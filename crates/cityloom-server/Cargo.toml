@@ -1,0 +1,12 @@
+[package]
+name = "cityloom-server"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+cityloom-core = { path = "../cityloom-core" }
+
+[lints]
+workspace = true

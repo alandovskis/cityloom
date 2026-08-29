@@ -1,0 +1,18 @@
+[workspace]
+resolver = "3"
+members = ["crates/cityloom-core", "crates/cityloom-server", "crates/cityloom-client"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.97"
+license = "MIT"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# "CityLoom", "WebGL", "PostGIS" and friends are product and proper nouns; they
+# appear in nearly every doc comment and reading better unbackticked.
+doc_markdown = "allow"
