@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CityLoom</title>
+    <!-- Built by `just build`; never a CDN tag (UI-001). -->
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body class="h-screen overflow-hidden">
+    <!-- Task 038 replaces this with the real app shell: tool rail, canvas,
+         inspector. The canvas id is part of the client contract. -->
+    <main class="h-full w-full">
+      <canvas
+        id="cityloom-canvas"
+        aria-label="City map"
+        class="block h-full w-full"
+      ></canvas>
+    </main>
+    <noscript>CityLoom needs JavaScript and WebGL2.</noscript>
+    <script type="module">
+      // Task 024 wires this to the wasm bundle in /pkg.
+    </script>
+  </body>
+</html>
