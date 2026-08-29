@@ -1,0 +1,34 @@
+[project]
+name = "cityloom-tests"
+version = "0.1.0"
+description = "Integration and end-to-end test harness for CityLoom."
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-playwright>=0.7",
+    "psycopg[binary]>=3.2",
+    "httpx>=0.28",
+    "ruff>=0.9",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "covers(*ids): feature ids from docs/state/features.md this test asserts",
+    "integration: needs Postgres and the server binary",
+    "e2e: needs a built wasm bundle and a browser",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+# Explicit, so `ruff format .` cannot wander into the virtualenv or build
+# output the way it does when relying on the implicit default excludes.
+extend-exclude = [".venv", "target", "web/pkg"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
