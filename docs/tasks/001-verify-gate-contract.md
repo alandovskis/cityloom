@@ -3,7 +3,7 @@ id: 001
 title: "Prove and harden the verify gate's output contract"
 depends_on: []
 features: [OPS-001, OPS-002, OPS-003, OPS-004, OPS-005, OPS-006, OPS-007, OPS-008, OPS-017, TEST-001]
-status: todo
+status: done
 acceptance:
   - "just verify"
   - "uv run --frozen pytest tests/test_verify_gate.py"

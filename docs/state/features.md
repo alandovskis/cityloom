@@ -19,14 +19,14 @@ Decisions that shaped this list (2026-08-29):
 
 ## OPS — environment, gate, packaging
 
-- [FAILING] OPS-001 — `just verify` exits 0 on a clean checkout with no product code changes.
-- [FAILING] OPS-002 — `just verify` exits non-zero when any Rust test fails.
-- [FAILING] OPS-003 — `just verify` exits non-zero when clippy emits any warning (`-D warnings`).
-- [FAILING] OPS-004 — `just verify` exits non-zero when `cargo fmt --check` finds unformatted Rust.
-- [FAILING] OPS-005 — `just verify` exits non-zero when `ruff check` finds a Python lint error.
-- [FAILING] OPS-006 — `just verify` prints at most 40 lines of output per stage on success.
-- [FAILING] OPS-007 — `just verify` on failure prints the failing stage name and the last 60 lines of that stage's log, and nothing from passing stages.
-- [FAILING] OPS-008 — `just verify` names every stage it ran and its pass/fail state in a final summary block.
+- [PASSING] OPS-001 — `just verify` exits 0 on a clean checkout with no product code changes.
+- [PASSING] OPS-002 — `just verify` exits non-zero when any Rust test fails.
+- [PASSING] OPS-003 — `just verify` exits non-zero when clippy emits any warning (`-D warnings`).
+- [PASSING] OPS-004 — `just verify` exits non-zero when `cargo fmt --check` finds unformatted Rust.
+- [PASSING] OPS-005 — `just verify` exits non-zero when `ruff check` finds a Python lint error.
+- [PASSING] OPS-006 — `just verify` prints at most 40 lines of output per stage on success.
+- [PASSING] OPS-007 — `just verify` on failure prints the failing stage name and the last 60 lines of that stage's log, and nothing from passing stages.
+- [PASSING] OPS-008 — `just verify` names every stage it ran and its pass/fail state in a final summary block.
 - [FAILING] OPS-009 — `just setup` installs the `wasm32-unknown-unknown` target and `wasm-pack`, and is idempotent.
 - [FAILING] OPS-010 — `just build` produces a wasm artifact at `web/pkg/cityloom_client_bg.wasm`.
 - [FAILING] OPS-011 — `just format` rewrites unformatted Rust and Python in place and exits 0.
@@ -35,7 +35,7 @@ Decisions that shaped this list (2026-08-29):
 - [FAILING] OPS-014 — `just migrate` is idempotent: a second run exits 0 and applies zero new migrations.
 - [FAILING] OPS-015 — `uv sync` provisions the Python environment and `uv run pytest --collect-only` exits 0.
 - [FAILING] OPS-016 — The production Docker image builds and `docker run` serves HTTP 200 on `/healthz`.
-- [FAILING] OPS-017 — `just verify` completes in under 5 minutes on a warm cache.
+- [PASSING] OPS-017 — `just verify` completes in under 5 minutes on a warm cache.
 
 ## CORE — canonical network model
 
@@ -322,7 +322,7 @@ Decisions that shaped this list (2026-08-29):
 
 ## TEST — test infrastructure
 
-- [FAILING] TEST-001 — `cargo nextest run` executes all Rust unit and integration tests.
+- [PASSING] TEST-001 — `cargo nextest run` executes all Rust unit and integration tests.
 - [FAILING] TEST-002 — A pytest fixture provisions an isolated Postgres database per test and drops it afterwards.
 - [FAILING] TEST-003 — A pytest fixture starts the server on an ephemeral port and waits for `/healthz` before yielding.
 - [FAILING] TEST-004 — The server fixture tears the process down even when a test fails.

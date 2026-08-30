@@ -4,9 +4,13 @@
 # "done".
 #
 # Output contract:
-#   - a passing stage prints its name and a short tail (<= TAIL_OK lines)
-#   - a failing stage prints its name and the last TAIL_FAIL lines of its log
-#   - passing stages print no log content when a later stage fails
+#   - a passing stage prints its name and, only if the whole run succeeds, a
+#     short tail (<= TAIL_OK lines, capped at 40)
+#   - a failing stage prints its name and the last TAIL_FAIL lines of its log,
+#     immediately, since that is the terminal state of the run
+#   - passing-stage log content is never printed when a later stage fails —
+#     it is buffered and discarded, not streamed live, because streaming live
+#     would leak it onto the terminal before the eventual failure is known
 #   - a summary block always names every stage and its state
 #
 # Stages fail fast: the first failure stops the run, so the feedback loop stays
@@ -25,6 +29,7 @@ trap 'rm -rf "$LOG_DIR"' EXIT
 
 STAGE_NAMES=()
 STAGE_STATES=()
+STAGE_TAILS=()
 FAILED_STAGE=""
 
 bold()  { printf '\033[1m%s\033[0m\n' "$*"; }
@@ -34,25 +39,26 @@ dim()   { printf '\033[2m%s\033[0m\n' "$*"; }
 
 # run <name> <command...>
 #
-# Captures all output to a per-stage log so a passing stage never floods the
-# terminal, and a failing stage can be shown in full-enough detail to act on.
+# Captures all output to a per-stage log. A passing stage's tail is buffered,
+# not printed, until the whole run's outcome is known — printing it live would
+# leak it even on runs where a later stage goes on to fail.
 run() {
     local name="$1"; shift
     local log="$LOG_DIR/$name.log"
 
     if [[ -n "$FAILED_STAGE" ]]; then
-        STAGE_NAMES+=("$name"); STAGE_STATES+=("skipped")
+        STAGE_NAMES+=("$name"); STAGE_STATES+=("skipped"); STAGE_TAILS+=("")
         return 0
     fi
 
     printf '\033[1m==> %s\033[0m\n' "$name"
     if "$@" >"$log" 2>&1; then
         STAGE_NAMES+=("$name"); STAGE_STATES+=("pass")
-        tail -n "$TAIL_OK" "$log" | sed 's/^/    /'
+        STAGE_TAILS+=("$(tail -n "$TAIL_OK" "$log")")
         green "    ok"
     else
         local code=$?
-        STAGE_NAMES+=("$name"); STAGE_STATES+=("fail")
+        STAGE_NAMES+=("$name"); STAGE_STATES+=("fail"); STAGE_TAILS+=("")
         FAILED_STAGE="$name"
         red "    FAILED (exit $code) — last $TAIL_FAIL lines:"
         tail -n "$TAIL_FAIL" "$log" | sed 's/^/    /'
@@ -80,6 +86,16 @@ fi
 run py-lint uv run --frozen ruff check .
 run py-fmt  uv run --frozen ruff format --check .
 run py-test uv run --frozen pytest "${PYTEST_ARGS[@]}"
+
+# --- Stage output (only ever shown once the whole run has succeeded) -------
+
+if [[ -z "$FAILED_STAGE" ]]; then
+    for i in "${!STAGE_NAMES[@]}"; do
+        [[ -n "${STAGE_TAILS[$i]}" ]] || continue
+        printf '\033[1m==> %s\033[0m\n' "${STAGE_NAMES[$i]}"
+        printf '%s\n' "${STAGE_TAILS[$i]}" | sed 's/^/    /'
+    done
+fi
 
 # --- Summary ----------------------------------------------------------------
 
