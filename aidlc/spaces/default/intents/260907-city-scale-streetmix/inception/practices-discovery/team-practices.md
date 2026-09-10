@@ -1,9 +1,21 @@
-# Team-Level Rules
+# Team Practices — Streetmix at City Scale
 
-> This team's affirmed practices and corrections. Loaded after `org.md` as
-> strict-additive guidance; contradictions with broader policy are rejected.
-> Populated by the practices-discovery affirmation gate. Edit at the gate,
-> not directly.
+Integrated after three blind support reviews (quality, developer, devsecops)
+and the human's answers to the practices-discovery interview
+(`practices-discovery-questions.md`). Five sections match
+`aidlc/spaces/default/memory/team.md` exactly. Where a bullet states a fact
+rather than a choice, its source is named; everything else is the practice
+this team is affirming going forward.
+
+This project is **not greenfield in the sense the original draft claimed.**
+The workspace root already carries the owner's own stated conventions —
+`CLAUDE.md`, `scripts/verify.sh`, `docs/state/features.md`,
+`docs/state/handoff.md`, `docs/templates/initializer-prompt.md`,
+`docs/templates/task-template.md` — and they currently contradict each other:
+`CLAUDE.md` names `just build`, `just format`, `just verify`, and
+`./scripts/state-summary.sh`, none of which exist yet, alongside
+`scripts/next-tasks.sh` and `docs/tasks/`, also missing. This is a workspace
+with an incomplete toolchain, not a blank slate, and Q2 settles it.
 
 ## Way of Working
 
@@ -460,16 +472,19 @@
   practice, not a naming convention, and the one that actually protects
   against the licence risk.
 
-- Correction to the overlay-keying practice, decided at user-stories (Q11) and recorded here because the learnings window for that stage had closed. The affirmed rule — overlay keyed on OSM way id plus a project-owned lane discriminator — does not work: osm2streets' split_ways splits one OSM way into several Roads at intersections, each carrying the same osm_ids, and Road.osm_ids is a Vec documented as "One road may consist of multiple ways", so the relation is many-to-many in both directions and a way id cannot distinguish two blocks of the same street. RoadID cannot substitute; it is allocated from a build-order counter. The key is therefore the OSM way id, plus the direction-normalised pair of bounding OSM node ids for the segment, plus a project-owned lane discriminator. Node ids are what split_ways actually splits on and are stable OSM identities. The original rule's prohibition on osm2streets' positional (usize) indices still stands and is unchanged. (learned 2026-09-10) <!-- cid:260907-city-scale-streetmix:refined-mockups:fa3d9fa30731f8a5bf8ccb487cb6016e53160cb11a69deb91826e4db9e8fa7ee -->
-- Corollary of the three inward-pointing layers, learned at domain-design when a review found an outer-ring component depending directly on the adapter crate. Introducing a port trait does not by itself decouple two crates: a trait narrows the API that crosses the boundary, but something must still construct the concrete implementor, and whichever component does that declares the dependency in its own Cargo.toml. The edge disappears only when construction moves — to a composition root that holds no other behaviour, which in a WebAssembly client is the entry point that already has to exist. So the port and the composition root are one fix, not two, and the single permitted outer-to-adapter dependency belongs in the one component with nothing to test around it. (learned 2026-09-10) <!-- cid:260907-city-scale-streetmix:domain-design:7fcc523285bfd5a7d5c6478d2f2e0c13189c60d406a82078c4c628dadd25f89b -->
-## Forbidden
+## Sources
 
-<!-- Team-specific forbidden patterns -->
-
-## Mandated
-
-<!-- Team-specific mandates -->
-
-## Corrections
-
-<!-- Self-learning loop appends here. -->
+- `aidlc/spaces/default/memory/org.md`, `team.md`, `project.md`
+- `initiative-brief.md`, `constraint-register.md`, `raid-log.md`,
+  `scope-document.md`, `wireframes.md` (Ideation, approved)
+- `CLAUDE.md`, `scripts/verify.sh`, `docs/state/`, `docs/templates/` (workspace
+  root, inspected directly)
+- `osm2streets-js/Cargo.toml` and `src/lib.rs` on `a-b-street/osm2streets`
+  `main` (read directly)
+- `practices-discovery-questions.md` — the interview and its eight answers
+- `contributions/aidlc-quality-agent.md`, `aidlc-developer-agent.md`,
+  `aidlc-devsecops-agent.md`
+- SonarQube Cloud documentation and pricing, checked live for this revision
+  (`https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/languages/rust`,
+  `https://www.sonarsource.com/blog/introducing-rust-in-sonarqube/`,
+  `https://www.sonarsource.com/plans-and-pricing/`)

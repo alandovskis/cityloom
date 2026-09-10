@@ -1,0 +1,113 @@
+{
+  "stage": "user-stories",
+  "upstream_ids": [
+    "FR1.1", "FR1.2", "FR1.3", "FR1.4",
+    "FR2.1", "FR2.2", "FR2.3",
+    "FR3.1", "FR3.2", "FR3.3", "FR3.4",
+    "FR4.1", "FR4.2", "FR4.3", "FR4.4", "FR4.5",
+    "FR5.1", "FR5.2", "FR5.3",
+    "FR6.1", "FR6.2", "FR6.3", "FR6.4",
+    "FR7.1", "FR7.2", "FR7.3",
+    "FR8.1", "FR8.2", "FR8.3",
+    "FR9.1", "FR9.2", "FR9.3", "FR9.4",
+    "FR10.1", "FR10.2", "FR10.3",
+    "FR11.1", "FR11.2",
+    "NFR1.1", "NFR1.2", "NFR1.3",
+    "NFR2.1", "NFR2.2",
+    "NFR3.1", "NFR3.2", "NFR3.3",
+    "NFR4.1", "NFR4.2", "NFR4.3", "NFR4.4", "NFR4.5", "NFR4.6", "NFR4.7",
+    "NFR5.1", "NFR5.2",
+    "NFR6.1", "NFR6.2", "NFR6.3",
+    "NFR7.1", "NFR7.2", "NFR7.3"
+  ],
+  "coverage": [
+    { "id": "FR1.1", "status": "OK", "target": "US2.1" },
+    { "id": "FR1.2", "status": "OK", "target": "US2.2" },
+    { "id": "FR1.3", "status": "OK", "target": "US2.3" },
+    { "id": "FR1.4", "status": "OK", "target": "US1.2" },
+
+    { "id": "FR2.1", "status": "OK", "target": "US3.1" },
+    { "id": "FR2.2", "status": "OK", "target": "US3.1, US3.2" },
+    { "id": "FR2.3", "status": "OK", "target": "US7.3" },
+
+    { "id": "FR3.1", "status": "OK", "target": "US4.1" },
+    { "id": "FR3.2", "status": "OK", "target": "US4.1" },
+    { "id": "FR3.3", "status": "OK", "target": "US4.2, US11.2, US12.2" },
+    { "id": "FR3.4", "status": "OK", "target": "US5.1, US7.3" },
+
+    { "id": "FR4.1", "status": "OK", "target": "US5.1, US5.5" },
+    { "id": "FR4.2", "status": "OK", "target": "US5.2, US5.5" },
+    { "id": "FR4.3", "status": "OK", "target": "US5.3" },
+    { "id": "FR4.4", "status": "OK", "target": "US5.3" },
+    { "id": "FR4.5", "status": "OK", "target": "US5.4" },
+
+    { "id": "FR5.1", "status": "OK", "target": "US6.1, US6.4" },
+    { "id": "FR5.2", "status": "OK", "target": "US6.2" },
+    { "id": "FR5.3", "status": "OK", "target": "US6.3, US6.4" },
+
+    { "id": "FR6.1", "status": "OK", "target": "US7.1" },
+    { "id": "FR6.2", "status": "OK", "target": "US7.2" },
+    { "id": "FR6.3", "status": "OK", "target": "US7.4" },
+    { "id": "FR6.4", "status": "OK", "target": "US7.3, US7.5" },
+
+    { "id": "FR7.1", "status": "OK", "target": "US9.1" },
+    { "id": "FR7.2", "status": "OK", "target": "US1.2, US8.1, US9.2" },
+    { "id": "FR7.3", "status": "OK", "target": "US9.3" },
+
+    { "id": "FR8.1", "status": "OK", "target": "US10.1" },
+    { "id": "FR8.2", "status": "OK", "target": "US10.2" },
+    { "id": "FR8.3", "status": "OK", "target": "US10.3" },
+
+    { "id": "FR9.1", "status": "OK", "target": "US11.1" },
+    { "id": "FR9.2", "status": "OK", "target": "US11.2" },
+    { "id": "FR9.3", "status": "OK", "target": "US11.3" },
+    { "id": "FR9.4", "status": "OK", "target": "US11.3" },
+
+    { "id": "FR10.1", "status": "OK", "target": "US12.1" },
+    { "id": "FR10.2", "status": "OK", "target": "US12.2" },
+    { "id": "FR10.3", "status": "OK", "target": "US12.3" },
+
+    { "id": "FR11.1", "status": "OK", "target": "US1.1" },
+    { "id": "FR11.2", "status": "OK", "target": "US1.2" },
+
+    { "id": "NFR1.1", "status": "Deferred", "target": "nfr-requirements" },
+    { "id": "NFR1.2", "status": "Deferred", "target": "nfr-requirements" },
+    { "id": "NFR1.3", "status": "Deferred", "target": "nfr-requirements" },
+
+    { "id": "NFR2.1", "status": "OK", "target": "US3.2" },
+    { "id": "NFR2.2", "status": "Deferred", "target": "nfr-requirements" },
+
+    { "id": "NFR3.1", "status": "Deferred", "target": "nfr-requirements" },
+    { "id": "NFR3.2", "status": "Deferred", "target": "deployment-pipeline" },
+    { "id": "NFR3.3", "status": "Deferred", "target": "infrastructure-design" },
+
+    { "id": "NFR4.1", "status": "OK", "target": "US2.3, US5.3, US13.1, US13.2" },
+    { "id": "NFR4.2", "status": "OK", "target": "US2.3, US5.3" },
+    { "id": "NFR4.3", "status": "OK", "target": "US4.1, US5.3, US13.1" },
+    { "id": "NFR4.4", "status": "OK", "target": "US1.1, US13.2" },
+    { "id": "NFR4.5", "status": "OK", "target": "US5.3, US13.2" },
+    { "id": "NFR4.6", "status": "OK", "target": "US13.2" },
+    { "id": "NFR4.7", "status": "Deferred", "target": "nfr-requirements" },
+
+    { "id": "NFR5.1", "status": "N/A", "target": "An operating-cost ceiling on the project, not behaviour any user can observe or any story can assert. Enforced at infrastructure-design and environment-provisioning. AC3.1.7 incidentally protects it by asserting the import issues no request to the application's own server." },
+    { "id": "NFR5.2", "status": "OK", "target": "US3.1, US8.1" },
+
+    { "id": "NFR6.1", "status": "N/A", "target": "A repository practice enforced by push protection and the CI secret scan in team-practices.md. No user-facing behaviour to write a story against." },
+    { "id": "NFR6.2", "status": "OK", "target": "US10.1" },
+    { "id": "NFR6.3", "status": "N/A", "target": "A constraint on what may be collected. Satisfied by the absence of any story that collects payment or special-category data; verifiable by inspecting the story set rather than by a story of its own." },
+
+    { "id": "NFR7.1", "status": "N/A", "target": "An engineering coverage floor measured in CI, not user-observable behaviour. Owned by build-and-test." },
+    { "id": "NFR7.2", "status": "N/A", "target": "A dependency-pinning build practice. Owned by ci-pipeline and the affirmed mandate in project.md. AC3.1.5 asserts the pinned crate is actually invoked, which is the behavioural half." },
+    { "id": "NFR7.3", "status": "N/A", "target": "A defect-handling practice. Owned by build-and-test." }
+  ],
+  "reverse": [
+    { "id": "US5.5", "status": "N/A", "target": "Undo is required by three artifacts and defined by no requirement: AC5.3.3 exercises it, team-practices.md names it as one of five editing actions in the merge gate, and wireframes.md's Success state promises it after a corridor apply. FR4.1 and FR4.2 are the nearest upstream but neither mentions reversal. Raised for a requirements amendment alongside OQ-US1." },
+    { "id": "US7.5", "status": "N/A", "target": "FR6.4 permits correcting imported data; it says nothing about what happens to a correction when the street is imported again. The three-outcome behaviour (fingerprint match, key resolves, unresolved) is derived from the osm2streets data model rather than from a requirement." },
+    { "id": "US8.2", "status": "N/A", "target": "Derived from the Q6/Q9 browser-first persistence decision rather than from a requirement ID. FR7.2 requires a pre-sign-in design to survive signing in; it does not cover the case where device storage lost it. Raised for a requirements amendment alongside OQ-US1." },
+    { "id": "US8.3", "status": "N/A", "target": "Derived from the Q9 opt-in-upload decision, and raised to Must Have at the mob triage (Q12). No FR covers a deliberate upload without an account; FR7.2 and FR9.3 both assume the account path. Covered by OQ-US1." },
+    { "id": "US13.1", "status": "OK", "target": "NFR4.1" },
+    { "id": "US13.2", "status": "OK", "target": "NFR4.4" },
+    { "id": "US6.3", "status": "OK", "target": "FR5.3" },
+    { "id": "US6.4", "status": "OK", "target": "FR5.1, FR5.3" }
+  ]
+}

@@ -1,0 +1,270 @@
+{
+  "stage": "domain-design",
+  "note": "Every OK target was checked twice: that it exists as a declared component name in components.md, and that the named component's stated behaviour actually delivers the story. The second check is the one that matters \u2014 a target can exist and not deliver, which is how US7.4 was first mapped wrongly.",
+  "upstream_ids": [
+    "US1.1",
+    "US1.2",
+    "US2.1",
+    "US2.2",
+    "US2.3",
+    "US3.1",
+    "US3.2",
+    "US4.1",
+    "US4.2",
+    "US5.1",
+    "US5.2",
+    "US5.3",
+    "US5.4",
+    "US5.5",
+    "US6.1",
+    "US6.2",
+    "US6.3",
+    "US6.4",
+    "US7.1",
+    "US7.2",
+    "US7.3",
+    "US7.4",
+    "US7.5",
+    "US8.1",
+    "US8.2",
+    "US8.3",
+    "US9.1",
+    "US9.2",
+    "US9.3",
+    "US10.1",
+    "US10.2",
+    "US10.3",
+    "US11.1",
+    "US11.2",
+    "US11.3",
+    "US12.1",
+    "US12.2",
+    "US12.3",
+    "US13.1",
+    "US13.2"
+  ],
+  "coverage": [
+    {
+      "id": "US1.1",
+      "status": "OK",
+      "target": "AppShell"
+    },
+    {
+      "id": "US1.2",
+      "status": "OK",
+      "target": "AppShell"
+    },
+    {
+      "id": "US2.1",
+      "status": "OK",
+      "target": "MapView"
+    },
+    {
+      "id": "US2.2",
+      "status": "OK",
+      "target": "MapView"
+    },
+    {
+      "id": "US2.3",
+      "status": "OK",
+      "target": "MapView"
+    },
+    {
+      "id": "US3.1",
+      "status": "OK",
+      "target": "StreetImportAdapter"
+    },
+    {
+      "id": "US3.2",
+      "status": "OK",
+      "target": "MapView"
+    },
+    {
+      "id": "US4.1",
+      "status": "OK",
+      "target": "CrossSectionView"
+    },
+    {
+      "id": "US4.2",
+      "status": "OK",
+      "target": "CrossSectionView"
+    },
+    {
+      "id": "US5.1",
+      "status": "OK",
+      "target": "EditingSession"
+    },
+    {
+      "id": "US5.2",
+      "status": "OK",
+      "target": "EditingSession"
+    },
+    {
+      "id": "US5.3",
+      "status": "OK",
+      "target": "CrossSectionView"
+    },
+    {
+      "id": "US5.4",
+      "status": "OK",
+      "target": "DesignOverlay"
+    },
+    {
+      "id": "US5.5",
+      "status": "OK",
+      "target": "EditingSession"
+    },
+    {
+      "id": "US6.1",
+      "status": "OK",
+      "target": "CorridorPlanner"
+    },
+    {
+      "id": "US6.2",
+      "status": "OK",
+      "target": "CorridorPlanner"
+    },
+    {
+      "id": "US6.3",
+      "status": "OK",
+      "target": "CorridorPlanner"
+    },
+    {
+      "id": "US6.4",
+      "status": "OK",
+      "target": "CorridorPlanner"
+    },
+    {
+      "id": "US7.1",
+      "status": "OK",
+      "target": "ExtractFetcher"
+    },
+    {
+      "id": "US7.2",
+      "status": "OK",
+      "target": "ExtractFetcher"
+    },
+    {
+      "id": "US7.3",
+      "status": "OK",
+      "target": "CorrectionOverlay"
+    },
+    {
+      "id": "US7.4",
+      "status": "Deferred",
+      "target": "observability-setup"
+    },
+    {
+      "id": "US7.5",
+      "status": "OK",
+      "target": "CorrectionOverlay"
+    },
+    {
+      "id": "US8.1",
+      "status": "OK",
+      "target": "LocalDesignStore"
+    },
+    {
+      "id": "US8.2",
+      "status": "OK",
+      "target": "LocalDesignStore"
+    },
+    {
+      "id": "US8.3",
+      "status": "OK",
+      "target": "UploadClient"
+    },
+    {
+      "id": "US9.1",
+      "status": "OK",
+      "target": "AccountService"
+    },
+    {
+      "id": "US9.2",
+      "status": "OK",
+      "target": "AccountService"
+    },
+    {
+      "id": "US9.3",
+      "status": "OK",
+      "target": "DesignRepository"
+    },
+    {
+      "id": "US10.1",
+      "status": "OK",
+      "target": "DesignRepository"
+    },
+    {
+      "id": "US10.2",
+      "status": "OK",
+      "target": "SharingService"
+    },
+    {
+      "id": "US10.3",
+      "status": "OK",
+      "target": "SharingService"
+    },
+    {
+      "id": "US11.1",
+      "status": "OK",
+      "target": "DataRightsService"
+    },
+    {
+      "id": "US11.2",
+      "status": "OK",
+      "target": "DataRightsService"
+    },
+    {
+      "id": "US11.3",
+      "status": "OK",
+      "target": "DesignRepository"
+    },
+    {
+      "id": "US12.1",
+      "status": "OK",
+      "target": "ExportComposer"
+    },
+    {
+      "id": "US12.2",
+      "status": "OK",
+      "target": "ExportComposer"
+    },
+    {
+      "id": "US12.3",
+      "status": "OK",
+      "target": "ExportComposer"
+    },
+    {
+      "id": "US13.1",
+      "status": "OK",
+      "target": "AppShell"
+    },
+    {
+      "id": "US13.2",
+      "status": "OK",
+      "target": "CrossSectionView"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "StreetModel",
+      "status": "N/A",
+      "target": "The domain core. No story maps to it alone because every story that touches a street reads through it; it owns the provenance type FR3.1 requires and the carriageway definition AC6.2.1 needs."
+    },
+    {
+      "id": "OsmExtractProxy",
+      "status": "N/A",
+      "target": "Introduced by this stage's Q3 decision rather than by a story. It realises no US directly; it is the fetch path US3.1 and US3.2 depend on, and it carries the no-requester-logging obligation recorded in decisions.md ADR-004. It does not realise US7.4: it operates on requested areas, before any street identifier exists."
+    },
+    {
+      "id": "US7.4-local-half",
+      "status": "OK",
+      "target": "StreetImportAdapter"
+    },
+    {
+      "id": "CompositionRoot",
+      "status": "N/A",
+      "target": "Introduced by the architecture review's R-05 rather than by a story, and realises none. It is the WebAssembly entry point: it constructs the concrete StreetImportAdapter, supplies it as the core's StreetSource port, and mounts AppShell. Holding no product behaviour is what makes it the right place for the only outer-ring dependency on the adapter crate (decisions.md ADR-009)."
+    }
+  ]
+}
