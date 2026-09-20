@@ -1,0 +1,16 @@
+# The configured source regions for `region-build` (BR8.1, W1). Each entry
+# names a Geofabrik sub-region extract, its published MD5 checksum file,
+# and the bbox `region-build` records as that region's declared coverage
+# (`Manifest.regions[].bounds`, `Manifest.coverage`).
+#
+# The first configured region is Prince Edward Island: at 10.8 MB it is the
+# smallest Canadian province Geofabrik publishes, chosen deliberately so
+# the first real weekly build is cheap while it still exercises the whole
+# pipeline end to end (`code-generation-plan.md`, step 15.4). Coverage grows
+# by adding rows here; nothing else in the pipeline changes.
+
+[[regions]]
+name = "north-america/canada/prince-edward-island"
+pbf_url = "https://download.geofabrik.de/north-america/canada/prince-edward-island-latest.osm.pbf"
+md5_url = "https://download.geofabrik.de/north-america/canada/prince-edward-island-latest.osm.pbf.md5"
+bounds = "-64.50000,45.90000,-61.90000,47.10000"

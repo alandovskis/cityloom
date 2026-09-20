@@ -1,0 +1,13 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "street-import",
+  "confirmed": true,
+  "upstream_ids": ["NFR6.4.1", "NFR6.4.2", "NFR6.4.3", "NFR6.4.4", "NFR6.1.3"],
+  "coverage": [
+    { "id": "NFR6.4.1", "status": "N/A", "target": "code-level design (catch_unwind boundary) — no infrastructure resource required" },
+    { "id": "NFR6.4.2", "status": "N/A", "target": "code-level design (local-only log, no transmission) — no infrastructure resource required" },
+    { "id": "NFR6.4.3", "status": "OK", "target": "existing workspace CI pipeline (cargo build/clippy/fmt/test, unchanged) per cicd-pipeline.md" },
+    { "id": "NFR6.4.4", "status": "N/A", "target": "code-level design (timeout/bounds check) — no infrastructure resource required" },
+    { "id": "NFR6.1.3", "status": "N/A", "target": "no secret exists to provision or rotate" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "stage": "nfr-design",
+  "unit": "design-editing",
+  "confirmed": true,
+  "upstream_ids": ["NFR6.4.1", "NFR6.3.1", "NFR6.1.1"],
+  "coverage": [
+    { "id": "NFR6.4.1", "status": "OK", "target": "SD-1 (bounded undo stack and corridor selection)" },
+    { "id": "NFR6.3.1", "status": "OK", "target": "SD-2 (no PII-shaped fields)" },
+    { "id": "NFR6.1.1", "status": "OK", "target": "SD-3 (no secret to manage)" }
+  ]
+}

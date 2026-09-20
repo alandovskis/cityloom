@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="Overpass API 0.7.62.11 87bfad18">
+<note>The data included in this document is from www.openstreetmap.org. The data is made available under ODbL.</note>
+<meta osm_base="2026-09-16T12:33:35Z"/>
+
+  <node id="53184111" lat="47.6051575" lon="-122.3351305" version="9" timestamp="2023-04-13T07:50:37Z" changeset="134849115" uid="9180153" user="patricknoll_import">
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="highway" v="traffic_signals"/>
+  </node>
+  <node id="53184112" lat="47.6056295" lon="-122.3340260" version="9" timestamp="2025-04-12T16:13:58Z" changeset="164862735" uid="141565" user="megavolts">
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="highway" v="traffic_signals"/>
+    <tag k="tactile_paving" v="yes"/>
+  </node>
+  <node id="3629502475" lat="47.6053871" lon="-122.3345928" version="1" timestamp="2015-07-01T17:13:08Z" changeset="32336832" uid="1408522" user="Omnific"/>
+  <node id="4580623809" lat="47.6052655" lon="-122.3348776" version="1" timestamp="2016-12-30T05:00:05Z" changeset="44775187" uid="2601744" user="sctrojan79">
+    <tag k="bus" v="yes"/>
+    <tag k="gtfs:stop_id" v="1420"/>
+    <tag k="name" v="Madison St &amp; 2nd Ave"/>
+    <tag k="public_transport" v="stop_position"/>
+    <tag k="ref" v="1420"/>
+  </node>
+  <node id="6363977368" lat="47.6051886" lon="-122.3350577" version="3" timestamp="2024-08-29T07:12:35Z" changeset="155912893" uid="10350264" user="UW Maddie">
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:markings" v="dashes"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+  </node>
+  <node id="10725109973" lat="47.6055844" lon="-122.3341310" version="5" timestamp="2024-08-29T07:12:35Z" changeset="155912893" uid="10350264" user="UW Maddie">
+    <tag k="button_operated" v="no"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="lit" v="yes"/>
+    <tag k="tactile_paving" v="yes"/>
+  </node>
+  <node id="10725109987" lat="47.6052140" lon="-122.3349975" version="2" timestamp="2024-08-29T07:12:35Z" changeset="155912893" uid="10350264" user="UW Maddie">
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="lit" v="yes"/>
+  </node>
+  <node id="13959764596" lat="47.6054010" lon="-122.3345603" version="1" timestamp="2026-06-23T11:37:36Z" changeset="184472706" uid="21668461" user="sanjanasharma_lyft"/>
+  <way id="6428348" version="39" timestamp="2026-06-23T11:37:36Z" changeset="184472706" uid="21668461" user="sanjanasharma_lyft">
+    <nd ref="53184112"/>
+    <nd ref="10725109973"/>
+    <nd ref="13959764596"/>
+    <nd ref="3629502475"/>
+    <nd ref="4580623809"/>
+    <nd ref="10725109987"/>
+    <nd ref="6363977368"/>
+    <nd ref="53184111"/>
+    <tag k="highway" v="primary"/>
+    <tag k="lanes" v="2"/>
+    <tag k="maxspeed" v="25 mph"/>
+    <tag k="name" v="Madison Street"/>
+    <tag k="oneway" v="yes"/>
+    <tag k="sidewalk:both" v="separate"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="trolley_wire" v="yes"/>
+  </way>
+
+</osm>

@@ -1,0 +1,13 @@
+{
+  "stage": "code-generation",
+  "unit": "design-editing",
+  "version": 1,
+  "writes": [
+    { "path": "crates/cityloom-design-editing/Cargo.toml" },
+    { "path": "crates/cityloom-design-editing/src/lib.rs" },
+    { "path": "crates/cityloom-design-editing/src/entities.rs" },
+    { "path": "crates/cityloom-design-editing/src/design_overlay.rs" },
+    { "path": "crates/cityloom-design-editing/src/editing_session.rs" },
+    { "path": "crates/cityloom-design-editing/src/corridor_planner.rs" }
+  ]
+}

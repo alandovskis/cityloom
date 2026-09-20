@@ -1,0 +1,12 @@
+{
+  "stage": "nfr-design",
+  "confirmed": true,
+  "unit": "street-core",
+  "upstream_ids": ["NFR6.4.1", "NFR6.4.2", "NFR6.4.3", "NFR7.2.6"],
+  "coverage": [
+    { "id": "NFR6.4.1", "status": "OK", "target": "SD-1 (no mutable public API)" },
+    { "id": "NFR6.4.2", "status": "OK", "target": "SD-2 (crate-level dependency allowlist)" },
+    { "id": "NFR6.4.3", "status": "OK", "target": "SD-3 (forbid unsafe_code)" },
+    { "id": "NFR7.2.6", "status": "OK", "target": "SD-4 (dependency-free by construction)" }
+  ]
+}

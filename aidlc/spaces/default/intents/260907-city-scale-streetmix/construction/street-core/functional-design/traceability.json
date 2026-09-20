@@ -1,0 +1,23 @@
+{
+  "stage": "functional-design",
+  "confirmed": true,
+  "unit": "street-core",
+  "upstream_ids": ["AC4.1.1", "AC7.3.1", "AC7.3.4", "AC5.2.3", "AC6.2.1", "AC6.2.2", "AC6.2.3", "AC6.2.4", "AC6.2.5"],
+  "coverage": [
+    { "id": "AC4.1.1", "status": "OK", "target": "BR1.1" },
+    { "id": "AC7.3.1", "status": "OK", "target": "BR1.2" },
+    { "id": "AC7.3.4", "status": "OK", "target": "BR2.1, BR3.1" },
+    { "id": "AC5.2.3", "status": "N/A", "target": "anchor storage for a user-added lane is u5-design-editing's DesignOverlay; this Unit only supplies the keyed baseline lanes an anchor references" },
+    { "id": "AC6.2.1", "status": "OK", "target": "BR4.1" },
+    { "id": "AC6.2.2", "status": "N/A", "target": "the warn-and-proceed workflow is u5-design-editing's CorridorPlanner; this Unit supplies only the carriageway width it compares against" },
+    { "id": "AC6.2.3", "status": "OK", "target": "BR4.1 (a wholly-inferred carriageway width is representable because every contributing Dimension carries Provenance, BR1.1)" },
+    { "id": "AC6.2.4", "status": "N/A", "target": "an absent carriageway width (failed/thin import) is an adapter-level (u4-street-import) outcome, not one this Unit's construction rules produce" },
+    { "id": "AC6.2.5", "status": "N/A", "target": "the apply/warning workflow is u5-design-editing's CorridorPlanner" }
+  ],
+  "reverse": [
+    { "id": "BR2.2", "status": "N/A", "target": "a general safety property (bounds-checked access), not tied to a specific acceptance criterion" },
+    { "id": "BR5.1", "status": "N/A", "target": "an architectural invariant (immutability) underlying every editing-related AC rather than asserted by one directly" },
+    { "id": "BR6.1", "status": "N/A", "target": "a unit-of-measure convention (TC-5), not a user-facing acceptance criterion" },
+    { "id": "BR7.1", "status": "N/A", "target": "a crate-boundary/dependency-graph rule (decisions.md ADR-009), verified at compile time rather than by an acceptance criterion" }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "stage": "nfr-requirements",
+  "confirmed": true,
+  "unit": "osm2streets-build",
+  "upstream_ids": ["NFR6", "NFR7"],
+  "coverage": [
+    { "id": "NFR6", "status": "N/A", "target": "no runtime surface, no secrets required to fetch a public fork; NFR6.1.1 in security-requirements.md records the conditional case" },
+    { "id": "NFR7", "status": "OK", "target": "NFR7.2.1, NFR7.2.2, NFR7.2.3, NFR7.2.4, NFR7.2.5, NFR-SUPPLY-1, NFR-SUPPLY-2 in security-requirements.md" }
+  ]
+}

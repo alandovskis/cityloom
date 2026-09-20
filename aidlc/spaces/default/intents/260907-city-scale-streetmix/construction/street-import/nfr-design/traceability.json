@@ -1,0 +1,13 @@
+{
+  "stage": "nfr-design",
+  "unit": "street-import",
+  "confirmed": true,
+  "upstream_ids": ["NFR6.4.1", "NFR6.4.2", "NFR6.4.3", "NFR6.4.4", "NFR6.1.3"],
+  "coverage": [
+    { "id": "NFR6.4.1", "status": "OK", "target": "SD-1 (closed ImportFailure mapping via catch_unwind)" },
+    { "id": "NFR6.4.2", "status": "OK", "target": "SD-2 (local-only failure log, no transmission)" },
+    { "id": "NFR6.4.3", "status": "OK", "target": "SD-3 (osm2streets consumed only through the existing pin)" },
+    { "id": "NFR6.4.4", "status": "OK", "target": "SD-4 (untrusted extract bytes, bounded before conversion)" },
+    { "id": "NFR6.1.3", "status": "OK", "target": "SD-5 (no secret to manage)" }
+  ]
+}

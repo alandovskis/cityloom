@@ -1,0 +1,15 @@
+{
+  "stage": "code-generation",
+  "unit": "osm2streets-build",
+  "version": 1,
+  "writes": [
+    { "path": "docs/osm2streets-pin.md" },
+    { "path": "docs/dependencies.md" },
+    { "path": "fixtures/osm2streets/well-tagged-street.osm.xml" },
+    { "path": "fixtures/osm2streets/thinly-tagged-street.osm.xml" },
+    { "path": "fixtures/osm2streets/one-way-street.osm.xml" },
+    { "path": "fixtures/osm2streets/street-with-cycleway.osm.xml" },
+    { "path": "fixtures/osm2streets/one-intersection.osm.xml" },
+    { "path": "fixtures/osm2streets/README.md" }
+  ]
+}

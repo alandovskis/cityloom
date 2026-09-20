@@ -1,0 +1,15 @@
+{
+  "stage": "nfr-design",
+  "confirmed": true,
+  "unit": "osm2streets-build",
+  "upstream_ids": ["NFR7.2.1", "NFR7.2.2", "NFR7.2.3", "NFR7.2.4", "NFR7.2.5", "NFR-SUPPLY-1", "NFR-SUPPLY-2"],
+  "coverage": [
+    { "id": "NFR7.2.1", "status": "OK", "target": "SD-2 (two-point pin, rev= only)" },
+    { "id": "NFR7.2.2", "status": "OK", "target": "SD-2 (abstutil pinned the same way)" },
+    { "id": "NFR7.2.3", "status": "OK", "target": "SD-1 (fork identity)" },
+    { "id": "NFR7.2.4", "status": "OK", "target": "SD-3 (locked resolution, committed Cargo.lock)" },
+    { "id": "NFR7.2.5", "status": "OK", "target": "SD-4 (branch protection on the fork, applied at environment-provisioning)" },
+    { "id": "NFR-SUPPLY-1", "status": "OK", "target": "SD-5 (provenance record in docs/dependencies.md)" },
+    { "id": "NFR-SUPPLY-2", "status": "OK", "target": "SD-6 (cargo audit coverage, no new tool)" }
+  ]
+}

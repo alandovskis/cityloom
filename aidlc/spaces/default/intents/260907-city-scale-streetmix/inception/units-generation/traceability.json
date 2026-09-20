@@ -1,0 +1,270 @@
+{
+  "stage": "units-generation",
+  "note": "Targets are Unit IDs from unit-of-work.md and each one appears on that story's row in unit-of-work-story-map.md. US7.4 is Deferred rather than OK, carrying forward the same split recorded at domain-design.",
+  "upstream_ids": [
+    "US1.1",
+    "US1.2",
+    "US2.1",
+    "US2.2",
+    "US2.3",
+    "US3.1",
+    "US3.2",
+    "US4.1",
+    "US4.2",
+    "US5.1",
+    "US5.2",
+    "US5.3",
+    "US5.4",
+    "US5.5",
+    "US6.1",
+    "US6.2",
+    "US6.3",
+    "US6.4",
+    "US7.1",
+    "US7.2",
+    "US7.3",
+    "US7.4",
+    "US7.5",
+    "US8.1",
+    "US8.2",
+    "US8.3",
+    "US9.1",
+    "US9.2",
+    "US9.3",
+    "US10.1",
+    "US10.2",
+    "US10.3",
+    "US11.1",
+    "US11.2",
+    "US11.3",
+    "US12.1",
+    "US12.2",
+    "US12.3",
+    "US13.1",
+    "US13.2"
+  ],
+  "coverage": [
+    {
+      "id": "US1.1",
+      "status": "OK",
+      "target": "U6"
+    },
+    {
+      "id": "US1.2",
+      "status": "OK",
+      "target": "U6"
+    },
+    {
+      "id": "US2.1",
+      "status": "OK",
+      "target": "U6"
+    },
+    {
+      "id": "US2.2",
+      "status": "OK",
+      "target": "U6"
+    },
+    {
+      "id": "US2.3",
+      "status": "OK",
+      "target": "U6"
+    },
+    {
+      "id": "US3.1",
+      "status": "OK",
+      "target": "U4"
+    },
+    {
+      "id": "US3.2",
+      "status": "OK",
+      "target": "U6"
+    },
+    {
+      "id": "US4.1",
+      "status": "OK",
+      "target": "U6"
+    },
+    {
+      "id": "US4.2",
+      "status": "OK",
+      "target": "U6"
+    },
+    {
+      "id": "US5.1",
+      "status": "OK",
+      "target": "U5"
+    },
+    {
+      "id": "US5.2",
+      "status": "OK",
+      "target": "U5"
+    },
+    {
+      "id": "US5.3",
+      "status": "OK",
+      "target": "U6"
+    },
+    {
+      "id": "US5.4",
+      "status": "OK",
+      "target": "U5"
+    },
+    {
+      "id": "US5.5",
+      "status": "OK",
+      "target": "U5"
+    },
+    {
+      "id": "US6.1",
+      "status": "OK",
+      "target": "U5"
+    },
+    {
+      "id": "US6.2",
+      "status": "OK",
+      "target": "U5"
+    },
+    {
+      "id": "US6.3",
+      "status": "OK",
+      "target": "U5"
+    },
+    {
+      "id": "US6.4",
+      "status": "OK",
+      "target": "U5"
+    },
+    {
+      "id": "US7.1",
+      "status": "OK",
+      "target": "U4"
+    },
+    {
+      "id": "US7.2",
+      "status": "OK",
+      "target": "U4"
+    },
+    {
+      "id": "US7.3",
+      "status": "OK",
+      "target": "U4"
+    },
+    {
+      "id": "US7.4",
+      "status": "Deferred",
+      "target": "observability-setup \u2014 the maintainer-facing half of this story is not realised by any Unit in this plan; U4 delivers only the local half (one log per failure, with the source street identifier). Carried forward unchanged from domain-design."
+    },
+    {
+      "id": "US7.5",
+      "status": "OK",
+      "target": "U4"
+    },
+    {
+      "id": "US8.1",
+      "status": "OK",
+      "target": "U7"
+    },
+    {
+      "id": "US8.2",
+      "status": "OK",
+      "target": "U7"
+    },
+    {
+      "id": "US8.3",
+      "status": "OK",
+      "target": "U7"
+    },
+    {
+      "id": "US9.1",
+      "status": "OK",
+      "target": "U11"
+    },
+    {
+      "id": "US9.2",
+      "status": "OK",
+      "target": "U11"
+    },
+    {
+      "id": "US9.3",
+      "status": "OK",
+      "target": "U11"
+    },
+    {
+      "id": "US10.1",
+      "status": "OK",
+      "target": "U11"
+    },
+    {
+      "id": "US10.2",
+      "status": "OK",
+      "target": "U11"
+    },
+    {
+      "id": "US10.3",
+      "status": "OK",
+      "target": "U11"
+    },
+    {
+      "id": "US11.1",
+      "status": "OK",
+      "target": "U12"
+    },
+    {
+      "id": "US11.2",
+      "status": "OK",
+      "target": "U12"
+    },
+    {
+      "id": "US11.3",
+      "status": "OK",
+      "target": "U10"
+    },
+    {
+      "id": "US12.1",
+      "status": "OK",
+      "target": "U8"
+    },
+    {
+      "id": "US12.2",
+      "status": "OK",
+      "target": "U8"
+    },
+    {
+      "id": "US12.3",
+      "status": "OK",
+      "target": "U8"
+    },
+    {
+      "id": "US13.1",
+      "status": "OK",
+      "target": "U6"
+    },
+    {
+      "id": "US13.2",
+      "status": "OK",
+      "target": "U6"
+    }
+  ],
+  "reverse": [
+    {
+      "id": "U1",
+      "status": "N/A",
+      "target": "osm2streets-build is a packaging Unit and delivers no story directly. It is responsible for AC3.1.4 and AC3.1.5, the golden-fixture assertions against the pinned osm2streets build."
+    },
+    {
+      "id": "U2",
+      "status": "N/A",
+      "target": "street-core is a foundation library and delivers no story directly. It supplies the provenance types behind US4.1 and US4.2, the derived lane key behind AC5.2.3 and AC7.3.4, and the carriageway definition behind AC6.2.1-AC6.2.5."
+    },
+    {
+      "id": "U3",
+      "status": "N/A",
+      "target": "design-payload-spec is a contract consumed in place and delivers no story directly. It defines the shape asserted by AC8.1.1, AC8.1.2, AC8.3.1-AC8.3.5, AC9.2.1 and AC11.2.1-AC11.2.3."
+    },
+    {
+      "id": "U9",
+      "status": "N/A",
+      "target": "osm-extract-proxy delivers no story directly. It supplies the fetch half of US3.1 and carries its own privacy obligation, which traces to NFR6 rather than to a story. AC3.1.7 is false by design under this Unit (decisions.md ADR-001, divergence 6)."
+    }
+  ]
+}

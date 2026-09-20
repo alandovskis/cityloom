@@ -1,0 +1,18 @@
+{
+  "stage": "code-generation",
+  "unit": "street-import",
+  "version": 1,
+  "writes": [
+    { "path": "crates/cityloom-street-import/Cargo.toml" },
+    { "path": "crates/cityloom-street-import/src/lib.rs" },
+    { "path": "crates/cityloom-street-import/src/failure.rs" },
+    { "path": "crates/cityloom-street-import/src/fingerprint.rs" },
+    { "path": "crates/cityloom-street-import/src/correction.rs" },
+    { "path": "crates/cityloom-street-import/src/transport.rs" },
+    { "path": "crates/cityloom-street-import/src/fetcher.rs" },
+    { "path": "crates/cityloom-street-import/src/log.rs" },
+    { "path": "crates/cityloom-street-import/src/adapter.rs" },
+    { "path": "docs/dependencies.md" },
+    { "path": "docs/osm2streets-pin.md" }
+  ]
+}

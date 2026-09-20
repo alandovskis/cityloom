@@ -1,0 +1,19 @@
+{
+  "stage": "functional-design",
+  "confirmed": true,
+  "unit": "design-payload-spec",
+  "upstream_ids": ["AC8.1.1", "AC8.1.2", "AC8.3.1", "AC8.3.2", "AC8.3.3", "AC8.3.4", "AC8.3.5", "AC9.2.1", "AC11.2.1", "AC11.2.2", "AC11.2.3"],
+  "coverage": [
+    { "id": "AC8.1.1", "status": "OK", "target": "BR2.1" },
+    { "id": "AC8.1.2", "status": "OK", "target": "BR2.1" },
+    { "id": "AC8.3.1", "status": "N/A", "target": "the upload workflow itself (triggering, endpoint, retention) belongs to u7-local-persistence's UploadClient; this Unit only fixes the shape uploaded" },
+    { "id": "AC8.3.2", "status": "N/A", "target": "same — upload-triggering behaviour is u7-local-persistence" },
+    { "id": "AC8.3.3", "status": "N/A", "target": "same — upload-triggering behaviour is u7-local-persistence" },
+    { "id": "AC8.3.4", "status": "N/A", "target": "same — removal behaviour is u7-local-persistence/u10-design-storage" },
+    { "id": "AC8.3.5", "status": "OK", "target": "BR2.1 (the uploaded shape is the same DesignPayload the round-trip promise covers)" },
+    { "id": "AC9.2.1", "status": "OK", "target": "BR2.1, BR3.1 (migration preserving every edit and provenance state is exactly what round-trip fidelity plus wire-carried provenance guarantee)" },
+    { "id": "AC11.2.1", "status": "OK", "target": "BR3.1" },
+    { "id": "AC11.2.2", "status": "OK", "target": "BR3.1" },
+    { "id": "AC11.2.3", "status": "OK", "target": "BR3.1" }
+  ]
+}

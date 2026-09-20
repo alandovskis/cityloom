@@ -1,0 +1,10 @@
+{
+  "stage": "nfr-requirements",
+  "confirmed": true,
+  "unit": "street-core",
+  "upstream_ids": ["NFR6", "NFR7"],
+  "coverage": [
+    { "id": "NFR6", "status": "OK", "target": "NFR6.4.1, NFR6.4.2, NFR6.4.3 in security-requirements.md; NFR6.1.2 N/A within that file" },
+    { "id": "NFR7", "status": "OK", "target": "NFR7.2.6 in security-requirements.md (no new dependency introduced by this Unit)" }
+  ]
+}

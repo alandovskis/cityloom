@@ -1,0 +1,10 @@
+[package]
+name = "street-core"
+version = "0.1.0"
+description = "The imported street/lane baseline domain model: provenance-carrying dimensions, keyed lanes and streets, and the StreetSource import port (Unit U2)."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"

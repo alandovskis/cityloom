@@ -1,0 +1,14 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "design-storage",
+  "confirmed": true,
+  "upstream_ids": ["NFR1", "NFR2", "NFR3", "NFR5", "NFR6", "NFR7"],
+  "coverage": [
+    { "id": "NFR1", "status": "OK", "target": "NFR1.4.1-NFR1.4.4 (proposed NFR1.4) in performance-requirements.md" },
+    { "id": "NFR2", "status": "OK", "target": "NFR2.3.1-NFR2.3.3 (proposed NFR2.3) in scalability-requirements.md" },
+    { "id": "NFR3", "status": "OK", "target": "NFR3.1.1, NFR3.2.1, NFR3.3.1, NFR3.4.1-NFR3.4.2 (proposed NFR3.4) in reliability-requirements.md" },
+    { "id": "NFR5", "status": "OK", "target": "NFR5.3.1 in security-requirements.md (rate limiting as a cost/abuse bound)" },
+    { "id": "NFR6", "status": "OK", "target": "NFR6.1.1, NFR6.3.1, NFR6.4.1-NFR6.4.4 (proposed NFR6.4) in security-requirements.md" },
+    { "id": "NFR7", "status": "OK", "target": "NFR7.4.1-NFR7.4.4 (proposed NFR7.4) in observability-requirements.md" }
+  ]
+}

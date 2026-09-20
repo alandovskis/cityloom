@@ -1,0 +1,51 @@
+[package]
+name = "cityloom-street-import"
+version = "0.1.0"
+description = "The request-to-corrected-street pipeline (Unit U4): fetching OSM extract bytes, converting them via the pinned osm2streets crate into street-core's provenance-carrying types, and managing corrections."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# Path dependencies within this workspace.
+street-core = { path = "../street-core" }
+cityloom-api-types = { path = "../cityloom-api-types" }
+
+# The pinned osm2streets dependency (`docs/osm2streets-pin.md`,
+# `security-design.md` SD-3): consumed only through this one declaration,
+# so exactly one `osm2streets` package resolves in the dependency graph.
+# `streets_reader` lives in the same upstream repository at the same pinned
+# commit and is the only crate in that repository offering OSM XML parsing
+# (`osm_to_street_network`) — `osm2streets` itself operates on an
+# already-built `StreetNetwork` (`code-generation-plan.md` Step 1
+# deviation; see `code-summary.md`).
+osm2streets = { git = "https://github.com/a-b-street/osm2streets", rev = "fc119c47dac567d030c6ce7c24a48896f58ed906" }
+streets_reader = { git = "https://github.com/a-b-street/osm2streets", rev = "fc119c47dac567d030c6ce7c24a48896f58ed906" }
+# Deliberately declared WITHOUT `rev =` here, unlike `osm2streets` and
+# `streets_reader` above — see "abstutil pin, deviation" in
+# `docs/osm2streets-pin.md` for why: this crate must resolve to the exact
+# same `abstutil` package `streets_reader::osm_to_street_network` expects
+# for its `&mut Timer` parameter, and a second, independently-`rev`-pinned
+# declaration of the same commit is a *different* Cargo `SourceId` — Cargo
+# then compiles two distinct `abstutil` crates and `Timer<'_>` from one does
+# not type-check as `Timer<'_>` from the other (verified empirically against
+# `E0308` during this Unit's build; `cargo tree -p cityloom-street-import -i
+# abstutil` below confirms the single-package outcome this form produces).
+# The pin itself is still enforced, just at the `Cargo.lock` layer instead
+# of this Cargo.toml line: the committed lockfile records this repository's
+# resolved commit, and `cargo build --locked` (`scripts/verify.sh`, every
+# CI run) fails hard rather than silently re-resolving to a newer commit.
+abstutil = { git = "https://github.com/a-b-street/abstreet" }
+
+thiserror = "2.0.20"
+futures = "0.3.34"
+
+# Browser transport and timeout budget (`security-design.md` SD-4): used only
+# by this crate's `GlooExtractTransport`/`GlooTimeoutSource` — the concrete,
+# WASM-only implementations of the `ExtractTransport`/`TimeoutSource` ports.
+# Unit tests exercise the ports through fakes and never construct these.
+gloo-net = "0.6.0"
+gloo-timers = { version = "0.3.0", features = ["futures"] }

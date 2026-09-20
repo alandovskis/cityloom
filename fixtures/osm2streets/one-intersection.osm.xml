@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="Overpass API 0.7.62.11 87bfad18">
+<note>The data included in this document is from www.openstreetmap.org. The data is made available under ODbL.</note>
+<meta osm_base="2026-09-16T12:34:36Z"/>
+
+  <node id="53097841" lat="47.6664236" lon="-122.3119122" version="8" timestamp="2013-10-11T17:25:22Z" changeset="18301140" uid="1340045" user="ST_Mike"/>
+  <node id="53162661" lat="47.6649022" lon="-122.3130617" version="7" timestamp="2021-02-05T09:34:48Z" changeset="98757055" uid="8563184" user="G1asshouse">
+    <tag k="highway" v="traffic_signals"/>
+    <tag k="traffic_signals:direction" v="both"/>
+  </node>
+  <node id="53162662" lat="47.6648936" lon="-122.3119594" version="8" timestamp="2020-02-19T07:39:53Z" changeset="81207809" uid="8563184" user="G1asshouse">
+    <tag k="highway" v="traffic_signals"/>
+    <tag k="traffic_signals:direction" v="both"/>
+  </node>
+  <node id="53222752" lat="47.6630904" lon="-122.3119673" version="11" timestamp="2021-05-12T02:35:22Z" changeset="104540270" uid="8563184" user="G1asshouse">
+    <tag k="highway" v="traffic_signals"/>
+    <tag k="traffic_signals:direction" v="both"/>
+  </node>
+  <node id="53247596" lat="47.6685208" lon="-122.3119060" version="6" timestamp="2017-10-09T00:57:23Z" changeset="52744802" uid="2773196" user="NickBolten"/>
+  <node id="59712855" lat="47.6648947" lon="-122.3113693" version="5" timestamp="2015-03-31T01:49:35Z" changeset="29866321" uid="2601744" user="sctrojan79"/>
+  <node id="59713084" lat="47.6648979" lon="-122.3125137" version="9" timestamp="2021-02-05T09:34:48Z" changeset="98757055" uid="8563184" user="G1asshouse"/>
+  <node id="59713094" lat="47.6649068" lon="-122.3136426" version="5" timestamp="2021-02-05T09:34:48Z" changeset="98757055" uid="8563184" user="G1asshouse"/>
+  <node id="3871555554" lat="47.6649063" lon="-122.3135792" version="2" timestamp="2021-02-05T09:34:48Z" changeset="98757055" uid="8563184" user="G1asshouse"/>
+  <node id="4272380196" lat="47.6615417" lon="-122.3119714" version="1" timestamp="2016-06-29T23:09:00Z" changeset="40378690" uid="2511706" user="calfarome"/>
+  <node id="4607197853" lat="47.6666409" lon="-122.3119116" version="3" timestamp="2025-11-08T13:10:28Z" changeset="174375519" uid="4744872" user="Itserpol">
+    <tag k="bus" v="yes"/>
+    <tag k="gtfs:stop_id:US-WA-KCM" v="36890"/>
+    <tag k="name" v="15th Avenue Northeast &amp; Northeast 52nd Street"/>
+    <tag k="public_transport" v="stop_position"/>
+    <tag k="ref" v="36890"/>
+  </node>
+  <node id="4607202597" lat="47.6662364" lon="-122.3119156" version="3" timestamp="2025-11-08T13:10:28Z" changeset="174375519" uid="4744872" user="Itserpol">
+    <tag k="bus" v="yes"/>
+    <tag k="gtfs:stop_id:US-WA-KCM" v="35790"/>
+    <tag k="name" v="15th Avenue Northeast &amp; Northeast 52nd Street"/>
+    <tag k="public_transport" v="stop_position"/>
+    <tag k="ref" v="35790"/>
+  </node>
+  <node id="4636010866" lat="47.6661918" lon="-122.3119164" version="1" timestamp="2017-01-26T21:50:32Z" changeset="45531400" uid="5201592" user="Annddyy"/>
+  <node id="4694400569" lat="47.6649013" lon="-122.3129461" version="11" timestamp="2026-07-15T00:17:18Z" changeset="185751330" uid="10729211" user="KGo">
+    <tag k="button_operated" v="yes"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="yes"/>
+    <tag k="traffic_signals:sound" v="no"/>
+    <tag k="traffic_signals:vibration" v="yes"/>
+  </node>
+  <node id="4694400571" lat="47.6648947" lon="-122.3120961" version="9" timestamp="2025-07-07T18:09:43Z" changeset="168617751" uid="16974287" user="VLD304">
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="yes"/>
+  </node>
+  <node id="4694710425" lat="47.6630120" lon="-122.3119678" version="10" timestamp="2025-09-09T00:08:38Z" changeset="171659869" uid="23213284" user="VLD321">
+    <tag k="button_operated" v="no"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="traffic_signals:sound" v="yes"/>
+  </node>
+  <node id="4829744981" lat="47.6648042" lon="-122.3119608" version="9" timestamp="2025-07-07T18:13:05Z" changeset="168617846" uid="16974287" user="VLD304">
+    <tag k="button_operated" v="yes"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="yes"/>
+    <tag k="traffic_signals:sound" v="yes"/>
+  </node>
+  <node id="4829744982" lat="47.6631437" lon="-122.3119670" version="9" timestamp="2025-09-09T00:08:38Z" changeset="171659869" uid="23213284" user="VLD321">
+    <tag k="button_operated" v="no"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="traffic_signals:sound" v="yes"/>
+  </node>
+  <node id="4829744984" lat="47.6648934" lon="-122.3118309" version="8" timestamp="2026-03-25T00:02:42Z" changeset="180380618" uid="23951437" user="Th3eit">
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="yes"/>
+  </node>
+  <node id="4831344185" lat="47.6649034" lon="-122.3132174" version="12" timestamp="2025-07-07T18:06:44Z" changeset="168617671" uid="16974287" user="VLD304">
+    <tag k="button_operated" v="yes"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="yes"/>
+    <tag k="traffic_signals:sound" v="no"/>
+    <tag k="traffic_signals:vibration" v="no"/>
+  </node>
+  <node id="5154230198" lat="47.6649888" lon="-122.3119578" version="7" timestamp="2026-03-25T00:02:41Z" changeset="180380618" uid="23951437" user="Th3eit">
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="yes"/>
+  </node>
+  <node id="5154230202" lat="47.6663638" lon="-122.3119134" version="9" timestamp="2026-03-25T00:02:35Z" changeset="180381280" uid="23951437" user="Th3eit">
+    <tag k="button_operated" v="yes"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="yes"/>
+    <tag k="traffic_signals:sound" v="no"/>
+  </node>
+  <node id="5156175463" lat="47.6664990" lon="-122.3119119" version="7" timestamp="2025-09-09T15:57:13Z" changeset="171693921" uid="22891840" user="VLD317">
+    <tag k="crossing" v="unmarked"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="no"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="no"/>
+  </node>
+  <node id="5156175464" lat="47.6684446" lon="-122.3119062" version="5" timestamp="2026-08-12T07:26:51Z" changeset="187322165" uid="24409619" user="coolduder">
+    <tag k="crossing" v="unmarked"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="no"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="yes"/>
+  </node>
+  <node id="5443512768" lat="47.6616477" lon="-122.3119711" version="1" timestamp="2018-02-28T18:48:39Z" changeset="56764834" uid="2959136" user="fluffy_unicorn"/>
+  <node id="5443512781" lat="47.6623898" lon="-122.3119689" version="2" timestamp="2021-07-31T13:00:17Z" changeset="108942784" uid="8563184" user="G1asshouse"/>
+  <node id="5443512797" lat="47.6643527" lon="-122.3119668" version="2" timestamp="2020-02-17T23:20:30Z" changeset="81138051" uid="8563184" user="G1asshouse"/>
+  <node id="5443512804" lat="47.6647252" lon="-122.3119620" version="2" timestamp="2020-02-17T23:20:30Z" changeset="81138051" uid="8563184" user="G1asshouse"/>
+  <node id="6363985067" lat="47.6648990" lon="-122.3126507" version="4" timestamp="2026-08-06T13:05:57Z" changeset="187032364" uid="4744872" user="Itserpol">
+    <tag k="bus" v="yes"/>
+    <tag k="gtfs:stop_id:US-WA-KCM" v="10370"/>
+    <tag k="name" v="Northeast 50th Street &amp; University Way Northeast"/>
+    <tag k="network" v="King County Metro"/>
+    <tag k="network:short" v="KCM"/>
+    <tag k="network:wikidata" v="Q6411393"/>
+    <tag k="operator" v="King County Metro"/>
+    <tag k="operator:short" v="KCM"/>
+    <tag k="operator:wikidata" v="Q6411393"/>
+    <tag k="public_transport" v="stop_position"/>
+    <tag k="ref" v="10370"/>
+  </node>
+  <way id="6509865" version="39" timestamp="2024-11-11T05:45:53Z" changeset="158994078" uid="20996589" user="Lumikeiju">
+    <nd ref="53162662"/>
+    <nd ref="5154230198"/>
+    <nd ref="4636010866"/>
+    <nd ref="4607202597"/>
+    <nd ref="5154230202"/>
+    <nd ref="53097841"/>
+    <nd ref="5156175463"/>
+    <nd ref="4607197853"/>
+    <nd ref="5156175464"/>
+    <nd ref="53247596"/>
+    <tag k="highway" v="secondary"/>
+    <tag k="lanes" v="4"/>
+    <tag k="lit" v="dusk-dawn"/>
+    <tag k="maxspeed" v="25 mph"/>
+    <tag k="name" v="15th Avenue Northeast"/>
+    <tag k="sidewalk" v="separate"/>
+    <tag k="snowplowing" v="yes"/>
+    <tag k="winter_service" v="yes"/>
+    <tag k="winter_service:priority" v="2"/>
+  </way>
+  <way id="340214356" version="22" timestamp="2026-08-21T01:39:51Z" changeset="187771577" uid="23131980" user="Yushclay">
+    <nd ref="53162661"/>
+    <nd ref="4831344185"/>
+    <nd ref="3871555554"/>
+    <nd ref="59713094"/>
+    <tag k="highway" v="secondary"/>
+    <tag k="lanes" v="4"/>
+    <tag k="lit" v="dusk-dawn"/>
+    <tag k="maxspeed" v="25 mph"/>
+    <tag k="name" v="Northeast 50th Street"/>
+    <tag k="sidewalk:both" v="separate"/>
+    <tag k="snowplowing" v="yes"/>
+    <tag k="surface" v="concrete"/>
+    <tag k="trolley_wire" v="yes"/>
+    <tag k="winter_service" v="yes"/>
+    <tag k="winter_service:priority" v="2"/>
+  </way>
+  <way id="465799954" version="12" timestamp="2026-08-21T01:39:51Z" changeset="187771577" uid="23131980" user="Yushclay">
+    <nd ref="53162661"/>
+    <nd ref="4694400569"/>
+    <nd ref="6363985067"/>
+    <nd ref="59713084"/>
+    <nd ref="4694400571"/>
+    <nd ref="53162662"/>
+    <tag k="highway" v="secondary"/>
+    <tag k="lanes" v="4"/>
+    <tag k="maxspeed" v="25 mph"/>
+    <tag k="name" v="Northeast 50th Street"/>
+    <tag k="sidewalk:both" v="separate"/>
+    <tag k="snowplowing" v="yes"/>
+    <tag k="surface" v="concrete"/>
+    <tag k="trolley_wire" v="yes"/>
+    <tag k="winter_service" v="yes"/>
+    <tag k="winter_service:priority" v="2"/>
+  </way>
+  <way id="465799955" version="13" timestamp="2026-07-24T04:54:48Z" changeset="186273112" uid="20996589" user="Lumikeiju">
+    <nd ref="53162662"/>
+    <nd ref="4829744984"/>
+    <nd ref="59712855"/>
+    <tag k="highway" v="tertiary"/>
+    <tag k="lanes" v="4"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="25 mph"/>
+    <tag k="name" v="Northeast 50th Street"/>
+    <tag k="sidewalk:both" v="separate"/>
+    <tag k="snowplowing" v="yes"/>
+    <tag k="surface" v="concrete"/>
+    <tag k="winter_service" v="yes"/>
+    <tag k="winter_service:priority" v="2"/>
+  </way>
+  <way id="465799956" version="12" timestamp="2024-11-12T03:28:52Z" changeset="159033903" uid="20996589" user="Lumikeiju">
+    <nd ref="4272380196"/>
+    <nd ref="5443512768"/>
+    <nd ref="5443512781"/>
+    <nd ref="4694710425"/>
+    <nd ref="53222752"/>
+    <nd ref="4829744982"/>
+    <nd ref="5443512797"/>
+    <nd ref="5443512804"/>
+    <nd ref="4829744981"/>
+    <nd ref="53162662"/>
+    <tag k="highway" v="secondary"/>
+    <tag k="lanes" v="4"/>
+    <tag k="lit" v="dusk-dawn"/>
+    <tag k="maxspeed" v="25 mph"/>
+    <tag k="name" v="15th Avenue Northeast"/>
+    <tag k="sidewalk" v="separate"/>
+    <tag k="snowplowing" v="yes"/>
+    <tag k="surface" v="concrete"/>
+    <tag k="trolley_wire" v="yes"/>
+    <tag k="winter_service" v="yes"/>
+    <tag k="winter_service:priority" v="2"/>
+  </way>
+
+</osm>

@@ -1,0 +1,12 @@
+{
+  "stage": "infrastructure-design",
+  "confirmed": true,
+  "unit": "street-core",
+  "upstream_ids": ["NFR6.4.1", "NFR6.4.2", "NFR6.4.3", "NFR7.2.6"],
+  "coverage": [
+    { "id": "NFR6.4.1", "status": "N/A", "target": "a compile-time/API-shape guarantee (nfr-design SD-1), not an infrastructure/CI concern" },
+    { "id": "NFR6.4.2", "status": "N/A", "target": "a Cargo dependency-graph guarantee (nfr-design SD-2), not an infrastructure/CI concern" },
+    { "id": "NFR6.4.3", "status": "OK", "target": "cicd-pipeline.md Lint stage (clippy/fmt cover this crate; forbid(unsafe_code) is compile-time)" },
+    { "id": "NFR7.2.6", "status": "N/A", "target": "no dependency exists to scan or pin" }
+  ]
+}

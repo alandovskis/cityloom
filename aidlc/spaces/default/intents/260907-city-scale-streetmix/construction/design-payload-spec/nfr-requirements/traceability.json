@@ -1,0 +1,9 @@
+{
+  "stage": "nfr-requirements",
+  "confirmed": true,
+  "unit": "design-payload-spec",
+  "upstream_ids": ["NFR6"],
+  "coverage": [
+    { "id": "NFR6", "status": "OK", "target": "NFR6.4.4, NFR6.4.5, NFR6.3.1 in security-requirements.md; NFR6.1.3 N/A within that file" }
+  ]
+}

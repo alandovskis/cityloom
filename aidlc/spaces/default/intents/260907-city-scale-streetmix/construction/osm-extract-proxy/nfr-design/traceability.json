@@ -1,0 +1,453 @@
+{
+  "stage": "nfr-design",
+  "unit": "osm-extract-proxy",
+  "upstream_ids": [
+    "NFR1.1",
+    "NFR1.1.1",
+    "NFR1.1.2",
+    "NFR1.1.3",
+    "NFR1.1.4",
+    "NFR1.1.5",
+    "NFR1.1.6",
+    "NFR2.1",
+    "NFR2.1.1",
+    "NFR2.1.2",
+    "NFR2.1.3",
+    "NFR2.1.4",
+    "NFR2.1.5",
+    "NFR2.1.6",
+    "NFR2.1.7",
+    "NFR3.1",
+    "NFR3.1.1",
+    "NFR3.1.2",
+    "NFR3.1.3",
+    "NFR3.1.4",
+    "NFR3.1.5",
+    "NFR3.1.6",
+    "NFR3.1.7",
+    "NFR3.1.8",
+    "NFR3.1.9",
+    "NFR3.1.10",
+    "NFR3.1.11",
+    "NFR3.1.12",
+    "NFR3.1.13",
+    "NFR3.1.14",
+    "NFR3.1.15",
+    "NFR3.1.16",
+    "NFR3.1.17",
+    "NFR3.2",
+    "NFR3.2.1",
+    "NFR3.2.2",
+    "NFR3.2.3",
+    "NFR3.2.4",
+    "NFR3.2.5",
+    "NFR3.3",
+    "NFR3.3.1",
+    "NFR4.6",
+    "NFR5.1",
+    "NFR5.1.1",
+    "NFR5.1.2",
+    "NFR5.1.3",
+    "NFR5.1.4",
+    "NFR5.1.5",
+    "NFR5.1.6",
+    "NFR5.1.7",
+    "NFR5.1.8",
+    "NFR5.2",
+    "NFR5.2.1",
+    "NFR6.1",
+    "NFR6.1.1",
+    "NFR6.3",
+    "NFR6.3.1",
+    "NFR6.3.2",
+    "NFR6.3.3",
+    "NFR6.3.4",
+    "NFR6.4",
+    "NFR6.4.1",
+    "NFR6.4.2",
+    "NFR6.4.3",
+    "NFR6.4.4",
+    "NFR6.5",
+    "NFR7.1",
+    "NFR7.1.1",
+    "NFR7.2",
+    "NFR7.2.1",
+    "NFR7.2.2",
+    "NFR7.2.3",
+    "NFR7.3",
+    "NFR7.3.1"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "refined by NFR1.1.1 to NFR1.1.6 (performance-requirements.md); met by PD-1 to PD-8 (performance-design.md) with RD-3 bounding every wait"
+    },
+    {
+      "id": "NFR1.1.1",
+      "status": "OK",
+      "target": "PD-4 (one deadline for the whole request), RD-3 (performance-design.md, reliability-design.md)"
+    },
+    {
+      "id": "NFR1.1.2",
+      "status": "OK",
+      "target": "PD-2 (packed store read by offset), PD-3 (cut on the blocking pool), PD-6 (bucket measurement)"
+    },
+    {
+      "id": "NFR1.1.3",
+      "status": "OK",
+      "target": "PD-5 (cache hit as one lookup on shared bytes), PD-6"
+    },
+    {
+      "id": "NFR1.1.4",
+      "status": "OK",
+      "target": "PD-7 (sequential verification, compact manifest parse), RD-1 (start-up sequence)"
+    },
+    {
+      "id": "NFR1.1.5",
+      "status": "OK",
+      "target": "PD-1 (integer cell addressing, span check before any read), PD-2, PD-3"
+    },
+    {
+      "id": "NFR1.1.6",
+      "status": "OK",
+      "target": "PD-3 (four-permit semaphore), SC-2"
+    },
+    {
+      "id": "NFR2.1",
+      "status": "OK",
+      "target": "refined by NFR2.1.1 to NFR2.1.7 (scalability-requirements.md); met by SC-1 to SC-7 (scalability-design.md), SD-4 and PD-3"
+    },
+    {
+      "id": "NFR2.1.1",
+      "status": "OK",
+      "target": "SC-1, SC-2, SC-3 (scalability-design.md)"
+    },
+    {
+      "id": "NFR2.1.2",
+      "status": "OK",
+      "target": "SC-2 (slots as the only queue), RD-3"
+    },
+    {
+      "id": "NFR2.1.3",
+      "status": "OK",
+      "target": "SD-4 (window map and 60-second sweep), SC-1"
+    },
+    {
+      "id": "NFR2.1.4",
+      "status": "OK",
+      "target": "SC-4 (region growth is configuration plus a build)"
+    },
+    {
+      "id": "NFR2.1.5",
+      "status": "OK",
+      "target": "PD-2 (24-byte index entries), SC-4 (sizing table)"
+    },
+    {
+      "id": "NFR2.1.6",
+      "status": "OK",
+      "target": "SC-4, SC-5 (build memory and sequential store write)"
+    },
+    {
+      "id": "NFR2.1.7",
+      "status": "OK",
+      "target": "SC-7 (packed store keeps the artifact at two files), PD-2; placement itself remains Infrastructure Design's per logical-components.md handoff item 1"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "refined by NFR3.1.1 to NFR3.1.17 (reliability-requirements.md, observability-requirements.md); met by RD-1 to RD-9 (reliability-design.md) and OD-2 to OD-8 (observability-design.md); NFR3.1.11 has no in-Unit treatment, see its own row"
+    },
+    {
+      "id": "NFR3.1.1",
+      "status": "OK",
+      "target": "OD-6 (readiness signal), OD-7 (availability SLI), RD-2"
+    },
+    {
+      "id": "NFR3.1.2",
+      "status": "OK",
+      "target": "OD-2 (counters), OD-7 (success-ratio computation)"
+    },
+    {
+      "id": "NFR3.1.3",
+      "status": "OK",
+      "target": "PD-1 (integer canonical box), PD-3 (de-duplication and fixed sort order), the project encoder of tech-stack-decisions.md TS-3"
+    },
+    {
+      "id": "NFR3.1.4",
+      "status": "OK",
+      "target": "RD-8 (the build never publishes a partial result)"
+    },
+    {
+      "id": "NFR3.1.5",
+      "status": "OK",
+      "target": "RD-6 (process restart)"
+    },
+    {
+      "id": "NFR3.1.6",
+      "status": "OK",
+      "target": "RD-4 (per-request failure boundary), SD-2 (catch-panic layer)"
+    },
+    {
+      "id": "NFR3.1.7",
+      "status": "OK",
+      "target": "PD-3 (deadline checked between cells), RD-3"
+    },
+    {
+      "id": "NFR3.1.8",
+      "status": "OK",
+      "target": "PD-5 (weighted LRU eviction), RD-5"
+    },
+    {
+      "id": "NFR3.1.9",
+      "status": "OK",
+      "target": "RD-1 (Unready with no run-time transition)"
+    },
+    {
+      "id": "NFR3.1.10",
+      "status": "OK",
+      "target": "PD-2 (absent store entry is a covered, empty cell), RD-4"
+    },
+    {
+      "id": "NFR3.1.11",
+      "status": "N/A",
+      "target": "a platform outage has no design treatment inside this Unit; recorded as the LC-4 failure domain in logical-components.md with no recovery action, per reliability-requirements.md"
+    },
+    {
+      "id": "NFR3.1.12",
+      "status": "OK",
+      "target": "OD-2 (counters struct and periodic row)"
+    },
+    {
+      "id": "NFR3.1.13",
+      "status": "OK",
+      "target": "OD-3 (record_failure as the single failure-mapping function)"
+    },
+    {
+      "id": "NFR3.1.14",
+      "status": "OK",
+      "target": "PD-6 (bucket counters), OD-2"
+    },
+    {
+      "id": "NFR3.1.15",
+      "status": "OK",
+      "target": "OD-4 (lifecycle rows)"
+    },
+    {
+      "id": "NFR3.1.16",
+      "status": "OK",
+      "target": "OD-5 (build rows)"
+    },
+    {
+      "id": "NFR3.1.17",
+      "status": "OK",
+      "target": "OD-8 (no alert defined; platform notifications only)"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "refined by NFR3.2.1 to NFR3.2.5; met by RD-1, RD-2 (reliability-design.md), SD-8, SD-10 (security-design.md), OD-6"
+    },
+    {
+      "id": "NFR3.2.1",
+      "status": "OK",
+      "target": "RD-2 (readiness-gated rollover), OD-6"
+    },
+    {
+      "id": "NFR3.2.2",
+      "status": "OK",
+      "target": "RD-2 (probe timeout exceeds measured Ready time), PD-7"
+    },
+    {
+      "id": "NFR3.2.3",
+      "status": "OK",
+      "target": "OD-6, SD-8 (readiness endpoint)"
+    },
+    {
+      "id": "NFR3.2.4",
+      "status": "OK",
+      "target": "RD-1 (verify every cell before Ready), SD-10"
+    },
+    {
+      "id": "NFR3.2.5",
+      "status": "OK",
+      "target": "SD-8 (fixed body, bypasses stamp and limiter)"
+    },
+    {
+      "id": "NFR3.3",
+      "status": "OK",
+      "target": "refined by NFR3.3.1 (no attached volume, no persistent state); met by RD-1 (store opened read-only, every runtime structure in memory) and LC-2"
+    },
+    {
+      "id": "NFR3.3.1",
+      "status": "OK",
+      "target": "RD-1 (store opened read-only, every runtime structure in memory), LC-2 (the only data is a read-only artifact)"
+    },
+    {
+      "id": "NFR4.6",
+      "status": "N/A",
+      "target": "the mobile browser matrix is a client-surface requirement; security-requirements.md cites it only in an assumption about cross-origin preflight (NFR5.1.8), and this Unit has no user interface and no design element for it"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "refined by NFR5.1.1 to NFR5.1.8; met by PD-5 (cache ceiling), PD-2/PD-3 (memory), SD-4 and SC-1 (requester windows), SC-2 (CPU), SD-2 (no CORS); NFR5.1.6 is deferred to environment-provisioning, see its own row"
+    },
+    {
+      "id": "NFR5.1.1",
+      "status": "OK",
+      "target": "PD-5 (moka with byte weigher and 32 MiB capacity)"
+    },
+    {
+      "id": "NFR5.1.2",
+      "status": "OK",
+      "target": "PD-2 (index sizing), PD-3 (per-cut buffers freed with the task), SC-4 (memory table)"
+    },
+    {
+      "id": "NFR5.1.3",
+      "status": "OK",
+      "target": "SD-4 (two fixed windows per hash), SC-1"
+    },
+    {
+      "id": "NFR5.1.4",
+      "status": "OK",
+      "target": "SC-2 (CPU bounded by four cuts), PD-3"
+    },
+    {
+      "id": "NFR5.1.5",
+      "status": "OK",
+      "target": "SC-1 to SC-3 (the bounds), OD-7 (cost inputs from the counters row); the allocation itself is checked against B-3's measurement"
+    },
+    {
+      "id": "NFR5.1.6",
+      "status": "Deferred",
+      "target": "the account usage limit is set at environment-provisioning; listed as logical-components.md handoff item 5"
+    },
+    {
+      "id": "NFR5.1.7",
+      "status": "OK",
+      "target": "SD-4 (limiter with Retry-After), SC-1, SC-2, PD-4"
+    },
+    {
+      "id": "NFR5.1.8",
+      "status": "OK",
+      "target": "SD-2 (no CORS layer; x-client-build forces a failing preflight)"
+    },
+    {
+      "id": "NFR5.2",
+      "status": "OK",
+      "target": "refined by NFR5.2.1 (the proxy as the bounded, cached exception); met by PD-3 (one bounded cut per miss) and PD-5 (hits cost no cut, single-flight)"
+    },
+    {
+      "id": "NFR5.2.1",
+      "status": "OK",
+      "target": "PD-3 (one bounded cut per miss), PD-5 (hits cost no cut; single-flight)"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "refined by NFR6.1.1 (no secret exists for this Unit); met by SD-9 (typed environment configuration, no secrets store)"
+    },
+    {
+      "id": "NFR6.1.1",
+      "status": "OK",
+      "target": "SD-9 (typed environment configuration, no secret)"
+    },
+    {
+      "id": "NFR6.3",
+      "status": "OK",
+      "target": "refined by NFR6.3.1 to NFR6.3.4 (security-requirements.md; its review R-01 records that the inception parent needs recharacterising); met by SD-1, SD-6, SD-7 (security-design.md), OD-1, OD-3"
+    },
+    {
+      "id": "NFR6.3.1",
+      "status": "OK",
+      "target": "SD-7 (emission discipline), OD-1 (subscriber with span events off), OD-3 (five-field failure rows)"
+    },
+    {
+      "id": "NFR6.3.2",
+      "status": "OK",
+      "target": "SD-1 (RandomState-keyed hash minted at start)"
+    },
+    {
+      "id": "NFR6.3.3",
+      "status": "OK",
+      "target": "SD-1 (platform-asserted address, one borrowed use)"
+    },
+    {
+      "id": "NFR6.3.4",
+      "status": "OK",
+      "target": "SD-6 (fixed header set, no cookie), SD-8"
+    },
+    {
+      "id": "NFR6.4",
+      "status": "OK",
+      "target": "a proposed inception addition recorded under security-requirements.md Amendments required, refined by NFR6.4.1 to NFR6.4.4; met by SD-2, SD-5, SD-6"
+    },
+    {
+      "id": "NFR6.4.1",
+      "status": "OK",
+      "target": "SD-5 (typed parsing, integer-only addressing, read-only store)"
+    },
+    {
+      "id": "NFR6.4.2",
+      "status": "OK",
+      "target": "SD-2 (catch-panic to the typed error), SD-6 (constrained header values, typed bodies)"
+    },
+    {
+      "id": "NFR6.4.3",
+      "status": "OK",
+      "target": "SD-6 (one response layer sets the header set unconditionally)"
+    },
+    {
+      "id": "NFR6.4.4",
+      "status": "OK",
+      "target": "SD-2 (GET only, header limits, read timeout)"
+    },
+    {
+      "id": "NFR6.5",
+      "status": "N/A",
+      "target": "not a requirement: the id appears only inside security-requirements.md's review appendix as the reviewer's suggested alternative numbering for NFR6.3.1 to NFR6.3.4; nothing is specified under it and nothing is designed against it"
+    },
+    {
+      "id": "NFR7.1",
+      "status": "Deferred",
+      "target": "refined by NFR7.1.1 (coverage floor extended to this Unit); the floor is measured at build-and-test over the LC-1 modules named in logical-components.md"
+    },
+    {
+      "id": "NFR7.1.1",
+      "status": "Deferred",
+      "target": "the coverage floor is measured at build-and-test; every design element above names its requirement's test, and the modules in logical-components.md LC-1 are the measured set"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "refined by NFR7.2.1 to NFR7.2.3; met by SD-10 (verified download and manifest provenance), SD-11 (locked builds and audit), RD-8 (whole builds, content-derived buildId), PD-1 (reproducible key rendering)"
+    },
+    {
+      "id": "NFR7.2.1",
+      "status": "OK",
+      "target": "SD-11 (locked builds), RD-8 (whole builds with content-derived buildId), PD-1 (reproducible key rendering)"
+    },
+    {
+      "id": "NFR7.2.2",
+      "status": "OK",
+      "target": "SD-10 (TLS with verification, publisher checksum, manifest provenance)"
+    },
+    {
+      "id": "NFR7.2.3",
+      "status": "OK",
+      "target": "SD-11 (supply chain)"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "Deferred",
+      "target": "refined by NFR7.3.1 (a failing regression test before every fix); enforced at code-generation and build-and-test per team.md; RD-4 names the regression rule for panics"
+    },
+    {
+      "id": "NFR7.3.1",
+      "status": "Deferred",
+      "target": "enforced at code-generation and build-and-test per team.md; RD-4 names the regression rule for panics"
+    }
+  ],
+  "note": "Ids are three-level (NFR1.1.1 refines inception NFR1.1) because requirements.md already uses the two-level form; the two-level rows map each inception sub-requirement to the design elements that meet its refinements, the three-level rows map each refinement individually."
+}

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="Overpass API 0.7.62.11 87bfad18">
+<note>The data included in this document is from www.openstreetmap.org. The data is made available under ODbL.</note>
+<meta osm_base="2026-09-16T12:32:36Z"/>
+
+  <node id="31251896" lat="47.6535999" lon="-122.3151843" version="2" timestamp="2017-02-04T23:25:43Z" changeset="45817751" uid="2601744" user="sctrojan79"/>
+  <node id="31251897" lat="47.6535902" lon="-122.3145066" version="9" timestamp="2020-02-20T02:19:27Z" changeset="81245772" uid="8563184" user="G1asshouse">
+    <tag k="highway" v="traffic_signals"/>
+    <tag k="traffic_signals:direction" v="both"/>
+  </node>
+  <node id="4695100998" lat="47.6535921" lon="-122.3146403" version="8" timestamp="2025-07-18T21:10:03Z" changeset="169128999" uid="19857719" user="VLD277">
+    <tag k="button_operated" v="yes"/>
+    <tag k="crossing" v="traffic_signals"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="zebra:paired"/>
+    <tag k="crossing:signals" v="yes"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="no"/>
+    <tag k="traffic_signals:sound" v="no"/>
+  </node>
+  <way id="4729721" version="20" timestamp="2025-10-22T13:54:28Z" changeset="173629284" uid="22101303" user="KarlaIbrahić">
+    <nd ref="31251896"/>
+    <nd ref="4695100998"/>
+    <nd ref="31251897"/>
+    <tag k="bicycle" v="designated"/>
+    <tag k="cycleway:left" v="track"/>
+    <tag k="hgv" v="designated"/>
+    <tag k="highway" v="secondary"/>
+    <tag k="lanes" v="4"/>
+    <tag k="lanes:backward" v="1"/>
+    <tag k="lanes:forward" v="3"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="25 mph"/>
+    <tag k="name" v="Northeast Pacific Street"/>
+    <tag k="name:etymology" v="Pacific County, Washington"/>
+    <tag k="name:etymology:wikidata" v="Q483990"/>
+    <tag k="name:etymology:wikipedia" v="en:Pacific County, Washington"/>
+    <tag k="parking:lane:both" v="no_parking"/>
+    <tag k="sidewalk" v="separate"/>
+    <tag k="snowplowing" v="yes"/>
+    <tag k="source:hgv" v="https://www.seattle.gov/Documents/Departments/SDOT/Services/Permits/MajorTruckStreets.pdf"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="turn:lanes:forward" v="left|through|through;right"/>
+    <tag k="width" v="16"/>
+    <tag k="winter_service" v="yes"/>
+    <tag k="winter_service:priority" v="2"/>
+  </way>
+
+</osm>

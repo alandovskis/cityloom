@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT column_name FROM information_schema.columns WHERE table_name = 'stored_designs'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "column_name",
+        "type_info": "Name",
+        "origin": {
+          "Table": {
+            "table": "information_schema.columns",
+            "name": "column_name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "06b5cacd39ac3042fd9ff1ab032fe8e14a5fb0aecd5b93ef737a34c42c7532ff"
+}

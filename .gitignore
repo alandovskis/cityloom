@@ -81,3 +81,11 @@ aidlc/diagnostics/
 # which was proven to corrupt the multi-line audit blocks) ·
 # aidlc/spaces/*/intents/*/<phase>/<stage>/*.md (artifacts + diary).
 .claude/settings.local.json
+
+# Rust workspace (cityloom)
+target/
+# Secrets are Railway environment variables, never files in the repository.
+.env
+.env.*
+# Local data builds (`region-build --synthetic` writes here; never committed).
+target/data/

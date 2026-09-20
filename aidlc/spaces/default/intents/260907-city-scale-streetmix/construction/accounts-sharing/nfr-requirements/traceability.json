@@ -1,0 +1,14 @@
+{
+  "stage": "nfr-requirements",
+  "unit": "accounts-sharing",
+  "confirmed": "2026-09-20",
+  "upstream_ids": ["NFR1", "NFR2", "NFR3", "NFR4", "NFR6", "NFR7"],
+  "coverage": [
+    { "id": "NFR1", "status": "OK", "target": "NFR1.5.1-NFR1.5.3 (proposed NFR1.5) in performance-requirements.md" },
+    { "id": "NFR2", "status": "OK", "target": "NFR2.4.1-NFR2.4.2 (proposed NFR2.4) in scalability-requirements.md" },
+    { "id": "NFR3", "status": "OK", "target": "NFR3.2.2 and NFR3.5.1 (proposed NFR3.5) in reliability-requirements.md" },
+    { "id": "NFR4", "status": "OK", "target": "functional-design/rules.md BR9.2 (named, screen-reader-announceable sharing-state string) — this Unit's server-side contribution to NFR4.1/NFR4.3; the remaining NFR4 sub-items (keyboard operability, viewport widths, mobile matrix) apply to client-surfaces/U6's rendering, not this server Unit" },
+    { "id": "NFR6", "status": "OK", "target": "NFR6.1.2, NFR6.2.1-NFR6.2.8 in security-requirements.md" },
+    { "id": "NFR7", "status": "OK", "target": "NFR7.5.1-NFR7.5.4 (proposed NFR7.5) in observability-requirements.md" }
+  ]
+}

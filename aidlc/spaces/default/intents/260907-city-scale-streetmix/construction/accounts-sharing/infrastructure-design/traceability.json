@@ -1,0 +1,33 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "accounts-sharing",
+  "confirmed": "2026-09-20T-repair",
+  "upstream_ids": [
+    "NFR2.4.1",
+    "NFR2.4.2",
+    "NFR3.2.2",
+    "NFR3.5.1",
+    "NFR6.1.2",
+    "NFR6.2.5",
+    "NFR6.2.7",
+    "NFR6.2.8",
+    "NFR7.5.1",
+    "NFR7.5.2",
+    "NFR7.5.3",
+    "NFR7.5.4"
+  ],
+  "coverage": [
+    { "id": "NFR2.4.1", "status": "OK", "target": "infrastructure-specification.md \"Connection pool sizing\" row (shared PgPool, no new pool)" },
+    { "id": "NFR2.4.2", "status": "OK", "target": "infrastructure-specification.md ID-21 (indexes created by this Unit's own migration)" },
+    { "id": "NFR3.2.2", "status": "OK", "target": "infrastructure-specification.md \"Database\" row (RD-1's shared-Postgres persistence, no new resource)" },
+    { "id": "NFR3.5.1", "status": "OK", "target": "infrastructure-specification.md \"Account-deletion cascade transaction\" row (single shared database, RD-2's transaction is possible only because no second database exists)" },
+    { "id": "NFR6.1.2", "status": "OK", "target": "cicd-pipeline.md CP-5 (zero new secrets)" },
+    { "id": "NFR6.2.5", "status": "OK", "target": "infrastructure-specification.md ID-23 (access-gate Railway service variable)" },
+    { "id": "NFR6.2.7", "status": "OK", "target": "infrastructure-specification.md ID-23 and its \"Environment-provisioning handoff\" item 1 (absent = off, verified at setup)" },
+    { "id": "NFR6.2.8", "status": "OK", "target": "cicd-pipeline.md CP-1 fast-tier test list (session-revocation-immediacy test)" },
+    { "id": "NFR7.5.1", "status": "OK", "target": "monitoring-design.md \"Where each signal lands\" (counters row)" },
+    { "id": "NFR7.5.2", "status": "OK", "target": "monitoring-design.md \"Metrics & KPIs\" (sign-up/sign-in success ratio, grant/link churn)" },
+    { "id": "NFR7.5.3", "status": "OK", "target": "monitoring-design.md \"Metrics & KPIs\" (access-gate refusal count)" },
+    { "id": "NFR7.5.4", "status": "OK", "target": "monitoring-design.md \"Where each signal lands\" (readiness row, shared /readyz)" }
+  ]
+}

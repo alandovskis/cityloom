@@ -1,0 +1,49 @@
+{
+  "stage": "code-generation",
+  "unit": "osm2streets-build",
+  "version": 1,
+  "items": [
+    {
+      "id": "NFR7.2.1",
+      "status": "OK",
+      "target": "docs/osm2streets-pin.md",
+      "note": "osm2streets pinned to commit fc119c47dac567d030c6ce7c24a48896f58ed906 with `rev =`, no `branch`/`tag`; verified live against a-b-street/osm2streets `main` on 2026-09-16."
+    },
+    {
+      "id": "NFR7.2.2",
+      "status": "OK",
+      "target": "docs/osm2streets-pin.md",
+      "note": "Transitive `abstutil` dependency pinned to commit 0964f29315820c91b171b585eb51e300164e9197, closing the unpinned `git =` reference confirmed live in osm2streets' own Cargo.toml (no rev/tag/branch) on 2026-09-16. The Cargo declaration that will apply this pin is recorded here as a documented pending edit for u4-street-import, which does not exist yet; the commit itself is verified and committed now."
+    },
+    {
+      "id": "NFR7.2.3",
+      "status": "GAP",
+      "target": "docs/osm2streets-pin.md#fork-status-not-yet-done",
+      "note": "Fork identity (SD-1) is NOT met. This Unit has no GitHub write credentials and cannot create a fork on the project owner's behalf. The pin is an interim state against upstream a-b-street/osm2streets directly. Named human follow-up with exact scope recorded in docs/osm2streets-pin.md's \"Fork status: NOT YET DONE\" section and code-summary.md's Deviations."
+    },
+    {
+      "id": "NFR7.2.4",
+      "status": "OK",
+      "target": "docs/osm2streets-pin.md",
+      "note": "Locked resolution (SD-3) recorded: build command is `cargo build --workspace --locked`; Cargo.lock is documented to commit once a consuming crate exists (u4-street-import). No lockfile change is expected from this Unit alone, since it adds no workspace member — recorded as a gap in code-summary.md, not silently skipped."
+    },
+    {
+      "id": "NFR7.2.5",
+      "status": "GAP",
+      "target": "docs/osm2streets-pin.md#fork-status-not-yet-done",
+      "note": "Branch protection on the fork (SD-4) is NOT met — there is no fork yet to protect. Deferred to environment-provisioning per security-design.md, and named explicitly as part of the same human follow-up as NFR7.2.3."
+    },
+    {
+      "id": "AC3.1.4",
+      "status": "OK",
+      "target": "fixtures/osm2streets/well-tagged-street.osm.xml, fixtures/osm2streets/thinly-tagged-street.osm.xml, fixtures/osm2streets/one-way-street.osm.xml, fixtures/osm2streets/street-with-cycleway.osm.xml, fixtures/osm2streets/one-intersection.osm.xml",
+      "note": "The golden-fixture input set unit-of-work.md assigns to this Unit is committed: five real, well-formed OSM extracts (well-tagged street, thinly-tagged street, one-way street, street with a separately mapped cycleway, one intersection), documented in fixtures/osm2streets/README.md. The assertions against osm2streets' output for these fixtures are u4-street-import's job (not yet built); this Unit's own test floor (unit-test-instructions.md) only requires the fixture files to be well-formed XML, verified."
+    },
+    {
+      "id": "AC3.1.5",
+      "status": "OK",
+      "target": "fixtures/osm2streets/README.md",
+      "note": "The fixture that will trip the day the pinned dependency's behaviour moves (the tamper-detection property, security-design.md SD-7) exists as committed data now; the assertion that fails when osm2streets' output diverges from the golden files is u4-street-import's, not re-implemented here."
+    }
+  ]
+}

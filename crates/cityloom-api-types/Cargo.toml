@@ -1,0 +1,11 @@
+[package]
+name = "cityloom-api-types"
+version = "0.1.0"
+description = "Wire types shared by both ends of every CityLoom HTTP boundary (Contract 1 is U9-owned)."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["raw_value"] }

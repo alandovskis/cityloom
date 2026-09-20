@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO stored_designs (anonymous_design_id, payload, created_at, expires_at)\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (anonymous_design_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "99926a35f417a82f6b3b86d47c8b73ba0198f1e4b11db23c7b9ed1c768c35b74"
+}

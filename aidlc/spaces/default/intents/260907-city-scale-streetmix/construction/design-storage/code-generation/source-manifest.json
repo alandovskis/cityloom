@@ -1,0 +1,20 @@
+{
+  "stage": "code-generation",
+  "unit": "design-storage",
+  "version": 1,
+  "writes": [
+    { "path": "crates/cityloom-design-storage/Cargo.toml" },
+    { "path": "crates/cityloom-design-storage/migrations/0001_create_stored_designs.sql" },
+    { "path": "crates/cityloom-design-storage/src/failure.rs" },
+    { "path": "crates/cityloom-design-storage/src/handlers.rs" },
+    { "path": "crates/cityloom-design-storage/src/lib.rs" },
+    { "path": "crates/cityloom-design-storage/src/observability.rs" },
+    { "path": "crates/cityloom-design-storage/src/rate_limit.rs" },
+    { "path": "crates/cityloom-design-storage/src/repository.rs" },
+    { "path": "crates/cityloom-design-storage/src/sweep.rs" },
+    { "path": "crates/cityloom-design-storage/src/test_support.rs" },
+    { "path": "crates/cityloom-design-storage/.sqlx/" },
+    { "path": "Cargo.lock" },
+    { "path": "docs/dependencies.md" }
+  ]
+}

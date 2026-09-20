@@ -1,0 +1,10 @@
+{
+  "stage": "code-generation",
+  "unit": "design-payload-spec",
+  "version": 1,
+  "writes": [
+    { "path": "crates/cityloom-design-payload/Cargo.toml" },
+    { "path": "crates/cityloom-design-payload/src/lib.rs" },
+    { "path": "docs/dependencies.md" }
+  ]
+}

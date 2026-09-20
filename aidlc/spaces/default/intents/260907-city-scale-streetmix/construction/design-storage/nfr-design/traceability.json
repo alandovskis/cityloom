@@ -1,0 +1,213 @@
+{
+  "stage": "nfr-design",
+  "unit": "design-storage",
+  "upstream_ids": [
+    "NFR1.4",
+    "NFR1.4.1",
+    "NFR1.4.2",
+    "NFR1.4.3",
+    "NFR1.4.4",
+    "NFR2.3",
+    "NFR2.3.1",
+    "NFR2.3.2",
+    "NFR2.3.3",
+    "NFR3.1",
+    "NFR3.1.1",
+    "NFR3.2",
+    "NFR3.2.1",
+    "NFR3.3",
+    "NFR3.3.1",
+    "NFR3.4",
+    "NFR3.4.1",
+    "NFR3.4.2",
+    "NFR5.3",
+    "NFR5.3.1",
+    "NFR6.1",
+    "NFR6.1.1",
+    "NFR6.3",
+    "NFR6.3.1",
+    "NFR6.4",
+    "NFR6.4.1",
+    "NFR6.4.2",
+    "NFR6.4.3",
+    "NFR6.4.4",
+    "NFR7.4",
+    "NFR7.4.1",
+    "NFR7.4.2",
+    "NFR7.4.3",
+    "NFR7.4.4"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1.4",
+      "status": "OK",
+      "target": "a proposed inception addition recorded under performance-requirements.md Amendments required, refined by NFR1.4.1-NFR1.4.4; met by PD-1 to PD-5 in performance-design.md"
+    },
+    {
+      "id": "NFR1.4.1",
+      "status": "OK",
+      "target": "PD-1, PD-4, PD-5 in performance-design.md"
+    },
+    {
+      "id": "NFR1.4.2",
+      "status": "OK",
+      "target": "PD-1, PD-4, PD-5 in performance-design.md"
+    },
+    {
+      "id": "NFR1.4.3",
+      "status": "OK",
+      "target": "PD-1, PD-4, PD-5 in performance-design.md"
+    },
+    {
+      "id": "NFR1.4.4",
+      "status": "OK",
+      "target": "PD-3 in performance-design.md"
+    },
+    {
+      "id": "NFR2.3",
+      "status": "OK",
+      "target": "a proposed inception addition recorded under scalability-requirements.md Amendments required, refined by NFR2.3.1-NFR2.3.3; met by SC-1 to SC-4 in scalability-design.md"
+    },
+    {
+      "id": "NFR2.3.1",
+      "status": "OK",
+      "target": "SC-2 in scalability-design.md; PD-3 in performance-design.md"
+    },
+    {
+      "id": "NFR2.3.2",
+      "status": "OK",
+      "target": "SC-3 in scalability-design.md; SD-3 in security-design.md"
+    },
+    {
+      "id": "NFR2.3.3",
+      "status": "OK",
+      "target": "SC-1 in scalability-design.md"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "refined by NFR3.1.1 in reliability-requirements.md; met by RD-4 in reliability-design.md"
+    },
+    {
+      "id": "NFR3.1.1",
+      "status": "OK",
+      "target": "RD-4 in reliability-design.md"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "refined by NFR3.2.1; met by RD-2 in reliability-design.md"
+    },
+    {
+      "id": "NFR3.2.1",
+      "status": "OK",
+      "target": "RD-2 in reliability-design.md"
+    },
+    {
+      "id": "NFR3.3",
+      "status": "OK",
+      "target": "refined by NFR3.3.1; met by RD-4 in reliability-design.md"
+    },
+    {
+      "id": "NFR3.3.1",
+      "status": "OK",
+      "target": "RD-4 in reliability-design.md"
+    },
+    {
+      "id": "NFR3.4",
+      "status": "OK",
+      "target": "a proposed inception addition recorded under reliability-requirements.md Amendments required, refined by NFR3.4.1-NFR3.4.2; met by RD-1, RD-3 in reliability-design.md"
+    },
+    {
+      "id": "NFR3.4.1",
+      "status": "OK",
+      "target": "RD-1 in reliability-design.md"
+    },
+    {
+      "id": "NFR3.4.2",
+      "status": "OK",
+      "target": "RD-3 in reliability-design.md"
+    },
+    {
+      "id": "NFR5.3",
+      "status": "OK",
+      "target": "refined by NFR5.3.1 (security-requirements.md, cost restated as an abuse bound); met by SD-2 in security-design.md"
+    },
+    {
+      "id": "NFR5.3.1",
+      "status": "OK",
+      "target": "SD-2 in security-design.md"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "refined by NFR6.1.1; met by SD-8 in security-design.md"
+    },
+    {
+      "id": "NFR6.1.1",
+      "status": "OK",
+      "target": "SD-8 in security-design.md"
+    },
+    {
+      "id": "NFR6.3",
+      "status": "OK",
+      "target": "refined by NFR6.3.1; met by SD-7 in security-design.md"
+    },
+    {
+      "id": "NFR6.3.1",
+      "status": "OK",
+      "target": "SD-7 in security-design.md"
+    },
+    {
+      "id": "NFR6.4",
+      "status": "OK",
+      "target": "a proposed inception addition recorded under security-requirements.md Amendments required, refined by NFR6.4.1-NFR6.4.4; met by SD-2, SD-3, SD-4, SD-6 in security-design.md"
+    },
+    {
+      "id": "NFR6.4.1",
+      "status": "OK",
+      "target": "SD-2 (guessing-campaign mitigation, T1), SD-7 (identifier held/compared opaquely, never re-derived) in security-design.md"
+    },
+    {
+      "id": "NFR6.4.2",
+      "status": "OK",
+      "target": "SD-4 in security-design.md"
+    },
+    {
+      "id": "NFR6.4.3",
+      "status": "OK",
+      "target": "SD-3 in security-design.md"
+    },
+    {
+      "id": "NFR6.4.4",
+      "status": "OK",
+      "target": "SD-6 in security-design.md"
+    },
+    {
+      "id": "NFR7.4",
+      "status": "OK",
+      "target": "a proposed inception addition recorded under observability-requirements.md Amendments required, refined by NFR7.4.1-NFR7.4.4; met by OD-1 to OD-4 in observability-design.md"
+    },
+    {
+      "id": "NFR7.4.1",
+      "status": "OK",
+      "target": "OD-1 in observability-design.md"
+    },
+    {
+      "id": "NFR7.4.2",
+      "status": "OK",
+      "target": "OD-2 in observability-design.md"
+    },
+    {
+      "id": "NFR7.4.3",
+      "status": "OK",
+      "target": "OD-3 in observability-design.md"
+    },
+    {
+      "id": "NFR7.4.4",
+      "status": "OK",
+      "target": "OD-4 in observability-design.md"
+    }
+  ],
+  "confirmed": true
+}

@@ -1,0 +1,21 @@
+# The data pointer (`infrastructure-specification.md` ID-10): the GitHub
+# Release the running image's `Dockerfile` data stage fetches `store.bin`
+# and `manifest.json` from, and the SHA-256 each asset must match exactly.
+#
+# This file is committed and updated by exactly one thing: the weekly
+# `.github/workflows/data-build.yml` workflow, after it publishes a new
+# release whose `buildId` differs from the one recorded here (BR8.5). It is
+# never hand-edited except to roll back to an earlier release tag (RD-9),
+# and even then only by copying a prior commit's values.
+#
+# The placeholder below is deliberate: it names a release that does not
+# exist, so a `docker build` run before the first real data build fails
+# loudly in the data stage (a 404 fetching the asset) rather than silently
+# shipping an empty or missing store. The first successful run of the
+# workflow overwrites every field with real values.
+
+release_tag = "data-0000000000000000000000000000000000000000000000000000000000000000"
+build_id = "0000000000000000000000000000000000000000000000000000000000000000"
+store_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+manifest_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+published_at = "1970-01-01T00:00:00Z"

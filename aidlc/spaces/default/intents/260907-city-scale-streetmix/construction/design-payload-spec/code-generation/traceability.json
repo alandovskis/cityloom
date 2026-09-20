@@ -1,0 +1,32 @@
+{
+  "stage": "code-generation",
+  "unit": "design-payload-spec",
+  "upstream_ids": [
+    "AC8.1.1", "AC8.1.2", "AC8.3.1", "AC8.3.2", "AC8.3.3", "AC8.3.4", "AC8.3.5",
+    "AC9.2.1", "AC11.2.1", "AC11.2.2", "AC11.2.3",
+    "BR1.1", "BR2.1", "BR3.1", "BR4.1", "BR5.1", "BR6.1",
+    "NFR6.4.4", "NFR6.4.5", "NFR6.3.1"
+  ],
+  "coverage": [
+    { "id": "AC8.1.1", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (full_design_payload_round_trips_byte_for_byte)" },
+    { "id": "AC8.1.2", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (full_design_payload_round_trips_byte_for_byte)" },
+    { "id": "AC8.3.1", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (DesignPayload struct)" },
+    { "id": "AC8.3.2", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (remove_kind_lane_edit_round_trips)" },
+    { "id": "AC8.3.3", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (LaneEdit anchor field)" },
+    { "id": "AC8.3.4", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (import_fingerprint_round_trips_completely)" },
+    { "id": "AC8.3.5", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (wire_field_names_are_exact_camel_case)" },
+    { "id": "AC9.2.1", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (DesignPayload is the reused shape; consumed by u12-data-rights export, not re-implemented here)" },
+    { "id": "AC11.2.1", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (Provenance enum on Dimension)" },
+    { "id": "AC11.2.2", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (mapped_and_user_set_dimensions_round_trip_distinctly)" },
+    { "id": "AC11.2.3", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (inferred_dimension_round_trips_with_provenance_intact)" },
+    { "id": "BR1.1", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (DesignPayload::from_json, unsupported_version_is_rejected_without_constructing_a_payload)" },
+    { "id": "BR2.1", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (full_design_payload_round_trips_byte_for_byte)" },
+    { "id": "BR3.1", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (Dimension struct; inferred/mapped/user_set round-trip tests)" },
+    { "id": "BR4.1", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (Correction struct has no provenance field; correction_serializes_with_no_provenance_key)" },
+    { "id": "BR5.1", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (ImportFingerprint struct; import_fingerprint_round_trips_completely)" },
+    { "id": "BR6.1", "status": "N/A", "target": "Process policy (one-crate, one-owner shared-crate model) — not independently runtime-enforced; no code artifact applies" },
+    { "id": "NFR6.4.4", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (DesignPayload::from_json fail-closed version check, PayloadError::UnsupportedPayloadVersion)" },
+    { "id": "NFR6.4.5", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (Correction struct has no provenance field — structural, matches SD-2)" },
+    { "id": "NFR6.3.1", "status": "OK", "target": "crates/cityloom-design-payload/src/lib.rs (schema has no PII-shaped fields, per entities.md)" }
+  ]
+}

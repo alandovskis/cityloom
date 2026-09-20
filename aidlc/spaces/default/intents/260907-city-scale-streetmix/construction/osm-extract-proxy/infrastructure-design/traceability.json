@@ -1,0 +1,69 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "osm-extract-proxy",
+  "note": "Ids are the two-level inception NFRs the nfr-design artifacts cite; each row maps an NFR design decision that needs infrastructure to the resource or setting in this stage's artifacts (ID-n infrastructure-specification.md, MD-n monitoring-design.md, CP-n cicd-pipeline.md). Where the three-level refinement is the operative one it is named in the target.",
+  "upstream_ids": [
+    "NFR1.1",
+    "NFR2.1",
+    "NFR3.1",
+    "NFR3.2",
+    "NFR5.1",
+    "NFR6.1",
+    "NFR6.3",
+    "NFR6.4",
+    "NFR7.2",
+    "NFR7.3"
+  ],
+  "coverage": [
+    {
+      "id": "NFR1.1",
+      "status": "OK",
+      "target": "ID-1 (us-east4, one replica), ID-2 (store inside the image, so a miss reads local disk and start-up needs no download), ID-5 (120 s probe timeout against the 30 s Ready target, NFR1.1.4), ID-6 (5 s drain exceeding the 3 s budget, NFR1.1.1); CP-1 slow tier runs the miss/hit benchmark (NFR1.1.2, NFR1.1.3); MD metrics read the buckets and the ready row"
+    },
+    {
+      "id": "NFR2.1",
+      "status": "OK",
+      "target": "ID-7 (slot count and limits as service variables so B-3 can move them, NFR2.1.1, NFR2.1.2), ID-8 (usage-metered compute, no size to pick), ID-10 and ID-11 (release assets and the free runner for the ≤ 500 MB store and ≤ 30 min build, NFR2.1.6; region growth is one configuration entry and one run, NFR2.1.4); the packed store keeps the artifact at two files (NFR2.1.7)"
+    },
+    {
+      "id": "NFR3.1",
+      "status": "OK",
+      "target": "MD-1 (external uptime monitor as the availability SLI source, NFR3.1.1 — the platform's health check is deploy-time only; this is the one alert this Unit defines, superseding NFR3.1.17's 'no alert' text per monitoring-design.md Amendments required), MD SLIs (success ratio from counters rows, NFR3.1.2), MD-2 (crash-restart via ON_FAILURE policy, NFR3.1.5), CP-3 (rollback via deployment history, RTO), CP-4 (a failed data build publishes nothing, and a partial publish is repaired on the next run, NFR3.1.4), MD-4; NFR3.1.11 (platform outage) has no in-Unit treatment beyond MD-1 noticing it"
+    },
+    {
+      "id": "NFR3.2",
+      "status": "OK",
+      "target": "ID-5 (healthcheckPath /readyz, healthcheckTimeout 120 s), CP-1 Deploy and Rollover rows (new deployment takes traffic only on 2xx; previous keeps serving on a failed check and on a failed build — checked against Railway's deployment reference and confirmed by doing at environment-provisioning, NFR3.2.1; timeout exceeds Ready time, NFR3.2.2), ID-2 (cells verified at start from the image, NFR3.2.4), ID-4/ID-12 (readiness route reachable by the platform's probe hostname and the monitor, NFR3.2.3, NFR3.2.5)"
+    },
+    {
+      "id": "NFR5.1",
+      "status": "OK",
+      "target": "ID-9 (workspace spending limit soft $4 / hard $5 = the account usage limit, NFR5.1.6), ID-8 and the Cost estimate section (memory $1.25 + CPU $1.00 = $2.25 fixed, leaving 5 GB/month of egress headroom inside the ≤ $2.50 allocation — the number B-3's measurement is read against; a measured breach is the constraint change NFR5.1.5 requires, NFR5.1.2, NFR5.1.4, NFR5.1.5), MD cost metrics (egress from bytesServed and platform metrics), ID-7 (windows, slots, cache ceiling as variables, NFR5.1.1, NFR5.1.3, NFR5.1.7); free-tier runner, releases and monitor add nothing to the spend"
+    },
+    {
+      "id": "NFR6.1",
+      "status": "OK",
+      "target": "CP-5 (no secret in the service, no Railway token in CI, public release assets fetched without credentials; Q1 option A chosen to keep NFR6.1.1 intact), ID-7 (non-secret service variables), ID-5 (configuration committed as code)"
+    },
+    {
+      "id": "NFR6.3",
+      "status": "OK",
+      "target": "ID-4 (X-Real-IP designated as the platform-asserted address, whole value, peer fallback — NFR6.3.3; the raw value reaches one hashing call), MD 'Where each signal lands' (only the catalogued rows reach the log explorer; no access log, no request-scoped field — NFR6.3.1), CP-1 fast tier runs the log-capture and spoofed-header tests"
+    },
+    {
+      "id": "NFR6.4",
+      "status": "OK",
+      "target": "ID-3 (TLS-only public hostname makes Strict-Transport-Security meaningful — NFR6.4.3; the edge's 32 KB header limit sits above the listener's own — NFR6.4.4), ID-2 (non-root runtime image, read-only data path — NFR6.4.1's read-only store), CP-1 fast tier runs the header-set, preflight and bbox property tests"
+    },
+    {
+      "id": "NFR7.2",
+      "status": "OK",
+      "target": "ID-2 (pinned toolchain, cargo build --release --locked in the image build, SHA-256 verification of the fetched assets — NFR7.2.1), CP-4 (region download over TLS with the project User-Agent and the publisher's checksum, provenance in the manifest — NFR7.2.2), CP-1 fast tier's manifest check and slow tier's cargo audit (NFR7.2.3), CP-6 (content-derived buildId as the data artifact identity)"
+    },
+    {
+      "id": "NFR7.3",
+      "status": "Deferred",
+      "target": "the regression-test-first rule is enforced at code-generation and build-and-test per team.md; this stage's contribution is MD-2 (a crash-restart notification names the defect) and CP-1 (every named test runs in the fast tier so a regression fails the push)"
+    }
+  ]
+}

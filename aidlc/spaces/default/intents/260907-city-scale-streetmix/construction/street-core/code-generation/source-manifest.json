@@ -1,0 +1,14 @@
+{
+  "stage": "code-generation",
+  "unit": "street-core",
+  "version": 1,
+  "writes": [
+    { "path": "crates/street-core/Cargo.toml" },
+    { "path": "crates/street-core/src/lib.rs" },
+    { "path": "crates/street-core/src/provenance.rs" },
+    { "path": "crates/street-core/src/lane.rs" },
+    { "path": "crates/street-core/src/street.rs" },
+    { "path": "crates/street-core/src/graph.rs" },
+    { "path": "crates/street-core/src/source.rs" }
+  ]
+}

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="Overpass API 0.7.62.11 87bfad18">
+<note>The data included in this document is from www.openstreetmap.org. The data is made available under ODbL.</note>
+<meta osm_base="2026-09-16T12:34:36Z"/>
+
+  <node id="29937527" lat="47.6503715" lon="-122.3315012" version="12" timestamp="2019-01-15T00:20:31Z" changeset="66318755" uid="2773196" user="NickBolten"/>
+  <node id="30101206" lat="47.6481396" lon="-122.3325484" version="4" timestamp="2009-03-22T03:45:11Z" changeset="844449" uid="11039" user="Rob Lanphier"/>
+  <node id="30101207" lat="47.6489722" lon="-122.3320162" version="4" timestamp="2009-03-22T03:45:11Z" changeset="844449" uid="11039" user="Rob Lanphier"/>
+  <node id="3346661822" lat="47.6479116" lon="-122.3326901" version="1" timestamp="2015-02-12T21:03:53Z" changeset="28808434" uid="2601744" user="sctrojan79"/>
+  <node id="3346661824" lat="47.6479904" lon="-122.3326411" version="1" timestamp="2015-02-12T21:03:53Z" changeset="28808434" uid="2601744" user="sctrojan79"/>
+  <node id="3346661829" lat="47.6485530" lon="-122.3322842" version="1" timestamp="2015-02-12T21:03:53Z" changeset="28808434" uid="2601744" user="sctrojan79"/>
+  <node id="4100247547" lat="47.6490688" lon="-122.3319550" version="1" timestamp="2016-04-05T17:36:14Z" changeset="38325710" uid="137875" user="lukobe"/>
+  <node id="5766736932" lat="47.6492360" lon="-122.3318445" version="2" timestamp="2025-11-01T10:43:21Z" changeset="174055386" uid="10350264" user="UW Maddie">
+    <tag k="crossing" v="unmarked"/>
+    <tag k="crossing:markings" v="no"/>
+    <tag k="highway" v="crossing"/>
+  </node>
+  <node id="6209287731" lat="47.6504427" lon="-122.3314966" version="3" timestamp="2025-11-01T10:43:21Z" changeset="174055386" uid="10350264" user="UW Maddie"/>
+  <node id="6292206938" lat="47.6504263" lon="-122.3314936" version="1" timestamp="2019-02-20T23:39:28Z" changeset="67411317" uid="2773196" user="NickBolten"/>
+  <way id="8111822" version="35" timestamp="2024-11-12T03:28:52Z" changeset="159033903" uid="20996589" user="Lumikeiju">
+    <nd ref="5766736932"/>
+    <nd ref="4100247547"/>
+    <nd ref="30101207"/>
+    <nd ref="3346661829"/>
+    <nd ref="30101206"/>
+    <nd ref="3346661824"/>
+    <nd ref="3346661822"/>
+    <tag k="highway" v="tertiary"/>
+    <tag k="lanes" v="2"/>
+    <tag k="maxspeed" v="25 mph"/>
+    <tag k="name" v="North Northlake Way"/>
+    <tag k="parking:left" v="no"/>
+    <tag k="parking:right" v="on_kerb"/>
+    <tag k="parking:right:orientation" v="diagonal"/>
+    <tag k="sidewalk:left" v="separate"/>
+    <tag k="sidewalk:right" v="no"/>
+    <tag k="snowplowing" v="yes"/>
+    <tag k="surface" v="asphalt"/>
+    <tag k="winter_service" v="yes"/>
+    <tag k="winter_service:priority" v="2"/>
+  </way>
+  <way id="1081893497" version="6" timestamp="2026-05-17T23:26:42Z" changeset="182806450" uid="3594360" user="kosmer">
+    <nd ref="29937527"/>
+    <nd ref="6292206938"/>
+    <nd ref="6209287731"/>
+    <tag k="bicycle" v="designated"/>
+    <tag k="foot" v="designated"/>
+    <tag k="highway" v="cycleway"/>
+    <tag k="lit" v="no"/>
+    <tag k="name" v="Burke-Gilman Trail"/>
+    <tag k="oneway" v="no"/>
+    <tag k="railtrail" v="yes"/>
+    <tag k="segregated" v="no"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+
+</osm>

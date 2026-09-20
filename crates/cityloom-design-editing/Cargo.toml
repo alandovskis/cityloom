@@ -1,0 +1,19 @@
+[package]
+name = "cityloom-design-editing"
+version = "0.1.0"
+description = "The proposed change and the machine that applies it (Unit U5): lane edits/additions/removals held as a proposal over the imported baseline, selection and undo state, and corridor work (connectivity, fit assessment, correspondence, bulk apply). No I/O of any kind."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# Path dependencies within this workspace only (`code-generation-plan.md`
+# Step 1) — no third-party dependency. `cityloom-street-import` is
+# depended on only for its `Correction`/`CorrectionOverlay` domain types
+# (BR3.1's revert-through-corrections resolution); this crate never uses
+# its fetch/transport/adapter machinery.
+street-core = { path = "../street-core" }
+cityloom-street-import = { path = "../cityloom-street-import" }

@@ -1,0 +1,36 @@
+{
+  "stage": "nfr-design",
+  "unit": "accounts-sharing",
+  "confirmed": "2026-09-20T-summary",
+  "upstream_ids": [
+    "NFR1.5.1", "NFR1.5.2", "NFR1.5.3",
+    "NFR2.4.1", "NFR2.4.2",
+    "NFR3.2.2", "NFR3.5.1",
+    "NFR4",
+    "NFR6.1.2", "NFR6.2.1", "NFR6.2.2", "NFR6.2.3", "NFR6.2.4", "NFR6.2.5", "NFR6.2.6", "NFR6.2.7", "NFR6.2.8",
+    "NFR7.5.1", "NFR7.5.2", "NFR7.5.3", "NFR7.5.4"
+  ],
+  "coverage": [
+    { "id": "NFR1.5.1", "status": "OK", "target": "PD-1" },
+    { "id": "NFR1.5.2", "status": "OK", "target": "PD-2" },
+    { "id": "NFR1.5.3", "status": "OK", "target": "PD-1" },
+    { "id": "NFR2.4.1", "status": "OK", "target": "SC-1" },
+    { "id": "NFR2.4.2", "status": "OK", "target": "SC-2" },
+    { "id": "NFR3.2.2", "status": "OK", "target": "RD-1" },
+    { "id": "NFR3.5.1", "status": "OK", "target": "RD-2" },
+    { "id": "NFR4", "status": "OK", "target": "Carried from nfr-requirements (rules.md BR9.2, server-side API shape only); no additional nfr-design element needed beyond what security-design.md/observability-design.md already expose to the client" },
+    { "id": "NFR6.1.2", "status": "OK", "target": "SD-8" },
+    { "id": "NFR6.2.1", "status": "OK", "target": "SD-2, SD-3" },
+    { "id": "NFR6.2.2", "status": "OK", "target": "SD-4" },
+    { "id": "NFR6.2.3", "status": "OK", "target": "SD-5" },
+    { "id": "NFR6.2.4", "status": "OK", "target": "SD-6" },
+    { "id": "NFR6.2.5", "status": "OK", "target": "SD-1" },
+    { "id": "NFR6.2.6", "status": "OK", "target": "SD-7" },
+    { "id": "NFR6.2.7", "status": "OK", "target": "SD-1" },
+    { "id": "NFR6.2.8", "status": "OK", "target": "SD-3" },
+    { "id": "NFR7.5.1", "status": "OK", "target": "OD-1" },
+    { "id": "NFR7.5.2", "status": "OK", "target": "OD-1" },
+    { "id": "NFR7.5.3", "status": "OK", "target": "OD-1" },
+    { "id": "NFR7.5.4", "status": "OK", "target": "OD-2" }
+  ]
+}

@@ -1,0 +1,11 @@
+Vendored from https://github.com/openstreetmap/OSM-binary
+Path:    osmpbf/fileformat.proto, osmpbf/osmformat.proto
+Commit:  9f01ad3ece9737503a059d58749e02c9008d5699 (master, fetched 2026-09-15)
+Licence: MIT — the licence text in each .proto file's own header (Scott A.
+         Crosby, 2010), reproduced in LICENSE beside this file. The
+         repository's top-level LICENSE (LGPL-3.0) covers its C++ library,
+         none of which is vendored here.
+SHA-256: eff8c3868b7fbf29a1ef9902933bd55a957c4e87ccfc490166fbe573ee173775  fileformat.proto
+         5120dad564e717cf0b2bcf4b49d62c7180dc8b148084aa6b9f069a5e916027bc  osmformat.proto
+Use:     compiled at build time by build.rs with protobuf-codegen's pure-Rust
+         parser (no protoc) into the project's own PBF encoder (TS-3).

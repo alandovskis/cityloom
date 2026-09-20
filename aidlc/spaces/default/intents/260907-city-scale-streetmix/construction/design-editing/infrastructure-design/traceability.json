@@ -1,0 +1,11 @@
+{
+  "stage": "infrastructure-design",
+  "unit": "design-editing",
+  "confirmed": true,
+  "upstream_ids": ["NFR6.4.1", "NFR6.3.1", "NFR6.1.1"],
+  "coverage": [
+    { "id": "NFR6.4.1", "status": "N/A", "target": "code-level design (bounded undo stack/corridor selection) — no infrastructure resource required" },
+    { "id": "NFR6.3.1", "status": "N/A", "target": "no infrastructure resource required" },
+    { "id": "NFR6.1.1", "status": "N/A", "target": "no secret exists to provision or rotate" }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM stored_designs WHERE anonymous_design_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1e61040db955433e11266bca0d6502c6a145a3fe4a4270989f7793aff9511da9"
+}

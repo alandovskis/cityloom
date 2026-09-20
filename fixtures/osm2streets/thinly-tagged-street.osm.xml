@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="Overpass API 0.7.62.11 87bfad18">
+<note>The data included in this document is from www.openstreetmap.org. The data is made available under ODbL.</note>
+<meta osm_base="2026-09-16T12:33:35Z"/>
+
+  <node id="53070289" lat="47.6640182" lon="-122.3195520" version="5" timestamp="2017-02-20T05:43:51Z" changeset="46233580" uid="2773196" user="NickBolten"/>
+  <node id="59713405" lat="47.6640180" lon="-122.3189675" version="2" timestamp="2021-10-06T22:31:09Z" changeset="112189615" uid="11517143" user="austinsnow"/>
+  <node id="4694710421" lat="47.6640170" lon="-122.3194669" version="2" timestamp="2017-05-02T01:10:04Z" changeset="48321139" uid="5348229" user="nbolten_import">
+    <tag k="highway" v="crossing"/>
+  </node>
+  <node id="4829706949" lat="47.6640174" lon="-122.3185100" version="7" timestamp="2025-09-08T23:30:07Z" changeset="171659355" uid="23213284" user="VLD321">
+    <tag k="crossing" v="unmarked"/>
+    <tag k="crossing:island" v="no"/>
+    <tag k="crossing:markings" v="no"/>
+    <tag k="highway" v="crossing"/>
+    <tag k="tactile_paving" v="no"/>
+  </node>
+  <node id="9153364260" lat="47.6640163" lon="-122.3184484" version="1" timestamp="2021-10-06T22:31:09Z" changeset="112189615" uid="11517143" user="austinsnow"/>
+  <way id="6344532" version="15" timestamp="2024-08-18T05:19:49Z" changeset="155397028" uid="20996589" user="Lumikeiju">
+    <nd ref="53070289"/>
+    <nd ref="4694710421"/>
+    <nd ref="59713405"/>
+    <nd ref="4829706949"/>
+    <nd ref="9153364260"/>
+    <tag k="highway" v="residential"/>
+    <tag k="lanes" v="2"/>
+    <tag k="maxspeed" v="20 mph"/>
+    <tag k="name" v="Northeast 48th Street"/>
+    <tag k="sidewalk:left" v="no"/>
+    <tag k="sidewalk:right" v="separate"/>
+    <tag k="surface" v="concrete"/>
+  </way>
+
+</osm>

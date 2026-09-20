@@ -1,0 +1,31 @@
+{
+  "stage": "code-generation",
+  "unit": "street-core",
+  "coverage": [
+    {
+      "id": "AC4.1.1",
+      "status": "OK",
+      "target": "crates/street-core/src/provenance.rs (Provenance enum, Dimension struct) — tests dimension_stores_metres_and_provenance, provenance_variants_are_distinct"
+    },
+    {
+      "id": "AC7.3.1",
+      "status": "OK",
+      "target": "crates/street-core/src/provenance.rs (Dimension::corrected) — tests correcting_a_mapped_dimension_sets_user_set, correcting_an_inferred_dimension_sets_user_set, correcting_a_user_set_dimension_stays_user_set"
+    },
+    {
+      "id": "AC7.3.4",
+      "status": "OK",
+      "target": "crates/street-core/src/lane.rs (Lane::key, LaneKey — BR2.1) and crates/street-core/src/street.rs (Street::identity, BoundingNodeIds — BR3.1) — tests identical_lane_fields_derive_the_same_key, a_different_lane_type/direction/ordinal_from_kerb_derives_a_different_key, bounding_node_ids_are_direction_normalised, two_streets_with_the_same_way_id_but_different_node_ids_are_distinct"
+    },
+    {
+      "id": "AC6.2.1",
+      "status": "OK",
+      "target": "crates/street-core/src/street.rs (compute_carriageway_width — BR4.1) — tests carriageway_width_sums_between_two_kerb_buffers_when_both_present, carriageway_width_excludes_walkable_and_verge_lanes_without_kerb_buffers"
+    },
+    {
+      "id": "AC6.2.3",
+      "status": "OK",
+      "target": "crates/street-core/src/street.rs (compute_carriageway_width — BR4.1, provenance aggregation) — test carriageway_width_is_computable_when_every_contributing_width_is_inferred"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "stage": "infrastructure-design",
+  "confirmed": true,
+  "unit": "osm2streets-build",
+  "upstream_ids": ["NFR7.2.1", "NFR7.2.2", "NFR7.2.3", "NFR7.2.4", "NFR7.2.5", "NFR-SUPPLY-1", "NFR-SUPPLY-2"],
+  "coverage": [
+    { "id": "NFR7.2.1", "status": "OK", "target": "cicd-pipeline.md Build stage (cargo build --locked covers the pin)" },
+    { "id": "NFR7.2.2", "status": "OK", "target": "cicd-pipeline.md Build stage (same, abstutil pinned identically)" },
+    { "id": "NFR7.2.3", "status": "OK", "target": "infrastructure-specification.md ID-1 (fork repository)" },
+    { "id": "NFR7.2.4", "status": "OK", "target": "cicd-pipeline.md Build stage (Cargo.lock, --locked)" },
+    { "id": "NFR7.2.5", "status": "OK", "target": "infrastructure-specification.md ID-1 (branch protection, applied at environment-provisioning)" },
+    { "id": "NFR-SUPPLY-1", "status": "OK", "target": "cicd-pipeline.md Manifest check (docs/dependencies.md row)" },
+    { "id": "NFR-SUPPLY-2", "status": "OK", "target": "cicd-pipeline.md Dependency scan (cargo audit); monitoring-design.md Metrics & KPIs" }
+  ]
+}
