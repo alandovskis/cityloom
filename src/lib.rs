@@ -8,7 +8,7 @@ pub mod model;
 
 use wasm_bindgen::prelude::*;
 
-use catalogue::{KINDS, SAMPLES};
+use catalogue::{CURBS, KINDS, MATERIALS, SAMPLES};
 
 fn json<T: serde::Serialize>(v: &T) -> String {
     serde_json::to_string(v).expect("view serialises")
@@ -52,6 +52,16 @@ impl Sheet {
 
     pub fn nudge_width(&mut self, uid: u32, delta_mm: i32) -> bool {
         self.0.nudge_width(uid, delta_mm)
+    }
+
+    /// Sets a piece's surface, by index into `materials().surfaces`.
+    pub fn set_material(&mut self, uid: u32, material: usize) -> bool {
+        self.0.set_material(uid, material)
+    }
+
+    /// Sets a piece's curb, by index into `materials().curbs`; -1 is none.
+    pub fn set_curb(&mut self, uid: u32, curb: i32) -> bool {
+        self.0.set_curb(uid, usize::try_from(curb).ok())
     }
 
     pub fn begin_gesture(&mut self) {
@@ -106,6 +116,12 @@ impl Sheet {
 #[wasm_bindgen]
 pub fn catalogue() -> String {
     json(&KINDS)
+}
+
+/// The surface and curb material tables as JSON.
+#[wasm_bindgen]
+pub fn materials() -> String {
+    json(&serde_json::json!({ "surfaces": MATERIALS, "curbs": CURBS }))
 }
 
 /// Names of the sample streets as JSON.

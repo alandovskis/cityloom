@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-use crate::catalogue::{KINDS, Kind, Mode, SAMPLES, kind_index};
+use crate::catalogue::{CURBS, DEFAULT_CURB, KINDS, Kind, MATERIALS, Mode, SAMPLES, kind_index};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -15,6 +15,26 @@ pub struct Segment {
     pub uid: u32,
     pub kind: usize,
     pub width_mm: i32,
+    /// Index into `MATERIALS`; always one the kind allows.
+    pub material: usize,
+    /// Index into `CURBS`. `None` is a flush edge, and is always the value for
+    /// a kind without a curb.
+    pub curb: Option<usize>,
+}
+
+impl Segment {
+    /// A piece with its kind's default surface and, where the kind has one,
+    /// the default curb.
+    pub fn new(uid: u32, kind: usize, width_mm: i32) -> Segment {
+        let k = &KINDS[kind];
+        Segment {
+            uid,
+            kind,
+            width_mm,
+            material: k.materials[0],
+            curb: k.has_curb.then_some(DEFAULT_CURB),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -70,11 +90,11 @@ impl Editor {
             .map(|(id, w)| {
                 let uid = self.next_uid;
                 self.next_uid += 1;
-                Segment {
+                Segment::new(
                     uid,
-                    kind: kind_index(id).expect("sample uses catalogue kinds"),
-                    width_mm: *w,
-                }
+                    kind_index(id).expect("sample uses catalogue kinds"),
+                    *w,
+                )
             })
             .collect();
         self.states = vec![State {
@@ -174,11 +194,7 @@ impl Editor {
             k.default_mm
         };
         let uid = self.new_uid();
-        let seg = Segment {
-            uid,
-            kind,
-            width_mm: width,
-        };
+        let seg = Segment::new(uid, kind, width);
         self.edit(format!("Add {}", k.name.to_lowercase()), |segs| {
             let at = index.min(segs.len());
             segs.insert(at, seg);
@@ -244,6 +260,46 @@ impl Editor {
         self.edit(label, |segs| {
             segs[pos].width_mm = w;
             true
+        })
+    }
+
+    /// Sets a piece's surface. Refused when the kind does not allow it.
+    pub fn set_material(&mut self, uid: u32, material: usize) -> bool {
+        let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
+            return false;
+        };
+        let kind = &KINDS[self.current()[pos].kind];
+        if !kind.materials.contains(&material) {
+            return false;
+        }
+        let label = format!(
+            "{} surface: {}",
+            kind.name,
+            MATERIALS[material].name.to_lowercase()
+        );
+        self.edit(label, |segs| {
+            let changed = segs[pos].material != material;
+            segs[pos].material = material;
+            changed
+        })
+    }
+
+    /// Sets a piece's curb; `None` is a flush edge. Refused when the kind has
+    /// no curb or the curb is not in the table.
+    pub fn set_curb(&mut self, uid: u32, curb: Option<usize>) -> bool {
+        let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
+            return false;
+        };
+        let kind = &KINDS[self.current()[pos].kind];
+        if !kind.has_curb || curb.is_some_and(|c| c >= CURBS.len()) {
+            return false;
+        }
+        let what = curb.map_or("none".to_string(), |c| CURBS[c].name.to_lowercase());
+        let label = format!("{} curb: {what}", kind.name);
+        self.edit(label, |segs| {
+            let changed = segs[pos].curb != curb;
+            segs[pos].curb = curb;
+            changed
         })
     }
 
@@ -435,6 +491,8 @@ impl Editor {
                     x_mm: x,
                     min_mm: k.min_mm,
                     max_mm: k.max_mm,
+                    material: MATERIALS[s.material].id,
+                    curb: s.curb.map(|c| CURBS[c].id),
                 };
                 x += s.width_mm;
                 v
@@ -540,6 +598,8 @@ pub struct SegView {
     pub x_mm: i32,
     pub min_mm: i32,
     pub max_mm: i32,
+    pub material: &'static str,
+    pub curb: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -819,5 +879,80 @@ mod tests {
         e.load_sample(2);
         assert!(!e.view().can_undo);
         assert_eq!(e.view().row_mm, 12000);
+    }
+
+    #[test]
+    fn new_pieces_get_their_kinds_defaults() {
+        let e = Editor::new(0);
+        for s in e.current() {
+            let k = &KINDS[s.kind];
+            assert_eq!(s.material, k.materials[0], "{}", k.id);
+            assert_eq!(s.curb.is_some(), k.has_curb, "{}", k.id);
+        }
+        let mut e = Editor::new(0);
+        let uid = e.add(kind("bike"), 0);
+        let s = e.current().iter().find(|s| s.uid == uid).unwrap();
+        assert_eq!(s.curb, Some(DEFAULT_CURB));
+    }
+
+    #[test]
+    fn every_kinds_materials_are_valid_and_start_with_a_default() {
+        for k in KINDS.iter() {
+            assert!(!k.materials.is_empty(), "{}", k.id);
+            assert!(k.materials.iter().all(|&m| m < MATERIALS.len()), "{}", k.id);
+        }
+        assert!(DEFAULT_CURB < CURBS.len());
+    }
+
+    #[test]
+    fn set_material_accepts_allowed_and_refuses_others() {
+        let mut e = Editor::new(0);
+        let parking = e.current()[1].uid;
+        let permeable = MATERIALS.iter().position(|m| m.id == "permeable").unwrap();
+        let grass = MATERIALS.iter().position(|m| m.id == "grass").unwrap();
+        assert!(!e.set_material(parking, grass)); // not a parking surface
+        assert!(!e.view().can_undo);
+        assert!(e.set_material(parking, permeable));
+        assert_eq!(e.view().segments[1].material, "permeable");
+        assert_eq!(e.view().revisions[0].label, "Parking surface: permeable paving");
+        assert!(!e.set_material(parking, permeable)); // unchanged
+        assert!(!e.set_material(9999, permeable)); // unknown piece
+    }
+
+    #[test]
+    fn material_changes_undo_and_redo() {
+        let mut e = Editor::new(0);
+        let lane = e.current()[2].uid;
+        assert!(e.set_material(lane, 1)); // concrete
+        assert!(e.undo());
+        assert_eq!(e.view().segments[2].material, "asphalt");
+        assert!(e.redo());
+        assert_eq!(e.view().segments[2].material, "concrete");
+    }
+
+    #[test]
+    fn set_curb_only_on_kinds_that_have_one() {
+        let mut e = Editor::new(0);
+        let walk = e.current()[0].uid;
+        let lane = e.current()[2].uid;
+        assert!(!e.set_curb(lane, Some(0))); // driving lanes have no curb
+        assert!(!e.set_curb(walk, Some(99))); // not in the table
+        assert!(!e.set_curb(walk, Some(DEFAULT_CURB))); // unchanged
+        assert!(e.set_curb(walk, Some(0)));
+        assert_eq!(e.view().segments[0].curb, Some("granite"));
+        assert_eq!(e.view().revisions[0].label, "Sidewalk curb: granite");
+        assert!(e.set_curb(walk, None));
+        assert_eq!(e.view().segments[0].curb, None);
+        assert_eq!(e.view().revisions[1].label, "Sidewalk curb: none");
+        assert!(e.undo());
+        assert_eq!(e.view().segments[0].curb, Some("granite"));
+    }
+
+    #[test]
+    fn material_and_curb_count_as_changes_from_today() {
+        let mut e = Editor::new(0);
+        assert!(!e.view().changed);
+        e.set_curb(e.current()[0].uid, None);
+        assert!(e.view().changed);
     }
 }
