@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "clipped-overflow-container",
+        "value": "*",
+        "files": [
+          "web/index.html"
+        ],
+        "createdAt": "2026-09-30T07:38:09.357Z",
+        "reason": "assistant judgement, not user confirmed: the account menu opens inside the .sheet clip near its top edge and is ~90px tall, so it never reaches the clipped edge (checked in a desktop screenshot)"
+      }
+    ]
+  }
+}
