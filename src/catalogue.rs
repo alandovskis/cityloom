@@ -77,7 +77,7 @@ pub const CURBS: [Material; 5] = [
     Material { id: "concrete", name: "Concrete" },
     Material { id: "asphalt", name: "Asphalt" },
     Material { id: "planted", name: "Planted" },
-    Material { id: "kassel", name: "Kassel kerb" },
+    Material { id: "kassel", name: "Bus-friendly curb" },
 ];
 
 /// A new sidewalk or bike lane gets this curb (concrete).

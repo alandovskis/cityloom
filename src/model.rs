@@ -945,7 +945,7 @@ mod tests {
         assert_eq!(e.view().segments[0].curb, Some("planted"));
         assert!(e.undo());
         assert!(e.set_curb(walk, CURBS.iter().position(|c| c.id == "kassel")));
-        assert_eq!(e.view().revisions[1].label, "Sidewalk curb: kassel kerb");
+        assert_eq!(e.view().revisions[1].label, "Sidewalk curb: bus-friendly curb");
         assert!(e.undo());
         assert!(e.set_curb(walk, None));
         assert_eq!(e.view().segments[0].curb, None);
