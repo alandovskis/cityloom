@@ -53,6 +53,9 @@
   --s-coat-0: #ee9b78;
   --s-coat-1: #74aede;
 
+  --shadow-lift: 0 6px 14px -4px rgb(20 24 28 / 0.28);
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0.5 0.5 5 5 9.5 0.5' fill='none' stroke='%2314181c' stroke-width='1.4'/%3E%3C/svg%3E");
+
   --font: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
 
   --line-heavy: 2px;
@@ -186,9 +189,7 @@ select {
   padding: 4px 30px 4px 10px;
   border: var(--line) solid var(--ink);
   border-radius: 0;
-  background: var(--sheet)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0.5 0.5 5 5 9.5 0.5' fill='none' stroke='%2314181c' stroke-width='1.4'/%3E%3C/svg%3E")
-    no-repeat right 10px center;
+  background: var(--sheet) var(--select-arrow) no-repeat right 10px center;
   font-weight: 500;
   cursor: pointer;
 }
@@ -730,7 +731,7 @@ svg pattern circle {
   padding: 4px 10px 4px 4px;
   border: var(--line) solid var(--blue);
   background: var(--sheet);
-  box-shadow: 0 6px 14px -4px rgb(20 24 28 / 0.28);
+  box-shadow: var(--shadow-lift);
   font-weight: 600;
   pointer-events: none;
   translate: -50% -60%;
@@ -1281,4 +1282,76 @@ kbd {
   .tb-cell {
     padding-inline: 14px;
   }
+}
+
+/* ---- dark: a composed night sheet, not an inversion ---- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --sheet: #13181d;
+    --sheet-deep: #1c232a;
+    --ink: #e8edf1;
+    --ink-soft: #b9c3cc;
+    --ink-faint: #93a0ab;
+    --rule: #3b4650;
+    --blue: #7fa6ff;
+    --blue-wash: rgb(127 166 255 / 0.16);
+    --red: #ff8073;
+    --red-wash: rgb(255 128 115 / 0.16);
+
+    --k-sidewalk: #6a5238;
+    --k-planting: #41633a;
+    --k-bike: #2c6b63;
+    --k-travel: #46525e;
+    --k-bus: #5a4a7e;
+    --k-parking: #50493c;
+    --k-median: #3a6b31;
+    --k-loading: #7e6d1f;
+    --sky: #182838;
+
+    --s-tree: #55924a;
+    --s-car: #33404c;
+    --s-bus: #8068b8;
+    --s-van: #c0a02c;
+    --s-coat-0: #d27753;
+    --s-coat-1: #5590c4;
+
+    --shadow-lift: 0 8px 18px -4px rgb(0 0 0 / 0.55);
+    --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0.5 0.5 5 5 9.5 0.5' fill='none' stroke='%23e8edf1' stroke-width='1.4'/%3E%3C/svg%3E");
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --sheet: #13181d;
+  --sheet-deep: #1c232a;
+  --ink: #e8edf1;
+  --ink-soft: #b9c3cc;
+  --ink-faint: #93a0ab;
+  --rule: #3b4650;
+  --blue: #7fa6ff;
+  --blue-wash: rgb(127 166 255 / 0.16);
+  --red: #ff8073;
+  --red-wash: rgb(255 128 115 / 0.16);
+
+  --k-sidewalk: #6a5238;
+  --k-planting: #41633a;
+  --k-bike: #2c6b63;
+  --k-travel: #46525e;
+  --k-bus: #5a4a7e;
+  --k-parking: #50493c;
+  --k-median: #3a6b31;
+  --k-loading: #7e6d1f;
+  --sky: #182838;
+
+  --s-tree: #55924a;
+  --s-car: #33404c;
+  --s-bus: #8068b8;
+  --s-van: #c0a02c;
+  --s-coat-0: #d27753;
+  --s-coat-1: #5590c4;
+
+  --shadow-lift: 0 8px 18px -4px rgb(0 0 0 / 0.55);
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0.5 0.5 5 5 9.5 0.5' fill='none' stroke='%23e8edf1' stroke-width='1.4'/%3E%3C/svg%3E");
 }

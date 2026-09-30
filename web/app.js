@@ -792,15 +792,37 @@ el.sample.addEventListener("change", () => {
   refresh();
   say(`${view.name} loaded.`);
 });
-for (const b of document.querySelectorAll(".unit")) {
+for (const b of document.querySelectorAll(".unit[data-unit]")) {
   b.addEventListener("click", () => {
     units = b.dataset.unit;
-    for (const o of document.querySelectorAll(".unit")) o.setAttribute("aria-pressed", String(o === b));
+    for (const o of document.querySelectorAll(".unit[data-unit]")) o.setAttribute("aria-pressed", String(o === b));
     renderSamples();
     renderPalette();
     render();
   });
 }
+
+// Theme: follow the system until the person picks one; the pick is remembered.
+const root = document.documentElement;
+const dark = matchMedia("(prefers-color-scheme: dark)");
+const theme = () => root.dataset.theme || (dark.matches ? "dark" : "light");
+function syncTheme() {
+  for (const b of document.querySelectorAll(".theme")) b.setAttribute("aria-pressed", String(b.dataset.themeSet === theme()));
+}
+for (const b of document.querySelectorAll(".theme")) {
+  b.addEventListener("click", () => {
+    root.dataset.theme = b.dataset.themeSet;
+    try {
+      localStorage.setItem("cityloom-theme", b.dataset.themeSet);
+    } catch {
+      // Storage can be blocked; the choice then lasts for this visit only.
+    }
+    syncTheme();
+    say(`${b.textContent} theme.`);
+  });
+}
+dark.addEventListener("change", syncTheme);
+syncTheme();
 
 new ResizeObserver(() => renderDrawing()).observe(el.scroll);
 
