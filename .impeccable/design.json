@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-30T12:00:00Z",
+  "generatedAt": "2026-09-30T18:00:00Z",
   "title": "Design System: CityLoom",
   "extensions": {
     "colorMeta": {
@@ -17,7 +17,8 @@
           "#9c9fa1",
           "#bbbec0",
           "#eceff1"
-        ]
+        ],
+        "dark": "#13181d"
       },
       "sheet-deep": {
         "role": "neutral",
@@ -32,7 +33,8 @@
           "#9a9fa3",
           "#babec2",
           "#eaeff3"
-        ]
+        ],
+        "dark": "#1c232a"
       },
       "ink": {
         "role": "neutral",
@@ -47,7 +49,8 @@
           "#9a9fa4",
           "#b9bec4",
           "#e9eff5"
-        ]
+        ],
+        "dark": "#e8edf1"
       },
       "ink-soft": {
         "role": "neutral",
@@ -62,7 +65,8 @@
           "#95a0a9",
           "#b5bfc9",
           "#e5f0fa"
-        ]
+        ],
+        "dark": "#b9c3cc"
       },
       "ink-faint": {
         "role": "neutral",
@@ -77,7 +81,8 @@
           "#93a0ab",
           "#b2c0cb",
           "#e3f1fc"
-        ]
+        ],
+        "dark": "#93a0ab"
       },
       "rule": {
         "role": "neutral",
@@ -92,7 +97,8 @@
           "#989fa6",
           "#b7bfc6",
           "#e7f0f7"
-        ]
+        ],
+        "dark": "#3b4650"
       },
       "blue-pencil": {
         "role": "primary",
@@ -107,7 +113,8 @@
           "#5894ff",
           "#75b5ff",
           "#a4e8ff"
-        ]
+        ],
+        "dark": "#7fa6ff"
       },
       "redline": {
         "role": "secondary",
@@ -122,19 +129,22 @@
           "#fd6757",
           "#ff8875",
           "#ffbaa4"
-        ]
+        ],
+        "dark": "#ff8073"
       },
       "blue-wash": {
         "role": "primary",
         "displayName": "Blue Wash",
         "canonical": "rgb(29 78 216 / 0.09)",
-        "tonalRamp": []
+        "tonalRamp": [],
+        "dark": "rgb(127 166 255 / 0.16)"
       },
       "red-wash": {
         "role": "secondary",
         "displayName": "Red Wash",
         "canonical": "rgb(184 35 26 / 0.09)",
-        "tonalRamp": []
+        "tonalRamp": [],
+        "dark": "rgb(255 128 115 / 0.16)"
       },
       "k-sidewalk": {
         "role": "tertiary",
@@ -149,7 +159,8 @@
           "#faecdb",
           "#fcf5ed",
           "#fefbf8"
-        ]
+        ],
+        "dark": "#6a5238"
       },
       "k-planting": {
         "role": "tertiary",
@@ -164,7 +175,8 @@
           "#e2f1d9",
           "#f0f8ec",
           "#fafcf8"
-        ]
+        ],
+        "dark": "#41633a"
       },
       "k-bike": {
         "role": "tertiary",
@@ -179,7 +191,8 @@
           "#d4f0eb",
           "#e9f7f5",
           "#f7fcfb"
-        ]
+        ],
+        "dark": "#2c6b63"
       },
       "k-travel": {
         "role": "tertiary",
@@ -194,7 +207,8 @@
           "#e4e8eb",
           "#f2f3f5",
           "#fafbfb"
-        ]
+        ],
+        "dark": "#46525e"
       },
       "k-bus": {
         "role": "tertiary",
@@ -209,7 +223,8 @@
           "#ebe3f7",
           "#f5f1fb",
           "#fbfafe"
-        ]
+        ],
+        "dark": "#5a4a7e"
       },
       "k-parking": {
         "role": "tertiary",
@@ -224,7 +239,8 @@
           "#f1efe8",
           "#f8f7f3",
           "#fcfcfb"
-        ]
+        ],
+        "dark": "#50493c"
       },
       "k-median": {
         "role": "tertiary",
@@ -239,7 +255,8 @@
           "#d2e7cd",
           "#e9f3e6",
           "#f7faf6"
-        ]
+        ],
+        "dark": "#3a6b31"
       },
       "k-loading": {
         "role": "tertiary",
@@ -254,7 +271,8 @@
           "#fbf2cb",
           "#fdf9e5",
           "#fefdf5"
-        ]
+        ],
+        "dark": "#7e6d1f"
       },
       "sky": {
         "role": "tertiary",
@@ -269,7 +287,8 @@
           "#f3f9fc",
           "#f9fcfe",
           "#fdfefe"
-        ]
+        ],
+        "dark": "#182838"
       },
       "s-tree": {
         "role": "tertiary",
@@ -284,7 +303,8 @@
           "#c9e1c1",
           "#e4f0e0",
           "#f5f9f3"
-        ]
+        ],
+        "dark": "#55924a"
       },
       "s-car": {
         "role": "tertiary",
@@ -299,7 +319,8 @@
           "#f1f3f6",
           "#f8f9fb",
           "#fcfdfd"
-        ]
+        ],
+        "dark": "#33404c"
       },
       "s-bus": {
         "role": "tertiary",
@@ -314,7 +335,8 @@
           "#e2d8f4",
           "#f1ecf9",
           "#faf8fd"
-        ]
+        ],
+        "dark": "#8068b8"
       },
       "s-van": {
         "role": "tertiary",
@@ -329,7 +351,8 @@
           "#f9eab5",
           "#fcf5da",
           "#fefbf1"
-        ]
+        ],
+        "dark": "#c0a02c"
       },
       "s-coat-0": {
         "role": "tertiary",
@@ -344,7 +367,8 @@
           "#f8d7c9",
           "#fcebe4",
           "#fef8f5"
-        ]
+        ],
+        "dark": "#d27753"
       },
       "s-coat-1": {
         "role": "tertiary",
@@ -359,7 +383,8 @@
           "#c7dff2",
           "#e3eff8",
           "#f5f9fd"
-        ]
+        ],
+        "dark": "#5590c4"
       }
     },
     "typographyMeta": {
@@ -400,7 +425,8 @@
       {
         "name": "lifted-chip",
         "value": "0 6px 14px -4px rgb(20 24 28 / 0.28)",
-        "purpose": "State only: the legend chip while held in a drag. Nothing at rest has a shadow."
+        "purpose": "State only: the legend chip while held in a drag. Nothing at rest has a shadow. Light theme value; dark uses the darker lift below.",
+        "dark": "0 8px 18px -4px rgb(0 0 0 / 0.55)"
       }
     ],
     "motion": [
@@ -428,7 +454,17 @@
         "name": "compact",
         "value": "640px"
       }
-    ]
+    ],
+    "themes": {
+      "default": "system",
+      "modes": [
+        "light",
+        "dark"
+      ],
+      "darkSelector": "@media (prefers-color-scheme: dark) :root:not([data-theme=\"light\"]), :root[data-theme=\"dark\"]",
+      "storageKey": "cityloom-theme",
+      "note": "Schema v2 has no theme field; each colorMeta entry carries a `dark` value (canonical light value stays in `canonical`), and the frontmatter holds the same values as `dark-*` colour keys."
+    }
   },
   "components": [
     {
@@ -445,6 +481,14 @@
       "refersTo": "unit-toggle-pressed",
       "description": "Two-state m/ft switch, one joined pair rounded at its outer ends; the pressed unit is inked solid.",
       "html": "<div class=\"ds-units\"><button class=\"ds-unit\" aria-pressed=\"true\">m</button><button class=\"ds-unit\" aria-pressed=\"false\">ft</button></div>",
+      "css": ".ds-units{display:flex;background:#f3f6f8;padding:12px}.ds-unit{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:42px;min-height:34px;padding:4px 10px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-size:14px;font-weight:600;letter-spacing:0;cursor:pointer}.ds-unit+.ds-unit{margin-left:-1px}.ds-unit:hover:not([aria-pressed=true]){background:#e5eaee}.ds-unit[aria-pressed=true]{background:#14181c;color:#f3f6f8}.ds-unit:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-unit:first-child{border-radius:6px 0 0 6px}.ds-unit:last-child{border-radius:0 6px 6px 0}"
+    },
+    {
+      "name": "Theme Toggle",
+      "kind": "custom",
+      "refersTo": "unit-toggle-pressed",
+      "description": "Light | Dark pair beside the m/ft units: same joined toggle, pressed shows the theme in effect; follows the system until a choice is made and stores it.",
+      "html": "<div class=\"ds-units\"><button class=\"ds-unit\" aria-pressed=\"true\">Light</button><button class=\"ds-unit\" aria-pressed=\"false\">Dark</button></div>",
       "css": ".ds-units{display:flex;background:#f3f6f8;padding:12px}.ds-unit{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:42px;min-height:34px;padding:4px 10px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-size:14px;font-weight:600;letter-spacing:0;cursor:pointer}.ds-unit+.ds-unit{margin-left:-1px}.ds-unit:hover:not([aria-pressed=true]){background:#e5eaee}.ds-unit[aria-pressed=true]{background:#14181c;color:#f3f6f8}.ds-unit:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-unit:first-child{border-radius:6px 0 0 6px}.ds-unit:last-child{border-radius:0 6px 6px 0}"
     },
     {
@@ -498,23 +542,29 @@
   ],
   "narrative": {
     "northStar": "The Typical Section Sheet",
-    "overview": "The interface is a drafting sheet that has been softened for residents, not an engineering tool. One quiet 1px border with a 14px corner encloses the viewport; there are no tick rails, no double frame and no title block. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a redline for what does not fit. It is recognisable with content removed by its cool paper, thin grey rules, rounded controls and the section drawing itself.\n\nDensity is that of a working sheet but the voice is plain: headings, table heads and drawing labels are sentence case in a condensed grotesque, tabular figures for every dimension, hairline rules between rows. Controls and the about-this-street card have gentle corners; there is no dark or saturated fill and no call-to-action button. The primary action is dragging a piece inside the drawing. The drawing keeps its drafting devices (dimension strings, revision cloud, a graphic scale bar) and the panels carry the rest (pieces of the street, where the width goes, people moved, does it work, your changes).\n\nEach segment type has its own light tint and its own hatch texture, and is named on the drawing when the segment is wide enough, with a two-letter code as the narrow fallback. The tint makes the sheet readable at a glance; the hatch and name carry the identity, so the drawing still survives greyscale and colour-blindness.",
+    "overview": "The interface is a drafting sheet that has been softened for residents, not an engineering tool. One quiet 1px border with a 14px corner encloses the viewport; there are no tick rails, no double frame and no title block. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a redline for what does not fit. It is recognisable with content removed by its cool paper, thin grey rules, rounded controls and the section drawing itself.\n\nThe sheet has two themes, light and dark, and the same drawing lives in both. It follows the system setting until the person chooses Light or Dark in the header, and remembers the choice. Dark is a composed night sheet, not an inversion: a blue-black ground, pale ink, deeper muted tints, and the same two pencils lifted to stay legible.\n\nDensity is that of a working sheet but the voice is plain: headings, table heads and drawing labels are sentence case in a condensed grotesque, tabular figures for every dimension, hairline rules between rows. Controls and the about-this-street card have gentle corners; there is no saturated fill and no call-to-action button. The primary action is dragging a piece inside the drawing. The drawing keeps its drafting devices (dimension strings, revision cloud, a graphic scale bar) and the panels carry the rest (pieces of the street, where the width goes, people moved, does it work, your changes).\n\nEach segment type has its own light tint and its own hatch texture, and is named on the drawing when the segment is wide enough, with a two-letter code as the narrow fallback. The tint makes the sheet readable at a glance; the hatch and name carry the identity, so the drawing still survives greyscale and colour-blindness.",
     "keyCharacteristics": [
       "One sheet, one border (1px Faint Ink, 14px radius), controls at 6px, no rails.",
       "Black ink on cool paper, coloured in with pale tints; blue pencil for selection, redline for failure, and no other saturated accent.",
       "Tint plus hatch plus name (or two-letter code) encodes segment type; colour is never the only code.",
       "Tabular figures and sentence-case condensed type; sizes stay in a 13 to 16px band, with only the street title (32px) larger.",
+      "Two themes, light and dark, sharing one structure: system-following until the person picks Light or Dark; dark is composed, not inverted.",
       "Flat: depth comes from line weight and quiet ruled divisions, not shadow."
     ],
     "rules": [
       {
         "name": "The Two Pencils Rule",
-        "body": "Blue means selected, red means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else.",
+        "body": "Blue means selected, red means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else. It holds in both themes: in dark, blue and red are the lighter pencils (#7fa6ff, #ff8073) and stay reserved for selection and failure; no night tint is blue or red enough to be mistaken for them.",
         "section": "colors"
       },
       {
         "name": "The Colour-Plus-Hatch-Plus-Name Rule",
-        "body": "A segment type is identified by its tint, its hatch and its name together (the two-letter code stands in for the name only when the segment is too narrow). Colour is never the only code: every tint ships with a hatch and a name and code, and a new category needs all three.",
+        "body": "A segment type is identified by its tint, its hatch and its name together (the two-letter code stands in for the name only when the segment is too narrow). Colour is never the only code: every tint ships with a hatch and a name and code, and a new category needs all three. It holds in dark: the tints are darker, the hatch strokes use the pale ink, and the name or code stays.",
+        "section": "colors"
+      },
+      {
+        "name": "The Composed Night Rule",
+        "body": "Dark is designed, not computed: a new colour token gets a hand-picked dark value alongside its light one, tints go darker and muted while ink goes pale, and nothing is produced by inverting or filtering the light theme.",
         "section": "colors"
       },
       {
@@ -545,13 +595,15 @@
       "**Do** use blue only for the thing being acted on and red only for a failed fit.",
       "**Do** use the radius ladder (6px controls, 10px card, 14px sheet) and outline controls in 1px ink on paper fill.",
       "**Do** set headings and labels in sentence case, plain resident wording, and numbers in tabular figures.",
+      "**Do** give every new colour token a light value and a hand-set dark value together, and check tints against hatch and ink in both themes.",
       "**Do** halo any label that sits over a hatch with 4px of paper.",
       "**Do** give every new control a 2px blue focus outline and honour prefers-reduced-motion."
     ],
     "donts": [
       "**Don't** let a tint stand alone as the identifier of a type, or use a tint as a state signal.",
       "**Don't** add cards beyond the about-this-street card, nested boxes, filled call-to-action buttons or icon-card sidebars.",
-      "**Don't** add shadows to anything at rest.",
+      "**Don't** add shadows to anything at rest, in either theme.",
+      "**Don't** derive the dark theme by inverting or filtering the light one, and don't let a dark tint drift toward blue or red.",
       "**Don't** introduce a third saturated accent or use blue and red decoratively.",
       "**Don't** replace line-art symbols with filled or glyph icons.",
       "**Don't** set body-scale text in a face other than Barlow Semi Condensed."

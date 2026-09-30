@@ -1,6 +1,6 @@
 ---
 name: CityLoom
-description: A softened drafting sheet for rearranging a street's fixed width. Black ink on cool bond paper, light tints per segment type, one blue pencil, one redline, quiet rounded frame.
+description: A softened drafting sheet for rearranging a street's fixed width. Black ink on cool bond paper by day, pale ink on a composed night sheet after dark; tints per segment type, one blue pencil, one redline, quiet rounded frame.
 colors:
   sheet: "#f3f6f8"
   sheet-deep: "#e5eaee"
@@ -27,6 +27,32 @@ colors:
   s-van: "#f0cb45"
   s-coat-0: "#ee9b78"
   s-coat-1: "#74aede"
+  # dark theme values, one per colour token above (same names, dark- prefix)
+  dark-sheet: "#13181d"
+  dark-sheet-deep: "#1c232a"
+  dark-ink: "#e8edf1"
+  dark-ink-soft: "#b9c3cc"
+  dark-ink-faint: "#93a0ab"
+  dark-rule: "#3b4650"
+  dark-blue-pencil: "#7fa6ff"
+  dark-blue-wash: "rgb(127 166 255 / 0.16)"
+  dark-redline: "#ff8073"
+  dark-red-wash: "rgb(255 128 115 / 0.16)"
+  dark-k-sidewalk: "#6a5238"
+  dark-k-planting: "#41633a"
+  dark-k-bike: "#2c6b63"
+  dark-k-travel: "#46525e"
+  dark-k-bus: "#5a4a7e"
+  dark-k-parking: "#50493c"
+  dark-k-median: "#3a6b31"
+  dark-k-loading: "#7e6d1f"
+  dark-sky: "#182838"
+  dark-s-tree: "#55924a"
+  dark-s-car: "#33404c"
+  dark-s-bus: "#8068b8"
+  dark-s-van: "#c0a02c"
+  dark-s-coat-0: "#d27753"
+  dark-s-coat-1: "#5590c4"
 typography:
   title:
     fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
@@ -159,7 +185,9 @@ components:
 
 The interface is a drafting sheet that has been softened for residents, not an engineering tool. One quiet 1px border with a 14px corner encloses the viewport; there are no tick rails, no double frame and no title block. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a redline for what does not fit. It is recognisable with content removed by its cool paper, thin grey rules, rounded controls and the section drawing itself.
 
-Density is that of a working sheet but the voice is plain: headings, table heads and drawing labels are sentence case in a condensed grotesque, tabular figures for every dimension, hairline rules between rows. Controls and the about-this-street card have gentle corners; there is no dark or saturated fill and no call-to-action button. The primary action is dragging a piece inside the drawing. The drawing keeps its drafting devices (dimension strings, revision cloud, a graphic scale bar) and the panels carry the rest (pieces of the street, where the width goes, people moved, does it work, your changes).
+The sheet has two themes, light and dark, and the same drawing lives in both. It follows the system setting until the person chooses Light or Dark in the header, and remembers the choice. Dark is a composed night sheet, not an inversion: a blue-black ground, pale ink, deeper muted tints, and the same two pencils lifted to stay legible.
+
+Density is that of a working sheet but the voice is plain: headings, table heads and drawing labels are sentence case in a condensed grotesque, tabular figures for every dimension, hairline rules between rows. Controls and the about-this-street card have gentle corners; there is no saturated fill and no call-to-action button. The primary action is dragging a piece inside the drawing. The drawing keeps its drafting devices (dimension strings, revision cloud, a graphic scale bar) and the panels carry the rest (pieces of the street, where the width goes, people moved, does it work, your changes).
 
 Each segment type has its own light tint and its own hatch texture, and is named on the drawing when the segment is wide enough, with a two-letter code as the narrow fallback. The tint makes the sheet readable at a glance; the hatch and name carry the identity, so the drawing still survives greyscale and colour-blindness.
 
@@ -168,11 +196,12 @@ Each segment type has its own light tint and its own hatch texture, and is named
 - Black ink on cool paper, coloured in with pale tints; blue pencil for selection, redline for failure, and no other saturated accent.
 - Tint plus hatch plus name (or two-letter code) encodes segment type; colour is never the only code.
 - Tabular figures and sentence-case condensed type; sizes stay in a 13 to 16px band, with only the street title (32px) larger.
+- Two themes, light and dark, sharing one structure: system-following until the person picks Light or Dark; dark is composed, not inverted.
 - Flat: depth comes from line weight and quiet ruled divisions, not shadow.
 
 ## Colors
 
-Cool bond paper, graphite ink, pale tints for what the drawing depicts, and two pencils for what the user does and what fails. Saturated chroma is confined to blue and red, and both are rare; the tints are light, sit under the ink linework, and never carry state.
+Cool bond paper, graphite ink, pale tints for what the drawing depicts, and two pencils for what the user does and what fails. Saturated chroma is confined to blue and red, and both are rare; the tints sit under the ink linework and never carry state. The hex values in Primary through Neutral are the light theme; the dark theme has the same tokens with the values under Night sheet below (frontmatter keys `dark-*`).
 
 ### Primary
 - **Blue Pencil** (#1d4ed8): the only selection and focus color. Focus ring (2px, 2px offset), text caret and text selection, selected segment box and its dimension and name text, the selected schedule row (text plus 9% wash), the "Change N" label on the drawing and the current row of Your changes, drag ghost, insertion caret, and handle hover fill. Its meaning is "this is what you are acting on".
@@ -197,10 +226,21 @@ Fills for what the drawing shows. Each is paired with ink hatch and outline, so 
 - **Faint Ink** (#59656f): the sheet's outer border, tertiary text, disabled text, street-edge label text, drag-grip glyph, unassigned-space outline.
 - **Rule Grey** (#b4bcc3): the quiet structural line: dividers between header, drawing, status bar, lower band and notes column, note-heading underlines, the about card border, hairlines between table rows, disabled control borders. Never used for text.
 
-### Named Rules
-**The Two Pencils Rule.** Blue means selected, red means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else.
+### Night sheet (dark theme)
+Same token names, re-composed for a dark ground; every value is a `dark-*` key in the frontmatter. Applied when the person has chosen Dark, or when they have chosen nothing and the system prefers dark.
+- **Night ground** (#13181d, `dark-sheet`): the sheet ground and every control fill. **Night Deep** (#1c232a): hover fills for tools, icon buttons and legend rows.
+- **Pale Ink** (#e8edf1): primary text, control borders, symbol outlines, hatch strokes, dimension lines, the pressed state (pale fill, night text). **Soft Pale Ink** (#b9c3cc): secondary text. **Faint Pale Ink** (#93a0ab): the sheet border, tertiary and disabled text. **Night Rule** (#3b4650): dividers, hairlines, card border.
+- **Blue Pencil, night** (#7fa6ff) with wash rgb(127 166 255 / 0.16); **Redline, night** (#ff8073) with wash rgb(255 128 115 / 0.16). Same jobs as in light; the washes are stronger (16% against 9%) so they still register on the dark ground.
+- **Depiction tints, muted and deep**: sidewalk #6a5238, planting #41633a, bike #2c6b63, travel #46525e, bus #5a4a7e, parking #50493c, median #3a6b31, loading #7e6d1f. **Sky** #182838.
+- **Symbol fills**: tree #55924a, car #33404c, bus #8068b8, van #c0a02c, coats #d27753 and #5590c4.
+- Hatch strokes and dot stipple follow Pale Ink, so hatch still reads over the darker tints. Label halos follow the night ground.
 
-**The Colour-Plus-Hatch-Plus-Name Rule.** A segment type is identified by its tint, its hatch and its name together (the two-letter code stands in for the name only when the segment is too narrow). Colour is never the only code: every tint ships with a hatch and a name and code, and a new category needs all three.
+### Named Rules
+**The Two Pencils Rule.** Blue means selected, red means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else. It holds in both themes: in dark, blue and red are the lighter pencils (#7fa6ff, #ff8073) and stay reserved for selection and failure; no night tint is blue or red enough to be mistaken for them.
+
+**The Composed Night Rule.** Dark is designed, not computed: a new colour token gets a hand-picked dark value alongside its light one, tints go darker and muted while ink goes pale, and nothing is produced by inverting or filtering the light theme.
+
+**The Colour-Plus-Hatch-Plus-Name Rule.** A segment type is identified by its tint, its hatch and its name together (the two-letter code stands in for the name only when the segment is too narrow). Colour is never the only code: every tint ships with a hatch and a name and code, and a new category needs all three. It holds in dark: the tints are darker, the hatch strokes use the pale ink, and the name or code stays.
 
 ## Typography
 
@@ -225,7 +265,7 @@ Fills for what the drawing shows. Each is paired with ink hatch and outline, so 
 
 ## Layout
 
-The sheet fills the viewport inside a 12px frame (6px under 640px), as a single block with a 1px Faint Ink border and 14px radius (10px under 640px), clipping its content to the corner. Inside: a header (street name and "Street cross-section" sub-title left, Street picker, Undo/Redo/Start over and m/ft units right), then a body of two columns, the work area and a fixed 340px notes column, divided by a 1px Rule Grey line. The work area stacks the drawing (Today strip above Your design section, same scale and origin), a status bar (fit statement, key hints), then a lower band of Pieces of the street (left) and Add a piece (right, min 280px). The notes column holds Where the width goes, People moved, Does it work?, Your changes, and the about-this-street card pinned at the bottom.
+The sheet fills the viewport inside a 12px frame (6px under 640px), as a single block with a 1px Faint Ink border and 14px radius (10px under 640px), clipping its content to the corner. Inside: a header (street name and "Street cross-section" sub-title left, Street picker, Undo/Redo/Start over, m/ft units and the Light | Dark theme toggle right), then a body of two columns, the work area and a fixed 340px notes column, divided by a 1px Rule Grey line. The work area stacks the drawing (Today strip above Your design section, same scale and origin), a status bar (fit statement, key hints), then a lower band of Pieces of the street (left) and Add a piece (right, min 280px). The notes column holds Where the width goes, People moved, Does it work?, Your changes, and the about-this-street card pinned at the bottom.
 
 The drawing scales so the street width fills the width minus margins; the SVG has a 680px minimum and scrolls horizontally on narrow screens, with vertical geometry scaled 0.9 to 1.1. Rhythm is tight: 4, 8, 12, 18, 20px paddings; table rows are 3px above and below. All region dividers are 1px Rule Grey.
 
@@ -236,7 +276,7 @@ Breakpoints: at 1100px the notes column drops below the work area with a 1px Rul
 
 ## Elevation & Depth
 
-Flat. There are no shadows at rest and no layered surfaces; depth is line weight (1px border and dividers, 2px object outlines in the drawing, 0.8px dimension and boundary lines, 3.4px ground line). The one exception is state-only: the chip being dragged floats with a soft shadow (`0 6px 14px -4px rgb(20 24 28 / 0.28)`) and a blue border, because it is literally lifted off the sheet. A dragged segment is shown lifted by dropping its opacity to 0.35.
+Flat in both themes. There are no shadows at rest and no layered surfaces; depth is line weight (1px border and dividers, 2px object outlines in the drawing, 0.8px dimension and boundary lines, 3.4px ground line). The one exception is state-only: the chip being dragged floats with a soft shadow (`--shadow-lift`: `0 6px 14px -4px rgb(20 24 28 / 0.28)` in light, `0 8px 18px -4px rgb(0 0 0 / 0.55)` in dark) and a blue border, because it is literally lifted off the sheet. A dragged segment is shown lifted by dropping its opacity to 0.35.
 
 ### Named Rules
 **The Flat Sheet Rule.** Nothing rests above the paper. Only an object in the user's hand may cast a shadow.
@@ -257,9 +297,13 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 - **Focus:** 2px blue outline at 2px offset.
 - Transitions: 120ms, cubic-bezier(0.16, 1, 0.3, 1), background and colour only; disabled under reduced motion.
 
+### Theme toggle
+- The Light | Dark pair beside the m/ft units is the same joined 34px toggle (6px outer corners, pressed = inked fill). Its pressed state shows the theme in effect, so with no saved choice it tracks the system live.
+- Behaviour: follows the system (`prefers-color-scheme`) until a choice is made; the choice is stored in localStorage under `cityloom-theme` (storage failures are tolerated, and the choice then lasts the visit). A small inline script in the page head applies the stored choice before first paint, and the page declares `color-scheme: light dark`. The choice is announced in the status line ("Dark theme.").
+
 ### Inputs / Fields
 - **Width field:** 68px by 30px, 1px ink border, 6px radius, paper fill, right-aligned tabular 500 text, unit tag beside it. **Invalid:** border and text turn redline. **Focus:** blue outline, blue caret.
-- **Street select:** same 6px outline, custom 10px chevron drawn in ink, sentence-case caption "Street" above at 13px.
+- **Street select:** same 6px outline, custom 10px chevron drawn in ink (`--select-arrow`, re-stroked in pale ink in dark), sentence-case caption "Street" above at 13px.
 
 ### Pieces of the street and Add a piece
 - **Pieces of the street:** ruled table, rows separated by 1px Rule Grey, columns Pattern swatch (44 by 22px hatch, 4px radius), Type (segment name), Width field, Actions. There is no Mark column. Selected row takes Blue Wash and blue name.
@@ -283,13 +327,15 @@ The Today strip and Your design section share one origin and scale. Each propose
 - **Do** use blue only for the thing being acted on and red only for a failed fit.
 - **Do** use the radius ladder (6px controls, 10px card, 14px sheet) and outline controls in 1px ink on paper fill.
 - **Do** set headings and labels in sentence case, plain resident wording, and numbers in tabular figures.
+- **Do** give every new colour token a light value and a hand-set dark value together, and check tints against hatch and ink in both themes.
 - **Do** halo any label that sits over a hatch with 4px of paper.
 - **Do** give every new control a 2px blue focus outline and honour prefers-reduced-motion.
 
 ### Don't:
 - **Don't** let a tint stand alone as the identifier of a type, or use a tint as a state signal.
 - **Don't** add cards beyond the about-this-street card, nested boxes, filled call-to-action buttons or icon-card sidebars.
-- **Don't** add shadows to anything at rest.
+- **Don't** add shadows to anything at rest, in either theme.
+- **Don't** derive the dark theme by inverting or filtering the light one, and don't let a dark tint drift toward blue or red.
 - **Don't** introduce a third saturated accent or use blue and red decoratively.
 - **Don't** replace line-art symbols with filled or glyph icons.
 - **Don't** set body-scale text in a face other than Barlow Semi Condensed.
