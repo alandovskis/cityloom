@@ -1446,6 +1446,17 @@ kbd {
   display: none;
 }
 
+.menu-row select {
+  min-height: 30px;
+  max-width: 190px;
+  padding: 2px 6px;
+  border: var(--line) solid var(--ink);
+  border-radius: 6px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
 .menu-row + .menu-row {
   margin-top: 10px;
 }

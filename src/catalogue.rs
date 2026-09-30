@@ -90,6 +90,32 @@ pub const DIRECTIONS: [Material; 2] = [
     Material { id: "toward", name: "Toward you" },
 ];
 
+/// The side of the road a region drives on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Side {
+    Left,
+    Right,
+}
+
+/// A region carries the rules its streets share. For now that is which side
+/// of the road traffic keeps to. Synthetic placeholder list.
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct Region {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub drive_side: Side,
+}
+
+pub const REGIONS: [Region; 6] = [
+    Region { id: "canada", name: "Canada", drive_side: Side::Right },
+    Region { id: "united-states", name: "United States", drive_side: Side::Right },
+    Region { id: "germany", name: "Germany", drive_side: Side::Right },
+    Region { id: "united-kingdom", name: "United Kingdom", drive_side: Side::Left },
+    Region { id: "australia", name: "Australia", drive_side: Side::Left },
+    Region { id: "japan", name: "Japan", drive_side: Side::Left },
+];
+
 pub const CURBS: [Material; 6] = [
     Material { id: "granite", name: "Granite" },
     Material { id: "concrete", name: "Concrete" },

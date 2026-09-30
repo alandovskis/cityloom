@@ -944,6 +944,32 @@ for (const b of document.querySelectorAll(".unit[data-unit]")) {
   });
 }
 
+// Region: which side of the road traffic keeps to; remembered. The street is
+// laid out again for it only while it is untouched (the model decides).
+{
+  const pick = $("region");
+  pick.innerHTML = MATERIALS.regions
+    .map((r) => `<option value="${r.id}">${esc(r.name)} (${r.drive_side})</option>`)
+    .join("");
+  const set = (id) => {
+    const i = MATERIALS.regions.findIndex((r) => r.id === id);
+    if (i >= 0 && sheet.set_region(i)) refresh();
+    pick.value = view.region;
+  };
+  try {
+    set(localStorage.getItem("cityloom-region"));
+  } catch {
+    pick.value = view.region;
+  }
+  pick.addEventListener("change", () => {
+    set(pick.value);
+    try {
+      localStorage.setItem("cityloom-region", pick.value);
+    } catch {}
+    say(`${MATERIALS.regions.find((r) => r.id === view.region).name}: traffic keeps ${MATERIALS.regions.find((r) => r.id === view.region).drive_side}.`);
+  });
+}
+
 // Theme: follow the system until the person picks one; the pick is remembered.
 const root = document.documentElement;
 const dark = matchMedia("(prefers-color-scheme: dark)");

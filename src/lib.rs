@@ -8,7 +8,7 @@ pub mod model;
 
 use wasm_bindgen::prelude::*;
 
-use catalogue::{CURBS, DIRECTIONS, KINDS, MATERIALS, SAMPLES};
+use catalogue::{CURBS, DIRECTIONS, KINDS, REGIONS, MATERIALS, SAMPLES};
 
 fn json<T: serde::Serialize>(v: &T) -> String {
     serde_json::to_string(v).expect("view serialises")
@@ -62,6 +62,11 @@ impl Sheet {
     /// Sets a piece's curb, by index into `materials().curbs`; -1 is none.
     pub fn set_curb(&mut self, uid: u32, curb: i32) -> bool {
         self.0.set_curb(uid, usize::try_from(curb).ok())
+    }
+
+    /// Sets the region, by index into `materials().regions`.
+    pub fn set_region(&mut self, region: usize) -> bool {
+        self.0.set_region(region)
     }
 
     /// Sets a lane's direction, by index into `materials().directions`; -1 is
@@ -127,7 +132,7 @@ pub fn catalogue() -> String {
 /// The surface and curb material tables as JSON.
 #[wasm_bindgen]
 pub fn materials() -> String {
-    json(&serde_json::json!({ "surfaces": MATERIALS, "curbs": CURBS, "directions": DIRECTIONS }))
+    json(&serde_json::json!({ "surfaces": MATERIALS, "curbs": CURBS, "directions": DIRECTIONS, "regions": REGIONS }))
 }
 
 /// Names of the sample streets as JSON.

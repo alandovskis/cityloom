@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-use crate::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, Kind, MATERIALS, Mode, SAMPLES, kind_index};
+use crate::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, REGIONS, Side, KINDS, Kind, MATERIALS, Mode, SAMPLES, kind_index};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -50,6 +50,8 @@ struct State {
 
 pub struct Editor {
     sample: usize,
+    /// Index into `REGIONS`. A setting of the sheet, not part of the history.
+    region: usize,
     row_mm: i32,
     states: Vec<State>,
     cursor: usize,
@@ -57,6 +59,22 @@ pub struct Editor {
     selected: Option<u32>,
     gesture: Option<Vec<Segment>>,
     pending_label: String,
+}
+
+fn required_direction(s: &Segment) -> bool {
+    KINDS[s.kind].direction == DirectionRule::Required
+}
+
+/// Gives the driving lanes the directions a street in this region starts with:
+/// with traffic on the right, lanes on the left half of the street come toward
+/// the viewer and lanes on the right half go away; on the left it is the
+/// other way round.
+fn default_directions(segs: &mut [Segment], side: Side) {
+    let lanes = segs.iter().filter(|s| required_direction(s)).count();
+    for (i, s) in segs.iter_mut().filter(|s| required_direction(s)).enumerate() {
+        let right_half = i * 2 >= lanes;
+        s.direction = Some(usize::from(right_half == (side == Side::Left)));
+    }
 }
 
 fn snap(v: i32) -> i32 {
@@ -71,6 +89,7 @@ impl Editor {
     pub fn new(sample: usize) -> Editor {
         let mut e = Editor {
             sample: 0,
+            region: 0,
             row_mm: 0,
             states: Vec::new(),
             cursor: 0,
@@ -104,11 +123,7 @@ impl Editor {
             .collect::<Vec<Segment>>();
         let mut segments = segments;
         // Driving lanes on the left half of the street run away, the rest toward.
-        let required = |s: &Segment| KINDS[s.kind].direction == DirectionRule::Required;
-        let lanes = segments.iter().filter(|s| required(s)).count();
-        for (i, s) in segments.iter_mut().filter(|s| required(s)).enumerate() {
-            s.direction = Some(usize::from(i * 2 >= lanes));
-        }
+        default_directions(&mut segments, REGIONS[self.region].drive_side);
         self.states = vec![State {
             label: "Street today".into(),
             segments,
@@ -340,6 +355,22 @@ impl Editor {
         })
     }
 
+    /// Sets the region, by index into `REGIONS`. It changes which side of the
+    /// road traffic keeps to. Lanes are only re-laid for the new side while the
+    /// street is untouched; otherwise the edits stay and the check reports
+    /// any lane that now runs against the traffic.
+    pub fn set_region(&mut self, region: usize) -> bool {
+        if region >= REGIONS.len() || region == self.region {
+            return false;
+        }
+        let side_changed = REGIONS[region].drive_side != REGIONS[self.region].drive_side;
+        self.region = region;
+        if side_changed && self.states.len() == 1 {
+            default_directions(&mut self.states[0].segments, REGIONS[region].drive_side);
+        }
+        true
+    }
+
     pub fn nudge_width(&mut self, uid: u32, delta_mm: i32) -> bool {
         let Some(s) = self.current().iter().find(|s| s.uid == uid) else {
             return false;
@@ -493,6 +524,7 @@ impl Editor {
         View {
             name: SAMPLES[self.sample].name,
             sample: self.sample,
+            region: REGIONS[self.region].id,
             row_mm: self.row_mm,
             total_mm,
             delta_mm: total_mm - self.row_mm,
@@ -501,7 +533,7 @@ impl Editor {
             existing_total_mm: total(existing),
             selected: self.selected,
             outcomes: outcomes(segs, existing),
-            checks: checks(segs, self.row_mm),
+            checks: checks(segs, self.row_mm, REGIONS[self.region].drive_side),
             revisions: self.states[1..=self.cursor]
                 .iter()
                 .enumerate()
@@ -576,7 +608,7 @@ fn outcomes(segs: &[Segment], existing: &[Segment]) -> Outcomes {
     }
 }
 
-fn checks(segs: &[Segment], row_mm: i32) -> Vec<Check> {
+fn checks(segs: &[Segment], row_mm: i32, side: Side) -> Vec<Check> {
     let total_mm = total(segs);
     let delta = total_mm - row_mm;
     let fits = delta <= 0;
@@ -585,6 +617,16 @@ fn checks(segs: &[Segment], row_mm: i32) -> Vec<Check> {
     let access = segs.iter().any(|s| {
         matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= ACCESS_LANE_MM
     });
+    // With traffic on the right, lanes coming toward the viewer (1) sit to the
+    // left of lanes going away (0); with traffic on the left, the reverse. A
+    // one-way street has nothing to conflict.
+    let lanes: Vec<usize> = segs.iter().filter(|s| required_direction(s)).filter_map(|s| s.direction).collect();
+    let (wrong_first, wrong_then) = if side == Side::Right { (0, 1) } else { (1, 0) };
+    let keeps = lanes
+        .iter()
+        .position(|&d| d == wrong_first)
+        .is_none_or(|i| !lanes[i..].contains(&wrong_then));
+    let side_name = if side == Side::Right { "right" } else { "left" };
     vec![
         Check {
             id: "fits",
@@ -621,6 +663,17 @@ fn checks(segs: &[Segment], row_mm: i32) -> Vec<Check> {
                 "A lane of 3.0 m or more".into()
             } else {
                 "No lane of 3.0 m or more".into()
+            },
+        },
+        Check {
+            id: "side",
+            ok: keeps,
+            amount_mm: 0,
+            label: if side == Side::Right { "Traffic keeps right" } else { "Traffic keeps left" },
+            detail: if keeps {
+                "Lanes run the way this region drives".into()
+            } else {
+                format!("A lane runs against traffic that keeps {side_name}")
             },
         },
     ]
@@ -677,6 +730,7 @@ pub struct Revision {
 pub struct View {
     pub name: &'static str,
     pub sample: usize,
+    pub region: &'static str,
     pub row_mm: i32,
     pub total_mm: i32,
     pub delta_mm: i32,
@@ -973,13 +1027,14 @@ mod tests {
     fn driving_lanes_must_have_a_direction_and_bike_lanes_may() {
         let mut e = Editor::new(0);
         let dirs: Vec<_> = e.view().segments.iter().filter(|s| s.kind == kind_index("travel").unwrap()).map(|s| s.direction).collect();
-        assert_eq!(dirs, [Some("away"), Some("toward")]);
+        assert_eq!(dirs, [Some("toward"), Some("away")]); // traffic keeps right
         let lane = e.current().iter().find(|s| s.kind == kind_index("travel").unwrap()).unwrap().uid;
         assert!(!e.set_direction(lane, None)); // a driving lane cannot be undirected
         assert!(!e.set_direction(lane, Some(9)));
-        assert!(!e.set_direction(lane, Some(0))); // unchanged
-        assert!(e.set_direction(lane, Some(1)));
-        assert_eq!(e.view().revisions[0].label, "Driving lane direction: toward you");
+        assert!(!e.set_direction(lane, Some(1))); // unchanged
+        assert!(e.set_direction(lane, Some(0)));
+        assert_eq!(e.view().revisions[0].label, "Driving lane direction: away from you");
+        assert!(e.undo());
         let walk = e.current()[0].uid;
         assert!(!e.set_direction(walk, Some(0))); // sidewalks have none
         let bike = e.add(kind_index("bike").unwrap(), 1);
@@ -989,6 +1044,37 @@ mod tests {
         assert_eq!(e.view().revisions.last().unwrap().label, "Bike lane direction: two-way");
         assert!(e.undo());
         assert_eq!(e.view().segments[1].direction, Some("away"));
+    }
+
+    #[test]
+    fn a_region_sets_which_side_traffic_keeps_to() {
+        let dirs = |e: &Editor| -> Vec<_> {
+            e.view().segments.iter().filter(|s| s.direction.is_some() && s.kind == kind("travel")).map(|s| s.direction).collect()
+        };
+        let mut e = Editor::new(0);
+        assert_eq!(e.view().region, "canada");
+        assert!(e.view().checks.iter().find(|c| c.id == "side").unwrap().ok);
+        let uk = REGIONS.iter().position(|r| r.id == "united-kingdom").unwrap();
+        assert!(!e.set_region(99));
+        assert!(!e.set_region(0)); // unchanged
+        // an untouched street is laid out again for the new side
+        assert!(e.set_region(uk));
+        assert_eq!(dirs(&e), [Some("away"), Some("toward")]);
+        assert!(e.view().checks.iter().find(|c| c.id == "side").unwrap().ok);
+        // once edited, the lanes stay and the check reports the conflict
+        e.add(kind("bike"), 0);
+        assert!(e.set_region(0));
+        assert_eq!(dirs(&e), [Some("away"), Some("toward")]);
+        let side = e.view().checks.into_iter().find(|c| c.id == "side").unwrap();
+        assert!(!side.ok);
+        assert_eq!(side.label, "Traffic keeps right");
+        // a one-way street has nothing to conflict
+        let lanes: Vec<u32> = e.current().iter().filter(|s| s.kind == kind("travel")).map(|s| s.uid).collect();
+        assert!(e.set_direction(lanes[0], Some(1)));
+        assert!(e.view().checks.iter().find(|c| c.id == "side").unwrap().ok);
+        // starting over keeps the region
+        e.load_sample(0);
+        assert_eq!(e.view().region, "canada");
     }
 
     #[test]
