@@ -56,7 +56,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 $("defs").innerHTML = `<defs>${Object.values(HATCH).join("")}</defs>`;
 
 const swatch = (kindId) =>
-  `<svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><rect width="44" height="22" fill="url(#h-${kindId})" stroke="none"/></svg>`;
+  `<svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><rect class="k-${kindId}" width="44" height="22" stroke="none"/><rect width="44" height="22" fill="url(#h-${kindId})" stroke="none"/></svg>`;
 
 const ICON = {
   left: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M12 7H2M6 3 2 7l4 4"/></svg>`,
@@ -179,7 +179,7 @@ function renderDrawing() {
     const x = X(s.x_mm);
     const w = s.width_mm * L.scale;
     parts.push(
-      `<rect class="obj" x="${x}" y="${Y.ex}" width="${w}" height="${Y.exH}"/>` +
+      `<rect class="obj k-${k.id}" x="${x}" y="${Y.ex}" width="${w}" height="${Y.exH}"/>` +
         `<rect class="hatch" x="${x}" y="${Y.ex}" width="${w}" height="${Y.exH}" fill="url(#h-${k.id})"/>`,
     );
     const label = fmtN(s.width_mm);
@@ -205,6 +205,9 @@ function renderDrawing() {
     `<text class="t-label t-faint" x="${xL}" y="${Y.dim - 42}" text-anchor="middle">R/W</text>` +
       `<text class="t-label t-faint" x="${xR}" y="${Y.dim - 42}" text-anchor="middle">R/W</text>`,
   );
+
+  // sky behind the section, within the right-of-way
+  parts.push(`<rect class="sky" x="${xL}" y="${Y.top}" width="${xR - xL}" height="${G - Y.top}"/>`);
 
   // ground
   parts.push(`<line class="ground" x1="${xL - 14}" x2="${Math.min(Math.max(X(v.total_mm), xR) + 14, W - 4)}" y1="${G}" y2="${G}"/>`);
@@ -237,7 +240,7 @@ function renderDrawing() {
       `<g class="seg${lifted ? " lifted" : ""}" data-role="seg" data-uid="${s.uid}">` +
         `<rect class="hit" x="${x}" y="${Y.top}" width="${w}" height="${bodyBottom - Y.top}"/>` +
         symbol(k.id, cx, G, pxPerM, w, s.width_mm / 1000, F) +
-        `<rect class="obj" x="${x}" y="${G}" width="${w}" height="${Y.slab}"/>` +
+        `<rect class="obj k-${k.id}" x="${x}" y="${G}" width="${w}" height="${Y.slab}"/>` +
         `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#h-${k.id})"/>` +
         `<text class="t-mark t-halo${sel ? " t-blue" : ""}" x="${cx}" y="${Y.mark}" text-anchor="middle">${k.mark}</text>` +
         `</g>`,
@@ -417,7 +420,7 @@ function renderNotes() {
     `<tbody>${o.share
       .map((s, i) => {
         const ex = o.existing_share[i].mm;
-        return `<tr><td>${s.label}</td><td>${fmtN(ex)}</td><td>${fmtN(s.mm)}</td>${changeCell(s.mm - ex, signed(s.mm - ex))}</tr>`;
+        return `<tr><td><span class="mc mc-${s.mode}" aria-hidden="true"></span>${s.label}</td><td>${fmtN(ex)}</td><td>${fmtN(s.mm)}</td>${changeCell(s.mm - ex, signed(s.mm - ex))}</tr>`;
       })
       .join("")}</tbody>`;
 

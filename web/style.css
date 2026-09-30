@@ -34,6 +34,25 @@
   --red: #b8231a;
   --red-wash: rgb(184 35 26 / 0.09);
 
+  /* segment types: a tint each, always paired with a hatch and a mark */
+  --k-sidewalk: #f2cfa6;
+  --k-planting: #b6dc9f;
+  --k-bike: #93d9cc;
+  --k-travel: #bcc5ce;
+  --k-bus: #cdb8ec;
+  --k-parking: #dcd6c5;
+  --k-median: #8fc281;
+  --k-loading: #f5df7e;
+  --sky: #e2eff8;
+
+  /* symbol colours */
+  --s-tree: #78b565;
+  --s-car: #dbe2e9;
+  --s-bus: #b79ee3;
+  --s-van: #f0cb45;
+  --s-coat-0: #ee9b78;
+  --s-coat-1: #74aede;
+
   --font: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
 
   --line-heavy: 2px;
@@ -1138,3 +1157,47 @@ svg pattern circle {
     padding-inline: 14px;
   }
 }
+
+/* ---- colour: segment types, sky, symbols, mode chips ---- */
+.k-sidewalk { fill: var(--k-sidewalk); }
+.k-planting { fill: var(--k-planting); }
+.k-bike { fill: var(--k-bike); }
+.k-travel { fill: var(--k-travel); }
+.k-bus { fill: var(--k-bus); }
+.k-parking { fill: var(--k-parking); }
+.k-median { fill: var(--k-median); }
+.k-loading { fill: var(--k-loading); }
+.sky {
+  fill: var(--sky);
+  pointer-events: none;
+}
+.sym .f-tree { fill: var(--s-tree); }
+.sym .f-car { fill: var(--s-car); }
+.sym .f-bus { fill: var(--s-bus); }
+.sym .f-van { fill: var(--s-van); }
+.sym .f-coat-0 { fill: var(--s-coat-0); }
+.sym .f-coat-1 { fill: var(--s-coat-1); }
+.sym .f-kerb { fill: var(--k-median); }
+.swatch .k-sidewalk,
+.swatch .k-planting,
+.swatch .k-bike,
+.swatch .k-travel,
+.swatch .k-bus,
+.swatch .k-parking,
+.swatch .k-median,
+.swatch .k-loading {
+  stroke: none;
+}
+.mc {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 8px;
+  border: var(--line) solid var(--ink);
+  vertical-align: -1px;
+}
+.mc-foot { background: var(--k-sidewalk); }
+.mc-bike { background: var(--k-bike); }
+.mc-transit { background: var(--k-bus); }
+.mc-vehicle { background: var(--k-travel); }
+.mc-green { background: var(--k-planting); }

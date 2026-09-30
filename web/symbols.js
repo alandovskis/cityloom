@@ -5,12 +5,12 @@
 const at = (x, s, inner) =>
   `<g transform="translate(${x} 0) scale(${s})">${inner}</g>`;
 
-const person = (x = 0, s = 1) =>
+const person = (x = 0, s = 1, v = 0) =>
   at(
     x,
     s,
     `<circle cx="0" cy="-58" r="6"/>` +
-      `<path d="M-7,-50 Q-8,-52 -5,-52 L5,-52 Q8,-52 7,-50 L9,-24 L-9,-24 Z"/>` +
+      `<path class="f-coat-${v}" d="M-7,-50 Q-8,-52 -5,-52 L5,-52 Q8,-52 7,-50 L9,-24 L-9,-24 Z"/>` +
       `<path class="o" d="M-4,-24 L-5,0 M4,-24 L5,0"/>`,
   );
 
@@ -19,7 +19,7 @@ const tree = (x = 0, s = 1) =>
     x,
     s,
     `<path class="o" d="M-3,0 L-3,-44 M3,0 L3,-44"/>` +
-      `<path d="M-22,-58 C-33,-62 -31,-86 -17,-88 C-15,-103 11,-107 17,-93 C33,-93 36,-71 24,-63 C21,-49 -13,-49 -22,-58 Z"/>` +
+      `<path class="f-tree" d="M-22,-58 C-33,-62 -31,-86 -17,-88 C-15,-103 11,-107 17,-93 C33,-93 36,-71 24,-63 C21,-49 -13,-49 -22,-58 Z"/>` +
       `<path class="o" d="M0,-44 L0,-68 M0,-56 L-11,-68 M0,-60 L10,-76"/>`,
   );
 
@@ -27,7 +27,7 @@ const shrub = (x = 0, s = 1) =>
   at(
     x,
     s,
-    `<path d="M-15,0 C-18,-14 -7,-24 0,-19 C6,-26 18,-15 15,0 Z"/>` +
+    `<path class="f-tree" d="M-15,0 C-18,-14 -7,-24 0,-19 C6,-26 18,-15 15,0 Z"/>` +
       `<path class="o" d="M0,-19 L0,-4 M-6,-14 L-4,-4 M7,-15 L5,-4"/>`,
   );
 
@@ -45,7 +45,7 @@ const car = (x = 0, s = 1) =>
   at(
     x,
     s,
-    `<path d="M-46,-8 L-46,-19 C-46,-23 -42,-24 -38,-25 L-26,-27 L-16,-38 C-14,-40 -12,-40 -8,-40 L14,-40 C18,-40 20,-39 22,-37 L32,-27 L42,-25 C46,-24 48,-22 48,-18 L48,-8 Z"/>` +
+    `<path class="f-car" d="M-46,-8 L-46,-19 C-46,-23 -42,-24 -38,-25 L-26,-27 L-16,-38 C-14,-40 -12,-40 -8,-40 L14,-40 C18,-40 20,-39 22,-37 L32,-27 L42,-25 C46,-24 48,-22 48,-18 L48,-8 Z"/>` +
       `<path d="M-14,-27 L-8,-36 L4,-36 L4,-27 Z"/><path d="M9,-27 L9,-36 L16,-36 L27,-27 Z"/>` +
       `<circle cx="-28" cy="-8" r="8"/><circle cx="28" cy="-8" r="8"/>`,
   );
@@ -54,7 +54,7 @@ const bus = (x = 0, s = 1) =>
   at(
     x,
     s,
-    `<path d="M-72,-7 L-72,-58 Q-72,-66 -64,-66 L64,-66 Q72,-66 72,-58 L72,-7 Z"/>` +
+    `<path class="f-bus" d="M-72,-7 L-72,-58 Q-72,-66 -64,-66 L64,-66 Q72,-66 72,-58 L72,-7 Z"/>` +
       [-60, -40, -20, 0, 20].map((wx) => `<rect x="${wx}" y="-58" width="16" height="20"/>`).join("") +
       `<path d="M42,-58 L58,-58 L58,-14 L42,-14 Z"/>` +
       `<path class="o" d="M-72,-44 L-64,-44"/>` +
@@ -65,7 +65,7 @@ const van = (x = 0, s = 1) =>
   at(
     x,
     s,
-    `<path d="M-52,-8 L-52,-58 L10,-58 L10,-8 Z"/>` +
+    `<path class="f-van" d="M-52,-8 L-52,-58 L10,-58 L10,-8 Z"/>` +
       `<path d="M10,-8 L10,-44 L30,-44 L44,-26 L54,-24 L54,-8 Z"/>` +
       `<path d="M15,-40 L28,-40 L38,-27 L15,-27 Z"/>` +
       `<circle cx="-30" cy="-8" r="8"/><circle cx="34" cy="-8" r="8"/>`,
@@ -86,7 +86,7 @@ const SYMBOLS = {
     const gap = (wm * 55 * 0.3) / 1;
     const xs = n === 1 ? [0] : n === 2 ? [-gap * 0.55, gap * 0.55] : [-gap * 0.85, 0, gap * 0.85];
     const sizes = [1, 0.86, 0.94];
-    return xs.map((x, i) => person(x, sizes[i])).join("");
+    return xs.map((x, i) => person(x, sizes[i], i % 2)).join("");
   },
   planting: (wm) => (wm < 1.2 ? shrub(0, 1) : tree(0, 1)),
   bike: () => cyclist(0, 1),
@@ -95,7 +95,7 @@ const SYMBOLS = {
   parking: (wm) => car(-8, 0.92) + postP(wm * 55 * 0.36, 0.9),
   median: (wm) => {
     const w = Math.max(wm * 55 - 10, 20) / 2;
-    const kerb = `<rect x="${-w}" y="-10" width="${w * 2}" height="10"/>`;
+    const kerb = `<rect class="f-kerb" x="${-w}" y="-10" width="${w * 2}" height="10"/>`;
     return kerb + (wm >= 2.4 ? tree(0, 0.9) : shrub(-w * 0.35, 0.8) + shrub(w * 0.35, 0.8)).replace(/translate\((-?[\d.]+) 0\)/g, (m, x) => `translate(${x} -10)`);
   },
   loading: () => van(0, 1),
