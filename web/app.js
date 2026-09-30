@@ -2,12 +2,13 @@
 // No editing rules live here: widths, snapping, limits, history and checks all
 // come from the WebAssembly model.
 
-import init, { Sheet, catalogue } from "./pkg/cityloom_editor.js";
-import { HATCH, symbol } from "./symbols.js";
+import init, { Sheet, catalogue, materials } from "./pkg/cityloom_editor.js";
+import { CURB_HATCH, HATCH, MATERIAL_HATCH, symbol } from "./symbols.js";
 
 await init();
 
 const KINDS = JSON.parse(catalogue());
+const MATERIALS = JSON.parse(materials());
 const sheet = new Sheet(0);
 let view = JSON.parse(sheet.view());
 let units = "m";
@@ -51,7 +52,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 
 // ---- static pieces --------------------------------------------------------
 
-$("defs").innerHTML = `<defs>${Object.values(HATCH).join("")}</defs>`;
+$("defs").innerHTML = `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}</defs>`;
 
 const swatch = (kindId) =>
   `<svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><rect class="k-${kindId}" width="44" height="22" stroke="none"/><rect width="44" height="22" fill="url(#h-${kindId})" stroke="none"/></svg>`;
@@ -179,7 +180,7 @@ function renderDrawing() {
     const w = s.width_mm * L.scale;
     parts.push(
       `<rect class="obj k-${k.id}" x="${x}" y="${Y.ex}" width="${w}" height="${Y.exH}"/>` +
-        `<rect class="hatch" x="${x}" y="${Y.ex}" width="${w}" height="${Y.exH}" fill="url(#h-${k.id})"/>`,
+        `<rect class="hatch" x="${x}" y="${Y.ex}" width="${w}" height="${Y.exH}" fill="url(#${engineering() ? `m-${s.material}` : `h-${k.id}`})"/>`,
     );
     const label = fmtN(s.width_mm);
     if (w > label.length * 8.5 + 10) {
@@ -240,7 +241,7 @@ function renderDrawing() {
         `<rect class="hit" x="${x}" y="${Y.top}" width="${w}" height="${bodyBottom - Y.top}"/>` +
         symbol(k.id, cx, G, pxPerM, w, s.width_mm / 1000, F) +
         `<rect class="obj k-${k.id}" x="${x}" y="${G}" width="${w}" height="${Y.slab}"/>` +
-        `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#h-${k.id})"/>` +
+        `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#${engineering() ? `m-${s.material}` : `h-${k.id}`})"/>` +
         `<text class="t-mark t-halo${sel ? " t-blue" : ""}" x="${cx}" y="${Y.mark}" text-anchor="middle">${w > k.name.length * 8.6 + 10 ? esc(k.name) : w > 30 ? k.mark : ""}</text>` +
         `</g>`,
     );
@@ -293,6 +294,28 @@ function renderDrawing() {
     );
   }
 
+  // curbs: a block on each side of a curbed piece that faces a road piece
+  {
+    const road = new Set(["travel", "bus", "parking", "loading"]);
+    const cw = Math.max(5, 150 * L.scale);
+    v.segments.forEach((s, i) => {
+      if (!s.curb) return;
+      const x = X(s.x_mm);
+      const w = s.width_mm * L.scale;
+      const sides = [
+        [v.segments[i - 1], x],
+        [v.segments[i + 1], x + w - cw],
+      ];
+      for (const [nb, bx] of sides) {
+        if (!nb || !road.has(KINDS[nb.kind].id)) continue;
+        parts.push(
+          `<rect class="curb" x="${bx}" y="${G - 12}" width="${cw}" height="12"/>` +
+            (engineering() ? `<rect class="hatch" x="${bx}" y="${G - 12}" width="${cw}" height="12" fill="url(#c-${s.curb})"/>` : ""),
+        );
+      }
+    });
+  }
+
   // engineering view: lane markings as they cut through the section, a filled
   // block for a solid line and an outlined one for a broken line
   if (engineering()) {
@@ -301,6 +324,8 @@ function renderDrawing() {
       const a = KINDS[v.segments[i - 1].kind].id;
       const b = KINDS[v.segments[i].kind].id;
       if (!road.has(a) || !road.has(b)) continue;
+      // a bike-lane curb takes the place of the line on its side
+      if ((a === "bike" && v.segments[i - 1].curb) || (b === "bike" && v.segments[i].curb)) continue;
       const broken = a === "travel" && b === "travel";
       const x = X(v.segments[i].x_mm);
       parts.push(`<rect class="lane-mark${broken ? " broken" : ""}" x="${x - 3.5}" y="${G - 9}" width="7" height="9"/>`);

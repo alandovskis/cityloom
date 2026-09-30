@@ -134,3 +134,22 @@ export const HATCH = {
   median: `<pattern id="h-median" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M0,0 L7,0 M0,0 L0,7"/></pattern>`,
   loading: `<pattern id="h-loading" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M0,6 L5,1 L10,6"/></pattern>`,
 };
+
+// Surface material hatches, used for the pieces in the engineering view, where
+// the hatch names the material and the label names the kind of piece.
+export const MATERIAL_HATCH = {
+  asphalt: `<pattern id="m-asphalt" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="0.7"/><circle cx="3.7" cy="3.7" r="0.7"/></pattern>`,
+  concrete: `<pattern id="m-concrete" width="12" height="10" patternUnits="userSpaceOnUse"><path d="M2,8 L4.5,3.5 L7,8 Z"/><circle cx="9.5" cy="3" r="0.8"/></pattern>`,
+  permeable: `<pattern id="m-permeable" width="8" height="8" patternUnits="userSpaceOnUse"><rect x="1.5" y="1.5" width="5" height="5"/></pattern>`,
+  brick: `<pattern id="m-brick" width="12" height="8" patternUnits="userSpaceOnUse"><path d="M0,0 H12 M0,4 H12 M3,0 V4 M9,4 V8"/></pattern>`,
+  grass: `<pattern id="m-grass" width="9" height="8" patternUnits="userSpaceOnUse"><path d="M1.5,7 L2.5,3 M5,7 L4.5,2.5 M8,7 L8.8,3.5"/></pattern>`,
+  planted: `<pattern id="m-planted" width="12" height="10" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="2"/><circle cx="9" cy="7.5" r="1.4"/></pattern>`,
+  gravel: `<pattern id="m-gravel" width="11" height="9" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.1"/><circle cx="7.5" cy="3" r="0.6"/><circle cx="4.5" cy="7" r="0.9"/><circle cx="9.5" cy="7.5" r="0.5"/></pattern>`,
+};
+
+// Curb hatches.
+export const CURB_HATCH = {
+  granite: `<pattern id="c-granite" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0,0 L5,5 M5,0 L0,5"/></pattern>`,
+  concrete: `<pattern id="c-concrete" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0,0 L0,5"/></pattern>`,
+  asphalt: `<pattern id="c-asphalt" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7"/><circle cx="3" cy="3" r="0.7"/></pattern>`,
+};

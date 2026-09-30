@@ -1747,3 +1747,9 @@ kbd {
 #drawing .lane-mark.broken {
   fill: var(--sheet);
 }
+#drawing .curb {
+  fill: var(--sheet);
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  pointer-events: none;
+}
