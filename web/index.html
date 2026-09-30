@@ -100,24 +100,38 @@
         </div>
 
         <aside class="notes" id="notes" aria-label="Sheet notes">
-          <section aria-labelledby="h-space">
-            <h2 id="h-space" class="note-h">Where the width goes</h2>
-            <table class="nt" id="space"></table>
-          </section>
-          <section aria-labelledby="h-cap">
-            <h2 id="h-cap" class="note-h">People moved</h2>
-            <table class="nt" id="cap"></table>
-          </section>
-          <section aria-labelledby="h-checks">
-            <h2 id="h-checks" class="note-h">Does it work?</h2>
-            <ul class="checks" id="checks"></ul>
-          </section>
-          <p class="fine">Sample numbers for now, not real measurements.</p>
+          <div class="tabs" role="tablist" aria-label="Sheet notes">
+            <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true">Space</button>
+            <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1">Checks</button>
+            <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
+          </div>
 
-          <section aria-labelledby="h-rev" class="revs">
-            <h2 id="h-rev" class="note-h">Your changes</h2>
-            <table class="nt rev" id="revs"></table>
-          </section>
+          <div class="panel" id="p-space" role="tabpanel" aria-labelledby="t-space">
+            <section aria-labelledby="h-space">
+              <h2 id="h-space" class="note-h">Where the width goes</h2>
+              <table class="nt" id="space"></table>
+            </section>
+            <section aria-labelledby="h-cap">
+              <h2 id="h-cap" class="note-h">People moved</h2>
+              <table class="nt" id="cap"></table>
+            </section>
+          </div>
+
+          <div class="panel" id="p-checks" role="tabpanel" aria-labelledby="t-checks" hidden>
+            <section aria-labelledby="h-checks">
+              <h2 id="h-checks" class="note-h">Does it work?</h2>
+              <ul class="checks" id="checks"></ul>
+            </section>
+          </div>
+
+          <div class="panel" id="p-changes" role="tabpanel" aria-labelledby="t-changes" hidden>
+            <section aria-labelledby="h-rev" class="revs">
+              <h2 id="h-rev" class="note-h">Your changes</h2>
+              <table class="nt rev" id="revs"></table>
+            </section>
+          </div>
+
+          <p class="fine">Sample numbers for now, not real measurements.</p>
 
           <div class="title-block" aria-label="About this street">
             <div class="tb-cell tb-wide"><span>Street</span><b id="tb-street"></b></div>

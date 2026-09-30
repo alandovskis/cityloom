@@ -312,6 +312,9 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 ### Inputs / Fields
 - **Width field:** 68px by 30px, 1px ink border, 6px radius, paper fill, right-aligned tabular 500 text, unit tag beside it. **Invalid:** border and text turn redline. **Focus:** blue outline, blue caret.
 
+### Notes tabs
+- **Tabs:** the right column is split into Space (where the width goes, people moved), Checks and Changes. Text tabs on a 1px Rule Grey baseline; the selected tab is Ink 600 with a 2px ink underline. Arrow keys, Home and End move between tabs; the choice is remembered. In print all three show, without the tab row.
+
 ### Add a piece
 - **Pieces of the street:** there is no longer a table of pieces. Width, surface and curb are edited in the left inspector; moving and removing pieces is done on the drawing with the keyboard.
 - **Add a piece:** the palette is one ruled row per segment type (44px swatch, name, default width, small grip glyph), draggable, Bond Paper Deep on hover. Not cards.

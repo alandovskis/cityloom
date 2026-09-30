@@ -1026,6 +1026,37 @@ render();
 // Print: the print stylesheet lays the sheet out; this is only the trigger.
 $("print").addEventListener("click", () => window.print());
 
+// Notes tabs: Space, Checks, Changes. Arrow keys move between tabs; the choice is remembered.
+{
+  const tabs = [...document.querySelectorAll(".notes .tab")];
+  const show = (tab, focus) => {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute("aria-selected", String(on));
+      t.tabIndex = on ? 0 : -1;
+      $(t.getAttribute("aria-controls")).hidden = !on;
+    }
+    if (focus) tab.focus();
+    try {
+      localStorage.setItem("cityloom-notes-tab", tab.id);
+    } catch {}
+  };
+  let saved = null;
+  try {
+    saved = localStorage.getItem("cityloom-notes-tab");
+  } catch {}
+  show(tabs.find((t) => t.id === saved) || tabs[0], false);
+  tabs.forEach((t, i) => {
+    t.addEventListener("click", () => show(t, false));
+    t.addEventListener("keydown", (e) => {
+      const to = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (to === undefined) return;
+      e.preventDefault();
+      show(tabs[(to + tabs.length) % tabs.length], true);
+    });
+  });
+}
+
 // Notes sidebar: collapsible from a header button or the ] key; remembered.
 {
   const root = document.documentElement;
