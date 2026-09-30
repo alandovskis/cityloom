@@ -317,7 +317,7 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 
 ### Sidebar colour
 - **Left inspector:** takes the selected piece's kind colour: a 4px bar along its top edge, a 30% wash behind it, and the section heading rules. With nothing selected it stays neutral. Selected options still use Blue Pencil.
-- **Right notes:** each tab has one hue from the logo's bands (Space teal, Checks green, Changes purple) on its tab marker, underline and heading rules, over an 8% wash of the same hue.
+- **Right notes:** each tab has one hue from the logo's bands (Space teal, Checks green, Changes purple) on its tab marker, underline and heading rules. The column itself carries an 8% wash of the chrome teal.
 
 ### Add a piece
 - **Pieces of the street:** there is no longer a table of pieces. Width, surface and curb are edited in the left inspector; moving and removing pieces is done on the drawing with the keyboard.

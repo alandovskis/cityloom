@@ -1888,7 +1888,7 @@ kbd {
   --pc: #8a6fd1;
 }
 .notes {
-  background: color-mix(in srgb, var(--pc-wash, var(--chrome)) 8%, transparent);
+  background: color-mix(in srgb, var(--chrome) 8%, transparent);
 }
 .tab[aria-selected="true"] {
   border-bottom-color: var(--pc);
