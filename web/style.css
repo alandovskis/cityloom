@@ -1703,3 +1703,13 @@ kbd {
     overflow: visible;
   }
 }
+
+/* ---- engineering drawing: the same section as plain line work -------------- */
+:root[data-drawing="engineering"] #drawing .obj {
+  fill: var(--sheet);
+  stroke-width: 2.4;
+}
+:root[data-drawing="engineering"] #drawing .sky,
+:root[data-drawing="engineering"] #drawing .sym {
+  display: none;
+}
