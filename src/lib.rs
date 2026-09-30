@@ -5,6 +5,7 @@
 
 pub mod catalogue;
 pub mod model;
+pub mod plan;
 
 use wasm_bindgen::prelude::*;
 
