@@ -251,6 +251,7 @@ function renderDrawing() {
         `<rect class="obj k-${k.id}" x="${x}" y="${G}" width="${w}" height="${Y.slab}"/>` +
         `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#${engineering() ? `m-${s.material}` : `h-${k.id}`})"/>` +
         (engineering() ? "" : surfaceCourse(x, G, w, s.material)) +
+        (s.direction && w >= 26 ? dirGlyph(s.direction, cx, G + Y.slab / 2) : "") +
         `<text class="t-mark t-halo${sel ? " t-blue" : ""}" x="${cx}" y="${Y.mark}" text-anchor="middle">${w > k.name.length * 8.6 + 10 ? esc(k.name) : w > 30 ? k.mark : ""}</text>` +
         `</g>`,
     );
@@ -560,6 +561,17 @@ const curbSwatch = (id) =>
     ? `<svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><line x1="4" x2="40" y1="11" y2="11"/></svg>`
     : `<svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><rect width="44" height="22" fill="var(--sheet)" stroke="none"/><rect width="44" height="22" fill="url(#c-${id})" stroke="none"/></svg>`;
 
+// Traffic direction as drawn on a cross-section: a dot is the point of an arrow
+// coming toward you, a cross is its tail going away.
+const dirGlyph = (id, cx, cy) =>
+  id === "toward"
+    ? `<circle class="dir" cx="${cx}" cy="${cy}" r="8"/><circle class="dir-dot" cx="${cx}" cy="${cy}" r="2.6"/>`
+    : `<circle class="dir" cx="${cx}" cy="${cy}" r="8"/><path class="dir-x" d="M${cx - 4.5},${cy - 4.5} L${cx + 4.5},${cy + 4.5} M${cx + 4.5},${cy - 4.5} L${cx - 4.5},${cy + 4.5}"/>`;
+const dirSwatch = (id) =>
+  id === "both"
+    ? `<svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><path class="dir-x" d="M8,11 H36 M12,7 L8,11 L12,15 M32,7 L36,11 L32,15"/></svg>`
+    : `<svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false">${dirGlyph(id, 22, 11)}</svg>`;
+
 const option = (fid, checked, swatchHtml, name, data) =>
   `<li><button type="button" class="opt" role="radio" aria-checked="${checked}" tabindex="${checked ? 0 : -1}" data-ifid="${fid}" ${data}>${swatchHtml}<span>${esc(name)}</span>${ICON.tick}</button></li>`;
 
@@ -585,6 +597,12 @@ function renderInspector() {
       return option(`s-${mat.id}`, mat.id === s.material, surfaceSwatch(mat.id), mat.name, `data-isurface="${m}"`);
     })
     .join("");
+  let dirs = "";
+  if (k.direction !== "none") {
+    const rows = MATERIALS.directions.map((d, di) => option(`d-${d.id}`, d.id === s.direction, dirSwatch(d.id), d.name, `data-idir="${di}"`));
+    if (k.direction === "optional") rows.push(option("d-both", s.direction == null, dirSwatch("both"), "Two-way", `data-idir="-1"`));
+    dirs = `<section class="insp-sec"><h3 class="note-h" id="i-h-dir">Direction</h3><ul class="opts" role="radiogroup" aria-labelledby="i-h-dir">${rows.join("")}</ul></section>`;
+  }
   let curbs = "";
   if (k.has_curb) {
     const rows = MATERIALS.curbs.map((c, ci) => option(`c-${c.id}`, c.id === s.curb, curbSwatch(c.id), c.name, `data-icurb="${ci}"`));
@@ -602,6 +620,7 @@ function renderInspector() {
       </div>
       <p class="insp-range">Allowed ${lo} to ${hi} ${units}</p>
     </section>
+    ${dirs}
     <section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3><ul class="opts" role="radiogroup" aria-labelledby="i-h-surface">${surfaces}</ul></section>
     ${curbs}`;
   if (focusId) {
@@ -618,6 +637,7 @@ el.inspector.addEventListener("click", (e) => {
   if (b.dataset.istep) ok = sheet.nudge_width(uid, Number(b.dataset.istep) * stepMm());
   else if (b.dataset.isurface) ok = sheet.set_material(uid, Number(b.dataset.isurface));
   else if (b.dataset.icurb) ok = sheet.set_curb(uid, Number(b.dataset.icurb));
+  else if (b.dataset.idir) ok = sheet.set_direction(uid, Number(b.dataset.idir));
   if (ok) {
     refresh();
     announceEdit();

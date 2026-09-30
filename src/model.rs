@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-use crate::catalogue::{CURBS, DEFAULT_CURB, KINDS, Kind, MATERIALS, Mode, SAMPLES, kind_index};
+use crate::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, Kind, MATERIALS, Mode, SAMPLES, kind_index};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -20,6 +20,10 @@ pub struct Segment {
     /// Index into `CURBS`. `None` is a flush edge, and is always the value for
     /// a kind without a curb.
     pub curb: Option<usize>,
+    /// Index into `DIRECTIONS`. Always `Some` where the kind requires a
+    /// direction (a driving lane), and `None` for a kind without one. Where it
+    /// is optional (a bike lane) `None` means two-way.
+    pub direction: Option<usize>,
 }
 
 impl Segment {
@@ -33,6 +37,7 @@ impl Segment {
             width_mm,
             material: k.materials[0],
             curb: k.has_curb.then_some(DEFAULT_CURB),
+            direction: (k.direction == DirectionRule::Required).then_some(0),
         }
     }
 }
@@ -96,7 +101,14 @@ impl Editor {
                     *w,
                 )
             })
-            .collect();
+            .collect::<Vec<Segment>>();
+        let mut segments = segments;
+        // Driving lanes on the left half of the street run away, the rest toward.
+        let required = |s: &Segment| KINDS[s.kind].direction == DirectionRule::Required;
+        let lanes = segments.iter().filter(|s| required(s)).count();
+        for (i, s) in segments.iter_mut().filter(|s| required(s)).enumerate() {
+            s.direction = Some(usize::from(i * 2 >= lanes));
+        }
         self.states = vec![State {
             label: "Street today".into(),
             segments,
@@ -303,6 +315,31 @@ impl Editor {
         })
     }
 
+    /// Sets which way a lane runs; `None` is two-way. Refused for a kind with
+    /// no direction, for `None` where the kind requires one, and for an index
+    /// outside `DIRECTIONS`.
+    pub fn set_direction(&mut self, uid: u32, direction: Option<usize>) -> bool {
+        let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
+            return false;
+        };
+        let kind = &KINDS[self.current()[pos].kind];
+        let allowed = match kind.direction {
+            DirectionRule::None => false,
+            DirectionRule::Required => direction.is_some(),
+            DirectionRule::Optional => true,
+        };
+        if !allowed || direction.is_some_and(|d| d >= DIRECTIONS.len()) {
+            return false;
+        }
+        let what = direction.map_or("two-way".to_string(), |d| DIRECTIONS[d].name.to_lowercase());
+        let label = format!("{} direction: {what}", kind.name);
+        self.edit(label, |segs| {
+            let changed = segs[pos].direction != direction;
+            segs[pos].direction = direction;
+            changed
+        })
+    }
+
     pub fn nudge_width(&mut self, uid: u32, delta_mm: i32) -> bool {
         let Some(s) = self.current().iter().find(|s| s.uid == uid) else {
             return false;
@@ -493,6 +530,7 @@ impl Editor {
                     max_mm: k.max_mm,
                     material: MATERIALS[s.material].id,
                     curb: s.curb.map(|c| CURBS[c].id),
+                    direction: s.direction.map(|d| DIRECTIONS[d].id),
                 };
                 x += s.width_mm;
                 v
@@ -600,6 +638,7 @@ pub struct SegView {
     pub max_mm: i32,
     pub material: &'static str,
     pub curb: Option<&'static str>,
+    pub direction: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -928,6 +967,28 @@ mod tests {
         assert_eq!(e.view().segments[2].material, "asphalt");
         assert!(e.redo());
         assert_eq!(e.view().segments[2].material, "concrete");
+    }
+
+    #[test]
+    fn driving_lanes_must_have_a_direction_and_bike_lanes_may() {
+        let mut e = Editor::new(0);
+        let dirs: Vec<_> = e.view().segments.iter().filter(|s| s.kind == kind_index("travel").unwrap()).map(|s| s.direction).collect();
+        assert_eq!(dirs, [Some("away"), Some("toward")]);
+        let lane = e.current().iter().find(|s| s.kind == kind_index("travel").unwrap()).unwrap().uid;
+        assert!(!e.set_direction(lane, None)); // a driving lane cannot be undirected
+        assert!(!e.set_direction(lane, Some(9)));
+        assert!(!e.set_direction(lane, Some(0))); // unchanged
+        assert!(e.set_direction(lane, Some(1)));
+        assert_eq!(e.view().revisions[0].label, "Driving lane direction: toward you");
+        let walk = e.current()[0].uid;
+        assert!(!e.set_direction(walk, Some(0))); // sidewalks have none
+        let bike = e.add(kind_index("bike").unwrap(), 1);
+        assert_eq!(e.view().segments[1].direction, None);
+        assert!(e.set_direction(bike, Some(0)));
+        assert!(e.set_direction(bike, None));
+        assert_eq!(e.view().revisions.last().unwrap().label, "Bike lane direction: two-way");
+        assert!(e.undo());
+        assert_eq!(e.view().segments[1].direction, Some("away"));
     }
 
     #[test]

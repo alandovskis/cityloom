@@ -1867,6 +1867,33 @@ kbd {
   stroke-width: 1;
   pointer-events: none;
 }
+#drawing .dir {
+  fill: var(--sheet);
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  pointer-events: none;
+}
+#drawing .dir-dot {
+  fill: var(--ink);
+  pointer-events: none;
+}
+#drawing .dir-x,
+.swatch .dir-x {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.swatch .dir {
+  fill: var(--sheet);
+  stroke: var(--ink);
+  stroke-width: 1.4;
+}
+.swatch .dir-dot {
+  fill: var(--ink);
+}
 #drawing .curb {
   fill: var(--sheet);
   stroke: var(--ink);

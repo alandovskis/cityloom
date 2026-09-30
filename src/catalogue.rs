@@ -52,6 +52,17 @@ pub struct Kind {
     pub materials: &'static [usize],
     /// Whether this kind of piece has a curb material to choose.
     pub has_curb: bool,
+    /// Whether this kind of piece runs one way, and if so whether it must.
+    pub direction: DirectionRule,
+}
+
+/// A driving lane must run one way; a bike lane may, or may be two-way.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DirectionRule {
+    None,
+    Required,
+    Optional,
 }
 
 /// A surface or curb material. Synthetic placeholder list, like the rest of
@@ -70,6 +81,13 @@ pub const MATERIALS: [Material; 7] = [
     Material { id: "grass", name: "Grass" },
     Material { id: "planted", name: "Planted bed" },
     Material { id: "gravel", name: "Gravel" },
+];
+
+/// Which way a one-way lane runs, seen from the cross-section: away from the
+/// viewer (into the page) or toward them.
+pub const DIRECTIONS: [Material; 2] = [
+    Material { id: "away", name: "Away from you" },
+    Material { id: "toward", name: "Toward you" },
 ];
 
 pub const CURBS: [Material; 6] = [
@@ -95,6 +113,7 @@ pub const KINDS: [Kind; 8] = [
         max_mm: 8000,
         people_per_hour_per_m: 2500,
         materials: &[1, 3, 0, 2],
+        direction: DirectionRule::None,
         has_curb: true,
     },
     Kind {
@@ -107,6 +126,7 @@ pub const KINDS: [Kind; 8] = [
         max_mm: 6000,
         people_per_hour_per_m: 0,
         materials: &[4, 5, 6],
+        direction: DirectionRule::None,
         has_curb: false,
     },
     Kind {
@@ -119,6 +139,7 @@ pub const KINDS: [Kind; 8] = [
         max_mm: 3000,
         people_per_hour_per_m: 3500,
         materials: &[0, 1, 2],
+        direction: DirectionRule::Optional,
         has_curb: true,
     },
     Kind {
@@ -131,6 +152,7 @@ pub const KINDS: [Kind; 8] = [
         max_mm: 4000,
         people_per_hour_per_m: 900,
         materials: &[0, 1, 2],
+        direction: DirectionRule::Required,
         has_curb: false,
     },
     Kind {
@@ -143,6 +165,7 @@ pub const KINDS: [Kind; 8] = [
         max_mm: 4000,
         people_per_hour_per_m: 4000,
         materials: &[0, 1, 2],
+        direction: DirectionRule::None,
         has_curb: false,
     },
     Kind {
@@ -155,6 +178,7 @@ pub const KINDS: [Kind; 8] = [
         max_mm: 3000,
         people_per_hour_per_m: 0,
         materials: &[0, 2, 1],
+        direction: DirectionRule::None,
         has_curb: false,
     },
     Kind {
@@ -167,6 +191,7 @@ pub const KINDS: [Kind; 8] = [
         max_mm: 6000,
         people_per_hour_per_m: 0,
         materials: &[4, 5, 6],
+        direction: DirectionRule::None,
         has_curb: false,
     },
     Kind {
@@ -179,6 +204,7 @@ pub const KINDS: [Kind; 8] = [
         max_mm: 3600,
         people_per_hour_per_m: 0,
         materials: &[0, 1, 2],
+        direction: DirectionRule::None,
         has_curb: false,
     },
 ];
