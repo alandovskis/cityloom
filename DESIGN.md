@@ -265,7 +265,7 @@ Same token names, re-composed for a dark ground; every value is a `dark-*` key i
 
 ## Layout
 
-The sheet fills the viewport inside a 12px frame (6px under 640px), as a single block with a 1px Faint Ink border and 14px radius (10px under 640px), clipping its content to the corner. Inside: a top bar (the CityLoom mark and wordmark left, the Light | Dark theme toggle and the avatar menu right) over a header (street name and "Street cross-section" sub-title left, and Undo/Redo/Start over right), then a body of two columns, the work area and a fixed 340px notes column, divided by a 1px Rule Grey line. The work area stacks the drawing (Today strip above Your design section, same scale and origin), a status bar (fit statement, key hints), then a lower band of Pieces of the street (left) and Add a piece (right, min 280px). The notes column holds Where the width goes, People moved, Does it work?, Your changes, and the about-this-street card pinned at the bottom.
+The sheet fills the viewport inside a 12px frame (6px under 640px), as a single block with a 1px Faint Ink border and 14px radius (10px under 640px), clipping its content to the corner. Inside: a top bar (the CityLoom mark and wordmark left, the Light | Dark theme toggle and the avatar menu right) over a header (street name and "Street cross-section" sub-title left, and Undo/Redo/Start over plus a Hide notes / Show notes button right), then a body of two columns, the work area and a fixed 340px notes column, divided by a 1px Rule Grey line. The work area stacks the drawing (Today strip above Your design section, same scale and origin), a status bar (fit statement, key hints), then a lower band of Pieces of the street (left) and Add a piece (right, min 280px). The notes column holds Where the width goes, People moved, Does it work?, Your changes, and the about-this-street card pinned at the bottom.
 
 The drawing scales so the street width fills the width minus margins; the SVG has a 680px minimum and scrolls horizontally on narrow screens, with vertical geometry scaled 0.9 to 1.1. Rhythm is tight: 4, 8, 12, 18, 20px paddings; table rows are 3px above and below. All region dividers are 1px Rule Grey.
 
@@ -290,6 +290,7 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 ## Components
 
 ### Buttons (tools and unit toggle)
+- **Notes toggle:** a tool button with a panel icon and the label "Hide notes" or "Show notes" (aria-expanded, aria-controls, aria-keyshortcuts `]`). It, or the `]` key outside a text field, collapses the 340px notes column so the drawing takes the full width; the choice is remembered in localStorage and applied before first paint.
 - **Tool icons:** Undo, Redo and Start over each carry a 16px line icon (1.6px round-cap stroke in the button's text colour, so it follows hover, pressed and disabled) 6px before the label. The label stays; icons never replace it.
 - **Shape:** 6px radius, 1px ink border, 34px tall. Undo, Redo and Start over sit apart with a 6px gap; the m/ft toggle is joined (borders overlap by 1px) with outer corners rounded.
 - **Default:** paper fill, ink text, 14px 600 sentence case, no tracking, padding 4px 14px. Unit toggle is 10px side padding.

@@ -1452,3 +1452,10 @@ kbd {
   gap: 16px;
   font-size: 15px;
 }
+
+:root[data-notes="closed"] .sheet-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+:root[data-notes="closed"] .notes {
+  display: none;
+}

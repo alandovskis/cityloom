@@ -837,3 +837,32 @@ render();
     if (e.relatedTarget && !menu.contains(e.relatedTarget) && e.relatedTarget !== btn) setOpen(false);
   });
 }
+
+// Notes sidebar: collapsible from a header button or the ] key; remembered.
+{
+  const root = document.documentElement;
+  const btn = $("notes-toggle");
+  const label = $("notes-label");
+  const sync = () => {
+    const open = root.dataset.notes !== "closed";
+    btn.setAttribute("aria-expanded", String(open));
+    label.textContent = open ? "Hide notes" : "Show notes";
+  };
+  const toggle = () => {
+    const open = root.dataset.notes === "closed";
+    if (open) delete root.dataset.notes;
+    else root.dataset.notes = "closed";
+    try {
+      localStorage.setItem("cityloom-notes", open ? "open" : "closed");
+    } catch {}
+    sync();
+    say(open ? "Notes shown." : "Notes hidden.");
+  };
+  btn.addEventListener("click", toggle);
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "]" || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+    e.preventDefault();
+    toggle();
+  });
+  sync();
+}
