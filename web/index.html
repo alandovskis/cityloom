@@ -52,8 +52,9 @@
                 <svg id="drawing" xmlns="http://www.w3.org/2000/svg" role="img"></svg>
               </div>
             </div>
-            <p id="fit" class="fit" role="status"></p>
-            <p class="cue">On a touch screen, swipe the section sideways to see all of it. Reorder from the schedule below.</p>
+            <div class="statusbar">
+              <p id="fit" class="fit" role="status"></p>
+              <p class="cue">On a touch screen, swipe the section sideways to see all of it. Reorder from the schedule below.</p>
             <p id="keys" class="keys">
               <span><kbd>←</kbd> <kbd>→</kbd> select</span>
               <span><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> reorder</span>
@@ -61,6 +62,7 @@
               <span><kbd>Delete</kbd> remove</span>
               <span><kbd>Ctrl</kbd> <kbd>Z</kbd> undo</span>
             </p>
+            </div>
           </section>
 
           <div class="lower">
@@ -83,7 +85,7 @@
 
             <section class="legend" aria-labelledby="h-legend">
               <h2 id="h-legend" class="note-h">Legend</h2>
-              <p class="hint">Drag a type onto the section, or press it to add after the selected segment.</p>
+              <p class="hint">Drag onto the section, or press to add after the selected segment.</p>
               <ul id="palette" class="palette"></ul>
             </section>
           </div>

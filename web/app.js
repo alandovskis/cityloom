@@ -118,9 +118,9 @@ const Y0 = {
   slab: 34,
   mark: 368,
   total: 408,
-  total2: 438,
-  scale: 484,
-  height: 512,
+  total2: 434,
+  scale: 466,
+  height: 484,
 };
 const Y = { ...Y0 };
 let F = 1;
@@ -159,7 +159,7 @@ function renderDrawing() {
   const v = view;
   const W = Math.max(el.wrap.clientWidth, 680);
   L.width = W;
-  setGeometry(Math.min(Math.max(W / 900, 1), 1.3));
+  setGeometry(Math.min(Math.max(W / 1050, 0.9), 1.1));
   // Room right of the right-of-way line for the redline when a street runs over.
   L.padR = Math.max(60, Math.round(W * 0.17));
   L.scale = (W - L.padL - L.padR) / v.row_mm;
@@ -248,7 +248,7 @@ function renderDrawing() {
       parts.push(`<text class="t-dim t-halo${sel ? " t-blue" : ""}" x="${cx}" y="${Y.dim - 7}" text-anchor="middle">${label}</text>`);
     }
     if (sel) {
-      parts.push(`<rect class="sel-box" x="${x}" y="${Y.dim - 20}" width="${w}" height="${Y.mark + 10 - (Y.dim - 20)}"/>`);
+      parts.push(`<rect class="sel-box" x="${x}" y="${Y.dim - 28}" width="${w}" height="${Y.mark + 10 - (Y.dim - 28)}"/>`);
     }
   }
 
@@ -281,10 +281,11 @@ function renderDrawing() {
     const x = xR;
     const clipped = X(v.total_mm) > W - 10;
     const w = Math.min(X(v.total_mm), W - 10) - xR;
-    const top = Y.dim - 26;
-    const h = Y.mark + 14 - top;
+    const top = Y.dim - 38;
+    const h = Y.mark + 18 - top;
+    const inset = Math.min(14, w / 4);
     parts.push(`<rect class="over-wash" x="${x}" y="${top}" width="${w}" height="${h}"/>`);
-    parts.push(cloud(x + 5, top, Math.max(w - 5, 14), h, 6, fresh));
+    parts.push(cloud(x + inset, top, Math.max(w - inset * 2, 14), h, 6, fresh));
     parts.push(
       `<text class="t-over" x="${xR + 10}" y="${Y.dim - 62}">${signed(v.delta_mm)} ${units} over${clipped ? " (continues)" : ""}</text>`,
     );
