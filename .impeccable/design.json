@@ -487,7 +487,7 @@
       "name": "Theme Toggle",
       "kind": "custom",
       "refersTo": "unit-toggle-pressed",
-      "description": "Light | Dark pair beside the m/ft units: same joined toggle, pressed shows the theme in effect; follows the system until a choice is made and stores it.",
+      "description": "Light | Dark pair beside the m/ft units: same joined toggle, pressed shows the theme in effect; follows the system until a choice is made and stores it. Lives in the avatar's account menu.",
       "html": "<div class=\"ds-units\"><button class=\"ds-unit\" aria-pressed=\"true\">Light</button><button class=\"ds-unit\" aria-pressed=\"false\">Dark</button></div>",
       "css": ".ds-units{display:flex;background:#f3f6f8;padding:12px}.ds-unit{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:42px;min-height:34px;padding:4px 10px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-size:14px;font-weight:600;letter-spacing:0;cursor:pointer}.ds-unit+.ds-unit{margin-left:-1px}.ds-unit:hover:not([aria-pressed=true]){background:#e5eaee}.ds-unit[aria-pressed=true]{background:#14181c;color:#f3f6f8}.ds-unit:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-unit:first-child{border-radius:6px 0 0 6px}.ds-unit:last-child{border-radius:0 6px 6px 0}"
     },
@@ -541,7 +541,7 @@
     {
       "name": "Avatar",
       "kind": "custom",
-      "description": "34px circle at the far right of the top bar; a button that opens a right-aligned panel holding the Guest heading and the Units row with the m | ft toggle. Closes on Escape, outside press or focus leaving.",
+      "description": "34px circle at the far right of the top bar; a button that opens a right-aligned panel holding the Guest heading and a Units row (m | ft) and a Theme row (Light | Dark). Closes on Escape, outside press or focus leaving.",
       "html": "<span class=\"ds-avatar\"><svg viewBox=\"0 0 32 32\" width=\"30\" height=\"30\"><circle cx=\"16\" cy=\"12.5\" r=\"5\"/><path d=\"M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5\"/></svg></span>",
       "css": ".ds-avatar{display:grid;place-items:center;width:34px;height:34px;border:1px solid #14181c;border-radius:50%;background:#e5eaee;color:#14181c;overflow:hidden}.ds-avatar svg{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}"
     }

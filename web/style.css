@@ -1459,3 +1459,7 @@ kbd {
 :root[data-notes="closed"] .notes {
   display: none;
 }
+
+.menu-row + .menu-row {
+  margin-top: 10px;
+}
