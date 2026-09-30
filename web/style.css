@@ -1397,3 +1397,17 @@ kbd {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-ico {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

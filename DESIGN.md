@@ -290,6 +290,7 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 ## Components
 
 ### Buttons (tools and unit toggle)
+- **Tool icons:** Undo, Redo and Start over each carry a 16px line icon (1.6px round-cap stroke in the button's text colour, so it follows hover, pressed and disabled) 6px before the label. The label stays; icons never replace it.
 - **Shape:** 6px radius, 1px ink border, 34px tall. Undo, Redo and Start over sit apart with a 6px gap; the m/ft toggle is joined (borders overlap by 1px) with outer corners rounded.
 - **Default:** paper fill, ink text, 14px 600 sentence case, no tracking, padding 4px 14px. Unit toggle is 10px side padding.
 - **Hover:** Bond Paper Deep fill. **Active (pressed):** ink fill, paper text, the same as the selected unit (aria-pressed).
