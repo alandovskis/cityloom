@@ -308,11 +308,14 @@ function renderDrawing() {
   // curbs: a block on each side of a curbed piece that faces a road piece
   {
     const road = new Set(["travel", "bus", "parking", "loading"]);
-    const cw = Math.max(5, 150 * L.scale);
     v.segments.forEach((s, i) => {
       if (!s.curb) return;
       const x = X(s.x_mm);
       const w = s.width_mm * L.scale;
+      // a planted curb is a strip of planting, not a kerb stone
+      const planted = s.curb === "planted";
+      const cw = Math.min(planted ? Math.max(14, 600 * L.scale) : Math.max(5, 150 * L.scale), w / 2);
+      const fill = planted ? "m-planted" : `c-${s.curb}`;
       const sides = [
         [v.segments[i - 1], x],
         [v.segments[i + 1], x + w - cw],
@@ -321,7 +324,7 @@ function renderDrawing() {
         if (!nb || !road.has(KINDS[nb.kind].id)) continue;
         parts.push(
           `<rect class="curb" x="${bx}" y="${G - 12}" width="${cw}" height="12"/>` +
-            `<rect class="hatch" x="${bx}" y="${G - 12}" width="${cw}" height="12" fill="url(#c-${s.curb})"/>`,
+            `<rect class="hatch" x="${bx}" y="${G - 12}" width="${cw}" height="12" fill="url(#${fill})"/>`,
         );
       }
     });
