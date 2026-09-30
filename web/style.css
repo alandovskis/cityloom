@@ -1372,3 +1372,20 @@ kbd {
   flex-direction: row;
   justify-content: center;
 }
+
+.id {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.id .mark {
+  flex: none;
+  display: block;
+}
+@media (max-width: 640px) {
+  .id .mark {
+    width: 34px;
+    height: 34px;
+  }
+}
