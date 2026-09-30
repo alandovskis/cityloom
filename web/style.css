@@ -1495,7 +1495,10 @@ kbd {
 }
 
 /* ---- inspector: the selected piece, at the left of the drawing ------------- */
+/* --kc is the selected piece's kind colour, set from the page; unset when nothing is selected */
 .inspector {
+  border-top: 4px solid var(--kc, transparent);
+  background: color-mix(in srgb, var(--kc, transparent) 30%, transparent);
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -1530,6 +1533,7 @@ kbd {
 }
 .insp-sec .note-h {
   margin-bottom: 8px;
+  border-bottom-color: var(--kc, var(--ink));
 }
 .stepper {
   display: grid;
@@ -1868,4 +1872,43 @@ kbd {
   stroke: var(--ink);
   stroke-width: 1.6;
   pointer-events: none;
+}
+
+/* ---- notes: one hue per tab, taken from the logo's bands -------------------- */
+#p-space,
+#t-space {
+  --pc: #2aa898;
+}
+#p-checks,
+#t-checks {
+  --pc: #5fae4a;
+}
+#p-changes,
+#t-changes {
+  --pc: #8a6fd1;
+}
+.notes {
+  background: color-mix(in srgb, var(--pc-wash, var(--chrome)) 8%, transparent);
+}
+.tab[aria-selected="true"] {
+  border-bottom-color: var(--pc);
+}
+.tab[aria-selected="true"]::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  background: var(--pc);
+}
+.panel .note-h {
+  border-bottom: var(--line-heavy) solid var(--pc);
+}
+@media print {
+  .notes {
+    background: none;
+  }
+  .inspector {
+    background: none;
+  }
 }

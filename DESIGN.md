@@ -315,6 +315,10 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 ### Notes tabs
 - **Tabs:** the right column is split into Space (where the width goes, people moved), Checks and Changes. Text tabs on a 1px Rule Grey baseline; the selected tab is Ink 600 with a 2px ink underline. Arrow keys, Home and End move between tabs; the choice is remembered. In print all three show, without the tab row.
 
+### Sidebar colour
+- **Left inspector:** takes the selected piece's kind colour: a 4px bar along its top edge, a 30% wash behind it, and the section heading rules. With nothing selected it stays neutral. Selected options still use Blue Pencil.
+- **Right notes:** each tab has one hue from the logo's bands (Space teal, Checks green, Changes purple) on its tab marker, underline and heading rules, over an 8% wash of the same hue.
+
 ### Add a piece
 - **Pieces of the street:** there is no longer a table of pieces. Width, surface and curb are edited in the left inspector; moving and removing pieces is done on the drawing with the keyboard.
 - **Add a piece:** the palette is one ruled row per segment type (44px swatch, name, default width, small grip glyph), draggable, Bond Paper Deep on hover. Not cards.

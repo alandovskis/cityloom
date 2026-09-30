@@ -570,10 +570,12 @@ function renderInspector() {
   const focusId = active && el.inspector.contains(active) ? active.dataset.ifid : null;
   const s = view.selected ? seg(view.selected) : null;
   if (!s) {
+    el.inspector.style.removeProperty("--kc");
     el.inspector.innerHTML = `<p class="insp-empty">Select a piece to change its width and surface.</p>`;
     return;
   }
   const k = kindOf(s);
+  el.inspector.style.setProperty("--kc", `var(--k-${k.id})`);
   const i = idxOf(s.uid);
   const lo = num(s.min_mm).toFixed(2);
   const hi = num(s.max_mm).toFixed(2);
