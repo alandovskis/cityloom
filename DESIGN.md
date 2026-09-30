@@ -255,7 +255,7 @@ Same token names, re-composed for a dark ground; every value is a `dark-*` key i
 - **Heading** (600, 16px): panel headings (Pieces of the street, Add a piece, Where the width goes, People moved, Does it work?, Your changes), with a 1px Rule Grey underline.
 - **Label** (600, 14px): tool buttons (Undo, Redo, Start over), drawing labels "Today", "Your design", "Street edge", "Unused", "Scale" (SVG, 0.01em).
 - **Table head** (600, 13px): column heads of the schedule and notes tables. The unit tag beside width fields and the legend sub-text are 12px. Key caps (kbd) are 13px 600.
-- **Field label** (500, 13px): the Street picker caption and the about-card captions.
+- **Field label** (500, 13px): the about-card captions.
 - **Dimension** (500, 16px, tabular): widths above segments, overall strings ("Street width", "Your design"), scale bar numerals. Segment names on the drawing are 600, 15px; when the segment is narrow the two-letter code is shown instead. Text over hatch carries a 4px paper-coloured halo.
 
 ### Named Rules
@@ -265,7 +265,7 @@ Same token names, re-composed for a dark ground; every value is a `dark-*` key i
 
 ## Layout
 
-The sheet fills the viewport inside a 12px frame (6px under 640px), as a single block with a 1px Faint Ink border and 14px radius (10px under 640px), clipping its content to the corner. Inside: a top bar (the CityLoom mark and wordmark left, the Light | Dark theme toggle and a guest avatar right) over a header (street name and "Street cross-section" sub-title left, Street picker, Undo/Redo/Start over, and the m/ft units right), then a body of two columns, the work area and a fixed 340px notes column, divided by a 1px Rule Grey line. The work area stacks the drawing (Today strip above Your design section, same scale and origin), a status bar (fit statement, key hints), then a lower band of Pieces of the street (left) and Add a piece (right, min 280px). The notes column holds Where the width goes, People moved, Does it work?, Your changes, and the about-this-street card pinned at the bottom.
+The sheet fills the viewport inside a 12px frame (6px under 640px), as a single block with a 1px Faint Ink border and 14px radius (10px under 640px), clipping its content to the corner. Inside: a top bar (the CityLoom mark and wordmark left, the Light | Dark theme toggle and a guest avatar right) over a header (street name and "Street cross-section" sub-title left, Undo/Redo/Start over, and the m/ft units right), then a body of two columns, the work area and a fixed 340px notes column, divided by a 1px Rule Grey line. The work area stacks the drawing (Today strip above Your design section, same scale and origin), a status bar (fit statement, key hints), then a lower band of Pieces of the street (left) and Add a piece (right, min 280px). The notes column holds Where the width goes, People moved, Does it work?, Your changes, and the about-this-street card pinned at the bottom.
 
 The drawing scales so the street width fills the width minus margins; the SVG has a 680px minimum and scrolls horizontally on narrow screens, with vertical geometry scaled 0.9 to 1.1. Rhythm is tight: 4, 8, 12, 18, 20px paddings; table rows are 3px above and below. All region dividers are 1px Rule Grey.
 
@@ -283,7 +283,7 @@ Flat in both themes. There are no shadows at rest and no layered surfaces; depth
 
 ## Shapes
 
-Softly rounded, with a small ladder of radii: sheet 14px (`--radius-lg`), about-this-street card 10px, controls 6px (`--radius`: buttons, select, width inputs, icon buttons, the drag chip), 4px on swatches and key caps, 3px on mode chips. The m/ft toggle is one joined pair, rounded only at its outer ends. Legend rows are square ruled rows, not rounded cards. The drawing itself stays hard-edged: rectangles with 2px ink outline over a hatch, handles as 18 by 16px square grips with a double-headed arrow, dimension strings as a line with 45-degree tick marks at each end (4px), street-edge lines as long-dash-dot strokes, boundary lines as 5/4 dashes, selection as a 2px blue rectangle, overflow as a scalloped revision cloud in red drawn in over 620ms. Elevation symbols (person, tree, shrub, cyclist, car, bus, van, parking sign, median kerb) are single-weight line art, 1.2px non-scaling stroke, round joins.
+Softly rounded, with a small ladder of radii: sheet 14px (`--radius-lg`), about-this-street card 10px, controls 6px (`--radius`: buttons, width inputs, icon buttons, the drag chip), 4px on swatches and key caps, 3px on mode chips. The m/ft toggle is one joined pair, rounded only at its outer ends. Legend rows are square ruled rows, not rounded cards. The drawing itself stays hard-edged: rectangles with 2px ink outline over a hatch, handles as 18 by 16px square grips with a double-headed arrow, dimension strings as a line with 45-degree tick marks at each end (4px), street-edge lines as long-dash-dot strokes, boundary lines as 5/4 dashes, selection as a 2px blue rectangle, overflow as a scalloped revision cloud in red drawn in over 620ms. Elevation symbols (person, tree, shrub, cyclist, car, bus, van, parking sign, median kerb) are single-weight line art, 1.2px non-scaling stroke, round joins.
 
 Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: sidewalk (dot stipple), planting (grass ticks), bike lane (45-degree lines), travel lane (staggered dashes), bus lane (tight reverse diagonal), parking (horizontal lines), median (crosshatch grid), loading (chevrons).
 
@@ -306,7 +306,6 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 
 ### Inputs / Fields
 - **Width field:** 68px by 30px, 1px ink border, 6px radius, paper fill, right-aligned tabular 500 text, unit tag beside it. **Invalid:** border and text turn redline. **Focus:** blue outline, blue caret.
-- **Street select:** same 6px outline, custom 10px chevron drawn in ink (`--select-arrow`, re-stroked in pale ink in dark), sentence-case caption "Street" above at 13px.
 
 ### Pieces of the street and Add a piece
 - **Pieces of the street:** ruled table, rows separated by 1px Rule Grey, columns Pattern swatch (44 by 22px hatch, 4px radius), Type (segment name), Width field, Actions. There is no Mark column. Selected row takes Blue Wash and blue name.

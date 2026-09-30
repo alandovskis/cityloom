@@ -414,7 +414,7 @@
       },
       "field-label": {
         "displayName": "Field label",
-        "purpose": "Street picker caption and about-card captions; 13px sentence case."
+        "purpose": "About-card captions; 13px sentence case."
       },
       "dimension": {
         "displayName": "Dimension",
@@ -490,14 +490,6 @@
       "description": "Light | Dark pair beside the m/ft units: same joined toggle, pressed shows the theme in effect; follows the system until a choice is made and stores it.",
       "html": "<div class=\"ds-units\"><button class=\"ds-unit\" aria-pressed=\"true\">Light</button><button class=\"ds-unit\" aria-pressed=\"false\">Dark</button></div>",
       "css": ".ds-units{display:flex;background:#f3f6f8;padding:12px}.ds-unit{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:42px;min-height:34px;padding:4px 10px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-size:14px;font-weight:600;letter-spacing:0;cursor:pointer}.ds-unit+.ds-unit{margin-left:-1px}.ds-unit:hover:not([aria-pressed=true]){background:#e5eaee}.ds-unit[aria-pressed=true]{background:#14181c;color:#f3f6f8}.ds-unit:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-unit:first-child{border-radius:6px 0 0 6px}.ds-unit:last-child{border-radius:0 6px 6px 0}"
-    },
-    {
-      "name": "Street Select",
-      "kind": "input",
-      "refersTo": "button-tool",
-      "description": "6px-radius select with a sentence-case caption above it.",
-      "html": "<label class=\"ds-pick\"><span>Street</span><select class=\"ds-select\"><option>Main Street</option></select></label>",
-      "css": ".ds-pick{display:grid;gap:2px;background:#f3f6f8;padding:12px}.ds-pick span{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;font-size:13px;font-weight:500;color:#3b444c}.ds-select{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;appearance:none;min-height:34px;padding:4px 30px 4px 10px;border:1px solid #14181c;border-radius:6px;font-weight:500;color:#14181c;cursor:pointer;background:#f3f6f8 url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0.5 0.5 5 5 9.5 0.5' fill='none' stroke='%2314181c' stroke-width='1.4'/%3E%3C/svg%3E\") no-repeat right 10px center}.ds-select:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}"
     },
     {
       "name": "Width Field",

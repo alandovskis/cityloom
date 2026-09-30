@@ -54,7 +54,6 @@
   --s-coat-1: #74aede;
 
   --shadow-lift: 0 6px 14px -4px rgb(20 24 28 / 0.28);
-  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0.5 0.5 5 5 9.5 0.5' fill='none' stroke='%2314181c' stroke-width='1.4'/%3E%3C/svg%3E");
 
   --font: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
 
@@ -95,7 +94,6 @@ body {
 }
 
 input,
-select,
 button {
   font: inherit;
   color: inherit;
@@ -170,28 +168,6 @@ h1 {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 12px 16px;
-}
-
-.pick {
-  display: grid;
-  gap: 2px;
-}
-.pick span {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-select {
-  appearance: none;
-  min-height: 34px;
-  padding: 4px 30px 4px 10px;
-  border: var(--line) solid var(--ink);
-  border-radius: 0;
-  background: var(--sheet) var(--select-arrow) no-repeat right 10px center;
-  font-weight: 500;
-  cursor: pointer;
 }
 
 .btns,
@@ -1138,11 +1114,6 @@ h1 {
   letter-spacing: 0;
   text-transform: none;
 }
-.pick span {
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
-}
 .btn,
 .unit {
   border-radius: var(--radius);
@@ -1165,7 +1136,6 @@ h1 {
 .unit:last-child {
   border-radius: 0 var(--radius) var(--radius) 0;
 }
-select,
 .wfield input,
 .ico,
 .drag-chip {
@@ -1307,8 +1277,7 @@ kbd {
     --s-coat-1: #5590c4;
 
     --shadow-lift: 0 8px 18px -4px rgb(0 0 0 / 0.55);
-    --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0.5 0.5 5 5 9.5 0.5' fill='none' stroke='%23e8edf1' stroke-width='1.4'/%3E%3C/svg%3E");
-  }
+    }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -1342,7 +1311,6 @@ kbd {
   --s-coat-1: #5590c4;
 
   --shadow-lift: 0 8px 18px -4px rgb(0 0 0 / 0.55);
-  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0.5 0.5 5 5 9.5 0.5' fill='none' stroke='%23e8edf1' stroke-width='1.4'/%3E%3C/svg%3E");
 }
 
 

@@ -2,13 +2,12 @@
 // No editing rules live here: widths, snapping, limits, history and checks all
 // come from the WebAssembly model.
 
-import init, { Sheet, catalogue, samples } from "./pkg/cityloom_editor.js";
+import init, { Sheet, catalogue } from "./pkg/cityloom_editor.js";
 import { HATCH, symbol } from "./symbols.js";
 
 await init();
 
 const KINDS = JSON.parse(catalogue());
-const SAMPLES = JSON.parse(samples());
 const sheet = new Sheet(0);
 let view = JSON.parse(sheet.view());
 let units = "m";
@@ -26,7 +25,6 @@ const el = {
   checks: $("checks"),
   revs: $("revs"),
   live: $("live"),
-  sample: $("sample"),
   undo: $("undo"),
   redo: $("redo"),
   reset: $("reset"),
@@ -465,12 +463,6 @@ function renderHead() {
   el.reset.disabled = !view.changed;
 }
 
-function renderSamples() {
-  el.sample.innerHTML = SAMPLES.map(
-    (s, i) => `<option value="${i}"${i === view.sample ? " selected" : ""}>${esc(s.name)}, ${fmt(s.row_mm)}</option>`,
-  ).join("");
-}
-
 function render() {
   renderHead();
   renderFit();
@@ -786,17 +778,10 @@ el.reset.addEventListener("click", () => {
     say("Started over from the street as it is today.");
   }
 });
-el.sample.addEventListener("change", () => {
-  sheet.load_sample(Number(el.sample.value));
-  wasOver = false;
-  refresh();
-  say(`${view.name} loaded.`);
-});
 for (const b of document.querySelectorAll(".unit[data-unit]")) {
   b.addEventListener("click", () => {
     units = b.dataset.unit;
     for (const o of document.querySelectorAll(".unit[data-unit]")) o.setAttribute("aria-pressed", String(o === b));
-    renderSamples();
     renderPalette();
     render();
   });
@@ -826,6 +811,5 @@ syncTheme();
 
 new ResizeObserver(() => renderDrawing()).observe(el.scroll);
 
-renderSamples();
 renderPalette();
 render();
