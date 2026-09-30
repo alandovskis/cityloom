@@ -7,7 +7,7 @@
       "sheet": {
         "role": "neutral",
         "displayName": "Bond Paper",
-        "canonical": "#f3f6f8",
+        "canonical": "#e8edf0",
         "tonalRamp": [
           "#141618",
           "#2c2e30",
@@ -23,7 +23,7 @@
       "sheet-deep": {
         "role": "neutral",
         "displayName": "Bond Paper Deep",
-        "canonical": "#e5eaee",
+        "canonical": "#d9e1e6",
         "tonalRamp": [
           "#131719",
           "#2b2e31",
@@ -87,7 +87,7 @@
       "rule": {
         "role": "neutral",
         "displayName": "Rule Grey",
-        "canonical": "#b4bcc3",
+        "canonical": "#a6b0b8",
         "tonalRamp": [
           "#11171c",
           "#282f34",
@@ -473,7 +473,7 @@
       "refersTo": "button-tool",
       "description": "Undo / Redo / Start over: 6px radius, ink-outlined, sentence case, 6px apart; inverts when pressed.",
       "html": "<div class=\"ds-btns\"><button class=\"ds-btn\">Undo</button><button class=\"ds-btn\">Redo</button><button class=\"ds-btn\" disabled>Start over</button></div>",
-      "css": ".ds-btns{display:flex;gap:6px;background:#f3f6f8;padding:12px}.ds-btn{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-height:34px;padding:4px 14px;border:1px solid #14181c;border-radius:6px;background:#f3f6f8;color:#14181c;font-size:14px;font-weight:600;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1),color 120ms cubic-bezier(.16,1,.3,1)}.ds-btn:hover:not(:disabled){background:#e5eaee}.ds-btn:active:not(:disabled){background:#14181c;color:#f3f6f8}.ds-btn:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-btn:disabled{color:#59656f;border-color:#b4bcc3;background:transparent;cursor:not-allowed}"
+      "css": ".ds-btns{display:flex;gap:6px;background:#e8edf0;padding:12px}.ds-btn{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-height:34px;padding:4px 14px;border:1px solid #14181c;border-radius:6px;background:#e8edf0;color:#14181c;font-size:14px;font-weight:600;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1),color 120ms cubic-bezier(.16,1,.3,1)}.ds-btn:hover:not(:disabled){background:#d9e1e6}.ds-btn:active:not(:disabled){background:#14181c;color:#e8edf0}.ds-btn:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-btn:disabled{color:#59656f;border-color:#a6b0b8;background:transparent;cursor:not-allowed}"
     },
     {
       "name": "Unit Toggle",
@@ -481,7 +481,7 @@
       "refersTo": "unit-toggle-pressed",
       "description": "Two-state m/ft switch, one joined pair rounded at its outer ends; the pressed unit is inked solid. Lives in the avatar's account menu, not the header.",
       "html": "<div class=\"ds-units\"><button class=\"ds-unit\" aria-pressed=\"true\">m</button><button class=\"ds-unit\" aria-pressed=\"false\">ft</button></div>",
-      "css": ".ds-units{display:flex;background:#f3f6f8;padding:12px}.ds-unit{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:42px;min-height:34px;padding:4px 10px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-size:14px;font-weight:600;letter-spacing:0;cursor:pointer}.ds-unit+.ds-unit{margin-left:-1px}.ds-unit:hover:not([aria-pressed=true]){background:#e5eaee}.ds-unit[aria-pressed=true]{background:#14181c;color:#f3f6f8}.ds-unit:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-unit:first-child{border-radius:6px 0 0 6px}.ds-unit:last-child{border-radius:0 6px 6px 0}"
+      "css": ".ds-units{display:flex;background:#e8edf0;padding:12px}.ds-unit{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:42px;min-height:34px;padding:4px 10px;border:1px solid #14181c;border-radius:0;background:#e8edf0;color:#14181c;font-size:14px;font-weight:600;letter-spacing:0;cursor:pointer}.ds-unit+.ds-unit{margin-left:-1px}.ds-unit:hover:not([aria-pressed=true]){background:#d9e1e6}.ds-unit[aria-pressed=true]{background:#14181c;color:#e8edf0}.ds-unit:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-unit:first-child{border-radius:6px 0 0 6px}.ds-unit:last-child{border-radius:0 6px 6px 0}"
     },
     {
       "name": "Theme Toggle",
@@ -489,7 +489,7 @@
       "refersTo": "unit-toggle-pressed",
       "description": "Light | Dark pair beside the m/ft units: same joined toggle, pressed shows the theme in effect; follows the system until a choice is made and stores it. Lives in the avatar's account menu.",
       "html": "<div class=\"ds-units\"><button class=\"ds-unit\" aria-pressed=\"true\">Light</button><button class=\"ds-unit\" aria-pressed=\"false\">Dark</button></div>",
-      "css": ".ds-units{display:flex;background:#f3f6f8;padding:12px}.ds-unit{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:42px;min-height:34px;padding:4px 10px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-size:14px;font-weight:600;letter-spacing:0;cursor:pointer}.ds-unit+.ds-unit{margin-left:-1px}.ds-unit:hover:not([aria-pressed=true]){background:#e5eaee}.ds-unit[aria-pressed=true]{background:#14181c;color:#f3f6f8}.ds-unit:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-unit:first-child{border-radius:6px 0 0 6px}.ds-unit:last-child{border-radius:0 6px 6px 0}"
+      "css": ".ds-units{display:flex;background:#e8edf0;padding:12px}.ds-unit{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:42px;min-height:34px;padding:4px 10px;border:1px solid #14181c;border-radius:0;background:#e8edf0;color:#14181c;font-size:14px;font-weight:600;letter-spacing:0;cursor:pointer}.ds-unit+.ds-unit{margin-left:-1px}.ds-unit:hover:not([aria-pressed=true]){background:#d9e1e6}.ds-unit[aria-pressed=true]{background:#14181c;color:#e8edf0}.ds-unit:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-unit:first-child{border-radius:6px 0 0 6px}.ds-unit:last-child{border-radius:0 6px 6px 0}"
     },
     {
       "name": "Width Field",
@@ -497,7 +497,7 @@
       "refersTo": "field-width",
       "description": "Right-aligned tabular width input with a unit tag; red text and border when invalid.",
       "html": "<span class=\"ds-wfield\"><input class=\"ds-input\" value=\"3.5\" aria-label=\"Width\"><span class=\"ds-tag\">m</span></span>",
-      "css": ".ds-wfield{display:inline-flex;align-items:center;gap:6px;background:#f3f6f8;padding:12px}.ds-input{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:68px;min-height:30px;padding:2px 6px;border:1px solid #14181c;border-radius:6px;background:#f3f6f8;color:#14181c;font-weight:500;text-align:right;font-variant-numeric:tabular-nums;caret-color:#1d4ed8}.ds-input:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-input:invalid{border-color:#b8231a;color:#b8231a}.ds-tag{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:18px;font-size:12px;color:#3b444c}"
+      "css": ".ds-wfield{display:inline-flex;align-items:center;gap:6px;background:#e8edf0;padding:12px}.ds-input{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:68px;min-height:30px;padding:2px 6px;border:1px solid #14181c;border-radius:6px;background:#e8edf0;color:#14181c;font-weight:500;text-align:right;font-variant-numeric:tabular-nums;caret-color:#1d4ed8}.ds-input:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-input:invalid{border-color:#b8231a;color:#b8231a}.ds-tag{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:18px;font-size:12px;color:#3b444c}"
     },
     {
       "name": "Icon Button",
@@ -505,15 +505,15 @@
       "refersTo": "icon-button",
       "description": "30px 6px-radius line-icon button; the remove variant turns redline on hover.",
       "html": "<div class=\"ds-acts\"><button class=\"ds-ico\" aria-label=\"Move left\"><svg viewBox=\"0 0 14 14\"><path d=\"M9 2 4 7l5 5\"/></svg></button><button class=\"ds-ico ds-danger\" aria-label=\"Delete\"><svg viewBox=\"0 0 14 14\"><path d=\"M2 2l10 10M12 2 2 12\"/></svg></button></div>",
-      "css": ".ds-acts{display:flex;gap:4px;background:#f3f6f8;padding:12px}.ds-ico{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid #14181c;border-radius:6px;background:#f3f6f8;color:#14181c;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1)}.ds-ico svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:square}.ds-ico:hover{background:#e5eaee}.ds-ico:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-danger{margin-left:10px}.ds-danger:hover{background:#b8231a;border-color:#b8231a;color:#f3f6f8}"
+      "css": ".ds-acts{display:flex;gap:4px;background:#e8edf0;padding:12px}.ds-ico{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid #14181c;border-radius:6px;background:#e8edf0;color:#14181c;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1)}.ds-ico svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:square}.ds-ico:hover{background:#d9e1e6}.ds-ico:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-danger{margin-left:10px}.ds-danger:hover{background:#b8231a;border-color:#b8231a;color:#e8edf0}"
     },
     {
       "name": "Symbol Schedule Row",
       "kind": "custom",
       "refersTo": "schedule-row-selected",
       "description": "Ruled table row: hatch swatch, type name, width; selected row takes blue wash and blue name. No Mark column.",
-      "html": "<table class=\"ds-sched\"><thead><tr><th></th><th>Type</th><th class=\"ds-n\">Width</th></tr></thead><tbody><tr><td><svg class=\"ds-sw\" viewBox=\"0 0 44 22\"><defs><pattern id=\"ds-h\" width=\"8\" height=\"8\" patternUnits=\"userSpaceOnUse\"><circle cx=\"2\" cy=\"2\" r=\".9\" fill=\"#14181c\"/><circle cx=\"6\" cy=\"6\" r=\".9\" fill=\"#14181c\"/></pattern></defs><rect width=\"44\" height=\"22\" fill=\"url(#ds-h)\"/></svg></td><td class=\"ds-name\">Sidewalk</td><td class=\"ds-n\">3.0 m</td></tr><tr class=\"ds-sel\"><td><svg class=\"ds-sw\" viewBox=\"0 0 44 22\"><rect width=\"44\" height=\"22\" fill=\"#f3f6f8\"/></svg></td><td class=\"ds-name\">Bike lane</td><td class=\"ds-n\">1.8 m</td></tr></tbody></table>",
-      "css": ".ds-sched{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:100%;border-collapse:collapse;background:#f3f6f8;color:#14181c;font-size:15px;font-variant-numeric:tabular-nums}.ds-sched th{padding:4px 8px 4px 0;font-size:13px;font-weight:600;text-align:left;color:#3b444c}.ds-sched td{padding:3px 8px 3px 0;border-top:1px solid #b4bcc3;vertical-align:middle}.ds-n{text-align:right!important}.ds-name{font-weight:500}.ds-sw{display:block;width:44px;height:22px;border:1px solid #14181c;border-radius:4px}.ds-sel td{background:rgb(29 78 216/.09)}.ds-sel .ds-name{color:#1d4ed8}"
+      "html": "<table class=\"ds-sched\"><thead><tr><th></th><th>Type</th><th class=\"ds-n\">Width</th></tr></thead><tbody><tr><td><svg class=\"ds-sw\" viewBox=\"0 0 44 22\"><defs><pattern id=\"ds-h\" width=\"8\" height=\"8\" patternUnits=\"userSpaceOnUse\"><circle cx=\"2\" cy=\"2\" r=\".9\" fill=\"#14181c\"/><circle cx=\"6\" cy=\"6\" r=\".9\" fill=\"#14181c\"/></pattern></defs><rect width=\"44\" height=\"22\" fill=\"url(#ds-h)\"/></svg></td><td class=\"ds-name\">Sidewalk</td><td class=\"ds-n\">3.0 m</td></tr><tr class=\"ds-sel\"><td><svg class=\"ds-sw\" viewBox=\"0 0 44 22\"><rect width=\"44\" height=\"22\" fill=\"#e8edf0\"/></svg></td><td class=\"ds-name\">Bike lane</td><td class=\"ds-n\">1.8 m</td></tr></tbody></table>",
+      "css": ".ds-sched{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:100%;border-collapse:collapse;background:#e8edf0;color:#14181c;font-size:15px;font-variant-numeric:tabular-nums}.ds-sched th{padding:4px 8px 4px 0;font-size:13px;font-weight:600;text-align:left;color:#3b444c}.ds-sched td{padding:3px 8px 3px 0;border-top:1px solid #a6b0b8;vertical-align:middle}.ds-n{text-align:right!important}.ds-name{font-weight:500}.ds-sw{display:block;width:44px;height:22px;border:1px solid #14181c;border-radius:4px}.ds-sel td{background:rgb(29 78 216/.09)}.ds-sel .ds-name{color:#1d4ed8}"
     },
     {
       "name": "Sheet Note Heading and Check",
@@ -521,7 +521,7 @@
       "refersTo": "note-heading",
       "description": "Sentence-case note heading with a Rule Grey underline over ruled check rows; a failing check is wholly redline.",
       "html": "<div class=\"ds-note\"><h2 class=\"ds-h\">Does it work?</h2><ul class=\"ds-checks\"><li><b>Fits right-of-way</b><span>Placeholder rule</span></li><li class=\"ds-bad\"><b>Over width</b><span>0.6 m over</span></li></ul></div>",
-      "css": ".ds-note{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;background:#f3f6f8;color:#14181c;padding:12px 18px}.ds-h{margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #b4bcc3;font-size:16px;font-weight:600}.ds-checks{margin:0;padding:0;list-style:none}.ds-checks li{padding:5px 0;border-top:1px solid #b4bcc3}.ds-checks li:first-child{border-top:0;padding-top:0}.ds-checks b{display:block;font-weight:600;line-height:1.15}.ds-checks span{font-size:14px;color:#3b444c}.ds-bad,.ds-bad span{color:#b8231a!important}"
+      "css": ".ds-note{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;background:#e8edf0;color:#14181c;padding:12px 18px}.ds-h{margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #a6b0b8;font-size:16px;font-weight:600}.ds-checks{margin:0;padding:0;list-style:none}.ds-checks li{padding:5px 0;border-top:1px solid #a6b0b8}.ds-checks li:first-child{border-top:0;padding-top:0}.ds-checks b{display:block;font-weight:600;line-height:1.15}.ds-checks span{font-size:14px;color:#3b444c}.ds-bad,.ds-bad span{color:#b8231a!important}"
     },
     {
       "name": "About This Street Card",
@@ -529,7 +529,7 @@
       "refersTo": "about-card",
       "description": "Rounded card with Street, Width and Changes made; sentence-case captions over values.",
       "html": "<div class=\"ds-tb\"><div class=\"ds-c ds-wide\"><span>Street</span><b>Main Street</b></div><div class=\"ds-c\"><span>Width</span><b>20 m</b></div><div class=\"ds-c\"><span>Changes made</span><b>2</b></div></div>",
-      "css": ".ds-tb{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;display:grid;grid-template-columns:1fr 1fr;border:1px solid #b4bcc3;border-radius:10px;overflow:hidden;background:#f3f6f8;color:#14181c;margin:12px}.ds-c{display:flex;flex-direction:column;gap:1px;padding:8px 14px 9px;border-top:1px solid #b4bcc3}.ds-wide{grid-column:1/-1}.ds-c:nth-child(n+3):nth-child(odd){border-right:1px solid #b4bcc3}.ds-c span{font-size:13px;font-weight:500;color:#3b444c}.ds-c b{font-size:17px;font-weight:600}"
+      "css": ".ds-tb{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;display:grid;grid-template-columns:1fr 1fr;border:1px solid #a6b0b8;border-radius:10px;overflow:hidden;background:#e8edf0;color:#14181c;margin:12px}.ds-c{display:flex;flex-direction:column;gap:1px;padding:8px 14px 9px;border-top:1px solid #a6b0b8}.ds-wide{grid-column:1/-1}.ds-c:nth-child(n+3):nth-child(odd){border-right:1px solid #a6b0b8}.ds-c span{font-size:13px;font-weight:500;color:#3b444c}.ds-c b{font-size:17px;font-weight:600}"
     },
     {
       "name": "CityLoom Mark",
@@ -543,7 +543,7 @@
       "kind": "custom",
       "description": "34px circle at the far right of the top bar; a button that opens a right-aligned panel holding the Guest heading and a Units row (m | ft) and a Theme row (Light | Dark). Closes on Escape, outside press or focus leaving.",
       "html": "<span class=\"ds-avatar\"><svg viewBox=\"0 0 32 32\" width=\"30\" height=\"30\"><circle cx=\"16\" cy=\"12.5\" r=\"5\"/><path d=\"M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5\"/></svg></span>",
-      "css": ".ds-avatar{display:grid;place-items:center;width:34px;height:34px;border:1px solid #14181c;border-radius:50%;background:#e5eaee;color:#14181c;overflow:hidden}.ds-avatar svg{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}"
+      "css": ".ds-avatar{display:grid;place-items:center;width:34px;height:34px;border:1px solid #14181c;border-radius:50%;background:#d9e1e6;color:#14181c;overflow:hidden}.ds-avatar svg{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}"
     }
   ],
   "narrative": {

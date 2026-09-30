@@ -23,12 +23,12 @@
 :root {
   color-scheme: light;
 
-  --sheet: #f3f6f8;
-  --sheet-deep: #e5eaee;
+  --sheet: #e8edf0;
+  --sheet-deep: #d9e1e6;
   --ink: #14181c;
   --ink-soft: #3b444c;
   --ink-faint: #59656f;
-  --rule: #b4bcc3;
+  --rule: #a6b0b8;
   --blue: #1d4ed8;
   --blue-wash: rgb(29 78 216 / 0.09);
   --red: #b8231a;
