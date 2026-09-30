@@ -314,7 +314,9 @@ function renderDrawing() {
       const planted = s.curb === "planted";
       // a Kassel kerb is wider and has a sloped road face, so a wheel can touch it safely
       const kassel = s.curb === "kassel";
-      const cw = Math.min(planted ? Math.max(14, 600 * L.scale) : kassel ? Math.max(9, 250 * L.scale) : Math.max(5, 150 * L.scale), w / 2);
+      // a bike-friendly curb is a low ramp a wheel can ride up
+      const ramp = s.curb === "bikefriendly";
+      const cw = Math.min(planted ? Math.max(14, 600 * L.scale) : kassel ? Math.max(9, 250 * L.scale) : ramp ? Math.max(9, 300 * L.scale) : Math.max(5, 150 * L.scale), w / 2);
       const fill = planted ? "m-planted" : `c-${s.curb}`;
       const sides = [
         [v.segments[i - 1], x, false],
@@ -322,10 +324,11 @@ function renderDrawing() {
       ];
       for (const [nb, bx, roadRight] of sides) {
         if (!nb || !road.has(KINDS[nb.kind].id)) continue;
-        if (kassel) {
+        if (kassel || ramp) {
           const [a, b] = roadRight ? [bx + cw, bx] : [bx, bx + cw]; // a: road-side foot, b: back
-          const top = roadRight ? bx + cw * 0.35 : bx + cw * 0.65;
-          const pts = `${a},${G} ${b},${G} ${b},${G - 12} ${top},${G - 12}`;
+          const top = ramp ? b : roadRight ? bx + cw * 0.35 : bx + cw * 0.65;
+          const h = ramp ? 7 : 12;
+          const pts = `${a},${G} ${b},${G} ${b},${G - h} ${top},${G - h}`;
           parts.push(`<polygon class="curb" points="${pts}"/><polygon class="hatch" points="${pts}" fill="url(#${fill})"/>`);
           continue;
         }
