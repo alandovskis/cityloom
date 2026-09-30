@@ -527,70 +527,26 @@ svg pattern circle {
   stroke: none;
 }
 
-/* ---- lower: schedule + legend ------------------------------------------- */
+/* ---- lower: legend ------------------------------------------- */
 
 .lower {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
-}
-.schedule {
-  padding: 14px 20px 20px;
-  min-width: 0;
 }
 .legend {
   padding: 14px 20px 20px;
-  border-left: var(--line) solid var(--ink);
+  border-top: var(--line) solid var(--ink);
   min-width: 0;
 }
 
-.sched {
-  width: 100%;
-  border-collapse: collapse;
-}
-.sched th {
-  padding: 4px 8px 4px 0;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-align: left;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-.sched th.num,
-.sched td.num {
-  text-align: right;
-}
-.sched td {
-  padding: 3px 8px 3px 0;
-  border-top: var(--line) solid var(--rule);
-  vertical-align: middle;
-}
-.sched tr.sel td {
-  background: var(--blue-wash);
-}
-.sched tr.sel .mark,
-.sched tr.sel .name {
-  color: var(--blue);
-}
-.sched tr {
-  cursor: default;
-}
-.mark {
-  padding-left: 8px !important;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-}
 .swatch {
   display: block;
   width: 44px;
   height: 22px;
   border: var(--line) solid var(--ink);
   background: var(--sheet);
-}
-.sched .name {
-  font-weight: 500;
 }
 .wfield {
   display: inline-flex;
@@ -861,21 +817,10 @@ svg pattern circle {
   }
 }
 
-@media (max-width: 860px) {
-  .lower {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .legend {
-    border-left: 0;
-    border-top: var(--line) solid var(--ink);
-  }
-}
-
 @media (max-width: 640px) {
   .sheet-head {
     padding: 12px 14px 10px;
   }
-  .schedule,
   .legend {
     padding-inline: 14px;
   }
@@ -884,13 +829,6 @@ svg pattern circle {
   }
   .notes {
     padding-inline: 14px;
-  }
-  .sched .swatch {
-    display: none;
-  }
-  .sched th:nth-child(1),
-  .sched td:nth-child(1) {
-    display: none;
   }
   .palette {
     grid-template-columns: 1fr 1fr;
@@ -935,7 +873,7 @@ svg pattern circle {
   }
 }
 @media (pointer: coarse) {
-  /* Let a swipe on the section pan it; reordering is in the schedule. */
+  /* Let a swipe on the section pan it. */
   .seg {
     touch-action: pan-x pan-y;
   }
@@ -1009,7 +947,6 @@ svg pattern circle {
   max-width: none;
   margin-bottom: 6px;
 }
-.schedule,
 .legend {
   padding-top: 10px;
   padding-bottom: 12px;
@@ -1105,7 +1042,7 @@ svg pattern circle {
   border-color: var(--rule);
 }
 .legend {
-  border-left: var(--line) solid var(--rule);
+  border-top: var(--line) solid var(--rule);
 }
 .notes {
   border-left: var(--line) solid var(--rule);
@@ -1170,7 +1107,6 @@ kbd {
   letter-spacing: 0;
   text-transform: none;
 }
-.sched th,
 .nt th {
   font-size: 13px;
   letter-spacing: 0;
@@ -1185,9 +1121,6 @@ kbd {
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0;
-}
-.sched td:first-child {
-  padding-left: 0;
 }
 
 /* about-this-street card in place of the drawing title block */
@@ -1670,12 +1603,6 @@ kbd {
   }
 }
 
-.sched .finish {
-  display: block;
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--ink-soft);
-}
 
 /* ---- print: the sheet on paper, light ink, no editing chrome ---------------- */
 @page {
@@ -1751,9 +1678,6 @@ kbd {
   .statusbar,
   .legend,
   .drawing .cue,
-  .sched th:last-child,
-  .sched td:last-child,
-  #sched-empty,
   #drawing .handle,
   #drawing .sel-box,
   #drawing .caret,
@@ -1796,29 +1720,11 @@ kbd {
   #drawing .t-blue {
     fill: var(--ink);
   }
-  .sched tr.sel .name,
-  .sched tr.sel .mark {
-    color: var(--ink);
-  }
 
-  /* pieces table reads as text, not a form */
-  .sched tr.sel td {
-    background: none;
-  }
-  .wfield input {
-    padding: 0;
-    border: 0;
-    background: none;
-    appearance: textfield;
-    -moz-appearance: textfield;
-    font-weight: 600;
-    text-align: right;
-  }
-
-  /* one page: drawing beside the pieces table, the notes in a row beneath */
+  /* one page: the drawing across the sheet, the notes in a row beneath */
   .sheet-body,
   :root[data-notes="closed"] .sheet-body {
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
   }
   .work,
@@ -1828,17 +1734,6 @@ kbd {
   .drawing {
     grid-column: 1;
     border-bottom: 0;
-  }
-  .schedule {
-    grid-column: 2;
-    padding: 12px 0 0 16px;
-  }
-  .sched .swatch {
-    width: 32px;
-  }
-  .wfield input {
-    min-height: 0;
-    width: auto;
   }
   .notes {
     grid-column: 1 / -1;
@@ -1856,7 +1751,6 @@ kbd {
     border-top: var(--line) solid var(--rule);
   }
   .notes > section,
-  .sched tr,
   .nt tr,
   .checks li {
     break-inside: avoid;

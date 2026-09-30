@@ -18,8 +18,6 @@ const el = {
   svg: $("drawing"),
   wrap: $("wrap"),
   scroll: $("scroll"),
-  sched: $("sched-body"),
-  schedEmpty: $("sched-empty"),
   palette: $("palette"),
   space: $("space"),
   cap: $("cap"),
@@ -464,53 +462,7 @@ function renderDrawing() {
   el.svg.innerHTML = engineering() ? `<g transform="translate(0 10)">${parts.join("")}</g>${furniture.join("")}` : parts.join("");
 }
 
-// ---- schedule and legend --------------------------------------------------
-
-// "Concrete", or "Concrete · granite curb" / "Concrete · no curb" where the kind has a curb.
-function finishText(s, k) {
-  const surface = MATERIALS.surfaces.find((m) => m.id === s.material).name;
-  if (!k.has_curb) return surface;
-  const curb = MATERIALS.curbs.find((c) => c.id === s.curb);
-  return `${surface} · ${curb ? `${curb.name.toLowerCase()} curb` : "no curb"}`;
-}
-
-function renderSchedule() {
-  const focusId = document.activeElement?.dataset?.fid;
-  const n = view.segments.length;
-  el.schedEmpty.hidden = n > 0;
-  el.sched.innerHTML = view.segments
-    .map((s, i) => {
-      const k = kindOf(s);
-      const sel = s.uid === view.selected;
-      const lo = num(s.min_mm).toFixed(2);
-      const hi = num(s.max_mm).toFixed(2);
-      return `<tr data-uid="${s.uid}"${sel ? ' class="sel" aria-selected="true"' : ""}>
-        <td>${swatch(k.id)}</td>
-        <td class="name">${esc(k.name)}<small class="finish">${esc(finishText(s, k))}</small></td>
-        <td class="num"><span class="wfield"><input type="number" inputmode="decimal" data-fid="w-${s.uid}" step="${units === "m" ? "0.1" : "0.25"}" min="${lo}" max="${hi}" value="${num(s.width_mm).toFixed(2)}" aria-label="Width of ${esc(k.name.toLowerCase())}, ${i + 1} of ${n}, in ${unitWord()}"><span class="unit-tag" aria-hidden="true">${units}</span></span></td>
-        <td><div class="acts">
-          <button type="button" class="ico" data-act="earlier" data-fid="e-${s.uid}" aria-label="Move ${esc(k.name.toLowerCase())} earlier"${i === 0 ? " disabled" : ""}>${ICON.left}</button>
-          <button type="button" class="ico" data-act="later" data-fid="l-${s.uid}" aria-label="Move ${esc(k.name.toLowerCase())} later"${i === n - 1 ? " disabled" : ""}>${ICON.right}</button>
-          <button type="button" class="ico danger" data-act="remove" data-fid="r-${s.uid}" aria-label="Remove ${esc(k.name.toLowerCase())}">${ICON.remove}</button>
-        </div></td>
-      </tr>`;
-    })
-    .join("");
-  restoreFocus(focusId);
-}
-
-function restoreFocus(fid) {
-  if (!fid) return;
-  const t = el.sched.querySelector(`[data-fid="${fid}"]`);
-  if (t && !t.disabled) {
-    t.focus({ preventScroll: true });
-    return;
-  }
-  // The control went away or is now disabled: fall back to the selection, then the drawing.
-  const uid = view.selected;
-  const alt = uid && el.sched.querySelector(`[data-fid="w-${uid}"]`);
-  (alt || el.wrap).focus({ preventScroll: true });
-}
+// ---- legend --------------------------------------------------
 
 function renderPalette() {
   el.palette.innerHTML = KINDS.map(
@@ -591,7 +543,6 @@ function render() {
   renderHead();
   renderFit();
   renderDrawing();
-  renderSchedule();
   renderInspector();
   renderNotes();
 }
@@ -699,11 +650,6 @@ function select(uid) {
   sheet.select(uid || 0);
   view = JSON.parse(sheet.view());
   renderDrawing();
-  for (const tr of el.sched.children) {
-    const on = Number(tr.dataset.uid) === view.selected;
-    tr.classList.toggle("sel", on);
-    on ? tr.setAttribute("aria-selected", "true") : tr.removeAttribute("aria-selected");
-  }
   renderInspector();
 }
 
@@ -891,44 +837,6 @@ el.palette.addEventListener("click", (e) => {
     return;
   }
   addKind(Number(chip.dataset.kind), insertIndex());
-});
-
-// ---- schedule input -------------------------------------------------------
-
-el.sched.addEventListener("change", (e) => {
-  const input = e.target.closest("input");
-  if (!input) return;
-  const uid = Number(input.closest("tr").dataset.uid);
-  const v = parseFloat(input.value);
-  if (Number.isFinite(v)) {
-    const before = seg(uid).width_mm;
-    sheet.set_width(uid, fromInput(v));
-    refresh();
-    if (seg(uid)?.width_mm !== before) announceEdit();
-    else renderSchedule();
-  } else {
-    renderSchedule();
-  }
-});
-
-el.sched.addEventListener("click", (e) => {
-  const tr = e.target.closest("tr");
-  if (!tr) return;
-  const uid = Number(tr.dataset.uid);
-  const btn = e.target.closest("button");
-  if (btn) {
-    select(uid);
-    if (btn.dataset.act === "earlier") moveBy(uid, -1);
-    else if (btn.dataset.act === "later") moveBy(uid, 1);
-    else if (btn.dataset.act === "remove") removeSel(uid);
-  } else if (uid !== view.selected) {
-    select(uid);
-  }
-});
-
-el.sched.addEventListener("focusin", (e) => {
-  const tr = e.target.closest("tr");
-  if (tr && Number(tr.dataset.uid) !== view.selected) select(Number(tr.dataset.uid));
 });
 
 // ---- keyboard -------------------------------------------------------------

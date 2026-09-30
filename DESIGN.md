@@ -157,9 +157,6 @@ components:
   icon-button-danger-hover:
     backgroundColor: "{colors.redline}"
     textColor: "{colors.sheet}"
-  schedule-row-selected:
-    backgroundColor: "{colors.blue-wash}"
-    textColor: "{colors.blue-pencil}"
   legend-row:
     backgroundColor: "transparent"
     textColor: "{colors.ink}"
@@ -204,15 +201,15 @@ Each segment type has its own light tint and its own hatch texture, and is named
 Cool bond paper, graphite ink, pale tints for what the drawing depicts, and two pencils for what the user does and what fails. Saturated chroma is confined to blue and red, and both are rare; the tints sit under the ink linework and never carry state. The hex values in Primary through Neutral are the light theme; the dark theme has the same tokens with the values under Night sheet below (frontmatter keys `dark-*`).
 
 ### Primary
-- **Blue Pencil** (#1d4ed8): the only selection and focus color. Focus ring (2px, 2px offset), text caret and text selection, selected segment box and its dimension and name text, the selected schedule row (text plus 9% wash), the "Change N" label on the drawing and the current row of Your changes, drag ghost, insertion caret, and handle hover fill. Its meaning is "this is what you are acting on".
-- **Blue Wash** (rgb(29 78 216 / 0.09)): tint under selected schedule row, current change row, and the drag ghost.
+- **Blue Pencil** (#1d4ed8): the only selection and focus color. Focus ring (2px, 2px offset), text caret and text selection, selected segment box and its dimension and name text, the "Change N" label on the drawing and the current row of Your changes, drag ghost, insertion caret, and handle hover fill. Its meaning is "this is what you are acting on".
+- **Blue Wash** (rgb(29 78 216 / 0.09)): tint under the current change row and the drag ghost.
 
 ### Secondary
 - **Redline** (#b8231a): the only failure color. Over-width wash, revision cloud, over-width dimension string and its "too wide" text, failed checks, an invalid width field, and the danger hover on remove. If red is on the sheet, something does not fit.
 - **Red Wash** (rgb(184 35 26 / 0.09)): tint over the overflow zone.
 
 ### Tertiary (depiction tints)
-Fills for what the drawing shows. Each is paired with ink hatch and outline, so none is ever the sole identifier. Used on the slab and Today-strip rectangles and the schedule and legend swatches; the mode chips in the Where the width goes table reuse five of them.
+Fills for what the drawing shows. Each is paired with ink hatch and outline, so none is ever the sole identifier. Used on the slab and Today-strip rectangles and the legend and inspector swatches; the mode chips in the Where the width goes table reuse five of them.
 - **Sidewalk Sand** (#f2cfa6), **Planting Green** (#b6dc9f), **Bike Teal** (#93d9cc), **Travel Slate** (#bcc5ce), **Bus Lilac** (#cdb8ec), **Parking Stone** (#dcd6c5), **Median Green** (#8fc281, also the median kerb symbol), **Loading Yellow** (#f5df7e): the eight segment-type tints (k-sidewalk to k-loading in the frontmatter).
 - **Sky** (#e2eff8): the pale rectangle behind the section elevation, above the ground line; no pointer events.
 - **Symbol fills**: tree (#78b565, trees and shrubs), car (#dbe2e9), bus (#b79ee3), van (#f0cb45), and two coat variants for the person (#ee9b78, #74aede). Symbols keep their 1.2px ink outline; symbol parts without a fill stay paper.
@@ -258,9 +255,9 @@ Same token names, re-composed for a dark ground; every value is a `dark-*` key i
 - **Title** (600, 32px, line-height 1, -0.005em, sentence case): street name in the sheet header. The 26px size under 640px in an earlier rule is overridden in the build, which stays at 32px.
 - **Body** (400, 15px, 1.35): hints, status line, fit statement, the "Street cross-section" sub-title; tabular figures on by default for the whole page.
 - **Note** (500, 14px): note tables, key legend, check detail.
-- **Heading** (600, 16px): panel headings (Pieces of the street, Add a piece, Where the width goes, People moved, Does it work?, Your changes), with a 1px Rule Grey underline.
+- **Heading** (600, 16px): panel headings (Add a piece, Where the width goes, People moved, Does it work?, Your changes), with a 1px Rule Grey underline.
 - **Label** (600, 14px): tool buttons (Undo, Redo, Start over), drawing labels "Today", "Your design", "Street edge", "Unused", "Scale" (SVG, 0.01em).
-- **Table head** (600, 13px): column heads of the schedule and notes tables. The unit tag beside width fields and the legend sub-text are 12px. Key caps (kbd) are 13px 600.
+- **Table head** (600, 13px): column heads of the notes tables. The unit tag beside width fields and the legend sub-text are 12px. Key caps (kbd) are 13px 600.
 - **Field label** (500, 13px): the about-card captions.
 - **Dimension** (500, 16px, tabular): widths above segments, overall strings ("Street width", "Your design"), scale bar numerals. Segment names on the drawing are 600, 15px; when the segment is narrow the two-letter code is shown instead. Text over hatch carries a 4px paper-coloured halo.
 
@@ -275,10 +272,10 @@ The sheet fills the viewport inside a 12px frame (6px under 640px), as a single 
 
 The drawing scales so the street width fills the width minus margins; the SVG has a 680px minimum and scrolls horizontally on narrow screens, with vertical geometry scaled 0.9 to 1.1. Rhythm is tight: 4, 8, 12, 18, 20px paddings; table rows are 3px above and below. All region dividers are 1px Rule Grey.
 
-Breakpoints: at 1100px the notes column drops below the work area with a 1px Rule Grey top line; at 860px Pieces of the street and Add a piece stack; at 640px the frame narrows to 6px and the pattern swatch column of the schedule is hidden.
+Breakpoints: at 1100px the notes column drops below the work area with a 1px Rule Grey top line; at 640px the frame narrows to 6px.
 
 ### Named Rules
-**The Quiet-Rule Rule.** Regions are separated by single 1px Rule Grey lines and table rows. The one enclosed box is the about-this-street card; legend and schedule entries are ruled rows, never cards, and nothing nests inside another box.
+**The Quiet-Rule Rule.** Regions are separated by single 1px Rule Grey lines and table rows. The one enclosed box is the about-this-street card; legend entries are ruled rows, never cards, and nothing nests inside another box.
 
 ## Elevation & Depth
 
@@ -315,8 +312,8 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 ### Inputs / Fields
 - **Width field:** 68px by 30px, 1px ink border, 6px radius, paper fill, right-aligned tabular 500 text, unit tag beside it. **Invalid:** border and text turn redline. **Focus:** blue outline, blue caret.
 
-### Pieces of the street and Add a piece
-- **Pieces of the street:** ruled table, rows separated by 1px Rule Grey, columns Pattern swatch (44 by 22px hatch, 4px radius), Type (segment name), Width field, Actions. There is no Mark column. Selected row takes Blue Wash and blue name.
+### Add a piece
+- **Pieces of the street:** there is no longer a table of pieces. Width, surface and curb are edited in the left inspector; moving and removing pieces is done on the drawing with the keyboard.
 - **Add a piece:** the palette is one ruled row per segment type (44px swatch, name, default width, small grip glyph), draggable, Bond Paper Deep on hover. Not cards.
 - **Icon buttons:** 30px, 1px ink border, 6px radius, 14px 1.6px square-cap line icons; remove hovers redline with paper icon and stands 10px apart from the move arrows.
 
