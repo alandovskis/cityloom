@@ -1,6 +1,6 @@
 ---
 name: CityLoom
-description: A civil drafting sheet for rearranging a street's fixed right-of-way. Black ink on cool bond paper, one blue pencil, one redline.
+description: A civil drafting sheet for rearranging a street's fixed right-of-way. Black ink on cool bond paper, light tints per segment type, one blue pencil, one redline.
 colors:
   sheet: "#f3f6f8"
   sheet-deep: "#e5eaee"
@@ -12,6 +12,21 @@ colors:
   blue-wash: "rgb(29 78 216 / 0.09)"
   redline: "#b8231a"
   red-wash: "rgb(184 35 26 / 0.09)"
+  k-sidewalk: "#f2cfa6"
+  k-planting: "#b6dc9f"
+  k-bike: "#93d9cc"
+  k-travel: "#bcc5ce"
+  k-bus: "#cdb8ec"
+  k-parking: "#dcd6c5"
+  k-median: "#8fc281"
+  k-loading: "#f5df7e"
+  sky: "#e2eff8"
+  s-tree: "#78b565"
+  s-car: "#dbe2e9"
+  s-bus: "#b79ee3"
+  s-van: "#f0cb45"
+  s-coat-0: "#ee9b78"
+  s-coat-1: "#74aede"
 typography:
   title:
     fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
@@ -35,6 +50,12 @@ typography:
   label:
     fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
     fontSize: "13px"
+    fontWeight: 600
+    lineHeight: 1.35
+    letterSpacing: "0.12em"
+  table-head:
+    fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
+    fontSize: "12px"
     fontWeight: 600
     lineHeight: 1.35
     letterSpacing: "0.12em"
@@ -122,22 +143,22 @@ components:
 
 **Creative North Star: "The Typical Section Sheet"**
 
-The interface is a civil drafting sheet, not an app window. One double-ruled border encloses the whole viewport; tick margins numbered 1 to 8 across the top and A to D down the left frame the work; a title block closes the right column. The ground is cool bond paper, everything is drawn in black ink at graded line weights, and only two other colors exist: a blue pencil for what is selected or focused, and a redline for what does not fit. It is recognisable with all content removed by its border, tick margins and title block.
+The interface is a civil drafting sheet, not an app window. One double-ruled border encloses the whole viewport; tick margins numbered 1 to 8 across the top and A to D down the left frame the work; a title block closes the right column. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a redline for what does not fit. It is recognisable with all content removed by its border, tick margins and title block.
 
-Density is that of a working sheet: small condensed capitals for labels, tabular figures for every dimension, hairline rules between rows. There is no card, no rounded corner, no fill color and no call-to-action button. The primary action is dragging a segment inside the drawing. Drafting devices (dimension strings, revision clouds, a graphic scale bar, a schedule table, a revision table) carry the information that an app would put in chrome.
+Density is that of a working sheet: small condensed capitals for labels, tabular figures for every dimension, hairline rules between rows. There is no card, no rounded corner, no dark or saturated fill and no call-to-action button. The primary action is dragging a segment inside the drawing. Drafting devices (dimension strings, revision clouds, a graphic scale bar, a schedule table, a revision table) carry the information that an app would put in chrome.
 
-Segment types are never told apart by color. Each has its own hatch texture and its own two-letter mark, so the drawing survives greyscale and colour-blindness.
+Each segment type has its own light tint, its own hatch texture and its own two-letter mark. The tint makes the sheet readable at a glance; the hatch and mark carry the identity, so the drawing still survives greyscale and colour-blindness.
 
 **Key Characteristics:**
 - One sheet, one border (2px ink plus a 1px outer rule), square corners everywhere.
-- Black ink on cool paper; blue pencil for selection, redline for failure, nothing else chromatic.
-- Hatch pattern plus mark, never colour, encodes segment type.
-- Tabular figures and condensed capitals; sizes stay in a narrow 11 to 16px band, with only the sheet title larger.
+- Black ink on cool paper, coloured in with pale tints; blue pencil for selection, redline for failure, and no other saturated accent.
+- Tint plus hatch plus mark encodes segment type; colour is never the only code.
+- Tabular figures and condensed capitals; sizes stay in a narrow 11 to 16px band (12px for table heads), with only the sheet title larger.
 - Flat: depth comes from line weight and ruled divisions, not shadow.
 
 ## Colors
 
-Cool bond paper, graphite ink, and two pencils. Chroma is confined to blue and red, and both are rare.
+Cool bond paper, graphite ink, pale tints for what the drawing depicts, and two pencils for what the user does and what fails. Saturated chroma is confined to blue and red, and both are rare; the tints are light, sit under the ink linework, and never carry state.
 
 ### Primary
 - **Blue Pencil** (#1d4ed8): the only selection and focus color. Focus ring (2px, 2px offset), text caret and text selection, selected segment box and its dimension and mark text, the selected schedule row (text plus 9% wash), the current revision letter and row, drag ghost, insertion caret, and handle hover fill. Its meaning is "this is what you are acting on".
@@ -146,6 +167,13 @@ Cool bond paper, graphite ink, and two pencils. Chroma is confined to blue and r
 ### Secondary
 - **Redline** (#b8231a): the only failure color. Over-width wash, revision cloud, over-width dimension string and its text, failed checks, an invalid width field, and the danger hover on delete. If red is on the sheet, something does not fit.
 - **Red Wash** (rgb(184 35 26 / 0.09)): tint over the overflow zone.
+
+### Tertiary (depiction tints)
+Fills for what the drawing shows. Each is paired with ink hatch and outline, so none is ever the sole identifier. Used on the slab and existing-strip rectangles and the schedule and legend swatches; the mode chips in the Width by use table reuse five of them.
+- **Sidewalk Sand** (#f2cfa6), **Planting Green** (#b6dc9f), **Bike Teal** (#93d9cc), **Travel Slate** (#bcc5ce), **Bus Lilac** (#cdb8ec), **Parking Stone** (#dcd6c5), **Median Green** (#8fc281, also the median kerb symbol), **Loading Yellow** (#f5df7e): the eight segment-type tints (k-sidewalk to k-loading in the frontmatter).
+- **Sky** (#e2eff8): the pale rectangle behind the section elevation, above the ground line; no pointer events.
+- **Symbol fills**: tree (#78b565, trees and shrubs), car (#dbe2e9), bus (#b79ee3), van (#f0cb45), and two coat variants for the person (#ee9b78, #74aede). Symbols keep their 1.2px ink outline; symbol parts without a fill stay paper.
+- **Mode chips**: an 11px square with a 1px ink border before each row label in the Width by use table, reusing tints: foot is Sidewalk Sand, bike is Bike Teal, transit is Bus Lilac, vehicle is Travel Slate, green is Planting Green. No new values.
 
 ### Neutral
 - **Bond Paper** (#f3f6f8): the sheet ground, every control fill, and text on inverted (ink) surfaces.
@@ -156,9 +184,9 @@ Cool bond paper, graphite ink, and two pencils. Chroma is confined to blue and r
 - **Rule Grey** (#b4bcc3): hairline separators between table rows and between tick-margin cells; disabled control borders. Never used for text.
 
 ### Named Rules
-**The Two Pencils Rule.** Blue means selected, red means failed. No other color may be introduced, and neither may be used decoratively.
+**The Two Pencils Rule.** Blue means selected, red means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else.
 
-**The Hatch-Not-Hue Rule.** A segment type is identified by its hatch and its mark. Never assign it a fill color.
+**The Colour-Plus-Hatch-Plus-Mark Rule.** A segment type is identified by its tint, its hatch and its two-letter mark together. Colour is never the only code: every tint ships with a hatch and a mark, and a new category needs all three.
 
 ## Typography
 
@@ -171,7 +199,8 @@ Cool bond paper, graphite ink, and two pencils. Chroma is confined to blue and r
 - **Body** (400, 15px, 1.35): hints, status line, fit statement; tabular figures on by default for the whole page.
 - **Note** (500, 14px): note tables, sub-title, key legend, check detail.
 - **Label** (600, 13px, 0.12em, uppercase): note headings (ruled underneath), tool buttons (0.1em), drawing labels "Existing", "Proposed", "Scale" (14px in the SVG).
-- **Field label** (500, 11 to 12px, 0.08 to 0.12em, uppercase): tick-margin numerals, form-field captions, title-block cell captions, table column heads.
+- **Table head** (600, 12px, 0.1 to 0.12em, uppercase): column heads of the schedule and notes tables. The unit tag beside width fields and the legend sub-text are also 12px. Key caps (kbd) are 13px 600 in the build, not 12.
+- **Field label** (500, 11 to 11.5px, 0.08 to 0.12em, uppercase): tick-margin numerals, form-field captions, title-block cell captions.
 - **Dimension** (500, 16px, tabular): widths above segments, overall strings, scale bar numerals. Marks (SW, BL, TL...) are 600, 16px, 0.08em. Text over hatch carries a 4px paper-coloured halo.
 
 ### Named Rules
@@ -201,7 +230,7 @@ Flat. There are no shadows at rest and no layered surfaces; depth is line weight
 
 Square. Every border radius is 0, on buttons, selects, inputs, chips and swatches. Forms are drawn as line art: rectangles with 2px ink outline over a hatch, handles as 18 by 16px square grips with a double-headed arrow, dimension strings as a line with 45-degree tick marks at each end (4px), right-of-way lines as long-dash-dot strokes, boundary lines as 5/4 dashes, selection as a 2px blue rectangle, overflow as a scalloped revision cloud in red drawn in over 620ms. Elevation symbols (person, tree, shrub, cyclist, car, bus, van, parking sign, median kerb) are single-weight line art, 1.2px non-scaling stroke, paper-filled, round joins.
 
-Hatch vocabulary, 1px ink strokes on paper, one per segment type: sidewalk (dot stipple), planting (grass ticks), bike lane (45-degree lines), travel lane (staggered dashes), bus lane (tight reverse diagonal), parking (horizontal lines), median (crosshatch grid), loading (chevrons).
+Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: sidewalk (dot stipple), planting (grass ticks), bike lane (45-degree lines), travel lane (staggered dashes), bus lane (tight reverse diagonal), parking (horizontal lines), median (crosshatch grid), loading (chevrons).
 
 ## Components
 
@@ -228,13 +257,14 @@ Hatch vocabulary, 1px ink strokes on paper, one per segment type: sidewalk (dot 
 - **Title block:** 2 by 3 grid pinned to the bottom of the notes column, 2px ink top edge, 1px ink cell dividers, 11.5px captions over 16px uppercase values (Project, Street, Sheet, Date, Revision, Right-of-way).
 
 ### Section drawing (signature component)
-The Existing strip and Proposed section share one origin and scale. Each proposed segment: line-art symbol standing on a 3.4px ground line, a 34px slab with 2px ink outline and hatch, its mark below, its width above on a dimension line. Overall strings below: right-of-way, then proposed total if different. Right-of-way lines dash-dot at both ends; a graphic scale bar of five alternating black and paper blocks closes the drawing. Selected segment: 2px blue box. Handles: square grips that turn blue-filled on hover or drag, and whose boundary line becomes a solid 2px blue. Over-width: red wash, scalloped red cloud, red second dimension string and "over" note.
+The Existing strip and Proposed section share one origin and scale. Each proposed segment: line-art symbol standing on a 3.4px ground line, a 34px slab with 2px ink outline, its segment tint and hatch over it, its mark below, its width above on a dimension line. Overall strings below: right-of-way, then proposed total if different. Right-of-way lines dash-dot at both ends; a graphic scale bar of five alternating black and paper blocks closes the drawing. Selected segment: 2px blue box. Handles: square grips that turn blue-filled on hover or drag, and whose boundary line becomes a solid 2px blue. Over-width: red wash, scalloped red cloud, red second dimension string and "over" note.
 
 ## Do's and Don'ts
 
 ### Do:
 - **Do** draw with ink lines at graded weights: 2px frame and title block edge, 1px structure, 0.8px dimensions.
-- **Do** encode any new category with a new hatch texture and a two-letter mark before considering anything else.
+- **Do** encode any new category with a light tint, a new hatch texture and a two-letter mark together.
+- **Do** keep tints pale enough that 1px ink hatch and 16px marks stay legible over them.
 - **Do** use blue only for the thing being acted on and red only for a failed fit.
 - **Do** keep corners square and controls outlined in 1px ink on paper fill.
 - **Do** set labels in tracked uppercase 600 and numbers in tabular figures.
@@ -242,9 +272,9 @@ The Existing strip and Proposed section share one origin and scale. Each propose
 - **Do** give every new control a 2px blue focus outline and honour prefers-reduced-motion.
 
 ### Don't:
-- **Don't** colour segment types; hue is not an identifier here.
+- **Don't** let a tint stand alone as the identifier of a type, or use a tint as a state signal.
 - **Don't** use cards, rounded corners, filled call-to-action buttons or icon-card sidebars.
 - **Don't** add shadows to anything at rest.
-- **Don't** introduce a third accent color or use blue and red decoratively.
+- **Don't** introduce a third saturated accent or use blue and red decoratively.
 - **Don't** replace line-art symbols with filled or glyph icons.
 - **Don't** set body-scale text in a face other than Barlow Semi Condensed.

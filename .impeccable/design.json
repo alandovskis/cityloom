@@ -135,6 +135,231 @@
         "displayName": "Red Wash",
         "canonical": "rgb(184 35 26 / 0.09)",
         "tonalRamp": []
+      },
+      "k-sidewalk": {
+        "role": "tertiary",
+        "displayName": "Sidewalk Sand",
+        "canonical": "#f2cfa6",
+        "tonalRamp": [
+          "#362f25",
+          "#6d5d4b",
+          "#a38c70",
+          "#daba95",
+          "#f6ddc1",
+          "#faecdb",
+          "#fcf5ed",
+          "#fefbf8"
+        ]
+      },
+      "k-planting": {
+        "role": "tertiary",
+        "displayName": "Planting Green",
+        "canonical": "#b6dc9f",
+        "tonalRamp": [
+          "#293224",
+          "#526348",
+          "#7b956b",
+          "#a4c68f",
+          "#cce7bc",
+          "#e2f1d9",
+          "#f0f8ec",
+          "#fafcf8"
+        ]
+      },
+      "k-bike": {
+        "role": "tertiary",
+        "displayName": "Bike Teal",
+        "canonical": "#93d9cc",
+        "tonalRamp": [
+          "#21312e",
+          "#42625c",
+          "#63928a",
+          "#84c3b8",
+          "#b3e4db",
+          "#d4f0eb",
+          "#e9f7f5",
+          "#f7fcfb"
+        ]
+      },
+      "k-travel": {
+        "role": "tertiary",
+        "displayName": "Travel Slate",
+        "canonical": "#bcc5ce",
+        "tonalRamp": [
+          "#2a2c2e",
+          "#55595d",
+          "#7f858b",
+          "#a9b1b9",
+          "#d0d6dd",
+          "#e4e8eb",
+          "#f2f3f5",
+          "#fafbfb"
+        ]
+      },
+      "k-bus": {
+        "role": "tertiary",
+        "displayName": "Bus Lilac",
+        "canonical": "#cdb8ec",
+        "tonalRamp": [
+          "#2e2935",
+          "#5c536a",
+          "#8a7c9f",
+          "#b9a6d4",
+          "#dccdf2",
+          "#ebe3f7",
+          "#f5f1fb",
+          "#fbfafe"
+        ]
+      },
+      "k-parking": {
+        "role": "tertiary",
+        "displayName": "Parking Stone",
+        "canonical": "#dcd6c5",
+        "tonalRamp": [
+          "#32302c",
+          "#636059",
+          "#959085",
+          "#c6c1b1",
+          "#e7e2d6",
+          "#f1efe8",
+          "#f8f7f3",
+          "#fcfcfb"
+        ]
+      },
+      "k-median": {
+        "role": "tertiary",
+        "displayName": "Median Green",
+        "canonical": "#8fc281",
+        "tonalRamp": [
+          "#202c1d",
+          "#40573a",
+          "#618357",
+          "#81af74",
+          "#b1d4a7",
+          "#d2e7cd",
+          "#e9f3e6",
+          "#f7faf6"
+        ]
+      },
+      "k-loading": {
+        "role": "tertiary",
+        "displayName": "Loading Yellow",
+        "canonical": "#f5df7e",
+        "tonalRamp": [
+          "#37321c",
+          "#6e6439",
+          "#a59755",
+          "#ddc971",
+          "#f8e9a5",
+          "#fbf2cb",
+          "#fdf9e5",
+          "#fefdf5"
+        ]
+      },
+      "sky": {
+        "role": "tertiary",
+        "displayName": "Sky",
+        "canonical": "#e2eff8",
+        "tonalRamp": [
+          "#333638",
+          "#666c70",
+          "#99a1a7",
+          "#cbd7df",
+          "#ebf4fa",
+          "#f3f9fc",
+          "#f9fcfe",
+          "#fdfefe"
+        ]
+      },
+      "s-tree": {
+        "role": "tertiary",
+        "displayName": "Symbol Tree",
+        "canonical": "#78b565",
+        "tonalRamp": [
+          "#1b2917",
+          "#36512d",
+          "#517a44",
+          "#6ca35b",
+          "#a1cb93",
+          "#c9e1c1",
+          "#e4f0e0",
+          "#f5f9f3"
+        ]
+      },
+      "s-car": {
+        "role": "tertiary",
+        "displayName": "Symbol Car",
+        "canonical": "#dbe2e9",
+        "tonalRamp": [
+          "#313334",
+          "#636669",
+          "#94999d",
+          "#c5cbd2",
+          "#e6ebf0",
+          "#f1f3f6",
+          "#f8f9fb",
+          "#fcfdfd"
+        ]
+      },
+      "s-bus": {
+        "role": "tertiary",
+        "displayName": "Symbol Bus",
+        "canonical": "#b79ee3",
+        "tonalRamp": [
+          "#292433",
+          "#524766",
+          "#7c6b99",
+          "#a58ecc",
+          "#cdbbeb",
+          "#e2d8f4",
+          "#f1ecf9",
+          "#faf8fd"
+        ]
+      },
+      "s-van": {
+        "role": "tertiary",
+        "displayName": "Symbol Van",
+        "canonical": "#f0cb45",
+        "tonalRamp": [
+          "#362e10",
+          "#6c5b1f",
+          "#a2892f",
+          "#d8b73e",
+          "#f5db7d",
+          "#f9eab5",
+          "#fcf5da",
+          "#fefbf1"
+        ]
+      },
+      "s-coat-0": {
+        "role": "tertiary",
+        "displayName": "Symbol Coat 0",
+        "canonical": "#ee9b78",
+        "tonalRamp": [
+          "#36231b",
+          "#6b4636",
+          "#a16951",
+          "#d68c6c",
+          "#f3b9a1",
+          "#f8d7c9",
+          "#fcebe4",
+          "#fef8f5"
+        ]
+      },
+      "s-coat-1": {
+        "role": "tertiary",
+        "displayName": "Symbol Coat 1",
+        "canonical": "#74aede",
+        "tonalRamp": [
+          "#1a2732",
+          "#344e64",
+          "#4e7596",
+          "#689dc8",
+          "#9ec6e8",
+          "#c7dff2",
+          "#e3eff8",
+          "#f5f9fd"
+        ]
       }
     },
     "typographyMeta": {
@@ -154,9 +379,13 @@
         "displayName": "Label",
         "purpose": "Ruled note headings, tool buttons, drawing labels; tracked uppercase."
       },
+      "table-head": {
+        "displayName": "Table head",
+        "purpose": "Schedule and notes table column heads; 12px tracked uppercase."
+      },
       "field-label": {
         "displayName": "Field label",
-        "purpose": "Tick-margin numerals, form captions, title-block captions, column heads."
+        "purpose": "Tick-margin numerals, form captions, title-block captions."
       },
       "dimension": {
         "displayName": "Dimension",
@@ -265,23 +494,23 @@
   ],
   "narrative": {
     "northStar": "The Typical Section Sheet",
-    "overview": "The interface is a civil drafting sheet, not an app window. One double-ruled border encloses the whole viewport; tick margins numbered 1 to 8 across the top and A to D down the left frame the work; a title block closes the right column. The ground is cool bond paper, everything is drawn in black ink at graded line weights, and only two other colors exist: a blue pencil for what is selected or focused, and a redline for what does not fit.\n\nDensity is that of a working sheet: small condensed capitals for labels, tabular figures for every dimension, hairline rules between rows. There is no card, no rounded corner, no fill color and no call-to-action button. The primary action is dragging a segment inside the drawing.\n\nSegment types are never told apart by color. Each has its own hatch texture and its own two-letter mark, so the drawing survives greyscale and colour-blindness.",
+    "overview": "The interface is a civil drafting sheet, not an app window. One double-ruled border encloses the whole viewport; tick margins numbered 1 to 8 across the top and A to D down the left frame the work; a title block closes the right column. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a redline for what does not fit.\n\nDensity is that of a working sheet: small condensed capitals for labels, tabular figures for every dimension, hairline rules between rows. There is no card, no rounded corner, no dark or saturated fill and no call-to-action button. The primary action is dragging a segment inside the drawing.\n\nEach segment type has its own light tint, its own hatch texture and its own two-letter mark. The tint makes the sheet readable at a glance; the hatch and mark carry the identity, so the drawing still survives greyscale and colour-blindness.",
     "keyCharacteristics": [
       "One sheet, one border (2px ink plus a 1px outer rule), square corners everywhere.",
-      "Black ink on cool paper; blue pencil for selection, redline for failure, nothing else chromatic.",
-      "Hatch pattern plus mark, never colour, encodes segment type.",
-      "Tabular figures and condensed capitals; sizes stay in a narrow 11 to 16px band, with only the sheet title larger.",
+      "Black ink on cool paper, coloured in with pale tints; blue pencil for selection, redline for failure, and no other saturated accent.",
+      "Tint plus hatch plus mark encodes segment type; colour is never the only code.",
+      "Tabular figures and condensed capitals; sizes stay in a narrow 11 to 16px band (12px for table heads), with only the sheet title larger.",
       "Flat: depth comes from line weight and ruled divisions, not shadow."
     ],
     "rules": [
       {
         "name": "The Two Pencils Rule",
-        "body": "Blue means selected, red means failed. No other color may be introduced, and neither may be used decoratively.",
+        "body": "Blue means selected, red means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else.",
         "section": "colors"
       },
       {
-        "name": "The Hatch-Not-Hue Rule",
-        "body": "A segment type is identified by its hatch and its mark. Never assign it a fill color.",
+        "name": "The Colour-Plus-Hatch-Plus-Mark Rule",
+        "body": "A segment type is identified by its tint, its hatch and its two-letter mark together. Colour is never the only code: every tint ships with a hatch and a mark, and a new category needs all three.",
         "section": "colors"
       },
       {
@@ -307,7 +536,8 @@
     ],
     "dos": [
       "Do draw with ink lines at graded weights: 2px frame and title block edge, 1px structure, 0.8px dimensions.",
-      "Do encode any new category with a new hatch texture and a two-letter mark before considering anything else.",
+      "Do encode any new category with a light tint, a new hatch texture and a two-letter mark together.",
+      "Do keep tints pale enough that 1px ink hatch and 16px marks stay legible over them.",
       "Do use blue only for the thing being acted on and red only for a failed fit.",
       "Do keep corners square and controls outlined in 1px ink on paper fill.",
       "Do set labels in tracked uppercase 600 and numbers in tabular figures.",
@@ -315,10 +545,10 @@
       "Do give every new control a 2px blue focus outline and honour prefers-reduced-motion."
     ],
     "donts": [
-      "Don't colour segment types; hue is not an identifier here.",
+      "Don't let a tint stand alone as the identifier of a type, or use a tint as a state signal.",
       "Don't use cards, rounded corners, filled call-to-action buttons or icon-card sidebars.",
       "Don't add shadows to anything at rest.",
-      "Don't introduce a third accent color or use blue and red decoratively.",
+      "Don't introduce a third saturated accent or use blue and red decoratively.",
       "Don't replace line-art symbols with filled or glyph icons.",
       "Don't set body-scale text in a face other than Barlow Semi Condensed."
     ]
