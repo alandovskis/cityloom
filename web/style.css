@@ -1919,6 +1919,12 @@ kbd {
 #drawing .lane-mark.broken {
   fill: var(--sheet);
 }
+#drawing .surface {
+  fill: var(--sheet);
+  stroke: var(--ink);
+  stroke-width: 1;
+  pointer-events: none;
+}
 #drawing .curb {
   fill: var(--sheet);
   stroke: var(--ink);

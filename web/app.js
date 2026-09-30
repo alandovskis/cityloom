@@ -159,6 +159,12 @@ function cloud(x, y, w, h, r = 7, fresh = false) {
   return `<path class="cloud${fresh ? " fresh" : ""}" pathLength="1" d="${d}Z"/>`;
 }
 
+// Standard view: the hatch and tint name the kind of piece, so the surface
+// finish is drawn as a paving course along the top of the slab.
+const surfaceCourse = (x, y, w, material) =>
+  `<rect class="surface" x="${x}" y="${y}" width="${w}" height="10"/>` +
+  `<rect class="hatch" x="${x}" y="${y}" width="${w}" height="10" fill="url(#m-${material})"/>`;
+
 function renderDrawing() {
   const v = view;
   const W = Math.max(el.wrap.clientWidth, 680);
@@ -246,6 +252,7 @@ function renderDrawing() {
         symbol(k.id, cx, G, pxPerM, w, s.width_mm / 1000, F) +
         `<rect class="obj k-${k.id}" x="${x}" y="${G}" width="${w}" height="${Y.slab}"/>` +
         `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#${engineering() ? `m-${s.material}` : `h-${k.id}`})"/>` +
+        (engineering() ? "" : surfaceCourse(x, G, w, s.material)) +
         `<text class="t-mark t-halo${sel ? " t-blue" : ""}" x="${cx}" y="${Y.mark}" text-anchor="middle">${w > k.name.length * 8.6 + 10 ? esc(k.name) : w > 30 ? k.mark : ""}</text>` +
         `</g>`,
     );
@@ -314,7 +321,7 @@ function renderDrawing() {
         if (!nb || !road.has(KINDS[nb.kind].id)) continue;
         parts.push(
           `<rect class="curb" x="${bx}" y="${G - 12}" width="${cw}" height="12"/>` +
-            (engineering() ? `<rect class="hatch" x="${bx}" y="${G - 12}" width="${cw}" height="12" fill="url(#c-${s.curb})"/>` : ""),
+            `<rect class="hatch" x="${bx}" y="${G - 12}" width="${cw}" height="12" fill="url(#c-${s.curb})"/>`,
         );
       }
     });
