@@ -2063,3 +2063,387 @@ kbd {
     display: none;
   }
 }
+
+/* ---- surface tabs: Street | Intersection --------------------------------- */
+.surfaces {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  gap: 4px;
+  margin: 0 auto 0 18px;
+}
+.surface {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--chrome-ink);
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+  opacity: 0.78;
+  transition: opacity 120ms var(--ease-out);
+}
+.surface:hover {
+  opacity: 1;
+}
+.surface[aria-current="page"] {
+  border-bottom-color: var(--chrome-ink);
+  font-weight: 600;
+  opacity: 1;
+}
+.surface:focus-visible {
+  outline-color: var(--chrome-ink);
+}
+
+/* ---- intersection: plan drawing ----------------------------------------- */
+:root {
+  --road: #ced6dc;
+}
+:root[data-theme="dark"] {
+  --road: #2b343d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --road: #2b343d;
+  }
+}
+
+.plan-drawing {
+  padding-top: 0;
+}
+.plan-drawing .wrap {
+  min-width: 0;
+}
+.plan-drawing .scroll {
+  overflow: hidden;
+}
+#drawing .t-note {
+  font-size: 14px;
+  font-weight: 500;
+}
+#drawing .wedge,
+#drawing .wedge-g {
+  stroke: none;
+}
+#drawing .wedge-g {
+  cursor: pointer;
+}
+#drawing .wedge-g[data-role="none"] {
+  cursor: default;
+}
+#drawing .piece {
+  stroke: var(--ink);
+  stroke-width: 0.8;
+  stroke-opacity: 0.6;
+  stroke-linejoin: round;
+}
+#drawing .arm {
+  cursor: pointer;
+}
+#drawing .arm:hover .piece {
+  stroke-opacity: 1;
+}
+#drawing .road {
+  fill: var(--road);
+  stroke: none;
+}
+#drawing .road.ring {
+  stroke: none;
+}
+#drawing .island,
+#drawing .bulb {
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+#drawing .curb-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+#drawing .curb-line.bad {
+  stroke: var(--red);
+  stroke-width: 3;
+}
+#drawing .crossing {
+  fill: var(--road);
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+#drawing .zebra {
+  fill: var(--ink);
+}
+#drawing [data-role="crossing"] {
+  cursor: pointer;
+}
+#drawing .zebra-fill {
+  stroke: none;
+}
+#drawing .stop-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 4;
+  pointer-events: none;
+}
+#drawing .stop-line.yield {
+  stroke-width: 3;
+  stroke-dasharray: 7 5;
+}
+#drawing .sign * {
+  fill: var(--sheet);
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+#drawing .sign circle {
+  fill: var(--ink);
+  stroke: none;
+}
+#drawing .lane-arrow path {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+#drawing .lane-arrow path.halo {
+  stroke: var(--sheet);
+  stroke-width: 5;
+}
+#drawing .lane-arrow.out path:not(.halo) {
+  stroke: var(--ink-soft);
+  stroke-width: 1.4;
+}
+#drawing .lane-arrow.bad path:not(.halo) {
+  stroke: var(--red);
+  stroke-width: 2.4;
+}
+#drawing .sel-line {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+#drawing .mv {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+#drawing .mv.no {
+  stroke: var(--ink-soft);
+  stroke-width: 1.4;
+  stroke-dasharray: 4 4;
+}
+#drawing .mv.bad {
+  stroke: var(--red);
+}
+#drawing .mv-x {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+#drawing .mv-tip {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+#drawing .north circle {
+  fill: var(--sheet);
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+#drawing .north path {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+#drawing .scale text {
+  fill: var(--ink);
+}
+#drawing .handle {
+  cursor: grab;
+}
+#drawing .handle:active {
+  cursor: grabbing;
+}
+#drawing .handle .grip {
+  fill: var(--sheet);
+}
+
+/* engineering style: the same plan as plain line work */
+:root[data-drawing="engineering"] #drawing .piece,
+:root[data-drawing="engineering"] #drawing .wedge,
+:root[data-drawing="engineering"] #drawing .bulb,
+:root[data-drawing="engineering"] #drawing .island {
+  fill: var(--sheet);
+}
+:root[data-drawing="engineering"] #drawing .road,
+:root[data-drawing="engineering"] #drawing .crossing {
+  fill: var(--sheet);
+}
+
+/* ---- intersection: inspector and notes ------------------------------------ */
+.inspector select {
+  width: 100%;
+  min-height: 34px;
+  padding: 2px 6px;
+  border: var(--line) solid var(--ink);
+  border-radius: 6px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+.inspector .btn.danger:hover:not(:disabled) {
+  background: var(--red);
+  border-color: var(--red);
+  color: var(--sheet);
+}
+.lanes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lane-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: var(--line) solid var(--rule);
+  font-size: 15px;
+}
+.lane-row:last-child {
+  border-bottom: var(--line) solid var(--rule);
+}
+.lane-row small {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.lane-row.bad span:first-child {
+  color: var(--red);
+  font-weight: 600;
+}
+.turns-btns {
+  display: flex;
+  gap: 4px;
+}
+.turn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  border: var(--line) solid var(--ink);
+  border-radius: 6px;
+  background: var(--sheet);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+.turn:hover:not(:disabled):not([aria-pressed="true"]) {
+  background: var(--sheet-deep);
+}
+.turn .turn-ico {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.turn[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--sheet);
+}
+.turn:disabled {
+  border-color: var(--rule);
+  color: var(--ink-faint);
+  cursor: default;
+}
+.turn[aria-pressed="false"]:not(:disabled)::after {
+  content: "";
+  position: absolute;
+  inset: 5px 5px;
+  background: linear-gradient(to top right, transparent calc(50% - 0.8px), var(--ink-soft) calc(50% - 0.8px) calc(50% + 0.8px), transparent calc(50% + 0.8px));
+  pointer-events: none;
+}
+.turn.bad {
+  border-color: var(--red);
+  color: var(--red);
+}
+.turn.bad[aria-pressed="true"] {
+  background: var(--red);
+  color: var(--sheet);
+}
+.nt .turn {
+  width: 30px;
+  height: 26px;
+  vertical-align: middle;
+}
+.turns td,
+.turns th {
+  text-align: center;
+}
+.turns th[scope="row"],
+.nt th[scope="row"] {
+  text-align: left;
+  font-weight: 500;
+}
+.nt th[scope="row"] {
+  padding: 3px 6px 3px 0;
+}
+.dirtag {
+  display: inline-block;
+  min-width: 28px;
+  margin-right: 4px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.nt td.bad {
+  color: var(--red);
+  font-weight: 600;
+}
+.nt td.self,
+.nt td.zero {
+  color: var(--ink-faint);
+}
+.nt tr.total th,
+.nt tr.total td {
+  border-top: var(--line) solid var(--ink);
+  font-weight: 600;
+}
+.chip.plain {
+  grid-template-columns: 1fr;
+}
+.chip.plain span:first-child {
+  display: none;
+}
+.chip.plain[aria-pressed="true"] {
+  background: var(--blue-wash);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.chip.plain {
+  cursor: pointer;
+}
+.chip span > b,
+.chip span > small {
+  display: block;
+}

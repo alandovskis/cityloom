@@ -15,7 +15,7 @@ const RING_WIDTH_MM: f64 = 6_000.0;
 const MIN_ISLAND_MM: f64 = 1_500.0;
 /// A ring's least outer radius, and the arc between two arms it keeps clear.
 const MIN_RING_MM: i32 = 12_000;
-const MIN_RING_ARC_MM: f64 = 2_500.0;
+const MIN_RING_ARC_MM: f64 = 8_000.0;
 /// Bits of the road stay clear of parking this far past a crossing.
 const PARK_CLEAR_MM: f64 = 1_000.0;
 const NO_CROSSING_CLEAR_MM: f64 = 4_000.0;
@@ -195,6 +195,8 @@ pub struct PieceView {
 #[derive(Serialize)]
 pub struct LaneView {
     pub uses: u8,
+    /// Serves only turns that are banned.
+    pub bad: bool,
     pub at: P,
     /// Direction the lane's traffic travels, as a bearing.
     pub heading: i32,
@@ -212,6 +214,8 @@ pub struct CrossingView {
     pub distance_mm: i32,
     pub stage_mm: i32,
     pub stages: i32,
+    /// A stage is longer than a person should have to cross in one go.
+    pub too_far: bool,
 }
 
 #[derive(Serialize)]
@@ -233,8 +237,9 @@ pub struct ArmView {
     pub leave_arrows: Vec<LaneView>,
     /// "free", "stop", "yield" or "signal" for the entering traffic.
     pub role: &'static str,
+    /// The arm from its mouth to its end, property line to property line.
+    pub outline: Vec<Value>,
     pub end: P,
-    pub label_at: P,
     pub mouth_at: P,
     pub banned: Vec<u32>,
     pub classes: u8,
@@ -254,6 +259,8 @@ pub struct CornerView {
     pub radius_mm: i32,
     pub speed_kmh: f64,
     pub ok: bool,
+    /// Turns here are faster than is safe beside a crossing.
+    pub fast: bool,
     pub straight: bool,
     pub wedge: Vec<Value>,
     pub curb: Vec<Value>,
@@ -359,7 +366,7 @@ fn priority_pair(arms: &[Arm]) -> [usize; 2] {
 }
 
 fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, head: i32, uses: u8) -> LaneView {
-    LaneView { uses, at: at(a.bearing, a.lat(off, x_mm), t), heading: head }
+    LaneView { uses, bad: false, at: at(a.bearing, a.lat(off, x_mm), t), heading: head }
 }
 
 impl Junction {
@@ -389,7 +396,7 @@ impl Junction {
             let cx = a.crossing;
             let far = l.mouth + cx.map_or(0.0, |c| (c.setback_mm + c.width_mm) as f64);
             let park_t = far + if cx.is_some() { PARK_CLEAR_MM } else { NO_CROSSING_CLEAR_MM };
-            let clear_far = far + 1_500.0;
+            let clear_far = clear_far(a, l);
             let mut pieces = Vec::new();
             let mut gaps = Vec::new();
             let mut bulbs: [Option<Vec<Value>>; 2] = [None, None];
@@ -411,6 +418,10 @@ impl Junction {
                 } else {
                     clear_far
                 };
+                if inside && !road {
+                    // The median stops short of the junction; the road runs on beside it.
+                    gaps.push(poly(&strip(l.bearing, x0, x1, l.strip0, t0)));
+                }
                 if parks {
                     let side_ix = usize::from(Some(pi) != first_road);
                     if Some(pi) == first_road || Some(pi) == last_road {
@@ -457,6 +468,7 @@ impl Junction {
                     distance_mm: distance,
                     stage_mm: if c.island { (distance - ISLAND_MM) / 2 } else { distance },
                     stages: if c.island { 2 } else { 1 },
+                    too_far: (if c.island { (distance - ISLAND_MM) / 2 } else { distance }) > MAX_STAGE_MM,
                 }
             });
             let enters = !l.prof.enter_x.is_empty();
@@ -491,8 +503,8 @@ impl Junction {
                 lanes,
                 leave_arrows,
                 role: control_role(s, i),
+                outline: poly(&strip(l.bearing, l.pl, l.pr, l.mouth, len)),
                 end: at(l.bearing, off, len),
-                label_at: at(l.bearing, off, len * 0.62),
                 mouth_at: at(l.bearing, off, l.mouth),
                 banned: a.banned.clone(),
                 classes: classes[i],
@@ -511,7 +523,7 @@ impl Junction {
         let ring = lay.ring.as_ref();
         for c in &lay.corners {
             let (la, lb) = (&lay.arms[c.a], &lay.arms[c.b]);
-            let (fa, fb) = (la.mouth + WEDGE_MM, lb.mouth + WEDGE_MM);
+            let (fa, fb) = (clear_far(&s.arms[c.a], la), clear_far(&s.arms[c.b], lb));
             // The curb's two ends, where it leaves each arm's straight edge.
             let (ca_in, cb_in, curb_mid): (P, P, Vec<Value>) = match (&c.fillet, ring) {
                 (Some(f), _) => (f.a, f.b, vec![arc(f.r, false, cross(sub(f.a, f.o), sub(f.b, f.o)) > 0.0, f.b)]),
@@ -559,6 +571,7 @@ impl Junction {
                 radius_mm: radius,
                 speed_kmh: if c.fillet.is_some() { speed_kmh(radius) } else { 0.0 },
                 ok,
+                fast: c.fillet.is_some() && speed_kmh(radius) > MAX_TURN_KMH && (s.arms[c.a].crossing.is_some() || s.arms[c.b].crossing.is_some()),
                 straight: c.fillet.is_none(),
                 wedge,
                 curb,
@@ -606,6 +619,11 @@ impl Junction {
                 movements.push(MoveView { from: a.uid, to: b.uid, class, allowed, lane, path });
             }
         }
+        for (a, arm) in arms.iter_mut().zip(&s.arms) {
+            for (lane, &uses) in a.lanes.iter_mut().zip(&arm.lanes) {
+                lane.bad = !CLASSES_ALL.iter().filter(|c| uses & **c != 0).any(|c| movements.iter().any(|m| m.from == arm.uid && m.allowed && m.class == *c));
+            }
+        }
         let conflicts = conflicts(s, &movements, &lay, side);
 
         let checks = checks(s, &arms, &corners, &movements, &lay);
@@ -643,6 +661,13 @@ impl Junction {
             changed: self.changed(),
         }
     }
+}
+
+/// How far out the plain pavement of the corner runs: past the crossing, where
+/// planting and the median take over.
+fn clear_far(a: &Arm, l: &ArmLayout) -> f64 {
+    let crossing = a.crossing.map_or(0.0, |c| (c.setback_mm + c.width_mm) as f64);
+    (l.mouth + crossing + 1_500.0).max(l.mouth + WEDGE_MM)
 }
 
 fn l_(p: P) -> Value {
@@ -772,12 +797,7 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
     });
 
     // Turning speed across a marked crossing.
-    let fast: Vec<String> = corners
-        .iter()
-        .filter(|c| !c.straight && c.speed_kmh > MAX_TURN_KMH)
-        .filter(|c| arms.iter().any(|a| (a.uid == c.uid || a.uid == c.next_uid) && a.crossing.is_some()))
-        .map(|c| name(c.uid))
-        .collect();
+    let fast: Vec<String> = corners.iter().filter(|c| c.fast).map(|c| name(c.uid)).collect();
     out.push(Check {
         id: "turning-speed",
         ok: fast.is_empty(),
@@ -827,6 +847,15 @@ mod tests {
         assert_eq!(v.conflicts.merging, 8);
         assert_eq!(v.conflicts.diverging, 8);
         assert!(v.conflicts.by_phase);
+    }
+
+    #[test]
+    fn every_sample_starts_sound() {
+        for i in 0..JUNCTION_SAMPLES.len() {
+            let v = Junction::new(i).view();
+            let failing: Vec<_> = v.checks.iter().filter(|c| !c.ok).map(|c| format!("{}: {}", c.id, c.detail)).collect();
+            assert!(failing.is_empty(), "{}: {failing:?}", JUNCTION_SAMPLES[i].name);
+        }
     }
 
     #[test]
@@ -885,22 +914,25 @@ mod tests {
         assert_eq!(d(&j), 11_400 - 2_400);
         assert!(j.set_bulb(st, 1, true));
         assert_eq!(d(&j), 11_400 - 4_800);
-        let av = arm_of(&j, 0); // Sample Avenue 2, road 20 m, no island
+        let av = arm_of(&j, 0); // Sample Avenue 2, road 20 m, starts with an island
         let cv = |j: &Junction| j.view().arms.iter().find(|a| a.uid == av).unwrap().crossing.as_ref().map(|c| (c.stage_mm, c.stages)).unwrap();
+        assert_eq!(cv(&j), (9_000, 2));
+        assert!(j.set_island(av, false));
         assert_eq!(cv(&j), (20_000, 1));
     }
 
     #[test]
-    fn the_avenue_is_too_wide_to_cross_until_it_has_an_island() {
+    fn the_avenue_is_too_wide_to_cross_without_its_islands() {
         let mut j = Junction::new(0);
-        let av = arm_of(&j, 0);
+        let (n, s) = (arm_of(&j, 0), arm_of(&j, 180));
         let check = |j: &Junction| j.view().checks.iter().find(|c| c.id == "crossing").unwrap().ok;
+        assert!(check(&j), "two stages of 9 m");
+        assert!(j.set_island(n, false));
+        assert!(!check(&j), "20 m in one go");
+        assert!(j.set_island(s, false));
         assert!(!check(&j));
-        assert!(j.set_island(av, true));
-        assert!(!check(&j) || check(&j)); // the other arm decides once the avenue passes
-        let av2 = arm_of(&j, 180);
-        assert!(j.set_island(av2, true));
-        assert!(check(&j), "two stages of about 9 m");
+        assert!(j.set_island(n, true) && j.set_island(s, true));
+        assert!(check(&j));
     }
 
     #[test]

@@ -235,29 +235,51 @@ pub fn arm_name(a: &Arm) -> String {
 
 // ---- samples ----------------------------------------------------------------
 
+pub struct SampleArm {
+    pub street: usize,
+    pub bearing: i32,
+    pub offset_mm: i32,
+    pub corner_mm: i32,
+    /// Starts with a refuge island in its crossing.
+    pub island: bool,
+}
+
+const fn sa(street: usize, bearing: i32, offset_mm: i32, corner_mm: i32, island: bool) -> SampleArm {
+    SampleArm { street, bearing, offset_mm, corner_mm, island }
+}
+
 pub struct JunctionSample {
     pub name: &'static str,
     pub control: usize,
-    /// (street sample, bearing, offset in mm)
-    pub arms: &'static [(usize, i32, i32)],
+    pub arms: &'static [SampleArm],
 }
 
 pub const JUNCTION_SAMPLES: [JunctionSample; 4] = [
     JunctionSample {
         name: "Avenue and street",
         control: SIGNAL,
-        arms: &[(1, 0, 0), (0, 90, 0), (1, 180, 0), (0, 270, 0)],
+        arms: &[sa(1, 0, 0, 6_000, true), sa(0, 90, 0, 6_000, false), sa(1, 180, 0, 6_000, true), sa(0, 270, 0, 6_000, false)],
     },
-    JunctionSample { name: "Street and lane", control: PRIORITY, arms: &[(0, 90, 0), (2, 180, 0), (0, 270, 0)] },
+    JunctionSample {
+        name: "Street and lane",
+        control: PRIORITY,
+        arms: &[sa(0, 90, 0, 3_000, false), sa(2, 180, 0, 3_000, false), sa(0, 270, 0, 3_000, false)],
+    },
     JunctionSample {
         name: "Offset crossing",
         control: PRIORITY,
-        arms: &[(2, 0, 2500), (0, 90, 0), (2, 180, 2500), (0, 270, 0)],
+        arms: &[sa(2, 0, 2_500, 3_000, false), sa(0, 90, 0, 3_000, false), sa(2, 180, 2_500, 3_000, false), sa(0, 270, 0, 3_000, false)],
     },
     JunctionSample {
         name: "Five ways",
         control: ALL_WAY_STOP,
-        arms: &[(0, 0, 0), (2, 70, 0), (1, 145, 0), (2, 215, 0), (0, 290, 0)],
+        arms: &[
+            sa(0, 0, 0, 4_000, false),
+            sa(2, 70, 0, 3_000, false),
+            sa(1, 145, 0, 4_000, true),
+            sa(2, 215, 0, 3_000, false),
+            sa(0, 290, 0, 4_000, false),
+        ],
     },
 ];
 
@@ -307,10 +329,15 @@ impl Junction {
         let mut arms: Vec<Arm> = s
             .arms
             .iter()
-            .map(|&(street, bearing, offset)| {
+            .map(|a| {
                 let uid = self.next_uid;
                 self.next_uid += 1;
-                self.fresh_arm(uid, street, bearing, offset)
+                let mut arm = self.fresh_arm(uid, a.street, a.bearing, a.offset_mm);
+                arm.corner_mm = a.corner_mm;
+                if let Some(c) = arm.crossing.as_mut() {
+                    c.island = a.island;
+                }
+                arm
             })
             .collect();
         arms.sort_by_key(|a| a.bearing);
@@ -537,16 +564,25 @@ impl Junction {
         let uid = self.next_uid;
         let arm = self.fresh_arm(uid, street, bearing, 0);
         let label = format!("Add {}", arm_name(&arm));
-        if self.edit(label, |s| {
-            s.arms.push(arm);
-            true
-        }) {
-            self.next_uid += 1;
-            self.selected = Target::Arm(uid);
-            uid
-        } else {
-            0
+        // A tight angle between streets needs a tighter corner to fit, so try
+        // smaller radii on the new corners before giving up.
+        for radius in [DEFAULT_CORNER_MM, 4_500, 3_000, 2_000, MIN_CORNER_MM] {
+            let mut arm = arm.clone();
+            arm.corner_mm = radius;
+            if self.edit(label.clone(), |s| {
+                s.arms.push(arm);
+                s.arms.sort_by_key(|a| a.bearing);
+                let i = s.arms.iter().position(|a| a.uid == uid).unwrap_or(0);
+                let before = (i + s.arms.len() - 1) % s.arms.len();
+                s.arms[before].corner_mm = s.arms[before].corner_mm.min(radius);
+                true
+            }) {
+                self.next_uid += 1;
+                self.selected = Target::Arm(uid);
+                return uid;
+            }
         }
+        0
     }
 
     pub fn remove_arm(&mut self, uid: u32) -> bool {
@@ -742,7 +778,8 @@ pub fn widest_gap(arms: &[Arm]) -> i32 {
     if n == 0 {
         return 0;
     }
-    let (start, width) = (0..n).map(|i| (b[i], gap(b[i], b[(i + 1) % n]).max(if n == 1 { 360 } else { 0 }))).max_by_key(|&(_, w)| w).unwrap();
+    // The first of the widest gaps, so the choice does not depend on order.
+    let (start, width) = (0..n).map(|i| (b[i], gap(b[i], b[(i + 1) % n]))).fold((b[0], 0), |best, g| if g.1 > best.1 { g } else { best });
     snap(start + width / 2, BEARING_STEP).rem_euclid(360)
 }
 
@@ -849,6 +886,15 @@ mod tests {
         assert_eq!(j.arm(uid).unwrap().bearing, 0);
         assert_eq!(j.current().arms.len(), 4);
         assert_eq!(j.selected, Target::Arm(uid));
+    }
+
+    #[test]
+    fn a_street_squeezed_between_wide_ones_takes_tighter_corners() {
+        let mut j = Junction::new(0); // 0, 90, 180, 270: all gaps 90, first is 0 to 90
+        let uid = j.add_arm(2, -1);
+        assert_ne!(uid, 0, "there is room at 45 degrees with a smaller corner");
+        assert_eq!(j.arm(uid).unwrap().bearing, 45);
+        assert!(j.arm(uid).unwrap().corner_mm < DEFAULT_CORNER_MM);
     }
 
     #[test]

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CityLoom street editor</title>
-  <meta name="description" content="Rearrange the pieces of a street within its width and see what changes.">
+  <title>CityLoom intersection editor</title>
+  <meta name="description" content="Change how a junction of streets works: corners, crossings, lanes, turns and control.">
   <meta name="color-scheme" content="light dark">
   <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";if(localStorage.getItem("cityloom-drawing")==="engineering")document.documentElement.dataset.drawing="engineering"}catch(e){}</script>
   <link rel="preload" href="fonts/barlow-semi-condensed-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -19,8 +19,8 @@
       <div class="topbar">
         <div class="brand"><img class="mark" src="logo.svg" alt="" width="44" height="44"><span class="wordmark">CityLoom</span></div>
         <nav class="surfaces" aria-label="Editors">
-          <a href="index.html" class="surface" aria-current="page">Street</a>
-          <a href="intersection.html" class="surface">Intersection</a>
+          <a href="index.html" class="surface">Street</a>
+          <a href="intersection.html" class="surface" aria-current="page">Intersection</a>
         </nav>
         <div class="top-end">
           <div class="account">
@@ -58,8 +58,8 @@
       </div>
       <header class="sheet-head">
         <div class="street">
-          <h1 id="street-name">Your street</h1>
-          <p class="street-sub"><span>Street cross-section</span> <span aria-hidden="true">·</span> <span><b id="row-dim" class="fig"></b> wide</span></p>
+          <h1 id="street-name">Your junction</h1>
+          <p class="street-sub"><span>Junction plan</span> <span aria-hidden="true">·</span> <span><b id="arm-count" class="fig"></b></span></p>
         </div>
         <div class="tools">
           <div class="btns" role="toolbar" aria-label="Sheet tools">
@@ -68,70 +68,71 @@
             <button type="button" id="reset" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>Start over</button>
           </div>
           <button type="button" id="print" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2V6h11v5.5h-2M4.5 9.5h7v4h-7z"/></svg>Print</button>
-          <button type="button" id="inspector-toggle" class="btn" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the piece details ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span id="inspector-label">Hide piece details</span></button>
+          <button type="button" id="inspector-toggle" class="btn" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the details ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span id="inspector-label">Hide details</span></button>
           <button type="button" id="notes-toggle" class="btn" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span id="notes-label">Hide notes</span></button>
         </div>
       </header>
 
       <main class="sheet-body">
-        <aside class="inspector" id="inspector" aria-label="Selected piece"></aside>
+        <aside class="inspector" id="inspector" aria-label="Selected street, corner or crossing"></aside>
 
         <div class="work">
-          <section class="drawing" aria-labelledby="h-drawing">
-            <h2 id="h-drawing" class="sr-only">Cross-section</h2>
-            <div class="clock" id="clock">
-              <label for="time" class="clock-l">Time of day</label>
-              <input type="range" id="time" min="0" max="95" step="1" value="48">
-              <output id="time-out" for="time" class="fig"></output>
-              <div class="clock-scale" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
-              <div class="clock-bar" id="clock-bar" aria-hidden="true"></div>
-              <p class="clock-note" id="clock-note"></p>
-            </div>
+          <section class="drawing plan-drawing" aria-labelledby="h-drawing">
+            <h2 id="h-drawing" class="sr-only">Junction plan</h2>
             <div class="scroll" id="scroll">
-              <div class="wrap" id="wrap" tabindex="0" role="group" aria-label="Street cross-section editor" aria-describedby="keys">
-                <svg id="drawing" xmlns="http://www.w3.org/2000/svg" role="img"></svg>
+              <div class="wrap" id="wrap" tabindex="0" role="group" aria-label="Junction plan editor" aria-describedby="keys">
+                <svg id="drawing" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plan of the junction, north up"></svg>
               </div>
             </div>
             <div class="statusbar">
               <p id="fit" class="fit" role="status"></p>
-              <p class="cue">On a touch screen, swipe the street sideways to see all of it.</p>
-            <p id="keys" class="keys">
-              <span><kbd>←</kbd> <kbd>→</kbd> select</span>
-              <span><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> reorder</span>
-              <span><kbd>+</kbd> <kbd>−</kbd> resize</span>
-              <span><kbd>Delete</kbd> remove</span>
-              <span><kbd>[</kbd> <kbd>]</kbd> details, notes</span>
-              <span><kbd>Ctrl</kbd> <kbd>Z</kbd> undo</span>
-            </p>
+              <p id="keys" class="keys">
+                <span><kbd>←</kbd> <kbd>→</kbd> select</span>
+                <span><kbd>+</kbd> <kbd>−</kbd> change</span>
+                <span><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> turn a street</span>
+                <span><kbd>Delete</kbd> remove</span>
+                <span><kbd>[</kbd> <kbd>]</kbd> details, notes</span>
+                <span><kbd>Ctrl</kbd> <kbd>Z</kbd> undo</span>
+              </p>
             </div>
           </section>
 
           <div class="lower">
             <section class="legend" aria-labelledby="h-legend">
-              <h2 id="h-legend" class="note-h">Add a piece</h2>
-              <p class="hint">Drag onto the street, or press to add after the selected piece.</p>
+              <h2 id="h-legend" class="note-h">Add a street</h2>
+              <p class="hint" id="add-hint">Drag onto the plan, or press to add in the widest gap.</p>
               <ul id="palette" class="palette"></ul>
+            </section>
+            <section class="legend" aria-labelledby="h-samples">
+              <h2 id="h-samples" class="note-h">Start from</h2>
+              <p class="hint">Sample junctions. Starting from one clears your changes.</p>
+              <ul id="samples" class="palette"></ul>
             </section>
           </div>
         </div>
 
         <aside class="notes" id="notes" aria-label="Sheet notes">
           <div class="tabs" role="tablist" aria-label="Sheet notes">
-            <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true">Space</button>
+            <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true">Streets</button>
             <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1">Checks</button>
             <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
           </div>
 
           <div class="panel" id="p-space" role="tabpanel" aria-labelledby="t-space">
-            <section aria-labelledby="h-space">
-              <h2 id="h-space" class="note-h">Where the width goes</h2>
-              <table class="nt" id="space"></table>
+            <section aria-labelledby="h-across">
+              <h2 id="h-across" class="note-h">Getting across</h2>
+              <table class="nt" id="across"></table>
             </section>
-            <section aria-labelledby="h-cap">
-              <h2 id="h-cap" class="note-h">People moved</h2>
-              <table class="nt" id="cap"></table>
+            <section aria-labelledby="h-turns">
+              <h2 id="h-turns" class="note-h">Turns allowed</h2>
+              <p class="hint">Each row is a street traffic comes from. Press a cell to allow or ban that turn.</p>
+              <table class="nt turns" id="turns"></table>
             </section>
-            <p class="fine" id="time-note"></p>
+            <section aria-labelledby="h-conf">
+              <h2 id="h-conf" class="note-h">Where paths meet</h2>
+              <table class="nt" id="conflicts"></table>
+              <p class="fine" id="conflict-note"></p>
+            </section>
           </div>
 
           <div class="panel" id="p-checks" role="tabpanel" aria-labelledby="t-checks" hidden>
@@ -148,11 +149,11 @@
             </section>
           </div>
 
-          <p class="fine">Sample numbers for now, not real measurements.</p>
+          <p class="fine">Sample numbers and limits for now, not real measurements.</p>
 
-          <div class="title-block" aria-label="About this street">
-            <div class="tb-cell tb-wide"><span>Street</span><b id="tb-street"></b></div>
-            <div class="tb-cell"><span>Width</span><b id="tb-row" class="fig"></b></div>
+          <div class="title-block" aria-label="About this junction">
+            <div class="tb-cell tb-wide"><span>Junction</span><b id="tb-street"></b></div>
+            <div class="tb-cell"><span>Streets</span><b id="tb-row" class="fig"></b></div>
             <div class="tb-cell"><span>Changes made</span><b id="tb-changes" class="fig"></b></div>
           </div>
         </aside>
@@ -161,6 +162,6 @@
   </div>
 
   <div id="live" class="sr-only" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="junction.js"></script>
 </body>
 </html>

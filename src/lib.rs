@@ -306,7 +306,7 @@ impl Plan {
 pub fn junction_catalogue() -> String {
     use junction::*;
     let samples: Vec<_> = JUNCTION_SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "arms": s.arms.len() })).collect();
-    let streets: Vec<_> = SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm })).collect();
+    let streets: Vec<_> = SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm, "pieces": s.segments })).collect();
     json(&serde_json::json!({
         "controls": CONTROLS,
         "samples": samples,
