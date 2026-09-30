@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CityLoom typical section</title>
+  <meta name="description" content="Rearrange a street's fixed right-of-way on a drafting sheet and see what changes.">
+  <meta name="color-scheme" content="light">
+  <link rel="preload" href="fonts/barlow-semi-condensed-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <svg id="defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"></svg>
+
+  <div class="sheet">
+    <div class="rail rail-top" aria-hidden="true">
+      <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span>
+    </div>
+    <div class="rail rail-left" aria-hidden="true">
+      <span>A</span><span>B</span><span>C</span><span>D</span>
+    </div>
+
+    <div class="sheet-content">
+      <header class="sheet-head">
+        <div class="street">
+          <h1 id="street-name">Typical section</h1>
+          <p class="street-sub"><span>Typical section</span> <span aria-hidden="true">/</span> <span>Right-of-way <b id="row-dim" class="fig"></b></span></p>
+        </div>
+        <div class="tools">
+          <label class="pick">
+            <span>Street</span>
+            <select id="sample"></select>
+          </label>
+          <div class="btns" role="toolbar" aria-label="Sheet tools">
+            <button type="button" id="undo" class="btn">Undo</button>
+            <button type="button" id="redo" class="btn">Redo</button>
+            <button type="button" id="reset" class="btn">Reset</button>
+          </div>
+          <div class="units" role="group" aria-label="Units">
+            <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
+            <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="sheet-body">
+        <div class="work">
+          <section class="drawing" aria-labelledby="h-drawing">
+            <h2 id="h-drawing" class="sr-only">Cross-section</h2>
+            <div class="scroll" id="scroll">
+              <div class="wrap" id="wrap" tabindex="0" role="group" aria-label="Cross-section editor" aria-describedby="keys">
+                <svg id="drawing" xmlns="http://www.w3.org/2000/svg" role="img"></svg>
+              </div>
+            </div>
+            <p id="fit" class="fit" role="status"></p>
+            <p class="cue">On a touch screen, swipe the section sideways to see all of it. Reorder from the schedule below.</p>
+            <p id="keys" class="keys">
+              <span><kbd>←</kbd> <kbd>→</kbd> select</span>
+              <span><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> reorder</span>
+              <span><kbd>+</kbd> <kbd>−</kbd> resize</span>
+              <span><kbd>Delete</kbd> remove</span>
+              <span><kbd>Ctrl</kbd> <kbd>Z</kbd> undo</span>
+            </p>
+          </section>
+
+          <div class="lower">
+            <section class="schedule" aria-labelledby="h-schedule">
+              <h2 id="h-schedule" class="note-h">Segment schedule</h2>
+              <table class="sched">
+                <thead>
+                  <tr>
+                    <th scope="col">Mark</th>
+                    <th scope="col"><span class="sr-only">Pattern</span></th>
+                    <th scope="col">Type</th>
+                    <th scope="col" class="num">Width</th>
+                    <th scope="col"><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody id="sched-body"></tbody>
+              </table>
+              <p id="sched-empty" class="empty" hidden>No segments. Add one from the legend.</p>
+            </section>
+
+            <section class="legend" aria-labelledby="h-legend">
+              <h2 id="h-legend" class="note-h">Legend</h2>
+              <p class="hint">Drag a type onto the section, or press it to add after the selected segment.</p>
+              <ul id="palette" class="palette"></ul>
+            </section>
+          </div>
+        </div>
+
+        <aside class="notes" aria-label="Sheet notes">
+          <section aria-labelledby="h-space">
+            <h2 id="h-space" class="note-h">Width by use</h2>
+            <table class="nt" id="space"></table>
+          </section>
+          <section aria-labelledby="h-cap">
+            <h2 id="h-cap" class="note-h">Capacity</h2>
+            <table class="nt" id="cap"></table>
+          </section>
+          <section aria-labelledby="h-checks">
+            <h2 id="h-checks" class="note-h">Checks</h2>
+            <ul class="checks" id="checks"></ul>
+          </section>
+          <p class="fine">Placeholder widths, rules and rates. Synthetic data, not measurements.</p>
+
+          <section aria-labelledby="h-rev" class="revs">
+            <h2 id="h-rev" class="note-h">Revisions</h2>
+            <table class="nt rev" id="revs"></table>
+          </section>
+
+          <div class="title-block" aria-label="Title block">
+            <div class="tb-cell tb-wide"><span>Project</span><b>CityLoom</b></div>
+            <div class="tb-cell tb-wide"><span>Street</span><b id="tb-street"></b></div>
+            <div class="tb-cell"><span>Sheet</span><b>S-1</b></div>
+            <div class="tb-cell"><span>Date</span><b id="tb-date" class="fig"></b></div>
+            <div class="tb-cell"><span>Revision</span><b id="tb-rev"></b></div>
+            <div class="tb-cell"><span>Right-of-way</span><b id="tb-row" class="fig"></b></div>
+          </div>
+        </aside>
+      </main>
+    </div>
+  </div>
+
+  <div id="live" class="sr-only" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
