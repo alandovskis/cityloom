@@ -1,0 +1,326 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-30T00:00:00Z",
+  "title": "Design System: CityLoom",
+  "extensions": {
+    "colorMeta": {
+      "sheet": {
+        "role": "neutral",
+        "displayName": "Bond Paper",
+        "canonical": "#f3f6f8",
+        "tonalRamp": [
+          "#141618",
+          "#2c2e30",
+          "#46484a",
+          "#616465",
+          "#7e8182",
+          "#9c9fa1",
+          "#bbbec0",
+          "#eceff1"
+        ]
+      },
+      "sheet-deep": {
+        "role": "neutral",
+        "displayName": "Bond Paper Deep",
+        "canonical": "#e5eaee",
+        "tonalRamp": [
+          "#131719",
+          "#2b2e31",
+          "#44484b",
+          "#606467",
+          "#7c8184",
+          "#9a9fa3",
+          "#babec2",
+          "#eaeff3"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Black Ink",
+        "canonical": "#14181c",
+        "tonalRamp": [
+          "#13171a",
+          "#2a2e33",
+          "#44484d",
+          "#5f6469",
+          "#7c8186",
+          "#9a9fa4",
+          "#b9bec4",
+          "#e9eff5"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "#3b444c",
+        "tonalRamp": [
+          "#0f171e",
+          "#262f36",
+          "#404951",
+          "#5b656d",
+          "#78828b",
+          "#95a0a9",
+          "#b5bfc9",
+          "#e5f0fa"
+        ]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Faint Ink",
+        "canonical": "#59656f",
+        "tonalRamp": [
+          "#0d171f",
+          "#252f38",
+          "#3e4953",
+          "#59656f",
+          "#76828c",
+          "#93a0ab",
+          "#b2c0cb",
+          "#e3f1fc"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule Grey",
+        "canonical": "#b4bcc3",
+        "tonalRamp": [
+          "#11171c",
+          "#282f34",
+          "#42494f",
+          "#5d646a",
+          "#7a8188",
+          "#989fa6",
+          "#b7bfc6",
+          "#e7f0f7"
+        ]
+      },
+      "blue-pencil": {
+        "role": "primary",
+        "displayName": "Blue Pencil",
+        "canonical": "#1d4ed8",
+        "tonalRamp": [
+          "#0f0077",
+          "#030098",
+          "#072fba",
+          "#2052dc",
+          "#3b73ff",
+          "#5894ff",
+          "#75b5ff",
+          "#a4e8ff"
+        ]
+      },
+      "redline": {
+        "role": "secondary",
+        "displayName": "Redline",
+        "canonical": "#b8231a",
+        "tonalRamp": [
+          "#4d0000",
+          "#700000",
+          "#920000",
+          "#b51f17",
+          "#d94638",
+          "#fd6757",
+          "#ff8875",
+          "#ffbaa4"
+        ]
+      },
+      "blue-wash": {
+        "role": "primary",
+        "displayName": "Blue Wash",
+        "canonical": "rgb(29 78 216 / 0.09)",
+        "tonalRamp": []
+      },
+      "red-wash": {
+        "role": "secondary",
+        "displayName": "Red Wash",
+        "canonical": "rgb(184 35 26 / 0.09)",
+        "tonalRamp": []
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Street name in the sheet header; uppercase."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Hints, status and fit statement; tabular figures throughout."
+      },
+      "note": {
+        "displayName": "Note",
+        "purpose": "Note tables, key legend, check detail."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Ruled note headings, tool buttons, drawing labels; tracked uppercase."
+      },
+      "field-label": {
+        "displayName": "Field label",
+        "purpose": "Tick-margin numerals, form captions, title-block captions, column heads."
+      },
+      "dimension": {
+        "displayName": "Dimension",
+        "purpose": "Widths, overall strings, scale bar numerals in the drawing."
+      }
+    },
+    "shadows": [
+      {
+        "name": "lifted-chip",
+        "value": "0 6px 14px -4px rgb(20 24 28 / 0.28)",
+        "purpose": "State only: the legend chip while held in a drag. Nothing at rest has a shadow."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "120ms colour and background transitions on tools, chips, icon buttons and handle grips."
+      },
+      {
+        "name": "draw-cloud",
+        "value": "620ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Revision cloud strokes itself in when a street first goes over width; removed under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "notes-below",
+        "value": "1100px"
+      },
+      {
+        "name": "lower-stacks",
+        "value": "860px"
+      },
+      {
+        "name": "compact",
+        "value": "640px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Tool Button",
+      "kind": "custom",
+      "refersTo": "button-tool",
+      "description": "Segmented undo/redo/reset strip; square, ink-outlined, inverts when pressed.",
+      "html": "<div class=\"ds-btns\"><button class=\"ds-btn\">Undo</button><button class=\"ds-btn\">Redo</button><button class=\"ds-btn\" disabled>Reset</button></div>",
+      "css": ".ds-btns{display:flex;background:#f3f6f8;padding:12px}.ds-btn{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-height:34px;padding:4px 14px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1),color 120ms cubic-bezier(.16,1,.3,1)}.ds-btn+.ds-btn{margin-left:-1px}.ds-btn:hover:not(:disabled){background:#e5eaee}.ds-btn:active:not(:disabled){background:#14181c;color:#f3f6f8}.ds-btn:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-btn:disabled{color:#59656f;border-color:#b4bcc3;background:transparent;cursor:not-allowed}"
+    },
+    {
+      "name": "Unit Toggle",
+      "kind": "custom",
+      "refersTo": "unit-toggle-pressed",
+      "description": "Two-state m/ft switch; the pressed unit is inked solid.",
+      "html": "<div class=\"ds-units\"><button class=\"ds-unit\" aria-pressed=\"true\">m</button><button class=\"ds-unit\" aria-pressed=\"false\">ft</button></div>",
+      "css": ".ds-units{display:flex;background:#f3f6f8;padding:12px}.ds-unit{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:42px;min-height:34px;padding:4px 10px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-size:13px;font-weight:600;letter-spacing:.04em;cursor:pointer}.ds-unit+.ds-unit{margin-left:-1px}.ds-unit:hover:not([aria-pressed=true]){background:#e5eaee}.ds-unit[aria-pressed=true]{background:#14181c;color:#f3f6f8}.ds-unit:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}"
+    },
+    {
+      "name": "Street Select",
+      "kind": "input",
+      "refersTo": "button-tool",
+      "description": "Square select with a tracked uppercase caption above it.",
+      "html": "<label class=\"ds-pick\"><span>Street</span><select class=\"ds-select\"><option>Main Street</option></select></label>",
+      "css": ".ds-pick{display:grid;gap:2px;background:#f3f6f8;padding:12px}.ds-pick span{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;font-size:11px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:#3b444c}.ds-select{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;appearance:none;min-height:34px;padding:4px 30px 4px 10px;border:1px solid #14181c;border-radius:0;font-weight:500;color:#14181c;cursor:pointer;background:#f3f6f8 url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0.5 0.5 5 5 9.5 0.5' fill='none' stroke='%2314181c' stroke-width='1.4'/%3E%3C/svg%3E\") no-repeat right 10px center}.ds-select:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}"
+    },
+    {
+      "name": "Width Field",
+      "kind": "input",
+      "refersTo": "field-width",
+      "description": "Right-aligned tabular width input with a unit tag; red text and border when invalid.",
+      "html": "<span class=\"ds-wfield\"><input class=\"ds-input\" value=\"3.5\" aria-label=\"Width\"><span class=\"ds-tag\">m</span></span>",
+      "css": ".ds-wfield{display:inline-flex;align-items:center;gap:6px;background:#f3f6f8;padding:12px}.ds-input{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:68px;min-height:30px;padding:2px 6px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-weight:500;text-align:right;font-variant-numeric:tabular-nums;caret-color:#1d4ed8}.ds-input:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-input:invalid{border-color:#b8231a;color:#b8231a}.ds-tag{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:18px;font-size:12px;color:#3b444c}"
+    },
+    {
+      "name": "Icon Button",
+      "kind": "custom",
+      "refersTo": "icon-button",
+      "description": "30px square line-icon button; the delete variant turns redline on hover.",
+      "html": "<div class=\"ds-acts\"><button class=\"ds-ico\" aria-label=\"Move left\"><svg viewBox=\"0 0 14 14\"><path d=\"M9 2 4 7l5 5\"/></svg></button><button class=\"ds-ico ds-danger\" aria-label=\"Delete\"><svg viewBox=\"0 0 14 14\"><path d=\"M2 2l10 10M12 2 2 12\"/></svg></button></div>",
+      "css": ".ds-acts{display:flex;gap:4px;background:#f3f6f8;padding:12px}.ds-ico{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1)}.ds-ico svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:square}.ds-ico:hover{background:#e5eaee}.ds-ico:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-danger{margin-left:10px}.ds-danger:hover{background:#b8231a;border-color:#b8231a;color:#f3f6f8}"
+    },
+    {
+      "name": "Symbol Schedule Row",
+      "kind": "custom",
+      "refersTo": "schedule-row-selected",
+      "description": "Ruled table row: mark, hatch swatch, type, width; selected row takes blue wash and blue text.",
+      "html": "<table class=\"ds-sched\"><thead><tr><th>Mark</th><th></th><th>Type</th><th class=\"ds-n\">Width</th></tr></thead><tbody><tr><td class=\"ds-mark\">SW</td><td><svg class=\"ds-sw\" viewBox=\"0 0 44 22\"><defs><pattern id=\"ds-h\" width=\"8\" height=\"8\" patternUnits=\"userSpaceOnUse\"><circle cx=\"2\" cy=\"2\" r=\".9\" fill=\"#14181c\"/><circle cx=\"6\" cy=\"6\" r=\".9\" fill=\"#14181c\"/></pattern></defs><rect width=\"44\" height=\"22\" fill=\"url(#ds-h)\"/></svg></td><td class=\"ds-name\">Sidewalk</td><td class=\"ds-n\">3.0 m</td></tr><tr class=\"ds-sel\"><td class=\"ds-mark\">BL</td><td><svg class=\"ds-sw\" viewBox=\"0 0 44 22\"><rect width=\"44\" height=\"22\" fill=\"#f3f6f8\"/></svg></td><td class=\"ds-name\">Bike lane</td><td class=\"ds-n\">1.8 m</td></tr></tbody></table>",
+      "css": ".ds-sched{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:100%;border-collapse:collapse;background:#f3f6f8;color:#14181c;font-size:15px;font-variant-numeric:tabular-nums}.ds-sched th{padding:4px 8px 4px 0;font-size:12px;font-weight:600;letter-spacing:.12em;text-align:left;text-transform:uppercase;color:#3b444c}.ds-sched td{padding:3px 8px 3px 0;border-top:1px solid #b4bcc3;vertical-align:middle}.ds-n{text-align:right!important}.ds-mark{padding-left:8px!important;font-weight:600;letter-spacing:.08em}.ds-name{font-weight:500}.ds-sw{display:block;width:44px;height:22px;border:1px solid #14181c}.ds-sel td{background:rgb(29 78 216/.09)}.ds-sel .ds-mark,.ds-sel .ds-name{color:#1d4ed8}"
+    },
+    {
+      "name": "Sheet Note Heading and Check",
+      "kind": "custom",
+      "refersTo": "title-block-cell",
+      "description": "Ruled note heading over ruled check rows; a failing check is wholly redline.",
+      "html": "<div class=\"ds-note\"><h2 class=\"ds-h\">Checks</h2><ul class=\"ds-checks\"><li><b>Fits right-of-way</b><span>Placeholder rule</span></li><li class=\"ds-bad\"><b>Over width</b><span>0.6 m over</span></li></ul></div>",
+      "css": ".ds-note{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;background:#f3f6f8;color:#14181c;padding:12px 18px}.ds-h{margin:0 0 8px;padding-bottom:4px;border-bottom:1px solid #14181c;font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}.ds-checks{margin:0;padding:0;list-style:none}.ds-checks li{padding:5px 0;border-top:1px solid #b4bcc3}.ds-checks li:first-child{border-top:0;padding-top:0}.ds-checks b{display:block;font-weight:600;line-height:1.15}.ds-checks span{font-size:14px;color:#3b444c}.ds-bad,.ds-bad span{color:#b8231a!important}"
+    },
+    {
+      "name": "Title Block",
+      "kind": "custom",
+      "refersTo": "title-block-cell",
+      "description": "Two-column cell grid under a 2px rule: tiny tracked caption over an uppercase value.",
+      "html": "<div class=\"ds-tb\"><div class=\"ds-c\"><span>Project</span><b>CityLoom</b></div><div class=\"ds-c\"><span>Street</span><b>Main Street</b></div><div class=\"ds-c\"><span>Sheet</span><b>S-1</b></div><div class=\"ds-c\"><span>Revision</span><b>B</b></div></div>",
+      "css": ".ds-tb{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;display:grid;grid-template-columns:1fr 1fr;border-top:2px solid #14181c;background:#f3f6f8;color:#14181c}.ds-c{display:flex;flex-direction:column;gap:1px;padding:5px 18px 6px;border-top:1px solid #14181c}.ds-c:nth-child(-n+2){border-top:0}.ds-c:nth-child(even){border-left:1px solid #14181c}.ds-c span{font-size:11.5px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:#3b444c}.ds-c b{font-size:16px;font-weight:600;letter-spacing:.03em;text-transform:uppercase}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Typical Section Sheet",
+    "overview": "The interface is a civil drafting sheet, not an app window. One double-ruled border encloses the whole viewport; tick margins numbered 1 to 8 across the top and A to D down the left frame the work; a title block closes the right column. The ground is cool bond paper, everything is drawn in black ink at graded line weights, and only two other colors exist: a blue pencil for what is selected or focused, and a redline for what does not fit.\n\nDensity is that of a working sheet: small condensed capitals for labels, tabular figures for every dimension, hairline rules between rows. There is no card, no rounded corner, no fill color and no call-to-action button. The primary action is dragging a segment inside the drawing.\n\nSegment types are never told apart by color. Each has its own hatch texture and its own two-letter mark, so the drawing survives greyscale and colour-blindness.",
+    "keyCharacteristics": [
+      "One sheet, one border (2px ink plus a 1px outer rule), square corners everywhere.",
+      "Black ink on cool paper; blue pencil for selection, redline for failure, nothing else chromatic.",
+      "Hatch pattern plus mark, never colour, encodes segment type.",
+      "Tabular figures and condensed capitals; sizes stay in a narrow 11 to 16px band, with only the sheet title larger.",
+      "Flat: depth comes from line weight and ruled divisions, not shadow."
+    ],
+    "rules": [
+      {
+        "name": "The Two Pencils Rule",
+        "body": "Blue means selected, red means failed. No other color may be introduced, and neither may be used decoratively.",
+        "section": "colors"
+      },
+      {
+        "name": "The Hatch-Not-Hue Rule",
+        "body": "A segment type is identified by its hatch and its mark. Never assign it a fill color.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every number is a tabular figure, so a changing dimension does not shift its neighbours.",
+        "section": "typography"
+      },
+      {
+        "name": "The Caps-For-Labels Rule",
+        "body": "Labels are uppercase and tracked; values, names and sentences are not. Figures never uppercase.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ruled-Not-Boxed Rule",
+        "body": "Regions are separated by single ruled lines and table rows, never by cards, gaps of background, or nested boxes.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Sheet Rule",
+        "body": "Nothing rests above the paper. Only an object in the user's hand may cast a shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do draw with ink lines at graded weights: 2px frame and title block edge, 1px structure, 0.8px dimensions.",
+      "Do encode any new category with a new hatch texture and a two-letter mark before considering anything else.",
+      "Do use blue only for the thing being acted on and red only for a failed fit.",
+      "Do keep corners square and controls outlined in 1px ink on paper fill.",
+      "Do set labels in tracked uppercase 600 and numbers in tabular figures.",
+      "Do halo any label that sits over a hatch with 4px of paper.",
+      "Do give every new control a 2px blue focus outline and honour prefers-reduced-motion."
+    ],
+    "donts": [
+      "Don't colour segment types; hue is not an identifier here.",
+      "Don't use cards, rounded corners, filled call-to-action buttons or icon-card sidebars.",
+      "Don't add shadows to anything at rest.",
+      "Don't introduce a third accent color or use blue and red decoratively.",
+      "Don't replace line-art symbols with filled or glyph icons.",
+      "Don't set body-scale text in a face other than Barlow Semi Condensed."
+    ]
+  }
+}
