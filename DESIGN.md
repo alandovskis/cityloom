@@ -311,15 +311,15 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 - **Icon buttons:** 30px, 1px ink border, 6px radius, 14px 1.6px square-cap line icons; remove hovers redline with paper icon and stands 10px apart from the move arrows.
 
 ### CityLoom mark
-- **Mark:** `web/logo.svg`, a woven street section: five vertical bands of unequal widths in the sidewalk, planting, bike, travel and loading pencils (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a), crossed by two ink threads that pass over and under alternate bands. Colours are fixed and identical in both themes. The header mark is 44px (34px under 640px), the about-card mark 30px.
+- **Mark:** `web/logo.svg`, a woven street section: five vertical bands of unequal widths in the sidewalk, planting, bike, travel and loading pencils (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a), crossed by two ink threads that pass over and under alternate bands. Colours are fixed and identical in both themes. The mark appears once, at the top left of the header, 44px (34px under 640px); it is not repeated in the about card.
 - **Favicon:** `web/favicon.svg` is the same mark with the threads switching to Night Ink in dark schemes.
-- **Wordmark:** "CityLoom" in Barlow Semi Condensed 600, live text beside the mark, never outlined into the SVG. Below 24px the weave blurs; use the favicon there.
+- **Wordmark:** "CityLoom" in Barlow Semi Condensed 600 whenever a name is needed beside the mark; live text, never outlined into the SVG. Below 24px the weave blurs; use the favicon there.
 - **Do not** recolour the bands, put a container or shadow around the mark, or show it under 16px.
 
 ### Notes and the about-this-street card
 - **Notes:** sentence-case heading (16px 600) with a 1px Rule Grey underline, right-aligned tabular tables, checks with 16px square-cap line icons; a failing check turns whole redline.
 - **Your changes:** compact table of numbered steps, current row in Blue Wash, "Street today" base row (marked with a dash) in Soft Ink, scrolls at 104px height below 1100px.
-- **About this street card:** 2-column grid pinned to the bottom of the notes column, 10px radius, 1px Rule Grey border and dividers, 16px below. A full-width row with the CityLoom mark (30px) beside the wordmark (20px 600), a full-width Street row, then Width and Changes made. Captions 13px over 17px 600 values, all sentence case.
+- **About this street card:** 2-column grid pinned to the bottom of the notes column, 10px radius, 1px Rule Grey border and dividers, 16px below. A full-width Street row, then Width and Changes made. Captions 13px over 17px 600 values, all sentence case.
 
 ### Section drawing (signature component)
 The Today strip and Your design section share one origin and scale. Each proposed segment: line-art symbol standing on a 3.4px ground line, a 34px slab with 2px ink outline, its segment tint and hatch over it, its name below (two-letter code when narrow), its width above on a dimension line. Overall strings below: "Street width", then "Your design" total if different. Street-edge lines dash-dot at both ends, labelled "Street edge"; a graphic scale bar of five alternating black and paper blocks closes the drawing. Selected segment: 2px blue box, with a blue "Change N" label after a change. Handles: square grips that turn blue-filled on hover or drag, and whose boundary line becomes a solid 2px blue. Over-width: red wash, scalloped red cloud, red second dimension string and "too wide" note.
