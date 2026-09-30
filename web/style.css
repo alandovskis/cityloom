@@ -1519,3 +1519,187 @@ kbd {
     --chrome-line: #2f5654;
   }
 }
+
+/* ---- print: the sheet on paper, light ink, no editing chrome ---------------- */
+@page {
+  size: A4 landscape;
+  margin: 10mm;
+}
+@media print {
+  :root,
+  :root[data-theme],
+  :root:not([data-theme="light"]) {
+    color-scheme: light;
+
+    --sheet: #fff;
+    --sheet-deep: #d9e1e6;
+    --ink: #14181c;
+    --ink-soft: #3b444c;
+    --ink-faint: #59656f;
+    --rule: #a6b0b8;
+    --blue: #1d4ed8;
+    --blue-wash: rgb(29 78 216 / 0.09);
+    --red: #b8231a;
+    --red-wash: rgb(184 35 26 / 0.09);
+
+    --k-sidewalk: #f2cfa6;
+    --k-planting: #b6dc9f;
+    --k-bike: #93d9cc;
+    --k-travel: #bcc5ce;
+    --k-bus: #cdb8ec;
+    --k-parking: #dcd6c5;
+    --k-median: #8fc281;
+    --k-loading: #f5df7e;
+    --sky: #e2eff8;
+    --chrome: #fff;
+    --chrome-ink: #14181c;
+    --chrome-wash: #fff;
+    --chrome-line: #a6b0b8;
+
+    --s-tree: #78b565;
+    --s-car: #dbe2e9;
+    --s-bus: #b79ee3;
+    --s-van: #f0cb45;
+    --s-coat-0: #ee9b78;
+    --s-coat-1: #74aede;
+  }
+
+  html,
+  body {
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body {
+    min-height: 0;
+    font-size: 12px;
+  }
+
+  /* the frame goes; the sheet is the page */
+  .sheet {
+    margin: 0;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+  }
+  .sheet-content {
+    min-height: 0;
+  }
+
+  /* everything that only makes sense on a screen */
+  .top-end,
+  .tools,
+  .statusbar,
+  .legend,
+  .drawing .cue,
+  .sched th:last-child,
+  .sched td:last-child,
+  #sched-empty,
+  #drawing .handle,
+  #drawing .sel-box,
+  #drawing .caret,
+  #drawing .caret-head,
+  .title-block,
+  #drawing .ghost {
+    display: none !important;
+  }
+
+  .topbar {
+    background: none;
+    color: var(--ink);
+    padding: 0 0 4px;
+    border-bottom: var(--line) solid var(--rule);
+  }
+  .sheet-head {
+    background: none;
+    padding: 8px 0;
+    border-bottom: var(--line) solid var(--ink);
+  }
+
+  /* the drawing scales to the page instead of scrolling */
+  .scroll {
+    overflow: visible;
+  }
+  .wrap {
+    min-width: 0;
+  }
+  #drawing {
+    width: 100%;
+    height: auto;
+    max-height: 80mm;
+  }
+
+  /* pieces table reads as text, not a form */
+  .sched tr.sel td {
+    background: none;
+  }
+  .wfield input {
+    padding: 0;
+    border: 0;
+    background: none;
+    appearance: textfield;
+    -moz-appearance: textfield;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  /* one page: drawing beside the pieces table, the notes in a row beneath */
+  .sheet-body,
+  :root[data-notes="closed"] .sheet-body {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .work,
+  .lower {
+    display: contents;
+  }
+  .drawing {
+    grid-column: 1;
+    border-bottom: 0;
+  }
+  .schedule {
+    grid-column: 2;
+    padding: 12px 0 0 16px;
+  }
+  .sched .swatch {
+    width: 32px;
+  }
+  .wfield input {
+    min-height: 0;
+    width: auto;
+  }
+  .notes {
+    grid-column: 1 / -1;
+  }
+
+  /* notes print even when collapsed on screen, as a row of columns under the sheet */
+  :root[data-notes="closed"] .notes,
+  .notes {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px 20px;
+    padding: 10px 0 0;
+    border-left: 0;
+    border-top: var(--line) solid var(--rule);
+  }
+  .notes > section,
+  .sched tr,
+  .nt tr,
+  .checks li {
+    break-inside: avoid;
+  }
+  .notes .fine {
+    grid-column: 1 / -1;
+    order: 1;
+    margin: 0;
+  }
+  .revs {
+    display: block;
+    min-height: 0;
+  }
+  .rev {
+    max-height: none;
+    overflow: visible;
+  }
+}
