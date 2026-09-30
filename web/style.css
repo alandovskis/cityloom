@@ -1659,12 +1659,22 @@ kbd {
     border-right: 0;
     border-top: var(--line) solid var(--rule);
   }
+  .inspector > * {
+    max-width: 360px;
+  }
   .work {
     order: 1;
   }
   .notes {
     order: 3;
   }
+}
+
+.sched .finish {
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-soft);
 }
 
 /* ---- print: the sheet on paper, light ink, no editing chrome ---------------- */
@@ -1776,6 +1786,19 @@ kbd {
     width: 100%;
     height: auto;
     max-height: 80mm;
+  }
+
+  /* the on-screen selection does not belong on paper */
+  .wrap:focus,
+  .wrap:focus-visible {
+    outline: 0;
+  }
+  #drawing .t-blue {
+    fill: var(--ink);
+  }
+  .sched tr.sel .name,
+  .sched tr.sel .mark {
+    color: var(--ink);
   }
 
   /* pieces table reads as text, not a form */

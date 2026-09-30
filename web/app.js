@@ -447,6 +447,14 @@ function renderDrawing() {
 
 // ---- schedule and legend --------------------------------------------------
 
+// "Concrete", or "Concrete · granite curb" / "Concrete · no curb" where the kind has a curb.
+function finishText(s, k) {
+  const surface = MATERIALS.surfaces.find((m) => m.id === s.material).name;
+  if (!k.has_curb) return surface;
+  const curb = MATERIALS.curbs.find((c) => c.id === s.curb);
+  return `${surface} · ${curb ? `${curb.name.toLowerCase()} curb` : "no curb"}`;
+}
+
 function renderSchedule() {
   const focusId = document.activeElement?.dataset?.fid;
   const n = view.segments.length;
@@ -459,7 +467,7 @@ function renderSchedule() {
       const hi = num(s.max_mm).toFixed(2);
       return `<tr data-uid="${s.uid}"${sel ? ' class="sel" aria-selected="true"' : ""}>
         <td>${swatch(k.id)}</td>
-        <td class="name">${esc(k.name)}</td>
+        <td class="name">${esc(k.name)}<small class="finish">${esc(finishText(s, k))}</small></td>
         <td class="num"><span class="wfield"><input type="number" inputmode="decimal" data-fid="w-${s.uid}" step="${units === "m" ? "0.1" : "0.25"}" min="${lo}" max="${hi}" value="${num(s.width_mm).toFixed(2)}" aria-label="Width of ${esc(k.name.toLowerCase())}, ${i + 1} of ${n}, in ${unitWord()}"><span class="unit-tag" aria-hidden="true">${units}</span></span></td>
         <td><div class="acts">
           <button type="button" class="ico" data-act="earlier" data-fid="e-${s.uid}" aria-label="Move ${esc(k.name.toLowerCase())} earlier"${i === 0 ? " disabled" : ""}>${ICON.left}</button>
