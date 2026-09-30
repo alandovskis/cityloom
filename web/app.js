@@ -809,6 +809,29 @@ for (const b of document.querySelectorAll(".theme")) {
 dark.addEventListener("change", syncTheme);
 syncTheme();
 
+// Drawing style: the same section as a plain engineering drawing; remembered.
+const engineering = () => root.dataset.drawing === "engineering";
+function syncDrawing() {
+  for (const b of document.querySelectorAll(".drawing-mode")) {
+    b.setAttribute("aria-pressed", String((b.dataset.drawingSet === "engineering") === engineering()));
+  }
+}
+for (const b of document.querySelectorAll(".drawing-mode")) {
+  b.addEventListener("click", () => {
+    if (b.dataset.drawingSet === "engineering") root.dataset.drawing = "engineering";
+    else delete root.dataset.drawing;
+    try {
+      localStorage.setItem("cityloom-drawing", b.dataset.drawingSet);
+    } catch {
+      // Storage can be blocked; the choice then lasts for this visit only.
+    }
+    syncDrawing();
+    renderDrawing();
+    say(`${b.textContent} drawing.`);
+  });
+}
+syncDrawing();
+
 new ResizeObserver(() => renderDrawing()).observe(el.scroll);
 
 renderPalette();
