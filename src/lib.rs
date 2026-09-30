@@ -4,12 +4,15 @@
 //! returns and relays pointer and keyboard input.
 
 pub mod catalogue;
+pub mod junction;
+pub mod junction_view;
 pub mod model;
 pub mod plan;
 
 use wasm_bindgen::prelude::*;
 
 use catalogue::{CURBS, DIRECTIONS, KINDS, REGIONS, MATERIALS, SAMPLES};
+use junction::Target;
 
 fn json<T: serde::Serialize>(v: &T) -> String {
     serde_json::to_string(v).expect("view serialises")
@@ -166,4 +169,157 @@ pub fn samples() -> String {
         .map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm }))
         .collect();
     json(&list)
+}
+
+/// One junction being edited.
+#[wasm_bindgen]
+pub struct Plan(junction::Junction);
+
+#[wasm_bindgen]
+impl Plan {
+    #[wasm_bindgen(constructor)]
+    pub fn new(sample: usize) -> Plan {
+        Plan(junction::Junction::new(sample))
+    }
+
+    pub fn load_sample(&mut self, sample: usize) {
+        self.0.load_sample(sample);
+    }
+
+    /// The whole drawable state as JSON.
+    pub fn view(&self) -> String {
+        json(&self.0.view())
+    }
+
+    /// Adds a street at `bearing`, or in the widest gap when it is negative.
+    pub fn add_arm(&mut self, street: usize, bearing: i32) -> u32 {
+        self.0.add_arm(street, bearing)
+    }
+
+    pub fn remove_arm(&mut self, uid: u32) -> bool {
+        self.0.remove_arm(uid)
+    }
+
+    pub fn set_bearing(&mut self, uid: u32, degrees: i32) -> bool {
+        self.0.set_bearing(uid, degrees)
+    }
+
+    pub fn set_offset(&mut self, uid: u32, mm: i32) -> bool {
+        self.0.set_offset(uid, mm)
+    }
+
+    /// Sets the curb radius at the corner clockwise of an arm.
+    pub fn set_corner(&mut self, uid: u32, mm: i32) -> bool {
+        self.0.set_corner(uid, mm)
+    }
+
+    pub fn set_street(&mut self, uid: u32, street: usize) -> bool {
+        self.0.set_street(uid, street)
+    }
+
+    pub fn set_crossing(&mut self, uid: u32, on: bool) -> bool {
+        self.0.set_crossing(uid, on)
+    }
+
+    pub fn set_setback(&mut self, uid: u32, mm: i32) -> bool {
+        self.0.set_setback(uid, mm)
+    }
+
+    pub fn set_crossing_width(&mut self, uid: u32, mm: i32) -> bool {
+        self.0.set_crossing_width(uid, mm)
+    }
+
+    pub fn set_island(&mut self, uid: u32, on: bool) -> bool {
+        self.0.set_island(uid, on)
+    }
+
+    /// Side 0 is the arm's left curb, 1 its right.
+    pub fn set_bulb(&mut self, uid: u32, side: usize, on: bool) -> bool {
+        self.0.set_bulb(uid, side, on)
+    }
+
+    /// `class` is 1 left, 2 through, 4 right.
+    pub fn set_lane_use(&mut self, uid: u32, lane: usize, class: u8, on: bool) -> bool {
+        self.0.set_lane_use(uid, lane, class, on)
+    }
+
+    pub fn set_turn(&mut self, from: u32, to: u32, allowed: bool) -> bool {
+        self.0.set_turn(from, to, allowed)
+    }
+
+    /// Sets the control, by index into `junction_catalogue().controls`.
+    pub fn set_control(&mut self, control: usize) -> bool {
+        self.0.set_control(control)
+    }
+
+    pub fn set_ring(&mut self, extra_mm: i32) -> bool {
+        self.0.set_ring(extra_mm)
+    }
+
+    /// Sets the region, by index into `materials().regions`.
+    pub fn set_region(&mut self, region: usize) -> bool {
+        self.0.set_region(region)
+    }
+
+    pub fn begin_gesture(&mut self) {
+        self.0.begin_gesture();
+    }
+
+    pub fn end_gesture(&mut self) -> bool {
+        self.0.end_gesture()
+    }
+
+    pub fn cancel_gesture(&mut self) {
+        self.0.cancel_gesture();
+    }
+
+    pub fn undo(&mut self) -> bool {
+        self.0.undo()
+    }
+
+    pub fn redo(&mut self) -> bool {
+        self.0.redo()
+    }
+
+    pub fn reset(&mut self) -> bool {
+        self.0.reset()
+    }
+
+    /// Selects an arm (1), a corner (2) or a crossing (3) by the arm's uid;
+    /// kind 0 clears the selection.
+    pub fn select(&mut self, kind: u8, uid: u32) {
+        self.0.select(match kind {
+            1 => Target::Arm(uid),
+            2 => Target::Corner(uid),
+            3 => Target::Crossing(uid),
+            _ => Target::None,
+        });
+    }
+
+    pub fn select_relative(&mut self, delta: i32) {
+        self.0.select_relative(delta);
+    }
+}
+
+/// Controls, sample junctions, the streets an arm may take and the limits, as JSON.
+#[wasm_bindgen]
+pub fn junction_catalogue() -> String {
+    use junction::*;
+    let samples: Vec<_> = JUNCTION_SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "arms": s.arms.len() })).collect();
+    let streets: Vec<_> = SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm })).collect();
+    json(&serde_json::json!({
+        "controls": CONTROLS,
+        "samples": samples,
+        "streets": streets,
+        "limits": {
+            "min_arms": MIN_ARMS, "max_arms": MAX_ARMS,
+            "bearing_step": BEARING_STEP, "min_separation": MIN_SEPARATION,
+            "corner": [MIN_CORNER_MM, MAX_CORNER_MM, RING_STEP_MM],
+            "setback": [MIN_SETBACK_MM, MAX_SETBACK_MM, RING_STEP_MM],
+            "crossing": [MIN_CROSSING_MM, MAX_CROSSING_MM, RING_STEP_MM],
+            "offset_step": OFFSET_STEP_MM,
+            "ring_step": RING_STEP_MM, "max_ring": MAX_RING_MM,
+            "island_mm": ISLAND_MM,
+        },
+    }))
 }
