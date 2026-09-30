@@ -813,3 +813,27 @@ new ResizeObserver(() => renderDrawing()).observe(el.scroll);
 
 renderPalette();
 render();
+
+// Account menu: a disclosure from the avatar that holds the unit toggle.
+{
+  const btn = $("account-btn");
+  const menu = $("account-menu");
+  const setOpen = (open, refocus = false) => {
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+    if (!open && refocus) btn.focus();
+  };
+  btn.addEventListener("click", () => setOpen(menu.hidden));
+  document.addEventListener("pointerdown", (e) => {
+    if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) setOpen(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !menu.hidden) {
+      e.stopPropagation();
+      setOpen(false, true);
+    }
+  });
+  menu.addEventListener("focusout", (e) => {
+    if (e.relatedTarget && !menu.contains(e.relatedTarget) && e.relatedTarget !== btn) setOpen(false);
+  });
+}

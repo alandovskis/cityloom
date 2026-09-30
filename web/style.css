@@ -1378,6 +1378,10 @@ kbd {
   gap: 12px;
 }
 .avatar {
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 120ms var(--ease-out);
   display: grid;
   place-items: center;
   width: 34px;
@@ -1410,4 +1414,41 @@ kbd {
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.avatar:hover,
+.avatar[aria-expanded="true"] {
+  background: var(--sheet);
+}
+.account {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  min-width: 220px;
+  padding: 12px 14px 14px;
+  border: var(--line) solid var(--ink-faint);
+  border-radius: var(--radius-lg);
+  background: var(--sheet);
+  box-shadow: var(--shadow-lift);
+}
+.menu[hidden] {
+  display: none;
+}
+.menu-h {
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: var(--line) solid var(--rule);
+  font-size: 16px;
+  font-weight: 600;
+}
+.menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 15px;
 }

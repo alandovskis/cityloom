@@ -23,7 +23,19 @@
           <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
           <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
         </div>
-          <span class="avatar" role="img" aria-label="Guest, not signed in"><svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></span>
+          <div class="account">
+            <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
+            <div id="account-menu" class="menu" hidden>
+              <p class="menu-h">Guest</p>
+              <div class="menu-row">
+                <span id="units-label">Units</span>
+                <div class="units" role="group" aria-labelledby="units-label">
+                  <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
+                  <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <header class="sheet-head">
@@ -36,10 +48,6 @@
             <button type="button" id="undo" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M5.5 3 2.5 6l3 3M2.5 6H10a3.5 3.5 0 0 1 0 7H6"/></svg>Undo</button>
             <button type="button" id="redo" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M10.5 3l3 3-3 3M13.5 6H6a3.5 3.5 0 0 0 0 7h4"/></svg>Redo</button>
             <button type="button" id="reset" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>Start over</button>
-          </div>
-          <div class="units" role="group" aria-label="Units">
-            <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
-            <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
           </div>
         </div>
       </header>
