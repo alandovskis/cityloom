@@ -44,6 +44,10 @@
   --k-median: #8fc281;
   --k-loading: #f5df7e;
   --sky: #e2eff8;
+  --chrome: #0f4f4c;
+  --chrome-ink: #f3f6f8;
+  --chrome-wash: #e3f0ee;
+  --chrome-line: #b7d3cf;
 
   /* symbol colours */
   --s-tree: #78b565;
@@ -1268,6 +1272,10 @@ kbd {
     --k-median: #3a6b31;
     --k-loading: #7e6d1f;
     --sky: #182838;
+    --chrome: #0d3a38;
+    --chrome-ink: #e8edf1;
+    --chrome-wash: #16262a;
+    --chrome-line: #2b4646;
 
     --s-tree: #55924a;
     --s-car: #33404c;
@@ -1302,6 +1310,10 @@ kbd {
   --k-median: #3a6b31;
   --k-loading: #7e6d1f;
   --sky: #182838;
+  --chrome: #0d3a38;
+  --chrome-ink: #e8edf1;
+  --chrome-wash: #16262a;
+  --chrome-line: #2b4646;
 
   --s-tree: #55924a;
   --s-car: #33404c;
@@ -1462,4 +1474,64 @@ kbd {
 
 .menu-row + .menu-row {
   margin-top: 10px;
+}
+
+/* ---- coloured chrome ---------------------------------------------------- */
+.topbar {
+  position: relative;
+  background: var(--chrome);
+  color: var(--chrome-ink);
+  border-bottom: 0;
+}
+.topbar::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--k-sidewalk) 0 20%,
+    var(--k-planting) 20% 34%,
+    var(--k-bike) 34% 66%,
+    var(--k-bus) 66% 86%,
+    var(--k-loading) 86% 100%
+  );
+}
+.topbar {
+  padding-bottom: 10px;
+}
+.topbar .avatar {
+  border-color: var(--chrome-ink);
+  background: transparent;
+  color: var(--chrome-ink);
+}
+.topbar .avatar:hover,
+.topbar .avatar[aria-expanded="true"] {
+  background: rgb(255 255 255 / 0.14);
+}
+.topbar .avatar:focus-visible {
+  outline-color: var(--chrome-ink);
+}
+.menu {
+  color: var(--ink);
+}
+.sheet-head {
+  background: var(--chrome-wash);
+  border-bottom-color: var(--chrome-line);
+}
+.topbar::after {
+  height: 5px;
+  background: linear-gradient(90deg, #e59a4a 0 20%, #5fae4a 20% 34%, #2aa898 34% 66%, #8a6fd1 66% 86%, #e0c23a 86% 100%);
+}
+:root[data-theme="dark"] {
+  --chrome: #0f4744;
+  --chrome-wash: #14302f;
+  --chrome-line: #2f5654;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --chrome: #0f4744;
+    --chrome-wash: #14302f;
+    --chrome-line: #2f5654;
+  }
 }

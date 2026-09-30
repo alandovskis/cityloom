@@ -235,6 +235,12 @@ Same token names, re-composed for a dark ground; every value is a `dark-*` key i
 - **Symbol fills**: tree #55924a, car #33404c, bus #8068b8, van #c0a02c, coats #d27753 and #5590c4.
 - Hatch strokes and dot stipple follow Pale Ink, so hatch still reads over the darker tints. Label halos follow the night ground.
 
+### Chrome colour
+- **Chrome Teal** (light #0f4f4c, dark #0f4744, ink #f3f6f8 / #e8edf1): the top bar behind the logo, wordmark and avatar. It is the mark's own teal taken deep, so the brand sits in the chrome and nowhere in the drawing.
+- **Chrome Wash** (light #e3f0ee, dark #14302f) with **Chrome Line** (#b7d3cf / #2f5654): the header band and its bottom rule.
+- **Weave Stripe:** a 5px strip under the top bar in the mark's five band colours (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a) at 20/14/32/20/14%, the same proportions as the logo. Fixed in both themes.
+- The avatar's focus ring is Chrome Ink on the teal bar (blue would not reach contrast there). The account menu is a paper panel and keeps Blue focus.
+
 ### Named Rules
 **The Two Pencils Rule.** Blue means selected, red means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else. It holds in both themes: in dark, blue and red are the lighter pencils (#7fa6ff, #ff8073) and stay reserved for selection and failure; no night tint is blue or red enough to be mistaken for them.
 
