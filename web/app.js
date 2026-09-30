@@ -4,6 +4,7 @@
 
 import init, { Sheet, catalogue, materials } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH, symbol } from "./symbols.js";
+import { engineering, initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
 
 await init();
 
@@ -953,7 +954,6 @@ el.palette.addEventListener("click", (e) => {
 
 // ---- keyboard -------------------------------------------------------------
 
-const typing = (t) => t instanceof Element && t.closest("input, select, textarea");
 
 el.wrap.addEventListener("keydown", (e) => {
   const uid = view.selected;
@@ -1021,202 +1021,25 @@ el.reset.addEventListener("click", () => {
     say("Started over from the street as it is today.");
   }
 });
-for (const b of document.querySelectorAll(".unit[data-unit]")) {
-  b.addEventListener("click", () => {
-    units = b.dataset.unit;
-    for (const o of document.querySelectorAll(".unit[data-unit]")) o.setAttribute("aria-pressed", String(o === b));
-    renderPalette();
-    render();
-  });
-}
-
-// Region: which side of the road traffic keeps to; remembered. The street is
-// laid out again for it only while it is untouched (the model decides).
-{
-  const pick = $("region");
-  pick.innerHTML = MATERIALS.regions
-    .map((r) => `<option value="${r.id}">${esc(r.name)} (${r.drive_side})</option>`)
-    .join("");
-  const set = (id) => {
-    const i = MATERIALS.regions.findIndex((r) => r.id === id);
-    if (i >= 0 && sheet.set_region(i)) refresh();
-    pick.value = view.region;
-  };
-  try {
-    set(localStorage.getItem("cityloom-region"));
-  } catch {
-    pick.value = view.region;
-  }
-  pick.addEventListener("change", () => {
-    set(pick.value);
-    try {
-      localStorage.setItem("cityloom-region", pick.value);
-    } catch {}
-    say(`${MATERIALS.regions.find((r) => r.id === view.region).name}: traffic keeps ${MATERIALS.regions.find((r) => r.id === view.region).drive_side}.`);
-  });
-}
-
-// Theme: follow the system until the person picks one; the pick is remembered.
-const root = document.documentElement;
-const dark = matchMedia("(prefers-color-scheme: dark)");
-const theme = () => root.dataset.theme || (dark.matches ? "dark" : "light");
-function syncTheme() {
-  for (const b of document.querySelectorAll(".theme")) b.setAttribute("aria-pressed", String(b.dataset.themeSet === theme()));
-}
-for (const b of document.querySelectorAll(".theme")) {
-  b.addEventListener("click", () => {
-    root.dataset.theme = b.dataset.themeSet;
-    try {
-      localStorage.setItem("cityloom-theme", b.dataset.themeSet);
-    } catch {
-      // Storage can be blocked; the choice then lasts for this visit only.
-    }
-    syncTheme();
-    say(`${b.textContent} theme.`);
-  });
-}
-dark.addEventListener("change", syncTheme);
-syncTheme();
-
-// Drawing style: the same section as a plain engineering drawing; remembered.
-const engineering = () => root.dataset.drawing === "engineering";
-function syncDrawing() {
-  for (const b of document.querySelectorAll(".drawing-mode")) {
-    b.setAttribute("aria-pressed", String((b.dataset.drawingSet === "engineering") === engineering()));
-  }
-}
-for (const b of document.querySelectorAll(".drawing-mode")) {
-  b.addEventListener("click", () => {
-    if (b.dataset.drawingSet === "engineering") root.dataset.drawing = "engineering";
-    else delete root.dataset.drawing;
-    try {
-      localStorage.setItem("cityloom-drawing", b.dataset.drawingSet);
-    } catch {
-      // Storage can be blocked; the choice then lasts for this visit only.
-    }
-    syncDrawing();
-    renderDrawing();
-    say(`${b.textContent} drawing.`);
-  });
-}
-syncDrawing();
+initUnits((u) => {
+  units = u;
+  renderPalette();
+  render();
+});
+initRegion({
+  regions: MATERIALS.regions,
+  apply: (i) => sheet.set_region(i),
+  current: () => view.region,
+  onChange: refresh,
+  say,
+});
+initTheme(say);
+initDrawingStyle(say, renderDrawing);
 
 new ResizeObserver(() => renderDrawing()).observe(el.scroll);
 
 renderPalette();
 render();
 
-// Account menu: a disclosure from the avatar that holds the unit toggle.
-{
-  const btn = $("account-btn");
-  const menu = $("account-menu");
-  const setOpen = (open, refocus = false) => {
-    menu.hidden = !open;
-    btn.setAttribute("aria-expanded", String(open));
-    if (!open && refocus) btn.focus();
-  };
-  btn.addEventListener("click", () => setOpen(menu.hidden));
-  document.addEventListener("pointerdown", (e) => {
-    if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) setOpen(false);
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !menu.hidden) {
-      e.stopPropagation();
-      setOpen(false, true);
-    }
-  });
-  menu.addEventListener("focusout", (e) => {
-    if (e.relatedTarget && !menu.contains(e.relatedTarget) && e.relatedTarget !== btn) setOpen(false);
-  });
-}
-
-// Piece details sidebar: collapsible from a header button or the [ key; remembered.
-{
-  const btn = $("inspector-toggle");
-  const label = $("inspector-label");
-  const sync = () => {
-    const open = root.dataset.inspector !== "closed";
-    btn.setAttribute("aria-expanded", String(open));
-    label.textContent = open ? "Hide piece details" : "Show piece details";
-  };
-  const toggle = () => {
-    const open = root.dataset.inspector === "closed";
-    if (open) delete root.dataset.inspector;
-    else root.dataset.inspector = "closed";
-    try {
-      localStorage.setItem("cityloom-inspector", open ? "open" : "closed");
-    } catch {}
-    sync();
-    say(open ? "Piece details shown." : "Piece details hidden.");
-  };
-  btn.addEventListener("click", toggle);
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "[" || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
-    e.preventDefault();
-    toggle();
-  });
-  sync();
-}
-
-// Print: the print stylesheet lays the sheet out; this is only the trigger.
-$("print").addEventListener("click", () => window.print());
-
-// Notes tabs: Space, Checks, Changes. Arrow keys move between tabs; the choice is remembered.
-{
-  const tabs = [...document.querySelectorAll(".notes .tab")];
-  const show = (tab, focus) => {
-    for (const t of tabs) {
-      const on = t === tab;
-      t.setAttribute("aria-selected", String(on));
-      t.tabIndex = on ? 0 : -1;
-      $(t.getAttribute("aria-controls")).hidden = !on;
-    }
-    if (focus) tab.focus();
-    try {
-      localStorage.setItem("cityloom-notes-tab", tab.id);
-    } catch {}
-  };
-  let saved = null;
-  try {
-    saved = localStorage.getItem("cityloom-notes-tab");
-  } catch {}
-  show(tabs.find((t) => t.id === saved) || tabs[0], false);
-  tabs.forEach((t, i) => {
-    t.addEventListener("click", () => show(t, false));
-    t.addEventListener("keydown", (e) => {
-      const to = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
-      if (to === undefined) return;
-      e.preventDefault();
-      show(tabs[(to + tabs.length) % tabs.length], true);
-    });
-  });
-}
-
-// Notes sidebar: collapsible from a header button or the ] key; remembered.
-{
-  const root = document.documentElement;
-  const btn = $("notes-toggle");
-  const label = $("notes-label");
-  const sync = () => {
-    const open = root.dataset.notes !== "closed";
-    btn.setAttribute("aria-expanded", String(open));
-    label.textContent = open ? "Hide notes" : "Show notes";
-  };
-  const toggle = () => {
-    const open = root.dataset.notes === "closed";
-    if (open) delete root.dataset.notes;
-    else root.dataset.notes = "closed";
-    try {
-      localStorage.setItem("cityloom-notes", open ? "open" : "closed");
-    } catch {}
-    sync();
-    say(open ? "Notes shown." : "Notes hidden.");
-  };
-  btn.addEventListener("click", toggle);
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "]" || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
-    e.preventDefault();
-    toggle();
-  });
-  sync();
-}
+initAccountMenu();
+initPanels({ say });
