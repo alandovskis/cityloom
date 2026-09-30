@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CityLoom typical section</title>
-  <meta name="description" content="Rearrange a street's fixed right-of-way on a drafting sheet and see what changes.">
+  <title>CityLoom street editor</title>
+  <meta name="description" content="Rearrange the pieces of a street within its width and see what changes.">
   <meta name="color-scheme" content="light">
   <link rel="preload" href="fonts/barlow-semi-condensed-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
@@ -13,18 +13,11 @@
   <svg id="defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"></svg>
 
   <div class="sheet">
-    <div class="rail rail-top" aria-hidden="true">
-      <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span>
-    </div>
-    <div class="rail rail-left" aria-hidden="true">
-      <span>A</span><span>B</span><span>C</span><span>D</span>
-    </div>
-
     <div class="sheet-content">
       <header class="sheet-head">
         <div class="street">
-          <h1 id="street-name">Typical section</h1>
-          <p class="street-sub"><span>Typical section</span> <span aria-hidden="true">/</span> <span>Right-of-way <b id="row-dim" class="fig"></b></span></p>
+          <h1 id="street-name">Your street</h1>
+          <p class="street-sub"><span>Street cross-section</span> <span aria-hidden="true">·</span> <span><b id="row-dim" class="fig"></b> wide</span></p>
         </div>
         <div class="tools">
           <label class="pick">
@@ -34,7 +27,7 @@
           <div class="btns" role="toolbar" aria-label="Sheet tools">
             <button type="button" id="undo" class="btn">Undo</button>
             <button type="button" id="redo" class="btn">Redo</button>
-            <button type="button" id="reset" class="btn">Reset</button>
+            <button type="button" id="reset" class="btn">Start over</button>
           </div>
           <div class="units" role="group" aria-label="Units">
             <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
@@ -48,13 +41,13 @@
           <section class="drawing" aria-labelledby="h-drawing">
             <h2 id="h-drawing" class="sr-only">Cross-section</h2>
             <div class="scroll" id="scroll">
-              <div class="wrap" id="wrap" tabindex="0" role="group" aria-label="Cross-section editor" aria-describedby="keys">
+              <div class="wrap" id="wrap" tabindex="0" role="group" aria-label="Street cross-section editor" aria-describedby="keys">
                 <svg id="drawing" xmlns="http://www.w3.org/2000/svg" role="img"></svg>
               </div>
             </div>
             <div class="statusbar">
               <p id="fit" class="fit" role="status"></p>
-              <p class="cue">On a touch screen, swipe the section sideways to see all of it. Reorder from the schedule below.</p>
+              <p class="cue">On a touch screen, swipe the street sideways to see all of it. Reorder pieces from the list below.</p>
             <p id="keys" class="keys">
               <span><kbd>←</kbd> <kbd>→</kbd> select</span>
               <span><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> reorder</span>
@@ -67,11 +60,10 @@
 
           <div class="lower">
             <section class="schedule" aria-labelledby="h-schedule">
-              <h2 id="h-schedule" class="note-h">Segment schedule</h2>
+              <h2 id="h-schedule" class="note-h">Pieces of the street</h2>
               <table class="sched">
                 <thead>
                   <tr>
-                    <th scope="col">Mark</th>
                     <th scope="col"><span class="sr-only">Pattern</span></th>
                     <th scope="col">Type</th>
                     <th scope="col" class="num">Width</th>
@@ -84,8 +76,8 @@
             </section>
 
             <section class="legend" aria-labelledby="h-legend">
-              <h2 id="h-legend" class="note-h">Legend</h2>
-              <p class="hint">Drag onto the section, or press to add after the selected segment.</p>
+              <h2 id="h-legend" class="note-h">Add a piece</h2>
+              <p class="hint">Drag onto the street, or press to add after the selected piece.</p>
               <ul id="palette" class="palette"></ul>
             </section>
           </div>
@@ -93,31 +85,29 @@
 
         <aside class="notes" aria-label="Sheet notes">
           <section aria-labelledby="h-space">
-            <h2 id="h-space" class="note-h">Width by use</h2>
+            <h2 id="h-space" class="note-h">Where the width goes</h2>
             <table class="nt" id="space"></table>
           </section>
           <section aria-labelledby="h-cap">
-            <h2 id="h-cap" class="note-h">Capacity</h2>
+            <h2 id="h-cap" class="note-h">People moved</h2>
             <table class="nt" id="cap"></table>
           </section>
           <section aria-labelledby="h-checks">
-            <h2 id="h-checks" class="note-h">Checks</h2>
+            <h2 id="h-checks" class="note-h">Does it work?</h2>
             <ul class="checks" id="checks"></ul>
           </section>
-          <p class="fine">Placeholder widths, rules and rates. Synthetic data, not measurements.</p>
+          <p class="fine">Sample numbers for now, not real measurements.</p>
 
           <section aria-labelledby="h-rev" class="revs">
-            <h2 id="h-rev" class="note-h">Revisions</h2>
+            <h2 id="h-rev" class="note-h">Your changes</h2>
             <table class="nt rev" id="revs"></table>
           </section>
 
-          <div class="title-block" aria-label="Title block">
-            <div class="tb-cell tb-wide"><span>Project</span><b>CityLoom</b></div>
+          <div class="title-block" aria-label="About this street">
+            <div class="tb-cell tb-brand"><b>CityLoom</b></div>
             <div class="tb-cell tb-wide"><span>Street</span><b id="tb-street"></b></div>
-            <div class="tb-cell"><span>Sheet</span><b>S-1</b></div>
-            <div class="tb-cell"><span>Date</span><b id="tb-date" class="fig"></b></div>
-            <div class="tb-cell"><span>Revision</span><b id="tb-rev"></b></div>
-            <div class="tb-cell"><span>Right-of-way</span><b id="tb-row" class="fig"></b></div>
+            <div class="tb-cell"><span>Width</span><b id="tb-row" class="fig"></b></div>
+            <div class="tb-cell"><span>Changes made</span><b id="tb-changes" class="fig"></b></div>
           </div>
         </aside>
       </main>

@@ -76,9 +76,9 @@ const kindOf = (s) => KINDS[s.kind];
 
 function fitText() {
   const d = view.delta_mm;
-  if (d === 0) return "The street is exactly full";
-  if (d < 0) return `${fmt(-d)} unassigned`;
-  return `${fmt(d)} over the right-of-way. Narrow or remove ${fmt(d)}`;
+  if (d === 0) return "Every metre of the street is used";
+  if (d < 0) return `${fmt(-d)} left to use`;
+  return `${fmt(d)} too wide. Make a piece narrower or remove one`;
 }
 
 let liveTimer = 0;
@@ -111,7 +111,7 @@ const Y0 = {
   exLabel: 16,
   ex: 26,
   exH: 36,
-  propLabel: 104,
+  propLabel: 92,
   dim: 156,
   top: 172,
   ground: 312,
@@ -173,7 +173,7 @@ function renderDrawing() {
   const parts = [];
 
   // existing strip, same scale and origin as the proposal
-  parts.push(`<text class="t-label t-soft" x="${L.padL}" y="${Y.exLabel}">Existing</text>`);
+  parts.push(`<text class="t-label t-soft" x="${L.padL}" y="${Y.exLabel}">Today</text>`);
   for (const s of v.existing) {
     const k = KINDS[s.kind];
     const x = X(s.x_mm);
@@ -191,8 +191,8 @@ function renderDrawing() {
   // proposal heading
   const rev = v.revisions.at(-1);
   parts.push(
-    `<text class="t-label" x="${L.padL + 30}" y="${Y.propLabel}">Proposed</text>` +
-      (rev ? `<text class="t-label t-blue" x="${L.padL + 116}" y="${Y.propLabel}">Rev ${esc(rev.letter)}</text>` : ""),
+    `<text class="t-label" x="${L.padL + 30}" y="${Y.propLabel}">Your design</text>` +
+      (rev ? `<text class="t-label t-blue" x="${L.padL + 130}" y="${Y.propLabel}">Change ${rev.step}</text>` : ""),
   );
 
   // right-of-way lines
@@ -202,8 +202,8 @@ function renderDrawing() {
     parts.push(`<line class="rw" x1="${x}" x2="${x}" y1="${Y.dim - 34}" y2="${Y.total2 + 6}"/>`);
   }
   parts.push(
-    `<text class="t-label t-faint" x="${xL}" y="${Y.dim - 42}" text-anchor="middle">R/W</text>` +
-      `<text class="t-label t-faint" x="${xR}" y="${Y.dim - 42}" text-anchor="middle">R/W</text>`,
+    `<text class="t-label t-faint" x="${xL}" y="${Y.dim - 42}" text-anchor="start">Street edge</text>` +
+      `<text class="t-label t-faint" x="${xR}" y="${Y.dim - 42}" text-anchor="end">Street edge</text>`,
   );
 
   // sky behind the section, within the right-of-way
@@ -217,10 +217,10 @@ function renderDrawing() {
     const x = X(v.total_mm);
     const w = xR - x;
     parts.push(`<rect class="free" x="${x}" y="${Y.top}" width="${w}" height="${bodyBottom - Y.top}"/>`);
-    const t = `Unassigned ${fmt(-v.delta_mm)}`;
+    const t = `Unused ${fmt(-v.delta_mm)}`;
     if (w >= 88) {
       parts.push(
-        `<text class="t-label t-faint" x="${x + w / 2}" y="${G - 8}" text-anchor="middle">Unassigned</text>` +
+        `<text class="t-label t-faint" x="${x + w / 2}" y="${G - 8}" text-anchor="middle">Unused</text>` +
           `<text class="t-dim t-soft" x="${x + w / 2}" y="${G + 10}" text-anchor="middle">${fmt(-v.delta_mm)}</text>`,
       );
     } else if (w >= 22) {
@@ -242,7 +242,7 @@ function renderDrawing() {
         symbol(k.id, cx, G, pxPerM, w, s.width_mm / 1000, F) +
         `<rect class="obj k-${k.id}" x="${x}" y="${G}" width="${w}" height="${Y.slab}"/>` +
         `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#h-${k.id})"/>` +
-        `<text class="t-mark t-halo${sel ? " t-blue" : ""}" x="${cx}" y="${Y.mark}" text-anchor="middle">${k.mark}</text>` +
+        `<text class="t-mark t-halo${sel ? " t-blue" : ""}" x="${cx}" y="${Y.mark}" text-anchor="middle">${w > k.name.length * 8.6 + 10 ? esc(k.name) : w > 30 ? k.mark : ""}</text>` +
         `</g>`,
     );
     parts.push(dimLine(x, x + w, Y.dim));
@@ -290,18 +290,18 @@ function renderDrawing() {
     parts.push(`<rect class="over-wash" x="${x}" y="${top}" width="${w}" height="${h}"/>`);
     parts.push(cloud(x + inset, top, Math.max(w - inset * 2, 14), h, 6, fresh));
     parts.push(
-      `<text class="t-over" x="${xR + 10}" y="${Y.dim - 62}">${signed(v.delta_mm)} ${units} over${clipped ? " (continues)" : ""}</text>`,
+      `<text class="t-over" x="${xR + 10}" y="${Y.dim - 62}">${fmt(v.delta_mm)} too wide${clipped ? " (more off-screen)" : ""}</text>`,
     );
   }
 
   // overall dimension strings
   parts.push(dimLine(xL, xR, Y.total));
-  parts.push(`<text class="t-dim t-halo" x="${(xL + xR) / 2}" y="${Y.total - 7}" text-anchor="middle">R/W ${fmt(v.row_mm)}</text>`);
+  parts.push(`<text class="t-dim t-halo" x="${(xL + xR) / 2}" y="${Y.total - 7}" text-anchor="middle">Street width ${fmt(v.row_mm)}</text>`);
   if (v.delta_mm !== 0) {
     const cls = over ? "dim-red" : "";
     parts.push(dimLine(xL, X(v.total_mm), Y.total2, cls));
     parts.push(
-      `<text class="t-dim t-halo ${over ? "t-red" : "t-soft"}" x="${(xL + X(v.total_mm)) / 2}" y="${Y.total2 - 7}" text-anchor="middle">Proposed ${fmt(v.total_mm)}</text>`,
+      `<text class="t-dim t-halo ${over ? "t-red" : "t-soft"}" x="${(xL + X(v.total_mm)) / 2}" y="${Y.total2 - 7}" text-anchor="middle">Your design ${fmt(v.total_mm)}</text>`,
     );
   }
 
@@ -363,7 +363,6 @@ function renderSchedule() {
       const lo = num(s.min_mm).toFixed(2);
       const hi = num(s.max_mm).toFixed(2);
       return `<tr data-uid="${s.uid}"${sel ? ' class="sel" aria-selected="true"' : ""}>
-        <td class="mark">${k.mark}</td>
         <td>${swatch(k.id)}</td>
         <td class="name">${esc(k.name)}</td>
         <td class="num"><span class="wfield"><input type="number" inputmode="decimal" data-fid="w-${s.uid}" step="${units === "m" ? "0.1" : "0.25"}" min="${lo}" max="${hi}" value="${num(s.width_mm).toFixed(2)}" aria-label="Width of ${esc(k.name.toLowerCase())}, ${i + 1} of ${n}, in ${unitWord()}"><span class="unit-tag" aria-hidden="true">${units}</span></span></td>
@@ -405,8 +404,8 @@ const changeCell = (d, text) => `<td class="${d > 0 ? "up" : d < 0 ? "down" : "z
 
 function checkDetail(c) {
   if (c.id === "fits") {
-    if (c.ok) return view.delta_mm === 0 ? "Exactly full" : `${fmt(c.amount_mm)} unassigned`;
-    return `${fmt(c.amount_mm)} over. Narrow or remove ${fmt(c.amount_mm)}.`;
+    if (c.ok) return view.delta_mm === 0 ? "Every metre is used" : `${fmt(c.amount_mm)} left to use`;
+    return `${fmt(c.amount_mm)} too wide. Narrow or remove a piece.`;
   }
   if (c.id === "access") return c.ok ? `A lane of ${fmt(c.amount_mm)} or more` : `No lane of ${fmt(c.amount_mm)} or more`;
   return c.detail;
@@ -416,7 +415,7 @@ function renderNotes() {
   const o = view.outcomes;
   el.space.innerHTML =
     `<caption class="sr-only">Width by use, in ${unitWord()}</caption>` +
-    head(["Use", "Existing", "Proposed", "Change"]) +
+    head(["Use", "Today", "Your design", "Change"]) +
     `<tbody>${o.share
       .map((s, i) => {
         const ex = o.existing_share[i].mm;
@@ -429,7 +428,7 @@ function renderNotes() {
   const fmtInt = (n) => n.toLocaleString("en-US");
   el.cap.innerHTML =
     `<caption class="sr-only">People per hour, placeholder rates</caption>` +
-    head(["", "Existing", "Proposed", "Change"]) +
+    head(["", "Today", "Your design", "Change"]) +
     `<tbody><tr><td>People per hour</td><td>${fmtInt(o.existing_capacity_pph)}</td><td>${fmtInt(o.capacity_pph)}</td>${changeCell(d, pct === 0 ? "0" : (pct > 0 ? "+" : "−") + Math.abs(pct) + "%")}</tr></tbody>`;
 
   el.checks.innerHTML = view.checks
@@ -440,21 +439,20 @@ function renderNotes() {
     .join("");
 
   el.revs.innerHTML =
-    head(["Rev", "Description"]) +
-    `<tbody><tr class="base${view.revisions.length ? "" : " now"}"><td>—</td><td>Existing street</td></tr>${view.revisions
-      .map((r, i) => `<tr${i === view.revisions.length - 1 ? ' class="now"' : ""}><td>${esc(r.letter)}</td><td>${esc(r.label)}</td></tr>`)
+    head(["Step", "What changed"]) +
+    `<tbody><tr class="base${view.revisions.length ? "" : " now"}"><td>—</td><td>Street today</td></tr>${view.revisions
+      .map((r, i) => `<tr${i === view.revisions.length - 1 ? ' class="now"' : ""}><td>${r.step}</td><td>${esc(r.label)}</td></tr>`)
       .join("")}</tbody>`;
   el.revs.scrollTop = el.revs.scrollHeight;
 
-  $("tb-date").textContent = new Date().toISOString().slice(0, 10);
-  $("tb-rev").textContent = view.revisions.at(-1)?.letter ?? "—";
+  $("tb-changes").textContent = String(view.revisions.length);
 }
 
 function renderFit() {
   const box = $("fit");
   const d = view.delta_mm;
   box.className = "fit" + (d > 0 ? " bad" : "");
-  box.textContent = d === 0 ? "Fits: the street is exactly full." : d < 0 ? `Fits: ${fmt(-d)} unassigned.` : `Over by ${fmt(d)}. Narrow or remove ${fmt(d)}.`;
+  box.textContent = d === 0 ? "Every metre of the street is used." : d < 0 ? `${fmt(-d)} of the street is still unused.` : `${fmt(d)} too wide. Make a piece narrower or remove one.`;
 }
 
 function renderHead() {
@@ -785,7 +783,7 @@ el.redo.addEventListener("click", redo);
 el.reset.addEventListener("click", () => {
   if (sheet.reset()) {
     refresh();
-    say("Reset to the existing street.");
+    say("Started over from the street as it is today.");
   }
 });
 el.sample.addEventListener("change", () => {
