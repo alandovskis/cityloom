@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-use crate::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, REGIONS, Side, KINDS, Kind, MATERIALS, Mode, SAMPLES, kind_index};
+use crate::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, REGIONS, Side, KINDS, MATERIALS, Mode, SAMPLES, kind_index};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -24,6 +24,108 @@ pub struct Segment {
     /// direction (a driving lane), and `None` for a kind without one. Where it
     /// is optional (a bike lane) `None` means two-way.
     pub direction: Option<usize>,
+    /// Other types this piece takes at certain times of day. Outside every
+    /// window it is the type above. Windows never overlap.
+    pub variants: Vec<Variant>,
+}
+
+/// A different type a piece takes between two times of day.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Variant {
+    pub kind: usize,
+    /// Index into `MATERIALS`; always one the kind allows.
+    pub material: usize,
+    /// Start of the window, in minutes after midnight, a multiple of 15.
+    pub from_min: i32,
+    /// End of the window (not included). Earlier than `from_min` means the
+    /// window runs past midnight.
+    pub to_min: i32,
+}
+
+/// Time of day is kept in quarter hours; a window is a set of those.
+const SLOT_MIN: i32 = 15;
+const SLOTS: i32 = 24 * 60 / SLOT_MIN;
+
+fn window_mask(from_min: i32, to_min: i32) -> u128 {
+    let (from, to) = (from_min / SLOT_MIN, to_min / SLOT_MIN);
+    let range = |a: i32, b: i32| (a..b).fold(0u128, |m, i| m | (1 << i));
+    if from < to { range(from, to) } else { range(from, SLOTS) | range(0, to) }
+}
+
+fn valid_window(from_min: i32, to_min: i32) -> bool {
+    let ok = |m: i32| (0..24 * 60).contains(&m) && m % SLOT_MIN == 0;
+    ok(from_min) && ok(to_min) && from_min != to_min
+}
+
+fn clock(min: i32) -> String {
+    format!("{:02}:{:02}", min / 60, min % 60)
+}
+
+impl Segment {
+    /// The variant in force at `time_min`, if any.
+    fn variant_at(&self, time_min: i32) -> Option<usize> {
+        let slot = 1u128 << (time_min.rem_euclid(24 * 60) / SLOT_MIN);
+        self.variants.iter().position(|v| window_mask(v.from_min, v.to_min) & slot != 0)
+    }
+
+    fn kind_at(&self, time_min: i32) -> usize {
+        self.variant_at(time_min).map_or(self.kind, |i| self.variants[i].kind)
+    }
+
+    /// The range of widths every type of this piece allows.
+    fn bounds(&self) -> (i32, i32) {
+        self.bounds_except(None)
+    }
+
+    /// Like `bounds`, leaving out the variant at `skip`.
+    fn bounds_except(&self, skip: Option<usize>) -> (i32, i32) {
+        let variants = self.variants.iter().enumerate().filter(|(i, _)| Some(*i) != skip).map(|(_, v)| v.kind);
+        std::iter::once(self.kind)
+            .chain(variants)
+            .fold((0, i32::MAX), |(lo, hi), k| (lo.max(KINDS[k].min_mm), hi.min(KINDS[k].max_mm)))
+    }
+
+    /// The piece as it is at `time_min`: its type, surface and direction then,
+    /// with no variants of its own.
+    fn at(&self, time_min: i32) -> Segment {
+        let vi = self.variant_at(time_min);
+        let kind = vi.map_or(self.kind, |i| self.variants[i].kind);
+        let k = &KINDS[kind];
+        Segment {
+            uid: self.uid,
+            kind,
+            width_mm: self.width_mm,
+            material: vi.map_or(self.material, |i| self.variants[i].material),
+            curb: if k.has_curb { self.curb } else { None },
+            direction: match k.direction {
+                DirectionRule::None => None,
+                DirectionRule::Required => Some(self.direction.unwrap_or(0)),
+                DirectionRule::Optional => self.direction,
+            },
+            variants: Vec::new(),
+        }
+    }
+
+    /// Kinds this piece may take at other times: other roadway types that
+    /// share some width with its own types. Empty for a piece that is not
+    /// roadway. Taking one may move the width into the shared range.
+    fn alt_kinds(&self) -> Vec<usize> {
+        self.alt_kinds_except(None)
+    }
+
+    fn alt_kinds_except(&self, skip: Option<usize>) -> Vec<usize> {
+        if !KINDS[self.kind].shares_road {
+            return Vec::new();
+        }
+        let (lo, hi) = self.bounds_except(skip);
+        (0..KINDS.len())
+            .filter(|&k| {
+                k != self.kind
+                    && KINDS[k].shares_road
+                    && lo.max(KINDS[k].min_mm) <= hi.min(KINDS[k].max_mm)
+            })
+            .collect()
+    }
 }
 
 impl Segment {
@@ -38,6 +140,7 @@ impl Segment {
             material: k.materials[0],
             curb: k.has_curb.then_some(DEFAULT_CURB),
             direction: (k.direction == DirectionRule::Required).then_some(0),
+            variants: Vec::new(),
         }
     }
 }
@@ -52,6 +155,8 @@ pub struct Editor {
     sample: usize,
     /// Index into `REGIONS`. A setting of the sheet, not part of the history.
     region: usize,
+    /// The time of day the sheet shows, in minutes. Also a setting, not history.
+    time_min: i32,
     row_mm: i32,
     states: Vec<State>,
     cursor: usize,
@@ -90,6 +195,7 @@ impl Editor {
         let mut e = Editor {
             sample: 0,
             region: 0,
+            time_min: 12 * 60,
             row_mm: 0,
             states: Vec::new(),
             cursor: 0,
@@ -235,7 +341,7 @@ impl Editor {
         let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
             return false;
         };
-        let name = KINDS[self.current()[pos].kind].name.to_lowercase();
+        let name = KINDS[self.current()[pos].kind_at(self.time_min)].name.to_lowercase();
         let neighbour = if pos + 1 < self.current().len() {
             Some(self.current()[pos + 1].uid)
         } else if pos > 0 {
@@ -258,7 +364,7 @@ impl Editor {
         let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
             return false;
         };
-        let name = KINDS[self.current()[pos].kind].name.to_lowercase();
+        let name = KINDS[self.current()[pos].kind_at(self.time_min)].name.to_lowercase();
         let changed = self.edit(format!("Move {name}"), |segs| {
             let seg = segs.remove(pos);
             let at = index.min(segs.len());
@@ -271,18 +377,16 @@ impl Editor {
         changed
     }
 
-    fn clamp_width(kind: &Kind, w: i32) -> i32 {
-        w.clamp(kind.min_mm, kind.max_mm)
-    }
-
     /// Sets a width in millimetres, rounded to 10 mm and kept in the kind's
     /// allowed range.
     pub fn set_width(&mut self, uid: u32, width_mm: i32) -> bool {
         let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
             return false;
         };
-        let kind = &KINDS[self.current()[pos].kind];
-        let w = Self::clamp_width(kind, ((width_mm as f64 / 10.0).round() as i32) * 10);
+        let seg = &self.current()[pos];
+        let kind = &KINDS[seg.kind_at(self.time_min)];
+        let (lo, hi) = seg.bounds();
+        let w = (((width_mm as f64 / 10.0).round() as i32) * 10).clamp(lo, hi);
         let label = format!("Resize {}", kind.name.to_lowercase());
         self.edit(label, |segs| {
             segs[pos].width_mm = w;
@@ -295,7 +399,9 @@ impl Editor {
         let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
             return false;
         };
-        let kind = &KINDS[self.current()[pos].kind];
+        let seg = &self.current()[pos];
+        let active = seg.variant_at(self.time_min);
+        let kind = &KINDS[seg.kind_at(self.time_min)];
         if !kind.materials.contains(&material) {
             return false;
         }
@@ -305,8 +411,12 @@ impl Editor {
             MATERIALS[material].name.to_lowercase()
         );
         self.edit(label, |segs| {
-            let changed = segs[pos].material != material;
-            segs[pos].material = material;
+            let target = match active {
+                Some(vi) => &mut segs[pos].variants[vi].material,
+                None => &mut segs[pos].material,
+            };
+            let changed = *target != material;
+            *target = material;
             changed
         })
     }
@@ -317,7 +427,7 @@ impl Editor {
         let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
             return false;
         };
-        let kind = &KINDS[self.current()[pos].kind];
+        let kind = &KINDS[self.current()[pos].kind_at(self.time_min)];
         if !kind.has_curb || curb.is_some_and(|c| c >= CURBS.len()) {
             return false;
         }
@@ -337,7 +447,7 @@ impl Editor {
         let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
             return false;
         };
-        let kind = &KINDS[self.current()[pos].kind];
+        let kind = &KINDS[self.current()[pos].kind_at(self.time_min)];
         let allowed = match kind.direction {
             DirectionRule::None => false,
             DirectionRule::Required => direction.is_some(),
@@ -388,6 +498,139 @@ impl Editor {
         true
     }
 
+    /// Sets the time of day the sheet shows, in minutes after midnight.
+    /// Snapped to a quarter hour. A setting, so it stays out of the history.
+    pub fn set_time(&mut self, time_min: i32) -> bool {
+        let t = (time_min.clamp(0, 24 * 60 - 1) / SLOT_MIN) * SLOT_MIN;
+        let changed = t != self.time_min;
+        self.time_min = t;
+        changed
+    }
+
+    fn seg_pos(&self, uid: u32) -> Option<usize> {
+        self.current().iter().position(|s| s.uid == uid)
+    }
+
+    /// Gives a roadway piece a different type at certain times. It gets the
+    /// first type that fits and the first free window of a few common ones
+    /// (morning rush, evening rush, ...). Refused when the piece cannot change
+    /// type or every window is taken.
+    pub fn add_variant(&mut self, uid: u32) -> bool {
+        let Some(pos) = self.seg_pos(uid) else {
+            return false;
+        };
+        let seg = &self.current()[pos];
+        let alts = seg.alt_kinds();
+        let prefer = ["bus", "parking", "loading", "travel", "bike"];
+        let Some(kind) = prefer
+            .iter()
+            .filter_map(|id| kind_index(id))
+            .find(|k| alts.contains(k))
+        else {
+            return false;
+        };
+        let used = seg.variants.iter().fold(0u128, |m, v| m | window_mask(v.from_min, v.to_min));
+        let windows = [(7 * 60, 10 * 60), (16 * 60, 19 * 60), (10 * 60, 16 * 60), (19 * 60, 7 * 60)];
+        let Some(&(from_min, to_min)) = windows.iter().find(|(f, t)| window_mask(*f, *t) & used == 0) else {
+            return false;
+        };
+        let name = KINDS[seg.kind].name;
+        let label = format!(
+            "{} is {} {}-{}",
+            name,
+            KINDS[kind].name.to_lowercase(),
+            clock(from_min),
+            clock(to_min)
+        );
+        self.edit(label, |segs| {
+            let d = &mut segs[pos];
+            d.variants.push(Variant { kind, material: KINDS[kind].materials[0], from_min, to_min });
+            let (lo, hi) = d.bounds();
+            d.width_mm = d.width_mm.clamp(lo, hi);
+            true
+        })
+    }
+
+    /// Changes the type of one of a piece's variants.
+    pub fn set_variant_kind(&mut self, uid: u32, index: usize, kind: usize) -> bool {
+        let Some(pos) = self.seg_pos(uid) else {
+            return false;
+        };
+        let seg = &self.current()[pos];
+        let Some(v) = seg.variants.get(index) else {
+            return false;
+        };
+        if v.kind == kind || !seg.alt_kinds_except(Some(index)).contains(&kind) {
+            return false;
+        }
+        let label = format!(
+            "{} is {} {}-{}",
+            KINDS[seg.kind].name,
+            KINDS[kind].name.to_lowercase(),
+            clock(v.from_min),
+            clock(v.to_min)
+        );
+        self.edit(label, |segs| {
+            let d = &mut segs[pos];
+            d.variants[index].kind = kind;
+            d.variants[index].material = KINDS[kind].materials[0];
+            let (lo, hi) = d.bounds();
+            d.width_mm = d.width_mm.clamp(lo, hi);
+            true
+        })
+    }
+
+    /// Moves the window of one of a piece's variants. Refused when a time is
+    /// not on a quarter hour, the two are equal, or it overlaps another window.
+    pub fn set_variant_time(&mut self, uid: u32, index: usize, from_min: i32, to_min: i32) -> bool {
+        let Some(pos) = self.seg_pos(uid) else {
+            return false;
+        };
+        let seg = &self.current()[pos];
+        if index >= seg.variants.len() || !valid_window(from_min, to_min) {
+            return false;
+        }
+        let mask = window_mask(from_min, to_min);
+        let others = seg
+            .variants
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != index)
+            .fold(0u128, |m, (_, v)| m | window_mask(v.from_min, v.to_min));
+        if mask & others != 0 {
+            return false;
+        }
+        let label = format!(
+            "{} is {} {}-{}",
+            KINDS[seg.kind].name,
+            KINDS[seg.variants[index].kind].name.to_lowercase(),
+            clock(from_min),
+            clock(to_min)
+        );
+        self.edit(label, |segs| {
+            let v = &mut segs[pos].variants[index];
+            let changed = (v.from_min, v.to_min) != (from_min, to_min);
+            v.from_min = from_min;
+            v.to_min = to_min;
+            changed
+        })
+    }
+
+    pub fn remove_variant(&mut self, uid: u32, index: usize) -> bool {
+        let Some(pos) = self.seg_pos(uid) else {
+            return false;
+        };
+        let seg = &self.current()[pos];
+        if index >= seg.variants.len() {
+            return false;
+        }
+        let label = format!("Remove other times from {}", KINDS[seg.kind].name.to_lowercase());
+        self.edit(label, |segs| {
+            segs[pos].variants.remove(index);
+            true
+        })
+    }
+
     pub fn nudge_width(&mut self, uid: u32, delta_mm: i32) -> bool {
         let Some(s) = self.current().iter().find(|s| s.uid == uid) else {
             return false;
@@ -407,11 +650,12 @@ impl Editor {
             return false;
         }
         let (l, r) = (&base[left_index], &base[left_index + 1]);
-        let (lk, rk) = (&KINDS[l.kind], &KINDS[r.kind]);
+        let (lk, rk) = (&KINDS[l.kind_at(self.time_min)], &KINDS[r.kind_at(self.time_min)]);
         let pair = l.width_mm + r.width_mm;
         // Left width limits from both segments' allowed ranges.
-        let lo = lk.min_mm.max(pair - rk.max_mm);
-        let hi = lk.max_mm.min(pair - rk.min_mm);
+        let ((llo, lhi), (rlo, rhi)) = (l.bounds(), r.bounds());
+        let lo = llo.max(pair - rhi);
+        let hi = lhi.min(pair - rlo);
         if lo > hi {
             return false;
         }
@@ -430,8 +674,9 @@ impl Editor {
         let Some(s) = base.iter().find(|s| s.uid == uid) else {
             return false;
         };
-        let kind = &KINDS[s.kind];
-        let w = Self::clamp_width(kind, snap(s.width_mm + delta_mm));
+        let kind = &KINDS[s.kind_at(self.time_min)];
+        let (lo, hi) = s.bounds();
+        let w = snap(s.width_mm + delta_mm).clamp(lo, hi);
         let label = format!("Resize {}", kind.name.to_lowercase());
         self.apply_widths(label, &[(uid, w)])
     }
@@ -538,6 +783,9 @@ impl Editor {
         let segs = self.current();
         let total_mm = total(segs);
         let existing = &self.states[0].segments;
+        // Everything that measures the street does so as it is at the shown time.
+        let at = |v: &[Segment]| v.iter().map(|s| s.at(self.time_min)).collect::<Vec<_>>();
+        let (now, existing_now) = (at(segs), at(existing));
         View {
             name: SAMPLES[self.sample].name,
             sample: self.sample,
@@ -545,12 +793,13 @@ impl Editor {
             row_mm: self.row_mm,
             total_mm,
             delta_mm: total_mm - self.row_mm,
+            time_min: self.time_min,
             segments: self.seg_views(segs),
             existing: self.seg_views(existing),
             existing_total_mm: total(existing),
             selected: self.selected,
-            outcomes: outcomes(segs, existing),
-            checks: checks(segs, self.row_mm, REGIONS[self.region].drive_side),
+            outcomes: outcomes(&now, &existing_now),
+            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side),
             revisions: self.states[1..=self.cursor]
                 .iter()
                 .enumerate()
@@ -569,17 +818,31 @@ impl Editor {
         let mut x = 0;
         segs.iter()
             .map(|s| {
-                let k = &KINDS[s.kind];
+                let (min_mm, max_mm) = s.bounds();
+                let n = s.at(self.time_min);
                 let v = SegView {
                     uid: s.uid,
-                    kind: s.kind,
+                    kind: n.kind,
+                    base_kind: s.kind,
                     width_mm: s.width_mm,
                     x_mm: x,
-                    min_mm: k.min_mm,
-                    max_mm: k.max_mm,
-                    material: MATERIALS[s.material].id,
-                    curb: s.curb.map(|c| CURBS[c].id),
-                    direction: s.direction.map(|d| DIRECTIONS[d].id),
+                    min_mm,
+                    max_mm,
+                    material: MATERIALS[n.material].id,
+                    curb: n.curb.map(|c| CURBS[c].id),
+                    direction: n.direction.map(|d| DIRECTIONS[d].id),
+                    variants: s
+                        .variants
+                        .iter()
+                        .map(|v| VariantView {
+                            kind: v.kind,
+                            material: MATERIALS[v.material].id,
+                            from_min: v.from_min,
+                            to_min: v.to_min,
+                        })
+                        .collect(),
+                    active_variant: s.variant_at(self.time_min),
+                    alt_kinds: s.alt_kinds(),
                 };
                 x += s.width_mm;
                 v
@@ -701,7 +964,10 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side) -> Vec<Check> {
 #[derive(Serialize)]
 pub struct SegView {
     pub uid: u32,
+    /// The type at the shown time.
     pub kind: usize,
+    /// The type outside every variant's window.
+    pub base_kind: usize,
     pub width_mm: i32,
     pub x_mm: i32,
     pub min_mm: i32,
@@ -709,6 +975,18 @@ pub struct SegView {
     pub material: &'static str,
     pub curb: Option<&'static str>,
     pub direction: Option<&'static str>,
+    pub variants: Vec<VariantView>,
+    pub active_variant: Option<usize>,
+    /// Types this piece may take at other times.
+    pub alt_kinds: Vec<usize>,
+}
+
+#[derive(Serialize)]
+pub struct VariantView {
+    pub kind: usize,
+    pub material: &'static str,
+    pub from_min: i32,
+    pub to_min: i32,
 }
 
 #[derive(Serialize)]
@@ -748,6 +1026,8 @@ pub struct View {
     pub name: &'static str,
     pub sample: usize,
     pub region: &'static str,
+    /// The time of day shown, in minutes after midnight.
+    pub time_min: i32,
     pub row_mm: i32,
     pub total_mm: i32,
     pub delta_mm: i32,
@@ -1105,6 +1385,90 @@ mod tests {
         // starting over keeps the region
         e.load_sample(0);
         assert_eq!(e.view().region, "united-states");
+    }
+
+    #[test]
+    fn a_piece_can_take_a_different_type_at_certain_times() {
+        let mut e = Editor::new(0);
+        let parking = e.current()[1].uid;
+        let bus = kind("bus");
+        let base_pph = e.view().outcomes.capacity_pph;
+        assert!(e.add_variant(parking));
+        assert_eq!(e.view().revisions[0].label, "Parking is bus lane 07:00-10:00");
+        assert_eq!(e.view().segments[1].width_mm, 3000); // a bus lane needs 3.0 m
+        // shown at midday it is still parking; at 08:00 it is a bus lane
+        assert_eq!(e.view().segments[1].kind, kind("parking"));
+        assert_eq!(e.view().outcomes.capacity_pph, base_pph);
+        assert!(e.set_time(8 * 60 + 7)); // snaps to a quarter hour
+        assert_eq!(e.view().time_min, 8 * 60);
+        assert_eq!(e.view().segments[1].kind, bus);
+        assert_eq!(e.view().segments[1].base_kind, kind("parking"));
+        assert_eq!(e.view().segments[1].active_variant, Some(0));
+        assert!(e.view().outcomes.capacity_pph > base_pph);
+        assert!(e.set_time(10 * 60)); // the window does not include its end
+        assert_eq!(e.view().segments[1].kind, kind("parking"));
+        // the time is a setting: no revision, and it survives undo
+        assert_eq!(e.view().revisions.len(), 1);
+        assert!(e.undo());
+        assert!(e.view().segments[1].variants.is_empty());
+        assert!(e.redo());
+    }
+
+    #[test]
+    fn variant_windows_are_quarter_hours_and_never_overlap() {
+        let mut e = Editor::new(0);
+        let parking = e.current()[1].uid;
+        assert!(e.add_variant(parking)); // 07:00-10:00
+        assert!(e.add_variant(parking)); // takes the next free window, 16:00-19:00
+        let w = |e: &Editor| -> Vec<_> { e.view().segments[1].variants.iter().map(|v| (v.from_min, v.to_min)).collect() };
+        assert_eq!(w(&e), [(420, 600), (960, 1140)]);
+        assert!(!e.set_variant_time(parking, 1, 500, 700)); // overlaps the first
+        assert!(!e.set_variant_time(parking, 1, 601, 700)); // not a quarter hour
+        assert!(!e.set_variant_time(parking, 1, 700, 700)); // empty
+        assert!(!e.set_variant_time(parking, 5, 700, 800)); // no such window
+        assert!(e.set_variant_time(parking, 1, 22 * 60, 5 * 60)); // past midnight
+        e.set_time(23 * 60);
+        assert_eq!(e.view().segments[1].active_variant, Some(1));
+        e.set_time(2 * 60);
+        assert_eq!(e.view().segments[1].active_variant, Some(1));
+        e.set_time(12 * 60);
+        assert_eq!(e.view().segments[1].active_variant, None);
+        assert!(e.remove_variant(parking, 1));
+        assert!(!e.remove_variant(parking, 1));
+    }
+
+    #[test]
+    fn only_roadway_pieces_change_type_and_the_width_must_suit_every_type() {
+        let mut e = Editor::new(0);
+        assert!(!e.add_variant(e.current()[0].uid)); // a sidewalk is not roadway
+        let parking = e.current()[1].uid;
+        assert!(e.add_variant(parking));
+        let alts = e.view().segments[1].alt_kinds.clone();
+        assert!(!alts.contains(&kind("sidewalk")) && !alts.contains(&kind("parking")));
+        assert!(!e.set_variant_kind(parking, 0, kind("sidewalk")));
+        assert!(!e.set_variant_kind(parking, 0, kind("bus"))); // unchanged
+        // parking (2.1 to 3.0 m) as a bus lane (3.0 m or more) is 3.0 m wide
+        assert_eq!(e.view().segments[1].width_mm, 3000);
+        assert_eq!((e.view().segments[1].min_mm, e.view().segments[1].max_mm), (3000, 3000));
+        e.set_width(parking, 99_000);
+        assert_eq!(e.view().segments[1].width_mm, 3000);
+        // a type that shares no width with the others is not offered
+        assert!(!e.view().segments[1].alt_kinds.contains(&kind("bike")) || KINDS[kind("bike")].max_mm >= 3000);
+        assert!(e.set_variant_kind(parking, 0, kind("loading")));
+        assert_eq!(e.view().segments[1].width_mm, 3000);
+    }
+
+    #[test]
+    fn surface_edits_go_to_whichever_type_is_shown() {
+        let mut e = Editor::new(0);
+        let parking = e.current()[1].uid;
+        assert!(e.add_variant(parking));
+        let concrete = MATERIALS.iter().position(|m| m.id == "concrete").unwrap();
+        e.set_time(8 * 60);
+        assert!(e.set_material(parking, concrete)); // the bus lane's surface
+        assert_eq!(e.view().segments[1].material, "concrete");
+        e.set_time(12 * 60);
+        assert_eq!(e.view().segments[1].material, "asphalt"); // parking is untouched
     }
 
     #[test]

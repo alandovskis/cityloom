@@ -54,6 +54,9 @@ pub struct Kind {
     pub has_curb: bool,
     /// Whether this kind of piece runs one way, and if so whether it must.
     pub direction: DirectionRule,
+    /// Whether this kind is roadway space that can change type through the
+    /// day: a lane that is a bus lane at rush hour and parking otherwise.
+    pub shares_road: bool,
 }
 
 /// A driving lane must run one way; a bike lane may, or may be two-way.
@@ -140,6 +143,7 @@ pub const KINDS: [Kind; 8] = [
         people_per_hour_per_m: 2500,
         materials: &[1, 3, 0, 2],
         direction: DirectionRule::None,
+        shares_road: false,
         has_curb: true,
     },
     Kind {
@@ -153,6 +157,7 @@ pub const KINDS: [Kind; 8] = [
         people_per_hour_per_m: 0,
         materials: &[4, 5, 6],
         direction: DirectionRule::None,
+        shares_road: false,
         has_curb: false,
     },
     Kind {
@@ -166,6 +171,7 @@ pub const KINDS: [Kind; 8] = [
         people_per_hour_per_m: 3500,
         materials: &[0, 1, 2],
         direction: DirectionRule::Optional,
+        shares_road: true,
         has_curb: true,
     },
     Kind {
@@ -179,6 +185,7 @@ pub const KINDS: [Kind; 8] = [
         people_per_hour_per_m: 900,
         materials: &[0, 1, 2],
         direction: DirectionRule::Required,
+        shares_road: true,
         has_curb: false,
     },
     Kind {
@@ -192,6 +199,7 @@ pub const KINDS: [Kind; 8] = [
         people_per_hour_per_m: 4000,
         materials: &[0, 1, 2],
         direction: DirectionRule::None,
+        shares_road: true,
         has_curb: false,
     },
     Kind {
@@ -205,6 +213,7 @@ pub const KINDS: [Kind; 8] = [
         people_per_hour_per_m: 0,
         materials: &[0, 2, 1],
         direction: DirectionRule::None,
+        shares_road: true,
         has_curb: false,
     },
     Kind {
@@ -218,6 +227,7 @@ pub const KINDS: [Kind; 8] = [
         people_per_hour_per_m: 0,
         materials: &[4, 5, 6],
         direction: DirectionRule::None,
+        shares_road: false,
         has_curb: false,
     },
     Kind {
@@ -231,6 +241,7 @@ pub const KINDS: [Kind; 8] = [
         people_per_hour_per_m: 0,
         materials: &[0, 1, 2],
         direction: DirectionRule::None,
+        shares_road: true,
         has_curb: false,
     },
 ];

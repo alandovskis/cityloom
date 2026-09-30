@@ -69,6 +69,28 @@ impl Sheet {
         self.0.set_region(region)
     }
 
+    /// Sets the time of day the sheet shows, in minutes after midnight.
+    pub fn set_time(&mut self, minutes: i32) -> bool {
+        self.0.set_time(minutes)
+    }
+
+    /// Gives a piece a different type at certain times.
+    pub fn add_variant(&mut self, uid: u32) -> bool {
+        self.0.add_variant(uid)
+    }
+
+    pub fn set_variant_kind(&mut self, uid: u32, index: usize, kind: usize) -> bool {
+        self.0.set_variant_kind(uid, index, kind)
+    }
+
+    pub fn set_variant_time(&mut self, uid: u32, index: usize, from_min: i32, to_min: i32) -> bool {
+        self.0.set_variant_time(uid, index, from_min, to_min)
+    }
+
+    pub fn remove_variant(&mut self, uid: u32, index: usize) -> bool {
+        self.0.remove_variant(uid, index)
+    }
+
     /// Sets a lane's direction, by index into `materials().directions`; -1 is
     /// two-way, allowed for a bike lane only.
     pub fn set_direction(&mut self, uid: u32, direction: i32) -> bool {

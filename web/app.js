@@ -252,6 +252,7 @@ function renderDrawing() {
         `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#${engineering() ? `m-${s.material}` : `h-${k.id}`})"/>` +
         (engineering() ? "" : surfaceCourse(x, G, w, s.material)) +
         (s.direction && w >= 26 ? dirGlyph(s.direction, cx, G + Y.slab / 2) : "") +
+        (s.variants.length && w >= 48 ? clockBadge(x + 24, G + Y.slab - 10) : "") +
         `<text class="t-mark t-halo${sel ? " t-blue" : ""}" x="${cx}" y="${Y.mark}" text-anchor="middle">${w > k.name.length * 8.6 + 10 ? esc(k.name) : w > 30 ? k.mark : ""}</text>` +
         `</g>`,
     );
@@ -543,7 +544,45 @@ function renderHead() {
   el.reset.disabled = !view.changed;
 }
 
+// ---- time of day ----------------------------------------------------------
+
+const hhmm = (min) => `${String(Math.floor(min / 60) % 24).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+const toMin = (text) => {
+  const [h, m] = text.split(":").map(Number);
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : NaN;
+};
+
+// The slider sets the time the sheet shows. Under it, a bar marks when the
+// selected piece is something other than its usual type.
+function renderClock() {
+  const t = $("time");
+  t.value = view.time_min / 15;
+  t.setAttribute("aria-valuetext", hhmm(view.time_min));
+  $("time-out").textContent = hhmm(view.time_min);
+  const s = view.selected ? seg(view.selected) : null;
+  const bands = [];
+  for (const v of s?.variants ?? []) {
+    const c = `var(--k-${KINDS[v.kind].id})`;
+    const [a, b] = [(v.from_min / 1440) * 100, (v.to_min / 1440) * 100];
+    if (v.from_min < v.to_min) bands.push([a, b, c]);
+    else bands.push([a, 100, c], [0, b, c]);
+  }
+  $("clock-bar").innerHTML = bands
+    .map(([a, b, c]) => `<i style="left:${a}%;width:${b - a}%;background:${c}"></i>`)
+    .join("");
+  $("clock-bar").classList.toggle("on", bands.length > 0);
+  $("clock-note").textContent = s?.variants.length
+    ? `${KINDS[s.base_kind].name} except ${s.variants.map((v) => `${KINDS[v.kind].name.toLowerCase()} ${hhmm(v.from_min)}\u2013${hhmm(v.to_min)}`).join(", ")}`
+    : "";
+  $("time-note").textContent = `Numbers are for ${hhmm(view.time_min)}.`;
+}
+
+$("time").addEventListener("input", (e) => {
+  if (sheet.set_time(Number(e.target.value) * 15)) refresh();
+});
+
 function render() {
+  renderClock();
   renderHead();
   renderFit();
   renderDrawing();
@@ -568,6 +607,9 @@ const dirGlyph = (id, cx, cy) => {
   const path = `M${cx},${cy - 7 * d} V${cy + 7 * d} M${cx - 4.5},${cy + 2.5 * d} L${cx},${cy + 7 * d} L${cx + 4.5},${cy + 2.5 * d}`;
   return `<path class="dir-halo" d="${path}"/><path class="dir" d="${path}"/>`;
 };
+// Marks a piece that is a different type at other times.
+const clockBadge = (cx, cy) =>
+  `<circle class="badge" cx="${cx}" cy="${cy}" r="7"/><path class="badge-hands" d="M${cx},${cy - 4} V${cy} L${cx + 3},${cy + 2}"/>`;
 const dirSwatch = (id) =>
   id === "both"
     ? `<svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><path class="dir-x" d="M8,11 H36 M12,7 L8,11 L12,15 M32,7 L36,11 L32,15"/></svg>`
@@ -598,6 +640,23 @@ function renderInspector() {
       return option(`s-${mat.id}`, mat.id === s.material, surfaceSwatch(mat.id), mat.name, `data-isurface="${m}"`);
     })
     .join("");
+  const kindOptions = (sel) => s.alt_kinds.concat(sel).filter((v, j, a) => a.indexOf(v) === j).sort((a, b) => a - b);
+  const rows = s.variants
+    .map(
+      (v, vi) => `<li class="var${s.active_variant === vi ? " now" : ""}">
+        <select data-ivkind="${vi}" data-ifid="vk-${vi}" aria-label="Type ${vi + 1}">${kindOptions(v.kind).map((kk) => `<option value="${kk}"${kk === v.kind ? " selected" : ""}>${esc(KINDS[kk].name)}</option>`).join("")}</select>
+        <span class="var-times"><input type="time" step="900" data-ivfrom="${vi}" data-ifid="vf-${vi}" value="${hhmm(v.from_min)}" aria-label="From"><span aria-hidden="true">to</span><input type="time" step="900" data-ivto="${vi}" data-ifid="vt-${vi}" value="${hhmm(v.to_min)}" aria-label="To"></span>
+        <button type="button" class="ico danger" data-ivremove="${vi}" data-ifid="vr-${vi}" aria-label="Remove ${esc(KINDS[v.kind].name.toLowerCase())} at ${hhmm(v.from_min)} to ${hhmm(v.to_min)}">${ICON.remove}</button>
+      </li>`,
+    )
+    .join("");
+  const times = s.alt_kinds.length || s.variants.length
+    ? `<section class="insp-sec"><h3 class="note-h" id="i-h-times">Other times</h3>
+        <p class="insp-range">${esc(KINDS[s.base_kind].name)} the rest of the day.</p>
+        <ul class="vars">${rows}</ul>
+        <button type="button" class="btn" data-ivadd data-ifid="va"${s.alt_kinds.length ? "" : " disabled"}>${ICON.plus}Add other times</button>
+      </section>`
+    : "";
   let dirs = "";
   if (k.direction !== "none") {
     const rows = MATERIALS.directions.map((d, di) => option(`d-${d.id}`, d.id === s.direction, dirSwatch(d.id), d.name, `data-idir="${di}"`));
@@ -611,7 +670,7 @@ function renderInspector() {
     curbs = `<section class="insp-sec"><h3 class="note-h" id="i-h-curb">Curb</h3><ul class="opts" role="radiogroup" aria-labelledby="i-h-curb">${rows.join("")}</ul></section>`;
   }
   el.inspector.innerHTML = `
-    <div class="insp-head">${swatch(k.id)}<div><h2 class="insp-name">${esc(k.name)}</h2><p class="insp-sub">${fmt(s.width_mm)} wide · ${i + 1} of ${view.segments.length}</p></div></div>
+    <div class="insp-head">${swatch(k.id)}<div><h2 class="insp-name">${esc(k.name)}</h2><p class="insp-sub">${fmt(s.width_mm)} wide · ${i + 1} of ${view.segments.length}${s.variants.length ? ` · ${hhmm(view.time_min)}` : ""}</p></div></div>
     <section class="insp-sec">
       <h3 class="note-h" id="i-h-width">Width</h3>
       <div class="stepper">
@@ -621,6 +680,7 @@ function renderInspector() {
       </div>
       <p class="insp-range">Allowed ${lo} to ${hi} ${units}</p>
     </section>
+    ${times}
     ${dirs}
     <section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3><ul class="opts" role="radiogroup" aria-labelledby="i-h-surface">${surfaces}</ul></section>
     ${curbs}`;
@@ -639,6 +699,8 @@ el.inspector.addEventListener("click", (e) => {
   else if (b.dataset.isurface) ok = sheet.set_material(uid, Number(b.dataset.isurface));
   else if (b.dataset.icurb) ok = sheet.set_curb(uid, Number(b.dataset.icurb));
   else if (b.dataset.idir) ok = sheet.set_direction(uid, Number(b.dataset.idir));
+  else if ("ivadd" in b.dataset) ok = sheet.add_variant(uid);
+  else if (b.dataset.ivremove) ok = sheet.remove_variant(uid, Number(b.dataset.ivremove));
   if (ok) {
     refresh();
     announceEdit();
@@ -646,9 +708,21 @@ el.inspector.addEventListener("click", (e) => {
 });
 
 el.inspector.addEventListener("change", (e) => {
-  const input = e.target.closest("input");
+  const input = e.target.closest("input, select");
   const uid = view.selected;
   if (!input || !uid) return;
+  const d = input.dataset;
+  if (d.ivkind !== undefined || d.ivfrom !== undefined || d.ivto !== undefined) {
+    const vi = Number(d.ivkind ?? d.ivfrom ?? d.ivto);
+    const v = seg(uid).variants[vi];
+    const ok =
+      d.ivkind !== undefined
+        ? sheet.set_variant_kind(uid, vi, Number(input.value))
+        : sheet.set_variant_time(uid, vi, d.ivfrom !== undefined ? toMin(input.value) : v.from_min, d.ivto !== undefined ? toMin(input.value) : v.to_min);
+    refresh();
+    if (ok) announceEdit();
+    return;
+  }
   const v = parseFloat(input.value);
   if (!Number.isFinite(v)) return renderInspector();
   const before = seg(uid).width_mm;

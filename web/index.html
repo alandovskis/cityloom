@@ -75,6 +75,14 @@
         <div class="work">
           <section class="drawing" aria-labelledby="h-drawing">
             <h2 id="h-drawing" class="sr-only">Cross-section</h2>
+            <div class="clock" id="clock">
+              <label for="time" class="clock-l">Time of day</label>
+              <input type="range" id="time" min="0" max="95" step="1" value="48">
+              <output id="time-out" for="time" class="fig"></output>
+              <div class="clock-scale" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+              <div class="clock-bar" id="clock-bar" aria-hidden="true"></div>
+              <p class="clock-note" id="clock-note"></p>
+            </div>
             <div class="scroll" id="scroll">
               <div class="wrap" id="wrap" tabindex="0" role="group" aria-label="Street cross-section editor" aria-describedby="keys">
                 <svg id="drawing" xmlns="http://www.w3.org/2000/svg" role="img"></svg>
@@ -119,6 +127,7 @@
               <h2 id="h-cap" class="note-h">People moved</h2>
               <table class="nt" id="cap"></table>
             </section>
+            <p class="fine" id="time-note"></p>
           </div>
 
           <div class="panel" id="p-checks" role="tabpanel" aria-labelledby="t-checks" hidden>

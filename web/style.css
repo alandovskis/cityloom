@@ -1940,3 +1940,126 @@ kbd {
     background: none;
   }
 }
+
+/* ---- time of day ------------------------------------------------------------ */
+.clock {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) 3.4em;
+  align-items: center;
+  gap: 2px 12px;
+  padding: 8px 20px 10px;
+  border-top: var(--line) solid var(--rule);
+}
+.clock-l {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.clock input[type="range"] {
+  width: 100%;
+  accent-color: var(--blue);
+}
+.clock output {
+  font-size: 16px;
+  font-weight: 600;
+  text-align: right;
+}
+.clock-scale {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.clock-bar {
+  position: relative;
+  grid-column: 2;
+  height: 6px;
+  border: var(--line) solid var(--rule);
+  visibility: hidden;
+}
+.clock-bar.on {
+  visibility: visible;
+}
+.clock-bar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.clock-note {
+  grid-column: 2;
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+#drawing .badge {
+  fill: var(--sheet);
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  pointer-events: none;
+}
+#drawing .badge-hands {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.insp-sec .btn[data-ivadd] {
+  width: 100%;
+  justify-content: center;
+  white-space: nowrap;
+}
+.vars {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+.var {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 0;
+  border-top: var(--line) solid var(--rule);
+}
+.var.now {
+  background: var(--blue-wash);
+}
+.var select,
+.var input[type="time"] {
+  min-height: 30px;
+  padding: 2px 6px;
+  border: var(--line) solid var(--ink);
+  border-radius: 0;
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.var-times {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+.var-times input {
+  width: 0;
+  flex: 1;
+  min-width: 0;
+}
+.var .ico {
+  grid-column: 2;
+  grid-row: 1;
+}
+@media print {
+  .clock {
+    display: none;
+  }
+}
