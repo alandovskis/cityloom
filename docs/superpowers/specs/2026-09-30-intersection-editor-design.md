@@ -77,8 +77,8 @@ sample street at the sheet's drive side, so a region change re-reads it.
 - **Movements.** For entering arm A and leaving arm B the turn is
   `bearing(B) - (bearing(A) + 180)`, folded to -180..180. Within 35 degrees
   is *through*, more clockwise is *right*, more anticlockwise is *left*.
-  Each ordered pair of arms is allowed unless banned. An arm cannot ban every
-  pair. A street that only leaves the junction (one-way out) has no entering
+  Each ordered pair of arms is allowed unless banned. An arm cannot ban its
+  last way out. A street that only leaves the junction (one-way out) has no entering
   lanes and no movements.
 - **Lanes.** `uses` names the classes a lane serves. Editing a lane that
   would leave it serving nothing is rejected. When geometry changes, uses are
@@ -87,8 +87,9 @@ sample street at the sheet's drive side, so a region change re-reads it.
   right; three or more are left, through..., right).
 - **Control.** Setting `Roundabout` turns the crossing into a ring; any
   other control turns it back. The ring's outer radius is the least that
-  keeps neighbouring arms apart (the floor), plus whatever the resident adds,
-  up to 40 m. Without a ring, `Priority` calls the two arms nearest to a
+  keeps neighbouring arms 8 m of ring apart (the floor), plus whatever the
+  resident adds, up to 40 m. A roundabout that cannot fit its arms in 40 m is
+  rejected, so the choice of roundabout is refused rather than drawn wrongly. Without a ring, `Priority` calls the two arms nearest to a
   straight line the priority street, the rest give way.
 - Region changes are a setting, not history, as in the section editor.
 
@@ -114,9 +115,12 @@ The page transforms those into SVG. It contains no geometry rules.
 | Lanes cover every turn | each allowed movement has a lane of its class |
 | Lanes follow the turn bans | each lane class has an allowed movement |
 | Crossing distance | every stage is 15.0 m or less |
-| Turning speed | a turn across a marked crossing is 25 km/h or less at the corner radius (v = sqrt(127 R 0.3)) |
-| Fits the arms | ring (if any) keeps every arm clear of its neighbours |
+| Slow turns at crossings | a corner beside a marked crossing turns at 20 km/h or less (v = sqrt(127 R 0.3)) |
+| Sidewalk survives the corner | every fillet leaves at least 1.8 m of pavement before the property line |
 | Signal has room | a signal junction has no more than 4 arms |
+
+The first version drops the earlier idea of a check on the ring fitting; the
+model refuses a ring that will not fit instead.
 
 ### Numbers
 
@@ -177,8 +181,9 @@ A new page, `web/intersection.html`, with `web/junction.js`, in the same sheet.
 
 ## Sample junctions
 
-Three synthetic starting junctions: a four-way of two avenues and streets, a
-T with a lane, and an offset crossing. Each names the sample street per arm.
+Four synthetic starting junctions: a four-way signal of an avenue and a street,
+a T of a street and a lane, an offset crossing, and a five-way with all-way
+stop. Each starts with every check passing. Each names the sample street per arm.
 "Start over" returns to the loaded sample.
 
 ## Out of scope
