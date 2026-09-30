@@ -314,7 +314,7 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 - **Icon buttons:** 30px, 1px ink border, 6px radius, 14px 1.6px square-cap line icons; remove hovers redline with paper icon and stands 10px apart from the move arrows.
 
 ### CityLoom mark
-- **Mark:** `web/logo.svg`, a woven street section: five vertical bands of unequal widths in the sidewalk, planting, bike, travel and loading pencils (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a), woven with four thin wavy ink threads that pass over and under alternate bands, like cloth on a loom. Colours are fixed and identical in both themes. The mark and wordmark appear once, as a lockup at the top left of the top bar, mark 30px (28px under 640px); they are not repeated in the about card.
+- **Mark:** `web/logo.svg`, a woven street section: five vertical bands of unequal widths in the sidewalk, planting, bike, travel and loading pencils (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a), crossed by two ink threads that pass over and under alternate bands. Colours are fixed and identical in both themes. The mark and wordmark appear once, as a lockup at the top left of the top bar, mark 30px (28px under 640px); they are not repeated in the about card.
 - **Favicon:** `web/favicon.svg` is the same mark with the threads switching to Night Ink in dark schemes.
 - **Wordmark:** "CityLoom" in Barlow Semi Condensed 600 (20px, 18px on phones), live text beside the mark in the top bar, which is closed by a 1px Rule Grey line; never outlined into the SVG. Below 24px the weave blurs; use the favicon there.
 - **Do not** recolour the bands, put a container or shadow around the mark, or show it under 16px.
