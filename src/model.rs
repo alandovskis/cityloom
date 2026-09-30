@@ -355,18 +355,35 @@ impl Editor {
         })
     }
 
-    /// Sets the region, by index into `REGIONS`. It changes which side of the
-    /// road traffic keeps to. Lanes are only re-laid for the new side while the
-    /// street is untouched; otherwise the edits stay and the check reports
-    /// any lane that now runs against the traffic.
+    /// Sets the region, by index into `REGIONS`. The region itself is a
+    /// setting and stays out of the history. When it changes which side of the
+    /// road traffic keeps to, the street's lanes are mirrored to match: silently
+    /// while the street is untouched (it is just laid out for that region), and
+    /// as one undoable change once it has edits.
     pub fn set_region(&mut self, region: usize) -> bool {
         if region >= REGIONS.len() || region == self.region {
             return false;
         }
-        let side_changed = REGIONS[region].drive_side != REGIONS[self.region].drive_side;
+        let side = REGIONS[region].drive_side;
+        let side_changed = side != REGIONS[self.region].drive_side;
         self.region = region;
-        if side_changed && self.states.len() == 1 {
-            default_directions(&mut self.states[0].segments, REGIONS[region].drive_side);
+        if !side_changed {
+            return true;
+        }
+        if self.states.len() == 1 {
+            default_directions(&mut self.states[0].segments, side);
+        } else {
+            let label = format!("Traffic keeps {}", if side == Side::Right { "right" } else { "left" });
+            self.edit(label, |segs| {
+                let mut changed = false;
+                for s in segs.iter_mut() {
+                    if let Some(d) = s.direction {
+                        s.direction = Some(1 - d);
+                        changed = true;
+                    }
+                }
+                changed
+            });
         }
         true
     }
@@ -1061,20 +1078,33 @@ mod tests {
         assert!(e.set_region(uk));
         assert_eq!(dirs(&e), [Some("away"), Some("toward")]);
         assert!(e.view().checks.iter().find(|c| c.id == "side").unwrap().ok);
-        // once edited, the lanes stay and the check reports the conflict
+        assert!(!e.view().can_undo);
+        // once edited, a change of side mirrors the lanes as one undoable change
         e.add(kind("bike"), 0);
         assert!(e.set_region(0));
+        assert_eq!(dirs(&e), [Some("toward"), Some("away")]);
+        assert_eq!(e.view().revisions.last().unwrap().label, "Traffic keeps right");
+        assert!(e.view().checks.iter().find(|c| c.id == "side").unwrap().ok);
+        // a region on the same side leaves the lanes alone
+        let us = REGIONS.iter().position(|r| r.id == "united-states").unwrap();
+        let revs = e.view().revisions.len();
+        assert!(e.set_region(us));
+        assert_eq!(e.view().revisions.len(), revs);
+        assert_eq!(dirs(&e), [Some("toward"), Some("away")]);
+        // undo puts the lanes back, so they now run against the region's side
+        assert!(e.undo());
         assert_eq!(dirs(&e), [Some("away"), Some("toward")]);
         let side = e.view().checks.into_iter().find(|c| c.id == "side").unwrap();
         assert!(!side.ok);
         assert_eq!(side.label, "Traffic keeps right");
+        assert!(e.redo());
         // a one-way street has nothing to conflict
         let lanes: Vec<u32> = e.current().iter().filter(|s| s.kind == kind("travel")).map(|s| s.uid).collect();
-        assert!(e.set_direction(lanes[0], Some(1)));
+        assert!(e.set_direction(lanes[0], Some(0)));
         assert!(e.view().checks.iter().find(|c| c.id == "side").unwrap().ok);
         // starting over keeps the region
         e.load_sample(0);
-        assert_eq!(e.view().region, "canada");
+        assert_eq!(e.view().region, "united-states");
     }
 
     #[test]
