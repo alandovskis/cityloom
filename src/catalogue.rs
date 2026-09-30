@@ -52,6 +52,8 @@ pub struct Kind {
     pub materials: &'static [usize],
     /// Whether this kind of piece has a curb material to choose.
     pub has_curb: bool,
+    /// The curbs it may have, as indices into `CURBS`; empty without a curb.
+    pub curbs: &'static [usize],
     /// Whether this kind of piece runs one way, and if so whether it must.
     pub direction: DirectionRule,
     /// Whether this kind is roadway space that can change type through the
@@ -119,13 +121,14 @@ pub const REGIONS: [Region; 6] = [
     Region { id: "japan", name: "Japan", drive_side: Side::Left },
 ];
 
-pub const CURBS: [Material; 6] = [
+pub const CURBS: [Material; 7] = [
     Material { id: "granite", name: "Granite" },
     Material { id: "concrete", name: "Concrete" },
     Material { id: "asphalt", name: "Asphalt" },
     Material { id: "planted", name: "Planted" },
     Material { id: "kassel", name: "Bus-friendly curb" },
     Material { id: "bikefriendly", name: "Bike-friendly curb" },
+    Material { id: "island", name: "Bus boarding island" },
 ];
 
 /// A new sidewalk or bike lane gets this curb (concrete).
@@ -145,6 +148,7 @@ pub const KINDS: [Kind; 8] = [
         direction: DirectionRule::None,
         shares_road: false,
         has_curb: true,
+        curbs: &[0, 1, 2, 3, 4, 5],
     },
     Kind {
         id: "planting",
@@ -159,6 +163,7 @@ pub const KINDS: [Kind; 8] = [
         direction: DirectionRule::None,
         shares_road: false,
         has_curb: false,
+        curbs: &[],
     },
     Kind {
         id: "bike",
@@ -173,6 +178,7 @@ pub const KINDS: [Kind; 8] = [
         direction: DirectionRule::Optional,
         shares_road: true,
         has_curb: true,
+        curbs: &[0, 1, 2, 3, 4, 5, 6],
     },
     Kind {
         id: "travel",
@@ -187,6 +193,7 @@ pub const KINDS: [Kind; 8] = [
         direction: DirectionRule::Required,
         shares_road: true,
         has_curb: false,
+        curbs: &[],
     },
     Kind {
         id: "bus",
@@ -201,6 +208,7 @@ pub const KINDS: [Kind; 8] = [
         direction: DirectionRule::None,
         shares_road: true,
         has_curb: false,
+        curbs: &[],
     },
     Kind {
         id: "parking",
@@ -215,6 +223,7 @@ pub const KINDS: [Kind; 8] = [
         direction: DirectionRule::None,
         shares_road: true,
         has_curb: false,
+        curbs: &[],
     },
     Kind {
         id: "median",
@@ -229,6 +238,7 @@ pub const KINDS: [Kind; 8] = [
         direction: DirectionRule::None,
         shares_road: false,
         has_curb: false,
+        curbs: &[],
     },
     Kind {
         id: "loading",
@@ -243,6 +253,7 @@ pub const KINDS: [Kind; 8] = [
         direction: DirectionRule::None,
         shares_road: true,
         has_curb: false,
+        curbs: &[],
     },
 ];
 

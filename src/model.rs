@@ -428,7 +428,7 @@ impl Editor {
             return false;
         };
         let kind = &KINDS[self.current()[pos].kind_at(self.time_min)];
-        if !kind.has_curb || curb.is_some_and(|c| c >= CURBS.len()) {
+        if !kind.has_curb || curb.is_some_and(|c| !kind.curbs.contains(&c)) {
             return false;
         }
         let what = curb.map_or("none".to_string(), |c| CURBS[c].name.to_lowercase());
@@ -1472,12 +1472,29 @@ mod tests {
     }
 
     #[test]
+    fn a_bike_lane_may_have_a_bus_boarding_island() {
+        let mut e = Editor::new(0);
+        let bike = e.add(kind("bike"), 1);
+        let island = CURBS.iter().position(|c| c.id == "island").unwrap();
+        assert!(e.set_curb(bike, Some(island)));
+        assert_eq!(e.view().segments[1].curb, Some("island"));
+        assert_eq!(e.view().revisions.last().unwrap().label, "Bike lane curb: bus boarding island");
+        for k in KINDS.iter().filter(|k| k.has_curb) {
+            assert!(!k.curbs.is_empty() && k.curbs.iter().all(|&c| c < CURBS.len()), "{}", k.id);
+            assert!(k.curbs.contains(&DEFAULT_CURB), "{}", k.id);
+        }
+        assert!(KINDS.iter().filter(|k| !k.has_curb).all(|k| k.curbs.is_empty()));
+    }
+
+    #[test]
     fn set_curb_only_on_kinds_that_have_one() {
         let mut e = Editor::new(0);
         let walk = e.current()[0].uid;
         let lane = e.current()[2].uid;
         assert!(!e.set_curb(lane, Some(0))); // driving lanes have no curb
         assert!(!e.set_curb(walk, Some(99))); // not in the table
+        let island = CURBS.iter().position(|c| c.id == "island").unwrap();
+        assert!(!e.set_curb(walk, Some(island))); // a boarding island is for bike lanes
         assert!(!e.set_curb(walk, Some(DEFAULT_CURB))); // unchanged
         assert!(e.set_curb(walk, Some(0)));
         assert_eq!(e.view().segments[0].curb, Some("granite"));

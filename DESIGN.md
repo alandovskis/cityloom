@@ -321,6 +321,9 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 ### Region
 - **Region:** a select in the account menu (Canada, United States, Germany, United Kingdom, Australia, Japan), each with the side of the road its traffic keeps to, shown in brackets. The choice is remembered. Changing to a region on the other side mirrors every directed lane: silently while the street is untouched (it is just laid out for that region), and as one undoable change, "Traffic keeps left" or "Traffic keeps right", once the street has edits. Undo puts the lanes back but not the region, so the check "Traffic keeps right" or "Traffic keeps left" then turns redline until the region or the lanes are changed again. A one-way street always passes. The region list is a synthetic placeholder, like the rest of the catalogue.
 
+### Bus boarding island
+- **Bus boarding island:** a curb choice for bike lanes only. It is drawn as a 900 mm raised platform, 16px tall, with a grid hatch, standing on one side of the lane: the side facing a bus or driving lane, else the first road side. A sidewalk cannot take it.
+
 ### Time of day
 - **Clock:** a slider above the drawing sets the time the sheet shows, in quarter hours. The drawing, the numbers and the checks all describe the street at that time, and a line under the numbers says so. The time is a setting, not an edit.
 - **Other times:** a roadway piece (driving, bus, parking, loading, bike) can take a different type in windows of the day, set in the inspector's Other times group: a type and a from and to time per window. Windows never overlap and may run past midnight. A piece with other times carries a small clock badge, and the bar under the slider shows the selected piece's windows in the colours of their types. Taking a type with a different width range moves the width into the range both allow, in the same change (a 2.4 m parking lane becomes a 3.0 m bus lane).

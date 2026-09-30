@@ -154,5 +154,6 @@ export const CURB_HATCH = {
   asphalt: `<pattern id="c-asphalt" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7"/><circle cx="3" cy="3" r="0.7"/></pattern>`,
   planted: `<pattern id="c-planted" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="1.8" cy="1.8" r="1.2"/><circle cx="4.6" cy="4.4" r="0.8"/></pattern>`,
   bikefriendly: `<pattern id="c-bikefriendly" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0,5 L5,0"/><circle cx="1.2" cy="1.2" r="0.6"/></pattern>`,
+  island: `<pattern id="c-island" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M0,3 H6 M3,0 V6"/></pattern>`,
   kassel: `<pattern id="c-kassel" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><path d="M0,0 L0,5"/></pattern>`,
 };

@@ -316,14 +316,23 @@ function renderDrawing() {
       const planted = s.curb === "planted";
       // a Kassel kerb is wider and has a sloped road face, so a wheel can touch it safely
       const kassel = s.curb === "kassel";
+      // a bus boarding island is a wide raised platform between the lane and the traffic
+      const island = s.curb === "island";
       // a bike-friendly curb is a low ramp a wheel can ride up
       const ramp = s.curb === "bikefriendly";
-      const cw = Math.min(planted ? Math.max(14, 600 * L.scale) : kassel ? Math.max(9, 250 * L.scale) : ramp ? Math.max(9, 300 * L.scale) : Math.max(5, 150 * L.scale), w / 2);
+      const cw = Math.min(planted ? Math.max(14, 600 * L.scale) : island ? Math.max(16, 900 * L.scale) : kassel ? Math.max(9, 250 * L.scale) : ramp ? Math.max(9, 300 * L.scale) : Math.max(5, 150 * L.scale), w / 2);
+      const ch = island ? 16 : 12;
       const fill = planted ? "m-planted" : `c-${s.curb}`;
       const sides = [
         [v.segments[i - 1], x, false],
         [v.segments[i + 1], x + w - cw, true],
       ];
+      // an island stands on one side only, the one facing the buses
+      if (island) {
+        const rank = (nb) => ["bus", "travel"].indexOf(KINDS[nb.kind].id);
+        const facing = sides.filter(([nb]) => nb && road.has(KINDS[nb.kind].id)).sort((a, b) => rank(b[0]) - rank(a[0]));
+        sides.splice(0, sides.length, ...facing.slice(0, 1));
+      }
       for (const [nb, bx, roadRight] of sides) {
         if (!nb || !road.has(KINDS[nb.kind].id)) continue;
         if (kassel || ramp) {
@@ -335,8 +344,8 @@ function renderDrawing() {
           continue;
         }
         parts.push(
-          `<rect class="curb" x="${bx}" y="${G - 12}" width="${cw}" height="12"/>` +
-            `<rect class="hatch" x="${bx}" y="${G - 12}" width="${cw}" height="12" fill="url(#${fill})"/>`,
+          `<rect class="curb" x="${bx}" y="${G - ch}" width="${cw}" height="${ch}"/>` +
+            `<rect class="hatch" x="${bx}" y="${G - ch}" width="${cw}" height="${ch}" fill="url(#${fill})"/>`,
         );
       }
     });
@@ -665,7 +674,10 @@ function renderInspector() {
   }
   let curbs = "";
   if (k.has_curb) {
-    const rows = MATERIALS.curbs.map((c, ci) => option(`c-${c.id}`, c.id === s.curb, curbSwatch(c.id), c.name, `data-icurb="${ci}"`));
+    const rows = k.curbs.map((ci) => {
+      const c = MATERIALS.curbs[ci];
+      return option(`c-${c.id}`, c.id === s.curb, curbSwatch(c.id), c.name, `data-icurb="${ci}"`);
+    });
     rows.push(option("c-none", s.curb == null, curbSwatch("none"), "None (flush)", `data-icurb="-1"`));
     curbs = `<section class="insp-sec"><h3 class="note-h" id="i-h-curb">Curb</h3><ul class="opts" role="radiogroup" aria-labelledby="i-h-curb">${rows.join("")}</ul></section>`;
   }
