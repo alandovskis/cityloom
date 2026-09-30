@@ -42,20 +42,6 @@ fn total(segments: &[Segment]) -> i32 {
     segments.iter().map(|s| s.width_mm).sum()
 }
 
-fn letter(n: usize) -> String {
-    // A, B, ... Z, AA, AB ...
-    let mut n = n;
-    let mut out = String::new();
-    loop {
-        out.insert(0, (b'A' + (n % 26) as u8) as char);
-        if n < 26 {
-            break;
-        }
-        n = n / 26 - 1;
-    }
-    out
-}
-
 impl Editor {
     pub fn new(sample: usize) -> Editor {
         let mut e = Editor {
@@ -92,7 +78,7 @@ impl Editor {
             })
             .collect();
         self.states = vec![State {
-            label: "Existing".into(),
+            label: "Street today".into(),
             segments,
         }];
         self.cursor = 0;
@@ -427,7 +413,7 @@ impl Editor {
                 .iter()
                 .enumerate()
                 .map(|(i, s)| Revision {
-                    letter: letter(i),
+                    step: i + 1,
                     label: s.label.clone(),
                 })
                 .collect(),
@@ -508,12 +494,12 @@ fn checks(segs: &[Segment], row_mm: i32) -> Vec<Check> {
             id: "fits",
             ok: fits,
             amount_mm: delta.abs(),
-            label: "Fits the right-of-way",
+            label: "Fits the street width",
             detail: if fits {
                 if delta == 0 {
                     "Exactly full".into()
                 } else {
-                    format!("{} mm unassigned", -delta)
+                    format!("{} mm left to use", -delta)
                 }
             } else {
                 format!("{delta} mm over")
@@ -523,18 +509,18 @@ fn checks(segs: &[Segment], row_mm: i32) -> Vec<Check> {
             id: "edges",
             ok: both_edges,
             amount_mm: 0,
-            label: "Sidewalk at each edge",
+            label: "Sidewalk on both sides",
             detail: if both_edges {
-                "Both edges".into()
+                "Both sides".into()
             } else {
-                "An edge has no sidewalk".into()
+                "One side has no sidewalk".into()
             },
         },
         Check {
             id: "access",
             ok: access,
             amount_mm: ACCESS_LANE_MM,
-            label: "Emergency vehicle lane",
+            label: "Room for emergency vehicles",
             detail: if access {
                 "A lane of 3.0 m or more".into()
             } else {
@@ -584,7 +570,7 @@ pub struct Check {
 
 #[derive(Serialize)]
 pub struct Revision {
-    pub letter: String,
+    pub step: usize,
     pub label: String,
 }
 
@@ -824,14 +810,6 @@ mod tests {
         let e = Editor::new(1);
         let sum: i32 = e.view().outcomes.share.iter().map(|s| s.pct).sum();
         assert!((98..=102).contains(&sum), "{sum}");
-    }
-
-    #[test]
-    fn revision_letters_run_past_z() {
-        assert_eq!(letter(0), "A");
-        assert_eq!(letter(25), "Z");
-        assert_eq!(letter(26), "AA");
-        assert_eq!(letter(27), "AB");
     }
 
     #[test]

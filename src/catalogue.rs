@@ -26,11 +26,11 @@ impl Mode {
 
     pub fn label(self) -> &'static str {
         match self {
-            Mode::Foot => "On foot",
-            Mode::Bike => "By bike",
-            Mode::Transit => "By bus",
-            Mode::Vehicle => "Vehicles",
-            Mode::Green => "Planting",
+            Mode::Foot => "Walking",
+            Mode::Bike => "Biking",
+            Mode::Transit => "Buses",
+            Mode::Vehicle => "Cars and trucks",
+            Mode::Green => "Greenery",
         }
     }
 }
@@ -82,7 +82,7 @@ pub const KINDS: [Kind; 8] = [
     },
     Kind {
         id: "travel",
-        name: "Travel lane",
+        name: "Driving lane",
         mark: "TL",
         mode: Mode::Vehicle,
         default_mm: 3300,
@@ -102,7 +102,7 @@ pub const KINDS: [Kind; 8] = [
     },
     Kind {
         id: "parking",
-        name: "Parking lane",
+        name: "Parking",
         mark: "PK",
         mode: Mode::Vehicle,
         default_mm: 2400,
