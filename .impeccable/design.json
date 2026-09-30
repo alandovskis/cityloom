@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-30T00:00:00Z",
+  "generatedAt": "2026-09-30T12:00:00Z",
   "title": "Design System: CityLoom",
   "extensions": {
     "colorMeta": {
@@ -365,7 +365,11 @@
     "typographyMeta": {
       "title": {
         "displayName": "Title",
-        "purpose": "Street name in the sheet header; uppercase."
+        "purpose": "Street name in the sheet header; 32px sentence case."
+      },
+      "heading": {
+        "displayName": "Heading",
+        "purpose": "Panel headings with a Rule Grey underline; sentence case."
       },
       "body": {
         "displayName": "Body",
@@ -377,15 +381,15 @@
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Ruled note headings, tool buttons, drawing labels; tracked uppercase."
+        "purpose": "Tool buttons and drawing labels (Today, Your design, Street edge); sentence case."
       },
       "table-head": {
         "displayName": "Table head",
-        "purpose": "Schedule and notes table column heads; 12px tracked uppercase."
+        "purpose": "Schedule and notes table column heads; 13px sentence case."
       },
       "field-label": {
         "displayName": "Field label",
-        "purpose": "Tick-margin numerals, form captions, title-block captions."
+        "purpose": "Street picker caption and about-card captions; 13px sentence case."
       },
       "dimension": {
         "displayName": "Dimension",
@@ -431,25 +435,25 @@
       "name": "Tool Button",
       "kind": "custom",
       "refersTo": "button-tool",
-      "description": "Segmented undo/redo/reset strip; square, ink-outlined, inverts when pressed.",
-      "html": "<div class=\"ds-btns\"><button class=\"ds-btn\">Undo</button><button class=\"ds-btn\">Redo</button><button class=\"ds-btn\" disabled>Reset</button></div>",
-      "css": ".ds-btns{display:flex;background:#f3f6f8;padding:12px}.ds-btn{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-height:34px;padding:4px 14px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1),color 120ms cubic-bezier(.16,1,.3,1)}.ds-btn+.ds-btn{margin-left:-1px}.ds-btn:hover:not(:disabled){background:#e5eaee}.ds-btn:active:not(:disabled){background:#14181c;color:#f3f6f8}.ds-btn:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-btn:disabled{color:#59656f;border-color:#b4bcc3;background:transparent;cursor:not-allowed}"
+      "description": "Undo / Redo / Start over: 6px radius, ink-outlined, sentence case, 6px apart; inverts when pressed.",
+      "html": "<div class=\"ds-btns\"><button class=\"ds-btn\">Undo</button><button class=\"ds-btn\">Redo</button><button class=\"ds-btn\" disabled>Start over</button></div>",
+      "css": ".ds-btns{display:flex;gap:6px;background:#f3f6f8;padding:12px}.ds-btn{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-height:34px;padding:4px 14px;border:1px solid #14181c;border-radius:6px;background:#f3f6f8;color:#14181c;font-size:14px;font-weight:600;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1),color 120ms cubic-bezier(.16,1,.3,1)}.ds-btn:hover:not(:disabled){background:#e5eaee}.ds-btn:active:not(:disabled){background:#14181c;color:#f3f6f8}.ds-btn:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-btn:disabled{color:#59656f;border-color:#b4bcc3;background:transparent;cursor:not-allowed}"
     },
     {
       "name": "Unit Toggle",
       "kind": "custom",
       "refersTo": "unit-toggle-pressed",
-      "description": "Two-state m/ft switch; the pressed unit is inked solid.",
+      "description": "Two-state m/ft switch, one joined pair rounded at its outer ends; the pressed unit is inked solid.",
       "html": "<div class=\"ds-units\"><button class=\"ds-unit\" aria-pressed=\"true\">m</button><button class=\"ds-unit\" aria-pressed=\"false\">ft</button></div>",
-      "css": ".ds-units{display:flex;background:#f3f6f8;padding:12px}.ds-unit{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:42px;min-height:34px;padding:4px 10px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-size:13px;font-weight:600;letter-spacing:.04em;cursor:pointer}.ds-unit+.ds-unit{margin-left:-1px}.ds-unit:hover:not([aria-pressed=true]){background:#e5eaee}.ds-unit[aria-pressed=true]{background:#14181c;color:#f3f6f8}.ds-unit:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}"
+      "css": ".ds-units{display:flex;background:#f3f6f8;padding:12px}.ds-unit{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:42px;min-height:34px;padding:4px 10px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-size:14px;font-weight:600;letter-spacing:0;cursor:pointer}.ds-unit+.ds-unit{margin-left:-1px}.ds-unit:hover:not([aria-pressed=true]){background:#e5eaee}.ds-unit[aria-pressed=true]{background:#14181c;color:#f3f6f8}.ds-unit:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-unit:first-child{border-radius:6px 0 0 6px}.ds-unit:last-child{border-radius:0 6px 6px 0}"
     },
     {
       "name": "Street Select",
       "kind": "input",
       "refersTo": "button-tool",
-      "description": "Square select with a tracked uppercase caption above it.",
+      "description": "6px-radius select with a sentence-case caption above it.",
       "html": "<label class=\"ds-pick\"><span>Street</span><select class=\"ds-select\"><option>Main Street</option></select></label>",
-      "css": ".ds-pick{display:grid;gap:2px;background:#f3f6f8;padding:12px}.ds-pick span{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;font-size:11px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:#3b444c}.ds-select{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;appearance:none;min-height:34px;padding:4px 30px 4px 10px;border:1px solid #14181c;border-radius:0;font-weight:500;color:#14181c;cursor:pointer;background:#f3f6f8 url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0.5 0.5 5 5 9.5 0.5' fill='none' stroke='%2314181c' stroke-width='1.4'/%3E%3C/svg%3E\") no-repeat right 10px center}.ds-select:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}"
+      "css": ".ds-pick{display:grid;gap:2px;background:#f3f6f8;padding:12px}.ds-pick span{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;font-size:13px;font-weight:500;color:#3b444c}.ds-select{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;appearance:none;min-height:34px;padding:4px 30px 4px 10px;border:1px solid #14181c;border-radius:6px;font-weight:500;color:#14181c;cursor:pointer;background:#f3f6f8 url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0.5 0.5 5 5 9.5 0.5' fill='none' stroke='%2314181c' stroke-width='1.4'/%3E%3C/svg%3E\") no-repeat right 10px center}.ds-select:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}"
     },
     {
       "name": "Width Field",
@@ -457,50 +461,50 @@
       "refersTo": "field-width",
       "description": "Right-aligned tabular width input with a unit tag; red text and border when invalid.",
       "html": "<span class=\"ds-wfield\"><input class=\"ds-input\" value=\"3.5\" aria-label=\"Width\"><span class=\"ds-tag\">m</span></span>",
-      "css": ".ds-wfield{display:inline-flex;align-items:center;gap:6px;background:#f3f6f8;padding:12px}.ds-input{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:68px;min-height:30px;padding:2px 6px;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;font-weight:500;text-align:right;font-variant-numeric:tabular-nums;caret-color:#1d4ed8}.ds-input:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-input:invalid{border-color:#b8231a;color:#b8231a}.ds-tag{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:18px;font-size:12px;color:#3b444c}"
+      "css": ".ds-wfield{display:inline-flex;align-items:center;gap:6px;background:#f3f6f8;padding:12px}.ds-input{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:68px;min-height:30px;padding:2px 6px;border:1px solid #14181c;border-radius:6px;background:#f3f6f8;color:#14181c;font-weight:500;text-align:right;font-variant-numeric:tabular-nums;caret-color:#1d4ed8}.ds-input:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-input:invalid{border-color:#b8231a;color:#b8231a}.ds-tag{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:18px;font-size:12px;color:#3b444c}"
     },
     {
       "name": "Icon Button",
       "kind": "custom",
       "refersTo": "icon-button",
-      "description": "30px square line-icon button; the delete variant turns redline on hover.",
+      "description": "30px 6px-radius line-icon button; the remove variant turns redline on hover.",
       "html": "<div class=\"ds-acts\"><button class=\"ds-ico\" aria-label=\"Move left\"><svg viewBox=\"0 0 14 14\"><path d=\"M9 2 4 7l5 5\"/></svg></button><button class=\"ds-ico ds-danger\" aria-label=\"Delete\"><svg viewBox=\"0 0 14 14\"><path d=\"M2 2l10 10M12 2 2 12\"/></svg></button></div>",
-      "css": ".ds-acts{display:flex;gap:4px;background:#f3f6f8;padding:12px}.ds-ico{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid #14181c;border-radius:0;background:#f3f6f8;color:#14181c;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1)}.ds-ico svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:square}.ds-ico:hover{background:#e5eaee}.ds-ico:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-danger{margin-left:10px}.ds-danger:hover{background:#b8231a;border-color:#b8231a;color:#f3f6f8}"
+      "css": ".ds-acts{display:flex;gap:4px;background:#f3f6f8;padding:12px}.ds-ico{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid #14181c;border-radius:6px;background:#f3f6f8;color:#14181c;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1)}.ds-ico svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:square}.ds-ico:hover{background:#e5eaee}.ds-ico:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-danger{margin-left:10px}.ds-danger:hover{background:#b8231a;border-color:#b8231a;color:#f3f6f8}"
     },
     {
       "name": "Symbol Schedule Row",
       "kind": "custom",
       "refersTo": "schedule-row-selected",
-      "description": "Ruled table row: mark, hatch swatch, type, width; selected row takes blue wash and blue text.",
-      "html": "<table class=\"ds-sched\"><thead><tr><th>Mark</th><th></th><th>Type</th><th class=\"ds-n\">Width</th></tr></thead><tbody><tr><td class=\"ds-mark\">SW</td><td><svg class=\"ds-sw\" viewBox=\"0 0 44 22\"><defs><pattern id=\"ds-h\" width=\"8\" height=\"8\" patternUnits=\"userSpaceOnUse\"><circle cx=\"2\" cy=\"2\" r=\".9\" fill=\"#14181c\"/><circle cx=\"6\" cy=\"6\" r=\".9\" fill=\"#14181c\"/></pattern></defs><rect width=\"44\" height=\"22\" fill=\"url(#ds-h)\"/></svg></td><td class=\"ds-name\">Sidewalk</td><td class=\"ds-n\">3.0 m</td></tr><tr class=\"ds-sel\"><td class=\"ds-mark\">BL</td><td><svg class=\"ds-sw\" viewBox=\"0 0 44 22\"><rect width=\"44\" height=\"22\" fill=\"#f3f6f8\"/></svg></td><td class=\"ds-name\">Bike lane</td><td class=\"ds-n\">1.8 m</td></tr></tbody></table>",
-      "css": ".ds-sched{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:100%;border-collapse:collapse;background:#f3f6f8;color:#14181c;font-size:15px;font-variant-numeric:tabular-nums}.ds-sched th{padding:4px 8px 4px 0;font-size:12px;font-weight:600;letter-spacing:.12em;text-align:left;text-transform:uppercase;color:#3b444c}.ds-sched td{padding:3px 8px 3px 0;border-top:1px solid #b4bcc3;vertical-align:middle}.ds-n{text-align:right!important}.ds-mark{padding-left:8px!important;font-weight:600;letter-spacing:.08em}.ds-name{font-weight:500}.ds-sw{display:block;width:44px;height:22px;border:1px solid #14181c}.ds-sel td{background:rgb(29 78 216/.09)}.ds-sel .ds-mark,.ds-sel .ds-name{color:#1d4ed8}"
+      "description": "Ruled table row: hatch swatch, type name, width; selected row takes blue wash and blue name. No Mark column.",
+      "html": "<table class=\"ds-sched\"><thead><tr><th></th><th>Type</th><th class=\"ds-n\">Width</th></tr></thead><tbody><tr><td><svg class=\"ds-sw\" viewBox=\"0 0 44 22\"><defs><pattern id=\"ds-h\" width=\"8\" height=\"8\" patternUnits=\"userSpaceOnUse\"><circle cx=\"2\" cy=\"2\" r=\".9\" fill=\"#14181c\"/><circle cx=\"6\" cy=\"6\" r=\".9\" fill=\"#14181c\"/></pattern></defs><rect width=\"44\" height=\"22\" fill=\"url(#ds-h)\"/></svg></td><td class=\"ds-name\">Sidewalk</td><td class=\"ds-n\">3.0 m</td></tr><tr class=\"ds-sel\"><td><svg class=\"ds-sw\" viewBox=\"0 0 44 22\"><rect width=\"44\" height=\"22\" fill=\"#f3f6f8\"/></svg></td><td class=\"ds-name\">Bike lane</td><td class=\"ds-n\">1.8 m</td></tr></tbody></table>",
+      "css": ".ds-sched{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:100%;border-collapse:collapse;background:#f3f6f8;color:#14181c;font-size:15px;font-variant-numeric:tabular-nums}.ds-sched th{padding:4px 8px 4px 0;font-size:13px;font-weight:600;text-align:left;color:#3b444c}.ds-sched td{padding:3px 8px 3px 0;border-top:1px solid #b4bcc3;vertical-align:middle}.ds-n{text-align:right!important}.ds-name{font-weight:500}.ds-sw{display:block;width:44px;height:22px;border:1px solid #14181c;border-radius:4px}.ds-sel td{background:rgb(29 78 216/.09)}.ds-sel .ds-name{color:#1d4ed8}"
     },
     {
       "name": "Sheet Note Heading and Check",
       "kind": "custom",
-      "refersTo": "title-block-cell",
-      "description": "Ruled note heading over ruled check rows; a failing check is wholly redline.",
-      "html": "<div class=\"ds-note\"><h2 class=\"ds-h\">Checks</h2><ul class=\"ds-checks\"><li><b>Fits right-of-way</b><span>Placeholder rule</span></li><li class=\"ds-bad\"><b>Over width</b><span>0.6 m over</span></li></ul></div>",
-      "css": ".ds-note{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;background:#f3f6f8;color:#14181c;padding:12px 18px}.ds-h{margin:0 0 8px;padding-bottom:4px;border-bottom:1px solid #14181c;font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase}.ds-checks{margin:0;padding:0;list-style:none}.ds-checks li{padding:5px 0;border-top:1px solid #b4bcc3}.ds-checks li:first-child{border-top:0;padding-top:0}.ds-checks b{display:block;font-weight:600;line-height:1.15}.ds-checks span{font-size:14px;color:#3b444c}.ds-bad,.ds-bad span{color:#b8231a!important}"
+      "refersTo": "note-heading",
+      "description": "Sentence-case note heading with a Rule Grey underline over ruled check rows; a failing check is wholly redline.",
+      "html": "<div class=\"ds-note\"><h2 class=\"ds-h\">Does it work?</h2><ul class=\"ds-checks\"><li><b>Fits right-of-way</b><span>Placeholder rule</span></li><li class=\"ds-bad\"><b>Over width</b><span>0.6 m over</span></li></ul></div>",
+      "css": ".ds-note{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;background:#f3f6f8;color:#14181c;padding:12px 18px}.ds-h{margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #b4bcc3;font-size:16px;font-weight:600}.ds-checks{margin:0;padding:0;list-style:none}.ds-checks li{padding:5px 0;border-top:1px solid #b4bcc3}.ds-checks li:first-child{border-top:0;padding-top:0}.ds-checks b{display:block;font-weight:600;line-height:1.15}.ds-checks span{font-size:14px;color:#3b444c}.ds-bad,.ds-bad span{color:#b8231a!important}"
     },
     {
-      "name": "Title Block",
+      "name": "About This Street Card",
       "kind": "custom",
-      "refersTo": "title-block-cell",
-      "description": "Two-column cell grid under a 2px rule: tiny tracked caption over an uppercase value.",
-      "html": "<div class=\"ds-tb\"><div class=\"ds-c\"><span>Project</span><b>CityLoom</b></div><div class=\"ds-c\"><span>Street</span><b>Main Street</b></div><div class=\"ds-c\"><span>Sheet</span><b>S-1</b></div><div class=\"ds-c\"><span>Revision</span><b>B</b></div></div>",
-      "css": ".ds-tb{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;display:grid;grid-template-columns:1fr 1fr;border-top:2px solid #14181c;background:#f3f6f8;color:#14181c}.ds-c{display:flex;flex-direction:column;gap:1px;padding:5px 18px 6px;border-top:1px solid #14181c}.ds-c:nth-child(-n+2){border-top:0}.ds-c:nth-child(even){border-left:1px solid #14181c}.ds-c span{font-size:11.5px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:#3b444c}.ds-c b{font-size:16px;font-weight:600;letter-spacing:.03em;text-transform:uppercase}"
+      "refersTo": "about-card",
+      "description": "Rounded card with a CityLoom wordmark row, Street, Width and Changes made; sentence-case captions over values.",
+      "html": "<div class=\"ds-tb\"><div class=\"ds-c ds-wide ds-brand\"><b>CityLoom</b></div><div class=\"ds-c ds-wide\"><span>Street</span><b>Main Street</b></div><div class=\"ds-c\"><span>Width</span><b>20 m</b></div><div class=\"ds-c\"><span>Changes made</span><b>2</b></div></div>",
+      "css": ".ds-tb{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;display:grid;grid-template-columns:1fr 1fr;border:1px solid #b4bcc3;border-radius:10px;overflow:hidden;background:#f3f6f8;color:#14181c;margin:12px}.ds-c{display:flex;flex-direction:column;gap:1px;padding:8px 14px 9px;border-top:1px solid #b4bcc3}.ds-wide{grid-column:1/-1}.ds-brand{border-top:0}.ds-c:nth-child(n+3):nth-child(odd){border-right:1px solid #b4bcc3}.ds-c span{font-size:13px;font-weight:500;color:#3b444c}.ds-c b{font-size:17px;font-weight:600}.ds-brand b{font-size:20px}"
     }
   ],
   "narrative": {
     "northStar": "The Typical Section Sheet",
-    "overview": "The interface is a civil drafting sheet, not an app window. One double-ruled border encloses the whole viewport; tick margins numbered 1 to 8 across the top and A to D down the left frame the work; a title block closes the right column. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a redline for what does not fit.\n\nDensity is that of a working sheet: small condensed capitals for labels, tabular figures for every dimension, hairline rules between rows. There is no card, no rounded corner, no dark or saturated fill and no call-to-action button. The primary action is dragging a segment inside the drawing.\n\nEach segment type has its own light tint, its own hatch texture and its own two-letter mark. The tint makes the sheet readable at a glance; the hatch and mark carry the identity, so the drawing still survives greyscale and colour-blindness.",
+    "overview": "The interface is a drafting sheet that has been softened for residents, not an engineering tool. One quiet 1px border with a 14px corner encloses the viewport; there are no tick rails, no double frame and no title block. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a redline for what does not fit. It is recognisable with content removed by its cool paper, thin grey rules, rounded controls and the section drawing itself.\n\nDensity is that of a working sheet but the voice is plain: headings, table heads and drawing labels are sentence case in a condensed grotesque, tabular figures for every dimension, hairline rules between rows. Controls and the about-this-street card have gentle corners; there is no dark or saturated fill and no call-to-action button. The primary action is dragging a piece inside the drawing. The drawing keeps its drafting devices (dimension strings, revision cloud, a graphic scale bar) and the panels carry the rest (pieces of the street, where the width goes, people moved, does it work, your changes).\n\nEach segment type has its own light tint and its own hatch texture, and is named on the drawing when the segment is wide enough, with a two-letter code as the narrow fallback. The tint makes the sheet readable at a glance; the hatch and name carry the identity, so the drawing still survives greyscale and colour-blindness.",
     "keyCharacteristics": [
-      "One sheet, one border (2px ink plus a 1px outer rule), square corners everywhere.",
+      "One sheet, one border (1px Faint Ink, 14px radius), controls at 6px, no rails.",
       "Black ink on cool paper, coloured in with pale tints; blue pencil for selection, redline for failure, and no other saturated accent.",
-      "Tint plus hatch plus mark encodes segment type; colour is never the only code.",
-      "Tabular figures and condensed capitals; sizes stay in a narrow 11 to 16px band (12px for table heads), with only the sheet title larger.",
-      "Flat: depth comes from line weight and ruled divisions, not shadow."
+      "Tint plus hatch plus name (or two-letter code) encodes segment type; colour is never the only code.",
+      "Tabular figures and sentence-case condensed type; sizes stay in a 13 to 16px band, with only the street title (32px) larger.",
+      "Flat: depth comes from line weight and quiet ruled divisions, not shadow."
     ],
     "rules": [
       {
@@ -509,8 +513,8 @@
         "section": "colors"
       },
       {
-        "name": "The Colour-Plus-Hatch-Plus-Mark Rule",
-        "body": "A segment type is identified by its tint, its hatch and its two-letter mark together. Colour is never the only code: every tint ships with a hatch and a mark, and a new category needs all three.",
+        "name": "The Colour-Plus-Hatch-Plus-Name Rule",
+        "body": "A segment type is identified by its tint, its hatch and its name together (the two-letter code stands in for the name only when the segment is too narrow). Colour is never the only code: every tint ships with a hatch and a name and code, and a new category needs all three.",
         "section": "colors"
       },
       {
@@ -519,13 +523,13 @@
         "section": "typography"
       },
       {
-        "name": "The Caps-For-Labels Rule",
-        "body": "Labels are uppercase and tracked; values, names and sentences are not. Figures never uppercase.",
+        "name": "The Plain-Words Rule",
+        "body": "Headings, labels, table heads, buttons and drawing text are sentence case at normal letter-spacing and use resident language (Today, Your design, Street width, Add a piece). No tracked capitals. The only capitals are the two-letter segment codes.",
         "section": "typography"
       },
       {
-        "name": "The Ruled-Not-Boxed Rule",
-        "body": "Regions are separated by single ruled lines and table rows, never by cards, gaps of background, or nested boxes.",
+        "name": "The Quiet-Rule Rule",
+        "body": "Regions are separated by single 1px Rule Grey lines and table rows. The one enclosed box is the about-this-street card; legend and schedule entries are ruled rows, never cards, and nothing nests inside another box.",
         "section": "layout"
       },
       {
@@ -535,22 +539,22 @@
       }
     ],
     "dos": [
-      "Do draw with ink lines at graded weights: 2px frame and title block edge, 1px structure, 0.8px dimensions.",
-      "Do encode any new category with a light tint, a new hatch texture and a two-letter mark together.",
-      "Do keep tints pale enough that 1px ink hatch and 16px marks stay legible over them.",
-      "Do use blue only for the thing being acted on and red only for a failed fit.",
-      "Do keep corners square and controls outlined in 1px ink on paper fill.",
-      "Do set labels in tracked uppercase 600 and numbers in tabular figures.",
-      "Do halo any label that sits over a hatch with 4px of paper.",
-      "Do give every new control a 2px blue focus outline and honour prefers-reduced-motion."
+      "**Do** draw with ink lines at graded weights: 1px structure and borders, 2px object outlines, 0.8px dimensions.",
+      "**Do** encode any new category with a light tint, a new hatch texture, a name and a two-letter code together.",
+      "**Do** keep tints pale enough that 1px ink hatch and 15 to 16px names stay legible over them.",
+      "**Do** use blue only for the thing being acted on and red only for a failed fit.",
+      "**Do** use the radius ladder (6px controls, 10px card, 14px sheet) and outline controls in 1px ink on paper fill.",
+      "**Do** set headings and labels in sentence case, plain resident wording, and numbers in tabular figures.",
+      "**Do** halo any label that sits over a hatch with 4px of paper.",
+      "**Do** give every new control a 2px blue focus outline and honour prefers-reduced-motion."
     ],
     "donts": [
-      "Don't let a tint stand alone as the identifier of a type, or use a tint as a state signal.",
-      "Don't use cards, rounded corners, filled call-to-action buttons or icon-card sidebars.",
-      "Don't add shadows to anything at rest.",
-      "Don't introduce a third saturated accent or use blue and red decoratively.",
-      "Don't replace line-art symbols with filled or glyph icons.",
-      "Don't set body-scale text in a face other than Barlow Semi Condensed."
+      "**Don't** let a tint stand alone as the identifier of a type, or use a tint as a state signal.",
+      "**Don't** add cards beyond the about-this-street card, nested boxes, filled call-to-action buttons or icon-card sidebars.",
+      "**Don't** add shadows to anything at rest.",
+      "**Don't** introduce a third saturated accent or use blue and red decoratively.",
+      "**Don't** replace line-art symbols with filled or glyph icons.",
+      "**Don't** set body-scale text in a face other than Barlow Semi Condensed."
     ]
   }
 }

@@ -1,6 +1,6 @@
 ---
 name: CityLoom
-description: A civil drafting sheet for rearranging a street's fixed right-of-way. Black ink on cool bond paper, light tints per segment type, one blue pencil, one redline.
+description: A softened drafting sheet for rearranging a street's fixed width. Black ink on cool bond paper, light tints per segment type, one blue pencil, one redline, quiet rounded frame.
 colors:
   sheet: "#f3f6f8"
   sheet-deep: "#e5eaee"
@@ -30,10 +30,16 @@ colors:
 typography:
   title:
     fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
-    fontSize: "30px"
+    fontSize: "32px"
     fontWeight: 600
     lineHeight: 1
-    letterSpacing: "0.02em"
+    letterSpacing: "-0.005em"
+  heading:
+    fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
+    fontSize: "16px"
+    fontWeight: 600
+    lineHeight: 1.35
+    letterSpacing: "normal"
   body:
     fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
     fontSize: "15px"
@@ -49,22 +55,22 @@ typography:
     letterSpacing: "normal"
   label:
     fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
+    fontSize: "14px"
+    fontWeight: 600
+    lineHeight: 1.35
+    letterSpacing: "normal"
+  table-head:
+    fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
     fontSize: "13px"
     fontWeight: 600
     lineHeight: 1.35
-    letterSpacing: "0.12em"
-  table-head:
-    fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
-    fontSize: "12px"
-    fontWeight: 600
-    lineHeight: 1.35
-    letterSpacing: "0.12em"
+    letterSpacing: "normal"
   field-label:
     fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
-    fontSize: "11px"
+    fontSize: "13px"
     fontWeight: 500
     lineHeight: 1.35
-    letterSpacing: "0.1em"
+    letterSpacing: "normal"
   dimension:
     fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
     fontSize: "16px"
@@ -73,7 +79,10 @@ typography:
     letterSpacing: "normal"
     fontFeature: "tnum"
 rounded:
-  none: "0px"
+  sm: "4px"
+  md: "6px"
+  card: "10px"
+  lg: "14px"
 spacing:
   hair: "1px"
   heavy: "2px"
@@ -82,14 +91,13 @@ spacing:
   md: "12px"
   lg: "18px"
   xl: "20px"
-  rail: "22px"
-  frame: "10px"
+  frame: "12px"
 components:
   button-tool:
     backgroundColor: "{colors.sheet}"
     textColor: "{colors.ink}"
     typography: "{typography.label}"
-    rounded: "{rounded.none}"
+    rounded: "{rounded.md}"
     padding: "4px 14px"
     height: "34px"
   button-tool-hover:
@@ -103,13 +111,13 @@ components:
   unit-toggle-pressed:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.sheet}"
-    rounded: "{rounded.none}"
+    rounded: "{rounded.md}"
     padding: "4px 10px"
     height: "34px"
   field-width:
     backgroundColor: "{colors.sheet}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.none}"
+    rounded: "{rounded.md}"
     padding: "2px 6px"
     height: "30px"
     width: "68px"
@@ -118,7 +126,7 @@ components:
   icon-button:
     backgroundColor: "{colors.sheet}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.none}"
+    rounded: "{rounded.md}"
     size: "30px"
   icon-button-danger-hover:
     backgroundColor: "{colors.redline}"
@@ -131,10 +139,16 @@ components:
     textColor: "{colors.ink}"
     typography: "{typography.body}"
     padding: "3px 6px 3px 0"
-  title-block-cell:
+  note-heading:
+    textColor: "{colors.ink}"
+    typography: "{typography.heading}"
+    padding: "0 0 6px"
+  about-card:
+    backgroundColor: "{colors.sheet}"
     textColor: "{colors.ink}"
     typography: "{typography.field-label}"
-    padding: "5px 18px 6px"
+    rounded: "{rounded.card}"
+    padding: "8px 14px 9px"
 ---
 
 # Design System: CityLoom
@@ -143,137 +157,138 @@ components:
 
 **Creative North Star: "The Typical Section Sheet"**
 
-The interface is a civil drafting sheet, not an app window. One double-ruled border encloses the whole viewport; tick margins numbered 1 to 8 across the top and A to D down the left frame the work; a title block closes the right column. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a redline for what does not fit. It is recognisable with all content removed by its border, tick margins and title block.
+The interface is a drafting sheet that has been softened for residents, not an engineering tool. One quiet 1px border with a 14px corner encloses the viewport; there are no tick rails, no double frame and no title block. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a redline for what does not fit. It is recognisable with content removed by its cool paper, thin grey rules, rounded controls and the section drawing itself.
 
-Density is that of a working sheet: small condensed capitals for labels, tabular figures for every dimension, hairline rules between rows. There is no card, no rounded corner, no dark or saturated fill and no call-to-action button. The primary action is dragging a segment inside the drawing. Drafting devices (dimension strings, revision clouds, a graphic scale bar, a schedule table, a revision table) carry the information that an app would put in chrome.
+Density is that of a working sheet but the voice is plain: headings, table heads and drawing labels are sentence case in a condensed grotesque, tabular figures for every dimension, hairline rules between rows. Controls and the about-this-street card have gentle corners; there is no dark or saturated fill and no call-to-action button. The primary action is dragging a piece inside the drawing. The drawing keeps its drafting devices (dimension strings, revision cloud, a graphic scale bar) and the panels carry the rest (pieces of the street, where the width goes, people moved, does it work, your changes).
 
-Each segment type has its own light tint, its own hatch texture and its own two-letter mark. The tint makes the sheet readable at a glance; the hatch and mark carry the identity, so the drawing still survives greyscale and colour-blindness.
+Each segment type has its own light tint and its own hatch texture, and is named on the drawing when the segment is wide enough, with a two-letter code as the narrow fallback. The tint makes the sheet readable at a glance; the hatch and name carry the identity, so the drawing still survives greyscale and colour-blindness.
 
 **Key Characteristics:**
-- One sheet, one border (2px ink plus a 1px outer rule), square corners everywhere.
+- One sheet, one border (1px Faint Ink, 14px radius), controls at 6px, no rails.
 - Black ink on cool paper, coloured in with pale tints; blue pencil for selection, redline for failure, and no other saturated accent.
-- Tint plus hatch plus mark encodes segment type; colour is never the only code.
-- Tabular figures and condensed capitals; sizes stay in a narrow 11 to 16px band (12px for table heads), with only the sheet title larger.
-- Flat: depth comes from line weight and ruled divisions, not shadow.
+- Tint plus hatch plus name (or two-letter code) encodes segment type; colour is never the only code.
+- Tabular figures and sentence-case condensed type; sizes stay in a 13 to 16px band, with only the street title (32px) larger.
+- Flat: depth comes from line weight and quiet ruled divisions, not shadow.
 
 ## Colors
 
 Cool bond paper, graphite ink, pale tints for what the drawing depicts, and two pencils for what the user does and what fails. Saturated chroma is confined to blue and red, and both are rare; the tints are light, sit under the ink linework, and never carry state.
 
 ### Primary
-- **Blue Pencil** (#1d4ed8): the only selection and focus color. Focus ring (2px, 2px offset), text caret and text selection, selected segment box and its dimension and mark text, the selected schedule row (text plus 9% wash), the current revision letter and row, drag ghost, insertion caret, and handle hover fill. Its meaning is "this is what you are acting on".
-- **Blue Wash** (rgb(29 78 216 / 0.09)): tint under selected schedule row, current revision row, and the drag ghost.
+- **Blue Pencil** (#1d4ed8): the only selection and focus color. Focus ring (2px, 2px offset), text caret and text selection, selected segment box and its dimension and name text, the selected schedule row (text plus 9% wash), the "Change N" label on the drawing and the current row of Your changes, drag ghost, insertion caret, and handle hover fill. Its meaning is "this is what you are acting on".
+- **Blue Wash** (rgb(29 78 216 / 0.09)): tint under selected schedule row, current change row, and the drag ghost.
 
 ### Secondary
-- **Redline** (#b8231a): the only failure color. Over-width wash, revision cloud, over-width dimension string and its text, failed checks, an invalid width field, and the danger hover on delete. If red is on the sheet, something does not fit.
+- **Redline** (#b8231a): the only failure color. Over-width wash, revision cloud, over-width dimension string and its "too wide" text, failed checks, an invalid width field, and the danger hover on remove. If red is on the sheet, something does not fit.
 - **Red Wash** (rgb(184 35 26 / 0.09)): tint over the overflow zone.
 
 ### Tertiary (depiction tints)
-Fills for what the drawing shows. Each is paired with ink hatch and outline, so none is ever the sole identifier. Used on the slab and existing-strip rectangles and the schedule and legend swatches; the mode chips in the Width by use table reuse five of them.
+Fills for what the drawing shows. Each is paired with ink hatch and outline, so none is ever the sole identifier. Used on the slab and Today-strip rectangles and the schedule and legend swatches; the mode chips in the Where the width goes table reuse five of them.
 - **Sidewalk Sand** (#f2cfa6), **Planting Green** (#b6dc9f), **Bike Teal** (#93d9cc), **Travel Slate** (#bcc5ce), **Bus Lilac** (#cdb8ec), **Parking Stone** (#dcd6c5), **Median Green** (#8fc281, also the median kerb symbol), **Loading Yellow** (#f5df7e): the eight segment-type tints (k-sidewalk to k-loading in the frontmatter).
 - **Sky** (#e2eff8): the pale rectangle behind the section elevation, above the ground line; no pointer events.
 - **Symbol fills**: tree (#78b565, trees and shrubs), car (#dbe2e9), bus (#b79ee3), van (#f0cb45), and two coat variants for the person (#ee9b78, #74aede). Symbols keep their 1.2px ink outline; symbol parts without a fill stay paper.
-- **Mode chips**: an 11px square with a 1px ink border before each row label in the Width by use table, reusing tints: foot is Sidewalk Sand, bike is Bike Teal, transit is Bus Lilac, vehicle is Travel Slate, green is Planting Green. No new values.
+- **Mode chips**: an 11px square with a 1px ink border and 3px radius before each row label in the Where the width goes table (Walking, Biking, Buses, Cars and trucks, Greenery), reusing tints: foot is Sidewalk Sand, bike is Bike Teal, transit is Bus Lilac, vehicle is Travel Slate, green is Planting Green. No new values.
 
 ### Neutral
 - **Bond Paper** (#f3f6f8): the sheet ground, every control fill, and text on inverted (ink) surfaces.
 - **Bond Paper Deep** (#e5eaee): hover fill for tools, icon buttons and legend rows.
-- **Black Ink** (#14181c): primary text, all structural lines (border, header rule, note headings, symbol outlines, hatch strokes, dimension lines), and the pressed state.
-- **Soft Ink** (#3b444c): secondary text, column heads, keys, hints.
-- **Faint Ink** (#59656f): tertiary text, tick-margin numerals, disabled text, right-of-way boundary text, drag-grip glyph, unassigned-space outline.
-- **Rule Grey** (#b4bcc3): hairline separators between table rows and between tick-margin cells; disabled control borders. Never used for text.
+- **Black Ink** (#14181c): primary text, control borders, symbol outlines, hatch strokes, dimension lines, and the pressed state.
+- **Soft Ink** (#3b444c): secondary text, column heads, captions, hints.
+- **Faint Ink** (#59656f): the sheet's outer border, tertiary text, disabled text, street-edge label text, drag-grip glyph, unassigned-space outline.
+- **Rule Grey** (#b4bcc3): the quiet structural line: dividers between header, drawing, status bar, lower band and notes column, note-heading underlines, the about card border, hairlines between table rows, disabled control borders. Never used for text.
 
 ### Named Rules
 **The Two Pencils Rule.** Blue means selected, red means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else.
 
-**The Colour-Plus-Hatch-Plus-Mark Rule.** A segment type is identified by its tint, its hatch and its two-letter mark together. Colour is never the only code: every tint ships with a hatch and a mark, and a new category needs all three.
+**The Colour-Plus-Hatch-Plus-Name Rule.** A segment type is identified by its tint, its hatch and its name together (the two-letter code stands in for the name only when the segment is too narrow). Colour is never the only code: every tint ships with a hatch and a name and code, and a new category needs all three.
 
 ## Typography
 
 **Display, Body and Label Font:** Barlow Semi Condensed (self-hosted woff2, weights 400, 500, 600; fallback Arial Narrow, Helvetica Neue, Arial, sans-serif)
 
-**Character:** One condensed grotesque doing the work of drafting lettering: narrow, even-stroked, set in capitals with generous tracking for labels and in tabular figures for every number. Hierarchy comes from weight (500 vs 600), case and tracking, not from size.
+**Character:** One condensed grotesque, set in sentence case at natural spacing, with tabular figures for every number. Hierarchy comes from weight (500 vs 600) and size, not from case or tracking.
 
 ### Hierarchy
-- **Title** (600, 30px, line-height 1, 0.02em, uppercase; 26px under 640px): street name in the sheet header.
-- **Body** (400, 15px, 1.35): hints, status line, fit statement; tabular figures on by default for the whole page.
-- **Note** (500, 14px): note tables, sub-title, key legend, check detail.
-- **Label** (600, 13px, 0.12em, uppercase): note headings (ruled underneath), tool buttons (0.1em), drawing labels "Existing", "Proposed", "Scale" (14px in the SVG).
-- **Table head** (600, 12px, 0.1 to 0.12em, uppercase): column heads of the schedule and notes tables. The unit tag beside width fields and the legend sub-text are also 12px. Key caps (kbd) are 13px 600 in the build, not 12.
-- **Field label** (500, 11 to 11.5px, 0.08 to 0.12em, uppercase): tick-margin numerals, form-field captions, title-block cell captions.
-- **Dimension** (500, 16px, tabular): widths above segments, overall strings, scale bar numerals. Marks (SW, BL, TL...) are 600, 16px, 0.08em. Text over hatch carries a 4px paper-coloured halo.
+- **Title** (600, 32px, line-height 1, -0.005em, sentence case): street name in the sheet header. The 26px size under 640px in an earlier rule is overridden in the build, which stays at 32px.
+- **Body** (400, 15px, 1.35): hints, status line, fit statement, the "Street cross-section" sub-title; tabular figures on by default for the whole page.
+- **Note** (500, 14px): note tables, key legend, check detail.
+- **Heading** (600, 16px): panel headings (Pieces of the street, Add a piece, Where the width goes, People moved, Does it work?, Your changes), with a 1px Rule Grey underline.
+- **Label** (600, 14px): tool buttons (Undo, Redo, Start over), drawing labels "Today", "Your design", "Street edge", "Unused", "Scale" (SVG, 0.01em).
+- **Table head** (600, 13px): column heads of the schedule and notes tables. The unit tag beside width fields and the legend sub-text are 12px. Key caps (kbd) are 13px 600.
+- **Field label** (500, 13px): the Street picker caption and the about-card captions.
+- **Dimension** (500, 16px, tabular): widths above segments, overall strings ("Street width", "Your design"), scale bar numerals. Segment names on the drawing are 600, 15px; when the segment is narrow the two-letter code is shown instead. Text over hatch carries a 4px paper-coloured halo.
 
 ### Named Rules
 **The Tabular Rule.** Every number is a tabular figure, so a changing dimension does not shift its neighbours.
 
-**The Caps-For-Labels Rule.** Labels are uppercase and tracked; values, names and sentences are not. Figures never uppercase.
+**The Plain-Words Rule.** Headings, labels, table heads, buttons and drawing text are sentence case at normal letter-spacing and use resident language (Today, Your design, Street width, Add a piece). No tracked capitals. The only capitals are the two-letter segment codes.
 
 ## Layout
 
-The sheet fills the viewport inside a 10px frame (6px under 640px). A 22px rail runs along the top and left, divided into 8 by 4 numbered and lettered zones. Inside: a header strip (title left, street picker, undo/redo/reset and units right), then a body of two columns, the work area and a fixed 340px notes column divided by a 1px ink rule. The work area stacks the drawing (Existing strip above Proposed section, same scale and origin), a status bar (fit statement, key hints), then a lower band of segment schedule (left) and legend (right, min 280px).
+The sheet fills the viewport inside a 12px frame (6px under 640px), as a single block with a 1px Faint Ink border and 14px radius (10px under 640px), clipping its content to the corner. Inside: a header (street name and "Street cross-section" sub-title left, Street picker, Undo/Redo/Start over and m/ft units right), then a body of two columns, the work area and a fixed 340px notes column, divided by a 1px Rule Grey line. The work area stacks the drawing (Today strip above Your design section, same scale and origin), a status bar (fit statement, key hints), then a lower band of Pieces of the street (left) and Add a piece (right, min 280px). The notes column holds Where the width goes, People moved, Does it work?, Your changes, and the about-this-street card pinned at the bottom.
 
-The drawing scales so the right-of-way fills the width minus margins; the SVG has a 680px minimum and scrolls horizontally on narrow screens, with vertical geometry scaled 0.9 to 1.1. Rhythm is tight: 4, 8, 12, 18, 20px paddings; table rows are 3px above and below. Structural dividers are 1px ink; the frame and the title block top edge are 2px.
+The drawing scales so the street width fills the width minus margins; the SVG has a 680px minimum and scrolls horizontally on narrow screens, with vertical geometry scaled 0.9 to 1.1. Rhythm is tight: 4, 8, 12, 18, 20px paddings; table rows are 3px above and below. All region dividers are 1px Rule Grey.
 
-Breakpoints: at 1100px the notes column drops below the work area with a 2px top rule; at 860px the schedule and legend stack; at 640px the rail is removed, the frame narrows, and the pattern swatch and type columns of the schedule are hidden.
+Breakpoints: at 1100px the notes column drops below the work area with a 1px Rule Grey top line; at 860px Pieces of the street and Add a piece stack; at 640px the frame narrows to 6px and the pattern swatch column of the schedule is hidden.
 
 ### Named Rules
-**The Ruled-Not-Boxed Rule.** Regions are separated by single ruled lines and table rows, never by cards, gaps of background, or nested boxes.
+**The Quiet-Rule Rule.** Regions are separated by single 1px Rule Grey lines and table rows. The one enclosed box is the about-this-street card; legend and schedule entries are ruled rows, never cards, and nothing nests inside another box.
 
 ## Elevation & Depth
 
-Flat. There are no shadows at rest and no layered surfaces; depth is line weight (2px border and title block edge, 1px structure, 0.8px dimension and boundary lines, 3.4px ground line). The one exception is state-only: the chip being dragged floats with a soft shadow (`0 6px 14px -4px rgb(20 24 28 / 0.28)`) and a blue border, because it is literally lifted off the sheet. A dragged segment is shown lifted by dropping its opacity to 0.35.
+Flat. There are no shadows at rest and no layered surfaces; depth is line weight (1px border and dividers, 2px object outlines in the drawing, 0.8px dimension and boundary lines, 3.4px ground line). The one exception is state-only: the chip being dragged floats with a soft shadow (`0 6px 14px -4px rgb(20 24 28 / 0.28)`) and a blue border, because it is literally lifted off the sheet. A dragged segment is shown lifted by dropping its opacity to 0.35.
 
 ### Named Rules
 **The Flat Sheet Rule.** Nothing rests above the paper. Only an object in the user's hand may cast a shadow.
 
 ## Shapes
 
-Square. Every border radius is 0, on buttons, selects, inputs, chips and swatches. Forms are drawn as line art: rectangles with 2px ink outline over a hatch, handles as 18 by 16px square grips with a double-headed arrow, dimension strings as a line with 45-degree tick marks at each end (4px), right-of-way lines as long-dash-dot strokes, boundary lines as 5/4 dashes, selection as a 2px blue rectangle, overflow as a scalloped revision cloud in red drawn in over 620ms. Elevation symbols (person, tree, shrub, cyclist, car, bus, van, parking sign, median kerb) are single-weight line art, 1.2px non-scaling stroke, paper-filled, round joins.
+Softly rounded, with a small ladder of radii: sheet 14px (`--radius-lg`), about-this-street card 10px, controls 6px (`--radius`: buttons, select, width inputs, icon buttons, the drag chip), 4px on swatches and key caps, 3px on mode chips. The m/ft toggle is one joined pair, rounded only at its outer ends. Legend rows are square ruled rows, not rounded cards. The drawing itself stays hard-edged: rectangles with 2px ink outline over a hatch, handles as 18 by 16px square grips with a double-headed arrow, dimension strings as a line with 45-degree tick marks at each end (4px), street-edge lines as long-dash-dot strokes, boundary lines as 5/4 dashes, selection as a 2px blue rectangle, overflow as a scalloped revision cloud in red drawn in over 620ms. Elevation symbols (person, tree, shrub, cyclist, car, bus, van, parking sign, median kerb) are single-weight line art, 1.2px non-scaling stroke, round joins.
 
 Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: sidewalk (dot stipple), planting (grass ticks), bike lane (45-degree lines), travel lane (staggered dashes), bus lane (tight reverse diagonal), parking (horizontal lines), median (crosshatch grid), loading (chevrons).
 
 ## Components
 
 ### Buttons (tools and unit toggle)
-- **Shape:** square, 1px ink border, 34px tall, adjoining buttons overlap borders by 1px to read as one segmented strip.
-- **Default:** paper fill, ink text, 13px 600 uppercase, 0.1em tracking, padding 4px 14px. Unit toggle is sentence case at 10px side padding.
+- **Shape:** 6px radius, 1px ink border, 34px tall. Undo, Redo and Start over sit apart with a 6px gap; the m/ft toggle is joined (borders overlap by 1px) with outer corners rounded.
+- **Default:** paper fill, ink text, 14px 600 sentence case, no tracking, padding 4px 14px. Unit toggle is 10px side padding.
 - **Hover:** Bond Paper Deep fill. **Active (pressed):** ink fill, paper text, the same as the selected unit (aria-pressed).
 - **Disabled:** Faint Ink text, Rule Grey border, transparent fill.
 - **Focus:** 2px blue outline at 2px offset.
 - Transitions: 120ms, cubic-bezier(0.16, 1, 0.3, 1), background and colour only; disabled under reduced motion.
 
 ### Inputs / Fields
-- **Width field:** 68px by 30px, 1px ink border, no radius, paper fill, right-aligned tabular 500 text, unit tag beside it. **Invalid:** border and text turn redline. **Focus:** blue outline, blue caret.
-- **Street select:** same square outline, custom 10px chevron drawn in ink, uppercase caption above at 11px.
+- **Width field:** 68px by 30px, 1px ink border, 6px radius, paper fill, right-aligned tabular 500 text, unit tag beside it. **Invalid:** border and text turn redline. **Focus:** blue outline, blue caret.
+- **Street select:** same 6px outline, custom 10px chevron drawn in ink, sentence-case caption "Street" above at 13px.
 
-### Symbol schedule and legend
-- **Schedule:** ruled table, rows separated by 1px Rule Grey, columns Mark, Pattern swatch (44 by 22px hatch), Type, Width field, Actions. Selected row takes Blue Wash and blue mark/name.
-- **Legend:** the palette is a symbol schedule as well, one ruled row per segment type (44px swatch, name, default width, small grip glyph), draggable, Bond Paper Deep on hover. Not cards.
-- **Icon buttons:** 30px squares, 1px ink border, 14px 1.6px square-cap line icons; delete hovers redline with paper icon and stands 10px apart from the move arrows.
+### Pieces of the street and Add a piece
+- **Pieces of the street:** ruled table, rows separated by 1px Rule Grey, columns Pattern swatch (44 by 22px hatch, 4px radius), Type (segment name), Width field, Actions. There is no Mark column. Selected row takes Blue Wash and blue name.
+- **Add a piece:** the palette is one ruled row per segment type (44px swatch, name, default width, small grip glyph), draggable, Bond Paper Deep on hover. Not cards.
+- **Icon buttons:** 30px, 1px ink border, 6px radius, 14px 1.6px square-cap line icons; remove hovers redline with paper icon and stands 10px apart from the move arrows.
 
-### Sheet notes, revisions and title block
-- **Notes:** heading with 1px ink underline, right-aligned tabular tables, checks with 16px square-cap line icons; a failing check turns whole redline.
-- **Revisions:** compact table, current row in Blue Wash, base row in Soft Ink, scrolls at 104px height below 1100px.
-- **Title block:** 2 by 3 grid pinned to the bottom of the notes column, 2px ink top edge, 1px ink cell dividers, 11.5px captions over 16px uppercase values (Project, Street, Sheet, Date, Revision, Right-of-way).
+### Notes and the about-this-street card
+- **Notes:** sentence-case heading (16px 600) with a 1px Rule Grey underline, right-aligned tabular tables, checks with 16px square-cap line icons; a failing check turns whole redline.
+- **Your changes:** compact table of numbered steps, current row in Blue Wash, "Street today" base row (marked with a dash) in Soft Ink, scrolls at 104px height below 1100px.
+- **About this street card:** 2-column grid pinned to the bottom of the notes column, 10px radius, 1px Rule Grey border and dividers, 16px below. A full-width CityLoom wordmark row (20px 600), a full-width Street row, then Width and Changes made. Captions 13px over 17px 600 values, all sentence case.
 
 ### Section drawing (signature component)
-The Existing strip and Proposed section share one origin and scale. Each proposed segment: line-art symbol standing on a 3.4px ground line, a 34px slab with 2px ink outline, its segment tint and hatch over it, its mark below, its width above on a dimension line. Overall strings below: right-of-way, then proposed total if different. Right-of-way lines dash-dot at both ends; a graphic scale bar of five alternating black and paper blocks closes the drawing. Selected segment: 2px blue box. Handles: square grips that turn blue-filled on hover or drag, and whose boundary line becomes a solid 2px blue. Over-width: red wash, scalloped red cloud, red second dimension string and "over" note.
+The Today strip and Your design section share one origin and scale. Each proposed segment: line-art symbol standing on a 3.4px ground line, a 34px slab with 2px ink outline, its segment tint and hatch over it, its name below (two-letter code when narrow), its width above on a dimension line. Overall strings below: "Street width", then "Your design" total if different. Street-edge lines dash-dot at both ends, labelled "Street edge"; a graphic scale bar of five alternating black and paper blocks closes the drawing. Selected segment: 2px blue box, with a blue "Change N" label after a change. Handles: square grips that turn blue-filled on hover or drag, and whose boundary line becomes a solid 2px blue. Over-width: red wash, scalloped red cloud, red second dimension string and "too wide" note.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** draw with ink lines at graded weights: 2px frame and title block edge, 1px structure, 0.8px dimensions.
-- **Do** encode any new category with a light tint, a new hatch texture and a two-letter mark together.
-- **Do** keep tints pale enough that 1px ink hatch and 16px marks stay legible over them.
+- **Do** draw with ink lines at graded weights: 1px structure and borders, 2px object outlines, 0.8px dimensions.
+- **Do** encode any new category with a light tint, a new hatch texture, a name and a two-letter code together.
+- **Do** keep tints pale enough that 1px ink hatch and 15 to 16px names stay legible over them.
 - **Do** use blue only for the thing being acted on and red only for a failed fit.
-- **Do** keep corners square and controls outlined in 1px ink on paper fill.
-- **Do** set labels in tracked uppercase 600 and numbers in tabular figures.
+- **Do** use the radius ladder (6px controls, 10px card, 14px sheet) and outline controls in 1px ink on paper fill.
+- **Do** set headings and labels in sentence case, plain resident wording, and numbers in tabular figures.
 - **Do** halo any label that sits over a hatch with 4px of paper.
 - **Do** give every new control a 2px blue focus outline and honour prefers-reduced-motion.
 
 ### Don't:
 - **Don't** let a tint stand alone as the identifier of a type, or use a tint as a state signal.
-- **Don't** use cards, rounded corners, filled call-to-action buttons or icon-card sidebars.
+- **Don't** add cards beyond the about-this-street card, nested boxes, filled call-to-action buttons or icon-card sidebars.
 - **Don't** add shadows to anything at rest.
 - **Don't** introduce a third saturated accent or use blue and red decoratively.
 - **Don't** replace line-art symbols with filled or glyph icons.
