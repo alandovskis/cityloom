@@ -1479,23 +1479,11 @@ kbd {
 /* ---- coloured chrome ---------------------------------------------------- */
 .topbar {
   position: relative;
-  background: var(--chrome);
+  background:
+    linear-gradient(90deg, #e59a4a 0 20%, #5fae4a 20% 34%, #2aa898 34% 66%, #8a6fd1 66% 86%, #e0c23a 86% 100%) bottom / 100% 5px no-repeat,
+    var(--chrome);
   color: var(--chrome-ink);
   border-bottom: 0;
-}
-.topbar::after {
-  content: "";
-  position: absolute;
-  inset: auto 0 0 0;
-  height: 4px;
-  background: linear-gradient(
-    90deg,
-    var(--k-sidewalk) 0 20%,
-    var(--k-planting) 20% 34%,
-    var(--k-bike) 34% 66%,
-    var(--k-bus) 66% 86%,
-    var(--k-loading) 86% 100%
-  );
 }
 .topbar {
   padding-bottom: 10px;
@@ -1518,10 +1506,6 @@ kbd {
 .sheet-head {
   background: var(--chrome-wash);
   border-bottom-color: var(--chrome-line);
-}
-.topbar::after {
-  height: 5px;
-  background: linear-gradient(90deg, #e59a4a 0 20%, #5fae4a 20% 34%, #2aa898 34% 66%, #8a6fd1 66% 86%, #e0c23a 86% 100%);
 }
 :root[data-theme="dark"] {
   --chrome: #0f4744;
