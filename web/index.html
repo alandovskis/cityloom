@@ -6,7 +6,7 @@
   <title>CityLoom street editor</title>
   <meta name="description" content="Rearrange the pieces of a street within its width and see what changes.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-drawing")==="engineering")document.documentElement.dataset.drawing="engineering"}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";if(localStorage.getItem("cityloom-drawing")==="engineering")document.documentElement.dataset.drawing="engineering"}catch(e){}</script>
   <link rel="preload" href="fonts/barlow-semi-condensed-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
@@ -60,11 +60,14 @@
             <button type="button" id="reset" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>Start over</button>
           </div>
           <button type="button" id="print" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2V6h11v5.5h-2M4.5 9.5h7v4h-7z"/></svg>Print</button>
+          <button type="button" id="inspector-toggle" class="btn" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the piece details ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span id="inspector-label">Hide piece details</span></button>
           <button type="button" id="notes-toggle" class="btn" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span id="notes-label">Hide notes</span></button>
         </div>
       </header>
 
       <main class="sheet-body">
+        <aside class="inspector" id="inspector" aria-label="Selected piece"></aside>
+
         <div class="work">
           <section class="drawing" aria-labelledby="h-drawing">
             <h2 id="h-drawing" class="sr-only">Cross-section</h2>
@@ -81,7 +84,7 @@
               <span><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> reorder</span>
               <span><kbd>+</kbd> <kbd>−</kbd> resize</span>
               <span><kbd>Delete</kbd> remove</span>
-              <span><kbd>]</kbd> notes</span>
+              <span><kbd>[</kbd> <kbd>]</kbd> details, notes</span>
               <span><kbd>Ctrl</kbd> <kbd>Z</kbd> undo</span>
             </p>
             </div>

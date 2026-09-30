@@ -229,8 +229,18 @@ h1 {
 .sheet-body {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   min-height: 0;
+}
+.inspector {
+  grid-column: 1;
+}
+.work {
+  grid-column: 2;
+}
+.notes {
+  grid-column: 3;
+  width: 340px;
 }
 
 .work {
@@ -845,9 +855,6 @@ svg pattern circle {
 /* ---- narrow ------------------------------------------------------------- */
 
 @media (max-width: 1100px) {
-  .sheet-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .notes {
     border-left: 0;
 
@@ -1465,9 +1472,6 @@ kbd {
   font-size: 15px;
 }
 
-:root[data-notes="closed"] .sheet-body {
-  grid-template-columns: minmax(0, 1fr);
-}
 :root[data-notes="closed"] .notes {
   display: none;
 }
@@ -1517,6 +1521,149 @@ kbd {
     --chrome: #0f4744;
     --chrome-wash: #14302f;
     --chrome-line: #2f5654;
+  }
+}
+
+/* ---- inspector: the selected piece, at the left of the drawing ------------- */
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 248px;
+  min-width: 0;
+  padding: 16px 18px 20px;
+  border-right: var(--line) solid var(--rule);
+}
+:root[data-inspector="closed"] .inspector {
+  display: none;
+}
+.insp-empty {
+  margin: 0;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+.insp-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.insp-name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.insp-sub {
+  margin: 3px 0 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.insp-sec .note-h {
+  margin-bottom: 8px;
+}
+.stepper {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 6px;
+}
+.stepper .ico {
+  width: 36px;
+  height: 36px;
+}
+.stepper .wfield {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+.stepper .wfield input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  font-size: 20px;
+  font-weight: 600;
+  text-align: center;
+}
+.stepper .unit-tag {
+  font-size: 14px;
+}
+.insp-range {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.opts {
+  display: block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.opt {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 6px 4px 0;
+  border: 0;
+  border-top: var(--line) solid var(--rule);
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms var(--ease-out);
+}
+.opts li:last-child .opt {
+  border-bottom: var(--line) solid var(--rule);
+}
+.opt:hover {
+  background: var(--sheet-deep);
+}
+.opt[aria-checked="true"] {
+  background: var(--blue-wash);
+  color: var(--blue);
+  font-weight: 600;
+}
+.opt .tick {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+}
+.opt[aria-checked="true"] .tick {
+  opacity: 1;
+}
+.swatch.none line {
+  stroke: var(--ink-faint);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+@media (max-width: 1100px) {
+  .sheet-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .inspector,
+  .work,
+  .notes {
+    grid-column: 1;
+    width: auto;
+  }
+  .inspector {
+    order: 2;
+    border-right: 0;
+    border-top: var(--line) solid var(--rule);
+  }
+  .work {
+    order: 1;
+  }
+  .notes {
+    order: 3;
   }
 }
 
@@ -1590,6 +1737,7 @@ kbd {
   /* everything that only makes sense on a screen */
   .top-end,
   .tools,
+  .inspector,
   .statusbar,
   .legend,
   .drawing .cue,
@@ -1676,6 +1824,7 @@ kbd {
   /* notes print even when collapsed on screen, as a row of columns under the sheet */
   :root[data-notes="closed"] .notes,
   .notes {
+    width: auto;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px 20px;

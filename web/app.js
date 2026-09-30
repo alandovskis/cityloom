@@ -29,6 +29,7 @@ const el = {
   undo: $("undo"),
   redo: $("redo"),
   reset: $("reset"),
+  inspector: $("inspector"),
 };
 
 // ---- formatting -----------------------------------------------------------
@@ -62,6 +63,9 @@ const ICON = {
   right: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10M8 3l4 4-4 4"/></svg>`,
   remove: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8"/></svg>`,
   grip: `<svg class="grip-ico" viewBox="0 0 10 14" aria-hidden="true"><path d="M2 2h.01M8 2h.01M2 7h.01M8 7h.01M2 12h.01M8 12h.01"/></svg>`,
+  minus: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>`,
+  plus: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>`,
+  tick: `<svg class="tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.5 6.5 12.5 13.5 3.5"/></svg>`,
   ok: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.5 6.5 12.5 13.5 3.5"/></svg>`,
   bad: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3 3 13"/></svg>`,
 };
@@ -561,8 +565,106 @@ function render() {
   renderFit();
   renderDrawing();
   renderSchedule();
+  renderInspector();
   renderNotes();
 }
+
+
+// ---- inspector ------------------------------------------------------------
+
+const surfaceSwatch = (id) =>
+  `<svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><rect width="44" height="22" fill="var(--sheet)" stroke="none"/><rect width="44" height="22" fill="url(#m-${id})" stroke="none"/></svg>`;
+const curbSwatch = (id) =>
+  id === "none"
+    ? `<svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><line x1="4" x2="40" y1="11" y2="11"/></svg>`
+    : `<svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><rect width="44" height="22" fill="var(--sheet)" stroke="none"/><rect width="44" height="22" fill="url(#c-${id})" stroke="none"/></svg>`;
+
+const option = (fid, checked, swatchHtml, name, data) =>
+  `<li><button type="button" class="opt" role="radio" aria-checked="${checked}" tabindex="${checked ? 0 : -1}" data-ifid="${fid}" ${data}>${swatchHtml}<span>${esc(name)}</span>${ICON.tick}</button></li>`;
+
+const stepMm = () => (units === "m" ? 100 : 305);
+
+function renderInspector() {
+  const active = document.activeElement;
+  const focusId = active && el.inspector.contains(active) ? active.dataset.ifid : null;
+  const s = view.selected ? seg(view.selected) : null;
+  if (!s) {
+    el.inspector.innerHTML = `<p class="insp-empty">Select a piece to change its width and surface.</p>`;
+    return;
+  }
+  const k = kindOf(s);
+  const i = idxOf(s.uid);
+  const lo = num(s.min_mm).toFixed(2);
+  const hi = num(s.max_mm).toFixed(2);
+  const surfaces = k.materials
+    .map((m) => {
+      const mat = MATERIALS.surfaces[m];
+      return option(`s-${mat.id}`, mat.id === s.material, surfaceSwatch(mat.id), mat.name, `data-isurface="${m}"`);
+    })
+    .join("");
+  let curbs = "";
+  if (k.has_curb) {
+    const rows = MATERIALS.curbs.map((c, ci) => option(`c-${c.id}`, c.id === s.curb, curbSwatch(c.id), c.name, `data-icurb="${ci}"`));
+    rows.push(option("c-none", s.curb == null, curbSwatch("none"), "None (flush)", `data-icurb="-1"`));
+    curbs = `<section class="insp-sec"><h3 class="note-h" id="i-h-curb">Curb</h3><ul class="opts" role="radiogroup" aria-labelledby="i-h-curb">${rows.join("")}</ul></section>`;
+  }
+  el.inspector.innerHTML = `
+    <div class="insp-head">${swatch(k.id)}<div><h2 class="insp-name">${esc(k.name)}</h2><p class="insp-sub">${fmt(s.width_mm)} wide · ${i + 1} of ${view.segments.length}</p></div></div>
+    <section class="insp-sec">
+      <h3 class="note-h" id="i-h-width">Width</h3>
+      <div class="stepper">
+        <button type="button" class="ico" data-istep="-1" data-ifid="minus" aria-label="Narrower by ${fmtN(stepMm())} ${units}">${ICON.minus}</button>
+        <span class="wfield"><input type="number" inputmode="decimal" data-ifid="width" step="${units === "m" ? "0.1" : "0.25"}" min="${lo}" max="${hi}" value="${num(s.width_mm).toFixed(2)}" aria-labelledby="i-h-width"><span class="unit-tag" aria-hidden="true">${units}</span></span>
+        <button type="button" class="ico" data-istep="1" data-ifid="plus" aria-label="Wider by ${fmtN(stepMm())} ${units}">${ICON.plus}</button>
+      </div>
+      <p class="insp-range">Allowed ${lo} to ${hi} ${units}</p>
+    </section>
+    <section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3><ul class="opts" role="radiogroup" aria-labelledby="i-h-surface">${surfaces}</ul></section>
+    ${curbs}`;
+  if (focusId) {
+    const t = el.inspector.querySelector(`[data-ifid="${focusId}"]`);
+    if (t && !t.disabled) t.focus({ preventScroll: true });
+  }
+}
+
+el.inspector.addEventListener("click", (e) => {
+  const uid = view.selected;
+  const b = e.target.closest("button");
+  if (!b || !uid) return;
+  let ok = false;
+  if (b.dataset.istep) ok = sheet.nudge_width(uid, Number(b.dataset.istep) * stepMm());
+  else if (b.dataset.isurface) ok = sheet.set_material(uid, Number(b.dataset.isurface));
+  else if (b.dataset.icurb) ok = sheet.set_curb(uid, Number(b.dataset.icurb));
+  if (ok) {
+    refresh();
+    announceEdit();
+  }
+});
+
+el.inspector.addEventListener("change", (e) => {
+  const input = e.target.closest("input");
+  const uid = view.selected;
+  if (!input || !uid) return;
+  const v = parseFloat(input.value);
+  if (!Number.isFinite(v)) return renderInspector();
+  const before = seg(uid).width_mm;
+  sheet.set_width(uid, fromInput(v));
+  refresh();
+  if (seg(uid)?.width_mm !== before) announceEdit();
+});
+
+// Radio groups: arrows move the choice, as native radios do.
+el.inspector.addEventListener("keydown", (e) => {
+  const cur = e.target.closest('[role="radio"]');
+  if (!cur || e.metaKey || e.ctrlKey || e.altKey) return;
+  const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+  if (!step) return;
+  e.preventDefault();
+  const group = [...cur.closest('[role="radiogroup"]').querySelectorAll('[role="radio"]')];
+  const next = group[(group.indexOf(cur) + step + group.length) % group.length];
+  next.focus();
+  next.click();
+});
 
 // ---- actions --------------------------------------------------------------
 
@@ -575,6 +677,7 @@ function select(uid) {
     tr.classList.toggle("sel", on);
     on ? tr.setAttribute("aria-selected", "true") : tr.removeAttribute("aria-selected");
   }
+  renderInspector();
 }
 
 function insertIndex() {
@@ -952,6 +1055,34 @@ render();
   menu.addEventListener("focusout", (e) => {
     if (e.relatedTarget && !menu.contains(e.relatedTarget) && e.relatedTarget !== btn) setOpen(false);
   });
+}
+
+// Piece details sidebar: collapsible from a header button or the [ key; remembered.
+{
+  const btn = $("inspector-toggle");
+  const label = $("inspector-label");
+  const sync = () => {
+    const open = root.dataset.inspector !== "closed";
+    btn.setAttribute("aria-expanded", String(open));
+    label.textContent = open ? "Hide piece details" : "Show piece details";
+  };
+  const toggle = () => {
+    const open = root.dataset.inspector === "closed";
+    if (open) delete root.dataset.inspector;
+    else root.dataset.inspector = "closed";
+    try {
+      localStorage.setItem("cityloom-inspector", open ? "open" : "closed");
+    } catch {}
+    sync();
+    say(open ? "Piece details shown." : "Piece details hidden.");
+  };
+  btn.addEventListener("click", toggle);
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "[" || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+    e.preventDefault();
+    toggle();
+  });
+  sync();
 }
 
 // Print: the print stylesheet lays the sheet out; this is only the trigger.
