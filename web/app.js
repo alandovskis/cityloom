@@ -838,6 +838,9 @@ render();
   });
 }
 
+// Print: the print stylesheet lays the sheet out; this is only the trigger.
+$("print").addEventListener("click", () => window.print());
+
 // Notes sidebar: collapsible from a header button or the ] key; remembered.
 {
   const root = document.documentElement;
