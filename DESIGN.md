@@ -265,7 +265,7 @@ Same token names, re-composed for a dark ground; every value is a `dark-*` key i
 
 ## Layout
 
-The sheet fills the viewport inside a 12px frame (6px under 640px), as a single block with a 1px Faint Ink border and 14px radius (10px under 640px), clipping its content to the corner. Inside: a top bar (the CityLoom mark and wordmark left, the Light | Dark theme toggle right) over a header (street name and "Street cross-section" sub-title left, Street picker, Undo/Redo/Start over, and the m/ft units right), then a body of two columns, the work area and a fixed 340px notes column, divided by a 1px Rule Grey line. The work area stacks the drawing (Today strip above Your design section, same scale and origin), a status bar (fit statement, key hints), then a lower band of Pieces of the street (left) and Add a piece (right, min 280px). The notes column holds Where the width goes, People moved, Does it work?, Your changes, and the about-this-street card pinned at the bottom.
+The sheet fills the viewport inside a 12px frame (6px under 640px), as a single block with a 1px Faint Ink border and 14px radius (10px under 640px), clipping its content to the corner. Inside: a top bar (the CityLoom mark and wordmark left, the Light | Dark theme toggle and a guest avatar right) over a header (street name and "Street cross-section" sub-title left, Street picker, Undo/Redo/Start over, and the m/ft units right), then a body of two columns, the work area and a fixed 340px notes column, divided by a 1px Rule Grey line. The work area stacks the drawing (Today strip above Your design section, same scale and origin), a status bar (fit statement, key hints), then a lower band of Pieces of the street (left) and Add a piece (right, min 280px). The notes column holds Where the width goes, People moved, Does it work?, Your changes, and the about-this-street card pinned at the bottom.
 
 The drawing scales so the street width fills the width minus margins; the SVG has a 680px minimum and scrolls horizontally on narrow screens, with vertical geometry scaled 0.9 to 1.1. Rhythm is tight: 4, 8, 12, 18, 20px paddings; table rows are 3px above and below. All region dividers are 1px Rule Grey.
 
@@ -300,6 +300,9 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 ### Theme toggle
 - The Light | Dark pair in the top bar is the same joined 34px toggle (6px outer corners, pressed = inked fill). Its pressed state shows the theme in effect, so with no saved choice it tracks the system live.
 - Behaviour: follows the system (`prefers-color-scheme`) until a choice is made; the choice is stored in localStorage under `cityloom-theme` (storage failures are tolerated, and the choice then lasts the visit). A small inline script in the page head applies the stored choice before first paint, and the page declares `color-scheme: light dark`. The choice is announced in the status line ("Dark theme.").
+
+### Avatar
+- A 34px circle at the far right of the top bar: 1px Ink outline, Bond Paper Deep fill, a line-art head-and-shoulders in 1.6px round-cap ink. It is a placeholder image labelled "Guest, not signed in", not a control, because CityLoom has no accounts yet. When sign-in exists it becomes a button with a menu; until then it must not look pressable (no hover state).
 
 ### Inputs / Fields
 - **Width field:** 68px by 30px, 1px ink border, 6px radius, paper fill, right-aligned tabular 500 text, unit tag beside it. **Invalid:** border and text turn redline. **Focus:** blue outline, blue caret.

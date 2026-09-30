@@ -1403,3 +1403,29 @@ kbd {
     font-size: 18px;
   }
 }
+
+.top-end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: var(--line) solid var(--ink);
+  border-radius: 50%;
+  background: var(--sheet-deep);
+  color: var(--ink);
+  overflow: hidden;
+}
+.avatar svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
