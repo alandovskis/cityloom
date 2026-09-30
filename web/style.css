@@ -1713,3 +1713,28 @@ kbd {
 :root[data-drawing="engineering"] #drawing .sym {
   display: none;
 }
+#drawing .ext {
+  stroke: var(--ink-soft);
+  stroke-width: 0.8;
+}
+#drawing .sheet-frame {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  pointer-events: none;
+}
+#drawing .tb-line {
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+#drawing .tb-l {
+  fill: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+#drawing .tb-v {
+  font-size: 17px;
+  font-weight: 600;
+}

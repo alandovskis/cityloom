@@ -126,6 +126,7 @@ function setGeometry(f) {
   F = f;
   for (const k in Y0) Y[k] = Math.round(Y0[k] * f);
 }
+const TB_H = 46; // title block height in the engineering view
 const L = { padL: 30, padR: 40, scale: 0.05, width: 760 };
 let drag = null;
 let wasOver = false;
@@ -292,6 +293,16 @@ function renderDrawing() {
     );
   }
 
+  // engineering view: extension lines carry each boundary down to the overall strings
+  if (engineering()) {
+    const bounds = new Set([0, v.row_mm]);
+    for (const s of v.segments) bounds.add(s.x_mm + s.width_mm);
+    for (const mm of bounds) {
+      if (mm > v.row_mm) continue;
+      parts.push(`<line class="ext" x1="${X(mm)}" x2="${X(mm)}" y1="${bodyBottom + 4}" y2="${Y.total + 6}"/>`);
+    }
+  }
+
   // overall dimension strings
   parts.push(dimLine(xL, xR, Y.total));
   parts.push(`<text class="t-dim t-halo" x="${(xL + xR) / 2}" y="${Y.total - 7}" text-anchor="middle">Street width ${fmt(v.row_mm)}</text>`);
@@ -321,6 +332,37 @@ function renderDrawing() {
     parts.push(`<text class="t-dim t-soft" x="${L.padL + 60 + barW + 8}" y="${y - 6}">${units}</text>`);
   }
 
+  // engineering view: sheet border and title block
+  const furniture = [];
+  const H = engineering() ? Y.height + TB_H + 20 : Y.height;
+  if (engineering()) {
+    const top = H - TB_H - 4;
+    const cells = [
+      ["Street", v.name, 2.4],
+      ["Width", fmt(v.row_mm), 1],
+      ["Units", units === "m" ? "Metres" : "Feet", 1],
+      ["Changes", String(v.revisions.length), 1],
+      ["Sheet", "1 of 1", 1],
+    ];
+    const total = cells.reduce((a, c) => a + c[2], 0);
+    const x0 = 4;
+    const full = W - 8;
+    furniture.push(`<rect class="sheet-frame" x="${x0}" y="4" width="${full}" height="${H - 8}"/>`);
+    furniture.push(`<line class="tb-line" x1="${x0}" x2="${x0 + full}" y1="${top}" y2="${top}"/>`);
+    let cx = x0;
+    for (const [label, value, fr] of cells) {
+      const w = (full * fr) / total;
+      if (cx > x0) furniture.push(`<line class="tb-line" x1="${cx}" x2="${cx}" y1="${top}" y2="${H - 4}"/>`);
+      furniture.push(
+        `<svg x="${cx}" y="${top}" width="${w}" height="${TB_H}">` +
+          `<text class="tb-l" x="10" y="16">${label}</text>` +
+          `<text class="tb-v" x="10" y="${TB_H - 10}">${esc(value)}</text>` +
+          `</svg>`,
+      );
+      cx += w;
+    }
+  }
+
   // drag feedback
   if (drag && drag.type === "move" && drag.active) {
     const s = seg(drag.uid);
@@ -339,13 +381,14 @@ function renderDrawing() {
   }
 
   el.svg.setAttribute("width", W);
-  el.svg.setAttribute("height", Y.height);
-  el.svg.setAttribute("viewBox", `0 0 ${W} ${Y.height}`);
+  el.svg.setAttribute("height", H);
+  el.svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   el.svg.setAttribute(
     "aria-label",
     `Cross-section of ${v.name}. ${n} segments, ${fmt(v.total_mm)} of ${fmt(v.row_mm)}. ${fitText()}.`,
   );
-  el.svg.innerHTML = parts.join("");
+  // the drawing sits a little lower inside the border in the engineering view
+  el.svg.innerHTML = engineering() ? `<g transform="translate(0 10)">${parts.join("")}</g>${furniture.join("")}` : parts.join("");
 }
 
 // ---- schedule and legend --------------------------------------------------
