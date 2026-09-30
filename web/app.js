@@ -293,6 +293,31 @@ function renderDrawing() {
     );
   }
 
+  // engineering view: lane markings as they cut through the section, a filled
+  // block for a solid line and an outlined one for a broken line
+  if (engineering()) {
+    const road = new Set(["travel", "bus", "bike", "parking", "loading"]);
+    for (let i = 1; i < n; i++) {
+      const a = KINDS[v.segments[i - 1].kind].id;
+      const b = KINDS[v.segments[i].kind].id;
+      if (!road.has(a) || !road.has(b)) continue;
+      const broken = a === "travel" && b === "travel";
+      const x = X(v.segments[i].x_mm);
+      parts.push(`<rect class="lane-mark${broken ? " broken" : ""}" x="${x - 3.5}" y="${G - 9}" width="7" height="9"/>`);
+    }
+    const kx = xR - 236;
+    if (kx > L.padL + 60 + 5 * (units === "m" ? 1000 : MM_PER_FT * 5) * L.scale + 30) {
+      const ky = Y.scale;
+      parts.push(
+        `<text class="t-label t-soft" x="${kx}" y="${ky - 6}">Lane markings</text>` +
+          `<rect class="lane-mark" x="${kx + 136}" y="${ky - 16}" width="7" height="10"/>` +
+          `<text class="t-dim t-soft" x="${kx + 150}" y="${ky - 6}">Solid</text>` +
+          `<rect class="lane-mark broken" x="${kx + 190}" y="${ky - 16}" width="7" height="10"/>` +
+          `<text class="t-dim t-soft" x="${kx + 204}" y="${ky - 6}">Broken</text>`,
+      );
+    }
+  }
+
   // engineering view: extension lines carry each boundary down to the overall strings
   if (engineering()) {
     const bounds = new Set([0, v.row_mm]);

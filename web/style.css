@@ -1738,3 +1738,12 @@ kbd {
   font-size: 17px;
   font-weight: 600;
 }
+#drawing .lane-mark {
+  fill: var(--ink);
+  stroke: var(--ink);
+  stroke-width: 1.2;
+  pointer-events: none;
+}
+#drawing .lane-mark.broken {
+  fill: var(--sheet);
+}
