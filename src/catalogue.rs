@@ -72,10 +72,11 @@ pub const MATERIALS: [Material; 7] = [
     Material { id: "gravel", name: "Gravel" },
 ];
 
-pub const CURBS: [Material; 3] = [
+pub const CURBS: [Material; 4] = [
     Material { id: "granite", name: "Granite" },
     Material { id: "concrete", name: "Concrete" },
     Material { id: "asphalt", name: "Asphalt" },
+    Material { id: "planted", name: "Planted" },
 ];
 
 /// A new sidewalk or bike lane gets this curb (concrete).
