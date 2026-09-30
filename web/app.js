@@ -561,12 +561,13 @@ const curbSwatch = (id) =>
     ? `<svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><line x1="4" x2="40" y1="11" y2="11"/></svg>`
     : `<svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><rect width="44" height="22" fill="var(--sheet)" stroke="none"/><rect width="44" height="22" fill="url(#c-${id})" stroke="none"/></svg>`;
 
-// Traffic direction as drawn on a cross-section: a dot is the point of an arrow
-// coming toward you, a cross is its tail going away.
-const dirGlyph = (id, cx, cy) =>
-  id === "toward"
-    ? `<circle class="dir" cx="${cx}" cy="${cy}" r="8"/><circle class="dir-dot" cx="${cx}" cy="${cy}" r="2.6"/>`
-    : `<circle class="dir" cx="${cx}" cy="${cy}" r="8"/><path class="dir-x" d="M${cx - 4.5},${cy - 4.5} L${cx + 4.5},${cy + 4.5} M${cx + 4.5},${cy - 4.5} L${cx - 4.5},${cy + 4.5}"/>`;
+// Traffic direction as an arrow: up runs away from you, down comes toward you.
+// The paler outline under the arrow keeps it readable over hatching.
+const dirGlyph = (id, cx, cy) => {
+  const d = id === "toward" ? 1 : -1;
+  const path = `M${cx},${cy - 7 * d} V${cy + 7 * d} M${cx - 4.5},${cy + 2.5 * d} L${cx},${cy + 7 * d} L${cx + 4.5},${cy + 2.5 * d}`;
+  return `<path class="dir-halo" d="${path}"/><path class="dir" d="${path}"/>`;
+};
 const dirSwatch = (id) =>
   id === "both"
     ? `<svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><path class="dir-x" d="M8,11 H36 M12,7 L8,11 L12,15 M32,7 L36,11 L32,15"/></svg>`

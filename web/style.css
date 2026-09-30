@@ -1867,32 +1867,22 @@ kbd {
   stroke-width: 1;
   pointer-events: none;
 }
-#drawing .dir {
-  fill: var(--sheet);
-  stroke: var(--ink);
-  stroke-width: 1.4;
-  pointer-events: none;
-}
-#drawing .dir-dot {
-  fill: var(--ink);
-  pointer-events: none;
-}
-#drawing .dir-x,
+#drawing .dir,
+#drawing .dir-halo,
+.swatch .dir,
+.swatch .dir-halo,
 .swatch .dir-x {
   fill: none;
   stroke: var(--ink);
-  stroke-width: 1.6;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;
 }
-.swatch .dir {
-  fill: var(--sheet);
-  stroke: var(--ink);
-  stroke-width: 1.4;
-}
-.swatch .dir-dot {
-  fill: var(--ink);
+#drawing .dir-halo,
+.swatch .dir-halo {
+  stroke: var(--sheet);
+  stroke-width: 5;
 }
 #drawing .curb {
   fill: var(--sheet);

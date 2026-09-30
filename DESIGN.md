@@ -316,7 +316,7 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 - **Tabs:** the right column is split into Space (where the width goes, people moved), Checks and Changes. Text tabs on a 1px Rule Grey baseline; the selected tab is Ink 600 with a 2px ink underline. Arrow keys, Home and End move between tabs; the choice is remembered. In print all three show, without the tab row.
 
 ### Lane direction
-- **Direction:** a driving lane always runs one way and a bike lane may. Each is drawn with the cross-section convention in a 16px circle on the slab: a dot for traffic coming toward you, a cross for traffic going away. A two-way bike lane has no symbol. The inspector's Direction group lists Away from you and Toward you, plus Two-way for a bike lane. The sample streets start with the driving lanes on the left half running away and the rest toward.
+- **Direction:** a driving lane always runs one way and a bike lane may. Each is drawn as a 14px arrow on the slab, with a Sheet outline so it reads over the hatch: up for traffic going away from you, down for traffic coming toward you. A two-way bike lane has no arrow. The inspector's Direction group lists Away from you and Toward you, plus Two-way for a bike lane. The sample streets start with the driving lanes on the left half running away and the rest toward.
 
 ### Sidebar colour
 - **Left inspector:** takes the selected piece's kind colour: a 4px bar along its top edge, a 30% wash behind it, and the section heading rules. With nothing selected it stays neutral. Selected options still use Blue Pencil.
