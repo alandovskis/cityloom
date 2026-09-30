@@ -2447,3 +2447,38 @@ kbd {
 .chip span > small {
   display: block;
 }
+
+.swatch.none path,
+.swatch.none rect,
+.swatch.none circle {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.swatch.none .dash {
+  stroke-dasharray: 3 3;
+  stroke: var(--ink-faint);
+}
+
+.inspector .insp-sec > .btn {
+  width: 100%;
+  justify-content: center;
+  white-space: nowrap;
+}
+.inspector .insp-sec > .btn + .insp-range {
+  margin-top: 8px;
+}
+
+.opt[role="checkbox"] {
+  grid-template-columns: minmax(0, 1fr) 16px;
+  padding-left: 6px;
+}
+.opt[role="checkbox"]:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+.opt[role="checkbox"]:disabled:hover {
+  background: transparent;
+}

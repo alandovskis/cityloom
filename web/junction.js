@@ -72,6 +72,11 @@ const ICON = {
   grip: `<svg class="grip-ico" viewBox="0 0 10 14" aria-hidden="true"><path d="M2 2h.01M8 2h.01M2 7h.01M8 7h.01M2 12h.01M8 12h.01"/></svg>`,
 };
 
+const BTN = {
+  plus: `<svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3 8h10M8 3v10"/></svg>`,
+  remove: `<svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>`,
+};
+
 // A turn arrow, pointing up, in a 16 by 16 box: the stem and its branch.
 const turnGlyph = (cls, size = 16) => {
   const branch = { [LEFT]: "M8 9Q8 5 3.5 5M6 3 3.5 5 6 7", [RIGHT]: "M8 9Q8 5 12.5 5M10 3l2.5 2L10 7", [THROUGH]: "M8 9V2M5.5 4.5 8 2l2.5 2.5" }[cls];
@@ -181,36 +186,24 @@ function controlMarker(a) {
   return line + glyph;
 }
 
+// The distance across, set on the crossing itself over a paper halo.
 function crossingDim(a) {
   const c = a.crossing;
-  const cmds = c.poly;
-  const p = [1, 2, 3].map((i) => [cmds[i][1], cmds[i][2]]);
-  const [p1, p2, p3] = p;
-  const n = dirOf(a.bearing);
-  const off = 1300;
-  const q2 = [p2[0] + n[0] * off, p2[1] + n[1] * off];
-  const q3 = [p3[0] + n[0] * off, p3[1] + n[1] * off];
-  const [x2, y2] = T(q2);
-  const [x3, y3] = T(q3);
-  const ang = Math.atan2(y3 - y2, x3 - x2);
-  const tk = [Math.cos(ang + 0.785) * 5, Math.sin(ang + 0.785) * 5];
-  const tick = (x, y) => `M${f1(x - tk[0])} ${f1(y - tk[1])}L${f1(x + tk[0])} ${f1(y + tk[1])}`;
-  const mid = [(x2 + x3) / 2, (y2 + y3) / 2];
+  const [p0, p2] = [0, 2].map((i) => [c.poly[i][1], c.poly[i][2]]);
+  const [x, y] = T([(p0[0] + p2[0]) / 2, (p0[1] + p2[1]) / 2]);
   const text = c.stages > 1 ? `${c.stages} × ${fmtN(c.stage_mm)}` : fmtN(c.distance_mm);
-  void p1;
-  return (
-    `<path class="dim${c.too_far ? " dim-red" : ""}" d="M${f1(x2)} ${f1(y2)}L${f1(x3)} ${f1(y3)}${tick(x2, y2)}${tick(x3, y3)}"/>` +
-    `<text class="t-dim t-halo${c.too_far ? " t-red" : ""}" x="${f1(mid[0])}" y="${f1(mid[1] - 5)}" text-anchor="middle">${text}</text>`
-  );
+  return `<text class="t-dim t-halo${c.too_far ? " t-red" : ""}" x="${f1(x)}" y="${f1(y + 5)}" text-anchor="middle">${text}</text>`;
 }
 
 function renderPlan() {
   const v = view;
   const W = Math.max(el.wrap.clientWidth, 320);
-  const H = Math.round(Math.min(Math.max(window.innerHeight - 300, 460), 760));
+  const narrow = W < 640;
+  const H = Math.round(narrow ? Math.min(W * 1.1, 520) : Math.min(Math.max(window.innerHeight - 240, 520), 820));
   const [bx0, by0, bx1, by1] = v.bounds;
-  const pad = 44;
-  S.s = Math.min((W - 2 * pad) / (bx1 - bx0), (H - 2 * pad) / (by1 - by0));
+  const padX = narrow ? 24 : Math.min(150, W * 0.2);
+  const padY = 64;
+  S.s = Math.min((W - 2 * padX) / (bx1 - bx0), (H - 2 * padY) / (by1 - by0));
   S.ox = W / 2 - ((bx0 + bx1) / 2) * S.s;
   S.oy = H / 2 - ((by0 + by1) / 2) * S.s;
   S.w = W;
@@ -300,11 +293,18 @@ function renderPlan() {
       layers.mark.push(`<g class="lane-arrow out" transform="translate(${f1(x)} ${f1(y)}) rotate(${l.heading})"><path class="halo" d="M0 ${h / 2}V${-h / 2}M-3.5 ${-h / 2 + 3.5}L0 ${-h / 2}L3.5 ${-h / 2 + 3.5}"/><path d="M0 ${h / 2}V${-h / 2}M-3.5 ${-h / 2 + 3.5}L0 ${-h / 2}L3.5 ${-h / 2 + 3.5}"/></g>`);
     }
 
-    // labels at the arm's end, on paper so they read over the strips
-    const [lx, ly] = T(a.label_at);
+    // the street's name and width, outside the end of the arm
+    const [lx, ly] = T(a.end);
+    const ld = dirOf(a.bearing);
+    const side = Math.abs(ld[0]) > 0.5;
+    // On a narrow screen there is no room beside a sideways arm: set its name above it.
+    const beside = side && !narrow;
+    const anchor = side ? (ld[0] > 0 ? (narrow ? "end" : "start") : narrow ? "start" : "end") : "middle";
+    const x = beside ? lx + ld[0] * 12 : lx;
+    const y1 = beside ? ly - 2 : ld[1] < 0 || side ? ly - 32 : ly + 26;
     layers.label.push(
-      `<text class="t-mark t-halo${isSel("arm", a.uid) ? " t-blue" : ""}" x="${f1(lx)}" y="${f1(ly)}" text-anchor="middle">${esc(a.street)}</text>` +
-        `<text class="t-note t-halo t-soft" x="${f1(lx)}" y="${f1(ly + 17)}" text-anchor="middle">${compass(a.bearing)} · ${fmt(a.road_mm)} road${a.offset_mm ? ` · shifted ${fmt(Math.abs(a.offset_mm))}` : ""}</text>`,
+      `<text class="t-mark t-halo${isSel("arm", a.uid) ? " t-blue" : ""}" x="${f1(x)}" y="${f1(y1)}" text-anchor="${anchor}">${esc(a.street)}</text>` +
+        `<text class="t-note t-halo t-soft" x="${f1(x)}" y="${f1(y1 + 17)}" text-anchor="${anchor}">${compass(a.bearing)} · ${fmt(a.road_mm)} road${a.offset_mm ? ` · shifted ${fmt(Math.abs(a.offset_mm))}` : ""}</text>`,
     );
 
     if (isSel("arm", a.uid)) layers.sel.push(`<path class="sel-box" d="${pathD(a.outline)}"/>`);
@@ -525,7 +525,7 @@ function crossingSection(a) {
   const c = a.crossing;
   if (!c) {
     return `<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
-      <button type="button" class="btn" data-icross="1" data-ifid="cross-add">${ICON.plus}Mark a crossing</button></section>`;
+      <button type="button" class="btn" data-icross="1" data-ifid="cross-add">${BTN.plus}Mark a crossing</button></section>`;
   }
   const bulbs = [0, 1]
     .map((i) => {
@@ -536,7 +536,7 @@ function crossingSection(a) {
   return (
     `<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
       <p class="insp-range">${c.stages > 1 ? `${c.stages} stages of ${fmt(c.stage_mm)}` : `${fmt(c.distance_mm)} to cross`}${c.too_far ? ". Too far in one go." : ""}</p>
-      <button type="button" class="btn" data-icross="0" data-ifid="cross-off">${ICON.remove}Remove the crossing</button></section>` +
+      <button type="button" class="btn" data-icross="0" data-ifid="cross-off">${BTN.remove}Remove the crossing</button></section>` +
     numField("setback", "Set back from the junction", c.setback_mm, { minus: "Closer by 0.5 m", plus: "Farther by 0.5 m", hint: `${fmt(LIM.setback[0])} to ${fmt(LIM.setback[1])}` }) +
     numField("cwidth", "Crossing width", c.width_mm, { minus: "Narrower by 0.5 m", plus: "Wider by 0.5 m", hint: `${fmt(LIM.crossing[0])} to ${fmt(LIM.crossing[1])}` }) +
     `<section class="insp-sec"><h3 class="note-h" id="i-h-refuge">Halfway island</h3><ul class="opts">${option("island", c.island, "", a.can_island ? "Refuge island in the middle" : "Refuge island (road too narrow)", `data-iisland="1" ${a.can_island ? "" : "disabled"}`, "checkbox")}</ul></section>` +
@@ -589,7 +589,7 @@ function renderInspector() {
         `<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3><select data-istreet data-ifid="street" aria-labelledby="i-h-street">${streets}</select><p class="insp-range">The street's own layout is edited in the street editor.</p></section>` +
         `<section class="insp-sec"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>${a.enters ? `<ul class="lanes">${laneRows(a)}</ul>` : `<p class="insp-range">One way out. No lanes come in.</p>`}</section>` +
         crossingSection(a) +
-        `<section class="insp-sec"><button type="button" class="btn danger" data-iremove="1" data-ifid="remove" ${canRemove ? "" : "disabled"}>${ICON.remove}Remove this street</button>${canRemove ? "" : `<p class="insp-range">A junction needs at least ${LIM.min_arms} streets.</p>`}</section>`;
+        `<section class="insp-sec"><button type="button" class="btn danger" data-iremove="1" data-ifid="remove" ${canRemove ? "" : "disabled"}>${BTN.remove}Remove this street</button>${canRemove ? "" : `<p class="insp-range">A junction needs at least ${LIM.min_arms} streets.</p>`}</section>`;
     }
   }
   if (focusId) {
