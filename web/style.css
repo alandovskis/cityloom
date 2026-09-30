@@ -2482,3 +2482,41 @@ kbd {
 .opt[role="checkbox"]:disabled:hover {
   background: transparent;
 }
+
+.plan-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 8px 20px;
+  border-top: var(--line) solid var(--rule);
+  list-style: none;
+  font-size: 14px;
+  font-weight: 500;
+}
+.plan-key li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.plan-key .swatch {
+  width: 28px;
+  height: 14px;
+}
+@media (max-width: 1100px) {
+  body:has(.plan-drawing) .work {
+    display: contents;
+  }
+  body:has(.plan-drawing) .drawing {
+    order: 1;
+  }
+  body:has(.plan-drawing) .inspector {
+    order: 2;
+  }
+  body:has(.plan-drawing) .lower {
+    order: 3;
+  }
+  body:has(.plan-drawing) .notes {
+    order: 4;
+  }
+}

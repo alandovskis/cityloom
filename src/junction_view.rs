@@ -485,7 +485,7 @@ impl Junction {
                 .zip(&a.lanes)
                 .map(|(&x, &u)| lane_view(l, off, x, arrow_t, heading(l.bearing), u))
                 .collect();
-            let leave_arrows = l.prof.leave_x.iter().map(|&x| lane_view(l, off, x, l.mouth + 6_000.0, l.bearing.round() as i32, 0)).collect();
+            let leave_arrows = l.prof.leave_x.iter().map(|&x| lane_view(l, off, x, arrow_t, l.bearing.round() as i32, 0)).collect();
             let road_mm = l.prof.road_mm();
             arms.push(ArmView {
                 uid: a.uid,

@@ -83,17 +83,6 @@ const turnGlyph = (cls, size = 16) => {
   return `<svg class="turn-ico" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true" focusable="false"><path d="M8 14V9"/><path d="${branch}"/></svg>`;
 };
 
-const controlGlyph = (id) => {
-  const g = {
-    uncontrolled: `<path class="dash" d="M6 11h32"/>`,
-    priority: `<path d="M4 8h36M4 14h36"/><path d="M22 20v-6M18 17l4-4 4 4" transform="translate(0 -1)"/>`,
-    stop: `<path d="M17 4h10l5 5v6l-5 5H17l-5-5V9z"/><path d="M17 11h10"/>`,
-    signal: `<rect x="17" y="2" width="10" height="18" rx="2"/><circle cx="22" cy="7" r="1.6"/><circle cx="22" cy="11" r="1.6"/><circle cx="22" cy="15" r="1.6"/>`,
-    roundabout: `<circle cx="22" cy="11" r="8"/><circle cx="22" cy="11" r="3"/>`,
-  }[id];
-  return `<svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false">${g}</svg>`;
-};
-
 const streetSwatch = (s) => {
   let x = 0;
   const w = 44 / s.row_mm;
@@ -186,20 +175,28 @@ function controlMarker(a) {
   return line + glyph;
 }
 
-// The distance across, set on the crossing itself over a paper halo.
+// The distance across as a dimension string with ticks, on the junction side
+// of the crossing where nothing else is drawn, its figure over a paper halo.
 function crossingDim(a) {
   const c = a.crossing;
-  const [p0, p2] = [0, 2].map((i) => [c.poly[i][1], c.poly[i][2]]);
-  const [x, y] = T([(p0[0] + p2[0]) / 2, (p0[1] + p2[1]) / 2]);
+  const n = dirOf(a.bearing);
+  const off = -800;
+  const [q0, q1] = [0, 1].map((i) => T([c.poly[i][1] + n[0] * off, c.poly[i][2] + n[1] * off]));
+  const ang = Math.atan2(q1[1] - q0[1], q1[0] - q0[0]);
+  const tk = [Math.cos(ang + 0.785) * 5, Math.sin(ang + 0.785) * 5];
+  const tick = ([x, y]) => `M${f1(x - tk[0])} ${f1(y - tk[1])}L${f1(x + tk[0])} ${f1(y + tk[1])}`;
   const text = c.stages > 1 ? `${c.stages} × ${fmtN(c.stage_mm)}` : fmtN(c.distance_mm);
-  return `<text class="t-dim t-halo${c.too_far ? " t-red" : ""}" x="${f1(x)}" y="${f1(y + 5)}" text-anchor="middle">${text}</text>`;
+  return (
+    `<path class="dim${c.too_far ? " dim-red" : ""}" d="M${f1(q0[0])} ${f1(q0[1])}L${f1(q1[0])} ${f1(q1[1])}${tick(q0)}${tick(q1)}"/>` +
+    `<text class="t-dim t-halo${c.too_far ? " t-red" : ""}" x="${f1((q0[0] + q1[0]) / 2)}" y="${f1((q0[1] + q1[1]) / 2 + 5)}" text-anchor="middle">${text}</text>`
+  );
 }
 
 function renderPlan() {
   const v = view;
   const W = Math.max(el.wrap.clientWidth, 320);
   const narrow = W < 640;
-  const H = Math.round(narrow ? Math.min(W * 1.1, 520) : Math.min(Math.max(window.innerHeight - 240, 520), 820));
+  const H = Math.round(narrow ? Math.min(W * 1.5, 620) : Math.min(Math.max(window.innerHeight - 240, 520), 820));
   const [bx0, by0, bx1, by1] = v.bounds;
   const padX = narrow ? 24 : Math.min(150, W * 0.2);
   const padY = 64;
@@ -442,6 +439,14 @@ function renderNotes() {
   $("tb-changes").textContent = String(v.revisions.length);
 }
 
+// A key to the strips: the tint and hatch of each piece that appears in the plan.
+function renderKey() {
+  const ids = [...new Set(view.arms.flatMap((a) => a.pieces.map((p) => p.kind)))].sort((x, y) => x - y);
+  $("plan-key").innerHTML = ids
+    .map((k) => `<li><svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><rect class="k-${KINDS[k].id}" width="44" height="22" stroke="none"/><rect width="44" height="22" fill="url(#h-${KINDS[k].id})" stroke="none"/></svg>${esc(KINDS[k].name)}</li>`)
+    .join("");
+}
+
 function renderHead() {
   const v = view;
   $("street-name").textContent = v.name;
@@ -487,9 +492,9 @@ function numField(key, label, mm, opts = {}) {
     </div>${hint ? `<p class="insp-range">${hint}</p>` : ""}</section>`;
 }
 
-function renderJunctionPanel() {
+function controlSection() {
   const v = view;
-  const controls = CAT.controls.map((c, i) => option(`ctl-${c.id}`, i === v.control_index, controlGlyph(c.id), c.name, `data-icontrol="${i}"`)).join("");
+  const opts = CAT.controls.map((c, i) => `<option value="${i}"${i === v.control_index ? " selected" : ""}>${esc(c.name)}</option>`).join("");
   let ring = "";
   if (v.ring) {
     ring = numField("ring", "Size of the roundabout", v.ring.radius_mm, {
@@ -500,10 +505,11 @@ function renderJunctionPanel() {
       tag: `${units} across`,
     });
   }
-  el.inspector.innerHTML = `
-    <p class="insp-empty">Select a street, corner or crossing to change it. Or set how the whole junction is controlled.</p>
-    <section class="insp-sec"><h3 class="note-h" id="i-h-control">Control</h3><ul class="opts" role="radiogroup" aria-labelledby="i-h-control">${controls}</ul></section>
-    ${ring}`;
+  return `<section class="insp-sec"><h3 class="note-h" id="i-h-control">Junction control</h3><select data-icontrol data-ifid="control" aria-labelledby="i-h-control">${opts}</select></section>${ring}`;
+}
+
+function renderJunctionPanel() {
+  el.inspector.innerHTML = `<p class="insp-empty">Select a street, corner or crossing to change it.</p>${controlSection()}`;
 }
 
 function laneRows(a) {
@@ -558,37 +564,40 @@ function renderInspector() {
     el.inspector.innerHTML = `
       <div class="insp-head"><div><h2 class="insp-name">Corner</h2><p class="insp-sub">${esc(compass(a.bearing))} to ${esc(compass(next.bearing))}</p></div></div>
       ${numField("corner", "Curb radius", c.radius_mm, { minus: "Tighter by 0.5 m", plus: "Wider by 0.5 m", hint: `${fmt(LIM.corner[0])} to ${fmt(LIM.corner[1])}. Cars turn here at about ${Math.round(c.speed_kmh)} km/h.` })}
-      <p class="insp-empty">A tight corner slows turning cars and shortens the walk across. A wide one lets them swing through faster.</p>`;
+      <p class="insp-empty">A tight corner slows turning cars and shortens the walk across. A wide one lets them swing through faster.</p>${controlSection()}`;
   } else {
     const crossingOnly = v.selected.kind === "crossing";
     const streets = CAT.streets.map((s, i) => `<option value="${i}"${i === a.street_index ? " selected" : ""}>${esc(s.name)}</option>`).join("");
     const head = `<div class="insp-head"><div><h2 class="insp-name">${esc(a.street)}</h2><p class="insp-sub">${esc(compass(a.bearing))}, ${a.bearing}° · ${fmt(a.road_mm)} road</p></div></div>`;
     if (crossingOnly) {
-      el.inspector.innerHTML = head + crossingSection(a);
+      el.inspector.innerHTML = head + crossingSection(a) + controlSection();
     } else {
       const canRemove = v.arms.length > CAT.limits.min_arms;
+      const dirSec = numField("bearing", "Direction", a.bearing, {
+        minus: "Turn anticlockwise by 5°",
+        plus: "Turn clockwise by 5°",
+        value: a.bearing,
+        step: LIM.bearing_step,
+        min: 0,
+        max: 355,
+        tag: "°",
+        hint: "Clockwise from north. At least 30° from its neighbours.",
+      });
+      const offSec = numField("offset", "Shift sideways", a.offset_mm, {
+        minus: "Shift left by 0.1 m",
+        plus: "Shift right by 0.1 m",
+        value: num(a.offset_mm).toFixed(2),
+        step: units === "m" ? "0.1" : "0.5",
+        hint: `Up to ${fmt(a.max_offset_mm)} either way. Looking out from the junction.`,
+      });
       el.inspector.innerHTML =
         head +
-        numField("bearing", "Direction", a.bearing, {
-          minus: "Turn anticlockwise by 5°",
-          plus: "Turn clockwise by 5°",
-          value: a.bearing,
-          step: LIM.bearing_step,
-          min: 0,
-          max: 355,
-          tag: "°",
-          hint: "Clockwise from north. At least 30° from its neighbours.",
-        }) +
-        numField("offset", "Shift sideways", a.offset_mm, {
-          minus: "Shift left by 0.1 m",
-          plus: "Shift right by 0.1 m",
-          value: num(a.offset_mm).toFixed(2),
-          step: units === "m" ? "0.1" : "0.5",
-          hint: `Up to ${fmt(a.max_offset_mm)} either way. Looking out from the junction.`,
-        }) +
-        `<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3><select data-istreet data-ifid="street" aria-labelledby="i-h-street">${streets}</select><p class="insp-range">The street's own layout is edited in the street editor.</p></section>` +
         `<section class="insp-sec"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>${a.enters ? `<ul class="lanes">${laneRows(a)}</ul>` : `<p class="insp-range">One way out. No lanes come in.</p>`}</section>` +
         crossingSection(a) +
+        dirSec +
+        offSec +
+        `<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3><select data-istreet data-ifid="street" aria-labelledby="i-h-street">${streets}</select><p class="insp-range">The street's own layout is edited in the street editor.</p></section>` +
+        controlSection() +
         `<section class="insp-sec"><button type="button" class="btn danger" data-iremove="1" data-ifid="remove" ${canRemove ? "" : "disabled"}>${BTN.remove}Remove this street</button>${canRemove ? "" : `<p class="insp-range">A junction needs at least ${LIM.min_arms} streets.</p>`}</section>`;
     }
   }
@@ -602,6 +611,7 @@ function renderInspector() {
 
 function render() {
   renderHead();
+  renderKey();
   renderPlan();
   renderInspector();
   renderNotes();
@@ -670,7 +680,6 @@ el.inspector.addEventListener("click", (e) => {
   const d = b.dataset;
   const s = view.selected;
   const uid = s.uid;
-  if (d.icontrol !== undefined) return void act(() => plan.set_control(Number(d.icontrol)), "control");
   if (d.istep) return void step(d.istep, Number(d.dir));
   if (d.lane !== undefined) return void act(() => plan.set_lane_use(uid, Number(d.lane), Number(d.class), b.getAttribute("aria-pressed") !== "true"), "lane");
   if (d.icross !== undefined) return void act(() => plan.set_crossing(uid, d.icross === "1"));
@@ -699,6 +708,7 @@ function step(key, dir) {
 el.inspector.addEventListener("change", (e) => {
   const t = e.target;
   const s = view.selected;
+  if (t.dataset.icontrol !== undefined) return void act(() => plan.set_control(Number(t.value)), "control");
   if (t.dataset.istreet !== undefined) return void act(() => plan.set_street(s.uid, Number(t.value)));
   const key = t.dataset.iset;
   if (!key) return;
