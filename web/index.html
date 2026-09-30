@@ -16,13 +16,17 @@
 
   <div class="sheet">
     <div class="sheet-content">
-      <header class="sheet-head">
-        <div class="id">
+      <div class="topbar">
         <div class="brand"><img class="mark" src="logo.svg" alt="" width="44" height="44"><span class="wordmark">CityLoom</span></div>
+        <div class="units" role="group" aria-label="Colour theme">
+          <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
+          <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
+        </div>
+      </div>
+      <header class="sheet-head">
         <div class="street">
           <h1 id="street-name">Your street</h1>
           <p class="street-sub"><span>Street cross-section</span> <span aria-hidden="true">·</span> <span><b id="row-dim" class="fig"></b> wide</span></p>
-        </div>
         </div>
         <div class="tools">
           <label class="pick">
@@ -37,10 +41,6 @@
           <div class="units" role="group" aria-label="Units">
             <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
             <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
-          </div>
-          <div class="units" role="group" aria-label="Colour theme">
-            <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
-            <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
           </div>
         </div>
       </header>

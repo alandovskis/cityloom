@@ -265,7 +265,7 @@ Same token names, re-composed for a dark ground; every value is a `dark-*` key i
 
 ## Layout
 
-The sheet fills the viewport inside a 12px frame (6px under 640px), as a single block with a 1px Faint Ink border and 14px radius (10px under 640px), clipping its content to the corner. Inside: a header (the CityLoom mark and wordmark, then street name and "Street cross-section" sub-title left, Street picker, Undo/Redo/Start over, m/ft units and the Light | Dark theme toggle right), then a body of two columns, the work area and a fixed 340px notes column, divided by a 1px Rule Grey line. The work area stacks the drawing (Today strip above Your design section, same scale and origin), a status bar (fit statement, key hints), then a lower band of Pieces of the street (left) and Add a piece (right, min 280px). The notes column holds Where the width goes, People moved, Does it work?, Your changes, and the about-this-street card pinned at the bottom.
+The sheet fills the viewport inside a 12px frame (6px under 640px), as a single block with a 1px Faint Ink border and 14px radius (10px under 640px), clipping its content to the corner. Inside: a top bar (the CityLoom mark and wordmark left, the Light | Dark theme toggle right) over a header (street name and "Street cross-section" sub-title left, Street picker, Undo/Redo/Start over, and the m/ft units right), then a body of two columns, the work area and a fixed 340px notes column, divided by a 1px Rule Grey line. The work area stacks the drawing (Today strip above Your design section, same scale and origin), a status bar (fit statement, key hints), then a lower band of Pieces of the street (left) and Add a piece (right, min 280px). The notes column holds Where the width goes, People moved, Does it work?, Your changes, and the about-this-street card pinned at the bottom.
 
 The drawing scales so the street width fills the width minus margins; the SVG has a 680px minimum and scrolls horizontally on narrow screens, with vertical geometry scaled 0.9 to 1.1. Rhythm is tight: 4, 8, 12, 18, 20px paddings; table rows are 3px above and below. All region dividers are 1px Rule Grey.
 
@@ -298,7 +298,7 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 - Transitions: 120ms, cubic-bezier(0.16, 1, 0.3, 1), background and colour only; disabled under reduced motion.
 
 ### Theme toggle
-- The Light | Dark pair beside the m/ft units is the same joined 34px toggle (6px outer corners, pressed = inked fill). Its pressed state shows the theme in effect, so with no saved choice it tracks the system live.
+- The Light | Dark pair in the top bar is the same joined 34px toggle (6px outer corners, pressed = inked fill). Its pressed state shows the theme in effect, so with no saved choice it tracks the system live.
 - Behaviour: follows the system (`prefers-color-scheme`) until a choice is made; the choice is stored in localStorage under `cityloom-theme` (storage failures are tolerated, and the choice then lasts the visit). A small inline script in the page head applies the stored choice before first paint, and the page declares `color-scheme: light dark`. The choice is announced in the status line ("Dark theme.").
 
 ### Inputs / Fields
@@ -311,9 +311,9 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 - **Icon buttons:** 30px, 1px ink border, 6px radius, 14px 1.6px square-cap line icons; remove hovers redline with paper icon and stands 10px apart from the move arrows.
 
 ### CityLoom mark
-- **Mark:** `web/logo.svg`, a woven street section: five vertical bands of unequal widths in the sidewalk, planting, bike, travel and loading pencils (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a), crossed by two ink threads that pass over and under alternate bands. Colours are fixed and identical in both themes. The mark and wordmark appear once, as a lockup at the top left of the header, mark 44px (34px under 640px); they are not repeated in the about card.
+- **Mark:** `web/logo.svg`, a woven street section: five vertical bands of unequal widths in the sidewalk, planting, bike, travel and loading pencils (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a), crossed by two ink threads that pass over and under alternate bands. Colours are fixed and identical in both themes. The mark and wordmark appear once, as a lockup at the top left of the top bar, mark 30px (28px under 640px); they are not repeated in the about card.
 - **Favicon:** `web/favicon.svg` is the same mark with the threads switching to Night Ink in dark schemes.
-- **Wordmark:** "CityLoom" in Barlow Semi Condensed 600 (22px, 18px on phones), live text beside the mark and separated from the street title by a 1px Rule Grey line; never outlined into the SVG. Below 24px the weave blurs; use the favicon there.
+- **Wordmark:** "CityLoom" in Barlow Semi Condensed 600 (20px, 18px on phones), live text beside the mark in the top bar, which is closed by a 1px Rule Grey line; never outlined into the SVG. Below 24px the weave blurs; use the favicon there.
 - **Do not** recolour the bands, put a container or shadow around the mark, or show it under 16px.
 
 ### Notes and the about-this-street card
