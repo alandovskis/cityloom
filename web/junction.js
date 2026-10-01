@@ -578,7 +578,7 @@ function renderHead() {
 
 function renderPalette() {
   el.palette.innerHTML = CAT.streets
-    .map((s, i) => `<li><button type="button" class="chip" data-street="${i}">${streetSwatch(s)}<span><b>${esc(s.name)}</b><small>${fmt(s.row_mm)} wide</small></span>${ICON.grip}</button></li>`)
+    .map((s, i) => (s.freeway ? "" : `<li><button type="button" class="chip" data-street="${i}">${streetSwatch(s)}<span><b>${esc(s.name)}</b><small>${fmt(s.row_mm)} wide</small></span>${ICON.grip}</button></li>`))
     .join("");
   el.samples.innerHTML = CAT.samples
     .map((s, i) => `<li><button type="button" class="chip plain" data-sample="${i}" aria-pressed="${view.sample === i}"><span></span><span><b>${esc(s.name)}</b><small>${s.arms} streets</small></span></button></li>`)
@@ -741,7 +741,7 @@ function renderInspector() {
       <p class="insp-empty">A tight corner slows turning cars and shortens the walk across. A wide one lets them swing through faster.</p>${controlSection()}`;
   } else {
     const crossingOnly = v.selected.kind === "crossing";
-    const streets = CAT.streets.map((s, i) => `<option value="${i}"${i === a.street_index ? " selected" : ""}>${esc(s.name)}</option>`).join("");
+    const streets = CAT.streets.map((s, i) => (s.freeway ? "" : `<option value="${i}"${i === a.street_index ? " selected" : ""}>${esc(s.name)}</option>`)).join("");
     const head = `<div class="insp-head"><div><h2 class="insp-name">${esc(a.street)}</h2><p class="insp-sub">${esc(compass(a.bearing))}, ${a.bearing}° · ${fmt(a.road_mm)} road</p></div></div>`;
     if (crossingOnly) {
       el.inspector.innerHTML = head + crossingSection(a) + controlSection();

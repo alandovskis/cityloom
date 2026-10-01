@@ -126,6 +126,7 @@
             <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true">Space</button>
             <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1">Checks</button>
             <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
+            <button type="button" role="tab" class="tab" id="t-measures" aria-controls="p-measures" aria-selected="false" tabindex="-1">Measures</button>
           </div>
 
           <div class="panel" id="p-space" role="tabpanel" aria-labelledby="t-space">
@@ -151,6 +152,14 @@
             <section aria-labelledby="h-rev" class="revs">
               <h2 id="h-rev" class="note-h">Your changes</h2>
               <table class="nt rev" id="revs"></table>
+            </section>
+          </div>
+
+          <div class="panel" id="p-measures" role="tabpanel" aria-labelledby="t-measures" hidden>
+            <section aria-labelledby="h-measures">
+              <h2 id="h-measures" class="note-h">Transit priority measures</h2>
+              <p class="hint">The toolbox of the <a href="https://tpa.transitcosts.com/atlas/toolbox">Transit Priority Atlas</a>. Arranging the street as a lane measure keeps its sidewalks and lays the roadway out again; you can change it after.</p>
+              <table class="nt measures" id="measures"></table>
             </section>
           </div>
 

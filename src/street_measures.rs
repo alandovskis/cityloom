@@ -125,7 +125,11 @@ pub fn detect(raw: &[Segment], now: &[Segment], side: Side, freeway: bool) -> Ve
             let p = present(d.code);
             let mut problems = Vec::new();
             if p {
-                problems.extend(base.iter().cloned());
+                for b in &base {
+                    if !problems.contains(b) {
+                        problems.push(b.clone());
+                    }
+                }
                 if matches!(d.code, "B1" | "B2") && !median_beside {
                     problems.push("Center-running lanes need a median or platform beside them for stops".into());
                 }
@@ -167,9 +171,9 @@ fn recipe(code: &str) -> Option<Vec<Spec>> {
     let median = || sp("median", None, false);
     let shoulder = || sp("shoulder", None, false);
     let v = match code {
-        "A1" => vec![sp("bike", None, true), bus(), bus(), sp("bike", None, true)],
-        "A2" => vec![bus(), median(), bus()],
-        "A3" => vec![sp("loading", None, false), bus(), bus(), sp("loading", None, false)],
+        "A1" => vec![sp("bike", None, true), bus(), sp("median", None, true), bus(), sp("bike", None, true)],
+        "A2" => vec![sp("planting", None, true), bus(), median(), bus(), sp("planting", None, true)],
+        "A3" => vec![sp("loading", None, false), bus(), sp("median", None, true), bus(), sp("loading", None, false)],
         "B1" => vec![tr(), t(), bus(), median(), bus(), t(), tr()],
         "B2" => vec![shoulder(), tr(), t(), bus(), median(), bus(), t(), tr(), shoulder()],
         "B3" => {
@@ -178,7 +182,7 @@ fn recipe(code: &str) -> Option<Vec<Spec>> {
             vec![tr(), t(), c, t(), tr()]
         }
         "B4" => vec![tr(), t(), sp("bus", None, false), t(), tr()],
-        "C1" => vec![tr(), t(), sp("bus", Fixed(1), false), sp("bus", Fixed(0), false)],
+        "C1" => vec![tr(), t(), sp("median", None, true), t(), tr(), sp("bus", Fixed(1), false), sp("bus", Fixed(0), false)],
         "D1" => vec![sp("parking", None, false), bus(), t(), t(), bus(), sp("parking", None, false)],
         "E1" => vec![bus(), tr(), t(), t(), tr(), bus()],
         "E2" => {
@@ -191,8 +195,8 @@ fn recipe(code: &str) -> Option<Vec<Spec>> {
             }]
         }
         "E3" => vec![bus(), tr(), t(), t(), median(), t(), t(), tr(), bus()],
-        "F1" => vec![bus(), sp("travel", Fixed(0), true), sp("travel", Fixed(0), false)],
-        "F2" => vec![sp("parking", None, false), bus(), sp("travel", Fixed(0), true), sp("travel", Fixed(0), false)],
+        "F1" => vec![bus(), sp("travel", Fixed(0), true), sp("travel", Fixed(0), false), sp("travel", Fixed(0), false), sp("travel", Fixed(0), true)],
+        "F2" => vec![sp("parking", None, false), bus(), sp("travel", Fixed(0), true), sp("travel", Fixed(0), false), sp("travel", Fixed(0), true), sp("parking", None, true)],
         _ => return Option::None,
     };
     Some(v)
@@ -228,12 +232,18 @@ pub fn arrange(code: &str, existing: &[Segment], row_mm: i32, side: Side, freewa
     }
     let mut w: Vec<i32> = specs.iter().map(|s| KINDS[kinds(s)].default_mm).collect();
     let sum = |w: &[i32]| w.iter().sum::<i32>();
-    while sum(&w) > room {
-        let i = (0..w.len()).filter(|&i| w[i] > KINDS[kinds(&specs[i])].min_mm).max_by_key(|&i| w[i])?;
-        w[i] -= 100;
+    // Squeeze other traffic before the transit lanes: a transit lane wants its width.
+    'squeeze: while sum(&w) > room {
+        for pick in ["travel", "parking", "bike", "loading", "shoulder", "planting", "median", "bus"] {
+            if let Some(i) = (0..w.len()).filter(|&i| specs[i].kind == pick && w[i] > KINDS[kinds(&specs[i])].min_mm).max_by_key(|&i| w[i]) {
+                w[i] -= 100;
+                continue 'squeeze;
+            }
+        }
+        return None;
     }
     'grow: while sum(&w) + 100 <= room {
-        for pick in ["bus", "travel", "median", "bike", "shoulder", "loading", "parking"] {
+        for pick in ["bus", "travel", "median", "planting", "bike", "shoulder", "loading", "parking"] {
             if let Some(i) = (0..w.len()).filter(|&i| specs[i].kind == pick && w[i] + 100 <= KINDS[kinds(&specs[i])].max_mm).min_by_key(|&i| w[i]) {
                 w[i] += 100;
                 continue 'grow;
@@ -242,7 +252,9 @@ pub fn arrange(code: &str, existing: &[Segment], row_mm: i32, side: Side, freewa
         break;
     }
 
-    let count = specs.iter().filter(|s| s.kind != "median").count();
+    // Which half a lane is in is counted among roadway pieces only.
+    let on_road = |s: &Spec| !matches!(s.kind, "median" | "planting");
+    let count = specs.iter().filter(|s| on_road(s)).count();
     let mut out: Vec<Segment> = lead;
     let mut idx = 0;
     for (s, width) in specs.iter().zip(w) {
@@ -268,7 +280,7 @@ pub fn arrange(code: &str, existing: &[Segment], row_mm: i32, side: Side, freewa
             };
             seg.variants.push(Variant { kind: vk, material: KINDS[vk].materials[0], direction: vdir, from_min: from, to_min: to });
         }
-        if s.kind != "median" {
+        if on_road(s) {
             idx += 1;
         }
         out.push(seg);

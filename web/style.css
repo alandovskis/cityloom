@@ -2739,3 +2739,15 @@ kbd {
 .m-not {
   color: var(--ink-faint);
 }
+
+.m-apply {
+  min-height: 28px;
+  padding: 2px 10px;
+  font-size: 13px;
+}
+.measures small.m-problem {
+  color: var(--red);
+}
+.var select[data-ivdir] {
+  grid-column: 1 / -1;
+}

@@ -2,7 +2,7 @@
 // No editing rules live here: widths, snapping, limits, history and checks all
 // come from the WebAssembly model.
 
-import init, { Sheet, catalogue, materials, samples } from "./pkg/cityloom_editor.js";
+import init, { Sheet, atlas, catalogue, materials, samples } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH, symbol } from "./symbols.js";
 import { engineering, initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
 
@@ -11,6 +11,7 @@ await init();
 const KINDS = JSON.parse(catalogue());
 const MATERIALS = JSON.parse(materials());
 const SAMPLES = JSON.parse(samples());
+const ATLAS = JSON.parse(atlas());
 const sheet = new Sheet(0);
 let view = JSON.parse(sheet.view());
 let units = "m";
@@ -504,6 +505,53 @@ $("samples").addEventListener("click", (e) => {
   say(`${view.name}. ${fitText()}.`);
 });
 
+// ---- Atlas measures ----------------------------------------------------------
+
+// Every measure of the Transit Priority Atlas toolbox: the lane arrangements can
+// be recognised in this street and laid out from its width; the rest say where
+// they are set, or why they are not modelled.
+function renderMeasures() {
+  const found = new Map(view.measures.map((m) => [m.code, m]));
+  const groups = [...new Set(ATLAS.map((m) => m.group))];
+  $("measures").innerHTML = groups
+    .map((g) => {
+      const rows = ATLAS.filter((m) => m.group === g)
+        .map((m) => {
+          let state;
+          let extra = "";
+          if (m.place === "street") {
+            const f = found.get(m.code);
+            if (f.present) {
+              state = `<b class="m-on">This street</b>`;
+              extra = f.problems.map((p) => `<small class="m-problem">${esc(p)}</small>`).join("");
+            } else if (f.can_apply) {
+              state = `<button type="button" class="btn m-apply" data-measure="${m.code}" aria-label="Arrange the street as ${esc(m.code)} ${esc(m.name)}">Arrange</button>`;
+            } else {
+              state = `<span class="m-not">${m.code === "B2" || m.code === "E3" ? "Freeways only" : view.measures && SAMPLES[view.sample].freeway ? "Not for a freeway" : "Will not fit"}</span>`;
+            }
+          } else if (m.place === "junction") {
+            state = "Set at a junction";
+          } else {
+            state = `<span class="m-not">Not modelled</span>`;
+          }
+          const note = m.place === "street" ? "" : m.note ? `<small>${esc(m.note)}</small>` : "";
+          return `<tr><th scope="row"><span class="dirtag">${esc(m.code)}</span>${esc(m.name)}${note}${extra}</th><td>${state}</td></tr>`;
+        })
+        .join("");
+      return `<tbody><tr class="m-group"><th colspan="2" scope="colgroup">${esc(g)}</th></tr>${rows}</tbody>`;
+    })
+    .join("");
+}
+
+$("measures").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-measure]");
+  if (!b) return;
+  if (sheet.apply_measure(b.dataset.measure)) {
+    refresh();
+    announceEdit();
+  } else say("That measure does not suit this street.");
+});
+
 // ---- notes ----------------------------------------------------------------
 
 const head = (cols) => `<thead><tr>${cols.map((c) => `<th scope="col">${c}</th>`).join("")}</tr></thead>`;
@@ -611,6 +659,7 @@ $("time").addEventListener("input", (e) => {
 
 function render() {
   renderSamples();
+  renderMeasures();
   renderClock();
   renderHead();
   renderFit();
@@ -669,11 +718,19 @@ function renderInspector() {
       return option(`s-${mat.id}`, mat.id === s.material, surfaceSwatch(mat.id), mat.name, `data-isurface="${m}"`);
     })
     .join("");
+  const vdirSelect = (v, vi) => {
+    const rule = KINDS[v.kind].direction;
+    if (rule === "none") return "";
+    const opts = MATERIALS.directions.map((dd) => `<option value="${dd.id}"${dd.id === v.direction ? " selected" : ""}>${esc(dd.name)}</option>`);
+    if (rule === "optional") opts.push(`<option value="both"${v.direction == null ? " selected" : ""}>Two-way</option>`);
+    return `<select data-ivdir="${vi}" data-ifid="vd-${vi}" aria-label="Direction ${vi + 1}">${opts.join("")}</select>`;
+  };
   const kindOptions = (sel) => s.alt_kinds.concat(sel).filter((v, j, a) => a.indexOf(v) === j).sort((a, b) => a - b);
   const rows = s.variants
     .map(
       (v, vi) => `<li class="var${s.active_variant === vi ? " now" : ""}">
         <select data-ivkind="${vi}" data-ifid="vk-${vi}" aria-label="Type ${vi + 1}">${kindOptions(v.kind).map((kk) => `<option value="${kk}"${kk === v.kind ? " selected" : ""}>${esc(KINDS[kk].name)}</option>`).join("")}</select>
+        ${vdirSelect(v, vi)}
         <span class="var-times"><input type="time" step="900" data-ivfrom="${vi}" data-ifid="vf-${vi}" value="${hhmm(v.from_min)}" aria-label="From"><span aria-hidden="true">to</span><input type="time" step="900" data-ivto="${vi}" data-ifid="vt-${vi}" value="${hhmm(v.to_min)}" aria-label="To"></span>
         <button type="button" class="ico danger" data-ivremove="${vi}" data-ifid="vr-${vi}" aria-label="Remove ${esc(KINDS[v.kind].name.toLowerCase())} at ${hhmm(v.from_min)} to ${hhmm(v.to_min)}">${ICON.remove}</button>
       </li>`,
@@ -744,6 +801,13 @@ el.inspector.addEventListener("change", (e) => {
   const uid = view.selected;
   if (!input || !uid) return;
   const d = input.dataset;
+  if (d.ivdir !== undefined) {
+    const di = input.value === "both" ? -1 : MATERIALS.directions.findIndex((x) => x.id === input.value);
+    const ok = sheet.set_variant_direction(uid, Number(d.ivdir), di);
+    refresh();
+    if (ok) announceEdit();
+    return;
+  }
   if (d.ivkind !== undefined || d.ivfrom !== undefined || d.ivto !== undefined) {
     const vi = Number(d.ivkind ?? d.ivfrom ?? d.ivto);
     const v = seg(uid).variants[vi];
