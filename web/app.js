@@ -627,9 +627,9 @@ const stdNumber = (id, attrs, tag) =>
   `<span class="wfield"><input type="number" id="${id}" inputmode="numeric" ${attrs}><span class="unit-tag" aria-hidden="true">${tag}</span></span>`;
 $("std-form").innerHTML =
   stdField("std-road", "Road type", `<select id="std-road">${STD.road_types.map((r, i) => `<option value="${i}">${esc(r.name)}</option>`).join("")}</select>`) +
-  stdField("std-speed", "Design speed", stdNumber("std-speed", `min="${STD.speed_kmh.min}" max="${STD.speed_kmh.max}" step="5"`, "km/h")) +
+  stdField("std-speed", "Design speed", stdNumber("std-speed", `min="${STD.speed_kmh.min}" max="${STD.speed_kmh.max}" step="1"`, "km/h")) +
   `<p class="hint" id="std-vol-h">Traffic in the busiest hour, both directions</p>` +
-  STD.volumes.map((label, i) => stdField(`std-vol-${i}`, label, stdNumber(`std-vol-${i}`, `data-volume="${i}" min="0" max="${STD.volume_max}" step="10"`, "/h"))).join("");
+  STD.volumes.map((label, i) => stdField(`std-vol-${i}`, label, stdNumber(`std-vol-${i}`, `data-volume="${i}" min="0" max="${STD.volume_max}" step="1"`, "/h"))).join("");
 
 const designValue = (input) =>
   input.id === "std-road" ? view.design.road_type : input.id === "std-speed" ? view.design.speed_kmh : view.design.volumes[Number(input.dataset.volume)];
@@ -659,7 +659,7 @@ $("std-form").addEventListener("change", (e) => {
   const n = typed.trim() === "" ? NaN : Number(typed);
   let ok = false;
   if (input.id === "std-road") ok = sheet.set_road_type(n);
-  else if (Number.isInteger(n)) ok = input.id === "std-speed" ? sheet.set_speed(n) : sheet.set_volume(Number(input.dataset.volume), n);
+  else if (n === (n | 0)) ok = input.id === "std-speed" ? sheet.set_speed(n) : sheet.set_volume(Number(input.dataset.volume), n);
   refresh();
   const now = designValue(input);
   input.value = now;
