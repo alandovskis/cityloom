@@ -813,6 +813,8 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
         (r.start, r.end)
     };
     let stop_t = far + 600.0;
+    // However far a measure reaches, it stays on the arm as drawn.
+    let reach = |t: f64| t.min(len - 1_500.0);
     let mut problems = Vec::new();
     let name = arm_name(a);
 
@@ -826,11 +828,11 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
             if park == 0.0 {
                 problems.push(format!("{name}: an offset queue jump needs parking beside the curb to sit beside"));
             }
-            Some(poly(&strip(l.bearing, lo, hi, l.mouth, stop_t + queue_len)))
+            Some(poly(&strip(l.bearing, lo, hi, l.mouth, reach(stop_t + queue_len))))
         }
         Q_CURB => {
             let (lo, hi) = range(0.0, lane_w);
-            Some(poly(&strip(l.bearing, lo, hi, l.mouth, stop_t + queue_len)))
+            Some(poly(&strip(l.bearing, lo, hi, l.mouth, reach(stop_t + queue_len))))
         }
         _ => None,
     };
@@ -848,7 +850,7 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
         if l.prof.enter_x.len() < 2 && a.bus_lane {
             problems.push(format!("{name}: a bus gate needs a traffic lane to hold back"));
         }
-        let t = stop_t + queue_len;
+        let t = reach(stop_t + queue_len);
         [at(l.bearing, l.lat(off, l.prof.enter_span.0), t), at(l.bearing, l.lat(off, l.prof.enter_span.1), t)]
     });
 
@@ -859,7 +861,7 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
             }
             let w = if park > 0.0 { park } else { 2_400.0 };
             let (lo, hi) = range(0.0, w);
-            (Some(poly(&strip(l.bearing, lo, hi, l.mouth + 18_000.0, l.mouth + 30_000.0))), Some(at(l.bearing, (lo + hi) / 2.0, l.mouth + 24_000.0)))
+            (Some(poly(&strip(l.bearing, lo, hi, far + 3_000.0, far + 11_000.0))), Some(at(l.bearing, (lo + hi) / 2.0, far + 7_000.0)))
         }
         STOP_PLATFORM => {
             if s.control != SIGNAL {
@@ -869,7 +871,7 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
                 problems.push(format!("{name}: a platform in the street needs a crossing to reach it"));
             }
             let (lo, hi) = range(lane_w, lane_w + 2_500.0);
-            (Some(poly(&strip(l.bearing, lo, hi, l.mouth + 18_000.0, l.mouth + 30_000.0))), Some(at(l.bearing, (lo + hi) / 2.0, l.mouth + 24_000.0)))
+            (Some(poly(&strip(l.bearing, lo, hi, far + 3_000.0, far + 11_000.0))), Some(at(l.bearing, (lo + hi) / 2.0, far + 7_000.0)))
         }
         _ => (None, None),
     };

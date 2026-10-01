@@ -2,7 +2,7 @@
 // input. Every rule and every piece of plan geometry comes from the
 // WebAssembly model; this file only turns millimetres into pixels.
 
-import init, { Plan, catalogue, junction_catalogue, materials } from "./pkg/cityloom_editor.js";
+import init, { Plan, atlas, catalogue, junction_catalogue, materials } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH } from "./symbols.js";
 import { engineering, initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
 
@@ -12,6 +12,7 @@ const KINDS = JSON.parse(catalogue());
 const CAT = JSON.parse(junction_catalogue());
 const MATERIALS = JSON.parse(materials());
 const LIM = CAT.limits;
+const ATLAS = JSON.parse(atlas());
 const plan = new Plan(0);
 let view = JSON.parse(plan.view());
 let units = "m";
@@ -193,6 +194,53 @@ function crossingDim(a) {
   );
 }
 
+// A code tag, as the Atlas names the measure, on a paper halo.
+const codeTag = (p, code) => {
+  const [x, y] = T(p);
+  return `<text class="t-note t-halo measure-tag" x="${f1(x)}" y="${f1(y + 4)}" text-anchor="middle">${code}</text>`;
+};
+
+const polyCentre = (cmds) => {
+  const pts = cmds.filter((c) => c[0] !== "Z");
+  return [pts.reduce((n, c) => n + c[1], 0) / pts.length, pts.reduce((n, c) => n + c[2], 0) / pts.length];
+};
+
+// The transit priority measures on one arm: gates, stops, filters, caps and
+// their Atlas codes. The bus lane and queue jumps are drawn with the arm itself.
+function measureMarks(a) {
+  const t = a.transit;
+  const out = [];
+  const code = (list, i) => CAT[list][i].code;
+  if (t.queue) out.push(codeTag(polyCentre(t.queue), code("approaches", t.approach)));
+  if (t.virtual_loop) {
+    out.push(`<path class="measure-loop" d="${pathD(t.virtual_loop)}"/>`, codeTag(polyCentre(t.virtual_loop), "G3"));
+  }
+  if (t.gate) {
+    const [p0, p1] = t.gate.map(T);
+    out.push(`<path class="stop-line${t.approach === 5 ? " yield" : ""}" d="M${f1(p0[0])} ${f1(p0[1])}L${f1(p1[0])} ${f1(p1[1])}"/>`);
+    out.push(codeTag([(t.gate[0][0] + t.gate[1][0]) / 2, (t.gate[0][1] + t.gate[1][1]) / 2], code("approaches", t.approach)));
+  }
+  if (t.stop_poly) {
+    const d = pathD(t.stop_poly);
+    out.push(`<path class="bulb measure-stop k-sidewalk" d="${d}"/><path class="hatch" fill="${hatchFor("sidewalk")}" d="${d}"/>`, codeTag(t.stop_at, code("stops", t.stop)));
+  }
+  for (const b of t.bollards) {
+    const [x, y] = T(b);
+    out.push(`<circle class="bollard" cx="${f1(x)}" cy="${f1(y)}" r="3.2"/>`);
+  }
+  if (t.filter && t.bollards.length) out.push(codeTag(t.bollards[Math.floor(t.bollards.length / 2)], "N1"));
+  if (t.cap) {
+    const [p0, p1] = t.cap.map(T);
+    out.push(`<path class="dead-cap" d="M${f1(p0[0])} ${f1(p0[1])}L${f1(p1[0])} ${f1(p1[1])}"/>`, codeTag(t.icon_at, "L4"));
+  }
+  if (t.island) {
+    const d = pathD(t.island);
+    out.push(`<path class="island k-sidewalk" d="${d}"/><path class="hatch" fill="${hatchFor("sidewalk")}" d="${d}"/>`, codeTag(t.icon_at, "L3"));
+  }
+  if (t.rule === 1 || t.rule === 2) out.push(codeTag(t.icon_at, t.rule === 1 ? "L1" : "L2"));
+  return out.join("");
+}
+
 function renderPlan() {
   const v = view;
   const W = Math.max(el.wrap.clientWidth, 320);
@@ -217,7 +265,7 @@ function renderPlan() {
     .map((a) => `<pattern id="zb-${a.uid}" width="${zebra * 2}" height="${zebra * 2}" patternUnits="userSpaceOnUse" patternTransform="rotate(${a.bearing})"><rect class="zebra" width="${zebra}" height="${zebra * 2}"/></pattern>`)
     .join("");
 
-  const layers = { wedge: [], arm: [], lane: [], road: [], bulb: [], curb: [], cross: [], mark: [], sel: [], grip: [], move: [], label: [] };
+  const layers = { wedge: [], arm: [], lane: [], measure: [], road: [], bulb: [], curb: [], cross: [], mark: [], sel: [], grip: [], move: [], label: [] };
 
   // pavement wedges between arms; pressing one selects the corner
   for (const c of v.corners) {
@@ -232,7 +280,11 @@ function renderPlan() {
       const k = KINDS[p.kind];
       g.push(`<path class="piece k-${k.id}" d="${pathD(p.poly)}"/><path class="hatch" fill="${hatchFor(k.id)}" d="${pathD(p.poly)}"/>`);
     }
-    layers.arm.push(`<g class="arm${isSel("arm", a.uid) ? " on" : ""}" data-role="arm" data-uid="${a.uid}">${g.join("")}</g>`);
+    const tr = a.transit;
+    if (tr.bus) g.push(`<path class="piece k-bus" d="${pathD(tr.bus)}"/><path class="hatch" fill="${hatchFor("bus")}" d="${pathD(tr.bus)}"/>`);
+    if (tr.queue) g.push(`<path class="piece k-bus queue" d="${pathD(tr.queue)}"/><path class="hatch" fill="${hatchFor("bus")}" d="${pathD(tr.queue)}"/>`);
+    layers.arm.push(`<g class="arm${isSel("arm", a.uid) ? " on" : ""}${a.rule === undefined ? "" : ""}${tr.rule === 4 ? " dead" : ""}" data-role="arm" data-uid="${a.uid}">${g.join("")}</g>`);
+    layers.measure.push(measureMarks(a));
     a.lanes.forEach((l, i) => {
       layers.lane.push(`<path class="lane-hit${isLane(a.uid, i) ? " on" : ""}" data-role="lane" data-uid="${a.uid}" data-lane="${i}" d="${pathD(l.poly)}"><title>Lane ${i + 1} of ${a.lanes.length}, ${esc(a.label)}</title></path>`);
     });
@@ -350,7 +402,7 @@ function renderPlan() {
   if (sa) {
     for (const m of v.movements.filter((m) => m.from === sa.uid)) {
       const d = pathD(m.path);
-      layers.move.push(`<path class="mv${m.allowed ? "" : " no"}${m.allowed && !m.lane ? " bad" : ""}" d="${d}"${m.allowed ? ' marker-end="url(#mv-head)"' : ""}/>`);
+      layers.move.push(`<path class="mv${m.allowed ? "" : " no"}${m.allowed && !m.lane ? " bad" : ""}${m.indirect ? " indirect" : ""}" d="${d}"${m.allowed ? ' marker-end="url(#mv-head)"' : ""}><title>${esc(m.blocked ?? "")}</title></path>`);
       if (!m.allowed) {
         const a = m.path[0];
         const b = m.path[m.path.length - 1];
@@ -373,6 +425,7 @@ function renderPlan() {
     layers.wedge.join("") +
     layers.arm.join("") +
     layers.lane.join("") +
+    layers.measure.join("") +
     layers.road.join("") +
     layers.bulb.join("") +
     layers.curb.join("") +
@@ -428,6 +481,7 @@ function renderNotes() {
               if (!m) return `<td class="zero" aria-hidden="true">–</td>`;
               const name = `${a.label} to ${b.label}: ${CLASS_WORD[m.class]} turn`;
               const bad = m.allowed && !m.lane;
+              if (m.blocked) return `<td><button type="button" class="turn locked" disabled title="${esc(m.blocked)}" aria-label="${esc(name)}: not possible. ${esc(m.blocked)}">${turnGlyph(m.class)}</button></td>`;
               return `<td><button type="button" class="turn${m.allowed ? " on" : ""}${bad ? " bad" : ""}" data-from="${a.uid}" data-to="${b.uid}" data-fid="t-${a.uid}-${b.uid}" aria-pressed="${m.allowed}" aria-label="${esc(name)}${m.allowed ? (bad ? ", allowed, no lane serves it" : ", allowed") : ", not allowed"}">${turnGlyph(m.class)}</button></td>`;
             })
             .join("")}</tr>`,
@@ -466,6 +520,39 @@ function renderKey() {
   const ids = [...new Set(view.arms.flatMap((a) => a.pieces.map((p) => p.kind)))].sort((x, y) => x - y);
   $("plan-key").innerHTML = ids
     .map((k) => `<li><svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><rect class="k-${KINDS[k].id}" width="44" height="22" stroke="none"/><rect width="44" height="22" fill="url(#h-${KINDS[k].id})" stroke="none"/></svg>${esc(KINDS[k].name)}</li>`)
+    .join("");
+}
+
+// Every measure of the Transit Priority Atlas toolbox, with where it is modelled
+// and where this junction uses it.
+function renderMeasures() {
+  const used = new Map();
+  const use = (code, a) => used.set(code, [...(used.get(code) ?? []), a.compass ?? compass(a.bearing)]);
+  for (const a of view.arms) {
+    const t = a.transit;
+    if (t.approach) use(CAT.approaches[t.approach].code, a);
+    if (t.stop) use(CAT.stops[t.stop].code, a);
+    if (t.rule) use(CAT.rules[t.rule].code, a);
+    if (t.filter) use("N1", a);
+  }
+  const groups = [...new Set(ATLAS.map((m) => m.group))];
+  $("measures").innerHTML = groups
+    .map((g) => {
+      const rows = ATLAS.filter((m) => m.group === g)
+        .map((m) => {
+          const where = used.get(m.code);
+          const state = where
+            ? `<b class="m-on">In use on ${where.join(", ")}</b>`
+            : m.place === "junction"
+              ? "Set on a street"
+              : m.place === "street"
+                ? "Street editor"
+                : `<span class="m-not">Not modelled</span>`;
+          return `<tr><th scope="row"><span class="dirtag">${esc(m.code)}</span>${esc(m.name)}${m.note ? `<small>${esc(m.note)}</small>` : ""}</th><td>${state}</td></tr>`;
+        })
+        .join("");
+      return `<tbody><tr class="m-group"><th colspan="2" scope="colgroup">${esc(g)}</th></tr>${rows}</tbody>`;
+    })
     .join("");
 }
 
@@ -563,6 +650,32 @@ function laneRows(a) {
     .join("");
 }
 
+// The transit priority measures of the Atlas that sit on one approach.
+function transitSection(a) {
+  const t = a.transit;
+  const sel = (key, list, cur, label) =>
+    `<label class="fld"><span id="i-h-${key}">${label}</span><select data-i${key} data-ifid="${key}" aria-labelledby="i-h-${key}">${CAT[list]
+      .map((o, i) => `<option value="${i}"${i === cur ? " selected" : ""}>${o.code ? `${o.code} ` : ""}${esc(o.name)}</option>`)
+      .join("")}</select></label>`;
+  const check = (fid, on, name, data) => `<ul class="opts">${option(fid, on, "", name, data, "checkbox")}</ul>`;
+  const lenField =
+    t.approach > 0 && t.approach !== 3
+      ? numField("alen", t.approach <= 2 ? "Length of the queue jump" : "Gate distance upstream", t.approach_mm, {
+          minus: "Shorter by 5 m",
+          plus: "Longer by 5 m",
+          hint: `${fmt(LIM.approach[0])} to ${fmt(LIM.approach[1])}`,
+        })
+      : "";
+  const problems = t.problems.length ? `<ul class="problems">${t.problems.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : "";
+  return `<section class="insp-sec"><h3 class="note-h" id="i-h-transit">Transit priority</h3>
+    ${check("buslane", t.bus_lane, "Bus lane along the way in", 'data-ibuslane="1"')}
+    ${sel("approach", "approaches", t.approach, "At the approach")}
+    ${sel("stop", "stops", t.stop, "Bus stop")}
+    ${sel("rule", "rules", t.rule, "Turns")}
+    ${check("filter", t.filter, "N1 Transit modal filter", 'data-ifilter="1"')}
+    ${problems}</section>${lenField}`;
+}
+
 function crossingSection(a) {
   const c = a.crossing;
   if (!c) {
@@ -655,6 +768,7 @@ function renderInspector() {
         head +
         `<section class="insp-sec"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>${a.enters ? `<ul class="lanes">${laneRows(a)}</ul>` : `<p class="insp-range">One way out. No lanes come in.</p>`}</section>` +
         crossingSection(a) +
+        transitSection(a) +
         dirSec +
         offSec +
         `<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3><select data-istreet data-ifid="street" aria-labelledby="i-h-street">${streets}</select><p class="insp-range">The street's own layout is edited in the street editor.</p></section>` +
@@ -676,6 +790,7 @@ function render() {
   renderPlan();
   renderInspector();
   renderNotes();
+  renderMeasures();
   for (const b of el.samples.querySelectorAll("[data-sample]")) b.setAttribute("aria-pressed", String(Number(b.dataset.sample) === view.sample));
 }
 
@@ -746,6 +861,8 @@ el.inspector.addEventListener("click", (e) => {
   const s = view.selected;
   const uid = s.uid;
   if (d.istep) return void step(d.istep, Number(d.dir));
+  if (d.ibuslane !== undefined) return void act(() => plan.set_bus_lane(uid, b.getAttribute("aria-checked") !== "true"));
+  if (d.ifilter !== undefined) return void act(() => plan.set_filter(uid, b.getAttribute("aria-checked") !== "true"));
   if (d.icycle !== undefined) return void act(() => plan.set_cycle(view.ring.cycle_mm ? 0 : LIM.cycle[3]));
   if (d.icycleoff !== undefined) return void act(() => plan.set_cycle(0));
   if (d.ibusoff !== undefined) return void act(() => plan.set_bus(0, 0));
@@ -771,6 +888,7 @@ function step(key, dir) {
     cwidth: () => plan.set_crossing_width(s.uid, c.width_mm + dir * LIM.crossing[2]),
     ring: () => plan.set_ring(view.ring_extra_mm + dir * LIM.ring_step),
     cycle: () => plan.set_cycle(view.ring.cycle_mm + dir * LIM.cycle[2]),
+    alen: () => plan.set_approach_len(s.uid, a.transit.approach_mm + dir * LIM.approach[2]),
   };
   const refused = { bearing: "bearing", ring: "other" }[key] ?? "other";
   act(tries[key], refused);
@@ -779,6 +897,9 @@ function step(key, dir) {
 el.inspector.addEventListener("change", (e) => {
   const t = e.target;
   const s = view.selected;
+  if (t.dataset.iapproach !== undefined) return void act(() => plan.set_approach(s.uid, Number(t.value)));
+  if (t.dataset.istop !== undefined) return void act(() => plan.set_stop(s.uid, Number(t.value)));
+  if (t.dataset.irule !== undefined) return void act(() => plan.set_rule(s.uid, Number(t.value)));
   if (t.dataset.ibus !== undefined) {
     const [a, b] = t.value ? t.value.split("-").map(Number) : [0, 0];
     return void act(() => plan.set_bus(a, b));
@@ -797,6 +918,7 @@ el.inspector.addEventListener("change", (e) => {
     cwidth: () => plan.set_crossing_width(s.uid, fromInput(v)),
     ring: () => plan.set_ring(Math.max(0, fromInput(v / 2) - view.ring.floor_mm)),
     cycle: () => plan.set_cycle(fromInput(v)),
+    alen: () => plan.set_approach_len(s.uid, fromInput(v)),
   }[key];
   act(set, key === "bearing" ? "bearing" : "other");
 });

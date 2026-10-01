@@ -2642,3 +2642,94 @@ kbd {
   font-size: 14px;
   color: var(--ink-soft);
 }
+
+/* ---- transit priority measures ------------------------------------------- */
+#drawing .measure-tag {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+#drawing .piece.queue {
+  stroke-dasharray: 6 3;
+}
+#drawing .measure-loop {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 2;
+  pointer-events: none;
+}
+#drawing .measure-stop {
+  stroke-width: 2;
+}
+#drawing .bollard {
+  fill: var(--ink);
+  stroke: var(--sheet);
+  stroke-width: 1;
+  pointer-events: none;
+}
+#drawing .dead-cap {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 5;
+  stroke-linecap: butt;
+  pointer-events: none;
+}
+#drawing .arm.dead {
+  opacity: 0.55;
+}
+#drawing .mv.indirect {
+  stroke-dasharray: 8 4;
+}
+.turn.locked {
+  border-style: dashed;
+  border-color: var(--rule);
+  color: var(--ink-faint);
+  opacity: 0.7;
+}
+.fld {
+  display: block;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+.fld span {
+  display: block;
+  margin-bottom: 3px;
+}
+.problems {
+  margin: 8px 0 0;
+  padding: 0 0 0 16px;
+  font-size: 14px;
+  color: var(--red);
+}
+.measures th[scope="row"] {
+  font-weight: 500;
+  vertical-align: top;
+  padding: 4px 8px 4px 0;
+}
+.measures th[scope="row"] small {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.measures td {
+  vertical-align: top;
+  text-align: right;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.measures .m-group th {
+  padding-top: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  border-bottom: var(--line) solid var(--ink);
+}
+.m-on {
+  color: var(--blue);
+}
+.m-not {
+  color: var(--ink-faint);
+}

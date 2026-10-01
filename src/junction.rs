@@ -76,9 +76,9 @@ pub const RULES: [Item; 5] = [
 
 /// How far a queue jump runs back from the stop line, or a gate stands
 /// upstream of it.
-pub const APPROACH_DEFAULT_MM: i32 = 20_000;
-pub const APPROACH_MIN_MM: i32 = 10_000;
-pub const APPROACH_MAX_MM: i32 = 30_000;
+pub const APPROACH_DEFAULT_MM: i32 = 10_000;
+pub const APPROACH_MIN_MM: i32 = 5_000;
+pub const APPROACH_MAX_MM: i32 = 15_000;
 pub const APPROACH_STEP_MM: i32 = 5_000;
 /// Width of a transit lane on an approach.
 pub const TRANSIT_LANE_MM: i32 = 3_300;
