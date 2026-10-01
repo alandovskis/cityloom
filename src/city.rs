@@ -344,6 +344,15 @@ impl City {
         Self::node_index(node).filter(|&n| NODES[n].junction).map(node_name)
     }
 
+    /// The two ends of a street, first the one the street editor looks from.
+    pub fn street_ends(&self, edge: u32) -> Vec<EndView> {
+        let Some(e) = Self::edge_index(edge) else { return Vec::new() };
+        [EDGES[e].a, EDGES[e].b]
+            .into_iter()
+            .map(|n| EndView { uid: node_uid(n), name: end_name(n), junction: NODES[n].junction })
+            .collect()
+    }
+
     /// The street editor on one street of the city.
     pub fn street_editor(&self, edge: u32, region: usize) -> Option<Editor> {
         Self::edge_index(edge)?;
@@ -482,6 +491,14 @@ pub struct PieceView {
     /// axis when looking from the street's first end to its second.
     pub offset_mm: i32,
     pub width_mm: i32,
+}
+
+/// One end of a street: a junction, or where it leaves the map.
+#[derive(Serialize)]
+pub struct EndView {
+    pub uid: u32,
+    pub name: String,
+    pub junction: bool,
 }
 
 #[derive(Serialize)]
@@ -699,6 +716,13 @@ mod tests {
             // Whatever happens, asking for the junction never panics.
             let _ = city.junction_editor(n.uid, 0).map(|j| j.view());
         }
+    }
+
+    #[test]
+    fn a_street_knows_its_ends() {
+        let ends = City::new().street_ends(1);
+        assert_eq!(ends.iter().map(|e| (e.name.as_str(), e.junction)).collect::<Vec<_>>(), [("the edge of the map", false), ("Junction 4", true)]);
+        assert!(City::new().street_ends(99).is_empty());
     }
 
     #[test]

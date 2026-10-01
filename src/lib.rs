@@ -434,6 +434,11 @@ impl City {
         self.0.junction_name(node).unwrap_or_default()
     }
 
+    /// The two ends of a street as JSON: each a junction or where it leaves the map.
+    pub fn street_ends(&self, edge: u32) -> String {
+        json(&self.0.street_ends(edge))
+    }
+
     /// The street editor on one street, or nothing when there is no such street.
     pub fn street(&self, edge: u32, region: usize) -> Option<Sheet> {
         self.0.street_editor(edge, region).map(Sheet)
