@@ -234,6 +234,31 @@ pub struct CrossingView {
     pub too_far: bool,
 }
 
+/// The transit priority measures on one arm, drawn and checked.
+#[derive(Serialize)]
+pub struct TransitView {
+    pub bus_lane: bool,
+    pub approach: usize,
+    pub approach_mm: i32,
+    pub stop: usize,
+    pub rule: usize,
+    pub filter: bool,
+    /// Which curb the traffic coming in runs beside: 0 left, 1 right.
+    pub kerb_side: usize,
+    pub bus: Option<Vec<Value>>,
+    pub queue: Option<Vec<Value>>,
+    pub virtual_loop: Option<Vec<Value>>,
+    pub gate: Option<[P; 2]>,
+    pub stop_poly: Option<Vec<Value>>,
+    pub stop_at: Option<P>,
+    pub bollards: Vec<P>,
+    pub cap: Option<[P; 2]>,
+    pub island: Option<Vec<Value>>,
+    pub icon_at: P,
+    /// What a measure here needs and does not have.
+    pub problems: Vec<String>,
+}
+
 #[derive(Serialize)]
 pub struct ArmView {
     pub uid: u32,
@@ -265,6 +290,7 @@ pub struct ArmView {
     pub max_offset_mm: i32,
     pub enters: bool,
     pub leaves: bool,
+    pub transit: TransitView,
 }
 
 #[derive(Serialize)]
@@ -294,6 +320,10 @@ pub struct MoveView {
     pub to: u32,
     pub class: u8,
     pub allowed: bool,
+    /// Why a measure stops this turn, if one does.
+    pub blocked: Option<&'static str>,
+    /// The turn is made the indirect way (L2).
+    pub indirect: bool,
     pub lane: bool,
     pub path: Vec<Value>,
 }
@@ -509,6 +539,7 @@ impl Junction {
             let bulb_l = if a.bulb[0] { l.prof.park[0] as f64 } else { 0.0 };
             let bulb_r = if a.bulb[1] { l.prof.park[1] as f64 } else { 0.0 };
             let (cl, cr) = (l.cl + bulb_l, l.cr - bulb_r);
+            let crossing_present = cx.is_some();
             let crossing = cx.map(|c| {
                 let t0 = l.mouth + c.setback_mm as f64;
                 let t1 = t0 + c.width_mm as f64;
@@ -549,10 +580,11 @@ impl Junction {
                         .arms
                         .iter()
                         .zip(&lay.arms)
-                        .filter(|(b, _)| b.uid != a.uid)
-                        .map(|(b, lb)| {
+                        .enumerate()
+                        .filter(|(_, (b, _))| b.uid != a.uid)
+                        .map(|(j, (b, lb))| {
                             let turn = (b.bearing - a.bearing).rem_euclid(360) - 180;
-                            (turn, DestView { uid: b.uid, label: arm_name(b), class: turn_class(a.bearing, b.bearing), on: lane.to.contains(&b.uid), open: !lb.prof.leave_x.is_empty() })
+                            (turn, DestView { uid: b.uid, label: arm_name(b), class: turn_class(a.bearing, b.bearing), on: lane.to.contains(&b.uid), open: !lb.prof.leave_x.is_empty() && blocked(&s.arms, i, j).is_none() })
                         })
                         .collect();
                     dests.sort_by_key(|d| d.0);
@@ -589,6 +621,7 @@ impl Junction {
                 max_offset_mm: road_mm / 2,
                 enters,
                 leaves,
+                transit: transit_view(s, a, l, off, far, crossing_present, side),
             });
         }
 
@@ -687,11 +720,19 @@ impl Junction {
                 let (Some(ea), Some(xb)) = (span_mid(la.prof.enter_span), span_mid(lb.prof.leave_span)) else { continue };
                 let pe = at(la.bearing, la.lat(a.offset_mm as f64, ea), la.mouth);
                 let px = at(lb.bearing, lb.lat(b.offset_mm as f64, xb), lb.mouth);
-                let allowed = !a.banned.contains(&b.uid);
+                let blocked = blocked(&s.arms, i, j);
+                let allowed = !a.banned.contains(&b.uid) && blocked.is_none();
                 let class = turn_class(a.bearing, b.bearing);
                 let lane = a.lanes.iter().any(|l| l.to.contains(&b.uid));
-                let path = movement_path(la.bearing, pe, lb.bearing, px, rad, side, a.bearing, b.bearing);
-                movements.push(MoveView { from: a.uid, to: b.uid, class, allowed, lane, path });
+                let indirect = a.rule == RULE_WITHIN && class == LEFT && rad.is_none();
+                let path = if indirect {
+                    // Straight on past the middle, then back to the street on the left.
+                    let w = at(la.bearing, la.lat(a.offset_mm as f64, ea), -0.4 * la.mouth);
+                    vec![m(pe), l(w), quad(scale(add(w, px), 0.5), px)]
+                } else {
+                    movement_path(la.bearing, pe, lb.bearing, px, rad, side, a.bearing, b.bearing)
+                };
+                movements.push(MoveView { from: a.uid, to: b.uid, class, allowed, blocked, indirect, lane, path });
             }
         }
         for (a, arm) in arms.iter_mut().zip(&s.arms) {
@@ -757,6 +798,123 @@ impl Junction {
 fn clear_far(a: &Arm, l: &ArmLayout) -> f64 {
     let crossing = a.crossing.map_or(0.0, |c| (c.setback_mm + c.width_mm) as f64);
     (l.mouth + crossing + 1_500.0).max(l.mouth + WEDGE_MM)
+}
+
+/// Places the transit measures on an arm and lists what each one is missing.
+fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_crossing: bool, side: Side) -> TransitView {
+    let len = ARM_LENGTH_MM as f64;
+    let kerb_side = usize::from(side == Side::Left);
+    let (ke, sg) = if kerb_side == 0 { (l.cl, 1.0) } else { (l.cr, -1.0) };
+    let park = l.prof.park[kerb_side] as f64;
+    let lane_w = TRANSIT_LANE_MM as f64;
+    let span = |from: f64, to: f64| (ke + sg * from).min(ke + sg * to)..(ke + sg * from).max(ke + sg * to);
+    let range = |from: f64, to: f64| {
+        let r = span(from, to);
+        (r.start, r.end)
+    };
+    let stop_t = far + 600.0;
+    let mut problems = Vec::new();
+    let name = arm_name(a);
+
+    let (lo, hi) = range(0.0, lane_w);
+    let bus = a.bus_lane.then(|| poly(&strip(l.bearing, lo, hi, l.mouth, len)));
+
+    let queue_len = a.approach_mm as f64;
+    let queue = match a.approach {
+        Q_OFFSET => {
+            let (lo, hi) = range(park, park + lane_w);
+            if park == 0.0 {
+                problems.push(format!("{name}: an offset queue jump needs parking beside the curb to sit beside"));
+            }
+            Some(poly(&strip(l.bearing, lo, hi, l.mouth, stop_t + queue_len)))
+        }
+        Q_CURB => {
+            let (lo, hi) = range(0.0, lane_w);
+            Some(poly(&strip(l.bearing, lo, hi, l.mouth, stop_t + queue_len)))
+        }
+        _ => None,
+    };
+    let virtual_loop = (a.approach == Q_VIRTUAL).then(|| {
+        if s.control != SIGNAL {
+            problems.push(format!("{name}: a virtual queue jump needs a traffic signal"));
+        }
+        let (lo, hi) = range(0.0, lane_w);
+        poly(&strip(l.bearing, lo, hi, stop_t + 2_000.0, stop_t + 5_000.0))
+    });
+    let gate = matches!(a.approach, GATE_SIGNAL | GATE_YIELD).then(|| {
+        if !a.bus_lane {
+            problems.push(format!("{name}: a bus gate lets a bus lane through, so it needs a bus lane"));
+        }
+        if l.prof.enter_x.len() < 2 && a.bus_lane {
+            problems.push(format!("{name}: a bus gate needs a traffic lane to hold back"));
+        }
+        let t = stop_t + queue_len;
+        [at(l.bearing, l.lat(off, l.prof.enter_span.0), t), at(l.bearing, l.lat(off, l.prof.enter_span.1), t)]
+    });
+
+    let (stop_poly, stop_at) = match a.stop {
+        STOP_BULB => {
+            if park == 0.0 {
+                problems.push(format!("{name}: a bus bulb extends the curb into parking, and there is none"));
+            }
+            let w = if park > 0.0 { park } else { 2_400.0 };
+            let (lo, hi) = range(0.0, w);
+            (Some(poly(&strip(l.bearing, lo, hi, l.mouth + 18_000.0, l.mouth + 30_000.0))), Some(at(l.bearing, (lo + hi) / 2.0, l.mouth + 24_000.0)))
+        }
+        STOP_PLATFORM => {
+            if s.control != SIGNAL {
+                problems.push(format!("{name}: a signal-protected platform needs a traffic signal"));
+            }
+            if !has_crossing {
+                problems.push(format!("{name}: a platform in the street needs a crossing to reach it"));
+            }
+            let (lo, hi) = range(lane_w, lane_w + 2_500.0);
+            (Some(poly(&strip(l.bearing, lo, hi, l.mouth + 18_000.0, l.mouth + 30_000.0))), Some(at(l.bearing, (lo + hi) / 2.0, l.mouth + 24_000.0)))
+        }
+        _ => (None, None),
+    };
+
+    let mid = (l.cl + l.cr) / 2.0;
+    let bollards = if a.filter {
+        if !a.bus_lane {
+            problems.push(format!("{name}: a modal filter needs a bus lane for the buses that pass"));
+        }
+        let mut v = Vec::new();
+        let mut x = l.cl + 900.0;
+        while x < l.cr {
+            let in_bus = a.bus_lane && x >= lo.min(hi) - 100.0 && x <= lo.max(hi) + 100.0;
+            if !in_bus {
+                v.push(at(l.bearing, x, l.mouth + 10_000.0));
+            }
+            x += 1_800.0;
+        }
+        v
+    } else {
+        Vec::new()
+    };
+    let cap = (a.rule == RULE_DEAD_END).then(|| [at(l.bearing, l.cl, l.mouth + 6_000.0), at(l.bearing, l.cr, l.mouth + 6_000.0)]);
+    let island = (a.rule == RULE_RIRO).then(|| poly(&strip(l.bearing, mid - 900.0, mid + 900.0, l.mouth + 1_500.0, l.mouth + 9_000.0)));
+    let _ = (&queue_len, off);
+    TransitView {
+        bus_lane: a.bus_lane,
+        approach: a.approach,
+        approach_mm: a.approach_mm,
+        stop: a.stop,
+        rule: a.rule,
+        filter: a.filter,
+        kerb_side,
+        bus,
+        queue,
+        virtual_loop,
+        gate,
+        stop_poly,
+        stop_at,
+        bollards,
+        cap,
+        island,
+        icon_at: at(l.bearing, mid, l.mouth + 14_000.0),
+        problems,
+    }
 }
 
 fn l_(p: P) -> Value {
@@ -826,11 +984,18 @@ fn conflicts(s: &State, moves: &[MoveView], lay: &Layout, side: Side) -> Conflic
 /// A movement's path as points, for crossing tests.
 fn sample_path(path: &[Value]) -> Vec<P> {
     let num = |v: &Value, i: usize| v[i].as_f64().unwrap_or(0.0);
-    let start = (num(&path[0], 1), num(&path[0], 2));
-    match path.get(1).and_then(|v| v[0].as_str()) {
-        Some("Q") => sample_quad(start, (num(&path[1], 1), num(&path[1], 2)), (num(&path[1], 3), num(&path[1], 4)), 16),
-        _ => vec![start],
+    let mut out: Vec<P> = Vec::new();
+    for c in path {
+        match c[0].as_str() {
+            Some("M") | Some("L") => out.push((num(c, 1), num(c, 2))),
+            Some("Q") => {
+                let from = *out.last().unwrap_or(&(0.0, 0.0));
+                out.extend(sample_quad(from, (num(c, 1), num(c, 2)), (num(c, 3), num(c, 4)), 16).into_iter().skip(1));
+            }
+            _ => {}
+        }
     }
+    out
 }
 
 fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView], lay: &Layout) -> Vec<Check> {
@@ -907,6 +1072,16 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
         detail: if thin.is_empty() { "Every corner leaves room to stand".into() } else { format!("Corner after {} eats the sidewalk", thin.join("; ")) },
     });
 
+    // Transit priority measures have what they need.
+    let problems: Vec<&str> = arms.iter().flat_map(|a| a.transit.problems.iter().map(String::as_str)).collect();
+    out.push(Check {
+        id: "transit",
+        ok: problems.is_empty(),
+        amount_mm: 0,
+        label: "Transit measures work",
+        detail: if problems.is_empty() { "Each measure has what it needs".into() } else { problems.join("; ") },
+    });
+
     // Signals.
     let signal_ok = s.control != SIGNAL || s.arms.len() <= MAX_SIGNAL_ARMS;
     out.push(Check {
@@ -976,6 +1151,92 @@ mod tests {
         assert_eq!(r.cycle_mm, Some(2000));
         assert!(r.island_mm < plain.island_mm);
         assert_eq!(v.conflicts.crossing, 8, "two for each of four streets");
+    }
+
+    #[test]
+    fn transit_measures_flag_what_they_lack_and_stop_turns() {
+        let mut j = Junction::new(0);
+        let (n, e) = (arm_of(&j, 0), arm_of(&j, 90));
+        let transit = |j: &Junction| j.view().checks.into_iter().find(|c| c.id == "transit").unwrap();
+        assert!(transit(&j).ok);
+        // A gate with no bus lane has nothing to let through.
+        assert!(j.set_approach(n, GATE_SIGNAL));
+        assert!(!transit(&j).ok);
+        assert!(j.set_bus_lane(n, true));
+        assert!(transit(&j).ok, "{}", transit(&j).detail);
+        // A virtual queue jump needs a signal; take the signal away.
+        assert!(j.set_approach(e, Q_VIRTUAL));
+        assert!(transit(&j).ok);
+        assert!(j.set_control(ALL_WAY_STOP));
+        assert!(!transit(&j).ok);
+        // A bulb extends into parking; a lane street has none beside its curb? it does here.
+        assert!(j.set_approach(e, 0) && j.set_control(SIGNAL));
+        assert!(j.set_stop(n, STOP_BULB));
+        assert!(transit(&j).ok);
+        assert!(j.set_stop(n, STOP_PLATFORM));
+        assert!(transit(&j).ok, "signal and crossing are there");
+        assert!(j.set_crossing(n, false));
+        assert!(!transit(&j).ok);
+    }
+
+    #[test]
+    fn turn_management_blocks_movements_and_the_lanes_that_only_go_there() {
+        let mut j = Junction::new(0);
+        let (n, e, s, w) = (arm_of(&j, 0), arm_of(&j, 90), arm_of(&j, 180), arm_of(&j, 270));
+        let moves = |j: &Junction| j.view().movements;
+        let allowed = |j: &Junction, a: u32, b: u32| moves(j).iter().find(|m| m.from == a && m.to == b).unwrap().allowed;
+        // L3: the east street is right-in/right-out: only right turns leave it, only right turns enter.
+        assert!(j.set_rule(e, RULE_RIRO));
+        assert!(allowed(&j, e, n) == false || allowed(&j, e, s) == false, "one of its turns is a left, so it is blocked");
+        let left_from_e = if turn_class(90, 0) == LEFT { n } else { s };
+        assert!(!allowed(&j, e, left_from_e));
+        assert!(!allowed(&j, e, w), "through is blocked");
+        assert!(moves(&j).iter().filter(|m| m.from == e && m.allowed).all(|m| m.class == RIGHT));
+        assert!(moves(&j).iter().filter(|m| m.to == e && m.allowed).all(|m| m.class == RIGHT));
+        // L4: a dead end has no movements either way.
+        assert!(j.set_rule(e, RULE_DEAD_END));
+        assert!(moves(&j).iter().filter(|m| m.from == e || m.to == e).all(|m| !m.allowed));
+        assert!(moves(&j).iter().filter(|m| m.blocked.is_some()).count() >= 6);
+        // N1: a filter does the same for general traffic.
+        assert!(j.set_rule(e, 0) && j.set_filter(w, true));
+        assert!(moves(&j).iter().filter(|m| m.from == w || m.to == w).all(|m| !m.allowed));
+        assert!(j.set_filter(w, false));
+        // L1: left turns from the south street are sent round the block.
+        assert!(j.set_rule(s, RULE_AROUND));
+        assert!(moves(&j).iter().filter(|m| m.from == s && m.class == LEFT).all(|m| !m.allowed));
+        assert!(moves(&j).iter().filter(|m| m.from == s && m.class != LEFT).all(|m| m.allowed));
+        // The lane checks still hold together with the measures.
+        let v = j.view();
+        assert!(v.checks.iter().find(|c| c.id == "lanes-cover").unwrap().ok);
+    }
+
+    #[test]
+    fn l2_leaves_the_left_turn_allowed_but_routes_it_through_the_middle() {
+        let mut j = Junction::new(0);
+        let n = arm_of(&j, 0);
+        assert!(j.set_rule(n, RULE_WITHIN));
+        let v = j.view();
+        let left = v.movements.iter().find(|m| m.from == n && m.class == LEFT).unwrap();
+        assert!(left.allowed && left.indirect);
+        assert_eq!(left.path.len(), 3);
+        assert_eq!(v.movements.iter().filter(|m| m.indirect).count(), 1);
+    }
+
+    #[test]
+    fn the_measures_are_drawn_where_they_belong() {
+        let mut j = Junction::new(0);
+        let e = arm_of(&j, 90);
+        j.set_bus_lane(e, true);
+        j.set_approach(e, Q_CURB);
+        j.set_stop(e, STOP_BULB);
+        j.set_filter(e, true);
+        j.set_rule(e, RULE_DEAD_END);
+        let v = j.view();
+        let t = &v.arms.iter().find(|a| a.uid == e).unwrap().transit;
+        assert!(t.bus.is_some() && t.queue.is_some() && t.stop_poly.is_some() && t.cap.is_some());
+        assert!(!t.bollards.is_empty());
+        let n = v.arms.iter().find(|a| a.bearing == 0).unwrap();
+        assert!(n.transit.bus.is_none() && n.transit.cap.is_none());
     }
 
     #[test]

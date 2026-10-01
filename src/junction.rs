@@ -25,6 +25,64 @@ pub const CONTROLS: [Material; 5] = [
     Material { id: "roundabout", name: "Roundabout" },
 ];
 
+/// One entry of a short list a junction measure is chosen from. `code` is the
+/// Transit Priority Atlas toolbox code.
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+pub struct Item {
+    pub id: &'static str,
+    pub code: &'static str,
+    pub name: &'static str,
+}
+
+pub const Q_OFFSET: usize = 1;
+pub const Q_CURB: usize = 2;
+pub const Q_VIRTUAL: usize = 3;
+pub const GATE_SIGNAL: usize = 4;
+pub const GATE_YIELD: usize = 5;
+
+/// What a street does on its way in to help buses get to the front: a short
+/// transit lane, a virtual lane made by signals, or a gate that stops the
+/// other traffic upstream.
+pub const APPROACHES: [Item; 6] = [
+    Item { id: "none", code: "", name: "None" },
+    Item { id: "queue-offset", code: "G1", name: "Offset queue-jump lane" },
+    Item { id: "queue-curb", code: "G2", name: "Curbside queue-jump lane" },
+    Item { id: "queue-virtual", code: "G3", name: "Virtual queue-jump lane" },
+    Item { id: "gate-signal", code: "H1", name: "Signal-controlled bus gate" },
+    Item { id: "gate-yield", code: "H2", name: "Yield-controlled bus gate" },
+];
+
+pub const STOP_BULB: usize = 1;
+pub const STOP_PLATFORM: usize = 2;
+
+pub const STOPS: [Item; 3] = [
+    Item { id: "none", code: "", name: "No bus stop" },
+    Item { id: "bulb", code: "M1", name: "Bus bulb" },
+    Item { id: "platform", code: "M2", name: "Signal-protected on-street platform" },
+];
+
+pub const RULE_AROUND: usize = 1;
+pub const RULE_WITHIN: usize = 2;
+pub const RULE_RIRO: usize = 3;
+pub const RULE_DEAD_END: usize = 4;
+
+pub const RULES: [Item; 5] = [
+    Item { id: "none", code: "", name: "No turn management" },
+    Item { id: "around", code: "L1", name: "Indirect left turn via alternative itinerary" },
+    Item { id: "within", code: "L2", name: "Indirect left turn within the intersection" },
+    Item { id: "riro", code: "L3", name: "Right-in/right-out" },
+    Item { id: "dead-end", code: "L4", name: "Dead-ending of a lateral street" },
+];
+
+/// How far a queue jump runs back from the stop line, or a gate stands
+/// upstream of it.
+pub const APPROACH_DEFAULT_MM: i32 = 20_000;
+pub const APPROACH_MIN_MM: i32 = 10_000;
+pub const APPROACH_MAX_MM: i32 = 30_000;
+pub const APPROACH_STEP_MM: i32 = 5_000;
+/// Width of a transit lane on an approach.
+pub const TRANSIT_LANE_MM: i32 = 3_300;
+
 pub const MAX_ARMS: usize = 5;
 pub const MIN_ARMS: usize = 3;
 pub const MIN_SEPARATION: i32 = 30;
@@ -85,6 +143,17 @@ pub struct Arm {
     pub bulb: [bool; 2],
     /// Arms this arm may not turn into.
     pub banned: Vec<u32>,
+    /// A transit lane runs along the entering curb all the way in.
+    pub bus_lane: bool,
+    /// Index into `APPROACHES`, and its length or distance.
+    pub approach: usize,
+    pub approach_mm: i32,
+    /// Index into `STOPS`.
+    pub stop: usize,
+    /// Index into `RULES`.
+    pub rule: usize,
+    /// A transit modal filter: only buses pass.
+    pub filter: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -255,6 +324,27 @@ pub fn arm_name(a: &Arm) -> String {
     format!("{} ({})", SAMPLES[a.street].name, compass(a.bearing))
 }
 
+/// Why traffic may not turn from arm `i` into arm `j`, when a measure stops
+/// it: a dead end, a transit modal filter, right-in/right-out, or a left turn
+/// sent round another way.
+pub fn blocked(arms: &[Arm], i: usize, j: usize) -> Option<&'static str> {
+    let (a, b) = (&arms[i], &arms[j]);
+    let class = turn_class(a.bearing, b.bearing);
+    if a.rule == RULE_DEAD_END || b.rule == RULE_DEAD_END {
+        Some("A dead end")
+    } else if a.filter || b.filter {
+        Some("A transit modal filter lets only buses through")
+    } else if a.rule == RULE_RIRO && class != RIGHT {
+        Some("Right-in/right-out: only right turns leave")
+    } else if b.rule == RULE_RIRO && class != RIGHT {
+        Some("Right-in/right-out: only right turns enter")
+    } else if a.rule == RULE_AROUND && class == LEFT {
+        Some("Left turns go round by another street")
+    } else {
+        None
+    }
+}
+
 // ---- samples ----------------------------------------------------------------
 
 pub struct SampleArm {
@@ -381,6 +471,12 @@ impl Junction {
             crossing: Some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false }),
             bulb: [false, false],
             banned: Vec::new(),
+            bus_lane: false,
+            approach: 0,
+            approach_mm: APPROACH_DEFAULT_MM,
+            stop: 0,
+            rule: 0,
+            filter: false,
         }
     }
 
@@ -779,6 +875,76 @@ impl Junction {
                 true
             },
         )
+    }
+
+    pub fn set_bus_lane(&mut self, uid: u32, on: bool) -> bool {
+        self.arm_edit(uid, |a| format!("{} bus lane: {}", arm_name(a), if on { "add" } else { "remove" }), |a| {
+            a.bus_lane = on;
+            true
+        })
+    }
+
+    /// Sets the approach measure, by index into `APPROACHES`.
+    pub fn set_approach(&mut self, uid: u32, approach: usize) -> bool {
+        if approach >= APPROACHES.len() {
+            return false;
+        }
+        self.arm_edit(
+            uid,
+            |a| format!("{}: {}", arm_name(a), if approach == 0 { "no approach measure".to_string() } else { format!("{} {}", APPROACHES[approach].code, APPROACHES[approach].name.to_lowercase()) }),
+            |a| {
+                a.approach = approach;
+                true
+            },
+        )
+    }
+
+    pub fn set_approach_len(&mut self, uid: u32, mm: i32) -> bool {
+        let mm = snap(mm, APPROACH_STEP_MM);
+        if !(APPROACH_MIN_MM..=APPROACH_MAX_MM).contains(&mm) {
+            return false;
+        }
+        self.arm_edit(uid, |a| format!("{} approach measure: {mm} mm", arm_name(a)), |a| {
+            a.approach_mm = mm;
+            true
+        })
+    }
+
+    /// Sets the bus stop, by index into `STOPS`.
+    pub fn set_stop(&mut self, uid: u32, stop: usize) -> bool {
+        if stop >= STOPS.len() {
+            return false;
+        }
+        self.arm_edit(
+            uid,
+            |a| format!("{}: {}", arm_name(a), if stop == 0 { "no bus stop".to_string() } else { format!("{} {}", STOPS[stop].code, STOPS[stop].name.to_lowercase()) }),
+            |a| {
+                a.stop = stop;
+                true
+            },
+        )
+    }
+
+    /// Sets the turn management, by index into `RULES`.
+    pub fn set_rule(&mut self, uid: u32, rule: usize) -> bool {
+        if rule >= RULES.len() {
+            return false;
+        }
+        self.arm_edit(
+            uid,
+            |a| format!("{}: {}", arm_name(a), if rule == 0 { "no turn management".to_string() } else { format!("{} {}", RULES[rule].code, RULES[rule].name.to_lowercase()) }),
+            |a| {
+                a.rule = rule;
+                true
+            },
+        )
+    }
+
+    pub fn set_filter(&mut self, uid: u32, on: bool) -> bool {
+        self.arm_edit(uid, |a| format!("{} transit modal filter (N1): {}", arm_name(a), if on { "add" } else { "remove" }), |a| {
+            a.filter = on;
+            true
+        })
     }
 
     pub fn set_turn(&mut self, from: u32, to: u32, allowed: bool) -> bool {

@@ -3,6 +3,7 @@
 //! The model owns every editing rule. The page only draws the view it
 //! returns and relays pointer and keyboard input.
 
+pub mod atlas;
 pub mod catalogue;
 pub mod junction;
 pub mod junction_view;
@@ -247,6 +248,35 @@ impl Plan {
         self.0.set_turn(from, to, allowed)
     }
 
+    pub fn set_bus_lane(&mut self, uid: u32, on: bool) -> bool {
+        self.0.set_bus_lane(uid, on)
+    }
+
+    /// Sets an arm's approach measure (G1, G2, G3, H1, H2), by index into
+    /// `junction_catalogue().approaches`.
+    pub fn set_approach(&mut self, uid: u32, approach: usize) -> bool {
+        self.0.set_approach(uid, approach)
+    }
+
+    pub fn set_approach_len(&mut self, uid: u32, mm: i32) -> bool {
+        self.0.set_approach_len(uid, mm)
+    }
+
+    /// Sets an arm's bus stop (M1, M2), by index into `junction_catalogue().stops`.
+    pub fn set_stop(&mut self, uid: u32, stop: usize) -> bool {
+        self.0.set_stop(uid, stop)
+    }
+
+    /// Sets an arm's turn management (L1 to L4), by index into `junction_catalogue().rules`.
+    pub fn set_rule(&mut self, uid: u32, rule: usize) -> bool {
+        self.0.set_rule(uid, rule)
+    }
+
+    /// A transit modal filter (N1).
+    pub fn set_filter(&mut self, uid: u32, on: bool) -> bool {
+        self.0.set_filter(uid, on)
+    }
+
     /// Sets the control, by index into `junction_catalogue().controls`.
     pub fn set_control(&mut self, control: usize) -> bool {
         self.0.set_control(control)
@@ -328,6 +358,9 @@ pub fn junction_catalogue() -> String {
     let streets: Vec<_> = SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm, "pieces": s.segments })).collect();
     json(&serde_json::json!({
         "controls": CONTROLS,
+        "approaches": APPROACHES,
+        "stops": STOPS,
+        "rules": RULES,
         "samples": samples,
         "streets": streets,
         "limits": {
@@ -339,7 +372,14 @@ pub fn junction_catalogue() -> String {
             "offset_step": OFFSET_STEP_MM,
             "ring_step": RING_STEP_MM, "max_ring": MAX_RING_MM,
             "island_mm": ISLAND_MM,
+            "approach": [APPROACH_MIN_MM, APPROACH_MAX_MM, APPROACH_STEP_MM, TRANSIT_LANE_MM],
             "cycle": [CYCLE_MIN_MM, CYCLE_MAX_MM, RING_STEP_MM, CYCLE_DEFAULT_MM],
         },
     }))
+}
+
+/// The Transit Priority Atlas toolbox measures and where each is modelled, as JSON.
+#[wasm_bindgen]
+pub fn atlas() -> String {
+    json(&atlas::MEASURES)
 }
