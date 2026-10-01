@@ -108,6 +108,7 @@
           <div class="tabs" role="tablist" aria-label="Sheet notes">
             <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="true">Checks</button>
             <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
+            <button type="button" role="tab" class="tab" id="t-standard" aria-controls="p-standard" aria-selected="false" tabindex="-1">Standard</button>
           </div>
 
           <div class="panel" id="p-checks" role="tabpanel" aria-labelledby="t-checks">
@@ -123,6 +124,15 @@
               <h2 id="h-changes" class="note-h">Your changes</h2>
               <p class="hint" id="changes-lead"></p>
               <ul class="checks places-list" id="changes"></ul>
+            </section>
+          </div>
+
+          <div class="panel" id="p-standard" role="tabpanel" aria-labelledby="t-standard" hidden>
+            <section aria-labelledby="h-standard">
+              <h2 id="h-standard" class="note-h">Engineering standard</h2>
+              <p class="hint">The lane widths every street in the city is checked against. Each street's road type, speed and traffic are set on its own page.</p>
+              <div class="std-form"><div class="field"><label for="std-pick">Standard</label><select id="std-pick"></select></div></div>
+              <p class="hint" id="std-note"></p>
             </section>
           </div>
 

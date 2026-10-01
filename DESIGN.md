@@ -315,6 +315,11 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 ### Notes tabs
 - **Tabs:** the right column is split into Space (where the width goes, people moved), Checks and Changes. Text tabs on a 1px Rule Grey baseline; the selected tab is Ink 600 with a 2px ink underline. Arrow keys, Home and End move between tabs; the choice is remembered. In print all three show, without the tab row.
 
+### Engineering standard
+- **Standard tab:** the notes column's Standard tab holds the city standard's name and note, the street's own road type (a select), design speed and the four busiest-hour volumes (number fields with a unit tag, in the same field style as the width field), and a table of the allowed range for each kind beside the street's current widths. Speed stays in km/h whatever the unit toggle says. A value the model refuses is put back and announced.
+- **Standard line in the inspector:** under "Allowed 2.70 to 4.00 m" a second line gives the standard's range for the selected piece. Outside it the line turns redline, takes the failed-check cross and says how far out in words ("0.2 m over the maximum"); colour is never the only signal. Typing or dragging outside the standard is still accepted: the standard advises, the Lane widths check reports.
+- **On the map:** the Standard tab holds one select that chooses the standard for the whole city.
+
 ### Lane direction
 - **Direction:** a driving lane always runs one way and a bike lane may. Each is drawn as a 14px arrow on the slab, with a Sheet outline so it reads over the hatch: up for traffic going away from you, down for traffic coming toward you. A two-way bike lane has no arrow. The inspector's Direction group lists Away from you and Toward you, plus Two-way for a bike lane. The sample streets start with driving lanes on the half of the street that the region's traffic keeps to, so with traffic on the right the lanes on the left half come toward the viewer and the rest go away.
 
