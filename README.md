@@ -1,7 +1,7 @@
 # CityLoom
 
 Streetmix at city scale: residents compose and compare whole-city scenarios.
-This repository holds two surfaces: the street cross-section editor (`index.html`) and the intersection editor (`intersection.html`).
+This repository holds three surfaces: a city map (`map.html`), the street cross-section editor (`index.html`) and the intersection editor (`intersection.html`). The map opens the other two on a street or junction of one sample city (`src/city.rs`), kept in browser storage.
 
 - `src/`: the editing models in Rust, compiled to WebAssembly: `model.rs` for a street, `junction.rs`, `junction_view.rs` and `plan.rs` for a junction. Tests are included.
 - `web/`: the page. It draws the model's view and relays input; it holds no editing rules.
