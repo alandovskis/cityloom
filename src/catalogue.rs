@@ -134,7 +134,7 @@ pub const CURBS: [Material; 7] = [
 /// A new sidewalk or bike lane gets this curb (concrete).
 pub const DEFAULT_CURB: usize = 1;
 
-pub const KINDS: [Kind; 8] = [
+pub const KINDS: [Kind; 9] = [
     Kind {
         id: "sidewalk",
         name: "Sidewalk",
@@ -205,7 +205,7 @@ pub const KINDS: [Kind; 8] = [
         max_mm: 4000,
         people_per_hour_per_m: 4000,
         materials: &[0, 1, 2],
-        direction: DirectionRule::None,
+        direction: DirectionRule::Optional,
         shares_road: true,
         has_curb: false,
         curbs: &[],
@@ -255,6 +255,21 @@ pub const KINDS: [Kind; 8] = [
         has_curb: false,
         curbs: &[],
     },
+    Kind {
+        id: "shoulder",
+        name: "Shoulder",
+        mark: "SD",
+        mode: Mode::Vehicle,
+        default_mm: 3000,
+        min_mm: 1800,
+        max_mm: 3600,
+        people_per_hour_per_m: 0,
+        materials: &[0, 1, 2],
+        direction: DirectionRule::None,
+        shares_road: true,
+        has_curb: false,
+        curbs: &[],
+    },
 ];
 
 pub fn kind_index(id: &str) -> Option<usize> {
@@ -264,13 +279,16 @@ pub fn kind_index(id: &str) -> Option<usize> {
 pub struct Sample {
     pub name: &'static str,
     pub row_mm: i32,
+    /// A limited-access road: no sidewalks, and a median and shoulders instead.
+    pub freeway: bool,
     pub segments: &'static [(&'static str, i32)],
 }
 
-pub const SAMPLES: [Sample; 3] = [
+pub const SAMPLES: [Sample; 4] = [
     Sample {
         name: "Sample Street 1",
         row_mm: 18000,
+        freeway: false,
         segments: &[
             ("sidewalk", 3300),
             ("parking", 2400),
@@ -283,6 +301,7 @@ pub const SAMPLES: [Sample; 3] = [
     Sample {
         name: "Sample Avenue 2",
         row_mm: 30000,
+        freeway: false,
         segments: &[
             ("sidewalk", 3500),
             ("planting", 1500),
@@ -300,12 +319,29 @@ pub const SAMPLES: [Sample; 3] = [
     Sample {
         name: "Sample Lane 3",
         row_mm: 12000,
+        freeway: false,
         segments: &[
             ("sidewalk", 2100),
             ("travel", 3000),
             ("travel", 3000),
             ("parking", 2400),
             ("sidewalk", 1500),
+        ],
+    },
+    Sample {
+        name: "Sample Freeway 4",
+        row_mm: 30600,
+        freeway: true,
+        segments: &[
+            ("shoulder", 3000),
+            ("travel", 3600),
+            ("travel", 3600),
+            ("travel", 3600),
+            ("median", 3000),
+            ("travel", 3600),
+            ("travel", 3600),
+            ("travel", 3600),
+            ("shoulder", 3000),
         ],
     },
 ];

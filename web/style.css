@@ -43,6 +43,7 @@
   --k-parking: #dcd6c5;
   --k-median: #8fc281;
   --k-loading: #f5df7e;
+  --k-shoulder: #d2d9c3;
   --sky: #e2eff8;
   --chrome: #0f4f4c;
   --chrome-ink: #f3f6f8;
@@ -1016,6 +1017,7 @@ svg pattern circle {
 .k-parking { fill: var(--k-parking); }
 .k-median { fill: var(--k-median); }
 .k-loading { fill: var(--k-loading); }
+.k-shoulder { fill: var(--k-shoulder); }
 .sky {
   fill: var(--sky);
   pointer-events: none;
@@ -1034,7 +1036,8 @@ svg pattern circle {
 .swatch .k-bus,
 .swatch .k-parking,
 .swatch .k-median,
-.swatch .k-loading {
+.swatch .k-loading,
+.swatch .k-shoulder {
   stroke: none;
 }
 .mc {
@@ -1248,6 +1251,7 @@ kbd {
     --k-parking: #50493c;
     --k-median: #3a6b31;
     --k-loading: #7e6d1f;
+    --k-shoulder: #455049;
     --sky: #182838;
     --chrome: #0d3a38;
     --chrome-ink: #e8edf1;
@@ -1286,6 +1290,7 @@ kbd {
   --k-parking: #50493c;
   --k-median: #3a6b31;
   --k-loading: #7e6d1f;
+  --k-shoulder: #455049;
   --sky: #182838;
   --chrome: #0d3a38;
   --chrome-ink: #e8edf1;
@@ -1686,6 +1691,7 @@ kbd {
     --k-parking: #dcd6c5;
     --k-median: #8fc281;
     --k-loading: #f5df7e;
+    --k-shoulder: #d2d9c3;
     --sky: #e2eff8;
     --chrome: #fff;
     --chrome-ink: #14181c;

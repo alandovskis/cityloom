@@ -2,7 +2,7 @@
 // No editing rules live here: widths, snapping, limits, history and checks all
 // come from the WebAssembly model.
 
-import init, { Sheet, catalogue, materials } from "./pkg/cityloom_editor.js";
+import init, { Sheet, catalogue, materials, samples } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH, symbol } from "./symbols.js";
 import { engineering, initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
 
@@ -10,6 +10,7 @@ await init();
 
 const KINDS = JSON.parse(catalogue());
 const MATERIALS = JSON.parse(materials());
+const SAMPLES = JSON.parse(samples());
 const sheet = new Sheet(0);
 let view = JSON.parse(sheet.view());
 let units = "m";
@@ -486,6 +487,23 @@ function renderPalette() {
   ).join("");
 }
 
+// ---- sample streets ---------------------------------------------------------
+
+function renderSamples() {
+  $("samples").innerHTML = SAMPLES.map(
+    (s, i) =>
+      `<li><button type="button" class="chip plain" data-sample="${i}" aria-pressed="${view.sample === i}"><span></span><span><b>${esc(s.name)}</b><small>${fmt(s.row_mm)} wide${s.freeway ? ", freeway" : ""}</small></span></button></li>`,
+  ).join("");
+}
+
+$("samples").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-sample]");
+  if (!b) return;
+  sheet.load_sample(Number(b.dataset.sample));
+  refresh();
+  say(`${view.name}. ${fitText()}.`);
+});
+
 // ---- notes ----------------------------------------------------------------
 
 const head = (cols) => `<thead><tr>${cols.map((c) => `<th scope="col">${c}</th>`).join("")}</tr></thead>`;
@@ -592,6 +610,7 @@ $("time").addEventListener("input", (e) => {
 });
 
 function render() {
+  renderSamples();
   renderClock();
   renderHead();
   renderFit();

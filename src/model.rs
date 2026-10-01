@@ -3,6 +3,7 @@
 
 use serde::Serialize;
 
+use crate::street_measures;
 use crate::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, REGIONS, Side, KINDS, MATERIALS, Mode, SAMPLES, kind_index};
 
 /// Widths snap to this step when dragged.
@@ -35,6 +36,8 @@ pub struct Variant {
     pub kind: usize,
     /// Index into `MATERIALS`; always one the kind allows.
     pub material: usize,
+    /// Which way the piece runs in this window, by the same rule as the base type.
+    pub direction: Option<usize>,
     /// Start of the window, in minutes after midnight, a multiple of 15.
     pub from_min: i32,
     /// End of the window (not included). Earlier than `from_min` means the
@@ -91,6 +94,7 @@ impl Segment {
         let vi = self.variant_at(time_min);
         let kind = vi.map_or(self.kind, |i| self.variants[i].kind);
         let k = &KINDS[kind];
+        let dir = vi.map_or(self.direction, |i| self.variants[i].direction);
         Segment {
             uid: self.uid,
             kind,
@@ -99,8 +103,8 @@ impl Segment {
             curb: if k.has_curb { self.curb } else { None },
             direction: match k.direction {
                 DirectionRule::None => None,
-                DirectionRule::Required => Some(self.direction.unwrap_or(0)),
-                DirectionRule::Optional => self.direction,
+                DirectionRule::Required => Some(dir.unwrap_or(0)),
+                DirectionRule::Optional => dir,
             },
             variants: Vec::new(),
         }
@@ -164,6 +168,15 @@ pub struct Editor {
     selected: Option<u32>,
     gesture: Option<Vec<Segment>>,
     pending_label: String,
+}
+
+/// The direction a piece takes when it becomes `kind`, keeping the one it has.
+fn direction_for(kind: usize, keep: Option<usize>) -> Option<usize> {
+    match KINDS[kind].direction {
+        DirectionRule::None => None,
+        DirectionRule::Required => Some(keep.unwrap_or(0)),
+        DirectionRule::Optional => keep,
+    }
 }
 
 fn required_direction(s: &Segment) -> bool {
@@ -447,6 +460,7 @@ impl Editor {
         let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
             return false;
         };
+        let active = self.current()[pos].variant_at(self.time_min);
         let kind = &KINDS[self.current()[pos].kind_at(self.time_min)];
         let allowed = match kind.direction {
             DirectionRule::None => false,
@@ -459,8 +473,12 @@ impl Editor {
         let what = direction.map_or("two-way".to_string(), |d| DIRECTIONS[d].name.to_lowercase());
         let label = format!("{} direction: {what}", kind.name);
         self.edit(label, |segs| {
-            let changed = segs[pos].direction != direction;
-            segs[pos].direction = direction;
+            let target = match active {
+                Some(vi) => &mut segs[pos].variants[vi].direction,
+                None => &mut segs[pos].direction,
+            };
+            let changed = *target != direction;
+            *target = direction;
             changed
         })
     }
@@ -490,6 +508,12 @@ impl Editor {
                     if let Some(d) = s.direction {
                         s.direction = Some(1 - d);
                         changed = true;
+                    }
+                    for v in &mut s.variants {
+                        if let Some(d) = v.direction {
+                            v.direction = Some(1 - d);
+                            changed = true;
+                        }
                     }
                 }
                 changed
@@ -544,7 +568,7 @@ impl Editor {
         );
         self.edit(label, |segs| {
             let d = &mut segs[pos];
-            d.variants.push(Variant { kind, material: KINDS[kind].materials[0], from_min, to_min });
+            d.variants.push(Variant { kind, material: KINDS[kind].materials[0], direction: direction_for(kind, d.direction), from_min, to_min });
             let (lo, hi) = d.bounds();
             d.width_mm = d.width_mm.clamp(lo, hi);
             true
@@ -572,10 +596,38 @@ impl Editor {
         );
         self.edit(label, |segs| {
             let d = &mut segs[pos];
+            let keep = d.variants[index].direction.or(d.direction);
             d.variants[index].kind = kind;
             d.variants[index].material = KINDS[kind].materials[0];
+            d.variants[index].direction = direction_for(kind, keep);
             let (lo, hi) = d.bounds();
             d.width_mm = d.width_mm.clamp(lo, hi);
+            true
+        })
+    }
+
+    /// Sets which way one of a piece's other-times types runs; `None` is
+    /// two-way, allowed only where the type's rule says so.
+    pub fn set_variant_direction(&mut self, uid: u32, index: usize, direction: Option<usize>) -> bool {
+        let Some(pos) = self.seg_pos(uid) else {
+            return false;
+        };
+        let seg = &self.current()[pos];
+        let Some(v) = seg.variants.get(index) else {
+            return false;
+        };
+        let allowed = match KINDS[v.kind].direction {
+            DirectionRule::None => false,
+            DirectionRule::Required => direction.is_some(),
+            DirectionRule::Optional => true,
+        };
+        if !allowed || direction.is_some_and(|d| d >= DIRECTIONS.len()) || v.direction == direction {
+            return false;
+        }
+        let what = direction.map_or("two-way".to_string(), |d| DIRECTIONS[d].name.to_lowercase());
+        let label = format!("{} {} direction: {what}", KINDS[seg.kind].name, KINDS[v.kind].name.to_lowercase());
+        self.edit(label, |segs| {
+            segs[pos].variants[index].direction = direction;
             true
         })
     }
@@ -629,6 +681,28 @@ impl Editor {
             segs[pos].variants.remove(index);
             true
         })
+    }
+
+    /// Arranges the roadway as one of the Atlas lane measures (`street_measures::DEFS`).
+    /// Refused when it does not suit this street or will not fit.
+    pub fn apply_measure(&mut self, code: &str) -> bool {
+        let Some(def) = street_measures::DEFS.iter().find(|d| d.code == code) else {
+            return false;
+        };
+        let existing = self.current().clone();
+        let mut next_uid = self.next_uid;
+        let Some(arranged) = street_measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, SAMPLES[self.sample].freeway, &mut next_uid) else {
+            return false;
+        };
+        let ok = self.edit(format!("{} {}", def.code, def.name), |segs| {
+            *segs = arranged;
+            true
+        });
+        if ok {
+            self.next_uid = next_uid;
+            self.selected = None;
+        }
+        ok
     }
 
     pub fn nudge_width(&mut self, uid: u32, delta_mm: i32) -> bool {
@@ -799,7 +873,8 @@ impl Editor {
             existing_total_mm: total(existing),
             selected: self.selected,
             outcomes: outcomes(&now, &existing_now),
-            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side),
+            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side, SAMPLES[self.sample].freeway),
+            measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor]
                 .iter()
                 .enumerate()
@@ -812,6 +887,22 @@ impl Editor {
             can_redo: self.cursor + 1 < self.states.len(),
             changed: segs != existing,
         }
+    }
+
+    fn measure_views(&self, raw: &[Segment], now: &[Segment]) -> Vec<MeasureView> {
+        let side = REGIONS[self.region].drive_side;
+        let freeway = SAMPLES[self.sample].freeway;
+        street_measures::detect(raw, now, side, freeway)
+            .into_iter()
+            .zip(street_measures::DEFS.iter())
+            .map(|(f, d)| MeasureView {
+                code: d.code,
+                name: d.name,
+                present: f.present,
+                problems: f.problems,
+                can_apply: street_measures::arrange(d.code, raw, self.row_mm, side, freeway, &mut self.next_uid.clone()).is_some(),
+            })
+            .collect()
     }
 
     fn seg_views(&self, segs: &[Segment]) -> Vec<SegView> {
@@ -837,6 +928,7 @@ impl Editor {
                         .map(|v| VariantView {
                             kind: v.kind,
                             material: MATERIALS[v.material].id,
+                            direction: v.direction.map(|d| DIRECTIONS[d].id),
                             from_min: v.from_min,
                             to_min: v.to_min,
                         })
@@ -888,12 +980,13 @@ fn outcomes(segs: &[Segment], existing: &[Segment]) -> Outcomes {
     }
 }
 
-fn checks(segs: &[Segment], row_mm: i32, side: Side) -> Vec<Check> {
+fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check> {
     let total_mm = total(segs);
     let delta = total_mm - row_mm;
     let fits = delta <= 0;
     let edge_walk = |s: Option<&Segment>| s.is_some_and(|s| KINDS[s.kind].id == "sidewalk");
-    let both_edges = edge_walk(segs.first()) && edge_walk(segs.last());
+    // A freeway has no sidewalks to ask for.
+    let both_edges = freeway || (edge_walk(segs.first()) && edge_walk(segs.last()));
     let access = segs.iter().any(|s| {
         matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= ACCESS_LANE_MM
     });
@@ -928,7 +1021,9 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side) -> Vec<Check> {
             ok: both_edges,
             amount_mm: 0,
             label: "Sidewalk on both sides",
-            detail: if both_edges {
+            detail: if freeway {
+                "A freeway has no sidewalks".into()
+            } else if both_edges {
                 "Both sides".into()
             } else {
                 "One side has no sidewalk".into()
@@ -984,6 +1079,7 @@ pub struct SegView {
 #[derive(Serialize)]
 pub struct VariantView {
     pub kind: usize,
+    pub direction: Option<&'static str>,
     pub material: &'static str,
     pub from_min: i32,
     pub to_min: i32,
@@ -1016,6 +1112,16 @@ pub struct Check {
 }
 
 #[derive(Serialize)]
+pub struct MeasureView {
+    pub code: &'static str,
+    pub name: &'static str,
+    pub present: bool,
+    pub problems: Vec<String>,
+    /// The street can be arranged as this measure.
+    pub can_apply: bool,
+}
+
+#[derive(Serialize)]
 pub struct Revision {
     pub step: usize,
     pub label: String,
@@ -1037,6 +1143,8 @@ pub struct View {
     pub selected: Option<u32>,
     pub outcomes: Outcomes,
     pub checks: Vec<Check>,
+    /// The Atlas lane measures: which this section forms, and what each lacks.
+    pub measures: Vec<MeasureView>,
     pub revisions: Vec<Revision>,
     pub can_undo: bool,
     pub can_redo: bool,
@@ -1053,6 +1161,77 @@ mod tests {
 
     fn kind(id: &str) -> usize {
         kind_index(id).unwrap()
+    }
+
+    #[test]
+    fn every_lane_measure_can_be_arranged_and_is_then_recognised() {
+        for (sample, region) in [(1, 0), (1, 3), (0, 0)] {
+            for d in street_measures::DEFS.iter().filter(|d| d.freeway == Some(false)) {
+                let mut e = Editor::new(sample);
+                e.set_region(region);
+                let view = e.view();
+                let m = view.measures.iter().find(|m| m.code == d.code).unwrap();
+                if !m.can_apply {
+                    continue;
+                }
+                assert!(e.apply_measure(d.code), "{} on {}", d.code, SAMPLES[sample].name);
+                let v = e.view();
+                assert!(v.delta_mm <= 0, "{} fits: {} over", d.code, v.delta_mm);
+                let found = v.measures.iter().find(|m| m.code == d.code).unwrap();
+                assert!(found.present, "{} is recognised on {} (region {region}); got {:?}", d.code, SAMPLES[sample].name, v.measures.iter().filter(|m| m.present).map(|m| m.code).collect::<Vec<_>>());
+                // A narrow street squeezes the bus lanes; that is the one thing it may be told off for.
+                assert!(found.problems.iter().all(|p| p.starts_with("A bus lane is")), "{}: {:?}", d.code, found.problems);
+                assert!(v.revisions.last().unwrap().label.starts_with(d.code));
+            }
+        }
+    }
+
+    #[test]
+    fn the_avenue_can_take_every_street_measure() {
+        let e = Editor::new(1);
+        let applicable: Vec<&str> = e.view().measures.iter().filter(|m| m.can_apply).map(|m| m.code).collect();
+        for c in ["A1", "A2", "A3", "B1", "B3", "B4", "C1", "D1", "E1", "E2", "F1", "F2"] {
+            assert!(applicable.contains(&c), "{c} on the avenue; applicable: {applicable:?}");
+        }
+        assert!(!applicable.contains(&"B2") && !applicable.contains(&"E3"), "freeway only");
+    }
+
+    #[test]
+    fn an_other_times_type_has_its_own_direction() {
+        let mut e = Editor::new(1);
+        assert!(e.apply_measure("B3"));
+        let bus = e.view().segments.iter().find(|s| s.kind == kind("bus")).unwrap().uid;
+        assert!(e.view().measures.iter().find(|m| m.code == "B3").unwrap().present);
+        // Make the afternoon window run the same way as the rest: it is no longer alternating.
+        let base = e.view().segments.iter().find(|s| s.uid == bus).unwrap().direction.map(|d| if d == "away" { 0 } else { 1 });
+        assert!(e.set_variant_direction(bus, 0, base));
+        assert!(!e.view().measures.iter().find(|m| m.code == "B3").unwrap().present);
+        assert!(!e.set_variant_direction(bus, 0, base), "unchanged");
+        assert!(!e.set_variant_direction(bus, 5, Some(0)));
+    }
+
+    #[test]
+    fn the_freeway_takes_only_its_own_measures() {
+        let mut e = Editor::new(3);
+        let applicable: Vec<&str> = e.view().measures.iter().filter(|m| m.can_apply).map(|m| m.code).collect();
+        assert_eq!(applicable, vec!["B2", "E3"]);
+        assert!(e.apply_measure("B2"));
+        let v = e.view();
+        assert!(v.measures.iter().find(|m| m.code == "B2").unwrap().present);
+        assert!(v.delta_mm <= 0);
+        assert!(e.apply_measure("E3"));
+        assert!(e.view().measures.iter().find(|m| m.code == "E3").unwrap().present);
+        assert!(!e.apply_measure("A1"), "not for a freeway");
+    }
+
+    #[test]
+    fn a_narrow_bus_lane_is_a_problem() {
+        let mut e = Editor::new(1);
+        assert!(e.apply_measure("B1"));
+        let bus = e.view().segments.iter().find(|s| s.kind == kind("bus")).unwrap().uid;
+        let _ = e.set_width(bus, 3000);
+        let m = e.view().measures.into_iter().find(|m| m.code == "B1").unwrap();
+        assert!(m.present && !m.problems.is_empty());
     }
 
     #[test]

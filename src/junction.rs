@@ -696,7 +696,7 @@ impl Junction {
     /// Adds a street at `bearing`, or at the middle of the widest gap when
     /// `bearing` is negative. Returns its uid, or 0 when it does not fit.
     pub fn add_arm(&mut self, street: usize, bearing: i32) -> u32 {
-        if street >= SAMPLES.len() || self.current().arms.len() >= MAX_ARMS {
+        if street >= SAMPLES.len() || SAMPLES[street].freeway || self.current().arms.len() >= MAX_ARMS {
             return 0;
         }
         let bearing = if bearing < 0 { widest_gap(&self.current().arms) } else { snap(bearing, BEARING_STEP).rem_euclid(360) };
@@ -785,7 +785,7 @@ impl Junction {
     }
 
     pub fn set_street(&mut self, uid: u32, street: usize) -> bool {
-        if street >= SAMPLES.len() {
+        if street >= SAMPLES.len() || SAMPLES[street].freeway {
             return false;
         }
         self.arm_edit(uid, |a| format!("{} becomes {}", arm_name(a), SAMPLES[street].name), |a| {

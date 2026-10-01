@@ -9,6 +9,7 @@ pub mod junction;
 pub mod junction_view;
 pub mod model;
 pub mod plan;
+pub mod street_measures;
 
 use wasm_bindgen::prelude::*;
 
@@ -86,6 +87,17 @@ impl Sheet {
 
     pub fn set_variant_kind(&mut self, uid: u32, index: usize, kind: usize) -> bool {
         self.0.set_variant_kind(uid, index, kind)
+    }
+
+    /// Sets which way an other-times type runs, by index into
+    /// `materials().directions`; -1 is two-way.
+    pub fn set_variant_direction(&mut self, uid: u32, index: usize, direction: i32) -> bool {
+        self.0.set_variant_direction(uid, index, usize::try_from(direction).ok())
+    }
+
+    /// Arranges the roadway as an Atlas lane measure, by its code (A1 to F2).
+    pub fn apply_measure(&mut self, code: &str) -> bool {
+        self.0.apply_measure(code)
     }
 
     pub fn set_variant_time(&mut self, uid: u32, index: usize, from_min: i32, to_min: i32) -> bool {
@@ -167,7 +179,7 @@ pub fn materials() -> String {
 pub fn samples() -> String {
     let list: Vec<_> = SAMPLES
         .iter()
-        .map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm }))
+        .map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm, "freeway": s.freeway }))
         .collect();
     json(&list)
 }
@@ -355,7 +367,7 @@ impl Plan {
 pub fn junction_catalogue() -> String {
     use junction::*;
     let samples: Vec<_> = JUNCTION_SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "arms": s.arms.len() })).collect();
-    let streets: Vec<_> = SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm, "pieces": s.segments })).collect();
+    let streets: Vec<_> = SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm, "pieces": s.segments, "freeway": s.freeway })).collect();
     json(&serde_json::json!({
         "controls": CONTROLS,
         "approaches": APPROACHES,

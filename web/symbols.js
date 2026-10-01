@@ -41,6 +41,9 @@ const cyclist = (x = 0, s = 1) =>
       `<circle cx="6" cy="-53" r="5"/>`,
   );
 
+const cone = (x = 0, s = 1) =>
+  at(x, s, `<path class="f-van" d="M-9,0 L-4,-34 L4,-34 L9,0 Z"/><path d="M-6.5,-14 L6.5,-14 M-5.2,-24 L5.2,-24"/><path class="o" d="M-13,0 L13,0"/>`);
+
 const car = (x = 0, s = 1) =>
   at(
     x,
@@ -99,6 +102,7 @@ const SYMBOLS = {
     return kerb + (wm >= 2.4 ? tree(0, 0.9) : shrub(-w * 0.35, 0.8) + shrub(w * 0.35, 0.8)).replace(/translate\((-?[\d.]+) 0\)/g, (m, x) => `translate(${x} -10)`);
   },
   loading: () => van(0, 1),
+  shoulder: () => cone(0, 1),
 };
 
 // Native widths, in drawing units at 55 px per metre, used to shrink a symbol
@@ -112,6 +116,7 @@ const NATIVE_W = {
   parking: () => 112,
   median: (wm) => (wm >= 2.4 ? 62 : 52),
   loading: () => 110,
+  shoulder: () => 40,
 };
 
 export function symbol(kindId, cx, groundY, pxPerM, segPx, wm, f = 1) {
@@ -132,6 +137,7 @@ export const HATCH = {
   bus: `<pattern id="h-bus" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><path d="M0,0 L0,4"/></pattern>`,
   parking: `<pattern id="h-parking" width="6" height="5" patternUnits="userSpaceOnUse"><path d="M0,2.5 L6,2.5"/></pattern>`,
   median: `<pattern id="h-median" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M0,0 L7,0 M0,0 L0,7"/></pattern>`,
+  shoulder: `<pattern id="h-shoulder" width="12" height="10" patternUnits="userSpaceOnUse"><path d="M0,5 L4,5 M6,5 L7,5 M9,5 L10,5"/></pattern>`,
   loading: `<pattern id="h-loading" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M0,6 L5,1 L10,6"/></pattern>`,
 };
 
