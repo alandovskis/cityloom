@@ -33,9 +33,6 @@ pub const DEFS: [Def; 14] = [
     Def { code: "F2", name: "Offset Contraflow Transit Lanes", freeway: Some(false) },
 ];
 
-/// A transit lane should be at least this wide (synthetic).
-pub const MIN_TRANSIT_LANE_MM: i32 = 3_300;
-
 pub struct Found {
     pub code: &'static str,
     pub present: bool,
@@ -55,9 +52,12 @@ fn left_half(side: Side) -> usize {
     usize::from(side == Side::Right)
 }
 
-/// Recognises the measures a section forms. `raw` is the section with its
+/// Recognises the measures a section forms. `bus_min_mm` is the narrowest bus
+/// lane the street's standard allows.
+///
+/// Also:  `raw` is the section with its
 /// other-times windows; `now` is the same section as it is at the shown time.
-pub fn detect(raw: &[Segment], now: &[Segment], side: Side, freeway: bool) -> Vec<Found> {
+pub fn detect(raw: &[Segment], now: &[Segment], side: Side, freeway: bool, bus_min_mm: i32) -> Vec<Found> {
     let road: Vec<&Segment> = now.iter().filter(|s| is_road(s)).collect();
     let raw_road: Vec<&Segment> = raw.iter().filter(|s| is_road(s)).collect();
     let n = road.len();
@@ -113,8 +113,8 @@ pub fn detect(raw: &[Segment], now: &[Segment], side: Side, freeway: bool) -> Ve
     // What any transit lane needs, and what centre-running lanes need besides.
     let mut base = Vec::new();
     for &i in &bus {
-        if road[i].width_mm < MIN_TRANSIT_LANE_MM {
-            base.push(format!("A bus lane is {} mm wide, and a transit lane wants {} mm", road[i].width_mm, MIN_TRANSIT_LANE_MM));
+        if road[i].width_mm < bus_min_mm {
+            base.push(format!("A bus lane is {} mm wide, and a transit lane wants {} mm", road[i].width_mm, bus_min_mm));
         }
     }
     let median_beside = now.iter().enumerate().any(|(k, s)| {

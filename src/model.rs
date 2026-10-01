@@ -1071,7 +1071,7 @@ impl Editor {
             existing_total_mm: total(existing),
             selected: self.selected,
             outcomes: outcomes(&now, &existing_now),
-            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side, SAMPLES[self.sample].freeway),
+            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side, SAMPLES[self.sample].freeway, self.standard(), &self.design),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor]
                 .iter()
@@ -1084,13 +1084,23 @@ impl Editor {
             can_undo: self.cursor > 0,
             can_redo: self.cursor + 1 < self.states.len(),
             changed: segs != existing,
+            design: self.design,
+            standard: self.standard,
+            std_limits: (0..KINDS.len())
+                .map(|k| {
+                    let (lo, hi) = self.standard().limits(&self.design, k);
+                    [lo, hi]
+                })
+                .collect(),
+            out_of_range: out_of_range(&now, self.standard(), &self.design),
         }
     }
 
     fn measure_views(&self, raw: &[Segment], now: &[Segment]) -> Vec<MeasureView> {
         let side = REGIONS[self.region].drive_side;
         let freeway = SAMPLES[self.sample].freeway;
-        street_measures::detect(raw, now, side, freeway)
+        let bus_min_mm = self.standard().limits(&self.design, kind_index("bus").expect("the catalogue has a bus lane")).0;
+        street_measures::detect(raw, now, side, freeway, bus_min_mm)
             .into_iter()
             .zip(street_measures::DEFS.iter())
             .map(|(f, d)| MeasureView {
@@ -1109,6 +1119,7 @@ impl Editor {
             .map(|s| {
                 let (min_mm, max_mm) = s.bounds();
                 let n = s.at(self.time_min);
+                let (std_min_mm, std_max_mm) = self.standard().limits(&self.design, n.kind);
                 let v = SegView {
                     uid: s.uid,
                     kind: n.kind,
@@ -1117,6 +1128,9 @@ impl Editor {
                     x_mm: x,
                     min_mm,
                     max_mm,
+                    std_min_mm,
+                    std_max_mm,
+                    std_ok: (std_min_mm..=std_max_mm).contains(&s.width_mm),
                     material: MATERIALS[n.material].id,
                     curb: n.curb.map(|c| CURBS[c].id),
                     direction: n.direction.map(|d| DIRECTIONS[d].id),
@@ -1178,7 +1192,7 @@ fn outcomes(segs: &[Segment], existing: &[Segment]) -> Outcomes {
     }
 }
 
-fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check> {
+fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, standard: &Standard, design: &Design) -> Vec<Check> {
     let total_mm = total(segs);
     let delta = total_mm - row_mm;
     let fits = delta <= 0;
@@ -1198,7 +1212,7 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check
         .position(|&d| d == wrong_first)
         .is_none_or(|i| !lanes[i..].contains(&wrong_then));
     let side_name = if side == Side::Right { "right" } else { "left" };
-    vec![
+    let mut list = vec![
         Check {
             id: "fits",
             ok: fits,
@@ -1249,7 +1263,38 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check
                 format!("A lane runs against traffic that keeps {side_name}")
             },
         },
-    ]
+    ];
+    list.push(lane_widths(segs, standard, design));
+    list
+}
+
+/// Each piece outside the standard's range for its kind on this street, the
+/// furthest out first; pieces equally far out keep their order in the street.
+fn out_of_range(now: &[Segment], standard: &Standard, design: &Design) -> Vec<OutOfRange> {
+    let mut out: Vec<OutOfRange> = now
+        .iter()
+        .map(|s| {
+            let (min_mm, max_mm) = standard.limits(design, s.kind);
+            OutOfRange { kind: s.kind, width_mm: s.width_mm, min_mm, max_mm }
+        })
+        .filter(|o| o.away_mm() > 0)
+        .collect();
+    out.sort_by_key(|o| std::cmp::Reverse(o.away_mm()));
+    out
+}
+
+/// Whether every piece is inside the standard's range. Advisory: it reports,
+/// it does not refuse.
+fn lane_widths(now: &[Segment], standard: &Standard, design: &Design) -> Check {
+    let out = out_of_range(now, standard, design);
+    let detail = match out.split_first() {
+        None => "Every piece is inside the standard's range".to_string(),
+        Some((w, rest)) => {
+            let first = format!("{} {} mm, standard allows {} to {} mm", KINDS[w.kind].name, w.width_mm, w.min_mm, w.max_mm);
+            if rest.is_empty() { first } else { format!("{first} and {} more", rest.len()) }
+        }
+    };
+    Check { id: "widths", ok: out.is_empty(), amount_mm: out.first().map_or(0, OutOfRange::away_mm), label: "Lane widths within the standard", detail }
 }
 
 // ---- serialised view ----------------------------------------------------
@@ -1265,6 +1310,11 @@ pub struct SegView {
     pub x_mm: i32,
     pub min_mm: i32,
     pub max_mm: i32,
+    /// The standard's range for this piece's type at the shown time, and
+    /// whether its width is inside it.
+    pub std_min_mm: i32,
+    pub std_max_mm: i32,
+    pub std_ok: bool,
     pub material: &'static str,
     pub curb: Option<&'static str>,
     pub direction: Option<&'static str>,
@@ -1309,6 +1359,22 @@ pub struct Check {
     pub detail: String,
 }
 
+/// A piece outside the standard's range for its kind on its street.
+#[derive(Serialize)]
+pub struct OutOfRange {
+    pub kind: usize,
+    pub width_mm: i32,
+    pub min_mm: i32,
+    pub max_mm: i32,
+}
+
+impl OutOfRange {
+    /// How far outside the range the width is.
+    fn away_mm(&self) -> i32 {
+        (self.min_mm - self.width_mm).max(self.width_mm - self.max_mm)
+    }
+}
+
 #[derive(Serialize)]
 pub struct MeasureView {
     pub code: &'static str,
@@ -1347,6 +1413,15 @@ pub struct View {
     pub can_undo: bool,
     pub can_redo: bool,
     pub changed: bool,
+    /// The street's road type, speed and traffic.
+    pub design: Design,
+    /// Index into the standards: the one the street is checked against.
+    pub standard: usize,
+    /// The standard's range for each kind on this street, indexed by kind.
+    pub std_limits: Vec<[i32; 2]>,
+    /// The pieces outside it, furthest out first, so the page can print them in
+    /// its units. What the Lane widths check speaks of.
+    pub out_of_range: Vec<OutOfRange>,
 }
 
 #[cfg(test)]
@@ -2047,5 +2122,91 @@ mod tests {
         assert!(e.set_speed(70));
         e.load_sample(1);
         assert_eq!(e.snapshot().design, Design::for_sample(1));
+    }
+
+    #[test]
+    fn the_default_standard_accepts_every_sample_street() {
+        for i in 0..SAMPLES.len() {
+            let v = Editor::new(i).view();
+            let c = v.checks.iter().find(|c| c.id == "widths").unwrap();
+            assert!(c.ok, "{}: {}", SAMPLES[i].name, c.detail);
+            assert!(v.segments.iter().all(|s| s.std_ok), "{}", SAMPLES[i].name);
+        }
+    }
+
+    #[test]
+    fn a_lane_outside_the_standard_fails_the_check_and_says_which() {
+        let mut e = Editor::new(0);
+        let lane = e.view().segments.iter().find(|s| s.kind == kind("travel")).unwrap().uid;
+        assert!(e.set_width(lane, 3800));
+        let v = e.view();
+        let c = v.checks.iter().find(|c| c.id == "widths").unwrap();
+        assert!(!c.ok);
+        assert_eq!(c.amount_mm, 200);
+        assert_eq!(c.detail, "Driving lane 3800 mm, standard allows 3100 to 3600 mm");
+        let o = &v.out_of_range[0];
+        assert_eq!((o.kind, o.width_mm, o.min_mm, o.max_mm), (kind("travel"), 3800, 3100, 3600));
+        let s = v.segments.iter().find(|s| s.uid == lane).unwrap();
+        assert!(!s.std_ok);
+        assert_eq!((s.std_min_mm, s.std_max_mm), (3100, 3600));
+        // The widths check comes last, so the others keep their places.
+        assert_eq!(v.checks.last().unwrap().id, "widths");
+        assert_eq!(v.checks[1].id, "edges");
+    }
+
+    #[test]
+    fn the_check_names_the_worst_lane_first_and_counts_the_rest() {
+        let mut e = Editor::new(0);
+        let lanes: Vec<u32> = e.view().segments.iter().filter(|s| s.kind == kind("travel")).map(|s| s.uid).collect();
+        assert!(e.set_width(lanes[0], 3700));
+        assert!(e.set_width(lanes[1], 3800));
+        let v = e.view();
+        let c = v.checks.iter().find(|c| c.id == "widths").unwrap();
+        assert_eq!(v.out_of_range.iter().map(|o| o.width_mm).collect::<Vec<_>>(), [3800, 3700]);
+        assert!(c.detail.starts_with("Driving lane 3800 mm") && c.detail.ends_with("and 1 more"), "{}", c.detail);
+    }
+
+    #[test]
+    fn a_busier_street_changes_the_range_a_piece_is_held_to() {
+        let mut e = Editor::new(0);
+        let walk = |e: &Editor| e.view().segments[0].std_min_mm;
+        assert_eq!(walk(&e), 2000);
+        assert!(e.set_volume(0, 1000));
+        assert_eq!(walk(&e), 2500);
+        assert!(e.set_volume(0, 100));
+        assert_eq!(walk(&e), 1400);
+        // A table of the range for every kind is there for the page.
+        let v = e.view();
+        assert_eq!(v.std_limits.len(), KINDS.len());
+        assert_eq!(v.std_limits[kind("sidewalk")], [1400, 3500]);
+    }
+
+    #[test]
+    fn the_standard_is_a_setting_the_view_reports() {
+        let mut e = Editor::new(0);
+        assert_eq!(e.view().standard, standard::BALANCED);
+        let before = e.view().std_limits[kind("sidewalk")];
+        assert!(e.set_standard(2));
+        let v = e.view();
+        assert_eq!(v.standard, 2);
+        assert_ne!(v.std_limits[kind("sidewalk")], before);
+        assert!(!v.can_undo);
+        assert!(!e.set_standard(2), "unchanged");
+        assert!(!e.set_standard(3), "no such standard");
+    }
+
+    #[test]
+    fn the_transit_minimum_comes_from_the_standard() {
+        let mut e = Editor::new(1);
+        assert!(e.apply_measure("B1"));
+        let bus = e.view().segments.iter().find(|s| s.kind == kind("bus")).unwrap().uid;
+        assert!(e.set_road_type(standard::COLLECTOR));
+        // The arranged bus lane is 3300 mm, the minimum on a collector.
+        assert_eq!(e.view().segments.iter().find(|s| s.uid == bus).unwrap().width_mm, 3300);
+        let problems = |e: &Editor| e.view().measures.into_iter().find(|m| m.code == "B1").unwrap().problems;
+        assert!(problems(&e).is_empty(), "{:?}", problems(&e));
+        // An arterial's bus lane is held to 100 mm more.
+        assert!(e.set_road_type(standard::ARTERIAL));
+        assert_eq!(problems(&e), ["A bus lane is 3300 mm wide, and a transit lane wants 3400 mm"]);
     }
 }
