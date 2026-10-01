@@ -5,6 +5,7 @@
 
 pub mod atlas;
 pub mod catalogue;
+pub mod city;
 pub mod junction;
 pub mod junction_view;
 pub mod model;

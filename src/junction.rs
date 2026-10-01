@@ -248,6 +248,29 @@ pub fn profile_of(street: &Street, region: usize) -> Profile {
 }
 
 impl Arm {
+    /// An arm with the defaults a street starts with at a junction.
+    pub fn new(uid: u32, street: usize, bearing: i32, offset_mm: i32) -> Arm {
+        Arm {
+            uid,
+            street,
+            edge: 0,
+            section: None,
+            bearing,
+            offset_mm,
+            corner_mm: DEFAULT_CORNER_MM,
+            lanes: Vec::new(),
+            crossing: Some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false }),
+            bulb: [false, false],
+            banned: Vec::new(),
+            bus_lane: false,
+            approach: 0,
+            approach_mm: APPROACH_DEFAULT_MM,
+            stop: 0,
+            rule: 0,
+            filter: false,
+        }
+    }
+
     pub fn profile(&self, region: usize) -> Profile {
         match &self.section {
             Some(s) => profile_of(s, region),
@@ -560,25 +583,7 @@ impl Junction {
     }
 
     fn fresh_arm(&self, uid: u32, street: usize, bearing: i32, offset_mm: i32) -> Arm {
-        Arm {
-            uid,
-            street,
-            edge: 0,
-            section: None,
-            bearing,
-            offset_mm,
-            corner_mm: DEFAULT_CORNER_MM,
-            lanes: Vec::new(),
-            crossing: Some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false }),
-            bulb: [false, false],
-            banned: Vec::new(),
-            bus_lane: false,
-            approach: 0,
-            approach_mm: APPROACH_DEFAULT_MM,
-            stop: 0,
-            rule: 0,
-            filter: false,
-        }
+        Arm::new(uid, street, bearing, offset_mm)
     }
 
     pub fn current(&self) -> &State {
