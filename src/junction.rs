@@ -10,7 +10,6 @@ use crate::plan::gap;
 pub const LEFT: u8 = 1;
 pub const THROUGH: u8 = 2;
 pub const RIGHT: u8 = 4;
-const CLASSES: [u8; 3] = [LEFT, THROUGH, RIGHT];
 
 pub const UNCONTROLLED: usize = 0;
 pub const PRIORITY: usize = 1;
@@ -56,6 +55,12 @@ pub struct Crossing {
     pub island: bool,
 }
 
+/// An entering lane and the streets it can go to, by their uids.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Lane {
+    pub to: Vec<u32>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Arm {
     pub uid: u32,
@@ -67,8 +72,8 @@ pub struct Arm {
     pub offset_mm: i32,
     /// Curb radius at the corner clockwise of this arm.
     pub corner_mm: i32,
-    /// What each entering lane serves, driver's left to right.
-    pub lanes: Vec<u8>,
+    /// The entering lanes, driver's left to right, and the streets each goes to.
+    pub lanes: Vec<Lane>,
     pub crossing: Option<Crossing>,
     /// Curb extension at the arm's left and right curb.
     pub bulb: [bool; 2],
@@ -579,6 +584,17 @@ impl Junction {
                 let i = s.arms.iter().position(|a| a.uid == uid).unwrap_or(0);
                 let before = (i + s.arms.len() - 1) % s.arms.len();
                 s.arms[before].corner_mm = s.arms[before].corner_mm.min(radius);
+                // Lanes that already serve a turn of the new street's kind take it too.
+                let new_bearing = s.arms[i].bearing;
+                let bearings: Vec<(u32, i32)> = s.arms.iter().map(|a| (a.uid, a.bearing)).collect();
+                for a in s.arms.iter_mut().filter(|a| a.uid != uid) {
+                    let class = turn_class(a.bearing, new_bearing);
+                    for l in &mut a.lanes {
+                        if l.to.iter().any(|t| bearings.iter().any(|(u, b)| u == t && turn_class(a.bearing, *b) == class)) {
+                            l.to.push(uid);
+                        }
+                    }
+                }
                 true
             }) {
                 self.next_uid += 1;
@@ -704,26 +720,28 @@ impl Junction {
         })
     }
 
-    pub fn set_lane_use(&mut self, uid: u32, lane: usize, class: u8, on: bool) -> bool {
-        if !CLASSES.contains(&class) {
+    /// Lets a lane go to a street, or not. A lane keeps at least one street.
+    pub fn set_lane_dest(&mut self, uid: u32, lane: usize, to: u32, on: bool) -> bool {
+        let Some(dest) = self.arm(to).map(arm_name) else { return false };
+        if uid == to {
             return false;
         }
-        let word = match class {
-            LEFT => "left",
-            THROUGH => "through",
-            _ => "right",
-        };
-        let avail = self.current().arms.iter().position(|a| a.uid == uid).map_or(0, |i| classes_of(&self.current().arms, i));
         self.arm_edit(
             uid,
-            |a| format!("{} lane {}: {word} {}", arm_name(a), lane + 1, if on { "on" } else { "off" }),
+            |a| format!("{} lane {}: {} {dest}", arm_name(a), lane + 1, if on { "to" } else { "not to" }),
             |a| {
-                let Some(u) = a.lanes.get_mut(lane) else { return false };
-                let next = if on { *u | class } else { *u & !class };
-                if next == 0 || next & !avail != 0 {
-                    return false;
+                let Some(l) = a.lanes.get_mut(lane) else { return false };
+                if on {
+                    if l.to.contains(&to) {
+                        return false;
+                    }
+                    l.to.push(to);
+                } else {
+                    if !l.to.contains(&to) || l.to.len() == 1 {
+                        return false;
+                    }
+                    l.to.retain(|u| *u != to);
                 }
-                *u = next;
                 true
             },
         )
@@ -792,17 +810,26 @@ pub fn widest_gap(arms: &[Arm]) -> i32 {
 /// exist, and features that need room or parking stay only where they have it.
 pub fn normalize(arms: &mut [Arm], region: usize) {
     let uids: Vec<u32> = arms.iter().map(|a| a.uid).collect();
+    let bearings: Vec<i32> = arms.iter().map(|a| a.bearing).collect();
     let avail: Vec<u8> = (0..arms.len()).map(|i| classes_of(arms, i)).collect();
     for (a, avail) in arms.iter_mut().zip(avail) {
         let p = profile(a.street, region);
         let n = p.enter_x.len();
+        let (uid, bearing) = (a.uid, a.bearing);
+        // Where lane `k` goes by default: every street whose turn it serves.
+        let default = |k: usize| -> Vec<u32> {
+            let want = default_uses(k, n, avail);
+            uids.iter().zip(&bearings).filter(|(u, b)| **u != uid && want & turn_class(bearing, **b) != 0).map(|(u, _)| *u).collect()
+        };
         if a.lanes.len() != n {
-            a.lanes = (0..n).map(|i| default_uses(i, n, avail)).collect();
+            a.lanes = (0..n).map(|k| Lane { to: default(k) }).collect();
         }
-        for (i, u) in a.lanes.iter_mut().enumerate() {
-            *u &= avail;
-            if *u == 0 {
-                *u = default_uses(i, n, avail);
+        for (k, l) in a.lanes.iter_mut().enumerate() {
+            l.to.retain(|u| uids.contains(u) && *u != uid);
+            l.to.sort_unstable();
+            l.to.dedup();
+            if l.to.is_empty() {
+                l.to = default(k);
             }
         }
         a.banned.retain(|b| uids.contains(b) && *b != a.uid);
@@ -994,14 +1021,32 @@ mod tests {
     }
 
     #[test]
-    fn lane_uses_need_a_turn_the_arm_has_and_at_least_one_class() {
-        let mut j = Junction::new(1);
+    fn a_lane_goes_to_streets_one_by_one_and_always_to_at_least_one() {
+        let mut j = Junction::new(1); // street, lane (south), street
         let lane = j.current().arms.iter().find(|a| a.street == 2).unwrap().uid;
-        // The lane is the stem of a T: no through movement exists.
-        assert!(!j.set_lane_use(lane, 0, THROUGH, true));
-        assert_eq!(j.arm(lane).unwrap().lanes[0], LEFT | RIGHT);
-        assert!(j.set_lane_use(lane, 0, LEFT, false));
-        assert!(!j.set_lane_use(lane, 0, RIGHT, false), "a lane must serve something");
+        let (e, w) = (arm_at(&j, 90), arm_at(&j, 270));
+        assert_eq!(j.arm(lane).unwrap().lanes[0].to, vec![e, w], "the stem's one lane goes both ways");
+        assert!(!j.set_lane_dest(lane, 0, e, true), "already goes there");
+        assert!(j.set_lane_dest(lane, 0, e, false));
+        assert!(!j.set_lane_dest(lane, 0, w, false), "a lane must go somewhere");
+        assert!(!j.set_lane_dest(lane, 0, lane, true), "not back where it came from");
+        assert!(j.set_lane_dest(lane, 0, e, true));
+    }
+
+    #[test]
+    fn two_straight_ons_at_a_five_way_can_be_split_between_lanes() {
+        let mut j = Junction::new(3);
+        let av = arm_at(&j, 145); // two lanes in; north and north-west are both straight on from here
+        let (n, nw) = (arm_at(&j, 0), arm_at(&j, 290));
+        let to = |j: &Junction, lane: usize| j.arm(av).unwrap().lanes[lane].to.clone();
+        assert!(to(&j, 0).contains(&n) && to(&j, 0).contains(&nw));
+        assert!(to(&j, 1).contains(&n) && to(&j, 1).contains(&nw));
+        assert!(j.set_lane_dest(av, 1, nw, false));
+        assert!(to(&j, 0).contains(&nw) && !to(&j, 1).contains(&nw), "one lane to each");
+    }
+
+    fn arm_at(j: &Junction, bearing: i32) -> u32 {
+        j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid
     }
 
     #[test]

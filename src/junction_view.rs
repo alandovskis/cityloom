@@ -194,7 +194,10 @@ pub struct PieceView {
 
 #[derive(Serialize)]
 pub struct LaneView {
+    /// The kinds of turn it serves, for the arrow drawn on it.
     pub uses: u8,
+    /// Every other street, in turn order from the driver's left, and whether this lane goes there.
+    pub dests: Vec<DestView>,
     /// Serves only turns that are banned.
     pub bad: bool,
     pub at: P,
@@ -203,6 +206,16 @@ pub struct LaneView {
     /// The lane along the whole arm, for pointing at it.
     pub poly: Vec<Value>,
     pub width_mm: i32,
+}
+
+#[derive(Serialize)]
+pub struct DestView {
+    pub uid: u32,
+    pub label: String,
+    pub class: u8,
+    pub on: bool,
+    /// The street can be left.
+    pub open: bool,
 }
 
 #[derive(Serialize)]
@@ -373,7 +386,7 @@ fn priority_pair(arms: &[Arm]) -> [usize; 2] {
 fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, head: i32, uses: u8) -> LaneView {
     let w = a.prof.pieces.iter().find(|p| p.x_mm + p.width_mm / 2 == x_mm && KINDS[p.kind].id == "travel").map_or(3_000, |p| p.width_mm);
     let c = a.lat(off, x_mm);
-    LaneView { uses, bad: false, at: at(a.bearing, c, t), heading: head, poly: poly(&strip(a.bearing, c - w as f64 / 2.0, c + w as f64 / 2.0, a.mouth, ARM_LENGTH_MM as f64)), width_mm: w }
+    LaneView { uses, dests: Vec::new(), bad: false, at: at(a.bearing, c, t), heading: head, poly: poly(&strip(a.bearing, c - w as f64 / 2.0, c + w as f64 / 2.0, a.mouth, ARM_LENGTH_MM as f64)), width_mm: w }
 }
 
 impl Junction {
@@ -490,7 +503,23 @@ impl Junction {
                 .enter_x
                 .iter()
                 .zip(&a.lanes)
-                .map(|(&x, &u)| lane_view(l, off, x, arrow_t, heading(l.bearing), u))
+                .map(|(&x, lane)| {
+                    let uses = lane.to.iter().filter_map(|t| s.arms.iter().find(|b| b.uid == *t)).fold(0, |m, b| m | turn_class(a.bearing, b.bearing));
+                    let mut v = lane_view(l, off, x, arrow_t, heading(l.bearing), uses);
+                    let mut dests: Vec<(i32, DestView)> = s
+                        .arms
+                        .iter()
+                        .zip(&lay.arms)
+                        .filter(|(b, _)| b.uid != a.uid)
+                        .map(|(b, lb)| {
+                            let turn = (b.bearing - a.bearing).rem_euclid(360) - 180;
+                            (turn, DestView { uid: b.uid, label: arm_name(b), class: turn_class(a.bearing, b.bearing), on: lane.to.contains(&b.uid), open: !lb.prof.leave_x.is_empty() })
+                        })
+                        .collect();
+                    dests.sort_by_key(|d| d.0);
+                    v.dests = dests.into_iter().map(|d| d.1).collect();
+                    v
+                })
                 .collect();
             let leave_arrows = l.prof.leave_x.iter().map(|&x| lane_view(l, off, x, arrow_t, l.bearing.round() as i32, 0)).collect();
             let road_mm = l.prof.road_mm();
@@ -621,14 +650,14 @@ impl Junction {
                 let px = at(lb.bearing, lb.lat(b.offset_mm as f64, xb), lb.mouth);
                 let allowed = !a.banned.contains(&b.uid);
                 let class = turn_class(a.bearing, b.bearing);
-                let lane = a.lanes.iter().any(|u| u & class != 0);
+                let lane = a.lanes.iter().any(|l| l.to.contains(&b.uid));
                 let path = movement_path(la.bearing, pe, lb.bearing, px, rad, side, a.bearing, b.bearing);
                 movements.push(MoveView { from: a.uid, to: b.uid, class, allowed, lane, path });
             }
         }
         for (a, arm) in arms.iter_mut().zip(&s.arms) {
-            for (lane, &uses) in a.lanes.iter_mut().zip(&arm.lanes) {
-                lane.bad = !CLASSES_ALL.iter().filter(|c| uses & **c != 0).any(|c| movements.iter().any(|m| m.from == arm.uid && m.allowed && m.class == *c));
+            for (lane, l) in a.lanes.iter_mut().zip(&arm.lanes) {
+                lane.bad = !l.to.iter().any(|t| movements.iter().any(|m| m.from == arm.uid && m.to == *t && m.allowed));
             }
         }
         let conflicts = conflicts(s, &movements, &lay, side);
@@ -761,7 +790,7 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
     // Every allowed turn has a lane that serves it.
     let mut no_lane = Vec::new();
     for m in moves.iter().filter(|m| m.allowed && !m.lane) {
-        no_lane.push(format!("{}: {} turn", name(m.from), word(m.class)));
+        no_lane.push(format!("{} to {} ({} turn)", name(m.from), name(m.to), word(m.class)));
     }
     no_lane.sort();
     no_lane.dedup();
@@ -775,11 +804,10 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
 
     // Every lane points at a turn that is allowed.
     let mut dead = Vec::new();
-    for a in &s.arms {
-        for (i, u) in a.lanes.iter().enumerate() {
-            let serves = CLASSES_ALL.iter().filter(|c| *u & **c != 0).any(|c| moves.iter().any(|m| m.from == a.uid && m.allowed && m.class == *c));
-            if !serves {
-                dead.push(format!("{} lane {}", arm_name(a), i + 1));
+    for a in arms {
+        for (i, l) in a.lanes.iter().enumerate() {
+            if l.bad {
+                dead.push(format!("{} lane {}", a.label, i + 1));
             }
         }
     }
@@ -836,8 +864,6 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
     let _ = lay;
     out
 }
-
-const CLASSES_ALL: [u8; 3] = [LEFT, THROUGH, RIGHT];
 
 #[cfg(test)]
 mod tests {
@@ -944,17 +970,17 @@ mod tests {
     }
 
     #[test]
-    fn a_lane_pointing_only_at_a_banned_turn_is_flagged_until_changed() {
+    fn a_lane_going_only_where_it_is_banned_is_flagged_until_changed() {
         let mut j = Junction::new(0);
         let av = arm_of(&j, 0);
-        let east = arm_of(&j, 90); // a left turn from the north arm
+        let (east, south) = (arm_of(&j, 90), arm_of(&j, 180));
         let follows = |j: &Junction| j.view().checks.iter().find(|c| c.id == "lanes-follow").unwrap().ok;
         assert!(follows(&j));
         assert!(j.set_turn(av, east, false));
         assert!(follows(&j), "the left lane still goes straight on");
-        assert!(j.set_lane_use(av, 0, THROUGH, false));
-        assert!(!follows(&j), "the left lane is now left only, and left is banned");
-        assert!(j.set_lane_use(av, 0, THROUGH, true));
+        assert!(j.set_lane_dest(av, 0, south, false));
+        assert!(!follows(&j), "the left lane now only goes east, which is banned");
+        assert!(j.set_lane_dest(av, 0, south, true));
         assert!(follows(&j));
     }
 
@@ -962,11 +988,12 @@ mod tests {
     fn an_allowed_turn_with_no_lane_is_flagged() {
         let mut j = Junction::new(0);
         let av = arm_of(&j, 0);
-        // The avenue's two lanes serve left+through and through+right; take the left off.
-        assert!(j.set_lane_use(av, 0, LEFT, false));
+        let east = arm_of(&j, 90);
+        // The avenue's left turn is only in its first lane; take it off.
+        assert!(j.set_lane_dest(av, 0, east, false));
         let v = j.view();
         assert!(!v.checks.iter().find(|c| c.id == "lanes-cover").unwrap().ok);
-        assert!(j.set_lane_use(av, 1, LEFT, true));
+        assert!(j.set_lane_dest(av, 1, east, true));
         assert!(j.view().checks.iter().find(|c| c.id == "lanes-cover").unwrap().ok);
     }
 

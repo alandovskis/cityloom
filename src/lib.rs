@@ -238,9 +238,9 @@ impl Plan {
         self.0.set_bulb(uid, side, on)
     }
 
-    /// `class` is 1 left, 2 through, 4 right.
-    pub fn set_lane_use(&mut self, uid: u32, lane: usize, class: u8, on: bool) -> bool {
-        self.0.set_lane_use(uid, lane, class, on)
+    /// Lets an entering lane go to a street, by the street's uid, or not.
+    pub fn set_lane_dest(&mut self, uid: u32, lane: usize, to: u32, on: bool) -> bool {
+        self.0.set_lane_dest(uid, lane, to, on)
     }
 
     pub fn set_turn(&mut self, from: u32, to: u32, allowed: bool) -> bool {
