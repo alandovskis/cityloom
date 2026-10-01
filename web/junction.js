@@ -250,6 +250,12 @@ function renderPlan() {
     const ri = v.ring.island_mm * S.s;
     layers.road.push(`<circle class="road ring" cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(r)}"/>`);
     layers.road.push(`<circle class="island k-median" cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(ri)}"/><circle class="hatch" fill="${hatchFor("median")}" cx="${f1(cx)}" cy="${f1(cy)}" r="${f1(ri)}"/>`);
+    if (v.bus) {
+      const d = pathD(v.bus.poly);
+      const [bx, by] = T([0, 0]);
+      layers.road.push(`<path class="piece k-bus bus-lane" d="${d}"/><path class="hatch" fill="${hatchFor("bus")}" d="${d}"/>`);
+      layers.label.push(`<text class="t-mark t-halo" x="${f1(bx)}" y="${f1(by + 5)}" text-anchor="middle">Bus only</text>`);
+    }
     // circulation arrows on the ring, between the streets
     const mid = (v.ring.radius_mm - 3000) * S.s;
     const ccw = v.ring.circulation === "anticlockwise";
@@ -513,7 +519,13 @@ function controlSection() {
       tag: `${units} across`,
     });
   }
-  return `<section class="insp-sec"><h3 class="note-h" id="i-h-control">Junction control</h3><select data-icontrol data-ifid="control" aria-labelledby="i-h-control">${opts}</select></section>${ring}`;
+  let bus = "";
+  if (v.ring) {
+    const cur = v.bus ? `${v.bus.from}-${v.bus.to}` : "";
+    const pairs = v.bus_options.map((o) => `<option value="${o.a}-${o.b}"${`${o.a}-${o.b}` === cur ? " selected" : ""}>${esc(o.label)}</option>`).join("");
+    bus = `<section class="insp-sec"><h3 class="note-h" id="i-h-bus">Bus lane through the middle</h3><select data-ibus data-ifid="bus" aria-labelledby="i-h-bus"><option value=""${cur ? "" : " selected"}>No bus lane</option>${pairs}</select><p class="insp-range">${v.bus ? `A ${fmt(v.bus.width_mm)} bus-only lane straight across the island. It crosses the ring where it enters and leaves.` : "Lets buses cut across the island between two streets."}</p></section>`;
+  }
+  return `<section class="insp-sec"><h3 class="note-h" id="i-h-control">Junction control</h3><select data-icontrol data-ifid="control" aria-labelledby="i-h-control">${opts}</select></section>${ring}${bus}`;
 }
 
 function renderJunctionPanel() {
@@ -733,6 +745,10 @@ function step(key, dir) {
 el.inspector.addEventListener("change", (e) => {
   const t = e.target;
   const s = view.selected;
+  if (t.dataset.ibus !== undefined) {
+    const [a, b] = t.value ? t.value.split("-").map(Number) : [0, 0];
+    return void act(() => plan.set_bus(a, b));
+  }
   if (t.dataset.icontrol !== undefined) return void act(() => plan.set_control(Number(t.value)), "control");
   if (t.dataset.istreet !== undefined) return void act(() => plan.set_street(s.uid, Number(t.value)));
   const key = t.dataset.iset;

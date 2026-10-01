@@ -47,6 +47,8 @@ pub const ISLAND_MIN_ROAD_MM: i32 = 9_000;
 pub const OFFSET_STEP_MM: i32 = 100;
 pub const MAX_RING_MM: i32 = 40_000;
 pub const RING_STEP_MM: i32 = 500;
+/// Width of the bus lane across a roundabout's middle.
+pub const BUS_LANE_MM: i32 = 3_500;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Crossing {
@@ -88,6 +90,9 @@ pub struct State {
     pub control: usize,
     /// Roundabout size above the least that keeps the arms apart.
     pub ring_extra_mm: i32,
+    /// A bus-only lane straight across the middle of a roundabout, between two
+    /// streets, by their uids (the lower first).
+    pub bus: Option<(u32, u32)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -349,7 +354,7 @@ impl Junction {
             .collect();
         arms.sort_by_key(|a| a.bearing);
         normalize(&mut arms, self.region);
-        self.states = vec![State { label: "Junction today".into(), arms, control: s.control, ring_extra_mm: 0 }];
+        self.states = vec![State { label: "Junction today".into(), arms, control: s.control, ring_extra_mm: 0, bus: None }];
         self.cursor = 0;
         self.selected = Target::None;
         self.gesture = None;
@@ -427,6 +432,12 @@ impl Junction {
         }
         next.arms.sort_by_key(|a| a.bearing);
         normalize(&mut next.arms, region);
+        // A bus lane needs a roundabout and both its streets.
+        if let Some((a, b)) = next.bus {
+            if next.control != ROUNDABOUT || !next.arms.iter().any(|x| x.uid == a) || !next.arms.iter().any(|x| x.uid == b) {
+                next.bus = None;
+            }
+        }
         if !valid(&next, region) || next == *self.current() {
             return false;
         }
@@ -779,6 +790,26 @@ impl Junction {
         })
     }
 
+    /// Runs a bus-only lane across the middle of a roundabout between two
+    /// streets, or takes it away with `None`.
+    pub fn set_bus(&mut self, pair: Option<(u32, u32)>) -> bool {
+        let pair = pair.map(|(a, b)| (a.min(b), a.max(b)));
+        let label = match pair {
+            Some((a, b)) => match (self.arm(a), self.arm(b)) {
+                (Some(x), Some(y)) => format!("Bus lane across the middle: {} to {}", arm_name(x), arm_name(y)),
+                _ => return false,
+            },
+            None => "Bus lane across the middle: remove".into(),
+        };
+        self.edit(label, |s| {
+            if pair.is_some() && (s.control != ROUNDABOUT || pair.is_some_and(|(a, b)| a == b)) {
+                return false;
+            }
+            s.bus = pair;
+            true
+        })
+    }
+
     /// Sets how much bigger than its least size a roundabout is.
     pub fn set_ring(&mut self, extra_mm: i32) -> bool {
         let extra = snap(extra_mm, RING_STEP_MM);
@@ -1083,6 +1114,27 @@ mod tests {
         assert!(j.set_ring(3000));
         assert!(j.undo() && j.undo());
         assert_eq!(j.current().control, SIGNAL);
+    }
+
+    #[test]
+    fn a_bus_lane_across_the_middle_needs_a_roundabout_and_goes_when_either_street_does() {
+        let mut j = Junction::new(0);
+        let (n, s, e) = (j.current().arms[0].uid, j.current().arms[2].uid, j.current().arms[1].uid);
+        assert!(!j.set_bus(Some((n, s))), "only a roundabout has a middle");
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(!j.set_bus(Some((n, n))));
+        assert!(j.set_bus(Some((s, n))));
+        assert_eq!(j.current().bus, Some((n, s)));
+        assert!(j.remove_arm(e));
+        assert_eq!(j.current().bus, Some((n, s)), "an unrelated street leaving keeps it");
+        let mut k = Junction::new(0);
+        k.set_control(ROUNDABOUT);
+        let (n, s) = (k.current().arms[0].uid, k.current().arms[2].uid);
+        k.set_bus(Some((n, s)));
+        assert!(k.set_control(SIGNAL));
+        assert_eq!(k.current().bus, None);
+        assert!(k.undo());
+        assert_eq!(k.current().bus, Some((n, s)));
     }
 
     #[test]

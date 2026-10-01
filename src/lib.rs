@@ -252,6 +252,12 @@ impl Plan {
         self.0.set_control(control)
     }
 
+    /// Runs a bus lane across the middle of a roundabout between two streets
+    /// (uids); 0 for both takes it away.
+    pub fn set_bus(&mut self, a: u32, b: u32) -> bool {
+        self.0.set_bus((a != 0 && b != 0).then_some((a, b)))
+    }
+
     pub fn set_ring(&mut self, extra_mm: i32) -> bool {
         self.0.set_ring(extra_mm)
     }

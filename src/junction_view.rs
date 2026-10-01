@@ -315,6 +315,21 @@ pub struct RingView {
 }
 
 #[derive(Serialize)]
+pub struct BusView {
+    pub from: u32,
+    pub to: u32,
+    pub poly: Vec<Value>,
+    pub width_mm: i32,
+}
+
+#[derive(Serialize)]
+pub struct BusOption {
+    pub a: u32,
+    pub b: u32,
+    pub label: String,
+}
+
+#[derive(Serialize)]
 pub struct Selection {
     pub kind: Option<&'static str>,
     pub uid: u32,
@@ -332,6 +347,10 @@ pub struct JView {
     pub control_index: usize,
     pub ring: Option<RingView>,
     pub ring_extra_mm: i32,
+    /// The bus lane across the middle of a roundabout, if there is one.
+    pub bus: Option<BusView>,
+    /// Pairs of streets it could join, the straightest first.
+    pub bus_options: Vec<BusOption>,
     pub core: Vec<Value>,
     pub arms: Vec<ArmView>,
     pub corners: Vec<CornerView>,
@@ -344,6 +363,23 @@ pub struct JView {
     pub can_undo: bool,
     pub can_redo: bool,
     pub changed: bool,
+}
+
+/// Every pair of streets a bus lane could join across a roundabout, the one
+/// nearest a straight line first.
+fn bus_options(s: &State) -> Vec<BusOption> {
+    if s.control != ROUNDABOUT {
+        return Vec::new();
+    }
+    let mut v: Vec<(i32, BusOption)> = Vec::new();
+    for (i, a) in s.arms.iter().enumerate() {
+        for b in &s.arms[i + 1..] {
+            let off = (gap(a.bearing, b.bearing) as i32 - 180).abs();
+            v.push((off, BusOption { a: a.uid, b: b.uid, label: format!("{} to {}", arm_name(a), arm_name(b)) }));
+        }
+    }
+    v.sort_by_key(|(off, o)| (*off, o.a, o.b));
+    v.into_iter().map(|(_, o)| o).collect()
 }
 
 fn heading(bearing: f64) -> i32 {
@@ -684,6 +720,15 @@ impl Junction {
                 circulation: if side == Side::Right { "anticlockwise" } else { "clockwise" },
             }),
             ring_extra_mm: s.ring_extra_mm,
+            bus: s.bus.and_then(|(a, b)| {
+                let ends = |u: u32| s.arms.iter().position(|x| x.uid == u).map(|i| at(lay.arms[i].bearing, s.arms[i].offset_mm as f64, lay.arms[i].mouth));
+                let (pa, pb) = (ends(a)?, ends(b)?);
+                let d = sub(pb, pa);
+                let len = (d.0 * d.0 + d.1 * d.1).sqrt().max(1.0);
+                let n = (-d.1 / len * BUS_LANE_MM as f64 / 2.0, d.0 / len * BUS_LANE_MM as f64 / 2.0);
+                Some(BusView { from: a, to: b, poly: poly(&[add(pa, n), add(pb, n), sub(pb, n), sub(pa, n)]), width_mm: BUS_LANE_MM })
+            }),
+            bus_options: bus_options(s),
             core,
             arms,
             corners,
@@ -748,7 +793,9 @@ fn conflicts(s: &State, moves: &[MoveView], lay: &Layout, side: Side) -> Conflic
         let enters = s.arms.iter().filter(|a| live.iter().any(|m| m.from == a.uid)).count();
         let leaves = s.arms.iter().filter(|a| live.iter().any(|m| m.to == a.uid)).count();
         let _ = side;
-        return Conflicts { crossing: 0, merging: enters, diverging: leaves, by_phase };
+        // A bus lane across the middle crosses the circulating traffic going in and coming out.
+        let crossing = if s.bus.is_some() { 2 } else { 0 };
+        return Conflicts { crossing, merging: enters, diverging: leaves, by_phase };
     }
     let mut diverging = 0;
     let mut merging = 0;
@@ -890,6 +937,22 @@ mod tests {
             let failing: Vec<_> = v.checks.iter().filter(|c| !c.ok).map(|c| format!("{}: {}", c.id, c.detail)).collect();
             assert!(failing.is_empty(), "{}: {failing:?}", JUNCTION_SAMPLES[i].name);
         }
+    }
+
+    #[test]
+    fn a_bus_lane_across_the_middle_is_drawn_between_its_streets_and_crosses_the_ring_twice() {
+        let mut j = Junction::new(0);
+        j.set_control(ROUNDABOUT);
+        let opts = j.view().bus_options;
+        assert_eq!(opts.len(), 6);
+        assert_eq!(opts[0].label.contains("north") && opts[0].label.contains("south") || opts[0].label.contains("east") && opts[0].label.contains("west"), true, "straightest first");
+        assert!(j.set_bus(Some((opts[0].a, opts[0].b))));
+        let v = j.view();
+        let bus = v.bus.unwrap();
+        assert_eq!(bus.poly.len(), 5);
+        assert_eq!(v.conflicts.crossing, 2);
+        assert!(j.set_bus(None));
+        assert!(j.view().bus.is_none());
     }
 
     #[test]
