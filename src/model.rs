@@ -1,7 +1,7 @@
 //! The cross-section editing model. Pure Rust, no browser types, so it is
 //! tested natively. All lengths are integer millimetres.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::street_measures;
 use crate::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, REGIONS, Side, KINDS, MATERIALS, Mode, SAMPLES, kind_index};
@@ -11,7 +11,7 @@ pub const SNAP_MM: i32 = 100;
 /// Sidewalk on each edge is a sheet check, not a hard rule.
 const ACCESS_LANE_MM: i32 = 3000;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Segment {
     pub uid: u32,
     pub kind: usize,
@@ -31,7 +31,7 @@ pub struct Segment {
 }
 
 /// A different type a piece takes between two times of day.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Variant {
     pub kind: usize,
     /// Index into `MATERIALS`; always one the kind allows.
@@ -149,6 +149,90 @@ impl Segment {
     }
 }
 
+/// One street as the city keeps it: the pieces of its section as the street
+/// editor shows them, looking from the street's first end toward its second.
+/// Directions are written for the side of the road in `side`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Street {
+    /// Index into `SAMPLES`: the kind of street it began as, which names it.
+    pub sample: usize,
+    pub row_mm: i32,
+    pub side: Side,
+    pub segments: Vec<Segment>,
+    pub next_uid: u32,
+}
+
+fn flip(d: &mut Option<usize>) {
+    if let Some(d) = d {
+        *d = 1 - *d;
+    }
+}
+
+impl Street {
+    /// The sample street laid out for a side of the road.
+    pub fn sample(sample: usize, side: Side) -> Street {
+        let sample = sample.min(SAMPLES.len() - 1);
+        let mut e = Editor::new(sample);
+        let region = REGIONS.iter().position(|r| r.drive_side == side).unwrap_or(0);
+        e.set_region(region);
+        e.snapshot()
+    }
+
+    /// The same street with its lanes written for `side`: running the other
+    /// way when the side differs.
+    pub fn for_side(&self, side: Side) -> Street {
+        let mut s = self.clone();
+        if s.side != side {
+            s.side = side;
+            for seg in &mut s.segments {
+                flip(&mut seg.direction);
+                for v in &mut seg.variants {
+                    flip(&mut v.direction);
+                }
+            }
+        }
+        s
+    }
+
+    /// The street as seen from its other end: the pieces in the opposite order
+    /// and every lane running the other way.
+    pub fn reversed(&self) -> Street {
+        let mut s = self.clone();
+        s.segments.reverse();
+        for seg in &mut s.segments {
+            flip(&mut seg.direction);
+            for v in &mut seg.variants {
+                flip(&mut v.direction);
+            }
+        }
+        s
+    }
+
+    /// Whether every index in it points into the catalogue, so that it can be
+    /// drawn. A street that came from storage is checked before it is used.
+    pub fn is_sound(&self) -> bool {
+        let seg_ok = |kind: usize, material: usize, curb: Option<usize>, direction: Option<usize>| {
+            kind < KINDS.len()
+                && KINDS[kind].materials.contains(&material)
+                && material < MATERIALS.len()
+                && curb.is_none_or(|c| c < CURBS.len() && KINDS[kind].has_curb)
+                && direction.is_none_or(|d| d < DIRECTIONS.len())
+        };
+        self.sample < SAMPLES.len()
+            && self.row_mm > 0
+            && !self.segments.is_empty()
+            && self.segments.iter().all(|s| {
+                seg_ok(s.kind, s.material, s.curb, s.direction)
+                    && s.width_mm > 0
+                    && s.variants.iter().all(|v| {
+                        seg_ok(v.kind, v.material, None, v.direction)
+                            && valid_window(v.from_min, v.to_min)
+                    })
+            })
+            && self.segments.iter().map(|s| s.uid).all(|u| u < self.next_uid)
+    }
+}
+
 #[derive(Clone, Debug)]
 struct State {
     label: String,
@@ -250,6 +334,42 @@ impl Editor {
         self.cursor = 0;
         self.selected = None;
         self.gesture = None;
+    }
+
+    /// The street as it is now, for the city to keep.
+    pub fn snapshot(&self) -> Street {
+        Street {
+            sample: self.sample,
+            row_mm: self.row_mm,
+            side: REGIONS[self.region].drive_side,
+            segments: self.current().clone(),
+            next_uid: self.next_uid,
+        }
+    }
+
+    /// An editor on a street the city holds. `today` is the street as it was
+    /// first laid out, which Start over returns to; `now` is how it stands.
+    /// Edits made earlier appear as one earlier revision.
+    pub fn from_street(today: &Street, now: &Street, region: usize) -> Editor {
+        let region = region.min(REGIONS.len() - 1);
+        let side = REGIONS[region].drive_side;
+        let (today, now) = (today.for_side(side), now.for_side(side));
+        let mut e = Editor {
+            sample: now.sample.min(SAMPLES.len() - 1),
+            region,
+            time_min: 12 * 60,
+            row_mm: now.row_mm,
+            states: vec![State { label: "Street today".into(), segments: today.segments }],
+            cursor: 0,
+            next_uid: now.next_uid.max(1),
+            selected: None,
+            gesture: None,
+            pending_label: String::new(),
+        };
+        if now.segments != e.states[0].segments {
+            e.push("Earlier changes".into(), now.segments);
+        }
+        e
     }
 
     fn current(&self) -> &Vec<Segment> {
@@ -1700,5 +1820,75 @@ mod tests {
         assert!(!e.view().changed);
         e.set_curb(e.current()[0].uid, None);
         assert!(e.view().changed);
+    }
+
+    #[test]
+    fn a_street_survives_a_round_trip_through_json() {
+        let mut e = Editor::new(1);
+        let uid = e.current()[2].uid;
+        assert!(e.set_width(uid, 2700));
+        let street = e.snapshot();
+        let back: Street = serde_json::from_str(&serde_json::to_string(&street).unwrap()).unwrap();
+        assert_eq!(back, street);
+        assert!(back.is_sound());
+    }
+
+    #[test]
+    fn an_editor_on_a_held_street_keeps_today_and_the_earlier_changes() {
+        let today = Street::sample(0, Side::Right);
+        let mut e = Editor::new(0);
+        let uid = e.current()[2].uid;
+        assert!(e.set_width(uid, 2700));
+        let now = e.snapshot();
+        let mut again = Editor::from_street(&today, &now, 0);
+        let v = again.view();
+        assert!(v.changed);
+        assert_eq!(v.revisions.len(), 1);
+        assert_eq!(v.revisions[0].label, "Earlier changes");
+        assert_eq!(again.snapshot(), now);
+        // Start over goes back to the street as first laid out, and can be undone.
+        assert!(again.reset());
+        assert_eq!(again.snapshot().segments, today.segments);
+        assert!(again.undo());
+        assert_eq!(again.snapshot().segments, now.segments);
+        // A street nobody has touched has no earlier changes to show.
+        assert!(!Editor::from_street(&today, &today, 0).view().changed);
+    }
+
+    #[test]
+    fn a_held_street_is_mirrored_for_the_side_of_the_road() {
+        let right = Street::sample(1, Side::Right);
+        let left = right.for_side(Side::Left);
+        assert_eq!(left.side, Side::Left);
+        assert_ne!(left.segments, right.segments);
+        assert_eq!(left.for_side(Side::Right), right);
+        // An untouched street read at the left is the sample laid out for the left.
+        assert_eq!(Street::sample(1, Side::Left), left);
+        let e = Editor::from_street(&right, &right, 3);
+        assert_eq!(e.snapshot(), left);
+    }
+
+    #[test]
+    fn a_street_seen_from_its_other_end_turns_through_half_a_circle() {
+        let s = Street::sample(1, Side::Right);
+        let r = s.reversed();
+        assert_eq!(r.reversed(), s);
+        assert_eq!(r.segments.first().map(|g| g.kind), s.segments.last().map(|g| g.kind));
+        // A lane going away from the viewer comes toward the viewer from the far end.
+        let lane = |st: &Street, i: usize| st.segments.iter().filter(|g| g.direction.is_some()).nth(i).unwrap().direction;
+        assert_eq!(lane(&s, 0).map(|d| 1 - d), lane(&r, 3));
+    }
+
+    #[test]
+    fn a_street_with_indices_outside_the_catalogue_is_not_sound() {
+        let mut s = Street::sample(0, Side::Right);
+        s.segments[0].kind = 99;
+        assert!(!s.is_sound());
+        let mut s = Street::sample(0, Side::Right);
+        s.segments[1].material = 99;
+        assert!(!s.is_sound());
+        let mut s = Street::sample(0, Side::Right);
+        s.sample = 99;
+        assert!(!s.is_sound());
     }
 }

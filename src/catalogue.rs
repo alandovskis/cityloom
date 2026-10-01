@@ -3,7 +3,7 @@
 //! Everything here is synthetic. The catalogue, the widths and the
 //! `people_per_hour_per_m` rates are stand-ins until real data is chosen.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -96,7 +96,7 @@ pub const DIRECTIONS: [Material; 2] = [
 ];
 
 /// The side of the road a region drives on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Side {
     Left,
