@@ -4,9 +4,9 @@
 // editors, which read the same city. No rules live here: what is a street,
 // where it runs and what is wrong with it all come from the WebAssembly model.
 
-import init, { catalogue, materials } from "./pkg/cityloom_editor.js";
+import init, { catalogue, materials, standards } from "./pkg/cityloom_editor.js";
 import { HATCH } from "./symbols.js";
-import { openCity, regionIndex, resetCity } from "./city.js";
+import { openCity, regionIndex, resetCity, writeCity } from "./city.js";
 import { initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits } from "./shell.js";
 
 await init();
@@ -15,6 +15,7 @@ const KINDS = JSON.parse(catalogue());
 const MATERIALS = JSON.parse(materials());
 const KIND_NAME = Object.fromEntries(KINDS.map((k) => [k.id, k.name]));
 const KIND_ORDER = KINDS.map((k) => k.id);
+const STD = JSON.parse(standards());
 
 let region = regionIndex(MATERIALS.regions);
 let city = openCity();
@@ -489,6 +490,7 @@ function render() {
   renderHead();
   renderPlaces();
   renderNotes();
+  renderStandard();
   renderKey();
   renderMap();
   setViewBox();
@@ -506,6 +508,23 @@ addEventListener("storage", (e) => {
 });
 addEventListener("pageshow", (e) => {
   if (e.persisted) reload();
+});
+
+// ---- engineering standard ---------------------------------------------------
+
+const pick = $("std-pick");
+pick.innerHTML = STD.standards.map((s, i) => `<option value="${i}">${esc(s.name)}</option>`).join("");
+
+function renderStandard() {
+  pick.value = String(view.standard);
+  $("std-note").textContent = STD.standards[view.standard].note;
+}
+
+pick.addEventListener("change", () => {
+  writeCity((c) => c.set_standard(Number(pick.value)));
+  reload();
+  const name = STD.standards[view.standard].name;
+  say(view.failing ? `${name} standard. ${plural(view.failing, "place")} now fail${view.failing === 1 ? "s" : ""} a check.` : `${name} standard. Every place works.`);
 });
 
 // ---- start over ---------------------------------------------------------------
