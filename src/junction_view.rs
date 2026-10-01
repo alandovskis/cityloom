@@ -5,7 +5,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::catalogue::{KINDS, REGIONS, SAMPLES, Side};
+use crate::catalogue::{KINDS, REGIONS, Side};
 use crate::junction::*;
 use crate::model::{Check, Revision};
 use crate::plan::*;
@@ -91,7 +91,7 @@ pub fn layout(s: &State, region: usize) -> Option<Layout> {
         .arms
         .iter()
         .map(|a| {
-            let prof = profile(a.street, region);
+            let prof = a.profile(region);
             let half = prof.row_mm as f64 / 2.0;
             let off = a.offset_mm as f64;
             ArmLayout {
@@ -372,7 +372,9 @@ pub struct Selection {
 
 #[derive(Serialize)]
 pub struct JView {
-    pub name: &'static str,
+    pub name: String,
+    /// A place in a city: its streets are the city's.
+    pub linked: bool,
     pub sample: usize,
     pub region: &'static str,
     pub drive_side: &'static str,
@@ -442,7 +444,7 @@ fn priority_pair(arms: &[Arm]) -> [usize; 2] {
     for i in 0..n {
         for j in i + 1..n {
             let d = (gap(arms[i].bearing, arms[j].bearing) as i32 - 180).abs();
-            let wide = SAMPLES[arms[i].street].row_mm + SAMPLES[arms[j].street].row_mm;
+            let wide = arms[i].row_mm() + arms[j].row_mm();
             let score = d * 100_000 - wide;
             if score < best.1 {
                 best = ([i, j], score);
@@ -598,7 +600,7 @@ impl Junction {
                 uid: a.uid,
                 label: arm_name(a),
                 street: l.prof.name,
-                street_index: a.street,
+                street_index: a.street_index(),
                 bearing: a.bearing,
                 offset_mm: a.offset_mm,
                 corner_mm: a.corner_mm,
@@ -753,7 +755,8 @@ impl Junction {
             Target::Cycle => Selection { kind: Some("cycle"), uid: 0, lane: 0 },
         };
         JView {
-            name: JUNCTION_SAMPLES[self.sample()].name,
+            name: if self.is_linked() { self.name().to_string() } else { JUNCTION_SAMPLES[self.sample()].name.to_string() },
+            linked: self.is_linked(),
             sample: self.sample(),
             region: REGIONS[region].id,
             drive_side: if side == Side::Left { "left" } else { "right" },

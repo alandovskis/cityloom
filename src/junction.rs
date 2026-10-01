@@ -4,7 +4,9 @@
 //! millimetres and angles integer degrees. Everything here is synthetic.
 
 use crate::catalogue::{KINDS, Material, Mode, REGIONS, SAMPLES, Side};
-use crate::model::Editor;
+use serde::{Deserialize, Serialize};
+
+use crate::model::{Editor, Street, View};
 use crate::plan::gap;
 
 pub const LEFT: u8 = 1;
@@ -112,7 +114,7 @@ pub const CYCLE_DEFAULT_MM: i32 = 2_000;
 pub const CYCLE_MIN_MM: i32 = 1_500;
 pub const CYCLE_MAX_MM: i32 = 3_000;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Crossing {
     pub setback_mm: i32,
     pub width_mm: i32,
@@ -120,16 +122,25 @@ pub struct Crossing {
 }
 
 /// An entering lane and the streets it can go to, by their uids.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lane {
     pub to: Vec<u32>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Arm {
     pub uid: u32,
-    /// Index into `SAMPLES`: the street whose section this arm reads.
+    /// Index into `SAMPLES`: the street whose section this arm reads, when it
+    /// does not come from a city.
     pub street: usize,
+    /// The city street this arm is, or 0 when it is not part of a city.
+    #[serde(default)]
+    pub edge: u32,
+    /// That street, seen looking outward from the junction. The city puts the
+    /// street's current state here when it opens the junction, so it is not
+    /// kept with the junction.
+    #[serde(skip)]
+    pub section: Option<Street>,
     /// Clockwise from north, a multiple of `BEARING_STEP`.
     pub bearing: i32,
     /// Sideways shift of the arm's axis, to the arm's right.
@@ -156,7 +167,7 @@ pub struct Arm {
     pub filter: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct State {
     pub label: String,
     pub arms: Vec<Arm>,
@@ -226,7 +237,39 @@ pub fn profile(street: usize, region: usize) -> Profile {
     let street = street.min(SAMPLES.len() - 1);
     let mut e = Editor::new(street);
     e.set_region(region);
-    let view = e.view();
+    read_profile(&e.view(), SAMPLES[street].name)
+}
+
+/// The profile of a street a city holds, with its lanes written for the side
+/// of the road of `region`.
+pub fn profile_of(street: &Street, region: usize) -> Profile {
+    let e = Editor::from_street(street, street, region);
+    read_profile(&e.view(), SAMPLES[street.sample.min(SAMPLES.len() - 1)].name)
+}
+
+impl Arm {
+    pub fn profile(&self, region: usize) -> Profile {
+        match &self.section {
+            Some(s) => profile_of(s, region),
+            None => profile(self.street, region),
+        }
+    }
+
+    /// Which sample street this arm is, or began as.
+    pub fn street_index(&self) -> usize {
+        self.section.as_ref().map_or(self.street, |s| s.sample).min(SAMPLES.len() - 1)
+    }
+
+    pub fn street_name(&self) -> &'static str {
+        SAMPLES[self.street_index()].name
+    }
+
+    pub fn row_mm(&self) -> i32 {
+        self.section.as_ref().map_or(SAMPLES[self.street_index()].row_mm, |s| s.row_mm)
+    }
+}
+
+fn read_profile(view: &View, name: &'static str) -> Profile {
     let pieces: Vec<Piece> = view
         .segments
         .iter()
@@ -254,7 +297,7 @@ pub fn profile(street: usize, region: usize) -> Profile {
     let park = |p: Option<&&Piece>| p.map_or(0, |p| if matches!(KINDS[p.kind].id, "parking" | "loading") { p.width_mm } else { 0 });
     let (enter_x, leave_x, enter_span, leave_span) = (lanes("toward"), lanes("away"), span("toward"), span("away"));
     Profile {
-        name: SAMPLES[street].name,
+        name,
         row_mm: view.row_mm,
         park: [park(road.first()), park(road.last())],
         pieces,
@@ -321,7 +364,7 @@ fn compass(bearing: i32) -> &'static str {
 }
 
 pub fn arm_name(a: &Arm) -> String {
-    format!("{} ({})", SAMPLES[a.street].name, compass(a.bearing))
+    format!("{} ({})", a.street_name(), compass(a.bearing))
 }
 
 /// Why traffic may not turn from arm `i` into arm `j`, when a measure stops
@@ -399,6 +442,10 @@ pub const JUNCTION_SAMPLES: [JunctionSample; 4] = [
 
 pub struct Junction {
     sample: usize,
+    /// Set when the junction is a place in a city: its streets are the city's
+    /// and its name is the city's, so streets cannot be added, removed or swapped.
+    linked: bool,
+    name: String,
     /// Index into `REGIONS`. A setting of the sheet, not part of the history.
     pub region: usize,
     states: Vec<State>,
@@ -417,6 +464,8 @@ impl Junction {
     pub fn new(sample: usize) -> Junction {
         let mut j = Junction {
             sample: 0,
+            linked: false,
+            name: String::new(),
             region: 0,
             states: Vec::new(),
             cursor: 0,
@@ -460,10 +509,62 @@ impl Junction {
         self.gesture = None;
     }
 
+    /// A junction that is a place in a city. `today` is how it was first laid
+    /// out and `now` how it stands, each with its arms' streets attached. When
+    /// the streets have changed so that `now` can no longer be drawn it is
+    /// eased (small corners, no offsets, no roundabout) before it is given up
+    /// for `today`. None when not even `today` can be drawn.
+    pub fn from_city(name: &str, today: &State, now: &State, region: usize) -> Option<Junction> {
+        let settle = |s: &State| {
+            let mut s = s.clone();
+            normalize(&mut s.arms, region);
+            s
+        };
+        let today = ease(&settle(today), region)?;
+        let now = ease(&settle(now), region);
+        let mut j = Junction {
+            sample: 0,
+            linked: true,
+            name: name.to_string(),
+            region,
+            next_uid: today.arms.iter().map(|a| a.uid).max().unwrap_or(0) + 1,
+            states: vec![State { label: "Junction today".into(), ..today.clone() }],
+            cursor: 0,
+            selected: Target::None,
+            gesture: None,
+            pending_label: String::new(),
+        };
+        let same = |a: &State, b: &State| State { label: String::new(), ..a.clone() } == State { label: String::new(), ..b.clone() };
+        if let Some(now) = now.filter(|n| !same(n, &today)) {
+            j.states.push(State { label: "Earlier changes".into(), ..now });
+            j.cursor = 1;
+        }
+        Some(j)
+    }
+
+    /// The junction as it is now, without its streets, for the city to keep.
+    pub fn snapshot(&self) -> State {
+        let mut s = self.current().clone();
+        for a in &mut s.arms {
+            a.section = None;
+        }
+        s
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn is_linked(&self) -> bool {
+        self.linked
+    }
+
     fn fresh_arm(&self, uid: u32, street: usize, bearing: i32, offset_mm: i32) -> Arm {
         Arm {
             uid,
             street,
+            edge: 0,
+            section: None,
             bearing,
             offset_mm,
             corner_mm: DEFAULT_CORNER_MM,
@@ -614,6 +715,13 @@ impl Junction {
         if self.cursor == 0 && self.states.len() == 1 {
             return false;
         }
+        if self.linked {
+            self.states.truncate(1);
+            self.cursor = 0;
+            self.selected = Target::None;
+            self.gesture = None;
+            return true;
+        }
         self.load_sample(self.sample);
         true
     }
@@ -696,7 +804,7 @@ impl Junction {
     /// Adds a street at `bearing`, or at the middle of the widest gap when
     /// `bearing` is negative. Returns its uid, or 0 when it does not fit.
     pub fn add_arm(&mut self, street: usize, bearing: i32) -> u32 {
-        if street >= SAMPLES.len() || SAMPLES[street].freeway || self.current().arms.len() >= MAX_ARMS {
+        if self.linked || street >= SAMPLES.len() || SAMPLES[street].freeway || self.current().arms.len() >= MAX_ARMS {
             return 0;
         }
         let bearing = if bearing < 0 { widest_gap(&self.current().arms) } else { snap(bearing, BEARING_STEP).rem_euclid(360) };
@@ -736,7 +844,7 @@ impl Junction {
     }
 
     pub fn remove_arm(&mut self, uid: u32) -> bool {
-        let Some(a) = self.arm(uid) else { return false };
+        let Some(a) = self.arm(uid).filter(|_| !self.linked) else { return false };
         let label = format!("Remove {}", arm_name(a));
         let ok = self.edit(label, |s| {
             if s.arms.len() <= MIN_ARMS {
@@ -753,7 +861,7 @@ impl Junction {
 
     pub fn set_bearing(&mut self, uid: u32, bearing: i32) -> bool {
         let b = snap(bearing, BEARING_STEP).rem_euclid(360);
-        self.arm_edit(uid, |a| format!("{} bearing: {b}°", SAMPLES[a.street].name), |a| {
+        self.arm_edit(uid, |a| format!("{} bearing: {b}°", a.street_name()), |a| {
             a.bearing = b;
             true
         })
@@ -763,7 +871,7 @@ impl Junction {
         let mm = snap(mm, OFFSET_STEP_MM);
         let region = self.region;
         self.arm_edit(uid, |a| format!("{} offset: {mm} mm", arm_name(a)), |a| {
-            let half = profile(a.street, region).road_mm() / 2;
+            let half = a.profile(region).road_mm() / 2;
             if mm.abs() > half {
                 return false;
             }
@@ -785,7 +893,7 @@ impl Junction {
     }
 
     pub fn set_street(&mut self, uid: u32, street: usize) -> bool {
-        if street >= SAMPLES.len() || SAMPLES[street].freeway {
+        if self.linked || street >= SAMPLES.len() || SAMPLES[street].freeway {
             return false;
         }
         self.arm_edit(uid, |a| format!("{} becomes {}", arm_name(a), SAMPLES[street].name), |a| {
@@ -827,7 +935,7 @@ impl Junction {
     pub fn set_island(&mut self, uid: u32, on: bool) -> bool {
         let region = self.region;
         self.arm_edit(uid, |a| format!("{} refuge island: {}", arm_name(a), if on { "add" } else { "remove" }), |a| {
-            if on && profile(a.street, region).road_mm() < ISLAND_MIN_ROAD_MM {
+            if on && a.profile(region).road_mm() < ISLAND_MIN_ROAD_MM {
                 return false;
             }
             a.crossing.as_mut().map(|c| c.island = on).is_some()
@@ -842,7 +950,7 @@ impl Junction {
         }
         let word = if side == 0 { "left" } else { "right" };
         self.arm_edit(uid, |a| format!("{} {word} bulb-out: {}", arm_name(a), if on { "add" } else { "remove" }), |a| {
-            if on && profile(a.street, region).park[side] == 0 {
+            if on && a.profile(region).park[side] == 0 {
                 return false;
             }
             a.bulb[side] = on;
@@ -1045,6 +1153,30 @@ pub fn widest_gap(arms: &[Arm]) -> i32 {
     snap(start + width / 2, BEARING_STEP).rem_euclid(360)
 }
 
+/// A state that can be drawn, or the nearest to it that can: first with the
+/// corners as small as they go, then with offsets, a roundabout and its extras
+/// undone. None when neither can be drawn.
+fn ease(s: &State, region: usize) -> Option<State> {
+    if valid(s, region) {
+        return Some(s.clone());
+    }
+    let mut t = s.clone();
+    for a in &mut t.arms {
+        a.corner_mm = MIN_CORNER_MM;
+    }
+    if valid(&t, region) {
+        return Some(t);
+    }
+    for a in &mut t.arms {
+        a.offset_mm = 0;
+    }
+    if t.control == ROUNDABOUT {
+        t.control = PRIORITY;
+    }
+    (t.bus, t.cycle, t.ring_extra_mm) = (None, None, 0);
+    valid(&t, region).then_some(t)
+}
+
 /// Keeps the parts that follow from the arms consistent: lane counts follow
 /// each street, a lane serves only turns its arm has, bans name arms that
 /// exist, and features that need room or parking stay only where they have it.
@@ -1053,7 +1185,7 @@ pub fn normalize(arms: &mut [Arm], region: usize) {
     let bearings: Vec<i32> = arms.iter().map(|a| a.bearing).collect();
     let avail: Vec<u8> = (0..arms.len()).map(|i| classes_of(arms, i)).collect();
     for (a, avail) in arms.iter_mut().zip(avail) {
-        let p = profile(a.street, region);
+        let p = a.profile(region);
         let n = p.enter_x.len();
         let (uid, bearing) = (a.uid, a.bearing);
         // Where lane `k` goes by default: every street whose turn it serves.
@@ -1421,5 +1553,68 @@ mod tests {
             let p = profile(a.street, 3);
             assert_eq!(a.lanes.len(), p.enter_x.len());
         }
+    }
+
+    fn linked(sample: usize) -> Junction {
+        let mut state = Junction::new(sample).current().clone();
+        for a in &mut state.arms {
+            a.edge = a.uid;
+            a.section = Some(Street::sample(a.street, Side::Right));
+        }
+        Junction::from_city("Test junction", &state, &state, 0).expect("the sample draws")
+    }
+
+    #[test]
+    fn a_junction_in_a_city_keeps_its_streets_and_name() {
+        let mut j = linked(0);
+        assert!(j.is_linked());
+        let uid = j.current().arms[0].uid;
+        assert!(!j.remove_arm(uid));
+        assert!(!j.set_street(uid, 2));
+        assert_eq!(j.add_arm(2, 45), 0);
+        assert_eq!(j.view().name, "Test junction");
+        assert!(j.view().linked);
+        // What it keeps for the city has no street attached.
+        assert!(j.snapshot().arms.iter().all(|a| a.section.is_none() && a.edge != 0));
+        // Other edits still work, and Start over goes back to today.
+        assert!(j.set_corner(uid, 4_000));
+        assert!(j.changed());
+        assert!(j.reset());
+        assert!(!j.changed());
+    }
+
+    #[test]
+    fn a_junction_reads_the_street_the_city_holds_not_the_sample() {
+        let mut state = Junction::new(0).current().clone();
+        let mut narrow = Street::sample(0, Side::Right);
+        narrow.segments.retain(|g| KINDS[g.kind].id != "parking");
+        for a in &mut state.arms {
+            a.edge = a.uid;
+            a.section = Some(if a.street == 0 { narrow.clone() } else { Street::sample(a.street, Side::Right) });
+        }
+        let j = Junction::from_city("Test", &state, &state, 0).unwrap();
+        let arm = j.current().arms.iter().find(|a| a.street == 0).unwrap();
+        assert_eq!(arm.profile(0).park, [0, 0]);
+        assert!(profile(0, 0).park != [0, 0]);
+    }
+
+    #[test]
+    fn earlier_changes_show_as_one_revision_and_start_over_clears_them() {
+        let today = linked(0).snapshot();
+        let mut state = today.clone();
+        state.control = PRIORITY;
+        for a in &mut state.arms {
+            a.section = Some(Street::sample(a.street, Side::Right));
+        }
+        let mut today = today;
+        for a in &mut today.arms {
+            a.section = Some(Street::sample(a.street, Side::Right));
+        }
+        let mut j = Junction::from_city("Test", &today, &state, 0).unwrap();
+        assert!(j.changed());
+        assert_eq!(j.revisions().collect::<Vec<_>>(), ["Earlier changes"]);
+        assert_eq!(j.current().control, PRIORITY);
+        assert!(j.undo());
+        assert_eq!(j.current().control, SIGNAL);
     }
 }
