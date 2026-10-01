@@ -21,7 +21,7 @@ const THROUGH = 2;
 const RIGHT = 4;
 const CLASS_WORD = { [LEFT]: "left", [THROUGH]: "straight on", [RIGHT]: "right" };
 const CLASS_NAME = { [LEFT]: "Left", [THROUGH]: "Straight on", [RIGHT]: "Right" };
-const SEL_KIND = { arm: 1, corner: 2, crossing: 3 };
+const SEL_KIND = { arm: 1, corner: 2, crossing: 3, lane: 4 };
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -131,6 +131,7 @@ function pathD(cmds) {
 const hatchFor = (kindId) => `url(#h-${kindId})`;
 const sel = () => view.selected;
 const isSel = (kind, uid) => sel().kind === kind && sel().uid === uid;
+const isLane = (uid, i) => sel().kind === "lane" && sel().uid === uid && sel().lane === i;
 
 // A turn arrow lying on a lane, pointing along the lane's travel.
 function laneArrow(l, size) {
@@ -216,7 +217,7 @@ function renderPlan() {
     .map((a) => `<pattern id="zb-${a.uid}" width="${zebra * 2}" height="${zebra * 2}" patternUnits="userSpaceOnUse" patternTransform="rotate(${a.bearing})"><rect class="zebra" width="${zebra}" height="${zebra * 2}"/></pattern>`)
     .join("");
 
-  const layers = { wedge: [], arm: [], road: [], bulb: [], curb: [], cross: [], mark: [], sel: [], grip: [], move: [], label: [] };
+  const layers = { wedge: [], arm: [], lane: [], road: [], bulb: [], curb: [], cross: [], mark: [], sel: [], grip: [], move: [], label: [] };
 
   // pavement wedges between arms; pressing one selects the corner
   for (const c of v.corners) {
@@ -232,6 +233,9 @@ function renderPlan() {
       g.push(`<path class="piece k-${k.id}" d="${pathD(p.poly)}"/><path class="hatch" fill="${hatchFor(k.id)}" d="${pathD(p.poly)}"/>`);
     }
     layers.arm.push(`<g class="arm${isSel("arm", a.uid) ? " on" : ""}" data-role="arm" data-uid="${a.uid}">${g.join("")}</g>`);
+    a.lanes.forEach((l, i) => {
+      layers.lane.push(`<path class="lane-hit${isLane(a.uid, i) ? " on" : ""}" data-role="lane" data-uid="${a.uid}" data-lane="${i}" d="${pathD(l.poly)}"><title>Lane ${i + 1} of ${a.lanes.length}, ${esc(a.label)}</title></path>`);
+    });
     for (const gp of a.gaps) layers.road.push(`<path class="road" d="${pathD(gp)}"/>`);
     a.bulbs.forEach((b, i) => {
       if (b) layers.bulb.push(`<g data-role="arm" data-uid="${a.uid}"><path class="bulb k-sidewalk" d="${pathD(b)}"/><path class="hatch" fill="${hatchFor("sidewalk")}" d="${pathD(b)}"/></g>`);
@@ -304,6 +308,9 @@ function renderPlan() {
         `<text class="t-note t-halo t-soft" x="${f1(x)}" y="${f1(y1 + 17)}" text-anchor="${anchor}">${compass(a.bearing)} · ${fmt(a.road_mm)} road${a.offset_mm ? ` · shifted ${fmt(Math.abs(a.offset_mm))}` : ""}</text>`,
     );
 
+    a.lanes.forEach((l, i) => {
+      if (isLane(a.uid, i)) layers.sel.push(`<path class="sel-box" d="${pathD(l.poly)}"/>`);
+    });
     if (isSel("arm", a.uid)) layers.sel.push(`<path class="sel-box" d="${pathD(a.outline)}"/>`);
     // the end grip: always there, since turning a street is the main move
     const [ex, ey] = T(a.end);
@@ -351,6 +358,7 @@ function renderPlan() {
     `<g class="plan${eng ? " eng" : ""}">` +
     layers.wedge.join("") +
     layers.arm.join("") +
+    layers.lane.join("") +
     layers.road.join("") +
     layers.bulb.join("") +
     layers.curb.join("") +
@@ -512,6 +520,8 @@ function renderJunctionPanel() {
   el.inspector.innerHTML = `<p class="insp-empty">Select a street, corner or crossing to change it.</p>${controlSection()}`;
 }
 
+const laneNote = (a, i) => (a.lanes.length === 1 ? "the only lane" : i === 0 ? "nearest the middle" : i === a.lanes.length - 1 ? "nearest the curb" : "");
+
 function laneRows(a) {
   return a.lanes
     .map((l, i) => {
@@ -522,7 +532,7 @@ function laneRows(a) {
           return `<button type="button" class="turn${on ? " on" : ""}${l.bad && on ? " bad" : ""}" data-lane="${i}" data-class="${c}" data-ifid="ln-${i}-${c}" aria-pressed="${on}" ${has ? "" : "disabled"} aria-label="Lane ${i + 1}: ${CLASS_WORD[c]}${has ? "" : ", no such turn here"}">${turnGlyph(c)}</button>`;
         })
         .join("");
-      return `<li class="lane-row${l.bad ? " bad" : ""}"><span>Lane ${i + 1}<small>${i === 0 ? "nearest the middle" : i === a.lanes.length - 1 ? "nearest the curb" : ""}</small></span><span class="turns-btns">${btns}</span></li>`;
+      return `<li class="lane-row${l.bad ? " bad" : ""}"><button type="button" class="lane-pick" data-pick="${i}" data-ifid="pick-${i}"><span>Lane ${i + 1}<small>${laneNote(a, i)}</small></span></button><span class="turns-btns">${btns}</span></li>`;
     })
     .join("");
 }
@@ -558,6 +568,21 @@ function renderInspector() {
   el.inspector.style.removeProperty("--kc");
   if (!a) {
     renderJunctionPanel();
+  } else if (v.selected.kind === "lane") {
+    const i = v.selected.lane;
+    const l = a.lanes[i];
+    const opts = [LEFT, THROUGH, RIGHT]
+      .map((c) => {
+        const has = (a.classes & c) !== 0;
+        return option(`ln-${c}`, (l.uses & c) !== 0, turnGlyph(c, 22), `${CLASS_NAME[c]}${has ? "" : " (no such turn here)"}`, `data-lane="${i}" data-class="${c}" ${has ? "" : "disabled"}`, "checkbox");
+      })
+      .join("");
+    el.inspector.innerHTML = `
+      <div class="insp-head"><div><h2 class="insp-name">Lane ${i + 1} of ${a.lanes.length}</h2><p class="insp-sub">${esc(a.label)}${laneNote(a, i) ? ` · ${laneNote(a, i)}` : ""}</p></div></div>
+      <section class="insp-sec"><h3 class="note-h" id="i-h-serves">This lane serves</h3><ul class="opts">${opts}</ul>
+      <p class="insp-range">${l.bad ? "Every turn it serves is banned. Add a turn or allow one." : `${fmt(l.width_mm)} wide. A lane has to serve at least one turn.`}</p></section>
+      <section class="insp-sec"><button type="button" class="btn" data-pickarm="1" data-ifid="pickarm">Select the whole street</button></section>
+      ${controlSection()}`;
   } else if (v.selected.kind === "corner") {
     const c = corner(a.uid);
     const next = arm(c.next_uid);
@@ -656,8 +681,9 @@ function act(fn, refused = "other") {
 
 // ---- selection ------------------------------------------------------------
 
-function select(kind, uid) {
-  plan.select(kind ? SEL_KIND[kind] : 0, uid || 0);
+function select(kind, uid, lane = 0) {
+  if (kind === "lane") plan.select_lane(uid, lane);
+  else plan.select(kind ? SEL_KIND[kind] : 0, uid || 0);
   view = JSON.parse(plan.view());
   renderPlan();
   renderInspector();
@@ -669,6 +695,7 @@ function announceSelection() {
   const s = view.selected;
   if (!s.kind) return;
   const a = arm(s.uid);
+  if (s.kind === "lane") return say(`Lane ${s.lane + 1} of ${a.lanes.length}, ${a.label}`);
   say(s.kind === "arm" ? `${a.label}, ${a.bearing} degrees` : s.kind === "corner" ? `Corner after ${a.label}, ${fmt(corner(s.uid).radius_mm)} radius` : `Crossing on ${a.label}`);
 }
 
@@ -681,7 +708,9 @@ el.inspector.addEventListener("click", (e) => {
   const s = view.selected;
   const uid = s.uid;
   if (d.istep) return void step(d.istep, Number(d.dir));
-  if (d.lane !== undefined) return void act(() => plan.set_lane_use(uid, Number(d.lane), Number(d.class), b.getAttribute("aria-pressed") !== "true"), "lane");
+  if (d.pickarm !== undefined) return void select("arm", uid);
+  if (d.pick !== undefined) return void select("lane", uid, Number(d.pick));
+  if (d.lane !== undefined) return void act(() => plan.set_lane_use(uid, Number(d.lane), Number(d.class), (b.getAttribute("aria-pressed") ?? b.getAttribute("aria-checked")) !== "true"), "lane");
   if (d.icross !== undefined) return void act(() => plan.set_crossing(uid, d.icross === "1"));
   if (d.iisland !== undefined) return void act(() => plan.set_island(uid, b.getAttribute("aria-checked") !== "true"), "island");
   if (d.ibulb !== undefined) return void act(() => plan.set_bulb(uid, Number(d.ibulb), b.getAttribute("aria-checked") !== "true"), "bulb");
@@ -774,7 +803,8 @@ el.svg.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     return;
   }
-  if (role === "arm") select("arm", uid);
+  if (role === "lane") select("lane", uid, Number(t.dataset.lane));
+  else if (role === "arm") select("arm", uid);
   else if (role === "crossing") select("crossing", uid);
   else if (role === "corner") select("corner", uid);
   else if (sel().kind) select(null, 0);

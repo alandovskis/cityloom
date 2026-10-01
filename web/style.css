@@ -2520,3 +2520,38 @@ kbd {
     order: 4;
   }
 }
+
+#drawing .lane-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+#drawing .lane-hit:hover {
+  fill: var(--blue-wash);
+}
+#drawing .lane-hit.on {
+  fill: var(--blue-wash);
+}
+.lane-pick {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lane-pick:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.opt[role="checkbox"]:has(.turn-ico) {
+  grid-template-columns: 26px minmax(0, 1fr) 16px;
+  padding-left: 0;
+}
+.opt .turn-ico {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
