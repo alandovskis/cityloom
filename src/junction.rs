@@ -49,6 +49,10 @@ pub const MAX_RING_MM: i32 = 40_000;
 pub const RING_STEP_MM: i32 = 500;
 /// Width of the bus lane across a roundabout's middle.
 pub const BUS_LANE_MM: i32 = 3_500;
+/// A cycle track around a roundabout, in steps of `RING_STEP_MM`.
+pub const CYCLE_DEFAULT_MM: i32 = 2_000;
+pub const CYCLE_MIN_MM: i32 = 1_500;
+pub const CYCLE_MAX_MM: i32 = 3_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Crossing {
@@ -93,6 +97,8 @@ pub struct State {
     /// A bus-only lane straight across the middle of a roundabout, between two
     /// streets, by their uids (the lower first).
     pub bus: Option<(u32, u32)>,
+    /// Width of a cycle track around the outside of a roundabout, if it has one.
+    pub cycle: Option<i32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -105,6 +111,8 @@ pub enum Target {
     Lane(u32, usize),
     /// The bus lane across a roundabout's middle.
     Bus,
+    /// The cycle track around a roundabout.
+    Cycle,
 }
 
 // ---- the street an arm reads ------------------------------------------------
@@ -356,7 +364,7 @@ impl Junction {
             .collect();
         arms.sort_by_key(|a| a.bearing);
         normalize(&mut arms, self.region);
-        self.states = vec![State { label: "Junction today".into(), arms, control: s.control, ring_extra_mm: 0, bus: None }];
+        self.states = vec![State { label: "Junction today".into(), arms, control: s.control, ring_extra_mm: 0, bus: None, cycle: None }];
         self.cursor = 0;
         self.selected = Target::None;
         self.gesture = None;
@@ -434,6 +442,9 @@ impl Junction {
         }
         next.arms.sort_by_key(|a| a.bearing);
         normalize(&mut next.arms, region);
+        if next.control != ROUNDABOUT {
+            next.cycle = None;
+        }
         // A bus lane needs a roundabout and both its streets.
         if let Some((a, b)) = next.bus {
             if next.control != ROUNDABOUT || !next.arms.iter().any(|x| x.uid == a) || !next.arms.iter().any(|x| x.uid == b) {
@@ -522,6 +533,7 @@ impl Junction {
             Target::Crossing(u) => self.arm(u).is_some_and(|a| a.crossing.is_some()),
             Target::Lane(u, i) => self.arm(u).is_some_and(|a| i < a.lanes.len()),
             Target::Bus => self.current().bus.is_some(),
+            Target::Cycle => self.current().cycle.is_some(),
         };
         if !keep {
             self.selected = Target::None;
@@ -549,6 +561,9 @@ impl Junction {
             if self.current().control != ROUNDABOUT && gap(a.bearing, arms[(i + 1) % arms.len()].bearing) != 180 {
                 v.push(Target::Corner(a.uid));
             }
+        }
+        if self.current().cycle.is_some() {
+            v.push(Target::Cycle);
         }
         if self.current().bus.is_some() {
             v.push(Target::Bus);
@@ -814,6 +829,26 @@ impl Junction {
                 return false;
             }
             s.bus = pair;
+            true
+        })
+    }
+
+    /// Puts a cycle track of `width_mm` around the outside of a roundabout, or
+    /// takes it away with `None`.
+    pub fn set_cycle(&mut self, width_mm: Option<i32>) -> bool {
+        let width = width_mm.map(|w| snap(w, RING_STEP_MM));
+        if width.is_some_and(|w| !(CYCLE_MIN_MM..=CYCLE_MAX_MM).contains(&w)) {
+            return false;
+        }
+        let label = match width {
+            Some(w) => format!("Cycle track around the roundabout: {w} mm"),
+            None => "Cycle track around the roundabout: remove".into(),
+        };
+        self.edit(label, |s| {
+            if width.is_some() && s.control != ROUNDABOUT {
+                return false;
+            }
+            s.cycle = width;
             true
         })
     }
@@ -1156,6 +1191,23 @@ mod tests {
         assert_eq!(j.targets().last(), Some(&Target::Bus));
         j.set_bus(None);
         assert_eq!(j.selected, Target::None);
+    }
+
+    #[test]
+    fn a_cycle_track_needs_a_roundabout_and_goes_with_it() {
+        let mut j = Junction::new(0);
+        assert!(!j.set_cycle(Some(2000)));
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(!j.set_cycle(Some(1000)) && !j.set_cycle(Some(3500)));
+        assert!(j.set_cycle(Some(2200)));
+        assert_eq!(j.current().cycle, Some(2000), "snaps to half metres");
+        j.select(Target::Cycle);
+        assert_eq!(j.selected, Target::Cycle);
+        assert!(j.set_control(SIGNAL));
+        assert_eq!(j.current().cycle, None);
+        assert_eq!(j.selected, Target::None);
+        assert!(j.undo());
+        assert_eq!(j.current().cycle, Some(2000));
     }
 
     #[test]

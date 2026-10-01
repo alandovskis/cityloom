@@ -258,6 +258,11 @@ impl Plan {
         self.0.set_bus((a != 0 && b != 0).then_some((a, b)))
     }
 
+    /// Puts a cycle track of this width around a roundabout; 0 takes it away.
+    pub fn set_cycle(&mut self, width_mm: i32) -> bool {
+        self.0.set_cycle((width_mm > 0).then_some(width_mm))
+    }
+
     pub fn set_ring(&mut self, extra_mm: i32) -> bool {
         self.0.set_ring(extra_mm)
     }
@@ -292,7 +297,7 @@ impl Plan {
     }
 
     /// Selects an arm (1), a corner (2), a crossing (3) by the arm's uid, or the
-    /// bus lane (5);
+    /// bus lane (5) or cycle track (6);
     /// kind 0 clears the selection.
     pub fn select(&mut self, kind: u8, uid: u32) {
         self.0.select(match kind {
@@ -300,6 +305,7 @@ impl Plan {
             2 => Target::Corner(uid),
             3 => Target::Crossing(uid),
             5 => Target::Bus,
+            6 => Target::Cycle,
             _ => Target::None,
         });
     }
@@ -333,6 +339,7 @@ pub fn junction_catalogue() -> String {
             "offset_step": OFFSET_STEP_MM,
             "ring_step": RING_STEP_MM, "max_ring": MAX_RING_MM,
             "island_mm": ISLAND_MM,
+            "cycle": [CYCLE_MIN_MM, CYCLE_MAX_MM, RING_STEP_MM, CYCLE_DEFAULT_MM],
         },
     }))
 }

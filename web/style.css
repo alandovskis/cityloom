@@ -2589,3 +2589,10 @@ kbd {
 #drawing text {
   pointer-events: none;
 }
+
+#drawing .cycle-g {
+  cursor: pointer;
+}
+#drawing .cycle-g:hover .piece {
+  stroke-opacity: 1;
+}

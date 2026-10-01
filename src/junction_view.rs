@@ -310,7 +310,10 @@ pub struct Conflicts {
 pub struct RingView {
     pub radius_mm: i32,
     pub floor_mm: i32,
+    /// The carriageway's outer radius, inside any cycle track.
+    pub road_mm: i32,
     pub island_mm: i32,
+    pub cycle_mm: Option<i32>,
     pub circulation: &'static str,
 }
 
@@ -674,7 +677,7 @@ impl Junction {
 
         // Movements.
         let mut movements = Vec::new();
-        let rad = ring.map(|r| r.radius);
+        let rad = ring.map(|r| r.radius - s.cycle.unwrap_or(0) as f64);
         for (i, a) in s.arms.iter().enumerate() {
             for (j, b) in s.arms.iter().enumerate() {
                 if i == j {
@@ -706,6 +709,7 @@ impl Junction {
             Target::Crossing(u) => Selection { kind: Some("crossing"), uid: u, lane: 0 },
             Target::Lane(u, i) => Selection { kind: Some("lane"), uid: u, lane: i },
             Target::Bus => Selection { kind: Some("bus"), uid: 0, lane: 0 },
+            Target::Cycle => Selection { kind: Some("cycle"), uid: 0, lane: 0 },
         };
         JView {
             name: JUNCTION_SAMPLES[self.sample()].name,
@@ -717,7 +721,9 @@ impl Junction {
             ring: ring.map(|r| RingView {
                 radius_mm: r.radius as i32,
                 floor_mm: r.floor,
-                island_mm: (r.radius - RING_WIDTH_MM).max(MIN_ISLAND_MM) as i32,
+                road_mm: r.radius as i32 - s.cycle.unwrap_or(0),
+                island_mm: (r.radius - s.cycle.unwrap_or(0) as f64 - RING_WIDTH_MM).max(MIN_ISLAND_MM) as i32,
+                cycle_mm: s.cycle,
                 circulation: if side == Side::Right { "anticlockwise" } else { "clockwise" },
             }),
             ring_extra_mm: s.ring_extra_mm,
@@ -795,7 +801,8 @@ fn conflicts(s: &State, moves: &[MoveView], lay: &Layout, side: Side) -> Conflic
         let leaves = s.arms.iter().filter(|a| live.iter().any(|m| m.to == a.uid)).count();
         let _ = side;
         // A bus lane across the middle crosses the circulating traffic going in and coming out.
-        let crossing = if s.bus.is_some() { 2 } else { 0 };
+        // Cyclists on a track round the outside cross the way in and the way out of every street.
+        let crossing = if s.bus.is_some() { 2 } else { 0 } + if s.cycle.is_some() { 2 * s.arms.len() } else { 0 };
         return Conflicts { crossing, merging: enters, diverging: leaves, by_phase };
     }
     let mut diverging = 0;
@@ -954,6 +961,21 @@ mod tests {
         assert_eq!(v.conflicts.crossing, 2);
         assert!(j.set_bus(None));
         assert!(j.view().bus.is_none());
+    }
+
+    #[test]
+    fn a_cycle_track_shrinks_the_carriageway_not_the_footprint_and_adds_crossings() {
+        let mut j = Junction::new(0);
+        j.set_control(ROUNDABOUT);
+        let plain = j.view().ring.unwrap();
+        assert!(j.set_cycle(Some(2000)));
+        let v = j.view();
+        let r = v.ring.unwrap();
+        assert_eq!(r.radius_mm, plain.radius_mm);
+        assert_eq!(r.road_mm, plain.radius_mm - 2000);
+        assert_eq!(r.cycle_mm, Some(2000));
+        assert!(r.island_mm < plain.island_mm);
+        assert_eq!(v.conflicts.crossing, 8, "two for each of four streets");
     }
 
     #[test]
