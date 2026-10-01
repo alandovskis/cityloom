@@ -54,7 +54,7 @@ const ICON = {
 // ---- the places -------------------------------------------------------------
 
 const nodes = () => new Map(view.nodes.map((n) => [n.uid, n]));
-const junctions = () => view.nodes.filter((n) => n.junction);
+const junctions = () => view.nodes.filter((n) => n.junction).sort((a, b) => junctionNumber(a) - junctionNumber(b));
 const junctionNumber = (n) => n.name.replace(/^\D+/, "");
 const streetHref = (e) => `index.html?street=${e.uid}`;
 const junctionHref = (n) => `intersection.html?junction=${n.uid}`;
@@ -81,7 +81,8 @@ let moved = false; // the person has zoomed or panned, so a resize keeps their v
 const MARGIN_M = 70;
 const world = () => {
   const [x0, y0, x1, y1] = view.bounds_mm.map((v) => v / 1000);
-  return { x0: x0 - MARGIN_M, y0: y0 - MARGIN_M, x1: x1 + MARGIN_M, y1: y1 + MARGIN_M };
+  // Extra room at the left keeps the scale bar clear of the streets.
+  return { x0: x0 - MARGIN_M - 190, y0: y0 - MARGIN_M, x1: x1 + MARGIN_M, y1: y1 + MARGIN_M };
 };
 
 function fit() {

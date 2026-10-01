@@ -3022,3 +3022,6 @@ kbd {
     display: none;
   }
 }
+.surface[hidden] {
+  display: none;
+}
