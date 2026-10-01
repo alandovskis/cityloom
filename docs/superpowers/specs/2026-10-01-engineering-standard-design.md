@@ -57,7 +57,9 @@ New module `src/standard.rs`, pure Rust like the others.
 A `Standard` has an `id`, a `name`, a one-line `note`, and:
 
 1. **Base rows.** One row for each (road type, speed band): 16 per standard.
-   A row gives `(min_mm, max_mm)` for every kind.
+   A row gives `(min_mm, max_mm)` for every kind. They are built from an anchor
+   row, a step per speed band and a step per road type, which keeps a standard
+   short; the lookup is unchanged.
 2. **Volume steps.** For each mode that carries traffic (Foot, Bike, Transit,
    Vehicle), two thresholds that split a volume into low, typical and high,
    and for each of those three bands an adjustment `(min_add_mm, max_add_mm)`
@@ -70,9 +72,9 @@ is the contract.
 
 ### Lookup
 
-`limits(standard, profile, kind) -> (min_mm, max_mm)`:
+`limits(standard, design, kind) -> (min_mm, max_mm)`:
 
-1. Take the base row for the profile's road type and the band of its speed.
+1. Take the base row for the design's road type and the band of its speed.
 2. Take the kind's `(min, max)` from it.
 3. If the kind's mode has a volume, find the volume's band for that mode and
    add that band's adjustment to min and to max.
@@ -87,7 +89,8 @@ city's default. Names are placeholders to settle in the plan.
 
 ### Per-street inputs
 
-`model::Street` gains a `profile`:
+`model::Street` gains a `design` (called `Design` in code, because
+`junction::Profile` already exists):
 
 - `road_type: usize` (index into `ROAD_TYPES`)
 - `speed_kmh: i32`
@@ -105,10 +108,10 @@ Defaults come from the sample (synthetic):
 | Freeway | freeway | 100 | 0 | 0 | 0 | 4000 |
 
 `Street::sample` fills these. `is_sound` rejects an index out of range, a speed
-or a volume out of range. `for_side` and `reversed` carry the profile through
+or a volume out of range. `for_side` and `reversed` carry the design through
 unchanged.
 
-The profile is a **setting of the street, not part of its undo history**, like
+The design is a **setting of the street, not part of its undo history**, like
 the region and the time of day. A change to it is not a revision under "Your
 changes", but it is saved with the street, and it makes the street count as
 edited on the map (`now != today`). "Start over" on a city resets it.
@@ -121,7 +124,9 @@ the width. It passes when every piece is within range. When it fails, `detail`
 names the worst piece and how far out it is ("Driving lane 3.60 m, standard
 allows 3.00 to 3.30 m"), and "and 2 more" if there are others. `amount_mm` is
 that worst distance. Checks carry no piece ids today and this change does not
-add them.
+add them. The pieces outside the range, furthest out first, are on
+`View.out_of_range`, so the page can print the lanes in its own units. (They
+are not on `Check`, which the junction editor shares.)
 
 `street_measures::MIN_TRANSIT_LANE_MM` is removed. The transit-lane message
 reads the standard's minimum for a bus lane on this street, so there is one
@@ -129,13 +134,12 @@ source of truth. The measure logic around it is unchanged.
 
 ### Editor
 
-`Editor` takes the standard as a setting, like `region`:
-`Editor::from_street(today, now, region, standard)` and a default standard for
-the standalone `Editor::new`. `SegView` gains the standard's range for that
-piece: `std_min_mm`, `std_max_mm`, and `std_ok`. Setting the profile on the
+`Editor` takes the standard as a setting, like `region`: `set_standard(index)`,
+with the balanced standard as the default for `Editor::new` and `from_street`. `SegView` gains the standard's range for that
+piece: `std_min_mm`, `std_max_mm`, and `std_ok`. Setting the design on the
 editor is `set_road_type`, `set_speed`, `set_volume(mode, value)`, each
 returning false for an invalid or unchanged value. The view reports the
-profile and the per-kind limits table for the Standard tab.
+design and the per-kind limits table for the Standard tab.
 
 ### City
 
@@ -145,8 +149,10 @@ profile and the per-kind limits table for the Standard tab.
 - `City::view` passes the standard to each street's editor. A street that
   fails the standard then appears in `failing` like any other failed check, so
   the map shows it with no new mechanism.
-- `City::street_profile` and `City::set_street_profile` read and write one
-  street's profile, so the street page can store what the editor holds.
+- A street's design travels with the street: the street editor holds it and
+  `keep_street` stores it, so the city needs no separate accessors.
+- Start over leaves the chosen standard alone: it is the city's rule, not an
+  edit to a street.
 - The view reports the active standard and the list of standards (id, name,
   note) for the map's picker.
 
@@ -155,19 +161,19 @@ profile and the per-kind limits table for the Standard tab.
 The save stores the standard by **id**, not index, so reordering the list does
 not change a saved choice. An unknown id falls back to the city's default.
 
-Streets saved before this change have no profile. They load with the profile
+Streets saved before this change have no design. They load with the design
 their sample gives, and keep their widths. `SAVE_VERSION` is **not** bumped,
-because bumping it would throw away every resident's saved city. The plan
-decides the exact serde mechanism; the requirement is that an old save loads
-with its streets and junctions intact and a test proves it.
+because bumping it would throw away every resident's saved city. `Street`
+deserialises through a private `SavedStreet` whose design is optional, and a
+test proves an old save loads with its streets and junctions intact.
 
 ### `lib.rs` (WebAssembly)
 
 - `Sheet`: `set_road_type(index)`, `set_speed(kmh)`, `set_volume(mode, value)`,
   `set_standard(index)`.
-- `City`: `set_standard(index)`, `street_profile`, `set_street_profile`.
-- A `standards()` export gives the road types, speed bands, volume thresholds
-  and the list of standards for the pages. The pages hold no rules.
+- `City`: `set_standard(index)` and `standard()`.
+- A `standards()` export gives the road types, the bounds of speed and volume,
+  the volume labels and the list of standards for the pages. The pages hold no rules.
 
 ## Interface
 
@@ -228,20 +234,14 @@ Rust, native, in the existing style:
 - The check passes for every sample street under the default standard, and
   fails, naming the lane and the range, for a width outside it.
 - A bus lane's minimum in the transit measures comes from the standard.
-- Profile: defaults per sample, `is_sound` rejects bad values, `for_side` and
+- Design: defaults per sample, `is_sound` rejects bad values, `for_side` and
   `reversed` keep it, setting it does not enter history, and it marks the street
   edited.
 - City: the default standard is in use after `City::new`. A save round-trips
-  the standard id and each profile. A save from before this change loads with
-  streets and junctions intact and sample-default profiles. An unknown standard
+  the standard id and each design. A save from before this change loads with
+  streets and junctions intact and sample-default designs. An unknown standard
   id falls back to the default. `set_standard` changes `failing` on the view for
   a street that sits between the two standards.
 
 Browser: the pages are checked by hand and with the existing build
 (`scripts/build.sh`), as for the earlier features.
-
-## Open items for the plan
-
-- Names of the three built-in standards, and the synthetic numbers.
-- The serde mechanism for loading a street that has no profile.
-- Where the Standard tab's range table and the lane inspector line share code.
