@@ -2555,3 +2555,27 @@ kbd {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+.lane-row {
+  display: block;
+}
+.lane-row .turns-btns {
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.turn.dest {
+  width: auto;
+  min-width: 52px;
+  gap: 3px;
+  padding: 0 6px;
+  grid-auto-flow: column;
+  font-size: 13px;
+  font-weight: 600;
+}
+.turn.dest .turn-ico {
+  width: 14px;
+  height: 14px;
+}
+.turn.dest[aria-pressed="false"]:not(:disabled)::after {
+  inset: 5px 4px;
+}

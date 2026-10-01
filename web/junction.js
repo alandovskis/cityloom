@@ -525,11 +525,10 @@ const laneNote = (a, i) => (a.lanes.length === 1 ? "the only lane" : i === 0 ? "
 function laneRows(a) {
   return a.lanes
     .map((l, i) => {
-      const btns = [LEFT, THROUGH, RIGHT]
-        .map((c) => {
-          const has = (a.classes & c) !== 0;
-          const on = (l.uses & c) !== 0;
-          return `<button type="button" class="turn${on ? " on" : ""}${l.bad && on ? " bad" : ""}" data-lane="${i}" data-class="${c}" data-ifid="ln-${i}-${c}" aria-pressed="${on}" ${has ? "" : "disabled"} aria-label="Lane ${i + 1}: ${CLASS_WORD[c]}${has ? "" : ", no such turn here"}">${turnGlyph(c)}</button>`;
+      const btns = l.dests
+        .map((d) => {
+          const bad = l.bad && d.on;
+          return `<button type="button" class="turn dest${d.on ? " on" : ""}${bad ? " bad" : ""}" data-lane="${i}" data-to="${d.uid}" data-ifid="ln-${i}-${d.uid}" aria-pressed="${d.on}" ${d.open ? "" : "disabled"} title="${esc(d.label)}" aria-label="Lane ${i + 1} to ${esc(d.label)}, ${CLASS_WORD[d.class]}">${turnGlyph(d.class)}<span aria-hidden="true">${compass(arm(d.uid).bearing)}</span></button>`;
         })
         .join("");
       return `<li class="lane-row${l.bad ? " bad" : ""}"><button type="button" class="lane-pick" data-pick="${i}" data-ifid="pick-${i}"><span>Lane ${i + 1}<small>${laneNote(a, i)}</small></span></button><span class="turns-btns">${btns}</span></li>`;
@@ -571,16 +570,13 @@ function renderInspector() {
   } else if (v.selected.kind === "lane") {
     const i = v.selected.lane;
     const l = a.lanes[i];
-    const opts = [LEFT, THROUGH, RIGHT]
-      .map((c) => {
-        const has = (a.classes & c) !== 0;
-        return option(`ln-${c}`, (l.uses & c) !== 0, turnGlyph(c, 22), `${CLASS_NAME[c]}${has ? "" : " (no such turn here)"}`, `data-lane="${i}" data-class="${c}" ${has ? "" : "disabled"}`, "checkbox");
-      })
+    const opts = l.dests
+      .map((d) => option(`ln-${d.uid}`, d.on, turnGlyph(d.class, 22), `${CLASS_NAME[d.class]} to ${d.label}${d.open ? "" : " (one way in)"}`, `data-lane="${i}" data-to="${d.uid}" ${d.open ? "" : "disabled"}`, "checkbox"))
       .join("");
     el.inspector.innerHTML = `
       <div class="insp-head"><div><h2 class="insp-name">Lane ${i + 1} of ${a.lanes.length}</h2><p class="insp-sub">${esc(a.label)}${laneNote(a, i) ? ` · ${laneNote(a, i)}` : ""}</p></div></div>
-      <section class="insp-sec"><h3 class="note-h" id="i-h-serves">This lane serves</h3><ul class="opts">${opts}</ul>
-      <p class="insp-range">${l.bad ? "Every turn it serves is banned. Add a turn or allow one." : `${fmt(l.width_mm)} wide. A lane has to serve at least one turn.`}</p></section>
+      <section class="insp-sec"><h3 class="note-h" id="i-h-serves">Where this lane goes</h3><ul class="opts">${opts}</ul>
+      <p class="insp-range">${l.bad ? "Every street it goes to is banned. Add a street, or allow a turn." : `${fmt(l.width_mm)} wide. A lane has to go to at least one street.`}</p></section>
       <section class="insp-sec"><button type="button" class="btn" data-pickarm="1" data-ifid="pickarm">Select the whole street</button></section>
       ${controlSection()}`;
   } else if (v.selected.kind === "corner") {
@@ -665,7 +661,7 @@ const REFUSED = {
   control: "The streets are too wide to fit a roundabout.",
   bearing: "That is too close to a neighbouring street, or leaves a gap wider than a straight road.",
   turn: "A street has to keep at least one way out.",
-  lane: "A lane has to serve at least one turn, and only turns this street has.",
+  lane: "A lane has to go to at least one street.",
   island: "This road is too narrow for an island.",
   bulb: "There is no parking on that side to give up.",
   other: "That change does not fit.",
@@ -710,7 +706,7 @@ el.inspector.addEventListener("click", (e) => {
   if (d.istep) return void step(d.istep, Number(d.dir));
   if (d.pickarm !== undefined) return void select("arm", uid);
   if (d.pick !== undefined) return void select("lane", uid, Number(d.pick));
-  if (d.lane !== undefined) return void act(() => plan.set_lane_use(uid, Number(d.lane), Number(d.class), (b.getAttribute("aria-pressed") ?? b.getAttribute("aria-checked")) !== "true"), "lane");
+  if (d.lane !== undefined) return void act(() => plan.set_lane_dest(uid, Number(d.lane), Number(d.to), (b.getAttribute("aria-pressed") ?? b.getAttribute("aria-checked")) !== "true"), "lane");
   if (d.icross !== undefined) return void act(() => plan.set_crossing(uid, d.icross === "1"));
   if (d.iisland !== undefined) return void act(() => plan.set_island(uid, b.getAttribute("aria-checked") !== "true"), "island");
   if (d.ibulb !== undefined) return void act(() => plan.set_bulb(uid, Number(d.ibulb), b.getAttribute("aria-checked") !== "true"), "bulb");
