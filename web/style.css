@@ -2596,3 +2596,49 @@ kbd {
 #drawing .cycle-g:hover .piece {
   stroke-opacity: 1;
 }
+
+/* ---- credits ------------------------------------------------------------ */
+.menu-foot {
+  margin: 12px 0 0;
+  padding-top: 8px;
+  border-top: var(--line) solid var(--rule);
+  font-size: 14px;
+}
+.menu-foot a,
+.credits a {
+  color: var(--ink);
+  text-underline-offset: 3px;
+}
+.menu-foot a:focus-visible,
+.credits a:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.credits {
+  flex: 1;
+  max-width: 68ch;
+  padding: 28px 24px 40px;
+}
+.credits h1 {
+  margin: 0 0 6px;
+}
+.credits .lede {
+  margin: 0 0 22px;
+  color: var(--ink-soft);
+}
+.credits section {
+  margin-bottom: 20px;
+}
+.credits p,
+.credit-list {
+  margin: 0;
+  text-wrap: pretty;
+}
+.credit-list {
+  padding-left: 18px;
+}
+.credits .back {
+  margin-top: 28px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
