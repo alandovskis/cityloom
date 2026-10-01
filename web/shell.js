@@ -8,14 +8,17 @@ const root = document.documentElement;
 export const typing = (t) => t instanceof Element && t.closest("input, select, textarea");
 export const engineering = () => root.dataset.drawing === "engineering";
 
-const remember = (key, value) => {
+// Says whether the value was stored. Storage can be blocked; a choice then
+// lasts for this visit only.
+export const remember = (key, value) => {
   try {
     localStorage.setItem(key, value);
+    return true;
   } catch {
-    // Storage can be blocked; the choice then lasts for this visit only.
+    return false;
   }
 };
-const recall = (key) => {
+export const recall = (key) => {
   try {
     return localStorage.getItem(key);
   } catch {

@@ -4,6 +4,7 @@
 
 import init, { Sheet, atlas, catalogue, materials, samples } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH, symbol } from "./symbols.js";
+import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
 import { engineering, initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
 
 await init();
@@ -12,7 +13,16 @@ const KINDS = JSON.parse(catalogue());
 const MATERIALS = JSON.parse(materials());
 const SAMPLES = JSON.parse(samples());
 const ATLAS = JSON.parse(atlas());
-const sheet = new Sheet(0);
+// Opened from the map (`?street=7`) the page edits that street of the city and
+// writes each change back; otherwise it is a sandbox on the sample streets.
+const placeId = placeParam("street");
+const city = placeId ? openCity() : null;
+const held = city?.street(placeId, regionIndex(MATERIALS.regions));
+if (placeId && !held) {
+  location.replace("map.html");
+  await new Promise(() => {});
+}
+const sheet = held ?? new Sheet(0);
 let view = JSON.parse(sheet.view());
 let units = "m";
 
@@ -610,6 +620,22 @@ function renderFit() {
   box.textContent = d === 0 ? "Every metre of the street is used." : d < 0 ? `${fmt(-d)} of the street is still unused.` : `${fmt(d)} too wide. Make a piece narrower or remove one.`;
 }
 
+// A street of the city says which junctions it runs between, and links to them.
+const ends = held ? JSON.parse(city.street_ends(placeId)) : [];
+const endLink = (e) => (e.junction ? `<a href="intersection.html?junction=${e.uid}">${esc(e.name)}</a>` : esc(e.name));
+const keepSoon = held
+  ? keeper(
+      () => writeCity((c) => c.keep_street(placeId, sheet)),
+      () => say(NOT_KEPT),
+    )
+  : () => {};
+if (held) {
+  document.title = `${view.name} between ${ends.map((e) => e.name).join(" and ")} · CityLoom`;
+  $("street-sub").innerHTML = `<a class="back" href="map.html"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d="M12 7H2M6 3 2 7l4 4"/></svg>City map</a> <span aria-hidden="true">·</span> <span>Street cross-section</span> <span aria-hidden="true">·</span> <span><b id="row-dim" class="fig"></b> wide</span> <span aria-hidden="true">·</span> <span>between ${endLink(ends[0])} and ${endLink(ends[1])}</span>`;
+  $("samples").closest("section").hidden = true;
+  document.querySelector('.surface[href="intersection.html"]').hidden = true;
+}
+
 function renderHead() {
   $("street-name").textContent = view.name;
   $("row-dim").textContent = fmt(view.row_mm);
@@ -658,6 +684,7 @@ $("time").addEventListener("input", (e) => {
 });
 
 function render() {
+  keepSoon();
   renderSamples();
   renderMeasures();
   renderClock();

@@ -4,6 +4,7 @@
 
 import init, { Plan, atlas, catalogue, junction_catalogue, materials } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH } from "./symbols.js";
+import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
 import { engineering, initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
 
 await init();
@@ -13,7 +14,27 @@ const CAT = JSON.parse(junction_catalogue());
 const MATERIALS = JSON.parse(materials());
 const LIM = CAT.limits;
 const ATLAS = JSON.parse(atlas());
-const plan = new Plan(0);
+// Opened from the map (`?junction=3`) the page edits that junction of the city,
+// reading its streets from the city, and writes each change back; otherwise it
+// is a sandbox on the sample junctions.
+const placeId = placeParam("junction");
+const city = placeId ? openCity() : null;
+const placeName = city?.junction_name(placeId);
+const held = city?.junction(placeId, regionIndex(MATERIALS.regions));
+if (placeId && !placeName) {
+  location.replace("map.html");
+  await new Promise(() => {});
+}
+if (placeId && !held) {
+  // The streets here have been changed so that the junction cannot be drawn.
+  initAccountMenu();
+  initTheme(() => {});
+  document.getElementById("street-name").textContent = placeName;
+  document.querySelector(".tools").hidden = true;
+  document.querySelector(".sheet-body").innerHTML = `<div class="stuck"><h2 class="note-h">This junction cannot be drawn</h2><p>The streets that meet here have been changed so that they no longer make a junction. Give the streets their room back, or start the city over from the map.</p><p><a class="back" href="map.html">City map</a></p></div>`;
+  await new Promise(() => {});
+}
+const plan = held ?? new Plan(0);
 let view = JSON.parse(plan.view());
 let units = "m";
 
@@ -49,6 +70,19 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 const f1 = (n) => Math.round(n * 10) / 10;
 const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 const compass = (b) => COMPASS[Math.round(((b % 360) + 360) % 360 / 45) % 8];
+
+const keepSoon = held
+  ? keeper(
+      () => writeCity((c) => c.keep_junction(placeId, plan)),
+      () => say(NOT_KEPT),
+    )
+  : () => {};
+if (held) {
+  document.title = `${view.name} · CityLoom`;
+  $("street-sub").innerHTML = `<a class="back" href="map.html"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d="M12 7H2M6 3 2 7l4 4"/></svg>City map</a> <span aria-hidden="true">·</span> <span>Junction plan</span> <span aria-hidden="true">·</span> <span><b id="arm-count" class="fig"></b></span>`;
+  document.querySelector(".lower").hidden = true;
+  document.querySelector('.surface[href="index.html"]').hidden = true;
+}
 
 let liveTimer = 0;
 function say(text) {
@@ -771,9 +805,13 @@ function renderInspector() {
         transitSection(a) +
         dirSec +
         offSec +
-        `<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3><select data-istreet data-ifid="street" aria-labelledby="i-h-street">${streets}</select><p class="insp-range">The street's own layout is edited in the street editor.</p></section>` +
+        (v.linked
+          ? `<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3><a class="btn" href="index.html?street=${a.edge}" data-ifid="street-link">Open the cross-section</a><p class="insp-range">This street belongs to the city. Its layout is edited in the street editor, and changes there show here.</p></section>`
+          : `<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3><select data-istreet data-ifid="street" aria-labelledby="i-h-street">${streets}</select><p class="insp-range">The street's own layout is edited in the street editor.</p></section>`) +
         controlSection() +
-        `<section class="insp-sec"><button type="button" class="btn danger" data-iremove="1" data-ifid="remove" ${canRemove ? "" : "disabled"}>${BTN.remove}Remove this street</button>${canRemove ? "" : `<p class="insp-range">A junction needs at least ${LIM.min_arms} streets.</p>`}</section>`;
+        (v.linked
+          ? ""
+          : `<section class="insp-sec"><button type="button" class="btn danger" data-iremove="1" data-ifid="remove" ${canRemove ? "" : "disabled"}>${BTN.remove}Remove this street</button>${canRemove ? "" : `<p class="insp-range">A junction needs at least ${LIM.min_arms} streets.</p>`}</section>`);
     }
   }
   if (focusId) {
@@ -796,11 +834,13 @@ function render() {
 
 function refresh() {
   view = JSON.parse(plan.view());
+  keepSoon();
   render();
 }
 
 function refreshDrawing() {
   view = JSON.parse(plan.view());
+  keepSoon();
   renderHead();
   renderPlan();
 }
@@ -941,6 +981,7 @@ function removeSelected() {
   if (s.kind === "bus") return void act(() => plan.set_bus(0, 0));
   if (s.kind === "cycle") return void act(() => plan.set_cycle(0));
   if (s.kind === "crossing") return void act(() => plan.set_crossing(s.uid, false));
+  if (s.kind === "arm" && view.linked) return void say("The streets here belong to the city, so they cannot be removed.");
   if (s.kind === "arm") {
     const ok = plan.remove_arm(s.uid);
     refresh();

@@ -2751,3 +2751,274 @@ kbd {
 .var select[data-ivdir] {
   grid-column: 1 / -1;
 }
+
+/* ---- city map ---------------------------------------------------------------- */
+
+.map-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px 10px;
+  border-top: var(--line) solid var(--rule);
+}
+.map-tools .btn {
+  min-width: 34px;
+  padding-inline: 10px;
+}
+.map-tools .btn:not([aria-label]) {
+  padding-inline: 12px;
+}
+.map-hint {
+  margin: 0 0 0 8px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.map-view {
+  position: relative;
+  height: clamp(380px, calc(100vh - 360px), 760px);
+  overflow: hidden;
+  border-top: var(--line) solid var(--rule);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  outline-offset: -2px;
+}
+.map-view.panning {
+  cursor: grabbing;
+}
+#map,
+.map-overlay {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.map-overlay {
+  pointer-events: none;
+}
+
+#map line,
+#map circle {
+  fill: none;
+  stroke-linecap: butt;
+}
+#map .m-hl {
+  opacity: 0;
+  transition: opacity 120ms var(--ease-out);
+}
+#map line.m-hl {
+  stroke: var(--blue);
+}
+#map circle.m-hl {
+  fill: var(--blue);
+  stroke: none;
+}
+#map .m-hl.on {
+  opacity: 1;
+}
+#map .m-bad {
+  stroke: var(--red);
+}
+#map .m-bad-disc {
+  fill: var(--red);
+  stroke: none;
+}
+#map .m-out {
+  stroke: var(--ink);
+}
+#map .m-walk {
+  stroke: var(--k-sidewalk);
+}
+#map .m-shoulder {
+  stroke: var(--k-shoulder);
+}
+#map .m-road {
+  stroke: var(--road);
+}
+#map .m-k-sidewalk {
+  stroke: var(--k-sidewalk);
+}
+#map .m-k-planting {
+  stroke: var(--k-planting);
+}
+#map .m-k-bike {
+  stroke: var(--k-bike);
+}
+#map .m-k-travel {
+  stroke: var(--k-travel);
+}
+#map .m-k-bus {
+  stroke: var(--k-bus);
+}
+#map .m-k-parking {
+  stroke: var(--k-parking);
+}
+#map .m-k-median {
+  stroke: var(--k-median);
+}
+#map .m-k-loading {
+  stroke: var(--k-loading);
+}
+#map .m-k-shoulder {
+  stroke: var(--k-shoulder);
+}
+#map pattern * {
+  vector-effect: non-scaling-stroke;
+}
+:root[data-drawing="engineering"] #map .m-walk,
+:root[data-drawing="engineering"] #map .m-shoulder,
+:root[data-drawing="engineering"] #map .m-road,
+:root[data-drawing="engineering"] #map .m-t {
+  stroke: var(--sheet);
+}
+#map text {
+  paint-order: stroke;
+  stroke: var(--sheet);
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+#map .m-name {
+  fill: var(--ink);
+  font-weight: 600;
+}
+#map .m-tag {
+  fill: var(--ink-soft);
+  font-weight: 500;
+}
+#map .m-jc {
+  fill: var(--sheet);
+  stroke: var(--ink);
+}
+#map .m-jn {
+  fill: var(--ink);
+  font-weight: 600;
+  stroke: none;
+}
+#map .m-badge circle {
+  fill: var(--sheet);
+  stroke: var(--red);
+}
+#map .m-badge path {
+  fill: none;
+  stroke: var(--red);
+  stroke-linecap: square;
+}
+#map a.place {
+  outline: none;
+  cursor: pointer;
+}
+#map .m-hit {
+  fill: transparent;
+  stroke: transparent;
+  pointer-events: all;
+}
+
+.map-overlay text {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--sheet);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.map-overlay .north path {
+  fill: var(--ink);
+  stroke: var(--sheet);
+  stroke-width: 1px;
+}
+.map-overlay .sb-ink {
+  fill: var(--ink);
+  stroke: var(--ink);
+}
+.map-overlay .sb-paper {
+  fill: var(--sheet);
+  stroke: var(--ink);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-soft);
+  text-underline-offset: 3px;
+}
+.back svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: square;
+}
+.street-sub a {
+  color: var(--ink-soft);
+}
+.stuck {
+  grid-column: 1 / -1;
+  max-width: 56ch;
+  padding: 28px 20px;
+}
+.stuck p {
+  margin: 0 0 12px;
+}
+
+.places {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.place-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0 8px;
+  padding: 5px 6px 5px 0;
+  border-top: var(--line) solid var(--rule);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background-color 120ms var(--ease-out);
+}
+.place-row:hover,
+.place-row.on {
+  background: var(--blue-wash);
+}
+.place-row:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+.place-row b {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+.place-row small {
+  grid-column: 1;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.place-row .st {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.place-row .st.bad {
+  color: var(--red);
+}
+.checks a {
+  color: inherit;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.insp-sec .places {
+  margin-top: 2px;
+}
+@media print {
+  .map-tools {
+    display: none;
+  }
+}
