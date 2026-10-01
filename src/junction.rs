@@ -91,6 +91,8 @@ pub enum Target {
     Arm(u32),
     Corner(u32),
     Crossing(u32),
+    /// An entering lane of an arm, by its place among that arm's lanes.
+    Lane(u32, usize),
 }
 
 // ---- the street an arm reads ------------------------------------------------
@@ -498,6 +500,7 @@ impl Junction {
             Target::None => true,
             Target::Arm(u) | Target::Corner(u) => self.arm(u).is_some(),
             Target::Crossing(u) => self.arm(u).is_some_and(|a| a.crossing.is_some()),
+            Target::Lane(u, i) => self.arm(u).is_some_and(|a| i < a.lanes.len()),
         };
         if !keep {
             self.selected = Target::None;
@@ -517,6 +520,7 @@ impl Junction {
         let arms = &self.current().arms;
         for (i, a) in arms.iter().enumerate() {
             v.push(Target::Arm(a.uid));
+            v.extend((0..a.lanes.len()).map(|i| Target::Lane(a.uid, i)));
             if a.crossing.is_some() {
                 v.push(Target::Crossing(a.uid));
             }
@@ -1042,6 +1046,10 @@ mod tests {
         j.select_relative(1);
         assert_eq!(j.selected, Target::Arm(j.current().arms[0].uid));
         j.select_relative(1);
+        assert_eq!(j.selected, Target::Lane(j.current().arms[0].uid, 0));
+        j.select_relative(1);
+        assert_eq!(j.selected, Target::Lane(j.current().arms[0].uid, 1));
+        j.select_relative(1);
         assert_eq!(j.selected, Target::Crossing(j.current().arms[0].uid));
         j.select_relative(1);
         assert_eq!(j.selected, Target::Corner(j.current().arms[0].uid));
@@ -1051,6 +1059,21 @@ mod tests {
         assert_eq!(j.selected, Target::None);
         j.set_control(ROUNDABOUT);
         assert!(!j.targets().iter().any(|t| matches!(t, Target::Corner(_))));
+    }
+
+    #[test]
+    fn a_lane_can_be_selected_and_is_dropped_when_it_goes() {
+        let mut j = Junction::new(0);
+        let n = j.current().arms[0].uid;
+        j.select(Target::Lane(n, 1));
+        assert_eq!(j.selected, Target::Lane(n, 1));
+        j.select(Target::Lane(n, 2));
+        assert_eq!(j.selected, Target::None, "the avenue has two lanes in");
+        j.select(Target::Lane(n, 0));
+        assert!(j.set_street(n, 2)); // a lane has one lane in
+        assert_eq!(j.selected, Target::Lane(n, 0));
+        j.select(Target::Lane(n, 1));
+        assert_eq!(j.selected, Target::None);
     }
 
     #[test]

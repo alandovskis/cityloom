@@ -296,6 +296,11 @@ impl Plan {
         });
     }
 
+    /// Selects one entering lane of an arm.
+    pub fn select_lane(&mut self, uid: u32, lane: usize) {
+        self.0.select(Target::Lane(uid, lane));
+    }
+
     pub fn select_relative(&mut self, delta: i32) {
         self.0.select_relative(delta);
     }

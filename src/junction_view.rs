@@ -200,6 +200,9 @@ pub struct LaneView {
     pub at: P,
     /// Direction the lane's traffic travels, as a bearing.
     pub heading: i32,
+    /// The lane along the whole arm, for pointing at it.
+    pub poly: Vec<Value>,
+    pub width_mm: i32,
 }
 
 #[derive(Serialize)]
@@ -302,6 +305,8 @@ pub struct RingView {
 pub struct Selection {
     pub kind: Option<&'static str>,
     pub uid: u32,
+    /// For a lane, its place among the arm's entering lanes.
+    pub lane: usize,
 }
 
 #[derive(Serialize)]
@@ -366,7 +371,9 @@ fn priority_pair(arms: &[Arm]) -> [usize; 2] {
 }
 
 fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, head: i32, uses: u8) -> LaneView {
-    LaneView { uses, bad: false, at: at(a.bearing, a.lat(off, x_mm), t), heading: head }
+    let w = a.prof.pieces.iter().find(|p| p.x_mm + p.width_mm / 2 == x_mm && KINDS[p.kind].id == "travel").map_or(3_000, |p| p.width_mm);
+    let c = a.lat(off, x_mm);
+    LaneView { uses, bad: false, at: at(a.bearing, c, t), heading: head, poly: poly(&strip(a.bearing, c - w as f64 / 2.0, c + w as f64 / 2.0, a.mouth, ARM_LENGTH_MM as f64)), width_mm: w }
 }
 
 impl Junction {
@@ -628,10 +635,11 @@ impl Junction {
 
         let checks = checks(s, &arms, &corners, &movements, &lay);
         let selected = match self.selected {
-            Target::None => Selection { kind: None, uid: 0 },
-            Target::Arm(u) => Selection { kind: Some("arm"), uid: u },
-            Target::Corner(u) => Selection { kind: Some("corner"), uid: u },
-            Target::Crossing(u) => Selection { kind: Some("crossing"), uid: u },
+            Target::None => Selection { kind: None, uid: 0, lane: 0 },
+            Target::Arm(u) => Selection { kind: Some("arm"), uid: u, lane: 0 },
+            Target::Corner(u) => Selection { kind: Some("corner"), uid: u, lane: 0 },
+            Target::Crossing(u) => Selection { kind: Some("crossing"), uid: u, lane: 0 },
+            Target::Lane(u, i) => Selection { kind: Some("lane"), uid: u, lane: i },
         };
         JView {
             name: JUNCTION_SAMPLES[self.sample()].name,
