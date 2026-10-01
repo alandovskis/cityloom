@@ -262,6 +262,8 @@ pub struct TransitView {
 #[derive(Serialize)]
 pub struct ArmView {
     pub uid: u32,
+    /// The city street this arm is, or 0 outside a city.
+    pub edge: u32,
     pub label: String,
     pub street: &'static str,
     pub street_index: usize,
@@ -598,6 +600,7 @@ impl Junction {
             let road_mm = l.prof.road_mm();
             arms.push(ArmView {
                 uid: a.uid,
+                edge: a.edge,
                 label: arm_name(a),
                 street: l.prof.name,
                 street_index: a.street_index(),

@@ -396,3 +396,62 @@ pub fn junction_catalogue() -> String {
 pub fn atlas() -> String {
     json(&atlas::MEASURES)
 }
+
+/// The city: its streets and junctions as the editors have left them. The
+/// page keeps `save()` in storage and gives it back to `new` next time.
+#[wasm_bindgen]
+pub struct City(city::City);
+
+#[wasm_bindgen]
+impl City {
+    /// The city as saved, or as first laid out when `saved` is empty or cannot be used.
+    #[wasm_bindgen(constructor)]
+    pub fn new(saved: &str) -> City {
+        City(city::City::load(saved))
+    }
+
+    pub fn save(&self) -> String {
+        self.0.save()
+    }
+
+    /// Every street and junction, and whether each works, as JSON.
+    pub fn view(&self, region: usize) -> String {
+        json(&self.0.view(region))
+    }
+
+    /// Puts every street and junction back as first laid out.
+    pub fn reset(&mut self) {
+        self.0.reset();
+    }
+
+    /// The name of a street, by its uid; empty when there is none.
+    pub fn street_name(&self, edge: u32) -> String {
+        self.0.street_name(edge).unwrap_or_default()
+    }
+
+    /// The name of a junction, by its uid; empty when there is none.
+    pub fn junction_name(&self, node: u32) -> String {
+        self.0.junction_name(node).unwrap_or_default()
+    }
+
+    /// The street editor on one street, or nothing when there is no such street.
+    pub fn street(&self, edge: u32, region: usize) -> Option<Sheet> {
+        self.0.street_editor(edge, region).map(Sheet)
+    }
+
+    /// Keeps what a street editor has made of the street.
+    pub fn keep_street(&mut self, edge: u32, sheet: &Sheet) -> bool {
+        self.0.keep_street(edge, sheet.0.snapshot())
+    }
+
+    /// The junction editor on one junction, or nothing when there is no such
+    /// junction or it cannot be drawn with the streets as they now are.
+    pub fn junction(&self, node: u32, region: usize) -> Option<Plan> {
+        self.0.junction_editor(node, region).map(Plan)
+    }
+
+    /// Keeps what a junction editor has made of the junction.
+    pub fn keep_junction(&mut self, node: u32, plan: &Plan) -> bool {
+        self.0.keep_junction(node, plan.0.snapshot())
+    }
+}
