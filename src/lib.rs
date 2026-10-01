@@ -10,6 +10,7 @@ pub mod junction;
 pub mod junction_view;
 pub mod model;
 pub mod plan;
+pub mod standard;
 pub mod street_measures;
 
 use wasm_bindgen::prelude::*;
