@@ -21,7 +21,7 @@ const THROUGH = 2;
 const RIGHT = 4;
 const CLASS_WORD = { [LEFT]: "left", [THROUGH]: "straight on", [RIGHT]: "right" };
 const CLASS_NAME = { [LEFT]: "Left", [THROUGH]: "Straight on", [RIGHT]: "Right" };
-const SEL_KIND = { arm: 1, corner: 2, crossing: 3, lane: 4 };
+const SEL_KIND = { arm: 1, corner: 2, crossing: 3, lane: 4, bus: 5 };
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -253,7 +253,8 @@ function renderPlan() {
     if (v.bus) {
       const d = pathD(v.bus.poly);
       const [bx, by] = T([0, 0]);
-      layers.road.push(`<path class="piece k-bus bus-lane" d="${d}"/><path class="hatch" fill="${hatchFor("bus")}" d="${d}"/>`);
+      layers.road.push(`<g class="bus-g" data-role="bus"><path class="piece k-bus bus-lane" d="${d}"/><path class="hatch" fill="${hatchFor("bus")}" d="${d}"/></g>`);
+      if (sel().kind === "bus") layers.sel.push(`<path class="sel-box" d="${d}"/>`);
       layers.label.push(`<text class="t-mark t-halo" x="${f1(bx)}" y="${f1(by + 5)}" text-anchor="middle">Bus only</text>`);
     }
     // circulation arrows on the ring, between the streets
@@ -577,7 +578,14 @@ function renderInspector() {
   const v = view;
   const a = selArm();
   el.inspector.style.removeProperty("--kc");
-  if (!a) {
+  if (v.selected.kind === "bus" && v.bus) {
+    const o = v.bus_options.find((p) => p.a === Math.min(v.bus.from, v.bus.to) && p.b === Math.max(v.bus.from, v.bus.to));
+    el.inspector.innerHTML = `
+      <div class="insp-head"><div><h2 class="insp-name">Bus lane</h2><p class="insp-sub">${esc(o?.label ?? "")}</p></div></div>
+      <section class="insp-sec"><p class="insp-range">A ${fmt(v.bus.width_mm)} bus-only lane straight across the island. It crosses the ring where it enters and leaves.</p></section>
+      ${controlSection()}
+      <section class="insp-sec"><button type="button" class="btn danger" data-ibusoff="1" data-ifid="busoff">${BTN.remove}Remove the bus lane</button></section>`;
+  } else if (!a) {
     renderJunctionPanel();
   } else if (v.selected.kind === "lane") {
     const i = v.selected.lane;
@@ -703,6 +711,7 @@ function announceSelection() {
   const s = view.selected;
   if (!s.kind) return;
   const a = arm(s.uid);
+  if (s.kind === "bus") return say("Bus lane across the middle");
   if (s.kind === "lane") return say(`Lane ${s.lane + 1} of ${a.lanes.length}, ${a.label}`);
   say(s.kind === "arm" ? `${a.label}, ${a.bearing} degrees` : s.kind === "corner" ? `Corner after ${a.label}, ${fmt(corner(s.uid).radius_mm)} radius` : `Crossing on ${a.label}`);
 }
@@ -716,6 +725,7 @@ el.inspector.addEventListener("click", (e) => {
   const s = view.selected;
   const uid = s.uid;
   if (d.istep) return void step(d.istep, Number(d.dir));
+  if (d.ibusoff !== undefined) return void act(() => plan.set_bus(0, 0));
   if (d.pickarm !== undefined) return void select("arm", uid);
   if (d.pick !== undefined) return void select("lane", uid, Number(d.pick));
   if (d.lane !== undefined) return void act(() => plan.set_lane_dest(uid, Number(d.lane), Number(d.to), (b.getAttribute("aria-pressed") ?? b.getAttribute("aria-checked")) !== "true"), "lane");
@@ -781,6 +791,7 @@ el.inspector.addEventListener("keydown", (e) => {
 
 function removeSelected() {
   const s = view.selected;
+  if (s.kind === "bus") return void act(() => plan.set_bus(0, 0));
   if (s.kind === "crossing") return void act(() => plan.set_crossing(s.uid, false));
   if (s.kind === "arm") {
     const ok = plan.remove_arm(s.uid);
@@ -815,7 +826,8 @@ el.svg.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     return;
   }
-  if (role === "lane") select("lane", uid, Number(t.dataset.lane));
+  if (role === "bus") select("bus", 0);
+  else if (role === "lane") select("lane", uid, Number(t.dataset.lane));
   else if (role === "arm") select("arm", uid);
   else if (role === "crossing") select("crossing", uid);
   else if (role === "corner") select("corner", uid);
@@ -944,7 +956,7 @@ el.wrap.addEventListener("keydown", (e) => {
     renderInspector();
     renderNotes();
     announceSelection();
-  } else if ((e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_") && s.kind) {
+  } else if ((e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_") && ["arm", "corner", "crossing"].includes(s.kind)) {
     e.preventDefault();
     const dir = e.key === "+" || e.key === "=" ? 1 : -1;
     step(s.kind === "arm" ? "bearing" : s.kind === "corner" ? "corner" : "setback", dir);

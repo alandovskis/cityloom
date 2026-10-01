@@ -291,13 +291,15 @@ impl Plan {
         self.0.reset()
     }
 
-    /// Selects an arm (1), a corner (2) or a crossing (3) by the arm's uid;
+    /// Selects an arm (1), a corner (2), a crossing (3) by the arm's uid, or the
+    /// bus lane (5);
     /// kind 0 clears the selection.
     pub fn select(&mut self, kind: u8, uid: u32) {
         self.0.select(match kind {
             1 => Target::Arm(uid),
             2 => Target::Corner(uid),
             3 => Target::Crossing(uid),
+            5 => Target::Bus,
             _ => Target::None,
         });
     }

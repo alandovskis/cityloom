@@ -705,6 +705,7 @@ impl Junction {
             Target::Corner(u) => Selection { kind: Some("corner"), uid: u, lane: 0 },
             Target::Crossing(u) => Selection { kind: Some("crossing"), uid: u, lane: 0 },
             Target::Lane(u, i) => Selection { kind: Some("lane"), uid: u, lane: i },
+            Target::Bus => Selection { kind: Some("bus"), uid: 0, lane: 0 },
         };
         JView {
             name: JUNCTION_SAMPLES[self.sample()].name,

@@ -2579,3 +2579,13 @@ kbd {
 .turn.dest[aria-pressed="false"]:not(:disabled)::after {
   inset: 5px 4px;
 }
+
+#drawing .bus-g {
+  cursor: pointer;
+}
+#drawing .bus-g:hover .piece {
+  stroke-opacity: 1;
+}
+#drawing text {
+  pointer-events: none;
+}

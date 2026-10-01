@@ -103,6 +103,8 @@ pub enum Target {
     Crossing(u32),
     /// An entering lane of an arm, by its place among that arm's lanes.
     Lane(u32, usize),
+    /// The bus lane across a roundabout's middle.
+    Bus,
 }
 
 // ---- the street an arm reads ------------------------------------------------
@@ -444,12 +446,14 @@ impl Junction {
         if self.gesture.is_some() {
             *self.current_mut() = next;
             self.pending_label = label;
+            self.fix_selection();
             return true;
         }
         next.label = label;
         self.states.truncate(self.cursor + 1);
         self.states.push(next);
         self.cursor += 1;
+        self.fix_selection();
         true
     }
 
@@ -517,6 +521,7 @@ impl Junction {
             Target::Arm(u) | Target::Corner(u) => self.arm(u).is_some(),
             Target::Crossing(u) => self.arm(u).is_some_and(|a| a.crossing.is_some()),
             Target::Lane(u, i) => self.arm(u).is_some_and(|a| i < a.lanes.len()),
+            Target::Bus => self.current().bus.is_some(),
         };
         if !keep {
             self.selected = Target::None;
@@ -544,6 +549,9 @@ impl Junction {
             if self.current().control != ROUNDABOUT && gap(a.bearing, arms[(i + 1) % arms.len()].bearing) != 180 {
                 v.push(Target::Corner(a.uid));
             }
+        }
+        if self.current().bus.is_some() {
+            v.push(Target::Bus);
         }
         v
     }
@@ -1135,6 +1143,19 @@ mod tests {
         assert_eq!(k.current().bus, None);
         assert!(k.undo());
         assert_eq!(k.current().bus, Some((n, s)));
+    }
+
+    #[test]
+    fn the_bus_lane_can_be_selected_and_is_dropped_with_it() {
+        let mut j = Junction::new(0);
+        j.set_control(ROUNDABOUT);
+        let (n, s) = (j.current().arms[0].uid, j.current().arms[2].uid);
+        j.set_bus(Some((n, s)));
+        j.select(Target::Bus);
+        assert_eq!(j.selected, Target::Bus);
+        assert_eq!(j.targets().last(), Some(&Target::Bus));
+        j.set_bus(None);
+        assert_eq!(j.selected, Target::None);
     }
 
     #[test]
