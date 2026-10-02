@@ -2718,6 +2718,11 @@ kbd {
 .measures small.m-problem {
   color: var(--warn);
 }
+@media print {
+  #p-measures .hint {
+    display: none;
+  }
+}
 .var select[data-ivdir] {
   grid-column: 1 / -1;
 }
