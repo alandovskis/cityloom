@@ -2,7 +2,7 @@
 // No editing rules live here: widths, snapping, limits, history and checks all
 // come from the WebAssembly model.
 
-import init, { Sheet, atlas, catalogue, materials, samples } from "./pkg/cityloom_editor.js";
+import init, { Sheet, atlas, catalogue, materials } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH, symbol } from "./symbols.js";
 import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
 import { initAccountMenu, initPanels, initRegion, initTheme, initUnits, remember, typing } from "./shell.js";
@@ -11,7 +11,6 @@ await init();
 
 const KINDS = JSON.parse(catalogue());
 const MATERIALS = JSON.parse(materials());
-const SAMPLES = JSON.parse(samples());
 const ATLAS = JSON.parse(atlas());
 // Opened from the map (`?street=7`) the page edits that street of the city and
 // writes each change back; otherwise it is a sandbox on the sample streets.
@@ -479,7 +478,7 @@ function renderMeasures() {
             } else if (f.can_apply) {
               state = `<button type="button" class="btn m-apply" data-measure="${m.code}" aria-label="Arrange the street as ${esc(m.code)} ${esc(m.name)}">Arrange</button>`;
             } else {
-              state = `<span class="m-not">${m.code === "B2" || m.code === "E3" ? "Freeways only" : view.measures && SAMPLES[view.sample].freeway ? "Not for a freeway" : "Will not fit"}</span>`;
+              state = `<span class="m-not">${esc(f.unavailable)}</span>`;
             }
           } else if (m.place === "junction") {
             state = "Set at a junction";
