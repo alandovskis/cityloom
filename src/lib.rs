@@ -342,6 +342,50 @@ impl Plan {
         self.0.set_ring(extra_mm)
     }
 
+    /// Sets the roundabout's outside radius; smaller than its least size is the least size.
+    pub fn set_ring_radius(&mut self, radius_mm: i32) -> bool {
+        self.0.set_ring_radius(radius_mm)
+    }
+
+    /// Puts a cycle track at its usual width around a roundabout, or takes it away.
+    pub fn set_cycle_track(&mut self, on: bool) -> bool {
+        self.0.set_cycle_track(on)
+    }
+
+    /// The `step_*` calls move one number by its step, `dir` 1 up and -1 down,
+    /// within its limits.
+    pub fn step_bearing(&mut self, uid: u32, dir: i32) -> bool {
+        self.0.step_bearing(uid, dir)
+    }
+
+    pub fn step_offset(&mut self, uid: u32, dir: i32) -> bool {
+        self.0.step_offset(uid, dir)
+    }
+
+    pub fn step_corner(&mut self, uid: u32, dir: i32) -> bool {
+        self.0.step_corner(uid, dir)
+    }
+
+    pub fn step_setback(&mut self, uid: u32, dir: i32) -> bool {
+        self.0.step_setback(uid, dir)
+    }
+
+    pub fn step_crossing_width(&mut self, uid: u32, dir: i32) -> bool {
+        self.0.step_crossing_width(uid, dir)
+    }
+
+    pub fn step_approach_len(&mut self, uid: u32, dir: i32) -> bool {
+        self.0.step_approach_len(uid, dir)
+    }
+
+    pub fn step_ring(&mut self, dir: i32) -> bool {
+        self.0.step_ring(dir)
+    }
+
+    pub fn step_cycle(&mut self, dir: i32) -> bool {
+        self.0.step_cycle(dir)
+    }
+
     /// Sets the region, by index into `materials().regions`.
     pub fn set_region(&mut self, region: usize) -> bool {
         self.0.set_region(region)

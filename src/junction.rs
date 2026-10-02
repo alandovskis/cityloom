@@ -1132,6 +1132,53 @@ impl Junction {
         })
     }
 
+    /// Moves an arm's bearing one step round, clockwise for `dir` 1.
+    pub fn step_bearing(&mut self, uid: u32, dir: i32) -> bool {
+        let Some(a) = self.arm(uid) else { return false };
+        self.set_bearing(uid, a.bearing + dir * BEARING_STEP)
+    }
+
+    pub fn step_offset(&mut self, uid: u32, dir: i32) -> bool {
+        let Some(a) = self.arm(uid) else { return false };
+        self.set_offset(uid, a.offset_mm + dir * OFFSET_STEP_MM)
+    }
+
+    /// Steps the curb radius at the corner clockwise of an arm.
+    pub fn step_corner(&mut self, uid: u32, dir: i32) -> bool {
+        let Some(a) = self.arm(uid) else { return false };
+        self.set_corner(uid, a.corner_mm + dir * RING_STEP_MM)
+    }
+
+    pub fn step_setback(&mut self, uid: u32, dir: i32) -> bool {
+        let Some(c) = self.arm(uid).and_then(|a| a.crossing) else { return false };
+        self.set_setback(uid, c.setback_mm + dir * RING_STEP_MM)
+    }
+
+    pub fn step_crossing_width(&mut self, uid: u32, dir: i32) -> bool {
+        let Some(c) = self.arm(uid).and_then(|a| a.crossing) else { return false };
+        self.set_crossing_width(uid, c.width_mm + dir * RING_STEP_MM)
+    }
+
+    pub fn step_approach_len(&mut self, uid: u32, dir: i32) -> bool {
+        let Some(a) = self.arm(uid) else { return false };
+        self.set_approach_len(uid, a.approach_mm + dir * APPROACH_STEP_MM)
+    }
+
+    pub fn step_ring(&mut self, dir: i32) -> bool {
+        self.set_ring(self.current().ring_extra_mm + dir * RING_STEP_MM)
+    }
+
+    /// Steps the width of the cycle track; there has to be one.
+    pub fn step_cycle(&mut self, dir: i32) -> bool {
+        let Some(w) = self.current().cycle else { return false };
+        self.set_cycle(Some(w + dir * RING_STEP_MM))
+    }
+
+    /// Puts the cycle track around a roundabout at its usual width, or takes it away.
+    pub fn set_cycle_track(&mut self, on: bool) -> bool {
+        self.set_cycle(on.then_some(CYCLE_DEFAULT_MM))
+    }
+
     /// Sets how much bigger than its least size a roundabout is.
     pub fn set_ring(&mut self, extra_mm: i32) -> bool {
         let extra = snap(extra_mm, RING_STEP_MM);
@@ -1621,5 +1668,117 @@ mod tests {
         assert_eq!(j.current().control, PRIORITY);
         assert!(j.undo());
         assert_eq!(j.current().control, SIGNAL);
+    }
+
+    #[test]
+    fn stepping_a_bearing_moves_it_one_step_and_wraps_past_north() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        assert!(j.step_bearing(n, 1));
+        assert_eq!(j.arm(n).unwrap().bearing, BEARING_STEP);
+        assert!(j.step_bearing(n, -1) && j.step_bearing(n, -1));
+        assert_eq!(j.arm(n).unwrap().bearing, 360 - BEARING_STEP);
+    }
+
+    #[test]
+    fn stepping_a_bearing_towards_its_neighbour_stops_where_the_model_refuses() {
+        let mut j = Junction::new(0);
+        let e = arm_at(&j, 90);
+        while j.step_bearing(e, -1) {}
+        let stopped = j.arm(e).unwrap().bearing;
+        assert!(stopped > 0 && stopped < 90, "stopped at {stopped}");
+        assert!(!j.step_bearing(e, -1));
+        assert_eq!(j.arm(e).unwrap().bearing, stopped);
+    }
+
+    #[test]
+    fn stepping_an_offset_moves_it_a_tenth_of_a_metre_either_way() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        assert!(j.step_offset(n, 1));
+        assert_eq!(j.arm(n).unwrap().offset_mm, OFFSET_STEP_MM);
+        assert!(j.step_offset(n, -1) && j.step_offset(n, -1));
+        assert_eq!(j.arm(n).unwrap().offset_mm, -OFFSET_STEP_MM);
+    }
+
+    #[test]
+    fn stepping_a_corner_changes_its_radius_by_a_step_within_the_limits() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        assert!(j.step_corner(n, 1));
+        assert_eq!(j.arm(n).unwrap().corner_mm, DEFAULT_CORNER_MM + RING_STEP_MM);
+        assert!(j.set_corner(n, MIN_CORNER_MM));
+        assert!(!j.step_corner(n, -1));
+        assert_eq!(j.arm(n).unwrap().corner_mm, MIN_CORNER_MM);
+    }
+
+    #[test]
+    fn stepping_a_setback_stops_at_its_limits_and_needs_a_crossing() {
+        let mut j = Junction::new(0);
+        let e = arm_at(&j, 90);
+        assert!(j.step_setback(e, 1));
+        assert_eq!(j.arm(e).unwrap().crossing.unwrap().setback_mm, DEFAULT_SETBACK_MM + RING_STEP_MM);
+        assert!(j.set_setback(e, MAX_SETBACK_MM));
+        assert!(!j.step_setback(e, 1));
+        assert!(j.set_crossing(e, false));
+        assert!(!j.step_setback(e, 1));
+    }
+
+    #[test]
+    fn stepping_a_crossing_width_stops_at_its_limits_and_needs_a_crossing() {
+        let mut j = Junction::new(0);
+        let e = arm_at(&j, 90);
+        assert!(j.step_crossing_width(e, 1));
+        assert_eq!(j.arm(e).unwrap().crossing.unwrap().width_mm, DEFAULT_CROSSING_MM + RING_STEP_MM);
+        assert!(j.set_crossing_width(e, MAX_CROSSING_MM));
+        assert!(!j.step_crossing_width(e, 1));
+        assert!(j.set_crossing(e, false));
+        assert!(!j.step_crossing_width(e, 1));
+    }
+
+    #[test]
+    fn stepping_an_approach_length_moves_it_by_its_step_within_the_limits() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        assert!(j.step_approach_len(n, 1));
+        assert_eq!(j.arm(n).unwrap().approach_mm, APPROACH_DEFAULT_MM + APPROACH_STEP_MM);
+        assert!(!j.step_approach_len(n, 1));
+        assert!(j.step_approach_len(n, -1) && j.step_approach_len(n, -1));
+        assert_eq!(j.arm(n).unwrap().approach_mm, APPROACH_DEFAULT_MM - APPROACH_STEP_MM);
+        assert!(!j.step_approach_len(n, -1));
+    }
+
+    #[test]
+    fn stepping_the_roundabout_changes_its_size_but_never_below_the_least() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(!j.step_ring(-1));
+        assert!(j.step_ring(1));
+        assert_eq!(j.current().ring_extra_mm, RING_STEP_MM);
+        assert!(j.step_ring(-1));
+        assert_eq!(j.current().ring_extra_mm, 0);
+    }
+
+    #[test]
+    fn stepping_the_cycle_track_stays_within_its_widths_and_needs_one() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(!j.step_cycle(1), "no track to widen");
+        assert!(j.set_cycle(Some(CYCLE_MIN_MM)));
+        assert!(!j.step_cycle(-1));
+        assert!(j.step_cycle(1) && j.step_cycle(1) && j.step_cycle(1));
+        assert_eq!(j.current().cycle, Some(CYCLE_MAX_MM));
+        assert!(!j.step_cycle(1));
+    }
+
+    #[test]
+    fn switching_the_cycle_track_on_gives_it_the_default_width() {
+        let mut j = Junction::new(0);
+        assert!(!j.set_cycle_track(true), "only a roundabout has one");
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(j.set_cycle_track(true));
+        assert_eq!(j.current().cycle, Some(CYCLE_DEFAULT_MM));
+        assert!(j.set_cycle_track(false));
+        assert_eq!(j.current().cycle, None);
     }
 }

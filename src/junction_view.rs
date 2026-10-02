@@ -472,6 +472,13 @@ impl Junction {
         self.set_bearing(uid, bearing_toward(x, y))
     }
 
+    /// Sets the roundabout's outside radius, which cannot be less than its
+    /// least size with these streets: smaller than that is the least size.
+    pub fn set_ring_radius(&mut self, radius_mm: i32) -> bool {
+        let Some(ring) = layout(self.current(), self.region).and_then(|l| l.ring) else { return false };
+        self.set_ring((radius_mm - ring.floor).max(0))
+    }
+
     /// Adds a street facing a point on the plan, as dropping one from the
     /// palette does. Returns its uid, or 0 when there is no room.
     pub fn add_arm_toward(&mut self, street: usize, x: f64, y: f64) -> u32 {
@@ -1590,5 +1597,23 @@ mod tests {
         let mut j = Junction::new(1);
         assert_eq!(j.add_arm_toward(2, 0.0, 10_000.0), 0); // 180°, where a street runs
         assert_eq!(j.current().arms.len(), 3);
+    }
+
+    #[test]
+    fn a_typed_roundabout_size_is_taken_from_its_least_size() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT));
+        let floor = j.view().ring.unwrap().floor_mm;
+        assert!(j.set_ring_radius(floor + 3_000));
+        assert_eq!(j.current().ring_extra_mm, 3_000);
+        // Smaller than the least size is the least size, not a refusal.
+        assert!(j.set_ring_radius(floor - 1_000));
+        assert_eq!(j.current().ring_extra_mm, 0);
+    }
+
+    #[test]
+    fn only_a_roundabout_has_a_size_to_type() {
+        let mut j = Junction::new(0);
+        assert!(!j.set_ring_radius(10_000));
     }
 }

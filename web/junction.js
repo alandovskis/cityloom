@@ -902,7 +902,7 @@ el.inspector.addEventListener("click", (e) => {
   if (d.istep) return void step(d.istep, Number(d.dir));
   if (d.ibuslane !== undefined) return void act(() => plan.set_bus_lane(uid, b.getAttribute("aria-checked") !== "true"));
   if (d.ifilter !== undefined) return void act(() => plan.set_filter(uid, b.getAttribute("aria-checked") !== "true"));
-  if (d.icycle !== undefined) return void act(() => plan.set_cycle(view.ring.cycle_mm ? 0 : LIM.cycle[3]));
+  if (d.icycle !== undefined) return void act(() => plan.set_cycle_track(!view.ring.cycle_mm));
   if (d.icycleoff !== undefined) return void act(() => plan.set_cycle(0));
   if (d.ibusoff !== undefined) return void act(() => plan.set_bus(0, 0));
   if (d.pickarm !== undefined) return void select("arm", uid);
@@ -917,17 +917,15 @@ el.inspector.addEventListener("click", (e) => {
 // A stepper button or a typed value changes one number, by 0.5 m, 0.1 m or 5°.
 function step(key, dir) {
   const s = view.selected;
-  const a = arm(s.uid);
-  const c = a?.crossing;
   const tries = {
-    bearing: () => plan.set_bearing(s.uid, a.bearing + dir * LIM.bearing_step),
-    offset: () => plan.set_offset(s.uid, a.offset_mm + dir * LIM.offset_step),
-    corner: () => plan.set_corner(s.uid, corner(s.uid).radius_mm + dir * LIM.corner[2]),
-    setback: () => plan.set_setback(s.uid, c.setback_mm + dir * LIM.setback[2]),
-    cwidth: () => plan.set_crossing_width(s.uid, c.width_mm + dir * LIM.crossing[2]),
-    ring: () => plan.set_ring(view.ring_extra_mm + dir * LIM.ring_step),
-    cycle: () => plan.set_cycle(view.ring.cycle_mm + dir * LIM.cycle[2]),
-    alen: () => plan.set_approach_len(s.uid, a.transit.approach_mm + dir * LIM.approach[2]),
+    bearing: () => plan.step_bearing(s.uid, dir),
+    offset: () => plan.step_offset(s.uid, dir),
+    corner: () => plan.step_corner(s.uid, dir),
+    setback: () => plan.step_setback(s.uid, dir),
+    cwidth: () => plan.step_crossing_width(s.uid, dir),
+    ring: () => plan.step_ring(dir),
+    cycle: () => plan.step_cycle(dir),
+    alen: () => plan.step_approach_len(s.uid, dir),
   };
   const refused = { bearing: "bearing", ring: "other" }[key] ?? "other";
   act(tries[key], refused);
@@ -955,7 +953,7 @@ el.inspector.addEventListener("change", (e) => {
     corner: () => plan.set_corner(s.uid, fromInput(v)),
     setback: () => plan.set_setback(s.uid, fromInput(v)),
     cwidth: () => plan.set_crossing_width(s.uid, fromInput(v)),
-    ring: () => plan.set_ring(Math.max(0, fromInput(v / 2) - view.ring.floor_mm)),
+    ring: () => plan.set_ring_radius(fromInput(v / 2)),
     cycle: () => plan.set_cycle(fromInput(v)),
     alen: () => plan.set_approach_len(s.uid, fromInput(v)),
   }[key];
