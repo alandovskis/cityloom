@@ -3213,3 +3213,16 @@ kbd {
   font-size: 14px;
   color: var(--ink-soft);
 }
+
+/* ---- header: the details toggle sits at the left, beside the street name ---- */
+.head-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 16px;
+}
+@media print {
+  .head-start > .btn {
+    display: none;
+  }
+}
