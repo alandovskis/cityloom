@@ -3227,7 +3227,7 @@ kbd {
   text-align: left;
   cursor: pointer;
 }
-.add-list li:last-child .add-item {
+.add-sub li:last-child .add-item {
   border-bottom: var(--line) solid var(--rule);
 }
 .add-item:hover {
@@ -3269,4 +3269,31 @@ kbd {
   height: 18px;
   margin: 0;
   accent-color: var(--blue);
+}
+
+/* ---- the Add menu in four short lists, and Add as the header's main action -- */
+.add-group + .add-group {
+  margin-top: 10px;
+}
+.add-group-h {
+  margin: 0 0 2px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+.add-sub {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.add > .btn {
+  border-color: var(--blue);
+  background: var(--blue-wash);
+  color: var(--blue);
+}
+.add > .btn:hover:not(:disabled),
+.add > .btn[aria-expanded="true"] {
+  background: var(--blue-wash);
+  box-shadow: inset 0 0 0 1px var(--blue);
 }

@@ -492,11 +492,21 @@ function renderDrawing() {
 
 // ---- the Add menu ----------------------------------------------------------
 
+// The pieces by what they are for, so twelve rows read as four short lists.
+const ADD_GROUPS = [
+  ["Walk and plant", ["sidewalk", "planting", "median"]],
+  ["Bike and transit", ["bike", "bus"]],
+  ["Cars", ["travel", "parking", "loading", "shoulder"]],
+  ["Furniture", ["bikerack", "bikeshare", "pole"]],
+];
+
 function renderPalette() {
-  el.palette.innerHTML = KINDS.map(
-    (k, i) =>
-      `<li><button type="button" class="add-item" data-kind="${i}">${swatch(k.id)}<b>${esc(k.name)}</b><span class="dw">${fmt(k.default_mm)}</span></button></li>`,
-  ).join("");
+  const row = (k, i) =>
+    `<li><button type="button" class="add-item" data-kind="${i}">${swatch(k.id)}<b>${esc(k.name)}</b><span class="dw">${fmt(k.default_mm)}</span></button></li>`;
+  el.palette.innerHTML = ADD_GROUPS.map(([name, ids], g) => {
+    const rows = ids.map((id) => KINDS.findIndex((k) => k.id === id)).filter((i) => i >= 0).map((i) => row(KINDS[i], i));
+    return `<li role="presentation" class="add-group"><p class="add-group-h" id="add-g-${g}">${name}</p><ul class="add-sub" role="group" aria-labelledby="add-g-${g}">${rows.join("")}</ul></li>`;
+  }).join("");
 }
 
 // ---- Atlas measures ----------------------------------------------------------
