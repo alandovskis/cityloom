@@ -198,6 +198,22 @@ pub enum Target {
     Cycle,
 }
 
+impl Target {
+    /// The target the view calls `kind` (its `selected.kind`), at `uid`, and
+    /// at `lane` for a lane. An unknown name is no target.
+    pub fn named(kind: &str, uid: u32, lane: usize) -> Target {
+        match kind {
+            "arm" => Target::Arm(uid),
+            "corner" => Target::Corner(uid),
+            "crossing" => Target::Crossing(uid),
+            "lane" => Target::Lane(uid, lane),
+            "bus" => Target::Bus,
+            "cycle" => Target::Cycle,
+            _ => Target::None,
+        }
+    }
+}
+
 // ---- the street an arm reads ------------------------------------------------
 
 /// One piece of an arm's section, as read from its sample street.

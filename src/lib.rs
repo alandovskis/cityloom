@@ -15,7 +15,6 @@ pub mod street_measures;
 use wasm_bindgen::prelude::*;
 
 use catalogue::{CURBS, DIRECTIONS, KINDS, REGIONS, MATERIALS, SAMPLES};
-use junction::Target;
 
 fn json<T: serde::Serialize>(v: &T) -> String {
     serde_json::to_string(v).expect("view serialises")
@@ -420,23 +419,11 @@ impl Plan {
         self.0.reset()
     }
 
-    /// Selects an arm (1), a corner (2), a crossing (3) by the arm's uid, or the
-    /// bus lane (5) or cycle track (6);
-    /// kind 0 clears the selection.
-    pub fn select(&mut self, kind: u8, uid: u32) {
-        self.0.select(match kind {
-            1 => Target::Arm(uid),
-            2 => Target::Corner(uid),
-            3 => Target::Crossing(uid),
-            5 => Target::Bus,
-            6 => Target::Cycle,
-            _ => Target::None,
-        });
-    }
-
-    /// Selects one entering lane of an arm.
-    pub fn select_lane(&mut self, uid: u32, lane: usize) {
-        self.0.select(Target::Lane(uid, lane));
+    /// Selects what the view calls `kind` (its `selected.kind`: arm, corner,
+    /// crossing, lane, bus or cycle) at `uid`, and at `lane` for a lane; any
+    /// other name clears the selection.
+    pub fn select(&mut self, kind: &str, uid: u32, lane: usize) {
+        self.0.select(junction::Target::named(kind, uid, lane));
     }
 
     pub fn select_relative(&mut self, delta: i32) {

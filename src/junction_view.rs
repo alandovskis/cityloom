@@ -1822,4 +1822,27 @@ mod tests {
             assert_eq!(t["dead"], dead);
         }
     }
+
+    #[test]
+    fn a_selection_named_in_the_view_selects_the_same_target_when_sent_back() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT));
+        let (a, b) = (arm_of(&j, 0), arm_of(&j, 180));
+        assert!(j.set_bus(Some((a, b))) && j.set_cycle(Some(2_000)));
+        let targets = j.targets();
+        assert!(targets.contains(&Target::Bus) && targets.contains(&Target::Cycle));
+        for t in targets {
+            j.select(t);
+            let s = j.view().selected;
+            assert_eq!(Target::named(s.kind.unwrap(), s.uid, s.lane), t);
+        }
+        j.select(Target::None);
+        assert_eq!(j.view().selected.kind, None);
+        assert_eq!(Target::named("", 0, 0), Target::None);
+    }
+
+    #[test]
+    fn an_unknown_selection_name_selects_nothing() {
+        assert_eq!(Target::named("wedge", 3, 0), Target::None);
+    }
 }

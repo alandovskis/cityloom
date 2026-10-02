@@ -40,7 +40,6 @@ let units = "m";
 
 const CLASS_WORD = { left: "left", through: "straight on", right: "right" };
 const CLASS_NAME = { left: "Left", through: "Straight on", right: "Right" };
-const SEL_KIND = { arm: 1, corner: 2, crossing: 3, lane: 4, bus: 5, cycle: 6 };
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -839,8 +838,7 @@ function act(fn) {
 // ---- selection ------------------------------------------------------------
 
 function select(kind, uid, lane = 0) {
-  if (kind === "lane") plan.select_lane(uid, lane);
-  else plan.select(kind ? SEL_KIND[kind] : 0, uid || 0);
+  plan.select(kind ?? "", uid || 0, lane);
   view = JSON.parse(plan.view());
   renderPlan();
   renderInspector();
@@ -965,7 +963,7 @@ el.svg.addEventListener("pointerdown", (e) => {
   const role = t?.dataset.role;
   const uid = Number(t?.dataset.uid);
   if (role === "grip-arm" || role === "grip-corner" || role === "grip-crossing") {
-    if (role === "grip-arm") plan.select(1, uid);
+    if (role === "grip-arm") plan.select("arm", uid, 0);
     drag = { type: role, uid, moved: false };
     plan.begin_gesture();
     el.svg.setPointerCapture(e.pointerId);
