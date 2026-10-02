@@ -294,9 +294,11 @@ function renderDrawing() {
     const attrs = interior ? `data-role="handle" data-i="${i - 1}"` : `data-role="edge" data-uid="${v.segments[n - 1].uid}"`;
     const active = drag && ((drag.type === "resize" && drag.i === i - 1) || (drag.type === "edge" && edgeOfLast)) ? " active" : "";
     const gy = G + Y.slab / 2;
+    // A finger needs more to land on than a pointer does (WCAG 2.5.8: 24px).
+    const hitHalf = matchMedia("(pointer: coarse)").matches ? 15 : 9;
     parts.push(
       `<g class="handle${active}" ${attrs}>${line}` +
-        `<rect class="hit" x="${x - 9}" y="${Y.dim - 8}" width="18" height="${bodyBottom - (Y.dim - 8)}"/>` +
+        `<rect class="hit" x="${x - hitHalf}" y="${Y.dim - 8}" width="${hitHalf * 2}" height="${bodyBottom - (Y.dim - 8)}"/>` +
         `<rect class="grip" x="${x - 9}" y="${gy - 8}" width="18" height="16"/>` +
         `<path class="grip-arrow" d="M${x - 5} ${gy}H${x + 5}M${x - 5} ${gy}l3 -3M${x - 5} ${gy}l3 3M${x + 5} ${gy}l-3 -3M${x + 5} ${gy}l-3 3"/>` +
         `</g>`,
