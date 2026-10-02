@@ -3105,3 +3105,12 @@ kbd {
 .menu-act + .menu-foot {
   margin-top: 8px;
 }
+
+/* ---- time of day: one row until the selected piece has other times ---------- */
+.clock-bar:not(.on),
+.clock-note:empty {
+  display: none;
+}
+.clock:not(:has(.clock-bar.on)) .clock-scale {
+  display: none;
+}
