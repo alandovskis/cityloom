@@ -78,7 +78,7 @@ pub struct Material {
     pub name: &'static str,
 }
 
-pub const MATERIALS: [Material; 7] = [
+pub const MATERIALS: [Material; 8] = [
     Material { id: "asphalt", name: "Asphalt" },
     Material { id: "concrete", name: "Concrete" },
     Material { id: "permeable", name: "Permeable paving" },
@@ -86,6 +86,7 @@ pub const MATERIALS: [Material; 7] = [
     Material { id: "grass", name: "Grass" },
     Material { id: "planted", name: "Planted bed" },
     Material { id: "gravel", name: "Gravel" },
+    Material { id: "trees", name: "Street trees" },
 ];
 
 /// Which way a one-way lane runs, seen from the cross-section: away from the
@@ -159,7 +160,7 @@ pub const KINDS: [Kind; 9] = [
         min_mm: 600,
         max_mm: 6000,
         people_per_hour_per_m: 0,
-        materials: &[4, 5, 6],
+        materials: &[7, 4, 5, 6],
         direction: DirectionRule::None,
         shares_road: false,
         has_curb: false,

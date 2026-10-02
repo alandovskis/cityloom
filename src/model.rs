@@ -1656,6 +1656,23 @@ mod tests {
     }
 
     #[test]
+    fn a_planting_strip_starts_with_street_trees_and_can_take_the_others() {
+        let mut e = Editor::new(0);
+        let uid = e.add(kind("planting"), 0);
+        fn id(e: &Editor, uid: u32) -> &'static str {
+            e.view().segments.iter().find(|s| s.uid == uid).unwrap().material
+        }
+        assert_eq!(id(&e, uid), "trees");
+        let grass = MATERIALS.iter().position(|m| m.id == "grass").unwrap();
+        let trees = MATERIALS.iter().position(|m| m.id == "trees").unwrap();
+        assert!(e.set_material(uid, grass));
+        assert_eq!(id(&e, uid), "grass");
+        assert!(e.set_material(uid, trees));
+        let walk = e.current()[1].uid;
+        assert!(!e.set_material(walk, trees)); // trees are for planting strips only
+    }
+
+    #[test]
     fn material_changes_undo_and_redo() {
         let mut e = Editor::new(0);
         let lane = e.current()[2].uid;

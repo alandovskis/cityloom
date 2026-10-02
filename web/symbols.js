@@ -97,15 +97,15 @@ const shelter = (x = 0, s = 1) =>
 
 // Each returns SVG for a segment `wm` metres wide drawn `wpx` pixels wide.
 const SYMBOLS = {
-  sidewalk: (wm, shelterOn) => {
-    if (shelterOn) return shelter(0, 1);
+  sidewalk: (wm, o) => {
+    if (o.shelter) return shelter(0, 1);
     const n = wm < 2.2 ? 1 : wm < 4.2 ? 2 : 3;
     const gap = (wm * 55 * 0.3) / 1;
     const xs = n === 1 ? [0] : n === 2 ? [-gap * 0.55, gap * 0.55] : [-gap * 0.85, 0, gap * 0.85];
     const sizes = [1, 0.86, 0.94];
     return xs.map((x, i) => person(x, sizes[i], i % 2)).join("");
   },
-  planting: (wm) => (wm < 1.2 ? shrub(0, 1) : tree(0, 1)),
+  planting: (wm, o) => (o.material === "trees" ? tree(0, 1) : shrub(0, 1)),
   bike: () => cyclist(0, 1),
   travel: () => car(0, 1),
   bus: () => bus(0, 1),
@@ -122,8 +122,8 @@ const SYMBOLS = {
 // Native widths, in drawing units at 55 px per metre, used to shrink a symbol
 // to fit a narrow segment.
 const NATIVE_W = {
-  sidewalk: (wm, shelterOn) => (shelterOn ? 84 : wm < 2.2 ? 24 : wm < 4.2 ? 70 : 110),
-  planting: (wm) => (wm < 1.2 ? 34 : 74),
+  sidewalk: (wm, o) => (o.shelter ? 84 : wm < 2.2 ? 24 : wm < 4.2 ? 70 : 110),
+  planting: (wm, o) => (o.material === "trees" ? 74 : 34),
   bike: () => 54,
   travel: () => 100,
   bus: () => 148,
@@ -133,12 +133,13 @@ const NATIVE_W = {
   shoulder: () => 40,
 };
 
-export function symbol(kindId, cx, groundY, pxPerM, segPx, wm, f = 1, shelterOn = false) {
+// `opts` carries what a piece has beyond its kind: { shelter, material }.
+export function symbol(kindId, cx, groundY, pxPerM, segPx, wm, f = 1, opts = {}) {
   const base = Math.min(pxPerM / 44, 1.2 * f);
-  const fit = (segPx * 0.86) / NATIVE_W[kindId](wm, shelterOn);
+  const fit = (segPx * 0.86) / NATIVE_W[kindId](wm, opts);
   const k = Math.min(base, fit);
   if (k < 0.3) return "";
-  return `<g class="sym" transform="translate(${cx} ${groundY}) scale(${k})">${SYMBOLS[kindId](wm, shelterOn)}</g>`;
+  return `<g class="sym" transform="translate(${cx} ${groundY}) scale(${k})">${SYMBOLS[kindId](wm, opts)}</g>`;
 }
 
 // Hatch patterns. One distinct texture per segment type, so the drawing never
@@ -163,6 +164,7 @@ export const MATERIAL_HATCH = {
   permeable: `<pattern id="m-permeable" width="8" height="8" patternUnits="userSpaceOnUse"><rect x="1.5" y="1.5" width="5" height="5"/></pattern>`,
   brick: `<pattern id="m-brick" width="12" height="8" patternUnits="userSpaceOnUse"><path d="M0,0 H12 M0,4 H12 M3,0 V4 M9,4 V8"/></pattern>`,
   grass: `<pattern id="m-grass" width="9" height="8" patternUnits="userSpaceOnUse"><path d="M1.5,7 L2.5,3 M5,7 L4.5,2.5 M8,7 L8.8,3.5"/></pattern>`,
+  trees: `<pattern id="m-trees" width="12" height="12" patternUnits="userSpaceOnUse"><circle cx="6" cy="6" r="4"/><circle cx="6" cy="6" r="0.8"/></pattern>`,
   planted: `<pattern id="m-planted" width="12" height="10" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="2"/><circle cx="9" cy="7.5" r="1.4"/></pattern>`,
   gravel: `<pattern id="m-gravel" width="11" height="9" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.1"/><circle cx="7.5" cy="3" r="0.6"/><circle cx="4.5" cy="7" r="0.9"/><circle cx="9.5" cy="7.5" r="0.5"/></pattern>`,
 };

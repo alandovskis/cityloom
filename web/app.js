@@ -259,7 +259,7 @@ function renderDrawing() {
     parts.push(
       `<g class="seg${lifted ? " lifted" : ""}" data-role="seg" data-uid="${s.uid}">` +
         `<rect class="hit" x="${x}" y="${Y.top}" width="${w}" height="${bodyBottom - Y.top}"/>` +
-        symbol(k.id, cx, G, pxPerM, w, s.width_mm / 1000, F, s.shelter) +
+        symbol(k.id, cx, G, pxPerM, w, s.width_mm / 1000, F, { shelter: s.shelter, material: s.material }) +
         `<rect class="obj k-${k.id}" x="${x}" y="${G}" width="${w}" height="${Y.slab}"/>` +
         `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#${engineering() ? `m-${s.material}` : `h-${k.id}`})"/>` +
         (engineering() ? "" : surfaceCourse(x, G, w, s.material)) +
@@ -816,7 +816,7 @@ function renderInspector() {
       </div>
       <p class="insp-range">Allowed ${lo} to ${hi} ${units}</p>
     </section>
-    <section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3><p class="insp-range">What it is paved with.</p><ul class="opts" role="radiogroup" aria-labelledby="i-h-surface">${surfaces}</ul></section>
+    <section class="insp-sec"><h3 class="note-h" id="i-h-surface">${k.id === "planting" ? "Planting" : "Surface"}</h3><p class="insp-range">${k.id === "planting" ? "What is planted in it." : "What it is paved with."}</p><ul class="opts" role="radiogroup" aria-labelledby="i-h-surface">${surfaces}</ul></section>
     ${stop}
     ${more}`;
   if (focusId) {
