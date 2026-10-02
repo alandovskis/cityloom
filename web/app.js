@@ -500,23 +500,6 @@ function renderPalette() {
   ).join("");
 }
 
-// ---- sample streets ---------------------------------------------------------
-
-function renderSamples() {
-  $("samples").innerHTML = SAMPLES.map(
-    (s, i) =>
-      `<li><button type="button" class="chip plain" data-sample="${i}" aria-pressed="${view.sample === i}"><span></span><span><b>${esc(s.name)}</b><small>${fmt(s.row_mm)} wide${s.freeway ? ", freeway" : ""}</small></span></button></li>`,
-  ).join("");
-}
-
-$("samples").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-sample]");
-  if (!b) return;
-  sheet.load_sample(Number(b.dataset.sample));
-  refresh();
-  say(`${view.name}. ${fitText()}.`);
-});
-
 // ---- Atlas measures ----------------------------------------------------------
 
 // Every measure of the Transit Priority Atlas toolbox: the lane arrangements can
@@ -642,7 +625,6 @@ const keepSoon = held
 if (held) {
   document.title = `${view.name} between ${ends.map((e) => e.name).join(" and ")} · CityLoom`;
   $("street-sub").innerHTML = `<a class="back" href="map.html"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d="M12 7H2M6 3 2 7l4 4"/></svg>City map</a> <span aria-hidden="true">·</span> <span>Street cross-section</span> <span aria-hidden="true">·</span> <span><b id="row-dim" class="fig"></b> wide</span> <span aria-hidden="true">·</span> <span>between ${endLink(ends[0])} and ${endLink(ends[1])}</span>`;
-  $("samples").closest("section").hidden = true;
   document.querySelector('.surface[href="intersection.html"]').hidden = true;
 }
 
@@ -702,7 +684,6 @@ $("time").addEventListener("input", (e) => {
 
 function render() {
   keepSoon();
-  renderSamples();
   renderMeasures();
   renderClock();
   renderHead();

@@ -365,7 +365,6 @@ The Today strip and Your design section share one origin and scale. Each propose
 - **Measures tab:** the fourth notes tab, on both pages, lists the whole Transit Priority Atlas toolbox in its three groups: ruled rows of code (the Atlas's, in the tabular tag style), name and state. On the street page a lane measure the section forms reads "This street" in Blue Pencil with its needs in Redline under the name; one it does not form has a small Arrange button; one that cannot suit the street says why (Freeways only, Not for a freeway, Will not fit). Measures set at a junction read "Set at a junction"; those not modelled read "Not modelled" with the reason.
 - **Bus lanes** may run one way (arrow glyph on the slab like a driving lane) or both ways, and an other-times type has its own direction, set in the inspector's Other times rows.
 - **Shoulder** is a ninth segment kind (mark SD) with a Shoulder Olive tint (light #d2d9c3, dark #455049), a dash hatch and a traffic-cone symbol. A freeway sample carries shoulders and a median and has no sidewalks.
-- **Start from:** the street page lists its sample streets as ruled rows below Add a piece, as the junction page does.
 
 ### Intersection plan (second surface)
 - **Surface tabs:** *Street* and *Intersection* sit after the wordmark in the top bar as text tabs with a 2px underline in Chrome Ink for the page you are on. They are links between two pages that share one shell (`shell.js`): top bar, account menu, sidebars, notes tabs.
