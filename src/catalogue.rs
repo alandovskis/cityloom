@@ -28,7 +28,7 @@ impl Mode {
         match self {
             Mode::Foot => "Walking",
             Mode::Bike => "Biking",
-            Mode::Transit => "Buses",
+            Mode::Transit => "Transit",
             Mode::Vehicle => "Cars and trucks",
             Mode::Green => "Greenery",
         }
@@ -198,8 +198,8 @@ pub const KINDS: [Kind; 12] = [
     },
     Kind {
         id: "bus",
-        name: "Bus lane",
-        mark: "BU",
+        name: "Transit lane",
+        mark: "TR",
         mode: Mode::Transit,
         default_mm: 3300,
         min_mm: 3000,

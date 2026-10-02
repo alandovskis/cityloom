@@ -71,7 +71,12 @@ impl Sheet {
         self.0.set_curb(uid, usize::try_from(curb).ok())
     }
 
-    /// Puts a bus shelter on a sidewalk beside a bus lane, or takes it away.
+    /// Sets whether a transit lane carries trams (true) or buses.
+    pub fn set_tram(&mut self, uid: u32, tram: bool) -> bool {
+        self.0.set_tram(uid, tram)
+    }
+
+    /// Puts a shelter on a sidewalk beside a transit lane, or takes it away.
     pub fn set_shelter(&mut self, uid: u32, shelter: bool) -> bool {
         self.0.set_shelter(uid, shelter)
     }
