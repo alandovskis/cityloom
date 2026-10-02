@@ -2889,6 +2889,12 @@ kbd {
   outline: none;
   cursor: pointer;
 }
+/* The link's own outline does not draw on an SVG hit shape; ring the shape. */
+#map a.place:focus-visible .m-hit {
+  fill: var(--blue-wash);
+  stroke: var(--blue);
+  stroke-opacity: 0.45;
+}
 #map .m-hit {
   fill: transparent;
   stroke: transparent;
