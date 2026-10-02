@@ -514,6 +514,13 @@ function renderPalette() {
 // Every measure of the Transit Priority Atlas toolbox: the lane arrangements can
 // be recognised in this street and laid out from its width; the rest say where
 // they are set, or why they are not modelled.
+// What each group of the Atlas toolbox means here, in one line.
+const MEASURE_GROUP_NOTE = {
+  "Linear continuous measures": "Lane arrangements along the street. Arrange lays the roadway out as that measure.",
+  "Localized measures": "Features at one junction. Set them on the intersection page.",
+  "Area-wide measures": "They cover many streets, so they are not modelled here.",
+};
+
 function renderMeasures() {
   const found = new Map(view.measures.map((m) => [m.code, m]));
   const groups = [...new Set(ATLAS.map((m) => m.group))];
@@ -542,7 +549,7 @@ function renderMeasures() {
           return `<tr><th scope="row"><span class="dirtag">${esc(m.code)}</span>${esc(m.name)}${note}${extra}</th><td>${state}</td></tr>`;
         })
         .join("");
-      return `<tbody><tr class="m-group"><th colspan="2" scope="colgroup">${esc(g)}</th></tr>${rows}</tbody>`;
+      return `<tbody><tr class="m-group"><th colspan="2" scope="colgroup">${esc(g)}${MEASURE_GROUP_NOTE[g] ? `<small class="m-group-note">${MEASURE_GROUP_NOTE[g]}</small>` : ""}</th></tr>${rows}</tbody>`;
     })
     .join("");
 }
