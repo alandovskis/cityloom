@@ -277,6 +277,23 @@ pub struct TransitView {
     pub icon_at: P,
     /// What a measure here needs and does not have.
     pub problems: Vec<String>,
+    /// What kind of approach measure there is: none, queue, virtual or gate.
+    pub approach_kind: &'static str,
+    /// The gate gives way to the buses it lets through, rather than a signal.
+    pub gate_yields: bool,
+    /// The arm is dead-ended: its street stops short of the junction.
+    pub dead: bool,
+    /// Where each measure is labelled with its Atlas code, in the order they are drawn.
+    pub tags: Vec<MeasureTag>,
+    /// The Atlas codes of the measures on this arm.
+    pub codes: Vec<&'static str>,
+}
+
+/// A measure's Atlas code and where to write it on the plan.
+#[derive(Serialize)]
+pub struct MeasureTag {
+    pub code: &'static str,
+    pub at: P,
 }
 
 #[derive(Serialize)]
@@ -900,27 +917,29 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
     let bus = a.bus_lane.then(|| poly(&strip(l.bearing, lo, hi, l.mouth, len)));
 
     let queue_len = a.approach_mm as f64;
-    let queue = match a.approach {
+    let queue_pts = match a.approach {
         Q_OFFSET => {
             let (lo, hi) = range(park, park + lane_w);
             if park == 0.0 {
                 problems.push(format!("{name}: an offset queue jump needs parking beside the curb to sit beside"));
             }
-            Some(poly(&strip(l.bearing, lo, hi, l.mouth, reach(stop_t + queue_len))))
+            Some(strip(l.bearing, lo, hi, l.mouth, reach(stop_t + queue_len)))
         }
         Q_CURB => {
             let (lo, hi) = range(0.0, lane_w);
-            Some(poly(&strip(l.bearing, lo, hi, l.mouth, reach(stop_t + queue_len))))
+            Some(strip(l.bearing, lo, hi, l.mouth, reach(stop_t + queue_len)))
         }
         _ => None,
     };
-    let virtual_loop = (a.approach == Q_VIRTUAL).then(|| {
+    let queue = queue_pts.as_ref().map(|p| poly(p));
+    let loop_pts = (a.approach == Q_VIRTUAL).then(|| {
         if s.control != SIGNAL {
             problems.push(format!("{name}: a virtual queue jump needs a traffic signal"));
         }
         let (lo, hi) = range(0.0, lane_w);
-        poly(&strip(l.bearing, lo, hi, stop_t + 2_000.0, stop_t + 5_000.0))
+        strip(l.bearing, lo, hi, stop_t + 2_000.0, stop_t + 5_000.0)
     });
+    let virtual_loop = loop_pts.as_ref().map(|p| poly(p));
     let gate = matches!(a.approach, GATE_SIGNAL | GATE_YIELD).then(|| {
         if !a.bus_lane {
             problems.push(format!("{name}: a bus gate lets a bus lane through, so it needs a bus lane"));
@@ -975,6 +994,41 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
     let cap = (a.rule == RULE_DEAD_END).then(|| [at(l.bearing, l.cl, l.mouth + 6_000.0), at(l.bearing, l.cr, l.mouth + 6_000.0)]);
     let island = (a.rule == RULE_RIRO).then(|| poly(&strip(l.bearing, mid - 900.0, mid + 900.0, l.mouth + 1_500.0, l.mouth + 9_000.0)));
     let _ = (&queue_len, off);
+    let centre = |pts: &[P]| scale(pts.iter().fold((0.0, 0.0), |acc, p| add(acc, *p)), 1.0 / pts.len() as f64);
+    let icon_at = at(l.bearing, mid, l.mouth + 14_000.0);
+    // Where each measure is labelled, in the order they are drawn.
+    let mut tags = Vec::new();
+    let approach_code = APPROACHES[a.approach].code;
+    if let Some(p) = &queue_pts {
+        tags.push(MeasureTag { code: approach_code, at: centre(p) });
+    }
+    if let Some(p) = &loop_pts {
+        tags.push(MeasureTag { code: approach_code, at: centre(p) });
+    }
+    if let Some(g) = &gate {
+        tags.push(MeasureTag { code: approach_code, at: scale(add(g[0], g[1]), 0.5) });
+    }
+    if let (Some(_), Some(p)) = (&stop_poly, stop_at) {
+        tags.push(MeasureTag { code: STOPS[a.stop].code, at: p });
+    }
+    if let (true, Some(p)) = (a.filter, bollards.get(bollards.len() / 2)) {
+        tags.push(MeasureTag { code: FILTER_CODE, at: *p });
+    }
+    if cap.is_some() || island.is_some() || matches!(a.rule, RULE_AROUND | RULE_WITHIN) {
+        tags.push(MeasureTag { code: RULES[a.rule].code, at: icon_at });
+    }
+    let mut codes = Vec::new();
+    for (on, code) in [(a.approach != 0, APPROACHES[a.approach].code), (a.stop != 0, STOPS[a.stop].code), (a.rule != 0, RULES[a.rule].code), (a.filter, FILTER_CODE)] {
+        if on {
+            codes.push(code);
+        }
+    }
+    let approach_kind = match a.approach {
+        Q_OFFSET | Q_CURB => "queue",
+        Q_VIRTUAL => "virtual",
+        GATE_SIGNAL | GATE_YIELD => "gate",
+        _ => "none",
+    };
     TransitView {
         bus_lane: a.bus_lane,
         approach: a.approach,
@@ -992,8 +1046,13 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
         bollards,
         cap,
         island,
-        icon_at: at(l.bearing, mid, l.mouth + 14_000.0),
+        icon_at,
         problems,
+        approach_kind,
+        gate_yields: a.approach == GATE_YIELD,
+        dead: a.rule == RULE_DEAD_END,
+        tags,
+        codes,
     }
 }
 
@@ -1681,5 +1740,86 @@ mod tests {
         let dests = north["lanes"][0]["dests"].as_array().unwrap();
         assert!(dests.iter().all(|d| ["left", "through", "right"].contains(&d["class"].as_str().unwrap())));
         assert!(dests.iter().any(|d| d["class"] == "through"));
+    }
+
+    fn transit_json(j: &Junction, uid: u32) -> serde_json::Value {
+        let v = serde_json::to_value(j.view()).unwrap();
+        v["arms"].as_array().unwrap().iter().find(|a| a["uid"] == uid).unwrap()["transit"].clone()
+    }
+
+    fn tag_codes(t: &serde_json::Value) -> Vec<&str> {
+        t["tags"].as_array().unwrap().iter().map(|g| g["code"].as_str().unwrap()).collect()
+    }
+
+    #[test]
+    fn an_arm_with_no_measures_has_no_tags_or_codes() {
+        let j = Junction::new(0);
+        let t = transit_json(&j, arm_of(&j, 90));
+        assert!(tag_codes(&t).is_empty());
+        assert_eq!(t["codes"], serde_json::json!([]));
+        assert_eq!(t["approach_kind"], "none");
+        assert_eq!(t["dead"], false);
+        assert_eq!(t["gate_yields"], false);
+    }
+
+    #[test]
+    fn each_measure_is_tagged_with_its_atlas_code_where_it_is_drawn() {
+        let mut j = Junction::new(0);
+        let e = arm_of(&j, 90);
+        j.set_bus_lane(e, true);
+        j.set_approach(e, Q_CURB);
+        j.set_stop(e, STOP_BULB);
+        j.set_filter(e, true);
+        j.set_rule(e, RULE_WITHIN);
+        let t = transit_json(&j, e);
+        assert_eq!(tag_codes(&t), vec!["G2", "M1", "N1", "L2"]);
+        assert_eq!(t["codes"], serde_json::json!(["G2", "M1", "L2", "N1"]));
+        assert_eq!(t["approach_kind"], "queue");
+        // The stop's tag sits at the stop; the rule's at the arm's icon spot.
+        assert_eq!(t["tags"][1]["at"], t["stop_at"]);
+        assert_eq!(t["tags"][3]["at"], t["icon_at"]);
+    }
+
+    #[test]
+    fn a_queue_jump_is_tagged_at_the_middle_of_its_lane() {
+        let mut j = Junction::new(0);
+        let e = arm_of(&j, 90);
+        j.set_approach(e, Q_CURB);
+        let t = transit_json(&j, e);
+        let queue = t["queue"].as_array().unwrap();
+        let pts: Vec<(f64, f64)> = queue.iter().filter(|c| c[0] != "Z").map(|c| (c[1].as_f64().unwrap(), c[2].as_f64().unwrap())).collect();
+        let n = pts.len() as f64;
+        let mean = (pts.iter().map(|p| p.0).sum::<f64>() / n, pts.iter().map(|p| p.1).sum::<f64>() / n);
+        let at = (t["tags"][0]["at"][0].as_f64().unwrap(), t["tags"][0]["at"][1].as_f64().unwrap());
+        assert!((at.0 - mean.0).abs() < 1e-6 && (at.1 - mean.1).abs() < 1e-6, "{at:?} vs {mean:?}");
+    }
+
+    #[test]
+    fn a_virtual_queue_jump_is_tagged_g3_and_a_gate_h1_or_h2() {
+        let mut j = Junction::new(0);
+        let e = arm_of(&j, 90);
+        assert!(j.set_approach(e, Q_VIRTUAL));
+        let t = transit_json(&j, e);
+        assert_eq!(tag_codes(&t), vec!["G3"]);
+        assert_eq!(t["approach_kind"], "virtual");
+        j.set_bus_lane(e, true);
+        j.set_approach(e, GATE_SIGNAL);
+        let t = transit_json(&j, e);
+        assert_eq!((tag_codes(&t), t["approach_kind"].as_str(), t["gate_yields"].as_bool()), (vec!["H1"], Some("gate"), Some(false)));
+        j.set_approach(e, GATE_YIELD);
+        let t = transit_json(&j, e);
+        assert_eq!((tag_codes(&t), t["gate_yields"].as_bool()), (vec!["H2"], Some(true)));
+    }
+
+    #[test]
+    fn turn_rules_are_tagged_and_a_dead_end_marks_its_arm() {
+        let mut j = Junction::new(0);
+        let e = arm_of(&j, 90);
+        for (rule, code, dead) in [(RULE_AROUND, "L1", false), (RULE_RIRO, "L3", false), (RULE_DEAD_END, "L4", true)] {
+            assert!(j.set_rule(e, rule));
+            let t = transit_json(&j, e);
+            assert_eq!(tag_codes(&t), vec![code], "rule {rule}");
+            assert_eq!(t["dead"], dead);
+        }
     }
 }

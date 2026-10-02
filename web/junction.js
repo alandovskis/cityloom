@@ -231,44 +231,33 @@ const codeTag = (p, code) => {
   return `<text class="t-note t-halo measure-tag" x="${f1(x)}" y="${f1(y + 4)}" text-anchor="middle">${code}</text>`;
 };
 
-const polyCentre = (cmds) => {
-  const pts = cmds.filter((c) => c[0] !== "Z");
-  return [pts.reduce((n, c) => n + c[1], 0) / pts.length, pts.reduce((n, c) => n + c[2], 0) / pts.length];
-};
-
 // The transit priority measures on one arm: gates, stops, filters, caps and
 // their Atlas codes. The bus lane and queue jumps are drawn with the arm itself.
 function measureMarks(a) {
   const t = a.transit;
   const out = [];
-  const code = (list, i) => CAT[list][i].code;
-  if (t.queue) out.push(codeTag(polyCentre(t.queue), code("approaches", t.approach)));
-  if (t.virtual_loop) {
-    out.push(`<path class="measure-loop" d="${pathD(t.virtual_loop)}"/>`, codeTag(polyCentre(t.virtual_loop), "G3"));
-  }
+  if (t.virtual_loop) out.push(`<path class="measure-loop" d="${pathD(t.virtual_loop)}"/>`);
   if (t.gate) {
     const [p0, p1] = t.gate.map(T);
-    out.push(`<path class="stop-line${t.approach === 5 ? " yield" : ""}" d="M${f1(p0[0])} ${f1(p0[1])}L${f1(p1[0])} ${f1(p1[1])}"/>`);
-    out.push(codeTag([(t.gate[0][0] + t.gate[1][0]) / 2, (t.gate[0][1] + t.gate[1][1]) / 2], code("approaches", t.approach)));
+    out.push(`<path class="stop-line${t.gate_yields ? " yield" : ""}" d="M${f1(p0[0])} ${f1(p0[1])}L${f1(p1[0])} ${f1(p1[1])}"/>`);
   }
   if (t.stop_poly) {
     const d = pathD(t.stop_poly);
-    out.push(`<path class="bulb measure-stop k-sidewalk" d="${d}"/><path class="hatch" fill="${hatchFor("sidewalk")}" d="${d}"/>`, codeTag(t.stop_at, code("stops", t.stop)));
+    out.push(`<path class="bulb measure-stop k-sidewalk" d="${d}"/><path class="hatch" fill="${hatchFor("sidewalk")}" d="${d}"/>`);
   }
   for (const b of t.bollards) {
     const [x, y] = T(b);
     out.push(`<circle class="bollard" cx="${f1(x)}" cy="${f1(y)}" r="3.2"/>`);
   }
-  if (t.filter && t.bollards.length) out.push(codeTag(t.bollards[Math.floor(t.bollards.length / 2)], "N1"));
   if (t.cap) {
     const [p0, p1] = t.cap.map(T);
-    out.push(`<path class="dead-cap" d="M${f1(p0[0])} ${f1(p0[1])}L${f1(p1[0])} ${f1(p1[1])}"/>`, codeTag(t.icon_at, "L4"));
+    out.push(`<path class="dead-cap" d="M${f1(p0[0])} ${f1(p0[1])}L${f1(p1[0])} ${f1(p1[1])}"/>`);
   }
   if (t.island) {
     const d = pathD(t.island);
-    out.push(`<path class="island k-sidewalk" d="${d}"/><path class="hatch" fill="${hatchFor("sidewalk")}" d="${d}"/>`, codeTag(t.icon_at, "L3"));
+    out.push(`<path class="island k-sidewalk" d="${d}"/><path class="hatch" fill="${hatchFor("sidewalk")}" d="${d}"/>`);
   }
-  if (t.rule === 1 || t.rule === 2) out.push(codeTag(t.icon_at, t.rule === 1 ? "L1" : "L2"));
+  for (const g of t.tags) out.push(codeTag(g.at, g.code));
   return out.join("");
 }
 
@@ -313,7 +302,7 @@ function renderPlan() {
     const tr = a.transit;
     if (tr.bus) g.push(`<path class="piece k-bus" d="${pathD(tr.bus)}"/><path class="hatch" fill="${hatchFor("bus")}" d="${pathD(tr.bus)}"/>`);
     if (tr.queue) g.push(`<path class="piece k-bus queue" d="${pathD(tr.queue)}"/><path class="hatch" fill="${hatchFor("bus")}" d="${pathD(tr.queue)}"/>`);
-    layers.arm.push(`<g class="arm${isSel("arm", a.uid) ? " on" : ""}${a.rule === undefined ? "" : ""}${tr.rule === 4 ? " dead" : ""}" data-role="arm" data-uid="${a.uid}">${g.join("")}</g>`);
+    layers.arm.push(`<g class="arm${isSel("arm", a.uid) ? " on" : ""}${tr.dead ? " dead" : ""}" data-role="arm" data-uid="${a.uid}">${g.join("")}</g>`);
     layers.measure.push(measureMarks(a));
     a.lanes.forEach((l, i) => {
       layers.lane.push(`<path class="lane-hit${isLane(a.uid, i) ? " on" : ""}" data-role="lane" data-uid="${a.uid}" data-lane="${i}" d="${pathD(l.poly)}"><title>Lane ${i + 1} of ${a.lanes.length}, ${esc(a.label)}</title></path>`);
@@ -558,13 +547,7 @@ function renderKey() {
 function renderMeasures() {
   const used = new Map();
   const use = (code, a) => used.set(code, [...(used.get(code) ?? []), a.compass ?? compass(a.bearing)]);
-  for (const a of view.arms) {
-    const t = a.transit;
-    if (t.approach) use(CAT.approaches[t.approach].code, a);
-    if (t.stop) use(CAT.stops[t.stop].code, a);
-    if (t.rule) use(CAT.rules[t.rule].code, a);
-    if (t.filter) use("N1", a);
-  }
+  for (const a of view.arms) for (const code of a.transit.codes) use(code, a);
   const groups = [...new Set(ATLAS.map((m) => m.group))];
   $("measures").innerHTML = groups
     .map((g) => {
@@ -689,8 +672,8 @@ function transitSection(a) {
       .join("")}</select></label>`;
   const check = (fid, on, name, data) => `<ul class="opts">${option(fid, on, "", name, data, "checkbox")}</ul>`;
   const lenField =
-    t.approach > 0 && t.approach !== 3
-      ? numField("alen", t.approach <= 2 ? "Length of the queue jump" : "Gate distance upstream", t.approach_mm, {
+    t.approach_kind === "queue" || t.approach_kind === "gate"
+      ? numField("alen", t.approach_kind === "queue" ? "Length of the queue jump" : "Gate distance upstream", t.approach_mm, {
           minus: "Shorter by 5 m",
           plus: "Longer by 5 m",
           hint: `${fmt(LIM.approach[0])} to ${fmt(LIM.approach[1])}`,

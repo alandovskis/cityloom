@@ -63,6 +63,9 @@ pub const STOPS: [Item; 3] = [
     Item { id: "platform", code: "M2", name: "Signal-protected on-street platform" },
 ];
 
+/// The Atlas code of the transit modal filter, which an arm has or has not.
+pub const FILTER_CODE: &str = "N1";
+
 pub const RULE_AROUND: usize = 1;
 pub const RULE_WITHIN: usize = 2;
 pub const RULE_RIRO: usize = 3;
