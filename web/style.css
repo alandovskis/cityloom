@@ -3074,3 +3074,21 @@ kbd {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- keyboard help: closed until asked for ---------------------------------- */
+.keyhelp {
+  flex: 1 1 auto;
+}
+.keyhelp summary {
+  display: inline-block;
+  padding: 4px 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  cursor: pointer;
+}
+.keyhelp summary:hover {
+  color: var(--ink);
+}
+.keyhelp .keys {
+  padding-block: 4px 8px;
+}
