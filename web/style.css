@@ -55,6 +55,13 @@
   --chrome-wash: #e4eaf7;
   --chrome-line: #b9c6e6;
 
+  /* the logo's five bands, fixed in both themes (logo.svg) */
+  --mark-1: #e59a4a;
+  --mark-2: #5fae4a;
+  --mark-3: #2aa898;
+  --mark-4: #8a6fd1;
+  --mark-5: #e0c23a;
+
   /* symbol colours */
   --s-tree: #78b565;
   --s-car: #dbe2e9;
@@ -1481,7 +1488,7 @@ kbd {
 .topbar {
   position: relative;
   background:
-    linear-gradient(90deg, #e59a4a 0 20%, #5fae4a 20% 34%, #2aa898 34% 66%, #8a6fd1 66% 86%, #e0c23a 86% 100%) bottom / 100% 5px no-repeat,
+    linear-gradient(90deg, var(--mark-1) 0 20%, var(--mark-2) 20% 34%, var(--mark-3) 34% 66%, var(--mark-4) 66% 86%, var(--mark-5) 86% 100%) bottom / 100% 5px no-repeat,
     var(--chrome);
   color: var(--chrome-ink);
   border-bottom: 0;

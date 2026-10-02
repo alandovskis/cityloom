@@ -23,6 +23,11 @@ colors:
   k-loading: "#f5df7e"
   sky: "#e2eff8"
   s-tree: "#78b565"
+  mark-1: "#e59a4a"
+  mark-2: "#5fae4a"
+  mark-3: "#2aa898"
+  mark-4: "#8a6fd1"
+  mark-5: "#e0c23a"
   s-car: "#dbe2e9"
   s-bus: "#eaa59b"
   s-van: "#f0cb45"
@@ -365,7 +370,7 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 - **Icon buttons:** 30px, 1px ink border, 6px radius, 14px 1.6px square-cap line icons; remove hovers danger red with paper icon and stands 10px apart from the move arrows.
 
 ### CityLoom mark
-- **Mark:** `web/logo.svg`, a woven street section: five vertical bands of unequal widths in the sidewalk, planting, bike, travel and loading pencils (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a), woven together by four straight ink threads that pass over and under alternate bands, each thread offset from its neighbour like a basket weave; the bands stand for the modes of travel. Colours are fixed and identical in both themes. The mark and wordmark appear once, as a lockup at the top left of the top bar, mark 30px (28px under 640px); they are not repeated in the about card.
+- **Mark:** `web/logo.svg`, a woven street section: five vertical bands of unequal widths in the sidewalk, planting, bike, travel and loading pencils (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a), woven together by four straight ink threads that pass over and under alternate bands, each thread offset from its neighbour like a basket weave; the bands stand for the modes of travel. Colours are fixed and identical in both themes. The same five colours (`mark-1` to `mark-5`) run as a 5px stripe along the bottom edge of the top bar, in the same proportions as the bands. The mark and wordmark appear once, as a lockup at the top left of the top bar, mark 30px (28px under 640px); they are not repeated in the about card.
 - **Favicon:** `web/favicon.svg` is the same mark with the threads switching to Night Ink in dark schemes.
 - **Wordmark:** "CityLoom" in Barlow Semi Condensed 600 (20px, 18px on phones), live text beside the mark in the top bar, which is closed by a 1px Rule Grey line; never outlined into the SVG. Below 24px the weave blurs; use the favicon there.
 - **Do not** recolour the bands, put a container or shadow around the mark, or show it under 16px.
