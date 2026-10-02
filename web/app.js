@@ -492,12 +492,12 @@ function renderDrawing() {
 
 // ---- the Add menu ----------------------------------------------------------
 
-// The pieces by what they are for, so twelve rows read as four short lists.
+// The pieces by what they are for, so twelve rows read as four lists.
 const ADD_GROUPS = [
   ["Walk and plant", ["sidewalk", "planting", "median"]],
-  ["Bike and transit", ["bike", "bus"]],
-  ["Cars", ["travel", "parking", "loading", "shoulder"]],
-  ["Furniture", ["bikerack", "bikeshare", "pole"]],
+  ["Cycling", ["bike", "bikerack", "bikeshare"]],
+  ["Roadway", ["travel", "bus", "parking", "loading", "shoulder"]],
+  ["Furniture", ["pole"]],
 ];
 
 function renderPalette() {
