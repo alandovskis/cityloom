@@ -71,6 +71,11 @@ impl Sheet {
         self.0.set_curb(uid, usize::try_from(curb).ok())
     }
 
+    /// Puts a bus shelter on a sidewalk beside a bus lane, or takes it away.
+    pub fn set_shelter(&mut self, uid: u32, shelter: bool) -> bool {
+        self.0.set_shelter(uid, shelter)
+    }
+
     /// Sets the region, by index into `materials().regions`.
     pub fn set_region(&mut self, region: usize) -> bool {
         self.0.set_region(region)

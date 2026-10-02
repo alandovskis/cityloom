@@ -25,6 +25,11 @@ pub struct Segment {
     /// direction (a driving lane), and `None` for a kind without one. Where it
     /// is optional (a bike lane) `None` means two-way.
     pub direction: Option<usize>,
+    /// A bus shelter stands on this sidewalk. Only a sidewalk has one, and it
+    /// is set only where a bus lane runs beside the sidewalk. Streets kept
+    /// before shelters existed have none.
+    #[serde(default)]
+    pub shelter: bool,
     /// Other types this piece takes at certain times of day. Outside every
     /// window it is the type above. Windows never overlap.
     pub variants: Vec<Variant>,
@@ -43,6 +48,16 @@ pub struct Variant {
     /// End of the window (not included). Earlier than `from_min` means the
     /// window runs past midnight.
     pub to_min: i32,
+}
+
+/// Whether a bus lane (at `time_min`) runs beside the piece at `pos`.
+fn bus_beside(segs: &[Segment], pos: usize, time_min: i32) -> bool {
+    let bus = kind_index("bus");
+    [pos.checked_sub(1), pos.checked_add(1)]
+        .into_iter()
+        .flatten()
+        .filter_map(|i| segs.get(i))
+        .any(|s| Some(s.kind_at(time_min)) == bus)
 }
 
 /// Time of day is kept in quarter hours; a window is a set of those.
@@ -106,6 +121,7 @@ impl Segment {
                 DirectionRule::Required => Some(dir.unwrap_or(0)),
                 DirectionRule::Optional => dir,
             },
+            shelter: self.shelter && k.id == "sidewalk",
             variants: Vec::new(),
         }
     }
@@ -144,6 +160,7 @@ impl Segment {
             material: k.materials[0],
             curb: k.has_curb.then_some(DEFAULT_CURB),
             direction: (k.direction == DirectionRule::Required).then_some(0),
+            shelter: false,
             variants: Vec::new(),
         }
     }
@@ -223,6 +240,7 @@ impl Street {
             && !self.segments.is_empty()
             && self.segments.iter().all(|s| {
                 seg_ok(s.kind, s.material, s.curb, s.direction)
+                    && (!s.shelter || KINDS[s.kind].id == "sidewalk")
                     && s.width_mm > 0
                     && s.variants.iter().all(|v| {
                         seg_ok(v.kind, v.material, None, v.direction)
@@ -569,6 +587,27 @@ impl Editor {
         self.edit(label, |segs| {
             let changed = segs[pos].curb != curb;
             segs[pos].curb = curb;
+            changed
+        })
+    }
+
+    /// Puts a bus shelter on a sidewalk, or takes it away. A shelter is only
+    /// added where a bus lane (at the shown time) runs beside the sidewalk;
+    /// taking one away is always allowed. Refused for any other kind.
+    pub fn set_shelter(&mut self, uid: u32, shelter: bool) -> bool {
+        let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
+            return false;
+        };
+        if KINDS[self.current()[pos].kind].id != "sidewalk" {
+            return false;
+        }
+        if shelter && !bus_beside(self.current(), pos, self.time_min) {
+            return false;
+        }
+        let label = format!("Sidewalk bus shelter: {}", if shelter { "added" } else { "removed" });
+        self.edit(label, |segs| {
+            let changed = segs[pos].shelter != shelter;
+            segs[pos].shelter = shelter;
             changed
         })
     }
@@ -1028,7 +1067,8 @@ impl Editor {
     fn seg_views(&self, segs: &[Segment]) -> Vec<SegView> {
         let mut x = 0;
         segs.iter()
-            .map(|s| {
+            .enumerate()
+            .map(|(i, s)| {
                 let (min_mm, max_mm) = s.bounds();
                 let n = s.at(self.time_min);
                 let v = SegView {
@@ -1042,6 +1082,8 @@ impl Editor {
                     material: MATERIALS[n.material].id,
                     curb: n.curb.map(|c| CURBS[c].id),
                     direction: n.direction.map(|d| DIRECTIONS[d].id),
+                    shelter: n.shelter,
+                    can_shelter: KINDS[n.kind].id == "sidewalk" && (s.shelter || bus_beside(segs, i, self.time_min)),
                     variants: s
                         .variants
                         .iter()
@@ -1190,6 +1232,11 @@ pub struct SegView {
     pub material: &'static str,
     pub curb: Option<&'static str>,
     pub direction: Option<&'static str>,
+    /// A bus shelter stands on this sidewalk.
+    pub shelter: bool,
+    /// Whether the shelter can be switched on or off: a sidewalk with a bus
+    /// lane beside it, or one that already has a shelter.
+    pub can_shelter: bool,
     pub variants: Vec<VariantView>,
     pub active_variant: Option<usize>,
     /// Types this piece may take at other times.
@@ -1783,6 +1830,48 @@ mod tests {
             assert!(k.curbs.contains(&DEFAULT_CURB), "{}", k.id);
         }
         assert!(KINDS.iter().filter(|k| !k.has_curb).all(|k| k.curbs.is_empty()));
+    }
+
+    #[test]
+    fn a_bus_shelter_stands_only_on_a_sidewalk_beside_a_bus_lane() {
+        let mut e = Editor::new(0);
+        let walk = e.current()[0].uid;
+        let lane = e.current()[2].uid;
+        assert!(!e.set_shelter(lane, true)); // not a sidewalk
+        assert!(!e.set_shelter(walk, true)); // no bus lane beside it
+        assert!(!e.view().segments[0].can_shelter);
+        let bus = kind_index("bus").unwrap();
+        let sidewalk_next_to_bus = {
+            e.add(bus, 1);
+            e.view().segments[0].can_shelter
+        };
+        assert!(sidewalk_next_to_bus);
+        assert!(e.set_shelter(walk, true));
+        assert!(e.view().segments[0].shelter);
+        assert_eq!(e.view().revisions.last().unwrap().label, "Sidewalk bus shelter: added");
+        assert!(!e.set_shelter(walk, true)); // unchanged
+        assert!(e.undo());
+        assert!(!e.view().segments[0].shelter);
+        assert!(e.redo());
+        // The bus lane goes; the shelter stays and can be taken away.
+        let bus_uid = e.current()[1].uid;
+        assert!(e.remove(bus_uid));
+        assert!(e.view().segments[0].shelter);
+        assert!(e.view().segments[0].can_shelter);
+        assert!(e.set_shelter(walk, false));
+        assert!(!e.view().segments[0].can_shelter);
+    }
+
+    #[test]
+    fn a_street_kept_without_shelters_still_loads() {
+        let street = Street::sample(0, Side::Right);
+        let mut v: serde_json::Value = serde_json::to_value(&street).unwrap();
+        for seg in v["segments"].as_array_mut().unwrap() {
+            seg.as_object_mut().unwrap().remove("shelter");
+        }
+        let back: Street = serde_json::from_value(v).unwrap();
+        assert!(back.is_sound());
+        assert!(back.segments.iter().all(|s| !s.shelter));
     }
 
     #[test]
