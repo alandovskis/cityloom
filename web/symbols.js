@@ -82,9 +82,23 @@ const postP = (x, s = 1) =>
       `<path class="o" d="M-2.5,-64 L-2.5,-74 L1.5,-74 Q4,-74 4,-71.5 Q4,-69 1.5,-69 L-2.5,-69"/>`,
   );
 
+// A bus shelter: posts, a roof in the bus lane's colour, a back panel and a
+// bench, with a person waiting under it.
+const shelter = (x = 0, s = 1) =>
+  at(
+    x,
+    s,
+    `<path class="o" d="M-34,0 L-34,-60 M34,0 L34,-60"/>` +
+      `<path class="o" d="M-34,-56 L-34,-18 M34,-56 L34,-18 M-34,-18 L34,-18"/>` +
+      `<path class="f-bus" d="M-42,-60 L42,-60 L42,-68 L-42,-68 Z"/>` +
+      `<path class="o" d="M-24,-14 L-4,-14 M-20,-14 L-20,0 M-8,-14 L-8,0"/>` +
+      person(18, 0.8, 1),
+  );
+
 // Each returns SVG for a segment `wm` metres wide drawn `wpx` pixels wide.
 const SYMBOLS = {
-  sidewalk: (wm, k) => {
+  sidewalk: (wm, shelterOn) => {
+    if (shelterOn) return shelter(0, 1);
     const n = wm < 2.2 ? 1 : wm < 4.2 ? 2 : 3;
     const gap = (wm * 55 * 0.3) / 1;
     const xs = n === 1 ? [0] : n === 2 ? [-gap * 0.55, gap * 0.55] : [-gap * 0.85, 0, gap * 0.85];
@@ -108,7 +122,7 @@ const SYMBOLS = {
 // Native widths, in drawing units at 55 px per metre, used to shrink a symbol
 // to fit a narrow segment.
 const NATIVE_W = {
-  sidewalk: (wm) => (wm < 2.2 ? 24 : wm < 4.2 ? 70 : 110),
+  sidewalk: (wm, shelterOn) => (shelterOn ? 84 : wm < 2.2 ? 24 : wm < 4.2 ? 70 : 110),
   planting: (wm) => (wm < 1.2 ? 34 : 74),
   bike: () => 54,
   travel: () => 100,
@@ -119,12 +133,12 @@ const NATIVE_W = {
   shoulder: () => 40,
 };
 
-export function symbol(kindId, cx, groundY, pxPerM, segPx, wm, f = 1) {
+export function symbol(kindId, cx, groundY, pxPerM, segPx, wm, f = 1, shelterOn = false) {
   const base = Math.min(pxPerM / 44, 1.2 * f);
-  const fit = (segPx * 0.86) / NATIVE_W[kindId](wm);
+  const fit = (segPx * 0.86) / NATIVE_W[kindId](wm, shelterOn);
   const k = Math.min(base, fit);
   if (k < 0.3) return "";
-  return `<g class="sym" transform="translate(${cx} ${groundY}) scale(${k})">${SYMBOLS[kindId](wm)}</g>`;
+  return `<g class="sym" transform="translate(${cx} ${groundY}) scale(${k})">${SYMBOLS[kindId](wm, shelterOn)}</g>`;
 }
 
 // Hatch patterns. One distinct texture per segment type, so the drawing never

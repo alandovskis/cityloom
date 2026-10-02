@@ -334,6 +334,9 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 ### Bus boarding island
 - **Bus boarding island:** a curb choice for bike lanes only. It is drawn as a 900 mm raised platform, 16px tall, with a grid hatch, standing on one side of the lane: the side facing a bus or driving lane, else the first road side. A sidewalk cannot take it.
 
+### Bus shelter
+- **Bus shelter:** a sidewalk with a bus lane beside it (at the shown time) shows a "Bus stop" group in the inspector with one checkbox, "Bus shelter on this sidewalk". Turned on, the sidewalk's people are replaced by a line-art shelter: two posts, a glass-line panel, a bench, a roof in Bus Red (the same fill as the bus symbol and lane) and one person waiting. It is an edit like any other (undoable, counted in Your changes, kept with the street). If the bus lane is later removed the shelter stays and can still be taken away.
+
 ### Time of day
 - **Clock:** a slider above the drawing sets the time the sheet shows, in quarter hours. It is one row (label, slider, time); the 00 to 24 scale, the band showing the selected piece's other times and the note under it appear only when that piece has other times. The drawing, the numbers and the checks all describe the street at that time, and a line under the numbers says so. The time is a setting, not an edit.
 - **Other times:** a roadway piece (driving, bus, parking, loading, bike) can take a different type in windows of the day, set in the inspector's Other times group: a type and a from and to time per window. Windows never overlap and may run past midnight. A piece with other times carries a small clock badge, and the bar under the slider shows the selected piece's windows in the colours of their types. Taking a type with a different width range moves the width into the range both allow, in the same change (a 2.4 m parking lane becomes a 3.0 m bus lane).

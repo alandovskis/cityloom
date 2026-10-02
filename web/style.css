@@ -3226,3 +3226,19 @@ kbd {
     display: none;
   }
 }
+
+/* ---- bus stop: the shelter checkbox in the inspector ------------------------ */
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--blue);
+}

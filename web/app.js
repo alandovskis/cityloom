@@ -259,7 +259,7 @@ function renderDrawing() {
     parts.push(
       `<g class="seg${lifted ? " lifted" : ""}" data-role="seg" data-uid="${s.uid}">` +
         `<rect class="hit" x="${x}" y="${Y.top}" width="${w}" height="${bodyBottom - Y.top}"/>` +
-        symbol(k.id, cx, G, pxPerM, w, s.width_mm / 1000, F) +
+        symbol(k.id, cx, G, pxPerM, w, s.width_mm / 1000, F, s.shelter) +
         `<rect class="obj k-${k.id}" x="${x}" y="${G}" width="${w}" height="${Y.slab}"/>` +
         `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#${engineering() ? `m-${s.material}` : `h-${k.id}`})"/>` +
         (engineering() ? "" : surfaceCourse(x, G, w, s.material)) +
@@ -798,6 +798,9 @@ function renderInspector() {
     rows.push(option("c-none", s.curb == null, curbSwatch("none"), "None (flush)", `data-icurb="-1"`));
     curbs = `<section class="insp-sec"><h3 class="note-h" id="i-h-curb">Curb</h3><p class="insp-range">The raised edge, if it has one.</p><ul class="opts" role="radiogroup" aria-labelledby="i-h-curb">${rows.join("")}</ul></section>`;
   }
+  const stop = s.can_shelter
+    ? `<section class="insp-sec"><h3 class="note-h" id="i-h-stop">Bus stop</h3><label class="check"><input type="checkbox" data-ishelter data-ifid="shelter"${s.shelter ? " checked" : ""}>Bus shelter on this sidewalk</label></section>`
+    : "";
   const moreBody = times + dirs + curbs;
   const more = moreBody
     ? `<details class="insp-more"${inspectorMoreOpen || moreForced() ? " open" : ""}><summary>More about this piece</summary>${moreBody}</details>`
@@ -814,6 +817,7 @@ function renderInspector() {
       <p class="insp-range">Allowed ${lo} to ${hi} ${units}</p>
     </section>
     <section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3><p class="insp-range">What it is paved with.</p><ul class="opts" role="radiogroup" aria-labelledby="i-h-surface">${surfaces}</ul></section>
+    ${stop}
     ${more}`;
   if (focusId) {
     const t = el.inspector.querySelector(`[data-ifid="${focusId}"]`);
@@ -843,6 +847,12 @@ el.inspector.addEventListener("change", (e) => {
   const uid = view.selected;
   if (!input || !uid) return;
   const d = input.dataset;
+  if (d.ishelter !== undefined) {
+    const ok = sheet.set_shelter(uid, input.checked);
+    refresh();
+    if (ok) announceEdit();
+    return;
+  }
   if (d.ivdir !== undefined) {
     const di = input.value === "both" ? -1 : MATERIALS.directions.findIndex((x) => x.id === input.value);
     const ok = sheet.set_variant_direction(uid, Number(d.ivdir), di);
