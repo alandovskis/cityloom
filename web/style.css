@@ -3294,14 +3294,16 @@ kbd {
   list-style: none;
 }
 .add > .btn {
-  border-color: var(--blue);
-  background: var(--blue-wash);
-  color: var(--blue);
+  min-height: 38px;
+  padding-inline: 18px;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--sheet);
 }
 .add > .btn:hover:not(:disabled),
 .add > .btn[aria-expanded="true"] {
-  background: var(--blue-wash);
-  box-shadow: inset 0 0 0 1px var(--blue);
+  background: var(--ink-soft);
+  border-color: var(--ink-soft);
 }
 
 /* ---- one line under each Transit measure group ------------------------------ */
