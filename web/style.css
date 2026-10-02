@@ -613,7 +613,7 @@ svg pattern circle {
 }
 .unit-tag {
   min-width: 18px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-soft);
 }
 .acts {
@@ -708,7 +708,7 @@ svg pattern circle {
 }
 .chip small {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-soft);
 }
 .drag-chip {
@@ -735,7 +735,7 @@ svg pattern circle {
 }
 .nt th {
   padding: 2px 0 4px 8px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-align: right;
@@ -1956,7 +1956,7 @@ kbd {
   grid-column: 2;
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -2621,7 +2621,7 @@ kbd {
 
 /* ---- transit priority measures ------------------------------------------- */
 #drawing .measure-tag {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.04em;
 }
