@@ -308,11 +308,8 @@ pub struct CornerView {
     pub straight: bool,
     pub wedge: Vec<Value>,
     pub curb: Vec<Value>,
-    /// Where the curb corner would be if sharp, the direction its arc bulges,
-    /// and the arc's apex per unit of radius: the page turns a drag into a radius.
-    pub sharp: Option<P>,
+    /// The direction the corner's arc bulges.
     pub bisector: Option<P>,
-    pub apex_per_radius: f64,
     pub handle: P,
 }
 
@@ -462,7 +459,52 @@ fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, head: i32, uses: u8) ->
     LaneView { uses, dests: Vec::new(), bad: false, at: at(a.bearing, c, t), heading: head, poly: poly(&strip(a.bearing, c - w as f64 / 2.0, c + w as f64 / 2.0, a.mouth, ARM_LENGTH_MM as f64)), width_mm: w }
 }
 
+/// The bearing, clockwise from north, of a point on the plan (north up, y
+/// growing down), in whole degrees.
+fn bearing_toward(x: f64, y: f64) -> i32 {
+    x.atan2(-y).to_degrees().rem_euclid(360.0).round() as i32
+}
+
 impl Junction {
+    /// Turns an arm to face a point on the plan, in millimetres from the
+    /// junction's centre.
+    pub fn drag_arm_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
+        self.set_bearing(uid, bearing_toward(x, y))
+    }
+
+    /// Adds a street facing a point on the plan, as dropping one from the
+    /// palette does. Returns its uid, or 0 when there is no room.
+    pub fn add_arm_toward(&mut self, street: usize, x: f64, y: f64) -> u32 {
+        self.add_arm(street, bearing_toward(x, y))
+    }
+
+    /// Sets the curb radius at the corner clockwise of an arm from a point on
+    /// the plan: the corner's handle stands `apex_per_radius` times the radius
+    /// away from where its curbs would meet. A straight curb has no radius.
+    pub fn drag_corner_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
+        let Some(i) = self.current().arms.iter().position(|a| a.uid == uid) else { return false };
+        let Some(lay) = layout(self.current(), self.region) else { return false };
+        let Some(c) = lay.corners.iter().find(|c| c.a == i) else { return false };
+        let Some(f) = &c.fillet else { return false };
+        let apex_per_radius = 1.0 / (c.delta as f64 / 2.0).to_radians().sin() - 1.0;
+        self.set_corner(uid, (dist(f.c, (x, y)) / apex_per_radius).round() as i32)
+    }
+
+    /// Sets how far a crossing stands back from the junction from a point on
+    /// the plan: its handle is on the far edge, the setback plus the crossing's
+    /// width out along the arm from the mouth.
+    pub fn drag_crossing_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
+        let Some(i) = self.current().arms.iter().position(|a| a.uid == uid) else { return false };
+        let Some(c) = self.current().arms[i].crossing.as_ref() else { return false };
+        let width = c.width_mm;
+        let Some(lay) = layout(self.current(), self.region) else { return false };
+        let a = &lay.arms[i];
+        let mouth = at(a.bearing, self.current().arms[i].offset_mm as f64, a.mouth);
+        let out = dir(a.bearing);
+        let t = (x - mouth.0) * out.0 + (y - mouth.1) * out.1;
+        self.set_setback(uid, (t - width as f64).round() as i32)
+    }
+
     pub fn view(&self) -> JView {
         let s = self.current();
         let region = self.region;
@@ -669,14 +711,13 @@ impl Junction {
             let ua = s.arms[c.a].uid;
             let ub = s.arms[c.b].uid;
             let radius = s.arms[c.a].corner_mm;
-            let (handle, apex_k, sharp, bis, ok) = match &c.fillet {
+            let (handle, bis, ok) = match &c.fillet {
                 Some(f) => {
                     let mid = sub(f.o, scale(f.u, f.r));
-                    let k = 1.0 / (c.delta as f64 / 2.0).to_radians().sin() - 1.0;
                     let margin = corner_prop.map_or(f64::MAX, |p| dist(mid, p));
-                    (mid, k, Some(f.c), Some(f.u), margin >= MIN_SIDEWALK_AT_CORNER_MM)
+                    (mid, Some(f.u), margin >= MIN_SIDEWALK_AT_CORNER_MM)
                 }
-                None => (scale(add(ca_in, cb_in), 0.5), 0.0, None, None, true),
+                None => (scale(add(ca_in, cb_in), 0.5), None, true),
             };
             corners.push(CornerView {
                 uid: ua,
@@ -688,9 +729,7 @@ impl Junction {
                 straight: c.fillet.is_none(),
                 wedge,
                 curb,
-                sharp,
                 bisector: bis,
-                apex_per_radius: apex_k,
                 handle,
             });
         }
@@ -1414,5 +1453,142 @@ mod tests {
         assert_eq!(j.view().ring.unwrap().circulation, "anticlockwise");
         j.set_region(3);
         assert_eq!(j.view().ring.unwrap().circulation, "clockwise");
+    }
+
+    #[test]
+    fn dragging_an_arm_turns_it_to_face_the_pointer() {
+        let mut j = Junction::new(1); // 90, 180, 270
+        let west = arm_of(&j, 270);
+        // The plan has north up and y growing down: up and to the left is 315°.
+        assert!(j.drag_arm_to(west, -7_071.0, -7_071.0));
+        assert_eq!(j.arm(west).unwrap().bearing, 315);
+    }
+
+    #[test]
+    fn dragging_an_arm_snaps_to_the_step() {
+        let mut j = Junction::new(1);
+        let west = arm_of(&j, 270);
+        // 322.6° is nearer 325° than 320°.
+        assert!(j.drag_arm_to(west, -7_650.0, -10_000.0));
+        assert_eq!(j.arm(west).unwrap().bearing, 325);
+    }
+
+    #[test]
+    fn dragging_an_arm_just_short_of_north_wraps_to_north() {
+        let mut j = Junction::new(1);
+        let west = arm_of(&j, 270);
+        // 359.9° rounds to 360°, which is 0°.
+        assert!(j.drag_arm_to(west, -10.0, -10_000.0));
+        assert_eq!(j.arm(west).unwrap().bearing, 0);
+    }
+
+    #[test]
+    fn dragging_an_arm_onto_its_neighbour_is_refused() {
+        let mut j = Junction::new(1);
+        let west = arm_of(&j, 270);
+        let before = j.current().clone();
+        // Straight down is 180°, where another street already runs.
+        assert!(!j.drag_arm_to(west, 0.0, 10_000.0));
+        assert_eq!(*j.current(), before);
+    }
+
+    #[test]
+    fn dragging_an_unknown_arm_does_nothing() {
+        let mut j = Junction::new(1);
+        assert!(!j.drag_arm_to(9_999, 0.0, -10_000.0));
+    }
+
+    #[test]
+    fn dragging_the_corner_handle_sets_the_radius_from_the_pointer() {
+        let mut j = Junction::new(0);
+        let n = arm_of(&j, 0);
+        // The handle stands at the arc's apex: `apex_per_radius` times the
+        // radius from where the curbs would meet, along the bisector.
+        let lay = layout(j.current(), 0).unwrap();
+        let i = j.current().arms.iter().position(|a| a.uid == n).unwrap();
+        let c = lay.corners.iter().find(|c| c.a == i).unwrap();
+        let f = c.fillet.as_ref().unwrap();
+        let k = 1.0 / (c.delta as f64 / 2.0).to_radians().sin() - 1.0;
+        let apex = |r: f64| add(f.c, scale(f.u, k * r));
+        let (x, y) = apex(9_000.0);
+        assert!(j.drag_corner_to(n, x, y));
+        assert_eq!(j.arm(n).unwrap().corner_mm, 9_000);
+    }
+
+    #[test]
+    fn dragging_the_corner_handle_beyond_the_limits_is_refused() {
+        let mut j = Junction::new(0);
+        let n = arm_of(&j, 0);
+        let before = j.arm(n).unwrap().corner_mm;
+        // On the sharp point itself the radius would be nothing.
+        let lay = layout(j.current(), 0).unwrap();
+        let i = j.current().arms.iter().position(|a| a.uid == n).unwrap();
+        let sharp = lay.corners.iter().find(|c| c.a == i).unwrap().fillet.as_ref().unwrap().c;
+        assert!(!j.drag_corner_to(n, sharp.0, sharp.1));
+        assert_eq!(j.arm(n).unwrap().corner_mm, before);
+    }
+
+    #[test]
+    fn a_straight_curb_has_no_corner_handle_to_drag() {
+        let mut j = Junction::new(1); // a T: the corner clockwise of the west arm is a straight curb
+        let west = arm_of(&j, 270);
+        let before = j.arm(west).unwrap().corner_mm;
+        assert!(!j.drag_corner_to(west, 1_000.0, 1_000.0));
+        assert_eq!(j.arm(west).unwrap().corner_mm, before);
+    }
+
+    #[test]
+    fn dragging_the_crossing_handle_sets_the_setback_from_the_pointer() {
+        let mut j = Junction::new(0);
+        let e = arm_of(&j, 90);
+        let width = j.view().arms.iter().find(|a| a.uid == e).unwrap().crossing.as_ref().unwrap().width_mm;
+        let a = j.view().arms.iter().find(|a| a.uid == e).unwrap().mouth_at;
+        // The handle is on the crossing's far edge: setback plus width out
+        // along the arm from the mouth.
+        let (x, y) = add(a, scale(dir(90.0), 5_000.0 + width as f64));
+        assert!(j.drag_crossing_to(e, x, y));
+        assert_eq!(j.arm(e).unwrap().crossing.as_ref().unwrap().setback_mm, 5_000);
+    }
+
+    #[test]
+    fn dragging_the_crossing_handle_beyond_the_limits_is_refused() {
+        let mut j = Junction::new(0);
+        let e = arm_of(&j, 90);
+        let a = j.view().arms.iter().find(|a| a.uid == e).unwrap().mouth_at;
+        let (x, y) = add(a, scale(dir(90.0), 40_000.0));
+        assert!(!j.drag_crossing_to(e, x, y));
+        assert_eq!(j.arm(e).unwrap().crossing.as_ref().unwrap().setback_mm, DEFAULT_SETBACK_MM);
+    }
+
+    #[test]
+    fn dragging_a_crossing_that_is_not_there_does_nothing() {
+        let mut j = Junction::new(0);
+        let e = arm_of(&j, 90);
+        j.set_crossing(e, false);
+        assert!(!j.drag_crossing_to(e, 5_000.0, 0.0));
+    }
+
+    #[test]
+    fn dropping_a_street_adds_it_facing_the_pointer() {
+        let mut j = Junction::new(1); // 90, 180, 270
+        let uid = j.add_arm_toward(2, 0.0, -10_000.0);
+        assert_ne!(uid, 0);
+        assert_eq!(j.arm(uid).unwrap().bearing, 0);
+        assert_eq!(j.current().arms.len(), 4);
+    }
+
+    #[test]
+    fn dropping_a_street_west_of_north_wraps_the_bearing() {
+        let mut j = Junction::new(1);
+        let uid = j.add_arm_toward(2, -7_071.0, -7_071.0);
+        assert_ne!(uid, 0);
+        assert_eq!(j.arm(uid).unwrap().bearing, 315);
+    }
+
+    #[test]
+    fn dropping_a_street_onto_another_adds_nothing() {
+        let mut j = Junction::new(1);
+        assert_eq!(j.add_arm_toward(2, 0.0, 10_000.0), 0); // 180°, where a street runs
+        assert_eq!(j.current().arms.len(), 3);
     }
 }

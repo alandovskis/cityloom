@@ -1027,21 +1027,7 @@ el.svg.addEventListener("pointerdown", (e) => {
 el.svg.addEventListener("pointermove", (e) => {
   if (!drag) return;
   const [x, y] = mmOf(e);
-  const a = arm(drag.uid);
-  let ok = false;
-  if (drag.type === "grip-arm") {
-    const deg = (Math.atan2(x, -y) * 180) / Math.PI;
-    ok = plan.set_bearing(drag.uid, Math.round(((deg % 360) + 360) % 360));
-  } else if (drag.type === "grip-corner") {
-    const c = corner(drag.uid);
-    if (!c?.sharp) return;
-    const r = Math.hypot(x - c.sharp[0], y - c.sharp[1]) / c.apex_per_radius;
-    ok = plan.set_corner(drag.uid, Math.round(r));
-  } else if (drag.type === "grip-crossing" && a?.crossing) {
-    const d = dirOf(a.bearing);
-    const t = (x - a.mouth_at[0]) * d[0] + (y - a.mouth_at[1]) * d[1];
-    ok = plan.set_setback(drag.uid, Math.round(t - a.crossing.width_mm));
-  }
+  const ok = { "grip-arm": plan.drag_arm_to, "grip-corner": plan.drag_corner_to, "grip-crossing": plan.drag_crossing_to }[drag.type].call(plan, drag.uid, x, y);
   if (ok) drag.moved = true;
   refreshDrawing();
 });
@@ -1067,11 +1053,6 @@ el.svg.addEventListener("pointercancel", () => finishPointer(false));
 // ---- add a street -------------------------------------------------------------
 
 let chip = null;
-
-function bearingAt(e) {
-  const [x, y] = mmOf(e);
-  return (((Math.atan2(x, -y) * 180) / Math.PI) % 360 + 360) % 360;
-}
 
 el.palette.addEventListener("pointerdown", (e) => {
   const b = e.target.closest("[data-street]");
@@ -1105,7 +1086,7 @@ function endChip(commit, e) {
   const r = el.svg.getBoundingClientRect();
   const over = e && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
   if (commit && over) {
-    act(() => plan.add_arm(c.street, Math.round(bearingAt(e))) !== 0, "add");
+    act(() => plan.add_arm_toward(c.street, ...mmOf(e)) !== 0, "add");
   }
 }
 el.palette.addEventListener("pointerup", (e) => endChip(true, e));

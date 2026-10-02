@@ -220,8 +220,30 @@ impl Plan {
         self.0.add_arm(street, bearing)
     }
 
+    /// Adds a street facing the point (x, y) on the plan, in millimetres from
+    /// the junction's centre. Returns its uid, or 0 when there is no room.
+    pub fn add_arm_toward(&mut self, street: usize, x: f64, y: f64) -> u32 {
+        self.0.add_arm_toward(street, x, y)
+    }
+
     pub fn remove_arm(&mut self, uid: u32) -> bool {
         self.0.remove_arm(uid)
+    }
+
+    /// Turns an arm to face the point (x, y) on the plan.
+    pub fn drag_arm_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
+        self.0.drag_arm_to(uid, x, y)
+    }
+
+    /// Sets the corner radius clockwise of an arm from the corner handle's
+    /// dragged position (x, y).
+    pub fn drag_corner_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
+        self.0.drag_corner_to(uid, x, y)
+    }
+
+    /// Sets a crossing's setback from the crossing handle's dragged position (x, y).
+    pub fn drag_crossing_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
+        self.0.drag_crossing_to(uid, x, y)
     }
 
     pub fn set_bearing(&mut self, uid: u32, degrees: i32) -> bool {
