@@ -112,6 +112,7 @@ typography:
     letterSpacing: "normal"
     fontFeature: "tnum"
 rounded:
+  chip: "3px"
   sm: "4px"
   md: "6px"
   card: "10px"
@@ -199,7 +200,7 @@ Each segment type has its own light tint and its own hatch texture, and is named
 - One sheet, one border (1px Faint Ink, 14px radius), controls at 6px, no rails.
 - Black ink on cool paper, coloured in with pale tints; blue pencil for selection, warning orange for failure, and no other saturated accent.
 - Tint plus hatch plus name (or two-letter code) encodes segment type; colour is never the only code.
-- Tabular figures and sentence-case condensed type; sizes stay in a 13 to 16px band, with only the street title (32px) larger.
+- Tabular figures and sentence-case condensed type; sizes stay in a 13 to 16px band, with larger sizes only for the street title (32px), the wordmark and the two readouts above. Print sets body text at 12px.
 - Two themes, light and dark, sharing one structure: system-following until the person picks Light or Dark; dark is composed, not inverted.
 - Flat: depth comes from line weight and quiet ruled divisions, not shadow.
 
@@ -264,6 +265,8 @@ Same token names, re-composed for a dark ground; every value is a `dark-*` key i
 
 ### Hierarchy
 - **Title** (600, 32px, line-height 1, -0.005em, sentence case): street name in the sheet header. The 26px size under 640px in an earlier rule is overridden in the build, which stays at 32px.
+- **Readout** (600, 20px, line-height 1.1): the selected piece's name in the inspector and the number in the width stepper. **Cell value** (17px, tracking 0): the figures in the totals cells of the notes. These are the only sizes between the 16px band and the 32px title.
+- **Wordmark** (600, 20px, 18px under 640px, line-height 1): see Components.
 - **Body** (400, 15px, 1.35): hints, status line, fit statement, the "Street cross-section" sub-title; tabular figures on by default for the whole page.
 - **Note** (500, 14px): note tables, key legend, check detail.
 - **Heading** (600, 16px): panel headings (Add a piece, Where the width goes, People moved, Does it work?, Your changes), with a 1px Rule Grey underline.
@@ -370,7 +373,7 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 - **Icon buttons:** 30px, 1px ink border, 6px radius, 14px 1.6px square-cap line icons; remove hovers danger red with paper icon and stands 10px apart from the move arrows.
 
 ### CityLoom mark
-- **Mark:** `web/logo.svg`, a woven street section: five vertical bands of unequal widths in the sidewalk, planting, bike, travel and loading pencils (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a), woven together by four straight ink threads that pass over and under alternate bands, each thread offset from its neighbour like a basket weave; the bands stand for the modes of travel. Colours are fixed and identical in both themes. The same five colours (`mark-1` to `mark-5`) run as a 5px stripe along the bottom edge of the top bar, in the same proportions as the bands. The mark and wordmark appear once, as a lockup at the top left of the top bar, mark 30px (28px under 640px); they are not repeated in the about card.
+- **Mark:** `web/logo.svg`, a woven street section: five vertical bands of unequal widths in the sidewalk, planting, bike, travel and loading pencils (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a), woven together by four straight ink threads that pass over and under alternate bands, each thread offset from its neighbour like a basket weave; the bands stand for the modes of travel. Colours are fixed and identical in both themes. The same five colours (`mark-1` to `mark-5`) run as a 5px stripe along the bottom edge of the top bar. The mark and wordmark appear once, as a lockup at the top left of the top bar, mark 30px (28px under 640px); they are not repeated in the about card.
 - **Favicon:** `web/favicon.svg` is the same mark with the threads switching to Night Ink in dark schemes.
 - **Wordmark:** "CityLoom" in Barlow Semi Condensed 600 (20px, 18px on phones), live text beside the mark in the top bar, which is closed by a 1px Rule Grey line; never outlined into the SVG. Below 24px the weave blurs; use the favicon there.
 - **Do not** recolour the bands, put a container or shadow around the mark, or show it under 16px.
