@@ -604,6 +604,9 @@ function renderNotes() {
     .join("");
 
   const failing = view.checks.filter((c) => !c.ok).length;
+  const fc = $("fit-checks");
+  fc.hidden = failing === 0;
+  fc.textContent = failing === 1 ? "1 check fails" : `${failing} checks fail`;
   $("checks-n").hidden = failing === 0;
   $("checks-n").innerHTML = failing ? `${failing}<span class="sr-only"> fail</span>` : "";
 
@@ -683,6 +686,13 @@ function renderClock() {
   $("time-note").textContent = `Numbers are for ${hhmm(view.time_min)}.`;
 }
 
+// "N checks fail" opens the Checks tab, and the notes column if it is closed.
+$("fit-checks").addEventListener("click", () => {
+  if (document.documentElement.dataset.notes === "closed") $("notes-toggle").click();
+  $("t-checks").click();
+  $("t-checks").focus();
+});
+
 $("time").addEventListener("input", (e) => {
   if (sheet.set_time(Number(e.target.value) * 15)) refresh();
 });
@@ -728,6 +738,22 @@ const option = (fid, checked, swatchHtml, name, data) =>
   `<li><button type="button" class="opt" role="radio" aria-checked="${checked}" tabindex="${checked ? 0 : -1}" data-ifid="${fid}" ${data}>${swatchHtml}<span>${esc(name)}</span>${ICON.tick}</button></li>`;
 
 const stepMm = () => (units === "m" ? 100 : 305);
+
+// The rarer settings (other times, direction, curb) sit under one disclosure.
+// It stays open once opened, and is open for a piece that already has other
+// times, since those change what the drawing shows.
+let inspectorMoreOpen = false;
+const moreForced = () => {
+  const s = view.selected ? seg(view.selected) : null;
+  return !!s && s.variants.length > 0;
+};
+el.inspector.addEventListener(
+  "toggle",
+  (e) => {
+    if (e.target.classList?.contains("insp-more") && !moreForced()) inspectorMoreOpen = e.target.open;
+  },
+  true,
+);
 
 function renderInspector() {
   const active = document.activeElement;
@@ -778,7 +804,7 @@ function renderInspector() {
   if (k.direction !== "none") {
     const rows = MATERIALS.directions.map((d, di) => option(`d-${d.id}`, d.id === s.direction, dirSwatch(d.id), d.name, `data-idir="${di}"`));
     if (k.direction === "optional") rows.push(option("d-both", s.direction == null, dirSwatch("both"), "Two-way", `data-idir="-1"`));
-    dirs = `<section class="insp-sec"><h3 class="note-h" id="i-h-dir">Direction</h3><ul class="opts" role="radiogroup" aria-labelledby="i-h-dir">${rows.join("")}</ul></section>`;
+    dirs = `<section class="insp-sec"><h3 class="note-h" id="i-h-dir">Direction</h3><p class="insp-range">Which way traffic goes.</p><ul class="opts" role="radiogroup" aria-labelledby="i-h-dir">${rows.join("")}</ul></section>`;
   }
   let curbs = "";
   if (k.has_curb) {
@@ -787,8 +813,12 @@ function renderInspector() {
       return option(`c-${c.id}`, c.id === s.curb, curbSwatch(c.id), c.name, `data-icurb="${ci}"`);
     });
     rows.push(option("c-none", s.curb == null, curbSwatch("none"), "None (flush)", `data-icurb="-1"`));
-    curbs = `<section class="insp-sec"><h3 class="note-h" id="i-h-curb">Curb</h3><ul class="opts" role="radiogroup" aria-labelledby="i-h-curb">${rows.join("")}</ul></section>`;
+    curbs = `<section class="insp-sec"><h3 class="note-h" id="i-h-curb">Curb</h3><p class="insp-range">The raised edge, if it has one.</p><ul class="opts" role="radiogroup" aria-labelledby="i-h-curb">${rows.join("")}</ul></section>`;
   }
+  const moreBody = times + dirs + curbs;
+  const more = moreBody
+    ? `<details class="insp-more"${inspectorMoreOpen || moreForced() ? " open" : ""}><summary>More about this piece</summary>${moreBody}</details>`
+    : "";
   el.inspector.innerHTML = `
     <div class="insp-head">${swatch(k.id)}<div><h2 class="insp-name">${esc(k.name)}</h2><p class="insp-sub">${fmt(s.width_mm)} wide · ${i + 1} of ${view.segments.length}${s.variants.length ? ` · ${hhmm(view.time_min)}` : ""}</p></div></div>
     <section class="insp-sec">
@@ -800,10 +830,8 @@ function renderInspector() {
       </div>
       <p class="insp-range">Allowed ${lo} to ${hi} ${units}</p>
     </section>
-    ${times}
-    ${dirs}
-    <section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3><ul class="opts" role="radiogroup" aria-labelledby="i-h-surface">${surfaces}</ul></section>
-    ${curbs}`;
+    <section class="insp-sec"><h3 class="note-h" id="i-h-surface">Surface</h3><p class="insp-range">What it is paved with.</p><ul class="opts" role="radiogroup" aria-labelledby="i-h-surface">${surfaces}</ul></section>
+    ${more}`;
   if (focusId) {
     const t = el.inspector.querySelector(`[data-ifid="${focusId}"]`);
     if (t && !t.disabled) t.focus({ preventScroll: true });

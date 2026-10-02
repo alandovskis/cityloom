@@ -3114,3 +3114,38 @@ kbd {
 .clock:not(:has(.clock-bar.on)) .clock-scale {
   display: none;
 }
+
+/* ---- inspector: the rarer settings behind one disclosure -------------------- */
+.insp-more > summary {
+  padding: 6px 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.insp-more > summary:hover {
+  color: var(--ink);
+}
+.insp-more[open] > summary {
+  margin-bottom: 8px;
+}
+.insp-more > .insp-sec + .insp-sec {
+  margin-top: 14px;
+}
+
+/* ---- failing checks, beside the fit line ------------------------------------ */
+.fit-checks {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--red);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.fit-checks[hidden] {
+  display: none;
+}
