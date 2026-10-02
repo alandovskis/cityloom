@@ -65,6 +65,14 @@
           <p class="street-sub" id="street-sub"><span>Street cross-section</span> <span aria-hidden="true">·</span> <span><b id="row-dim" class="fig"></b> wide</span></p>
         </div>
         <div class="tools">
+          <div class="add">
+            <button type="button" id="add-btn" class="btn" aria-haspopup="true" aria-expanded="false" aria-controls="add-menu"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3 8h10M8 3v10"/></svg>Add a piece</button>
+            <div id="add-menu" class="menu add-menu" hidden>
+              <p class="menu-h">Add a piece</p>
+              <p class="hint">It goes after the selected piece, or at the end.</p>
+              <ul id="palette" class="add-list"></ul>
+            </div>
+          </div>
           <div class="btns" role="toolbar" aria-label="Sheet tools">
             <button type="button" id="undo" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M5.5 3 2.5 6l3 3M2.5 6H10a3.5 3.5 0 0 1 0 7H6"/></svg>Undo</button>
             <button type="button" id="redo" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M10.5 3l3 3-3 3M13.5 6H6a3.5 3.5 0 0 0 0 7h4"/></svg>Redo</button>
@@ -82,7 +90,7 @@
           <section class="drawing" aria-labelledby="h-drawing">
             <h2 id="h-drawing" class="sr-only">Cross-section</h2>
             <div class="welcome" id="welcome">
-              <p>Drag a piece onto the street. The width is fixed, so a piece that does not fit turns red.</p>
+              <p>Add a piece, then drag pieces to arrange them. The width is fixed, so a piece that does not fit turns red.</p>
               <button type="button" id="welcome-dismiss" class="btn">Got it</button>
             </div>
             <div class="clock" id="clock">
@@ -118,13 +126,6 @@
             </div>
           </section>
 
-          <div class="lower">
-            <section class="legend" aria-labelledby="h-legend">
-              <h2 id="h-legend" class="note-h">Add a piece</h2>
-              <p class="hint">Drag onto the street, or press to add after the selected piece.</p>
-              <ul id="palette" class="palette"></ul>
-            </section>
-          </div>
         </div>
 
         <aside class="notes" id="notes" aria-label="Notes">

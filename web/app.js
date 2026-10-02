@@ -73,7 +73,6 @@ const ICON = {
   left: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M12 7H2M6 3 2 7l4 4"/></svg>`,
   right: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10M8 3l4 4-4 4"/></svg>`,
   remove: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8"/></svg>`,
-  grip: `<svg class="grip-ico" viewBox="0 0 10 14" aria-hidden="true"><path d="M2 2h.01M8 2h.01M2 7h.01M8 7h.01M2 12h.01M8 12h.01"/></svg>`,
   minus: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>`,
   plus: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>`,
   tick: `<svg class="tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.5 6.5 12.5 13.5 3.5"/></svg>`,
@@ -470,7 +469,7 @@ function renderDrawing() {
     parts.push(`<rect class="ghost" x="${drag.px - w / 2}" y="${G - 4}" width="${w}" height="${Y.slab + 8}"/>`);
     parts.push(`<text class="t-mark t-blue" x="${drag.px}" y="${G + Y.slab / 2 + 5}" text-anchor="middle">${kindOf(s).mark}</text>`);
   }
-  if (drag && drag.idx != null && ((drag.type === "move" && drag.active) || (drag.type === "new" && drag.over))) {
+  if (drag && drag.idx != null && drag.type === "move" && drag.active) {
     const others = v.segments.filter((s) => s.uid !== (drag.uid || 0));
     const mm = others.slice(0, drag.idx).reduce((a, s) => a + s.width_mm, 0);
     const x = X(mm);
@@ -491,12 +490,12 @@ function renderDrawing() {
   el.svg.innerHTML = engineering() ? `<g transform="translate(0 10)">${parts.join("")}</g>${furniture.join("")}` : parts.join("");
 }
 
-// ---- legend --------------------------------------------------
+// ---- the Add menu ----------------------------------------------------------
 
 function renderPalette() {
   el.palette.innerHTML = KINDS.map(
     (k, i) =>
-      `<li><button type="button" class="chip" data-kind="${i}">${swatch(k.id)}<b>${esc(k.name)}</b><span class="dw">${fmt(k.default_mm)}</span>${ICON.grip}</button></li>`,
+      `<li><button type="button" class="add-item" data-kind="${i}">${swatch(k.id)}<b>${esc(k.name)}</b><span class="dw">${fmt(k.default_mm)}</span></button></li>`,
   ).join("");
 }
 
@@ -1028,65 +1027,43 @@ function finishPointer(commit) {
 el.svg.addEventListener("pointerup", () => finishPointer(true));
 el.svg.addEventListener("pointercancel", () => finishPointer(false));
 
-// ---- pointer: legend ------------------------------------------------------
+// ---- add menu ---------------------------------------------------------------
 
-let chipDrag = null;
-let suppressClick = false;
-
-el.palette.addEventListener("pointerdown", (e) => {
-  const chip = e.target.closest(".chip");
-  if (!chip || (e.pointerType === "mouse" && e.button !== 0)) return;
-  chipDrag = { kind: Number(chip.dataset.kind), startX: e.clientX, startY: e.clientY, active: false, ghost: null };
-  try {
-    chip.setPointerCapture(e.pointerId);
-  } catch {
-    // Not an active pointer (synthetic input).
-  }
-});
-
-el.palette.addEventListener("pointermove", (e) => {
-  if (!chipDrag) return;
-  const c = chipDrag;
-  if (!c.active) {
-    if (Math.hypot(e.clientX - c.startX, e.clientY - c.startY) < DRAG_START_PX) return;
-    c.active = true;
-    c.ghost = document.createElement("div");
-    c.ghost.className = "drag-chip";
-    c.ghost.innerHTML = `${swatch(KINDS[c.kind].id)}<span>${esc(KINDS[c.kind].name)}</span>`;
-    c.ghost.style.cssText = "";
-    document.body.append(c.ghost);
-  }
-  c.ghost.style.left = `${e.clientX}px`;
-  c.ghost.style.top = `${e.clientY}px`;
-  const r = el.scroll.getBoundingClientRect();
-  const over = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-  drag = { type: "new", kind: c.kind, over, idx: over ? sheet.drop_index(mmAt(e.clientX), 0) : null };
-  renderDrawing();
-});
-
-function endChipDrag(commit) {
-  const c = chipDrag;
-  if (!c) return;
-  chipDrag = null;
-  if (!c.active) return;
-  suppressClick = true;
-  c.ghost.remove();
-  const d = drag;
-  drag = null;
-  if (commit && d && d.over) addKind(d.kind, d.idx);
-  else renderDrawing();
+const addBtn = $("add-btn");
+const addMenu = $("add-menu");
+const addItems = () => [...el.palette.querySelectorAll(".add-item")];
+function setAddOpen(open, refocus = false) {
+  addMenu.hidden = !open;
+  addBtn.setAttribute("aria-expanded", String(open));
+  if (open) addItems()[0]?.focus();
+  else if (refocus) addBtn.focus();
 }
-el.palette.addEventListener("pointerup", () => endChipDrag(true));
-el.palette.addEventListener("pointercancel", () => endChipDrag(false));
-
-el.palette.addEventListener("click", (e) => {
-  const chip = e.target.closest(".chip");
-  if (!chip) return;
-  if (suppressClick) {
-    suppressClick = false;
-    return;
+addBtn.addEventListener("click", () => setAddOpen(addMenu.hidden));
+addBtn.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown" && addMenu.hidden) {
+    e.preventDefault();
+    setAddOpen(true);
   }
-  addKind(Number(chip.dataset.kind), insertIndex());
+});
+addMenu.addEventListener("keydown", (e) => {
+  const items = addItems();
+  const at = items.indexOf(document.activeElement);
+  const to = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: items.length - 1 }[e.key];
+  if (to === undefined) return;
+  e.preventDefault();
+  items[(to + items.length) % items.length].focus();
+});
+document.addEventListener("pointerdown", (e) => {
+  if (!addMenu.hidden && !addMenu.contains(e.target) && !addBtn.contains(e.target)) setAddOpen(false);
+});
+addMenu.addEventListener("focusout", (e) => {
+  if (e.relatedTarget && !addMenu.contains(e.relatedTarget) && e.relatedTarget !== addBtn) setAddOpen(false);
+});
+el.palette.addEventListener("click", (e) => {
+  const item = e.target.closest(".add-item");
+  if (!item) return;
+  setAddOpen(false, true);
+  addKind(Number(item.dataset.kind), insertIndex());
 });
 
 // ---- keyboard -------------------------------------------------------------
@@ -1146,7 +1123,7 @@ el.wrap.addEventListener("keydown", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && chipDrag?.active) endChipDrag(false);
+  if (e.key === "Escape" && !addMenu.hidden) setAddOpen(false, true);
   if (!(e.metaKey || e.ctrlKey) || typing(e.target)) return;
   const k = e.key.toLowerCase();
   if (k === "z") {

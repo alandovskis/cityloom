@@ -3163,3 +3163,53 @@ kbd {
 .drawing:has(.wrap:focus-visible) .focus-hint {
   display: block;
 }
+
+/* ---- the Add menu, in the toolbar ------------------------------------------- */
+.add {
+  position: relative;
+}
+.add-menu {
+  right: auto;
+  left: 0;
+  width: 280px;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+}
+.add-menu .hint {
+  margin: 0 0 8px;
+}
+.add-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.add-item {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 6px 4px 0;
+  border: 0;
+  border-top: var(--line) solid var(--rule);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.add-list li:last-child .add-item {
+  border-bottom: var(--line) solid var(--rule);
+}
+.add-item:hover {
+  background: var(--sheet-deep);
+}
+.add-item b {
+  font-size: 15px;
+  font-weight: 600;
+}
+.add-item .dw {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
