@@ -5,7 +5,7 @@
 import init, { Sheet, atlas, catalogue, materials, samples } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH, symbol } from "./symbols.js";
 import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
-import { engineering, initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
+import { engineering, initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits, remember, typing } from "./shell.js";
 
 await init();
 
@@ -926,6 +926,20 @@ function redo() {
 }
 
 // ---- pointer: section -----------------------------------------------------
+
+// The first-run cue goes once the resident has dismissed it or has started
+// to edit; it is remembered so it does not come back.
+const dismissWelcome = () => {
+  document.documentElement.dataset.welcome = "seen";
+  remember("cityloom-welcome", "seen");
+};
+$("welcome-dismiss").addEventListener("click", () => {
+  dismissWelcome();
+  el.wrap.focus();
+});
+for (const [target, type] of [[el.svg, "pointerdown"], [el.palette, "pointerdown"], [el.wrap, "keydown"]]) {
+  target.addEventListener(type, dismissWelcome, { once: true });
+}
 
 const DRAG_START_PX = 4;
 

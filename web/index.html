@@ -6,7 +6,7 @@
   <title>CityLoom street editor</title>
   <meta name="description" content="Rearrange the pieces of a street within its width and see what changes.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";if(localStorage.getItem("cityloom-drawing")==="engineering")document.documentElement.dataset.drawing="engineering"}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";if(localStorage.getItem("cityloom-drawing")==="engineering")document.documentElement.dataset.drawing="engineering";if(localStorage.getItem("cityloom-welcome")==="seen")document.documentElement.dataset.welcome="seen"}catch(e){}</script>
   <link rel="preload" href="fonts/barlow-semi-condensed-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
@@ -81,6 +81,10 @@
         <div class="work">
           <section class="drawing" aria-labelledby="h-drawing">
             <h2 id="h-drawing" class="sr-only">Cross-section</h2>
+            <div class="welcome" id="welcome">
+              <p>Drag a piece onto the street. The width is fixed, so a piece that does not fit turns red.</p>
+              <button type="button" id="welcome-dismiss" class="btn">Got it</button>
+            </div>
             <div class="clock" id="clock">
               <label for="time" class="clock-l">Time of day</label>
               <input type="range" id="time" min="0" max="95" step="1" value="48">

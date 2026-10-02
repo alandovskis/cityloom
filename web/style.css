@@ -3025,3 +3025,33 @@ kbd {
 .surface[hidden] {
   display: none;
 }
+
+/* ---- first-run cue ---------------------------------------------------------- */
+.welcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 8px 20px;
+  border-top: var(--line) solid var(--rule);
+  background: var(--blue-wash);
+}
+.welcome p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+:root[data-welcome="seen"] .welcome {
+  display: none;
+}
+@media (max-width: 640px) {
+  .welcome {
+    padding-inline: 14px;
+  }
+}
+@media print {
+  .welcome {
+    display: none;
+  }
+}
