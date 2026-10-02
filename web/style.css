@@ -155,7 +155,6 @@ button {
 
 h1 {
   margin: 0;
-  font-size: 30px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -1346,7 +1345,6 @@ kbd {
   display: block;
 }
 .wordmark {
-  font-size: 22px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.005em;
@@ -1354,13 +1352,6 @@ kbd {
 @media (max-width: 640px) {
   .topbar {
     padding-inline: 14px;
-  }
-  .brand .mark {
-    width: 34px;
-    height: 34px;
-  }
-  .wordmark {
-    font-size: 18px;
   }
 }
 .topbar {
