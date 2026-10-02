@@ -39,9 +39,9 @@
   --k-planting: #b6dc9f;
   --k-bike: #93d9cc;
   --k-travel: #2b3138;
-  --travel-hatch: #aeb8c2;
+  --dark-hatch: #aeb8c2;
   --k-bus: #eaa59b;
-  --k-parking: #dcd6c5;
+  --k-parking: #2b3138;
   --k-median: #8fc281;
   --k-loading: #f5df7e;
   --k-shoulder: #d2d9c3;
@@ -1258,9 +1258,9 @@ kbd {
     --k-planting: #41633a;
     --k-bike: #2c6b63;
     --k-travel: #05070a;
-    --travel-hatch: #8c98a4;
+    --dark-hatch: #8c98a4;
     --k-bus: #7a4540;
-    --k-parking: #50493c;
+    --k-parking: #05070a;
     --k-median: #3a6b31;
     --k-loading: #7e6d1f;
     --k-shoulder: #455049;
@@ -1301,9 +1301,9 @@ kbd {
   --k-planting: #41633a;
   --k-bike: #2c6b63;
   --k-travel: #05070a;
-  --travel-hatch: #8c98a4;
+  --dark-hatch: #8c98a4;
   --k-bus: #7a4540;
-  --k-parking: #50493c;
+  --k-parking: #05070a;
   --k-median: #3a6b31;
   --k-loading: #7e6d1f;
   --k-shoulder: #455049;
@@ -1706,9 +1706,9 @@ kbd {
     --k-planting: #b6dc9f;
     --k-bike: #93d9cc;
     --k-travel: #2b3138;
-    --travel-hatch: #aeb8c2;
+    --dark-hatch: #aeb8c2;
     --k-bus: #eaa59b;
-    --k-parking: #dcd6c5;
+    --k-parking: #2b3138;
     --k-median: #8fc281;
     --k-loading: #f5df7e;
     --k-shoulder: #d2d9c3;
@@ -3375,8 +3375,23 @@ kbd {
   display: none;
 }
 
-/* ---- the driving lane is black, so its hatch is light ----------------------- */
+/* ---- the driving lane and parking are black, so their hatch is light ----------------------- */
 #h-travel *,
-#mh-travel * {
-  stroke: var(--travel-hatch);
+#mh-travel *,
+#h-parking *,
+#mh-parking * {
+  stroke: var(--dark-hatch);
+}
+
+/* ---- the P on a parking slab ------------------------------------------------ */
+#drawing .slab-p,
+.swatch .slab-p {
+  fill: #fff;
+  stroke: none;
+  font-family: var(--font);
+  font-weight: 700;
+  pointer-events: none;
+}
+:root[data-drawing="engineering"] #drawing .slab-p {
+  fill: var(--ink);
 }

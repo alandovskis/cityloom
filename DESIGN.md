@@ -17,7 +17,7 @@ colors:
   k-bike: "#93d9cc"
   k-travel: "#2b3138"
   k-bus: "#eaa59b"
-  k-parking: "#dcd6c5"
+  k-parking: "#2b3138"
   k-median: "#8fc281"
   k-loading: "#f5df7e"
   sky: "#e2eff8"
@@ -43,7 +43,7 @@ colors:
   dark-k-bike: "#2c6b63"
   dark-k-travel: "#05070a"
   dark-k-bus: "#7a4540"
-  dark-k-parking: "#50493c"
+  dark-k-parking: "#05070a"
   dark-k-median: "#3a6b31"
   dark-k-loading: "#7e6d1f"
   dark-sky: "#182838"
@@ -210,11 +210,12 @@ Cool bond paper, graphite ink, pale tints for what the drawing depicts, and two 
 
 ### Tertiary (depiction tints)
 Fills for what the drawing shows. Each is paired with ink hatch and outline, so none is ever the sole identifier. Used on the slab and Today-strip rectangles and the legend and inspector swatches; the mode chips in the Where the width goes table reuse five of them.
-- **Sidewalk Grey** (#c4c8cc), **Planting Green** (#b6dc9f), **Bike Teal** (#93d9cc), **Asphalt Black** (#2b3138), **Bus Red** (#eaa59b), **Parking Stone** (#dcd6c5), **Median Green** (#8fc281, also the median kerb symbol), **Loading Yellow** (#f5df7e): the eight segment-type tints (k-sidewalk to k-loading in the frontmatter).
+- **Sidewalk Grey** (#c4c8cc), **Planting Green** (#b6dc9f), **Bike Teal** (#93d9cc), **Asphalt Black** (#2b3138), **Bus Red** (#eaa59b), **Parking Black** (#2b3138, the same black as the driving lane), **Median Green** (#8fc281, also the median kerb symbol), **Loading Yellow** (#f5df7e): the eight segment-type tints (k-sidewalk to k-loading in the frontmatter).
 - **Sky** (#e2eff8): the pale rectangle behind the section elevation, above the ground line; no pointer events.
 - **Symbol fills**: tree (#78b565, trees and shrubs), car (#dbe2e9), bus (the Bus Red of the lane, #eaa59b), van (#f0cb45), and two coat variants for the person (#ee9b78, #74aede). Symbols keep their 1.2px ink outline; symbol parts without a fill stay paper.
 - **Bus Red** is the painted transit lane (bus or tram), a pale rose well off the redline (#b8231a). It is a depiction tint under ink hatch and never carries state; the redline stays the only red that means a check fails or a piece does not fit.
-- **Asphalt Black** is the driving lane, so its hatch (the staggered dashes, in the swatch and on the slab) is drawn light: #aeb8c2 on the light sheet, #8c98a4 on the night sheet. Everything else drawn on it, the direction arrow with its paper halo and the surface course, already reads on black. The dark-theme tint is #05070a, a near-black that stays apart from the night sheet by its outline.
+- **Parking** is black like the driving lane and is told apart by a white "P" drawn on the slab (20px 700, centred; ink in the engineering drawing, where the slab is paper), by its own horizontal-line hatch and by its name; the Add menu swatch carries the P too. The P is omitted on a slab under 22px.
+- **Asphalt Black** is the driving lane and parking, so their hatch (staggered dashes, horizontal lines, in the swatch and on the slab) is drawn light: #aeb8c2 on the light sheet, #8c98a4 on the night sheet. Everything else drawn on it, the direction arrow with its paper halo and the surface course, already reads on black. The dark-theme tint is #05070a, a near-black that stays apart from the night sheet by its outline.
 - **Mode chips**: an 11px square with a 1px ink border and 3px radius before each row label in the Where the width goes table (Walking, Biking, Transit, Cars and trucks, Greenery), reusing tints: foot is Sidewalk Grey, bike is Bike Teal, transit is Bus Red, vehicle is Asphalt Black, green is Planting Green. No new values.
 
 ### Neutral
@@ -230,7 +231,7 @@ Same token names, re-composed for a dark ground; every value is a `dark-*` key i
 - **Night ground** (#13181d, `dark-sheet`): the sheet ground and every control fill. **Night Deep** (#1c232a): hover fills for tools, icon buttons and legend rows.
 - **Pale Ink** (#e8edf1): primary text, control borders, symbol outlines, hatch strokes, dimension lines, the pressed state (pale fill, night text). **Soft Pale Ink** (#b9c3cc): secondary text. **Faint Pale Ink** (#93a0ab): the sheet border, tertiary and disabled text. **Night Rule** (#3b4650): dividers, hairlines, card border.
 - **Blue Pencil, night** (#7fa6ff) with wash rgb(127 166 255 / 0.16); **Redline, night** (#ff8073) with wash rgb(255 128 115 / 0.16). Same jobs as in light; the washes are stronger (16% against 9%) so they still register on the dark ground.
-- **Depiction tints, muted and deep**: sidewalk #5b6168, planting #41633a, bike #2c6b63, travel #05070a, bus #7a4540, parking #50493c, median #3a6b31, loading #7e6d1f. **Sky** #182838.
+- **Depiction tints, muted and deep**: sidewalk #5b6168, planting #41633a, bike #2c6b63, travel #05070a, bus #7a4540, parking #05070a, median #3a6b31, loading #7e6d1f. **Sky** #182838.
 - **Symbol fills**: tree #55924a, car #33404c, bus #7a4540 (the dark Bus Red of the lane), van #c0a02c, coats #d27753 and #5590c4.
 - Hatch strokes and dot stipple follow Pale Ink, so hatch still reads over the darker tints. Label halos follow the night ground.
 

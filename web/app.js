@@ -67,7 +67,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 $("defs").innerHTML = `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}</defs>`;
 
 const swatch = (kindId) =>
-  `<svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><rect class="k-${kindId}" width="44" height="22" stroke="none"/><rect width="44" height="22" fill="url(#h-${kindId})" stroke="none"/></svg>`;
+  `<svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><rect class="k-${kindId}" width="44" height="22" stroke="none"/><rect width="44" height="22" fill="url(#h-${kindId})" stroke="none"/>${kindId === "parking" ? `<text class="slab-p" x="22" y="16" text-anchor="middle" font-size="14">P</text>` : ""}</svg>`;
 
 const ICON = {
   left: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M12 7H2M6 3 2 7l4 4"/></svg>`,
@@ -264,6 +264,7 @@ function renderDrawing() {
         `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#${engineering() ? `m-${s.material}` : `h-${k.id}`})"/>` +
         (engineering() ? "" : surfaceCourse(x, G, w, s.material)) +
         (s.direction && w >= 26 ? dirGlyph(s.direction, cx, G + Y.slab / 2) : "") +
+        (k.id === "parking" && w >= 22 ? `<text class="slab-p" x="${cx}" y="${G + Y.slab / 2 + 7}" text-anchor="middle" font-size="20">P</text>` : "") +
         (s.variants.length && w >= 48 ? clockBadge(x + 24, G + Y.slab - 10) : "") +
         `<text class="t-mark t-halo${sel ? " t-blue" : ""}" x="${cx}" y="${Y.mark}" text-anchor="middle">${w > k.name.length * 8.6 + 10 ? esc(k.name) : w > 30 ? k.mark : ""}</text>` +
         `</g>`,

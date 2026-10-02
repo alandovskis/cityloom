@@ -228,19 +228,19 @@
       },
       "k-parking": {
         "role": "tertiary",
-        "displayName": "Parking Stone",
-        "canonical": "#dcd6c5",
+        "displayName": "Parking Black",
+        "canonical": "#2b3138",
         "tonalRamp": [
-          "#32302c",
-          "#636059",
-          "#959085",
-          "#c6c1b1",
-          "#e7e2d6",
-          "#f1efe8",
-          "#f8f7f3",
-          "#fcfcfb"
+          "#2c2f32",
+          "#595e63",
+          "#858c95",
+          "#b3bbc4",
+          "#dadee3",
+          "#eaecef",
+          "#f4f5f7",
+          "#fbfbfc"
         ],
-        "dark": "#50493c"
+        "dark": "#05070a"
       },
       "k-median": {
         "role": "tertiary",
