@@ -3308,3 +3308,9 @@ kbd {
   letter-spacing: 0;
   text-transform: none;
 }
+
+.menu-act + .menu-act {
+  margin-top: 6px;
+  padding-top: 0;
+  border-top: 0;
+}

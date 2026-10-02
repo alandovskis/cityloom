@@ -604,7 +604,7 @@ function renderNotes() {
     )
     .join("");
 
-  if (view.revisions.length) dismissWelcome();
+  if (view.revisions.length && !welcomePinned) dismissWelcome();
   const failing = view.checks.filter((c) => !c.ok).length;
   const fc = $("fit-checks");
   fc.hidden = failing === 0;
@@ -976,10 +976,21 @@ function redo() {
 
 // The first-run cue goes when the resident dismisses it or has made a change
 // to the street (the first revision); it is remembered so it does not return.
+var welcomePinned = false; // var: render runs before this line
 function dismissWelcome() {
+  welcomePinned = false;
   document.documentElement.dataset.welcome = "seen";
   remember("cityloom-welcome", "seen");
 }
+// "How this works" in the settings menu brings the cue back, and keeps it
+// until it is dismissed, however much has been edited.
+$("how-btn").addEventListener("click", () => {
+  welcomePinned = true;
+  delete document.documentElement.dataset.welcome;
+  remember("cityloom-welcome", "show");
+  $("welcome").scrollIntoView({ block: "nearest" });
+  $("welcome-dismiss").focus();
+});
 $("welcome-dismiss").addEventListener("click", () => {
   dismissWelcome();
   el.wrap.focus();

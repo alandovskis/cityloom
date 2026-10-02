@@ -314,7 +314,7 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 - **Width field:** 68px by 30px, 1px ink border, 6px radius, paper fill, right-aligned tabular 500 text, unit tag beside it. **Invalid:** border and text turn redline. **Focus:** blue outline, blue caret.
 
 ### First-run cue
-- **Cue:** a one-line strip across the top of the drawing, Blue Wash fill under a 1px Rule Grey line: "Add a piece, then drag pieces to arrange them. The width is fixed, so a piece that does not fit turns red." A "Got it" tool button sits at its end. It goes only when "Got it" is pressed or the first change is made to the street, so a stray tap cannot remove it; it is remembered in localStorage and applied before first paint, and is hidden in print. Dismissing returns focus to the drawing.
+- **Cue:** a one-line strip across the top of the drawing, Blue Wash fill under a 1px Rule Grey line: "Add a piece, then drag pieces to arrange them. The width is fixed, so a piece that does not fit turns red." A "Got it" tool button sits at its end. It goes only when "Got it" is pressed or the first change is made to the street, so a stray tap cannot remove it; it is remembered in localStorage and applied before first paint, and is hidden in print. Dismissing returns focus to the drawing. "How this works" in the settings menu brings the cue back, scrolls to it and focuses "Got it"; once reopened it stays until dismissed, however much has been edited.
 
 ### Failing checks by the fit line
 - **Link:** when any check fails, a redline underlined text button "N checks fail" sits beside the fit status in the status bar. It opens the notes column if it is closed and the Checks tab, and moves focus to the tab. It is hidden when every check passes.
