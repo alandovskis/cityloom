@@ -82,6 +82,46 @@ const postP = (x, s = 1) =>
       `<path class="o" d="M-2.5,-64 L-2.5,-74 L1.5,-74 Q4,-74 4,-71.5 Q4,-69 1.5,-69 L-2.5,-69"/>`,
   );
 
+// A bicycle parked, wheels and frame, no rider.
+const parkedBike = (x = 0, s = 1) =>
+  at(
+    x,
+    s,
+    `<circle cx="-16" cy="-11" r="11"/><circle cx="16" cy="-11" r="11"/>` +
+      `<path class="o" d="M-16,-11 L-4,-29 L11,-29 L16,-11 M-4,-29 L2,-11 L-16,-11 M11,-29 L9,-35 M6,-35 L13,-35 M-4,-31 L-4,-35 M-8,-35 L0,-35"/>`,
+  );
+
+// Inverted-U racks with a bike locked to the near one.
+const bikeRack = (x = 0, s = 1) =>
+  at(
+    x,
+    s,
+    parkedBike(-6, 1) +
+      `<path class="o" d="M16,0 L16,-30 Q16,-38 24,-38 Q32,-38 32,-30 L32,0"/>` +
+      `<path class="o" d="M-44,0 L-44,-30 Q-44,-38 -36,-38 Q-28,-38 -28,-30 L-28,0"/>`,
+  );
+
+// A bikeshare station: a docking kiosk with its screen and two docked bikes.
+const bikeshare = (x = 0, s = 1) =>
+  at(
+    x,
+    s,
+    `<path class="f-share" d="M-8,0 L-8,-56 Q-8,-62 -2,-62 L2,-62 Q8,-62 8,-56 L8,0 Z"/>` +
+      `<rect x="-5" y="-54" width="10" height="12" rx="1"/>` +
+      parkedBike(-38, 0.8) +
+      parkedBike(38, 0.8),
+  );
+
+// A utility pole: crossarm, insulators, a transformer and two wires.
+const pole = (x = 0, s = 1) =>
+  at(
+    x,
+    s,
+    `<path class="o" d="M0,0 L0,-120 M-20,-108 L20,-108 M-14,-96 L14,-96"/>` +
+      `<path class="o" d="M-20,-108 L-20,-114 M20,-108 L20,-114 M-20,-114 Q-34,-104 -40,-108 M20,-114 Q34,-104 40,-108"/>` +
+      `<rect x="5" y="-86" width="12" height="18" rx="3"/>`,
+  );
+
 // A bus shelter: posts, a roof in the bus lane's colour, a back panel and a
 // bench, with a person waiting under it.
 const shelter = (x = 0, s = 1) =>
@@ -117,6 +157,9 @@ const SYMBOLS = {
   },
   loading: () => van(0, 1),
   shoulder: () => cone(0, 1),
+  bikerack: () => bikeRack(0, 1),
+  bikeshare: () => bikeshare(0, 1),
+  pole: () => pole(0, 1),
 };
 
 // Native widths, in drawing units at 55 px per metre, used to shrink a symbol
@@ -131,6 +174,9 @@ const NATIVE_W = {
   median: (wm) => (wm >= 2.4 ? 62 : 52),
   loading: () => 110,
   shoulder: () => 40,
+  bikerack: () => 80,
+  bikeshare: () => 108,
+  pole: () => 80,
 };
 
 // `opts` carries what a piece has beyond its kind: { shelter, material }.
@@ -153,6 +199,9 @@ export const HATCH = {
   parking: `<pattern id="h-parking" width="6" height="5" patternUnits="userSpaceOnUse"><path d="M0,2.5 L6,2.5"/></pattern>`,
   median: `<pattern id="h-median" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M0,0 L7,0 M0,0 L0,7"/></pattern>`,
   shoulder: `<pattern id="h-shoulder" width="12" height="10" patternUnits="userSpaceOnUse"><path d="M0,5 L4,5 M6,5 L7,5 M9,5 L10,5"/></pattern>`,
+  bikerack: `<pattern id="h-bikerack" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M1,7 L1,3 Q5,0 9,3 L9,7"/></pattern>`,
+  bikeshare: `<pattern id="h-bikeshare" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="2.2"/></pattern>`,
+  pole: `<pattern id="h-pole" width="6" height="8" patternUnits="userSpaceOnUse"><path d="M3,0 L3,8"/></pattern>`,
   loading: `<pattern id="h-loading" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M0,6 L5,1 L10,6"/></pattern>`,
 };
 

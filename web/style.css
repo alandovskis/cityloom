@@ -44,6 +44,9 @@
   --k-median: #8fc281;
   --k-loading: #f5df7e;
   --k-shoulder: #d2d9c3;
+  --k-bikerack: #a8d3e8;
+  --k-bikeshare: #e9b5d3;
+  --k-pole: #c2b6a3;
   --sky: #e2eff8;
   --chrome: #0f4f4c;
   --chrome-ink: #f3f6f8;
@@ -1018,6 +1021,9 @@ svg pattern circle {
 .k-median { fill: var(--k-median); }
 .k-loading { fill: var(--k-loading); }
 .k-shoulder { fill: var(--k-shoulder); }
+.k-bikerack { fill: var(--k-bikerack); }
+.k-bikeshare { fill: var(--k-bikeshare); }
+.k-pole { fill: var(--k-pole); }
 .sky {
   fill: var(--sky);
   pointer-events: none;
@@ -1029,6 +1035,7 @@ svg pattern circle {
 .sym .f-coat-0 { fill: var(--s-coat-0); }
 .sym .f-coat-1 { fill: var(--s-coat-1); }
 .sym .f-kerb { fill: var(--k-median); }
+.sym .f-share { fill: var(--k-bikeshare); }
 .swatch .k-sidewalk,
 .swatch .k-planting,
 .swatch .k-bike,
@@ -1037,7 +1044,10 @@ svg pattern circle {
 .swatch .k-parking,
 .swatch .k-median,
 .swatch .k-loading,
-.swatch .k-shoulder {
+.swatch .k-shoulder,
+.swatch .k-bikerack,
+.swatch .k-bikeshare,
+.swatch .k-pole {
   stroke: none;
 }
 .mc {
@@ -1252,6 +1262,9 @@ kbd {
     --k-median: #3a6b31;
     --k-loading: #7e6d1f;
     --k-shoulder: #455049;
+    --k-bikerack: #2f5f78;
+    --k-bikeshare: #70406a;
+    --k-pole: #5a5246;
     --sky: #182838;
     --chrome: #0d3a38;
     --chrome-ink: #e8edf1;
@@ -1291,6 +1304,9 @@ kbd {
   --k-median: #3a6b31;
   --k-loading: #7e6d1f;
   --k-shoulder: #455049;
+  --k-bikerack: #2f5f78;
+  --k-bikeshare: #70406a;
+  --k-pole: #5a5246;
   --sky: #182838;
   --chrome: #0d3a38;
   --chrome-ink: #e8edf1;
@@ -1692,6 +1708,9 @@ kbd {
     --k-median: #8fc281;
     --k-loading: #f5df7e;
     --k-shoulder: #d2d9c3;
+    --k-bikerack: #a8d3e8;
+    --k-bikeshare: #e9b5d3;
+    --k-pole: #c2b6a3;
     --sky: #e2eff8;
     --chrome: #fff;
     --chrome-ink: #14181c;
@@ -2865,6 +2884,15 @@ kbd {
 }
 #map .m-k-shoulder {
   stroke: var(--k-shoulder);
+}
+#map .m-k-bikerack {
+  stroke: var(--k-bikerack);
+}
+#map .m-k-bikeshare {
+  stroke: var(--k-bikeshare);
+}
+#map .m-k-pole {
+  stroke: var(--k-pole);
 }
 #map pattern * {
   vector-effect: non-scaling-stroke;

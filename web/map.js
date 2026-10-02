@@ -142,6 +142,8 @@ const zoomBy = (f) => {
 // ---- the drawing --------------------------------------------------------------
 
 const TINT_KINDS = new Set(KIND_ORDER);
+// Pieces beside the roadway, not part of it.
+const OFF_ROAD = new Set(["sidewalk", "planting", "bikerack", "bikeshare", "pole"]);
 
 // Hatch for the map: the same textures as the section, kept to the same size on
 // screen at every zoom.
@@ -180,7 +182,7 @@ function renderMap() {
   const edges = view.edges.map((e) => {
     const g = geometry(e, byId);
     const row = e.row_mm / 1000;
-    const road = e.pieces.filter((p) => p.kind !== "sidewalk" && p.kind !== "planting");
+    const road = e.pieces.filter((p) => !OFF_ROAD.has(p.kind));
     const lo = Math.min(...road.map((p) => p.offset_mm - p.width_mm / 2)) / 1000;
     const hi = Math.max(...road.map((p) => p.offset_mm + p.width_mm / 2)) / 1000;
     return { e, g, row, roadOff: (lo + hi) / 2, roadW: hi - lo, t0: e.trim_a_mm / 1000, t1: g.len - e.trim_b_mm / 1000 };

@@ -1673,6 +1673,28 @@ mod tests {
     }
 
     #[test]
+    fn street_furniture_is_added_like_any_piece_and_follows_the_older_kinds() {
+        let shoulder = kind_index("shoulder").unwrap();
+        let mut e = Editor::new(0);
+        for (n, id) in ["bikerack", "bikeshare", "pole"].into_iter().enumerate() {
+            let k = kind_index(id).unwrap();
+            assert_eq!(k, shoulder + 1 + n, "{id} is appended, so stored kind indices hold");
+            let before = e.current().len();
+            let uid = e.add(k, 1);
+            assert_eq!(e.current().len(), before + 1);
+            let s = e.current().iter().find(|s| s.uid == uid).unwrap();
+            assert_eq!(s.width_mm, KINDS[k].default_mm);
+            assert!(e.set_shelter(uid, true) == false); // not a sidewalk
+            assert!(e.remove(uid));
+        }
+        // None of them counts as the sidewalk the edges check asks for.
+        let rack = kind_index("bikerack").unwrap();
+        let mut e = Editor::new(0);
+        e.add(rack, 0);
+        assert!(!e.view().checks[1].ok);
+    }
+
+    #[test]
     fn material_changes_undo_and_redo() {
         let mut e = Editor::new(0);
         let lane = e.current()[2].uid;
