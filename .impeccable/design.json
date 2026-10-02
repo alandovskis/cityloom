@@ -325,18 +325,18 @@
       "s-bus": {
         "role": "tertiary",
         "displayName": "Symbol Bus",
-        "canonical": "#b79ee3",
+        "canonical": "#eaa59b",
         "tonalRamp": [
-          "#292433",
-          "#524766",
-          "#7c6b99",
-          "#a58ecc",
-          "#cdbbeb",
-          "#e2d8f4",
-          "#f1ecf9",
-          "#faf8fd"
+          "#332624",
+          "#664b47",
+          "#99716b",
+          "#cc968e",
+          "#ebc1bb",
+          "#f4dcd8",
+          "#f9eeec",
+          "#fdf9f8"
         ],
-        "dark": "#8068b8"
+        "dark": "#7a4540"
       },
       "s-van": {
         "role": "tertiary",

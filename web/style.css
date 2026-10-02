@@ -53,7 +53,7 @@
   /* symbol colours */
   --s-tree: #78b565;
   --s-car: #dbe2e9;
-  --s-bus: #b79ee3;
+  --s-bus: var(--k-bus);
   --s-van: #f0cb45;
   --s-coat-0: #ee9b78;
   --s-coat-1: #74aede;
@@ -1260,7 +1260,7 @@ kbd {
 
     --s-tree: #55924a;
     --s-car: #33404c;
-    --s-bus: #8068b8;
+    --s-bus: var(--k-bus);
     --s-van: #c0a02c;
     --s-coat-0: #d27753;
     --s-coat-1: #5590c4;
@@ -1299,7 +1299,7 @@ kbd {
 
   --s-tree: #55924a;
   --s-car: #33404c;
-  --s-bus: #8068b8;
+  --s-bus: var(--k-bus);
   --s-van: #c0a02c;
   --s-coat-0: #d27753;
   --s-coat-1: #5590c4;
@@ -1700,7 +1700,7 @@ kbd {
 
     --s-tree: #78b565;
     --s-car: #dbe2e9;
-    --s-bus: #b79ee3;
+    --s-bus: var(--k-bus);
     --s-van: #f0cb45;
     --s-coat-0: #ee9b78;
     --s-coat-1: #74aede;

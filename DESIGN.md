@@ -23,7 +23,7 @@ colors:
   sky: "#e2eff8"
   s-tree: "#78b565"
   s-car: "#dbe2e9"
-  s-bus: "#b79ee3"
+  s-bus: "#eaa59b"
   s-van: "#f0cb45"
   s-coat-0: "#ee9b78"
   s-coat-1: "#74aede"
@@ -49,7 +49,7 @@ colors:
   dark-sky: "#182838"
   dark-s-tree: "#55924a"
   dark-s-car: "#33404c"
-  dark-s-bus: "#8068b8"
+  dark-s-bus: "#7a4540"
   dark-s-van: "#c0a02c"
   dark-s-coat-0: "#d27753"
   dark-s-coat-1: "#5590c4"
@@ -212,7 +212,7 @@ Cool bond paper, graphite ink, pale tints for what the drawing depicts, and two 
 Fills for what the drawing shows. Each is paired with ink hatch and outline, so none is ever the sole identifier. Used on the slab and Today-strip rectangles and the legend and inspector swatches; the mode chips in the Where the width goes table reuse five of them.
 - **Sidewalk Sand** (#f2cfa6), **Planting Green** (#b6dc9f), **Bike Teal** (#93d9cc), **Travel Slate** (#bcc5ce), **Bus Red** (#eaa59b), **Parking Stone** (#dcd6c5), **Median Green** (#8fc281, also the median kerb symbol), **Loading Yellow** (#f5df7e): the eight segment-type tints (k-sidewalk to k-loading in the frontmatter).
 - **Sky** (#e2eff8): the pale rectangle behind the section elevation, above the ground line; no pointer events.
-- **Symbol fills**: tree (#78b565, trees and shrubs), car (#dbe2e9), bus (#b79ee3), van (#f0cb45), and two coat variants for the person (#ee9b78, #74aede). Symbols keep their 1.2px ink outline; symbol parts without a fill stay paper.
+- **Symbol fills**: tree (#78b565, trees and shrubs), car (#dbe2e9), bus (the Bus Red of the lane, #eaa59b), van (#f0cb45), and two coat variants for the person (#ee9b78, #74aede). Symbols keep their 1.2px ink outline; symbol parts without a fill stay paper.
 - **Bus Red** is the painted bus lane, a pale rose well off the redline (#b8231a). It is a depiction tint under ink hatch and never carries state; the redline stays the only red that means a check fails or a piece does not fit.
 - **Mode chips**: an 11px square with a 1px ink border and 3px radius before each row label in the Where the width goes table (Walking, Biking, Buses, Cars and trucks, Greenery), reusing tints: foot is Sidewalk Sand, bike is Bike Teal, transit is Bus Red, vehicle is Travel Slate, green is Planting Green. No new values.
 
