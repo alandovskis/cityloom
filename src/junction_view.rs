@@ -192,9 +192,28 @@ pub struct PieceView {
     pub poly: Vec<Value>,
 }
 
+/// The name of one class of turn, as the page and the checks say it.
+fn class_word(c: u8) -> &'static str {
+    match c {
+        LEFT => "left",
+        THROUGH => "through",
+        _ => "right",
+    }
+}
+
+fn word<S: serde::Serializer>(c: &u8, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(class_word(*c))
+}
+
+/// The classes in a set of them, left to right.
+fn words<S: serde::Serializer>(mask: &u8, s: S) -> Result<S::Ok, S::Error> {
+    s.collect_seq([LEFT, THROUGH, RIGHT].into_iter().filter(|c| mask & c != 0).map(class_word))
+}
+
 #[derive(Serialize)]
 pub struct LaneView {
     /// The kinds of turn it serves, for the arrow drawn on it.
+    #[serde(serialize_with = "words")]
     pub uses: u8,
     /// Every other street, in turn order from the driver's left, and whether this lane goes there.
     pub dests: Vec<DestView>,
@@ -212,6 +231,7 @@ pub struct LaneView {
 pub struct DestView {
     pub uid: u32,
     pub label: String,
+    #[serde(serialize_with = "word")]
     pub class: u8,
     pub on: bool,
     /// The street can be left.
@@ -285,6 +305,7 @@ pub struct ArmView {
     pub end: P,
     pub mouth_at: P,
     pub banned: Vec<u32>,
+    #[serde(serialize_with = "words")]
     pub classes: u8,
     pub road_mm: i32,
     /// Which side's curb can bulge out into parking: only beside parking.
@@ -318,6 +339,7 @@ pub struct CornerView {
 pub struct MoveView {
     pub from: u32,
     pub to: u32,
+    #[serde(serialize_with = "word")]
     pub class: u8,
     pub allowed: bool,
     /// Why a measure stops this turn, if one does.
@@ -1057,18 +1079,13 @@ fn sample_path(path: &[Value]) -> Vec<P> {
 }
 
 fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView], lay: &Layout) -> Vec<Check> {
-    let word = |c: u8| match c {
-        LEFT => "left",
-        THROUGH => "through",
-        _ => "right",
-    };
     let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or(String::new(), |a| a.label.clone());
     let mut out = Vec::new();
 
     // Every allowed turn has a lane that serves it.
     let mut no_lane = Vec::new();
     for m in moves.iter().filter(|m| m.allowed && !m.lane) {
-        no_lane.push(format!("{} to {} ({} turn)", name(m.from), name(m.to), word(m.class)));
+        no_lane.push(format!("{} to {} ({} turn)", name(m.from), name(m.to), class_word(m.class)));
     }
     no_lane.sort();
     no_lane.dedup();
@@ -1648,5 +1665,21 @@ mod tests {
         let by = |street: usize| v.arms.iter().find(|a| a.street_index == street).unwrap().can_bulb;
         assert_eq!(by(0), [true, true]);
         assert_eq!(by(2), [false, true]);
+    }
+
+    #[test]
+    fn turn_classes_and_lane_uses_are_sent_as_words() {
+        let j = Junction::new(0);
+        let v = serde_json::to_value(j.view()).unwrap();
+        let north = v["arms"].as_array().unwrap().iter().find(|a| a["bearing"] == 0).unwrap();
+        let uses: Vec<Vec<&str>> = north["lanes"].as_array().unwrap().iter().map(|l| l["uses"].as_array().unwrap().iter().map(|u| u.as_str().unwrap()).collect()).collect();
+        assert_eq!(uses, vec![vec!["left", "through"], vec!["through", "right"]]);
+        // Entering from the north and heading east is a left turn.
+        let east = v["arms"].as_array().unwrap().iter().find(|a| a["bearing"] == 90).unwrap();
+        let m = v["movements"].as_array().unwrap().iter().find(|m| m["from"] == north["uid"] && m["to"] == east["uid"]).unwrap();
+        assert_eq!(m["class"], "left");
+        let dests = north["lanes"][0]["dests"].as_array().unwrap();
+        assert!(dests.iter().all(|d| ["left", "through", "right"].contains(&d["class"].as_str().unwrap())));
+        assert!(dests.iter().any(|d| d["class"] == "through"));
     }
 }

@@ -38,11 +38,8 @@ const plan = held ?? new Plan(0);
 let view = JSON.parse(plan.view());
 let units = "m";
 
-const LEFT = 1;
-const THROUGH = 2;
-const RIGHT = 4;
-const CLASS_WORD = { [LEFT]: "left", [THROUGH]: "straight on", [RIGHT]: "right" };
-const CLASS_NAME = { [LEFT]: "Left", [THROUGH]: "Straight on", [RIGHT]: "Right" };
+const CLASS_WORD = { left: "left", through: "straight on", right: "right" };
+const CLASS_NAME = { left: "Left", through: "Straight on", right: "Right" };
 const SEL_KIND = { arm: 1, corner: 2, crossing: 3, lane: 4, bus: 5, cycle: 6 };
 
 const $ = (id) => document.getElementById(id);
@@ -114,7 +111,7 @@ const BTN = {
 
 // A turn arrow, pointing up, in a 16 by 16 box: the stem and its branch.
 const turnGlyph = (cls, size = 16) => {
-  const branch = { [LEFT]: "M8 9Q8 5 3.5 5M6 3 3.5 5 6 7", [RIGHT]: "M8 9Q8 5 12.5 5M10 3l2.5 2L10 7", [THROUGH]: "M8 9V2M5.5 4.5 8 2l2.5 2.5" }[cls];
+  const branch = { left: "M8 9Q8 5 3.5 5M6 3 3.5 5 6 7", right: "M8 9Q8 5 12.5 5M10 3l2.5 2L10 7", through: "M8 9V2M5.5 4.5 8 2l2.5 2.5" }[cls];
   return `<svg class="turn-ico" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true" focusable="false"><path d="M8 14V9"/><path d="${branch}"/></svg>`;
 };
 
@@ -172,12 +169,12 @@ const isLane = (uid, i) => sel().kind === "lane" && sel().uid === uid && sel().l
 function laneArrow(l, size) {
   const uses = l.uses;
   const h = size;
-  const stem = uses & THROUGH ? -h / 2 : 0;
+  const stem = uses.includes("through") ? -h / 2 : 0;
   const bw = h * 0.42;
   const parts = [`M0 ${h / 2}V${stem}`];
-  if (uses & THROUGH) parts.push(`M${-h * 0.18} ${-h / 2 + h * 0.2}L0 ${-h / 2}L${h * 0.18} ${-h / 2 + h * 0.2}`);
-  if (uses & LEFT) parts.push(`M0 ${-h * 0.05}Q0 ${-h * 0.3} ${-bw} ${-h * 0.3}M${-bw + h * 0.16} ${-h * 0.3 - h * 0.16}L${-bw} ${-h * 0.3}L${-bw + h * 0.16} ${-h * 0.3 + h * 0.16}`);
-  if (uses & RIGHT) parts.push(`M0 ${-h * 0.05}Q0 ${-h * 0.3} ${bw} ${-h * 0.3}M${bw - h * 0.16} ${-h * 0.3 - h * 0.16}L${bw} ${-h * 0.3}L${bw - h * 0.16} ${-h * 0.3 + h * 0.16}`);
+  if (uses.includes("through")) parts.push(`M${-h * 0.18} ${-h / 2 + h * 0.2}L0 ${-h / 2}L${h * 0.18} ${-h / 2 + h * 0.2}`);
+  if (uses.includes("left")) parts.push(`M0 ${-h * 0.05}Q0 ${-h * 0.3} ${-bw} ${-h * 0.3}M${-bw + h * 0.16} ${-h * 0.3 - h * 0.16}L${-bw} ${-h * 0.3}L${-bw + h * 0.16} ${-h * 0.3 + h * 0.16}`);
+  if (uses.includes("right")) parts.push(`M0 ${-h * 0.05}Q0 ${-h * 0.3} ${bw} ${-h * 0.3}M${bw - h * 0.16} ${-h * 0.3 - h * 0.16}L${bw} ${-h * 0.3}L${bw - h * 0.16} ${-h * 0.3 + h * 0.16}`);
   const [x, y] = T(l.at);
   const d = parts.join("");
   return `<g class="lane-arrow${l.bad ? " bad" : ""}" transform="translate(${f1(x)} ${f1(y)}) rotate(${l.heading})"><path class="halo" d="${d}"/><path d="${d}"/></g>`;
