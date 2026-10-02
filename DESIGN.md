@@ -239,10 +239,10 @@ Same token names, re-composed for a dark ground; every value is a `dark-*` key i
 - Hatch strokes and dot stipple follow Pale Ink, so hatch still reads over the darker tints. Label halos follow the night ground.
 
 ### Chrome colour
-- **Chrome Teal** (light #0f4f4c, dark #0f4744, ink #f3f6f8 / #e8edf1): the top bar behind the logo, wordmark and avatar. It is the mark's own teal taken deep, so the brand sits in the chrome and nowhere in the drawing.
-- **Chrome Wash** (light #e3f0ee, dark #14302f) with **Chrome Line** (#b7d3cf / #2f5654): the header band and its bottom rule.
+- **Chrome Blue** (light #1e3a8a, dark #1b2f6e, ink #f3f6f8 / #e8edf1; ink on it 9.5:1 and 10.6:1): the top bar behind the logo, wordmark and avatar. It is a deep navy, well away from the Blue Pencil (#1d4ed8) that marks selection, so the chrome never reads as a selected thing. It replaced the earlier Chrome Teal.
+- **Chrome Wash** (light #e4eaf7, dark #16213f) with **Chrome Line** (#b9c6e6 / #2c3f73): the header band and its bottom rule. The Add a piece button's blue label on its wash over this band measures 4.9:1 in both themes.
 - **Weave Stripe:** a 5px strip under the top bar in the mark's five band colours (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a) at 20/14/32/20/14%, the same proportions as the logo. Fixed in both themes.
-- The avatar's focus ring is Chrome Ink on the teal bar (blue would not reach contrast there). The account menu is a paper panel and keeps Blue focus.
+- The avatar's focus ring is Chrome Ink on the blue bar (the Blue Pencil would not reach contrast there). The account menu is a paper panel and keeps Blue focus.
 
 ### Named Rules
 **The Two Pencils Rule.** Blue means selected, orange means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else. It holds in both themes: in dark, blue and orange are the lighter pencils (#7fa6ff, #f6a04a) and stay reserved for selection and failure; no night tint is blue or orange enough to be mistaken for them.

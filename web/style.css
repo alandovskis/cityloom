@@ -50,10 +50,10 @@
   --k-bikeshare: #e9b5d3;
   --k-pole: #c2b6a3;
   --sky: #e2eff8;
-  --chrome: #0f4f4c;
+  --chrome: #1e3a8a;
   --chrome-ink: #f3f6f8;
-  --chrome-wash: #e3f0ee;
-  --chrome-line: #b7d3cf;
+  --chrome-wash: #e4eaf7;
+  --chrome-line: #b9c6e6;
 
   /* symbol colours */
   --s-tree: #78b565;
@@ -1268,10 +1268,10 @@ kbd {
     --k-bikeshare: #70406a;
     --k-pole: #5a5246;
     --sky: #182838;
-    --chrome: #0d3a38;
+    --chrome: #1b2f6e;
     --chrome-ink: #e8edf1;
-    --chrome-wash: #16262a;
-    --chrome-line: #2b4646;
+    --chrome-wash: #16213f;
+    --chrome-line: #2c3f73;
 
     --s-tree: #55924a;
     --s-car: #33404c;
@@ -1312,10 +1312,10 @@ kbd {
   --k-bikeshare: #70406a;
   --k-pole: #5a5246;
   --sky: #182838;
-  --chrome: #0d3a38;
+  --chrome: #1b2f6e;
   --chrome-ink: #e8edf1;
-  --chrome-wash: #16262a;
-  --chrome-line: #2b4646;
+  --chrome-wash: #16213f;
+  --chrome-line: #2c3f73;
 
   --s-tree: #55924a;
   --s-car: #33404c;
@@ -1518,15 +1518,15 @@ kbd {
   border-bottom-color: var(--chrome-line);
 }
 :root[data-theme="dark"] {
-  --chrome: #0f4744;
-  --chrome-wash: #14302f;
-  --chrome-line: #2f5654;
+  --chrome: #1b2f6e;
+  --chrome-wash: #16213f;
+  --chrome-line: #2c3f73;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --chrome: #0f4744;
-    --chrome-wash: #14302f;
-    --chrome-line: #2f5654;
+    --chrome: #1b2f6e;
+    --chrome-wash: #16213f;
+    --chrome-line: #2c3f73;
   }
 }
 
