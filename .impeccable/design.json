@@ -148,19 +148,19 @@
       },
       "k-sidewalk": {
         "role": "tertiary",
-        "displayName": "Sidewalk Sand",
-        "canonical": "#f2cfa6",
+        "displayName": "Sidewalk Grey",
+        "canonical": "#c4c8cc",
         "tonalRamp": [
-          "#362f25",
-          "#6d5d4b",
-          "#a38c70",
-          "#daba95",
-          "#f6ddc1",
-          "#faecdb",
-          "#fcf5ed",
-          "#fefbf8"
+          "#2a2d31",
+          "#555c63",
+          "#818992",
+          "#b2b7bd",
+          "#d9dcde",
+          "#e9eaec",
+          "#f4f4f5",
+          "#fbfbfb"
         ],
-        "dark": "#6a5238"
+        "dark": "#5b6168"
       },
       "k-planting": {
         "role": "tertiary",
@@ -196,19 +196,19 @@
       },
       "k-travel": {
         "role": "tertiary",
-        "displayName": "Travel Slate",
-        "canonical": "#bcc5ce",
+        "displayName": "Asphalt Black",
+        "canonical": "#2b3138",
         "tonalRamp": [
           "#2a2c2e",
           "#55595d",
           "#7f858b",
-          "#a9b1b9",
-          "#d0d6dd",
-          "#e4e8eb",
+          "#a9b0b9",
+          "#d1d6dc",
+          "#e4e7eb",
           "#f2f3f5",
-          "#fafbfb"
+          "#fafafb"
         ],
-        "dark": "#46525e"
+        "dark": "#05070a"
       },
       "k-bus": {
         "role": "tertiary",

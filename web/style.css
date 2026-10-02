@@ -35,10 +35,11 @@
   --red-wash: rgb(184 35 26 / 0.09);
 
   /* segment types: a tint each, always paired with a hatch and a mark */
-  --k-sidewalk: #f2cfa6;
+  --k-sidewalk: #c4c8cc;
   --k-planting: #b6dc9f;
   --k-bike: #93d9cc;
-  --k-travel: #bcc5ce;
+  --k-travel: #2b3138;
+  --travel-hatch: #aeb8c2;
   --k-bus: #eaa59b;
   --k-parking: #dcd6c5;
   --k-median: #8fc281;
@@ -1253,10 +1254,11 @@ kbd {
     --red: #ff8073;
     --red-wash: rgb(255 128 115 / 0.16);
 
-    --k-sidewalk: #6a5238;
+    --k-sidewalk: #5b6168;
     --k-planting: #41633a;
     --k-bike: #2c6b63;
-    --k-travel: #46525e;
+    --k-travel: #05070a;
+    --travel-hatch: #8c98a4;
     --k-bus: #7a4540;
     --k-parking: #50493c;
     --k-median: #3a6b31;
@@ -1295,10 +1297,11 @@ kbd {
   --red: #ff8073;
   --red-wash: rgb(255 128 115 / 0.16);
 
-  --k-sidewalk: #6a5238;
+  --k-sidewalk: #5b6168;
   --k-planting: #41633a;
   --k-bike: #2c6b63;
-  --k-travel: #46525e;
+  --k-travel: #05070a;
+  --travel-hatch: #8c98a4;
   --k-bus: #7a4540;
   --k-parking: #50493c;
   --k-median: #3a6b31;
@@ -1699,10 +1702,11 @@ kbd {
     --red: #b8231a;
     --red-wash: rgb(184 35 26 / 0.09);
 
-    --k-sidewalk: #f2cfa6;
+    --k-sidewalk: #c4c8cc;
     --k-planting: #b6dc9f;
     --k-bike: #93d9cc;
-    --k-travel: #bcc5ce;
+    --k-travel: #2b3138;
+    --travel-hatch: #aeb8c2;
     --k-bus: #eaa59b;
     --k-parking: #dcd6c5;
     --k-median: #8fc281;
@@ -3369,4 +3373,10 @@ kbd {
 /* ---- the clock is there only when a piece has other times ------------------- */
 .clock[hidden] {
   display: none;
+}
+
+/* ---- the driving lane is black, so its hatch is light ----------------------- */
+#h-travel *,
+#mh-travel * {
+  stroke: var(--travel-hatch);
 }
