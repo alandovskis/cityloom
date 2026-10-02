@@ -665,6 +665,9 @@ const toMin = (text) => {
 // The slider sets the time the sheet shows. Under it, a bar marks when the
 // selected piece is something other than its usual type.
 function renderClock() {
+  // Time only matters once some piece changes type through the day.
+  const timed = view.segments.some((s) => s.variants.length > 0);
+  $("clock").hidden = !timed;
   const t = $("time");
   t.value = view.time_min / 15;
   t.setAttribute("aria-valuetext", hhmm(view.time_min));
@@ -684,7 +687,7 @@ function renderClock() {
   $("clock-note").textContent = s?.variants.length
     ? `${KINDS[s.base_kind].name} except ${s.variants.map((v) => `${KINDS[v.kind].name.toLowerCase()} ${hhmm(v.from_min)}\u2013${hhmm(v.to_min)}`).join(", ")}`
     : "";
-  $("time-note").textContent = `Numbers are for ${hhmm(view.time_min)}.`;
+  $("time-note").textContent = timed ? `Numbers are for ${hhmm(view.time_min)}.` : "";
 }
 
 // "N checks fail" opens the Checks tab, and the notes column if it is closed.

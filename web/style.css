@@ -3365,3 +3365,8 @@ kbd {
     align-items: center;
   }
 }
+
+/* ---- the clock is there only when a piece has other times ------------------- */
+.clock[hidden] {
+  display: none;
+}
