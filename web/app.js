@@ -603,6 +603,7 @@ function renderNotes() {
     )
     .join("");
 
+  if (view.revisions.length) dismissWelcome();
   const failing = view.checks.filter((c) => !c.ok).length;
   const fc = $("fit-checks");
   fc.hidden = failing === 0;
@@ -959,19 +960,16 @@ function redo() {
 
 // ---- pointer: section -----------------------------------------------------
 
-// The first-run cue goes once the resident has dismissed it or has started
-// to edit; it is remembered so it does not come back.
-const dismissWelcome = () => {
+// The first-run cue goes when the resident dismisses it or has made a change
+// to the street (the first revision); it is remembered so it does not return.
+function dismissWelcome() {
   document.documentElement.dataset.welcome = "seen";
   remember("cityloom-welcome", "seen");
-};
+}
 $("welcome-dismiss").addEventListener("click", () => {
   dismissWelcome();
   el.wrap.focus();
 });
-for (const [target, type] of [[el.svg, "pointerdown"], [el.palette, "pointerdown"], [el.wrap, "keydown"]]) {
-  target.addEventListener(type, dismissWelcome, { once: true });
-}
 
 const DRAG_START_PX = 4;
 
@@ -1132,13 +1130,23 @@ el.wrap.addEventListener("keydown", (e) => {
     case "+":
     case "=":
       e.preventDefault();
-      nudge(uid, 100);
+      nudge(uid, e.shiftKey ? 500 : 100);
       break;
     case "-":
     case "_":
       e.preventDefault();
-      nudge(uid, -100);
+      nudge(uid, e.shiftKey ? -500 : -100);
       break;
+    case "Enter": {
+      // Straight to the width field, opening the details if they are hidden.
+      if (!uid) break;
+      e.preventDefault();
+      if (document.documentElement.dataset.inspector === "closed") $("inspector-toggle").click();
+      const field = el.inspector.querySelector('[data-ifid="width"]');
+      field?.focus();
+      field?.select();
+      break;
+    }
     case "Delete":
     case "Backspace":
       e.preventDefault();

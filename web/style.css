@@ -3149,3 +3149,17 @@ kbd {
 .fit-checks[hidden] {
   display: none;
 }
+
+/* ---- one line of keys while the drawing has keyboard focus ------------------ */
+.focus-hint {
+  display: none;
+  flex-basis: 100%;
+  order: 4;
+  margin: 0;
+  padding-bottom: 6px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.drawing:has(.wrap:focus-visible) .focus-hint {
+  display: block;
+}
