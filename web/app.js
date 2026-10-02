@@ -603,6 +603,10 @@ function renderNotes() {
     )
     .join("");
 
+  const failing = view.checks.filter((c) => !c.ok).length;
+  $("checks-n").hidden = failing === 0;
+  $("checks-n").innerHTML = failing ? `${failing}<span class="sr-only"> fail</span>` : "";
+
   el.revs.innerHTML =
     head(["Step", "What changed"]) +
     `<tbody><tr class="base${view.revisions.length ? "" : " now"}"><td>—</td><td>Street today</td></tr>${view.revisions
@@ -1142,7 +1146,7 @@ el.redo.addEventListener("click", redo);
 el.reset.addEventListener("click", () => {
   if (sheet.reset()) {
     refresh();
-    say("Started over from the street as it is today.");
+    say("Started over from the street as it is today. Undo brings your changes back.");
   }
 });
 initUnits((u) => {

@@ -67,7 +67,7 @@
           <div class="btns" role="toolbar" aria-label="Sheet tools">
             <button type="button" id="undo" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M5.5 3 2.5 6l3 3M2.5 6H10a3.5 3.5 0 0 1 0 7H6"/></svg>Undo</button>
             <button type="button" id="redo" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M10.5 3l3 3-3 3M13.5 6H6a3.5 3.5 0 0 0 0 7h4"/></svg>Redo</button>
-            <button type="button" id="reset" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>Start over</button>
+            <button type="button" id="reset" class="btn" title="Back to the street as it is today. Undo brings your changes back."><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>Start over</button>
           </div>
           <button type="button" id="print" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2V6h11v5.5h-2M4.5 9.5h7v4h-7z"/></svg>Print</button>
           <button type="button" id="inspector-toggle" class="btn" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the piece details ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span id="inspector-label">Hide piece details</span></button>
@@ -128,10 +128,10 @@
 
         <aside class="notes" id="notes" aria-label="Sheet notes">
           <div class="tabs" role="tablist" aria-label="Sheet notes">
-            <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true">Space</button>
-            <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1">Checks</button>
+            <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true">Width</button>
+            <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1">Checks<span class="tab-n" id="checks-n" hidden></span></button>
             <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
-            <button type="button" role="tab" class="tab" id="t-measures" aria-controls="p-measures" aria-selected="false" tabindex="-1">Measures</button>
+            <button type="button" role="tab" class="tab" id="t-measures" aria-controls="p-measures" aria-selected="false" tabindex="-1">Transit</button>
           </div>
 
           <div class="panel" id="p-space" role="tabpanel" aria-labelledby="t-space">
@@ -140,7 +140,7 @@
               <table class="nt" id="space"></table>
             </section>
             <section aria-labelledby="h-cap">
-              <h2 id="h-cap" class="note-h">People moved</h2>
+              <h2 id="h-cap" class="note-h">People moved <span class="sample">sample numbers</span></h2>
               <table class="nt" id="cap"></table>
             </section>
             <p class="fine" id="time-note"></p>
@@ -148,7 +148,7 @@
 
           <div class="panel" id="p-checks" role="tabpanel" aria-labelledby="t-checks" hidden>
             <section aria-labelledby="h-checks">
-              <h2 id="h-checks" class="note-h">Does it work?</h2>
+              <h2 id="h-checks" class="note-h">Does it work? <span class="sample">sample limits</span></h2>
               <ul class="checks" id="checks"></ul>
             </section>
           </div>
@@ -163,12 +163,10 @@
           <div class="panel" id="p-measures" role="tabpanel" aria-labelledby="t-measures" hidden>
             <section aria-labelledby="h-measures">
               <h2 id="h-measures" class="note-h">Transit priority measures</h2>
-              <p class="hint">The toolbox of the <a href="https://tpa.transitcosts.com/atlas/toolbox">Transit Priority Atlas</a>. Arranging the street as a lane measure keeps its sidewalks and lays the roadway out again; you can change it after.</p>
+              <p class="hint">Ways to give buses priority, from the <a href="https://tpa.transitcosts.com/atlas/toolbox">Transit Priority Atlas</a>. Arrange keeps the sidewalks and lays the roadway out again as that measure. You can undo it.</p>
               <table class="nt measures" id="measures"></table>
             </section>
           </div>
-
-          <p class="fine">Sample numbers for now, not real measurements.</p>
 
           <div class="title-block" aria-label="About this street">
             <div class="tb-cell tb-wide"><span>Street</span><b id="tb-street"></b></div>
