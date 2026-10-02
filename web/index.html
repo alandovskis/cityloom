@@ -6,7 +6,7 @@
   <title>CityLoom street editor</title>
   <meta name="description" content="Rearrange the pieces of a street within its width and see what changes.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";if(localStorage.getItem("cityloom-drawing")==="engineering")document.documentElement.dataset.drawing="engineering";if(localStorage.getItem("cityloom-welcome")==="seen")document.documentElement.dataset.welcome="seen"}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";if(localStorage.getItem("cityloom-welcome")==="seen")document.documentElement.dataset.welcome="seen"}catch(e){}</script>
   <link rel="preload" href="fonts/barlow-semi-condensed-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
@@ -44,13 +44,6 @@
                 <div class="units" role="group" aria-labelledby="theme-label">
                   <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
                   <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
-                </div>
-              </div>
-              <div class="menu-row">
-                <span id="drawing-label">Drawing</span>
-                <div class="units" role="group" aria-labelledby="drawing-label">
-                  <button type="button" class="unit drawing-mode" data-drawing-set="standard" aria-pressed="true">Standard</button>
-                  <button type="button" class="unit drawing-mode" data-drawing-set="engineering" aria-pressed="false">Engineering</button>
                 </div>
               </div>
               <p class="menu-act"><button type="button" id="how-btn" class="btn">How this works</button></p>

@@ -6,7 +6,6 @@ const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
 
 export const typing = (t) => t instanceof Element && t.closest("input, select, textarea");
-export const engineering = () => root.dataset.drawing === "engineering";
 
 // Says whether the value was stored. Storage can be blocked; a choice then
 // lasts for this visit only.
@@ -72,26 +71,6 @@ export function initTheme(say) {
     });
   }
   dark.addEventListener("change", sync);
-  sync();
-}
-
-// Drawing style: the same drawing as plain engineering line work; remembered.
-export function initDrawingStyle(say, onChange) {
-  const sync = () => {
-    for (const b of document.querySelectorAll(".drawing-mode")) {
-      b.setAttribute("aria-pressed", String((b.dataset.drawingSet === "engineering") === engineering()));
-    }
-  };
-  for (const b of document.querySelectorAll(".drawing-mode")) {
-    b.addEventListener("click", () => {
-      if (b.dataset.drawingSet === "engineering") root.dataset.drawing = "engineering";
-      else delete root.dataset.drawing;
-      remember("cityloom-drawing", b.dataset.drawingSet);
-      sync();
-      onChange();
-      say(`${b.textContent} drawing.`);
-    });
-  }
   sync();
 }
 

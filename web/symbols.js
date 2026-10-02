@@ -217,8 +217,8 @@ export const HATCH = {
   loading: `<pattern id="h-loading" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M0,6 L5,1 L10,6"/></pattern>`,
 };
 
-// Surface material hatches, used for the pieces in the engineering view, where
-// the hatch names the material and the label names the kind of piece.
+// Surface material hatches: they fill the surface swatches in the inspector and
+// the paving course along the top of each slab.
 export const MATERIAL_HATCH = {
   asphalt: `<pattern id="m-asphalt" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="0.7"/><circle cx="3.7" cy="3.7" r="0.7"/></pattern>`,
   concrete: `<pattern id="m-concrete" width="12" height="10" patternUnits="userSpaceOnUse"><path d="M2,8 L4.5,3.5 L7,8 Z"/><circle cx="9.5" cy="3" r="0.8"/></pattern>`,

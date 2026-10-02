@@ -5,7 +5,7 @@
 import init, { Plan, atlas, catalogue, junction_catalogue, materials } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH } from "./symbols.js";
 import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
-import { engineering, initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
+import { initAccountMenu, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
 
 await init();
 
@@ -291,7 +291,6 @@ function renderPlan() {
   el.svg.setAttribute("width", W);
   el.svg.setAttribute("height", H);
   el.svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  const eng = engineering();
   const zebra = Math.max(4, f1(600 * S.s));
 
   const defs = v.arms
@@ -455,7 +454,7 @@ function renderPlan() {
 
   el.svg.innerHTML =
     `<defs>${defs}</defs>` +
-    `<g class="plan${eng ? " eng" : ""}">` +
+    `<g class="plan">` +
     layers.wedge.join("") +
     layers.arm.join("") +
     layers.lane.join("") +
@@ -1206,7 +1205,6 @@ initRegion({
   say,
 });
 initTheme(say);
-initDrawingStyle(say, renderPlan);
 
 new ResizeObserver(() => renderPlan()).observe(el.scroll);
 window.addEventListener("resize", () => renderPlan());

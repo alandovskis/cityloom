@@ -5,7 +5,7 @@
 import init, { Sheet, atlas, catalogue, materials, samples } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH, symbol } from "./symbols.js";
 import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
-import { engineering, initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits, remember, typing } from "./shell.js";
+import { initAccountMenu, initPanels, initRegion, initTheme, initUnits, remember, typing } from "./shell.js";
 
 await init();
 
@@ -141,7 +141,6 @@ function setGeometry(f) {
   F = f;
   for (const k in Y0) Y[k] = Math.round(Y0[k] * f);
 }
-const TB_H = 46; // title block height in the engineering view
 const L = { padL: 30, padR: 40, scale: 0.05, width: 760 };
 let drag = null;
 let wasOver = false;
@@ -169,8 +168,8 @@ function cloud(x, y, w, h, r = 7, fresh = false) {
   return `<path class="cloud${fresh ? " fresh" : ""}" pathLength="1" d="${d}Z"/>`;
 }
 
-// Standard view: the hatch and tint name the kind of piece, so the surface
-// finish is drawn as a paving course along the top of the slab.
+// The hatch and tint name the kind of piece, so the surface finish is drawn as
+// a paving course along the top of the slab.
 const surfaceCourse = (x, y, w, material) =>
   `<rect class="surface" x="${x}" y="${y}" width="${w}" height="10"/>` +
   `<rect class="hatch" x="${x}" y="${y}" width="${w}" height="10" fill="url(#m-${material})"/>`;
@@ -200,7 +199,7 @@ function renderDrawing() {
     const w = s.width_mm * L.scale;
     parts.push(
       `<rect class="obj k-${k.id}" x="${x}" y="${Y.ex}" width="${w}" height="${Y.exH}"/>` +
-        `<rect class="hatch" x="${x}" y="${Y.ex}" width="${w}" height="${Y.exH}" fill="url(#${engineering() ? `m-${s.material}` : `h-${k.id}`})"/>`,
+        `<rect class="hatch" x="${x}" y="${Y.ex}" width="${w}" height="${Y.exH}" fill="url(#h-${k.id})"/>`,
     );
     const label = fmtN(s.width_mm);
     if (w > label.length * 8.5 + 10) {
@@ -261,8 +260,8 @@ function renderDrawing() {
         `<rect class="hit" x="${x}" y="${Y.top}" width="${w}" height="${bodyBottom - Y.top}"/>` +
         symbol(k.id, cx, G, pxPerM, w, s.width_mm / 1000, F, { shelter: s.shelter, material: s.material, tram: s.tram }) +
         `<rect class="obj k-${k.id}" x="${x}" y="${G}" width="${w}" height="${Y.slab}"/>` +
-        `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#${engineering() ? `m-${s.material}` : `h-${k.id}`})"/>` +
-        (engineering() ? "" : surfaceCourse(x, G, w, s.material)) +
+        `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#h-${k.id})"/>` +
+        surfaceCourse(x, G, w, s.material) +
         (s.direction && w >= 26 ? dirGlyph(s.direction, cx, G + Y.slab / 2) : "") +
         (k.id === "parking" && w >= 22 ? `<text class="slab-p" x="${cx}" y="${G + Y.slab / 2 + 7}" text-anchor="middle" font-size="20">P</text>` : "") +
         (s.variants.length && w >= 48 ? clockBadge(x + 24, G + Y.slab - 10) : "") +
@@ -366,43 +365,6 @@ function renderDrawing() {
     });
   }
 
-  // engineering view: lane markings as they cut through the section, a filled
-  // block for a solid line and an outlined one for a broken line
-  if (engineering()) {
-    const road = new Set(["travel", "bus", "bike", "parking", "loading"]);
-    for (let i = 1; i < n; i++) {
-      const a = KINDS[v.segments[i - 1].kind].id;
-      const b = KINDS[v.segments[i].kind].id;
-      if (!road.has(a) || !road.has(b)) continue;
-      // a bike-lane curb takes the place of the line on its side
-      if ((a === "bike" && v.segments[i - 1].curb) || (b === "bike" && v.segments[i].curb)) continue;
-      const broken = a === "travel" && b === "travel";
-      const x = X(v.segments[i].x_mm);
-      parts.push(`<rect class="lane-mark${broken ? " broken" : ""}" x="${x - 3.5}" y="${G - 9}" width="7" height="9"/>`);
-    }
-    const kx = xR - 236;
-    if (kx > L.padL + 60 + 5 * (units === "m" ? 1000 : MM_PER_FT * 5) * L.scale + 30) {
-      const ky = Y.scale;
-      parts.push(
-        `<text class="t-label t-soft" x="${kx}" y="${ky - 6}">Lane markings</text>` +
-          `<rect class="lane-mark" x="${kx + 136}" y="${ky - 16}" width="7" height="10"/>` +
-          `<text class="t-dim t-soft" x="${kx + 150}" y="${ky - 6}">Solid</text>` +
-          `<rect class="lane-mark broken" x="${kx + 190}" y="${ky - 16}" width="7" height="10"/>` +
-          `<text class="t-dim t-soft" x="${kx + 204}" y="${ky - 6}">Broken</text>`,
-      );
-    }
-  }
-
-  // engineering view: extension lines carry each boundary down to the overall strings
-  if (engineering()) {
-    const bounds = new Set([0, v.row_mm]);
-    for (const s of v.segments) bounds.add(s.x_mm + s.width_mm);
-    for (const mm of bounds) {
-      if (mm > v.row_mm) continue;
-      parts.push(`<line class="ext" x1="${X(mm)}" x2="${X(mm)}" y1="${bodyBottom + 4}" y2="${Y.total + 6}"/>`);
-    }
-  }
-
   // overall dimension strings
   parts.push(dimLine(xL, xR, Y.total));
   parts.push(`<text class="t-dim t-halo" x="${(xL + xR) / 2}" y="${Y.total - 7}" text-anchor="middle">Street width ${fmt(v.row_mm)}</text>`);
@@ -432,36 +394,7 @@ function renderDrawing() {
     parts.push(`<text class="t-dim t-soft" x="${L.padL + 60 + barW + 8}" y="${y - 6}">${units}</text>`);
   }
 
-  // engineering view: sheet border and title block
-  const furniture = [];
-  const H = engineering() ? Y.height + TB_H + 20 : Y.height;
-  if (engineering()) {
-    const top = H - TB_H - 4;
-    const cells = [
-      ["Street", v.name, 2.4],
-      ["Width", fmt(v.row_mm), 1],
-      ["Units", units === "m" ? "Metres" : "Feet", 1],
-      ["Changes", String(v.revisions.length), 1],
-      ["Sheet", "1 of 1", 1],
-    ];
-    const total = cells.reduce((a, c) => a + c[2], 0);
-    const x0 = 4;
-    const full = W - 8;
-    furniture.push(`<rect class="sheet-frame" x="${x0}" y="4" width="${full}" height="${H - 8}"/>`);
-    furniture.push(`<line class="tb-line" x1="${x0}" x2="${x0 + full}" y1="${top}" y2="${top}"/>`);
-    let cx = x0;
-    for (const [label, value, fr] of cells) {
-      const w = (full * fr) / total;
-      if (cx > x0) furniture.push(`<line class="tb-line" x1="${cx}" x2="${cx}" y1="${top}" y2="${H - 4}"/>`);
-      furniture.push(
-        `<svg x="${cx}" y="${top}" width="${w}" height="${TB_H}">` +
-          `<text class="tb-l" x="10" y="16">${label}</text>` +
-          `<text class="tb-v" x="10" y="${TB_H - 10}">${esc(value)}</text>` +
-          `</svg>`,
-      );
-      cx += w;
-    }
-  }
+  const H = Y.height;
 
   // drag feedback
   if (drag && drag.type === "move" && drag.active) {
@@ -487,8 +420,7 @@ function renderDrawing() {
     "aria-label",
     `Cross-section of ${v.name}. ${n} segments, ${fmt(v.total_mm)} of ${fmt(v.row_mm)}. ${fitText()}.`,
   );
-  // the drawing sits a little lower inside the border in the engineering view
-  el.svg.innerHTML = engineering() ? `<g transform="translate(0 10)">${parts.join("")}</g>${furniture.join("")}` : parts.join("");
+  el.svg.innerHTML = parts.join("");
   // A street that runs over draws its cloud and label beyond the right-of-way
   // line; bring them into view the first time, when the section scrolls.
   if (fresh) {
@@ -1230,7 +1162,6 @@ initRegion({
   say,
 });
 initTheme(say);
-initDrawingStyle(say, renderDrawing);
 
 new ResizeObserver(() => renderDrawing()).observe(el.scroll);
 

@@ -1860,49 +1860,6 @@ kbd {
   }
 }
 
-/* ---- engineering drawing: the same section as plain line work -------------- */
-:root[data-drawing="engineering"] #drawing .obj {
-  fill: var(--sheet);
-  stroke-width: 2.4;
-}
-:root[data-drawing="engineering"] #drawing .sky,
-:root[data-drawing="engineering"] #drawing .sym {
-  display: none;
-}
-#drawing .ext {
-  stroke: var(--ink-soft);
-  stroke-width: 0.8;
-}
-#drawing .sheet-frame {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1.6;
-  pointer-events: none;
-}
-#drawing .tb-line {
-  stroke: var(--ink);
-  stroke-width: 1;
-}
-#drawing .tb-l {
-  fill: var(--ink-faint);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-#drawing .tb-v {
-  font-size: 17px;
-  font-weight: 600;
-}
-#drawing .lane-mark {
-  fill: var(--ink);
-  stroke: var(--ink);
-  stroke-width: 1.2;
-  pointer-events: none;
-}
-#drawing .lane-mark.broken {
-  fill: var(--sheet);
-}
 #drawing .surface {
   fill: var(--sheet);
   stroke: var(--ink);
@@ -2313,18 +2270,6 @@ kbd {
   cursor: grabbing;
 }
 #drawing .handle .grip {
-  fill: var(--sheet);
-}
-
-/* engineering style: the same plan as plain line work */
-:root[data-drawing="engineering"] #drawing .piece,
-:root[data-drawing="engineering"] #drawing .wedge,
-:root[data-drawing="engineering"] #drawing .bulb,
-:root[data-drawing="engineering"] #drawing .island {
-  fill: var(--sheet);
-}
-:root[data-drawing="engineering"] #drawing .road,
-:root[data-drawing="engineering"] #drawing .crossing {
   fill: var(--sheet);
 }
 
@@ -2903,12 +2848,6 @@ kbd {
 #map pattern * {
   vector-effect: non-scaling-stroke;
 }
-:root[data-drawing="engineering"] #map .m-walk,
-:root[data-drawing="engineering"] #map .m-shoulder,
-:root[data-drawing="engineering"] #map .m-road,
-:root[data-drawing="engineering"] #map .m-t {
-  stroke: var(--sheet);
-}
 #map text {
   paint-order: stroke;
   stroke: var(--sheet);
@@ -3396,10 +3335,6 @@ kbd {
   font-weight: 700;
   pointer-events: none;
 }
-:root[data-drawing="engineering"] #drawing .slab-p {
-  fill: var(--ink);
-}
-
 /* ---- narrow screens: icon-only history and panel buttons -------------------- */
 @media (max-width: 640px) {
   .sheet-head .lbl {

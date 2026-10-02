@@ -7,7 +7,7 @@
 import init, { catalogue, materials } from "./pkg/cityloom_editor.js";
 import { HATCH } from "./symbols.js";
 import { openCity, regionIndex, resetCity } from "./city.js";
-import { initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits } from "./shell.js";
+import { initAccountMenu, initPanels, initRegion, initTheme, initUnits } from "./shell.js";
 
 await init();
 
@@ -553,7 +553,6 @@ initRegion({
   say,
 });
 initTheme(say);
-initDrawingStyle(say, renderMap);
 initAccountMenu();
 initPanels({ say, detailsWord: "places" });
 

@@ -6,7 +6,7 @@
   <title>CityLoom intersection editor</title>
   <meta name="description" content="Change how a junction of streets works: corners, crossings, lanes, turns and control.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";if(localStorage.getItem("cityloom-drawing")==="engineering")document.documentElement.dataset.drawing="engineering"}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed"}catch(e){}</script>
   <link rel="preload" href="fonts/barlow-semi-condensed-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
@@ -44,13 +44,6 @@
                 <div class="units" role="group" aria-labelledby="theme-label">
                   <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
                   <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
-                </div>
-              </div>
-              <div class="menu-row">
-                <span id="drawing-label">Drawing</span>
-                <div class="units" role="group" aria-labelledby="drawing-label">
-                  <button type="button" class="unit drawing-mode" data-drawing-set="standard" aria-pressed="true">Standard</button>
-                  <button type="button" class="unit drawing-mode" data-drawing-set="engineering" aria-pressed="false">Engineering</button>
                 </div>
               </div>
               <p class="menu-act"><button type="button" id="print" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2V6h11v5.5h-2M4.5 9.5h7v4h-7z"/></svg>Print this sheet</button></p>
