@@ -2893,6 +2893,10 @@ kbd {
   stroke: var(--blue);
   stroke-opacity: 0.45;
 }
+#map a.place:focus-visible circle.m-hit {
+  stroke-opacity: 0.9;
+  stroke-width: 2px;
+}
 #map .m-hit {
   fill: transparent;
   stroke: transparent;
