@@ -2719,7 +2719,7 @@ kbd {
   color: var(--warn);
 }
 @media print {
-  #p-measures .hint {
+  #p-measures {
     display: none;
   }
 }
