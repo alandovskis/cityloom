@@ -212,19 +212,19 @@
       },
       "k-bus": {
         "role": "tertiary",
-        "displayName": "Bus Lilac",
-        "canonical": "#cdb8ec",
+        "displayName": "Bus Red",
+        "canonical": "#eaa59b",
         "tonalRamp": [
-          "#2e2935",
-          "#5c536a",
-          "#8a7c9f",
-          "#b9a6d4",
-          "#dccdf2",
-          "#ebe3f7",
-          "#f5f1fb",
-          "#fbfafe"
+          "#352b29",
+          "#6a5653",
+          "#9f807c",
+          "#d4aca6",
+          "#f2d2cd",
+          "#f7e6e3",
+          "#fbf2f1",
+          "#fefbfa"
         ],
-        "dark": "#5a4a7e"
+        "dark": "#7a4540"
       },
       "k-parking": {
         "role": "tertiary",

@@ -39,7 +39,7 @@
   --k-planting: #b6dc9f;
   --k-bike: #93d9cc;
   --k-travel: #bcc5ce;
-  --k-bus: #cdb8ec;
+  --k-bus: #eaa59b;
   --k-parking: #dcd6c5;
   --k-median: #8fc281;
   --k-loading: #f5df7e;
@@ -1247,7 +1247,7 @@ kbd {
     --k-planting: #41633a;
     --k-bike: #2c6b63;
     --k-travel: #46525e;
-    --k-bus: #5a4a7e;
+    --k-bus: #7a4540;
     --k-parking: #50493c;
     --k-median: #3a6b31;
     --k-loading: #7e6d1f;
@@ -1286,7 +1286,7 @@ kbd {
   --k-planting: #41633a;
   --k-bike: #2c6b63;
   --k-travel: #46525e;
-  --k-bus: #5a4a7e;
+  --k-bus: #7a4540;
   --k-parking: #50493c;
   --k-median: #3a6b31;
   --k-loading: #7e6d1f;
@@ -1687,7 +1687,7 @@ kbd {
     --k-planting: #b6dc9f;
     --k-bike: #93d9cc;
     --k-travel: #bcc5ce;
-    --k-bus: #cdb8ec;
+    --k-bus: #eaa59b;
     --k-parking: #dcd6c5;
     --k-median: #8fc281;
     --k-loading: #f5df7e;
