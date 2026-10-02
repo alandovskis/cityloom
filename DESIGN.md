@@ -111,6 +111,36 @@ typography:
     lineHeight: 1.35
     letterSpacing: "normal"
     fontFeature: "tnum"
+  readout:
+    fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
+    fontSize: "20px"
+    fontWeight: 600
+    lineHeight: 1.1
+    letterSpacing: "normal"
+  cell-value:
+    fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
+    fontSize: "17px"
+    fontWeight: 600
+    lineHeight: 1.35
+    letterSpacing: "normal"
+  wordmark:
+    fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
+    fontSize: "20px"
+    fontWeight: 600
+    lineHeight: 1
+    letterSpacing: "normal"
+  wordmark-phone:
+    fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
+    fontSize: "18px"
+    fontWeight: 600
+    lineHeight: 1
+    letterSpacing: "normal"
+  print-body:
+    fontFamily: "Barlow Semi Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif"
+    fontSize: "12px"
+    fontWeight: 400
+    lineHeight: 1.35
+    letterSpacing: "normal"
 rounded:
   chip: "3px"
   sm: "4px"
