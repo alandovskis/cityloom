@@ -71,12 +71,12 @@
       "ink-faint": {
         "role": "neutral",
         "displayName": "Faint Ink",
-        "canonical": "#59656f",
+        "canonical": "#525e68",
         "tonalRamp": [
           "#0d171f",
           "#252f38",
           "#3e4953",
-          "#59656f",
+          "#525e68",
           "#76828c",
           "#93a0ab",
           "#b2c0cb",

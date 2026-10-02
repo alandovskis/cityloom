@@ -6,7 +6,7 @@ colors:
   sheet-deep: "#d9e1e6"
   ink: "#14181c"
   ink-soft: "#3b444c"
-  ink-faint: "#59656f"
+  ink-faint: "#525e68"
   rule: "#a6b0b8"
   blue-pencil: "#1d4ed8"
   blue-wash: "rgb(29 78 216 / 0.09)"
@@ -262,7 +262,7 @@ Fills for what the drawing shows. Each is paired with ink hatch and outline, so 
 - **Bond Paper Deep** (#d9e1e6): hover fill for tools, icon buttons and legend rows.
 - **Black Ink** (#14181c): primary text, control borders, symbol outlines, hatch strokes, dimension lines, and the pressed state.
 - **Soft Ink** (#3b444c): secondary text, column heads, captions, hints.
-- **Faint Ink** (#59656f): the sheet's outer border, tertiary text, disabled text, street-edge label text, drag-grip glyph, unassigned-space outline.
+- **Faint Ink** (#525e68): the sheet's outer border, tertiary text, disabled text, street-edge label text, drag-grip glyph, unassigned-space outline.
 - **Rule Grey** (#a6b0b8): the quiet structural line: dividers between header, drawing, status bar, lower band and notes column, note-heading underlines, the about card border, hairlines between table rows, disabled control borders. Never used for text.
 
 ### Night sheet (dark theme)
