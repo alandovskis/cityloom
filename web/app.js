@@ -2,7 +2,7 @@
 // No editing rules live here: widths, snapping, limits, history and checks all
 // come from the WebAssembly model.
 
-import init, { Sheet, atlas, catalogue, materials, samples, standards } from "./pkg/cityloom_editor.js";
+import init, { Sheet, atlas, catalogue, materials, samples } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH, symbol } from "./symbols.js";
 import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
 import { engineering, initAccountMenu, initDrawingStyle, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
@@ -13,7 +13,6 @@ const KINDS = JSON.parse(catalogue());
 const MATERIALS = JSON.parse(materials());
 const SAMPLES = JSON.parse(samples());
 const ATLAS = JSON.parse(atlas());
-const STD = JSON.parse(standards());
 // Opened from the map (`?street=7`) the page edits that street of the city and
 // writes each change back; otherwise it is a sandbox on the sample streets.
 const placeId = placeParam("street");
@@ -574,12 +573,6 @@ function checkDetail(c) {
     return `${fmt(c.amount_mm)} too wide. Narrow or remove a piece.`;
   }
   if (c.id === "access") return c.ok ? `A lane of ${fmt(c.amount_mm)} or more` : `No lane of ${fmt(c.amount_mm)} or more`;
-  if (c.id === "widths") {
-    if (c.ok) return "Every piece is inside the standard's range";
-    const [w, ...rest] = view.out_of_range;
-    const first = `${KINDS[w.kind].name} ${fmt(w.width_mm)}, standard allows ${fmtN(w.min_mm)} to ${fmt(w.max_mm)}`;
-    return rest.length ? `${first} and ${rest.length} more` : first;
-  }
   return c.detail;
 }
 
@@ -619,54 +612,6 @@ function renderNotes() {
 
   $("tb-changes").textContent = String(view.revisions.length);
 }
-
-// ---- engineering standard ---------------------------------------------------
-
-const stdField = (id, label, control) => `<div class="field"><label for="${id}">${label}</label>${control}</div>`;
-const stdNumber = (id, attrs, tag) =>
-  `<span class="wfield"><input type="number" id="${id}" inputmode="numeric" ${attrs}><span class="unit-tag" aria-hidden="true">${tag}</span></span>`;
-$("std-form").innerHTML =
-  stdField("std-road", "Road type", `<select id="std-road">${STD.road_types.map((r, i) => `<option value="${i}">${esc(r.name)}</option>`).join("")}</select>`) +
-  stdField("std-speed", "Design speed", stdNumber("std-speed", `min="${STD.speed_kmh.min}" max="${STD.speed_kmh.max}" step="1"`, "km/h")) +
-  `<p class="hint" id="std-vol-h">Traffic in the busiest hour, both directions</p>` +
-  STD.volumes.map((label, i) => stdField(`std-vol-${i}`, label, stdNumber(`std-vol-${i}`, `data-volume="${i}" min="0" max="${STD.volume_max}" step="1"`, "/h"))).join("");
-
-const designValue = (input) =>
-  input.id === "std-road" ? view.design.road_type : input.id === "std-speed" ? view.design.speed_kmh : view.design.volumes[Number(input.dataset.volume)];
-
-function renderStandard() {
-  const std = STD.standards[view.standard];
-  $("std-lead").textContent = `${std.name}. ${std.note} Chosen for the whole city on the map.`;
-  for (const input of $("std-form").querySelectorAll("input, select")) {
-    if (document.activeElement !== input) input.value = designValue(input);
-  }
-  const rows = KINDS.map((k, i) => {
-    const [lo, hi] = view.std_limits[i];
-    const here = view.segments.filter((s) => s.kind === i);
-    const now = here.length
-      ? here.map((s) => (s.std_ok ? fmtN(s.width_mm) : `<span class="bad">${fmtN(s.width_mm)}<span class="sr-only"> (outside the range)</span></span>`)).join(", ")
-      : "—";
-    return `<tr><td>${esc(k.name)}</td><td>${fmtN(lo)} to ${fmtN(hi)}</td><td>${now}</td></tr>`;
-  }).join("");
-  $("std-table").innerHTML = `<caption class="sr-only">Allowed width of each kind of piece on this street, in ${unitWord()}</caption>${head(["Piece", "Allowed", "Now"])}<tbody>${rows}</tbody>`;
-}
-
-// A value the model refuses is put back as it was, and the person is told.
-$("std-form").addEventListener("change", (e) => {
-  const input = e.target.closest("input, select");
-  if (!input) return;
-  const typed = input.value;
-  const n = typed.trim() === "" ? NaN : Number(typed);
-  let ok = false;
-  if (input.id === "std-road") ok = sheet.set_road_type(n);
-  else if (n === (n | 0)) ok = input.id === "std-speed" ? sheet.set_speed(n) : sheet.set_volume(Number(input.dataset.volume), n);
-  refresh();
-  const now = designValue(input);
-  input.value = now;
-  const name = input.labels[0].textContent;
-  if (ok) say(`${name}: ${input.tagName === "SELECT" ? STD.road_types[now].name : now}.`);
-  else if (String(now) !== typed) say(`${name} needs a whole number from ${input.min} to ${input.max}. Kept ${now}.`);
-});
 
 function renderFit() {
   const box = $("fit");
@@ -748,7 +693,6 @@ function render() {
   renderDrawing();
   renderInspector();
   renderNotes();
-  renderStandard();
 }
 
 
@@ -795,10 +739,6 @@ function renderInspector() {
   const i = idxOf(s.uid);
   const lo = num(s.min_mm).toFixed(2);
   const hi = num(s.max_mm).toFixed(2);
-  const stdRange = `${num(s.std_min_mm).toFixed(2)} to ${num(s.std_max_mm).toFixed(2)} ${units}`;
-  const stdLine = s.std_ok
-    ? `Standard: ${stdRange}`
-    : `${ICON.bad}Standard: ${stdRange}, ${s.width_mm < s.std_min_mm ? `${fmt(s.std_min_mm - s.width_mm)} under the minimum` : `${fmt(s.width_mm - s.std_max_mm)} over the maximum`}`;
   const surfaces = k.materials
     .map((m) => {
       const mat = MATERIALS.surfaces[m];
@@ -855,7 +795,6 @@ function renderInspector() {
         <button type="button" class="ico" data-istep="1" data-ifid="plus" aria-label="Wider by ${fmtN(stepMm())} ${units}">${ICON.plus}</button>
       </div>
       <p class="insp-range">Allowed ${lo} to ${hi} ${units}</p>
-      <p class="insp-range${s.std_ok ? "" : " std-bad"}">${stdLine}</p>
     </section>
     ${times}
     ${dirs}

@@ -15,7 +15,6 @@ use serde::{Deserialize, Serialize};
 use crate::catalogue::{KINDS, REGIONS, SAMPLES, Side};
 use crate::junction::{self, ALL_WAY_STOP, Arm, Junction, PRIORITY, SIGNAL, State};
 use crate::model::{Editor, Street};
-use crate::standard::{self, STANDARDS, StandardInfo};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
 const SAVE_VERSION: u32 = 1;
@@ -112,9 +111,6 @@ const EDGES: [EdgeDef; 23] = [
 /// The map name of the city.
 pub const NAME: &str = "Sample city";
 
-/// The standard this city starts on: its default. A resident can pick another.
-pub const DEFAULT_STANDARD: usize = standard::BALANCED;
-
 /// Node and street uids are their place in the tables above, counting from 1.
 fn node_uid(i: usize) -> u32 {
     i as u32 + 1
@@ -126,9 +122,6 @@ struct Saved {
     version: u32,
     streets: BTreeMap<u32, Street>,
     junctions: BTreeMap<u32, State>,
-    /// The id of the standard the city is on. Saves from before standards have none.
-    #[serde(default)]
-    standard: Option<String>,
 }
 
 pub struct City {
@@ -136,7 +129,6 @@ pub struct City {
     junctions: BTreeMap<u32, State>,
     today_streets: BTreeMap<u32, Street>,
     today_junctions: BTreeMap<u32, State>,
-    standard: usize,
 }
 
 fn dist_mm(a: usize, b: usize) -> f64 {
@@ -299,7 +291,7 @@ impl City {
             EDGES.iter().enumerate().map(|(i, e)| (i as u32 + 1, Street::sample(e.street, Side::Right))).collect();
         let today_junctions: BTreeMap<u32, State> =
             (0..NODES.len()).filter(|&n| NODES[n].junction).map(|n| (node_uid(n), generate(n, &today_streets))).collect();
-        City { streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions, standard: DEFAULT_STANDARD }
+        City { streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions }
     }
 
     /// The city as saved, or as first laid out for any part of the save that
@@ -309,9 +301,6 @@ impl City {
         let Ok(saved) = serde_json::from_str::<Saved>(json) else { return city };
         if saved.version != SAVE_VERSION {
             return city;
-        }
-        if let Some(i) = saved.standard.as_deref().and_then(|id| STANDARDS.iter().position(|s| s.id == id)) {
-            city.standard = i;
         }
         for (uid, street) in saved.streets {
             let ok = city.today_streets.get(&uid).is_some_and(|t| t.sample == street.sample && t.row_mm == street.row_mm);
@@ -329,12 +318,7 @@ impl City {
     }
 
     pub fn save(&self) -> String {
-        let saved = Saved {
-            version: SAVE_VERSION,
-            streets: self.streets.clone(),
-            junctions: self.junctions.clone(),
-            standard: Some(STANDARDS[self.standard].id.to_string()),
-        };
+        let saved = Saved { version: SAVE_VERSION, streets: self.streets.clone(), junctions: self.junctions.clone() };
         serde_json::to_string(&saved).expect("the city serialises")
     }
 
@@ -342,28 +326,6 @@ impl City {
     pub fn reset(&mut self) {
         self.streets = self.today_streets.clone();
         self.junctions = self.today_junctions.clone();
-    }
-
-    pub fn standard(&self) -> usize {
-        self.standard
-    }
-
-    /// Chooses the standard every street is checked against. False when there
-    /// is no such standard or it is the one already chosen. Start over leaves
-    /// it alone: it is the city's rule, not an edit to a street or junction.
-    pub fn set_standard(&mut self, standard: usize) -> bool {
-        if standard >= STANDARDS.len() || standard == self.standard {
-            return false;
-        }
-        self.standard = standard;
-        true
-    }
-
-    /// A street editor on the street as `today` and `now`, checked against the city's standard.
-    fn editor_for(&self, today: &Street, now: &Street, region: usize) -> Editor {
-        let mut e = Editor::from_street(today, now, region);
-        e.set_standard(self.standard);
-        e
     }
 
     fn edge_index(uid: u32) -> Option<usize> {
@@ -394,7 +356,7 @@ impl City {
     /// The street editor on one street of the city.
     pub fn street_editor(&self, edge: u32, region: usize) -> Option<Editor> {
         Self::edge_index(edge)?;
-        Some(self.editor_for(self.today_streets.get(&edge)?, self.streets.get(&edge)?, region))
+        Some(Editor::from_street(self.today_streets.get(&edge)?, self.streets.get(&edge)?, region))
     }
 
     /// Keeps what the street editor has made of a street.
@@ -450,7 +412,7 @@ impl City {
             let uid = i as u32 + 1;
             let today = &self.today_streets[&uid];
             let now = &self.streets[&uid];
-            let editor = self.editor_for(today, now, region);
+            let editor = Editor::from_street(today, now, region);
             let v = editor.view();
             let failing: Vec<String> = v.checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect();
             let row = v.row_mm;
@@ -516,7 +478,7 @@ impl City {
         let places = nodes.iter().filter(|n| n.junction).count() + edges.len();
         let failing = nodes.iter().filter(|n| !n.ok).count() + edges.iter().filter(|e| !e.ok).count();
         let edited = nodes.iter().filter(|n| n.edited).count() + edges.iter().filter(|e| e.edited).count();
-        CityView { name: NAME, nodes, edges, bounds_mm: [x0, y0, x1, y1], places, failing, edited, standard: self.standard, standards: standard::info() }
+        CityView { name: NAME, nodes, edges, bounds_mm: [x0, y0, x1, y1], places, failing, edited }
     }
 }
 
@@ -587,15 +549,11 @@ pub struct CityView {
     pub places: usize,
     pub failing: usize,
     pub edited: usize,
-    /// Index into `standards`: the one every street is checked against.
-    pub standard: usize,
-    pub standards: Vec<StandardInfo>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::standard::Design;
 
     #[test]
     fn the_network_is_well_formed() {
@@ -773,72 +731,5 @@ mod tests {
         assert_eq!(edge_name(22), "Sample Freeway 4 · through the city");
         assert_eq!(node_name(15), "Junction 7");
         assert_eq!(node_name(0), "Edge of the map");
-    }
-
-    #[test]
-    fn the_city_starts_on_its_default_standard() {
-        let city = City::new();
-        assert_eq!(city.standard(), DEFAULT_STANDARD);
-        let v = city.view(0);
-        assert_eq!(v.standard, DEFAULT_STANDARD);
-        assert_eq!(v.standards.iter().map(|s| s.id).collect::<Vec<_>>(), ["compact", "balanced", "generous"]);
-    }
-
-    #[test]
-    fn the_standard_is_saved_by_its_id() {
-        let mut city = City::new();
-        assert!(city.set_standard(0));
-        let saved = city.save();
-        assert!(saved.contains(r#""standard":"compact""#), "{saved}");
-        assert_eq!(City::load(&saved).standard(), 0);
-        // An id nobody knows falls back to the city's default.
-        assert_eq!(City::load(&saved.replace("compact", "nonesuch")).standard(), DEFAULT_STANDARD);
-    }
-
-    #[test]
-    fn a_save_from_before_designs_loads_with_its_streets() {
-        let mut city = City::new();
-        let mut e = city.street_editor(1, 0).unwrap();
-        let uid = e.view().segments[2].uid;
-        assert!(e.set_width(uid, 2_700));
-        assert!(city.keep_street(1, e.snapshot()));
-        let mut saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
-        saved.as_object_mut().unwrap().remove("standard");
-        for street in saved["streets"].as_object_mut().unwrap().values_mut() {
-            assert!(street.as_object_mut().unwrap().remove("design").is_some());
-        }
-        let back = City::load(&saved.to_string());
-        assert_eq!(back.standard(), DEFAULT_STANDARD);
-        assert_eq!(back.streets, city.streets);
-        assert_eq!(back.streets[&1].design, Design::for_sample(back.streets[&1].sample));
-        assert_eq!(back.view(0).edited, 1);
-    }
-
-    #[test]
-    fn choosing_a_standard_re_checks_every_street() {
-        let mut city = City::new();
-        assert_eq!(city.view(0).failing, 0);
-        assert!(city.set_standard(2));
-        let v = city.view(0);
-        assert_eq!(v.standard, 2);
-        assert!(v.failing > 0);
-        assert!(v.edges.iter().any(|e| e.failing.iter().any(|f| f == "Lane widths within the standard")));
-        assert!(!city.set_standard(2), "unchanged");
-        assert!(!city.set_standard(3), "no such standard");
-        assert!(city.set_standard(DEFAULT_STANDARD));
-        assert_eq!(city.view(0).failing, 0);
-    }
-
-    #[test]
-    fn a_street_whose_design_changed_counts_as_edited_and_comes_back_in_the_editor() {
-        let mut city = City::new();
-        let mut e = city.street_editor(1, 0).unwrap();
-        assert!(e.set_speed(30));
-        assert!(city.keep_street(1, e.snapshot()));
-        assert!(city.view(0).edges[0].edited);
-        assert_eq!(city.street_editor(1, 0).unwrap().view().design.speed_kmh, 30);
-        city.reset();
-        assert_eq!(city.view(0).edited, 0);
-        assert_eq!(city.street_editor(1, 0).unwrap().view().design.speed_kmh, 50);
     }
 }

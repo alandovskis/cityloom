@@ -10,7 +10,6 @@ pub mod junction;
 pub mod junction_view;
 pub mod model;
 pub mod plan;
-pub mod standard;
 pub mod street_measures;
 
 use wasm_bindgen::prelude::*;
@@ -102,23 +101,6 @@ impl Sheet {
         self.0.apply_measure(code)
     }
 
-    pub fn set_road_type(&mut self, index: usize) -> bool {
-        self.0.set_road_type(index)
-    }
-
-    pub fn set_speed(&mut self, speed_kmh: i32) -> bool {
-        self.0.set_speed(speed_kmh)
-    }
-
-    /// `mode` is 0 walking, 1 biking, 2 buses, 3 vehicles.
-    pub fn set_volume(&mut self, mode: usize, volume: i32) -> bool {
-        self.0.set_volume(mode, volume)
-    }
-
-    pub fn set_standard(&mut self, index: usize) -> bool {
-        self.0.set_standard(index)
-    }
-
     pub fn set_variant_time(&mut self, uid: u32, index: usize, from_min: i32, to_min: i32) -> bool {
         self.0.set_variant_time(uid, index, from_min, to_min)
     }
@@ -201,12 +183,6 @@ pub fn samples() -> String {
         .map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm, "freeway": s.freeway }))
         .collect();
     json(&list)
-}
-
-/// What the pages need to draw the engineering standard's controls, as JSON.
-#[wasm_bindgen]
-pub fn standards() -> String {
-    json(&standard::catalogue())
 }
 
 /// One junction being edited.
@@ -446,16 +422,6 @@ impl City {
     /// Puts every street and junction back as first laid out.
     pub fn reset(&mut self) {
         self.0.reset();
-    }
-
-    /// The index of the standard the city is checked against.
-    pub fn standard(&self) -> usize {
-        self.0.standard()
-    }
-
-    /// Chooses the standard; false when there is no such one or it is the one already chosen.
-    pub fn set_standard(&mut self, index: usize) -> bool {
-        self.0.set_standard(index)
     }
 
     /// The name of a street, by its uid; empty when there is none.
