@@ -837,6 +837,7 @@ function renderInspector() {
       <p class="insp-range">Allowed ${lo} to ${hi} ${units}</p>
     </section>
     <section class="insp-sec"><h3 class="note-h" id="i-h-surface">${k.id === "planting" ? "Planting" : "Surface"}</h3><p class="insp-range">${k.id === "planting" ? "What is planted in it." : "What it is paved with."}</p><ul class="opts" role="radiogroup" aria-labelledby="i-h-surface">${surfaces}</ul></section>
+    <section class="insp-sec"><h3 class="note-h" id="i-h-pos">Position</h3><div class="move-btns"><button type="button" class="btn" data-imove="-1" data-ifid="move-left"${i === 0 ? " disabled" : ""}>${ICON.left}Move left</button><button type="button" class="btn" data-imove="1" data-ifid="move-right"${i === view.segments.length - 1 ? " disabled" : ""}>Move right${ICON.right}</button></div></section>
     ${vehicle}
     ${stop}
     ${more}`;
@@ -851,7 +852,8 @@ el.inspector.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b || !uid) return;
   let ok = false;
-  if (b.dataset.itram) ok = sheet.set_tram(uid, b.dataset.itram === "1");
+  if (b.dataset.imove) moveBy(uid, Number(b.dataset.imove));
+  else if (b.dataset.itram) ok = sheet.set_tram(uid, b.dataset.itram === "1");
   else if (b.dataset.istep) ok = sheet.nudge_width(uid, Number(b.dataset.istep) * stepMm());
   else if (b.dataset.isurface) ok = sheet.set_material(uid, Number(b.dataset.isurface));
   else if (b.dataset.icurb) ok = sheet.set_curb(uid, Number(b.dataset.icurb));

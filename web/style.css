@@ -3314,3 +3314,54 @@ kbd {
   padding-top: 0;
   border-top: 0;
 }
+
+/* ---- Move left / right in the inspector ------------------------------------- */
+.move-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.move-btns .btn {
+  justify-content: center;
+  white-space: nowrap;
+}
+.move-btns .btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: square;
+}
+
+/* ---- a finger: 44px targets ------------------------------------------------- */
+@media (pointer: coarse) {
+  .btn,
+  .unit,
+  .add-item,
+  .tab,
+  .check,
+  .fit-checks {
+    min-height: 44px;
+  }
+  .ico,
+  .stepper .ico {
+    width: 44px;
+    height: 44px;
+  }
+  .stepper {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+  }
+  .stepper .wfield input,
+  .stepper input,
+  .inspector select,
+  .var input[type="time"] {
+    min-height: 44px;
+  }
+  .keyhelp summary,
+  .insp-more > summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+}
