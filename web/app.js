@@ -489,6 +489,14 @@ function renderDrawing() {
   );
   // the drawing sits a little lower inside the border in the engineering view
   el.svg.innerHTML = engineering() ? `<g transform="translate(0 10)">${parts.join("")}</g>${furniture.join("")}` : parts.join("");
+  // A street that runs over draws its cloud and label beyond the right-of-way
+  // line; bring them into view the first time, when the section scrolls.
+  if (fresh) {
+    const reach = xR + 140 - el.scroll.clientWidth;
+    if (reach > el.scroll.scrollLeft) el.scroll.scrollLeft = reach;
+  }
+  // The swipe hint is for a section that is wider than the room it has.
+  document.querySelector(".cue").classList.toggle("on", el.scroll.scrollWidth > el.scroll.clientWidth + 1);
 }
 
 // ---- the Add menu ----------------------------------------------------------
@@ -1004,6 +1012,19 @@ $("welcome-dismiss").addEventListener("click", () => {
 
 const DRAG_START_PX = 4;
 
+// Stacked under 1100px the inspector sits below the street. A tap on a piece
+// that does not turn into a drag brings it into view.
+let tapped = false;
+const narrow = matchMedia("(max-width: 1100px)");
+const calm = matchMedia("(prefers-reduced-motion: reduce)");
+el.svg.addEventListener("pointerup", () => {
+  if (!tapped) return;
+  tapped = false;
+  if (narrow.matches && document.documentElement.dataset.inspector !== "closed") {
+    el.inspector.scrollIntoView({ block: "start", behavior: calm.matches ? "auto" : "smooth" });
+  }
+});
+
 el.svg.addEventListener("pointerdown", (e) => {
   if (e.pointerType === "mouse" && e.button !== 0) return;
   const t = e.target.closest("[data-role]");
@@ -1020,6 +1041,7 @@ el.svg.addEventListener("pointerdown", (e) => {
     const uid = Number(t.dataset.uid);
     select(uid);
     announceSelection();
+    tapped = true;
     drag = { type: "move", uid, startX: e.clientX, active: false };
   }
   try {
@@ -1042,6 +1064,7 @@ el.svg.addEventListener("pointermove", (e) => {
     refresh();
   } else if (drag.type === "move") {
     if (!drag.active && Math.abs(dx) < DRAG_START_PX) return;
+    tapped = false;
     drag.active = true;
     drag.px = e.clientX - el.svg.getBoundingClientRect().left;
     drag.idx = sheet.drop_index(mmAt(e.clientX), drag.uid);
