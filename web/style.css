@@ -3092,3 +3092,16 @@ kbd {
 .keyhelp .keys {
   padding-block: 4px 8px;
 }
+
+/* ---- sidebar toggles keep their label; the fill says open ------------------- */
+.btn[aria-expanded="true"] {
+  background: var(--sheet-deep);
+}
+.menu-act {
+  margin: 12px 0 0;
+  padding-top: 8px;
+  border-top: var(--line) solid var(--rule);
+}
+.menu-act + .menu-foot {
+  margin-top: 8px;
+}

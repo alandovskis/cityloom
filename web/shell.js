@@ -119,15 +119,11 @@ export function initAccountMenu() {
   });
 }
 
-// A sidebar that collapses from a header button or a key; remembered.
-function initSidebar({ dataKey, storeKey, button, label, key, shown, hidden, saidShown, saidHidden, say }) {
+// A sidebar that collapses from a header button or a key; remembered. The
+// button keeps its label; aria-expanded says whether the sidebar is open.
+function initSidebar({ dataKey, storeKey, button, key, saidShown, saidHidden, say }) {
   const btn = $(button);
-  const text = $(label);
-  const sync = () => {
-    const open = root.dataset[dataKey] !== "closed";
-    btn.setAttribute("aria-expanded", String(open));
-    text.textContent = open ? hidden : shown;
-  };
+  const sync = () => btn.setAttribute("aria-expanded", String(root.dataset[dataKey] !== "closed"));
   const toggle = () => {
     const open = root.dataset[dataKey] === "closed";
     if (open) delete root.dataset[dataKey];
@@ -178,10 +174,7 @@ export function initPanels({ say, detailsWord = "piece details" }) {
     dataKey: "inspector",
     storeKey: "cityloom-inspector",
     button: "inspector-toggle",
-    label: "inspector-label",
     key: "[",
-    shown: `Show ${detailsWord}`,
-    hidden: `Hide ${detailsWord}`,
     saidShown: `${cap(detailsWord)} shown.`,
     saidHidden: `${cap(detailsWord)} hidden.`,
     say,
@@ -191,10 +184,7 @@ export function initPanels({ say, detailsWord = "piece details" }) {
     dataKey: "notes",
     storeKey: "cityloom-notes",
     button: "notes-toggle",
-    label: "notes-label",
     key: "]",
-    shown: "Show notes",
-    hidden: "Hide notes",
     saidShown: "Notes shown.",
     saidHidden: "Notes hidden.",
     say,
