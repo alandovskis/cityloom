@@ -122,7 +122,19 @@ const pole = (x = 0, s = 1) =>
       `<rect x="5" y="-86" width="12" height="18" rx="3"/>`,
   );
 
-// A bus shelter: posts, a roof in the bus lane's colour, a back panel and a
+// A tram: a longer body than the bus, with a pantograph and the rail under it.
+const tram = (x = 0, s = 1) =>
+  at(
+    x,
+    s,
+    `<path class="o" d="M-96,0 L96,0"/>` +
+      `<path class="f-bus" d="M-84,-8 L-84,-52 Q-84,-60 -76,-60 L76,-60 Q84,-60 84,-52 L84,-8 Z"/>` +
+      [-72, -52, -32, -12, 8, 28, 48].map((wx) => `<rect x="${wx}" y="-52" width="14" height="18"/>`).join("") +
+      `<path class="o" d="M-8,-60 L-2,-78 M8,-60 L2,-78 M-14,-78 L14,-78"/>` +
+      `<circle cx="-62" cy="-6" r="6"/><circle cx="-34" cy="-6" r="6"/><circle cx="34" cy="-6" r="6"/><circle cx="62" cy="-6" r="6"/>`,
+  );
+
+// A shelter: posts, a roof in the transit lane's colour, a back panel and a
 // bench, with a person waiting under it.
 const shelter = (x = 0, s = 1) =>
   at(
@@ -148,7 +160,7 @@ const SYMBOLS = {
   planting: (wm, o) => (o.material === "trees" ? tree(0, 1) : shrub(0, 1)),
   bike: () => cyclist(0, 1),
   travel: () => car(0, 1),
-  bus: () => bus(0, 1),
+  bus: (wm, o) => (o.tram ? tram(0, 1) : bus(0, 1)),
   parking: (wm) => car(-8, 0.92) + postP(wm * 55 * 0.36, 0.9),
   median: (wm) => {
     const w = Math.max(wm * 55 - 10, 20) / 2;
@@ -169,7 +181,7 @@ const NATIVE_W = {
   planting: (wm, o) => (o.material === "trees" ? 74 : 34),
   bike: () => 54,
   travel: () => 100,
-  bus: () => 148,
+  bus: (wm, o) => (o.tram ? 176 : 148),
   parking: () => 112,
   median: (wm) => (wm >= 2.4 ? 62 : 52),
   loading: () => 110,

@@ -259,7 +259,7 @@ function renderDrawing() {
     parts.push(
       `<g class="seg${lifted ? " lifted" : ""}" data-role="seg" data-uid="${s.uid}">` +
         `<rect class="hit" x="${x}" y="${Y.top}" width="${w}" height="${bodyBottom - Y.top}"/>` +
-        symbol(k.id, cx, G, pxPerM, w, s.width_mm / 1000, F, { shelter: s.shelter, material: s.material }) +
+        symbol(k.id, cx, G, pxPerM, w, s.width_mm / 1000, F, { shelter: s.shelter, material: s.material, tram: s.tram }) +
         `<rect class="obj k-${k.id}" x="${x}" y="${G}" width="${w}" height="${Y.slab}"/>` +
         `<rect class="hatch" x="${x}" y="${G}" width="${w}" height="${Y.slab}" fill="url(#${engineering() ? `m-${s.material}` : `h-${k.id}`})"/>` +
         (engineering() ? "" : surfaceCourse(x, G, w, s.material)) +
@@ -799,7 +799,10 @@ function renderInspector() {
     curbs = `<section class="insp-sec"><h3 class="note-h" id="i-h-curb">Curb</h3><p class="insp-range">The raised edge, if it has one.</p><ul class="opts" role="radiogroup" aria-labelledby="i-h-curb">${rows.join("")}</ul></section>`;
   }
   const stop = s.can_shelter
-    ? `<section class="insp-sec"><h3 class="note-h" id="i-h-stop">Bus stop</h3><label class="check"><input type="checkbox" data-ishelter data-ifid="shelter"${s.shelter ? " checked" : ""}>Bus shelter on this sidewalk</label></section>`
+    ? `<section class="insp-sec"><h3 class="note-h" id="i-h-stop">Transit stop</h3><label class="check"><input type="checkbox" data-ishelter data-ifid="shelter"${s.shelter ? " checked" : ""}>Shelter on this sidewalk</label></section>`
+    : "";
+  const vehicle = k.id === "bus"
+    ? `<section class="insp-sec"><h3 class="note-h" id="i-h-veh">Vehicle</h3><div class="units" role="group" aria-labelledby="i-h-veh"><button type="button" class="unit" data-itram="0" data-ifid="veh-bus" aria-pressed="${!s.tram}">Bus</button><button type="button" class="unit" data-itram="1" data-ifid="veh-tram" aria-pressed="${s.tram}">Tram</button></div></section>`
     : "";
   const moreBody = times + dirs + curbs;
   const more = moreBody
@@ -817,6 +820,7 @@ function renderInspector() {
       <p class="insp-range">Allowed ${lo} to ${hi} ${units}</p>
     </section>
     <section class="insp-sec"><h3 class="note-h" id="i-h-surface">${k.id === "planting" ? "Planting" : "Surface"}</h3><p class="insp-range">${k.id === "planting" ? "What is planted in it." : "What it is paved with."}</p><ul class="opts" role="radiogroup" aria-labelledby="i-h-surface">${surfaces}</ul></section>
+    ${vehicle}
     ${stop}
     ${more}`;
   if (focusId) {
@@ -830,7 +834,8 @@ el.inspector.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b || !uid) return;
   let ok = false;
-  if (b.dataset.istep) ok = sheet.nudge_width(uid, Number(b.dataset.istep) * stepMm());
+  if (b.dataset.itram) ok = sheet.set_tram(uid, b.dataset.itram === "1");
+  else if (b.dataset.istep) ok = sheet.nudge_width(uid, Number(b.dataset.istep) * stepMm());
   else if (b.dataset.isurface) ok = sheet.set_material(uid, Number(b.dataset.isurface));
   else if (b.dataset.icurb) ok = sheet.set_curb(uid, Number(b.dataset.icurb));
   else if (b.dataset.idir) ok = sheet.set_direction(uid, Number(b.dataset.idir));
