@@ -717,7 +717,7 @@ function crossingSection(a) {
   }
   const bulbs = [0, 1]
     .map((i) => {
-      const has = a.park_mm[i] > 0;
+      const has = a.can_bulb[i];
       return option(`bulb-${i}`, a.bulbs[i] !== null, "", `${i === 0 ? "Left" : "Right"} curb bulge${has ? "" : " (no parking there)"}`, `data-ibulb="${i}" ${has ? "" : "disabled"}`, "checkbox");
     })
     .join("");
@@ -779,7 +779,6 @@ function renderInspector() {
     if (crossingOnly) {
       el.inspector.innerHTML = head + crossingSection(a) + controlSection();
     } else {
-      const canRemove = v.arms.length > CAT.limits.min_arms;
       const dirSec = numField("bearing", "Direction", a.bearing, {
         minus: "Turn anticlockwise by 5°",
         plus: "Turn clockwise by 5°",
@@ -810,7 +809,7 @@ function renderInspector() {
         controlSection() +
         (v.linked
           ? ""
-          : `<section class="insp-sec"><button type="button" class="btn danger" data-iremove="1" data-ifid="remove" ${canRemove ? "" : "disabled"}>${BTN.remove}Remove this street</button>${canRemove ? "" : `<p class="insp-range">A junction needs at least ${LIM.min_arms} streets.</p>`}</section>`);
+          : `<section class="insp-sec"><button type="button" class="btn danger" data-iremove="1" data-ifid="remove" ${v.can_remove ? "" : "disabled"}>${BTN.remove}Remove this street</button>${v.can_remove ? "" : `<p class="insp-range">A junction needs at least ${LIM.min_arms} streets.</p>`}</section>`);
     }
   }
   if (focusId) {
@@ -849,23 +848,11 @@ function announceEdit() {
   if (last) say(`${last.label}. ${$("fit").textContent}`);
 }
 
-const REFUSED = {
-  add: "There is no room for another street.",
-  remove: "A junction needs at least three streets.",
-  control: "The streets are too wide to fit a roundabout.",
-  bearing: "That is too close to a neighbouring street, or leaves a gap wider than a straight road.",
-  turn: "A street has to keep at least one way out.",
-  lane: "A lane has to go to at least one street.",
-  island: "This road is too narrow for an island.",
-  bulb: "There is no parking on that side to give up.",
-  other: "That change does not fit.",
-};
-
-function act(fn, refused = "other") {
+function act(fn) {
   const ok = fn();
   refresh();
   if (ok) announceEdit();
-  else say(REFUSED[refused]);
+  else say(plan.refusal());
   return ok;
 }
 
@@ -907,10 +894,10 @@ el.inspector.addEventListener("click", (e) => {
   if (d.ibusoff !== undefined) return void act(() => plan.set_bus(0, 0));
   if (d.pickarm !== undefined) return void select("arm", uid);
   if (d.pick !== undefined) return void select("lane", uid, Number(d.pick));
-  if (d.lane !== undefined) return void act(() => plan.set_lane_dest(uid, Number(d.lane), Number(d.to), (b.getAttribute("aria-pressed") ?? b.getAttribute("aria-checked")) !== "true"), "lane");
+  if (d.lane !== undefined) return void act(() => plan.set_lane_dest(uid, Number(d.lane), Number(d.to), (b.getAttribute("aria-pressed") ?? b.getAttribute("aria-checked")) !== "true"));
   if (d.icross !== undefined) return void act(() => plan.set_crossing(uid, d.icross === "1"));
-  if (d.iisland !== undefined) return void act(() => plan.set_island(uid, b.getAttribute("aria-checked") !== "true"), "island");
-  if (d.ibulb !== undefined) return void act(() => plan.set_bulb(uid, Number(d.ibulb), b.getAttribute("aria-checked") !== "true"), "bulb");
+  if (d.iisland !== undefined) return void act(() => plan.set_island(uid, b.getAttribute("aria-checked") !== "true"));
+  if (d.ibulb !== undefined) return void act(() => plan.set_bulb(uid, Number(d.ibulb), b.getAttribute("aria-checked") !== "true"));
   if (d.iremove) return void removeSelected();
 });
 
@@ -927,8 +914,7 @@ function step(key, dir) {
     cycle: () => plan.step_cycle(dir),
     alen: () => plan.step_approach_len(s.uid, dir),
   };
-  const refused = { bearing: "bearing", ring: "other" }[key] ?? "other";
-  act(tries[key], refused);
+  act(tries[key]);
 }
 
 el.inspector.addEventListener("change", (e) => {
@@ -941,7 +927,7 @@ el.inspector.addEventListener("change", (e) => {
     const [a, b] = t.value ? t.value.split("-").map(Number) : [0, 0];
     return void act(() => plan.set_bus(a, b));
   }
-  if (t.dataset.icontrol !== undefined) return void act(() => plan.set_control(Number(t.value)), "control");
+  if (t.dataset.icontrol !== undefined) return void act(() => plan.set_control(Number(t.value)));
   if (t.dataset.istreet !== undefined) return void act(() => plan.set_street(s.uid, Number(t.value)));
   const key = t.dataset.iset;
   if (!key) return;
@@ -957,7 +943,7 @@ el.inspector.addEventListener("change", (e) => {
     cycle: () => plan.set_cycle(fromInput(v)),
     alen: () => plan.set_approach_len(s.uid, fromInput(v)),
   }[key];
-  act(set, key === "bearing" ? "bearing" : "other");
+  act(set);
 });
 
 // Radio groups: arrows move the choice, as native radios do.
@@ -978,13 +964,7 @@ function removeSelected() {
   if (s.kind === "bus") return void act(() => plan.set_bus(0, 0));
   if (s.kind === "cycle") return void act(() => plan.set_cycle(0));
   if (s.kind === "crossing") return void act(() => plan.set_crossing(s.uid, false));
-  if (s.kind === "arm" && view.linked) return void say("The streets here belong to the city, so they cannot be removed.");
-  if (s.kind === "arm") {
-    const ok = plan.remove_arm(s.uid);
-    refresh();
-    if (ok) announceEdit();
-    else say(REFUSED.remove);
-  }
+  if (s.kind === "arm") act(() => plan.remove_arm(s.uid));
 }
 
 // ---- notes events -----------------------------------------------------------
@@ -992,7 +972,7 @@ function removeSelected() {
 $("turns").addEventListener("click", (e) => {
   const b = e.target.closest("button.turn");
   if (!b) return;
-  act(() => plan.set_turn(Number(b.dataset.from), Number(b.dataset.to), b.getAttribute("aria-pressed") !== "true"), "turn");
+  act(() => plan.set_turn(Number(b.dataset.from), Number(b.dataset.to), b.getAttribute("aria-pressed") !== "true"));
 });
 
 // ---- pointer ----------------------------------------------------------------
@@ -1084,7 +1064,7 @@ function endChip(commit, e) {
   const r = el.svg.getBoundingClientRect();
   const over = e && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
   if (commit && over) {
-    act(() => plan.add_arm_toward(c.street, ...mmOf(e)) !== 0, "add");
+    act(() => plan.add_arm_toward(c.street, ...mmOf(e)) !== 0);
   }
 }
 el.palette.addEventListener("pointerup", (e) => endChip(true, e));
@@ -1093,7 +1073,7 @@ el.palette.addEventListener("pointercancel", (e) => endChip(false, e));
 el.palette.addEventListener("click", (e) => {
   const b = e.target.closest("[data-street]");
   if (!b || e.detail > 1 || chipDidDrag) return;
-  act(() => plan.add_arm(Number(b.dataset.street), -1) !== 0, "add");
+  act(() => plan.add_arm(Number(b.dataset.street), -1) !== 0);
 });
 let chipDidDrag = false;
 el.palette.addEventListener("pointerdown", () => (chipDidDrag = false));

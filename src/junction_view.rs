@@ -287,7 +287,8 @@ pub struct ArmView {
     pub banned: Vec<u32>,
     pub classes: u8,
     pub road_mm: i32,
-    pub park_mm: [i32; 2],
+    /// Which side's curb can bulge out into parking: only beside parking.
+    pub can_bulb: [bool; 2],
     pub can_island: bool,
     pub max_offset_mm: i32,
     pub enters: bool,
@@ -374,6 +375,8 @@ pub struct JView {
     pub name: String,
     /// A place in a city: its streets are the city's.
     pub linked: bool,
+    /// A street can be taken away: the junction is not the city's and keeps three.
+    pub can_remove: bool,
     pub sample: usize,
     pub region: &'static str,
     pub drive_side: &'static str,
@@ -670,7 +673,7 @@ impl Junction {
                 banned: a.banned.clone(),
                 classes: classes[i],
                 road_mm,
-                park_mm: l.prof.park,
+                can_bulb: l.prof.park.map(|p| p > 0),
                 can_island: road_mm >= ISLAND_MIN_ROAD_MM,
                 max_offset_mm: road_mm / 2,
                 enters,
@@ -806,6 +809,7 @@ impl Junction {
         JView {
             name: if self.is_linked() { self.name().to_string() } else { JUNCTION_SAMPLES[self.sample()].name.to_string() },
             linked: self.is_linked(),
+            can_remove: !self.is_linked() && n > MIN_ARMS,
             sample: self.sample(),
             region: REGIONS[region].id,
             drive_side: if side == Side::Left { "left" } else { "right" },
@@ -1615,5 +1619,34 @@ mod tests {
     fn only_a_roundabout_has_a_size_to_type() {
         let mut j = Junction::new(0);
         assert!(!j.set_ring_radius(10_000));
+    }
+
+    #[test]
+    fn a_street_can_be_removed_while_the_junction_keeps_three_and_is_not_the_city_s() {
+        let mut j = Junction::new(0);
+        assert!(j.view().can_remove);
+        let uid = j.current().arms[0].uid;
+        assert!(j.remove_arm(uid));
+        assert!(!j.view().can_remove, "three streets are left");
+    }
+
+    #[test]
+    fn a_city_junction_cannot_remove_streets() {
+        let mut state = Junction::new(0).current().clone();
+        for a in &mut state.arms {
+            a.edge = a.uid;
+            a.section = Some(crate::model::Street::sample(a.street, crate::catalogue::Side::Right));
+        }
+        let j = Junction::from_city("Test", &state, &state, 0).unwrap();
+        assert!(!j.view().can_remove);
+    }
+
+    #[test]
+    fn a_curb_bulge_is_offered_only_beside_parking() {
+        let j = Junction::new(1); // Sample Street 1 has parking both sides; Sample Lane 3 on one
+        let v = j.view();
+        let by = |street: usize| v.arms.iter().find(|a| a.street_index == street).unwrap().can_bulb;
+        assert_eq!(by(0), [true, true]);
+        assert_eq!(by(2), [false, true]);
     }
 }

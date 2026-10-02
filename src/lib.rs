@@ -220,6 +220,11 @@ impl Plan {
         self.0.add_arm(street, bearing)
     }
 
+    /// Why the last edit was refused, in words. Read it after a call returned false.
+    pub fn refusal(&self) -> String {
+        self.0.refusal().unwrap_or(junction::Refusal::DoesNotFit).message().to_string()
+    }
+
     /// Adds a street facing the point (x, y) on the plan, in millimetres from
     /// the junction's centre. Returns its uid, or 0 when there is no room.
     pub fn add_arm_toward(&mut self, street: usize, x: f64, y: f64) -> u32 {

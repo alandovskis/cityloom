@@ -463,6 +463,57 @@ pub const JUNCTION_SAMPLES: [JunctionSample; 4] = [
 
 // ---- the editor ---------------------------------------------------------------
 
+/// Why an edit was refused, in words for the resident.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Refusal {
+    NoRoomForStreet,
+    NeedsThreeStreets,
+    LinkedNoAdd,
+    LinkedNoRemove,
+    LinkedNoSwap,
+    RoundaboutTooBig,
+    BearingBlocked,
+    LastWayOut,
+    LaneNeedsStreet,
+    IslandRoadTooNarrow,
+    BulbNoParking,
+    DoesNotFit,
+}
+
+impl Refusal {
+    pub const ALL: [Refusal; 12] = [
+        Refusal::NoRoomForStreet,
+        Refusal::NeedsThreeStreets,
+        Refusal::LinkedNoAdd,
+        Refusal::LinkedNoRemove,
+        Refusal::LinkedNoSwap,
+        Refusal::RoundaboutTooBig,
+        Refusal::BearingBlocked,
+        Refusal::LastWayOut,
+        Refusal::LaneNeedsStreet,
+        Refusal::IslandRoadTooNarrow,
+        Refusal::BulbNoParking,
+        Refusal::DoesNotFit,
+    ];
+
+    pub fn message(self) -> &'static str {
+        match self {
+            Refusal::NoRoomForStreet => "There is no room for another street.",
+            Refusal::NeedsThreeStreets => "A junction needs at least three streets.",
+            Refusal::LinkedNoAdd => "The streets here belong to the city, so none can be added.",
+            Refusal::LinkedNoRemove => "The streets here belong to the city, so they cannot be removed.",
+            Refusal::LinkedNoSwap => "The streets here belong to the city, so they cannot be swapped.",
+            Refusal::RoundaboutTooBig => "The streets are too wide to fit a roundabout.",
+            Refusal::BearingBlocked => "That is too close to a neighbouring street, or leaves a gap wider than a straight road.",
+            Refusal::LastWayOut => "A street has to keep at least one way out.",
+            Refusal::LaneNeedsStreet => "A lane has to go to at least one street.",
+            Refusal::IslandRoadTooNarrow => "This road is too narrow for an island.",
+            Refusal::BulbNoParking => "There is no parking on that side to give up.",
+            Refusal::DoesNotFit => "That change does not fit.",
+        }
+    }
+}
+
 pub struct Junction {
     sample: usize,
     /// Set when the junction is a place in a city: its streets are the city's
@@ -477,6 +528,8 @@ pub struct Junction {
     pub selected: Target,
     gesture: Option<State>,
     pending_label: String,
+    /// Why the last edit was refused; None once one is taken.
+    refusal: Option<Refusal>,
 }
 
 fn snap(v: i32, step: i32) -> i32 {
@@ -496,6 +549,7 @@ impl Junction {
             selected: Target::None,
             gesture: None,
             pending_label: String::new(),
+            refusal: None,
         };
         j.load_sample(sample);
         j
@@ -556,6 +610,7 @@ impl Junction {
             selected: Target::None,
             gesture: None,
             pending_label: String::new(),
+            refusal: None,
         };
         let same = |a: &State, b: &State| State { label: String::new(), ..a.clone() } == State { label: String::new(), ..b.clone() };
         if let Some(now) = now.filter(|n| !same(n, &today)) {
@@ -637,10 +692,18 @@ impl Junction {
     where
         F: FnOnce(&mut State) -> bool,
     {
+        self.edit_why(Refusal::DoesNotFit, label, f)
+    }
+
+    /// Like `edit`, with the reason to give when the result cannot be drawn.
+    fn edit_why<F>(&mut self, why: Refusal, label: String, f: F) -> bool
+    where
+        F: FnOnce(&mut State) -> bool,
+    {
         let region = self.region;
         let mut next = self.current().clone();
         if !f(&mut next) {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         next.arms.sort_by_key(|a| a.bearing);
         normalize(&mut next.arms, region);
@@ -653,9 +716,13 @@ impl Junction {
                 next.bus = None;
             }
         }
-        if !valid(&next, region) || next == *self.current() {
-            return false;
+        if !valid(&next, region) {
+            return self.refuse(why);
         }
+        if next == *self.current() {
+            return self.refuse(Refusal::DoesNotFit);
+        }
+        self.refusal = None;
         if self.gesture.is_some() {
             *self.current_mut() = next;
             self.pending_label = label;
@@ -668,6 +735,16 @@ impl Junction {
         self.cursor += 1;
         self.fix_selection();
         true
+    }
+
+    fn refuse(&mut self, why: Refusal) -> bool {
+        self.refusal = Some(why);
+        false
+    }
+
+    /// Why the last edit was refused, if the last one was.
+    pub fn refusal(&self) -> Option<Refusal> {
+        self.refusal
     }
 
     pub fn begin_gesture(&mut self) {
@@ -801,15 +878,31 @@ impl Junction {
     where
         F: FnOnce(&mut Arm) -> bool,
     {
-        let Some(a) = self.arm(uid) else { return false };
+        self.arm_edit_why(Refusal::DoesNotFit, uid, label, f)
+    }
+
+    fn arm_edit_why<F>(&mut self, why: Refusal, uid: u32, label: impl FnOnce(&Arm) -> String, f: F) -> bool
+    where
+        F: FnOnce(&mut Arm) -> bool,
+    {
+        let Some(a) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         let label = label(a);
-        self.edit(label, |s| s.arms.iter_mut().find(|a| a.uid == uid).is_some_and(f))
+        self.edit_why(why, label, |s| s.arms.iter_mut().find(|a| a.uid == uid).is_some_and(f))
     }
 
     /// Adds a street at `bearing`, or at the middle of the widest gap when
     /// `bearing` is negative. Returns its uid, or 0 when it does not fit.
     pub fn add_arm(&mut self, street: usize, bearing: i32) -> u32 {
-        if self.linked || street >= SAMPLES.len() || SAMPLES[street].freeway || self.current().arms.len() >= MAX_ARMS {
+        if self.linked {
+            self.refuse(Refusal::LinkedNoAdd);
+            return 0;
+        }
+        if street >= SAMPLES.len() || SAMPLES[street].freeway {
+            self.refuse(Refusal::DoesNotFit);
+            return 0;
+        }
+        if self.current().arms.len() >= MAX_ARMS {
+            self.refuse(Refusal::NoRoomForStreet);
             return 0;
         }
         let bearing = if bearing < 0 { widest_gap(&self.current().arms) } else { snap(bearing, BEARING_STEP).rem_euclid(360) };
@@ -845,16 +938,20 @@ impl Junction {
                 return uid;
             }
         }
+        self.refuse(Refusal::NoRoomForStreet);
         0
     }
 
     pub fn remove_arm(&mut self, uid: u32) -> bool {
-        let Some(a) = self.arm(uid).filter(|_| !self.linked) else { return false };
+        let Some(a) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        if self.linked {
+            return self.refuse(Refusal::LinkedNoRemove);
+        }
+        if self.current().arms.len() <= MIN_ARMS {
+            return self.refuse(Refusal::NeedsThreeStreets);
+        }
         let label = format!("Remove {}", arm_name(a));
         let ok = self.edit(label, |s| {
-            if s.arms.len() <= MIN_ARMS {
-                return false;
-            }
             s.arms.retain(|a| a.uid != uid);
             true
         });
@@ -866,7 +963,7 @@ impl Junction {
 
     pub fn set_bearing(&mut self, uid: u32, bearing: i32) -> bool {
         let b = snap(bearing, BEARING_STEP).rem_euclid(360);
-        self.arm_edit(uid, |a| format!("{} bearing: {b}°", a.street_name()), |a| {
+        self.arm_edit_why(Refusal::BearingBlocked, uid, |a| format!("{} bearing: {b}°", a.street_name()), |a| {
             a.bearing = b;
             true
         })
@@ -889,7 +986,7 @@ impl Junction {
     pub fn set_corner(&mut self, uid: u32, mm: i32) -> bool {
         let mm = snap(mm, RING_STEP_MM);
         if !(MIN_CORNER_MM..=MAX_CORNER_MM).contains(&mm) {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         self.arm_edit(uid, |a| format!("Corner after {}: {mm} mm radius", arm_name(a)), |a| {
             a.corner_mm = mm;
@@ -898,8 +995,11 @@ impl Junction {
     }
 
     pub fn set_street(&mut self, uid: u32, street: usize) -> bool {
-        if self.linked || street >= SAMPLES.len() || SAMPLES[street].freeway {
-            return false;
+        if self.linked {
+            return self.refuse(Refusal::LinkedNoSwap);
+        }
+        if street >= SAMPLES.len() || SAMPLES[street].freeway {
+            return self.refuse(Refusal::DoesNotFit);
         }
         self.arm_edit(uid, |a| format!("{} becomes {}", arm_name(a), SAMPLES[street].name), |a| {
             a.street = street;
@@ -920,7 +1020,7 @@ impl Junction {
     pub fn set_setback(&mut self, uid: u32, mm: i32) -> bool {
         let mm = snap(mm, RING_STEP_MM);
         if !(MIN_SETBACK_MM..=MAX_SETBACK_MM).contains(&mm) {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         self.arm_edit(uid, |a| format!("{} crossing set back {mm} mm", arm_name(a)), |a| {
             a.crossing.as_mut().map(|c| c.setback_mm = mm).is_some()
@@ -930,7 +1030,7 @@ impl Junction {
     pub fn set_crossing_width(&mut self, uid: u32, mm: i32) -> bool {
         let mm = snap(mm, RING_STEP_MM);
         if !(MIN_CROSSING_MM..=MAX_CROSSING_MM).contains(&mm) {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         self.arm_edit(uid, |a| format!("{} crossing {mm} mm wide", arm_name(a)), |a| {
             a.crossing.as_mut().map(|c| c.width_mm = mm).is_some()
@@ -939,10 +1039,10 @@ impl Junction {
 
     pub fn set_island(&mut self, uid: u32, on: bool) -> bool {
         let region = self.region;
+        if on && self.arm(uid).is_some_and(|a| a.profile(region).road_mm() < ISLAND_MIN_ROAD_MM) {
+            return self.refuse(Refusal::IslandRoadTooNarrow);
+        }
         self.arm_edit(uid, |a| format!("{} refuge island: {}", arm_name(a), if on { "add" } else { "remove" }), |a| {
-            if on && a.profile(region).road_mm() < ISLAND_MIN_ROAD_MM {
-                return false;
-            }
             a.crossing.as_mut().map(|c| c.island = on).is_some()
         })
     }
@@ -951,13 +1051,13 @@ impl Junction {
     pub fn set_bulb(&mut self, uid: u32, side: usize, on: bool) -> bool {
         let region = self.region;
         if side > 1 {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         let word = if side == 0 { "left" } else { "right" };
+        if on && self.arm(uid).is_some_and(|a| a.profile(region).park[side] == 0) {
+            return self.refuse(Refusal::BulbNoParking);
+        }
         self.arm_edit(uid, |a| format!("{} {word} bulb-out: {}", arm_name(a), if on { "add" } else { "remove" }), |a| {
-            if on && a.profile(region).park[side] == 0 {
-                return false;
-            }
             a.bulb[side] = on;
             true
         })
@@ -965,9 +1065,12 @@ impl Junction {
 
     /// Lets a lane go to a street, or not. A lane keeps at least one street.
     pub fn set_lane_dest(&mut self, uid: u32, lane: usize, to: u32, on: bool) -> bool {
-        let Some(dest) = self.arm(to).map(arm_name) else { return false };
+        let Some(dest) = self.arm(to).map(arm_name) else { return self.refuse(Refusal::DoesNotFit) };
         if uid == to {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
+        }
+        if !on && self.arm(uid).and_then(|a| a.lanes.get(lane)).is_some_and(|l| l.to == [to]) {
+            return self.refuse(Refusal::LaneNeedsStreet);
         }
         self.arm_edit(
             uid,
@@ -980,7 +1083,7 @@ impl Junction {
                     }
                     l.to.push(to);
                 } else {
-                    if !l.to.contains(&to) || l.to.len() == 1 {
+                    if !l.to.contains(&to) {
                         return false;
                     }
                     l.to.retain(|u| *u != to);
@@ -1000,7 +1103,7 @@ impl Junction {
     /// Sets the approach measure, by index into `APPROACHES`.
     pub fn set_approach(&mut self, uid: u32, approach: usize) -> bool {
         if approach >= APPROACHES.len() {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         self.arm_edit(
             uid,
@@ -1015,7 +1118,7 @@ impl Junction {
     pub fn set_approach_len(&mut self, uid: u32, mm: i32) -> bool {
         let mm = snap(mm, APPROACH_STEP_MM);
         if !(APPROACH_MIN_MM..=APPROACH_MAX_MM).contains(&mm) {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         self.arm_edit(uid, |a| format!("{} approach measure: {mm} mm", arm_name(a)), |a| {
             a.approach_mm = mm;
@@ -1026,7 +1129,7 @@ impl Junction {
     /// Sets the bus stop, by index into `STOPS`.
     pub fn set_stop(&mut self, uid: u32, stop: usize) -> bool {
         if stop >= STOPS.len() {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         self.arm_edit(
             uid,
@@ -1041,7 +1144,7 @@ impl Junction {
     /// Sets the turn management, by index into `RULES`.
     pub fn set_rule(&mut self, uid: u32, rule: usize) -> bool {
         if rule >= RULES.len() {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         self.arm_edit(
             uid,
@@ -1061,20 +1164,23 @@ impl Junction {
     }
 
     pub fn set_turn(&mut self, from: u32, to: u32, allowed: bool) -> bool {
-        let (Some(a), Some(b)) = (self.arm(from), self.arm(to)) else { return false };
+        let (Some(a), Some(b)) = (self.arm(from), self.arm(to)) else { return self.refuse(Refusal::DoesNotFit) };
         if from == to {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         let label = format!("{} to {}: {}", arm_name(a), arm_name(b), if allowed { "allow" } else { "no turn" });
         let others = self.current().arms.len() - 1;
+        // An arm keeps at least one way out.
+        if !allowed && a.banned.len() + 2 > others && !a.banned.contains(&to) {
+            return self.refuse(Refusal::LastWayOut);
+        }
         self.arm_edit(from, |_| label, |a| {
             if allowed {
                 let before = a.banned.len();
                 a.banned.retain(|&u| u != to);
                 return a.banned.len() != before;
             }
-            // An arm keeps at least one way out.
-            if a.banned.contains(&to) || a.banned.len() + 2 > others {
+            if a.banned.contains(&to) {
                 return false;
             }
             a.banned.push(to);
@@ -1084,9 +1190,11 @@ impl Junction {
 
     pub fn set_control(&mut self, control: usize) -> bool {
         if control >= CONTROLS.len() {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
-        self.edit(format!("Control: {}", CONTROLS[control].name.to_lowercase()), |s| {
+        // Only a roundabout can leave a junction that cannot be drawn.
+        let why = if control == ROUNDABOUT { Refusal::RoundaboutTooBig } else { Refusal::DoesNotFit };
+        self.edit_why(why, format!("Control: {}", CONTROLS[control].name.to_lowercase()), |s| {
             s.control = control;
             true
         })
@@ -1099,7 +1207,7 @@ impl Junction {
         let label = match pair {
             Some((a, b)) => match (self.arm(a), self.arm(b)) {
                 (Some(x), Some(y)) => format!("Bus lane across the middle: {} to {}", arm_name(x), arm_name(y)),
-                _ => return false,
+                _ => return self.refuse(Refusal::DoesNotFit),
             },
             None => "Bus lane across the middle: remove".into(),
         };
@@ -1117,7 +1225,7 @@ impl Junction {
     pub fn set_cycle(&mut self, width_mm: Option<i32>) -> bool {
         let width = width_mm.map(|w| snap(w, RING_STEP_MM));
         if width.is_some_and(|w| !(CYCLE_MIN_MM..=CYCLE_MAX_MM).contains(&w)) {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         let label = match width {
             Some(w) => format!("Cycle track around the roundabout: {w} mm"),
@@ -1134,33 +1242,33 @@ impl Junction {
 
     /// Moves an arm's bearing one step round, clockwise for `dir` 1.
     pub fn step_bearing(&mut self, uid: u32, dir: i32) -> bool {
-        let Some(a) = self.arm(uid) else { return false };
+        let Some(a) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         self.set_bearing(uid, a.bearing + dir * BEARING_STEP)
     }
 
     pub fn step_offset(&mut self, uid: u32, dir: i32) -> bool {
-        let Some(a) = self.arm(uid) else { return false };
+        let Some(a) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         self.set_offset(uid, a.offset_mm + dir * OFFSET_STEP_MM)
     }
 
     /// Steps the curb radius at the corner clockwise of an arm.
     pub fn step_corner(&mut self, uid: u32, dir: i32) -> bool {
-        let Some(a) = self.arm(uid) else { return false };
+        let Some(a) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         self.set_corner(uid, a.corner_mm + dir * RING_STEP_MM)
     }
 
     pub fn step_setback(&mut self, uid: u32, dir: i32) -> bool {
-        let Some(c) = self.arm(uid).and_then(|a| a.crossing) else { return false };
+        let Some(c) = self.arm(uid).and_then(|a| a.crossing) else { return self.refuse(Refusal::DoesNotFit) };
         self.set_setback(uid, c.setback_mm + dir * RING_STEP_MM)
     }
 
     pub fn step_crossing_width(&mut self, uid: u32, dir: i32) -> bool {
-        let Some(c) = self.arm(uid).and_then(|a| a.crossing) else { return false };
+        let Some(c) = self.arm(uid).and_then(|a| a.crossing) else { return self.refuse(Refusal::DoesNotFit) };
         self.set_crossing_width(uid, c.width_mm + dir * RING_STEP_MM)
     }
 
     pub fn step_approach_len(&mut self, uid: u32, dir: i32) -> bool {
-        let Some(a) = self.arm(uid) else { return false };
+        let Some(a) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         self.set_approach_len(uid, a.approach_mm + dir * APPROACH_STEP_MM)
     }
 
@@ -1170,7 +1278,7 @@ impl Junction {
 
     /// Steps the width of the cycle track; there has to be one.
     pub fn step_cycle(&mut self, dir: i32) -> bool {
-        let Some(w) = self.current().cycle else { return false };
+        let Some(w) = self.current().cycle else { return self.refuse(Refusal::DoesNotFit) };
         self.set_cycle(Some(w + dir * RING_STEP_MM))
     }
 
@@ -1183,7 +1291,7 @@ impl Junction {
     pub fn set_ring(&mut self, extra_mm: i32) -> bool {
         let extra = snap(extra_mm, RING_STEP_MM);
         if !(0..=MAX_RING_MM).contains(&extra) {
-            return false;
+            return self.refuse(Refusal::DoesNotFit);
         }
         self.edit(format!("Roundabout: {extra} mm larger"), |s| {
             s.ring_extra_mm = extra;
@@ -1780,5 +1888,147 @@ mod tests {
         assert_eq!(j.current().cycle, Some(CYCLE_DEFAULT_MM));
         assert!(j.set_cycle_track(false));
         assert_eq!(j.current().cycle, None);
+    }
+
+    #[test]
+    fn a_refused_edit_says_why_and_a_taken_one_clears_it() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        assert_eq!(j.refusal(), None);
+        assert!(!j.set_corner(n, 99_000));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+        assert!(j.set_corner(n, 7_000));
+        assert_eq!(j.refusal(), None);
+    }
+
+    #[test]
+    fn every_refusal_has_a_message() {
+        for r in Refusal::ALL {
+            assert!(r.message().ends_with('.'), "{r:?}");
+        }
+    }
+
+    #[test]
+    fn a_sixth_street_has_no_room() {
+        let mut j = Junction::new(3); // five ways
+        assert_eq!(j.add_arm(0, -1), 0);
+        assert_eq!(j.refusal(), Some(Refusal::NoRoomForStreet));
+    }
+
+    #[test]
+    fn a_junction_keeps_three_streets() {
+        let mut j = Junction::new(1);
+        let uid = j.current().arms[0].uid;
+        assert!(!j.remove_arm(uid));
+        assert_eq!(j.refusal(), Some(Refusal::NeedsThreeStreets));
+    }
+
+    #[test]
+    fn the_streets_of_a_city_junction_cannot_be_added_removed_or_swapped() {
+        let mut j = linked(1); // three streets: removal is also below the least
+        let uid = j.current().arms[0].uid;
+        assert!(!j.remove_arm(uid));
+        assert_eq!(j.refusal(), Some(Refusal::LinkedNoRemove));
+        assert_eq!(j.add_arm(0, -1), 0);
+        assert_eq!(j.refusal(), Some(Refusal::LinkedNoAdd));
+        assert!(!j.set_street(uid, 2));
+        assert_eq!(j.refusal(), Some(Refusal::LinkedNoSwap));
+    }
+
+    #[test]
+    fn a_bearing_too_close_to_a_neighbour_is_refused_for_that() {
+        let mut j = Junction::new(0);
+        let e = arm_at(&j, 90);
+        assert!(!j.set_bearing(e, 10));
+        assert_eq!(j.refusal(), Some(Refusal::BearingBlocked));
+    }
+
+    #[test]
+    fn a_street_keeps_a_way_out() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        let others: Vec<u32> = j.current().arms.iter().map(|a| a.uid).filter(|u| *u != n).collect();
+        assert!(j.set_turn(n, others[0], false));
+        assert!(j.set_turn(n, others[1], false));
+        assert!(!j.set_turn(n, others[2], false));
+        assert_eq!(j.refusal(), Some(Refusal::LastWayOut));
+    }
+
+    #[test]
+    fn a_lane_keeps_a_street_to_go_to() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        let to = j.arm(n).unwrap().lanes[0].to.clone();
+        for u in &to[1..] {
+            assert!(j.set_lane_dest(n, 0, *u, false));
+        }
+        assert!(!j.set_lane_dest(n, 0, to[0], false));
+        assert_eq!(j.refusal(), Some(Refusal::LaneNeedsStreet));
+    }
+
+    #[test]
+    fn a_narrow_road_has_no_island_and_a_street_without_parking_no_bulge() {
+        let mut j = Junction::new(1); // the stem is Sample Lane 3: 8.4 m road, parking on one side
+        let lane = j.current().arms.iter().find(|a| a.street == 2).unwrap().uid;
+        assert!(!j.set_island(lane, true));
+        assert_eq!(j.refusal(), Some(Refusal::IslandRoadTooNarrow));
+        assert!(!j.set_bulb(lane, 0, true));
+        assert_eq!(j.refusal(), Some(Refusal::BulbNoParking));
+    }
+
+    #[test]
+    fn an_edit_that_cannot_be_drawn_is_refused_with_the_reason_it_was_given() {
+        let mut j = Junction::new(0);
+        // Two streets on one bearing cannot be drawn.
+        assert!(!j.edit_why(Refusal::RoundaboutTooBig, "x".into(), |s| {
+            s.arms[1].bearing = s.arms[0].bearing;
+            true
+        }));
+        assert_eq!(j.refusal(), Some(Refusal::RoundaboutTooBig));
+    }
+
+    #[test]
+    fn a_control_that_does_not_exist_is_refused_as_not_fitting() {
+        let mut j = Junction::new(0);
+        assert!(!j.set_control(99));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+    }
+
+    #[test]
+    fn every_refused_edit_leaves_a_reason() {
+        let j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        let e = arm_at(&j, 90);
+        let ops: Vec<(&str, Box<dyn Fn(&mut Junction) -> bool>)> = vec![
+            ("bearing", Box::new(move |j| j.set_bearing(e, 10))),
+            ("offset", Box::new(move |j| j.set_offset(n, 99_000))),
+            ("corner", Box::new(move |j| j.set_corner(n, 99_000))),
+            ("street", Box::new(move |j| j.set_street(n, 99))),
+            ("setback", Box::new(move |j| j.set_setback(n, 99_000))),
+            ("crossing width", Box::new(move |j| j.set_crossing_width(n, 99_000))),
+            ("bulb side", Box::new(move |j| j.set_bulb(n, 2, true))),
+            ("lane", Box::new(move |j| j.set_lane_dest(n, 9, e, true))),
+            ("lane to self", Box::new(move |j| j.set_lane_dest(n, 0, n, true))),
+            ("approach", Box::new(move |j| j.set_approach(n, 99))),
+            ("approach length", Box::new(move |j| j.set_approach_len(n, 99_000))),
+            ("stop", Box::new(move |j| j.set_stop(n, 99))),
+            ("rule", Box::new(move |j| j.set_rule(n, 99))),
+            ("turn to self", Box::new(move |j| j.set_turn(n, n, false))),
+            ("control", Box::new(|j| j.set_control(99))),
+            ("bus", Box::new(move |j| j.set_bus(Some((n, e))))),
+            ("cycle", Box::new(|j| j.set_cycle(Some(2_000)))),
+            ("cycle width", Box::new(|j| j.set_cycle(Some(99_000)))),
+            ("ring", Box::new(|j| j.set_ring(-500))),
+            ("unknown arm", Box::new(|j| j.set_offset(9_999, 100))),
+            ("step crossing none", Box::new(move |j| j.set_crossing(n, false) && j.step_setback(n, 1))),
+            ("step cycle none", Box::new(|j| j.step_cycle(1))),
+            ("step unknown arm", Box::new(|j| j.step_bearing(9_999, 1))),
+        ];
+        for (name, op) in &ops {
+            let mut k = Junction::new(0);
+            k.refusal = None;
+            assert!(!op(&mut k), "{name} was meant to be refused");
+            assert!(k.refusal().is_some(), "{name} gave no reason");
+        }
     }
 }
