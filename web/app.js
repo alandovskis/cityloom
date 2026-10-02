@@ -180,7 +180,7 @@ function renderDrawing() {
   const W = Math.max(el.wrap.clientWidth, 680);
   L.width = W;
   setGeometry(Math.min(Math.max(W / 1050, 0.9), 1.1));
-  // Room right of the right-of-way line for the redline when a street runs over.
+  // Room right of the right-of-way line for the orange cloud when a street runs over.
   L.padR = Math.max(60, Math.round(W * 0.17));
   L.scale = (W - L.padL - L.padR) / v.row_mm;
   const pxPerM = L.scale * 1000;
@@ -305,7 +305,7 @@ function renderDrawing() {
     );
   }
 
-  // overflow: redline wash and revision cloud
+  // overflow: orange wash and revision cloud
   if (over) {
     const x = xR;
     const clipped = X(v.total_mm) > W - 10;
@@ -407,10 +407,10 @@ function renderDrawing() {
   parts.push(dimLine(xL, xR, Y.total));
   parts.push(`<text class="t-dim t-halo" x="${(xL + xR) / 2}" y="${Y.total - 7}" text-anchor="middle">Street width ${fmt(v.row_mm)}</text>`);
   if (v.delta_mm !== 0) {
-    const cls = over ? "dim-red" : "";
+    const cls = over ? "dim-warn" : "";
     parts.push(dimLine(xL, X(v.total_mm), Y.total2, cls));
     parts.push(
-      `<text class="t-dim t-halo ${over ? "t-red" : "t-soft"}" x="${(xL + X(v.total_mm)) / 2}" y="${Y.total2 - 7}" text-anchor="middle">Your design ${fmt(v.total_mm)}</text>`,
+      `<text class="t-dim t-halo ${over ? "t-warn" : "t-soft"}" x="${(xL + X(v.total_mm)) / 2}" y="${Y.total2 - 7}" text-anchor="middle">Your design ${fmt(v.total_mm)}</text>`,
     );
   }
 

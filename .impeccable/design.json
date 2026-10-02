@@ -116,35 +116,12 @@
         ],
         "dark": "#7fa6ff"
       },
-      "redline": {
-        "role": "secondary",
-        "displayName": "Redline",
-        "canonical": "#b8231a",
-        "tonalRamp": [
-          "#4d0000",
-          "#700000",
-          "#920000",
-          "#b51f17",
-          "#d94638",
-          "#fd6757",
-          "#ff8875",
-          "#ffbaa4"
-        ],
-        "dark": "#ff8073"
-      },
       "blue-wash": {
         "role": "primary",
         "displayName": "Blue Wash",
         "canonical": "rgb(29 78 216 / 0.09)",
         "tonalRamp": [],
         "dark": "rgb(127 166 255 / 0.16)"
-      },
-      "red-wash": {
-        "role": "secondary",
-        "displayName": "Red Wash",
-        "canonical": "rgb(184 35 26 / 0.09)",
-        "tonalRamp": [],
-        "dark": "rgb(255 128 115 / 0.16)"
       },
       "k-sidewalk": {
         "role": "tertiary",
@@ -385,6 +362,36 @@
           "#f5f9fd"
         ],
         "dark": "#5590c4"
+      },
+      "warning": {
+        "role": "secondary",
+        "displayName": "Warning Orange",
+        "canonical": "#9f4209",
+        "tonalRamp": [
+          "#4d1d00",
+          "#702b00",
+          "#923700",
+          "#b55317",
+          "#d97538",
+          "#fd9657",
+          "#ffa975",
+          "#ffc7a4"
+        ],
+        "dark": "#f6a04a"
+      },
+      "warning-wash": {
+        "role": "secondary",
+        "displayName": "Warning Wash",
+        "canonical": "rgb(159 66 9 / 0.09)",
+        "tonalRamp": [],
+        "dark": "rgb(255 128 115 / 0.16)"
+      },
+      "danger": {
+        "role": "secondary",
+        "displayName": "Danger Red",
+        "canonical": "#b8231a",
+        "tonalRamp": [],
+        "dark": "#ff8073"
       }
     },
     "typographyMeta": {
@@ -497,15 +504,15 @@
       "refersTo": "field-width",
       "description": "Right-aligned tabular width input with a unit tag; red text and border when invalid.",
       "html": "<span class=\"ds-wfield\"><input class=\"ds-input\" value=\"3.5\" aria-label=\"Width\"><span class=\"ds-tag\">m</span></span>",
-      "css": ".ds-wfield{display:inline-flex;align-items:center;gap:6px;background:#e8edf0;padding:12px}.ds-input{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:68px;min-height:30px;padding:2px 6px;border:1px solid #14181c;border-radius:6px;background:#e8edf0;color:#14181c;font-weight:500;text-align:right;font-variant-numeric:tabular-nums;caret-color:#1d4ed8}.ds-input:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-input:invalid{border-color:#b8231a;color:#b8231a}.ds-tag{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:18px;font-size:12px;color:#3b444c}"
+      "css": ".ds-wfield{display:inline-flex;align-items:center;gap:6px;background:#e8edf0;padding:12px}.ds-input{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;width:68px;min-height:30px;padding:2px 6px;border:1px solid #14181c;border-radius:6px;background:#e8edf0;color:#14181c;font-weight:500;text-align:right;font-variant-numeric:tabular-nums;caret-color:#1d4ed8}.ds-input:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-input:invalid{border-color:#9f4209;color:#9f4209}.ds-tag{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;min-width:18px;font-size:12px;color:#3b444c}"
     },
     {
       "name": "Icon Button",
       "kind": "custom",
       "refersTo": "icon-button",
-      "description": "30px 6px-radius line-icon button; the remove variant turns redline on hover.",
+      "description": "30px 6px-radius line-icon button; the remove variant turns danger red on hover.",
       "html": "<div class=\"ds-acts\"><button class=\"ds-ico\" aria-label=\"Move left\"><svg viewBox=\"0 0 14 14\"><path d=\"M9 2 4 7l5 5\"/></svg></button><button class=\"ds-ico ds-danger\" aria-label=\"Delete\"><svg viewBox=\"0 0 14 14\"><path d=\"M2 2l10 10M12 2 2 12\"/></svg></button></div>",
-      "css": ".ds-acts{display:flex;gap:4px;background:#e8edf0;padding:12px}.ds-ico{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid #14181c;border-radius:6px;background:#e8edf0;color:#14181c;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1)}.ds-ico svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:square}.ds-ico:hover{background:#d9e1e6}.ds-ico:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-danger{margin-left:10px}.ds-danger:hover{background:#b8231a;border-color:#b8231a;color:#e8edf0}"
+      "css": ".ds-acts{display:flex;gap:4px;background:#e8edf0;padding:12px}.ds-ico{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid #14181c;border-radius:6px;background:#e8edf0;color:#14181c;cursor:pointer;transition:background-color 120ms cubic-bezier(.16,1,.3,1)}.ds-ico svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:square}.ds-ico:hover{background:#d9e1e6}.ds-ico:focus-visible{outline:2px solid #1d4ed8;outline-offset:2px}.ds-danger{margin-left:10px}.ds-danger:hover{background:#9f4209;border-color:#9f4209;color:#e8edf0}"
     },
     {
       "name": "Symbol Schedule Row",
@@ -521,7 +528,7 @@
       "refersTo": "note-heading",
       "description": "Sentence-case note heading with a Rule Grey underline over ruled check rows; a failing check is wholly redline.",
       "html": "<div class=\"ds-note\"><h2 class=\"ds-h\">Does it work?</h2><ul class=\"ds-checks\"><li><b>Fits right-of-way</b><span>Placeholder rule</span></li><li class=\"ds-bad\"><b>Over width</b><span>0.6 m over</span></li></ul></div>",
-      "css": ".ds-note{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;background:#e8edf0;color:#14181c;padding:12px 18px}.ds-h{margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #a6b0b8;font-size:16px;font-weight:600}.ds-checks{margin:0;padding:0;list-style:none}.ds-checks li{padding:5px 0;border-top:1px solid #a6b0b8}.ds-checks li:first-child{border-top:0;padding-top:0}.ds-checks b{display:block;font-weight:600;line-height:1.15}.ds-checks span{font-size:14px;color:#3b444c}.ds-bad,.ds-bad span{color:#b8231a!important}"
+      "css": ".ds-note{font-family:\"Barlow Semi Condensed\",\"Arial Narrow\",\"Helvetica Neue\",Arial,sans-serif;background:#e8edf0;color:#14181c;padding:12px 18px}.ds-h{margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid #a6b0b8;font-size:16px;font-weight:600}.ds-checks{margin:0;padding:0;list-style:none}.ds-checks li{padding:5px 0;border-top:1px solid #a6b0b8}.ds-checks li:first-child{border-top:0;padding-top:0}.ds-checks b{display:block;font-weight:600;line-height:1.15}.ds-checks span{font-size:14px;color:#3b444c}.ds-bad,.ds-bad span{color:#9f4209!important}"
     },
     {
       "name": "About This Street Card",
@@ -548,7 +555,7 @@
   ],
   "narrative": {
     "northStar": "The Typical Section Sheet",
-    "overview": "The interface is a drafting sheet that has been softened for residents, not an engineering tool. One quiet 1px border with a 14px corner encloses the viewport; there are no tick rails, no double frame and no title block. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a redline for what does not fit. It is recognisable with content removed by its cool paper, thin grey rules, rounded controls and the section drawing itself.\n\nThe sheet has two themes, light and dark, and the same drawing lives in both. It follows the system setting until the person chooses Light or Dark in the header, and remembers the choice. Dark is a composed night sheet, not an inversion: a blue-black ground, pale ink, deeper muted tints, and the same two pencils lifted to stay legible.\n\nDensity is that of a working sheet but the voice is plain: headings, table heads and drawing labels are sentence case in a condensed grotesque, tabular figures for every dimension, hairline rules between rows. Controls and the about-this-street card have gentle corners; there is no saturated fill and no call-to-action button. The primary action is dragging a piece inside the drawing. The drawing keeps its drafting devices (dimension strings, revision cloud, a graphic scale bar) and the panels carry the rest (pieces of the street, where the width goes, people moved, does it work, your changes).\n\nEach segment type has its own light tint and its own hatch texture, and is named on the drawing when the segment is wide enough, with a two-letter code as the narrow fallback. The tint makes the sheet readable at a glance; the hatch and name carry the identity, so the drawing still survives greyscale and colour-blindness.",
+    "overview": "The interface is a drafting sheet that has been softened for residents, not an engineering tool. One quiet 1px border with a 14px corner encloses the viewport; there are no tick rails, no double frame and no title block. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and an orange pencil for what does not fit. It is recognisable with content removed by its cool paper, thin grey rules, rounded controls and the section drawing itself.\n\nThe sheet has two themes, light and dark, and the same drawing lives in both. It follows the system setting until the person chooses Light or Dark in the header, and remembers the choice. Dark is a composed night sheet, not an inversion: a blue-black ground, pale ink, deeper muted tints, and the same two pencils lifted to stay legible.\n\nDensity is that of a working sheet but the voice is plain: headings, table heads and drawing labels are sentence case in a condensed grotesque, tabular figures for every dimension, hairline rules between rows. Controls and the about-this-street card have gentle corners; there is no saturated fill and no call-to-action button. The primary action is dragging a piece inside the drawing. The drawing keeps its drafting devices (dimension strings, revision cloud, a graphic scale bar) and the panels carry the rest (pieces of the street, where the width goes, people moved, does it work, your changes).\n\nEach segment type has its own light tint and its own hatch texture, and is named on the drawing when the segment is wide enough, with a two-letter code as the narrow fallback. The tint makes the sheet readable at a glance; the hatch and name carry the identity, so the drawing still survives greyscale and colour-blindness.",
     "keyCharacteristics": [
       "One sheet, one border (1px Faint Ink, 14px radius), controls at 6px, no rails.",
       "Black ink on cool paper, coloured in with pale tints; blue pencil for selection, redline for failure, and no other saturated accent.",
@@ -560,7 +567,7 @@
     "rules": [
       {
         "name": "The Two Pencils Rule",
-        "body": "Blue means selected, red means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else. It holds in both themes: in dark, blue and red are the lighter pencils (#7fa6ff, #ff8073) and stay reserved for selection and failure; no night tint is blue or red enough to be mistaken for them.",
+        "body": "Blue means selected, orange means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else. It holds in both themes: in dark, blue and red are the lighter pencils (#7fa6ff, #ff8073) and stay reserved for selection and failure; no night tint is blue or red enough to be mistaken for them.",
         "section": "colors"
       },
       {

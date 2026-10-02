@@ -223,8 +223,8 @@ function crossingDim(a) {
   const tick = ([x, y]) => `M${f1(x - tk[0])} ${f1(y - tk[1])}L${f1(x + tk[0])} ${f1(y + tk[1])}`;
   const text = c.stages > 1 ? `${c.stages} × ${fmtN(c.stage_mm)}` : fmtN(c.distance_mm);
   return (
-    `<path class="dim${c.too_far ? " dim-red" : ""}" d="M${f1(q0[0])} ${f1(q0[1])}L${f1(q1[0])} ${f1(q1[1])}${tick(q0)}${tick(q1)}"/>` +
-    `<text class="t-dim t-halo${c.too_far ? " t-red" : ""}" x="${f1((q0[0] + q1[0]) / 2)}" y="${f1((q0[1] + q1[1]) / 2 + 5)}" text-anchor="middle">${text}</text>`
+    `<path class="dim${c.too_far ? " dim-warn" : ""}" d="M${f1(q0[0])} ${f1(q0[1])}L${f1(q1[0])} ${f1(q1[1])}${tick(q0)}${tick(q1)}"/>` +
+    `<text class="t-dim t-halo${c.too_far ? " t-warn" : ""}" x="${f1((q0[0] + q1[0]) / 2)}" y="${f1((q0[1] + q1[1]) / 2 + 5)}" text-anchor="middle">${text}</text>`
   );
 }
 

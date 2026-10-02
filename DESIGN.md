@@ -1,6 +1,6 @@
 ---
 name: CityLoom
-description: A softened drafting sheet for rearranging a street's fixed width. Black ink on cool bond paper by day, pale ink on a composed night sheet after dark; tints per segment type, one blue pencil, one redline, quiet rounded frame.
+description: A softened drafting sheet for rearranging a street's fixed width. Black ink on cool bond paper by day, pale ink on a composed night sheet after dark; tints per segment type, one blue pencil, one warning orange, quiet rounded frame.
 colors:
   sheet: "#e8edf0"
   sheet-deep: "#d9e1e6"
@@ -10,8 +10,9 @@ colors:
   rule: "#a6b0b8"
   blue-pencil: "#1d4ed8"
   blue-wash: "rgb(29 78 216 / 0.09)"
-  redline: "#b8231a"
-  red-wash: "rgb(184 35 26 / 0.09)"
+  warning: "#9f4209"
+  warning-wash: "rgb(159 66 9 / 0.09)"
+  danger: "#b8231a"
   k-sidewalk: "#c4c8cc"
   k-planting: "#b6dc9f"
   k-bike: "#93d9cc"
@@ -36,8 +37,9 @@ colors:
   dark-rule: "#3b4650"
   dark-blue-pencil: "#7fa6ff"
   dark-blue-wash: "rgb(127 166 255 / 0.16)"
-  dark-redline: "#ff8073"
-  dark-red-wash: "rgb(255 128 115 / 0.16)"
+  dark-warning: "#f6a04a"
+  dark-warning-wash: "rgb(246 160 74 / 0.16)"
+  dark-danger: "#ff8073"
   dark-k-sidewalk: "#5b6168"
   dark-k-planting: "#41633a"
   dark-k-bike: "#2c6b63"
@@ -148,14 +150,14 @@ components:
     height: "30px"
     width: "68px"
   field-width-invalid:
-    textColor: "{colors.redline}"
+    textColor: "{colors.warning}"
   icon-button:
     backgroundColor: "{colors.sheet}"
     textColor: "{colors.ink}"
     rounded: "{rounded.md}"
     size: "30px"
   icon-button-danger-hover:
-    backgroundColor: "{colors.redline}"
+    backgroundColor: "{colors.warning}"
     textColor: "{colors.sheet}"
   legend-row:
     backgroundColor: "transparent"
@@ -180,7 +182,7 @@ components:
 
 **Creative North Star: "The Typical Section Sheet"**
 
-The interface is a drafting sheet that has been softened for residents, not an engineering tool. One quiet 1px border with a 14px corner encloses the viewport; there are no tick rails, no double frame and no title block. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a redline for what does not fit. It is recognisable with content removed by its cool paper, thin grey rules, rounded controls and the section drawing itself.
+The interface is a drafting sheet that has been softened for residents, not an engineering tool. One quiet 1px border with a 14px corner encloses the viewport; there are no tick rails, no double frame and no title block. The ground is cool bond paper, everything is drawn in black ink at graded line weights and then lightly coloured in: a pale tint per segment type, a pale sky behind the section, tinted symbols. Two saturated pencils sit above that colouring: a blue pencil for what is selected or focused, and a warning orange for what does not fit. It is recognisable with content removed by its cool paper, thin grey rules, rounded controls and the section drawing itself.
 
 The sheet has two themes, light and dark, and the same drawing lives in both. It follows the system setting until the person chooses Light or Dark in the header, and remembers the choice. Dark is a composed night sheet, not an inversion: a blue-black ground, pale ink, deeper muted tints, and the same two pencils lifted to stay legible.
 
@@ -190,7 +192,7 @@ Each segment type has its own light tint and its own hatch texture, and is named
 
 **Key Characteristics:**
 - One sheet, one border (1px Faint Ink, 14px radius), controls at 6px, no rails.
-- Black ink on cool paper, coloured in with pale tints; blue pencil for selection, redline for failure, and no other saturated accent.
+- Black ink on cool paper, coloured in with pale tints; blue pencil for selection, warning orange for failure, and no other saturated accent.
 - Tint plus hatch plus name (or two-letter code) encodes segment type; colour is never the only code.
 - Tabular figures and sentence-case condensed type; sizes stay in a 13 to 16px band, with only the street title (32px) larger.
 - Two themes, light and dark, sharing one structure: system-following until the person picks Light or Dark; dark is composed, not inverted.
@@ -198,22 +200,23 @@ Each segment type has its own light tint and its own hatch texture, and is named
 
 ## Colors
 
-Cool bond paper, graphite ink, pale tints for what the drawing depicts, and two pencils for what the user does and what fails. Saturated chroma is confined to blue and red, and both are rare; the tints sit under the ink linework and never carry state. The hex values in Primary through Neutral are the light theme; the dark theme has the same tokens with the values under Night sheet below (frontmatter keys `dark-*`).
+Cool bond paper, graphite ink, pale tints for what the drawing depicts, and two pencils for what the user does and what fails. Saturated chroma is confined to blue and orange, and both are rare; the tints sit under the ink linework and never carry state. The hex values in Primary through Neutral are the light theme; the dark theme has the same tokens with the values under Night sheet below (frontmatter keys `dark-*`).
 
 ### Primary
 - **Blue Pencil** (#1d4ed8): the only selection and focus color. Focus ring (2px, 2px offset), text caret and text selection, selected segment box and its dimension and name text, the "Change N" label on the drawing and the current row of Your changes, drag ghost, insertion caret, and handle hover fill. Its meaning is "this is what you are acting on".
 - **Blue Wash** (rgb(29 78 216 / 0.09)): tint under the current change row and the drag ghost.
 
 ### Secondary
-- **Redline** (#b8231a): the only failure color. Over-width wash, revision cloud, over-width dimension string and its "too wide" text, failed checks, an invalid width field, and the danger hover on remove. If red is on the sheet, something does not fit.
-- **Red Wash** (rgb(184 35 26 / 0.09)): tint over the overflow zone.
+- **Warning Orange** (#9f4209, a burnt orange, 5.8:1 on the sheet): the only failure color. Over-width wash, revision cloud, over-width dimension string and its "too wide" text, failed checks, an invalid width field. If orange is on the sheet, something does not fit. It replaced the earlier redline so that the painted-red transit lane could not be mistaken for a failure.
+- **Danger Red** (#b8231a; #ff8073 at night): used only for the hover on a remove button, where red means a destructive press, not a failed fit.
+- **Warning Wash** (rgb(159 66 9 / 0.09)): tint over the overflow zone.
 
 ### Tertiary (depiction tints)
 Fills for what the drawing shows. Each is paired with ink hatch and outline, so none is ever the sole identifier. Used on the slab and Today-strip rectangles and the legend and inspector swatches; the mode chips in the Where the width goes table reuse five of them.
 - **Sidewalk Grey** (#c4c8cc), **Planting Green** (#b6dc9f), **Bike Teal** (#93d9cc), **Asphalt Black** (#2b3138), **Bus Red** (#eaa59b), **Parking Black** (#2b3138, the same black as the driving lane), **Median Green** (#8fc281, also the median kerb symbol), **Loading Yellow** (#f5df7e): the eight segment-type tints (k-sidewalk to k-loading in the frontmatter).
 - **Sky** (#e2eff8): the pale rectangle behind the section elevation, above the ground line; no pointer events.
 - **Symbol fills**: tree (#78b565, trees and shrubs), car (#dbe2e9), bus (the Bus Red of the lane, #eaa59b), van (#f0cb45), and two coat variants for the person (#ee9b78, #74aede). Symbols keep their 1.2px ink outline; symbol parts without a fill stay paper.
-- **Bus Red** is the painted transit lane (bus or tram), a pale rose well off the redline (#b8231a). It is a depiction tint under ink hatch and never carries state; the redline stays the only red that means a check fails or a piece does not fit.
+- **Bus Red** is the painted transit lane (bus or tram), a pale rose. It is a depiction tint under ink hatch and never carries state; Warning Orange stays the only colour that means a check fails or a piece does not fit.
 - **Parking** is black like the driving lane and is told apart by a white "P" drawn on the slab (20px 700, centred; ink in the engineering drawing, where the slab is paper), by its own horizontal-line hatch and by its name; the Add menu swatch carries the P too. The P is omitted on a slab under 22px.
 - **Asphalt Black** is the driving lane and parking, so their hatch (staggered dashes, horizontal lines, in the swatch and on the slab) is drawn light: #aeb8c2 on the light sheet, #8c98a4 on the night sheet. Everything else drawn on it, the direction arrow with its paper halo and the surface course, already reads on black. The dark-theme tint is #05070a, a near-black that stays apart from the night sheet by its outline.
 - **Mode chips**: an 11px square with a 1px ink border and 3px radius before each row label in the Where the width goes table (Walking, Biking, Transit, Cars and trucks, Greenery), reusing tints: foot is Sidewalk Grey, bike is Bike Teal, transit is Bus Red, vehicle is Asphalt Black, green is Planting Green. No new values.
@@ -230,7 +233,7 @@ Fills for what the drawing shows. Each is paired with ink hatch and outline, so 
 Same token names, re-composed for a dark ground; every value is a `dark-*` key in the frontmatter. Applied when the person has chosen Dark, or when they have chosen nothing and the system prefers dark.
 - **Night ground** (#13181d, `dark-sheet`): the sheet ground and every control fill. **Night Deep** (#1c232a): hover fills for tools, icon buttons and legend rows.
 - **Pale Ink** (#e8edf1): primary text, control borders, symbol outlines, hatch strokes, dimension lines, the pressed state (pale fill, night text). **Soft Pale Ink** (#b9c3cc): secondary text. **Faint Pale Ink** (#93a0ab): the sheet border, tertiary and disabled text. **Night Rule** (#3b4650): dividers, hairlines, card border.
-- **Blue Pencil, night** (#7fa6ff) with wash rgb(127 166 255 / 0.16); **Redline, night** (#ff8073) with wash rgb(255 128 115 / 0.16). Same jobs as in light; the washes are stronger (16% against 9%) so they still register on the dark ground.
+- **Blue Pencil, night** (#7fa6ff) with wash rgb(127 166 255 / 0.16); **Warning Orange, night** (#f6a04a, 8.5:1 on the night sheet) with wash rgb(246 160 74 / 0.16). Same jobs as in light; the washes are stronger (16% against 9%) so they still register on the dark ground.
 - **Depiction tints, muted and deep**: sidewalk #5b6168, planting #41633a, bike #2c6b63, travel #05070a, bus #7a4540, parking #05070a, median #3a6b31, loading #7e6d1f. **Sky** #182838.
 - **Symbol fills**: tree #55924a, car #33404c, bus #7a4540 (the dark Bus Red of the lane), van #c0a02c, coats #d27753 and #5590c4.
 - Hatch strokes and dot stipple follow Pale Ink, so hatch still reads over the darker tints. Label halos follow the night ground.
@@ -242,7 +245,7 @@ Same token names, re-composed for a dark ground; every value is a `dark-*` key i
 - The avatar's focus ring is Chrome Ink on the teal bar (blue would not reach contrast there). The account menu is a paper panel and keeps Blue focus.
 
 ### Named Rules
-**The Two Pencils Rule.** Blue means selected, red means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else. It holds in both themes: in dark, blue and red are the lighter pencils (#7fa6ff, #ff8073) and stay reserved for selection and failure; no night tint is blue or red enough to be mistaken for them.
+**The Two Pencils Rule.** Blue means selected, orange means failed. Neither may be used decoratively, and no tint may borrow either hue to mean something else. It holds in both themes: in dark, blue and orange are the lighter pencils (#7fa6ff, #f6a04a) and stay reserved for selection and failure; no night tint is blue or orange enough to be mistaken for them.
 
 **The Composed Night Rule.** Dark is designed, not computed: a new colour token gets a hand-picked dark value alongside its light one, tints go darker and muted while ink goes pale, and nothing is produced by inverting or filtering the light theme.
 
@@ -289,7 +292,7 @@ Flat in both themes. There are no shadows at rest and no layered surfaces; depth
 
 ## Shapes
 
-Softly rounded, with a small ladder of radii: sheet 14px (`--radius-lg`), about-this-street card 10px, controls 6px (`--radius`: buttons, width inputs, icon buttons, the drag chip), 4px on swatches and key caps, 3px on mode chips. The m/ft toggle is one joined pair, rounded only at its outer ends. Legend rows are square ruled rows, not rounded cards. The drawing itself stays hard-edged: rectangles with 2px ink outline over a hatch, handles as 18 by 16px square grips with a double-headed arrow (the area that takes a press is 18px wide, 30px on a touch screen), dimension strings as a line with 45-degree tick marks at each end (4px), street-edge lines as long-dash-dot strokes, boundary lines as 5/4 dashes, selection as a 2px blue rectangle, overflow as a scalloped revision cloud in red drawn in over 620ms. Elevation symbols (person, tree, shrub, cyclist, car, bus, van, parking sign, median kerb) are single-weight line art, 1.2px non-scaling stroke, round joins.
+Softly rounded, with a small ladder of radii: sheet 14px (`--radius-lg`), about-this-street card 10px, controls 6px (`--radius`: buttons, width inputs, icon buttons, the drag chip), 4px on swatches and key caps, 3px on mode chips. The m/ft toggle is one joined pair, rounded only at its outer ends. Legend rows are square ruled rows, not rounded cards. The drawing itself stays hard-edged: rectangles with 2px ink outline over a hatch, handles as 18 by 16px square grips with a double-headed arrow (the area that takes a press is 18px wide, 30px on a touch screen), dimension strings as a line with 45-degree tick marks at each end (4px), street-edge lines as long-dash-dot strokes, boundary lines as 5/4 dashes, selection as a 2px blue rectangle, overflow as a scalloped revision cloud in orange drawn in over 620ms. Elevation symbols (person, tree, shrub, cyclist, car, bus, van, parking sign, median kerb) are single-weight line art, 1.2px non-scaling stroke, round joins.
 
 Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: sidewalk (dot stipple), planting (grass ticks), bike lane (45-degree lines), travel lane (staggered dashes), bus lane (tight reverse diagonal), parking (horizontal lines), median (crosshatch grid), loading (chevrons).
 
@@ -314,25 +317,25 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 
 ### Inputs / Fields
 - **Move buttons:** a "Position" group in the inspector holds "Move left" and "Move right" as two equal tool buttons with a 14px line arrow, disabled at the ends, so reordering never needs a drag. **Touch:** under `pointer: coarse` tool buttons, toggles, tabs, menu rows, the check line, disclosure summaries, steppers and fields are at least 44px tall.
-- **Width field:** 68px by 30px, 1px ink border, 6px radius, paper fill, right-aligned tabular 500 text, unit tag beside it. **Invalid:** border and text turn redline. **Focus:** blue outline, blue caret.
+- **Width field:** 68px by 30px, 1px ink border, 6px radius, paper fill, right-aligned tabular 500 text, unit tag beside it. **Invalid:** border and text turn warning orange. **Focus:** blue outline, blue caret.
 
 ### First-run cue
-- **Cue:** a one-line strip across the top of the drawing, Blue Wash fill under a 1px Rule Grey line: "Add a piece, then drag pieces to arrange them. The width is fixed, so a piece that does not fit turns red." A "Got it" tool button sits at its end. It goes only when "Got it" is pressed or the first change is made to the street, so a stray tap cannot remove it; it is remembered in localStorage and applied before first paint, and is hidden in print. Dismissing returns focus to the drawing. "How this works" in the settings menu brings the cue back, scrolls to it and focuses "Got it"; once reopened it stays until dismissed, however much has been edited.
+- **Cue:** a one-line strip across the top of the drawing, Blue Wash fill under a 1px Rule Grey line: "Add a piece, then drag to arrange. The width is fixed; a piece that does not fit turns orange." A "Got it" tool button sits at its end. It goes only when "Got it" is pressed or the first change is made to the street, so a stray tap cannot remove it; it is remembered in localStorage and applied before first paint, and is hidden in print. Dismissing returns focus to the drawing. "How this works" in the settings menu brings the cue back, scrolls to it and focuses "Got it"; once reopened it stays until dismissed, however much has been edited.
 
 ### Failing checks by the fit line
-- **Link:** when any check fails, a redline underlined text button "N checks fail" sits beside the fit status in the status bar. It opens the notes column if it is closed and the Checks tab, and moves focus to the tab. It is hidden when every check passes.
+- **Link:** when any check fails, an orange underlined text button "N checks fail" sits beside the fit status in the status bar. It opens the notes column if it is closed and the Checks tab, and moves focus to the tab. It is hidden when every check passes.
 
 ### Keyboard help
 - **Keyboard:** the shortcut line under the drawing is closed behind a one-word "Keyboard" disclosure beside the fit status (14px Soft Ink). Opened, it lists select, reorder, resize, remove, panels and undo. The list stays the drawing's accessible description. While the drawing has keyboard focus (focus-visible) a 14px Soft Ink line under the status bar says which keys work. Shift with + or − resizes by 500 mm instead of 100, and Enter moves to the selected piece's width field, opening the details first if they are hidden.
 
 ### Notes tabs
-- **Tabs:** the right column is split into Width (where the width goes, people moved), Checks and Changes; the street page adds Transit, whose three groups each carry a 13px Soft Ink line saying what the group is (lane arrangements along the street, features at one junction, or area-wide and not modelled). When any check fails, the Checks tab carries a redline count beside its label (a 13px chip, redline border and wash, with "fail" for screen readers). Headings whose numbers are placeholders (People moved, Does it work?) carry a 13px Soft Ink tag, "sample numbers" or "sample limits", on the same line. Text tabs on a 1px Rule Grey baseline; the selected tab is Ink 600 with a 2px ink underline. Arrow keys, Home and End move between tabs; the choice is remembered. In print all three show, without the tab row.
+- **Tabs:** the right column is split into Width (where the width goes, people moved), Checks and Changes; the street page adds Transit, whose three groups each carry a 13px Soft Ink line saying what the group is (lane arrangements along the street, features at one junction, or area-wide and not modelled). When any check fails, the Checks tab carries a warning orange count beside its label (a 13px chip, warning orange border and wash, with "fail" for screen readers). Headings whose numbers are placeholders (People moved, Does it work?) carry a 13px Soft Ink tag, "sample numbers" or "sample limits", on the same line. Text tabs on a 1px Rule Grey baseline; the selected tab is Ink 600 with a 2px ink underline. Arrow keys, Home and End move between tabs; the choice is remembered. In print all three show, without the tab row.
 
 ### Lane direction
 - **Direction:** a driving lane always runs one way and a bike lane may. Each is drawn as a 14px arrow on the slab, with a Sheet outline so it reads over the hatch: up for traffic going away from you, down for traffic coming toward you. A two-way bike lane has no arrow. The inspector's Direction group lists Away from you and Toward you, plus Two-way for a bike lane. The sample streets start with driving lanes on the half of the street that the region's traffic keeps to, so with traffic on the right the lanes on the left half come toward the viewer and the rest go away.
 
 ### Region
-- **Region:** a select in the account menu (Canada, United States, Germany, United Kingdom, Australia, Japan), each with the side of the road its traffic keeps to, shown in brackets. The choice is remembered. Changing to a region on the other side mirrors every directed lane: silently while the street is untouched (it is just laid out for that region), and as one undoable change, "Traffic keeps left" or "Traffic keeps right", once the street has edits. Undo puts the lanes back but not the region, so the check "Traffic keeps right" or "Traffic keeps left" then turns redline until the region or the lanes are changed again. A one-way street always passes. The region list is a synthetic placeholder, like the rest of the catalogue.
+- **Region:** a select in the account menu (Canada, United States, Germany, United Kingdom, Australia, Japan), each with the side of the road its traffic keeps to, shown in brackets. The choice is remembered. Changing to a region on the other side mirrors every directed lane: silently while the street is untouched (it is just laid out for that region), and as one undoable change, "Traffic keeps left" or "Traffic keeps right", once the street has edits. Undo puts the lanes back but not the region, so the check "Traffic keeps right" or "Traffic keeps left" then turns warning orange until the region or the lanes are changed again. A one-way street always passes. The region list is a synthetic placeholder, like the rest of the catalogue.
 
 ### Bus boarding island
 - **Bus boarding island:** a curb choice for bike lanes only. It is drawn as a 900 mm raised platform, 16px tall, with a grid hatch, standing on one side of the lane: the side facing a bus or driving lane, else the first road side. A sidewalk cannot take it.
@@ -356,7 +359,7 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 ### Add a piece
 - **Pieces of the street:** there is no longer a table of pieces. Width and surface are edited in the left inspector, with other times, direction and curb under a "More about this piece" disclosure (open for a piece that has other times, and kept open once opened), each with a one-line plain subtitle; moving and removing pieces is done on the drawing with the keyboard.
 - **Add a piece:** a tool button with a plus icon at the left of the header tools opens a 280px menu under it (the same panel as the account menu, left-aligned, with the lift shadow): a "Add a piece" heading, one line saying the piece goes after the selected piece or at the end, then four short lists, each under a 13px Soft Ink head (Walk and plant: sidewalk, planting strip, planted median; Cycling: bike lane, bike rack, Bikeshare station; Roadway: driving lane, transit lane, parking, loading zone, shoulder; Furniture: utility pole), one ruled row per segment type (44px swatch, name, default width), Bond Paper Deep on hover. The heads are skipped by arrow-key navigation. The button is the header's main action: a Blue Pencil outline, Blue Wash fill and blue label, the only coloured tool button. It is a menu button (aria-haspopup, aria-expanded, aria-controls): ArrowDown opens it, arrows, Home and End move between rows, Escape closes it and returns focus to the button, and choosing a row adds the piece and closes it. Pieces are no longer dragged in from a palette; they are dragged in the drawing to reorder and resize. Not cards.
-- **Icon buttons:** 30px, 1px ink border, 6px radius, 14px 1.6px square-cap line icons; remove hovers redline with paper icon and stands 10px apart from the move arrows.
+- **Icon buttons:** 30px, 1px ink border, 6px radius, 14px 1.6px square-cap line icons; remove hovers danger red with paper icon and stands 10px apart from the move arrows.
 
 ### CityLoom mark
 - **Mark:** `web/logo.svg`, a woven street section: five vertical bands of unequal widths in the sidewalk, planting, bike, travel and loading pencils (#e59a4a, #5fae4a, #2aa898, #8a6fd1, #e0c23a), woven together by four straight ink threads that pass over and under alternate bands, each thread offset from its neighbour like a basket weave; the bands stand for the modes of travel. Colours are fixed and identical in both themes. The mark and wordmark appear once, as a lockup at the top left of the top bar, mark 30px (28px under 640px); they are not repeated in the about card.
@@ -365,34 +368,34 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 - **Do not** recolour the bands, put a container or shadow around the mark, or show it under 16px.
 
 ### Notes and the about-this-street card
-- **Notes:** sentence-case heading (16px 600) with a 1px Rule Grey underline, right-aligned tabular tables, checks with 16px square-cap line icons; a failing check turns whole redline.
+- **Notes:** sentence-case heading (16px 600) with a 1px Rule Grey underline, right-aligned tabular tables, checks with 16px square-cap line icons; a failing check turns whole warning orange.
 - **Your changes:** compact table of numbered steps, current row in Blue Wash, "Street today" base row (marked with a dash) in Soft Ink, scrolls at 104px height below 1100px.
 - **About this street card:** 2-column grid pinned to the bottom of the notes column, 10px radius, 1px Rule Grey border and dividers, 16px below. A full-width Street row, then Width and Changes made. Captions 13px over 17px 600 values, all sentence case.
 
 ### Section drawing (signature component)
-The Today strip and Your design section share one origin and scale. Each proposed segment: line-art symbol standing on a 3.4px ground line, a 34px slab with 2px ink outline, its segment tint and hatch over it, its name below (two-letter code when narrow), its width above on a dimension line. Overall strings below: "Street width", then "Your design" total if different. Street-edge lines dash-dot at both ends, labelled "Street edge"; a graphic scale bar of five alternating black and paper blocks closes the drawing. Selected segment: 2px blue box, with a blue "Change N" label after a change. Handles: square grips that turn blue-filled on hover or drag, and whose boundary line becomes a solid 2px blue. Over-width: red wash, scalloped red cloud, red second dimension string and "too wide" note.
+The Today strip and Your design section share one origin and scale. Each proposed segment: line-art symbol standing on a 3.4px ground line, a 34px slab with 2px ink outline, its segment tint and hatch over it, its name below (two-letter code when narrow), its width above on a dimension line. Overall strings below: "Street width", then "Your design" total if different. Street-edge lines dash-dot at both ends, labelled "Street edge"; a graphic scale bar of five alternating black and paper blocks closes the drawing. Selected segment: 2px blue box, with a blue "Change N" label after a change. Handles: square grips that turn blue-filled on hover or drag, and whose boundary line becomes a solid 2px blue. Over-width: orange wash, scalloped orange cloud, red second dimension string and "too wide" note.
 
 ### Transit priority measures (street editor)
-- **Measures tab:** the fourth notes tab, on both pages, lists the whole Transit Priority Atlas toolbox in its three groups: ruled rows of code (the Atlas's, in the tabular tag style), name and state. On the street page a lane measure the section forms reads "This street" in Blue Pencil with its needs in Redline under the name; one it does not form has a small Arrange button; one that cannot suit the street says why (Freeways only, Not for a freeway, Will not fit). Measures set at a junction read "Set at a junction"; those not modelled read "Not modelled" with the reason.
+- **Measures tab:** the fourth notes tab, on both pages, lists the whole Transit Priority Atlas toolbox in its three groups: ruled rows of code (the Atlas's, in the tabular tag style), name and state. On the street page a lane measure the section forms reads "This street" in Blue Pencil with its needs in Warning Orange under the name; one it does not form has a small Arrange button; one that cannot suit the street says why (Freeways only, Not for a freeway, Will not fit). Measures set at a junction read "Set at a junction"; those not modelled read "Not modelled" with the reason.
 - **Transit lanes** may run one way (arrow glyph on the slab like a driving lane) or both ways, and an other-times type has its own direction, set in the inspector's Other times rows.
 - **Shoulder** is a ninth segment kind (mark SD) with a Shoulder Olive tint (light #d2d9c3, dark #455049), a dash hatch and a traffic-cone symbol. A freeway sample carries shoulders and a median and has no sidewalks.
 - **Street furniture:** Bike rack (mark BR, 1.2 m, 0.6 to 2.4 m), Bikeshare station (BS, 2.0 m, 1.2 to 3.0 m) and Utility pole (UP, 0.6 m, 0.3 to 1.5 m) are the tenth to twelfth kinds, added in Add a piece like any piece. They are appended after the shoulder so the indices of streets already kept hold. Each takes the sidewalk's surfaces (concrete, brick pavers, asphalt, permeable) and has no curb, direction or other times. Tints: Rack Sky (light #a8d3e8, dark #2f5f78), Share Rose (#e9b5d3, #70406a) and Pole Timber (#c2b6a3, #5a5246); hatches: arches, dots and vertical dashes. Symbols: a locked bike between two inverted-U racks; a docking kiosk with two docked bikes (its body in Share Rose); a pole with crossarm, wires and a transformer. They count as walking space in Where the width goes, move nobody, do not satisfy the "Sidewalk on both sides" check, and on the city map sit beside the roadway.
 
 ### Intersection plan (second surface)
 - **Surface tabs:** *Street* and *Intersection* sit after the wordmark in the top bar as text tabs with a 2px underline in Chrome Ink for the page you are on. They are links between two pages that share one shell (`shell.js`): top bar, account menu, sidebars, notes tabs.
-- **Plan drawing:** the same pieces as the section, seen from above and running out from the junction: each piece keeps its tint, hatch and name; the carriageway where streets meet is the untinted Road Grey (`--road`, light #ced6dc, dark #2b343d), and the pavement between arms is the sidewalk tint and dot stipple. Curbs are 2px ink lines with true fillets; a curb that fails a check turns Redline at 3px. Crossings are ink bars parallel to traffic with the distance across set on them over a paper halo, and a refuge island or bulb-out is pavement with a 2px outline. Lane arrows sit on entering lanes with a paper halo (left, straight, right, combined); leaving lanes carry a fainter arrow; a lane whose only turn is banned draws its arrow in Redline. Control is drawn as a stop line (dashed for give way) and a small line-art sign: signal head, stop octagon or give-way triangle. North is marked once top left, with a graphic scale bar of five blocks over 20 m bottom left. North is up.
+- **Plan drawing:** the same pieces as the section, seen from above and running out from the junction: each piece keeps its tint, hatch and name; the carriageway where streets meet is the untinted Road Grey (`--road`, light #ced6dc, dark #2b343d), and the pavement between arms is the sidewalk tint and dot stipple. Curbs are 2px ink lines with true fillets; a curb that fails a check turns Warning Orange at 3px. Crossings are ink bars parallel to traffic with the distance across set on them over a paper halo, and a refuge island or bulb-out is pavement with a 2px outline. Lane arrows sit on entering lanes with a paper halo (left, straight, right, combined); leaving lanes carry a fainter arrow; a lane whose only turn is banned draws its arrow in Warning Orange. Control is drawn as a stop line (dashed for give way) and a small line-art sign: signal head, stop octagon or give-way triangle. North is marked once top left, with a graphic scale bar of five blocks over 20 m bottom left. North is up.
 - **Selection:** a street, one of its entering lanes, a corner or a crossing. A lane is selected by pressing it anywhere along the arm (it takes a Blue Wash on hover and a Blue Pencil outline when selected), by its name in the street's lane list, or with the arrow keys, which pass through a street's lanes after the street itself. Its inspector lists every other street, left turns first, as checkbox rows with the turn drawn as a line arrow; a lane goes to the streets that are ticked. Blue Pencil outlines the street's extent, strokes the corner's curb, or outlines the crossing, and shows that target's grip. Every street always carries a grip at its end for turning it; corner and crossing grips appear only when selected. A selected street also shows its allowed turns as ink curves with arrowheads and its banned turns as dashed faint curves with a cross.
 - **Roundabout:** a control type, drawn as a ring with a Median Green island and circulation arrows on the ring, with give-way lines at each entry. It can carry a bus-only lane straight across the island between two streets: a 3.5 m band in Bus Red with the bus hatch and the words "Bus only" over a paper halo. It is chosen in the left sidebar from a list of street pairs, the straightest first, and counts as two crossing points where it meets the ring. It is selectable on the plan (Blue Pencil outline, and Delete removes it). A roundabout may also have an optional cycle track round the outside: a 1.5 to 3.0 m band in Bike Teal with the bike hatch, drawn inside the roundabout's overall size so it takes its width from the carriageway, selectable and removable like the bus lane, counted as two crossing points per street; plan text never takes a press, so it cannot block a target underneath.
-- **Turn schedule:** a ruled table in the notes, rows are the street traffic comes from and columns the street it goes to; each cell is a 30 by 26px toggle showing the turn as a line arrow: ink fill when allowed, paper with a diagonal strike when banned, Redline when allowed but no lane serves it.
+- **Turn schedule:** a ruled table in the notes, rows are the street traffic comes from and columns the street it goes to; each cell is a 30 by 26px toggle showing the turn as a line arrow: ink fill when allowed, paper with a diagonal strike when banned, Warning Orange when allowed but no lane serves it.
 - **Lane rows:** in the inspector, one ruled row per entering lane with a toggle for each other street (the turn arrow and the street's compass letters), so a lane can go to one of two streets that are both straight on; a street that cannot be left is disabled.
-- **Transit priority measures** (Transit Priority Atlas toolbox, credited on the Credits page): set per street in the left sidebar under Transit priority, and drawn on the arm with the Atlas code in a small paper-halo tag (G1, G2, G3, H1, H2, L1 to L4, M1, M2, N1). A bus lane along the way in, and queue-jump lanes (dashed outline), are Bus Red with the bus hatch on the entering curb side; a gate is a stop line (dashed for give way) across the other lanes; a bus bulb and an on-street platform are pavement with a 2px outline; a modal filter is a row of ink bollards with a gap for the bus lane; a dead end is a 5px ink bar with the street beyond it at 55% opacity; right-in/right-out is a pavement nose in the street's middle. A measure that needs something missing lists it in Redline under the controls and fails the check "Transit measures work". Turns that a measure rules out are locked in the schedule (dashed, disabled, with the reason) and are not offered to lanes. The Measures tab lists every Atlas measure, with where it is modelled and where this junction uses it; measures that are not modelled say why.
+- **Transit priority measures** (Transit Priority Atlas toolbox, credited on the Credits page): set per street in the left sidebar under Transit priority, and drawn on the arm with the Atlas code in a small paper-halo tag (G1, G2, G3, H1, H2, L1 to L4, M1, M2, N1). A bus lane along the way in, and queue-jump lanes (dashed outline), are Bus Red with the bus hatch on the entering curb side; a gate is a stop line (dashed for give way) across the other lanes; a bus bulb and an on-street platform are pavement with a 2px outline; a modal filter is a row of ink bollards with a gap for the bus lane; a dead end is a 5px ink bar with the street beyond it at 55% opacity; right-in/right-out is a pavement nose in the street's middle. A measure that needs something missing lists it in Warning Orange under the controls and fails the check "Transit measures work". Turns that a measure rules out are locked in the schedule (dashed, disabled, with the reason) and are not offered to lanes. The Measures tab lists every Atlas measure, with where it is modelled and where this junction uses it; measures that are not modelled say why.
 - **Checks and thresholds** (crossing distance, turning speed, corner room, signal size) are synthetic placeholders and the sheet says so.
 
 ### City map (third surface)
 - **Surface tabs:** *Map*, *Street* and *Intersection*. Opened from the map, an editor shows only *Map* and its own tab, and a "City map" link with the streets' or junctions' neighbours in its sub-title.
 - **Map drawing:** the city in plan at true scale, north up, drawn in the sheet's vocabulary. Each street is its section seen from above: ink outline, sidewalk tint, Road Grey carriageway, then each piece in its tint and hatch (hatch kept at screen size at every zoom). Details stop short of a junction, where the carriageways merge into plain road. Junctions are a paper disc with the junction's number; street names sit on the upper side of a street long enough to hold one. A graphic scale bar and north mark stay on the window.
 - **Places:** every junction and street is a link (to the plan or the cross-section). Hover or focus puts a Blue Pencil casing under it and highlights its row in Places; a drag pans, so it never opens a place. Zoom with the buttons, the wheel, a pinch or `+` `−` `0`.
-- **Redline:** a place with a failing check gets a Redline casing and a paper badge with a cross, and is listed under Checks. A changed place is marked with the word "changed", not a colour.
+- **Warning Orange:** a place with a failing check gets a Warning Orange casing and a paper badge with a cross, and is listed under Checks. A changed place is marked with the word "changed", not a colour.
 - **Start over** on the map undoes every change in the city and cannot itself be undone, so the button asks to be pressed twice.
 - **Shared city:** streets and junctions are kept in browser storage and read back by both editors. A junction reads its streets from the city, so a street edit shows in the junctions at its ends; the streets of a junction cannot be added, removed or swapped there. The layout, names and widths are synthetic placeholders.
 
@@ -402,7 +405,7 @@ The Today strip and Your design section share one origin and scale. Each propose
 - **Do** draw with ink lines at graded weights: 1px structure and borders, 2px object outlines, 0.8px dimensions.
 - **Do** encode any new category with a light tint, a new hatch texture, a name and a two-letter code together.
 - **Do** keep tints pale enough that 1px ink hatch and 15 to 16px names stay legible over them.
-- **Do** use blue only for the thing being acted on and red only for a failed fit.
+- **Do** use blue only for the thing being acted on and orange only for a failed fit.
 - **Do** use the radius ladder (6px controls, 10px card, 14px sheet) and outline controls in 1px ink on paper fill.
 - **Do** set headings and labels in sentence case, plain resident wording, and numbers in tabular figures.
 - **Do** give every new colour token a light value and a hand-set dark value together, and check tints against hatch and ink in both themes.
@@ -413,7 +416,7 @@ The Today strip and Your design section share one origin and scale. Each propose
 - **Don't** let a tint stand alone as the identifier of a type, or use a tint as a state signal.
 - **Don't** add cards beyond the about-this-street card, nested boxes, filled call-to-action buttons or icon-card sidebars.
 - **Don't** add shadows to anything at rest, in either theme.
-- **Don't** derive the dark theme by inverting or filtering the light one, and don't let a dark tint drift toward blue or red.
-- **Don't** introduce a third saturated accent or use blue and red decoratively.
+- **Don't** derive the dark theme by inverting or filtering the light one, and don't let a dark tint drift toward blue or orange.
+- **Don't** introduce a third saturated accent or use blue and orange decoratively.
 - **Don't** replace line-art symbols with filled or glyph icons.
 - **Don't** set body-scale text in a face other than Barlow Semi Condensed.

@@ -1,5 +1,5 @@
 /* Typical section sheet. One drafting sheet, black ink, one blue pencil for
-   what is selected, one redline for what does not fit. */
+   what is selected, one orange pencil for what does not fit. */
 
 @font-face {
   font-family: "Barlow Semi Condensed";
@@ -31,8 +31,9 @@
   --rule: #a6b0b8;
   --blue: #1d4ed8;
   --blue-wash: rgb(29 78 216 / 0.09);
-  --red: #b8231a;
-  --red-wash: rgb(184 35 26 / 0.09);
+  --danger: #b8231a;
+  --warn: #9f4209;
+  --warn-wash: rgb(159 66 9 / 0.09);
 
   /* segment types: a tint each, always paired with a hatch and a mark */
   --k-sidewalk: #c4c8cc;
@@ -391,13 +392,13 @@ kbd {
   stroke-linejoin: round;
 }
 #drawing .t-over {
-  fill: var(--red);
+  fill: var(--warn);
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.04em;
 }
-#drawing .t-red {
-  fill: var(--red);
+#drawing .t-warn {
+  fill: var(--warn);
   font-weight: 600;
 }
 #drawing .t-blue {
@@ -429,8 +430,8 @@ kbd {
   stroke-width: 0.8;
   fill: none;
 }
-.dim-red {
-  stroke: var(--red);
+.dim-warn {
+  stroke: var(--warn);
 }
 .bound {
   stroke: var(--ink-faint);
@@ -518,12 +519,12 @@ kbd {
   pointer-events: none;
 }
 .over-wash {
-  fill: var(--red-wash);
+  fill: var(--warn-wash);
   pointer-events: none;
 }
 .cloud {
   fill: none;
-  stroke: var(--red);
+  stroke: var(--warn);
   stroke-width: 1.8;
   stroke-linejoin: round;
   pointer-events: none;
@@ -607,8 +608,8 @@ svg pattern circle {
   font-variant-numeric: tabular-nums;
 }
 .wfield input:invalid {
-  border-color: var(--red);
-  color: var(--red);
+  border-color: var(--warn);
+  color: var(--warn);
 }
 .unit-tag {
   min-width: 18px;
@@ -649,8 +650,8 @@ svg pattern circle {
   cursor: not-allowed;
 }
 .ico.danger:hover:not(:disabled) {
-  background: var(--red);
-  border-color: var(--red);
+  background: var(--danger);
+  border-color: var(--danger);
   color: var(--sheet);
 }
 /* Delete keeps clear water around it, away from the move arrows. */
@@ -802,10 +803,10 @@ svg pattern circle {
   color: var(--ink-soft);
 }
 .checks li.bad {
-  color: var(--red);
+  color: var(--warn);
 }
 .checks li.bad span {
-  color: var(--red);
+  color: var(--warn);
 }
 
 .fine {
@@ -900,7 +901,7 @@ svg pattern circle {
   font-weight: 600;
 }
 .fit.bad {
-  color: var(--red);
+  color: var(--warn);
 }
 .cue {
   display: none;
@@ -1251,16 +1252,17 @@ kbd {
     --rule: #3b4650;
     --blue: #7fa6ff;
     --blue-wash: rgb(127 166 255 / 0.16);
-    --red: #ff8073;
-    --red-wash: rgb(255 128 115 / 0.16);
+    --danger: #ff8073;
+    --warn: #f6a04a;
+    --warn-wash: rgb(246 160 74 / 0.16);
 
     --k-sidewalk: #5b6168;
     --k-planting: #41633a;
     --k-bike: #2c6b63;
-    --k-travel: #05070a;
-    --dark-hatch: #8c98a4;
+    --k-travel: #2a323a;
+    --dark-hatch: #a3afbb;
     --k-bus: #7a4540;
-    --k-parking: #05070a;
+    --k-parking: #2a323a;
     --k-median: #3a6b31;
     --k-loading: #7e6d1f;
     --k-shoulder: #455049;
@@ -1294,16 +1296,17 @@ kbd {
   --rule: #3b4650;
   --blue: #7fa6ff;
   --blue-wash: rgb(127 166 255 / 0.16);
-  --red: #ff8073;
-  --red-wash: rgb(255 128 115 / 0.16);
+  --danger: #ff8073;
+  --warn: #f6a04a;
+  --warn-wash: rgb(246 160 74 / 0.16);
 
   --k-sidewalk: #5b6168;
   --k-planting: #41633a;
   --k-bike: #2c6b63;
-  --k-travel: #05070a;
-  --dark-hatch: #8c98a4;
+  --k-travel: #2a323a;
+  --dark-hatch: #a3afbb;
   --k-bus: #7a4540;
-  --k-parking: #05070a;
+  --k-parking: #2a323a;
   --k-median: #3a6b31;
   --k-loading: #7e6d1f;
   --k-shoulder: #455049;
@@ -1699,8 +1702,9 @@ kbd {
     --rule: #a6b0b8;
     --blue: #1d4ed8;
     --blue-wash: rgb(29 78 216 / 0.09);
-    --red: #b8231a;
-    --red-wash: rgb(184 35 26 / 0.09);
+    --danger: #b8231a;
+    --warn: #9f4209;
+    --warn-wash: rgb(159 66 9 / 0.09);
 
     --k-sidewalk: #c4c8cc;
     --k-planting: #b6dc9f;
@@ -2195,7 +2199,7 @@ kbd {
   pointer-events: none;
 }
 #drawing .curb-line.bad {
-  stroke: var(--red);
+  stroke: var(--warn);
   stroke-width: 3;
 }
 #drawing .crossing {
@@ -2251,7 +2255,7 @@ kbd {
   stroke-width: 1.4;
 }
 #drawing .lane-arrow.bad path:not(.halo) {
-  stroke: var(--red);
+  stroke: var(--warn);
   stroke-width: 2.4;
 }
 #drawing .sel-line {
@@ -2274,7 +2278,7 @@ kbd {
   stroke-dasharray: 4 4;
 }
 #drawing .mv.bad {
-  stroke: var(--red);
+  stroke: var(--warn);
 }
 #drawing .mv-x {
   fill: none;
@@ -2339,8 +2343,8 @@ kbd {
   font-size: 15px;
 }
 .inspector .btn.danger:hover:not(:disabled) {
-  background: var(--red);
-  border-color: var(--red);
+  background: var(--danger);
+  border-color: var(--danger);
   color: var(--sheet);
 }
 .lanes {
@@ -2366,7 +2370,7 @@ kbd {
   color: var(--ink-soft);
 }
 .lane-row.bad span:first-child {
-  color: var(--red);
+  color: var(--warn);
   font-weight: 600;
 }
 .turns-btns {
@@ -2414,11 +2418,11 @@ kbd {
   pointer-events: none;
 }
 .turn.bad {
-  border-color: var(--red);
-  color: var(--red);
+  border-color: var(--warn);
+  color: var(--warn);
 }
 .turn.bad[aria-pressed="true"] {
-  background: var(--red);
+  background: var(--warn);
   color: var(--sheet);
 }
 .nt .turn {
@@ -2446,7 +2450,7 @@ kbd {
   color: var(--ink-soft);
 }
 .nt td.bad {
-  color: var(--red);
+  color: var(--warn);
   font-weight: 600;
 }
 .nt td.self,
@@ -2731,7 +2735,7 @@ kbd {
   margin: 8px 0 0;
   padding: 0 0 0 16px;
   font-size: 14px;
-  color: var(--red);
+  color: var(--warn);
 }
 .measures th[scope="row"] {
   font-weight: 500;
@@ -2769,7 +2773,7 @@ kbd {
   font-size: 13px;
 }
 .measures small.m-problem {
-  color: var(--red);
+  color: var(--warn);
 }
 .var select[data-ivdir] {
   grid-column: 1 / -1;
@@ -2844,10 +2848,10 @@ kbd {
   opacity: 1;
 }
 #map .m-bad {
-  stroke: var(--red);
+  stroke: var(--warn);
 }
 #map .m-bad-disc {
-  fill: var(--red);
+  fill: var(--warn);
   stroke: none;
 }
 #map .m-out {
@@ -2932,11 +2936,11 @@ kbd {
 }
 #map .m-badge circle {
   fill: var(--sheet);
-  stroke: var(--red);
+  stroke: var(--warn);
 }
 #map .m-badge path {
   fill: none;
-  stroke: var(--red);
+  stroke: var(--warn);
   stroke-linecap: square;
 }
 #map a.place {
@@ -3039,7 +3043,7 @@ kbd {
   color: var(--ink-soft);
 }
 .place-row .st.bad {
-  color: var(--red);
+  color: var(--warn);
 }
 .checks a {
   color: inherit;
@@ -3098,10 +3102,10 @@ kbd {
 .tab-n {
   margin-left: 6px;
   padding: 0 6px;
-  border: var(--line) solid var(--red);
+  border: var(--line) solid var(--warn);
   border-radius: var(--radius);
-  background: var(--red-wash);
-  color: var(--red);
+  background: var(--warn-wash);
+  color: var(--warn);
   font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -3170,7 +3174,7 @@ kbd {
   padding: 4px 0;
   border: 0;
   background: none;
-  color: var(--red);
+  color: var(--warn);
   font: inherit;
   font-size: 15px;
   font-weight: 600;
@@ -3204,7 +3208,7 @@ kbd {
   right: auto;
   left: 0;
   width: 280px;
-  max-height: min(70vh, 520px);
+  max-height: min(86vh, 660px);
   overflow-y: auto;
 }
 .add-menu .hint {
