@@ -2,6 +2,7 @@
 //! and how their answers are read. Pure, so it is tested without a network.
 
 pub mod area;
+pub mod loader;
 pub mod nominatim;
 pub mod overpass;
 
