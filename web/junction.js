@@ -2,7 +2,7 @@
 // input. Every rule and every piece of plan geometry comes from the
 // WebAssembly model; this file only turns millimetres into pixels.
 
-import init, { Plan, atlas, catalogue, junction_catalogue, materials } from "./pkg/cityloom_editor.js";
+import init, { Plan, atlas, catalogue, junction_catalogue, materials, mount_turns } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH } from "./symbols.js";
 import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
 import { initAccountMenu, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
@@ -485,27 +485,6 @@ function renderNotes() {
       })
       .join("")}</tbody>`;
 
-  const cols = v.arms;
-  $("turns").innerHTML =
-    `<caption class="sr-only">Turns allowed. Rows are the street traffic comes from, columns the street it goes to.</caption>` +
-    `<thead><tr><th scope="col"><span class="sr-only">From</span></th>${cols.map((c) => `<th scope="col" title="${esc(c.label)}"><span aria-hidden="true">${compass(c.bearing)}</span><span class="sr-only">${esc(c.label)}</span></th>`).join("")}</tr></thead>` +
-    `<tbody>${v.arms
-      .map(
-        (a) =>
-          `<tr><th scope="row" title="${esc(a.label)}"><span class="dirtag">${compass(a.bearing)}</span><span class="sr-only">${esc(a.label)}</span></th>${cols
-            .map((b) => {
-              if (a.uid === b.uid) return `<td class="self" aria-hidden="true">·</td>`;
-              const m = v.movements.find((m) => m.from === a.uid && m.to === b.uid);
-              if (!m) return `<td class="zero" aria-hidden="true">–</td>`;
-              const name = `${a.label} to ${b.label}: ${CLASS_WORD[m.class]} turn`;
-              const bad = m.allowed && !m.lane;
-              if (m.blocked) return `<td><button type="button" class="turn locked" disabled title="${esc(m.blocked)}" aria-label="${esc(name)}: not possible. ${esc(m.blocked)}">${turnGlyph(m.class)}</button></td>`;
-              return `<td><button type="button" class="turn${m.allowed ? " on" : ""}${bad ? " bad" : ""}" data-from="${a.uid}" data-to="${b.uid}" data-fid="t-${a.uid}-${b.uid}" aria-pressed="${m.allowed}" aria-label="${esc(name)}${m.allowed ? (bad ? ", allowed, no lane serves it" : ", allowed") : ", not allowed"}">${turnGlyph(m.class)}</button></td>`;
-            })
-            .join("")}</tr>`,
-      )
-      .join("")}</tbody>`;
-
   const c = v.conflicts;
   $("conflicts").innerHTML =
     `<caption class="sr-only">Points where the paths of allowed turns meet</caption>` +
@@ -822,6 +801,15 @@ function refreshDrawing() {
   renderPlan();
 }
 
+// The turn table is drawn and edited by the page's Rust components; what they
+// change is drawn and announced here as any other edit is.
+plan.on_edit((ok) => {
+  refresh();
+  if (ok) announceEdit();
+  else say(plan.refusal());
+});
+mount_turns(plan, $("turns"));
+
 function announceEdit() {
   const last = view.revisions.at(-1);
   if (last) say(`${last.label}. ${$("fit").textContent}`);
@@ -944,14 +932,6 @@ function removeSelected() {
   if (s.kind === "crossing") return void act(() => plan.set_crossing(s.uid, false));
   if (s.kind === "arm") act(() => plan.remove_arm(s.uid));
 }
-
-// ---- notes events -----------------------------------------------------------
-
-$("turns").addEventListener("click", (e) => {
-  const b = e.target.closest("button.turn");
-  if (!b) return;
-  act(() => plan.set_turn(Number(b.dataset.from), Number(b.dataset.to), b.getAttribute("aria-pressed") !== "true"));
-});
 
 // ---- pointer ----------------------------------------------------------------
 

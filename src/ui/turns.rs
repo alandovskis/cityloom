@@ -1,10 +1,13 @@
 //! The "Turns allowed" table: rows are the street traffic comes from, columns
 //! the street it goes to, and a cell allows or bans that turn.
 
+use std::rc::Rc;
+
 use leptos::prelude::*;
 
-use crate::junction::{Junction, THROUGH, LEFT};
+use crate::junction::{LEFT, THROUGH};
 use crate::junction_view::JView;
+use crate::ui::shared::Shared;
 
 const COMPASS: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
@@ -36,7 +39,7 @@ fn turn_glyph(class: u8) -> impl IntoView {
     }
 }
 
-fn table(v: &JView, toggle: impl Fn(u32, u32, bool) + Copy + 'static) -> AnyView {
+fn table(v: &JView, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
     let columns = v
         .arms
         .iter()
@@ -84,6 +87,7 @@ fn table(v: &JView, toggle: impl Fn(u32, u32, bool) + Copy + 'static) -> AnyView
                         if !m.allowed { ", not allowed" } else if bad { ", allowed, no lane serves it" } else { ", allowed" }
                     );
                     let (from, to, allowed) = (a.uid, b.uid, m.allowed);
+                    let toggle = toggle.clone();
                     view! {
                         <td>
                             <button
@@ -128,16 +132,23 @@ fn table(v: &JView, toggle: impl Fn(u32, u32, bool) + Copy + 'static) -> AnyView
 }
 
 #[component]
-pub fn Turns() -> impl IntoView {
-    let model = StoredValue::new_local(Junction::new(0));
-    let view = RwSignal::new_local(model.with_value(|j| j.view()));
-    let toggle = move |from: u32, to: u32, allowed: bool| {
-        model.update_value(|j| {
-            j.set_turn(from, to, !allowed);
-        });
-        view.set(model.with_value(|j| j.view()));
+pub fn Turns(shared: Rc<Shared>) -> impl IntoView {
+    let version = shared.version();
+    let toggle: Rc<dyn Fn(u32, u32, bool)> = {
+        let shared = shared.clone();
+        Rc::new(move |from, to, allowed| {
+            shared.edit_in_page(|j| j.set_turn(from, to, !allowed));
+        })
     };
-    move || view.with(|v| table(v, toggle))
+    // Neither is `Send`, which a reactive closure needs: keep them where only
+    // this thread can reach them.
+    let shared = StoredValue::new_local(shared);
+    let toggle = StoredValue::new_local(toggle);
+    move || {
+        version.track();
+        let v = shared.with_value(|s| s.read(|j| j.view()));
+        toggle.with_value(|t| table(&v, t))
+    }
 }
 
 #[cfg(test)]
