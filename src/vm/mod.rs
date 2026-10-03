@@ -6,5 +6,6 @@
 pub mod camera;
 pub mod city_store;
 pub mod core;
+pub mod map;
 pub mod map_gestures;
 pub mod ports;
