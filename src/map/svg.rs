@@ -7,7 +7,7 @@ use std::fmt::Write;
 
 use crate::city::model::{CityView, EdgeView, NodeView};
 use crate::map::camera::ScaleBar;
-use crate::map::vm::{junction_label, junction_number, street_label};
+use crate::map::vm::{junction_label, street_label};
 use crate::shared::symbols::HATCH;
 use crate::shared::units::Units;
 
@@ -158,7 +158,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
         })
         .collect();
     let mut places: Vec<&NodeView> = v.nodes.iter().filter(|n| n.junction).collect();
-    places.sort_by_key(|n| junction_number(&n.name));
+    places.sort_by_key(|n| n.number);
     let rad = |n: &NodeView| n.radius_mm as f64 / 1000.0;
     let mut s = String::new();
 
@@ -234,7 +234,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             r2(px(11.0)),
             r2(px(1.5)),
             r2(px(13.0)),
-            junction_number(&n.name)
+            n.number
         )
         .unwrap();
         if n.edited {

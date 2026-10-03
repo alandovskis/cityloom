@@ -552,6 +552,7 @@ impl City {
             let mut v = NodeView {
                 uid,
                 name: self.layout.node_name(i),
+                number: if def.junction { self.layout.junction_number(i) as u32 } else { 0 },
                 x_mm: def.x_mm,
                 y_mm: def.y_mm,
                 junction: def.junction,
@@ -637,6 +638,8 @@ pub struct EdgeView {
 pub struct NodeView {
     pub uid: u32,
     pub name: String,
+    /// Which junction it is, counting in reading order from 1; 0 where a street leaves the map.
+    pub number: u32,
     pub x_mm: i32,
     pub y_mm: i32,
     /// A junction of streets, or else where a street leaves the map.

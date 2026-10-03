@@ -303,4 +303,15 @@ mod tests {
         // and a name survives being kept and opened again
         assert_eq!(Street::imported(0, Side::Right, &[]).named("X").title(), "X");
     }
+
+    #[test]
+    fn a_junction_is_numbered_by_its_place_among_the_junctions_and_a_gate_has_no_number() {
+        let v = City::from_network(&crossing(), "Testville").view(0);
+        let numbers: Vec<u32> = v.nodes.iter().map(|n| n.number).collect();
+        assert_eq!(numbers, vec![1, 0, 0, 0, 0]);
+        let sample = City::new().view(0);
+        let mut j: Vec<u32> = sample.nodes.iter().filter(|n| n.junction).map(|n| n.number).collect();
+        j.sort_unstable();
+        assert_eq!(j, (1..=9).collect::<Vec<u32>>());
+    }
 }

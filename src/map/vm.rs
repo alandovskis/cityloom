@@ -49,11 +49,6 @@ fn streets(n: usize) -> String {
     plural(n, "street", "streets")
 }
 
-/// The number of a junction from its name: `Junction 12` is 12.
-pub fn junction_number(name: &str) -> u32 {
-    name.trim_start_matches(|c: char| !c.is_ascii_digit()).parse().unwrap_or(0)
-}
-
 /// The places a street runs between, from its name `Kind · Here and there`.
 pub fn street_ends(name: &str) -> &str {
     name.split(" \u{b7} ").nth(1).unwrap_or("")
@@ -175,7 +170,7 @@ impl MapVm {
 
     fn junctions(v: &CityView) -> Vec<&NodeView> {
         let mut j: Vec<&NodeView> = v.nodes.iter().filter(|n| n.junction).collect();
-        j.sort_by_key(|n| junction_number(&n.name));
+        j.sort_by_key(|n| n.number);
         j
     }
 
@@ -714,13 +709,6 @@ mod tests {
     }
 
     #[test]
-    fn a_junction_is_numbered_by_the_digits_in_its_name() {
-        assert_eq!(junction_number("Junction 12"), 12);
-        assert_eq!(junction_number("Junction 4"), 4);
-        assert_eq!(junction_number("Edge"), 0);
-    }
-
-    #[test]
     fn a_street_runs_between_the_places_after_the_dot_in_its_name() {
         assert_eq!(street_ends("Avenue \u{b7} Junction 1 to Junction 2"), "Junction 1 to Junction 2");
         assert_eq!(street_ends("Plain"), "");
@@ -741,7 +729,8 @@ mod tests {
     fn the_junctions_are_listed_in_the_order_of_their_numbers_with_a_link_to_each() {
         let (vm, ..) = vm();
         let rows = vm.junction_rows();
-        let numbers: Vec<u32> = rows.iter().map(|r| junction_number(&r.name)).collect();
+        let view = vm.view();
+        let numbers: Vec<u32> = rows.iter().map(|r| view.nodes.iter().find(|n| n.name == r.name).unwrap().number).collect();
         let mut sorted = numbers.clone();
         sorted.sort_unstable();
         assert_eq!(numbers, sorted);
