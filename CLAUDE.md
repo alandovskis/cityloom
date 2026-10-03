@@ -2,16 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-CityLoom is a street, junction and city-map editor written in Rust, compiled to WebAssembly and drawn with Leptos 0.8 (client-side rendering). The three pages are `web/map.html`, `web/street.html` (street) and `web/intersection.html` (junction). All catalogue widths, rules and rates are synthetic placeholders.
+CityLoom is a street, junction and city-map editor written in Rust, compiled to WebAssembly and drawn with Leptos 0.8 (client-side rendering). The pages are `web/index.html` (home: find a place), `web/map.html`, `web/street.html` and `web/intersection.html`. The streets come from OpenStreetMap; the catalogue's rules, rates and thresholds are synthetic placeholders.
 
 ## Commands
 
 `just` lists the recipes. The ones used most:
 
 ```sh
-just test            # cargo test + `cargo build --target wasm32-unknown-unknown` (cfg(target_arch = "wasm32") code is not compiled by plain `cargo test`)
+just test            # cargo test --workspace + `cargo build --target wasm32-unknown-unknown --workspace` (cfg(target_arch = "wasm32") code is not compiled by plain `cargo test`)
 cargo test shell::vm # one module; a full test name also works
-just build           # release wasm + wasm-bindgen into web/pkg (gitignored); scripts/build.sh does the work
+just build           # release wasm of both modules + wasm-bindgen into web/pkg (gitignored); scripts/build.sh does the work
+just default-area osm_import/tests/data/kreuzberg.osm   # remakes web/data/default-network.json
 just e2e             # builds, then runs the Playwright tests in e2e/; `just e2e tests/street.spec.ts` for one spec
 just check           # everything
 just format          # rustfmt (rustfmt.toml) + Prettier; `just format-check` only checks, as CI does
@@ -27,17 +28,20 @@ The code is organised by vertical slice, one folder per feature, and MVVM is use
 
 - `street/`, `junction/`, `map/`, `shell/` each hold what that feature needs: `model.rs` (street, junction: the editing rules, no DOM, no signals, no I/O; edits return `bool` and a refusal carries a reason), `vm.rs` (the view-model), `text.rs` (the words said to a screen reader), the Leptos views, and `tests.rs`. `junction/` also has `geometry.rs`, `read_model.rs` and `frame.rs`.
 - `city/` is the sample city (`model.rs`), how it is kept in storage (`store.rs`) and the `CityBinding` a page writes back through (`binding.rs`).
-- `shared/` is the kernel: catalogue, units, atlas, symbols, the ports (`Announcer`, `Storage`, `Scheduler` and their fakes in `ports.rs`), `platform.rs` (their browser side), `core.rs` (`Core<M: Presents>`, the model plus a version signal plus a cached view; `view()` is tracked, `view_now()` is not, so use it in commands), `keeper.rs`, `shortcut.rs`, `bind.rs`, and `testing.rs` (test-only HTML helpers). `shared` must not depend on any slice.
+- `place/` is where a city comes from: `area.rs` (an `Area` kept under its position), `nominatim.rs` and `overpass.rs` (the requests and readers, pure), `loader.rs` (`Loader`: search, then fetch, import and keep an area's roads, through the ports), `vm.rs`/`view.rs` (`AreaVm`, the home page's place search) and the `prepare_city` export the page scripts await.
+- `shared/` is the kernel: catalogue, units, atlas, symbols, the ports (`Announcer`, `Storage`, `Scheduler` and their fakes in `ports.rs`), `platform.rs` (their browser side), `core.rs` (`Core<M: Presents>`, the model plus a version signal plus a cached view; `view()` is tracked, `view_now()` is not, so use it in commands), `keeper.rs`, `shortcut.rs`, `bind.rs`, and `testing.rs` (test-only HTML helpers). `shared` must not depend on any slice. The ports also include `Fetcher` (HTTP), `Importer` (the OSM reader, a separate wasm module) and `Navigator`.
 - **Dependency rule:** a slice may use another slice's `model` (junction uses the street model; city uses both), `city::store` / `city::binding`, `shell::Target` and `shared`; it must never reach into another slice's `vm`, views or text. New code goes in the slice that owns the feature, not in a layer folder.
 - **View-models** expose presentation-ready reactive getters and take commands. They reach the browser **only through the ports**, so they are tested natively against `test_ports()` / `test_ports_with_time()`.
 - **Views** bind to a view-model and forward events; they decide nothing. Rendering is by pure functions returning SVG strings (`plan_svg.rs`, `street/svg.rs`, `map/svg.rs`) set with `inner_html`; pointer and keyboard logic are pure state machines with tests. `shell/view.rs` is the exception: it binds the static markup the pages share to `ShellVm` with web-sys listeners and effects.
 - **Entry points** are in each slice's `mod.rs` (wasm-bindgen exports: `Plan`/`open_junction`/`mount_page`, `Sheet`/`open_street`/`mount_street_page`, `mount_map`) and `lib.rs`. A page script (`web/app.js`, `junction.js`, `map.js`, each tiny) only loads the module, sets up the hatch `<defs>`, and calls `mount_*` and `.mount_shell()`.
 
+OpenStreetMap: the workspace has three more crates. `osm_network` is the plain network type (serde only). `osm_import` runs osm2streets (git dependencies, so they stay out of the editor's wasm) and fills it; it builds as its own wasm module (`web/pkg/osm_import*`), which `web/city.js` loads on first use and offers to the editor as `window.cityloomImportOsm`. `city/import.rs` turns a network into a `Layout` (the nodes and edges a `City` holds; the sample city is `Layout::sample()`): roads become streets (`Street::imported`, with their own `name`), a meeting of 3-5 arms the junction editor can draw becomes a junction (arms leaving within 30 degrees are spread; a meeting that cannot be drawn is a plain connection). A place is flagged only for checks a change makes worse than the city first laid out. `CityStore::current` opens the chosen area (`cityloom-area`), the default one (Kreuzberg, shipped as `web/data/default-network.json`) before one is chosen, or the sample city; the area's network and edits are kept under `cityloom-network:<key>` / `cityloom-city:<key>`. Edges are drawn as straight lines between their nodes: a road's real shape is not kept yet.
+
 Persistence: a page opened from the map (`?junction=3`, `?street=7`) edits one place of the city. `CityBinding` writes it back through `CityStore` (against the city as stored *now*, so another tab's change is not overwritten) behind a 250 ms debounced `Keeper`; `flush()` is called on `pagehide`. Without the query parameter the page is a sandbox on the sample streets and keeps nothing. A write failure is said once.
 
 ## Conventions and gotchas
 
-- E2E tests (`e2e/tests/*.spec.ts`, Playwright) cover each page: `shell.spec.ts` runs the same checks on all three, plus one spec per page. `fixtures.ts` makes every test fail on a page error and gives each a fresh browser context (empty storage). They run against the built `web/pkg`, so rebuild after changing Rust (`just e2e` does). Pointer behaviour (drags) is only covered here, not by `cargo test`.
+- E2E tests (`e2e/tests/*.spec.ts`, Playwright) cover each page: `shell.spec.ts` runs the same checks on all three, plus one spec per page. `fixtures.ts` makes every test fail on a page error and gives each a fresh browser context (empty storage), starting on the sample city (no network) unless it says `test.use({ area: "world" })`; `home.spec.ts` stubs Nominatim and Overpass with `page.route`. They run against the built `web/pkg`, so rebuild after changing Rust (`just e2e` does). Pointer behaviour (drags) is only covered here, not by `cargo test`.
 - Logic belongs in Rust; JS in `web/` stays start-up glue. Do not add logic there.
 - Add view-model behaviour with a native test against the port fakes. Component tests render to HTML on the host (each slice's `tests.rs`, Leptos `ssr` as a dev-dependency; helpers in `shared/testing.rs`); `shared::platform::browser_ports()` also works natively (thread-local recorders), which is how those tests read what was announced.
 - Non-`Send` values inside reactive closures go in `StoredValue::new_local`; views take a `Copy` handle (`junction::watch::Watch`, `street::watch::SheetWatch`) over an `Rc<…Vm>`.
