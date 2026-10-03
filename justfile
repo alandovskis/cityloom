@@ -17,8 +17,8 @@ build:
 
 # Unit tests on the host, and a type-check of the wasm-only code that they do not compile.
 test:
-    cargo test
-    cargo build --target wasm32-unknown-unknown
+    cargo test --workspace
+    cargo build --target wasm32-unknown-unknown --workspace
 
 # Browser tests, after a fresh build. Arguments go to Playwright: `just e2e tests/street.spec.ts`.
 e2e *args: build
