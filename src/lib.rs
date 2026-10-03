@@ -214,13 +214,13 @@ pub fn samples() -> String {
 
 /// One junction being edited.
 #[wasm_bindgen]
-pub struct Plan(std::rc::Rc<ui::shared::Shared>);
+pub struct Plan(std::rc::Rc<vm::junction::JunctionVm>);
 
 #[wasm_bindgen]
 impl Plan {
     #[wasm_bindgen(constructor)]
     pub fn new(sample: usize) -> Plan {
-        Plan(ui::shared::Shared::new(junction::Junction::new(sample)))
+        Plan(vm::junction::JunctionVm::new(ui::platform::browser_ports(), junction::Junction::new(sample), None))
     }
 
     pub fn load_sample(&mut self, sample: usize) {
@@ -243,15 +243,14 @@ impl Plan {
         self.0.set_units(units::Units::parse(units));
     }
 
-    /// Says what to call, with no arguments, after any change to this junction:
-    /// the page keeps what the city holds.
-    pub fn on_change(&self, callback: js_sys::Function) {
-        self.0.set_on_change(callback);
+    /// The page is being left: what is waiting to be kept in the city is kept now.
+    pub fn flush(&self) {
+        self.0.flush();
     }
 
     /// The whole drawable state as JSON.
     pub fn view(&self) -> String {
-        json(&*self.0.view())
+        json(&*self.0.view_now())
     }
 
     /// Adds a street at `bearing`, or in the widest gap when it is negative.
@@ -563,15 +562,22 @@ impl City {
     pub fn keep_street(&mut self, edge: u32, sheet: &Sheet) -> bool {
         self.0.keep_street(edge, sheet.0.read(|e| e.snapshot()))
     }
+}
 
-    /// The junction editor on one junction, or nothing when there is no such
-    /// junction or it cannot be drawn with the streets as they now are.
-    pub fn junction(&self, node: u32, region: usize) -> Option<Plan> {
-        self.0.junction_editor(node, region).map(|j| Plan(ui::shared::Shared::new(j)))
-    }
+/// The name of a junction of the city kept in this browser; empty when there is none.
+#[wasm_bindgen]
+pub fn junction_name(node: u32) -> String {
+    vm::city_store::CityStore::new(ui::platform::browser_ports().storage).open().junction_name(node).unwrap_or_default()
+}
 
-    /// Keeps what a junction editor has made of the junction.
-    pub fn keep_junction(&mut self, node: u32, plan: &Plan) -> bool {
-        self.0.keep_junction(node, plan.0.read(|j| j.snapshot()))
-    }
+/// The junction editor on one junction of the city kept in this browser, which
+/// writes what is made back to the city. Nothing when there is no such junction
+/// or it cannot be drawn with the streets as they now are.
+#[wasm_bindgen]
+pub fn open_junction(node: u32) -> Option<Plan> {
+    let ports = ui::platform::browser_ports();
+    let store = vm::city_store::CityStore::new(ports.storage.clone());
+    let junction = store.open().junction_editor(node, store.region())?;
+    let place = vm::binding::Place::Junction(node);
+    Some(Plan(vm::junction::JunctionVm::new(ports, junction, Some(vm::binding::CityBinding { store, place }))))
 }

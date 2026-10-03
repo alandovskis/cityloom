@@ -12,7 +12,7 @@ use crate::catalogue::{KINDS, SAMPLES};
 use crate::junction::JUNCTION_SAMPLES;
 use crate::junction_view::JView;
 use crate::vm::junction_text::{arms_text, fit_text};
-use crate::ui::shared::Shared;
+use crate::vm::junction::JunctionVm;
 use crate::ui::watch::Watch;
 
 /// The kinds of piece that appear in the plan, in the order the catalogue lists them.
@@ -32,8 +32,8 @@ fn swatch_rects(id: &str, x: f64, width: f64) -> impl IntoView {
 }
 
 #[component]
-pub fn Header(shared: Rc<Shared>) -> impl IntoView {
-    let w = Watch::new(shared);
+pub fn Header(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
     let name = move || w.view().name.clone();
     let linked = move || w.view().linked;
     let arms = move || arms_text(&w.view());
@@ -65,8 +65,8 @@ pub fn Header(shared: Rc<Shared>) -> impl IntoView {
 }
 
 #[component]
-pub fn TitleBlock(shared: Rc<Shared>) -> impl IntoView {
-    let w = Watch::new(shared);
+pub fn TitleBlock(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
     view! {
         <div class="tb-cell tb-wide"><span>"Junction"</span><b id="tb-street">{move || w.view().name.clone()}</b></div>
         <div class="tb-cell"><span>"Streets"</span><b id="tb-row" class="fig">{move || w.view().arms.len().to_string()}</b></div>
@@ -76,8 +76,8 @@ pub fn TitleBlock(shared: Rc<Shared>) -> impl IntoView {
 
 /// The status line: whether the junction works.
 #[component]
-pub fn Fit(shared: Rc<Shared>) -> impl IntoView {
-    let w = Watch::new(shared);
+pub fn Fit(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
     view! {
         <p id="fit" class=move || if w.view().checks.iter().any(|c| !c.ok) { "fit bad" } else { "fit" } role="status">
             {move || fit_text(&w.view())}
@@ -86,8 +86,8 @@ pub fn Fit(shared: Rc<Shared>) -> impl IntoView {
 }
 
 #[component]
-pub fn History(shared: Rc<Shared>) -> impl IntoView {
-    let w = Watch::new(shared);
+pub fn History(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
     view! {
         <button type="button" id="undo" class="btn" disabled=move || !w.view().can_undo on:click=move |_| { w.undo(); }>
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M5.5 3 2.5 6l3 3M2.5 6H10a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -106,8 +106,8 @@ pub fn History(shared: Rc<Shared>) -> impl IntoView {
 
 /// A key to the strips: the tint and hatch of each piece that appears in the plan.
 #[component]
-pub fn Key(shared: Rc<Shared>) -> impl IntoView {
-    let w = Watch::new(shared);
+pub fn Key(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
     move || {
         key_kinds(&w.view())
             .into_iter()
@@ -227,8 +227,8 @@ fn street_chip(w: Watch, street: usize, chip: StoredValue<Option<Chip>, LocalSto
 
 /// The streets to add: drag one onto the plan, or press it to add in the widest gap.
 #[component]
-pub fn Palette(shared: Rc<Shared>) -> impl IntoView {
-    let w = Watch::new(shared);
+pub fn Palette(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
     let chip = StoredValue::new_local(None::<Chip>);
     let dragged = StoredValue::new_local(false);
     SAMPLES.iter().enumerate().filter(|(_, s)| !s.freeway).map(|(i, _)| street_chip(w, i, chip, dragged)).collect_view()
@@ -236,8 +236,8 @@ pub fn Palette(shared: Rc<Shared>) -> impl IntoView {
 
 /// The sample junctions to start from.
 #[component]
-pub fn Samples(shared: Rc<Shared>) -> impl IntoView {
-    let w = Watch::new(shared);
+pub fn Samples(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
     JUNCTION_SAMPLES
         .iter()
         .enumerate()

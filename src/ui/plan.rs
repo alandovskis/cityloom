@@ -11,7 +11,7 @@ use crate::junction::Target;
 use crate::ui::keys;
 use crate::ui::plan_svg::{plan_label, plan_svg};
 use crate::vm::plan_frame::Frame;
-use crate::ui::shared::Shared;
+use crate::vm::junction::JunctionVm;
 use crate::ui::watch::Watch;
 
 /// What a grip is dragging.
@@ -61,8 +61,8 @@ struct Drag {
 }
 
 #[component]
-pub fn PlanDrawing(shared: Rc<Shared>) -> impl IntoView {
-    let w = Watch::new(shared);
+pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
     let viewport = RwSignal::new((1000.0, 800.0));
     let drag = StoredValue::new_local(None::<Drag>);
 

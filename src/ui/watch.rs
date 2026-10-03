@@ -7,46 +7,44 @@ use leptos::prelude::*;
 use crate::junction::{Junction, Target};
 use crate::junction_view::{ArmView, JView};
 use crate::ui::keys::{Action, Step};
-use crate::ui::shared::Shared;
 use crate::units::Units;
+use crate::vm::junction::JunctionVm;
 
-/// The signals a component watches, and the junction itself, which is kept
-/// where only this thread can reach it. It is `Copy`, so any closure can hold it.
+/// What a component reads of the junction view-model and tells it. The view-model
+/// is kept where only this thread can reach it, so the handle is `Copy` and any
+/// closure can hold it.
 #[derive(Clone, Copy)]
 pub struct Watch {
-    version: RwSignal<u32>,
-    units: RwSignal<Units>,
-    shared: StoredValue<Rc<Shared>, LocalStorage>,
+    vm: StoredValue<Rc<JunctionVm>, LocalStorage>,
 }
 
 impl Watch {
-    pub fn new(shared: Rc<Shared>) -> Watch {
-        Watch { version: shared.version(), units: shared.units(), shared: StoredValue::new_local(shared) }
+    pub fn new(vm: Rc<JunctionVm>) -> Watch {
+        Watch { vm: StoredValue::new_local(vm) }
     }
 
     pub fn version(&self) -> RwSignal<u32> {
-        self.version
+        self.vm.with_value(|v| v.version())
     }
 
     /// The view, drawing again when the junction is edited.
     pub fn view(&self) -> Rc<JView> {
-        self.version.track();
-        self.shared.with_value(|s| s.view())
+        self.vm.with_value(|v| v.view())
     }
 
     /// The view as it is now, for an event handler: nothing is watched.
     pub fn view_now(&self) -> Rc<JView> {
-        self.shared.with_value(|s| s.view())
+        self.vm.with_value(|v| v.view_now())
     }
 
     /// The units as they are now, for an event handler: nothing is watched.
     pub fn units_now(&self) -> Units {
-        self.units.get_untracked()
+        self.vm.with_value(|v| v.units_now())
     }
 
     /// The units, drawing again when they change.
     pub fn units(&self) -> Units {
-        self.units.get()
+        self.vm.with_value(|v| v.units())
     }
 
     /// The view and the units, drawing again when either changes.
@@ -59,42 +57,42 @@ impl Watch {
         self.view().arms.iter().find(|a| a.uid == uid).map(f)
     }
 
-    /// Edits the junction as the page does; the script draws and announces it.
+    /// Edits the junction as the person does: announced by what it was, or why it was refused.
     pub fn edit(&self, f: impl FnOnce(&mut Junction) -> bool) -> bool {
-        self.shared.with_value(|s| s.edit_in_page(f))
+        self.vm.with_value(|v| v.apply(f))
     }
 
     pub fn frame(&self) -> Option<crate::vm::plan_frame::Frame> {
-        self.shared.with_value(|s| s.frame())
+        self.vm.with_value(|v| v.frame())
     }
 
     pub fn set_frame(&self, frame: crate::vm::plan_frame::Frame) {
-        self.shared.with_value(|s| s.set_frame(frame));
+        self.vm.with_value(|v| v.set_frame(frame));
     }
 
-    /// A change the script need only redraw for.
+    /// A change that is not announced, as each step of a drag is.
     pub fn quiet(&self, f: impl FnOnce(&mut Junction) -> bool) -> bool {
-        self.shared.with_value(|s| s.quiet_in_page(f))
+        self.vm.with_value(|v| v.quiet(f))
     }
 
     pub fn finish_gesture(&self, commit: bool) {
-        self.shared.with_value(|s| s.end_gesture_in_page(commit));
+        self.vm.with_value(|v| v.end_gesture(commit));
     }
 
     pub fn undo(&self) -> bool {
-        self.shared.with_value(|s| s.undo_in_page())
+        self.vm.with_value(|v| v.undo())
     }
 
     pub fn redo(&self) -> bool {
-        self.shared.with_value(|s| s.redo_in_page())
+        self.vm.with_value(|v| v.redo())
     }
 
     pub fn reset(&self) -> bool {
-        self.shared.with_value(|s| s.reset_in_page())
+        self.vm.with_value(|v| v.reset())
     }
 
     pub fn load_sample(&self, sample: usize) {
-        self.shared.with_value(|s| s.load_sample_in_page(sample));
+        self.vm.with_value(|v| v.load_sample(sample));
     }
 
     /// What a key on the plan asks for.
@@ -102,7 +100,7 @@ impl Watch {
         let selected = self.view_now().selected.uid;
         let kind = self.view_now().selected.kind;
         match action {
-            Action::Select(dir) => self.shared.with_value(|s| s.select_relative_in_page(dir)),
+            Action::Select(dir) => self.vm.with_value(|v| v.select_relative(dir)),
             Action::Deselect => self.select(Target::None),
             Action::Step(step, dir) => {
                 if kind.is_some() {
@@ -127,6 +125,6 @@ impl Watch {
     }
 
     pub fn select(&self, target: Target) {
-        self.shared.with_value(|s| s.select_in_page(target));
+        self.vm.with_value(|v| v.select(target));
     }
 }

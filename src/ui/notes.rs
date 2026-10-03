@@ -8,7 +8,7 @@ use leptos::prelude::*;
 use crate::atlas::{MEASURES, Where};
 use crate::junction_view::{CrossingView, JView};
 use crate::model::Check;
-use crate::ui::shared::Shared;
+use crate::vm::junction::JunctionVm;
 use crate::ui::watch::Watch;
 use crate::ui::turns::compass;
 use crate::units::Units;
@@ -64,8 +64,8 @@ fn icon(ok: bool) -> impl IntoView {
 }
 
 #[component]
-pub fn Across(shared: Rc<Shared>) -> impl IntoView {
-    let watch = Watch::new(shared);
+pub fn Across(vm: Rc<JunctionVm>) -> impl IntoView {
+    let watch = Watch::new(vm);
     move || {
         let (v, units) = watch.now();
         let rows = v
@@ -102,8 +102,8 @@ pub fn Across(shared: Rc<Shared>) -> impl IntoView {
 }
 
 #[component]
-pub fn Conflicts(shared: Rc<Shared>) -> impl IntoView {
-    let watch = Watch::new(shared);
+pub fn Conflicts(vm: Rc<JunctionVm>) -> impl IntoView {
+    let watch = Watch::new(vm);
     move || {
         let (v, _) = watch.now();
         let c = &v.conflicts;
@@ -127,14 +127,14 @@ pub fn Conflicts(shared: Rc<Shared>) -> impl IntoView {
 }
 
 #[component]
-pub fn ConflictNote(shared: Rc<Shared>) -> impl IntoView {
-    let watch = Watch::new(shared);
+pub fn ConflictNote(vm: Rc<JunctionVm>) -> impl IntoView {
+    let watch = Watch::new(vm);
     move || conflict_note(&watch.now().0)
 }
 
 #[component]
-pub fn Checks(shared: Rc<Shared>) -> impl IntoView {
-    let watch = Watch::new(shared);
+pub fn Checks(vm: Rc<JunctionVm>) -> impl IntoView {
+    let watch = Watch::new(vm);
     move || {
         let (v, units) = watch.now();
         v.checks
@@ -157,8 +157,8 @@ pub fn Checks(shared: Rc<Shared>) -> impl IntoView {
 /// Every measure of the Transit Priority Atlas toolbox, with where it is
 /// modelled and where this junction uses it.
 #[component]
-pub fn Measures(shared: Rc<Shared>) -> impl IntoView {
-    let watch = Watch::new(shared);
+pub fn Measures(vm: Rc<JunctionVm>) -> impl IntoView {
+    let watch = Watch::new(vm);
     move || {
         let (v, _) = watch.now();
         atlas_groups()
@@ -199,8 +199,8 @@ pub fn Measures(shared: Rc<Shared>) -> impl IntoView {
 }
 
 #[component]
-pub fn Revisions(shared: Rc<Shared>) -> impl IntoView {
-    let watch = Watch::new(shared);
+pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
+    let watch = Watch::new(vm);
     // The newest change is the one to see.
     #[cfg(target_arch = "wasm32")]
     {

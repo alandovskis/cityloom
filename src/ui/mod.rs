@@ -13,7 +13,6 @@ pub mod page;
 pub mod plan;
 pub mod platform;
 pub mod plan_svg;
-pub mod shared;
 pub mod sheet;
 pub mod sheet_watch;
 pub mod store;
@@ -44,28 +43,28 @@ pub fn mount_page(plan: &crate::Plan) {
     let at = |id: &str| -> HtmlElement {
         leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into()
     };
-    let shared = plan.0.clone();
+    let vm = plan.0.clone();
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
-    mount("scroll", view! { <plan::PlanDrawing shared=shared.clone()/> }.into_any());
-    mount("street", view! { <page::Header shared=shared.clone()/> }.into_any());
-    mount("title-block", view! { <page::TitleBlock shared=shared.clone()/> }.into_any());
-    mount("fit-slot", view! { <page::Fit shared=shared.clone()/> }.into_any());
-    mount("history", view! { <page::History shared=shared.clone()/> }.into_any());
-    mount("plan-key", view! { <page::Key shared=shared.clone()/> }.into_any());
-    mount("palette", view! { <page::Palette shared=shared.clone()/> }.into_any());
-    mount("samples", view! { <page::Samples shared=shared.clone()/> }.into_any());
-    mount("turns", view! { <turns::Turns shared=shared.clone()/> }.into_any());
-    mount("inspector", view! { <inspector::Inspector shared=shared.clone()/> }.into_any());
-    mount("across", view! { <notes::Across shared=shared.clone()/> }.into_any());
-    mount("conflicts", view! { <notes::Conflicts shared=shared.clone()/> }.into_any());
-    mount("conflict-note", view! { <notes::ConflictNote shared=shared.clone()/> }.into_any());
-    mount("checks", view! { <notes::Checks shared=shared.clone()/> }.into_any());
-    mount("measures", view! { <notes::Measures shared=shared.clone()/> }.into_any());
-    mount("revs", view! { <notes::Revisions shared=shared/> }.into_any());
+    mount("scroll", view! { <plan::PlanDrawing vm=vm.clone()/> }.into_any());
+    mount("street", view! { <page::Header vm=vm.clone()/> }.into_any());
+    mount("title-block", view! { <page::TitleBlock vm=vm.clone()/> }.into_any());
+    mount("fit-slot", view! { <page::Fit vm=vm.clone()/> }.into_any());
+    mount("history", view! { <page::History vm=vm.clone()/> }.into_any());
+    mount("plan-key", view! { <page::Key vm=vm.clone()/> }.into_any());
+    mount("palette", view! { <page::Palette vm=vm.clone()/> }.into_any());
+    mount("samples", view! { <page::Samples vm=vm.clone()/> }.into_any());
+    mount("turns", view! { <turns::Turns vm=vm.clone()/> }.into_any());
+    mount("inspector", view! { <inspector::Inspector vm=vm.clone()/> }.into_any());
+    mount("across", view! { <notes::Across vm=vm.clone()/> }.into_any());
+    mount("conflicts", view! { <notes::Conflicts vm=vm.clone()/> }.into_any());
+    mount("conflict-note", view! { <notes::ConflictNote vm=vm.clone()/> }.into_any());
+    mount("checks", view! { <notes::Checks vm=vm.clone()/> }.into_any());
+    mount("measures", view! { <notes::Measures vm=vm.clone()/> }.into_any());
+    mount("revs", view! { <notes::Revisions vm=vm/> }.into_any());
     // Streets that belong to a city are not added, and there is no street page to go to.
-    if plan.0.view().linked {
+    if plan.0.view_now().linked {
         for selector in [".lower", ".surface[href=\"index.html\"]"] {
             if let Ok(Some(el)) = leptos::prelude::document().query_selector(selector) {
                 el.unchecked_into::<HtmlElement>().set_hidden(true);

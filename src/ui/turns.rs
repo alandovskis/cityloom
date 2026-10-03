@@ -7,7 +7,8 @@ use leptos::prelude::*;
 
 use crate::junction::{LEFT, THROUGH};
 use crate::junction_view::JView;
-use crate::ui::shared::Shared;
+use crate::ui::watch::Watch;
+use crate::vm::junction::JunctionVm;
 
 const COMPASS: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
@@ -141,21 +142,16 @@ fn table(v: &JView, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
 }
 
 #[component]
-pub fn Turns(shared: Rc<Shared>) -> impl IntoView {
-    let version = shared.version();
-    let toggle: Rc<dyn Fn(u32, u32, bool)> = {
-        let shared = shared.clone();
-        Rc::new(move |from, to, allowed| {
-            shared.edit_in_page(|j| j.set_turn(from, to, !allowed));
-        })
-    };
-    // Neither is `Send`, which a reactive closure needs: keep them where only
-    // this thread can reach them.
-    let shared = StoredValue::new_local(shared);
+pub fn Turns(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
+    let toggle: Rc<dyn Fn(u32, u32, bool)> = Rc::new(move |from, to, allowed| {
+        w.edit(|j| j.set_turn(from, to, !allowed));
+    });
+    // Not `Send`, which a reactive closure needs: keep it where only this thread
+    // can reach it.
     let toggle = StoredValue::new_local(toggle);
     move || {
-        version.track();
-        let v = shared.with_value(|s| s.view());
+        let v = w.view();
         toggle.with_value(|t| table(&v, t))
     }
 }

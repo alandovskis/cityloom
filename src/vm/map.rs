@@ -469,7 +469,7 @@ impl MapVm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vm::ports::{MemoryStorage, RecordingAnnouncer, Storage, test_ports};
+    use crate::vm::ports::{MemoryStorage, RecordingAnnouncer, test_ports};
 
     fn vm() -> (Rc<MapVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         let (ports, said, storage) = test_ports();

@@ -10,7 +10,7 @@ use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 use crate::catalogue::SAMPLES;
 use crate::junction::*;
 use crate::junction_view::{CrossingView, JView};
-use crate::ui::shared::Shared;
+use crate::vm::junction::JunctionVm;
 use crate::ui::turns::{compass, turn_glyph, turn_name, turn_word};
 use crate::ui::watch::Watch;
 use crate::units::Units;
@@ -832,8 +832,8 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
 // ---- the panel -----------------------------------------------------------------------
 
 #[component]
-pub fn Inspector(shared: Rc<Shared>) -> impl IntoView {
-    let w = Watch::new(shared);
+pub fn Inspector(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
     // The panel is drawn again only when what is selected changes; edits change
     // what is in it, not what it is made of.
     let selected = Memo::new(move |_| {

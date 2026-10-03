@@ -2,8 +2,8 @@
 // WebAssembly module (`mount_page`); this opens the junction, keeps what it
 // makes in the city, and sets up what every page shares.
 
-import init, { Plan, hatches, materials, mount_page, say } from "./pkg/cityloom_editor.js";
-import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
+import init, { Plan, hatches, junction_name, materials, mount_page, open_junction, say } from "./pkg/cityloom_editor.js";
+import { placeParam } from "./city.js";
 import { initAccountMenu, initPanels, initRegion, initTheme, initUnits } from "./shell.js";
 
 await init();
@@ -15,9 +15,8 @@ const MATERIALS = JSON.parse(materials());
 // reading its streets from the city, and writes each change back; otherwise it
 // is a sandbox on the sample junctions.
 const placeId = placeParam("junction");
-const city = placeId ? openCity() : null;
-const placeName = city?.junction_name(placeId);
-const held = city?.junction(placeId, regionIndex(MATERIALS.regions));
+const placeName = placeId ? junction_name(placeId) : "";
+const held = placeId ? open_junction(placeId) : undefined;
 if (placeId && !placeName) {
   location.replace("map.html");
   await new Promise(() => {});
@@ -37,13 +36,8 @@ const plan = held ?? new Plan(0);
 document.getElementById("defs").innerHTML = `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}
   <marker id="mv-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mv-tip" d="M1 1 9 5 1 9"/></marker></defs>`;
 
-if (held) {
-  const keepSoon = keeper(
-    () => writeCity((c) => c.keep_junction(placeId, plan)),
-    () => say(NOT_KEPT),
-  );
-  plan.on_change(keepSoon);
-}
+// What is waiting to be kept in the city is kept when the page is left.
+addEventListener("pagehide", () => plan.flush());
 
 mount_page(plan);
 

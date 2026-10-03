@@ -9,7 +9,7 @@ use leptos::tachys::view::RenderHtml;
 
 use crate::catalogue::KINDS;
 use crate::junction::*;
-use crate::ui::shared::Shared;
+use crate::vm::junction::JunctionVm;
 use crate::units::Units;
 use crate::ui::{inspector, notes, page, plan, turns};
 
@@ -20,11 +20,11 @@ fn html(view: impl FnOnce() -> AnyView) -> String {
     view().to_html()
 }
 
-fn shared(sample: usize) -> Rc<Shared> {
-    Shared::new(Junction::new(sample))
+fn shared(sample: usize) -> Rc<JunctionVm> {
+    JunctionVm::new(crate::ui::platform::browser_ports(), Junction::new(sample), None)
 }
 
-fn arm(shared: &Shared, bearing: i32) -> u32 {
+fn arm(shared: &JunctionVm, bearing: i32) -> u32 {
     shared.read(|j| j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid)
 }
 
@@ -37,7 +37,7 @@ fn count(html: &str, needle: &str) -> usize {
 #[test]
 fn the_turn_table_has_a_button_for_every_turn_and_none_for_a_street_to_itself() {
     let s = shared(0);
-    let h = html(|| view! { <turns::Turns shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <turns::Turns vm=s.clone()/> }.into_any());
     assert_eq!(count(&h, "<button"), 12);
     assert_eq!(count(&h, "aria-pressed=\"true\""), 12);
     assert_eq!(count(&h, "class=\"self\""), 4);
@@ -49,7 +49,7 @@ fn a_banned_turn_reads_as_not_allowed() {
     let s = shared(0);
     let (n, e) = (arm(&s, 0), arm(&s, 90));
     s.edit(|j| j.set_turn(n, e, false));
-    let h = html(|| view! { <turns::Turns shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <turns::Turns vm=s.clone()/> }.into_any());
     assert!(h.contains("left turn, not allowed"));
     assert_eq!(count(&h, "aria-pressed=\"true\""), 11);
 }
@@ -59,7 +59,7 @@ fn a_turn_a_measure_blocks_is_locked_with_its_reason() {
     let s = shared(0);
     let e = arm(&s, 90);
     s.edit(|j| j.set_rule(e, RULE_DEAD_END));
-    let h = html(|| view! { <turns::Turns shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <turns::Turns vm=s.clone()/> }.into_any());
     assert!(count(&h, "turn locked") > 0);
     assert!(h.contains("not possible."));
 }
@@ -69,7 +69,7 @@ fn a_turn_a_measure_blocks_is_locked_with_its_reason() {
 #[test]
 fn getting_across_lists_each_street_with_its_crossing_and_lanes() {
     let s = shared(0);
-    let h = html(|| view! { <notes::Across shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <notes::Across vm=s.clone()/> }.into_any());
     assert_eq!(count(&h, "<tr><th scope=\"row\">"), 4);
     assert!(h.contains("2 × 9.0"));
     assert!(h.contains(">11.4<"));
@@ -79,7 +79,7 @@ fn getting_across_lists_each_street_with_its_crossing_and_lanes() {
 fn getting_across_follows_the_units() {
     let s = shared(0);
     s.set_units(Units::Feet);
-    let h = html(|| view! { <notes::Across shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <notes::Across vm=s.clone()/> }.into_any());
     assert!(h.contains("2 × 29.5"));
     assert!(h.contains(">37.4<"));
 }
@@ -89,23 +89,23 @@ fn a_street_without_a_crossing_says_none_and_a_too_long_one_is_flagged() {
     let s = shared(0);
     let e = arm(&s, 90);
     s.edit(|j| j.set_crossing(e, false));
-    let h = html(|| view! { <notes::Across shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <notes::Across vm=s.clone()/> }.into_any());
     assert!(h.contains("class=\"zero\">none"));
 }
 
 #[test]
 fn conflicts_are_counted_and_the_note_follows_the_control() {
     let s = shared(0);
-    let h = html(|| view! { <notes::Conflicts shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <notes::Conflicts vm=s.clone()/> }.into_any());
     assert!(h.contains("<td>16</td>") && h.contains("<td>32</td>"));
-    let note = html(|| view! { <notes::ConflictNote shared=s.clone()/> }.into_any());
+    let note = html(|| view! { <notes::ConflictNote vm=s.clone()/> }.into_any());
     assert!(note.contains("A signal takes turns"));
 }
 
 #[test]
 fn the_checks_each_say_whether_they_pass() {
     let s = shared(0);
-    let h = html(|| view! { <notes::Checks shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
     assert_eq!(count(&h, "<li class=\"ok\">"), 7);
     assert!(h.contains(": passes"));
     assert!(h.contains("Longest crossing in one go: 11.4 m"));
@@ -116,7 +116,7 @@ fn a_failing_check_is_marked_and_says_so_to_a_screen_reader() {
     let s = shared(0);
     let n = arm(&s, 0);
     s.edit(|j| j.set_corner(n, 12_000));
-    let h = html(|| view! { <notes::Checks shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
     assert!(count(&h, "<li class=\"bad\">") >= 1);
     assert!(h.contains(": fails"));
 }
@@ -124,11 +124,11 @@ fn a_failing_check_is_marked_and_says_so_to_a_screen_reader() {
 #[test]
 fn the_changes_start_from_the_junction_today_and_list_each_edit() {
     let s = shared(0);
-    let h = html(|| view! { <notes::Revisions shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <notes::Revisions vm=s.clone()/> }.into_any());
     assert!(h.contains("Junction today") && h.contains("base now"));
     let n = arm(&s, 0);
     s.edit(|j| j.set_corner(n, 7_000));
-    let h = html(|| view! { <notes::Revisions shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <notes::Revisions vm=s.clone()/> }.into_any());
     assert!(h.contains("7000 mm radius"));
     assert!(h.contains("class=\"now\""));
     assert!(!h.contains("base now"));
@@ -140,7 +140,7 @@ fn the_measures_say_where_each_is_modelled_and_where_it_is_in_use() {
     let e = arm(&s, 90);
     s.edit(|j| j.set_bus_lane(e, true));
     s.edit(|j| j.set_approach(e, Q_CURB));
-    let h = html(|| view! { <notes::Measures shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <notes::Measures vm=s.clone()/> }.into_any());
     assert_eq!(count(&h, "<tbody>"), 3);
     assert!(h.contains("In use on E"));
     assert!(h.contains("Street editor") && h.contains("Not modelled"));
@@ -148,8 +148,8 @@ fn the_measures_say_where_each_is_modelled_and_where_it_is_in_use() {
 
 // ---- inspector -----------------------------------------------------------------
 
-fn panel(s: &Rc<Shared>) -> String {
-    html(|| view! { <inspector::Inspector shared=s.clone()/> }.into_any())
+fn panel(s: &Rc<JunctionVm>) -> String {
+    html(|| view! { <inspector::Inspector vm=s.clone()/> }.into_any())
 }
 
 #[test]
@@ -217,7 +217,7 @@ fn a_city_junction_s_streets_link_to_the_street_editor_and_cannot_be_removed() {
         a.section = Some(crate::model::Street::sample(a.street, crate::catalogue::Side::Right));
     }
     let j = Junction::from_city("Test", &state, &state, 0).unwrap();
-    let s = Shared::new(j);
+    let s = JunctionVm::new(crate::ui::platform::browser_ports(), j, None);
     let e = arm(&s, 90);
     s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
@@ -277,7 +277,7 @@ use crate::ui::keys::{Action, Step};
 use crate::ui::live;
 use crate::ui::watch::Watch;
 
-fn watch(sample: usize) -> (Rc<Shared>, Watch) {
+fn watch(sample: usize) -> (Rc<JunctionVm>, Watch) {
     let s = shared(sample);
     let w = Watch::new(s.clone());
     live::take_said();
@@ -290,7 +290,7 @@ fn stepping_the_selected_street_turns_it_by_a_step_and_says_so() {
     owner.set();
     let (s, w) = watch(0);
     let n = arm(&s, 0);
-    s.select_in_page(Target::Arm(n));
+    s.select(Target::Arm(n));
     live::take_said();
     w.apply(Action::Step(Step::Bearing, 1));
     assert_eq!(s.read(|j| j.arm(n).unwrap().bearing), 5);
@@ -303,10 +303,10 @@ fn stepping_suits_what_is_selected() {
     owner.set();
     let (s, w) = watch(0);
     let n = arm(&s, 0);
-    s.select_in_page(Target::Corner(n));
+    s.select(Target::Corner(n));
     w.apply(Action::Step(Step::Corner, -1));
     assert_eq!(s.read(|j| j.arm(n).unwrap().corner_mm), 5_500);
-    s.select_in_page(Target::Crossing(n));
+    s.select(Target::Crossing(n));
     w.apply(Action::Step(Step::Setback, 1));
     assert_eq!(s.read(|j| j.arm(n).unwrap().crossing.unwrap().setback_mm), 3_500);
 }
@@ -327,10 +327,10 @@ fn removing_takes_away_what_is_selected_in_the_way_that_suits_it() {
     owner.set();
     let (s, w) = watch(0);
     let n = arm(&s, 0);
-    s.select_in_page(Target::Crossing(n));
+    s.select(Target::Crossing(n));
     w.apply(Action::Remove);
     assert!(s.read(|j| j.arm(n).unwrap().crossing.is_none()));
-    s.select_in_page(Target::Arm(n));
+    s.select(Target::Arm(n));
     w.apply(Action::Remove);
     assert_eq!(s.read(|j| j.current().arms.len()), 3);
     assert!(s.read(|j| j.arm(n).is_none()));
@@ -342,7 +342,7 @@ fn removing_the_last_removable_street_is_refused_with_its_reason() {
     owner.set();
     let (s, w) = watch(1);
     let uid = s.read(|j| j.current().arms[0].uid);
-    s.select_in_page(Target::Arm(uid));
+    s.select(Target::Arm(uid));
     live::take_said();
     w.apply(Action::Remove);
     assert_eq!(live::take_said(), vec!["A junction needs at least three streets."]);
@@ -369,36 +369,36 @@ fn the_bus_lane_and_cycle_track_are_removed_by_the_same_key() {
     let (n, so) = (arm(&s, 0), arm(&s, 180));
     s.edit(|j| j.set_bus(Some((n, so))));
     s.edit(|j| j.set_cycle(Some(2_000)));
-    s.select_in_page(Target::Bus);
+    s.select(Target::Bus);
     w.apply(Action::Remove);
     assert!(s.read(|j| j.current().bus.is_none()));
-    s.select_in_page(Target::Cycle);
+    s.select(Target::Cycle);
     w.apply(Action::Remove);
     assert!(s.read(|j| j.current().cycle.is_none()));
 }
 
 // ---- the page around the plan -------------------------------------------------------
 
-fn linked_shared() -> Rc<Shared> {
+fn linked_shared() -> Rc<JunctionVm> {
     let mut state = Junction::new(0).current().clone();
     for a in &mut state.arms {
         a.edge = a.uid + 10;
         a.section = Some(crate::model::Street::sample(a.street, crate::catalogue::Side::Right));
     }
-    Shared::new(Junction::from_city("Junction 4", &state, &state, 0).unwrap())
+    JunctionVm::new(crate::ui::platform::browser_ports(), Junction::from_city("Junction 4", &state, &state, 0).unwrap(), None)
 }
 
 #[test]
 fn the_heading_names_the_junction_and_counts_its_streets() {
     let s = shared(0);
-    let h = html(|| view! { <page::Header shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::Header vm=s.clone()/> }.into_any());
     assert!(h.contains(">Avenue and street</h1>") && h.contains("Junction plan") && h.contains(">4 streets<"));
     assert!(!h.contains("City map"));
 }
 
 #[test]
 fn a_city_junction_s_heading_links_back_to_the_map() {
-    let h = html(|| view! { <page::Header shared=linked_shared()/> }.into_any());
+    let h = html(|| view! { <page::Header vm=linked_shared()/> }.into_any());
     assert!(h.contains("href=\"map.html\"") && h.contains("City map") && h.contains(">Junction 4</h1>"));
 }
 
@@ -407,18 +407,18 @@ fn the_title_block_gives_the_name_the_streets_and_the_changes_made() {
     let s = shared(0);
     let n = arm(&s, 0);
     s.edit(|j| j.set_corner(n, 7_000));
-    let h = html(|| view! { <page::TitleBlock shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
     assert!(h.contains("id=\"tb-street\">Avenue and street<") && h.contains("id=\"tb-row\" class=\"fig\">4<") && h.contains("id=\"tb-changes\" class=\"fig\">1<"));
 }
 
 #[test]
 fn the_status_line_says_whether_the_junction_works() {
     let s = shared(0);
-    let h = html(|| view! { <page::Fit shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::Fit vm=s.clone()/> }.into_any());
     assert!(h.contains("class=\"fit\"") && h.contains("Every check passes."));
     let n = arm(&s, 0);
     s.edit(|j| j.set_island(n, false));
-    let h = html(|| view! { <page::Fit shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::Fit vm=s.clone()/> }.into_any());
     assert!(h.contains("class=\"fit bad\"") && h.contains("One check needs attention: crossing distance."));
 }
 
@@ -434,21 +434,21 @@ fn button_tag(html: &str, id: &str) -> String {
 fn undo_redo_and_start_over_are_off_until_there_is_something_to_undo() {
     let s = shared(0);
     let off = |h: &str| ["undo", "redo", "reset"].map(|id| button_tag(h, id).contains("disabled"));
-    let h = html(|| view! { <page::History shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::History vm=s.clone()/> }.into_any());
     assert_eq!(off(&h), [true, true, true]);
     let n = arm(&s, 0);
     s.edit(|j| j.set_corner(n, 7_000));
-    let h = html(|| view! { <page::History shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::History vm=s.clone()/> }.into_any());
     assert_eq!(off(&h), [false, true, false]);
     s.edit(|j| j.undo());
-    let h = html(|| view! { <page::History shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::History vm=s.clone()/> }.into_any());
     assert_eq!(off(&h), [true, false, true]);
 }
 
 #[test]
 fn the_key_lists_the_pieces_in_the_plan() {
     let s = shared(0);
-    let h = html(|| view! { <page::Key shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::Key vm=s.clone()/> }.into_any());
     assert_eq!(count(&h, "<li>"), 5);
     assert!(h.contains("Sidewalk") && h.contains("Driving lane") && h.contains("Planted median"));
 }
@@ -456,19 +456,19 @@ fn the_key_lists_the_pieces_in_the_plan() {
 #[test]
 fn the_palette_offers_each_street_but_not_the_freeway_with_its_width() {
     let s = shared(0);
-    let h = html(|| view! { <page::Palette shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::Palette vm=s.clone()/> }.into_any());
     assert_eq!(count(&h, "class=\"chip\""), 3);
     assert!(h.contains("Sample Street 1") && h.contains("18.0 m wide") && h.contains("30.0 m wide"));
     assert!(!h.contains("Freeway"));
     s.set_units(Units::Feet);
-    let h = html(|| view! { <page::Palette shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::Palette vm=s.clone()/> }.into_any());
     assert!(h.contains("59.1 ft wide"));
 }
 
 #[test]
 fn the_samples_say_which_one_the_junction_is() {
     let s = shared(1);
-    let h = html(|| view! { <page::Samples shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <page::Samples vm=s.clone()/> }.into_any());
     assert_eq!(count(&h, "class=\"chip plain\""), 4);
     assert_eq!(count(&h, "aria-pressed=\"true\""), 1);
     assert!(h.contains("Street and lane") && h.contains("3 streets") && h.contains("Five ways"));
@@ -477,7 +477,7 @@ fn the_samples_say_which_one_the_junction_is() {
 #[test]
 fn the_plan_is_a_labelled_group_holding_a_picture_of_the_junction() {
     let s = shared(0);
-    let h = html(|| view! { <plan::PlanDrawing shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
     assert!(h.contains("id=\"wrap\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Junction plan editor\""));
     assert!(h.contains("id=\"drawing\"") && h.contains("role=\"img\""));
     assert!(h.contains("Plan of the junction, north up. 4 streets."));
@@ -490,7 +490,7 @@ fn the_plan_follows_the_units_and_the_selection() {
     s.set_units(Units::Feet);
     let n = arm(&s, 0);
     s.edit(|j| j.select(Target::Arm(n)));
-    let h = html(|| view! { <plan::PlanDrawing shared=s.clone()/> }.into_any());
+    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
     assert!(h.contains("2 × 29.5") && h.contains("66 ft"));
     assert_eq!(count(&h, "class=\"arm on\""), 1);
 }
