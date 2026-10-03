@@ -13,12 +13,9 @@ use crate::shared::units::Units;
 use crate::vm::binding::CityBinding;
 use crate::shared::core::{Core, Presents};
 use crate::vm::junction_text as text;
-use crate::shared::keeper::Keeper;
+use crate::shared::keeper::{Keeper, NOT_KEPT};
 use crate::vm::plan_frame::Frame;
 use crate::shared::ports::Ports;
-
-/// Said once when what a page makes cannot be kept.
-pub const NOT_KEPT: &str = "This browser is not keeping your changes, so other pages will not see them.";
 
 impl Presents for Junction {
     type View = JView;

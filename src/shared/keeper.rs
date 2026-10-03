@@ -10,6 +10,9 @@ use crate::shared::ports::Scheduler;
 /// How long after the last change it is kept, in milliseconds.
 const DELAY_MS: u32 = 250;
 
+/// Said once when what a page makes cannot be kept.
+pub const NOT_KEPT: &str = "This browser is not keeping your changes, so other pages will not see them.";
+
 pub struct Keeper {
     scheduler: Rc<dyn Scheduler>,
     keep: Rc<dyn Fn() -> bool>,
