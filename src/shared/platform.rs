@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::shared::ports::{Announcer, Fetched, Fetcher, Importer, Ports, Scheduler, Storage};
+use crate::shared::ports::{Announcer, Fetched, Fetcher, Importer, Navigator, Ports, Scheduler, Storage};
 use crate::shared::{live, store};
 
 struct BrowserAnnouncer;
@@ -137,9 +137,23 @@ async fn read_osm(osm: &[u8]) -> Result<String, String> {
     json.as_string().ok_or_else(|| "the map data could not be read".to_string())
 }
 
+struct BrowserNavigator;
+
+impl Navigator for BrowserNavigator {
+    fn go(&self, href: &str) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = leptos::prelude::window().location().set_href(href);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = href;
+    }
+}
+
 /// What a view-model gets on a page: the live region and local storage.
 pub fn browser_ports() -> Ports {
     Ports {
+        navigator: Rc::new(BrowserNavigator),
         importer: Rc::new(BrowserImporter),
         fetcher: Rc::new(BrowserFetcher),
         announcer: Rc::new(BrowserAnnouncer),

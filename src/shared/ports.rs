@@ -38,9 +38,15 @@ pub trait Importer {
     fn import(&self, osm: Vec<u8>, done: Box<dyn FnOnce(Result<String, String>)>);
 }
 
+/// Opens another page of the site.
+pub trait Navigator {
+    fn go(&self, href: &str);
+}
+
 /// The platform services a view-model is given.
 #[derive(Clone)]
 pub struct Ports {
+    pub navigator: Rc<dyn Navigator>,
     pub importer: Rc<dyn Importer>,
     pub fetcher: Rc<dyn Fetcher>,
     pub announcer: Rc<dyn Announcer>,
@@ -206,6 +212,25 @@ impl Importer for FakeImporter {
     }
 }
 
+/// A navigator that keeps where it was sent.
+#[derive(Default)]
+pub struct RecordingNavigator {
+    gone: RefCell<Vec<String>>,
+}
+
+impl RecordingNavigator {
+    /// Where it was sent since this was last called.
+    pub fn take(&self) -> Vec<String> {
+        std::mem::take(&mut *self.gone.borrow_mut())
+    }
+}
+
+impl Navigator for RecordingNavigator {
+    fn go(&self, href: &str) {
+        self.gone.borrow_mut().push(href.to_string());
+    }
+}
+
 /// Ports for a test, with the fakes kept so the test can look at them.
 pub fn test_ports() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
     let (ports, announcer, storage, _) = test_ports_with_time();
@@ -219,7 +244,14 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
     let scheduler = Rc::new(ManualScheduler::default());
     let fetcher = Rc::new(FakeFetcher::default());
     (
-        Ports { importer: Rc::new(FakeImporter::default()), fetcher, announcer: announcer.clone(), storage: storage.clone(), scheduler: scheduler.clone() },
+        Ports {
+            navigator: Rc::new(RecordingNavigator::default()),
+            importer: Rc::new(FakeImporter::default()),
+            fetcher,
+            announcer: announcer.clone(),
+            storage: storage.clone(),
+            scheduler: scheduler.clone(),
+        },
         announcer,
         storage,
         scheduler,
@@ -228,12 +260,20 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
 
 /// The same, with the fetcher and the importer too.
 pub fn test_ports_with_fetcher() -> (Ports, Rc<FakeFetcher>, Rc<FakeImporter>) {
+    let (ports, fetcher, importer, _) = test_ports_with_services();
+    (ports, fetcher, importer)
+}
+
+/// The same, with the navigator too.
+pub fn test_ports_with_services() -> (Ports, Rc<FakeFetcher>, Rc<FakeImporter>, Rc<RecordingNavigator>) {
     let (mut ports, ..) = test_ports_with_time();
     let fetcher = Rc::new(FakeFetcher::default());
     let importer = Rc::new(FakeImporter::default());
+    let navigator = Rc::new(RecordingNavigator::default());
     ports.fetcher = fetcher.clone();
     ports.importer = importer.clone();
-    (ports, fetcher, importer)
+    ports.navigator = navigator.clone();
+    (ports, fetcher, importer, navigator)
 }
 
 #[cfg(test)]
