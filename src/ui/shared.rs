@@ -2,44 +2,32 @@
 //! script that still drives the rest of the page. Both edit it through here, so
 //! an edit made by either bumps a version the components watch.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::rc::Rc;
 
 use leptos::prelude::*;
 
 use crate::junction::{Junction, Refusal, Target};
+use crate::ui::core::Core;
 use crate::ui::{announce, live};
-use crate::junction_view::JView;
 use crate::ui::plan_svg::Frame;
-use crate::units::Units;
 
 pub struct Shared {
-    model: RefCell<Junction>,
-    version: ArcRwSignal<u32>,
-    units: ArcRwSignal<Units>,
-    on_change: RefCell<Option<js_sys::Function>>,
-    /// The view as of a version of the model.
-    cached: RefCell<Option<(u32, Rc<JView>)>>,
+    core: Core<Junction>,
     /// How the plan was last drawn, for turning a pointer position into a point on it.
     frame: Cell<Option<Frame>>,
 }
 
+impl std::ops::Deref for Shared {
+    type Target = Core<Junction>;
+    fn deref(&self) -> &Core<Junction> {
+        &self.core
+    }
+}
+
 impl Shared {
     pub fn new(model: Junction) -> Rc<Shared> {
-        Rc::new(Shared { model: RefCell::new(model), version: ArcRwSignal::new(0), units: ArcRwSignal::new(Units::default()), on_change: RefCell::new(None), cached: RefCell::new(None), frame: Cell::new(None) })
-    }
-
-    /// The model's view, built once for each edit however often it is asked for.
-    pub fn view(&self) -> Rc<JView> {
-        let version = self.version.get_untracked();
-        if let Some((at, view)) = &*self.cached.borrow() {
-            if *at == version {
-                return view.clone();
-            }
-        }
-        let view = Rc::new(self.model.borrow().view());
-        *self.cached.borrow_mut() = Some((version, view.clone()));
-        view
+        Rc::new(Shared { core: Core::new(model), frame: Cell::new(None) })
     }
 
     pub fn frame(&self) -> Option<Frame> {
@@ -48,20 +36,6 @@ impl Shared {
 
     pub fn set_frame(&self, frame: Frame) {
         self.frame.set(Some(frame));
-    }
-
-    pub fn read<R>(&self, f: impl FnOnce(&Junction) -> R) -> R {
-        f(&self.model.borrow())
-    }
-
-    /// Edits the model, and tells whatever watches `version` and the script.
-    pub fn edit<R>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
-        let r = f(&mut self.model.borrow_mut());
-        self.version.update(|v| *v += 1);
-        if let Some(on_change) = &*self.on_change.borrow() {
-            let _ = on_change.call0(&wasm_bindgen::JsValue::NULL);
-        }
-        r
     }
 
     /// An edit made from a component of the page: it is announced by what it
@@ -148,35 +122,17 @@ impl Shared {
     }
 
     fn say_selection(&self) {
-        if let Some(text) = announce::selection_text(&self.view(), self.units.get_untracked()) {
+        if let Some(text) = announce::selection_text(&self.view(), self.units().get_untracked()) {
             live::say(&text);
         }
     }
 
-    /// Says what to call, with no arguments, after any change to the junction,
-    /// by either side: the script keeps what the city holds.
-    pub fn set_on_change(&self, f: js_sys::Function) {
-        *self.on_change.borrow_mut() = Some(f);
-    }
-
-    /// The units the page shows lengths in; not part of the model.
-    pub fn units(&self) -> RwSignal<Units> {
-        self.units.clone().into()
-    }
-
-    pub fn set_units(&self, units: Units) {
-        self.units.set(units);
-    }
-
-    /// Changes whenever the model is edited, by either side.
-    pub fn version(&self) -> RwSignal<u32> {
-        self.version.clone().into()
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::units::Units;
 
     #[test]
     fn an_edit_bumps_the_version_and_a_read_does_not() {

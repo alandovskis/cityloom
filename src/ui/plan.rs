@@ -8,7 +8,7 @@ use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
 use crate::junction::Target;
-use crate::ui::keys::{self, Shortcut};
+use crate::ui::keys;
 use crate::ui::plan_svg::{Frame, plan_label, plan_svg};
 use crate::ui::shared::Shared;
 use crate::ui::watch::Watch;
@@ -47,6 +47,7 @@ pub fn selected_by(role: &str, uid: u32, lane: usize) -> Target {
 }
 
 /// Where the window's size and the drawing's width are now.
+#[cfg(target_arch = "wasm32")]
 fn viewport_of(wrap: &Element) -> (f64, f64) {
     let height = leptos::web_sys::window().and_then(|w| w.inner_height().ok()).and_then(|h| h.as_f64()).unwrap_or(800.0);
     (wrap.client_width() as f64, height)
@@ -73,6 +74,7 @@ pub fn PlanDrawing(shared: Rc<Shared>) -> impl IntoView {
             }
         });
         // Control or Command with Z or Y undoes and redoes, wherever the keyboard is.
+        use crate::ui::keys::Shortcut;
         window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
             if !(e.meta_key() || e.ctrl_key()) || typing(&e) {
                 return;

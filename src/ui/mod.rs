@@ -2,6 +2,7 @@
 //! view and calls the model's edits; the page holds no rules of its own.
 
 pub mod announce;
+pub mod core;
 pub mod inspector;
 pub mod keys;
 pub mod live;
