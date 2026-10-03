@@ -35,6 +35,24 @@ impl Units {
         }
     }
 
+    /// A length in millimetres to `places` decimals, for a field to hold.
+    pub fn fixed(self, mm: i32, places: usize) -> String {
+        let per = match self {
+            Units::Metres => 1000.0,
+            Units::Feet => MM_PER_FOOT,
+        };
+        format!("{:.*}", places, mm as f64 / per)
+    }
+
+    /// Whole millimetres for a number typed in these units.
+    pub fn mm(self, typed: f64) -> i32 {
+        let per = match self {
+            Units::Metres => 1000.0,
+            Units::Feet => MM_PER_FOOT,
+        };
+        (typed * per).round() as i32
+    }
+
     /// A length with its unit: 11.4 m.
     pub fn length(self, mm: i32) -> String {
         format!("{} {}", self.number(mm), self.word())
@@ -86,5 +104,23 @@ mod tests {
         assert_eq!(Units::parse("cubits"), Units::Metres);
         assert_eq!(Units::Feet.word(), "ft");
         assert_eq!(Units::Metres.word(), "m");
+    }
+
+    #[test]
+    fn an_input_shows_a_length_to_the_places_it_asks_for() {
+        assert_eq!(Units::Metres.fixed(11_400, 1), "11.4");
+        assert_eq!(Units::Metres.fixed(-100, 2), "-0.10");
+        assert_eq!(Units::Metres.fixed(0, 2), "0.00");
+        assert_eq!(Units::Feet.fixed(3_048, 1), "10.0");
+        assert_eq!(Units::Feet.fixed(100, 2), "0.33");
+    }
+
+    #[test]
+    fn a_typed_number_becomes_whole_millimetres() {
+        assert_eq!(Units::Metres.mm(11.4), 11_400);
+        assert_eq!(Units::Metres.mm(0.1234), 123);
+        assert_eq!(Units::Metres.mm(-0.1), -100);
+        assert_eq!(Units::Feet.mm(10.0), 3_048);
+        assert_eq!(Units::Feet.mm(0.5), 152);
     }
 }
