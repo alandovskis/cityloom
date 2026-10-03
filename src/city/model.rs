@@ -147,6 +147,29 @@ pub struct Layout {
     pub(super) edges: Vec<EdgeDef>,
 }
 
+/// Moves bearings (sorted, in degrees) apart where two are closer than the junction editor allows,
+/// each by half of what is missing, in the editor's steps. Bearings that cannot all fit are left.
+fn spread(b: &mut [i32]) {
+    use crate::junction::model::{BEARING_STEP, MIN_SEPARATION};
+    let n = b.len();
+    for _ in 0..40 {
+        let mut moved = false;
+        for i in 0..n {
+            let j = (i + 1) % n;
+            let gap = (b[j] - b[i]).rem_euclid(360);
+            if n > 1 && gap < MIN_SEPARATION {
+                let give = (((MIN_SEPARATION - gap) as f64 / 2.0 / BEARING_STEP as f64).ceil() as i32) * BEARING_STEP;
+                b[i] = (b[i] - give).rem_euclid(360);
+                b[j] = (b[j] + give).rem_euclid(360);
+                moved = true;
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
+}
+
 impl Layout {
     /// The sample city's network.
     pub fn sample() -> Layout {
@@ -220,6 +243,12 @@ impl Layout {
     fn generate(&self, node: usize, streets: &BTreeMap<u32, Street>) -> State {
         let def = &self.nodes[node];
         let mut incident: Vec<(i32, usize)> = self.edges_at(node).into_iter().map(|e| (self.bearing(node, self.other_end(e, node)), e)).collect();
+        incident.sort_by_key(|(b, _)| *b);
+        let mut bearings: Vec<i32> = incident.iter().map(|(b, _)| *b).collect();
+        spread(&mut bearings);
+        for (i, b) in bearings.into_iter().enumerate() {
+            incident[i].0 = b;
+        }
         incident.sort_by_key(|(b, _)| *b);
         let mut arms: Vec<Arm> = incident
             .iter()
@@ -328,11 +357,29 @@ impl City {
     }
 
     /// The same for any network.
-    pub fn on(layout: Layout) -> City {
+    pub fn on(mut layout: Layout) -> City {
         let today_streets: BTreeMap<u32, Street> =
             layout.edges.iter().enumerate().map(|(i, e)| (i as u32 + 1, e.section.clone().unwrap_or_else(|| Street::sample(e.street, layout.side)))).collect();
-        let today_junctions: BTreeMap<u32, State> =
-            (0..layout.nodes.len()).filter(|&n| layout.nodes[n].junction).map(|n| (node_uid(n), layout.generate(n, &today_streets))).collect();
+        let region = REGIONS.iter().position(|r| r.drive_side == layout.side).unwrap_or(0);
+        let mut today_junctions: BTreeMap<u32, State> = BTreeMap::new();
+        for n in 0..layout.nodes.len() {
+            if !layout.nodes[n].junction {
+                continue;
+            }
+            let mut s = layout.generate(n, &today_streets);
+            for a in &mut s.arms {
+                let e = (a.edge as usize).saturating_sub(1);
+                a.section = today_streets.get(&a.edge).map(|st| seen_from(&layout, e, n, st));
+            }
+            // A meeting the junction editor cannot draw (every road leaving to one side, say) is left as
+            // a plain connection of streets.
+            if Junction::from_city("", &s, &s, region).is_none() {
+                layout.nodes[n].junction = false;
+                continue;
+            }
+            forget_streets(&mut s);
+            today_junctions.insert(node_uid(n), s);
+        }
         City { layout, streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions }
     }
 

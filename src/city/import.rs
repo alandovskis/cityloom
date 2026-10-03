@@ -225,4 +225,43 @@ mod tests {
         assert!(junction.name.contains("Main Street") && junction.name.contains("Side Road"), "{}", junction.name);
         assert!(v.nodes.iter().filter(|n| !n.junction).all(|n| n.name.starts_with("End of ")), "{:?}", v.nodes.iter().map(|n| &n.name).collect::<Vec<_>>());
     }
+
+    /// A node at the origin with a road to each of the given points, all of them junction-like in the data.
+    fn star(ends: &[(f64, f64)]) -> Network {
+        let mut net = crossing();
+        net.nodes.truncate(1);
+        net.roads.clear();
+        for (i, &(x, y)) in ends.iter().enumerate() {
+            let id = i as u32 + 2;
+            net.nodes.push(Node { id, osm_nodes: vec![id as i64], x_m: x, y_m: y, junction: false, control: Control::None });
+            let mut road = crossing().roads[0].clone();
+            road.id = id;
+            road.to = id;
+            road.points = vec![(0.0, 0.0), (x, y)];
+            net.roads.push(road);
+        }
+        net
+    }
+
+    #[test]
+    fn arms_that_leave_almost_together_are_drawn_apart() {
+        // two roads 10 degrees apart, and two more to make a crossing
+        let net = star(&[(0.0, 200.0), (35.0, 197.0), (200.0, 0.0), (0.0, -200.0)]);
+        let city = City::from_network(&net, "Fork");
+        let v = city.view(0);
+        let junction = v.nodes.iter().find(|n| n.junction).expect("still a junction");
+        assert_eq!(junction.arms, 4);
+        assert!(city.junction_editor(junction.uid, 0).is_some());
+    }
+
+    #[test]
+    fn a_meeting_that_cannot_be_drawn_as_a_junction_is_not_offered_as_one() {
+        // three roads all heading north: no junction editor can draw that
+        let net = star(&[(-50.0, 200.0), (0.0, 200.0), (50.0, 200.0)]);
+        let city = City::from_network(&net, "Fan");
+        let v = city.view(0);
+        assert_eq!(v.edges.len(), 3);
+        assert!(v.nodes.iter().all(|n| !n.junction));
+        assert!(v.nodes.iter().all(|n| n.ok), "nothing to fail where there is no junction");
+    }
 }

@@ -1829,6 +1829,7 @@ name = "osm_import"
 version = "0.1.0"
 dependencies = [
  "abstutil",
+ "cityloom_editor",
  "instant",
  "osm2streets",
  "osm_network",
