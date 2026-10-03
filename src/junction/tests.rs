@@ -209,7 +209,7 @@ fn a_city_junction_s_streets_link_to_the_street_editor_and_cannot_be_removed() {
     let e = arm(&s, 90);
     s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
-    assert!(h.contains("Open the cross-section") && h.contains("index.html?street="));
+    assert!(h.contains("Open the cross-section") && h.contains("street.html?street="));
     assert!(!h.contains("Remove this street"));
 }
 

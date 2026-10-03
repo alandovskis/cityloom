@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-CityLoom is a street, junction and city-map editor written in Rust, compiled to WebAssembly and drawn with Leptos 0.8 (client-side rendering). The three pages are `web/map.html`, `web/index.html` (street) and `web/intersection.html` (junction). All catalogue widths, rules and rates are synthetic placeholders.
+CityLoom is a street, junction and city-map editor written in Rust, compiled to WebAssembly and drawn with Leptos 0.8 (client-side rendering). The three pages are `web/map.html`, `web/street.html` (street) and `web/intersection.html` (junction). All catalogue widths, rules and rates are synthetic placeholders.
 
 ## Commands
 

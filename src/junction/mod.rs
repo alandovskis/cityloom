@@ -90,7 +90,7 @@ pub fn mount_page(plan: &Plan) {
     mount("revs", view! { <notes::Revisions vm=vm/> }.into_any());
     // Streets that belong to a city are not added, and there is no street page to go to.
     if plan.0.view_now().linked {
-        for selector in [".lower", ".surface[href=\"index.html\"]"] {
+        for selector in [".lower", ".surface[href=\"street.html\"]"] {
             if let Ok(Some(el)) = leptos::prelude::document().query_selector(selector) {
                 el.unchecked_into::<HtmlElement>().set_hidden(true);
             }

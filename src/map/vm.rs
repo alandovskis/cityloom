@@ -76,7 +76,7 @@ pub fn street_label(e: &EdgeView, units: Units) -> String {
 }
 
 pub fn street_href(uid: u32) -> String {
-    format!("index.html?street={uid}")
+    format!("street.html?street={uid}")
 }
 
 pub fn junction_href(uid: u32) -> String {
@@ -679,7 +679,7 @@ mod tests {
         vm.move_active(1);
         assert_eq!(vm.chosen_href(), vm.results().get(1).map(|r| r.href.clone()));
         vm.set_search("avenue");
-        assert!(vm.chosen_href().unwrap().starts_with("index.html?street="));
+        assert!(vm.chosen_href().unwrap().starts_with("street.html?street="));
         vm.set_search("zzz");
         assert_eq!(vm.chosen_href(), None);
     }
@@ -756,7 +756,7 @@ mod tests {
         let rows = vm.street_rows();
         assert_eq!(rows.len(), vm.view().edges.len());
         let e = &vm.view().edges[0];
-        assert_eq!(rows[0].href, format!("index.html?street={}", e.uid));
+        assert_eq!(rows[0].href, format!("street.html?street={}", e.uid));
         assert_eq!(rows[0].hot, format!("s-{}", e.uid));
         assert_eq!(rows[0].sub, format!("{} \u{b7} {}", street_ends(&e.name), Units::Metres.length(e.row_mm)));
         vm.set_units(Units::Feet);

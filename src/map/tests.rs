@@ -121,7 +121,7 @@ fn the_places_panel_lists_each_junction_and_street_as_a_link_with_what_is_wrong(
     let (vm, storage) = map_vm();
     let h = map_html(|| view! { <map_ui::Places vm=vm.clone()/> });
     assert_eq!(count(&h, "class=\"place-row\""), 32);
-    assert!(h.contains("href=\"intersection.html?junction=") && h.contains("href=\"index.html?street="));
+    assert!(h.contains("href=\"intersection.html?junction=") && h.contains("href=\"street.html?street="));
     assert!(h.contains(">Junctions</h3>") && h.contains(">Streets</h3>") && !h.contains("class=\"st"));
     assert!(h.contains("Press a junction to open its plan. Press a street to open its cross-section."));
     change_a_street(&vm, &storage, 1_000);
@@ -147,7 +147,7 @@ fn the_checks_lead_and_list_say_what_needs_attention() {
     assert!(map_html(|| view! { <map_ui::ChecksLead vm=vm.clone()/> }).contains("1 place needs attention. Open one to see what is wrong and fix it."));
     let h = map_html(|| view! { <map_ui::Checks vm=vm.clone()/> });
     assert_eq!(count(&h, "<li class=\"bad\">"), 1);
-    assert!(h.contains("href=\"index.html?street=") && h.contains("Fits the street width"));
+    assert!(h.contains("href=\"street.html?street=") && h.contains("Fits the street width"));
 }
 
 #[test]
@@ -189,7 +189,7 @@ fn a_search_lists_the_places_found_as_options_with_what_is_wrong_and_says_how_ma
     assert!(h.contains("aria-expanded=\"true\""));
     let shown = vm.results().len().min(crate::map::vm::MapVm::SHOWN);
     assert_eq!(count(&h, "role=\"option\""), shown);
-    assert!(h.contains("Sample Avenue") && h.contains("href=\"index.html?street="));
+    assert!(h.contains("Sample Avenue") && h.contains("href=\"street.html?street="));
     assert!(h.contains("Needs attention"), "a place that does not work says so in the results");
     assert!(h.contains("place") && h.contains("match"));
 }

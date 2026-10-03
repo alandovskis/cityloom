@@ -79,7 +79,7 @@ test.describe("the search box on the city map", () => {
   });
 
   test("a result that needs attention says so", async ({ page }) => {
-    await page.goto(`/index.html?street=1`);
+    await page.goto(`/street.html?street=1`);
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("+");

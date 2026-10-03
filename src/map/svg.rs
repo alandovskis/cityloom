@@ -339,7 +339,7 @@ mod tests {
         assert_eq!(count(&s, "class=\"m-walk\"") + count(&s, "class=\"m-shoulder\""), n);
         assert_eq!(count(&s, "class=\"m-road\""), n);
         assert_eq!(count(&s, "data-hl=\"s-"), n);
-        assert!(s.contains("href=\"index.html?street="));
+        assert!(s.contains("href=\"street.html?street="));
         assert!(!s.contains("NaN") && !s.contains("inf"));
     }
 

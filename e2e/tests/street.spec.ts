@@ -11,7 +11,7 @@ const pieceCount = (page: Page) => page.locator("#drawing").getAttribute("aria-l
 
 test.describe("the street editor, as a sandbox on the sample streets", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/index.html");
+    await page.goto("/street.html");
     await expect(page.locator("#drawing")).toBeVisible();
   });
 
@@ -205,7 +205,7 @@ test.describe("the street editor, as a sandbox on the sample streets", () => {
 
 test.describe("the street editor on a street of the city", () => {
   test("is named for the street, says where it runs between, and links back to the map", async ({ page }) => {
-    await page.goto(`/index.html?street=${STREET}`);
+    await page.goto(`/street.html?street=${STREET}`);
     await expect(page.locator("#street-name")).toHaveText("Sample Avenue 2");
     await expect(page.locator("#street-sub")).toContainText("the edge of the map");
     await expect(page.locator("#street-sub")).toContainText("Junction 4");
@@ -214,7 +214,7 @@ test.describe("the street editor on a street of the city", () => {
   });
 
   test("what is changed is kept in the city across a reload", async ({ page }) => {
-    await page.goto(`/index.html?street=${STREET}`);
+    await page.goto(`/street.html?street=${STREET}`);
     await selectFirstPiece(page);
     await page.keyboard.press("Delete");
     await expect(pieceCount(page)).resolves.toMatch(/10 segments/);
@@ -223,16 +223,16 @@ test.describe("the street editor on a street of the city", () => {
   });
 
   test("a change is kept even when the page is left at once", async ({ page }) => {
-    await page.goto(`/index.html?street=${STREET}`);
+    await page.goto(`/street.html?street=${STREET}`);
     await selectFirstPiece(page);
     await page.keyboard.press("Delete");
     await page.goto("/map.html");
-    await page.goto(`/index.html?street=${STREET}`);
+    await page.goto(`/street.html?street=${STREET}`);
     await expect(pieceCount(page)).resolves.toMatch(/10 segments/);
   });
 
   test("a street that is not in the city goes back to the map", async ({ page }) => {
-    await page.goto("/index.html?street=999");
+    await page.goto("/street.html?street=999");
     await expect(page).toHaveURL(/map\.html$/);
   });
 });

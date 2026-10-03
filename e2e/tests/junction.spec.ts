@@ -136,7 +136,7 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#street-name")).toHaveText("Junction 1");
     await expect(page.locator("a.back")).toHaveAttribute("href", "map.html");
     await expect(page.locator(".lower")).toBeHidden();
-    await expect(page.locator('.surface[href="index.html"]')).toBeHidden();
+    await expect(page.locator('.surface[href="street.html"]')).toBeHidden();
     await expect(page).toHaveTitle("Junction 1 · CityLoom");
   });
 
@@ -168,7 +168,7 @@ test.describe("the junction editor on a junction of the city", () => {
   test("a street change made elsewhere shows in the junction at its end", async ({ page }) => {
     await page.goto("/intersection.html?junction=2"); // Junction 4, where Sample Avenue 2 ends
     const before = await page.locator("#drawing").innerHTML();
-    await page.goto("/index.html?street=1");
+    await page.goto("/street.html?street=1");
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("-");

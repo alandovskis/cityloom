@@ -19,7 +19,7 @@ test.describe("the city map", () => {
     await expect(page.locator(`a.place-row[href="intersection.html?junction=${JUNCTION}"]`)).toContainText(
       "Junction 1",
     );
-    await expect(page.locator(`a.place-row[href="index.html?street=${STREET}"]`)).toBeVisible();
+    await expect(page.locator(`a.place-row[href="street.html?street=${STREET}"]`)).toBeVisible();
   });
 
   test("a place in the list opens its editor", async ({ page }) => {
@@ -58,7 +58,7 @@ test.describe("the city map", () => {
   });
 
   test("a change made in a street editor shows on the map", async ({ page }) => {
-    await page.goto(`/index.html?street=${STREET}`);
+    await page.goto(`/street.html?street=${STREET}`);
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("+");
@@ -74,7 +74,7 @@ test.describe("the city map", () => {
   });
 
   test("start over asks to be pressed twice, and then puts the city back as first laid out", async ({ page }) => {
-    await page.goto(`/index.html?street=${STREET}`);
+    await page.goto(`/street.html?street=${STREET}`);
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("+");
@@ -89,7 +89,7 @@ test.describe("the city map", () => {
     await expect(page.locator("#reset")).toBeDisabled();
     await expect(page.locator("#fit")).toHaveText("32 places. Every check passes.");
     await expect(page.locator("#fit .tick.fresh")).toBeVisible();
-    await page.goto(`/index.html?street=${STREET}`);
+    await page.goto(`/street.html?street=${STREET}`);
     await expect(page.locator("#revs tbody tr")).toHaveCount(1);
   });
 });
