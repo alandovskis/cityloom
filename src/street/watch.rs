@@ -5,10 +5,10 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::model::{Editor, SegView, View};
-use crate::ui::street_keys::Action;
+use crate::street::model::{Editor, SegView, View};
+use crate::street::keys::Action;
 use crate::shared::units::Units;
-use crate::vm::street::StreetVm;
+use crate::street::vm::StreetVm;
 
 /// What a component reads of the street view-model and tells it. The view-model
 /// is kept where only this thread can reach it, so the handle is `Copy` and any

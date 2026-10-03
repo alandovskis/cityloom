@@ -1,7 +1,7 @@
 //! A place in the city that a page edits, and how what it makes is written back.
 
 use crate::junction::State;
-use crate::model::Street;
+use crate::street::model::Street;
 use crate::vm::city_store::CityStore;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,7 +64,7 @@ mod tests {
         assert!(j.set_corner(uid, 7_000));
         assert!(b.keep_junction(j.snapshot()));
         assert_eq!(b.store.open().view(0).edited, 1);
-        let mut e = crate::model::Editor::new(0);
+        let mut e = crate::street::model::Editor::new(0);
         let u = e.view().segments[0].uid;
         e.nudge_width(u, 100);
         assert!(!b.keep_street(e.snapshot()));

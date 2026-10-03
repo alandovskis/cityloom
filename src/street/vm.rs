@@ -6,13 +6,13 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::model::{Editor, View};
+use crate::street::model::{Editor, View};
 use crate::shared::units::Units;
 use crate::vm::binding::CityBinding;
 use crate::shared::core::{Core, Presents};
 use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
-use crate::vm::street_text as text;
+use crate::street::text;
 
 /// Said once when what a page makes cannot be kept.
 pub const NOT_KEPT: &str = crate::vm::junction::NOT_KEPT;

@@ -8,10 +8,10 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
-use crate::vm::street::StreetVm;
-use crate::ui::sheet_watch::SheetWatch;
-use crate::ui::street_keys::{self, Action};
-use crate::ui::street_svg::{Geometry, Interaction, Moving, street_label, street_svg};
+use crate::street::vm::StreetVm;
+use crate::street::watch::SheetWatch;
+use crate::street::keys::{self, Action};
+use crate::street::svg::{Geometry, Interaction, Moving, street_label, street_svg};
 
 /// How far a pointer must move before a pressed piece is being moved.
 const DRAG_START_PX: f64 = 4.0;
@@ -203,7 +203,7 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
             return;
         }
         let selected = w.view_now().selected.is_some();
-        let Some((action, prevent)) = street_keys::on_section(&e.key(), e.shift_key(), selected) else { return };
+        let Some((action, prevent)) = keys::on_section(&e.key(), e.shift_key(), selected) else { return };
         if prevent {
             e.prevent_default();
         }

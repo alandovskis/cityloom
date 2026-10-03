@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::street_measures;
+use crate::street::measures;
 use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, REGIONS, Side, KINDS, MATERIALS, Mode, SAMPLES, kind_index};
 
 /// Widths snap to this step when dragged.
@@ -867,15 +867,15 @@ impl Editor {
         })
     }
 
-    /// Arranges the roadway as one of the Atlas lane measures (`street_measures::DEFS`).
+    /// Arranges the roadway as one of the Atlas lane measures (`measures::DEFS`).
     /// Refused when it does not suit this street or will not fit.
     pub fn apply_measure(&mut self, code: &str) -> bool {
-        let Some(def) = street_measures::DEFS.iter().find(|d| d.code == code) else {
+        let Some(def) = measures::DEFS.iter().find(|d| d.code == code) else {
             return false;
         };
         let existing = self.current().clone();
         let mut next_uid = self.next_uid;
-        let Some(arranged) = street_measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, SAMPLES[self.sample].freeway, &mut next_uid) else {
+        let Some(arranged) = measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, SAMPLES[self.sample].freeway, &mut next_uid) else {
             return false;
         };
         let ok = self.edit(format!("{} {}", def.code, def.name), |segs| {
@@ -1076,11 +1076,11 @@ impl Editor {
     fn measure_views(&self, raw: &[Segment], now: &[Segment]) -> Vec<MeasureView> {
         let side = REGIONS[self.region].drive_side;
         let freeway = SAMPLES[self.sample].freeway;
-        street_measures::detect(raw, now, side, freeway)
+        measures::detect(raw, now, side, freeway)
             .into_iter()
-            .zip(street_measures::DEFS.iter())
+            .zip(measures::DEFS.iter())
             .map(|(f, d)| {
-                let can_apply = street_measures::arrange(d.code, raw, self.row_mm, side, freeway, &mut self.next_uid.clone()).is_some();
+                let can_apply = measures::arrange(d.code, raw, self.row_mm, side, freeway, &mut self.next_uid.clone()).is_some();
                 let unavailable = (!can_apply).then(|| match d.freeway {
                     Some(only) if only != freeway => if only { "Freeways only" } else { "Not for a freeway" },
                     _ => "Will not fit",
@@ -1364,7 +1364,7 @@ mod tests {
     #[test]
     fn every_lane_measure_can_be_arranged_and_is_then_recognised() {
         for (sample, region) in [(1, 0), (1, 3), (0, 0)] {
-            for d in street_measures::DEFS.iter().filter(|d| d.freeway == Some(false)) {
+            for d in measures::DEFS.iter().filter(|d| d.freeway == Some(false)) {
                 let mut e = Editor::new(sample);
                 e.set_region(region);
                 let view = e.view();

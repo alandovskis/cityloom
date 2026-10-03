@@ -9,10 +9,10 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
 use crate::shared::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS};
-use crate::model::{SegView, View};
-use crate::vm::street::StreetVm;
-use crate::ui::sheet_watch::SheetWatch;
-use crate::ui::street_page::{hhmm, to_min};
+use crate::street::model::{SegView, View};
+use crate::street::vm::StreetVm;
+use crate::street::watch::SheetWatch;
+use crate::street::page::{hhmm, to_min};
 use crate::shared::units::Units;
 
 /// The kinds a piece may take at other times, with the one it is: the choices
@@ -93,7 +93,7 @@ fn curb_swatch(id: Option<&'static str>) -> AnyView {
 fn direction_swatch(id: Option<&'static str>) -> AnyView {
     match id {
         None => view! { <svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><path class="dir-x" d="M8,11 H36 M12,7 L8,11 L12,15 M32,7 L36,11 L32,15"/></svg> }.into_any(),
-        Some(id) => view! { <svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false" inner_html=crate::ui::street_svg::dir_glyph(id, 22.0, 11.0)></svg> }.into_any(),
+        Some(id) => view! { <svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false" inner_html=crate::street::svg::dir_glyph(id, 22.0, 11.0)></svg> }.into_any(),
     }
 }
 
@@ -287,7 +287,7 @@ fn shelter_section(w: SheetWatch, uid: u32) -> impl IntoView {
 
 /// One row of "other times": the type, its direction, when it is, and a way to remove it.
 fn variant_row(w: SheetWatch, uid: u32, vi: usize) -> impl IntoView {
-    let get = move |f: &dyn Fn(&crate::model::VariantView) -> String| w.segment(uid, |s| s.variants.get(vi).map(f)).flatten().unwrap_or_default();
+    let get = move |f: &dyn Fn(&crate::street::model::VariantView) -> String| w.segment(uid, |s| s.variants.get(vi).map(f)).flatten().unwrap_or_default();
     let now = move || w.segment(uid, |s| s.active_variant == Some(vi)).unwrap_or(false);
     let kind = move || w.segment(uid, |s| s.variants.get(vi).map(|v| v.kind)).flatten().unwrap_or(0);
     let kinds = move || w.segment(uid, |s| variant_kinds(&s.alt_kinds, s.variants.get(vi).map_or(0, |v| v.kind))).unwrap_or_default();
@@ -480,7 +480,7 @@ pub fn StreetInspector(vm: Rc<StreetVm>) -> impl IntoView {
 #[cfg(test)]
 mod pure_tests {
     use super::*;
-    use crate::model::Editor;
+    use crate::street::model::Editor;
 
     #[test]
     fn the_kinds_a_list_offers_are_the_alternatives_and_the_current_one_once_each_in_order() {

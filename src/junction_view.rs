@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::junction::*;
-use crate::model::{Check, Revision};
+use crate::street::model::{Check, Revision};
 use crate::plan::*;
 
 /// Ring width of a roundabout, and the smallest island in its middle.
@@ -1711,7 +1711,7 @@ mod tests {
         let mut state = Junction::new(0).current().clone();
         for a in &mut state.arms {
             a.edge = a.uid;
-            a.section = Some(crate::model::Street::sample(a.street, crate::shared::catalogue::Side::Right));
+            a.section = Some(crate::street::model::Street::sample(a.street, crate::shared::catalogue::Side::Right));
         }
         let j = Junction::from_city("Test", &state, &state, 0).unwrap();
         assert!(!j.view().can_remove);

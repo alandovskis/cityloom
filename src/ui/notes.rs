@@ -7,7 +7,7 @@ use leptos::prelude::*;
 
 use crate::shared::atlas::{MEASURES, Where};
 use crate::junction_view::{CrossingView, JView};
-use crate::model::Check;
+use crate::street::model::Check;
 use crate::vm::junction::JunctionVm;
 use crate::ui::watch::Watch;
 use crate::ui::turns::compass;
@@ -245,7 +245,7 @@ pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use crate::junction::*;
-    use crate::model::Check;
+    use crate::street::model::Check;
     use crate::shared::units::Units;
 
     use super::*;

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::shared::catalogue::{KINDS, REGIONS, SAMPLES, Side};
 use crate::junction::{self, ALL_WAY_STOP, Arm, Junction, PRIORITY, SIGNAL, State};
-use crate::model::{Editor, Street};
+use crate::street::model::{Editor, Street};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
 const SAVE_VERSION: u32 = 1;

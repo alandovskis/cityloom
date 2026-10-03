@@ -13,4 +13,6 @@ pub mod ports;
 pub mod shortcut;
 pub mod store;
 pub mod symbols;
+#[cfg(test)]
+pub mod testing;
 pub mod units;

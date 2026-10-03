@@ -6,7 +6,7 @@
 //! worded in the comments below. They are not the Atlas's guidance.
 
 use crate::shared::catalogue::{DirectionRule, KINDS, Side, kind_index};
-use crate::model::{Segment, Variant};
+use crate::street::model::{Segment, Variant};
 
 /// One measure: its Atlas code and name, and whether it is for a freeway.
 pub struct Def {

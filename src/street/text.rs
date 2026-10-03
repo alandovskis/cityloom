@@ -2,7 +2,7 @@
 //! the street, and what a screen reader is told after an edit or a selection.
 
 use crate::shared::catalogue::KINDS;
-use crate::model::View;
+use crate::street::model::View;
 use crate::shared::units::Units;
 
 pub const STARTED_OVER: &str = "Started over from the street as it is today. Undo brings your changes back.";
@@ -51,7 +51,7 @@ pub fn selection_text(v: &View, units: Units) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Editor;
+    use crate::street::model::Editor;
 
     fn uid(e: &Editor, i: usize) -> u32 {
         e.view().segments[i].uid

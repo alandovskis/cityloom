@@ -10,13 +10,6 @@ pub mod page;
 pub mod plan;
 pub mod plan_svg;
 pub mod shell;
-pub mod sheet_watch;
-pub mod street;
-pub mod street_inspector;
-pub mod street_keys;
-pub mod street_notes;
-pub mod street_page;
-pub mod street_svg;
 pub mod turns;
 pub mod watch;
 
@@ -71,47 +64,6 @@ pub fn mount_page(plan: &crate::Plan) {
 #[wasm_bindgen]
 pub fn say(text: &str) {
     crate::shared::live::say(text);
-}
-
-/// Draws the street page into the elements it keeps for them: the section, its
-/// heading and status, undo and redo, the menu to add a piece, the time of day,
-/// the details of the selected piece, and the notes beside it. `ends`, for a
-/// street of a city, is the JSON of the places it runs between.
-#[wasm_bindgen]
-pub fn mount_street_page(sheet: &crate::Sheet, ends: Option<String>) {
-    // Components create effects as they are built, before any is mounted.
-    let _ = any_spawner::Executor::init_wasm_bindgen();
-    let at = |id: &str| -> HtmlElement {
-        leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into()
-    };
-    let vm = sheet.0.clone();
-    let ends: Option<Vec<street_page::StreetEnd>> = ends.and_then(|json| serde_json::from_str(&json).ok());
-    let mount = |id: &str, view: AnyView| {
-        leptos::mount::mount_to(at(id), move || view).forget();
-    };
-    mount("scroll", view! { <street::StreetDrawing vm=vm.clone()/> }.into_any());
-    mount("street", view! { <street_page::StreetHeader vm=vm.clone() ends=ends.clone()/> }.into_any());
-    mount("title-block", view! { <street_page::TitleBlock vm=vm.clone()/> }.into_any());
-    mount("fit-slot", view! { <street_page::Fit vm=vm.clone()/> }.into_any());
-    mount("fit-checks-slot", view! { <street_notes::FitChecks vm=vm.clone()/> }.into_any());
-    mount("checks-n-slot", view! { <street_notes::ChecksBadge vm=vm.clone()/> }.into_any());
-    mount("history", view! { <street_page::History vm=vm.clone()/> }.into_any());
-    mount("add", view! { <street_page::AddMenu vm=vm.clone()/> }.into_any());
-    mount("clock-slot", view! { <street_page::Clock vm=vm.clone()/> }.into_any());
-    mount("time-note", view! { <street_page::TimeNote vm=vm.clone()/> }.into_any());
-    mount("welcome-slot", view! { <street_page::Welcome vm=vm.clone()/> }.into_any());
-    mount("inspector", view! { <street_inspector::StreetInspector vm=vm.clone()/> }.into_any());
-    mount("space", view! { <street_notes::Space vm=vm.clone()/> }.into_any());
-    mount("cap", view! { <street_notes::Capacity vm=vm.clone()/> }.into_any());
-    mount("checks", view! { <street_notes::Checks vm=vm.clone()/> }.into_any());
-    mount("revs", view! { <street_notes::Revisions vm=vm.clone()/> }.into_any());
-    mount("measures", view! { <street_notes::Measures vm=vm/> }.into_any());
-    // A street of a city is reached from the map, and its junctions are pages of their own.
-    if ends.is_some() {
-        if let Ok(Some(el)) = leptos::prelude::document().query_selector(".surface[href=\"intersection.html\"]") {
-            el.unchecked_into::<HtmlElement>().set_hidden(true);
-        }
-    }
 }
 
 /// The map page as the script sees it: what the pages around it ask of it.

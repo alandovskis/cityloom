@@ -5,9 +5,9 @@
 use std::fmt::Write;
 
 use crate::shared::catalogue::KINDS;
-use crate::model::{SegView, View};
+use crate::street::model::{SegView, View};
 use crate::shared::symbols::{SymbolOpts, symbol};
-use crate::vm::street_text::fit_phrase;
+use crate::street::text::fit_phrase;
 use crate::shared::units::Units;
 
 /// The heights of the drawing's bands, scaled with its width.
@@ -463,7 +463,7 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Editor;
+    use crate::street::model::Editor;
 
     fn svg(e: &Editor) -> StreetSvg {
         street_svg(&e.view(), 1050.0, Units::Metres, &Interaction::default())

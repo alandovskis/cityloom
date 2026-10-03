@@ -8,10 +8,10 @@ use leptos::prelude::*;
 use serde::Deserialize;
 
 use crate::shared::catalogue::KINDS;
-use crate::model::{SegView, View};
-use crate::vm::street::StreetVm;
-use crate::ui::sheet_watch::SheetWatch;
-use crate::vm::street_text::status_text;
+use crate::street::model::{SegView, View};
+use crate::street::vm::StreetVm;
+use crate::street::watch::SheetWatch;
+use crate::street::text::status_text;
 
 // ---- what the page is made of --------------------------------------------------------
 
@@ -451,7 +451,7 @@ pub fn Welcome(vm: Rc<StreetVm>) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Editor;
+    use crate::street::model::Editor;
 
     #[test]
     fn the_kinds_to_add_come_in_four_lists_that_cover_every_kind_but_the_one_with_no_place() {

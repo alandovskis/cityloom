@@ -8,10 +8,9 @@
 pub mod city;
 pub mod junction;
 pub mod junction_view;
-pub mod model;
 pub mod plan;
-pub mod street_measures;
 pub mod shared;
+pub mod street;
 pub mod vm;
 pub mod ui;
 
@@ -20,38 +19,8 @@ use wasm_bindgen::prelude::*;
 
 use shared::catalogue::{CURBS, DIRECTIONS, KINDS, REGIONS, MATERIALS, SAMPLES};
 
-fn json<T: serde::Serialize>(v: &T) -> String {
+pub(crate) fn json<T: serde::Serialize>(v: &T) -> String {
     serde_json::to_string(v).expect("view serialises")
-}
-
-/// One street being edited. The page drives it through the components the
-/// module mounts; the script only starts it up and hands it what the shell
-/// chooses (units, region).
-#[wasm_bindgen]
-pub struct Sheet(std::rc::Rc<vm::street::StreetVm>);
-
-#[wasm_bindgen]
-impl Sheet {
-    #[wasm_bindgen(constructor)]
-    pub fn new(sample: usize) -> Sheet {
-        Sheet(vm::street::StreetVm::new(shared::platform::browser_ports(), model::Editor::new(sample), None))
-    }
-
-    /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
-    /// to this page.
-    pub fn mount_shell(&self) {
-        ui::shell::mount(self.0.clone(), "piece details");
-    }
-
-    /// The page is being left: what is waiting to be kept in the city is kept now.
-    pub fn flush(&self) {
-        self.0.flush();
-    }
-
-    /// The whole drawable state as JSON.
-    pub fn view(&self) -> String {
-        json(&*self.0.view_now())
-    }
 }
 
 /// The segment catalogue as JSON.
@@ -165,20 +134,4 @@ pub fn open_junction(node: u32) -> Option<Plan> {
     Some(Plan(vm::junction::JunctionVm::new(ports, junction, Some(vm::binding::CityBinding { store, place }))))
 }
 
-/// The street editor on one street of the city kept in this browser, which
-/// writes what is made back to the city. Nothing when there is no such street.
-#[wasm_bindgen]
-pub fn open_street(edge: u32) -> Option<Sheet> {
-    let ports = shared::platform::browser_ports();
-    let store = vm::city_store::CityStore::new(ports.storage.clone());
-    let street = store.open().street_editor(edge, store.region())?;
-    let place = vm::binding::Place::Street(edge);
-    Some(Sheet(vm::street::StreetVm::new(ports, street, Some(vm::binding::CityBinding { store, place }))))
-}
 
-/// The two ends of a street of the city kept in this browser as JSON: each a
-/// junction or where it leaves the map.
-#[wasm_bindgen]
-pub fn street_ends(edge: u32) -> String {
-    json(&vm::city_store::CityStore::new(shared::platform::browser_ports().storage).open().street_ends(edge))
-}

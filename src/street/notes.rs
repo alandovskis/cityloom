@@ -2,7 +2,7 @@
 //! people it moves, whether it works, what has changed, and the transit
 //! measures it forms or could.
 
-use crate::model::{Check, View};
+use crate::street::model::{Check, View};
 use crate::shared::units::Units;
 
 /// A whole number with a comma between each thousand, as `toLocaleString` writes it.
@@ -68,8 +68,8 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::shared::atlas::{MEASURES, Where};
-use crate::vm::street::StreetVm;
-use crate::ui::sheet_watch::SheetWatch;
+use crate::street::vm::StreetVm;
+use crate::street::watch::SheetWatch;
 
 fn mode_class(mode: crate::shared::catalogue::Mode) -> String {
     serde_json::to_value(mode).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
@@ -314,7 +314,7 @@ pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Editor;
+    use crate::street::model::Editor;
 
     #[test]
     fn a_number_is_written_with_a_comma_between_thousands() {

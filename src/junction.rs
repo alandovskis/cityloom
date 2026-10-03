@@ -6,7 +6,7 @@
 use crate::shared::catalogue::{KINDS, Material, REGIONS, SAMPLES, Side, is_roadway};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{Editor, Street, View};
+use crate::street::model::{Editor, Street, View};
 use crate::plan::gap;
 
 pub const LEFT: u8 = 1;
