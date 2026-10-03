@@ -7,3 +7,13 @@ web/pkg/
 e2e/node_modules/
 e2e/test-results/
 e2e/playwright-report/
+
+# RustRover and the other JetBrains IDEs: keep what the team can share (code style,
+# inspection profiles, run configurations), not what the IDE generates per machine.
+.idea/*
+!.idea/codeStyles/
+!.idea/inspectionProfiles/
+!.idea/runConfigurations/
+*.iml
+*.iws
+.idea_modules/
