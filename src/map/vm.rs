@@ -134,6 +134,9 @@ pub struct MapVm {
     panning: ArcRwSignal<bool>,
     hot: ArcRwSignal<Option<String>>,
     armed: ArcRwSignal<bool>,
+    search: ArcRwSignal<String>,
+    /// The result the arrow keys have moved to, by index into `results`.
+    active: ArcRwSignal<Option<usize>>,
 }
 
 impl MapVm {
@@ -151,6 +154,8 @@ impl MapVm {
             panning: ArcRwSignal::new(false),
             hot: ArcRwSignal::new(None),
             armed: ArcRwSignal::new(false),
+            search: ArcRwSignal::new(String::new()),
+            active: ArcRwSignal::new(None),
         })
     }
 
@@ -219,6 +224,87 @@ impl MapVm {
                 tag: Self::tag(e.ok, e.edited),
             })
             .collect()
+    }
+
+    // ---- search ----
+
+    /// What was typed in the search box.
+    pub fn search_text(&self) -> String {
+        self.search.get()
+    }
+
+    pub fn set_search(&self, text: &str) {
+        self.search.set(text.to_string());
+        self.active.set(None);
+    }
+
+    /// The places the search finds: the junctions, then the streets.
+    pub fn results(&self) -> Vec<PlaceRow> {
+        if self.terms().is_empty() {
+            return Vec::new();
+        }
+        let (j, s) = self.narrowed();
+        j.into_iter().chain(s).collect()
+    }
+
+    /// How many results the dropdown shows before it says how many more there are.
+    pub const SHOWN: usize = 8;
+
+    /// The result the arrow keys are on.
+    pub fn active_result(&self) -> Option<usize> {
+        self.active.get()
+    }
+
+    /// Moves down (1) or up (-1) the results shown, and stops at the ends.
+    pub fn move_active(&self, by: i32) {
+        let n = self.results().len().min(Self::SHOWN) as i32;
+        if n == 0 {
+            return;
+        }
+        let at = self.active.get_untracked().map_or(-1, |i| i as i32);
+        self.active.set(Some((at + by).clamp(0, n - 1) as usize));
+    }
+
+    /// The words searched for, lower case.
+    fn terms(&self) -> Vec<String> {
+        self.search.get().to_lowercase().split_whitespace().map(String::from).collect()
+    }
+
+    /// The junctions and the streets that the search leaves. The whole phrase is
+    /// looked for in a place's name and small print first, so that "junction 4"
+    /// finds Junction 4 and the streets that end there and not every junction of
+    /// four streets; when that finds nothing, each word is looked for on its own.
+    fn narrowed(&self) -> (Vec<PlaceRow>, Vec<PlaceRow>) {
+        let terms = self.terms();
+        let (junctions, streets) = (self.junction_rows(), self.street_rows());
+        let text = |r: &PlaceRow| format!("{} {}", r.name, r.sub).to_lowercase();
+        let phrase = terms.join(" ");
+        let by_phrase = |rows: &[PlaceRow]| rows.iter().filter(|r| text(r).contains(&phrase)).cloned().collect::<Vec<_>>();
+        let by_words = |rows: &[PlaceRow]| rows.iter().filter(|r| terms.iter().all(|t| text(r).contains(t.as_str()))).cloned().collect::<Vec<_>>();
+        let (j, st) = (by_phrase(&junctions), by_phrase(&streets));
+        if j.is_empty() && st.is_empty() { (by_words(&junctions), by_words(&streets)) } else { (j, st) }
+    }
+
+    /// How the search came out, or nothing when nothing is searched for.
+    pub fn search_note(&self) -> Option<String> {
+        if self.terms().is_empty() {
+            return None;
+        }
+        let n = self.results().len();
+        Some(if n == 0 {
+            format!("No places match \u{201c}{}\u{201d}. Clear the search to see all {}.", self.search.get().trim(), self.places())
+        } else if n > Self::SHOWN {
+            format!("{} \u{b7} showing the first {}", plural(n, "place matches", "places match"), Self::SHOWN)
+        } else {
+            plural(n, "place matches", "places match")
+        })
+    }
+
+    /// Where pressing Enter goes: the result the arrow keys are on, else the first.
+    pub fn chosen_href(&self) -> Option<String> {
+        let results = self.results();
+        let at = self.active.get_untracked().unwrap_or(0).min(Self::SHOWN - 1);
+        results.into_iter().nth(at).map(|r| r.href)
     }
 
     /// How a junction is told on the map.
@@ -509,6 +595,97 @@ mod tests {
             assert!(e.set_width(u, e.view().segments[0].width_mm + mm), "{mm}");
             c.keep_street(street, e.snapshot())
         }));
+    }
+
+    fn names(vm: &MapVm) -> Vec<String> {
+        vm.results().into_iter().map(|r| r.name).collect()
+    }
+
+    #[test]
+    fn nothing_is_found_until_something_is_searched_for_and_the_places_list_is_whole() {
+        let (vm, ..) = vm();
+        assert_eq!(vm.search_text(), "");
+        assert!(vm.results().is_empty());
+        assert_eq!(vm.search_note(), None);
+        vm.set_search("avenue");
+        assert_eq!(vm.junction_rows().len() + vm.street_rows().len(), vm.places(), "the places list is not narrowed");
+    }
+
+    #[test]
+    fn a_search_finds_places_by_name_and_by_the_small_print() {
+        let (vm, ..) = vm();
+        vm.set_search("avenue");
+        assert!(!vm.results().is_empty() && names(&vm).iter().all(|n| n.to_lowercase().contains("avenue")));
+        vm.set_search("signal");
+        let found = vm.results();
+        assert!(!found.is_empty() && found.iter().all(|r| r.sub.to_lowercase().contains("traffic signal")));
+    }
+
+    #[test]
+    fn a_search_ignores_case_and_spaces_looks_for_the_phrase_first_and_then_for_each_word() {
+        let (vm, ..) = vm();
+        vm.set_search("  JUNCTION   4 ");
+        let found = vm.results();
+        assert!(found.iter().any(|r| r.name == "Junction 4"));
+        assert!(found.iter().all(|r| format!("{} {}", r.name, r.sub).contains("Junction 4")), "not every junction of four streets");
+        vm.set_search("avenue junction 5");
+        let found = vm.results();
+        assert!(!found.is_empty() && found.iter().all(|r| r.name.to_lowercase().contains("avenue") && r.sub.contains("Junction 5")));
+    }
+
+    #[test]
+    fn the_note_counts_the_matches_and_says_what_to_do_when_there_are_none() {
+        let (vm, ..) = vm();
+        vm.set_search("Junction 1 stop");
+        assert_eq!(vm.search_note().as_deref(), Some("1 place matches"));
+        vm.set_search("zzz");
+        assert_eq!(vm.search_note(), Some(format!("No places match \u{201c}zzz\u{201d}. Clear the search to see all {}.", vm.places())));
+        vm.set_search("sample");
+        assert!(vm.search_note().unwrap().ends_with(&format!("showing the first {}", MapVm::SHOWN)));
+    }
+
+    #[test]
+    fn the_arrow_keys_move_down_the_results_and_stop_at_the_ends() {
+        let (vm, ..) = vm();
+        vm.set_search("junction");
+        assert_eq!(vm.active_result(), None);
+        vm.move_active(-1);
+        assert_eq!(vm.active_result(), Some(0));
+        vm.move_active(1);
+        vm.move_active(1);
+        assert_eq!(vm.active_result(), Some(2));
+        for _ in 0..20 {
+            vm.move_active(1);
+        }
+        assert_eq!(vm.active_result(), Some(MapVm::SHOWN - 1));
+        vm.set_search("junction 4");
+        assert_eq!(vm.active_result(), None, "a new search starts again");
+        vm.set_search("zzz");
+        vm.move_active(1);
+        assert_eq!(vm.active_result(), None);
+    }
+
+    #[test]
+    fn enter_opens_the_result_the_arrows_are_on_or_else_the_first_and_nothing_when_there_is_none() {
+        let (vm, ..) = vm();
+        vm.set_search("junction");
+        assert_eq!(vm.chosen_href(), vm.results().first().map(|r| r.href.clone()));
+        vm.move_active(1);
+        vm.move_active(1);
+        assert_eq!(vm.chosen_href(), vm.results().get(1).map(|r| r.href.clone()));
+        vm.set_search("avenue");
+        assert!(vm.chosen_href().unwrap().starts_with("index.html?street="));
+        vm.set_search("zzz");
+        assert_eq!(vm.chosen_href(), None);
+    }
+
+    #[test]
+    fn clearing_the_search_finds_nothing_and_says_nothing() {
+        let (vm, ..) = vm();
+        vm.set_search("avenue");
+        vm.set_search("");
+        assert_eq!(vm.search_note(), None);
+        assert_eq!(vm.chosen_href(), None);
     }
 
     #[test]

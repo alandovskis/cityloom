@@ -247,6 +247,125 @@ pub fn Status(vm: Rc<MapVm>) -> impl IntoView {
     }
 }
 
+/// Opens a page of the site.
+fn go(href: &str) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = leptos::prelude::window().location().set_href(href);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = href;
+}
+
+/// The search box in the header. What is typed finds junctions and streets by name
+/// and small print; the arrow keys move down the results, Enter opens the one they
+/// are on (or the first), Escape clears, and `/` goes to the box from anywhere.
+#[component]
+pub fn SearchBox(vm: Rc<MapVm>) -> impl IntoView {
+    let vm = Bound::new(vm);
+    let input = NodeRef::<leptos::html::Input>::new();
+    #[cfg(target_arch = "wasm32")]
+    {
+        let handle = window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
+            let in_a_field =
+                e.target().and_then(|t| t.dyn_into::<Element>().ok()).is_some_and(|el| el.closest("input, select, textarea").ok().flatten().is_some());
+            if e.key() == "/" && !e.meta_key() && !e.ctrl_key() && !e.alt_key() && !in_a_field {
+                e.prevent_default();
+                if let Some(i) = input.get_untracked() {
+                    let _ = i.focus();
+                }
+            }
+        });
+        on_cleanup(move || handle.remove());
+    }
+    let open = move || vm.with(|v| v.search_note().is_some());
+    let active = move || vm.with(|v| v.active_result());
+    let keydown = move |e: KeyboardEvent| match e.key().as_str() {
+        "ArrowDown" => {
+            e.prevent_default();
+            vm.with(|v| v.move_active(1));
+        }
+        "ArrowUp" => {
+            e.prevent_default();
+            vm.with(|v| v.move_active(-1));
+        }
+        "Escape" => {
+            if vm.with(|v| v.search_text()).is_empty() {
+                if let Some(i) = input.get_untracked() {
+                    let _ = i.blur();
+                }
+            } else {
+                e.prevent_default();
+                vm.with(|v| v.set_search(""));
+            }
+        }
+        _ => {}
+    };
+    view! {
+        <form
+            class="search"
+            role="search"
+            on:submit=move |e| {
+                e.prevent_default();
+                if let Some(href) = vm.with(|v| v.chosen_href()) {
+                    go(&href);
+                }
+            }
+        >
+            <svg class="search-ico" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m12.8 12.8 4 4"/></svg>
+            <input
+                id="search"
+                type="search"
+                name="q"
+                node_ref=input
+                placeholder="Search junctions and streets"
+                aria-label="Search places"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls="search-results"
+                aria-expanded=move || open().to_string()
+                aria-activedescendant=move || active().map(|i| format!("sr-{i}"))
+                autocomplete="off"
+                spellcheck="false"
+                enterkeyhint="go"
+                prop:value=move || vm.with(|v| v.search_text())
+                on:input=move |e| vm.with(|v| v.set_search(&event_target_value(&e)))
+                on:keydown=keydown
+            />
+            <kbd class="search-key" aria-hidden="true">"/"</kbd>
+            <div class="search-pop" hidden=move || !open()>
+                <ul id="search-results" role="listbox" aria-label="Places found">
+                    {move || vm.with(|v| v.results()).into_iter().take(MapVm::SHOWN).enumerate().map(|(i, r)| result_row(vm, r, i)).collect_view()}
+                </ul>
+                <p class="search-note" role="status">{move || vm.with(|v| v.search_note())}</p>
+            </div>
+        </form>
+    }
+}
+
+fn result_row(vm: Vm, row: PlaceRow, i: usize) -> impl IntoView {
+    let on = move || vm.with(|v| v.active_result()) == Some(i);
+    let (enter, focus) = (row.hot.clone(), row.hot.clone());
+    let tag = row.tag.map(|t| view! { <span class=if t.bad { "st bad" } else { "st" }>{t.text}</span> });
+    view! {
+        <li role="option" id=format!("sr-{i}") aria-selected=move || on().to_string()>
+            <a
+                class=move || if on() { "place-row on" } else { "place-row" }
+                href=row.href
+                tabindex="-1"
+                on:pointerenter=move |_| vm.with(|v| v.set_hot(Some(enter.clone())))
+                on:pointerleave=move |_| vm.with(|v| v.set_hot(None))
+                on:focus=move |_| vm.with(|v| v.set_hot(Some(focus.clone())))
+                on:blur=move |_| vm.with(|v| v.set_hot(None))
+            >
+                <b>{row.name}</b>
+                <small>{row.sub}</small>
+                {tag}
+            </a>
+        </li>
+    }
+}
+
 fn place_row(vm: Vm, row: PlaceRow) -> impl IntoView {
     let on = {
         let hot = row.hot.clone();

@@ -169,3 +169,46 @@ fn the_map_s_title_block_gives_the_city_its_places_and_what_changed() {
         h.contains("id=\"tb-street\">Sample city<") && h.contains("id=\"tb-places\" class=\"fig\">32<") && h.contains("id=\"tb-changes\" class=\"fig\">1<")
     );
 }
+
+#[test]
+fn the_search_box_is_a_labelled_combobox_that_starts_closed() {
+    let (vm, _) = map_vm();
+    let h = map_html(|| view! { <map_ui::SearchBox vm=vm.clone()/> });
+    assert!(h.contains("role=\"search\"") && h.contains("id=\"search\"") && h.contains("aria-label=\"Search places\""));
+    assert!(h.contains("role=\"combobox\"") && h.contains("aria-expanded=\"false\"") && h.contains("placeholder=\"Search junctions and streets\""));
+    assert_eq!(count(&h, "role=\"option\""), 0);
+}
+
+#[test]
+fn a_search_lists_the_places_found_as_options_with_what_is_wrong_and_says_how_many() {
+    let (vm, storage) = map_vm();
+    change_a_street(&vm, &storage, 1_000);
+    vm.set_search("avenue");
+    let h = map_html(|| view! { <map_ui::SearchBox vm=vm.clone()/> });
+    assert!(h.contains("aria-expanded=\"true\""));
+    let shown = vm.results().len().min(crate::map::vm::MapVm::SHOWN);
+    assert_eq!(count(&h, "role=\"option\""), shown);
+    assert!(h.contains("Sample Avenue") && h.contains("href=\"index.html?street="));
+    assert!(h.contains("Needs attention"), "a place that does not work says so in the results");
+    assert!(h.contains("place") && h.contains("match"));
+}
+
+#[test]
+fn the_option_the_arrow_keys_are_on_is_selected_and_named_by_the_box() {
+    let (vm, _) = map_vm();
+    vm.set_search("junction");
+    vm.move_active(1);
+    vm.move_active(1);
+    let h = map_html(|| view! { <map_ui::SearchBox vm=vm.clone()/> });
+    assert!(h.contains("aria-activedescendant=\"sr-1\""));
+    assert_eq!(count(&h, "aria-selected=\"true\""), 1);
+}
+
+#[test]
+fn a_search_that_finds_nothing_says_so_and_how_to_get_the_places_back() {
+    let (vm, _) = map_vm();
+    vm.set_search("zzz");
+    let h = map_html(|| view! { <map_ui::SearchBox vm=vm.clone()/> });
+    assert_eq!(count(&h, "role=\"option\""), 0);
+    assert!(h.contains("No places match") && h.contains("Clear the search to see all 32."));
+}
