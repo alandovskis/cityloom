@@ -176,8 +176,9 @@ fn the_search_box_is_a_labelled_combobox_that_starts_closed() {
     let (vm, _) = map_vm();
     let h = map_html(|| view! { <map_ui::SearchBox vm=vm.clone()/> });
     assert!(h.contains("role=\"search\"") && h.contains("id=\"search\"") && h.contains("aria-label=\"Search places\""));
-    assert!(h.contains("role=\"combobox\"") && h.contains("aria-expanded=\"false\"") && h.contains("placeholder=\"Search junctions and streets\""));
+    assert!(h.contains("role=\"combobox\"") && h.contains("aria-expanded=\"false\"") && h.contains("placeholder=\"Search places\""));
     assert_eq!(count(&h, "role=\"option\""), 0);
+    assert!(h.contains("type=\"submit\"") && h.contains(">Search<"), "a button as well as Enter, for those who look for one");
 }
 
 #[test]

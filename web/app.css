@@ -42,7 +42,7 @@
   --rw: calc(var(--pad) + var(--panel-w));
 
   /* The drawing of the city. */
-  --casing: #9ea9b5;
+  --casing: #8793a1;
   --road: #ffffff;
   --k-sidewalk: #d9dfe5;
   --k-planting: #b9dfae;
@@ -419,6 +419,27 @@ a.btn {
   stroke-width: 1.8;
   stroke-linecap: round;
   pointer-events: none;
+}
+.bar .search-go {
+  display: none;
+}
+.search-go {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  min-height: 0;
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.search-go:hover {
+  filter: brightness(0.94);
 }
 .search-key {
   position: absolute;

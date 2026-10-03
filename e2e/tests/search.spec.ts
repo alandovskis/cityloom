@@ -6,6 +6,10 @@ test.describe("the search box on the city map", () => {
     await expect(page.locator("#map")).toBeVisible();
   });
 
+  test("has no Search button in the header: Enter does it", async ({ page }) => {
+    await expect(page.locator(".bar .search-go")).toBeHidden();
+  });
+
   test("is the biggest thing in the header", async ({ page }) => {
     const box = await page.locator("#search").boundingBox();
     const bar = await page.locator(".bar").boundingBox();
@@ -13,7 +17,7 @@ test.describe("the search box on the city map", () => {
     expect(box!.width).toBeGreaterThan(400);
     expect(box!.y).toBeGreaterThanOrEqual(bar!.y);
     expect(box!.y + box!.height).toBeLessThanOrEqual(bar!.y + bar!.height);
-    await expect(page.locator("#search")).toHaveAttribute("placeholder", "Search junctions and streets");
+    await expect(page.locator("#search")).toHaveAttribute("placeholder", "Search places");
   });
 
   test("the / key goes to it from anywhere, but not while typing in another field", async ({ page }) => {

@@ -19,7 +19,7 @@ test.describe("the home page", () => {
     expect(box.height).toBeGreaterThanOrEqual(56);
     expect(box.width).toBeGreaterThan(400);
     expect(box.y).toBeLessThan(viewport.height * 0.7);
-    await expect(page.locator("#search")).toHaveAttribute("placeholder", "Search junctions and streets");
+    await expect(page.locator("#search")).toHaveAttribute("placeholder", "Search places");
   });
 
   test("a search finds places and Enter opens the first", async ({ page }) => {
@@ -27,6 +27,24 @@ test.describe("the home page", () => {
     await expect(page.locator('#search-results [role="option"]').first()).toContainText("Sample Avenue");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/street\.html\?street=\d+$/);
+  });
+
+  test("has a Search button, and it opens the first place found", async ({ page }) => {
+    const go = page.getByRole("button", { name: "Search" });
+    await expect(go).toBeVisible();
+    await page.locator("#search").fill("junction 1");
+    await go.click();
+    await expect(page).toHaveURL(/intersection\.html\?junction=\d+$/);
+  });
+
+  test("the search is a white field with a clear edge, not a grey one", async ({ page }) => {
+    const style = await page.locator("#search").evaluate((el) => {
+      const c = getComputedStyle(el);
+      return { bg: c.backgroundColor, border: c.borderTopWidth, edge: c.borderTopColor };
+    });
+    expect(style.bg).toBe("rgb(255, 255, 255)");
+    expect(parseFloat(style.border)).toBeGreaterThanOrEqual(1.5);
+    expect(style.edge).not.toBe("rgb(205, 211, 218)");
   });
 
   test("the / key goes to the search box", async ({ page }) => {

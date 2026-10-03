@@ -367,7 +367,7 @@ pub fn SearchBox(vm: Rc<MapVm>) -> impl IntoView {
                 type="search"
                 name="q"
                 node_ref=input
-                placeholder="Search junctions and streets"
+                placeholder="Search places"
                 aria-label="Search places"
                 role="combobox"
                 aria-autocomplete="list"
@@ -382,6 +382,7 @@ pub fn SearchBox(vm: Rc<MapVm>) -> impl IntoView {
                 on:keydown=keydown
             />
             <kbd class="search-key" aria-hidden="true">"/"</kbd>
+            <button type="submit" class="search-go">"Search"</button>
             <div class="search-pop" hidden=move || !open()>
                 <ul id="search-results" role="listbox" aria-label="Places found">
                     {move || vm.with(|v| v.results()).into_iter().take(MapVm::SHOWN).enumerate().map(|(i, r)| result_row(vm, r, i)).collect_view()}

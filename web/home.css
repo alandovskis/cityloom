@@ -12,9 +12,13 @@ body.home {
   z-index: 0;
   top: 0;
   bottom: 0;
-  left: min(860px, 56vw);
-  right: 0;
+  left: min(760px, 50vw);
+  right: -14vw;
+  bottom: -10vh;
   pointer-events: none;
+  /* The streets come out from under the card rather than stopping at its edge. */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 160px);
+  mask-image: linear-gradient(to right, transparent 0, #000 160px);
 }
 .hero-map svg {
   position: absolute;
@@ -48,7 +52,7 @@ body.home {
 .hero-card {
   width: min(780px, 100%);
   padding: 44px 48px;
-  border-radius: 28px;
+  border-radius: var(--r-card);
   background: var(--panel);
   box-shadow: var(--shadow);
 }
@@ -70,21 +74,40 @@ body.home {
 .hero-search {
   margin-top: 28px;
 }
+/* The way in: a white field with a clear edge, a blue glyph, and a blue Search button. */
 .hero-search .search input {
   height: 64px;
-  padding: 0 64px 0 58px;
-  border-radius: 18px;
+  padding: 0 128px 0 58px;
+  border: 2px solid #7b8794;
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
   font-size: 18px;
 }
+.hero-search .search input:hover {
+  border-color: var(--ink-2);
+}
+.hero-search .search input:focus {
+  border-color: var(--accent);
+}
+.hero-search .search-go {
+  right: 10px;
+  top: 10px;
+  display: block;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 10px;
+  font-size: 16px;
+}
 .hero-search .search-ico {
+  stroke: var(--accent);
   left: 19px;
   top: 19px;
   width: 26px;
   height: 26px;
 }
 .hero-search .search-key {
-  top: 18px;
-  right: 16px;
+  display: none;
 }
 .hero-search .search-pop {
   top: calc(100% + 10px);
@@ -100,7 +123,7 @@ body.home {
 .hero-actions .btn {
   min-height: 48px;
   padding: 0 22px;
-  border-radius: 14px;
+  border-radius: 12px;
   font-size: 16px;
 }
 .hero-link {
@@ -134,9 +157,13 @@ body.home {
     left: 0;
     height: 36svh;
     order: 3;
+    right: 0;
+    bottom: 0;
     margin: 0 8px 8px;
     border-radius: var(--r-card);
     overflow: hidden;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
   body.home {
     display: flex;
@@ -163,8 +190,11 @@ body.home {
 
 @media (max-width: 520px) {
   .hero-search .search input {
-    padding-right: 16px;
+    padding-right: 112px;
     font-size: 16px;
+  }
+  .hero-search .search-go {
+    padding: 0 16px;
   }
   .hero-search .search-key {
     display: none;

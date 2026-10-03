@@ -74,6 +74,9 @@ impl Geometry {
     }
 }
 
+/// The narrowest a street is drawn, in pixels.
+const MIN_STREET_PX: f64 = 13.0;
+
 /// A street ready to draw: its geometry, width, where its road lies and where its details run.
 struct Laid<'a> {
     e: &'a EdgeView,
@@ -81,6 +84,8 @@ struct Laid<'a> {
     row: f64,
     road_off: f64,
     road_w: f64,
+    /// How much wider than true the street is drawn, so that it can be seen from far off.
+    boost: f64,
     t0: f64,
     t1: f64,
 }
@@ -146,7 +151,10 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             let hi = road.iter().map(|p| (p.offset_mm + p.width_mm / 2) as f64).fold(f64::MIN, f64::max) / 1000.0;
             let t0 = e.trim_a_mm as f64 / 1000.0;
             let t1 = g.len - e.trim_b_mm as f64 / 1000.0;
-            Some(Laid { e, g, row: e.row_mm as f64 / 1000.0, road_off: (lo + hi) / 2.0, road_w: hi - lo, t0, t1 })
+            // A street is never drawn narrower than this on screen, whatever the zoom.
+            let row = e.row_mm as f64 / 1000.0;
+            let boost = (px(MIN_STREET_PX) / row).max(1.0);
+            Some(Laid { e, g, row: row * boost, road_off: (lo + hi) / 2.0 * boost, road_w: (hi - lo) * boost, boost, t0, t1 })
         })
         .collect();
     let mut places: Vec<&NodeView> = v.nodes.iter().filter(|n| n.junction).collect();
@@ -170,7 +178,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             "<line class=\"{}\" {} stroke-width=\"{}\"/>",
             if l.e.freeway { "m-shoulder" } else { "m-walk" },
             l.g.line(0.0, 0.0, l.g.len),
-            r2(l.row - px(2.0))
+            r2(l.row - px(3.0))
         )
         .unwrap();
     }
@@ -181,11 +189,12 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
     for hatch in [false, true] {
         for l in laid.iter().filter(|l| l.t1 > l.t0) {
             for p in &l.e.pieces {
-                let line = l.g.line(p.offset_mm as f64 / 1000.0, l.t0, l.t1);
+                let line = l.g.line(p.offset_mm as f64 / 1000.0 * l.boost, l.t0, l.t1);
                 if hatch {
-                    write!(s, "<line class=\"m-h\" stroke=\"url(#mh-{})\" {line} stroke-width=\"{}\"/>", p.kind, r2(p.width_mm as f64 / 1000.0)).unwrap();
+                    write!(s, "<line class=\"m-h\" stroke=\"url(#mh-{})\" {line} stroke-width=\"{}\"/>", p.kind, r2(p.width_mm as f64 / 1000.0 * l.boost))
+                        .unwrap();
                 } else {
-                    write!(s, "<line class=\"m-t m-k-{}\" {line} stroke-width=\"{}\"/>", p.kind, r2(p.width_mm as f64 / 1000.0)).unwrap();
+                    write!(s, "<line class=\"m-t m-k-{}\" {line} stroke-width=\"{}\"/>", p.kind, r2(p.width_mm as f64 / 1000.0 * l.boost)).unwrap();
                 }
             }
         }
@@ -306,6 +315,42 @@ mod tests {
 
     fn view() -> CityView {
         City::new().view(0)
+    }
+
+    /// The stroke widths, in metres, of the lines of one class.
+    fn widths(s: &str, class: &str) -> Vec<f64> {
+        s.split(&format!("class=\"{class}\""))
+            .skip(1)
+            .filter_map(|rest| rest.split("stroke-width=\"").nth(1))
+            .filter_map(|w| w.split('"').next()?.parse().ok())
+            .collect()
+    }
+
+    #[test]
+    fn a_street_is_never_drawn_narrower_than_the_minimum_on_screen_and_keeps_its_true_width_when_zoomed_in() {
+        let v = view();
+        let far = 0.3; // pixels to the metre, with the whole city in view
+        let narrowest = widths(&map_svg(&v, far, Units::Metres), "m-out").into_iter().fold(f64::MAX, f64::min);
+        assert!(narrowest * far >= MIN_STREET_PX - 0.05, "{narrowest}");
+        let near = 6.0;
+        let true_widths: Vec<f64> = v.edges.iter().map(|e| e.row_mm as f64 / 1000.0).collect();
+        let drawn = widths(&map_svg(&v, near, Units::Metres), "m-out");
+        assert!(drawn.iter().all(|w| true_widths.iter().any(|t| (t - w).abs() < 0.01)), "unchanged when the street is wide enough to see");
+    }
+
+    #[test]
+    fn a_boosted_street_keeps_its_lanes_in_proportion() {
+        let v = view();
+        let far = map_svg(&v, 0.3, Units::Metres);
+        let (row, road) = (widths(&far, "m-out")[0], widths(&far, "m-road")[0]);
+        let e = &v.edges[0];
+        let (lo, hi) = e
+            .pieces
+            .iter()
+            .filter(|p| !OFF_ROAD.contains(&p.kind))
+            .fold((i32::MAX, i32::MIN), |(lo, hi), p| (lo.min(p.offset_mm - p.width_mm / 2), hi.max(p.offset_mm + p.width_mm / 2)));
+        let true_ratio = (hi - lo) as f64 / e.row_mm as f64;
+        assert!((road / row - true_ratio).abs() < 0.02, "{} vs {true_ratio}", road / row);
     }
 
     fn count(s: &str, needle: &str) -> usize {
