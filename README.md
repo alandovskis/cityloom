@@ -20,3 +20,13 @@ cargo install wasm-bindgen-cli --version 0.2.129 --root .tools   # once; must ma
 ./scripts/build.sh                                               # writes web/pkg
 python3 -m http.server 8137 --directory web                      # open http://127.0.0.1:8137/
 ```
+
+## End-to-end tests
+
+Playwright drives the built pages in Chromium (`e2e/`). Build the module first; a small Node server serves `web/`.
+
+```sh
+./scripts/build.sh
+cd e2e && npm ci && npx playwright install chromium   # once
+npm test                                              # or: npx playwright test tests/street.spec.ts
+```

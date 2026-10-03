@@ -12,6 +12,7 @@ cargo test shell::vm                         # one module; a full test name also
 cargo install wasm-bindgen-cli --version 0.2.129 --root .tools   # once; must match Cargo.toml
 ./scripts/build.sh                           # release wasm + wasm-bindgen into web/pkg (gitignored)
 python3 -m http.server 8137 --directory web  # http://127.0.0.1:8137/
+(cd e2e && npm test)                         # browser tests; needs ./scripts/build.sh first (`npm ci` and `npx playwright install chromium` once)
 cargo build --target wasm32-unknown-unknown  # also run this: `cfg(target_arch = "wasm32")` code is not compiled by `cargo test`
 ```
 
@@ -33,6 +34,7 @@ Persistence: a page opened from the map (`?junction=3`, `?street=7`) edits one p
 
 ## Conventions and gotchas
 
+- E2E tests (`e2e/tests/*.spec.ts`, Playwright) cover each page: `shell.spec.ts` runs the same checks on all three, plus one spec per page. `fixtures.ts` makes every test fail on a page error and gives each a fresh browser context (empty storage). They run against the built `web/pkg`, so rebuild with `./scripts/build.sh` after changing Rust. Pointer behaviour (drags) is only covered here, not by `cargo test`.
 - Logic belongs in Rust; JS in `web/` stays start-up glue. Do not add logic there.
 - Add view-model behaviour with a native test against the port fakes. Component tests render to HTML on the host (each slice's `tests.rs`, Leptos `ssr` as a dev-dependency; helpers in `shared/testing.rs`); `shared::platform::browser_ports()` also works natively (thread-local recorders), which is how those tests read what was announced.
 - Non-`Send` values inside reactive closures go in `StoredValue::new_local`; views take a `Copy` handle (`junction::watch::Watch`, `street::watch::SheetWatch`) over an `Rc<…Vm>`.
