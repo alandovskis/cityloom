@@ -194,6 +194,20 @@ impl StreetVm {
     }
 }
 
+impl crate::vm::shell::Target for StreetVm {
+    fn set_units(&self, units: Units) {
+        StreetVm::set_units(self, units);
+    }
+
+    fn apply_region(&self, region: usize) -> bool {
+        self.edit(|e| e.set_region(region))
+    }
+
+    fn region_id(&self) -> String {
+        self.view_now().region.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

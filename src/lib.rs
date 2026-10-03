@@ -39,15 +39,10 @@ impl Sheet {
         Sheet(vm::street::StreetVm::new(ui::platform::browser_ports(), model::Editor::new(sample), None))
     }
 
-    /// Sets the units lengths are shown in, `"m"` or `"ft"`, in the parts of the
-    /// page drawn by the components.
-    pub fn set_units(&self, units: &str) {
-        self.0.set_units(units::Units::parse(units));
-    }
-
-    /// Sets the region whose materials and rules apply.
-    pub fn set_region(&mut self, region: usize) -> bool {
-        self.0.edit(|e| e.set_region(region))
+    /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
+    /// to this page.
+    pub fn mount_shell(&self) {
+        ui::shell::mount(self.0.clone(), "piece details");
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -96,15 +91,10 @@ impl Plan {
         Plan(vm::junction::JunctionVm::new(ui::platform::browser_ports(), junction::Junction::new(sample), None))
     }
 
-    /// Sets the units lengths are shown in, `"m"` or `"ft"`, in the parts of the
-    /// page drawn by the components.
-    pub fn set_units(&self, units: &str) {
-        self.0.set_units(units::Units::parse(units));
-    }
-
-    /// Sets the region whose materials and rules apply.
-    pub fn set_region(&mut self, region: usize) -> bool {
-        self.0.edit(|j| j.set_region(region))
+    /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
+    /// to this page.
+    pub fn mount_shell(&self) {
+        ui::shell::mount(self.0.clone(), "details");
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -159,49 +149,6 @@ pub fn atlas() -> String {
     json(&atlas::MEASURES)
 }
 
-/// The city: its streets and junctions as the editors have left them. The
-/// page keeps `save()` in storage and gives it back to `new` next time.
-#[wasm_bindgen]
-pub struct City(city::City);
-
-#[wasm_bindgen]
-impl City {
-    /// The city as saved, or as first laid out when `saved` is empty or cannot be used.
-    #[wasm_bindgen(constructor)]
-    pub fn new(saved: &str) -> City {
-        City(city::City::load(saved))
-    }
-
-    pub fn save(&self) -> String {
-        self.0.save()
-    }
-
-    /// Every street and junction, and whether each works, as JSON.
-    pub fn view(&self, region: usize) -> String {
-        json(&self.0.view(region))
-    }
-
-    /// Puts every street and junction back as first laid out.
-    pub fn reset(&mut self) {
-        self.0.reset();
-    }
-
-    /// The name of a street, by its uid; empty when there is none.
-    pub fn street_name(&self, edge: u32) -> String {
-        self.0.street_name(edge).unwrap_or_default()
-    }
-
-    /// The name of a junction, by its uid; empty when there is none.
-    pub fn junction_name(&self, node: u32) -> String {
-        self.0.junction_name(node).unwrap_or_default()
-    }
-
-    /// The two ends of a street as JSON: each a junction or where it leaves the map.
-    pub fn street_ends(&self, edge: u32) -> String {
-        json(&self.0.street_ends(edge))
-    }
-}
-
 /// The name of a junction of the city kept in this browser; empty when there is none.
 #[wasm_bindgen]
 pub fn junction_name(node: u32) -> String {
@@ -229,4 +176,11 @@ pub fn open_street(edge: u32) -> Option<Sheet> {
     let street = store.open().street_editor(edge, store.region())?;
     let place = vm::binding::Place::Street(edge);
     Some(Sheet(vm::street::StreetVm::new(ports, street, Some(vm::binding::CityBinding { store, place }))))
+}
+
+/// The two ends of a street of the city kept in this browser as JSON: each a
+/// junction or where it leaves the map.
+#[wasm_bindgen]
+pub fn street_ends(edge: u32) -> String {
+    json(&vm::city_store::CityStore::new(ui::platform::browser_ports().storage).open().street_ends(edge))
 }

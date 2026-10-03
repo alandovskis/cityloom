@@ -466,6 +466,21 @@ impl MapVm {
     }
 }
 
+impl crate::vm::shell::Target for MapVm {
+    fn set_units(&self, units: Units) {
+        MapVm::set_units(self, units);
+    }
+
+    fn apply_region(&self, region: usize) -> bool {
+        self.set_region(region);
+        true
+    }
+
+    fn region_id(&self) -> String {
+        crate::catalogue::REGIONS[self.region()].id.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

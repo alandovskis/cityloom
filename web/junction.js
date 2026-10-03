@@ -2,15 +2,13 @@
 // WebAssembly module (`mount_page`); this opens the junction, keeps what it
 // makes in the city, and sets up what every page shares.
 
-import init, { Plan, hatches, junction_name, materials, mount_page, open_junction, say } from "./pkg/cityloom_editor.js";
+import init, { Plan, hatches, junction_name, mount_page, open_junction } from "./pkg/cityloom_editor.js";
 import { placeParam } from "./city.js";
-import { initAccountMenu, initPanels, initRegion, initTheme, initUnits } from "./shell.js";
 
 await init();
 
 const { HATCH, MATERIAL_HATCH, CURB_HATCH } = JSON.parse(hatches());
 
-const MATERIALS = JSON.parse(materials());
 // Opened from the map (`?junction=3`) the page edits that junction of the city,
 // reading its streets from the city, and writes each change back; otherwise it
 // is a sandbox on the sample junctions.
@@ -23,8 +21,7 @@ if (placeId && !placeName) {
 }
 if (placeId && !held) {
   // The streets here have been changed so that the junction cannot be drawn.
-  initAccountMenu();
-  initTheme(() => {});
+  new Plan(0).mount_shell(); // only the settings menu and the sidebars have anything to do here
   document.getElementById("street-name").textContent = placeName;
   document.querySelector(".tools").hidden = true;
   document.querySelector(".sheet-body").innerHTML = `<div class="stuck"><h2 class="note-h">This junction cannot be drawn</h2><p>The streets that meet here have been changed so that they no longer make a junction. Give the streets their room back, or start the city over from the map.</p><p><a class="back" href="map.html">City map</a></p></div>`;
@@ -41,14 +38,4 @@ addEventListener("pagehide", () => plan.flush());
 
 mount_page(plan);
 
-initUnits((u) => plan.set_units(u));
-initRegion({
-  regions: MATERIALS.regions,
-  apply: (i) => plan.set_region(i),
-  current: () => JSON.parse(plan.view()).region,
-  onChange: () => {},
-  say,
-});
-initTheme(say);
-initAccountMenu();
-initPanels({ say, detailsWord: "details" });
+plan.mount_shell();

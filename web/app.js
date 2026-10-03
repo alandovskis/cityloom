@@ -2,18 +2,15 @@
 // WebAssembly module (`mount_street_page`); this opens the street, keeps what
 // it makes in the city, and sets up what every page shares.
 
-import init, { Sheet, hatches, materials, mount_street_page, open_street, say } from "./pkg/cityloom_editor.js";
-import { openCity, placeParam } from "./city.js";
-import { initAccountMenu, initPanels, initRegion, initTheme, initUnits } from "./shell.js";
+import init, { Sheet, hatches, mount_street_page, open_street, street_ends } from "./pkg/cityloom_editor.js";
+import { placeParam } from "./city.js";
 
 await init();
 
 const { HATCH, MATERIAL_HATCH, CURB_HATCH } = JSON.parse(hatches());
-const MATERIALS = JSON.parse(materials());
 // Opened from the map (`?street=7`) the page edits that street of the city and
 // writes each change back; otherwise it is a sandbox on the sample streets.
 const placeId = placeParam("street");
-const city = placeId ? openCity() : null;
 const held = placeId ? open_street(placeId) : undefined;
 if (placeId && !held) {
   location.replace("map.html");
@@ -27,16 +24,6 @@ document.getElementById("defs").innerHTML = `<defs>${[HATCH, MATERIAL_HATCH, CUR
 // What is waiting to be kept in the city is kept when the page is left.
 addEventListener("pagehide", () => sheet.flush());
 
-mount_street_page(sheet, held ? city.street_ends(placeId) : undefined);
+mount_street_page(sheet, held ? street_ends(placeId) : undefined);
 
-initUnits((u) => sheet.set_units(u));
-initRegion({
-  regions: MATERIALS.regions,
-  apply: (i) => sheet.set_region(i),
-  current: () => JSON.parse(sheet.view()).region,
-  onChange: () => {},
-  say,
-});
-initTheme(say);
-initAccountMenu();
-initPanels({ say });
+sheet.mount_shell();

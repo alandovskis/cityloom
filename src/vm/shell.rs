@@ -66,7 +66,7 @@ pub struct RegionOption {
 
 pub struct ShellVm {
     ports: Ports,
-    target: Box<dyn Target>,
+    target: Rc<dyn Target>,
     /// What the left sidebar holds on this page: "piece details", "details", "places".
     details_word: &'static str,
     tabs: Vec<String>,
@@ -95,7 +95,7 @@ fn capitalised(s: &str) -> String {
 impl ShellVm {
     /// The shell of a page whose notes have `tabs`, by id. What was chosen on an
     /// earlier visit is restored; the region is given to the page's model.
-    pub fn new(ports: Ports, target: Box<dyn Target>, details_word: &'static str, tabs: Vec<String>, system_dark: bool) -> Rc<ShellVm> {
+    pub fn new(ports: Ports, target: Rc<dyn Target>, details_word: &'static str, tabs: Vec<String>, system_dark: bool) -> Rc<ShellVm> {
         let storage = ports.storage.clone();
         let recall = |k: &str| storage.recall(k);
         let theme = recall(THEME_KEY).as_deref().and_then(Theme::parse);
@@ -305,7 +305,7 @@ mod tests {
         let (ports, said, storage) = test_ports();
         prepare(&storage);
         let page = Rc::new(Page { units: Cell::new(Units::Metres), region: RefCell::new("canada".into()), takes: Cell::new(true) });
-        let vm = ShellVm::new(ports, Box::new(Fake(page.clone())), "piece details", tabs(), false);
+        let vm = ShellVm::new(ports, Rc::new(Fake(page.clone())), "piece details", tabs(), false);
         Rig { vm, page, said, storage }
     }
 
@@ -431,7 +431,7 @@ mod tests {
     fn the_left_sidebar_is_named_for_what_the_page_puts_in_it() {
         let (ports, said, _) = test_ports();
         let page = Rc::new(Page { units: Cell::new(Units::Metres), region: RefCell::new("canada".into()), takes: Cell::new(true) });
-        let vm = ShellVm::new(ports, Box::new(Fake(page)), "places", vec![], false);
+        let vm = ShellVm::new(ports, Rc::new(Fake(page)), "places", vec![], false);
         vm.toggle_inspector();
         assert_eq!(said.take(), vec!["Places hidden."]);
     }

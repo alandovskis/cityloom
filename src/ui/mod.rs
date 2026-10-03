@@ -12,6 +12,7 @@ pub mod page;
 pub mod plan;
 pub mod platform;
 pub mod plan_svg;
+pub mod shell;
 pub mod sheet_watch;
 pub mod store;
 pub mod street;
@@ -123,20 +124,10 @@ pub struct MapPage(std::rc::Rc<crate::vm::map::MapVm>);
 
 #[wasm_bindgen]
 impl MapPage {
-    /// Sets the units lengths are shown in, `"m"` or `"ft"`.
-    pub fn set_units(&self, units: &str) {
-        self.0.set_units(crate::units::Units::parse(units));
-    }
-
-    /// Sets the region, by index into `materials().regions`.
-    pub fn set_region(&self, region: usize) -> bool {
-        self.0.set_region(region);
-        true
-    }
-
-    /// The id of the region the city is shown in.
-    pub fn region_id(&self) -> String {
-        crate::catalogue::REGIONS[self.0.region()].id.to_string()
+    /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
+    /// to this page.
+    pub fn mount_shell(&self) {
+        shell::mount(self.0.clone(), "places");
     }
 }
 
