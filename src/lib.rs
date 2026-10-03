@@ -225,7 +225,7 @@ impl Plan {
 
     /// The whole drawable state as JSON.
     pub fn view(&self) -> String {
-        self.0.read(|j| json(&j.view()))
+        json(&*self.0.view())
     }
 
     /// Adds a street at `bearing`, or in the widest gap when it is negative.

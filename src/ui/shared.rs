@@ -8,6 +8,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::junction::Junction;
+use crate::junction_view::JView;
 use crate::units::Units;
 
 pub struct Shared {
@@ -15,11 +16,26 @@ pub struct Shared {
     version: ArcRwSignal<u32>,
     units: ArcRwSignal<Units>,
     on_edit: RefCell<Option<js_sys::Function>>,
+    /// The view as of a version of the model.
+    cached: RefCell<Option<(u32, Rc<JView>)>>,
 }
 
 impl Shared {
     pub fn new(model: Junction) -> Rc<Shared> {
-        Rc::new(Shared { model: RefCell::new(model), version: ArcRwSignal::new(0), units: ArcRwSignal::new(Units::default()), on_edit: RefCell::new(None) })
+        Rc::new(Shared { model: RefCell::new(model), version: ArcRwSignal::new(0), units: ArcRwSignal::new(Units::default()), on_edit: RefCell::new(None), cached: RefCell::new(None) })
+    }
+
+    /// The model's view, built once for each edit however often it is asked for.
+    pub fn view(&self) -> Rc<JView> {
+        let version = self.version.get_untracked();
+        if let Some((at, view)) = &*self.cached.borrow() {
+            if *at == version {
+                return view.clone();
+            }
+        }
+        let view = Rc::new(self.model.borrow().view());
+        *self.cached.borrow_mut() = Some((version, view.clone()));
+        view
     }
 
     pub fn read<R>(&self, f: impl FnOnce(&Junction) -> R) -> R {
@@ -111,5 +127,26 @@ mod tests {
         let shared = Shared::new(Junction::new(0));
         shared.set_units(Units::Feet);
         assert_eq!(shared.version().get_untracked(), 0);
+    }
+
+    #[test]
+    fn the_view_is_built_once_per_edit_however_often_it_is_asked_for() {
+        let shared = Shared::new(Junction::new(0));
+        let a = shared.view();
+        assert!(Rc::ptr_eq(&a, &shared.view()));
+        let uid = shared.read(|j| j.current().arms[0].uid);
+        assert!(shared.edit(|j| j.set_corner(uid, 7_000)));
+        let b = shared.view();
+        assert!(!Rc::ptr_eq(&a, &b));
+        assert!(Rc::ptr_eq(&b, &shared.view()));
+        assert_eq!(b.arms.iter().find(|x| x.uid == uid).unwrap().corner_mm, 7_000);
+    }
+
+    #[test]
+    fn changing_units_keeps_the_view() {
+        let shared = Shared::new(Junction::new(0));
+        let a = shared.view();
+        shared.set_units(Units::Feet);
+        assert!(Rc::ptr_eq(&a, &shared.view()));
     }
 }

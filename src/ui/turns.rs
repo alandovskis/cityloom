@@ -146,7 +146,7 @@ pub fn Turns(shared: Rc<Shared>) -> impl IntoView {
     let toggle = StoredValue::new_local(toggle);
     move || {
         version.track();
-        let v = shared.with_value(|s| s.read(|j| j.view()));
+        let v = shared.with_value(|s| s.view());
         toggle.with_value(|t| table(&v, t))
     }
 }
