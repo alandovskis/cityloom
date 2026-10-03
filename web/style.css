@@ -584,6 +584,10 @@ svg pattern circle {
   grid-template-columns: minmax(0, 1fr);
   min-height: 0;
 }
+
+.lower[hidden] {
+  display: none;
+}
 .legend {
   padding: 14px 20px 20px;
   border-top: var(--line) solid var(--ink);
