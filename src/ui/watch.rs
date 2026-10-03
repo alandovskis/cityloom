@@ -64,11 +64,11 @@ impl Watch {
         self.shared.with_value(|s| s.edit_in_page(f))
     }
 
-    pub fn frame(&self) -> Option<crate::ui::plan_svg::Frame> {
+    pub fn frame(&self) -> Option<crate::vm::plan_frame::Frame> {
         self.shared.with_value(|s| s.frame())
     }
 
-    pub fn set_frame(&self, frame: crate::ui::plan_svg::Frame) {
+    pub fn set_frame(&self, frame: crate::vm::plan_frame::Frame) {
         self.shared.with_value(|s| s.set_frame(frame));
     }
 

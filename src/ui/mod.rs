@@ -1,7 +1,6 @@
 //! The page, drawn from the model by Leptos. Each component reads the model's
 //! view and calls the model's edits; the page holds no rules of its own.
 
-pub mod announce;
 pub mod bind;
 pub mod core;
 pub mod inspector;

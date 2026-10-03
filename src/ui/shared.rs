@@ -9,8 +9,9 @@ use leptos::prelude::*;
 
 use crate::junction::{Junction, Refusal, Target};
 use crate::ui::core::Core;
-use crate::ui::{announce, live};
-use crate::ui::plan_svg::Frame;
+use crate::ui::live;
+use crate::vm::junction_text as announce;
+use crate::vm::plan_frame::Frame;
 
 pub struct Shared {
     core: Core<Junction>,

@@ -11,7 +11,7 @@ use leptos::web_sys::{Element, HtmlElement, PointerEvent};
 use crate::catalogue::{KINDS, SAMPLES};
 use crate::junction::JUNCTION_SAMPLES;
 use crate::junction_view::JView;
-use crate::ui::announce::{arms_text, fit_text};
+use crate::vm::junction_text::{arms_text, fit_text};
 use crate::ui::shared::Shared;
 use crate::ui::watch::Watch;
 

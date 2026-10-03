@@ -9,7 +9,8 @@ use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
 use crate::junction::Target;
 use crate::ui::keys;
-use crate::ui::plan_svg::{Frame, plan_label, plan_svg};
+use crate::ui::plan_svg::{plan_label, plan_svg};
+use crate::vm::plan_frame::Frame;
 use crate::ui::shared::Shared;
 use crate::ui::watch::Watch;
 

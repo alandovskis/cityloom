@@ -59,6 +59,11 @@ impl<M: Presents> Core<M> {
         r
     }
 
+    /// Changes whenever the model is edited, for whatever must draw again then.
+    pub fn version(&self) -> RwSignal<u32> {
+        self.version.clone().into()
+    }
+
     /// The units, read so that a view that reads them draws again when they change.
     pub fn units(&self) -> Units {
         self.units.get()
