@@ -463,12 +463,26 @@ impl City {
     }
 
     fn with_streets(&self, node: usize, s: &State) -> State {
+        self.with_streets_of(&self.streets, node, s)
+    }
+
+    fn with_streets_of(&self, streets: &BTreeMap<u32, Street>, node: usize, s: &State) -> State {
         let mut s = s.clone();
         for a in &mut s.arms {
             let edge = a.edge;
-            a.section = self.edge_index(edge).and_then(|e| self.streets.get(&edge).map(|st| seen_from(&self.layout, e, node, st)));
+            a.section = self.edge_index(edge).and_then(|e| streets.get(&edge).map(|st| seen_from(&self.layout, e, node, st)));
         }
         s
+    }
+
+    /// The checks a junction fails as the city first laid it out, by label. A real city's streets
+    /// fall short of the rules as they stand; only what a change adds is flagged.
+    fn failing_today(&self, node: u32, region: usize) -> Vec<String> {
+        let Some(n) = self.node_index(node) else { return Vec::new() };
+        let Some(state) = self.today_junctions.get(&node) else { return Vec::new() };
+        let today = self.with_streets_of(&self.today_streets, n, state);
+        Junction::from_city("", &today, &today, region)
+            .map_or_else(Vec::new, |j| j.view().checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect())
     }
 
     /// The junction editor on one junction of the city, reading the streets as
@@ -508,7 +522,8 @@ impl City {
             let now = &self.streets[&uid];
             let editor = Editor::from_street(today, now, region);
             let v = editor.view();
-            let failing: Vec<String> = v.checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect();
+            let at_first: Vec<String> = Editor::from_street(today, today, region).view().checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect();
+            let failing: Vec<String> = v.checks.iter().filter(|c| !c.ok && !at_first.iter().any(|l| l == c.label)).map(|c| c.label.to_string()).collect();
             let row = v.row_mm;
             edges.push(EdgeView {
                 uid,
@@ -554,7 +569,8 @@ impl City {
                 v.control = Some(junction::CONTROLS[now.control].name);
                 match self.junction_editor(uid, region) {
                     Some(j) => {
-                        v.failing = j.view().checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect();
+                        let at_first = self.failing_today(uid, region);
+                        v.failing = j.view().checks.iter().filter(|c| !c.ok && !at_first.iter().any(|l| l == c.label)).map(|c| c.label.to_string()).collect();
                         v.ok = v.failing.is_empty();
                     }
                     None => {

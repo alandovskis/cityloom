@@ -264,4 +264,28 @@ mod tests {
         assert!(v.nodes.iter().all(|n| !n.junction));
         assert!(v.nodes.iter().all(|n| n.ok), "nothing to fail where there is no junction");
     }
+
+    fn bare_street() -> Network {
+        let mut net = star(&[(100.0, 0.0)]);
+        net.roads[0].lanes = vec![lane(LaneKind::Driving, Way::Backward, 3.0), lane(LaneKind::Driving, Way::Forward, 3.0)];
+        net
+    }
+
+    #[test]
+    fn what_a_real_street_already_lacks_is_not_flagged_until_a_change_makes_it_worse() {
+        let mut city = City::from_network(&bare_street(), "Bare");
+        let v = city.view(0);
+        // two driving lanes and nothing else: no sidewalks, no room for emergency vehicles
+        let editor = city.street_editor(v.edges[0].uid, 0).unwrap();
+        assert!(editor.view().checks.iter().any(|c| !c.ok), "the street does fall short of the rules");
+        assert!(v.edges[0].ok && v.edges[0].failing.is_empty() && v.failing == 0, "but it is as it is, not a problem to fix");
+        // making it wider than its room is a new failure, and is flagged, alone
+        let mut e = editor;
+        let uid = e.view().segments[0].uid;
+        e.nudge_width(uid, 100);
+        assert!(city.keep_street(v.edges[0].uid, e.snapshot()));
+        let v = city.view(0);
+        assert_eq!(v.edges[0].failing, vec!["Fits the street width".to_string()]);
+        assert_eq!(v.failing, 1);
+    }
 }
