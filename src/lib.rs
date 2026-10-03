@@ -15,6 +15,7 @@ pub mod plan;
 pub mod street_measures;
 pub mod symbols;
 pub mod units;
+pub mod vm;
 pub mod ui;
 
 use wasm_bindgen::prelude::*;
