@@ -6,7 +6,7 @@
   <title>CityLoom city map</title>
   <meta name="description" content="See the whole city at once and open any street or junction to change it.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed"}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed"}catch(e){}</script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="app.css">

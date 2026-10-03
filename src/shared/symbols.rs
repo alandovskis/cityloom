@@ -76,7 +76,7 @@ pub const CURB_HATCH: [(&str, &str); 7] = [
 // ---- elevation symbols ------------------------------------------------------------
 //
 // Symbol origin is bottom-centre; y runs up as negative. Stroke width is
-// constant on screen (see `.sym` in style.css), so a symbol can be scaled freely.
+// constant on screen (see `.sym` in editor.css), so a symbol can be scaled freely.
 
 /// A group of drawing moved `x` along and `y` down and scaled by `s`.
 fn at(x: f64, y: f64, s: f64, inner: &str) -> String {

@@ -14,7 +14,7 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:8137",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } }],
   webServer: {
     command: "node serve.mjs",
     url: "http://127.0.0.1:8137/map.html",

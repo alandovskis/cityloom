@@ -27,7 +27,7 @@ impl MapPage {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.clone(), "places");
+        crate::shell::mount(self.0.clone(), "places", false);
     }
 }
 

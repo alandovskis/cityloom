@@ -7,61 +7,55 @@
   <meta name="description" content="Who and what CityLoom is built on.">
   <meta name="color-scheme" content="light dark">
   <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed"}catch(e){}</script>
-  <link rel="preload" href="fonts/barlow-semi-condensed-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="app.css">
 </head>
-<body>
-  <svg id="defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"></svg>
+<body class="read">
+  <header class="bar">
+    <a class="brand" href="index.html" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
+    <nav class="surfaces" aria-label="Editors">
+      <a href="map.html" class="surface">Map</a>
+      <a href="street.html" class="surface">Street</a>
+      <a href="intersection.html" class="surface">Intersection</a>
+    </nav>
+    <div class="top-end"><a class="surface" href="credits.html" aria-current="page">Credits</a></div>
+  </header>
 
-  <div class="sheet">
-    <div class="sheet-content">
-      <div class="topbar">
-        <div class="brand"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></div>
-        <nav class="surfaces" aria-label="Editors">
-          <a href="street.html" class="surface">Street</a>
-          <a href="intersection.html" class="surface">Intersection</a>
-        </nav>
-        <div class="top-end"><a class="surface" href="credits.html" aria-current="page">Credits</a></div>
-      </div>
-      <main class="credits">
-        <h1>Credits</h1>
-        <p class="lede">CityLoom is built on other people's work. This page says whose, and what is still a stand-in.</p>
+  <main class="read-card credits">
+    <h1>Credits</h1>
+    <p class="lede">CityLoom is built on other people's work. This page says whose, and what is still a stand-in.</p>
 
-        <section aria-labelledby="c-atlas">
-          <h2 id="c-atlas" class="note-h">Transit measures</h2>
-          <p>The transit priority measures in the editors, and their names and codes, follow the toolbox of the
-          <a href="https://tpa.transitcosts.com/atlas/toolbox">Transit Priority Atlas</a>, published by the Marron Institute.
-          CityLoom draws them in its own way and is not affiliated with or endorsed by the Atlas or the Marron Institute.</p>
-        </section>
+    <section aria-labelledby="c-atlas">
+      <h2 id="c-atlas" class="note-h">Transit measures</h2>
+      <p>The transit priority measures in the editors, and their names and codes, follow the toolbox of the
+      <a href="https://tpa.transitcosts.com/atlas/toolbox">Transit Priority Atlas</a>, published by the Marron Institute.
+      CityLoom draws them in its own way and is not affiliated with or endorsed by the Atlas or the Marron Institute.</p>
+    </section>
 
-        <section aria-labelledby="c-type">
-          <h2 id="c-type" class="note-h">Typeface</h2>
-          <p>Barlow Semi Condensed, copyright 2017 The Barlow Project Authors, used under the SIL Open Font License 1.1.
-          <a href="fonts/LICENSE-barlow.txt">Read the license</a>.</p>
-          <p>The CityLoom logotype is drawn from Overpass, copyright 2021 The Overpass Project Authors, used under the SIL Open Font License 1.1.
-          <a href="fonts/LICENSE-overpass.txt">Read the license</a>.</p>
-        </section>
+    <section aria-labelledby="c-type">
+      <h2 id="c-type" class="note-h">Typeface</h2>
+      <p>The pages are set in the system's own typeface. The CityLoom logotype is drawn from Overpass, copyright 2021 The Overpass Project Authors, used under the SIL Open Font License 1.1.
+      <a href="fonts/LICENSE-overpass.txt">Read the license</a>.</p>
+    </section>
 
-        <section aria-labelledby="c-code">
-          <h2 id="c-code" class="note-h">Software</h2>
-          <ul class="credit-list">
-            <li><b>Rust</b> compiles the editing models to WebAssembly.</li>
-            <li><b>wasm-bindgen</b> 0.2.129 joins the Rust code to the page.</li>
-            <li><b>serde</b> 1.0.229 and <b>serde_json</b> 1.0.151 carry the drawing from Rust to the page.</li>
-          </ul>
-        </section>
+    <section aria-labelledby="c-code">
+      <h2 id="c-code" class="note-h">Software</h2>
+      <ul class="credit-list">
+        <li><b>Rust</b> compiles the editing models and the pages to WebAssembly.</li>
+        <li><b>Leptos</b> draws the pages in the browser.</li>
+        <li><b>wasm-bindgen</b> 0.2.129 joins the Rust code to the page.</li>
+        <li><b>serde</b> 1.0.229 and <b>serde_json</b> 1.0.151 carry the drawing from Rust to the page.</li>
+      </ul>
+    </section>
 
-        <section aria-labelledby="c-data">
-          <h2 id="c-data" class="note-h">Numbers</h2>
-          <p>Every width, rule, rate and threshold in CityLoom is a synthetic placeholder, not a measurement or a standard.
-          No real city data is used yet.</p>
-        </section>
+    <section aria-labelledby="c-data">
+      <h2 id="c-data" class="note-h">Numbers</h2>
+      <p>Every width, rule, rate and threshold in CityLoom is a synthetic placeholder, not a measurement or a standard.
+      No real city data is used yet.</p>
+    </section>
 
-        <p class="back"><a href="street.html">Back to the street editor</a> · <a href="intersection.html">Back to the intersection editor</a></p>
-      </main>
-    </div>
-  </div>
+    <p class="back-links"><a href="street.html">Back to the street editor</a> · <a href="intersection.html">Back to the intersection editor</a> · <a href="map.html">Back to the map</a></p>
+  </main>
 </body>
 </html>

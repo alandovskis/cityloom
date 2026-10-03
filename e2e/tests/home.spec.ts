@@ -121,3 +121,11 @@ test.describe("the home page", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   });
 });
+
+test("the credits page is in the same world and links home", async ({ page }) => {
+  await page.goto("/credits.html");
+  await expect(page.locator("h1")).toHaveText("Credits");
+  await expect(page.locator(".bar .brand")).toHaveAttribute("href", "index.html");
+  await expect(page.locator(".read-card")).toContainText("Overpass");
+  await expect(page.locator(".read-card")).not.toContainText("Barlow");
+});

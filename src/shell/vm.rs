@@ -96,11 +96,29 @@ impl ShellVm {
     /// The shell of a page whose notes have `tabs`, by id. What was chosen on an
     /// earlier visit is restored; the region is given to the page's model.
     pub fn new(ports: Ports, target: Rc<dyn Target>, details_word: &'static str, tabs: Vec<String>, system_dark: bool) -> Rc<ShellVm> {
+        ShellVm::new_with(ports, target, details_word, tabs, system_dark, true)
+    }
+
+    /// As `new`, with whether the notes start open when the person has not chosen:
+    /// a page that cannot spare the room for them on a narrow screen says no.
+    pub fn new_with(
+        ports: Ports,
+        target: Rc<dyn Target>,
+        details_word: &'static str,
+        tabs: Vec<String>,
+        system_dark: bool,
+        notes_default_open: bool,
+    ) -> Rc<ShellVm> {
         let storage = ports.storage.clone();
         let recall = |k: &str| storage.recall(k);
         let theme = recall(THEME_KEY).as_deref().and_then(Theme::parse);
         let tab = recall(TAB_KEY).filter(|t| tabs.contains(t)).or_else(|| tabs.first().cloned()).unwrap_or_default();
-        let (inspector_open, notes_open) = (recall(INSPECTOR_KEY).as_deref() != Some("closed"), recall(NOTES_KEY).as_deref() != Some("closed"));
+        let inspector_open = recall(INSPECTOR_KEY).as_deref() != Some("closed");
+        let notes_open = match recall(NOTES_KEY).as_deref() {
+            Some("closed") => false,
+            Some("open") => true,
+            _ => notes_default_open,
+        };
         let vm = ShellVm {
             target,
             details_word,
@@ -416,6 +434,35 @@ mod tests {
         r.vm.toggle_notes();
         assert_eq!(r.storage.recall(NOTES_KEY).as_deref(), Some("open"));
         assert_eq!(r.said.take(), vec!["Piece details hidden.", "Piece details shown.", "Notes hidden.", "Notes shown."]);
+    }
+
+    fn rig_notes(default_open: bool, prepare: impl FnOnce(&MemoryStorage)) -> Rig {
+        let (ports, said, storage) = test_ports();
+        prepare(&storage);
+        let page = Rc::new(Page { units: Cell::new(Units::Metres), region: RefCell::new("canada".into()), takes: Cell::new(true) });
+        let vm = ShellVm::new_with(ports, Rc::new(Fake(page.clone())), "details", tabs(), false, default_open);
+        Rig { vm, page, said, storage }
+    }
+
+    #[test]
+    fn on_a_screen_too_narrow_for_them_the_notes_start_closed_until_the_person_has_chosen() {
+        let r = rig_notes(false, |_| {});
+        assert!(!r.vm.notes_open() && r.vm.inspector_open());
+        r.vm.toggle_notes();
+        assert!(r.vm.notes_open());
+        assert_eq!(r.storage.recall(NOTES_KEY).as_deref(), Some("open"));
+    }
+
+    #[test]
+    fn what_the_person_chose_before_wins_over_the_default_either_way() {
+        let r = rig_notes(false, |s| {
+            s.remember(NOTES_KEY, "open");
+        });
+        assert!(r.vm.notes_open(), "opened on an earlier visit, so open");
+        let r = rig_notes(true, |s| {
+            s.remember(NOTES_KEY, "closed");
+        });
+        assert!(!r.vm.notes_open());
     }
 
     #[test]
