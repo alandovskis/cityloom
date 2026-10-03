@@ -7,7 +7,7 @@ use crate::shared::catalogue::{KINDS, Material, REGIONS, SAMPLES, Side, is_roadw
 use serde::{Deserialize, Serialize};
 
 use crate::street::model::{Editor, Street, View};
-use crate::plan::gap;
+use crate::junction::geometry::gap;
 
 pub const LEFT: u8 = 1;
 pub const THROUGH: u8 = 2;
@@ -1403,7 +1403,7 @@ pub fn valid(s: &State, region: usize) -> bool {
             return false;
         }
     }
-    crate::junction_view::layout(s, region).is_some()
+    crate::junction::read_model::layout(s, region).is_some()
 }
 
 #[cfg(test)]

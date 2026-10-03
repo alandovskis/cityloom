@@ -1,6 +1,6 @@
 //! A place in the city that a page edits, and how what it makes is written back.
 
-use crate::junction::State;
+use crate::junction::model::State;
 use crate::street::model::Street;
 use crate::vm::city_store::CityStore;
 
@@ -52,7 +52,7 @@ mod tests {
         e.nudge_width(u, -100);
         assert!(b.keep_street(e.snapshot()));
         assert_eq!(b.store.open().view(0).edited, 1);
-        assert!(!b.keep_junction(crate::junction::Junction::new(0).snapshot()), "not a junction");
+        assert!(!b.keep_junction(crate::junction::model::Junction::new(0).snapshot()), "not a junction");
     }
 
     #[test]

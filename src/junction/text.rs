@@ -1,8 +1,8 @@
 //! What the page says in words after the junction changes: the status line, and
 //! what a screen reader is told about an edit or a selection.
 
-use crate::junction::CONTROLS;
-use crate::junction_view::JView;
+use crate::junction::model::CONTROLS;
+use crate::junction::read_model::JView;
 use crate::shared::units::Units;
 
 pub const UNDONE: &str = "Undone.";
@@ -52,7 +52,7 @@ pub fn selection_text(v: &JView, units: Units) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::junction::*;
+    use crate::junction::model::*;
 
     fn arm_at(j: &Junction, bearing: i32) -> u32 {
         j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid

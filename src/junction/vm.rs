@@ -7,14 +7,14 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::junction::{Junction, Refusal, Target};
-use crate::junction_view::JView;
+use crate::junction::model::{Junction, Refusal, Target};
+use crate::junction::read_model::JView;
 use crate::shared::units::Units;
 use crate::vm::binding::CityBinding;
 use crate::shared::core::{Core, Presents};
-use crate::vm::junction_text as text;
+use crate::junction::text as text;
 use crate::shared::keeper::{Keeper, NOT_KEPT};
-use crate::vm::plan_frame::Frame;
+use crate::junction::frame::Frame;
 use crate::shared::ports::Ports;
 
 impl Presents for Junction {

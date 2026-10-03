@@ -6,11 +6,11 @@ use std::fmt::Write;
 use serde_json::Value;
 
 use crate::shared::catalogue::KINDS;
-use crate::junction::{LEFT, RIGHT, THROUGH};
-use crate::junction_view::{ArmView, JView, LaneView};
-use crate::ui::turns::compass;
+use crate::junction::model::{LEFT, RIGHT, THROUGH};
+use crate::junction::read_model::{ArmView, JView, LaneView};
+use crate::junction::turns::compass;
 use crate::shared::units::Units;
-use crate::vm::plan_frame::Frame;
+use crate::junction::frame::Frame;
 
 type P = (f64, f64);
 
@@ -501,7 +501,7 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::junction::*;
+    use crate::junction::model::*;
 
     fn svg(j: &Junction) -> PlanSvg {
         plan_svg(&j.view(), 1000.0, 1000.0, Units::Metres)

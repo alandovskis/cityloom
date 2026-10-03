@@ -9,11 +9,11 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, HtmlElement, PointerEvent};
 
 use crate::shared::catalogue::{KINDS, SAMPLES};
-use crate::junction::JUNCTION_SAMPLES;
-use crate::junction_view::JView;
-use crate::vm::junction_text::{arms_text, fit_text};
-use crate::vm::junction::JunctionVm;
-use crate::ui::watch::Watch;
+use crate::junction::model::JUNCTION_SAMPLES;
+use crate::junction::read_model::JView;
+use crate::junction::text::{arms_text, fit_text};
+use crate::junction::vm::JunctionVm;
+use crate::junction::watch::Watch;
 
 /// The kinds of piece that appear in the plan, in the order the catalogue lists them.
 pub fn key_kinds(v: &JView) -> Vec<usize> {
@@ -257,7 +257,7 @@ pub fn Samples(vm: Rc<JunctionVm>) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::junction::*;
+    use crate::junction::model::*;
 
     #[test]
     fn the_key_lists_each_piece_in_the_plan_once_in_catalogue_order() {

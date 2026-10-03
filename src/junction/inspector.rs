@@ -8,11 +8,11 @@ use leptos::prelude::*;
 use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 
 use crate::shared::catalogue::SAMPLES;
-use crate::junction::*;
-use crate::junction_view::{CrossingView, JView};
-use crate::vm::junction::JunctionVm;
-use crate::ui::turns::{compass, turn_glyph, turn_name, turn_word};
-use crate::ui::watch::Watch;
+use crate::junction::model::*;
+use crate::junction::read_model::{CrossingView, JView};
+use crate::junction::vm::JunctionVm;
+use crate::junction::turns::{compass, turn_glyph, turn_name, turn_word};
+use crate::junction::watch::Watch;
 use crate::shared::units::Units;
 
 // ---- text the panel is made of ---------------------------------------------
@@ -623,7 +623,7 @@ fn choice(
     key: &'static str,
     label: &'static str,
     items: &'static [Item],
-    current: impl Fn(&crate::junction_view::TransitView) -> usize + Send + Sync + Copy + 'static,
+    current: impl Fn(&crate::junction::read_model::TransitView) -> usize + Send + Sync + Copy + 'static,
     set: impl Fn(&mut Junction, usize) -> bool + Copy + 'static,
     uid: u32,
 ) -> impl IntoView {

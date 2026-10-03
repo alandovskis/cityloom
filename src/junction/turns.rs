@@ -5,10 +5,10 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::junction::{LEFT, THROUGH};
-use crate::junction_view::JView;
-use crate::ui::watch::Watch;
-use crate::vm::junction::JunctionVm;
+use crate::junction::model::{LEFT, THROUGH};
+use crate::junction::read_model::JView;
+use crate::junction::watch::Watch;
+use crate::junction::vm::JunctionVm;
 
 const COMPASS: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 

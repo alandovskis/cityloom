@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::shared::catalogue::{KINDS, REGIONS, SAMPLES, Side};
-use crate::junction::{self, ALL_WAY_STOP, Arm, Junction, PRIORITY, SIGNAL, State};
+use crate::junction::model::{self as junction, ALL_WAY_STOP, Arm, Junction, PRIORITY, SIGNAL, State};
 use crate::street::model::{Editor, Street};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
@@ -216,7 +216,7 @@ fn generate(node: usize, streets: &BTreeMap<u32, Street>) -> State {
 /// the curb, so one radius does not suit every corner of a junction. A corner
 /// nothing suits keeps `preferred`.
 fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
-    use junction::{MAX_CORNER_MM, MIN_CORNER_MM, RING_STEP_MM};
+    use crate::junction::model::{MAX_CORNER_MM, MIN_CORNER_MM, RING_STEP_MM};
     let state = |arms: &[Arm]| State { label: String::new(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None };
     let mut radii: Vec<i32> = (MIN_CORNER_MM..=MAX_CORNER_MM).step_by(RING_STEP_MM as usize).collect();
     radii.sort_by_key(|r| ((r - preferred).abs(), *r));
@@ -243,7 +243,7 @@ fn forget_streets(s: &mut State) {
 /// Whether a saved junction can stand for this node: the same streets, with
 /// every index and length inside what the editor allows.
 fn junction_fits(s: &State, node: usize) -> bool {
-    use junction::*;
+    use crate::junction::model::*;
     let mut want: Vec<u32> = edges_at(node).iter().map(|&e| e as u32 + 1).collect();
     let mut have: Vec<u32> = s.arms.iter().map(|a| a.edge).collect();
     want.sort_unstable();

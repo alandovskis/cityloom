@@ -6,11 +6,11 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::shared::atlas::{MEASURES, Where};
-use crate::junction_view::{CrossingView, JView};
+use crate::junction::read_model::{CrossingView, JView};
 use crate::street::model::Check;
-use crate::vm::junction::JunctionVm;
-use crate::ui::watch::Watch;
-use crate::ui::turns::compass;
+use crate::junction::vm::JunctionVm;
+use crate::junction::watch::Watch;
+use crate::junction::turns::compass;
 use crate::shared::units::Units;
 
 /// How far it is to cross: the length, or the stages and their length.
@@ -244,13 +244,13 @@ pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
-    use crate::junction::*;
+    use crate::junction::model::*;
     use crate::street::model::Check;
     use crate::shared::units::Units;
 
     use super::*;
 
-    fn arm_view(j: &Junction, bearing: i32) -> crate::junction_view::ArmView {
+    fn arm_view(j: &Junction, bearing: i32) -> crate::junction::read_model::ArmView {
         j.view().arms.into_iter().find(|a| a.bearing == bearing).unwrap()
     }
 

@@ -4,11 +4,11 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::junction::{Junction, Target};
-use crate::junction_view::{ArmView, JView};
-use crate::ui::keys::{Action, Step};
+use crate::junction::model::{Junction, Target};
+use crate::junction::read_model::{ArmView, JView};
+use crate::junction::keys::{Action, Step};
 use crate::shared::units::Units;
-use crate::vm::junction::JunctionVm;
+use crate::junction::vm::JunctionVm;
 
 /// What a component reads of the junction view-model and tells it. The view-model
 /// is kept where only this thread can reach it, so the handle is `Copy` and any
@@ -62,11 +62,11 @@ impl Watch {
         self.vm.with_value(|v| v.apply(f))
     }
 
-    pub fn frame(&self) -> Option<crate::vm::plan_frame::Frame> {
+    pub fn frame(&self) -> Option<crate::junction::frame::Frame> {
         self.vm.with_value(|v| v.frame())
     }
 
-    pub fn set_frame(&self, frame: crate::vm::plan_frame::Frame) {
+    pub fn set_frame(&self, frame: crate::junction::frame::Frame) {
         self.vm.with_value(|v| v.set_frame(frame));
     }
 

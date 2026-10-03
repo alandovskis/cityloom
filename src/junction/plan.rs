@@ -7,12 +7,12 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
-use crate::junction::Target;
-use crate::ui::keys;
-use crate::ui::plan_svg::{plan_label, plan_svg};
-use crate::vm::plan_frame::Frame;
-use crate::vm::junction::JunctionVm;
-use crate::ui::watch::Watch;
+use crate::junction::model::Target;
+use crate::junction::keys;
+use crate::junction::plan_svg::{plan_label, plan_svg};
+use crate::junction::frame::Frame;
+use crate::junction::vm::JunctionVm;
+use crate::junction::watch::Watch;
 
 /// What a grip is dragging.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

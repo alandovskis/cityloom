@@ -6,9 +6,9 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
-use crate::junction::*;
+use crate::junction::model::*;
 use crate::street::model::{Check, Revision};
-use crate::plan::*;
+use crate::junction::geometry::*;
 
 /// Ring width of a roundabout, and the smallest island in its middle.
 const RING_WIDTH_MM: f64 = 6_000.0;
