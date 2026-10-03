@@ -7,7 +7,7 @@ use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, KeyboardEvent, PointerEvent, WheelEvent};
 
-use crate::ui::bind::Bound;
+use crate::shared::bind::Bound;
 use crate::ui::map_svg::{hot_layer, map_svg, overlay_svg};
 use crate::vm::map::{MapVm, NoteItem, PlaceRow, ResetOutcome};
 

@@ -3,7 +3,7 @@
 //! measures it forms or could.
 
 use crate::model::{Check, View};
-use crate::units::Units;
+use crate::shared::units::Units;
 
 /// A whole number with a comma between each thousand, as `toLocaleString` writes it.
 pub fn thousands(n: i32) -> String {
@@ -67,11 +67,11 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::atlas::{MEASURES, Where};
+use crate::shared::atlas::{MEASURES, Where};
 use crate::vm::street::StreetVm;
 use crate::ui::sheet_watch::SheetWatch;
 
-fn mode_class(mode: crate::catalogue::Mode) -> String {
+fn mode_class(mode: crate::shared::catalogue::Mode) -> String {
     serde_json::to_value(mode).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
 }
 

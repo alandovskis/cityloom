@@ -34,7 +34,7 @@ impl CityBinding {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vm::ports::test_ports;
+    use crate::shared::ports::test_ports;
 
     fn binding(place: impl Fn(&crate::city::CityView) -> Place) -> CityBinding {
         let (ports, ..) = test_ports();

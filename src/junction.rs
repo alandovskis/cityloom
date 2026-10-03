@@ -3,7 +3,7 @@
 //! Pure Rust like `model.rs`, so it is tested natively. Lengths are integer
 //! millimetres and angles integer degrees. Everything here is synthetic.
 
-use crate::catalogue::{KINDS, Material, Mode, REGIONS, SAMPLES, Side};
+use crate::shared::catalogue::{KINDS, Material, REGIONS, SAMPLES, Side, is_roadway};
 use serde::{Deserialize, Serialize};
 
 use crate::model::{Editor, Street, View};
@@ -246,10 +246,6 @@ pub struct Profile {
     pub leave_span: (i32, i32),
     /// Width of parking or loading beside the left and right curb, or 0.
     pub park: [i32; 2],
-}
-
-pub fn is_roadway(kind: usize) -> bool {
-    !matches!(KINDS[kind].mode, Mode::Foot | Mode::Green)
 }
 
 pub fn profile(street: usize, region: usize) -> Profile {

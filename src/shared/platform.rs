@@ -2,8 +2,8 @@
 
 use std::rc::Rc;
 
-use crate::ui::{live, store};
-use crate::vm::ports::{Announcer, Ports, Scheduler, Storage};
+use crate::shared::{live, store};
+use crate::shared::ports::{Announcer, Ports, Scheduler, Storage};
 
 struct BrowserAnnouncer;
 

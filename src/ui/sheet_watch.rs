@@ -7,7 +7,7 @@ use leptos::prelude::*;
 
 use crate::model::{Editor, SegView, View};
 use crate::ui::street_keys::Action;
-use crate::units::Units;
+use crate::shared::units::Units;
 use crate::vm::street::StreetVm;
 
 /// What a component reads of the street view-model and tells it. The view-model

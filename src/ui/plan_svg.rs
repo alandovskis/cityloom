@@ -5,11 +5,11 @@ use std::fmt::Write;
 
 use serde_json::Value;
 
-use crate::catalogue::KINDS;
+use crate::shared::catalogue::KINDS;
 use crate::junction::{LEFT, RIGHT, THROUGH};
 use crate::junction_view::{ArmView, JView, LaneView};
 use crate::ui::turns::compass;
-use crate::units::Units;
+use crate::shared::units::Units;
 use crate::vm::plan_frame::Frame;
 
 type P = (f64, f64);

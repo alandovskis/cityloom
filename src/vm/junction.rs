@@ -9,13 +9,13 @@ use leptos::prelude::*;
 
 use crate::junction::{Junction, Refusal, Target};
 use crate::junction_view::JView;
-use crate::units::Units;
+use crate::shared::units::Units;
 use crate::vm::binding::CityBinding;
-use crate::vm::core::{Core, Presents};
+use crate::shared::core::{Core, Presents};
 use crate::vm::junction_text as text;
-use crate::vm::keeper::Keeper;
+use crate::shared::keeper::Keeper;
 use crate::vm::plan_frame::Frame;
-use crate::vm::ports::Ports;
+use crate::shared::ports::Ports;
 
 /// Said once when what a page makes cannot be kept.
 pub const NOT_KEPT: &str = "This browser is not keeping your changes, so other pages will not see them.";
@@ -230,7 +230,7 @@ mod tests {
     use super::*;
     use crate::vm::binding::Place;
     use crate::vm::city_store::CityStore;
-    use crate::vm::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_time};
+    use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_time};
 
     struct Rig {
         vm: Rc<JunctionVm>,

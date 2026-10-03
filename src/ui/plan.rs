@@ -75,12 +75,12 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
             }
         });
         // Control or Command with Z or Y undoes and redoes, wherever the keyboard is.
-        use crate::ui::keys::Shortcut;
+        use crate::shared::shortcut::{Shortcut, shortcut};
         window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
             if !(e.meta_key() || e.ctrl_key()) || typing(&e) {
                 return;
             }
-            match keys::shortcut(&e.key(), e.shift_key()) {
+            match shortcut(&e.key(), e.shift_key()) {
                 Some(Shortcut::Undo) => {
                     e.prevent_default();
                     w.undo();

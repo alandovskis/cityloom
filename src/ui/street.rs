@@ -87,7 +87,7 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
         });
         // Control or Command with Z or Y undoes and redoes, wherever the keyboard is.
         window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
-            use crate::ui::keys::{Shortcut, shortcut};
+            use crate::shared::shortcut::{Shortcut, shortcut};
             if !(e.meta_key() || e.ctrl_key()) || typing(&e) {
                 return;
             }

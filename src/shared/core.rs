@@ -8,7 +8,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::units::Units;
+use crate::shared::units::Units;
 
 /// A model a view-model presents a view of.
 pub trait Presents {

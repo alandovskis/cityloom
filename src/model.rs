@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::street_measures;
-use crate::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, REGIONS, Side, KINDS, MATERIALS, Mode, SAMPLES, kind_index};
+use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, REGIONS, Side, KINDS, MATERIALS, Mode, SAMPLES, kind_index};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;

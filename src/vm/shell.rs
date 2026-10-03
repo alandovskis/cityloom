@@ -7,9 +7,9 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::catalogue::{REGIONS, Side};
-use crate::units::Units;
-use crate::vm::ports::Ports;
+use crate::shared::catalogue::{REGIONS, Side};
+use crate::shared::units::Units;
+use crate::shared::ports::Ports;
 
 pub const REGION_KEY: &str = crate::vm::city_store::REGION_KEY;
 pub const THEME_KEY: &str = "cityloom-theme";
@@ -264,7 +264,7 @@ impl ShellVm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vm::ports::{MemoryStorage, RecordingAnnouncer, Storage, test_ports};
+    use crate::shared::ports::{MemoryStorage, RecordingAnnouncer, Storage, test_ports};
     use std::cell::{Cell, RefCell};
 
     struct Page {

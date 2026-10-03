@@ -6,10 +6,10 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use crate::city::{CityView, EdgeView, NodeView};
-use crate::symbols::HATCH;
+use crate::shared::symbols::HATCH;
 use crate::vm::camera::ScaleBar;
 use crate::vm::map::{junction_label, junction_number, street_label};
-use crate::units::Units;
+use crate::shared::units::Units;
 
 /// Pieces beside the roadway, not part of it.
 const OFF_ROAD: [&str; 5] = ["sidewalk", "planting", "bikerack", "bikeshare", "pole"];

@@ -281,7 +281,7 @@ pub fn hatches_json() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalogue::KINDS;
+    use crate::shared::catalogue::KINDS;
 
     fn sym(kind: &str, wm: f64, o: SymbolOpts) -> String {
         symbol(kind, 100.0, 300.0, wm * 55.0, wm * 55.0, wm, 1.0, o)

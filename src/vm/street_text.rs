@@ -1,9 +1,9 @@
 //! What the street page says in words: the line that says whether the pieces fit
 //! the street, and what a screen reader is told after an edit or a selection.
 
-use crate::catalogue::KINDS;
+use crate::shared::catalogue::KINDS;
 use crate::model::View;
-use crate::units::Units;
+use crate::shared::units::Units;
 
 pub const STARTED_OVER: &str = "Started over from the street as it is today. Undo brings your changes back.";
 pub const MEASURE_REFUSED: &str = "That measure does not suit this street.";

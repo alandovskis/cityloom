@@ -1,20 +1,16 @@
 //! The page, drawn from the model by Leptos. Each component reads the model's
 //! view and calls the model's edits; the page holds no rules of its own.
 
-pub mod bind;
 pub mod inspector;
 pub mod keys;
-pub mod live;
 pub mod map;
 pub mod map_svg;
 pub mod notes;
 pub mod page;
 pub mod plan;
-pub mod platform;
 pub mod plan_svg;
 pub mod shell;
 pub mod sheet_watch;
-pub mod store;
 pub mod street;
 pub mod street_inspector;
 pub mod street_keys;
@@ -74,7 +70,7 @@ pub fn mount_page(plan: &crate::Plan) {
 /// Says `text` to a screen reader.
 #[wasm_bindgen]
 pub fn say(text: &str) {
-    live::say(text);
+    crate::shared::live::say(text);
 }
 
 /// Draws the street page into the elements it keeps for them: the section, its
@@ -137,7 +133,7 @@ impl MapPage {
 pub fn mount_map() -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
-    let vm = crate::vm::map::MapVm::new(platform::browser_ports());
+    let vm = crate::vm::map::MapVm::new(crate::shared::platform::browser_ports());
     let at = |id: &str| -> HtmlElement {
         leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into()
     };

@@ -7,10 +7,10 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::tachys::view::RenderHtml;
 
-use crate::catalogue::KINDS;
+use crate::shared::catalogue::KINDS;
 use crate::junction::*;
 use crate::vm::junction::JunctionVm;
-use crate::units::Units;
+use crate::shared::units::Units;
 use crate::ui::{inspector, notes, page, plan, turns};
 
 /// A component drawn to HTML.
@@ -21,7 +21,7 @@ fn html(view: impl FnOnce() -> AnyView) -> String {
 }
 
 fn shared(sample: usize) -> Rc<JunctionVm> {
-    JunctionVm::new(crate::ui::platform::browser_ports(), Junction::new(sample), None)
+    JunctionVm::new(crate::shared::platform::browser_ports(), Junction::new(sample), None)
 }
 
 fn arm(shared: &JunctionVm, bearing: i32) -> u32 {
@@ -214,10 +214,10 @@ fn a_city_junction_s_streets_link_to_the_street_editor_and_cannot_be_removed() {
     let mut state = Junction::new(0).current().clone();
     for a in &mut state.arms {
         a.edge = a.uid + 10;
-        a.section = Some(crate::model::Street::sample(a.street, crate::catalogue::Side::Right));
+        a.section = Some(crate::model::Street::sample(a.street, crate::shared::catalogue::Side::Right));
     }
     let j = Junction::from_city("Test", &state, &state, 0).unwrap();
-    let s = JunctionVm::new(crate::ui::platform::browser_ports(), j, None);
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), j, None);
     let e = arm(&s, 90);
     s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
@@ -274,7 +274,7 @@ fn the_panel_s_lengths_follow_the_units() {
 // ---- what the keys do -------------------------------------------------------------
 
 use crate::ui::keys::{Action, Step};
-use crate::ui::live;
+use crate::shared::live;
 use crate::ui::watch::Watch;
 
 fn watch(sample: usize) -> (Rc<JunctionVm>, Watch) {
@@ -383,9 +383,9 @@ fn linked_shared() -> Rc<JunctionVm> {
     let mut state = Junction::new(0).current().clone();
     for a in &mut state.arms {
         a.edge = a.uid + 10;
-        a.section = Some(crate::model::Street::sample(a.street, crate::catalogue::Side::Right));
+        a.section = Some(crate::model::Street::sample(a.street, crate::shared::catalogue::Side::Right));
     }
-    JunctionVm::new(crate::ui::platform::browser_ports(), Junction::from_city("Junction 4", &state, &state, 0).unwrap(), None)
+    JunctionVm::new(crate::shared::platform::browser_ports(), Junction::from_city("Junction 4", &state, &state, 0).unwrap(), None)
 }
 
 #[test]
@@ -503,7 +503,7 @@ use crate::ui::sheet_watch::SheetWatch;
 use crate::ui::street_keys::Action as StreetAction;
 
 fn street_watch() -> (Rc<StreetVm>, SheetWatch) {
-    let s = StreetVm::new(crate::ui::platform::browser_ports(), Editor::new(0), None);
+    let s = StreetVm::new(crate::shared::platform::browser_ports(), Editor::new(0), None);
     let w = SheetWatch::new(s.clone());
     live::take_said();
     (s, w)
@@ -582,7 +582,7 @@ fn removing_takes_the_selected_piece_away() {
 use crate::ui::{street, street_inspector, street_notes, street_page};
 
 fn street_shared(sample: usize) -> Rc<StreetVm> {
-    StreetVm::new(crate::ui::platform::browser_ports(), Editor::new(sample), None)
+    StreetVm::new(crate::shared::platform::browser_ports(), Editor::new(sample), None)
 }
 
 fn street_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
@@ -893,7 +893,7 @@ fn the_panel_s_lengths_and_steps_follow_the_units() {
 use crate::ui::map as map_ui;
 use crate::vm::city_store::CityStore;
 use crate::vm::map::MapVm;
-use crate::vm::ports::{MemoryStorage, test_ports};
+use crate::shared::ports::{MemoryStorage, test_ports};
 
 fn map_vm() -> (Rc<MapVm>, Rc<MemoryStorage>) {
     let (ports, _, storage) = test_ports();

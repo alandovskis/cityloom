@@ -7,7 +7,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use serde::Deserialize;
 
-use crate::catalogue::KINDS;
+use crate::shared::catalogue::KINDS;
 use crate::model::{SegView, View};
 use crate::vm::street::StreetVm;
 use crate::ui::sheet_watch::SheetWatch;
@@ -385,7 +385,7 @@ pub fn TimeNote(vm: Rc<StreetVm>) -> impl IntoView {
 /// in the settings menu brings it back and keeps it until it is dismissed.
 #[component]
 pub fn Welcome(vm: Rc<StreetVm>) -> impl IntoView {
-    use crate::ui::store::remember;
+    use crate::shared::store::remember;
 
     // Only the browser watches the street, for the first change.
     #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]

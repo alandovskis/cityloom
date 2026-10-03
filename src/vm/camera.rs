@@ -1,7 +1,7 @@
 //! Where the map is looked at from, and how far in: a camera on the city drawn in
 //! metres. It knows nothing of the page except the size of the window it fills.
 
-use crate::units::Units;
+use crate::shared::units::Units;
 
 /// How far in a person may zoom, as multiples of the zoom that fits the city.
 const ZOOM_OUT: f64 = 0.8;

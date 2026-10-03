@@ -6,7 +6,7 @@
 use std::rc::Rc;
 
 use crate::city::City;
-use crate::vm::ports::Storage;
+use crate::shared::ports::Storage;
 
 pub const CITY_KEY: &str = "cityloom-city";
 pub const REGION_KEY: &str = "cityloom-region";
@@ -45,16 +45,16 @@ impl CityStore {
     /// first when none is chosen or it is unknown.
     pub fn region(&self) -> usize {
         let id = self.storage.recall(REGION_KEY);
-        crate::catalogue::REGIONS.iter().position(|r| Some(r.id) == id.as_deref()).unwrap_or(0)
+        crate::shared::catalogue::REGIONS.iter().position(|r| Some(r.id) == id.as_deref()).unwrap_or(0)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vm::ports::test_ports;
+    use crate::shared::ports::test_ports;
 
-    fn store() -> (CityStore, Rc<crate::vm::ports::MemoryStorage>) {
+    fn store() -> (CityStore, Rc<crate::shared::ports::MemoryStorage>) {
         let (ports, _, storage) = test_ports();
         (CityStore::new(ports.storage), storage)
     }

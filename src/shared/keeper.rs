@@ -5,7 +5,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::vm::ports::Scheduler;
+use crate::shared::ports::Scheduler;
 
 /// How long after the last change it is kept, in milliseconds.
 const DELAY_MS: u32 = 250;
@@ -62,7 +62,7 @@ impl Keeper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vm::ports::ManualScheduler;
+    use crate::shared::ports::ManualScheduler;
 
     fn keeper(ok: bool) -> (Rc<Keeper>, Rc<ManualScheduler>, Rc<Cell<u32>>, Rc<Cell<u32>>) {
         let s = Rc::new(ManualScheduler::default());

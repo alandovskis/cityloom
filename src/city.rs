@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::catalogue::{KINDS, REGIONS, SAMPLES, Side};
+use crate::shared::catalogue::{KINDS, REGIONS, SAMPLES, Side};
 use crate::junction::{self, ALL_WAY_STOP, Arm, Junction, PRIORITY, SIGNAL, State};
 use crate::model::{Editor, Street};
 

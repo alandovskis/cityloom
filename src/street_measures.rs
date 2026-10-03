@@ -5,7 +5,7 @@
 //! The definitions are CityLoom's own simplification of the Atlas's names,
 //! worded in the comments below. They are not the Atlas's guidance.
 
-use crate::catalogue::{DirectionRule, KINDS, Side, kind_index};
+use crate::shared::catalogue::{DirectionRule, KINDS, Side, kind_index};
 use crate::model::{Segment, Variant};
 
 /// One measure: its Atlas code and name, and whether it is for a freeway.
@@ -47,7 +47,7 @@ fn id(s: &Segment) -> &'static str {
 }
 
 fn is_road(s: &Segment) -> bool {
-    crate::junction::is_roadway(s.kind)
+    crate::shared::catalogue::is_roadway(s.kind)
 }
 
 /// Which direction (0 away, 1 toward) lanes on the left half of the street run.

@@ -3,7 +3,7 @@
 
 use crate::junction::CONTROLS;
 use crate::junction_view::JView;
-use crate::units::Units;
+use crate::shared::units::Units;
 
 pub const UNDONE: &str = "Undone.";
 pub const STARTED_OVER: &str = "Started over from the junction as it is today.";

@@ -8,7 +8,7 @@ use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, HtmlElement, PointerEvent};
 
-use crate::catalogue::{KINDS, SAMPLES};
+use crate::shared::catalogue::{KINDS, SAMPLES};
 use crate::junction::JUNCTION_SAMPLES;
 use crate::junction_view::JView;
 use crate::vm::junction_text::{arms_text, fit_text};

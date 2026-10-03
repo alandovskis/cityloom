@@ -8,12 +8,12 @@ use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
-use crate::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS};
+use crate::shared::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS};
 use crate::model::{SegView, View};
 use crate::vm::street::StreetVm;
 use crate::ui::sheet_watch::SheetWatch;
 use crate::ui::street_page::{hhmm, to_min};
-use crate::units::Units;
+use crate::shared::units::Units;
 
 /// The kinds a piece may take at other times, with the one it is: the choices
 /// in a list, in catalogue order.

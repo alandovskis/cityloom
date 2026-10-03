@@ -7,11 +7,11 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::model::{Editor, View};
-use crate::units::Units;
+use crate::shared::units::Units;
 use crate::vm::binding::CityBinding;
-use crate::vm::core::{Core, Presents};
-use crate::vm::keeper::Keeper;
-use crate::vm::ports::Ports;
+use crate::shared::core::{Core, Presents};
+use crate::shared::keeper::Keeper;
+use crate::shared::ports::Ports;
 use crate::vm::street_text as text;
 
 /// Said once when what a page makes cannot be kept.
@@ -213,7 +213,7 @@ mod tests {
     use super::*;
     use crate::vm::binding::Place;
     use crate::vm::city_store::CityStore;
-    use crate::vm::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, test_ports_with_time};
+    use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, test_ports_with_time};
 
     struct Rig {
         vm: Rc<StreetVm>,
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn a_sandbox_keeps_nothing_in_storage() {
-        use crate::vm::ports::Storage;
+        use crate::shared::ports::Storage;
         let r = rig(0);
         let uid = first(&r.vm);
         r.vm.edit(|e| e.nudge_width(uid, 100));

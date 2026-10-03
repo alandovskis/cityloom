@@ -4,11 +4,11 @@
 
 use std::fmt::Write;
 
-use crate::catalogue::KINDS;
+use crate::shared::catalogue::KINDS;
 use crate::model::{SegView, View};
-use crate::symbols::{SymbolOpts, symbol};
+use crate::shared::symbols::{SymbolOpts, symbol};
 use crate::vm::street_text::fit_phrase;
-use crate::units::Units;
+use crate::shared::units::Units;
 
 /// The heights of the drawing's bands, scaled with its width.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -689,7 +689,7 @@ mod tests {
         let segs = e.view().segments.len();
         for i in 0..segs {
             let u = uid(&e, i);
-            for c in 0..crate::catalogue::CURBS.len() {
+            for c in 0..crate::shared::catalogue::CURBS.len() {
                 if e.set_curb(u, Some(c)) {
                     let s = svg(&e);
                     assert!(!s.markup.contains("NaN"), "curb {c} on {i}");

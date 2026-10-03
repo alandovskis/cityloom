@@ -7,13 +7,13 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 
-use crate::catalogue::SAMPLES;
+use crate::shared::catalogue::SAMPLES;
 use crate::junction::*;
 use crate::junction_view::{CrossingView, JView};
 use crate::vm::junction::JunctionVm;
 use crate::ui::turns::{compass, turn_glyph, turn_name, turn_word};
 use crate::ui::watch::Watch;
-use crate::units::Units;
+use crate::shared::units::Units;
 
 // ---- text the panel is made of ---------------------------------------------
 

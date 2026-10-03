@@ -7,7 +7,7 @@ use leptos::prelude::*;
 use crate::junction::{Junction, Target};
 use crate::junction_view::{ArmView, JView};
 use crate::ui::keys::{Action, Step};
-use crate::units::Units;
+use crate::shared::units::Units;
 use crate::vm::junction::JunctionVm;
 
 /// What a component reads of the junction view-model and tells it. The view-model

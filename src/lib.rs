@@ -5,22 +5,20 @@
 
 #![recursion_limit = "1024"]
 
-pub mod atlas;
-pub mod catalogue;
 pub mod city;
 pub mod junction;
 pub mod junction_view;
 pub mod model;
 pub mod plan;
 pub mod street_measures;
-pub mod symbols;
-pub mod units;
+pub mod shared;
 pub mod vm;
 pub mod ui;
 
+use shared::{atlas, symbols};
 use wasm_bindgen::prelude::*;
 
-use catalogue::{CURBS, DIRECTIONS, KINDS, REGIONS, MATERIALS, SAMPLES};
+use shared::catalogue::{CURBS, DIRECTIONS, KINDS, REGIONS, MATERIALS, SAMPLES};
 
 fn json<T: serde::Serialize>(v: &T) -> String {
     serde_json::to_string(v).expect("view serialises")
@@ -36,7 +34,7 @@ pub struct Sheet(std::rc::Rc<vm::street::StreetVm>);
 impl Sheet {
     #[wasm_bindgen(constructor)]
     pub fn new(sample: usize) -> Sheet {
-        Sheet(vm::street::StreetVm::new(ui::platform::browser_ports(), model::Editor::new(sample), None))
+        Sheet(vm::street::StreetVm::new(shared::platform::browser_ports(), model::Editor::new(sample), None))
     }
 
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
@@ -88,7 +86,7 @@ pub struct Plan(std::rc::Rc<vm::junction::JunctionVm>);
 impl Plan {
     #[wasm_bindgen(constructor)]
     pub fn new(sample: usize) -> Plan {
-        Plan(vm::junction::JunctionVm::new(ui::platform::browser_ports(), junction::Junction::new(sample), None))
+        Plan(vm::junction::JunctionVm::new(shared::platform::browser_ports(), junction::Junction::new(sample), None))
     }
 
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
@@ -152,7 +150,7 @@ pub fn atlas() -> String {
 /// The name of a junction of the city kept in this browser; empty when there is none.
 #[wasm_bindgen]
 pub fn junction_name(node: u32) -> String {
-    vm::city_store::CityStore::new(ui::platform::browser_ports().storage).open().junction_name(node).unwrap_or_default()
+    vm::city_store::CityStore::new(shared::platform::browser_ports().storage).open().junction_name(node).unwrap_or_default()
 }
 
 /// The junction editor on one junction of the city kept in this browser, which
@@ -160,7 +158,7 @@ pub fn junction_name(node: u32) -> String {
 /// or it cannot be drawn with the streets as they now are.
 #[wasm_bindgen]
 pub fn open_junction(node: u32) -> Option<Plan> {
-    let ports = ui::platform::browser_ports();
+    let ports = shared::platform::browser_ports();
     let store = vm::city_store::CityStore::new(ports.storage.clone());
     let junction = store.open().junction_editor(node, store.region())?;
     let place = vm::binding::Place::Junction(node);
@@ -171,7 +169,7 @@ pub fn open_junction(node: u32) -> Option<Plan> {
 /// writes what is made back to the city. Nothing when there is no such street.
 #[wasm_bindgen]
 pub fn open_street(edge: u32) -> Option<Sheet> {
-    let ports = ui::platform::browser_ports();
+    let ports = shared::platform::browser_ports();
     let store = vm::city_store::CityStore::new(ports.storage.clone());
     let street = store.open().street_editor(edge, store.region())?;
     let place = vm::binding::Place::Street(edge);
@@ -182,5 +180,5 @@ pub fn open_street(edge: u32) -> Option<Sheet> {
 /// junction or where it leaves the map.
 #[wasm_bindgen]
 pub fn street_ends(edge: u32) -> String {
-    json(&vm::city_store::CityStore::new(ui::platform::browser_ports().storage).open().street_ends(edge))
+    json(&vm::city_store::CityStore::new(shared::platform::browser_ports().storage).open().street_ends(edge))
 }

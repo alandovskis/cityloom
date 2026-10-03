@@ -391,3 +391,8 @@ pub const SAMPLES: [Sample; 4] = [
         ],
     },
 ];
+
+/// Whether a kind of piece is part of the roadway, as opposed to the footway or the green.
+pub fn is_roadway(kind: usize) -> bool {
+    !matches!(KINDS[kind].mode, Mode::Foot | Mode::Green)
+}

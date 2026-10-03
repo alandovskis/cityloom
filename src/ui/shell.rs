@@ -8,7 +8,7 @@ use leptos::prelude::*;
 use leptos::web_sys::{Element, Event, EventTarget, HtmlElement, HtmlSelectElement, KeyboardEvent, MediaQueryList, MouseEvent};
 use wasm_bindgen::prelude::*;
 
-use crate::units::Units;
+use crate::shared::units::Units;
 use crate::vm::shell::{ShellVm, Target, Theme};
 
 fn listen<E: JsCast + 'static>(target: &EventTarget, event: &str, mut f: impl FnMut(E) + 'static) {
@@ -36,7 +36,7 @@ fn typing(target: Option<EventTarget>) -> bool {
 pub fn mount(target: Rc<dyn Target>, details_word: &'static str) {
     let tabs = all(".notes .tab").iter().map(|t| t.id()).collect();
     let dark = leptos::prelude::window().match_media("(prefers-color-scheme: dark)").ok().flatten();
-    let vm = ShellVm::new(crate::ui::platform::browser_ports(), target, details_word, tabs, dark.as_ref().is_some_and(|m| m.matches()));
+    let vm = ShellVm::new(crate::shared::platform::browser_ports(), target, details_word, tabs, dark.as_ref().is_some_and(|m| m.matches()));
     // The effects live as long as the page.
     let owner = Owner::new();
     owner.with(|| {

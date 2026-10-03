@@ -7,14 +7,14 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::catalogue::KINDS;
+use crate::shared::catalogue::KINDS;
 use crate::city::{City, CityView, EdgeView, NodeView};
-use crate::units::Units;
+use crate::shared::units::Units;
 use crate::vm::camera::{Camera, ScaleBar, World};
 use crate::vm::city_store::CityStore;
-use crate::vm::core::{Core, Presents};
+use crate::shared::core::{Core, Presents};
 use crate::vm::map_gestures::{MapGestures, Moved};
-use crate::vm::ports::Ports;
+use crate::shared::ports::Ports;
 
 pub const ARMED_RESET: &str = "Press again to start over";
 pub const RESET: &str = "Start over";
@@ -477,14 +477,14 @@ impl crate::vm::shell::Target for MapVm {
     }
 
     fn region_id(&self) -> String {
-        crate::catalogue::REGIONS[self.region()].id.to_string()
+        crate::shared::catalogue::REGIONS[self.region()].id.to_string()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vm::ports::{MemoryStorage, RecordingAnnouncer, test_ports};
+    use crate::shared::ports::{MemoryStorage, RecordingAnnouncer, test_ports};
 
     fn vm() -> (Rc<MapVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         let (ports, said, storage) = test_ports();

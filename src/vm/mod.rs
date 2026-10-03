@@ -6,14 +6,11 @@
 pub mod binding;
 pub mod camera;
 pub mod city_store;
-pub mod core;
 pub mod junction;
 pub mod junction_text;
-pub mod keeper;
 pub mod map;
 pub mod map_gestures;
 pub mod plan_frame;
-pub mod ports;
 pub mod shell;
 pub mod street;
 pub mod street_text;
