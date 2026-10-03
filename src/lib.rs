@@ -212,7 +212,9 @@ pub fn samples() -> String {
     json(&list)
 }
 
-/// One junction being edited.
+/// One junction being edited. The page drives it through the components the
+/// module mounts; the script only starts it up and hands it what the shell
+/// chooses (units, region).
 #[wasm_bindgen]
 pub struct Plan(std::rc::Rc<vm::junction::JunctionVm>);
 
@@ -223,24 +225,15 @@ impl Plan {
         Plan(vm::junction::JunctionVm::new(ui::platform::browser_ports(), junction::Junction::new(sample), None))
     }
 
-    pub fn load_sample(&mut self, sample: usize) {
-        self.0.edit(|j| j.load_sample(sample))
-    }
-
-    /// Where a point of the page falls on the plan, in millimetres from the
-    /// junction's centre: `[x, y]`, or empty before the plan is drawn.
-    pub fn point_at(&self, client_x: f64, client_y: f64) -> Vec<f64> {
-        let Some(frame) = self.0.frame() else { return Vec::new() };
-        let Some(svg) = leptos::prelude::document().get_element_by_id("drawing") else { return Vec::new() };
-        let r = svg.get_bounding_client_rect();
-        let (x, y) = frame.plan_point((client_x - r.left(), client_y - r.top()));
-        vec![x, y]
-    }
-
     /// Sets the units lengths are shown in, `"m"` or `"ft"`, in the parts of the
     /// page drawn by the components.
     pub fn set_units(&self, units: &str) {
         self.0.set_units(units::Units::parse(units));
+    }
+
+    /// Sets the region whose materials and rules apply.
+    pub fn set_region(&mut self, region: usize) -> bool {
+        self.0.edit(|j| j.set_region(region))
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -251,222 +244,6 @@ impl Plan {
     /// The whole drawable state as JSON.
     pub fn view(&self) -> String {
         json(&*self.0.view_now())
-    }
-
-    /// Adds a street at `bearing`, or in the widest gap when it is negative.
-    pub fn add_arm(&mut self, street: usize, bearing: i32) -> u32 {
-        self.0.edit(|j| j.add_arm(street, bearing))
-    }
-
-    /// Why the last edit was refused, in words. Read it after a call returned false.
-    pub fn refusal(&self) -> String {
-        self.0.read(|j| j.refusal().unwrap_or(junction::Refusal::DoesNotFit).message().to_string())
-    }
-
-    /// Adds a street facing the point (x, y) on the plan, in millimetres from
-    /// the junction's centre. Returns its uid, or 0 when there is no room.
-    pub fn add_arm_toward(&mut self, street: usize, x: f64, y: f64) -> u32 {
-        self.0.edit(|j| j.add_arm_toward(street, x, y))
-    }
-
-    pub fn remove_arm(&mut self, uid: u32) -> bool {
-        self.0.edit(|j| j.remove_arm(uid))
-    }
-
-    /// Turns an arm to face the point (x, y) on the plan.
-    pub fn drag_arm_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
-        self.0.edit(|j| j.drag_arm_to(uid, x, y))
-    }
-
-    /// Sets the corner radius clockwise of an arm from the corner handle's
-    /// dragged position (x, y).
-    pub fn drag_corner_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
-        self.0.edit(|j| j.drag_corner_to(uid, x, y))
-    }
-
-    /// Sets a crossing's setback from the crossing handle's dragged position (x, y).
-    pub fn drag_crossing_to(&mut self, uid: u32, x: f64, y: f64) -> bool {
-        self.0.edit(|j| j.drag_crossing_to(uid, x, y))
-    }
-
-    pub fn set_bearing(&mut self, uid: u32, degrees: i32) -> bool {
-        self.0.edit(|j| j.set_bearing(uid, degrees))
-    }
-
-    pub fn set_offset(&mut self, uid: u32, mm: i32) -> bool {
-        self.0.edit(|j| j.set_offset(uid, mm))
-    }
-
-    /// Sets the curb radius at the corner clockwise of an arm.
-    pub fn set_corner(&mut self, uid: u32, mm: i32) -> bool {
-        self.0.edit(|j| j.set_corner(uid, mm))
-    }
-
-    pub fn set_street(&mut self, uid: u32, street: usize) -> bool {
-        self.0.edit(|j| j.set_street(uid, street))
-    }
-
-    pub fn set_crossing(&mut self, uid: u32, on: bool) -> bool {
-        self.0.edit(|j| j.set_crossing(uid, on))
-    }
-
-    pub fn set_setback(&mut self, uid: u32, mm: i32) -> bool {
-        self.0.edit(|j| j.set_setback(uid, mm))
-    }
-
-    pub fn set_crossing_width(&mut self, uid: u32, mm: i32) -> bool {
-        self.0.edit(|j| j.set_crossing_width(uid, mm))
-    }
-
-    pub fn set_island(&mut self, uid: u32, on: bool) -> bool {
-        self.0.edit(|j| j.set_island(uid, on))
-    }
-
-    /// Side 0 is the arm's left curb, 1 its right.
-    pub fn set_bulb(&mut self, uid: u32, side: usize, on: bool) -> bool {
-        self.0.edit(|j| j.set_bulb(uid, side, on))
-    }
-
-    /// Lets an entering lane go to a street, by the street's uid, or not.
-    pub fn set_lane_dest(&mut self, uid: u32, lane: usize, to: u32, on: bool) -> bool {
-        self.0.edit(|j| j.set_lane_dest(uid, lane, to, on))
-    }
-
-    pub fn set_turn(&mut self, from: u32, to: u32, allowed: bool) -> bool {
-        self.0.edit(|j| j.set_turn(from, to, allowed))
-    }
-
-    pub fn set_bus_lane(&mut self, uid: u32, on: bool) -> bool {
-        self.0.edit(|j| j.set_bus_lane(uid, on))
-    }
-
-    /// Sets an arm's approach measure (G1, G2, G3, H1, H2), by index into
-    /// `junction_catalogue().approaches`.
-    pub fn set_approach(&mut self, uid: u32, approach: usize) -> bool {
-        self.0.edit(|j| j.set_approach(uid, approach))
-    }
-
-    pub fn set_approach_len(&mut self, uid: u32, mm: i32) -> bool {
-        self.0.edit(|j| j.set_approach_len(uid, mm))
-    }
-
-    /// Sets an arm's bus stop (M1, M2), by index into `junction_catalogue().stops`.
-    pub fn set_stop(&mut self, uid: u32, stop: usize) -> bool {
-        self.0.edit(|j| j.set_stop(uid, stop))
-    }
-
-    /// Sets an arm's turn management (L1 to L4), by index into `junction_catalogue().rules`.
-    pub fn set_rule(&mut self, uid: u32, rule: usize) -> bool {
-        self.0.edit(|j| j.set_rule(uid, rule))
-    }
-
-    /// A transit modal filter (N1).
-    pub fn set_filter(&mut self, uid: u32, on: bool) -> bool {
-        self.0.edit(|j| j.set_filter(uid, on))
-    }
-
-    /// Sets the control, by index into `junction_catalogue().controls`.
-    pub fn set_control(&mut self, control: usize) -> bool {
-        self.0.edit(|j| j.set_control(control))
-    }
-
-    /// Runs a bus lane across the middle of a roundabout between two streets
-    /// (uids); 0 for both takes it away.
-    pub fn set_bus(&mut self, a: u32, b: u32) -> bool {
-        self.0.edit(|j| j.set_bus((a != 0 && b != 0).then_some((a, b))))
-    }
-
-    /// Puts a cycle track of this width around a roundabout; 0 takes it away.
-    pub fn set_cycle(&mut self, width_mm: i32) -> bool {
-        self.0.edit(|j| j.set_cycle((width_mm > 0).then_some(width_mm)))
-    }
-
-    pub fn set_ring(&mut self, extra_mm: i32) -> bool {
-        self.0.edit(|j| j.set_ring(extra_mm))
-    }
-
-    /// Sets the roundabout's outside radius; smaller than its least size is the least size.
-    pub fn set_ring_radius(&mut self, radius_mm: i32) -> bool {
-        self.0.edit(|j| j.set_ring_radius(radius_mm))
-    }
-
-    /// Puts a cycle track at its usual width around a roundabout, or takes it away.
-    pub fn set_cycle_track(&mut self, on: bool) -> bool {
-        self.0.edit(|j| j.set_cycle_track(on))
-    }
-
-    /// The `step_*` calls move one number by its step, `dir` 1 up and -1 down,
-    /// within its limits.
-    pub fn step_bearing(&mut self, uid: u32, dir: i32) -> bool {
-        self.0.edit(|j| j.step_bearing(uid, dir))
-    }
-
-    pub fn step_offset(&mut self, uid: u32, dir: i32) -> bool {
-        self.0.edit(|j| j.step_offset(uid, dir))
-    }
-
-    pub fn step_corner(&mut self, uid: u32, dir: i32) -> bool {
-        self.0.edit(|j| j.step_corner(uid, dir))
-    }
-
-    pub fn step_setback(&mut self, uid: u32, dir: i32) -> bool {
-        self.0.edit(|j| j.step_setback(uid, dir))
-    }
-
-    pub fn step_crossing_width(&mut self, uid: u32, dir: i32) -> bool {
-        self.0.edit(|j| j.step_crossing_width(uid, dir))
-    }
-
-    pub fn step_approach_len(&mut self, uid: u32, dir: i32) -> bool {
-        self.0.edit(|j| j.step_approach_len(uid, dir))
-    }
-
-    pub fn step_ring(&mut self, dir: i32) -> bool {
-        self.0.edit(|j| j.step_ring(dir))
-    }
-
-    pub fn step_cycle(&mut self, dir: i32) -> bool {
-        self.0.edit(|j| j.step_cycle(dir))
-    }
-
-    /// Sets the region, by index into `materials().regions`.
-    pub fn set_region(&mut self, region: usize) -> bool {
-        self.0.edit(|j| j.set_region(region))
-    }
-
-    pub fn begin_gesture(&mut self) {
-        self.0.edit(|j| j.begin_gesture())
-    }
-
-    pub fn end_gesture(&mut self) -> bool {
-        self.0.edit(|j| j.end_gesture())
-    }
-
-    pub fn cancel_gesture(&mut self) {
-        self.0.edit(|j| j.cancel_gesture())
-    }
-
-    pub fn undo(&mut self) -> bool {
-        self.0.edit(|j| j.undo())
-    }
-
-    pub fn redo(&mut self) -> bool {
-        self.0.edit(|j| j.redo())
-    }
-
-    pub fn reset(&mut self) -> bool {
-        self.0.edit(|j| j.reset())
-    }
-
-    /// Selects what the view calls `kind` (its `selected.kind`: arm, corner,
-    /// crossing, lane, bus or cycle) at `uid`, and at `lane` for a lane; any
-    /// other name clears the selection.
-    pub fn select(&mut self, kind: &str, uid: u32, lane: usize) {
-        self.0.edit(|j| j.select(junction::Target::named(kind, uid, lane)))
-    }
-
-    pub fn select_relative(&mut self, delta: i32) {
-        self.0.edit(|j| j.select_relative(delta))
     }
 }
 
