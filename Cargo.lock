@@ -267,6 +267,7 @@ dependencies = [
  "any_spawner",
  "js-sys",
  "leptos",
+ "osm_network",
  "serde",
  "serde_json",
  "wasm-bindgen",
@@ -1830,10 +1831,17 @@ dependencies = [
  "abstutil",
  "instant",
  "osm2streets",
- "serde",
+ "osm_network",
  "serde_json",
  "streets_reader",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "osm_network"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
 osm2streets = { git = "https://github.com/a-b-street/osm2streets" }
 streets_reader = { git = "https://github.com/a-b-street/osm2streets" }
 abstutil = { git = "https://github.com/a-b-street/abstreet" }
-serde = { version = "1.0.229", features = ["derive"] }
+osm_network = { path = "../osm_network" }
 serde_json = "1.0.151"
 wasm-bindgen = "0.2.129"
 instant = { version = "0.1.13", features = ["wasm-bindgen"] }

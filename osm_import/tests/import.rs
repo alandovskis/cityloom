@@ -26,3 +26,8 @@ fn a_road_keeps_its_lanes_and_the_osm_way_it_came_from() {
     assert!(main.lanes.iter().all(|l| l.width_m > 0.0));
     assert!(main.points.len() >= 2);
 }
+
+#[test]
+fn a_crossing_in_london_keeps_to_the_left() {
+    assert!(import(CROSSING).unwrap().left_hand);
+}

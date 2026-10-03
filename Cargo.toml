@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+osm_network = { path = "osm_network" }
 any_spawner = { version = "0.3.0", features = ["wasm-bindgen"] }
 js-sys = "0.3.106"
 leptos = { version = "0.8.21", features = ["csr"] }
@@ -14,7 +15,7 @@ wasm-bindgen-futures = "0.4.79"
 web-sys = { version = "0.3.106", features = ["ResizeObserver", "ResizeObserverEntry", "FocusOptions", "DomRect", "PointerEvent", "Element", "HtmlElement", "Window", "KeyboardEvent", "CssStyleDeclaration", "HtmlBodyElement", "Document", "Node", "EventTarget", "ScrollIntoViewOptions", "ScrollLogicalPosition", "ScrollBehavior", "MediaQueryList", "Storage", "NodeList", "HtmlDetailsElement", "WheelEvent", "StorageEvent", "PageTransitionEvent", "HtmlSelectElement", "HtmlOptionElement", "MouseEvent", "FocusEvent", "MediaQueryListEvent", "Event", "Location", "Request", "RequestInit", "RequestMode", "Response", "Headers", "AbortSignal"] }
 
 [workspace]
-members = [".", "osm_import"]
+members = [".", "osm_import", "osm_network"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
