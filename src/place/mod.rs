@@ -5,6 +5,7 @@ pub mod area;
 pub mod loader;
 pub mod nominatim;
 pub mod overpass;
+pub mod view;
 pub mod vm;
 
 /// A box on the earth, in degrees.

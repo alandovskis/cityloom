@@ -73,7 +73,7 @@ pub fn mount_home() -> MapPage {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
     mount("hero-map-slot", view! { <home::HeroMap vm=vm.clone()/> }.into_any());
-    mount("search-slot", view! { <view::SearchBox vm=vm.clone()/> }.into_any());
+    mount("search-slot", view! { <crate::place::view::AreaSearch vm=crate::place::vm::AreaVm::new(browser_ports())/> }.into_any());
     mount("hero-facts-slot", view! { <home::HeroFacts vm=vm.clone()/> }.into_any());
     MapPage(vm)
 }

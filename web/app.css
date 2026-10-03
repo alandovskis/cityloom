@@ -439,6 +439,10 @@ a.btn {
 .search-go:hover {
   filter: brightness(0.94);
 }
+.search-go[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: progress;
+}
 .search-key {
   position: absolute;
   right: 12px;
@@ -640,6 +644,15 @@ a.btn {
   color: var(--ink);
   text-decoration: none;
   transition: background-color 120ms var(--ease-out);
+}
+.place-row {
+  /* a row that is a button, as in a list of places to choose from */
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .place-row:hover,
 .place-row.on {

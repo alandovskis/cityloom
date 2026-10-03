@@ -1,4 +1,41 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+import type { Page } from "@playwright/test";
+
 import { expect, live, STREET, test } from "./fixtures";
+
+const CORS = { "access-control-allow-origin": "*" };
+const EXTRACT = fileURLToPath(new URL("../../osm_import/tests/data/kreuzberg.osm", import.meta.url));
+
+/** The two services a place is found and read from, answered without a network: Nominatim with two
+ *  places, and Overpass with the real extract of Kreuzberg, which the OSM reader in the browser reads. */
+const stubWorld = async (page: Page, requests: string[] = []) => {
+  await page.route("https://nominatim.openstreetmap.org/**", (route) => {
+    requests.push(route.request().url());
+    return route.fulfill({
+      headers: CORS,
+      json: [
+        {
+          display_name: "Kreuzberg, Friedrichshain-Kreuzberg, Berlin, 10999, Germany",
+          lat: "52.4990",
+          lon: "13.4030",
+          boundingbox: ["52.48", "52.51", "13.38", "13.43"],
+        },
+        {
+          display_name: "Kreuzberg, Bavaria, Germany",
+          lat: "50.0",
+          lon: "10.0",
+          boundingbox: ["49.9", "50.1", "9.9", "10.1"],
+        },
+      ],
+    });
+  });
+  await page.route("https://overpass-api.de/**", (route) => {
+    requests.push(route.request().url());
+    return route.fulfill({ headers: CORS, contentType: "application/xml", body: readFileSync(EXTRACT) });
+  });
+};
 
 test.describe("the home page", () => {
   test.beforeEach(async ({ page }) => {
@@ -10,7 +47,7 @@ test.describe("the home page", () => {
     await expect(page).toHaveTitle("CityLoom: redesign the streets of your city");
     await expect(page.locator("h1")).toHaveText("Redesign the streets of your city.");
     await expect(page.locator(".lead")).toContainText("rearrange it");
-    await expect(page.locator(".hero-note")).toContainText("placeholders");
+    await expect(page.locator(".hero-note")).toContainText("OpenStreetMap");
   });
 
   test("puts the search box in the middle of the first screen, and it is big", async ({ page }) => {
@@ -19,22 +56,50 @@ test.describe("the home page", () => {
     expect(box.height).toBeGreaterThanOrEqual(56);
     expect(box.width).toBeGreaterThan(400);
     expect(box.y).toBeLessThan(viewport.height * 0.7);
-    await expect(page.locator("#search")).toHaveAttribute("placeholder", "Search places");
+    await expect(page.locator("#search")).toHaveAttribute("placeholder", /Find a place/);
   });
 
-  test("a search finds places and Enter opens the first", async ({ page }) => {
-    await page.locator("#search").fill("avenue");
-    await expect(page.locator('#search-results [role="option"]').first()).toContainText("Sample Avenue");
+  test("a search finds places, and Enter opens the first one's streets on the map", async ({ page }) => {
+    const requests: string[] = [];
+    await stubWorld(page, requests);
+    await page.locator("#search").fill("Kreuzberg");
+    expect(requests).toEqual([]); // nothing is asked until the person asks
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/street\.html\?street=\d+$/);
+    await expect(page.locator('#area-results [role="option"]')).toHaveCount(2);
+    await expect(page.locator('#area-results [role="option"]').first()).toContainText(
+      "Kreuzberg, Friedrichshain-Kreuzberg",
+    );
+    await expect(page.locator(".search-note")).toContainText("2 places found");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/map\.html$/);
+    await expect(page.locator("#title-block")).toContainText("Kreuzberg, Friedrichshain-Kreuzberg");
+    expect(await page.locator("#map-slot a[href^='street.html']").count()).toBeGreaterThan(50);
+    expect(requests.some((r) => r.startsWith("https://overpass-api.de/"))).toBe(true);
   });
 
-  test("has a Search button, and it opens the first place found", async ({ page }) => {
-    const go = page.getByRole("button", { name: "Search" });
+  test("has a Find button, which becomes Open once there are places to open", async ({ page }) => {
+    await stubWorld(page);
+    const go = page.getByRole("button", { name: "Find" });
     await expect(go).toBeVisible();
-    await page.locator("#search").fill("junction 1");
+    await page.locator("#search").fill("Kreuzberg");
     await go.click();
-    await expect(page).toHaveURL(/intersection\.html\?junction=\d+$/);
+    await expect(page.getByRole("button", { name: "Open" })).toBeVisible();
+    await page.locator('#area-results [role="option"]').nth(0).click();
+    await expect(page).toHaveURL(/map\.html$/);
+  });
+
+  test("a place whose streets cannot be got says so and stays on the page", async ({ page, errors }) => {
+    await stubWorld(page);
+    await page.route("https://overpass-api.de/**", (route) => route.fulfill({ status: 504, headers: CORS, body: "" }));
+    await page.locator("#search").fill("Kreuzberg");
+    await page.keyboard.press("Enter");
+    await expect(page.locator('#area-results [role="option"]')).toHaveCount(2);
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".search-note")).toContainText("could not be fetched");
+    await expect(page).toHaveURL(/\/$/);
+    errors.length = 0; // the browser logs the failed request, which is the point
   });
 
   test("the search is a white field with a clear edge, not a grey one", async ({ page }) => {
