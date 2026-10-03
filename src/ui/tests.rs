@@ -493,3 +493,85 @@ fn the_plan_follows_the_units_and_the_selection() {
     assert!(h.contains("2 × 29.5") && h.contains("66 ft"));
     assert_eq!(count(&h, "class=\"arm on\""), 1);
 }
+
+// ---- what the keys do on the street ---------------------------------------------------
+
+use crate::model::Editor;
+use crate::ui::sheet::SharedSheet;
+use crate::ui::sheet_watch::SheetWatch;
+use crate::ui::street_keys::Action as StreetAction;
+
+fn street_watch() -> (Rc<SharedSheet>, SheetWatch) {
+    let s = SharedSheet::new(Editor::new(0));
+    let w = SheetWatch::new(s.clone());
+    live::take_said();
+    (s, w)
+}
+
+fn segment(s: &SharedSheet, i: usize) -> u32 {
+    s.view().segments[i].uid
+}
+
+#[test]
+fn nudging_changes_the_selected_piece_s_width_and_says_so() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = street_watch();
+    let u = segment(&s, 2);
+    s.select_in_page(Some(u));
+    live::take_said();
+    w.apply(StreetAction::Nudge(100));
+    assert_eq!(s.view().segments[2].width_mm, 3_400);
+    assert!(live::take_said()[0].contains(". "));
+    w.apply(StreetAction::Nudge(-500));
+    assert_eq!(s.view().segments[2].width_mm, 2_900);
+}
+
+#[test]
+fn nudging_with_nothing_selected_changes_nothing() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = street_watch();
+    w.apply(StreetAction::Nudge(100));
+    w.apply(StreetAction::Remove);
+    w.apply(StreetAction::Move(1));
+    assert_eq!(s.view().revisions.len(), 0);
+}
+
+#[test]
+fn a_piece_moves_one_place_along_and_stops_at_the_ends() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = street_watch();
+    let first = segment(&s, 0);
+    s.select_in_page(Some(first));
+    w.apply(StreetAction::Move(-1));
+    assert_eq!(segment(&s, 0), first, "already first");
+    w.apply(StreetAction::Move(1));
+    assert_eq!(segment(&s, 1), first);
+    assert_eq!(s.view().revisions.len(), 1);
+}
+
+#[test]
+fn the_selection_moves_along_the_pieces_and_escape_clears_it() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = street_watch();
+    w.apply(StreetAction::Select(1));
+    assert!(s.view().selected.is_some());
+    assert_eq!(live::take_said().len(), 1);
+    w.apply(StreetAction::Escape);
+    assert_eq!(s.view().selected, None);
+}
+
+#[test]
+fn removing_takes_the_selected_piece_away() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = street_watch();
+    let u = segment(&s, 0);
+    s.select_in_page(Some(u));
+    w.apply(StreetAction::Remove);
+    assert_eq!(s.view().segments.len(), 5);
+    assert!(s.view().segments.iter().all(|x| x.uid != u));
+}

@@ -229,6 +229,11 @@ fn curbs(v: &View, g: &Geometry) -> String {
     out
 }
 
+/// What a screen reader is told the drawing is.
+pub fn street_label(v: &View, units: Units) -> String {
+    format!("Cross-section of {}. {} segments, {} of {}. {}.", v.name, v.segments.len(), units.length_fine(v.total_mm), units.length_fine(v.row_mm), fit_phrase(v, units))
+}
+
 /// The street drawn `width` wide: `ui` is what the pointer is doing to it.
 pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> StreetSvg {
     let g = Geometry::fit(width, v.row_mm);
@@ -452,8 +457,7 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
         }
     }
 
-    let label = format!("Cross-section of {}. {} segments, {} of {}. {}.", v.name, n, length(v.total_mm), length(v.row_mm), fit_phrase(v, units));
-    StreetSvg { geometry: g, label, markup: p, row_right: xr, over }
+    StreetSvg { geometry: g, label: street_label(v, units), markup: p, row_right: xr, over }
 }
 
 #[cfg(test)]
