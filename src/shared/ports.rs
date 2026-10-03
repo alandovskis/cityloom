@@ -23,9 +23,19 @@ pub trait Scheduler {
     fn cancel(&self, id: u32);
 }
 
+/// What came back from a request: the body, or what went wrong, in words.
+pub type Fetched = Result<Vec<u8>, String>;
+
+/// Asks a server for something. The answer arrives later, once, to `done`.
+pub trait Fetcher {
+    /// `body` makes it a POST of that text; without one it is a GET.
+    fn fetch(&self, url: &str, body: Option<&str>, done: Box<dyn FnOnce(Fetched)>);
+}
+
 /// The platform services a view-model is given.
 #[derive(Clone)]
 pub struct Ports {
+    pub fetcher: Rc<dyn Fetcher>,
     pub announcer: Rc<dyn Announcer>,
     pub storage: Rc<dyn Storage>,
     pub scheduler: Rc<dyn Scheduler>,
@@ -121,6 +131,40 @@ impl Scheduler for ManualScheduler {
     }
 }
 
+/// A fetcher that keeps its requests until the test answers them.
+#[derive(Default)]
+pub struct FakeFetcher {
+    asked: RefCell<Vec<(String, Option<String>, Box<dyn FnOnce(Fetched)>)>>,
+}
+
+impl FakeFetcher {
+    /// The url and body of each request not yet answered, oldest first.
+    pub fn asked(&self) -> Vec<(String, Option<String>)> {
+        self.asked.borrow().iter().map(|(u, b, _)| (u.clone(), b.clone())).collect()
+    }
+
+    /// Answers the oldest request not yet answered. False when there is none.
+    pub fn answer(&self, result: Fetched) -> bool {
+        let first = {
+            let mut asked = self.asked.borrow_mut();
+            if asked.is_empty() { None } else { Some(asked.remove(0)) }
+        };
+        match first {
+            Some((_, _, done)) => {
+                done(result);
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+impl Fetcher for FakeFetcher {
+    fn fetch(&self, url: &str, body: Option<&str>, done: Box<dyn FnOnce(Fetched)>) {
+        self.asked.borrow_mut().push((url.to_string(), body.map(str::to_string), done));
+    }
+}
+
 /// Ports for a test, with the fakes kept so the test can look at them.
 pub fn test_ports() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
     let (ports, announcer, storage, _) = test_ports_with_time();
@@ -132,7 +176,16 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
     let announcer = Rc::new(RecordingAnnouncer::default());
     let storage = Rc::new(MemoryStorage::default());
     let scheduler = Rc::new(ManualScheduler::default());
-    (Ports { announcer: announcer.clone(), storage: storage.clone(), scheduler: scheduler.clone() }, announcer, storage, scheduler)
+    let fetcher = Rc::new(FakeFetcher::default());
+    (Ports { fetcher, announcer: announcer.clone(), storage: storage.clone(), scheduler: scheduler.clone() }, announcer, storage, scheduler)
+}
+
+/// The same, with the fetcher too.
+pub fn test_ports_with_fetcher() -> (Ports, Rc<FakeFetcher>) {
+    let (mut ports, ..) = test_ports_with_time();
+    let fetcher = Rc::new(FakeFetcher::default());
+    ports.fetcher = fetcher.clone();
+    (ports, fetcher)
 }
 
 #[cfg(test)]
@@ -157,6 +210,21 @@ mod tests {
         s.blocked(true);
         assert!(!s.remember("k", "w"));
         assert_eq!(s.recall("k").as_deref(), Some("v"));
+    }
+
+    #[test]
+    fn the_fake_fetcher_keeps_requests_and_answers_the_oldest_first() {
+        let f = FakeFetcher::default();
+        let got = Rc::new(RefCell::new(Vec::new()));
+        let (a, b) = (got.clone(), got.clone());
+        f.fetch("u1", None, Box::new(move |r| a.borrow_mut().push(("one", r))));
+        f.fetch("u2", Some("q"), Box::new(move |r| b.borrow_mut().push(("two", r))));
+        assert_eq!(f.asked(), vec![("u1".to_string(), None), ("u2".to_string(), Some("q".to_string()))]);
+        assert!(f.answer(Ok(b"x".to_vec())));
+        assert!(f.answer(Err("down".into())));
+        assert!(!f.answer(Ok(vec![])));
+        assert_eq!(*got.borrow(), vec![("one", Ok(b"x".to_vec())), ("two", Err("down".to_string()))]);
+        assert!(f.asked().is_empty());
     }
 
     #[test]
