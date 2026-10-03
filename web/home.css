@@ -47,7 +47,7 @@ body.home {
 }
 .hero-card {
   width: min(780px, 100%);
-  padding: clamp(28px, 4vw, 48px);
+  padding: 44px 48px;
   border-radius: 28px;
   background: var(--panel);
   box-shadow: var(--shadow);
@@ -157,6 +157,7 @@ body.home {
   }
   .hero-card {
     width: 100%;
+    padding: 28px 22px;
   }
 }
 
