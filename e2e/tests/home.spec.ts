@@ -84,6 +84,21 @@ test.describe("the home page", () => {
     expect(inside).toBe(false);
   });
 
+  test("fits the city beside the card, so no street is cut by it, and lets it run off the right edge", async ({
+    page,
+  }) => {
+    const card = (await page.locator(".hero-card").boundingBox())!;
+    const west = await page
+      .locator(".hero-map #map .m-jc")
+      .evaluateAll((els) => Math.min(...els.map((e) => e.getBoundingClientRect().left)));
+    expect(west).toBeGreaterThan(card.x + card.width);
+    const east = await page
+      .locator(".hero-map #map .m-jc")
+      .evaluateAll((els) => Math.max(...els.map((e) => e.getBoundingClientRect().right)));
+    expect(east).toBeLessThanOrEqual(page.viewportSize()!.width + 0.14 * page.viewportSize()!.width);
+    await expect(page.locator(".hero-map #map .m-name").first()).toBeHidden();
+  });
+
   test("says how the city stands, and says so when a place needs attention", async ({ page }) => {
     await expect(page.locator(".hero-facts")).toContainText("Sample city: 9 junctions, 23 streets.");
     await expect(page.locator(".hero-facts")).toContainText("Every check passes.");

@@ -130,6 +130,25 @@ test.describe("the map under the floating panels", () => {
     expect(Math.abs((c.l + c.r) / 2 - (open.l + open.r) / 2)).toBeLessThan(30);
   });
 
+  test("the streets are named at the zoom that fits the city, and drawn wide enough to see", async ({ page }) => {
+    await page.goto("/map.html");
+    await expect(page.locator("#map .m-jc").first()).toBeVisible();
+    expect(await page.locator("#map .m-name").count()).toBeGreaterThanOrEqual(6);
+    const road = await page
+      .locator("#map .m-out")
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().height);
+    expect(
+      Math.max(
+        road,
+        await page
+          .locator("#map .m-out")
+          .first()
+          .evaluate((el) => el.getBoundingClientRect().width),
+      ),
+    ).toBeGreaterThanOrEqual(15);
+  });
+
   test("hiding the panels gives the map the room back and Whole city centres it again", async ({ page }) => {
     await page.goto("/map.html");
     await expect(page.locator("#map .m-jc").first()).toBeVisible();

@@ -95,11 +95,27 @@ fn window_of(el: &Element) -> (f64, f64, (f64, f64)) {
     (r.width(), r.height(), (r.left() + r.width() / 2.0, r.top() + r.height() / 2.0))
 }
 
+/// Has `observer` watch everything that floats over the map, so it fits again
+/// when a panel appears, goes or changes size.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn observe_covers(observer: &leptos::web_sys::ResizeObserver) {
+    if let Ok(covers) = leptos::prelude::document().query_selector_all("[data-covers]") {
+        for i in 0..covers.length() {
+            if let Some(c) = covers.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
+                observer.observe(&c);
+            }
+        }
+    }
+}
+
 /// How much of the map's box the floating panels and bars (marked `data-covers`)
 /// cover along each edge, plus a gap. Anything that does not overlap the map, as
 /// when the panels stack below it on a phone, covers nothing.
+///
+/// An element can say which edge it covers, `data-covers="left"`, when its size
+/// and place do not make that plain.
 #[cfg(target_arch = "wasm32")]
-fn insets_of(map: &Element) -> Insets {
+pub(crate) fn insets_of(map: &Element) -> Insets {
     const GAP: f64 = 16.0;
     let m = map.get_bounding_client_rect();
     let mut insets = Insets::default();
@@ -111,9 +127,10 @@ fn insets_of(map: &Element) -> Insets {
         if !overlaps {
             continue;
         }
-        let hugs_left = r.left() - m.left() < GAP * 2.0;
-        let hugs_right = m.right() - r.right() < GAP * 2.0;
-        if r.width() < m.width() * 0.5 && (hugs_left || hugs_right) {
+        let said = c.get_attribute("data-covers").unwrap_or_default();
+        let hugs_left = said == "left" || (said.is_empty() && r.left() - m.left() < GAP * 2.0);
+        let hugs_right = said == "right" || (said.is_empty() && m.right() - r.right() < GAP * 2.0);
+        if (said == "left" || said == "right") || (r.width() < m.width() * 0.5 && (hugs_left || hugs_right)) {
             // A panel down one side.
             if hugs_left {
                 insets.left = insets.left.max(r.right() - m.left() + GAP);
@@ -163,13 +180,7 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
             if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
                 o.observe(&el);
                 // Panels and bars that float over the map say so, and are watched too.
-                if let Ok(covers) = leptos::prelude::document().query_selector_all("[data-covers]") {
-                    for i in 0..covers.length() {
-                        if let Some(c) = covers.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
-                            o.observe(&c);
-                        }
-                    }
-                }
+                observe_covers(&o);
             }
             observer.forget();
             // A drag that ends over a place must not open it.

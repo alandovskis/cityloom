@@ -34,7 +34,10 @@ pub fn HeroMap(vm: Rc<MapVm>) -> impl IntoView {
                 move || {
                     let r = el.get_bounding_client_rect();
                     if r.width() > 0.0 && r.height() > 0.0 {
-                        vm.with(|v| v.resize(r.width(), r.height()));
+                        vm.with(|v| {
+                            v.set_insets(crate::map::view::insets_of(&el));
+                            v.resize(r.width(), r.height());
+                        });
                     }
                 }
             };
@@ -42,6 +45,7 @@ pub fn HeroMap(vm: Rc<MapVm>) -> impl IntoView {
             let observer = Closure::<dyn FnMut(leptos::web_sys::js_sys::Array)>::new(move |_| fit());
             if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
                 o.observe(&el);
+                crate::map::view::observe_covers(&o);
             }
             observer.forget();
         });

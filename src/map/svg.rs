@@ -75,7 +75,7 @@ impl Geometry {
 }
 
 /// The narrowest a street is drawn, in pixels.
-const MIN_STREET_PX: f64 = 13.0;
+const MIN_STREET_PX: f64 = 16.0;
 
 /// A street ready to draw: its geometry, width, where its road lies and where its details run.
 struct Laid<'a> {
@@ -201,7 +201,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
     }
 
     // Names sit beside a street, on the upper side, where it is long enough to hold one.
-    for l in laid.iter().filter(|l| (l.t1 - l.t0) * k >= 150.0) {
+    for l in laid.iter().filter(|l| (l.t1 - l.t0) * k >= 110.0) {
         let tm = (l.t0 + l.t1) / 2.0;
         let mut ang = l.g.uy.atan2(l.g.ux).to_degrees();
         if !(-90.0..=90.0).contains(&ang) {
@@ -351,6 +351,15 @@ mod tests {
             .fold((i32::MAX, i32::MIN), |(lo, hi), p| (lo.min(p.offset_mm - p.width_mm / 2), hi.max(p.offset_mm + p.width_mm / 2)));
         let true_ratio = (hi - lo) as f64 / e.row_mm as f64;
         assert!((road / row - true_ratio).abs() < 0.02, "{} vs {true_ratio}", road / row);
+    }
+
+    #[test]
+    fn the_streets_are_named_at_the_zoom_that_fits_the_city_in_a_laptop_window() {
+        let v = view();
+        let world = crate::map::camera::World::round(v.bounds_mm);
+        let camera = crate::map::camera::Camera::new(world, 650.0, 800.0);
+        let at_fit = map_svg(&v, camera.k, Units::Metres);
+        assert!(count(&at_fit, "class=\"m-name\"") >= 6, "{}", count(&at_fit, "class=\"m-name\""));
     }
 
     fn count(s: &str, needle: &str) -> usize {

@@ -7,7 +7,7 @@
 
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
-  --land: #e9edf0;
+  --land: #e2e7ec;
   --panel: #ffffff;
   --ink: #111827;
   --ink-2: #4b5563;
@@ -42,17 +42,17 @@
   --rw: calc(var(--pad) + var(--panel-w));
 
   /* The drawing of the city. */
-  --casing: #8793a1;
+  --casing: #7d8996;
   --road: #ffffff;
-  --k-sidewalk: #d9dfe5;
-  --k-planting: #b9dfae;
-  --k-bike: #9fdfd2;
+  --k-sidewalk: #cfd7de;
+  --k-planting: #a5d696;
+  --k-bike: #7fd3c3;
   --k-travel: #ffffff;
-  --k-bus: #f5b4a8;
-  --k-parking: #cdd4db;
-  --k-median: #a6d29a;
-  --k-loading: #f8e29c;
-  --k-shoulder: #dde2e8;
+  --k-bus: #f2a99b;
+  --k-parking: #b9c2cc;
+  --k-median: #93c98a;
+  --k-loading: #f6d777;
+  --k-shoulder: #cbd3db;
   --k-bikerack: #cdd6e2;
   --k-bikeshare: #b5c7e8;
   --k-pole: #9aa4b0;
@@ -61,7 +61,7 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --land: #12161b;
+  --land: #0f1317;
   --panel: #1b2127;
   --ink: #e8edf2;
   --ink-2: #b7c1cb;
@@ -84,17 +84,17 @@
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px rgb(0 0 0 / 0.5);
   --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
 
-  --casing: #55616d;
-  --road: #2a323a;
-  --k-sidewalk: #333c45;
+  --casing: #6a7886;
+  --road: #3a4550;
+  --k-sidewalk: #27303a;
   --k-planting: #3c6a39;
   --k-bike: #2f7468;
-  --k-travel: #20262c;
+  --k-travel: #3a4550;
   --k-bus: #8a4b43;
-  --k-parking: #39424b;
+  --k-parking: #2f3943;
   --k-median: #3f7438;
   --k-loading: #8a7a2b;
-  --k-shoulder: #2d353d;
+  --k-shoulder: #232b33;
   --k-bikerack: #46525f;
   --k-bikeshare: #3f5a85;
   --k-pole: #75808c;
@@ -104,7 +104,7 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
 
-    --land: #12161b;
+    --land: #0f1317;
     --panel: #1b2127;
     --ink: #e8edf2;
     --ink-2: #b7c1cb;
@@ -127,17 +127,17 @@
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px rgb(0 0 0 / 0.5);
     --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
 
-    --casing: #55616d;
-    --road: #2a323a;
-    --k-sidewalk: #333c45;
+    --casing: #6a7886;
+    --road: #3a4550;
+    --k-sidewalk: #27303a;
     --k-planting: #3c6a39;
     --k-bike: #2f7468;
-    --k-travel: #20262c;
+    --k-travel: #3a4550;
     --k-bus: #8a4b43;
-    --k-parking: #39424b;
+    --k-parking: #2f3943;
     --k-median: #3f7438;
     --k-loading: #8a7a2b;
-    --k-shoulder: #2d353d;
+    --k-shoulder: #232b33;
     --k-bikerack: #46525f;
     --k-bikeshare: #3f5a85;
     --k-pole: #75808c;
@@ -1050,6 +1050,10 @@ a.btn {
 }
 .swatch rect {
   stroke: none;
+}
+/* The key shows the flat tints the map is drawn in, not the editors' hatch. */
+.swatch rect[fill^="url"] {
+  display: none;
 }
 .k-sidewalk {
   fill: var(--k-sidewalk);

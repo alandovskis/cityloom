@@ -7,7 +7,7 @@ use crate::shared::units::Units;
 const ZOOM_OUT: f64 = 0.8;
 const ZOOM_IN: f64 = 10.0;
 /// Room round the city, in metres.
-const MARGIN_M: f64 = 70.0;
+const MARGIN_M: f64 = 30.0;
 
 /// The box the camera looks over, in metres.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -172,13 +172,13 @@ mod tests {
     #[test]
     fn the_world_is_the_city_with_a_margin_all_round() {
         let w = city();
-        assert_eq!((w.x0, w.y0, w.x1, w.y1), (-70.0, -70.0, 1070.0, 570.0));
+        assert_eq!((w.x0, w.y0, w.x1, w.y1), (-30.0, -30.0, 1030.0, 530.0));
     }
 
     #[test]
     fn a_new_camera_fits_the_whole_city_in_the_window_and_centres_on_it() {
         let c = Camera::new(city(), 800.0, 520.0);
-        assert!((c.k - (800.0_f64 / 1140.0).min(520.0 / 640.0)).abs() < 1e-12);
+        assert!((c.k - (800.0_f64 / 1060.0).min(520.0 / 560.0)).abs() < 1e-12);
         assert_eq!((c.cx, c.cy), (500.0, 250.0));
         assert!(!c.moved);
         assert_eq!(c.k, c.fit_k);

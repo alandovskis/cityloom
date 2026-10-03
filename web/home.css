@@ -12,13 +12,15 @@ body.home {
   z-index: 0;
   top: 0;
   bottom: 0;
-  left: min(760px, 50vw);
+  left: 0;
   right: -14vw;
   bottom: -10vh;
   pointer-events: none;
-  /* The streets come out from under the card rather than stopping at its edge. */
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 160px);
-  mask-image: linear-gradient(to right, transparent 0, #000 160px);
+}
+/* A backdrop: its names would be cut by the card, and nothing in it is read. */
+.hero-map #map .m-name,
+.hero-map #map .m-tag {
+  display: none;
 }
 .hero-map svg {
   position: absolute;
@@ -162,8 +164,6 @@ body.home {
     margin: 0 8px 8px;
     border-radius: var(--r-card);
     overflow: hidden;
-    -webkit-mask-image: none;
-    mask-image: none;
   }
   body.home {
     display: flex;
