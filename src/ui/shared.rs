@@ -8,16 +8,18 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::junction::Junction;
+use crate::units::Units;
 
 pub struct Shared {
     model: RefCell<Junction>,
     version: ArcRwSignal<u32>,
+    units: ArcRwSignal<Units>,
     on_edit: RefCell<Option<js_sys::Function>>,
 }
 
 impl Shared {
     pub fn new(model: Junction) -> Rc<Shared> {
-        Rc::new(Shared { model: RefCell::new(model), version: ArcRwSignal::new(0), on_edit: RefCell::new(None) })
+        Rc::new(Shared { model: RefCell::new(model), version: ArcRwSignal::new(0), units: ArcRwSignal::new(Units::default()), on_edit: RefCell::new(None) })
     }
 
     pub fn read<R>(&self, f: impl FnOnce(&Junction) -> R) -> R {
@@ -44,6 +46,15 @@ impl Shared {
     /// Says what to call after an edit made from a component.
     pub fn set_on_edit(&self, f: js_sys::Function) {
         *self.on_edit.borrow_mut() = Some(f);
+    }
+
+    /// The units the page shows lengths in; not part of the model.
+    pub fn units(&self) -> RwSignal<Units> {
+        self.units.clone().into()
+    }
+
+    pub fn set_units(&self, units: Units) {
+        self.units.set(units);
     }
 
     /// Changes whenever the model is edited, by either side.
@@ -84,5 +95,21 @@ mod tests {
         let shared = Shared::new(Junction::new(0));
         let uid = shared.read(|j| j.current().arms[0].uid);
         assert!(shared.edit_in_page(|j| j.set_corner(uid, 7_000)));
+    }
+
+    #[test]
+    fn the_units_start_in_metres_and_the_page_can_change_them() {
+        let shared = Shared::new(Junction::new(0));
+        let units = shared.units();
+        assert_eq!(units.get_untracked(), Units::Metres);
+        shared.set_units(Units::Feet);
+        assert_eq!(units.get_untracked(), Units::Feet);
+    }
+
+    #[test]
+    fn changing_units_is_not_an_edit_of_the_model() {
+        let shared = Shared::new(Junction::new(0));
+        shared.set_units(Units::Feet);
+        assert_eq!(shared.version().get_untracked(), 0);
     }
 }

@@ -11,6 +11,7 @@ pub mod junction_view;
 pub mod model;
 pub mod plan;
 pub mod street_measures;
+pub mod units;
 pub mod ui;
 
 use wasm_bindgen::prelude::*;
@@ -208,6 +209,12 @@ impl Plan {
 
     pub fn load_sample(&mut self, sample: usize) {
         self.0.edit(|j| j.load_sample(sample))
+    }
+
+    /// Sets the units lengths are shown in, `"m"` or `"ft"`, in the parts of the
+    /// page drawn by the components.
+    pub fn set_units(&self, units: &str) {
+        self.0.set_units(units::Units::parse(units));
     }
 
     /// Says what to call, with whether the model took the edit, after the page's
