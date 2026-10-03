@@ -191,7 +191,7 @@ impl StreetVm {
     }
 }
 
-impl crate::vm::shell::Target for StreetVm {
+impl crate::shell::Target for StreetVm {
     fn set_units(&self, units: Units) {
         StreetVm::set_units(self, units);
     }

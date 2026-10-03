@@ -7,8 +7,8 @@ use std::fmt::Write;
 
 use crate::city::model::{CityView, EdgeView, NodeView};
 use crate::shared::symbols::HATCH;
-use crate::vm::camera::ScaleBar;
-use crate::vm::map::{junction_label, junction_number, street_label};
+use crate::map::camera::ScaleBar;
+use crate::map::vm::{junction_label, junction_number, street_label};
 use crate::shared::units::Units;
 
 /// Pieces beside the roadway, not part of it.
@@ -224,7 +224,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
         write!(
             s,
             "<a class=\"place\" href=\"{}\" data-hl=\"s-{}\" aria-label=\"{}\"><title>{}</title><line class=\"m-hit\" {} stroke-width=\"{}\"/></a>",
-            crate::vm::map::street_href(l.e.uid),
+            crate::map::vm::street_href(l.e.uid),
             l.e.uid,
             esc(&street_label(l.e, units)),
             esc(&l.e.name),
@@ -237,7 +237,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
         write!(
             s,
             "<a class=\"place\" href=\"{}\" data-hl=\"j-{}\" aria-label=\"{}\"><title>{}</title><circle class=\"m-hit\" cx=\"{}\" cy=\"{}\" r=\"{}\"/></a>",
-            crate::vm::map::junction_href(n.uid),
+            crate::map::vm::junction_href(n.uid),
             n.uid,
             esc(&junction_label(n)),
             esc(&n.name),

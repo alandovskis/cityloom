@@ -8,9 +8,9 @@ use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::Units;
 // ---- the city map ---------------------------------------------------------------------------
 
-use crate::ui::map as map_ui;
+use crate::map::view as map_ui;
 use crate::city::store::CityStore;
-use crate::vm::map::MapVm;
+use crate::map::vm::MapVm;
 use crate::shared::ports::{MemoryStorage, test_ports};
 
 fn map_vm() -> (Rc<MapVm>, Rc<MemoryStorage>) {

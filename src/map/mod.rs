@@ -1,0 +1,59 @@
+//! The city map page: the whole city drawn as a map to pan, zoom and choose a
+//! street or junction from. Its view-model, camera, gestures and views live together.
+
+pub mod camera;
+pub mod gestures;
+#[cfg(test)]
+mod tests;
+pub mod svg;
+pub mod view;
+pub mod vm;
+
+use std::rc::Rc;
+
+use leptos::prelude::*;
+use leptos::web_sys::HtmlElement;
+use wasm_bindgen::prelude::*;
+
+use crate::shared::platform::browser_ports;
+
+/// The map page as the script sees it: what the pages around it ask of it.
+#[wasm_bindgen]
+pub struct MapPage(Rc<vm::MapVm>);
+
+#[wasm_bindgen]
+impl MapPage {
+    /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
+    /// to this page.
+    pub fn mount_shell(&self) {
+        crate::shell::mount(self.0.clone(), "places");
+    }
+}
+
+/// Draws the city map page into the elements it keeps for it, and hands back
+/// what the script needs to reach it.
+#[wasm_bindgen]
+pub fn mount_map() -> MapPage {
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let vm = vm::MapVm::new(browser_ports());
+    let at = |id: &str| -> HtmlElement {
+        leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into()
+    };
+    let mount = |id: &str, view: AnyView| {
+        leptos::mount::mount_to(at(id), move || view).forget();
+    };
+    mount("street", view! { <view::MapHeader vm=vm.clone()/> }.into_any());
+    mount("reset-slot", view! { <view::ResetButton vm=vm.clone()/> }.into_any());
+    mount("map-tools-slot", view! { <view::MapTools vm=vm.clone()/> }.into_any());
+    mount("map-slot", view! { <view::MapView vm=vm.clone()/> }.into_any());
+    mount("plan-key", view! { <view::Legend vm=vm.clone()/> }.into_any());
+    mount("fit-slot", view! { <view::Status vm=vm.clone()/> }.into_any());
+    mount("inspector", view! { <view::Places vm=vm.clone()/> }.into_any());
+    mount("checks-lead", view! { <view::ChecksLead vm=vm.clone()/> }.into_any());
+    mount("checks", view! { <view::Checks vm=vm.clone()/> }.into_any());
+    mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());
+    mount("changes", view! { <view::Changes vm=vm.clone()/> }.into_any());
+    mount("title-block", view! { <view::TitleBlock vm=vm.clone()/> }.into_any());
+    MapPage(vm)
+}

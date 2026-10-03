@@ -10,10 +10,10 @@ use leptos::prelude::*;
 use crate::shared::catalogue::KINDS;
 use crate::city::model::{City, CityView, EdgeView, NodeView};
 use crate::shared::units::Units;
-use crate::vm::camera::{Camera, ScaleBar, World};
+use crate::map::camera::{Camera, ScaleBar, World};
 use crate::city::store::CityStore;
 use crate::shared::core::{Core, Presents};
-use crate::vm::map_gestures::{MapGestures, Moved};
+use crate::map::gestures::{MapGestures, Moved};
 use crate::shared::ports::Ports;
 
 pub const ARMED_RESET: &str = "Press again to start over";
@@ -466,7 +466,7 @@ impl MapVm {
     }
 }
 
-impl crate::vm::shell::Target for MapVm {
+impl crate::shell::Target for MapVm {
     fn set_units(&self, units: Units) {
         MapVm::set_units(self, units);
     }

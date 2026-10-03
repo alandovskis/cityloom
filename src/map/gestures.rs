@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use crate::vm::camera::Camera;
+use crate::map::camera::Camera;
 
 /// How far a pressed pointer moves before it is a drag, in pixels.
 const DRAG_START_PX: f64 = 5.0;
@@ -122,7 +122,7 @@ impl MapGestures {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vm::camera::World;
+    use crate::map::camera::World;
 
     fn camera() -> Camera {
         Camera::new(World::round([0, 0, 1_000_000, 500_000]), 800.0, 520.0)

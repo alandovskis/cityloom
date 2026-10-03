@@ -7,10 +7,10 @@
 
 pub mod city;
 pub mod junction;
+pub mod map;
 pub mod shared;
+pub mod shell;
 pub mod street;
-pub mod vm;
-pub mod ui;
 
 use shared::{atlas, symbols};
 use wasm_bindgen::prelude::*;
@@ -56,3 +56,9 @@ pub fn atlas() -> String {
     json(&atlas::MEASURES)
 }
 
+
+/// Says `text` to a screen reader.
+#[wasm_bindgen]
+pub fn say(text: &str) {
+    shared::live::say(text);
+}

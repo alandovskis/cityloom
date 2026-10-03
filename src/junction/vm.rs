@@ -208,7 +208,7 @@ impl JunctionVm {
     }
 }
 
-impl crate::vm::shell::Target for JunctionVm {
+impl crate::shell::Target for JunctionVm {
     fn set_units(&self, units: Units) {
         JunctionVm::set_units(self, units);
     }

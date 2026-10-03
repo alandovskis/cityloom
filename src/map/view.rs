@@ -8,8 +8,8 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, KeyboardEvent, PointerEvent, WheelEvent};
 
 use crate::shared::bind::Bound;
-use crate::ui::map_svg::{hot_layer, map_svg, overlay_svg};
-use crate::vm::map::{MapVm, NoteItem, PlaceRow, ResetOutcome};
+use crate::map::svg::{hot_layer, map_svg, overlay_svg};
+use crate::map::vm::{MapVm, NoteItem, PlaceRow, ResetOutcome};
 
 type Vm = Bound<MapVm>;
 

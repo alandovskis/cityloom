@@ -45,7 +45,7 @@ impl Plan {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::ui::shell::mount(self.0.clone(), "details");
+        crate::shell::mount(self.0.clone(), "details");
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.

@@ -9,7 +9,7 @@ use leptos::web_sys::{Element, Event, EventTarget, HtmlElement, HtmlSelectElemen
 use wasm_bindgen::prelude::*;
 
 use crate::shared::units::Units;
-use crate::vm::shell::{ShellVm, Target, Theme};
+use crate::shell::vm::{ShellVm, Target, Theme};
 
 fn listen<E: JsCast + 'static>(target: &EventTarget, event: &str, mut f: impl FnMut(E) + 'static) {
     let cb = Closure::<dyn FnMut(Event)>::new(move |e: Event| f(e.unchecked_into()));
