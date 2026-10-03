@@ -4,6 +4,15 @@
 use std::rc::Rc;
 
 use leptos::prelude::*;
+use leptos::web_sys::{Element, PointerEvent};
+use wasm_bindgen::JsCast;
+
+/// The element a pointer handler is attached to, which is not always the thing
+/// under the pointer: that is `target`, and a drawing's handler sees every shape
+/// in it.
+pub fn current_element(e: &PointerEvent) -> Element {
+    e.current_target().and_then(|t| t.dyn_into::<Element>().ok()).expect("a pointer handler is attached to an element")
+}
 
 pub struct Bound<T: 'static>(StoredValue<Rc<T>, LocalStorage>);
 

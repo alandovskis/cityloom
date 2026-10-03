@@ -7,6 +7,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
+use crate::shared::bind::current_element;
 use crate::junction::model::Target;
 use crate::junction::keys;
 use crate::junction::plan_svg::{plan_label, plan_svg};
@@ -121,7 +122,7 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
 
     // A point in the drawing, from where the pointer is on the page.
     let plan_point = move |e: &PointerEvent| {
-        let svg: Element = event_target(e);
+        let svg: Element = current_element(e);
         let r = svg.get_bounding_client_rect();
         w.frame().map_or((0.0, 0.0), |f| f.plan_point((e.client_x() as f64 - r.left(), e.client_y() as f64 - r.top())))
     };
@@ -130,7 +131,7 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
         if e.button() != 0 {
             return;
         }
-        let svg: Element = event_target(&e);
+        let svg: Element = current_element(&e);
         let hit = e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()).and_then(|t| t.closest("[data-role]").ok().flatten());
         let role = hit.as_ref().and_then(|h| h.get_attribute("data-role")).unwrap_or_default();
         let number = |name: &str| hit.as_ref().and_then(|h| h.get_attribute(name)).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);

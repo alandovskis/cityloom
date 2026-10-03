@@ -8,6 +8,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
+use crate::shared::bind::current_element;
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
 use crate::street::keys::{self, Action};
@@ -125,7 +126,7 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
         if e.pointer_type() == "mouse" && e.button() != 0 {
             return;
         }
-        let svg: Element = event_target(&e);
+        let svg: Element = current_element(&e);
         let hit = e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()).and_then(|t| t.closest("[data-role]").ok().flatten());
         focus_wrap(wrap);
         let Some(hit) = hit else { return };
@@ -169,7 +170,7 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
                 }
                 tapped.set_value(false);
                 drag.set_value(Some(Drag::Move { uid, start_x, active: true }));
-                let svg: Element = event_target(&e);
+                let svg: Element = current_element(&e);
                 let left = svg.get_bounding_client_rect().left();
                 let px = e.client_x() as f64 - left;
                 let mm = geometry.with_value(|g| g.mm_at(px));
