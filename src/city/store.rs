@@ -37,10 +37,17 @@ impl CityStore {
         CityStore { storage, area: Some(area) }
     }
 
-    /// The store of the area the person last chose, or of the default area when none was.
+    /// The store of the area the person last chose, or of the default area when none was. Until that
+    /// area's roads are kept (the page loads them before it opens the city) it is the sample city's store.
     pub fn current(storage: Rc<dyn Storage>) -> CityStore {
         let area = storage.recall(AREA_KEY).and_then(|q| Area::from_query(&q)).unwrap_or_else(default_area);
-        CityStore::for_area(storage, area)
+        let store = CityStore::for_area(storage.clone(), area);
+        if store.has_network() { store } else { CityStore::new(storage) }
+    }
+
+    /// The area `current` would open, whether or not its roads are kept yet.
+    pub fn current_area(storage: &dyn Storage) -> Area {
+        storage.recall(AREA_KEY).and_then(|q| Area::from_query(&q)).unwrap_or_else(default_area)
     }
 
     /// Makes `area` the one every page opens. Says whether that was kept.
@@ -242,12 +249,17 @@ mod tests {
     #[test]
     fn pages_open_the_area_that_was_chosen_and_the_default_before_one_is() {
         let (ports, _, storage) = test_ports();
-        assert_eq!(CityStore::current(ports.storage.clone()).area(), Some(&default_area()));
+        assert_eq!(CityStore::current_area(&*storage), default_area());
         let chosen = Area::new("Testville", 1.0, 2.0);
         assert!(CityStore::choose(&*storage, &chosen));
+        assert_eq!(CityStore::current_area(&*storage), chosen);
+        // its roads are not kept yet, so the pages have the sample city, under the sample's keys
+        assert_eq!(CityStore::current(ports.storage.clone()).area(), None);
+        CityStore::for_area(ports.storage.clone(), chosen.clone()).keep_network(&tiny_network());
         assert_eq!(CityStore::current(ports.storage.clone()).area(), Some(&chosen));
+        assert_eq!(CityStore::current(ports.storage.clone()).open().view(0).name, "Testville");
         storage.remember(AREA_KEY, "area=nonsense");
-        assert_eq!(CityStore::current(ports.storage).area(), Some(&default_area()));
+        assert_eq!(CityStore::current_area(&*storage), default_area());
     }
 
     #[test]

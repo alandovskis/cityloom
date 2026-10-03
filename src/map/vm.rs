@@ -141,7 +141,7 @@ pub struct MapVm {
 
 impl MapVm {
     pub fn new(ports: Ports) -> Rc<MapVm> {
-        let store = CityStore::new(ports.storage.clone());
+        let store = CityStore::current(ports.storage.clone());
         let model = CityModel { city: store.open(), region: store.region() };
         let core = Core::new(model);
         let world = World::round(core.view_now().bounds_mm);

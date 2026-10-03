@@ -130,7 +130,7 @@ pub fn junction_catalogue() -> String {
 /// The name of a junction of the city kept in this browser; empty when there is none.
 #[wasm_bindgen]
 pub fn junction_name(node: u32) -> String {
-    CityStore::new(browser_ports().storage).open().junction_name(node).unwrap_or_default()
+    CityStore::current(browser_ports().storage).open().junction_name(node).unwrap_or_default()
 }
 
 /// The junction editor on one junction of the city kept in this browser, which
@@ -139,7 +139,7 @@ pub fn junction_name(node: u32) -> String {
 #[wasm_bindgen]
 pub fn open_junction(node: u32) -> Option<Plan> {
     let ports = browser_ports();
-    let store = CityStore::new(ports.storage.clone());
+    let store = CityStore::current(ports.storage.clone());
     let junction = store.open().junction_editor(node, store.region())?;
     let place = Place::Junction(node);
     Some(Plan(vm::JunctionVm::new(ports, junction, Some(CityBinding { store, place }))))
