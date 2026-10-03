@@ -217,7 +217,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             r2(-(l.row / 2.0 + px(6.0))),
             r2(px(13.0)),
             r2(px(4.0)),
-            esc(l.e.kind),
+            esc(&l.e.kind),
             if l.e.edited { " \u{b7} changed" } else { "" }
         )
         .unwrap();

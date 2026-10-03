@@ -530,7 +530,7 @@ impl City {
                 a: node_uid(e.a),
                 b: node_uid(e.b),
                 name: self.layout.edge_name(i),
-                kind: SAMPLES[e.street].name,
+                kind: now.title(),
                 row_mm: row,
                 total_mm: v.total_mm,
                 length_mm: self.layout.dist_mm(e.a, e.b).round() as i32,
@@ -618,7 +618,7 @@ pub struct EdgeView {
     pub b: u32,
     pub name: String,
     /// The kind of street it began as.
-    pub kind: &'static str,
+    pub kind: String,
     pub row_mm: i32,
     pub total_mm: i32,
     pub length_mm: i32,

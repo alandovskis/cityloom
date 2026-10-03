@@ -101,7 +101,7 @@ impl Layout {
                     b: index[&r.to],
                     street: class,
                     name: Some(street_name(r)),
-                    section: (!pieces.is_empty()).then(|| Street::imported(class, side, &pieces)),
+                    section: (!pieces.is_empty()).then(|| Street::imported(class, side, &pieces).named(&street_name(r))),
                 }
             })
             .collect();
@@ -287,5 +287,20 @@ mod tests {
         let v = city.view(0);
         assert_eq!(v.edges[0].failing, vec!["Fits the street width".to_string()]);
         assert_eq!(v.failing, 1);
+    }
+
+    #[test]
+    fn the_editors_call_a_street_by_its_own_name_and_not_by_its_kind() {
+        let city = City::from_network(&crossing(), "Testville");
+        let v = city.view(0);
+        let main = v.edges.iter().find(|e| e.name.starts_with("Main Street")).unwrap();
+        assert_eq!(main.kind, "Main Street");
+        assert_eq!(city.street_editor(main.uid, 0).unwrap().view().name, "Main Street");
+        let junction = v.nodes.iter().find(|n| n.junction).unwrap();
+        let arms: Vec<String> = city.junction_editor(junction.uid, 0).unwrap().view().arms.iter().map(|a| a.street.clone()).collect();
+        assert_eq!(arms.iter().filter(|n| *n == "Main Street").count(), 2);
+        assert_eq!(arms.iter().filter(|n| *n == "Side Road").count(), 2);
+        // and a name survives being kept and opened again
+        assert_eq!(Street::imported(0, Side::Right, &[]).named("X").title(), "X");
     }
 }

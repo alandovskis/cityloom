@@ -165,8 +165,11 @@ impl Segment {
 /// Directions are written for the side of the road in `side`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Street {
-    /// Index into `SAMPLES`: the kind of street it began as, which names it.
+    /// Index into `SAMPLES`: the kind of street it began as, which names it unless it has a name of its own.
     pub sample: usize,
+    /// What the street is called, where it is not just its kind.
+    #[serde(default)]
+    pub name: Option<String>,
     pub row_mm: i32,
     pub side: Side,
     pub segments: Vec<Segment>,
@@ -208,7 +211,18 @@ impl Street {
                 g
             })
             .collect();
-        Street { sample: sample.min(SAMPLES.len() - 1), row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1 }
+        Street { sample: sample.min(SAMPLES.len() - 1), name: None, row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1 }
+    }
+
+    /// The same street, called `name`.
+    pub fn named(mut self, name: &str) -> Street {
+        self.name = Some(name.to_string());
+        self
+    }
+
+    /// What it is called: its own name, or else the sort of street it is.
+    pub fn title(&self) -> String {
+        self.name.clone().unwrap_or_else(|| SAMPLES[self.sample.min(SAMPLES.len() - 1)].name.to_string())
     }
 
     /// The sample street laid out for a side of the road.
@@ -282,6 +296,8 @@ struct State {
 
 pub struct Editor {
     sample: usize,
+    /// What the street is called, where it has a name of its own.
+    street_name: Option<String>,
     /// Index into `REGIONS`. A setting of the sheet, not part of the history.
     region: usize,
     /// The time of day the sheet shows, in minutes. Also a setting, not history.
@@ -332,6 +348,7 @@ impl Editor {
     pub fn new(sample: usize) -> Editor {
         let mut e = Editor {
             sample: 0,
+            street_name: None,
             region: 0,
             time_min: 12 * 60,
             row_mm: 0,
@@ -372,7 +389,14 @@ impl Editor {
 
     /// The street as it is now, for the city to keep.
     pub fn snapshot(&self) -> Street {
-        Street { sample: self.sample, row_mm: self.row_mm, side: REGIONS[self.region].drive_side, segments: self.current().clone(), next_uid: self.next_uid }
+        Street {
+            sample: self.sample,
+            name: self.street_name.clone(),
+            row_mm: self.row_mm,
+            side: REGIONS[self.region].drive_side,
+            segments: self.current().clone(),
+            next_uid: self.next_uid,
+        }
     }
 
     /// An editor on a street the city holds. `today` is the street as it was
@@ -384,6 +408,7 @@ impl Editor {
         let (today, now) = (today.for_side(side), now.for_side(side));
         let mut e = Editor {
             sample: now.sample.min(SAMPLES.len() - 1),
+            street_name: now.name.clone(),
             region,
             time_min: 12 * 60,
             row_mm: now.row_mm,
@@ -1012,7 +1037,7 @@ impl Editor {
         let at = |v: &[Segment]| v.iter().map(|s| s.at(self.time_min)).collect::<Vec<_>>();
         let (now, existing_now) = (at(segs), at(existing));
         View {
-            name: SAMPLES[self.sample].name,
+            name: self.street_name.clone().unwrap_or_else(|| SAMPLES[self.sample].name.to_string()),
             sample: self.sample,
             region: REGIONS[self.region].id,
             row_mm: self.row_mm,
@@ -1256,7 +1281,7 @@ pub struct Revision {
 
 #[derive(Serialize)]
 pub struct View {
-    pub name: &'static str,
+    pub name: String,
     pub sample: usize,
     pub region: &'static str,
     /// The time of day shown, in minutes after midnight.

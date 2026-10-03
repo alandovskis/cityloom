@@ -302,7 +302,7 @@ pub struct ArmView {
     /// The city street this arm is, or 0 outside a city.
     pub edge: u32,
     pub label: String,
-    pub street: &'static str,
+    pub street: String,
     pub street_index: usize,
     pub bearing: i32,
     pub offset_mm: i32,
@@ -705,7 +705,7 @@ impl Junction {
                 uid: a.uid,
                 edge: a.edge,
                 label: arm_name(a),
-                street: l.prof.name,
+                street: l.prof.name.clone(),
                 street_index: a.street_index(),
                 bearing: a.bearing,
                 offset_mm: a.offset_mm,

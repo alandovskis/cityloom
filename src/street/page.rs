@@ -116,7 +116,7 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
         _ => ().into_any(),
     });
     view! {
-        <h1 id="street-name">{move || w.view().name}</h1>
+        <h1 id="street-name">{move || w.view().name.clone()}</h1>
         <p class="street-sub" id="street-sub">
             {linked.then(|| view! { {back_link()} " " <span aria-hidden="true">"\u{b7}"</span> " " })}
             <span>"Street cross-section"</span>
@@ -133,7 +133,7 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
 pub fn TitleBlock(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     view! {
-        <div class="tb-cell tb-wide"><span>"Street"</span><b id="tb-street">{move || w.view().name}</b></div>
+        <div class="tb-cell tb-wide"><span>"Street"</span><b id="tb-street">{move || w.view().name.clone()}</b></div>
         <div class="tb-cell"><span>"Width"</span><b id="tb-row" class="fig">{move || w.units().length_fine(w.view().row_mm)}</b></div>
         <div class="tb-cell"><span>"Changes made"</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
     }

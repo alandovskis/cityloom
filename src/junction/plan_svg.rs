@@ -533,7 +533,7 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
             if p.is_sel("arm", a.uid) { " t-blue" } else { "" },
             f1(x),
             f1(y1),
-            esc(a.street),
+            esc(&a.street),
             f1(x),
             f1(y1 + 17.0),
             compass(a.bearing),
