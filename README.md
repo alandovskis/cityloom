@@ -3,9 +3,12 @@
 Streetmix at city scale: residents compose and compare whole-city scenarios.
 This repository holds three surfaces: a city map (`map.html`), the street cross-section editor (`index.html`) and the intersection editor (`intersection.html`). The map opens the other two on a street or junction of one sample city (`src/city.rs`), kept in browser storage.
 
-- `src/`: the editing models in Rust, compiled to WebAssembly: `model.rs` for a street, `junction.rs`, `junction_view.rs` and `plan.rs` for a junction. Tests are included.
-- `src/vm/`: the view-models (MVVM). A view-model has no page in it: it owns the model, exposes properties that are ready to show (words, flags, lists) and takes commands, and reaches the browser only through the ports in `ports.rs` (announce, store, timers), so it is tested on the host with fakes. There is one per page (`map.rs`, `junction.rs`, `street.rs`) and one for what every page shares (`shell.rs`: units, region, theme, settings menu, sidebars, notes tabs). Pages that edit a place in the city keep their changes there through a `CityBinding` and a `Keeper`.
-- `src/ui/`: the views, drawn by [Leptos](https://leptos.dev) (client-side rendering). A view binds to a view-model's properties and sends it what the person does; it decides nothing. Components are drawn to HTML in tests; `shell.rs` binds the markup the pages share, and is checked in the browser.
+- `src/`: one folder per feature (a vertical slice), each holding its own model, view-model and views, plus a small kernel:
+  - `street/`, `junction/`: the editors. `model.rs` has the editing rules (`junction/` also has `geometry.rs` and `read_model.rs`); `vm.rs` is the view-model; `text.rs` the words said to a screen reader; the rest are the Leptos views, with tests beside them.
+  - `map/`: the city map (view-model, camera, gestures, views). `city/`: the sample city, how it is kept in storage (`store.rs`) and the binding a page writes back through (`binding.rs`). `shell/`: the settings menu, sidebars and notes tabs every page shares.
+  - `shared/`: what every slice uses: the catalogue and units, the ports a view-model reaches the browser through (`ports.rs`, with test fakes) and their browser side (`platform.rs`), the reactive `core.rs`, the `keeper.rs` that debounces writes, and the helpers views bind with.
+- A view-model has no page in it: it owns the model, exposes properties that are ready to show (words, flags, lists) and takes commands, and reaches the browser only through the ports, so it is tested on the host with fakes. A view (Leptos, client-side rendered) binds to those properties and sends commands; it decides nothing. Components are drawn to HTML in tests; `shell/view.rs` binds the markup the pages share and is checked in the browser.
+- A slice reaches another only through that slice's model (or `city`'s store and binding, or `shell`'s `Target`), never its view-model or views; `shared` depends on no slice.
 - `web/`: the pages' markup and a few lines of start-up per page that load the module and call `mount_*`; no logic.
 - All catalogue widths, rules and capacity rates are synthetic placeholders.
 
