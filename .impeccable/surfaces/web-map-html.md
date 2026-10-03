@@ -23,8 +23,10 @@ OWN-WORLD: Cool light land (#e9edf0), white panels with 16px radius and a soft t
 
 STORY: The resident opens the map and sees one calm city with a chip that says whether it works. If something is wrong the chip turns amber, the street glows amber on the map and its card rises to the top of Places. They press it and land in the editor.
 
+HOME PAGE (added later at the user's request): web/index.html is the first thing seen. A floating card at 16px radius holds the headline, the big search with its filled blue Search button, the way into the map and into a new street, and how the city stands; the real sample city runs off the right and bottom edges behind it, inert. The card uses the system radii (16px card, 14px search, 12px buttons).
+
 FIRST VIEWPORT: Full-bleed map. Top: one floating bar (logo, wordmark, Map / Street / Intersection, avatar). Left: a Places card with the city name, a one-line summary, and a list with attention rows first. Right: a Notes card (Checks, Changes). Bottom-right: grouped zoom and whole-city control. Bottom centre: the status chip. Start over sits alone at the foot of Places.
 
-FORM: The category standard, the user's own choice from the card round (not the roll or my pick); benchmark Streetmix. Seed key f82482e8, kind canon.
+FORM: The category standard, the user's own choice from the card round: the roll (seed key f82482e8) assigned The Wall Chart and offered The Charrette Plot as the pick, and the user's own choice of the standing exit replaced both. Benchmark Streetmix. Telemetry kind canon, not sent.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

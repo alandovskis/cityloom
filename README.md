@@ -1,3 +1,5 @@
+<img src="web/logo-wordmark.svg" alt="CityLoom" height="56">
+
 # CityLoom
 
 Streetmix at city scale: residents compose and compare whole-city scenarios.

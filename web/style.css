@@ -1375,14 +1375,12 @@ kbd {
   align-items: center;
   gap: 10px;
 }
-.brand .mark {
+.brand .logo {
   flex: none;
   display: block;
-}
-.wordmark {
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.005em;
+  width: auto;
+  /* The blue of the mark would sink into the bar it sits on. */
+  --logo-a: #a9c2ff;
 }
 @media (max-width: 640px) {
   .topbar {
@@ -1392,23 +1390,15 @@ kbd {
 .topbar {
   padding-block: 6px;
 }
-.brand .mark {
-  width: 30px;
+.brand .logo {
   height: 30px;
-}
-.wordmark {
-  font-size: 20px;
 }
 .sheet-head {
   padding-block: 10px 8px;
 }
 @media (max-width: 640px) {
-  .brand .mark {
-    width: 28px;
-    height: 28px;
-  }
-  .wordmark {
-    font-size: 18px;
+  .brand .logo {
+    height: 26px;
   }
 }
 

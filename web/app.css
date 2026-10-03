@@ -311,13 +311,11 @@ a.btn {
   color: var(--ink);
   text-decoration: none;
 }
-.mark {
+.logo {
   display: block;
-}
-.wordmark {
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  height: 30px;
+  width: auto;
+  --logo-a: var(--accent);
 }
 .search-slot {
   justify-self: center;

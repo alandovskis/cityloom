@@ -1,16 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CityLoom"><title>CityLoom</title>
-<!-- Streets as warp, the changes made to them as weft: woven over and under. -->
-<rect x="6" y="5" width="10" height="54" rx="2" fill="#2563eb"/>
-<rect x="20" y="5" width="10" height="54" rx="2" fill="#2563eb"/>
-<rect x="34" y="5" width="10" height="54" rx="2" fill="#2563eb"/>
-<rect x="48" y="5" width="10" height="54" rx="2" fill="#2563eb"/>
-<rect x="2" y="13" width="60" height="8" rx="4" fill="#64748b"/>
-<rect x="2" y="28" width="60" height="8" rx="4" fill="#f59e0b"/>
-<rect x="2" y="43" width="60" height="8" rx="4" fill="#64748b"/>
-<rect x="6" y="12.6" width="10" height="8.8" fill="#2563eb"/>
-<rect x="34" y="12.6" width="10" height="8.8" fill="#2563eb"/>
-<rect x="20" y="27.6" width="10" height="8.8" fill="#2563eb"/>
-<rect x="48" y="27.6" width="10" height="8.8" fill="#2563eb"/>
-<rect x="6" y="42.6" width="10" height="8.8" fill="#2563eb"/>
-<rect x="34" y="42.6" width="10" height="8.8" fill="#2563eb"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 46.0 30.0" role="img" aria-label="CityLoom"><title>CityLoom</title><style>@media (prefers-color-scheme:dark){.a{stroke:#8ab4ff}}</style><defs><clipPath id="kt"><rect x="0" y="0" width="46" height="15.0"/></clipPath><clipPath id="kb"><rect x="0" y="15.0" width="46" height="15.0"/></clipPath></defs><circle cx="15.0" cy="15.0" r="11.5" fill="none" class="a" stroke="#2563eb" stroke-width="7.0"/><circle cx="31.0" cy="15.0" r="11.5" fill="none" stroke="#f59e0b" stroke-width="7.0"/><circle cx="15.0" cy="15.0" r="11.5" fill="none" class="a" stroke="#2563eb" stroke-width="7.0" clip-path="url(#kt)"/><circle cx="31.0" cy="15.0" r="11.5" fill="none" stroke="#f59e0b" stroke-width="7.0" clip-path="url(#kb)"/></svg>
