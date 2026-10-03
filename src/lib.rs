@@ -13,6 +13,7 @@ pub mod junction_view;
 pub mod model;
 pub mod plan;
 pub mod street_measures;
+pub mod symbols;
 pub mod units;
 pub mod ui;
 
@@ -483,6 +484,13 @@ pub fn junction_catalogue() -> String {
             "cycle": [CYCLE_MIN_MM, CYCLE_MAX_MM, RING_STEP_MM, CYCLE_DEFAULT_MM],
         },
     }))
+}
+
+/// The hatch patterns of the pieces, surfaces and curbs, as JSON: `{HATCH, MATERIAL_HATCH, CURB_HATCH}`,
+/// each from a name to its SVG `<pattern>`.
+#[wasm_bindgen]
+pub fn hatches() -> String {
+    symbols::hatches_json()
 }
 
 /// The Transit Priority Atlas toolbox measures and where each is modelled, as JSON.

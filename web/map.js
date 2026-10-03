@@ -4,12 +4,13 @@
 // editors, which read the same city. No rules live here: what is a street,
 // where it runs and what is wrong with it all come from the WebAssembly model.
 
-import init, { catalogue, materials } from "./pkg/cityloom_editor.js";
-import { HATCH } from "./symbols.js";
+import init, { catalogue, hatches, materials } from "./pkg/cityloom_editor.js";
 import { openCity, regionIndex, resetCity } from "./city.js";
 import { initAccountMenu, initPanels, initRegion, initTheme, initUnits } from "./shell.js";
 
 await init();
+
+const { HATCH } = JSON.parse(hatches());
 
 const KINDS = JSON.parse(catalogue());
 const MATERIALS = JSON.parse(materials());
