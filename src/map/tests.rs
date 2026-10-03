@@ -213,3 +213,24 @@ fn a_search_that_finds_nothing_says_so_and_how_to_get_the_places_back() {
     assert_eq!(count(&h, "role=\"option\""), 0);
     assert!(h.contains("No places match") && h.contains("Clear the search to see all 32."));
 }
+
+use crate::map::home;
+
+#[test]
+fn the_hero_map_draws_every_junction_but_cannot_be_reached_or_read_out() {
+    let (vm, _) = map_vm();
+    let h = map_html(|| view! { <home::HeroMap vm=vm.clone()/> });
+    assert_eq!(count(&h, "class=\"m-jc\""), 9);
+    assert!(h.contains("aria-hidden=\"true\"") && h.contains("inert"));
+}
+
+#[test]
+fn the_hero_facts_name_the_city_and_say_whether_it_works() {
+    let (vm, storage) = map_vm();
+    let h = map_html(|| view! { <home::HeroFacts vm=vm.clone()/> });
+    assert!(h.contains("class=\"hero-facts\"") && h.contains("Sample city: 9 junctions, 23 streets.") && h.contains("Every check passes."));
+    assert!(h.contains("tick"));
+    change_a_street(&vm, &storage, 1_000);
+    let h = map_html(|| view! { <home::HeroFacts vm=vm.clone()/> });
+    assert!(h.contains("class=\"hero-facts bad\"") && h.contains("needs attention") && !h.contains("tick"));
+}

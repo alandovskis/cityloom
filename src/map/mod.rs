@@ -3,6 +3,7 @@
 
 pub mod camera;
 pub mod gestures;
+pub mod home;
 pub mod svg;
 #[cfg(test)]
 mod tests;
@@ -55,5 +56,24 @@ pub fn mount_map() -> MapPage {
     mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());
     mount("changes", view! { <view::Changes vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <view::TitleBlock vm=vm.clone()/> }.into_any());
+    MapPage(vm)
+}
+
+/// Draws the home page into the elements it keeps for it: the city behind the
+/// hero card, the search box, and how the city stands. Hands back what the script
+/// needs to reach it.
+#[wasm_bindgen]
+pub fn mount_home() -> MapPage {
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let vm = vm::MapVm::new(browser_ports());
+    let at =
+        |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
+    let mount = |id: &str, view: AnyView| {
+        leptos::mount::mount_to(at(id), move || view).forget();
+    };
+    mount("hero-map-slot", view! { <home::HeroMap vm=vm.clone()/> }.into_any());
+    mount("search-slot", view! { <view::SearchBox vm=vm.clone()/> }.into_any());
+    mount("hero-facts-slot", view! { <home::HeroFacts vm=vm.clone()/> }.into_any());
     MapPage(vm)
 }

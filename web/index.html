@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CityLoom: redesign the streets of your city</title>
+  <meta name="description" content="Pick any street or junction of the city, rearrange it, and see at once what still works.">
+  <meta name="color-scheme" content="light dark">
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="home.css">
+</head>
+<body class="home">
+  <header class="bar">
+    <a class="brand" href="index.html" aria-label="CityLoom, home"><img class="mark" src="logo.svg" alt="" width="32" height="32"><span class="wordmark">CityLoom</span></a>
+    <nav class="surfaces" aria-label="Editors">
+      <a href="map.html" class="surface">Map</a>
+      <a href="street.html" class="surface">Street</a>
+      <a href="intersection.html" class="surface">Intersection</a>
+    </nav>
+    <div class="top-end">
+      <div class="account">
+        <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
+        <div id="account-menu" class="menu" hidden>
+          <p class="menu-h">Settings</p>
+          <div class="menu-row">
+            <span id="units-label">Units</span>
+            <div class="units" role="group" aria-labelledby="units-label">
+              <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
+              <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
+            </div>
+          </div>
+          <div class="menu-row">
+            <label for="region">Region</label>
+            <select id="region"></select>
+          </div>
+          <div class="menu-row">
+            <span id="theme-label">Theme</span>
+            <div class="units" role="group" aria-labelledby="theme-label">
+              <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
+              <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
+            </div>
+          </div>
+          <p class="menu-foot"><a href="credits.html">Credits</a></p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="hero-map-slot"></div>
+
+  <main class="hero">
+    <div class="hero-card">
+      <h1>Redesign the streets of your city.</h1>
+      <p class="lead">Open the map, pick a street or junction, and rearrange it. You see straight away what still works.</p>
+      <div class="hero-search" id="search-slot"></div>
+      <div class="hero-actions">
+        <a class="btn" href="map.html">Open the city map</a>
+        <a class="hero-link" href="street.html">Start a new street</a>
+      </div>
+      <div id="hero-facts-slot"></div>
+      <p class="hero-note">A sample city for now: its streets, widths and rules are placeholders.</p>
+    </div>
+  </main>
+
+  <div id="live" class="sr-only" role="status" aria-live="polite"></div>
+  <script type="module" src="home.js"></script>
+</body>
+</html>
