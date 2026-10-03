@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use super::area::Area;
+use super::area::{Area, DEFAULT_NETWORK_URL, default_area};
 use super::nominatim::{self, Place};
 use super::overpass;
 use crate::city::store::CityStore;
@@ -32,6 +32,9 @@ impl Loader {
         if store.has_network() {
             return done(Ok(()));
         }
+        if area == default_area() {
+            return self.load_shipped(store, done);
+        }
         let (store, importer) = (store.clone(), self.ports.importer.clone());
         let done = Rc::new(std::cell::RefCell::new(Some(done)));
         let finish = move |r: Result<(), String>| {
@@ -55,6 +58,22 @@ impl Loader {
                         ))
                     }),
                 ),
+            }),
+        );
+    }
+}
+
+impl Loader {
+    /// The default area comes with the app, already read.
+    fn load_shipped(&self, store: &CityStore, done: impl FnOnce(Result<(), String>) + 'static) {
+        let store = store.clone();
+        self.ports.fetcher.fetch(
+            DEFAULT_NETWORK_URL,
+            None,
+            Box::new(move |fetched| {
+                done(fetched.and_then(|body| serde_json::from_slice(&body).map_err(|e| format!("the shipped roads were not understood ({e})"))).and_then(
+                    |network| if store.keep_network(&network) { Ok(()) } else { Err("the roads could not be kept: storage is blocked or full".to_string()) },
+                ))
             }),
         );
     }
@@ -120,6 +139,20 @@ mod tests {
         importer.answer(Ok(NETWORK.to_string()));
         assert_eq!(result.borrow_mut().take(), Some(Ok(())));
         assert_eq!(store.open().view(0).name, "Testville");
+    }
+
+    #[test]
+    fn the_default_area_is_read_from_the_file_that_ships_not_from_overpass() {
+        let (ports, fetcher, importer) = test_ports_with_fetcher();
+        let store = CityStore::for_area(ports.storage.clone(), default_area());
+        let result = seen();
+        let r = result.clone();
+        Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
+        assert_eq!(fetcher.asked(), vec![("data/default-network.json".to_string(), None)]);
+        fetcher.answer(Ok(NETWORK.as_bytes().to_vec()));
+        assert!(importer.asked().is_empty(), "it is already read");
+        assert_eq!(result.borrow_mut().take(), Some(Ok(())));
+        assert!(store.has_network());
     }
 
     #[test]

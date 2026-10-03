@@ -5,6 +5,15 @@ use super::Bounds;
 /// How far either way of its centre an area reaches, in metres.
 pub const HALF_M: f64 = 400.0;
 
+/// The area a visit begins with, before anyone has chosen one. Its street network is shipped
+/// with the app (`web/data/default-network.json`), so it opens without a network.
+pub fn default_area() -> Area {
+    Area::new("Kreuzberg, Berlin", 52.5010, 13.4235)
+}
+
+/// Where the shipped network of the default area is, relative to the pages.
+pub const DEFAULT_NETWORK_URL: &str = "data/default-network.json";
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Area {
     pub name: String,
@@ -75,6 +84,12 @@ mod tests {
         assert_eq!(Area::from_query("area=abc,def"), None);
         assert_eq!(Area::from_query("area=95,0"), None);
         assert_eq!(Area::from_query("area=1,2").unwrap().name, "");
+    }
+
+    #[test]
+    fn the_default_area_is_the_one_whose_network_ships() {
+        assert_eq!(default_area().key(), "52.5010,13.4235");
+        assert_eq!(default_area(), Area::from_query(&default_area().to_query()).unwrap());
     }
 
     #[test]
