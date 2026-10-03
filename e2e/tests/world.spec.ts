@@ -26,6 +26,7 @@ test("a junction of the area opens in the junction editor and a street in the st
 
 test("an edit made in the area is kept for it and not in the sample city", async ({ page }) => {
   await page.goto("/map.html");
+  await expect(page.locator("#title-block")).toContainText("Kreuzberg");
   const keys = await page.evaluate(() => Object.keys(localStorage));
   expect(keys.some((k) => k.startsWith("cityloom-network:52.5010,13.4235"))).toBe(true);
   expect(keys).not.toContain("cityloom-city");
