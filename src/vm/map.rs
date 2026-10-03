@@ -8,10 +8,10 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::shared::catalogue::KINDS;
-use crate::city::{City, CityView, EdgeView, NodeView};
+use crate::city::model::{City, CityView, EdgeView, NodeView};
 use crate::shared::units::Units;
 use crate::vm::camera::{Camera, ScaleBar, World};
-use crate::vm::city_store::CityStore;
+use crate::city::store::CityStore;
 use crate::shared::core::{Core, Presents};
 use crate::vm::map_gestures::{MapGestures, Moved};
 use crate::shared::ports::Ports;
@@ -675,7 +675,7 @@ mod tests {
     #[test]
     fn the_region_is_read_from_storage_and_can_be_changed() {
         let (ports, ..) = test_ports();
-        ports.storage.remember(crate::vm::city_store::REGION_KEY, "united-kingdom");
+        ports.storage.remember(crate::city::store::REGION_KEY, "united-kingdom");
         let vm = MapVm::new(ports);
         assert_eq!(vm.region(), 3);
         vm.set_region(0);

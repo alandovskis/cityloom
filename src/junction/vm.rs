@@ -10,7 +10,7 @@ use leptos::prelude::*;
 use crate::junction::model::{Junction, Refusal, Target};
 use crate::junction::read_model::JView;
 use crate::shared::units::Units;
-use crate::vm::binding::CityBinding;
+use crate::city::binding::CityBinding;
 use crate::shared::core::{Core, Presents};
 use crate::junction::text as text;
 use crate::shared::keeper::{Keeper, NOT_KEPT};
@@ -225,8 +225,8 @@ impl crate::vm::shell::Target for JunctionVm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vm::binding::Place;
-    use crate::vm::city_store::CityStore;
+    use crate::city::binding::Place;
+    use crate::city::store::CityStore;
     use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_time};
 
     struct Rig {
@@ -366,7 +366,7 @@ mod tests {
         r.vm.edit(|j| j.set_corner(n, 7_000));
         r.time.advance(1_000);
         assert_eq!(r.time.pending(), 0);
-        assert_eq!(r.storage.recall(crate::vm::city_store::CITY_KEY), None);
+        assert_eq!(r.storage.recall(crate::city::store::CITY_KEY), None);
     }
 
     #[test]

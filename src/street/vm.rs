@@ -8,7 +8,7 @@ use leptos::prelude::*;
 
 use crate::street::model::{Editor, View};
 use crate::shared::units::Units;
-use crate::vm::binding::CityBinding;
+use crate::city::binding::CityBinding;
 use crate::shared::core::{Core, Presents};
 use crate::shared::keeper::{Keeper, NOT_KEPT};
 use crate::shared::ports::Ports;
@@ -208,8 +208,8 @@ impl crate::vm::shell::Target for StreetVm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vm::binding::Place;
-    use crate::vm::city_store::CityStore;
+    use crate::city::binding::Place;
+    use crate::city::store::CityStore;
     use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, test_ports_with_time};
 
     struct Rig {
@@ -352,7 +352,7 @@ mod tests {
         r.vm.edit(|e| e.nudge_width(uid, 100));
         r.time.advance(1_000);
         assert_eq!(r.time.pending(), 0);
-        assert_eq!(r.storage.recall(crate::vm::city_store::CITY_KEY), None);
+        assert_eq!(r.storage.recall(crate::city::store::CITY_KEY), None);
     }
 
     #[test]

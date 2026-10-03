@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use crate::city::{CityView, EdgeView, NodeView};
+use crate::city::model::{CityView, EdgeView, NodeView};
 use crate::shared::symbols::HATCH;
 use crate::vm::camera::ScaleBar;
 use crate::vm::map::{junction_label, junction_number, street_label};
@@ -130,7 +130,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
         .iter()
         .filter_map(|e| {
             let g = Geometry::of(e, &nodes)?;
-            let road: Vec<&crate::city::PieceView> = e.pieces.iter().filter(|p| !OFF_ROAD.contains(&p.kind)).collect();
+            let road: Vec<&crate::city::model::PieceView> = e.pieces.iter().filter(|p| !OFF_ROAD.contains(&p.kind)).collect();
             let lo = road.iter().map(|p| (p.offset_mm - p.width_mm / 2) as f64).fold(f64::MAX, f64::min) / 1000.0;
             let hi = road.iter().map(|p| (p.offset_mm + p.width_mm / 2) as f64).fold(f64::MIN, f64::max) / 1000.0;
             let t0 = e.trim_a_mm as f64 / 1000.0;
@@ -270,7 +270,7 @@ pub fn overlay_svg(bar: &ScaleBar, height: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::city::City;
+    use crate::city::model::City;
 
     fn view() -> CityView {
         City::new().view(0)

@@ -26,8 +26,8 @@ use wasm_bindgen::prelude::*;
 
 use crate::shared::catalogue::SAMPLES;
 use crate::shared::platform::browser_ports;
-use crate::vm::binding::{CityBinding, Place};
-use crate::vm::city_store::CityStore;
+use crate::city::binding::{CityBinding, Place};
+use crate::city::store::CityStore;
 
 /// One junction being edited. The page drives it through the components the
 /// module mounts; the script only starts it up and hands it what the shell

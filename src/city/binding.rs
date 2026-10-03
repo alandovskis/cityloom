@@ -2,7 +2,7 @@
 
 use crate::junction::model::State;
 use crate::street::model::Street;
-use crate::vm::city_store::CityStore;
+use crate::city::store::CityStore;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Place {
@@ -36,7 +36,7 @@ mod tests {
     use super::*;
     use crate::shared::ports::test_ports;
 
-    fn binding(place: impl Fn(&crate::city::CityView) -> Place) -> CityBinding {
+    fn binding(place: impl Fn(&crate::city::model::CityView) -> Place) -> CityBinding {
         let (ports, ..) = test_ports();
         let store = CityStore::new(ports.storage);
         let place = place(&store.open().view(0));

@@ -5,7 +5,7 @@
 
 use std::rc::Rc;
 
-use crate::city::City;
+use crate::city::model::City;
 use crate::shared::ports::Storage;
 
 pub const CITY_KEY: &str = "cityloom-city";

@@ -9,7 +9,7 @@ use crate::shared::units::Units;
 // ---- the city map ---------------------------------------------------------------------------
 
 use crate::ui::map as map_ui;
-use crate::vm::city_store::CityStore;
+use crate::city::store::CityStore;
 use crate::vm::map::MapVm;
 use crate::shared::ports::{MemoryStorage, test_ports};
 

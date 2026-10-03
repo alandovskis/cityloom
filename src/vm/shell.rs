@@ -11,7 +11,7 @@ use crate::shared::catalogue::{REGIONS, Side};
 use crate::shared::units::Units;
 use crate::shared::ports::Ports;
 
-pub const REGION_KEY: &str = crate::vm::city_store::REGION_KEY;
+pub const REGION_KEY: &str = crate::city::store::REGION_KEY;
 pub const THEME_KEY: &str = "cityloom-theme";
 pub const INSPECTOR_KEY: &str = "cityloom-inspector";
 pub const NOTES_KEY: &str = "cityloom-notes";
