@@ -22,33 +22,46 @@ const SAVE_VERSION: u32 = 1;
 /// Streets wider than this get a refuge island in their crossings to start with.
 const ISLAND_ROW_MM: i32 = 24_000;
 
-pub(crate) struct NodeDef {
-    x_mm: i32,
-    y_mm: i32,
+/// What a place is called when it is not the sample city's numbering.
+pub(super) struct Names {
+    /// As a title: "Main Street and Side Road".
+    pub(super) name: String,
+    /// In a sentence: "the end of Main Street".
+    pub(super) end: String,
+}
+
+pub(super) struct NodeDef {
+    pub(super) x_mm: i32,
+    pub(super) y_mm: i32,
     /// Where three to five streets meet. Otherwise the street runs off the map.
-    junction: bool,
-    control: usize,
-    corner_mm: i32,
+    pub(super) junction: bool,
+    pub(super) control: usize,
+    pub(super) corner_mm: i32,
+    pub(super) names: Option<Names>,
 }
 
 const fn junction_at(x_m: i32, y_m: i32, control: usize, corner_mm: i32) -> NodeDef {
-    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm, names: None }
 }
 
 const fn gate_at(x_m: i32, y_m: i32) -> NodeDef {
-    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0 }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0, names: None }
 }
 
-pub(crate) struct EdgeDef {
+pub(super) struct EdgeDef {
     /// Node indices. The street editor shows the street looking from `a` to `b`.
-    a: usize,
-    b: usize,
-    /// Index into `SAMPLES`.
-    street: usize,
+    pub(super) a: usize,
+    pub(super) b: usize,
+    /// Index into `SAMPLES`: what sort of street it is.
+    pub(super) street: usize,
+    /// Its name, where it is not just the sort of street it is.
+    pub(super) name: Option<String>,
+    /// The street as it first stands, where it is not the sample.
+    pub(super) section: Option<Street>,
 }
 
 const fn street(a: usize, b: usize, street: usize) -> EdgeDef {
-    EdgeDef { a, b, street }
+    EdgeDef { a, b, street, name: None, section: None }
 }
 
 const STREET: usize = 0;
@@ -127,15 +140,17 @@ struct Saved {
 /// Where the junctions and street ends are, and which street joins which. The
 /// network is fixed for a city; what a resident edits is kept apart from it.
 pub struct Layout {
-    pub(crate) name: String,
-    pub(crate) nodes: Vec<NodeDef>,
-    pub(crate) edges: Vec<EdgeDef>,
+    pub(super) name: String,
+    /// The side traffic keeps to.
+    pub(super) side: Side,
+    pub(super) nodes: Vec<NodeDef>,
+    pub(super) edges: Vec<EdgeDef>,
 }
 
 impl Layout {
     /// The sample city's network.
     pub fn sample() -> Layout {
-        Layout { name: NAME.to_string(), nodes: NODES.into_iter().collect(), edges: EDGES.into_iter().collect() }
+        Layout { name: NAME.to_string(), side: Side::Right, nodes: NODES.into_iter().collect(), edges: EDGES.into_iter().collect() }
     }
 }
 
@@ -178,16 +193,22 @@ impl Layout {
     }
 
     fn node_name(&self, node: usize) -> String {
+        if let Some(n) = &self.nodes[node].names {
+            return n.name.clone();
+        }
         if self.nodes[node].junction { format!("Junction {}", self.junction_number(node)) } else { "Edge of the map".to_string() }
     }
 
     fn end_name(&self, node: usize) -> String {
+        if let Some(n) = &self.nodes[node].names {
+            return n.end.clone();
+        }
         if self.nodes[node].junction { format!("Junction {}", self.junction_number(node)) } else { "the edge of the map".to_string() }
     }
 
     fn edge_name(&self, edge: usize) -> String {
         let e = &self.edges[edge];
-        let kind = SAMPLES[e.street].name;
+        let kind = e.name.as_deref().unwrap_or(SAMPLES[e.street].name);
         if !self.nodes[e.a].junction && !self.nodes[e.b].junction {
             format!("{kind} · through the city")
         } else {
@@ -309,7 +330,7 @@ impl City {
     /// The same for any network.
     pub fn on(layout: Layout) -> City {
         let today_streets: BTreeMap<u32, Street> =
-            layout.edges.iter().enumerate().map(|(i, e)| (i as u32 + 1, Street::sample(e.street, Side::Right))).collect();
+            layout.edges.iter().enumerate().map(|(i, e)| (i as u32 + 1, e.section.clone().unwrap_or_else(|| Street::sample(e.street, layout.side)))).collect();
         let today_junctions: BTreeMap<u32, State> =
             (0..layout.nodes.len()).filter(|&n| layout.nodes[n].junction).map(|n| (node_uid(n), layout.generate(n, &today_streets))).collect();
         City { layout, streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions }
