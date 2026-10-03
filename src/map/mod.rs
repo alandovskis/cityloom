@@ -42,6 +42,7 @@ pub fn mount_map() -> MapPage {
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
+    mount("search-slot", view! { <view::SearchBox vm=vm.clone()/> }.into_any());
     mount("street", view! { <view::MapHeader vm=vm.clone()/> }.into_any());
     mount("reset-slot", view! { <view::ResetButton vm=vm.clone()/> }.into_any());
     mount("map-tools-slot", view! { <view::MapTools vm=vm.clone()/> }.into_any());

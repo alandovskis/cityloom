@@ -76,11 +76,10 @@ pub fn MapTools(vm: Rc<MapVm>) -> impl IntoView {
             <button type="button" id="zoom-in" class="btn" aria-label="Zoom in" on:click=move |_| vm.with(|v| v.zoom_in())>
                 <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3.5 8h9M8 3.5v9"/></svg>
             </button>
-            <button type="button" id="zoom-fit" class="btn" on:click=move |_| vm.with(|v| v.fit_camera())>
+            <button type="button" id="zoom-fit" class="btn" title="Whole city" on:click=move |_| vm.with(|v| v.fit_camera())>
                 <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg>
-                "Whole city"
+                <span class="lbl">"Whole city"</span>
             </button>
-            <p class="map-hint">"Press a junction to open its plan. Press a street to open its cross-section."</p>
         </div>
     }
 }
@@ -112,9 +111,11 @@ fn insets_of(map: &Element) -> Insets {
         if !overlaps {
             continue;
         }
-        if r.height() > m.height() * 0.5 {
+        let hugs_left = r.left() - m.left() < GAP * 2.0;
+        let hugs_right = m.right() - r.right() < GAP * 2.0;
+        if r.width() < m.width() * 0.5 && (hugs_left || hugs_right) {
             // A panel down one side.
-            if r.left() + r.width() / 2.0 < m.left() + m.width() / 2.0 {
+            if hugs_left {
                 insets.left = insets.left.max(r.right() - m.left() + GAP);
             } else {
                 insets.right = insets.right.max(m.right() - r.left() + GAP);
@@ -448,6 +449,7 @@ pub fn Places(vm: Rc<MapVm>) -> impl IntoView {
         <div class="insp-head">
             <div><h2 class="insp-name">"Places"</h2><p class="insp-sub">{move || vm.with(|v| v.counts())}</p></div>
         </div>
+        <p class="map-hint">"Press a junction to open its plan. Press a street to open its cross-section."</p>
         <section class="insp-sec">
             <h3 class="note-h">"Junctions"</h3>
             <ul class="places">{move || vm.with(|v| v.junction_rows()).into_iter().map(|r| place_row(vm, r)).collect_view()}</ul>

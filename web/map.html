@@ -7,114 +7,109 @@
   <meta name="description" content="See the whole city at once and open any street or junction to change it.">
   <meta name="color-scheme" content="light dark">
   <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed"}catch(e){}</script>
-  <link rel="preload" href="fonts/barlow-semi-condensed-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="map.css">
 </head>
 <body>
   <svg id="defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"></svg>
 
-  <div class="sheet">
-    <div class="sheet-content">
-      <div class="topbar">
-        <div class="brand"><img class="mark" src="logo.svg" alt="" width="44" height="44"><span class="wordmark">CityLoom</span></div>
-        <nav class="surfaces" aria-label="Editors">
-          <a href="map.html" class="surface" aria-current="page">Map</a>
-          <a href="index.html" class="surface">Street</a>
-          <a href="intersection.html" class="surface">Intersection</a>
-        </nav>
-        <div class="top-end">
-          <div class="account">
-            <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
-            <div id="account-menu" class="menu" hidden>
-              <p class="menu-h">Settings</p>
-              <div class="menu-row">
-                <span id="units-label">Units</span>
-                <div class="units" role="group" aria-labelledby="units-label">
-                  <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
-                  <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
-                </div>
-              </div>
-              <div class="menu-row">
-                <label for="region">Region</label>
-                <select id="region"></select>
-              </div>
-              <div class="menu-row">
-                <span id="theme-label">Theme</span>
-                <div class="units" role="group" aria-labelledby="theme-label">
-                  <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
-                  <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
-                </div>
-              </div>
-              <p class="menu-act"><button type="button" id="print" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2V6h11v5.5h-2M4.5 9.5h7v4h-7z"/></svg>Print this sheet</button></p>
-              <p class="menu-foot"><a href="credits.html">Credits</a></p>
+  <header class="bar" data-covers>
+    <a class="brand" href="map.html" aria-label="CityLoom, the city map"><img class="mark" src="logo.svg" alt="" width="32" height="32"><span class="wordmark">CityLoom</span></a>
+    <div class="search-slot" id="search-slot"></div>
+    <nav class="surfaces" aria-label="Editors">
+      <a href="map.html" class="surface" aria-current="page">Map</a>
+      <a href="index.html" class="surface">Street</a>
+      <a href="intersection.html" class="surface">Intersection</a>
+    </nav>
+    <div class="top-end">
+      <button type="button" id="inspector-toggle" class="btn quiet" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the places ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span>Places</span></button>
+      <button type="button" id="notes-toggle" class="btn quiet" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span>Notes</span></button>
+      <div class="account">
+        <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
+        <div id="account-menu" class="menu" hidden>
+          <p class="menu-h">Settings</p>
+          <div class="menu-row">
+            <span id="units-label">Units</span>
+            <div class="units" role="group" aria-labelledby="units-label">
+              <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
+              <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
             </div>
           </div>
+          <div class="menu-row">
+            <label for="region">Region</label>
+            <select id="region"></select>
+          </div>
+          <div class="menu-row">
+            <span id="theme-label">Theme</span>
+            <div class="units" role="group" aria-labelledby="theme-label">
+              <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
+              <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
+            </div>
+          </div>
+          <p class="menu-act"><button type="button" id="print" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2V6h11v5.5h-2M4.5 9.5h7v4h-7z"/></svg>Print this sheet</button></p>
+          <div class="menu-keys">
+            <p class="menu-h">Keyboard</p>
+            <p id="keys" class="keys">
+              <span><kbd>/</kbd> search</span>
+              <span><kbd>Tab</kbd> next place</span>
+              <span><kbd>Enter</kbd> open</span>
+              <span><kbd>+</kbd> <kbd>−</kbd> zoom</span>
+              <span><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> move the map</span>
+              <span><kbd>0</kbd> whole city</span>
+              <span><kbd>[</kbd> <kbd>]</kbd> places, notes</span>
+            </p>
+          </div>
+          <p class="menu-foot"><a href="credits.html">Credits</a></p>
         </div>
       </div>
-      <header class="sheet-head">
-        <div class="head-start">
-          <button type="button" id="inspector-toggle" class="btn" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the places ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span>Places</span></button>
-          <div class="street" id="street"></div>
-        </div>
-        <div class="tools">
-          <div id="reset-slot" style="display: contents"></div>
-          <button type="button" id="notes-toggle" class="btn" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span>Notes</span></button>
-        </div>
-      </header>
-
-      <main class="sheet-body">
-        <aside class="inspector" id="inspector" aria-label="Places in the city"></aside>
-
-        <div class="work">
-          <section class="drawing plan-drawing" aria-labelledby="h-drawing">
-            <h2 id="h-drawing" class="sr-only">City map</h2>
-            <div id="map-tools-slot" style="display: contents"></div>
-            <div id="map-slot" style="display: contents"></div>
-            <ul class="plan-key" id="plan-key" aria-label="Key to the strips"></ul>
-            <div class="statusbar">
-              <div id="fit-slot" style="display: contents"></div>
-              <p id="keys" class="keys">
-                <span><kbd>Tab</kbd> next place</span>
-                <span><kbd>Enter</kbd> open</span>
-                <span><kbd>+</kbd> <kbd>−</kbd> zoom</span>
-                <span><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> move the map</span>
-                <span><kbd>0</kbd> whole city</span>
-                <span><kbd>[</kbd> <kbd>]</kbd> places, notes</span>
-              </p>
-            </div>
-          </section>
-        </div>
-
-        <aside class="notes" id="notes" aria-label="Notes">
-          <div class="tabs" role="tablist" aria-label="Notes sections">
-            <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="true">Checks</button>
-            <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
-          </div>
-
-          <div class="panel" id="p-checks" role="tabpanel" aria-labelledby="t-checks">
-            <section aria-labelledby="h-checks">
-              <h2 id="h-checks" class="note-h">Does it work?</h2>
-              <p class="hint" id="checks-lead"></p>
-              <ul class="checks places-list" id="checks"></ul>
-            </section>
-          </div>
-
-          <div class="panel" id="p-changes" role="tabpanel" aria-labelledby="t-changes" hidden>
-            <section aria-labelledby="h-changes">
-              <h2 id="h-changes" class="note-h">Your changes</h2>
-              <p class="hint" id="changes-lead"></p>
-              <ul class="checks places-list" id="changes"></ul>
-            </section>
-          </div>
-
-          <p class="fine">The layout, the street widths and every threshold are samples for now, not a real city.</p>
-
-          <div class="title-block" id="title-block" aria-label="About this city"></div>
-        </aside>
-      </main>
     </div>
-  </div>
+  </header>
+
+  <aside class="panel left" id="places-panel" aria-label="Places in the city" data-covers>
+    <div class="panel-head"><div class="street" id="street"></div></div>
+    <div class="panel-body inspector" id="inspector"></div>
+    <div class="panel-foot"><div id="reset-slot" style="display: contents"></div></div>
+  </aside>
+
+  <main class="stage">
+    <section class="drawing" aria-labelledby="h-drawing">
+      <h2 id="h-drawing" class="sr-only">City map</h2>
+      <div id="map-slot" style="display: contents"></div>
+    </section>
+    <div class="zoom-dock" id="map-tools-slot"></div>
+    <div class="statusbar">
+      <div id="fit-slot" style="display: contents"></div>
+    </div>
+  </main>
+
+  <aside class="panel right notes" id="notes" aria-label="Notes" data-covers>
+    <div class="tabs" role="tablist" aria-label="Notes sections">
+      <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="true">Checks</button>
+      <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
+    </div>
+    <div class="panel-body">
+      <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks">
+        <section aria-labelledby="h-checks">
+          <h2 id="h-checks" class="note-h">Does it work?</h2>
+          <p class="hint" id="checks-lead"></p>
+          <ul class="checks places-list" id="checks"></ul>
+        </section>
+      </div>
+      <div class="panel-tab" id="p-changes" role="tabpanel" aria-labelledby="t-changes" hidden>
+        <section aria-labelledby="h-changes">
+          <h2 id="h-changes" class="note-h">Your changes</h2>
+          <p class="hint" id="changes-lead"></p>
+          <ul class="checks places-list" id="changes"></ul>
+        </section>
+      </div>
+      <section class="key-section" aria-labelledby="h-key">
+        <h2 id="h-key" class="note-h">Key to the streets</h2>
+        <ul class="plan-key" id="plan-key" aria-label="Key to the streets"></ul>
+      </section>
+      <p class="fine">The layout, the street widths and every threshold are samples for now, not a real city.</p>
+    </div>
+    <div class="title-block" id="title-block" aria-label="About this city"></div>
+  </aside>
 
   <div id="live" class="sr-only" role="status" aria-live="polite"></div>
   <script type="module" src="map.js"></script>

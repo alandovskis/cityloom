@@ -18,3 +18,4 @@ e2e/playwright-report/
 *.iml
 *.iws
 .idea_modules/
+.impeccable/mocks/

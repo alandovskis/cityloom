@@ -37,6 +37,8 @@ Used by non-professional residents, first in a web browser, later in native mobi
 
 The name CityLoom only. No logo, voice, or identity assets exist yet.
 
+Visual direction (a standing preference, chosen by the product owner, 2026-10-03): the category standard for a resident-facing map tool, executed at full craft and sitting alongside Streetmix. A light, friendly, plainly familiar interface: a full-bleed map under floating white panels, soft rounded cards, one blue accent, one amber for what needs attention, system type. No thematic costume (no drafting sheet, no poster, no game). It applies to every page; pages are moved over one at a time, the city map first, and the earlier drafting-sheet look is retired as each one moves.
+
 ## Evidence on Hand
 
 None. The repository is empty. Do not fabricate data, outcomes, users, testimonials, or benchmarks.

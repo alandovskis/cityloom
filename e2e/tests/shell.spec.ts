@@ -33,7 +33,7 @@ for (const p of PAGES) {
       await expect(menu).toBeHidden();
       await expect(button).toHaveAttribute("aria-expanded", "false");
       await button.click();
-      await page.locator(".sheet-head").click({ position: { x: 5, y: 5 } });
+      await page.mouse.click(4, 4);
       await expect(menu).toBeHidden();
     });
 

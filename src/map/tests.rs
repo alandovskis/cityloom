@@ -62,7 +62,7 @@ fn the_map_tools_zoom_in_out_and_to_the_whole_city() {
     for id in ["zoom-out", "zoom-in", "zoom-fit"] {
         assert!(h.contains(&format!("id=\"{id}\"")), "{id}");
     }
-    assert!(h.contains("aria-label=\"Zoom out\"") && h.contains("Whole city") && h.contains("Press a junction to open its plan."));
+    assert!(h.contains("aria-label=\"Zoom out\"") && h.contains("Whole city") && h.contains("title=\"Whole city\""));
 }
 
 #[test]
@@ -123,6 +123,7 @@ fn the_places_panel_lists_each_junction_and_street_as_a_link_with_what_is_wrong(
     assert_eq!(count(&h, "class=\"place-row\""), 32);
     assert!(h.contains("href=\"intersection.html?junction=") && h.contains("href=\"index.html?street="));
     assert!(h.contains(">Junctions</h3>") && h.contains(">Streets</h3>") && !h.contains("class=\"st"));
+    assert!(h.contains("Press a junction to open its plan. Press a street to open its cross-section."));
     change_a_street(&vm, &storage, 1_000);
     let h = map_html(|| view! { <map_ui::Places vm=vm.clone()/> });
     assert_eq!(count(&h, "class=\"st bad\">Needs attention"), 1);
