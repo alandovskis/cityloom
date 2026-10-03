@@ -6,7 +6,10 @@ export default defineConfig({
   testDir: "./tests",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  reporter: "list",
+  retries: process.env.CI ? 1 : 0,
+  workers: process.env.CI ? 2 : undefined,
+  // CI keeps an HTML report (with traces) for the run to upload when a test fails.
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: "http://127.0.0.1:8137",
     trace: "retain-on-failure",
@@ -15,6 +18,6 @@ export default defineConfig({
   webServer: {
     command: "node serve.mjs",
     url: "http://127.0.0.1:8137/map.html",
-    reuseExistingServer: true,
+    reuseExistingServer: !process.env.CI,
   },
 });

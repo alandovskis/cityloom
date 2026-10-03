@@ -23,6 +23,7 @@ just serve    # http://127.0.0.1:8137/
 just test     # cargo test, and a type-check of the wasm-only code
 just e2e      # browser tests after a fresh build; arguments go to Playwright, e.g. `just e2e tests/street.spec.ts`
 just check    # test, then e2e
+just format   # rustfmt and Prettier (just format-check only checks)
 ```
 
 Without `just`: `cargo test`, `./scripts/build.sh`, `python3 -m http.server 8137 --directory web`, and `cd e2e && npx playwright test`.
@@ -30,3 +31,7 @@ Without `just`: `cargo test`, `./scripts/build.sh`, `python3 -m http.server 8137
 ## End-to-end tests
 
 Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; a small Node server (`e2e/serve.mjs`) serves `web/` for the run.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: formatting, the unit tests (with warnings denied), and the browser tests, each through `just`. A final `CI` job passes only if all of them did, so that is the one check to require in branch protection. A failed browser run keeps its Playwright report and traces as an artifact. Actions are pinned to a commit, and Dependabot proposes weekly updates for them, the Cargo dependencies and the browser tests' npm packages.

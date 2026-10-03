@@ -14,11 +14,12 @@ cargo test shell::vm # one module; a full test name also works
 just build           # release wasm + wasm-bindgen into web/pkg (gitignored); scripts/build.sh does the work
 just e2e             # builds, then runs the Playwright tests in e2e/; `just e2e tests/street.spec.ts` for one spec
 just check           # everything
+just format          # rustfmt (rustfmt.toml) + Prettier; `just format-check` only checks, as CI does
 just serve           # http://127.0.0.1:8137/
 just setup           # once: wasm-bindgen-cli (version from Cargo.toml, into .tools), `npm ci`, Playwright's Chromium
 ```
 
-There is no linter or formatter configuration. `build.sh` strips the name and producers sections (without that the wasm is ~7.6 MB instead of ~2 MB). The `proc-macro-error2` future-incompat warning comes from Leptos dependencies and is harmless.
+CI (`.github/workflows/ci.yml`) runs `just format-check`, `just test` and `just e2e` with `RUSTFLAGS=-D warnings`, so a new compiler warning fails it; run `just format` before committing. There is no clippy configuration. `build.sh` strips the name and producers sections (without that the wasm is ~7.6 MB instead of ~2 MB). The `proc-macro-error2` future-incompat warning comes from Leptos dependencies and is harmless.
 
 ## Architecture
 
