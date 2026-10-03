@@ -7,8 +7,8 @@ use leptos::prelude::*;
 
 use crate::junction::model::{LEFT, THROUGH};
 use crate::junction::read_model::JView;
-use crate::junction::watch::Watch;
 use crate::junction::vm::JunctionVm;
+use crate::junction::watch::Watch;
 
 const COMPASS: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
@@ -94,7 +94,13 @@ fn table(v: &JView, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
                     let class = format!("turn{}{}", if m.allowed { " on" } else { "" }, if bad { " bad" } else { "" });
                     let label = format!(
                         "{name}{}",
-                        if !m.allowed { ", not allowed" } else if bad { ", allowed, no lane serves it" } else { ", allowed" }
+                        if !m.allowed {
+                            ", not allowed"
+                        } else if bad {
+                            ", allowed, no lane serves it"
+                        } else {
+                            ", allowed"
+                        }
                     );
                     let (from, to, allowed) = (a.uid, b.uid, m.allowed);
                     let toggle = toggle.clone();

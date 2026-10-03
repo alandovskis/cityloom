@@ -11,9 +11,9 @@ pub mod page;
 pub mod plan;
 pub mod plan_svg;
 pub mod read_model;
-pub mod text;
 #[cfg(test)]
 mod tests;
+pub mod text;
 pub mod turns;
 pub mod vm;
 pub mod watch;
@@ -24,10 +24,10 @@ use leptos::prelude::*;
 use leptos::web_sys::HtmlElement;
 use wasm_bindgen::prelude::*;
 
-use crate::shared::catalogue::SAMPLES;
-use crate::shared::platform::browser_ports;
 use crate::city::binding::{CityBinding, Place};
 use crate::city::store::CityStore;
+use crate::shared::catalogue::SAMPLES;
+use crate::shared::platform::browser_ports;
 
 /// One junction being edited. The page drives it through the components the
 /// module mounts; the script only starts it up and hands it what the shell
@@ -66,9 +66,8 @@ impl Plan {
 pub fn mount_page(plan: &Plan) {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
-    let at = |id: &str| -> HtmlElement {
-        leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into()
-    };
+    let at =
+        |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let vm = plan.0.clone();
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
@@ -104,7 +103,8 @@ pub fn mount_page(plan: &Plan) {
 pub fn junction_catalogue() -> String {
     use model::*;
     let samples: Vec<_> = JUNCTION_SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "arms": s.arms.len() })).collect();
-    let streets: Vec<_> = SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm, "pieces": s.segments, "freeway": s.freeway })).collect();
+    let streets: Vec<_> =
+        SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm, "pieces": s.segments, "freeway": s.freeway })).collect();
     crate::json(&serde_json::json!({
         "controls": CONTROLS,
         "approaches": APPROACHES,

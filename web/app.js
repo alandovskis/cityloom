@@ -19,7 +19,8 @@ if (placeId && !held) {
 const sheet = held ?? new Sheet(0);
 
 // The hatch patterns the section and the swatches are filled with.
-document.getElementById("defs").innerHTML = `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}</defs>`;
+document.getElementById("defs").innerHTML =
+  `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}</defs>`;
 
 // What is waiting to be kept in the city is kept when the page is left.
 addEventListener("pagehide", () => sheet.flush());

@@ -61,10 +61,38 @@ pub const MEASURES: [Measure; 30] = [
     m("M1", "Bus Bulbs", "M Bus stop related", LOCAL, Where::Junction, ""),
     m("M2", "Signal-Protected On-Street Platforms", "M Bus stop related", LOCAL, Where::Junction, ""),
     m("N1", "Transit Modal Filter", "N Transit modal filters", LOCAL, Where::Junction, ""),
-    m("TSP", "Transit Signal Priority", "TSP Transit signal priority", LOCAL, Where::Not, "The Atlas lists it as under development, and CityLoom has no signal timing to prioritise."),
-    m("Z1", "Limited Traffic Areas", "Z Areas with access restrictions", AREA, Where::Not, "An area of many streets, and CityLoom edits one street or one junction."),
-    m("W-D", "Dynamic Congestion Pricing", "W Congestion and road pricing", AREA, Where::Not, "The Atlas lists it as in development, and a price needs a city and demand to act on."),
-    m("W-F", "Fixed-Fee Road Pricing", "W Congestion and road pricing", AREA, Where::Not, "The Atlas lists it as in development, and a price needs a city and demand to act on."),
+    m(
+        "TSP",
+        "Transit Signal Priority",
+        "TSP Transit signal priority",
+        LOCAL,
+        Where::Not,
+        "The Atlas lists it as under development, and CityLoom has no signal timing to prioritise.",
+    ),
+    m(
+        "Z1",
+        "Limited Traffic Areas",
+        "Z Areas with access restrictions",
+        AREA,
+        Where::Not,
+        "An area of many streets, and CityLoom edits one street or one junction.",
+    ),
+    m(
+        "W-D",
+        "Dynamic Congestion Pricing",
+        "W Congestion and road pricing",
+        AREA,
+        Where::Not,
+        "The Atlas lists it as in development, and a price needs a city and demand to act on.",
+    ),
+    m(
+        "W-F",
+        "Fixed-Fee Road Pricing",
+        "W Congestion and road pricing",
+        AREA,
+        Where::Not,
+        "The Atlas lists it as in development, and a price needs a city and demand to act on.",
+    ),
 ];
 
 #[cfg(test)]

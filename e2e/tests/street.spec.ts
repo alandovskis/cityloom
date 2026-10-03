@@ -17,7 +17,10 @@ test.describe("the street editor, as a sandbox on the sample streets", () => {
 
   test("starts on the first sample and says whether the pieces fit", async ({ page }) => {
     await expect(page.locator("#street-name")).toHaveText("Sample Street 1");
-    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /6 segments, 18\.0 m of 18\.0 m\. Every metre of the street is used\.$/);
+    await expect(page.locator("#drawing")).toHaveAttribute(
+      "aria-label",
+      /6 segments, 18\.0 m of 18\.0 m\. Every metre of the street is used\.$/,
+    );
     await expect(page.locator("#fit")).toHaveText("Every metre of the street is used.");
     await expect(page.locator("#undo")).toBeDisabled();
     await expect(page.locator("#redo")).toBeDisabled();

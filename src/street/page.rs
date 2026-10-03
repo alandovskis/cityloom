@@ -9,9 +9,9 @@ use serde::Deserialize;
 
 use crate::shared::catalogue::KINDS;
 use crate::street::model::{SegView, View};
+use crate::street::text::status_text;
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
-use crate::street::text::status_text;
 
 // ---- what the page is made of --------------------------------------------------------
 
@@ -66,7 +66,8 @@ pub fn clock_note(s: &SegView) -> String {
     if s.variants.is_empty() {
         return String::new();
     }
-    let others: Vec<String> = s.variants.iter().map(|v| format!("{} {}\u{2013}{}", KINDS[v.kind].name.to_lowercase(), hhmm(v.from_min), hhmm(v.to_min))).collect();
+    let others: Vec<String> =
+        s.variants.iter().map(|v| format!("{} {}\u{2013}{}", KINDS[v.kind].name.to_lowercase(), hhmm(v.from_min), hhmm(v.to_min))).collect();
     format!("{} except {}", KINDS[s.base_kind].name, others.join(", "))
 }
 
@@ -91,10 +92,9 @@ fn back_link() -> impl IntoView {
 
 fn end_link(e: &StreetEnd) -> impl IntoView {
     let name = e.name.clone();
-    e.junction.then(|| format!("intersection.html?junction={}", e.uid)).map_or_else(
-        || name.clone().into_any(),
-        |href| view! { <a href=href>{name.clone()}</a> }.into_any(),
-    )
+    e.junction
+        .then(|| format!("intersection.html?junction={}", e.uid))
+        .map_or_else(|| name.clone().into_any(), |href| view! { <a href=href>{name.clone()}</a> }.into_any())
 }
 
 /// The street's name and how wide it is; for a street of a city, the way back to
@@ -527,7 +527,8 @@ mod tests {
 
     #[test]
     fn the_ends_of_a_city_street_are_read_from_the_json_the_city_gives() {
-        let ends: Vec<StreetEnd> = serde_json::from_str(r#"[{"name":"Junction 1","junction":true,"uid":3},{"name":"Edge of the map","junction":false,"uid":0}]"#).unwrap();
+        let ends: Vec<StreetEnd> =
+            serde_json::from_str(r#"[{"name":"Junction 1","junction":true,"uid":3},{"name":"Edge of the map","junction":false,"uid":0}]"#).unwrap();
         assert_eq!(ends[0], StreetEnd { name: "Junction 1".into(), junction: true, uid: 3 });
         assert!(!ends[1].junction);
     }

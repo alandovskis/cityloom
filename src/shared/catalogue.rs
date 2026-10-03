@@ -16,13 +16,7 @@ pub enum Mode {
 }
 
 impl Mode {
-    pub const ALL: [Mode; 5] = [
-        Mode::Foot,
-        Mode::Bike,
-        Mode::Transit,
-        Mode::Vehicle,
-        Mode::Green,
-    ];
+    pub const ALL: [Mode; 5] = [Mode::Foot, Mode::Bike, Mode::Transit, Mode::Vehicle, Mode::Green];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -91,10 +85,7 @@ pub const MATERIALS: [Material; 8] = [
 
 /// Which way a one-way lane runs, seen from the cross-section: away from the
 /// viewer (into the page) or toward them.
-pub const DIRECTIONS: [Material; 2] = [
-    Material { id: "away", name: "Away from you" },
-    Material { id: "toward", name: "Toward you" },
-];
+pub const DIRECTIONS: [Material; 2] = [Material { id: "away", name: "Away from you" }, Material { id: "toward", name: "Toward you" }];
 
 /// The side of the road a region drives on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -335,14 +326,7 @@ pub const SAMPLES: [Sample; 4] = [
         name: "Sample Street 1",
         row_mm: 18000,
         freeway: false,
-        segments: &[
-            ("sidewalk", 3300),
-            ("parking", 2400),
-            ("travel", 3300),
-            ("travel", 3300),
-            ("parking", 2400),
-            ("sidewalk", 3300),
-        ],
+        segments: &[("sidewalk", 3300), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 3300)],
     },
     Sample {
         name: "Sample Avenue 2",
@@ -366,13 +350,7 @@ pub const SAMPLES: [Sample; 4] = [
         name: "Sample Lane 3",
         row_mm: 12000,
         freeway: false,
-        segments: &[
-            ("sidewalk", 2100),
-            ("travel", 3000),
-            ("travel", 3000),
-            ("parking", 2400),
-            ("sidewalk", 1500),
-        ],
+        segments: &[("sidewalk", 2100), ("travel", 3000), ("travel", 3000), ("parking", 2400), ("sidewalk", 1500)],
     },
     Sample {
         name: "Sample Freeway 4",

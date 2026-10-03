@@ -8,9 +8,9 @@ use leptos::prelude::*;
 
 use crate::junction::model::*;
 use crate::junction::vm::JunctionVm;
-use crate::shared::units::Units;
-use crate::shared::testing::{button_tag, count, html};
 use crate::junction::{inspector, notes, page, plan, turns};
+use crate::shared::testing::{button_tag, count, html};
+use crate::shared::units::Units;
 
 fn shared(sample: usize) -> Rc<JunctionVm> {
     JunctionVm::new(crate::shared::platform::browser_ports(), Junction::new(sample), None)
@@ -262,8 +262,8 @@ fn the_panel_s_lengths_follow_the_units() {
 // ---- what the keys do -------------------------------------------------------------
 
 use crate::junction::keys::{Action, Step};
-use crate::shared::live;
 use crate::junction::watch::Watch;
+use crate::shared::live;
 
 fn watch(sample: usize) -> (Rc<JunctionVm>, Watch) {
     let s = shared(sample);
@@ -396,7 +396,9 @@ fn the_title_block_gives_the_name_the_streets_and_the_changes_made() {
     let n = arm(&s, 0);
     s.edit(|j| j.set_corner(n, 7_000));
     let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
-    assert!(h.contains("id=\"tb-street\">Avenue and street<") && h.contains("id=\"tb-row\" class=\"fig\">4<") && h.contains("id=\"tb-changes\" class=\"fig\">1<"));
+    assert!(
+        h.contains("id=\"tb-street\">Avenue and street<") && h.contains("id=\"tb-row\" class=\"fig\">4<") && h.contains("id=\"tb-changes\" class=\"fig\">1<")
+    );
 }
 
 #[test]

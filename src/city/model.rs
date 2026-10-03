@@ -12,8 +12,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared::catalogue::{KINDS, REGIONS, SAMPLES, Side};
 use crate::junction::model::{self as junction, ALL_WAY_STOP, Arm, Junction, PRIORITY, SIGNAL, State};
+use crate::shared::catalogue::{KINDS, REGIONS, SAMPLES, Side};
 use crate::street::model::{Editor, Street};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
@@ -225,8 +225,7 @@ fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
         let found = radii.iter().any(|&r| {
             arms[i].corner_mm = r;
             let s = state(arms);
-            Junction::from_city("", &s, &s, 0)
-                .is_some_and(|j| j.view().corners.iter().any(|c| c.uid == uid && c.ok && !c.fast))
+            Junction::from_city("", &s, &s, 0).is_some_and(|j| j.view().corners.iter().any(|c| c.uid == uid && c.ok && !c.fast))
         });
         if !found {
             arms[i].corner_mm = preferred;
@@ -267,9 +266,8 @@ fn junction_fits(s: &State, node: usize) -> bool {
                 && (APPROACH_MIN_MM..=APPROACH_MAX_MM).contains(&a.approach_mm)
                 && a.stop < STOPS.len()
                 && a.rule < RULES.len()
-                && a.crossing.is_none_or(|c| {
-                    (MIN_SETBACK_MM..=MAX_SETBACK_MM).contains(&c.setback_mm) && (MIN_CROSSING_MM..=MAX_CROSSING_MM).contains(&c.width_mm)
-                })
+                && a.crossing
+                    .is_none_or(|c| (MIN_SETBACK_MM..=MAX_SETBACK_MM).contains(&c.setback_mm) && (MIN_CROSSING_MM..=MAX_CROSSING_MM).contains(&c.width_mm))
         })
 }
 
@@ -287,8 +285,7 @@ impl City {
     /// The city as first laid out: every street a sample, every junction
     /// generated from the streets that meet there.
     pub fn new() -> City {
-        let today_streets: BTreeMap<u32, Street> =
-            EDGES.iter().enumerate().map(|(i, e)| (i as u32 + 1, Street::sample(e.street, Side::Right))).collect();
+        let today_streets: BTreeMap<u32, Street> = EDGES.iter().enumerate().map(|(i, e)| (i as u32 + 1, Street::sample(e.street, Side::Right))).collect();
         let today_junctions: BTreeMap<u32, State> =
             (0..NODES.len()).filter(|&n| NODES[n].junction).map(|n| (node_uid(n), generate(n, &today_streets))).collect();
         City { streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions }
@@ -347,10 +344,7 @@ impl City {
     /// The two ends of a street, first the one the street editor looks from.
     pub fn street_ends(&self, edge: u32) -> Vec<EndView> {
         let Some(e) = Self::edge_index(edge) else { return Vec::new() };
-        [EDGES[e].a, EDGES[e].b]
-            .into_iter()
-            .map(|n| EndView { uid: node_uid(n), name: end_name(n), junction: NODES[n].junction })
-            .collect()
+        [EDGES[e].a, EDGES[e].b].into_iter().map(|n| EndView { uid: node_uid(n), name: end_name(n), junction: NODES[n].junction }).collect()
     }
 
     /// The street editor on one street of the city.
@@ -577,7 +571,8 @@ mod tests {
     #[test]
     fn every_place_in_the_first_city_works() {
         let v = City::new().view(0);
-        let bad: Vec<_> = v.nodes.iter().filter(|n| !n.ok).map(|n| (&n.name, &n.failing)).chain(v.edges.iter().filter(|e| !e.ok).map(|e| (&e.name, &e.failing))).collect();
+        let bad: Vec<_> =
+            v.nodes.iter().filter(|n| !n.ok).map(|n| (&n.name, &n.failing)).chain(v.edges.iter().filter(|e| !e.ok).map(|e| (&e.name, &e.failing))).collect();
         assert!(bad.is_empty(), "{bad:?}");
         assert_eq!((v.failing, v.edited), (0, 0));
         assert_eq!(v.places, 9 + 23);

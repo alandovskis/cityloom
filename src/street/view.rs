@@ -9,10 +9,10 @@ use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
 use crate::shared::bind::current_element;
-use crate::street::vm::StreetVm;
-use crate::street::watch::SheetWatch;
 use crate::street::keys::{self, Action};
 use crate::street::svg::{Geometry, Interaction, Moving, street_label, street_svg};
+use crate::street::vm::StreetVm;
+use crate::street::watch::SheetWatch;
 
 /// How far a pointer must move before a pressed piece is being moved.
 const DRAG_START_PX: f64 = 4.0;
@@ -283,7 +283,11 @@ fn show_inspector() {
             if let Some(el) = doc.get_element_by_id("inspector") {
                 let o = leptos::web_sys::ScrollIntoViewOptions::new();
                 o.set_block(leptos::web_sys::ScrollLogicalPosition::Start);
-                o.set_behavior(if matches("(prefers-reduced-motion: reduce)") { leptos::web_sys::ScrollBehavior::Auto } else { leptos::web_sys::ScrollBehavior::Smooth });
+                o.set_behavior(if matches("(prefers-reduced-motion: reduce)") {
+                    leptos::web_sys::ScrollBehavior::Auto
+                } else {
+                    leptos::web_sys::ScrollBehavior::Smooth
+                });
                 el.scroll_into_view_with_scroll_into_view_options(&o);
             }
         }
@@ -292,7 +296,9 @@ fn show_inspector() {
 
 #[cfg(target_arch = "wasm32")]
 fn typing(e: &KeyboardEvent) -> bool {
-    e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()).is_some_and(|t| t.closest("input, select, textarea").ok().flatten().is_some())
+    e.target()
+        .and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok())
+        .is_some_and(|t| t.closest("input, select, textarea").ok().flatten().is_some())
 }
 
 /// After the drawing is redrawn: bring a street that has just run over into

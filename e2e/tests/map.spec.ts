@@ -15,7 +15,9 @@ test.describe("the city map", () => {
   });
 
   test("lists junctions and streets that link to their editors", async ({ page }) => {
-    await expect(page.locator(`a.place-row[href="intersection.html?junction=${JUNCTION}"]`)).toContainText("Junction 1");
+    await expect(page.locator(`a.place-row[href="intersection.html?junction=${JUNCTION}"]`)).toContainText(
+      "Junction 1",
+    );
     await expect(page.locator(`a.place-row[href="index.html?street=${STREET}"]`)).toBeVisible();
   });
 
@@ -61,7 +63,9 @@ test.describe("the city map", () => {
     await page.keyboard.press("+");
     await expect(live(page)).toContainText("Resize");
     await page.goto("/map.html");
-    await expect(page.locator("#fit")).toHaveText("1 place needs attention: Sample Avenue 2, the edge of the map to Junction 4.");
+    await expect(page.locator("#fit")).toHaveText(
+      "1 place needs attention: Sample Avenue 2, the edge of the map to Junction 4.",
+    );
     await expect(page.locator("#reset")).toBeEnabled();
     await page.locator("#t-changes").click();
     await expect(page.locator("#changes")).not.toBeEmpty();
@@ -76,7 +80,9 @@ test.describe("the city map", () => {
     await page.goto("/map.html");
     await page.locator("#reset").click();
     await expect(page.locator("#reset-label")).toHaveText("Press again to start over");
-    await expect(live(page)).toHaveText("This puts every street and junction back as first laid out. Press again to confirm.");
+    await expect(live(page)).toHaveText(
+      "This puts every street and junction back as first laid out. Press again to confirm.",
+    );
     await page.locator("#reset").click();
     await expect(page.locator("#reset")).toBeDisabled();
     await expect(page.locator("#fit")).toHaveText("32 places. Every check passes.");

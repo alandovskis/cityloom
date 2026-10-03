@@ -3,8 +3,14 @@
 
 /// One distinct texture per kind of piece.
 pub const HATCH: [(&str, &str); 12] = [
-    ("sidewalk", r##"<pattern id="h-sidewalk" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.9"/><circle cx="6" cy="6" r="0.9"/></pattern>"##),
-    ("planting", r##"<pattern id="h-planting" width="9" height="8" patternUnits="userSpaceOnUse"><path d="M1.5,7 L2.5,3 M5,7 L4.5,2.5 M8,7 L8.8,3.5"/></pattern>"##),
+    (
+        "sidewalk",
+        r##"<pattern id="h-sidewalk" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.9"/><circle cx="6" cy="6" r="0.9"/></pattern>"##,
+    ),
+    (
+        "planting",
+        r##"<pattern id="h-planting" width="9" height="8" patternUnits="userSpaceOnUse"><path d="M1.5,7 L2.5,3 M5,7 L4.5,2.5 M8,7 L8.8,3.5"/></pattern>"##,
+    ),
     ("bike", r##"<pattern id="h-bike" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0,0 L0,6"/></pattern>"##),
     ("travel", r##"<pattern id="h-travel" width="14" height="12" patternUnits="userSpaceOnUse"><path d="M1,3 L6,3 M8,9 L13,9"/></pattern>"##),
     ("bus", r##"<pattern id="h-bus" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><path d="M0,0 L0,4"/></pattern>"##),
@@ -19,23 +25,50 @@ pub const HATCH: [(&str, &str); 12] = [
 
 /// Surface materials: the surface swatches and the paving course along each slab.
 pub const MATERIAL_HATCH: [(&str, &str); 8] = [
-    ("asphalt", r##"<pattern id="m-asphalt" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="0.7"/><circle cx="3.7" cy="3.7" r="0.7"/></pattern>"##),
-    ("concrete", r##"<pattern id="m-concrete" width="12" height="10" patternUnits="userSpaceOnUse"><path d="M2,8 L4.5,3.5 L7,8 Z"/><circle cx="9.5" cy="3" r="0.8"/></pattern>"##),
+    (
+        "asphalt",
+        r##"<pattern id="m-asphalt" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="0.7"/><circle cx="3.7" cy="3.7" r="0.7"/></pattern>"##,
+    ),
+    (
+        "concrete",
+        r##"<pattern id="m-concrete" width="12" height="10" patternUnits="userSpaceOnUse"><path d="M2,8 L4.5,3.5 L7,8 Z"/><circle cx="9.5" cy="3" r="0.8"/></pattern>"##,
+    ),
     ("permeable", r##"<pattern id="m-permeable" width="8" height="8" patternUnits="userSpaceOnUse"><rect x="1.5" y="1.5" width="5" height="5"/></pattern>"##),
     ("brick", r##"<pattern id="m-brick" width="12" height="8" patternUnits="userSpaceOnUse"><path d="M0,0 H12 M0,4 H12 M3,0 V4 M9,4 V8"/></pattern>"##),
     ("grass", r##"<pattern id="m-grass" width="9" height="8" patternUnits="userSpaceOnUse"><path d="M1.5,7 L2.5,3 M5,7 L4.5,2.5 M8,7 L8.8,3.5"/></pattern>"##),
-    ("trees", r##"<pattern id="m-trees" width="12" height="12" patternUnits="userSpaceOnUse"><circle cx="6" cy="6" r="4"/><circle cx="6" cy="6" r="0.8"/></pattern>"##),
-    ("planted", r##"<pattern id="m-planted" width="12" height="10" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="2"/><circle cx="9" cy="7.5" r="1.4"/></pattern>"##),
-    ("gravel", r##"<pattern id="m-gravel" width="11" height="9" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.1"/><circle cx="7.5" cy="3" r="0.6"/><circle cx="4.5" cy="7" r="0.9"/><circle cx="9.5" cy="7.5" r="0.5"/></pattern>"##),
+    (
+        "trees",
+        r##"<pattern id="m-trees" width="12" height="12" patternUnits="userSpaceOnUse"><circle cx="6" cy="6" r="4"/><circle cx="6" cy="6" r="0.8"/></pattern>"##,
+    ),
+    (
+        "planted",
+        r##"<pattern id="m-planted" width="12" height="10" patternUnits="userSpaceOnUse"><circle cx="3.5" cy="3.5" r="2"/><circle cx="9" cy="7.5" r="1.4"/></pattern>"##,
+    ),
+    (
+        "gravel",
+        r##"<pattern id="m-gravel" width="11" height="9" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.1"/><circle cx="7.5" cy="3" r="0.6"/><circle cx="4.5" cy="7" r="0.9"/><circle cx="9.5" cy="7.5" r="0.5"/></pattern>"##,
+    ),
 ];
 
 /// Curbs.
 pub const CURB_HATCH: [(&str, &str); 7] = [
     ("granite", r##"<pattern id="c-granite" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0,0 L5,5 M5,0 L0,5"/></pattern>"##),
-    ("concrete", r##"<pattern id="c-concrete" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0,0 L0,5"/></pattern>"##),
-    ("asphalt", r##"<pattern id="c-asphalt" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7"/><circle cx="3" cy="3" r="0.7"/></pattern>"##),
-    ("planted", r##"<pattern id="c-planted" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="1.8" cy="1.8" r="1.2"/><circle cx="4.6" cy="4.4" r="0.8"/></pattern>"##),
-    ("bikefriendly", r##"<pattern id="c-bikefriendly" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0,5 L5,0"/><circle cx="1.2" cy="1.2" r="0.6"/></pattern>"##),
+    (
+        "concrete",
+        r##"<pattern id="c-concrete" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0,0 L0,5"/></pattern>"##,
+    ),
+    (
+        "asphalt",
+        r##"<pattern id="c-asphalt" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7"/><circle cx="3" cy="3" r="0.7"/></pattern>"##,
+    ),
+    (
+        "planted",
+        r##"<pattern id="c-planted" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="1.8" cy="1.8" r="1.2"/><circle cx="4.6" cy="4.4" r="0.8"/></pattern>"##,
+    ),
+    (
+        "bikefriendly",
+        r##"<pattern id="c-bikefriendly" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0,5 L5,0"/><circle cx="1.2" cy="1.2" r="0.6"/></pattern>"##,
+    ),
     ("island", r##"<pattern id="c-island" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M0,3 H6 M3,0 V6"/></pattern>"##),
     ("kassel", r##"<pattern id="c-kassel" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><path d="M0,0 L0,5"/></pattern>"##),
 ];
@@ -71,7 +104,12 @@ fn tree(x: f64, y: f64, s: f64) -> String {
 }
 
 fn shrub(x: f64, y: f64, s: f64) -> String {
-    at(x, y, s, "<path class=\"f-tree\" d=\"M-15,0 C-18,-14 -7,-24 0,-19 C6,-26 18,-15 15,0 Z\"/><path class=\"o\" d=\"M0,-19 L0,-4 M-6,-14 L-4,-4 M7,-15 L5,-4\"/>")
+    at(
+        x,
+        y,
+        s,
+        "<path class=\"f-tree\" d=\"M-15,0 C-18,-14 -7,-24 0,-19 C6,-26 18,-15 15,0 Z\"/><path class=\"o\" d=\"M0,-19 L0,-4 M-6,-14 L-4,-4 M7,-15 L5,-4\"/>",
+    )
 }
 
 fn cyclist(x: f64, s: f64) -> String {
@@ -84,7 +122,12 @@ fn cyclist(x: f64, s: f64) -> String {
 }
 
 fn cone(x: f64, s: f64) -> String {
-    at(x, 0.0, s, "<path class=\"f-van\" d=\"M-9,0 L-4,-34 L4,-34 L9,0 Z\"/><path d=\"M-6.5,-14 L6.5,-14 M-5.2,-24 L5.2,-24\"/><path class=\"o\" d=\"M-13,0 L13,0\"/>")
+    at(
+        x,
+        0.0,
+        s,
+        "<path class=\"f-van\" d=\"M-9,0 L-4,-34 L4,-34 L9,0 Z\"/><path d=\"M-6.5,-14 L6.5,-14 M-5.2,-24 L5.2,-24\"/><path class=\"o\" d=\"M-13,0 L13,0\"/>",
+    )
 }
 
 fn car(x: f64, s: f64) -> String {
@@ -209,7 +252,13 @@ fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
             if o.shelter {
                 return shelter(0.0, 1.0);
             }
-            let n = if wm < 2.2 { 1 } else if wm < 4.2 { 2 } else { 3 };
+            let n = if wm < 2.2 {
+                1
+            } else if wm < 4.2 {
+                2
+            } else {
+                3
+            };
             let gap = wm * 55.0 * 0.3;
             let xs: Vec<f64> = match n {
                 1 => vec![0.0],
@@ -219,10 +268,22 @@ fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
             let sizes = [1.0, 0.86, 0.94];
             xs.iter().enumerate().map(|(i, x)| person(*x, sizes[i], i % 2)).collect()
         }
-        "planting" => if o.material == "trees" { tree(0.0, 0.0, 1.0) } else { shrub(0.0, 0.0, 1.0) },
+        "planting" => {
+            if o.material == "trees" {
+                tree(0.0, 0.0, 1.0)
+            } else {
+                shrub(0.0, 0.0, 1.0)
+            }
+        }
         "bike" => cyclist(0.0, 1.0),
         "travel" => car(0.0, 1.0),
-        "bus" => if o.tram { tram(0.0, 1.0) } else { bus(0.0, 1.0) },
+        "bus" => {
+            if o.tram {
+                tram(0.0, 1.0)
+            } else {
+                bus(0.0, 1.0)
+            }
+        }
         "parking" => car(-8.0, 0.92) + &post_p(wm * 55.0 * 0.36, 0.9),
         "median" => {
             let w = (wm * 55.0 - 10.0).max(20.0) / 2.0;
@@ -243,13 +304,41 @@ fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
 /// it to fit a narrow segment.
 fn native_width(kind_id: &str, wm: f64, o: SymbolOpts) -> f64 {
     match kind_id {
-        "sidewalk" => if o.shelter { 84.0 } else if wm < 2.2 { 24.0 } else if wm < 4.2 { 70.0 } else { 110.0 },
-        "planting" => if o.material == "trees" { 74.0 } else { 34.0 },
+        "sidewalk" => {
+            if o.shelter {
+                84.0
+            } else if wm < 2.2 {
+                24.0
+            } else if wm < 4.2 {
+                70.0
+            } else {
+                110.0
+            }
+        }
+        "planting" => {
+            if o.material == "trees" {
+                74.0
+            } else {
+                34.0
+            }
+        }
         "bike" => 54.0,
         "travel" => 100.0,
-        "bus" => if o.tram { 176.0 } else { 148.0 },
+        "bus" => {
+            if o.tram {
+                176.0
+            } else {
+                148.0
+            }
+        }
         "parking" => 112.0,
-        "median" => if wm >= 2.4 { 62.0 } else { 52.0 },
+        "median" => {
+            if wm >= 2.4 {
+                62.0
+            } else {
+                52.0
+            }
+        }
         "loading" => 110.0,
         "shoulder" => 40.0,
         "bikerack" => 80.0,
@@ -293,7 +382,11 @@ mod tests {
             assert!(HATCH.iter().any(|(id, svg)| *id == k.id && svg.contains(&format!("id=\"h-{}\"", k.id))), "hatch for {}", k.id);
             assert!(!art(k.id, 3.0, SymbolOpts::default()).is_empty(), "symbol for {}", k.id);
             // The fall-through arm of `native_width` is only for a kind with no symbol.
-            assert!(["sidewalk", "planting", "bike", "travel", "bus", "parking", "median", "loading", "shoulder", "bikerack", "bikeshare", "pole"].contains(&k.id), "{} has no width", k.id);
+            assert!(
+                ["sidewalk", "planting", "bike", "travel", "bus", "parking", "median", "loading", "shoulder", "bikerack", "bikeshare", "pole"].contains(&k.id),
+                "{} has no width",
+                k.id
+            );
         }
     }
 

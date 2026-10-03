@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use crate::city::model::{CityView, EdgeView, NodeView};
-use crate::shared::symbols::HATCH;
 use crate::map::camera::ScaleBar;
 use crate::map::vm::{junction_label, junction_number, street_label};
+use crate::shared::symbols::HATCH;
 use crate::shared::units::Units;
 
 /// Pieces beside the roadway, not part of it.
@@ -110,12 +110,23 @@ pub fn hot_layer(v: &CityView, k: f64, hot: Option<&str>) -> String {
     let nodes: HashMap<u32, &NodeView> = v.nodes.iter().map(|n| (n.uid, n)).collect();
     if let Some(uid) = hot.strip_prefix("s-").and_then(|u| u.parse::<u32>().ok()) {
         if let Some((e, g)) = v.edges.iter().find(|e| e.uid == uid).and_then(|e| Geometry::of(e, &nodes).map(|g| (e, g))) {
-            return format!("<line id=\"hl-s-{}\" class=\"m-hl on\" {} stroke-width=\"{}\"/>", e.uid, g.line(0.0, 0.0, g.len), r2(e.row_mm as f64 / 1000.0 + px(14.0)));
+            return format!(
+                "<line id=\"hl-s-{}\" class=\"m-hl on\" {} stroke-width=\"{}\"/>",
+                e.uid,
+                g.line(0.0, 0.0, g.len),
+                r2(e.row_mm as f64 / 1000.0 + px(14.0))
+            );
         }
     }
     if let Some(uid) = hot.strip_prefix("j-").and_then(|u| u.parse::<u32>().ok()) {
         if let Some(n) = v.nodes.iter().find(|n| n.uid == uid && n.junction) {
-            return format!("<circle id=\"hl-j-{}\" class=\"m-hl on\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>", n.uid, n.x_mm as f64 / 1000.0, n.y_mm as f64 / 1000.0, r2(n.radius_mm as f64 / 1000.0 + px(8.0)));
+            return format!(
+                "<circle id=\"hl-j-{}\" class=\"m-hl on\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>",
+                n.uid,
+                n.x_mm as f64 / 1000.0,
+                n.y_mm as f64 / 1000.0,
+                r2(n.radius_mm as f64 / 1000.0 + px(8.0))
+            );
         }
     }
     String::new()
@@ -154,7 +165,14 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
         write!(s, "<line class=\"m-out\" {} stroke-width=\"{}\"/>", l.g.line(0.0, 0.0, l.g.len), r2(l.row)).unwrap();
     }
     for l in &laid {
-        write!(s, "<line class=\"{}\" {} stroke-width=\"{}\"/>", if l.e.freeway { "m-shoulder" } else { "m-walk" }, l.g.line(0.0, 0.0, l.g.len), r2(l.row - px(2.0))).unwrap();
+        write!(
+            s,
+            "<line class=\"{}\" {} stroke-width=\"{}\"/>",
+            if l.e.freeway { "m-shoulder" } else { "m-walk" },
+            l.g.line(0.0, 0.0, l.g.len),
+            r2(l.row - px(2.0))
+        )
+        .unwrap();
     }
     for l in &laid {
         write!(s, "<line class=\"m-road\" {} stroke-width=\"{}\"/>", l.g.line(l.road_off, 0.0, l.g.len), r2(l.road_w)).unwrap();
@@ -211,7 +229,14 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
         )
         .unwrap();
         if n.edited {
-            write!(s, "<text class=\"m-tag\" text-anchor=\"middle\" y=\"{}\" font-size=\"{}\" stroke-width=\"{}\">changed</text>", r2(px(26.0)), r2(px(12.0)), r2(px(4.0))).unwrap();
+            write!(
+                s,
+                "<text class=\"m-tag\" text-anchor=\"middle\" y=\"{}\" font-size=\"{}\" stroke-width=\"{}\">changed</text>",
+                r2(px(26.0)),
+                r2(px(12.0)),
+                r2(px(4.0))
+            )
+            .unwrap();
         }
         s += "</g>";
         if !n.ok {
@@ -255,7 +280,14 @@ pub fn overlay_svg(bar: &ScaleBar, height: f64) -> String {
     let (x, y) = (20.0, height - 34.0);
     let block = bar.width_px / 5.0;
     let blocks: String = (0..5)
-        .map(|i| format!("<rect class=\"{}\" x=\"{}\" y=\"{y}\" width=\"{}\" height=\"7\"/>", if i % 2 == 1 { "sb-paper" } else { "sb-ink" }, r2(x + block * i as f64), r2(block)))
+        .map(|i| {
+            format!(
+                "<rect class=\"{}\" x=\"{}\" y=\"{y}\" width=\"{}\" height=\"7\"/>",
+                if i % 2 == 1 { "sb-paper" } else { "sb-ink" },
+                r2(x + block * i as f64),
+                r2(block)
+            )
+        })
         .collect();
     format!(
         "<g class=\"north\" transform=\"translate(24 22)\"><path d=\"M0 -12 L7 10 L0 5 L-7 10 Z\"/><text y=\"26\" text-anchor=\"middle\">N</text></g><g class=\"scale\">{blocks}<text x=\"{x}\" y=\"{}\">0</text><text x=\"{}\" y=\"{}\" text-anchor=\"end\">{} {}</text></g>",

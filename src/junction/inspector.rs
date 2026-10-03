@@ -7,12 +7,12 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 
-use crate::shared::catalogue::SAMPLES;
 use crate::junction::model::*;
 use crate::junction::read_model::{CrossingView, JView};
-use crate::junction::vm::JunctionVm;
 use crate::junction::turns::{compass, turn_glyph, turn_name, turn_word};
+use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
+use crate::shared::catalogue::SAMPLES;
 use crate::shared::units::Units;
 
 // ---- text the panel is made of ---------------------------------------------
@@ -186,9 +186,7 @@ fn ring_size(w: Watch) -> impl IntoView {
         value: length_signal(w, 1, |v| v.ring.as_ref().map_or(0, |r| r.radius_mm * 2)),
         step: step_signal(w),
         tag: Signal::derive(move || format!("{} across", w.units().word())),
-        hint: derived(w, |v, u| {
-            format!("Across the outside. No smaller than {} with these streets.", u.length(v.ring.as_ref().map_or(0, |r| r.floor_mm * 2)))
-        }),
+        hint: derived(w, |v, u| format!("Across the outside. No smaller than {} with these streets.", u.length(v.ring.as_ref().map_or(0, |r| r.floor_mm * 2)))),
     };
     num_field(
         spec,
@@ -239,10 +237,7 @@ fn bus_choice(w: Watch) -> impl IntoView {
     };
     let none_selected = move || w.view().bus.is_none();
     let note = Signal::derive(move || match w.view().bus.as_ref() {
-        Some(b) => format!(
-            "A {} bus-only lane straight across the island. It crosses the ring where it enters and leaves.",
-            w.units().length(b.width_mm)
-        ),
+        Some(b) => format!("A {} bus-only lane straight across the island. It crosses the ring where it enters and leaves.", w.units().length(b.width_mm)),
         None => "Lets buses cut across the island between two streets.".to_string(),
     });
     section(
@@ -420,7 +415,11 @@ fn dest_button(w: Watch, uid: u32, lane: usize, to: u32) -> impl IntoView {
     let d = a.and_then(|a| a.lanes.get(lane)).and_then(|l| l.dests.iter().find(|d| d.uid == to));
     let (class, label) = d.map_or((0, String::new()), |d| (d.class, d.label.clone()));
     let bearing = v.arms.iter().find(|x| x.uid == to).map_or(0, |x| x.bearing);
-    let state = move || w.arm(uid, |a| a.lanes.get(lane).and_then(|l| l.dests.iter().find(|d| d.uid == to).map(|d| (d.on, d.open, l.bad)))).flatten().unwrap_or((false, false, false));
+    let state = move || {
+        w.arm(uid, |a| a.lanes.get(lane).and_then(|l| l.dests.iter().find(|d| d.uid == to).map(|d| (d.on, d.open, l.bad))))
+            .flatten()
+            .unwrap_or((false, false, false))
+    };
     let name = format!("Lane {} to {}, {}", lane + 1, label, turn_word(class));
     view! {
         <button
@@ -487,7 +486,9 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
         let v = w.view_now();
         let d = v.arms.iter().find(|a| a.uid == uid).and_then(|a| a.lanes.get(lane)).and_then(|l| l.dests.iter().find(|d| d.uid == to));
         let (class, label) = d.map_or((0, String::new()), |d| (d.class, d.label.clone()));
-        let state = move || w.arm(uid, |a| a.lanes.get(lane).and_then(|l| l.dests.iter().find(|d| d.uid == to).map(|d| (d.on, d.open)))).flatten().unwrap_or((false, false));
+        let state = move || {
+            w.arm(uid, |a| a.lanes.get(lane).and_then(|l| l.dests.iter().find(|d| d.uid == to).map(|d| (d.on, d.open)))).flatten().unwrap_or((false, false))
+        };
         option_btn(
             move || state().0,
             move || !state().1,

@@ -6,7 +6,13 @@ import { expect, live, test } from "./fixtures";
 const PAGES = [
   { name: "map", url: "/map.html", firstTab: "t-checks", secondTab: "t-changes", details: "Places hidden." },
   { name: "street", url: "/index.html", firstTab: "t-space", secondTab: "t-checks", details: "Piece details hidden." },
-  { name: "junction", url: "/intersection.html", firstTab: "t-space", secondTab: "t-checks", details: "Details hidden." },
+  {
+    name: "junction",
+    url: "/intersection.html",
+    firstTab: "t-space",
+    secondTab: "t-checks",
+    details: "Details hidden.",
+  },
 ];
 
 for (const p of PAGES) {

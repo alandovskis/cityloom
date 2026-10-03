@@ -2,8 +2,8 @@
 //! people it moves, whether it works, what has changed, and the transit
 //! measures it forms or could.
 
-use crate::street::model::{Check, View};
 use crate::shared::units::Units;
+use crate::street::model::{Check, View};
 
 /// A whole number with a comma between each thousand, as `toLocaleString` writes it.
 pub fn thousands(n: i32) -> String {

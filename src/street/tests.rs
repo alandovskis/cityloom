@@ -16,7 +16,6 @@ use crate::street::watch::SheetWatch;
 use crate::street::{inspector, notes, page, view};
 // ---- what the keys do on the street ---------------------------------------------------
 
-
 fn street_watch() -> (Rc<StreetVm>, SheetWatch) {
     let s = StreetVm::new(crate::shared::platform::browser_ports(), Editor::new(0), None);
     let w = SheetWatch::new(s.clone());
@@ -92,8 +91,6 @@ fn removing_takes_the_selected_piece_away() {
     assert!(s.view().segments.iter().all(|x| x.uid != u));
 }
 
-
-
 fn street_shared(sample: usize) -> Rc<StreetVm> {
     StreetVm::new(crate::shared::platform::browser_ports(), Editor::new(sample), None)
 }
@@ -103,10 +100,7 @@ fn street_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
 }
 
 fn street_ends() -> Vec<page::StreetEnd> {
-    vec![
-        page::StreetEnd { name: "the edge of the map".into(), junction: false, uid: 0 },
-        page::StreetEnd { name: "Junction 4".into(), junction: true, uid: 2 },
-    ]
+    vec![page::StreetEnd { name: "the edge of the map".into(), junction: false, uid: 0 }, page::StreetEnd { name: "Junction 4".into(), junction: true, uid: 2 }]
 }
 
 #[test]
@@ -153,7 +147,11 @@ fn the_street_s_title_block_gives_its_name_width_and_changes() {
     let u = segment(&s, 0);
     s.edit(|e| e.nudge_width(u, 100));
     let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
-    assert!(h.contains("id=\"tb-street\">Sample Street 1<") && h.contains("id=\"tb-row\" class=\"fig\">18.0 m<") && h.contains("id=\"tb-changes\" class=\"fig\">1<"));
+    assert!(
+        h.contains("id=\"tb-street\">Sample Street 1<")
+            && h.contains("id=\"tb-row\" class=\"fig\">18.0 m<")
+            && h.contains("id=\"tb-changes\" class=\"fig\">1<")
+    );
 }
 
 #[test]

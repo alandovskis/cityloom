@@ -2,8 +2,8 @@
 //! the street, and what a screen reader is told after an edit or a selection.
 
 use crate::shared::catalogue::KINDS;
-use crate::street::model::View;
 use crate::shared::units::Units;
+use crate::street::model::View;
 
 pub const STARTED_OVER: &str = "Started over from the street as it is today. Undo brings your changes back.";
 pub const MEASURE_REFUSED: &str = "That measure does not suit this street.";
@@ -113,6 +113,9 @@ mod tests {
         e.select(Some(second));
         let v = e.view();
         let s = &v.segments[1];
-        assert_eq!(selection_text(&v, Units::Metres).unwrap(), format!("{}, {} m, 2 of {}", KINDS[s.kind].name, Units::Metres.fine(s.width_mm), v.segments.len()));
+        assert_eq!(
+            selection_text(&v, Units::Metres).unwrap(),
+            format!("{}, {} m, 2 of {}", KINDS[s.kind].name, Units::Metres.fine(s.width_mm), v.segments.len())
+        );
     }
 }

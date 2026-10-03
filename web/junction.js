@@ -24,13 +24,15 @@ if (placeId && !held) {
   new Plan(0).mount_shell(); // only the settings menu and the sidebars have anything to do here
   document.getElementById("street-name").textContent = placeName;
   document.querySelector(".tools").hidden = true;
-  document.querySelector(".sheet-body").innerHTML = `<div class="stuck"><h2 class="note-h">This junction cannot be drawn</h2><p>The streets that meet here have been changed so that they no longer make a junction. Give the streets their room back, or start the city over from the map.</p><p><a class="back" href="map.html">City map</a></p></div>`;
+  document.querySelector(".sheet-body").innerHTML =
+    `<div class="stuck"><h2 class="note-h">This junction cannot be drawn</h2><p>The streets that meet here have been changed so that they no longer make a junction. Give the streets their room back, or start the city over from the map.</p><p><a class="back" href="map.html">City map</a></p></div>`;
   await new Promise(() => {});
 }
 const plan = held ?? new Plan(0);
 
 // The hatch patterns the plan and the swatches are filled with.
-document.getElementById("defs").innerHTML = `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}
+document.getElementById("defs").innerHTML =
+  `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}
   <marker id="mv-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mv-tip" d="M1 1 9 5 1 9"/></marker></defs>`;
 
 // What is waiting to be kept in the city is kept when the page is left.

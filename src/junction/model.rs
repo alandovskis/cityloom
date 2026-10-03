@@ -6,8 +6,8 @@
 use crate::shared::catalogue::{KINDS, Material, REGIONS, SAMPLES, Side, is_roadway};
 use serde::{Deserialize, Serialize};
 
-use crate::street::model::{Editor, Street, View};
 use crate::junction::geometry::gap;
+use crate::street::model::{Editor, Street, View};
 
 pub const LEFT: u8 = 1;
 pub const THROUGH: u8 = 2;
@@ -308,20 +308,13 @@ impl Arm {
 }
 
 fn read_profile(view: &View, name: &'static str) -> Profile {
-    let pieces: Vec<Piece> = view
-        .segments
-        .iter()
-        .map(|s| Piece { kind: s.kind, material: s.material, x_mm: s.x_mm, width_mm: s.width_mm, direction: s.direction })
-        .collect();
+    let pieces: Vec<Piece> =
+        view.segments.iter().map(|s| Piece { kind: s.kind, material: s.material, x_mm: s.x_mm, width_mm: s.width_mm, direction: s.direction }).collect();
     let road: Vec<&Piece> = pieces.iter().filter(|p| is_roadway(p.kind)).collect();
     let road_l = road.first().map_or(0, |p| p.x_mm);
     let road_r = road.last().map_or(view.row_mm, |p| p.x_mm + p.width_mm);
     let lanes = |dir: &str| {
-        let mut v: Vec<i32> = pieces
-            .iter()
-            .filter(|p| KINDS[p.kind].id == "travel" && p.direction == Some(dir))
-            .map(|p| p.x_mm + p.width_mm / 2)
-            .collect();
+        let mut v: Vec<i32> = pieces.iter().filter(|p| KINDS[p.kind].id == "travel" && p.direction == Some(dir)).map(|p| p.x_mm + p.width_mm / 2).collect();
         v.sort_unstable_by(|a, b| b.cmp(a));
         v
     };
@@ -334,18 +327,7 @@ fn read_profile(view: &View, name: &'static str) -> Profile {
     };
     let park = |p: Option<&&Piece>| p.map_or(0, |p| if matches!(KINDS[p.kind].id, "parking" | "loading") { p.width_mm } else { 0 });
     let (enter_x, leave_x, enter_span, leave_span) = (lanes("toward"), lanes("away"), span("toward"), span("away"));
-    Profile {
-        name,
-        row_mm: view.row_mm,
-        park: [park(road.first()), park(road.last())],
-        pieces,
-        road_l,
-        road_r,
-        enter_x,
-        leave_x,
-        enter_span,
-        leave_span,
-    }
+    Profile { name, row_mm: view.row_mm, park: [park(road.first()), park(road.last())], pieces, road_l, road_r, enter_x, leave_x, enter_span, leave_span }
 }
 
 impl Profile {
@@ -372,10 +354,7 @@ pub fn turn_class(from: i32, to: i32) -> u8 {
 
 /// The classes of turn an arm has, given the other arms' bearings.
 pub fn classes_of(arms: &[Arm], i: usize) -> u8 {
-    arms.iter()
-        .enumerate()
-        .filter(|(j, _)| *j != i)
-        .fold(0, |m, (_, b)| m | turn_class(arms[i].bearing, b.bearing))
+    arms.iter().enumerate().filter(|(j, _)| *j != i).fold(0, |m, (_, b)| m | turn_class(arms[i].bearing, b.bearing))
 }
 
 /// The classes a lane in place `i` of `n` serves by default, given those the
@@ -466,13 +445,7 @@ pub const JUNCTION_SAMPLES: [JunctionSample; 4] = [
     JunctionSample {
         name: "Five ways",
         control: ALL_WAY_STOP,
-        arms: &[
-            sa(0, 0, 0, 4_000, false),
-            sa(2, 70, 0, 3_000, false),
-            sa(1, 145, 0, 4_000, true),
-            sa(2, 215, 0, 3_000, false),
-            sa(0, 290, 0, 4_000, false),
-        ],
+        arms: &[sa(0, 0, 0, 4_000, false), sa(2, 70, 0, 3_000, false), sa(1, 145, 0, 4_000, true), sa(2, 215, 0, 3_000, false), sa(0, 290, 0, 4_000, false)],
     },
 ];
 
@@ -978,23 +951,32 @@ impl Junction {
 
     pub fn set_bearing(&mut self, uid: u32, bearing: i32) -> bool {
         let b = snap(bearing, BEARING_STEP).rem_euclid(360);
-        self.arm_edit_why(Refusal::BearingBlocked, uid, |a| format!("{} bearing: {b}°", a.street_name()), |a| {
-            a.bearing = b;
-            true
-        })
+        self.arm_edit_why(
+            Refusal::BearingBlocked,
+            uid,
+            |a| format!("{} bearing: {b}°", a.street_name()),
+            |a| {
+                a.bearing = b;
+                true
+            },
+        )
     }
 
     pub fn set_offset(&mut self, uid: u32, mm: i32) -> bool {
         let mm = snap(mm, OFFSET_STEP_MM);
         let region = self.region;
-        self.arm_edit(uid, |a| format!("{} offset: {mm} mm", arm_name(a)), |a| {
-            let half = a.profile(region).road_mm() / 2;
-            if mm.abs() > half {
-                return false;
-            }
-            a.offset_mm = mm;
-            true
-        })
+        self.arm_edit(
+            uid,
+            |a| format!("{} offset: {mm} mm", arm_name(a)),
+            |a| {
+                let half = a.profile(region).road_mm() / 2;
+                if mm.abs() > half {
+                    return false;
+                }
+                a.offset_mm = mm;
+                true
+            },
+        )
     }
 
     /// Sets the curb radius at the corner clockwise of an arm.
@@ -1003,10 +985,14 @@ impl Junction {
         if !(MIN_CORNER_MM..=MAX_CORNER_MM).contains(&mm) {
             return self.refuse(Refusal::DoesNotFit);
         }
-        self.arm_edit(uid, |a| format!("Corner after {}: {mm} mm radius", arm_name(a)), |a| {
-            a.corner_mm = mm;
-            true
-        })
+        self.arm_edit(
+            uid,
+            |a| format!("Corner after {}: {mm} mm radius", arm_name(a)),
+            |a| {
+                a.corner_mm = mm;
+                true
+            },
+        )
     }
 
     pub fn set_street(&mut self, uid: u32, street: usize) -> bool {
@@ -1016,20 +1002,28 @@ impl Junction {
         if street >= SAMPLES.len() || SAMPLES[street].freeway {
             return self.refuse(Refusal::DoesNotFit);
         }
-        self.arm_edit(uid, |a| format!("{} becomes {}", arm_name(a), SAMPLES[street].name), |a| {
-            a.street = street;
-            a.offset_mm = 0;
-            a.lanes.clear();
-            a.bulb = [false, false];
-            true
-        })
+        self.arm_edit(
+            uid,
+            |a| format!("{} becomes {}", arm_name(a), SAMPLES[street].name),
+            |a| {
+                a.street = street;
+                a.offset_mm = 0;
+                a.lanes.clear();
+                a.bulb = [false, false];
+                true
+            },
+        )
     }
 
     pub fn set_crossing(&mut self, uid: u32, on: bool) -> bool {
-        self.arm_edit(uid, |a| format!("{} crossing: {}", arm_name(a), if on { "add" } else { "remove" }), |a| {
-            a.crossing = on.then_some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false });
-            true
-        })
+        self.arm_edit(
+            uid,
+            |a| format!("{} crossing: {}", arm_name(a), if on { "add" } else { "remove" }),
+            |a| {
+                a.crossing = on.then_some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false });
+                true
+            },
+        )
     }
 
     pub fn set_setback(&mut self, uid: u32, mm: i32) -> bool {
@@ -1037,9 +1031,7 @@ impl Junction {
         if !(MIN_SETBACK_MM..=MAX_SETBACK_MM).contains(&mm) {
             return self.refuse(Refusal::DoesNotFit);
         }
-        self.arm_edit(uid, |a| format!("{} crossing set back {mm} mm", arm_name(a)), |a| {
-            a.crossing.as_mut().map(|c| c.setback_mm = mm).is_some()
-        })
+        self.arm_edit(uid, |a| format!("{} crossing set back {mm} mm", arm_name(a)), |a| a.crossing.as_mut().map(|c| c.setback_mm = mm).is_some())
     }
 
     pub fn set_crossing_width(&mut self, uid: u32, mm: i32) -> bool {
@@ -1047,9 +1039,7 @@ impl Junction {
         if !(MIN_CROSSING_MM..=MAX_CROSSING_MM).contains(&mm) {
             return self.refuse(Refusal::DoesNotFit);
         }
-        self.arm_edit(uid, |a| format!("{} crossing {mm} mm wide", arm_name(a)), |a| {
-            a.crossing.as_mut().map(|c| c.width_mm = mm).is_some()
-        })
+        self.arm_edit(uid, |a| format!("{} crossing {mm} mm wide", arm_name(a)), |a| a.crossing.as_mut().map(|c| c.width_mm = mm).is_some())
     }
 
     pub fn set_island(&mut self, uid: u32, on: bool) -> bool {
@@ -1057,9 +1047,11 @@ impl Junction {
         if on && self.arm(uid).is_some_and(|a| a.profile(region).road_mm() < ISLAND_MIN_ROAD_MM) {
             return self.refuse(Refusal::IslandRoadTooNarrow);
         }
-        self.arm_edit(uid, |a| format!("{} refuge island: {}", arm_name(a), if on { "add" } else { "remove" }), |a| {
-            a.crossing.as_mut().map(|c| c.island = on).is_some()
-        })
+        self.arm_edit(
+            uid,
+            |a| format!("{} refuge island: {}", arm_name(a), if on { "add" } else { "remove" }),
+            |a| a.crossing.as_mut().map(|c| c.island = on).is_some(),
+        )
     }
 
     /// Side 0 is the arm's left curb, 1 its right.
@@ -1072,10 +1064,14 @@ impl Junction {
         if on && self.arm(uid).is_some_and(|a| a.profile(region).park[side] == 0) {
             return self.refuse(Refusal::BulbNoParking);
         }
-        self.arm_edit(uid, |a| format!("{} {word} bulb-out: {}", arm_name(a), if on { "add" } else { "remove" }), |a| {
-            a.bulb[side] = on;
-            true
-        })
+        self.arm_edit(
+            uid,
+            |a| format!("{} {word} bulb-out: {}", arm_name(a), if on { "add" } else { "remove" }),
+            |a| {
+                a.bulb[side] = on;
+                true
+            },
+        )
     }
 
     /// Lets a lane go to a street, or not. A lane keeps at least one street.
@@ -1109,10 +1105,14 @@ impl Junction {
     }
 
     pub fn set_bus_lane(&mut self, uid: u32, on: bool) -> bool {
-        self.arm_edit(uid, |a| format!("{} bus lane: {}", arm_name(a), if on { "add" } else { "remove" }), |a| {
-            a.bus_lane = on;
-            true
-        })
+        self.arm_edit(
+            uid,
+            |a| format!("{} bus lane: {}", arm_name(a), if on { "add" } else { "remove" }),
+            |a| {
+                a.bus_lane = on;
+                true
+            },
+        )
     }
 
     /// Sets the approach measure, by index into `APPROACHES`.
@@ -1122,7 +1122,17 @@ impl Junction {
         }
         self.arm_edit(
             uid,
-            |a| format!("{}: {}", arm_name(a), if approach == 0 { "no approach measure".to_string() } else { format!("{} {}", APPROACHES[approach].code, APPROACHES[approach].name.to_lowercase()) }),
+            |a| {
+                format!(
+                    "{}: {}",
+                    arm_name(a),
+                    if approach == 0 {
+                        "no approach measure".to_string()
+                    } else {
+                        format!("{} {}", APPROACHES[approach].code, APPROACHES[approach].name.to_lowercase())
+                    }
+                )
+            },
             |a| {
                 a.approach = approach;
                 true
@@ -1135,10 +1145,14 @@ impl Junction {
         if !(APPROACH_MIN_MM..=APPROACH_MAX_MM).contains(&mm) {
             return self.refuse(Refusal::DoesNotFit);
         }
-        self.arm_edit(uid, |a| format!("{} approach measure: {mm} mm", arm_name(a)), |a| {
-            a.approach_mm = mm;
-            true
-        })
+        self.arm_edit(
+            uid,
+            |a| format!("{} approach measure: {mm} mm", arm_name(a)),
+            |a| {
+                a.approach_mm = mm;
+                true
+            },
+        )
     }
 
     /// Sets the bus stop, by index into `STOPS`.
@@ -1148,7 +1162,13 @@ impl Junction {
         }
         self.arm_edit(
             uid,
-            |a| format!("{}: {}", arm_name(a), if stop == 0 { "no bus stop".to_string() } else { format!("{} {}", STOPS[stop].code, STOPS[stop].name.to_lowercase()) }),
+            |a| {
+                format!(
+                    "{}: {}",
+                    arm_name(a),
+                    if stop == 0 { "no bus stop".to_string() } else { format!("{} {}", STOPS[stop].code, STOPS[stop].name.to_lowercase()) }
+                )
+            },
             |a| {
                 a.stop = stop;
                 true
@@ -1163,7 +1183,13 @@ impl Junction {
         }
         self.arm_edit(
             uid,
-            |a| format!("{}: {}", arm_name(a), if rule == 0 { "no turn management".to_string() } else { format!("{} {}", RULES[rule].code, RULES[rule].name.to_lowercase()) }),
+            |a| {
+                format!(
+                    "{}: {}",
+                    arm_name(a),
+                    if rule == 0 { "no turn management".to_string() } else { format!("{} {}", RULES[rule].code, RULES[rule].name.to_lowercase()) }
+                )
+            },
             |a| {
                 a.rule = rule;
                 true
@@ -1172,10 +1198,14 @@ impl Junction {
     }
 
     pub fn set_filter(&mut self, uid: u32, on: bool) -> bool {
-        self.arm_edit(uid, |a| format!("{} transit modal filter (N1): {}", arm_name(a), if on { "add" } else { "remove" }), |a| {
-            a.filter = on;
-            true
-        })
+        self.arm_edit(
+            uid,
+            |a| format!("{} transit modal filter (N1): {}", arm_name(a), if on { "add" } else { "remove" }),
+            |a| {
+                a.filter = on;
+                true
+            },
+        )
     }
 
     pub fn set_turn(&mut self, from: u32, to: u32, allowed: bool) -> bool {
@@ -1189,18 +1219,22 @@ impl Junction {
         if !allowed && a.banned.len() + 2 > others && !a.banned.contains(&to) {
             return self.refuse(Refusal::LastWayOut);
         }
-        self.arm_edit(from, |_| label, |a| {
-            if allowed {
-                let before = a.banned.len();
-                a.banned.retain(|&u| u != to);
-                return a.banned.len() != before;
-            }
-            if a.banned.contains(&to) {
-                return false;
-            }
-            a.banned.push(to);
-            true
-        })
+        self.arm_edit(
+            from,
+            |_| label,
+            |a| {
+                if allowed {
+                    let before = a.banned.len();
+                    a.banned.retain(|&u| u != to);
+                    return a.banned.len() != before;
+                }
+                if a.banned.contains(&to) {
+                    return false;
+                }
+                a.banned.push(to);
+                true
+            },
+        )
     }
 
     pub fn set_control(&mut self, control: usize) -> bool {

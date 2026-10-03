@@ -7,14 +7,14 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::shared::catalogue::KINDS;
 use crate::city::model::{City, CityView, EdgeView, NodeView};
-use crate::shared::units::Units;
-use crate::map::camera::{Camera, ScaleBar, World};
 use crate::city::store::CityStore;
-use crate::shared::core::{Core, Presents};
+use crate::map::camera::{Camera, ScaleBar, World};
 use crate::map::gestures::{MapGestures, Moved};
+use crate::shared::catalogue::KINDS;
+use crate::shared::core::{Core, Presents};
 use crate::shared::ports::Ports;
+use crate::shared::units::Units;
 
 pub const ARMED_RESET: &str = "Press again to start over";
 pub const RESET: &str = "Start over";
@@ -67,13 +67,7 @@ fn state_words(ok: bool, failing: &[String], edited: bool) -> String {
 
 /// How a junction on the map is told to a screen reader.
 pub fn junction_label(n: &NodeView) -> String {
-    format!(
-        "{}, {}, {}.{} Opens the junction plan.",
-        n.name,
-        n.control.unwrap_or("").to_lowercase(),
-        streets(n.arms),
-        state_words(n.ok, &n.failing, n.edited)
-    )
+    format!("{}, {}, {}.{} Opens the junction plan.", n.name, n.control.unwrap_or("").to_lowercase(), streets(n.arms), state_words(n.ok, &n.failing, n.edited))
 }
 
 /// How a street on the map is told to a screen reader.
@@ -195,11 +189,7 @@ impl MapVm {
     }
 
     fn tag(ok: bool, edited: bool) -> Option<StateTag> {
-        if !ok {
-            Some(StateTag { text: "Needs attention", bad: true })
-        } else {
-            edited.then_some(StateTag { text: "Changed", bad: false })
-        }
+        if !ok { Some(StateTag { text: "Needs attention", bad: true }) } else { edited.then_some(StateTag { text: "Changed", bad: false }) }
     }
 
     /// The junctions, in the order of their numbers, as rows to open.
@@ -248,7 +238,12 @@ impl MapVm {
             all.push((NoteItem { href: junction_href(n.uid), name: n.name.clone(), detail: String::new() }, n.ok, n.edited, n.failing.as_slice()));
         }
         for e in &v.edges {
-            all.push((NoteItem { href: street_href(e.uid), name: format!("{}, {}", e.kind, street_ends(&e.name)), detail: String::new() }, e.ok, e.edited, e.failing.as_slice()));
+            all.push((
+                NoteItem { href: street_href(e.uid), name: format!("{}, {}", e.kind, street_ends(&e.name)), detail: String::new() },
+                e.ok,
+                e.edited,
+                e.failing.as_slice(),
+            ));
         }
         all
     }
@@ -256,7 +251,14 @@ impl MapVm {
     /// The places that need attention, with what is wrong.
     pub fn failing_items(&self) -> Vec<NoteItem> {
         let v = self.view();
-        Self::places_for_notes(&v).into_iter().filter(|p| !p.1).map(|(mut i, _, _, f)| { i.detail = f.join("; "); i }).collect()
+        Self::places_for_notes(&v)
+            .into_iter()
+            .filter(|p| !p.1)
+            .map(|(mut i, _, _, f)| {
+                i.detail = f.join("; ");
+                i
+            })
+            .collect()
     }
 
     pub fn checks_lead(&self) -> String {
@@ -300,7 +302,14 @@ impl MapVm {
             return Status { text: format!("{} places. Every check passes.", v.places), bad: false };
         }
         let more = if bad.len() > 3 { " and more" } else { "" };
-        Status { text: format!("{} attention: {}{more}.", plural(bad.len(), "place needs", "places need"), bad.iter().take(3).cloned().collect::<Vec<_>>().join(", ")), bad: true }
+        Status {
+            text: format!(
+                "{} attention: {}{more}.",
+                plural(bad.len(), "place needs", "places need"),
+                bad.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+            ),
+            bad: true,
+        }
     }
 
     /// The kinds of piece the streets are made of, in the order the catalogue lists them.

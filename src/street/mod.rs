@@ -8,9 +8,9 @@ pub mod model;
 pub mod notes;
 pub mod page;
 pub mod svg;
-pub mod text;
 #[cfg(test)]
 mod tests;
+pub mod text;
 pub mod view;
 pub mod vm;
 pub mod watch;
@@ -21,9 +21,9 @@ use leptos::prelude::*;
 use leptos::web_sys::HtmlElement;
 use wasm_bindgen::prelude::*;
 
-use crate::shared::platform::browser_ports;
 use crate::city::binding::{CityBinding, Place};
 use crate::city::store::CityStore;
+use crate::shared::platform::browser_ports;
 
 /// One street being edited. The page drives it through the components the
 /// module mounts; the script only starts it up and hands it what the shell
@@ -63,9 +63,8 @@ impl Sheet {
 pub fn mount_street_page(sheet: &Sheet, ends: Option<String>) {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
-    let at = |id: &str| -> HtmlElement {
-        leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into()
-    };
+    let at =
+        |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let vm = sheet.0.clone();
     let ends: Option<Vec<page::StreetEnd>> = ends.and_then(|json| serde_json::from_str(&json).ok());
     let mount = |id: &str, view: AnyView| {

@@ -8,8 +8,8 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::shared::catalogue::{REGIONS, Side};
-use crate::shared::units::Units;
 use crate::shared::ports::Ports;
+use crate::shared::units::Units;
 
 pub const REGION_KEY: &str = crate::city::store::REGION_KEY;
 pub const THEME_KEY: &str = "cityloom-theme";

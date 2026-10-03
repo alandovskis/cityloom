@@ -5,12 +5,12 @@ use std::fmt::Write;
 
 use serde_json::Value;
 
-use crate::shared::catalogue::KINDS;
+use crate::junction::frame::Frame;
 use crate::junction::model::{LEFT, RIGHT, THROUGH};
 use crate::junction::read_model::{ArmView, JView, LaneView};
 use crate::junction::turns::compass;
+use crate::shared::catalogue::KINDS;
 use crate::shared::units::Units;
-use crate::junction::frame::Frame;
 
 type P = (f64, f64);
 
@@ -101,10 +101,38 @@ impl Plan<'_> {
             write!(d, "M{} {}L0 {}L{} {}", -h * 0.18, -h / 2.0 + h * 0.2, -h / 2.0, h * 0.18, -h / 2.0 + h * 0.2).unwrap();
         }
         if l.uses & LEFT != 0 {
-            write!(d, "M0 {}Q0 {} {} {}M{} {}L{} {}L{} {}", -h * 0.05, -h * 0.3, -bw, -h * 0.3, -bw + h * 0.16, -h * 0.3 - h * 0.16, -bw, -h * 0.3, -bw + h * 0.16, -h * 0.3 + h * 0.16).unwrap();
+            write!(
+                d,
+                "M0 {}Q0 {} {} {}M{} {}L{} {}L{} {}",
+                -h * 0.05,
+                -h * 0.3,
+                -bw,
+                -h * 0.3,
+                -bw + h * 0.16,
+                -h * 0.3 - h * 0.16,
+                -bw,
+                -h * 0.3,
+                -bw + h * 0.16,
+                -h * 0.3 + h * 0.16
+            )
+            .unwrap();
         }
         if l.uses & RIGHT != 0 {
-            write!(d, "M0 {}Q0 {} {} {}M{} {}L{} {}L{} {}", -h * 0.05, -h * 0.3, bw, -h * 0.3, bw - h * 0.16, -h * 0.3 - h * 0.16, bw, -h * 0.3, bw - h * 0.16, -h * 0.3 + h * 0.16).unwrap();
+            write!(
+                d,
+                "M0 {}Q0 {} {} {}M{} {}L{} {}L{} {}",
+                -h * 0.05,
+                -h * 0.3,
+                bw,
+                -h * 0.3,
+                bw - h * 0.16,
+                -h * 0.3 - h * 0.16,
+                bw,
+                -h * 0.3,
+                bw - h * 0.16,
+                -h * 0.3 + h * 0.16
+            )
+            .unwrap();
         }
         let (x, y) = self.f.at(l.at);
         format!(
@@ -145,11 +173,14 @@ impl Plan<'_> {
         let sign = match a.role {
             "signal" => format!(
                 "<g class=\"sign\" transform=\"translate({} {}) rotate({})\"><rect x=\"-4.5\" y=\"-10\" width=\"9\" height=\"20\" rx=\"2\"/><circle cx=\"0\" cy=\"-5\" r=\"1.7\"/><circle cx=\"0\" cy=\"0\" r=\"1.7\"/><circle cx=\"0\" cy=\"5\" r=\"1.7\"/></g>",
-                f1(c.0), f1(c.1), a.bearing
+                f1(c.0),
+                f1(c.1),
+                a.bearing
             ),
             "stop" => format!(
                 "<g class=\"sign\" transform=\"translate({} {})\"><path d=\"M-3.5 -8.5h7l5 5v7l-5 5h-7l-5 -5v-7z\"/><path d=\"M-4 0h8\"/></g>",
-                f1(c.0), f1(c.1)
+                f1(c.0),
+                f1(c.1)
             ),
             "yield" => format!("<g class=\"sign\" transform=\"translate({} {}) rotate({})\"><path d=\"M-8 -7H8L0 8z\"/></g>", f1(c.0), f1(c.1), a.bearing),
             _ => String::new(),
@@ -173,8 +204,12 @@ impl Plan<'_> {
         format!(
             "<path class=\"dim{}\" d=\"M{} {}L{} {}{}{}\"/><text class=\"t-dim t-halo{}\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{text}</text>",
             if warn { " dim-warn" } else { "" },
-            f1(q0.0), f1(q0.1), f1(q1.0), f1(q1.1),
-            tick(q0), tick(q1),
+            f1(q0.0),
+            f1(q0.1),
+            f1(q1.0),
+            f1(q1.1),
+            tick(q0),
+            tick(q1),
             if warn { " t-warn" } else { "" },
             f1((q0.0 + q1.0) / 2.0),
             f1((q0.1 + q1.1) / 2.0 + 5.0)
@@ -220,7 +255,15 @@ impl Plan<'_> {
     fn scale_bar(&self, x: f64, y: f64) -> String {
         let block = 4000.0 * self.f.scale;
         let blocks: String = (0..5)
-            .map(|i| format!("<rect class=\"{}\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"6\"/>", if i % 2 == 1 { "bar-w" } else { "bar-b" }, f1(x + 36.0 + i as f64 * block), y - 6.0, f1(block)))
+            .map(|i| {
+                format!(
+                    "<rect class=\"{}\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"6\"/>",
+                    if i % 2 == 1 { "bar-w" } else { "bar-b" },
+                    f1(x + 36.0 + i as f64 * block),
+                    y - 6.0,
+                    f1(block)
+                )
+            })
             .collect();
         let end = match self.units {
             Units::Metres => "20 m".to_string(),
@@ -228,7 +271,10 @@ impl Plan<'_> {
         };
         format!(
             "<g class=\"scale\"><text class=\"t-label\" x=\"{x}\" y=\"{y}\">Scale</text>{blocks}<text class=\"t-dim\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">0</text><text class=\"t-dim\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{end}</text></g>",
-            f1(x + 36.0), y + 20.0, f1(x + 36.0 + 5.0 * block), y + 20.0
+            f1(x + 36.0),
+            y + 20.0,
+            f1(x + 36.0 + 5.0 * block),
+            y + 20.0
         )
     }
 }
@@ -278,7 +324,14 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
     // pavement wedges between arms; pressing one selects the corner
     for c in &v.corners {
         let d = p.path_d(&c.wedge);
-        write!(l.wedge, "<g class=\"wedge-g\" data-role=\"{}\" data-uid=\"{}\">{}</g>", if c.straight { "none" } else { "corner" }, c.uid, p.piece("wedge k-sidewalk", "sidewalk", &d)).unwrap();
+        write!(
+            l.wedge,
+            "<g class=\"wedge-g\" data-role=\"{}\" data-uid=\"{}\">{}</g>",
+            if c.straight { "none" } else { "corner" },
+            c.uid,
+            p.piece("wedge k-sidewalk", "sidewalk", &d)
+        )
+        .unwrap();
     }
 
     for a in &v.arms {
@@ -294,7 +347,14 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
         if let Some(q) = &t.queue {
             g += &p.piece("piece k-bus queue", "bus", &p.path_d(q));
         }
-        write!(l.arm, "<g class=\"arm{}{}\" data-role=\"arm\" data-uid=\"{}\">{g}</g>", if p.is_sel("arm", a.uid) { " on" } else { "" }, if t.dead { " dead" } else { "" }, a.uid).unwrap();
+        write!(
+            l.arm,
+            "<g class=\"arm{}{}\" data-role=\"arm\" data-uid=\"{}\">{g}</g>",
+            if p.is_sel("arm", a.uid) { " on" } else { "" },
+            if t.dead { " dead" } else { "" },
+            a.uid
+        )
+        .unwrap();
         l.measure += &p.measure_marks(a);
         for (i, lane) in a.lanes.iter().enumerate() {
             write!(
@@ -325,7 +385,9 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
         let ri = ring.island_mm as f64 * f.scale;
         write!(l.road, "<circle class=\"road ring\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>", f1(cx), f1(cy), f1(r)).unwrap();
         if ring.cycle_mm.is_some_and(|c| c != 0) {
-            let circle = |rad: f64| format!("M{} {}a{} {} 0 1 0 {} 0a{} {} 0 1 0 {} 0Z", f1(cx - rad), f1(cy), f1(rad), f1(rad), f1(2.0 * rad), f1(rad), f1(rad), f1(-2.0 * rad));
+            let circle = |rad: f64| {
+                format!("M{} {}a{} {} 0 1 0 {} 0a{} {} 0 1 0 {} 0Z", f1(cx - rad), f1(cy), f1(rad), f1(rad), f1(2.0 * rad), f1(rad), f1(rad), f1(-2.0 * rad))
+            };
             let band = circle(ro) + &circle(r);
             write!(
                 l.road,
@@ -334,13 +396,29 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
             )
             .unwrap();
             if v.selected.kind == Some("cycle") {
-                write!(l.sel, "<circle class=\"sel-line\" cx=\"{}\" cy=\"{}\" r=\"{}\"/><circle class=\"sel-line\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>", f1(cx), f1(cy), f1(ro), f1(cx), f1(cy), f1(r)).unwrap();
+                write!(
+                    l.sel,
+                    "<circle class=\"sel-line\" cx=\"{}\" cy=\"{}\" r=\"{}\"/><circle class=\"sel-line\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>",
+                    f1(cx),
+                    f1(cy),
+                    f1(ro),
+                    f1(cx),
+                    f1(cy),
+                    f1(r)
+                )
+                .unwrap();
             }
         }
         write!(
             l.road,
             "<circle class=\"island k-median\" cx=\"{}\" cy=\"{}\" r=\"{}\"/><circle class=\"hatch\" fill=\"{}\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>",
-            f1(cx), f1(cy), f1(ri), hatch("median"), f1(cx), f1(cy), f1(ri)
+            f1(cx),
+            f1(cy),
+            f1(ri),
+            hatch("median"),
+            f1(cx),
+            f1(cy),
+            f1(ri)
         )
         .unwrap();
         if let Some(bus) = &v.bus {
@@ -364,7 +442,14 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
             let heading = ang + if ccw { -90.0 } else { 90.0 };
             let h = 20.0_f64.min(mid * 0.5);
             let d = format!("M0 {}V{}M-4 {}L0 {}L4 {}", h / 2.0, -h / 2.0, -h / 2.0 + 4.0, -h / 2.0, -h / 2.0 + 4.0);
-            write!(l.mark, "<g class=\"lane-arrow\" transform=\"translate({} {}) rotate({})\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>", f1(cx + dx * mid), f1(cy + dy * mid), f1(heading)).unwrap();
+            write!(
+                l.mark,
+                "<g class=\"lane-arrow\" transform=\"translate({} {}) rotate({})\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
+                f1(cx + dx * mid),
+                f1(cy + dy * mid),
+                f1(heading)
+            )
+            .unwrap();
         }
     } else {
         write!(l.road, "<path class=\"road\" d=\"{}\"/>", p.path_d(&v.core)).unwrap();
@@ -378,7 +463,12 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
     for a in &v.arms {
         if let Some(c) = &a.crossing {
             let d = p.path_d(&c.poly);
-            write!(l.cross, "<g data-role=\"crossing\" data-uid=\"{}\"><path class=\"crossing\" d=\"{d}\"/><path fill=\"url(#zb-{})\" class=\"zebra-fill\" d=\"{d}\"/></g>", a.uid, a.uid).unwrap();
+            write!(
+                l.cross,
+                "<g data-role=\"crossing\" data-uid=\"{}\"><path class=\"crossing\" d=\"{d}\"/><path fill=\"url(#zb-{})\" class=\"zebra-fill\" d=\"{d}\"/></g>",
+                a.uid, a.uid
+            )
+            .unwrap();
             if let Some(i) = &c.island_poly {
                 write!(l.cross, "<g data-role=\"crossing\" data-uid=\"{}\">{}</g>", a.uid, p.piece("island k-sidewalk", "sidewalk", &p.path_d(i))).unwrap();
             }
@@ -396,7 +486,14 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
             let (x, y) = f.at(out.at);
             let h = (1800.0 * f.scale).clamp(12.0, 22.0);
             let d = format!("M0 {}V{}M-3.5 {}L0 {}L3.5 {}", h / 2.0, -h / 2.0, -h / 2.0 + 3.5, -h / 2.0, -h / 2.0 + 3.5);
-            write!(l.mark, "<g class=\"lane-arrow out\" transform=\"translate({} {}) rotate({})\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>", f1(x), f1(y), out.heading).unwrap();
+            write!(
+                l.mark,
+                "<g class=\"lane-arrow out\" transform=\"translate({} {}) rotate({})\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
+                f1(x),
+                f1(y),
+                out.heading
+            )
+            .unwrap();
         }
 
         // the street's name and width, outside the end of the arm
@@ -406,12 +503,24 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
         // On a narrow screen there is no room beside a sideways arm: set its name above it.
         let beside = side && !f.narrow;
         let anchor = if side {
-            if ld.0 > 0.0 { if f.narrow { "end" } else { "start" } } else if f.narrow { "start" } else { "end" }
+            if ld.0 > 0.0 {
+                if f.narrow { "end" } else { "start" }
+            } else if f.narrow {
+                "start"
+            } else {
+                "end"
+            }
         } else {
             "middle"
         };
         let x = if beside { lx + ld.0 * 12.0 } else { lx };
-        let y1 = if beside { ly - 2.0 } else if ld.1 < 0.0 || side { ly - 32.0 } else { ly + 26.0 };
+        let y1 = if beside {
+            ly - 2.0
+        } else if ld.1 < 0.0 || side {
+            ly - 32.0
+        } else {
+            ly + 26.0
+        };
         let shifted = if a.offset_mm != 0 { format!(" · shifted {}", units.length(a.offset_mm.abs())) } else { String::new() };
         write!(
             l.label,

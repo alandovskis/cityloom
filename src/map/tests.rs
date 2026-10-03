@@ -8,8 +8,8 @@ use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::Units;
 // ---- the city map ---------------------------------------------------------------------------
 
-use crate::map::view as map_ui;
 use crate::city::store::CityStore;
+use crate::map::view as map_ui;
 use crate::map::vm::MapVm;
 use crate::shared::ports::{MemoryStorage, test_ports};
 
@@ -165,5 +165,7 @@ fn the_map_s_title_block_gives_the_city_its_places_and_what_changed() {
     let (vm, storage) = map_vm();
     change_a_street(&vm, &storage, -100);
     let h = map_html(|| view! { <map_ui::TitleBlock vm=vm.clone()/> });
-    assert!(h.contains("id=\"tb-street\">Sample city<") && h.contains("id=\"tb-places\" class=\"fig\">32<") && h.contains("id=\"tb-changes\" class=\"fig\">1<"));
+    assert!(
+        h.contains("id=\"tb-street\">Sample city<") && h.contains("id=\"tb-places\" class=\"fig\">32<") && h.contains("id=\"tb-changes\" class=\"fig\">1<")
+    );
 }

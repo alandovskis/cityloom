@@ -24,7 +24,14 @@ pub struct Keeper {
 
 impl Keeper {
     pub fn new(scheduler: Rc<dyn Scheduler>, keep: impl Fn() -> bool + 'static, on_fail: impl Fn() + 'static) -> Rc<Keeper> {
-        let k = Rc::new(Keeper { scheduler, keep: Rc::new(keep), on_fail: Rc::new(on_fail), pending: Cell::new(None), told: Cell::new(false), me: RefCell::new(None) });
+        let k = Rc::new(Keeper {
+            scheduler,
+            keep: Rc::new(keep),
+            on_fail: Rc::new(on_fail),
+            pending: Cell::new(None),
+            told: Cell::new(false),
+            me: RefCell::new(None),
+        });
         *k.me.borrow_mut() = Some(Rc::downgrade(&k));
         k
     }
@@ -71,7 +78,14 @@ mod tests {
         let s = Rc::new(ManualScheduler::default());
         let (kept, failed) = (Rc::new(Cell::new(0)), Rc::new(Cell::new(0)));
         let (k, f) = (kept.clone(), failed.clone());
-        let keeper = Keeper::new(s.clone(), move || { k.set(k.get() + 1); ok }, move || f.set(f.get() + 1));
+        let keeper = Keeper::new(
+            s.clone(),
+            move || {
+                k.set(k.get() + 1);
+                ok
+            },
+            move || f.set(f.get() + 1),
+        );
         (keeper, s, kept, failed)
     }
 

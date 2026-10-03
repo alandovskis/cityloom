@@ -8,12 +8,12 @@ use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, HtmlElement, PointerEvent};
 
-use crate::shared::catalogue::{KINDS, SAMPLES};
 use crate::junction::model::JUNCTION_SAMPLES;
 use crate::junction::read_model::JView;
 use crate::junction::text::{arms_text, fit_text};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
+use crate::shared::catalogue::{KINDS, SAMPLES};
 
 /// The kinds of piece that appear in the plan, in the order the catalogue lists them.
 pub fn key_kinds(v: &JView) -> Vec<usize> {

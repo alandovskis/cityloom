@@ -1,8 +1,8 @@
 //! A place in the city that a page edits, and how what it makes is written back.
 
+use crate::city::store::CityStore;
 use crate::junction::model::State;
 use crate::street::model::Street;
-use crate::city::store::CityStore;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Place {

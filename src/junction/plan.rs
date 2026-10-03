@@ -7,13 +7,13 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
-use crate::shared::bind::current_element;
-use crate::junction::model::Target;
-use crate::junction::keys;
-use crate::junction::plan_svg::{plan_label, plan_svg};
 use crate::junction::frame::Frame;
+use crate::junction::keys;
+use crate::junction::model::Target;
+use crate::junction::plan_svg::{plan_label, plan_svg};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
+use crate::shared::bind::current_element;
 
 /// What a grip is dragging.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -212,7 +212,9 @@ fn focus_wrap() {
 /// Whether a key press came from a field being typed in.
 #[cfg(target_arch = "wasm32")]
 fn typing(e: &KeyboardEvent) -> bool {
-    e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()).is_some_and(|t| t.closest("input, select, textarea").ok().flatten().is_some())
+    e.target()
+        .and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok())
+        .is_some_and(|t| t.closest("input, select, textarea").ok().flatten().is_some())
 }
 
 /// Keeps `viewport` as wide as the plan's group and as high as the window.

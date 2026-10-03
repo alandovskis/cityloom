@@ -20,4 +20,3 @@ pub fn button_tag(html: &str, id: &str) -> String {
     let end = html[at..].find('>').unwrap() + at;
     html[start..=end].to_string()
 }
-

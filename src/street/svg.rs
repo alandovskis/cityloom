@@ -5,10 +5,10 @@
 use std::fmt::Write;
 
 use crate::shared::catalogue::KINDS;
-use crate::street::model::{SegView, View};
 use crate::shared::symbols::{SymbolOpts, symbol};
-use crate::street::text::fit_phrase;
 use crate::shared::units::Units;
+use crate::street::model::{SegView, View};
+use crate::street::text::fit_phrase;
 
 /// The heights of the drawing's bands, scaled with its width.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -122,7 +122,17 @@ fn esc(s: &str) -> String {
 }
 
 fn dim_line(x0: f64, x1: f64, y: f64, class: &str) -> String {
-    format!("<path class=\"dim {class}\" d=\"M{x0} {y}H{x1}M{} {}L{} {}M{} {}L{} {}\"/>", x0 - 4.0, y + 4.0, x0 + 4.0, y - 4.0, x1 - 4.0, y + 4.0, x1 + 4.0, y - 4.0)
+    format!(
+        "<path class=\"dim {class}\" d=\"M{x0} {y}H{x1}M{} {}L{} {}M{} {}L{} {}\"/>",
+        x0 - 4.0,
+        y + 4.0,
+        x0 + 4.0,
+        y - 4.0,
+        x1 - 4.0,
+        y + 4.0,
+        x1 + 4.0,
+        y - 4.0
+    )
 }
 
 /// A revision cloud: a rectangle outlined with outward arcs.
@@ -149,7 +159,9 @@ fn cloud(x: f64, y: f64, w: f64, h: f64, r: f64, fresh: bool) -> String {
 
 /// The surface finish, drawn as a paving course along the top of the slab.
 fn surface_course(x: f64, y: f64, w: f64, material: &str) -> String {
-    format!("<rect class=\"surface\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"10\"/><rect class=\"hatch\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"10\" fill=\"url(#m-{material})\"/>")
+    format!(
+        "<rect class=\"surface\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"10\"/><rect class=\"hatch\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"10\" fill=\"url(#m-{material})\"/>"
+    )
 }
 
 /// Traffic direction as an arrow: up runs away from you, down comes toward you.
@@ -211,7 +223,13 @@ fn curbs(v: &View, g: &Geometry) -> String {
             if kassel || ramp {
                 // a: the road-side foot, b: the back
                 let (a, b) = if road_right { (bx + cw, bx) } else { (bx, bx + cw) };
-                let top = if ramp { b } else if road_right { bx + cw * 0.35 } else { bx + cw * 0.65 };
+                let top = if ramp {
+                    b
+                } else if road_right {
+                    bx + cw * 0.35
+                } else {
+                    bx + cw * 0.65
+                };
                 let h = if ramp { 7.0 } else { 12.0 };
                 let pts = format!("{a},{gy} {b},{gy} {b},{} {top},{}", gy - h, gy - h);
                 write!(out, "<polygon class=\"curb\" points=\"{pts}\"/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#{fill})\"/>").unwrap();
@@ -231,7 +249,14 @@ fn curbs(v: &View, g: &Geometry) -> String {
 
 /// What a screen reader is told the drawing is.
 pub fn street_label(v: &View, units: Units) -> String {
-    format!("Cross-section of {}. {} segments, {} of {}. {}.", v.name, v.segments.len(), units.length_fine(v.total_mm), units.length_fine(v.row_mm), fit_phrase(v, units))
+    format!(
+        "Cross-section of {}. {} segments, {} of {}. {}.",
+        v.name,
+        v.segments.len(),
+        units.length_fine(v.total_mm),
+        units.length_fine(v.row_mm),
+        fit_phrase(v, units)
+    )
 }
 
 /// The street drawn `width` wide: `ui` is what the pointer is doing to it.
@@ -259,7 +284,13 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
         .unwrap();
         let label = fine(s.width_mm);
         if w > label.len() as f64 * 8.5 + 10.0 {
-            write!(p, "<text class=\"t-dim t-halo\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{label}</text>", x + w / 2.0, rows.existing + rows.existing_height / 2.0 + 4.5).unwrap();
+            write!(
+                p,
+                "<text class=\"t-dim t-halo\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{label}</text>",
+                x + w / 2.0,
+                rows.existing + rows.existing_height / 2.0 + 4.5
+            )
+            .unwrap();
         }
     }
 
@@ -316,7 +347,13 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
         let sel = v.selected == Some(s.uid);
         let lifted = ui.moving.is_some_and(|m| m.uid == s.uid);
         let opts = SymbolOpts { shelter: s.shelter, material: s.material, tram: s.tram };
-        let name = if w > k.name.len() as f64 * 8.6 + 10.0 { esc(k.name) } else if w > 30.0 { k.mark.to_string() } else { String::new() };
+        let name = if w > k.name.len() as f64 * 8.6 + 10.0 {
+            esc(k.name)
+        } else if w > 30.0 {
+            k.mark.to_string()
+        } else {
+            String::new()
+        };
         write!(
             p,
             "<g class=\"seg{}\" data-role=\"seg\" data-uid=\"{}\"><rect class=\"hit\" x=\"{x}\" y=\"{}\" width=\"{w}\" height=\"{}\"/>{}<rect class=\"obj k-{}\" x=\"{x}\" y=\"{ground}\" width=\"{w}\" height=\"{}\"/><rect class=\"hatch\" x=\"{x}\" y=\"{ground}\" width=\"{w}\" height=\"{}\" fill=\"url(#h-{})\"/>{}",
@@ -341,14 +378,22 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
         if !s.variants.is_empty() && w >= 48.0 {
             p += &clock_badge(x + 24.0, ground + rows.slab - 10.0);
         }
-        write!(p, "<text class=\"t-mark t-halo{}\" x=\"{cx}\" y=\"{}\" text-anchor=\"middle\">{name}</text></g>", if sel { " t-blue" } else { "" }, rows.mark).unwrap();
+        write!(p, "<text class=\"t-mark t-halo{}\" x=\"{cx}\" y=\"{}\" text-anchor=\"middle\">{name}</text></g>", if sel { " t-blue" } else { "" }, rows.mark)
+            .unwrap();
         p += &dim_line(x, x + w, rows.dim, "");
         let label = fine(s.width_mm);
         if w > label.len() as f64 * 9.0 + 8.0 {
-            write!(p, "<text class=\"t-dim t-halo{}\" x=\"{cx}\" y=\"{}\" text-anchor=\"middle\">{label}</text>", if sel { " t-blue" } else { "" }, rows.dim - 7.0).unwrap();
+            write!(
+                p,
+                "<text class=\"t-dim t-halo{}\" x=\"{cx}\" y=\"{}\" text-anchor=\"middle\">{label}</text>",
+                if sel { " t-blue" } else { "" },
+                rows.dim - 7.0
+            )
+            .unwrap();
         }
         if sel {
-            write!(p, "<rect class=\"sel-box\" x=\"{x}\" y=\"{}\" width=\"{w}\" height=\"{}\"/>", rows.dim - 28.0, rows.mark + 10.0 - (rows.dim - 28.0)).unwrap();
+            write!(p, "<rect class=\"sel-box\" x=\"{x}\" y=\"{}\" width=\"{w}\" height=\"{}\"/>", rows.dim - 28.0, rows.mark + 10.0 - (rows.dim - 28.0))
+                .unwrap();
         }
     }
 
@@ -363,7 +408,8 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
             p += &line;
             continue;
         }
-        let attrs = if interior { format!("data-role=\"handle\" data-i=\"{}\"", i - 1) } else { format!("data-role=\"edge\" data-uid=\"{}\"", v.segments[n - 1].uid) };
+        let attrs =
+            if interior { format!("data-role=\"handle\" data-i=\"{}\"", i - 1) } else { format!("data-role=\"edge\" data-uid=\"{}\"", v.segments[n - 1].uid) };
         let active = (interior && ui.resizing == Some(i - 1)) || (edge_of_last && ui.edge);
         let gy = ground + rows.slab / 2.0;
         // A finger needs more to land on than a pointer does (WCAG 2.5.8: 24px).
@@ -396,17 +442,40 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
         let h = rows.mark + 18.0 - top;
         write!(p, "<rect class=\"over-wash\" x=\"{xr}\" y=\"{top}\" width=\"{w}\" height=\"{h}\"/>").unwrap();
         p += &cloud(xr + inset, top, (w - inset * 2.0).max(14.0), h, 6.0, ui.fresh);
-        write!(p, "<text class=\"t-over\" x=\"{}\" y=\"{}\">{} too wide{}</text>", xr + 10.0, rows.dim - 62.0, length(v.delta_mm), if clipped { " (more off-screen)" } else { "" }).unwrap();
+        write!(
+            p,
+            "<text class=\"t-over\" x=\"{}\" y=\"{}\">{} too wide{}</text>",
+            xr + 10.0,
+            rows.dim - 62.0,
+            length(v.delta_mm),
+            if clipped { " (more off-screen)" } else { "" }
+        )
+        .unwrap();
     }
 
     p += &curbs(v, &g);
 
     // overall dimension strings
     p += &dim_line(xl, xr, rows.total, "");
-    write!(p, "<text class=\"t-dim t-halo\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">Street width {}</text>", (xl + xr) / 2.0, rows.total - 7.0, length(v.row_mm)).unwrap();
+    write!(
+        p,
+        "<text class=\"t-dim t-halo\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">Street width {}</text>",
+        (xl + xr) / 2.0,
+        rows.total - 7.0,
+        length(v.row_mm)
+    )
+    .unwrap();
     if v.delta_mm != 0 {
         p += &dim_line(xl, total_x, rows.total2, if over { "dim-warn" } else { "" });
-        write!(p, "<text class=\"t-dim t-halo {}\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">Your design {}</text>", if over { "t-warn" } else { "t-soft" }, (xl + total_x) / 2.0, rows.total2 - 7.0, length(v.total_mm)).unwrap();
+        write!(
+            p,
+            "<text class=\"t-dim t-halo {}\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">Your design {}</text>",
+            if over { "t-warn" } else { "t-soft" },
+            (xl + total_x) / 2.0,
+            rows.total2 - 7.0,
+            length(v.total_mm)
+        )
+        .unwrap();
     }
 
     // graphic scale bar: five equal parts, so the scale claim can be checked by eye
@@ -419,7 +488,15 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
         let bar_w = unit_mm * parts as f64 * scale;
         write!(p, "<text class=\"t-label t-soft\" x=\"{}\" y=\"{}\">Scale</text>", g.pad_left, y - 8.0).unwrap();
         for i in 0..parts {
-            write!(p, "<rect class=\"{}\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"8\"/>", if i % 2 == 1 { "bar-w" } else { "bar-b" }, g.pad_left + 60.0 + i as f64 * unit_mm * scale, y - 14.0, unit_mm * scale).unwrap();
+            write!(
+                p,
+                "<rect class=\"{}\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"8\"/>",
+                if i % 2 == 1 { "bar-w" } else { "bar-b" },
+                g.pad_left + 60.0 + i as f64 * unit_mm * scale,
+                y - 14.0,
+                unit_mm * scale
+            )
+            .unwrap();
         }
         let step = if units == Units::Metres { 1 } else { 5 };
         for i in 0..=parts {
@@ -427,7 +504,14 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
             if i % every != 0 && i != parts {
                 continue;
             }
-            write!(p, "<text class=\"t-dim t-soft\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>", g.pad_left + 60.0 + i as f64 * unit_mm * scale, y + 12.0, i * step).unwrap();
+            write!(
+                p,
+                "<text class=\"t-dim t-soft\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>",
+                g.pad_left + 60.0 + i as f64 * unit_mm * scale,
+                y + 12.0,
+                i * step
+            )
+            .unwrap();
         }
         write!(p, "<text class=\"t-dim t-soft\" x=\"{}\" y=\"{}\">{}</text>", g.pad_left + 60.0 + bar_w + 8.0, y - 6.0, units.word()).unwrap();
     }
@@ -437,7 +521,14 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
         if let Some(s) = v.segments.iter().find(|s| s.uid == m.uid) {
             let w = s.width_mm as f64 * scale;
             write!(p, "<rect class=\"ghost\" x=\"{}\" y=\"{}\" width=\"{w}\" height=\"{}\"/>", m.px - w / 2.0, ground - 4.0, rows.slab + 8.0).unwrap();
-            write!(p, "<text class=\"t-mark t-blue\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>", m.px, ground + rows.slab / 2.0 + 5.0, KINDS[s.kind].mark).unwrap();
+            write!(
+                p,
+                "<text class=\"t-mark t-blue\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>",
+                m.px,
+                ground + rows.slab / 2.0 + 5.0,
+                KINDS[s.kind].mark
+            )
+            .unwrap();
         }
         if let Some(index) = m.index {
             let mm: i32 = v.segments.iter().filter(|s| s.uid != m.uid).take(index).map(|s| s.width_mm).sum();
@@ -625,7 +716,8 @@ mod tests {
         let g = s.geometry;
         let x = g.x(3_300.0);
         assert!(s.markup.contains(&format!("<line class=\"caret\" x1=\"{x}\"")));
-        let none = street_svg(&e.view(), 1050.0, Units::Metres, &Interaction { moving: Some(Moving { uid: u, px: 400.0, index: None }), ..Interaction::default() });
+        let none =
+            street_svg(&e.view(), 1050.0, Units::Metres, &Interaction { moving: Some(Moving { uid: u, px: 400.0, index: None }), ..Interaction::default() });
         assert_eq!(count(&none.markup, "class=\"caret\""), 0);
         assert_eq!(count(&none.markup, "class=\"ghost\""), 1);
     }
@@ -650,7 +742,10 @@ mod tests {
 
     #[test]
     fn a_direction_arrow_points_up_away_from_you_and_down_toward_you() {
-        assert_eq!(dir_glyph("away", 10.0, 10.0), "<path class=\"dir-halo\" d=\"M10,17 V3 M5.5,7.5 L10,3 L14.5,7.5\"/><path class=\"dir\" d=\"M10,17 V3 M5.5,7.5 L10,3 L14.5,7.5\"/>");
+        assert_eq!(
+            dir_glyph("away", 10.0, 10.0),
+            "<path class=\"dir-halo\" d=\"M10,17 V3 M5.5,7.5 L10,3 L14.5,7.5\"/><path class=\"dir\" d=\"M10,17 V3 M5.5,7.5 L10,3 L14.5,7.5\"/>"
+        );
         assert!(dir_glyph("toward", 10.0, 10.0).contains("d=\"M10,3 V17 M5.5,12.5 L10,17 L14.5,12.5\""));
     }
 
@@ -728,7 +823,12 @@ mod tests {
         let u = uid(&e, 0);
         e.set_width(u, 1_800);
         let s = street_svg(&e.view(), 680.0, Units::Metres, &Interaction::default());
-        assert!(s.markup.contains(">Sw</text>") || s.markup.contains(">SW</text>") || s.markup.contains("text-anchor=\"middle\"></text>") || s.markup.contains(">Sidewalk<"));
+        assert!(
+            s.markup.contains(">Sw</text>")
+                || s.markup.contains(">SW</text>")
+                || s.markup.contains("text-anchor=\"middle\"></text>")
+                || s.markup.contains(">Sidewalk<")
+        );
     }
 
     #[test]

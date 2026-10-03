@@ -5,30 +5,22 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::shared::atlas::{MEASURES, Where};
 use crate::junction::read_model::{CrossingView, JView};
-use crate::street::model::Check;
+use crate::junction::turns::compass;
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
-use crate::junction::turns::compass;
+use crate::shared::atlas::{MEASURES, Where};
 use crate::shared::units::Units;
+use crate::street::model::Check;
 
 /// How far it is to cross: the length, or the stages and their length.
 fn crossing_text(c: &CrossingView, units: Units) -> String {
-    if c.stages > 1 {
-        format!("{} × {}", c.stages, units.number(c.stage_mm))
-    } else {
-        units.number(c.distance_mm)
-    }
+    if c.stages > 1 { format!("{} × {}", c.stages, units.number(c.stage_mm)) } else { units.number(c.distance_mm) }
 }
 
 /// What a check says, with the length it speaks of in the units shown.
 fn check_detail(c: &Check, units: Units) -> String {
-    if c.id == "crossing" && c.amount_mm != 0 {
-        format!("{}: {}", c.detail, units.length(c.amount_mm))
-    } else {
-        c.detail.clone()
-    }
+    if c.id == "crossing" && c.amount_mm != 0 { format!("{}: {}", c.detail, units.length(c.amount_mm)) } else { c.detail.clone() }
 }
 
 /// Why the conflict counts are what they are, where that is not obvious.
@@ -245,8 +237,8 @@ pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use crate::junction::model::*;
-    use crate::street::model::Check;
     use crate::shared::units::Units;
+    use crate::street::model::Check;
 
     use super::*;
 

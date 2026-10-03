@@ -5,10 +5,10 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
-use crate::junction::model::*;
-use crate::street::model::{Check, Revision};
 use crate::junction::geometry::*;
+use crate::junction::model::*;
+use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
+use crate::street::model::{Check, Revision};
 
 /// Ring width of a roundabout, and the smallest island in its middle.
 const RING_WIDTH_MM: f64 = 6_000.0;
@@ -498,7 +498,15 @@ fn priority_pair(arms: &[Arm]) -> [usize; 2] {
 fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, head: i32, uses: u8) -> LaneView {
     let w = a.prof.pieces.iter().find(|p| p.x_mm + p.width_mm / 2 == x_mm && KINDS[p.kind].id == "travel").map_or(3_000, |p| p.width_mm);
     let c = a.lat(off, x_mm);
-    LaneView { uses, dests: Vec::new(), bad: false, at: at(a.bearing, c, t), heading: head, poly: poly(&strip(a.bearing, c - w as f64 / 2.0, c + w as f64 / 2.0, a.mouth, ARM_LENGTH_MM as f64)), width_mm: w }
+    LaneView {
+        uses,
+        dests: Vec::new(),
+        bad: false,
+        at: at(a.bearing, c, t),
+        heading: head,
+        poly: poly(&strip(a.bearing, c - w as f64 / 2.0, c + w as f64 / 2.0, a.mouth, ARM_LENGTH_MM as f64)),
+        width_mm: w,
+    }
 }
 
 /// The bearing, clockwise from north, of a point on the plan (north up, y
@@ -617,12 +625,7 @@ impl Junction {
                         }
                     }
                 }
-                pieces.push(PieceView {
-                    kind: p.kind,
-                    material: p.material,
-                    direction: p.direction,
-                    poly: poly(&strip(l.bearing, x0, x1, t0, len)),
-                });
+                pieces.push(PieceView { kind: p.kind, material: p.material, direction: p.direction, poly: poly(&strip(l.bearing, x0, x1, t0, len)) });
             }
             for c in strip(l.bearing, l.pl, l.pr, len, len) {
                 widen(c);
@@ -679,7 +682,16 @@ impl Junction {
                         .filter(|(_, (b, _))| b.uid != a.uid)
                         .map(|(j, (b, lb))| {
                             let turn = (b.bearing - a.bearing).rem_euclid(360) - 180;
-                            (turn, DestView { uid: b.uid, label: arm_name(b), class: turn_class(a.bearing, b.bearing), on: lane.to.contains(&b.uid), open: !lb.prof.leave_x.is_empty() && blocked(&s.arms, i, j).is_none() })
+                            (
+                                turn,
+                                DestView {
+                                    uid: b.uid,
+                                    label: arm_name(b),
+                                    class: turn_class(a.bearing, b.bearing),
+                                    on: lane.to.contains(&b.uid),
+                                    open: !lb.prof.leave_x.is_empty() && blocked(&s.arms, i, j).is_none(),
+                                },
+                            )
                         })
                         .collect();
                     dests.sort_by_key(|d| d.0);
@@ -1018,7 +1030,9 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
         tags.push(MeasureTag { code: RULES[a.rule].code, at: icon_at });
     }
     let mut codes = Vec::new();
-    for (on, code) in [(a.approach != 0, APPROACHES[a.approach].code), (a.stop != 0, STOPS[a.stop].code), (a.rule != 0, RULES[a.rule].code), (a.filter, FILTER_CODE)] {
+    for (on, code) in
+        [(a.approach != 0, APPROACHES[a.approach].code), (a.stop != 0, STOPS[a.stop].code), (a.rule != 0, RULES[a.rule].code), (a.filter, FILTER_CODE)]
+    {
         if on {
             codes.push(code);
         }
@@ -1262,7 +1276,11 @@ mod tests {
         j.set_control(ROUNDABOUT);
         let opts = j.view().bus_options;
         assert_eq!(opts.len(), 6);
-        assert_eq!(opts[0].label.contains("north") && opts[0].label.contains("south") || opts[0].label.contains("east") && opts[0].label.contains("west"), true, "straightest first");
+        assert_eq!(
+            opts[0].label.contains("north") && opts[0].label.contains("south") || opts[0].label.contains("east") && opts[0].label.contains("west"),
+            true,
+            "straightest first"
+        );
         assert!(j.set_bus(Some((opts[0].a, opts[0].b))));
         let v = j.view();
         let bus = v.bus.unwrap();
@@ -1731,7 +1749,8 @@ mod tests {
         let j = Junction::new(0);
         let v = serde_json::to_value(j.view()).unwrap();
         let north = v["arms"].as_array().unwrap().iter().find(|a| a["bearing"] == 0).unwrap();
-        let uses: Vec<Vec<&str>> = north["lanes"].as_array().unwrap().iter().map(|l| l["uses"].as_array().unwrap().iter().map(|u| u.as_str().unwrap()).collect()).collect();
+        let uses: Vec<Vec<&str>> =
+            north["lanes"].as_array().unwrap().iter().map(|l| l["uses"].as_array().unwrap().iter().map(|u| u.as_str().unwrap()).collect()).collect();
         assert_eq!(uses, vec![vec!["left", "through"], vec!["through", "right"]]);
         // Entering from the north and heading east is a left turn.
         let east = v["arms"].as_array().unwrap().iter().find(|a| a["bearing"] == 90).unwrap();

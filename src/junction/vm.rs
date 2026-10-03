@@ -7,15 +7,15 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
+use crate::city::binding::CityBinding;
+use crate::junction::frame::Frame;
 use crate::junction::model::{Junction, Refusal, Target};
 use crate::junction::read_model::JView;
-use crate::shared::units::Units;
-use crate::city::binding::CityBinding;
+use crate::junction::text;
 use crate::shared::core::{Core, Presents};
-use crate::junction::text as text;
 use crate::shared::keeper::{Keeper, NOT_KEPT};
-use crate::junction::frame::Frame;
 use crate::shared::ports::Ports;
+use crate::shared::units::Units;
 
 impl Presents for Junction {
     type View = JView;

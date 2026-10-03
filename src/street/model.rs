@@ -3,8 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, SAMPLES, Side, kind_index};
 use crate::street::measures;
-use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, REGIONS, Side, KINDS, MATERIALS, Mode, SAMPLES, kind_index};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -57,11 +57,7 @@ pub struct Variant {
 /// Whether a bus lane (at `time_min`) runs beside the piece at `pos`.
 fn bus_beside(segs: &[Segment], pos: usize, time_min: i32) -> bool {
     let bus = kind_index("bus");
-    [pos.checked_sub(1), pos.checked_add(1)]
-        .into_iter()
-        .flatten()
-        .filter_map(|i| segs.get(i))
-        .any(|s| Some(s.kind_at(time_min)) == bus)
+    [pos.checked_sub(1), pos.checked_add(1)].into_iter().flatten().filter_map(|i| segs.get(i)).any(|s| Some(s.kind_at(time_min)) == bus)
 }
 
 /// Time of day is kept in quarter hours; a window is a set of those.
@@ -102,9 +98,7 @@ impl Segment {
     /// Like `bounds`, leaving out the variant at `skip`.
     fn bounds_except(&self, skip: Option<usize>) -> (i32, i32) {
         let variants = self.variants.iter().enumerate().filter(|(i, _)| Some(*i) != skip).map(|(_, v)| v.kind);
-        std::iter::once(self.kind)
-            .chain(variants)
-            .fold((0, i32::MAX), |(lo, hi), k| (lo.max(KINDS[k].min_mm), hi.min(KINDS[k].max_mm)))
+        std::iter::once(self.kind).chain(variants).fold((0, i32::MAX), |(lo, hi), k| (lo.max(KINDS[k].min_mm), hi.min(KINDS[k].max_mm)))
     }
 
     /// The piece as it is at `time_min`: its type, surface and direction then,
@@ -143,13 +137,7 @@ impl Segment {
             return Vec::new();
         }
         let (lo, hi) = self.bounds_except(skip);
-        (0..KINDS.len())
-            .filter(|&k| {
-                k != self.kind
-                    && KINDS[k].shares_road
-                    && lo.max(KINDS[k].min_mm) <= hi.min(KINDS[k].max_mm)
-            })
-            .collect()
+        (0..KINDS.len()).filter(|&k| k != self.kind && KINDS[k].shares_road && lo.max(KINDS[k].min_mm) <= hi.min(KINDS[k].max_mm)).collect()
     }
 }
 
@@ -249,10 +237,7 @@ impl Street {
                     && (!s.shelter || KINDS[s.kind].id == "sidewalk")
                     && (!s.tram || KINDS[s.kind].id == "bus" || s.variants.iter().any(|v| KINDS[v.kind].id == "bus"))
                     && s.width_mm > 0
-                    && s.variants.iter().all(|v| {
-                        seg_ok(v.kind, v.material, None, v.direction)
-                            && valid_window(v.from_min, v.to_min)
-                    })
+                    && s.variants.iter().all(|v| seg_ok(v.kind, v.material, None, v.direction) && valid_window(v.from_min, v.to_min))
             })
             && self.segments.iter().map(|s| s.uid).all(|u| u < self.next_uid)
     }
@@ -342,20 +327,13 @@ impl Editor {
             .map(|(id, w)| {
                 let uid = self.next_uid;
                 self.next_uid += 1;
-                Segment::new(
-                    uid,
-                    kind_index(id).expect("sample uses catalogue kinds"),
-                    *w,
-                )
+                Segment::new(uid, kind_index(id).expect("sample uses catalogue kinds"), *w)
             })
             .collect::<Vec<Segment>>();
         let mut segments = segments;
         // Driving lanes on the left half of the street run away, the rest toward.
         default_directions(&mut segments, REGIONS[self.region].drive_side);
-        self.states = vec![State {
-            label: "Street today".into(),
-            segments,
-        }];
+        self.states = vec![State { label: "Street today".into(), segments }];
         self.cursor = 0;
         self.selected = None;
         self.gesture = None;
@@ -363,13 +341,7 @@ impl Editor {
 
     /// The street as it is now, for the city to keep.
     pub fn snapshot(&self) -> Street {
-        Street {
-            sample: self.sample,
-            row_mm: self.row_mm,
-            side: REGIONS[self.region].drive_side,
-            segments: self.current().clone(),
-            next_uid: self.next_uid,
-        }
+        Street { sample: self.sample, row_mm: self.row_mm, side: REGIONS[self.region].drive_side, segments: self.current().clone(), next_uid: self.next_uid }
     }
 
     /// An editor on a street the city holds. `today` is the street as it was
@@ -479,11 +451,7 @@ impl Editor {
         }
         let k = &KINDS[kind];
         let remaining = self.row_mm - total(self.current());
-        let width = if remaining >= k.min_mm {
-            (remaining / SNAP_MM * SNAP_MM).clamp(k.min_mm, k.default_mm)
-        } else {
-            k.default_mm
-        };
+        let width = if remaining >= k.min_mm { (remaining / SNAP_MM * SNAP_MM).clamp(k.min_mm, k.default_mm) } else { k.default_mm };
         let uid = self.new_uid();
         let seg = Segment::new(uid, kind, width);
         self.edit(format!("Add {}", k.name.to_lowercase()), |segs| {
@@ -563,11 +531,7 @@ impl Editor {
         if !kind.materials.contains(&material) {
             return false;
         }
-        let label = format!(
-            "{} surface: {}",
-            kind.name,
-            MATERIALS[material].name.to_lowercase()
-        );
+        let label = format!("{} surface: {}", kind.name, MATERIALS[material].name.to_lowercase());
         self.edit(label, |segs| {
             let target = match active {
                 Some(vi) => &mut segs[pos].variants[vi].material,
@@ -730,11 +694,7 @@ impl Editor {
         let seg = &self.current()[pos];
         let alts = seg.alt_kinds();
         let prefer = ["bus", "parking", "loading", "travel", "bike"];
-        let Some(kind) = prefer
-            .iter()
-            .filter_map(|id| kind_index(id))
-            .find(|k| alts.contains(k))
-        else {
+        let Some(kind) = prefer.iter().filter_map(|id| kind_index(id)).find(|k| alts.contains(k)) else {
             return false;
         };
         let used = seg.variants.iter().fold(0u128, |m, v| m | window_mask(v.from_min, v.to_min));
@@ -743,13 +703,7 @@ impl Editor {
             return false;
         };
         let name = KINDS[seg.kind].name;
-        let label = format!(
-            "{} is {} {}-{}",
-            name,
-            KINDS[kind].name.to_lowercase(),
-            clock(from_min),
-            clock(to_min)
-        );
+        let label = format!("{} is {} {}-{}", name, KINDS[kind].name.to_lowercase(), clock(from_min), clock(to_min));
         self.edit(label, |segs| {
             let d = &mut segs[pos];
             d.variants.push(Variant { kind, material: KINDS[kind].materials[0], direction: direction_for(kind, d.direction), from_min, to_min });
@@ -771,13 +725,7 @@ impl Editor {
         if v.kind == kind || !seg.alt_kinds_except(Some(index)).contains(&kind) {
             return false;
         }
-        let label = format!(
-            "{} is {} {}-{}",
-            KINDS[seg.kind].name,
-            KINDS[kind].name.to_lowercase(),
-            clock(v.from_min),
-            clock(v.to_min)
-        );
+        let label = format!("{} is {} {}-{}", KINDS[seg.kind].name, KINDS[kind].name.to_lowercase(), clock(v.from_min), clock(v.to_min));
         self.edit(label, |segs| {
             let d = &mut segs[pos];
             let keep = d.variants[index].direction.or(d.direction);
@@ -827,22 +775,11 @@ impl Editor {
             return false;
         }
         let mask = window_mask(from_min, to_min);
-        let others = seg
-            .variants
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| *i != index)
-            .fold(0u128, |m, (_, v)| m | window_mask(v.from_min, v.to_min));
+        let others = seg.variants.iter().enumerate().filter(|(i, _)| *i != index).fold(0u128, |m, (_, v)| m | window_mask(v.from_min, v.to_min));
         if mask & others != 0 {
             return false;
         }
-        let label = format!(
-            "{} is {} {}-{}",
-            KINDS[seg.kind].name,
-            KINDS[seg.variants[index].kind].name.to_lowercase(),
-            clock(from_min),
-            clock(to_min)
-        );
+        let label = format!("{} is {} {}-{}", KINDS[seg.kind].name, KINDS[seg.variants[index].kind].name.to_lowercase(), clock(from_min), clock(to_min));
         self.edit(label, |segs| {
             let v = &mut segs[pos].variants[index];
             let changed = (v.from_min, v.to_min) != (from_min, to_min);
@@ -875,7 +812,8 @@ impl Editor {
         };
         let existing = self.current().clone();
         let mut next_uid = self.next_uid;
-        let Some(arranged) = measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, SAMPLES[self.sample].freeway, &mut next_uid) else {
+        let Some(arranged) = measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, SAMPLES[self.sample].freeway, &mut next_uid)
+        else {
             return false;
         };
         let ok = self.edit(format!("{} {}", def.code, def.name), |segs| {
@@ -1009,9 +947,7 @@ impl Editor {
         if segs.is_empty() {
             return;
         }
-        let pos = self
-            .selected
-            .and_then(|u| segs.iter().position(|s| s.uid == u));
+        let pos = self.selected.and_then(|u| segs.iter().position(|s| s.uid == u));
         let next = match pos {
             Some(p) => (p as i32 + delta).clamp(0, segs.len() as i32 - 1) as usize,
             None if delta >= 0 => 0,
@@ -1059,14 +995,7 @@ impl Editor {
             outcomes: outcomes(&now, &existing_now),
             checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side, SAMPLES[self.sample].freeway),
             measures: self.measure_views(segs, &now),
-            revisions: self.states[1..=self.cursor]
-                .iter()
-                .enumerate()
-                .map(|(i, s)| Revision {
-                    step: i + 1,
-                    label: s.label.clone(),
-                })
-                .collect(),
+            revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
             can_redo: self.cursor + 1 < self.states.len(),
             changed: segs != existing,
@@ -1082,7 +1011,13 @@ impl Editor {
             .map(|(f, d)| {
                 let can_apply = measures::arrange(d.code, raw, self.row_mm, side, freeway, &mut self.next_uid.clone()).is_some();
                 let unavailable = (!can_apply).then(|| match d.freeway {
-                    Some(only) if only != freeway => if only { "Freeways only" } else { "Not for a freeway" },
+                    Some(only) if only != freeway => {
+                        if only {
+                            "Freeways only"
+                        } else {
+                            "Not for a freeway"
+                        }
+                    }
                     _ => "Will not fit",
                 });
                 MeasureView { code: d.code, name: d.name, present: f.present, problems: f.problems, can_apply, unavailable }
@@ -1135,9 +1070,7 @@ impl Editor {
 // ---- outcomes and checks ------------------------------------------------
 
 fn capacity(segs: &[Segment]) -> i32 {
-    segs.iter()
-        .map(|s| KINDS[s.kind].people_per_hour_per_m * s.width_mm / 1000)
-        .sum()
+    segs.iter().map(|s| KINDS[s.kind].people_per_hour_per_m * s.width_mm / 1000).sum()
 }
 
 fn shares(segs: &[Segment]) -> Vec<Share> {
@@ -1145,28 +1078,14 @@ fn shares(segs: &[Segment]) -> Vec<Share> {
     Mode::ALL
         .iter()
         .map(|m| {
-            let mm: i32 = segs
-                .iter()
-                .filter(|s| KINDS[s.kind].mode == *m)
-                .map(|s| s.width_mm)
-                .sum();
-            Share {
-                mode: *m,
-                label: m.label(),
-                mm,
-                pct: (mm as f64 * 100.0 / t as f64).round() as i32,
-            }
+            let mm: i32 = segs.iter().filter(|s| KINDS[s.kind].mode == *m).map(|s| s.width_mm).sum();
+            Share { mode: *m, label: m.label(), mm, pct: (mm as f64 * 100.0 / t as f64).round() as i32 }
         })
         .collect()
 }
 
 fn outcomes(segs: &[Segment], existing: &[Segment]) -> Outcomes {
-    Outcomes {
-        share: shares(segs),
-        existing_share: shares(existing),
-        capacity_pph: capacity(segs),
-        existing_capacity_pph: capacity(existing),
-    }
+    Outcomes { share: shares(segs), existing_share: shares(existing), capacity_pph: capacity(segs), existing_capacity_pph: capacity(existing) }
 }
 
 fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check> {
@@ -1176,18 +1095,13 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check
     let edge_walk = |s: Option<&Segment>| s.is_some_and(|s| KINDS[s.kind].id == "sidewalk");
     // A freeway has no sidewalks to ask for.
     let both_edges = freeway || (edge_walk(segs.first()) && edge_walk(segs.last()));
-    let access = segs.iter().any(|s| {
-        matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= ACCESS_LANE_MM
-    });
+    let access = segs.iter().any(|s| matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= ACCESS_LANE_MM);
     // With traffic on the right, lanes coming toward the viewer (1) sit to the
     // left of lanes going away (0); with traffic on the left, the reverse. A
     // one-way street has nothing to conflict.
     let lanes: Vec<usize> = segs.iter().filter(|s| required_direction(s)).filter_map(|s| s.direction).collect();
     let (wrong_first, wrong_then) = if side == Side::Right { (0, 1) } else { (1, 0) };
-    let keeps = lanes
-        .iter()
-        .position(|&d| d == wrong_first)
-        .is_none_or(|i| !lanes[i..].contains(&wrong_then));
+    let keeps = lanes.iter().position(|&d| d == wrong_first).is_none_or(|i| !lanes[i..].contains(&wrong_then));
     let side_name = if side == Side::Right { "right" } else { "left" };
     vec![
         Check {
@@ -1195,15 +1109,7 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check
             ok: fits,
             amount_mm: delta.abs(),
             label: "Fits the street width",
-            detail: if fits {
-                if delta == 0 {
-                    "Exactly full".into()
-                } else {
-                    format!("{} mm left to use", -delta)
-                }
-            } else {
-                format!("{delta} mm over")
-            },
+            detail: if fits { if delta == 0 { "Exactly full".into() } else { format!("{} mm left to use", -delta) } } else { format!("{delta} mm over") },
         },
         Check {
             id: "edges",
@@ -1223,22 +1129,14 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check
             ok: access,
             amount_mm: ACCESS_LANE_MM,
             label: "Room for emergency vehicles",
-            detail: if access {
-                "A lane of 3.0 m or more".into()
-            } else {
-                "No lane of 3.0 m or more".into()
-            },
+            detail: if access { "A lane of 3.0 m or more".into() } else { "No lane of 3.0 m or more".into() },
         },
         Check {
             id: "side",
             ok: keeps,
             amount_mm: 0,
             label: if side == Side::Right { "Traffic keeps right" } else { "Traffic keeps left" },
-            detail: if keeps {
-                "Lanes run the way this region drives".into()
-            } else {
-                format!("A lane runs against traffic that keeps {side_name}")
-            },
+            detail: if keeps { "Lanes run the way this region drives".into() } else { format!("A lane runs against traffic that keeps {side_name}") },
         },
     ]
 }
@@ -1376,7 +1274,13 @@ mod tests {
                 let v = e.view();
                 assert!(v.delta_mm <= 0, "{} fits: {} over", d.code, v.delta_mm);
                 let found = v.measures.iter().find(|m| m.code == d.code).unwrap();
-                assert!(found.present, "{} is recognised on {} (region {region}); got {:?}", d.code, SAMPLES[sample].name, v.measures.iter().filter(|m| m.present).map(|m| m.code).collect::<Vec<_>>());
+                assert!(
+                    found.present,
+                    "{} is recognised on {} (region {region}); got {:?}",
+                    d.code,
+                    SAMPLES[sample].name,
+                    v.measures.iter().filter(|m| m.present).map(|m| m.code).collect::<Vec<_>>()
+                );
                 // A narrow street squeezes the bus lanes; that is the one thing it may be told off for.
                 assert!(found.problems.iter().all(|p| p.starts_with("A bus lane is")), "{}: {:?}", d.code, found.problems);
                 assert!(v.revisions.last().unwrap().label.starts_with(d.code));
@@ -1786,9 +1690,8 @@ mod tests {
 
     #[test]
     fn a_region_sets_which_side_traffic_keeps_to() {
-        let dirs = |e: &Editor| -> Vec<_> {
-            e.view().segments.iter().filter(|s| s.direction.is_some() && s.kind == kind("travel")).map(|s| s.direction).collect()
-        };
+        let dirs =
+            |e: &Editor| -> Vec<_> { e.view().segments.iter().filter(|s| s.direction.is_some() && s.kind == kind("travel")).map(|s| s.direction).collect() };
         let mut e = Editor::new(0);
         assert_eq!(e.view().region, "canada");
         assert!(e.view().checks.iter().find(|c| c.id == "side").unwrap().ok);

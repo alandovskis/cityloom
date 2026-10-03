@@ -5,9 +5,9 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::street::model::{Editor, SegView, View};
-use crate::street::keys::Action;
 use crate::shared::units::Units;
+use crate::street::keys::Action;
+use crate::street::model::{Editor, SegView, View};
 use crate::street::vm::StreetVm;
 
 /// What a component reads of the street view-model and tells it. The view-model

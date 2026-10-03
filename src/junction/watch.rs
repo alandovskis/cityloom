@@ -4,11 +4,11 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
+use crate::junction::keys::{Action, Step};
 use crate::junction::model::{Junction, Target};
 use crate::junction::read_model::{ArmView, JView};
-use crate::junction::keys::{Action, Step};
-use crate::shared::units::Units;
 use crate::junction::vm::JunctionVm;
+use crate::shared::units::Units;
 
 /// What a component reads of the junction view-model and tells it. The view-model
 /// is kept where only this thread can reach it, so the handle is `Copy` and any

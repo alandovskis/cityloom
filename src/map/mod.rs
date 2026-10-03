@@ -3,9 +3,9 @@
 
 pub mod camera;
 pub mod gestures;
+pub mod svg;
 #[cfg(test)]
 mod tests;
-pub mod svg;
 pub mod view;
 pub mod vm;
 
@@ -37,9 +37,8 @@ pub fn mount_map() -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let vm = vm::MapVm::new(browser_ports());
-    let at = |id: &str| -> HtmlElement {
-        leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into()
-    };
+    let at =
+        |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };

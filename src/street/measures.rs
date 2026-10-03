@@ -117,9 +117,8 @@ pub fn detect(raw: &[Segment], now: &[Segment], side: Side, freeway: bool) -> Ve
             base.push(format!("A bus lane is {} mm wide, and a transit lane wants {} mm", road[i].width_mm, MIN_TRANSIT_LANE_MM));
         }
     }
-    let median_beside = now.iter().enumerate().any(|(k, s)| {
-        id(s) == "median" && (k > 0 && id(&now[k - 1]) == "bus" || k + 1 < now.len() && id(&now[k + 1]) == "bus")
-    });
+    let median_beside =
+        now.iter().enumerate().any(|(k, s)| id(s) == "median" && (k > 0 && id(&now[k - 1]) == "bus" || k + 1 < now.len() && id(&now[k + 1]) == "bus"));
     DEFS.iter()
         .map(|d| {
             let p = present(d.code);
@@ -196,7 +195,14 @@ fn recipe(code: &str) -> Option<Vec<Spec>> {
         }
         "E3" => vec![bus(), tr(), t(), t(), median(), t(), t(), tr(), bus()],
         "F1" => vec![bus(), sp("travel", Fixed(0), true), sp("travel", Fixed(0), false), sp("travel", Fixed(0), false), sp("travel", Fixed(0), true)],
-        "F2" => vec![sp("parking", None, false), bus(), sp("travel", Fixed(0), true), sp("travel", Fixed(0), false), sp("travel", Fixed(0), true), sp("parking", None, true)],
+        "F2" => vec![
+            sp("parking", None, false),
+            bus(),
+            sp("travel", Fixed(0), true),
+            sp("travel", Fixed(0), false),
+            sp("travel", Fixed(0), true),
+            sp("parking", None, true),
+        ],
         _ => return Option::None,
     };
     Some(v)

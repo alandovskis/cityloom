@@ -183,11 +183,14 @@ mod tests {
         let s = Rc::new(ManualScheduler::default());
         let log = Rc::new(RefCell::new(Vec::new()));
         let (s2, l2) = (s.clone(), log.clone());
-        s.after(10, Box::new(move || {
-            l2.borrow_mut().push("first");
-            let l3 = l2.clone();
-            s2.after(10, Box::new(move || l3.borrow_mut().push("second")));
-        }));
+        s.after(
+            10,
+            Box::new(move || {
+                l2.borrow_mut().push("first");
+                let l3 = l2.clone();
+                s2.after(10, Box::new(move || l3.borrow_mut().push("second")));
+            }),
+        );
         s.advance(15);
         assert_eq!(*log.borrow(), vec!["first"]);
         s.advance(10);

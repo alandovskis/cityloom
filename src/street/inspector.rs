@@ -9,11 +9,11 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
 use crate::shared::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS};
+use crate::shared::units::Units;
 use crate::street::model::{SegView, View};
+use crate::street::page::{hhmm, to_min};
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
-use crate::street::page::{hhmm, to_min};
-use crate::shared::units::Units;
 
 /// The kinds a piece may take at other times, with the one it is: the choices
 /// in a list, in catalogue order.
@@ -79,7 +79,9 @@ fn surface_swatch(id: &'static str) -> AnyView {
 
 fn curb_swatch(id: Option<&'static str>) -> AnyView {
     match id {
-        None => view! { <svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><line x1="4" x2="40" y1="11" y2="11"/></svg> }.into_any(),
+        None => {
+            view! { <svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><line x1="4" x2="40" y1="11" y2="11"/></svg> }.into_any()
+        }
         Some(id) => view! {
             <svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false">
                 <rect width="44" height="22" fill="var(--sheet)" stroke="none"/>
@@ -151,7 +153,10 @@ fn kind_of(w: SheetWatch, uid: u32) -> usize {
 fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
     let value = move || w.segment(uid, |s| w.units().fixed(s.width_mm, 2)).unwrap_or_default();
     let range = move || w.segment(uid, |s| width_range(s, w.units())).unwrap_or_default();
-    let (lo, hi) = (move || w.segment(uid, |s| w.units().fixed(s.min_mm, 2)).unwrap_or_default(), move || w.segment(uid, |s| w.units().fixed(s.max_mm, 2)).unwrap_or_default());
+    let (lo, hi) = (
+        move || w.segment(uid, |s| w.units().fixed(s.min_mm, 2)).unwrap_or_default(),
+        move || w.segment(uid, |s| w.units().fixed(s.max_mm, 2)).unwrap_or_default(),
+    );
     let step = move || if w.units() == Units::Metres { "0.1" } else { "0.25" };
     let nudge = move |dir: i32| {
         w.edit(|e| e.nudge_width(uid, dir * w.units_now().step_mm()));
@@ -368,9 +373,17 @@ fn direction_section(w: SheetWatch, uid: u32, optional: bool) -> impl IntoView {
     let options = DIRECTIONS
         .iter()
         .enumerate()
-        .map(|(i, d)| radio(chosen(Some(d.id)), direction_swatch(Some(d.id)), d.name.to_string(), move || { w.edit(|e| e.set_direction(uid, Some(i))); }))
+        .map(|(i, d)| {
+            radio(chosen(Some(d.id)), direction_swatch(Some(d.id)), d.name.to_string(), move || {
+                w.edit(|e| e.set_direction(uid, Some(i)));
+            })
+        })
         .collect_view();
-    let both = optional.then(|| radio(chosen(None), direction_swatch(None), "Two-way".to_string(), move || { w.edit(|e| e.set_direction(uid, None)); }));
+    let both = optional.then(|| {
+        radio(chosen(None), direction_swatch(None), "Two-way".to_string(), move || {
+            w.edit(|e| e.set_direction(uid, None));
+        })
+    });
     section(
         "i-h-dir",
         "Direction",
@@ -384,10 +397,24 @@ fn curb_section(w: SheetWatch, uid: u32, curbs: &'static [usize]) -> impl IntoVi
         .iter()
         .map(|&ci| {
             let c = &CURBS[ci];
-            radio(move || w.segment(uid, |s| s.curb == Some(c.id)).unwrap_or(false), curb_swatch(Some(c.id)), c.name.to_string(), move || { w.edit(|e| e.set_curb(uid, Some(ci))); })
+            radio(
+                move || w.segment(uid, |s| s.curb == Some(c.id)).unwrap_or(false),
+                curb_swatch(Some(c.id)),
+                c.name.to_string(),
+                move || {
+                    w.edit(|e| e.set_curb(uid, Some(ci)));
+                },
+            )
         })
         .collect_view();
-    let none = radio(move || w.segment(uid, |s| s.curb.is_none()).unwrap_or(false), curb_swatch(None), "None (flush)".to_string(), move || { w.edit(|e| e.set_curb(uid, None)); });
+    let none = radio(
+        move || w.segment(uid, |s| s.curb.is_none()).unwrap_or(false),
+        curb_swatch(None),
+        "None (flush)".to_string(),
+        move || {
+            w.edit(|e| e.set_curb(uid, None));
+        },
+    );
     section(
         "i-h-curb",
         "Curb",

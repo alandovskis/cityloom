@@ -6,12 +6,12 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::street::model::{Editor, View};
-use crate::shared::units::Units;
 use crate::city::binding::CityBinding;
 use crate::shared::core::{Core, Presents};
 use crate::shared::keeper::{Keeper, NOT_KEPT};
 use crate::shared::ports::Ports;
+use crate::shared::units::Units;
+use crate::street::model::{Editor, View};
 use crate::street::text;
 
 impl Presents for Editor {

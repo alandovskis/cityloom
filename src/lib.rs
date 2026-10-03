@@ -15,7 +15,7 @@ pub mod street;
 use shared::{atlas, symbols};
 use wasm_bindgen::prelude::*;
 
-use shared::catalogue::{CURBS, DIRECTIONS, KINDS, REGIONS, MATERIALS, SAMPLES};
+use shared::catalogue::{CURBS, DIRECTIONS, KINDS, MATERIALS, REGIONS, SAMPLES};
 
 pub(crate) fn json<T: serde::Serialize>(v: &T) -> String {
     serde_json::to_string(v).expect("view serialises")
@@ -36,10 +36,7 @@ pub fn materials() -> String {
 /// Names of the sample streets as JSON.
 #[wasm_bindgen]
 pub fn samples() -> String {
-    let list: Vec<_> = SAMPLES
-        .iter()
-        .map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm, "freeway": s.freeway }))
-        .collect();
+    let list: Vec<_> = SAMPLES.iter().map(|s| serde_json::json!({ "name": s.name, "row_mm": s.row_mm, "freeway": s.freeway })).collect();
     json(&list)
 }
 
@@ -55,7 +52,6 @@ pub fn hatches() -> String {
 pub fn atlas() -> String {
     json(&atlas::MEASURES)
 }
-
 
 /// Says `text` to a screen reader.
 #[wasm_bindgen]
