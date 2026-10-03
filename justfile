@@ -37,6 +37,10 @@ format-check:
     cargo fmt --check
     cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js
 
+# Remake the roads of the default area from an OSM extract: `just default-area osm_import/tests/data/kreuzberg.osm`.
+default-area extract:
+    cargo run -q -p osm_import --bin osm2network -- {{extract}} web/data/default-network.json
+
 # Serve the pages at http://127.0.0.1:8137/ (build first).
 serve:
     python3 -m http.server 8137 --directory web

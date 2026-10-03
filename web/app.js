@@ -2,10 +2,18 @@
 // WebAssembly module (`mount_street_page`); this opens the street, keeps what
 // it makes in the city, and sets up what every page shares.
 
-import init, { Sheet, hatches, mount_street_page, open_street, street_ends } from "./pkg/cityloom_editor.js";
+import init, {
+  Sheet,
+  hatches,
+  mount_street_page,
+  open_street,
+  prepare_city,
+  street_ends,
+} from "./pkg/cityloom_editor.js";
 import { placeParam } from "./city.js";
 
 await init();
+await prepare_city();
 
 const { HATCH, MATERIAL_HATCH, CURB_HATCH } = JSON.parse(hatches());
 // Opened from the map (`?street=7`) the page edits that street of the city and

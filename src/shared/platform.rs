@@ -76,7 +76,7 @@ impl Fetcher for BrowserFetcher {
     #[cfg(target_arch = "wasm32")]
     fn fetch(&self, url: &str, body: Option<&str>, done: Box<dyn FnOnce(Fetched)>) {
         let (url, body) = (url.to_string(), body.map(str::to_string));
-        leptos::task::spawn_local(async move { done(request(&url, body.as_deref()).await) });
+        wasm_bindgen_futures::spawn_local(async move { done(request(&url, body.as_deref()).await) });
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -112,7 +112,7 @@ struct BrowserImporter;
 impl Importer for BrowserImporter {
     #[cfg(target_arch = "wasm32")]
     fn import(&self, osm: Vec<u8>, done: Box<dyn FnOnce(Result<String, String>)>) {
-        leptos::task::spawn_local(async move { done(read_osm(&osm).await) });
+        wasm_bindgen_futures::spawn_local(async move { done(read_osm(&osm).await) });
     }
 
     #[cfg(not(target_arch = "wasm32"))]

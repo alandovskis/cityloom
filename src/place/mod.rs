@@ -88,3 +88,30 @@ mod tests {
         assert_eq!(encode("a-b_c.d~e9"), "a-b_c.d~e9");
     }
 }
+
+/// Gets the roads of the area the person is working in, from where they come from, unless
+/// they are already kept. The pages call this before they open the city. Resolves with the
+/// empty string when the city is ready, or with what went wrong, in words; the city is then the
+/// sample, so the page still works.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn prepare_city() -> js_sys::Promise {
+    use crate::city::store::CityStore;
+    use crate::shared::platform::browser_ports;
+    js_sys::Promise::new(&mut |resolve, _| {
+        let ports = browser_ports();
+        let Some(area) = CityStore::current_area(&*ports.storage) else {
+            let _ = resolve.call1(&wasm_bindgen::JsValue::NULL, &wasm_bindgen::JsValue::from_str(""));
+            return;
+        };
+        let store = CityStore::for_area(ports.storage.clone(), area);
+        let announcer = ports.announcer.clone();
+        loader::Loader::new(ports).load(&store, move |result| {
+            let problem = result.err().unwrap_or_default();
+            if !problem.is_empty() {
+                announcer.say(&problem);
+            }
+            let _ = resolve.call1(&wasm_bindgen::JsValue::NULL, &wasm_bindgen::JsValue::from_str(&problem));
+        });
+    })
+}

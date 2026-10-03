@@ -2,10 +2,11 @@
 // WebAssembly module (`mount_page`); this opens the junction, keeps what it
 // makes in the city, and sets up what every page shares.
 
-import init, { Plan, hatches, junction_name, mount_page, open_junction } from "./pkg/cityloom_editor.js";
+import init, { Plan, hatches, junction_name, mount_page, open_junction, prepare_city } from "./pkg/cityloom_editor.js";
 import { placeParam } from "./city.js";
 
 await init();
+await prepare_city();
 
 const { HATCH, MATERIAL_HATCH, CURB_HATCH } = JSON.parse(hatches());
 
