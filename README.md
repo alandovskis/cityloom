@@ -14,19 +14,19 @@ This repository holds three surfaces: a city map (`map.html`), the street cross-
 
 ## Build and run
 
+[`just`](https://just.systems) wraps the common operations (`just` lists them):
+
 ```sh
-cargo test
-cargo install wasm-bindgen-cli --version 0.2.129 --root .tools   # once; must match Cargo.toml
-./scripts/build.sh                                               # writes web/pkg
-python3 -m http.server 8137 --directory web                      # open http://127.0.0.1:8137/
+just setup    # once: wasm-bindgen-cli at the version Cargo.toml pins (into .tools), and the browser tests' dependencies
+just build    # the WebAssembly module, into web/pkg
+just serve    # http://127.0.0.1:8137/
+just test     # cargo test, and a type-check of the wasm-only code
+just e2e      # browser tests after a fresh build; arguments go to Playwright, e.g. `just e2e tests/street.spec.ts`
+just check    # test, then e2e
 ```
+
+Without `just`: `cargo test`, `./scripts/build.sh`, `python3 -m http.server 8137 --directory web`, and `cd e2e && npx playwright test`.
 
 ## End-to-end tests
 
-Playwright drives the built pages in Chromium (`e2e/`). Build the module first; a small Node server serves `web/`.
-
-```sh
-./scripts/build.sh
-cd e2e && npm ci && npx playwright install chromium   # once
-npm test                                              # or: npx playwright test tests/street.spec.ts
-```
+Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; a small Node server (`e2e/serve.mjs`) serves `web/` for the run.
