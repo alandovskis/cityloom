@@ -5,32 +5,78 @@
 
 use std::rc::Rc;
 
-use crate::city::model::City;
+use osm_network::Network;
+
+use crate::city::model::{City, Layout};
+use crate::place::area::Area;
 use crate::shared::ports::Storage;
 
 pub const CITY_KEY: &str = "cityloom-city";
+/// The street network of an area, as `osm_import` made it; the area's key follows.
+pub const NETWORK_KEY: &str = "cityloom-network";
 pub const REGION_KEY: &str = "cityloom-region";
 
 #[derive(Clone)]
 pub struct CityStore {
     storage: Rc<dyn Storage>,
+    /// The part of the world the city is made from. None is the sample city.
+    area: Option<Area>,
 }
 
 impl CityStore {
+    /// The store of the sample city.
     pub fn new(storage: Rc<dyn Storage>) -> CityStore {
-        CityStore { storage }
+        CityStore { storage, area: None }
+    }
+
+    /// The store of the city made from `area`. Its street network has to be
+    /// kept first (`keep_network`); until it is, the city is the sample.
+    pub fn for_area(storage: Rc<dyn Storage>, area: Area) -> CityStore {
+        CityStore { storage, area: Some(area) }
+    }
+
+    pub fn area(&self) -> Option<&Area> {
+        self.area.as_ref()
+    }
+
+    fn key(&self, base: &str) -> String {
+        match &self.area {
+            Some(a) => format!("{base}:{}", a.key()),
+            None => base.to_string(),
+        }
+    }
+
+    /// Keeps the street network the area's city is made from. Says whether it was kept.
+    pub fn keep_network(&self, network: &Network) -> bool {
+        serde_json::to_string(network).is_ok_and(|json| self.storage.remember(&self.key(NETWORK_KEY), &json))
+    }
+
+    /// Whether the area's street network is kept. The sample city always has its own.
+    pub fn has_network(&self) -> bool {
+        self.area.is_none() || self.network().is_some()
+    }
+
+    fn network(&self) -> Option<Network> {
+        serde_json::from_str(&self.storage.recall(&self.key(NETWORK_KEY))?).ok()
+    }
+
+    fn layout(&self) -> Layout {
+        match (&self.area, self.network()) {
+            (Some(area), Some(network)) => Layout::from_network(&network, &area.name),
+            _ => Layout::sample(),
+        }
     }
 
     /// The city as it is kept, or as first laid out when nothing usable is.
     pub fn open(&self) -> City {
-        City::load(&self.storage.recall(CITY_KEY).unwrap_or_default())
+        City::load_on(self.layout(), &self.storage.recall(&self.key(CITY_KEY)).unwrap_or_default())
     }
 
     /// Applies `change` to the city as it is kept now and keeps the result.
     /// Says whether the change was taken and kept.
     pub fn write(&self, change: impl FnOnce(&mut City) -> bool) -> bool {
         let mut city = self.open();
-        change(&mut city) && self.storage.remember(CITY_KEY, &city.save())
+        change(&mut city) && self.storage.remember(&self.key(CITY_KEY), &city.save())
     }
 
     /// Puts every street and junction back as first laid out, and keeps that.
@@ -126,6 +172,67 @@ mod tests {
         assert_eq!(s.open().view(0).edited, 1);
         assert!(s.reset());
         assert_eq!(s.open().view(0).edited, 0);
+    }
+
+    fn tiny_network() -> Network {
+        use osm_network::{Control, Lane, LaneKind, Node, Road, Way};
+        let node = |id, x_m, junction| Node { id, osm_nodes: vec![id as i64], x_m, y_m: 0.0, junction, control: Control::None };
+        let lane = |kind, way| Lane { kind, way, width_m: 3.0 };
+        Network {
+            left_hand: false,
+            nodes: vec![node(1, 0.0, false), node(2, 100.0, false)],
+            roads: vec![Road {
+                id: 1,
+                osm_ways: vec![7],
+                name: Some("Only Street".into()),
+                highway: "residential".into(),
+                from: 1,
+                to: 2,
+                lanes: vec![lane(LaneKind::Driving, Way::Forward), lane(LaneKind::Driving, Way::Backward)],
+                points: vec![(0.0, 0.0), (100.0, 0.0)],
+            }],
+        }
+    }
+
+    #[test]
+    fn an_area_without_its_network_is_the_sample_until_the_network_is_kept() {
+        let (ports, ..) = test_ports();
+        let s = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
+        assert!(!s.has_network());
+        assert_eq!(s.open().view(0).name, "Sample city");
+        assert!(s.keep_network(&tiny_network()));
+        assert!(s.has_network());
+        let v = s.open().view(0);
+        assert_eq!((v.name.as_str(), v.edges.len()), ("Testville", 1));
+        assert!(v.edges[0].name.starts_with("Only Street"));
+    }
+
+    #[test]
+    fn what_is_edited_in_an_area_is_kept_under_that_area_and_not_the_sample_s() {
+        let (ports, _, storage) = test_ports();
+        let area = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
+        area.keep_network(&tiny_network());
+        let street = area.open().view(0).edges[0].uid;
+        assert!(area.write(|c| {
+            let mut e = c.street_editor(street, 0).unwrap();
+            let u = e.view().segments[0].uid;
+            e.nudge_width(u, 100);
+            c.keep_street(street, e.snapshot())
+        }));
+        assert_eq!(area.open().view(0).edited, 1);
+        assert_eq!(storage.recall(CITY_KEY), None, "the sample city's key is untouched");
+        assert_eq!(CityStore::new(ports.storage.clone()).open().view(0).edited, 0);
+        let other = CityStore::for_area(ports.storage, Area::new("Elsewhere", 5.0, 6.0));
+        assert!(!other.has_network());
+    }
+
+    #[test]
+    fn a_damaged_network_is_not_used() {
+        let (ports, _, storage) = test_ports();
+        let s = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
+        storage.remember("cityloom-network:1.0000,2.0000", "{not json");
+        assert!(!s.has_network());
+        assert_eq!(s.open().view(0).name, "Sample city");
     }
 
     #[test]
