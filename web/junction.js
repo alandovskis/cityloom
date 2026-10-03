@@ -2,7 +2,7 @@
 // input. Every rule and every piece of plan geometry comes from the
 // WebAssembly model; this file only turns millimetres into pixels.
 
-import init, { Plan, atlas, catalogue, junction_catalogue, materials, mount_notes } from "./pkg/cityloom_editor.js";
+import init, { Plan, catalogue, junction_catalogue, materials, mount_notes } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH } from "./symbols.js";
 import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
 import { initAccountMenu, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
@@ -13,7 +13,6 @@ const KINDS = JSON.parse(catalogue());
 const CAT = JSON.parse(junction_catalogue());
 const MATERIALS = JSON.parse(materials());
 const LIM = CAT.limits;
-const ATLAS = JSON.parse(atlas());
 // Opened from the map (`?junction=3`) the page edits that junction of the city,
 // reading its streets from the city, and writes each change back; otherwise it
 // is a sandbox on the sample junctions.
@@ -480,33 +479,6 @@ function renderKey() {
     .join("");
 }
 
-// Every measure of the Transit Priority Atlas toolbox, with where it is modelled
-// and where this junction uses it.
-function renderMeasures() {
-  const used = new Map();
-  const use = (code, a) => used.set(code, [...(used.get(code) ?? []), a.compass ?? compass(a.bearing)]);
-  for (const a of view.arms) for (const code of a.transit.codes) use(code, a);
-  const groups = [...new Set(ATLAS.map((m) => m.group))];
-  $("measures").innerHTML = groups
-    .map((g) => {
-      const rows = ATLAS.filter((m) => m.group === g)
-        .map((m) => {
-          const where = used.get(m.code);
-          const state = where
-            ? `<b class="m-on">In use on ${where.join(", ")}</b>`
-            : m.place === "junction"
-              ? "Set on a street"
-              : m.place === "street"
-                ? "Street editor"
-                : `<span class="m-not">Not modelled</span>`;
-          return `<tr><th scope="row"><span class="dirtag">${esc(m.code)}</span>${esc(m.name)}${m.note ? `<small>${esc(m.note)}</small>` : ""}</th><td>${state}</td></tr>`;
-        })
-        .join("");
-      return `<tbody><tr class="m-group"><th colspan="2" scope="colgroup">${esc(g)}</th></tr>${rows}</tbody>`;
-    })
-    .join("");
-}
-
 function renderHead() {
   const v = view;
   $("street-name").textContent = v.name;
@@ -744,7 +716,6 @@ function render() {
   renderPlan();
   renderInspector();
   renderNotes();
-  renderMeasures();
   for (const b of el.samples.querySelectorAll("[data-sample]")) b.setAttribute("aria-pressed", String(Number(b.dataset.sample) === view.sample));
 }
 

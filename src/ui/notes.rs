@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
+use crate::atlas::{MEASURES, Where};
 use crate::junction_view::{CrossingView, JView};
 use crate::model::Check;
 use crate::ui::shared::Shared;
@@ -38,6 +39,22 @@ fn conflict_note(v: &JView) -> &'static str {
     } else {
         ""
     }
+}
+
+/// The compass points of the arms a measure is in use on, in arm order.
+fn used_on(v: &JView, code: &str) -> Vec<&'static str> {
+    v.arms.iter().filter(|a| a.transit.codes.contains(&code)).map(|a| compass(a.bearing)).collect()
+}
+
+/// The Atlas's groups of measures, in the order they are listed.
+fn atlas_groups() -> Vec<&'static str> {
+    let mut groups: Vec<&'static str> = Vec::new();
+    for m in &MEASURES {
+        if !groups.contains(&m.group) {
+            groups.push(m.group);
+        }
+    }
+    groups
 }
 
 /// What a component needs to draw from the shared junction: the signals it
@@ -156,6 +173,50 @@ pub fn Checks(shared: Rc<Shared>) -> impl IntoView {
     }
 }
 
+/// Every measure of the Transit Priority Atlas toolbox, with where it is
+/// modelled and where this junction uses it.
+#[component]
+pub fn Measures(shared: Rc<Shared>) -> impl IntoView {
+    let watch = Watch::new(shared);
+    move || {
+        let (v, _) = watch.now();
+        atlas_groups()
+            .into_iter()
+            .map(|group| {
+                let rows = MEASURES
+                    .iter()
+                    .filter(|m| m.group == group)
+                    .map(|m| {
+                        let on = used_on(&v, m.code);
+                        let state = if !on.is_empty() {
+                            view! { <b class="m-on">{format!("In use on {}", on.join(", "))}</b> }.into_any()
+                        } else {
+                            match m.place {
+                                Where::Junction => "Set on a street".into_any(),
+                                Where::Street => "Street editor".into_any(),
+                                Where::Not => view! { <span class="m-not">"Not modelled"</span> }.into_any(),
+                            }
+                        };
+                        let note = (!m.note.is_empty()).then(|| view! { <small>{m.note}</small> });
+                        view! {
+                            <tr>
+                                <th scope="row"><span class="dirtag">{m.code}</span>{m.name}{note}</th>
+                                <td>{state}</td>
+                            </tr>
+                        }
+                    })
+                    .collect_view();
+                view! {
+                    <tbody>
+                        <tr class="m-group"><th colspan="2" scope="colgroup">{group}</th></tr>
+                        {rows}
+                    </tbody>
+                }
+            })
+            .collect_view()
+    }
+}
+
 #[component]
 pub fn Revisions(shared: Rc<Shared>) -> impl IntoView {
     let watch = Watch::new(shared);
@@ -252,5 +313,26 @@ mod tests {
         assert_eq!(conflict_note(&j.view()), "");
         assert!(j.set_control(ROUNDABOUT));
         assert_eq!(conflict_note(&j.view()), "Traffic in a roundabout only merges and splits; it never crosses.");
+    }
+
+    #[test]
+    fn a_measure_is_in_use_on_the_arms_that_have_it_in_arm_order() {
+        let mut j = Junction::new(0);
+        let (n, e) = (arm_view(&j, 0).uid, arm_view(&j, 90).uid);
+        assert!(used_on(&j.view(), "N1").is_empty());
+        j.set_bus_lane(e, true);
+        j.set_filter(e, true);
+        j.set_approach(e, Q_CURB);
+        j.set_filter(n, true);
+        j.set_bus_lane(n, true);
+        let v = j.view();
+        assert_eq!(used_on(&v, "N1"), vec!["N", "E"]);
+        assert_eq!(used_on(&v, "G2"), vec!["E"]);
+        assert!(used_on(&v, "L1").is_empty());
+    }
+
+    #[test]
+    fn the_atlas_groups_come_in_the_order_they_are_listed() {
+        assert_eq!(atlas_groups(), vec!["Linear continuous measures", "Localized measures", "Area-wide measures"]);
     }
 }

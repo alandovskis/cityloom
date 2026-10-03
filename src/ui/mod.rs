@@ -26,5 +26,6 @@ pub fn mount_notes(plan: &crate::Plan) {
     mount("conflicts", view! { <notes::Conflicts shared=shared.clone()/> }.into_any());
     mount("conflict-note", view! { <notes::ConflictNote shared=shared.clone()/> }.into_any());
     mount("checks", view! { <notes::Checks shared=shared.clone()/> }.into_any());
+    mount("measures", view! { <notes::Measures shared=shared.clone()/> }.into_any());
     mount("revs", view! { <notes::Revisions shared=shared/> }.into_any());
 }
