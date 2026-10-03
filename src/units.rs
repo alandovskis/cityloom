@@ -62,6 +62,11 @@ impl Units {
         }
     }
 
+    /// A street length with its unit: 3.3 m.
+    pub fn length_fine(self, mm: i32) -> String {
+        format!("{} {}", self.fine(mm), self.word())
+    }
+
     /// A change in length with its sign, `+1.2` or `\u{2212}1.2`, and `0` for none.
     pub fn signed(self, mm: i32) -> String {
         match mm {

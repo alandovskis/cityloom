@@ -11,6 +11,8 @@ pub mod page;
 pub mod plan;
 pub mod plan_svg;
 pub mod shared;
+pub mod sheet;
+pub mod street_text;
 pub mod turns;
 pub mod watch;
 
