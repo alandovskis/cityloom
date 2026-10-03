@@ -4,7 +4,7 @@ Streetmix at city scale: residents compose and compare whole-city scenarios.
 This repository holds three surfaces: a city map (`map.html`), the street cross-section editor (`index.html`) and the intersection editor (`intersection.html`). The map opens the other two on a street or junction of one sample city (`src/city.rs`), kept in browser storage.
 
 - `src/`: the editing models in Rust, compiled to WebAssembly: `model.rs` for a street, `junction.rs`, `junction_view.rs` and `plan.rs` for a junction. Tests are included.
-- `src/ui/`: the page's components, drawn from the model's view by [Leptos](https://leptos.dev) (client-side rendering). The page is moving into Rust one panel at a time; `shared.rs` is the bridge that lets these components and the remaining script edit the same junction. The junction page is entirely in Rust (plan, inspector, notes, palette, keyboard, announcements); the street editor and the map are next.
+- `src/ui/`: the page's components, drawn from the model's view by [Leptos](https://leptos.dev) (client-side rendering). The page is moving into Rust one panel at a time; `shared.rs` is the bridge that lets these components and the remaining script edit the same junction. The junction page and the street editor are entirely in Rust (drawing, inspectors, notes, menus, keyboard, announcements); the city map is next.
 - `web/`: the page. It draws the model's view and relays input; it holds no editing rules.
 - All catalogue widths, rules and capacity rates are synthetic placeholders.
 

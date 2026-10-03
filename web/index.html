@@ -56,25 +56,11 @@
       <header class="sheet-head">
         <div class="head-start">
           <button type="button" id="inspector-toggle" class="btn" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the piece details ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span class="lbl">Piece details</span></button>
-          <div class="street">
-            <h1 id="street-name">Your street</h1>
-            <p class="street-sub" id="street-sub"><span>Street cross-section</span> <span aria-hidden="true">·</span> <span><b id="row-dim" class="fig"></b> wide</span></p>
-          </div>
+          <div class="street" id="street"></div>
         </div>
         <div class="tools">
-          <div class="add">
-            <button type="button" id="add-btn" class="btn" aria-haspopup="true" aria-expanded="false" aria-controls="add-menu"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3 8h10M8 3v10"/></svg>Add a piece</button>
-            <div id="add-menu" class="menu add-menu" hidden>
-              <p class="menu-h">Add a piece</p>
-              <p class="hint">Goes after the selected piece.</p>
-              <ul id="palette" class="add-list"></ul>
-            </div>
-          </div>
-          <div class="btns" role="toolbar" aria-label="Sheet tools">
-            <button type="button" id="undo" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M5.5 3 2.5 6l3 3M2.5 6H10a3.5 3.5 0 0 1 0 7H6"/></svg><span class="lbl">Undo</span></button>
-            <button type="button" id="redo" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M10.5 3l3 3-3 3M13.5 6H6a3.5 3.5 0 0 0 0 7h4"/></svg><span class="lbl">Redo</span></button>
-          </div>
-          <button type="button" id="reset" class="btn" title="Back to the street as it is today. Undo brings your changes back."><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg><span class="lbl">Start over</span></button>
+          <div class="add" id="add"></div>
+          <div id="history" style="display: contents"></div>
           <button type="button" id="notes-toggle" class="btn" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span class="lbl">Notes</span></button>
         </div>
       </header>
@@ -85,26 +71,12 @@
         <div class="work">
           <section class="drawing" aria-labelledby="h-drawing">
             <h2 id="h-drawing" class="sr-only">Cross-section</h2>
-            <div class="welcome" id="welcome">
-              <p>Add a piece, then drag to arrange. The width is fixed; a piece that does not fit turns orange.</p>
-              <button type="button" id="welcome-dismiss" class="btn">Got it</button>
-            </div>
-            <div class="clock" id="clock">
-              <label for="time" class="clock-l">Time of day</label>
-              <input type="range" id="time" min="0" max="95" step="1" value="48">
-              <output id="time-out" for="time" class="fig"></output>
-              <div class="clock-scale" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
-              <div class="clock-bar" id="clock-bar" aria-hidden="true"></div>
-              <p class="clock-note" id="clock-note"></p>
-            </div>
-            <div class="scroll" id="scroll">
-              <div class="wrap" id="wrap" tabindex="0" role="group" aria-label="Street cross-section editor" aria-describedby="keys">
-                <svg id="drawing" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cross-section of the street"></svg>
-              </div>
-            </div>
+            <div id="welcome-slot" style="display: contents"></div>
+            <div id="clock-slot" style="display: contents"></div>
+            <div class="scroll" id="scroll"></div>
             <div class="statusbar">
-              <p id="fit" class="fit" role="status"></p>
-              <button type="button" id="fit-checks" class="fit-checks" hidden></button>
+              <div id="fit-slot" style="display: contents"></div>
+              <div id="fit-checks-slot" style="display: contents"></div>
               <p class="focus-hint" aria-hidden="true">Arrows select. Shift+arrows reorder. + and − resize, with Shift for bigger steps. Enter edits the width.</p>
               <p class="cue">On a touch screen, swipe the street sideways to see all of it.</p>
               <details class="keyhelp">
@@ -127,7 +99,7 @@
         <aside class="notes" id="notes" aria-label="Notes">
           <div class="tabs" role="tablist" aria-label="Notes sections">
             <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true">Width</button>
-            <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1">Checks<span class="tab-n" id="checks-n" hidden></span></button>
+            <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1">Checks<span id="checks-n-slot" style="display: contents"></span></button>
             <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
             <button type="button" role="tab" class="tab" id="t-measures" aria-controls="p-measures" aria-selected="false" tabindex="-1">Transit</button>
           </div>
@@ -166,11 +138,7 @@
             </section>
           </div>
 
-          <div class="title-block" aria-label="About this street">
-            <div class="tb-cell tb-wide"><span>Street</span><b id="tb-street"></b></div>
-            <div class="tb-cell"><span>Width</span><b id="tb-row" class="fig"></b></div>
-            <div class="tb-cell"><span>Changes made</span><b id="tb-changes" class="fig"></b></div>
-          </div>
+          <div class="title-block" id="title-block" aria-label="About this street"></div>
         </aside>
       </main>
     </div>

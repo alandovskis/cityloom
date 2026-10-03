@@ -213,7 +213,9 @@ pub fn AddMenu(shared: Rc<SharedSheet>) -> impl IntoView {
     {
         Effect::new(move |_| {
             if open.get() {
-                request_animation_frame(move || {
+                // Once the list is shown, so that it can take the focus.
+                leptos::task::spawn_local(async move {
+                    leptos::task::tick().await;
                     if let Some(first) = items().first() {
                         let _ = first.focus();
                     }
