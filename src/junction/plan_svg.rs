@@ -516,7 +516,12 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
         let x = if beside { lx + ld.0 * 12.0 } else { lx };
         let y1 = if beside {
             ly - 2.0
-        } else if ld.1 < 0.0 || side {
+        } else if side {
+            // clear of the road's edge and its crossing: the west name above its arm, the east below its own,
+            // so the two never meet in the middle of a narrow drawing
+            let half = a.road_mm as f64 * f.scale / 2.0;
+            if ld.0 < 0.0 { ly - half - 30.0 } else { ly + half + 26.0 }
+        } else if ld.1 < 0.0 {
             ly - 32.0
         } else {
             ly + 26.0
@@ -829,6 +834,29 @@ mod tests {
         assert_eq!(anchors(&narrow.markup, "Sample Street 1"), vec!["end", "start"]);
         // Streets that run up and down are centred either way.
         assert_eq!(anchors(&svg(&j).markup, "Sample Avenue 2"), vec!["middle", "middle"]);
+    }
+
+    #[test]
+    fn on_a_narrow_drawing_a_sideways_arm_s_name_and_width_clear_the_road() {
+        let j = Junction::new(0);
+        let s = plan_svg(&j.view(), 390.0, 1000.0, Units::Metres);
+        let centre = s.frame.at((0.0, 0.0)).1;
+        let half_road = 11_400.0 * s.frame.scale / 2.0;
+        let tail = ">Sample Street 1</text>";
+        let found: Vec<_> = s.markup.match_indices(tail).collect();
+        assert_eq!(found.len(), 2);
+        let mut seen = [0; 2];
+        for (i, _) in found {
+            let head = &s.markup[..i];
+            let at = head.rfind(" y=\"").unwrap() + 4;
+            let y: f64 = head[at..].split('"').next().unwrap().parse().unwrap();
+            // the width line is written 17 below the name: the one is above the road's edge, the other below it
+            let above = y + 17.0 <= centre - half_road;
+            let below = y >= centre + half_road + 10.0;
+            assert!(above || below, "name at {y}, road from {} to {}", centre - half_road, centre + half_road);
+            seen[usize::from(below)] += 1;
+        }
+        assert_eq!(seen, [1, 1], "one name above, one below");
     }
 
     #[test]

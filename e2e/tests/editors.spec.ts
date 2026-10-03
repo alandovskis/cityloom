@@ -56,6 +56,13 @@ test("the intersection's streets to add and junctions to start from are on scree
   await page.goto("/intersection.html");
   await expect(page.locator("#palette .chip").first()).toBeInViewport();
   await expect(page.locator("#samples .chip").first()).toBeInViewport();
+  // All of it, not only its top: the column does not scroll, and the last chip ends above the window's bottom.
+  const column = await page
+    .locator(".stage-main")
+    .evaluate((el) => ({ scroll: el.scrollHeight, client: el.clientHeight }));
+  expect(column.scroll).toBeLessThanOrEqual(column.client + 1);
+  const last = await box(page, "#samples .chip:last-child");
+  expect(last.y + last.height).toBeLessThanOrEqual(900);
 });
 
 test.describe("on a screen too narrow for the notes beside the drawing", () => {

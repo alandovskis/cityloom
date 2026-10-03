@@ -73,6 +73,8 @@
 }
 .panel-body {
   padding: 14px 20px 18px;
+  /* a row never ends in a hard cut: the scroller fades out into the bottom padding */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
 }
 .stage {
   display: block;
@@ -981,7 +983,7 @@ svg pattern circle {
 /* The streets to add, and the junctions to start from. */
 .lower {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   align-items: start;
   gap: 12px;
 }
@@ -1016,8 +1018,9 @@ svg pattern circle {
 }
 .palette {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   align-content: start;
+  align-items: start;
   gap: 8px;
 }
 .chip {
@@ -1034,6 +1037,18 @@ svg pattern circle {
   cursor: grab;
   touch-action: none;
   transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+}
+.chip:has(.grip-ico) {
+  grid-template-columns: 44px 1fr 10px;
+}
+.grip-ico {
+  width: 10px;
+  height: 14px;
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.6;
 }
 .chip:hover {
   background: var(--fill);
