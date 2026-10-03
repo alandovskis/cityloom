@@ -7,6 +7,8 @@ use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, KeyboardEvent, PointerEvent, WheelEvent};
 
+#[cfg(target_arch = "wasm32")]
+use crate::map::camera::Insets;
 use crate::map::svg::{hot_layer, map_svg, overlay_svg};
 use crate::map::vm::{MapVm, NoteItem, PlaceRow, ResetOutcome};
 use crate::shared::bind::Bound;
@@ -94,6 +96,38 @@ fn window_of(el: &Element) -> (f64, f64, (f64, f64)) {
     (r.width(), r.height(), (r.left() + r.width() / 2.0, r.top() + r.height() / 2.0))
 }
 
+/// How much of the map's box the floating panels and bars (marked `data-covers`)
+/// cover along each edge, plus a gap. Anything that does not overlap the map, as
+/// when the panels stack below it on a phone, covers nothing.
+#[cfg(target_arch = "wasm32")]
+fn insets_of(map: &Element) -> Insets {
+    const GAP: f64 = 16.0;
+    let m = map.get_bounding_client_rect();
+    let mut insets = Insets::default();
+    let Ok(covers) = leptos::prelude::document().query_selector_all("[data-covers]") else { return insets };
+    for i in 0..covers.length() {
+        let Some(c) = covers.item(i).and_then(|n| n.dyn_into::<Element>().ok()) else { continue };
+        let r = c.get_bounding_client_rect();
+        let overlaps = r.width() > 0.0 && r.height() > 0.0 && r.right() > m.left() && r.left() < m.right() && r.bottom() > m.top() && r.top() < m.bottom();
+        if !overlaps {
+            continue;
+        }
+        if r.height() > m.height() * 0.5 {
+            // A panel down one side.
+            if r.left() + r.width() / 2.0 < m.left() + m.width() / 2.0 {
+                insets.left = insets.left.max(r.right() - m.left() + GAP);
+            } else {
+                insets.right = insets.right.max(m.right() - r.left() + GAP);
+            }
+        } else if r.top() + r.height() / 2.0 < m.top() + m.height() / 2.0 {
+            insets.top = insets.top.max(r.bottom() - m.top() + GAP / 2.0);
+        } else {
+            insets.bottom = insets.bottom.max(m.bottom() - r.top() + GAP / 2.0);
+        }
+    }
+    insets
+}
+
 #[component]
 pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
@@ -111,16 +145,30 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
             let Some(el) = frame.get() else { return };
             let el: Element = el.into();
             let (w, h, _) = window_of(&el);
-            vm.with(|v| v.resize(w, h));
+            vm.with(|v| {
+                v.set_insets(insets_of(&el));
+                v.resize(w, h);
+            });
             let target = el.clone();
             let observer = Closure::<dyn FnMut(leptos::web_sys::js_sys::Array)>::new(move |_| {
                 let (w, h, _) = window_of(&target);
                 if w > 0.0 && h > 0.0 {
-                    vm.with(|v| v.resize(w, h));
+                    vm.with(|v| {
+                        v.set_insets(insets_of(&target));
+                        v.resize(w, h);
+                    });
                 }
             });
             if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
                 o.observe(&el);
+                // Panels and bars that float over the map say so, and are watched too.
+                if let Ok(covers) = leptos::prelude::document().query_selector_all("[data-covers]") {
+                    for i in 0..covers.length() {
+                        if let Some(c) = covers.item(i).and_then(|n| n.dyn_into::<Element>().ok()) {
+                            o.observe(&c);
+                        }
+                    }
+                }
             }
             observer.forget();
             // A drag that ends over a place must not open it.

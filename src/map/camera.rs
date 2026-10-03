@@ -6,9 +6,8 @@ use crate::shared::units::Units;
 /// How far in a person may zoom, as multiples of the zoom that fits the city.
 const ZOOM_OUT: f64 = 0.8;
 const ZOOM_IN: f64 = 10.0;
-/// Room round the city, in metres, and extra at the left to keep the scale bar clear.
+/// Room round the city, in metres.
 const MARGIN_M: f64 = 70.0;
-const LEFT_EXTRA_M: f64 = 190.0;
 
 /// The box the camera looks over, in metres.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -23,8 +22,18 @@ impl World {
     /// The box round a city whose bounds are `[x0, y0, x1, y1]` in millimetres.
     pub fn round(bounds_mm: [i32; 4]) -> World {
         let [x0, y0, x1, y1] = bounds_mm.map(|v| v as f64 / 1000.0);
-        World { x0: x0 - MARGIN_M - LEFT_EXTRA_M, y0: y0 - MARGIN_M, x1: x1 + MARGIN_M, y1: y1 + MARGIN_M }
+        World { x0: x0 - MARGIN_M, y0: y0 - MARGIN_M, x1: x1 + MARGIN_M, y1: y1 + MARGIN_M }
     }
+}
+
+/// How much of each edge of the window other things cover, in pixels: floating
+/// panels and bars. The whole city is fitted and centred in what is left.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Insets {
+    pub left: f64,
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -41,23 +50,27 @@ pub struct Camera {
     /// The person has zoomed or panned, so a resize keeps their view.
     pub moved: bool,
     pub world: World,
+    pub insets: Insets,
 }
 
 impl Camera {
     /// A camera on the whole city, in a window of this size.
     pub fn new(world: World, width: f64, height: f64) -> Camera {
-        let mut c = Camera { k: 1.0, cx: 0.0, cy: 0.0, fit_k: 1.0, width, height, moved: false, world };
+        let mut c = Camera { k: 1.0, cx: 0.0, cy: 0.0, fit_k: 1.0, width, height, moved: false, world, insets: Insets::default() };
         c.fit();
         c
     }
 
     /// Shows the whole city.
     pub fn fit(&mut self) {
-        let w = self.world;
-        self.fit_k = (self.width / (w.x1 - w.x0)).min(self.height / (w.y1 - w.y0));
+        let (w, i) = (self.world, self.insets);
+        let open = ((self.width - i.left - i.right).max(1.0), (self.height - i.top - i.bottom).max(1.0));
+        self.fit_k = (open.0 / (w.x1 - w.x0)).min(open.1 / (w.y1 - w.y0));
         self.k = self.fit_k;
-        self.cx = (w.x0 + w.x1) / 2.0;
-        self.cy = (w.y0 + w.y1) / 2.0;
+        // The middle of the window is not the middle of the open part, so the point
+        // there is not the middle of the city.
+        self.cx = (w.x0 + w.x1) / 2.0 - (i.left - i.right) / (2.0 * self.k);
+        self.cy = (w.y0 + w.y1) / 2.0 - (i.top - i.bottom) / (2.0 * self.k);
         self.moved = false;
     }
 
@@ -71,9 +84,23 @@ impl Camera {
     /// The window changed size. A camera the person has moved keeps its view, at
     /// the same zoom relative to the whole city.
     pub fn resize(&mut self, width: f64, height: f64) {
+        self.refit(|c| {
+            c.width = width;
+            c.height = height;
+        });
+    }
+
+    /// What covers the window changed. A camera the person has moved keeps its view.
+    pub fn set_insets(&mut self, insets: Insets) {
+        if insets != self.insets {
+            self.refit(|c| c.insets = insets);
+        }
+    }
+
+    /// Changes what the camera is fitted to, keeping a view the person moved.
+    fn refit(&mut self, change: impl FnOnce(&mut Camera)) {
         let keep = self.moved.then_some((self.k / self.fit_k, self.cx, self.cy));
-        self.width = width;
-        self.height = height;
+        change(self);
         self.fit();
         if let Some((rel, cx, cy)) = keep {
             self.k = rel * self.fit_k;
@@ -95,9 +122,10 @@ impl Camera {
         self.clamp();
     }
 
-    /// Zooms by a factor about the middle of the window.
+    /// Zooms by a factor about the middle of the part of the window that is open.
     pub fn zoom_by(&mut self, factor: f64) {
-        self.zoom_at(self.k * factor, 0.0, 0.0);
+        let i = self.insets;
+        self.zoom_at(self.k * factor, (i.left - i.right) / 2.0, (i.top - i.bottom) / 2.0);
     }
 
     /// Moves the view by pixels.
@@ -142,18 +170,73 @@ mod tests {
     }
 
     #[test]
-    fn the_world_is_the_city_with_a_margin_and_extra_room_at_the_left() {
+    fn the_world_is_the_city_with_a_margin_all_round() {
         let w = city();
-        assert_eq!((w.x0, w.y0, w.x1, w.y1), (-260.0, -70.0, 1070.0, 570.0));
+        assert_eq!((w.x0, w.y0, w.x1, w.y1), (-70.0, -70.0, 1070.0, 570.0));
     }
 
     #[test]
     fn a_new_camera_fits_the_whole_city_in_the_window_and_centres_on_it() {
         let c = Camera::new(city(), 800.0, 520.0);
-        assert!((c.k - (800.0_f64 / 1330.0).min(520.0 / 640.0)).abs() < 1e-12);
-        assert_eq!((c.cx, c.cy), (405.0, 250.0));
+        assert!((c.k - (800.0_f64 / 1140.0).min(520.0 / 640.0)).abs() < 1e-12);
+        assert_eq!((c.cx, c.cy), (500.0, 250.0));
         assert!(!c.moved);
         assert_eq!(c.k, c.fit_k);
+    }
+
+    /// Where a point of the city is in the window, in pixels from its top left.
+    fn on_screen(c: &Camera, x: f64, y: f64) -> (f64, f64) {
+        (c.width / 2.0 + (x - c.cx) * c.k, c.height / 2.0 + (y - c.cy) * c.k)
+    }
+
+    #[test]
+    fn with_part_of_the_window_covered_the_city_is_fitted_and_centred_in_what_is_left() {
+        let mut c = Camera::new(city(), 1000.0, 600.0);
+        let open = c.fit_k;
+        c.set_insets(Insets { left: 300.0, top: 80.0, right: 100.0, bottom: 40.0 });
+        assert!(c.fit_k < open, "less room, so a smaller city");
+        assert_eq!(c.k, c.fit_k);
+        assert!(!c.moved);
+        let w = c.world;
+        let (mid_x, mid_y) = ((w.x0 + w.x1) / 2.0, (w.y0 + w.y1) / 2.0);
+        let (sx, sy) = on_screen(&c, mid_x, mid_y);
+        assert!((sx - (300.0 + (1000.0 - 400.0) / 2.0)).abs() < 1e-9, "{sx}");
+        assert!((sy - (80.0 + (600.0 - 120.0) / 2.0)).abs() < 1e-9, "{sy}");
+        let (left, top) = on_screen(&c, w.x0, w.y0);
+        let (right, bottom) = on_screen(&c, w.x1, w.y1);
+        assert!(left >= 300.0 - 1e-9 && right <= 900.0 + 1e-9 && top >= 80.0 - 1e-9 && bottom <= 560.0 + 1e-9, "the whole city is in the open part");
+    }
+
+    #[test]
+    fn a_camera_somebody_moved_keeps_its_view_when_the_covered_part_changes() {
+        let mut c = Camera::new(city(), 1000.0, 600.0);
+        c.zoom_by(3.0);
+        c.pan_by(30.0, 10.0);
+        let (rel, cx, cy) = (c.k / c.fit_k, c.cx, c.cy);
+        c.set_insets(Insets { left: 360.0, ..Insets::default() });
+        assert!(c.moved);
+        assert!((c.k / c.fit_k - rel).abs() < 1e-9 && (c.cx, c.cy) == (cx, cy));
+    }
+
+    #[test]
+    fn the_same_insets_change_nothing() {
+        let mut c = Camera::new(city(), 1000.0, 600.0);
+        c.set_insets(Insets { left: 360.0, ..Insets::default() });
+        c.zoom_by(2.0);
+        let before = c;
+        c.set_insets(Insets { left: 360.0, ..Insets::default() });
+        assert_eq!(c, before);
+    }
+
+    #[test]
+    fn zooming_by_a_step_keeps_the_middle_of_the_open_part_where_it_is() {
+        let mut c = Camera::new(city(), 1000.0, 600.0);
+        c.set_insets(Insets { left: 300.0, top: 80.0, right: 100.0, bottom: 40.0 });
+        let (mid_x, mid_y) = (300.0 + 300.0, 80.0 + 240.0);
+        let world = (c.cx + (mid_x - c.width / 2.0) / c.k, c.cy + (mid_y - c.height / 2.0) / c.k);
+        c.zoom_by(2.0);
+        let (sx, sy) = on_screen(&c, world.0, world.1);
+        assert!((sx - mid_x).abs() < 1e-6 && (sy - mid_y).abs() < 1e-6, "{sx} {sy}");
     }
 
     #[test]

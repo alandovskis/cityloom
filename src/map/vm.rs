@@ -9,7 +9,7 @@ use leptos::prelude::*;
 
 use crate::city::model::{City, CityView, EdgeView, NodeView};
 use crate::city::store::CityStore;
-use crate::map::camera::{Camera, ScaleBar, World};
+use crate::map::camera::{Camera, Insets, ScaleBar, World};
 use crate::map::gestures::{MapGestures, Moved};
 use crate::shared::catalogue::KINDS;
 use crate::shared::core::{Core, Presents};
@@ -470,6 +470,11 @@ impl MapVm {
         self.update_camera(|c| c.resize(width, height));
     }
 
+    /// What floats over the map, in pixels from each edge: the whole city is fitted in what is left.
+    pub fn set_insets(&self, insets: Insets) {
+        self.update_camera(|c| c.set_insets(insets));
+    }
+
     pub fn zoom_in(&self) {
         self.update_camera(|c| c.zoom_by(ZOOM_STEP));
     }
@@ -686,6 +691,19 @@ mod tests {
         vm.set_search("");
         assert_eq!(vm.search_note(), None);
         assert_eq!(vm.chosen_href(), None);
+    }
+
+    #[test]
+    fn what_floats_over_the_map_makes_the_whole_city_fit_in_the_open_part() {
+        let (vm, ..) = vm();
+        vm.resize(1000.0, 600.0);
+        let open = vm.camera().fit_k;
+        vm.set_insets(Insets { left: 376.0, top: 88.0, right: 376.0, bottom: 72.0 });
+        assert!(vm.camera().fit_k < open);
+        assert_eq!(vm.camera().k, vm.camera().fit_k);
+        vm.zoom_in();
+        vm.fit_camera();
+        assert_eq!(vm.camera().k, vm.camera().fit_k, "whole city fits the open part again");
     }
 
     #[test]
