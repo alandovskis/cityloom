@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::shared::ports::{Announcer, Fetched, Fetcher, Ports, Scheduler, Storage};
+use crate::shared::ports::{Announcer, Fetched, Fetcher, Importer, Ports, Scheduler, Storage};
 use crate::shared::{live, store};
 
 struct BrowserAnnouncer;
@@ -105,9 +105,42 @@ async fn request(url: &str, body: Option<&str>) -> Fetched {
     Ok(js_sys::Uint8Array::new(&buffer).to_vec())
 }
 
+/// The OpenStreetMap reader, which the page script loads on first use and offers as
+/// `window.cityloomImportOsm(bytes) -> Promise<string>`.
+struct BrowserImporter;
+
+impl Importer for BrowserImporter {
+    #[cfg(target_arch = "wasm32")]
+    fn import(&self, osm: Vec<u8>, done: Box<dyn FnOnce(Result<String, String>)>) {
+        leptos::task::spawn_local(async move { done(read_osm(&osm).await) });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn import(&self, _osm: Vec<u8>, done: Box<dyn FnOnce(Result<String, String>)>) {
+        done(Err("there is no OpenStreetMap reader here".to_string()));
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn read_osm(osm: &[u8]) -> Result<String, String> {
+    use wasm_bindgen::JsCast;
+    let words = |e: wasm_bindgen::JsValue| {
+        e.as_string()
+            .or_else(|| js_sys::Reflect::get(&e, &"message".into()).ok().and_then(|m| m.as_string()))
+            .unwrap_or_else(|| "the map data could not be read".to_string())
+    };
+    let window = web_sys::window().ok_or("there is no window")?;
+    let read = js_sys::Reflect::get(&window, &"cityloomImportOsm".into()).map_err(words)?;
+    let read: js_sys::Function = read.dyn_into().map_err(|_| "the page has no OpenStreetMap reader".to_string())?;
+    let promise = read.call1(&wasm_bindgen::JsValue::NULL, &js_sys::Uint8Array::from(osm)).map_err(words)?;
+    let json = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise)).await.map_err(words)?;
+    json.as_string().ok_or_else(|| "the map data could not be read".to_string())
+}
+
 /// What a view-model gets on a page: the live region and local storage.
 pub fn browser_ports() -> Ports {
     Ports {
+        importer: Rc::new(BrowserImporter),
         fetcher: Rc::new(BrowserFetcher),
         announcer: Rc::new(BrowserAnnouncer),
         storage: Rc::new(BrowserStorage),

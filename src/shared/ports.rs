@@ -32,9 +32,16 @@ pub trait Fetcher {
     fn fetch(&self, url: &str, body: Option<&str>, done: Box<dyn FnOnce(Fetched)>);
 }
 
+/// Turns OpenStreetMap data into the street network JSON the city is made from. The reader is
+/// a module of its own that the page loads when it is first asked.
+pub trait Importer {
+    fn import(&self, osm: Vec<u8>, done: Box<dyn FnOnce(Result<String, String>)>);
+}
+
 /// The platform services a view-model is given.
 #[derive(Clone)]
 pub struct Ports {
+    pub importer: Rc<dyn Importer>,
     pub fetcher: Rc<dyn Fetcher>,
     pub announcer: Rc<dyn Announcer>,
     pub storage: Rc<dyn Storage>,
@@ -165,6 +172,40 @@ impl Fetcher for FakeFetcher {
     }
 }
 
+/// An importer that keeps what it is asked to read until the test answers.
+#[derive(Default)]
+pub struct FakeImporter {
+    asked: RefCell<Vec<(Vec<u8>, Box<dyn FnOnce(Result<String, String>)>)>>,
+}
+
+impl FakeImporter {
+    /// What each request not yet answered asked to read, oldest first.
+    pub fn asked(&self) -> Vec<Vec<u8>> {
+        self.asked.borrow().iter().map(|(b, _)| b.clone()).collect()
+    }
+
+    /// Answers the oldest request not yet answered. False when there is none.
+    pub fn answer(&self, result: Result<String, String>) -> bool {
+        let first = {
+            let mut asked = self.asked.borrow_mut();
+            if asked.is_empty() { None } else { Some(asked.remove(0)) }
+        };
+        match first {
+            Some((_, done)) => {
+                done(result);
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+impl Importer for FakeImporter {
+    fn import(&self, osm: Vec<u8>, done: Box<dyn FnOnce(Result<String, String>)>) {
+        self.asked.borrow_mut().push((osm, done));
+    }
+}
+
 /// Ports for a test, with the fakes kept so the test can look at them.
 pub fn test_ports() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
     let (ports, announcer, storage, _) = test_ports_with_time();
@@ -177,15 +218,22 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
     let storage = Rc::new(MemoryStorage::default());
     let scheduler = Rc::new(ManualScheduler::default());
     let fetcher = Rc::new(FakeFetcher::default());
-    (Ports { fetcher, announcer: announcer.clone(), storage: storage.clone(), scheduler: scheduler.clone() }, announcer, storage, scheduler)
+    (
+        Ports { importer: Rc::new(FakeImporter::default()), fetcher, announcer: announcer.clone(), storage: storage.clone(), scheduler: scheduler.clone() },
+        announcer,
+        storage,
+        scheduler,
+    )
 }
 
-/// The same, with the fetcher too.
-pub fn test_ports_with_fetcher() -> (Ports, Rc<FakeFetcher>) {
+/// The same, with the fetcher and the importer too.
+pub fn test_ports_with_fetcher() -> (Ports, Rc<FakeFetcher>, Rc<FakeImporter>) {
     let (mut ports, ..) = test_ports_with_time();
     let fetcher = Rc::new(FakeFetcher::default());
+    let importer = Rc::new(FakeImporter::default());
     ports.fetcher = fetcher.clone();
-    (ports, fetcher)
+    ports.importer = importer.clone();
+    (ports, fetcher, importer)
 }
 
 #[cfg(test)]
