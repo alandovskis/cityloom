@@ -27,6 +27,16 @@ e2e *args: build
 # Everything: unit tests, then the browser tests.
 check: test e2e
 
+# Format the Rust (rustfmt.toml) and the scripts (.prettierrc.json).
+format:
+    cargo fmt
+    cd e2e && npx prettier --ignore-path ../.prettierignore --write . ../web/*.js
+
+# Fail if anything is not formatted, without changing it.
+format-check:
+    cargo fmt --check
+    cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js
+
 # Serve the pages at http://127.0.0.1:8137/ (build first).
 serve:
     python3 -m http.server 8137 --directory web
