@@ -53,6 +53,39 @@ impl Units {
         (typed * per).round() as i32
     }
 
+    /// A length as a street shows it: to a tenth of a metre, or to a hundredth
+    /// when it is not a whole tenth; feet to a tenth.
+    pub fn fine(self, mm: i32) -> String {
+        match self {
+            Units::Metres if mm % 100 != 0 => self.fixed(mm, 2),
+            _ => self.number(mm),
+        }
+    }
+
+    /// A change in length with its sign, `+1.2` or `\u{2212}1.2`, and `0` for none.
+    pub fn signed(self, mm: i32) -> String {
+        match mm {
+            0 => "0".to_string(),
+            _ => format!("{}{}", if mm > 0 { "+" } else { "\u{2212}" }, self.fine(mm.abs())),
+        }
+    }
+
+    /// What the units are called in a sentence.
+    pub fn name(self) -> &'static str {
+        match self {
+            Units::Metres => "metres",
+            Units::Feet => "feet",
+        }
+    }
+
+    /// How far a width nudge moves a piece: a tenth of a metre, or about a foot.
+    pub fn step_mm(self) -> i32 {
+        match self {
+            Units::Metres => 100,
+            Units::Feet => 305,
+        }
+    }
+
     /// A length with its unit: 11.4 m.
     pub fn length(self, mm: i32) -> String {
         format!("{} {}", self.number(mm), self.word())
@@ -122,5 +155,33 @@ mod tests {
         assert_eq!(Units::Metres.mm(-0.1), -100);
         assert_eq!(Units::Feet.mm(10.0), 3_048);
         assert_eq!(Units::Feet.mm(0.5), 152);
+    }
+
+    #[test]
+    fn a_street_length_shows_a_tenth_or_a_hundredth_when_it_needs_one() {
+        assert_eq!(Units::Metres.fine(3_000), "3.0");
+        assert_eq!(Units::Metres.fine(2_700), "2.7");
+        assert_eq!(Units::Metres.fine(2_750), "2.75");
+        // 0.305 is a hair under in binary, and rounds down, as the page always did.
+        assert_eq!(Units::Metres.fine(305), "0.30");
+        assert_eq!(Units::Feet.fine(3_048), "10.0");
+        assert_eq!(Units::Feet.fine(2_750), "9.0");
+    }
+
+    #[test]
+    fn a_change_in_length_has_its_sign_and_zero_has_none() {
+        assert_eq!(Units::Metres.signed(0), "0");
+        assert_eq!(Units::Metres.signed(1_200), "+1.2");
+        assert_eq!(Units::Metres.signed(-1_200), "\u{2212}1.2");
+        assert_eq!(Units::Metres.signed(-250), "\u{2212}0.25");
+        assert_eq!(Units::Feet.signed(3_048), "+10.0");
+    }
+
+    #[test]
+    fn the_units_are_named_in_words_and_have_a_step() {
+        assert_eq!(Units::Metres.name(), "metres");
+        assert_eq!(Units::Feet.name(), "feet");
+        assert_eq!(Units::Metres.step_mm(), 100);
+        assert_eq!(Units::Feet.step_mm(), 305);
     }
 }
