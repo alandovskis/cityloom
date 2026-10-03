@@ -51,14 +51,12 @@ impl SharedSheet {
         self.say_selection();
     }
 
-    /// The end of a gesture: kept when `commit`, announced as an edit if it
-    /// changed anything, or else by what is selected.
+    /// The end of a gesture: kept when `commit`, and announced as an edit if it
+    /// changed anything.
     pub fn end_gesture_in_page(&self, commit: bool) {
         if commit {
             if self.edit(|e| e.end_gesture()) {
                 self.say_edit();
-            } else {
-                self.say_selection();
             }
         } else {
             self.edit(|e| e.cancel_gesture());
@@ -161,7 +159,7 @@ mod tests {
     }
 
     #[test]
-    fn a_gesture_is_one_edit_when_it_ends_or_the_selection_when_it_changed_nothing() {
+    fn a_gesture_is_one_edit_when_it_ends_and_nothing_when_it_changed_nothing() {
         let s = SharedSheet::new(Editor::new(0));
         s.select_in_page(Some(first(&s)));
         said();
@@ -173,7 +171,7 @@ mod tests {
         assert!(said()[0].contains(". "));
         s.quiet_in_page(|e| e.begin_gesture());
         s.end_gesture_in_page(true);
-        assert_eq!(said().len(), 1, "the selection is announced");
+        assert!(said().is_empty(), "a gesture that changed nothing says nothing");
         s.quiet_in_page(|e| e.begin_gesture());
         s.quiet_in_page(|e| e.resize_boundary(0, 300));
         s.end_gesture_in_page(false);
