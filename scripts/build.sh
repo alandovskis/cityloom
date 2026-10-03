@@ -13,5 +13,5 @@ if [ "$(uname)" = Darwin ]; then
   export DYLD_FALLBACK_LIBRARY_PATH
 fi
 cargo build --release --target wasm32-unknown-unknown
-wasm-bindgen --target web --no-typescript --out-dir web/pkg \
+wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
   target/wasm32-unknown-unknown/release/cityloom_editor.wasm
