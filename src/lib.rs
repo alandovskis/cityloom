@@ -3,6 +3,8 @@
 //! The model owns every editing rule. The page only draws the view it
 //! returns and relays pointer and keyboard input.
 
+#![recursion_limit = "1024"]
+
 pub mod atlas;
 pub mod catalogue;
 pub mod city;

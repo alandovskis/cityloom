@@ -16,3 +16,6 @@ crate-type = ["cdylib", "rlib"]
 [profile.release]
 opt-level = "s"
 lto = true
+
+[dev-dependencies]
+leptos = { version = "0.8.21", features = ["ssr"] }

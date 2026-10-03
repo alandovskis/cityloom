@@ -7,6 +7,9 @@ pub mod shared;
 pub mod turns;
 pub mod watch;
 
+#[cfg(test)]
+mod tests;
+
 use leptos::prelude::*;
 use leptos::web_sys::HtmlElement;
 use wasm_bindgen::prelude::*;

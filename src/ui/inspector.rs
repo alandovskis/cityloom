@@ -130,6 +130,7 @@ fn num_field(n: Num, on_step: impl Fn(i32) + Clone + 'static, on_set: impl Fn(f6
                         step=move || step.get()
                         min=n.min
                         max=n.max
+                        value=move || value.get()
                         prop:value=move || value.get()
                         aria-labelledby=n.id
                         on:change=move |ev| {

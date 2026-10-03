@@ -202,15 +202,18 @@ pub fn Measures(shared: Rc<Shared>) -> impl IntoView {
 pub fn Revisions(shared: Rc<Shared>) -> impl IntoView {
     let watch = Watch::new(shared);
     // The newest change is the one to see.
-    let version = watch.version();
-    Effect::new(move |_| {
-        version.track();
-        request_animation_frame(|| {
-            if let Some(el) = document().get_element_by_id("revs") {
-                el.set_scroll_top(el.scroll_height());
-            }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let version = watch.version();
+        Effect::new(move |_| {
+            version.track();
+            request_animation_frame(|| {
+                if let Some(el) = document().get_element_by_id("revs") {
+                    el.set_scroll_top(el.scroll_height());
+                }
+            });
         });
-    });
+    }
     move || {
         let (v, _) = watch.now();
         let last = v.revisions.len().checked_sub(1);
