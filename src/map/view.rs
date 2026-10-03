@@ -10,6 +10,7 @@ use leptos::web_sys::{Element, KeyboardEvent, PointerEvent, WheelEvent};
 use crate::map::svg::{hot_layer, map_svg, overlay_svg};
 use crate::map::vm::{MapVm, NoteItem, PlaceRow, ResetOutcome};
 use crate::shared::bind::Bound;
+use crate::shared::tick::Tick;
 
 type Vm = Bound<MapVm>;
 
@@ -237,8 +238,10 @@ pub fn Legend(vm: Rc<MapVm>) -> impl IntoView {
 #[component]
 pub fn Status(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
+    let works = Signal::derive(move || !vm.with(|v| v.status().bad));
     view! {
-        <p id="fit" class=move || if vm.with(|v| v.status().bad) { "fit bad" } else { "fit" } role="status">
+        <p id="fit" class=move || if works.get() { "fit" } else { "fit bad" } role="status">
+            <Tick works=works/>
             {move || vm.with(|v| v.status().text)}
         </p>
     }

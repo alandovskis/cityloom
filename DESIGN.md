@@ -363,6 +363,10 @@ Hatch vocabulary, 1px ink strokes over the segment tint, one per segment type: s
 ### First-run cue
 - **Cue:** a one-line strip across the top of the drawing, Blue Wash fill under a 1px Rule Grey line: "Add a piece, then drag to arrange. The width is fixed; a piece that does not fit turns orange." A "Got it" tool button sits at its end. It goes only when "Got it" is pressed or the first change is made to the street, so a stray tap cannot remove it; it is remembered in localStorage and applied before first paint, and is hidden in print. Dismissing returns focus to the drawing. "How this works" in the settings menu brings the cue back, scrolls to it and focuses "Got it"; once reopened it stays until dismissed, however much has been edited.
 
+### Checker's tick
+- **Tick:** when the sheet works (the street's width exactly used, every check of a junction or the city passing), a 14px ink check mark sits before the fit line, drawn with the icons' 1.6px round stroke in the text colour. It is the only acknowledgement of getting something right: not a banner, not a colour, and not blue or orange, which stay reserved for selection and failure. It is hidden while the sheet does not work, and the line's words say the same, so it is `aria-hidden`.
+- **Moment:** a sheet that works when it opens just carries the tick. When it comes to work after not working, the tick draws itself in over 420ms (`--ease-out`, the same stroke-offset draw as the revision cloud), once; an edit that leaves the sheet working does not draw it again. With reduced motion it is simply there.
+
 ### Failing checks by the fit line
 - **Link:** when any check fails, an orange underlined text button "N checks fail" sits beside the fit status in the status bar. It opens the notes column if it is closed and the Checks tab, and moves focus to the tab. It is hidden when every check passes.
 

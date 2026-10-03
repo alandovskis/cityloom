@@ -62,6 +62,31 @@ test.describe("the street editor, as a sandbox on the sample streets", () => {
     await expect(page.locator("#undo")).toBeEnabled();
   });
 
+  test("a street that fits carries a tick, which goes when it is too wide and draws itself in when it fits again", async ({
+    page,
+  }) => {
+    const tick = page.locator("#fit .tick");
+    await expect(tick).toBeVisible();
+    await expect(tick).not.toHaveClass(/\bfresh\b/);
+    await selectFirstPiece(page);
+    await page.keyboard.press("+");
+    await expect(tick).toHaveCount(0);
+    await page.keyboard.press("-");
+    await expect(tick).toBeVisible();
+    await expect(tick).toHaveClass(/\bfresh\b/);
+    await expect(tick.locator("path")).toHaveCSS("animation-name", "draw-tick");
+    await page.keyboard.press("+");
+    await expect(tick).toHaveCount(0);
+  });
+
+  test("with reduced motion the tick is simply there", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await selectFirstPiece(page);
+    await page.keyboard.press("+");
+    await page.keyboard.press("-");
+    await expect(page.locator("#fit .tick.fresh path")).toHaveCSS("animation-name", "none");
+  });
+
   test("removing a piece frees its width, and Ctrl+Z puts it back", async ({ page }) => {
     await selectFirstPiece(page);
     await page.keyboard.press("Delete");

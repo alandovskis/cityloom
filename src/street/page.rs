@@ -8,6 +8,7 @@ use leptos::prelude::*;
 use serde::Deserialize;
 
 use crate::shared::catalogue::KINDS;
+use crate::shared::tick::Tick;
 use crate::street::model::{SegView, View};
 use crate::street::text::status_text;
 use crate::street::vm::StreetVm;
@@ -143,8 +144,11 @@ pub fn TitleBlock(vm: Rc<StreetVm>) -> impl IntoView {
 pub fn Fit(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     let too_wide = move || w.view().delta_mm > 0;
+    // The width is all used: neither over nor under.
+    let fits = Signal::derive(move || w.view().delta_mm == 0);
     view! {
         <p id="fit" class=move || if too_wide() { "fit bad" } else { "fit" } role="status">
+            <Tick works=fits/>
             {move || {
                 let (v, units) = w.now();
                 status_text(&v, units)

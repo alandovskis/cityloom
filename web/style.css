@@ -913,6 +913,30 @@ svg pattern circle {
 .fit.bad {
   color: var(--warn);
 }
+/* A checker's tick: the sheet works. It draws itself in once, as the revision cloud does. */
+.tick {
+  width: 14px;
+  height: 14px;
+  margin-inline-end: 6px;
+  vertical-align: -2px;
+}
+.tick path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.tick.fresh path {
+  animation: draw-tick 420ms var(--ease-out) both;
+}
+@keyframes draw-tick {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tick.fresh path {
+    animation: none;
+  }
+}
 .cue {
   display: none;
   margin: 0;

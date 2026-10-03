@@ -110,10 +110,10 @@ fn the_key_lists_what_the_streets_are_made_of() {
 fn the_map_s_status_line_says_whether_every_place_works() {
     let (vm, storage) = map_vm();
     let h = map_html(|| view! { <map_ui::Status vm=vm.clone()/> });
-    assert!(h.contains("class=\"fit\"") && h.contains("32 places. Every check passes."));
+    assert!(h.contains("class=\"fit\"") && h.contains("32 places. Every check passes.") && h.contains("tick"));
     change_a_street(&vm, &storage, 1_000);
     let h = map_html(|| view! { <map_ui::Status vm=vm.clone()/> });
-    assert!(h.contains("class=\"fit bad\"") && h.contains("1 place needs attention: "));
+    assert!(h.contains("class=\"fit bad\"") && h.contains("1 place needs attention: ") && !h.contains("tick"));
 }
 
 #[test]

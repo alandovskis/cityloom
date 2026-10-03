@@ -13,6 +13,7 @@ test.describe("the junction editor, as a sandbox on the sample junctions", () =>
   test("starts on the first sample and says whether it works", async ({ page }) => {
     await expect(page.locator("#arm-count")).toHaveText("4 streets");
     await expect(page.locator("#fit")).toHaveText("4 streets, traffic signal. Every check passes.");
+    await expect(page.locator("#fit .tick")).toBeVisible();
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /^Plan of the junction, north up\. 4 streets/);
     await expect(page.locator("#undo")).toBeDisabled();
     await expect(page.locator("#redo")).toBeDisabled();

@@ -10,6 +10,7 @@ test.describe("the city map", () => {
     await expect(page.locator("#street-name")).toHaveText("Sample city");
     await expect(page.locator(".insp-sub")).toHaveText("9 junctions, 23 streets");
     await expect(page.locator("#fit")).toHaveText("32 places. Every check passes.");
+    await expect(page.locator("#fit .tick")).toBeVisible();
     await expect(page.locator(".places a.place-row")).toHaveCount(32);
     await expect(page.locator("#map-view")).toHaveAttribute("aria-label", "Map of the city, north up");
   });
@@ -66,6 +67,7 @@ test.describe("the city map", () => {
     await expect(page.locator("#fit")).toHaveText(
       "1 place needs attention: Sample Avenue 2, the edge of the map to Junction 4.",
     );
+    await expect(page.locator("#fit .tick")).toHaveCount(0);
     await expect(page.locator("#reset")).toBeEnabled();
     await page.locator("#t-changes").click();
     await expect(page.locator("#changes")).not.toBeEmpty();
@@ -86,6 +88,7 @@ test.describe("the city map", () => {
     await page.locator("#reset").click();
     await expect(page.locator("#reset")).toBeDisabled();
     await expect(page.locator("#fit")).toHaveText("32 places. Every check passes.");
+    await expect(page.locator("#fit .tick.fresh")).toBeVisible();
     await page.goto(`/index.html?street=${STREET}`);
     await expect(page.locator("#revs tbody tr")).toHaveCount(1);
   });
