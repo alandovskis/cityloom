@@ -2,7 +2,7 @@
 // input. Every rule and every piece of plan geometry comes from the
 // WebAssembly model; this file only turns millimetres into pixels.
 
-import init, { Plan, atlas, catalogue, junction_catalogue, materials, mount_turns } from "./pkg/cityloom_editor.js";
+import init, { Plan, atlas, catalogue, junction_catalogue, materials, mount_notes } from "./pkg/cityloom_editor.js";
 import { CURB_HATCH, HATCH, MATERIAL_HATCH } from "./symbols.js";
 import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
 import { initAccountMenu, initPanels, initRegion, initTheme, initUnits, typing } from "./shell.js";
@@ -98,8 +98,6 @@ const ICON = {
   plus: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>`,
   remove: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8"/></svg>`,
   tick: `<svg class="tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.5 6.5 12.5 13.5 3.5"/></svg>`,
-  ok: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.5 6.5 12.5 13.5 3.5"/></svg>`,
-  bad: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3 3 13"/></svg>`,
   grip: `<svg class="grip-ico" viewBox="0 0 10 14" aria-hidden="true"><path d="M2 2h.01M8 2h.01M2 7h.01M8 7h.01M2 12h.01M8 12h.01"/></svg>`,
 };
 
@@ -470,46 +468,8 @@ function scaleBar(x, y) {
 
 // ---- notes ----------------------------------------------------------------
 
-const head = (cols) => `<thead><tr>${cols.map((c) => `<th scope="col">${c}</th>`).join("")}</tr></thead>`;
-
 function renderNotes() {
-  const v = view;
-  $("across").innerHTML =
-    `<caption class="sr-only">How far it is to cross each street, and how many lanes come in</caption>` +
-    head(["Street", "To cross", "Lanes in"]) +
-    `<tbody>${v.arms
-      .map((a) => {
-        const c = a.crossing;
-        const across = c ? `<td class="${c.too_far ? "bad" : ""}">${c.stages > 1 ? `${c.stages} × ${fmtN(c.stage_mm)}` : fmtN(c.distance_mm)}</td>` : `<td class="zero">none</td>`;
-        return `<tr><th scope="row"><span class="dirtag">${compass(a.bearing)}</span>${esc(a.street)}</th>${across}<td>${a.enters ? a.lanes.length : "0"}</td></tr>`;
-      })
-      .join("")}</tbody>`;
-
-  const c = v.conflicts;
-  $("conflicts").innerHTML =
-    `<caption class="sr-only">Points where the paths of allowed turns meet</caption>` +
-    head(["Kind", "Points"]) +
-    `<tbody><tr><th scope="row">Crossing</th><td>${c.crossing}</td></tr><tr><th scope="row">Merging</th><td>${c.merging}</td></tr><tr><th scope="row">Splitting</th><td>${c.diverging}</td></tr><tr class="total"><th scope="row">All</th><td>${c.crossing + c.merging + c.diverging}</td></tr></tbody>`;
-  $("conflict-note").textContent = c.by_phase
-    ? "A signal takes turns, so paths that cross do not meet at the same time."
-    : v.ring
-      ? "Traffic in a roundabout only merges and splits; it never crosses."
-      : "";
-
-  $("checks").innerHTML = v.checks
-    .map((k) => {
-      const detail = k.id === "crossing" && k.amount_mm ? `${k.detail}: ${fmt(k.amount_mm)}` : k.detail;
-      return `<li class="${k.ok ? "ok" : "bad"}">${k.ok ? ICON.ok : ICON.bad}<div><b>${esc(k.label)}<span class="sr-only">: ${k.ok ? "passes" : "fails"}</span></b><span>${esc(detail)}</span></div></li>`;
-    })
-    .join("");
-
-  $("revs").innerHTML =
-    head(["Step", "What changed"]) +
-    `<tbody><tr class="base${v.revisions.length ? "" : " now"}"><td>—</td><td>Junction today</td></tr>${v.revisions
-      .map((r, i) => `<tr${i === v.revisions.length - 1 ? ' class="now"' : ""}><td>${r.step}</td><td>${esc(r.label)}</td></tr>`)
-      .join("")}</tbody>`;
-  $("revs").scrollTop = $("revs").scrollHeight;
-  $("tb-changes").textContent = String(v.revisions.length);
+  $("tb-changes").textContent = String(view.revisions.length);
 }
 
 // A key to the strips: the tint and hatch of each piece that appears in the plan.
@@ -801,14 +761,14 @@ function refreshDrawing() {
   renderPlan();
 }
 
-// The turn table is drawn and edited by the page's Rust components; what they
-// change is drawn and announced here as any other edit is.
+// The notes are drawn, and the turn table edited, by the page's Rust components;
+// what they change is drawn and announced here as any other edit is.
 plan.on_edit((ok) => {
   refresh();
   if (ok) announceEdit();
   else say(plan.refusal());
 });
-mount_turns(plan, $("turns"));
+mount_notes(plan);
 
 function announceEdit() {
   const last = view.revisions.at(-1);
@@ -1111,6 +1071,7 @@ el.reset.addEventListener("click", () => {
 });
 initUnits((u) => {
   units = u;
+  plan.set_units(u);
   renderPalette();
   render();
 });
