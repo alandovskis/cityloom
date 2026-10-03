@@ -16,7 +16,7 @@ pub fn compass(bearing: i32) -> &'static str {
     COMPASS[((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8]
 }
 
-fn turn_word(class: u8) -> &'static str {
+pub fn turn_word(class: u8) -> &'static str {
     match class {
         LEFT => "left",
         THROUGH => "straight on",
@@ -24,15 +24,24 @@ fn turn_word(class: u8) -> &'static str {
     }
 }
 
+/// How a class of turn is named at the start of a sentence.
+pub fn turn_name(class: u8) -> &'static str {
+    match class {
+        LEFT => "Left",
+        THROUGH => "Straight on",
+        _ => "Right",
+    }
+}
+
 /// A turn arrow, pointing up, in a 16 by 16 box: the stem and its branch.
-fn turn_glyph(class: u8) -> impl IntoView {
+pub fn turn_glyph(class: u8, size: u32) -> impl IntoView {
     let branch = match class {
         LEFT => "M8 9Q8 5 3.5 5M6 3 3.5 5 6 7",
         THROUGH => "M8 9V2M5.5 4.5 8 2l2.5 2.5",
         _ => "M8 9Q8 5 12.5 5M10 3l2.5 2L10 7",
     };
     view! {
-        <svg class="turn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+        <svg class="turn-ico" viewBox="0 0 16 16" width=size height=size aria-hidden="true" focusable="false">
             <path d="M8 14V9"/>
             <path d=branch/>
         </svg>
@@ -75,7 +84,7 @@ fn table(v: &JView, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
                         return view! {
                             <td>
                                 <button type="button" class="turn locked" disabled title=title aria-label=label>
-                                    {turn_glyph(m.class)}
+                                    {turn_glyph(m.class, 16)}
                                 </button>
                             </td>
                         }
@@ -97,7 +106,7 @@ fn table(v: &JView, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
                                 aria-label=label
                                 on:click=move |_| toggle(from, to, allowed)
                             >
-                                {turn_glyph(m.class)}
+                                {turn_glyph(m.class, 16)}
                             </button>
                         </td>
                     }

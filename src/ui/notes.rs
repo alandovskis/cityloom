@@ -9,6 +9,7 @@ use crate::atlas::{MEASURES, Where};
 use crate::junction_view::{CrossingView, JView};
 use crate::model::Check;
 use crate::ui::shared::Shared;
+use crate::ui::watch::Watch;
 use crate::ui::turns::compass;
 use crate::units::Units;
 
@@ -55,26 +56,6 @@ fn atlas_groups() -> Vec<&'static str> {
         }
     }
     groups
-}
-
-/// What a component needs to draw from the shared junction: the signals it
-/// watches, and the junction itself, kept where only this thread can reach it.
-struct Watch {
-    version: RwSignal<u32>,
-    units: RwSignal<Units>,
-    shared: StoredValue<Rc<Shared>, LocalStorage>,
-}
-
-impl Watch {
-    fn new(shared: Rc<Shared>) -> Watch {
-        Watch { version: shared.version(), units: shared.units(), shared: StoredValue::new_local(shared) }
-    }
-
-    /// The view and the units, drawing again when either changes.
-    fn now(&self) -> (Rc<JView>, Units) {
-        self.version.track();
-        (self.shared.with_value(|s| s.view()), self.units.get())
-    }
 }
 
 fn icon(ok: bool) -> impl IntoView {
@@ -221,7 +202,7 @@ pub fn Measures(shared: Rc<Shared>) -> impl IntoView {
 pub fn Revisions(shared: Rc<Shared>) -> impl IntoView {
     let watch = Watch::new(shared);
     // The newest change is the one to see.
-    let version = watch.version;
+    let version = watch.version();
     Effect::new(move |_| {
         version.track();
         request_animation_frame(|| {

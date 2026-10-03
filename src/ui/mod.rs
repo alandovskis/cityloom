@@ -1,9 +1,11 @@
 //! The page, drawn from the model by Leptos. Each component reads the model's
 //! view and calls the model's edits; the page holds no rules of its own.
 
+pub mod inspector;
 pub mod notes;
 pub mod shared;
 pub mod turns;
+pub mod watch;
 
 use leptos::prelude::*;
 use leptos::web_sys::HtmlElement;
@@ -26,6 +28,7 @@ pub fn mount_notes(plan: &crate::Plan) {
     mount("conflicts", view! { <notes::Conflicts shared=shared.clone()/> }.into_any());
     mount("conflict-note", view! { <notes::ConflictNote shared=shared.clone()/> }.into_any());
     mount("checks", view! { <notes::Checks shared=shared.clone()/> }.into_any());
+    mount("inspector", view! { <inspector::Inspector shared=shared.clone()/> }.into_any());
     mount("measures", view! { <notes::Measures shared=shared.clone()/> }.into_any());
     mount("revs", view! { <notes::Revisions shared=shared/> }.into_any());
 }

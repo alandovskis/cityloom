@@ -217,8 +217,8 @@ impl Plan {
         self.0.set_units(units::Units::parse(units));
     }
 
-    /// Says what to call, with whether the model took the edit, after the page's
-    /// own components have edited this junction.
+    /// Says what to call after the page's own components have changed this
+    /// junction: with whether the model took it, and `"edit"` or `"select"`.
     pub fn on_edit(&self, callback: js_sys::Function) {
         self.0.set_on_edit(callback);
     }

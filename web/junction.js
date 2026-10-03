@@ -12,7 +12,6 @@ await init();
 const KINDS = JSON.parse(catalogue());
 const CAT = JSON.parse(junction_catalogue());
 const MATERIALS = JSON.parse(materials());
-const LIM = CAT.limits;
 // Opened from the map (`?junction=3`) the page edits that junction of the city,
 // reading its streets from the city, and writes each change back; otherwise it
 // is a sandbox on the sample junctions.
@@ -37,8 +36,6 @@ const plan = held ?? new Plan(0);
 let view = JSON.parse(plan.view());
 let units = "m";
 
-const CLASS_WORD = { left: "left", through: "straight on", right: "right" };
-const CLASS_NAME = { left: "Left", through: "Straight on", right: "Right" };
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -47,7 +44,6 @@ const el = {
   scroll: $("scroll"),
   palette: $("palette"),
   samples: $("samples"),
-  inspector: $("inspector"),
   undo: $("undo"),
   redo: $("redo"),
   reset: $("reset"),
@@ -60,7 +56,6 @@ const MM_PER_FT = 304.8;
 const num = (mm) => (units === "m" ? mm / 1000 : mm / MM_PER_FT);
 const fmtN = (mm) => num(mm).toFixed(1);
 const fmt = (mm) => `${fmtN(mm)} ${units}`;
-const fromInput = (v) => Math.round(units === "m" ? v * 1000 : v * MM_PER_FT);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const f1 = (n) => Math.round(n * 10) / 10;
 const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -93,22 +88,7 @@ const selArm = () => (view.selected.kind ? arm(view.selected.uid) : null);
 // ---- icons ----------------------------------------------------------------
 
 const ICON = {
-  minus: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>`,
-  plus: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>`,
-  remove: `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8"/></svg>`,
-  tick: `<svg class="tick" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 8.5 6.5 12.5 13.5 3.5"/></svg>`,
   grip: `<svg class="grip-ico" viewBox="0 0 10 14" aria-hidden="true"><path d="M2 2h.01M8 2h.01M2 7h.01M8 7h.01M2 12h.01M8 12h.01"/></svg>`,
-};
-
-const BTN = {
-  plus: `<svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3 8h10M8 3v10"/></svg>`,
-  remove: `<svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>`,
-};
-
-// A turn arrow, pointing up, in a 16 by 16 box: the stem and its branch.
-const turnGlyph = (cls, size = 16) => {
-  const branch = { left: "M8 9Q8 5 3.5 5M6 3 3.5 5 6 7", right: "M8 9Q8 5 12.5 5M10 3l2.5 2L10 7", through: "M8 9V2M5.5 4.5 8 2l2.5 2.5" }[cls];
-  return `<svg class="turn-ico" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true" focusable="false"><path d="M8 14V9"/><path d="${branch}"/></svg>`;
 };
 
 const streetSwatch = (s) => {
@@ -508,213 +488,12 @@ function renderPalette() {
     .join("");
 }
 
-// ---- inspector ------------------------------------------------------------
-
-const option = (fid, checked, glyph, name, data, role = "radio") =>
-  `<li><button type="button" class="opt" role="${role}" aria-checked="${checked}" tabindex="${role === "radio" ? (checked ? 0 : -1) : 0}" data-ifid="${fid}" ${data}>${glyph}<span>${esc(name)}</span>${ICON.tick}</button></li>`;
-
-function numField(key, label, mm, opts = {}) {
-  const { unit = units, value = num(mm).toFixed(units === "m" ? 1 : 1), minus, plus, hint = "", step = units === "m" ? "0.1" : "0.5", min = "", max = "", tag = unit } = opts;
-  const id = `i-h-${key}`;
-  return `<section class="insp-sec"><h3 class="note-h" id="${id}">${label}</h3>
-    <div class="stepper">
-      <button type="button" class="ico" data-istep="${key}" data-dir="-1" data-ifid="${key}-minus" aria-label="${esc(minus)}">${ICON.minus}</button>
-      <span class="wfield"><input type="number" inputmode="decimal" data-iset="${key}" data-ifid="${key}" step="${step}" min="${min}" max="${max}" value="${value}" aria-labelledby="${id}"><span class="unit-tag" aria-hidden="true">${tag}</span></span>
-      <button type="button" class="ico" data-istep="${key}" data-dir="1" data-ifid="${key}-plus" aria-label="${esc(plus)}">${ICON.plus}</button>
-    </div>${hint ? `<p class="insp-range">${hint}</p>` : ""}</section>`;
-}
-
-function controlSection() {
-  const v = view;
-  const opts = CAT.controls.map((c, i) => `<option value="${i}"${i === v.control_index ? " selected" : ""}>${esc(c.name)}</option>`).join("");
-  let ring = "";
-  if (v.ring) {
-    ring = numField("ring", "Size of the roundabout", v.ring.radius_mm, {
-      minus: "Smaller by 0.5 m",
-      plus: "Larger by 0.5 m",
-      value: num(v.ring.radius_mm * 2).toFixed(1),
-      hint: `Across the outside. No smaller than ${fmt(v.ring.floor_mm * 2)} with these streets.`,
-      tag: `${units} across`,
-    });
-  }
-  let cycle = "";
-  if (v.ring) {
-    cycle = `<section class="insp-sec"><h3 class="note-h" id="i-h-cycle">Cycle track</h3><ul class="opts">${option("cycle-on", !!v.ring.cycle_mm, "", "Track around the outside", `data-icycle="1"`, "checkbox")}</ul></section>`;
-    if (v.ring.cycle_mm) {
-      cycle += numField("cycle", "Track width", v.ring.cycle_mm, { minus: "Narrower by 0.5 m", plus: "Wider by 0.5 m", hint: `${fmt(LIM.cycle[0])} to ${fmt(LIM.cycle[1])}. It takes space from the carriageway inside the same circle.` });
-    }
-  }
-  let bus = "";
-  if (v.ring) {
-    const cur = v.bus ? `${v.bus.from}-${v.bus.to}` : "";
-    const pairs = v.bus_options.map((o) => `<option value="${o.a}-${o.b}"${`${o.a}-${o.b}` === cur ? " selected" : ""}>${esc(o.label)}</option>`).join("");
-    bus = `<section class="insp-sec"><h3 class="note-h" id="i-h-bus">Bus lane through the middle</h3><select data-ibus data-ifid="bus" aria-labelledby="i-h-bus"><option value=""${cur ? "" : " selected"}>No bus lane</option>${pairs}</select><p class="insp-range">${v.bus ? `A ${fmt(v.bus.width_mm)} bus-only lane straight across the island. It crosses the ring where it enters and leaves.` : "Lets buses cut across the island between two streets."}</p></section>`;
-  }
-  return `<section class="insp-sec"><h3 class="note-h" id="i-h-control">Junction control</h3><select data-icontrol data-ifid="control" aria-labelledby="i-h-control">${opts}</select></section>${ring}${cycle}${bus}`;
-}
-
-function renderJunctionPanel() {
-  el.inspector.innerHTML = `<p class="insp-empty">Select a street, corner or crossing to change it.</p>${controlSection()}`;
-}
-
-const laneNote = (a, i) => (a.lanes.length === 1 ? "the only lane" : i === 0 ? "nearest the middle" : i === a.lanes.length - 1 ? "nearest the curb" : "");
-
-function laneRows(a) {
-  return a.lanes
-    .map((l, i) => {
-      const btns = l.dests
-        .map((d) => {
-          const bad = l.bad && d.on;
-          return `<button type="button" class="turn dest${d.on ? " on" : ""}${bad ? " bad" : ""}" data-lane="${i}" data-to="${d.uid}" data-ifid="ln-${i}-${d.uid}" aria-pressed="${d.on}" ${d.open ? "" : "disabled"} title="${esc(d.label)}" aria-label="Lane ${i + 1} to ${esc(d.label)}, ${CLASS_WORD[d.class]}">${turnGlyph(d.class)}<span aria-hidden="true">${compass(arm(d.uid).bearing)}</span></button>`;
-        })
-        .join("");
-      return `<li class="lane-row${l.bad ? " bad" : ""}"><button type="button" class="lane-pick" data-pick="${i}" data-ifid="pick-${i}"><span>Lane ${i + 1}<small>${laneNote(a, i)}</small></span></button><span class="turns-btns">${btns}</span></li>`;
-    })
-    .join("");
-}
-
-// The transit priority measures of the Atlas that sit on one approach.
-function transitSection(a) {
-  const t = a.transit;
-  const sel = (key, list, cur, label) =>
-    `<label class="fld"><span id="i-h-${key}">${label}</span><select data-i${key} data-ifid="${key}" aria-labelledby="i-h-${key}">${CAT[list]
-      .map((o, i) => `<option value="${i}"${i === cur ? " selected" : ""}>${o.code ? `${o.code} ` : ""}${esc(o.name)}</option>`)
-      .join("")}</select></label>`;
-  const check = (fid, on, name, data) => `<ul class="opts">${option(fid, on, "", name, data, "checkbox")}</ul>`;
-  const lenField =
-    t.approach_kind === "queue" || t.approach_kind === "gate"
-      ? numField("alen", t.approach_kind === "queue" ? "Length of the queue jump" : "Gate distance upstream", t.approach_mm, {
-          minus: "Shorter by 5 m",
-          plus: "Longer by 5 m",
-          hint: `${fmt(LIM.approach[0])} to ${fmt(LIM.approach[1])}`,
-        })
-      : "";
-  const problems = t.problems.length ? `<ul class="problems">${t.problems.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : "";
-  return `<section class="insp-sec"><h3 class="note-h" id="i-h-transit">Transit priority</h3>
-    ${check("buslane", t.bus_lane, "Bus lane along the way in", 'data-ibuslane="1"')}
-    ${sel("approach", "approaches", t.approach, "At the approach")}
-    ${sel("stop", "stops", t.stop, "Bus stop")}
-    ${sel("rule", "rules", t.rule, "Turns")}
-    ${check("filter", t.filter, "N1 Transit modal filter", 'data-ifilter="1"')}
-    ${problems}</section>${lenField}`;
-}
-
-function crossingSection(a) {
-  const c = a.crossing;
-  if (!c) {
-    return `<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
-      <button type="button" class="btn" data-icross="1" data-ifid="cross-add">${BTN.plus}Mark a crossing</button></section>`;
-  }
-  const bulbs = [0, 1]
-    .map((i) => {
-      const has = a.can_bulb[i];
-      return option(`bulb-${i}`, a.bulbs[i] !== null, "", `${i === 0 ? "Left" : "Right"} curb bulge${has ? "" : " (no parking there)"}`, `data-ibulb="${i}" ${has ? "" : "disabled"}`, "checkbox");
-    })
-    .join("");
-  return (
-    `<section class="insp-sec"><h3 class="note-h" id="i-h-cross">Crossing</h3>
-      <p class="insp-range">${c.stages > 1 ? `${c.stages} stages of ${fmt(c.stage_mm)}` : `${fmt(c.distance_mm)} to cross`}${c.too_far ? ". Too far in one go." : ""}</p>
-      <button type="button" class="btn" data-icross="0" data-ifid="cross-off">${BTN.remove}Remove the crossing</button></section>` +
-    numField("setback", "Set back from the junction", c.setback_mm, { minus: "Closer by 0.5 m", plus: "Farther by 0.5 m", hint: `${fmt(LIM.setback[0])} to ${fmt(LIM.setback[1])}` }) +
-    numField("cwidth", "Crossing width", c.width_mm, { minus: "Narrower by 0.5 m", plus: "Wider by 0.5 m", hint: `${fmt(LIM.crossing[0])} to ${fmt(LIM.crossing[1])}` }) +
-    `<section class="insp-sec"><h3 class="note-h" id="i-h-refuge">Halfway island</h3><ul class="opts">${option("island", c.island, "", a.can_island ? "Refuge island in the middle" : "Refuge island (road too narrow)", `data-iisland="1" ${a.can_island ? "" : "disabled"}`, "checkbox")}</ul></section>` +
-    `<section class="insp-sec"><h3 class="note-h" id="i-h-bulb">Shorten the crossing</h3><ul class="opts">${bulbs}</ul></section>`
-  );
-}
-
-function renderInspector() {
-  const active = document.activeElement;
-  const focusId = active && el.inspector.contains(active) ? active.dataset.ifid : null;
-  const v = view;
-  const a = selArm();
-  el.inspector.style.removeProperty("--kc");
-  if (v.selected.kind === "bus" && v.bus) {
-    const o = v.bus_options.find((p) => p.a === Math.min(v.bus.from, v.bus.to) && p.b === Math.max(v.bus.from, v.bus.to));
-    el.inspector.innerHTML = `
-      <div class="insp-head"><div><h2 class="insp-name">Bus lane</h2><p class="insp-sub">${esc(o?.label ?? "")}</p></div></div>
-      <section class="insp-sec"><p class="insp-range">A ${fmt(v.bus.width_mm)} bus-only lane straight across the island. It crosses the ring where it enters and leaves.</p></section>
-      ${controlSection()}
-      <section class="insp-sec"><button type="button" class="btn danger" data-ibusoff="1" data-ifid="busoff">${BTN.remove}Remove the bus lane</button></section>`;
-  } else if (v.selected.kind === "cycle" && v.ring?.cycle_mm) {
-    el.inspector.innerHTML = `
-      <div class="insp-head"><div><h2 class="insp-name">Cycle track</h2><p class="insp-sub">Round the outside of the roundabout</p></div></div>
-      ${numField("cycle", "Track width", v.ring.cycle_mm, { minus: "Narrower by 0.5 m", plus: "Wider by 0.5 m", hint: `${fmt(LIM.cycle[0])} to ${fmt(LIM.cycle[1])}. Cyclists cross every street where it meets the ring.` })}
-      ${controlSection()}
-      <section class="insp-sec"><button type="button" class="btn danger" data-icycleoff="1" data-ifid="cycleoff">${BTN.remove}Remove the cycle track</button></section>`;
-  } else if (!a) {
-    renderJunctionPanel();
-  } else if (v.selected.kind === "lane") {
-    const i = v.selected.lane;
-    const l = a.lanes[i];
-    const opts = l.dests
-      .map((d) => option(`ln-${d.uid}`, d.on, turnGlyph(d.class, 22), `${CLASS_NAME[d.class]} to ${d.label}${d.open ? "" : " (one way in)"}`, `data-lane="${i}" data-to="${d.uid}" ${d.open ? "" : "disabled"}`, "checkbox"))
-      .join("");
-    el.inspector.innerHTML = `
-      <div class="insp-head"><div><h2 class="insp-name">Lane ${i + 1} of ${a.lanes.length}</h2><p class="insp-sub">${esc(a.label)}${laneNote(a, i) ? ` · ${laneNote(a, i)}` : ""}</p></div></div>
-      <section class="insp-sec"><h3 class="note-h" id="i-h-serves">Where this lane goes</h3><ul class="opts">${opts}</ul>
-      <p class="insp-range">${l.bad ? "Every street it goes to is banned. Add a street, or allow a turn." : `${fmt(l.width_mm)} wide. A lane has to go to at least one street.`}</p></section>
-      <section class="insp-sec"><button type="button" class="btn" data-pickarm="1" data-ifid="pickarm">Select the whole street</button></section>
-      ${controlSection()}`;
-  } else if (v.selected.kind === "corner") {
-    const c = corner(a.uid);
-    const next = arm(c.next_uid);
-    el.inspector.innerHTML = `
-      <div class="insp-head"><div><h2 class="insp-name">Corner</h2><p class="insp-sub">${esc(compass(a.bearing))} to ${esc(compass(next.bearing))}</p></div></div>
-      ${numField("corner", "Curb radius", c.radius_mm, { minus: "Tighter by 0.5 m", plus: "Wider by 0.5 m", hint: `${fmt(LIM.corner[0])} to ${fmt(LIM.corner[1])}. Cars turn here at about ${Math.round(c.speed_kmh)} km/h.` })}
-      <p class="insp-empty">A tight corner slows turning cars and shortens the walk across. A wide one lets them swing through faster.</p>${controlSection()}`;
-  } else {
-    const crossingOnly = v.selected.kind === "crossing";
-    const streets = CAT.streets.map((s, i) => (s.freeway ? "" : `<option value="${i}"${i === a.street_index ? " selected" : ""}>${esc(s.name)}</option>`)).join("");
-    const head = `<div class="insp-head"><div><h2 class="insp-name">${esc(a.street)}</h2><p class="insp-sub">${esc(compass(a.bearing))}, ${a.bearing}° · ${fmt(a.road_mm)} road</p></div></div>`;
-    if (crossingOnly) {
-      el.inspector.innerHTML = head + crossingSection(a) + controlSection();
-    } else {
-      const dirSec = numField("bearing", "Direction", a.bearing, {
-        minus: "Turn anticlockwise by 5°",
-        plus: "Turn clockwise by 5°",
-        value: a.bearing,
-        step: LIM.bearing_step,
-        min: 0,
-        max: 355,
-        tag: "°",
-        hint: "Clockwise from north. At least 30° from its neighbours.",
-      });
-      const offSec = numField("offset", "Shift sideways", a.offset_mm, {
-        minus: "Shift left by 0.1 m",
-        plus: "Shift right by 0.1 m",
-        value: num(a.offset_mm).toFixed(2),
-        step: units === "m" ? "0.1" : "0.5",
-        hint: `Up to ${fmt(a.max_offset_mm)} either way. Looking out from the junction.`,
-      });
-      el.inspector.innerHTML =
-        head +
-        `<section class="insp-sec"><h3 class="note-h" id="i-h-lanes">Lanes coming in</h3>${a.enters ? `<ul class="lanes">${laneRows(a)}</ul>` : `<p class="insp-range">One way out. No lanes come in.</p>`}</section>` +
-        crossingSection(a) +
-        transitSection(a) +
-        dirSec +
-        offSec +
-        (v.linked
-          ? `<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3><a class="btn" href="index.html?street=${a.edge}" data-ifid="street-link">Open the cross-section</a><p class="insp-range">This street belongs to the city. Its layout is edited in the street editor, and changes there show here.</p></section>`
-          : `<section class="insp-sec"><h3 class="note-h" id="i-h-street">Street</h3><select data-istreet data-ifid="street" aria-labelledby="i-h-street">${streets}</select><p class="insp-range">The street's own layout is edited in the street editor.</p></section>`) +
-        controlSection() +
-        (v.linked
-          ? ""
-          : `<section class="insp-sec"><button type="button" class="btn danger" data-iremove="1" data-ifid="remove" ${v.can_remove ? "" : "disabled"}>${BTN.remove}Remove this street</button>${v.can_remove ? "" : `<p class="insp-range">A junction needs at least ${LIM.min_arms} streets.</p>`}</section>`);
-    }
-  }
-  if (focusId) {
-    const t = el.inspector.querySelector(`[data-ifid="${focusId}"]`);
-    if (t && !t.disabled) t.focus({ preventScroll: true });
-  }
-}
-
 // ---- rendering ------------------------------------------------------------
 
 function render() {
   renderHead();
   renderKey();
   renderPlan();
-  renderInspector();
   renderNotes();
   for (const b of el.samples.querySelectorAll("[data-sample]")) b.setAttribute("aria-pressed", String(Number(b.dataset.sample) === view.sample));
 }
@@ -734,9 +513,10 @@ function refreshDrawing() {
 
 // The notes are drawn, and the turn table edited, by the page's Rust components;
 // what they change is drawn and announced here as any other edit is.
-plan.on_edit((ok) => {
+plan.on_edit((ok, what) => {
   refresh();
-  if (ok) announceEdit();
+  if (what === "select") announceSelection();
+  else if (ok) announceEdit();
   else say(plan.refusal());
 });
 mount_notes(plan);
@@ -760,7 +540,6 @@ function select(kind, uid, lane = 0) {
   plan.select(kind ?? "", uid || 0, lane);
   view = JSON.parse(plan.view());
   renderPlan();
-  renderInspector();
   renderNotes();
   announceSelection();
 }
@@ -774,29 +553,6 @@ function announceSelection() {
   if (s.kind === "lane") return say(`Lane ${s.lane + 1} of ${a.lanes.length}, ${a.label}`);
   say(s.kind === "arm" ? `${a.label}, ${a.bearing} degrees` : s.kind === "corner" ? `Corner after ${a.label}, ${fmt(corner(s.uid).radius_mm)} radius` : `Crossing on ${a.label}`);
 }
-
-// ---- inspector events -------------------------------------------------------
-
-el.inspector.addEventListener("click", (e) => {
-  const b = e.target.closest("button");
-  if (!b || b.disabled) return;
-  const d = b.dataset;
-  const s = view.selected;
-  const uid = s.uid;
-  if (d.istep) return void step(d.istep, Number(d.dir));
-  if (d.ibuslane !== undefined) return void act(() => plan.set_bus_lane(uid, b.getAttribute("aria-checked") !== "true"));
-  if (d.ifilter !== undefined) return void act(() => plan.set_filter(uid, b.getAttribute("aria-checked") !== "true"));
-  if (d.icycle !== undefined) return void act(() => plan.set_cycle_track(!view.ring.cycle_mm));
-  if (d.icycleoff !== undefined) return void act(() => plan.set_cycle(0));
-  if (d.ibusoff !== undefined) return void act(() => plan.set_bus(0, 0));
-  if (d.pickarm !== undefined) return void select("arm", uid);
-  if (d.pick !== undefined) return void select("lane", uid, Number(d.pick));
-  if (d.lane !== undefined) return void act(() => plan.set_lane_dest(uid, Number(d.lane), Number(d.to), (b.getAttribute("aria-pressed") ?? b.getAttribute("aria-checked")) !== "true"));
-  if (d.icross !== undefined) return void act(() => plan.set_crossing(uid, d.icross === "1"));
-  if (d.iisland !== undefined) return void act(() => plan.set_island(uid, b.getAttribute("aria-checked") !== "true"));
-  if (d.ibulb !== undefined) return void act(() => plan.set_bulb(uid, Number(d.ibulb), b.getAttribute("aria-checked") !== "true"));
-  if (d.iremove) return void removeSelected();
-});
 
 // A stepper button or a typed value changes one number, by 0.5 m, 0.1 m or 5°.
 function step(key, dir) {
@@ -813,48 +569,6 @@ function step(key, dir) {
   };
   act(tries[key]);
 }
-
-el.inspector.addEventListener("change", (e) => {
-  const t = e.target;
-  const s = view.selected;
-  if (t.dataset.iapproach !== undefined) return void act(() => plan.set_approach(s.uid, Number(t.value)));
-  if (t.dataset.istop !== undefined) return void act(() => plan.set_stop(s.uid, Number(t.value)));
-  if (t.dataset.irule !== undefined) return void act(() => plan.set_rule(s.uid, Number(t.value)));
-  if (t.dataset.ibus !== undefined) {
-    const [a, b] = t.value ? t.value.split("-").map(Number) : [0, 0];
-    return void act(() => plan.set_bus(a, b));
-  }
-  if (t.dataset.icontrol !== undefined) return void act(() => plan.set_control(Number(t.value)));
-  if (t.dataset.istreet !== undefined) return void act(() => plan.set_street(s.uid, Number(t.value)));
-  const key = t.dataset.iset;
-  if (!key) return;
-  const v = parseFloat(t.value);
-  if (!Number.isFinite(v)) return renderInspector();
-  const set = {
-    bearing: () => plan.set_bearing(s.uid, Math.round(v)),
-    offset: () => plan.set_offset(s.uid, fromInput(v)),
-    corner: () => plan.set_corner(s.uid, fromInput(v)),
-    setback: () => plan.set_setback(s.uid, fromInput(v)),
-    cwidth: () => plan.set_crossing_width(s.uid, fromInput(v)),
-    ring: () => plan.set_ring_radius(fromInput(v / 2)),
-    cycle: () => plan.set_cycle(fromInput(v)),
-    alen: () => plan.set_approach_len(s.uid, fromInput(v)),
-  }[key];
-  act(set);
-});
-
-// Radio groups: arrows move the choice, as native radios do.
-el.inspector.addEventListener("keydown", (e) => {
-  const cur = e.target.closest('[role="radio"]');
-  if (!cur || e.metaKey || e.ctrlKey || e.altKey) return;
-  const stepBy = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
-  if (!stepBy) return;
-  e.preventDefault();
-  const group = [...cur.closest('[role="radiogroup"]').querySelectorAll('[role="radio"]')];
-  const next = group[(group.indexOf(cur) + stepBy + group.length) % group.length];
-  next.focus();
-  next.click();
-});
 
 function removeSelected() {
   const s = view.selected;
@@ -990,8 +704,7 @@ el.wrap.addEventListener("keydown", (e) => {
     plan.select_relative(dir);
     view = JSON.parse(plan.view());
     renderPlan();
-    renderInspector();
-    renderNotes();
+      renderNotes();
     announceSelection();
   } else if ((e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_") && ["arm", "corner", "crossing", "cycle"].includes(s.kind)) {
     e.preventDefault();

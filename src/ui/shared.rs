@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::junction::Junction;
+use crate::junction::{Junction, Target};
 use crate::junction_view::JView;
 use crate::units::Units;
 
@@ -53,13 +53,24 @@ impl Shared {
     /// with whether the model took it, so it can draw what it draws and announce it.
     pub fn edit_in_page<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
         let r = self.edit(f);
-        if let Some(on_edit) = &*self.on_edit.borrow() {
-            let _ = on_edit.call1(&wasm_bindgen::JsValue::NULL, &wasm_bindgen::JsValue::from_bool(r.into()));
-        }
+        self.tell("edit", r.into());
         r
     }
 
-    /// Says what to call after an edit made from a component.
+    /// A selection made from a component of the page.
+    pub fn select_in_page(&self, target: Target) {
+        self.edit(|j| j.select(target));
+        self.tell("select", true);
+    }
+
+    fn tell(&self, what: &str, ok: bool) {
+        if let Some(on_edit) = &*self.on_edit.borrow() {
+            let _ = on_edit.call2(&wasm_bindgen::JsValue::NULL, &wasm_bindgen::JsValue::from_bool(ok), &wasm_bindgen::JsValue::from_str(what));
+        }
+    }
+
+    /// Says what to call, with whether the model took it and `"edit"` or
+    /// `"select"`, after a change made from a component.
     pub fn set_on_edit(&self, f: js_sys::Function) {
         *self.on_edit.borrow_mut() = Some(f);
     }
@@ -148,5 +159,14 @@ mod tests {
         let a = shared.view();
         shared.set_units(Units::Feet);
         assert!(Rc::ptr_eq(&a, &shared.view()));
+    }
+
+    #[test]
+    fn selecting_from_the_page_changes_the_selection_and_bumps_the_version() {
+        let shared = Shared::new(Junction::new(0));
+        let uid = shared.read(|j| j.current().arms[0].uid);
+        shared.select_in_page(Target::Arm(uid));
+        assert_eq!(shared.read(|j| j.selected), Target::Arm(uid));
+        assert_eq!(shared.version().get_untracked(), 1);
     }
 }
