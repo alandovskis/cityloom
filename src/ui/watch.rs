@@ -6,6 +6,7 @@ use leptos::prelude::*;
 
 use crate::junction::{Junction, Target};
 use crate::junction_view::{ArmView, JView};
+use crate::ui::keys::{Action, Step};
 use crate::ui::shared::Shared;
 use crate::units::Units;
 
@@ -78,6 +79,51 @@ impl Watch {
 
     pub fn finish_gesture(&self, commit: bool) {
         self.shared.with_value(|s| s.end_gesture_in_page(commit));
+    }
+
+    pub fn undo(&self) -> bool {
+        self.shared.with_value(|s| s.undo_in_page())
+    }
+
+    pub fn redo(&self) -> bool {
+        self.shared.with_value(|s| s.redo_in_page())
+    }
+
+    pub fn reset(&self) -> bool {
+        self.shared.with_value(|s| s.reset_in_page())
+    }
+
+    pub fn load_sample(&self, sample: usize) {
+        self.shared.with_value(|s| s.load_sample_in_page(sample));
+    }
+
+    /// What a key on the plan asks for.
+    pub fn apply(&self, action: Action) {
+        let selected = self.view_now().selected.uid;
+        let kind = self.view_now().selected.kind;
+        match action {
+            Action::Select(dir) => self.shared.with_value(|s| s.select_relative_in_page(dir)),
+            Action::Deselect => self.select(Target::None),
+            Action::Step(step, dir) => {
+                if kind.is_some() {
+                    self.edit(|j| match step {
+                        Step::Bearing => j.step_bearing(selected, dir),
+                        Step::Corner => j.step_corner(selected, dir),
+                        Step::Setback => j.step_setback(selected, dir),
+                        Step::Cycle => j.step_cycle(dir),
+                    });
+                }
+            }
+            Action::Remove => {
+                match kind {
+                    Some("bus") => self.edit(|j| j.set_bus(None)),
+                    Some("cycle") => self.edit(|j| j.set_cycle_track(false)),
+                    Some("crossing") => self.edit(|j| j.set_crossing(selected, false)),
+                    Some("arm") => self.edit(|j| j.remove_arm(selected)),
+                    _ => false,
+                };
+            }
+        }
     }
 
     pub fn select(&self, target: Target) {

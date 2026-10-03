@@ -7,7 +7,8 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::junction::{Junction, Target};
+use crate::junction::{Junction, Refusal, Target};
+use crate::ui::{announce, live};
 use crate::junction_view::JView;
 use crate::ui::plan_svg::Frame;
 use crate::units::Units;
@@ -16,7 +17,7 @@ pub struct Shared {
     model: RefCell<Junction>,
     version: ArcRwSignal<u32>,
     units: ArcRwSignal<Units>,
-    on_edit: RefCell<Option<js_sys::Function>>,
+    on_change: RefCell<Option<js_sys::Function>>,
     /// The view as of a version of the model.
     cached: RefCell<Option<(u32, Rc<JView>)>>,
     /// How the plan was last drawn, for turning a pointer position into a point on it.
@@ -25,7 +26,7 @@ pub struct Shared {
 
 impl Shared {
     pub fn new(model: Junction) -> Rc<Shared> {
-        Rc::new(Shared { model: RefCell::new(model), version: ArcRwSignal::new(0), units: ArcRwSignal::new(Units::default()), on_edit: RefCell::new(None), cached: RefCell::new(None), frame: Cell::new(None) })
+        Rc::new(Shared { model: RefCell::new(model), version: ArcRwSignal::new(0), units: ArcRwSignal::new(Units::default()), on_change: RefCell::new(None), cached: RefCell::new(None), frame: Cell::new(None) })
     }
 
     /// The model's view, built once for each edit however often it is asked for.
@@ -53,57 +54,109 @@ impl Shared {
         f(&self.model.borrow())
     }
 
-    /// Edits the model, and tells whatever watches `version`.
+    /// Edits the model, and tells whatever watches `version` and the script.
     pub fn edit<R>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
         let r = f(&mut self.model.borrow_mut());
         self.version.update(|v| *v += 1);
+        if let Some(on_change) = &*self.on_change.borrow() {
+            let _ = on_change.call0(&wasm_bindgen::JsValue::NULL);
+        }
         r
     }
 
-    /// An edit made from a component of the page: the script is told afterwards,
-    /// with whether the model took it, so it can draw what it draws and announce it.
+    /// An edit made from a component of the page: it is announced by what it
+    /// was, and a refusal by its reason.
     pub fn edit_in_page<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
         let r = self.edit(f);
-        self.tell("edit", r.into());
+        if r.into() {
+            self.say_edit();
+        } else {
+            self.say_refusal();
+        }
         r
     }
 
     /// A selection made from a component of the page.
     pub fn select_in_page(&self, target: Target) {
         self.edit(|j| j.select(target));
-        self.tell("select", true);
+        self.say_selection();
     }
 
-    /// A change made from a component that the script need only redraw for, as
-    /// each step of a drag is.
+    /// A change made from a component that is not announced, as each step of a
+    /// drag is.
     pub fn quiet_in_page<R>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
-        let r = self.edit(f);
-        self.tell("refresh", true);
-        r
+        self.edit(f)
     }
 
     /// The end of a gesture made from a component: kept when `commit`, and the
-    /// script announces the edit if it changed anything, or else the selection.
+    /// edit is announced if it changed anything, or else the selection.
     pub fn end_gesture_in_page(&self, commit: bool) {
         if commit {
-            let changed = self.edit(|j| j.end_gesture());
-            self.tell(if changed { "edit" } else { "select" }, changed);
+            if self.edit(|j| j.end_gesture()) {
+                self.say_edit();
+            } else {
+                self.say_selection();
+            }
         } else {
             self.edit(|j| j.cancel_gesture());
-            self.tell("refresh", true);
         }
     }
 
-    fn tell(&self, what: &str, ok: bool) {
-        if let Some(on_edit) = &*self.on_edit.borrow() {
-            let _ = on_edit.call2(&wasm_bindgen::JsValue::NULL, &wasm_bindgen::JsValue::from_bool(ok), &wasm_bindgen::JsValue::from_str(what));
+    /// Moves the selection to the next thing round the junction, and says what.
+    pub fn select_relative_in_page(&self, dir: i32) {
+        self.edit(|j| j.select_relative(dir));
+        self.say_selection();
+    }
+
+    pub fn undo_in_page(&self) -> bool {
+        let done = self.edit(|j| j.undo());
+        if done {
+            live::say(announce::UNDONE);
+        }
+        done
+    }
+
+    pub fn redo_in_page(&self) -> bool {
+        let done = self.edit(|j| j.redo());
+        if done {
+            self.say_edit();
+        }
+        done
+    }
+
+    pub fn reset_in_page(&self) -> bool {
+        let done = self.edit(|j| j.reset());
+        if done {
+            live::say(announce::STARTED_OVER);
+        }
+        done
+    }
+
+    pub fn load_sample_in_page(&self, sample: usize) {
+        self.edit(|j| j.load_sample(sample));
+        live::say(&announce::sample_text(&self.view()));
+    }
+
+    fn say_edit(&self) {
+        if let Some(text) = announce::edit_text(&self.view()) {
+            live::say(&text);
         }
     }
 
-    /// Says what to call, with whether the model took it and `"edit"`,
-    /// `"select"` or `"refresh"`, after a change made from a component.
-    pub fn set_on_edit(&self, f: js_sys::Function) {
-        *self.on_edit.borrow_mut() = Some(f);
+    fn say_refusal(&self) {
+        live::say(self.read(|j| j.refusal()).unwrap_or(Refusal::DoesNotFit).message());
+    }
+
+    fn say_selection(&self) {
+        if let Some(text) = announce::selection_text(&self.view(), self.units.get_untracked()) {
+            live::say(&text);
+        }
+    }
+
+    /// Says what to call, with no arguments, after any change to the junction,
+    /// by either side: the script keeps what the city holds.
+    pub fn set_on_change(&self, f: js_sys::Function) {
+        *self.on_change.borrow_mut() = Some(f);
     }
 
     /// The units the page shows lengths in; not part of the model.
@@ -235,5 +288,72 @@ mod tests {
         let frame = Frame::fit([-10.0, -10.0, 10.0, 10.0], 1000.0, 800.0);
         shared.set_frame(frame);
         assert_eq!(shared.frame(), Some(frame));
+    }
+
+    fn said() -> Vec<String> {
+        crate::ui::live::take_said()
+    }
+
+    #[test]
+    fn an_edit_from_the_page_is_announced_by_its_label_and_a_refusal_by_its_reason() {
+        let shared = Shared::new(Junction::new(0));
+        let uid = shared.read(|j| j.current().arms[0].uid);
+        said();
+        assert!(shared.edit_in_page(|j| j.set_corner(uid, 7_000)));
+        assert_eq!(said(), vec!["Corner after Sample Avenue 2 (north): 7000 mm radius. 4 streets, traffic signal. Every check passes."]);
+        assert!(!shared.edit_in_page(|j| j.set_corner(uid, 99_000)));
+        assert_eq!(said(), vec!["That change does not fit."]);
+    }
+
+    #[test]
+    fn a_selection_from_the_page_is_announced_and_clearing_it_says_nothing() {
+        let shared = Shared::new(Junction::new(0));
+        let uid = shared.read(|j| j.current().arms[0].uid);
+        said();
+        shared.select_in_page(Target::Arm(uid));
+        assert_eq!(said(), vec!["Sample Avenue 2 (north), 0 degrees"]);
+        shared.select_in_page(Target::None);
+        assert!(said().is_empty());
+    }
+
+    #[test]
+    fn a_quiet_change_says_nothing() {
+        let shared = Shared::new(Junction::new(0));
+        said();
+        shared.quiet_in_page(|j| j.set_control(2));
+        assert!(said().is_empty());
+    }
+
+    #[test]
+    fn the_end_of_a_gesture_announces_the_edit_or_else_the_selection() {
+        let shared = Shared::new(Junction::new(0));
+        let uid = shared.read(|j| j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid);
+        shared.select_in_page(Target::Arm(uid));
+        said();
+        shared.quiet_in_page(|j| { j.begin_gesture(); true });
+        shared.quiet_in_page(|j| j.drag_arm_to(uid, 3_000.0, -10_000.0));
+        shared.end_gesture_in_page(true);
+        assert!(said()[0].starts_with("Sample Avenue 2 bearing: 15°."));
+        shared.quiet_in_page(|j| { j.begin_gesture(); true });
+        shared.end_gesture_in_page(true);
+        assert_eq!(said(), vec!["Sample Avenue 2 (north), 15 degrees"]);
+    }
+
+    #[test]
+    fn undo_redo_start_over_and_a_sample_are_announced() {
+        let shared = Shared::new(Junction::new(0));
+        let uid = shared.read(|j| j.current().arms[0].uid);
+        shared.edit(|j| j.set_corner(uid, 7_000));
+        said();
+        assert!(shared.undo_in_page());
+        assert_eq!(said(), vec!["Undone."]);
+        assert!(shared.redo_in_page());
+        assert!(said()[0].starts_with("Corner after"));
+        assert!(shared.reset_in_page());
+        assert_eq!(said(), vec!["Started over from the junction as it is today."]);
+        assert!(!shared.undo_in_page());
+        assert!(said().is_empty());
+        shared.load_sample_in_page(1);
+        assert_eq!(said(), vec!["Street and lane. 3 streets, side streets stop. Every check passes."]);
     }
 }

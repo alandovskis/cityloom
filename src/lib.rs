@@ -229,10 +229,10 @@ impl Plan {
         self.0.set_units(units::Units::parse(units));
     }
 
-    /// Says what to call after the page's own components have changed this
-    /// junction: with whether the model took it, and `"edit"`, `"select"` or `"refresh"`.
-    pub fn on_edit(&self, callback: js_sys::Function) {
-        self.0.set_on_edit(callback);
+    /// Says what to call, with no arguments, after any change to this junction:
+    /// the page keeps what the city holds.
+    pub fn on_change(&self, callback: js_sys::Function) {
+        self.0.set_on_change(callback);
     }
 
     /// The whole drawable state as JSON.

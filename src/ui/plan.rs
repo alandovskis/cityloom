@@ -5,9 +5,10 @@
 use std::rc::Rc;
 
 use leptos::prelude::*;
-use leptos::web_sys::{Element, HtmlElement, PointerEvent};
+use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
 use crate::junction::Target;
+use crate::ui::keys::{self, Shortcut};
 use crate::ui::plan_svg::{Frame, plan_label, plan_svg};
 use crate::ui::shared::Shared;
 use crate::ui::watch::Watch;
@@ -63,8 +64,44 @@ pub fn PlanDrawing(shared: Rc<Shared>) -> impl IntoView {
     let viewport = RwSignal::new((1000.0, 800.0));
     let drag = StoredValue::new_local(None::<Drag>);
 
+    let wrap = NodeRef::<leptos::html::Div>::new();
     #[cfg(target_arch = "wasm32")]
-    watch_size(viewport);
+    {
+        Effect::new(move |_| {
+            if let Some(el) = wrap.get() {
+                watch_size(el.into(), viewport);
+            }
+        });
+        // Control or Command with Z or Y undoes and redoes, wherever the keyboard is.
+        window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
+            if !(e.meta_key() || e.ctrl_key()) || typing(&e) {
+                return;
+            }
+            match keys::shortcut(&e.key(), e.shift_key()) {
+                Some(Shortcut::Undo) => {
+                    e.prevent_default();
+                    w.undo();
+                }
+                Some(Shortcut::Redo) => {
+                    e.prevent_default();
+                    w.redo();
+                }
+                None => {}
+            }
+        });
+    }
+
+    let keydown = move |e: KeyboardEvent| {
+        if e.meta_key() || e.ctrl_key() || e.alt_key() {
+            return;
+        }
+        if let Some((action, prevent)) = keys::on_plan(&e.key(), e.shift_key(), w.view_now().selected.kind) {
+            if prevent {
+                e.prevent_default();
+            }
+            w.apply(action);
+        }
+    };
 
     let markup = move || {
         let (v, units) = w.now();
@@ -137,6 +174,7 @@ pub fn PlanDrawing(shared: Rc<Shared>) -> impl IntoView {
     };
 
     view! {
+      <div class="wrap" id="wrap" tabindex="0" role="group" aria-label="Junction plan editor" aria-describedby="keys" node_ref=wrap on:keydown=keydown>
         <svg
             id="drawing"
             xmlns="http://www.w3.org/2000/svg"
@@ -154,6 +192,7 @@ pub fn PlanDrawing(shared: Rc<Shared>) -> impl IntoView {
             on:pointercancel=move |_| finish(false)
             inner_html=markup
         ></svg>
+      </div>
     }
 }
 
@@ -166,12 +205,17 @@ fn focus_wrap() {
     }
 }
 
+/// Whether a key press came from a field being typed in.
+#[cfg(target_arch = "wasm32")]
+fn typing(e: &KeyboardEvent) -> bool {
+    e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()).is_some_and(|t| t.closest("input, select, textarea").ok().flatten().is_some())
+}
+
 /// Keeps `viewport` as wide as the plan's group and as high as the window.
 #[cfg(target_arch = "wasm32")]
-fn watch_size(viewport: RwSignal<(f64, f64)>) {
+fn watch_size(wrap: Element, viewport: RwSignal<(f64, f64)>) {
     use leptos::wasm_bindgen::{JsCast, closure::Closure};
 
-    let Some(wrap) = document().get_element_by_id("wrap") else { return };
     let update = {
         let wrap = wrap.clone();
         move || viewport.set(viewport_of(&wrap))
@@ -179,7 +223,7 @@ fn watch_size(viewport: RwSignal<(f64, f64)>) {
     update();
     let on_resize = update.clone();
     let observer = Closure::<dyn FnMut(leptos::web_sys::js_sys::Array)>::new(move |_| on_resize());
-    if let Some(scroll) = document().get_element_by_id("scroll") {
+    if let Some(scroll) = wrap.parent_element() {
         if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
             o.observe(&scroll);
         }
