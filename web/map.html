@@ -55,15 +55,10 @@
       <header class="sheet-head">
         <div class="head-start">
           <button type="button" id="inspector-toggle" class="btn" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the places ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span>Places</span></button>
-          <div class="street">
-            <h1 id="street-name">Your city</h1>
-            <p class="street-sub" id="street-sub"><span>City map</span> <span aria-hidden="true">·</span> <span id="city-count" class="fig"></span></p>
-          </div>
+          <div class="street" id="street"></div>
         </div>
         <div class="tools">
-          <div class="btns" role="toolbar" aria-label="Sheet tools">
-            <button type="button" id="reset" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg><span id="reset-label">Start over</span></button>
-          </div>
+          <div id="reset-slot" style="display: contents"></div>
           <button type="button" id="notes-toggle" class="btn" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span>Notes</span></button>
         </div>
       </header>
@@ -74,19 +69,11 @@
         <div class="work">
           <section class="drawing plan-drawing" aria-labelledby="h-drawing">
             <h2 id="h-drawing" class="sr-only">City map</h2>
-            <div class="map-tools" role="toolbar" aria-label="Map view">
-              <button type="button" id="zoom-out" class="btn" aria-label="Zoom out"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3.5 8h9"/></svg></button>
-              <button type="button" id="zoom-in" class="btn" aria-label="Zoom in"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3.5 8h9M8 3.5v9"/></svg></button>
-              <button type="button" id="zoom-fit" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg>Whole city</button>
-              <p class="map-hint">Press a junction to open its plan. Press a street to open its cross-section.</p>
-            </div>
-            <div class="map-view" id="map-view" tabindex="0" role="group" aria-label="Map of the city, north up" aria-describedby="keys">
-              <svg id="map" xmlns="http://www.w3.org/2000/svg"></svg>
-              <svg class="map-overlay" id="map-overlay" aria-hidden="true" focusable="false"></svg>
-            </div>
+            <div id="map-tools-slot" style="display: contents"></div>
+            <div id="map-slot" style="display: contents"></div>
             <ul class="plan-key" id="plan-key" aria-label="Key to the strips"></ul>
             <div class="statusbar">
-              <p id="fit" class="fit" role="status"></p>
+              <div id="fit-slot" style="display: contents"></div>
               <p id="keys" class="keys">
                 <span><kbd>Tab</kbd> next place</span>
                 <span><kbd>Enter</kbd> open</span>
@@ -123,11 +110,7 @@
 
           <p class="fine">The layout, the street widths and every threshold are samples for now, not a real city.</p>
 
-          <div class="title-block" aria-label="About this city">
-            <div class="tb-cell tb-wide"><span>City</span><b id="tb-street"></b></div>
-            <div class="tb-cell"><span>Places</span><b id="tb-places" class="fig"></b></div>
-            <div class="tb-cell"><span>Changed</span><b id="tb-changes" class="fig"></b></div>
-          </div>
+          <div class="title-block" id="title-block" aria-label="About this city"></div>
         </aside>
       </main>
     </div>

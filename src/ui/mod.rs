@@ -2,13 +2,17 @@
 //! view and calls the model's edits; the page holds no rules of its own.
 
 pub mod announce;
+pub mod bind;
 pub mod core;
 pub mod inspector;
 pub mod keys;
 pub mod live;
+pub mod map;
+pub mod map_svg;
 pub mod notes;
 pub mod page;
 pub mod plan;
+pub mod platform;
 pub mod plan_svg;
 pub mod shared;
 pub mod sheet;
@@ -116,4 +120,55 @@ pub fn mount_street_page(sheet: &crate::Sheet, ends: Option<String>) {
             el.unchecked_into::<HtmlElement>().set_hidden(true);
         }
     }
+}
+
+/// The map page as the script sees it: what the pages around it ask of it.
+#[wasm_bindgen]
+pub struct MapPage(std::rc::Rc<crate::vm::map::MapVm>);
+
+#[wasm_bindgen]
+impl MapPage {
+    /// Sets the units lengths are shown in, `"m"` or `"ft"`.
+    pub fn set_units(&self, units: &str) {
+        self.0.set_units(crate::units::Units::parse(units));
+    }
+
+    /// Sets the region, by index into `materials().regions`.
+    pub fn set_region(&self, region: usize) -> bool {
+        self.0.set_region(region);
+        true
+    }
+
+    /// The id of the region the city is shown in.
+    pub fn region_id(&self) -> String {
+        crate::catalogue::REGIONS[self.0.region()].id.to_string()
+    }
+}
+
+/// Draws the city map page into the elements it keeps for it, and hands back
+/// what the script needs to reach it.
+#[wasm_bindgen]
+pub fn mount_map() -> MapPage {
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let vm = crate::vm::map::MapVm::new(platform::browser_ports());
+    let at = |id: &str| -> HtmlElement {
+        leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into()
+    };
+    let mount = |id: &str, view: AnyView| {
+        leptos::mount::mount_to(at(id), move || view).forget();
+    };
+    mount("street", view! { <map::MapHeader vm=vm.clone()/> }.into_any());
+    mount("reset-slot", view! { <map::ResetButton vm=vm.clone()/> }.into_any());
+    mount("map-tools-slot", view! { <map::MapTools vm=vm.clone()/> }.into_any());
+    mount("map-slot", view! { <map::MapView vm=vm.clone()/> }.into_any());
+    mount("plan-key", view! { <map::Legend vm=vm.clone()/> }.into_any());
+    mount("fit-slot", view! { <map::Status vm=vm.clone()/> }.into_any());
+    mount("inspector", view! { <map::Places vm=vm.clone()/> }.into_any());
+    mount("checks-lead", view! { <map::ChecksLead vm=vm.clone()/> }.into_any());
+    mount("checks", view! { <map::Checks vm=vm.clone()/> }.into_any());
+    mount("changes-lead", view! { <map::ChangesLead vm=vm.clone()/> }.into_any());
+    mount("changes", view! { <map::Changes vm=vm.clone()/> }.into_any());
+    mount("title-block", view! { <map::TitleBlock vm=vm.clone()/> }.into_any());
+    MapPage(vm)
 }

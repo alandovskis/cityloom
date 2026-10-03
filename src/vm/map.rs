@@ -354,6 +354,11 @@ impl MapVm {
         self.core.edit(|m| m.region = region);
     }
 
+    /// The region the city is shown in, by index into the catalogue.
+    pub fn region(&self) -> usize {
+        self.core.read(|m| m.region)
+    }
+
     /// The city is read again from where it is kept: another tab wrote it, the
     /// page is shown again, or it was started over.
     pub fn reload(&self) {
@@ -657,9 +662,9 @@ mod tests {
         let (ports, ..) = test_ports();
         ports.storage.remember(crate::vm::city_store::REGION_KEY, "united-kingdom");
         let vm = MapVm::new(ports);
-        assert_eq!(vm.core.read(|m| m.region), 3);
+        assert_eq!(vm.region(), 3);
         vm.set_region(0);
-        assert_eq!(vm.core.read(|m| m.region), 0);
+        assert_eq!(vm.region(), 0);
     }
 
     #[test]
