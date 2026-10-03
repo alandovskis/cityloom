@@ -63,6 +63,23 @@ impl Watch {
         self.shared.with_value(|s| s.edit_in_page(f))
     }
 
+    pub fn frame(&self) -> Option<crate::ui::plan_svg::Frame> {
+        self.shared.with_value(|s| s.frame())
+    }
+
+    pub fn set_frame(&self, frame: crate::ui::plan_svg::Frame) {
+        self.shared.with_value(|s| s.set_frame(frame));
+    }
+
+    /// A change the script need only redraw for.
+    pub fn quiet(&self, f: impl FnOnce(&mut Junction) -> bool) -> bool {
+        self.shared.with_value(|s| s.quiet_in_page(f))
+    }
+
+    pub fn finish_gesture(&self, commit: bool) {
+        self.shared.with_value(|s| s.end_gesture_in_page(commit));
+    }
+
     pub fn select(&self, target: Target) {
         self.shared.with_value(|s| s.select_in_page(target));
     }

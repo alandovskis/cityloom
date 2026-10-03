@@ -213,6 +213,16 @@ impl Plan {
         self.0.edit(|j| j.load_sample(sample))
     }
 
+    /// Where a point of the page falls on the plan, in millimetres from the
+    /// junction's centre: `[x, y]`, or empty before the plan is drawn.
+    pub fn point_at(&self, client_x: f64, client_y: f64) -> Vec<f64> {
+        let Some(frame) = self.0.frame() else { return Vec::new() };
+        let Some(svg) = leptos::prelude::document().get_element_by_id("drawing") else { return Vec::new() };
+        let r = svg.get_bounding_client_rect();
+        let (x, y) = frame.plan_point((client_x - r.left(), client_y - r.top()));
+        vec![x, y]
+    }
+
     /// Sets the units lengths are shown in, `"m"` or `"ft"`, in the parts of the
     /// page drawn by the components.
     pub fn set_units(&self, units: &str) {
@@ -220,7 +230,7 @@ impl Plan {
     }
 
     /// Says what to call after the page's own components have changed this
-    /// junction: with whether the model took it, and `"edit"` or `"select"`.
+    /// junction: with whether the model took it, and `"edit"`, `"select"` or `"refresh"`.
     pub fn on_edit(&self, callback: js_sys::Function) {
         self.0.set_on_edit(callback);
     }
