@@ -6,45 +6,43 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::model::{Editor, SegView, View};
-use crate::ui::sheet::SharedSheet;
 use crate::ui::street_keys::Action;
 use crate::units::Units;
+use crate::vm::street::StreetVm;
 
-/// The signals a component watches, and the street itself, kept where only
-/// this thread can reach it. It is `Copy`, so any closure can hold it.
+/// What a component reads of the street view-model and tells it. The view-model
+/// is kept where only this thread can reach it, so the handle is `Copy` and any
+/// closure can hold it.
 #[derive(Clone, Copy)]
 pub struct SheetWatch {
-    version: RwSignal<u32>,
-    units: RwSignal<Units>,
-    shared: StoredValue<Rc<SharedSheet>, LocalStorage>,
+    vm: StoredValue<Rc<StreetVm>, LocalStorage>,
 }
 
 impl SheetWatch {
-    pub fn new(shared: Rc<SharedSheet>) -> SheetWatch {
-        SheetWatch { version: shared.version(), units: shared.units(), shared: StoredValue::new_local(shared) }
+    pub fn new(vm: Rc<StreetVm>) -> SheetWatch {
+        SheetWatch { vm: StoredValue::new_local(vm) }
     }
 
     pub fn version(&self) -> RwSignal<u32> {
-        self.version
+        self.vm.with_value(|v| v.version())
     }
 
     /// The view, drawing again when the street is edited.
     pub fn view(&self) -> Rc<View> {
-        self.version.track();
-        self.shared.with_value(|s| s.view())
+        self.vm.with_value(|v| v.view())
     }
 
     /// The view as it is now, for an event handler: nothing is watched.
     pub fn view_now(&self) -> Rc<View> {
-        self.shared.with_value(|s| s.view())
+        self.vm.with_value(|v| v.view_now())
     }
 
     pub fn units(&self) -> Units {
-        self.units.get()
+        self.vm.with_value(|v| v.units())
     }
 
     pub fn units_now(&self) -> Units {
-        self.units.get_untracked()
+        self.vm.with_value(|v| v.units_now())
     }
 
     pub fn now(&self) -> (Rc<View>, Units) {
@@ -58,36 +56,36 @@ impl SheetWatch {
 
     /// Edits the street as the page does, announcing what was done.
     pub fn edit(&self, f: impl FnOnce(&mut Editor) -> bool) -> bool {
-        self.shared.with_value(|s| s.edit_in_page(f))
+        self.vm.with_value(|v| v.apply(f))
     }
 
     /// A change that is not announced, as each step of a drag is.
     pub fn quiet<R>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
-        self.shared.with_value(|s| s.quiet_in_page(f))
+        self.vm.with_value(|v| v.quiet(f))
     }
 
     pub fn select(&self, uid: Option<u32>) {
-        self.shared.with_value(|s| s.select_in_page(uid));
+        self.vm.with_value(|v| v.select(uid));
     }
 
     pub fn finish_gesture(&self, commit: bool) {
-        self.shared.with_value(|s| s.end_gesture_in_page(commit));
+        self.vm.with_value(|v| v.end_gesture(commit));
     }
 
     pub fn undo(&self) -> bool {
-        self.shared.with_value(|s| s.undo_in_page())
+        self.vm.with_value(|v| v.undo())
     }
 
     pub fn redo(&self) -> bool {
-        self.shared.with_value(|s| s.redo_in_page())
+        self.vm.with_value(|v| v.redo())
     }
 
     pub fn reset(&self) -> bool {
-        self.shared.with_value(|s| s.reset_in_page())
+        self.vm.with_value(|v| v.reset())
     }
 
     pub fn apply_measure(&self, code: &str) -> bool {
-        self.shared.with_value(|s| s.apply_measure_in_page(code))
+        self.vm.with_value(|v| v.apply_measure(code))
     }
 
     /// What a key on the section asks for, as far as it changes the street.
@@ -96,7 +94,7 @@ impl SheetWatch {
         let v = self.view_now();
         let selected = v.selected;
         match action {
-            Action::Select(dir) => self.shared.with_value(|s| s.select_relative_in_page(dir)),
+            Action::Select(dir) => self.vm.with_value(|v| v.select_relative(dir)),
             Action::Move(dir) => {
                 let Some(uid) = selected else { return };
                 let Some(i) = v.segments.iter().position(|s| s.uid == uid) else { return };

@@ -68,7 +68,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::atlas::{MEASURES, Where};
-use crate::ui::sheet::SharedSheet;
+use crate::vm::street::StreetVm;
 use crate::ui::sheet_watch::SheetWatch;
 
 fn mode_class(mode: crate::catalogue::Mode) -> String {
@@ -81,8 +81,8 @@ fn change_cell(delta: i32, text: String) -> impl IntoView {
 
 /// How the street's width is shared out among the uses, today and in the design.
 #[component]
-pub fn Space(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn Space(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     move || {
         let (v, units) = w.now();
         let o = &v.outcomes;
@@ -114,8 +114,8 @@ pub fn Space(shared: Rc<SharedSheet>) -> impl IntoView {
 
 /// How many people the street moves in an hour, today and in the design.
 #[component]
-pub fn Capacity(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn Capacity(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     move || {
         let v = w.view();
         let o = &v.outcomes;
@@ -144,8 +144,8 @@ fn icon(ok: bool) -> impl IntoView {
 
 /// Whether the street works, one line to a check.
 #[component]
-pub fn Checks(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     move || {
         let (v, units) = w.now();
         v.checks
@@ -171,8 +171,8 @@ fn failing(w: &SheetWatch) -> usize {
 
 /// The button under the drawing that says how many checks fail and goes to them.
 #[component]
-pub fn FitChecks(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn FitChecks(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     let go = move |_| {
         let doc = document();
         let click = |id: &str| {
@@ -197,8 +197,8 @@ pub fn FitChecks(shared: Rc<SharedSheet>) -> impl IntoView {
 
 /// The count of failing checks on the Checks tab.
 #[component]
-pub fn ChecksBadge(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn ChecksBadge(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     view! {
         <span class="tab-n" id="checks-n" hidden=move || failing(&w) == 0>
             {move || (failing(&w) > 0).then(|| view! { {failing(&w)}<span class="sr-only">" fail"</span> })}
@@ -208,8 +208,8 @@ pub fn ChecksBadge(shared: Rc<SharedSheet>) -> impl IntoView {
 
 /// What has been changed, from the street as it is today.
 #[component]
-pub fn Revisions(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn Revisions(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     #[cfg(target_arch = "wasm32")]
     {
         let version = w.version();
@@ -256,8 +256,8 @@ fn group_note(group: &str) -> &'static str {
 /// be recognised in this street and laid out from its width; the rest say where
 /// they are set, or why they are not modelled.
 #[component]
-pub fn Measures(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     let mut groups: Vec<&'static str> = Vec::new();
     for m in &MEASURES {
         if !groups.contains(&m.group) {

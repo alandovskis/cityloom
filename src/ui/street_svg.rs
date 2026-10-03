@@ -7,7 +7,7 @@ use std::fmt::Write;
 use crate::catalogue::KINDS;
 use crate::model::{SegView, View};
 use crate::symbols::{SymbolOpts, symbol};
-use crate::ui::street_text::fit_phrase;
+use crate::vm::street_text::fit_phrase;
 use crate::units::Units;
 
 /// The heights of the drawing's bands, scaled with its width.

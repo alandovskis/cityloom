@@ -10,7 +10,7 @@ use leptos::web_sys::{Element, HtmlInputElement, HtmlSelectElement, KeyboardEven
 
 use crate::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS};
 use crate::model::{SegView, View};
-use crate::ui::sheet::SharedSheet;
+use crate::vm::street::StreetVm;
 use crate::ui::sheet_watch::SheetWatch;
 use crate::ui::street_page::{hhmm, to_min};
 use crate::units::Units;
@@ -451,8 +451,8 @@ fn piece_panel(w: SheetWatch, uid: u32, more_open: RwSignal<bool>) -> AnyView {
 }
 
 #[component]
-pub fn StreetInspector(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn StreetInspector(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     let more_open = RwSignal::new(false);
     // The panel is drawn again only when the selection changes; edits change
     // what is in it, not what it is made of.

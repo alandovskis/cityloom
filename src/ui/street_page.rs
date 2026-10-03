@@ -9,9 +9,9 @@ use serde::Deserialize;
 
 use crate::catalogue::KINDS;
 use crate::model::{SegView, View};
-use crate::ui::sheet::SharedSheet;
+use crate::vm::street::StreetVm;
 use crate::ui::sheet_watch::SheetWatch;
-use crate::ui::street_text::status_text;
+use crate::vm::street_text::status_text;
 
 // ---- what the page is made of --------------------------------------------------------
 
@@ -100,8 +100,8 @@ fn end_link(e: &StreetEnd) -> impl IntoView {
 /// The street's name and how wide it is; for a street of a city, the way back to
 /// the map and the two places it runs between.
 #[component]
-pub fn StreetHeader(shared: Rc<SharedSheet>, ends: Option<Vec<StreetEnd>>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     #[cfg(target_arch = "wasm32")]
     if let Some(ends) = &ends {
         let names: Vec<String> = ends.iter().map(|e| e.name.clone()).collect();
@@ -129,8 +129,8 @@ pub fn StreetHeader(shared: Rc<SharedSheet>, ends: Option<Vec<StreetEnd>>) -> im
 }
 
 #[component]
-pub fn TitleBlock(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn TitleBlock(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     view! {
         <div class="tb-cell tb-wide"><span>"Street"</span><b id="tb-street">{move || w.view().name}</b></div>
         <div class="tb-cell"><span>"Width"</span><b id="tb-row" class="fig">{move || w.units().length_fine(w.view().row_mm)}</b></div>
@@ -140,8 +140,8 @@ pub fn TitleBlock(shared: Rc<SharedSheet>) -> impl IntoView {
 
 /// The status line: whether the pieces fit the street.
 #[component]
-pub fn Fit(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn Fit(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     let too_wide = move || w.view().delta_mm > 0;
     view! {
         <p id="fit" class=move || if too_wide() { "fit bad" } else { "fit" } role="status">
@@ -154,8 +154,8 @@ pub fn Fit(shared: Rc<SharedSheet>) -> impl IntoView {
 }
 
 #[component]
-pub fn History(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn History(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     view! {
         <div class="btns" role="toolbar" aria-label="Sheet tools">
             <button type="button" id="undo" class="btn" disabled=move || !w.view().can_undo on:click=move |_| { w.undo(); }>
@@ -188,11 +188,11 @@ fn kind_swatch(id: &'static str) -> impl IntoView {
 /// The button that opens the list of pieces, and the list: arrows move through
 /// it, Escape closes it, and choosing a piece adds it after the selected one.
 #[component]
-pub fn AddMenu(shared: Rc<SharedSheet>) -> impl IntoView {
+pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
     use leptos::wasm_bindgen::JsCast;
     use leptos::web_sys::{Element, FocusEvent, HtmlElement, KeyboardEvent};
 
-    let w = SheetWatch::new(shared);
+    let w = SheetWatch::new(vm);
     let open = RwSignal::new(false);
     let button = NodeRef::<leptos::html::Button>::new();
     let menu = NodeRef::<leptos::html::Div>::new();
@@ -326,8 +326,8 @@ pub fn AddMenu(shared: Rc<SharedSheet>) -> impl IntoView {
 /// The slider that sets the time the street is shown at, and under it a bar that
 /// marks when the selected piece is something other than its usual type.
 #[component]
-pub fn Clock(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn Clock(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     // Time only matters once some piece changes type through the day.
     let timed = move || w.view().segments.iter().any(|s| !s.variants.is_empty());
     let selected = move || {
@@ -372,8 +372,8 @@ pub fn Clock(shared: Rc<SharedSheet>) -> impl IntoView {
 
 /// Says which time the numbers are for, once there is a time to speak of.
 #[component]
-pub fn TimeNote(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn TimeNote(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     move || {
         let v = w.view();
         v.segments.iter().any(|s| !s.variants.is_empty()).then(|| format!("Numbers are for {}.", hhmm(v.time_min)))
@@ -384,12 +384,12 @@ pub fn TimeNote(shared: Rc<SharedSheet>) -> impl IntoView {
 /// has been changed, and is remembered so it does not return; "How this works"
 /// in the settings menu brings it back and keeps it until it is dismissed.
 #[component]
-pub fn Welcome(shared: Rc<SharedSheet>) -> impl IntoView {
+pub fn Welcome(vm: Rc<StreetVm>) -> impl IntoView {
     use crate::ui::store::remember;
 
     // Only the browser watches the street, for the first change.
     #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
-    let w = SheetWatch::new(shared);
+    let w = SheetWatch::new(vm);
     let pinned = StoredValue::new_local(false);
     let root = || document().document_element();
     let dismiss = move || {

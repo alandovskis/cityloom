@@ -8,7 +8,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
-use crate::ui::sheet::SharedSheet;
+use crate::vm::street::StreetVm;
 use crate::ui::sheet_watch::SheetWatch;
 use crate::ui::street_keys::{self, Action};
 use crate::ui::street_svg::{Geometry, Interaction, Moving, street_label, street_svg};
@@ -58,8 +58,8 @@ fn coarse() -> bool {
 }
 
 #[component]
-pub fn StreetDrawing(shared: Rc<SharedSheet>) -> impl IntoView {
-    let w = SheetWatch::new(shared);
+pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
     let width = RwSignal::new(1050.0_f64);
     let interaction = RwSignal::new(Interaction::default());
     let geometry = StoredValue::new_local(Geometry::fit(1050.0, 18_000));

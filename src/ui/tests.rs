@@ -498,18 +498,18 @@ fn the_plan_follows_the_units_and_the_selection() {
 // ---- what the keys do on the street ---------------------------------------------------
 
 use crate::model::Editor;
-use crate::ui::sheet::SharedSheet;
+use crate::vm::street::StreetVm;
 use crate::ui::sheet_watch::SheetWatch;
 use crate::ui::street_keys::Action as StreetAction;
 
-fn street_watch() -> (Rc<SharedSheet>, SheetWatch) {
-    let s = SharedSheet::new(Editor::new(0));
+fn street_watch() -> (Rc<StreetVm>, SheetWatch) {
+    let s = StreetVm::new(crate::ui::platform::browser_ports(), Editor::new(0), None);
     let w = SheetWatch::new(s.clone());
     live::take_said();
     (s, w)
 }
 
-fn segment(s: &SharedSheet, i: usize) -> u32 {
+fn segment(s: &StreetVm, i: usize) -> u32 {
     s.view().segments[i].uid
 }
 
@@ -519,7 +519,7 @@ fn nudging_changes_the_selected_piece_s_width_and_says_so() {
     owner.set();
     let (s, w) = street_watch();
     let u = segment(&s, 2);
-    s.select_in_page(Some(u));
+    s.select(Some(u));
     live::take_said();
     w.apply(StreetAction::Nudge(100));
     assert_eq!(s.view().segments[2].width_mm, 3_400);
@@ -545,7 +545,7 @@ fn a_piece_moves_one_place_along_and_stops_at_the_ends() {
     owner.set();
     let (s, w) = street_watch();
     let first = segment(&s, 0);
-    s.select_in_page(Some(first));
+    s.select(Some(first));
     w.apply(StreetAction::Move(-1));
     assert_eq!(segment(&s, 0), first, "already first");
     w.apply(StreetAction::Move(1));
@@ -571,7 +571,7 @@ fn removing_takes_the_selected_piece_away() {
     owner.set();
     let (s, w) = street_watch();
     let u = segment(&s, 0);
-    s.select_in_page(Some(u));
+    s.select(Some(u));
     w.apply(StreetAction::Remove);
     assert_eq!(s.view().segments.len(), 5);
     assert!(s.view().segments.iter().all(|x| x.uid != u));
@@ -581,8 +581,8 @@ fn removing_takes_the_selected_piece_away() {
 
 use crate::ui::{street, street_inspector, street_notes, street_page};
 
-fn street_shared(sample: usize) -> Rc<SharedSheet> {
-    SharedSheet::new(Editor::new(sample))
+fn street_shared(sample: usize) -> Rc<StreetVm> {
+    StreetVm::new(crate::ui::platform::browser_ports(), Editor::new(sample), None)
 }
 
 fn street_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
@@ -599,7 +599,7 @@ fn street_ends() -> Vec<street_page::StreetEnd> {
 #[test]
 fn the_street_section_is_a_labelled_group_holding_a_picture_of_the_street() {
     let s = street_shared(0);
-    let h = street_html(|| view! { <street::StreetDrawing shared=s.clone()/> });
+    let h = street_html(|| view! { <street::StreetDrawing vm=s.clone()/> });
     assert!(h.contains("id=\"wrap\"") && h.contains("aria-label=\"Street cross-section editor\"") && h.contains("tabindex=\"0\""));
     assert!(h.contains("id=\"drawing\"") && h.contains("role=\"img\""));
     assert!(h.contains("Cross-section of Sample Street 1. 6 segments, 18.0 m of 18.0 m. Every metre of the street is used."));
@@ -613,14 +613,14 @@ fn the_section_follows_the_units_and_the_selection() {
     s.set_units(Units::Feet);
     let u = segment(&s, 2);
     s.edit(|e| e.select(Some(u)));
-    let h = street_html(|| view! { <street::StreetDrawing shared=s.clone()/> });
+    let h = street_html(|| view! { <street::StreetDrawing vm=s.clone()/> });
     assert!(h.contains("Street width 59.1 ft") && count(&h, "class=\"sel-box\"") == 1);
 }
 
 #[test]
 fn the_street_heading_names_the_street_and_says_how_wide_it_is() {
     let s = street_shared(0);
-    let h = street_html(|| view! { <street_page::StreetHeader shared=s.clone() ends=None/> });
+    let h = street_html(|| view! { <street_page::StreetHeader vm=s.clone() ends=None/> });
     assert!(h.contains(">Sample Street 1</h1>") && h.contains("Street cross-section") && h.contains(">18.0 m</b>"));
     assert!(!h.contains("City map") && !h.contains("between"));
 }
@@ -628,7 +628,7 @@ fn the_street_heading_names_the_street_and_says_how_wide_it_is() {
 #[test]
 fn a_city_street_s_heading_links_back_and_to_the_junctions_it_runs_between() {
     let s = street_shared(1);
-    let h = street_html(|| view! { <street_page::StreetHeader shared=s.clone() ends=Some(street_ends())/> });
+    let h = street_html(|| view! { <street_page::StreetHeader vm=s.clone() ends=Some(street_ends())/> });
     assert!(h.contains("href=\"map.html\"") && h.contains("City map"));
     assert!(h.contains("between ") && h.contains("the edge of the map") && h.contains(" and <a href=\"intersection.html?junction=2\">Junction 4</a>"));
     assert_eq!(count(&h, "href=\"intersection.html"), 1, "the edge of the map is not a link");
@@ -639,18 +639,18 @@ fn the_street_s_title_block_gives_its_name_width_and_changes() {
     let s = street_shared(0);
     let u = segment(&s, 0);
     s.edit(|e| e.nudge_width(u, 100));
-    let h = street_html(|| view! { <street_page::TitleBlock shared=s.clone()/> });
+    let h = street_html(|| view! { <street_page::TitleBlock vm=s.clone()/> });
     assert!(h.contains("id=\"tb-street\">Sample Street 1<") && h.contains("id=\"tb-row\" class=\"fig\">18.0 m<") && h.contains("id=\"tb-changes\" class=\"fig\">1<"));
 }
 
 #[test]
 fn the_street_s_status_line_says_whether_the_pieces_fit() {
     let s = street_shared(0);
-    let h = street_html(|| view! { <street_page::Fit shared=s.clone()/> });
+    let h = street_html(|| view! { <street_page::Fit vm=s.clone()/> });
     assert!(h.contains("class=\"fit\"") && h.contains("Every metre of the street is used."));
     let u = segment(&s, 0);
     s.edit(|e| e.set_width(u, 3_800));
-    let h = street_html(|| view! { <street_page::Fit shared=s.clone()/> });
+    let h = street_html(|| view! { <street_page::Fit vm=s.clone()/> });
     assert!(h.contains("class=\"fit bad\"") && h.contains("0.5 m too wide. Make a piece narrower or remove one."));
 }
 
@@ -658,18 +658,18 @@ fn the_street_s_status_line_says_whether_the_pieces_fit() {
 fn the_street_s_history_buttons_are_off_until_there_is_something_to_undo() {
     let s = street_shared(0);
     let off = |h: &str| ["undo", "redo", "reset"].map(|id| button_tag(h, id).contains("disabled"));
-    let h = street_html(|| view! { <street_page::History shared=s.clone()/> });
+    let h = street_html(|| view! { <street_page::History vm=s.clone()/> });
     assert_eq!(off(&h), [true, true, true]);
     let u = segment(&s, 0);
     s.edit(|e| e.nudge_width(u, 100));
-    let h = street_html(|| view! { <street_page::History shared=s.clone()/> });
+    let h = street_html(|| view! { <street_page::History vm=s.clone()/> });
     assert_eq!(off(&h), [false, true, false]);
 }
 
 #[test]
 fn the_add_menu_is_closed_and_lists_every_piece_in_four_groups() {
     let s = street_shared(0);
-    let h = street_html(|| view! { <street_page::AddMenu shared=s.clone()/> });
+    let h = street_html(|| view! { <street_page::AddMenu vm=s.clone()/> });
     assert!(h.contains("aria-expanded=\"false\"") && h.contains("id=\"add-menu\" hidden class=\"menu add-menu\""));
     assert!(button_tag(&h, "add-btn").contains("aria-haspopup"));
     assert_eq!(count(&h, "class=\"add-item\""), 12);
@@ -678,22 +678,22 @@ fn the_add_menu_is_closed_and_lists_every_piece_in_four_groups() {
     }
     assert!(h.contains("3.3 m") && h.contains("Goes after the selected piece."));
     s.set_units(Units::Feet);
-    let h = street_html(|| view! { <street_page::AddMenu shared=s.clone()/> });
+    let h = street_html(|| view! { <street_page::AddMenu vm=s.clone()/> });
     assert!(h.contains("10.8 ft"));
 }
 
 #[test]
 fn the_clock_is_hidden_until_a_piece_changes_through_the_day() {
     let s = street_shared(1);
-    let h = street_html(|| view! { <street_page::Clock shared=s.clone()/> });
+    let h = street_html(|| view! { <street_page::Clock vm=s.clone()/> });
     assert!(h.contains("id=\"clock\" hidden"), "{h}");
-    let t = street_html(|| view! { <street_page::TimeNote shared=s.clone()/> });
+    let t = street_html(|| view! { <street_page::TimeNote vm=s.clone()/> });
     assert!(!t.contains("Numbers are"));
     assert!(s.edit(|e| e.apply_measure("B3")));
-    let h = street_html(|| view! { <street_page::Clock shared=s.clone()/> });
+    let h = street_html(|| view! { <street_page::Clock vm=s.clone()/> });
     assert!(!h.contains("id=\"clock\" hidden") && h.contains("id=\"clock\""));
     assert!(h.contains("id=\"time\"") && h.contains("aria-valuetext=\"12:00\"") && h.contains(">12:00</output>"));
-    let t = street_html(|| view! { <street_page::TimeNote shared=s.clone()/> });
+    let t = street_html(|| view! { <street_page::TimeNote vm=s.clone()/> });
     assert!(t.contains("Numbers are for 12:00."));
 }
 
@@ -703,7 +703,7 @@ fn the_clock_marks_when_the_selected_piece_is_something_else() {
     s.edit(|e| e.apply_measure("B3"));
     let timed = s.view().segments.iter().find(|x| !x.variants.is_empty()).unwrap().uid;
     s.edit(|e| e.select(Some(timed)));
-    let h = street_html(|| view! { <street_page::Clock shared=s.clone()/> });
+    let h = street_html(|| view! { <street_page::Clock vm=s.clone()/> });
     assert!(h.contains("class=\"clock-bar on\"") && h.contains("<i style=\"left:"));
     assert!(h.contains("except"));
 }
@@ -711,7 +711,7 @@ fn the_clock_marks_when_the_selected_piece_is_something_else() {
 #[test]
 fn the_cue_says_how_to_begin_and_can_be_dismissed() {
     let s = street_shared(0);
-    let h = street_html(|| view! { <street_page::Welcome shared=s.clone()/> });
+    let h = street_html(|| view! { <street_page::Welcome vm=s.clone()/> });
     assert!(h.contains("id=\"welcome\"") && h.contains("Add a piece, then drag to arrange.") && h.contains("id=\"welcome-dismiss\""));
 }
 
@@ -720,82 +720,82 @@ fn the_space_table_compares_each_use_today_and_in_the_design() {
     let s = street_shared(0);
     let u = segment(&s, 0);
     s.edit(|e| e.remove(u));
-    let h = street_html(|| view! { <street_notes::Space shared=s.clone()/> });
+    let h = street_html(|| view! { <street_notes::Space vm=s.clone()/> });
     assert!(h.contains("Width by use, in metres") && h.contains("Your design"));
     assert!(h.contains("class=\"down\">\u{2212}3.3<") && h.contains("class=\"zero\">0<"));
     s.set_units(Units::Feet);
-    assert!(street_html(|| view! { <street_notes::Space shared=s.clone()/> }).contains("in feet"));
+    assert!(street_html(|| view! { <street_notes::Space vm=s.clone()/> }).contains("in feet"));
 }
 
 #[test]
 fn the_capacity_table_says_how_many_people_move_and_how_that_changed() {
     let s = street_shared(0);
-    let h = street_html(|| view! { <street_notes::Capacity shared=s.clone()/> });
+    let h = street_html(|| view! { <street_notes::Capacity vm=s.clone()/> });
     assert!(h.contains("People per hour") && h.contains("class=\"zero\">0<"));
     let v = s.view();
     assert!(h.contains(&street_notes::thousands(v.outcomes.capacity_pph)));
     let u = segment(&s, 2);
     s.edit(|e| e.set_width(u, 3_000));
-    let h = street_html(|| view! { <street_notes::Capacity shared=s.clone()/> });
+    let h = street_html(|| view! { <street_notes::Capacity vm=s.clone()/> });
     assert!(h.contains("class=\"down\"") || h.contains("class=\"up\"") || h.contains("class=\"zero\""));
 }
 
 #[test]
 fn the_checks_each_say_whether_they_pass_in_words() {
     let s = street_shared(0);
-    let h = street_html(|| view! { <street_notes::Checks shared=s.clone()/> });
+    let h = street_html(|| view! { <street_notes::Checks vm=s.clone()/> });
     assert_eq!(count(&h, "<li class=\"ok\">"), 4);
     assert!(h.contains(": passes") && h.contains("Every metre is used"));
     let u = segment(&s, 0);
     s.edit(|e| e.set_width(u, 3_800));
-    let h = street_html(|| view! { <street_notes::Checks shared=s.clone()/> });
+    let h = street_html(|| view! { <street_notes::Checks vm=s.clone()/> });
     assert!(h.contains("<li class=\"bad\">") && h.contains(": fails") && h.contains("0.5 m too wide. Narrow or remove a piece."));
 }
 
 #[test]
 fn the_count_of_failing_checks_shows_under_the_drawing_and_on_the_tab_only_when_there_are_some() {
     let s = street_shared(0);
-    let pill = street_html(|| view! { <street_notes::FitChecks shared=s.clone()/> });
+    let pill = street_html(|| view! { <street_notes::FitChecks vm=s.clone()/> });
     assert!(button_tag(&pill, "fit-checks").contains("hidden"));
-    let badge = street_html(|| view! { <street_notes::ChecksBadge shared=s.clone()/> });
+    let badge = street_html(|| view! { <street_notes::ChecksBadge vm=s.clone()/> });
     assert!(badge.contains("hidden") && !badge.contains("sr-only"));
     let u = segment(&s, 0);
     s.edit(|e| e.set_width(u, 3_800));
-    let pill = street_html(|| view! { <street_notes::FitChecks shared=s.clone()/> });
+    let pill = street_html(|| view! { <street_notes::FitChecks vm=s.clone()/> });
     assert!(!button_tag(&pill, "fit-checks").contains("hidden") && pill.contains("1 check fails"));
-    let badge = street_html(|| view! { <street_notes::ChecksBadge shared=s.clone()/> });
+    let badge = street_html(|| view! { <street_notes::ChecksBadge vm=s.clone()/> });
     assert!(badge.contains(">1<") && badge.contains("sr-only"));
 }
 
 #[test]
 fn the_street_s_changes_start_from_the_street_today_and_list_each_edit() {
     let s = street_shared(0);
-    let h = street_html(|| view! { <street_notes::Revisions shared=s.clone()/> });
+    let h = street_html(|| view! { <street_notes::Revisions vm=s.clone()/> });
     assert!(h.contains("Street today") && h.contains("base now"));
     let u = segment(&s, 0);
     s.edit(|e| e.remove(u));
-    let h = street_html(|| view! { <street_notes::Revisions shared=s.clone()/> });
+    let h = street_html(|| view! { <street_notes::Revisions vm=s.clone()/> });
     assert!(!h.contains("base now") && h.contains("class=\"now\"") && h.contains(&s.view().revisions[0].label));
 }
 
 #[test]
 fn the_measures_offer_to_arrange_what_fits_and_say_what_is_present_or_why_not() {
     let s = street_shared(1);
-    let h = street_html(|| view! { <street_notes::Measures shared=s.clone()/> });
+    let h = street_html(|| view! { <street_notes::Measures vm=s.clone()/> });
     assert_eq!(count(&h, "<tbody>"), 3);
     assert!(count(&h, "class=\"btn m-apply\"") >= 10);
     assert!(h.contains("Arrange the street as B1 Center-Running Transit Lanes"));
     assert!(h.contains("Freeways only") && h.contains("Not modelled") && h.contains("Set at a junction"));
     assert!(h.contains("Lane arrangements along the street."));
     assert!(s.edit(|e| e.apply_measure("B3")));
-    let h = street_html(|| view! { <street_notes::Measures shared=s.clone()/> });
+    let h = street_html(|| view! { <street_notes::Measures vm=s.clone()/> });
     assert!(h.contains("This street") && !h.contains("Arrange the street as B3"));
 }
 
 #[test]
 fn nothing_selected_the_street_panel_says_how_to_begin() {
     let s = street_shared(0);
-    let h = street_html(|| view! { <street_inspector::StreetInspector shared=s.clone()/> });
+    let h = street_html(|| view! { <street_inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains("Select a piece to change its width and surface."));
 }
 
@@ -804,7 +804,7 @@ fn a_selected_piece_s_panel_has_its_width_surface_and_position() {
     let s = street_shared(0);
     let u = segment(&s, 2);
     s.edit(|e| e.select(Some(u)));
-    let h = street_html(|| view! { <street_inspector::StreetInspector shared=s.clone()/> });
+    let h = street_html(|| view! { <street_inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains(">Driving lane</h2>") && h.contains("3.3 m wide \u{b7} 3 of 6"));
     for want in ["Width", "Surface", "What it is paved with.", "Position", "Move left", "Move right", "Allowed "] {
         assert!(h.contains(want), "{want}");
@@ -818,7 +818,7 @@ fn the_end_pieces_cannot_be_moved_past_the_ends() {
     let s = street_shared(0);
     let u = segment(&s, 0);
     s.edit(|e| e.select(Some(u)));
-    let h = street_html(|| view! { <street_inspector::StreetInspector shared=s.clone()/> });
+    let h = street_html(|| view! { <street_inspector::StreetInspector vm=s.clone()/> });
     let left = h.split("Move left").next().unwrap().rsplit("<button").next().unwrap();
     assert!(left.contains("disabled"));
 }
@@ -828,13 +828,13 @@ fn a_planting_strip_is_about_planting_and_a_transit_lane_can_carry_trams() {
     let s = street_shared(1);
     let planting = s.view().segments.iter().find(|x| KINDS[x.kind].id == "planting").unwrap().uid;
     s.edit(|e| e.select(Some(planting)));
-    let h = street_html(|| view! { <street_inspector::StreetInspector shared=s.clone()/> });
+    let h = street_html(|| view! { <street_inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains(">Planting</h3>") && h.contains("What is planted in it.") && h.contains("Street trees"));
     assert!(!h.contains("Vehicle"));
     assert!(s.edit(|e| e.apply_measure("B1")));
     let bus = s.view().segments.iter().find(|x| KINDS[x.kind].id == "bus").unwrap().uid;
     s.edit(|e| e.select(Some(bus)));
-    let h = street_html(|| view! { <street_inspector::StreetInspector shared=s.clone()/> });
+    let h = street_html(|| view! { <street_inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains("Vehicle") && h.contains(">Bus</button>") && h.contains(">Tram</button>"));
 }
 
@@ -845,7 +845,7 @@ fn a_sidewalk_beside_a_bus_lane_offers_a_shelter() {
     let walk = s.view().segments.iter().find(|x| x.can_shelter).map(|x| x.uid);
     let Some(walk) = walk else { return };
     s.edit(|e| e.select(Some(walk)));
-    let h = street_html(|| view! { <street_inspector::StreetInspector shared=s.clone()/> });
+    let h = street_html(|| view! { <street_inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains("Transit stop") && h.contains("Shelter on this sidewalk"));
 }
 
@@ -854,13 +854,13 @@ fn the_rarer_settings_sit_under_one_disclosure_that_is_open_for_a_piece_with_oth
     let s = street_shared(1);
     let u = segment(&s, 3);
     s.edit(|e| e.select(Some(u)));
-    let h = street_html(|| view! { <street_inspector::StreetInspector shared=s.clone()/> });
+    let h = street_html(|| view! { <street_inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains("class=\"insp-more\"") && h.contains("More about this piece") && h.contains("Other times") && h.contains("Direction"));
     assert!(h.contains("Add other times"));
     let tag = h.split("class=\"insp-more\"").nth(1).unwrap().split('>').next().unwrap().to_string();
     assert!(!tag.contains("open"), "{tag}");
     s.edit(|e| e.add_variant(u));
-    let h = street_html(|| view! { <street_inspector::StreetInspector shared=s.clone()/> });
+    let h = street_html(|| view! { <street_inspector::StreetInspector vm=s.clone()/> });
     assert_eq!(count(&h, "class=\"var now\"") + count(&h, "class=\"var\""), 1);
     assert!(h.contains("aria-label=\"Type 1\"") && h.contains("aria-label=\"From\"") && h.contains("aria-label=\"To\""));
 }
@@ -870,11 +870,11 @@ fn a_sidewalk_has_a_curb_to_choose_and_a_driving_lane_has_none() {
     let s = street_shared(0);
     let walk = segment(&s, 0);
     s.edit(|e| e.select(Some(walk)));
-    let h = street_html(|| view! { <street_inspector::StreetInspector shared=s.clone()/> });
+    let h = street_html(|| view! { <street_inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains(">Curb</h3>") && h.contains("None (flush)") && h.contains("Granite"));
     let lane = segment(&s, 2);
     s.edit(|e| e.select(Some(lane)));
-    assert!(!street_html(|| view! { <street_inspector::StreetInspector shared=s.clone()/> }).contains(">Curb</h3>"));
+    assert!(!street_html(|| view! { <street_inspector::StreetInspector vm=s.clone()/> }).contains(">Curb</h3>"));
 }
 
 #[test]
@@ -883,7 +883,7 @@ fn the_panel_s_lengths_and_steps_follow_the_units() {
     s.set_units(Units::Feet);
     let u = segment(&s, 2);
     s.edit(|e| e.select(Some(u)));
-    let h = street_html(|| view! { <street_inspector::StreetInspector shared=s.clone()/> });
+    let h = street_html(|| view! { <street_inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains("10.8 ft wide") && h.contains("aria-label=\"Narrower by 1.0 ft\"") && h.contains("step=\"0.25\""));
     assert!(h.contains("Allowed ") && h.contains(" ft"));
 }

@@ -2,8 +2,8 @@
 // WebAssembly module (`mount_street_page`); this opens the street, keeps what
 // it makes in the city, and sets up what every page shares.
 
-import init, { Sheet, hatches, materials, mount_street_page, say } from "./pkg/cityloom_editor.js";
-import { NOT_KEPT, keeper, openCity, placeParam, regionIndex, writeCity } from "./city.js";
+import init, { Sheet, hatches, materials, mount_street_page, open_street, say } from "./pkg/cityloom_editor.js";
+import { openCity, placeParam } from "./city.js";
 import { initAccountMenu, initPanels, initRegion, initTheme, initUnits } from "./shell.js";
 
 await init();
@@ -14,7 +14,7 @@ const MATERIALS = JSON.parse(materials());
 // writes each change back; otherwise it is a sandbox on the sample streets.
 const placeId = placeParam("street");
 const city = placeId ? openCity() : null;
-const held = city?.street(placeId, regionIndex(MATERIALS.regions));
+const held = placeId ? open_street(placeId) : undefined;
 if (placeId && !held) {
   location.replace("map.html");
   await new Promise(() => {});
@@ -24,13 +24,8 @@ const sheet = held ?? new Sheet(0);
 // The hatch patterns the section and the swatches are filled with.
 document.getElementById("defs").innerHTML = `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}</defs>`;
 
-if (held) {
-  const keepSoon = keeper(
-    () => writeCity((c) => c.keep_street(placeId, sheet)),
-    () => say(NOT_KEPT),
-  );
-  sheet.on_change(keepSoon);
-}
+// What is waiting to be kept in the city is kept when the page is left.
+addEventListener("pagehide", () => sheet.flush());
 
 mount_street_page(sheet, held ? city.street_ends(placeId) : undefined);
 

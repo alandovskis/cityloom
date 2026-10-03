@@ -26,21 +26,17 @@ fn json<T: serde::Serialize>(v: &T) -> String {
     serde_json::to_string(v).expect("view serialises")
 }
 
-/// One street being edited.
+/// One street being edited. The page drives it through the components the
+/// module mounts; the script only starts it up and hands it what the shell
+/// chooses (units, region).
 #[wasm_bindgen]
-pub struct Sheet(std::rc::Rc<ui::sheet::SharedSheet>);
+pub struct Sheet(std::rc::Rc<vm::street::StreetVm>);
 
 #[wasm_bindgen]
 impl Sheet {
     #[wasm_bindgen(constructor)]
     pub fn new(sample: usize) -> Sheet {
-        Sheet(ui::sheet::SharedSheet::new(model::Editor::new(sample)))
-    }
-
-    /// Says what to call, with no arguments, after any change to this street:
-    /// the page keeps what the city holds.
-    pub fn on_change(&self, callback: js_sys::Function) {
-        self.0.set_on_change(callback);
+        Sheet(vm::street::StreetVm::new(ui::platform::browser_ports(), model::Editor::new(sample), None))
     }
 
     /// Sets the units lengths are shown in, `"m"` or `"ft"`, in the parts of the
@@ -49,144 +45,19 @@ impl Sheet {
         self.0.set_units(units::Units::parse(units));
     }
 
-    pub fn load_sample(&mut self, sample: usize) {
-        self.0.edit(|e| e.load_sample(sample))
-    }
-
-    /// The whole drawable state as JSON.
-    pub fn view(&self) -> String {
-        json(&*self.0.view())
-    }
-
-    pub fn add(&mut self, kind: usize, index: usize) -> u32 {
-        self.0.edit(|e| e.add(kind, index))
-    }
-
-    pub fn remove(&mut self, uid: u32) -> bool {
-        self.0.edit(|e| e.remove(uid))
-    }
-
-    pub fn move_to(&mut self, uid: u32, index: usize) -> bool {
-        self.0.edit(|e| e.move_to(uid, index))
-    }
-
-    pub fn set_width(&mut self, uid: u32, width_mm: i32) -> bool {
-        self.0.edit(|e| e.set_width(uid, width_mm))
-    }
-
-    pub fn nudge_width(&mut self, uid: u32, delta_mm: i32) -> bool {
-        self.0.edit(|e| e.nudge_width(uid, delta_mm))
-    }
-
-    /// Sets a piece's surface, by index into `materials().surfaces`.
-    pub fn set_material(&mut self, uid: u32, material: usize) -> bool {
-        self.0.edit(|e| e.set_material(uid, material))
-    }
-
-    /// Sets a piece's curb, by index into `materials().curbs`; -1 is none.
-    pub fn set_curb(&mut self, uid: u32, curb: i32) -> bool {
-        self.0.edit(|e| e.set_curb(uid, usize::try_from(curb).ok()))
-    }
-
-    /// Sets whether a transit lane carries trams (true) or buses.
-    pub fn set_tram(&mut self, uid: u32, tram: bool) -> bool {
-        self.0.edit(|e| e.set_tram(uid, tram))
-    }
-
-    /// Puts a shelter on a sidewalk beside a transit lane, or takes it away.
-    pub fn set_shelter(&mut self, uid: u32, shelter: bool) -> bool {
-        self.0.edit(|e| e.set_shelter(uid, shelter))
-    }
-
-    /// Sets the region, by index into `materials().regions`.
+    /// Sets the region whose materials and rules apply.
     pub fn set_region(&mut self, region: usize) -> bool {
         self.0.edit(|e| e.set_region(region))
     }
 
-    /// Sets the time of day the sheet shows, in minutes after midnight.
-    pub fn set_time(&mut self, minutes: i32) -> bool {
-        self.0.edit(|e| e.set_time(minutes))
+    /// The page is being left: what is waiting to be kept in the city is kept now.
+    pub fn flush(&self) {
+        self.0.flush();
     }
 
-    /// Gives a piece a different type at certain times.
-    pub fn add_variant(&mut self, uid: u32) -> bool {
-        self.0.edit(|e| e.add_variant(uid))
-    }
-
-    pub fn set_variant_kind(&mut self, uid: u32, index: usize, kind: usize) -> bool {
-        self.0.edit(|e| e.set_variant_kind(uid, index, kind))
-    }
-
-    /// Sets which way an other-times type runs, by index into
-    /// `materials().directions`; -1 is two-way.
-    pub fn set_variant_direction(&mut self, uid: u32, index: usize, direction: i32) -> bool {
-        self.0.edit(|e| e.set_variant_direction(uid, index, usize::try_from(direction).ok()))
-    }
-
-    /// Arranges the roadway as an Atlas lane measure, by its code (A1 to F2).
-    pub fn apply_measure(&mut self, code: &str) -> bool {
-        self.0.edit(|e| e.apply_measure(code))
-    }
-
-    pub fn set_variant_time(&mut self, uid: u32, index: usize, from_min: i32, to_min: i32) -> bool {
-        self.0.edit(|e| e.set_variant_time(uid, index, from_min, to_min))
-    }
-
-    pub fn remove_variant(&mut self, uid: u32, index: usize) -> bool {
-        self.0.edit(|e| e.remove_variant(uid, index))
-    }
-
-    /// Sets a lane's direction, by index into `materials().directions`; -1 is
-    /// two-way, allowed for a bike lane only.
-    pub fn set_direction(&mut self, uid: u32, direction: i32) -> bool {
-        self.0.edit(|e| e.set_direction(uid, usize::try_from(direction).ok()))
-    }
-
-    pub fn begin_gesture(&mut self) {
-        self.0.edit(|e| e.begin_gesture())
-    }
-
-    pub fn end_gesture(&mut self) -> bool {
-        self.0.edit(|e| e.end_gesture())
-    }
-
-    pub fn cancel_gesture(&mut self) {
-        self.0.edit(|e| e.cancel_gesture())
-    }
-
-    pub fn resize_boundary(&mut self, left_index: usize, delta_mm: i32) -> bool {
-        self.0.edit(|e| e.resize_boundary(left_index, delta_mm))
-    }
-
-    pub fn resize_edge(&mut self, uid: u32, delta_mm: i32) -> bool {
-        self.0.edit(|e| e.resize_edge(uid, delta_mm))
-    }
-
-    pub fn undo(&mut self) -> bool {
-        self.0.edit(|e| e.undo())
-    }
-
-    pub fn redo(&mut self) -> bool {
-        self.0.edit(|e| e.redo())
-    }
-
-    pub fn reset(&mut self) -> bool {
-        self.0.edit(|e| e.reset())
-    }
-
-    /// Selects a segment; 0 clears the selection.
-    pub fn select(&mut self, uid: u32) {
-        self.0.edit(|e| e.select((uid != 0).then_some(uid)))
-    }
-
-    pub fn select_relative(&mut self, delta: i32) {
-        self.0.edit(|e| e.select_relative(delta))
-    }
-
-    /// Where a dragged segment would land for a pointer `x_mm` from the
-    /// street's left edge. `exclude` is the dragged uid, or 0.
-    pub fn drop_index(&self, x_mm: f64, exclude: u32) -> usize {
-        self.0.read(|e| e.drop_index(x_mm, exclude))
+    /// The whole drawable state as JSON.
+    pub fn view(&self) -> String {
+        json(&*self.0.view_now())
     }
 }
 
@@ -329,16 +200,6 @@ impl City {
     pub fn street_ends(&self, edge: u32) -> String {
         json(&self.0.street_ends(edge))
     }
-
-    /// The street editor on one street, or nothing when there is no such street.
-    pub fn street(&self, edge: u32, region: usize) -> Option<Sheet> {
-        self.0.street_editor(edge, region).map(|e| Sheet(ui::sheet::SharedSheet::new(e)))
-    }
-
-    /// Keeps what a street editor has made of the street.
-    pub fn keep_street(&mut self, edge: u32, sheet: &Sheet) -> bool {
-        self.0.keep_street(edge, sheet.0.read(|e| e.snapshot()))
-    }
 }
 
 /// The name of a junction of the city kept in this browser; empty when there is none.
@@ -357,4 +218,15 @@ pub fn open_junction(node: u32) -> Option<Plan> {
     let junction = store.open().junction_editor(node, store.region())?;
     let place = vm::binding::Place::Junction(node);
     Some(Plan(vm::junction::JunctionVm::new(ports, junction, Some(vm::binding::CityBinding { store, place }))))
+}
+
+/// The street editor on one street of the city kept in this browser, which
+/// writes what is made back to the city. Nothing when there is no such street.
+#[wasm_bindgen]
+pub fn open_street(edge: u32) -> Option<Sheet> {
+    let ports = ui::platform::browser_ports();
+    let store = vm::city_store::CityStore::new(ports.storage.clone());
+    let street = store.open().street_editor(edge, store.region())?;
+    let place = vm::binding::Place::Street(edge);
+    Some(Sheet(vm::street::StreetVm::new(ports, street, Some(vm::binding::CityBinding { store, place }))))
 }
