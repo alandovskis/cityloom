@@ -16,6 +16,10 @@ body.home {
   right: -14vw;
   bottom: -10vh;
   pointer-events: none;
+  /* Every street, the freeway too, eases in from the card's edge instead of starting with a cut. */
+  --card-right: calc(clamp(16px, 5vw, 80px) + 780px);
+  -webkit-mask-image: linear-gradient(to right, transparent calc(var(--card-right) - 24px), #000 calc(var(--card-right) + 150px));
+  mask-image: linear-gradient(to right, transparent calc(var(--card-right) - 24px), #000 calc(var(--card-right) + 150px));
 }
 /* A backdrop: its names would be cut by the card, and nothing in it is read. */
 .hero-map #map .m-name,
@@ -161,6 +165,8 @@ body.home {
     order: 3;
     right: 0;
     bottom: 0;
+    -webkit-mask-image: none;
+    mask-image: none;
     margin: 0 8px 8px;
     border-radius: var(--r-card);
     overflow: hidden;
