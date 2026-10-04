@@ -12,7 +12,7 @@ CityLoom is a street, junction and city-map editor written in Rust, compiled to 
 just test            # cargo test --workspace + `cargo build --target wasm32-unknown-unknown --workspace` (cfg(target_arch = "wasm32") code is not compiled by plain `cargo test`)
 cargo test shell::vm # one module; a full test name also works
 just build           # release wasm of both modules + wasm-bindgen into web/pkg (gitignored); scripts/build.sh does the work
-just metro-tiles quebec-latest.osm.pbf   # cuts the metro area's roads into web/data/metro (gitignored; needs osmium-tool).Nothing needs them: without tiles every place, the default one too, comes from Overpass
+just metro-tiles quebec-latest.osm.pbf   # cuts the metro area's roads into web/data/metro (gitignored; needs osmium-tool). Nothing needs them: without tiles every place, the default one too, comes from Overpass
 just e2e             # builds, then runs the Playwright tests in e2e/; `just e2e tests/street.spec.ts` for one spec
 just check           # everything
 just format          # rustfmt (rustfmt.toml) + Prettier; `just format-check` only checks, as CI does
