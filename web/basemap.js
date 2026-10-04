@@ -21,12 +21,9 @@ async function styleFor(theme) {
   return style;
 }
 
+// Always an adapter: a map that cannot start (no style, no PMTiles reader, no WebGL) says `failed`, and the
+// module shows why, rather than the page never mounting.
 export async function createBasemap(container) {
-  const protocol = new pmtiles.Protocol();
-  addProtocol("pmtiles", protocol.tile);
-  const archive = new pmtiles.PMTiles(here(TILES));
-  protocol.add(archive);
-
   // What is said before the module listens waits for it.
   let listener = null;
   const queue = [];
@@ -35,24 +32,50 @@ export async function createBasemap(container) {
     if (listener) listener(json);
     else queue.push(json);
   };
-  archive.getHeader().then(
+  const listen = (on) => {
+    listener = on;
+    queue.splice(0).forEach(on);
+  };
+
+  let theme = themeNow();
+  let map, header;
+  try {
+    const protocol = new pmtiles.Protocol();
+    addProtocol("pmtiles", protocol.tile);
+    const archive = new pmtiles.PMTiles(here(TILES));
+    protocol.add(archive);
+    header = archive.getHeader();
+    header.catch(() => {}); // answered below, once the map has started
+    map = new MapLibreMap({
+      container,
+      style: await styleFor(theme),
+      center: [0, 0],
+      zoom: 1,
+      maxZoom: 19,
+      attributionControl: false,
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
+      keyboard: false, // the shortcuts are the page's
+    });
+  } catch (error) {
+    console.warn("The basemap could not start:", error);
+    emit({ kind: "failed" });
+    const nothing = () => {};
+    return {
+      setPlaces: nothing,
+      fit: nothing,
+      zoomBy: nothing,
+      panBy: nothing,
+      highlight: nothing,
+      setImperial: nothing,
+      listen,
+    };
+  }
+  header.then(
     (h) => emit({ kind: "ready", bounds: [h.minLon, h.minLat, h.maxLon, h.maxLat] }),
     () => emit({ kind: "failed" }),
   );
-
-  let theme = themeNow();
-  const map = new MapLibreMap({
-    container,
-    style: await styleFor(theme),
-    center: [0, 0],
-    zoom: 1,
-    maxZoom: 19,
-    attributionControl: false,
-    dragRotate: false,
-    pitchWithRotate: false,
-    touchPitch: false,
-    keyboard: false, // the shortcuts are the page's
-  });
   map.touchZoomRotate.disableRotation();
   map.addControl(new AttributionControl({ compact: true }));
   let scale = new ScaleControl({ unit: "metric" });
@@ -83,12 +106,25 @@ export async function createBasemap(container) {
     showPlaces();
   });
 
+  // `theme` is the one asked for last, `shown` the one whose style the map has.
+  let shown = theme;
   const retheme = async () => {
     const next = themeNow();
     if (next === theme) return;
     theme = next;
+    let style;
+    try {
+      style = await styleFor(next);
+    } catch (error) {
+      // The map keeps the style it has; a later flip tries again.
+      console.warn("The basemap's style could not be had:", error);
+      if (theme === next) theme = shown;
+      return;
+    }
+    if (theme !== next) return; // a newer flip is in flight and applies its own style
+    shown = next;
     styled = false;
-    map.setStyle(await styleFor(theme), { diff: false });
+    map.setStyle(style, { diff: false });
   };
   new MutationObserver(retheme).observe(document.documentElement, {
     attributes: true,
@@ -160,9 +196,6 @@ export async function createBasemap(container) {
       scale = new ScaleControl({ unit: imperial ? "imperial" : "metric" });
       map.addControl(scale, "bottom-left");
     },
-    listen(on) {
-      listener = on;
-      queue.splice(0).forEach(on);
-    },
+    listen,
   };
 }

@@ -795,8 +795,9 @@ a.btn {
   position: absolute;
   inset: 0;
 }
-/* The map is MapLibre's; a place that cannot be shown says why over it. MapLibre's own stylesheet, loaded
-   after this one, makes its container `position: relative`: this one fills the drawing all the same. */
+/* The map is MapLibre's; a place that cannot be shown says why over it. MapLibre makes its container
+   `position: relative` (`.maplibregl-map`, specificity 0,1,0); this selector (0,2,0) wins, so the map fills
+   the drawing. */
 .drawing > .basemap {
   position: absolute;
   inset: 0;
