@@ -76,7 +76,7 @@ test.describe("the home page", () => {
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/map\.html$/);
     await expect(page.locator("#title-block")).toContainText("Kreuzberg, Friedrichshain-Kreuzberg");
-    expect(await page.locator("#map-slot a[href^='street.html']").count()).toBeGreaterThan(50);
+    expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(50);
     expect(requests.some((r) => r.startsWith("https://overpass-api.de/"))).toBe(true);
   });
 
@@ -121,7 +121,7 @@ test.describe("the home page", () => {
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/map\.html$/);
     await expect(page.locator("#title-block")).toContainText("Mile End, Montréal");
-    expect(await page.locator("#map-slot a[href^='street.html']").count()).toBeGreaterThan(20);
+    expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(20);
     expect(asked).toEqual([]);
   });
 

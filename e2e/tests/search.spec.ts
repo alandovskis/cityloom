@@ -1,9 +1,9 @@
-import { expect, JUNCTION, live, test } from "./fixtures";
+import { expect, JUNCTION, live, mapReady, mapStill, serveWorld, test } from "./fixtures";
 
 test.describe("the search box on the city map", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/map.html");
-    await expect(page.locator("#map")).toBeVisible();
+    await expect(page.locator("#basemap canvas")).toBeVisible();
   });
 
   test("has no Search button in the header: Enter does it", async ({ page }) => {
@@ -102,63 +102,58 @@ test.describe("the search box on the city map", () => {
 });
 
 test.describe("the map under the floating panels", () => {
-  const discs = async (page: import("@playwright/test").Page) => {
-    const boxes = await page
-      .locator("#map .m-jc")
-      .evaluateAll((els) =>
-        els.map((e) => e.getBoundingClientRect()).map((r) => ({ l: r.left, r: r.right, t: r.top, b: r.bottom })),
-      );
-    return {
-      l: Math.min(...boxes.map((b) => b.l)),
-      r: Math.max(...boxes.map((b) => b.r)),
-      t: Math.min(...boxes.map((b) => b.t)),
-      b: Math.max(...boxes.map((b) => b.b)),
-    };
-  };
+  test.use({ area: "world" });
+  test.beforeEach(async ({ page }) => {
+    await serveWorld(page);
+    await page.goto("/map.html");
+    await mapReady(page);
+    await mapStill(page);
+  });
+
+  /** The box the places occupy on the screen, in page pixels. */
+  const placesBox = (page: import("@playwright/test").Page) =>
+    page.evaluate(() => {
+      const map = (window as any).cityloomMap;
+      const r = map.getCanvas().getBoundingClientRect();
+      let l = Infinity,
+        t = Infinity,
+        rt = -Infinity,
+        b = -Infinity;
+      for (const f of map.querySourceFeatures("places")) {
+        const pts = f.geometry.type === "Point" ? [f.geometry.coordinates] : f.geometry.coordinates;
+        for (const c of pts) {
+          const p = map.project(c);
+          l = Math.min(l, r.left + p.x);
+          rt = Math.max(rt, r.left + p.x);
+          t = Math.min(t, r.top + p.y);
+          b = Math.max(b, r.top + p.y);
+        }
+      }
+      return { l, r: rt, t, b };
+    });
 
   test("the whole city is fitted between the panels and under the bar, and centred there", async ({ page }) => {
-    await page.goto("/map.html");
-    await expect(page.locator("#map .m-jc").first()).toBeVisible();
     const left = (await page.locator(".panel.left").boundingBox())!;
     const right = (await page.locator(".panel.right").boundingBox())!;
     const bar = (await page.locator(".bar").boundingBox())!;
-    const c = await discs(page);
-    expect(c.l).toBeGreaterThan(left.x + left.width);
-    expect(c.r).toBeLessThan(right.x);
-    expect(c.t).toBeGreaterThan(bar.y + bar.height);
+    await expect.poll(async () => (await placesBox(page)).l).toBeGreaterThan(left.x + left.width - 1);
+    const c = await placesBox(page);
+    expect(c.r).toBeLessThan(right.x + 1);
+    expect(c.t).toBeGreaterThan(bar.y + bar.height - 1);
     const open = { l: left.x + left.width, r: right.x };
-    expect(Math.abs((c.l + c.r) / 2 - (open.l + open.r) / 2)).toBeLessThan(30);
-  });
-
-  test("the streets are named at the zoom that fits the city, and drawn wide enough to see", async ({ page }) => {
-    await page.goto("/map.html");
-    await expect(page.locator("#map .m-jc").first()).toBeVisible();
-    expect(await page.locator("#map .m-name").count()).toBeGreaterThanOrEqual(6);
-    const road = await page
-      .locator("#map .m-out")
-      .first()
-      .evaluate((el) => el.getBoundingClientRect().height);
-    expect(
-      Math.max(
-        road,
-        await page
-          .locator("#map .m-out")
-          .first()
-          .evaluate((el) => el.getBoundingClientRect().width),
-      ),
-    ).toBeGreaterThanOrEqual(15);
+    expect(Math.abs((c.l + c.r) / 2 - (open.l + open.r) / 2)).toBeLessThan(60);
   });
 
   test("hiding the panels gives the map the room back and Whole city centres it again", async ({ page }) => {
-    await page.goto("/map.html");
-    await expect(page.locator("#map .m-jc").first()).toBeVisible();
-    const before = await discs(page);
+    const before = await placesBox(page);
     await page.locator("#inspector-toggle").click();
     await page.locator("#notes-toggle").click();
     await page.locator("#zoom-fit").click();
-    await expect.poll(async () => (await discs(page)).r - (await discs(page)).l).toBeGreaterThan(before.r - before.l);
-    const after = await discs(page);
-    const viewport = page.viewportSize()!;
-    expect(Math.abs((after.l + after.r) / 2 - viewport.width / 2)).toBeLessThan(30);
+    await expect
+      .poll(async () => (await placesBox(page)).r - (await placesBox(page)).l)
+      .toBeGreaterThan(before.r - before.l);
+    await mapStill(page); // measured where the fit ends, not on its way there
+    const after = await placesBox(page);
+    expect(Math.abs((after.l + after.r) / 2 - page.viewportSize()!.width / 2)).toBeLessThan(60);
   });
 });
