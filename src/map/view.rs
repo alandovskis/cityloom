@@ -4,13 +4,15 @@
 use std::rc::Rc;
 
 use leptos::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use leptos::wasm_bindgen::JsCast;
-use leptos::web_sys::{Element, KeyboardEvent, PointerEvent, WheelEvent};
+#[cfg(target_arch = "wasm32")]
+use leptos::web_sys::Element;
+use leptos::web_sys::KeyboardEvent;
 
 #[cfg(target_arch = "wasm32")]
 use crate::map::camera::Insets;
-use crate::map::svg::{hot_layer, map_svg, overlay_svg};
-use crate::map::vm::{MapVm, NoteItem, PlaceRow, ResetOutcome};
+use crate::map::vm::{BasemapState, MapVm, NoteItem, PlaceRow, ResetOutcome};
 use crate::shared::bind::Bound;
 use crate::shared::tick::Tick;
 
@@ -84,17 +86,6 @@ pub fn MapTools(vm: Rc<MapVm>) -> impl IntoView {
     }
 }
 
-/// The place a pointer or the focus is on, from the nearest thing under it that names one.
-fn hot_of(target: Option<leptos::web_sys::EventTarget>) -> Option<String> {
-    target.and_then(|t| t.dyn_into::<Element>().ok()).and_then(|t| t.closest("[data-hl]").ok().flatten()).and_then(|t| t.get_attribute("data-hl"))
-}
-
-/// The window the map fills, and the point at its middle, in page pixels.
-fn window_of(el: &Element) -> (f64, f64, (f64, f64)) {
-    let r = el.get_bounding_client_rect();
-    (r.width(), r.height(), (r.left() + r.width() / 2.0, r.top() + r.height() / 2.0))
-}
-
 /// Has `observer` watch everything that floats over the map, so it fits again
 /// when a panel appears, goes or changes size.
 #[cfg(target_arch = "wasm32")]
@@ -146,52 +137,57 @@ pub(crate) fn insets_of(map: &Element) -> Insets {
     insets
 }
 
+/// What binds the page to the map: the keyboard on the map, what floats over it, and keeping the map in step
+/// with the city. The map itself is drawn by MapLibre into `#basemap`, which the page holds; this shows only
+/// why there is none when there is none.
 #[component]
 pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
-    let frame = NodeRef::<leptos::html::Div>::new();
-    // Widths that stay a few pixels wide are set in metres, so a new zoom draws again.
-    let k = Memo::new(move |_| vm.with(|v| v.camera().k));
-    let places = move || vm.with(|v| map_svg(&v.view(), k.get(), v.units()));
-    let highlight = move || vm.with(|v| hot_layer(&v.view(), k.get(), v.hot().as_deref()));
-    let overlay = move || vm.with(|v| overlay_svg(&v.scale_bar(), v.camera().height));
-
     #[cfg(target_arch = "wasm32")]
     {
         use leptos::wasm_bindgen::closure::Closure;
+        // The places follow the city and whether the map is ready; the highlight follows the pointer.
         Effect::new(move |_| {
-            let Some(el) = frame.get() else { return };
-            let el: Element = el.into();
-            let (w, h, _) = window_of(&el);
             vm.with(|v| {
-                v.set_insets(insets_of(&el));
-                v.resize(w, h);
+                v.view();
+                v.basemap_state();
             });
-            let target = el.clone();
-            let observer = Closure::<dyn FnMut(leptos::web_sys::js_sys::Array)>::new(move |_| {
-                let (w, h, _) = window_of(&target);
-                if w > 0.0 && h > 0.0 {
-                    vm.with(|v| {
-                        v.set_insets(insets_of(&target));
-                        v.resize(w, h);
-                    });
+            vm.with(|v| v.sync_places());
+        });
+        Effect::new(move |_| {
+            vm.with(|v| v.hot());
+            vm.with(|v| v.sync_highlight());
+        });
+
+        Effect::new(move |_| {
+            let Some(el) = leptos::prelude::document().get_element_by_id("basemap") else { return };
+            let key = Closure::<dyn FnMut(KeyboardEvent)>::new(move |e: KeyboardEvent| {
+                if e.meta_key() || e.ctrl_key() || e.alt_key() {
+                    return;
+                }
+                if vm.with(|v| v.press_key(&e.key())) {
+                    e.prevent_default();
                 }
             });
+            let _ = el.add_event_listener_with_callback("keydown", key.as_ref().unchecked_ref());
+            key.forget();
+            // What floats over the map is kept clear of when the places are fitted.
+            let fit = {
+                let el = el.clone();
+                move || {
+                    let r = el.get_bounding_client_rect();
+                    if r.width() > 0.0 && r.height() > 0.0 {
+                        vm.with(|v| v.set_insets(insets_of(&el)));
+                    }
+                }
+            };
+            fit();
+            let observer = Closure::<dyn FnMut(leptos::web_sys::js_sys::Array)>::new(move |_| fit());
             if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
                 o.observe(&el);
-                // Panels and bars that float over the map say so, and are watched too.
                 observe_covers(&o);
             }
             observer.forget();
-            // A drag that ends over a place must not open it.
-            let swallow = Closure::<dyn FnMut(leptos::web_sys::Event)>::new(move |e: leptos::web_sys::Event| {
-                if vm.with(|v| v.swallow_click()) {
-                    e.prevent_default();
-                    e.stop_propagation();
-                }
-            });
-            let _ = el.add_event_listener_with_callback_and_bool("click", swallow.as_ref().unchecked_ref(), true);
-            swallow.forget();
         });
         // What the other pages wrote is read again when the page is shown, and when another tab writes.
         window_event_listener(leptos::ev::storage, move |e: leptos::web_sys::StorageEvent| {
@@ -206,86 +202,31 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
         });
     }
 
-    let down = move |e: PointerEvent| {
-        if e.pointer_type() == "mouse" && e.button() != 0 {
-            return;
-        }
-        vm.with(|v| v.pointer_down(e.pointer_id(), e.client_x() as f64, e.client_y() as f64));
-    };
-    let moved = move |e: PointerEvent| {
-        let Some(el) = frame.get_untracked() else { return };
-        let el: Element = el.into();
-        let (_, _, origin) = window_of(&el);
-        if vm.with(|v| v.pointer_move(e.pointer_id(), e.client_x() as f64, e.client_y() as f64, origin)) {
-            let _ = el.set_pointer_capture(e.pointer_id());
-        }
-    };
-    let up = move |e: PointerEvent| vm.with(|v| v.pointer_up(e.pointer_id()));
-    let wheel = move |e: WheelEvent| {
-        e.prevent_default();
-        let Some(el) = frame.get_untracked() else { return };
-        let (_, _, origin) = window_of(&Element::from(el));
-        vm.with(|v| v.wheel(e.delta_y(), e.ctrl_key(), e.client_x() as f64 - origin.0, e.client_y() as f64 - origin.1));
-    };
-    let key = move |e: KeyboardEvent| {
-        if e.meta_key() || e.ctrl_key() || e.alt_key() {
-            return;
-        }
-        if vm.with(|v| v.press_key(&e.key())) {
-            e.prevent_default();
-        }
-    };
-    let hot_pointer = move |e: PointerEvent| {
-        let h = hot_of(e.target());
-        vm.with(|v| v.set_hot(h));
-    };
-    let hot_focus = move |e: leptos::web_sys::FocusEvent| {
-        let h = hot_of(e.target());
-        vm.with(|v| v.set_hot(h));
-    };
     view! {
-        <div
-            class=move || if vm.with(|v| v.panning()) { "map-view panning" } else { "map-view" }
-            id="map-view"
-            tabindex="0"
-            role="group"
-            aria-label="Map of the city, north up"
-            aria-describedby="keys"
-            node_ref=frame
-            on:pointerdown=down
-            on:pointermove=moved
-            on:pointerup=up
-            on:pointercancel=up
-            on:wheel=wheel
-            on:keydown=key
-            on:pointerover=hot_pointer
-            on:pointerleave=move |_| vm.with(|v| v.set_hot(None))
-            on:focusin=hot_focus
-            on:focusout=move |_| vm.with(|v| v.set_hot(None))
+        <p
+            class="basemap-note"
+            role="status"
+            hidden=move || !matches!(vm.with(|v| v.basemap_state()), BasemapState::Unavailable(_))
         >
-            <svg id="map" xmlns="http://www.w3.org/2000/svg" viewBox=move || vm.with(|v| v.view_box())>
-                <g inner_html=highlight></g>
-                <g inner_html=places></g>
-            </svg>
-            <svg class="map-overlay" id="map-overlay" aria-hidden="true" focusable="false" inner_html=overlay></svg>
-        </div>
+            {move || match vm.with(|v| v.basemap_state()) {
+                BasemapState::Unavailable(words) => words,
+                _ => "",
+            }}
+        </p>
     }
 }
 
-/// A key to the strips: the tint and hatch of each kind of piece in the streets.
+/// A key to what the colours of the places on the map say.
 #[component]
 pub fn Legend(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
     move || {
-        vm.with(|v| v.legend())
+        vm.with(|v| v.status_key())
             .into_iter()
             .map(|(id, name)| {
                 view! {
                     <li>
-                        <svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false">
-                            <rect class=format!("k-{id}") width="44" height="22" stroke="none"/>
-                            <rect width="44" height="22" fill=format!("url(#h-{id})") stroke="none"/>
-                        </svg>
+                        <span class=format!("dot dot-{id}") aria-hidden="true"></span>
                         {name}
                     </li>
                 }

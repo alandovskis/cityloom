@@ -1,8 +1,7 @@
 //! The city map page: the whole city drawn as a map to pan, zoom and choose a
-//! street or junction from. Its view-model, camera, gestures and views live together.
+//! street or junction from. Its view-model, camera and views live together.
 
 pub mod camera;
-pub mod gestures;
 pub mod home;
 pub mod overlay;
 pub mod projection;

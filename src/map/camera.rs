@@ -1,8 +1,6 @@
 //! Where the map is looked at from, and how far in: a camera on the city drawn in
 //! metres. It knows nothing of the page except the size of the window it fills.
 
-use crate::shared::units::Units;
-
 /// How far in a person may zoom, as multiples of the zoom that fits the city.
 const ZOOM_OUT: f64 = 0.8;
 const ZOOM_IN: f64 = 10.0;
@@ -142,23 +140,6 @@ impl Camera {
         let r2 = |n: f64| (n * 100.0).round() / 100.0;
         format!("{} {} {} {}", r2(self.cx - w / 2.0), r2(self.cy - h / 2.0), r2(w), r2(h))
     }
-
-    /// A scale bar that fits in 170 px, of a round length in the units shown.
-    pub fn scale_bar(&self, units: Units) -> ScaleBar {
-        let (per_unit, options): (f64, &[i32]) = match units {
-            Units::Metres => (self.k, &[10, 20, 50, 100, 200, 500, 1000]),
-            Units::Feet => (self.k * 0.3048, &[50, 100, 200, 500, 1000, 2000, 5000]),
-        };
-        let length = options.iter().copied().filter(|n| *n as f64 * per_unit <= 170.0).last().unwrap_or(options[0]);
-        ScaleBar { length, width_px: length as f64 * per_unit, unit: units.word() }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ScaleBar {
-    pub length: i32,
-    pub width_px: f64,
-    pub unit: &'static str,
 }
 
 #[cfg(test)]
@@ -295,27 +276,5 @@ mod tests {
         let vb: Vec<f64> = c.view_box().split(' ').map(|n| n.parse().unwrap()).collect();
         assert!((vb[2] - 800.0 / c.k).abs() < 0.01 && (vb[3] - 520.0 / c.k).abs() < 0.01);
         assert!((vb[0] + vb[2] / 2.0 - c.cx).abs() < 0.01);
-    }
-
-    #[test]
-    fn the_scale_bar_is_the_longest_round_length_that_fits_in_the_window_s_corner() {
-        let mut c = Camera::new(city(), 800.0, 520.0);
-        c.k = 1.0;
-        assert_eq!(c.scale_bar(Units::Metres), ScaleBar { length: 100, width_px: 100.0, unit: "m" });
-        c.k = 10.0;
-        assert_eq!(c.scale_bar(Units::Metres).length, 10);
-        c.k = 0.01;
-        assert_eq!(c.scale_bar(Units::Metres).length, 1000);
-        c.k = 1.0;
-        let ft = c.scale_bar(Units::Feet);
-        assert_eq!((ft.length, ft.unit), (500, "ft"));
-        assert!((ft.width_px - 500.0 * 0.3048).abs() < 1e-9);
-    }
-
-    #[test]
-    fn a_scale_that_fits_nothing_still_shows_the_shortest_bar() {
-        let mut c = Camera::new(city(), 800.0, 520.0);
-        c.k = 100.0;
-        assert_eq!(c.scale_bar(Units::Metres).length, 10);
     }
 }

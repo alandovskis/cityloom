@@ -2,18 +2,19 @@
 //! attention and what has changed, where the camera is, and what pressing
 //! "start over" means. The view binds to its properties and sends it commands.
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::cell::Cell;
+use std::rc::{Rc, Weak};
 
 use leptos::prelude::*;
 
 use crate::city::model::{City, CityView, EdgeView, NodeView};
 use crate::city::store::CityStore;
-use crate::map::camera::{Camera, Insets, ScaleBar, World};
-use crate::map::gestures::{MapGestures, Moved};
-use crate::shared::catalogue::KINDS;
+use crate::map::camera::{Camera, Insets, World};
+use crate::map::overlay;
+use crate::map::projection::Projection;
+use crate::map::style;
 use crate::shared::core::{Core, Presents};
-use crate::shared::ports::Ports;
+use crate::shared::ports::{MapEvent, Ports};
 use crate::shared::units::Units;
 
 pub const ARMED_RESET: &str = "Press again to start over";
@@ -25,6 +26,32 @@ const DONE_SAID: &str = "The city is back as it was first laid out.";
 const ZOOM_STEP: f64 = 1.4;
 /// How far an arrow key pans, in pixels.
 const PAN_PX: f64 = 80.0;
+
+/// What the map page says where it has no map to show.
+pub const MISSING: &str = "The basemap could not be loaded. Build it with `just basemap-tiles`, then reload the page.";
+pub const OUTSIDE: &str = "There is no basemap for this place. The map covers the Montréal area.";
+pub const NO_ROADS: &str = "The roads of this place could not be loaded, so there is no map to show.";
+
+/// Whether the basemap is there to draw the places on.
+#[derive(Clone, Debug, PartialEq)]
+pub enum BasemapState {
+    /// Asked for; the tiles have not answered.
+    Waiting,
+    Ready,
+    /// There will be no map, for the reason in these words.
+    Unavailable(&'static str),
+}
+
+/// The place a `hot` name (`s-7`, `j-3`) opens.
+fn href_of(hot: &str) -> Option<String> {
+    let (kind, uid) = hot.split_once('-')?;
+    let uid: u32 = uid.parse().ok()?;
+    match kind {
+        "s" => Some(street_href(uid)),
+        "j" => Some(junction_href(uid)),
+        _ => None,
+    }
+}
 
 struct CityModel {
     city: City,
@@ -121,12 +148,13 @@ pub enum ResetOutcome {
 }
 
 pub struct MapVm {
+    me: Weak<MapVm>,
     core: Core<CityModel>,
     store: CityStore,
     ports: Ports,
     camera: ArcRwSignal<Camera>,
-    gestures: RefCell<MapGestures>,
-    panning: ArcRwSignal<bool>,
+    basemap: ArcRwSignal<BasemapState>,
+    moved: Cell<bool>,
     hot: ArcRwSignal<Option<String>>,
     armed: ArcRwSignal<bool>,
     search: ArcRwSignal<String>,
@@ -140,13 +168,15 @@ impl MapVm {
         let model = CityModel { city: store.open(), region: store.region() };
         let core = Core::new(model);
         let world = World::round(core.view_now().bounds_mm);
-        Rc::new(MapVm {
+        let basemap = if store.area().is_some() { BasemapState::Waiting } else { BasemapState::Unavailable(NO_ROADS) };
+        Rc::new_cyclic(|me| MapVm {
+            me: me.clone(),
             core,
             store,
             ports,
             camera: ArcRwSignal::new(Camera::new(world, 800.0, 520.0)),
-            gestures: RefCell::new(MapGestures::default()),
-            panning: ArcRwSignal::new(false),
+            basemap: ArcRwSignal::new(basemap),
+            moved: Cell::new(false),
             hot: ArcRwSignal::new(None),
             armed: ArcRwSignal::new(false),
             search: ArcRwSignal::new(String::new()),
@@ -393,12 +423,6 @@ impl MapVm {
         }
     }
 
-    /// The kinds of piece the streets are made of, in the order the catalogue lists them.
-    pub fn legend(&self) -> Vec<(&'static str, &'static str)> {
-        let v = self.view();
-        KINDS.iter().filter(|k| v.edges.iter().any(|e| e.pieces.iter().any(|p| p.kind == k.id))).map(|k| (k.id, k.name)).collect()
-    }
-
     pub fn can_reset(&self) -> bool {
         self.view().edited > 0
     }
@@ -415,24 +439,12 @@ impl MapVm {
         self.camera.get().view_box()
     }
 
-    pub fn scale_bar(&self) -> ScaleBar {
-        self.camera.get().scale_bar(self.units())
-    }
-
-    pub fn panning(&self) -> bool {
-        self.panning.get()
-    }
-
     /// The place the pointer or the focus is on, which the map and the lists show together.
     pub fn hot(&self) -> Option<String> {
         self.hot.get()
     }
 
     // ---- commands ----
-
-    pub fn set_units(&self, units: Units) {
-        self.core.set_units(units);
-    }
 
     pub fn set_hot(&self, hot: Option<String>) {
         if self.hot.get_untracked() != hot {
@@ -465,74 +477,140 @@ impl MapVm {
         self.update_camera(|c| c.resize(width, height));
     }
 
-    /// What floats over the map, in pixels from each edge: the whole city is fitted in what is left.
+    // ---- the map ----
+
+    pub fn basemap_state(&self) -> BasemapState {
+        self.basemap.get()
+    }
+
+    /// Where the city lies on the earth: known once its area's roads are, never for the sample city.
+    pub fn projection(&self) -> Option<Projection> {
+        let area = self.store.area()?;
+        let origin = self.core.view_now().origin_m?;
+        Some(Projection::new(area.bounds(), origin))
+    }
+
+    /// Listens to what the map says, and tells it the units. Called once, by the page that has a map.
+    pub fn attach(&self) {
+        let me = self.me.clone();
+        self.ports.mapper.listen(Box::new(move |event| {
+            if let Some(vm) = me.upgrade() {
+                vm.on_map_event(event);
+            }
+        }));
+        self.ports.mapper.set_imperial(matches!(self.core.units(), Units::Feet));
+    }
+
+    fn on_map_event(&self, event: MapEvent) {
+        match event {
+            MapEvent::Ready { bounds } => self.tiles_ready(bounds),
+            MapEvent::Failed => self.give_up(MISSING),
+            MapEvent::Pick { hot } => {
+                if let Some(href) = href_of(&hot) {
+                    self.ports.navigator.go(&href);
+                }
+            }
+            MapEvent::Hover { hot } => self.set_hot(hot),
+            MapEvent::Moved => self.moved.set(true),
+        }
+    }
+
+    /// There will be no map, unless the page never had one to wait for (which has said why already).
+    fn give_up(&self, words: &'static str) {
+        if self.store.area().is_some() {
+            self.basemap.set(BasemapState::Unavailable(words));
+        }
+    }
+
+    fn tiles_ready(&self, [west, south, east, north]: [f64; 4]) {
+        let Some(area) = self.store.area() else { return };
+        if !(west..=east).contains(&area.lon) || !(south..=north).contains(&area.lat) {
+            return self.give_up(OUTSIDE);
+        }
+        self.basemap.set(BasemapState::Ready);
+        self.sync_places();
+        self.fit();
+    }
+
+    /// Sends the places to the map, once there is a map to show them on.
+    pub fn sync_places(&self) {
+        let (Some(projection), Some(area)) = (self.projection(), self.store.area()) else { return };
+        if self.basemap.get_untracked() != BasemapState::Ready {
+            return;
+        }
+        self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&self.core.view_now(), &projection));
+    }
+
+    /// Sends the place the pointer or the focus is on to the map.
+    pub fn sync_highlight(&self) {
+        self.ports.mapper.highlight(self.hot.get_untracked().as_deref());
+    }
+
+    /// Fits the places in what the panels leave of the map, and gives the view back to the page.
+    pub fn fit(&self) {
+        self.moved.set(false);
+        let Some(projection) = self.projection() else { return };
+        if self.basemap.get_untracked() != BasemapState::Ready {
+            return;
+        }
+        let Some(bounds) = overlay::bounds(&self.core.view_now(), &projection) else { return };
+        let i = self.camera.get_untracked().insets;
+        self.ports.mapper.fit(bounds, [i.top, i.right, i.bottom, i.left]);
+    }
+
+    /// The colours the places are drawn in, and what each says.
+    pub fn status_key(&self) -> Vec<(&'static str, &'static str)> {
+        vec![("ok", "Works"), ("changed", "Changed"), ("bad", "Needs attention")]
+    }
+
+    /// What floats over the map, in pixels from each edge: the whole city is fitted in what is left, until
+    /// the person moves the map themselves.
     pub fn set_insets(&self, insets: Insets) {
         self.update_camera(|c| c.set_insets(insets));
+        if !self.moved.get() {
+            self.fit();
+        }
+    }
+
+    pub fn set_units(&self, units: Units) {
+        self.core.set_units(units);
+        self.ports.mapper.set_imperial(matches!(units, Units::Feet));
     }
 
     pub fn zoom_in(&self) {
-        self.update_camera(|c| c.zoom_by(ZOOM_STEP));
+        self.moved.set(true);
+        self.ports.mapper.zoom_by(ZOOM_STEP);
     }
 
     pub fn zoom_out(&self) {
-        self.update_camera(|c| c.zoom_by(1.0 / ZOOM_STEP));
+        self.moved.set(true);
+        self.ports.mapper.zoom_by(1.0 / ZOOM_STEP);
     }
 
+    fn pan(&self, dx: f64, dy: f64) {
+        self.moved.set(true);
+        self.ports.mapper.pan_by(dx, dy);
+    }
+
+    /// The whole city fits the window again: the hero's camera, and the map.
     pub fn fit_camera(&self) {
         self.update_camera(|c| c.fit());
-    }
-
-    /// A turn of the wheel at a point (pixels from the window's middle); a pinch on
-    /// a trackpad comes as a wheel with Ctrl held, and is finer.
-    pub fn wheel(&self, delta_y: f64, ctrl: bool, sx: f64, sy: f64) {
-        self.update_camera(|c| c.zoom_at(c.k * (-delta_y * if ctrl { 0.01 } else { 0.0015 }).exp(), sx, sy));
+        self.fit();
     }
 
     /// What a key does to the map; says whether the key was one of its own.
     pub fn press_key(&self, key: &str) -> bool {
         match key {
-            "ArrowLeft" => self.update_camera(|c| c.pan_by(-PAN_PX, 0.0)),
-            "ArrowRight" => self.update_camera(|c| c.pan_by(PAN_PX, 0.0)),
-            "ArrowUp" => self.update_camera(|c| c.pan_by(0.0, -PAN_PX)),
-            "ArrowDown" => self.update_camera(|c| c.pan_by(0.0, PAN_PX)),
+            "ArrowLeft" => self.pan(-PAN_PX, 0.0),
+            "ArrowRight" => self.pan(PAN_PX, 0.0),
+            "ArrowUp" => self.pan(0.0, -PAN_PX),
+            "ArrowDown" => self.pan(0.0, PAN_PX),
             "+" | "=" => self.zoom_in(),
             "-" | "_" => self.zoom_out(),
             "0" => self.fit_camera(),
             _ => return false,
         }
         true
-    }
-
-    pub fn pointer_down(&self, id: i32, x: f64, y: f64) {
-        let camera = self.camera.get_untracked();
-        self.gestures.borrow_mut().down(&camera, id, x, y);
-    }
-
-    /// A pointer moved; `origin` is the middle of the window in page pixels.
-    /// Says whether a drag has just begun, so that the view can take hold of the pointer.
-    pub fn pointer_move(&self, id: i32, x: f64, y: f64, origin: (f64, f64)) -> bool {
-        let mut camera = self.camera.get_untracked();
-        let moved = self.gestures.borrow_mut().moved(&mut camera, id, x, y, origin);
-        if moved != Moved::Nothing {
-            self.camera.set(camera);
-        }
-        let panning = self.gestures.borrow().panning();
-        if self.panning.get_untracked() != panning {
-            self.panning.set(panning);
-        }
-        moved == Moved::StartedPanning
-    }
-
-    pub fn pointer_up(&self, id: i32) {
-        self.gestures.borrow_mut().up(id);
-        if self.panning.get_untracked() {
-            self.panning.set(false);
-        }
-    }
-
-    /// Whether a click is the end of a drag, and so is not to open a place.
-    pub fn swallow_click(&self) -> bool {
-        self.gestures.borrow_mut().swallow_click()
     }
 
     /// "Start over" undoes every change in the whole city and cannot itself be
@@ -579,7 +657,10 @@ impl crate::shell::Target for MapVm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::ports::{MemoryStorage, RecordingAnnouncer, test_ports};
+    use crate::map::camera::Insets;
+    use crate::place::area::Area;
+    use crate::shared::ports::{FakeMapper, MapCall, MapEvent, MemoryStorage, Ports, RecordingAnnouncer, RecordingNavigator, test_ports};
+    use osm_network::{Control, Lane, LaneKind, Network, Node, Road, Way};
 
     fn vm() -> (Rc<MapVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         let (ports, said, storage) = test_ports();
@@ -825,16 +906,6 @@ mod tests {
     }
 
     #[test]
-    fn the_legend_lists_the_kinds_the_streets_are_made_of_in_catalogue_order() {
-        let (vm, ..) = vm();
-        let legend = vm.legend();
-        assert!(!legend.is_empty());
-        let positions: Vec<usize> = legend.iter().map(|(id, _)| KINDS.iter().position(|k| k.id == *id).unwrap()).collect();
-        assert!(positions.windows(2).all(|w| w[0] < w[1]));
-        assert!(legend.iter().any(|(id, name)| *id == "sidewalk" && *name == "Sidewalk"));
-    }
-
-    #[test]
     fn start_over_asks_to_be_pressed_twice_and_then_puts_the_city_back() {
         let (vm, said, storage) = vm();
         assert!(!vm.can_reset());
@@ -885,66 +956,170 @@ mod tests {
         assert_eq!(vm.hot(), None);
     }
 
+    /// A city of one street that bends, kept for an area that the page opens.
+    fn area_vm() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<MemoryStorage>) {
+        let (ports, _, storage) = test_ports();
+        let area = Area::new("Bendville", 45.5, -73.6);
+        let node = |id, x_m, y_m| Node { id, osm_nodes: vec![id as i64], x_m, y_m, junction: false, control: Control::None };
+        let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0 };
+        let network = Network {
+            left_hand: false,
+            nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
+            roads: vec![Road {
+                id: 1,
+                osm_ways: vec![7],
+                name: Some("Bend Street".into()),
+                highway: "residential".into(),
+                from: 1,
+                to: 2,
+                lanes: vec![lane(Way::Forward), lane(Way::Backward)],
+                points: vec![(0.0, 0.0), (80.0, 0.0), (100.0, 50.0)],
+            }],
+        };
+        assert!(CityStore::for_area(storage.clone(), area.clone()).keep_network(&network));
+        assert!(CityStore::choose(&*storage, &area));
+        let (mapper, navigator) = (Rc::new(FakeMapper::default()), Rc::new(RecordingNavigator::default()));
+        let ports = Ports { mapper: mapper.clone(), navigator: navigator.clone(), ..ports };
+        let vm = MapVm::new(ports);
+        vm.attach();
+        mapper.take(); // the scale's units, said when it attached
+        (vm, mapper, navigator, storage)
+    }
+
+    /// Tiles that cover the area `area_vm` opens.
+    const COVERING: MapEvent = MapEvent::Ready { bounds: [-74.0, 45.0, -73.0, 46.0] };
+
     #[test]
-    fn the_camera_follows_the_window_and_the_buttons_and_keys() {
+    fn a_page_on_the_sample_city_has_no_map_and_says_why() {
         let (vm, ..) = vm();
-        vm.resize(1000.0, 600.0);
-        let fit = vm.camera();
-        assert_eq!((fit.width, fit.height), (1000.0, 600.0));
+        assert_eq!(vm.basemap_state(), BasemapState::Unavailable(NO_ROADS));
+        assert!(vm.projection().is_none());
+    }
+
+    #[test]
+    fn the_map_waits_for_the_tiles_and_then_shows_the_places_and_fits_them() {
+        let (vm, mapper, ..) = area_vm();
+        assert_eq!(vm.basemap_state(), BasemapState::Waiting);
+        assert!(mapper.take().is_empty(), "nothing is shown before the tiles are there");
+        mapper.say(COVERING);
+        assert_eq!(vm.basemap_state(), BasemapState::Ready);
+        let calls = mapper.take();
+        assert!(matches!(&calls[0], MapCall::Places { layers, data } if layers.contains("places-street") && data.contains("\"s-1\"")), "{calls:?}");
+        assert!(matches!(&calls[1], MapCall::Fit { bounds, insets } if bounds[0] < bounds[2] && bounds[1] < bounds[3] && *insets == [0.0; 4]), "{calls:?}");
+    }
+
+    #[test]
+    fn tiles_that_do_not_cover_the_area_say_so_and_show_nothing() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(MapEvent::Ready { bounds: [10.0, 50.0, 11.0, 51.0] });
+        assert_eq!(vm.basemap_state(), BasemapState::Unavailable(OUTSIDE));
+        assert!(mapper.take().is_empty());
+        vm.sync_places();
+        assert!(mapper.take().is_empty(), "still nothing, though asked");
+    }
+
+    #[test]
+    fn tiles_that_could_not_be_had_say_so() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(MapEvent::Failed);
+        assert_eq!(vm.basemap_state(), BasemapState::Unavailable(MISSING));
+    }
+
+    #[test]
+    fn pressing_a_place_opens_it_and_the_pointer_over_one_makes_it_hot() {
+        let (vm, mapper, navigator, _) = area_vm();
+        mapper.say(MapEvent::Pick { hot: "s-1".into() });
+        mapper.say(MapEvent::Pick { hot: "j-3".into() });
+        mapper.say(MapEvent::Pick { hot: "nonsense".into() });
+        assert_eq!(navigator.take(), vec!["street.html?street=1".to_string(), "intersection.html?junction=3".to_string()]);
+        mapper.say(MapEvent::Hover { hot: Some("s-1".into()) });
+        assert_eq!(vm.hot().as_deref(), Some("s-1"));
+        mapper.say(MapEvent::Hover { hot: None });
+        assert_eq!(vm.hot(), None);
+    }
+
+    #[test]
+    fn the_hot_place_is_sent_to_the_map() {
+        let (vm, mapper, ..) = area_vm();
+        vm.set_hot(Some("s-1".into()));
+        vm.sync_highlight();
+        vm.set_hot(None);
+        vm.sync_highlight();
+        assert_eq!(mapper.take(), vec![MapCall::Highlight(Some("s-1".into())), MapCall::Highlight(None)]);
+    }
+
+    #[test]
+    fn the_buttons_and_keys_move_the_map_through_the_port() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(COVERING);
+        mapper.take();
         vm.zoom_in();
-        assert!((vm.camera().k - fit.k * 1.4).abs() < 1e-9);
         vm.zoom_out();
-        assert!((vm.camera().k - fit.k).abs() < 1e-9);
-        assert!(vm.press_key("+") && vm.camera().k > fit.k);
-        assert!(vm.press_key("0") && vm.camera().k == vm.camera().fit_k && !vm.camera().moved);
-        let cx = vm.camera().cx;
-        assert!(vm.press_key("ArrowRight") && vm.camera().cx > cx);
+        assert!(vm.press_key("+") && vm.press_key("=") && vm.press_key("-") && vm.press_key("_"));
+        assert!(vm.press_key("ArrowLeft") && vm.press_key("ArrowRight") && vm.press_key("ArrowUp") && vm.press_key("ArrowDown"));
         assert!(!vm.press_key("a"));
-        vm.fit_camera();
-        assert_eq!(vm.camera().cx, cx);
+        assert!(vm.press_key("0"));
+        let calls = mapper.take();
+        let (zin, zout) = (1.4, 1.0 / 1.4);
+        assert_eq!(
+            calls[..10],
+            [
+                MapCall::Zoom(zin),
+                MapCall::Zoom(zout),
+                MapCall::Zoom(zin),
+                MapCall::Zoom(zin),
+                MapCall::Zoom(zout),
+                MapCall::Zoom(zout),
+                MapCall::Pan(-80.0, 0.0),
+                MapCall::Pan(80.0, 0.0),
+                MapCall::Pan(0.0, -80.0),
+                MapCall::Pan(0.0, 80.0),
+            ]
+        );
+        assert!(matches!(calls[10], MapCall::Fit { .. }), "{calls:?}");
     }
 
     #[test]
-    fn the_wheel_zooms_about_the_pointer_and_finer_with_control() {
+    fn the_places_are_fitted_in_what_floats_over_the_map_until_the_person_moves_it() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(COVERING);
+        mapper.take();
+        vm.set_insets(Insets { left: 100.0, top: 50.0, right: 20.0, bottom: 10.0 });
+        assert!(matches!(mapper.take()[..], [MapCall::Fit { insets, .. }] if insets == [50.0, 20.0, 10.0, 100.0]), "top, right, bottom, left");
+        mapper.say(MapEvent::Moved);
+        vm.set_insets(Insets { left: 200.0, ..Insets::default() });
+        assert!(mapper.take().is_empty(), "the person's view is kept");
+        vm.fit_camera();
+        assert!(matches!(mapper.take()[..], [MapCall::Fit { insets, .. }] if insets == [0.0, 0.0, 0.0, 200.0]));
+        vm.set_insets(Insets::default());
+        assert_eq!(mapper.take().len(), 1, "fitting gave the view back to the page");
+    }
+
+    #[test]
+    fn the_units_are_told_to_the_scale() {
+        let (vm, mapper, ..) = area_vm();
+        vm.set_units(Units::Feet);
+        assert_eq!(mapper.take(), vec![MapCall::Imperial(true)]);
+        vm.set_units(Units::Metres);
+        assert_eq!(mapper.take(), vec![MapCall::Imperial(false)]);
+    }
+
+    #[test]
+    fn the_key_says_what_the_colours_of_the_places_mean() {
         let (vm, ..) = vm();
-        let k0 = vm.camera().k;
-        vm.wheel(-100.0, false, 0.0, 0.0);
-        let plain = vm.camera().k / k0;
-        vm.fit_camera();
-        vm.wheel(-100.0, true, 0.0, 0.0);
-        let ctrl = vm.camera().k / k0;
-        assert!((plain - (0.15f64).exp()).abs() < 1e-9 && (ctrl - 1.0f64.exp()).abs() < 1e-9);
-        vm.wheel(10_000.0, false, 0.0, 0.0);
-        assert!(vm.camera().k < k0);
+        assert_eq!(vm.status_key(), vec![("ok", "Works"), ("changed", "Changed"), ("bad", "Needs attention")]);
     }
 
     #[test]
-    fn the_view_box_and_scale_bar_follow_the_camera_and_the_units() {
+    fn the_hero_camera_follows_the_window_and_the_view_box_follows_it() {
         let (vm, ..) = vm();
         let o = Owner::new();
         o.set();
+        vm.resize(1000.0, 600.0);
+        let fit = vm.camera();
+        assert_eq!((fit.width, fit.height), (1000.0, 600.0));
         let before = vm.view_box();
-        vm.zoom_in();
+        vm.resize(500.0, 600.0);
         assert_ne!(vm.view_box(), before);
-        let m = vm.scale_bar();
-        assert_eq!(m.unit, "m");
-        vm.set_units(Units::Feet);
-        assert_eq!(vm.scale_bar().unit, "ft");
-    }
-
-    #[test]
-    fn a_drag_pans_the_map_and_the_click_that_ends_it_is_swallowed() {
-        let (vm, ..) = vm();
-        let c0 = vm.camera();
-        vm.pointer_down(1, 100.0, 100.0);
-        assert!(!vm.pointer_move(1, 102.0, 100.0, (400.0, 260.0)), "too short to be a drag");
-        assert!(vm.pointer_move(1, 160.0, 100.0, (400.0, 260.0)), "a drag begins");
-        assert!(vm.panning());
-        assert!(!vm.pointer_move(1, 170.0, 100.0, (400.0, 260.0)));
-        assert!(vm.camera().cx < c0.cx);
-        vm.pointer_up(1);
-        assert!(!vm.panning());
-        assert!(vm.swallow_click());
-        assert!(!vm.swallow_click());
     }
 }

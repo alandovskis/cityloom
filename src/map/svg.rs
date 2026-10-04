@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use crate::city::model::{CityView, EdgeView, NodeView};
-use crate::map::camera::ScaleBar;
 use crate::map::vm::{junction_label, street_label};
 use crate::shared::symbols::HATCH;
 use crate::shared::units::Units;
@@ -106,35 +105,6 @@ fn badge(x: f64, y: f64, px: &dyn Fn(f64) -> f64) -> String {
         r2(px(6.0)),
         r2(px(2.0))
     )
-}
-
-/// The place the pointer or the focus is on, outlined under everything else.
-pub fn hot_layer(v: &CityView, k: f64, hot: Option<&str>) -> String {
-    let Some(hot) = hot else { return String::new() };
-    let px = |n: f64| n / k;
-    let nodes: HashMap<u32, &NodeView> = v.nodes.iter().map(|n| (n.uid, n)).collect();
-    if let Some(uid) = hot.strip_prefix("s-").and_then(|u| u.parse::<u32>().ok()) {
-        if let Some((e, g)) = v.edges.iter().find(|e| e.uid == uid).and_then(|e| Geometry::of(e, &nodes).map(|g| (e, g))) {
-            return format!(
-                "<line id=\"hl-s-{}\" class=\"m-hl on\" {} stroke-width=\"{}\"/>",
-                e.uid,
-                g.line(0.0, 0.0, g.len),
-                r2(e.row_mm as f64 / 1000.0 + px(14.0))
-            );
-        }
-    }
-    if let Some(uid) = hot.strip_prefix("j-").and_then(|u| u.parse::<u32>().ok()) {
-        if let Some(n) = v.nodes.iter().find(|n| n.uid == uid && n.junction) {
-            return format!(
-                "<circle id=\"hl-j-{}\" class=\"m-hl on\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>",
-                n.uid,
-                n.x_mm as f64 / 1000.0,
-                n.y_mm as f64 / 1000.0,
-                r2(n.radius_mm as f64 / 1000.0 + px(8.0))
-            );
-        }
-    }
-    String::new()
 }
 
 /// The whole map at zoom `k` (pixels to the metre).
@@ -282,30 +252,6 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
         .unwrap();
     }
     s
-}
-
-/// North and the scale bar are drawn on the window, not on the map, so they keep their size.
-pub fn overlay_svg(bar: &ScaleBar, height: f64) -> String {
-    let (x, y) = (20.0, height - 34.0);
-    let block = bar.width_px / 5.0;
-    let blocks: String = (0..5)
-        .map(|i| {
-            format!(
-                "<rect class=\"{}\" x=\"{}\" y=\"{y}\" width=\"{}\" height=\"7\"/>",
-                if i % 2 == 1 { "sb-paper" } else { "sb-ink" },
-                r2(x + block * i as f64),
-                r2(block)
-            )
-        })
-        .collect();
-    format!(
-        "<g class=\"north\" transform=\"translate(24 22)\"><path d=\"M0 -12 L7 10 L0 5 L-7 10 Z\"/><text y=\"26\" text-anchor=\"middle\">N</text></g><g class=\"scale\">{blocks}<text x=\"{x}\" y=\"{}\">0</text><text x=\"{}\" y=\"{}\" text-anchor=\"end\">{} {}</text></g>",
-        y - 6.0,
-        r2(x + bar.width_px),
-        y - 6.0,
-        bar.length,
-        bar.unit
-    )
 }
 
 #[cfg(test)]
@@ -472,30 +418,6 @@ mod tests {
         for none in ["m-bad", "m-badge", "changed"] {
             assert!(!s.contains(none), "{none}");
         }
-    }
-
-    #[test]
-    fn the_hot_place_is_outlined_in_its_own_layer_and_nothing_is_when_none_is() {
-        let v = view();
-        let e = v.edges[0].uid;
-        let n = v.nodes.iter().find(|n| n.junction).unwrap().uid;
-        assert_eq!(hot_layer(&v, 1.0, None), "");
-        let st = hot_layer(&v, 1.0, Some(&format!("s-{e}")));
-        assert!(st.starts_with(&format!("<line id=\"hl-s-{e}\" class=\"m-hl on\"")));
-        let jn = hot_layer(&v, 1.0, Some(&format!("j-{n}")));
-        assert!(jn.starts_with(&format!("<circle id=\"hl-j-{n}\" class=\"m-hl on\"")));
-        assert_eq!(hot_layer(&v, 1.0, Some("s-99999")), "");
-        assert_eq!(hot_layer(&v, 1.0, Some("x-1")), "");
-        assert!(!map_svg(&v, 1.0, Units::Metres).contains("m-hl"));
-    }
-
-    #[test]
-    fn the_scale_bar_and_north_are_drawn_on_the_window() {
-        let bar = ScaleBar { length: 100, width_px: 150.0, unit: "m" };
-        let s = overlay_svg(&bar, 520.0);
-        assert_eq!(count(&s, "class=\"sb-ink\"") + count(&s, "class=\"sb-paper\""), 5);
-        assert!(s.contains("class=\"north\"") && s.contains(">100 m</text>") && s.contains(">0</text>"));
-        assert!(s.contains("y=\"486\""));
     }
 
     #[test]

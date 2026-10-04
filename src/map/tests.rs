@@ -5,7 +5,6 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::shared::testing::{button_tag, count, html};
-use crate::shared::units::Units;
 // ---- the city map ---------------------------------------------------------------------------
 
 use crate::city::store::CityStore;
@@ -66,44 +65,22 @@ fn the_map_tools_zoom_in_out_and_to_the_whole_city() {
 }
 
 #[test]
-fn the_map_is_a_labelled_group_holding_every_place_as_a_link_and_a_scale_bar() {
-    let (vm, _) = map_vm();
+fn a_map_page_with_nothing_to_show_says_why() {
+    let (vm, _) = map_vm(); // the sample city: no roads of a place, so no map
     let h = map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
-    assert!(h.contains("id=\"map-view\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Map of the city, north up\""));
-    assert!(h.contains("viewBox=\""));
-    assert_eq!(count(&h, "class=\"place\""), 9 + 23);
-    assert!(h.contains("class=\"sb-ink\"") && h.contains("class=\"north\""));
-    assert!(!h.contains("m-hl"), "nothing is hot");
-    assert!(!h.contains("panning"));
+    assert!(h.contains("role=\"status\"") && h.contains("The roads of this place could not be loaded"), "{h}");
+    assert!(!h.contains("hidden"), "{h}");
 }
 
 #[test]
-fn the_place_the_pointer_is_on_is_outlined_on_the_map() {
-    let (vm, _) = map_vm();
-    let e = vm.view().edges[0].uid;
-    vm.set_hot(Some(format!("s-{e}")));
-    let h = map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
-    assert_eq!(count(&h, "class=\"m-hl on\""), 1);
-    assert!(h.contains(&format!("id=\"hl-s-{e}\"")));
-}
-
-#[test]
-fn the_map_follows_the_zoom_and_the_units() {
-    let (vm, _) = map_vm();
-    let before = map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
-    vm.zoom_in();
-    let after = map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
-    assert_ne!(before, after);
-    vm.set_units(Units::Feet);
-    assert!(map_html(|| view! { <map_ui::MapView vm=vm.clone()/> }).contains(" ft</text>"));
-}
-
-#[test]
-fn the_key_lists_what_the_streets_are_made_of() {
+fn the_key_says_what_the_colours_of_the_places_mean() {
     let (vm, _) = map_vm();
     let h = map_html(|| view! { <map_ui::Legend vm=vm.clone()/> });
-    assert_eq!(count(&h, "<li>"), vm.legend().len());
-    assert!(h.contains("Sidewalk") && h.contains("url(#h-sidewalk)"));
+    assert_eq!(count(&h, "<li>"), 3);
+    for words in ["Works", "Changed", "Needs attention"] {
+        assert!(h.contains(words), "{words}");
+    }
+    assert!(h.contains("dot-bad") && h.contains("dot-ok") && h.contains("dot-changed"));
 }
 
 #[test]
