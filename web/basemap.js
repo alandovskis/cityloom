@@ -76,6 +76,9 @@ export async function createBasemap(container) {
     (h) => emit({ kind: "ready", bounds: [h.minLon, h.minLat, h.maxLon, h.maxLat] }),
     () => emit({ kind: "failed" }),
   );
+  // The page's `#basemap` is the map's one stop for the keyboard, and holds its name: MapLibre's canvas
+  // inside it would be a second.
+  map.getCanvas().setAttribute("tabindex", "-1");
   map.touchZoomRotate.disableRotation();
   map.addControl(new AttributionControl({ compact: true }));
   let scale = new ScaleControl({ unit: "metric" });

@@ -202,6 +202,17 @@ test.describe("the city map", () => {
     expect((await centre(page)).lat).toBeLessThan(start.lat);
   });
 
+  test("the map is one stop for the keyboard: its canvas is not a second one", async ({ page }) => {
+    await expect(page.locator("#basemap canvas")).toHaveAttribute("tabindex", "-1");
+    await page.locator("#basemap").focus();
+    await page.keyboard.press("Tab");
+    const next = await page.evaluate(() => document.activeElement?.tagName);
+    expect(next).not.toBe("CANVAS");
+    // Shift+Tab from there comes back to the map itself
+    await page.keyboard.press("Shift+Tab");
+    await expect(page.locator("#basemap")).toBeFocused();
+  });
+
   test("the units change the scale", async ({ page }) => {
     await expect(page.locator(".maplibregl-ctrl-scale")).toContainText(/\d\s*m$/);
     await page.locator("#account-btn").click();
