@@ -16,6 +16,7 @@ const types = {
   ".woff2": "font/woff2",
   ".pbf": "application/x-protobuf",
   ".pmtiles": "application/octet-stream",
+  ".txt": "text/plain; charset=utf-8",
 };
 
 /** The bytes a `Range` header asks of a file `size` long: [start, end], or null when it cannot be had. */
