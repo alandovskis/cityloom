@@ -16,13 +16,13 @@ use crate::street::watch::SheetWatch;
 
 // ---- what the page is made of --------------------------------------------------------
 
-/// The pieces by what they are for, so fourteen rows read as five lists.
+/// The pieces by what they are for, so sixteen rows read as five lists.
 pub const ADD_GROUPS: [(&str, &[&str]); 5] = [
     ("Walk and plant", &["sidewalk", "planting", "median"]),
     ("Cycling", &["bike", "bikerack", "bikeshare"]),
     ("Transit", &["bus", "busshelter", "busstation"]),
     ("Roadway", &["travel", "parking", "loading", "shoulder"]),
-    ("Furniture", &["pole"]),
+    ("Furniture", &["pole", "bench", "terrace"]),
 ];
 
 /// The indices into the catalogue of the kinds in one group, those the catalogue has.
@@ -461,12 +461,14 @@ mod tests {
     #[test]
     fn the_kinds_to_add_come_in_four_lists_that_cover_every_kind_but_the_one_with_no_place() {
         let all: Vec<usize> = ADD_GROUPS.iter().flat_map(|(_, ids)| group_kinds(ids)).collect();
-        assert_eq!(all.len(), 14);
+        assert_eq!(all.len(), 16);
         let mut seen = all.clone();
         seen.sort_unstable();
         seen.dedup();
-        assert_eq!(seen.len(), 14, "each kind is in one list");
-        assert_eq!(KINDS.len(), 14);
+        assert_eq!(seen.len(), 16, "each kind is in one list");
+        assert_eq!(KINDS.len(), 16);
+        let furniture: Vec<&str> = group_kinds(ADD_GROUPS[4].1).into_iter().map(|k| KINDS[k].id).collect();
+        assert_eq!(furniture, ["pole", "bench", "terrace"]);
         let transit: Vec<&str> = group_kinds(ADD_GROUPS[2].1).into_iter().map(|k| KINDS[k].id).collect();
         assert_eq!(transit, ["bus", "busshelter", "busstation"]);
         assert_eq!(group_kinds(&["travel", "nonsense"]).len(), 1);

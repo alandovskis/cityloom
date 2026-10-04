@@ -2,7 +2,7 @@
 //! the line-art elevation symbols drawn on the street's section.
 
 /// One distinct texture per kind of piece.
-pub const HATCH: [(&str, &str); 14] = [
+pub const HATCH: [(&str, &str); 16] = [
     (
         "sidewalk",
         r##"<pattern id="h-sidewalk" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.9"/><circle cx="6" cy="6" r="0.9"/></pattern>"##,
@@ -22,6 +22,11 @@ pub const HATCH: [(&str, &str); 14] = [
     ("pole", r##"<pattern id="h-pole" width="6" height="8" patternUnits="userSpaceOnUse"><path d="M3,0 L3,8"/></pattern>"##),
     ("busshelter", r##"<pattern id="h-busshelter" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M1,2 L9,2 M2,2 L2,7 M8,2 L8,7"/></pattern>"##),
     ("busstation", r##"<pattern id="h-busstation" width="12" height="8" patternUnits="userSpaceOnUse"><path d="M0,3 L12,3 M0,6 L12,6 M4,0 L4,3"/></pattern>"##),
+    ("bench", r##"<pattern id="h-bench" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M1,2 L9,2 M1,6 L9,6 M1,2 L1,6 M9,2 L9,6"/></pattern>"##),
+    (
+        "terrace",
+        r##"<pattern id="h-terrace" width="12" height="12" patternUnits="userSpaceOnUse"><circle cx="6" cy="6" r="4"/><path d="M6,2 L6,10 M2,6 L10,6"/></pattern>"##,
+    ),
     ("loading", r##"<pattern id="h-loading" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M0,6 L5,1 L10,6"/></pattern>"##),
 ];
 
@@ -251,6 +256,26 @@ fn station(x: f64, s: f64) -> String {
     )
 }
 
+/// A bench: a slatted seat and back on four legs.
+fn bench(x: f64, s: f64) -> String {
+    at(
+        x,
+        0.0,
+        s,
+        "<path class=\"o\" d=\"M-30,-22 L30,-22 M-30,-40 L30,-40 M-30,-40 L-30,-22 M30,-40 L30,-22 M-26,-22 L-26,0 M26,-22 L26,0\"/><path class=\"o\" d=\"M-30,-31 L30,-31\"/>",
+    )
+}
+
+/// A café terrace: a table under an umbrella, with a chair either side.
+fn terrace(x: f64, s: f64) -> String {
+    at(
+        x,
+        0.0,
+        s,
+        "<path class=\"o\" d=\"M0,-84 L0,0 M-22,-34 L22,-34 M-52,-44 L-52,-24 L-42,-24 L-42,0 M-52,-24 L-52,0 M52,-44 L52,-24 L42,-24 L42,0 M52,-24 L52,0\"/><path class=\"f-van\" d=\"M-44,-80 Q0,-110 44,-80 Z\"/>",
+    )
+}
+
 /// What a piece has beyond its kind, which changes what is drawn on it.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SymbolOpts<'a> {
@@ -308,6 +333,8 @@ fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
         "pole" => pole(0.0, 1.0),
         "busshelter" => shelter(0.0, 1.0),
         "busstation" => station(0.0, 1.0),
+        "bench" => bench(0.0, 1.0),
+        "terrace" => terrace(0.0, 1.0),
         _ => String::new(),
     }
 }
@@ -356,6 +383,8 @@ fn native_width(kind_id: &str, wm: f64, o: SymbolOpts) -> f64 {
         "pole" => 80.0,
         "busshelter" => 84.0,
         "busstation" => 180.0,
+        "bench" => 64.0,
+        "terrace" => 114.0,
         _ => 100.0,
     }
 }
@@ -409,7 +438,9 @@ mod tests {
                     "bikeshare",
                     "pole",
                     "busshelter",
-                    "busstation"
+                    "busstation",
+                    "bench",
+                    "terrace"
                 ]
                 .contains(&k.id),
                 "{} has no width",
@@ -440,6 +471,12 @@ mod tests {
         assert!(s.contains("M-42,-60 L42,-60 L42,-68 L-42,-68 Z"));
         assert_eq!(s.matches("f-coat-").count(), 1);
         assert_eq!(sym("busstation", 4.0, SymbolOpts::default()).matches("f-coat-").count(), 2);
+    }
+
+    #[test]
+    fn a_bench_is_a_seat_on_legs_and_a_terrace_a_table_under_an_umbrella() {
+        assert!(sym("bench", 0.7, SymbolOpts::default()).contains("M-30,-22 L30,-22"));
+        assert!(sym("terrace", 2.0, SymbolOpts::default()).contains("f-van"));
     }
 
     #[test]

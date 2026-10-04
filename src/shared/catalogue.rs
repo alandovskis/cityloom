@@ -126,7 +126,7 @@ pub const CURBS: [Material; 7] = [
 /// A new sidewalk or bike lane gets this curb (concrete).
 pub const DEFAULT_CURB: usize = 1;
 
-pub const KINDS: [Kind; 14] = [
+pub const KINDS: [Kind; 16] = [
     Kind {
         id: "sidewalk",
         name: "Sidewalk",
@@ -330,6 +330,36 @@ pub const KINDS: [Kind; 14] = [
         default_mm: 3000,
         min_mm: 2000,
         max_mm: 6000,
+        people_per_hour_per_m: 0,
+        materials: &[1, 3, 0, 2],
+        direction: DirectionRule::None,
+        shares_road: false,
+        has_curb: false,
+        curbs: &[],
+    },
+    Kind {
+        id: "bench",
+        name: "Bench",
+        mark: "BN",
+        mode: Mode::Foot,
+        default_mm: 700,
+        min_mm: 400,
+        max_mm: 1500,
+        people_per_hour_per_m: 0,
+        materials: &[1, 3, 0, 2],
+        direction: DirectionRule::None,
+        shares_road: false,
+        has_curb: false,
+        curbs: &[],
+    },
+    Kind {
+        id: "terrace",
+        name: "Café terrace",
+        mark: "CT",
+        mode: Mode::Foot,
+        default_mm: 2000,
+        min_mm: 1200,
+        max_mm: 5000,
         people_per_hour_per_m: 0,
         materials: &[1, 3, 0, 2],
         direction: DirectionRule::None,
