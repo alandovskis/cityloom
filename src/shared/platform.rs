@@ -2,6 +2,9 @@
 
 use std::rc::Rc;
 
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::prelude::*;
+
 use crate::shared::ports::{Announcer, Fetched, Fetcher, Importer, Navigator, Ports, Scheduler, Storage};
 use crate::shared::{live, store};
 
@@ -151,6 +154,65 @@ impl Navigator for BrowserNavigator {
         }
         #[cfg(not(target_arch = "wasm32"))]
         let _ = href;
+    }
+}
+
+#[wasm_bindgen]
+extern "C" {
+    /// The map of the page: the adapter `createBasemap` makes in `web/basemap.js`.
+    pub type Basemap;
+    #[wasm_bindgen(method, js_name = setPlaces)]
+    fn set_places(this: &Basemap, layers: &str, data: &str);
+    #[wasm_bindgen(method)]
+    fn fit(this: &Basemap, west: f64, south: f64, east: f64, north: f64, top: f64, right: f64, bottom: f64, left: f64);
+    #[wasm_bindgen(method, js_name = zoomBy)]
+    fn zoom_by(this: &Basemap, factor: f64);
+    #[wasm_bindgen(method, js_name = panBy)]
+    fn pan_by(this: &Basemap, dx: f64, dy: f64);
+    #[wasm_bindgen(method)]
+    fn highlight(this: &Basemap, hot: Option<String>);
+    #[wasm_bindgen(method, js_name = setImperial)]
+    fn set_imperial(this: &Basemap, imperial: bool);
+    #[wasm_bindgen(method)]
+    fn listen(this: &Basemap, on: &js_sys::Function);
+}
+
+/// The map on the page, as a `Mapper`.
+pub struct BrowserMapper(Basemap);
+
+impl BrowserMapper {
+    pub fn new(basemap: Basemap) -> BrowserMapper {
+        BrowserMapper(basemap)
+    }
+}
+
+impl crate::shared::ports::Mapper for BrowserMapper {
+    fn set_places(&self, layers: &str, data: &str) {
+        self.0.set_places(layers, data);
+    }
+    fn fit(&self, [w, s, e, n]: [f64; 4], [top, right, bottom, left]: [f64; 4]) {
+        self.0.fit(w, s, e, n, top, right, bottom, left);
+    }
+    fn zoom_by(&self, factor: f64) {
+        self.0.zoom_by(factor);
+    }
+    fn pan_by(&self, dx: f64, dy: f64) {
+        self.0.pan_by(dx, dy);
+    }
+    fn highlight(&self, hot: Option<&str>) {
+        self.0.highlight(hot.map(String::from));
+    }
+    fn set_imperial(&self, imperial: bool) {
+        self.0.set_imperial(imperial);
+    }
+    fn listen(&self, on: Box<dyn Fn(crate::shared::ports::MapEvent)>) {
+        let callback = Closure::<dyn Fn(String)>::new(move |json: String| {
+            if let Ok(event) = serde_json::from_str(&json) {
+                on(event);
+            }
+        });
+        self.0.listen(callback.as_ref().unchecked_ref());
+        callback.forget();
     }
 }
 

@@ -1,5 +1,7 @@
-//! The city map page: the whole city drawn as a map to pan, zoom and choose a
-//! street or junction from. Its view-model, camera and views live together.
+//! The city map page: the whole city drawn over an OpenStreetMap basemap to pan,
+//! zoom and choose a street or junction from. MapLibre draws the map and takes the
+//! pointer (`web/basemap.js`, reached through the `Mapper` port); the view-model,
+//! the places it hands the map, and the views around the map live here.
 
 pub mod camera;
 pub mod home;
@@ -33,13 +35,15 @@ impl MapPage {
     }
 }
 
-/// Draws the city map page into the elements it keeps for it, and hands back
-/// what the script needs to reach it.
+/// Draws the city map page into the elements it keeps for it, over the basemap the script made, and hands
+/// back what the script needs to reach it.
 #[wasm_bindgen]
-pub fn mount_map() -> MapPage {
+pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
-    let vm = vm::MapVm::new(browser_ports());
+    let ports = crate::shared::ports::Ports { mapper: Rc::new(crate::shared::platform::BrowserMapper::new(basemap)), ..browser_ports() };
+    let vm = vm::MapVm::new(ports);
+    vm.attach();
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let mount = |id: &str, view: AnyView| {

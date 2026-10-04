@@ -10,10 +10,9 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="vendor/maplibre-gl.css">
 </head>
 <body>
-  <svg id="defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"></svg>
-
   <header class="bar" data-covers>
     <a class="brand" href="map.html" aria-label="CityLoom, the city map"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
     <div class="search-slot" id="search-slot"></div>
@@ -47,7 +46,6 @@
               <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
             </div>
           </div>
-          <p class="menu-act"><button type="button" id="print" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2V6h11v5.5h-2M4.5 9.5h7v4h-7z"/></svg>Print this sheet</button></p>
           <div class="menu-keys">
             <p class="menu-h">Keyboard</p>
             <p id="keys" class="keys">
@@ -75,6 +73,7 @@
   <main class="stage">
     <section class="drawing" aria-labelledby="h-drawing">
       <h2 id="h-drawing" class="sr-only">City map</h2>
+      <div id="basemap" class="basemap" tabindex="0" role="group" aria-label="Map of the city, north up" aria-describedby="keys"></div>
       <div id="map-slot" style="display: contents"></div>
     </section>
     <div class="zoom-dock" id="map-tools-slot"></div>
@@ -104,8 +103,8 @@
         </section>
       </div>
       <section class="key-section" aria-labelledby="h-key">
-        <h2 id="h-key" class="note-h">Key to the streets</h2>
-        <ul class="plan-key" id="plan-key" aria-label="Key to the streets"></ul>
+        <h2 id="h-key" class="note-h">Key to the map</h2>
+        <ul class="plan-key" id="plan-key" aria-label="Key to the map"></ul>
       </section>
       <p class="fine">The streets are from OpenStreetMap. Every threshold the checks use is a sample for now, not a real rule.</p>
     </div>
@@ -113,6 +112,7 @@
   </aside>
 
   <div id="live" class="sr-only" role="status" aria-live="polite"></div>
+  <script src="vendor/pmtiles.js"></script>
   <script type="module" src="map.js"></script>
 </body>
 </html>
