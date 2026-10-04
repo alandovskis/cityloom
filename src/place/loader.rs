@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use super::area::{Area, DEFAULT_NETWORK_URL, default_area};
+use super::area::{Area, DEFAULT_DATA_URL, default_area};
 use super::nominatim::{self, Place};
 use super::overpass;
 use crate::city::store::CityStore;
@@ -32,9 +32,6 @@ impl Loader {
         if store.has_network() {
             return done(Ok(()));
         }
-        if area == default_area() {
-            return self.load_shipped(store, done);
-        }
         let (store, importer) = (store.clone(), self.ports.importer.clone());
         let done = Rc::new(std::cell::RefCell::new(Some(done)));
         let finish = move |r: Result<(), String>| {
@@ -43,9 +40,11 @@ impl Loader {
             }
         };
         let finish_import = finish.clone();
+        // The default area's data comes with the app, as PBF; any other is asked of Overpass, as XML.
+        let (url, query) = if area == default_area() { (DEFAULT_DATA_URL, None) } else { (overpass::ENDPOINT, Some(overpass::query(area.bounds()))) };
         self.ports.fetcher.fetch(
-            overpass::ENDPOINT,
-            Some(&overpass::query(area.bounds())),
+            url,
+            query.as_deref(),
             Box::new(move |fetched| match fetched {
                 Err(e) => finish(Err(format!("the roads of {} could not be fetched ({e})", label(&area)))),
                 Ok(osm) => importer.import(
@@ -58,22 +57,6 @@ impl Loader {
                         ))
                     }),
                 ),
-            }),
-        );
-    }
-}
-
-impl Loader {
-    /// The default area comes with the app, already read.
-    fn load_shipped(&self, store: &CityStore, done: impl FnOnce(Result<(), String>) + 'static) {
-        let store = store.clone();
-        self.ports.fetcher.fetch(
-            DEFAULT_NETWORK_URL,
-            None,
-            Box::new(move |fetched| {
-                done(fetched.and_then(|body| serde_json::from_slice(&body).map_err(|e| format!("the shipped roads were not understood ({e})"))).and_then(
-                    |network| if store.keep_network(&network) { Ok(()) } else { Err("the roads could not be kept: storage is blocked or full".to_string()) },
-                ))
             }),
         );
     }
@@ -142,15 +125,16 @@ mod tests {
     }
 
     #[test]
-    fn the_default_area_is_read_from_the_file_that_ships_not_from_overpass() {
+    fn the_default_area_is_read_from_the_pbf_that_ships_not_from_overpass() {
         let (ports, fetcher, importer) = test_ports_with_fetcher();
         let store = CityStore::for_area(ports.storage.clone(), default_area());
         let result = seen();
         let r = result.clone();
         Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
-        assert_eq!(fetcher.asked(), vec![("data/default-network.json".to_string(), None)]);
-        fetcher.answer(Ok(NETWORK.as_bytes().to_vec()));
-        assert!(importer.asked().is_empty(), "it is already read");
+        assert_eq!(fetcher.asked(), vec![("data/default.osm.pbf".to_string(), None)]);
+        fetcher.answer(Ok(b"PBF".to_vec()));
+        assert_eq!(importer.asked(), vec![b"PBF".to_vec()], "read like any other data");
+        importer.answer(Ok(NETWORK.to_string()));
         assert_eq!(result.borrow_mut().take(), Some(Ok(())));
         assert!(store.has_network());
     }

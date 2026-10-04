@@ -5,14 +5,14 @@ use super::Bounds;
 /// How far either way of its centre an area reaches, in metres.
 pub const HALF_M: f64 = 400.0;
 
-/// The area a visit begins with, before anyone has chosen one. Its street network is shipped
-/// with the app (`web/data/default-network.json`), so it opens without a network.
+/// The area a visit begins with, before anyone has chosen one. Its OpenStreetMap data is shipped
+/// with the app (`web/data/default.osm.pbf`), so it opens without Overpass.
 pub fn default_area() -> Area {
-    Area::new("Kreuzberg, Berlin", 52.5010, 13.4235)
+    Area::new("Plateau Mont-Royal, Montréal", 45.5261, -73.5978)
 }
 
-/// Where the shipped network of the default area is, relative to the pages.
-pub const DEFAULT_NETWORK_URL: &str = "data/default-network.json";
+/// Where the shipped OpenStreetMap data of the default area is, relative to the pages.
+pub const DEFAULT_DATA_URL: &str = "data/default.osm.pbf";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Area {
@@ -87,8 +87,8 @@ mod tests {
     }
 
     #[test]
-    fn the_default_area_is_the_one_whose_network_ships() {
-        assert_eq!(default_area().key(), "52.5010,13.4235");
+    fn the_default_area_is_the_one_whose_data_ships() {
+        assert_eq!(default_area().key(), "45.5261,-73.5978");
         assert_eq!(default_area(), Area::from_query(&default_area().to_query()).unwrap());
     }
 
