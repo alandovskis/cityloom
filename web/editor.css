@@ -1786,11 +1786,14 @@ svg pattern circle {
   background: var(--accent);
   filter: brightness(0.94);
 }
+/* Fixed to the window so the stage cannot clip it; the page script sets its place. */
 .add-menu {
+  position: fixed;
   right: auto;
-  left: 0;
-  width: min(720px, calc(100vw - 32px));
-  max-height: min(78vh, 680px);
+  left: 8px;
+  top: 8px;
+  width: min(720px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
   overflow-y: auto;
 }
 .add-menu .hint {
