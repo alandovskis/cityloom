@@ -5,6 +5,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use serde::Deserialize;
+
 /// Says something to a person who cannot see the page.
 pub trait Announcer {
     fn say(&self, text: &str);
@@ -44,6 +46,55 @@ pub trait Navigator {
     fn go(&self, href: &str);
 }
 
+/// What the map tells the page.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum MapEvent {
+    /// The tiles are there. `bounds` is the area they cover: west, south, east, north, in degrees.
+    Ready { bounds: [f64; 4] },
+    /// The tiles could not be had.
+    Failed,
+    /// A place on the map was pressed: `s-7` for a street, `j-3` for a junction.
+    Pick { hot: String },
+    /// The pointer is over a place, or is no longer.
+    Hover { hot: Option<String> },
+    /// The person moved the map themselves, with the pointer or the wheel.
+    Moved,
+}
+
+/// The map the page shows the city on. It answers by telling `listen`'s function what happened.
+pub trait Mapper {
+    /// Shows the places: `layers` is a MapLibre layer list over a GeoJSON source named `places`, whose
+    /// features `data` holds. Called again whenever the places change.
+    fn set_places(&self, layers: &str, data: &str);
+    /// Moves the view to hold `bounds` (west, south, east, north in degrees), clear of `insets`
+    /// (top, right, bottom, left, in pixels).
+    fn fit(&self, bounds: [f64; 4], insets: [f64; 4]);
+    /// Zooms in by `factor` (more than 1), or out (less than 1).
+    fn zoom_by(&self, factor: f64);
+    /// Moves the view by pixels: a positive `dx` moves it east, a positive `dy` south.
+    fn pan_by(&self, dx: f64, dy: f64);
+    /// Marks the place `hot` (as in `s-7`) as the one the pointer or focus is on, and clears any other.
+    fn highlight(&self, hot: Option<&str>);
+    /// Whether the scale is shown in feet and miles.
+    fn set_imperial(&self, imperial: bool);
+    /// Has `on` called with what the map tells the page, from now on.
+    fn listen(&self, on: Box<dyn Fn(MapEvent)>);
+}
+
+/// The map of a page that has none.
+pub struct NoMapper;
+
+impl Mapper for NoMapper {
+    fn set_places(&self, _: &str, _: &str) {}
+    fn fit(&self, _: [f64; 4], _: [f64; 4]) {}
+    fn zoom_by(&self, _: f64) {}
+    fn pan_by(&self, _: f64, _: f64) {}
+    fn highlight(&self, _: Option<&str>) {}
+    fn set_imperial(&self, _: bool) {}
+    fn listen(&self, _: Box<dyn Fn(MapEvent)>) {}
+}
+
 /// The platform services a view-model is given.
 #[derive(Clone)]
 pub struct Ports {
@@ -53,6 +104,7 @@ pub struct Ports {
     pub announcer: Rc<dyn Announcer>,
     pub storage: Rc<dyn Storage>,
     pub scheduler: Rc<dyn Scheduler>,
+    pub mapper: Rc<dyn Mapper>,
 }
 
 /// An announcer that keeps what it was told.
@@ -237,6 +289,62 @@ impl Navigator for RecordingNavigator {
     }
 }
 
+/// What a `FakeMapper` was asked.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MapCall {
+    Places { layers: String, data: String },
+    Fit { bounds: [f64; 4], insets: [f64; 4] },
+    Zoom(f64),
+    Pan(f64, f64),
+    Highlight(Option<String>),
+    Imperial(bool),
+}
+
+/// A map that keeps what it is asked, and passes on what a test has it say.
+#[derive(Default)]
+pub struct FakeMapper {
+    calls: RefCell<Vec<MapCall>>,
+    listener: RefCell<Option<Box<dyn Fn(MapEvent)>>>,
+}
+
+impl FakeMapper {
+    /// What it was asked since this was last called.
+    pub fn take(&self) -> Vec<MapCall> {
+        std::mem::take(&mut *self.calls.borrow_mut())
+    }
+
+    /// The map tells the page something.
+    pub fn say(&self, event: MapEvent) {
+        if let Some(on) = &*self.listener.borrow() {
+            on(event);
+        }
+    }
+}
+
+impl Mapper for FakeMapper {
+    fn set_places(&self, layers: &str, data: &str) {
+        self.calls.borrow_mut().push(MapCall::Places { layers: layers.into(), data: data.into() });
+    }
+    fn fit(&self, bounds: [f64; 4], insets: [f64; 4]) {
+        self.calls.borrow_mut().push(MapCall::Fit { bounds, insets });
+    }
+    fn zoom_by(&self, factor: f64) {
+        self.calls.borrow_mut().push(MapCall::Zoom(factor));
+    }
+    fn pan_by(&self, dx: f64, dy: f64) {
+        self.calls.borrow_mut().push(MapCall::Pan(dx, dy));
+    }
+    fn highlight(&self, hot: Option<&str>) {
+        self.calls.borrow_mut().push(MapCall::Highlight(hot.map(String::from)));
+    }
+    fn set_imperial(&self, imperial: bool) {
+        self.calls.borrow_mut().push(MapCall::Imperial(imperial));
+    }
+    fn listen(&self, on: Box<dyn Fn(MapEvent)>) {
+        *self.listener.borrow_mut() = Some(on);
+    }
+}
+
 /// Ports for a test, with the fakes kept so the test can look at them.
 pub fn test_ports() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
     let (ports, announcer, storage, _) = test_ports_with_time();
@@ -257,6 +365,7 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
             announcer: announcer.clone(),
             storage: storage.clone(),
             scheduler: scheduler.clone(),
+            mapper: Rc::new(NoMapper),
         },
         announcer,
         storage,
@@ -357,5 +466,50 @@ mod tests {
         assert_eq!(*log.borrow(), vec!["first"]);
         s.advance(10);
         assert_eq!(*log.borrow(), vec!["first", "second"]);
+    }
+}
+
+#[cfg(test)]
+mod map_tests {
+    use super::*;
+
+    #[test]
+    fn the_adapters_events_are_read_from_json() {
+        let read = |s: &str| serde_json::from_str::<MapEvent>(s).unwrap();
+        assert_eq!(read(r#"{"kind":"ready","bounds":[1,2,3,4]}"#), MapEvent::Ready { bounds: [1.0, 2.0, 3.0, 4.0] });
+        assert_eq!(read(r#"{"kind":"failed"}"#), MapEvent::Failed);
+        assert_eq!(read(r#"{"kind":"pick","hot":"s-7"}"#), MapEvent::Pick { hot: "s-7".into() });
+        assert_eq!(read(r#"{"kind":"hover","hot":"j-3"}"#), MapEvent::Hover { hot: Some("j-3".into()) });
+        assert_eq!(read(r#"{"kind":"hover","hot":null}"#), MapEvent::Hover { hot: None });
+        assert_eq!(read(r#"{"kind":"moved"}"#), MapEvent::Moved);
+    }
+
+    #[test]
+    fn the_fake_records_what_it_is_asked_and_passes_on_what_it_is_told() {
+        let fake = FakeMapper::default();
+        fake.zoom_by(1.4);
+        fake.pan_by(-80.0, 0.0);
+        fake.highlight(Some("s-1"));
+        fake.set_imperial(true);
+        fake.fit([1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]);
+        fake.set_places("[]", "{}");
+        assert_eq!(
+            fake.take(),
+            vec![
+                MapCall::Zoom(1.4),
+                MapCall::Pan(-80.0, 0.0),
+                MapCall::Highlight(Some("s-1".into())),
+                MapCall::Imperial(true),
+                MapCall::Fit { bounds: [1.0, 2.0, 3.0, 4.0], insets: [5.0, 6.0, 7.0, 8.0] },
+                MapCall::Places { layers: "[]".into(), data: "{}".into() },
+            ]
+        );
+        assert!(fake.take().is_empty(), "taken once");
+
+        let heard = Rc::new(RefCell::new(Vec::new()));
+        let sink = heard.clone();
+        fake.listen(Box::new(move |e| sink.borrow_mut().push(e)));
+        fake.say(MapEvent::Moved);
+        assert_eq!(*heard.borrow(), vec![MapEvent::Moved]);
     }
 }

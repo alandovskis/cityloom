@@ -163,5 +163,6 @@ pub fn browser_ports() -> Ports {
         announcer: Rc::new(BrowserAnnouncer),
         storage: Rc::new(BrowserStorage),
         scheduler: Rc::new(BrowserScheduler::default()),
+        mapper: Rc::new(crate::shared::ports::NoMapper),
     }
 }
