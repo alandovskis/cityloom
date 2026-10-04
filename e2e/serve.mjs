@@ -29,7 +29,13 @@ function rangeOf(header, size) {
 }
 
 createServer(async (req, res) => {
-  const path = normalize(decodeURIComponent(new URL(req.url, "http://x").pathname));
+  let path;
+  try {
+    path = normalize(decodeURIComponent(new URL(req.url, "http://x").pathname));
+  } catch {
+    // A malformed escape: answered, rather than left to throw out of the handler and stop the server.
+    return res.writeHead(400).end("bad request");
+  }
   const file = join(root, path.endsWith("/") ? path + "index.html" : path);
   if (!file.startsWith(root)) return res.writeHead(403).end();
   try {

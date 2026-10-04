@@ -29,6 +29,11 @@ test.describe("the static server", () => {
     expect(past.status()).toBe(416);
   });
 
+  test("refuses a path whose escapes are not UTF-8, and keeps serving", async ({ request }) => {
+    expect((await request.get("/%E0%A4%A")).status()).toBe(400);
+    expect((await request.get("/map.html")).status()).toBe(200);
+  });
+
   test("serves JSON with its content type", async ({ request }) => {
     expect((await request.get("/basemap-light.json")).headers()["content-type"]).toContain("application/json");
   });
