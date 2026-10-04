@@ -14,6 +14,10 @@ const centre = (page: Page) =>
     return { lng: c.lng, lat: c.lat };
   });
 
+type Box = { x: number; y: number; width: number; height: number };
+const overlaps = (a: Box, b: Box) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
 /** A junction the pointer can reach, in page pixels: one the floating panels and buttons do not cover, and
  *  the only one drawn where it is. */
 const junctionSpot = (page: Page) =>
@@ -190,6 +194,51 @@ test.describe("the city map", () => {
     await page.locator("#account-btn").click();
     await page.locator('[data-unit="ft"]').click();
     await expect(page.locator(".maplibregl-ctrl-scale")).toContainText(/(ft|mi)$/);
+  });
+
+  test("the scale and the attribution stay clear of the panels, the status bar and the zoom buttons", async ({
+    page,
+  }) => {
+    const box = async (selector: string) => (await page.locator(selector).boundingBox())!;
+    await expect(page.locator(".maplibregl-ctrl-scale")).toBeVisible();
+    // the attribution starts open, as a line of text
+    await expect(page.locator(".maplibregl-ctrl-attrib")).toContainText("OpenStreetMap");
+    const panel = await box("#places-panel");
+    const scale = await box(".maplibregl-ctrl-scale");
+    expect(scale.x).toBeGreaterThanOrEqual(panel.x + panel.width);
+    const attribution = await box(".maplibregl-ctrl-attrib");
+    for (const covers of ["#places-panel", "#notes", ".statusbar", "#map-tools-slot"]) {
+      expect(overlaps(scale, await box(covers)), `the scale under ${covers}`).toBe(false);
+      expect(overlaps(attribution, await box(covers)), `the attribution under ${covers}`).toBe(false);
+    }
+
+    // With the Places panel hidden, the scale goes back to the map's edge.
+    await page.locator("#inspector-toggle").click();
+    await expect(page.locator("html")).toHaveAttribute("data-inspector", "closed");
+    const map = await box("#basemap");
+    await expect.poll(async () => (await box(".maplibregl-ctrl-scale")).x - map.x).toBeLessThan(24);
+  });
+
+  test("on a phone the scale and the attribution stay clear of the status line and the zoom buttons", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const box = async (selector: string) => (await page.locator(selector).boundingBox())!;
+    await expect(page.locator(".maplibregl-ctrl-scale")).toBeVisible();
+    await expect(page.locator(".maplibregl-ctrl-attrib")).toContainText("OpenStreetMap");
+    const [scale, attribution, map] = [
+      await box(".maplibregl-ctrl-scale"),
+      await box(".maplibregl-ctrl-attrib"),
+      await box("#basemap"),
+    ];
+    for (const control of [scale, attribution]) {
+      expect(control.x).toBeGreaterThanOrEqual(map.x);
+      expect(control.y).toBeGreaterThanOrEqual(map.y);
+      expect(control.x + control.width).toBeLessThanOrEqual(map.x + map.width);
+      expect(overlaps(control, await box(".statusbar"))).toBe(false);
+      expect(overlaps(control, await box("#map-tools-slot"))).toBe(false);
+    }
+    expect(overlaps(scale, attribution)).toBe(false);
   });
 
   test("a theme changes the basemap and keeps the places and the highlight", async ({ page }) => {

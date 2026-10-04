@@ -823,6 +823,18 @@ a.btn {
 .basemap-note[hidden] {
   display: none;
 }
+/* MapLibre's corners are the map's, which runs under the floating panels: the scale goes beside the Places
+   panel (and back to the edge when it is hidden), and the status bar leaves room for it (`.statusbar`). The
+   attribution, which opens leftwards into a line of text, stands on the zoom buttons (`.zoom-dock`: three
+   44px buttons and two 1px rules), its right edge in line with theirs, clear of the status bar and the Notes.
+   Each control keeps MapLibre's own 10px margin. */
+.drawing .maplibregl-ctrl-bottom-left {
+  left: var(--lw);
+}
+.drawing .maplibregl-ctrl-bottom-right {
+  right: calc(var(--rw) + var(--pad) - 10px);
+  bottom: calc(var(--pad) + 3 * 44px + 2px);
+}
 /* The key's dots repeat `style::OK`, `CHANGED` and `BAD`: keep them equal. */
 .dot {
   display: inline-block;
@@ -1099,6 +1111,11 @@ a.btn {
   max-width: calc(100% - var(--lw) - var(--rw) - 160px);
   min-width: 0;
 }
+/* On the map it is centred between the scale (bottom left, up to 110px with its margin) and the zoom
+   buttons (bottom right), so each side keeps clear the wider of them. */
+.drawing:has(> .basemap) ~ .statusbar {
+  max-width: calc(100% - var(--lw) - var(--rw) - 2 * 128px);
+}
 .fit {
   display: inline-flex;
   align-items: center;
@@ -1242,6 +1259,19 @@ a.btn {
   .zoom-dock {
     right: 12px;
     bottom: 12px;
+  }
+  /* The map is a box of its own here, with the status line across its foot: MapLibre's scale goes to its
+     top left corner, where nothing floats, and the attribution stays on the zoom buttons. */
+  .drawing:has(> .basemap) ~ .statusbar {
+    max-width: calc(100% - 24px - 56px);
+  }
+  .drawing .maplibregl-ctrl-bottom-left {
+    top: 10px;
+    bottom: auto;
+  }
+  .drawing .maplibregl-ctrl-bottom-right {
+    right: 2px;
+    bottom: calc(12px + 3 * 44px + 2px);
   }
   .fit {
     font-size: 14px;
