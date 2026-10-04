@@ -2,7 +2,7 @@
 //! the line-art elevation symbols drawn on the street's section.
 
 /// One distinct texture per kind of piece.
-pub const HATCH: [(&str, &str); 12] = [
+pub const HATCH: [(&str, &str); 14] = [
     (
         "sidewalk",
         r##"<pattern id="h-sidewalk" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.9"/><circle cx="6" cy="6" r="0.9"/></pattern>"##,
@@ -20,6 +20,8 @@ pub const HATCH: [(&str, &str); 12] = [
     ("bikerack", r##"<pattern id="h-bikerack" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M1,7 L1,3 Q5,0 9,3 L9,7"/></pattern>"##),
     ("bikeshare", r##"<pattern id="h-bikeshare" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="2.2"/></pattern>"##),
     ("pole", r##"<pattern id="h-pole" width="6" height="8" patternUnits="userSpaceOnUse"><path d="M3,0 L3,8"/></pattern>"##),
+    ("busshelter", r##"<pattern id="h-busshelter" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M1,2 L9,2 M2,2 L2,7 M8,2 L8,7"/></pattern>"##),
+    ("busstation", r##"<pattern id="h-busstation" width="12" height="8" patternUnits="userSpaceOnUse"><path d="M0,3 L12,3 M0,6 L12,6 M4,0 L4,3"/></pattern>"##),
     ("loading", r##"<pattern id="h-loading" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M0,6 L5,1 L10,6"/></pattern>"##),
 ];
 
@@ -225,7 +227,7 @@ fn tram(x: f64, s: f64) -> String {
     )
 }
 
-/// A shelter: posts, a roof in the transit lane's colour, a back panel and a
+/// A bus shelter: posts, a roof in the transit lane's colour, a back panel and a
 /// bench, with a person waiting under it.
 fn shelter(x: f64, s: f64) -> String {
     at(
@@ -237,10 +239,21 @@ fn shelter(x: f64, s: f64) -> String {
     )
 }
 
+/// A bus station: a platform with a long canopy on posts, a bench and two people waiting.
+fn station(x: f64, s: f64) -> String {
+    at(
+        x,
+        0.0,
+        s,
+        &("<path class=\"o\" d=\"M-84,0 L-84,-10 L84,-10 L84,0\"/><path class=\"o\" d=\"M-70,-10 L-70,-66 M0,-10 L0,-66 M70,-10 L70,-66\"/><path class=\"f-bus\" d=\"M-90,-66 L90,-66 L90,-74 L-90,-74 Z\"/><path class=\"o\" d=\"M-58,-24 L-30,-24 M-54,-24 L-54,-10 M-34,-24 L-34,-10\"/>".to_string()
+            + &person(20.0, 0.8, 1)
+            + &person(46.0, 0.8, 2)),
+    )
+}
+
 /// What a piece has beyond its kind, which changes what is drawn on it.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SymbolOpts<'a> {
-    pub shelter: bool,
     pub material: &'a str,
     pub tram: bool,
 }
@@ -249,9 +262,6 @@ pub struct SymbolOpts<'a> {
 fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
     match kind_id {
         "sidewalk" => {
-            if o.shelter {
-                return shelter(0.0, 1.0);
-            }
             let n = if wm < 2.2 {
                 1
             } else if wm < 4.2 {
@@ -296,6 +306,8 @@ fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
         "bikerack" => bike_rack(0.0, 1.0),
         "bikeshare" => bikeshare(0.0, 1.0),
         "pole" => pole(0.0, 1.0),
+        "busshelter" => shelter(0.0, 1.0),
+        "busstation" => station(0.0, 1.0),
         _ => String::new(),
     }
 }
@@ -305,9 +317,7 @@ fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
 fn native_width(kind_id: &str, wm: f64, o: SymbolOpts) -> f64 {
     match kind_id {
         "sidewalk" => {
-            if o.shelter {
-                84.0
-            } else if wm < 2.2 {
+            if wm < 2.2 {
                 24.0
             } else if wm < 4.2 {
                 70.0
@@ -344,6 +354,8 @@ fn native_width(kind_id: &str, wm: f64, o: SymbolOpts) -> f64 {
         "bikerack" => 80.0,
         "bikeshare" => 108.0,
         "pole" => 80.0,
+        "busshelter" => 84.0,
+        "busstation" => 180.0,
         _ => 100.0,
     }
 }
@@ -383,7 +395,23 @@ mod tests {
             assert!(!art(k.id, 3.0, SymbolOpts::default()).is_empty(), "symbol for {}", k.id);
             // The fall-through arm of `native_width` is only for a kind with no symbol.
             assert!(
-                ["sidewalk", "planting", "bike", "travel", "bus", "parking", "median", "loading", "shoulder", "bikerack", "bikeshare", "pole"].contains(&k.id),
+                [
+                    "sidewalk",
+                    "planting",
+                    "bike",
+                    "travel",
+                    "bus",
+                    "parking",
+                    "median",
+                    "loading",
+                    "shoulder",
+                    "bikerack",
+                    "bikeshare",
+                    "pole",
+                    "busshelter",
+                    "busstation"
+                ]
+                .contains(&k.id),
                 "{} has no width",
                 k.id
             );
@@ -407,10 +435,11 @@ mod tests {
     }
 
     #[test]
-    fn a_sidewalk_with_a_shelter_shows_the_shelter_and_one_person_under_it() {
-        let s = sym("sidewalk", 3.0, SymbolOpts { shelter: true, ..SymbolOpts::default() });
+    fn a_bus_shelter_has_one_person_under_it_and_a_bus_station_two() {
+        let s = sym("busshelter", 3.0, SymbolOpts::default());
         assert!(s.contains("M-42,-60 L42,-60 L42,-68 L-42,-68 Z"));
         assert_eq!(s.matches("f-coat-").count(), 1);
+        assert_eq!(sym("busstation", 4.0, SymbolOpts::default()).matches("f-coat-").count(), 2);
     }
 
     #[test]

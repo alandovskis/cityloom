@@ -194,7 +194,7 @@ fn the_add_menu_is_closed_and_lists_every_piece_in_five_groups() {
     let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
     assert!(h.contains("aria-expanded=\"false\"") && h.contains("id=\"add-menu\" hidden class=\"menu add-menu\""));
     assert!(button_tag(&h, "add-btn").contains("aria-haspopup"));
-    assert_eq!(count(&h, "class=\"add-item\""), 12);
+    assert_eq!(count(&h, "class=\"add-item\""), 14);
     for (g, group) in ["Walk and plant", "Cycling", "Transit", "Roadway", "Furniture"].into_iter().enumerate() {
         assert!(h.contains(&format!("id=\"add-g-{g}\" class=\"add-group-h\">{group}<")), "{group}");
     }
@@ -358,17 +358,6 @@ fn a_planting_strip_is_about_planting_and_a_transit_lane_can_carry_trams() {
     s.edit(|e| e.select(Some(bus)));
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains("Vehicle") && h.contains(">Bus</button>") && h.contains(">Tram</button>"));
-}
-
-#[test]
-fn a_sidewalk_beside_a_bus_lane_offers_a_shelter() {
-    let s = street_shared(1);
-    s.edit(|e| e.apply_measure("E1"));
-    let walk = s.view().segments.iter().find(|x| x.can_shelter).map(|x| x.uid);
-    let Some(walk) = walk else { return };
-    s.edit(|e| e.select(Some(walk)));
-    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    assert!(h.contains("Transit stop") && h.contains("Shelter on this sidewalk"));
 }
 
 #[test]

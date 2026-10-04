@@ -25,11 +25,6 @@ pub struct Segment {
     /// direction (a driving lane), and `None` for a kind without one. Where it
     /// is optional (a bike lane) `None` means two-way.
     pub direction: Option<usize>,
-    /// A bus shelter stands on this sidewalk. Only a sidewalk has one, and it
-    /// is set only where a bus lane runs beside the sidewalk. Streets kept
-    /// before shelters existed have none.
-    #[serde(default)]
-    pub shelter: bool,
     /// Whether a transit lane carries trams rather than buses. Matters only
     /// while the piece is a transit lane, at its base or in a window.
     #[serde(default)]
@@ -52,12 +47,6 @@ pub struct Variant {
     /// End of the window (not included). Earlier than `from_min` means the
     /// window runs past midnight.
     pub to_min: i32,
-}
-
-/// Whether a bus lane (at `time_min`) runs beside the piece at `pos`.
-fn bus_beside(segs: &[Segment], pos: usize, time_min: i32) -> bool {
-    let bus = kind_index("bus");
-    [pos.checked_sub(1), pos.checked_add(1)].into_iter().flatten().filter_map(|i| segs.get(i)).any(|s| Some(s.kind_at(time_min)) == bus)
 }
 
 /// Time of day is kept in quarter hours; a window is a set of those.
@@ -119,7 +108,6 @@ impl Segment {
                 DirectionRule::Required => Some(dir.unwrap_or(0)),
                 DirectionRule::Optional => dir,
             },
-            shelter: self.shelter && k.id == "sidewalk",
             tram: self.tram && k.id == "bus",
             variants: Vec::new(),
         }
@@ -153,7 +141,6 @@ impl Segment {
             material: k.materials[0],
             curb: k.has_curb.then_some(DEFAULT_CURB),
             direction: (k.direction == DirectionRule::Required).then_some(0),
-            shelter: false,
             tram: false,
             variants: Vec::new(),
         }
@@ -279,7 +266,6 @@ impl Street {
             && !self.segments.is_empty()
             && self.segments.iter().all(|s| {
                 seg_ok(s.kind, s.material, s.curb, s.direction)
-                    && (!s.shelter || KINDS[s.kind].id == "sidewalk")
                     && (!s.tram || KINDS[s.kind].id == "bus" || s.variants.iter().any(|v| KINDS[v.kind].id == "bus"))
                     && s.width_mm > 0
                     && s.variants.iter().all(|v| seg_ok(v.kind, v.material, None, v.direction) && valid_window(v.from_min, v.to_min))
@@ -614,27 +600,6 @@ impl Editor {
         self.edit(label, |segs| {
             let changed = segs[pos].curb != curb;
             segs[pos].curb = curb;
-            changed
-        })
-    }
-
-    /// Puts a bus shelter on a sidewalk, or takes it away. A shelter is only
-    /// added where a bus lane (at the shown time) runs beside the sidewalk;
-    /// taking one away is always allowed. Refused for any other kind.
-    pub fn set_shelter(&mut self, uid: u32, shelter: bool) -> bool {
-        let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
-            return false;
-        };
-        if KINDS[self.current()[pos].kind].id != "sidewalk" {
-            return false;
-        }
-        if shelter && !bus_beside(self.current(), pos, self.time_min) {
-            return false;
-        }
-        let label = format!("Sidewalk shelter: {}", if shelter { "added" } else { "removed" });
-        self.edit(label, |segs| {
-            let changed = segs[pos].shelter != shelter;
-            segs[pos].shelter = shelter;
             changed
         })
     }
@@ -1084,8 +1049,7 @@ impl Editor {
     fn seg_views(&self, segs: &[Segment]) -> Vec<SegView> {
         let mut x = 0;
         segs.iter()
-            .enumerate()
-            .map(|(i, s)| {
+            .map(|s| {
                 let (min_mm, max_mm) = s.bounds();
                 let n = s.at(self.time_min);
                 let v = SegView {
@@ -1099,9 +1063,7 @@ impl Editor {
                     material: MATERIALS[n.material].id,
                     curb: n.curb.map(|c| CURBS[c].id),
                     direction: n.direction.map(|d| DIRECTIONS[d].id),
-                    shelter: n.shelter,
                     tram: n.tram,
-                    can_shelter: KINDS[n.kind].id == "sidewalk" && (s.shelter || bus_beside(segs, i, self.time_min)),
                     variants: s
                         .variants
                         .iter()
@@ -1213,13 +1175,8 @@ pub struct SegView {
     pub material: &'static str,
     pub curb: Option<&'static str>,
     pub direction: Option<&'static str>,
-    /// A bus shelter stands on this sidewalk.
-    pub shelter: bool,
     /// A transit lane at the shown time carries trams.
     pub tram: bool,
-    /// Whether the shelter can be switched on or off: a sidewalk with a bus
-    /// lane beside it, or one that already has a shelter.
-    pub can_shelter: bool,
     pub variants: Vec<VariantView>,
     pub active_variant: Option<usize>,
     /// Types this piece may take at other times.
@@ -1722,7 +1679,7 @@ mod tests {
     fn street_furniture_is_added_like_any_piece_and_follows_the_older_kinds() {
         let shoulder = kind_index("shoulder").unwrap();
         let mut e = Editor::new(0);
-        for (n, id) in ["bikerack", "bikeshare", "pole"].into_iter().enumerate() {
+        for (n, id) in ["bikerack", "bikeshare", "pole", "busshelter", "busstation"].into_iter().enumerate() {
             let k = kind_index(id).unwrap();
             assert_eq!(k, shoulder + 1 + n, "{id} is appended, so stored kind indices hold");
             let before = e.current().len();
@@ -1730,7 +1687,6 @@ mod tests {
             assert_eq!(e.current().len(), before + 1);
             let s = e.current().iter().find(|s| s.uid == uid).unwrap();
             assert_eq!(s.width_mm, KINDS[k].default_mm);
-            assert!(e.set_shelter(uid, true) == false); // not a sidewalk
             assert!(e.remove(uid));
         }
         // None of them counts as the sidewalk the edges check asks for.
@@ -1917,36 +1873,6 @@ mod tests {
     }
 
     #[test]
-    fn a_bus_shelter_stands_only_on_a_sidewalk_beside_a_bus_lane() {
-        let mut e = Editor::new(0);
-        let walk = e.current()[0].uid;
-        let lane = e.current()[2].uid;
-        assert!(!e.set_shelter(lane, true)); // not a sidewalk
-        assert!(!e.set_shelter(walk, true)); // no bus lane beside it
-        assert!(!e.view().segments[0].can_shelter);
-        let bus = kind_index("bus").unwrap();
-        let sidewalk_next_to_bus = {
-            e.add(bus, 1);
-            e.view().segments[0].can_shelter
-        };
-        assert!(sidewalk_next_to_bus);
-        assert!(e.set_shelter(walk, true));
-        assert!(e.view().segments[0].shelter);
-        assert_eq!(e.view().revisions.last().unwrap().label, "Sidewalk shelter: added");
-        assert!(!e.set_shelter(walk, true)); // unchanged
-        assert!(e.undo());
-        assert!(!e.view().segments[0].shelter);
-        assert!(e.redo());
-        // The bus lane goes; the shelter stays and can be taken away.
-        let bus_uid = e.current()[1].uid;
-        assert!(e.remove(bus_uid));
-        assert!(e.view().segments[0].shelter);
-        assert!(e.view().segments[0].can_shelter);
-        assert!(e.set_shelter(walk, false));
-        assert!(!e.view().segments[0].can_shelter);
-    }
-
-    #[test]
     fn a_transit_lane_carries_buses_or_trams() {
         let mut e = Editor::new(0);
         let lane = e.current()[2].uid;
@@ -1962,15 +1888,14 @@ mod tests {
     }
 
     #[test]
-    fn a_street_kept_without_shelters_still_loads() {
+    fn a_street_kept_with_the_old_sidewalk_shelter_flag_still_loads() {
         let street = Street::sample(0, Side::Right);
         let mut v: serde_json::Value = serde_json::to_value(&street).unwrap();
         for seg in v["segments"].as_array_mut().unwrap() {
-            seg.as_object_mut().unwrap().remove("shelter");
+            seg.as_object_mut().unwrap().insert("shelter".into(), true.into());
         }
         let back: Street = serde_json::from_value(v).unwrap();
         assert!(back.is_sound());
-        assert!(back.segments.iter().all(|s| !s.shelter));
     }
 
     #[test]

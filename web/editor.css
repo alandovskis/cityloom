@@ -658,6 +658,12 @@ svg pattern circle {
 .k-pole {
   fill: var(--k-pole);
 }
+.k-busshelter {
+  fill: var(--k-busshelter);
+}
+.k-busstation {
+  fill: var(--k-busstation);
+}
 #drawing .slab-p,
 .swatch .slab-p {
   fill: var(--ink-2);
@@ -911,7 +917,9 @@ svg pattern circle {
 .swatch .k-shoulder,
 .swatch .k-bikerack,
 .swatch .k-bikeshare,
-.swatch .k-pole {
+.swatch .k-pole,
+.swatch .k-busshelter,
+.swatch .k-busstation {
   stroke: none;
 }
 /* The map hides the texture in its key; here a surface is told apart by it. */
