@@ -4,7 +4,9 @@
 pub mod camera;
 pub mod gestures;
 pub mod home;
+pub mod overlay;
 pub mod projection;
+pub mod style;
 pub mod svg;
 #[cfg(test)]
 mod tests;
