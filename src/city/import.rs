@@ -66,6 +66,30 @@ fn join(names: &[String]) -> String {
     }
 }
 
+/// How far along a road to look for the way it leaves a junction: past the rounding of its corner.
+const LOOK_M: f64 = 20.0;
+
+/// The way a road leaves its first point and its last, in degrees clockwise from north, from a point
+/// about `LOOK_M` along it (or its far end, if it is shorter).
+fn headings(points: &[(f64, f64)]) -> Option<(f64, f64)> {
+    let along = |line: &[(f64, f64)]| -> Option<f64> {
+        let origin = *line.first()?;
+        let mut run = 0.0;
+        let mut at = origin;
+        for &p in &line[1..] {
+            run += (p.0 - at.0).hypot(p.1 - at.1);
+            at = p;
+            if run >= LOOK_M {
+                break;
+            }
+        }
+        let (dx, dy) = (at.0 - origin.0, at.1 - origin.1);
+        (dx != 0.0 || dy != 0.0).then(|| dx.atan2(dy).to_degrees().rem_euclid(360.0))
+    };
+    let reversed: Vec<(f64, f64)> = points.iter().rev().copied().collect();
+    Some((along(points)?, along(&reversed)?))
+}
+
 impl City {
     /// The city for `network`, every street and junction as OpenStreetMap has it.
     pub fn from_network(network: &Network, name: &str) -> City {
@@ -101,6 +125,7 @@ impl Layout {
                     b: index[&r.to],
                     street: class,
                     name: Some(street_name(r)),
+                    headings: headings(&r.points),
                     section: (!pieces.is_empty()).then(|| Street::imported(class, side, &pieces).named(&street_name(r))),
                 }
             })
@@ -313,5 +338,26 @@ mod tests {
         let mut j: Vec<u32> = sample.nodes.iter().filter(|n| n.junction).map(|n| n.number).collect();
         j.sort_unstable();
         assert_eq!(j, (1..=9).collect::<Vec<u32>>());
+    }
+
+    /// A T whose three streets all curve away to the north, so that the straight line from the junction to the
+    /// far end of each lies in one half of the plane, though they leave the junction west, east and south.
+    fn curving_t() -> Network {
+        let mut net = star(&[(-100.0, 100.0), (100.0, 100.0), (60.0, 50.0)]);
+        net.roads[0].points = vec![(0.0, 0.0), (-30.0, 0.0), (-100.0, 100.0)];
+        net.roads[1].points = vec![(0.0, 0.0), (30.0, 0.0), (100.0, 100.0)];
+        net.roads[2].points = vec![(0.0, 0.0), (0.0, -30.0), (60.0, -30.0), (60.0, 50.0)];
+        net
+    }
+
+    #[test]
+    fn a_junction_leaves_the_way_its_roads_do_and_not_the_way_their_far_ends_lie() {
+        let city = City::from_network(&curving_t(), "Curves");
+        let v = city.view(0);
+        let junction = v.nodes.iter().find(|n| n.junction).expect("a T, though the far ends all lie to the north");
+        let arms = city.junction_editor(junction.uid, 0).unwrap().view().arms;
+        let mut bearings: Vec<i32> = arms.iter().map(|a| a.bearing).collect();
+        bearings.sort_unstable();
+        assert_eq!(bearings, vec![90, 180, 270]);
     }
 }

@@ -287,10 +287,27 @@ impl Arm {
     }
 
     pub fn profile(&self, region: usize) -> Profile {
-        match &self.section {
+        // Reading a street's profile builds an editor on it, and a junction asks for it of every arm
+        // many times over, so what has been read is kept.
+        thread_local! {
+            static READ: std::cell::RefCell<std::collections::HashMap<(usize, Option<Street>, usize), Profile>> = Default::default();
+        }
+        let key = (self.street, self.section.clone(), region);
+        if let Some(p) = READ.with(|r| r.borrow().get(&key).cloned()) {
+            return p;
+        }
+        let p = match &self.section {
             Some(s) => profile_of(s, region),
             None => profile(self.street, region),
-        }
+        };
+        READ.with(|r| {
+            let mut r = r.borrow_mut();
+            if r.len() > 4096 {
+                r.clear();
+            }
+            r.insert(key, p.clone());
+        });
+        p
     }
 
     /// Which sample street this arm is, or began as.

@@ -88,7 +88,7 @@ pub const MATERIALS: [Material; 8] = [
 pub const DIRECTIONS: [Material; 2] = [Material { id: "away", name: "Away from you" }, Material { id: "toward", name: "Toward you" }];
 
 /// The side of the road a region drives on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Side {
     Left,

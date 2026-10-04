@@ -11,7 +11,7 @@ pub const SNAP_MM: i32 = 100;
 /// Sidewalk on each edge is a sheet check, not a hard rule.
 const ACCESS_LANE_MM: i32 = 3000;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Segment {
     pub uid: u32,
     pub kind: usize,
@@ -40,7 +40,7 @@ pub struct Segment {
 }
 
 /// A different type a piece takes between two times of day.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Variant {
     pub kind: usize,
     /// Index into `MATERIALS`; always one the kind allows.
@@ -163,7 +163,7 @@ impl Segment {
 /// One street as the city keeps it: the pieces of its section as the street
 /// editor shows them, looking from the street's first end toward its second.
 /// Directions are written for the side of the road in `side`.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Street {
     /// Index into `SAMPLES`: the kind of street it began as, which names it unless it has a name of its own.
     pub sample: usize,

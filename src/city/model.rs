@@ -58,10 +58,13 @@ pub(super) struct EdgeDef {
     pub(super) name: Option<String>,
     /// The street as it first stands, where it is not the sample.
     pub(super) section: Option<Street>,
+    /// The way the street leaves node `a` and node `b`, in degrees clockwise from north, where its real
+    /// shape is known. Otherwise it leaves along the straight line to its other end.
+    pub(super) headings: Option<(f64, f64)>,
 }
 
 const fn street(a: usize, b: usize, street: usize) -> EdgeDef {
-    EdgeDef { a, b, street, name: None, section: None }
+    EdgeDef { a, b, street, name: None, section: None, headings: None }
 }
 
 const STREET: usize = 0;
@@ -147,9 +150,27 @@ pub struct Layout {
     pub(super) edges: Vec<EdgeDef>,
 }
 
-/// Moves bearings (sorted, in degrees) apart where two are closer than the junction editor allows,
-/// each by half of what is missing, in the editor's steps. Bearings that cannot all fit are left.
+/// The widest a gap between neighbouring arms can be made by moving them, in degrees: a bend with a
+/// side street on its inside has a gap a little over 180, which is a junction; a fan is not one.
+const MOST_CLOSED: i32 = 60;
+
+/// Moves bearings (sorted, in degrees) to what the junction editor allows: apart where two are closer than
+/// it allows, each by half of what is missing, and together where a gap is wider than a straight line (by up to
+/// `MOST_CLOSED`), in the editor's steps. Bearings that cannot all be made to fit are left.
 fn spread(b: &mut [i32]) {
+    use crate::junction::model::BEARING_STEP;
+    let n = b.len();
+    let gap = |b: &[i32], i: usize| (b[(i + 1) % n] - b[i]).rem_euclid(360);
+    if let Some(i) = (0..n).find(|&i| (181..=180 + MOST_CLOSED).contains(&gap(b, i))) {
+        // the two arms either side of the wide gap each move into it by half the excess
+        let take = (((gap(b, i) - 180) as f64 / 2.0 / BEARING_STEP as f64).ceil() as i32) * BEARING_STEP;
+        b[i] = (b[i] + take).rem_euclid(360);
+        b[(i + 1) % n] = (b[(i + 1) % n] - take).rem_euclid(360);
+    }
+    separate(b);
+}
+
+fn separate(b: &mut [i32]) {
     use crate::junction::model::{BEARING_STEP, MIN_SEPARATION};
     let n = b.len();
     for _ in 0..40 {
@@ -189,6 +210,18 @@ impl Layout {
     fn dist_mm(&self, a: usize, b: usize) -> f64 {
         let (dx, dy) = ((self.nodes[a].x_mm - self.nodes[b].x_mm) as f64, (self.nodes[a].y_mm - self.nodes[b].y_mm) as f64);
         dx.hypot(dy)
+    }
+
+    /// The bearing at which street `edge` leaves `node`, to the nearest step the junction editor uses.
+    fn leaving(&self, edge: usize, node: usize) -> i32 {
+        let e = &self.edges[edge];
+        match e.headings {
+            Some((a, b)) => {
+                let deg = if e.a == node { a } else { b };
+                ((deg / junction::BEARING_STEP as f64).round() as i32 * junction::BEARING_STEP).rem_euclid(360)
+            }
+            None => self.bearing(node, self.other_end(edge, node)),
+        }
     }
 
     /// The bearing from node `from` toward node `to`, clockwise from north (up),
@@ -242,7 +275,7 @@ impl Layout {
     /// A junction as first laid out, from the streets that meet there.
     fn generate(&self, node: usize, streets: &BTreeMap<u32, Street>) -> State {
         let def = &self.nodes[node];
-        let mut incident: Vec<(i32, usize)> = self.edges_at(node).into_iter().map(|e| (self.bearing(node, self.other_end(e, node)), e)).collect();
+        let mut incident: Vec<(i32, usize)> = self.edges_at(node).into_iter().map(|e| (self.leaving(e, node), e)).collect();
         incident.sort_by_key(|(b, _)| *b);
         let mut bearings: Vec<i32> = incident.iter().map(|(b, _)| *b).collect();
         spread(&mut bearings);
@@ -682,6 +715,31 @@ mod tests {
 
     fn edge_name(edge: usize) -> String {
         Layout::sample().edge_name(edge)
+    }
+
+    fn gaps(b: &[i32]) -> Vec<i32> {
+        (0..b.len()).map(|i| (b[(i + 1) % b.len()] - b[i]).rem_euclid(360)).collect()
+    }
+
+    #[test]
+    fn a_bend_with_a_side_street_on_its_inside_is_made_a_junction_and_a_fan_is_not() {
+        // 185 degrees across the outside of the bend
+        let mut b = [0, 185, 270];
+        spread(&mut b);
+        assert!(gaps(&b).iter().all(|g| (30..=180).contains(g)), "{b:?}");
+        // a larger excess is closed a step at a time on each side
+        let mut b = [0, 80, 150];
+        spread(&mut b);
+        assert!(gaps(&b).iter().all(|g| (30..=180).contains(g)), "{b:?}");
+        // three streets all within a quarter of the compass are a fan, which no junction is
+        let mut b = [0, 50, 100];
+        let before = b;
+        spread(&mut b);
+        assert_eq!(b, before);
+        // what was already a junction is left as it is
+        let mut b = [0, 90, 180, 270];
+        spread(&mut b);
+        assert_eq!(b, [0, 90, 180, 270]);
     }
 
     #[test]
