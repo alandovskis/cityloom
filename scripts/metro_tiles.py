@@ -47,6 +47,11 @@ def main():
     if len(sys.argv) not in (2, 3):
         sys.exit(__doc__)
     source = Path(sys.argv[1]).resolve()
+    if not source.is_file():
+        sys.exit(
+            f"{source} does not exist. Download the Quebec extract first (about 1.2 GB):\n"
+            "  curl -L -o quebec-latest.osm.pbf https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf"
+        )
     work = Path(sys.argv[2] if len(sys.argv) == 3 else "/tmp/cityloom-metro")
     work.mkdir(parents=True, exist_ok=True)
 
