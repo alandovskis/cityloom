@@ -31,3 +31,21 @@ fn a_road_keeps_its_lanes_and_the_osm_way_it_came_from() {
 fn a_crossing_in_london_keeps_to_the_left() {
     assert!(import(CROSSING).unwrap().left_hand);
 }
+
+const BOULEVARD: &[u8] = include_bytes!("boulevard.osm");
+
+#[test]
+fn two_carriageways_with_a_median_between_them_are_one_street_of_both_directions() {
+    let net = import(BOULEVARD).expect("the boulevard reads");
+    let between: Vec<_> = net
+        .roads
+        .iter()
+        .filter(|r| r.name.as_deref() == Some("Boulevard") && r.osm_ways.len() <= 2 && (r.osm_ways.contains(&100) || r.osm_ways.contains(&101)))
+        .collect();
+    assert_eq!(between.len(), 1, "{:#?}", net.roads.iter().map(|r| (&r.name, &r.osm_ways, r.from, r.to)).collect::<Vec<_>>());
+    let b = between[0];
+    assert!(b.osm_ways.contains(&100) && b.osm_ways.contains(&101));
+    use osm_import::{LaneKind, Way};
+    let driving = |way| b.lanes.iter().filter(|l| l.kind == LaneKind::Driving && l.way == way).count();
+    assert!(driving(Way::Forward) >= 2 && driving(Way::Backward) >= 2, "{:?}", b.lanes);
+}

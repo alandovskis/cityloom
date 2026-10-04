@@ -16,7 +16,9 @@ pub fn import(osm: &[u8]) -> Result<Network, String> {
     let mut timer = Timer::throwaway();
     let (mut streets, _doc) = streets_reader::osm_to_street_network(osm, None, MapConfig::default(), &mut timer).map_err(|e| e.to_string())?;
     streets.apply_transformations(Transformation::standard_for_clipped_areas(), &mut timer);
-    Ok(convert(&streets))
+    let mut network = convert(&streets);
+    osm_network::merge::merge_dual_carriageways(&mut network);
+    Ok(network)
 }
 
 fn convert(streets: &StreetNetwork) -> Network {
