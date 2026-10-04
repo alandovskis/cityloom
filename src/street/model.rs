@@ -1679,7 +1679,7 @@ mod tests {
     fn street_furniture_is_added_like_any_piece_and_follows_the_older_kinds() {
         let shoulder = kind_index("shoulder").unwrap();
         let mut e = Editor::new(0);
-        for (n, id) in ["bikerack", "bikeshare", "pole", "busshelter", "busstation", "bench", "terrace"].into_iter().enumerate() {
+        for (n, id) in ["bikerack", "bikeshare", "pole", "busshelter", "busstation", "bench", "terrace", "streetlamp"].into_iter().enumerate() {
             let k = kind_index(id).unwrap();
             assert_eq!(k, shoulder + 1 + n, "{id} is appended, so stored kind indices hold");
             let before = e.current().len();

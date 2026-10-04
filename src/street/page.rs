@@ -16,13 +16,14 @@ use crate::street::watch::SheetWatch;
 
 // ---- what the page is made of --------------------------------------------------------
 
-/// The pieces by what they are for, so sixteen rows read as five lists.
-pub const ADD_GROUPS: [(&str, &[&str]); 5] = [
+/// The pieces by what they are for, so seventeen rows read as six lists.
+pub const ADD_GROUPS: [(&str, &[&str]); 6] = [
     ("Walk and plant", &["sidewalk", "planting", "median"]),
     ("Cycling", &["bike", "bikerack", "bikeshare"]),
     ("Transit", &["bus", "busshelter", "busstation"]),
     ("Roadway", &["travel", "parking", "loading", "shoulder"]),
-    ("Furniture", &["pole", "bench", "terrace"]),
+    ("Furniture", &["bench", "terrace"]),
+    ("Utilities", &["pole", "streetlamp"]),
 ];
 
 /// The indices into the catalogue of the kinds in one group, those the catalogue has.
@@ -461,14 +462,16 @@ mod tests {
     #[test]
     fn the_kinds_to_add_come_in_four_lists_that_cover_every_kind_but_the_one_with_no_place() {
         let all: Vec<usize> = ADD_GROUPS.iter().flat_map(|(_, ids)| group_kinds(ids)).collect();
-        assert_eq!(all.len(), 16);
+        assert_eq!(all.len(), 17);
         let mut seen = all.clone();
         seen.sort_unstable();
         seen.dedup();
-        assert_eq!(seen.len(), 16, "each kind is in one list");
-        assert_eq!(KINDS.len(), 16);
+        assert_eq!(seen.len(), 17, "each kind is in one list");
+        assert_eq!(KINDS.len(), 17);
         let furniture: Vec<&str> = group_kinds(ADD_GROUPS[4].1).into_iter().map(|k| KINDS[k].id).collect();
-        assert_eq!(furniture, ["pole", "bench", "terrace"]);
+        assert_eq!(furniture, ["bench", "terrace"]);
+        let utilities: Vec<&str> = group_kinds(ADD_GROUPS[5].1).into_iter().map(|k| KINDS[k].id).collect();
+        assert_eq!(utilities, ["pole", "streetlamp"]);
         let transit: Vec<&str> = group_kinds(ADD_GROUPS[2].1).into_iter().map(|k| KINDS[k].id).collect();
         assert_eq!(transit, ["bus", "busshelter", "busstation"]);
         assert_eq!(group_kinds(&["travel", "nonsense"]).len(), 1);

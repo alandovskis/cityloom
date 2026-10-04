@@ -60,6 +60,7 @@
   --k-busstation: #eeb8ab;
   --k-bench: #d8c8ad;
   --k-terrace: #f1dca0;
+  --k-streetlamp: #d9dcc0;
 }
 
 :root[data-theme="dark"] {
@@ -106,6 +107,7 @@
   --k-busstation: #6d3832;
   --k-bench: #6e5d48;
   --k-terrace: #7d6a30;
+  --k-streetlamp: #5d6148;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -153,6 +155,7 @@
     --k-busstation: #6d3832;
     --k-bench: #6e5d48;
     --k-terrace: #7d6a30;
+    --k-streetlamp: #5d6148;
   }
 }
 
@@ -942,6 +945,9 @@ a.btn {
 #map .m-k-terrace {
   stroke: var(--k-terrace);
 }
+#map .m-k-streetlamp {
+  stroke: var(--k-streetlamp);
+}
 /* Lane types are told apart by tint, by the key, and by their names when zoomed in; the hatch of the
    editors is too busy at city scale. */
 #map .m-h {
@@ -1127,6 +1133,9 @@ a.btn {
 }
 .k-terrace {
   fill: var(--k-terrace);
+}
+.k-streetlamp {
+  fill: var(--k-streetlamp);
 }
 .swatch .k-travel {
   stroke: var(--field-line);

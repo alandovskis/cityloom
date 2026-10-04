@@ -2,7 +2,7 @@
 //! the line-art elevation symbols drawn on the street's section.
 
 /// One distinct texture per kind of piece.
-pub const HATCH: [(&str, &str); 16] = [
+pub const HATCH: [(&str, &str); 17] = [
     (
         "sidewalk",
         r##"<pattern id="h-sidewalk" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.9"/><circle cx="6" cy="6" r="0.9"/></pattern>"##,
@@ -26,6 +26,10 @@ pub const HATCH: [(&str, &str); 16] = [
     (
         "terrace",
         r##"<pattern id="h-terrace" width="12" height="12" patternUnits="userSpaceOnUse"><circle cx="6" cy="6" r="4"/><path d="M6,2 L6,10 M2,6 L10,6"/></pattern>"##,
+    ),
+    (
+        "streetlamp",
+        r##"<pattern id="h-streetlamp" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="5" cy="5" r="1.5"/><path d="M5,0 L5,2 M5,8 L5,10 M0,5 L2,5 M8,5 L10,5"/></pattern>"##,
     ),
     ("loading", r##"<pattern id="h-loading" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M0,6 L5,1 L10,6"/></pattern>"##),
 ];
@@ -256,6 +260,11 @@ fn station(x: f64, s: f64) -> String {
     )
 }
 
+/// A street lamp: a pole that curves over into an arm, with a lit head.
+fn street_lamp(x: f64, s: f64) -> String {
+    at(x, 0.0, s, "<path class=\"o\" d=\"M0,0 L0,-130 Q0,-150 20,-150 L40,-150\"/><path class=\"f-van\" d=\"M30,-150 L54,-150 L50,-142 L34,-142 Z\"/>")
+}
+
 /// A bench: a slatted seat and back on four legs.
 fn bench(x: f64, s: f64) -> String {
     at(
@@ -335,6 +344,7 @@ fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
         "busstation" => station(0.0, 1.0),
         "bench" => bench(0.0, 1.0),
         "terrace" => terrace(0.0, 1.0),
+        "streetlamp" => street_lamp(0.0, 1.0),
         _ => String::new(),
     }
 }
@@ -385,6 +395,7 @@ fn native_width(kind_id: &str, wm: f64, o: SymbolOpts) -> f64 {
         "busstation" => 180.0,
         "bench" => 64.0,
         "terrace" => 114.0,
+        "streetlamp" => 64.0,
         _ => 100.0,
     }
 }
@@ -440,7 +451,8 @@ mod tests {
                     "busshelter",
                     "busstation",
                     "bench",
-                    "terrace"
+                    "terrace",
+                    "streetlamp"
                 ]
                 .contains(&k.id),
                 "{} has no width",
@@ -477,6 +489,12 @@ mod tests {
     fn a_bench_is_a_seat_on_legs_and_a_terrace_a_table_under_an_umbrella() {
         assert!(sym("bench", 0.7, SymbolOpts::default()).contains("M-30,-22 L30,-22"));
         assert!(sym("terrace", 2.0, SymbolOpts::default()).contains("f-van"));
+    }
+
+    #[test]
+    fn a_street_lamp_is_a_pole_with_an_arm_and_a_lit_head() {
+        let s = sym("streetlamp", 0.5, SymbolOpts::default());
+        assert!(s.contains("M0,0 L0,-130") && s.contains("f-van"));
     }
 
     #[test]
