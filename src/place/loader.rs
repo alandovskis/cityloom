@@ -32,6 +32,8 @@ impl Loader {
         if store.has_network() {
             return done(Ok(()));
         }
+        let bounds = area.bounds();
+        let area_name = area.clone();
         let (store, importer) = (store.clone(), self.ports.importer.clone());
         let done = Rc::new(std::cell::RefCell::new(Some(done)));
         let finish = move |r: Result<(), String>| {
@@ -49,9 +51,13 @@ impl Loader {
                 Err(e) => finish(Err(format!("the roads of {} could not be fetched ({e})", label(&area)))),
                 Ok(osm) => importer.import(
                     osm,
+                    Some([bounds.south, bounds.west, bounds.north, bounds.east]),
                     Box::new(move |read| {
                         finish_import(read.and_then(|json| serde_json::from_str(&json).map_err(|e| format!("the roads were not understood ({e})"))).and_then(
-                            |network| {
+                            |network: osm_network::Network| {
+                                if network.roads.is_empty() {
+                                    return Err(format!("OpenStreetMap has no streets around {}", label(&area_name)));
+                                }
                                 if store.keep_network(&network) { Ok(()) } else { Err("the roads could not be kept: storage is blocked or full".to_string()) }
                             },
                         ))
@@ -119,6 +125,9 @@ mod tests {
         assert!(result.borrow().is_none(), "nothing is done before the roads arrive");
         fetcher.answer(Ok(b"<osm/>".to_vec()));
         assert_eq!(importer.asked(), vec![b"<osm/>".to_vec()]);
+        let [south, west, north, east] = importer.bounds_asked()[0].expect("only the area is kept");
+        let b = Area::new("Testville", 1.0, 2.0).bounds();
+        assert_eq!([south, west, north, east], [b.south, b.west, b.north, b.east]);
         importer.answer(Ok(NETWORK.to_string()));
         assert_eq!(result.borrow_mut().take(), Some(Ok(())));
         assert_eq!(store.open().view(0).name, "Testville");
@@ -187,6 +196,20 @@ mod tests {
             assert!(!message.is_empty(), "step {step}");
             assert!(!store.has_network(), "step {step}: {message}");
         }
+    }
+
+    #[test]
+    fn a_place_with_no_streets_round_it_is_said_and_not_kept() {
+        let (ports, fetcher, importer) = test_ports_with_fetcher();
+        let store = CityStore::for_area(ports.storage.clone(), Area::new("Mid-ocean", 1.0, 2.0));
+        let result = seen();
+        let r = result.clone();
+        Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
+        fetcher.answer(Ok(b"<osm/>".to_vec()));
+        importer.answer(Ok(r#"{"left_hand":false,"nodes":[],"roads":[]}"#.to_string()));
+        let message = result.borrow_mut().take().unwrap().unwrap_err();
+        assert!(message.contains("no streets") && message.contains("Mid-ocean"), "{message}");
+        assert!(!store.has_network());
     }
 
     #[test]

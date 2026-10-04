@@ -35,7 +35,8 @@ pub trait Fetcher {
 /// Turns OpenStreetMap data into the street network JSON the city is made from. The reader is
 /// a module of its own that the page loads when it is first asked.
 pub trait Importer {
-    fn import(&self, osm: Vec<u8>, done: Box<dyn FnOnce(Result<String, String>)>);
+    /// `bounds` is the box to keep, south, west, north, east in degrees, or None to keep all of it.
+    fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>);
 }
 
 /// Opens another page of the site.
@@ -181,13 +182,18 @@ impl Fetcher for FakeFetcher {
 /// An importer that keeps what it is asked to read until the test answers.
 #[derive(Default)]
 pub struct FakeImporter {
-    asked: RefCell<Vec<(Vec<u8>, Box<dyn FnOnce(Result<String, String>)>)>>,
+    asked: RefCell<Vec<(Vec<u8>, Option<[f64; 4]>, Box<dyn FnOnce(Result<String, String>)>)>>,
 }
 
 impl FakeImporter {
     /// What each request not yet answered asked to read, oldest first.
     pub fn asked(&self) -> Vec<Vec<u8>> {
-        self.asked.borrow().iter().map(|(b, _)| b.clone()).collect()
+        self.asked.borrow().iter().map(|(b, ..)| b.clone()).collect()
+    }
+
+    /// The box each request not yet answered asked to keep, oldest first.
+    pub fn bounds_asked(&self) -> Vec<Option<[f64; 4]>> {
+        self.asked.borrow().iter().map(|(_, b, _)| *b).collect()
     }
 
     /// Answers the oldest request not yet answered. False when there is none.
@@ -197,7 +203,7 @@ impl FakeImporter {
             if asked.is_empty() { None } else { Some(asked.remove(0)) }
         };
         match first {
-            Some((_, done)) => {
+            Some((_, _, done)) => {
                 done(result);
                 true
             }
@@ -207,8 +213,8 @@ impl FakeImporter {
 }
 
 impl Importer for FakeImporter {
-    fn import(&self, osm: Vec<u8>, done: Box<dyn FnOnce(Result<String, String>)>) {
-        self.asked.borrow_mut().push((osm, done));
+    fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>) {
+        self.asked.borrow_mut().push((osm, bounds, done));
     }
 }
 

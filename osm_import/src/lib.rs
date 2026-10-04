@@ -13,8 +13,17 @@ use wasm_bindgen::prelude::*;
 
 /// Reads OSM XML (or PBF) into a network.
 pub fn import(osm: &[u8]) -> Result<Network, String> {
+    import_in(osm, None)
+}
+
+/// The same, keeping only what lies in a box (south, west, north, east, in degrees): a road that
+/// crosses its edge is cut there and ends in a street running off the map.
+pub fn import_in(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<Network, String> {
     let mut timer = Timer::throwaway();
-    let (mut streets, _doc) = streets_reader::osm_to_street_network(osm, None, MapConfig::default(), &mut timer).map_err(|e| e.to_string())?;
+    let clip = bounds.map(|[south, west, north, east]| {
+        [(west, south), (east, south), (east, north), (west, north), (west, south)].into_iter().map(|(lon, lat)| geom::LonLat::new(lon, lat)).collect()
+    });
+    let (mut streets, _doc) = streets_reader::osm_to_street_network(osm, clip, MapConfig::default(), &mut timer).map_err(|e| e.to_string())?;
     streets.apply_transformations(Transformation::standard_for_clipped_areas(), &mut timer);
     let mut network = convert(&streets);
     osm_network::merge::merge_dual_carriageways(&mut network);
@@ -71,8 +80,10 @@ fn convert(streets: &StreetNetwork) -> Network {
     net
 }
 
-/// For the browser: OSM XML in, the network as JSON out (or the error text, as a thrown string).
+/// For the browser: OSM XML or PBF in, the network as JSON out (or the error text, as a thrown string).
+/// `bounds` is empty, or the box to keep: south, west, north, east.
 #[wasm_bindgen]
-pub fn osm_to_network(osm: &[u8]) -> Result<String, String> {
-    serde_json::to_string(&import(osm)?).map_err(|e| e.to_string())
+pub fn osm_to_network(osm: &[u8], bounds: &[f64]) -> Result<String, String> {
+    let bounds = <[f64; 4]>::try_from(bounds).ok();
+    serde_json::to_string(&import_in(osm, bounds)?).map_err(|e| e.to_string())
 }

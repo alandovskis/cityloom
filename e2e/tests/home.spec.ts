@@ -18,8 +18,8 @@ const stubWorld = async (page: Page, requests: string[] = []) => {
       json: [
         {
           display_name: "Kreuzberg, Friedrichshain-Kreuzberg, Berlin, 10999, Germany",
-          lat: "52.4990",
-          lon: "13.4030",
+          lat: "52.5010",
+          lon: "13.4235",
           boundingbox: ["52.48", "52.51", "13.38", "13.43"],
         },
         {

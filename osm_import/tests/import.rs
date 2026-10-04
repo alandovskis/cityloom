@@ -49,3 +49,21 @@ fn two_carriageways_with_a_median_between_them_are_one_street_of_both_directions
     let driving = |way| b.lanes.iter().filter(|l| l.kind == LaneKind::Driving && l.way == way).count();
     assert!(driving(Way::Forward) >= 2 && driving(Way::Backward) >= 2, "{:?}", b.lanes);
 }
+
+const PLATEAU: &[u8] = include_bytes!("data/plateau.osm");
+
+#[test]
+fn an_import_can_be_clipped_to_a_box_and_keeps_only_what_lies_in_it() {
+    let all = import(PLATEAU).unwrap();
+    // 150 m either way of the middle of the extract (45.5261, -73.5978)
+    let (lat, lon): (f64, f64) = (45.5261, -73.5978);
+    let (dlat, dlon) = (150.0 / 111_320.0, 150.0 / (111_320.0 * lat.to_radians().cos()));
+    let clipped = osm_import::import_in(PLATEAU, Some([lat - dlat, lon - dlon, lat + dlat, lon + dlon])).unwrap();
+    assert!(clipped.roads.len() > 10, "{} roads", clipped.roads.len());
+    assert!(clipped.roads.len() < all.roads.len() / 2, "{} of {}", clipped.roads.len(), all.roads.len());
+    // nothing lies far outside the box: the data's own corner is 400 m away, the box 150 m
+    let (min_x, max_x) = clipped.nodes.iter().fold((f64::MAX, f64::MIN), |(a, b), n| (a.min(n.x_m), b.max(n.x_m)));
+    assert!(max_x - min_x < 400.0, "{} m wide", max_x - min_x);
+    // no box is the same as `import`
+    assert_eq!(osm_import::import_in(PLATEAU, None).unwrap(), all);
+}

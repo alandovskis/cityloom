@@ -111,18 +111,18 @@ struct BrowserImporter;
 
 impl Importer for BrowserImporter {
     #[cfg(target_arch = "wasm32")]
-    fn import(&self, osm: Vec<u8>, done: Box<dyn FnOnce(Result<String, String>)>) {
-        wasm_bindgen_futures::spawn_local(async move { done(read_osm(&osm).await) });
+    fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>) {
+        wasm_bindgen_futures::spawn_local(async move { done(read_osm(&osm, bounds).await) });
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn import(&self, _osm: Vec<u8>, done: Box<dyn FnOnce(Result<String, String>)>) {
+    fn import(&self, _osm: Vec<u8>, _bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>) {
         done(Err("there is no OpenStreetMap reader here".to_string()));
     }
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn read_osm(osm: &[u8]) -> Result<String, String> {
+async fn read_osm(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<String, String> {
     use wasm_bindgen::JsCast;
     let words = |e: wasm_bindgen::JsValue| {
         e.as_string()
@@ -132,7 +132,11 @@ async fn read_osm(osm: &[u8]) -> Result<String, String> {
     let window = web_sys::window().ok_or("there is no window")?;
     let read = js_sys::Reflect::get(&window, &"cityloomImportOsm".into()).map_err(words)?;
     let read: js_sys::Function = read.dyn_into().map_err(|_| "the page has no OpenStreetMap reader".to_string())?;
-    let promise = read.call1(&wasm_bindgen::JsValue::NULL, &js_sys::Uint8Array::from(osm)).map_err(words)?;
+    let bounds = match bounds {
+        Some(b) => js_sys::Float64Array::from(&b[..]),
+        None => js_sys::Float64Array::new_with_length(0),
+    };
+    let promise = read.call2(&wasm_bindgen::JsValue::NULL, &js_sys::Uint8Array::from(osm), &bounds).map_err(words)?;
     let json = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise)).await.map_err(words)?;
     json.as_string().ok_or_else(|| "the map data could not be read".to_string())
 }
