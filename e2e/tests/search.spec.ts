@@ -65,7 +65,7 @@ test.describe("the search box on the city map", () => {
     await expect(page.locator("#search")).toHaveAttribute("aria-activedescendant", "sr-1");
     const second = await page.locator("#sr-1 a").getAttribute("href");
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(new RegExp(second!.replace(/[?.]/g, "\\$&") + "$"));
+    await expect(page).toHaveURL((url) => url.pathname.slice(1) + url.search === second);
   });
 
   test("Escape clears what was typed, then leaves the box", async ({ page }) => {

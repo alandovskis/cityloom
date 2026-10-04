@@ -123,7 +123,7 @@ test.describe("the city map", () => {
   test("a place in the list opens its editor", async ({ page }) => {
     const href = await page.locator("a.place-row[href^='street.html']").first().getAttribute("href");
     await page.locator(`a.place-row[href="${href}"]`).click();
-    await expect(page).toHaveURL(new RegExp(href!.replace("?", "\\?") + "$"));
+    await expect(page).toHaveURL((url) => url.pathname.slice(1) + url.search === href);
   });
 
   test("every place is a link the keyboard reaches, and Enter on one opens its editor", async ({ page }) => {
@@ -145,7 +145,7 @@ test.describe("the city map", () => {
     await expect(second).toHaveClass(/\bon\b/);
     const href = (await second.getAttribute("href"))!;
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(new RegExp(href.replace(/[?.]/g, "\\$&") + "$"));
+    await expect(page).toHaveURL((url) => url.pathname.slice(1) + url.search === href);
   });
 
   test("pressing a place on the map opens it", async ({ page }) => {
