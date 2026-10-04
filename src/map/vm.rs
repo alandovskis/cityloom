@@ -6,6 +6,7 @@ use std::cell::Cell;
 use std::rc::{Rc, Weak};
 
 use leptos::prelude::*;
+use osm_network::Network;
 
 use crate::city::model::{City, CityView, EdgeView, NodeView};
 use crate::city::store::CityStore;
@@ -13,6 +14,7 @@ use crate::map::camera::{Camera, Insets, World};
 use crate::map::overlay;
 use crate::map::projection::Projection;
 use crate::map::style;
+use crate::place::area::Area;
 use crate::shared::core::{Core, Presents};
 use crate::shared::ports::{MapEvent, Ports};
 use crate::shared::units::Units;
@@ -31,6 +33,8 @@ const PAN_PX: f64 = 80.0;
 pub const MISSING: &str = "The basemap could not be loaded. Build it with `just basemap-tiles`, then reload the page.";
 pub const OUTSIDE: &str = "There is no basemap for this place. The map covers the Montréal area.";
 pub const NO_ROADS: &str = "The roads of this place could not be loaded, so there is no map to show.";
+/// What the status line says of a city with no places.
+pub const NOTHING_TO_SHOW: &str = "No roads to show.";
 
 /// Whether the basemap is there to draw the places on.
 #[derive(Clone, Debug, PartialEq)]
@@ -51,6 +55,15 @@ fn href_of(hot: &str) -> Option<String> {
         "j" => Some(junction_href(uid)),
         _ => None,
     }
+}
+
+/// What a page shows when the area chosen has no roads kept.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Fallback {
+    /// The home page: the sample city, drawn behind the card.
+    SampleCity,
+    /// The map page: a city of no places, named after the area.
+    NoPlaces,
 }
 
 struct CityModel {
@@ -151,6 +164,8 @@ pub struct MapVm {
     me: Weak<MapVm>,
     core: Core<CityModel>,
     store: CityStore,
+    /// The area the map page was opened on whose roads could not be had: the page shows a city of no places.
+    roadless: Option<Area>,
     ports: Ports,
     camera: ArcRwSignal<Camera>,
     basemap: ArcRwSignal<BasemapState>,
@@ -163,16 +178,32 @@ pub struct MapVm {
 }
 
 impl MapVm {
-    pub fn new(ports: Ports) -> Rc<MapVm> {
+    /// The map page's: the city of the area chosen. When that area's roads could not be had it is a city of
+    /// no places named after the area, never the sample city the other pages fall back on.
+    pub fn for_map(ports: Ports) -> Rc<MapVm> {
+        MapVm::build(ports, Fallback::NoPlaces)
+    }
+
+    /// The home page's: the city of the area chosen, or the sample city behind the card when that area's
+    /// roads could not be had.
+    pub fn for_home(ports: Ports) -> Rc<MapVm> {
+        MapVm::build(ports, Fallback::SampleCity)
+    }
+
+    fn build(ports: Ports, fallback: Fallback) -> Rc<MapVm> {
         let store = CityStore::current(ports.storage.clone());
-        let model = CityModel { city: store.open(), region: store.region() };
+        let has_roads = store.area().is_some();
+        // An area was chosen (not the sample city) but its roads are not kept.
+        let roadless = if fallback == Fallback::NoPlaces && !has_roads { CityStore::current_area(&*ports.storage) } else { None };
+        let model = CityModel { city: Self::open_city(&store, roadless.as_ref()), region: store.region() };
         let core = Core::new(model);
         let world = World::round(core.view_now().bounds_mm);
-        let basemap = if store.area().is_some() { BasemapState::Waiting } else { BasemapState::Unavailable(NO_ROADS) };
+        let basemap = if has_roads { BasemapState::Waiting } else { BasemapState::Unavailable(NO_ROADS) };
         Rc::new_cyclic(|me| MapVm {
             me: me.clone(),
             core,
             store,
+            roadless,
             ports,
             camera: ArcRwSignal::new(Camera::new(world, 800.0, 520.0)),
             basemap: ArcRwSignal::new(basemap),
@@ -212,6 +243,11 @@ impl MapVm {
 
     pub fn places(&self) -> usize {
         self.view().places
+    }
+
+    /// A city with nothing in it: an area whose roads could not be had, or that has none.
+    fn has_no_places(&self) -> bool {
+        self.places() == 0
     }
 
     pub fn changes(&self) -> usize {
@@ -315,6 +351,9 @@ impl MapVm {
         if self.terms().is_empty() {
             return None;
         }
+        if self.has_no_places() {
+            return Some("There are no places to search.".to_string());
+        }
         let n = self.results().len();
         Some(if n == 0 {
             format!("No places match \u{201c}{}\u{201d}. Clear the search to see all {}.", self.search.get().trim(), self.places())
@@ -373,6 +412,9 @@ impl MapVm {
     }
 
     pub fn checks_lead(&self) -> String {
+        if self.has_no_places() {
+            return "There are no places to check.".to_string();
+        }
         let v = self.view();
         let all = Self::places_for_notes(&v);
         let failing = all.iter().filter(|p| !p.1).count();
@@ -397,6 +439,9 @@ impl MapVm {
     }
 
     pub fn changes_lead(&self) -> String {
+        if self.has_no_places() {
+            return "There are no places to change.".to_string();
+        }
         let n = self.changed_items().len();
         if n > 0 {
             format!("{} changed from the city as first laid out.", plural(n, "place", "places"))
@@ -407,6 +452,10 @@ impl MapVm {
 
     /// Whether the city works, in one line.
     pub fn status(&self) -> Status {
+        if self.has_no_places() {
+            // Nothing works, since there is nothing: not a tick.
+            return Status { text: NOTHING_TO_SHOW.to_string(), bad: true };
+        }
         let v = self.view();
         let bad: Vec<String> = Self::places_for_notes(&v).into_iter().filter(|p| !p.1).map(|p| p.0.name).collect();
         if bad.is_empty() {
@@ -464,8 +513,15 @@ impl MapVm {
     /// The city is read again from where it is kept: another tab wrote it, the
     /// page is shown again, or it was started over.
     pub fn reload(&self) {
-        let city = self.store.open();
+        let city = Self::open_city(&self.store, self.roadless.as_ref());
         self.core.edit(|m| m.city = city);
+    }
+
+    fn open_city(store: &CityStore, roadless: Option<&Area>) -> City {
+        match roadless {
+            Some(area) => City::from_network(&Network::default(), &area.name),
+            None => store.open(),
+        }
     }
 
     fn update_camera(&self, f: impl FnOnce(&mut Camera)) {
@@ -664,7 +720,7 @@ mod tests {
 
     fn vm() -> (Rc<MapVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         let (ports, said, storage) = test_ports();
-        (MapVm::new(ports), said, storage)
+        (MapVm::for_home(ports), said, storage)
     }
 
     /// Another page writes a street of the city into the shared storage.
@@ -940,7 +996,7 @@ mod tests {
     fn the_region_is_read_from_storage_and_can_be_changed() {
         let (ports, ..) = test_ports();
         ports.storage.remember(crate::city::store::REGION_KEY, "united-kingdom");
-        let vm = MapVm::new(ports);
+        let vm = MapVm::for_home(ports);
         assert_eq!(vm.region(), 3);
         vm.set_region(0);
         assert_eq!(vm.region(), 0);
@@ -980,7 +1036,7 @@ mod tests {
         assert!(CityStore::choose(&*storage, &area));
         let (mapper, navigator) = (Rc::new(FakeMapper::default()), Rc::new(RecordingNavigator::default()));
         let ports = Ports { mapper: mapper.clone(), navigator: navigator.clone(), ..ports };
-        let vm = MapVm::new(ports);
+        let vm = MapVm::for_map(ports);
         vm.attach();
         mapper.take(); // the scale's units, said when it attached
         (vm, mapper, navigator, storage)
@@ -994,6 +1050,80 @@ mod tests {
         let (vm, ..) = vm();
         assert_eq!(vm.basemap_state(), BasemapState::Unavailable(NO_ROADS));
         assert!(vm.projection().is_none());
+    }
+
+    /// The map page on the area chosen (here the default one), whose roads were never kept.
+    fn roadless_map_vm() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<MemoryStorage>) {
+        let (ports, _, storage) = test_ports();
+        let mapper = Rc::new(FakeMapper::default());
+        let vm = MapVm::for_map(Ports { mapper: mapper.clone(), ..ports });
+        vm.attach();
+        mapper.take();
+        (vm, mapper, storage)
+    }
+
+    #[test]
+    fn the_map_page_of_an_area_whose_roads_were_not_had_shows_nothing_of_the_sample_city() {
+        let (vm, mapper, _) = roadless_map_vm();
+        let owner = Owner::new();
+        owner.set();
+        assert_eq!(vm.basemap_state(), BasemapState::Unavailable(NO_ROADS));
+        assert_eq!(vm.title(), crate::place::area::default_area().name, "the area that could not be loaded");
+        assert!(vm.junction_rows().is_empty() && vm.street_rows().is_empty());
+        assert_eq!((vm.places(), vm.changes()), (0, 0));
+        assert_eq!(vm.counts(), "0 junctions, 0 streets");
+        assert_eq!(vm.status(), Status { text: NOTHING_TO_SHOW.to_string(), bad: true });
+        assert!(vm.failing_items().is_empty() && vm.changed_items().is_empty());
+        assert_eq!(vm.checks_lead(), "There are no places to check.");
+        assert_eq!(vm.changes_lead(), "There are no places to change.");
+        assert!(!vm.can_reset());
+        assert_eq!(vm.press_reset(), ResetOutcome::Ignored);
+        vm.set_search("avenue");
+        assert!(vm.results().is_empty());
+        assert_eq!(vm.search_note().as_deref(), Some("There are no places to search."));
+        assert!(vm.projection().is_none());
+        // the camera the page keeps for the panels has a box round nothing, not an inside-out one
+        vm.resize(1000.0, 600.0);
+        vm.set_insets(Insets { left: 300.0, ..Insets::default() });
+        assert!(vm.camera().fit_k.is_finite() && vm.camera().fit_k > 0.0);
+        mapper.say(COVERING);
+        mapper.say(MapEvent::Failed);
+        assert_eq!(vm.basemap_state(), BasemapState::Unavailable(NO_ROADS), "the reason stays the roads");
+        assert!(mapper.take().is_empty(), "nothing is drawn");
+    }
+
+    #[test]
+    fn the_map_page_reads_nothing_back_from_the_sample_city_when_the_city_is_read_again() {
+        let (vm, _, storage) = roadless_map_vm();
+        nudge_street(&storage, 1, -100); // the sample city's own key, as its sandbox might
+        vm.reload();
+        assert_eq!((vm.places(), vm.changes()), (0, 0));
+        assert_eq!(vm.title(), crate::place::area::default_area().name);
+    }
+
+    #[test]
+    fn the_map_page_on_the_sample_city_chosen_on_purpose_lists_its_places() {
+        use crate::shared::ports::Storage;
+        let (ports, _, storage) = test_ports();
+        storage.remember(crate::city::store::AREA_KEY, crate::city::store::SAMPLE_AREA);
+        let vm = MapVm::for_map(ports);
+        assert_eq!(vm.title(), "Sample city");
+        assert_eq!(vm.junction_rows().len() + vm.street_rows().len(), 32);
+        assert_eq!(vm.basemap_state(), BasemapState::Unavailable(NO_ROADS));
+    }
+
+    #[test]
+    fn the_home_page_falls_back_on_the_sample_city_when_the_area_s_roads_were_not_had() {
+        let (vm, ..) = vm(); // the default area, whose roads are not kept
+        assert_eq!(vm.title(), "Sample city");
+        assert_eq!(vm.places(), 32);
+        assert!(vm.status().text.ends_with("Every check passes."));
+    }
+
+    #[test]
+    fn the_map_page_of_an_area_whose_roads_were_had_shows_them() {
+        let (vm, ..) = area_vm();
+        assert_eq!((vm.title().as_str(), vm.street_rows().len()), ("Bendville", 1));
     }
 
     #[test]

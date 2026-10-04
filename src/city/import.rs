@@ -260,6 +260,14 @@ mod tests {
     }
 
     #[test]
+    fn a_network_without_roads_is_a_city_of_no_places_whose_bounds_are_a_point() {
+        let v = City::from_network(&Network::default(), "Nowhere").view(0);
+        assert_eq!((v.name.as_str(), v.places, v.nodes.len(), v.edges.len()), ("Nowhere", 0, 0, 0));
+        assert_eq!(v.bounds_mm, [0; 4], "not the empty fold's sentinels, which make an inside-out box");
+        assert_eq!(v.origin_m, None);
+    }
+
+    #[test]
     fn a_street_has_the_lanes_and_name_of_its_road() {
         let city = City::from_network(&crossing(), "Testville");
         let v = city.view(0);

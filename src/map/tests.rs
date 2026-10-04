@@ -14,7 +14,7 @@ use crate::shared::ports::{MemoryStorage, test_ports};
 
 fn map_vm() -> (Rc<MapVm>, Rc<MemoryStorage>) {
     let (ports, _, storage) = test_ports();
-    (MapVm::new(ports), storage)
+    (MapVm::for_home(ports), storage)
 }
 
 fn map_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
@@ -70,6 +70,26 @@ fn a_map_page_with_nothing_to_show_says_why() {
     let h = map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
     assert!(h.contains("role=\"status\"") && h.contains("The roads of this place could not be loaded"), "{h}");
     assert!(!h.contains("hidden"), "{h}");
+}
+
+#[test]
+fn a_map_page_whose_area_s_roads_were_not_had_lists_nothing_and_names_the_area() {
+    let (ports, _, _) = test_ports(); // the default area, whose roads are not kept
+    let vm = MapVm::for_map(ports);
+    let area = crate::place::area::default_area().name;
+    let h = map_html(|| view! { <map_ui::MapHeader vm=vm.clone()/> });
+    assert!(h.contains(&format!(">{area}</h1>")) && h.contains("0 junctions, 0 streets") && !h.contains("Sample city"), "{h}");
+    let h = map_html(|| view! { <map_ui::Places vm=vm.clone()/> });
+    assert_eq!(count(&h, "place-row"), 0, "{h}");
+    let h = map_html(|| view! { <map_ui::Status vm=vm.clone()/> });
+    assert!(h.contains("class=\"fit bad\"") && h.contains("No roads to show.") && !h.contains("tick"), "{h}");
+    let h = map_html(|| view! { <map_ui::TitleBlock vm=vm.clone()/> });
+    assert!(h.contains(&format!("id=\"tb-street\">{area}<")) && h.contains("id=\"tb-places\" class=\"fig\">0<"), "{h}");
+    assert!(button_tag(&map_html(|| view! { <map_ui::ResetButton vm=vm.clone()/> }), "reset").contains("disabled"));
+    assert_eq!(count(&map_html(|| view! { <map_ui::Checks vm=vm.clone()/> }), "<li"), 0);
+    assert_eq!(count(&map_html(|| view! { <map_ui::Changes vm=vm.clone()/> }), "<li"), 0);
+    let h = map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
+    assert!(h.contains("The roads of this place could not be loaded"), "{h}");
 }
 
 #[test]

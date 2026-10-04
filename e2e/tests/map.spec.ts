@@ -284,6 +284,14 @@ test.describe("when there is no basemap", () => {
     await page.route("https://overpass-api.de/**", (route) => route.abort());
     await page.goto("/map.html");
     await expect(page.locator(".basemap-note")).toContainText("The roads of this place could not be loaded");
+    // nothing of the sample city stands in for the area: no places, and the page names the area it could not load
+    await expect(page.locator("#fit")).toHaveText("No roads to show.");
+    await expect(page.locator("a.place-row")).toHaveCount(0);
+    await expect(page.locator("#city-count")).toHaveText("0 junctions, 0 streets");
+    await expect(page.locator("#title-block")).toContainText("Plateau Mont-Royal");
+    await expect(page.locator("#title-block")).not.toContainText("Sample city");
+    await expect(page.locator("#street-name")).not.toHaveText("Sample city");
+    await expect(page.locator("#reset")).toBeDisabled();
     // the refused request is the point of the test; anything else still fails it
     forgive(errors, /^Failed to load resource: net::ERR_FAILED$/);
   });

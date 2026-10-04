@@ -632,10 +632,12 @@ impl City {
             }
             nodes.push(v);
         }
-        let (mut x0, mut y0, mut x1, mut y1) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
-        for n in &nodes {
-            (x0, y0, x1, y1) = (x0.min(n.x_mm), y0.min(n.y_mm), x1.max(n.x_mm), y1.max(n.y_mm));
-        }
+        // A city of no places lies at its origin, not in a box turned inside out.
+        let (x0, y0, x1, y1) = if nodes.is_empty() {
+            (0, 0, 0, 0)
+        } else {
+            nodes.iter().fold((i32::MAX, i32::MAX, i32::MIN, i32::MIN), |(x0, y0, x1, y1), n| (x0.min(n.x_mm), y0.min(n.y_mm), x1.max(n.x_mm), y1.max(n.y_mm)))
+        };
         let places = nodes.iter().filter(|n| n.junction).count() + edges.len();
         let failing = nodes.iter().filter(|n| !n.ok).count() + edges.iter().filter(|e| !e.ok).count();
         let edited = nodes.iter().filter(|n| n.edited).count() + edges.iter().filter(|e| e.edited).count();
