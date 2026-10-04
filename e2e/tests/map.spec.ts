@@ -14,6 +14,19 @@ const centre = (page: Page) =>
     return { lng: c.lng, lat: c.lat };
   });
 
+/** The colour of the basemap's land: none while a new style is put in, when the map has no layers. */
+const land = (page: Page) =>
+  page.evaluate(() => {
+    const map = (window as any).cityloomMap;
+    return map.getLayer("background") ? map.getPaintProperty("background", "background-color") : null;
+  });
+
+/** Waits for a new style, whose land is not `before`, to be in and the places to be back on it. */
+async function restyled(page: Page, before: unknown) {
+  await expect.poll(async () => [null, before].includes(await land(page))).toBe(false);
+  await mapReady(page);
+}
+
 type Box = { x: number; y: number; width: number; height: number };
 const overlaps = (a: Box, b: Box) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
@@ -241,19 +254,41 @@ test.describe("the city map", () => {
     expect(overlaps(scale, attribution)).toBe(false);
   });
 
-  test("a theme changes the basemap and keeps the places and the highlight", async ({ page }) => {
-    // While a new style is put in, the map has no layers: the colour is then none.
-    const land = () =>
-      page.evaluate(() => {
+  test("the place the pointer is on in the list is lit on the map, and stays lit through a change of theme", async ({
+    page,
+  }) => {
+    const row = page.locator("#places-panel a.place-row[href^='intersection.html']").first();
+    const hot = (await row.getAttribute("data-hl"))!;
+    // Whether the map draws the place lit: null while it has no places (a new style is going in).
+    const lit = () =>
+      page.evaluate((id) => {
         const map = (window as any).cityloomMap;
-        return map.getLayer("background") ? map.getPaintProperty("background", "background-color") : null;
-      });
-    const light = await land();
+        return map.getSource("places") ? map.getFeatureState({ source: "places", id }).hot === true : null;
+      }, hot);
+    expect(await lit()).toBe(false);
+    await row.hover();
+    await expect.poll(lit).toBe(true);
+    const light = await land(page);
+    // The theme changes while the pointer stays on the row: as the system's dark mode would, with no menu to
+    // reach (whose button would take the pointer off the row).
+    await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
+    await restyled(page, light);
+    await expect.poll(lit).toBe(true);
+    await expect(row).toHaveClass(/\bon\b/);
+    // and the pointer leaving the row puts it out
+    await page.mouse.move(2, 400);
+    await expect.poll(lit).toBe(false);
+  });
+
+  test("a theme changes the basemap and keeps the places, and the pointer on one still lights it in the list", async ({
+    page,
+  }) => {
+    const light = await land(page);
     expect(light).not.toBeNull();
     await page.locator("#account-btn").click();
     await page.locator('[data-theme-set="dark"]').click();
-    await expect.poll(async () => [null, light].includes(await land())).toBe(false);
-    await mapReady(page); // the places came back with the new style
+    await restyled(page, light);
+    // the pointer on the map lights the place in the list
     const spot = await junctionSpot(page);
     await page.mouse.move(spot.x, spot.y);
     await expect(page.locator("a.place-row.on")).toHaveCount(1);
