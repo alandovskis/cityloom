@@ -316,6 +316,7 @@ mod tests {
         assert_eq!(f.vm.status(), Status::Loading("Kreuzberg, Friedrichshain-Kreuzberg".into()));
         assert_eq!(f.vm.note().unwrap(), "Getting the streets of Kreuzberg, Friedrichshain-Kreuzberg…");
         assert!(f.navigator.take().is_empty(), "not before the streets are here");
+        f.fetcher.answer(Err("no tiles".into())); // the index of the metro tiles: none
         f.fetcher.answer(Ok(b"<osm/>".to_vec()));
         f.importer.answer(Ok(NETWORK.to_string()));
         assert_eq!(f.navigator.take(), vec!["map.html"]);
@@ -329,6 +330,7 @@ mod tests {
         let f = fixture();
         found(&f);
         f.vm.choose(1);
+        f.fetcher.answer(Err("no tiles".into()));
         f.fetcher.answer(Err("the server answered 504".into()));
         assert!(matches!(f.vm.status(), Status::Failed(m) if m.contains("504")));
         assert!(f.navigator.take().is_empty());

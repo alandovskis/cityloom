@@ -5,6 +5,7 @@ pub mod area;
 pub mod loader;
 pub mod nominatim;
 pub mod overpass;
+pub mod tiles;
 pub mod view;
 pub mod vm;
 

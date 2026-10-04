@@ -19,3 +19,7 @@ e2e/playwright-report/
 *.iws
 .idea_modules/
 .impeccable/mocks/
+
+# The metropolitan area's OSM tiles are made by scripts/metro-tiles.sh, not kept in git. The index
+# beside them is a placeholder that names none; the script overwrites it, and that is not committed.
+/web/data/metro/*.osm.pbf
