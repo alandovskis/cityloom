@@ -23,7 +23,9 @@ pub fn import_in(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<Network, String
     let clip = bounds.map(|[south, west, north, east]| {
         [(west, south), (east, south), (east, north), (west, north), (west, south)].into_iter().map(|(lon, lat)| geom::LonLat::new(lon, lat)).collect()
     });
-    let (mut streets, _doc) = streets_reader::osm_to_street_network(osm, clip, MapConfig::default(), &mut timer).map_err(|e| e.to_string())?;
+    // Most streets carry no sidewalk tags: without inference they would have none.
+    let config = MapConfig { inferred_sidewalks: true, ..MapConfig::default() };
+    let (mut streets, _doc) = streets_reader::osm_to_street_network(osm, clip, config, &mut timer).map_err(|e| e.to_string())?;
     streets.apply_transformations(Transformation::standard_for_clipped_areas(), &mut timer);
     let mut network = convert(&streets);
     osm_network::merge::merge_dual_carriageways(&mut network);
@@ -61,15 +63,7 @@ fn convert(streets: &StreetNetwork) -> Network {
                 .lane_specs_ltr
                 .iter()
                 .map(|l| Lane {
-                    kind: match l.lt {
-                        LaneType::Driving => LaneKind::Driving,
-                        LaneType::Parking(_) => LaneKind::Parking,
-                        LaneType::Sidewalk | LaneType::Shoulder | LaneType::Footway => LaneKind::Sidewalk,
-                        LaneType::Biking => LaneKind::Bike,
-                        LaneType::Bus => LaneKind::Bus,
-                        LaneType::Buffer(_) => LaneKind::Buffer,
-                        _ => LaneKind::Other,
-                    },
+                    kind: lane_kind(l.lt),
                     way: if l.dir == Direction::Forward { Way::Forward } else { Way::Backward },
                     width_m: l.width.inner_meters(),
                 })
@@ -78,6 +72,31 @@ fn convert(streets: &StreetNetwork) -> Network {
         });
     }
     net
+}
+
+/// A shoulder is not somewhere to walk: it is a buffer between the road and what lies beside it.
+fn lane_kind(lt: LaneType) -> LaneKind {
+    match lt {
+        LaneType::Driving => LaneKind::Driving,
+        LaneType::Parking(_) => LaneKind::Parking,
+        LaneType::Sidewalk | LaneType::Footway => LaneKind::Sidewalk,
+        LaneType::Biking => LaneKind::Bike,
+        LaneType::Bus => LaneKind::Bus,
+        LaneType::Buffer(_) | LaneType::Shoulder => LaneKind::Buffer,
+        _ => LaneKind::Other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_shoulder_is_a_buffer_and_not_a_sidewalk() {
+        assert_eq!(lane_kind(LaneType::Shoulder), LaneKind::Buffer);
+        assert_eq!(lane_kind(LaneType::Sidewalk), LaneKind::Sidewalk);
+        assert_eq!(lane_kind(LaneType::Footway), LaneKind::Sidewalk);
+    }
 }
 
 /// For the browser: OSM XML or PBF in, the network as JSON out (or the error text, as a thrown string).

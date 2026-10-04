@@ -67,3 +67,12 @@ fn an_import_can_be_clipped_to_a_box_and_keeps_only_what_lies_in_it() {
     // no box is the same as `import`
     assert_eq!(osm_import::import_in(PLATEAU, None).unwrap(), all);
 }
+
+#[test]
+fn a_street_with_no_sidewalk_tags_gets_a_sidewalk_on_each_side() {
+    use osm_import::{LaneKind, Way};
+    let net = import(CROSSING).unwrap();
+    let side = net.roads.iter().find(|r| r.name.as_deref() == Some("Side Road")).unwrap();
+    let sidewalks = |way| side.lanes.iter().filter(|l| l.kind == LaneKind::Sidewalk && l.way == way).count();
+    assert_eq!((sidewalks(Way::Forward), sidewalks(Way::Backward)), (1, 1), "{:?}", side.lanes);
+}
