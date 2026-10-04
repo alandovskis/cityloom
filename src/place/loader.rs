@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use super::area::{Area, DEFAULT_DATA_URL, default_area};
+use super::area::Area;
 use super::nominatim::{self, Place};
 use super::overpass;
 use super::tiles;
@@ -29,8 +29,8 @@ impl Loader {
     /// are fetched, read and kept, unless they already are. A store of no area
     /// has the sample city and is done at once.
     ///
-    /// Where the roads come from: the default area's come with the app; the others' come from
-    /// a tile of the metropolitan area's data if one holds the place, and from Overpass if not.
+    /// Where the roads come from: a tile of the metropolitan area's data if one holds the place, and
+    /// Overpass if not (or if the tile cannot be had).
     pub fn load(&self, store: &CityStore, done: impl FnOnce(Result<(), String>) + 'static) {
         let Some(area) = store.area().cloned() else { return done(Ok(())) };
         if store.has_network() {
@@ -44,9 +44,6 @@ impl Loader {
         });
         let this = self.clone();
         let store = store.clone();
-        if area == default_area() {
-            return this.read(DEFAULT_DATA_URL, None, area, store, finish);
-        }
         let overpass = {
             let (this, area, store, finish) = (this.clone(), area.clone(), store.clone(), finish.clone());
             move || this.read(overpass::ENDPOINT, Some(overpass::query(area.bounds())), area, store, finish)
@@ -117,6 +114,7 @@ mod tests {
     use std::cell::RefCell;
 
     use super::*;
+    use crate::place::area::default_area;
     use crate::shared::ports::{MemoryStorage, test_ports_with_fetcher};
 
     type Seen<T> = Rc<RefCell<Option<T>>>;
@@ -181,18 +179,24 @@ mod tests {
     }
 
     #[test]
-    fn the_default_area_is_read_from_the_pbf_that_ships_not_from_overpass() {
+    fn the_default_area_is_read_like_any_other_from_its_tile_or_from_overpass() {
+        // from a tile, when the index has one for it
         let (ports, fetcher, importer) = test_ports_with_fetcher();
         let store = CityStore::for_area(ports.storage.clone(), default_area());
-        let result = seen();
-        let r = result.clone();
-        Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
-        assert_eq!(fetcher.asked(), vec![("data/default.osm.pbf".to_string(), None)]);
-        fetcher.answer(Ok(b"PBF".to_vec()));
-        assert_eq!(importer.asked(), vec![b"PBF".to_vec()], "read like any other data");
-        importer.answer(Ok(NETWORK.to_string()));
-        assert_eq!(result.borrow_mut().take(), Some(Ok(())));
-        assert!(store.has_network());
+        Loader::new(ports).load(&store, |_| {});
+        let d = default_area();
+        let index = format!(r#"{{"lon0":{},"lat0":{},"dlon":0.0257,"dlat":0.018,"tiles":["0_0"]}}"#, d.lon - 0.01, d.lat - 0.01);
+        fetcher.answer(Ok(index.into_bytes()));
+        assert_eq!(fetcher.asked(), vec![("data/metro/0_0.osm.pbf".to_string(), None)]);
+        fetcher.answer(Ok(b"TILE".to_vec()));
+        assert_eq!(importer.asked(), vec![b"TILE".to_vec()]);
+
+        // and from Overpass when there are no tiles, as there are not where they are not deployed
+        let (ports, fetcher, _) = test_ports_with_fetcher();
+        let store = CityStore::for_area(ports.storage.clone(), default_area());
+        Loader::new(ports).load(&store, |_| {});
+        without_tiles(&fetcher);
+        assert_eq!(fetcher.asked()[0].0, overpass::ENDPOINT);
     }
 
     #[test]

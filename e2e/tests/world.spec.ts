@@ -1,7 +1,21 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { expect, test } from "./fixtures";
 
-// The pages open the area of the world that was chosen: before one is, the one that ships with the app.
+// The pages open the area of the world that was chosen: before one is, the Plateau Mont-Royal. There are
+// no metro tiles in the tests, so one is served: a tile of one place, holding a real extract of the Plateau.
 test.use({ area: "world" });
+
+const PLATEAU = fileURLToPath(new URL("../fixtures/plateau.osm.pbf", import.meta.url));
+
+test.beforeEach(async ({ page }) => {
+  await page.route("**/data/metro/index.json", (route) =>
+    route.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"] } }),
+  );
+  await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(PLATEAU) }));
+  await page.route("https://overpass-api.de/**", (route) => route.abort());
+});
 
 test("the map opens on the default area, made of its real streets", async ({ page }) => {
   await page.goto("/map.html");

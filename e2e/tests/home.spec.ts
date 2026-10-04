@@ -7,7 +7,7 @@ import { expect, live, STREET, test } from "./fixtures";
 
 const CORS = { "access-control-allow-origin": "*" };
 const EXTRACT = fileURLToPath(new URL("../../osm_import/tests/data/kreuzberg.osm", import.meta.url));
-const PLATEAU_PBF = fileURLToPath(new URL("../../web/data/default.osm.pbf", import.meta.url));
+const PLATEAU_PBF = fileURLToPath(new URL("../fixtures/plateau.osm.pbf", import.meta.url));
 
 /** The two services a place is found and read from, answered without a network: Nominatim with two
  *  places, and Overpass with the real extract of Kreuzberg, which the OSM reader in the browser reads. */

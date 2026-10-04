@@ -37,10 +37,6 @@ format-check:
     cargo fmt --check
     cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js
 
-# Remake the default area's data from an OSM XML extract: `just default-area osm_import/tests/data/plateau.osm`. Needs uv.
-default-area extract:
-    uv run --with osmium scripts/osm2pbf.py {{extract}} web/data/default.osm.pbf
-
 # Cut the Montréal metropolitan area's roads into tiles in web/data/metro, from a Geofabrik Quebec extract. Needs osmium-tool.
 metro-tiles quebec:
     ./scripts/metro_tiles.py {{quebec}}
