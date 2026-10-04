@@ -17,10 +17,11 @@ use crate::street::watch::SheetWatch;
 // ---- what the page is made of --------------------------------------------------------
 
 /// The pieces by what they are for, so twelve rows read as four lists.
-pub const ADD_GROUPS: [(&str, &[&str]); 4] = [
+pub const ADD_GROUPS: [(&str, &[&str]); 5] = [
     ("Walk and plant", &["sidewalk", "planting", "median"]),
     ("Cycling", &["bike", "bikerack", "bikeshare"]),
-    ("Roadway", &["travel", "bus", "parking", "loading", "shoulder"]),
+    ("Transit", &["bus"]),
+    ("Roadway", &["travel", "parking", "loading", "shoulder"]),
     ("Furniture", &["pole"]),
 ];
 
