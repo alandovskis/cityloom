@@ -7,6 +7,7 @@ import { expect, live, STREET, test } from "./fixtures";
 
 const CORS = { "access-control-allow-origin": "*" };
 const EXTRACT = fileURLToPath(new URL("../../osm_import/tests/data/kreuzberg.osm", import.meta.url));
+const PLATEAU_PBF = fileURLToPath(new URL("../../web/data/default.osm.pbf", import.meta.url));
 
 /** The two services a place is found and read from, answered without a network: Nominatim with two
  *  places, and Overpass with the real extract of Kreuzberg, which the OSM reader in the browser reads. */
@@ -88,6 +89,40 @@ test.describe("the home page", () => {
     await expect(page.getByRole("button", { name: "Open" })).toBeVisible();
     await page.locator('#area-results [role="option"]').nth(0).click();
     await expect(page).toHaveURL(/map\.html$/);
+  });
+
+  test("a place a metro tile holds is read from the tile, and Overpass is not asked", async ({ page }) => {
+    const asked: string[] = [];
+    await page.route("https://nominatim.openstreetmap.org/**", (route) =>
+      route.fulfill({
+        headers: CORS,
+        json: [
+          {
+            display_name: "Mile End, Montréal, Québec",
+            lat: "45.5265",
+            lon: "-73.5970",
+            boundingbox: ["45.5", "45.55", "-73.62", "-73.57"],
+          },
+        ],
+      }),
+    );
+    await page.route("https://overpass-api.de/**", (route) => {
+      asked.push(route.request().url());
+      return route.abort();
+    });
+    // a grid of one tile, holding the extract the app ships
+    await page.route("**/data/metro/index.json", (route) =>
+      route.fulfill({ json: { lon0: -73.6, lat0: 45.52, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"] } }),
+    );
+    await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(PLATEAU_PBF) }));
+    await page.locator("#search").fill("Mile End");
+    await page.keyboard.press("Enter");
+    await expect(page.locator('#area-results [role="option"]')).toHaveCount(1);
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/map\.html$/);
+    await expect(page.locator("#title-block")).toContainText("Mile End, Montréal");
+    expect(await page.locator("#map-slot a[href^='street.html']").count()).toBeGreaterThan(20);
+    expect(asked).toEqual([]);
   });
 
   test("a place whose streets cannot be got says so and stays on the page", async ({ page, errors }) => {

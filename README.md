@@ -37,3 +37,17 @@ Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first;
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: formatting, the unit tests (with warnings denied), and the browser tests, each through `just`. A final `CI` job passes only if all of them did, so that is the one check to require in branch protection. A failed browser run keeps its Playwright report and traces as an artifact. Actions are pinned to a commit, and Dependabot proposes weekly updates for them, the Cargo dependencies and the browser tests' npm packages.
+
+## Montréal metro tiles
+
+The roads of the whole Montréal metropolitan area can be cut into tiles that are served with the pages, so that
+a place there is read from a file of a few kilobytes instead of being asked of Overpass:
+
+```sh
+curl -LO https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf   # about 1.2 GB
+brew install osmium-tool
+just metro-tiles quebec-latest.osm.pbf   # about 3 minutes; 1,700 tiles, about 49 MB, in web/data/metro
+```
+
+The tiles are not kept in git; `web/data/metro/index.json` is a placeholder that names none, and the command above
+overwrites it. Deploy the folder with the pages. Without tiles every place other than the default one comes from Overpass.

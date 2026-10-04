@@ -41,6 +41,10 @@ format-check:
 default-area extract:
     uv run --with osmium scripts/osm2pbf.py {{extract}} web/data/default.osm.pbf
 
+# Cut the Montréal metropolitan area's roads into tiles in web/data/metro, from a Geofabrik Quebec extract. Needs osmium-tool.
+metro-tiles quebec:
+    ./scripts/metro_tiles.py {{quebec}}
+
 # Serve the pages at http://127.0.0.1:8137/ (build first).
 serve:
     python3 -m http.server 8137 --directory web
