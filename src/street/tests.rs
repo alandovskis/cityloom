@@ -195,6 +195,8 @@ fn the_add_menu_is_closed_and_lists_every_piece_in_seven_groups() {
     assert!(h.contains("aria-expanded=\"false\"") && h.contains("id=\"add-menu\" hidden class=\"menu add-menu\""));
     assert!(button_tag(&h, "add-btn").contains("aria-haspopup"));
     assert_eq!(count(&h, "class=\"add-item\""), 17);
+    assert_eq!(count(&h, "class=\"add-icon\""), 17);
+    assert!(h.contains("viewBox=\"0 0 200 160\"") && !h.contains("class=\"swatch\""));
     for (g, group) in ["Walking", "Greenery", "Cycling", "Transit", "Roadway", "Furniture", "Utilities"].into_iter().enumerate() {
         assert!(h.contains(&format!("id=\"add-g-{g}\" class=\"add-group-h\">{group}<")), "{group}");
     }

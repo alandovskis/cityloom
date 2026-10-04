@@ -8,6 +8,7 @@ use leptos::prelude::*;
 use serde::Deserialize;
 
 use crate::shared::catalogue::KINDS;
+use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
 use crate::street::model::{SegView, View};
 use crate::street::text::status_text;
@@ -181,17 +182,6 @@ pub fn History(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// A swatch of a kind of piece: its tint and hatch, with the parking mark.
-fn kind_swatch(id: &'static str) -> impl IntoView {
-    view! {
-        <svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false">
-            <rect class=format!("k-{id}") width="44" height="22" stroke="none"/>
-            <rect width="44" height="22" fill=format!("url(#h-{id})") stroke="none"/>
-            {(id == "parking").then(|| view! { <text class="slab-p" x="22" y="16" text-anchor="middle" font-size="14">"P"</text> })}
-        </svg>
-    }
-}
-
 /// The button that opens the list of pieces, and the list: arrows move through
 /// it, Escape closes it, and choosing a piece adds it after the selected one.
 #[component]
@@ -286,7 +276,7 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
                                     w.edit(|e| e.add(k, at) != 0);
                                 }
                             >
-                                {kind_swatch(kind.id)}
+                                <span class="add-icon" inner_html=icon(kind.id)></span>
                                 <b>{kind.name}</b>
                                 <span class="dw">{move || w.units().length_fine(kind.default_mm)}</span>
                             </button>

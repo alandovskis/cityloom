@@ -1,6 +1,8 @@
 //! The hatch patterns that tell the pieces of a street apart without colour, and
 //! the line-art elevation symbols drawn on the street's section.
 
+use crate::shared::catalogue::{KINDS, MATERIALS};
+
 /// One distinct texture per kind of piece.
 pub const HATCH: [(&str, &str); 17] = [
     (
@@ -412,6 +414,41 @@ pub fn symbol(kind_id: &str, cx: f64, ground_y: f64, px_per_m: f64, seg_px: f64,
     format!("<g class=\"sym\" transform=\"translate({cx} {ground_y}) scale({k})\">{}</g>", art(kind_id, wm, o))
 }
 
+/// Where each symbol's art lies, as its middle, width and height in drawing units, measured
+/// from the art as drawn at its default width. `icon` scales and centres by it.
+const EXTENT: [(&str, f64, f64, f64); 17] = [
+    ("sidewalk", 0.0, 71.0, 64.0),
+    ("planting", 1.0, 60.0, 102.0),
+    ("bike", 0.0, 54.0, 58.0),
+    ("travel", 1.0, 94.0, 40.0),
+    ("bus", 0.0, 144.0, 66.0),
+    ("parking", 2.0, 104.0, 68.0),
+    ("median", 0.0, 90.0, 27.0),
+    ("loading", 1.0, 106.0, 58.0),
+    ("shoulder", 0.0, 26.0, 34.0),
+    ("bikerack", -6.0, 76.0, 38.0),
+    ("bikeshare", 0.0, 120.0, 62.0),
+    ("pole", 0.0, 80.0, 120.0),
+    ("busshelter", 0.0, 84.0, 68.0),
+    ("busstation", 0.0, 180.0, 74.0),
+    ("bench", 0.0, 60.0, 40.0),
+    ("terrace", 0.0, 104.0, 95.0),
+    ("streetlamp", 27.0, 54.0, 150.0),
+];
+
+/// A picture of one kind of piece for a menu: its elevation symbol at the width and surface
+/// it is added with, standing on a ground line, scaled up to fill the picture.
+pub fn icon(kind_id: &str) -> String {
+    let (Some(kind), Some(&(_, mid, w, h))) = (KINDS.iter().find(|k| k.id == kind_id), EXTENT.iter().find(|e| e.0 == kind_id)) else { return String::new() };
+    let opts = SymbolOpts { material: MATERIALS[kind.materials[0]].id, ..SymbolOpts::default() };
+    let k = (176.0 / w).min(132.0 / h).min(2.5);
+    format!(
+        "<svg class=\"icon\" viewBox=\"0 0 200 160\" aria-hidden=\"true\" focusable=\"false\"><g class=\"sym\"><path class=\"o\" d=\"M8,148 L192,148\"/><g transform=\"translate({} 148) scale({k})\">{}</g></g></svg>",
+        100.0 - mid * k,
+        art(kind.id, kind.default_mm as f64 / 1000.0, opts)
+    )
+}
+
 /// All the hatch patterns as one JSON object of three: kinds, materials, curbs, each
 /// from the pattern's name to its SVG. The pages that still draw in script read them.
 pub fn hatches_json() -> String {
@@ -483,6 +520,18 @@ mod tests {
         assert!(s.contains("M-42,-60 L42,-60 L42,-68 L-42,-68 Z"));
         assert_eq!(s.matches("f-coat-").count(), 1);
         assert_eq!(sym("busstation", 4.0, SymbolOpts::default()).matches("f-coat-").count(), 2);
+    }
+
+    #[test]
+    fn every_kind_of_piece_has_an_icon_that_draws_it_and_the_ground_it_stands_on() {
+        for k in &KINDS {
+            let svg = icon(k.id);
+            assert!(svg.starts_with("<svg") && svg.ends_with("</svg>"), "{}", k.id);
+            assert!(svg.contains("class=\"sym\"") && svg.contains(&art(k.id, k.default_mm as f64 / 1000.0, SymbolOpts::default())[..20]), "{}", k.id);
+        }
+        assert_eq!(KINDS.len(), EXTENT.len(), "every kind has its extent");
+        // A planting strip is drawn with the surface it starts with: trees.
+        assert!(icon("planting").contains("C-33,-62"));
     }
 
     #[test]
