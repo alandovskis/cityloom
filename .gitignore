@@ -28,3 +28,6 @@ e2e/playwright-report/
 /node_modules/
 /web/vendor/
 /web/data/basemap/*.pmtiles
+
+# Planetiler's downloaded sources (Natural Earth, water polygons), fetched by scripts/basemap_tiles.py.
+/data/

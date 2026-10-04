@@ -48,4 +48,4 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404).end("not found");
   }
-}).listen(8137, "127.0.0.1");
+}).listen(Number(process.env.E2E_PORT ?? 8137), "127.0.0.1");

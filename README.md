@@ -51,3 +51,14 @@ just metro-tiles quebec-latest.osm.pbf   # about 3 minutes; 1,700 tiles, about 4
 
 The tiles are not kept in git; `web/data/metro/index.json` is a placeholder that names none, and the command above
 overwrites it. Deploy the folder with the pages. Without tiles every place, the default one (the Plateau Mont-Royal) too, comes from Overpass, so the app then needs a network.
+
+## The basemap
+
+The map page draws the city over a basemap of the Montréal metropolitan area, from a file of vector tiles that is served with the pages and read with HTTP range requests (any host that serves static files with range support will do; `just serve` does):
+
+```sh
+brew install openjdk          # Planetiler needs Java 21 or later
+just basemap-tiles quebec-latest.osm.pbf   # the same extract as above; about 1 GB of sources are downloaded once; writes web/data/basemap/montreal.pmtiles
+```
+
+The tiles are not kept in git. Without them the map page says the basemap could not be loaded and shows no map, and a place outside the metropolitan area says there is no basemap for it; the street and junction editors work either way. The style is `web/basemap-light.json` and `web/basemap-dark.json`, written by `node scripts/make_basemap_style.mjs`.

@@ -29,8 +29,7 @@ test.describe("the static server", () => {
     expect(past.status()).toBe(416);
   });
 
-  // web/basemap-light.json does not exist until Task 7, which turns this fixme into a test.
-  test.fixme("serves JSON with its content type", async ({ request }) => {
+  test("serves JSON with its content type", async ({ request }) => {
     expect((await request.get("/basemap-light.json")).headers()["content-type"]).toContain("application/json");
   });
 });

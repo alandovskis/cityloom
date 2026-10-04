@@ -42,6 +42,10 @@ format-check:
 metro-tiles quebec:
     ./scripts/metro_tiles.py {{quebec}}
 
+# Build the basemap's tiles of the Montréal metropolitan area in web/data/basemap, from the same extract. Needs Java 21+.
+basemap-tiles quebec:
+    ./scripts/basemap_tiles.py {{quebec}}
+
 # Serve the pages at http://127.0.0.1:8137/ (build first). The server answers range requests, as the map's tiles need.
 serve:
     node e2e/serve.mjs

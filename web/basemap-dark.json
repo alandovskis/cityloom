@@ -1,0 +1,424 @@
+{
+  "version": 8,
+  "name": "CityLoom dark",
+  "glyphs": "GLYPHS",
+  "sources": {
+    "basemap": {
+      "type": "vector",
+      "url": "pmtiles://TILES",
+      "attribution": "© <a href=\"https://openmaptiles.org/\">OpenMapTiles</a> © <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap contributors</a>"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#0f1317"
+      }
+    },
+    {
+      "id": "landcover",
+      "type": "fill",
+      "source": "basemap",
+      "source-layer": "landcover",
+      "filter": [
+        "in",
+        [
+          "get",
+          "class"
+        ],
+        [
+          "literal",
+          [
+            "grass",
+            "wood"
+          ]
+        ]
+      ],
+      "paint": {
+        "fill-color": [
+          "match",
+          [
+            "get",
+            "class"
+          ],
+          "wood",
+          "#122015",
+          "#15261b"
+        ],
+        "fill-opacity": 0.7
+      }
+    },
+    {
+      "id": "park",
+      "type": "fill",
+      "source": "basemap",
+      "source-layer": "park",
+      "paint": {
+        "fill-color": "#15261b",
+        "fill-opacity": 0.8
+      }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "basemap",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#142230"
+      }
+    },
+    {
+      "id": "waterway",
+      "type": "line",
+      "source": "basemap",
+      "source-layer": "waterway",
+      "paint": {
+        "line-color": "#142230",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          8,
+          0.5,
+          16,
+          3
+        ]
+      }
+    },
+    {
+      "id": "building",
+      "type": "fill",
+      "source": "basemap",
+      "source-layer": "building",
+      "minzoom": 14,
+      "paint": {
+        "fill-color": "#192027",
+        "fill-outline-color": "#222b33"
+      }
+    },
+    {
+      "id": "path",
+      "type": "line",
+      "source": "basemap",
+      "source-layer": "transportation",
+      "minzoom": 14,
+      "filter": [
+        "in",
+        [
+          "get",
+          "class"
+        ],
+        [
+          "literal",
+          [
+            "path",
+            "pedestrian",
+            "track"
+          ]
+        ]
+      ],
+      "paint": {
+        "line-color": "#3b454f",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          14,
+          0.6,
+          20,
+          2
+        ],
+        "line-dasharray": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "road-casing",
+      "type": "line",
+      "source": "basemap",
+      "source-layer": "transportation",
+      "filter": [
+        "in",
+        [
+          "get",
+          "class"
+        ],
+        [
+          "literal",
+          [
+            "motorway",
+            "trunk",
+            "primary",
+            "secondary",
+            "tertiary",
+            "minor",
+            "service"
+          ]
+        ]
+      ],
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": [
+          "match",
+          [
+            "get",
+            "class"
+          ],
+          "motorway",
+          "#2a2418",
+          "trunk",
+          "#2a2418",
+          "primary",
+          "#2a2418",
+          "#0b0f13"
+        ],
+        "line-width": [
+          "interpolate",
+          [
+            "exponential",
+            1.5
+          ],
+          [
+            "zoom"
+          ],
+          10,
+          [
+            "match",
+            [
+              "get",
+              "class"
+            ],
+            "motorway",
+            2.7,
+            "trunk",
+            2.7,
+            "primary",
+            2.4,
+            "secondary",
+            2.2,
+            "tertiary",
+            2,
+            1.6
+          ],
+          20,
+          [
+            "match",
+            [
+              "get",
+              "class"
+            ],
+            "motorway",
+            23.2,
+            "trunk",
+            23.2,
+            "primary",
+            21.2,
+            "secondary",
+            19.2,
+            "tertiary",
+            17.2,
+            "minor",
+            13.2,
+            "service",
+            7.2,
+            13.2
+          ]
+        ]
+      }
+    },
+    {
+      "id": "road",
+      "type": "line",
+      "source": "basemap",
+      "source-layer": "transportation",
+      "filter": [
+        "in",
+        [
+          "get",
+          "class"
+        ],
+        [
+          "literal",
+          [
+            "motorway",
+            "trunk",
+            "primary",
+            "secondary",
+            "tertiary",
+            "minor",
+            "service"
+          ]
+        ]
+      ],
+      "layout": {
+        "line-cap": "round",
+        "line-join": "round"
+      },
+      "paint": {
+        "line-color": [
+          "match",
+          [
+            "get",
+            "class"
+          ],
+          "minor",
+          "#262e35",
+          "service",
+          "#262e35",
+          "motorway",
+          "#5d4d30",
+          "trunk",
+          "#5d4d30",
+          "primary",
+          "#5d4d30",
+          "#303941"
+        ],
+        "line-width": [
+          "interpolate",
+          [
+            "exponential",
+            1.5
+          ],
+          [
+            "zoom"
+          ],
+          10,
+          [
+            "match",
+            [
+              "get",
+              "class"
+            ],
+            "motorway",
+            1.5,
+            "trunk",
+            1.5,
+            "primary",
+            1.2,
+            "secondary",
+            1,
+            "tertiary",
+            0.8,
+            0.4
+          ],
+          20,
+          [
+            "match",
+            [
+              "get",
+              "class"
+            ],
+            "motorway",
+            22,
+            "trunk",
+            22,
+            "primary",
+            20,
+            "secondary",
+            18,
+            "tertiary",
+            16,
+            "minor",
+            12,
+            "service",
+            6,
+            12
+          ]
+        ]
+      }
+    },
+    {
+      "id": "road-name",
+      "type": "symbol",
+      "source": "basemap",
+      "source-layer": "transportation_name",
+      "minzoom": 14,
+      "layout": {
+        "symbol-placement": "line",
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Noto Sans Regular"
+        ],
+        "text-size": 11,
+        "text-letter-spacing": 0.02
+      },
+      "paint": {
+        "text-color": "#9aa6b2",
+        "text-halo-color": "#0f1317",
+        "text-halo-width": 1.5
+      }
+    },
+    {
+      "id": "water-name",
+      "type": "symbol",
+      "source": "basemap",
+      "source-layer": "water_name",
+      "layout": {
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Noto Sans Regular"
+        ],
+        "text-size": 12
+      },
+      "paint": {
+        "text-color": "#6f9bc2",
+        "text-halo-color": "#0f1317",
+        "text-halo-width": 1.2
+      }
+    },
+    {
+      "id": "place",
+      "type": "symbol",
+      "source": "basemap",
+      "source-layer": "place",
+      "minzoom": 10,
+      "layout": {
+        "text-field": [
+          "get",
+          "name"
+        ],
+        "text-font": [
+          "Noto Sans Bold"
+        ],
+        "text-size": [
+          "match",
+          [
+            "get",
+            "class"
+          ],
+          "city",
+          16,
+          "suburb",
+          13,
+          12
+        ]
+      },
+      "paint": {
+        "text-color": "#e8edf2",
+        "text-halo-color": "#0f1317",
+        "text-halo-width": 1.5
+      }
+    }
+  ]
+}
