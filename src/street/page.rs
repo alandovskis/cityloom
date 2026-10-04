@@ -16,9 +16,10 @@ use crate::street::watch::SheetWatch;
 
 // ---- what the page is made of --------------------------------------------------------
 
-/// The pieces by what they are for, so seventeen rows read as six lists.
-pub const ADD_GROUPS: [(&str, &[&str]); 6] = [
-    ("Walk and plant", &["sidewalk", "planting", "median"]),
+/// The pieces by what they are for, so seventeen rows read as seven lists.
+pub const ADD_GROUPS: [(&str, &[&str]); 7] = [
+    ("Walking", &["sidewalk"]),
+    ("Greenery", &["planting", "median"]),
     ("Cycling", &["bike", "bikerack", "bikeshare"]),
     ("Transit", &["bus", "busshelter", "busstation"]),
     ("Roadway", &["travel", "parking", "loading", "shoulder"]),
@@ -468,12 +469,15 @@ mod tests {
         seen.dedup();
         assert_eq!(seen.len(), 17, "each kind is in one list");
         assert_eq!(KINDS.len(), 17);
-        let furniture: Vec<&str> = group_kinds(ADD_GROUPS[4].1).into_iter().map(|k| KINDS[k].id).collect();
-        assert_eq!(furniture, ["bench", "terrace"]);
-        let utilities: Vec<&str> = group_kinds(ADD_GROUPS[5].1).into_iter().map(|k| KINDS[k].id).collect();
-        assert_eq!(utilities, ["pole", "streetlamp"]);
-        let transit: Vec<&str> = group_kinds(ADD_GROUPS[2].1).into_iter().map(|k| KINDS[k].id).collect();
-        assert_eq!(transit, ["bus", "busshelter", "busstation"]);
+        let ids = |group: &str| -> Vec<&str> {
+            let (_, ids) = ADD_GROUPS.iter().find(|(name, _)| *name == group).unwrap();
+            group_kinds(ids).into_iter().map(|k| KINDS[k].id).collect()
+        };
+        assert_eq!(ids("Walking"), ["sidewalk"]);
+        assert_eq!(ids("Greenery"), ["planting", "median"]);
+        assert_eq!(ids("Transit"), ["bus", "busshelter", "busstation"]);
+        assert_eq!(ids("Furniture"), ["bench", "terrace"]);
+        assert_eq!(ids("Utilities"), ["pole", "streetlamp"]);
         assert_eq!(group_kinds(&["travel", "nonsense"]).len(), 1);
     }
 

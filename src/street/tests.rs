@@ -189,13 +189,13 @@ fn the_street_s_history_buttons_are_off_until_there_is_something_to_undo() {
 }
 
 #[test]
-fn the_add_menu_is_closed_and_lists_every_piece_in_six_groups() {
+fn the_add_menu_is_closed_and_lists_every_piece_in_seven_groups() {
     let s = street_shared(0);
     let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
     assert!(h.contains("aria-expanded=\"false\"") && h.contains("id=\"add-menu\" hidden class=\"menu add-menu\""));
     assert!(button_tag(&h, "add-btn").contains("aria-haspopup"));
     assert_eq!(count(&h, "class=\"add-item\""), 17);
-    for (g, group) in ["Walk and plant", "Cycling", "Transit", "Roadway", "Furniture", "Utilities"].into_iter().enumerate() {
+    for (g, group) in ["Walking", "Greenery", "Cycling", "Transit", "Roadway", "Furniture", "Utilities"].into_iter().enumerate() {
         assert!(h.contains(&format!("id=\"add-g-{g}\" class=\"add-group-h\">{group}<")), "{group}");
     }
     assert!(h.contains("3.3 m") && h.contains("Goes after the selected piece."));
