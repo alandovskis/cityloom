@@ -7,7 +7,7 @@ This repository holds three surfaces: a city map (`map.html`), the street cross-
 
 - `src/`: one folder per feature (a vertical slice), each holding its own model, view-model and views, plus a small kernel:
   - `street/`, `junction/`: the editors. `model.rs` has the editing rules (`junction/` also has `geometry.rs` and `read_model.rs`); `vm.rs` is the view-model; `text.rs` the words said to a screen reader; the rest are the Leptos views, with tests beside them.
-  - `map/`: the city map (view-model, camera, gestures, views). `city/`: the city (the sample one, or one made from OpenStreetMap), how it is kept in storage (`store.rs`) and the binding a page writes back through (`binding.rs`). `shell/`: the settings menu, sidebars and notes tabs every page shares.
+  - `map/`: the city map (view-model, the overlay and its projection onto the basemap, views). `city/`: the city (the sample one, or one made from OpenStreetMap), how it is kept in storage (`store.rs`) and the binding a page writes back through (`binding.rs`). `shell/`: the settings menu, sidebars and notes tabs every page shares.
   - `shared/`: what every slice uses: the catalogue and units, the ports a view-model reaches the browser through (`ports.rs`, with test fakes) and their browser side (`platform.rs`), the reactive `core.rs`, the `keeper.rs` that debounces writes, and the helpers views bind with.
 - A view-model has no page in it: it owns the model, exposes properties that are ready to show (words, flags, lists) and takes commands, and reaches the browser only through the ports, so it is tested on the host with fakes. A view (Leptos, client-side rendered) binds to those properties and sends commands; it decides nothing. Components are drawn to HTML in tests; `shell/view.rs` binds the markup the pages share and is checked in the browser.
 - A slice reaches another only through that slice's model (or `city`'s store and binding, or `shell`'s `Target`), never its view-model or views; `shared` depends on no slice.
@@ -28,11 +28,11 @@ just check    # test, then e2e
 just format   # rustfmt and Prettier (just format-check only checks)
 ```
 
-Without `just`: `cargo test`, `./scripts/build.sh`, `python3 -m http.server 8137 --directory web`, and `cd e2e && npx playwright test`.
+Without `just`: `cargo test`, `./scripts/build.sh`, `node e2e/serve.mjs` (the basemap's tiles need range requests, which `python3 -m http.server` does not answer), and `cd e2e && npx playwright test`.
 
 ## End-to-end tests
 
-Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; a small Node server (`e2e/serve.mjs`) serves `web/` for the run.
+Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; a small Node server (`e2e/serve.mjs`) serves `web/` for the run (and the basemap's range requests); `E2E_PORT` moves it off port 8137 when something else holds that.
 
 ## Continuous integration
 
