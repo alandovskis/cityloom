@@ -8,6 +8,7 @@ default:
 
 # Install what building and the browser tests need (once).
 setup:
+    npm ci
     cargo install wasm-bindgen-cli --version {{wasm_bindgen}} --root .tools
     cd e2e && npm ci && npx playwright install chromium
 
@@ -41,9 +42,9 @@ format-check:
 metro-tiles quebec:
     ./scripts/metro_tiles.py {{quebec}}
 
-# Serve the pages at http://127.0.0.1:8137/ (build first).
+# Serve the pages at http://127.0.0.1:8137/ (build first). The server answers range requests, as the map's tiles need.
 serve:
-    python3 -m http.server 8137 --directory web
+    node e2e/serve.mjs
 
 # Remove build output.
 clean:
