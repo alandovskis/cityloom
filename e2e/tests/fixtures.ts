@@ -50,9 +50,10 @@ export const STREET = 1; // "Sample Avenue 2", between the edge of the map and J
 export const PLATEAU_PBF = fileURLToPath(new URL("../fixtures/plateau.osm.pbf", import.meta.url));
 export const PLATEAU_TILES = fileURLToPath(new URL("../fixtures/plateau.pmtiles", import.meta.url));
 
-/** Serves the basemap's tiles as a static host with range support does: PMTiles reads them in pieces. */
-export async function serveBasemap(context: BrowserContext, file = PLATEAU_TILES) {
-  const body = readFileSync(file);
+/** Serves the basemap's tiles as a static host with range support does: PMTiles reads them in pieces.
+ *  `tiles` is a file to read them from, or the bytes themselves. */
+export async function serveBasemap(context: BrowserContext, tiles: string | Buffer = PLATEAU_TILES) {
+  const body = typeof tiles === "string" ? readFileSync(tiles) : tiles;
   await context.route("**/data/basemap/montreal.pmtiles", async (route) => {
     const range = /bytes=(\d+)-(\d*)/.exec(route.request().headers()["range"] ?? "");
     if (!range) return route.fulfill({ body, headers: { "accept-ranges": "bytes" } });
@@ -81,6 +82,19 @@ export async function mapReady(page: Page) {
     const m = (window as any).cityloomMap;
     return !!m && !!m.getSource("places") && m.areTilesLoaded() && m.querySourceFeatures("places").length > 0;
   });
+}
+
+/** Takes out of `errors` the ones a test expects (a request it refused, say), each of which must match one of
+ *  `expected`: any other error is left for the fixture to fail the test on. Each expected error must have
+ *  happened, so a test whose failure went away does not pass for nothing. */
+export function forgive(errors: string[], ...expected: RegExp[]) {
+  for (const p of expected)
+    expect(
+      errors.some((e) => p.test(e)),
+      `an error matching ${p}`,
+    ).toBe(true);
+  const others = errors.filter((e) => !expected.some((p) => p.test(e)));
+  errors.splice(0, errors.length, ...others);
 }
 
 /** Waits until the map has stopped moving: a fit, a zoom and a pan each ease for a moment. */

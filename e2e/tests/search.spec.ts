@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+
 import { expect, JUNCTION, live, mapReady, mapStill, serveWorld, test } from "./fixtures";
 
 test.describe("the search box on the city map", () => {
@@ -111,7 +113,7 @@ test.describe("the map under the floating panels", () => {
   });
 
   /** The box the places occupy on the screen, in page pixels. */
-  const placesBox = (page: import("@playwright/test").Page) =>
+  const placesBox = (page: Page) =>
     page.evaluate(() => {
       const map = (window as any).cityloomMap;
       const r = map.getCanvas().getBoundingClientRect();
@@ -141,6 +143,9 @@ test.describe("the map under the floating panels", () => {
     expect(c.r).toBeLessThan(right.x + 1);
     expect(c.t).toBeGreaterThan(bar.y + bar.height - 1);
     const open = { l: left.x + left.width, r: right.x };
+    // The old SVG drawing was placed exactly; MapLibre fits with padding through a camera ease, so this allows
+    // some room. Once still the fit is off by well under a pixel (0.1 px measured); a panel the fit ignored would
+    // move the centre by half its width (180 px for the 360 px panel), far past 60.
     expect(Math.abs((c.l + c.r) / 2 - (open.l + open.r) / 2)).toBeLessThan(60);
   });
 

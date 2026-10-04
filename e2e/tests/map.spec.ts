@@ -1,10 +1,14 @@
-import { expect, live, mapReady, mapStill, serveWorld, test } from "./fixtures";
+import { readFileSync } from "node:fs";
+
+import type { Page } from "@playwright/test";
+
+import { expect, forgive, live, mapReady, mapStill, PLATEAU_TILES, serveBasemap, serveWorld, test } from "./fixtures";
 
 // The map page works on a real area: the default one, the Plateau Mont-Royal, from a metro tile.
 test.use({ area: "world" });
 
-const zoom = (page: import("@playwright/test").Page) => page.evaluate(() => (window as any).cityloomMap.getZoom());
-const centre = (page: import("@playwright/test").Page) =>
+const zoom = (page: Page) => page.evaluate(() => (window as any).cityloomMap.getZoom());
+const centre = (page: Page) =>
   page.evaluate(() => {
     const c = (window as any).cityloomMap.getCenter();
     return { lng: c.lng, lat: c.lat };
@@ -12,7 +16,7 @@ const centre = (page: import("@playwright/test").Page) =>
 
 /** A junction the pointer can reach, in page pixels: one the floating panels and buttons do not cover, and
  *  the only one drawn where it is. */
-const junctionSpot = (page: import("@playwright/test").Page) =>
+const junctionSpot = (page: Page) =>
   page.evaluate(() => {
     const map = (window as any).cityloomMap;
     const r = map.getCanvas().getBoundingClientRect();
@@ -56,13 +60,23 @@ test.describe("the city map", () => {
 
   test("the streets lie on the basemap's roads", async ({ page }) => {
     // At a street's middle, the basemap draws a road within a few pixels: the overlay is where the earth is.
-    await page.evaluate(() => (window as any).cityloomMap.jumpTo({ zoom: 16 }));
+    // `idle` comes once the new view's tiles are loaded and drawn, which the old view's being loaded does not say.
+    await page.evaluate(
+      () =>
+        new Promise((done) => {
+          const map = (window as any).cityloomMap;
+          map.once("idle", done);
+          map.jumpTo({ zoom: 16 });
+        }),
+    );
+    await mapStill(page);
     await mapReady(page);
     const result = await page.evaluate(() => {
       const map = (window as any).cityloomMap;
       const lines = map
         .querySourceFeatures("places")
         .filter((f: any) => f.geometry.type === "LineString" && f.properties.width_m >= 6);
+      // the basemap style's road layers (scripts/make_basemap_style.mjs)
       const roads = ["road", "road-casing"];
       let on = 0;
       let seen = 0;
@@ -85,7 +99,7 @@ test.describe("the city map", () => {
       }
       return { on, seen };
     });
-    expect(result.seen).toBeGreaterThan(3);
+    expect(result.seen).toBeGreaterThanOrEqual(10);
     expect(result.on / result.seen).toBeGreaterThan(0.8);
   });
 
@@ -93,6 +107,28 @@ test.describe("the city map", () => {
     const href = await page.locator("a.place-row[href^='street.html']").first().getAttribute("href");
     await page.locator(`a.place-row[href="${href}"]`).click();
     await expect(page).toHaveURL(new RegExp(href!.replace("?", "\\?") + "$"));
+  });
+
+  test("every place is a link the keyboard reaches, and Enter on one opens its editor", async ({ page }) => {
+    // The map's canvas holds no place to focus: the Places list is how a keyboard gets to each of them.
+    const rows = page.locator("#places-panel .places a.place-row");
+    const counts = (await page.locator("#places-panel .insp-sub").textContent())!;
+    const [, junctions, streets] = /^(\d+) junctions?, (\d+) streets?$/.exec(counts)!;
+    expect(await rows.count()).toBe(Number(junctions) + Number(streets));
+    const reachable = await rows.evaluateAll(
+      (els) => els.filter((a) => (a as HTMLAnchorElement).href && (a as HTMLAnchorElement).tabIndex >= 0).length,
+    );
+    expect(reachable).toBe(Number(junctions) + Number(streets));
+
+    // Tab goes from one place to the next, and the place with the focus is the one shown.
+    await rows.first().focus();
+    await page.keyboard.press("Tab");
+    const second = rows.nth(1);
+    await expect(second).toBeFocused();
+    await expect(second).toHaveClass(/\bon\b/);
+    const href = (await second.getAttribute("href"))!;
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(new RegExp(href.replace(/[?.]/g, "\\$&") + "$"));
   });
 
   test("pressing a place on the map opens it", async ({ page }) => {
@@ -230,8 +266,15 @@ test.describe("when there is no basemap", () => {
     await page.goto("/map.html");
     await expect(page.locator(".basemap-note")).toContainText("The basemap could not be loaded");
     await expect(page.locator(".basemap-note")).toContainText("just basemap-tiles");
+    await expect(page.locator("a.place-row[href^='street.html']")).not.toHaveCount(0);
     expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(50);
-    errors.length = 0; // the failed request is the point of the test
+    // The failed request, and MapLibre's report of its source failing for it, are the point of the test;
+    // anything else still fails it.
+    forgive(
+      errors,
+      /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/,
+      /^Error: Bad response code: 404\n/,
+    );
   });
 
   test("an area whose roads could not be got says so", async ({ page, errors }) => {
@@ -241,7 +284,31 @@ test.describe("when there is no basemap", () => {
     await page.route("https://overpass-api.de/**", (route) => route.abort());
     await page.goto("/map.html");
     await expect(page.locator(".basemap-note")).toContainText("The roads of this place could not be loaded");
-    errors.length = 0; // the browser logs the refused request, which is the point
+    // the refused request is the point of the test; anything else still fails it
+    forgive(errors, /^Failed to load resource: net::ERR_FAILED$/);
+  });
+
+  test("a place beyond the basemap's coverage is said, and the page and its places still work", async ({
+    page,
+    context,
+  }) => {
+    // The fixture's tiles, saying in their header that they cover Berlin: the Plateau is then outside them.
+    const tiles = Buffer.from(readFileSync(PLATEAU_TILES));
+    expect(tiles.subarray(0, 7).toString("latin1")).toBe("PMTiles");
+    expect(tiles[7]).toBe(3); // the header below is version 3's
+    // PMTiles v3 header: min lon, min lat, max lon, max lat, little-endian int32 of degrees * 1e7.
+    [13.0, 52.3, 13.8, 52.7].forEach((deg, i) => tiles.writeInt32LE(Math.round(deg * 1e7), 102 + 4 * i));
+    await serveWorld(page);
+    await context.unroute("**/data/basemap/montreal.pmtiles");
+    await serveBasemap(context, tiles);
+    await page.goto("/map.html");
+    await expect(page.locator(".basemap-note")).toHaveText(
+      "There is no basemap for this place. The map covers the Montréal area.",
+    );
+    await expect(page.locator("a.place-row[href^='street.html']")).not.toHaveCount(0);
+    expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(50);
+    // nothing of the city is drawn on a map of somewhere else
+    expect(await page.evaluate(() => !(window as any).cityloomMap.getSource("places"))).toBe(true);
   });
 });
 
