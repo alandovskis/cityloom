@@ -32,13 +32,8 @@ street or junction editor.
 - **Print is dropped on the map page.** The shell's Print button is hidden
   there; the other two pages keep it.
 
-## Not decided here (to settle in the plan)
-
-- A road's real shape is not kept today (`city/import.rs` draws straight lines
-  between nodes), so on a real basemap the overlay will cut across curved
-  roads. Keeping `Road::points` in `Layout` is a separate change. This spec
-  accepts the straight overlay and states it in the page's notes; it does not
-  fold that change in.
+- A street keeps its **actual geometry**. The overlay follows the road's real
+  centreline, not a straight line between its two nodes.
 
 ## Data and build
 
@@ -60,6 +55,32 @@ street or junction editor.
 - Missing tiles: the page's start-up glue tries the PMTiles header; on failure
   it calls a Rust export that puts the message on the page (the words are in
   Rust, per the architecture).
+
+## Street geometry
+
+The imported `Network` already holds each road's centreline (`Road::points`,
+metres). `city/import.rs` reads it only to find the headings at the two ends
+and then drops it, so `Layout` edges are straight lines between nodes. This
+change keeps it:
+
+- An edge gains a `shape`: its centreline as a polyline in millimetres, from
+  node `a` to node `b`, reversed when the road runs the other way, as `headings`
+  already is. A road with fewer than two points keeps the straight line.
+  `Layout` is rebuilt from the stored network on every load
+  (`city/store.rs`), so this changes no stored format; the sample city's edges
+  stay straight.
+- Merged dual carriageways (`osm_network::merge`) already carry one merged
+  centreline; that is the shape kept.
+- `headings` is derived from the shape's ends as now, so the junction editor is
+  unchanged.
+- A street's length is today the straight distance between its nodes
+  (`Layout::dist_mm`). It becomes the length along the shape. Every place that
+  reads it (the street editor's length, the checks that use it) is found and
+  changed with it, and a test covers a curved street that is longer than its
+  chord. This is a behaviour change to checks, to be stated in the plan.
+- `map/overlay.rs` offsets the shape sideways by the street's half width to
+  make its polygon, and simplifies it for the zoom so a long curved road is not
+  a heavy feature. Joins at a junction are cut at the junction disc.
 
 ## Georeferencing
 
@@ -104,8 +125,10 @@ riskiest part of the work, since an error of a few metres shows.
 
 ## Tests
 
-- Native: the projection (round trip, and a known node), the overlay GeoJSON
-  (width, status, one feature per place), the view-model against the fake
+- Native: the projection (round trip, and a known node), the kept shape (end
+  order, a reversed road, a road with one point, length along a curve), the
+  overlay GeoJSON (width, status, one feature per place, a curved street's
+  polygon follows its centreline), the view-model against the fake
   `Mapper` (a pick selects a place; a shortcut becomes a command; zoom and fit
   commands), and the missing-basemap message.
 - Browser (`e2e/tests/map.spec.ts`): a small committed fixture
@@ -121,7 +144,9 @@ riskiest part of the work, since an error of a few metres shows.
 
 ## Out of scope
 
-- Keeping a road's real shape, and drawing lanes or hatches on the map.
+- Drawing lanes or hatches on the map.
+- Drawing the real shape in the street and junction editors, which still show
+  a straight street; only the map follows the centreline.
 - A basemap beyond the Montréal metropolitan area.
 - Print on the map page.
 - A second basemap style or a style editor.
