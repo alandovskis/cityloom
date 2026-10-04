@@ -61,10 +61,13 @@ pub(super) struct EdgeDef {
     /// The way the street leaves node `a` and node `b`, in degrees clockwise from north, where its real
     /// shape is known. Otherwise it leaves along the straight line to its other end.
     pub(super) headings: Option<(f64, f64)>,
+    /// The street's centreline in layout millimetres, from node `a` to node `b`, where its real shape is
+    /// known. Otherwise it runs along the straight line between them.
+    pub(super) shape: Option<Vec<(i32, i32)>>,
 }
 
 const fn street(a: usize, b: usize, street: usize) -> EdgeDef {
-    EdgeDef { a, b, street, name: None, section: None, headings: None }
+    EdgeDef { a, b, street, name: None, section: None, headings: None, shape: None }
 }
 
 const STREET: usize = 0;
@@ -148,6 +151,9 @@ pub struct Layout {
     pub(super) side: Side,
     pub(super) nodes: Vec<NodeDef>,
     pub(super) edges: Vec<EdgeDef>,
+    /// Where the layout's origin lies in the network it was made from, in metres east and north of the
+    /// network's own origin. The sample city is on no network, so has none.
+    pub(super) origin_m: Option<(f64, f64)>,
 }
 
 /// The widest a gap between neighbouring arms can be made by moving them, in degrees: a bend with a
@@ -194,7 +200,7 @@ fn separate(b: &mut [i32]) {
 impl Layout {
     /// The sample city's network.
     pub fn sample() -> Layout {
-        Layout { name: NAME.to_string(), side: Side::Right, nodes: NODES.into_iter().collect(), edges: EDGES.into_iter().collect() }
+        Layout { name: NAME.to_string(), side: Side::Right, nodes: NODES.into_iter().collect(), edges: EDGES.into_iter().collect(), origin_m: None }
     }
 }
 
@@ -206,10 +212,19 @@ pub struct City {
     today_junctions: BTreeMap<u32, State>,
 }
 
+/// How long a line through these points is, in millimetres.
+fn path_mm(points: &[(i32, i32)]) -> f64 {
+    points.windows(2).map(|w| ((w[1].0 - w[0].0) as f64).hypot((w[1].1 - w[0].1) as f64)).sum()
+}
+
 impl Layout {
-    fn dist_mm(&self, a: usize, b: usize) -> f64 {
-        let (dx, dy) = ((self.nodes[a].x_mm - self.nodes[b].x_mm) as f64, (self.nodes[a].y_mm - self.nodes[b].y_mm) as f64);
-        dx.hypot(dy)
+    /// The street's centreline from node `a` to node `b`, in millimetres: its own shape, or the straight line.
+    fn shape_of(&self, edge: usize) -> Vec<(i32, i32)> {
+        let e = &self.edges[edge];
+        e.shape.clone().unwrap_or_else(|| {
+            let (a, b) = (&self.nodes[e.a], &self.nodes[e.b]);
+            vec![(a.x_mm, a.y_mm), (b.x_mm, b.y_mm)]
+        })
     }
 
     /// The bearing at which street `edge` leaves `node`, to the nearest step the junction editor uses.
@@ -558,6 +573,7 @@ impl City {
             let at_first: Vec<String> = Editor::from_street(today, today, region).view().checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect();
             let failing: Vec<String> = v.checks.iter().filter(|c| !c.ok && !at_first.iter().any(|l| l == c.label)).map(|c| c.label.to_string()).collect();
             let row = v.row_mm;
+            let shape = self.layout.shape_of(i);
             edges.push(EdgeView {
                 uid,
                 a: node_uid(e.a),
@@ -566,7 +582,8 @@ impl City {
                 kind: now.title(),
                 row_mm: row,
                 total_mm: v.total_mm,
-                length_mm: self.layout.dist_mm(e.a, e.b).round() as i32,
+                length_mm: path_mm(&shape).round() as i32,
+                shape_mm: shape.iter().map(|&(x, y)| [x, y]).collect(),
                 trim_a_mm: trim_at(e.a),
                 trim_b_mm: trim_at(e.b),
                 freeway: SAMPLES[e.street].freeway,
@@ -622,7 +639,16 @@ impl City {
         let places = nodes.iter().filter(|n| n.junction).count() + edges.len();
         let failing = nodes.iter().filter(|n| !n.ok).count() + edges.iter().filter(|e| !e.ok).count();
         let edited = nodes.iter().filter(|n| n.edited).count() + edges.iter().filter(|e| e.edited).count();
-        CityView { name: self.layout.name.clone(), nodes, edges, bounds_mm: [x0, y0, x1, y1], places, failing, edited }
+        CityView {
+            name: self.layout.name.clone(),
+            nodes,
+            edges,
+            bounds_mm: [x0, y0, x1, y1],
+            places,
+            failing,
+            edited,
+            origin_m: self.layout.origin_m.map(|(x, y)| [x, y]),
+        }
     }
 }
 
@@ -656,6 +682,8 @@ pub struct EdgeView {
     pub row_mm: i32,
     pub total_mm: i32,
     pub length_mm: i32,
+    /// The street's centreline from node `a` to node `b`, in millimetres: two points or more.
+    pub shape_mm: Vec<[i32; 2]>,
     /// How far in from each end the street's details are left out, because
     /// the junction there is drawn over them.
     pub trim_a_mm: i32,
@@ -695,6 +723,8 @@ pub struct CityView {
     pub places: usize,
     pub failing: usize,
     pub edited: usize,
+    /// Where the layout's origin lies in the network, in metres east and north of its corner; None for the sample city.
+    pub origin_m: Option<[f64; 2]>,
 }
 
 #[cfg(test)]

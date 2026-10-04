@@ -90,6 +90,19 @@ fn headings(points: &[(f64, f64)]) -> Option<(f64, f64)> {
     Some((along(points)?, along(&reversed)?))
 }
 
+/// A road's centreline in layout millimetres with its two ends set to where its nodes are, so that a street
+/// meets its junctions; None for a road with fewer than two points.
+fn shape_mm(points: &[(f64, f64)], from: (i32, i32), to: (i32, i32), mm_of: &impl Fn(f64, f64) -> (i32, i32)) -> Option<Vec<(i32, i32)>> {
+    if points.len() < 2 {
+        return None;
+    }
+    let mut line: Vec<(i32, i32)> = points.iter().map(|&(x, y)| mm_of(x, y)).collect();
+    let last = line.len() - 1;
+    line[0] = from;
+    line[last] = to;
+    Some(line)
+}
+
 impl City {
     /// The city for `network`, every street and junction as OpenStreetMap has it.
     pub fn from_network(network: &Network, name: &str) -> City {
@@ -112,6 +125,12 @@ impl Layout {
         let index: BTreeMap<u32, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
         let roads: Vec<_> = roads.into_iter().filter(|r| index.contains_key(&r.from) && index.contains_key(&r.to)).collect();
         let (min_x, max_y) = nodes.iter().fold((f64::MAX, f64::MIN), |(x, y), n| (x.min(n.x_m), y.max(n.y_m)));
+        let origin_m = (!nodes.is_empty()).then_some((min_x, max_y));
+        let mm_of = |x_m: f64, y_m: f64| (((x_m - min_x) * 1000.0).round() as i32, ((max_y - y_m) * 1000.0).round() as i32);
+        let node_mm = |id: u32| {
+            let n = nodes[index[&id]];
+            mm_of(n.x_m, n.y_m)
+        };
         let street_name = |r: &osm_network::Road| r.name.clone().unwrap_or_else(|| format!("Unnamed {}", r.highway.replace('_', " ")));
 
         let edges: Vec<EdgeDef> = roads
@@ -126,6 +145,7 @@ impl Layout {
                     street: class,
                     name: Some(street_name(r)),
                     headings: headings(&r.points),
+                    shape: shape_mm(&r.points, node_mm(r.from), node_mm(r.to), &mm_of),
                     section: (!pieces.is_empty()).then(|| Street::imported(class, side, &pieces).named(&street_name(r))),
                 }
             })
@@ -164,7 +184,7 @@ impl Layout {
                 }
             })
             .collect();
-        Layout { name: name.to_string(), side: if network.left_hand { Side::Left } else { Side::Right }, nodes, edges }
+        Layout { name: name.to_string(), side: if network.left_hand { Side::Left } else { Side::Right }, nodes, edges, origin_m }
     }
 }
 
@@ -359,5 +379,50 @@ mod tests {
         let mut bearings: Vec<i32> = arms.iter().map(|a| a.bearing).collect();
         bearings.sort_unstable();
         assert_eq!(bearings, vec![90, 180, 270]);
+    }
+
+    #[test]
+    fn a_street_keeps_its_roads_shape_with_its_ends_on_its_nodes() {
+        let v = City::from_network(&curving_t(), "Curves").view(0);
+        let node = |uid: u32| v.nodes.iter().find(|n| n.uid == uid).unwrap();
+        let mut lens: Vec<usize> = v.edges.iter().map(|e| e.shape_mm.len()).collect();
+        lens.sort_unstable();
+        assert_eq!(lens, vec![3, 3, 4], "a point for each point the road has");
+        for e in &v.edges {
+            assert_eq!(e.shape_mm[0], [node(e.a).x_mm, node(e.a).y_mm], "starts on node a");
+            assert_eq!(*e.shape_mm.last().unwrap(), [node(e.b).x_mm, node(e.b).y_mm], "ends on node b");
+        }
+    }
+
+    #[test]
+    fn a_curved_street_is_longer_than_the_line_between_its_ends() {
+        let v = City::from_network(&curving_t(), "Curves").view(0);
+        let e = &v.edges[0]; // (0,0) -> (-30,0) -> (-100,100): 30 m, then about 122.07 m
+        let (a, b) = (e.shape_mm[0], e.shape_mm[2]);
+        let chord = ((a[0] - b[0]) as f64).hypot((a[1] - b[1]) as f64);
+        assert!((e.length_mm - 152_066).abs() <= 2, "{}", e.length_mm);
+        assert!(e.length_mm as f64 > chord + 5_000.0);
+    }
+
+    #[test]
+    fn a_road_with_no_centreline_or_one_point_is_the_straight_line_between_its_nodes() {
+        for points in [vec![], vec![(0.0, 0.0)]] {
+            let mut net = curving_t();
+            net.roads[0].points = points;
+            let v = City::from_network(&net, "Bare").view(0);
+            let e = &v.edges[0];
+            assert_eq!(e.shape_mm.len(), 2);
+            let node = |uid: u32| v.nodes.iter().find(|n| n.uid == uid).unwrap();
+            assert_eq!(e.shape_mm[0], [node(e.a).x_mm, node(e.a).y_mm]);
+            assert_eq!(e.shape_mm[1], [node(e.b).x_mm, node(e.b).y_mm]);
+        }
+    }
+
+    #[test]
+    fn the_layout_remembers_where_its_origin_lies_in_the_network() {
+        assert_eq!(City::from_network(&curving_t(), "Curves").view(0).origin_m, Some([-100.0, 100.0]));
+        let sample = City::new().view(0);
+        assert_eq!(sample.origin_m, None);
+        assert!(sample.edges.iter().all(|e| e.shape_mm.len() == 2), "the sample's streets are straight");
     }
 }
