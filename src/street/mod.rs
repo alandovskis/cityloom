@@ -82,12 +82,6 @@ pub fn mount_street_page(sheet: &Sheet, ends: Option<String>) {
     mount("checks", view! { <notes::Checks vm=vm.clone()/> }.into_any());
     mount("revs", view! { <notes::Revisions vm=vm.clone()/> }.into_any());
     mount("measures", view! { <notes::Measures vm=vm/> }.into_any());
-    // A street of a city is reached from the map, and its junctions are pages of their own.
-    if ends.is_some() {
-        if let Ok(Some(el)) = leptos::prelude::document().query_selector(".surface[href=\"intersection.html\"]") {
-            el.unchecked_into::<HtmlElement>().set_hidden(true);
-        }
-    }
 }
 
 /// The two ends of a street of the city kept in this browser as JSON: each a
