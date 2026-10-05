@@ -155,7 +155,10 @@ export async function createBasemap(container) {
     map.getCanvas().style.cursor = now ? "pointer" : "";
     emit({ kind: "hover", hot: now });
   });
+  // Leaving the map puts out only what the map itself lit: a row of the list the pointer is on now has lit its
+  // own place, and the browser says this after the row's pointerenter.
   map.getCanvas().addEventListener("mouseleave", () => {
+    if (over === null) return;
     over = null;
     emit({ kind: "hover", hot: null });
   });

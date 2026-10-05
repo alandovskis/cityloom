@@ -291,6 +291,21 @@ test.describe("the city map", () => {
     await expect.poll(lit).toBe(false);
   });
 
+  test("a place in the list is lit when the pointer comes onto it from the map", async ({ page }) => {
+    const row = page.locator("#places-panel a.place-row[href^='intersection.html']").first();
+    const hot = (await row.getAttribute("data-hl"))!;
+    const lit = () =>
+      page.evaluate((id) => {
+        return (window as any).cityloomMap.getFeatureState({ source: "places", id }).hot === true;
+      }, hot);
+    // The pointer is on the map, where it sets nothing, and then goes onto the row: leaving the map must not
+    // put out what the row lit.
+    await page.mouse.move(1400, 300);
+    await row.hover();
+    await expect.poll(lit).toBe(true);
+    await expect(row).toHaveClass(/\bon\b/);
+  });
+
   test("a theme changes the basemap and keeps the places, and the pointer on one still lights it in the list", async ({
     page,
   }) => {
