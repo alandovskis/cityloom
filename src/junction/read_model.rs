@@ -1188,16 +1188,21 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
     });
 
     // Crossing distance.
-    let longest = arms.iter().filter_map(|a| a.crossing.as_ref().map(|c| (c.stage_mm, a.label.clone()))).max_by_key(|(d, _)| *d);
+    let longest = arms.iter().filter_map(|a| a.crossing.as_ref().map(|c| (c, a))).max_by_key(|(c, _)| c.stage_mm);
     out.push(match longest {
         None => Check { id: "crossing", ok: true, amount_mm: 0, label: "Crossing distance", detail: "No crossings marked".into() },
-        Some((d, who)) => Check {
-            id: "crossing",
-            ok: d <= MAX_STAGE_MM,
-            amount_mm: d,
-            label: "Crossing distance",
-            detail: if d <= MAX_STAGE_MM { "Longest crossing in one go".into() } else { format!("{who} is too far to cross in one go") },
-        },
+        Some((c, a)) => {
+            let d = c.stage_mm;
+            let detail = if d <= MAX_STAGE_MM {
+                "Longest crossing in one go".into()
+            } else if a.can_island && !c.island && (c.distance_mm - ISLAND_MM) / 2 <= MAX_STAGE_MM {
+                // The island is the editor's to suggest, not to place: where it would bring each stage within reach, say so.
+                format!("{} is too far to cross in one go. A refuge island in the middle would split it in two", a.label)
+            } else {
+                format!("{} is too far to cross in one go", a.label)
+            };
+            Check { id: "crossing", ok: d <= MAX_STAGE_MM, amount_mm: d, label: "Crossing distance", detail }
+        }
     });
 
     // Turning speed across a marked crossing.
@@ -1259,6 +1264,23 @@ mod tests {
         assert_eq!(v.conflicts.merging, 8);
         assert_eq!(v.conflicts.diverging, 8);
         assert!(v.conflicts.by_phase);
+    }
+
+    #[test]
+    fn a_crossing_that_is_too_far_suggests_a_refuge_island_where_one_would_fix_it() {
+        let mut j = Junction::new(0);
+        let n = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+        assert!(j.set_island(n, false));
+        let v = j.view();
+        let check = v.checks.iter().find(|c| c.id == "crossing").unwrap();
+        assert!(!check.ok);
+        assert_eq!(check.detail, "Sample Avenue 2 (north) is too far to cross in one go. A refuge island in the middle would split it in two");
+        // With the island on, there is nothing to suggest.
+        assert!(j.set_island(n, true));
+        let v = j.view();
+        let check = v.checks.iter().find(|c| c.id == "crossing").unwrap();
+        assert!(check.ok);
+        assert_eq!(check.detail, "Longest crossing in one go");
     }
 
     #[test]

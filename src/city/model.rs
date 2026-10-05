@@ -19,9 +19,6 @@ use crate::street::model::{Editor, Street};
 /// Bump when what is saved changes shape; an older save is then left behind.
 const SAVE_VERSION: u32 = 1;
 
-/// Streets wider than this get a refuge island in their crossings to start with.
-const ISLAND_ROW_MM: i32 = 24_000;
-
 /// What a place is called when it is not the sample city's numbering.
 pub(super) struct Names {
     /// As a title: "Main Street and Side Road".
@@ -306,11 +303,6 @@ impl Layout {
                 arm.edge = e as u32 + 1;
                 arm.corner_mm = def.corner_mm;
                 arm.section = streets.get(&arm.edge).map(|s| seen_from(self, e, node, s));
-                if arm.row_mm() >= ISLAND_ROW_MM
-                    && let Some(c) = arm.crossing.as_mut()
-                {
-                    c.island = true;
-                }
                 arm
             })
             .collect();
@@ -808,6 +800,20 @@ mod tests {
         let left = REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap();
         let v = City::new().view(left);
         assert_eq!(v.failing, 0, "{:?}", v.nodes.iter().filter(|n| !n.ok).map(|n| (&n.name, &n.failing)).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn a_junction_is_laid_out_without_refuge_islands_whatever_the_width() {
+        let city = City::new();
+        let mut crossings = 0;
+        for n in 0..city.layout.nodes.len() {
+            let Some(j) = city.junction_editor(node_uid(n), 0) else { continue };
+            for c in j.current().arms.iter().filter_map(|a| a.crossing) {
+                crossings += 1;
+                assert!(!c.island, "node {n} starts with an island");
+            }
+        }
+        assert!(crossings > 0);
     }
 
     #[test]
