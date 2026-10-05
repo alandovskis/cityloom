@@ -331,6 +331,7 @@ fn total(segments: &[Segment]) -> i32 {
 }
 
 impl Editor {
+    /// A street laid out on one of the sample profiles, which the imported streets without a section of their own start from.
     pub fn new(sample: usize) -> Editor {
         let mut e = Editor {
             sample: 0,

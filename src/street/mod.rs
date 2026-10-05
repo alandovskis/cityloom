@@ -33,11 +33,6 @@ pub struct Sheet(Rc<vm::StreetVm>);
 
 #[wasm_bindgen]
 impl Sheet {
-    #[wasm_bindgen(constructor)]
-    pub fn new(sample: usize) -> Sheet {
-        Sheet(vm::StreetVm::new(browser_ports(), model::Editor::new(sample), None))
-    }
-
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
