@@ -38,13 +38,9 @@ format-check:
     cargo fmt --check
     cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js
 
-# Cut the Montréal metropolitan area's roads into tiles in web/data/metro, from a Geofabrik Quebec extract. Needs osmium-tool.
-metro-tiles quebec:
-    ./scripts/metro_tiles.py {{quebec}}
-
-# Build the basemap's tiles of the Montréal metropolitan area in web/data/basemap, from the same extract. Needs Java 21+.
-basemap-tiles quebec:
-    ./scripts/basemap_tiles.py {{quebec}}
+# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool) and build the basemap in web/data/basemap (needs Java 21+). `just prepare --refresh` downloads a newer extract.
+prepare *args:
+    ./scripts/prepare.py {{args}}
 
 # Serve the pages at http://127.0.0.1:8137/ (build first). The server answers range requests, as the map's tiles need.
 serve:

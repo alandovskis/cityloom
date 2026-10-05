@@ -375,7 +375,7 @@ test.describe("when there is no basemap", () => {
     await page.route("**/data/basemap/montreal.pmtiles", (route) => route.fulfill({ status: 404, body: "" }));
     await page.goto("/map.html");
     await expect(page.locator(".basemap-note")).toContainText("The basemap could not be loaded");
-    await expect(page.locator(".basemap-note")).toContainText("just basemap-tiles");
+    await expect(page.locator(".basemap-note")).toContainText("just prepare");
     await expect(page.locator("a.place-row[href^='street.html']")).not.toHaveCount(0);
     expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(50);
     // The failed request, and MapLibre's report of its source failing for it, are the point of the test;

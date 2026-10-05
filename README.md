@@ -38,27 +38,25 @@ Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first;
 
 `.github/workflows/ci.yml` runs on pushes to `main` and on pull requests: formatting, the unit tests (with warnings denied), and the browser tests, each through `just`. A final `CI` job passes only if all of them did, so that is the one check to require in branch protection. A failed browser run keeps its Playwright report and traces as an artifact. Actions are pinned to a commit, and Dependabot proposes weekly updates for them, the Cargo dependencies and the browser tests' npm packages.
 
-## Montréal metro tiles
+## The Montréal data
 
-The roads of the whole Montréal metropolitan area can be cut into tiles that are served with the pages, so that
-a place there is read from a file of a few kilobytes instead of being asked of Overpass:
+One command makes both the road tiles and the basemap below. It first downloads Geofabrik's Quebec extract (about 1.2 GB) into `data/` unless it is there already; `just prepare --refresh` downloads a newer one, and an interrupted download carries on where it stopped when run again:
 
 ```sh
-curl -LO https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf   # about 1.2 GB
-brew install osmium-tool
-just metro-tiles quebec-latest.osm.pbf   # about 3 minutes; 1,700 tiles, about 49 MB, in web/data/metro
+brew install osmium-tool openjdk   # osmium for the road tiles, Java 21 or later for Planetiler
+just prepare
 ```
+
+## Montréal metro tiles
+
+The roads of the whole Montréal metropolitan area are cut into tiles that are served with the pages, so that
+a place there is read from a file of a few kilobytes instead of being asked of Overpass (about 3 minutes; 1,700 tiles, about 49 MB, in `web/data/metro`).
 
 The tiles are not kept in git; `web/data/metro/index.json` is a placeholder that names none, and the command above
 overwrites it. Deploy the folder with the pages. Without tiles every place, the default one (the Plateau Mont-Royal) too, comes from Overpass, so the app then needs a network.
 
 ## The basemap
 
-The map page draws the city over a basemap of the Montréal metropolitan area, from a file of vector tiles that is served with the pages and read with HTTP range requests (any host that serves static files with range support will do; `just serve` does):
-
-```sh
-brew install openjdk          # Planetiler needs Java 21 or later
-just basemap-tiles quebec-latest.osm.pbf   # the same extract as above; about 1 GB of sources are downloaded once; writes web/data/basemap/montreal.pmtiles
-```
+The map page draws the city over a basemap of the Montréal metropolitan area, from a file of vector tiles, `web/data/basemap/montreal.pmtiles`, that is served with the pages and read with HTTP range requests (any host that serves static files with range support will do; `just serve` does). It is built from the same extract with Planetiler, which downloads about 1 GB of sources once.
 
 The tiles are not kept in git. Without them the map page says the basemap could not be loaded and shows no map, and a place outside the metropolitan area says there is no basemap for it; the street and junction editors work either way. The style is `web/basemap-light.json` and `web/basemap-dark.json`, written by `node scripts/make_basemap_style.mjs`.

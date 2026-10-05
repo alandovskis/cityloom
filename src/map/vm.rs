@@ -30,7 +30,7 @@ const ZOOM_STEP: f64 = 1.4;
 const PAN_PX: f64 = 80.0;
 
 /// What the map page says where it has no map to show.
-pub const MISSING: &str = "The basemap could not be loaded. Build it with `just basemap-tiles`, then reload the page.";
+pub const MISSING: &str = "The basemap could not be loaded. Build it with `just prepare`, then reload the page.";
 pub const OUTSIDE: &str = "There is no basemap for this place. The map covers the Montréal area.";
 pub const NO_ROADS: &str = "The roads of this place could not be loaded, so there is no map to show.";
 /// What the status line says of a city with no places.
