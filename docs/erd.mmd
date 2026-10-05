@@ -27,8 +27,10 @@ erDiagram
     ARM ||--o{ LANE : lanes
     ARM |o--o| CROSSING : crossing
 
-    NETWORK {
+    METROPOLITAN_REGION {
         string name
+    }
+    NETWORK {
         Side side
         f64x2 origin_m "optional lon/lat anchor"
         BTreeMap streets
