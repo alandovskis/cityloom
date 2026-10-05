@@ -17,6 +17,11 @@ erDiagram
     STREET }o--|| CATALOGUE_STREET : "sample"
     SEGMENT ||--|{ SEGMENT_TIMES : "times of day (windows never overlap, cover the day)"
     SEGMENT_TIMES }o--|| SEGMENT_KIND : kind
+    SEGMENT }o--|| MATERIAL : material
+    SEGMENT }o--o| CURB : curb
+    SEGMENT_TIMES }o--|| MATERIAL : material
+    SEGMENT_KIND }o--|{ MATERIAL : "allowed materials (first is default)"
+    SEGMENT_KIND }o--o{ CURB : "allowed curbs"
 
     JUNCTION_STATE ||--o{ ARM : arms
     ARM }o--o| EDGE_DEF : "edge (uid; 0 = sample)"
@@ -60,14 +65,14 @@ erDiagram
     SEGMENT {
         u32 uid
         i32 width_mm
-        Material material
-        Curb curb "optional"
+        string material FK
+        string curb FK "optional"
         Direction direction "optional"
         bool tram
     }
     SEGMENT_TIMES {
         string kind FK
-        Material material
+        string material FK
         Direction direction "optional"
         i32 from_min "minute of day, included"
         i32 to_min "excluded; before from_min wraps midnight"
@@ -84,6 +89,14 @@ erDiagram
         bool has_curb
         DirectionRule direction_rule "none, required, optional"
         bool shares_road "may change type through the day"
+    }
+    MATERIAL {
+        string id PK "asphalt, concrete, permeable, brick, grass, planted, gravel, trees"
+        string name
+    }
+    CURB {
+        string id PK "granite, concrete, asphalt, planted, kassel, bikefriendly, island"
+        string name
     }
     JUNCTION_STATE {
         string label
