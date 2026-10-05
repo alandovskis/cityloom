@@ -1,12 +1,12 @@
 erDiagram
     METROPOLITAN_REGION ||--|| NETWORK : "network"
-    METROPOLITAN_REGION ||--o{ STREET : "streets (by edge uid)"
-    METROPOLITAN_REGION ||--o{ JUNCTION_STATE : "junctions (by node uid)"
-    METROPOLITAN_REGION ||--o{ STREET : "today_streets"
-    METROPOLITAN_REGION ||--o{ JUNCTION_STATE : "today_junctions"
 
     NETWORK ||--o{ NODE_DEF : nodes
     NETWORK ||--o{ EDGE_DEF : edges
+    NETWORK ||--o{ STREET : "streets (by edge uid)"
+    NETWORK ||--o{ JUNCTION_STATE : "junctions (by node uid)"
+    NETWORK ||--o{ STREET : "today_streets"
+    NETWORK ||--o{ JUNCTION_STATE : "today_junctions"
     NODE_DEF ||--o| NAMES : "names (sample only)"
     EDGE_DEF }o--|| NODE_DEF : "a"
     EDGE_DEF }o--|| NODE_DEF : "b"
@@ -27,16 +27,14 @@ erDiagram
     ARM ||--o{ LANE : lanes
     ARM |o--o| CROSSING : crossing
 
-    METROPOLITAN_REGION {
-        BTreeMap streets
-        BTreeMap junctions
-        BTreeMap today_streets
-        BTreeMap today_junctions
-    }
     NETWORK {
         string name
         Side side
         f64x2 origin_m "optional lon/lat anchor"
+        BTreeMap streets
+        BTreeMap junctions
+        BTreeMap today_streets
+        BTreeMap today_junctions
     }
     NODE_DEF {
         i32 x_mm
