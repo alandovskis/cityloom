@@ -16,6 +16,7 @@ erDiagram
     STREET ||--o{ SEGMENT : segments
     STREET }o--|| CATALOGUE_STREET : "sample"
     SEGMENT ||--|{ SEGMENT_TIMES : "times of day (windows never overlap, cover the day)"
+    SEGMENT_TIMES }o--|| SEGMENT_KIND : kind
 
     JUNCTION_STATE ||--o{ ARM : arms
     ARM }o--o| EDGE_DEF : "edge (uid; 0 = sample)"
@@ -65,11 +66,24 @@ erDiagram
         bool tram
     }
     SEGMENT_TIMES {
-        SegmentKind kind
+        string kind FK
         Material material
         Direction direction "optional"
         i32 from_min "minute of day, included"
         i32 to_min "excluded; before from_min wraps midnight"
+    }
+    SEGMENT_KIND {
+        string id PK "sidewalk, planting, bike, travel, bus, parking, median, loading, shoulder, bikerack, bikeshare, pole, busshelter, busstation, bench, terrace, streetlamp"
+        string name
+        string mark "two-letter sheet mark"
+        Mode mode "foot, bike, transit, vehicle, green"
+        i32 default_mm
+        i32 min_mm
+        i32 max_mm
+        i32 people_per_hour_per_m "synthetic"
+        bool has_curb
+        DirectionRule direction_rule "none, required, optional"
+        bool shares_road "may change type through the day"
     }
     JUNCTION_STATE {
         string label
