@@ -16,11 +16,8 @@ erDiagram
     STREET ||--o{ SEGMENT : segments
     STREET }o--|| CATALOGUE_STREET : "sample"
     SEGMENT ||--o{ VARIANT : "time-of-day variants"
-    SEGMENT }o--|| CATALOGUE_KIND : kind
-    SEGMENT }o--|| CATALOGUE_MATERIAL : material
 
     JUNCTION_STATE ||--o{ ARM : arms
-    JUNCTION_STATE }o--|| CATALOGUE_CONTROL : control
     ARM }o--o| EDGE_DEF : "edge (uid; 0 = sample)"
     ARM }o--|| CATALOGUE_STREET : "street"
     ARM |o--o| STREET : "section (not saved)"
@@ -42,7 +39,7 @@ erDiagram
         i32 x_mm
         i32 y_mm
         bool junction
-        usize control
+        Control control
         i32 corner_mm
     }
     EDGE_DEF {
@@ -61,23 +58,23 @@ erDiagram
     }
     SEGMENT {
         u32 uid
-        usize kind
+        SegmentKind kind
         i32 width_mm
-        usize material
-        usize curb "optional"
-        usize direction "optional"
+        Material material
+        Curb curb "optional"
+        Direction direction "optional"
         bool tram
     }
     VARIANT {
-        usize kind
-        usize material
-        usize direction "optional"
+        SegmentKind kind
+        Material material
+        Direction direction "optional"
         i32 from_min
         i32 to_min
     }
     JUNCTION_STATE {
         string label
-        usize control
+        Control control
         i32 ring_extra_mm
         u32x2 bus "optional"
         i32 cycle "optional"
@@ -92,10 +89,10 @@ erDiagram
         bool bulb_x2
         u32_list banned
         bool bus_lane
-        usize approach
+        Approach approach
         i32 approach_mm
-        usize stop
-        usize rule
+        BusStop stop
+        TurnRule rule
         bool filter
     }
     LANE {
