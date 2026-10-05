@@ -15,7 +15,7 @@ erDiagram
 
     STREET ||--o{ SEGMENT : segments
     STREET }o--|| CATALOGUE_STREET : "sample"
-    SEGMENT ||--o{ VARIANT : "time-of-day variants"
+    SEGMENT ||--o{ VARIANT : "time-of-day variants (windows never overlap)"
 
     JUNCTION_STATE ||--o{ ARM : arms
     ARM }o--o| EDGE_DEF : "edge (uid; 0 = sample)"
@@ -58,7 +58,7 @@ erDiagram
     }
     SEGMENT {
         u32 uid
-        SegmentKind kind
+        SegmentKind kind "base kind, outside any variant window"
         i32 width_mm
         Material material
         Curb curb "optional"
@@ -66,11 +66,11 @@ erDiagram
         bool tram
     }
     VARIANT {
-        SegmentKind kind
+        SegmentKind kind "kind inside the window"
         Material material
         Direction direction "optional"
-        i32 from_min
-        i32 to_min
+        i32 from_min "minute of day, included"
+        i32 to_min "excluded; before from_min wraps midnight"
     }
     JUNCTION_STATE {
         string label
