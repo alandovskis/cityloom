@@ -14,7 +14,7 @@ use crate::shared::ports::{MemoryStorage, test_ports};
 
 fn map_vm() -> (Rc<MapVm>, Rc<MemoryStorage>) {
     let (ports, _, storage) = test_ports();
-    (MapVm::for_home(ports), storage)
+    (MapVm::on_sample(ports), storage)
 }
 
 fn map_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
@@ -24,7 +24,7 @@ fn map_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
 /// Another page changes a street and the map reads the city again.
 fn change_a_street(vm: &MapVm, storage: &Rc<MemoryStorage>, by_mm: i32) {
     let street = vm.view().edges.iter().find(|e| !e.freeway).unwrap().uid;
-    assert!(CityStore::new(storage.clone()).write(|c| {
+    assert!(CityStore::sample(storage.clone()).write(|c| {
         let mut e = c.street_editor(street, 0).unwrap();
         let u = e.view().segments[0].uid;
         e.set_width(u, e.view().segments[0].width_mm + by_mm);
@@ -66,7 +66,8 @@ fn the_map_tools_zoom_in_out_and_to_the_whole_city() {
 
 #[test]
 fn a_map_page_with_nothing_to_show_says_why() {
-    let (vm, _) = map_vm(); // the sample city: no roads of a place, so no map
+    let (ports, ..) = test_ports();
+    let vm = MapVm::new(ports); // the default area, whose roads are not kept: so no map
     let h = map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
     assert!(h.contains("role=\"status\"") && h.contains("The roads of this place could not be loaded"), "{h}");
     assert!(!h.contains("hidden"), "{h}");
@@ -75,7 +76,7 @@ fn a_map_page_with_nothing_to_show_says_why() {
 #[test]
 fn a_map_page_whose_area_s_roads_were_not_had_lists_nothing_and_names_the_area() {
     let (ports, _, _) = test_ports(); // the default area, whose roads are not kept
-    let vm = MapVm::for_map(ports);
+    let vm = MapVm::new(ports);
     let area = crate::place::area::default_area().name;
     let h = map_html(|| view! { <map_ui::MapHeader vm=vm.clone()/> });
     assert!(h.contains(&format!(">{area}</h1>")) && h.contains("0 junctions, 0 streets") && !h.contains("Sample city"), "{h}");

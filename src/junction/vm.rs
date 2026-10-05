@@ -243,7 +243,7 @@ mod tests {
 
     fn city_rig() -> (Rig, CityBinding) {
         let (ports, said, storage, time) = test_ports_with_time();
-        let store = CityStore::new(ports.storage.clone());
+        let store = CityStore::sample(ports.storage.clone());
         let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
         let junction = store.open().junction_editor(node, 0).unwrap();
         let binding = CityBinding { store, place: Place::Junction(node) };

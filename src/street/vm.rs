@@ -226,7 +226,7 @@ mod tests {
 
     fn city_rig() -> (Rig, CityBinding) {
         let (ports, said, storage, time) = test_ports_with_time();
-        let store = CityStore::new(ports.storage.clone());
+        let store = CityStore::sample(ports.storage.clone());
         let edge = store.open().view(0).edges[0].uid;
         let street = store.open().street_editor(edge, 0).unwrap();
         let binding = CityBinding { store, place: Place::Street(edge) };

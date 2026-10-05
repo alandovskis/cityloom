@@ -14,9 +14,6 @@ use crate::shared::ports::Storage;
 pub const CITY_KEY: &str = "cityloom-city";
 /// The area the person is working in, which every page opens its city from.
 pub const AREA_KEY: &str = "cityloom-area";
-/// What `AREA_KEY` holds to work on the sample city instead of any area of the world: a city that needs
-/// no network, which the tests of the pages use.
-pub const SAMPLE_AREA: &str = "sample";
 /// The street network of an area, as `osm_import` made it; the area's key follows.
 pub const NETWORK_KEY: &str = "cityloom-network";
 pub const REGION_KEY: &str = "cityloom-region";
@@ -24,37 +21,42 @@ pub const REGION_KEY: &str = "cityloom-region";
 #[derive(Clone)]
 pub struct CityStore {
     storage: Rc<dyn Storage>,
-    /// The part of the world the city is made from. None is the sample city.
-    area: Option<Area>,
+    /// The part of the world the city is made from.
+    area: Area,
+    /// In the tests: the hand-made city they are written against, kept under the keys of no area.
+    #[cfg(test)]
+    sample: bool,
 }
 
 impl CityStore {
-    /// The store of the sample city.
-    pub fn new(storage: Rc<dyn Storage>) -> CityStore {
-        CityStore { storage, area: None }
+    /// The store of the hand-made city the tests use. It is not part of the app.
+    #[cfg(test)]
+    pub fn sample(storage: Rc<dyn Storage>) -> CityStore {
+        CityStore { storage, area: default_area(), sample: true }
     }
 
     /// The store of the city made from `area`. Its street network has to be
-    /// kept first (`keep_network`); until it is, the city is the sample.
+    /// kept first (`keep_network`); until it is, the city has no places.
     pub fn for_area(storage: Rc<dyn Storage>, area: Area) -> CityStore {
-        CityStore { storage, area: Some(area) }
+        CityStore {
+            storage,
+            area,
+            #[cfg(test)]
+            sample: false,
+        }
     }
 
     /// The store of the area the person last chose, or of the default area when none was. Until that
-    /// area's roads are kept (the page loads them before it opens the city) it is the sample city's store.
+    /// area's roads are kept (the page loads them before it opens the city) its city has no places.
     pub fn current(storage: Rc<dyn Storage>) -> CityStore {
-        let Some(area) = CityStore::current_area(&*storage) else { return CityStore::new(storage) };
-        let store = CityStore::for_area(storage.clone(), area);
-        if store.has_network() { store } else { CityStore::new(storage) }
+        let area = CityStore::current_area(&*storage);
+        CityStore::for_area(storage, area)
     }
 
-    /// The area `current` would open, whether or not its roads are kept yet; None for the sample city.
-    pub fn current_area(storage: &dyn Storage) -> Option<Area> {
-        match storage.recall(AREA_KEY) {
-            Some(v) if v == SAMPLE_AREA => None,
-            Some(v) => Some(Area::from_query(&v).unwrap_or_else(default_area)),
-            None => Some(default_area()),
-        }
+    /// The area `current` would open, whether or not its roads are kept yet: the one last chosen, and the
+    /// default one when none was or what was kept is not an area.
+    pub fn current_area(storage: &dyn Storage) -> Area {
+        storage.recall(AREA_KEY).and_then(|v| Area::from_query(&v)).unwrap_or_else(default_area)
     }
 
     /// Makes `area` the one every page opens. Says whether that was kept.
@@ -62,15 +64,16 @@ impl CityStore {
         storage.remember(AREA_KEY, &area.to_query())
     }
 
-    pub fn area(&self) -> Option<&Area> {
-        self.area.as_ref()
+    pub fn area(&self) -> &Area {
+        &self.area
     }
 
     fn key(&self, base: &str) -> String {
-        match &self.area {
-            Some(a) => format!("{base}:{}", a.key()),
-            None => base.to_string(),
+        #[cfg(test)]
+        if self.sample {
+            return base.to_string();
         }
+        format!("{base}:{}", self.area.key())
     }
 
     /// Keeps the street network the area's city is made from. Says whether it was kept.
@@ -78,9 +81,13 @@ impl CityStore {
         serde_json::to_string(network).is_ok_and(|json| self.storage.remember(&self.key(NETWORK_KEY), &json))
     }
 
-    /// Whether the area's street network is kept. The sample city always has its own.
+    /// Whether the area's street network is kept.
     pub fn has_network(&self) -> bool {
-        self.area.is_none() || self.network().is_some()
+        #[cfg(test)]
+        if self.sample {
+            return true;
+        }
+        self.network().is_some()
     }
 
     fn network(&self) -> Option<Network> {
@@ -88,10 +95,11 @@ impl CityStore {
     }
 
     fn layout(&self) -> Layout {
-        match (&self.area, self.network()) {
-            (Some(area), Some(network)) => Layout::from_network(&network, &area.name),
-            _ => Layout::sample(),
+        #[cfg(test)]
+        if self.sample {
+            return Layout::sample();
         }
+        Layout::from_network(&self.network().unwrap_or_default(), &self.area.name)
     }
 
     /// The city as it is kept, or as first laid out when nothing usable is.
@@ -129,7 +137,7 @@ mod tests {
 
     fn store() -> (CityStore, Rc<crate::shared::ports::MemoryStorage>) {
         let (ports, _, storage) = test_ports();
-        (CityStore::new(ports.storage), storage)
+        (CityStore::sample(ports.storage), storage)
     }
 
     #[test]
@@ -222,11 +230,12 @@ mod tests {
     }
 
     #[test]
-    fn an_area_without_its_network_is_the_sample_until_the_network_is_kept() {
+    fn an_area_without_its_network_is_an_empty_city_until_the_network_is_kept() {
         let (ports, ..) = test_ports();
         let s = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
         assert!(!s.has_network());
-        assert_eq!(s.open().view(0).name, "Sample city");
+        let v = s.open().view(0);
+        assert_eq!((v.name.as_str(), v.places), ("Testville", 0));
         assert!(s.keep_network(&tiny_network()));
         assert!(s.has_network());
         let v = s.open().view(0);
@@ -235,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn what_is_edited_in_an_area_is_kept_under_that_area_and_not_the_sample_s() {
+    fn what_is_edited_in_an_area_is_kept_under_that_area_and_not_under_the_test_city_s() {
         let (ports, _, storage) = test_ports();
         let area = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
         area.keep_network(&tiny_network());
@@ -247,8 +256,8 @@ mod tests {
             c.keep_street(street, e.snapshot())
         }));
         assert_eq!(area.open().view(0).edited, 1);
-        assert_eq!(storage.recall(CITY_KEY), None, "the sample city's key is untouched");
-        assert_eq!(CityStore::new(ports.storage.clone()).open().view(0).edited, 0);
+        assert_eq!(storage.recall(CITY_KEY), None, "the key of no area is untouched");
+        assert_eq!(CityStore::sample(ports.storage.clone()).open().view(0).edited, 0);
         let other = CityStore::for_area(ports.storage, Area::new("Elsewhere", 5.0, 6.0));
         assert!(!other.has_network());
     }
@@ -256,20 +265,27 @@ mod tests {
     #[test]
     fn pages_open_the_area_that_was_chosen_and_the_default_before_one_is() {
         let (ports, _, storage) = test_ports();
-        assert_eq!(CityStore::current_area(&*storage), Some(default_area()));
+        assert_eq!(CityStore::current_area(&*storage), default_area());
         let chosen = Area::new("Testville", 1.0, 2.0);
         assert!(CityStore::choose(&*storage, &chosen));
-        assert_eq!(CityStore::current_area(&*storage), Some(chosen.clone()));
-        // its roads are not kept yet, so the pages have the sample city, under the sample's keys
-        assert_eq!(CityStore::current(ports.storage.clone()).area(), None);
-        CityStore::for_area(ports.storage.clone(), chosen.clone()).keep_network(&tiny_network());
-        assert_eq!(CityStore::current(ports.storage.clone()).area(), Some(&chosen));
+        assert_eq!(CityStore::current_area(&*storage), chosen);
+        // its roads are not kept yet: the pages have its city, with no places in it
+        let store = CityStore::current(ports.storage.clone());
+        assert_eq!(store.area(), &chosen);
+        assert!(!store.has_network());
+        assert_eq!(store.open().view(0).places, 0);
+        store.keep_network(&tiny_network());
         assert_eq!(CityStore::current(ports.storage.clone()).open().view(0).name, "Testville");
         storage.remember(AREA_KEY, "area=nonsense");
-        assert_eq!(CityStore::current_area(&*storage), Some(default_area()));
-        storage.remember(AREA_KEY, SAMPLE_AREA);
-        assert_eq!(CityStore::current_area(&*storage), None);
-        assert_eq!(CityStore::current(ports.storage).area(), None);
+        assert_eq!(CityStore::current_area(&*storage), default_area());
+    }
+
+    #[test]
+    fn what_an_older_visit_kept_as_the_sample_city_is_the_default_area_now() {
+        let (ports, _, storage) = test_ports();
+        storage.remember(AREA_KEY, "sample");
+        assert_eq!(CityStore::current_area(&*storage), default_area());
+        assert_eq!(CityStore::current(ports.storage).area(), &default_area());
     }
 
     #[test]
@@ -278,7 +294,8 @@ mod tests {
         let s = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
         storage.remember("cityloom-network:1.0000,2.0000", "{not json");
         assert!(!s.has_network());
-        assert_eq!(s.open().view(0).name, "Sample city");
+        let v = s.open().view(0);
+        assert_eq!((v.name.as_str(), v.places), ("Testville", 0));
     }
 
     #[test]

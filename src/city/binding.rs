@@ -38,7 +38,7 @@ mod tests {
 
     fn binding(place: impl Fn(&crate::city::model::CityView) -> Place) -> CityBinding {
         let (ports, ..) = test_ports();
-        let store = CityStore::new(ports.storage);
+        let store = CityStore::sample(ports.storage);
         let place = place(&store.open().view(0));
         CityBinding { store, place }
     }
