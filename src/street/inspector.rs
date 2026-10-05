@@ -270,26 +270,6 @@ fn vehicle_section(w: SheetWatch, uid: u32) -> impl IntoView {
     }
 }
 
-fn shelter_section(w: SheetWatch, uid: u32) -> impl IntoView {
-    view! {
-        <section class="insp-sec">
-            <h3 class="note-h" id="i-h-stop">"Transit stop"</h3>
-            <label class="check">
-                <input
-                    type="checkbox"
-                    id="shelter"
-                    prop:checked=move || w.segment(uid, |s| s.shelter).unwrap_or(false)
-                    on:change=move |e| {
-                        let on = leptos::prelude::event_target_checked(&e);
-                        w.edit(|ed| ed.set_shelter(uid, on));
-                    }
-                />
-                "Shelter on this sidewalk"
-            </label>
-        </section>
-    }
-}
-
 /// One row of "other times": the type, its direction, when it is, and a way to remove it.
 fn variant_row(w: SheetWatch, uid: u32, vi: usize) -> impl IntoView {
     let get = move |f: &dyn Fn(&crate::street::model::VariantView) -> String| w.segment(uid, |s| s.variants.get(vi).map(f)).flatten().unwrap_or_default();
@@ -461,7 +441,6 @@ fn piece_panel(w: SheetWatch, uid: u32, more_open: RwSignal<bool>) -> AnyView {
         let (v, units) = w.now();
         v.segments.iter().find(|s| s.uid == uid).map(|s| piece_sub(&v, s, units)).unwrap_or_default()
     };
-    let can_shelter = Memo::new(move |_| w.segment(uid, |s| s.can_shelter).unwrap_or(false));
     view! {
         {move || {
             let k = &KINDS[kind.get()];
@@ -471,7 +450,6 @@ fn piece_panel(w: SheetWatch, uid: u32, more_open: RwSignal<bool>) -> AnyView {
         {surface_section(w, uid)}
         {position_section(w, uid)}
         {move || (KINDS[kind.get()].id == "bus").then(|| vehicle_section(w, uid))}
-        {move || can_shelter.get().then(|| shelter_section(w, uid))}
         {more_section(w, uid, more_open)}
     }
     .into_any()

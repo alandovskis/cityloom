@@ -137,6 +137,31 @@ test.describe("the street editor, as a sandbox on the sample streets", () => {
     await expect(page.locator("#fit")).toHaveText(/too wide/);
   });
 
+  for (const [width, height] of [
+    [1440, 900],
+    [1280, 720],
+    [1024, 768],
+    [390, 844],
+  ]) {
+    test(`the menu of pieces stays inside a ${width} by ${height} window and scrolls to its last piece`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height });
+      await page.locator("#add-btn").click();
+      const menu = page.locator("#add-menu");
+      await expect(menu).toBeVisible();
+      const box = (await menu.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+      expect(box.y + box.height).toBeLessThanOrEqual(height);
+      const last = page.locator(".add-item", { hasText: "Street lamp" });
+      await last.scrollIntoViewIfNeeded();
+      const item = (await last.boundingBox())!;
+      expect(item.y + item.height).toBeLessThanOrEqual(height);
+    });
+  }
+
   test("a boundary between two pieces is dragged to share width between them", async ({ page }) => {
     const handle = page.locator('#drawing [data-role="handle"]').first();
     const box = (await handle.boundingBox())!;

@@ -1,8 +1,10 @@
 //! The hatch patterns that tell the pieces of a street apart without colour, and
 //! the line-art elevation symbols drawn on the street's section.
 
+use crate::shared::catalogue::{KINDS, MATERIALS};
+
 /// One distinct texture per kind of piece.
-pub const HATCH: [(&str, &str); 12] = [
+pub const HATCH: [(&str, &str); 17] = [
     (
         "sidewalk",
         r##"<pattern id="h-sidewalk" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.9"/><circle cx="6" cy="6" r="0.9"/></pattern>"##,
@@ -20,6 +22,17 @@ pub const HATCH: [(&str, &str); 12] = [
     ("bikerack", r##"<pattern id="h-bikerack" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M1,7 L1,3 Q5,0 9,3 L9,7"/></pattern>"##),
     ("bikeshare", r##"<pattern id="h-bikeshare" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="4" cy="4" r="2.2"/></pattern>"##),
     ("pole", r##"<pattern id="h-pole" width="6" height="8" patternUnits="userSpaceOnUse"><path d="M3,0 L3,8"/></pattern>"##),
+    ("busshelter", r##"<pattern id="h-busshelter" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M1,2 L9,2 M2,2 L2,7 M8,2 L8,7"/></pattern>"##),
+    ("busstation", r##"<pattern id="h-busstation" width="12" height="8" patternUnits="userSpaceOnUse"><path d="M0,3 L12,3 M0,6 L12,6 M4,0 L4,3"/></pattern>"##),
+    ("bench", r##"<pattern id="h-bench" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M1,2 L9,2 M1,6 L9,6 M1,2 L1,6 M9,2 L9,6"/></pattern>"##),
+    (
+        "terrace",
+        r##"<pattern id="h-terrace" width="12" height="12" patternUnits="userSpaceOnUse"><circle cx="6" cy="6" r="4"/><path d="M6,2 L6,10 M2,6 L10,6"/></pattern>"##,
+    ),
+    (
+        "streetlamp",
+        r##"<pattern id="h-streetlamp" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="5" cy="5" r="1.5"/><path d="M5,0 L5,2 M5,8 L5,10 M0,5 L2,5 M8,5 L10,5"/></pattern>"##,
+    ),
     ("loading", r##"<pattern id="h-loading" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M0,6 L5,1 L10,6"/></pattern>"##),
 ];
 
@@ -225,7 +238,7 @@ fn tram(x: f64, s: f64) -> String {
     )
 }
 
-/// A shelter: posts, a roof in the transit lane's colour, a back panel and a
+/// A bus shelter: posts, a roof in the transit lane's colour, a back panel and a
 /// bench, with a person waiting under it.
 fn shelter(x: f64, s: f64) -> String {
     at(
@@ -237,10 +250,46 @@ fn shelter(x: f64, s: f64) -> String {
     )
 }
 
+/// A bus station: a platform with a long canopy on posts, a bench and two people waiting.
+fn station(x: f64, s: f64) -> String {
+    at(
+        x,
+        0.0,
+        s,
+        &("<path class=\"o\" d=\"M-84,0 L-84,-10 L84,-10 L84,0\"/><path class=\"o\" d=\"M-70,-10 L-70,-66 M0,-10 L0,-66 M70,-10 L70,-66\"/><path class=\"f-bus\" d=\"M-90,-66 L90,-66 L90,-74 L-90,-74 Z\"/><path class=\"o\" d=\"M-58,-24 L-30,-24 M-54,-24 L-54,-10 M-34,-24 L-34,-10\"/>".to_string()
+            + &person(20.0, 0.8, 1)
+            + &person(46.0, 0.8, 2)),
+    )
+}
+
+/// A street lamp: a pole that curves over into an arm, with a lit head.
+fn street_lamp(x: f64, s: f64) -> String {
+    at(x, 0.0, s, "<path class=\"o\" d=\"M0,0 L0,-130 Q0,-150 20,-150 L40,-150\"/><path class=\"f-van\" d=\"M30,-150 L54,-150 L50,-142 L34,-142 Z\"/>")
+}
+
+/// A bench: a slatted seat and back on four legs.
+fn bench(x: f64, s: f64) -> String {
+    at(
+        x,
+        0.0,
+        s,
+        "<path class=\"o\" d=\"M-30,-22 L30,-22 M-30,-40 L30,-40 M-30,-40 L-30,-22 M30,-40 L30,-22 M-26,-22 L-26,0 M26,-22 L26,0\"/><path class=\"o\" d=\"M-30,-31 L30,-31\"/>",
+    )
+}
+
+/// A café terrace: a table under an umbrella, with a chair either side.
+fn terrace(x: f64, s: f64) -> String {
+    at(
+        x,
+        0.0,
+        s,
+        "<path class=\"o\" d=\"M0,-84 L0,0 M-22,-34 L22,-34 M-52,-44 L-52,-24 L-42,-24 L-42,0 M-52,-24 L-52,0 M52,-44 L52,-24 L42,-24 L42,0 M52,-24 L52,0\"/><path class=\"f-van\" d=\"M-44,-80 Q0,-110 44,-80 Z\"/>",
+    )
+}
+
 /// What a piece has beyond its kind, which changes what is drawn on it.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SymbolOpts<'a> {
-    pub shelter: bool,
     pub material: &'a str,
     pub tram: bool,
 }
@@ -249,9 +298,6 @@ pub struct SymbolOpts<'a> {
 fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
     match kind_id {
         "sidewalk" => {
-            if o.shelter {
-                return shelter(0.0, 1.0);
-            }
             let n = if wm < 2.2 {
                 1
             } else if wm < 4.2 {
@@ -296,6 +342,11 @@ fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
         "bikerack" => bike_rack(0.0, 1.0),
         "bikeshare" => bikeshare(0.0, 1.0),
         "pole" => pole(0.0, 1.0),
+        "busshelter" => shelter(0.0, 1.0),
+        "busstation" => station(0.0, 1.0),
+        "bench" => bench(0.0, 1.0),
+        "terrace" => terrace(0.0, 1.0),
+        "streetlamp" => street_lamp(0.0, 1.0),
         _ => String::new(),
     }
 }
@@ -305,9 +356,7 @@ fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
 fn native_width(kind_id: &str, wm: f64, o: SymbolOpts) -> f64 {
     match kind_id {
         "sidewalk" => {
-            if o.shelter {
-                84.0
-            } else if wm < 2.2 {
+            if wm < 2.2 {
                 24.0
             } else if wm < 4.2 {
                 70.0
@@ -344,6 +393,11 @@ fn native_width(kind_id: &str, wm: f64, o: SymbolOpts) -> f64 {
         "bikerack" => 80.0,
         "bikeshare" => 108.0,
         "pole" => 80.0,
+        "busshelter" => 84.0,
+        "busstation" => 180.0,
+        "bench" => 64.0,
+        "terrace" => 114.0,
+        "streetlamp" => 64.0,
         _ => 100.0,
     }
 }
@@ -358,6 +412,41 @@ pub fn symbol(kind_id: &str, cx: f64, ground_y: f64, px_per_m: f64, seg_px: f64,
         return String::new();
     }
     format!("<g class=\"sym\" transform=\"translate({cx} {ground_y}) scale({k})\">{}</g>", art(kind_id, wm, o))
+}
+
+/// Where each symbol's art lies, as its middle, width and height in drawing units, measured
+/// from the art as drawn at its default width. `icon` scales and centres by it.
+const EXTENT: [(&str, f64, f64, f64); 17] = [
+    ("sidewalk", 0.0, 71.0, 64.0),
+    ("planting", 1.0, 60.0, 102.0),
+    ("bike", 0.0, 54.0, 58.0),
+    ("travel", 1.0, 94.0, 40.0),
+    ("bus", 0.0, 144.0, 66.0),
+    ("parking", 2.0, 104.0, 68.0),
+    ("median", 0.0, 90.0, 27.0),
+    ("loading", 1.0, 106.0, 58.0),
+    ("shoulder", 0.0, 26.0, 34.0),
+    ("bikerack", -6.0, 76.0, 38.0),
+    ("bikeshare", 0.0, 120.0, 62.0),
+    ("pole", 0.0, 80.0, 120.0),
+    ("busshelter", 0.0, 84.0, 68.0),
+    ("busstation", 0.0, 180.0, 74.0),
+    ("bench", 0.0, 60.0, 40.0),
+    ("terrace", 0.0, 104.0, 95.0),
+    ("streetlamp", 27.0, 54.0, 150.0),
+];
+
+/// A picture of one kind of piece for a menu: its elevation symbol at the width and surface
+/// it is added with, standing on a ground line, scaled up to fill the picture.
+pub fn icon(kind_id: &str) -> String {
+    let (Some(kind), Some(&(_, mid, w, h))) = (KINDS.iter().find(|k| k.id == kind_id), EXTENT.iter().find(|e| e.0 == kind_id)) else { return String::new() };
+    let opts = SymbolOpts { material: MATERIALS[kind.materials[0]].id, ..SymbolOpts::default() };
+    let k = (176.0 / w).min(132.0 / h).min(2.5);
+    format!(
+        "<svg class=\"icon\" viewBox=\"0 0 200 160\" aria-hidden=\"true\" focusable=\"false\"><g class=\"sym\"><path class=\"o\" d=\"M8,148 L192,148\"/><g transform=\"translate({} 148) scale({k})\">{}</g></g></svg>",
+        100.0 - mid * k,
+        art(kind.id, kind.default_mm as f64 / 1000.0, opts)
+    )
 }
 
 /// All the hatch patterns as one JSON object of three: kinds, materials, curbs, each
@@ -383,7 +472,26 @@ mod tests {
             assert!(!art(k.id, 3.0, SymbolOpts::default()).is_empty(), "symbol for {}", k.id);
             // The fall-through arm of `native_width` is only for a kind with no symbol.
             assert!(
-                ["sidewalk", "planting", "bike", "travel", "bus", "parking", "median", "loading", "shoulder", "bikerack", "bikeshare", "pole"].contains(&k.id),
+                [
+                    "sidewalk",
+                    "planting",
+                    "bike",
+                    "travel",
+                    "bus",
+                    "parking",
+                    "median",
+                    "loading",
+                    "shoulder",
+                    "bikerack",
+                    "bikeshare",
+                    "pole",
+                    "busshelter",
+                    "busstation",
+                    "bench",
+                    "terrace",
+                    "streetlamp"
+                ]
+                .contains(&k.id),
                 "{} has no width",
                 k.id
             );
@@ -407,10 +515,35 @@ mod tests {
     }
 
     #[test]
-    fn a_sidewalk_with_a_shelter_shows_the_shelter_and_one_person_under_it() {
-        let s = sym("sidewalk", 3.0, SymbolOpts { shelter: true, ..SymbolOpts::default() });
+    fn a_bus_shelter_has_one_person_under_it_and_a_bus_station_two() {
+        let s = sym("busshelter", 3.0, SymbolOpts::default());
         assert!(s.contains("M-42,-60 L42,-60 L42,-68 L-42,-68 Z"));
         assert_eq!(s.matches("f-coat-").count(), 1);
+        assert_eq!(sym("busstation", 4.0, SymbolOpts::default()).matches("f-coat-").count(), 2);
+    }
+
+    #[test]
+    fn every_kind_of_piece_has_an_icon_that_draws_it_and_the_ground_it_stands_on() {
+        for k in &KINDS {
+            let svg = icon(k.id);
+            assert!(svg.starts_with("<svg") && svg.ends_with("</svg>"), "{}", k.id);
+            assert!(svg.contains("class=\"sym\"") && svg.contains(&art(k.id, k.default_mm as f64 / 1000.0, SymbolOpts::default())[..20]), "{}", k.id);
+        }
+        assert_eq!(KINDS.len(), EXTENT.len(), "every kind has its extent");
+        // A planting strip is drawn with the surface it starts with: trees.
+        assert!(icon("planting").contains("C-33,-62"));
+    }
+
+    #[test]
+    fn a_bench_is_a_seat_on_legs_and_a_terrace_a_table_under_an_umbrella() {
+        assert!(sym("bench", 0.7, SymbolOpts::default()).contains("M-30,-22 L30,-22"));
+        assert!(sym("terrace", 2.0, SymbolOpts::default()).contains("f-van"));
+    }
+
+    #[test]
+    fn a_street_lamp_is_a_pole_with_an_arm_and_a_lit_head() {
+        let s = sym("streetlamp", 0.5, SymbolOpts::default());
+        assert!(s.contains("M0,0 L0,-130") && s.contains("f-van"));
     }
 
     #[test]

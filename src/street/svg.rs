@@ -346,7 +346,7 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
         let cx = x + w / 2.0;
         let sel = v.selected == Some(s.uid);
         let lifted = ui.moving.is_some_and(|m| m.uid == s.uid);
-        let opts = SymbolOpts { shelter: s.shelter, material: s.material, tram: s.tram };
+        let opts = SymbolOpts { material: s.material, tram: s.tram };
         let name = if w > k.name.len() as f64 * 8.6 + 10.0 {
             esc(k.name)
         } else if w > 30.0 {

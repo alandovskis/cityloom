@@ -189,14 +189,16 @@ fn the_street_s_history_buttons_are_off_until_there_is_something_to_undo() {
 }
 
 #[test]
-fn the_add_menu_is_closed_and_lists_every_piece_in_four_groups() {
+fn the_add_menu_is_closed_and_lists_every_piece_in_seven_groups() {
     let s = street_shared(0);
     let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
     assert!(h.contains("aria-expanded=\"false\"") && h.contains("id=\"add-menu\" hidden class=\"menu add-menu\""));
     assert!(button_tag(&h, "add-btn").contains("aria-haspopup"));
-    assert_eq!(count(&h, "class=\"add-item\""), 12);
-    for group in ["Walk and plant", "Cycling", "Roadway", "Furniture"] {
-        assert!(h.contains(group), "{group}");
+    assert_eq!(count(&h, "class=\"add-item\""), 17);
+    assert_eq!(count(&h, "class=\"add-icon\""), 17);
+    assert!(h.contains("viewBox=\"0 0 200 160\"") && !h.contains("class=\"swatch\""));
+    for (g, group) in ["Walking", "Greenery", "Cycling", "Transit", "Roadway", "Furniture", "Utilities"].into_iter().enumerate() {
+        assert!(h.contains(&format!("id=\"add-g-{g}\" class=\"add-group-h\">{group}<")), "{group}");
     }
     assert!(h.contains("3.3 m") && h.contains("Goes after the selected piece."));
     s.set_units(Units::Feet);
@@ -358,17 +360,6 @@ fn a_planting_strip_is_about_planting_and_a_transit_lane_can_carry_trams() {
     s.edit(|e| e.select(Some(bus)));
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains("Vehicle") && h.contains(">Bus</button>") && h.contains(">Tram</button>"));
-}
-
-#[test]
-fn a_sidewalk_beside_a_bus_lane_offers_a_shelter() {
-    let s = street_shared(1);
-    s.edit(|e| e.apply_measure("E1"));
-    let walk = s.view().segments.iter().find(|x| x.can_shelter).map(|x| x.uid);
-    let Some(walk) = walk else { return };
-    s.edit(|e| e.select(Some(walk)));
-    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    assert!(h.contains("Transit stop") && h.contains("Shelter on this sidewalk"));
 }
 
 #[test]

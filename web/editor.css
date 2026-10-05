@@ -658,6 +658,21 @@ svg pattern circle {
 .k-pole {
   fill: var(--k-pole);
 }
+.k-busshelter {
+  fill: var(--k-busshelter);
+}
+.k-busstation {
+  fill: var(--k-busstation);
+}
+.k-bench {
+  fill: var(--k-bench);
+}
+.k-terrace {
+  fill: var(--k-terrace);
+}
+.k-streetlamp {
+  fill: var(--k-streetlamp);
+}
 #drawing .slab-p,
 .swatch .slab-p {
   fill: var(--ink-2);
@@ -911,7 +926,12 @@ svg pattern circle {
 .swatch .k-shoulder,
 .swatch .k-bikerack,
 .swatch .k-bikeshare,
-.swatch .k-pole {
+.swatch .k-pole,
+.swatch .k-busshelter,
+.swatch .k-busstation,
+.swatch .k-bench,
+.swatch .k-terrace,
+.swatch .k-streetlamp {
   stroke: none;
 }
 /* The map hides the texture in its key; here a surface is told apart by it. */
@@ -1766,18 +1786,18 @@ svg pattern circle {
   background: var(--accent);
   filter: brightness(0.94);
 }
+/* Fixed to the window so the stage cannot clip it; the page script sets its place. */
 .add-menu {
+  position: fixed;
   right: auto;
-  left: 0;
-  width: 300px;
-  max-height: min(78vh, 680px);
+  left: 8px;
+  top: 8px;
+  width: min(720px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
   overflow-y: auto;
 }
 .add-menu .hint {
   padding: 0 0 8px;
-}
-.add-group + .add-group {
-  margin-top: 10px;
 }
 .add-group-h {
   margin: 0 0 2px;
@@ -1792,9 +1812,14 @@ svg pattern circle {
   padding: 0;
   list-style: none;
 }
+.add-list {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px 16px;
+  align-items: start;
+}
 .add-item {
   display: grid;
-  grid-template-columns: 44px 1fr auto;
+  grid-template-columns: 88px 1fr auto;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -1806,6 +1831,16 @@ svg pattern circle {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+.add-icon,
+.add-icon .icon {
+  display: block;
+  width: 88px;
+  height: 70px;
+}
+.add-icon .icon {
+  border-radius: 8px;
+  background: var(--fill);
 }
 .add-item:hover {
   background: var(--fill);

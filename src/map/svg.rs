@@ -11,7 +11,7 @@ use crate::shared::symbols::HATCH;
 use crate::shared::units::Units;
 
 /// Pieces beside the roadway, not part of it.
-const OFF_ROAD: [&str; 5] = ["sidewalk", "planting", "bikerack", "bikeshare", "pole"];
+const OFF_ROAD: [&str; 10] = ["sidewalk", "planting", "bikerack", "bikeshare", "pole", "busshelter", "busstation", "bench", "terrace", "streetlamp"];
 
 /// A number to two places, with no trailing zeros.
 fn r2(n: f64) -> String {

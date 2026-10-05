@@ -56,6 +56,11 @@
   --k-bikerack: #cdd6e2;
   --k-bikeshare: #b5c7e8;
   --k-pole: #9aa4b0;
+  --k-busshelter: #f6c9bf;
+  --k-busstation: #eeb8ab;
+  --k-bench: #d8c8ad;
+  --k-terrace: #f1dca0;
+  --k-streetlamp: #d9dcc0;
 }
 
 :root[data-theme="dark"] {
@@ -98,6 +103,11 @@
   --k-bikerack: #46525f;
   --k-bikeshare: #3f5a85;
   --k-pole: #75808c;
+  --k-busshelter: #7a4039;
+  --k-busstation: #6d3832;
+  --k-bench: #6e5d48;
+  --k-terrace: #7d6a30;
+  --k-streetlamp: #5d6148;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -141,6 +151,11 @@
     --k-bikerack: #46525f;
     --k-bikeshare: #3f5a85;
     --k-pole: #75808c;
+    --k-busshelter: #7a4039;
+    --k-busstation: #6d3832;
+    --k-bench: #6e5d48;
+    --k-terrace: #7d6a30;
+    --k-streetlamp: #5d6148;
   }
 }
 
@@ -918,6 +933,21 @@ a.btn {
 #map .m-k-pole {
   stroke: var(--k-pole);
 }
+#map .m-k-busshelter {
+  stroke: var(--k-busshelter);
+}
+#map .m-k-busstation {
+  stroke: var(--k-busstation);
+}
+#map .m-k-bench {
+  stroke: var(--k-bench);
+}
+#map .m-k-terrace {
+  stroke: var(--k-terrace);
+}
+#map .m-k-streetlamp {
+  stroke: var(--k-streetlamp);
+}
 /* Lane types are told apart by tint, by the key, and by their names when zoomed in; the hatch of the
    editors is too busy at city scale. */
 #map .m-h {
@@ -1091,6 +1121,21 @@ a.btn {
 }
 .k-pole {
   fill: var(--k-pole);
+}
+.k-busshelter {
+  fill: var(--k-busshelter);
+}
+.k-busstation {
+  fill: var(--k-busstation);
+}
+.k-bench {
+  fill: var(--k-bench);
+}
+.k-terrace {
+  fill: var(--k-terrace);
+}
+.k-streetlamp {
+  fill: var(--k-streetlamp);
 }
 .swatch .k-travel {
   stroke: var(--field-line);

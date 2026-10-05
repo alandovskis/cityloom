@@ -8,6 +8,7 @@ use leptos::prelude::*;
 use serde::Deserialize;
 
 use crate::shared::catalogue::KINDS;
+use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
 use crate::street::model::{SegView, View};
 use crate::street::text::status_text;
@@ -16,12 +17,15 @@ use crate::street::watch::SheetWatch;
 
 // ---- what the page is made of --------------------------------------------------------
 
-/// The pieces by what they are for, so twelve rows read as four lists.
-pub const ADD_GROUPS: [(&str, &[&str]); 4] = [
-    ("Walk and plant", &["sidewalk", "planting", "median"]),
+/// The pieces by what they are for, so seventeen rows read as seven lists.
+pub const ADD_GROUPS: [(&str, &[&str]); 7] = [
+    ("Walking", &["sidewalk"]),
+    ("Greenery", &["planting", "median"]),
     ("Cycling", &["bike", "bikerack", "bikeshare"]),
-    ("Roadway", &["travel", "bus", "parking", "loading", "shoulder"]),
-    ("Furniture", &["pole"]),
+    ("Transit", &["bus", "busshelter", "busstation"]),
+    ("Roadway", &["travel", "parking", "loading", "shoulder"]),
+    ("Furniture", &["bench", "terrace"]),
+    ("Utilities", &["pole", "streetlamp"]),
 ];
 
 /// The indices into the catalogue of the kinds in one group, those the catalogue has.
@@ -178,15 +182,25 @@ pub fn History(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// A swatch of a kind of piece: its tint and hatch, with the parking mark.
-fn kind_swatch(id: &'static str) -> impl IntoView {
-    view! {
-        <svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false">
-            <rect class=format!("k-{id}") width="44" height="22" stroke="none"/>
-            <rect width="44" height="22" fill=format!("url(#h-{id})") stroke="none"/>
-            {(id == "parking").then(|| view! { <text class="slab-p" x="22" y="16" text-anchor="middle" font-size="14">"P"</text> })}
-        </svg>
-    }
+/// Where the list of pieces is drawn, in window pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MenuBox {
+    pub left: f64,
+    pub top: f64,
+    pub width: f64,
+    pub max_height: f64,
+}
+
+/// The list opens under its button, as wide as it likes up to 720 px, and is kept inside the
+/// window: moved left if the button is near the right edge, and given the height that is left
+/// below it (at least 160 px, moving up for that), so what does not fit scrolls.
+pub fn menu_box(button_left: f64, button_bottom: f64, window_w: f64, window_h: f64) -> MenuBox {
+    const MARGIN: f64 = 8.0;
+    const MIN_HEIGHT: f64 = 160.0;
+    let width = (window_w - 2.0 * MARGIN).min(720.0);
+    let left = button_left.clamp(MARGIN, (window_w - width - MARGIN).max(MARGIN));
+    let top = (button_bottom + MARGIN).min(window_h - MIN_HEIGHT - MARGIN).max(MARGIN);
+    MenuBox { left, top, width, max_height: (window_h - top - MARGIN).max(MIN_HEIGHT) }
 }
 
 /// The button that opens the list of pieces, and the list: arrows move through
@@ -215,8 +229,22 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
     };
     #[cfg(target_arch = "wasm32")]
     {
+        // The list is fixed to the window, so the stage cannot clip it: put it under its button.
+        let place = move || {
+            let (Some(b), Some(m), Some(win)) = (button.get_untracked(), menu.get_untracked(), leptos::web_sys::window()) else { return };
+            let size = |v: Result<leptos::wasm_bindgen::JsValue, _>| v.ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let r = b.get_bounding_client_rect();
+            let at = menu_box(r.left(), r.bottom(), size(win.inner_width()), size(win.inner_height()));
+            let _ = m.set_attribute("style", &format!("left:{}px;top:{}px;width:{}px;max-height:{}px", at.left, at.top, at.width, at.max_height));
+        };
+        window_event_listener(leptos::ev::resize, move |_| {
+            if open.get_untracked() {
+                place();
+            }
+        });
         Effect::new(move |_| {
             if open.get() {
+                place();
                 // Once the list is shown, so that it can take the focus.
                 leptos::task::spawn_local(async move {
                     leptos::task::tick().await;
@@ -283,7 +311,7 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
                                     w.edit(|e| e.add(k, at) != 0);
                                 }
                             >
-                                {kind_swatch(kind.id)}
+                                <span class="add-icon" inner_html=icon(kind.id)></span>
                                 <b>{kind.name}</b>
                                 <span class="dw">{move || w.units().length_fine(kind.default_mm)}</span>
                             </button>
@@ -458,14 +486,43 @@ mod tests {
     use crate::street::model::Editor;
 
     #[test]
+    fn the_menu_opens_under_its_button_and_never_leaves_the_window() {
+        // Room: under the button, as wide as it likes, to the bottom of the window.
+        let m = menu_box(340.0, 190.0, 1440.0, 900.0);
+        assert_eq!((m.left, m.top, m.width, m.max_height), (340.0, 198.0, 720.0, 694.0));
+        // A button near the right edge: the menu is drawn leftwards to fit.
+        let m = menu_box(792.0, 150.0, 1280.0, 720.0);
+        assert_eq!((m.left, m.width), (552.0, 720.0));
+        // A phone: the menu is the width of the window less its margins.
+        let m = menu_box(14.0, 270.0, 390.0, 844.0);
+        assert_eq!((m.left, m.width), (8.0, 374.0));
+        // A short window: the menu keeps some height and moves up to have it.
+        let m = menu_box(10.0, 250.0, 1000.0, 300.0);
+        assert_eq!((m.top, m.max_height), (132.0, 160.0));
+        for (l, b, w, h) in [(340.0, 190.0, 1024.0, 768.0), (792.0, 150.0, 1280.0, 720.0), (14.0, 270.0, 390.0, 844.0), (10.0, 250.0, 1000.0, 300.0)] {
+            let m = menu_box(l, b, w, h);
+            assert!(m.left >= 0.0 && m.left + m.width <= w && m.top >= 0.0 && m.top + m.max_height <= h, "{w}x{h}");
+        }
+    }
+
+    #[test]
     fn the_kinds_to_add_come_in_four_lists_that_cover_every_kind_but_the_one_with_no_place() {
         let all: Vec<usize> = ADD_GROUPS.iter().flat_map(|(_, ids)| group_kinds(ids)).collect();
-        assert_eq!(all.len(), 12);
+        assert_eq!(all.len(), 17);
         let mut seen = all.clone();
         seen.sort_unstable();
         seen.dedup();
-        assert_eq!(seen.len(), 12, "each kind is in one list");
-        assert_eq!(KINDS.len(), 12);
+        assert_eq!(seen.len(), 17, "each kind is in one list");
+        assert_eq!(KINDS.len(), 17);
+        let ids = |group: &str| -> Vec<&str> {
+            let (_, ids) = ADD_GROUPS.iter().find(|(name, _)| *name == group).unwrap();
+            group_kinds(ids).into_iter().map(|k| KINDS[k].id).collect()
+        };
+        assert_eq!(ids("Walking"), ["sidewalk"]);
+        assert_eq!(ids("Greenery"), ["planting", "median"]);
+        assert_eq!(ids("Transit"), ["bus", "busshelter", "busstation"]);
+        assert_eq!(ids("Furniture"), ["bench", "terrace"]);
+        assert_eq!(ids("Utilities"), ["pole", "streetlamp"]);
         assert_eq!(group_kinds(&["travel", "nonsense"]).len(), 1);
     }
 
