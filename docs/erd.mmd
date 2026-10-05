@@ -15,7 +15,7 @@ erDiagram
 
     STREET ||--o{ SEGMENT : segments
     STREET }o--|| CATALOGUE_STREET : "sample"
-    SEGMENT ||--o{ VARIANT : "time-of-day variants (windows never overlap)"
+    SEGMENT ||--o{ SEGMENT_TIMES : "times of day (windows never overlap)"
 
     JUNCTION_STATE ||--o{ ARM : arms
     ARM }o--o| EDGE_DEF : "edge (uid; 0 = sample)"
@@ -65,7 +65,7 @@ erDiagram
         Direction direction "optional"
         bool tram
     }
-    VARIANT {
+    SEGMENT_TIMES {
         SegmentKind kind "kind inside the window"
         Material material
         Direction direction "optional"
