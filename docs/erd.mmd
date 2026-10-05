@@ -1,0 +1,109 @@
+erDiagram
+    CITY ||--|| LAYOUT : "layout"
+    CITY ||--o{ STREET : "streets (by edge uid)"
+    CITY ||--o{ JUNCTION_STATE : "junctions (by node uid)"
+    CITY ||--o{ STREET : "today_streets"
+    CITY ||--o{ JUNCTION_STATE : "today_junctions"
+
+    LAYOUT ||--o{ NODE_DEF : nodes
+    LAYOUT ||--o{ EDGE_DEF : edges
+    NODE_DEF ||--o| NAMES : "names (sample only)"
+    EDGE_DEF }o--|| NODE_DEF : "a"
+    EDGE_DEF }o--|| NODE_DEF : "b"
+    EDGE_DEF |o--o| STREET : "section (imported)"
+    EDGE_DEF }o--|| CATALOGUE_STREET : "street (sample idx)"
+
+    STREET ||--o{ SEGMENT : segments
+    STREET }o--|| CATALOGUE_STREET : "sample"
+    SEGMENT ||--o{ VARIANT : "time-of-day variants"
+    SEGMENT }o--|| CATALOGUE_KIND : kind
+    SEGMENT }o--|| CATALOGUE_MATERIAL : material
+
+    JUNCTION_STATE ||--o{ ARM : arms
+    JUNCTION_STATE }o--|| CATALOGUE_CONTROL : control
+    ARM }o--o| EDGE_DEF : "edge (uid; 0 = sample)"
+    ARM }o--|| CATALOGUE_STREET : "street"
+    ARM |o--o| STREET : "section (not saved)"
+    ARM ||--o{ LANE : lanes
+    ARM |o--o| CROSSING : crossing
+
+    CITY {
+        BTreeMap streets
+        BTreeMap junctions
+        BTreeMap today_streets
+        BTreeMap today_junctions
+    }
+    LAYOUT {
+        string name
+        Side side
+        f64x2 origin_m "optional lon/lat anchor"
+    }
+    NODE_DEF {
+        i32 x_mm
+        i32 y_mm
+        bool junction
+        usize control
+        i32 corner_mm
+    }
+    EDGE_DEF {
+        usize a FK
+        usize b FK
+        usize street FK
+        string name "optional"
+        f64x2 headings "optional"
+        i32x2_list shape "optional centreline mm"
+    }
+    STREET {
+        usize sample FK
+        string name "optional"
+        i32 row_mm
+        Side side
+        u32 next_uid
+    }
+    SEGMENT {
+        u32 uid
+        usize kind
+        i32 width_mm
+        usize material
+        usize curb "optional"
+        usize direction "optional"
+        bool tram
+    }
+    VARIANT {
+        usize kind
+        usize material
+        usize direction "optional"
+        i32 from_min
+        i32 to_min
+    }
+    JUNCTION_STATE {
+        string label
+        usize control
+        i32 ring_extra_mm
+        u32x2 bus "optional"
+        i32 cycle "optional"
+    }
+    ARM {
+        u32 uid
+        usize street FK
+        u32 edge FK
+        i32 bearing
+        i32 offset_mm
+        i32 corner_mm
+        bool bulb_x2
+        u32_list banned
+        bool bus_lane
+        usize approach
+        i32 approach_mm
+        usize stop
+        usize rule
+        bool filter
+    }
+    LANE {
+        u32_list to "arm uids reachable"
+    }
+    CROSSING {
+        i32 setback_mm
+        i32 width_mm
+        bool island
+    }
