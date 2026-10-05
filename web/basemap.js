@@ -90,7 +90,6 @@ export async function createBasemap(container) {
   let hot = null;
   let styled = false;
   const showHot = () => {
-    console.log("DIAG showHot", JSON.stringify({ styled, source: !!map.getSource("places"), hot }));
     if (styled && map.getSource("places") && hot) map.setFeatureState({ source: "places", id: hot }, { hot: true });
   };
   const showPlaces = () => {

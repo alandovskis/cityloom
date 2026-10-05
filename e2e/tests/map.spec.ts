@@ -276,19 +276,8 @@ test.describe("the city map", () => {
         const map = (window as any).cityloomMap;
         return map.getSource("places") ? map.getFeatureState({ source: "places", id }).hot === true : null;
       }, hot);
-    page.on("console", (m) => m.text().startsWith("DIAG") && console.log(m.text()));
-    await page.evaluate(() => {
-      for (const t of ["pointerenter", "pointerover", "mouseenter", "focus"])
-        document.addEventListener(t, (e) => console.log("DIAG event " + t + " " + (e.target as Element).tagName), true);
-    });
     expect(await lit()).toBe(false);
-    console.log("DIAG row", hot, JSON.stringify(await row.boundingBox()));
     await row.hover();
-    console.log(
-      "DIAG after hover",
-      await page.evaluate(() => document.querySelector("#places-panel a.place-row:hover")?.getAttribute("data-hl")),
-      await page.evaluate(() => document.querySelector("#places-panel a.place-row.on")?.getAttribute("data-hl")),
-    );
     await expect.poll(lit).toBe(true);
     const light = await land(page);
     // The theme changes while the pointer stays on the row: as the system's dark mode would, with no menu to
