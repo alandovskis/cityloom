@@ -1000,125 +1000,6 @@ svg pattern circle {
   background: var(--k-planting);
 }
 
-/* The streets to add, and the junctions to start from. */
-.lower {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  align-items: start;
-  gap: 12px;
-}
-.lower[hidden] {
-  display: none;
-}
-.legend {
-  min-width: 0;
-  padding: 12px 16px 14px;
-  border-radius: var(--r-card);
-  background: var(--panel);
-  box-shadow: var(--shadow-soft);
-}
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 10px;
-}
-.legend .note-h {
-  padding: 0;
-  font-size: 15px;
-}
-.legend .hint {
-  flex: 1 1 14ch;
-  padding: 0;
-  font-size: 13px;
-}
-.legend .palette {
-  flex-basis: 100%;
-  margin-top: 8px;
-}
-.palette {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-  align-content: start;
-  align-items: start;
-  gap: 8px;
-}
-.chip {
-  display: grid;
-  grid-template-columns: 44px 1fr;
-  align-items: center;
-  gap: 4px 10px;
-  width: 100%;
-  padding: 6px 10px 6px 6px;
-  border: 1px solid var(--field-line);
-  border-radius: var(--r-ctl);
-  background: var(--panel);
-  text-align: left;
-  cursor: grab;
-  touch-action: none;
-  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out);
-}
-.chip:has(.grip-ico) {
-  grid-template-columns: 44px 1fr 10px;
-}
-.grip-ico {
-  width: 10px;
-  height: 14px;
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 2;
-  stroke-linecap: round;
-  opacity: 0.6;
-}
-.chip:hover {
-  background: var(--fill);
-}
-.chip:active {
-  cursor: grabbing;
-}
-.chip b {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.15;
-}
-.chip small {
-  display: block;
-  color: var(--ink-2);
-  font-size: 12.5px;
-}
-.chip.plain {
-  grid-template-columns: 1fr;
-  cursor: pointer;
-}
-.chip.plain span:first-child {
-  display: none;
-}
-.chip.plain[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-wash);
-  color: var(--accent);
-}
-.chip span > b,
-.chip span > small {
-  display: block;
-}
-.drag-chip {
-  position: fixed;
-  z-index: 60;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px 4px 4px;
-  border: 1px solid var(--accent);
-  border-radius: var(--r-ctl);
-  background: var(--panel);
-  box-shadow: var(--shadow);
-  font-weight: 600;
-  pointer-events: none;
-  translate: -50% -60%;
-}
-
 /* ---- the inspector ----------------------------------------------------------- */
 
 .panel.left {
@@ -1918,9 +1799,6 @@ svg pattern circle {
   .stage {
     order: 1;
   }
-  .lower {
-    grid-template-columns: 1fr;
-  }
   .stage-head {
     align-items: stretch;
   }
@@ -1951,7 +1829,6 @@ svg pattern circle {
     stroke-dasharray: none;
     stroke-dashoffset: 0;
   }
-  .chip,
   .ico,
   .turn,
   .opt,
@@ -1964,7 +1841,6 @@ svg pattern circle {
   .bar,
   .panel,
   .tools,
-  .lower,
   .welcome,
   .clock,
   .statusbar {

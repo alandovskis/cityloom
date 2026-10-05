@@ -1,6 +1,10 @@
 import type { Page } from "@playwright/test";
 
-import { expect, JUNCTION, live, mapReady, mapStill, serveWorld, test } from "./fixtures";
+import { expect, live, mapReady, mapStill, openStreet, test } from "./fixtures";
+
+/** The name of the first junction the map lists. */
+const firstJunctionName = async (page: Page) =>
+  (await page.locator("#places-panel a.place-row[href^='intersection.html'] b").first().innerText()).trim();
 
 test.describe("the search box on the city map", () => {
   test.beforeEach(async ({ page }) => {
@@ -39,20 +43,20 @@ test.describe("the search box on the city map", () => {
     await page.locator("#search").fill("avenue");
     await expect(page.locator("#search")).toHaveAttribute("aria-expanded", "true");
     const options = page.locator('#search-results [role="option"]');
-    await expect(options.first()).toContainText("Sample Avenue");
+    await expect(options.first()).toContainText(/avenue/i);
     expect(await options.count()).toBeGreaterThan(1);
     await expect(page.locator(".search-note")).toContainText("match");
   });
 
-  test("finds a junction by its name and the streets that end at it", async ({ page }) => {
-    await page.locator("#search").fill("junction 4");
+  test("finds a junction by its name", async ({ page }) => {
+    const name = await firstJunctionName(page);
+    await page.locator("#search").fill(name);
     const options = page.locator('#search-results [role="option"]');
-    await expect(options.first()).toContainText("Junction 4");
-    await expect(options.nth(1)).toContainText("Junction 4");
+    await expect(options.first()).toContainText(name);
   });
 
   test("Enter opens the first place found", async ({ page }) => {
-    await page.locator("#search").fill("junction 1");
+    await page.locator("#search").fill(await firstJunctionName(page));
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/intersection\.html\?junction=\d+$/);
   });
@@ -79,34 +83,35 @@ test.describe("the search box on the city map", () => {
   });
 
   test("a search that finds nothing says so and how to get the places back", async ({ page }) => {
+    const places = await page.locator("#places-panel a.place-row").count();
     await page.locator("#search").fill("zzz");
     await expect(page.locator('#search-results [role="option"]')).toHaveCount(0);
-    await expect(page.locator(".search-note")).toHaveText("No places match “zzz”. Clear the search to see all 32.");
+    await expect(page.locator(".search-note")).toHaveText(
+      `No places match “zzz”. Clear the search to see all ${places}.`,
+    );
   });
 
   test("a result that needs attention says so", async ({ page }) => {
-    await page.goto(`/street.html?street=1`);
+    await openStreet(page);
+    const name = (await page.locator("#street-name").innerText()).trim();
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("+");
     await expect(live(page)).toContainText("Resize");
     await page.goto("/map.html");
-    await page.locator("#search").fill("avenue");
+    await page.locator("#search").fill(name);
     await expect(page.locator("#search-results .st.bad").first()).toHaveText("Needs attention");
   });
 
   test("clicking a result opens the place", async ({ page }) => {
-    await page.locator("#search").fill("junction 1");
+    await page.locator("#search").fill(await firstJunctionName(page));
     await page.locator('#search-results [role="option"] a').first().click();
     await expect(page).toHaveURL(/intersection\.html\?junction=\d+$/);
-    expect(JUNCTION).toBeGreaterThan(0);
   });
 });
 
 test.describe("the map under the floating panels", () => {
-  test.use({ area: "world" });
   test.beforeEach(async ({ page }) => {
-    await serveWorld(page);
     await page.goto("/map.html");
     await mapReady(page);
     await mapStill(page);

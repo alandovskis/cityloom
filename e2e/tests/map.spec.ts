@@ -2,10 +2,9 @@ import { readFileSync } from "node:fs";
 
 import type { Page } from "@playwright/test";
 
-import { expect, forgive, live, mapReady, mapStill, PLATEAU_TILES, serveBasemap, serveWorld, test } from "./fixtures";
+import { expect, forgive, live, mapReady, mapStill, PLATEAU_TILES, serveBasemap, test } from "./fixtures";
 
 // The map page works on a real area: the default one, the Plateau Mont-Royal, from a metro tile.
-test.use({ area: "world" });
 
 const zoom = (page: Page) => page.evaluate(() => (window as any).cityloomMap.getZoom());
 const centre = (page: Page) =>
@@ -55,7 +54,6 @@ const junctionSpot = (page: Page) =>
 
 test.describe("the city map", () => {
   test.beforeEach(async ({ page }) => {
-    await serveWorld(page);
     await page.goto("/map.html");
     await mapReady(page);
     await mapStill(page); // the city is fitted: the view the tests start from
@@ -370,7 +368,6 @@ test.describe("when there is no basemap", () => {
     context,
     errors,
   }) => {
-    await serveWorld(page);
     await context.unroute("**/data/basemap/montreal.pmtiles");
     await page.route("**/data/basemap/montreal.pmtiles", (route) => route.fulfill({ status: 404, body: "" }));
     await page.goto("/map.html");
@@ -394,12 +391,11 @@ test.describe("when there is no basemap", () => {
     await page.route("https://overpass-api.de/**", (route) => route.abort());
     await page.goto("/map.html");
     await expect(page.locator(".basemap-note")).toContainText("The roads of this place could not be loaded");
-    // nothing of the sample city stands in for the area: no places, and the page names the area it could not load
+    // no places stand in for the area, and the page names the area it could not load
     await expect(page.locator("#fit")).toHaveText("No roads to show.");
     await expect(page.locator("a.place-row")).toHaveCount(0);
     await expect(page.locator("#city-count")).toHaveText("0 junctions, 0 streets");
     await expect(page.locator("#title-block")).toContainText("Plateau Mont-Royal");
-    await expect(page.locator("#title-block")).not.toContainText("Sample city");
     await expect(page.locator("#street-name")).not.toHaveText("Sample city");
     await expect(page.locator("#reset")).toBeDisabled();
     // the refused request is the point of the test; anything else still fails it
@@ -416,7 +412,6 @@ test.describe("when there is no basemap", () => {
     expect(tiles[7]).toBe(3); // the header below is version 3's
     // PMTiles v3 header: min lon, min lat, max lon, max lat, little-endian int32 of degrees * 1e7.
     [13.0, 52.3, 13.8, 52.7].forEach((deg, i) => tiles.writeInt32LE(Math.round(deg * 1e7), 102 + 4 * i));
-    await serveWorld(page);
     await context.unroute("**/data/basemap/montreal.pmtiles");
     await serveBasemap(context, tiles);
     await page.goto("/map.html");
@@ -427,14 +422,5 @@ test.describe("when there is no basemap", () => {
     expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(50);
     // nothing of the city is drawn on a map of somewhere else
     expect(await page.evaluate(() => !(window as any).cityloomMap.getSource("places"))).toBe(true);
-  });
-});
-
-test.describe("on the sample city, which has no map", () => {
-  test.use({ area: "sample" });
-  test("says there is no map, and lists the places", async ({ page }) => {
-    await page.goto("/map.html");
-    await expect(page.locator(".basemap-note")).toContainText("could not be loaded");
-    await expect(page.locator("a.place-row")).toHaveCount(32);
   });
 });

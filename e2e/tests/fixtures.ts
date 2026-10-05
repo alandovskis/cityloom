@@ -6,24 +6,22 @@ import { expect, test as base, type BrowserContext, type Page } from "@playwrigh
 /** Every test fails if its page throws or logs a console error. Each test gets a
  *  fresh browser context, so the page starts with empty storage.
  *
- *  The pages open the area of the world last chosen, the default one before any is.
- *  Most tests are written against the sample city, which needs no network, so a
- *  test starts on that unless it says `test.use({ area: "world" })`. */
-export const test = base.extend<{ errors: string[]; area: "sample" | "world" }>({
-  area: ["sample", { option: true }],
-  context: async ({ context, area }, use) => {
-    if (area === "sample") {
-      await context.addInitScript(() => {
-        try {
-          if (!localStorage.getItem("cityloom-area")) localStorage.setItem("cityloom-area", "sample");
-        } catch {
-          // storage blocked: the page then has the default area
-        }
-      });
-    }
+ *  The pages open the area of the world last chosen, the default one before any is: the Plateau
+ *  Mont-Royal. There is no network in the tests, so its roads come from a metro tile served from
+ *  `fixtures/plateau.osm.pbf` and its basemap from `fixtures/plateau.pmtiles`. A test that wants
+ *  something else asks for it with its own `page.route`, which wins over these. */
+export const test = base.extend<{ errors: string[]; world: void }>({
+  context: async ({ context }, use) => {
     await serveBasemap(context);
     await use(context);
   },
+  world: [
+    async ({ page }, use) => {
+      await serveWorld(page);
+      await use();
+    },
+    { auto: true },
+  ],
   errors: [
     async ({ page }, use) => {
       const errors: string[] = [];
@@ -42,10 +40,6 @@ export { expect };
 
 /** What a screen reader was last told. */
 export const live = (page: Page) => page.locator("#live");
-
-/** The sample city, as the map lists it: the junction and street the tests open. */
-export const JUNCTION = 3; // "Junction 1"
-export const STREET = 1; // "Sample Avenue 2", between the edge of the map and Junction 4
 
 export const PLATEAU_PBF = fileURLToPath(new URL("../fixtures/plateau.osm.pbf", import.meta.url));
 export const PLATEAU_TILES = fileURLToPath(new URL("../fixtures/plateau.pmtiles", import.meta.url));
@@ -74,6 +68,25 @@ export async function serveWorld(page: Page) {
   );
   await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(PLATEAU_PBF) }));
   await page.route("https://overpass-api.de/**", (route) => route.abort());
+}
+
+/** Opens a junction of the city the way a person does: from the map's list of places. Says its address. */
+export async function openJunction(page: Page, n = 0) {
+  return openPlace(page, "intersection.html", n);
+}
+
+/** Opens a street of the city from the map's list of places. Says its address. */
+export async function openStreet(page: Page, n = 0) {
+  return openPlace(page, "street.html", n);
+}
+
+async function openPlace(page: Page, editor: string, n: number) {
+  await page.goto("/map.html");
+  const row = page.locator(`#places-panel a.place-row[href^='${editor}']`).nth(n);
+  const href = (await row.getAttribute("href"))!;
+  await row.click();
+  await page.waitForURL(`**/${href}`);
+  return href;
 }
 
 /** Waits until the places are on the map and its tiles are drawn. */
