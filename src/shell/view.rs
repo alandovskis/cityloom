@@ -33,10 +33,19 @@ fn typing(target: Option<EventTarget>) -> bool {
 
 /// Binds the page's shell markup to a view-model made for `target`. `details_word`
 /// names what the left sidebar holds on this page.
-pub fn mount(target: Rc<dyn Target>, details_word: &'static str) {
+pub fn mount(target: Rc<dyn Target>, details_word: &'static str, notes_give_way: bool) {
     let tabs = all(".notes .tab").iter().map(|t| t.id()).collect();
     let dark = leptos::prelude::window().match_media("(prefers-color-scheme: dark)").ok().flatten();
-    let vm = ShellVm::new(crate::shared::platform::browser_ports(), target, details_word, tabs, dark.as_ref().is_some_and(|m| m.matches()));
+    // An editor has too little room for its notes beside the drawing below this width.
+    let roomy = leptos::prelude::window().match_media("(min-width: 1360px)").ok().flatten().is_none_or(|m| m.matches());
+    let vm = ShellVm::new_with(
+        crate::shared::platform::browser_ports(),
+        target,
+        details_word,
+        tabs,
+        dark.as_ref().is_some_and(|m| m.matches()),
+        roomy || !notes_give_way,
+    );
     // The effects live as long as the page.
     let owner = Owner::new();
     owner.with(|| {
@@ -157,7 +166,7 @@ fn bind_sidebars(vm: &Rc<ShellVm>) {
         Effect::new(move |_| {
             let open = if data == "inspector" { v.inspector_open() } else { v.notes_open() };
             if let Some(root) = &root {
-                let _ = if open { root.remove_attribute(&format!("data-{data}")) } else { root.set_attribute(&format!("data-{data}"), "closed") };
+                let _ = root.set_attribute(&format!("data-{data}"), if open { "open" } else { "closed" });
             }
             let _ = btn.set_attribute("aria-expanded", &open.to_string());
         });

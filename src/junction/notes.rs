@@ -71,7 +71,7 @@ pub fn Across(vm: Rc<JunctionVm>) -> impl IntoView {
                 let lanes = if a.enters { a.lanes.len() } else { 0 };
                 view! {
                     <tr>
-                        <th scope="row"><span class="dirtag">{compass(a.bearing)}</span>{a.street}</th>
+                        <th scope="row"><span class="dirtag">{compass(a.bearing)}</span>{a.street.clone()}</th>
                         {across}
                         <td>{lanes}</td>
                     </tr>

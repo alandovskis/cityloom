@@ -15,4 +15,5 @@ pub mod store;
 pub mod symbols;
 #[cfg(test)]
 pub mod testing;
+pub mod tick;
 pub mod units;

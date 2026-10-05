@@ -231,7 +231,7 @@ pub struct Piece {
 /// "away" traffic leaves the junction and "toward" traffic enters it.
 #[derive(Clone, Debug)]
 pub struct Profile {
-    pub name: &'static str,
+    pub name: String,
     pub row_mm: i32,
     pub pieces: Vec<Piece>,
     /// Extent of the carriageway across the section.
@@ -252,14 +252,14 @@ pub fn profile(street: usize, region: usize) -> Profile {
     let street = street.min(SAMPLES.len() - 1);
     let mut e = Editor::new(street);
     e.set_region(region);
-    read_profile(&e.view(), SAMPLES[street].name)
+    read_profile(&e.view(), SAMPLES[street].name.to_string())
 }
 
 /// The profile of a street a city holds, with its lanes written for the side
 /// of the road of `region`.
 pub fn profile_of(street: &Street, region: usize) -> Profile {
     let e = Editor::from_street(street, street, region);
-    read_profile(&e.view(), SAMPLES[street.sample.min(SAMPLES.len() - 1)].name)
+    read_profile(&e.view(), street.title())
 }
 
 impl Arm {
@@ -287,10 +287,27 @@ impl Arm {
     }
 
     pub fn profile(&self, region: usize) -> Profile {
-        match &self.section {
+        // Reading a street's profile builds an editor on it, and a junction asks for it of every arm
+        // many times over, so what has been read is kept.
+        thread_local! {
+            static READ: std::cell::RefCell<std::collections::HashMap<(usize, Option<Street>, usize), Profile>> = Default::default();
+        }
+        let key = (self.street, self.section.clone(), region);
+        if let Some(p) = READ.with(|r| r.borrow().get(&key).cloned()) {
+            return p;
+        }
+        let p = match &self.section {
             Some(s) => profile_of(s, region),
             None => profile(self.street, region),
-        }
+        };
+        READ.with(|r| {
+            let mut r = r.borrow_mut();
+            if r.len() > 4096 {
+                r.clear();
+            }
+            r.insert(key, p.clone());
+        });
+        p
     }
 
     /// Which sample street this arm is, or began as.
@@ -298,8 +315,8 @@ impl Arm {
         self.section.as_ref().map_or(self.street, |s| s.sample).min(SAMPLES.len() - 1)
     }
 
-    pub fn street_name(&self) -> &'static str {
-        SAMPLES[self.street_index()].name
+    pub fn street_name(&self) -> String {
+        self.section.as_ref().map_or_else(|| SAMPLES[self.street_index()].name.to_string(), Street::title)
     }
 
     pub fn row_mm(&self) -> i32 {
@@ -307,7 +324,7 @@ impl Arm {
     }
 }
 
-fn read_profile(view: &View, name: &'static str) -> Profile {
+fn read_profile(view: &View, name: String) -> Profile {
     let pieces: Vec<Piece> =
         view.segments.iter().map(|s| Piece { kind: s.kind, material: s.material, x_mm: s.x_mm, width_mm: s.width_mm, direction: s.direction }).collect();
     let road: Vec<&Piece> = pieces.iter().filter(|p| is_roadway(p.kind)).collect();

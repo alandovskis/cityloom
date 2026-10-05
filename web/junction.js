@@ -2,10 +2,11 @@
 // WebAssembly module (`mount_page`); this opens the junction, keeps what it
 // makes in the city, and sets up what every page shares.
 
-import init, { Plan, hatches, junction_name, mount_page, open_junction } from "./pkg/cityloom_editor.js";
+import init, { Plan, hatches, junction_name, mount_page, open_junction, prepare_city } from "./pkg/cityloom_editor.js";
 import { placeParam } from "./city.js";
 
 await init();
+await prepare_city();
 
 const { HATCH, MATERIAL_HATCH, CURB_HATCH } = JSON.parse(hatches());
 
@@ -24,7 +25,7 @@ if (placeId && !held) {
   new Plan(0).mount_shell(); // only the settings menu and the sidebars have anything to do here
   document.getElementById("street-name").textContent = placeName;
   document.querySelector(".tools").hidden = true;
-  document.querySelector(".sheet-body").innerHTML =
+  document.querySelector(".stage-main").innerHTML =
     `<div class="stuck"><h2 class="note-h">This junction cannot be drawn</h2><p>The streets that meet here have been changed so that they no longer make a junction. Give the streets their room back, or start the city over from the map.</p><p><a class="back" href="map.html">City map</a></p></div>`;
   await new Promise(() => {});
 }

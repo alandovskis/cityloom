@@ -41,7 +41,7 @@ impl Sheet {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.clone(), "piece details");
+        crate::shell::mount(self.0.clone(), "piece details", true);
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -99,7 +99,7 @@ pub fn mount_street_page(sheet: &Sheet, ends: Option<String>) {
 /// junction or where it leaves the map.
 #[wasm_bindgen]
 pub fn street_ends(edge: u32) -> String {
-    crate::json(&CityStore::new(browser_ports().storage).open().street_ends(edge))
+    crate::json(&CityStore::current(browser_ports().storage).open().street_ends(edge))
 }
 
 /// The street editor on one street of the city kept in this browser, which
@@ -107,7 +107,7 @@ pub fn street_ends(edge: u32) -> String {
 #[wasm_bindgen]
 pub fn open_street(edge: u32) -> Option<Sheet> {
     let ports = browser_ports();
-    let store = CityStore::new(ports.storage.clone());
+    let store = CityStore::current(ports.storage.clone());
     let street = store.open().street_editor(edge, store.region())?;
     let place = Place::Street(edge);
     Some(Sheet(vm::StreetVm::new(ports, street, Some(CityBinding { store, place }))))

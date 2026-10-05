@@ -1,0 +1,8 @@
+[package]
+name = "osm_network"
+version = "0.1.0"
+edition = "2024"
+description = "The plain street network that osm_import produces and the editor reads."
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }

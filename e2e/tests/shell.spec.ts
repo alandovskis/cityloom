@@ -5,7 +5,7 @@ import { expect, live, test } from "./fixtures";
 
 const PAGES = [
   { name: "map", url: "/map.html", firstTab: "t-checks", secondTab: "t-changes", details: "Places hidden." },
-  { name: "street", url: "/index.html", firstTab: "t-space", secondTab: "t-checks", details: "Piece details hidden." },
+  { name: "street", url: "/street.html", firstTab: "t-space", secondTab: "t-checks", details: "Piece details hidden." },
   {
     name: "junction",
     url: "/intersection.html",
@@ -33,7 +33,7 @@ for (const p of PAGES) {
       await expect(menu).toBeHidden();
       await expect(button).toHaveAttribute("aria-expanded", "false");
       await button.click();
-      await page.locator(".sheet-head").click({ position: { x: 5, y: 5 } });
+      await page.mouse.click(4, 4);
       await expect(menu).toBeHidden();
     });
 

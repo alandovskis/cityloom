@@ -760,7 +760,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
             "i-h-street",
             "Street",
             view! {
-                <a class="btn" href=format!("index.html?street={edge}")>"Open the cross-section"</a>
+                <a class="btn" href=format!("street.html?street={edge}")>"Open the cross-section"</a>
                 <p class="insp-range">"This street belongs to the city. Its layout is edited in the street editor, and changes there show here."</p>
             },
         )

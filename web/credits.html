@@ -7,58 +7,70 @@
   <meta name="description" content="Who and what CityLoom is built on.">
   <meta name="color-scheme" content="light dark">
   <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed"}catch(e){}</script>
-  <link rel="preload" href="fonts/barlow-semi-condensed-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="app.css">
 </head>
-<body>
-  <svg id="defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"></svg>
+<body class="read">
+  <header class="bar">
+    <a class="brand" href="index.html" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
+    <nav class="surfaces" aria-label="Editors">
+      <a href="map.html" class="surface">Map</a>
+      <a href="street.html" class="surface">Street</a>
+      <a href="intersection.html" class="surface">Intersection</a>
+    </nav>
+    <div class="top-end"><a class="surface" href="credits.html" aria-current="page">Credits</a></div>
+  </header>
 
-  <div class="sheet">
-    <div class="sheet-content">
-      <div class="topbar">
-        <div class="brand"><img class="mark" src="logo.svg" alt="" width="44" height="44"><span class="wordmark">CityLoom</span></div>
-        <nav class="surfaces" aria-label="Editors">
-          <a href="index.html" class="surface">Street</a>
-          <a href="intersection.html" class="surface">Intersection</a>
-        </nav>
-        <div class="top-end"><a class="surface" href="credits.html" aria-current="page">Credits</a></div>
-      </div>
-      <main class="credits">
-        <h1>Credits</h1>
-        <p class="lede">CityLoom is built on other people's work. This page says whose, and what is still a stand-in.</p>
+  <main class="read-card credits">
+    <h1>Credits</h1>
+    <p class="lede">CityLoom is built on other people's work. This page says whose, and what is still a stand-in.</p>
 
-        <section aria-labelledby="c-atlas">
-          <h2 id="c-atlas" class="note-h">Transit measures</h2>
-          <p>The transit priority measures in the editors, and their names and codes, follow the toolbox of the
-          <a href="https://tpa.transitcosts.com/atlas/toolbox">Transit Priority Atlas</a>, published by the Marron Institute.
-          CityLoom draws them in its own way and is not affiliated with or endorsed by the Atlas or the Marron Institute.</p>
-        </section>
+    <section aria-labelledby="c-atlas">
+      <h2 id="c-atlas" class="note-h">Transit measures</h2>
+      <p>The transit priority measures in the editors, and their names and codes, follow the toolbox of the
+      <a href="https://tpa.transitcosts.com/atlas/toolbox">Transit Priority Atlas</a>, published by the Marron Institute.
+      CityLoom draws them in its own way and is not affiliated with or endorsed by the Atlas or the Marron Institute.</p>
+    </section>
 
-        <section aria-labelledby="c-type">
-          <h2 id="c-type" class="note-h">Typeface</h2>
-          <p>Barlow Semi Condensed, copyright 2017 The Barlow Project Authors, used under the SIL Open Font License 1.1.
-          <a href="fonts/LICENSE-barlow.txt">Read the license</a>.</p>
-        </section>
+    <section aria-labelledby="c-osm">
+      <h2 id="c-osm" class="note-h">Streets</h2>
+      <p>The streets, their lanes and the junctions come from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, © OpenStreetMap contributors,
+      available under the <a href="https://opendatacommons.org/licenses/odbl/">Open Database Licence</a>. Places are found with Nominatim and the roads are fetched with the Overpass API, both public services of the OpenStreetMap community.
+      <a href="https://github.com/a-b-street/osm2streets">osm2streets</a> (Apache License 2.0) turns the map data into streets and junctions.
+      Where CityLoom is deployed with tiles of the Montréal area, those are cut from a Geofabrik extract of the same data.</p>
+    </section>
 
-        <section aria-labelledby="c-code">
-          <h2 id="c-code" class="note-h">Software</h2>
-          <ul class="credit-list">
-            <li><b>Rust</b> compiles the editing models to WebAssembly.</li>
-            <li><b>wasm-bindgen</b> 0.2.129 joins the Rust code to the page.</li>
-            <li><b>serde</b> 1.0.229 and <b>serde_json</b> 1.0.151 carry the drawing from Rust to the page.</li>
-          </ul>
-        </section>
+    <section aria-labelledby="c-map">
+      <h2 id="c-map" class="note-h">The map</h2>
+      <p>The basemap behind the city map is drawn from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> data, © OpenStreetMap contributors (<a href="https://opendatacommons.org/licenses/odbl/">ODbL</a>), in the <a href="https://openmaptiles.org/">OpenMapTiles</a> schema (© OpenMapTiles, CC BY 4.0), made with <a href="https://github.com/onthegomap/planetiler">Planetiler</a> (Apache License 2.0) from a Geofabrik extract, with Natural Earth (public domain) and OpenStreetMap water polygons at low zooms. Where CityLoom is deployed with the basemap's tiles, those are built from these sources.
+      It is drawn with <a href="https://maplibre.org/">MapLibre GL JS</a> and read with <a href="https://github.com/protomaps/PMTiles">PMTiles</a>, both under the BSD 3-Clause license: <a href="licenses/LICENSE-maplibre-gl.txt">read the MapLibre license</a>, <a href="licenses/LICENSE-pmtiles.txt">read the PMTiles license</a>.
+      Its labels are set in Noto Sans, copyright The Noto Project Authors, under the SIL Open Font License 1.1: <a href="glyphs/LICENSE-noto-sans.txt">read the license</a>.</p>
+    </section>
 
-        <section aria-labelledby="c-data">
-          <h2 id="c-data" class="note-h">Numbers</h2>
-          <p>Every width, rule, rate and threshold in CityLoom is a synthetic placeholder, not a measurement or a standard.
-          No real city data is used yet.</p>
-        </section>
+    <section aria-labelledby="c-type">
+      <h2 id="c-type" class="note-h">Typeface</h2>
+      <p>The pages are set in the system's own typeface. The CityLoom logotype is drawn from Overpass, copyright 2021 The Overpass Project Authors, used under the SIL Open Font License 1.1.
+      <a href="fonts/LICENSE-overpass.txt">Read the license</a>.</p>
+    </section>
 
-        <p class="back"><a href="index.html">Back to the street editor</a> · <a href="intersection.html">Back to the intersection editor</a></p>
-      </main>
-    </div>
-  </div>
+    <section aria-labelledby="c-code">
+      <h2 id="c-code" class="note-h">Software</h2>
+      <ul class="credit-list">
+        <li><b>Rust</b> compiles the editing models and the pages to WebAssembly.</li>
+        <li><b>Leptos</b> draws the pages in the browser.</li>
+        <li><b>wasm-bindgen</b> 0.2.129 joins the Rust code to the page.</li>
+        <li><b>serde</b> 1.0.229 and <b>serde_json</b> 1.0.151 carry the drawing from Rust to the page.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="c-data">
+      <h2 id="c-data" class="note-h">Numbers</h2>
+      <p>Every rule, rate and threshold the checks use is a synthetic placeholder, not a measurement or a standard.
+      The widths of the streets are what OpenStreetMap says of their lanes, or a typical lane where it says nothing.</p>
+    </section>
+
+    <p class="back-links"><a href="street.html">Back to the street editor</a> · <a href="intersection.html">Back to the intersection editor</a> · <a href="map.html">Back to the map</a></p>
+  </main>
 </body>
 </html>

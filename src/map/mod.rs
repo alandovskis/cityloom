@@ -1,8 +1,13 @@
-//! The city map page: the whole city drawn as a map to pan, zoom and choose a
-//! street or junction from. Its view-model, camera, gestures and views live together.
+//! The city map page: the whole city drawn over an OpenStreetMap basemap to pan,
+//! zoom and choose a street or junction from. MapLibre draws the map and takes the
+//! pointer (`web/basemap.js`, reached through the `Mapper` port); the view-model,
+//! the places it hands the map, and the views around the map live here.
 
 pub mod camera;
-pub mod gestures;
+pub mod home;
+pub mod overlay;
+pub mod projection;
+pub mod style;
 pub mod svg;
 #[cfg(test)]
 mod tests;
@@ -26,22 +31,25 @@ impl MapPage {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.clone(), "places");
+        crate::shell::mount(self.0.clone(), "places", false);
     }
 }
 
-/// Draws the city map page into the elements it keeps for it, and hands back
-/// what the script needs to reach it.
+/// Draws the city map page into the elements it keeps for it, over the basemap the script made, and hands
+/// back what the script needs to reach it.
 #[wasm_bindgen]
-pub fn mount_map() -> MapPage {
+pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
-    let vm = vm::MapVm::new(browser_ports());
+    let ports = crate::shared::ports::Ports { mapper: Rc::new(crate::shared::platform::BrowserMapper::new(basemap)), ..browser_ports() };
+    let vm = vm::MapVm::for_map(ports);
+    vm.attach();
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
+    mount("search-slot", view! { <view::SearchBox vm=vm.clone()/> }.into_any());
     mount("street", view! { <view::MapHeader vm=vm.clone()/> }.into_any());
     mount("reset-slot", view! { <view::ResetButton vm=vm.clone()/> }.into_any());
     mount("map-tools-slot", view! { <view::MapTools vm=vm.clone()/> }.into_any());
@@ -54,5 +62,24 @@ pub fn mount_map() -> MapPage {
     mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());
     mount("changes", view! { <view::Changes vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <view::TitleBlock vm=vm.clone()/> }.into_any());
+    MapPage(vm)
+}
+
+/// Draws the home page into the elements it keeps for it: the city behind the
+/// hero card, the search box, and how the city stands. Hands back what the script
+/// needs to reach it.
+#[wasm_bindgen]
+pub fn mount_home() -> MapPage {
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let vm = vm::MapVm::for_home(browser_ports());
+    let at =
+        |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
+    let mount = |id: &str, view: AnyView| {
+        leptos::mount::mount_to(at(id), move || view).forget();
+    };
+    mount("hero-map-slot", view! { <home::HeroMap vm=vm.clone()/> }.into_any());
+    mount("search-slot", view! { <crate::place::view::AreaSearch vm=crate::place::vm::AreaVm::new(browser_ports())/> }.into_any());
+    mount("hero-facts-slot", view! { <home::HeroFacts vm=vm.clone()/> }.into_any());
     MapPage(vm)
 }

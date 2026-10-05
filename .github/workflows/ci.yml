@@ -85,7 +85,9 @@ jobs:
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: e2e/package-lock.json
+          cache-dependency-path: |
+            e2e/package-lock.json
+            package-lock.json
 
       # wasm-bindgen-cli takes minutes to compile, so keep it for as long as its version holds.
       - id: wasm-bindgen

@@ -8,6 +8,7 @@ use leptos::prelude::*;
 use serde::Deserialize;
 
 use crate::shared::catalogue::KINDS;
+use crate::shared::tick::Tick;
 use crate::street::model::{SegView, View};
 use crate::street::text::status_text;
 use crate::street::vm::StreetVm;
@@ -115,7 +116,7 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
         _ => ().into_any(),
     });
     view! {
-        <h1 id="street-name">{move || w.view().name}</h1>
+        <h1 id="street-name">{move || w.view().name.clone()}</h1>
         <p class="street-sub" id="street-sub">
             {linked.then(|| view! { {back_link()} " " <span aria-hidden="true">"\u{b7}"</span> " " })}
             <span>"Street cross-section"</span>
@@ -132,7 +133,7 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
 pub fn TitleBlock(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     view! {
-        <div class="tb-cell tb-wide"><span>"Street"</span><b id="tb-street">{move || w.view().name}</b></div>
+        <div class="tb-cell tb-wide"><span>"Street"</span><b id="tb-street">{move || w.view().name.clone()}</b></div>
         <div class="tb-cell"><span>"Width"</span><b id="tb-row" class="fig">{move || w.units().length_fine(w.view().row_mm)}</b></div>
         <div class="tb-cell"><span>"Changes made"</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
     }
@@ -143,8 +144,11 @@ pub fn TitleBlock(vm: Rc<StreetVm>) -> impl IntoView {
 pub fn Fit(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     let too_wide = move || w.view().delta_mm > 0;
+    // The width is all used: neither over nor under.
+    let fits = Signal::derive(move || w.view().delta_mm == 0);
     view! {
         <p id="fit" class=move || if too_wide() { "fit bad" } else { "fit" } role="status">
+            <Tick works=fits/>
             {move || {
                 let (v, units) = w.now();
                 status_text(&v, units)

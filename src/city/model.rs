@@ -22,33 +22,52 @@ const SAVE_VERSION: u32 = 1;
 /// Streets wider than this get a refuge island in their crossings to start with.
 const ISLAND_ROW_MM: i32 = 24_000;
 
-struct NodeDef {
-    x_m: i32,
-    y_m: i32,
+/// What a place is called when it is not the sample city's numbering.
+pub(super) struct Names {
+    /// As a title: "Main Street and Side Road".
+    pub(super) name: String,
+    /// In a sentence: "the end of Main Street".
+    pub(super) end: String,
+}
+
+pub(super) struct NodeDef {
+    pub(super) x_mm: i32,
+    pub(super) y_mm: i32,
     /// Where three to five streets meet. Otherwise the street runs off the map.
-    junction: bool,
-    control: usize,
-    corner_mm: i32,
+    pub(super) junction: bool,
+    pub(super) control: usize,
+    pub(super) corner_mm: i32,
+    pub(super) names: Option<Names>,
 }
 
 const fn junction_at(x_m: i32, y_m: i32, control: usize, corner_mm: i32) -> NodeDef {
-    NodeDef { x_m, y_m, junction: true, control, corner_mm }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm, names: None }
 }
 
 const fn gate_at(x_m: i32, y_m: i32) -> NodeDef {
-    NodeDef { x_m, y_m, junction: false, control: 0, corner_mm: 0 }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0, names: None }
 }
 
-struct EdgeDef {
+pub(super) struct EdgeDef {
     /// Node indices. The street editor shows the street looking from `a` to `b`.
-    a: usize,
-    b: usize,
-    /// Index into `SAMPLES`.
-    street: usize,
+    pub(super) a: usize,
+    pub(super) b: usize,
+    /// Index into `SAMPLES`: what sort of street it is.
+    pub(super) street: usize,
+    /// Its name, where it is not just the sort of street it is.
+    pub(super) name: Option<String>,
+    /// The street as it first stands, where it is not the sample.
+    pub(super) section: Option<Street>,
+    /// The way the street leaves node `a` and node `b`, in degrees clockwise from north, where its real
+    /// shape is known. Otherwise it leaves along the straight line to its other end.
+    pub(super) headings: Option<(f64, f64)>,
+    /// The street's centreline in layout millimetres, from node `a` to node `b`, where its real shape is
+    /// known. Otherwise it runs along the straight line between them.
+    pub(super) shape: Option<Vec<(i32, i32)>>,
 }
 
 const fn street(a: usize, b: usize, street: usize) -> EdgeDef {
-    EdgeDef { a, b, street }
+    EdgeDef { a, b, street, name: None, section: None, headings: None, shape: None }
 }
 
 const STREET: usize = 0;
@@ -124,91 +143,215 @@ struct Saved {
     junctions: BTreeMap<u32, State>,
 }
 
+/// Where the junctions and street ends are, and which street joins which. The
+/// network is fixed for a city; what a resident edits is kept apart from it.
+pub struct Layout {
+    pub(super) name: String,
+    /// The side traffic keeps to.
+    pub(super) side: Side,
+    pub(super) nodes: Vec<NodeDef>,
+    pub(super) edges: Vec<EdgeDef>,
+    /// Where the layout's origin lies in the network it was made from, in metres east and north of the
+    /// network's own origin. The sample city is on no network, so has none.
+    pub(super) origin_m: Option<(f64, f64)>,
+}
+
+/// The widest a gap between neighbouring arms can be made by moving them, in degrees: a bend with a
+/// side street on its inside has a gap a little over 180, which is a junction; a fan is not one.
+const MOST_CLOSED: i32 = 60;
+
+/// Moves bearings (sorted, in degrees) to what the junction editor allows: apart where two are closer than
+/// it allows, each by half of what is missing, and together where a gap is wider than a straight line (by up to
+/// `MOST_CLOSED`), in the editor's steps. Bearings that cannot all be made to fit are left.
+fn spread(b: &mut [i32]) {
+    use crate::junction::model::BEARING_STEP;
+    let n = b.len();
+    let gap = |b: &[i32], i: usize| (b[(i + 1) % n] - b[i]).rem_euclid(360);
+    if let Some(i) = (0..n).find(|&i| (181..=180 + MOST_CLOSED).contains(&gap(b, i))) {
+        // the two arms either side of the wide gap each move into it by half the excess
+        let take = (((gap(b, i) - 180) as f64 / 2.0 / BEARING_STEP as f64).ceil() as i32) * BEARING_STEP;
+        b[i] = (b[i] + take).rem_euclid(360);
+        b[(i + 1) % n] = (b[(i + 1) % n] - take).rem_euclid(360);
+    }
+    separate(b);
+}
+
+fn separate(b: &mut [i32]) {
+    use crate::junction::model::{BEARING_STEP, MIN_SEPARATION};
+    let n = b.len();
+    for _ in 0..40 {
+        let mut moved = false;
+        for i in 0..n {
+            let j = (i + 1) % n;
+            let gap = (b[j] - b[i]).rem_euclid(360);
+            if n > 1 && gap < MIN_SEPARATION {
+                let give = (((MIN_SEPARATION - gap) as f64 / 2.0 / BEARING_STEP as f64).ceil() as i32) * BEARING_STEP;
+                b[i] = (b[i] - give).rem_euclid(360);
+                b[j] = (b[j] + give).rem_euclid(360);
+                moved = true;
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
+}
+
+impl Layout {
+    /// The sample city's network.
+    pub fn sample() -> Layout {
+        Layout { name: NAME.to_string(), side: Side::Right, nodes: NODES.into_iter().collect(), edges: EDGES.into_iter().collect(), origin_m: None }
+    }
+}
+
 pub struct City {
+    layout: Layout,
     streets: BTreeMap<u32, Street>,
     junctions: BTreeMap<u32, State>,
     today_streets: BTreeMap<u32, Street>,
     today_junctions: BTreeMap<u32, State>,
 }
 
-fn dist_mm(a: usize, b: usize) -> f64 {
-    let (dx, dy) = ((NODES[a].x_m - NODES[b].x_m) as f64, (NODES[a].y_m - NODES[b].y_m) as f64);
-    dx.hypot(dy) * 1000.0
+/// How long a line through these points is, in millimetres.
+fn path_mm(points: &[(i32, i32)]) -> f64 {
+    points.windows(2).map(|w| ((w[1].0 - w[0].0) as f64).hypot((w[1].1 - w[0].1) as f64)).sum()
 }
 
-/// The bearing from node `from` toward node `to`, clockwise from north (up),
-/// to the nearest step the junction editor uses.
-fn bearing(from: usize, to: usize) -> i32 {
-    let dx = (NODES[to].x_m - NODES[from].x_m) as f64;
-    let dy = (NODES[to].y_m - NODES[from].y_m) as f64;
-    let deg = dx.atan2(-dy).to_degrees();
-    ((deg / junction::BEARING_STEP as f64).round() as i32 * junction::BEARING_STEP).rem_euclid(360)
-}
-
-fn edges_at(node: usize) -> Vec<usize> {
-    (0..EDGES.len()).filter(|&e| EDGES[e].a == node || EDGES[e].b == node).collect()
-}
-
-fn other_end(edge: usize, node: usize) -> usize {
-    if EDGES[edge].a == node { EDGES[edge].b } else { EDGES[edge].a }
-}
-
-/// Junctions are numbered in reading order, so the names run across the map.
-fn junction_number(node: usize) -> usize {
-    let mut order: Vec<usize> = (0..NODES.len()).filter(|&n| NODES[n].junction).collect();
-    order.sort_by_key(|&n| (NODES[n].y_m, NODES[n].x_m));
-    order.iter().position(|&n| n == node).map_or(0, |p| p + 1)
-}
-
-fn node_name(node: usize) -> String {
-    if NODES[node].junction { format!("Junction {}", junction_number(node)) } else { "Edge of the map".to_string() }
-}
-
-fn end_name(node: usize) -> String {
-    if NODES[node].junction { format!("Junction {}", junction_number(node)) } else { "the edge of the map".to_string() }
-}
-
-fn edge_name(edge: usize) -> String {
-    let e = &EDGES[edge];
-    let kind = SAMPLES[e.street].name;
-    if !NODES[e.a].junction && !NODES[e.b].junction {
-        format!("{kind} · through the city")
-    } else {
-        format!("{kind} · {} to {}", end_name(e.a), end_name(e.b))
-    }
-}
-
-/// The street an arm reads: the city's street as seen looking out from `node`.
-fn seen_from(edge: usize, node: usize, street: &Street) -> Street {
-    if EDGES[edge].a == node { street.clone() } else { street.reversed() }
-}
-
-/// A junction as first laid out, from the streets that meet there.
-fn generate(node: usize, streets: &BTreeMap<u32, Street>) -> State {
-    let def = &NODES[node];
-    let mut incident: Vec<(i32, usize)> = edges_at(node).into_iter().map(|e| (bearing(node, other_end(e, node)), e)).collect();
-    incident.sort_by_key(|(b, _)| *b);
-    let mut arms: Vec<Arm> = incident
-        .iter()
-        .enumerate()
-        .map(|(i, &(b, e))| {
-            let mut arm = Arm::new(i as u32 + 1, EDGES[e].street, b, 0);
-            arm.edge = e as u32 + 1;
-            arm.corner_mm = def.corner_mm;
-            arm.section = streets.get(&arm.edge).map(|s| seen_from(e, node, s));
-            if arm.row_mm() >= ISLAND_ROW_MM
-                && let Some(c) = arm.crossing.as_mut()
-            {
-                c.island = true;
-            }
-            arm
+impl Layout {
+    /// The street's centreline from node `a` to node `b`, in millimetres: its own shape, or the straight line.
+    fn shape_of(&self, edge: usize) -> Vec<(i32, i32)> {
+        let e = &self.edges[edge];
+        e.shape.clone().unwrap_or_else(|| {
+            let (a, b) = (&self.nodes[e.a], &self.nodes[e.b]);
+            vec![(a.x_mm, a.y_mm), (b.x_mm, b.y_mm)]
         })
-        .collect();
-    junction::normalize(&mut arms, 0);
-    tune_corners(&mut arms, def.control, def.corner_mm);
-    let mut s = State { label: "Junction today".into(), arms, control: def.control, ring_extra_mm: 0, bus: None, cycle: None };
-    forget_streets(&mut s);
-    s
+    }
+
+    /// The bearing at which street `edge` leaves `node`, to the nearest step the junction editor uses.
+    fn leaving(&self, edge: usize, node: usize) -> i32 {
+        let e = &self.edges[edge];
+        match e.headings {
+            Some((a, b)) => {
+                let deg = if e.a == node { a } else { b };
+                ((deg / junction::BEARING_STEP as f64).round() as i32 * junction::BEARING_STEP).rem_euclid(360)
+            }
+            None => self.bearing(node, self.other_end(edge, node)),
+        }
+    }
+
+    /// The bearing from node `from` toward node `to`, clockwise from north (up),
+    /// to the nearest step the junction editor uses.
+    fn bearing(&self, from: usize, to: usize) -> i32 {
+        let dx = (self.nodes[to].x_mm - self.nodes[from].x_mm) as f64;
+        let dy = (self.nodes[to].y_mm - self.nodes[from].y_mm) as f64;
+        let deg = dx.atan2(-dy).to_degrees();
+        ((deg / junction::BEARING_STEP as f64).round() as i32 * junction::BEARING_STEP).rem_euclid(360)
+    }
+
+    fn edges_at(&self, node: usize) -> Vec<usize> {
+        (0..self.edges.len()).filter(|&e| self.edges[e].a == node || self.edges[e].b == node).collect()
+    }
+
+    fn other_end(&self, edge: usize, node: usize) -> usize {
+        if self.edges[edge].a == node { self.edges[edge].b } else { self.edges[edge].a }
+    }
+
+    /// Junctions are numbered in reading order, so the names run across the map.
+    fn junction_number(&self, node: usize) -> usize {
+        let mut order: Vec<usize> = (0..self.nodes.len()).filter(|&n| self.nodes[n].junction).collect();
+        order.sort_by_key(|&n| (self.nodes[n].y_mm, self.nodes[n].x_mm));
+        order.iter().position(|&n| n == node).map_or(0, |p| p + 1)
+    }
+
+    fn node_name(&self, node: usize) -> String {
+        if let Some(n) = &self.nodes[node].names {
+            return n.name.clone();
+        }
+        if self.nodes[node].junction { format!("Junction {}", self.junction_number(node)) } else { "Edge of the map".to_string() }
+    }
+
+    fn end_name(&self, node: usize) -> String {
+        if let Some(n) = &self.nodes[node].names {
+            return n.end.clone();
+        }
+        if self.nodes[node].junction { format!("Junction {}", self.junction_number(node)) } else { "the edge of the map".to_string() }
+    }
+
+    fn edge_name(&self, edge: usize) -> String {
+        let e = &self.edges[edge];
+        let kind = e.name.as_deref().unwrap_or(SAMPLES[e.street].name);
+        if !self.nodes[e.a].junction && !self.nodes[e.b].junction {
+            format!("{kind} · through the city")
+        } else {
+            format!("{kind} · {} to {}", self.end_name(e.a), self.end_name(e.b))
+        }
+    }
+
+    /// A junction as first laid out, from the streets that meet there.
+    fn generate(&self, node: usize, streets: &BTreeMap<u32, Street>) -> State {
+        let def = &self.nodes[node];
+        let mut incident: Vec<(i32, usize)> = self.edges_at(node).into_iter().map(|e| (self.leaving(e, node), e)).collect();
+        incident.sort_by_key(|(b, _)| *b);
+        let mut bearings: Vec<i32> = incident.iter().map(|(b, _)| *b).collect();
+        spread(&mut bearings);
+        for (i, b) in bearings.into_iter().enumerate() {
+            incident[i].0 = b;
+        }
+        incident.sort_by_key(|(b, _)| *b);
+        let mut arms: Vec<Arm> = incident
+            .iter()
+            .enumerate()
+            .map(|(i, &(b, e))| {
+                let mut arm = Arm::new(i as u32 + 1, self.edges[e].street, b, 0);
+                arm.edge = e as u32 + 1;
+                arm.corner_mm = def.corner_mm;
+                arm.section = streets.get(&arm.edge).map(|s| seen_from(self, e, node, s));
+                if arm.row_mm() >= ISLAND_ROW_MM
+                    && let Some(c) = arm.crossing.as_mut()
+                {
+                    c.island = true;
+                }
+                arm
+            })
+            .collect();
+        junction::normalize(&mut arms, 0);
+        tune_corners(&mut arms, def.control, def.corner_mm);
+        let mut s = State { label: "Junction today".into(), arms, control: def.control, ring_extra_mm: 0, bus: None, cycle: None };
+        forget_streets(&mut s);
+        s
+    }
+
+    /// Whether a saved junction can stand for this node: the same streets, with
+    /// every index and length inside what the editor allows.
+    fn junction_fits(&self, s: &State, node: usize) -> bool {
+        use crate::junction::model::*;
+        let mut want: Vec<u32> = self.edges_at(node).iter().map(|&e| e as u32 + 1).collect();
+        let mut have: Vec<u32> = s.arms.iter().map(|a| a.edge).collect();
+        want.sort_unstable();
+        have.sort_unstable();
+        let mut uids: Vec<u32> = s.arms.iter().map(|a| a.uid).collect();
+        uids.sort_unstable();
+        uids.dedup();
+        want == have
+            && uids.len() == s.arms.len()
+            && uids.first().is_some_and(|&u| u != 0)
+            && s.control < CONTROLS.len()
+            && (0..=MAX_RING_MM).contains(&s.ring_extra_mm)
+            && s.cycle.is_none_or(|c| (CYCLE_MIN_MM..=CYCLE_MAX_MM).contains(&c))
+            && s.arms.iter().all(|a| {
+                a.street < SAMPLES.len()
+                    && a.bearing % BEARING_STEP == 0
+                    && (0..360).contains(&a.bearing)
+                    && (MIN_CORNER_MM..=MAX_CORNER_MM).contains(&a.corner_mm)
+                    && a.offset_mm.abs() <= 30_000
+                    && a.approach < APPROACHES.len()
+                    && (APPROACH_MIN_MM..=APPROACH_MAX_MM).contains(&a.approach_mm)
+                    && a.stop < STOPS.len()
+                    && a.rule < RULES.len()
+                    && a.crossing
+                        .is_none_or(|c| (MIN_SETBACK_MM..=MAX_SETBACK_MM).contains(&c.setback_mm) && (MIN_CROSSING_MM..=MAX_CROSSING_MM).contains(&c.width_mm))
+            })
+    }
 }
 
 /// Gives each corner the radius nearest `preferred` that leaves its sidewalk
@@ -239,40 +382,13 @@ fn forget_streets(s: &mut State) {
     }
 }
 
-/// Whether a saved junction can stand for this node: the same streets, with
-/// every index and length inside what the editor allows.
-fn junction_fits(s: &State, node: usize) -> bool {
-    use crate::junction::model::*;
-    let mut want: Vec<u32> = edges_at(node).iter().map(|&e| e as u32 + 1).collect();
-    let mut have: Vec<u32> = s.arms.iter().map(|a| a.edge).collect();
-    want.sort_unstable();
-    have.sort_unstable();
-    let mut uids: Vec<u32> = s.arms.iter().map(|a| a.uid).collect();
-    uids.sort_unstable();
-    uids.dedup();
-    want == have
-        && uids.len() == s.arms.len()
-        && uids.first().is_some_and(|&u| u != 0)
-        && s.control < CONTROLS.len()
-        && (0..=MAX_RING_MM).contains(&s.ring_extra_mm)
-        && s.cycle.is_none_or(|c| (CYCLE_MIN_MM..=CYCLE_MAX_MM).contains(&c))
-        && s.arms.iter().all(|a| {
-            a.street < SAMPLES.len()
-                && a.bearing % BEARING_STEP == 0
-                && (0..360).contains(&a.bearing)
-                && (MIN_CORNER_MM..=MAX_CORNER_MM).contains(&a.corner_mm)
-                && a.offset_mm.abs() <= 30_000
-                && a.approach < APPROACHES.len()
-                && (APPROACH_MIN_MM..=APPROACH_MAX_MM).contains(&a.approach_mm)
-                && a.stop < STOPS.len()
-                && a.rule < RULES.len()
-                && a.crossing
-                    .is_none_or(|c| (MIN_SETBACK_MM..=MAX_SETBACK_MM).contains(&c.setback_mm) && (MIN_CROSSING_MM..=MAX_CROSSING_MM).contains(&c.width_mm))
-        })
-}
-
 fn same_junction(a: &State, b: &State) -> bool {
     State { label: String::new(), ..a.clone() } == State { label: String::new(), ..b.clone() }
+}
+
+/// The street an arm reads: the city's street as seen looking out from `node`.
+fn seen_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Street {
+    if layout.edges[edge].a == node { street.clone() } else { street.reversed() }
 }
 
 impl Default for City {
@@ -285,16 +401,45 @@ impl City {
     /// The city as first laid out: every street a sample, every junction
     /// generated from the streets that meet there.
     pub fn new() -> City {
-        let today_streets: BTreeMap<u32, Street> = EDGES.iter().enumerate().map(|(i, e)| (i as u32 + 1, Street::sample(e.street, Side::Right))).collect();
-        let today_junctions: BTreeMap<u32, State> =
-            (0..NODES.len()).filter(|&n| NODES[n].junction).map(|n| (node_uid(n), generate(n, &today_streets))).collect();
-        City { streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions }
+        City::on(Layout::sample())
+    }
+
+    /// The same for any network.
+    pub fn on(mut layout: Layout) -> City {
+        let today_streets: BTreeMap<u32, Street> =
+            layout.edges.iter().enumerate().map(|(i, e)| (i as u32 + 1, e.section.clone().unwrap_or_else(|| Street::sample(e.street, layout.side)))).collect();
+        let region = REGIONS.iter().position(|r| r.drive_side == layout.side).unwrap_or(0);
+        let mut today_junctions: BTreeMap<u32, State> = BTreeMap::new();
+        for n in 0..layout.nodes.len() {
+            if !layout.nodes[n].junction {
+                continue;
+            }
+            let mut s = layout.generate(n, &today_streets);
+            for a in &mut s.arms {
+                let e = (a.edge as usize).saturating_sub(1);
+                a.section = today_streets.get(&a.edge).map(|st| seen_from(&layout, e, n, st));
+            }
+            // A meeting the junction editor cannot draw (every road leaving to one side, say) is left as
+            // a plain connection of streets.
+            if Junction::from_city("", &s, &s, region).is_none() {
+                layout.nodes[n].junction = false;
+                continue;
+            }
+            forget_streets(&mut s);
+            today_junctions.insert(node_uid(n), s);
+        }
+        City { layout, streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions }
     }
 
     /// The city as saved, or as first laid out for any part of the save that
     /// cannot be used. Not an error: a stale or damaged save just starts over.
     pub fn load(json: &str) -> City {
-        let mut city = City::new();
+        City::load_on(Layout::sample(), json)
+    }
+
+    /// The same for any network.
+    pub fn load_on(layout: Layout, json: &str) -> City {
+        let mut city = City::on(layout);
         let Ok(saved) = serde_json::from_str::<Saved>(json) else { return city };
         if saved.version != SAVE_VERSION {
             return city;
@@ -306,8 +451,8 @@ impl City {
             }
         }
         for (uid, state) in saved.junctions {
-            let node = (uid as usize).checked_sub(1).filter(|&n| n < NODES.len() && NODES[n].junction);
-            if node.is_some_and(|n| junction_fits(&state, n)) {
+            let node = (uid as usize).checked_sub(1).filter(|&n| n < city.layout.nodes.len() && city.layout.nodes[n].junction);
+            if node.is_some_and(|n| city.layout.junction_fits(&state, n)) {
                 city.junctions.insert(uid, state);
             }
         }
@@ -325,31 +470,34 @@ impl City {
         self.junctions = self.today_junctions.clone();
     }
 
-    fn edge_index(uid: u32) -> Option<usize> {
-        (uid as usize).checked_sub(1).filter(|&e| e < EDGES.len())
+    fn edge_index(&self, uid: u32) -> Option<usize> {
+        (uid as usize).checked_sub(1).filter(|&e| e < self.layout.edges.len())
     }
 
-    fn node_index(uid: u32) -> Option<usize> {
-        (uid as usize).checked_sub(1).filter(|&n| n < NODES.len())
+    fn node_index(&self, uid: u32) -> Option<usize> {
+        (uid as usize).checked_sub(1).filter(|&n| n < self.layout.nodes.len())
     }
 
     pub fn street_name(&self, edge: u32) -> Option<String> {
-        Self::edge_index(edge).map(edge_name)
+        self.edge_index(edge).map(|e| self.layout.edge_name(e))
     }
 
     pub fn junction_name(&self, node: u32) -> Option<String> {
-        Self::node_index(node).filter(|&n| NODES[n].junction).map(node_name)
+        self.node_index(node).filter(|&n| self.layout.nodes[n].junction).map(|n| self.layout.node_name(n))
     }
 
     /// The two ends of a street, first the one the street editor looks from.
     pub fn street_ends(&self, edge: u32) -> Vec<EndView> {
-        let Some(e) = Self::edge_index(edge) else { return Vec::new() };
-        [EDGES[e].a, EDGES[e].b].into_iter().map(|n| EndView { uid: node_uid(n), name: end_name(n), junction: NODES[n].junction }).collect()
+        let Some(e) = self.edge_index(edge) else { return Vec::new() };
+        [self.layout.edges[e].a, self.layout.edges[e].b]
+            .into_iter()
+            .map(|n| EndView { uid: node_uid(n), name: self.layout.end_name(n), junction: self.layout.nodes[n].junction })
+            .collect()
     }
 
     /// The street editor on one street of the city.
     pub fn street_editor(&self, edge: u32, region: usize) -> Option<Editor> {
-        Self::edge_index(edge)?;
+        self.edge_index(edge)?;
         Some(Editor::from_street(self.today_streets.get(&edge)?, self.streets.get(&edge)?, region))
     }
 
@@ -363,26 +511,40 @@ impl City {
     }
 
     fn with_streets(&self, node: usize, s: &State) -> State {
+        self.with_streets_of(&self.streets, node, s)
+    }
+
+    fn with_streets_of(&self, streets: &BTreeMap<u32, Street>, node: usize, s: &State) -> State {
         let mut s = s.clone();
         for a in &mut s.arms {
             let edge = a.edge;
-            a.section = Self::edge_index(edge).and_then(|e| self.streets.get(&edge).map(|st| seen_from(e, node, st)));
+            a.section = self.edge_index(edge).and_then(|e| streets.get(&edge).map(|st| seen_from(&self.layout, e, node, st)));
         }
         s
+    }
+
+    /// The checks a junction fails as the city first laid it out, by label. A real city's streets
+    /// fall short of the rules as they stand; only what a change adds is flagged.
+    fn failing_today(&self, node: u32, region: usize) -> Vec<String> {
+        let Some(n) = self.node_index(node) else { return Vec::new() };
+        let Some(state) = self.today_junctions.get(&node) else { return Vec::new() };
+        let today = self.with_streets_of(&self.today_streets, n, state);
+        Junction::from_city("", &today, &today, region)
+            .map_or_else(Vec::new, |j| j.view().checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect())
     }
 
     /// The junction editor on one junction of the city, reading the streets as
     /// they now stand. None when it cannot be drawn with them.
     pub fn junction_editor(&self, node: u32, region: usize) -> Option<Junction> {
-        let n = Self::node_index(node).filter(|&n| NODES[n].junction)?;
+        let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
         let today = self.with_streets(n, self.today_junctions.get(&node)?);
         let now = self.with_streets(n, self.junctions.get(&node)?);
-        Junction::from_city(&node_name(n), &today, &now, region)
+        Junction::from_city(&self.layout.node_name(n), &today, &now, region)
     }
 
     /// Keeps what the junction editor has made of a junction.
     pub fn keep_junction(&mut self, node: u32, state: State) -> bool {
-        let fits = Self::node_index(node).filter(|&n| NODES[n].junction).is_some_and(|n| junction_fits(&state, n));
+        let fits = self.node_index(node).filter(|&n| self.layout.nodes[n].junction).is_some_and(|n| self.layout.junction_fits(&state, n));
         if fits {
             self.junctions.insert(node, state);
         }
@@ -397,28 +559,31 @@ impl City {
         let mut nodes = Vec::new();
         let mut edges = Vec::new();
         let trim_at = |n: usize| -> i32 {
-            if !NODES[n].junction {
+            if !self.layout.nodes[n].junction {
                 return 0;
             }
-            edges_at(n).iter().map(|&e| SAMPLES[EDGES[e].street].row_mm / 2).max().unwrap_or(0)
+            self.layout.edges_at(n).iter().map(|&e| SAMPLES[self.layout.edges[e].street].row_mm / 2).max().unwrap_or(0)
         };
-        for (i, e) in EDGES.iter().enumerate() {
+        for (i, e) in self.layout.edges.iter().enumerate() {
             let uid = i as u32 + 1;
             let today = &self.today_streets[&uid];
             let now = &self.streets[&uid];
             let editor = Editor::from_street(today, now, region);
             let v = editor.view();
-            let failing: Vec<String> = v.checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect();
+            let at_first: Vec<String> = Editor::from_street(today, today, region).view().checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect();
+            let failing: Vec<String> = v.checks.iter().filter(|c| !c.ok && !at_first.iter().any(|l| l == c.label)).map(|c| c.label.to_string()).collect();
             let row = v.row_mm;
+            let shape = self.layout.shape_of(i);
             edges.push(EdgeView {
                 uid,
                 a: node_uid(e.a),
                 b: node_uid(e.b),
-                name: edge_name(i),
-                kind: SAMPLES[e.street].name,
+                name: self.layout.edge_name(i),
+                kind: now.title(),
                 row_mm: row,
                 total_mm: v.total_mm,
-                length_mm: dist_mm(e.a, e.b).round() as i32,
+                length_mm: path_mm(&shape).round() as i32,
+                shape_mm: shape.iter().map(|&(x, y)| [x, y]).collect(),
                 trim_a_mm: trim_at(e.a),
                 trim_b_mm: trim_at(e.b),
                 freeway: SAMPLES[e.street].freeway,
@@ -432,13 +597,14 @@ impl City {
                 failing,
             });
         }
-        for (i, def) in NODES.iter().enumerate() {
+        for (i, def) in self.layout.nodes.iter().enumerate() {
             let uid = node_uid(i);
             let mut v = NodeView {
                 uid,
-                name: node_name(i),
-                x_mm: def.x_m * 1000,
-                y_mm: def.y_m * 1000,
+                name: self.layout.node_name(i),
+                number: if def.junction { self.layout.junction_number(i) as u32 } else { 0 },
+                x_mm: def.x_mm,
+                y_mm: def.y_mm,
                 junction: def.junction,
                 radius_mm: trim_at(i),
                 control: None,
@@ -454,7 +620,8 @@ impl City {
                 v.control = Some(junction::CONTROLS[now.control].name);
                 match self.junction_editor(uid, region) {
                     Some(j) => {
-                        v.failing = j.view().checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect();
+                        let at_first = self.failing_today(uid, region);
+                        v.failing = j.view().checks.iter().filter(|c| !c.ok && !at_first.iter().any(|l| l == c.label)).map(|c| c.label.to_string()).collect();
                         v.ok = v.failing.is_empty();
                     }
                     None => {
@@ -465,14 +632,25 @@ impl City {
             }
             nodes.push(v);
         }
-        let (mut x0, mut y0, mut x1, mut y1) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
-        for n in &nodes {
-            (x0, y0, x1, y1) = (x0.min(n.x_mm), y0.min(n.y_mm), x1.max(n.x_mm), y1.max(n.y_mm));
-        }
+        // A city of no places lies at its origin, not in a box turned inside out.
+        let (x0, y0, x1, y1) = if nodes.is_empty() {
+            (0, 0, 0, 0)
+        } else {
+            nodes.iter().fold((i32::MAX, i32::MAX, i32::MIN, i32::MIN), |(x0, y0, x1, y1), n| (x0.min(n.x_mm), y0.min(n.y_mm), x1.max(n.x_mm), y1.max(n.y_mm)))
+        };
         let places = nodes.iter().filter(|n| n.junction).count() + edges.len();
         let failing = nodes.iter().filter(|n| !n.ok).count() + edges.iter().filter(|e| !e.ok).count();
         let edited = nodes.iter().filter(|n| n.edited).count() + edges.iter().filter(|e| e.edited).count();
-        CityView { name: NAME, nodes, edges, bounds_mm: [x0, y0, x1, y1], places, failing, edited }
+        CityView {
+            name: self.layout.name.clone(),
+            nodes,
+            edges,
+            bounds_mm: [x0, y0, x1, y1],
+            places,
+            failing,
+            edited,
+            origin_m: self.layout.origin_m.map(|(x, y)| [x, y]),
+        }
     }
 }
 
@@ -502,10 +680,12 @@ pub struct EdgeView {
     pub b: u32,
     pub name: String,
     /// The kind of street it began as.
-    pub kind: &'static str,
+    pub kind: String,
     pub row_mm: i32,
     pub total_mm: i32,
     pub length_mm: i32,
+    /// The street's centreline from node `a` to node `b`, in millimetres: two points or more.
+    pub shape_mm: Vec<[i32; 2]>,
     /// How far in from each end the street's details are left out, because
     /// the junction there is drawn over them.
     pub trim_a_mm: i32,
@@ -521,6 +701,8 @@ pub struct EdgeView {
 pub struct NodeView {
     pub uid: u32,
     pub name: String,
+    /// Which junction it is, counting in reading order from 1; 0 where a street leaves the map.
+    pub number: u32,
     pub x_mm: i32,
     pub y_mm: i32,
     /// A junction of streets, or else where a street leaves the map.
@@ -535,7 +717,7 @@ pub struct NodeView {
 
 #[derive(Serialize)]
 pub struct CityView {
-    pub name: &'static str,
+    pub name: String,
     pub nodes: Vec<NodeView>,
     pub edges: Vec<EdgeView>,
     pub bounds_mm: [i32; 4],
@@ -543,11 +725,54 @@ pub struct CityView {
     pub places: usize,
     pub failing: usize,
     pub edited: usize,
+    /// Where the layout's origin lies in the network, in metres east and north of its corner; None for the sample city.
+    pub origin_m: Option<[f64; 2]>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn junction_number(node: usize) -> usize {
+        Layout::sample().junction_number(node)
+    }
+
+    fn edges_at(node: usize) -> Vec<usize> {
+        Layout::sample().edges_at(node)
+    }
+
+    fn node_name(node: usize) -> String {
+        Layout::sample().node_name(node)
+    }
+
+    fn edge_name(edge: usize) -> String {
+        Layout::sample().edge_name(edge)
+    }
+
+    fn gaps(b: &[i32]) -> Vec<i32> {
+        (0..b.len()).map(|i| (b[(i + 1) % b.len()] - b[i]).rem_euclid(360)).collect()
+    }
+
+    #[test]
+    fn a_bend_with_a_side_street_on_its_inside_is_made_a_junction_and_a_fan_is_not() {
+        // 185 degrees across the outside of the bend
+        let mut b = [0, 185, 270];
+        spread(&mut b);
+        assert!(gaps(&b).iter().all(|g| (30..=180).contains(g)), "{b:?}");
+        // a larger excess is closed a step at a time on each side
+        let mut b = [0, 80, 150];
+        spread(&mut b);
+        assert!(gaps(&b).iter().all(|g| (30..=180).contains(g)), "{b:?}");
+        // three streets all within a quarter of the compass are a fan, which no junction is
+        let mut b = [0, 50, 100];
+        let before = b;
+        spread(&mut b);
+        assert_eq!(b, before);
+        // what was already a junction is left as it is
+        let mut b = [0, 90, 180, 270];
+        spread(&mut b);
+        assert_eq!(b, [0, 90, 180, 270]);
+    }
 
     #[test]
     fn the_network_is_well_formed() {

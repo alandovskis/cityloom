@@ -6,8 +6,7 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use crate::city::model::{CityView, EdgeView, NodeView};
-use crate::map::camera::ScaleBar;
-use crate::map::vm::{junction_label, junction_number, street_label};
+use crate::map::vm::{junction_label, street_label};
 use crate::shared::symbols::HATCH;
 use crate::shared::units::Units;
 
@@ -74,6 +73,9 @@ impl Geometry {
     }
 }
 
+/// The narrowest a street is drawn, in pixels.
+const MIN_STREET_PX: f64 = 16.0;
+
 /// A street ready to draw: its geometry, width, where its road lies and where its details run.
 struct Laid<'a> {
     e: &'a EdgeView,
@@ -81,6 +83,8 @@ struct Laid<'a> {
     row: f64,
     road_off: f64,
     road_w: f64,
+    /// How much wider than true the street is drawn, so that it can be seen from far off.
+    boost: f64,
     t0: f64,
     t1: f64,
 }
@@ -103,35 +107,6 @@ fn badge(x: f64, y: f64, px: &dyn Fn(f64) -> f64) -> String {
     )
 }
 
-/// The place the pointer or the focus is on, outlined under everything else.
-pub fn hot_layer(v: &CityView, k: f64, hot: Option<&str>) -> String {
-    let Some(hot) = hot else { return String::new() };
-    let px = |n: f64| n / k;
-    let nodes: HashMap<u32, &NodeView> = v.nodes.iter().map(|n| (n.uid, n)).collect();
-    if let Some(uid) = hot.strip_prefix("s-").and_then(|u| u.parse::<u32>().ok()) {
-        if let Some((e, g)) = v.edges.iter().find(|e| e.uid == uid).and_then(|e| Geometry::of(e, &nodes).map(|g| (e, g))) {
-            return format!(
-                "<line id=\"hl-s-{}\" class=\"m-hl on\" {} stroke-width=\"{}\"/>",
-                e.uid,
-                g.line(0.0, 0.0, g.len),
-                r2(e.row_mm as f64 / 1000.0 + px(14.0))
-            );
-        }
-    }
-    if let Some(uid) = hot.strip_prefix("j-").and_then(|u| u.parse::<u32>().ok()) {
-        if let Some(n) = v.nodes.iter().find(|n| n.uid == uid && n.junction) {
-            return format!(
-                "<circle id=\"hl-j-{}\" class=\"m-hl on\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>",
-                n.uid,
-                n.x_mm as f64 / 1000.0,
-                n.y_mm as f64 / 1000.0,
-                r2(n.radius_mm as f64 / 1000.0 + px(8.0))
-            );
-        }
-    }
-    String::new()
-}
-
 /// The whole map at zoom `k` (pixels to the metre).
 pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
     let px = |n: f64| n / k;
@@ -146,11 +121,14 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             let hi = road.iter().map(|p| (p.offset_mm + p.width_mm / 2) as f64).fold(f64::MIN, f64::max) / 1000.0;
             let t0 = e.trim_a_mm as f64 / 1000.0;
             let t1 = g.len - e.trim_b_mm as f64 / 1000.0;
-            Some(Laid { e, g, row: e.row_mm as f64 / 1000.0, road_off: (lo + hi) / 2.0, road_w: hi - lo, t0, t1 })
+            // A street is never drawn narrower than this on screen, whatever the zoom.
+            let row = e.row_mm as f64 / 1000.0;
+            let boost = (px(MIN_STREET_PX) / row).max(1.0);
+            Some(Laid { e, g, row: row * boost, road_off: (lo + hi) / 2.0 * boost, road_w: (hi - lo) * boost, boost, t0, t1 })
         })
         .collect();
     let mut places: Vec<&NodeView> = v.nodes.iter().filter(|n| n.junction).collect();
-    places.sort_by_key(|n| junction_number(&n.name));
+    places.sort_by_key(|n| n.number);
     let rad = |n: &NodeView| n.radius_mm as f64 / 1000.0;
     let mut s = String::new();
 
@@ -170,7 +148,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             "<line class=\"{}\" {} stroke-width=\"{}\"/>",
             if l.e.freeway { "m-shoulder" } else { "m-walk" },
             l.g.line(0.0, 0.0, l.g.len),
-            r2(l.row - px(2.0))
+            r2(l.row - px(3.0))
         )
         .unwrap();
     }
@@ -181,18 +159,19 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
     for hatch in [false, true] {
         for l in laid.iter().filter(|l| l.t1 > l.t0) {
             for p in &l.e.pieces {
-                let line = l.g.line(p.offset_mm as f64 / 1000.0, l.t0, l.t1);
+                let line = l.g.line(p.offset_mm as f64 / 1000.0 * l.boost, l.t0, l.t1);
                 if hatch {
-                    write!(s, "<line class=\"m-h\" stroke=\"url(#mh-{})\" {line} stroke-width=\"{}\"/>", p.kind, r2(p.width_mm as f64 / 1000.0)).unwrap();
+                    write!(s, "<line class=\"m-h\" stroke=\"url(#mh-{})\" {line} stroke-width=\"{}\"/>", p.kind, r2(p.width_mm as f64 / 1000.0 * l.boost))
+                        .unwrap();
                 } else {
-                    write!(s, "<line class=\"m-t m-k-{}\" {line} stroke-width=\"{}\"/>", p.kind, r2(p.width_mm as f64 / 1000.0)).unwrap();
+                    write!(s, "<line class=\"m-t m-k-{}\" {line} stroke-width=\"{}\"/>", p.kind, r2(p.width_mm as f64 / 1000.0 * l.boost)).unwrap();
                 }
             }
         }
     }
 
     // Names sit beside a street, on the upper side, where it is long enough to hold one.
-    for l in laid.iter().filter(|l| (l.t1 - l.t0) * k >= 150.0) {
+    for l in laid.iter().filter(|l| (l.t1 - l.t0) * k >= 110.0) {
         let tm = (l.t0 + l.t1) / 2.0;
         let mut ang = l.g.uy.atan2(l.g.ux).to_degrees();
         if !(-90.0..=90.0).contains(&ang) {
@@ -208,7 +187,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             r2(-(l.row / 2.0 + px(6.0))),
             r2(px(13.0)),
             r2(px(4.0)),
-            esc(l.e.kind),
+            esc(&l.e.kind),
             if l.e.edited { " \u{b7} changed" } else { "" }
         )
         .unwrap();
@@ -225,7 +204,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             r2(px(11.0)),
             r2(px(1.5)),
             r2(px(13.0)),
-            junction_number(&n.name)
+            n.number
         )
         .unwrap();
         if n.edited {
@@ -275,30 +254,6 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
     s
 }
 
-/// North and the scale bar are drawn on the window, not on the map, so they keep their size.
-pub fn overlay_svg(bar: &ScaleBar, height: f64) -> String {
-    let (x, y) = (20.0, height - 34.0);
-    let block = bar.width_px / 5.0;
-    let blocks: String = (0..5)
-        .map(|i| {
-            format!(
-                "<rect class=\"{}\" x=\"{}\" y=\"{y}\" width=\"{}\" height=\"7\"/>",
-                if i % 2 == 1 { "sb-paper" } else { "sb-ink" },
-                r2(x + block * i as f64),
-                r2(block)
-            )
-        })
-        .collect();
-    format!(
-        "<g class=\"north\" transform=\"translate(24 22)\"><path d=\"M0 -12 L7 10 L0 5 L-7 10 Z\"/><text y=\"26\" text-anchor=\"middle\">N</text></g><g class=\"scale\">{blocks}<text x=\"{x}\" y=\"{}\">0</text><text x=\"{}\" y=\"{}\" text-anchor=\"end\">{} {}</text></g>",
-        y - 6.0,
-        r2(x + bar.width_px),
-        y - 6.0,
-        bar.length,
-        bar.unit
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,6 +261,51 @@ mod tests {
 
     fn view() -> CityView {
         City::new().view(0)
+    }
+
+    /// The stroke widths, in metres, of the lines of one class.
+    fn widths(s: &str, class: &str) -> Vec<f64> {
+        s.split(&format!("class=\"{class}\""))
+            .skip(1)
+            .filter_map(|rest| rest.split("stroke-width=\"").nth(1))
+            .filter_map(|w| w.split('"').next()?.parse().ok())
+            .collect()
+    }
+
+    #[test]
+    fn a_street_is_never_drawn_narrower_than_the_minimum_on_screen_and_keeps_its_true_width_when_zoomed_in() {
+        let v = view();
+        let far = 0.3; // pixels to the metre, with the whole city in view
+        let narrowest = widths(&map_svg(&v, far, Units::Metres), "m-out").into_iter().fold(f64::MAX, f64::min);
+        assert!(narrowest * far >= MIN_STREET_PX - 0.05, "{narrowest}");
+        let near = 6.0;
+        let true_widths: Vec<f64> = v.edges.iter().map(|e| e.row_mm as f64 / 1000.0).collect();
+        let drawn = widths(&map_svg(&v, near, Units::Metres), "m-out");
+        assert!(drawn.iter().all(|w| true_widths.iter().any(|t| (t - w).abs() < 0.01)), "unchanged when the street is wide enough to see");
+    }
+
+    #[test]
+    fn a_boosted_street_keeps_its_lanes_in_proportion() {
+        let v = view();
+        let far = map_svg(&v, 0.3, Units::Metres);
+        let (row, road) = (widths(&far, "m-out")[0], widths(&far, "m-road")[0]);
+        let e = &v.edges[0];
+        let (lo, hi) = e
+            .pieces
+            .iter()
+            .filter(|p| !OFF_ROAD.contains(&p.kind))
+            .fold((i32::MAX, i32::MIN), |(lo, hi), p| (lo.min(p.offset_mm - p.width_mm / 2), hi.max(p.offset_mm + p.width_mm / 2)));
+        let true_ratio = (hi - lo) as f64 / e.row_mm as f64;
+        assert!((road / row - true_ratio).abs() < 0.02, "{} vs {true_ratio}", road / row);
+    }
+
+    #[test]
+    fn the_streets_are_named_at_the_zoom_that_fits_the_city_in_a_laptop_window() {
+        let v = view();
+        let world = crate::map::camera::World::round(v.bounds_mm);
+        let camera = crate::map::camera::Camera::new(world, 650.0, 800.0);
+        let at_fit = map_svg(&v, camera.k, Units::Metres);
+        assert!(count(&at_fit, "class=\"m-name\"") >= 6, "{}", count(&at_fit, "class=\"m-name\""));
     }
 
     fn count(s: &str, needle: &str) -> usize {
@@ -339,7 +339,7 @@ mod tests {
         assert_eq!(count(&s, "class=\"m-walk\"") + count(&s, "class=\"m-shoulder\""), n);
         assert_eq!(count(&s, "class=\"m-road\""), n);
         assert_eq!(count(&s, "data-hl=\"s-"), n);
-        assert!(s.contains("href=\"index.html?street="));
+        assert!(s.contains("href=\"street.html?street="));
         assert!(!s.contains("NaN") && !s.contains("inf"));
     }
 
@@ -418,30 +418,6 @@ mod tests {
         for none in ["m-bad", "m-badge", "changed"] {
             assert!(!s.contains(none), "{none}");
         }
-    }
-
-    #[test]
-    fn the_hot_place_is_outlined_in_its_own_layer_and_nothing_is_when_none_is() {
-        let v = view();
-        let e = v.edges[0].uid;
-        let n = v.nodes.iter().find(|n| n.junction).unwrap().uid;
-        assert_eq!(hot_layer(&v, 1.0, None), "");
-        let st = hot_layer(&v, 1.0, Some(&format!("s-{e}")));
-        assert!(st.starts_with(&format!("<line id=\"hl-s-{e}\" class=\"m-hl on\"")));
-        let jn = hot_layer(&v, 1.0, Some(&format!("j-{n}")));
-        assert!(jn.starts_with(&format!("<circle id=\"hl-j-{n}\" class=\"m-hl on\"")));
-        assert_eq!(hot_layer(&v, 1.0, Some("s-99999")), "");
-        assert_eq!(hot_layer(&v, 1.0, Some("x-1")), "");
-        assert!(!map_svg(&v, 1.0, Units::Metres).contains("m-hl"));
-    }
-
-    #[test]
-    fn the_scale_bar_and_north_are_drawn_on_the_window() {
-        let bar = ScaleBar { length: 100, width_px: 150.0, unit: "m" };
-        let s = overlay_svg(&bar, 520.0);
-        assert_eq!(count(&s, "class=\"sb-ink\"") + count(&s, "class=\"sb-paper\""), 5);
-        assert!(s.contains("class=\"north\"") && s.contains(">100 m</text>") && s.contains(">0</text>"));
-        assert!(s.contains("y=\"486\""));
     }
 
     #[test]

@@ -1,9 +1,33 @@
 target/
 .tools/
 web/pkg/
+.impeccable/critique/
 .impeccable/review/
 .impeccable/questions/
 .impeccable/hook.cache.json
 e2e/node_modules/
 e2e/test-results/
 e2e/playwright-report/
+
+# RustRover and the other JetBrains IDEs: keep what the team can share (code style,
+# inspection profiles, run configurations), not what the IDE generates per machine.
+.idea/*
+!.idea/codeStyles/
+!.idea/inspectionProfiles/
+!.idea/runConfigurations/
+*.iml
+*.iws
+.idea_modules/
+.impeccable/mocks/
+
+# The metropolitan area's OSM tiles are made by scripts/metro-tiles.sh, not kept in git. The index
+# beside them is a placeholder that names none; the script overwrites it, and that is not committed.
+/web/data/metro/*.osm.pbf
+
+# What scripts/build.sh copies from node_modules, and the basemap's tiles, which scripts/basemap_tiles.py makes.
+/node_modules/
+/web/vendor/
+/web/data/basemap/*.pmtiles
+
+# Planetiler's downloaded sources (Natural Earth, water polygons), fetched by scripts/basemap_tiles.py.
+/data/

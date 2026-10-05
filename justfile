@@ -8,6 +8,7 @@ default:
 
 # Install what building and the browser tests need (once).
 setup:
+    npm ci
     cargo install wasm-bindgen-cli --version {{wasm_bindgen}} --root .tools
     cd e2e && npm ci && npx playwright install chromium
 
@@ -17,8 +18,8 @@ build:
 
 # Unit tests on the host, and a type-check of the wasm-only code that they do not compile.
 test:
-    cargo test
-    cargo build --target wasm32-unknown-unknown
+    cargo test --workspace
+    cargo build --target wasm32-unknown-unknown --workspace
 
 # Browser tests, after a fresh build. Arguments go to Playwright: `just e2e tests/street.spec.ts`.
 e2e *args: build
@@ -37,9 +38,17 @@ format-check:
     cargo fmt --check
     cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js
 
-# Serve the pages at http://127.0.0.1:8137/ (build first).
+# Cut the Montréal metropolitan area's roads into tiles in web/data/metro, from a Geofabrik Quebec extract. Needs osmium-tool.
+metro-tiles quebec:
+    ./scripts/metro_tiles.py {{quebec}}
+
+# Build the basemap's tiles of the Montréal metropolitan area in web/data/basemap, from the same extract. Needs Java 21+.
+basemap-tiles quebec:
+    ./scripts/basemap_tiles.py {{quebec}}
+
+# Serve the pages at http://127.0.0.1:8137/ (build first). The server answers range requests, as the map's tiles need.
 serve:
-    python3 -m http.server 8137 --directory web
+    node e2e/serve.mjs
 
 # Remove build output.
 clean:

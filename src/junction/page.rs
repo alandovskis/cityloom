@@ -14,6 +14,7 @@ use crate::junction::text::{arms_text, fit_text};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
 use crate::shared::catalogue::{KINDS, SAMPLES};
+use crate::shared::tick::Tick;
 
 /// The kinds of piece that appear in the plan, in the order the catalogue lists them.
 pub fn key_kinds(v: &JView) -> Vec<usize> {
@@ -78,8 +79,10 @@ pub fn TitleBlock(vm: Rc<JunctionVm>) -> impl IntoView {
 #[component]
 pub fn Fit(vm: Rc<JunctionVm>) -> impl IntoView {
     let w = Watch::new(vm);
+    let works = Signal::derive(move || w.view().checks.iter().all(|c| c.ok));
     view! {
-        <p id="fit" class=move || if w.view().checks.iter().any(|c| !c.ok) { "fit bad" } else { "fit" } role="status">
+        <p id="fit" class=move || if works.get() { "fit" } else { "fit bad" } role="status">
+            <Tick works=works/>
             {move || fit_text(&w.view())}
         </p>
     }

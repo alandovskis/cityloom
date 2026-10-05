@@ -8,6 +8,7 @@
 pub mod city;
 pub mod junction;
 pub mod map;
+pub mod place;
 pub mod shared;
 pub mod shell;
 pub mod street;

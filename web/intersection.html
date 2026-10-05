@@ -6,152 +6,153 @@
   <title>CityLoom intersection editor</title>
   <meta name="description" content="Change how a junction of streets works: corners, crossings, lanes, turns and control.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;if(localStorage.getItem("cityloom-notes")==="closed")document.documentElement.dataset.notes="closed";if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed"}catch(e){}</script>
-  <link rel="preload" href="fonts/barlow-semi-condensed-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed"}catch(e){}</script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="editor.css">
 </head>
 <body>
   <svg id="defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"></svg>
 
-  <div class="sheet">
-    <div class="sheet-content">
-      <div class="topbar">
-        <div class="brand"><img class="mark" src="logo.svg" alt="" width="44" height="44"><span class="wordmark">CityLoom</span></div>
-        <nav class="surfaces" aria-label="Editors">
-          <a href="map.html" class="surface">Map</a>
-          <a href="index.html" class="surface">Street</a>
-          <a href="intersection.html" class="surface" aria-current="page">Intersection</a>
-        </nav>
-        <div class="top-end">
-          <div class="account">
-            <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
-            <div id="account-menu" class="menu" hidden>
-              <p class="menu-h">Settings</p>
-              <div class="menu-row">
-                <span id="units-label">Units</span>
-                <div class="units" role="group" aria-labelledby="units-label">
-                  <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
-                  <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
-                </div>
-              </div>
-              <div class="menu-row">
-                <label for="region">Region</label>
-                <select id="region"></select>
-              </div>
-              <div class="menu-row">
-                <span id="theme-label">Theme</span>
-                <div class="units" role="group" aria-labelledby="theme-label">
-                  <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
-                  <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
-                </div>
-              </div>
-              <p class="menu-act"><button type="button" id="print" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2V6h11v5.5h-2M4.5 9.5h7v4h-7z"/></svg>Print this sheet</button></p>
-              <p class="menu-foot"><a href="credits.html">Credits</a></p>
+  <header class="bar" data-covers>
+    <a class="brand" href="index.html" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
+    <nav class="surfaces" aria-label="Editors">
+      <a href="map.html" class="surface">Map</a>
+      <a href="street.html" class="surface">Street</a>
+      <a href="intersection.html" class="surface" aria-current="page">Intersection</a>
+    </nav>
+    <div class="top-end">
+      <button type="button" id="inspector-toggle" class="btn quiet" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the details ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span>Details</span></button>
+      <button type="button" id="notes-toggle" class="btn quiet" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span>Notes</span></button>
+      <div class="account">
+        <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
+        <div id="account-menu" class="menu" hidden>
+          <p class="menu-h">Settings</p>
+          <div class="menu-row">
+            <span id="units-label">Units</span>
+            <div class="units" role="group" aria-labelledby="units-label">
+              <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
+              <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
             </div>
           </div>
+          <div class="menu-row">
+            <label for="region">Region</label>
+            <select id="region"></select>
+          </div>
+          <div class="menu-row">
+            <span id="theme-label">Theme</span>
+            <div class="units" role="group" aria-labelledby="theme-label">
+              <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
+              <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
+            </div>
+          </div>
+          <p class="menu-act"><button type="button" id="print" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2V6h11v5.5h-2M4.5 9.5h7v4h-7z"/></svg>Print this sheet</button></p>
+          <div class="menu-keys">
+            <p class="menu-h">Keyboard</p>
+            <p id="keys" class="keys">
+              <span><kbd>←</kbd> <kbd>→</kbd> select</span>
+              <span><kbd>+</kbd> <kbd>−</kbd> change</span>
+              <span><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> turn a street</span>
+              <span><kbd>Delete</kbd> remove</span>
+              <span><kbd>[</kbd> <kbd>]</kbd> details, notes</span>
+              <span><kbd>Ctrl</kbd> <kbd>Z</kbd> undo</span>
+            </p>
+          </div>
+          <p class="menu-foot"><a href="credits.html">Credits</a></p>
         </div>
       </div>
-      <header class="sheet-head">
-        <div class="head-start">
-          <button type="button" id="inspector-toggle" class="btn" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the details ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span>Details</span></button>
-          <div class="street" id="street"></div>
-        </div>
-        <div class="tools">
-          <div class="btns" id="history" role="toolbar" aria-label="Sheet tools"></div>
-          <button type="button" id="notes-toggle" class="btn" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span>Notes</span></button>
-        </div>
-      </header>
-
-      <main class="sheet-body">
-        <aside class="inspector" id="inspector" aria-label="Selected street, corner or crossing"></aside>
-
-        <div class="work">
-          <section class="drawing plan-drawing" aria-labelledby="h-drawing">
-            <h2 id="h-drawing" class="sr-only">Junction plan</h2>
-            <div class="scroll" id="scroll"></div>
-            <ul class="plan-key" id="plan-key" aria-label="Key to the strips"></ul>
-            <div class="statusbar">
-              <div id="fit-slot" style="display: contents"></div>
-              <p id="keys" class="keys">
-                <span><kbd>←</kbd> <kbd>→</kbd> select</span>
-                <span><kbd>+</kbd> <kbd>−</kbd> change</span>
-                <span><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> turn a street</span>
-                <span><kbd>Delete</kbd> remove</span>
-                <span><kbd>[</kbd> <kbd>]</kbd> details, notes</span>
-                <span><kbd>Ctrl</kbd> <kbd>Z</kbd> undo</span>
-              </p>
-            </div>
-          </section>
-
-          <div class="lower">
-            <section class="legend" aria-labelledby="h-legend">
-              <h2 id="h-legend" class="note-h">Add a street</h2>
-              <p class="hint" id="add-hint">Drag onto the plan, or press to add in the widest gap.</p>
-              <ul id="palette" class="palette"></ul>
-            </section>
-            <section class="legend" aria-labelledby="h-samples">
-              <h2 id="h-samples" class="note-h">Start from</h2>
-              <p class="hint">Sample junctions. Starting from one clears your changes.</p>
-              <ul id="samples" class="palette"></ul>
-            </section>
-          </div>
-        </div>
-
-        <aside class="notes" id="notes" aria-label="Notes">
-          <div class="tabs" role="tablist" aria-label="Notes sections">
-            <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true">Streets</button>
-            <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1">Checks</button>
-            <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
-            <button type="button" role="tab" class="tab" id="t-measures" aria-controls="p-measures" aria-selected="false" tabindex="-1">Measures</button>
-          </div>
-
-          <div class="panel" id="p-space" role="tabpanel" aria-labelledby="t-space">
-            <section aria-labelledby="h-across">
-              <h2 id="h-across" class="note-h">Getting across</h2>
-              <table class="nt" id="across"></table>
-            </section>
-            <section aria-labelledby="h-turns">
-              <h2 id="h-turns" class="note-h">Turns allowed</h2>
-              <p class="hint">Each row is a street traffic comes from. Press a cell to allow or ban that turn.</p>
-              <table class="nt turns" id="turns"></table>
-            </section>
-            <section aria-labelledby="h-conf">
-              <h2 id="h-conf" class="note-h">Where paths meet</h2>
-              <table class="nt" id="conflicts"></table>
-              <p class="fine" id="conflict-note"></p>
-            </section>
-          </div>
-
-          <div class="panel" id="p-checks" role="tabpanel" aria-labelledby="t-checks" hidden>
-            <section aria-labelledby="h-checks">
-              <h2 id="h-checks" class="note-h">Does it work?</h2>
-              <ul class="checks" id="checks"></ul>
-            </section>
-          </div>
-
-          <div class="panel" id="p-changes" role="tabpanel" aria-labelledby="t-changes" hidden>
-            <section aria-labelledby="h-rev" class="revs">
-              <h2 id="h-rev" class="note-h">Your changes</h2>
-              <table class="nt rev" id="revs"></table>
-            </section>
-          </div>
-
-          <div class="panel" id="p-measures" role="tabpanel" aria-labelledby="t-measures" hidden>
-            <section aria-labelledby="h-measures">
-              <h2 id="h-measures" class="note-h">Transit priority measures</h2>
-              <p class="hint">The toolbox of the <a href="https://tpa.transitcosts.com/atlas/toolbox">Transit Priority Atlas</a>, and where CityLoom models each measure.</p>
-              <table class="nt measures" id="measures"></table>
-            </section>
-          </div>
-
-          <p class="fine">Sample numbers and limits for now, not real measurements.</p>
-
-          <div class="title-block" id="title-block" aria-label="About this junction"></div>
-        </aside>
-      </main>
     </div>
-  </div>
+  </header>
+
+  <aside class="panel left" id="details-panel" aria-label="Selected street, corner or crossing" data-covers>
+    <div class="panel-body inspector" id="inspector"></div>
+  </aside>
+
+  <main class="stage">
+    <div class="stage-main">
+      <div class="stage-head">
+        <div class="title-card"><div class="street" id="street"></div></div>
+        <div class="tools">
+          <div id="history" style="display: contents"></div>
+        </div>
+      </div>
+      <section class="drawing plan-drawing" aria-labelledby="h-drawing">
+        <h2 id="h-drawing" class="sr-only">Junction plan</h2>
+        <div class="scroll" id="scroll"></div>
+        <ul class="plan-key" id="plan-key" aria-label="Key to the strips"></ul>
+      </section>
+      <div class="statusbar">
+        <div class="fit-row">
+          <div id="fit-slot" style="display: contents"></div>
+        </div>
+      </div>
+      <div class="lower">
+      <section class="legend" aria-labelledby="h-legend">
+      <h2 id="h-legend" class="note-h">Add a street</h2>
+      <p class="hint" id="add-hint">Drag onto the plan, or press to add in the widest gap.</p>
+      <ul id="palette" class="palette"></ul>
+      </section>
+      <section class="legend" aria-labelledby="h-samples">
+      <h2 id="h-samples" class="note-h">Start from</h2>
+      <p class="hint">Sample junctions. Starting from one clears your changes.</p>
+      <ul id="samples" class="palette"></ul>
+      </section>
+      </div>
+    </div>
+  </main>
+
+  <aside class="panel right notes" id="notes" aria-label="Notes" data-covers>
+    <div class="tabs" role="tablist" aria-label="Notes sections">
+      <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true">Streets</button>
+      <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1">Checks</button>
+      <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
+      <button type="button" role="tab" class="tab" id="t-measures" aria-controls="p-measures" aria-selected="false" tabindex="-1">Measures</button>
+    </div>
+    <div class="panel-body">
+      <div class="panel-tab" id="p-space" role="tabpanel" aria-labelledby="t-space">
+      <section aria-labelledby="h-across">
+      <h2 id="h-across" class="note-h">Getting across</h2>
+      <table class="nt" id="across"></table>
+      </section>
+      <section aria-labelledby="h-turns">
+      <h2 id="h-turns" class="note-h">Turns allowed</h2>
+      <p class="hint">Each row is a street traffic comes from. Press a cell to allow or ban that turn.</p>
+      <table class="nt turns" id="turns"></table>
+      </section>
+      <section aria-labelledby="h-conf">
+      <h2 id="h-conf" class="note-h">Where paths meet</h2>
+      <table class="nt" id="conflicts"></table>
+      <p class="fine" id="conflict-note"></p>
+      </section>
+      </div>
+      
+      <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks" hidden>
+      <section aria-labelledby="h-checks">
+      <h2 id="h-checks" class="note-h">Does it work?</h2>
+      <ul class="checks" id="checks"></ul>
+      </section>
+      </div>
+      
+      <div class="panel-tab" id="p-changes" role="tabpanel" aria-labelledby="t-changes" hidden>
+      <section aria-labelledby="h-rev" class="revs">
+      <h2 id="h-rev" class="note-h">Your changes</h2>
+      <table class="nt rev" id="revs"></table>
+      </section>
+      </div>
+      
+      <div class="panel-tab" id="p-measures" role="tabpanel" aria-labelledby="t-measures" hidden>
+      <section aria-labelledby="h-measures">
+      <h2 id="h-measures" class="note-h">Transit priority measures</h2>
+      <p class="hint">The toolbox of the <a href="https://tpa.transitcosts.com/atlas/toolbox">Transit Priority Atlas</a>, and where CityLoom models each measure.</p>
+      <table class="nt measures" id="measures"></table>
+      </section>
+      </div>
+      
+      <p class="fine">Sample numbers and limits for now, not real measurements.</p>
+    </div>
+    <div class="title-block" id="title-block" aria-label="About this junction"></div>
+  </aside>
 
   <div id="live" class="sr-only" role="status" aria-live="polite"></div>
   <script type="module" src="junction.js"></script>

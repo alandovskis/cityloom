@@ -1,0 +1,1945 @@
+/* The street and intersection editors, in the same world as the map: a light page,
+   a few white floating cards, one blue for what is chosen and amber for what does
+   not fit. Loaded after app.css, which holds the tokens, the bar, the menu and the
+   cards. */
+
+:root {
+  /* What the editors draw, beyond the map's tints. */
+  --sky: #e9f3fb;
+  --s-tree: #6fb35e;
+  --s-car: #dfe5ec;
+  --s-bus: #f2a99b;
+  --s-van: #f1cd55;
+  --s-coat-0: #ee9b78;
+  --s-coat-1: #74aede;
+  --danger: #b8231a;
+  --dark-hatch: #aeb8c2;
+  /* The asphalt of a street in section: a little darker than the map's white road. */
+  --k-travel: #c3cbd3;
+  --k-parking: #b4bdc7;
+  --road: #ffffff;
+  --panel-w: 300px;
+  --notes-w: 340px;
+  --rw: calc(var(--pad) + var(--notes-w));
+  --kc: transparent;
+  /* Rust-drawn swatches still fill with this name. */
+  --sheet: var(--panel);
+}
+:root[data-theme="dark"] {
+  --sky: #17222e;
+  --s-tree: #55924a;
+  --s-car: #3a4651;
+  --s-bus: #8a4b43;
+  --s-van: #c0a02c;
+  --s-coat-0: #d27753;
+  --s-coat-1: #5590c4;
+  --danger: #ff8073;
+  --dark-hatch: #8c98a4;
+  --k-travel: #333c45;
+  --k-parking: #3d4750;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sky: #17222e;
+    --s-tree: #55924a;
+    --s-car: #3a4651;
+    --s-bus: #8a4b43;
+    --s-van: #c0a02c;
+    --s-coat-0: #d27753;
+    --s-coat-1: #5590c4;
+    --danger: #ff8073;
+    --dark-hatch: #8c98a4;
+    --k-travel: #333c45;
+    --k-parking: #3d4750;
+  }
+}
+
+/* ---- the page: bar, two cards, and a column of work between them ---------- */
+
+.bar {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.bar .surfaces {
+  justify-self: start;
+}
+.panel.right {
+  width: var(--notes-w);
+  bottom: var(--pad);
+  max-height: none;
+}
+.tab {
+  white-space: nowrap;
+  padding-inline: 8px;
+}
+.panel-body {
+  padding: 14px 20px 18px;
+  /* a row never ends in a hard cut: the scroller fades out into the bottom padding */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent);
+}
+.stage {
+  display: block;
+}
+.stage-main {
+  position: absolute;
+  top: calc(var(--pad) + var(--bar-h) + 12px);
+  bottom: var(--pad);
+  left: calc(var(--lw) + var(--pad));
+  right: calc(var(--rw) + var(--pad));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 2px 2px 4px;
+}
+:root[data-inspector="closed"] .stage-main {
+  left: var(--pad);
+}
+:root[data-notes="closed"] .stage-main {
+  right: var(--pad);
+}
+.stage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.title-card {
+  min-width: 0;
+  padding: 10px 20px 11px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+#street-name {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+.street-sub {
+  margin: 2px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.street-sub a {
+  color: var(--ink-2);
+}
+.street-sub .fig {
+  color: var(--ink);
+  font-weight: 600;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.back svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+.tools .btn {
+  min-height: 38px;
+}
+.btns {
+  display: contents;
+}
+.stuck {
+  max-width: 56ch;
+  padding: 24px 28px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+.stuck p {
+  margin: 0 0 12px;
+}
+.stuck .note-h {
+  padding: 0 0 8px;
+  font-size: 18px;
+}
+
+/* Under 1360px there is not room for the notes beside the drawing until they are asked for. */
+@media (min-width: 900px) and (max-width: 1359px) {
+  :root:not([data-notes="open"]) {
+    --rw: 0px;
+  }
+  :root:not([data-notes="open"]) .panel.right {
+    display: none;
+  }
+  :root:not([data-notes="open"]) .stage-main {
+    right: var(--pad);
+  }
+}
+
+/* ---- the drawing ----------------------------------------------------------- */
+
+.drawing {
+  position: relative;
+  inset: auto;
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+.drawing > .scroll {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 10px 6px 6px;
+}
+.wrap {
+  flex: none;
+  width: 100%;
+  min-width: 600px;
+  margin-block: auto;
+  outline-offset: -2px;
+  border-radius: var(--r-ctl);
+}
+.plan-drawing .wrap {
+  min-width: 0;
+}
+.plan-drawing > .scroll {
+  overflow: hidden;
+}
+.wrap:focus-visible {
+  outline: 2px solid var(--accent-line);
+}
+#drawing {
+  display: block;
+  overflow: visible;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.statusbar {
+  position: static;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 2px;
+}
+.fit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+}
+.fit-checks {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--warn-wash);
+  color: var(--warn);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fit-checks:hover {
+  box-shadow: inset 0 0 0 1px var(--warn-line);
+}
+.fit-checks[hidden] {
+  display: none;
+}
+.focus-hint {
+  display: none;
+  margin: 0;
+  max-width: 70ch;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-align: center;
+}
+.drawing:has(.wrap:focus-visible) ~ .statusbar .focus-hint,
+.stage-main:has(.wrap:focus-visible) .focus-hint {
+  display: block;
+}
+.cue {
+  display: none;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.cue.on {
+  display: block;
+}
+
+.welcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  background: var(--accent-wash);
+}
+.welcome p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+:root[data-welcome="seen"] .welcome {
+  display: none;
+}
+
+.clock {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) 3.4em;
+  align-items: center;
+  gap: 2px 12px;
+  padding: 10px 18px 12px;
+  border-top: 1px solid var(--rule);
+}
+.clock[hidden] {
+  display: none;
+}
+.clock-l {
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+.clock input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.clock output {
+  font-size: 16px;
+  font-weight: 600;
+  text-align: right;
+}
+.clock-scale {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.clock-bar {
+  position: relative;
+  grid-column: 2;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--fill);
+  visibility: hidden;
+}
+.clock-bar.on {
+  visibility: visible;
+}
+.clock-bar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.clock-note {
+  grid-column: 2;
+  margin: 0;
+  min-height: 1.2em;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.clock-bar:not(.on),
+.clock-note:empty {
+  display: none;
+}
+.clock:not(:has(.clock-bar.on)) .clock-scale {
+  display: none;
+}
+
+/* ---- the drawing's own marks ----------------------------------------------- */
+
+#drawing text {
+  font-family: var(--font);
+  fill: var(--ink);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+#drawing .t-soft {
+  fill: var(--ink-2);
+}
+#drawing .t-faint {
+  fill: var(--ink-3);
+}
+#drawing .t-label {
+  font-size: 13px;
+  font-weight: 600;
+  fill: var(--ink-2);
+}
+#drawing .t-dim {
+  font-size: 15px;
+  font-weight: 500;
+}
+#drawing .t-mark {
+  font-size: 15px;
+  font-weight: 600;
+}
+#drawing .t-note {
+  font-size: 14px;
+  font-weight: 500;
+}
+#drawing .t-halo {
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+#drawing .t-over {
+  fill: var(--warn);
+  font-size: 15px;
+  font-weight: 600;
+}
+#drawing .t-warn {
+  fill: var(--warn);
+  font-weight: 600;
+}
+#drawing .t-blue {
+  fill: var(--accent);
+  font-weight: 600;
+}
+
+.obj {
+  fill: var(--panel);
+  stroke: var(--ink-2);
+  stroke-width: 1.6;
+}
+.bar-b {
+  fill: var(--ink-2);
+  stroke: var(--ink-2);
+  stroke-width: 1;
+}
+.bar-w {
+  fill: var(--panel);
+  stroke: var(--ink-2);
+  stroke-width: 1;
+}
+.ground {
+  stroke: var(--ink-2);
+  stroke-width: 3;
+}
+.dim {
+  stroke: var(--ink-2);
+  stroke-width: 0.9;
+  fill: none;
+}
+.dim-warn {
+  stroke: var(--warn-line);
+}
+.bound {
+  stroke: var(--ink-3);
+  stroke-width: 0.9;
+  stroke-dasharray: 5 4;
+}
+.rw {
+  stroke: var(--ink-2);
+  stroke-width: 1.2;
+  stroke-dasharray: 12 3 2 3;
+}
+/* A faint texture under the flat tints, so colour is not the only thing that tells the pieces apart. */
+.hatch {
+  stroke: none;
+  opacity: 0.3;
+}
+.seg {
+  cursor: grab;
+  touch-action: none;
+}
+.seg:active {
+  cursor: grabbing;
+}
+.seg .hit {
+  fill: transparent;
+}
+.seg.lifted {
+  opacity: 0.35;
+}
+.seg:hover .obj {
+  stroke-width: 2;
+}
+.sel-box {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  pointer-events: none;
+}
+.handle {
+  cursor: ew-resize;
+  touch-action: none;
+}
+.handle .hit {
+  fill: transparent;
+}
+.handle .grip {
+  fill: var(--panel);
+  stroke: var(--ink-3);
+  stroke-width: 1;
+  transition: stroke 120ms var(--ease-out), fill 120ms var(--ease-out);
+}
+.handle .grip-arrow {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.3;
+}
+.handle:hover .grip,
+.handle.active .grip {
+  stroke: var(--accent);
+  fill: var(--accent);
+}
+.handle:hover .grip-arrow,
+.handle.active .grip-arrow {
+  stroke: var(--accent-ink);
+}
+.handle:hover .bound-line,
+.handle.active .bound-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: none;
+}
+.caret {
+  stroke: var(--accent);
+  stroke-width: 2.6;
+  pointer-events: none;
+}
+.caret-head {
+  fill: var(--accent);
+  stroke: none;
+  pointer-events: none;
+}
+.ghost {
+  fill: var(--accent-wash);
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 3;
+  pointer-events: none;
+}
+.over-wash {
+  fill: var(--warn-wash);
+  pointer-events: none;
+}
+.cloud {
+  fill: none;
+  stroke: var(--warn-line);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.cloud.fresh {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw-cloud 620ms var(--ease-out) forwards;
+}
+@keyframes draw-cloud {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.free {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+.sky {
+  fill: var(--sky);
+  pointer-events: none;
+}
+.sym * {
+  fill: var(--panel);
+  stroke: var(--ink-2);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.sym .o {
+  fill: none;
+}
+.sym .f-tree {
+  fill: var(--s-tree);
+}
+.sym .f-car {
+  fill: var(--s-car);
+}
+.sym .f-bus {
+  fill: var(--s-bus);
+}
+.sym .f-van {
+  fill: var(--s-van);
+}
+.sym .f-coat-0 {
+  fill: var(--s-coat-0);
+}
+.sym .f-coat-1 {
+  fill: var(--s-coat-1);
+}
+.sym .f-kerb {
+  fill: var(--k-median);
+}
+.sym .f-share {
+  fill: var(--k-bikeshare);
+}
+svg pattern * {
+  stroke: var(--ink-2);
+  stroke-width: 1;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+svg pattern circle {
+  fill: var(--ink-2);
+  stroke: none;
+}
+#h-travel *,
+#mh-travel *,
+#h-parking *,
+#mh-parking * {
+  stroke: var(--ink-2);
+}
+.k-sidewalk {
+  fill: var(--k-sidewalk);
+}
+.k-planting {
+  fill: var(--k-planting);
+}
+.k-bike {
+  fill: var(--k-bike);
+}
+.k-travel {
+  fill: var(--k-travel);
+}
+.k-bus {
+  fill: var(--k-bus);
+}
+.k-parking {
+  fill: var(--k-parking);
+}
+.k-median {
+  fill: var(--k-median);
+}
+.k-loading {
+  fill: var(--k-loading);
+}
+.k-shoulder {
+  fill: var(--k-shoulder);
+}
+.k-bikerack {
+  fill: var(--k-bikerack);
+}
+.k-bikeshare {
+  fill: var(--k-bikeshare);
+}
+.k-pole {
+  fill: var(--k-pole);
+}
+#drawing .slab-p,
+.swatch .slab-p {
+  fill: var(--ink-2);
+  stroke: none;
+  font-family: var(--font);
+  font-weight: 700;
+  pointer-events: none;
+}
+#drawing .badge {
+  fill: var(--panel);
+  stroke: var(--ink-2);
+  stroke-width: 1.4;
+  pointer-events: none;
+}
+#drawing .badge-hands {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* The plan of a junction. */
+#drawing .wedge,
+#drawing .wedge-g {
+  stroke: none;
+}
+#drawing .wedge-g {
+  cursor: pointer;
+}
+#drawing .wedge-g[data-role="none"] {
+  cursor: default;
+}
+#drawing .piece {
+  stroke: var(--ink-2);
+  stroke-width: 0.8;
+  stroke-opacity: 0.55;
+  stroke-linejoin: round;
+}
+#drawing .arm,
+#drawing .bus-g,
+#drawing .cycle-g {
+  cursor: pointer;
+}
+#drawing .arm:hover .piece,
+#drawing .bus-g:hover .piece,
+#drawing .cycle-g:hover .piece {
+  stroke-opacity: 1;
+}
+#drawing .road {
+  fill: var(--road);
+  stroke: none;
+}
+#drawing .island,
+#drawing .bulb {
+  stroke: var(--ink-2);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+#drawing .curb-line {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+#drawing .curb-line.bad {
+  stroke: var(--warn-line);
+  stroke-width: 3;
+}
+#drawing .crossing {
+  fill: var(--road);
+  stroke: var(--ink-2);
+  stroke-width: 1;
+}
+#drawing .zebra {
+  fill: var(--ink-2);
+}
+#drawing [data-role="crossing"] {
+  cursor: pointer;
+}
+#drawing .zebra-fill {
+  stroke: none;
+}
+#drawing .stop-line {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 4;
+  pointer-events: none;
+}
+#drawing .stop-line.yield {
+  stroke-width: 3;
+  stroke-dasharray: 7 5;
+}
+#drawing .sign * {
+  fill: var(--panel);
+  stroke: var(--ink-2);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+#drawing .sign circle {
+  fill: var(--ink-2);
+  stroke: none;
+}
+#drawing .lane-arrow path {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+#drawing .lane-arrow path.halo {
+  stroke: var(--panel);
+  stroke-width: 5;
+}
+#drawing .lane-arrow.out path:not(.halo) {
+  stroke: var(--ink-3);
+  stroke-width: 1.4;
+}
+#drawing .lane-arrow.bad path:not(.halo) {
+  stroke: var(--warn-line);
+  stroke-width: 2.4;
+}
+#drawing .sel-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+#drawing .mv {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+#drawing .mv.no {
+  stroke: var(--ink-3);
+  stroke-width: 1.4;
+  stroke-dasharray: 4 4;
+}
+#drawing .mv.bad {
+  stroke: var(--warn-line);
+}
+#drawing .mv.indirect {
+  stroke-dasharray: 8 4;
+}
+#drawing .mv-x {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+#drawing .mv-tip {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+#drawing .north circle {
+  fill: var(--panel);
+  stroke: var(--ink-2);
+  stroke-width: 1.2;
+}
+#drawing .north path {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+#drawing .scale text {
+  fill: var(--ink-2);
+}
+#drawing .handle {
+  cursor: grab;
+}
+#drawing .handle:active {
+  cursor: grabbing;
+}
+#drawing .handle .grip {
+  fill: var(--panel);
+}
+#drawing .lane-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+#drawing .lane-hit:hover,
+#drawing .lane-hit.on {
+  fill: var(--accent-wash);
+}
+#drawing .measure-tag {
+  font-size: 13px;
+  font-weight: 600;
+}
+#drawing .piece.queue {
+  stroke-dasharray: 6 3;
+}
+#drawing .measure-loop {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 2;
+  pointer-events: none;
+}
+#drawing .measure-stop {
+  stroke-width: 2;
+}
+#drawing .bollard {
+  fill: var(--ink-2);
+  stroke: var(--panel);
+  stroke-width: 1;
+  pointer-events: none;
+}
+#drawing .dead-cap {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 5;
+  stroke-linecap: butt;
+  pointer-events: none;
+}
+#drawing .arm.dead {
+  opacity: 0.55;
+}
+
+/* ---- legend, swatches ------------------------------------------------------- */
+
+.swatch {
+  display: block;
+  width: 44px;
+  height: 22px;
+  border: 1px solid var(--field-line);
+  border-radius: 5px;
+  background: var(--panel);
+}
+.swatch .k-sidewalk,
+.swatch .k-planting,
+.swatch .k-bike,
+.swatch .k-travel,
+.swatch .k-bus,
+.swatch .k-parking,
+.swatch .k-median,
+.swatch .k-loading,
+.swatch .k-shoulder,
+.swatch .k-bikerack,
+.swatch .k-bikeshare,
+.swatch .k-pole {
+  stroke: none;
+}
+/* The map hides the texture in its key; here a surface is told apart by it. */
+.swatch rect[fill^="url"] {
+  display: inline;
+}
+.swatch.none line {
+  stroke: var(--ink-3);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+.swatch.none path,
+.swatch.none rect,
+.swatch.none circle {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.swatch.none .dash {
+  stroke-dasharray: 3 3;
+  stroke: var(--ink-3);
+}
+.plan-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 8px 18px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.plan-key li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.plan-key .swatch {
+  width: 26px;
+  height: 13px;
+}
+.mc {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 8px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+.mc-foot {
+  background: var(--k-sidewalk);
+}
+.mc-bike {
+  background: var(--k-bike);
+}
+.mc-transit {
+  background: var(--k-bus);
+}
+.mc-vehicle {
+  background: var(--k-travel);
+  box-shadow: inset 0 0 0 1px var(--field-line);
+}
+.mc-green {
+  background: var(--k-planting);
+}
+
+/* The streets to add, and the junctions to start from. */
+.lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+.lower[hidden] {
+  display: none;
+}
+.legend {
+  min-width: 0;
+  padding: 12px 16px 14px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 10px;
+}
+.legend .note-h {
+  padding: 0;
+  font-size: 15px;
+}
+.legend .hint {
+  flex: 1 1 14ch;
+  padding: 0;
+  font-size: 13px;
+}
+.legend .palette {
+  flex-basis: 100%;
+  margin-top: 8px;
+}
+.palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  align-content: start;
+  align-items: start;
+  gap: 8px;
+}
+.chip {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: center;
+  gap: 4px 10px;
+  width: 100%;
+  padding: 6px 10px 6px 6px;
+  border: 1px solid var(--field-line);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  text-align: left;
+  cursor: grab;
+  touch-action: none;
+  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+}
+.chip:has(.grip-ico) {
+  grid-template-columns: 44px 1fr 10px;
+}
+.grip-ico {
+  width: 10px;
+  height: 14px;
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.6;
+}
+.chip:hover {
+  background: var(--fill);
+}
+.chip:active {
+  cursor: grabbing;
+}
+.chip b {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+.chip small {
+  display: block;
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+.chip.plain {
+  grid-template-columns: 1fr;
+  cursor: pointer;
+}
+.chip.plain span:first-child {
+  display: none;
+}
+.chip.plain[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.chip span > b,
+.chip span > small {
+  display: block;
+}
+.drag-chip {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  font-weight: 600;
+  pointer-events: none;
+  translate: -50% -60%;
+}
+
+/* ---- the inspector ----------------------------------------------------------- */
+
+.panel.left {
+  border-top: 4px solid var(--kc);
+}
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.insp-empty {
+  margin: 0;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.insp-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+}
+.insp-name {
+  margin: 0;
+  display: block;
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.insp-sub {
+  margin: 3px 0 0;
+  display: block;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.insp-sec .note-h {
+  margin: 0 0 8px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.insp-sec > .btn {
+  width: 100%;
+  justify-content: center;
+  white-space: nowrap;
+}
+.insp-sec > .btn + .insp-range {
+  margin-top: 8px;
+}
+.insp-range {
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.insp-more > summary {
+  padding: 6px 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.insp-more > summary:hover {
+  color: var(--ink);
+}
+.insp-more[open] > summary {
+  margin-bottom: 8px;
+}
+.insp-more > .insp-sec + .insp-sec {
+  margin-top: 14px;
+}
+
+.wfield {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.wfield input,
+.var input[type="time"],
+.var select,
+.inspector select {
+  min-height: 36px;
+  padding: 2px 10px;
+  border: 1px solid var(--field-line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+.wfield input {
+  width: 72px;
+  font-weight: 500;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.wfield input:focus,
+.var select:focus,
+.var input[type="time"]:focus,
+.inspector select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+.wfield input:invalid {
+  border-color: var(--warn-line);
+  color: var(--warn);
+}
+.inspector select {
+  width: 100%;
+}
+.unit-tag {
+  min-width: 18px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.stepper {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 6px;
+}
+.stepper .ico {
+  width: 38px;
+  height: 38px;
+}
+.stepper .wfield {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+.stepper .wfield input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  font-size: 20px;
+  font-weight: 600;
+  text-align: center;
+}
+.stepper .unit-tag {
+  font-size: 14px;
+}
+.acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.ico {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--field-line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+}
+.ico svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ico:hover:not(:disabled) {
+  background: var(--fill);
+}
+.ico:disabled {
+  border-color: var(--rule);
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+.ico.danger:hover:not(:disabled),
+.btn.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--panel);
+}
+.acts .ico.danger {
+  margin-left: 10px;
+}
+.opts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.opt {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 8px 5px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms var(--ease-out);
+}
+.opt:hover {
+  background: var(--fill);
+}
+.opt[aria-checked="true"] {
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-weight: 600;
+}
+.opt .tick {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+}
+.opt[aria-checked="true"] .tick {
+  opacity: 1;
+}
+.opt[role="checkbox"] {
+  grid-template-columns: minmax(0, 1fr) 16px;
+  padding-left: 8px;
+}
+.opt[role="checkbox"]:has(.turn-ico) {
+  grid-template-columns: 26px minmax(0, 1fr) 16px;
+  padding-left: 4px;
+}
+.opt[role="checkbox"]:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+.opt[role="checkbox"]:disabled:hover {
+  background: transparent;
+}
+.opt .turn-ico {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.vars {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+.var {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--fill);
+}
+.var.now {
+  background: var(--accent-wash);
+}
+.var select,
+.var input[type="time"] {
+  min-height: 32px;
+  font-size: 14px;
+}
+.var select[data-ivdir] {
+  grid-column: 1 / -1;
+}
+.var-times {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+.var-times input {
+  width: 0;
+  flex: 1;
+  min-width: 0;
+}
+.var .ico {
+  grid-column: 2;
+  grid-row: 1;
+}
+.insp-sec .btn[data-ivadd] {
+  width: 100%;
+  justify-content: center;
+  white-space: nowrap;
+}
+.move-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.move-btns .btn {
+  justify-content: center;
+  white-space: nowrap;
+}
+.move-btns .btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.fld {
+  display: block;
+  margin: 0 0 10px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.fld span {
+  display: block;
+  margin-bottom: 3px;
+}
+.problems {
+  margin: 8px 0 0;
+  padding: 0 0 0 16px;
+  color: var(--warn);
+  font-size: 14px;
+}
+.lanes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lane-row {
+  display: block;
+  padding: 8px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 15px;
+}
+.lane-row:first-child {
+  border-top: 0;
+}
+.lane-row small {
+  display: block;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.lane-row.bad span:first-child {
+  color: var(--warn);
+  font-weight: 600;
+}
+.lane-row .turns-btns {
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.lane-pick {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lane-pick:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.turns-btns {
+  display: flex;
+  gap: 4px;
+}
+.turn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--field-line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
+}
+.turn:hover:not(:disabled):not([aria-pressed="true"]) {
+  background: var(--fill);
+}
+.turn .turn-ico {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.turn[aria-pressed="true"] {
+  border-color: var(--accent-line);
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.turn:disabled {
+  border-color: var(--rule);
+  color: var(--ink-3);
+  cursor: default;
+}
+.turn[aria-pressed="false"]:not(:disabled)::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  background: linear-gradient(to top right, transparent calc(50% - 0.8px), var(--ink-3) calc(50% - 0.8px) calc(50% + 0.8px), transparent calc(50% + 0.8px));
+  pointer-events: none;
+}
+.turn.bad {
+  border-color: var(--warn-line);
+  color: var(--warn);
+}
+.turn.bad[aria-pressed="true"] {
+  border-color: var(--warn-line);
+  background: var(--warn-wash);
+  color: var(--warn);
+}
+.turn.locked {
+  border-style: dashed;
+  border-color: var(--field-line);
+  color: var(--ink-3);
+  opacity: 0.7;
+}
+.turn.dest {
+  width: auto;
+  min-width: 52px;
+  gap: 3px;
+  padding: 0 8px;
+  grid-auto-flow: column;
+  font-size: 13px;
+  font-weight: 600;
+}
+.turn.dest .turn-ico {
+  width: 14px;
+  height: 14px;
+}
+.turn.dest[aria-pressed="false"]:not(:disabled)::after {
+  inset: 5px 4px;
+}
+
+/* ---- notes ------------------------------------------------------------------- */
+
+.notes .tabs {
+  margin: 0 0 4px;
+}
+.tab-n {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--warn-wash);
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 700;
+}
+.sample {
+  margin-left: 6px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+.nt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.nt th {
+  padding: 2px 0 6px 8px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+.nt th:first-child {
+  padding-left: 0;
+  text-align: left;
+}
+.nt td {
+  padding: 6px 0 6px 8px;
+  border-top: 1px solid var(--rule);
+  text-align: right;
+}
+.nt td:first-child {
+  padding-left: 0;
+  text-align: left;
+  font-weight: 500;
+}
+.nt .up,
+.nt .down {
+  color: var(--ink);
+  font-weight: 600;
+}
+.nt .zero,
+.nt td.self {
+  color: var(--ink-3);
+}
+.nt td.bad {
+  color: var(--warn);
+  font-weight: 600;
+}
+.nt th[scope="row"] {
+  padding: 6px 6px 6px 0;
+  font-weight: 500;
+  text-align: left;
+  color: var(--ink);
+  font-size: 14px;
+}
+.nt tr.total th,
+.nt tr.total td {
+  border-top: 2px solid var(--ink-3);
+  font-weight: 600;
+}
+.nt .turn {
+  width: 30px;
+  height: 26px;
+  vertical-align: middle;
+}
+.turns td,
+.turns th {
+  text-align: center;
+}
+.turns th[scope="row"] {
+  text-align: left;
+}
+.dirtag {
+  display: inline-block;
+  min-width: 28px;
+  margin-right: 4px;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.revs {
+  min-height: 0;
+}
+.rev {
+  display: block;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.rev tbody,
+.rev thead {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+.rev th:first-child,
+.rev td:first-child {
+  width: 44px;
+}
+.rev th,
+.rev td {
+  text-align: left;
+}
+.rev td:first-child {
+  font-weight: 600;
+}
+.rev tr.now td {
+  background: var(--accent-wash);
+}
+.rev tr.base td {
+  color: var(--ink-2);
+}
+.measures th[scope="row"] {
+  padding: 6px 8px 6px 0;
+  vertical-align: top;
+  font-weight: 500;
+}
+.measures th[scope="row"] small {
+  display: block;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 400;
+}
+.measures td {
+  vertical-align: top;
+  text-align: right;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.measures .m-group th {
+  padding-top: 16px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+}
+.m-group-note {
+  display: block;
+  margin-top: 1px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 400;
+}
+.m-on {
+  color: var(--accent);
+}
+.m-not {
+  color: var(--ink-3);
+}
+.m-apply {
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.measures small.m-problem {
+  color: var(--warn);
+}
+.fine {
+  padding: 8px 0 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.checks li {
+  grid-template-columns: 22px minmax(0, 1fr);
+}
+.title-block {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 4px 22px;
+  padding: 12px 20px 14px;
+  border-top: 1px solid var(--rule);
+}
+
+/* ---- the Add menu --------------------------------------------------------------- */
+
+.add {
+  position: relative;
+}
+.add > .btn {
+  padding-inline: 18px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.add > .btn:hover:not(:disabled),
+.add > .btn[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  filter: brightness(0.94);
+}
+.add-menu {
+  right: auto;
+  left: 0;
+  width: 300px;
+  max-height: min(78vh, 680px);
+  overflow-y: auto;
+}
+.add-menu .hint {
+  padding: 0 0 8px;
+}
+.add-group + .add-group {
+  margin-top: 10px;
+}
+.add-group-h {
+  margin: 0 0 2px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.add-list,
+.add-sub {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.add-item {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 8px 5px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.add-item:hover {
+  background: var(--fill);
+}
+.add-item b {
+  font-size: 15px;
+  font-weight: 600;
+}
+.add-item .dw {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.keyhelp {
+  display: none;
+}
+
+/* ---- touch, small screens, motion --------------------------------------------- */
+
+@media (pointer: coarse) {
+  .add-item,
+  .check,
+  .fit-checks {
+    min-height: 44px;
+  }
+  .ico,
+  .stepper .ico {
+    width: 44px;
+    height: 44px;
+  }
+  .stepper {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+  }
+  .stepper .wfield input,
+  .stepper input,
+  .inspector select,
+  .var input[type="time"] {
+    min-height: 44px;
+  }
+  .insp-more > summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .turn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .focus-hint {
+    display: none !important;
+  }
+}
+
+@media (max-width: 899px) {
+  .stage {
+    position: static;
+    height: auto;
+    min-height: 0;
+    margin: 0 8px;
+    border-radius: 0;
+    overflow: visible;
+    background: transparent;
+  }
+  .stage-main {
+    position: static;
+    overflow: visible;
+    padding: 0;
+  }
+  .panel.left {
+    order: 2;
+  }
+  .panel.right {
+    order: 3;
+    bottom: auto;
+  }
+  .stage {
+    order: 1;
+  }
+  .lower {
+    grid-template-columns: 1fr;
+  }
+  .stage-head {
+    align-items: stretch;
+  }
+  .tools {
+    justify-content: flex-start;
+  }
+  .btn .lbl {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .tools .btn:has(.lbl) {
+    min-width: 44px;
+    justify-content: center;
+    padding-inline: 10px;
+  }
+  .drawing > .scroll {
+    overflow-x: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud.fresh {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+  .chip,
+  .ico,
+  .turn,
+  .opt,
+  .handle .grip {
+    transition: none;
+  }
+}
+
+@media print {
+  .bar,
+  .panel,
+  .tools,
+  .lower,
+  .welcome,
+  .clock,
+  .statusbar {
+    display: none;
+  }
+  .stage-main {
+    position: static;
+    overflow: visible;
+  }
+}
+.tools[hidden] {
+  display: none;
+}

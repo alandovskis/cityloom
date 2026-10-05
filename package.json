@@ -1,0 +1,9 @@
+{
+  "name": "cityloom-web",
+  "private": true,
+  "description": "What the pages load at run time from npm: the map's libraries, copied into web/vendor by scripts/build.sh.",
+  "dependencies": {
+    "maplibre-gl": "^6.12.0",
+    "pmtiles": "^4.5.0"
+  }
+}

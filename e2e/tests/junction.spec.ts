@@ -13,6 +13,7 @@ test.describe("the junction editor, as a sandbox on the sample junctions", () =>
   test("starts on the first sample and says whether it works", async ({ page }) => {
     await expect(page.locator("#arm-count")).toHaveText("4 streets");
     await expect(page.locator("#fit")).toHaveText("4 streets, traffic signal. Every check passes.");
+    await expect(page.locator("#fit .tick")).toBeVisible();
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /^Plan of the junction, north up\. 4 streets/);
     await expect(page.locator("#undo")).toBeDisabled();
     await expect(page.locator("#redo")).toBeDisabled();
@@ -135,7 +136,7 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#street-name")).toHaveText("Junction 1");
     await expect(page.locator("a.back")).toHaveAttribute("href", "map.html");
     await expect(page.locator(".lower")).toBeHidden();
-    await expect(page.locator('.surface[href="index.html"]')).toBeHidden();
+    await expect(page.locator('.surface[href="street.html"]')).toBeHidden();
     await expect(page).toHaveTitle("Junction 1 · CityLoom");
   });
 
@@ -167,7 +168,7 @@ test.describe("the junction editor on a junction of the city", () => {
   test("a street change made elsewhere shows in the junction at its end", async ({ page }) => {
     await page.goto("/intersection.html?junction=2"); // Junction 4, where Sample Avenue 2 ends
     const before = await page.locator("#drawing").innerHTML();
-    await page.goto("/index.html?street=1");
+    await page.goto("/street.html?street=1");
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("-");

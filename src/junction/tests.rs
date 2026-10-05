@@ -209,7 +209,7 @@ fn a_city_junction_s_streets_link_to_the_street_editor_and_cannot_be_removed() {
     let e = arm(&s, 90);
     s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
-    assert!(h.contains("Open the cross-section") && h.contains("index.html?street="));
+    assert!(h.contains("Open the cross-section") && h.contains("street.html?street="));
     assert!(!h.contains("Remove this street"));
 }
 
@@ -405,11 +405,11 @@ fn the_title_block_gives_the_name_the_streets_and_the_changes_made() {
 fn the_status_line_says_whether_the_junction_works() {
     let s = shared(0);
     let h = html(|| view! { <page::Fit vm=s.clone()/> }.into_any());
-    assert!(h.contains("class=\"fit\"") && h.contains("Every check passes."));
+    assert!(h.contains("class=\"fit\"") && h.contains("Every check passes.") && h.contains("tick"));
     let n = arm(&s, 0);
     s.edit(|j| j.set_island(n, false));
     let h = html(|| view! { <page::Fit vm=s.clone()/> }.into_any());
-    assert!(h.contains("class=\"fit bad\"") && h.contains("One check needs attention: crossing distance."));
+    assert!(h.contains("class=\"fit bad\"") && h.contains("One check needs attention: crossing distance.") && !h.contains("tick"));
 }
 
 /// The opening tag of the button with this id.

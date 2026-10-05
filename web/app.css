@@ -1,0 +1,1356 @@
+/* The city map page. A light, familiar map-app arrangement: the city fills the
+   viewport and a bar, two panels and a few controls float over it as quiet white
+   cards. One blue for what is chosen, amber for what needs attention. */
+
+:root {
+  color-scheme: light;
+
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --land: #e2e7ec;
+  --panel: #ffffff;
+  --ink: #111827;
+  --ink-2: #4b5563;
+  --ink-3: #5f6b7a;
+  --rule: #e5e8ec;
+  --fill: #f1f3f5;
+  --field-line: #cdd3da;
+
+  --accent: #2563eb;
+  --accent-ink: #ffffff;
+  --accent-wash: #e8effd;
+  --accent-line: rgb(37 99 235 / 0.4);
+
+  --warn: #92400e;
+  --warn-wash: #fef3c7;
+  --warn-line: #f59e0b;
+  --ok: #166534;
+  --ok-wash: #dcfce7;
+
+  --shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 8px 24px rgb(15 23 42 / 0.12);
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.08), 0 2px 8px rgb(15 23 42 / 0.06);
+
+  --r-card: 16px;
+  --r-ctl: 12px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --pad: 16px;
+  --bar-h: 64px;
+  --panel-w: 360px;
+  /* How far the panels reach in from each side, for what floats between them. */
+  --lw: calc(var(--pad) + var(--panel-w));
+  --rw: calc(var(--pad) + var(--panel-w));
+
+  /* The drawing of the city. */
+  --casing: #7d8996;
+  --road: #ffffff;
+  --k-sidewalk: #cfd7de;
+  --k-planting: #a5d696;
+  --k-bike: #7fd3c3;
+  --k-travel: #ffffff;
+  --k-bus: #f2a99b;
+  --k-parking: #b9c2cc;
+  --k-median: #93c98a;
+  --k-loading: #f6d777;
+  --k-shoulder: #cbd3db;
+  --k-bikerack: #cdd6e2;
+  --k-bikeshare: #b5c7e8;
+  --k-pole: #9aa4b0;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --land: #0f1317;
+  --panel: #1b2127;
+  --ink: #e8edf2;
+  --ink-2: #b7c1cb;
+  --ink-3: #9aa6b2;
+  --rule: #2c343c;
+  --fill: #252d35;
+  --field-line: #3b454f;
+
+  --accent: #8ab4ff;
+  --accent-ink: #0b1220;
+  --accent-wash: rgb(138 180 255 / 0.16);
+  --accent-line: rgb(138 180 255 / 0.45);
+
+  --warn: #fcd34d;
+  --warn-wash: rgb(245 158 11 / 0.18);
+  --warn-line: #f59e0b;
+  --ok: #86efac;
+  --ok-wash: rgb(34 197 94 / 0.16);
+
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px rgb(0 0 0 / 0.5);
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
+
+  --casing: #6a7886;
+  --road: #3a4550;
+  --k-sidewalk: #27303a;
+  --k-planting: #3c6a39;
+  --k-bike: #2f7468;
+  --k-travel: #3a4550;
+  --k-bus: #8a4b43;
+  --k-parking: #2f3943;
+  --k-median: #3f7438;
+  --k-loading: #8a7a2b;
+  --k-shoulder: #232b33;
+  --k-bikerack: #46525f;
+  --k-bikeshare: #3f5a85;
+  --k-pole: #75808c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --land: #0f1317;
+    --panel: #1b2127;
+    --ink: #e8edf2;
+    --ink-2: #b7c1cb;
+    --ink-3: #9aa6b2;
+    --rule: #2c343c;
+    --fill: #252d35;
+    --field-line: #3b454f;
+
+    --accent: #8ab4ff;
+    --accent-ink: #0b1220;
+    --accent-wash: rgb(138 180 255 / 0.16);
+    --accent-line: rgb(138 180 255 / 0.45);
+
+    --warn: #fcd34d;
+    --warn-wash: rgb(245 158 11 / 0.18);
+    --warn-line: #f59e0b;
+    --ok: #86efac;
+    --ok-wash: rgb(34 197 94 / 0.16);
+
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px rgb(0 0 0 / 0.5);
+    --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
+
+    --casing: #6a7886;
+    --road: #3a4550;
+    --k-sidewalk: #27303a;
+    --k-planting: #3c6a39;
+    --k-bike: #2f7468;
+    --k-travel: #3a4550;
+    --k-bus: #8a4b43;
+    --k-parking: #2f3943;
+    --k-median: #3f7438;
+    --k-loading: #8a7a2b;
+    --k-shoulder: #232b33;
+    --k-bikerack: #46525f;
+    --k-bikeshare: #3f5a85;
+    --k-pole: #75808c;
+  }
+}
+
+:root[data-inspector="closed"] {
+  --lw: 0px;
+}
+:root[data-notes="closed"] {
+  --rw: 0px;
+}
+:root[data-inspector="closed"] .panel.left,
+:root[data-notes="closed"] .panel.right {
+  display: none;
+}
+
+/* ---- base ----------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  background: var(--land);
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--land);
+  color: var(--ink);
+  font: 400 15px/1.45 var(--font);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+h1,
+h2,
+h3,
+p,
+ul {
+  margin: 0;
+}
+ul {
+  padding: 0;
+  list-style: none;
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.fig {
+  font-variant-numeric: tabular-nums;
+}
+::selection {
+  background: var(--accent-wash);
+  color: var(--ink);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+* {
+  scrollbar-color: var(--field-line) transparent;
+  scrollbar-width: thin;
+}
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 1px 6px;
+  border: 1px solid var(--field-line);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink-2);
+  font: 600 12px/1.5 var(--font);
+  text-align: center;
+}
+
+/* ---- buttons ---------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--field-line);
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out);
+}
+.a-btn-reset,
+a.btn {
+  text-decoration: none;
+}
+.btn:hover:not(:disabled) {
+  background: var(--fill);
+}
+.btn:disabled {
+  color: var(--ink-3);
+  opacity: 0.6;
+  cursor: default;
+}
+.btn.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-2);
+}
+.btn.quiet:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+.btn.quiet[aria-expanded="true"] {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.btn-ico {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- the bar ---------------------------------------------------------------- */
+
+.bar {
+  position: fixed;
+  z-index: 30;
+  top: var(--pad);
+  left: var(--pad);
+  right: var(--pad);
+  height: var(--bar-h);
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr) auto auto;
+  align-items: center;
+  gap: 20px;
+  padding: 0 12px 0 18px;
+  background: var(--panel);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.logo {
+  display: block;
+  height: 30px;
+  width: auto;
+  --logo-a: var(--accent);
+}
+.search-slot {
+  justify-self: center;
+  width: 100%;
+  max-width: 640px;
+}
+.surfaces {
+  display: flex;
+  gap: 2px;
+}
+.surface {
+  padding: 8px 14px;
+  border-radius: 10px;
+  color: var(--ink-2);
+  font-weight: 600;
+  text-decoration: none;
+}
+.surface:hover {
+  background: var(--fill);
+  color: var(--ink);
+}
+.surface[aria-current="page"] {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.surface[hidden] {
+  display: none;
+}
+.top-end {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.account {
+  position: relative;
+  margin-left: 6px;
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fill);
+  cursor: pointer;
+}
+.avatar:hover {
+  background: var(--accent-wash);
+}
+.avatar svg {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+/* The search: the first thing in the bar, and the largest. */
+.search {
+  position: relative;
+  width: 100%;
+}
+.search input {
+  width: 100%;
+  height: 46px;
+  padding: 0 52px 0 46px;
+  border: 1px solid var(--field-line);
+  border-radius: 14px;
+  background: var(--land);
+  color: var(--ink);
+  font-size: 16px;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out), box-shadow 120ms var(--ease-out);
+}
+.search input::placeholder {
+  color: var(--ink-3);
+}
+.search input::-webkit-search-cancel-button,
+.search input::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+.search input:hover {
+  border-color: var(--ink-3);
+}
+.search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--panel);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+.search-ico {
+  position: absolute;
+  left: 15px;
+  top: 13px;
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.bar .search-go {
+  display: none;
+}
+.search-go {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  min-height: 0;
+  height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.search-go:hover {
+  filter: brightness(0.94);
+}
+.search-go[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: progress;
+}
+.search-key {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  pointer-events: none;
+}
+.search-pop {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 40;
+  max-height: min(64vh, 540px);
+  overflow: auto;
+  padding: 6px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.search-pop[hidden],
+.search:not(:focus-within) .search-pop {
+  display: none;
+}
+.search-note {
+  padding: 8px 10px 6px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.search-pop li[aria-selected="true"] .place-row {
+  background: var(--accent-wash);
+}
+
+/* The settings menu. */
+.menu {
+  position: absolute;
+  z-index: 50;
+  right: 0;
+  top: calc(100% + 12px);
+  width: 300px;
+  padding: 14px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.menu[hidden] {
+  display: none;
+}
+.menu-h {
+  margin-bottom: 6px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-2);
+}
+.menu-row:first-of-type {
+  border-top: 0;
+}
+.menu select {
+  max-width: 170px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--field-line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+}
+.units {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--fill);
+}
+.unit {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.unit[aria-pressed="true"] {
+  background: var(--panel);
+  color: var(--accent);
+  box-shadow: var(--shadow-soft);
+}
+.menu-act {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+.menu-foot {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+/* ---- the panels ------------------------------------------------------------- */
+
+.panel {
+  position: fixed;
+  z-index: 20;
+  top: calc(var(--pad) + var(--bar-h) + 12px);
+  bottom: var(--pad);
+  width: var(--panel-w);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.panel.left {
+  left: var(--pad);
+}
+.panel.right {
+  right: var(--pad);
+  /* As tall as what it holds, so the map shows beside it. */
+  bottom: auto;
+  max-height: calc(100% - var(--pad) * 2 - var(--bar-h) - 12px);
+}
+.panel-head {
+  padding: 18px 20px 6px;
+}
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 12px 12px;
+}
+.panel.right .panel-body {
+  flex: 0 1 auto;
+  padding: 14px 20px 12px;
+}
+.panel-foot {
+  padding: 14px 20px;
+  border-top: 1px solid var(--rule);
+}
+.street-sub {
+  display: none;
+}
+#street-name {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+.insp-head {
+  padding: 10px 8px 4px;
+}
+.insp-name {
+  display: inline;
+  margin-right: 8px;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+.insp-sub {
+  display: inline;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.map-hint {
+  padding: 2px 8px 8px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.insp-sec {
+  margin-top: 6px;
+}
+.note-h {
+  padding: 12px 8px 4px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+.insp-sec .note-h {
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* A place in a list. */
+.place-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1px 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: background-color 120ms var(--ease-out);
+}
+.place-row {
+  /* a row that is a button, as in a list of places to choose from */
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.place-row:hover,
+.place-row.on {
+  background: var(--accent-wash);
+}
+.place-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.place-row b {
+  font-size: 15px;
+  font-weight: 600;
+}
+.place-row small {
+  grid-column: 1;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.place-row .st {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.place-row .st.bad {
+  background: var(--warn-wash);
+  color: var(--warn);
+}
+
+/* Notes. */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin: 12px 12px 0;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--fill);
+}
+.tab {
+  flex: 1;
+  min-height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tab:hover {
+  color: var(--ink);
+}
+.tab[aria-selected="true"] {
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+.panel-tab[hidden] {
+  display: none;
+}
+.hint {
+  padding: 0 8px 6px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.fine {
+  padding: 10px 8px 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.checks li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 8px;
+  border-top: 1px solid var(--rule);
+}
+.checks li:first-child {
+  border-top: 0;
+}
+.checks svg {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.checks li.bad svg {
+  stroke: var(--warn);
+}
+.checks b {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+.checks a {
+  color: var(--ink);
+}
+.checks span {
+  display: block;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.checks li.bad span {
+  color: var(--warn);
+}
+.title-block {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 4px 22px;
+  padding: 12px 20px 14px;
+  border-top: 1px solid var(--rule);
+}
+.tb-cell span {
+  display: block;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.tb-cell b {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ---- the map ---------------------------------------------------------------- */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--land);
+}
+.drawing {
+  position: absolute;
+  inset: 0;
+}
+/* The map is MapLibre's; a place that cannot be shown says why over it. MapLibre makes its container
+   `position: relative` (`.maplibregl-map`, specificity 0,1,0); this selector (0,2,0) wins, so the map fills
+   the drawing. */
+.drawing > .basemap {
+  position: absolute;
+  inset: 0;
+}
+.basemap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+.basemap-note {
+  position: absolute;
+  inset: auto 50% 50% auto;
+  transform: translate(50%, 50%);
+  max-width: 36ch;
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctl);
+  box-shadow: var(--shadow-soft);
+  z-index: 2;
+}
+.basemap-note[hidden] {
+  display: none;
+}
+/* MapLibre's corners are the map's, which runs under the floating panels: the scale goes beside the Places
+   panel (and back to the edge when it is hidden), and the status bar leaves room for it (`.statusbar`). The
+   attribution, which opens leftwards into a line of text, stands on the zoom buttons (`.zoom-dock`: three
+   44px buttons and two 1px rules), its right edge in line with theirs, clear of the status bar and the Notes.
+   Each control keeps MapLibre's own 10px margin. */
+.drawing .maplibregl-ctrl-bottom-left {
+  left: var(--lw);
+}
+.drawing .maplibregl-ctrl-bottom-right {
+  right: calc(var(--rw) + var(--pad) - 10px);
+  bottom: calc(var(--pad) + 3 * 44px + 2px);
+}
+/* The key's dots repeat `style::OK`, `CHANGED` and `BAD`: keep them equal. */
+.dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 0 1px var(--field-line);
+  vertical-align: -1px;
+}
+.dot-ok {
+  background: #4b6b8a;
+}
+.dot-changed {
+  background: #2563eb;
+}
+.dot-bad {
+  background: #dc2626;
+}
+
+/* The home page's backdrop: the city drawn as an SVG. */
+#map line,
+#map circle {
+  fill: none;
+  stroke-linecap: butt;
+}
+#map .m-bad {
+  stroke: var(--warn-line);
+}
+#map .m-bad-disc {
+  fill: var(--warn-line);
+  fill-opacity: 0.35;
+  stroke: none;
+}
+#map .m-out {
+  stroke: var(--casing);
+}
+#map .m-walk {
+  stroke: var(--k-sidewalk);
+}
+#map .m-shoulder {
+  stroke: var(--k-shoulder);
+}
+#map .m-road {
+  stroke: var(--road);
+}
+#map .m-k-sidewalk {
+  stroke: var(--k-sidewalk);
+}
+#map .m-k-planting {
+  stroke: var(--k-planting);
+}
+#map .m-k-bike {
+  stroke: var(--k-bike);
+}
+#map .m-k-travel {
+  stroke: var(--k-travel);
+}
+#map .m-k-bus {
+  stroke: var(--k-bus);
+}
+#map .m-k-parking {
+  stroke: var(--k-parking);
+}
+#map .m-k-median {
+  stroke: var(--k-median);
+}
+#map .m-k-loading {
+  stroke: var(--k-loading);
+}
+#map .m-k-shoulder {
+  stroke: var(--k-shoulder);
+}
+#map .m-k-bikerack {
+  stroke: var(--k-bikerack);
+}
+#map .m-k-bikeshare {
+  stroke: var(--k-bikeshare);
+}
+#map .m-k-pole {
+  stroke: var(--k-pole);
+}
+/* Lane types are told apart by tint, by the key, and by their names when zoomed in; the hatch of the
+   editors is too busy at city scale. */
+#map .m-h {
+  display: none;
+}
+#map pattern * {
+  vector-effect: non-scaling-stroke;
+  stroke: var(--ink-3);
+}
+#map text {
+  paint-order: stroke;
+  stroke: var(--land);
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+#map .m-name {
+  fill: var(--ink-2);
+  font-weight: 600;
+}
+#map .m-tag {
+  fill: var(--ink-3);
+  font-weight: 500;
+}
+#map .m-jc {
+  fill: var(--panel);
+  stroke: var(--accent);
+}
+#map .m-jn {
+  fill: var(--accent);
+  font-weight: 700;
+  stroke: none;
+}
+#map .m-badge circle {
+  fill: var(--panel);
+  stroke: var(--warn-line);
+}
+#map .m-badge path {
+  fill: none;
+  stroke: var(--warn);
+  stroke-linecap: round;
+}
+#map a.place {
+  outline: none;
+  cursor: pointer;
+}
+#map a.place:focus-visible .m-hit {
+  fill: var(--accent-wash);
+  stroke: var(--accent);
+  stroke-opacity: 0.5;
+}
+#map a.place:focus-visible circle.m-hit {
+  stroke-opacity: 1;
+  stroke-width: 2px;
+}
+#map .m-hit {
+  fill: transparent;
+  stroke: transparent;
+  pointer-events: all;
+}
+
+/* Zoom, whole city. */
+.zoom-dock {
+  position: absolute;
+  z-index: 10;
+  right: calc(var(--rw) + var(--pad));
+  bottom: var(--pad);
+}
+.map-tools {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.map-tools .btn {
+  min-height: 44px;
+  min-width: 44px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.map-tools .btn:hover {
+  background: var(--fill);
+}
+.map-tools .btn + .btn {
+  border-top: 1px solid var(--rule);
+}
+#zoom-in {
+  order: 1;
+}
+#zoom-out {
+  order: 2;
+}
+#zoom-fit {
+  order: 3;
+}
+.map-tools .lbl {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The key to the streets, in the notes panel. */
+.key-section {
+  margin-top: 6px;
+}
+.plan-key {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+  padding: 2px 8px 6px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.plan-key li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.swatch {
+  width: 26px;
+  height: 13px;
+  border-radius: 3px;
+  stroke: var(--field-line);
+  stroke-width: 1px;
+}
+.swatch rect {
+  stroke: none;
+}
+/* The key shows the flat tints the map is drawn in, not the editors' hatch. */
+.swatch rect[fill^="url"] {
+  display: none;
+}
+.k-sidewalk {
+  fill: var(--k-sidewalk);
+}
+.k-planting {
+  fill: var(--k-planting);
+}
+.k-bike {
+  fill: var(--k-bike);
+}
+.k-travel {
+  fill: var(--k-travel);
+}
+.k-bus {
+  fill: var(--k-bus);
+}
+.k-parking {
+  fill: var(--k-parking);
+}
+.k-median {
+  fill: var(--k-median);
+}
+.k-loading {
+  fill: var(--k-loading);
+}
+.k-shoulder {
+  fill: var(--k-shoulder);
+}
+.k-bikerack {
+  fill: var(--k-bikerack);
+}
+.k-bikeshare {
+  fill: var(--k-bikeshare);
+}
+.k-pole {
+  fill: var(--k-pole);
+}
+.swatch .k-travel {
+  stroke: var(--field-line);
+  stroke-width: 1px;
+}
+
+/* Whether the city works, and the keys. */
+.statusbar {
+  position: absolute;
+  z-index: 10;
+  left: calc(var(--lw) + (100% - var(--lw) - var(--rw)) / 2);
+  transform: translateX(-50%);
+  bottom: var(--pad);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - var(--lw) - var(--rw) - 160px);
+  min-width: 0;
+}
+/* On the map it is centred between the scale (bottom left, up to 110px with its margin) and the zoom
+   buttons (bottom right), so each side keeps clear the wider of them. */
+.drawing:has(> .basemap) ~ .statusbar {
+  max-width: calc(100% - var(--lw) - var(--rw) - 2 * 128px);
+}
+.fit {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  color: var(--ok);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+.fit.bad {
+  background: var(--warn-wash);
+  color: var(--warn);
+  box-shadow: var(--shadow-soft), inset 0 0 0 1px var(--warn-line);
+}
+.menu-keys {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+.keys {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+/* A checker's tick: the sheet works. It draws itself in once. */
+.tick {
+  width: 16px;
+  height: 16px;
+  margin-inline-end: 8px;
+  stroke-width: 2;
+}
+.tick path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.tick.fresh path {
+  animation: draw-tick 420ms var(--ease-out) both;
+}
+@keyframes draw-tick {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+/* ---- touch, small screens, motion ------------------------------------------- */
+
+@media (pointer: coarse) {
+  .btn,
+  .tab,
+  .unit {
+    min-height: 44px;
+  }
+  .place-row {
+    padding: 12px 10px;
+  }
+  .keys,
+  .search-key {
+    display: none;
+  }
+}
+
+/* Under 900px the panels stack below the map instead of floating over it. */
+@media (max-width: 899px) {
+  :root {
+    --bar-h: auto;
+    --lw: 0px;
+    --rw: 0px;
+    --pad: 8px;
+  }
+  .bar {
+    position: sticky;
+    margin: 8px;
+    top: 8px;
+    height: auto;
+    grid-template-columns: 1fr auto;
+    gap: 10px 8px;
+    padding: 10px 10px 12px 14px;
+  }
+  .search-slot {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-width: none;
+    justify-self: stretch;
+  }
+  .surfaces {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    overflow-x: auto;
+  }
+  .btn.quiet span {
+    display: none;
+  }
+  .top-end {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+  }
+  .bar {
+    order: 0;
+  }
+  .stage {
+    order: 1;
+    position: relative;
+    height: 62svh;
+    min-height: 340px;
+    margin: 0 8px;
+    border-radius: var(--r-card);
+  }
+  .panel {
+    position: static;
+    width: auto;
+    max-height: none;
+    margin: 12px 8px;
+  }
+  .panel.left {
+    order: 2;
+  }
+  .panel.right {
+    order: 3;
+  }
+  .panel.right {
+    max-height: none;
+  }
+  .panel-body {
+    overflow: visible;
+  }
+  .statusbar {
+    left: 50%;
+    max-width: calc(100% - 24px - 56px);
+    bottom: 12px;
+  }
+  .zoom-dock {
+    right: 12px;
+    bottom: 12px;
+  }
+  /* The map is a box of its own here, with the status line across its foot: MapLibre's scale goes to its
+     top left corner, where nothing floats, and the attribution stays on the zoom buttons. */
+  .drawing:has(> .basemap) ~ .statusbar {
+    max-width: calc(100% - 24px - 56px);
+  }
+  .drawing .maplibregl-ctrl-bottom-left {
+    top: 10px;
+    bottom: auto;
+  }
+  .drawing .maplibregl-ctrl-bottom-right {
+    right: 2px;
+    bottom: calc(12px + 3 * 44px + 2px);
+  }
+  .fit {
+    font-size: 14px;
+    padding: 9px 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .search input,
+  .place-row {
+    transition: none;
+  }
+  .tick.fresh path {
+    animation: none;
+  }
+}
+
+@media print {
+  .bar,
+  .panel,
+  .zoom-dock,
+  .keys {
+    display: none;
+  }
+  .stage {
+    position: static;
+    height: 90vh;
+  }
+}
+
+/* ---- a page to read: one white card on the land ----------------------------- */
+
+.bar .top-end .surface {
+  color: var(--ink-2);
+}
+.read-card {
+  max-width: 720px;
+  margin: calc(var(--pad) + var(--bar-h) + 28px) auto 48px;
+  padding: 32px 40px 36px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+.read-card h1 {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.read-card .lede {
+  margin-top: 10px;
+  color: var(--ink-2);
+  font-size: 18px;
+}
+.read-card section {
+  margin-top: 26px;
+}
+.read-card .note-h {
+  padding: 0 0 6px;
+  font-size: 17px;
+}
+.read-card p,
+.read-card .credit-list {
+  max-width: 62ch;
+  margin-top: 8px;
+}
+.credit-list {
+  padding-left: 18px;
+  list-style: disc;
+}
+.back-links {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+@media (max-width: 899px) {
+  .read-card {
+    margin: 12px 8px 32px;
+    padding: 24px 20px 28px;
+  }
+}

@@ -45,7 +45,7 @@ impl Plan {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.clone(), "details");
+        crate::shell::mount(self.0.clone(), "details", true);
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -90,7 +90,7 @@ pub fn mount_page(plan: &Plan) {
     mount("revs", view! { <notes::Revisions vm=vm/> }.into_any());
     // Streets that belong to a city are not added, and there is no street page to go to.
     if plan.0.view_now().linked {
-        for selector in [".lower", ".surface[href=\"index.html\"]"] {
+        for selector in [".lower", ".surface[href=\"street.html\"]"] {
             if let Ok(Some(el)) = leptos::prelude::document().query_selector(selector) {
                 el.unchecked_into::<HtmlElement>().set_hidden(true);
             }
@@ -130,7 +130,7 @@ pub fn junction_catalogue() -> String {
 /// The name of a junction of the city kept in this browser; empty when there is none.
 #[wasm_bindgen]
 pub fn junction_name(node: u32) -> String {
-    CityStore::new(browser_ports().storage).open().junction_name(node).unwrap_or_default()
+    CityStore::current(browser_ports().storage).open().junction_name(node).unwrap_or_default()
 }
 
 /// The junction editor on one junction of the city kept in this browser, which
@@ -139,7 +139,7 @@ pub fn junction_name(node: u32) -> String {
 #[wasm_bindgen]
 pub fn open_junction(node: u32) -> Option<Plan> {
     let ports = browser_ports();
-    let store = CityStore::new(ports.storage.clone());
+    let store = CityStore::current(ports.storage.clone());
     let junction = store.open().junction_editor(node, store.region())?;
     let place = Place::Junction(node);
     Some(Plan(vm::JunctionVm::new(ports, junction, Some(CityBinding { store, place }))))

@@ -159,10 +159,21 @@ fn the_street_s_status_line_says_whether_the_pieces_fit() {
     let s = street_shared(0);
     let h = street_html(|| view! { <page::Fit vm=s.clone()/> });
     assert!(h.contains("class=\"fit\"") && h.contains("Every metre of the street is used."));
+    assert!(h.contains("tick"), "a street whose width is all used carries the tick");
     let u = segment(&s, 0);
     s.edit(|e| e.set_width(u, 3_800));
     let h = street_html(|| view! { <page::Fit vm=s.clone()/> });
     assert!(h.contains("class=\"fit bad\"") && h.contains("0.5 m too wide. Make a piece narrower or remove one."));
+    assert!(!h.contains("tick"));
+}
+
+#[test]
+fn a_street_with_width_left_over_does_not_carry_the_tick() {
+    let s = street_shared(0);
+    let u = segment(&s, 0);
+    s.edit(|e| e.remove(u));
+    let h = street_html(|| view! { <page::Fit vm=s.clone()/> });
+    assert!(h.contains("class=\"fit\"") && h.contains("still unused") && !h.contains("tick"));
 }
 
 #[test]

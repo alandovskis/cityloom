@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CityLoom street editor</title>
+  <meta name="description" content="Rearrange a street's fixed width: add, move and resize its pieces and see at once whether it fits.">
+  <meta name="color-scheme" content="light dark">
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";if(localStorage.getItem("cityloom-welcome")==="seen")document.documentElement.dataset.welcome="seen"}catch(e){}</script>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+  <svg id="defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"></svg>
+
+  <header class="bar" data-covers>
+    <a class="brand" href="index.html" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
+    <nav class="surfaces" aria-label="Editors">
+      <a href="map.html" class="surface">Map</a>
+      <a href="street.html" class="surface" aria-current="page">Street</a>
+      <a href="intersection.html" class="surface">Intersection</a>
+    </nav>
+    <div class="top-end">
+      <button type="button" id="inspector-toggle" class="btn quiet" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the piece details ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span>Piece details</span></button>
+      <button type="button" id="notes-toggle" class="btn quiet" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span>Notes</span></button>
+      <div class="account">
+        <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
+        <div id="account-menu" class="menu" hidden>
+          <p class="menu-h">Settings</p>
+          <div class="menu-row">
+            <span id="units-label">Units</span>
+            <div class="units" role="group" aria-labelledby="units-label">
+              <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
+              <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
+            </div>
+          </div>
+          <div class="menu-row">
+            <label for="region">Region</label>
+            <select id="region"></select>
+          </div>
+          <div class="menu-row">
+            <span id="theme-label">Theme</span>
+            <div class="units" role="group" aria-labelledby="theme-label">
+              <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
+              <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
+            </div>
+          </div>
+          <p class="menu-act"><button type="button" id="how-btn" class="btn">How this works</button></p>
+          <p class="menu-act"><button type="button" id="print" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2V6h11v5.5h-2M4.5 9.5h7v4h-7z"/></svg>Print this sheet</button></p>
+          <div class="menu-keys">
+            <p class="menu-h">Keyboard</p>
+            <p id="keys" class="keys">
+              <span><kbd>←</kbd> <kbd>→</kbd> select</span>
+              <span><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> reorder</span>
+              <span><kbd>+</kbd> <kbd>−</kbd> resize (<kbd>Shift</kbd> bigger)</span>
+              <span><kbd>Enter</kbd> edit width</span>
+              <span><kbd>Delete</kbd> remove</span>
+              <span><kbd>[</kbd> <kbd>]</kbd> details, notes</span>
+              <span><kbd>Ctrl</kbd> <kbd>Z</kbd> undo</span>
+            </p>
+          </div>
+          <p class="menu-foot"><a href="credits.html">Credits</a></p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <aside class="panel left" id="details-panel" aria-label="Piece details" data-covers>
+    <div class="panel-body inspector" id="inspector"></div>
+  </aside>
+
+  <main class="stage">
+    <div class="stage-main">
+      <div class="stage-head">
+        <div class="title-card"><div class="street" id="street"></div></div>
+        <div class="tools">
+          <div class="add" id="add"></div>
+          <div id="history" style="display: contents"></div>
+        </div>
+      </div>
+      <section class="drawing" aria-labelledby="h-drawing">
+        <h2 id="h-drawing" class="sr-only">Cross-section</h2>
+        <div id="welcome-slot" style="display: contents"></div>
+        <div id="clock-slot" style="display: contents"></div>
+        <div class="scroll" id="scroll"></div>
+      </section>
+      <div class="statusbar">
+        <p class="focus-hint" aria-hidden="true">Arrows select. Shift+arrows reorder. + and − resize, with Shift for bigger steps. Enter edits the width.</p>
+        <p class="cue">On a touch screen, swipe the street sideways to see all of it.</p>
+        <div class="fit-row">
+          <div id="fit-slot" style="display: contents"></div>
+          <div id="fit-checks-slot" style="display: contents"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="panel right notes" id="notes" aria-label="Notes" data-covers>
+    <div class="tabs" role="tablist" aria-label="Notes sections">
+      <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true">Width</button>
+      <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1">Checks<span id="checks-n-slot" style="display: contents"></span></button>
+      <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
+      <button type="button" role="tab" class="tab" id="t-measures" aria-controls="p-measures" aria-selected="false" tabindex="-1">Transit</button>
+    </div>
+    <div class="panel-body">
+      <div class="panel-tab" id="p-space" role="tabpanel" aria-labelledby="t-space">
+          <section aria-labelledby="h-space">
+            <h2 id="h-space" class="note-h">Where the width goes</h2>
+            <table class="nt" id="space"></table>
+          </section>
+          <section aria-labelledby="h-cap">
+            <h2 id="h-cap" class="note-h">People moved <span class="sample">sample numbers</span></h2>
+            <table class="nt" id="cap"></table>
+          </section>
+          <p class="fine" id="time-note"></p>
+        </div>
+      
+        <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks" hidden>
+          <section aria-labelledby="h-checks">
+            <h2 id="h-checks" class="note-h">Does it work? <span class="sample">sample limits</span></h2>
+            <ul class="checks" id="checks"></ul>
+          </section>
+        </div>
+      
+        <div class="panel-tab" id="p-changes" role="tabpanel" aria-labelledby="t-changes" hidden>
+          <section aria-labelledby="h-rev" class="revs">
+            <h2 id="h-rev" class="note-h">Your changes</h2>
+            <table class="nt rev" id="revs"></table>
+          </section>
+        </div>
+      
+        <div class="panel-tab" id="p-measures" role="tabpanel" aria-labelledby="t-measures" hidden>
+          <section aria-labelledby="h-measures">
+            <h2 id="h-measures" class="note-h">Transit priority measures</h2>
+            <p class="hint">Ways to give buses priority, from the <a href="https://tpa.transitcosts.com/atlas/toolbox">Transit Priority Atlas</a>. Arrange keeps the sidewalks and lays the roadway out again as that measure. You can undo it.</p>
+            <table class="nt measures" id="measures"></table>
+          </section>
+        </div>
+    </div>
+    <div class="title-block" id="title-block" aria-label="About this street"></div>
+  </aside>
+
+  <div id="live" class="sr-only" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
