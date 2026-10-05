@@ -22,6 +22,7 @@ erDiagram
     SEGMENT_TIMES }o--|| MATERIAL : material
     SEGMENT_KIND }o--|{ MATERIAL : "allowed materials (first is default)"
     SEGMENT_KIND }o--o{ CURB : "allowed curbs"
+    SEGMENT_KIND }o--|{ MODE : "serves (one or more)"
 
     JUNCTION_STATE ||--o{ ARM : arms
     ARM }o--o| EDGE_DEF : "edge (uid; 0 = sample)"
@@ -81,7 +82,6 @@ erDiagram
         string id PK "sidewalk, planting, bike, travel, bus, parking, median, loading, shoulder, bikerack, bikeshare, pole, busshelter, busstation, bench, terrace, streetlamp"
         string name
         string mark "two-letter sheet mark"
-        Mode mode "foot, bike, transit, vehicle, green"
         i32 default_mm
         i32 min_mm
         i32 max_mm
@@ -89,6 +89,10 @@ erDiagram
         bool has_curb
         DirectionRule direction_rule "none, required, optional"
         bool shares_road "may change type through the day"
+    }
+    MODE {
+        string id PK "foot, bike, transit, vehicle, green"
+        string label
     }
     MATERIAL {
         string id PK "asphalt, concrete, permeable, brick, grass, planted, gravel, trees"
