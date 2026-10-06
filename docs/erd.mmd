@@ -4,16 +4,15 @@ erDiagram
     NETWORK ||--o{ NODE_DEF : nodes
     NETWORK ||--o{ EDGE_DEF : edges
     NETWORK ||--o{ STREET : "streets (by edge uid)"
-    NETWORK ||--o{ JUNCTION_STATE : "junctions (by node uid)"
-    NETWORK ||--o{ STREET : "today_streets"
-    NETWORK ||--o{ JUNCTION_STATE : "today_junctions"
+    NETWORK ||--o{ JUNCTION : "junctions (by node uid)"
+    JUNCTION ||--|{ JUNCTION_REVISION : "revisions (oldest first)"
     NODE_DEF ||--o| NAMES : "names (sample only)"
     EDGE_DEF }o--|| NODE_DEF : "a"
     EDGE_DEF }o--|| NODE_DEF : "b"
     EDGE_DEF |o--o| STREET : "section (imported)"
     EDGE_DEF }o--|| CATALOGUE_STREET : "street (sample idx)"
 
-    STREET ||--|{ STREET_REVISION : "revisions (oldest first)"
+    STREET ||--|{ STREET_REVISION : "revisions (oldest first; the first is the street as first laid out)"
     STREET_REVISION ||--o{ SEGMENT : segments
     STREET }o--|| CATALOGUE_STREET : "sample"
     SEGMENT ||--|{ SEGMENT_TIMES : "times of day (windows never overlap, cover the day)"
@@ -25,7 +24,7 @@ erDiagram
     SEGMENT_KIND }o--o{ CURB : "allowed curbs"
     SEGMENT_KIND }o--|{ MODE : "serves (one or more)"
 
-    JUNCTION_STATE ||--o{ ARM : arms
+    JUNCTION_REVISION ||--o{ ARM : arms
     ARM }o--o| EDGE_DEF : "edge (uid; 0 = sample)"
     ARM }o--|| CATALOGUE_STREET : "street"
     ARM |o--o| STREET : "section (not saved)"
@@ -40,8 +39,6 @@ erDiagram
         f64x2 origin_m "optional lon/lat anchor"
         BTreeMap streets
         BTreeMap junctions
-        BTreeMap today_streets
-        BTreeMap today_junctions
     }
     NODE_DEF {
         i32 x_mm
@@ -107,7 +104,11 @@ erDiagram
         string id PK "granite, concrete, asphalt, planted, kassel, bikefriendly, island"
         string name
     }
-    JUNCTION_STATE {
+    JUNCTION {
+        usize current "revision shown; undo and redo move it"
+        u32 next_uid
+    }
+    JUNCTION_REVISION {
         string label
         Control control
         i32 ring_extra_mm
