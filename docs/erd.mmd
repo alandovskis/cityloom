@@ -7,7 +7,6 @@ erDiagram
     NETWORK ||--o{ JUNCTION : "junctions (by node uid)"
     JUNCTION ||--|{ JUNCTION_REVISION : "revisions (oldest first)"
     JUNCTION }o--|| CATALOGUE_JUNCTION_SAMPLE : sample
-    JUNCTION }o--|| CATALOGUE_REGION : region
     NODE_DEF ||--o| NAMES : "names (sample only)"
     EDGE_DEF }o--|| NODE_DEF : "a"
     EDGE_DEF }o--|| NODE_DEF : "b"
@@ -106,15 +105,10 @@ erDiagram
         string id PK "granite, concrete, asphalt, planted, kassel, bikefriendly, island"
         string name
     }
-    CATALOGUE_REGION {
-        string id PK "canada, united-states, germany, united-kingdom, australia, japan"
-        string name
-    }
     JUNCTION {
         usize sample FK
         string name
         bool linked "a place in the network: its streets and name are the network's"
-        usize region FK "a setting of the sheet, not part of the history"
         usize current "revision shown; undo and redo move it"
         u32 next_uid
     }
