@@ -26,13 +26,12 @@ impl Loader {
     }
 
     /// Makes sure the store holds the street network of its area: the roads
-    /// are fetched, read and kept, unless they already are. A store of no area
-    /// has the sample city and is done at once.
+    /// are fetched, read and kept, unless they already are.
     ///
     /// Where the roads come from: a tile of the metropolitan area's data if one holds the place, and
     /// Overpass if not (or if the tile cannot be had).
     pub fn load(&self, store: &CityStore, done: impl FnOnce(Result<(), String>) + 'static) {
-        let Some(area) = store.area().cloned() else { return done(Ok(())) };
+        let area = store.area().clone();
         if store.has_network() {
             return done(Ok(()));
         }
@@ -204,17 +203,6 @@ mod tests {
         let (ports, fetcher, _) = test_ports_with_fetcher();
         let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
         store.keep_network(&serde_json::from_str(NETWORK).unwrap());
-        let result = seen();
-        let r = result.clone();
-        Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));
-        assert!(fetcher.asked().is_empty());
-        assert_eq!(result.borrow_mut().take(), Some(Ok(())));
-    }
-
-    #[test]
-    fn the_sample_city_needs_nothing_fetched() {
-        let (ports, fetcher, _) = test_ports_with_fetcher();
-        let store = CityStore::new(ports.storage.clone());
         let result = seen();
         let r = result.clone();
         Loader::new(ports).load(&store, move |x| *r.borrow_mut() = Some(x));

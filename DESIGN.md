@@ -277,7 +277,7 @@ The page is a stack of layers: the drawing at the back, floating cards on top. A
 
 **Map page.** The map fills the viewport. Places card on the left (360px, full height), Notes card on the right (360px, as tall as its content), zoom group bottom-right, the status chip bottom-centre of the open area between the cards.
 
-**Home page.** One hero card (up to 780px, 44px/48px padding) holds the headline, the large search with its blue Search button, the way in, and how the city stands. The sample city is drawn full-bleed behind it, inert, and eases in from the card's right edge with a gradient mask. Names are hidden on this backdrop.
+**Home page.** One hero card (up to 780px, 44px/48px padding) holds the headline, the large search with its blue Search button, the way in, and how the city stands. The city is drawn full-bleed behind it, inert, and eases in from the card's right edge with a gradient mask. Names are hidden on this backdrop.
 
 **Editors (street and intersection).** A three-part arrangement under the bar: a left details card (300px), a right Notes card (340px, tabs), and a centre column between them. The centre column is a vertical stack with 12px gaps: a **stage head** (title card plus tool strip), the **plate** (the drawing on a white 16px card), the status chip, and for junctions two **tray** cards. Under 1360px wide the Notes card starts closed (the person can open it); under 900px every card stacks below the drawing and the bar wraps to a second and third row.
 

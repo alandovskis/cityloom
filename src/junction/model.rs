@@ -542,6 +542,8 @@ fn snap(v: i32, step: i32) -> i32 {
 }
 
 impl Junction {
+    /// The sandbox junction the tests are written against, on one of the samples. It is not part of the app.
+    #[cfg(test)]
     pub fn new(sample: usize) -> Junction {
         let mut j = Junction {
             sample: 0,

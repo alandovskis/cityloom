@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, STREET, test } from "./fixtures";
+import { expect, live, openStreet, test } from "./fixtures";
 
 const selectFirstPiece = async (page: Page) => {
   await page.locator("#wrap").focus();
@@ -9,17 +9,22 @@ const selectFirstPiece = async (page: Page) => {
 
 const pieceCount = (page: Page) => page.locator("#drawing").getAttribute("aria-label");
 
-test.describe("the street editor, as a sandbox on the sample streets", () => {
+/** How many pieces the street has, from what the drawing says of itself. */
+const pieces = async (page: Page) => Number(/(\d+) segments/.exec((await pieceCount(page)) ?? "")?.[1]);
+
+// The editor is reached from the map: a street of the Plateau, the first the map lists.
+
+test.describe("the street editor on a street of the city", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/street.html");
+    await openStreet(page);
     await expect(page.locator("#drawing")).toBeVisible();
   });
 
-  test("starts on the first sample and says whether the pieces fit", async ({ page }) => {
-    await expect(page.locator("#street-name")).toHaveText("Sample Street 1");
+  test("starts as the city has the street and says whether the pieces fit", async ({ page }) => {
+    await expect(page.locator("#street-name")).not.toHaveText("");
     await expect(page.locator("#drawing")).toHaveAttribute(
       "aria-label",
-      /6 segments, 18\.0 m of 18\.0 m\. Every metre of the street is used\.$/,
+      /\d+ segments, ([\d.]+) m of \1 m\. Every metre of the street is used\.$/,
     );
     await expect(page.locator("#fit")).toHaveText("Every metre of the street is used.");
     await expect(page.locator("#undo")).toBeDisabled();
@@ -41,7 +46,7 @@ test.describe("the street editor, as a sandbox on the sample streets", () => {
   test("a piece is selected with the arrow keys, announced, and shown in the details", async ({ page }) => {
     await expect(page.locator("#inspector .insp-empty")).toBeVisible();
     await selectFirstPiece(page);
-    await expect(live(page)).toHaveText(/^Sidewalk, 3\.3 m, 1 of 6$/);
+    await expect(live(page)).toHaveText(/^.+, [\d.]+ m, 1 of \d+$/);
     await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(page.locator("#inspector .insp-empty")).toBeVisible();
@@ -49,13 +54,13 @@ test.describe("the street editor, as a sandbox on the sample streets", () => {
 
   test("a piece is pressed to select it", async ({ page }) => {
     await page.locator('#drawing [data-role="seg"]').nth(1).click();
-    await expect(live(page)).toHaveText(/, 2 of 6$/);
+    await expect(live(page)).toHaveText(/, 2 of \d+$/);
   });
 
   test("making a piece wider says that the street is too wide, and narrower makes room again", async ({ page }) => {
     await selectFirstPiece(page);
     await page.keyboard.press("+");
-    await expect(live(page)).toHaveText(/^Resize sidewalk\. 0\.1 m too wide\. Make a piece narrower or remove one\.$/);
+    await expect(live(page)).toHaveText(/^Resize .+\. 0\.1 m too wide\. Make a piece narrower or remove one\.$/);
     await expect(page.locator("#fit")).toHaveText("0.1 m too wide. Make a piece narrower or remove one.");
     await page.keyboard.press("-");
     await expect(page.locator("#fit")).toHaveText("Every metre of the street is used.");
@@ -88,10 +93,11 @@ test.describe("the street editor, as a sandbox on the sample streets", () => {
   });
 
   test("removing a piece frees its width, and Ctrl+Z puts it back", async ({ page }) => {
+    const before = await pieces(page);
     await selectFirstPiece(page);
     await page.keyboard.press("Delete");
-    await expect(page.locator("#fit")).toHaveText(/3\.3 m of the street is still unused\.$/);
-    await expect(pieceCount(page)).resolves.toMatch(/5 segments/);
+    await expect(page.locator("#fit")).toHaveText(/[\d.]+ m of the street is still unused\.$/);
+    expect(await pieces(page)).toBe(before - 1);
     await page.keyboard.press("Control+z");
     await expect(page.locator("#fit")).toHaveText("Every metre of the street is used.");
     await expect(live(page)).toHaveText(/^Undone\. /);
@@ -103,7 +109,7 @@ test.describe("the street editor, as a sandbox on the sample streets", () => {
     await page.locator("#undo").click();
     await expect(live(page)).toHaveText("Undone. Every metre of the street is used.");
     await page.locator("#redo").click();
-    await expect(live(page)).toHaveText(/^Redone\. 3\.3 m left to use\.$/);
+    await expect(live(page)).toHaveText(/^Redone\. [\d.]+ m left to use\.$/);
   });
 
   test("Shift and an arrow move the selected piece one place along", async ({ page }) => {
@@ -113,26 +119,28 @@ test.describe("the street editor, as a sandbox on the sample streets", () => {
     await expect(page.locator("#undo")).toBeEnabled();
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowRight");
-    await expect(live(page)).toHaveText(/, 2 of 6$/);
+    await expect(live(page)).toHaveText(/, 2 of \d+$/);
   });
 
   test("start over puts the street back as it is today and can itself be undone", async ({ page }) => {
+    const before = await pieces(page);
     await selectFirstPiece(page);
     await page.keyboard.press("Delete");
     await page.locator("#reset").click();
     await expect(live(page)).toHaveText("Started over from the street as it is today. Undo brings your changes back.");
-    await expect(pieceCount(page)).resolves.toMatch(/6 segments/);
+    expect(await pieces(page)).toBe(before);
     await page.locator("#undo").click();
-    await expect(pieceCount(page)).resolves.toMatch(/5 segments/);
+    expect(await pieces(page)).toBe(before - 1);
   });
 
   test("a piece is added from the menu, which opens and closes", async ({ page }) => {
+    const before = await pieces(page);
     const menu = page.locator("#add-btn");
     await expect(menu).toHaveAttribute("aria-expanded", "false");
     await menu.click();
     await expect(menu).toHaveAttribute("aria-expanded", "true");
     await page.locator(".add-item", { hasText: "Bike lane" }).click();
-    await expect(pieceCount(page)).resolves.toMatch(/7 segments/);
+    expect(await pieces(page)).toBe(before + 1);
     await expect(live(page)).toContainText("Add bike lane");
     await expect(page.locator("#fit")).toHaveText(/too wide/);
   });
@@ -195,7 +203,8 @@ test.describe("the street editor, as a sandbox on the sample streets", () => {
     await page.keyboard.press("Enter");
     const width = page.locator("#inspector input").first();
     await expect(width).toBeFocused();
-    await width.fill("3");
+    const was = Number(await width.inputValue());
+    await width.fill(String(Math.round((was - 0.3) * 10) / 10));
     await width.press("Enter");
     await expect(page.locator("#fit")).toHaveText(/0\.3 m of the street is still unused\.$/);
   });
@@ -228,36 +237,42 @@ test.describe("the street editor, as a sandbox on the sample streets", () => {
   });
 });
 
-test.describe("the street editor on a street of the city", () => {
+test.describe("what the street editor keeps in the city", () => {
   test("is named for the street, says where it runs between, and links back to the map", async ({ page }) => {
-    await page.goto(`/street.html?street=${STREET}`);
-    await expect(page.locator("#street-name")).toHaveText("Sample Avenue 2");
-    await expect(page.locator("#street-sub")).toContainText("the edge of the map");
-    await expect(page.locator("#street-sub")).toContainText("Junction 4");
+    await openStreet(page);
+    await expect(page.locator("#street-name")).not.toHaveText("");
+    await expect(page.locator("#street-sub")).not.toHaveText("");
     await expect(page.locator("a.back")).toHaveAttribute("href", "map.html");
-    await expect(page.locator('.surface[href="intersection.html"]')).toBeHidden();
+    await expect(page.locator('.surface[href="intersection.html"]')).toHaveCount(0);
   });
 
   test("what is changed is kept in the city across a reload", async ({ page }) => {
-    await page.goto(`/street.html?street=${STREET}`);
+    await openStreet(page);
+    const before = await pieces(page);
     await selectFirstPiece(page);
     await page.keyboard.press("Delete");
-    await expect(pieceCount(page)).resolves.toMatch(/10 segments/);
+    expect(await pieces(page)).toBe(before - 1);
     await page.reload();
-    await expect(pieceCount(page)).resolves.toMatch(/10 segments/);
+    expect(await pieces(page)).toBe(before - 1);
   });
 
   test("a change is kept even when the page is left at once", async ({ page }) => {
-    await page.goto(`/street.html?street=${STREET}`);
+    const href = await openStreet(page);
+    const before = await pieces(page);
     await selectFirstPiece(page);
     await page.keyboard.press("Delete");
     await page.goto("/map.html");
-    await page.goto(`/street.html?street=${STREET}`);
-    await expect(pieceCount(page)).resolves.toMatch(/10 segments/);
+    await page.goto(`/${href}`);
+    expect(await pieces(page)).toBe(before - 1);
   });
 
   test("a street that is not in the city goes back to the map", async ({ page }) => {
     await page.goto("/street.html?street=999");
+    await expect(page).toHaveURL(/map\.html$/);
+  });
+
+  test("the page without a street goes back to the map", async ({ page }) => {
+    await page.goto("/street.html");
     await expect(page).toHaveURL(/map\.html$/);
   });
 });

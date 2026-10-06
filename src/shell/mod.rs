@@ -5,5 +5,16 @@
 pub mod view;
 pub mod vm;
 
+use std::rc::Rc;
+
+use wasm_bindgen::prelude::*;
+
 pub use view::mount;
-pub use vm::Target;
+pub use vm::{Bare, Target};
+
+/// Binds the shell of a page that has nothing of its own to bind: a junction that cannot be drawn still has
+/// its settings menu and sidebars.
+#[wasm_bindgen]
+pub fn mount_bare_shell() {
+    mount(Rc::new(Bare::default()), "details", true);
+}

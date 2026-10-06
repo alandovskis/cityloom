@@ -2,7 +2,14 @@
 // WebAssembly module (`mount_page`); this opens the junction, keeps what it
 // makes in the city, and sets up what every page shares.
 
-import init, { Plan, hatches, junction_name, mount_page, open_junction, prepare_city } from "./pkg/cityloom_editor.js";
+import init, {
+  hatches,
+  junction_name,
+  mount_bare_shell,
+  mount_page,
+  open_junction,
+  prepare_city,
+} from "./pkg/cityloom_editor.js";
 import { placeParam } from "./city.js";
 
 await init();
@@ -10,26 +17,25 @@ await prepare_city();
 
 const { HATCH, MATERIAL_HATCH, CURB_HATCH } = JSON.parse(hatches());
 
-// Opened from the map (`?junction=3`) the page edits that junction of the city,
-// reading its streets from the city, and writes each change back; otherwise it
-// is a sandbox on the sample junctions.
+// The page edits a junction of the city (`?junction=3`), reading its streets from the city, and writes each
+// change back. It is reached from the map: without a junction of the city it goes there.
 const placeId = placeParam("junction");
 const placeName = placeId ? junction_name(placeId) : "";
 const held = placeId ? open_junction(placeId) : undefined;
-if (placeId && !placeName) {
+if (!placeName) {
   location.replace("map.html");
   await new Promise(() => {});
 }
-if (placeId && !held) {
+if (!held) {
   // The streets here have been changed so that the junction cannot be drawn.
-  new Plan(0).mount_shell(); // only the settings menu and the sidebars have anything to do here
+  mount_bare_shell(); // only the settings menu and the sidebars have anything to do here
   document.getElementById("street-name").textContent = placeName;
   document.querySelector(".tools").hidden = true;
   document.querySelector(".stage-main").innerHTML =
     `<div class="stuck"><h2 class="note-h">This junction cannot be drawn</h2><p>The streets that meet here have been changed so that they no longer make a junction. Give the streets their room back, or start the city over from the map.</p><p><a class="back" href="map.html">City map</a></p></div>`;
   await new Promise(() => {});
 }
-const plan = held ?? new Plan(0);
+const plan = held;
 
 // The hatch patterns the plan and the swatches are filled with.
 document.getElementById("defs").innerHTML =

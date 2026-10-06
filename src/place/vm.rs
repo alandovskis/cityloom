@@ -320,7 +320,7 @@ mod tests {
         f.fetcher.answer(Ok(b"<osm/>".to_vec()));
         f.importer.answer(Ok(NETWORK.to_string()));
         assert_eq!(f.navigator.take(), vec!["map.html"]);
-        let area = CityStore::current_area(&*f.storage).unwrap();
+        let area = CityStore::current_area(&*f.storage);
         assert_eq!((area.name.as_str(), area.key().as_str()), ("Kreuzberg, Friedrichshain-Kreuzberg", "52.4990,13.4030"));
         assert_eq!(CityStore::current(f.storage.clone()).open().view(0).name, "Kreuzberg, Friedrichshain-Kreuzberg");
     }
@@ -334,7 +334,7 @@ mod tests {
         f.fetcher.answer(Err("the server answered 504".into()));
         assert!(matches!(f.vm.status(), Status::Failed(m) if m.contains("504")));
         assert!(f.navigator.take().is_empty());
-        assert_eq!(CityStore::current_area(&*f.storage), Some(crate::place::area::default_area()), "still the default");
+        assert_eq!(CityStore::current_area(&*f.storage), crate::place::area::default_area(), "still the default");
     }
 
     #[test]

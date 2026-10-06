@@ -27,6 +27,26 @@ pub trait Target {
     fn region_id(&self) -> String;
 }
 
+/// The target of a page that has nothing of its own to bind (a junction that cannot be drawn): the menu
+/// still works, and what it chooses is kept for the pages that do.
+#[derive(Default)]
+pub struct Bare {
+    region: std::cell::RefCell<String>,
+}
+
+impl Target for Bare {
+    fn set_units(&self, _: Units) {}
+
+    fn apply_region(&self, region: usize) -> bool {
+        *self.region.borrow_mut() = REGIONS[region].id.to_string();
+        true
+    }
+
+    fn region_id(&self) -> String {
+        self.region.borrow().clone()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Theme {
     Light,
@@ -513,5 +533,18 @@ mod tests {
         assert_eq!(r.vm.tab_key("t-changes", "Home").as_deref(), Some("t-space"));
         assert_eq!(r.vm.tab_key("t-space", "a"), None);
         assert_eq!(r.vm.tab(), "t-space");
+    }
+
+    #[test]
+    fn a_page_with_nothing_of_its_own_to_bind_still_has_the_menu_and_keeps_what_is_chosen() {
+        let (ports, _, storage) = test_ports();
+        storage.remember(REGION_KEY, "united-kingdom");
+        let vm = ShellVm::new(ports, Rc::new(Bare::default()), "details", tabs(), false);
+        assert_eq!(vm.region(), "united-kingdom");
+        vm.set_units(Units::Feet);
+        assert_eq!(vm.units(), Units::Feet);
+        vm.choose_region("germany");
+        assert_eq!(vm.region(), "germany");
+        assert_eq!(storage.recall(REGION_KEY).as_deref(), Some("germany"));
     }
 }

@@ -437,27 +437,6 @@ fn the_key_lists_the_pieces_in_the_plan() {
 }
 
 #[test]
-fn the_palette_offers_each_street_but_not_the_freeway_with_its_width() {
-    let s = shared(0);
-    let h = html(|| view! { <page::Palette vm=s.clone()/> }.into_any());
-    assert_eq!(count(&h, "class=\"chip\""), 3);
-    assert!(h.contains("Sample Street 1") && h.contains("18.0 m wide") && h.contains("30.0 m wide"));
-    assert!(!h.contains("Freeway"));
-    s.set_units(Units::Feet);
-    let h = html(|| view! { <page::Palette vm=s.clone()/> }.into_any());
-    assert!(h.contains("59.1 ft wide"));
-}
-
-#[test]
-fn the_samples_say_which_one_the_junction_is() {
-    let s = shared(1);
-    let h = html(|| view! { <page::Samples vm=s.clone()/> }.into_any());
-    assert_eq!(count(&h, "class=\"chip plain\""), 4);
-    assert_eq!(count(&h, "aria-pressed=\"true\""), 1);
-    assert!(h.contains("Street and lane") && h.contains("3 streets") && h.contains("Five ways"));
-}
-
-#[test]
 fn the_plan_is_a_labelled_group_holding_a_picture_of_the_junction() {
     let s = shared(0);
     let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());

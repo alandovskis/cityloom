@@ -12,15 +12,14 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::junction::model::{self as junction, ALL_WAY_STOP, Arm, Junction, PRIORITY, SIGNAL, State};
+use crate::junction::model::{self as junction, Arm, Junction, State};
+#[cfg(test)]
+use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
 use crate::shared::catalogue::{KINDS, REGIONS, SAMPLES, Side};
 use crate::street::model::{Editor, Street};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
 const SAVE_VERSION: u32 = 1;
-
-/// Streets wider than this get a refuge island in their crossings to start with.
-const ISLAND_ROW_MM: i32 = 24_000;
 
 /// What a place is called when it is not the sample city's numbering.
 pub(super) struct Names {
@@ -40,10 +39,12 @@ pub(super) struct NodeDef {
     pub(super) names: Option<Names>,
 }
 
+#[cfg(test)]
 const fn junction_at(x_m: i32, y_m: i32, control: usize, corner_mm: i32) -> NodeDef {
     NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm, names: None }
 }
 
+#[cfg(test)]
 const fn gate_at(x_m: i32, y_m: i32) -> NodeDef {
     NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0, names: None }
 }
@@ -66,15 +67,21 @@ pub(super) struct EdgeDef {
     pub(super) shape: Option<Vec<(i32, i32)>>,
 }
 
+#[cfg(test)]
 const fn street(a: usize, b: usize, street: usize) -> EdgeDef {
     EdgeDef { a, b, street, name: None, section: None, headings: None, shape: None }
 }
 
+#[cfg(test)]
 const STREET: usize = 0;
+#[cfg(test)]
 const AVENUE: usize = 1;
+#[cfg(test)]
 const LANE: usize = 2;
+#[cfg(test)]
 const FREEWAY: usize = 3;
 
+#[cfg(test)]
 #[rustfmt::skip]
 const NODES: [NodeDef; 21] = [
     gate_at(20, 340),                           //  0 avenue, west
@@ -100,6 +107,7 @@ const NODES: [NodeDef; 21] = [
     gate_at(900, 660),                          // 20 freeway, east
 ];
 
+#[cfg(test)]
 #[rustfmt::skip]
 const EDGES: [EdgeDef; 23] = [
     street(0, 1, AVENUE),   //  1
@@ -128,6 +136,7 @@ const EDGES: [EdgeDef; 23] = [
 ];
 
 /// The map name of the city.
+#[cfg(test)]
 pub const NAME: &str = "Sample city";
 
 /// Node and street uids are their place in the tables above, counting from 1.
@@ -198,7 +207,8 @@ fn separate(b: &mut [i32]) {
 }
 
 impl Layout {
-    /// The sample city's network.
+    /// The hand-made city the tests are written against. It is not part of the app.
+    #[cfg(test)]
     pub fn sample() -> Layout {
         Layout { name: NAME.to_string(), side: Side::Right, nodes: NODES.into_iter().collect(), edges: EDGES.into_iter().collect(), origin_m: None }
     }
@@ -306,11 +316,6 @@ impl Layout {
                 arm.edge = e as u32 + 1;
                 arm.corner_mm = def.corner_mm;
                 arm.section = streets.get(&arm.edge).map(|s| seen_from(self, e, node, s));
-                if arm.row_mm() >= ISLAND_ROW_MM
-                    && let Some(c) = arm.crossing.as_mut()
-                {
-                    c.island = true;
-                }
                 arm
             })
             .collect();
@@ -391,6 +396,7 @@ fn seen_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Stre
     if layout.edges[edge].a == node { street.clone() } else { street.reversed() }
 }
 
+#[cfg(test)]
 impl Default for City {
     fn default() -> Self {
         City::new()
@@ -398,8 +404,9 @@ impl Default for City {
 }
 
 impl City {
-    /// The city as first laid out: every street a sample, every junction
-    /// generated from the streets that meet there.
+    /// The hand-made city the tests are written against, as first laid out: every street a sample, every
+    /// junction generated from the streets that meet there. It is not part of the app.
+    #[cfg(test)]
     pub fn new() -> City {
         City::on(Layout::sample())
     }
@@ -431,8 +438,9 @@ impl City {
         City { layout, streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions }
     }
 
-    /// The city as saved, or as first laid out for any part of the save that
+    /// The hand-made city as saved, or as first laid out for any part of the save that
     /// cannot be used. Not an error: a stale or damaged save just starts over.
+    #[cfg(test)]
     pub fn load(json: &str) -> City {
         City::load_on(Layout::sample(), json)
     }
@@ -808,6 +816,20 @@ mod tests {
         let left = REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap();
         let v = City::new().view(left);
         assert_eq!(v.failing, 0, "{:?}", v.nodes.iter().filter(|n| !n.ok).map(|n| (&n.name, &n.failing)).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn a_junction_is_laid_out_without_refuge_islands_whatever_the_width() {
+        let city = City::new();
+        let mut crossings = 0;
+        for n in 0..city.layout.nodes.len() {
+            let Some(j) = city.junction_editor(node_uid(n), 0) else { continue };
+            for c in j.current().arms.iter().filter_map(|a| a.crossing) {
+                crossings += 1;
+                assert!(!c.island, "node {n} starts with an island");
+            }
+        }
+        assert!(crossings > 0);
     }
 
     #[test]

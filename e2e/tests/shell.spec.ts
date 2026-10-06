@@ -1,14 +1,29 @@
 // What every page shares: the settings menu, the sidebars and the notes tabs.
 // The same checks run on each page.
 
-import { expect, live, test } from "./fixtures";
+import type { Page } from "@playwright/test";
 
+import { expect, live, openJunction, openStreet, test } from "./fixtures";
+
+// The editors are reached from the map, as a person does.
 const PAGES = [
-  { name: "map", url: "/map.html", firstTab: "t-checks", secondTab: "t-changes", details: "Places hidden." },
-  { name: "street", url: "/street.html", firstTab: "t-space", secondTab: "t-checks", details: "Piece details hidden." },
+  {
+    name: "map",
+    open: (page: Page) => page.goto("/map.html"),
+    firstTab: "t-checks",
+    secondTab: "t-changes",
+    details: "Places hidden.",
+  },
+  {
+    name: "street",
+    open: (page: Page) => openStreet(page),
+    firstTab: "t-space",
+    secondTab: "t-checks",
+    details: "Piece details hidden.",
+  },
   {
     name: "junction",
-    url: "/intersection.html",
+    open: (page: Page) => openJunction(page),
     firstTab: "t-space",
     secondTab: "t-checks",
     details: "Details hidden.",
@@ -18,7 +33,7 @@ const PAGES = [
 for (const p of PAGES) {
   test.describe(`the shell on the ${p.name} page`, () => {
     test.beforeEach(async ({ page }) => {
-      await page.goto(p.url);
+      await p.open(page);
       await expect(page.locator("#region option")).toHaveCount(6);
     });
 

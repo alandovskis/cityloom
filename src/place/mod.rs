@@ -103,11 +103,7 @@ pub fn prepare_city() -> js_sys::Promise {
     use crate::shared::platform::browser_ports;
     js_sys::Promise::new(&mut |resolve, _| {
         let ports = browser_ports();
-        let Some(area) = CityStore::current_area(&*ports.storage) else {
-            let _ = resolve.call1(&wasm_bindgen::JsValue::NULL, &wasm_bindgen::JsValue::from_str(""));
-            return;
-        };
-        let store = CityStore::for_area(ports.storage.clone(), area);
+        let store = CityStore::current(ports.storage.clone());
         let announcer = ports.announcer.clone();
         loader::Loader::new(ports).load(&store, move |result| {
             let problem = result.err().unwrap_or_default();

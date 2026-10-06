@@ -132,9 +132,6 @@ body.home {
   border-radius: 12px;
   font-size: 16px;
 }
-.hero-link {
-  font-weight: 600;
-}
 
 .hero-facts {
   display: flex;

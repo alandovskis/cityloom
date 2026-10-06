@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import type { Page } from "@playwright/test";
 
-import { expect, live, STREET, test } from "./fixtures";
+import { expect, live, openStreet, test } from "./fixtures";
 
 const CORS = { "access-control-allow-origin": "*" };
 const EXTRACT = fileURLToPath(new URL("../../osm_import/tests/data/kreuzberg.osm", import.meta.url));
@@ -152,23 +152,22 @@ test.describe("the home page", () => {
     await expect(page.locator("#search")).toBeFocused();
   });
 
-  test("the way into the map and into a new street are one press away", async ({ page }) => {
+  test("the way into the map is one press away, and there is no way into an editor without a place", async ({
+    page,
+  }) => {
     await page.getByRole("link", { name: "Open the city map" }).click();
     await expect(page).toHaveURL(/map\.html$/);
     await page.goBack();
-    await page.getByRole("link", { name: "Start a new street" }).click();
-    await expect(page).toHaveURL(/street\.html$/);
+    await expect(page.locator('a[href="street.html"], a[href="intersection.html"]')).toHaveCount(0);
   });
 
-  test("the top bar links to the editors and the brand stays home", async ({ page }) => {
+  test("the top bar links to the map and the brand stays home", async ({ page }) => {
     await expect(page.locator('.surfaces a[href="map.html"]')).toBeVisible();
-    await expect(page.locator('.surfaces a[href="street.html"]')).toBeVisible();
-    await expect(page.locator('.surfaces a[href="intersection.html"]')).toBeVisible();
     await expect(page.locator(".brand")).toHaveAttribute("href", "index.html");
   });
 
   test("shows the city behind the card, which cannot be pressed or reached", async ({ page }) => {
-    await expect(page.locator(".hero-map #map .m-jc")).toHaveCount(9);
+    expect(await page.locator(".hero-map #map .m-jc").count()).toBeGreaterThan(5);
     await expect(page.locator(".hero-map")).toHaveAttribute("inert", "");
     await expect(page.locator(".hero-map")).toHaveAttribute("aria-hidden", "true");
     const reachable = await page
@@ -191,7 +190,8 @@ test.describe("the home page", () => {
     const west = await page
       .locator(".hero-map #map .m-jc")
       .evaluateAll((els) => Math.min(...els.map((e) => e.getBoundingClientRect().left)));
-    expect(west).toBeGreaterThan(card.x + card.width);
+    // A junction's marker reaches a few pixels beyond its centre, which is what the city is fitted by.
+    expect(west).toBeGreaterThan(card.x + card.width - 4);
     const east = await page
       .locator(".hero-map #map .m-jc")
       .evaluateAll((els) => Math.max(...els.map((e) => e.getBoundingClientRect().right)));
@@ -200,16 +200,18 @@ test.describe("the home page", () => {
   });
 
   test("says how the city stands, and says so when a place needs attention", async ({ page }) => {
-    await expect(page.locator(".hero-facts")).toContainText("Sample city: 9 junctions, 23 streets.");
+    await expect(page.locator(".hero-facts")).toContainText(
+      /^Plateau Mont-Royal, Montréal: \d+ junctions, \d+ streets\./,
+    );
     await expect(page.locator(".hero-facts")).toContainText("Every check passes.");
     await expect(page.locator(".hero-facts .tick")).toBeVisible();
-    await page.goto(`/street.html?street=${STREET}`);
+    await openStreet(page);
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("+");
     await expect(live(page)).toContainText("Resize");
     await page.goto("/");
-    await expect(page.locator(".hero-facts.bad")).toContainText("needs attention");
+    await expect(page.locator(".hero-facts.bad")).toContainText(/needs? attention/);
     await expect(page.locator(".hero-facts .tick")).toHaveCount(0);
   });
 
