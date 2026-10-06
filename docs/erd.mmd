@@ -13,7 +13,8 @@ erDiagram
     EDGE_DEF |o--o| STREET : "section (imported)"
     EDGE_DEF }o--|| CATALOGUE_STREET : "street (sample idx)"
 
-    STREET ||--o{ SEGMENT : segments
+    STREET ||--|{ STREET_REVISION : "revisions (oldest first)"
+    STREET_REVISION ||--o{ SEGMENT : segments
     STREET }o--|| CATALOGUE_STREET : "sample"
     SEGMENT ||--|{ SEGMENT_TIMES : "times of day (windows never overlap, cover the day)"
     SEGMENT_TIMES }o--|| SEGMENT_KIND : kind
@@ -61,7 +62,11 @@ erDiagram
         usize sample FK
         string name "optional"
         i32 row_mm
+        usize current "revision shown; undo and redo move it"
         u32 next_uid
+    }
+    STREET_REVISION {
+        string label "what the change did"
     }
     SEGMENT {
         u32 uid
