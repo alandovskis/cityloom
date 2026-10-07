@@ -31,3 +31,7 @@ e2e/playwright-report/
 
 # Planetiler's downloaded sources (Natural Earth, water polygons), fetched by scripts/basemap_tiles.py.
 /data/
+
+# Rendered from docs/erd.mmd (mmdc -i docs/erd.mmd -o docs/erd.svg; the .png with -s 2)
+docs/erd.svg
+docs/erd.png
