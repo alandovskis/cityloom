@@ -15,7 +15,9 @@ use serde::{Deserialize, Serialize};
 use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
-use crate::shared::catalogue::{KINDS, REGIONS, SAMPLES, Side, StreetClass};
+#[cfg(test)]
+use crate::shared::catalogue::SAMPLES;
+use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass};
 use crate::street::model::{Editor, Street};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
@@ -357,7 +359,7 @@ impl Layout {
             .iter()
             .enumerate()
             .map(|(i, &(b, e))| {
-                let mut arm = Arm::new(i as u32 + 1, 0, b, 0);
+                let mut arm = Arm::new(i as u32 + 1, b, 0);
                 arm.edge = e as u32 + 1;
                 arm.corner_mm = def.corner_mm;
                 arm.section = streets.get(&arm.edge).map(|s| seen_from(self, e, node, s));
@@ -389,8 +391,7 @@ impl Layout {
             && (0..=MAX_RING_MM).contains(&s.ring_extra_mm)
             && s.cycle.is_none_or(|c| (CYCLE_MIN_MM..=CYCLE_MAX_MM).contains(&c))
             && s.arms.iter().all(|a| {
-                a.street < SAMPLES.len()
-                    && a.bearing % BEARING_STEP == 0
+                a.bearing % BEARING_STEP == 0
                     && (0..360).contains(&a.bearing)
                     && (MIN_CORNER_MM..=MAX_CORNER_MM).contains(&a.corner_mm)
                     && a.offset_mm.abs() <= 30_000

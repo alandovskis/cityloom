@@ -12,7 +12,6 @@ use crate::junction::read_model::{CrossingView, JView};
 use crate::junction::turns::{compass, turn_glyph, turn_name, turn_word};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
-use crate::shared::catalogue::SAMPLES;
 use crate::shared::units::Units;
 
 // ---- text the panel is made of ---------------------------------------------
@@ -754,7 +753,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
             format!("Up to {} either way. Looking out from the junction.", u.length(max))
         }),
     };
-    let street = if linked {
+    let street = {
         let edge = w.view_now().arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.edge);
         section(
             "i-h-street",
@@ -762,30 +761,6 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
             view! {
                 <a class="btn" href=format!("street.html?street={edge}")>"Open the cross-section"</a>
                 <p class="insp-range">"This street belongs to the city. Its layout is edited in the street editor, and changes there show here."</p>
-            },
-        )
-        .into_any()
-    } else {
-        section(
-            "i-h-street",
-            "Street",
-            view! {
-                <select
-                    aria-labelledby="i-h-street"
-                    on:change=move |ev| {
-                        if let Ok(i) = event_target_value(&ev).parse::<usize>() {
-                            w.edit(|j| j.set_street(uid, i));
-                        }
-                    }
-                >
-                    {SAMPLES
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, s)| !s.class.is_freeway())
-                        .map(|(i, s)| view! { <option value=i.to_string() prop:selected=move || w.arm(uid, |a| a.street_index == i).unwrap_or(false)>{s.name}</option> })
-                        .collect_view()}
-                </select>
-                <p class="insp-range">"The street's own layout is edited in the street editor."</p>
             },
         )
         .into_any()

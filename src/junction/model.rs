@@ -3,7 +3,7 @@
 //! Pure Rust like `model.rs`, so it is tested natively. Lengths are integer
 //! millimetres and angles integer degrees. Everything here is synthetic.
 
-use crate::shared::catalogue::{KINDS, Material, REGIONS, SAMPLES, Side, is_roadway};
+use crate::shared::catalogue::{KINDS, Material, REGIONS, Side, StreetClass, is_roadway};
 use serde::{Deserialize, Serialize};
 
 use crate::junction::geometry::gap;
@@ -133,9 +133,6 @@ pub struct Lane {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Arm {
     pub uid: u32,
-    /// Index into `SAMPLES`: the street whose section this arm reads, when it
-    /// does not come from a city.
-    pub street: usize,
     /// The city street this arm is, or 0 when it is not part of a city.
     #[serde(default)]
     pub edge: u32,
@@ -248,13 +245,6 @@ pub struct Profile {
     pub park: [i32; 2],
 }
 
-pub fn profile(street: usize, region: usize) -> Profile {
-    let street = street.min(SAMPLES.len() - 1);
-    let mut e = Editor::new(street);
-    e.set_region(region);
-    read_profile(&e.view(), SAMPLES[street].name.to_string())
-}
-
 /// The profile of a street a city holds, with its lanes written for the side
 /// of the road of `region`.
 pub fn profile_of(street: &Street, region: usize) -> Profile {
@@ -264,10 +254,9 @@ pub fn profile_of(street: &Street, region: usize) -> Profile {
 
 impl Arm {
     /// An arm with the defaults a street starts with at a junction.
-    pub fn new(uid: u32, street: usize, bearing: i32, offset_mm: i32) -> Arm {
+    pub fn new(uid: u32, bearing: i32, offset_mm: i32) -> Arm {
         Arm {
             uid,
-            street,
             edge: 0,
             section: None,
             bearing,
@@ -290,16 +279,14 @@ impl Arm {
         // Reading a street's profile builds an editor on it, and a junction asks for it of every arm
         // many times over, so what has been read is kept.
         thread_local! {
-            static READ: std::cell::RefCell<std::collections::HashMap<(usize, Option<Street>, usize), Profile>> = Default::default();
+            static READ: std::cell::RefCell<std::collections::HashMap<(Street, usize), Profile>> = Default::default();
         }
-        let key = (self.street, self.section.clone(), region);
+        let street = self.section.as_ref().expect("an arm carries the street it reads");
+        let key = (street.clone(), region);
         if let Some(p) = READ.with(|r| r.borrow().get(&key).cloned()) {
             return p;
         }
-        let p = match &self.section {
-            Some(s) => profile_of(s, region),
-            None => profile(self.street, region),
-        };
+        let p = profile_of(street, region);
         READ.with(|r| {
             let mut r = r.borrow_mut();
             if r.len() > 4096 {
@@ -310,17 +297,17 @@ impl Arm {
         p
     }
 
-    /// Which sample street this arm is, or began as.
-    pub fn street_index(&self) -> usize {
-        self.street.min(SAMPLES.len() - 1)
-    }
-
     pub fn street_name(&self) -> String {
-        self.section.as_ref().map_or_else(|| SAMPLES[self.street_index()].name.to_string(), Street::title)
+        self.section.as_ref().map_or_else(String::new, Street::title)
     }
 
     pub fn row_mm(&self) -> i32 {
-        self.section.as_ref().map_or(SAMPLES[self.street_index()].row_mm, |s| s.row_mm)
+        self.section.as_ref().map_or(0, |s| s.row_mm)
+    }
+
+    /// What sort of street the arm is.
+    pub fn class(&self) -> Option<StreetClass> {
+        self.section.as_ref().map(|s| s.class)
     }
 }
 
@@ -471,11 +458,8 @@ pub const JUNCTION_SAMPLES: [JunctionSample; 4] = [
 /// Why an edit was refused, in words for the resident.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Refusal {
-    NoRoomForStreet,
     NeedsThreeStreets,
-    LinkedNoAdd,
     LinkedNoRemove,
-    LinkedNoSwap,
     RoundaboutTooBig,
     BearingBlocked,
     LastWayOut,
@@ -486,12 +470,9 @@ pub enum Refusal {
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 12] = [
-        Refusal::NoRoomForStreet,
+    pub const ALL: [Refusal; 9] = [
         Refusal::NeedsThreeStreets,
-        Refusal::LinkedNoAdd,
         Refusal::LinkedNoRemove,
-        Refusal::LinkedNoSwap,
         Refusal::RoundaboutTooBig,
         Refusal::BearingBlocked,
         Refusal::LastWayOut,
@@ -503,11 +484,8 @@ impl Refusal {
 
     pub fn message(self) -> &'static str {
         match self {
-            Refusal::NoRoomForStreet => "There is no room for another street.",
             Refusal::NeedsThreeStreets => "A junction needs at least three streets.",
-            Refusal::LinkedNoAdd => "The streets here belong to the city, so none can be added.",
             Refusal::LinkedNoRemove => "The streets here belong to the city, so they cannot be removed.",
-            Refusal::LinkedNoSwap => "The streets here belong to the city, so they cannot be swapped.",
             Refusal::RoundaboutTooBig => "The streets are too wide to fit a roundabout.",
             Refusal::BearingBlocked => "That is too close to a neighbouring street, or leaves a gap wider than a straight road.",
             Refusal::LastWayOut => "A street has to keep at least one way out.",
@@ -644,8 +622,11 @@ impl Junction {
         self.linked
     }
 
-    fn fresh_arm(&self, uid: u32, street: usize, bearing: i32, offset_mm: i32) -> Arm {
-        Arm::new(uid, street, bearing, offset_mm)
+    /// An arm of a sample junction: it reads the sample street `sample`, laid out for the right-hand side.
+    fn fresh_arm(&self, uid: u32, sample: usize, bearing: i32, offset_mm: i32) -> Arm {
+        let mut arm = Arm::new(uid, bearing, offset_mm);
+        arm.section = Some(Street::sample(sample, Side::Right));
+        arm
     }
 
     pub fn current(&self) -> &State {
@@ -897,58 +878,6 @@ impl Junction {
         self.edit_why(why, label, |s| s.arms.iter_mut().find(|a| a.uid == uid).is_some_and(f))
     }
 
-    /// Adds a street at `bearing`, or at the middle of the widest gap when
-    /// `bearing` is negative. Returns its uid, or 0 when it does not fit.
-    pub fn add_arm(&mut self, street: usize, bearing: i32) -> u32 {
-        if self.linked {
-            self.refuse(Refusal::LinkedNoAdd);
-            return 0;
-        }
-        if street >= SAMPLES.len() || SAMPLES[street].class.is_freeway() {
-            self.refuse(Refusal::DoesNotFit);
-            return 0;
-        }
-        if self.current().arms.len() >= MAX_ARMS {
-            self.refuse(Refusal::NoRoomForStreet);
-            return 0;
-        }
-        let bearing = if bearing < 0 { widest_gap(&self.current().arms) } else { snap(bearing, BEARING_STEP).rem_euclid(360) };
-        let uid = self.next_uid;
-        let arm = self.fresh_arm(uid, street, bearing, 0);
-        let label = format!("Add {}", arm_name(&arm));
-        // A tight angle between streets needs a tighter corner to fit, so try
-        // smaller radii on the new corners before giving up.
-        for radius in [DEFAULT_CORNER_MM, 4_500, 3_000, 2_000, MIN_CORNER_MM] {
-            let mut arm = arm.clone();
-            arm.corner_mm = radius;
-            if self.edit(label.clone(), |s| {
-                s.arms.push(arm);
-                s.arms.sort_by_key(|a| a.bearing);
-                let i = s.arms.iter().position(|a| a.uid == uid).unwrap_or(0);
-                let before = (i + s.arms.len() - 1) % s.arms.len();
-                s.arms[before].corner_mm = s.arms[before].corner_mm.min(radius);
-                // Lanes that already serve a turn of the new street's kind take it too.
-                let new_bearing = s.arms[i].bearing;
-                let bearings: Vec<(u32, i32)> = s.arms.iter().map(|a| (a.uid, a.bearing)).collect();
-                for a in s.arms.iter_mut().filter(|a| a.uid != uid) {
-                    let class = turn_class(a.bearing, new_bearing);
-                    for l in &mut a.lanes {
-                        if l.to.iter().any(|t| bearings.iter().any(|(u, b)| u == t && turn_class(a.bearing, *b) == class)) {
-                            l.to.push(uid);
-                        }
-                    }
-                }
-                true
-            }) {
-                self.next_uid += 1;
-                self.selected = Target::Arm(uid);
-                return uid;
-            }
-        }
-        self.refuse(Refusal::NoRoomForStreet);
-        0
-    }
-
     pub fn remove_arm(&mut self, uid: u32) -> bool {
         let Some(a) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
         if self.linked {
@@ -1009,26 +938,6 @@ impl Junction {
             |a| format!("Corner after {}: {mm} mm radius", arm_name(a)),
             |a| {
                 a.corner_mm = mm;
-                true
-            },
-        )
-    }
-
-    pub fn set_street(&mut self, uid: u32, street: usize) -> bool {
-        if self.linked {
-            return self.refuse(Refusal::LinkedNoSwap);
-        }
-        if street >= SAMPLES.len() || SAMPLES[street].class.is_freeway() {
-            return self.refuse(Refusal::DoesNotFit);
-        }
-        self.arm_edit(
-            uid,
-            |a| format!("{} becomes {}", arm_name(a), SAMPLES[street].name),
-            |a| {
-                a.street = street;
-                a.offset_mm = 0;
-                a.lanes.clear();
-                a.bulb = [false, false];
                 true
             },
         )
@@ -1462,6 +1371,20 @@ pub fn valid(s: &State, region: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::catalogue::SAMPLES;
+
+    #[test]
+    fn an_arm_is_the_street_it_reads() {
+        let city = crate::city::model::City::new();
+        let node = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let j = city.junction_editor(node, 0).unwrap();
+        for a in &j.current().arms {
+            let section = a.section.as_ref().expect("a city arm carries its street");
+            assert_eq!(a.street_name(), section.title());
+            assert_eq!(a.row_mm(), section.row_mm);
+            assert_eq!(a.class(), Some(section.class));
+        }
+    }
 
     #[test]
     fn turn_classes_follow_the_angle() {
@@ -1484,6 +1407,17 @@ mod tests {
         // The stem of a T has no through: everything falls back to what exists.
         assert_eq!(default_uses(0, 1, LEFT | RIGHT), LEFT | RIGHT);
         assert_eq!(default_uses(1, 3, LEFT | RIGHT), LEFT | RIGHT);
+    }
+
+    /// The profile of sample street `sample`, laid out for the side of the road of `region`.
+    fn profile(sample: usize, region: usize) -> Profile {
+        profile_of(&Street::sample(sample, Side::Right), region)
+    }
+
+    /// Which sample street an arm of a sample junction reads.
+    fn sample_of(a: &Arm) -> usize {
+        let name = a.street_name();
+        SAMPLES.iter().position(|s| s.name == name).expect("an arm of a sample junction reads a sample street")
     }
 
     #[test]
@@ -1510,32 +1444,10 @@ mod tests {
     }
 
     #[test]
-    fn a_new_arm_finds_the_widest_gap() {
-        let mut j = Junction::new(1); // 90, 180, 270
-        let uid = j.add_arm(2, -1);
-        assert_ne!(uid, 0);
-        assert_eq!(j.arm(uid).unwrap().bearing, 0);
-        assert_eq!(j.current().arms.len(), 4);
-        assert_eq!(j.selected, Target::Arm(uid));
-    }
-
-    #[test]
-    fn a_street_squeezed_between_wide_ones_takes_tighter_corners() {
-        let mut j = Junction::new(0); // 0, 90, 180, 270: all gaps 90, first is 0 to 90
-        let uid = j.add_arm(2, -1);
-        assert_ne!(uid, 0, "there is room at 45 degrees with a smaller corner");
-        assert_eq!(j.arm(uid).unwrap().bearing, 45);
-        assert!(j.arm(uid).unwrap().corner_mm < DEFAULT_CORNER_MM);
-    }
-
-    #[test]
     fn arms_stay_between_three_and_five() {
         let mut j = Junction::new(1);
         let a = j.current().arms[0].uid;
         assert!(!j.remove_arm(a));
-        let mut j = Junction::new(3);
-        assert_eq!(j.add_arm(0, 0), 0);
-        assert_eq!(j.current().arms.len(), 5);
     }
 
     #[test]
@@ -1548,10 +1460,6 @@ mod tests {
         let mut t = Junction::new(1); // 90, 180, 270
         let south = t.current().arms[1].uid;
         assert!(!t.set_bearing(south, 60), "would leave a gap wider than 180");
-        let north = t.add_arm(2, 0);
-        assert_ne!(north, 0);
-        let east = t.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid;
-        assert!(!t.remove_arm(east) || t.current().arms.len() == 3);
     }
 
     #[test]
@@ -1616,14 +1524,14 @@ mod tests {
     #[test]
     fn a_narrow_street_takes_no_island() {
         let mut j = Junction::new(1); // Street, lane, street
-        let lane = j.current().arms.iter().find(|a| a.street == 2).unwrap().uid;
+        let lane = j.current().arms.iter().find(|a| sample_of(a) == 2).unwrap().uid;
         assert!(!j.set_island(lane, true), "8.4 m carriageway is too narrow");
     }
 
     #[test]
     fn a_lane_goes_to_streets_one_by_one_and_always_to_at_least_one() {
         let mut j = Junction::new(1); // street, lane (south), street
-        let lane = j.current().arms.iter().find(|a| a.street == 2).unwrap().uid;
+        let lane = j.current().arms.iter().find(|a| sample_of(a) == 2).unwrap().uid;
         let (e, w) = (arm_at(&j, 90), arm_at(&j, 270));
         assert_eq!(j.arm(lane).unwrap().lanes[0].to, vec![e, w], "the stem's one lane goes both ways");
         assert!(!j.set_lane_dest(lane, 0, e, true), "already goes there");
@@ -1758,18 +1666,19 @@ mod tests {
     }
 
     #[test]
-    fn a_lane_can_be_selected_and_is_dropped_when_it_goes() {
+    fn a_lane_can_be_selected_only_where_the_arm_has_it() {
         let mut j = Junction::new(0);
         let n = j.current().arms[0].uid;
         j.select(Target::Lane(n, 1));
         assert_eq!(j.selected, Target::Lane(n, 1));
         j.select(Target::Lane(n, 2));
         assert_eq!(j.selected, Target::None, "the avenue has two lanes in");
-        j.select(Target::Lane(n, 0));
-        assert!(j.set_street(n, 2)); // a lane has one lane in
-        assert_eq!(j.selected, Target::Lane(n, 0));
-        j.select(Target::Lane(n, 1));
-        assert_eq!(j.selected, Target::None);
+        let mut j = Junction::new(1); // street, lane (south), street
+        let lane = j.current().arms.iter().find(|a| sample_of(a) == 2).unwrap().uid;
+        j.select(Target::Lane(lane, 0));
+        assert_eq!(j.selected, Target::Lane(lane, 0));
+        j.select(Target::Lane(lane, 1));
+        assert_eq!(j.selected, Target::None, "a lane has one lane in");
     }
 
     #[test]
@@ -1778,7 +1687,7 @@ mod tests {
         assert!(j.set_region(3));
         assert!(!j.set_region(3));
         for a in &j.current().arms {
-            let p = profile(a.street, 3);
+            let p = profile(sample_of(a), 3);
             assert_eq!(a.lanes.len(), p.enter_x.len());
         }
     }
@@ -1787,7 +1696,6 @@ mod tests {
         let mut state = Junction::new(sample).current().clone();
         for a in &mut state.arms {
             a.edge = a.uid;
-            a.section = Some(Street::sample(a.street, Side::Right));
         }
         Junction::from_city("Test junction", &state, &state, 0).expect("the sample draws")
     }
@@ -1798,8 +1706,6 @@ mod tests {
         assert!(j.is_linked());
         let uid = j.current().arms[0].uid;
         assert!(!j.remove_arm(uid));
-        assert!(!j.set_street(uid, 2));
-        assert_eq!(j.add_arm(2, 45), 0);
         assert_eq!(j.view().name, "Test junction");
         assert!(j.view().linked);
         // What it keeps for the city has no street attached.
@@ -1818,26 +1724,29 @@ mod tests {
         narrow.segments.retain(|g| KINDS[g.kind].id != "parking");
         for a in &mut state.arms {
             a.edge = a.uid;
-            a.section = Some(if a.street == 0 { narrow.clone() } else { Street::sample(a.street, Side::Right) });
+            if sample_of(a) == 0 {
+                a.section = Some(narrow.clone());
+            }
         }
         let j = Junction::from_city("Test", &state, &state, 0).unwrap();
-        let arm = j.current().arms.iter().find(|a| a.street == 0).unwrap();
+        let arm = j.current().arms.iter().find(|a| sample_of(a) == 0).unwrap();
         assert_eq!(arm.profile(0).park, [0, 0]);
         assert!(profile(0, 0).park != [0, 0]);
     }
 
     #[test]
     fn earlier_changes_show_as_one_revision_and_start_over_clears_them() {
-        let today = linked(0).snapshot();
+        let base = linked(0);
+        // What the city holds has no street attached; it attaches them again as it opens the junction.
+        let attach = |s: &mut State| {
+            for a in &mut s.arms {
+                a.section = base.arm(a.uid).and_then(|b| b.section.clone());
+            }
+        };
+        let mut today = base.snapshot();
+        attach(&mut today);
         let mut state = today.clone();
         state.control = PRIORITY;
-        for a in &mut state.arms {
-            a.section = Some(Street::sample(a.street, Side::Right));
-        }
-        let mut today = today;
-        for a in &mut today.arms {
-            a.section = Some(Street::sample(a.street, Side::Right));
-        }
         let mut j = Junction::from_city("Test", &today, &state, 0).unwrap();
         assert!(j.changed());
         assert_eq!(j.revisions().collect::<Vec<_>>(), ["Earlier changes"]);
@@ -1977,13 +1886,6 @@ mod tests {
     }
 
     #[test]
-    fn a_sixth_street_has_no_room() {
-        let mut j = Junction::new(3); // five ways
-        assert_eq!(j.add_arm(0, -1), 0);
-        assert_eq!(j.refusal(), Some(Refusal::NoRoomForStreet));
-    }
-
-    #[test]
     fn a_junction_keeps_three_streets() {
         let mut j = Junction::new(1);
         let uid = j.current().arms[0].uid;
@@ -1992,15 +1894,11 @@ mod tests {
     }
 
     #[test]
-    fn the_streets_of_a_city_junction_cannot_be_added_removed_or_swapped() {
+    fn the_streets_of_a_city_junction_cannot_be_removed() {
         let mut j = linked(1); // three streets: removal is also below the least
         let uid = j.current().arms[0].uid;
         assert!(!j.remove_arm(uid));
         assert_eq!(j.refusal(), Some(Refusal::LinkedNoRemove));
-        assert_eq!(j.add_arm(0, -1), 0);
-        assert_eq!(j.refusal(), Some(Refusal::LinkedNoAdd));
-        assert!(!j.set_street(uid, 2));
-        assert_eq!(j.refusal(), Some(Refusal::LinkedNoSwap));
     }
 
     #[test]
@@ -2037,7 +1935,7 @@ mod tests {
     #[test]
     fn a_narrow_road_has_no_island_and_a_street_without_parking_no_bulge() {
         let mut j = Junction::new(1); // the stem is Sample Lane 3: 8.4 m road, parking on one side
-        let lane = j.current().arms.iter().find(|a| a.street == 2).unwrap().uid;
+        let lane = j.current().arms.iter().find(|a| sample_of(a) == 2).unwrap().uid;
         assert!(!j.set_island(lane, true));
         assert_eq!(j.refusal(), Some(Refusal::IslandRoadTooNarrow));
         assert!(!j.set_bulb(lane, 0, true));
@@ -2071,7 +1969,6 @@ mod tests {
             ("bearing", Box::new(move |j| j.set_bearing(e, 10))),
             ("offset", Box::new(move |j| j.set_offset(n, 99_000))),
             ("corner", Box::new(move |j| j.set_corner(n, 99_000))),
-            ("street", Box::new(move |j| j.set_street(n, 99))),
             ("setback", Box::new(move |j| j.set_setback(n, 99_000))),
             ("crossing width", Box::new(move |j| j.set_crossing_width(n, 99_000))),
             ("bulb side", Box::new(move |j| j.set_bulb(n, 2, true))),
