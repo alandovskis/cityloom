@@ -1,0 +1,125 @@
+erDiagram
+    METROPOLITAN_REGION ||--|| NETWORK : "network"
+
+    NETWORK ||--o{ STREET : "streets (edges, by uid)"
+    NETWORK ||--o{ JUNCTION : "junctions (nodes, by uid)"
+    JUNCTION ||--|{ JUNCTION_REVISION : "revisions (oldest first)"
+    STREET }o--|| JUNCTION : "a"
+    STREET }o--|| JUNCTION : "b"
+
+    STREET ||--|{ STREET_REVISION : "revisions (oldest first; the first is the street as first laid out)"
+    STREET_REVISION ||--o{ SEGMENT : segments
+    SEGMENT ||--|{ SEGMENT_TIMES : "times of day (windows never overlap, cover the day)"
+    SEGMENT_TIMES }o--|| SEGMENT_KIND : kind
+    SEGMENT }o--|| MATERIAL : material
+    SEGMENT }o--o| CURB : curb
+    SEGMENT_TIMES }o--|| MATERIAL : material
+    SEGMENT_KIND }o--|{ MATERIAL : "allowed materials (first is default)"
+    SEGMENT_KIND }o--o{ CURB : "allowed curbs"
+    SEGMENT_KIND }o--|{ MODE : "serves (one or more)"
+
+    JUNCTION_REVISION ||--o{ ARM : arms
+    ARM }o--o| STREET : "edge (uid; 0 = sample)"
+    ARM ||--o{ LANE : lanes
+    ARM |o--o| CROSSING : crossing
+
+    METROPOLITAN_REGION {
+        string name
+    }
+    NETWORK {
+        Side side
+        f64x2 origin_m "optional lon/lat anchor"
+    }
+    STREET {
+        usize a FK "end junction"
+        usize b FK "end junction"
+        usize sample FK
+        string name "optional"
+        f64x2 headings "optional; leaving a and b"
+        i32x2_list shape "optional centreline mm, a to b"
+        i32 row_mm
+        usize current "revision shown; undo and redo move it"
+        u32 next_uid
+    }
+    STREET_REVISION {
+        string label "what the change did"
+    }
+    SEGMENT {
+        u32 uid
+        i32 width_mm
+        string material FK
+        string curb FK "optional"
+        Direction direction "optional"
+        bool tram
+    }
+    SEGMENT_TIMES {
+        string kind FK
+        string material FK
+        Direction direction "optional"
+        i32 from_min "minute of day, included"
+        i32 to_min "excluded; before from_min wraps midnight"
+    }
+    SEGMENT_KIND {
+        string id PK "sidewalk, planting, bike, travel, bus, parking, median, loading, shoulder, bikerack, bikeshare, pole, busshelter, busstation, bench, terrace, streetlamp"
+        string name
+        string mark "two-letter sheet mark"
+        i32 default_mm
+        i32 min_mm
+        i32 max_mm
+        i32 people_per_hour_per_m "synthetic"
+        bool has_curb
+        DirectionRule direction_rule "none, required, optional"
+        bool shares_road "may change type through the day"
+    }
+    MODE {
+        string id PK "foot, bike, transit, vehicle, green"
+        string label
+    }
+    MATERIAL {
+        string id PK "asphalt, concrete, permeable, brick, grass, planted, gravel, trees"
+        string name
+    }
+    CURB {
+        string id PK "granite, concrete, asphalt, planted, kassel, bikefriendly, island"
+        string name
+    }
+    JUNCTION {
+        i32 x_mm
+        i32 y_mm
+        i32 corner_mm
+        usize sample FK
+        bool linked "a place in the network: its streets and name are the network's"
+        usize current "revision shown; undo and redo move it"
+        u32 next_uid
+    }
+    JUNCTION_REVISION {
+        string label
+        Control control
+        i32 ring_extra_mm
+        u32x2 bus "optional"
+        i32 cycle "optional"
+    }
+    ARM {
+        u32 uid
+        usize street FK
+        u32 edge FK
+        i32 bearing
+        i32 offset_mm
+        i32 corner_mm
+        bool bulb_x2
+        u32_list banned
+        bool bus_lane
+        Approach approach
+        i32 approach_mm
+        BusStop stop
+        TurnRule rule
+        bool filter
+    }
+    LANE {
+        u32_list to "arm uids reachable"
+    }
+    CROSSING {
+        i32 setback_mm
+        i32 width_mm
+        bool island
+    }
