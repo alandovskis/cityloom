@@ -72,7 +72,7 @@ impl Street {
 }
 
 impl Editor {
-    /// A street laid out on one of the sample profiles, which the imported streets without a section of their own start from.
+    /// A street laid out on one of the sample profiles.
     pub fn new(sample: usize) -> Editor {
         let mut e = Editor {
             class: StreetClass::Local,

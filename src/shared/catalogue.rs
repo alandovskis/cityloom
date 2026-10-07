@@ -95,8 +95,6 @@ pub enum Side {
     Right,
 }
 
-/// A region carries the rules its streets share. For now that is which side
-/// of the road traffic keeps to. Synthetic placeholder list.
 /// What sort of street a road is. It decides what a street may be: a motorway is limited-access.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -114,6 +112,8 @@ impl StreetClass {
     }
 }
 
+/// A region carries the rules its streets share. For now that is which side
+/// of the road traffic keeps to. Synthetic placeholder list.
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct Region {
     pub id: &'static str,

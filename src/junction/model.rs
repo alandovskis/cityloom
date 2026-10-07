@@ -460,7 +460,7 @@ impl Refusal {
 
 pub struct Junction {
     /// Set when the junction is a place in a city: its streets are the city's
-    /// and its name is the city's, so streets cannot be added, removed or swapped.
+    /// and its name is the city's, so its streets cannot be removed.
     linked: bool,
     name: String,
     /// Index into `REGIONS`. A setting of the sheet, not part of the history.

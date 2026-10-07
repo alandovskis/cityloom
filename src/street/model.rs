@@ -174,7 +174,7 @@ fn flip(d: &mut Option<usize>) {
     }
 }
 
-/// One piece of a street built from outside the catalogue's samples.
+/// One piece of a street, as read from a road of the network.
 #[derive(Clone, Copy, Debug)]
 pub struct Piece {
     pub kind: usize,
