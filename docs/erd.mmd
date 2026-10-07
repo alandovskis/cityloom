@@ -9,7 +9,6 @@ erDiagram
 
     STREET ||--|{ STREET_REVISION : "revisions (oldest first; the first is the street as first laid out)"
     STREET_REVISION ||--o{ SEGMENT : segments
-    STREET }o--|| CATALOGUE_STREET : "sample"
     SEGMENT ||--|{ SEGMENT_TIMES : "times of day (windows never overlap, cover the day)"
     SEGMENT_TIMES }o--|| SEGMENT_KIND : kind
     SEGMENT }o--|| MATERIAL : material
@@ -21,7 +20,6 @@ erDiagram
 
     JUNCTION_REVISION ||--o{ ARM : arms
     ARM }o--o| STREET : "edge (uid; 0 = sample)"
-    ARM }o--|| CATALOGUE_STREET : "street"
     ARM ||--o{ LANE : lanes
     ARM |o--o| CROSSING : crossing
 
