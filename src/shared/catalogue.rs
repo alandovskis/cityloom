@@ -1,4 +1,4 @@
-//! Placeholder segment catalogue, outcome rates and sample streets.
+//! Placeholder segment catalogue and outcome rates.
 //!
 //! Everything here is synthetic. The catalogue, the widths and the
 //! `people_per_hour_per_m` rates are stand-ins until real data is chosen.
@@ -404,62 +404,6 @@ pub const KINDS: [Kind; 17] = [
 pub fn kind_index(id: &str) -> Option<usize> {
     KINDS.iter().position(|k| k.id == id)
 }
-
-pub struct Sample {
-    pub name: &'static str,
-    pub row_mm: i32,
-    pub class: StreetClass,
-    pub segments: &'static [(&'static str, i32)],
-}
-
-pub const SAMPLES: [Sample; 4] = [
-    Sample {
-        name: "Sample Street 1",
-        row_mm: 18000,
-        class: StreetClass::Local,
-        segments: &[("sidewalk", 3300), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 3300)],
-    },
-    Sample {
-        name: "Sample Avenue 2",
-        row_mm: 30000,
-        class: StreetClass::Arterial,
-        segments: &[
-            ("sidewalk", 3500),
-            ("planting", 1500),
-            ("parking", 2400),
-            ("travel", 3300),
-            ("travel", 3300),
-            ("median", 2000),
-            ("travel", 3300),
-            ("travel", 3300),
-            ("parking", 2400),
-            ("planting", 1500),
-            ("sidewalk", 3500),
-        ],
-    },
-    Sample {
-        name: "Sample Lane 3",
-        row_mm: 12000,
-        class: StreetClass::Local,
-        segments: &[("sidewalk", 2100), ("travel", 3000), ("travel", 3000), ("parking", 2400), ("sidewalk", 1500)],
-    },
-    Sample {
-        name: "Sample Freeway 4",
-        row_mm: 30600,
-        class: StreetClass::Motorway,
-        segments: &[
-            ("shoulder", 3000),
-            ("travel", 3600),
-            ("travel", 3600),
-            ("travel", 3600),
-            ("median", 3000),
-            ("travel", 3600),
-            ("travel", 3600),
-            ("travel", 3600),
-            ("shoulder", 3000),
-        ],
-    },
-];
 
 /// Whether a kind of piece is part of the roadway, as opposed to the footway or the green.
 pub fn is_roadway(kind: usize) -> bool {

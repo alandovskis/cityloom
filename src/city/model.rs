@@ -15,9 +15,9 @@ use serde::{Deserialize, Serialize};
 use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
-#[cfg(test)]
-use crate::shared::catalogue::SAMPLES;
 use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass};
+#[cfg(test)]
+use crate::street::model::SAMPLES;
 use crate::street::model::{Editor, Street};
 
 /// Bump when what is saved changes shape; an older save is then left behind.

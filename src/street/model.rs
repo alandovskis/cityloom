@@ -3,8 +3,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, SAMPLES, Side, StreetClass, kind_index};
+use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, Side, StreetClass, kind_index};
 use crate::street::measures;
+
+#[cfg(test)]
+mod fixtures;
+#[cfg(test)]
+pub use fixtures::SAMPLES;
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -212,15 +217,6 @@ impl Street {
         self.name.clone().unwrap_or_default()
     }
 
-    /// The sample street laid out for a side of the road.
-    pub fn sample(sample: usize, side: Side) -> Street {
-        let sample = sample.min(SAMPLES.len() - 1);
-        let mut e = Editor::new(sample);
-        let region = REGIONS.iter().position(|r| r.drive_side == side).unwrap_or(0);
-        e.set_region(region);
-        e.snapshot()
-    }
-
     /// The same street with its lanes written for `side`: running the other
     /// way when the side differs.
     pub fn for_side(&self, side: Side) -> Street {
@@ -330,50 +326,6 @@ fn total(segments: &[Segment]) -> i32 {
 }
 
 impl Editor {
-    /// A street laid out on one of the sample profiles, which the imported streets without a section of their own start from.
-    pub fn new(sample: usize) -> Editor {
-        let mut e = Editor {
-            class: StreetClass::Local,
-            street_name: None,
-            region: 0,
-            time_min: 12 * 60,
-            row_mm: 0,
-            states: Vec::new(),
-            cursor: 0,
-            next_uid: 1,
-            selected: None,
-            gesture: None,
-            pending_label: String::new(),
-        };
-        e.load_sample(sample);
-        e
-    }
-
-    pub fn load_sample(&mut self, sample: usize) {
-        let sample = sample.min(SAMPLES.len() - 1);
-        let s = &SAMPLES[sample];
-        self.class = s.class;
-        self.street_name = Some(s.name.to_string());
-        self.row_mm = s.row_mm;
-        self.next_uid = 1;
-        let segments = s
-            .segments
-            .iter()
-            .map(|(id, w)| {
-                let uid = self.next_uid;
-                self.next_uid += 1;
-                Segment::new(uid, kind_index(id).expect("sample uses catalogue kinds"), *w)
-            })
-            .collect::<Vec<Segment>>();
-        let mut segments = segments;
-        // Driving lanes on the left half of the street run away, the rest toward.
-        default_directions(&mut segments, REGIONS[self.region].drive_side);
-        self.states = vec![State { label: "Street today".into(), segments }];
-        self.cursor = 0;
-        self.selected = None;
-        self.gesture = None;
-    }
-
     /// The street as it is now, for the city to keep.
     pub fn snapshot(&self) -> Street {
         Street {
@@ -1406,6 +1358,14 @@ mod tests {
         let _ = e.set_width(bus, 3000);
         let m = e.view().measures.into_iter().find(|m| m.code == "B1").unwrap();
         assert!(m.present && !m.problems.is_empty());
+    }
+
+    #[test]
+    fn a_street_is_what_it_is_given_and_has_no_template_to_fall_back_on() {
+        let s = Street::imported(StreetClass::Local, Side::Right, &[]);
+        assert_eq!(s.title(), "");
+        assert!(!s.class.is_freeway());
+        assert!(Street::imported(StreetClass::Motorway, Side::Right, &[]).class.is_freeway());
     }
 
     #[test]

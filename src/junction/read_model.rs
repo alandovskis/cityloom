@@ -1726,7 +1726,7 @@ mod tests {
     fn a_curb_bulge_is_offered_only_beside_parking() {
         let j = Junction::new(1); // Sample Street 1 has parking both sides; Sample Lane 3 on one
         let v = j.view();
-        let by = |sample: usize| v.arms.iter().find(|a| a.street == crate::shared::catalogue::SAMPLES[sample].name).unwrap().can_bulb;
+        let by = |sample: usize| v.arms.iter().find(|a| a.street == crate::street::model::SAMPLES[sample].name).unwrap().can_bulb;
         assert_eq!(by(0), [true, true]);
         assert_eq!(by(2), [false, true]);
     }

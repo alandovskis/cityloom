@@ -1266,7 +1266,7 @@ pub fn valid(s: &State, region: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::catalogue::SAMPLES;
+    use crate::street::model::SAMPLES;
 
     #[test]
     fn a_junction_from_a_city_has_the_name_the_city_gives_it() {
