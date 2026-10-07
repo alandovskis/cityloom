@@ -35,3 +35,7 @@ e2e/playwright-report/
 # Rendered from docs/erd.mmd (mmdc -i docs/erd.mmd -o docs/erd.svg; the .png with -s 2)
 docs/erd.svg
 docs/erd.png
+
+# The spec and plan written for the no-catalogue-samples work are kept locally
+docs/superpowers/specs/2026-10-07-no-catalogue-samples-design.md
+docs/superpowers/plans/2026-10-07-no-catalogue-samples.md
