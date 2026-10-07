@@ -29,6 +29,7 @@ pub fn edit_text(v: &JView) -> Option<String> {
 }
 
 /// A sample junction was loaded.
+#[cfg(test)]
 pub fn sample_text(v: &JView) -> String {
     format!("{}. {}", v.name, fit_text(v))
 }

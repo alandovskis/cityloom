@@ -3,8 +3,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, SAMPLES, Side, kind_index};
+use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, Side, StreetClass, kind_index};
 use crate::street::measures;
+
+#[cfg(test)]
+mod fixtures;
+#[cfg(test)]
+pub use fixtures::SAMPLES;
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -152,9 +157,9 @@ impl Segment {
 /// Directions are written for the side of the road in `side`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Street {
-    /// Index into `SAMPLES`: the kind of street it began as, which names it unless it has a name of its own.
-    pub sample: usize,
-    /// What the street is called, where it is not just its kind.
+    /// What sort of street it is.
+    pub class: StreetClass,
+    /// What the street is called.
     #[serde(default)]
     pub name: Option<String>,
     pub row_mm: i32,
@@ -169,7 +174,7 @@ fn flip(d: &mut Option<usize>) {
     }
 }
 
-/// One piece of a street built from outside the catalogue's samples.
+/// One piece of a street, as read from a road of the network.
 #[derive(Clone, Copy, Debug)]
 pub struct Piece {
     pub kind: usize,
@@ -180,10 +185,10 @@ pub struct Piece {
 
 impl Street {
     /// A street made of the given pieces, left to right as seen from its first
-    /// end, with each kind's default surface. `sample` says what sort of street
-    /// it is (it names the street and, for a freeway, changes its rules); the
-    /// row is the pieces' widths, each brought inside what its kind allows.
-    pub fn imported(sample: usize, side: Side, pieces: &[Piece]) -> Street {
+    /// end, with each kind's default surface. `class` says what sort of street
+    /// it is (a motorway has its own rules); the row is the pieces' widths,
+    /// each brought inside what its kind allows.
+    pub fn imported(class: StreetClass, side: Side, pieces: &[Piece]) -> Street {
         let segments: Vec<Segment> = pieces
             .iter()
             .enumerate()
@@ -198,7 +203,7 @@ impl Street {
                 g
             })
             .collect();
-        Street { sample: sample.min(SAMPLES.len() - 1), name: None, row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1 }
+        Street { class, name: None, row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1 }
     }
 
     /// The same street, called `name`.
@@ -207,18 +212,9 @@ impl Street {
         self
     }
 
-    /// What it is called: its own name, or else the sort of street it is.
+    /// What it is called.
     pub fn title(&self) -> String {
-        self.name.clone().unwrap_or_else(|| SAMPLES[self.sample.min(SAMPLES.len() - 1)].name.to_string())
-    }
-
-    /// The sample street laid out for a side of the road.
-    pub fn sample(sample: usize, side: Side) -> Street {
-        let sample = sample.min(SAMPLES.len() - 1);
-        let mut e = Editor::new(sample);
-        let region = REGIONS.iter().position(|r| r.drive_side == side).unwrap_or(0);
-        e.set_region(region);
-        e.snapshot()
+        self.name.clone().unwrap_or_default()
     }
 
     /// The same street with its lanes written for `side`: running the other
@@ -261,8 +257,7 @@ impl Street {
                 && curb.is_none_or(|c| c < CURBS.len() && KINDS[kind].has_curb)
                 && direction.is_none_or(|d| d < DIRECTIONS.len())
         };
-        self.sample < SAMPLES.len()
-            && self.row_mm > 0
+        self.row_mm > 0
             && !self.segments.is_empty()
             && self.segments.iter().all(|s| {
                 seg_ok(s.kind, s.material, s.curb, s.direction)
@@ -281,7 +276,7 @@ struct State {
 }
 
 pub struct Editor {
-    sample: usize,
+    class: StreetClass,
     /// What the street is called, where it has a name of its own.
     street_name: Option<String>,
     /// Index into `REGIONS`. A setting of the sheet, not part of the history.
@@ -331,53 +326,10 @@ fn total(segments: &[Segment]) -> i32 {
 }
 
 impl Editor {
-    /// A street laid out on one of the sample profiles, which the imported streets without a section of their own start from.
-    pub fn new(sample: usize) -> Editor {
-        let mut e = Editor {
-            sample: 0,
-            street_name: None,
-            region: 0,
-            time_min: 12 * 60,
-            row_mm: 0,
-            states: Vec::new(),
-            cursor: 0,
-            next_uid: 1,
-            selected: None,
-            gesture: None,
-            pending_label: String::new(),
-        };
-        e.load_sample(sample);
-        e
-    }
-
-    pub fn load_sample(&mut self, sample: usize) {
-        let sample = sample.min(SAMPLES.len() - 1);
-        let s = &SAMPLES[sample];
-        self.sample = sample;
-        self.row_mm = s.row_mm;
-        self.next_uid = 1;
-        let segments = s
-            .segments
-            .iter()
-            .map(|(id, w)| {
-                let uid = self.next_uid;
-                self.next_uid += 1;
-                Segment::new(uid, kind_index(id).expect("sample uses catalogue kinds"), *w)
-            })
-            .collect::<Vec<Segment>>();
-        let mut segments = segments;
-        // Driving lanes on the left half of the street run away, the rest toward.
-        default_directions(&mut segments, REGIONS[self.region].drive_side);
-        self.states = vec![State { label: "Street today".into(), segments }];
-        self.cursor = 0;
-        self.selected = None;
-        self.gesture = None;
-    }
-
     /// The street as it is now, for the city to keep.
     pub fn snapshot(&self) -> Street {
         Street {
-            sample: self.sample,
+            class: self.class,
             name: self.street_name.clone(),
             row_mm: self.row_mm,
             side: REGIONS[self.region].drive_side,
@@ -394,7 +346,7 @@ impl Editor {
         let side = REGIONS[region].drive_side;
         let (today, now) = (today.for_side(side), now.for_side(side));
         let mut e = Editor {
-            sample: now.sample.min(SAMPLES.len() - 1),
+            class: now.class,
             street_name: now.name.clone(),
             region,
             time_min: 12 * 60,
@@ -834,8 +786,7 @@ impl Editor {
         };
         let existing = self.current().clone();
         let mut next_uid = self.next_uid;
-        let Some(arranged) = measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, SAMPLES[self.sample].freeway, &mut next_uid)
-        else {
+        let Some(arranged) = measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, self.class.is_freeway(), &mut next_uid) else {
             return false;
         };
         let ok = self.edit(format!("{} {}", def.code, def.name), |segs| {
@@ -1003,8 +954,8 @@ impl Editor {
         let at = |v: &[Segment]| v.iter().map(|s| s.at(self.time_min)).collect::<Vec<_>>();
         let (now, existing_now) = (at(segs), at(existing));
         View {
-            name: self.street_name.clone().unwrap_or_else(|| SAMPLES[self.sample].name.to_string()),
-            sample: self.sample,
+            name: self.street_name.clone().unwrap_or_default(),
+            class: self.class,
             region: REGIONS[self.region].id,
             row_mm: self.row_mm,
             total_mm,
@@ -1015,7 +966,7 @@ impl Editor {
             existing_total_mm: total(existing),
             selected: self.selected,
             outcomes: outcomes(&now, &existing_now),
-            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side, SAMPLES[self.sample].freeway),
+            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side, self.class.is_freeway()),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
@@ -1026,7 +977,7 @@ impl Editor {
 
     fn measure_views(&self, raw: &[Segment], now: &[Segment]) -> Vec<MeasureView> {
         let side = REGIONS[self.region].drive_side;
-        let freeway = SAMPLES[self.sample].freeway;
+        let freeway = self.class.is_freeway();
         measures::detect(raw, now, side, freeway)
             .into_iter()
             .zip(measures::DEFS.iter())
@@ -1240,7 +1191,7 @@ pub struct Revision {
 #[derive(Serialize)]
 pub struct View {
     pub name: String,
-    pub sample: usize,
+    pub class: StreetClass,
     pub region: &'static str,
     /// The time of day shown, in minutes after midnight.
     pub time_min: i32,
@@ -1275,9 +1226,9 @@ mod tests {
             Piece { kind: kind("bike"), width_mm: 1500, direction: None },
             Piece { kind: kind("sidewalk"), width_mm: 2000, direction: Some(0) },
         ];
-        let s = Street::imported(0, Side::Left, &pieces);
+        let s = Street::imported(StreetClass::Local, Side::Left, &pieces);
         assert!(s.is_sound());
-        assert_eq!((s.sample, s.row_mm, s.side), (0, 2000 + 3200 + 3200 + 1500 + 2000, Side::Left));
+        assert_eq!((s.class, s.row_mm, s.side), (StreetClass::Local, 2000 + 3200 + 3200 + 1500 + 2000, Side::Left));
         assert_eq!(s.segments.iter().map(|g| g.uid).collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
         // a driving lane keeps its way; a kind with no direction has none, even if one was given
         assert_eq!(s.segments.iter().map(|g| g.direction).collect::<Vec<_>>(), vec![None, Some(1), Some(0), None, None]);
@@ -1289,7 +1240,11 @@ mod tests {
     #[test]
     fn a_piece_wider_or_narrower_than_its_kind_allows_is_brought_inside() {
         let kind = kind_index("travel").unwrap();
-        let s = Street::imported(0, Side::Right, &[Piece { kind, width_mm: 100, direction: Some(0) }, Piece { kind, width_mm: 99_000, direction: Some(1) }]);
+        let s = Street::imported(
+            StreetClass::Local,
+            Side::Right,
+            &[Piece { kind, width_mm: 100, direction: Some(0) }, Piece { kind, width_mm: 99_000, direction: Some(1) }],
+        );
         assert_eq!(s.segments[0].width_mm, KINDS[kind].min_mm);
         assert_eq!(s.segments[1].width_mm, KINDS[kind].max_mm);
         assert_eq!(s.row_mm, KINDS[kind].min_mm + KINDS[kind].max_mm);
@@ -1403,6 +1358,14 @@ mod tests {
         let _ = e.set_width(bus, 3000);
         let m = e.view().measures.into_iter().find(|m| m.code == "B1").unwrap();
         assert!(m.present && !m.problems.is_empty());
+    }
+
+    #[test]
+    fn a_street_is_what_it_is_given_and_has_no_template_to_fall_back_on() {
+        let s = Street::imported(StreetClass::Local, Side::Right, &[]);
+        assert_eq!(s.title(), "");
+        assert!(!s.class.is_freeway());
+        assert!(Street::imported(StreetClass::Motorway, Side::Right, &[]).class.is_freeway());
     }
 
     #[test]
@@ -2000,9 +1963,6 @@ mod tests {
         assert!(!s.is_sound());
         let mut s = Street::sample(0, Side::Right);
         s.segments[1].material = 99;
-        assert!(!s.is_sound());
-        let mut s = Street::sample(0, Side::Right);
-        s.sample = 99;
         assert!(!s.is_sound());
     }
 }

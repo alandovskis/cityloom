@@ -15,19 +15,13 @@ use serde::{Deserialize, Serialize};
 use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
-use crate::shared::catalogue::{KINDS, REGIONS, SAMPLES, Side};
+use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass};
+#[cfg(test)]
+use crate::street::model::SAMPLES;
 use crate::street::model::{Editor, Street};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
-const SAVE_VERSION: u32 = 1;
-
-/// What a place is called when it is not the sample city's numbering.
-pub(super) struct Names {
-    /// As a title: "Main Street and Side Road".
-    pub(super) name: String,
-    /// In a sentence: "the end of Main Street".
-    pub(super) end: String,
-}
+const SAVE_VERSION: u32 = 2;
 
 pub(super) struct NodeDef {
     pub(super) x_mm: i32,
@@ -36,29 +30,28 @@ pub(super) struct NodeDef {
     pub(super) junction: bool,
     pub(super) control: usize,
     pub(super) corner_mm: i32,
-    pub(super) names: Option<Names>,
 }
 
 #[cfg(test)]
 const fn junction_at(x_m: i32, y_m: i32, control: usize, corner_mm: i32) -> NodeDef {
-    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm, names: None }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm }
 }
 
 #[cfg(test)]
 const fn gate_at(x_m: i32, y_m: i32) -> NodeDef {
-    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0, names: None }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0 }
 }
 
 pub(super) struct EdgeDef {
     /// Node indices. The street editor shows the street looking from `a` to `b`.
     pub(super) a: usize,
     pub(super) b: usize,
-    /// Index into `SAMPLES`: what sort of street it is.
-    pub(super) street: usize,
-    /// Its name, where it is not just the sort of street it is.
+    /// What sort of street it is.
+    pub(super) class: StreetClass,
+    /// Its name, where the network gives it one.
     pub(super) name: Option<String>,
-    /// The street as it first stands, where it is not the sample.
-    pub(super) section: Option<Street>,
+    /// The street as it first stands.
+    pub(super) section: Street,
     /// The way the street leaves node `a` and node `b`, in degrees clockwise from north, where its real
     /// shape is known. Otherwise it leaves along the straight line to its other end.
     pub(super) headings: Option<(f64, f64)>,
@@ -67,9 +60,17 @@ pub(super) struct EdgeDef {
     pub(super) shape: Option<Vec<(i32, i32)>>,
 }
 
+/// A street of the hand-made test city: between two nodes, laid out like one of the sample streets.
 #[cfg(test)]
-const fn street(a: usize, b: usize, street: usize) -> EdgeDef {
-    EdgeDef { a, b, street, name: None, section: None, headings: None, shape: None }
+struct TestEdge {
+    a: usize,
+    b: usize,
+    fixture: usize,
+}
+
+#[cfg(test)]
+const fn street(a: usize, b: usize, fixture: usize) -> TestEdge {
+    TestEdge { a, b, fixture }
 }
 
 #[cfg(test)]
@@ -109,7 +110,7 @@ const NODES: [NodeDef; 21] = [
 
 #[cfg(test)]
 #[rustfmt::skip]
-const EDGES: [EdgeDef; 23] = [
+const EDGES: [TestEdge; 23] = [
     street(0, 1, AVENUE),   //  1
     street(1, 6, AVENUE),   //  2
     street(6, 9, AVENUE),   //  3
@@ -210,7 +211,19 @@ impl Layout {
     /// The hand-made city the tests are written against. It is not part of the app.
     #[cfg(test)]
     pub fn sample() -> Layout {
-        Layout { name: NAME.to_string(), side: Side::Right, nodes: NODES.into_iter().collect(), edges: EDGES.into_iter().collect(), origin_m: None }
+        let edges = EDGES
+            .iter()
+            .map(|e| EdgeDef {
+                a: e.a,
+                b: e.b,
+                class: SAMPLES[e.fixture].class,
+                name: None,
+                section: Street::sample(e.fixture, Side::Right),
+                headings: None,
+                shape: None,
+            })
+            .collect();
+        Layout { name: NAME.to_string(), side: Side::Right, nodes: NODES.into_iter().collect(), edges, origin_m: None }
     }
 }
 
@@ -258,7 +271,7 @@ impl Layout {
         ((deg / junction::BEARING_STEP as f64).round() as i32 * junction::BEARING_STEP).rem_euclid(360)
     }
 
-    fn edges_at(&self, node: usize) -> Vec<usize> {
+    pub(super) fn edges_at(&self, node: usize) -> Vec<usize> {
         (0..self.edges.len()).filter(|&e| self.edges[e].a == node || self.edges[e].b == node).collect()
     }
 
@@ -273,23 +286,57 @@ impl Layout {
         order.iter().position(|&n| n == node).map_or(0, |p| p + 1)
     }
 
-    fn node_name(&self, node: usize) -> String {
-        if let Some(n) = &self.nodes[node].names {
-            return n.name.clone();
+    /// The distinct names of the streets meeting at `node`, in the order the edges are held.
+    fn street_names_at(&self, node: usize) -> Vec<String> {
+        let mut names: Vec<String> = Vec::new();
+        for e in self.edges_at(node) {
+            if let Some(n) = &self.edges[e].name
+                && !names.contains(n)
+            {
+                names.push(n.clone());
+            }
         }
-        if self.nodes[node].junction { format!("Junction {}", self.junction_number(node)) } else { "Edge of the map".to_string() }
+        names
     }
 
-    fn end_name(&self, node: usize) -> String {
-        if let Some(n) = &self.nodes[node].names {
-            return n.end.clone();
+    /// Who a junction's streets are, in a title: "Main Street and Side Road".
+    fn joined(names: &[String]) -> String {
+        match names {
+            [] => String::new(),
+            [one] => format!("{one} junction"),
+            [a, b] => format!("{a} and {b}"),
+            [a, b, c] => format!("{a}, {b} and {c}"),
+            [a, b, rest @ ..] => format!("{a}, {b} and {} more", rest.len()),
         }
-        if self.nodes[node].junction { format!("Junction {}", self.junction_number(node)) } else { "the edge of the map".to_string() }
+    }
+
+    /// A place as a title.
+    pub(super) fn node_name(&self, node: usize) -> String {
+        let names = self.street_names_at(node);
+        match (self.nodes[node].junction, names.first()) {
+            (true, Some(_)) => Self::joined(&names),
+            (true, None) => format!("Junction {}", self.junction_number(node)),
+            (false, Some(street)) if self.edges_at(node).len() == 1 => format!("End of {street}"),
+            (false, Some(street)) => format!("Connection on {street}"),
+            (false, None) => "Edge of the map".to_string(),
+        }
+    }
+
+    /// A place in a sentence.
+    pub(super) fn end_name(&self, node: usize) -> String {
+        let names = self.street_names_at(node);
+        match (self.nodes[node].junction, names.first()) {
+            (true, Some(_)) => Self::joined(&names),
+            (true, None) => format!("Junction {}", self.junction_number(node)),
+            (false, Some(street)) if self.edges_at(node).len() == 1 => format!("the end of {street}"),
+            (false, Some(street)) => format!("a connection on {street}"),
+            (false, None) => "the edge of the map".to_string(),
+        }
     }
 
     fn edge_name(&self, edge: usize) -> String {
         let e = &self.edges[edge];
-        let kind = e.name.as_deref().unwrap_or(SAMPLES[e.street].name);
+        let kind = e.name.clone().unwrap_or_else(|| e.section.title());
         if !self.nodes[e.a].junction && !self.nodes[e.b].junction {
             format!("{kind} · through the city")
         } else {
@@ -312,7 +359,7 @@ impl Layout {
             .iter()
             .enumerate()
             .map(|(i, &(b, e))| {
-                let mut arm = Arm::new(i as u32 + 1, self.edges[e].street, b, 0);
+                let mut arm = Arm::new(i as u32 + 1, b, 0);
                 arm.edge = e as u32 + 1;
                 arm.corner_mm = def.corner_mm;
                 arm.section = streets.get(&arm.edge).map(|s| seen_from(self, e, node, s));
@@ -344,8 +391,7 @@ impl Layout {
             && (0..=MAX_RING_MM).contains(&s.ring_extra_mm)
             && s.cycle.is_none_or(|c| (CYCLE_MIN_MM..=CYCLE_MAX_MM).contains(&c))
             && s.arms.iter().all(|a| {
-                a.street < SAMPLES.len()
-                    && a.bearing % BEARING_STEP == 0
+                a.bearing % BEARING_STEP == 0
                     && (0..360).contains(&a.bearing)
                     && (MIN_CORNER_MM..=MAX_CORNER_MM).contains(&a.corner_mm)
                     && a.offset_mm.abs() <= 30_000
@@ -413,8 +459,7 @@ impl City {
 
     /// The same for any network.
     pub fn on(mut layout: Layout) -> City {
-        let today_streets: BTreeMap<u32, Street> =
-            layout.edges.iter().enumerate().map(|(i, e)| (i as u32 + 1, e.section.clone().unwrap_or_else(|| Street::sample(e.street, layout.side)))).collect();
+        let today_streets: BTreeMap<u32, Street> = layout.edges.iter().enumerate().map(|(i, e)| (i as u32 + 1, e.section.clone())).collect();
         let region = REGIONS.iter().position(|r| r.drive_side == layout.side).unwrap_or(0);
         let mut today_junctions: BTreeMap<u32, State> = BTreeMap::new();
         for n in 0..layout.nodes.len() {
@@ -453,7 +498,7 @@ impl City {
             return city;
         }
         for (uid, street) in saved.streets {
-            let ok = city.today_streets.get(&uid).is_some_and(|t| t.sample == street.sample && t.row_mm == street.row_mm);
+            let ok = city.today_streets.get(&uid).is_some_and(|t| t.class == street.class && t.row_mm == street.row_mm);
             if ok && street.is_sound() {
                 city.streets.insert(uid, street);
             }
@@ -511,7 +556,7 @@ impl City {
 
     /// Keeps what the street editor has made of a street.
     pub fn keep_street(&mut self, edge: u32, street: Street) -> bool {
-        let ok = self.today_streets.get(&edge).is_some_and(|t| t.sample == street.sample && t.row_mm == street.row_mm);
+        let ok = self.today_streets.get(&edge).is_some_and(|t| t.class == street.class && t.row_mm == street.row_mm);
         if ok && street.is_sound() {
             self.streets.insert(edge, street);
         }
@@ -570,7 +615,7 @@ impl City {
             if !self.layout.nodes[n].junction {
                 return 0;
             }
-            self.layout.edges_at(n).iter().map(|&e| SAMPLES[self.layout.edges[e].street].row_mm / 2).max().unwrap_or(0)
+            self.layout.edges_at(n).iter().map(|&e| self.today_streets[&(e as u32 + 1)].row_mm / 2).max().unwrap_or(0)
         };
         for (i, e) in self.layout.edges.iter().enumerate() {
             let uid = i as u32 + 1;
@@ -594,7 +639,7 @@ impl City {
                 shape_mm: shape.iter().map(|&(x, y)| [x, y]).collect(),
                 trim_a_mm: trim_at(e.a),
                 trim_b_mm: trim_at(e.b),
-                freeway: SAMPLES[e.street].freeway,
+                freeway: e.class.is_freeway(),
                 pieces: v
                     .segments
                     .iter()
@@ -965,6 +1010,22 @@ mod tests {
         let ends = City::new().street_ends(1);
         assert_eq!(ends.iter().map(|e| (e.name.as_str(), e.junction)).collect::<Vec<_>>(), [("the edge of the map", false), ("Junction 4", true)]);
         assert!(City::new().street_ends(99).is_empty());
+    }
+
+    #[test]
+    fn a_save_from_before_street_classes_is_left_behind() {
+        let mut city = City::new();
+        let uid = city.view(0).edges[0].uid;
+        let mut e = city.street_editor(uid, 0).unwrap();
+        let piece = e.view().segments[0].uid;
+        e.nudge_width(piece, 100);
+        assert!(city.keep_street(uid, e.snapshot()));
+        let edited = city.view(0).edited;
+        assert!(edited > 0);
+        let json = city.save();
+        assert_eq!(City::load(&json).view(0).edited, edited, "a save of this version is kept");
+        let old = json.replace(&format!("\"version\":{SAVE_VERSION}"), "\"version\":1");
+        assert_eq!(City::load(&old).view(0).edited, 0, "a version 1 save is not opened");
     }
 
     #[test]

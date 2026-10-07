@@ -303,7 +303,6 @@ pub struct ArmView {
     pub edge: u32,
     pub label: String,
     pub street: String,
-    pub street_index: usize,
     pub bearing: i32,
     pub offset_mm: i32,
     pub corner_mm: i32,
@@ -416,7 +415,6 @@ pub struct JView {
     pub linked: bool,
     /// A street can be taken away: the junction is not the city's and keeps three.
     pub can_remove: bool,
-    pub sample: usize,
     pub region: &'static str,
     pub drive_side: &'static str,
     pub control: &'static str,
@@ -527,12 +525,6 @@ impl Junction {
     pub fn set_ring_radius(&mut self, radius_mm: i32) -> bool {
         let Some(ring) = layout(self.current(), self.region).and_then(|l| l.ring) else { return false };
         self.set_ring((radius_mm - ring.floor).max(0))
-    }
-
-    /// Adds a street facing a point on the plan, as dropping one from the
-    /// palette does. Returns its uid, or 0 when there is no room.
-    pub fn add_arm_toward(&mut self, street: usize, x: f64, y: f64) -> u32 {
-        self.add_arm(street, bearing_toward(x, y))
     }
 
     /// Sets the curb radius at the corner clockwise of an arm from a point on
@@ -706,7 +698,6 @@ impl Junction {
                 edge: a.edge,
                 label: arm_name(a),
                 street: l.prof.name.clone(),
-                street_index: a.street_index(),
                 bearing: a.bearing,
                 offset_mm: a.offset_mm,
                 corner_mm: a.corner_mm,
@@ -858,10 +849,9 @@ impl Junction {
             Target::Cycle => Selection { kind: Some("cycle"), uid: 0, lane: 0 },
         };
         JView {
-            name: if self.is_linked() { self.name().to_string() } else { JUNCTION_SAMPLES[self.sample()].name.to_string() },
+            name: self.name().to_string(),
             linked: self.is_linked(),
             can_remove: !self.is_linked() && n > MIN_ARMS,
-            sample: self.sample(),
             region: REGIONS[region].id,
             drive_side: if side == Side::Left { "left" } else { "right" },
             control: CONTROLS[s.control].id,
@@ -1696,30 +1686,6 @@ mod tests {
     }
 
     #[test]
-    fn dropping_a_street_adds_it_facing_the_pointer() {
-        let mut j = Junction::new(1); // 90, 180, 270
-        let uid = j.add_arm_toward(2, 0.0, -10_000.0);
-        assert_ne!(uid, 0);
-        assert_eq!(j.arm(uid).unwrap().bearing, 0);
-        assert_eq!(j.current().arms.len(), 4);
-    }
-
-    #[test]
-    fn dropping_a_street_west_of_north_wraps_the_bearing() {
-        let mut j = Junction::new(1);
-        let uid = j.add_arm_toward(2, -7_071.0, -7_071.0);
-        assert_ne!(uid, 0);
-        assert_eq!(j.arm(uid).unwrap().bearing, 315);
-    }
-
-    #[test]
-    fn dropping_a_street_onto_another_adds_nothing() {
-        let mut j = Junction::new(1);
-        assert_eq!(j.add_arm_toward(2, 0.0, 10_000.0), 0); // 180°, where a street runs
-        assert_eq!(j.current().arms.len(), 3);
-    }
-
-    #[test]
     fn a_typed_roundabout_size_is_taken_from_its_least_size() {
         let mut j = Junction::new(0);
         assert!(j.set_control(ROUNDABOUT));
@@ -1751,7 +1717,6 @@ mod tests {
         let mut state = Junction::new(0).current().clone();
         for a in &mut state.arms {
             a.edge = a.uid;
-            a.section = Some(crate::street::model::Street::sample(a.street, crate::shared::catalogue::Side::Right));
         }
         let j = Junction::from_city("Test", &state, &state, 0).unwrap();
         assert!(!j.view().can_remove);
@@ -1761,7 +1726,7 @@ mod tests {
     fn a_curb_bulge_is_offered_only_beside_parking() {
         let j = Junction::new(1); // Sample Street 1 has parking both sides; Sample Lane 3 on one
         let v = j.view();
-        let by = |street: usize| v.arms.iter().find(|a| a.street_index == street).unwrap().can_bulb;
+        let by = |sample: usize| v.arms.iter().find(|a| a.street == crate::street::model::SAMPLES[sample].name).unwrap().can_bulb;
         assert_eq!(by(0), [true, true]);
         assert_eq!(by(2), [false, true]);
     }

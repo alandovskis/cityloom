@@ -172,6 +172,7 @@ impl JunctionVm {
         done
     }
 
+    #[cfg(test)]
     pub fn load_sample(&self, sample: usize) {
         self.edit(|j| j.load_sample(sample));
         self.ports.announcer.say(&text::sample_text(&self.view_now()));

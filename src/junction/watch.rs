@@ -91,6 +91,7 @@ impl Watch {
         self.vm.with_value(|v| v.reset())
     }
 
+    #[cfg(test)]
     pub fn load_sample(&self, sample: usize) {
         self.vm.with_value(|v| v.load_sample(sample));
     }

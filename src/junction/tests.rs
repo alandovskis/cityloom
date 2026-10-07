@@ -202,7 +202,6 @@ fn a_city_junction_s_streets_link_to_the_street_editor_and_cannot_be_removed() {
     let mut state = Junction::new(0).current().clone();
     for a in &mut state.arms {
         a.edge = a.uid + 10;
-        a.section = Some(crate::street::model::Street::sample(a.street, crate::shared::catalogue::Side::Right));
     }
     let j = Junction::from_city("Test", &state, &state, 0).unwrap();
     let s = JunctionVm::new(crate::shared::platform::browser_ports(), j, None);
@@ -371,7 +370,6 @@ fn linked_shared() -> Rc<JunctionVm> {
     let mut state = Junction::new(0).current().clone();
     for a in &mut state.arms {
         a.edge = a.uid + 10;
-        a.section = Some(crate::street::model::Street::sample(a.street, crate::shared::catalogue::Side::Right));
     }
     JunctionVm::new(crate::shared::platform::browser_ports(), Junction::from_city("Junction 4", &state, &state, 0).unwrap(), None)
 }
