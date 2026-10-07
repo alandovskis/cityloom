@@ -312,7 +312,7 @@ impl Arm {
 
     /// Which sample street this arm is, or began as.
     pub fn street_index(&self) -> usize {
-        self.section.as_ref().map_or(self.street, |s| s.sample).min(SAMPLES.len() - 1)
+        self.street.min(SAMPLES.len() - 1)
     }
 
     pub fn street_name(&self) -> String {
@@ -904,7 +904,7 @@ impl Junction {
             self.refuse(Refusal::LinkedNoAdd);
             return 0;
         }
-        if street >= SAMPLES.len() || SAMPLES[street].freeway {
+        if street >= SAMPLES.len() || SAMPLES[street].class.is_freeway() {
             self.refuse(Refusal::DoesNotFit);
             return 0;
         }
@@ -1018,7 +1018,7 @@ impl Junction {
         if self.linked {
             return self.refuse(Refusal::LinkedNoSwap);
         }
-        if street >= SAMPLES.len() || SAMPLES[street].freeway {
+        if street >= SAMPLES.len() || SAMPLES[street].class.is_freeway() {
             return self.refuse(Refusal::DoesNotFit);
         }
         self.arm_edit(

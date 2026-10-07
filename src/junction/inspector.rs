@@ -781,7 +781,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
                     {SAMPLES
                         .iter()
                         .enumerate()
-                        .filter(|(_, s)| !s.freeway)
+                        .filter(|(_, s)| !s.class.is_freeway())
                         .map(|(i, s)| view! { <option value=i.to_string() prop:selected=move || w.arm(uid, |a| a.street_index == i).unwrap_or(false)>{s.name}</option> })
                         .collect_view()}
                 </select>

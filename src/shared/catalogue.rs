@@ -97,6 +97,23 @@ pub enum Side {
 
 /// A region carries the rules its streets share. For now that is which side
 /// of the road traffic keeps to. Synthetic placeholder list.
+/// What sort of street a road is. It decides what a street may be: a motorway is limited-access.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StreetClass {
+    Motorway,
+    Arterial,
+    Collector,
+    Local,
+}
+
+impl StreetClass {
+    /// A limited-access road: no sidewalks, and a median and shoulders instead.
+    pub fn is_freeway(self) -> bool {
+        self == StreetClass::Motorway
+    }
+}
+
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct Region {
     pub id: &'static str,
@@ -391,8 +408,7 @@ pub fn kind_index(id: &str) -> Option<usize> {
 pub struct Sample {
     pub name: &'static str,
     pub row_mm: i32,
-    /// A limited-access road: no sidewalks, and a median and shoulders instead.
-    pub freeway: bool,
+    pub class: StreetClass,
     pub segments: &'static [(&'static str, i32)],
 }
 
@@ -400,13 +416,13 @@ pub const SAMPLES: [Sample; 4] = [
     Sample {
         name: "Sample Street 1",
         row_mm: 18000,
-        freeway: false,
+        class: StreetClass::Local,
         segments: &[("sidewalk", 3300), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 3300)],
     },
     Sample {
         name: "Sample Avenue 2",
         row_mm: 30000,
-        freeway: false,
+        class: StreetClass::Arterial,
         segments: &[
             ("sidewalk", 3500),
             ("planting", 1500),
@@ -424,13 +440,13 @@ pub const SAMPLES: [Sample; 4] = [
     Sample {
         name: "Sample Lane 3",
         row_mm: 12000,
-        freeway: false,
+        class: StreetClass::Local,
         segments: &[("sidewalk", 2100), ("travel", 3000), ("travel", 3000), ("parking", 2400), ("sidewalk", 1500)],
     },
     Sample {
         name: "Sample Freeway 4",
         row_mm: 30600,
-        freeway: true,
+        class: StreetClass::Motorway,
         segments: &[
             ("shoulder", 3000),
             ("travel", 3600),

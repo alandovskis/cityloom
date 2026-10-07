@@ -6,23 +6,19 @@ use osm_network::{Control, Lane, LaneKind, Network, Way};
 
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
-use crate::shared::catalogue::{Side, kind_index};
+use crate::shared::catalogue::{Side, StreetClass, kind_index};
 use crate::street::model::{Piece, Street};
 
 /// How wide a corner is rounded where nothing in the data says.
 const CORNER_MM: i32 = 4_000;
 
-/// Which sort of sample street a road is like, by OpenStreetMap's `highway`.
-fn class_of(highway: &str) -> usize {
-    const STREET: usize = 0;
-    const AVENUE: usize = 1;
-    const LANE: usize = 2;
-    const FREEWAY: usize = 3;
+/// The class of a road, by OpenStreetMap's `highway`.
+fn class_of(highway: &str) -> StreetClass {
     match highway {
-        "motorway" | "motorway_link" => FREEWAY,
-        "trunk" | "trunk_link" | "primary" | "primary_link" | "secondary" | "secondary_link" | "tertiary" | "tertiary_link" => AVENUE,
-        "service" => LANE,
-        _ => STREET,
+        "motorway" | "motorway_link" => StreetClass::Motorway,
+        "trunk" | "trunk_link" | "primary" | "primary_link" => StreetClass::Arterial,
+        "secondary" | "secondary_link" | "tertiary" | "tertiary_link" => StreetClass::Collector,
+        _ => StreetClass::Local,
     }
 }
 
@@ -102,10 +98,10 @@ impl City {
 
 impl Layout {
     /// The layout of a network: a node for each end or meeting of streets, a street for each road.
-    /// Roads that start and end at one node, or at a node the network lacks, are left out, and so is a
-    /// node nothing leads to.
+    /// Roads that start and end at one node, that have no lanes, or that start or end at a node the
+    /// network lacks are left out, and so is a node nothing leads to.
     pub fn from_network(network: &Network, name: &str) -> Layout {
-        let roads: Vec<_> = network.roads.iter().filter(|r| r.from != r.to).collect();
+        let roads: Vec<_> = network.roads.iter().filter(|r| r.from != r.to && !r.lanes.is_empty()).collect();
         let mut degree: BTreeMap<u32, usize> = BTreeMap::new();
         for r in &roads {
             *degree.entry(r.from).or_default() += 1;
@@ -132,11 +128,11 @@ impl Layout {
                 EdgeDef {
                     a: index[&r.from],
                     b: index[&r.to],
-                    street: class,
+                    class,
                     name: Some(street_name(r)),
                     headings: headings(&r.points),
                     shape: shape_mm(&r.points, node_mm(r.from), node_mm(r.to), &mm_of),
-                    section: (!pieces.is_empty()).then(|| Street::imported(class, side, &pieces).named(&street_name(r))),
+                    section: Street::imported(class, side, &pieces).named(&street_name(r)),
                 }
             })
             .collect();
@@ -316,6 +312,40 @@ mod tests {
         assert_eq!(meeting.name, "Connection on Side Road");
     }
 
+    #[test]
+    fn a_road_is_classed_by_its_highway() {
+        use crate::shared::catalogue::StreetClass::*;
+        for (highway, class) in [
+            ("motorway", Motorway),
+            ("motorway_link", Motorway),
+            ("trunk", Arterial),
+            ("primary_link", Arterial),
+            ("secondary", Collector),
+            ("tertiary_link", Collector),
+            ("residential", Local),
+            ("service", Local),
+            ("footway", Local),
+        ] {
+            assert_eq!(class_of(highway), class, "{highway}");
+        }
+    }
+
+    #[test]
+    fn a_road_with_no_lanes_is_not_a_street() {
+        let mut net = crossing();
+        net.roads[0].lanes.clear();
+        let v = City::from_network(&net, "Bare").view(0);
+        assert_eq!(v.edges.len(), 3, "the lane-less road is left out");
+    }
+
+    #[test]
+    fn a_motorway_is_a_freeway_and_a_residential_street_is_not() {
+        let mut net = crossing();
+        net.roads[1].highway = "motorway".into();
+        let v = City::from_network(&net, "Fast").view(0);
+        assert_eq!(v.edges.iter().filter(|e| e.freeway).count(), 1);
+    }
+
     fn bare_street() -> Network {
         let mut net = star(&[(100.0, 0.0)]);
         net.roads[0].lanes = vec![lane(LaneKind::Driving, Way::Backward, 3.0), lane(LaneKind::Driving, Way::Forward, 3.0)];
@@ -352,7 +382,7 @@ mod tests {
         assert_eq!(arms.iter().filter(|n| *n == "Main Street").count(), 2);
         assert_eq!(arms.iter().filter(|n| *n == "Side Road").count(), 2);
         // and a name survives being kept and opened again
-        assert_eq!(Street::imported(0, Side::Right, &[]).named("X").title(), "X");
+        assert_eq!(Street::imported(StreetClass::Local, Side::Right, &[]).named("X").title(), "X");
     }
 
     #[test]
