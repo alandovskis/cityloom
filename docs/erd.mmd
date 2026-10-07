@@ -19,7 +19,7 @@ erDiagram
     SEGMENT_KIND }o--|{ MODE : "serves (one or more)"
 
     JUNCTION_REVISION ||--o{ ARM : arms
-    ARM }o--o| STREET : "edge (uid; 0 = sample)"
+    ARM }o--o| STREET : "street (edge uid)"
     ARM ||--o{ LANE : lanes
     ARM |o--o| CROSSING : crossing
 
@@ -33,7 +33,7 @@ erDiagram
     STREET {
         usize a FK "end junction"
         usize b FK "end junction"
-        usize sample FK
+        StreetClass class "motorway, arterial, collector or local"
         string name "optional"
         f64x2 headings "optional; leaving a and b"
         i32x2_list shape "optional centreline mm, a to b"
@@ -87,10 +87,8 @@ erDiagram
         i32 x_mm
         i32 y_mm
         i32 corner_mm
-        usize sample FK
         bool linked "a place in the network: its streets and name are the network's"
         usize current "revision shown; undo and redo move it"
-        u32 next_uid
     }
     JUNCTION_REVISION {
         string label
