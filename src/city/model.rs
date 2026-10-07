@@ -21,14 +21,6 @@ use crate::street::model::{Editor, Street};
 /// Bump when what is saved changes shape; an older save is then left behind.
 const SAVE_VERSION: u32 = 1;
 
-/// What a place is called when it is not the sample city's numbering.
-pub(super) struct Names {
-    /// As a title: "Main Street and Side Road".
-    pub(super) name: String,
-    /// In a sentence: "the end of Main Street".
-    pub(super) end: String,
-}
-
 pub(super) struct NodeDef {
     pub(super) x_mm: i32,
     pub(super) y_mm: i32,
@@ -36,17 +28,16 @@ pub(super) struct NodeDef {
     pub(super) junction: bool,
     pub(super) control: usize,
     pub(super) corner_mm: i32,
-    pub(super) names: Option<Names>,
 }
 
 #[cfg(test)]
 const fn junction_at(x_m: i32, y_m: i32, control: usize, corner_mm: i32) -> NodeDef {
-    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm, names: None }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm }
 }
 
 #[cfg(test)]
 const fn gate_at(x_m: i32, y_m: i32) -> NodeDef {
-    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0, names: None }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0 }
 }
 
 pub(super) struct EdgeDef {
@@ -258,7 +249,7 @@ impl Layout {
         ((deg / junction::BEARING_STEP as f64).round() as i32 * junction::BEARING_STEP).rem_euclid(360)
     }
 
-    fn edges_at(&self, node: usize) -> Vec<usize> {
+    pub(super) fn edges_at(&self, node: usize) -> Vec<usize> {
         (0..self.edges.len()).filter(|&e| self.edges[e].a == node || self.edges[e].b == node).collect()
     }
 
@@ -273,18 +264,52 @@ impl Layout {
         order.iter().position(|&n| n == node).map_or(0, |p| p + 1)
     }
 
-    fn node_name(&self, node: usize) -> String {
-        if let Some(n) = &self.nodes[node].names {
-            return n.name.clone();
+    /// The distinct names of the streets meeting at `node`, in the order the edges are held.
+    fn street_names_at(&self, node: usize) -> Vec<String> {
+        let mut names: Vec<String> = Vec::new();
+        for e in self.edges_at(node) {
+            if let Some(n) = &self.edges[e].name
+                && !names.contains(n)
+            {
+                names.push(n.clone());
+            }
         }
-        if self.nodes[node].junction { format!("Junction {}", self.junction_number(node)) } else { "Edge of the map".to_string() }
+        names
     }
 
-    fn end_name(&self, node: usize) -> String {
-        if let Some(n) = &self.nodes[node].names {
-            return n.end.clone();
+    /// Who a junction's streets are, in a title: "Main Street and Side Road".
+    fn joined(names: &[String]) -> String {
+        match names {
+            [] => String::new(),
+            [one] => format!("{one} junction"),
+            [a, b] => format!("{a} and {b}"),
+            [a, b, c] => format!("{a}, {b} and {c}"),
+            [a, b, rest @ ..] => format!("{a}, {b} and {} more", rest.len()),
         }
-        if self.nodes[node].junction { format!("Junction {}", self.junction_number(node)) } else { "the edge of the map".to_string() }
+    }
+
+    /// A place as a title.
+    pub(super) fn node_name(&self, node: usize) -> String {
+        let names = self.street_names_at(node);
+        match (self.nodes[node].junction, names.first()) {
+            (true, Some(_)) => Self::joined(&names),
+            (true, None) => format!("Junction {}", self.junction_number(node)),
+            (false, Some(street)) if self.edges_at(node).len() == 1 => format!("End of {street}"),
+            (false, Some(street)) => format!("Connection on {street}"),
+            (false, None) => "Edge of the map".to_string(),
+        }
+    }
+
+    /// A place in a sentence.
+    pub(super) fn end_name(&self, node: usize) -> String {
+        let names = self.street_names_at(node);
+        match (self.nodes[node].junction, names.first()) {
+            (true, Some(_)) => Self::joined(&names),
+            (true, None) => format!("Junction {}", self.junction_number(node)),
+            (false, Some(street)) if self.edges_at(node).len() == 1 => format!("the end of {street}"),
+            (false, Some(street)) => format!("a connection on {street}"),
+            (false, None) => "the edge of the map".to_string(),
+        }
     }
 
     fn edge_name(&self, edge: usize) -> String {

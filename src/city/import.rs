@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use osm_network::{Control, Lane, LaneKind, Network, Way};
 
-use super::model::{City, EdgeDef, Layout, Names, NodeDef};
+use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
 use crate::shared::catalogue::{Side, kind_index};
 use crate::street::model::{Piece, Street};
@@ -53,16 +53,6 @@ fn control_of(c: Control) -> usize {
         Control::Signals => SIGNAL,
         Control::Signs => ALL_WAY_STOP,
         Control::None => PRIORITY,
-    }
-}
-
-fn join(names: &[String]) -> String {
-    match names {
-        [] => String::new(),
-        [one] => format!("{one} junction"),
-        [a, b] => format!("{a} and {b}"),
-        [a, b, c] => format!("{a}, {b} and {c}"),
-        [a, b, rest @ ..] => format!("{a}, {b} and {} more", rest.len()),
     }
 }
 
@@ -153,34 +143,14 @@ impl Layout {
 
         let nodes = nodes
             .iter()
-            .enumerate()
-            .map(|(i, n)| {
-                let incident: Vec<&String> = edges.iter().filter(|e| e.a == i || e.b == i).filter_map(|e| e.name.as_ref()).collect();
-                let mut distinct: Vec<String> = Vec::new();
-                for n in incident {
-                    if !distinct.contains(n) {
-                        distinct.push(n.clone());
-                    }
-                }
+            .map(|n| {
                 let junction = n.junction && (MIN_ARMS..=MAX_ARMS).contains(&degree[&n.id]);
-                let names = if junction {
-                    let title = join(&distinct);
-                    Names { end: title.clone(), name: title }
-                } else {
-                    let street = distinct.first().cloned().unwrap_or_default();
-                    if degree[&n.id] == 1 {
-                        Names { name: format!("End of {street}"), end: format!("the end of {street}") }
-                    } else {
-                        Names { name: format!("Connection on {street}"), end: format!("a connection on {street}") }
-                    }
-                };
                 NodeDef {
                     x_mm: ((n.x_m - min_x) * 1000.0).round() as i32,
                     y_mm: ((max_y - n.y_m) * 1000.0).round() as i32,
                     junction,
                     control: if junction { control_of(n.control) } else { 0 },
                     corner_mm: if junction { CORNER_MM } else { 0 },
-                    names: Some(names),
                 }
             })
             .collect();
@@ -316,6 +286,34 @@ mod tests {
         assert_eq!(v.edges.len(), 3);
         assert!(v.nodes.iter().all(|n| !n.junction));
         assert!(v.nodes.iter().all(|n| n.ok), "nothing to fail where there is no junction");
+    }
+
+    #[test]
+    fn a_places_title_follows_the_names_of_the_streets_that_meet_there() {
+        let mut layout = Layout::from_network(&crossing(), "Testville");
+        let junction = layout.nodes.iter().position(|n| n.junction).unwrap();
+        assert_eq!(layout.node_name(junction), "Side Road and Main Street");
+        assert_eq!(layout.end_name(junction), "Side Road and Main Street");
+        let gate = layout.nodes.iter().position(|n| !n.junction).unwrap();
+        let street = layout.edges[layout.edges_at(gate)[0]].name.clone().unwrap();
+        assert_eq!(layout.node_name(gate), format!("End of {street}"));
+        assert_eq!(layout.end_name(gate), format!("the end of {street}"));
+        // the title is not kept: renaming a street changes it
+        for e in &mut layout.edges {
+            if e.name.as_deref() == Some("Side Road") {
+                e.name = Some("Renamed Road".into());
+            }
+        }
+        assert_eq!(layout.node_name(junction), "Renamed Road and Main Street");
+    }
+
+    #[test]
+    fn a_meeting_that_cannot_be_drawn_is_titled_as_a_connection_on_its_street() {
+        let net = star(&[(-50.0, 200.0), (0.0, 200.0), (50.0, 200.0)]);
+        let v = City::from_network(&net, "Fan").view(0);
+        let meeting = v.nodes.iter().find(|n| n.uid == 1).unwrap();
+        assert!(!meeting.junction);
+        assert_eq!(meeting.name, "Connection on Side Road");
     }
 
     fn bare_street() -> Network {
