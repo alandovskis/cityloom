@@ -415,7 +415,6 @@ pub struct JView {
     pub linked: bool,
     /// A street can be taken away: the junction is not the city's and keeps three.
     pub can_remove: bool,
-    pub sample: usize,
     pub region: &'static str,
     pub drive_side: &'static str,
     pub control: &'static str,
@@ -850,10 +849,9 @@ impl Junction {
             Target::Cycle => Selection { kind: Some("cycle"), uid: 0, lane: 0 },
         };
         JView {
-            name: if self.is_linked() { self.name().to_string() } else { JUNCTION_SAMPLES[self.sample()].name.to_string() },
+            name: self.name().to_string(),
             linked: self.is_linked(),
             can_remove: !self.is_linked() && n > MIN_ARMS,
-            sample: self.sample(),
             region: REGIONS[region].id,
             drive_side: if side == Side::Left { "left" } else { "right" },
             control: CONTROLS[s.control].id,

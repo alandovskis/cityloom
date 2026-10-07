@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 use crate::junction::geometry::gap;
 use crate::street::model::{Editor, Street, View};
 
+#[cfg(test)]
+mod fixtures;
+#[cfg(test)]
+pub use fixtures::JUNCTION_SAMPLES;
+
 pub const LEFT: u8 = 1;
 pub const THROUGH: u8 = 2;
 pub const RIGHT: u8 = 4;
@@ -409,50 +414,6 @@ pub fn blocked(arms: &[Arm], i: usize, j: usize) -> Option<&'static str> {
     }
 }
 
-// ---- samples ----------------------------------------------------------------
-
-pub struct SampleArm {
-    pub street: usize,
-    pub bearing: i32,
-    pub offset_mm: i32,
-    pub corner_mm: i32,
-    /// Starts with a refuge island in its crossing.
-    pub island: bool,
-}
-
-const fn sa(street: usize, bearing: i32, offset_mm: i32, corner_mm: i32, island: bool) -> SampleArm {
-    SampleArm { street, bearing, offset_mm, corner_mm, island }
-}
-
-pub struct JunctionSample {
-    pub name: &'static str,
-    pub control: usize,
-    pub arms: &'static [SampleArm],
-}
-
-pub const JUNCTION_SAMPLES: [JunctionSample; 4] = [
-    JunctionSample {
-        name: "Avenue and street",
-        control: SIGNAL,
-        arms: &[sa(1, 0, 0, 6_000, true), sa(0, 90, 0, 6_000, false), sa(1, 180, 0, 6_000, true), sa(0, 270, 0, 6_000, false)],
-    },
-    JunctionSample {
-        name: "Street and lane",
-        control: PRIORITY,
-        arms: &[sa(0, 90, 0, 3_000, false), sa(2, 180, 0, 3_000, false), sa(0, 270, 0, 3_000, false)],
-    },
-    JunctionSample {
-        name: "Offset crossing",
-        control: PRIORITY,
-        arms: &[sa(2, 0, 2_500, 3_000, false), sa(0, 90, 0, 3_000, false), sa(2, 180, 2_500, 3_000, false), sa(0, 270, 0, 3_000, false)],
-    },
-    JunctionSample {
-        name: "Five ways",
-        control: ALL_WAY_STOP,
-        arms: &[sa(0, 0, 0, 4_000, false), sa(2, 70, 0, 3_000, false), sa(1, 145, 0, 4_000, true), sa(2, 215, 0, 3_000, false), sa(0, 290, 0, 4_000, false)],
-    },
-];
-
 // ---- the editor ---------------------------------------------------------------
 
 /// Why an edit was refused, in words for the resident.
@@ -498,7 +459,6 @@ impl Refusal {
 }
 
 pub struct Junction {
-    sample: usize,
     /// Set when the junction is a place in a city: its streets are the city's
     /// and its name is the city's, so streets cannot be added, removed or swapped.
     linked: bool,
@@ -507,7 +467,6 @@ pub struct Junction {
     pub region: usize,
     states: Vec<State>,
     cursor: usize,
-    next_uid: u32,
     pub selected: Target,
     gesture: Option<State>,
     pending_label: String,
@@ -520,57 +479,6 @@ fn snap(v: i32, step: i32) -> i32 {
 }
 
 impl Junction {
-    /// The sandbox junction the tests are written against, on one of the samples. It is not part of the app.
-    #[cfg(test)]
-    pub fn new(sample: usize) -> Junction {
-        let mut j = Junction {
-            sample: 0,
-            linked: false,
-            name: String::new(),
-            region: 0,
-            states: Vec::new(),
-            cursor: 0,
-            next_uid: 1,
-            selected: Target::None,
-            gesture: None,
-            pending_label: String::new(),
-            refusal: None,
-        };
-        j.load_sample(sample);
-        j
-    }
-
-    pub fn sample(&self) -> usize {
-        self.sample
-    }
-
-    pub fn load_sample(&mut self, sample: usize) {
-        let sample = sample.min(JUNCTION_SAMPLES.len() - 1);
-        let s = &JUNCTION_SAMPLES[sample];
-        self.sample = sample;
-        self.next_uid = 1;
-        let mut arms: Vec<Arm> = s
-            .arms
-            .iter()
-            .map(|a| {
-                let uid = self.next_uid;
-                self.next_uid += 1;
-                let mut arm = self.fresh_arm(uid, a.street, a.bearing, a.offset_mm);
-                arm.corner_mm = a.corner_mm;
-                if let Some(c) = arm.crossing.as_mut() {
-                    c.island = a.island;
-                }
-                arm
-            })
-            .collect();
-        arms.sort_by_key(|a| a.bearing);
-        normalize(&mut arms, self.region);
-        self.states = vec![State { label: "Junction today".into(), arms, control: s.control, ring_extra_mm: 0, bus: None, cycle: None }];
-        self.cursor = 0;
-        self.selected = Target::None;
-        self.gesture = None;
-    }
-
     /// A junction that is a place in a city. `today` is how it was first laid
     /// out and `now` how it stands, each with its arms' streets attached. When
     /// the streets have changed so that `now` can no longer be drawn it is
@@ -585,11 +493,9 @@ impl Junction {
         let today = ease(&settle(today), region)?;
         let now = ease(&settle(now), region);
         let mut j = Junction {
-            sample: 0,
             linked: true,
             name: name.to_string(),
             region,
-            next_uid: today.arms.iter().map(|a| a.uid).max().unwrap_or(0) + 1,
             states: vec![State { label: "Junction today".into(), ..today.clone() }],
             cursor: 0,
             selected: Target::None,
@@ -620,13 +526,6 @@ impl Junction {
 
     pub fn is_linked(&self) -> bool {
         self.linked
-    }
-
-    /// An arm of a sample junction: it reads the sample street `sample`, laid out for the right-hand side.
-    fn fresh_arm(&self, uid: u32, sample: usize, bearing: i32, offset_mm: i32) -> Arm {
-        let mut arm = Arm::new(uid, bearing, offset_mm);
-        arm.section = Some(Street::sample(sample, Side::Right));
-        arm
     }
 
     pub fn current(&self) -> &State {
@@ -785,14 +684,10 @@ impl Junction {
         if self.cursor == 0 && self.states.len() == 1 {
             return false;
         }
-        if self.linked {
-            self.states.truncate(1);
-            self.cursor = 0;
-            self.selected = Target::None;
-            self.gesture = None;
-            return true;
-        }
-        self.load_sample(self.sample);
+        self.states.truncate(1);
+        self.cursor = 0;
+        self.selected = Target::None;
+        self.gesture = None;
         true
     }
 
@@ -1372,6 +1267,15 @@ pub fn valid(s: &State, region: usize) -> bool {
 mod tests {
     use super::*;
     use crate::shared::catalogue::SAMPLES;
+
+    #[test]
+    fn a_junction_from_a_city_has_the_name_the_city_gives_it() {
+        let city = crate::city::model::City::new();
+        let view = city.view(0);
+        let node = view.nodes.iter().find(|n| n.junction).unwrap();
+        let j = city.junction_editor(node.uid, 0).unwrap();
+        assert_eq!(j.view().name, node.name);
+    }
 
     #[test]
     fn an_arm_is_the_street_it_reads() {
