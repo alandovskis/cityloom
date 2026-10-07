@@ -1,16 +1,13 @@
 erDiagram
     METROPOLITAN_REGION ||--|| NETWORK : "network"
 
-    NETWORK ||--o{ EDGE_DEF : edges
-    NETWORK ||--o{ STREET : "streets (by edge uid)"
+    NETWORK ||--o{ STREET : "streets (edges, by uid)"
     NETWORK ||--o{ JUNCTION : "junctions (nodes, by uid)"
     JUNCTION ||--|{ JUNCTION_REVISION : "revisions (oldest first)"
     JUNCTION }o--|| CATALOGUE_JUNCTION_SAMPLE : sample
     JUNCTION ||--o| NAMES : "names (sample only)"
-    EDGE_DEF }o--|| JUNCTION : "a"
-    EDGE_DEF }o--|| JUNCTION : "b"
-    EDGE_DEF |o--o| STREET : "section (imported)"
-    EDGE_DEF }o--|| CATALOGUE_STREET : "street (sample idx)"
+    STREET }o--|| JUNCTION : "a"
+    STREET }o--|| JUNCTION : "b"
 
     STREET ||--|{ STREET_REVISION : "revisions (oldest first; the first is the street as first laid out)"
     STREET_REVISION ||--o{ SEGMENT : segments
@@ -25,9 +22,8 @@ erDiagram
     SEGMENT_KIND }o--|{ MODE : "serves (one or more)"
 
     JUNCTION_REVISION ||--o{ ARM : arms
-    ARM }o--o| EDGE_DEF : "edge (uid; 0 = sample)"
+    ARM }o--o| STREET : "edge (uid; 0 = sample)"
     ARM }o--|| CATALOGUE_STREET : "street"
-    ARM |o--o| STREET : "section (not saved)"
     ARM ||--o{ LANE : lanes
     ARM |o--o| CROSSING : crossing
 
@@ -38,17 +34,13 @@ erDiagram
         Side side
         f64x2 origin_m "optional lon/lat anchor"
     }
-    EDGE_DEF {
-        usize a FK
-        usize b FK
-        usize street FK
-        string name "optional"
-        f64x2 headings "optional"
-        i32x2_list shape "optional centreline mm"
-    }
     STREET {
+        usize a FK "end junction"
+        usize b FK "end junction"
         usize sample FK
         string name "optional"
+        f64x2 headings "optional; leaving a and b"
+        i32x2_list shape "optional centreline mm, a to b"
         i32 row_mm
         usize current "revision shown; undo and redo move it"
         u32 next_uid
