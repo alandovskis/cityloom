@@ -4,7 +4,6 @@ erDiagram
     NETWORK ||--o{ STREET : "streets (edges, by uid)"
     NETWORK ||--o{ JUNCTION : "junctions (nodes, by uid)"
     JUNCTION ||--|{ JUNCTION_REVISION : "revisions (oldest first)"
-    JUNCTION }o--|| CATALOGUE_JUNCTION_SAMPLE : sample
     JUNCTION ||--o| NAMES : "names (sample only)"
     STREET }o--|| JUNCTION : "a"
     STREET }o--|| JUNCTION : "b"
