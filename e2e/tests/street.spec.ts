@@ -209,6 +209,16 @@ test.describe("the street editor on a street of the city", () => {
     await expect(page.locator("#fit")).toHaveText(/0\.3 m of the street is still unused\.$/);
   });
 
+  test("a width typed with a decimal comma is read as a decimal", async ({ page }) => {
+    await selectFirstPiece(page);
+    await page.keyboard.press("Enter");
+    const width = page.locator("#inspector input").first();
+    await expect(width).toBeFocused();
+    await width.fill("2,5");
+    await width.press("Enter");
+    await expect(width).toHaveValue("2.50");
+  });
+
   test("the notes list the width shared out, the checks, the changes and the transit measures", async ({ page }) => {
     await expect(page.locator("#space")).not.toBeEmpty();
     await page.locator("#t-checks").click();

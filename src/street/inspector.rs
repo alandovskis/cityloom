@@ -159,14 +159,18 @@ pub fn commit_width(w: SheetWatch, uid: u32, typed: &str) -> bool {
     true
 }
 
+/// The step an arrow key makes in the width field, as a number field would.
+pub fn width_key(key: &str) -> Option<i32> {
+    match key {
+        "ArrowUp" => Some(1),
+        "ArrowDown" => Some(-1),
+        _ => None,
+    }
+}
+
 fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
     let value = move || w.segment(uid, |s| w.units().fixed(s.width_mm, 2)).unwrap_or_default();
     let range = move || w.segment(uid, |s| width_range(s, w.units())).unwrap_or_default();
-    let (lo, hi) = (
-        move || w.segment(uid, |s| w.units().fixed(s.min_mm, 2)).unwrap_or_default(),
-        move || w.segment(uid, |s| w.units().fixed(s.max_mm, 2)).unwrap_or_default(),
-    );
-    let step = move || if w.units() == Units::Metres { "0.1" } else { "0.25" };
     let nudge = move |dir: i32| {
         w.edit(|e| e.nudge_width(uid, dir * w.units_now().step_mm()));
     };
@@ -177,15 +181,20 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
                 <button type="button" class="ico" aria-label=move || step_label(false, w.units()) on:click=move |_| nudge(-1)>{icon("M3 7h8")}</button>
                 <span class="wfield">
                     <input
-                        type="number"
+                        type="text"
                         id="width"
                         inputmode="decimal"
-                        step=step
-                        min=lo
-                        max=hi
+                        autocomplete="off"
                         value=value
                         prop:value=value
                         aria-labelledby="i-h-width"
+                        aria-describedby="i-width-range"
+                        on:keydown=move |e| {
+                            if let Some(dir) = width_key(&e.key()) {
+                                e.prevent_default();
+                                nudge(dir);
+                            }
+                        }
                         on:change=move |e| {
                             let input = leptos::prelude::event_target::<HtmlInputElement>(&e);
                             if !commit_width(w, uid, &input.value()) {
@@ -197,7 +206,7 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
                 </span>
                 <button type="button" class="ico" aria-label=move || step_label(true, w.units()) on:click=move |_| nudge(1)>{icon("M3 7h8M7 3v8")}</button>
             </div>
-            <p class="insp-range">{range}</p>
+            <p class="insp-range" id="i-width-range">{range}</p>
         </section>
     }
 }

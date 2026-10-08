@@ -338,6 +338,23 @@ fn a_width_typed_with_a_comma_is_committed() {
 }
 
 #[test]
+fn the_arrow_keys_step_the_width_field() {
+    assert_eq!(inspector::width_key("ArrowUp"), Some(1));
+    assert_eq!(inspector::width_key("ArrowDown"), Some(-1));
+    assert_eq!(inspector::width_key("Enter"), None);
+}
+
+#[test]
+fn the_width_field_is_text_so_a_comma_reaches_it() {
+    let s = street_shared(0);
+    let u = segment(&s, 2);
+    s.edit(|e| e.select(Some(u)));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains("id=\"width\"") && h.contains("type=\"text\"") && h.contains("inputmode=\"decimal\""));
+    assert!(!h.contains("type=\"number\""));
+}
+
+#[test]
 fn a_selected_piece_s_panel_has_its_width_and_surface_and_no_buttons_to_move_it() {
     let s = street_shared(0);
     let u = segment(&s, 2);
@@ -459,6 +476,6 @@ fn the_panel_s_lengths_and_steps_follow_the_units() {
     let u = segment(&s, 2);
     s.edit(|e| e.select(Some(u)));
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    assert!(h.contains("10.8 ft wide") && h.contains("aria-label=\"Narrower by 1.0 ft\"") && h.contains("step=\"0.25\""));
+    assert!(h.contains("10.8 ft wide") && h.contains("aria-label=\"Narrower by 1.0 ft\""));
     assert!(h.contains("Allowed ") && h.contains(" ft"));
 }
