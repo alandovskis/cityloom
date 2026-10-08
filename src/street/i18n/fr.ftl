@@ -90,7 +90,7 @@ check-access-ok = Une voie de { $amount } ou plus
 check-access-bad = Aucune voie de { $amount } ou plus
 check-passes = { " " }: réussite
 check-fails = { " " }: échec
-badge-fail = { " " }en échec
+badge-fail = { " " }en échec
 failing =
     { $n ->
         [one] { $n } vérification échoue

@@ -88,9 +88,9 @@ check-fits-full = Every metre is used
 check-fits-over = { $amount } too wide. Narrow or remove a piece.
 check-access-ok = A lane of { $amount } or more
 check-access-bad = No lane of { $amount } or more
-check-passes = { " " }: passes
-check-fails = { " " }: fails
-badge-fail = { " " }fail
+check-passes = : passes
+check-fails = : fails
+badge-fail = { " " }fail
 failing =
     { $n ->
         [one] 1 check fails

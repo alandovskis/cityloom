@@ -535,3 +535,16 @@ fn the_notes_are_drawn_again_in_the_language_the_shell_switches() {
     let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
     assert!(h.contains("Personnes par heure"));
 }
+
+#[test]
+fn the_checks_and_their_count_are_said_in_english_with_no_stray_space() {
+    let s = street_shared(0);
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(h.contains("<span class=\"sr-only\">: passes</span>"), "{h}");
+    let u = segment(&s, 0);
+    s.edit(|e| e.set_width(u, 3_800));
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(h.contains("<span class=\"sr-only\">: fails</span>"), "{h}");
+    let badge = street_html(|| view! { <notes::ChecksBadge vm=s.clone()/> });
+    assert!(badge.contains("<span class=\"sr-only\"> fail</span>"), "{badge}");
+}
