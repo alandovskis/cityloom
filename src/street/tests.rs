@@ -356,19 +356,31 @@ fn a_planting_strip_is_about_planting_and_a_transit_lane_can_carry_trams() {
 }
 
 #[test]
-fn the_rarer_settings_sit_under_one_disclosure_that_is_open_for_a_piece_with_other_times() {
+fn every_setting_of_a_piece_is_shown_with_nothing_to_open() {
     let s = street_shared(1);
     let u = segment(&s, 3);
     s.edit(|e| e.select(Some(u)));
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    assert!(h.contains("class=\"insp-more\"") && h.contains("More about this piece") && h.contains("Other times") && h.contains("Direction"));
-    assert!(h.contains("Add other times"));
-    let tag = h.split("class=\"insp-more\"").nth(1).unwrap().split('>').next().unwrap().to_string();
-    assert!(!tag.contains("open"), "{tag}");
+    assert!(!h.contains("<details") && !h.contains("insp-more") && !h.contains("More about this piece"), "{h}");
+    assert!(h.contains(">Other times</h3>") && h.contains("Add other times") && h.contains(">Direction</h3>"));
     s.edit(|e| e.add_variant(u));
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
     assert_eq!(count(&h, "class=\"var now\"") + count(&h, "class=\"var\""), 1);
     assert!(h.contains("aria-label=\"Type 1\"") && h.contains("aria-label=\"From\"") && h.contains("aria-label=\"To\""));
+}
+
+#[test]
+fn a_sidewalk_shows_its_curb_with_the_rest_and_a_planting_strip_has_no_direction() {
+    let s = street_shared(0);
+    let walk = segment(&s, 0);
+    s.edit(|e| e.select(Some(walk)));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Curb</h3>") && !h.contains("<details"));
+    let s = street_shared(1);
+    let planting = s.view().segments.iter().find(|x| KINDS[x.kind].id == "planting").unwrap().uid;
+    s.edit(|e| e.select(Some(planting)));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(!h.contains(">Direction</h3>") && !h.contains("<details"));
 }
 
 #[test]

@@ -1057,23 +1057,6 @@ svg pattern circle {
   color: var(--ink-2);
   font-size: 13px;
 }
-.insp-more > summary {
-  padding: 6px 0;
-  color: var(--ink-2);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.insp-more > summary:hover {
-  color: var(--ink);
-}
-.insp-more[open] > summary {
-  margin-bottom: 8px;
-}
-.insp-more > .insp-sec + .insp-sec {
-  margin-top: 14px;
-}
-
 .wfield {
   display: inline-flex;
   align-items: center;
@@ -1754,11 +1737,6 @@ svg pattern circle {
   .inspector select,
   .var input[type="time"] {
     min-height: 44px;
-  }
-  .insp-more > summary {
-    min-height: 44px;
-    display: flex;
-    align-items: center;
   }
   .turn {
     min-width: 44px;

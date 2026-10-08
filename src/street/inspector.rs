@@ -377,38 +377,21 @@ fn curb_section(w: SheetWatch, uid: u32, curbs: &'static [usize]) -> impl IntoVi
     )
 }
 
-/// The rarer settings: other times, direction and curb, under one disclosure.
-/// It stays open once opened, and is open for a piece that already has other
-/// times, since those change what the drawing shows.
-fn more_section(w: SheetWatch, uid: u32, open: RwSignal<bool>) -> impl IntoView {
+/// The rarer settings, shown with the rest: other times, direction and curb, for the kinds of piece that have them.
+fn rarer_sections(w: SheetWatch, uid: u32) -> impl IntoView {
     let kind = Memo::new(move |_| kind_of(w, uid));
     let has_times = Memo::new(move |_| w.segment(uid, |s| !s.alt_kinds.is_empty() || !s.variants.is_empty()).unwrap_or(false));
-    let forced = move || w.segment(uid, |s| !s.variants.is_empty()).unwrap_or(false);
     move || {
         let k = &KINDS[kind.get()];
-        let any = has_times.get() || k.direction != DirectionRule::None || k.has_curb;
-        any.then(|| {
-            view! {
-                <details
-                    class="insp-more"
-                    prop:open=move || open.get() || forced()
-                    on:toggle=move |e| {
-                        if !forced() {
-                            open.set(leptos::prelude::event_target::<leptos::web_sys::HtmlDetailsElement>(&e).open());
-                        }
-                    }
-                >
-                    <summary>"More about this piece"</summary>
-                    {has_times.get().then(|| times_section(w, uid))}
-                    {(k.direction != DirectionRule::None).then(|| direction_section(w, uid, k.direction == DirectionRule::Optional))}
-                    {k.has_curb.then(|| curb_section(w, uid, k.curbs))}
-                </details>
-            }
-        })
+        view! {
+            {has_times.get().then(|| times_section(w, uid))}
+            {(k.direction != DirectionRule::None).then(|| direction_section(w, uid, k.direction == DirectionRule::Optional))}
+            {k.has_curb.then(|| curb_section(w, uid, k.curbs))}
+        }
     }
 }
 
-fn piece_panel(w: SheetWatch, uid: u32, more_open: RwSignal<bool>) -> AnyView {
+fn piece_panel(w: SheetWatch, uid: u32) -> AnyView {
     let kind = Memo::new(move |_| kind_of(w, uid));
     let name = move || KINDS[kind.get()].name;
     let sub = move || {
@@ -423,7 +406,7 @@ fn piece_panel(w: SheetWatch, uid: u32, more_open: RwSignal<bool>) -> AnyView {
         {width_section(w, uid)}
         {surface_section(w, uid)}
         {move || (KINDS[kind.get()].id == "bus").then(|| vehicle_section(w, uid))}
-        {more_section(w, uid, more_open)}
+        {rarer_sections(w, uid)}
     }
     .into_any()
 }
@@ -431,7 +414,6 @@ fn piece_panel(w: SheetWatch, uid: u32, more_open: RwSignal<bool>) -> AnyView {
 #[component]
 pub fn StreetInspector(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
-    let more_open = RwSignal::new(false);
     // The panel is drawn again only when the selection changes; edits change
     // what is in it, not what it is made of.
     let selected = Memo::new(move |_| w.view().selected);
@@ -450,7 +432,7 @@ pub fn StreetInspector(vm: Rc<StreetVm>) -> impl IntoView {
         }
     });
     move || match selected.get() {
-        Some(uid) => piece_panel(w, uid, more_open),
+        Some(uid) => piece_panel(w, uid),
         None => view! { <p class="insp-empty">"Select a piece to change its width and surface."</p> }.into_any(),
     }
 }
