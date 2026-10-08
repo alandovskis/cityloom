@@ -39,12 +39,15 @@ The French the app speaks (fr-CA). One term per English word, used everywhere. A
 | Furniture | Mobilier urbain |
 | Utilities | Services publics |
 
+`mode-bike` and `group-cycling` are both `Vélo` on purpose: the mode and its group of pieces are one idea.
+
 ## Terms to confirm
 
 Chosen as the most standard Québec term, but the catalogue's meaning leaves room for another:
 
 - Transit lane: `Voie réservée au transport en commun` (could be `Voie réservée aux autobus` if it is only ever a bus lane).
 - Bike lane: `Piste cyclable` (a `Bande cyclable` if it is only a painted lane).
+- Bike rack: `Support à vélos` (or `Support à vélo`).
 - Utility pole: `Poteau de services publics` (or `Poteau d’électricité`, `Poteau de service`).
 - Bus station: `Station d’autobus` (or `Gare d’autobus` for a terminal).
 - Bikeshare station: `Station de vélos en libre-service` (or the brand-like `Station BIXI`).

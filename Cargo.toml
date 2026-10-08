@@ -29,3 +29,4 @@ lto = true
 [dev-dependencies]
 fluent-syntax = "0.12.0"
 leptos = { version = "0.8.21", features = ["ssr"] }
+proc-macro2 = { version = "1.0.107", features = ["span-locations"] }

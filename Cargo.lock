@@ -270,6 +270,7 @@ dependencies = [
  "js-sys",
  "leptos",
  "osm_network",
+ "proc-macro2",
  "serde",
  "serde_json",
  "unic-langid",
