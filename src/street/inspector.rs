@@ -319,6 +319,10 @@ fn variant_row(w: SheetWatch, uid: u32, vi: usize) -> impl IntoView {
                 <span aria-hidden="true">"to"</span>
                 <input type="time" step="900" aria-label="To" prop:value=move || get(&|v| hhmm(v.to_min)) value=move || get(&|v| hhmm(v.to_min)) on:change=move |e| times(false, event_target_value(&e))/>
             </span>
+            {move || {
+                let days = get(&|v| v.days.clone().unwrap_or_default());
+                (!days.is_empty()).then(|| view! { <span class="var-days">{days}</span> })
+            }}
             <button
                 type="button"
                 class="ico danger"

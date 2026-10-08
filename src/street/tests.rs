@@ -379,6 +379,25 @@ fn the_rarer_settings_sit_under_one_disclosure_that_is_open_for_a_piece_with_oth
 }
 
 #[test]
+fn the_days_of_a_window_are_said_in_its_row_and_a_window_of_every_day_says_none() {
+    use crate::shared::catalogue::{Side, StreetClass, kind_index};
+    use crate::street::model::{Piece, Street, Window};
+    let kind = |id| kind_index(id).unwrap();
+    let rows = |days: Option<&str>| {
+        let window = Window { kind: kind("bus"), from_min: 360, to_min: 600, days: days.map(str::to_string) };
+        let street =
+            Street::imported(StreetClass::Local, Side::Right, &[Piece { kind: kind("parking"), width_mm: 3000, direction: Some(0), variants: vec![window] }]);
+        let s = StreetVm::new(crate::shared::platform::browser_ports(), Editor::from_street(&street, &street, 0), None);
+        let u = segment(&s, 0);
+        s.edit(|e| e.select(Some(u)));
+        street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> })
+    };
+    let h = rows(Some("Mo-Fr"));
+    assert!(h.contains("class=\"var-days\"") && h.contains("Mo-Fr"), "{h}");
+    assert!(!rows(None).contains("var-days"));
+}
+
+#[test]
 fn a_sidewalk_has_a_curb_to_choose_and_a_driving_lane_has_none() {
     let s = street_shared(0);
     let walk = segment(&s, 0);

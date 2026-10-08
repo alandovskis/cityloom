@@ -52,6 +52,10 @@ pub struct Variant {
     /// End of the window (not included). Earlier than `from_min` means the
     /// window runs past midnight.
     pub to_min: i32,
+    /// The days of the week it applies on, as OSM writes them (`Mo-Fr`), where the window is not every day.
+    /// Only said: the sheet's clock has no day.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub days: Option<String>,
 }
 
 /// Time of day is kept in quarter hours; a window is a set of those.
@@ -186,11 +190,13 @@ pub struct Piece {
 }
 
 /// A time of day, in minutes after midnight and on quarter hours as `Variant`'s are, that a piece is of another kind.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Window {
     pub kind: usize,
     pub from_min: i32,
     pub to_min: i32,
+    /// The days of the week, as `Variant::days`.
+    pub days: Option<String>,
 }
 
 impl Street {
@@ -215,6 +221,7 @@ impl Street {
                         direction: direction_for(w.kind, g.direction),
                         from_min: w.from_min,
                         to_min: w.to_min,
+                        days: w.days.clone(),
                     })
                     .collect();
                 let (lo, hi) = g.bounds();
@@ -699,7 +706,7 @@ impl Editor {
         let label = format!("{} is {} {}-{}", name, KINDS[kind].name.to_lowercase(), clock(from_min), clock(to_min));
         self.edit(label, |segs| {
             let d = &mut segs[pos];
-            d.variants.push(Variant { kind, material: KINDS[kind].materials[0], direction: direction_for(kind, d.direction), from_min, to_min });
+            d.variants.push(Variant { kind, material: KINDS[kind].materials[0], direction: direction_for(kind, d.direction), from_min, to_min, days: None });
             let (lo, hi) = d.bounds();
             d.width_mm = d.width_mm.clamp(lo, hi);
             true
@@ -1044,6 +1051,7 @@ impl Editor {
                             direction: v.direction.map(|d| DIRECTIONS[d].id),
                             from_min: v.from_min,
                             to_min: v.to_min,
+                            days: v.days.clone(),
                         })
                         .collect(),
                     active_variant: s.variant_at(self.time_min),
@@ -1161,6 +1169,7 @@ pub struct VariantView {
     pub material: &'static str,
     pub from_min: i32,
     pub to_min: i32,
+    pub days: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1275,7 +1284,12 @@ mod tests {
     #[test]
     fn a_piece_with_windows_is_its_kind_outside_them_and_the_window_kind_inside() {
         let (parking, bus) = (kind("parking"), kind("bus"));
-        let piece = Piece { kind: parking, width_mm: 3400, direction: Some(0), variants: vec![Window { kind: bus, from_min: 6 * 60, to_min: 10 * 60 }] };
+        let piece = Piece {
+            kind: parking,
+            width_mm: 3400,
+            direction: Some(0),
+            variants: vec![Window { kind: bus, from_min: 6 * 60, to_min: 10 * 60, days: Some("Mo-Fr".into()) }],
+        };
         let s = Street::imported(StreetClass::Local, Side::Right, &[piece]);
         assert!(s.is_sound());
         let g = &s.segments[0];
@@ -1285,6 +1299,8 @@ mod tests {
         // the width is one both kinds allow
         assert_eq!(g.width_mm, 3000);
         assert_eq!(g.variants[0].direction, g.direction);
+        assert_eq!(g.variants[0].days.as_deref(), Some("Mo-Fr"));
+        assert_eq!(s.segments[0].variants[0].days, Editor::from_street(&s, &s, 0).view().segments[0].variants[0].days);
     }
 
     fn ids(e: &Editor) -> Vec<&'static str> {

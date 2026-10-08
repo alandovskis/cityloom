@@ -284,7 +284,7 @@ pub fn arrange(code: &str, existing: &[Segment], row_mm: i32, side: Side, freewa
                 DirectionRule::None => None,
                 _ => Some(if flip { 1 - seg.direction.unwrap_or(half) } else { half }),
             };
-            seg.variants.push(Variant { kind: vk, material: KINDS[vk].materials[0], direction: vdir, from_min: from, to_min: to });
+            seg.variants.push(Variant { kind: vk, material: KINDS[vk].materials[0], direction: vdir, from_min: from, to_min: to, days: None });
         }
         if on_road(s) {
             idx += 1;

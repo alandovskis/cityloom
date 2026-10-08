@@ -42,15 +42,22 @@ fn piece(lane: &Lane) -> Piece {
     // A bus lane at some hours is parking the rest of the time
     if let Some(windows) = lane.hours.as_deref().filter(|_| lane.kind == LaneKind::Bus).and_then(windows_of) {
         base = kind("parking");
-        variants = windows.into_iter().map(|(from_min, to_min)| Window { kind: kind("bus"), from_min, to_min }).collect();
+        let days = days_of(lane.hours.as_deref().unwrap_or_default());
+        variants = windows.into_iter().map(|(from_min, to_min)| Window { kind: kind("bus"), from_min, to_min, days: days.clone() }).collect();
     }
     Piece { kind: base, width_mm: (lane.width_m * 1000.0).round() as i32, direction: Some(usize::from(lane.way == Way::Backward)), variants }
 }
 
 const SLOT_MIN: i32 = 15;
 
+/// What opening hours say before their times, as written: `Mo-Fr`, `Sa,Su`; nothing for every day.
+fn days_of(hours: &str) -> Option<String> {
+    let days: Vec<&str> = hours.split_whitespace().filter(|t| !t.contains(':')).collect();
+    (!days.is_empty()).then(|| days.join(" "))
+}
+
 /// The windows of the day, in minutes (from, to) with midnight at the end of a window as 0, that OSM
-/// opening hours name: `Mo-Fr 06:00-10:00,14:30-19:00`. The days are not kept, nor is a time to the minute:
+/// opening hours name: `Mo-Fr 06:00-10:00,14:30-19:00`. The days are for `days_of`; a time to the minute:
 /// a window starts on the quarter hour before and ends on the one after. Hours with several rules, an `off`,
 /// a window past midnight or two that overlap are not read.
 fn windows_of(hours: &str) -> Option<Vec<(i32, i32)>> {
@@ -207,6 +214,14 @@ mod tests {
 
     fn windows(p: &Piece) -> Vec<(&'static str, i32, i32)> {
         p.variants.iter().map(|w| (KINDS[w.kind].id, w.from_min, w.to_min)).collect()
+    }
+
+    #[test]
+    fn the_days_of_the_hours_go_with_each_window() {
+        let days = |hours| piece(&bus_lane(Some(hours))).variants.iter().map(|w| w.days.clone()).collect::<Vec<_>>();
+        assert_eq!(days("Mo-Fr 06:00-10:00,14:30-19:00"), [Some("Mo-Fr".to_string()), Some("Mo-Fr".to_string())]);
+        assert_eq!(days("Sa,Su 08:00-12:00"), [Some("Sa,Su".to_string())]);
+        assert_eq!(days("06:00-10:00"), [None]);
     }
 
     #[test]

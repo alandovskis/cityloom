@@ -71,8 +71,14 @@ pub fn clock_note(s: &SegView) -> String {
     if s.variants.is_empty() {
         return String::new();
     }
-    let others: Vec<String> =
-        s.variants.iter().map(|v| format!("{} {}\u{2013}{}", KINDS[v.kind].name.to_lowercase(), hhmm(v.from_min), hhmm(v.to_min))).collect();
+    let others: Vec<String> = s
+        .variants
+        .iter()
+        .map(|v| {
+            let days = v.days.as_ref().map_or(String::new(), |d| format!(" {d}"));
+            format!("{}{days} {}\u{2013}{}", KINDS[v.kind].name.to_lowercase(), hhmm(v.from_min), hhmm(v.to_min))
+        })
+        .collect();
     format!("{} except {}", KINDS[s.base_kind].name, others.join(", "))
 }
 
@@ -582,6 +588,8 @@ mod tests {
         let note = clock_note(&s);
         assert!(note.starts_with(KINDS[s.base_kind].name) && note.contains(" except "), "{note}");
         assert!(note.contains("07:00\u{2013}10:00"), "{note}");
+        s.variants[0].days = Some("Mo-Fr".into());
+        assert!(clock_note(&s).contains("Mo-Fr 07:00\u{2013}10:00"), "{}", clock_note(&s));
         s.variants.clear();
         assert_eq!(clock_note(&s), "");
     }

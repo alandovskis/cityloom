@@ -1288,6 +1288,11 @@ svg pattern circle {
   gap: 6px;
   font-size: 14px;
 }
+.var-days {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  color: var(--ink-2);
+}
 .var-times input {
   width: 0;
   flex: 1;
