@@ -211,7 +211,8 @@ mod tests {
 
     fn tiny_network() -> Network {
         use osm_network::{Control, Lane, LaneKind, Node, Road, Way};
-        let node = |id, x_m, junction| Node { id, osm_nodes: vec![id as i64], x_m, y_m: 0.0, junction, control: Control::None };
+        let node =
+            |id, x_m, junction| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m: 0.0, junction, control: Control::None };
         let lane = |kind, way| Lane { kind, way, width_m: 3.0, hours: None };
         Network {
             left_hand: false,
@@ -219,6 +220,7 @@ mod tests {
             roads: vec![Road {
                 id: 1,
                 osm_ways: vec![7],
+                osm_versions: Default::default(),
                 name: Some("Only Street".into()),
                 highway: "residential".into(),
                 from: 1,

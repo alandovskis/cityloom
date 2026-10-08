@@ -42,6 +42,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
         net.nodes.push(Node {
             id: id.0 as u32,
             osm_nodes: i.osm_ids.iter().map(|n| n.0).collect(),
+            osm_versions: i.osm_ids.iter().filter_map(|n| Some((n.0, doc.nodes.get(n)?.version?))).collect(),
             x_m: c.x(),
             y_m: height - c.y(),
             junction: i.kind == IntersectionKind::Intersection,
@@ -58,6 +59,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
         net.roads.push(Road {
             id: id.0 as u32,
             osm_ways: r.osm_ids.iter().map(|w| w.0).collect(),
+            osm_versions: r.osm_ids.iter().filter_map(|w| Some((w.0, doc.ways.get(w)?.version?))).collect(),
             name: r.name.clone(),
             highway: r.highway_type.clone(),
             from: r.src_i.0 as u32,

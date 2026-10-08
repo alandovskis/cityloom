@@ -91,3 +91,16 @@ fn a_bus_lane_tagged_with_hours_keeps_them() {
         assert!(road.lanes.iter().filter(|l| l.kind != LaneKind::Bus).all(|l| l.hours.is_none()));
     }
 }
+
+#[test]
+fn a_road_and_a_node_remember_the_version_of_each_osm_way_and_node_they_were_made_from() {
+    let net = import(RENE_LEVESQUE).unwrap();
+    for road in &net.roads {
+        let want = if road.osm_ways == [4687530] { 49 } else { 26 };
+        assert_eq!(road.osm_versions.get(&road.osm_ways[0]), Some(&want), "{road:?}");
+        assert_eq!(road.osm_versions.len(), road.osm_ways.len());
+    }
+    let version = |osm: i64| net.nodes.iter().find(|n| n.osm_nodes == [osm]).map(|n| n.osm_versions.get(&osm).copied());
+    assert_eq!(version(29796354), Some(Some(5)));
+    assert_eq!(version(9041670850), Some(Some(1)));
+}

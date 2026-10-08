@@ -255,10 +255,12 @@ mod tests {
 
     /// Two streets crossing at a signalled junction, with a dead end on each arm.
     fn crossing() -> Network {
-        let node = |id, x_m, y_m, junction, control| Node { id, osm_nodes: vec![id as i64 * 10], x_m, y_m, junction, control };
+        let node =
+            |id, x_m, y_m, junction, control| Node { id, osm_nodes: vec![id as i64 * 10], osm_versions: Default::default(), x_m, y_m, junction, control };
         let road = |id, name: &str, to, points| Road {
             id,
             osm_ways: vec![id as i64 * 100],
+            osm_versions: Default::default(),
             name: Some(name.to_string()),
             highway: "residential".into(),
             from: 1,
@@ -339,7 +341,7 @@ mod tests {
         net.roads.clear();
         for (i, &(x, y)) in ends.iter().enumerate() {
             let id = i as u32 + 2;
-            net.nodes.push(Node { id, osm_nodes: vec![id as i64], x_m: x, y_m: y, junction: false, control: Control::None });
+            net.nodes.push(Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m: x, y_m: y, junction: false, control: Control::None });
             let mut road = crossing().roads[0].clone();
             road.id = id;
             road.to = id;

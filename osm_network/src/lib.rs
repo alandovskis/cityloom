@@ -3,6 +3,8 @@
 //!
 //! Positions are metres from the south-west corner of the data: `x` east, `y` north.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,6 +51,9 @@ pub struct Node {
     pub id: u32,
     /// The OSM nodes it stands for; the key an edit is kept under.
     pub osm_nodes: Vec<i64>,
+    /// The version OpenStreetMap had of each of them when the data was read.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub osm_versions: BTreeMap<i64, i32>,
     pub x_m: f64,
     pub y_m: f64,
     /// Where three or more roads meet and traffic gives way, as opposed to a street running off the data or ending.
@@ -61,6 +66,9 @@ pub struct Road {
     pub id: u32,
     /// The OSM ways it was made from; the key an edit is kept under.
     pub osm_ways: Vec<i64>,
+    /// The version OpenStreetMap had of each of them when the data was read.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub osm_versions: BTreeMap<i64, i32>,
     pub name: Option<String>,
     /// OSM's `highway` value.
     pub highway: String,
