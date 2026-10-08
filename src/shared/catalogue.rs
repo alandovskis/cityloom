@@ -500,12 +500,6 @@ mod tests {
     }
 
     #[test]
-    fn the_group_ids_are_those_of_the_add_menu() {
-        let menu: Vec<&str> = crate::street::page::ADD_GROUPS.iter().map(|(id, _)| *id).collect();
-        assert_eq!(menu, GROUP_IDS);
-    }
-
-    #[test]
     fn the_keys_are_the_ids_with_a_prefix() {
         assert_eq!(kind_key("bikerack"), "kind-bikerack");
         assert_eq!(mode_key(Mode::Vehicle), "mode-vehicle");

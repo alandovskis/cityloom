@@ -786,3 +786,9 @@ fn the_drawing_is_in_french_when_the_page_is() {
     let h = street_html(|| view! { <view::StreetDrawing vm=e.clone()/> });
     assert!(h.contains(">Aujourd’hui<") && !h.contains(">Today<"), "{h}");
 }
+
+#[test]
+fn the_group_ids_are_those_of_the_add_menu() {
+    let menu: Vec<&str> = page::ADD_GROUPS.iter().map(|(id, _)| *id).collect();
+    assert_eq!(menu, crate::shared::catalogue::GROUP_IDS);
+}
