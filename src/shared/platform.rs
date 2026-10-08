@@ -5,7 +5,7 @@ use std::rc::Rc;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 
-use crate::shared::ports::{Announcer, Fetched, Fetcher, Importer, Navigator, Ports, Scheduler, Storage};
+use crate::shared::ports::{Announcer, Fetched, Fetcher, Importer, Navigator, Page, Ports, Scheduler, Storage};
 use crate::shared::{live, store};
 
 struct BrowserAnnouncer;
@@ -157,6 +157,31 @@ impl Navigator for BrowserNavigator {
     }
 }
 
+struct BrowserPage;
+
+impl Page for BrowserPage {
+    fn language(&self) -> Option<String> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let navigator: web_sys::Navigator = leptos::prelude::window().navigator();
+            navigator.language()
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        None
+    }
+
+    fn set_lang(&self, tag: &str) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(root) = leptos::prelude::document().document_element() {
+                let _ = root.set_attribute("lang", tag);
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = tag;
+    }
+}
+
 #[wasm_bindgen]
 extern "C" {
     /// The map of the page: the adapter `createBasemap` makes in `web/basemap.js`.
@@ -226,5 +251,6 @@ pub fn browser_ports() -> Ports {
         storage: Rc::new(BrowserStorage),
         scheduler: Rc::new(BrowserScheduler::default()),
         mapper: Rc::new(crate::shared::ports::NoMapper),
+        page: Rc::new(BrowserPage),
     }
 }

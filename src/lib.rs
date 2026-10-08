@@ -52,3 +52,18 @@ pub fn atlas() -> String {
 pub fn say(text: &str) {
     shared::live::say(text);
 }
+
+/// Every slice's messages, in one place: a slice's `.ftl` files are registered here.
+const RESOURCES: &[shared::i18n::Resources] = &[];
+
+/// The words of the app in `locale`.
+pub fn i18n_for(locale: shared::i18n::Locale) -> std::rc::Rc<shared::i18n::I18n> {
+    shared::i18n::I18n::new(locale, RESOURCES)
+}
+
+/// The words of the app in the language the page starts in, which the document then says it is in.
+pub fn i18n_browser(ports: &shared::ports::Ports) -> std::rc::Rc<shared::i18n::I18n> {
+    let locale = shared::i18n::detect(ports);
+    ports.page.set_lang(locale.tag());
+    i18n_for(locale)
+}

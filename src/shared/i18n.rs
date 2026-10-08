@@ -11,6 +11,8 @@ use fluent_bundle::{FluentArgs, FluentBundle, FluentResource};
 use leptos::prelude::*;
 use unic_langid::langid;
 
+use crate::shared::ports::Ports;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Locale {
     #[default]
@@ -140,6 +142,20 @@ impl I18n {
         }
         Some(text)
     }
+}
+
+/// Where the person's choice of language is kept.
+pub const LANG_KEY: &str = "cityloom-lang";
+
+/// A stored choice: `en` or any French; anything else is not one.
+fn stored(tag: &str) -> Option<Locale> {
+    let primary = tag.split(['-', '_']).next().unwrap_or("");
+    (primary.eq_ignore_ascii_case("en") || primary.eq_ignore_ascii_case("fr")).then(|| Locale::parse(tag))
+}
+
+/// The language to start in: the one a person chose, else the browser's, else English.
+pub fn detect(ports: &Ports) -> Locale {
+    ports.storage.recall(LANG_KEY).and_then(|tag| stored(&tag)).or_else(|| ports.page.language().map(|tag| Locale::parse(&tag))).unwrap_or_default()
 }
 
 const NBSP: char = '\u{a0}';
@@ -352,5 +368,33 @@ mod tests {
     #[test]
     fn parity_reports_a_file_that_does_not_parse() {
         assert!(parity_problems("a = { \n", "a = x\n")[0].starts_with("en does not parse"));
+    }
+
+    use crate::shared::ports::{Storage, test_ports_with_page};
+
+    #[test]
+    fn the_stored_language_wins_over_the_browser_s() {
+        let (ports, page, storage) = test_ports_with_page();
+        storage.remember(LANG_KEY, "fr-CA");
+        *page.language.borrow_mut() = Some("en-US".into());
+        assert_eq!(detect(&ports), Locale::FrCa);
+    }
+
+    #[test]
+    fn without_a_stored_language_the_browser_s_is_used_and_then_english() {
+        let (ports, page, _) = test_ports_with_page();
+        assert_eq!(detect(&ports), Locale::En);
+        *page.language.borrow_mut() = Some("fr-CA".into());
+        assert_eq!(detect(&ports), Locale::FrCa);
+    }
+
+    #[test]
+    fn a_stored_value_that_is_not_a_language_is_ignored() {
+        let (ports, page, storage) = test_ports_with_page();
+        storage.remember(LANG_KEY, "de");
+        *page.language.borrow_mut() = Some("fr".into());
+        assert_eq!(detect(&ports), Locale::FrCa);
+        storage.remember(LANG_KEY, "");
+        assert_eq!(detect(&ports), Locale::FrCa);
     }
 }
