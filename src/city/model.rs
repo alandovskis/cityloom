@@ -17,9 +17,10 @@ use crate::junction::model::{self as junction, Arm, Junction, State};
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass};
 use crate::shared::provenance::OsmRef;
+use crate::shared::said::Said;
 #[cfg(test)]
 use crate::street::model::SAMPLES;
-use crate::street::model::{Editor, Said, Street};
+use crate::street::model::{Editor, Street};
 
 thread_local! {
     static ENGLISH: std::rc::Rc<crate::shared::i18n::I18n> = crate::i18n_for(crate::shared::i18n::Locale::En);
@@ -28,7 +29,7 @@ thread_local! {
 /// What the street said, in English: the map's list of places says what fails in English until the
 /// map page is translated.
 fn english(said: &Said) -> String {
-    ENGLISH.with(|i18n| crate::street::text::say_now(i18n, crate::shared::units::Units::Metres, said))
+    ENGLISH.with(|i18n| crate::shared::said::say_now(i18n, crate::shared::units::Units::Metres, said))
 }
 
 /// Bump when what is saved changes shape; an older save is then left behind.

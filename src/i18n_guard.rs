@@ -17,7 +17,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/street/inspector.rs", include_str!("street/inspector.rs")),
     ("src/street/svg.rs", include_str!("street/svg.rs")),
     ("src/street/model.rs", include_str!("street/model.rs")),
-    ("src/street/model/said.rs", include_str!("street/model/said.rs")),
+    ("src/shared/said.rs", include_str!("shared/said.rs")),
 ];
 
 /// Attributes whose value is text a person reads (also as `attr:<name>`).

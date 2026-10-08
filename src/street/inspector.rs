@@ -10,9 +10,10 @@ use leptos::web_sys::{Element, HtmlInputElement, HtmlSelectElement, KeyboardEven
 
 use crate::shared::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS, curb_key, direction_key, kind_key, material_key};
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::said::hhmm;
 use crate::shared::units::{Units, parse_number};
 use crate::street::model::{SegView, View};
-use crate::street::page::{hhmm, to_min};
+use crate::street::page::to_min;
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
 

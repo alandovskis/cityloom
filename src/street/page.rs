@@ -10,6 +10,7 @@ use serde::Deserialize;
 use crate::shared::catalogue::{KINDS, group_key, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
+use crate::shared::said::hhmm;
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
 use crate::street::model::{SegView, View};
@@ -39,11 +40,6 @@ pub fn group_kinds(ids: &[&str]) -> Vec<usize> {
 /// Where a new piece goes: after the selected one, or at the end.
 pub fn insert_index(v: &View) -> usize {
     v.selected.and_then(|u| v.segments.iter().position(|s| s.uid == u)).map_or(v.segments.len(), |i| i + 1)
-}
-
-/// A time of day, `06:30`; the hour wraps at 24.
-pub fn hhmm(min: i32) -> String {
-    format!("{:02}:{:02}", (min / 60) % 24, min % 60)
 }
 
 /// Minutes after midnight from `hh:mm`, or None when it is not a time.

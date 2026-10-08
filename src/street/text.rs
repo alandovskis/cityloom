@@ -4,45 +4,20 @@
 //! Every sentence is a message (`src/street/i18n`); these functions only choose
 //! which one and hand it the lengths, written in the language of the page.
 
-use crate::shared::atlas::name_key;
-use crate::shared::catalogue::{KINDS, curb_key, direction_key, kind_key, material_key};
+use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::said::Said;
 use crate::shared::units::Units;
-use crate::street::model::{Arg, Said, View};
-use crate::street::page::hhmm;
+use crate::street::model::View;
 
-/// What the model said, in words, for a view: it asks with `tr`, so it is drawn again when the
-/// language is switched.
+/// What the model said, in words, for a view (see `shared::said`).
 pub fn say(i18n: &I18n, units: Units, said: &Said) -> String {
-    put_into_words(i18n, units, said, true)
+    crate::shared::said::say(i18n, units, said)
 }
 
 /// The same, for a command: nothing is watched.
 pub fn say_now(i18n: &I18n, units: Units, said: &Said) -> String {
-    put_into_words(i18n, units, said, false)
-}
-
-fn put_into_words(i18n: &I18n, units: Units, said: &Said, watched: bool) -> String {
-    let locale = if watched { i18n.locale() } else { i18n.locale_now() };
-    let tr = |key: &str, args: &Args| if watched { i18n.tr(key, args) } else { i18n.tr_now(key, args) };
-    let name = |key: String| tr(&key, &Args::new());
-    let mut args = Args::new();
-    for (arg_name, arg) in &said.args {
-        args = match arg {
-            Arg::Num(n) => args.num(arg_name, *n),
-            Arg::Text(t) => args.str(arg_name, t.clone()),
-            Arg::Kind(id) => args.str(arg_name, name(kind_key(id))),
-            Arg::KindLower(id) => args.str(arg_name, name(kind_key(id)).to_lowercase()),
-            Arg::MaterialLower(id) => args.str(arg_name, name(material_key(id)).to_lowercase()),
-            Arg::CurbLower(id) => args.str(arg_name, name(curb_key(id)).to_lowercase()),
-            Arg::DirectionLower(id) => args.str(arg_name, name(direction_key(id)).to_lowercase()),
-            Arg::Measure(code) => args.str(arg_name, name(name_key(code))),
-            Arg::Clock(min) => args.str(arg_name, hhmm(*min)),
-            Arg::Length(mm) => args.str(arg_name, units.length_fine_in(*mm, locale)),
-            Arg::Msg(key) => args.str(arg_name, tr(key, &Args::new())),
-        };
-    }
-    tr(said.key, &args)
+    crate::shared::said::say_now(i18n, units, said)
 }
 
 /// Said when the street is put back as it is today.
@@ -294,7 +269,7 @@ mod tests {
         assert!(fr_said.starts_with("Retrait\u{a0}: stationnement. "), "{fr_said}");
     }
 
-    /// Every key the model can say is a message in both languages. The model builds a `Said` only with `Said::new("…")`, and puts a word in another's place only with `Arg::Msg("…")`, so its source lists them all.
+    /// Every key the model can say is a message in both languages. A new constructor in the model must use these literal forms, or this test does not see its key. The model builds a `Said` only with `Said::new("…")`, and puts a word in another's place only with `Arg::Msg("…")`, so its source lists them all.
     #[test]
     fn every_message_the_model_says_exists_in_english_and_in_french() {
         let source = include_str!("model.rs");

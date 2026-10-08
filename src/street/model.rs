@@ -7,8 +7,7 @@ use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, K
 use crate::shared::provenance::OsmRef;
 use crate::street::measures;
 
-mod said;
-pub use said::{Arg, Said};
+pub use crate::shared::said::{Arg, Said};
 
 #[cfg(test)]
 mod fixtures;
@@ -1046,7 +1045,7 @@ impl Editor {
                     Some(false) if freeway => Said::new("unavailable-not-freeway"),
                     _ => Said::new("measure-will-not-fit"),
                 });
-                MeasureView { code: d.code, name: measures::name(d.code), present: f.present, problems: f.problems, can_apply, unavailable }
+                MeasureView { code: d.code, present: f.present, problems: f.problems, can_apply, unavailable }
             })
             .collect()
     }
@@ -1103,7 +1102,7 @@ fn shares(segs: &[Segment]) -> Vec<Share> {
         .iter()
         .map(|m| {
             let mm: i32 = segs.iter().filter(|s| KINDS[s.kind].mode == *m).map(|s| s.width_mm).sum();
-            Share { mode: *m, label: m.label(), mm, pct: (mm as f64 * 100.0 / t as f64).round() as i32 }
+            Share { mode: *m, mm, pct: (mm as f64 * 100.0 / t as f64).round() as i32 }
         })
         .collect()
 }
@@ -1211,7 +1210,6 @@ pub struct VariantView {
 #[derive(Serialize)]
 pub struct Share {
     pub mode: Mode,
-    pub label: &'static str,
     pub mm: i32,
     pub pct: i32,
 }
@@ -1235,7 +1233,6 @@ pub struct Check {
 #[derive(Serialize)]
 pub struct MeasureView {
     pub code: &'static str,
-    pub name: &'static str,
     pub present: bool,
     pub problems: Vec<measures::Problem>,
     /// The street can be arranged as this measure.
