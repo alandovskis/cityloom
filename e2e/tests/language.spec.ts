@@ -71,6 +71,10 @@ test("the street page can be read in French and the choice is kept", async ({ pa
   await expect(page.locator("#add-btn")).toHaveText(/Ajouter un élément/);
   await expect(page.locator('[data-lang="fr-CA"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator('[data-lang="en"]')).toHaveAttribute("aria-pressed", "false");
+  // The region list is rebuilt in French, not left as it was built.
+  await expect(page.locator("#region option").first()).toHaveText(/^Canada \(/);
+  await expect(page.locator("#region")).not.toContainText("(right)");
+  await expect(page.locator("#region")).toContainText("États-Unis");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
   await expect(page.locator("#add-btn")).toHaveText(/Ajouter un élément/);

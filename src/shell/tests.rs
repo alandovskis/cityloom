@@ -53,3 +53,12 @@ fn street_html_has_a_language_row_and_sets_the_language_in_the_head() {
 fn the_street_ftl_files_have_the_same_messages_and_variables() {
     assert_eq!(parity_problems(crate::street::RESOURCES.en, crate::street::RESOURCES.fr), Vec::<String>::new());
 }
+
+#[test]
+fn the_region_list_is_made_of_the_options_it_is_given() {
+    use crate::shell::view::region_options_html;
+    use crate::shell::vm::RegionOption;
+    let html =
+        region_options_html(&[RegionOption { id: "canada", label: "Canada (droite)".into() }, RegionOption { id: "japan", label: "Japon (gauche)".into() }]);
+    assert_eq!(html, "<option value=\"canada\">Canada (droite)</option><option value=\"japan\">Japon (gauche)</option>");
+}

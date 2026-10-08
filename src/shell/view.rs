@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::units::Units;
-use crate::shell::vm::{ShellVm, Target, Theme};
+use crate::shell::vm::{RegionOption, ShellVm, Target, Theme};
 
 fn listen<E: JsCast + 'static>(target: &EventTarget, event: &str, mut f: impl FnMut(E) + 'static) {
     let cb = Closure::<dyn FnMut(Event)>::new(move |e: Event| f(e.unchecked_into()));
@@ -164,13 +164,21 @@ fn bind_units(vm: &Rc<ShellVm>) {
 
 fn bind_region(vm: &Rc<ShellVm>) {
     let Some(pick) = by_id("region").and_then(|e| e.dyn_into::<HtmlSelectElement>().ok()) else { return };
-    let options: String = vm.regions().iter().map(|r| format!("<option value=\"{}\">{}</option>", r.id, r.label)).collect();
-    pick.set_inner_html(&options);
     let v = vm.clone();
     let p = pick.clone();
     listen(&pick, "change", move |_: Event| v.choose_region(&p.value()));
+    // The options are rebuilt when the language changes (`regions` reads it), and the chosen one is
+    // selected again, because replacing the options drops the selection.
     let v = vm.clone();
-    Effect::new(move |_| pick.set_value(&v.region()));
+    Effect::new(move |_| {
+        pick.set_inner_html(&region_options_html(&v.regions()));
+        pick.set_value(&v.region());
+    });
+}
+
+/// The `<option>`s of the region list.
+pub(crate) fn region_options_html(regions: &[RegionOption]) -> String {
+    regions.iter().map(|r| format!("<option value=\"{}\">{}</option>", r.id, r.label)).collect()
 }
 
 fn bind_theme(vm: &Rc<ShellVm>, dark: Option<MediaQueryList>) {
