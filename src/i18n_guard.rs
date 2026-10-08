@@ -197,7 +197,8 @@ fn value_end(t: &[TokenTree], eq: usize) -> usize {
     t.len()
 }
 
-fn walk(stream: TokenStream, out: &mut Vec<(usize, String)>) {
+/// Calls `visit(line, text)` for each string literal in code that is not a test or an attribute that is not text.
+fn walk(stream: TokenStream, visit: &mut dyn FnMut(usize, &str)) {
     let t: Vec<TokenTree> = stream.into_iter().collect();
     let mut i = 0;
     while i < t.len() {
@@ -225,11 +226,11 @@ fn walk(stream: TokenStream, out: &mut Vec<(usize, String)>) {
             }
         }
         match &t[i] {
-            TokenTree::Group(g) => walk(g.stream(), out),
+            TokenTree::Group(g) => walk(g.stream(), visit),
             TokenTree::Literal(l) => {
                 let text = l.to_string();
                 if let Some(s) = string_text(&text) {
-                    out.extend(pieces(s).into_iter().filter(|p| looks_like_words(p)).map(|p| (l.span().start().line, p)));
+                    visit(l.span().start().line, s);
                 }
             }
             _ => {}
@@ -242,7 +243,7 @@ fn walk(stream: TokenStream, out: &mut Vec<(usize, String)>) {
 fn offenders(src: &str) -> Vec<(usize, String)> {
     let mut out = Vec::new();
     match TokenStream::from_str(src) {
-        Ok(stream) => walk(stream, &mut out),
+        Ok(stream) => walk(stream, &mut |line, s| out.extend(pieces(s).into_iter().filter(|p| looks_like_words(p)).map(|p| (line, p)))),
         Err(e) => out.push((0, format!("does not lex: {e}"))),
     }
     out
@@ -255,6 +256,82 @@ fn migrated_files_have_no_hardcoded_text() {
         found.extend(offenders(src).into_iter().map(|(line, lit)| format!("{path}:{line}: {lit:?}")));
     }
     assert!(found.is_empty(), "text still in the code:\n{}", found.join("\n"));
+}
+
+// ---- the keys ----
+//
+// A mistyped message id does not fail: the key itself is shown. So every string literal in a migrated file
+// that is shaped like a message id (kebab-case with at least one hyphen: `measure-refused`) must be a
+// message in BOTH languages. The net is wide on purpose, any such literal and not only the argument of a
+// call, because keys also sit in tables and consts and in `Said::new`/`Arg::Msg` and `plain(..)` calls; the
+// price is the few literals of that shape that are not messages, each listed in `NOT_MESSAGE_IDS` with its
+// reason. (A key built at run time, `format!("region-{}", id)`, is out of the net's sight; the tests of
+// the slice that builds it cover it.)
+
+/// Whether `s` is shaped like a message id: lower-case kebab-case with at least one hyphen.
+fn is_message_id(s: &str) -> bool {
+    let word = |w: &str| !w.is_empty() && w.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    let mut parts = s.split('-');
+    let first = parts.next().unwrap_or("");
+    let rest: Vec<&str> = parts.collect();
+    word(first) && first.starts_with(|c: char| c.is_ascii_lowercase()) && !rest.is_empty() && rest.iter().all(|w| word(w))
+}
+
+/// Literals shaped like a message id that are not one, each with the reason.
+const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("data-notes", "the name of a data- attribute on the document element"),
+    ("data-inspector", "the name of a data- attribute on the document element"),
+    ("data-welcome", "the name of a data- attribute on the document element"),
+    ("data-role", "the name of a data- attribute of an SVG handle"),
+    ("data-uid", "the name of a data- attribute of an SVG handle"),
+    ("data-i", "the name of a data- attribute of an SVG handle"),
+    ("cityloom-welcome", "a storage key"),
+    ("notes-toggle", "the id of an element of the page"),
+    ("inspector-toggle", "the id of an element of the page"),
+    ("t-checks", "the id of a tab of the page"),
+    ("i-h-dir", "the id of an inspector heading"),
+    ("i-h-curb", "the id of an inspector heading"),
+    ("m-planted", "a CSS class of the drawing"),
+    ("dim-warn", "a CSS class of the drawing"),
+    ("t-warn", "a CSS class of the drawing"),
+    ("t-soft", "a CSS class of the drawing"),
+    ("bar-w", "a CSS class of the drawing"),
+    ("bar-b", "a CSS class of the drawing"),
+];
+
+/// The message-id-shaped literals in `src` as `(line, literal)`.
+fn message_ids(src: &str) -> Vec<(usize, String)> {
+    let mut out = Vec::new();
+    match TokenStream::from_str(src) {
+        Ok(stream) => walk(stream, &mut |line, s| {
+            if is_message_id(s) && !NOT_MESSAGE_IDS.iter().any(|(l, _)| *l == s) {
+                out.push((line, s.to_string()));
+            }
+        }),
+        Err(e) => out.push((0, format!("does not lex: {e}"))),
+    }
+    out
+}
+
+/// The ids in `src` that are not a message in `locale`.
+fn unknown_ids(src: &str, i18n: &crate::shared::i18n::I18n, locale: crate::shared::i18n::Locale) -> Vec<(usize, String)> {
+    message_ids(src).into_iter().filter(|(_, id)| !i18n.has_message(id, locale)).collect()
+}
+
+#[test]
+fn every_message_id_used_in_a_migrated_file_exists_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    let mut found = Vec::new();
+    // The scan must be seeing the keys (a scan that finds none passes for nothing).
+    let seen: usize = MIGRATED.iter().map(|(_, src)| message_ids(src).len()).sum();
+    assert!(seen > 150, "only {seen} message ids seen in the migrated files");
+    for locale in [Locale::En, Locale::FrCa] {
+        let i18n = crate::i18n_for(locale);
+        for (path, src) in MIGRATED {
+            found.extend(unknown_ids(src, &i18n, locale).into_iter().map(|(line, id)| format!("{path}:{line}: {id:?} is not a message in {}", locale.tag())));
+        }
+    }
+    assert!(found.is_empty(), "keys that are not messages:\n{}", found.join("\n"));
 }
 
 #[cfg(test)]
@@ -338,5 +415,35 @@ mod tests {
             assert!(found.iter().any(|(_, l)| l == w), "{w}: {found:?}");
         }
         assert_eq!(found.iter().find(|(_, l)| l == "Use").map(|(n, _)| *n), Some(3));
+    }
+
+    #[test]
+    fn it_reports_a_mistyped_key_in_a_call_a_table_and_a_const() {
+        use crate::shared::i18n::{Locale, Resources};
+        const R: Resources = Resources { en: "measure-refused = No.\nbadge-fail = Fail\n", fr: "measure-refused = Non.\nbadge-fail = Echec\n" };
+        let i18n = crate::shared::i18n::I18n::new(Locale::En, &[R]);
+        let src = "const KEYS: [&str; 2] = [\"badge-fail\", \"badge-fial\"];\nfn f(i: &I18n) { i.tr(\"measure-refused\", &a); i.tr(\"measure-refuse\", &a); say(w, \"measure-refsed\"); }";
+        let bad: Vec<String> = unknown_ids(src, &i18n, Locale::En).into_iter().map(|(_, id)| id).collect();
+        assert_eq!(bad, vec!["badge-fial", "measure-refuse", "measure-refsed"]);
+        // A key missing from one language only is reported for that language.
+        const ONLY_EN: Resources = Resources { en: "a-b = A\n", fr: "" };
+        let i18n = crate::shared::i18n::I18n::new(Locale::FrCa, &[ONLY_EN]);
+        assert_eq!(unknown_ids("let k = \"a-b\";", &i18n, Locale::FrCa).len(), 1);
+        assert_eq!(unknown_ids("let k = \"a-b\";", &i18n, Locale::En).len(), 0);
+    }
+
+    #[test]
+    fn a_message_id_is_kebab_case_with_a_hyphen() {
+        for yes in ["a-b", "measure-refused", "ui-key-ctrl", "mode-3d-view", "a-1"] {
+            assert!(is_message_id(yes), "{yes}");
+        }
+        for no in ["", "word", "Word-x", "a-", "-a", "a--b", "a_b", "a-B", "t-checks ", "left:{}px", "1-a", "M3-3"] {
+            assert!(!is_message_id(no), "{no}");
+        }
+    }
+
+    #[test]
+    fn it_leaves_test_items_alone_when_collecting_keys() {
+        assert_eq!(message_ids("#[cfg(test)]\nmod t { fn f() { let a = \"made-up\"; } }").len(), 0);
     }
 }

@@ -119,7 +119,13 @@ impl I18n {
         self.say(self.locale_now(), key, args)
     }
 
-    /// The keys that were asked for and not found in the active language, in order.
+    /// Whether `key` is a message with a value in `locale`'s own bundle (no fallback to English).
+    pub fn has_message(&self, key: &str, locale: Locale) -> bool {
+        let b = if locale == Locale::En { &self.en } else { &self.fr };
+        b.get_message(key).is_some_and(|m| m.value().is_some())
+    }
+
+    /// The keys that were asked for and not found in the active language, sorted.
     pub fn missing(&self) -> Vec<String> {
         self.missing.borrow().iter().cloned().collect()
     }
@@ -267,6 +273,16 @@ pub(crate) mod tests {
             }
         }
         problems
+    }
+
+    #[test]
+    fn has_message_looks_in_the_one_language_without_falling_back() {
+        let i = I18n::new(Locale::En, &[R]);
+        assert!(i.has_message("hello", Locale::En) && i.has_message("hello", Locale::FrCa));
+        assert!(i.has_message("only-en", Locale::En));
+        assert!(!i.has_message("only-en", Locale::FrCa));
+        assert!(!i.has_message("nothing", Locale::En));
+        assert!(i.missing().is_empty(), "asking whether a message exists is not asking for it");
     }
 
     #[test]
