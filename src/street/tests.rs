@@ -792,3 +792,25 @@ fn the_group_ids_are_those_of_the_add_menu() {
     let menu: Vec<&str> = page::ADD_GROUPS.iter().map(|(id, _)| *id).collect();
     assert_eq!(menu, crate::shared::catalogue::GROUP_IDS);
 }
+
+#[test]
+fn the_lengths_around_the_section_follow_the_language() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let row = s.view().row_mm;
+    let fr = Units::Metres.length_fine_in(row, Locale::FrCa);
+    let en = Units::Metres.length_fine_in(row, Locale::En);
+    assert!(fr.contains(',') && fr.contains('\u{a0}') && en.contains('.'), "{fr} {en}");
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
+    assert!(h.contains(&format!(">{fr}<")) && !h.contains(&en), "{h}");
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(h.contains(&format!(">{fr}<")) && !h.contains(&en), "{h}");
+    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
+    let sidewalk = KINDS.iter().find(|k| k.id == "sidewalk").expect("a sidewalk kind").default_mm;
+    let fr_dw = Units::Metres.length_fine_in(sidewalk, Locale::FrCa);
+    let en_dw = Units::Metres.length_fine_in(sidewalk, Locale::En);
+    assert!(h.contains(&format!("class=\"dw\">{fr_dw}<")) && !h.contains(&format!("class=\"dw\">{en_dw}<")), "{h}");
+    // the English page keeps its point
+    let e = street_shared(1);
+    let h = street_html(|| view! { <page::TitleBlock vm=e.clone()/> });
+    assert!(h.contains(&format!(">{en}<")), "{h}");
+}

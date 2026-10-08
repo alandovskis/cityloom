@@ -197,7 +197,7 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
             " "
             <span aria-hidden="true">"\u{b7}"</span>
             " "
-            <span><b id="row-dim" class="fig">{move || w.units().length_fine(w.view().row_mm)}</b>{move || format!(" {}", w.i18n().tr("header-wide", &Args::new()))}</span>
+            <span><b id="row-dim" class="fig">{move || w.units().length_fine_in(w.view().row_mm, w.i18n().locale())}</b>{move || format!(" {}", w.i18n().tr("header-wide", &Args::new()))}</span>
             {between}
         </p>
     }
@@ -208,7 +208,7 @@ pub fn TitleBlock(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     view! {
         <div class="tb-cell tb-wide"><span>{say(w, "block-street")}</span><b id="tb-street">{move || w.view().name.clone()}</b></div>
-        <div class="tb-cell"><span>{say(w, "block-width")}</span><b id="tb-row" class="fig">{move || w.units().length_fine(w.view().row_mm)}</b></div>
+        <div class="tb-cell"><span>{say(w, "block-width")}</span><b id="tb-row" class="fig">{move || w.units().length_fine_in(w.view().row_mm, w.i18n().locale())}</b></div>
         <div class="tb-cell"><span>{say(w, "block-changes")}</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
         {move || {
             let source = w.view().source.clone();
@@ -399,7 +399,7 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
                             >
                                 <span class="add-icon" inner_html=icon(kind.id)></span>
                                 <b>{move || w.i18n().tr(&kind_key(kind.id), &Args::new())}</b>
-                                <span class="dw">{move || w.units().length_fine(kind.default_mm)}</span>
+                                <span class="dw">{move || w.units().length_fine_in(kind.default_mm, w.i18n().locale())}</span>
                             </button>
                         </li>
                     }
