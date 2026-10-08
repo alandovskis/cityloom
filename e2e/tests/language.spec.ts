@@ -42,6 +42,7 @@ const ENGLISH = [
   "Today",
   "too wide",
   "left to use",
+  "Resize",
 ];
 
 /** The visible text of the page, less the street's own name (OpenStreetMap data). */
@@ -51,9 +52,13 @@ const visibleText = async (page: Page) => {
   return name ? text.split(name).join("") : text;
 };
 
+// Known gap: innerText does not see the values of aria-label and title attributes; the native tests of
+// each component cover those.
 const expectNoEnglish = async (page: Page, where: string) => {
   const text = await visibleText(page);
   for (const phrase of ENGLISH) expect(text, `"${phrase}" ${where}`).not.toContain(phrase);
+  // Lengths take a decimal comma in French: "9,0 m", never "9.0 m".
+  expect(text, `a decimal point in a length ${where}`).not.toMatch(/\d\.\d+[\s\u00a0\u202f]?(?:m|ft)\b/);
 };
 
 const overflow = (page: Page) =>
@@ -88,6 +93,9 @@ test("nothing of the page is left in English once it is French, a piece selected
   await openStreet(page);
   await selectFirstPiece(page);
   await page.keyboard.press("Enter");
+  await expect(page.locator("#add-btn")).toHaveText(/Ajouter/);
+  await expect(page.locator("#row-dim")).toHaveText(/^\d+,\d+/);
+  await expect(page.locator("#tb-row")).toHaveText(/^\d+,\d+/);
   await expectNoEnglish(page, "with a piece selected");
 
   // An edit: the status line and the changes' labels are French too.
@@ -102,16 +110,24 @@ test("nothing of the page is left in English once it is French, a piece selected
     await expect(page.locator(tab)).toHaveAttribute("aria-selected", "true");
     await expectNoEnglish(page, `on the ${tab} tab`);
   }
-  await page.locator("#t-changes").click();
-  await expect(page.locator("#revs")).not.toContainText("Resize");
+
+  // The add menu: its group and kind names and the default widths. It is closed again whatever happens.
+  await page.locator("#add-btn").click();
+  try {
+    await expect(page.locator(".add-item").first()).toBeVisible();
+    await expect(page.locator(".dw").first()).toHaveText(/^\d+,\d+/);
+    await expectNoEnglish(page, "with the add menu open");
+  } finally {
+    await page.keyboard.press("Escape");
+  }
+  await expect(page.locator(".add-item").first()).toBeHidden();
 
   await page.locator("#account-btn").click();
   await expectNoEnglish(page, "with the settings menu open");
 });
 
-test("French text does not overflow the page", async ({ page }) => {
-  await storedFrench(page);
-  await openStreet(page);
+/** The page and the settings menu fit the viewport at every width. */
+const expectFits = async (page: Page) => {
   for (const width of [1280, 1024, 768, 390]) {
     await page.setViewportSize({ width, height: 800 });
     expect(await overflow(page), `at ${width}px`).toBeLessThanOrEqual(0);
@@ -124,6 +140,19 @@ test("French text does not overflow the page", async ({ page }) => {
     expect(await overflow(page), `with the menu open at ${width}px`).toBeLessThanOrEqual(0);
     await page.keyboard.press("Escape");
   }
+};
+
+// English is the baseline: French may not overflow where English does not. English fits at all four widths,
+// so none is left out of the French check.
+test("English text does not overflow the page", async ({ page }) => {
+  await openStreet(page);
+  await expectFits(page);
+});
+
+test("French text does not overflow the page", async ({ page }) => {
+  await storedFrench(page);
+  await openStreet(page);
+  await expectFits(page);
 });
 
 test("a French reader types a decimal comma", async ({ page }) => {
