@@ -54,3 +54,17 @@ Chosen as the most standard Québec term, but the catalogue's meaning leaves roo
 - Furniture group: `Mobilier urbain`.
 - Utilities group: `Services publics`.
 - Shoulder: `Accotement` (the Québec road term; `Bas-côté` elsewhere).
+
+## Street page notes
+
+| English | Français (fr-CA) | Note |
+| --- | --- | --- |
+| Use (a column of the width table) | Usage | |
+| Today | Aujourd’hui | |
+| Your design | Votre aménagement | |
+| Change (a column) | Variation | |
+| Step | Étape | |
+| check (of the street) | vérification | `0` and `1` are singular, as in CLDR. |
+| passes / fails | réussite / échec | Nouns, so they agree with any check's name. |
+| Set at a junction | Se règle à une intersection | |
+| Not modelled | Non modélisé | |

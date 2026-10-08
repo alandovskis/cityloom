@@ -10,6 +10,7 @@ use proc_macro2::{Delimiter, TokenStream, TokenTree};
 const MIGRATED: &[(&str, &str)] = &[
     // Files are added here as their task completes.
     ("src/street/text.rs", include_str!("street/text.rs")),
+    ("src/street/notes.rs", include_str!("street/notes.rs")),
 ];
 
 /// Attributes whose value is text a person reads (also as `attr:<name>`).

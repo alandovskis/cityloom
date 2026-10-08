@@ -70,3 +70,41 @@ edit-redone = Redone. { $fit }.
 selection-position = { $kind }, { $width }, { $index } of { $total }
 started-over = Started over from the street as it is today. Undo brings your changes back.
 measure-refused = That measure does not suit this street.
+
+# The notes beside the section.
+units-metres = metres
+units-feet = feet
+space-caption = Width by use, in { $units }
+col-use = Use
+col-today = Today
+col-design = Your design
+col-change = Change
+col-step = Step
+col-what-changed = What changed
+street-today = Street today
+capacity-caption = People per hour, placeholder rates
+capacity-row = People per hour
+check-fits-full = Every metre is used
+check-fits-over = { $amount } too wide. Narrow or remove a piece.
+check-access-ok = A lane of { $amount } or more
+check-access-bad = No lane of { $amount } or more
+check-passes = { " " }: passes
+check-fails = { " " }: fails
+badge-fail = { " " }fail
+failing =
+    { $n ->
+        [one] 1 check fails
+       *[other] { $n } checks fail
+    }
+group-name-linear = Linear continuous measures
+group-name-local = Localized measures
+group-name-area = Area-wide measures
+group-note-linear = Lane arrangements along the street. Arrange lays the roadway out as that measure.
+group-note-local = Features at one junction. Set them on the intersection page.
+group-note-area = They cover many streets, so they are not modelled here.
+measure-arrange = Arrange
+measure-arrange-label = Arrange the street as { $code } { $name }
+measure-this-street = This street
+measure-will-not-fit = Will not fit
+measure-set-at-junction = Set at a junction
+measure-not-modelled = Not modelled

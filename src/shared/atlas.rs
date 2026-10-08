@@ -26,9 +26,9 @@ pub struct Measure {
     pub note: &'static str,
 }
 
-const LINEAR: &str = "Linear continuous measures";
-const LOCAL: &str = "Localized measures";
-const AREA: &str = "Area-wide measures";
+pub const LINEAR: &str = "Linear continuous measures";
+pub const LOCAL: &str = "Localized measures";
+pub const AREA: &str = "Area-wide measures";
 
 const fn m(code: &'static str, name: &'static str, family: &'static str, group: &'static str, place: Where, note: &'static str) -> Measure {
     Measure { code, name, family, group, place, note }

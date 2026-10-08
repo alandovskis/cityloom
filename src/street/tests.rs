@@ -479,3 +479,59 @@ fn the_panel_s_lengths_and_steps_follow_the_units() {
     assert!(h.contains("10.8 ft wide") && h.contains("aria-label=\"Narrower by 1.0 ft\""));
     assert!(h.contains("Allowed ") && h.contains(" ft"));
 }
+
+// ---- the notes in French ----------------------------------------------------------------
+
+fn street_shared_in(sample: usize, locale: Locale) -> Rc<StreetVm> {
+    StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), Editor::new(sample), None)
+}
+
+#[test]
+fn the_space_and_capacity_tables_are_in_french() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let u = segment(&s, 0);
+    s.edit(|e| e.remove(u));
+    let h = street_html(|| view! { <notes::Space vm=s.clone()/> });
+    assert!(h.contains("Largeur par usage, en mètres") && h.contains("Votre aménagement") && h.contains("Marche"));
+    assert!(!h.contains("Your design") && !h.contains("Width by use"));
+    let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
+    assert!(h.contains("Personnes par heure") && !h.contains("People per hour"));
+}
+
+#[test]
+fn the_checks_and_their_count_are_in_french() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(h.contains("\u{a0}: réussite") && h.contains("Chaque mètre est utilisé") && !h.contains(": passes"));
+    let u = segment(&s, 0);
+    s.edit(|e| e.set_width(u, 3_800));
+    let pill = street_html(|| view! { <notes::FitChecks vm=s.clone()/> });
+    assert!(pill.contains("1 vérification échoue") && !pill.contains("1 check fails"));
+    let badge = street_html(|| view! { <notes::ChecksBadge vm=s.clone()/> });
+    assert!(badge.contains("en échec") && !badge.contains(" fail"));
+}
+
+#[test]
+fn the_changes_and_the_measures_are_in_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
+    assert!(h.contains("La rue aujourd’hui") && h.contains("Étape") && !h.contains("Street today"));
+    let h = street_html(|| view! { <notes::Measures vm=s.clone()/> });
+    assert!(h.contains("Réorganiser") && h.contains("Se règle à une intersection") && h.contains("Non modélisé"));
+    assert!(h.contains("Aménagements de voies le long de la rue.") && !h.contains("Lane arrangements along the street."));
+    assert!(!h.contains(">Arrange<") && !h.contains("Set at a junction") && !h.contains("Not modelled"));
+}
+
+#[test]
+fn the_notes_are_drawn_again_in_the_language_the_shell_switches() {
+    let owner = Owner::new();
+    owner.set();
+    let s = street_shared_in(0, Locale::En);
+    let i18n = s.i18n().clone();
+    // The same instance the view-model holds, so switching it changes what the notes say.
+    let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
+    assert!(h.contains("People per hour"));
+    i18n.set(Locale::FrCa);
+    let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
+    assert!(h.contains("Personnes par heure"));
+}

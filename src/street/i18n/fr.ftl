@@ -70,3 +70,41 @@ edit-redone = Rétabli. { $fit }.
 selection-position = { $kind }, { $width }, { $index } sur { $total }
 started-over = Retour à la rue telle qu’elle est aujourd’hui. Annulez pour retrouver vos modifications.
 measure-refused = Cette mesure ne convient pas à cette rue.
+
+# Les notes à côté de la coupe.
+units-metres = mètres
+units-feet = pieds
+space-caption = Largeur par usage, en { $units }
+col-use = Usage
+col-today = Aujourd’hui
+col-design = Votre aménagement
+col-change = Variation
+col-step = Étape
+col-what-changed = Ce qui a changé
+street-today = La rue aujourd’hui
+capacity-caption = Personnes par heure, taux d’exemple
+capacity-row = Personnes par heure
+check-fits-full = Chaque mètre est utilisé
+check-fits-over = { $amount } de trop. Rétrécissez ou retirez un élément.
+check-access-ok = Une voie de { $amount } ou plus
+check-access-bad = Aucune voie de { $amount } ou plus
+check-passes = { " " }: réussite
+check-fails = { " " }: échec
+badge-fail = { " " }en échec
+failing =
+    { $n ->
+        [one] { $n } vérification échoue
+       *[other] { $n } vérifications échouent
+    }
+group-name-linear = Mesures linéaires continues
+group-name-local = Mesures ponctuelles
+group-name-area = Mesures à l’échelle d’un secteur
+group-note-linear = Aménagements de voies le long de la rue. Réorganiser dispose la chaussée selon cette mesure.
+group-note-local = Éléments propres à une intersection. Réglez-les sur la page de l’intersection.
+group-note-area = Elles couvrent de nombreuses rues; elles ne sont donc pas modélisées ici.
+measure-arrange = Réorganiser
+measure-arrange-label = Réorganiser la rue selon { $code } { $name }
+measure-this-street = Cette rue
+measure-will-not-fit = Ne rentre pas
+measure-set-at-junction = Se règle à une intersection
+measure-not-modelled = Non modélisé
