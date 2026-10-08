@@ -8,8 +8,8 @@ use leptos::prelude::*;
 
 use crate::city::binding::CityBinding;
 use crate::shared::core::{Core, Presents};
-use crate::shared::i18n::I18n;
-use crate::shared::keeper::{Keeper, NOT_KEPT};
+use crate::shared::i18n::{Args, I18n};
+use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
 use crate::shared::units::Units;
 use crate::street::model::{Editor, View};
@@ -43,7 +43,7 @@ impl StreetVm {
                     move || keep.upgrade().is_some_and(|vm| vm.keep_now()),
                     move || {
                         if let Some(vm) = told.upgrade() {
-                            vm.ports.announcer.say(NOT_KEPT);
+                            vm.ports.announcer.say(&vm.i18n.tr_now("not-kept", &Args::new()));
                         }
                     },
                 )
@@ -219,6 +219,7 @@ mod tests {
     use crate::city::binding::Place;
     use crate::city::store::CityStore;
     use crate::shared::i18n::Locale;
+    use crate::shared::keeper::NOT_KEPT;
     use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, test_ports_with_time};
 
     struct Rig {
@@ -428,5 +429,18 @@ mod tests {
         r.time.advance(300);
         assert_eq!(r.said.take(), vec![NOT_KEPT]);
         assert_eq!(r.vm.view_now().revisions.len(), 2);
+    }
+
+    #[test]
+    fn a_city_that_cannot_be_written_is_said_in_the_language_of_the_page() {
+        let (r, _) = city_rig();
+        r.vm.i18n().set(Locale::FrCa);
+        r.storage.blocked(true);
+        let uid = first(&r.vm);
+        r.vm.edit(|e| e.nudge_width(uid, 100));
+        r.time.advance(300);
+        r.vm.edit(|e| e.nudge_width(uid, 100));
+        r.time.advance(300);
+        assert_eq!(r.said.take(), vec!["Ce navigateur ne conserve pas vos modifications, alors les autres pages ne les verront pas."]);
     }
 }

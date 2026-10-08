@@ -4,6 +4,7 @@ theme-light = clair
 theme-dark = sombre
 theme-announced = Thème { $theme }.
 notes-shown = Notes affichées.
+not-kept = Ce navigateur ne conserve pas vos modifications, alors les autres pages ne les verront pas.
 notes-hidden = Notes masquées.
 details-shown = { $what } affichés.
 details-hidden = { $what } masqués.

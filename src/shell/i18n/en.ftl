@@ -4,6 +4,7 @@ theme-light = Light
 theme-dark = Dark
 theme-announced = { $theme } theme.
 notes-shown = Notes shown.
+not-kept = This browser is not keeping your changes, so other pages will not see them.
 notes-hidden = Notes hidden.
 details-shown = { $what } shown.
 details-hidden = { $what } hidden.
