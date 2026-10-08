@@ -8,6 +8,7 @@ use leptos::prelude::*;
 use serde::Deserialize;
 
 use crate::shared::catalogue::KINDS;
+use crate::shared::provenance::Sources;
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
 use crate::street::model::{SegView, View};
@@ -146,6 +147,16 @@ pub fn TitleBlock(vm: Rc<StreetVm>) -> impl IntoView {
         <div class="tb-cell tb-wide"><span>"Street"</span><b id="tb-street">{move || w.view().name.clone()}</b></div>
         <div class="tb-cell"><span>"Width"</span><b id="tb-row" class="fig">{move || w.units().length_fine(w.view().row_mm)}</b></div>
         <div class="tb-cell"><span>"Changes made"</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
+        {move || {
+            let source = w.view().source.clone();
+            (!source.is_empty())
+                .then(|| {
+                    view! {
+                        <div class="tb-cell tb-full"><span>"OpenStreetMap"</span><b class="tb-src"><Sources kind="way" refs=source/></b></div>
+                        <div class="tb-cell tb-full"><span>"Data"</span><b id="tb-state">{move || if w.view().changed { "Edited" } else { "As imported" }}</b></div>
+                    }
+                })
+        }}
     }
 }
 

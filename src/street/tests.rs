@@ -398,6 +398,30 @@ fn the_days_of_a_window_are_said_in_its_row_and_a_window_of_every_day_says_none(
 }
 
 #[test]
+fn the_title_block_links_the_osm_ways_and_says_whether_the_street_was_changed() {
+    use crate::shared::catalogue::{Side, StreetClass, kind_index};
+    use crate::shared::provenance::OsmRef;
+    use crate::street::model::{Piece, Street};
+    let travel = kind_index("travel").unwrap();
+    let mut street = Street::imported(StreetClass::Local, Side::Right, &[Piece { kind: travel, width_mm: 3200, direction: Some(0), variants: Vec::new() }]);
+    street.source = vec![OsmRef { id: 4687530, version: Some(49) }, OsmRef { id: 7, version: None }];
+    let s = StreetVm::new(crate::shared::platform::browser_ports(), Editor::from_street(&street, &street, 0), None);
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(h.contains("href=\"https://www.openstreetmap.org/way/4687530\"") && h.contains(">way 4687530 v49<"), "{h}");
+    assert!(h.contains(">way 7<") && h.contains("id=\"tb-state\">As imported<"), "{h}");
+    let u = segment(&s, 0);
+    s.edit(|e| e.nudge_width(u, 100));
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(h.contains("id=\"tb-state\">Edited<"), "{h}");
+}
+
+#[test]
+fn the_title_block_of_a_sandbox_street_does_not_link_to_openstreetmap() {
+    let h = street_html(|| view! { <page::TitleBlock vm=street_shared(0)/> });
+    assert!(!h.contains("openstreetmap.org"), "{h}");
+}
+
+#[test]
 fn a_sidewalk_has_a_curb_to_choose_and_a_driving_lane_has_none() {
     let s = street_shared(0);
     let walk = segment(&s, 0);

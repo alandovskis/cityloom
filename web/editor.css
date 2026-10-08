@@ -1654,6 +1654,13 @@ svg pattern circle {
   padding: 12px 20px 14px;
   border-top: 1px solid var(--rule);
 }
+.tb-full {
+  grid-column: 1 / -1;
+}
+.tb-src {
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
 
 /* ---- the Add menu --------------------------------------------------------------- */
 

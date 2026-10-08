@@ -246,6 +246,23 @@ test.describe("what the street editor keeps in the city", () => {
     await expect(page.locator('.surface[href="intersection.html"]')).toHaveCount(0);
   });
 
+  test("says which OpenStreetMap ways it was made from, and whether it has been changed", async ({ page }) => {
+    await openStreet(page);
+    const block = page.locator("#title-block");
+    await expect(block.locator('a[href^="https://www.openstreetmap.org/way/"]').first()).toHaveText(
+      /^way \d+( v\d+)?$/,
+    );
+    await expect(block.locator("#tb-state")).toHaveText("As imported");
+    await selectFirstPiece(page);
+    await page.keyboard.press("Enter");
+    const width = page.locator("#inspector input").first();
+    await width.fill(String(Math.round((Number(await width.inputValue()) - 0.3) * 10) / 10));
+    await width.press("Enter");
+    await expect(block.locator("#tb-state")).toHaveText("Edited");
+    await page.reload();
+    await expect(block.locator("#tb-state")).toHaveText("Edited");
+  });
+
   test("what is changed is kept in the city across a reload", async ({ page }) => {
     await openStreet(page);
     const before = await pieces(page);

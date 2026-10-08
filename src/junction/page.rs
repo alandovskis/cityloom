@@ -10,6 +10,7 @@ use crate::junction::text::{arms_text, fit_text};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
 use crate::shared::catalogue::KINDS;
+use crate::shared::provenance::Sources;
 use crate::shared::tick::Tick;
 
 /// The kinds of piece that appear in the plan, in the order the catalogue lists them.
@@ -68,6 +69,16 @@ pub fn TitleBlock(vm: Rc<JunctionVm>) -> impl IntoView {
         <div class="tb-cell tb-wide"><span>"Junction"</span><b id="tb-street">{move || w.view().name.clone()}</b></div>
         <div class="tb-cell"><span>"Streets"</span><b id="tb-row" class="fig">{move || w.view().arms.len().to_string()}</b></div>
         <div class="tb-cell"><span>"Changes made"</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
+        {move || {
+            let source = w.view().source.clone();
+            (!source.is_empty())
+                .then(|| {
+                    view! {
+                        <div class="tb-cell tb-full"><span>"OpenStreetMap"</span><b class="tb-src"><Sources kind="node" refs=source/></b></div>
+                        <div class="tb-cell tb-full"><span>"Data"</span><b id="tb-state">{move || if w.view().changed { "Edited" } else { "As imported" }}</b></div>
+                    }
+                })
+        }}
     }
 }
 
