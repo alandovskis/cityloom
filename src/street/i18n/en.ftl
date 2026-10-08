@@ -1,5 +1,4 @@
 # What the street page says: the markup of street.html.
-st-page-title = CityLoom street editor
 st-page-description = Rearrange a street's fixed width: add, move and resize its pieces and see at once whether it fits.
 st-editors = Editors
 st-map = Map

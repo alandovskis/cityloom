@@ -265,6 +265,21 @@ test.describe("what the street editor keeps in the city", () => {
     await expect(page.locator('.surface[href="intersection.html"]')).toHaveCount(0);
   });
 
+  test("keeps its own title, named for the street, when the language changes", async ({ page }) => {
+    await openStreet(page);
+    await expect(page).toHaveTitle(/between .* and .* · CityLoom/);
+    const name = (await page.locator("#street-name").textContent()) ?? "";
+    expect(name).not.toBe("");
+    await page.locator("#account-btn").click();
+    await page.locator('[data-lang="fr-CA"]').click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+    const title = await page.title();
+    expect(title).toContain(name);
+    expect(title).toContain("CityLoom");
+    expect(title).not.toBe("CityLoom street editor");
+    expect(title).not.toBe("Éditeur de rues CityLoom");
+  });
+
   test("says which OpenStreetMap ways it was made from, and whether it has been changed", async ({ page }) => {
     await openStreet(page);
     const block = page.locator("#title-block");

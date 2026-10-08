@@ -1,5 +1,4 @@
 # Ce que dit la page de la rue : le balisage de street.html.
-st-page-title = Éditeur de rues CityLoom
 st-page-description = Réorganisez la largeur fixe d’une rue : ajoutez, déplacez et redimensionnez ses éléments et voyez aussitôt si tout y entre.
 st-editors = Éditeurs
 st-map = Carte
