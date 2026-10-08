@@ -564,6 +564,16 @@ fn the_heading_and_the_title_block_are_in_french() {
 }
 
 #[test]
+fn the_drawing_s_group_is_named_in_the_language_of_the_page() {
+    let s = street_shared(0);
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(h.contains("aria-label=\"Street cross-section editor\""), "{h}");
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(h.contains("aria-label=\"Éditeur de coupe transversale de la rue\"") && !h.contains("Street cross-section editor"), "{h}");
+}
+
+#[test]
 fn the_history_buttons_are_in_french() {
     let s = street_shared_in(0, Locale::FrCa);
     let h = street_html(|| view! { <page::History vm=s.clone()/> });

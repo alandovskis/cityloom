@@ -9,6 +9,7 @@ use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
 use crate::shared::bind::current_element;
+use crate::shared::i18n::Args;
 use crate::street::keys::{self, Action};
 use crate::street::svg::{Geometry, Interaction, Moving, street_label, street_svg};
 use crate::street::vm::StreetVm;
@@ -216,7 +217,7 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
     };
 
     view! {
-        <div class="wrap" id="wrap" tabindex="0" role="group" aria-label="Street cross-section editor" aria-describedby="keys" node_ref=wrap on:keydown=keydown>
+        <div class="wrap" id="wrap" tabindex="0" role="group" aria-label=move || w.i18n().tr("view-section-label", &Args::new()) aria-describedby="keys" node_ref=wrap on:keydown=keydown>
             <svg
                 id="drawing"
                 xmlns="http://www.w3.org/2000/svg"

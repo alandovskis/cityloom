@@ -86,3 +86,4 @@ Chosen as the most standard Québec term, but the catalogue's meaning leaves roo
 | Got it | Compris | |
 | Changes made | Modifications apportées | |
 | As imported | Tel qu’importé | |
+| Street cross-section editor | Éditeur de coupe transversale de la rue | |

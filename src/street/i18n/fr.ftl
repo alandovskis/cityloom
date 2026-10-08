@@ -146,3 +146,6 @@ day-sa = sam.
 day-su = dim.
 welcome-text = Ajoutez un élément, puis faites-le glisser pour le réorganiser. La largeur est fixe; un élément qui ne rentre pas devient orange.
 welcome-dismiss = Compris
+
+# Le dessin de la coupe (src/street/view.rs).
+view-section-label = Éditeur de coupe transversale de la rue

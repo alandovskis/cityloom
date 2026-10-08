@@ -146,3 +146,6 @@ day-sa = Sa
 day-su = Su
 welcome-text = Add a piece, then drag to arrange. The width is fixed; a piece that does not fit turns orange.
 welcome-dismiss = Got it
+
+# The drawing of the section (src/street/view.rs).
+view-section-label = Street cross-section editor
