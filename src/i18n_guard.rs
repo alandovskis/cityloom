@@ -147,8 +147,12 @@ fn attribute_name(t: &[TokenTree], start: usize, eq: usize) -> String {
     t[start..eq].iter().map(|x| x.to_string()).collect()
 }
 
-fn is_text_attr(name: &str) -> bool {
+/// Whether the value of an attribute is scanned: text a person reads, or code (an event handler, a property, a directive).
+fn is_scanned_attr(name: &str) -> bool {
     TEXT_ATTRS.contains(&name.strip_prefix("attr:").unwrap_or(name))
+        || ["on:", "prop:", "use:", "bind:", "let:"].iter().any(|p| name.starts_with(p))
+        || name == "ref"
+        || name == "node_ref"
 }
 
 /// Whether the `=` at `i` is an attribute's: it touches the value after it and the name before it.
@@ -171,7 +175,7 @@ fn value_end(t: &[TokenTree], eq: usize) -> usize {
     }
     let mut j = eq + 1;
     while j < t.len() {
-        if let Some(_) = attribute_at(t, j) {
+        if attribute_at(t, j).is_some() {
             return name_start(t, j).unwrap_or(j);
         }
         if is_punct(&t[j], '>') && !is_punct(&t[j - 1], '=') && !is_punct(&t[j - 1], '-') {
@@ -192,10 +196,9 @@ fn walk(stream: TokenStream, out: &mut Vec<(usize, String)>) {
             if t.get(j).is_some_and(|x| is_punct(x, '!')) {
                 j += 1;
             }
-            if let Some(attr @ TokenTree::Group(g)) = t.get(j).filter(|x| matches!(x, TokenTree::Group(g) if g.delimiter() == Delimiter::Bracket)) {
+            if let Some(attr @ TokenTree::Group(_)) = t.get(j).filter(|x| matches!(x, TokenTree::Group(g) if g.delimiter() == Delimiter::Bracket)) {
                 i = j + 1;
                 if is_cfg_test(attr) {
-                    let _ = g;
                     while i < t.len() && !is_punct(&t[i], ';') && !matches!(&t[i], TokenTree::Group(b) if b.delimiter() == Delimiter::Brace) {
                         i += 1;
                     }
@@ -205,7 +208,7 @@ fn walk(stream: TokenStream, out: &mut Vec<(usize, String)>) {
             }
         }
         if let Some(name) = attribute_at(&t, i) {
-            if !is_text_attr(&name) {
+            if !is_scanned_attr(&name) {
                 i = value_end(&t, i);
                 continue;
             }
@@ -262,6 +265,21 @@ mod tests {
         assert_eq!(words("let b = \"btn quiet\";"), vec!["btn quiet"]);
         assert_eq!(words("<i aria-label=\"Close it\">"), vec!["Close it"]);
         assert_eq!(words("<i attr:title=\"Close it\">"), vec!["Close it"]);
+    }
+
+    #[test]
+    fn it_scans_event_handlers_which_are_code() {
+        assert_eq!(words("view! { <button on:click=move |_| announce(\"Saved\")>\"Go\"</button> }"), vec!["Saved", "Go"]);
+        assert_eq!(words("view! { <i on:keydown=move |e| { if e.key() == \"Escape\" { say(\"Closed now\") } }></i> }"), vec!["Closed now"]);
+        assert_eq!(words("view! { <i prop:value=move || \"Some text\" use:thing=\"Other text\" bind:x=\"More text\"></i> }").len(), 3);
+        let quiet = [
+            "view! { <i class=move || if on() { \"btn on\" } else { \"btn\" }></i> }",
+            "view! { <i id=\"t-checks\"></i> }",
+            "view! { <i on:click=move |_| set_open.set(true)></i> }",
+        ];
+        for src in quiet {
+            assert_eq!(words(src), Vec::<String>::new(), "{src}");
+        }
     }
 
     #[test]
