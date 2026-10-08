@@ -6,12 +6,14 @@
 Needs osmium-tool (`brew install osmium-tool`) and a Geofabrik extract
 (https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf, about 1.2 GB).
 Writes web/data/metro/X_Y.osm.pbf and web/data/metro/index.json, which the app reads (src/place/tiles.rs).
+The index holds a checksum of each tile: an area made from a tile is made again when its tile's checksum is not the one it was made from.
 
 A tile is a rectangle (its core) holding every road that reaches into the core widened by a margin,
 whole, with the nodes it needs. The margin is wider than half an area (400 m), so a place whose
 centre is in a tile's core is read from that one tile.
 """
 
+import hashlib
 import json
 import os
 import resource
@@ -41,6 +43,19 @@ OUT = ROOT / "web" / "data" / "metro"
 
 def osmium(*args):
     subprocess.run(["osmium", *map(str, args)], check=True)
+
+
+def write_index(kept):
+    """Names the grid, the tiles there are and a checksum of each, which the app reads to tell a tile that changed."""
+    index = {
+        "lon0": LON0,
+        "lat0": LAT0,
+        "dlon": DLON,
+        "dlat": DLAT,
+        "tiles": [p.name.removesuffix(".osm.pbf") for p in kept],
+        "checksums": {p.name.removesuffix(".osm.pbf"): hashlib.sha256(p.read_bytes()).hexdigest()[:16] for p in kept},
+    }
+    (OUT / "index.json").write_text(json.dumps(index, separators=(",", ":")) + "\n")
 
 
 def main():
@@ -95,8 +110,7 @@ def main():
     for p in OUT.glob("*.osm.pbf"):
         if p not in kept:
             p.unlink()
-    index = {"lon0": LON0, "lat0": LAT0, "dlon": DLON, "dlat": DLAT, "tiles": [p.name.removesuffix(".osm.pbf") for p in kept]}
-    (OUT / "index.json").write_text(json.dumps(index, separators=(",", ":")) + "\n")
+    write_index(kept)
     total = sum(p.stat().st_size for p in kept)
     print(f"{len(kept)} tiles, {total / 1e6:.1f} MB, in {OUT}")
 

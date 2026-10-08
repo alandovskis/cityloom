@@ -30,3 +30,38 @@ test("what is kept for the area is kept under its own keys", async ({ page }) =>
   expect(keys.some((k) => k.startsWith("cityloom-network:45.5261,-73.5978"))).toBe(true);
   expect(keys).not.toContain("cityloom-city");
 });
+
+test("an area is made again when the checksum of its tile changes, and not otherwise", async ({ page }) => {
+  let checksum = "one";
+  await page.route("**/data/metro/index.json", (route) =>
+    route.fulfill({
+      json: {
+        lon0: -73.6078,
+        lat0: 45.5161,
+        dlon: 0.0257,
+        dlat: 0.018,
+        tiles: ["0_0"],
+        checksums: { "0_0": checksum },
+      },
+    }),
+  );
+  let tileReads = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/data/metro/0_0.osm.pbf")) tileReads++;
+  });
+  const key = "cityloom-checksum:45.5261,-73.5978";
+  const stored = () => page.evaluate((k) => localStorage.getItem(k), key);
+
+  await page.goto("/map.html");
+  await expect(page.locator("#title-block")).toContainText("Plateau");
+  expect([tileReads, await stored()]).toEqual([1, "one"]);
+
+  await page.reload();
+  await expect(page.locator("#title-block")).toContainText("Plateau");
+  expect(tileReads, "the same checksum: the roads kept stand").toBe(1);
+
+  checksum = "two";
+  await page.reload();
+  await expect(page.locator("#title-block")).toContainText("Plateau");
+  expect([tileReads, await stored()]).toEqual([2, "two"]);
+});
