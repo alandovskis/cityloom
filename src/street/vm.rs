@@ -8,6 +8,7 @@ use leptos::prelude::*;
 
 use crate::city::binding::CityBinding;
 use crate::shared::core::{Core, Presents};
+use crate::shared::i18n::I18n;
 use crate::shared::keeper::{Keeper, NOT_KEPT};
 use crate::shared::ports::Ports;
 use crate::shared::units::Units;
@@ -24,14 +25,16 @@ impl Presents for Editor {
 pub struct StreetVm {
     core: Core<Editor>,
     ports: Ports,
+    i18n: Rc<I18n>,
     keeper: Option<Rc<Keeper>>,
     binding: Option<CityBinding>,
 }
 
 impl StreetVm {
-    /// A street to edit. Bound to a place in the city, what is made is written
-    /// back to it; otherwise it is a sandbox.
-    pub fn new(ports: Ports, street: Editor, binding: Option<CityBinding>) -> Rc<StreetVm> {
+    /// A street to edit, saying what it says in the language of `i18n` (the one
+    /// instance the shell switches). Bound to a place in the city, what is made
+    /// is written back to it; otherwise it is a sandbox.
+    pub fn new(ports: Ports, i18n: Rc<I18n>, street: Editor, binding: Option<CityBinding>) -> Rc<StreetVm> {
         Rc::new_cyclic(|me: &std::rc::Weak<StreetVm>| {
             let keeper = binding.is_some().then(|| {
                 let (keep, told) = (me.clone(), me.clone());
@@ -45,8 +48,13 @@ impl StreetVm {
                     },
                 )
             });
-            StreetVm { core: Core::new(street), ports, keeper, binding }
+            StreetVm { core: Core::new(street), ports, i18n, keeper, binding }
         })
+    }
+
+    /// The words of the page, in the language the shell has chosen.
+    pub fn i18n(&self) -> &Rc<I18n> {
+        &self.i18n
     }
 
     // ---- what the views read ----
@@ -133,7 +141,7 @@ impl StreetVm {
     pub fn undo(&self) -> bool {
         let done = self.edit(|e| e.undo());
         if done {
-            self.ports.announcer.say(&text::undone_text(&self.view_now(), self.units_now()));
+            self.ports.announcer.say(&text::undone_text(&self.view_now(), &self.i18n, self.units_now()));
         }
         done
     }
@@ -141,7 +149,7 @@ impl StreetVm {
     pub fn redo(&self) -> bool {
         let done = self.edit(|e| e.redo());
         if done {
-            self.ports.announcer.say(&text::redone_text(&self.view_now(), self.units_now()));
+            self.ports.announcer.say(&text::redone_text(&self.view_now(), &self.i18n, self.units_now()));
         }
         done
     }
@@ -149,7 +157,7 @@ impl StreetVm {
     pub fn reset(&self) -> bool {
         let done = self.edit(|e| e.reset());
         if done {
-            self.ports.announcer.say(text::STARTED_OVER);
+            self.ports.announcer.say(&text::started_over(&self.i18n));
         }
         done
     }
@@ -160,7 +168,7 @@ impl StreetVm {
         if done {
             self.say_edit();
         } else {
-            self.ports.announcer.say(text::MEASURE_REFUSED);
+            self.ports.announcer.say(&text::measure_refused(&self.i18n));
         }
         done
     }
@@ -179,13 +187,13 @@ impl StreetVm {
     }
 
     fn say_edit(&self) {
-        if let Some(t) = text::edit_text(&self.view_now(), self.units_now()) {
+        if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
             self.ports.announcer.say(&t);
         }
     }
 
     fn say_selection(&self) {
-        if let Some(t) = text::selection_text(&self.view_now(), self.units_now()) {
+        if let Some(t) = text::selection_text(&self.view_now(), &self.i18n, self.units_now()) {
             self.ports.announcer.say(&t);
         }
     }
@@ -210,6 +218,7 @@ mod tests {
     use super::*;
     use crate::city::binding::Place;
     use crate::city::store::CityStore;
+    use crate::shared::i18n::Locale;
     use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, test_ports_with_time};
 
     struct Rig {
@@ -221,7 +230,7 @@ mod tests {
 
     fn rig(sample: usize) -> Rig {
         let (ports, said, storage, time) = test_ports_with_time();
-        Rig { vm: StreetVm::new(ports, Editor::new(sample), None), said, time, storage }
+        Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(sample), None), said, time, storage }
     }
 
     fn city_rig() -> (Rig, CityBinding) {
@@ -230,7 +239,7 @@ mod tests {
         let edge = store.open().view(0).edges[0].uid;
         let street = store.open().street_editor(edge, 0).unwrap();
         let binding = CityBinding { store, place: Place::Street(edge) };
-        (Rig { vm: StreetVm::new(ports, street, Some(binding.clone())), said, time, storage }, binding)
+        (Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), street, Some(binding.clone())), said, time, storage }, binding)
     }
 
     fn first(vm: &StreetVm) -> u32 {
@@ -268,6 +277,20 @@ mod tests {
         assert!(r.said.take()[0].ends_with(". 3.3 m left to use."));
         assert!(!r.vm.apply(|e| e.remove(uid)));
         assert!(r.said.take().is_empty());
+    }
+
+    #[test]
+    fn the_street_says_what_it_says_in_the_language_the_shell_switches() {
+        let r = rig(0);
+        let uid = first(&r.vm);
+        // The shell holds this same instance, so a switch there is a switch here.
+        let shell = r.vm.i18n().clone();
+        shell.set(Locale::FrCa);
+        r.vm.select(Some(uid));
+        assert_eq!(r.said.take(), vec!["Trottoir, 3,3\u{a0}m, 1 sur 6"]);
+        shell.set(Locale::En);
+        r.vm.select(Some(uid));
+        assert_eq!(r.said.take(), vec!["Sidewalk, 3.3 m, 1 of 6"]);
     }
 
     #[test]

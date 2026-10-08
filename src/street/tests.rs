@@ -18,7 +18,7 @@ use crate::street::{inspector, notes, page, view};
 // ---- what the keys do on the street ---------------------------------------------------
 
 fn street_watch() -> (Rc<StreetVm>, SheetWatch) {
-    let s = StreetVm::new(crate::shared::platform::browser_ports(), Editor::new(0), None);
+    let s = StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::new(0), None);
     let w = SheetWatch::new(s.clone());
     live::take_said();
     (s, w)
@@ -93,7 +93,7 @@ fn removing_takes_the_selected_piece_away() {
 }
 
 fn street_shared(sample: usize) -> Rc<StreetVm> {
-    StreetVm::new(crate::shared::platform::browser_ports(), Editor::new(sample), None)
+    StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::new(sample), None)
 }
 
 fn street_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
@@ -423,7 +423,7 @@ fn the_days_of_a_window_are_said_in_its_row_and_a_window_of_every_day_says_none(
         let window = Window { kind: kind("bus"), from_min: 360, to_min: 600, days: days.map(str::to_string) };
         let street =
             Street::imported(StreetClass::Local, Side::Right, &[Piece { kind: kind("parking"), width_mm: 3000, direction: Some(0), variants: vec![window] }]);
-        let s = StreetVm::new(crate::shared::platform::browser_ports(), Editor::from_street(&street, &street, 0), None);
+        let s = StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::from_street(&street, &street, 0), None);
         let u = segment(&s, 0);
         s.edit(|e| e.select(Some(u)));
         street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> })
@@ -441,7 +441,7 @@ fn the_title_block_links_the_osm_ways_and_says_whether_the_street_was_changed() 
     let travel = kind_index("travel").unwrap();
     let mut street = Street::imported(StreetClass::Local, Side::Right, &[Piece { kind: travel, width_mm: 3200, direction: Some(0), variants: Vec::new() }]);
     street.source = vec![OsmRef { id: 4687530, version: Some(49) }, OsmRef { id: 7, version: None }];
-    let s = StreetVm::new(crate::shared::platform::browser_ports(), Editor::from_street(&street, &street, 0), None);
+    let s = StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::from_street(&street, &street, 0), None);
     let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
     assert!(h.contains("href=\"https://www.openstreetmap.org/way/4687530\"") && h.contains(">way 4687530 v49<"), "{h}");
     assert!(h.contains(">way 7<") && h.contains("id=\"tb-state\">As imported<"), "{h}");

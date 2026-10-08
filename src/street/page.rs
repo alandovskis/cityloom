@@ -172,7 +172,10 @@ pub fn Fit(vm: Rc<StreetVm>) -> impl IntoView {
             <Tick works=fits/>
             {move || {
                 let (v, units) = w.now();
-                status_text(&v, units)
+                let i18n = w.i18n();
+                // The sentence is built from the locale as it is now; reading it here redraws the line on a switch.
+                i18n.locale();
+                status_text(&v, &i18n, units)
             }}
         </p>
     }

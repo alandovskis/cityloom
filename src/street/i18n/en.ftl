@@ -56,3 +56,17 @@ group-transit = Transit
 group-roadway = Roadway
 group-furniture = Furniture
 group-utilities = Utilities
+
+# How the pieces stand against the street's width, and what is said after an edit.
+fit-used = Every metre of the street is used
+fit-left = { $amount } left to use
+fit-over = { $amount } too wide. Make a piece narrower or remove one
+status-used = { fit-used }.
+status-unused = { $amount } of the street is still unused.
+status-over = { fit-over }.
+edit-done = { $label }. { $fit }.
+edit-undone = Undone. { $fit }.
+edit-redone = Redone. { $fit }.
+selection-position = { $kind }, { $width }, { $index } of { $total }
+started-over = Started over from the street as it is today. Undo brings your changes back.
+measure-refused = That measure does not suit this street.

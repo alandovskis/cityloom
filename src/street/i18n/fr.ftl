@@ -56,3 +56,17 @@ group-transit = Transport en commun
 group-roadway = Chaussée
 group-furniture = Mobilier urbain
 group-utilities = Services publics
+
+# Où en sont les éléments par rapport à la largeur de la rue, et ce qui est dit après une modification.
+fit-used = Chaque mètre de la rue est utilisé
+fit-left = Il reste { $amount } à utiliser
+fit-over = { $amount } de trop. Rétrécissez un élément ou retirez-en un
+status-used = { fit-used }.
+status-unused = Il reste { $amount } de la rue à utiliser.
+status-over = { fit-over }.
+edit-done = { $label }. { $fit }.
+edit-undone = Annulé. { $fit }.
+edit-redone = Rétabli. { $fit }.
+selection-position = { $kind }, { $width }, { $index } sur { $total }
+started-over = Retour à la rue telle qu’elle est aujourd’hui. Annulez pour retrouver vos modifications.
+measure-refused = Cette mesure ne convient pas à cette rue.

@@ -114,7 +114,7 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
         ui.fresh = over && !was_over.get_value();
         was_over.set_value(over);
         fresh.set_value(ui.fresh);
-        let out = street_svg(&v, width.get(), units, &ui);
+        let out = street_svg(&v, &w.i18n(), width.get(), units, &ui);
         geometry.set_value(out.geometry);
         row_right.set_value(out.row_right);
         out.markup
@@ -223,7 +223,10 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
                 role="img"
                 aria-label=move || {
                     let (v, units) = w.now();
-                    street_label(&v, units)
+                    let i18n = w.i18n();
+                    // Read so the label is drawn again when the language is switched.
+                    i18n.locale();
+                    street_label(&v, &i18n, units)
                 }
                 width=move || size().width.to_string()
                 height=move || height().to_string()

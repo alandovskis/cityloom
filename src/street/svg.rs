@@ -5,6 +5,7 @@
 use std::fmt::Write;
 
 use crate::shared::catalogue::KINDS;
+use crate::shared::i18n::I18n;
 use crate::shared::symbols::{SymbolOpts, symbol};
 use crate::shared::units::Units;
 use crate::street::model::{SegView, View};
@@ -248,19 +249,19 @@ fn curbs(v: &View, g: &Geometry) -> String {
 }
 
 /// What a screen reader is told the drawing is.
-pub fn street_label(v: &View, units: Units) -> String {
+pub fn street_label(v: &View, i18n: &I18n, units: Units) -> String {
     format!(
         "Cross-section of {}. {} segments, {} of {}. {}.",
         v.name,
         v.segments.len(),
         units.length_fine(v.total_mm),
         units.length_fine(v.row_mm),
-        fit_phrase(v, units)
+        fit_phrase(v, i18n, units)
     )
 }
 
 /// The street drawn `width` wide: `ui` is what the pointer is doing to it.
-pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> StreetSvg {
+pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interaction) -> StreetSvg {
     let g = Geometry::fit(width, v.row_mm);
     let (rows, scale) = (g.rows, g.scale);
     let w_px = g.width;
@@ -548,16 +549,21 @@ pub fn street_svg(v: &View, width: f64, units: Units, ui: &Interaction) -> Stree
         }
     }
 
-    StreetSvg { geometry: g, label: street_label(v, units), markup: p, row_right: xr, over }
+    StreetSvg { geometry: g, label: street_label(v, i18n, units), markup: p, row_right: xr, over }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::i18n::Locale;
     use crate::street::model::Editor;
 
+    fn en() -> std::rc::Rc<I18n> {
+        crate::i18n_for(Locale::En)
+    }
+
     fn svg(e: &Editor) -> StreetSvg {
-        street_svg(&e.view(), 1050.0, Units::Metres, &Interaction::default())
+        street_svg(&e.view(), &en(), 1050.0, Units::Metres, &Interaction::default())
     }
 
     fn count(s: &str, needle: &str) -> usize {
@@ -656,7 +662,7 @@ mod tests {
         let mut e = Editor::new(0);
         let u = uid(&e, 0);
         e.set_width(u, e.view().segments[0].width_mm + 1_000);
-        let fresh = street_svg(&e.view(), 1050.0, Units::Metres, &Interaction { fresh: true, ..Interaction::default() });
+        let fresh = street_svg(&e.view(), &en(), 1050.0, Units::Metres, &Interaction { fresh: true, ..Interaction::default() });
         assert!(fresh.markup.contains("class=\"cloud fresh\""));
     }
 
@@ -684,7 +690,7 @@ mod tests {
     #[test]
     fn a_handle_being_dragged_is_marked_active() {
         let e = Editor::new(0);
-        let drawn = |ui: Interaction| street_svg(&e.view(), 1050.0, Units::Metres, &ui).markup;
+        let drawn = |ui: Interaction| street_svg(&e.view(), &en(), 1050.0, Units::Metres, &ui).markup;
         let h = drawn(Interaction { resizing: Some(2), ..Interaction::default() });
         assert_eq!(count(&h, "class=\"handle active\""), 1);
         assert!(h.contains("class=\"handle active\" data-role=\"handle\" data-i=\"2\""));
@@ -696,7 +702,7 @@ mod tests {
     #[test]
     fn a_finger_gets_a_bigger_target_on_each_handle() {
         let e = Editor::new(0);
-        let hit = |coarse: bool| street_svg(&e.view(), 1050.0, Units::Metres, &Interaction { coarse, ..Interaction::default() }).markup;
+        let hit = |coarse: bool| street_svg(&e.view(), &en(), 1050.0, Units::Metres, &Interaction { coarse, ..Interaction::default() }).markup;
         assert!(hit(false).contains("width=\"18\" height=\"") && !hit(false).contains("width=\"30\""));
         assert!(hit(true).contains("width=\"30\" height=\""));
     }
@@ -707,7 +713,7 @@ mod tests {
         let u = uid(&e, 2);
         e.select(Some(u));
         let ui = Interaction { moving: Some(Moving { uid: u, px: 400.0, index: Some(1) }), ..Interaction::default() };
-        let s = street_svg(&e.view(), 1050.0, Units::Metres, &ui);
+        let s = street_svg(&e.view(), &en(), 1050.0, Units::Metres, &ui);
         assert_eq!(count(&s.markup, "class=\"seg lifted\""), 1);
         assert_eq!(count(&s.markup, "class=\"ghost\""), 1);
         assert_eq!(count(&s.markup, "class=\"caret\""), 1);
@@ -716,8 +722,13 @@ mod tests {
         let g = s.geometry;
         let x = g.x(3_300.0);
         assert!(s.markup.contains(&format!("<line class=\"caret\" x1=\"{x}\"")));
-        let none =
-            street_svg(&e.view(), 1050.0, Units::Metres, &Interaction { moving: Some(Moving { uid: u, px: 400.0, index: None }), ..Interaction::default() });
+        let none = street_svg(
+            &e.view(),
+            &en(),
+            1050.0,
+            Units::Metres,
+            &Interaction { moving: Some(Moving { uid: u, px: 400.0, index: None }), ..Interaction::default() },
+        );
         assert_eq!(count(&none.markup, "class=\"caret\""), 0);
         assert_eq!(count(&none.markup, "class=\"ghost\""), 1);
     }
@@ -757,7 +768,7 @@ mod tests {
             if mm != e.view().segments[0].width_mm {
                 assert!(e.set_width(u, mm), "{mm}");
             }
-            let s = street_svg(&e.view(), 680.0, Units::Metres, &Interaction::default());
+            let s = street_svg(&e.view(), &en(), 680.0, Units::Metres, &Interaction::default());
             let at = s.markup.find("t-mark t-halo\" x=").unwrap();
             let tail = &s.markup[at..];
             tail[tail.find('>').unwrap() + 1..tail.find("</text>").unwrap()].to_string()
@@ -798,16 +809,16 @@ mod tests {
         let s = svg(&Editor::new(0));
         assert_eq!(count(&s.markup, "class=\"bar-b\"") + count(&s.markup, "class=\"bar-w\""), 5);
         assert!(s.markup.contains(">5</text>") && s.markup.contains(">m</text>"));
-        let ft = street_svg(&Editor::new(0).view(), 1050.0, Units::Feet, &Interaction::default());
+        let ft = street_svg(&Editor::new(0).view(), &en(), 1050.0, Units::Feet, &Interaction::default());
         assert!(ft.markup.contains(">25</text>") && ft.markup.contains(">ft</text>"));
         assert!(ft.markup.contains(">Street width 59.1 ft<"));
     }
 
     #[test]
     fn the_scale_bar_labels_every_part_when_there_is_room_and_only_the_ends_when_there_is_not() {
-        let roomy = street_svg(&Editor::new(0).view(), 1500.0, Units::Metres, &Interaction::default());
+        let roomy = street_svg(&Editor::new(0).view(), &en(), 1500.0, Units::Metres, &Interaction::default());
         assert_eq!(count(&roomy.markup, "t-dim t-soft\" x="), 6 + 1);
-        let tight = street_svg(&Editor::new(0).view(), 680.0, Units::Metres, &Interaction::default());
+        let tight = street_svg(&Editor::new(0).view(), &en(), 680.0, Units::Metres, &Interaction::default());
         assert_eq!(count(&tight.markup, "t-dim t-soft\" x="), 2 + 1);
     }
 
@@ -822,7 +833,7 @@ mod tests {
         let mut e = Editor::new(0);
         let u = uid(&e, 0);
         e.set_width(u, 1_800);
-        let s = street_svg(&e.view(), 680.0, Units::Metres, &Interaction::default());
+        let s = street_svg(&e.view(), &en(), 680.0, Units::Metres, &Interaction::default());
         assert!(
             s.markup.contains(">Sw</text>")
                 || s.markup.contains(">SW</text>")
