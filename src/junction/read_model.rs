@@ -8,6 +8,7 @@ use serde_json::Value;
 use crate::junction::geometry::*;
 use crate::junction::model::*;
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
+use crate::shared::provenance::OsmRef;
 use crate::street::model::{Check, Revision};
 
 /// Ring width of a roundabout, and the smallest island in its middle.
@@ -437,6 +438,8 @@ pub struct JView {
     pub can_undo: bool,
     pub can_redo: bool,
     pub changed: bool,
+    /// The OSM nodes the junction was made from.
+    pub source: Vec<OsmRef>,
 }
 
 /// Every pair of streets a bus lane could join across a roundabout, the one
@@ -886,6 +889,7 @@ impl Junction {
             can_undo: self.can_undo(),
             can_redo: self.can_redo(),
             changed: self.changed(),
+            source: s.source.clone(),
         }
     }
 }

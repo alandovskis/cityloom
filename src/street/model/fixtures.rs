@@ -77,6 +77,7 @@ impl Editor {
         let mut e = Editor {
             class: StreetClass::Local,
             street_name: None,
+            source: Vec::new(),
             region: 0,
             time_min: 12 * 60,
             row_mm: 0,

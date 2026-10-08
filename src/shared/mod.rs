@@ -10,6 +10,7 @@ pub mod keeper;
 pub mod live;
 pub mod platform;
 pub mod ports;
+pub mod provenance;
 pub mod shortcut;
 pub mod store;
 pub mod symbols;

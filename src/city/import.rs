@@ -7,6 +7,7 @@ use osm_network::{Control, Lane, LaneKind, Network, Way};
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
 use crate::shared::catalogue::{Side, StreetClass, kind_index};
+use crate::shared::provenance::OsmRef;
 use crate::street::model::{Piece, Street, Window};
 
 /// How wide a corner is rounded where nothing in the data says.
@@ -83,6 +84,11 @@ fn windows_of(hours: &str) -> Option<Vec<(i32, i32)>> {
         return None;
     }
     Some(windows.into_iter().map(|(from, to)| (from, to % (24 * 60))).collect())
+}
+
+/// The OSM ways or nodes with the version each had.
+fn refs(ids: &[i64], versions: &BTreeMap<i64, i32>) -> Vec<OsmRef> {
+    ids.iter().map(|&id| OsmRef { id, version: versions.get(&id).copied() }).collect()
 }
 
 fn control_of(c: Control) -> usize {
@@ -173,7 +179,7 @@ impl Layout {
                     name: Some(street_name(r)),
                     headings: headings(&r.points),
                     shape: shape_mm(&r.points, node_mm(r.from), node_mm(r.to), &mm_of),
-                    section: Street::imported(class, side, &pieces).named(&street_name(r)),
+                    section: Street { source: refs(&r.osm_ways, &r.osm_versions), ..Street::imported(class, side, &pieces).named(&street_name(r)) },
                 }
             })
             .collect();
@@ -188,6 +194,7 @@ impl Layout {
                     junction,
                     control: if junction { control_of(n.control) } else { 0 },
                     corner_mm: if junction { CORNER_MM } else { 0 },
+                    source: refs(&n.osm_nodes, &n.osm_versions),
                 }
             })
             .collect();
@@ -222,6 +229,52 @@ mod tests {
         assert_eq!(days("Mo-Fr 06:00-10:00,14:30-19:00"), [Some("Mo-Fr".to_string()), Some("Mo-Fr".to_string())]);
         assert_eq!(days("Sa,Su 08:00-12:00"), [Some("Sa,Su".to_string())]);
         assert_eq!(days("06:00-10:00"), [None]);
+    }
+
+    #[test]
+    fn a_street_and_a_junction_carry_the_osm_ways_and_nodes_they_were_made_from_with_their_versions() {
+        use crate::shared::provenance::OsmRef;
+        let mut net = crossing();
+        net.roads[1].osm_versions = [(200, 12)].into();
+        net.nodes[0].osm_versions = [(10, 4)].into();
+        let city = City::from_network(&net, "Testville");
+        let v = city.view(0);
+        let street = |i: usize| city.street_editor(v.edges[i].uid, 0).unwrap().view();
+        assert_eq!(street(1).source, [OsmRef { id: 200, version: Some(12) }]);
+        assert_eq!(street(0).source, [OsmRef { id: 100, version: None }], "a way with no version is still named");
+        let junction = v.nodes.iter().find(|n| n.junction).unwrap().uid;
+        let editor = city.junction_editor(junction, 0).unwrap();
+        assert_eq!(editor.view().source, [OsmRef { id: 10, version: Some(4) }]);
+        assert_eq!(editor.snapshot().source, [OsmRef { id: 10, version: Some(4) }]);
+    }
+
+    #[test]
+    fn a_city_saved_before_places_carried_their_source_has_only_what_was_changed_marked_changed() {
+        let net = crossing();
+        let mut city = City::from_network(&net, "Testville");
+        let edge = city.view(0).edges[0].uid;
+        let mut e = city.street_editor(edge, 0).unwrap();
+        let u = e.view().segments[1].uid;
+        assert!(e.nudge_width(u, 100));
+        assert!(city.keep_street(edge, e.snapshot()));
+        // the save as an older version wrote it: none of its places has a source
+        let mut saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        fn strip(v: &mut serde_json::Value) {
+            match v {
+                serde_json::Value::Object(m) => {
+                    m.remove("source");
+                    m.values_mut().for_each(strip);
+                }
+                serde_json::Value::Array(a) => a.iter_mut().for_each(strip),
+                _ => {}
+            }
+        }
+        strip(&mut saved);
+        let loaded = City::load_on(Layout::from_network(&net, "Testville"), &saved.to_string());
+        let v = loaded.view(0);
+        assert_eq!((v.edited, v.edges[0].edited), (1, true));
+        let source = loaded.street_editor(edge, 0).unwrap().view().source;
+        assert_eq!(source.len(), 1);
     }
 
     #[test]

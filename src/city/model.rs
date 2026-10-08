@@ -16,6 +16,7 @@ use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass};
+use crate::shared::provenance::OsmRef;
 #[cfg(test)]
 use crate::street::model::SAMPLES;
 use crate::street::model::{Editor, Street};
@@ -30,16 +31,18 @@ pub(super) struct NodeDef {
     pub(super) junction: bool,
     pub(super) control: usize,
     pub(super) corner_mm: i32,
+    /// The OSM nodes it was made from.
+    pub(super) source: Vec<OsmRef>,
 }
 
 #[cfg(test)]
 const fn junction_at(x_m: i32, y_m: i32, control: usize, corner_mm: i32) -> NodeDef {
-    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm, source: Vec::new() }
 }
 
 #[cfg(test)]
 const fn gate_at(x_m: i32, y_m: i32) -> NodeDef {
-    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0 }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0, source: Vec::new() }
 }
 
 pub(super) struct EdgeDef {
@@ -368,7 +371,7 @@ impl Layout {
             .collect();
         junction::normalize(&mut arms, 0);
         tune_corners(&mut arms, def.control, def.corner_mm);
-        let mut s = State { label: "Junction today".into(), arms, control: def.control, ring_extra_mm: 0, bus: None, cycle: None };
+        let mut s = State { label: "Junction today".into(), arms, control: def.control, ring_extra_mm: 0, bus: None, cycle: None, source: def.source.clone() };
         forget_streets(&mut s);
         s
     }
@@ -411,7 +414,7 @@ impl Layout {
 /// nothing suits keeps `preferred`.
 fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
     use crate::junction::model::{MAX_CORNER_MM, MIN_CORNER_MM, RING_STEP_MM};
-    let state = |arms: &[Arm]| State { label: String::new(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None };
+    let state = |arms: &[Arm]| State { label: String::new(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None, source: Vec::new() };
     let mut radii: Vec<i32> = (MIN_CORNER_MM..=MAX_CORNER_MM).step_by(RING_STEP_MM as usize).collect();
     radii.sort_by_key(|r| ((r - preferred).abs(), *r));
     for i in 0..arms.len() {
@@ -500,13 +503,16 @@ impl City {
         for (uid, street) in saved.streets {
             let ok = city.today_streets.get(&uid).is_some_and(|t| t.class == street.class && t.row_mm == street.row_mm);
             if ok && street.is_sound() {
-                city.streets.insert(uid, street);
+                // where a street came from is not something an edit changes, and older saves did not say
+                let source = city.today_streets[&uid].source.clone();
+                city.streets.insert(uid, Street { source, ..street });
             }
         }
         for (uid, state) in saved.junctions {
             let node = (uid as usize).checked_sub(1).filter(|&n| n < city.layout.nodes.len() && city.layout.nodes[n].junction);
             if node.is_some_and(|n| city.layout.junction_fits(&state, n)) {
-                city.junctions.insert(uid, state);
+                let source = city.today_junctions[&uid].source.clone();
+                city.junctions.insert(uid, State { source, ..state });
             }
         }
         city

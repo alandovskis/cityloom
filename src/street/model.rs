@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, Side, StreetClass, kind_index};
+use crate::shared::provenance::OsmRef;
 use crate::street::measures;
 
 #[cfg(test)]
@@ -170,6 +171,9 @@ pub struct Street {
     pub side: Side,
     pub segments: Vec<Segment>,
     pub next_uid: u32,
+    /// The OSM ways it was made from. The sample streets are made from none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source: Vec<OsmRef>,
 }
 
 fn flip(d: &mut Option<usize>) {
@@ -229,7 +233,7 @@ impl Street {
                 g
             })
             .collect();
-        Street { class, name: None, row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1 }
+        Street { class, name: None, row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1, source: Vec::new() }
     }
 
     /// The same street, called `name`.
@@ -305,6 +309,8 @@ pub struct Editor {
     class: StreetClass,
     /// What the street is called, where it has a name of its own.
     street_name: Option<String>,
+    /// The OSM ways it was made from.
+    source: Vec<OsmRef>,
     /// Index into `REGIONS`. A setting of the sheet, not part of the history.
     region: usize,
     /// The time of day the sheet shows, in minutes. Also a setting, not history.
@@ -361,6 +367,7 @@ impl Editor {
             side: REGIONS[self.region].drive_side,
             segments: self.current().clone(),
             next_uid: self.next_uid,
+            source: self.source.clone(),
         }
     }
 
@@ -374,6 +381,7 @@ impl Editor {
         let mut e = Editor {
             class: now.class,
             street_name: now.name.clone(),
+            source: now.source.clone(),
             region,
             time_min: 12 * 60,
             row_mm: now.row_mm,
@@ -998,6 +1006,7 @@ impl Editor {
             can_undo: self.cursor > 0,
             can_redo: self.cursor + 1 < self.states.len(),
             changed: segs != existing,
+            source: self.source.clone(),
         }
     }
 
@@ -1238,6 +1247,8 @@ pub struct View {
     pub can_undo: bool,
     pub can_redo: bool,
     pub changed: bool,
+    /// The OSM ways the street was made from.
+    pub source: Vec<OsmRef>,
 }
 
 #[cfg(test)]
@@ -1263,6 +1274,25 @@ mod tests {
         assert_eq!(s.next_uid, 6);
         // and the editor opens on it
         assert_eq!(Editor::from_street(&s, &s, 0).view().row_mm, s.row_mm);
+    }
+
+    #[test]
+    fn a_street_keeps_the_osm_ways_it_came_from_through_the_editor_and_says_when_it_was_changed() {
+        use crate::shared::provenance::OsmRef;
+        let travel = kind("travel");
+        let mut street = Street::imported(StreetClass::Local, Side::Right, &[Piece { kind: travel, width_mm: 3200, direction: Some(0), variants: Vec::new() }]);
+        street.source = vec![OsmRef { id: 4687530, version: Some(49) }, OsmRef { id: 7, version: None }];
+        let mut e = Editor::from_street(&street, &street, 0);
+        assert_eq!(e.view().source, street.source);
+        assert!(!e.view().changed);
+        let uid = e.view().segments[0].uid;
+        assert!(e.nudge_width(uid, 100));
+        assert!(e.view().changed);
+        assert_eq!(e.snapshot().source, street.source);
+        // opened on a street that was changed before, it is changed
+        assert!(Editor::from_street(&street, &e.snapshot(), 0).view().changed);
+        e.undo();
+        assert!(!e.view().changed);
     }
 
     #[test]
