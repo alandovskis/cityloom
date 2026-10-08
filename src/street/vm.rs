@@ -359,6 +359,24 @@ mod tests {
     }
 
     #[test]
+    fn what_is_announced_after_an_edit_and_a_refusal_is_said_in_the_language_of_the_page() {
+        let (ports, said, _storage, _time) = test_ports_with_time();
+        let i18n = crate::i18n_for(Locale::En);
+        let vm = StreetVm::new(ports, i18n.clone(), Editor::new(1), None);
+        i18n.set(Locale::FrCa);
+        let uid = first(&vm);
+        assert!(vm.apply(|e| e.remove(uid)));
+        let told = said.take();
+        assert!(told[0].starts_with("Retrait\u{a0}: trottoir. Il reste 3,5\u{a0}m à utiliser"), "{told:?}");
+        assert!(!vm.apply_measure("B2"));
+        assert_eq!(said.take(), vec!["Cette mesure ne convient pas à cette rue."]);
+        // The edit was made in French; said again in English, it follows.
+        i18n.set(Locale::En);
+        assert!(vm.undo() && vm.redo());
+        assert_eq!(said.take().last().unwrap(), "Redone. 3.5 m left to use.");
+    }
+
+    #[test]
     fn what_is_announced_follows_the_units() {
         let r = rig(0);
         r.vm.set_units(Units::Feet);
