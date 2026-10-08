@@ -189,3 +189,53 @@ atlas-w-f-note = L’Atlas la présente comme étant en développement, et un pr
 # Ce qui manque à une mesure reconnue (src/street/measures.rs).
 problem-narrow-lane = Une voie d’autobus mesure { $width }{ "\u00A0" }mm de large, alors qu’une voie de transport en commun en exige { $min }{ "\u00A0" }mm
 problem-no-platform = Les voies centrales ont besoin d’un terre-plein ou d’un quai à côté pour les arrêts
+
+# Les matériaux, les bordures et les sens du catalogue (src/shared/catalogue.rs).
+material-asphalt = Asphalte
+material-concrete = Béton
+material-permeable = Revêtement perméable
+material-brick = Pavés de brique
+material-grass = Gazon
+material-planted = Plate-bande
+material-gravel = Gravier
+material-trees = Arbres de rue
+curb-granite = Granit
+curb-concrete = Béton
+curb-asphalt = Asphalte
+curb-planted = Planté
+curb-kassel = Bordure adaptée aux autobus
+curb-bikefriendly = Bordure adaptée aux vélos
+curb-island = Îlot d’embarquement d’autobus
+direction-away = S’éloigne de vous
+direction-toward = Vient vers vous
+
+# Le panneau de l’élément sélectionné (src/street/inspector.rs).
+inspector-empty = Sélectionnez un élément pour modifier sa largeur et son revêtement.
+inspector-sub = { $width } de large · { $at } sur { $total }
+inspector-sub-timed = { $width } de large · { $at } sur { $total } · { $time }
+inspector-width = Largeur
+inspector-step-wider = Élargir de { $step }{ "\u00A0" }{ $unit }
+inspector-step-narrower = Rétrécir de { $step }{ "\u00A0" }{ $unit }
+inspector-allowed = Valeurs permises : de { $min } à { $max }{ "\u00A0" }{ $unit }
+inspector-surface = Revêtement
+inspector-surface-note = Le matériau qui le recouvre.
+inspector-planting = Plantation
+inspector-planting-note = Ce qui y est planté.
+inspector-vehicle = Véhicule
+inspector-bus = Autobus
+inspector-tram = Tramway
+inspector-times = Autres périodes
+inspector-times-base = { $kind } le reste de la journée.
+inspector-times-add = Ajouter d’autres périodes
+inspector-variant-type = Type { $n }
+inspector-variant-direction = Direction { $n }
+inspector-variant-remove = Retirer l’élément { $kind } de { $from } à { $to }
+inspector-from = De
+inspector-to = À
+inspector-until = à
+inspector-direction = Direction
+inspector-direction-note = Le sens de la circulation.
+inspector-two-way = Double sens
+inspector-curb = Bordure
+inspector-curb-note = Le rebord surélevé, s’il y en a un.
+inspector-curb-none = Aucune (au ras du sol)

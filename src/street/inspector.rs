@@ -8,7 +8,8 @@ use leptos::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
-use crate::shared::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS};
+use crate::shared::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS, curb_key, direction_key, kind_key, material_key};
+use crate::shared::i18n::{Args, I18n};
 use crate::shared::units::{Units, parse_number};
 use crate::street::model::{SegView, View};
 use crate::street::page::{hhmm, to_min};
@@ -25,20 +26,33 @@ pub fn variant_kinds(alt_kinds: &[usize], current: usize) -> Vec<usize> {
 }
 
 /// What a piece's width is allowed to be, as the field holds it.
-pub fn width_range(s: &SegView, units: Units) -> String {
-    format!("Allowed {} to {} {}", units.fixed(s.min_mm, 2), units.fixed(s.max_mm, 2), units.word())
+pub fn width_range(s: &SegView, i18n: &I18n, units: Units) -> String {
+    let locale = i18n.locale();
+    let args = Args::new().str("min", units.fixed_in(s.min_mm, 2, locale)).str("max", units.fixed_in(s.max_mm, 2, locale)).str("unit", units.word());
+    i18n.tr("inspector-allowed", &args)
 }
 
 /// Where the piece is, and how wide, under its name.
-pub fn piece_sub(v: &View, s: &SegView, units: Units) -> String {
+pub fn piece_sub(v: &View, s: &SegView, i18n: &I18n, units: Units) -> String {
     let i = v.segments.iter().position(|x| x.uid == s.uid).unwrap_or(0);
-    let time = if s.variants.is_empty() { String::new() } else { format!(" \u{b7} {}", hhmm(v.time_min)) };
-    format!("{} wide \u{b7} {} of {}{time}", units.length_fine(s.width_mm), i + 1, v.segments.len())
+    let args = Args::new()
+        .str("width", units.length_fine_in(s.width_mm, i18n.locale()))
+        .num("at", i as i64 + 1)
+        .num("total", v.segments.len() as i64)
+        .str("time", hhmm(v.time_min));
+    i18n.tr(if s.variants.is_empty() { "inspector-sub" } else { "inspector-sub-timed" }, &args)
 }
 
 /// What the width steppers say they do.
-pub fn step_label(more: bool, units: Units) -> String {
-    format!("{} by {} {}", if more { "Wider" } else { "Narrower" }, units.fine(units.step_mm()), units.word())
+pub fn step_label(more: bool, i18n: &I18n, units: Units) -> String {
+    let args = Args::new().str("step", units.fine_in(units.step_mm(), i18n.locale())).str("unit", units.word());
+    i18n.tr(if more { "inspector-step-wider" } else { "inspector-step-narrower" }, &args)
+}
+
+/// A word of the panel, asked again when the language is switched.
+fn say(w: SheetWatch, key: impl Into<String>) -> impl Fn() -> String + Send + Sync + 'static {
+    let key = key.into();
+    move || w.i18n().tr(&key, &Args::new())
 }
 
 /// How a direction is picked in the field's `<select>`: the index into the
@@ -100,7 +114,12 @@ fn direction_swatch(id: Option<&'static str>) -> AnyView {
 }
 
 /// One choice in a group where exactly one is chosen.
-fn radio(checked: impl Fn() -> bool + Send + Sync + 'static, glyph: AnyView, name: String, on_click: impl Fn() + 'static) -> impl IntoView {
+fn radio(
+    checked: impl Fn() -> bool + Send + Sync + 'static,
+    glyph: AnyView,
+    name: impl Fn() -> String + Send + Sync + 'static,
+    on_click: impl Fn() + 'static,
+) -> impl IntoView {
     let tab = {
         // Only the chosen one is in the tab order; the arrows move between them.
         let checked = std::sync::Arc::new(checked);
@@ -139,7 +158,7 @@ fn radio_keys(e: KeyboardEvent) {
     }
 }
 
-fn section(id: &'static str, heading: &'static str, note: impl IntoView, body: impl IntoView) -> impl IntoView {
+fn section(id: &'static str, heading: impl Fn() -> String + Send + Sync + 'static, note: impl IntoView, body: impl IntoView) -> impl IntoView {
     view! { <section class="insp-sec"><h3 class="note-h" id=id>{heading}</h3>{note}{body}</section> }
 }
 
@@ -169,16 +188,19 @@ pub fn width_key(key: &str) -> Option<i32> {
 }
 
 fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
-    let value = move || w.segment(uid, |s| w.units().fixed(s.width_mm, 2)).unwrap_or_default();
-    let range = move || w.segment(uid, |s| width_range(s, w.units())).unwrap_or_default();
+    let value = move || {
+        let locale = w.i18n().locale();
+        w.segment(uid, |s| w.units().fixed_in(s.width_mm, 2, locale)).unwrap_or_default()
+    };
+    let range = move || w.segment(uid, |s| width_range(s, &w.i18n(), w.units())).unwrap_or_default();
     let nudge = move |dir: i32| {
         w.edit(|e| e.nudge_width(uid, dir * w.units_now().step_mm()));
     };
     view! {
         <section class="insp-sec">
-            <h3 class="note-h" id="i-h-width">"Width"</h3>
+            <h3 class="note-h" id="i-h-width">{say(w, "inspector-width")}</h3>
             <div class="stepper">
-                <button type="button" class="ico" aria-label=move || step_label(false, w.units()) on:click=move |_| nudge(-1)>{icon("M3 7h8")}</button>
+                <button type="button" class="ico" aria-label=move || step_label(false, &w.i18n(), w.units()) on:click=move |_| nudge(-1)>{icon("M3 7h8")}</button>
                 <span class="wfield">
                     <input
                         type="text"
@@ -198,13 +220,14 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
                         on:change=move |e| {
                             let input = leptos::prelude::event_target::<HtmlInputElement>(&e);
                             if !commit_width(w, uid, &input.value()) {
-                                input.set_value(&w.segment(uid, |s| w.units_now().fixed(s.width_mm, 2)).unwrap_or_default());
+                                let locale = w.i18n().locale_now();
+                                input.set_value(&w.segment(uid, |s| w.units_now().fixed_in(s.width_mm, 2, locale)).unwrap_or_default());
                             }
                         }
                     />
                     <span class="unit-tag" aria-hidden="true">{move || w.units().word()}</span>
                 </span>
-                <button type="button" class="ico" aria-label=move || step_label(true, w.units()) on:click=move |_| nudge(1)>{icon("M3 7h8M7 3v8")}</button>
+                <button type="button" class="ico" aria-label=move || step_label(true, &w.i18n(), w.units()) on:click=move |_| nudge(1)>{icon("M3 7h8M7 3v8")}</button>
             </div>
             <p class="insp-range" id="i-width-range">{range}</p>
         </section>
@@ -224,7 +247,7 @@ fn surface_section(w: SheetWatch, uid: u32) -> impl IntoView {
                 radio(
                     move || w.segment(uid, |s| s.material == mat.id).unwrap_or(false),
                     surface_swatch(mat.id),
-                    mat.name.to_string(),
+                    say(w, material_key(mat.id)),
                     move || {
                         w.edit(|e| e.set_material(uid, m));
                     },
@@ -233,8 +256,8 @@ fn surface_section(w: SheetWatch, uid: u32) -> impl IntoView {
             .collect_view();
         view! {
             <section class="insp-sec">
-                <h3 class="note-h" id="i-h-surface">{if planting { "Planting" } else { "Surface" }}</h3>
-                <p class="insp-range">{if planting { "What is planted in it." } else { "What it is paved with." }}</p>
+                <h3 class="note-h" id="i-h-surface">{say(w, if planting { "inspector-planting" } else { "inspector-surface" })}</h3>
+                <p class="insp-range">{say(w, if planting { "inspector-planting-note" } else { "inspector-surface-note" })}</p>
                 <ul class="opts" role="radiogroup" aria-labelledby="i-h-surface" on:keydown=radio_keys>{options}</ul>
             </section>
         }
@@ -245,10 +268,10 @@ fn vehicle_section(w: SheetWatch, uid: u32) -> impl IntoView {
     let tram = move || w.segment(uid, |s| s.tram).unwrap_or(false);
     view! {
         <section class="insp-sec">
-            <h3 class="note-h" id="i-h-veh">"Vehicle"</h3>
+            <h3 class="note-h" id="i-h-veh">{say(w, "inspector-vehicle")}</h3>
             <div class="units" role="group" aria-labelledby="i-h-veh">
-                <button type="button" class="unit" aria-pressed=move || (!tram()).to_string() on:click=move |_| { w.edit(|e| e.set_tram(uid, false)); }>"Bus"</button>
-                <button type="button" class="unit" aria-pressed=move || tram().to_string() on:click=move |_| { w.edit(|e| e.set_tram(uid, true)); }>"Tram"</button>
+                <button type="button" class="unit" aria-pressed=move || (!tram()).to_string() on:click=move |_| { w.edit(|e| e.set_tram(uid, false)); }>{say(w, "inspector-bus")}</button>
+                <button type="button" class="unit" aria-pressed=move || tram().to_string() on:click=move |_| { w.edit(|e| e.set_tram(uid, true)); }>{say(w, "inspector-tram")}</button>
             </div>
         </section>
     }
@@ -269,21 +292,21 @@ fn variant_row(w: SheetWatch, uid: u32, vi: usize) -> impl IntoView {
     view! {
         <li class=move || if now() { "var now" } else { "var" }>
             <select
-                aria-label=format!("Type {}", vi + 1)
+                aria-label=move || w.i18n().tr("inspector-variant-type", &Args::new().num("n", vi as i64 + 1))
                 on:change=move |e| {
                     if let Ok(k) = leptos::prelude::event_target::<HtmlSelectElement>(&e).value().parse::<usize>() {
                         w.edit(|ed| ed.set_variant_kind(uid, vi, k));
                     }
                 }
             >
-                {move || kinds().into_iter().map(|k| view! { <option value=k.to_string() prop:selected=move || kind() == k>{KINDS[k].name}</option> }).collect_view()}
+                {move || kinds().into_iter().map(|k| view! { <option value=k.to_string() prop:selected=move || kind() == k>{say(w, kind_key(KINDS[k].id))}</option> }).collect_view()}
             </select>
             {move || {
                 (direction_rule() != DirectionRule::None).then(|| {
                     let optional = direction_rule() == DirectionRule::Optional;
                     view! {
                         <select
-                            aria-label=format!("Direction {}", vi + 1)
+                            aria-label=move || w.i18n().tr("inspector-variant-direction", &Args::new().num("n", vi as i64 + 1))
                             on:change=move |e| {
                                 let value = leptos::prelude::event_target::<HtmlSelectElement>(&e).value();
                                 w.edit(|ed| ed.set_variant_direction(uid, vi, direction_choice(&value)));
@@ -291,17 +314,17 @@ fn variant_row(w: SheetWatch, uid: u32, vi: usize) -> impl IntoView {
                         >
                             {DIRECTIONS
                                 .iter()
-                                .map(|d| view! { <option value=d.id prop:selected=move || w.segment(uid, |s| s.variants.get(vi).and_then(|v| v.direction) == Some(d.id)).unwrap_or(false)>{d.name}</option> })
+                                .map(|d| view! { <option value=d.id prop:selected=move || w.segment(uid, |s| s.variants.get(vi).and_then(|v| v.direction) == Some(d.id)).unwrap_or(false)>{say(w, direction_key(d.id))}</option> })
                                 .collect_view()}
-                            {optional.then(|| view! { <option value="both" prop:selected=move || w.segment(uid, |s| s.variants.get(vi).is_some_and(|v| v.direction.is_none())).unwrap_or(false)>"Two-way"</option> })}
+                            {optional.then(|| view! { <option value="both" prop:selected=move || w.segment(uid, |s| s.variants.get(vi).is_some_and(|v| v.direction.is_none())).unwrap_or(false)>{say(w, "inspector-two-way")}</option> })}
                         </select>
                     }
                 })
             }}
             <span class="var-times">
-                <input type="time" step="900" aria-label="From" prop:value=move || get(&|v| hhmm(v.from_min)) value=move || get(&|v| hhmm(v.from_min)) on:change=move |e| times(true, event_target_value(&e))/>
-                <span aria-hidden="true">"to"</span>
-                <input type="time" step="900" aria-label="To" prop:value=move || get(&|v| hhmm(v.to_min)) value=move || get(&|v| hhmm(v.to_min)) on:change=move |e| times(false, event_target_value(&e))/>
+                <input type="time" step="900" aria-label=say(w, "inspector-from") prop:value=move || get(&|v| hhmm(v.from_min)) value=move || get(&|v| hhmm(v.from_min)) on:change=move |e| times(true, event_target_value(&e))/>
+                <span aria-hidden="true">{say(w, "inspector-until")}</span>
+                <input type="time" step="900" aria-label=say(w, "inspector-to") prop:value=move || get(&|v| hhmm(v.to_min)) value=move || get(&|v| hhmm(v.to_min)) on:change=move |e| times(false, event_target_value(&e))/>
             </span>
             {move || {
                 let days = get(&|v| v.days.clone().unwrap_or_default());
@@ -310,7 +333,11 @@ fn variant_row(w: SheetWatch, uid: u32, vi: usize) -> impl IntoView {
             <button
                 type="button"
                 class="ico danger"
-                aria-label=move || format!("Remove {} at {} to {}", KINDS[kind()].name.to_lowercase(), get(&|v| hhmm(v.from_min)), get(&|v| hhmm(v.to_min)))
+                aria-label=move || {
+                    let i18n = w.i18n();
+                    let name = i18n.tr(&kind_key(KINDS[kind()].id), &Args::new()).to_lowercase();
+                    i18n.tr("inspector-variant-remove", &Args::new().str("kind", name).str("from", get(&|v| hhmm(v.from_min))).str("to", get(&|v| hhmm(v.to_min))))
+                }
                 on:click=move |_| { w.edit(|e| e.remove_variant(uid, vi)); }
             >
                 {icon("M3 3l8 8M11 3l-8 8")}
@@ -321,16 +348,20 @@ fn variant_row(w: SheetWatch, uid: u32, vi: usize) -> impl IntoView {
 
 fn times_section(w: SheetWatch, uid: u32) -> impl IntoView {
     let count = Memo::new(move |_| w.segment(uid, |s| s.variants.len()).unwrap_or(0));
-    let base = move || w.segment(uid, |s| format!("{} the rest of the day.", KINDS[s.base_kind].name)).unwrap_or_default();
+    let base = move || {
+        let i18n = w.i18n();
+        w.segment(uid, |s| i18n.tr("inspector-times-base", &Args::new().str("kind", i18n.tr(&kind_key(KINDS[s.base_kind].id), &Args::new()))))
+            .unwrap_or_default()
+    };
     let can_add = move || w.segment(uid, |s| !s.alt_kinds.is_empty()).unwrap_or(false);
     view! {
         <section class="insp-sec">
-            <h3 class="note-h" id="i-h-times">"Other times"</h3>
+            <h3 class="note-h" id="i-h-times">{say(w, "inspector-times")}</h3>
             <p class="insp-range">{base}</p>
             <ul class="vars"><For each=move || 0..count.get() key=|i| *i children=move |vi| variant_row(w, uid, vi)/></ul>
             <button type="button" class="btn" disabled=move || !can_add() on:click=move |_| { w.edit(|e| e.add_variant(uid)); }>
                 <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
-                "Add other times"
+                {say(w, "inspector-times-add")}
             </button>
         </section>
     }
@@ -342,20 +373,20 @@ fn direction_section(w: SheetWatch, uid: u32, optional: bool) -> impl IntoView {
         .iter()
         .enumerate()
         .map(|(i, d)| {
-            radio(chosen(Some(d.id)), direction_swatch(Some(d.id)), d.name.to_string(), move || {
+            radio(chosen(Some(d.id)), direction_swatch(Some(d.id)), say(w, direction_key(d.id)), move || {
                 w.edit(|e| e.set_direction(uid, Some(i)));
             })
         })
         .collect_view();
     let both = optional.then(|| {
-        radio(chosen(None), direction_swatch(None), "Two-way".to_string(), move || {
+        radio(chosen(None), direction_swatch(None), say(w, "inspector-two-way"), move || {
             w.edit(|e| e.set_direction(uid, None));
         })
     });
     section(
         "i-h-dir",
-        "Direction",
-        view! { <p class="insp-range">"Which way traffic goes."</p> },
+        say(w, "inspector-direction"),
+        view! { <p class="insp-range">{say(w, "inspector-direction-note")}</p> },
         view! { <ul class="opts" role="radiogroup" aria-labelledby="i-h-dir" on:keydown=radio_keys>{options}{both}</ul> },
     )
 }
@@ -368,7 +399,7 @@ fn curb_section(w: SheetWatch, uid: u32, curbs: &'static [usize]) -> impl IntoVi
             radio(
                 move || w.segment(uid, |s| s.curb == Some(c.id)).unwrap_or(false),
                 curb_swatch(Some(c.id)),
-                c.name.to_string(),
+                say(w, curb_key(c.id)),
                 move || {
                     w.edit(|e| e.set_curb(uid, Some(ci)));
                 },
@@ -378,15 +409,15 @@ fn curb_section(w: SheetWatch, uid: u32, curbs: &'static [usize]) -> impl IntoVi
     let none = radio(
         move || w.segment(uid, |s| s.curb.is_none()).unwrap_or(false),
         curb_swatch(None),
-        "None (flush)".to_string(),
+        say(w, "inspector-curb-none"),
         move || {
             w.edit(|e| e.set_curb(uid, None));
         },
     );
     section(
         "i-h-curb",
-        "Curb",
-        view! { <p class="insp-range">"The raised edge, if it has one."</p> },
+        say(w, "inspector-curb"),
+        view! { <p class="insp-range">{say(w, "inspector-curb-note")}</p> },
         view! { <ul class="opts" role="radiogroup" aria-labelledby="i-h-curb" on:keydown=radio_keys>{options}{none}</ul> },
     )
 }
@@ -407,15 +438,15 @@ fn rarer_sections(w: SheetWatch, uid: u32) -> impl IntoView {
 
 fn piece_panel(w: SheetWatch, uid: u32) -> AnyView {
     let kind = Memo::new(move |_| kind_of(w, uid));
-    let name = move || KINDS[kind.get()].name;
+    let name = move || w.i18n().tr(&kind_key(KINDS[kind.get()].id), &Args::new());
     let sub = move || {
         let (v, units) = w.now();
-        v.segments.iter().find(|s| s.uid == uid).map(|s| piece_sub(&v, s, units)).unwrap_or_default()
+        v.segments.iter().find(|s| s.uid == uid).map(|s| piece_sub(&v, s, &w.i18n(), units)).unwrap_or_default()
     };
     view! {
         {move || {
             let k = &KINDS[kind.get()];
-            view! { <div class="insp-head">{swatch(k.id)}<div><h2 class="insp-name">{name()}</h2><p class="insp-sub">{sub}</p></div></div> }
+            view! { <div class="insp-head">{swatch(k.id)}<div><h2 class="insp-name">{name}</h2><p class="insp-sub">{sub}</p></div></div> }
         }}
         {width_section(w, uid)}
         {surface_section(w, uid)}
@@ -447,14 +478,19 @@ pub fn StreetInspector(vm: Rc<StreetVm>) -> impl IntoView {
     });
     move || match selected.get() {
         Some(uid) => piece_panel(w, uid),
-        None => view! { <p class="insp-empty">"Select a piece to change its width and surface."</p> }.into_any(),
+        None => view! { <p class="insp-empty">{say(w, "inspector-empty")}</p> }.into_any(),
     }
 }
 
 #[cfg(test)]
 mod pure_tests {
     use super::*;
+    use crate::shared::i18n::Locale;
     use crate::street::model::Editor;
+
+    fn en() -> Rc<I18n> {
+        crate::i18n_for(Locale::En)
+    }
 
     #[test]
     fn the_kinds_a_list_offers_are_the_alternatives_and_the_current_one_once_each_in_order() {
@@ -467,26 +503,29 @@ mod pure_tests {
     fn the_allowed_width_is_written_to_a_hundredth_in_the_units_shown() {
         let v = Editor::new(0).view();
         let s = &v.segments[0];
-        assert_eq!(width_range(s, Units::Metres), format!("Allowed {:.2} to {:.2} m", s.min_mm as f64 / 1000.0, s.max_mm as f64 / 1000.0));
-        assert!(width_range(s, Units::Feet).ends_with(" ft"));
+        let i18n = crate::i18n_for(Locale::En);
+        let said = |min: String, max: String, unit: &str| i18n.tr_now("inspector-allowed", &Args::new().str("min", min).str("max", max).str("unit", unit));
+        assert_eq!(width_range(s, &i18n, Units::Metres), said(format!("{:.2}", s.min_mm as f64 / 1000.0), format!("{:.2}", s.max_mm as f64 / 1000.0), "m"));
+        assert_eq!(width_range(s, &i18n, Units::Metres), format!("Allowed {:.2} to {:.2} m", s.min_mm as f64 / 1000.0, s.max_mm as f64 / 1000.0));
+        assert!(width_range(s, &i18n, Units::Feet).ends_with(" ft"));
     }
 
     #[test]
     fn a_piece_is_placed_among_the_pieces_and_a_timed_one_says_the_time() {
         let mut e = Editor::new(0);
         let v = e.view();
-        assert_eq!(piece_sub(&v, &v.segments[2], Units::Metres), "3.3 m wide \u{b7} 3 of 6");
+        assert_eq!(piece_sub(&v, &v.segments[2], &en(), Units::Metres), "3.3 m wide \u{b7} 3 of 6");
         let u = v.segments[1].uid;
         assert!(e.add_variant(u));
         let v = e.view();
         let s = v.segments.iter().find(|s| s.uid == u).unwrap();
-        assert!(piece_sub(&v, s, Units::Metres).ends_with(&format!(" \u{b7} {}", hhmm(v.time_min))));
+        assert!(piece_sub(&v, s, &en(), Units::Metres).ends_with(&format!(" \u{b7} {}", hhmm(v.time_min))));
     }
 
     #[test]
     fn the_steppers_say_how_far_they_move_in_the_units_shown() {
-        assert_eq!(step_label(false, Units::Metres), "Narrower by 0.1 m");
-        assert_eq!(step_label(true, Units::Feet), "Wider by 1.0 ft");
+        assert_eq!(step_label(false, &en(), Units::Metres), "Narrower by 0.1 m");
+        assert_eq!(step_label(true, &en(), Units::Feet), "Wider by 1.0 ft");
     }
 
     #[test]

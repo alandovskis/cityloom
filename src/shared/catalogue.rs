@@ -423,6 +423,21 @@ pub fn group_key(id: &str) -> String {
     format!("group-{id}")
 }
 
+/// The message that names a surface material.
+pub fn material_key(id: &str) -> String {
+    format!("material-{id}")
+}
+
+/// The message that names a kind of curb.
+pub fn curb_key(id: &str) -> String {
+    format!("curb-{id}")
+}
+
+/// The message that names a direction of travel.
+pub fn direction_key(id: &str) -> String {
+    format!("direction-{id}")
+}
+
 /// The message that names a mode.
 pub fn mode_key(mode: Mode) -> &'static str {
     match mode {
@@ -484,5 +499,24 @@ mod tests {
         assert_eq!(kind_key("bikerack"), "kind-bikerack");
         assert_eq!(mode_key(Mode::Vehicle), "mode-vehicle");
         assert_eq!(group_key("walking"), "group-walking");
+    }
+
+    #[test]
+    fn every_material_curb_and_direction_has_a_message_in_both_languages_and_english_says_the_name() {
+        for locale in Locale::ALL {
+            let i = crate::i18n_for(locale);
+            for (key, name) in MATERIALS
+                .iter()
+                .map(|m| (material_key(m.id), m.name))
+                .chain(CURBS.iter().map(|c| (curb_key(c.id), c.name)))
+                .chain(DIRECTIONS.iter().map(|d| (direction_key(d.id), d.name)))
+            {
+                let said = i.tr_now(&key, &Args::new());
+                if locale == Locale::En {
+                    assert_eq!(said, name, "{key}");
+                }
+            }
+            assert!(i.missing().is_empty(), "{:?}: {:?}", locale, i.missing());
+        }
     }
 }

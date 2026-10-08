@@ -660,3 +660,83 @@ fn a_measure_s_problems_are_said_in_each_language() {
     assert!(h.contains("Une voie d’autobus mesure 3000\u{a0}mm de large, alors qu’une voie de transport en commun en exige 3300\u{a0}mm"), "{h}");
     assert!(!h.contains("A bus lane is"));
 }
+
+// ---- the piece panel -------------------------------------------------------------------
+
+fn select_in(sample: usize, locale: Locale, pick: impl Fn(&StreetVm) -> u32) -> Rc<StreetVm> {
+    let s = street_shared_in(sample, locale);
+    let u = pick(&s);
+    s.edit(|e| e.select(Some(u)));
+    s
+}
+
+#[test]
+fn the_piece_panel_is_in_french() {
+    let s = select_in(0, Locale::FrCa, |s| segment(s, 2));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Voie de circulation</h2>") && h.contains("3,3\u{a0}m de large · 3 sur 6"), "{h}");
+    assert!(h.contains(">Largeur</h3>") && h.contains(">Revêtement</h3>") && h.contains("Le matériau qui le recouvre."), "{h}");
+    assert!(h.contains("Asphalte") && h.contains("Valeurs permises\u{a0}: de ") && h.contains(">Direction</h3>"), "{h}");
+    assert!(h.contains("aria-label=\"Rétrécir de 0,1\u{a0}m\"") && h.contains("aria-label=\"Élargir de 0,1\u{a0}m\""), "{h}");
+    assert!(h.contains("S’éloigne de vous"), "{h}");
+    for en in ["Width", "Surface", "What it is paved with.", "Allowed ", "Narrower by", "Driving lane", "Away from you", "wide"] {
+        assert!(!h.contains(en), "{en}");
+    }
+}
+
+#[test]
+fn the_width_field_and_its_range_follow_the_decimal_mark_of_the_language_and_round_trip() {
+    let owner = Owner::new();
+    owner.set();
+    let s = select_in(0, Locale::FrCa, |s| segment(s, 2));
+    let w = SheetWatch::new(s.clone());
+    let u = segment(&s, 2);
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains("value=\"3,30\""), "{h}");
+    let (min, max) = (s.view().segments[2].min_mm, s.view().segments[2].max_mm);
+    let (lo, hi) = (Units::Metres.fixed_in(min, 2, Locale::FrCa), Units::Metres.fixed_in(max, 2, Locale::FrCa));
+    assert!(lo.contains(',') && hi.contains(','));
+    assert!(h.contains(&format!("de {lo} à {hi}\u{a0}m")), "{h}");
+    // What the field holds, typed back, is the same width.
+    let typed = Units::Metres.fixed_in(2_700, 2, Locale::FrCa);
+    assert_eq!(typed, "2,70");
+    assert!(inspector::commit_width(w, u, &typed));
+    assert_eq!(s.view().segments[2].width_mm, 2_700);
+    assert_eq!(Units::Metres.fixed_in(s.view().segments[2].width_mm, 2, Locale::FrCa), typed);
+}
+
+#[test]
+fn the_empty_panel_the_vehicle_and_the_other_settings_are_in_french() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains("Sélectionnez un élément pour modifier sa largeur et son revêtement.") && !h.contains("Select a piece"), "{h}");
+    let s = street_shared_in(1, Locale::FrCa);
+    assert!(s.edit(|e| e.apply_measure("B1")));
+    let bus = s.view().segments.iter().find(|x| KINDS[x.kind].id == "bus").unwrap().uid;
+    s.edit(|e| e.select(Some(bus)));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Véhicule</h3>") && h.contains(">Autobus</button>") && h.contains(">Tramway</button>") && !h.contains("Vehicle"), "{h}");
+    let s = select_in(1, Locale::FrCa, |s| segment(s, 3));
+    let u = segment(&s, 3);
+    s.edit(|e| e.add_variant(u));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Autres périodes</h3>") && h.contains("Ajouter d’autres périodes") && h.contains("le reste de la journée."), "{h}");
+    assert!(h.contains("aria-label=\"Type 1\"") && h.contains("aria-label=\"De\"") && h.contains("aria-label=\"À\""), "{h}");
+    assert!(!h.contains("Other times") && !h.contains("Add other times") && !h.contains("aria-label=\"From\""), "{h}");
+    let walk = select_in(0, Locale::FrCa, |s| segment(s, 0));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=walk.clone()/> });
+    assert!(h.contains(">Bordure</h3>") && h.contains("Aucune (au ras du sol)") && h.contains("Granit") && !h.contains("None (flush)"), "{h}");
+}
+
+#[test]
+fn the_panel_is_drawn_again_in_the_language_the_shell_switches() {
+    let owner = Owner::new();
+    owner.set();
+    let s = select_in(0, Locale::En, |s| segment(s, 2));
+    let i18n = s.i18n().clone();
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Driving lane</h2>") && h.contains("value=\"3.30\""));
+    i18n.set(Locale::FrCa);
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Voie de circulation</h2>") && h.contains("value=\"3,30\"") && !h.contains("value=\"3.30\""), "{h}");
+}

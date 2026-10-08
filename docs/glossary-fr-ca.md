@@ -99,3 +99,17 @@ Chosen as the most standard Québec term, but the catalogue's meaning leaves roo
 | Queue-Jump Lane | Voie de dépassement de file | |
 | Bus Bulbs | Avancées de trottoir pour autobus | |
 | Transit Modal Filter | Filtre modal pour le transport en commun | |
+
+## Piece panel
+
+| English | Français (fr-CA) | Note |
+| --- | --- | --- |
+| Surface / Planting (heading) | Revêtement / Plantation | |
+| Other times | Autres périodes | |
+| Two-way | Double sens | |
+| Curb | Bordure | |
+| Wider by / Narrower by | Élargir de / Rétrécir de | Button labels, so verbs. |
+| Allowed 2.50 to 4.00 m | Valeurs permises : de 2,50 à 4,00 m | |
+| Vehicle: Bus / Tram | Véhicule : autobus / tramway | |
+| Away from you / Toward you | S’éloigne de vous / Vient vers vous | |
+| Asphalt, Concrete, Brick pavers, Gravel | Asphalte, Béton, Pavés de brique, Gravier | The materials are `material-<id>`, the curbs `curb-<id>`. |

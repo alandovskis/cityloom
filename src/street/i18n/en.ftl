@@ -189,3 +189,53 @@ atlas-w-f-note = The Atlas lists it as in development, and a price needs a city 
 # What a recognised measure is missing (src/street/measures.rs).
 problem-narrow-lane = A bus lane is { $width } mm wide, and a transit lane wants { $min } mm
 problem-no-platform = Center-running lanes need a median or platform beside them for stops
+
+# The materials, curbs and directions of the catalogue (src/shared/catalogue.rs).
+material-asphalt = Asphalt
+material-concrete = Concrete
+material-permeable = Permeable paving
+material-brick = Brick pavers
+material-grass = Grass
+material-planted = Planted bed
+material-gravel = Gravel
+material-trees = Street trees
+curb-granite = Granite
+curb-concrete = Concrete
+curb-asphalt = Asphalt
+curb-planted = Planted
+curb-kassel = Bus-friendly curb
+curb-bikefriendly = Bike-friendly curb
+curb-island = Bus boarding island
+direction-away = Away from you
+direction-toward = Toward you
+
+# The panel of the selected piece (src/street/inspector.rs).
+inspector-empty = Select a piece to change its width and surface.
+inspector-sub = { $width } wide · { $at } of { $total }
+inspector-sub-timed = { $width } wide · { $at } of { $total } · { $time }
+inspector-width = Width
+inspector-step-wider = Wider by { $step } { $unit }
+inspector-step-narrower = Narrower by { $step } { $unit }
+inspector-allowed = Allowed { $min } to { $max } { $unit }
+inspector-surface = Surface
+inspector-surface-note = What it is paved with.
+inspector-planting = Planting
+inspector-planting-note = What is planted in it.
+inspector-vehicle = Vehicle
+inspector-bus = Bus
+inspector-tram = Tram
+inspector-times = Other times
+inspector-times-base = { $kind } the rest of the day.
+inspector-times-add = Add other times
+inspector-variant-type = Type { $n }
+inspector-variant-direction = Direction { $n }
+inspector-variant-remove = Remove { $kind } at { $from } to { $to }
+inspector-from = From
+inspector-to = To
+inspector-until = to
+inspector-direction = Direction
+inspector-direction-note = Which way traffic goes.
+inspector-two-way = Two-way
+inspector-curb = Curb
+inspector-curb-note = The raised edge, if it has one.
+inspector-curb-none = None (flush)
