@@ -6,6 +6,7 @@ pub mod atlas;
 pub mod bind;
 pub mod catalogue;
 pub mod core;
+pub mod i18n;
 pub mod keeper;
 pub mod live;
 pub mod platform;
