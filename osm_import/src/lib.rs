@@ -9,7 +9,7 @@
 use abstutil::{Tags, Timer};
 pub use osm_network::*;
 use osm2streets::{Direction, DrivingSide, IntersectionControl, IntersectionKind, LaneType, MapConfig, StreetNetwork, Transformation};
-use streets_reader::osm_reader::Document;
+use streets_reader::{OsmExtract, osm_reader::Document};
 use wasm_bindgen::prelude::*;
 
 /// Reads OSM XML (or PBF) into a network.
@@ -26,11 +26,68 @@ pub fn import_in(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<Network, String
     });
     // Most streets carry no sidewalk tags: without inference they would have none.
     let config = MapConfig { inferred_sidewalks: true, ..MapConfig::default() };
-    let (mut streets, doc) = streets_reader::osm_to_street_network(osm, clip, config, &mut timer).map_err(|e| e.to_string())?;
+    let (mut streets, doc) = read_streets(osm, clip, config, &mut timer)?;
     streets.apply_transformations(Transformation::standard_for_clipped_areas(), &mut timer);
     let mut network = convert(&streets, &doc);
     osm_network::merge::merge_dual_carriageways(&mut network);
     Ok(network)
+}
+
+/// `streets_reader::osm_to_street_network`, with the sidewalk tags made explicit before the lanes are worked out
+/// from them. That function does not let anything in between, and its reading step is private, so the steps are
+/// repeated here as it takes them.
+fn read_streets(osm: &[u8], clip: Option<Vec<geom::LonLat>>, config: MapConfig, timer: &mut Timer) -> Result<(StreetNetwork, Document), String> {
+    let err = |e: &dyn std::fmt::Display| e.to_string();
+    let mut streets = StreetNetwork::blank();
+    streets.config = config;
+    let mut doc = Document::read(osm, clip.as_ref().map(|pts| geom::GPSBounds::from(pts.clone())), timer).map_err(|e| err(&e))?;
+    streets.gps_bounds = doc.gps_bounds.clone().ok_or("the OSM input has no GPS bounds")?;
+    if let Some(pts) = clip {
+        streets.boundary_polygon = geom::Ring::deduping_new(streets.gps_bounds.convert(&pts)).map_err(|e| err(&e))?.into_polygon();
+        doc.clip(&streets.boundary_polygon, timer);
+    } else {
+        streets.boundary_polygon = streets.gps_bounds.to_bounds().get_rectangle();
+    }
+    streets_reader::detect_country_code(&mut streets);
+
+    let mut extract = OsmExtract::new();
+    for (id, node) in &doc.nodes {
+        extract.handle_node(*id, node);
+    }
+    for way in doc.ways.values_mut().chain(doc.clipped_copied_ways.iter_mut().map(|(_, way)| way)) {
+        explicit_sidewalks(&mut way.tags);
+    }
+    for (id, way) in doc.ways.iter().chain(doc.clipped_copied_ways.iter().map(|(id, way)| (id, way))) {
+        extract.handle_way(*id, way, &streets.config);
+    }
+    for (id, rel) in &doc.relations {
+        extract.handle_relation(*id, rel);
+    }
+    streets_reader::split_ways::split_up_roads(&mut streets, extract, timer);
+    // Cul-de-sacs aren't supported yet.
+    streets.retain_roads(|r| r.src_i != r.dst_i);
+    Ok((streets, doc))
+}
+
+/// A way tagged `sidewalk:left` and/or `sidewalk:right` (and not `sidewalk`) is given the `sidewalk` they say.
+/// osm2streets takes a side not marked `no` to have one but then leaves out one mapped as `separate`, and takes a
+/// side that is not tagged at all to have one as well. Here a side has a sidewalk whatever it is tagged, except
+/// `no`, and a side not tagged has none. The sidewalk beside the road is shown whether it is part of the road's
+/// own way or a separate way of its own.
+fn explicit_sidewalks(tags: &mut Tags) {
+    if tags.contains_key("sidewalk") || !(tags.contains_key("sidewalk:left") || tags.contains_key("sidewalk:right")) {
+        return;
+    }
+    let has = |side: &str| tags.get(side).is_some_and(|v| v != "no" && v != "none");
+    let value = match (has("sidewalk:left"), has("sidewalk:right")) {
+        (true, true) => "both",
+        (true, false) => "left",
+        (false, true) => "right",
+        (false, false) => "none",
+    };
+    tags.remove("sidewalk:left");
+    tags.remove("sidewalk:right");
+    tags.insert("sidewalk", value);
 }
 
 fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
@@ -112,6 +169,27 @@ mod tests {
         assert_eq!(lane_kind(LaneType::Shoulder), LaneKind::Buffer);
         assert_eq!(lane_kind(LaneType::Sidewalk), LaneKind::Sidewalk);
         assert_eq!(lane_kind(LaneType::Footway), LaneKind::Sidewalk);
+    }
+
+    fn sidewalks(tags: &[(&str, &str)]) -> Vec<(String, String)> {
+        let mut tags = Tags::new(tags.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect());
+        explicit_sidewalks(&mut tags);
+        tags.into_inner().into_iter().collect()
+    }
+
+    #[test]
+    fn the_sidewalk_of_each_side_becomes_one_explicit_sidewalk_tag() {
+        let pair = |k: &str, v: &str| (k.to_string(), v.to_string());
+        assert_eq!(sidewalks(&[("sidewalk:left", "yes"), ("sidewalk:right", "separate")]), [pair("sidewalk", "both")]);
+        assert_eq!(sidewalks(&[("sidewalk:right", "explicit")]), [pair("sidewalk", "right")]);
+        assert_eq!(sidewalks(&[("sidewalk:left", "no"), ("sidewalk:right", "none")]), [pair("sidewalk", "none")]);
+    }
+
+    #[test]
+    fn a_way_with_a_sidewalk_tag_or_with_no_side_tagged_is_left_as_it_is() {
+        let tags = [("highway", "residential"), ("sidewalk", "left"), ("sidewalk:right", "yes")];
+        assert_eq!(sidewalks(&tags).len(), 3);
+        assert_eq!(sidewalks(&[("highway", "residential")]), [("highway".to_string(), "residential".to_string())]);
     }
 
     fn hours(key: &str, value: &str) -> Option<String> {

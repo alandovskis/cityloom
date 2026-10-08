@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+<node id="1" lat="45.5000" lon="-73.6000"></node>
+<node id="2" lat="45.5000" lon="-73.5980"></node>
+<way id="5"><nd ref="1"/><nd ref="2"/><tag k="highway" v="residential"/><tag k="name" v="left yes right no"/><tag k="sidewalk:left" v="yes"/><tag k="sidewalk:right" v="no"/></way>
+<node id="11" lat="45.5020" lon="-73.6000"></node>
+<node id="12" lat="45.5020" lon="-73.5980"></node>
+<way id="15"><nd ref="11"/><nd ref="12"/><tag k="highway" v="residential"/><tag k="name" v="left yes only"/><tag k="sidewalk:left" v="yes"/></way>
+<node id="21" lat="45.5040" lon="-73.6000"></node>
+<node id="22" lat="45.5040" lon="-73.5980"></node>
+<way id="25"><nd ref="21"/><nd ref="22"/><tag k="highway" v="residential"/><tag k="name" v="right yes only"/><tag k="sidewalk:right" v="yes"/></way>
+<node id="31" lat="45.5060" lon="-73.6000"></node>
+<node id="32" lat="45.5060" lon="-73.5980"></node>
+<way id="35"><nd ref="31"/><nd ref="32"/><tag k="highway" v="residential"/><tag k="name" v="left no only"/><tag k="sidewalk:left" v="no"/></way>
+<node id="41" lat="45.5080" lon="-73.6000"></node>
+<node id="42" lat="45.5080" lon="-73.5980"></node>
+<way id="45"><nd ref="41"/><nd ref="42"/><tag k="highway" v="residential"/><tag k="name" v="left no right separate"/><tag k="sidewalk:left" v="no"/><tag k="sidewalk:right" v="separate"/></way>
+<node id="51" lat="45.5100" lon="-73.6000"></node>
+<node id="52" lat="45.5100" lon="-73.5980"></node>
+<way id="55"><nd ref="51"/><nd ref="52"/><tag k="highway" v="residential"/><tag k="name" v="left separate right yes"/><tag k="sidewalk:left" v="separate"/><tag k="sidewalk:right" v="yes"/></way>
+<node id="61" lat="45.5120" lon="-73.6000"></node>
+<node id="62" lat="45.5120" lon="-73.5980"></node>
+<way id="65"><nd ref="61"/><nd ref="62"/><tag k="highway" v="residential"/><tag k="name" v="left no right no"/><tag k="sidewalk:left" v="no"/><tag k="sidewalk:right" v="no"/></way>
+<node id="81" lat="45.5160" lon="-73.6000"></node>
+<node id="82" lat="45.5160" lon="-73.5980"></node>
+<way id="85"><nd ref="81"/><nd ref="82"/><tag k="highway" v="residential"/><tag k="name" v="nothing tagged"/></way>
+</osm>

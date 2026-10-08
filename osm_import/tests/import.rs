@@ -104,3 +104,36 @@ fn a_road_and_a_node_remember_the_version_of_each_osm_way_and_node_they_were_mad
     assert_eq!(version(29796354), Some(Some(5)));
     assert_eq!(version(9041670850), Some(Some(1)));
 }
+
+const SIDEWALKS: &[u8] = include_bytes!("sidewalks.osm");
+
+/// Which sides of a road have a sidewalk: (left, right), looking from its first end to its last.
+fn sidewalks_of(net: &osm_import::Network, name: &str) -> (bool, bool) {
+    use osm_import::LaneKind;
+    let road = net.roads.iter().find(|r| r.name.as_deref() == Some(name)).unwrap_or_else(|| panic!("no road {name}"));
+    let walk = |l: Option<&osm_import::Lane>| l.is_some_and(|l| l.kind == LaneKind::Sidewalk);
+    (walk(road.lanes.first()), walk(road.lanes.last()))
+}
+
+#[test]
+fn a_side_tagged_with_a_sidewalk_has_one_and_a_side_not_tagged_has_none() {
+    let net = import(SIDEWALKS).unwrap();
+    assert_eq!(sidewalks_of(&net, "left yes right no"), (true, false));
+    assert_eq!(sidewalks_of(&net, "left yes only"), (true, false));
+    assert_eq!(sidewalks_of(&net, "right yes only"), (false, true));
+    assert_eq!(sidewalks_of(&net, "left no only"), (false, false));
+    assert_eq!(sidewalks_of(&net, "left no right no"), (false, false));
+}
+
+#[test]
+fn a_sidewalk_mapped_separately_is_drawn_beside_the_road() {
+    let net = import(SIDEWALKS).unwrap();
+    assert_eq!(sidewalks_of(&net, "left no right separate"), (false, true));
+    assert_eq!(sidewalks_of(&net, "left separate right yes"), (true, true));
+}
+
+#[test]
+fn a_road_with_neither_side_tagged_is_given_sidewalks_as_before() {
+    let net = import(SIDEWALKS).unwrap();
+    assert_eq!(sidewalks_of(&net, "nothing tagged"), (true, true), "a street with no tags is given sidewalks as before");
+}
