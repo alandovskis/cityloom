@@ -4,8 +4,8 @@
 
 use std::fmt::Write;
 
-use crate::shared::catalogue::KINDS;
-use crate::shared::i18n::I18n;
+use crate::shared::catalogue::{KINDS, kind_key, mark_key};
+use crate::shared::i18n::{Args, I18n};
 use crate::shared::symbols::{SymbolOpts, symbol};
 use crate::shared::units::Units;
 use crate::street::model::{SegView, View};
@@ -250,14 +250,14 @@ fn curbs(v: &View, g: &Geometry) -> String {
 
 /// What a screen reader is told the drawing is.
 pub fn street_label(v: &View, i18n: &I18n, units: Units) -> String {
-    format!(
-        "Cross-section of {}. {} segments, {} of {}. {}.",
-        v.name,
-        v.segments.len(),
-        units.length_fine(v.total_mm),
-        units.length_fine(v.row_mm),
-        fit_phrase(v, i18n, units)
-    )
+    let locale = i18n.locale();
+    let args = Args::new()
+        .str("name", v.name.clone())
+        .num("count", v.segments.len() as i64)
+        .str("total", units.length_fine_in(v.total_mm, locale))
+        .str("row", units.length_fine_in(v.row_mm, locale))
+        .str("fit", fit_phrase(v, i18n, units));
+    i18n.tr("svg-label", &args)
 }
 
 /// The street drawn `width` wide: `ui` is what the pointer is doing to it.
@@ -268,12 +268,16 @@ pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interact
     let ground = rows.ground;
     let body_bottom = ground + rows.slab;
     let over = v.delta_mm > 0;
-    let fine = |mm: i32| units.fine(mm);
-    let length = |mm: i32| units.length_fine(mm);
+    let locale = i18n.locale();
+    let fine = |mm: i32| units.fine_in(mm, locale);
+    let length = |mm: i32| units.length_fine_in(mm, locale);
+    // A word of the drawing, with the length it carries when there is one.
+    let say = |key: &str| esc(&i18n.tr(key, &Args::new()));
+    let say_length = |key: &str, mm: i32| esc(&i18n.tr(key, &Args::new().str("length", length(mm))));
     let mut p = String::new();
 
     // the street as it is today, at the same scale and origin as the design
-    write!(p, "<text class=\"t-label t-soft\" x=\"{}\" y=\"{}\">Today</text>", g.pad_left, rows.existing_label).unwrap();
+    write!(p, "<text class=\"t-label t-soft\" x=\"{}\" y=\"{}\">{}</text>", g.pad_left, rows.existing_label, say("svg-today")).unwrap();
     for s in &v.existing {
         let id = KINDS[s.kind].id;
         let (x, w) = (g.x(s.x_mm as f64), s.width_mm as f64 * scale);
@@ -296,9 +300,10 @@ pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interact
     }
 
     // the design's heading
-    write!(p, "<text class=\"t-label\" x=\"{}\" y=\"{}\">Your design</text>", g.pad_left + 30.0, rows.proposal_label).unwrap();
+    write!(p, "<text class=\"t-label\" x=\"{}\" y=\"{}\">{}</text>", g.pad_left + 30.0, rows.proposal_label, say("svg-your-design")).unwrap();
     if let Some(rev) = v.revisions.last() {
-        write!(p, "<text class=\"t-label t-blue\" x=\"{}\" y=\"{}\">Change {}</text>", g.pad_left + 130.0, rows.proposal_label, rev.step).unwrap();
+        let change = esc(&i18n.tr("svg-change", &Args::new().num("n", rev.step as i64)));
+        write!(p, "<text class=\"t-label t-blue\" x=\"{}\" y=\"{}\">{change}</text>", g.pad_left + 130.0, rows.proposal_label).unwrap();
     }
 
     // right-of-way lines
@@ -306,9 +311,10 @@ pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interact
     for x in [xl, xr] {
         write!(p, "<line class=\"rw\" x1=\"{x}\" x2=\"{x}\" y1=\"{}\" y2=\"{}\"/>", rows.dim - 34.0, rows.total2 + 6.0).unwrap();
     }
+    let edge = say("svg-street-edge");
     write!(
         p,
-        "<text class=\"t-label t-faint\" x=\"{xl}\" y=\"{}\" text-anchor=\"start\">Street edge</text><text class=\"t-label t-faint\" x=\"{xr}\" y=\"{}\" text-anchor=\"end\">Street edge</text>",
+        "<text class=\"t-label t-faint\" x=\"{xl}\" y=\"{}\" text-anchor=\"start\">{edge}</text><text class=\"t-label t-faint\" x=\"{xr}\" y=\"{}\" text-anchor=\"end\">{edge}</text>",
         rows.dim - 42.0,
         rows.dim - 42.0
     )
@@ -323,13 +329,14 @@ pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interact
     if v.delta_mm < 0 {
         let (x, w) = (total_x, xr - total_x);
         write!(p, "<rect class=\"free\" x=\"{x}\" y=\"{}\" width=\"{w}\" height=\"{}\"/>", rows.top, body_bottom - rows.top).unwrap();
-        let t = format!("Unused {}", length(-v.delta_mm));
+        let t = say_length("svg-unused-length", -v.delta_mm);
         if w >= 88.0 {
             write!(
                 p,
-                "<text class=\"t-label t-faint\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">Unused</text><text class=\"t-dim t-soft\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>",
+                "<text class=\"t-label t-faint\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text><text class=\"t-dim t-soft\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>",
                 x + w / 2.0,
                 ground - 8.0,
+                say("svg-unused"),
                 x + w / 2.0,
                 ground + 10.0,
                 length(-v.delta_mm)
@@ -348,10 +355,11 @@ pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interact
         let sel = v.selected == Some(s.uid);
         let lifted = ui.moving.is_some_and(|m| m.uid == s.uid);
         let opts = SymbolOpts { material: s.material, tram: s.tram };
-        let name = if w > k.name.len() as f64 * 8.6 + 10.0 {
-            esc(k.name)
+        let full = i18n.tr(&kind_key(k.id), &Args::new());
+        let name = if w > full.chars().count() as f64 * 8.6 + 10.0 {
+            esc(&full)
         } else if w > 30.0 {
-            k.mark.to_string()
+            esc(&i18n.tr(&mark_key(k.id), &Args::new()))
         } else {
             String::new()
         };
@@ -443,15 +451,8 @@ pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interact
         let h = rows.mark + 18.0 - top;
         write!(p, "<rect class=\"over-wash\" x=\"{xr}\" y=\"{top}\" width=\"{w}\" height=\"{h}\"/>").unwrap();
         p += &cloud(xr + inset, top, (w - inset * 2.0).max(14.0), h, 6.0, ui.fresh);
-        write!(
-            p,
-            "<text class=\"t-over\" x=\"{}\" y=\"{}\">{} too wide{}</text>",
-            xr + 10.0,
-            rows.dim - 62.0,
-            length(v.delta_mm),
-            if clipped { " (more off-screen)" } else { "" }
-        )
-        .unwrap();
+        let key = if clipped { "svg-too-wide-clipped" } else { "svg-too-wide" };
+        write!(p, "<text class=\"t-over\" x=\"{}\" y=\"{}\">{}</text>", xr + 10.0, rows.dim - 62.0, say_length(key, v.delta_mm)).unwrap();
     }
 
     p += &curbs(v, &g);
@@ -460,21 +461,21 @@ pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interact
     p += &dim_line(xl, xr, rows.total, "");
     write!(
         p,
-        "<text class=\"t-dim t-halo\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">Street width {}</text>",
+        "<text class=\"t-dim t-halo\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>",
         (xl + xr) / 2.0,
         rows.total - 7.0,
-        length(v.row_mm)
+        say_length("svg-street-width", v.row_mm)
     )
     .unwrap();
     if v.delta_mm != 0 {
         p += &dim_line(xl, total_x, rows.total2, if over { "dim-warn" } else { "" });
         write!(
             p,
-            "<text class=\"t-dim t-halo {}\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">Your design {}</text>",
+            "<text class=\"t-dim t-halo {}\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>",
             if over { "t-warn" } else { "t-soft" },
             (xl + total_x) / 2.0,
             rows.total2 - 7.0,
-            length(v.total_mm)
+            say_length("svg-design-width", v.total_mm)
         )
         .unwrap();
     }
@@ -487,7 +488,7 @@ pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interact
         };
         let (parts, y) = (5, rows.scale);
         let bar_w = unit_mm * parts as f64 * scale;
-        write!(p, "<text class=\"t-label t-soft\" x=\"{}\" y=\"{}\">Scale</text>", g.pad_left, y - 8.0).unwrap();
+        write!(p, "<text class=\"t-label t-soft\" x=\"{}\" y=\"{}\">{}</text>", g.pad_left, y - 8.0, say("svg-scale")).unwrap();
         for i in 0..parts {
             write!(
                 p,
@@ -527,7 +528,7 @@ pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interact
                 "<text class=\"t-mark t-blue\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>",
                 m.px,
                 ground + rows.slab / 2.0 + 5.0,
-                KINDS[s.kind].mark
+                esc(&i18n.tr(&mark_key(KINDS[s.kind].id), &Args::new()))
             )
             .unwrap();
         }
@@ -852,5 +853,90 @@ mod tests {
                 assert!(!svg(&e).markup.contains("NaN"), "sample {i} piece {k}");
             }
         }
+    }
+
+    fn fr() -> std::rc::Rc<I18n> {
+        crate::i18n_for(Locale::FrCa)
+    }
+
+    #[test]
+    fn the_drawing_says_its_words_in_french_and_not_in_english() {
+        let mut e = Editor::new(0);
+        let u = uid(&e, 0);
+        e.nudge_width(u, 100);
+        e.nudge_width(u, -100);
+        let v = e.view();
+        let s = street_svg(&v, &fr(), 1050.0, Units::Metres, &Interaction::default());
+        for want in
+            [">Aujourd’hui<", ">Votre aménagement<", ">Variation 2<", ">Limite de la rue<", ">Échelle<", ">Trottoir<", ">Largeur de la rue\u{a0}: 18,0\u{a0}m<"]
+        {
+            assert!(s.markup.contains(want), "{want}");
+        }
+        for not in ["Today", "Your design", "Change ", "Street edge", ">Scale<", ">Sidewalk<", "Street width"] {
+            assert!(!s.markup.contains(not), "{not}");
+        }
+        assert_eq!(s.label, "Coupe transversale de Sample Street 1. 6 éléments, 18,0\u{a0}m sur 18,0\u{a0}m. Chaque mètre de la rue est utilisé.");
+    }
+
+    #[test]
+    fn the_drawing_prints_its_lengths_with_the_decimal_comma_of_french() {
+        let mut e = Editor::new(0);
+        let u = uid(&e, 0);
+        e.remove(u);
+        let v = e.view();
+        let fr_svg = street_svg(&v, &fr(), 1050.0, Units::Metres, &Interaction::default());
+        let en_svg = street_svg(&v, &en(), 1050.0, Units::Metres, &Interaction::default());
+        // The piece widths, the unused space and the two totals.
+        assert!(fr_svg.markup.contains(">3,3\u{a0}m<") && fr_svg.markup.contains(">Inutilisé<"), "{}", fr_svg.markup);
+        assert!(fr_svg.markup.contains("Votre aménagement\u{a0}: 14,7\u{a0}m"));
+        assert!(en_svg.markup.contains(">3.3 m<") && en_svg.markup.contains(">Your design 14.7 m<"));
+        for dotted in [">3.3", "14.7 m", "14.7\u{a0}m", "18.0 m", "18.0\u{a0}m"] {
+            assert!(!fr_svg.markup.contains(dotted), "{dotted}");
+        }
+        let ft = street_svg(&v, &fr(), 1050.0, Units::Feet, &Interaction::default());
+        assert!(ft.markup.contains("48,2\u{a0}ft"), "{}", ft.markup);
+    }
+
+    #[test]
+    fn a_street_too_wide_says_by_how_much_in_each_language() {
+        let mut e = Editor::new(0);
+        let u = uid(&e, 0);
+        e.set_width(u, e.view().segments[0].width_mm + 1_000);
+        let v = e.view();
+        let s = street_svg(&v, &fr(), 1050.0, Units::Metres, &Interaction::default());
+        assert!(s.markup.contains(">1,0\u{a0}m de trop<") && !s.markup.contains("too wide"), "{}", s.markup);
+    }
+
+    #[test]
+    fn a_narrow_piece_shows_its_french_mark_and_a_one_piece_street_is_counted_in_the_singular() {
+        let mut e = Editor::new(0);
+        let u = uid(&e, 0);
+        e.set_width(u, KINDS[0].min_mm);
+        let s = street_svg(&e.view(), &fr(), 680.0, Units::Metres, &Interaction::default());
+        assert!(s.markup.contains(">TO</text>"), "{}", s.markup);
+        let mut one = Editor::new(0);
+        while one.view().segments.len() > 1 {
+            let u = uid(&one, 0);
+            one.remove(u);
+        }
+        assert!(street_label(&one.view(), &en(), Units::Metres).contains(". 1 segment, "));
+        assert!(street_label(&one.view(), &fr(), Units::Metres).contains(". 1 élément, "));
+    }
+
+    #[test]
+    fn the_drawing_is_made_again_in_the_language_the_shell_switches() {
+        let owner = leptos::prelude::Owner::new();
+        owner.set();
+        let i18n = en();
+        let v = Editor::new(0).view();
+        // What the drawing's closure does: it makes the drawing from the shared words, so it tracks them.
+        use leptos::prelude::{Get, StoredValue, WithValue};
+        let shared = StoredValue::new_local((i18n.clone(), v));
+        let markup =
+            leptos::prelude::Memo::new(move |_| shared.with_value(|(i18n, v)| street_svg(v, i18n, 1050.0, Units::Metres, &Interaction::default()).markup));
+        assert!(markup.get().contains(">Today<") && !markup.get().contains("Aujourd’hui"));
+        i18n.set(Locale::FrCa);
+        let m = markup.get();
+        assert!(m.contains(">Aujourd’hui<") && !m.contains(">Today<"), "{m}");
     }
 }

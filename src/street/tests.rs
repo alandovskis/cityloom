@@ -740,3 +740,17 @@ fn the_panel_is_drawn_again_in_the_language_the_shell_switches() {
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains(">Voie de circulation</h2>") && h.contains("value=\"3,30\"") && !h.contains("value=\"3.30\""), "{h}");
 }
+
+#[test]
+fn the_drawing_is_in_french_when_the_page_is() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(h.contains("Aujourd’hui") && h.contains("Votre aménagement") && h.contains("Coupe transversale de"), "{h}");
+    assert!(!h.contains(">Today<") && !h.contains("Cross-section of"), "{h}");
+    let e = street_shared(0);
+    let h = street_html(|| view! { <view::StreetDrawing vm=e.clone()/> });
+    assert!(h.contains(">Today<"), "{h}");
+    e.i18n().set(Locale::FrCa);
+    let h = street_html(|| view! { <view::StreetDrawing vm=e.clone()/> });
+    assert!(h.contains(">Aujourd’hui<") && !h.contains(">Today<"), "{h}");
+}

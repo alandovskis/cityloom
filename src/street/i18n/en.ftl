@@ -239,3 +239,39 @@ inspector-two-way = Two-way
 inspector-curb = Curb
 inspector-curb-note = The raised edge, if it has one.
 inspector-curb-none = None (flush)
+
+# The marks of the kinds, shown where a name does not fit (src/shared/catalogue.rs).
+kind-mark-sidewalk = SW
+kind-mark-planting = PL
+kind-mark-bike = BL
+kind-mark-travel = TL
+kind-mark-bus = TR
+kind-mark-parking = PK
+kind-mark-median = MD
+kind-mark-loading = LZ
+kind-mark-shoulder = SD
+kind-mark-bikerack = BR
+kind-mark-bikeshare = BS
+kind-mark-pole = UP
+kind-mark-busshelter = SH
+kind-mark-busstation = ST
+kind-mark-bench = BN
+kind-mark-terrace = CT
+kind-mark-streetlamp = SL
+
+# The drawing of the section (src/street/svg.rs).
+svg-today = Today
+svg-your-design = Your design
+svg-change = Change { $n }
+svg-street-edge = Street edge
+svg-unused = Unused
+svg-unused-length = Unused { $length }
+svg-too-wide = { $length } too wide
+svg-too-wide-clipped = { $length } too wide (more off-screen)
+svg-street-width = Street width { $length }
+svg-design-width = Your design { $length }
+svg-scale = Scale
+svg-label = Cross-section of { $name }. { $count ->
+        [one] { $count } segment
+       *[other] { $count } segments
+    }, { $total } of { $row }. { $fit }.

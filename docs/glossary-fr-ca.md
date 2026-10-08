@@ -113,3 +113,16 @@ Chosen as the most standard Québec term, but the catalogue's meaning leaves roo
 | Vehicle: Bus / Tram | Véhicule : autobus / tramway | |
 | Away from you / Toward you | S’éloigne de vous / Vient vers vous | |
 | Asphalt, Concrete, Brick pavers, Gravel | Asphalte, Béton, Pavés de brique, Gravier | The materials are `material-<id>`, the curbs `curb-<id>`. |
+
+## The drawing of the section
+
+| English | Français (fr-CA) | Note |
+| --- | --- | --- |
+| Street edge | Limite de la rue | |
+| Unused | Inutilisé | |
+| 1.0 m too wide | 1,0 m de trop | |
+| Street width | Largeur de la rue | |
+| Scale | Échelle | |
+| Change 2 | Variation 2 | As the column in the changes table. |
+| segment (a piece, in the label) | élément | |
+| Piece marks (SW, TL…) | TO, VC, VR, ST, TP, ZC, AC, PC, PL, SV, VP, PO, AB, SA, BC, TE, LA | Two letters, one per kind (`kind-mark-<id>`), unique among themselves. |

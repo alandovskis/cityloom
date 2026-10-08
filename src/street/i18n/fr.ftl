@@ -239,3 +239,39 @@ inspector-two-way = Double sens
 inspector-curb = Bordure
 inspector-curb-note = Le rebord surélevé, s’il y en a un.
 inspector-curb-none = Aucune (au ras du sol)
+
+# Les sigles des éléments, là où le nom ne tient pas (src/shared/catalogue.rs).
+kind-mark-sidewalk = TO
+kind-mark-planting = PL
+kind-mark-bike = PC
+kind-mark-travel = VC
+kind-mark-bus = VR
+kind-mark-parking = ST
+kind-mark-median = TP
+kind-mark-loading = ZC
+kind-mark-shoulder = AC
+kind-mark-bikerack = SV
+kind-mark-bikeshare = VP
+kind-mark-pole = PO
+kind-mark-busshelter = AB
+kind-mark-busstation = SA
+kind-mark-bench = BC
+kind-mark-terrace = TE
+kind-mark-streetlamp = LA
+
+# Le dessin de la coupe (src/street/svg.rs).
+svg-today = Aujourd’hui
+svg-your-design = Votre aménagement
+svg-change = Variation { $n }
+svg-street-edge = Limite de la rue
+svg-unused = Inutilisé
+svg-unused-length = Inutilisé : { $length }
+svg-too-wide = { $length } de trop
+svg-too-wide-clipped = { $length } de trop (suite hors écran)
+svg-street-width = Largeur de la rue : { $length }
+svg-design-width = Votre aménagement : { $length }
+svg-scale = Échelle
+svg-label = Coupe transversale de { $name }. { $count ->
+        [one] { $count } élément
+       *[other] { $count } éléments
+    }, { $total } sur { $row }. { $fit }.

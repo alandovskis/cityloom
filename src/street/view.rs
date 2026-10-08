@@ -115,7 +115,10 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
         ui.fresh = over && !was_over.get_value();
         was_over.set_value(over);
         fresh.set_value(ui.fresh);
-        let out = street_svg(&v, &w.i18n(), width.get(), units, &ui);
+        let i18n = w.i18n();
+        // Read so the drawing is made again, with its words, when the language is switched.
+        i18n.locale();
+        let out = street_svg(&v, &i18n, width.get(), units, &ui);
         geometry.set_value(out.geometry);
         row_right.set_value(out.row_right);
         out.markup

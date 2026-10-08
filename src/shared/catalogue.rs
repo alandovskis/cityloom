@@ -418,6 +418,11 @@ pub fn kind_key(id: &str) -> String {
     format!("kind-{id}")
 }
 
+/// The message that gives a kind's two-letter mark, shown where its name does not fit.
+pub fn mark_key(id: &str) -> String {
+    format!("kind-mark-{id}")
+}
+
 /// The message that names a group of kinds.
 pub fn group_key(id: &str) -> String {
     format!("group-{id}")
@@ -464,6 +469,9 @@ mod tests {
             for k in KINDS.iter() {
                 i.tr_now(&kind_key(k.id), &Args::new());
             }
+            for k in KINDS.iter() {
+                i.tr_now(&mark_key(k.id), &Args::new());
+            }
             for m in Mode::ALL {
                 i.tr_now(mode_key(m), &Args::new());
             }
@@ -479,6 +487,9 @@ mod tests {
         let i = crate::i18n_for(Locale::En);
         for k in KINDS.iter() {
             assert_eq!(i.tr_now(&kind_key(k.id), &Args::new()), k.name, "{}", k.id);
+        }
+        for k in KINDS.iter() {
+            assert_eq!(i.tr_now(&mark_key(k.id), &Args::new()), k.mark, "{}", k.id);
         }
         for m in Mode::ALL {
             assert_eq!(i.tr_now(mode_key(m), &Args::new()), m.label(), "{m:?}");
