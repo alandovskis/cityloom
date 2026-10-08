@@ -32,6 +32,15 @@ test.describe("the street editor on a street of the city", () => {
     await expect(page.locator("#reset")).toBeDisabled();
   });
 
+  test("choosing French in the settings menu changes the page's language and its markup", async ({ page }) => {
+    await page.locator("#account-btn").click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await page.locator('[data-lang="fr-CA"]').click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+    await expect(page.locator('[data-lang="fr-CA"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#account-menu .menu-h").first()).toHaveText("Réglages");
+  });
+
   test("the welcome note is shown at first and put away until asked for again", async ({ page }) => {
     await expect(page.locator("#welcome")).toBeVisible();
     await page.locator("#welcome-dismiss").click();

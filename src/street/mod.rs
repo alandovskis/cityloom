@@ -23,7 +23,11 @@ use wasm_bindgen::prelude::*;
 
 use crate::city::binding::{CityBinding, Place};
 use crate::city::store::CityStore;
+use crate::shared::i18n::Resources;
 use crate::shared::platform::browser_ports;
+
+/// What the street page says, in both languages.
+pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
 
 /// One street being edited. The page drives it through the components the
 /// module mounts; the script only starts it up and hands it what the shell

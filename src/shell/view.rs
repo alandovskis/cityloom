@@ -8,7 +8,7 @@ use leptos::prelude::*;
 use leptos::web_sys::{Element, Event, EventTarget, HtmlElement, HtmlSelectElement, KeyboardEvent, MediaQueryList, MouseEvent};
 use wasm_bindgen::prelude::*;
 
-use crate::shared::i18n::I18n;
+use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::units::Units;
 use crate::shell::vm::{ShellVm, Target, Theme};
 
@@ -51,6 +51,7 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
     // The effects live as long as the page.
     let owner = Owner::new();
     owner.with(|| {
+        bind_language(&vm);
         bind_units(&vm);
         bind_region(&vm);
         bind_theme(&vm, dark);
@@ -64,6 +65,88 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         });
     }
     std::mem::forget(owner);
+}
+
+/// The attributes a page's markup may have translated, as `data-i18n-<name>="key"`.
+const TRANSLATED_ATTRIBUTES: [&str; 4] = ["aria-label", "title", "placeholder", "content"];
+
+/// The value of attribute `name` in `tag` (the text between `<` and `>`), if it has one in double quotes.
+fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
+    let start = tag.find(&format!(" {name}=\""))? + name.len() + 3;
+    let len = tag[start..].find('"')?;
+    Some(&tag[start..start + len])
+}
+
+/// Every message the markup asks for, with the English text the markup has meanwhile: `(key, text)` for each
+/// `data-i18n="key"` (the text up to the next tag) and `(key, value)` for each `data-i18n-<attribute>="key"`
+/// (the value of that attribute on the same tag).
+pub fn i18n_keys(html: &str) -> Vec<(String, String)> {
+    let mut found = Vec::new();
+    let mut rest = html;
+    while let Some(open) = rest.find('<') {
+        rest = &rest[open + 1..];
+        // The tag ends at the first `>` outside quotes.
+        let mut quote = false;
+        let Some(end) = rest.find(|c: char| {
+            quote ^= c == '"';
+            c == '>' && !quote
+        }) else {
+            break;
+        };
+        let (tag, after) = (&rest[..end], &rest[end + 1..]);
+        if tag.starts_with(['/', '!']) {
+            continue;
+        }
+        if let Some(key) = attribute(tag, "data-i18n") {
+            let text = &after[..after.find('<').unwrap_or(after.len())];
+            found.push((key.to_string(), text.trim().to_string()));
+        }
+        for name in TRANSLATED_ATTRIBUTES {
+            if let Some(key) = attribute(tag, &format!("data-i18n-{name}")) {
+                found.push((key.to_string(), attribute(tag, name).unwrap_or_default().to_string()));
+            }
+        }
+        rest = after;
+    }
+    found
+}
+
+/// Puts the words of the active language into the markup under `root`. It reads the locale, so run in an
+/// effect it is done again when the language changes.
+pub fn apply_translations(root: &Element, i18n: &I18n) {
+    let _ = i18n.locale();
+    let each = |selector: &str| -> Vec<Element> {
+        let Ok(list) = root.query_selector_all(selector) else { return Vec::new() };
+        (0..list.length()).filter_map(|i| list.item(i)).filter_map(|n| n.dyn_into().ok()).collect()
+    };
+    for el in each("[data-i18n]") {
+        let key = el.get_attribute("data-i18n").unwrap_or_default();
+        el.set_text_content(Some(&i18n.tr(&key, &Args::new())));
+    }
+    for name in TRANSLATED_ATTRIBUTES {
+        for el in each(&format!("[data-i18n-{name}]")) {
+            let key = el.get_attribute(&format!("data-i18n-{name}")).unwrap_or_default();
+            let _ = el.set_attribute(name, &i18n.tr(&key, &Args::new()));
+        }
+    }
+}
+
+fn bind_language(vm: &Rc<ShellVm>) {
+    for b in all("[data-lang]") {
+        let (v, tag) = (vm.clone(), b.get_attribute("data-lang").unwrap_or_default());
+        listen(&b, "click", move |_: MouseEvent| v.set_locale(Locale::parse(&tag)));
+        let v = vm.clone();
+        Effect::new(move |_| {
+            let on = v.locale().tag() == b.get_attribute("data-lang").unwrap_or_default();
+            let _ = b.set_attribute("aria-pressed", &on.to_string());
+        });
+    }
+    let v = vm.clone();
+    Effect::new(move |_| {
+        if let Some(root) = document().document_element() {
+            apply_translations(&root, &v.i18n());
+        }
+    });
 }
 
 fn bind_units(vm: &Rc<ShellVm>) {

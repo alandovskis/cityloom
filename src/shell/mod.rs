@@ -2,6 +2,8 @@
 //! and notes sidebars and the notes tabs. The view-model decides; the view binds
 //! the markup each page keeps for them.
 
+#[cfg(test)]
+mod tests;
 pub mod view;
 pub mod vm;
 

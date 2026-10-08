@@ -165,6 +165,11 @@ impl ShellVm {
 
     // ---- language ----
 
+    /// The words, for a view that puts them in the markup.
+    pub fn i18n(&self) -> Rc<I18n> {
+        self.i18n.clone()
+    }
+
     /// The language in use; a view that reads it is drawn again when it changes.
     pub fn locale(&self) -> Locale {
         self.i18n.locale()
