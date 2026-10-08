@@ -324,27 +324,20 @@ fn nothing_selected_the_street_panel_says_how_to_begin() {
 }
 
 #[test]
-fn a_selected_piece_s_panel_has_its_width_surface_and_position() {
+fn a_selected_piece_s_panel_has_its_width_and_surface_and_no_buttons_to_move_it() {
     let s = street_shared(0);
     let u = segment(&s, 2);
     s.edit(|e| e.select(Some(u)));
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains(">Driving lane</h2>") && h.contains("3.3 m wide \u{b7} 3 of 6"));
-    for want in ["Width", "Surface", "What it is paved with.", "Position", "Move left", "Move right", "Allowed "] {
+    for want in ["Width", "Surface", "What it is paved with.", "Allowed "] {
         assert!(h.contains(want), "{want}");
+    }
+    for not in ["Position", "Move left", "Move right"] {
+        assert!(!h.contains(not), "{not}");
     }
     assert!(h.contains("id=\"width\"") && h.contains("value=\"3.30\"") && h.contains("aria-label=\"Narrower by 0.1 m\""));
     assert_eq!(count(&h, "aria-checked=\"true\""), 2, "a surface and a direction are chosen");
-}
-
-#[test]
-fn the_end_pieces_cannot_be_moved_past_the_ends() {
-    let s = street_shared(0);
-    let u = segment(&s, 0);
-    s.edit(|e| e.select(Some(u)));
-    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    let left = h.split("Move left").next().unwrap().rsplit("<button").next().unwrap();
-    assert!(left.contains("disabled"));
 }
 
 #[test]

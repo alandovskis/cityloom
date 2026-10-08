@@ -1307,23 +1307,6 @@ svg pattern circle {
   justify-content: center;
   white-space: nowrap;
 }
-.move-btns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-.move-btns .btn {
-  justify-content: center;
-  white-space: nowrap;
-}
-.move-btns .btn svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-}
 .check {
   display: flex;
   align-items: center;

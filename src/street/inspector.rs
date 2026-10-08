@@ -227,36 +227,6 @@ fn surface_section(w: SheetWatch, uid: u32) -> impl IntoView {
     }
 }
 
-fn position_section(w: SheetWatch, uid: u32) -> impl IntoView {
-    let place = move || {
-        let v = w.view();
-        v.segments.iter().position(|s| s.uid == uid).map(|i| (i, v.segments.len()))
-    };
-    let go = move |dir: i32| {
-        if let Some((i, n)) = place() {
-            let j = i as i32 + dir;
-            if j >= 0 && (j as usize) < n {
-                w.edit(|e| e.move_to(uid, j as usize));
-            }
-        }
-    };
-    view! {
-        <section class="insp-sec">
-            <h3 class="note-h" id="i-h-pos">"Position"</h3>
-            <div class="move-btns">
-                <button type="button" class="btn" disabled=move || place().is_none_or(|(i, _)| i == 0) on:click=move |_| go(-1)>
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M12 7H2M6 3 2 7l4 4"/></svg>
-                    "Move left"
-                </button>
-                <button type="button" class="btn" disabled=move || place().is_none_or(|(i, n)| i + 1 == n) on:click=move |_| go(1)>
-                    "Move right"
-                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h10M8 3l4 4-4 4"/></svg>
-                </button>
-            </div>
-        </section>
-    }
-}
-
 fn vehicle_section(w: SheetWatch, uid: u32) -> impl IntoView {
     let tram = move || w.segment(uid, |s| s.tram).unwrap_or(false);
     view! {
@@ -452,7 +422,6 @@ fn piece_panel(w: SheetWatch, uid: u32, more_open: RwSignal<bool>) -> AnyView {
         }}
         {width_section(w, uid)}
         {surface_section(w, uid)}
-        {position_section(w, uid)}
         {move || (KINDS[kind.get()].id == "bus").then(|| vehicle_section(w, uid))}
         {more_section(w, uid, more_open)}
     }
