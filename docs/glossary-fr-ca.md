@@ -140,3 +140,7 @@ Chosen as the most standard Québec term, but the catalogue's meaning leaves roo
 | Reset to existing | Retour à l’état existant | |
 | Earlier changes | Modifications antérieures | |
 | Traffic keeps right / left | La circulation se fait à droite / à gauche | |
+| Fits the street width | Respecte la largeur de la rue | A check's label. |
+| Sidewalk on both sides | Trottoir des deux côtés | |
+| Room for emergency vehicles | Place pour les véhicules d’urgence | |
+| Freeway | Autoroute | The Québec road term; the measures that are `Freeways only` are `Autoroutes seulement`. |

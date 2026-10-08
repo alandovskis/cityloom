@@ -19,7 +19,17 @@ use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass};
 use crate::shared::provenance::OsmRef;
 #[cfg(test)]
 use crate::street::model::SAMPLES;
-use crate::street::model::{Editor, Street};
+use crate::street::model::{Editor, Said, Street};
+
+thread_local! {
+    static ENGLISH: std::rc::Rc<crate::shared::i18n::I18n> = crate::i18n_for(crate::shared::i18n::Locale::En);
+}
+
+/// What the street said, in English: the map's list of places says what fails in English until the
+/// map page is translated.
+fn english(said: &Said) -> String {
+    ENGLISH.with(|i18n| crate::street::text::say_now(i18n, crate::shared::units::Units::Metres, said))
+}
 
 /// Bump when what is saved changes shape; an older save is then left behind.
 const SAVE_VERSION: u32 = 2;
@@ -629,8 +639,8 @@ impl City {
             let now = &self.streets[&uid];
             let editor = Editor::from_street(today, now, region);
             let v = editor.view();
-            let at_first: Vec<String> = Editor::from_street(today, today, region).view().checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect();
-            let failing: Vec<String> = v.checks.iter().filter(|c| !c.ok && !at_first.iter().any(|l| l == c.label)).map(|c| c.label.to_string()).collect();
+            let at_first: Vec<&str> = Editor::from_street(today, today, region).view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect();
+            let failing: Vec<String> = v.checks.iter().filter(|c| !c.ok && !at_first.contains(&c.id)).map(|c| english(&c.label)).collect();
             let row = v.row_mm;
             let shape = self.layout.shape_of(i);
             edges.push(EdgeView {

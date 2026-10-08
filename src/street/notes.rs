@@ -7,7 +7,6 @@
 
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::units::{Units, group_thousands};
-use crate::street::model::{Check, View};
 use crate::street::text::say;
 
 /// Which way a change goes, as the class of the cell that shows it.
@@ -35,27 +34,6 @@ pub fn capacity_change(existing: i32, now: i32, locale: Locale) -> String {
 
 fn plain(i18n: &I18n, key: &str) -> String {
     i18n.tr(key, &Args::new())
-}
-
-fn length(i18n: &I18n, units: Units, mm: i32) -> Args {
-    Args::new().str("amount", units.length_fine_in(mm, i18n.locale()))
-}
-
-/// What a check says, with the length it speaks of in the units shown.
-pub fn check_detail(c: &Check, v: &View, i18n: &I18n, units: Units) -> String {
-    match c.id {
-        "fits" if c.ok => {
-            if v.delta_mm == 0 {
-                plain(i18n, "check-fits-full")
-            } else {
-                i18n.tr("fit-left", &length(i18n, units, c.amount_mm))
-            }
-        }
-        "fits" => i18n.tr("check-fits-over", &length(i18n, units, c.amount_mm)),
-        "access" if c.ok => i18n.tr("check-access-ok", &length(i18n, units, c.amount_mm)),
-        "access" => i18n.tr("check-access-bad", &length(i18n, units, c.amount_mm)),
-        _ => c.detail.clone(),
-    }
 }
 
 /// How many checks fail, in words for the status line.
@@ -181,8 +159,8 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
                     <li class=if c.ok { "ok" } else { "bad" }>
                         {icon(c.ok)}
                         <div>
-                            <b>{c.label}<span class="sr-only">{plain(&i18n, if c.ok { "check-passes" } else { "check-fails" })}</span></b>
-                            <span>{check_detail(c, &v, &i18n, units)}</span>
+                            <b>{say(&i18n, units, &c.label)}<span class="sr-only">{plain(&i18n, if c.ok { "check-passes" } else { "check-fails" })}</span></b>
+                            <span>{say(&i18n, units, &c.detail)}</span>
                         </div>
                     </li>
                 }
@@ -302,7 +280,7 @@ pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
         }
     }
     move || {
-        let v = w.view();
+        let (v, units) = w.now();
         let i18n = w.i18n();
         groups
             .iter()
@@ -325,7 +303,7 @@ pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
                                 .into_any()
                             }
                             (Where::Street, Some(f)) => {
-                                let why = f.unavailable.map(str::to_string).unwrap_or_else(|| plain(&i18n, "measure-will-not-fit"));
+                                let why = f.unavailable.as_ref().map_or_else(|| plain(&i18n, "measure-will-not-fit"), |why| say(&i18n, units, why));
                                 view! { <span class="m-not">{why}</span> }.into_any()
                             }
                             (Where::Junction, _) => plain(&i18n, "measure-set-at-junction").into_any(),
@@ -357,7 +335,9 @@ pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::street::model::Editor;
+    use crate::shared::catalogue::{KINDS, REGIONS, Side};
+    use crate::street::model::{Check, Editor, View};
+    use crate::street::text::say_now;
 
     fn en() -> Rc<I18n> {
         crate::i18n_for(Locale::En)
@@ -384,40 +364,80 @@ mod tests {
         assert_eq!(capacity_change(1_000, 995, Locale::En), "0");
     }
 
-    fn check(v: &View, id: &str) -> Check {
-        let c = v.checks.iter().find(|c| c.id == id).unwrap();
-        Check { id: c.id, ok: c.ok, amount_mm: c.amount_mm, label: c.label, detail: c.detail.clone() }
+    fn check<'a>(v: &'a View, id: &str) -> &'a Check {
+        v.checks.iter().find(|c| c.id == id).unwrap()
+    }
+
+    fn detail(v: &View, id: &str, i18n: &I18n) -> String {
+        say_now(i18n, Units::Metres, &check(v, id).detail)
+    }
+
+    fn label(v: &View, id: &str, i18n: &I18n) -> String {
+        say_now(i18n, Units::Metres, &check(v, id).label)
+    }
+
+    /// Two driving lanes running against the side the region drives on.
+    fn against_traffic() -> Editor {
+        let mut e = Editor::new(0);
+        let lanes: Vec<u32> = e.view().segments.iter().filter(|s| KINDS[s.kind].id == "travel").map(|s| s.uid).collect();
+        e.set_direction(lanes[0], Some(0));
+        e.set_direction(lanes[1], Some(1));
+        e
     }
 
     #[test]
     fn the_fit_check_says_whether_the_street_is_full_has_room_or_is_too_wide() {
         let mut e = Editor::new(0);
         let v = e.view();
-        assert_eq!(check_detail(&check(&v, "fits"), &v, &en(), Units::Metres), "Every metre is used");
+        assert_eq!(detail(&v, "fits", &en()), "Every metre is used");
         let first = v.segments[0].uid;
         e.remove(first);
         let v = e.view();
-        assert_eq!(check_detail(&check(&v, "fits"), &v, &en(), Units::Metres), "3.3 m left to use");
+        assert_eq!(detail(&v, "fits", &en()), "3.3 m left to use");
         let mut e = Editor::new(0);
         e.set_width(first, 3_800);
         let v = e.view();
-        assert_eq!(check_detail(&check(&v, "fits"), &v, &en(), Units::Metres), "0.5 m too wide. Narrow or remove a piece.");
+        assert_eq!(detail(&v, "fits", &en()), "0.5 m too wide. Narrow or remove a piece.");
     }
 
     #[test]
     fn the_access_check_names_the_lane_width_it_asks_for() {
         let v = Editor::new(0).view();
-        let c = check(&v, "access");
-        let said = check_detail(&c, &v, &en(), Units::Metres);
-        assert!(said.starts_with(if c.ok { "A lane of " } else { "No lane of " }) && said.ends_with(" or more"), "{said}");
+        let said = detail(&v, "access", &en());
+        assert!(said.starts_with(if check(&v, "access").ok { "A lane of " } else { "No lane of " }) && said.ends_with(" or more"), "{said}");
     }
 
     #[test]
-    fn other_checks_say_only_their_detail() {
-        let v = Editor::new(0).view();
-        let other = v.checks.iter().find(|c| c.id != "fits" && c.id != "access").unwrap();
-        let c = Check { id: other.id, ok: other.ok, amount_mm: other.amount_mm, label: other.label, detail: other.detail.clone() };
-        assert_eq!(check_detail(&c, &v, &en(), Units::Metres), other.detail);
+    fn every_check_has_the_label_and_the_detail_it_always_had() {
+        let mut e = Editor::new(0);
+        let v = e.view();
+        let labels: Vec<String> = ["fits", "edges", "access", "side"].iter().map(|id| label(&v, id, &en())).collect();
+        assert_eq!(labels, ["Fits the street width", "Sidewalk on both sides", "Room for emergency vehicles", "Traffic keeps right"]);
+        assert_eq!(detail(&v, "edges", &en()), "Both sides");
+        assert_eq!(detail(&v, "side", &en()), "Lanes run the way this region drives");
+        // A sidewalk taken away from one side.
+        let first = v.segments[0].uid;
+        e.remove(first);
+        assert_eq!(detail(&e.view(), "edges", &en()), "One side has no sidewalk");
+        let v = against_traffic().view();
+        assert_eq!(detail(&v, "side", &en()), "A lane runs against traffic that keeps right");
+        assert!(!check(&v, "side").ok);
+        // Traffic on the left.
+        let mut e = Editor::new(0);
+        e.set_region(REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap());
+        assert_eq!(label(&e.view(), "side", &en()), "Traffic keeps left");
+        assert_eq!(detail(&Editor::new(3).view(), "edges", &en()), "A freeway has no sidewalks");
+    }
+
+    #[test]
+    fn a_measure_that_cannot_be_applied_says_why_in_words() {
+        let reason = |sample: usize, code: &str, i18n: &I18n| {
+            Editor::new(sample).view().measures.into_iter().find(|m| m.code == code).unwrap().unavailable.map(|s| say_now(i18n, Units::Metres, &s))
+        };
+        assert_eq!(reason(1, "B2", &en()).as_deref(), Some("Freeways only"));
+        assert_eq!(reason(3, "A1", &en()).as_deref(), Some("Not for a freeway"));
+        assert_eq!(reason(1, "B2", &fr()).as_deref(), Some("Autoroutes seulement"));
+        assert_eq!(reason(3, "A1", &fr()).as_deref(), Some("Pas pour une autoroute"));
     }
 
     #[test]
@@ -439,18 +459,26 @@ mod tests {
     fn the_checks_are_said_in_french() {
         let mut e = Editor::new(0);
         let v = e.view();
-        assert_eq!(check_detail(&check(&v, "fits"), &v, &fr(), Units::Metres), "Chaque mètre est utilisé");
-        let c = check(&v, "access");
-        let said = check_detail(&c, &v, &fr(), Units::Metres);
-        assert!(said.starts_with(if c.ok { "Une voie de " } else { "Aucune voie de " }) && said.ends_with("\u{a0}m ou plus"), "{said}");
+        assert_eq!(detail(&v, "fits", &fr()), "Chaque mètre est utilisé");
+        let said = detail(&v, "access", &fr());
+        assert!(said.starts_with(if check(&v, "access").ok { "Une voie de " } else { "Aucune voie de " }) && said.ends_with("\u{a0}m ou plus"), "{said}");
+        let labels: Vec<String> = ["fits", "edges", "access", "side"].iter().map(|id| label(&v, id, &fr())).collect();
+        assert_eq!(
+            labels,
+            ["Respecte la largeur de la rue", "Trottoir des deux côtés", "Place pour les véhicules d’urgence", "La circulation se fait à droite"]
+        );
+        assert_eq!(detail(&v, "edges", &fr()), "Des deux côtés");
+        assert_eq!(detail(&v, "side", &fr()), "Les voies vont dans le sens de la circulation de cette région");
         let first = v.segments[0].uid;
         e.set_width(first, 3_800);
-        let v = e.view();
-        assert_eq!(check_detail(&check(&v, "fits"), &v, &fr(), Units::Metres), "0,5\u{a0}m de trop. Rétrécissez ou retirez un élément.");
+        assert_eq!(detail(&e.view(), "fits", &fr()), "0,5\u{a0}m de trop. Rétrécissez ou retirez un élément.");
         let mut e = Editor::new(0);
         e.remove(first);
         let v = e.view();
-        assert_eq!(check_detail(&check(&v, "fits"), &v, &fr(), Units::Metres), "Il reste 3,3\u{a0}m à utiliser");
+        assert_eq!(detail(&v, "fits", &fr()), "Il reste 3,3\u{a0}m à utiliser");
+        assert_eq!(detail(&v, "edges", &fr()), "Un côté n’a pas de trottoir");
+        assert_eq!(detail(&Editor::new(3).view(), "edges", &fr()), "Une autoroute n’a pas de trottoir");
+        assert_eq!(detail(&against_traffic().view(), "side", &fr()), "Une voie circule à contre-sens de la circulation, qui se fait à droite");
     }
 
     #[test]

@@ -564,6 +564,23 @@ fn the_checks_and_their_count_are_said_in_english_with_no_stray_space() {
     assert!(badge.contains("<span class=\"sr-only\"> fail</span>"), "{badge}");
 }
 
+#[test]
+fn the_checks_and_why_a_measure_is_unavailable_are_said_in_french_and_follow_the_switch() {
+    let owner = Owner::new();
+    owner.set();
+    let s = street_shared_in(0, Locale::En);
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(h.contains("Fits the street width") && h.contains("Both sides") && h.contains("Room for emergency vehicles"), "{h}");
+    let m = street_html(|| view! { <notes::Measures vm=s.clone()/> });
+    assert!(m.contains("Freeways only"), "{m}");
+    s.i18n().set(Locale::FrCa);
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(h.contains("Respecte la largeur de la rue") && h.contains("Des deux côtés") && h.contains("Place pour les véhicules d’urgence"), "{h}");
+    assert!(!h.contains("Fits the street width") && !h.contains("Both sides"), "{h}");
+    let m = street_html(|| view! { <notes::Measures vm=s.clone()/> });
+    assert!(m.contains("Autoroutes seulement") && !m.contains("Freeways only"), "{m}");
+}
+
 // ---- the page around the section, in French ------------------------------------------------
 
 #[test]

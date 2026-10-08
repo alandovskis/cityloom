@@ -1042,14 +1042,9 @@ impl Editor {
             .map(|(f, d)| {
                 let can_apply = measures::arrange(d.code, raw, self.row_mm, side, freeway, &mut self.next_uid.clone()).is_some();
                 let unavailable = (!can_apply).then(|| match d.freeway {
-                    Some(only) if only != freeway => {
-                        if only {
-                            "Freeways only"
-                        } else {
-                            "Not for a freeway"
-                        }
-                    }
-                    _ => "Will not fit",
+                    Some(true) if !freeway => Said::new("unavailable-freeways-only"),
+                    Some(false) if freeway => Said::new("unavailable-not-freeway"),
+                    _ => Said::new("measure-will-not-fit"),
                 });
                 MeasureView { code: d.code, name: measures::name(d.code), present: f.present, problems: f.problems, can_apply, unavailable }
             })
@@ -1131,41 +1126,50 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check
     let lanes: Vec<usize> = segs.iter().filter(|s| required_direction(s)).filter_map(|s| s.direction).collect();
     let (wrong_first, wrong_then) = if side == Side::Right { (0, 1) } else { (1, 0) };
     let keeps = lanes.iter().position(|&d| d == wrong_first).is_none_or(|i| !lanes[i..].contains(&wrong_then));
-    let side_name = if side == Side::Right { "right" } else { "left" };
     vec![
         Check {
             id: "fits",
             ok: fits,
-            amount_mm: delta.abs(),
-            label: "Fits the street width",
-            detail: if fits { if delta == 0 { "Exactly full".into() } else { format!("{} mm left to use", -delta) } } else { format!("{delta} mm over") },
+            label: Said::new("check-label-fits"),
+            detail: if !fits {
+                Said::new("check-fits-over").with("amount", Arg::Length(delta))
+            } else if delta == 0 {
+                Said::new("check-fits-full")
+            } else {
+                Said::new("fit-left").with("amount", Arg::Length(-delta))
+            },
         },
         Check {
             id: "edges",
             ok: both_edges,
-            amount_mm: 0,
-            label: "Sidewalk on both sides",
+            label: Said::new("check-label-edges"),
             detail: if freeway {
-                "A freeway has no sidewalks".into()
+                Said::new("check-detail-no-sidewalks")
             } else if both_edges {
-                "Both sides".into()
+                Said::new("check-detail-both-sides")
             } else {
-                "One side has no sidewalk".into()
+                Said::new("check-detail-one-side")
             },
         },
         Check {
             id: "access",
             ok: access,
-            amount_mm: ACCESS_LANE_MM,
-            label: "Room for emergency vehicles",
-            detail: if access { "A lane of 3.0 m or more".into() } else { "No lane of 3.0 m or more".into() },
+            label: Said::new("check-label-access"),
+            detail: if access {
+                Said::new("check-access-ok").with("amount", Arg::Length(ACCESS_LANE_MM))
+            } else {
+                Said::new("check-access-bad").with("amount", Arg::Length(ACCESS_LANE_MM))
+            },
         },
         Check {
             id: "side",
             ok: keeps,
-            amount_mm: 0,
-            label: if side == Side::Right { "Traffic keeps right" } else { "Traffic keeps left" },
-            detail: if keeps { "Lanes run the way this region drives".into() } else { format!("A lane runs against traffic that keeps {side_name}") },
+            label: side_said(side),
+            detail: match (keeps, side) {
+                (true, _) => Said::new("check-detail-side-ok"),
+                (false, Side::Right) => Said::new("check-detail-side-bad").with("side", Arg::Msg("side-word-right")),
+                (false, Side::Left) => Said::new("check-detail-side-bad").with("side", Arg::Msg("side-word-left")),
+            },
         },
     ]
 }
@@ -1224,10 +1228,8 @@ pub struct Outcomes {
 pub struct Check {
     pub id: &'static str,
     pub ok: bool,
-    /// The length the detail speaks of, so the page can print it in its units.
-    pub amount_mm: i32,
-    pub label: &'static str,
-    pub detail: String,
+    pub label: Said,
+    pub detail: Said,
 }
 
 #[derive(Serialize)]
@@ -1239,7 +1241,7 @@ pub struct MeasureView {
     /// The street can be arranged as this measure.
     pub can_apply: bool,
     /// Why not, when it cannot be.
-    pub unavailable: Option<&'static str>,
+    pub unavailable: Option<Said>,
 }
 
 #[derive(Serialize)]
@@ -1424,10 +1426,11 @@ mod tests {
 
     #[test]
     fn a_measure_that_cannot_be_applied_says_why() {
-        let reason = |sample: usize, code: &str| Editor::new(sample).view().measures.into_iter().find(|m| m.code == code).unwrap().unavailable;
-        assert_eq!(reason(1, "B2"), Some("Freeways only"));
-        assert_eq!(reason(1, "E3"), Some("Freeways only"));
-        assert_eq!(reason(3, "A1"), Some("Not for a freeway"));
+        let reason =
+            |sample: usize, code: &str| Editor::new(sample).view().measures.into_iter().find(|m| m.code == code).unwrap().unavailable.map(|s| says(&s));
+        assert_eq!(reason(1, "B2").as_deref(), Some("Freeways only"));
+        assert_eq!(reason(1, "E3").as_deref(), Some("Freeways only"));
+        assert_eq!(reason(3, "A1").as_deref(), Some("Not for a freeway"));
         assert_eq!(reason(1, "A1"), None);
         assert_eq!(reason(3, "B2"), None);
     }
@@ -1438,7 +1441,7 @@ mod tests {
         for sample in 0..SAMPLES.len() {
             for m in Editor::new(sample).view().measures {
                 assert_eq!(m.unavailable.is_some(), !m.can_apply, "{} on {}", m.code, SAMPLES[sample].name);
-                if m.unavailable == Some("Will not fit") {
+                if m.unavailable.as_ref().map(says).as_deref() == Some("Will not fit") {
                     fits_not += 1;
                 }
             }
@@ -1515,7 +1518,8 @@ mod tests {
         let v = e.view();
         assert_eq!(v.delta_mm, 1800);
         assert!(!v.checks[0].ok);
-        assert_eq!(v.checks[0].detail, "1800 mm over");
+        assert_eq!(v.checks[0].detail, Said::new("check-fits-over").with("amount", Arg::Length(1800)));
+        assert_eq!(says(&v.checks[0].detail), "1.8 m too wide. Narrow or remove a piece.");
     }
 
     #[test]
@@ -1837,7 +1841,7 @@ mod tests {
         assert_eq!(dirs(&e), [Some("away"), Some("toward")]);
         let side = e.view().checks.into_iter().find(|c| c.id == "side").unwrap();
         assert!(!side.ok);
-        assert_eq!(side.label, "Traffic keeps right");
+        assert_eq!(says(&side.label), "Traffic keeps right");
         assert!(e.redo());
         // a one-way street has nothing to conflict
         let lanes: Vec<u32> = e.current().iter().filter(|s| s.kind == kind("travel")).map(|s| s.uid).collect();
