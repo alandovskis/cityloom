@@ -7,7 +7,6 @@
 
 use serde::Serialize;
 
-use crate::shared::atlas::MEASURES;
 use crate::shared::catalogue::{DirectionRule, KINDS, Side, kind_index};
 use crate::shared::i18n::{Args, I18n};
 use crate::street::model::{Segment, Variant};
@@ -35,11 +34,6 @@ pub const DEFS: [Def; 14] = [
     Def { code: "F1", freeway: Some(false) },
     Def { code: "F2", freeway: Some(false) },
 ];
-
-/// The English name of measure `code`, as the Atlas gives it (the messages `atlas-<code>-name` say it in each language).
-pub fn name(code: &str) -> &'static str {
-    MEASURES.iter().find(|m| m.code == code).map_or("", |m| m.name)
-}
 
 /// A transit lane should be at least this wide (synthetic).
 pub const MIN_TRANSIT_LANE_MM: i32 = 3_300;

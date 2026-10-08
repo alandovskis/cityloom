@@ -98,14 +98,6 @@ impl Units {
         self.signed_in(mm, Locale::En)
     }
 
-    /// What the units are called in a sentence.
-    pub fn name(self) -> &'static str {
-        match self {
-            Units::Metres => "metres",
-            Units::Feet => "feet",
-        }
-    }
-
     /// How far a width nudge moves a piece: a tenth of a metre, or about a foot.
     pub fn step_mm(self) -> i32 {
         match self {
@@ -285,9 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn the_units_are_named_in_words_and_have_a_step() {
-        assert_eq!(Units::Metres.name(), "metres");
-        assert_eq!(Units::Feet.name(), "feet");
+    fn the_units_have_a_step() {
         assert_eq!(Units::Metres.step_mm(), 100);
         assert_eq!(Units::Feet.step_mm(), 305);
     }

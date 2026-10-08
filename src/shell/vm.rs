@@ -489,12 +489,6 @@ mod tests {
     }
 
     #[test]
-    fn the_shell_s_two_languages_have_the_same_messages_and_variables() {
-        let r = crate::shell::RESOURCES;
-        assert_eq!(crate::shared::i18n::tests::parity_problems(r.en, r.fr), Vec::<String>::new());
-    }
-
-    #[test]
     fn units_start_in_metres_and_the_page_is_told_when_they_change() {
         let r = rig();
         assert_eq!(r.vm.units(), Units::Metres);

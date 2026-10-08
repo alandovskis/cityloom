@@ -814,3 +814,9 @@ fn the_lengths_around_the_section_follow_the_language() {
     let h = street_html(|| view! { <page::TitleBlock vm=e.clone()/> });
     assert!(h.contains(&format!(">{en}<")), "{h}");
 }
+
+#[test]
+fn the_street_ftl_files_have_the_same_messages_and_variables() {
+    use crate::shared::i18n::tests::parity_problems;
+    assert_eq!(parity_problems(crate::street::RESOURCES.en, crate::street::RESOURCES.fr), Vec::<String>::new());
+}
