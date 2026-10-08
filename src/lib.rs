@@ -69,6 +69,9 @@ pub fn i18n_browser(ports: &shared::ports::Ports) -> std::rc::Rc<shared::i18n::I
 }
 
 #[cfg(test)]
+mod i18n_guard;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use shared::i18n::Locale;
