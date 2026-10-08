@@ -99,6 +99,7 @@ Chosen as the most standard Québec term, but the catalogue's meaning leaves roo
 | Queue-Jump Lane | Voie de dépassement de file | |
 | Bus Bulbs | Avancées de trottoir pour autobus | |
 | Transit Modal Filter | Filtre modal pour le transport en commun | |
+| Yield-Controlled Bus Gates | Portes d’autobus à cédez le passage | Québec writes `cédez le passage`, without hyphens. |
 
 ## Piece panel
 
