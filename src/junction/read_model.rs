@@ -9,7 +9,24 @@ use crate::junction::geometry::*;
 use crate::junction::model::*;
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::shared::provenance::OsmRef;
-use crate::street::model::{Check, Revision};
+
+/// One rule of the junction and whether it holds (English until the junction page is translated).
+#[derive(Serialize)]
+pub struct Check {
+    pub id: &'static str,
+    pub ok: bool,
+    /// The length the detail speaks of, so the page can print it in its units.
+    pub amount_mm: i32,
+    pub label: &'static str,
+    pub detail: String,
+}
+
+/// One step of the junction's history.
+#[derive(Serialize)]
+pub struct Revision {
+    pub step: usize,
+    pub label: String,
+}
 
 /// Ring width of a roundabout, and the smallest island in its middle.
 const RING_WIDTH_MM: f64 = 6_000.0;

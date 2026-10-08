@@ -8,6 +8,7 @@
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::units::{Units, group_thousands};
 use crate::street::model::{Check, View};
+use crate::street::text::say;
 
 /// Which way a change goes, as the class of the cell that shows it.
 pub fn change_class(delta: i32) -> &'static str {
@@ -248,14 +249,14 @@ pub fn Revisions(vm: Rc<StreetVm>) -> impl IntoView {
         });
     }
     move || {
-        let v = w.view();
+        let (v, units) = w.now();
         let i18n = w.i18n();
         let last = v.revisions.len().checked_sub(1);
         let rows = v
             .revisions
             .iter()
             .enumerate()
-            .map(|(i, r)| view! { <tr class=if Some(i) == last { "now" } else { "" }><td>{r.step}</td><td>{r.label.clone()}</td></tr> })
+            .map(|(i, r)| view! { <tr class=if Some(i) == last { "now" } else { "" }><td>{r.step}</td><td>{say(&i18n, units, &r.label)}</td></tr> })
             .collect_view();
         view! {
             <thead><tr><th scope="col">{plain(&i18n, "col-step")}</th><th scope="col">{plain(&i18n, "col-what-changed")}</th></tr></thead>

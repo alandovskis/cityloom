@@ -5,13 +5,13 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
+use crate::junction::read_model::Check;
 use crate::junction::read_model::{CrossingView, JView};
 use crate::junction::turns::compass;
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
 use crate::shared::atlas::{MEASURES, Where};
 use crate::shared::units::Units;
-use crate::street::model::Check;
 
 /// How far it is to cross: the length, or the stages and their length.
 fn crossing_text(c: &CrossingView, units: Units) -> String {
@@ -237,8 +237,8 @@ pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use crate::junction::model::*;
+    use crate::junction::read_model::Check;
     use crate::shared::units::Units;
-    use crate::street::model::Check;
 
     use super::*;
 

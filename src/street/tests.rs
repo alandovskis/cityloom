@@ -300,7 +300,22 @@ fn the_street_s_changes_start_from_the_street_today_and_list_each_edit() {
     let u = segment(&s, 0);
     s.edit(|e| e.remove(u));
     let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
-    assert!(!h.contains("base now") && h.contains("class=\"now\"") && h.contains(&s.view().revisions[0].label));
+    assert!(!h.contains("base now") && h.contains("class=\"now\"") && h.contains("<td>Remove sidewalk</td>"), "{h}");
+}
+
+#[test]
+fn the_changes_list_is_drawn_again_in_the_language_the_shell_switches() {
+    let owner = Owner::new();
+    owner.set();
+    let s = street_shared_in(0, Locale::En);
+    let u = segment(&s, 0);
+    s.edit(|e| e.remove(u));
+    let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
+    assert!(h.contains("<td>Remove sidewalk</td>") && h.contains("Street today"), "{h}");
+    s.i18n().set(Locale::FrCa);
+    let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
+    assert!(h.contains("<td>Retrait\u{a0}: trottoir</td>") && h.contains("La rue aujourd’hui"), "{h}");
+    assert!(!h.contains("Remove sidewalk"), "{h}");
 }
 
 #[test]

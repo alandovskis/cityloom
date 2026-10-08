@@ -275,3 +275,26 @@ svg-label = Cross-section of { $name }. { $count ->
         [one] { $count } segment
        *[other] { $count } segments
     }, { $total } of { $row }. { $fit }.
+
+# What the model says it did, put into words by `text::say` (src/street/model.rs): the list of changes and what is announced after an edit.
+rev-earlier = Earlier changes
+rev-reset = Reset to existing
+rev-add = Add { $kind }
+rev-remove = Remove { $kind }
+rev-move = Move { $kind }
+rev-resize = Resize { $kind }
+rev-resize-pair = Resize { $a } and { $b }
+rev-surface = { $kind } surface: { $material }
+rev-curb = { $kind } curb: { $curb }
+rev-vehicle = { $kind } vehicle: { $vehicle }
+rev-direction = { $kind } direction: { $direction }
+rev-window = { $base } is { $kind } { $from }-{ $to }
+rev-variant-direction = { $base } { $kind } direction: { $direction }
+rev-variant-remove = Remove other times from { $kind }
+rev-measure = { $code } { $name }
+rev-word-none = none
+rev-word-two-way = two-way
+rev-word-tram = tram
+rev-word-bus = bus
+side-keeps-right = Traffic keeps right
+side-keeps-left = Traffic keeps left

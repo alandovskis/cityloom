@@ -126,3 +126,17 @@ Chosen as the most standard Québec term, but the catalogue's meaning leaves roo
 | Change 2 | Variation 2 | As the column in the changes table. |
 | segment (a piece, in the label) | élément | |
 | Piece marks (SW, TL…) | TO, VC, VR, ST, TP, ZC, AC, PC, PL, SV, VP, PO, AB, SA, BC, TE, LA | Two letters, one per kind (`kind-mark-<id>`), unique among themselves. |
+
+## What the model says it did (the changes list and the announcement after an edit)
+
+| English | Français (fr-CA) | Note |
+| --- | --- | --- |
+| Add / Remove / Move / Resize | Ajout / Retrait / Déplacement / Redimensionnement | Nouns followed by ` : ` and the lowercase name of the kind, so no article (and no gender) is needed. |
+| Parking surface: permeable paving | Stationnement, surface : revêtement perméable | The kind, then what changed. |
+| Curb: none | Bordure : aucune | |
+| Direction: two-way | Sens : double sens | As `Two-way` above. |
+| Parking is transit lane 07:00-10:00 | Stationnement devient voie réservée au transport en commun de 07:00 à 10:00 | |
+| Remove other times from … | Retrait des autres périodes : … | `Other times` is `Autres périodes`. |
+| Reset to existing | Retour à l’état existant | |
+| Earlier changes | Modifications antérieures | |
+| Traffic keeps right / left | La circulation se fait à droite / à gauche | |

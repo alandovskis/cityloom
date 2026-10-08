@@ -4,10 +4,46 @@
 //! Every sentence is a message (`src/street/i18n`); these functions only choose
 //! which one and hand it the lengths, written in the language of the page.
 
-use crate::shared::catalogue::{KINDS, kind_key};
+use crate::shared::atlas::name_key;
+use crate::shared::catalogue::{KINDS, curb_key, direction_key, kind_key, material_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::units::Units;
-use crate::street::model::View;
+use crate::street::model::{Arg, Said, View};
+use crate::street::page::hhmm;
+
+/// What the model said, in words, for a view: it asks with `tr`, so it is drawn again when the
+/// language is switched.
+pub fn say(i18n: &I18n, units: Units, said: &Said) -> String {
+    put_into_words(i18n, units, said, true)
+}
+
+/// The same, for a command: nothing is watched.
+pub fn say_now(i18n: &I18n, units: Units, said: &Said) -> String {
+    put_into_words(i18n, units, said, false)
+}
+
+fn put_into_words(i18n: &I18n, units: Units, said: &Said, watched: bool) -> String {
+    let locale = if watched { i18n.locale() } else { i18n.locale_now() };
+    let tr = |key: &str, args: &Args| if watched { i18n.tr(key, args) } else { i18n.tr_now(key, args) };
+    let name = |key: String| tr(&key, &Args::new());
+    let mut args = Args::new();
+    for (arg_name, arg) in &said.args {
+        args = match arg {
+            Arg::Num(n) => args.num(arg_name, *n),
+            Arg::Text(t) => args.str(arg_name, t.clone()),
+            Arg::Kind(id) => args.str(arg_name, name(kind_key(id))),
+            Arg::KindLower(id) => args.str(arg_name, name(kind_key(id)).to_lowercase()),
+            Arg::MaterialLower(id) => args.str(arg_name, name(material_key(id)).to_lowercase()),
+            Arg::CurbLower(id) => args.str(arg_name, name(curb_key(id)).to_lowercase()),
+            Arg::DirectionLower(id) => args.str(arg_name, name(direction_key(id)).to_lowercase()),
+            Arg::Measure(code) => args.str(arg_name, name(name_key(code))),
+            Arg::Clock(min) => args.str(arg_name, hhmm(*min)),
+            Arg::Length(mm) => args.str(arg_name, units.length_fine_in(*mm, locale)),
+            Arg::Msg(key) => args.str(arg_name, tr(key, &Args::new())),
+        };
+    }
+    tr(said.key, &args)
+}
 
 /// Said when the street is put back as it is today.
 pub fn started_over(i18n: &I18n) -> String {
@@ -39,9 +75,9 @@ pub fn status_text(v: &View, i18n: &I18n, units: Units) -> String {
     }
 }
 
-/// What the last edit was, and how the pieces stand. The label is the model's.
+/// What the last edit was, and how the pieces stand.
 pub fn edit_text(v: &View, i18n: &I18n, units: Units) -> Option<String> {
-    v.revisions.last().map(|r| i18n.tr_now("edit-done", &Args::new().str("label", r.label.clone()).str("fit", fit_phrase(v, i18n, units))))
+    v.revisions.last().map(|r| i18n.tr_now("edit-done", &Args::new().str("label", say_now(i18n, units, &r.label)).str("fit", fit_phrase(v, i18n, units))))
 }
 
 pub fn undone_text(v: &View, i18n: &I18n, units: Units) -> String {
@@ -122,7 +158,7 @@ mod tests {
         e.remove(first);
         let said = edit_text(&e.view(), &en(), Units::Metres).unwrap();
         assert!(said.ends_with(". 3.3 m left to use."), "{said}");
-        assert!(said.starts_with(&e.view().revisions.last().unwrap().label));
+        assert!(said.starts_with(&say_now(&en(), Units::Metres, &e.view().revisions.last().unwrap().label)));
     }
 
     #[test]
@@ -178,5 +214,110 @@ mod tests {
         assert_eq!(started_over(&fr()), "Retour à la rue telle qu’elle est aujourd’hui. Annulez pour retrouver vos modifications.");
         assert_eq!(measure_refused(&fr()), "Cette mesure ne convient pas à cette rue.");
         assert_eq!(measure_refused(&en()), "That measure does not suit this street.");
+    }
+
+    fn english_after(sample: usize, edit: impl FnOnce(&mut Editor)) -> String {
+        let mut e = Editor::new(sample);
+        edit(&mut e);
+        say_now(&en(), Units::Metres, &e.view().revisions.last().unwrap().label)
+    }
+
+    fn french_after(sample: usize, edit: impl FnOnce(&mut Editor)) -> String {
+        let mut e = Editor::new(sample);
+        edit(&mut e);
+        say_now(&fr(), Units::Metres, &e.view().revisions.last().unwrap().label)
+    }
+
+    fn piece(e: &Editor, id: &str) -> u32 {
+        e.view().segments.iter().find(|s| KINDS[s.kind].id == id).unwrap().uid
+    }
+
+    #[test]
+    fn a_revision_is_said_with_the_names_of_the_page_s_language() {
+        let remove = |e: &mut Editor| {
+            let u = piece(e, "parking");
+            assert!(e.remove(u));
+        };
+        assert_eq!(english_after(0, remove), "Remove parking");
+        assert_eq!(french_after(0, remove), "Retrait\u{a0}: stationnement");
+        let surface = |e: &mut Editor| {
+            let u = piece(e, "parking");
+            assert!(e.set_material(u, crate::shared::catalogue::MATERIALS.iter().position(|m| m.id == "permeable").unwrap()));
+        };
+        assert_eq!(english_after(0, surface), "Parking surface: permeable paving");
+        assert_eq!(french_after(0, surface), "Stationnement, surface\u{a0}: revêtement perméable");
+        let resize = |e: &mut Editor| {
+            let bike = KINDS.iter().position(|k| k.id == "bike").unwrap();
+            let u = e.add(bike, 0);
+            assert!(e.set_width(u, 2_000));
+        };
+        assert_eq!(english_after(0, resize), "Resize bike lane");
+        assert_eq!(french_after(0, resize), "Redimensionnement\u{a0}: piste cyclable");
+    }
+
+    #[test]
+    fn a_window_a_vehicle_and_a_reset_are_said_in_both_languages() {
+        let window = |e: &mut Editor| {
+            let u = piece(e, "parking");
+            assert!(e.add_variant(u));
+        };
+        assert_eq!(english_after(0, window), "Parking is transit lane 07:00-10:00");
+        assert_eq!(french_after(0, window), "Stationnement devient voie réservée au transport en commun de 07:00 à 10:00");
+        let tram = |e: &mut Editor| {
+            let u = piece(e, "parking");
+            assert!(e.add_variant(u));
+            e.set_time(8 * 60);
+            assert!(e.set_tram(u, true));
+        };
+        assert_eq!(english_after(0, tram), "Transit lane vehicle: tram");
+        assert_eq!(french_after(0, tram), "Voie réservée au transport en commun, véhicule\u{a0}: tramway");
+        let reset = |e: &mut Editor| {
+            let u = piece(e, "parking");
+            assert!(e.remove(u));
+            assert!(e.reset());
+        };
+        assert_eq!(english_after(0, reset), "Reset to existing");
+        assert_eq!(french_after(0, reset), "Retour à l’état existant");
+    }
+
+    #[test]
+    fn the_changes_follow_a_switch_of_language_instead_of_freezing_the_one_they_were_made_in() {
+        let mut e = Editor::new(0);
+        let u = piece(&e, "parking");
+        e.remove(u);
+        let v = e.view();
+        let i18n = crate::i18n_for(Locale::En);
+        let en_said = edit_text(&v, &i18n, Units::Metres).unwrap();
+        assert!(en_said.starts_with("Remove parking. "), "{en_said}");
+        i18n.set(Locale::FrCa);
+        let fr_said = edit_text(&v, &i18n, Units::Metres).unwrap();
+        assert!(fr_said.starts_with("Retrait\u{a0}: stationnement. "), "{fr_said}");
+    }
+
+    /// Every key the model can say is a message in both languages. The model builds a `Said` only with `Said::new("…")`, and puts a word in another's place only with `Arg::Msg("…")`, so its source lists them all.
+    #[test]
+    fn every_message_the_model_says_exists_in_english_and_in_french() {
+        let source = include_str!("model.rs");
+        let source = &source[..source.find("#[cfg(test)]\nmod tests").unwrap()];
+        let mut keys = Vec::new();
+        for opener in ["Said::new(\"", "Arg::Msg(\""] {
+            for part in source.split(opener).skip(1) {
+                keys.push(part[..part.find('"').unwrap()].to_string());
+            }
+        }
+        keys.sort();
+        keys.dedup();
+        assert!(keys.len() >= 20, "{keys:?}");
+        for locale in Locale::ALL {
+            let i18n = crate::i18n_for(locale);
+            // Every argument any of them takes, so that a message is found whatever it is about.
+            let args = ["kind", "a", "b", "material", "curb", "vehicle", "direction", "base", "from", "to", "code", "name", "amount"]
+                .into_iter()
+                .fold(Args::new(), |args, name| args.str(name, "x"));
+            for key in &keys {
+                i18n.tr_now(key, &args);
+            }
+            assert_eq!(i18n.missing(), Vec::<String>::new(), "{locale:?}");
+        }
     }
 }

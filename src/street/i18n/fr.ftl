@@ -275,3 +275,26 @@ svg-label = Coupe transversale de { $name }. { $count ->
         [one] { $count } élément
        *[other] { $count } éléments
     }, { $total } sur { $row }. { $fit }.
+
+# Ce que le modèle dit avoir fait, mis en mots par `text::say` (src/street/model.rs) : la liste des modifications et ce qui est annoncé après une modification.
+rev-earlier = Modifications antérieures
+rev-reset = Retour à l’état existant
+rev-add = Ajout : { $kind }
+rev-remove = Retrait : { $kind }
+rev-move = Déplacement : { $kind }
+rev-resize = Redimensionnement : { $kind }
+rev-resize-pair = Redimensionnement : { $a } et { $b }
+rev-surface = { $kind }, surface : { $material }
+rev-curb = { $kind }, bordure : { $curb }
+rev-vehicle = { $kind }, véhicule : { $vehicle }
+rev-direction = { $kind }, sens : { $direction }
+rev-window = { $base } devient { $kind } de { $from } à { $to }
+rev-variant-direction = { $base } en tant que { $kind }, sens : { $direction }
+rev-variant-remove = Retrait des autres périodes : { $kind }
+rev-measure = { $code } { $name }
+rev-word-none = aucune
+rev-word-two-way = double sens
+rev-word-tram = tramway
+rev-word-bus = autobus
+side-keeps-right = La circulation se fait à droite
+side-keeps-left = La circulation se fait à gauche
