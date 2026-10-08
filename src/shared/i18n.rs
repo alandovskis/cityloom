@@ -366,6 +366,13 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn parity_walks_the_variants_of_a_select() {
+        let en = "c = { $k ->\n    [one] x\n   *[other] { $n } y\n}\n";
+        let fr = "c = { $k ->\n    [one] x\n   *[other] { $count } y\n}\n";
+        assert_eq!(parity_problems(en, fr), vec!["c: variables differ (en: k, n; fr: count, k)".to_string()]);
+    }
+
+    #[test]
     fn parity_reports_a_file_that_does_not_parse() {
         assert!(parity_problems("a = { \n", "a = x\n")[0].starts_with("en does not parse"));
     }

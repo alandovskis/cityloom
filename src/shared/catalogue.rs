@@ -409,3 +409,80 @@ pub fn kind_index(id: &str) -> Option<usize> {
 pub fn is_roadway(kind: usize) -> bool {
     !matches!(KINDS[kind].mode, Mode::Foot | Mode::Green)
 }
+
+/// The groups the add menu sorts the kinds into, in its order. A group's name is the message `group-<id>`.
+pub const GROUP_IDS: [&str; 7] = ["walking", "greenery", "cycling", "transit", "roadway", "furniture", "utilities"];
+
+/// The message that names a kind of piece (`street/i18n`).
+pub fn kind_key(id: &str) -> String {
+    format!("kind-{id}")
+}
+
+/// The message that names a group of kinds.
+pub fn group_key(id: &str) -> String {
+    format!("group-{id}")
+}
+
+/// The message that names a mode.
+pub fn mode_key(mode: Mode) -> &'static str {
+    match mode {
+        Mode::Foot => "mode-foot",
+        Mode::Bike => "mode-bike",
+        Mode::Transit => "mode-transit",
+        Mode::Vehicle => "mode-vehicle",
+        Mode::Green => "mode-green",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shared::i18n::{Args, Locale};
+
+    /// The display word of each group, as the add menu shows it today.
+    const GROUP_WORDS: [&str; 7] = ["Walking", "Greenery", "Cycling", "Transit", "Roadway", "Furniture", "Utilities"];
+
+    #[test]
+    fn every_catalogue_kind_mode_and_group_has_a_message_in_both_languages() {
+        for locale in Locale::ALL {
+            let i = crate::i18n_for(locale);
+            for k in KINDS.iter() {
+                i.tr_now(&kind_key(k.id), &Args::new());
+            }
+            for m in Mode::ALL {
+                i.tr_now(mode_key(m), &Args::new());
+            }
+            for g in GROUP_IDS {
+                i.tr_now(&group_key(g), &Args::new());
+            }
+            assert!(i.missing().is_empty(), "{:?}: {:?}", locale, i.missing());
+        }
+    }
+
+    #[test]
+    fn the_english_messages_say_what_the_names_and_labels_still_say() {
+        let i = crate::i18n_for(Locale::En);
+        for k in KINDS.iter() {
+            assert_eq!(i.tr_now(&kind_key(k.id), &Args::new()), k.name, "{}", k.id);
+        }
+        for m in Mode::ALL {
+            assert_eq!(i.tr_now(mode_key(m), &Args::new()), m.label(), "{m:?}");
+        }
+        for (g, word) in GROUP_IDS.iter().zip(GROUP_WORDS) {
+            assert_eq!(i.tr_now(&group_key(g), &Args::new()), word, "{g}");
+        }
+    }
+
+    #[test]
+    fn the_group_ids_are_those_of_the_add_menu() {
+        let menu: Vec<String> = crate::street::page::ADD_GROUPS.iter().map(|(n, _)| n.to_lowercase()).collect();
+        assert_eq!(menu, GROUP_IDS);
+    }
+
+    #[test]
+    fn the_keys_are_the_ids_with_a_prefix() {
+        assert_eq!(kind_key("bikerack"), "kind-bikerack");
+        assert_eq!(mode_key(Mode::Vehicle), "mode-vehicle");
+        assert_eq!(group_key("walking"), "group-walking");
+    }
+}
