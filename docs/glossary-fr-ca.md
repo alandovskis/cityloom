@@ -11,7 +11,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 - Gender: avoid it where a sentence can. Labels such as `Ajout : …` and `réussite` / `échec` are nouns, so they agree with any name that follows.
 - `élément` is the word for a piece of a street (not `pièce`, not `segment`). `Réorganiser` is the word for Arrange.
 - `Vélo` is deliberately both the mode (`mode-bike`) and its group of pieces (`group-cycling`): one idea, one word.
-- Québec road vocabulary: `Accotement`, `Autoroute`, `Chaussée`, `cédez le passage` (no hyphens).
+- Road vocabulary: `Accotement`, `Autoroute`, `Chaussée` and `cédez le passage` are the forms chosen as Québec usage; a Québec reviewer should confirm them (see below).
 
 ## Terms
 
@@ -47,7 +47,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page notes | Use (a column of the width table) | Usage |  |
 | Street page notes | Today | Aujourd’hui |  |
 | Street page notes | Your design | Votre aménagement |  |
-| Street page notes | Change (a column) | Variation |  |
+| Street page notes | Change (a column) | Variation | To confirm: see "Variation N" below. |
 | Street page notes | Step | Étape |  |
 | Street page notes | check (of the street) | vérification | `0` and `1` are singular, as in CLDR. |
 | Street page notes | passes / fails | réussite / échec | Nouns, so they agree with any check's name. |
@@ -74,7 +74,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Transit priority measures | Queue-Jump Lane | Voie de dépassement de file |  |
 | Transit priority measures | Bus Bulbs | Avancées de trottoir pour autobus |  |
 | Transit priority measures | Transit Modal Filter | Filtre modal pour le transport en commun |  |
-| Transit priority measures | Yield-Controlled Bus Gates | Portes d’autobus à cédez le passage | Québec writes `cédez le passage`, without hyphens. |
+| Transit priority measures | Yield-Controlled Bus Gates | Portes d’autobus à cédez le passage | Chosen form, to confirm (see below). |
 | Piece panel | Surface / Planting (heading) | Revêtement / Plantation |  |
 | Piece panel | Other times | Autres périodes |  |
 | Piece panel | Two-way | Double sens |  |
@@ -89,26 +89,26 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | The drawing of the section | 1.0 m too wide | 1,0 m de trop |  |
 | The drawing of the section | Street width | Largeur de la rue |  |
 | The drawing of the section | Scale | Échelle |  |
-| The drawing of the section | Change 2 | Variation 2 | As the column in the changes table. |
+| The drawing of the section | Change 2 | Variation 2 | As the column in the changes table; to confirm, see below. |
 | The drawing of the section | segment (a piece, in the label) | élément |  |
 | The drawing of the section | Piece marks (SW, TL…) | TO, VC, VR, ST, TP, ZC, AC, PC, PL, SV, VP, PO, AB, SA, BC, TE, LA | Two letters, one per kind (`kind-mark-<id>`), unique among themselves. |
-| What the model says it did (the changes list and the announcement after an edit) | Add / Remove / Move / Resize | Ajout / Retrait / Déplacement / Redimensionnement | Nouns followed by ` : ` and the lowercase name of the kind, so no article (and no gender) is needed. |
-| What the model says it did (the changes list and the announcement after an edit) | Parking surface: permeable paving | Stationnement, surface : revêtement perméable | The kind, then what changed. |
-| What the model says it did (the changes list and the announcement after an edit) | Curb: none | Bordure : aucune |  |
-| What the model says it did (the changes list and the announcement after an edit) | Direction: two-way | Sens : double sens | As `Two-way` above. |
-| What the model says it did (the changes list and the announcement after an edit) | Parking is transit lane 07:00-10:00 | Stationnement devient voie réservée au transport en commun de 07:00 à 10:00 |  |
-| What the model says it did (the changes list and the announcement after an edit) | Remove other times from … | Retrait des autres périodes : … | `Other times` is `Autres périodes`. |
-| What the model says it did (the changes list and the announcement after an edit) | Reset to existing | Retour à l’état existant |  |
-| What the model says it did (the changes list and the announcement after an edit) | Earlier changes | Modifications antérieures |  |
-| What the model says it did (the changes list and the announcement after an edit) | Traffic keeps right / left | La circulation se fait à droite / à gauche |  |
-| What the model says it did (the changes list and the announcement after an edit) | Fits the street width | Respecte la largeur de la rue | A check's label. |
-| What the model says it did (the changes list and the announcement after an edit) | Sidewalk on both sides | Trottoir des deux côtés |  |
-| What the model says it did (the changes list and the announcement after an edit) | Room for emergency vehicles | Place pour les véhicules d’urgence |  |
-| What the model says it did (the changes list and the announcement after an edit) | Freeway | Autoroute | The Québec road term; the measures that are `Freeways only` are `Autoroutes seulement`. |
+| Changes list and announcements | Add / Remove / Move / Resize | Ajout / Retrait / Déplacement / Redimensionnement | Nouns followed by ` : ` and the lowercase name of the kind, so no article (and no gender) is needed. |
+| Changes list and announcements | Parking surface: permeable paving | Stationnement, surface : revêtement perméable | The kind, then what changed. |
+| Changes list and announcements | Curb: none | Bordure : aucune |  |
+| Changes list and announcements | Direction: two-way | Sens : double sens | As `Two-way` above. |
+| Changes list and announcements | Parking is transit lane 07:00-10:00 | Stationnement devient voie réservée au transport en commun de 07:00 à 10:00 |  |
+| Changes list and announcements | Remove other times from … | Retrait des autres périodes : … | `Other times` is `Autres périodes`. |
+| Changes list and announcements | Reset to existing | Retour à l’état existant |  |
+| Changes list and announcements | Earlier changes | Modifications antérieures |  |
+| Changes list and announcements | Traffic keeps right / left | La circulation se fait à droite / à gauche |  |
+| Changes list and announcements | Fits the street width | Respecte la largeur de la rue | A check's label. |
+| Changes list and announcements | Sidewalk on both sides | Trottoir des deux côtés |  |
+| Changes list and announcements | Room for emergency vehicles | Place pour les véhicules d’urgence |  |
+| Changes list and announcements | Freeway | Autoroute | Chosen as the Québec road term, to confirm; the measures that are `Freeways only` are `Autoroutes seulement`. |
 
 ## Terms to confirm
 
-Chosen as the most standard Québec term, but a native speaker (the owner) should confirm them; the meaning in the catalogue leaves room for another.
+Chosen as the most standard Québec term, but a native speaker (the owner) should confirm them; the meaning in the catalogue leaves room for another. Alternatives marked (suggestion) were proposed by a reviewer or implementer and are not from the owner's list.
 
 | English | Chosen | Alternative |
 | --- | --- | --- |
@@ -121,12 +121,13 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Furniture (group) | `Mobilier urbain` | |
 | Utilities (group) | `Services publics` | |
 | Shoulder | `Accotement` | `Bas-côté` (used elsewhere in the francophonie) |
-| Queue-Jump Lane | `Voie de dépassement de file` | `Voie de contournement de file` |
+| Queue-Jump Lane | `Voie de dépassement de file` | `Voie de contournement de file` (suggestion) |
 | Virtual Queue-Jump Lane | `Voie virtuelle de dépassement de file` | |
-| Bus Bulbs | `Avancées de trottoir pour autobus` | `Saillies de trottoir` |
+| Bus Bulbs | `Avancées de trottoir pour autobus` | `Saillies de trottoir` (suggestion) |
 | Bus Gates | `Portes d’autobus` (`à feux de signalisation`, `à cédez le passage`) | |
 | On-Street Platforms | `Quais sur rue` | |
 | Transit Signal Priority | `Priorité aux feux pour le transport en commun` | |
 | Planted (material, curb) | `Plate-bande` (material), `Planté` (curb) | |
 | Change N (changes table) | `Variation N` | |
-| Walking (mode) | `Marche` | `Déplacement à pied` |
+| Yield (as in Yield-Controlled Bus Gates) | `cédez le passage` | the earlier spelling `cédez-le-passage` was replaced; check with a Québec reviewer |
+| Walking (mode) | `Marche` | `Déplacement à pied` (suggestion) |
