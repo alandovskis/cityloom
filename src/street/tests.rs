@@ -548,3 +548,77 @@ fn the_checks_and_their_count_are_said_in_english_with_no_stray_space() {
     let badge = street_html(|| view! { <notes::ChecksBadge vm=s.clone()/> });
     assert!(badge.contains("<span class=\"sr-only\"> fail</span>"), "{badge}");
 }
+
+// ---- the page around the section, in French ------------------------------------------------
+
+#[test]
+fn the_heading_and_the_title_block_are_in_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends())/> });
+    assert!(h.contains("Carte de la ville") && h.contains("Coupe transversale de la rue") && h.contains("de large"), "{h}");
+    assert!(h.contains("entre ") && h.contains(" et <a href=\"intersection.html?junction=2\">Junction 4</a>"), "{h}");
+    assert!(!h.contains("City map") && !h.contains("Street cross-section") && !h.contains("between") && !h.contains(" wide"), "{h}");
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(h.contains(">Rue<") && h.contains(">Largeur<") && h.contains("Modifications apportées"), "{h}");
+    assert!(!h.contains(">Width<") && !h.contains("Changes made"), "{h}");
+}
+
+#[test]
+fn the_history_buttons_are_in_french() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <page::History vm=s.clone()/> });
+    assert!(h.contains("Annuler") && h.contains("Rétablir") && h.contains("Recommencer") && h.contains("Outils de la feuille"), "{h}");
+    assert!(!h.contains(">Undo<") && !h.contains("Start over") && !h.contains("Sheet tools"), "{h}");
+}
+
+#[test]
+fn the_add_menu_is_in_french() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
+    assert!(h.contains("Ajouter un élément") && h.contains("Se place après l’élément sélectionné."), "{h}");
+    assert!(h.contains("class=\"add-group-h\">Marche<") && h.contains("<b>Trottoir</b>"), "{h}");
+    assert!(!h.contains("Add a piece") && !h.contains("Goes after") && !h.contains(">Walking<") && !h.contains(">Sidewalk<"), "{h}");
+}
+
+#[test]
+fn the_clock_and_the_welcome_are_in_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    s.edit(|e| e.apply_measure("B3"));
+    let timed = s.view().segments.iter().find(|x| !x.variants.is_empty()).unwrap().uid;
+    s.edit(|e| e.select(Some(timed)));
+    let h = street_html(|| view! { <page::Clock vm=s.clone()/> });
+    assert!(h.contains("Heure de la journée") && h.contains(" sauf "), "{h}");
+    assert!(!h.contains("Time of day") && !h.contains("except"), "{h}");
+    let t = street_html(|| view! { <page::TimeNote vm=s.clone()/> });
+    assert!(t.contains("Les chiffres valent pour 12:00."), "{t}");
+    let h = street_html(|| view! { <page::Welcome vm=s.clone()/> });
+    assert!(h.contains("Ajoutez un élément") && h.contains("Compris") && !h.contains("Got it"), "{h}");
+}
+
+#[test]
+fn the_clock_note_names_the_days_in_each_language() {
+    let en = crate::i18n_for(Locale::En);
+    let fr = crate::i18n_for(Locale::FrCa);
+    let mut e = Editor::new(1);
+    assert!(e.apply_measure("B3"));
+    let mut seg = e.view().segments.into_iter().find(|x| !x.variants.is_empty()).unwrap();
+    seg.base_kind = KINDS.iter().position(|k| k.id == "sidewalk").unwrap();
+    seg.variants[0].kind = KINDS.iter().position(|k| k.id == "bike").unwrap();
+    seg.variants[0].from_min = 420;
+    seg.variants[0].to_min = 600;
+    seg.variants[0].days = Some("Mo-Fr,Su".into());
+    seg.variants.truncate(1);
+    assert_eq!(page::clock_note(&seg, &en), "Sidewalk except bike lane Mo-Fr,Su 07:00\u{2013}10:00");
+    assert_eq!(page::clock_note(&seg, &fr), "Trottoir sauf piste cyclable lun.-ven.,dim. 07:00\u{2013}10:00");
+}
+
+#[test]
+fn the_window_title_names_the_street_and_where_it_runs_in_each_language() {
+    let en = crate::i18n_for(Locale::En);
+    let fr = crate::i18n_for(Locale::FrCa);
+    let ends = ["Rue A".to_string(), "Rue B".to_string()];
+    assert_eq!(page::page_title(&en, "Main St", &ends), "Main St between Rue A and Rue B \u{b7} CityLoom");
+    assert_eq!(page::page_title(&fr, "Main St", &ends), "Main St entre Rue A et Rue B \u{b7} CityLoom");
+    assert_eq!(page::page_title(&en, "Main St", &[]), "CityLoom street editor");
+    assert_eq!(page::page_title(&fr, "Main St", &[]), "Éditeur de rues CityLoom");
+}

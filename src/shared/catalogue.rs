@@ -475,7 +475,7 @@ mod tests {
 
     #[test]
     fn the_group_ids_are_those_of_the_add_menu() {
-        let menu: Vec<String> = crate::street::page::ADD_GROUPS.iter().map(|(n, _)| n.to_lowercase()).collect();
+        let menu: Vec<&str> = crate::street::page::ADD_GROUPS.iter().map(|(id, _)| *id).collect();
         assert_eq!(menu, GROUP_IDS);
     }
 

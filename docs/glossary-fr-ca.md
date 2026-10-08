@@ -68,3 +68,21 @@ Chosen as the most standard Québec term, but the catalogue's meaning leaves roo
 | passes / fails | réussite / échec | Nouns, so they agree with any check's name. |
 | Set at a junction | Se règle à une intersection | |
 | Not modelled | Non modélisé | |
+
+## Street page frame
+
+| English | Français (fr-CA) | Note |
+| --- | --- | --- |
+| City map | Carte de la ville | |
+| Street cross-section | Coupe transversale de la rue | |
+| 12 m wide | 12 m de large | |
+| between A and B | entre A et B | |
+| Start over | Recommencer | |
+| Undo / Redo | Annuler / Rétablir | |
+| Add a piece | Ajouter un élément | |
+| Time of day | Heure de la journée | |
+| except (clock note) | sauf | |
+| Mo Tu We Th Fr Sa Su | lun. mar. mer. jeu. ven. sam. dim. | Lowercase, with a period (fr-CA). |
+| Got it | Compris | |
+| Changes made | Modifications apportées | |
+| As imported | Tel qu’importé | |

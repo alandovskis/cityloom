@@ -273,11 +273,10 @@ test.describe("what the street editor keeps in the city", () => {
     await page.locator("#account-btn").click();
     await page.locator('[data-lang="fr-CA"]').click();
     await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
-    const title = await page.title();
-    expect(title).toContain(name);
-    expect(title).toContain("CityLoom");
-    expect(title).not.toBe("CityLoom street editor");
-    expect(title).not.toBe("Éditeur de rues CityLoom");
+    await expect(page).toHaveTitle(/ entre .* et .* · CityLoom$/);
+    await expect(page).toHaveTitle(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} entre `));
+    await page.locator('[data-lang="en"]').click();
+    await expect(page).toHaveTitle(/between .* and .* · CityLoom/);
   });
 
   test("says which OpenStreetMap ways it was made from, and whether it has been changed", async ({ page }) => {

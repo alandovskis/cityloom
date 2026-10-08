@@ -7,7 +7,8 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use serde::Deserialize;
 
-use crate::shared::catalogue::KINDS;
+use crate::shared::catalogue::{KINDS, group_key, kind_key};
+use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
@@ -18,15 +19,16 @@ use crate::street::watch::SheetWatch;
 
 // ---- what the page is made of --------------------------------------------------------
 
-/// The pieces by what they are for, so seventeen rows read as seven lists.
+/// The pieces by what they are for, so seventeen rows read as seven lists: each group by its id
+/// (its name is the message `group-<id>`) and the kinds in it.
 pub const ADD_GROUPS: [(&str, &[&str]); 7] = [
-    ("Walking", &["sidewalk"]),
-    ("Greenery", &["planting", "median"]),
-    ("Cycling", &["bike", "bikerack", "bikeshare"]),
-    ("Transit", &["bus", "busshelter", "busstation"]),
-    ("Roadway", &["travel", "parking", "loading", "shoulder"]),
-    ("Furniture", &["bench", "terrace"]),
-    ("Utilities", &["pole", "streetlamp"]),
+    ("walking", &["sidewalk"]),
+    ("greenery", &["planting", "median"]),
+    ("cycling", &["bike", "bikerack", "bikeshare"]),
+    ("transit", &["bus", "busshelter", "busstation"]),
+    ("roadway", &["travel", "parking", "loading", "shoulder"]),
+    ("furniture", &["bench", "terrace"]),
+    ("utilities", &["pole", "streetlamp"]),
 ];
 
 /// The indices into the catalogue of the kinds in one group, those the catalogue has.
@@ -67,20 +69,68 @@ pub fn clock_bands(s: &SegView) -> Vec<(f64, f64, &'static str)> {
     bands
 }
 
+/// The days of the week an OSM opening-hours rule names (`Mo-Fr,Su`), in the words of the language.
+fn weekdays(days: &str, i18n: &I18n) -> String {
+    const IDS: [&str; 7] = ["mo", "tu", "we", "th", "fr", "sa", "su"];
+    let mut out = String::new();
+    let mut run = String::new();
+    let flush = |run: &mut String, out: &mut String| {
+        let id = run.to_ascii_lowercase();
+        if IDS.contains(&id.as_str()) {
+            out.push_str(&i18n.tr(&format!("day-{id}"), &Args::new()));
+        } else {
+            out.push_str(run);
+        }
+        run.clear();
+    };
+    for c in days.chars() {
+        if c.is_ascii_alphabetic() {
+            run.push(c);
+        } else {
+            flush(&mut run, &mut out);
+            out.push(c);
+        }
+    }
+    flush(&mut run, &mut out);
+    out
+}
+
 /// What the clock says about the selected piece: its usual type, and the others and when.
-pub fn clock_note(s: &SegView) -> String {
+pub fn clock_note(s: &SegView, i18n: &I18n) -> String {
     if s.variants.is_empty() {
         return String::new();
     }
+    let kind = |k: usize| i18n.tr(&kind_key(KINDS[k].id), &Args::new());
     let others: Vec<String> = s
         .variants
         .iter()
         .map(|v| {
-            let days = v.days.as_ref().map_or(String::new(), |d| format!(" {d}"));
-            format!("{}{days} {}\u{2013}{}", KINDS[v.kind].name.to_lowercase(), hhmm(v.from_min), hhmm(v.to_min))
+            let args = Args::new().str("kind", kind(v.kind).to_lowercase()).str("from", hhmm(v.from_min)).str("to", hhmm(v.to_min));
+            match &v.days {
+                Some(d) => i18n.tr("clock-window-days", &args.str("days", weekdays(d, i18n))),
+                None => i18n.tr("clock-window", &args),
+            }
         })
         .collect();
-    format!("{} except {}", KINDS[s.base_kind].name, others.join(", "))
+    i18n.tr("clock-except", &Args::new().str("kind", kind(s.base_kind)).str("others", others.join(", ")))
+}
+
+/// The ends of a street named in a sentence: `A`, or `A and B`, or `A, B and C`.
+fn ends_list(names: &[String], i18n: &I18n) -> String {
+    match names {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => i18n.tr("ends-and", &Args::new().str("a", rest.join(", ")).str("b", last.clone())),
+    }
+}
+
+/// The title of the window: the street and where it runs between, or the page's own name when
+/// it is not a street of a city.
+pub fn page_title(i18n: &I18n, street: &str, ends: &[String]) -> String {
+    if ends.is_empty() {
+        return i18n.tr("title-street-editor", &Args::new());
+    }
+    i18n.tr("title-between", &Args::new().str("street", street).str("ends", ends_list(ends, i18n)))
 }
 
 /// The ends of a street that belongs to a city: a junction, or where it leaves the map.
@@ -93,13 +143,18 @@ pub struct StreetEnd {
 
 // ---- the components ----------------------------------------------------------------------
 
-fn back_link() -> impl IntoView {
+fn back_link(w: SheetWatch) -> impl IntoView {
     view! {
         <a class="back" href="map.html">
             <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d="M12 7H2M6 3 2 7l4 4"/></svg>
-            "City map"
+            {say(w, "header-city-map")}
         </a>
     }
+}
+
+/// A word of the page, asked again when the language is switched.
+fn say(w: SheetWatch, key: &'static str) -> impl Fn() -> String + 'static {
+    move || w.i18n().tr(key, &Args::new())
 }
 
 fn end_link(e: &StreetEnd) -> impl IntoView {
@@ -114,27 +169,39 @@ fn end_link(e: &StreetEnd) -> impl IntoView {
 #[component]
 pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl IntoView {
     let w = SheetWatch::new(vm);
+    // This page owns the window's title; it is written again when the street or the language changes.
     #[cfg(target_arch = "wasm32")]
-    if let Some(ends) = &ends {
-        let names: Vec<String> = ends.iter().map(|e| e.name.clone()).collect();
+    {
+        let names: Vec<String> = ends.iter().flatten().map(|e| e.name.clone()).collect();
         Effect::new(move |_| {
-            document().set_title(&format!("{} between {} \u{b7} CityLoom", w.view().name, names.join(" and ")));
+            document().set_title(&page_title(&w.i18n(), &w.view().name, &names));
         });
     }
     let linked = ends.is_some();
     let between = ends.map(|ends| match ends.as_slice() {
-        [a, b] => view! { " " <span aria-hidden="true">"\u{b7}"</span> " " <span>"between " {end_link(a)} " and " {end_link(b)}</span> }.into_any(),
+        [a, b] => view! {
+            " "
+            <span aria-hidden="true">"\u{b7}"</span>
+            " "
+            <span>
+                {move || format!("{} ", w.i18n().tr("header-between", &Args::new()))}
+                {end_link(a)}
+                {move || format!(" {} ", w.i18n().tr("header-and", &Args::new()))}
+                {end_link(b)}
+            </span>
+        }
+        .into_any(),
         _ => ().into_any(),
     });
     view! {
         <h1 id="street-name">{move || w.view().name.clone()}</h1>
         <p class="street-sub" id="street-sub">
-            {linked.then(|| view! { {back_link()} " " <span aria-hidden="true">"\u{b7}"</span> " " })}
-            <span>"Street cross-section"</span>
+            {linked.then(|| view! { {back_link(w)} " " <span aria-hidden="true">"\u{b7}"</span> " " })}
+            <span>{say(w, "header-section")}</span>
             " "
             <span aria-hidden="true">"\u{b7}"</span>
             " "
-            <span><b id="row-dim" class="fig">{move || w.units().length_fine(w.view().row_mm)}</b>" wide"</span>
+            <span><b id="row-dim" class="fig">{move || w.units().length_fine(w.view().row_mm)}</b>{move || format!(" {}", w.i18n().tr("header-wide", &Args::new()))}</span>
             {between}
         </p>
     }
@@ -144,16 +211,19 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
 pub fn TitleBlock(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     view! {
-        <div class="tb-cell tb-wide"><span>"Street"</span><b id="tb-street">{move || w.view().name.clone()}</b></div>
-        <div class="tb-cell"><span>"Width"</span><b id="tb-row" class="fig">{move || w.units().length_fine(w.view().row_mm)}</b></div>
-        <div class="tb-cell"><span>"Changes made"</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
+        <div class="tb-cell tb-wide"><span>{say(w, "block-street")}</span><b id="tb-street">{move || w.view().name.clone()}</b></div>
+        <div class="tb-cell"><span>{say(w, "block-width")}</span><b id="tb-row" class="fig">{move || w.units().length_fine(w.view().row_mm)}</b></div>
+        <div class="tb-cell"><span>{say(w, "block-changes")}</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
         {move || {
             let source = w.view().source.clone();
             (!source.is_empty())
                 .then(|| {
                     view! {
-                        <div class="tb-cell tb-full"><span>"OpenStreetMap"</span><b class="tb-src"><Sources kind="way" refs=source/></b></div>
-                        <div class="tb-cell tb-full"><span>"Data"</span><b id="tb-state">{move || if w.view().changed { "Edited" } else { "As imported" }}</b></div>
+                        <div class="tb-cell tb-full"><span>{say(w, "block-osm")}</span><b class="tb-src"><Sources kind="way" refs=source/></b></div>
+                        <div class="tb-cell tb-full">
+                            <span>{say(w, "block-data")}</span>
+                            <b id="tb-state">{move || w.i18n().tr(if w.view().changed { "block-edited" } else { "block-imported" }, &Args::new())}</b>
+                        </div>
                     }
                 })
         }}
@@ -185,19 +255,19 @@ pub fn Fit(vm: Rc<StreetVm>) -> impl IntoView {
 pub fn History(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     view! {
-        <div class="btns" role="toolbar" aria-label="Sheet tools">
+        <div class="btns" role="toolbar" aria-label=say(w, "history-tools")>
             <button type="button" id="undo" class="btn" disabled=move || !w.view().can_undo on:click=move |_| { w.undo(); }>
                 <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M5.5 3 2.5 6l3 3M2.5 6H10a3.5 3.5 0 0 1 0 7H6"/></svg>
-                <span class="lbl">"Undo"</span>
+                <span class="lbl">{say(w, "history-undo")}</span>
             </button>
             <button type="button" id="redo" class="btn" disabled=move || !w.view().can_redo on:click=move |_| { w.redo(); }>
                 <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M10.5 3l3 3-3 3M13.5 6H6a3.5 3.5 0 0 0 0 7h4"/></svg>
-                <span class="lbl">"Redo"</span>
+                <span class="lbl">{say(w, "history-redo")}</span>
             </button>
         </div>
-        <button type="button" id="reset" class="btn" title="Back to the street as it is today. Undo brings your changes back." disabled=move || !w.view().changed on:click=move |_| { w.reset(); }>
+        <button type="button" id="reset" class="btn" title=say(w, "history-reset-title") disabled=move || !w.view().changed on:click=move |_| { w.reset(); }>
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>
-            <span class="lbl">"Start over"</span>
+            <span class="lbl">{say(w, "history-reset")}</span>
         </button>
     }
 }
@@ -315,7 +385,7 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
     let groups = ADD_GROUPS
         .iter()
         .enumerate()
-        .map(|(g, (name, ids))| {
+        .map(|(g, (group, ids))| {
             let rows = group_kinds(ids)
                 .into_iter()
                 .map(|k| {
@@ -332,7 +402,7 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
                                 }
                             >
                                 <span class="add-icon" inner_html=icon(kind.id)></span>
-                                <b>{kind.name}</b>
+                                <b>{move || w.i18n().tr(&kind_key(kind.id), &Args::new())}</b>
                                 <span class="dw">{move || w.units().length_fine(kind.default_mm)}</span>
                             </button>
                         </li>
@@ -341,7 +411,7 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
                 .collect_view();
             view! {
                 <li role="presentation" class="add-group">
-                    <p class="add-group-h" id=format!("add-g-{g}")>{*name}</p>
+                    <p class="add-group-h" id=format!("add-g-{g}")>{move || w.i18n().tr(&group_key(group), &Args::new())}</p>
                     <ul class="add-sub" role="group" aria-labelledby=format!("add-g-{g}")>{rows}</ul>
                 </li>
             }
@@ -365,11 +435,11 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
             }
         >
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3 8h10M8 3v10"/></svg>
-            "Add a piece"
+            {say(w, "add-button")}
         </button>
         <div id="add-menu" class="menu add-menu" hidden=move || !open.get() node_ref=menu on:keydown=menu_keys on:focusout=focus_out>
-            <p class="menu-h">"Add a piece"</p>
-            <p class="hint">"Goes after the selected piece."</p>
+            <p class="menu-h">{say(w, "add-button")}</p>
+            <p class="hint">{say(w, "add-hint")}</p>
             <ul id="palette" class="add-list">{groups}</ul>
         </div>
     }
@@ -384,11 +454,11 @@ pub fn Clock(vm: Rc<StreetVm>) -> impl IntoView {
     let timed = move || w.view().segments.iter().any(|s| !s.variants.is_empty());
     let selected = move || {
         let v = w.view();
-        v.selected.and_then(|u| v.segments.iter().find(|s| s.uid == u).map(|s| (clock_bands(s), clock_note(s))))
+        v.selected.and_then(|u| v.segments.iter().find(|s| s.uid == u).map(|s| (clock_bands(s), clock_note(s, &w.i18n()))))
     };
     view! {
         <div class="clock" id="clock" hidden=move || !timed()>
-            <label for="time" class="clock-l">"Time of day"</label>
+            <label for="time" class="clock-l">{say(w, "clock-time-of-day")}</label>
             <input
                 type="range"
                 id="time"
@@ -428,7 +498,7 @@ pub fn TimeNote(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     move || {
         let v = w.view();
-        v.segments.iter().any(|s| !s.variants.is_empty()).then(|| format!("Numbers are for {}.", hhmm(v.time_min)))
+        v.segments.iter().any(|s| !s.variants.is_empty()).then(|| w.i18n().tr("clock-numbers-for", &Args::new().str("time", hhmm(v.time_min))))
     }
 }
 
@@ -482,7 +552,7 @@ pub fn Welcome(vm: Rc<StreetVm>) -> impl IntoView {
     }
     view! {
         <div class="welcome" id="welcome">
-            <p>"Add a piece, then drag to arrange. The width is fixed; a piece that does not fit turns orange."</p>
+            <p>{say(w, "welcome-text")}</p>
             <button
                 type="button"
                 id="welcome-dismiss"
@@ -494,7 +564,7 @@ pub fn Welcome(vm: Rc<StreetVm>) -> impl IntoView {
                     }
                 }
             >
-                "Got it"
+                {say(w, "welcome-dismiss")}
             </button>
         </div>
     }
@@ -538,11 +608,11 @@ mod tests {
             let (_, ids) = ADD_GROUPS.iter().find(|(name, _)| *name == group).unwrap();
             group_kinds(ids).into_iter().map(|k| KINDS[k].id).collect()
         };
-        assert_eq!(ids("Walking"), ["sidewalk"]);
-        assert_eq!(ids("Greenery"), ["planting", "median"]);
-        assert_eq!(ids("Transit"), ["bus", "busshelter", "busstation"]);
-        assert_eq!(ids("Furniture"), ["bench", "terrace"]);
-        assert_eq!(ids("Utilities"), ["pole", "streetlamp"]);
+        assert_eq!(ids("walking"), ["sidewalk"]);
+        assert_eq!(ids("greenery"), ["planting", "median"]);
+        assert_eq!(ids("transit"), ["bus", "busshelter", "busstation"]);
+        assert_eq!(ids("furniture"), ["bench", "terrace"]);
+        assert_eq!(ids("utilities"), ["pole", "streetlamp"]);
         assert_eq!(group_kinds(&["travel", "nonsense"]).len(), 1);
     }
 
@@ -599,13 +669,14 @@ mod tests {
         let mut s = timed();
         s.variants[0].from_min = 420;
         s.variants[0].to_min = 600;
-        let note = clock_note(&s);
+        let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
+        let note = clock_note(&s, &i18n);
         assert!(note.starts_with(KINDS[s.base_kind].name) && note.contains(" except "), "{note}");
         assert!(note.contains("07:00\u{2013}10:00"), "{note}");
         s.variants[0].days = Some("Mo-Fr".into());
-        assert!(clock_note(&s).contains("Mo-Fr 07:00\u{2013}10:00"), "{}", clock_note(&s));
+        assert!(clock_note(&s, &i18n).contains("Mo-Fr 07:00\u{2013}10:00"), "{}", clock_note(&s, &i18n));
         s.variants.clear();
-        assert_eq!(clock_note(&s), "");
+        assert_eq!(clock_note(&s, &i18n), "");
     }
 
     #[test]
