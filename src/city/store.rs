@@ -212,7 +212,7 @@ mod tests {
     fn tiny_network() -> Network {
         use osm_network::{Control, Lane, LaneKind, Node, Road, Way};
         let node = |id, x_m, junction| Node { id, osm_nodes: vec![id as i64], x_m, y_m: 0.0, junction, control: Control::None };
-        let lane = |kind, way| Lane { kind, way, width_m: 3.0 };
+        let lane = |kind, way| Lane { kind, way, width_m: 3.0, hours: None };
         Network {
             left_hand: false,
             nodes: vec![node(1, 0.0, false), node(2, 100.0, false)],

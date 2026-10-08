@@ -131,7 +131,7 @@ pub fn merge_dual_carriageways(net: &mut Network) {
         // where the halves are furthest apart, which is their spacing; at the ends they meet
         let d = a.points.iter().map(|&p| dist(p, nearest(&b.points, p))).fold(0.0, f64::max);
         let median = (d - width(&a) / 2.0 - width(&b) / 2.0).max(MIN_MEDIAN_M);
-        let gap = Lane { kind: LaneKind::Other, way: Way::Forward, width_m: median };
+        let gap = Lane { kind: LaneKind::Other, way: Way::Forward, width_m: median, hours: None };
         let b_on_left = side_of(&a.points, &b.points) > 0.0;
         let lanes: Vec<Lane> = if b_on_left {
             b_here.lanes.iter().cloned().chain([gap]).chain(a.lanes.iter().cloned()).collect()
@@ -212,7 +212,7 @@ mod tests {
     }
 
     fn lane(kind: LaneKind, way: Way, width_m: f64) -> Lane {
-        Lane { kind, way, width_m }
+        Lane { kind, way, width_m, hours: None }
     }
 
     /// A one-way carriageway of two lanes, with a sidewalk on its right: lanes left to right as seen along the road.

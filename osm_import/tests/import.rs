@@ -76,3 +76,18 @@ fn a_street_with_no_sidewalk_tags_gets_a_sidewalk_on_each_side() {
     let sidewalks = |way| side.lanes.iter().filter(|l| l.kind == LaneKind::Sidewalk && l.way == way).count();
     assert_eq!((sidewalks(Way::Forward), sidewalks(Way::Backward)), (1, 1), "{:?}", side.lanes);
 }
+
+const RENE_LEVESQUE: &[u8] = include_bytes!("rene_levesque.osm");
+
+#[test]
+fn a_bus_lane_tagged_with_hours_keeps_them() {
+    use osm_import::LaneKind;
+    let net = import(RENE_LEVESQUE).expect("the boulevard reads");
+    assert!(!net.roads.is_empty());
+    for road in &net.roads {
+        let bus: Vec<_> = road.lanes.iter().filter(|l| l.kind == LaneKind::Bus).collect();
+        assert_eq!(bus.len(), 1, "{:?}", road.lanes);
+        assert_eq!(bus[0].hours.as_deref(), Some("Mo-Fr 06:00-10:00,14:30-19:00"), "{:?}", road.osm_ways);
+        assert!(road.lanes.iter().filter(|l| l.kind != LaneKind::Bus).all(|l| l.hours.is_none()));
+    }
+}

@@ -1002,7 +1002,7 @@ mod tests {
         let (ports, _, storage) = test_ports();
         let area = Area::new("Bendville", 45.5, -73.6);
         let node = |id, x_m, y_m| Node { id, osm_nodes: vec![id as i64], x_m, y_m, junction: false, control: Control::None };
-        let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0 };
+        let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, hours: None };
         let network = Network {
             left_hand: false,
             nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],

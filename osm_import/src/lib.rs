@@ -6,9 +6,10 @@
 //! depends on that shape and not on osm2streets. It is built as a separate
 //! WebAssembly module, loaded when a place is opened.
 
-use abstutil::Timer;
+use abstutil::{Tags, Timer};
 pub use osm_network::*;
 use osm2streets::{Direction, DrivingSide, IntersectionControl, IntersectionKind, LaneType, MapConfig, StreetNetwork, Transformation};
+use streets_reader::osm_reader::Document;
 use wasm_bindgen::prelude::*;
 
 /// Reads OSM XML (or PBF) into a network.
@@ -25,14 +26,14 @@ pub fn import_in(osm: &[u8], bounds: Option<[f64; 4]>) -> Result<Network, String
     });
     // Most streets carry no sidewalk tags: without inference they would have none.
     let config = MapConfig { inferred_sidewalks: true, ..MapConfig::default() };
-    let (mut streets, _doc) = streets_reader::osm_to_street_network(osm, clip, config, &mut timer).map_err(|e| e.to_string())?;
+    let (mut streets, doc) = streets_reader::osm_to_street_network(osm, clip, config, &mut timer).map_err(|e| e.to_string())?;
     streets.apply_transformations(Transformation::standard_for_clipped_areas(), &mut timer);
-    let mut network = convert(&streets);
+    let mut network = convert(&streets, &doc);
     osm_network::merge::merge_dual_carriageways(&mut network);
     Ok(network)
 }
 
-fn convert(streets: &StreetNetwork) -> Network {
+fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
     let bounds = streets.gps_bounds.to_bounds();
     let height = bounds.max_y;
     let mut net = Network { left_hand: streets.config.driving_side == DrivingSide::Left, ..Network::default() };
@@ -52,6 +53,8 @@ fn convert(streets: &StreetNetwork) -> Network {
         });
     }
     for (id, r) in &streets.roads {
+        // osm2streets leaves a way's conditional tags behind, so they are read from the way itself
+        let hours = r.osm_ids.iter().find_map(|w| doc.ways.get(w).and_then(|w| bus_hours(&w.tags)));
         net.roads.push(Road {
             id: id.0 as u32,
             osm_ways: r.osm_ids.iter().map(|w| w.0).collect(),
@@ -66,6 +69,7 @@ fn convert(streets: &StreetNetwork) -> Network {
                     kind: lane_kind(l.lt),
                     way: if l.dir == Direction::Forward { Way::Forward } else { Way::Backward },
                     width_m: l.width.inner_meters(),
+                    hours: if l.lt == LaneType::Bus { hours.clone() } else { None },
                 })
                 .collect(),
             points: r.center_line.points().iter().map(|p| (p.x(), height - p.y())).collect(),
@@ -87,6 +91,16 @@ fn lane_kind(lt: LaneType) -> LaneKind {
     }
 }
 
+/// The hours a way's bus lane is one, from `lanes:bus:conditional` or `lanes:psv:conditional`
+/// (`1 @ (Mo-Fr 06:00-10:00,14:30-19:00)`): what follows the `@`, without its parentheses.
+fn bus_hours(tags: &Tags) -> Option<String> {
+    let value = ["lanes:bus:conditional", "lanes:psv:conditional"].iter().find_map(|k| tags.get(*k))?;
+    let (_, hours) = value.split_once('@')?;
+    let hours = hours.trim();
+    let hours = hours.strip_prefix('(').and_then(|h| h.strip_suffix(')')).unwrap_or(hours).trim();
+    (!hours.is_empty()).then(|| hours.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -96,6 +110,23 @@ mod tests {
         assert_eq!(lane_kind(LaneType::Shoulder), LaneKind::Buffer);
         assert_eq!(lane_kind(LaneType::Sidewalk), LaneKind::Sidewalk);
         assert_eq!(lane_kind(LaneType::Footway), LaneKind::Sidewalk);
+    }
+
+    fn hours(key: &str, value: &str) -> Option<String> {
+        bus_hours(&Tags::new([(key.to_string(), value.to_string())].into()))
+    }
+
+    #[test]
+    fn bus_hours_are_what_follows_the_at_sign_with_or_without_parentheses() {
+        assert_eq!(hours("lanes:psv:conditional", "1 @ (Mo-Fr 06:00-10:00,14:30-19:00)").as_deref(), Some("Mo-Fr 06:00-10:00,14:30-19:00"));
+        assert_eq!(hours("lanes:bus:conditional", "1 @ Mo-Fr 07:00-09:00").as_deref(), Some("Mo-Fr 07:00-09:00"));
+    }
+
+    #[test]
+    fn a_conditional_without_hours_or_for_something_else_gives_none() {
+        assert_eq!(hours("lanes:psv:conditional", "1"), None);
+        assert_eq!(hours("lanes:psv:conditional", "1 @ ()"), None);
+        assert_eq!(hours("parking:lane:conditional", "no_parking @ (Mo-Fr 07:00-09:00)"), None);
     }
 }
 

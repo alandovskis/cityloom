@@ -163,7 +163,7 @@ mod tests {
     use crate::junction::model::SIGNAL;
 
     fn lane(kind: LaneKind, way: Way, width_m: f64) -> Lane {
-        Lane { kind, way, width_m }
+        Lane { kind, way, width_m, hours: None }
     }
 
     /// Two streets crossing at a signalled junction, with a dead end on each arm.

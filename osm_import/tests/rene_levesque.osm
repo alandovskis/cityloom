@@ -1,0 +1,61 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<osm version="0.6" generator="osmium/1.19.1">
+  <bounds minlat="44.958969" minlon="-79.840396" maxlat="62.626196" maxlon="-57.089082"/>
+  <node id="29794287" version="7" timestamp="2021-08-26T01:07:24Z" lat="45.5100744" lon="-73.5603768"/>
+  <node id="29796354" version="5" timestamp="2021-08-27T02:10:48Z" lat="45.5077404" lon="-73.5626294"/>
+  <node id="29796359" version="6" timestamp="2023-05-31T15:51:17Z" lat="45.5061808" lon="-73.5640661"/>
+  <node id="3391132741" version="4" timestamp="2022-07-25T20:43:43Z" lat="45.5069844" lon="-73.5633118"/>
+  <node id="3398341084" version="11" timestamp="2025-10-28T03:35:53Z" lat="45.5076665" lon="-73.5626925"/>
+  <node id="9036557070" version="2" timestamp="2021-08-27T19:30:27Z" lat="45.5101913" lon="-73.5602916"/>
+  <node id="9041670850" version="1" timestamp="2021-08-27T19:30:27Z" lat="45.5104016" lon="-73.5601375"/>
+  <node id="9910411635" version="1" timestamp="2022-07-25T20:43:43Z" lat="45.5069197" lon="-73.5633747"/>
+  <node id="11060288748" version="4" timestamp="2024-08-22T00:14:03Z" lat="45.5062429" lon="-73.5640123"/>
+  <node id="11678504157" version="1" timestamp="2024-02-29T20:06:26Z" lat="45.5062786" lon="-73.5639788"/>
+  <way id="4687530" version="49" timestamp="2025-08-31T11:16:51Z">
+    <nd ref="29796354"/>
+    <nd ref="3398341084"/>
+    <nd ref="3391132741"/>
+    <nd ref="9910411635"/>
+    <nd ref="11678504157"/>
+    <nd ref="11060288748"/>
+    <nd ref="29796359"/>
+    <tag k="busway:right" v="lane"/>
+    <tag k="cycleway:both" v="no"/>
+    <tag k="dual_carriageway" v="yes"/>
+    <tag k="highway" v="secondary"/>
+    <tag k="lanes" v="3"/>
+    <tag k="lanes:psv" v="1"/>
+    <tag k="lanes:psv:conditional" v="1 @ (Mo-Fr 06:00-10:00,14:30-19:00)"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="50"/>
+    <tag k="name" v="Boulevard René-Lévesque Ouest"/>
+    <tag k="old_name" v="Boulevard Dorchester"/>
+    <tag k="oneway" v="yes"/>
+    <tag k="psv:lanes" v="yes|yes|yes|designated"/>
+    <tag k="sidewalk:left" v="no"/>
+    <tag k="sidewalk:right" v="separate"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+  <way id="15915825" version="26" timestamp="2025-08-31T11:16:51Z">
+    <nd ref="29794287"/>
+    <nd ref="9036557070"/>
+    <nd ref="9041670850"/>
+    <tag k="busway:right" v="lane"/>
+    <tag k="cycleway:both" v="no"/>
+    <tag k="dual_carriageway" v="yes"/>
+    <tag k="foot" v="use_sidepath"/>
+    <tag k="highway" v="secondary"/>
+    <tag k="lanes" v="3"/>
+    <tag k="lanes:psv" v="1"/>
+    <tag k="lanes:psv:conditional" v="1 @ (Mo-Fr 06:00-10:00,14:30-19:00)"/>
+    <tag k="lit" v="yes"/>
+    <tag k="maxspeed" v="50"/>
+    <tag k="name" v="Boulevard René-Lévesque Est"/>
+    <tag k="old_name" v="Boulevard Dorchester"/>
+    <tag k="oneway" v="yes"/>
+    <tag k="psv:lanes" v="yes|yes|yes|designated"/>
+    <tag k="sidewalk:left" v="no"/>
+    <tag k="sidewalk:right" v="separate"/>
+    <tag k="surface" v="asphalt"/>
+  </way>
+</osm>

@@ -38,6 +38,10 @@ pub struct Lane {
     pub kind: LaneKind,
     pub way: Way,
     pub width_m: f64,
+    /// When the lane is a bus lane, if only at certain hours: OSM's opening-hours text, as tagged
+    /// (`Mo-Fr 06:00-10:00,14:30-19:00`). Without it a bus lane is one all day.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hours: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
