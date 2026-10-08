@@ -74,7 +74,7 @@ pub struct I18n {
 
 fn bundle(lang: unic_langid::LanguageIdentifier, texts: impl Iterator<Item = &'static str>) -> Bundle {
     let mut b = FluentBundle::new(vec![lang]);
-    // The texts are compiled in and checked by a test, so a parse failure is a bug in the build.
+    // The texts are compiled in and each slice's parity test (`parity_problems`) reports one that does not parse, so a parse failure here is a bug in the build.
     b.set_use_isolating(false);
     for text in texts {
         let res = FluentResource::try_new(text.to_string()).expect("a .ftl file does not parse");
@@ -170,6 +170,89 @@ mod tests {
         fr: "hello = Bonjour, { $name }.\nchecks = { $n ->\n    [one] { $n } vérification\n   *[other] { $n } vérifications\n}\nland = Langue : français\n",
     };
 
+    use fluent_syntax::ast::{Entry, Expression, InlineExpression, Pattern, PatternElement};
+    use fluent_syntax::parser::parse;
+    use std::collections::BTreeMap;
+
+    fn variables_in_inline(e: &InlineExpression<&str>, out: &mut BTreeSet<String>) {
+        match e {
+            InlineExpression::VariableReference { id } => {
+                out.insert(id.name.to_string());
+            }
+            InlineExpression::Placeable { expression } => variables_in_expression(expression, out),
+            InlineExpression::FunctionReference { arguments, .. } | InlineExpression::TermReference { arguments: Some(arguments), .. } => {
+                for p in &arguments.positional {
+                    variables_in_inline(p, out);
+                }
+                for n in &arguments.named {
+                    variables_in_inline(&n.value, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn variables_in_expression(e: &Expression<&str>, out: &mut BTreeSet<String>) {
+        match e {
+            Expression::Inline(i) => variables_in_inline(i, out),
+            Expression::Select { selector, variants } => {
+                variables_in_inline(selector, out);
+                for v in variants {
+                    variables_in_pattern(&v.value, out);
+                }
+            }
+        }
+    }
+
+    fn variables_in_pattern(p: &Pattern<&str>, out: &mut BTreeSet<String>) {
+        for el in &p.elements {
+            if let PatternElement::Placeable { expression } = el {
+                variables_in_expression(expression, out);
+            }
+        }
+    }
+
+    fn messages(text: &str, lang: &str, problems: &mut Vec<String>) -> BTreeMap<String, BTreeSet<String>> {
+        let resource = match parse(text) {
+            Ok(r) => r,
+            Err((r, errors)) => {
+                problems.push(format!("{lang} does not parse: {errors:?}"));
+                r
+            }
+        };
+        let mut map = BTreeMap::new();
+        for entry in &resource.body {
+            if let Entry::Message(m) = entry {
+                let mut vars = BTreeSet::new();
+                if let Some(p) = &m.value {
+                    variables_in_pattern(p, &mut vars);
+                }
+                map.insert(m.id.name.to_string(), vars);
+            }
+        }
+        map
+    }
+
+    /// What differs between the two languages of one slice: ids in one only, variables that differ,
+    /// and a file that does not parse.
+    pub(crate) fn parity_problems(en: &str, fr: &str) -> Vec<String> {
+        let mut problems = Vec::new();
+        let (e, f) = (messages(en, "en", &mut problems), messages(fr, "fr", &mut problems));
+        for id in e.keys().filter(|k| !f.contains_key(*k)) {
+            problems.push(format!("{id}: missing in fr"));
+        }
+        for id in f.keys().filter(|k| !e.contains_key(*k)) {
+            problems.push(format!("{id}: missing in en"));
+        }
+        for (id, ev) in &e {
+            if let Some(fv) = f.get(id).filter(|fv| *fv != ev) {
+                let join = |s: &BTreeSet<String>| s.iter().cloned().collect::<Vec<_>>().join(", ");
+                problems.push(format!("{id}: variables differ (en: {}; fr: {})", join(ev), join(fv)));
+            }
+        }
+        problems
+    }
+
     #[test]
     fn locale_parses_any_french_as_fr_ca_and_anything_else_as_english() {
         assert_eq!(Locale::parse("fr-CA"), Locale::FrCa);
@@ -253,5 +336,21 @@ mod tests {
         i.set(Locale::FrCa);
         s.borrow_mut().push(memo.get());
         assert_eq!(*seen.borrow(), vec![Locale::En, Locale::FrCa]);
+    }
+
+    #[test]
+    fn parity_reports_a_message_in_one_language_only_and_a_variable_that_differs() {
+        let en = "a = One\nb = Hi { $name }\nc = { $n ->\n    [one] x\n   *[other] { $n } y\n}\n";
+        let fr = "a = Un\nb = Salut { $nom }\nd = Extra\n";
+        let p = parity_problems(en, fr);
+        assert!(p.contains(&"c: missing in fr".to_string()), "{p:?}");
+        assert!(p.contains(&"d: missing in en".to_string()), "{p:?}");
+        assert!(p.contains(&"b: variables differ (en: name; fr: nom)".to_string()), "{p:?}");
+        assert!(parity_problems("a = x\n", "a = y\n").is_empty());
+    }
+
+    #[test]
+    fn parity_reports_a_file_that_does_not_parse() {
+        assert!(parity_problems("a = { \n", "a = x\n")[0].starts_with("en does not parse"));
     }
 }
