@@ -1,0 +1,22 @@
+# Ce que dit la coquille : le menu des réglages, les panneaux, le thème et la région.
+lang-announced = Langue : français.
+theme-light = clair
+theme-dark = sombre
+theme-announced = Thème { $theme }.
+notes-shown = Notes affichées.
+notes-hidden = Notes masquées.
+details-shown = { $what } affichés.
+details-hidden = { $what } masqués.
+details-piece = détails des pièces
+details-details = détails
+details-places = lieux
+region-announced = { $region } : la circulation se fait à { $side }.
+region-label = { $region } ({ $side })
+drive-left = gauche
+drive-right = droite
+region-canada = Canada
+region-united-states = États-Unis
+region-germany = Allemagne
+region-united-kingdom = Royaume-Uni
+region-australia = Australie
+region-japan = Japon

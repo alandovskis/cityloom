@@ -1,0 +1,22 @@
+# What the shell says: the settings menu, the sidebars, the theme and the region.
+lang-announced = Language: English.
+theme-light = Light
+theme-dark = Dark
+theme-announced = { $theme } theme.
+notes-shown = Notes shown.
+notes-hidden = Notes hidden.
+details-shown = { $what } shown.
+details-hidden = { $what } hidden.
+details-piece = piece details
+details-details = details
+details-places = places
+region-announced = { $region }: traffic keeps { $side }.
+region-label = { $region } ({ $side })
+drive-left = left
+drive-right = right
+region-canada = Canada
+region-united-states = United States
+region-germany = Germany
+region-united-kingdom = United Kingdom
+region-australia = Australia
+region-japan = Japan

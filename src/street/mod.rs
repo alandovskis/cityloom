@@ -29,14 +29,14 @@ use crate::shared::platform::browser_ports;
 /// module mounts; the script only starts it up and hands it what the shell
 /// chooses (units, region).
 #[wasm_bindgen]
-pub struct Sheet(Rc<vm::StreetVm>);
+pub struct Sheet(Rc<vm::StreetVm>, Rc<crate::shared::i18n::I18n>);
 
 #[wasm_bindgen]
 impl Sheet {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.clone(), "piece details", true);
+        crate::shell::mount(self.1.clone(), self.0.clone(), "details-piece", true);
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -99,5 +99,7 @@ pub fn open_street(edge: u32) -> Option<Sheet> {
     let store = CityStore::current(ports.storage.clone());
     let street = store.open().street_editor(edge, store.region())?;
     let place = Place::Street(edge);
-    Some(Sheet(vm::StreetVm::new(ports, street, Some(CityBinding { store, place }))))
+    // The street's own words come with its view-model (a later step); until then the shell's are in this one.
+    let i18n = crate::i18n_browser(&ports);
+    Some(Sheet(vm::StreetVm::new(ports, street, Some(CityBinding { store, place })), i18n))
 }

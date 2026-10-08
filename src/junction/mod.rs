@@ -32,14 +32,14 @@ use crate::shared::platform::browser_ports;
 /// module mounts; the script only starts it up and hands it what the shell
 /// chooses (units, region).
 #[wasm_bindgen]
-pub struct Plan(Rc<vm::JunctionVm>);
+pub struct Plan(Rc<vm::JunctionVm>, Rc<crate::shared::i18n::I18n>);
 
 #[wasm_bindgen]
 impl Plan {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.clone(), "details", true);
+        crate::shell::mount(self.1.clone(), self.0.clone(), "details-details", true);
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -96,5 +96,6 @@ pub fn open_junction(node: u32) -> Option<Plan> {
     let store = CityStore::current(ports.storage.clone());
     let junction = store.open().junction_editor(node, store.region())?;
     let place = Place::Junction(node);
-    Some(Plan(vm::JunctionVm::new(ports, junction, Some(CityBinding { store, place }))))
+    let i18n = crate::i18n_browser(&ports);
+    Some(Plan(vm::JunctionVm::new(ports, junction, Some(CityBinding { store, place })), i18n))
 }

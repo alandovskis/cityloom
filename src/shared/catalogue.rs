@@ -116,18 +116,18 @@ impl StreetClass {
 /// of the road traffic keeps to. Synthetic placeholder list.
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct Region {
+    /// Its name is the message `region-<id>` (`shell/i18n`).
     pub id: &'static str,
-    pub name: &'static str,
     pub drive_side: Side,
 }
 
 pub const REGIONS: [Region; 6] = [
-    Region { id: "canada", name: "Canada", drive_side: Side::Right },
-    Region { id: "united-states", name: "United States", drive_side: Side::Right },
-    Region { id: "germany", name: "Germany", drive_side: Side::Right },
-    Region { id: "united-kingdom", name: "United Kingdom", drive_side: Side::Left },
-    Region { id: "australia", name: "Australia", drive_side: Side::Left },
-    Region { id: "japan", name: "Japan", drive_side: Side::Left },
+    Region { id: "canada", drive_side: Side::Right },
+    Region { id: "united-states", drive_side: Side::Right },
+    Region { id: "germany", drive_side: Side::Right },
+    Region { id: "united-kingdom", drive_side: Side::Left },
+    Region { id: "australia", drive_side: Side::Left },
+    Region { id: "japan", drive_side: Side::Left },
 ];
 
 pub const CURBS: [Material; 7] = [

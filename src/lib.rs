@@ -54,7 +54,7 @@ pub fn say(text: &str) {
 }
 
 /// Every slice's messages, in one place: a slice's `.ftl` files are registered here.
-const RESOURCES: &[shared::i18n::Resources] = &[];
+const RESOURCES: &[shared::i18n::Resources] = &[shell::RESOURCES];
 
 /// The words of the app in `locale`.
 pub fn i18n_for(locale: shared::i18n::Locale) -> std::rc::Rc<shared::i18n::I18n> {
@@ -66,4 +66,21 @@ pub fn i18n_browser(ports: &shared::ports::Ports) -> std::rc::Rc<shared::i18n::I
     let locale = shared::i18n::detect(ports);
     ports.page.set_lang(locale.tag());
     i18n_for(locale)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shared::i18n::Locale;
+    use shared::ports::test_ports_with_page;
+
+    #[test]
+    fn the_page_is_told_the_language_it_starts_in() {
+        let (ports, page, _) = test_ports_with_page();
+        assert_eq!(i18n_browser(&ports).locale_now(), Locale::En);
+        assert_eq!(*page.lang.borrow(), "en");
+        *page.language.borrow_mut() = Some("fr".into());
+        assert_eq!(i18n_browser(&ports).locale_now(), Locale::FrCa);
+        assert_eq!(*page.lang.borrow(), "fr-CA");
+    }
 }

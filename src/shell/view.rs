@@ -8,6 +8,7 @@ use leptos::prelude::*;
 use leptos::web_sys::{Element, Event, EventTarget, HtmlElement, HtmlSelectElement, KeyboardEvent, MediaQueryList, MouseEvent};
 use wasm_bindgen::prelude::*;
 
+use crate::shared::i18n::I18n;
 use crate::shared::units::Units;
 use crate::shell::vm::{ShellVm, Target, Theme};
 
@@ -32,14 +33,15 @@ fn typing(target: Option<EventTarget>) -> bool {
 }
 
 /// Binds the page's shell markup to a view-model made for `target`. `details_word`
-/// names what the left sidebar holds on this page.
-pub fn mount(target: Rc<dyn Target>, details_word: &'static str, notes_give_way: bool) {
+/// is the message that names what the left sidebar holds on this page.
+pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str, notes_give_way: bool) {
     let tabs = all(".notes .tab").iter().map(|t| t.id()).collect();
     let dark = leptos::prelude::window().match_media("(prefers-color-scheme: dark)").ok().flatten();
     // An editor has too little room for its notes beside the drawing below this width.
     let roomy = leptos::prelude::window().match_media("(min-width: 1360px)").ok().flatten().is_none_or(|m| m.matches());
     let vm = ShellVm::new_with(
         crate::shared::platform::browser_ports(),
+        i18n,
         target,
         details_word,
         tabs,
