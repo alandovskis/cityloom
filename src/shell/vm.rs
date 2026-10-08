@@ -464,7 +464,7 @@ mod tests {
         r.vm.choose_region("united-kingdom");
         assert_eq!(
             r.said.take(),
-            vec!["Notes masquées.", "Détails des pièces masqués.", "Thème sombre.", "Royaume-Uni\u{a0}: la circulation se fait à gauche."]
+            vec!["Notes masquées.", "Détails des éléments masqués.", "Thème sombre.", "Royaume-Uni\u{a0}: la circulation se fait à gauche."]
         );
     }
 
