@@ -23,6 +23,6 @@ pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr
 /// its settings menu and sidebars.
 #[wasm_bindgen]
 pub fn mount_bare_shell() {
-    let i18n = crate::i18n_browser(&crate::shared::platform::browser_ports());
+    let i18n = crate::unmigrated_i18n();
     mount(i18n, Rc::new(Bare::default()), "details-details", true);
 }

@@ -42,7 +42,7 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = crate::shared::ports::Ports { mapper: Rc::new(crate::shared::platform::BrowserMapper::new(basemap)), ..browser_ports() };
-    let i18n = crate::i18n_browser(&ports);
+    let i18n = crate::unmigrated_i18n();
     let vm = vm::MapVm::new(ports);
     vm.attach();
     let at =
@@ -74,7 +74,7 @@ pub fn mount_home() -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = browser_ports();
-    let i18n = crate::i18n_browser(&ports);
+    let i18n = crate::unmigrated_i18n();
     let vm = vm::MapVm::new(ports);
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };

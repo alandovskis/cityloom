@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, openStreet, test } from "./fixtures";
+import { expect, mapReady, openJunction, openStreet, test } from "./fixtures";
 
 // The title following the language is covered in street.spec.ts ("keeps its own title, named for the street,
 // when the language changes").
@@ -173,4 +173,15 @@ test("a French reader types a decimal comma", async ({ page }) => {
   const fit = page.locator("#fit");
   await expect(fit).toContainText(/de trop|inutilisé/);
   await expect(fit).not.toContainText("too wide");
+});
+
+// The pages that are not translated are English from top to bottom, so the document says so even for a
+// reader who chose French on the street page (a screen reader would read English words with French rules).
+test("a page that is not translated keeps lang=en for a reader who chose French", async ({ page }) => {
+  await storedFrench(page);
+  await page.goto("/map.html");
+  await mapReady(page);
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await openJunction(page);
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
 });

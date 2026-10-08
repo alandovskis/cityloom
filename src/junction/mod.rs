@@ -96,6 +96,6 @@ pub fn open_junction(node: u32) -> Option<Plan> {
     let store = CityStore::current(ports.storage.clone());
     let junction = store.open().junction_editor(node, store.region())?;
     let place = Place::Junction(node);
-    let i18n = crate::i18n_browser(&ports);
+    let i18n = crate::unmigrated_i18n();
     Some(Plan(vm::JunctionVm::new(ports, junction, Some(CityBinding { store, place })), i18n))
 }
