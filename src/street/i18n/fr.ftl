@@ -149,3 +149,43 @@ welcome-dismiss = Compris
 
 # Le dessin de la coupe (src/street/view.rs).
 view-section-label = Éditeur de coupe transversale de la rue
+
+# The Transit Priority Atlas measures, by lowercase code (src/shared/atlas.rs).
+atlas-a1-name = Rues de transport en commun
+atlas-a2-name = Voies de transport en commun
+atlas-a3-name = Rues de transport en commun et d’accès direct
+atlas-b1-name = Voies centrales réservées au transport en commun
+atlas-b2-name = Voies centrales réservées au transport en commun sur terre-plein d’autoroute
+atlas-b3-name = Voies centrales réservées au transport en commun à sens alterné fixe
+atlas-b4-name = Voies centrales réservées au transport en commun à sens alterné dynamique
+atlas-c1-name = Voies latérales bidirectionnelles réservées au transport en commun
+atlas-d1-name = Voies décalées réservées au transport en commun
+atlas-e1-name = Voies réservées au transport en commun en bordure de trottoir
+atlas-e2-name = Voies réversibles de stationnement et de transport en commun en bordure de trottoir
+atlas-e3-name = Voies réservées au transport en commun sur l’accotement d’autoroute
+atlas-f1-name = Voies réservées au transport en commun à contresens
+atlas-f2-name = Voies décalées réservées au transport en commun à contresens
+atlas-g1-name = Voies décalées de dépassement de file
+atlas-g2-name = Voies de dépassement de file en bordure de trottoir
+atlas-g3-name = Voie virtuelle de dépassement de file
+atlas-h1-name = Portes d’autobus à feux de signalisation
+atlas-h2-name = Portes d’autobus à cédez-le-passage
+atlas-l1-name = Virage à gauche indirect par un autre itinéraire
+atlas-l2-name = Virage à gauche indirect dans l’intersection
+atlas-l3-name = Entrée et sortie à droite seulement
+atlas-l4-name = Mise en cul-de-sac des rues transversales
+atlas-m1-name = Avancées de trottoir pour autobus
+atlas-m2-name = Quais sur rue protégés par des feux
+atlas-n1-name = Filtre modal pour le transport en commun
+atlas-tsp-name = Priorité aux feux pour le transport en commun
+atlas-tsp-note = L’Atlas la présente comme étant en développement, et CityLoom n’a pas de phasage de feux à prioriser.
+atlas-z1-name = Zones à circulation restreinte
+atlas-z1-note = Un secteur compte de nombreuses rues, et CityLoom modifie une seule rue ou une seule intersection.
+atlas-w-d-name = Tarification dynamique de la congestion
+atlas-w-d-note = L’Atlas la présente comme étant en développement, et un prix a besoin d’une ville et d’une demande pour agir.
+atlas-w-f-name = Tarification routière à tarif fixe
+atlas-w-f-note = L’Atlas la présente comme étant en développement, et un prix a besoin d’une ville et d’une demande pour agir.
+
+# Ce qui manque à une mesure reconnue (src/street/measures.rs).
+problem-narrow-lane = Une voie d’autobus mesure { $width }{ "\u00A0" }mm de large, alors qu’une voie de transport en commun en exige { $min }{ "\u00A0" }mm
+problem-no-platform = Les voies centrales ont besoin d’un terre-plein ou d’un quai à côté pour les arrêts

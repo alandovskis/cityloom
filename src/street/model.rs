@@ -823,7 +823,7 @@ impl Editor {
         let Some(arranged) = measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, self.class.is_freeway(), &mut next_uid) else {
             return false;
         };
-        let ok = self.edit(format!("{} {}", def.code, def.name), |segs| {
+        let ok = self.edit(format!("{} {}", def.code, measures::name(def.code)), |segs| {
             *segs = arranged;
             true
         });
@@ -1028,7 +1028,7 @@ impl Editor {
                     }
                     _ => "Will not fit",
                 });
-                MeasureView { code: d.code, name: d.name, present: f.present, problems: f.problems, can_apply, unavailable }
+                MeasureView { code: d.code, name: measures::name(d.code), present: f.present, problems: f.problems, can_apply, unavailable }
             })
             .collect()
     }
@@ -1212,7 +1212,7 @@ pub struct MeasureView {
     pub code: &'static str,
     pub name: &'static str,
     pub present: bool,
-    pub problems: Vec<String>,
+    pub problems: Vec<measures::Problem>,
     /// The street can be arranged as this measure.
     pub can_apply: bool,
     /// Why not, when it cannot be.
@@ -1364,7 +1364,7 @@ mod tests {
                     v.measures.iter().filter(|m| m.present).map(|m| m.code).collect::<Vec<_>>()
                 );
                 // A narrow street squeezes the bus lanes; that is the one thing it may be told off for.
-                assert!(found.problems.iter().all(|p| p.starts_with("A bus lane is")), "{}: {:?}", d.code, found.problems);
+                assert!(found.problems.iter().all(|p| matches!(p, measures::Problem::NarrowTransitLane { .. })), "{}: {:?}", d.code, found.problems);
                 assert!(v.revisions.last().unwrap().label.starts_with(d.code));
             }
         }

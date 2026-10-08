@@ -632,3 +632,31 @@ fn the_window_title_names_the_street_and_where_it_runs_in_each_language() {
     assert_eq!(page::page_title(&en, "Main St", &[]), "CityLoom street editor");
     assert_eq!(page::page_title(&fr, "Main St", &[]), "Éditeur de rues CityLoom");
 }
+
+// ---- the measures' words ----------------------------------------------------------------
+
+#[test]
+fn the_measures_are_named_and_explained_in_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let h = street_html(|| view! { <notes::Measures vm=s.clone()/> });
+    assert!(h.contains("Voies centrales réservées au transport en commun"), "{h}");
+    assert!(h.contains("Réorganiser la rue selon B1 Voies centrales réservées au transport en commun"));
+    assert!(h.contains("n’a pas de phasage de feux à prioriser"));
+    assert!(!h.contains("Center-Running Transit Lanes") && !h.contains("Transit Signal Priority") && !h.contains("CityLoom has no signal timing"));
+}
+
+#[test]
+fn a_measure_s_problems_are_said_in_each_language() {
+    let narrow = |locale| {
+        let s = street_shared_in(1, locale);
+        assert!(s.edit(|e| e.apply_measure("B1")));
+        let bus = s.view().segments.iter().find(|g| KINDS[g.kind].id == "bus").unwrap().uid;
+        s.edit(|e| e.set_width(bus, 3_000));
+        street_html(|| view! { <notes::Measures vm=s.clone()/> })
+    };
+    let h = narrow(Locale::En);
+    assert!(h.contains("A bus lane is 3000 mm wide, and a transit lane wants 3300 mm"), "{h}");
+    let h = narrow(Locale::FrCa);
+    assert!(h.contains("Une voie d’autobus mesure 3000\u{a0}mm de large, alors qu’une voie de transport en commun en exige 3300\u{a0}mm"), "{h}");
+    assert!(!h.contains("A bus lane is"));
+}

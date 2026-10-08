@@ -87,3 +87,15 @@ Chosen as the most standard Québec term, but the catalogue's meaning leaves roo
 | Changes made | Modifications apportées | |
 | As imported | Tel qu’importé | |
 | Street cross-section editor | Éditeur de coupe transversale de la rue | |
+
+## Transit priority measures
+
+| English | Français (fr-CA) | Note |
+| --- | --- | --- |
+| Transit Streets / Transit Ways | Rues / Voies de transport en commun | The 30 Atlas names are the `atlas-<code>-name` messages. |
+| Center-Running Transit Lanes | Voies centrales réservées au transport en commun | |
+| Edge-Running / Curb-Adjacent | latérales / en bordure de trottoir | |
+| Contraflow | à contresens | |
+| Queue-Jump Lane | Voie de dépassement de file | |
+| Bus Bulbs | Avancées de trottoir pour autobus | |
+| Transit Modal Filter | Filtre modal pour le transport en commun | |

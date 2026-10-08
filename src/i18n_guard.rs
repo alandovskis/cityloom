@@ -13,6 +13,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/street/notes.rs", include_str!("street/notes.rs")),
     ("src/street/page.rs", include_str!("street/page.rs")),
     ("src/street/view.rs", include_str!("street/view.rs")),
+    ("src/street/measures.rs", include_str!("street/measures.rs")),
 ];
 
 /// Attributes whose value is text a person reads (also as `attr:<name>`).
@@ -48,6 +49,8 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("(max-width: 1100px)", "a media query"),
     ("(prefers-reduced-motion: reduce)", "a media query"),
     ("input, select, textarea", "a CSS selector"),
+    ("recipes use catalogue kinds", "a panic message about the code, never shown"),
+    ("catalogue kind", "a panic message about the code, never shown"),
 ];
 
 fn is_path_data(s: &str) -> bool {

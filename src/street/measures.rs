@@ -5,41 +5,69 @@
 //! The definitions are CityLoom's own simplification of the Atlas's names,
 //! worded in the comments below. They are not the Atlas's guidance.
 
+use serde::Serialize;
+
+use crate::shared::atlas::MEASURES;
 use crate::shared::catalogue::{DirectionRule, KINDS, Side, kind_index};
+use crate::shared::i18n::{Args, I18n};
 use crate::street::model::{Segment, Variant};
 
-/// One measure: its Atlas code and name, and whether it is for a freeway.
+/// One measure: its Atlas code, and whether it is for a freeway. Its name is the Atlas's (`name`).
 pub struct Def {
     pub code: &'static str,
-    pub name: &'static str,
     /// `Some(true)` only on a freeway, `Some(false)` only off one.
     pub freeway: Option<bool>,
 }
 
 pub const DEFS: [Def; 14] = [
-    Def { code: "A1", name: "Transit Streets", freeway: Some(false) },
-    Def { code: "A2", name: "Transit Ways", freeway: Some(false) },
-    Def { code: "A3", name: "Transit and Direct Access Streets", freeway: Some(false) },
-    Def { code: "B1", name: "Center-Running Transit Lanes", freeway: Some(false) },
-    Def { code: "B2", name: "Center-Running Transit Lanes on Freeway Medians", freeway: Some(true) },
-    Def { code: "B3", name: "Static Alternate-Direction Center-Running Transit Lanes", freeway: Some(false) },
-    Def { code: "B4", name: "Dynamic Alternate-Direction Center-Running Transit Lanes", freeway: Some(false) },
-    Def { code: "C1", name: "Edge-Running Bidirectional Transit Lanes", freeway: Some(false) },
-    Def { code: "D1", name: "Offset Transit Lanes", freeway: Some(false) },
-    Def { code: "E1", name: "Curb-Adjacent Transit Lanes", freeway: Some(false) },
-    Def { code: "E2", name: "Curb-Adjacent Reversible Parking and Transit Lanes", freeway: Some(false) },
-    Def { code: "E3", name: "Transit Lanes on Freeway Shoulders", freeway: Some(true) },
-    Def { code: "F1", name: "Contraflow Transit Lanes", freeway: Some(false) },
-    Def { code: "F2", name: "Offset Contraflow Transit Lanes", freeway: Some(false) },
+    Def { code: "A1", freeway: Some(false) },
+    Def { code: "A2", freeway: Some(false) },
+    Def { code: "A3", freeway: Some(false) },
+    Def { code: "B1", freeway: Some(false) },
+    Def { code: "B2", freeway: Some(true) },
+    Def { code: "B3", freeway: Some(false) },
+    Def { code: "B4", freeway: Some(false) },
+    Def { code: "C1", freeway: Some(false) },
+    Def { code: "D1", freeway: Some(false) },
+    Def { code: "E1", freeway: Some(false) },
+    Def { code: "E2", freeway: Some(false) },
+    Def { code: "E3", freeway: Some(true) },
+    Def { code: "F1", freeway: Some(false) },
+    Def { code: "F2", freeway: Some(false) },
 ];
+
+/// The English name of measure `code`, as the Atlas gives it (the messages `atlas-<code>-name` say it in each language).
+pub fn name(code: &str) -> &'static str {
+    MEASURES.iter().find(|m| m.code == code).map_or("", |m| m.name)
+}
 
 /// A transit lane should be at least this wide (synthetic).
 pub const MIN_TRANSIT_LANE_MM: i32 = 3_300;
 
+/// What is wrong with a measure that is recognised, said by `Problem::say` in the language of the page.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub enum Problem {
+    /// A transit lane narrower than `MIN_TRANSIT_LANE_MM`.
+    NarrowTransitLane { width_mm: i32 },
+    /// Center-running lanes with no median or platform beside them.
+    NoPlatform,
+}
+
+impl Problem {
+    pub fn say(&self, i18n: &I18n) -> String {
+        match self {
+            Problem::NarrowTransitLane { width_mm } => {
+                i18n.tr("problem-narrow-lane", &Args::new().str("width", width_mm.to_string()).str("min", MIN_TRANSIT_LANE_MM.to_string()))
+            }
+            Problem::NoPlatform => i18n.tr("problem-no-platform", &Args::new()),
+        }
+    }
+}
+
 pub struct Found {
     pub code: &'static str,
     pub present: bool,
-    pub problems: Vec<String>,
+    pub problems: Vec<Problem>,
 }
 
 fn id(s: &Segment) -> &'static str {
@@ -114,7 +142,7 @@ pub fn detect(raw: &[Segment], now: &[Segment], side: Side, freeway: bool) -> Ve
     let mut base = Vec::new();
     for &i in &bus {
         if road[i].width_mm < MIN_TRANSIT_LANE_MM {
-            base.push(format!("A bus lane is {} mm wide, and a transit lane wants {} mm", road[i].width_mm, MIN_TRANSIT_LANE_MM));
+            base.push(Problem::NarrowTransitLane { width_mm: road[i].width_mm });
         }
     }
     let median_beside =
@@ -130,7 +158,7 @@ pub fn detect(raw: &[Segment], now: &[Segment], side: Side, freeway: bool) -> Ve
                     }
                 }
                 if matches!(d.code, "B1" | "B2") && !median_beside {
-                    problems.push("Center-running lanes need a median or platform beside them for stops".into());
+                    problems.push(Problem::NoPlatform);
                 }
             }
             Found { code: d.code, present: p, problems }

@@ -68,7 +68,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::shared::atlas::{AREA, LINEAR, LOCAL, MEASURES, Where};
+use crate::shared::atlas::{AREA, LINEAR, LOCAL, MEASURES, Where, name_key, note_key};
 use crate::shared::catalogue::mode_key;
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
@@ -315,7 +315,7 @@ pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
                             (Where::Street, Some(f)) if f.present => view! { <b class="m-on">{plain(&i18n, "measure-this-street")}</b> }.into_any(),
                             (Where::Street, Some(f)) if f.can_apply => {
                                 let code = m.code;
-                                let label = i18n.tr("measure-arrange-label", &Args::new().str("code", m.code).str("name", m.name));
+                                let label = i18n.tr("measure-arrange-label", &Args::new().str("code", m.code).str("name", plain(&i18n, &name_key(m.code))));
                                 view! {
                                     <button type="button" class="btn m-apply" aria-label=label on:click=move |_| { w.apply_measure(code); }>
                                         {plain(&i18n, "measure-arrange")}
@@ -330,11 +330,11 @@ pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
                             (Where::Junction, _) => plain(&i18n, "measure-set-at-junction").into_any(),
                             _ => view! { <span class="m-not">{plain(&i18n, "measure-not-modelled")}</span> }.into_any(),
                         };
-                        let note = (m.place != Where::Street && !m.note.is_empty()).then(|| view! { <small>{m.note}</small> });
-                        let problems = found.filter(|f| f.present).map(|f| f.problems.iter().map(|p| view! { <small class="m-problem">{p.clone()}</small> }).collect_view());
+                        let note = (m.place != Where::Street && !m.note.is_empty()).then(|| view! { <small>{plain(&i18n, &note_key(m.code))}</small> });
+                        let problems = found.filter(|f| f.present).map(|f| f.problems.iter().map(|p| view! { <small class="m-problem">{p.say(&i18n)}</small> }).collect_view());
                         view! {
                             <tr>
-                                <th scope="row"><span class="dirtag">{m.code}</span>{m.name}{note}{problems}</th>
+                                <th scope="row"><span class="dirtag">{m.code}</span>{plain(&i18n, &name_key(m.code))}{note}{problems}</th>
                                 <td>{state}</td>
                             </tr>
                         }

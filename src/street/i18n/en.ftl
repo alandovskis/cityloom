@@ -149,3 +149,43 @@ welcome-dismiss = Got it
 
 # The drawing of the section (src/street/view.rs).
 view-section-label = Street cross-section editor
+
+# The Transit Priority Atlas measures, by lowercase code (src/shared/atlas.rs).
+atlas-a1-name = Transit Streets
+atlas-a2-name = Transit Ways
+atlas-a3-name = Transit and Direct Access Streets
+atlas-b1-name = Center-Running Transit Lanes
+atlas-b2-name = Center-Running Transit Lanes on Freeway Medians
+atlas-b3-name = Static Alternate-Direction Center-Running Transit Lanes
+atlas-b4-name = Dynamic Alternate-Direction Center-Running Transit Lanes
+atlas-c1-name = Edge-Running Bidirectional Transit Lanes
+atlas-d1-name = Offset Transit Lanes
+atlas-e1-name = Curb-Adjacent Transit Lanes
+atlas-e2-name = Curb-Adjacent Reversible Parking and Transit Lanes
+atlas-e3-name = Transit Lanes on Freeway Shoulders
+atlas-f1-name = Contraflow Transit Lanes
+atlas-f2-name = Offset Contraflow Transit Lanes
+atlas-g1-name = Offset Queue-Jump Lanes
+atlas-g2-name = Curbside Queue-Jump Lanes
+atlas-g3-name = Virtual Queue-Jump Lane
+atlas-h1-name = Signal-Controlled Bus Gates
+atlas-h2-name = Yield-Controlled Bus Gates
+atlas-l1-name = Indirect Left Turn via Alternative Itinerary
+atlas-l2-name = Indirect Left Turn within the Intersection
+atlas-l3-name = Right-In/Right-Out
+atlas-l4-name = Dead-Ending of Lateral Streets
+atlas-m1-name = Bus Bulbs
+atlas-m2-name = Signal-Protected On-Street Platforms
+atlas-n1-name = Transit Modal Filter
+atlas-tsp-name = Transit Signal Priority
+atlas-tsp-note = The Atlas lists it as under development, and CityLoom has no signal timing to prioritise.
+atlas-z1-name = Limited Traffic Areas
+atlas-z1-note = An area of many streets, and CityLoom edits one street or one junction.
+atlas-w-d-name = Dynamic Congestion Pricing
+atlas-w-d-note = The Atlas lists it as in development, and a price needs a city and demand to act on.
+atlas-w-f-name = Fixed-Fee Road Pricing
+atlas-w-f-note = The Atlas lists it as in development, and a price needs a city and demand to act on.
+
+# What a recognised measure is missing (src/street/measures.rs).
+problem-narrow-lane = A bus lane is { $width } mm wide, and a transit lane wants { $min } mm
+problem-no-platform = Center-running lanes need a median or platform beside them for stops
