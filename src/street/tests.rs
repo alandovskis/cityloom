@@ -6,9 +6,10 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::shared::catalogue::KINDS;
+use crate::shared::i18n::Locale;
 use crate::shared::live;
 use crate::shared::testing::{button_tag, count, html};
-use crate::shared::units::Units;
+use crate::shared::units::{Units, group_thousands};
 use crate::street::keys::Action as StreetAction;
 use crate::street::model::Editor;
 use crate::street::vm::StreetVm;
@@ -257,7 +258,7 @@ fn the_capacity_table_says_how_many_people_move_and_how_that_changed() {
     let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
     assert!(h.contains("People per hour") && h.contains("class=\"zero\">0<"));
     let v = s.view();
-    assert!(h.contains(&notes::thousands(v.outcomes.capacity_pph)));
+    assert!(h.contains(&group_thousands(v.outcomes.capacity_pph.into(), Locale::En)));
     let u = segment(&s, 2);
     s.edit(|e| e.set_width(u, 3_000));
     let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
@@ -321,6 +322,19 @@ fn nothing_selected_the_street_panel_says_how_to_begin() {
     let s = street_shared(0);
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains("Select a piece to change its width and surface."));
+}
+
+#[test]
+fn a_width_typed_with_a_comma_is_committed() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = street_watch();
+    let at = s.view().segments.iter().position(|g| g.min_mm <= 2_500 && g.max_mm >= 2_500 && g.width_mm != 2_500).expect("a piece 2.5 m can fit");
+    let u = segment(&s, at);
+    assert!(inspector::commit_width(w, u, "2,5"));
+    assert_eq!(s.view().segments[at].width_mm, 2_500);
+    assert!(!inspector::commit_width(w, u, "abc"));
+    assert_eq!(s.view().segments[at].width_mm, 2_500);
 }
 
 #[test]

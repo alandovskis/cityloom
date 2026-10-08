@@ -1,5 +1,7 @@
 //! Lengths as the resident reads them: metres or feet, to one decimal.
 
+use crate::shared::i18n::Locale;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Units {
     #[default]
@@ -22,9 +24,9 @@ impl Units {
         }
     }
 
-    /// A length in millimetres without its unit, to a tenth: 11.4.
-    pub fn number(self, mm: i32) -> String {
-        match self {
+    /// A length in millimetres without its unit, to a tenth: 11.4 (11,4 in French).
+    pub fn number_in(self, mm: i32, locale: Locale) -> String {
+        let text = match self {
             Units::Metres => {
                 // Whole tenths of a metre, a tie going away from zero.
                 let tenths = (mm.unsigned_abs() + 50) / 100;
@@ -32,16 +34,25 @@ impl Units {
                 format!("{sign}{}.{}", tenths / 10, tenths % 10)
             }
             Units::Feet => format!("{:.1}", mm as f64 / MM_PER_FOOT),
-        }
+        };
+        mark(text, locale)
+    }
+
+    pub fn number(self, mm: i32) -> String {
+        self.number_in(mm, Locale::En)
     }
 
     /// A length in millimetres to `places` decimals, for a field to hold.
-    pub fn fixed(self, mm: i32, places: usize) -> String {
+    pub fn fixed_in(self, mm: i32, places: usize, locale: Locale) -> String {
         let per = match self {
             Units::Metres => 1000.0,
             Units::Feet => MM_PER_FOOT,
         };
-        format!("{:.*}", places, mm as f64 / per)
+        mark(format!("{:.*}", places, mm as f64 / per), locale)
+    }
+
+    pub fn fixed(self, mm: i32, places: usize) -> String {
+        self.fixed_in(mm, places, Locale::En)
     }
 
     /// Whole millimetres for a number typed in these units.
@@ -55,24 +66,36 @@ impl Units {
 
     /// A length as a street shows it: to a tenth of a metre, or to a hundredth
     /// when it is not a whole tenth; feet to a tenth.
-    pub fn fine(self, mm: i32) -> String {
+    pub fn fine_in(self, mm: i32, locale: Locale) -> String {
         match self {
-            Units::Metres if mm % 100 != 0 => self.fixed(mm, 2),
-            _ => self.number(mm),
+            Units::Metres if mm % 100 != 0 => self.fixed_in(mm, 2, locale),
+            _ => self.number_in(mm, locale),
         }
+    }
+
+    pub fn fine(self, mm: i32) -> String {
+        self.fine_in(mm, Locale::En)
     }
 
     /// A street length with its unit: 3.3 m.
+    pub fn length_fine_in(self, mm: i32, locale: Locale) -> String {
+        format!("{}{}{}", self.fine_in(mm, locale), unit_gap(locale), self.word())
+    }
+
     pub fn length_fine(self, mm: i32) -> String {
-        format!("{} {}", self.fine(mm), self.word())
+        self.length_fine_in(mm, Locale::En)
     }
 
     /// A change in length with its sign, `+1.2` or `\u{2212}1.2`, and `0` for none.
-    pub fn signed(self, mm: i32) -> String {
+    pub fn signed_in(self, mm: i32, locale: Locale) -> String {
         match mm {
             0 => "0".to_string(),
-            _ => format!("{}{}", if mm > 0 { "+" } else { "\u{2212}" }, self.fine(mm.abs())),
+            _ => format!("{}{}", if mm > 0 { "+" } else { "\u{2212}" }, self.fine_in(mm.abs(), locale)),
         }
+    }
+
+    pub fn signed(self, mm: i32) -> String {
+        self.signed_in(mm, Locale::En)
     }
 
     /// What the units are called in a sentence.
@@ -91,15 +114,94 @@ impl Units {
         }
     }
 
-    /// A length with its unit: 11.4 m.
-    pub fn length(self, mm: i32) -> String {
-        format!("{} {}", self.number(mm), self.word())
+    /// A length with its unit: 11.4 m (11,4 m, with a no-break space, in French).
+    pub fn length_in(self, mm: i32, locale: Locale) -> String {
+        format!("{}{}{}", self.number_in(mm, locale), unit_gap(locale), self.word())
     }
+
+    pub fn length(self, mm: i32) -> String {
+        self.length_in(mm, Locale::En)
+    }
+}
+
+/// The decimal mark of the language, given a number written with a point.
+fn mark(text: String, locale: Locale) -> String {
+    if locale == Locale::FrCa { text.replace('.', ",") } else { text }
+}
+
+/// What sits between a number and its unit.
+fn unit_gap(locale: Locale) -> char {
+    if locale == Locale::FrCa { '\u{a0}' } else { ' ' }
+}
+
+/// A whole number with its thousands set apart: a comma in English, a no-break space in French.
+pub fn group_thousands(n: i64, locale: Locale) -> String {
+    let digits = n.unsigned_abs().to_string();
+    let gap = if locale == Locale::FrCa { '\u{a0}' } else { ',' };
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(gap);
+        }
+        out.push(c);
+    }
+    if n < 0 { format!("-{out}") } else { out }
+}
+
+/// A number as typed, with a comma or a point for the decimal mark and spaces
+/// (ordinary or no-break) between thousands.
+pub fn parse_number(text: &str) -> Option<f64> {
+    let cleaned: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    if cleaned.chars().filter(|c| matches!(c, ',' | '.')).count() > 1 {
+        return None;
+    }
+    cleaned.replace(',', ".").parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn french_writes_a_decimal_comma_and_a_space_before_the_unit() {
+        assert_eq!(Units::Metres.length_in(11_400, Locale::FrCa), "11,4\u{a0}m");
+        assert_eq!(Units::Metres.length_fine_in(3_250, Locale::FrCa), "3,25\u{a0}m");
+        assert_eq!(Units::Feet.length_in(3_048, Locale::FrCa), "10,0\u{a0}ft");
+        assert_eq!(Units::Metres.length_in(11_400, Locale::En), "11.4 m");
+    }
+
+    #[test]
+    fn signed_lengths_use_the_locale_too() {
+        assert_eq!(Units::Metres.signed_in(1_200, Locale::FrCa), "+1,2");
+        assert_eq!(Units::Metres.signed_in(-1_200, Locale::FrCa), "\u{2212}1,2");
+        assert_eq!(Units::Metres.signed_in(0, Locale::FrCa), "0");
+    }
+
+    #[test]
+    fn numbers_and_field_text_use_the_locale() {
+        assert_eq!(Units::Metres.number_in(11_400, Locale::FrCa), "11,4");
+        assert_eq!(Units::Metres.fine_in(2_750, Locale::FrCa), "2,75");
+        assert_eq!(Units::Metres.fixed_in(3_300, 2, Locale::FrCa), "3,30");
+        assert_eq!(Units::Metres.fixed_in(3_300, 2, Locale::En), "3.30");
+    }
+
+    #[test]
+    fn thousands_are_grouped_by_locale() {
+        assert_eq!(group_thousands(12_345, Locale::En), "12,345");
+        assert_eq!(group_thousands(12_345, Locale::FrCa), "12\u{a0}345");
+        assert_eq!(group_thousands(-1_234_567, Locale::FrCa), "-1\u{a0}234\u{a0}567");
+        assert_eq!(group_thousands(999, Locale::FrCa), "999");
+    }
+
+    #[test]
+    fn a_typed_number_may_use_a_comma_or_a_point() {
+        assert_eq!(parse_number("2,5"), Some(2.5));
+        assert_eq!(parse_number("2.5"), Some(2.5));
+        assert_eq!(parse_number(" 1\u{a0}234,5 "), Some(1234.5));
+        assert_eq!(parse_number(""), None);
+        assert_eq!(parse_number("abc"), None);
+        assert_eq!(parse_number("1,2,3"), None);
+    }
 
     #[test]
     fn metres_are_written_to_a_tenth() {

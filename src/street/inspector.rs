@@ -9,7 +9,7 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
 use crate::shared::catalogue::{CURBS, DIRECTIONS, DirectionRule, KINDS, MATERIALS};
-use crate::shared::units::Units;
+use crate::shared::units::{Units, parse_number};
 use crate::street::model::{SegView, View};
 use crate::street::page::{hhmm, to_min};
 use crate::street::vm::StreetVm;
@@ -150,6 +150,15 @@ fn kind_of(w: SheetWatch, uid: u32) -> usize {
     w.segment(uid, |s| s.kind).unwrap_or(0)
 }
 
+/// Sets a piece's width from what was typed (a comma or a point for the decimal mark);
+/// false when it is not a number.
+pub fn commit_width(w: SheetWatch, uid: u32, typed: &str) -> bool {
+    let Some(v) = parse_number(typed) else { return false };
+    let mm = w.units_now().mm(v);
+    w.edit(|ed| ed.set_width(uid, mm));
+    true
+}
+
 fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
     let value = move || w.segment(uid, |s| w.units().fixed(s.width_mm, 2)).unwrap_or_default();
     let range = move || w.segment(uid, |s| width_range(s, w.units())).unwrap_or_default();
@@ -179,12 +188,8 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
                         aria-labelledby="i-h-width"
                         on:change=move |e| {
                             let input = leptos::prelude::event_target::<HtmlInputElement>(&e);
-                            match input.value().parse::<f64>() {
-                                Ok(v) if v.is_finite() => {
-                                    let mm = w.units_now().mm(v);
-                                    w.edit(|ed| ed.set_width(uid, mm));
-                                }
-                                _ => input.set_value(&w.segment(uid, |s| w.units_now().fixed(s.width_mm, 2)).unwrap_or_default()),
+                            if !commit_width(w, uid, &input.value()) {
+                                input.set_value(&w.segment(uid, |s| w.units_now().fixed(s.width_mm, 2)).unwrap_or_default());
                             }
                         }
                     />

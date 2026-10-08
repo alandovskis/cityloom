@@ -2,21 +2,9 @@
 //! people it moves, whether it works, what has changed, and the transit
 //! measures it forms or could.
 
-use crate::shared::units::Units;
+use crate::shared::i18n::Locale;
+use crate::shared::units::{Units, group_thousands};
 use crate::street::model::{Check, View};
-
-/// A whole number with a comma between each thousand, as `toLocaleString` writes it.
-pub fn thousands(n: i32) -> String {
-    let digits = n.unsigned_abs().to_string();
-    let mut out = String::new();
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    if n < 0 { format!("-{out}") } else { out }
-}
 
 /// Which way a change goes, as the class of the cell that shows it.
 pub fn change_class(delta: i32) -> &'static str {
@@ -127,8 +115,8 @@ pub fn Capacity(vm: Rc<StreetVm>) -> impl IntoView {
             <tbody>
                 <tr>
                     <td>"People per hour"</td>
-                    <td>{thousands(o.existing_capacity_pph)}</td>
-                    <td>{thousands(o.capacity_pph)}</td>
+                    <td>{group_thousands(o.existing_capacity_pph.into(), Locale::En)}</td>
+                    <td>{group_thousands(o.capacity_pph.into(), Locale::En)}</td>
                     {change_cell(o.capacity_pph - o.existing_capacity_pph, capacity_change(o.existing_capacity_pph, o.capacity_pph))}
                 </tr>
             </tbody>
@@ -315,16 +303,6 @@ pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
 mod tests {
     use super::*;
     use crate::street::model::Editor;
-
-    #[test]
-    fn a_number_is_written_with_a_comma_between_thousands() {
-        assert_eq!(thousands(0), "0");
-        assert_eq!(thousands(999), "999");
-        assert_eq!(thousands(1_000), "1,000");
-        assert_eq!(thousands(12_345), "12,345");
-        assert_eq!(thousands(1_234_567), "1,234,567");
-        assert_eq!(thousands(-4_500), "-4,500");
-    }
 
     #[test]
     fn a_change_goes_up_down_or_nowhere() {
