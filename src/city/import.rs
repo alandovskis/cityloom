@@ -7,7 +7,7 @@ use osm_network::{Control, Lane, LaneKind, Network, Way};
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
 use crate::shared::catalogue::{Side, StreetClass, kind_index};
-use crate::street::model::{Piece, Street};
+use crate::street::model::{Piece, Street, Window};
 
 /// How wide a corner is rounded where nothing in the data says.
 const CORNER_MM: i32 = 4_000;
@@ -37,11 +37,45 @@ fn kind_of(kind: LaneKind) -> &'static str {
 }
 
 fn piece(lane: &Lane) -> Piece {
-    Piece {
-        kind: kind_index(kind_of(lane.kind)).expect("the catalogue has every kind of lane"),
-        width_mm: (lane.width_m * 1000.0).round() as i32,
-        direction: Some(usize::from(lane.way == Way::Backward)),
+    let kind = |id| kind_index(id).expect("the catalogue has every kind of lane");
+    let (mut base, mut variants) = (kind(kind_of(lane.kind)), Vec::new());
+    // A bus lane at some hours is parking the rest of the time
+    if let Some(windows) = lane.hours.as_deref().filter(|_| lane.kind == LaneKind::Bus).and_then(windows_of) {
+        base = kind("parking");
+        variants = windows.into_iter().map(|(from_min, to_min)| Window { kind: kind("bus"), from_min, to_min }).collect();
     }
+    Piece { kind: base, width_mm: (lane.width_m * 1000.0).round() as i32, direction: Some(usize::from(lane.way == Way::Backward)), variants }
+}
+
+const SLOT_MIN: i32 = 15;
+
+/// The windows of the day, in minutes (from, to) with midnight at the end of a window as 0, that OSM
+/// opening hours name: `Mo-Fr 06:00-10:00,14:30-19:00`. The days are not kept, nor is a time to the minute:
+/// a window starts on the quarter hour before and ends on the one after. Hours with several rules, an `off`,
+/// a window past midnight or two that overlap are not read.
+fn windows_of(hours: &str) -> Option<Vec<(i32, i32)>> {
+    let time = |t: &str| {
+        let (h, m) = t.split_once(':')?;
+        let (h, m): (i32, i32) = (h.parse().ok()?, m.parse().ok()?);
+        (h < 24 && m < 60 || (h, m) == (24, 0)).then_some(h * 60 + m)
+    };
+    if hours.contains(';') || hours.split_whitespace().any(|t| t.eq_ignore_ascii_case("off")) {
+        return None;
+    }
+    let mut windows = Vec::new();
+    for range in hours.split(|c: char| c.is_whitespace() || c == ',').filter(|r| r.contains(':')) {
+        let (from, to) = range.split_once('-')?;
+        let (from, to) = (time(from)? / SLOT_MIN * SLOT_MIN, (time(to)? + SLOT_MIN - 1) / SLOT_MIN * SLOT_MIN);
+        if to <= from {
+            return None;
+        }
+        windows.push((from, to));
+    }
+    windows.sort();
+    if windows.is_empty() || windows.windows(2).any(|w| w[1].0 < w[0].1) {
+        return None;
+    }
+    Some(windows.into_iter().map(|(from, to)| (from, to % (24 * 60))).collect())
 }
 
 fn control_of(c: Control) -> usize {
@@ -161,9 +195,47 @@ mod tests {
     use super::*;
     use crate::junction::model::CONTROLS;
     use crate::junction::model::SIGNAL;
+    use crate::shared::catalogue::KINDS;
 
     fn lane(kind: LaneKind, way: Way, width_m: f64) -> Lane {
         Lane { kind, way, width_m, hours: None }
+    }
+
+    fn bus_lane(hours: Option<&str>) -> Lane {
+        Lane { hours: hours.map(str::to_string), ..lane(LaneKind::Bus, Way::Forward, 3.2) }
+    }
+
+    fn windows(p: &Piece) -> Vec<(&'static str, i32, i32)> {
+        p.variants.iter().map(|w| (KINDS[w.kind].id, w.from_min, w.to_min)).collect()
+    }
+
+    #[test]
+    fn a_bus_lane_with_hours_is_parking_outside_them() {
+        let p = piece(&bus_lane(Some("Mo-Fr 06:00-10:00,14:30-19:00")));
+        assert_eq!(KINDS[p.kind].id, "parking");
+        assert_eq!(windows(&p), [("bus", 360, 600), ("bus", 870, 1140)]);
+    }
+
+    #[test]
+    fn a_bus_lane_without_hours_or_with_hours_that_cannot_be_read_stays_a_bus_lane() {
+        for hours in [None, Some("Sa,Su 07:00-09:00; Mo-Fr 06:00-10:00"), Some("sunrise-sunset"), Some("Mo-Fr")] {
+            let p = piece(&bus_lane(hours));
+            assert_eq!((KINDS[p.kind].id, p.variants.len()), ("bus", 0), "{hours:?}");
+        }
+    }
+
+    #[test]
+    fn hours_are_read_as_windows_of_quarter_hours_and_a_day_ends_at_midnight() {
+        assert_eq!(windows_of("07:05-09:50"), Some(vec![(420, 600)]));
+        assert_eq!(windows_of("Mo-Fr 16:00-24:00"), Some(vec![(960, 0)]));
+        assert_eq!(windows_of("Mo-Fr 10:00-12:00,06:00-08:00"), Some(vec![(360, 480), (600, 720)]));
+    }
+
+    #[test]
+    fn hours_that_overlap_or_run_past_midnight_or_say_off_are_not_read() {
+        for hours in ["06:00-10:00,09:00-12:00", "22:00-02:00", "Mo-Fr off", "10:00-10:00", ""] {
+            assert_eq!(windows_of(hours), None, "{hours:?}");
+        }
     }
 
     /// Two streets crossing at a signalled junction, with a dead end on each arm.

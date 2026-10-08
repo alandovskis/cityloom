@@ -175,12 +175,22 @@ fn flip(d: &mut Option<usize>) {
 }
 
 /// One piece of a street, as read from a road of the network.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Piece {
     pub kind: usize,
     pub width_mm: i32,
     /// Index into `DIRECTIONS`, for a kind that has one.
     pub direction: Option<usize>,
+    /// The times of day it is another kind; they must not overlap.
+    pub variants: Vec<Window>,
+}
+
+/// A time of day, in minutes after midnight and on quarter hours as `Variant`'s are, that a piece is of another kind.
+#[derive(Clone, Copy, Debug)]
+pub struct Window {
+    pub kind: usize,
+    pub from_min: i32,
+    pub to_min: i32,
 }
 
 impl Street {
@@ -195,11 +205,20 @@ impl Street {
             .map(|(i, p)| {
                 let k = &KINDS[p.kind];
                 let mut g = Segment::new(i as u32 + 1, p.kind, p.width_mm.clamp(k.min_mm, k.max_mm));
-                g.direction = match k.direction {
-                    DirectionRule::None => None,
-                    DirectionRule::Required => Some(p.direction.unwrap_or(0)),
-                    DirectionRule::Optional => p.direction,
-                };
+                g.direction = direction_for(p.kind, p.direction);
+                g.variants = p
+                    .variants
+                    .iter()
+                    .map(|w| Variant {
+                        kind: w.kind,
+                        material: KINDS[w.kind].materials[0],
+                        direction: direction_for(w.kind, g.direction),
+                        from_min: w.from_min,
+                        to_min: w.to_min,
+                    })
+                    .collect();
+                let (lo, hi) = g.bounds();
+                g.width_mm = p.width_mm.clamp(lo, hi);
                 g
             })
             .collect();
@@ -1220,11 +1239,11 @@ mod tests {
     fn a_street_made_of_given_pieces_is_sound_and_as_wide_as_they_are() {
         let kind = |id| kind_index(id).unwrap();
         let pieces = [
-            Piece { kind: kind("sidewalk"), width_mm: 2000, direction: None },
-            Piece { kind: kind("travel"), width_mm: 3200, direction: Some(1) },
-            Piece { kind: kind("travel"), width_mm: 3200, direction: Some(0) },
-            Piece { kind: kind("bike"), width_mm: 1500, direction: None },
-            Piece { kind: kind("sidewalk"), width_mm: 2000, direction: Some(0) },
+            Piece { kind: kind("sidewalk"), width_mm: 2000, direction: None, variants: Vec::new() },
+            Piece { kind: kind("travel"), width_mm: 3200, direction: Some(1), variants: Vec::new() },
+            Piece { kind: kind("travel"), width_mm: 3200, direction: Some(0), variants: Vec::new() },
+            Piece { kind: kind("bike"), width_mm: 1500, direction: None, variants: Vec::new() },
+            Piece { kind: kind("sidewalk"), width_mm: 2000, direction: Some(0), variants: Vec::new() },
         ];
         let s = Street::imported(StreetClass::Local, Side::Left, &pieces);
         assert!(s.is_sound());
@@ -1243,11 +1262,29 @@ mod tests {
         let s = Street::imported(
             StreetClass::Local,
             Side::Right,
-            &[Piece { kind, width_mm: 100, direction: Some(0) }, Piece { kind, width_mm: 99_000, direction: Some(1) }],
+            &[
+                Piece { kind, width_mm: 100, direction: Some(0), variants: Vec::new() },
+                Piece { kind, width_mm: 99_000, direction: Some(1), variants: Vec::new() },
+            ],
         );
         assert_eq!(s.segments[0].width_mm, KINDS[kind].min_mm);
         assert_eq!(s.segments[1].width_mm, KINDS[kind].max_mm);
         assert_eq!(s.row_mm, KINDS[kind].min_mm + KINDS[kind].max_mm);
+    }
+
+    #[test]
+    fn a_piece_with_windows_is_its_kind_outside_them_and_the_window_kind_inside() {
+        let (parking, bus) = (kind("parking"), kind("bus"));
+        let piece = Piece { kind: parking, width_mm: 3400, direction: Some(0), variants: vec![Window { kind: bus, from_min: 6 * 60, to_min: 10 * 60 }] };
+        let s = Street::imported(StreetClass::Local, Side::Right, &[piece]);
+        assert!(s.is_sound());
+        let g = &s.segments[0];
+        assert_eq!((g.kind, g.variants.len()), (parking, 1));
+        assert_eq!((g.variants[0].kind, g.variants[0].from_min, g.variants[0].to_min), (bus, 360, 600));
+        assert_eq!((g.kind_at(8 * 60), g.kind_at(12 * 60)), (bus, parking));
+        // the width is one both kinds allow
+        assert_eq!(g.width_mm, 3000);
+        assert_eq!(g.variants[0].direction, g.direction);
     }
 
     fn ids(e: &Editor) -> Vec<&'static str> {
