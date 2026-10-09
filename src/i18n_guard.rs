@@ -30,6 +30,14 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/map/view.rs", include_str!("map/view.rs")),
     ("src/map/overlay.rs", include_str!("map/overlay.rs")),
     ("src/map/mod.rs", include_str!("map/mod.rs")),
+    ("src/place/mod.rs", include_str!("place/mod.rs")),
+    ("src/place/area.rs", include_str!("place/area.rs")),
+    ("src/place/loader.rs", include_str!("place/loader.rs")),
+    ("src/place/nominatim.rs", include_str!("place/nominatim.rs")),
+    ("src/place/overpass.rs", include_str!("place/overpass.rs")),
+    ("src/place/tiles.rs", include_str!("place/tiles.rs")),
+    ("src/place/vm.rs", include_str!("place/vm.rs")),
+    ("src/place/view.rs", include_str!("place/view.rs")),
 ];
 
 /// Attributes whose value is text a person reads (also as `attr:<name>`).
@@ -75,6 +83,7 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("FeatureCollection", "a GeoJSON type name, data for MapLibre"),
     ("LineString", "a GeoJSON geometry type, data for MapLibre"),
     ("Point", "a GeoJSON geometry type, data for MapLibre"),
+    ("Plateau Mont-Royal, Montréal", "the default area's own name: a place name is data, like the names the place search gives"),
 ];
 
 fn is_path_data(s: &str) -> bool {

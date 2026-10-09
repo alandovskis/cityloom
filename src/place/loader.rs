@@ -8,6 +8,12 @@ use super::overpass;
 use super::tiles;
 use crate::city::store::CityStore;
 use crate::shared::ports::Ports;
+use crate::shared::said::{Arg, Said};
+
+/// What the browser or the OpenStreetMap reader said went wrong, passed on in its own words.
+fn problem(e: String) -> Said {
+    Said::new("place-problem").with("e", Arg::Text(e))
+}
 
 /// What is asked of the world's services, one thing at a time, with the answer handed on.
 #[derive(Clone)]
@@ -21,8 +27,8 @@ impl Loader {
     }
 
     /// The places called `text`, best first.
-    pub fn search(&self, text: &str, done: impl FnOnce(Result<Vec<Place>, String>) + 'static) {
-        self.ports.fetcher.fetch(&nominatim::search_url(text), None, Box::new(move |r| done(r.and_then(|body| nominatim::parse(&body)))));
+    pub fn search(&self, text: &str, done: impl FnOnce(Result<Vec<Place>, Said>) + 'static) {
+        self.ports.fetcher.fetch(&nominatim::search_url(text), None, Box::new(move |r| done(r.map_err(problem).and_then(|body| nominatim::parse(&body)))));
     }
 
     /// Makes sure the store holds the street network of its area: the roads
@@ -34,11 +40,11 @@ impl Loader {
     /// Roads that are kept stand, unless the tile index gives a checksum for the tile that holds the place
     /// and it is not the one they were made from: they are then read from the tile again. A tile that cannot
     /// be had, or read, leaves the roads that are kept as they are.
-    pub fn load(&self, store: &CityStore, done: impl FnOnce(Result<(), String>) + 'static) {
+    pub fn load(&self, store: &CityStore, done: impl FnOnce(Result<(), Said>) + 'static) {
         let area = store.area().clone();
         let kept = store.has_network();
         let done = Rc::new(std::cell::RefCell::new(Some(done)));
-        let finish: Rc<dyn Fn(Result<(), String>)> = Rc::new(move |r| {
+        let finish: Rc<dyn Fn(Result<(), Said>)> = Rc::new(move |r| {
             if let Some(done) = done.borrow_mut().take() {
                 done(r)
             }
@@ -60,7 +66,7 @@ impl Loader {
                     let stale = checksum.is_some() && store.checksum() != checksum;
                     let Some(url) = tile.filter(|_| stale) else { return finish(Ok(())) };
                     // whatever comes of it, there are roads
-                    let (importer, kept_anyway) = (this.clone(), Rc::new(move |_: Result<(), String>| finish(Ok(()))));
+                    let (importer, kept_anyway) = (this.clone(), Rc::new(move |_: Result<(), Said>| finish(Ok(()))));
                     let (area, store, after) = (area.clone(), store.clone(), kept_anyway.clone());
                     this.ports.fetcher.fetch(
                         &url,
@@ -92,13 +98,13 @@ impl Loader {
     }
 
     /// Fetches the data at `url` (by POST when there is a `body`) and imports it.
-    fn read(&self, url: &str, body: Option<String>, area: Area, store: CityStore, finish: Rc<dyn Fn(Result<(), String>)>) {
+    fn read(&self, url: &str, body: Option<String>, area: Area, store: CityStore, finish: Rc<dyn Fn(Result<(), Said>)>) {
         let this = self.clone();
         self.ports.fetcher.fetch(
             url,
             body.as_deref(),
             Box::new(move |fetched| match fetched {
-                Err(e) => finish(Err(format!("the roads of {} could not be fetched ({e})", label(&area)))),
+                Err(e) => finish(Err(Said::new("place-fetch-failed").with("area", label(&area)).with("e", Arg::Text(e)))),
                 Ok(osm) => this.import(osm, area, store, None, finish),
             }),
         );
@@ -106,31 +112,30 @@ impl Loader {
 
     /// Reads the OpenStreetMap data, keeping what lies in the area, and keeps the network that makes, with
     /// the checksum of the tile it came from, if it came from one.
-    fn import(&self, osm: Vec<u8>, area: Area, store: CityStore, checksum: Option<String>, finish: Rc<dyn Fn(Result<(), String>)>) {
+    fn import(&self, osm: Vec<u8>, area: Area, store: CityStore, checksum: Option<String>, finish: Rc<dyn Fn(Result<(), Said>)>) {
         let b = area.bounds();
         self.ports.importer.import(
             osm,
             Some([b.south, b.west, b.north, b.east]),
             Box::new(move |read| {
-                finish(read.and_then(|json| serde_json::from_str(&json).map_err(|e| format!("the roads were not understood ({e})"))).and_then(
-                    |network: osm_network::Network| {
-                        if network.roads.is_empty() {
-                            return Err(format!("OpenStreetMap has no streets around {}", label(&area)));
-                        }
-                        if store.keep_network_from(&network, checksum.as_deref()) {
-                            Ok(())
-                        } else {
-                            Err("the roads could not be kept: storage is blocked or full".to_string())
-                        }
-                    },
-                ))
+                finish(
+                    read.map_err(problem)
+                        .and_then(|json| serde_json::from_str(&json).map_err(|e| Said::new("place-roads-not-understood").with("e", Arg::Text(e.to_string()))))
+                        .and_then(|network: osm_network::Network| {
+                            if network.roads.is_empty() {
+                                return Err(Said::new("place-no-streets").with("area", label(&area)));
+                            }
+                            if store.keep_network_from(&network, checksum.as_deref()) { Ok(()) } else { Err(Said::new("place-roads-not-kept")) }
+                        }),
+                )
             }),
         );
     }
 }
 
-fn label(area: &Area) -> String {
-    if area.name.is_empty() { area.key() } else { area.name.clone() }
+/// What an area is called in a message: its name, or where it is when it has none. Data, not words of the app.
+fn label(area: &Area) -> Arg {
+    Arg::Text(if area.name.is_empty() { area.key() } else { area.name.clone() })
 }
 
 #[cfg(test)]
@@ -151,6 +156,16 @@ mod tests {
 
     fn seen<T>() -> Seen<T> {
         Rc::new(RefCell::new(None))
+    }
+
+    /// What a loader said, in English.
+    fn en(said: &Said) -> String {
+        crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres, said)
+    }
+
+    /// What a loader said, in French.
+    fn fr(said: &Said) -> String {
+        crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::FrCa), crate::shared::units::Units::Metres, said)
     }
 
     const NETWORK: &str = r#"{"left_hand":false,"nodes":[{"id":1,"osm_nodes":[1],"x_m":0.0,"y_m":0.0,"junction":false,"control":"none"},
@@ -177,7 +192,7 @@ mod tests {
         let f = found.clone();
         Loader::new(ports).search("x", move |r| *f.borrow_mut() = Some(r));
         fetcher.answer(Err("the server answered 429".into()));
-        assert_eq!(found.borrow_mut().take().unwrap().unwrap_err(), "the server answered 429");
+        assert_eq!(en(&found.borrow_mut().take().unwrap().unwrap_err()), "the server answered 429");
     }
 
     #[test]
@@ -229,7 +244,7 @@ mod tests {
     /// Testville with its network kept as made from a tile that had `checksum`, and its load begun.
     fn kept_from(
         checksum: Option<&str>,
-    ) -> (crate::shared::ports::Ports, Rc<crate::shared::ports::FakeFetcher>, Rc<crate::shared::ports::FakeImporter>, CityStore, Seen<Result<(), String>>) {
+    ) -> (crate::shared::ports::Ports, Rc<crate::shared::ports::FakeFetcher>, Rc<crate::shared::ports::FakeImporter>, CityStore, Seen<Result<(), Said>>) {
         let (ports, fetcher, importer) = test_ports_with_fetcher();
         let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
         store.keep_network_from(&serde_json::from_str(NETWORK).unwrap(), checksum);
@@ -350,6 +365,8 @@ mod tests {
 
     #[test]
     fn each_thing_that_goes_wrong_is_said_and_nothing_is_kept() {
+        let english = ["the roads of Testville could not be fetched (offline)", "bad data", "the roads were not understood ("];
+        let french = ["les rues de Testville n’ont pas pu être obtenues (offline)", "bad data", "les rues n’ont pas été comprises ("];
         for step in 0..3 {
             let (ports, fetcher, importer) = test_ports_with_fetcher();
             let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
@@ -371,8 +388,9 @@ mod tests {
                 }
             }
             let message = result.borrow_mut().take().unwrap().unwrap_err();
-            assert!(!message.is_empty(), "step {step}");
-            assert!(!store.has_network(), "step {step}: {message}");
+            assert!(en(&message).starts_with(english[step]), "step {step}: {}", en(&message));
+            assert!(fr(&message).starts_with(french[step]), "step {step}: {}", fr(&message));
+            assert!(!store.has_network(), "step {step}: {message:?}");
         }
     }
 
@@ -429,7 +447,8 @@ mod tests {
         fetcher.answer(Ok(b"<osm/>".to_vec()));
         importer.answer(Ok(r#"{"left_hand":false,"nodes":[],"roads":[]}"#.to_string()));
         let message = result.borrow_mut().take().unwrap().unwrap_err();
-        assert!(message.contains("no streets") && message.contains("Mid-ocean"), "{message}");
+        assert_eq!(en(&message), "OpenStreetMap has no streets around Mid-ocean");
+        assert_eq!(fr(&message), "OpenStreetMap n’a aucune rue autour de Mid-ocean");
         assert!(!store.has_network());
     }
 
@@ -446,6 +465,6 @@ mod tests {
         without_tiles(&fetcher);
         fetcher.answer(Ok(vec![]));
         importer.answer(Ok(NETWORK.to_string()));
-        assert!(result.borrow_mut().take().unwrap().unwrap_err().contains("storage"));
+        assert_eq!(en(&result.borrow_mut().take().unwrap().unwrap_err()), "the roads could not be kept: storage is blocked or full");
     }
 }

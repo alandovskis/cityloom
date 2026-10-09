@@ -1,6 +1,6 @@
 # Glossaire anglais / français (Canada)
 
-The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl` and `src/map/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled.
+The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl`, `src/map/i18n/fr.ftl` and `src/place/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled.
 
 ## Style rules
 
@@ -126,6 +126,14 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Map page | Press again to start over | Appuyez de nouveau pour recommencer | `Recommencer` as on the street page. |
 | Map page | Editors (the navigation) | Éditeurs |  |
 | Map page | Sheet tools | Outils de la feuille | To confirm, see below. |
+| Place search (home page) | Find a place | Chercher un lieu | `lieu`, as on the map page. |
+| Place search (home page) | Find / Open (the button) | Chercher / Ouvrir |  |
+| Place search (home page) | 2 places found | 2 lieux trouvés | `0` and `1` are singular: `1 lieu trouvé`. |
+| Place search (home page) | Use the arrow keys, then Enter | Utilisez les flèches, puis Entrée | `Entrée` as the key's name (`ui-key-enter`). |
+| Place search (home page) | Getting the streets of X… | Chargement des rues de X… | X is the place's own name, so no contraction (`de Le Plateau` is possible and left as it is). |
+| Place search (home page) | the roads … could not be fetched | les rues … n’ont pas pu être obtenues | The roads are `rues`, as everywhere in the app. The error in brackets is the browser's own, not translated. |
+| Place search (home page) | storage (the browser's) | stockage |  |
+| Place search (home page) | tile index | index des tuiles | Never shown to a person today: the loader goes on without it. |
 
 ## Terms to confirm
 
@@ -164,3 +172,5 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | as first laid out (map page) | `telle que tracée au départ` | `telle qu’aménagée à l’origine` (suggestion) |
 | Sheet tools (map page, a toolbar's name) | `Outils de la feuille` | `Outils` (suggestion) |
 | place (map page) | `lieu` | `endroit` (suggestion) |
+| Find a place, like Kreuzberg, Berlin (home page) | `Chercher un lieu, comme Kreuzberg, Berlin` | `Chercher un lieu, par exemple Kreuzberg, Berlin` (suggestion) |
+| Searching… (home page) | `Recherche en cours…` | `Recherche…` (suggestion) |

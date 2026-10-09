@@ -68,8 +68,8 @@ pub fn AreaSearch(vm: Rc<AreaVm>) -> impl IntoView {
                 type="search"
                 name="q"
                 node_ref=input
-                placeholder="Find a place, like Kreuzberg, Berlin"
-                aria-label="Find a place"
+                placeholder=move || vm.with(|v| v.word("place-search-placeholder"))
+                aria-label=move || vm.with(|v| v.word("place-search-label"))
                 role="combobox"
                 aria-autocomplete="list"
                 aria-controls="area-results"
@@ -84,10 +84,10 @@ pub fn AreaSearch(vm: Rc<AreaVm>) -> impl IntoView {
             />
             <kbd class="search-key" aria-hidden="true">"/"</kbd>
             <button type="submit" class="search-go" aria-disabled=move || vm.with(|v| v.busy()).to_string()>
-                {move || if vm.with(|v| v.status()) == Status::Found { "Open" } else { "Find" }}
+                {move || vm.with(|v| v.word(if v.status() == Status::Found { "place-open" } else { "place-find" }))}
             </button>
             <div class="search-pop" hidden=move || !open()>
-                <ul id="area-results" role="listbox" aria-label="Places found">
+                <ul id="area-results" role="listbox" aria-label=move || vm.with(|v| v.word("place-results"))>
                     {move || vm.with(|v| v.rows()).into_iter().enumerate().map(|(i, r)| row(vm, owner, r.name, r.detail, i)).collect_view()}
                 </ul>
                 <p class="search-note" role="status">{move || vm.with(|v| v.note())}</p>
@@ -111,6 +111,7 @@ fn row(vm: Vm, owner: StoredValue<Rc<AreaVm>, LocalStorage>, name: String, detai
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::i18n::Locale;
     use crate::shared::ports::test_ports_with_fetcher;
     use crate::shared::testing::{count, html};
 
@@ -122,7 +123,7 @@ mod tests {
     #[test]
     fn the_box_is_a_labelled_combobox_with_a_find_button_and_a_closed_list() {
         let (ports, ..) = test_ports_with_fetcher();
-        let h = page(&AreaVm::new(ports));
+        let h = page(&AreaVm::new(ports, crate::i18n_for(Locale::En)));
         assert!(h.contains("role=\"combobox\"") && h.contains("aria-label=\"Find a place\""));
         assert!(h.contains(">Find</button>") && !h.contains(">Open</button>"));
         assert!(h.contains("aria-expanded=\"false\""));
@@ -132,7 +133,7 @@ mod tests {
     #[test]
     fn what_was_found_is_listed_with_the_first_chosen_and_the_button_offers_to_open_it() {
         let (ports, fetcher, _) = test_ports_with_fetcher();
-        let vm = AreaVm::new(ports);
+        let vm = AreaVm::new(ports, crate::i18n_for(Locale::En));
         vm.set_text("Kreuzberg");
         vm.search();
         fetcher
@@ -148,7 +149,7 @@ mod tests {
     #[test]
     fn while_the_streets_are_got_the_button_is_off_and_the_note_says_so() {
         let (ports, fetcher, _) = test_ports_with_fetcher();
-        let vm = AreaVm::new(ports);
+        let vm = AreaVm::new(ports, crate::i18n_for(Locale::En));
         vm.set_text("x");
         vm.search();
         fetcher.answer(Ok(br#"[{"display_name":"Kreuzberg, Berlin","lat":"52.5","lon":"13.4","boundingbox":["52.4","52.6","13.3","13.5"]}]"#.to_vec()));
@@ -156,5 +157,32 @@ mod tests {
         let h = page(&vm);
         assert!(h.contains("aria-disabled=\"true\""));
         assert!(h.contains("Getting the streets of Kreuzberg, Berlin…"));
+    }
+
+    /// English the search box says, none of which the French box may show.
+    const ENGLISH: [&str; 8] = ["Find a place", ">Find<", ">Open<", "Places found", "place found", "places found", "Searching", "Getting the streets"];
+
+    #[test]
+    fn the_box_speaks_french_with_no_english_left() {
+        let (ports, fetcher, _) = test_ports_with_fetcher();
+        let vm = AreaVm::new(ports, crate::i18n_for(Locale::FrCa));
+        let h = page(&vm);
+        assert!(h.contains("placeholder=\"Chercher un lieu, comme Kreuzberg, Berlin\""), "{h}");
+        assert!(h.contains("aria-label=\"Chercher un lieu\"") && h.contains("aria-label=\"Lieux trouvés\""), "{h}");
+        assert!(h.contains(">Chercher</button>"), "{h}");
+        vm.set_text("Kreuzberg");
+        vm.search();
+        fetcher
+            .answer(Ok(br#"[{"display_name":"Kreuzberg, Berlin, Germany","lat":"52.5","lon":"13.4","boundingbox":["52.4","52.6","13.3","13.5"]}]"#.to_vec()));
+        let found = page(&vm);
+        assert!(found.contains(">Ouvrir</button>") && found.contains("1 lieu trouvé."), "{found}");
+        vm.choose(0);
+        let loading = page(&vm);
+        assert!(loading.contains("Chargement des rues de Kreuzberg, Berlin…"), "{loading}");
+        for h in [h, found, loading] {
+            for english in ENGLISH {
+                assert!(!h.contains(english), "{english:?} in {h}");
+            }
+        }
     }
 }

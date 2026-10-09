@@ -10,7 +10,9 @@ use super::area::Area;
 use super::loader::Loader;
 use super::nominatim::Place;
 use crate::city::store::CityStore;
+use crate::shared::i18n::{Args, I18n};
 use crate::shared::ports::Ports;
+use crate::shared::said::{Arg, Said};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Status {
@@ -20,7 +22,8 @@ pub enum Status {
     Nothing,
     /// The streets of the named place are being got.
     Loading(String),
-    Failed(String),
+    /// Why the search or the streets failed, said in the language of the page when shown.
+    Failed(Said),
 }
 
 /// A place found, as a row of the list.
@@ -32,6 +35,7 @@ pub struct Row {
 
 pub struct AreaVm {
     ports: Ports,
+    i18n: Rc<I18n>,
     loader: Loader,
     text: ArcRwSignal<String>,
     found: ArcRwSignal<Vec<Place>>,
@@ -50,10 +54,12 @@ impl AreaVm {
     /// How many places the list shows.
     pub const SHOWN: usize = 5;
 
-    pub fn new(ports: Ports) -> Rc<AreaVm> {
+    /// The search, saying what it says in the language of `i18n` (the page's one instance, which the shell switches).
+    pub fn new(ports: Ports, i18n: Rc<I18n>) -> Rc<AreaVm> {
         Rc::new(AreaVm {
             loader: Loader::new(ports.clone()),
             ports,
+            i18n,
             text: ArcRwSignal::new(String::new()),
             found: ArcRwSignal::new(Vec::new()),
             status: ArcRwSignal::new(Status::Idle),
@@ -122,24 +128,32 @@ impl AreaVm {
         self.active.set(Some(next as usize));
     }
 
-    /// What the list says about itself, for the person and a screen reader; None when it has nothing to say.
-    pub fn note(&self) -> Option<String> {
+    /// The message `key`, for a view: drawn again when the language is switched.
+    pub fn word(&self, key: &str) -> String {
+        self.i18n.tr(key, &Args::new())
+    }
+
+    /// What the list has to say about itself, as data; None when it has nothing to say.
+    fn note_said(&self) -> Option<Said> {
         match self.status.get() {
             Status::Idle => None,
-            Status::Searching => Some("Searching…".to_string()),
-            Status::Found => {
-                let n = self.rows().len();
-                Some(format!("{n} {} found. Use the arrow keys, then Enter.", if n == 1 { "place" } else { "places" }))
-            }
-            Status::Nothing => Some("No place found. Try a city, a neighbourhood or an address.".to_string()),
-            Status::Loading(name) => Some(format!("Getting the streets of {name}…")),
+            Status::Searching => Some(Said::new("place-searching")),
+            Status::Found => Some(Said::new("place-found").with("n", Arg::Num(self.rows().len() as i64))),
+            Status::Nothing => Some(Said::new("place-nothing")),
+            Status::Loading(name) => Some(Said::new("place-loading").with("name", Arg::Text(name))),
             Status::Failed(why) => Some(why),
         }
     }
 
+    /// What the list says about itself, for the person and a screen reader; None when it has nothing to say.
+    /// It follows a switch of language.
+    pub fn note(&self) -> Option<String> {
+        self.note_said().map(|said| super::say(&self.i18n, &said))
+    }
+
     fn say(&self) {
-        if let Some(note) = self.note() {
-            self.ports.announcer.say(&note);
+        if let Some(said) = self.note_said() {
+            self.ports.announcer.say(&super::say_now(&self.i18n, &said));
         }
     }
 
@@ -192,7 +206,7 @@ impl AreaVm {
         self.loader.load(&store, move |result| {
             match result {
                 Ok(()) if CityStore::choose(&*vm.ports.storage, &area) => vm.ports.navigator.go("map.html"),
-                Ok(()) => vm.status.set(Status::Failed("The place could not be kept: storage is blocked.".to_string())),
+                Ok(()) => vm.status.set(Status::Failed(Said::new("place-area-not-kept"))),
                 Err(why) => vm.status.set(Status::Failed(why)),
             }
             if matches!(vm.status.get_untracked(), Status::Failed(_)) {
@@ -205,6 +219,7 @@ impl AreaVm {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::i18n::{Args, Locale};
     use crate::shared::ports::{MemoryStorage, RecordingAnnouncer, test_ports_with_services};
 
     const BERLIN: &[u8] = br#"[{"display_name":"Kreuzberg, Friedrichshain-Kreuzberg, Berlin, 10999, Germany","lat":"52.4990","lon":"13.4030","boundingbox":["52.48","52.51","13.38","13.43"]},
@@ -225,12 +240,22 @@ mod tests {
     }
 
     fn fixture() -> Fixture {
+        fixture_in(Locale::En)
+    }
+
+    fn fixture_in(locale: Locale) -> Fixture {
         let (mut ports, fetcher, importer, navigator) = test_ports_with_services();
         let storage = Rc::new(MemoryStorage::default());
         let said = Rc::new(RecordingAnnouncer::default());
         ports.storage = storage.clone();
         ports.announcer = said.clone();
-        Fixture { vm: AreaVm::new(ports), fetcher, importer, navigator, storage, said }
+        Fixture { vm: AreaVm::new(ports, crate::i18n_for(locale)), fetcher, importer, navigator, storage, said }
+    }
+
+    /// `n` places found, as Nominatim would send them.
+    fn places(n: usize) -> Vec<u8> {
+        let one = |i: usize| format!(r#"{{"display_name":"Place {i}, Town","lat":"1.{i}","lon":"2.0","boundingbox":["1.0","1.9","1.9","2.1"]}}"#);
+        format!("[{}]", (0..n).map(one).collect::<Vec<_>>().join(",")).into_bytes()
     }
 
     fn found(f: &Fixture) {
@@ -291,8 +316,123 @@ mod tests {
         assert_eq!(f.vm.status(), Status::Idle);
         f.vm.search();
         f.fetcher.answer(Err("the server answered 429".into()));
-        assert_eq!(f.vm.status(), Status::Failed("the server answered 429".into()));
-        assert_eq!(f.vm.note().unwrap(), "the server answered 429");
+        assert!(matches!(f.vm.status(), Status::Failed(_)));
+        assert_eq!(f.vm.note().unwrap(), "the server answered 429", "the browser's own words, as they are");
+    }
+
+    /// The note for each state of the search, in one language.
+    fn notes(locale: Locale) -> Vec<String> {
+        let f = fixture_in(locale);
+        let mut out = Vec::new();
+        f.vm.set_text("x");
+        f.vm.search();
+        out.push(f.vm.note().unwrap());
+        f.fetcher.answer(Ok(places(1)));
+        out.push(f.vm.note().unwrap());
+        f.vm.set_text("y");
+        f.vm.search();
+        f.fetcher.answer(Ok(places(5)));
+        out.push(f.vm.note().unwrap());
+        f.vm.set_text("z");
+        f.vm.search();
+        f.fetcher.answer(Ok(b"[]".to_vec()));
+        out.push(f.vm.note().unwrap());
+        f.vm.set_text("w");
+        f.vm.search();
+        f.fetcher.answer(Ok(places(2)));
+        f.vm.choose(0);
+        out.push(f.vm.note().unwrap());
+        f.fetcher.answer(Err("no tiles".into()));
+        f.fetcher.answer(Err("the server answered 504".into()));
+        out.push(f.vm.note().unwrap());
+        f.vm.set_text("v");
+        f.vm.search();
+        f.fetcher.answer(Ok(b"<html>".to_vec()));
+        out.push(f.vm.note().unwrap().split(" (").next().unwrap().to_string());
+        out
+    }
+
+    #[test]
+    fn every_note_of_the_search_is_said_in_english_as_before_and_in_french() {
+        assert_eq!(
+            notes(Locale::En),
+            vec![
+                "Searching…",
+                "1 place found. Use the arrow keys, then Enter.",
+                "5 places found. Use the arrow keys, then Enter.",
+                "No place found. Try a city, a neighbourhood or an address.",
+                "Getting the streets of Place 0, Town…",
+                "the roads of Place 0, Town could not be fetched (the server answered 504)",
+                "the place search answered something unexpected",
+            ]
+        );
+        assert_eq!(
+            notes(Locale::FrCa),
+            vec![
+                "Recherche en cours…",
+                "1 lieu trouvé. Utilisez les flèches, puis Entrée.",
+                "5 lieux trouvés. Utilisez les flèches, puis Entrée.",
+                "Aucun lieu trouvé. Essayez une ville, un quartier ou une adresse.",
+                "Chargement des rues de Place 0, Town…",
+                "les rues de Place 0, Town n’ont pas pu être obtenues (the server answered 504)",
+                "la recherche de lieux a répondu quelque chose d’inattendu",
+            ]
+        );
+    }
+
+    #[test]
+    fn zero_and_one_place_found_are_singular_in_french_and_zero_is_plural_in_english() {
+        let said = |locale: Locale| [0, 1, 2].map(|n| crate::i18n_for(locale).tr_now("place-found", &Args::new().num("n", n)));
+        let then = " Use the arrow keys, then Enter.";
+        assert_eq!(said(Locale::En), [0, 1, 2].map(|n| format!("{n} {}found.{then}", if n == 1 { "place " } else { "places " })));
+        let ensuite = " Utilisez les flèches, puis Entrée.";
+        assert_eq!(said(Locale::FrCa), ["0 lieu trouvé.", "1 lieu trouvé.", "2 lieux trouvés."].map(|s| format!("{s}{ensuite}")));
+    }
+
+    #[test]
+    fn what_is_announced_is_in_the_language_of_the_page() {
+        let f = fixture_in(Locale::FrCa);
+        found(&f);
+        assert_eq!(f.said.take(), vec!["Recherche en cours…", "2 lieux trouvés. Utilisez les flèches, puis Entrée."]);
+    }
+
+    #[test]
+    fn the_note_follows_a_switch_of_language() {
+        let (ports, fetcher, ..) = test_ports_with_services();
+        let i18n = crate::i18n_for(Locale::En);
+        let vm = AreaVm::new(ports, i18n.clone());
+        vm.set_text("x");
+        vm.search();
+        fetcher.answer(Ok(b"[]".to_vec()));
+        let owner = Owner::new();
+        owner.set();
+        let v = StoredValue::new_local(vm.clone());
+        let note = Memo::new(move |_| v.with_value(|vm| vm.note()));
+        assert!(note.get().unwrap().starts_with("No place found"));
+        i18n.set(Locale::FrCa);
+        assert!(note.get().unwrap().starts_with("Aucun lieu trouvé"), "{:?}", note.get());
+    }
+
+    #[test]
+    fn roads_that_cannot_be_kept_are_said_in_both_languages() {
+        let expected = [
+            (Locale::En, "the roads could not be kept: storage is blocked or full"),
+            (Locale::FrCa, "les rues n’ont pas pu être conservées\u{a0}: le stockage est bloqué ou plein"),
+        ];
+        for (locale, expected) in expected {
+            let f = fixture_in(locale);
+            found(&f);
+            f.vm.choose(0);
+            f.fetcher.answer(Err("no tiles".into()));
+            f.fetcher.answer(Ok(b"<osm/>".to_vec()));
+            f.storage.blocked(true);
+            f.importer.answer(Ok(NETWORK.to_string()));
+            assert_eq!(f.vm.note().unwrap(), expected);
+        }
+        // Kept, then the choice of area cannot be: said the same way.
+        let said = |locale| crate::shared::said::say_now(&crate::i18n_for(locale), crate::shared::units::Units::Metres, &Said::new("place-area-not-kept"));
+        assert_eq!(said(Locale::En), "The place could not be kept: storage is blocked.");
+        assert_eq!(said(Locale::FrCa), "Le lieu n’a pas pu être conservé\u{a0}: le stockage est bloqué.");
     }
 
     #[test]
@@ -332,7 +472,7 @@ mod tests {
         f.vm.choose(1);
         f.fetcher.answer(Err("no tiles".into()));
         f.fetcher.answer(Err("the server answered 504".into()));
-        assert!(matches!(f.vm.status(), Status::Failed(m) if m.contains("504")));
+        assert!(matches!(f.vm.status(), Status::Failed(_)) && f.vm.note().unwrap().contains("504"));
         assert!(f.navigator.take().is_empty());
         assert_eq!(CityStore::current_area(&*f.storage), crate::place::area::default_area(), "still the default");
     }

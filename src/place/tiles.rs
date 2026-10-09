@@ -9,6 +9,8 @@ use std::collections::{HashMap, HashSet};
 
 use serde::Deserialize;
 
+use crate::shared::said::{Arg, Said};
+
 /// Where the tiles are, relative to the pages.
 pub const DIR: &str = "data/metro";
 
@@ -32,10 +34,10 @@ pub struct Index {
 }
 
 impl Index {
-    pub fn parse(json: &[u8]) -> Result<Index, String> {
-        let index: Index = serde_json::from_slice(json).map_err(|e| format!("the tile index was not understood ({e})"))?;
+    pub fn parse(json: &[u8]) -> Result<Index, Said> {
+        let index: Index = serde_json::from_slice(json).map_err(|e| Said::new("place-index-not-understood").with("e", Arg::Text(e.to_string())))?;
         if index.dlon <= 0.0 || index.dlat <= 0.0 {
-            return Err("the tile index has no tile size".to_string());
+            return Err(Said::new("place-index-no-size"));
         }
         Ok(index)
     }
@@ -95,7 +97,8 @@ mod tests {
 
     #[test]
     fn an_index_that_is_not_one_is_an_error() {
-        assert!(Index::parse(b"<html>").unwrap_err().contains("not understood"));
-        assert!(Index::parse(br#"{"lon0":0,"lat0":0,"dlon":0,"dlat":0.1,"tiles":[]}"#).unwrap_err().contains("tile size"));
+        let en = |s: Said| crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres, &s);
+        assert!(en(Index::parse(b"<html>").unwrap_err()).starts_with("the tile index was not understood (expected value"));
+        assert_eq!(en(Index::parse(br#"{"lon0":0,"lat0":0,"dlon":0,"dlat":0.1,"tiles":[]}"#).unwrap_err()), "the tile index has no tile size");
     }
 }

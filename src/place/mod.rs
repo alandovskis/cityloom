@@ -9,6 +9,23 @@ pub mod tiles;
 pub mod view;
 pub mod vm;
 
+use crate::shared::i18n::{I18n, Resources};
+use crate::shared::said::Said;
+use crate::shared::units::Units;
+
+/// What the place search says, in both languages.
+pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
+
+/// A place's message in words, for a view. Nothing a place says has a length in it, so the units do not matter.
+pub fn say(i18n: &I18n, said: &Said) -> String {
+    crate::shared::said::say(i18n, Units::Metres, said)
+}
+
+/// The same, for a command: nothing is watched.
+pub fn say_now(i18n: &I18n, said: &Said) -> String {
+    crate::shared::said::say_now(i18n, Units::Metres, said)
+}
+
 /// A box on the earth, in degrees.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bounds {
@@ -86,6 +103,12 @@ mod tests {
     }
 
     #[test]
+    fn the_place_ftl_files_have_the_same_messages_and_variables() {
+        use crate::shared::i18n::tests::parity_problems;
+        assert_eq!(parity_problems(RESOURCES.en, RESOURCES.fr), Vec::<String>::new());
+    }
+
+    #[test]
     fn text_is_encoded_for_a_query() {
         assert_eq!(encode("Rue de l'Église, Paris"), "Rue%20de%20l%27%C3%89glise%2C%20Paris");
         assert_eq!(encode("a-b_c.d~e9"), "a-b_c.d~e9");
@@ -96,6 +119,10 @@ mod tests {
 /// they are already kept. The pages call this before they open the city. Resolves with the
 /// empty string when the city is ready, or with what went wrong, in words; the city is then the
 /// sample, so the page still works.
+///
+/// What went wrong is worded in the language the document says it is in: a translated page's head script
+/// sets `<html lang>` from the stored choice before any module runs, and a page that is not translated keeps
+/// its English `lang`, so a French reader is not told French over English markup.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn prepare_city() -> js_sys::Promise {
@@ -105,8 +132,10 @@ pub fn prepare_city() -> js_sys::Promise {
         let ports = browser_ports();
         let store = CityStore::current(ports.storage.clone());
         let announcer = ports.announcer.clone();
+        let lang = leptos::prelude::document().document_element().and_then(|html| html.get_attribute("lang")).unwrap_or_default();
+        let i18n = crate::i18n_for(crate::shared::i18n::Locale::parse(&lang));
         loader::Loader::new(ports).load(&store, move |result| {
-            let problem = result.err().unwrap_or_default();
+            let problem = result.err().map(|why| say_now(&i18n, &why)).unwrap_or_default();
             if !problem.is_empty() {
                 announcer.say(&problem);
             }
