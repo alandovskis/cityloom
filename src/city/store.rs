@@ -128,14 +128,6 @@ impl CityStore {
         change(&mut city) && self.storage.remember(&self.key(CITY_KEY), &city.save())
     }
 
-    /// Puts every street and junction back as first laid out, and keeps that.
-    pub fn reset(&self) -> bool {
-        self.write(|city| {
-            city.reset();
-            true
-        })
-    }
-
     /// The index of the region the person chose, which the pages share; the
     /// first when none is chosen or it is unknown.
     pub fn region(&self) -> usize {
@@ -220,21 +212,6 @@ mod tests {
         assert!(s.write(nudge(a)));
         assert!(s.write(nudge(b)));
         assert_eq!(s.open().view(0).edited, 2);
-    }
-
-    #[test]
-    fn starting_over_puts_everything_back_and_keeps_that() {
-        let (s, _) = store();
-        let street = s.open().view(0).edges[0].uid;
-        s.write(|c| {
-            let mut e = c.street_editor(street, 0).unwrap();
-            let u = e.view().segments[0].uid;
-            e.nudge_width(u, 100);
-            c.keep_street(street, e.snapshot())
-        });
-        assert_eq!(s.open().view(0).edited, 1);
-        assert!(s.reset());
-        assert_eq!(s.open().view(0).edited, 0);
     }
 
     fn tiny_network() -> Network {

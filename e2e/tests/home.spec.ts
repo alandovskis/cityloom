@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import type { Page } from "@playwright/test";
 
-import { expect, live, openStreet, test } from "./fixtures";
+import { expect, live, openStreet, placesOnMap, test } from "./fixtures";
 
 const CORS = { "access-control-allow-origin": "*" };
 const EXTRACT = fileURLToPath(new URL("../../osm_import/tests/data/kreuzberg.osm", import.meta.url));
@@ -76,7 +76,7 @@ test.describe("the home page", () => {
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/map\.html$/);
     await expect(page.locator("#title-block")).toContainText("Kreuzberg, Friedrichshain-Kreuzberg");
-    expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(50);
+    expect(Number(await page.locator("#tb-places").innerText())).toBeGreaterThan(50);
     expect(requests.some((r) => r.startsWith("https://overpass-api.de/"))).toBe(true);
   });
 
@@ -121,7 +121,7 @@ test.describe("the home page", () => {
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/map\.html$/);
     await expect(page.locator("#title-block")).toContainText("Mile End, Montréal");
-    expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(20);
+    expect((await placesOnMap(page)).streets.length).toBeGreaterThan(20);
     expect(asked).toEqual([]);
   });
 

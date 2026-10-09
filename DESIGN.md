@@ -275,7 +275,7 @@ Flat, pale, named. Lane and strip kinds: sidewalk #cfd7de, planting #a5d696, bik
 
 The page is a stack of layers: the drawing at the back, floating cards on top. A fixed top **bar** (64px tall, 16px from the edges) holds the logo, the Map / Street / Intersection switcher, the search (map), the Piece details and Notes toggles and the avatar menu. Cards sit 16px from the viewport edge and 12px below the bar.
 
-**Map page.** The map fills the viewport. Places card on the left (360px, full height), Notes card on the right (360px, as tall as its content), zoom group bottom-right, the status chip bottom-centre of the open area between the cards.
+**Map page.** The map fills the viewport, with no card on the left (`data-left="none"` on the page makes `--lw` 0). Notes card on the right (360px, as tall as its content), with its show/hide button a tab beside it down the window's right-hand side (vertical text, `.notes-tab`, against the card and at the edge when the card is hidden), zoom group bottom-right, the status chip bottom-centre of the open area between the cards.
 
 **Home page.** One hero card (up to 780px, 44px/48px padding) holds the headline, the large search with its blue Search button, the way in, and how the city stands. The city is drawn full-bleed behind it, inert, and eases in from the card's right edge with a gradient mask. Names are hidden on this backdrop.
 
@@ -285,7 +285,7 @@ The page is a stack of layers: the drawing at the back, floating cards on top. A
 - *Junction:* the tool strip holds only Undo, Redo and Start over, which are narrow enough to sit to the right of the title card on the same row. Below the plan and chip come two tray cards side by side (Add a street, Start from; 1.4fr and 1fr). Everything fits at 1440x900 without scrolling.
 - The strip is the same component in both editors. The two arrangements differ only in what the strip holds, and the wrap is the mechanism; do not hard-code either one.
 
-**The camera-inset pattern.** On the map, any floating card (marked `data-covers`) tells the camera how far it reaches in from each edge. The camera fits and re-fits the city inside the open rectangle between the cards, with a small gap, so a "fit" view never ends up hidden behind a panel. Bar, Places and Notes are covers; closing a panel (toggle, `data-inspector`/`data-notes` = closed) changes its reach to 0 and the map re-fits. The CSS counterpart: `--lw` and `--rw` hold how far the left and right panels reach, and anything that floats in the open area (north arrow, scale bar, zoom group, status chip) is placed from them. A new floating card must be marked as a cover and use these variables, not fixed offsets.
+**The camera-inset pattern.** On the map, any floating card (marked `data-covers`) tells the camera how far it reaches in from each edge. The camera fits and re-fits the city inside the open rectangle between the cards, with a small gap, so a "fit" view never ends up hidden behind a panel. Bar, Notes and the Notes tab (`data-covers="right"`) are covers; closing a panel (toggle, `data-inspector`/`data-notes` = closed) changes its reach to 0 and the map re-fits. The CSS counterpart: `--lw` and `--rw` hold how far the left and right panels reach, and anything that floats in the open area (north arrow, scale bar, zoom group, status chip) is placed from them. A new floating card must be marked as a cover and use these variables, not fixed offsets.
 
 **Spacing rhythm.** 16px page padding, 12px between stacked cards, 8px between controls in a strip, 10 to 12px row padding inside lists, 20px card padding in panels. Under 900px the page padding drops to 8px.
 
@@ -361,7 +361,7 @@ Draggable chips for streets or pieces to add and junctions to start from: 12px r
 The drawing on one white 16px Soft card that scrolls horizontally on a phone. A welcome note (accent wash band) and a time-of-day slider with a coloured range track (accent slider) may sit inside it above the drawing. Under a junction plan a two-column swatch key lists the strip kinds.
 
 ### The camera-inset floating panel (map)
-See Layout. The bar, Places card and Notes card are `data-covers` floating cards; the zoom group, north arrow, scale bar and status chip are placed with `--lw` and `--rw` so they stay in the open area. Floating panels are the product's signature move: a map-app arrangement where the drawing is never covered by what the camera was told to avoid.
+See Layout. The bar and Notes card (and, on the map, the Notes tab) are `data-covers` floating cards; the zoom group, north arrow, scale bar and status chip are placed with `--lw` and `--rw` so they stay in the open area. Floating panels are the product's signature move: a map-app arrangement where the drawing is never covered by what the camera was told to avoid.
 
 ### Read card
 A page to read (credits) is one white 16px card, 720px wide, on the land, with a 36px headline, an 18px `ink-2` lede, 17px section heads and 62ch text.

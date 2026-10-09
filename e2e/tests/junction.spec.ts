@@ -140,7 +140,8 @@ test.describe("what the junction editor keeps in the city", () => {
     await page.reload();
     await expect(turns(page).first()).not.toHaveClass(/\bon\b/);
     await page.goto("/map.html");
-    await expect(page.locator("#reset")).toBeEnabled();
+    await page.locator("#t-changes").click();
+    await expect(page.locator("#changes")).not.toBeEmpty();
   });
 
   test("a change is kept even when the page is left at once", async ({ page }) => {

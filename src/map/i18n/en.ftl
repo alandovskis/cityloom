@@ -6,8 +6,6 @@ map-page-description = See the whole city at once and open any street or junctio
 map-brand = CityLoom, the city map
 map-editors = Editors
 map-nav-map = Map
-map-places-toggle-title = Show or hide the places ( [ )
-map-places-panel = Places in the city
 map-basemap-label = Map of the city, north up
 map-does-it-work = Does it work?
 map-your-changes = Your changes
@@ -20,17 +18,15 @@ map-key-open = open
 map-key-zoom = zoom
 map-key-move = move the map
 map-key-whole = whole city
-map-key-panels = places, notes
+map-key-panels = notes
 
 ## The heading, the tools and the panels
 map-city-map = City map
-map-sheet-tools = Sheet tools
 map-view-tools = Map view
 map-zoom-out = Zoom out
 map-zoom-in = Zoom in
 map-whole-city = Whole city
 map-places = Places
-map-places-hint = Press a junction to open its plan. Press a street to open its cross-section.
 map-junctions = Junctions
 map-streets-heading = Streets
 map-tb-city = City
@@ -119,10 +115,6 @@ map-status-bad-more = { $n ->
 } attention: { $names } and more.
 
 ## Start over
-map-reset = Start over
-map-reset-armed = Press again to start over
-map-reset-armed-said = This puts every street and junction back as first laid out. Press again to confirm.
-map-reset-done = The city is back as it was first laid out.
 
 ## The home page's markup (web/index.html)
 map-home-title = CityLoom: redesign the streets of your city

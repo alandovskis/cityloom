@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, placesOnMap, test } from "./fixtures";
 
 // The pages open the area of the world that was chosen: before one is, the Plateau Mont-Royal. There are
 // no metro tiles in the tests, so one is served: a tile of one place, holding a real extract of the Plateau.
@@ -6,20 +6,17 @@ import { expect, test } from "./fixtures";
 test("the map opens on the default area, made of its real streets", async ({ page }) => {
   await page.goto("/map.html");
   await expect(page.locator("#title-block")).toContainText("Plateau");
-  expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(50);
-  expect(await page.locator("a.place-row[href^='intersection.html']").count()).toBeGreaterThan(10);
-  // a street of the area, by its real name
-  await expect(page.locator("#places-panel")).toContainText(/Saint-Laurent|Rue |Avenue |Boulevard /);
+  const places = await placesOnMap(page);
+  expect(places.streets.length).toBeGreaterThan(50);
+  expect(places.junctions.length).toBeGreaterThan(10);
 });
 
 test("a junction of the area opens in the junction editor and a street in the street editor", async ({ page }) => {
   await page.goto("/map.html");
-  const junction = await page.locator("a.place-row[href^='intersection.html']").first().getAttribute("href");
-  await page.goto("/" + junction!);
+  const places = await placesOnMap(page);
+  await page.goto("/" + places.junctions[0]);
   await expect(page.locator(".plan, #plan").first()).toBeVisible();
-  await page.goto("/map.html");
-  const street = await page.locator("a.place-row[href^='street.html']").first().getAttribute("href");
-  await page.goto("/" + street!);
+  await page.goto("/" + places.streets[0]);
   await expect(page.locator("#drawing")).toBeVisible();
 });
 

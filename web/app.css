@@ -159,7 +159,8 @@
   }
 }
 
-:root[data-inspector="closed"] {
+:root[data-inspector="closed"],
+:root[data-left="none"] {
   --lw: 0px;
 }
 :root[data-notes="closed"] {
@@ -838,8 +839,8 @@ a.btn {
 .basemap-note[hidden] {
   display: none;
 }
-/* MapLibre's corners are the map's, which runs under the floating panels: the scale goes beside the Places
-   panel (and back to the edge when it is hidden), and the status bar leaves room for it (`.statusbar`). The
+/* MapLibre's corners are the map's, which runs under the floating panels: the scale goes beside the left
+   panel an editor has (and at the edge when there is none), and the status bar leaves room for it (`.statusbar`). The
    attribution, which opens leftwards into a line of text, stands on the zoom buttons (`.zoom-dock`: three
    44px buttons and two 1px rules), its right edge in line with theirs, clear of the status bar and the Notes.
    Each control keeps MapLibre's own 10px margin. */
@@ -1006,6 +1007,33 @@ a.btn {
   fill: transparent;
   stroke: transparent;
   pointer-events: all;
+}
+
+/* The map page's button for the Notes: a tab down the right-hand side, against the Notes (`--rw` is how far they
+   reach in, nothing when they are hidden), its text running downwards. */
+.notes-tab {
+  position: fixed;
+  z-index: 11;
+  top: 50%;
+  right: var(--rw);
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  min-width: 44px;
+  padding: 16px 0;
+  border: 0;
+  border-radius: 14px 0 0 14px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.notes-tab:hover {
+  background: var(--fill);
+}
+.notes-tab[aria-expanded="true"] {
+  color: var(--accent);
 }
 
 /* Zoom, whole city. */

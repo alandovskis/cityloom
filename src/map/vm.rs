@@ -170,15 +170,6 @@ pub struct Status {
     pub bad: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ResetOutcome {
-    /// Nothing has changed, so there is nothing to start over from.
-    Ignored,
-    /// Pressed once: it asks to be pressed again.
-    Armed,
-    Done,
-}
-
 /// The junction rows and the street rows, each with its folded text (see `MapVm::worded_rows`).
 type WordedRows = (Vec<(PlaceRow, String)>, Vec<(PlaceRow, String)>);
 
@@ -200,7 +191,6 @@ pub struct MapVm {
     basemap: ArcRwSignal<BasemapState>,
     moved: Cell<bool>,
     hot: ArcRwSignal<Option<String>>,
-    armed: ArcRwSignal<bool>,
     search: ArcRwSignal<String>,
     /// The result the arrow keys have moved to, by index into `results`.
     active: ArcRwSignal<Option<usize>>,
@@ -239,7 +229,6 @@ impl MapVm {
             basemap: ArcRwSignal::new(basemap),
             moved: Cell::new(false),
             hot: ArcRwSignal::new(None),
-            armed: ArcRwSignal::new(false),
             search: ArcRwSignal::new(String::new()),
             active: ArcRwSignal::new(None),
             worded: RefCell::new(None),
@@ -557,14 +546,6 @@ impl MapVm {
         Status { text: self.i18n.tr(key, &Args::new().num("n", bad.len() as i64).str("names", names)), bad: true }
     }
 
-    pub fn can_reset(&self) -> bool {
-        self.view().edited > 0
-    }
-
-    pub fn reset_label(&self) -> String {
-        self.word(if self.armed.get() { "map-reset-armed" } else { "map-reset" })
-    }
-
     pub fn camera(&self) -> Camera {
         self.camera.get()
     }
@@ -752,31 +733,6 @@ impl MapVm {
             _ => return false,
         }
         true
-    }
-
-    /// "Start over" undoes every change in the whole city and cannot itself be
-    /// undone, so it asks to be pressed twice.
-    pub fn press_reset(&self) -> ResetOutcome {
-        if !self.can_reset() {
-            return ResetOutcome::Ignored;
-        }
-        if !self.armed.get_untracked() {
-            self.armed.set(true);
-            self.ports.announcer.say(&self.i18n.tr_now("map-reset-armed-said", &Args::new()));
-            return ResetOutcome::Armed;
-        }
-        self.armed.set(false);
-        self.store.reset();
-        self.reload();
-        self.ports.announcer.say(&self.i18n.tr_now("map-reset-done", &Args::new()));
-        ResetOutcome::Done
-    }
-
-    /// Lets go of a first press of "start over".
-    pub fn disarm(&self) {
-        if self.armed.get_untracked() {
-            self.armed.set(false);
-        }
     }
 }
 
@@ -1128,37 +1084,6 @@ mod tests {
     }
 
     #[test]
-    fn start_over_asks_to_be_pressed_twice_and_then_puts_the_city_back() {
-        let (vm, said, storage) = vm();
-        assert!(!vm.can_reset());
-        assert_eq!(vm.press_reset(), ResetOutcome::Ignored);
-        nudge_street(&storage, vm.view().edges[0].uid, -100);
-        vm.reload();
-        assert!(vm.can_reset());
-        assert_eq!(vm.reset_label(), "Start over");
-        assert_eq!(vm.press_reset(), ResetOutcome::Armed);
-        assert_eq!(vm.reset_label(), "Press again to start over");
-        assert_eq!(said.take(), vec!["This puts every street and junction back as first laid out. Press again to confirm."]);
-        assert_eq!(vm.changes(), 1, "nothing is undone yet");
-        assert_eq!(vm.press_reset(), ResetOutcome::Done);
-        assert_eq!((vm.changes(), vm.reset_label().as_str()), (0, "Start over"));
-        assert_eq!(said.take(), vec!["The city is back as it was first laid out."]);
-        assert_eq!(CityStore::sample(storage.clone()).open().view(0).edited, 0, "and it is kept");
-    }
-
-    #[test]
-    fn letting_go_of_the_first_press_puts_the_button_back() {
-        let (vm, _, storage) = vm();
-        nudge_street(&storage, vm.view().edges[0].uid, -100);
-        vm.reload();
-        vm.press_reset();
-        vm.disarm();
-        assert_eq!(vm.reset_label(), "Start over");
-        assert_eq!(vm.press_reset(), ResetOutcome::Armed, "it must be asked again");
-        assert_eq!(vm.changes(), 1);
-    }
-
-    #[test]
     fn the_region_is_read_from_storage_and_can_be_changed() {
         let (ports, ..) = test_ports();
         ports.storage.remember(crate::city::store::REGION_KEY, "united-kingdom");
@@ -1236,8 +1161,6 @@ mod tests {
         assert!(vm.failing_items().is_empty() && vm.changed_items().is_empty());
         assert_eq!(vm.checks_lead(), "There are no places to check.");
         assert_eq!(vm.changes_lead(), "There are no places to change.");
-        assert!(!vm.can_reset());
-        assert_eq!(vm.press_reset(), ResetOutcome::Ignored);
         vm.set_search("avenue");
         assert!(vm.results().is_empty());
         assert_eq!(vm.search_note().as_deref(), Some("There are no places to search."));

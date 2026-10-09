@@ -12,7 +12,7 @@ const PAGES = [
     open: (page: Page) => page.goto("/map.html"),
     firstTab: "t-checks",
     secondTab: "t-changes",
-    details: "Places hidden.",
+    details: null, // the map has no left sidebar
   },
   {
     name: "street",
@@ -78,19 +78,6 @@ for (const p of PAGES) {
       await expect(page.locator("#region")).toHaveValue("united-kingdom");
     });
 
-    test("the left sidebar is hidden and shown from its button or the [ key, and remembered", async ({ page }) => {
-      const toggle = page.locator("#inspector-toggle");
-      await expect(toggle).toHaveAttribute("aria-expanded", "true");
-      await toggle.click();
-      await expect(page.locator("html")).toHaveAttribute("data-inspector", "closed");
-      await expect(toggle).toHaveAttribute("aria-expanded", "false");
-      await expect(live(page)).toHaveText(p.details);
-      await page.reload();
-      await expect(page.locator("html")).toHaveAttribute("data-inspector", "closed");
-      await page.keyboard.press("[");
-      await expect(page.locator("html")).not.toHaveAttribute("data-inspector", "closed");
-    });
-
     test("the notes are hidden and shown from their button or the ] key", async ({ page }) => {
       await page.locator("#notes-toggle").click();
       await expect(page.locator("html")).toHaveAttribute("data-notes", "closed");
@@ -100,12 +87,27 @@ for (const p of PAGES) {
       await expect(live(page)).toHaveText("Notes shown.");
     });
 
-    test("the keys for the sidebars are left alone while typing in a field", async ({ page }) => {
-      await page.locator("#account-btn").click();
-      await page.locator("#region").focus();
-      await page.keyboard.press("[");
-      await expect(page.locator("html")).not.toHaveAttribute("data-inspector", "closed");
-    });
+    if (p.details) {
+      test("the left sidebar is hidden and shown from its button or the [ key, and remembered", async ({ page }) => {
+        const toggle = page.locator("#inspector-toggle");
+        await expect(toggle).toHaveAttribute("aria-expanded", "true");
+        await toggle.click();
+        await expect(page.locator("html")).toHaveAttribute("data-inspector", "closed");
+        await expect(toggle).toHaveAttribute("aria-expanded", "false");
+        await expect(live(page)).toHaveText(p.details);
+        await page.reload();
+        await expect(page.locator("html")).toHaveAttribute("data-inspector", "closed");
+        await page.keyboard.press("[");
+        await expect(page.locator("html")).not.toHaveAttribute("data-inspector", "closed");
+      });
+
+      test("the keys for the sidebars are left alone while typing in a field", async ({ page }) => {
+        await page.locator("#account-btn").click();
+        await page.locator("#region").focus();
+        await page.keyboard.press("[");
+        await expect(page.locator("html")).not.toHaveAttribute("data-inspector", "closed");
+      });
+    }
 
     test("the notes tabs show one panel, move with the arrow keys, and remember the choice", async ({ page }) => {
       const first = page.locator(`#${p.firstTab}`);

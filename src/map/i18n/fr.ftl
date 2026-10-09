@@ -6,8 +6,6 @@ map-page-description = Voyez toute la ville d’un coup d’œil et ouvrez n’i
 map-brand = CityLoom, la carte de la ville
 map-editors = Éditeurs
 map-nav-map = Carte
-map-places-toggle-title = Afficher ou masquer les lieux ( [ )
-map-places-panel = Lieux de la ville
 map-basemap-label = Carte de la ville, nord en haut
 map-does-it-work = Est-ce que ça fonctionne?
 map-your-changes = Vos modifications
@@ -20,17 +18,15 @@ map-key-open = ouvrir
 map-key-zoom = zoom
 map-key-move = déplacer la carte
 map-key-whole = toute la ville
-map-key-panels = lieux, notes
+map-key-panels = notes
 
 ## L’en-tête, les outils et les panneaux
 map-city-map = Carte de la ville
-map-sheet-tools = Outils de la feuille
 map-view-tools = Vue de la carte
 map-zoom-out = Zoom arrière
 map-zoom-in = Zoom avant
 map-whole-city = Toute la ville
 map-places = Lieux
-map-places-hint = Appuyez sur une jonction pour ouvrir son plan. Appuyez sur une rue pour ouvrir sa coupe transversale.
 map-junctions = Jonctions
 map-streets-heading = Rues
 map-tb-city = Ville
@@ -119,10 +115,6 @@ map-status-bad-more = { $n ->
 } : { $names } et d’autres.
 
 ## Recommencer
-map-reset = Recommencer
-map-reset-armed = Appuyez de nouveau pour recommencer
-map-reset-armed-said = Toutes les rues et jonctions reviendront telles que tracées au départ. Appuyez de nouveau pour confirmer.
-map-reset-done = La ville est revenue telle que tracée au départ.
 
 ## Le balisage de la page d’accueil (web/index.html)
 map-home-title = CityLoom : réaménagez les rues de votre ville

@@ -567,12 +567,6 @@ impl City {
         serde_json::to_string(&saved).expect("the city serialises")
     }
 
-    /// Puts every street and junction back as first laid out.
-    pub fn reset(&mut self) {
-        self.streets = self.today_streets.clone();
-        self.junctions = self.today_junctions.clone();
-    }
-
     fn edge_index(&self, uid: u32) -> Option<usize> {
         (uid as usize).checked_sub(1).filter(|&e| e < self.layout.edges.len())
     }
@@ -1012,16 +1006,13 @@ mod tests {
         let v = back.view(0);
         assert!(v.edges[0].edited && v.nodes[1].edited);
         assert_eq!(v.edited, 2);
-        // The editors reopen with the earlier changes as one revision, and Start over undoes them.
+        // The editors reopen with the earlier changes as one revision, and Start over undoes them, in each editor.
         let mut e = back.street_editor(1, 0).unwrap();
         assert!(e.view().changed);
         assert!(e.reset());
         let mut j = back.junction_editor(node_uid(1), 0).unwrap();
         assert!(j.changed());
         assert!(j.reset());
-        let mut city = back;
-        city.reset();
-        assert_eq!(city.view(0).edited, 0);
     }
 
     #[test]

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 
 import type { Page } from "@playwright/test";
 
-import { expect, forgive, live, mapReady, mapStill, PLATEAU_TILES, serveBasemap, test } from "./fixtures";
+import { expect, forgive, live, mapReady, mapStill, PLATEAU_TILES, placesOnMap, serveBasemap, test } from "./fixtures";
 
 // The map page works on a real area: the default one, the Plateau Mont-Royal, from a metro tile.
 
@@ -65,12 +65,37 @@ test.describe("the city map", () => {
     await expect(page.locator("#basemap")).toHaveAttribute("aria-label", "Map of the city, north up");
     await expect(page.locator(".basemap-note")).toBeHidden();
     await expect(page.locator("#fit")).toHaveText(/ places\. Every check passes\.$/);
-    expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(50);
-    expect(await page.locator("a.place-row[href^='intersection.html']").count()).toBeGreaterThan(10);
+    const places = await placesOnMap(page);
+    expect(places.streets.length).toBeGreaterThan(50);
+    expect(places.junctions.length).toBeGreaterThan(10);
     const kinds = await page.evaluate(() => [
       ...new Set((window as any).cityloomMap.querySourceFeatures("places").map((f: any) => f.geometry.type)),
     ]);
     expect(kinds.sort()).toEqual(["LineString", "Point"]);
+  });
+
+  test("has no left sidebar: the map runs to the edge of the window", async ({ page }) => {
+    await expect(page.locator("#places-panel")).toHaveCount(0);
+    await expect(page.locator("#inspector-toggle")).toHaveCount(0);
+    await expect(page.locator("#reset")).toHaveCount(0);
+    const map = (await page.locator("#basemap").boundingBox())!;
+    expect(map.x).toBe(0);
+  });
+
+  test("the button for the Notes is a tab down the right-hand side, outside the header, with vertical text", async ({
+    page,
+  }) => {
+    const tab = page.locator("#notes-toggle");
+    await expect(page.locator(".bar #notes-toggle")).toHaveCount(0);
+    expect(await tab.evaluate((el) => getComputedStyle(el).writingMode)).toBe("vertical-rl");
+    const open = (await tab.boundingBox())!;
+    const notes = (await page.locator("#notes").boundingBox())!;
+    expect(open.x + open.width).toBeCloseTo(notes.x, 0); // against the Notes
+    await tab.click();
+    await expect(page.locator("html")).toHaveAttribute("data-notes", "closed");
+    const shut = (await tab.boundingBox())!;
+    expect(shut.x + shut.width).toBeCloseTo(page.viewportSize()!.width, 0); // at the window's edge
+    expect(shut.height).toBeGreaterThan(shut.width);
   });
 
   test("the streets lie on the basemap's roads", async ({ page }) => {
@@ -118,51 +143,11 @@ test.describe("the city map", () => {
     expect(result.on / result.seen).toBeGreaterThan(0.8);
   });
 
-  test("a place in the list opens its editor", async ({ page }) => {
-    const href = await page.locator("a.place-row[href^='street.html']").first().getAttribute("href");
-    await page.locator(`a.place-row[href="${href}"]`).click();
-    await expect(page).toHaveURL((url) => url.pathname.slice(1) + url.search === href);
-  });
-
-  test("every place is a link the keyboard reaches, and Enter on one opens its editor", async ({ page }) => {
-    // The map's canvas holds no place to focus: the Places list is how a keyboard gets to each of them.
-    const rows = page.locator("#places-panel .places a.place-row");
-    const counts = (await page.locator("#places-panel .insp-sub").textContent())!;
-    const [, junctions, streets] = /^(\d+) junctions?, (\d+) streets?$/.exec(counts)!;
-    expect(await rows.count()).toBe(Number(junctions) + Number(streets));
-    const reachable = await rows.evaluateAll(
-      (els) => els.filter((a) => (a as HTMLAnchorElement).href && (a as HTMLAnchorElement).tabIndex >= 0).length,
-    );
-    expect(reachable).toBe(Number(junctions) + Number(streets));
-
-    // Tab goes from one place to the next, and the place with the focus is the one shown.
-    await rows.first().focus();
-    await page.keyboard.press("Tab");
-    const second = rows.nth(1);
-    await expect(second).toBeFocused();
-    await expect(second).toHaveClass(/\bon\b/);
-    const href = (await second.getAttribute("href"))!;
-    await page.keyboard.press("Enter");
-    await expect(page).toHaveURL((url) => url.pathname.slice(1) + url.search === href);
-  });
-
   test("pressing a place on the map opens it", async ({ page }) => {
     const spot = await junctionSpot(page);
     await page.mouse.move(spot.x, spot.y);
     await page.mouse.click(spot.x, spot.y);
     await expect(page).toHaveURL(new RegExp(`intersection\\.html\\?junction=${spot.hot.slice(2)}$`));
-  });
-
-  test("the pointer over a place on the map highlights it in the list too", async ({ page }) => {
-    const spot = await junctionSpot(page);
-    await page.mouse.move(spot.x, spot.y);
-    await expect(page.locator("a.place-row.on")).toHaveCount(1);
-    await expect(page.locator("a.place-row.on")).toHaveAttribute(
-      "href",
-      `intersection.html?junction=${spot.hot.slice(2)}`,
-    );
-    await page.mouse.move(2, 400);
-    await expect(page.locator("a.place-row.on")).toHaveCount(0);
   });
 
   test("zooming in and out moves the view and the whole city button brings it back", async ({ page }) => {
@@ -218,27 +203,21 @@ test.describe("the city map", () => {
     await expect(page.locator(".maplibregl-ctrl-scale")).toContainText(/(ft|mi)$/);
   });
 
-  test("the scale and the attribution stay clear of the panels, the status bar and the zoom buttons", async ({
+  test("the scale and the attribution stay clear of the Notes, the status bar and the zoom buttons", async ({
     page,
   }) => {
     const box = async (selector: string) => (await page.locator(selector).boundingBox())!;
     await expect(page.locator(".maplibregl-ctrl-scale")).toBeVisible();
     // the attribution starts open, as a line of text
     await expect(page.locator(".maplibregl-ctrl-attrib")).toContainText("OpenStreetMap");
-    const panel = await box("#places-panel");
+    const map = await box("#basemap");
     const scale = await box(".maplibregl-ctrl-scale");
-    expect(scale.x).toBeGreaterThanOrEqual(panel.x + panel.width);
+    expect(scale.x - map.x).toBeLessThan(24);
     const attribution = await box(".maplibregl-ctrl-attrib");
-    for (const covers of ["#places-panel", "#notes", ".statusbar", "#map-tools-slot"]) {
+    for (const covers of ["#notes", ".statusbar", "#map-tools-slot"]) {
       expect(overlaps(scale, await box(covers)), `the scale under ${covers}`).toBe(false);
       expect(overlaps(attribution, await box(covers)), `the attribution under ${covers}`).toBe(false);
     }
-
-    // With the Places panel hidden, the scale goes back to the map's edge.
-    await page.locator("#inspector-toggle").click();
-    await expect(page.locator("html")).toHaveAttribute("data-inspector", "closed");
-    const map = await box("#basemap");
-    await expect.poll(async () => (await box(".maplibregl-ctrl-scale")).x - map.x).toBeLessThan(24);
   });
 
   test("on a phone the scale and the attribution stay clear of the status line and the zoom buttons", async ({
@@ -263,64 +242,27 @@ test.describe("the city map", () => {
     expect(overlaps(scale, attribution)).toBe(false);
   });
 
-  test("the place the pointer is on in the list is lit on the map, and stays lit through a change of theme", async ({
-    page,
-  }) => {
-    const row = page.locator("#places-panel a.place-row[href^='intersection.html']").first();
-    const hot = (await row.getAttribute("data-hl"))!;
-    // Whether the map draws the place lit: null while it has no places (a new style is going in).
-    const lit = () =>
-      page.evaluate((id) => {
-        const map = (window as any).cityloomMap;
-        return map.getSource("places") ? map.getFeatureState({ source: "places", id }).hot === true : null;
-      }, hot);
-    expect(await lit()).toBe(false);
-    await row.hover();
-    await expect.poll(lit).toBe(true);
-    const light = await land(page);
-    // The theme changes while the pointer stays on the row: as the system's dark mode would, with no menu to
-    // reach (whose button would take the pointer off the row).
-    await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
-    await restyled(page, light);
-    await expect.poll(lit).toBe(true);
-    await expect(row).toHaveClass(/\bon\b/);
-    // and the pointer leaving the row puts it out
-    await page.mouse.move(2, 400);
-    await expect.poll(lit).toBe(false);
-  });
-
-  test("a place in the list is lit when the pointer comes onto it from the map", async ({ page }) => {
-    const row = page.locator("#places-panel a.place-row[href^='intersection.html']").first();
-    const hot = (await row.getAttribute("data-hl"))!;
-    const lit = () =>
-      page.evaluate((id) => {
-        return (window as any).cityloomMap.getFeatureState({ source: "places", id }).hot === true;
-      }, hot);
-    // The pointer is on the map, where it sets nothing, and then goes onto the row: leaving the map must not
-    // put out what the row lit.
-    await page.mouse.move(1400, 300);
-    await row.hover();
-    await expect.poll(lit).toBe(true);
-    await expect(row).toHaveClass(/\bon\b/);
-  });
-
-  test("a theme changes the basemap and keeps the places, and the pointer on one still lights it in the list", async ({
-    page,
-  }) => {
+  test("a theme changes the basemap and keeps the places, and the pointer on one still lights it", async ({ page }) => {
     const light = await land(page);
     expect(light).not.toBeNull();
     await page.locator("#account-btn").click();
     await page.locator('[data-theme-set="dark"]').click();
     await restyled(page, light);
-    // the pointer on the map lights the place in the list
+    // the pointer on a place lights it
     const spot = await junctionSpot(page);
     await page.mouse.move(spot.x, spot.y);
-    await expect(page.locator("a.place-row.on")).toHaveCount(1);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (id) => (window as any).cityloomMap.getFeatureState({ source: "places", id }).hot === true,
+          spot.hot,
+        ),
+      )
+      .toBe(true);
   });
 
-  test("a change made in a street's editor shows on the map and in start over", async ({ page }) => {
-    await expect(page.locator("#reset")).toBeDisabled();
-    const href = (await page.locator("a.place-row[href^='street.html']").first().getAttribute("href"))!;
+  test("a change made in a street's editor shows on the map", async ({ page }) => {
+    const href = (await placesOnMap(page)).streets[0];
     await page.goto("/" + href);
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
@@ -331,7 +273,6 @@ test.describe("the city map", () => {
     // the street, and on a real area perhaps a junction it meets
     await expect(page.locator("#fit")).toHaveText(/^\d+ places? needs? attention: /);
     await expect(page.locator("#fit .tick")).toHaveCount(0);
-    await expect(page.locator("#reset")).toBeEnabled();
     const marked = await page.evaluate(() =>
       (window as any).cityloomMap.querySourceFeatures("places").some((f: any) => f.properties.status !== "ok"),
     );
@@ -339,31 +280,10 @@ test.describe("the city map", () => {
     await page.locator("#t-changes").click();
     await expect(page.locator("#changes")).not.toBeEmpty();
   });
-
-  test("start over asks to be pressed twice, and then puts the city back as first laid out", async ({ page }) => {
-    const href = (await page.locator("a.place-row[href^='street.html']").first().getAttribute("href"))!;
-    await page.goto("/" + href);
-    await page.locator("#wrap").focus();
-    await page.keyboard.press("ArrowRight");
-    await page.keyboard.press("+");
-    await expect(live(page)).toContainText("Resize");
-    await page.goto("/map.html");
-    await page.locator("#reset").click();
-    await expect(page.locator("#reset-label")).toHaveText("Press again to start over");
-    await expect(live(page)).toHaveText(
-      "This puts every street and junction back as first laid out. Press again to confirm.",
-    );
-    await page.locator("#reset").click();
-    await expect(page.locator("#reset")).toBeDisabled();
-    await expect(page.locator("#fit")).toHaveText(/ places\. Every check passes\.$/);
-    await expect(page.locator("#fit .tick.fresh")).toBeVisible();
-    await page.goto("/" + href);
-    await expect(page.locator("#revs tbody tr")).toHaveCount(1);
-  });
 });
 
 test.describe("when there is no basemap", () => {
-  test("tiles that cannot be had are said, and the page and its places still work", async ({
+  test("tiles that cannot be had are said, and the page and its notes still work", async ({
     page,
     context,
     errors,
@@ -373,8 +293,8 @@ test.describe("when there is no basemap", () => {
     await page.goto("/map.html");
     await expect(page.locator(".basemap-note")).toContainText("The basemap could not be loaded");
     await expect(page.locator(".basemap-note")).toContainText("just prepare");
-    await expect(page.locator("a.place-row[href^='street.html']")).not.toHaveCount(0);
-    expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(50);
+    // the city is in the Notes, though there is no map to draw it on
+    expect(Number(await page.locator("#tb-places").innerText())).toBeGreaterThan(50);
     // The failed request, and MapLibre's report of its source failing for it, are the point of the test;
     // anything else still fails it.
     forgive(
@@ -393,16 +313,13 @@ test.describe("when there is no basemap", () => {
     await expect(page.locator(".basemap-note")).toContainText("The roads of this place could not be loaded");
     // no places stand in for the area, and the page names the area it could not load
     await expect(page.locator("#fit")).toHaveText("No roads to show.");
-    await expect(page.locator("a.place-row")).toHaveCount(0);
-    await expect(page.locator("#city-count")).toHaveText("0 junctions, 0 streets");
     await expect(page.locator("#title-block")).toContainText("Plateau Mont-Royal");
-    await expect(page.locator("#street-name")).not.toHaveText("Sample city");
-    await expect(page.locator("#reset")).toBeDisabled();
+    await expect(page.locator("#title-block")).not.toContainText("Sample city");
     // the refused request is the point of the test; anything else still fails it
     forgive(errors, /^Failed to load resource: net::ERR_FAILED$/);
   });
 
-  test("a place beyond the basemap's coverage is said, and the page and its places still work", async ({
+  test("a place beyond the basemap's coverage is said, and the page and its notes still work", async ({
     page,
     context,
   }) => {
@@ -418,8 +335,8 @@ test.describe("when there is no basemap", () => {
     await expect(page.locator(".basemap-note")).toHaveText(
       "There is no basemap for this place. The map covers the Montréal area.",
     );
-    await expect(page.locator("a.place-row[href^='street.html']")).not.toHaveCount(0);
-    expect(await page.locator("a.place-row[href^='street.html']").count()).toBeGreaterThan(50);
+    // the city is in the Notes, though there is no map to draw it on
+    expect(Number(await page.locator("#tb-places").innerText())).toBeGreaterThan(50);
     // nothing of the city is drawn on a map of somewhere else
     expect(await page.evaluate(() => !(window as any).cityloomMap.getSource("places"))).toBe(true);
   });

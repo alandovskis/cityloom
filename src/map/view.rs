@@ -12,68 +12,16 @@ use leptos::web_sys::KeyboardEvent;
 
 #[cfg(target_arch = "wasm32")]
 use crate::map::camera::Insets;
-use crate::map::vm::{BasemapState, MapVm, NoteItem, PlaceRow, ResetOutcome, StateTag};
+use crate::map::vm::{BasemapState, MapVm, NoteItem, PlaceRow, StateTag};
 use crate::shared::bind::Bound;
 use crate::shared::said::Said;
 use crate::shared::tick::Tick;
 
 type Vm = Bound<MapVm>;
 
-/// How long a first press of "start over" waits to be pressed again, in milliseconds.
-#[cfg(target_arch = "wasm32")]
-const ARMED_MS: u64 = 4000;
-
 /// A message of the page, for a view: it follows a switch of language.
 fn word(vm: Vm, key: &'static str) -> impl Fn() -> String + Copy + 'static {
     move || vm.with(|v| v.word(key))
-}
-
-#[component]
-pub fn MapHeader(vm: Rc<MapVm>) -> impl IntoView {
-    let vm = Bound::new(vm);
-    // This page owns the window's title; it is written again when the language changes.
-    #[cfg(target_arch = "wasm32")]
-    Effect::new(move |_| document().set_title(&vm.with(|v| v.word("map-page-title"))));
-    view! {
-        <h1 id="street-name">{move || vm.with(|v| v.title())}</h1>
-        <p class="street-sub" id="street-sub">
-            <span>{word(vm, "map-city-map")}</span>
-            " "
-            <span aria-hidden="true">"\u{b7}"</span>
-            " "
-            <span id="city-count" class="fig">{move || vm.with(|v| v.counts())}</span>
-        </p>
-    }
-}
-
-#[component]
-pub fn ResetButton(vm: Rc<MapVm>) -> impl IntoView {
-    let vm = Bound::new(vm);
-    #[cfg(target_arch = "wasm32")]
-    let timer = StoredValue::new_local(None::<leptos::leptos_dom::helpers::TimeoutHandle>);
-    let press = move |_| {
-        let outcome = vm.with(|v| v.press_reset());
-        #[cfg(target_arch = "wasm32")]
-        {
-            if let Some(h) = timer.try_update_value(|t| t.take()).flatten() {
-                h.clear();
-            }
-            if outcome == ResetOutcome::Armed {
-                let h = set_timeout_with_handle(move || vm.with(|v| v.disarm()), std::time::Duration::from_millis(ARMED_MS)).ok();
-                timer.set_value(h);
-            }
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        let _ = outcome == ResetOutcome::Armed;
-    };
-    view! {
-        <div class="btns" role="toolbar" aria-label=word(vm, "map-sheet-tools")>
-            <button type="button" id="reset" class="btn" disabled=move || !vm.with(|v| v.can_reset()) on:click=press on:blur=move |_| vm.with(|v| v.disarm())>
-                <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>
-                <span id="reset-label">{move || vm.with(|v| v.reset_label())}</span>
-            </button>
-        </div>
-    }
 }
 
 #[component]
@@ -387,52 +335,6 @@ fn result_row(vm: Vm, row: PlaceRow, i: usize) -> impl IntoView {
                 {tag}
             </a>
         </li>
-    }
-}
-
-fn place_row(vm: Vm, row: PlaceRow) -> impl IntoView {
-    let on = {
-        let hot = row.hot.clone();
-        move || vm.with(|v| v.hot().as_deref() == Some(hot.as_str()))
-    };
-    let (enter, focus) = (row.hot.clone(), row.hot.clone());
-    let words = row_words(vm, row.name, row.sub);
-    let tag = state_tag(vm, row.tag);
-    view! {
-        <li>
-            <a
-                class=move || if on() { "place-row on" } else { "place-row" }
-                href=row.href
-                data-hl=row.hot
-                on:pointerenter=move |_| vm.with(|v| v.set_hot(Some(enter.clone())))
-                on:pointerleave=move |_| vm.with(|v| v.set_hot(None))
-                on:focus=move |_| vm.with(|v| v.set_hot(Some(focus.clone())))
-                on:blur=move |_| vm.with(|v| v.set_hot(None))
-            >
-                {words}
-                {tag}
-            </a>
-        </li>
-    }
-}
-
-/// The places in the city to open: the junctions, then the streets.
-#[component]
-pub fn Places(vm: Rc<MapVm>) -> impl IntoView {
-    let vm = Bound::new(vm);
-    view! {
-        <div class="insp-head">
-            <div><h2 class="insp-name">{word(vm, "map-places")}</h2><p class="insp-sub">{move || vm.with(|v| v.counts())}</p></div>
-        </div>
-        <p class="map-hint">{word(vm, "map-places-hint")}</p>
-        <section class="insp-sec">
-            <h3 class="note-h">{word(vm, "map-junctions")}</h3>
-            <ul class="places">{move || vm.with(|v| v.junction_rows()).into_iter().map(|r| place_row(vm, r)).collect_view()}</ul>
-        </section>
-        <section class="insp-sec">
-            <h3 class="note-h">{word(vm, "map-streets-heading")}</h3>
-            <ul class="places">{move || vm.with(|v| v.street_rows()).into_iter().map(|r| place_row(vm, r)).collect_view()}</ul>
-        </section>
     }
 }
 

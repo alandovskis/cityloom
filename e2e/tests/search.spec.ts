@@ -1,10 +1,16 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, mapReady, mapStill, openStreet, test } from "./fixtures";
+import { expect, live, mapReady, mapStill, openStreet, placesOnMap, test } from "./fixtures";
 
-/** The name of the first junction the map lists. */
-const firstJunctionName = async (page: Page) =>
-  (await page.locator("#places-panel a.place-row[href^='intersection.html'] b").first().innerText()).trim();
+/** The name of the first junction the search finds (it lists the junctions before the streets), with the box
+ *  left empty again. */
+const firstJunctionName = async (page: Page) => {
+  const found = page.locator("#search-results a.place-row[href^='intersection.html'] b").first();
+  await page.locator("#search").fill("e");
+  const name = (await found.innerText()).trim();
+  await page.locator("#search").fill("");
+  return name;
+};
 
 test.describe("the search box on the city map", () => {
   test.beforeEach(async ({ page }) => {
@@ -83,7 +89,8 @@ test.describe("the search box on the city map", () => {
   });
 
   test("a search that finds nothing says so and how to get the places back", async ({ page }) => {
-    const places = await page.locator("#places-panel a.place-row").count();
+    const { junctions, streets } = await placesOnMap(page);
+    const places = junctions.length + streets.length;
     await page.locator("#search").fill("zzz");
     await expect(page.locator('#search-results [role="option"]')).toHaveCount(0);
     await expect(page.locator(".search-note")).toHaveText(
@@ -139,31 +146,32 @@ test.describe("the map under the floating panels", () => {
       return { l, r: rt, t, b };
     });
 
-  test("the whole city is fitted between the panels and under the bar, and centred there", async ({ page }) => {
-    const left = (await page.locator(".panel.left").boundingBox())!;
+  test("the whole city is fitted left of the Notes and under the bar, and centred there", async ({ page }) => {
+    const map = (await page.locator("#basemap").boundingBox())!;
     const right = (await page.locator(".panel.right").boundingBox())!;
     const bar = (await page.locator(".bar").boundingBox())!;
-    await expect.poll(async () => (await placesBox(page)).l).toBeGreaterThan(left.x + left.width - 1);
     const c = await placesBox(page);
+    expect(c.l).toBeGreaterThan(map.x - 1);
     expect(c.r).toBeLessThan(right.x + 1);
     expect(c.t).toBeGreaterThan(bar.y + bar.height - 1);
-    const open = { l: left.x + left.width, r: right.x };
+    const open = { l: map.x, r: right.x };
     // The old SVG drawing was placed exactly; MapLibre fits with padding through a camera ease, so this allows
     // some room. Once still the fit is off by well under a pixel (0.1 px measured); a panel the fit ignored would
     // move the centre by half its width (180 px for the 360 px panel), far past 60.
     expect(Math.abs((c.l + c.r) / 2 - (open.l + open.r) / 2)).toBeLessThan(60);
   });
 
-  test("hiding the panels gives the map the room back and Whole city centres it again", async ({ page }) => {
-    const before = await placesBox(page);
-    await page.locator("#inspector-toggle").click();
+  test("hiding the Notes gives the map the room back and Whole city centres it again", async ({ page }) => {
+    const centred = async () => {
+      const b = await placesBox(page);
+      return Math.abs((b.l + b.r) / 2 - page.viewportSize()!.width / 2);
+    };
+    // with the Notes open the city sits left of them, well away from the middle of the window
+    expect(await centred()).toBeGreaterThan(100);
     await page.locator("#notes-toggle").click();
     await page.locator("#zoom-fit").click();
-    await expect
-      .poll(async () => (await placesBox(page)).r - (await placesBox(page)).l)
-      .toBeGreaterThan(before.r - before.l);
     await mapStill(page); // measured where the fit ends, not on its way there
-    const after = await placesBox(page);
-    expect(Math.abs((after.l + after.r) / 2 - page.viewportSize()!.width / 2)).toBeLessThan(60);
+    // the tab for the Notes, now at the edge, still takes a little of the room
+    expect(await centred()).toBeLessThan(60);
   });
 });

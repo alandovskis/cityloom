@@ -79,22 +79,36 @@ export async function serveWorld(page: Page) {
   await page.route("https://overpass-api.de/**", (route) => route.abort());
 }
 
-/** Opens a junction of the city the way a person does: from the map's list of places. Says its address. */
+/** The places of the city on the map, as the addresses of their editors: the junctions, then the streets, each
+ *  in the order of its number. */
+export async function placesOnMap(page: Page) {
+  await mapReady(page);
+  return page.evaluate(() => {
+    const hots = new Set<string>();
+    for (const f of (window as any).cityloomMap.querySourceFeatures("places")) hots.add(f.properties.hot);
+    const hrefs = (kind: string, page: string, param: string) =>
+      [...hots]
+        .filter((h) => h.startsWith(`${kind}-`))
+        .map((h) => Number(h.slice(2)))
+        .sort((a, b) => a - b)
+        .map((uid) => `${page}?${param}=${uid}`);
+    return { junctions: hrefs("j", "intersection.html", "junction"), streets: hrefs("s", "street.html", "street") };
+  });
+}
+
+/** Opens a junction of the city, by the address the map gives it. Says its address. */
 export async function openJunction(page: Page, n = 0) {
-  return openPlace(page, "intersection.html", n);
-}
-
-/** Opens a street of the city from the map's list of places. Says its address. */
-export async function openStreet(page: Page, n = 0) {
-  return openPlace(page, "street.html", n);
-}
-
-async function openPlace(page: Page, editor: string, n: number) {
   await page.goto("/map.html");
-  const row = page.locator(`#places-panel a.place-row[href^='${editor}']`).nth(n);
-  const href = (await row.getAttribute("href"))!;
-  await row.click();
-  await page.waitForURL(`**/${href}`);
+  const href = (await placesOnMap(page)).junctions[n];
+  await page.goto("/" + href);
+  return href;
+}
+
+/** Opens a street of the city, by the address the map gives it. Says its address. */
+export async function openStreet(page: Page, n = 0) {
+  await page.goto("/map.html");
+  const href = (await placesOnMap(page)).streets[n];
+  await page.goto("/" + href);
   return href;
 }
 

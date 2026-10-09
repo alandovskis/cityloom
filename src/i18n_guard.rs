@@ -422,7 +422,6 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("data-theme", "the name of an attribute"),
     ("data-covers", "the name of a data- attribute marking what floats over the map"),
     ("search-slot", "the id of an element of the map and home pages"),
-    ("reset-slot", "the id of an element of the map page"),
     ("map-tools-slot", "the id of an element of the map page"),
     ("map-slot", "the id of an element of the map page"),
     ("plan-key", "the id of an element of the map page"),

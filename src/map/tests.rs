@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::shared::testing::{button_tag, count, html};
+use crate::shared::testing::{count, html};
 // ---- the city map ---------------------------------------------------------------------------
 
 use crate::city::store::CityStore;
@@ -39,27 +39,6 @@ fn change_a_street(vm: &MapVm, storage: &Rc<MemoryStorage>, by_mm: i32) {
 }
 
 #[test]
-fn the_map_heading_names_the_city_and_counts_its_places() {
-    let (vm, _) = map_vm();
-    let h = map_html(|| view! { <map_ui::MapHeader vm=vm.clone()/> });
-    assert!(h.contains(">Sample city</h1>") && h.contains("City map") && h.contains("id=\"city-count\""));
-    assert!(h.contains("9 junctions, 23 streets"));
-}
-
-#[test]
-fn start_over_is_off_until_something_is_changed_and_then_says_what_it_does() {
-    let (vm, storage) = map_vm();
-    let h = map_html(|| view! { <map_ui::ResetButton vm=vm.clone()/> });
-    assert!(button_tag(&h, "reset").contains("disabled") && h.contains(">Start over<"));
-    change_a_street(&vm, &storage, -100);
-    let h = map_html(|| view! { <map_ui::ResetButton vm=vm.clone()/> });
-    assert!(!button_tag(&h, "reset").contains("disabled"));
-    vm.press_reset();
-    let h = map_html(|| view! { <map_ui::ResetButton vm=vm.clone()/> });
-    assert!(h.contains(">Press again to start over<"));
-}
-
-#[test]
 fn the_map_tools_zoom_in_out_and_to_the_whole_city() {
     let (vm, _) = map_vm();
     let h = map_html(|| view! { <map_ui::MapTools vm=vm.clone()/> });
@@ -79,19 +58,14 @@ fn a_map_page_with_nothing_to_show_says_why() {
 }
 
 #[test]
-fn a_map_page_whose_area_s_roads_were_not_had_lists_nothing_and_names_the_area() {
+fn a_map_page_whose_area_s_roads_were_not_had_names_the_area() {
     let (ports, _, _) = test_ports(); // the default area, whose roads are not kept
     let vm = MapVm::new(ports, crate::i18n_for(Locale::En));
     let area = crate::place::area::default_area().name;
-    let h = map_html(|| view! { <map_ui::MapHeader vm=vm.clone()/> });
-    assert!(h.contains(&format!(">{area}</h1>")) && h.contains("0 junctions, 0 streets") && !h.contains("Sample city"), "{h}");
-    let h = map_html(|| view! { <map_ui::Places vm=vm.clone()/> });
-    assert_eq!(count(&h, "place-row"), 0, "{h}");
     let h = map_html(|| view! { <map_ui::Status vm=vm.clone()/> });
     assert!(h.contains("class=\"fit bad\"") && h.contains("No roads to show.") && !h.contains("tick"), "{h}");
     let h = map_html(|| view! { <map_ui::TitleBlock vm=vm.clone()/> });
     assert!(h.contains(&format!("id=\"tb-street\">{area}<")) && h.contains("id=\"tb-places\" class=\"fig\">0<"), "{h}");
-    assert!(button_tag(&map_html(|| view! { <map_ui::ResetButton vm=vm.clone()/> }), "reset").contains("disabled"));
     assert_eq!(count(&map_html(|| view! { <map_ui::Checks vm=vm.clone()/> }), "<li"), 0);
     assert_eq!(count(&map_html(|| view! { <map_ui::Changes vm=vm.clone()/> }), "<li"), 0);
     let h = map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
@@ -117,28 +91,6 @@ fn the_map_s_status_line_says_whether_every_place_works() {
     change_a_street(&vm, &storage, 1_000);
     let h = map_html(|| view! { <map_ui::Status vm=vm.clone()/> });
     assert!(h.contains("class=\"fit bad\"") && h.contains("1 place needs attention: ") && !h.contains("tick"));
-}
-
-#[test]
-fn the_places_panel_lists_each_junction_and_street_as_a_link_with_what_is_wrong() {
-    let (vm, storage) = map_vm();
-    let h = map_html(|| view! { <map_ui::Places vm=vm.clone()/> });
-    assert_eq!(count(&h, "class=\"place-row\""), 32);
-    assert!(h.contains("href=\"intersection.html?junction=") && h.contains("href=\"street.html?street="));
-    assert!(h.contains(">Junctions</h3>") && h.contains(">Streets</h3>") && !h.contains("class=\"st"));
-    assert!(h.contains("Press a junction to open its plan. Press a street to open its cross-section."));
-    change_a_street(&vm, &storage, 1_000);
-    let h = map_html(|| view! { <map_ui::Places vm=vm.clone()/> });
-    assert_eq!(count(&h, "class=\"st bad\">Needs attention"), 1);
-}
-
-#[test]
-fn the_row_of_the_place_the_pointer_is_on_is_marked() {
-    let (vm, _) = map_vm();
-    let n = vm.view().nodes.iter().find(|n| n.junction).unwrap().uid;
-    vm.set_hot(Some(format!("j-{n}")));
-    let h = map_html(|| view! { <map_ui::Places vm=vm.clone()/> });
-    assert_eq!(count(&h, "class=\"place-row on\""), 1);
 }
 
 #[test]
@@ -261,13 +213,10 @@ fn the_hero_speaks_french_with_no_english_left() {
 /// Every view of the map page, drawn to HTML, with a street changed so it fails and the search open.
 fn every_view(vm: &Rc<MapVm>) -> String {
     let mut h = String::new();
-    h += &map_html(|| view! { <map_ui::MapHeader vm=vm.clone()/> });
-    h += &map_html(|| view! { <map_ui::ResetButton vm=vm.clone()/> });
     h += &map_html(|| view! { <map_ui::MapTools vm=vm.clone()/> });
     h += &map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
     h += &map_html(|| view! { <map_ui::Legend vm=vm.clone()/> });
     h += &map_html(|| view! { <map_ui::Status vm=vm.clone()/> });
-    h += &map_html(|| view! { <map_ui::Places vm=vm.clone()/> });
     h += &map_html(|| view! { <map_ui::ChecksLead vm=vm.clone()/> });
     h += &map_html(|| view! { <map_ui::Checks vm=vm.clone()/> });
     h += &map_html(|| view! { <map_ui::ChangesLead vm=vm.clone()/> });
@@ -313,7 +262,7 @@ fn every_view_of_the_map_page_speaks_french_with_no_english_left() {
     for english in ENGLISH {
         assert!(!h.contains(english), "{english:?} in {h}");
     }
-    for french in ["Carte de la ville", "Jonctions", "Rues", "Lieux", "À corriger", "Recommencer", "Toute la ville", "Rechercher des lieux"] {
+    for french in ["Lieux", "À corriger", "Toute la ville", "Rechercher des lieux"] {
         assert!(h.contains(french), "{french:?} in {h}");
     }
     assert!(h.contains("1 lieu à corriger\u{a0}: "), "the status line, with a no-break space before the colon: {h}");

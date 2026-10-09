@@ -56,13 +56,10 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
     mount("search-slot", view! { <view::SearchBox vm=vm.clone()/> }.into_any());
-    mount("street", view! { <view::MapHeader vm=vm.clone()/> }.into_any());
-    mount("reset-slot", view! { <view::ResetButton vm=vm.clone()/> }.into_any());
     mount("map-tools-slot", view! { <view::MapTools vm=vm.clone()/> }.into_any());
     mount("map-slot", view! { <view::MapView vm=vm.clone()/> }.into_any());
     mount("plan-key", view! { <view::Legend vm=vm.clone()/> }.into_any());
     mount("fit-slot", view! { <view::Status vm=vm.clone()/> }.into_any());
-    mount("inspector", view! { <view::Places vm=vm.clone()/> }.into_any());
     mount("checks-lead", view! { <view::ChecksLead vm=vm.clone()/> }.into_any());
     mount("checks", view! { <view::Checks vm=vm.clone()/> }.into_any());
     mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());
