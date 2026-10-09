@@ -105,15 +105,9 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Changes list and announcements | Sidewalk on both sides | Trottoir des deux côtés |  |
 | Changes list and announcements | Room for emergency vehicles | Place pour les véhicules d’urgence |  |
 | Changes list and announcements | Freeway | Autoroute | Chosen as the Québec road term, to confirm; the measures that are `Freeways only` are `Autoroutes seulement`. |
-| City names | Unnamed {class} street | `Rue { $class } sans nom` | The class is an adjective: `autoroutière`, `artérielle`, `collectrice`, `locale`. A motorway has its own message, `Autoroute sans nom`, because `rue autoroutière` is not said. To confirm. |
-| City names | Junction N | `Jonction N` | `Intersection` is also used in Québec; `jonction` follows the app's junction editor. To confirm. |
-| City names | Main Street junction (one street) | `Jonction Rue Principale` | To confirm. |
 | City names | A, B and N more | `A, B et N autres` | `1 autre` for one. |
-| City names | End of X | `Bout de X` | In a sentence: `le bout de X`. To confirm (`extrémité de X`, `fin de X`). |
-| City names | Connection on X | `Raccordement sur X` | In a sentence: `un raccordement sur X`. To confirm. |
 | City names | Edge of the map | `Limite de la carte` | In a sentence: `la limite de la carte`. |
-| City names | Kind · here to there | `Genre · de A à B` | `à travers la ville` for an edge between two non-junctions. |
-| City names | Cannot be drawn with the streets as they are | `Ne peut pas être dessinée avec les rues telles qu’elles sont` | To confirm. |
+| City names | Kind · between here and there | `Genre · entre A et B` | `entre … et …` needs no contraction with `le bout de`, `un raccordement sur`, `la limite de`. `à travers la ville` for an edge between two non-junctions. |
 | City names | Junction today / Earlier changes | `Jonction aujourd’hui` / `Modifications antérieures` | The junction's default history labels. |
 
 ## Terms to confirm
@@ -141,3 +135,9 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Change N (changes table) | `Variation N` | |
 | Yield (as in Yield-Controlled Bus Gates) | `cédez le passage` | the earlier spelling `cédez-le-passage` was replaced; check with a Québec reviewer |
 | Walking (mode) | `Marche` | `Déplacement à pied` (suggestion) |
+| Unnamed {class} street (city names) | `Rue { $class } sans nom` | The class is an adjective: `autoroutière`, `artérielle`, `collectrice`, `locale`. A motorway has its own message, `Autoroute sans nom`, because `rue autoroutière` is not said. |
+| Junction N (city names) | `Jonction N` | `Intersection` is also used in Québec; `jonction` follows the app's junction editor. |
+| Main Street junction (one street) (city names) | `Jonction Rue Principale` |  |
+| End of X (city names) | `Bout de X` | In a sentence: `le bout de X`. Alternatives: `extrémité de X`, `fin de X`. |
+| Connection on X (city names) | `Raccordement sur X` | In a sentence: `un raccordement sur X`. |
+| Cannot be drawn with the streets as they are (city names) | `Ne peut pas être dessinée avec les rues telles qu’elles sont` |  |

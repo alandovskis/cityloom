@@ -32,7 +32,37 @@ mod tests {
         assert_eq!(say("city-junction-of-many", Args::new().str("a", "A").str("b", "B").num("rest", 1)), "A, B and 1 more");
         assert_eq!(say("city-junction-of-many", Args::new().str("a", "A").str("b", "B").num("rest", 3)), "A, B and 3 more");
         assert_eq!(say("city-edge-between", Args::new().str("kind", "K").str("from", "X").str("to", "Y")), "K · X to Y");
-        assert_eq!(say("city-unnamed", Args::new().str("class", "local")), "Unnamed local");
+        assert_eq!(say("city-unnamed", Args::new().str("class", "local")), "Unnamed local street");
+        let street = || Args::new().str("street", "Main Street");
+        assert_eq!(say("city-end-of", street()), "End of Main Street");
+        assert_eq!(say("city-connection-on", street()), "Connection on Main Street");
+        assert_eq!(say("city-map-edge", Args::new()), "Edge of the map");
+        assert_eq!(say("city-the-end-of", street()), "the end of Main Street");
+        assert_eq!(say("city-a-connection-on", street()), "a connection on Main Street");
+        assert_eq!(say("city-the-edge-of-the-map", Args::new()), "the edge of the map");
+        assert_eq!(say("city-edge-through", Args::new().str("kind", "K")), "K · through the city");
+    }
+
+    #[test]
+    fn the_french_edge_name_reads_with_each_sentence_form() {
+        let i = crate::i18n_for(Locale::FrCa);
+        let street = || Args::new().str("street", "Main");
+        let end = i.tr_now("city-the-end-of", &street());
+        let connection = i.tr_now("city-a-connection-on", &street());
+        let edge = i.tr_now("city-the-edge-of-the-map", &Args::new());
+        let between = |from: &str, to: &str| i.tr_now("city-edge-between", &Args::new().str("kind", "K").str("from", from).str("to", to));
+        assert_eq!(between(&end, &connection), "K · entre le bout de Main et un raccordement sur Main");
+        assert_eq!(between(&edge, &end), "K · entre la limite de la carte et le bout de Main");
+        assert_eq!(between(&connection, &edge), "K · entre un raccordement sur Main et la limite de la carte");
+    }
+
+    #[test]
+    fn the_french_unnamed_street_agrees_with_rue() {
+        let i = crate::i18n_for(Locale::FrCa);
+        let say = |class: &str| i.tr_now("city-unnamed", &Args::new().str("class", i.tr_now(class, &Args::new())));
+        assert_eq!(say("class-local"), "Rue locale sans nom");
+        assert_eq!(say("class-collector"), "Rue collectrice sans nom");
+        assert_eq!(say("class-arterial"), "Rue artérielle sans nom");
     }
 
     #[test]
