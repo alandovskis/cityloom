@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
-use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass};
+use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass, class_key};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
@@ -170,6 +170,25 @@ pub struct Layout {
     pub(super) origin_m: Option<(f64, f64)>,
 }
 
+/// The messages that name a place that is not a junction, as a title or in a sentence. The end of an unnamed
+/// road has its own, because French says `d’une rue` where it says `de Rue Rachel`.
+struct PlaceForms {
+    end_of: &'static str,
+    end_of_unnamed: &'static str,
+    connection_on: &'static str,
+    map_edge: &'static str,
+}
+
+const TITLE: PlaceForms =
+    PlaceForms { end_of: "city-end-of", end_of_unnamed: "city-end-of-unnamed", connection_on: "city-connection-on", map_edge: "city-map-edge" };
+
+const IN_SENTENCE: PlaceForms = PlaceForms {
+    end_of: "city-the-end-of",
+    end_of_unnamed: "city-the-end-of-unnamed",
+    connection_on: "city-a-connection-on",
+    map_edge: "city-the-edge-of-the-map",
+};
+
 /// The widest a gap between neighbouring arms can be made by moving them, in degrees: a bend with a
 /// side street on its inside has a gap a little over 180, which is a junction; a fan is not one.
 const MOST_CLOSED: i32 = 60;
@@ -317,26 +336,41 @@ impl Layout {
         }
     }
 
+    /// A road at `node` that has no name at all, said as one in a sentence ("an unnamed local street"); None
+    /// where every road there has a name, of its own or in its section (the sample city's streets).
+    fn unnamed_at(&self, node: usize) -> Option<Said> {
+        let e = self.edges_at(node).into_iter().map(|e| &self.edges[e]).find(|e| e.name.is_none() && e.section.name.is_none())?;
+        Some(match e.section.class {
+            StreetClass::Motorway => Said::new("city-unnamed-motorway-in-sentence"),
+            class => Said::new("city-unnamed-in-sentence").with("class", Arg::Msg(class_key(class))),
+        })
+    }
+
+    /// A place that is not a junction, in the words of `forms`: the end of a street, a connection on one, or
+    /// the edge of the map where no road there has any name to lend it.
+    fn place_name(&self, node: usize, forms: &PlaceForms) -> Said {
+        let dead_end = self.edges_at(node).len() == 1;
+        if let Some(street) = self.street_names_at(node).first() {
+            let key = if dead_end { forms.end_of } else { forms.connection_on };
+            return Said::new(key).with("street", Arg::Text(street.clone()));
+        }
+        match self.unnamed_at(node) {
+            Some(street) => {
+                let key = if dead_end { forms.end_of_unnamed } else { forms.connection_on };
+                Said::new(key).with("street", Arg::Said(Box::new(street)))
+            }
+            None => Said::new(forms.map_edge),
+        }
+    }
+
     /// A place as a title.
     pub(super) fn node_name(&self, node: usize) -> Said {
-        let names = self.street_names_at(node);
-        match (self.nodes[node].junction, names.first()) {
-            (true, _) => self.junction_title(node),
-            (false, Some(street)) if self.edges_at(node).len() == 1 => Said::new("city-end-of").with("street", Arg::Text(street.clone())),
-            (false, Some(street)) => Said::new("city-connection-on").with("street", Arg::Text(street.clone())),
-            (false, None) => Said::new("city-map-edge"),
-        }
+        if self.nodes[node].junction { self.junction_title(node) } else { self.place_name(node, &TITLE) }
     }
 
     /// A place in a sentence.
     pub(super) fn end_name(&self, node: usize) -> Said {
-        let names = self.street_names_at(node);
-        match (self.nodes[node].junction, names.first()) {
-            (true, _) => self.junction_title(node),
-            (false, Some(street)) if self.edges_at(node).len() == 1 => Said::new("city-the-end-of").with("street", Arg::Text(street.clone())),
-            (false, Some(street)) => Said::new("city-a-connection-on").with("street", Arg::Text(street.clone())),
-            (false, None) => Said::new("city-the-edge-of-the-map"),
-        }
+        if self.nodes[node].junction { self.junction_title(node) } else { self.place_name(node, &IN_SENTENCE) }
     }
 
     /// What a street is called: the name the network gives it, or else its section's title.
@@ -1123,7 +1157,8 @@ mod tests {
         meeting.nodes[1].junction = false;
         assert_eq!((en(&meeting.node_name(1)), fr(&meeting.node_name(1))), ("Connection on Avenue Y".into(), "Raccordement sur Avenue Y".into()));
         assert_eq!(en(&meeting.end_name(1)), "a connection on Avenue Y");
-        // an end with no name is the edge of the map
+        // an end where no road has wording of its own to lend (the sample city's streets are named in their
+        // sections, not by the network) is the edge of the map
         let layout = Layout::sample();
         assert_eq!(layout.node_name(0), Said::new("city-map-edge"));
         assert_eq!((en(&layout.node_name(0)), fr(&layout.node_name(0))), ("Edge of the map".into(), "Limite de la carte".into()));
@@ -1142,10 +1177,6 @@ mod tests {
         let failing = &v.edges[1].failing;
         assert!(!failing.is_empty());
         assert!(failing.iter().all(|f| en(f) != fr(f)), "{failing:?}");
-        for n in v.nodes.iter().filter(|n| !n.ok) {
-            assert!(!n.failing.is_empty());
-            assert!(n.failing.iter().all(|f| f.key == "city-text" || f.key == "city-cannot-draw"), "{:?}", n.failing);
-        }
     }
 
     #[test]

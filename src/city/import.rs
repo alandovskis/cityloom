@@ -510,9 +510,65 @@ mod tests {
         let back = City::load_on(Layout::from_network(&net, "Nameless"), &old);
         assert!(back.view(0).edges[residential].edited, "the edit is kept");
         assert_eq!(en(&back.street_editor(residential as u32 + 1, 0).unwrap().view().name), "Unnamed local street");
-        // a street without a name is no part of a place's title
-        let ends: Vec<String> = city.view(0).nodes.iter().filter(|n| !n.junction).map(|n| en(&n.name)).collect();
-        assert!(ends.contains(&"Edge of the map".to_string()) && ends.contains(&"End of Side Road".to_string()), "{ends:?}");
+    }
+
+    #[test]
+    fn a_place_on_roads_without_names_is_named_for_the_unnamed_road_and_not_the_map_edge() {
+        let mut net = crossing();
+        net.roads[0].name = None;
+        let layout = Layout::from_network(&net, "Nameless");
+        // the far end of the unnamed road, which only it reaches
+        let dead_end = layout.nodes.iter().position(|n| n.source.first().is_some_and(|s| s.id == 20)).unwrap();
+        assert_eq!(
+            (en(&layout.node_name(dead_end)), fr(&layout.node_name(dead_end))),
+            ("End of an unnamed local street".into(), "Bout d’une rue locale sans nom".into())
+        );
+        assert_eq!(
+            (en(&layout.end_name(dead_end)), fr(&layout.end_name(dead_end))),
+            ("the end of an unnamed local street".into(), "le bout d’une rue locale sans nom".into())
+        );
+        let edge = layout.edges_at(dead_end)[0];
+        assert_eq!(en(&layout.edge_ends(edge)), "Main Street and Side Road to the end of an unnamed local street");
+        // the other ends keep the names of their roads
+        let named_end = layout.nodes.iter().position(|n| n.source.first().is_some_and(|s| s.id == 30)).unwrap();
+        assert_eq!(en(&layout.node_name(named_end)), "End of Main Street");
+
+        // two unnamed roads meeting where no junction is drawn: a connection on the road, not the edge of the map
+        let mut net = star(&[(0.0, 200.0), (0.0, -200.0)]);
+        for r in &mut net.roads {
+            r.name = None;
+        }
+        let layout = Layout::from_network(&net, "Through");
+        let middle = layout.nodes.iter().position(|n| n.source.first().is_some_and(|s| s.id == 10)).unwrap();
+        assert!(!layout.nodes[middle].junction);
+        assert_eq!(
+            (en(&layout.node_name(middle)), fr(&layout.node_name(middle))),
+            ("Connection on an unnamed local street".into(), "Raccordement sur une rue locale sans nom".into())
+        );
+        assert_eq!(en(&layout.end_name(middle)), "a connection on an unnamed local street");
+        // an unnamed motorway is said as a motorway
+        let mut net = net;
+        for r in &mut net.roads {
+            r.highway = "motorway".into();
+        }
+        let layout = Layout::from_network(&net, "Fast");
+        assert_eq!(
+            (en(&layout.node_name(middle)), fr(&layout.node_name(middle))),
+            ("Connection on an unnamed motorway".into(), "Raccordement sur une autoroute sans nom".into())
+        );
+        assert_eq!(
+            fr(&layout.end_name(layout.nodes.iter().position(|n| n.source.first().is_some_and(|s| s.id == 2)).unwrap())),
+            "le bout d’une autoroute sans nom"
+        );
+
+        // a junction of roads without names is still numbered
+        let mut net = crossing();
+        for r in &mut net.roads {
+            r.name = None;
+        }
+        let layout = Layout::from_network(&net, "Nameless");
+        let junction = layout.nodes.iter().position(|n| n.junction).unwrap();
+        assert_eq!((en(&layout.node_name(junction)), fr(&layout.node_name(junction))), ("Junction 1".into(), "Jonction 1".into()));
     }
 
     #[test]

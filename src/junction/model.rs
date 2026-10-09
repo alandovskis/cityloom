@@ -266,7 +266,8 @@ thread_local! {
 }
 
 /// What the city or a street says, in English: the junction's own words are English until its slice is
-/// translated, and the names it reads (a street's title) are put in the same language.
+/// translated, and the names it reads (a street's title) are put in the same language. Removed when the
+/// junction is translated (Tasks 6 and 7 of the bilingual plan).
 pub(crate) fn english(said: &crate::shared::said::Said) -> String {
     ENGLISH.with(|i18n| crate::shared::said::say_now(i18n, crate::shared::units::Units::Metres, said))
 }

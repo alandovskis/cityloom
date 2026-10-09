@@ -8,6 +8,12 @@ class-collector = collector
 class-local = local
 city-unnamed = Unnamed { $class } street
 city-unnamed-motorway = Unnamed motorway
+# An unnamed road named in a sentence, for a place on it that no named road reaches.
+city-unnamed-in-sentence = an unnamed { $class } street
+city-unnamed-motorway-in-sentence = an unnamed motorway
+# The end of an unnamed road; `street` is one of the two above.
+city-end-of-unnamed = End of { $street }
+city-the-end-of-unnamed = the end of { $street }
 city-junction-number = Junction { $n }
 city-junction-of-one = { $a } junction
 city-junction-of-two = { $a } and { $b }

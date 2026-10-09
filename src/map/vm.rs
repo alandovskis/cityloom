@@ -84,7 +84,8 @@ thread_local! {
     static ENGLISH: Rc<I18n> = crate::i18n_for(Locale::En);
 }
 
-/// What the city says, in English: the map page is English until it is translated.
+/// What the city says, in English: the map page is English until it is translated. Removed when the map
+/// page is translated (Task 4 of the bilingual plan).
 pub fn english(said: &Said) -> String {
     ENGLISH.with(|i18n| say_now(i18n, Units::Metres, said))
 }
