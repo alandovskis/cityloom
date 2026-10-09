@@ -14,7 +14,9 @@ use crate::map::overlay;
 use crate::map::projection::Projection;
 use crate::map::style;
 use crate::shared::core::{Core, Presents};
+use crate::shared::i18n::{I18n, Locale};
 use crate::shared::ports::{MapEvent, Ports};
+use crate::shared::said::{Said, say_now};
 use crate::shared::units::Units;
 
 pub const ARMED_RESET: &str = "Press again to start over";
@@ -78,25 +80,47 @@ fn streets(n: usize) -> String {
     plural(n, "street", "streets")
 }
 
-/// The places a street runs between, from its name `Kind · Here and there`.
-pub fn street_ends(name: &str) -> &str {
-    name.split(" \u{b7} ").nth(1).unwrap_or("")
+thread_local! {
+    static ENGLISH: Rc<I18n> = crate::i18n_for(Locale::En);
+}
+
+/// What the city says, in English: the map page is English until it is translated.
+pub fn english(said: &Said) -> String {
+    ENGLISH.with(|i18n| say_now(i18n, Units::Metres, said))
+}
+
+/// Each of what the city says, in English.
+fn english_all(said: &[Said]) -> Vec<String> {
+    said.iter().map(english).collect()
 }
 
 /// What a place needs, or that it is changed, for a screen reader.
-fn state_words(ok: bool, failing: &[String], edited: bool) -> String {
+fn state_words(ok: bool, failing: &[Said], edited: bool) -> String {
+    let failing = english_all(failing);
     let state = if ok { String::new() } else { format!(" Needs attention: {}.", failing.join(", ").to_lowercase()) };
     format!("{state}{}", if edited { " Changed." } else { "" })
 }
 
 /// How a junction on the map is told to a screen reader.
 pub fn junction_label(n: &NodeView) -> String {
-    format!("{}, {}, {}.{} Opens the junction plan.", n.name, n.control.unwrap_or("").to_lowercase(), streets(n.arms), state_words(n.ok, &n.failing, n.edited))
+    format!(
+        "{}, {}, {}.{} Opens the junction plan.",
+        english(&n.name),
+        n.control.unwrap_or("").to_lowercase(),
+        streets(n.arms),
+        state_words(n.ok, &n.failing, n.edited)
+    )
 }
 
 /// How a street on the map is told to a screen reader.
 pub fn street_label(e: &EdgeView, units: Units) -> String {
-    format!("{}, {}, {} wide.{} Opens the street cross-section.", e.kind, street_ends(&e.name), units.length(e.row_mm), state_words(e.ok, &e.failing, e.edited))
+    format!(
+        "{}, {}, {} wide.{} Opens the street cross-section.",
+        english(&e.kind),
+        english(&e.ends),
+        units.length(e.row_mm),
+        state_words(e.ok, &e.failing, e.edited)
+    )
 }
 
 pub fn street_href(uid: u32) -> String {
@@ -251,7 +275,7 @@ impl MapVm {
             .map(|n| PlaceRow {
                 href: junction_href(n.uid),
                 hot: format!("j-{}", n.uid),
-                name: n.name.clone(),
+                name: english(&n.name),
                 sub: format!("{}, {}", n.control.unwrap_or(""), streets(n.arms)),
                 tag: Self::tag(n.ok, n.edited),
             })
@@ -265,8 +289,8 @@ impl MapVm {
             .map(|e| PlaceRow {
                 href: street_href(e.uid),
                 hot: format!("s-{}", e.uid),
-                name: e.kind.to_string(),
-                sub: format!("{} \u{b7} {}", street_ends(&e.name), units.length(e.row_mm)),
+                name: english(&e.kind),
+                sub: format!("{} \u{b7} {}", english(&e.ends), units.length(e.row_mm)),
                 tag: Self::tag(e.ok, e.edited),
             })
             .collect()
@@ -367,14 +391,14 @@ impl MapVm {
     }
 
     /// Every place, as the notes list them: junctions, then streets.
-    fn places_for_notes(v: &CityView) -> Vec<(NoteItem, bool, bool, &[String])> {
+    fn places_for_notes(v: &CityView) -> Vec<(NoteItem, bool, bool, &[Said])> {
         let mut all = Vec::new();
         for n in Self::junctions(v) {
-            all.push((NoteItem { href: junction_href(n.uid), name: n.name.clone(), detail: String::new() }, n.ok, n.edited, n.failing.as_slice()));
+            all.push((NoteItem { href: junction_href(n.uid), name: english(&n.name), detail: String::new() }, n.ok, n.edited, n.failing.as_slice()));
         }
         for e in &v.edges {
             all.push((
-                NoteItem { href: street_href(e.uid), name: format!("{}, {}", e.kind, street_ends(&e.name)), detail: String::new() },
+                NoteItem { href: street_href(e.uid), name: format!("{}, {}", english(&e.kind), english(&e.ends)), detail: String::new() },
                 e.ok,
                 e.edited,
                 e.failing.as_slice(),
@@ -390,7 +414,7 @@ impl MapVm {
             .into_iter()
             .filter(|p| !p.1)
             .map(|(mut i, _, _, f)| {
-                i.detail = f.join("; ");
+                i.detail = english_all(f).join("; ");
                 i
             })
             .collect()
@@ -417,7 +441,7 @@ impl MapVm {
             .into_iter()
             .filter(|p| p.2)
             .map(|(mut i, ok, _, f)| {
-                i.detail = if ok { "Still works".to_string() } else { format!("Needs attention: {}", f.join("; ").to_lowercase()) };
+                i.detail = if ok { "Still works".to_string() } else { format!("Needs attention: {}", english_all(f).join("; ").to_lowercase()) };
                 i
             })
             .collect()
@@ -831,12 +855,6 @@ mod tests {
     }
 
     #[test]
-    fn a_street_runs_between_the_places_after_the_dot_in_its_name() {
-        assert_eq!(street_ends("Avenue \u{b7} Junction 1 to Junction 2"), "Junction 1 to Junction 2");
-        assert_eq!(street_ends("Plain"), "");
-    }
-
-    #[test]
     fn the_title_and_counts_describe_the_city() {
         let (vm, ..) = vm();
         let owner = Owner::new();
@@ -852,7 +870,7 @@ mod tests {
         let (vm, ..) = vm();
         let rows = vm.junction_rows();
         let view = vm.view();
-        let numbers: Vec<u32> = rows.iter().map(|r| view.nodes.iter().find(|n| n.name == r.name).unwrap().number).collect();
+        let numbers: Vec<u32> = rows.iter().map(|r| view.nodes.iter().find(|n| english(&n.name) == r.name).unwrap().number).collect();
         let mut sorted = numbers.clone();
         sorted.sort_unstable();
         assert_eq!(numbers, sorted);
@@ -869,7 +887,7 @@ mod tests {
         let e = &vm.view().edges[0];
         assert_eq!(rows[0].href, format!("street.html?street={}", e.uid));
         assert_eq!(rows[0].hot, format!("s-{}", e.uid));
-        assert_eq!(rows[0].sub, format!("{} \u{b7} {}", street_ends(&e.name), Units::Metres.length(e.row_mm)));
+        assert_eq!(rows[0].sub, format!("{} \u{b7} {}", english(&e.ends), Units::Metres.length(e.row_mm)));
         vm.set_units(Units::Feet);
         assert!(vm.street_rows()[0].sub.ends_with(&Units::Feet.length(e.row_mm)));
     }

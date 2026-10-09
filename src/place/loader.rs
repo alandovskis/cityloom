@@ -261,7 +261,14 @@ mod tests {
         importer.answer(Ok(two_roads));
         assert_eq!(result.borrow_mut().take(), Some(Ok(())));
         assert_eq!(store.checksum().as_deref(), Some("new"));
-        assert!(store.open().view(0).edges[0].name.contains("Changed Street"));
+        assert_eq!(
+            crate::shared::said::say_now(
+                &crate::i18n_for(crate::shared::i18n::Locale::En),
+                crate::shared::units::Units::Metres,
+                &store.open().view(0).edges[0].kind
+            ),
+            "Changed Street"
+        );
     }
 
     #[test]
@@ -310,7 +317,15 @@ mod tests {
             assert!(fetcher.asked().is_empty(), "step {step}: Overpass is not asked");
             assert_eq!(result.borrow_mut().take(), Some(Ok(())), "step {step}");
             assert_eq!(store.checksum().as_deref(), Some("old"), "step {step}");
-            assert!(store.open().view(0).edges[0].name.contains("Only Street"), "step {step}");
+            assert_eq!(
+                crate::shared::said::say_now(
+                    &crate::i18n_for(crate::shared::i18n::Locale::En),
+                    crate::shared::units::Units::Metres,
+                    &store.open().view(0).edges[0].kind
+                ),
+                "Only Street",
+                "step {step}"
+            );
         }
     }
 

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use crate::city::model::{CityView, EdgeView, NodeView};
-use crate::map::vm::{junction_label, street_label};
+use crate::map::vm::{english, junction_label, street_label};
 use crate::shared::symbols::HATCH;
 use crate::shared::units::Units;
 
@@ -187,7 +187,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             r2(-(l.row / 2.0 + px(6.0))),
             r2(px(13.0)),
             r2(px(4.0)),
-            esc(&l.e.kind),
+            esc(&english(&l.e.kind)),
             if l.e.edited { " \u{b7} changed" } else { "" }
         )
         .unwrap();
@@ -231,7 +231,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             crate::map::vm::street_href(l.e.uid),
             l.e.uid,
             esc(&street_label(l.e, units)),
-            esc(&l.e.name),
+            esc(&english(&l.e.name())),
             l.g.line(0.0, l.t0, l.t1.max(l.t0 + 0.01)),
             r2(l.row.max(px(18.0)))
         )
@@ -244,7 +244,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             crate::map::vm::junction_href(n.uid),
             n.uid,
             esc(&junction_label(n)),
-            esc(&n.name),
+            esc(&english(&n.name)),
             n.x_mm as f64 / 1000.0,
             n.y_mm as f64 / 1000.0,
             r2(rad(n).max(px(16.0)))

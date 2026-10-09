@@ -1,5 +1,7 @@
 # The names the app invents for the city's places and streets (src/city/model.rs).
 city-name = { $name }
+# Words the junction slice still gives in English (a check it fails), until it is translated.
+city-text = { $text }
 class-motorway = motorway
 class-arterial = arterial
 class-collector = collector
@@ -20,8 +22,9 @@ city-map-edge = Edge of the map
 city-the-end-of = the end of { $street }
 city-a-connection-on = a connection on { $street }
 city-the-edge-of-the-map = the edge of the map
-city-edge-between = { $kind } · { $from } to { $to }
-city-edge-through = { $kind } · through the city
+city-edge-between = { $from } to { $to }
+city-edge-through = through the city
+city-edge-name = { $kind } · { $ends }
 city-cannot-draw = Cannot be drawn with the streets as they are
 city-junction-today = Junction today
 city-earlier = Earlier changes

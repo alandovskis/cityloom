@@ -101,7 +101,11 @@ fn street_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
 }
 
 fn street_ends() -> Vec<page::StreetEnd> {
-    vec![page::StreetEnd { name: "the edge of the map".into(), junction: false, uid: 0 }, page::StreetEnd { name: "Junction 4".into(), junction: true, uid: 2 }]
+    use crate::shared::said::{Arg, Said};
+    vec![
+        page::StreetEnd { name: Said::new("city-the-edge-of-the-map"), junction: false, uid: 0 },
+        page::StreetEnd { name: Said::new("city-junction-number").with("n", Arg::Num(4)), junction: true, uid: 2 },
+    ]
 }
 
 #[test]
@@ -605,7 +609,7 @@ fn the_heading_and_the_title_block_are_in_french() {
     let s = street_shared_in(1, Locale::FrCa);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends())/> });
     assert!(h.contains("Carte de la ville") && h.contains("Coupe transversale de la rue") && h.contains("de large"), "{h}");
-    assert!(h.contains("entre ") && h.contains(" et <a href=\"intersection.html?junction=2\">Junction 4</a>"), "{h}");
+    assert!(h.contains("entre ") && h.contains("la limite de la carte") && h.contains(" et <a href=\"intersection.html?junction=2\">Jonction 4</a>"), "{h}");
     assert!(!h.contains("City map") && !h.contains("Street cross-section") && !h.contains("between") && !h.contains(" wide"), "{h}");
     let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
     assert!(h.contains(">Rue<") && h.contains(">Largeur<") && h.contains("Modifications apportées"), "{h}");

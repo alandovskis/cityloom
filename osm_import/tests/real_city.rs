@@ -17,11 +17,11 @@ fn a_real_neighbourhood_becomes_a_city_whose_places_can_all_be_opened() {
     let v = city.view(0);
     assert!(v.nodes.iter().filter(|n| n.junction).count() > 10);
     for n in v.nodes.iter().filter(|n| n.junction) {
-        assert!(city.junction_editor(n.uid, 0).is_some(), "{} cannot be opened", n.name);
+        assert!(city.junction_editor(n.uid, 0).is_some(), "{:?} cannot be opened", n.name);
     }
     for e in &v.edges {
-        assert!(city.street_editor(e.uid, 0).is_some(), "{} cannot be opened", e.name);
-        assert!(e.row_mm > 0 && e.length_mm > 0, "{}: row {} length {}", e.name, e.row_mm, e.length_mm);
+        assert!(city.street_editor(e.uid, 0).is_some(), "{:?} cannot be opened", e.name());
+        assert!(e.row_mm > 0 && e.length_mm > 0, "{:?}: row {} length {}", e.name(), e.row_mm, e.length_mm);
     }
 }
 
@@ -42,10 +42,10 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
     // a meeting the junction editor cannot draw is a plain connection; that is the exception
     assert!(junctions.len() * 100 >= candidates * 85, "{} of {candidates} meetings are junctions", junctions.len());
     for n in junctions {
-        assert!(city.junction_editor(n.uid, 0).is_some(), "{} cannot be opened", n.name);
+        assert!(city.junction_editor(n.uid, 0).is_some(), "{:?} cannot be opened", n.name);
     }
     for e in &v.edges {
-        assert!(city.street_editor(e.uid, 0).is_some(), "{} cannot be opened", e.name);
+        assert!(city.street_editor(e.uid, 0).is_some(), "{:?} cannot be opened", e.name());
     }
     // the streets with a median in them
     assert!(net.roads.iter().any(|r| r.lanes.iter().any(|l| l.kind == osm_import::LaneKind::Other)), "a divided street is merged");

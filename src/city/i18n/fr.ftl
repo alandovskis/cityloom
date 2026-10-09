@@ -1,5 +1,7 @@
 # Les noms que l’application invente pour les lieux et les rues de la ville (src/city/model.rs).
 city-name = { $name }
+# Les mots que la jonction donne encore en anglais (une vérification qui échoue), en attendant sa traduction.
+city-text = { $text }
 class-motorway = autoroutière
 class-arterial = artérielle
 class-collector = collectrice
@@ -20,8 +22,9 @@ city-map-edge = Limite de la carte
 city-the-end-of = le bout de { $street }
 city-a-connection-on = un raccordement sur { $street }
 city-the-edge-of-the-map = la limite de la carte
-city-edge-between = { $kind } · entre { $from } et { $to }
-city-edge-through = { $kind } · à travers la ville
+city-edge-between = entre { $from } et { $to }
+city-edge-through = à travers la ville
+city-edge-name = { $kind } · { $ends }
 city-cannot-draw = Ne peut pas être dessinée avec les rues telles qu’elles sont
 city-junction-today = Jonction aujourd’hui
 city-earlier = Modifications antérieures

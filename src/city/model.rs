@@ -17,20 +17,10 @@ use crate::junction::model::{self as junction, Arm, Junction, State};
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass};
 use crate::shared::provenance::OsmRef;
-use crate::shared::said::Said;
+use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
 use crate::street::model::{Editor, Street};
-
-thread_local! {
-    static ENGLISH: std::rc::Rc<crate::shared::i18n::I18n> = crate::i18n_for(crate::shared::i18n::Locale::En);
-}
-
-/// What the street said, in English: the map's list of places says what fails in English until the
-/// map page is translated.
-fn english(said: &Said) -> String {
-    ENGLISH.with(|i18n| crate::shared::said::say_now(i18n, crate::shared::units::Units::Metres, said))
-}
 
 /// Bump when what is saved changes shape; an older save is then left behind.
 const SAVE_VERSION: u32 = 2;
@@ -313,48 +303,55 @@ impl Layout {
         names
     }
 
-    /// Who a junction's streets are, in a title: "Main Street and Side Road".
-    fn joined(names: &[String]) -> String {
-        match names {
-            [] => String::new(),
-            [one] => format!("{one} junction"),
-            [a, b] => format!("{a} and {b}"),
-            [a, b, c] => format!("{a}, {b} and {c}"),
-            [a, b, rest @ ..] => format!("{a}, {b} and {} more", rest.len()),
+    /// A junction, by the streets that meet there ("Main Street and Side Road"), or by its number where
+    /// none of them has a name.
+    fn junction_title(&self, node: usize) -> Said {
+        let names = self.street_names_at(node);
+        let name = |i: usize| Arg::Text(names[i].clone());
+        match names.len() {
+            0 => Said::new("city-junction-number").with("n", Arg::Num(self.junction_number(node) as i64)),
+            1 => Said::new("city-junction-of-one").with("a", name(0)),
+            2 => Said::new("city-junction-of-two").with("a", name(0)).with("b", name(1)),
+            3 => Said::new("city-junction-of-three").with("a", name(0)).with("b", name(1)).with("c", name(2)),
+            n => Said::new("city-junction-of-many").with("a", name(0)).with("b", name(1)).with("rest", Arg::Num(n as i64 - 2)),
         }
     }
 
     /// A place as a title.
-    pub(super) fn node_name(&self, node: usize) -> String {
+    pub(super) fn node_name(&self, node: usize) -> Said {
         let names = self.street_names_at(node);
         match (self.nodes[node].junction, names.first()) {
-            (true, Some(_)) => Self::joined(&names),
-            (true, None) => format!("Junction {}", self.junction_number(node)),
-            (false, Some(street)) if self.edges_at(node).len() == 1 => format!("End of {street}"),
-            (false, Some(street)) => format!("Connection on {street}"),
-            (false, None) => "Edge of the map".to_string(),
+            (true, _) => self.junction_title(node),
+            (false, Some(street)) if self.edges_at(node).len() == 1 => Said::new("city-end-of").with("street", Arg::Text(street.clone())),
+            (false, Some(street)) => Said::new("city-connection-on").with("street", Arg::Text(street.clone())),
+            (false, None) => Said::new("city-map-edge"),
         }
     }
 
     /// A place in a sentence.
-    pub(super) fn end_name(&self, node: usize) -> String {
+    pub(super) fn end_name(&self, node: usize) -> Said {
         let names = self.street_names_at(node);
         match (self.nodes[node].junction, names.first()) {
-            (true, Some(_)) => Self::joined(&names),
-            (true, None) => format!("Junction {}", self.junction_number(node)),
-            (false, Some(street)) if self.edges_at(node).len() == 1 => format!("the end of {street}"),
-            (false, Some(street)) => format!("a connection on {street}"),
-            (false, None) => "the edge of the map".to_string(),
+            (true, _) => self.junction_title(node),
+            (false, Some(street)) if self.edges_at(node).len() == 1 => Said::new("city-the-end-of").with("street", Arg::Text(street.clone())),
+            (false, Some(street)) => Said::new("city-a-connection-on").with("street", Arg::Text(street.clone())),
+            (false, None) => Said::new("city-the-edge-of-the-map"),
         }
     }
 
-    fn edge_name(&self, edge: usize) -> String {
+    /// What a street is called: the name the network gives it, or else its section's title.
+    pub(super) fn edge_kind(&self, edge: usize) -> Said {
         let e = &self.edges[edge];
-        let kind = e.name.clone().unwrap_or_else(|| english(&e.section.title()));
+        e.name.as_ref().map_or_else(|| e.section.title(), |name| Said::new("city-name").with("name", Arg::Text(name.clone())))
+    }
+
+    /// Where a street runs: from one place to another, or through the city where neither end is a junction.
+    pub(super) fn edge_ends(&self, edge: usize) -> Said {
+        let e = &self.edges[edge];
         if !self.nodes[e.a].junction && !self.nodes[e.b].junction {
-            format!("{kind} · through the city")
+            Said::new("city-edge-through")
         } else {
-            format!("{kind} · {} to {}", self.end_name(e.a), self.end_name(e.b))
+            Said::new("city-edge-between").with("from", Arg::Said(Box::new(self.end_name(e.a)))).with("to", Arg::Said(Box::new(self.end_name(e.b))))
         }
     }
 
@@ -514,9 +511,11 @@ impl City {
         for (uid, street) in saved.streets {
             let ok = city.today_streets.get(&uid).is_some_and(|t| t.class == street.class && t.row_mm == street.row_mm);
             if ok && street.is_sound() {
-                // where a street came from is not something an edit changes, and older saves did not say
-                let source = city.today_streets[&uid].source.clone();
-                city.streets.insert(uid, Street { source, ..street });
+                // where a street came from and what it is called are not something an edit changes; older
+                // saves did not say where, and named a street without a name in English
+                let today = &city.today_streets[&uid];
+                let (source, name) = (today.source.clone(), today.name.clone());
+                city.streets.insert(uid, Street { source, name, ..street });
             }
         }
         for (uid, state) in saved.junctions {
@@ -548,11 +547,7 @@ impl City {
         (uid as usize).checked_sub(1).filter(|&n| n < self.layout.nodes.len())
     }
 
-    pub fn street_name(&self, edge: u32) -> Option<String> {
-        self.edge_index(edge).map(|e| self.layout.edge_name(e))
-    }
-
-    pub fn junction_name(&self, node: u32) -> Option<String> {
+    pub fn junction_name(&self, node: u32) -> Option<Said> {
         self.node_index(node).filter(|&n| self.layout.nodes[n].junction).map(|n| self.layout.node_name(n))
     }
 
@@ -593,14 +588,19 @@ impl City {
         s
     }
 
-    /// The checks a junction fails as the city first laid it out, by label. A real city's streets
+    /// The checks a junction fails as the city first laid it out, by id. A real city's streets
     /// fall short of the rules as they stand; only what a change adds is flagged.
-    fn failing_today(&self, node: u32, region: usize) -> Vec<String> {
+    fn failing_today(&self, node: u32, region: usize) -> Vec<&'static str> {
         let Some(n) = self.node_index(node) else { return Vec::new() };
         let Some(state) = self.today_junctions.get(&node) else { return Vec::new() };
         let today = self.with_streets_of(&self.today_streets, n, state);
-        Junction::from_city("", &today, &today, region)
-            .map_or_else(Vec::new, |j| j.view().checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect())
+        Junction::from_city("", &today, &today, region).map_or_else(Vec::new, |j| j.view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect())
+    }
+
+    /// The checks junction `j` fails that it did not fail as first laid out, in English: the junction's
+    /// checks are worded in English until its slice is translated, when this goes.
+    fn junction_failing_english(j: &Junction, at_first: &[&str]) -> Vec<String> {
+        j.view().checks.iter().filter(|c| !c.ok && !at_first.contains(&c.id)).map(|c| c.label.to_string()).collect()
     }
 
     /// The junction editor on one junction of the city, reading the streets as
@@ -609,7 +609,8 @@ impl City {
         let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
         let today = self.with_streets(n, self.today_junctions.get(&node)?);
         let now = self.with_streets(n, self.junctions.get(&node)?);
-        Junction::from_city(&self.layout.node_name(n), &today, &now, region)
+        // The junction editor is still English: it is given the junction's name in English.
+        Junction::from_city(&junction::english(&self.layout.node_name(n)), &today, &now, region)
     }
 
     /// Keeps what the junction editor has made of a junction.
@@ -641,15 +642,15 @@ impl City {
             let editor = Editor::from_street(today, now, region);
             let v = editor.view();
             let at_first: Vec<&str> = Editor::from_street(today, today, region).view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect();
-            let failing: Vec<String> = v.checks.iter().filter(|c| !c.ok && !at_first.contains(&c.id)).map(|c| english(&c.label)).collect();
+            let failing: Vec<Said> = v.checks.iter().filter(|c| !c.ok && !at_first.contains(&c.id)).map(|c| c.label.clone()).collect();
             let row = v.row_mm;
             let shape = self.layout.shape_of(i);
             edges.push(EdgeView {
                 uid,
                 a: node_uid(e.a),
                 b: node_uid(e.b),
-                name: self.layout.edge_name(i),
-                kind: english(&now.title()),
+                kind: self.layout.edge_kind(i),
+                ends: self.layout.edge_ends(i),
                 row_mm: row,
                 total_mm: v.total_mm,
                 length_mm: path_mm(&shape).round() as i32,
@@ -691,12 +692,15 @@ impl City {
                 match self.junction_editor(uid, region) {
                     Some(j) => {
                         let at_first = self.failing_today(uid, region);
-                        v.failing = j.view().checks.iter().filter(|c| !c.ok && !at_first.iter().any(|l| l == c.label)).map(|c| c.label.to_string()).collect();
+                        v.failing = Self::junction_failing_english(&j, &at_first)
+                            .into_iter()
+                            .map(|text| Said::new("city-text").with("text", Arg::Text(text)))
+                            .collect();
                         v.ok = v.failing.is_empty();
                     }
                     None => {
                         v.ok = false;
-                        v.failing = vec!["Cannot be drawn with the streets as they are".to_string()];
+                        v.failing = vec![Said::new("city-cannot-draw")];
                     }
                 }
             }
@@ -739,7 +743,7 @@ pub struct PieceView {
 #[derive(Serialize)]
 pub struct EndView {
     pub uid: u32,
-    pub name: String,
+    pub name: Said,
     pub junction: bool,
 }
 
@@ -748,9 +752,10 @@ pub struct EdgeView {
     pub uid: u32,
     pub a: u32,
     pub b: u32,
-    pub name: String,
-    /// The kind of street it began as.
-    pub kind: String,
+    /// What the street is called: its own name, or what sort of street it is.
+    pub kind: Said,
+    /// Where it runs: from one place to another, or through the city.
+    pub ends: Said,
     pub row_mm: i32,
     pub total_mm: i32,
     pub length_mm: i32,
@@ -764,13 +769,20 @@ pub struct EdgeView {
     pub pieces: Vec<PieceView>,
     pub edited: bool,
     pub ok: bool,
-    pub failing: Vec<String>,
+    pub failing: Vec<Said>,
+}
+
+impl EdgeView {
+    /// The street's whole name: what it is called and where it runs.
+    pub fn name(&self) -> Said {
+        Said::new("city-edge-name").with("kind", Arg::Said(Box::new(self.kind.clone()))).with("ends", Arg::Said(Box::new(self.ends.clone())))
+    }
 }
 
 #[derive(Serialize)]
 pub struct NodeView {
     pub uid: u32,
-    pub name: String,
+    pub name: Said,
     /// Which junction it is, counting in reading order from 1; 0 where a street leaves the map.
     pub number: u32,
     pub x_mm: i32,
@@ -778,11 +790,12 @@ pub struct NodeView {
     /// A junction of streets, or else where a street leaves the map.
     pub junction: bool,
     pub radius_mm: i32,
+    /// The junction's control, in English until the junction's words are translated.
     pub control: Option<&'static str>,
     pub arms: usize,
     pub edited: bool,
     pub ok: bool,
-    pub failing: Vec<String>,
+    pub failing: Vec<Said>,
 }
 
 #[derive(Serialize)]
@@ -802,6 +815,9 @@ pub struct CityView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::i18n::Locale;
+    use crate::shared::said::{Arg, say_now};
+    use crate::shared::units::Units;
 
     fn junction_number(node: usize) -> usize {
         Layout::sample().junction_number(node)
@@ -811,12 +827,21 @@ mod tests {
         Layout::sample().edges_at(node)
     }
 
-    fn node_name(node: usize) -> String {
-        Layout::sample().node_name(node)
+    fn en(said: &Said) -> String {
+        say_now(&crate::i18n_for(Locale::En), Units::Metres, said)
     }
 
-    fn edge_name(edge: usize) -> String {
-        Layout::sample().edge_name(edge)
+    fn fr(said: &Said) -> String {
+        say_now(&crate::i18n_for(Locale::FrCa), Units::Metres, said)
+    }
+
+    /// The sample layout with names given to some of its streets, by edge index.
+    fn named(names: &[(usize, &str)]) -> Layout {
+        let mut layout = Layout::sample();
+        for &(e, name) in names {
+            layout.edges[e].name = Some(name.to_string());
+        }
+        layout
     }
 
     fn gaps(b: &[i32]) -> Vec<i32> {
@@ -866,8 +891,13 @@ mod tests {
     #[test]
     fn every_place_in_the_first_city_works() {
         let v = City::new().view(0);
-        let bad: Vec<_> =
-            v.nodes.iter().filter(|n| !n.ok).map(|n| (&n.name, &n.failing)).chain(v.edges.iter().filter(|e| !e.ok).map(|e| (&e.name, &e.failing))).collect();
+        let bad: Vec<_> = v
+            .nodes
+            .iter()
+            .filter(|n| !n.ok)
+            .map(|n| (en(&n.name), &n.failing))
+            .chain(v.edges.iter().filter(|e| !e.ok).map(|e| (en(&e.name()), &e.failing)))
+            .collect();
         assert!(bad.is_empty(), "{bad:?}");
         assert_eq!((v.failing, v.edited), (0, 0));
         assert_eq!(v.places, 9 + 23);
@@ -877,7 +907,7 @@ mod tests {
     fn the_first_city_works_on_the_other_side_of_the_road_too() {
         let left = REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap();
         let v = City::new().view(left);
-        assert_eq!(v.failing, 0, "{:?}", v.nodes.iter().filter(|n| !n.ok).map(|n| (&n.name, &n.failing)).collect::<Vec<_>>());
+        assert_eq!(v.failing, 0, "{:?}", v.nodes.iter().filter(|n| !n.ok).map(|n| (en(&n.name), &n.failing)).collect::<Vec<_>>());
     }
 
     #[test]
@@ -1025,7 +1055,10 @@ mod tests {
     #[test]
     fn a_street_knows_its_ends() {
         let ends = City::new().street_ends(1);
-        assert_eq!(ends.iter().map(|e| (e.name.as_str(), e.junction)).collect::<Vec<_>>(), [("the edge of the map", false), ("Junction 4", true)]);
+        assert_eq!(
+            ends.iter().map(|e| (en(&e.name), e.junction)).collect::<Vec<_>>(),
+            [("the edge of the map".to_string(), false), ("Junction 4".to_string(), true)]
+        );
         assert!(City::new().street_ends(99).is_empty());
     }
 
@@ -1047,9 +1080,85 @@ mod tests {
 
     #[test]
     fn names_say_where_a_street_goes() {
-        assert_eq!(edge_name(0), "Sample Avenue 2 · the edge of the map to Junction 4");
-        assert_eq!(edge_name(22), "Sample Freeway 4 · through the city");
-        assert_eq!(node_name(15), "Junction 7");
-        assert_eq!(node_name(0), "Edge of the map");
+        let layout = Layout::sample();
+        assert_eq!(en(&layout.edge_kind(0)), "Sample Avenue 2");
+        assert_eq!(en(&layout.edge_ends(0)), "the edge of the map to Junction 4");
+        assert_eq!(fr(&layout.edge_ends(0)), "entre la limite de la carte et Jonction 4");
+        assert_eq!(en(&layout.edge_ends(22)), "through the city");
+        assert_eq!(fr(&layout.edge_ends(22)), "à travers la ville");
+        assert_eq!(layout.edge_ends(22), Said::new("city-edge-through"));
+        let v = City::new().view(0);
+        assert_eq!(en(&v.edges[0].name()), "Sample Avenue 2 · the edge of the map to Junction 4");
+        assert_eq!(en(&v.edges[22].name()), "Sample Freeway 4 · through the city");
+        assert_eq!(fr(&v.edges[22].name()), "Sample Freeway 4 · à travers la ville");
+    }
+
+    #[test]
+    fn a_place_is_titled_by_the_streets_that_meet_there_in_each_language() {
+        // node 15 meets edges 5, 16, 19, 20 and 21; the sample city's streets have no names of their own
+        let five = [5, 16, 19, 20, 21];
+        let names = ["A", "B", "C", "D", "E"];
+        let title = |k: usize| named(&five.iter().zip(names).take(k).map(|(&e, n)| (e, n)).collect::<Vec<_>>()).node_name(15);
+        assert_eq!(title(0), Said::new("city-junction-number").with("n", Arg::Num(7)));
+        assert_eq!(title(1), Said::new("city-junction-of-one").with("a", Arg::Text("A".into())));
+        assert_eq!(title(2).key, "city-junction-of-two");
+        assert_eq!(title(3).key, "city-junction-of-three");
+        assert_eq!(title(5), Said::new("city-junction-of-many").with("a", Arg::Text("A".into())).with("b", Arg::Text("B".into())).with("rest", Arg::Num(3)));
+        let english: Vec<String> = [0, 1, 2, 3, 5].into_iter().map(|k| en(&title(k))).collect();
+        assert_eq!(english, ["Junction 7", "A junction", "A and B", "A, B and C", "A, B and 3 more"]);
+        let french: Vec<String> = [0, 1, 2, 3, 5].into_iter().map(|k| fr(&title(k))).collect();
+        assert_eq!(french, ["Jonction 7", "Jonction A", "A et B", "A, B et C", "A, B et 3 autres"]);
+        assert!(french.iter().all(|t| !t.contains("Junction") && !t.contains(" and ")), "{french:?}");
+        // a junction is said the same in a sentence
+        assert_eq!(named(&[(5, "Main Street"), (16, "Side Road")]).end_name(15), named(&[(5, "Main Street"), (16, "Side Road")]).node_name(15));
+        assert_eq!(en(&named(&[(5, "Main Street"), (16, "Side Road")]).node_name(15)), "Main Street and Side Road");
+
+        // the end of a named street, where it leaves the map
+        let lane = named(&[(19, "Lane X")]);
+        assert_eq!(lane.node_name(16), Said::new("city-end-of").with("street", Arg::Text("Lane X".into())));
+        assert_eq!((en(&lane.node_name(16)), fr(&lane.node_name(16))), ("End of Lane X".into(), "Bout de Lane X".into()));
+        assert_eq!((en(&lane.end_name(16)), fr(&lane.end_name(16))), ("the end of Lane X".into(), "le bout de Lane X".into()));
+        // a meeting the junction editor cannot draw is a connection on its street
+        let mut meeting = named(&[(0, "Avenue Y")]);
+        meeting.nodes[1].junction = false;
+        assert_eq!((en(&meeting.node_name(1)), fr(&meeting.node_name(1))), ("Connection on Avenue Y".into(), "Raccordement sur Avenue Y".into()));
+        assert_eq!(en(&meeting.end_name(1)), "a connection on Avenue Y");
+        // an end with no name is the edge of the map
+        let layout = Layout::sample();
+        assert_eq!(layout.node_name(0), Said::new("city-map-edge"));
+        assert_eq!((en(&layout.node_name(0)), fr(&layout.node_name(0))), ("Edge of the map".into(), "Limite de la carte".into()));
+        assert_eq!(en(&layout.end_name(0)), "the edge of the map");
+        assert_eq!(City::new().junction_name(node_uid(1)).map(|n| en(&n)), Some("Junction 4".to_string()));
+        assert_eq!(City::new().junction_name(node_uid(0)), None, "an end of a street is not a junction");
+    }
+
+    #[test]
+    fn what_fails_is_said_in_the_language_of_the_map() {
+        let mut city = City::new();
+        let mut s = city.streets[&2].clone();
+        s.segments.retain(|g| KINDS[g.kind].id == "sidewalk");
+        assert!(city.keep_street(2, s));
+        let v = city.view(0);
+        let failing = &v.edges[1].failing;
+        assert!(!failing.is_empty());
+        assert!(failing.iter().all(|f| en(f) != fr(f)), "{failing:?}");
+        for n in v.nodes.iter().filter(|n| !n.ok) {
+            assert!(!n.failing.is_empty());
+            assert!(n.failing.iter().all(|f| f.key == "city-text" || f.key == "city-cannot-draw"), "{:?}", n.failing);
+        }
+    }
+
+    #[test]
+    fn a_saved_junction_from_the_earlier_version_with_a_label_still_loads() {
+        let mut city = City::new();
+        let mut j = city.junction_editor(node_uid(1), 0).unwrap();
+        let arm = j.current().arms[0].uid;
+        assert!(j.set_corner(arm, 4_500));
+        assert!(city.keep_junction(node_uid(1), j.snapshot()));
+        let mut saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        saved["junctions"]["2"]["label"] = serde_json::json!("Remove Main (N)");
+        let back = City::load(&saved.to_string());
+        assert!(back.view(0).nodes[1].edited, "the edited junction is kept");
+        assert!(same_junction(&back.junctions[&node_uid(1)], &city.junctions[&node_uid(1)]));
     }
 }

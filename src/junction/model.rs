@@ -1288,7 +1288,7 @@ mod tests {
         let view = city.view(0);
         let node = view.nodes.iter().find(|n| n.junction).unwrap();
         let j = city.junction_editor(node.uid, 0).unwrap();
-        assert_eq!(j.view().name, node.name);
+        assert_eq!(j.view().name, english(&node.name));
     }
 
     #[test]

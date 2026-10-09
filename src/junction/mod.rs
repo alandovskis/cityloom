@@ -81,10 +81,16 @@ pub fn mount_page(plan: &Plan) {
     mount("revs", view! { <notes::Revisions vm=vm/> }.into_any());
 }
 
-/// The name of a junction of the city kept in this browser; empty when there is none.
+/// The name of a junction of the city kept in this browser; empty when there is none. It is worded in
+/// English, as the rest of the junction page is, until that page is translated.
 #[wasm_bindgen]
 pub fn junction_name(node: u32) -> String {
-    CityStore::current(browser_ports().storage).open().junction_name(node).unwrap_or_default()
+    let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
+    CityStore::current(browser_ports().storage)
+        .open()
+        .junction_name(node)
+        .map(|name| crate::shared::said::say_now(&i18n, crate::shared::units::Units::Metres, &name))
+        .unwrap_or_default()
 }
 
 /// The junction editor on one junction of the city kept in this browser, which

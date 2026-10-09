@@ -10,7 +10,7 @@ use crate::city::model::City;
 use crate::shared::catalogue::{KINDS, group_key, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
-use crate::shared::said::{self, hhmm};
+use crate::shared::said::{self, Said, hhmm};
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
 use crate::street::model::{SegView, View};
@@ -132,7 +132,8 @@ pub fn page_title(i18n: &I18n, street: &str, ends: &[String]) -> String {
 /// The ends of a street that belongs to a city: a junction, or where it leaves the map.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StreetEnd {
-    pub name: String,
+    /// The place, as it is named in a sentence.
+    pub name: Said,
     pub junction: bool,
     pub uid: u32,
 }
@@ -164,11 +165,11 @@ fn street_title(w: SheetWatch) -> String {
     said::say(&w.i18n(), w.units(), &w.view().name)
 }
 
-fn end_link(e: &StreetEnd) -> impl IntoView {
+/// One end of the street, named in the language of the page: a link where it is a junction.
+fn end_link(w: SheetWatch, e: &StreetEnd) -> impl IntoView {
     let name = e.name.clone();
-    e.junction
-        .then(|| format!("intersection.html?junction={}", e.uid))
-        .map_or_else(|| name.clone().into_any(), |href| view! { <a href=href>{name.clone()}</a> }.into_any())
+    let words = move || said::say(&w.i18n(), w.units(), &name);
+    if e.junction { view! { <a href=format!("intersection.html?junction={}", e.uid)>{words}</a> }.into_any() } else { words.into_any() }
 }
 
 /// The street's name and how wide it is; for a street of a city, the way back to
@@ -179,8 +180,9 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
     // This page owns the window's title; it is written again when the street or the language changes.
     #[cfg(target_arch = "wasm32")]
     {
-        let names: Vec<String> = ends.iter().flatten().map(|e| e.name.clone()).collect();
+        let ends: Vec<Said> = ends.iter().flatten().map(|e| e.name.clone()).collect();
         Effect::new(move |_| {
+            let names: Vec<String> = ends.iter().map(|e| said::say(&w.i18n(), w.units(), e)).collect();
             document().set_title(&page_title(&w.i18n(), &street_title(w), &names));
         });
     }
@@ -192,9 +194,9 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
             " "
             <span>
                 {move || format!("{} ", w.i18n().tr("header-between", &Args::new()))}
-                {end_link(a)}
+                {end_link(w, a)}
                 {move || format!(" {} ", w.i18n().tr("header-and", &Args::new()))}
-                {end_link(b)}
+                {end_link(w, b)}
             </span>
         }
         .into_any(),
@@ -690,10 +692,9 @@ mod tests {
     fn the_ends_of_a_city_street_are_read_from_the_city() {
         let city = crate::city::model::City::new();
         let ends = street_ends(&city, 1);
-        assert_eq!(
-            ends,
-            [StreetEnd { name: "the edge of the map".into(), junction: false, uid: 1 }, StreetEnd { name: "Junction 4".into(), junction: true, uid: 2 }]
-        );
+        let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
+        let read = |e: &StreetEnd| (said::say_now(&i18n, crate::shared::units::Units::Metres, &e.name), e.junction, e.uid);
+        assert_eq!(ends.iter().map(read).collect::<Vec<_>>(), [("the edge of the map".to_string(), false, 1), ("Junction 4".to_string(), true, 2)]);
         assert!(street_ends(&city, 99).is_empty());
     }
 }
