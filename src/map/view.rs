@@ -12,8 +12,9 @@ use leptos::web_sys::KeyboardEvent;
 
 #[cfg(target_arch = "wasm32")]
 use crate::map::camera::Insets;
-use crate::map::vm::{BasemapState, MapVm, NoteItem, PlaceRow, ResetOutcome};
+use crate::map::vm::{BasemapState, MapVm, NoteItem, PlaceRow, ResetOutcome, StateTag};
 use crate::shared::bind::Bound;
+use crate::shared::said::Said;
 use crate::shared::tick::Tick;
 
 type Vm = Bound<MapVm>;
@@ -22,13 +23,21 @@ type Vm = Bound<MapVm>;
 #[cfg(target_arch = "wasm32")]
 const ARMED_MS: u64 = 4000;
 
+/// A message of the page, for a view: it follows a switch of language.
+fn word(vm: Vm, key: &'static str) -> impl Fn() -> String + Copy + 'static {
+    move || vm.with(|v| v.word(key))
+}
+
 #[component]
 pub fn MapHeader(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
+    // This page owns the window's title; it is written again when the language changes.
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| document().set_title(&vm.with(|v| v.word("map-page-title"))));
     view! {
         <h1 id="street-name">{move || vm.with(|v| v.title())}</h1>
         <p class="street-sub" id="street-sub">
-            <span>"City map"</span>
+            <span>{word(vm, "map-city-map")}</span>
             " "
             <span aria-hidden="true">"\u{b7}"</span>
             " "
@@ -58,7 +67,7 @@ pub fn ResetButton(vm: Rc<MapVm>) -> impl IntoView {
         let _ = outcome == ResetOutcome::Armed;
     };
     view! {
-        <div class="btns" role="toolbar" aria-label="Sheet tools">
+        <div class="btns" role="toolbar" aria-label=word(vm, "map-sheet-tools")>
             <button type="button" id="reset" class="btn" disabled=move || !vm.with(|v| v.can_reset()) on:click=press on:blur=move |_| vm.with(|v| v.disarm())>
                 <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>
                 <span id="reset-label">{move || vm.with(|v| v.reset_label())}</span>
@@ -71,16 +80,16 @@ pub fn ResetButton(vm: Rc<MapVm>) -> impl IntoView {
 pub fn MapTools(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
     view! {
-        <div class="map-tools" role="toolbar" aria-label="Map view">
-            <button type="button" id="zoom-out" class="btn" aria-label="Zoom out" on:click=move |_| vm.with(|v| v.zoom_out())>
+        <div class="map-tools" role="toolbar" aria-label=word(vm, "map-view-tools")>
+            <button type="button" id="zoom-out" class="btn" aria-label=word(vm, "map-zoom-out") on:click=move |_| vm.with(|v| v.zoom_out())>
                 <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3.5 8h9"/></svg>
             </button>
-            <button type="button" id="zoom-in" class="btn" aria-label="Zoom in" on:click=move |_| vm.with(|v| v.zoom_in())>
+            <button type="button" id="zoom-in" class="btn" aria-label=word(vm, "map-zoom-in") on:click=move |_| vm.with(|v| v.zoom_in())>
                 <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3.5 8h9M8 3.5v9"/></svg>
             </button>
-            <button type="button" id="zoom-fit" class="btn" title="Whole city" on:click=move |_| vm.with(|v| v.fit_camera())>
+            <button type="button" id="zoom-fit" class="btn" title=word(vm, "map-whole-city") on:click=move |_| vm.with(|v| v.fit_camera())>
                 <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg>
-                <span class="lbl">"Whole city"</span>
+                <span class="lbl">{word(vm, "map-whole-city")}</span>
             </button>
         </div>
     }
@@ -209,8 +218,8 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
             hidden=move || !matches!(vm.with(|v| v.basemap_state()), BasemapState::Unavailable(_))
         >
             {move || match vm.with(|v| v.basemap_state()) {
-                BasemapState::Unavailable(words) => words,
-                _ => "",
+                BasemapState::Unavailable(key) => vm.with(|v| v.word(key)),
+                _ => String::new(),
             }}
         </p>
     }
@@ -319,8 +328,8 @@ pub fn SearchBox(vm: Rc<MapVm>) -> impl IntoView {
                 type="search"
                 name="q"
                 node_ref=input
-                placeholder="Search places"
-                aria-label="Search places"
+                placeholder=word(vm, "map-search-label")
+                aria-label=word(vm, "map-search-label")
                 role="combobox"
                 aria-autocomplete="list"
                 aria-controls="search-results"
@@ -334,9 +343,9 @@ pub fn SearchBox(vm: Rc<MapVm>) -> impl IntoView {
                 on:keydown=keydown
             />
             <kbd class="search-key" aria-hidden="true">"/"</kbd>
-            <button type="submit" class="search-go">"Search"</button>
+            <button type="submit" class="search-go">{word(vm, "map-search-go")}</button>
             <div class="search-pop" hidden=move || !open()>
-                <ul id="search-results" role="listbox" aria-label="Places found">
+                <ul id="search-results" role="listbox" aria-label=word(vm, "map-search-results")>
                     {move || vm.with(|v| v.results()).into_iter().take(MapVm::SHOWN).enumerate().map(|(i, r)| result_row(vm, r, i)).collect_view()}
                 </ul>
                 <p class="search-note" role="status">{move || vm.with(|v| v.search_note())}</p>
@@ -345,10 +354,24 @@ pub fn SearchBox(vm: Rc<MapVm>) -> impl IntoView {
     }
 }
 
+/// How a place stands, as a tag in its row, in the language of the page.
+fn state_tag(vm: Vm, tag: Option<StateTag>) -> Option<impl IntoView> {
+    tag.map(|t| view! { <span class=if t.bad { "st bad" } else { "st" }>{word(vm, t.key)}</span> })
+}
+
+/// A place's name and small print, in the language of the page.
+fn row_words(vm: Vm, name: Said, sub: Said) -> impl IntoView {
+    view! {
+        <b>{move || vm.with(|v| v.say(&name))}</b>
+        <small>{move || vm.with(|v| v.say(&sub))}</small>
+    }
+}
+
 fn result_row(vm: Vm, row: PlaceRow, i: usize) -> impl IntoView {
     let on = move || vm.with(|v| v.active_result()) == Some(i);
     let (enter, focus) = (row.hot.clone(), row.hot.clone());
-    let tag = row.tag.map(|t| view! { <span class=if t.bad { "st bad" } else { "st" }>{t.text}</span> });
+    let words = row_words(vm, row.name, row.sub);
+    let tag = state_tag(vm, row.tag);
     view! {
         <li role="option" id=format!("sr-{i}") aria-selected=move || on().to_string()>
             <a
@@ -360,8 +383,7 @@ fn result_row(vm: Vm, row: PlaceRow, i: usize) -> impl IntoView {
                 on:focus=move |_| vm.with(|v| v.set_hot(Some(focus.clone())))
                 on:blur=move |_| vm.with(|v| v.set_hot(None))
             >
-                <b>{row.name}</b>
-                <small>{row.sub}</small>
+                {words}
                 {tag}
             </a>
         </li>
@@ -374,7 +396,8 @@ fn place_row(vm: Vm, row: PlaceRow) -> impl IntoView {
         move || vm.with(|v| v.hot().as_deref() == Some(hot.as_str()))
     };
     let (enter, focus) = (row.hot.clone(), row.hot.clone());
-    let tag = row.tag.map(|t| view! { <span class=if t.bad { "st bad" } else { "st" }>{t.text}</span> });
+    let words = row_words(vm, row.name, row.sub);
+    let tag = state_tag(vm, row.tag);
     view! {
         <li>
             <a
@@ -386,8 +409,7 @@ fn place_row(vm: Vm, row: PlaceRow) -> impl IntoView {
                 on:focus=move |_| vm.with(|v| v.set_hot(Some(focus.clone())))
                 on:blur=move |_| vm.with(|v| v.set_hot(None))
             >
-                <b>{row.name}</b>
-                <small>{row.sub}</small>
+                {words}
                 {tag}
             </a>
         </li>
@@ -400,15 +422,15 @@ pub fn Places(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
     view! {
         <div class="insp-head">
-            <div><h2 class="insp-name">"Places"</h2><p class="insp-sub">{move || vm.with(|v| v.counts())}</p></div>
+            <div><h2 class="insp-name">{word(vm, "map-places")}</h2><p class="insp-sub">{move || vm.with(|v| v.counts())}</p></div>
         </div>
-        <p class="map-hint">"Press a junction to open its plan. Press a street to open its cross-section."</p>
+        <p class="map-hint">{word(vm, "map-places-hint")}</p>
         <section class="insp-sec">
-            <h3 class="note-h">"Junctions"</h3>
+            <h3 class="note-h">{word(vm, "map-junctions")}</h3>
             <ul class="places">{move || vm.with(|v| v.junction_rows()).into_iter().map(|r| place_row(vm, r)).collect_view()}</ul>
         </section>
         <section class="insp-sec">
-            <h3 class="note-h">"Streets"</h3>
+            <h3 class="note-h">{word(vm, "map-streets-heading")}</h3>
             <ul class="places">{move || vm.with(|v| v.street_rows()).into_iter().map(|r| place_row(vm, r)).collect_view()}</ul>
         </section>
     }
@@ -459,8 +481,8 @@ pub fn Changes(vm: Rc<MapVm>) -> impl IntoView {
 pub fn TitleBlock(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
     view! {
-        <div class="tb-cell tb-wide"><span>"City"</span><b id="tb-street">{move || vm.with(|v| v.title())}</b></div>
-        <div class="tb-cell"><span>"Places"</span><b id="tb-places" class="fig">{move || vm.with(|v| v.places().to_string())}</b></div>
-        <div class="tb-cell"><span>"Changed"</span><b id="tb-changes" class="fig">{move || vm.with(|v| v.changes().to_string())}</b></div>
+        <div class="tb-cell tb-wide"><span>{word(vm, "map-tb-city")}</span><b id="tb-street">{move || vm.with(|v| v.title())}</b></div>
+        <div class="tb-cell"><span>{word(vm, "map-places")}</span><b id="tb-places" class="fig">{move || vm.with(|v| v.places().to_string())}</b></div>
+        <div class="tb-cell"><span>{word(vm, "map-tb-changed")}</span><b id="tb-changes" class="fig">{move || vm.with(|v| v.changes().to_string())}</b></div>
     }
 }

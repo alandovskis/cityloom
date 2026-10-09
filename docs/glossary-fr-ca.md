@@ -1,6 +1,6 @@
 # Glossaire anglais / français (Canada)
 
-The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl` and `src/street/i18n/fr.ftl` and `src/city/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled.
+The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl` and `src/map/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled.
 
 ## Style rules
 
@@ -109,6 +109,23 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | City names | Edge of the map | `Limite de la carte` | In a sentence: `la limite de la carte`. |
 | City names | Kind · between here and there | `Genre · entre A et B` | `entre … et …` needs no contraction with `le bout de`, `un raccordement sur`, `la limite de`. `à travers la ville` for an edge between two non-junctions. |
 | City names | Junction today / Earlier changes | `Jonction aujourd’hui` / `Modifications antérieures` | The junction's default history labels. |
+| Map page | place (a street or a junction to open) | lieu | `0` and `1` are singular: `1 lieu`, `2 lieux`. |
+| Map page | Junctions / Streets (headings) | Jonctions / Rues |  |
+| Map page | 3 streets (at a junction) | 3 rues |  |
+| Map page | Works / Still works | Fonctionne / Fonctionne toujours |  |
+| Map page | Changed (a place's tag) | Modifié | The title block's count is `Modifiés`. |
+| Map page | Needs attention | À corriger | To confirm, see below. |
+| Map page | Every check passes | Toutes les vérifications réussissent | As `vérification` / `échouent` on the street page. |
+| Map page | Key to the map | Légende de la carte |  |
+| Map page | basemap | fond de carte |  |
+| Map page | Whole city | Toute la ville |  |
+| Map page | Zoom in / Zoom out | Zoom avant / Zoom arrière |  |
+| Map page | Search places | Rechercher des lieux |  |
+| Map page | 12 places match · showing the first 8 | 12 lieux correspondent · 8 premiers affichés |  |
+| Map page | as first laid out | telle que tracée au départ | To confirm, see below. |
+| Map page | Press again to start over | Appuyez de nouveau pour recommencer | `Recommencer` as on the street page. |
+| Map page | Editors (the navigation) | Éditeurs |  |
+| Map page | Sheet tools | Outils de la feuille | To confirm, see below. |
 
 ## Terms to confirm
 
@@ -143,3 +160,7 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | An unnamed {class} street, in a sentence (city names) | `une rue { $class } sans nom` | For a place on an unnamed road: `Raccordement sur une rue locale sans nom`. A motorway: `une autoroute sans nom`. |
 | End of an unnamed street (city names) | `Bout d’une rue locale sans nom` | Its own message because `de` elides before `une`; in a sentence: `le bout d’une rue locale sans nom`. |
 | Cannot be drawn with the streets as they are (city names) | `Ne peut pas être dessinée avec les rues telles qu’elles sont` |  |
+| Needs attention (map page) | `À corriger` | `Attention requise`, `À vérifier` (suggestion) |
+| as first laid out (map page) | `telle que tracée au départ` | `telle qu’aménagée à l’origine` (suggestion) |
+| Sheet tools (map page, a toolbar's name) | `Outils de la feuille` | `Outils` (suggestion) |
+| place (map page) | `lieu` | `endroit` (suggestion) |

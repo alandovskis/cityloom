@@ -26,6 +26,10 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/shell/vm.rs", include_str!("shell/vm.rs")),
     ("src/shell/view.rs", include_str!("shell/view.rs")),
     ("src/shell/mod.rs", include_str!("shell/mod.rs")),
+    ("src/map/vm.rs", include_str!("map/vm.rs")),
+    ("src/map/view.rs", include_str!("map/view.rs")),
+    ("src/map/overlay.rs", include_str!("map/overlay.rs")),
+    ("src/map/mod.rs", include_str!("map/mod.rs")),
 ];
 
 /// Attributes whose value is text a person reads (also as `attr:<name>`).
@@ -67,6 +71,10 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("(min-width: 1360px)", "a media query"),
     ("recipes use catalogue kinds", "a panic message about the code, never shown"),
     ("catalogue kind", "a panic message about the code, never shown"),
+    ("Feature", "a GeoJSON type name, data for MapLibre"),
+    ("FeatureCollection", "a GeoJSON type name, data for MapLibre"),
+    ("LineString", "a GeoJSON geometry type, data for MapLibre"),
+    ("Point", "a GeoJSON geometry type, data for MapLibre"),
 ];
 
 fn is_path_data(s: &str) -> bool {
@@ -332,6 +340,16 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("data-unit", "the name of an attribute"),
     ("data-theme-set", "the name of an attribute"),
     ("data-theme", "the name of an attribute"),
+    ("data-covers", "the name of a data- attribute marking what floats over the map"),
+    ("search-slot", "the id of an element of the map and home pages"),
+    ("reset-slot", "the id of an element of the map page"),
+    ("map-tools-slot", "the id of an element of the map page"),
+    ("map-slot", "the id of an element of the map page"),
+    ("plan-key", "the id of an element of the map page"),
+    ("checks-lead", "the id of an element of the map page"),
+    ("changes-lead", "the id of an element of the map page"),
+    ("hero-map-slot", "the id of an element of the home page"),
+    ("hero-facts-slot", "the id of an element of the home page"),
 ];
 
 /// The message-id-shaped literals in `src` as `(line, literal)`.

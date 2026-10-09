@@ -20,7 +20,11 @@ use leptos::prelude::*;
 use leptos::web_sys::HtmlElement;
 use wasm_bindgen::prelude::*;
 
+use crate::shared::i18n::Resources;
 use crate::shared::platform::browser_ports;
+
+/// What the map page says, in both languages.
+pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
 
 /// The map page as the script sees it: what the pages around it ask of it.
 #[wasm_bindgen]
@@ -43,7 +47,7 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = crate::shared::ports::Ports { mapper: Rc::new(crate::shared::platform::BrowserMapper::new(basemap)), ..browser_ports() };
     let i18n = crate::unmigrated_i18n();
-    let vm = vm::MapVm::new(ports);
+    let vm = vm::MapVm::new(ports, i18n.clone());
     vm.attach();
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
@@ -75,7 +79,7 @@ pub fn mount_home() -> MapPage {
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = browser_ports();
     let i18n = crate::unmigrated_i18n();
-    let vm = vm::MapVm::new(ports);
+    let vm = vm::MapVm::new(ports, i18n.clone());
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let mount = |id: &str, view: AnyView| {

@@ -14,27 +14,20 @@ use crate::map::overlay;
 use crate::map::projection::Projection;
 use crate::map::style;
 use crate::shared::core::{Core, Presents};
-use crate::shared::i18n::{I18n, Locale};
+use crate::shared::i18n::{Args, I18n};
 use crate::shared::ports::{MapEvent, Ports};
-use crate::shared::said::{Said, say_now};
+use crate::shared::said::{self, Arg, Said};
 use crate::shared::units::Units;
-
-pub const ARMED_RESET: &str = "Press again to start over";
-pub const RESET: &str = "Start over";
-const ARMED_SAID: &str = "This puts every street and junction back as first laid out. Press again to confirm.";
-const DONE_SAID: &str = "The city is back as it was first laid out.";
 
 /// How far a zoom button, or a key, zooms at once.
 const ZOOM_STEP: f64 = 1.4;
 /// How far an arrow key pans, in pixels.
 const PAN_PX: f64 = 80.0;
 
-/// What the map page says where it has no map to show.
-pub const MISSING: &str = "The basemap could not be loaded. Build it with `just prepare`, then reload the page.";
-pub const OUTSIDE: &str = "There is no basemap for this place. The map covers the Montréal area.";
-pub const NO_ROADS: &str = "The roads of this place could not be loaded, so there is no map to show.";
-/// What the status line says of a city with no places.
-pub const NOTHING_TO_SHOW: &str = "No roads to show.";
+/// What the map page says where it has no map to show: the keys of its messages.
+pub const MISSING: &str = "map-basemap-missing";
+pub const OUTSIDE: &str = "map-basemap-outside";
+pub const NO_ROADS: &str = "map-no-roads";
 
 /// Whether the basemap is there to draw the places on.
 #[derive(Clone, Debug, PartialEq)]
@@ -42,7 +35,7 @@ pub enum BasemapState {
     /// Asked for; the tiles have not answered.
     Waiting,
     Ready,
-    /// There will be no map, for the reason in these words.
+    /// There will be no map, for the reason the message with this key gives.
     Unavailable(&'static str),
 }
 
@@ -70,58 +63,64 @@ impl Presents for CityModel {
 }
 
 // ---- words ------------------------------------------------------------------------------
+//
+// What the page says is worded with the tracked `tr`/`say`: a view that reads a property is drawn again when
+// the language is switched. A command words what it announces with `tr_now`.
 
-/// `1 street`, `3 streets`.
-pub fn plural(n: usize, one: &str, many: &str) -> String {
-    format!("{n} {}", if n == 1 { one } else { many })
+/// `1 street`, `3 streets`, as data to be worded.
+fn streets(n: usize) -> Arg {
+    Arg::Said(Box::new(Said::new("map-streets").with("n", Arg::Num(n as i64))))
 }
 
-fn streets(n: usize) -> String {
-    plural(n, "street", "streets")
+/// What a city's place says, in the language of the page.
+fn all_said(i18n: &I18n, units: Units, said: &[Said]) -> Vec<String> {
+    said.iter().map(|s| said::say(i18n, units, s)).collect()
 }
 
-thread_local! {
-    static ENGLISH: Rc<I18n> = crate::i18n_for(Locale::En);
+/// How a place is told to a screen reader: what it is, what it needs, whether it is changed, and what it
+/// opens, one sentence after another.
+fn label(i18n: &I18n, units: Units, what: String, (ok, failing, edited): (bool, &[Said], bool), opens: &str) -> String {
+    let mut sentences = vec![what];
+    if !ok {
+        let failing = all_said(i18n, units, failing).join(", ").to_lowercase();
+        sentences.push(i18n.tr("map-needs-attention", &Args::new().str("failing", failing)));
+    }
+    if edited {
+        sentences.push(i18n.tr("map-changed", &Args::new()));
+    }
+    sentences.push(i18n.tr(opens, &Args::new()));
+    sentences.join(" ")
 }
 
-/// What the city says, in English: the map page is English until it is translated. Removed when the map
-/// page is translated (Task 4 of the bilingual plan).
-pub fn english(said: &Said) -> String {
-    ENGLISH.with(|i18n| say_now(i18n, Units::Metres, said))
-}
-
-/// Each of what the city says, in English.
-fn english_all(said: &[Said]) -> Vec<String> {
-    said.iter().map(english).collect()
-}
-
-/// What a place needs, or that it is changed, for a screen reader.
-fn state_words(ok: bool, failing: &[Said], edited: bool) -> String {
-    let failing = english_all(failing);
-    let state = if ok { String::new() } else { format!(" Needs attention: {}.", failing.join(", ").to_lowercase()) };
-    format!("{state}{}", if edited { " Changed." } else { "" })
+/// The junction's control as data: in English until the junction's words are translated.
+fn control(n: &NodeView) -> &'static str {
+    n.control.unwrap_or_default()
 }
 
 /// How a junction on the map is told to a screen reader.
-pub fn junction_label(n: &NodeView) -> String {
-    format!(
-        "{}, {}, {}.{} Opens the junction plan.",
-        english(&n.name),
-        n.control.unwrap_or("").to_lowercase(),
-        streets(n.arms),
-        state_words(n.ok, &n.failing, n.edited)
-    )
+pub fn junction_label(n: &NodeView, i18n: &I18n, units: Units) -> String {
+    let what = said::say(
+        i18n,
+        units,
+        &Said::new("map-label-junction")
+            .with("name", Arg::Said(Box::new(n.name.clone())))
+            .with("control", Arg::Text(control(n).to_lowercase()))
+            .with("streets", streets(n.arms)),
+    );
+    label(i18n, units, what, (n.ok, &n.failing, n.edited), "map-opens-junction")
 }
 
 /// How a street on the map is told to a screen reader.
-pub fn street_label(e: &EdgeView, units: Units) -> String {
-    format!(
-        "{}, {}, {} wide.{} Opens the street cross-section.",
-        english(&e.kind),
-        english(&e.ends),
-        units.length(e.row_mm),
-        state_words(e.ok, &e.failing, e.edited)
-    )
+pub fn street_label(e: &EdgeView, i18n: &I18n, units: Units) -> String {
+    let what = said::say(
+        i18n,
+        units,
+        &Said::new("map-label-street")
+            .with("kind", Arg::Said(Box::new(e.kind.clone())))
+            .with("ends", Arg::Said(Box::new(e.ends.clone())))
+            .with("width", Arg::Text(units.length_in(e.row_mm, i18n.locale()))),
+    );
+    label(i18n, units, what, (e.ok, &e.failing, e.edited), "map-opens-street")
 }
 
 pub fn street_href(uid: u32) -> String {
@@ -134,20 +133,22 @@ pub fn junction_href(uid: u32) -> String {
 
 // ---- what the view binds to ----------------------------------------------------------------
 
-/// A place to open: in a list, or as a link on the map.
+/// A place to open: in a list, or as a link on the map. Its name and small print are data, worded by the view
+/// in the language of the page.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PlaceRow {
     pub href: String,
     /// What the map and the list highlight together: `j-3` or `s-7`.
     pub hot: String,
-    pub name: String,
-    pub sub: String,
+    pub name: Said,
+    pub sub: Said,
     pub tag: Option<StateTag>,
 }
 
+/// How a place stands, where it needs saying: the key of the words, and whether it is bad news.
 #[derive(Clone, Debug, PartialEq)]
 pub struct StateTag {
-    pub text: &'static str,
+    pub key: &'static str,
     pub bad: bool,
 }
 
@@ -179,6 +180,7 @@ pub struct MapVm {
     core: Core<CityModel>,
     store: CityStore,
     ports: Ports,
+    i18n: Rc<I18n>,
     camera: ArcRwSignal<Camera>,
     basemap: ArcRwSignal<BasemapState>,
     moved: Cell<bool>,
@@ -190,21 +192,21 @@ pub struct MapVm {
 }
 
 impl MapVm {
-    /// The city of the area chosen. When that area's roads could not be had it is a city of no places,
-    /// named after the area.
-    pub fn new(ports: Ports) -> Rc<MapVm> {
+    /// The city of the area chosen, saying what it says in the language of `i18n` (the one the shell
+    /// switches). When that area's roads could not be had it is a city of no places, named after the area.
+    pub fn new(ports: Ports, i18n: Rc<I18n>) -> Rc<MapVm> {
         let store = CityStore::current(ports.storage.clone());
-        MapVm::over(store, ports)
+        MapVm::over(store, ports, i18n)
     }
 
     /// In the tests: the page over the hand-made city they are written against.
     #[cfg(test)]
-    pub fn on_sample(ports: Ports) -> Rc<MapVm> {
+    pub fn on_sample(ports: Ports, i18n: Rc<I18n>) -> Rc<MapVm> {
         let store = CityStore::sample(ports.storage.clone());
-        MapVm::over(store, ports)
+        MapVm::over(store, ports, i18n)
     }
 
-    fn over(store: CityStore, ports: Ports) -> Rc<MapVm> {
+    fn over(store: CityStore, ports: Ports, i18n: Rc<I18n>) -> Rc<MapVm> {
         let has_roads = store.has_network();
         let model = CityModel { city: store.open(), region: store.region() };
         let core = Core::new(model);
@@ -215,6 +217,7 @@ impl MapVm {
             core,
             store,
             ports,
+            i18n,
             camera: ArcRwSignal::new(Camera::new(world, 800.0, 520.0)),
             basemap: ArcRwSignal::new(basemap),
             moved: Cell::new(false),
@@ -235,6 +238,21 @@ impl MapVm {
         self.core.units()
     }
 
+    /// The page's words, which the shell switches.
+    pub fn i18n(&self) -> &Rc<I18n> {
+        &self.i18n
+    }
+
+    /// The message `key`, for a view: drawn again when the language is switched.
+    pub fn word(&self, key: &str) -> String {
+        self.i18n.tr(key, &Args::new())
+    }
+
+    /// What the city says, for a view: drawn again when the language or the units change.
+    pub fn say(&self, said: &Said) -> String {
+        said::say(&self.i18n, self.units(), said)
+    }
+
     pub fn title(&self) -> String {
         self.view().name.to_string()
     }
@@ -248,7 +266,8 @@ impl MapVm {
     /// `9 junctions, 32 streets`.
     pub fn counts(&self) -> String {
         let v = self.view();
-        format!("{}, {}", plural(Self::junctions(&v).len(), "junction", "junctions"), streets(v.edges.len()))
+        let junctions = Said::new("map-junction-count").with("n", Arg::Num(Self::junctions(&v).len() as i64));
+        self.say(&Said::new("map-counts").with("junctions", Arg::Said(Box::new(junctions))).with("streets", streets(v.edges.len())))
     }
 
     pub fn places(&self) -> usize {
@@ -265,7 +284,7 @@ impl MapVm {
     }
 
     fn tag(ok: bool, edited: bool) -> Option<StateTag> {
-        if !ok { Some(StateTag { text: "Needs attention", bad: true }) } else { edited.then_some(StateTag { text: "Changed", bad: false }) }
+        if !ok { Some(StateTag { key: "map-state-bad", bad: true }) } else { edited.then_some(StateTag { key: "map-state-changed", bad: false }) }
     }
 
     /// The junctions, in the order of their numbers, as rows to open.
@@ -276,22 +295,24 @@ impl MapVm {
             .map(|n| PlaceRow {
                 href: junction_href(n.uid),
                 hot: format!("j-{}", n.uid),
-                name: english(&n.name),
-                sub: format!("{}, {}", n.control.unwrap_or(""), streets(n.arms)),
+                name: n.name.clone(),
+                sub: Said::new("map-junction-sub").with("control", Arg::Text(control(n).to_string())).with("streets", streets(n.arms)),
                 tag: Self::tag(n.ok, n.edited),
             })
             .collect()
     }
 
+    /// The streets, as rows to open. The width in the small print is written in the units and with the
+    /// decimal mark of the page now; the rows are made again when either changes.
     pub fn street_rows(&self) -> Vec<PlaceRow> {
-        let (v, units) = (self.view(), self.units());
+        let (v, units, locale) = (self.view(), self.units(), self.i18n.locale());
         v.edges
             .iter()
             .map(|e| PlaceRow {
                 href: street_href(e.uid),
                 hot: format!("s-{}", e.uid),
-                name: english(&e.kind),
-                sub: format!("{} \u{b7} {}", english(&e.ends), units.length(e.row_mm)),
+                name: e.kind.clone(),
+                sub: Said::new("map-street-sub").with("ends", Arg::Said(Box::new(e.ends.clone()))).with("width", Arg::Text(units.length_in(e.row_mm, locale))),
                 tag: Self::tag(e.ok, e.edited),
             })
             .collect()
@@ -345,10 +366,14 @@ impl MapVm {
     /// looked for in a place's name and small print first, so that "junction 4"
     /// finds Junction 4 and the streets that end there and not every junction of
     /// four streets; when that finds nothing, each word is looked for on its own.
+    /// What is looked in is the text the page shows, in its language: the rows
+    /// are made from the locale read with `locale()`, so the results follow a switch.
     fn narrowed(&self) -> (Vec<PlaceRow>, Vec<PlaceRow>) {
         let terms = self.terms();
         let (junctions, streets) = (self.junction_rows(), self.street_rows());
-        let text = |r: &PlaceRow| format!("{} {}", r.name, r.sub).to_lowercase();
+        let units = self.core.units_now();
+        let shown = |s: &Said| said::say_now(&self.i18n, units, s);
+        let text = |r: &PlaceRow| format!("{} {}", shown(&r.name), shown(&r.sub)).to_lowercase();
         let phrase = terms.join(" ");
         let by_phrase = |rows: &[PlaceRow]| rows.iter().filter(|r| text(r).contains(&phrase)).cloned().collect::<Vec<_>>();
         let by_words = |rows: &[PlaceRow]| rows.iter().filter(|r| terms.iter().all(|t| text(r).contains(t.as_str()))).cloned().collect::<Vec<_>>();
@@ -362,15 +387,16 @@ impl MapVm {
             return None;
         }
         if self.has_no_places() {
-            return Some("There are no places to search.".to_string());
+            return Some(self.word("map-search-no-places"));
         }
         let n = self.results().len();
+        let i18n = &self.i18n;
         Some(if n == 0 {
-            format!("No places match \u{201c}{}\u{201d}. Clear the search to see all {}.", self.search.get().trim(), self.places())
+            i18n.tr("map-search-none", &Args::new().str("query", self.search.get().trim()).num("places", self.places() as i64))
         } else if n > Self::SHOWN {
-            format!("{} \u{b7} showing the first {}", plural(n, "place matches", "places match"), Self::SHOWN)
+            i18n.tr("map-search-found-more", &Args::new().num("n", n as i64).num("shown", Self::SHOWN as i64))
         } else {
-            plural(n, "place matches", "places match")
+            i18n.tr("map-search-found", &Args::new().num("n", n as i64))
         })
     }
 
@@ -383,27 +409,24 @@ impl MapVm {
 
     /// How a junction is told on the map.
     pub fn junction_label(&self, uid: u32) -> String {
-        self.view().nodes.iter().find(|n| n.uid == uid).map(junction_label).unwrap_or_default()
+        let units = self.units();
+        self.view().nodes.iter().find(|n| n.uid == uid).map(|n| junction_label(n, &self.i18n, units)).unwrap_or_default()
     }
 
     pub fn street_label(&self, uid: u32) -> String {
         let units = self.units();
-        self.view().edges.iter().find(|e| e.uid == uid).map(|e| street_label(e, units)).unwrap_or_default()
+        self.view().edges.iter().find(|e| e.uid == uid).map(|e| street_label(e, &self.i18n, units)).unwrap_or_default()
     }
 
     /// Every place, as the notes list them: junctions, then streets.
-    fn places_for_notes(v: &CityView) -> Vec<(NoteItem, bool, bool, &[Said])> {
+    fn places_for_notes<'a>(&self, v: &'a CityView) -> Vec<(NoteItem, bool, bool, &'a [Said])> {
         let mut all = Vec::new();
         for n in Self::junctions(v) {
-            all.push((NoteItem { href: junction_href(n.uid), name: english(&n.name), detail: String::new() }, n.ok, n.edited, n.failing.as_slice()));
+            all.push((NoteItem { href: junction_href(n.uid), name: self.say(&n.name), detail: String::new() }, n.ok, n.edited, n.failing.as_slice()));
         }
         for e in &v.edges {
-            all.push((
-                NoteItem { href: street_href(e.uid), name: format!("{}, {}", english(&e.kind), english(&e.ends)), detail: String::new() },
-                e.ok,
-                e.edited,
-                e.failing.as_slice(),
-            ));
+            let name = Said::new("map-note-street").with("kind", Arg::Said(Box::new(e.kind.clone()))).with("ends", Arg::Said(Box::new(e.ends.clone())));
+            all.push((NoteItem { href: street_href(e.uid), name: self.say(&name), detail: String::new() }, e.ok, e.edited, e.failing.as_slice()));
         }
         all
     }
@@ -411,11 +434,11 @@ impl MapVm {
     /// The places that need attention, with what is wrong.
     pub fn failing_items(&self) -> Vec<NoteItem> {
         let v = self.view();
-        Self::places_for_notes(&v)
+        self.places_for_notes(&v)
             .into_iter()
             .filter(|p| !p.1)
             .map(|(mut i, _, _, f)| {
-                i.detail = english_all(f).join("; ");
+                i.detail = all_said(&self.i18n, self.units(), f).join("; ");
                 i
             })
             .collect()
@@ -423,26 +446,31 @@ impl MapVm {
 
     pub fn checks_lead(&self) -> String {
         if self.has_no_places() {
-            return "There are no places to check.".to_string();
+            return self.word("map-checks-no-places");
         }
         let v = self.view();
-        let all = Self::places_for_notes(&v);
+        let all = self.places_for_notes(&v);
         let failing = all.iter().filter(|p| !p.1).count();
         if failing > 0 {
-            format!("{} attention. Open one to see what is wrong and fix it.", plural(failing, "place needs", "places need"))
+            self.i18n.tr("map-checks-failing", &Args::new().num("n", failing as i64))
         } else {
-            format!("Every check passes in all {} places.", all.len())
+            self.i18n.tr("map-checks-pass", &Args::new().num("n", all.len() as i64))
         }
     }
 
     /// The places that have been changed, and whether each still works.
     pub fn changed_items(&self) -> Vec<NoteItem> {
         let v = self.view();
-        Self::places_for_notes(&v)
+        self.places_for_notes(&v)
             .into_iter()
             .filter(|p| p.2)
             .map(|(mut i, ok, _, f)| {
-                i.detail = if ok { "Still works".to_string() } else { format!("Needs attention: {}", english_all(f).join("; ").to_lowercase()) };
+                i.detail = if ok {
+                    self.word("map-still-works")
+                } else {
+                    let failing = all_said(&self.i18n, self.units(), f).join("; ").to_lowercase();
+                    self.i18n.tr("map-detail-needs-attention", &Args::new().str("failing", failing))
+                };
                 i
             })
             .collect()
@@ -450,44 +478,34 @@ impl MapVm {
 
     pub fn changes_lead(&self) -> String {
         if self.has_no_places() {
-            return "There are no places to change.".to_string();
+            return self.word("map-changes-no-places");
         }
         let n = self.changed_items().len();
-        if n > 0 {
-            format!("{} changed from the city as first laid out.", plural(n, "place", "places"))
-        } else {
-            "Nothing changed yet. Open a street or a junction to change it.".to_string()
-        }
+        if n > 0 { self.i18n.tr("map-changes-some", &Args::new().num("n", n as i64)) } else { self.word("map-changes-none") }
     }
 
     /// Whether the city works, in one line.
     pub fn status(&self) -> Status {
         if self.has_no_places() {
             // Nothing works, since there is nothing: not a tick.
-            return Status { text: NOTHING_TO_SHOW.to_string(), bad: true };
+            return Status { text: self.word("map-nothing-to-show"), bad: true };
         }
         let v = self.view();
-        let bad: Vec<String> = Self::places_for_notes(&v).into_iter().filter(|p| !p.1).map(|p| p.0.name).collect();
+        let bad: Vec<String> = self.places_for_notes(&v).into_iter().filter(|p| !p.1).map(|p| p.0.name).collect();
         if bad.is_empty() {
-            return Status { text: format!("{} places. Every check passes.", v.places), bad: false };
+            return Status { text: self.i18n.tr("map-status-ok", &Args::new().num("n", v.places as i64)), bad: false };
         }
-        let more = if bad.len() > 3 { " and more" } else { "" };
-        Status {
-            text: format!(
-                "{} attention: {}{more}.",
-                plural(bad.len(), "place needs", "places need"),
-                bad.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
-            ),
-            bad: true,
-        }
+        let key = if bad.len() > 3 { "map-status-bad-more" } else { "map-status-bad" };
+        let names = bad.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+        Status { text: self.i18n.tr(key, &Args::new().num("n", bad.len() as i64).str("names", names)), bad: true }
     }
 
     pub fn can_reset(&self) -> bool {
         self.view().edited > 0
     }
 
-    pub fn reset_label(&self) -> &'static str {
-        if self.armed.get() { ARMED_RESET } else { RESET }
+    pub fn reset_label(&self) -> String {
+        self.word(if self.armed.get() { "map-reset-armed" } else { "map-reset" })
     }
 
     pub fn camera(&self) -> Camera {
@@ -578,9 +596,9 @@ impl MapVm {
     }
 
     /// There will be no map, unless the page never had one to wait for (which has said why already).
-    fn give_up(&self, words: &'static str) {
+    fn give_up(&self, key: &'static str) {
         if self.store.has_network() {
-            self.basemap.set(BasemapState::Unavailable(words));
+            self.basemap.set(BasemapState::Unavailable(key));
         }
     }
 
@@ -625,8 +643,8 @@ impl MapVm {
     }
 
     /// The colours the places are drawn in, and what each says.
-    pub fn status_key(&self) -> Vec<(&'static str, &'static str)> {
-        vec![("ok", "Works"), ("changed", "Changed"), ("bad", "Needs attention")]
+    pub fn status_key(&self) -> Vec<(&'static str, String)> {
+        [("ok", "map-state-works"), ("changed", "map-state-changed"), ("bad", "map-state-bad")].into_iter().map(|(id, key)| (id, self.word(key))).collect()
     }
 
     /// What floats over the map, in pixels from each edge: the whole city is fitted in what is left, until
@@ -687,13 +705,13 @@ impl MapVm {
         }
         if !self.armed.get_untracked() {
             self.armed.set(true);
-            self.ports.announcer.say(ARMED_SAID);
+            self.ports.announcer.say(&self.i18n.tr_now("map-reset-armed-said", &Args::new()));
             return ResetOutcome::Armed;
         }
         self.armed.set(false);
         self.store.reset();
         self.reload();
-        self.ports.announcer.say(DONE_SAID);
+        self.ports.announcer.say(&self.i18n.tr_now("map-reset-done", &Args::new()));
         ResetOutcome::Done
     }
 
@@ -725,12 +743,31 @@ mod tests {
     use super::*;
     use crate::map::camera::Insets;
     use crate::place::area::Area;
+    use crate::shared::i18n::Locale;
     use crate::shared::ports::{FakeMapper, MapCall, MapEvent, MemoryStorage, Ports, RecordingAnnouncer, RecordingNavigator, test_ports};
+    use crate::shared::said::say_now;
     use osm_network::{Control, Lane, LaneKind, Network, Node, Road, Way};
 
     fn vm() -> (Rc<MapVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
+        vm_in(Locale::En)
+    }
+
+    fn vm_in(locale: Locale) -> (Rc<MapVm>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         let (ports, said, storage) = test_ports();
-        (MapVm::on_sample(ports), said, storage)
+        (MapVm::on_sample(ports, crate::i18n_for(locale)), said, storage)
+    }
+
+    /// What the page shows of a place's name or small print, in its language now.
+    fn shown(vm: &MapVm, said: &Said) -> String {
+        say_now(vm.i18n(), vm.units(), said)
+    }
+
+    fn name_of(vm: &MapVm, r: &PlaceRow) -> String {
+        shown(vm, &r.name)
+    }
+
+    fn sub_of(vm: &MapVm, r: &PlaceRow) -> String {
+        shown(vm, &r.sub)
     }
 
     /// Another page writes a street of the city into the shared storage.
@@ -745,7 +782,7 @@ mod tests {
     }
 
     fn names(vm: &MapVm) -> Vec<String> {
-        vm.results().into_iter().map(|r| r.name).collect()
+        vm.results().iter().map(|r| name_of(vm, r)).collect()
     }
 
     #[test]
@@ -765,7 +802,7 @@ mod tests {
         assert!(!vm.results().is_empty() && names(&vm).iter().all(|n| n.to_lowercase().contains("avenue")));
         vm.set_search("signal");
         let found = vm.results();
-        assert!(!found.is_empty() && found.iter().all(|r| r.sub.to_lowercase().contains("traffic signal")));
+        assert!(!found.is_empty() && found.iter().all(|r| sub_of(&vm, r).to_lowercase().contains("traffic signal")));
     }
 
     #[test]
@@ -773,11 +810,11 @@ mod tests {
         let (vm, ..) = vm();
         vm.set_search("  JUNCTION   4 ");
         let found = vm.results();
-        assert!(found.iter().any(|r| r.name == "Junction 4"));
-        assert!(found.iter().all(|r| format!("{} {}", r.name, r.sub).contains("Junction 4")), "not every junction of four streets");
+        assert!(found.iter().any(|r| name_of(&vm, r) == "Junction 4"));
+        assert!(found.iter().all(|r| format!("{} {}", name_of(&vm, r), sub_of(&vm, r)).contains("Junction 4")), "not every junction of four streets");
         vm.set_search("avenue junction 5");
         let found = vm.results();
-        assert!(!found.is_empty() && found.iter().all(|r| r.name.to_lowercase().contains("avenue") && r.sub.contains("Junction 5")));
+        assert!(!found.is_empty() && found.iter().all(|r| name_of(&vm, r).to_lowercase().contains("avenue") && sub_of(&vm, r).contains("Junction 5")));
     }
 
     #[test]
@@ -849,10 +886,28 @@ mod tests {
     }
 
     #[test]
-    fn plural_counts_with_the_right_word() {
-        assert_eq!(plural(1, "street", "streets"), "1 street");
-        assert_eq!(plural(2, "place needs", "places need"), "2 places need");
-        assert_eq!(plural(0, "place", "places"), "0 places");
+    fn a_search_matches_the_words_the_page_shows_in_its_language() {
+        let (vm, ..) = vm_in(Locale::FrCa);
+        vm.set_search("jonction 4");
+        let found = vm.results();
+        assert!(found.iter().any(|r| name_of(&vm, r) == "Jonction 4"), "{:?}", names(&vm));
+        assert!(found.iter().all(|r| format!("{} {}", name_of(&vm, r), sub_of(&vm, r)).contains("Jonction 4")), "{:?}", names(&vm));
+        vm.set_search("junction 4");
+        assert_eq!(names(&vm), Vec::<String>::new(), "the English names are not shown, so not found");
+        assert_eq!(vm.search_note().as_deref(), Some("Aucun lieu ne correspond à «\u{a0}junction 4\u{a0}». Effacez la recherche pour revoir les 32 lieux."));
+    }
+
+    #[test]
+    fn a_switch_of_language_rewords_what_the_search_finds_on_the_same_page() {
+        let (vm, ..) = vm();
+        vm.set_search("jonction 4");
+        assert!(vm.results().is_empty(), "nothing in English says jonction");
+        vm.i18n().set(Locale::FrCa);
+        assert!(names(&vm).iter().any(|n| n == "Jonction 4"), "{:?}", names(&vm));
+        vm.set_search("junction 4");
+        assert!(vm.results().is_empty());
+        vm.i18n().set(Locale::En);
+        assert!(names(&vm).iter().any(|n| n == "Junction 4"), "{:?}", names(&vm));
     }
 
     #[test]
@@ -862,7 +917,7 @@ mod tests {
         owner.set();
         let v = vm.view();
         assert_eq!(vm.title(), v.name);
-        assert_eq!(vm.counts(), format!("{}, {}", plural(v.nodes.iter().filter(|n| n.junction).count(), "junction", "junctions"), streets(v.edges.len())));
+        assert_eq!(vm.counts(), format!("{} junctions, {} streets", v.nodes.iter().filter(|n| n.junction).count(), v.edges.len()));
         assert_eq!((vm.places(), vm.changes()), (v.places, 0));
     }
 
@@ -871,12 +926,12 @@ mod tests {
         let (vm, ..) = vm();
         let rows = vm.junction_rows();
         let view = vm.view();
-        let numbers: Vec<u32> = rows.iter().map(|r| view.nodes.iter().find(|n| english(&n.name) == r.name).unwrap().number).collect();
+        let numbers: Vec<u32> = rows.iter().map(|r| view.nodes.iter().find(|n| n.name == r.name).unwrap().number).collect();
         let mut sorted = numbers.clone();
         sorted.sort_unstable();
         assert_eq!(numbers, sorted);
         assert!(rows[0].href.starts_with("intersection.html?junction=") && rows[0].hot.starts_with("j-"));
-        assert!(rows[0].sub.contains(" street"));
+        assert!(sub_of(&vm, &rows[0]).contains(" street"));
         assert_eq!(rows[0].tag, None);
     }
 
@@ -888,9 +943,9 @@ mod tests {
         let e = &vm.view().edges[0];
         assert_eq!(rows[0].href, format!("street.html?street={}", e.uid));
         assert_eq!(rows[0].hot, format!("s-{}", e.uid));
-        assert_eq!(rows[0].sub, format!("{} \u{b7} {}", english(&e.ends), Units::Metres.length(e.row_mm)));
+        assert_eq!(sub_of(&vm, &rows[0]), format!("{} \u{b7} {}", shown(&vm, &e.ends), Units::Metres.length(e.row_mm)));
         vm.set_units(Units::Feet);
-        assert!(vm.street_rows()[0].sub.ends_with(&Units::Feet.length(e.row_mm)));
+        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(&Units::Feet.length(e.row_mm)));
     }
 
     #[test]
@@ -913,7 +968,7 @@ mod tests {
         assert_eq!(vm.changes(), 0, "not until it is read again");
         vm.reload();
         assert_eq!(vm.changes(), 1);
-        assert_eq!(vm.street_rows()[0].tag, Some(StateTag { text: "Changed", bad: false }));
+        assert_eq!(vm.street_rows()[0].tag, Some(StateTag { key: "map-state-changed", bad: false }));
         assert!(vm.street_label(e).contains(" Changed."));
         let items = vm.changed_items();
         assert_eq!(items.len(), 1);
@@ -931,7 +986,7 @@ mod tests {
         let st = vm.status();
         assert!(st.bad && st.text.starts_with("1 place needs attention: "), "{}", st.text);
         let row = vm.street_rows().into_iter().find(|r| r.hot == format!("s-{e}")).unwrap();
-        assert_eq!(row.tag, Some(StateTag { text: "Needs attention", bad: true }));
+        assert_eq!(row.tag, Some(StateTag { key: "map-state-bad", bad: true }));
         assert!(vm.street_label(e).contains(" Needs attention: "));
         assert_eq!(vm.failing_items().len(), 1);
         assert!(vm.checks_lead().starts_with("1 place needs attention. Open one"));
@@ -976,11 +1031,11 @@ mod tests {
         assert_eq!(vm.reset_label(), "Start over");
         assert_eq!(vm.press_reset(), ResetOutcome::Armed);
         assert_eq!(vm.reset_label(), "Press again to start over");
-        assert_eq!(said.take(), vec![ARMED_SAID]);
+        assert_eq!(said.take(), vec!["This puts every street and junction back as first laid out. Press again to confirm."]);
         assert_eq!(vm.changes(), 1, "nothing is undone yet");
         assert_eq!(vm.press_reset(), ResetOutcome::Done);
-        assert_eq!((vm.changes(), vm.reset_label()), (0, "Start over"));
-        assert_eq!(said.take(), vec![DONE_SAID]);
+        assert_eq!((vm.changes(), vm.reset_label().as_str()), (0, "Start over"));
+        assert_eq!(said.take(), vec!["The city is back as it was first laid out."]);
         assert_eq!(CityStore::sample(storage.clone()).open().view(0).edited, 0, "and it is kept");
     }
 
@@ -1000,7 +1055,7 @@ mod tests {
     fn the_region_is_read_from_storage_and_can_be_changed() {
         let (ports, ..) = test_ports();
         ports.storage.remember(crate::city::store::REGION_KEY, "united-kingdom");
-        let vm = MapVm::on_sample(ports);
+        let vm = MapVm::on_sample(ports, crate::i18n_for(Locale::En));
         assert_eq!(vm.region(), 3);
         vm.set_region(0);
         assert_eq!(vm.region(), 0);
@@ -1041,7 +1096,7 @@ mod tests {
         assert!(CityStore::choose(&*storage, &area));
         let (mapper, navigator) = (Rc::new(FakeMapper::default()), Rc::new(RecordingNavigator::default()));
         let ports = Ports { mapper: mapper.clone(), navigator: navigator.clone(), ..ports };
-        let vm = MapVm::new(ports);
+        let vm = MapVm::new(ports, crate::i18n_for(Locale::En));
         vm.attach();
         mapper.take(); // the scale's units, said when it attached
         (vm, mapper, navigator, storage)
@@ -1054,7 +1109,7 @@ mod tests {
     fn roadless_map_vm() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<MemoryStorage>) {
         let (ports, _, storage) = test_ports();
         let mapper = Rc::new(FakeMapper::default());
-        let vm = MapVm::new(Ports { mapper: mapper.clone(), ..ports });
+        let vm = MapVm::new(Ports { mapper: mapper.clone(), ..ports }, crate::i18n_for(Locale::En));
         vm.attach();
         mapper.take();
         (vm, mapper, storage)
@@ -1070,7 +1125,7 @@ mod tests {
         assert!(vm.junction_rows().is_empty() && vm.street_rows().is_empty());
         assert_eq!((vm.places(), vm.changes()), (0, 0));
         assert_eq!(vm.counts(), "0 junctions, 0 streets");
-        assert_eq!(vm.status(), Status { text: NOTHING_TO_SHOW.to_string(), bad: true });
+        assert_eq!(vm.status(), Status { text: "No roads to show.".to_string(), bad: true });
         assert!(vm.failing_items().is_empty() && vm.changed_items().is_empty());
         assert_eq!(vm.checks_lead(), "There are no places to check.");
         assert_eq!(vm.changes_lead(), "There are no places to change.");
@@ -1216,7 +1271,7 @@ mod tests {
     #[test]
     fn the_key_says_what_the_colours_of_the_places_mean() {
         let (vm, ..) = vm();
-        assert_eq!(vm.status_key(), vec![("ok", "Works"), ("changed", "Changed"), ("bad", "Needs attention")]);
+        assert_eq!(vm.status_key(), vec![("ok", "Works".to_string()), ("changed", "Changed".to_string()), ("bad", "Needs attention".to_string())]);
     }
 
     #[test]

@@ -21,7 +21,7 @@ pub fn HeroMap(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
     let frame = NodeRef::<leptos::html::Div>::new();
     let k = Memo::new(move |_| vm.with(|v| v.camera().k));
-    let places = move || vm.with(|v| map_svg(&v.view(), k.get(), v.units()));
+    let places = move || vm.with(|v| map_svg(&v.view(), k.get(), v.units(), v.i18n()));
 
     #[cfg(target_arch = "wasm32")]
     {

@@ -6,7 +6,9 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 use crate::city::model::{CityView, EdgeView, NodeView};
-use crate::map::vm::{english, junction_label, street_label};
+use crate::map::vm::{junction_label, street_label};
+use crate::shared::i18n::I18n;
+use crate::shared::said::say;
 use crate::shared::symbols::HATCH;
 use crate::shared::units::Units;
 
@@ -107,8 +109,8 @@ fn badge(x: f64, y: f64, px: &dyn Fn(f64) -> f64) -> String {
     )
 }
 
-/// The whole map at zoom `k` (pixels to the metre).
-pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
+/// The whole map at zoom `k` (pixels to the metre), its names and labels in the language of `i18n`.
+pub fn map_svg(v: &CityView, k: f64, units: Units, i18n: &I18n) -> String {
     let px = |n: f64| n / k;
     let nodes: HashMap<u32, &NodeView> = v.nodes.iter().map(|n| (n.uid, n)).collect();
     let laid: Vec<Laid> = v
@@ -187,7 +189,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             r2(-(l.row / 2.0 + px(6.0))),
             r2(px(13.0)),
             r2(px(4.0)),
-            esc(&english(&l.e.kind)),
+            esc(&say(i18n, units, &l.e.kind)),
             if l.e.edited { " \u{b7} changed" } else { "" }
         )
         .unwrap();
@@ -230,8 +232,8 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             "<a class=\"place\" href=\"{}\" data-hl=\"s-{}\" aria-label=\"{}\"><title>{}</title><line class=\"m-hit\" {} stroke-width=\"{}\"/></a>",
             crate::map::vm::street_href(l.e.uid),
             l.e.uid,
-            esc(&street_label(l.e, units)),
-            esc(&english(&l.e.name())),
+            esc(&street_label(l.e, i18n, units)),
+            esc(&say(i18n, units, &l.e.name())),
             l.g.line(0.0, l.t0, l.t1.max(l.t0 + 0.01)),
             r2(l.row.max(px(18.0)))
         )
@@ -243,8 +245,8 @@ pub fn map_svg(v: &CityView, k: f64, units: Units) -> String {
             "<a class=\"place\" href=\"{}\" data-hl=\"j-{}\" aria-label=\"{}\"><title>{}</title><circle class=\"m-hit\" cx=\"{}\" cy=\"{}\" r=\"{}\"/></a>",
             crate::map::vm::junction_href(n.uid),
             n.uid,
-            esc(&junction_label(n)),
-            esc(&english(&n.name)),
+            esc(&junction_label(n, i18n, units)),
+            esc(&say(i18n, units, &n.name)),
             n.x_mm as f64 / 1000.0,
             n.y_mm as f64 / 1000.0,
             r2(rad(n).max(px(16.0)))
@@ -263,6 +265,11 @@ mod tests {
         City::new().view(0)
     }
 
+    /// The hero is English until the home page is translated.
+    fn en() -> std::rc::Rc<I18n> {
+        crate::i18n_for(crate::shared::i18n::Locale::En)
+    }
+
     /// The stroke widths, in metres, of the lines of one class.
     fn widths(s: &str, class: &str) -> Vec<f64> {
         s.split(&format!("class=\"{class}\""))
@@ -276,18 +283,18 @@ mod tests {
     fn a_street_is_never_drawn_narrower_than_the_minimum_on_screen_and_keeps_its_true_width_when_zoomed_in() {
         let v = view();
         let far = 0.3; // pixels to the metre, with the whole city in view
-        let narrowest = widths(&map_svg(&v, far, Units::Metres), "m-out").into_iter().fold(f64::MAX, f64::min);
+        let narrowest = widths(&map_svg(&v, far, Units::Metres, &en()), "m-out").into_iter().fold(f64::MAX, f64::min);
         assert!(narrowest * far >= MIN_STREET_PX - 0.05, "{narrowest}");
         let near = 6.0;
         let true_widths: Vec<f64> = v.edges.iter().map(|e| e.row_mm as f64 / 1000.0).collect();
-        let drawn = widths(&map_svg(&v, near, Units::Metres), "m-out");
+        let drawn = widths(&map_svg(&v, near, Units::Metres, &en()), "m-out");
         assert!(drawn.iter().all(|w| true_widths.iter().any(|t| (t - w).abs() < 0.01)), "unchanged when the street is wide enough to see");
     }
 
     #[test]
     fn a_boosted_street_keeps_its_lanes_in_proportion() {
         let v = view();
-        let far = map_svg(&v, 0.3, Units::Metres);
+        let far = map_svg(&v, 0.3, Units::Metres, &en());
         let (row, road) = (widths(&far, "m-out")[0], widths(&far, "m-road")[0]);
         let e = &v.edges[0];
         let (lo, hi) = e
@@ -304,7 +311,7 @@ mod tests {
         let v = view();
         let world = crate::map::camera::World::round(v.bounds_mm);
         let camera = crate::map::camera::Camera::new(world, 650.0, 800.0);
-        let at_fit = map_svg(&v, camera.k, Units::Metres);
+        let at_fit = map_svg(&v, camera.k, Units::Metres, &en());
         assert!(count(&at_fit, "class=\"m-name\"") >= 6, "{}", count(&at_fit, "class=\"m-name\""));
     }
 
@@ -333,7 +340,7 @@ mod tests {
     #[test]
     fn every_street_is_drawn_as_an_outline_a_walk_a_road_and_a_link_that_opens_it() {
         let v = view();
-        let s = map_svg(&v, 1.0, Units::Metres);
+        let s = map_svg(&v, 1.0, Units::Metres, &en());
         let n = v.edges.len();
         assert_eq!(count(&s, "class=\"m-out\""), n);
         assert_eq!(count(&s, "class=\"m-walk\"") + count(&s, "class=\"m-shoulder\""), n);
@@ -346,14 +353,14 @@ mod tests {
     #[test]
     fn a_freeway_has_a_shoulder_where_a_street_has_a_walk() {
         let v = view();
-        let s = map_svg(&v, 1.0, Units::Metres);
+        let s = map_svg(&v, 1.0, Units::Metres, &en());
         assert_eq!(count(&s, "class=\"m-shoulder\""), v.edges.iter().filter(|e| e.freeway).count());
     }
 
     #[test]
     fn every_junction_is_a_numbered_disc_and_a_link_that_opens_its_plan() {
         let v = view();
-        let s = map_svg(&v, 1.0, Units::Metres);
+        let s = map_svg(&v, 1.0, Units::Metres, &en());
         let j = v.nodes.iter().filter(|n| n.junction).count();
         assert_eq!(count(&s, "class=\"m-jc\""), j);
         assert_eq!(count(&s, "data-hl=\"j-"), j);
@@ -363,8 +370,8 @@ mod tests {
     #[test]
     fn what_is_drawn_to_a_few_pixels_is_set_in_metres_from_the_zoom() {
         let v = view();
-        let near = map_svg(&v, 10.0, Units::Metres);
-        let far = map_svg(&v, 1.0, Units::Metres);
+        let near = map_svg(&v, 10.0, Units::Metres, &en());
+        let far = map_svg(&v, 1.0, Units::Metres, &en());
         assert_ne!(near, far);
         // A junction's number is 13 pixels tall at any zoom.
         assert!(near.contains("font-size=\"1.3\"") && far.contains("font-size=\"13\""));
@@ -373,8 +380,8 @@ mod tests {
     #[test]
     fn a_street_is_named_where_it_is_long_enough_to_hold_the_name() {
         let v = view();
-        let far = map_svg(&v, 0.05, Units::Metres);
-        let near = map_svg(&v, 1.0, Units::Metres);
+        let far = map_svg(&v, 0.05, Units::Metres, &en());
+        let near = map_svg(&v, 1.0, Units::Metres, &en());
         assert!(count(&near, "class=\"m-name\"") > count(&far, "class=\"m-name\""));
         assert_eq!(count(&far, "class=\"m-name\""), 0);
         assert!(near.contains("rotate("));
@@ -382,7 +389,7 @@ mod tests {
 
     #[test]
     fn a_name_is_never_upside_down() {
-        let s = map_svg(&view(), 1.0, Units::Metres);
+        let s = map_svg(&view(), 1.0, Units::Metres, &en());
         for part in s.split("class=\"m-name\" transform=\"").skip(1) {
             let ang: f64 = part.split("rotate(").nth(1).unwrap().split(')').next().unwrap().parse().unwrap();
             assert!((-90.0..=90.0).contains(&ang), "{ang}");
@@ -403,7 +410,7 @@ mod tests {
     #[test]
     fn a_place_that_no_longer_works_is_ringed_and_badged_and_a_changed_one_says_so() {
         let v = broken_city();
-        let s = map_svg(&v, 1.0, Units::Metres);
+        let s = map_svg(&v, 1.0, Units::Metres, &en());
         let bad = v.edges.iter().filter(|e| !e.ok).count();
         assert!(bad >= 1);
         assert_eq!(count(&s, "class=\"m-bad\""), bad);
@@ -414,7 +421,7 @@ mod tests {
 
     #[test]
     fn a_working_city_has_no_rings_and_no_badges() {
-        let s = map_svg(&view(), 1.0, Units::Metres);
+        let s = map_svg(&view(), 1.0, Units::Metres, &en());
         for none in ["m-bad", "m-badge", "changed"] {
             assert!(!s.contains(none), "{none}");
         }
@@ -423,9 +430,9 @@ mod tests {
     #[test]
     fn the_links_tell_a_screen_reader_what_each_place_is() {
         let v = view();
-        let s = map_svg(&v, 1.0, Units::Metres);
+        let s = map_svg(&v, 1.0, Units::Metres, &en());
         assert!(s.contains("Opens the junction plan.") && s.contains("Opens the street cross-section."));
-        let feet = map_svg(&v, 1.0, Units::Feet);
+        let feet = map_svg(&v, 1.0, Units::Feet, &en());
         assert!(feet.contains(" ft wide."));
     }
 }
