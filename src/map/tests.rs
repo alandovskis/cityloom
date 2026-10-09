@@ -426,3 +426,45 @@ fn zero_and_one_are_singular_in_french_and_zero_is_plural_in_english_in_every_co
     assert_eq!(counted(&fr, "map-status-bad-more", more)[1], "1 lieu à corriger\u{a0}: X et d’autres.");
     assert_eq!(counted(&en, "map-status-bad-more", more)[2], "2 places need attention: X and more.");
 }
+
+// ---- the page's markup ----------------------------------------------------------------------
+
+const MAP_HTML: &str = include_str!("../../web/map.html");
+
+#[test]
+fn every_data_i18n_key_in_map_html_exists_in_both_languages() {
+    use crate::shell::view::i18n_keys;
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let keys = i18n_keys(MAP_HTML);
+    assert!(keys.len() > 35, "the page should have been converted: {}", keys.len());
+    for (key, _) in keys {
+        en.tr_now(&key, &Args::new());
+        fr.tr_now(&key, &Args::new());
+    }
+    assert_eq!(en.missing(), Vec::<String>::new(), "missing in en");
+    assert_eq!(fr.missing(), Vec::<String>::new(), "missing in fr");
+}
+
+#[test]
+fn the_english_text_in_map_html_is_the_english_message() {
+    let en = crate::i18n_for(Locale::En);
+    for (key, fallback) in crate::shell::view::i18n_keys(MAP_HTML) {
+        assert_eq!(fallback, en.tr_now(&key, &Args::new()), "{key}");
+    }
+}
+
+#[test]
+fn map_html_has_a_language_row_and_sets_the_language_in_the_head() {
+    assert!(MAP_HTML.contains(r#"data-lang="en" lang="en" aria-pressed="true">English<"#));
+    assert!(MAP_HTML.contains(r#"data-lang="fr-CA" lang="fr" aria-pressed="false">Français<"#));
+    assert_eq!(MAP_HTML.matches("<script>").count(), 1);
+    assert!(MAP_HTML.contains(r#"localStorage.getItem("cityloom-lang")"#));
+}
+
+#[test]
+fn the_window_title_of_the_map_page_is_its_header_s_message_in_english() {
+    // The header sets the title in the language of the page; the markup's own is the English message.
+    let en = crate::i18n_for(Locale::En);
+    assert!(MAP_HTML.contains(&format!("<title>{}</title>", en.tr_now("map-page-title", &Args::new()))));
+    assert!(!MAP_HTML.contains("<title data-i18n"), "the shell does not write the title");
+}

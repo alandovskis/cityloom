@@ -46,7 +46,8 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = crate::shared::ports::Ports { mapper: Rc::new(crate::shared::platform::BrowserMapper::new(basemap)), ..browser_ports() };
-    let i18n = crate::unmigrated_i18n();
+    // One instance for the page: the shell switches it and the map's words follow.
+    let i18n = crate::i18n_browser(&ports);
     let vm = vm::MapVm::new(ports, i18n.clone());
     vm.attach();
     let at =

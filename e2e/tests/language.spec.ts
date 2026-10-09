@@ -175,13 +175,31 @@ test("a French reader types a decimal comma", async ({ page }) => {
   await expect(fit).not.toContainText("too wide");
 });
 
-// The pages that are not translated are English from top to bottom, so the document says so even for a
-// reader who chose French on the street page (a screen reader would read English words with French rules).
-test("a page that is not translated keeps lang=en for a reader who chose French", async ({ page }) => {
-  await storedFrench(page);
+test("the map page can be read in French and the choice is kept", async ({ page }) => {
   await page.goto("/map.html");
   await mapReady(page);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("#h-checks")).toHaveText("Does it work?");
+  await chooseFrench(page);
+  await expect(page.locator("#h-checks")).toHaveText("Est-ce que ça fonctionne?");
+  await expect(page.locator("#places-panel h3").first()).toHaveText("Jonctions");
+  await expect(page.locator("#zoom-fit")).toHaveAttribute("title", "Toute la ville");
+  await expect(page).toHaveTitle("Carte de la ville CityLoom");
+  // The search finds what the page shows, in its language.
+  // A junction's small print counts its streets: "4 rues".
+  await page.locator("#search").fill("rues");
+  await expect(page.locator("#search-results [role=option]").first()).toContainText(/\d rues/);
+  await page.reload();
+  await mapReady(page);
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+  await expect(page.locator("#h-checks")).toHaveText("Est-ce que ça fonctionne?");
+  await expect(page.locator("#reset-label")).toHaveText("Recommencer");
+});
+
+// The pages that are not translated are English from top to bottom, so the document says so even for a
+// reader who chose French on another page (a screen reader would read English words with French rules).
+test("a page that is not translated keeps lang=en for a reader who chose French", async ({ page }) => {
+  await storedFrench(page);
   await openJunction(page);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
 });

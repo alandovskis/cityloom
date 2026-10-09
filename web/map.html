@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CityLoom city map</title>
-  <meta name="description" content="See the whole city at once and open any street or junction to change it.">
+  <meta name="description" data-i18n-content="map-page-description" content="See the whole city at once and open any street or junction to change it.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed"}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";var l=localStorage.getItem("cityloom-lang");if(l==="en"||l==="fr-CA")document.documentElement.lang=l}catch(e){}</script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="app.css">
@@ -14,55 +14,62 @@
 </head>
 <body>
   <header class="bar" data-covers>
-    <a class="brand" href="map.html" aria-label="CityLoom, the city map"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
+    <a class="brand" href="map.html" data-i18n-aria-label="map-brand" aria-label="CityLoom, the city map"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
     <div class="search-slot" id="search-slot"></div>
-    <nav class="surfaces" aria-label="Editors">
-      <a href="map.html" class="surface" aria-current="page">Map</a>
+    <nav class="surfaces" data-i18n-aria-label="map-editors" aria-label="Editors">
+      <a href="map.html" class="surface" aria-current="page" data-i18n="map-nav-map">Map</a>
     </nav>
     <div class="top-end">
-      <button type="button" id="inspector-toggle" class="btn quiet" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" title="Show or hide the places ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span>Places</span></button>
-      <button type="button" id="notes-toggle" class="btn quiet" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span>Notes</span></button>
+      <button type="button" id="inspector-toggle" class="btn quiet" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" data-i18n-title="map-places-toggle-title" title="Show or hide the places ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span data-i18n="map-places">Places</span></button>
+      <button type="button" id="notes-toggle" class="btn quiet" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" data-i18n-title="ui-notes-toggle-title" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span data-i18n="ui-notes">Notes</span></button>
       <div class="account">
-        <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
+        <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" data-i18n-aria-label="ui-settings" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
         <div id="account-menu" class="menu" hidden>
-          <p class="menu-h">Settings</p>
+          <p class="menu-h" data-i18n="ui-settings">Settings</p>
           <div class="menu-row">
-            <span id="units-label">Units</span>
+            <span id="units-label" data-i18n="ui-units">Units</span>
             <div class="units" role="group" aria-labelledby="units-label">
               <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
               <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
             </div>
           </div>
           <div class="menu-row">
-            <label for="region">Region</label>
+            <label for="region" data-i18n="ui-region">Region</label>
             <select id="region"></select>
           </div>
           <div class="menu-row">
-            <span id="theme-label">Theme</span>
+            <span id="theme-label" data-i18n="ui-theme">Theme</span>
             <div class="units" role="group" aria-labelledby="theme-label">
-              <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
-              <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
+              <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false" data-i18n="ui-theme-light">Light</button>
+              <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false" data-i18n="ui-theme-dark">Dark</button>
+            </div>
+          </div>
+          <div class="menu-row">
+            <span id="lang-label" data-i18n="ui-language">Language</span>
+            <div class="units" role="group" aria-labelledby="lang-label">
+              <button type="button" class="unit" data-lang="en" lang="en" aria-pressed="true">English</button>
+              <button type="button" class="unit" data-lang="fr-CA" lang="fr" aria-pressed="false">Français</button>
             </div>
           </div>
           <div class="menu-keys">
-            <p class="menu-h">Keyboard</p>
+            <p class="menu-h" data-i18n="ui-keyboard">Keyboard</p>
             <p id="keys" class="keys">
-              <span><kbd>/</kbd> search</span>
-              <span><kbd>Tab</kbd> next place</span>
-              <span><kbd>Enter</kbd> open</span>
-              <span><kbd>+</kbd> <kbd>−</kbd> zoom</span>
-              <span><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> move the map</span>
-              <span><kbd>0</kbd> whole city</span>
-              <span><kbd>[</kbd> <kbd>]</kbd> places, notes</span>
+              <span><kbd>/</kbd> <span data-i18n="map-key-search">search</span></span>
+              <span><kbd>Tab</kbd> <span data-i18n="map-key-next">next place</span></span>
+              <span><kbd data-i18n="ui-key-enter">Enter</kbd> <span data-i18n="map-key-open">open</span></span>
+              <span><kbd>+</kbd> <kbd>−</kbd> <span data-i18n="map-key-zoom">zoom</span></span>
+              <span><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> <span data-i18n="map-key-move">move the map</span></span>
+              <span><kbd>0</kbd> <span data-i18n="map-key-whole">whole city</span></span>
+              <span><kbd>[</kbd> <kbd>]</kbd> <span data-i18n="map-key-panels">places, notes</span></span>
             </p>
           </div>
-          <p class="menu-foot"><a href="credits.html">Credits</a></p>
+          <p class="menu-foot"><a href="credits.html" data-i18n="ui-credits">Credits</a></p>
         </div>
       </div>
     </div>
   </header>
 
-  <aside class="panel left" id="places-panel" aria-label="Places in the city" data-covers>
+  <aside class="panel left" id="places-panel" data-i18n-aria-label="map-places-panel" aria-label="Places in the city" data-covers>
     <div class="panel-head"><div class="street" id="street"></div></div>
     <div class="panel-body inspector" id="inspector"></div>
     <div class="panel-foot"><div id="reset-slot" style="display: contents"></div></div>
@@ -70,8 +77,8 @@
 
   <main class="stage">
     <section class="drawing" aria-labelledby="h-drawing">
-      <h2 id="h-drawing" class="sr-only">City map</h2>
-      <div id="basemap" class="basemap" tabindex="0" role="group" aria-label="Map of the city, north up" aria-describedby="keys"></div>
+      <h2 id="h-drawing" class="sr-only" data-i18n="map-city-map">City map</h2>
+      <div id="basemap" class="basemap" tabindex="0" role="group" data-i18n-aria-label="map-basemap-label" aria-label="Map of the city, north up" aria-describedby="keys"></div>
       <div id="map-slot" style="display: contents"></div>
     </section>
     <div class="zoom-dock" id="map-tools-slot"></div>
@@ -80,33 +87,33 @@
     </div>
   </main>
 
-  <aside class="panel right notes" id="notes" aria-label="Notes" data-covers>
-    <div class="tabs" role="tablist" aria-label="Notes sections">
-      <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="true">Checks</button>
-      <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1">Changes</button>
+  <aside class="panel right notes" id="notes" data-i18n-aria-label="ui-notes" aria-label="Notes" data-covers>
+    <div class="tabs" role="tablist" data-i18n-aria-label="ui-notes-sections" aria-label="Notes sections">
+      <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="true" data-i18n="ui-tab-checks">Checks</button>
+      <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>
     </div>
     <div class="panel-body">
       <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks">
         <section aria-labelledby="h-checks">
-          <h2 id="h-checks" class="note-h">Does it work?</h2>
+          <h2 id="h-checks" class="note-h" data-i18n="map-does-it-work">Does it work?</h2>
           <p class="hint" id="checks-lead"></p>
           <ul class="checks places-list" id="checks"></ul>
         </section>
       </div>
       <div class="panel-tab" id="p-changes" role="tabpanel" aria-labelledby="t-changes" hidden>
         <section aria-labelledby="h-changes">
-          <h2 id="h-changes" class="note-h">Your changes</h2>
+          <h2 id="h-changes" class="note-h" data-i18n="map-your-changes">Your changes</h2>
           <p class="hint" id="changes-lead"></p>
           <ul class="checks places-list" id="changes"></ul>
         </section>
       </div>
       <section class="key-section" aria-labelledby="h-key">
-        <h2 id="h-key" class="note-h">Key to the map</h2>
-        <ul class="plan-key" id="plan-key" aria-label="Key to the map"></ul>
+        <h2 id="h-key" class="note-h" data-i18n="map-legend">Key to the map</h2>
+        <ul class="plan-key" id="plan-key" data-i18n-aria-label="map-legend" aria-label="Key to the map"></ul>
       </section>
-      <p class="fine">The streets are from OpenStreetMap. Every threshold the checks use is a sample for now, not a real rule.</p>
+      <p class="fine" data-i18n="map-fine-print">The streets are from OpenStreetMap. Every threshold the checks use is a sample for now, not a real rule.</p>
     </div>
-    <div class="title-block" id="title-block" aria-label="About this city"></div>
+    <div class="title-block" id="title-block" data-i18n-aria-label="map-about-city" aria-label="About this city"></div>
   </aside>
 
   <div id="live" class="sr-only" role="status" aria-live="polite"></div>
