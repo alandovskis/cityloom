@@ -887,7 +887,10 @@ mod tests {
         let fr_svg = street_svg(&v, &fr(), 1050.0, Units::Metres, &Interaction::default());
         let en_svg = street_svg(&v, &en(), 1050.0, Units::Metres, &Interaction::default());
         // The piece widths, the unused space and the two totals.
-        assert!(fr_svg.markup.contains(">3,3\u{a0}m<") && fr_svg.markup.contains(">Inutilisé<"), "{}", fr_svg.markup);
+        assert!(
+            fr_svg.markup.contains(">3,3\u{a0}m<") && fr_svg.markup.contains(">Inutilisé<"),
+            "French SVG did not contain expected localized markers"
+        );
         assert!(fr_svg.markup.contains("Votre aménagement\u{a0}: 14,7\u{a0}m"));
         assert!(en_svg.markup.contains(">3.3 m<") && en_svg.markup.contains(">Your design 14.7 m<"));
         for dotted in [">3.3", "14.7 m", "14.7\u{a0}m", "18.0 m", "18.0\u{a0}m"] {
