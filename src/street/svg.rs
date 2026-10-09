@@ -916,7 +916,10 @@ mod tests {
         let u = uid(&e, 0);
         e.set_width(u, KINDS[0].min_mm);
         let s = street_svg(&e.view(), &fr(), 680.0, Units::Metres, &Interaction::default());
-        assert!(s.markup.contains(">TO</text>"), "{}", s.markup);
+        assert!(
+            s.markup.contains(">TO</text>"),
+            "Expected French mark TO in SVG markup"
+        );
         let mut one = Editor::new(0);
         while one.view().segments.len() > 1 {
             let u = uid(&one, 0);
