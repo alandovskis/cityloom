@@ -46,6 +46,10 @@ prepare *args:
 serve:
     node e2e/serve.mjs
 
+# Build, then upload the site to Railway (the cityloom project; needs the Railway CLI, logged in, and `just prepare`'s tiles).
+deploy:
+    ./scripts/deploy.sh
+
 # Remove build output.
 clean:
     cargo clean

@@ -42,7 +42,7 @@ createServer(async (req, res) => {
     const body = await readFile(file);
     const headers = {
       "content-type": types[extname(file)] ?? "application/octet-stream",
-      "cache-control": "no-store",
+      "cache-control": process.env.CACHE_CONTROL ?? "no-store",
       "accept-ranges": "bytes",
     };
     const range = rangeOf(req.headers.range ?? "", body.length);
@@ -55,4 +55,4 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404).end("not found");
   }
-}).listen(Number(process.env.E2E_PORT ?? 8137), "127.0.0.1");
+}).listen(Number(process.env.E2E_PORT ?? 8137), process.env.E2E_HOST ?? "127.0.0.1");
