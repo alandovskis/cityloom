@@ -5,8 +5,8 @@
 use std::rc::Rc;
 
 use leptos::prelude::*;
-use serde::Deserialize;
 
+use crate::city::model::City;
 use crate::shared::catalogue::{KINDS, group_key, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
@@ -130,11 +130,17 @@ pub fn page_title(i18n: &I18n, street: &str, ends: &[String]) -> String {
 }
 
 /// The ends of a street that belongs to a city: a junction, or where it leaves the map.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StreetEnd {
     pub name: String,
     pub junction: bool,
     pub uid: u32,
+}
+
+/// The two ends of street `edge` of `city`, first the one the editor looks from; none for a street the
+/// city does not have.
+pub fn street_ends(city: &City, edge: u32) -> Vec<StreetEnd> {
+    city.street_ends(edge).into_iter().map(|e| StreetEnd { name: e.name, junction: e.junction, uid: e.uid }).collect()
 }
 
 // ---- the components ----------------------------------------------------------------------
@@ -676,10 +682,13 @@ mod tests {
     }
 
     #[test]
-    fn the_ends_of_a_city_street_are_read_from_the_json_the_city_gives() {
-        let ends: Vec<StreetEnd> =
-            serde_json::from_str(r#"[{"name":"Junction 1","junction":true,"uid":3},{"name":"Edge of the map","junction":false,"uid":0}]"#).unwrap();
-        assert_eq!(ends[0], StreetEnd { name: "Junction 1".into(), junction: true, uid: 3 });
-        assert!(!ends[1].junction);
+    fn the_ends_of_a_city_street_are_read_from_the_city() {
+        let city = crate::city::model::City::new();
+        let ends = street_ends(&city, 1);
+        assert_eq!(
+            ends,
+            [StreetEnd { name: "the edge of the map".into(), junction: false, uid: 1 }, StreetEnd { name: "Junction 4".into(), junction: true, uid: 2 }]
+        );
+        assert!(street_ends(&city, 99).is_empty());
     }
 }
