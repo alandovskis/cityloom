@@ -24,14 +24,14 @@ use crate::shared::platform::browser_ports;
 
 /// The map page as the script sees it: what the pages around it ask of it.
 #[wasm_bindgen]
-pub struct MapPage(Rc<vm::MapVm>);
+pub struct MapPage(Rc<vm::MapVm>, Rc<crate::shared::i18n::I18n>);
 
 #[wasm_bindgen]
 impl MapPage {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.clone(), "places", false);
+        crate::shell::mount(self.1.clone(), self.0.clone(), "details-places", false);
     }
 }
 
@@ -42,6 +42,7 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = crate::shared::ports::Ports { mapper: Rc::new(crate::shared::platform::BrowserMapper::new(basemap)), ..browser_ports() };
+    let i18n = crate::unmigrated_i18n();
     let vm = vm::MapVm::new(ports);
     vm.attach();
     let at =
@@ -62,7 +63,7 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());
     mount("changes", view! { <view::Changes vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <view::TitleBlock vm=vm.clone()/> }.into_any());
-    MapPage(vm)
+    MapPage(vm, i18n)
 }
 
 /// Draws the home page into the elements it keeps for it: the city behind the
@@ -72,7 +73,9 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
 pub fn mount_home() -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
-    let vm = vm::MapVm::new(browser_ports());
+    let ports = browser_ports();
+    let i18n = crate::unmigrated_i18n();
+    let vm = vm::MapVm::new(ports);
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let mount = |id: &str, view: AnyView| {
@@ -81,5 +84,5 @@ pub fn mount_home() -> MapPage {
     mount("hero-map-slot", view! { <home::HeroMap vm=vm.clone()/> }.into_any());
     mount("search-slot", view! { <crate::place::view::AreaSearch vm=crate::place::vm::AreaVm::new(browser_ports())/> }.into_any());
     mount("hero-facts-slot", view! { <home::HeroFacts vm=vm.clone()/> }.into_any());
-    MapPage(vm)
+    MapPage(vm, i18n)
 }

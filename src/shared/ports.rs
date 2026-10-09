@@ -46,6 +46,14 @@ pub trait Navigator {
     fn go(&self, href: &str);
 }
 
+/// The page itself: the language the browser is set to, and the document's `lang`.
+pub trait Page {
+    /// The browser's preferred language tag, such as `fr-CA`, if it tells.
+    fn language(&self) -> Option<String>;
+    /// Sets the `lang` of the document.
+    fn set_lang(&self, tag: &str);
+}
+
 /// What the map tells the page.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -105,6 +113,7 @@ pub struct Ports {
     pub storage: Rc<dyn Storage>,
     pub scheduler: Rc<dyn Scheduler>,
     pub mapper: Rc<dyn Mapper>,
+    pub page: Rc<dyn Page>,
 }
 
 /// An announcer that keeps what it was told.
@@ -289,6 +298,22 @@ impl Navigator for RecordingNavigator {
     }
 }
 
+/// A page whose language a test sets, and whose `lang` it keeps.
+#[derive(Default)]
+pub struct FakePage {
+    pub language: RefCell<Option<String>>,
+    pub lang: RefCell<String>,
+}
+
+impl Page for FakePage {
+    fn language(&self) -> Option<String> {
+        self.language.borrow().clone()
+    }
+    fn set_lang(&self, tag: &str) {
+        *self.lang.borrow_mut() = tag.to_string();
+    }
+}
+
 /// What a `FakeMapper` was asked.
 #[derive(Clone, Debug, PartialEq)]
 pub enum MapCall {
@@ -366,11 +391,20 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
             storage: storage.clone(),
             scheduler: scheduler.clone(),
             mapper: Rc::new(NoMapper),
+            page: Rc::new(FakePage::default()),
         },
         announcer,
         storage,
         scheduler,
     )
+}
+
+/// The same, with the page too, so a test can set the browser's language.
+pub fn test_ports_with_page() -> (Ports, Rc<FakePage>, Rc<MemoryStorage>) {
+    let (mut ports, _, storage, _) = test_ports_with_time();
+    let page = Rc::new(FakePage::default());
+    ports.page = page.clone();
+    (ports, page, storage)
 }
 
 /// The same, with the fetcher and the importer too.

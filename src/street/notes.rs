@@ -1,22 +1,13 @@
 //! The notes beside the street's section: how its width is shared out, how many
 //! people it moves, whether it works, what has changed, and the transit
 //! measures it forms or could.
+//!
+//! Every word is a message (`src/street/i18n`). The views ask with `tr`, which
+//! is watched, so they are drawn again when the language is switched.
 
-use crate::shared::units::Units;
-use crate::street::model::{Check, View};
-
-/// A whole number with a comma between each thousand, as `toLocaleString` writes it.
-pub fn thousands(n: i32) -> String {
-    let digits = n.unsigned_abs().to_string();
-    let mut out = String::new();
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i) % 3 == 0 {
-            out.push(',');
-        }
-        out.push(c);
-    }
-    if n < 0 { format!("-{out}") } else { out }
-}
+use crate::shared::i18n::{Args, I18n, Locale};
+use crate::shared::units::{Units, group_thousands};
+use crate::street::text::say;
 
 /// Which way a change goes, as the class of the cell that shows it.
 pub fn change_class(delta: i32) -> &'static str {
@@ -27,38 +18,27 @@ pub fn change_class(delta: i32) -> &'static str {
     }
 }
 
-/// How capacity has changed, as a percentage of what it was: `+12%`, `\u{2212}8%`, `0`.
-pub fn capacity_change(existing: i32, now: i32) -> String {
+/// How capacity has changed, as a percentage of what it was: `+12%`, `\u{2212}8%`, `0`
+/// (`+12 %` in French, with a no-break space).
+pub fn capacity_change(existing: i32, now: i32, locale: Locale) -> String {
     let d = now - existing;
     // Rounded as `Math.round` does, half toward the larger.
     let pct = if existing != 0 { ((d as f64 * 100.0 / existing as f64) + 0.5).floor() as i32 } else { 0 };
+    let percent = if locale == Locale::FrCa { "\u{a0}%" } else { "%" };
     match pct {
         0 => "0".to_string(),
-        p if p > 0 => format!("+{p}%"),
-        p => format!("\u{2212}{}%", -p),
+        p if p > 0 => format!("+{p}{percent}"),
+        p => format!("\u{2212}{}{percent}", -p),
     }
 }
 
-/// What a check says, with the length it speaks of in the units shown.
-pub fn check_detail(c: &Check, v: &View, units: Units) -> String {
-    match c.id {
-        "fits" if c.ok => {
-            if v.delta_mm == 0 {
-                "Every metre is used".to_string()
-            } else {
-                format!("{} left to use", units.length_fine(c.amount_mm))
-            }
-        }
-        "fits" => format!("{} too wide. Narrow or remove a piece.", units.length_fine(c.amount_mm)),
-        "access" if c.ok => format!("A lane of {} or more", units.length_fine(c.amount_mm)),
-        "access" => format!("No lane of {} or more", units.length_fine(c.amount_mm)),
-        _ => c.detail.clone(),
-    }
+fn plain(i18n: &I18n, key: &str) -> String {
+    i18n.tr(key, &Args::new())
 }
 
 /// How many checks fail, in words for the status line.
-pub fn failing_text(failing: usize) -> String {
-    if failing == 1 { "1 check fails".to_string() } else { format!("{failing} checks fail") }
+pub fn failing_text(failing: usize, i18n: &I18n) -> String {
+    i18n.tr("failing", &Args::new().num("n", failing as i64))
 }
 
 // ---- the components ----------------------------------------------------------------------
@@ -67,7 +47,8 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::shared::atlas::{MEASURES, Where};
+use crate::shared::atlas::{AREA, LINEAR, LOCAL, MEASURES, Where, name_key, note_key};
+use crate::shared::catalogue::mode_key;
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
 
@@ -79,12 +60,21 @@ fn change_cell(delta: i32, text: String) -> impl IntoView {
     view! { <td class=change_class(delta)>{text}</td> }
 }
 
+fn units_key(units: Units) -> &'static str {
+    match units {
+        Units::Metres => "units-metres",
+        Units::Feet => "units-feet",
+    }
+}
+
 /// How the street's width is shared out among the uses, today and in the design.
 #[component]
 pub fn Space(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     move || {
         let (v, units) = w.now();
+        let i18n = w.i18n();
+        let locale = i18n.locale();
         let o = &v.outcomes;
         let rows = o
             .share
@@ -93,18 +83,24 @@ pub fn Space(vm: Rc<StreetVm>) -> impl IntoView {
             .map(|(s, ex)| {
                 view! {
                     <tr>
-                        <td><span class=format!("mc mc-{}", mode_class(s.mode)) aria-hidden="true"></span>{s.label}</td>
-                        <td>{units.fine(ex.mm)}</td>
-                        <td>{units.fine(s.mm)}</td>
-                        {change_cell(s.mm - ex.mm, units.signed(s.mm - ex.mm))}
+                        <td><span class=format!("mc mc-{}", mode_class(s.mode)) aria-hidden="true"></span>{plain(&i18n, mode_key(s.mode))}</td>
+                        <td>{units.fine_in(ex.mm, locale)}</td>
+                        <td>{units.fine_in(s.mm, locale)}</td>
+                        {change_cell(s.mm - ex.mm, units.signed_in(s.mm - ex.mm, locale))}
                     </tr>
                 }
             })
             .collect_view();
+        let caption = i18n.tr("space-caption", &Args::new().str("units", plain(&i18n, units_key(units))));
         view! {
-            <caption class="sr-only">{format!("Width by use, in {}", units.name())}</caption>
+            <caption class="sr-only">{caption}</caption>
             <thead>
-                <tr><th scope="col">"Use"</th><th scope="col">"Today"</th><th scope="col">"Your design"</th><th scope="col">"Change"</th></tr>
+                <tr>
+                    <th scope="col">{plain(&i18n, "col-use")}</th>
+                    <th scope="col">{plain(&i18n, "col-today")}</th>
+                    <th scope="col">{plain(&i18n, "col-design")}</th>
+                    <th scope="col">{plain(&i18n, "col-change")}</th>
+                </tr>
             </thead>
             <tbody>{rows}</tbody>
         }
@@ -118,18 +114,25 @@ pub fn Capacity(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     move || {
         let v = w.view();
+        let i18n = w.i18n();
+        let locale = i18n.locale();
         let o = &v.outcomes;
         view! {
-            <caption class="sr-only">"People per hour, placeholder rates"</caption>
+            <caption class="sr-only">{plain(&i18n, "capacity-caption")}</caption>
             <thead>
-                <tr><th scope="col"></th><th scope="col">"Today"</th><th scope="col">"Your design"</th><th scope="col">"Change"</th></tr>
+                <tr>
+                    <th scope="col"></th>
+                    <th scope="col">{plain(&i18n, "col-today")}</th>
+                    <th scope="col">{plain(&i18n, "col-design")}</th>
+                    <th scope="col">{plain(&i18n, "col-change")}</th>
+                </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td>"People per hour"</td>
-                    <td>{thousands(o.existing_capacity_pph)}</td>
-                    <td>{thousands(o.capacity_pph)}</td>
-                    {change_cell(o.capacity_pph - o.existing_capacity_pph, capacity_change(o.existing_capacity_pph, o.capacity_pph))}
+                    <td>{plain(&i18n, "capacity-row")}</td>
+                    <td>{group_thousands(o.existing_capacity_pph.into(), locale)}</td>
+                    <td>{group_thousands(o.capacity_pph.into(), locale)}</td>
+                    {change_cell(o.capacity_pph - o.existing_capacity_pph, capacity_change(o.existing_capacity_pph, o.capacity_pph, locale))}
                 </tr>
             </tbody>
         }
@@ -148,6 +151,7 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     move || {
         let (v, units) = w.now();
+        let i18n = w.i18n();
         v.checks
             .iter()
             .map(|c| {
@@ -155,8 +159,8 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
                     <li class=if c.ok { "ok" } else { "bad" }>
                         {icon(c.ok)}
                         <div>
-                            <b>{c.label}<span class="sr-only">{if c.ok { ": passes" } else { ": fails" }}</span></b>
-                            <span>{check_detail(c, &v, units)}</span>
+                            <b>{say(&i18n, units, &c.label)}<span class="sr-only">{plain(&i18n, if c.ok { "check-passes" } else { "check-fails" })}</span></b>
+                            <span>{say(&i18n, units, &c.detail)}</span>
                         </div>
                     </li>
                 }
@@ -190,7 +194,7 @@ pub fn FitChecks(vm: Rc<StreetVm>) -> impl IntoView {
     };
     view! {
         <button type="button" id="fit-checks" class="fit-checks" hidden=move || failing(&w) == 0 on:click=go>
-            {move || failing_text(failing(&w))}
+            {move || failing_text(failing(&w), &w.i18n())}
         </button>
     }
 }
@@ -201,7 +205,7 @@ pub fn ChecksBadge(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     view! {
         <span class="tab-n" id="checks-n" hidden=move || failing(&w) == 0>
-            {move || (failing(&w) > 0).then(|| view! { {failing(&w)}<span class="sr-only">" fail"</span> })}
+            {move || (failing(&w) > 0).then(|| view! { {failing(&w)}<span class="sr-only">{plain(&w.i18n(), "badge-fail")}</span> })}
         </span>
     }
 }
@@ -223,18 +227,19 @@ pub fn Revisions(vm: Rc<StreetVm>) -> impl IntoView {
         });
     }
     move || {
-        let v = w.view();
+        let (v, units) = w.now();
+        let i18n = w.i18n();
         let last = v.revisions.len().checked_sub(1);
         let rows = v
             .revisions
             .iter()
             .enumerate()
-            .map(|(i, r)| view! { <tr class=if Some(i) == last { "now" } else { "" }><td>{r.step}</td><td>{r.label.clone()}</td></tr> })
+            .map(|(i, r)| view! { <tr class=if Some(i) == last { "now" } else { "" }><td>{r.step}</td><td>{say(&i18n, units, &r.label)}</td></tr> })
             .collect_view();
         view! {
-            <thead><tr><th scope="col">"Step"</th><th scope="col">"What changed"</th></tr></thead>
+            <thead><tr><th scope="col">{plain(&i18n, "col-step")}</th><th scope="col">{plain(&i18n, "col-what-changed")}</th></tr></thead>
             <tbody>
-                <tr class=if v.revisions.is_empty() { "base now" } else { "base" }><td>"\u{2014}"</td><td>"Street today"</td></tr>
+                <tr class=if v.revisions.is_empty() { "base now" } else { "base" }><td>"\u{2014}"</td><td>{plain(&i18n, "street-today")}</td></tr>
                 {rows}
             </tbody>
         }
@@ -242,13 +247,23 @@ pub fn Revisions(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// What each group of the Atlas toolbox means here, in one line.
-fn group_note(group: &str) -> &'static str {
+/// The key of what each group of the Atlas toolbox means here, in one line.
+fn group_note_key(group: &str) -> Option<&'static str> {
     match group {
-        "Linear continuous measures" => "Lane arrangements along the street. Arrange lays the roadway out as that measure.",
-        "Localized measures" => "Features at one junction. Set them on the intersection page.",
-        "Area-wide measures" => "They cover many streets, so they are not modelled here.",
-        _ => "",
+        LINEAR => Some("group-note-linear"),
+        LOCAL => Some("group-note-local"),
+        AREA => Some("group-note-area"),
+        _ => None,
+    }
+}
+
+/// The key of a group's name.
+fn group_name_key(group: &str) -> Option<&'static str> {
+    match group {
+        LINEAR => Some("group-name-linear"),
+        LOCAL => Some("group-name-local"),
+        AREA => Some("group-name-area"),
+        _ => None,
     }
 }
 
@@ -265,7 +280,8 @@ pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
         }
     }
     move || {
-        let v = w.view();
+        let (v, units) = w.now();
+        let i18n = w.i18n();
         groups
             .iter()
             .map(|group| {
@@ -275,34 +291,39 @@ pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
                     .map(|m| {
                         let found = (m.place == Where::Street).then(|| v.measures.iter().find(|f| f.code == m.code)).flatten();
                         let state = match (m.place, found) {
-                            (Where::Street, Some(f)) if f.present => view! { <b class="m-on">"This street"</b> }.into_any(),
+                            (Where::Street, Some(f)) if f.present => view! { <b class="m-on">{plain(&i18n, "measure-this-street")}</b> }.into_any(),
                             (Where::Street, Some(f)) if f.can_apply => {
                                 let code = m.code;
+                                let label = i18n.tr("measure-arrange-label", &Args::new().str("code", m.code).str("name", plain(&i18n, &name_key(m.code))));
                                 view! {
-                                    <button type="button" class="btn m-apply" aria-label=format!("Arrange the street as {} {}", m.code, m.name) on:click=move |_| { w.apply_measure(code); }>
-                                        "Arrange"
+                                    <button type="button" class="btn m-apply" aria-label=label on:click=move |_| { w.apply_measure(code); }>
+                                        {plain(&i18n, "measure-arrange")}
                                     </button>
                                 }
                                 .into_any()
                             }
-                            (Where::Street, Some(f)) => view! { <span class="m-not">{f.unavailable.unwrap_or("Will not fit")}</span> }.into_any(),
-                            (Where::Junction, _) => "Set at a junction".into_any(),
-                            _ => view! { <span class="m-not">"Not modelled"</span> }.into_any(),
+                            (Where::Street, Some(f)) => {
+                                let why = f.unavailable.as_ref().map_or_else(|| plain(&i18n, "measure-will-not-fit"), |why| say(&i18n, units, why));
+                                view! { <span class="m-not">{why}</span> }.into_any()
+                            }
+                            (Where::Junction, _) => plain(&i18n, "measure-set-at-junction").into_any(),
+                            _ => view! { <span class="m-not">{plain(&i18n, "measure-not-modelled")}</span> }.into_any(),
                         };
-                        let note = (m.place != Where::Street && !m.note.is_empty()).then(|| view! { <small>{m.note}</small> });
-                        let problems = found.filter(|f| f.present).map(|f| f.problems.iter().map(|p| view! { <small class="m-problem">{p.clone()}</small> }).collect_view());
+                        let note = (m.place != Where::Street && !m.note.is_empty()).then(|| view! { <small>{plain(&i18n, &note_key(m.code))}</small> });
+                        let problems = found.filter(|f| f.present).map(|f| f.problems.iter().map(|p| view! { <small class="m-problem">{p.say(&i18n)}</small> }).collect_view());
                         view! {
                             <tr>
-                                <th scope="row"><span class="dirtag">{m.code}</span>{m.name}{note}{problems}</th>
+                                <th scope="row"><span class="dirtag">{m.code}</span>{plain(&i18n, &name_key(m.code))}{note}{problems}</th>
                                 <td>{state}</td>
                             </tr>
                         }
                     })
                     .collect_view();
-                let note = group_note(group);
+                let note = group_note_key(group).map(|k| plain(&i18n, k));
+                let name = group_name_key(group).map_or_else(|| group.to_string(), |k| plain(&i18n, k));
                 view! {
                     <tbody>
-                        <tr class="m-group"><th colspan="2" scope="colgroup">{*group}{(!note.is_empty()).then(|| view! { <small class="m-group-note">{note}</small> })}</th></tr>
+                        <tr class="m-group"><th colspan="2" scope="colgroup">{name}{note.map(|note| view! { <small class="m-group-note">{note}</small> })}</th></tr>
                         {rows}
                     </tbody>
                 }
@@ -314,16 +335,16 @@ pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::street::model::Editor;
+    use crate::shared::catalogue::{KINDS, REGIONS, Side};
+    use crate::street::model::{Check, Editor, View};
+    use crate::street::text::say_now;
 
-    #[test]
-    fn a_number_is_written_with_a_comma_between_thousands() {
-        assert_eq!(thousands(0), "0");
-        assert_eq!(thousands(999), "999");
-        assert_eq!(thousands(1_000), "1,000");
-        assert_eq!(thousands(12_345), "12,345");
-        assert_eq!(thousands(1_234_567), "1,234,567");
-        assert_eq!(thousands(-4_500), "-4,500");
+    fn en() -> Rc<I18n> {
+        crate::i18n_for(Locale::En)
+    }
+
+    fn fr() -> Rc<I18n> {
+        crate::i18n_for(Locale::FrCa)
     }
 
     #[test]
@@ -333,55 +354,137 @@ mod tests {
 
     #[test]
     fn capacity_changes_as_a_percentage_of_what_it_was() {
-        assert_eq!(capacity_change(1_000, 1_120), "+12%");
-        assert_eq!(capacity_change(1_000, 920), "\u{2212}8%");
-        assert_eq!(capacity_change(1_000, 1_000), "0");
-        assert_eq!(capacity_change(1_000, 1_004), "0");
-        assert_eq!(capacity_change(0, 500), "0");
+        assert_eq!(capacity_change(1_000, 1_120, Locale::En), "+12%");
+        assert_eq!(capacity_change(1_000, 920, Locale::En), "\u{2212}8%");
+        assert_eq!(capacity_change(1_000, 1_000, Locale::En), "0");
+        assert_eq!(capacity_change(1_000, 1_004, Locale::En), "0");
+        assert_eq!(capacity_change(0, 500, Locale::En), "0");
         // A half rounds toward the larger, as it always has on this page.
-        assert_eq!(capacity_change(1_000, 1_005), "+1%");
-        assert_eq!(capacity_change(1_000, 995), "0");
+        assert_eq!(capacity_change(1_000, 1_005, Locale::En), "+1%");
+        assert_eq!(capacity_change(1_000, 995, Locale::En), "0");
     }
 
-    fn check(v: &View, id: &str) -> Check {
-        let c = v.checks.iter().find(|c| c.id == id).unwrap();
-        Check { id: c.id, ok: c.ok, amount_mm: c.amount_mm, label: c.label, detail: c.detail.clone() }
+    fn check<'a>(v: &'a View, id: &str) -> &'a Check {
+        v.checks.iter().find(|c| c.id == id).unwrap()
+    }
+
+    fn detail(v: &View, id: &str, i18n: &I18n) -> String {
+        say_now(i18n, Units::Metres, &check(v, id).detail)
+    }
+
+    fn label(v: &View, id: &str, i18n: &I18n) -> String {
+        say_now(i18n, Units::Metres, &check(v, id).label)
+    }
+
+    /// Two driving lanes running against the side the region drives on.
+    fn against_traffic() -> Editor {
+        let mut e = Editor::new(0);
+        let lanes: Vec<u32> = e.view().segments.iter().filter(|s| KINDS[s.kind].id == "travel").map(|s| s.uid).collect();
+        e.set_direction(lanes[0], Some(0));
+        e.set_direction(lanes[1], Some(1));
+        e
     }
 
     #[test]
     fn the_fit_check_says_whether_the_street_is_full_has_room_or_is_too_wide() {
         let mut e = Editor::new(0);
         let v = e.view();
-        assert_eq!(check_detail(&check(&v, "fits"), &v, Units::Metres), "Every metre is used");
+        assert_eq!(detail(&v, "fits", &en()), "Every metre is used");
         let first = v.segments[0].uid;
         e.remove(first);
         let v = e.view();
-        assert_eq!(check_detail(&check(&v, "fits"), &v, Units::Metres), "3.3 m left to use");
+        assert_eq!(detail(&v, "fits", &en()), "3.3 m left to use");
         let mut e = Editor::new(0);
         e.set_width(first, 3_800);
         let v = e.view();
-        assert_eq!(check_detail(&check(&v, "fits"), &v, Units::Metres), "0.5 m too wide. Narrow or remove a piece.");
+        assert_eq!(detail(&v, "fits", &en()), "0.5 m too wide. Narrow or remove a piece.");
     }
 
     #[test]
     fn the_access_check_names_the_lane_width_it_asks_for() {
         let v = Editor::new(0).view();
-        let c = check(&v, "access");
-        let said = check_detail(&c, &v, Units::Metres);
-        assert!(said.starts_with(if c.ok { "A lane of " } else { "No lane of " }) && said.ends_with(" or more"), "{said}");
+        let said = detail(&v, "access", &en());
+        assert!(said.starts_with(if check(&v, "access").ok { "A lane of " } else { "No lane of " }) && said.ends_with(" or more"), "{said}");
     }
 
     #[test]
-    fn other_checks_say_only_their_detail() {
-        let v = Editor::new(0).view();
-        let other = v.checks.iter().find(|c| c.id != "fits" && c.id != "access").unwrap();
-        let c = Check { id: other.id, ok: other.ok, amount_mm: other.amount_mm, label: other.label, detail: other.detail.clone() };
-        assert_eq!(check_detail(&c, &v, Units::Metres), other.detail);
+    fn every_check_has_the_label_and_the_detail_it_always_had() {
+        let mut e = Editor::new(0);
+        let v = e.view();
+        let labels: Vec<String> = ["fits", "edges", "access", "side"].iter().map(|id| label(&v, id, &en())).collect();
+        assert_eq!(labels, ["Fits the street width", "Sidewalk on both sides", "Room for emergency vehicles", "Traffic keeps right"]);
+        assert_eq!(detail(&v, "edges", &en()), "Both sides");
+        assert_eq!(detail(&v, "side", &en()), "Lanes run the way this region drives");
+        // A sidewalk taken away from one side.
+        let first = v.segments[0].uid;
+        e.remove(first);
+        assert_eq!(detail(&e.view(), "edges", &en()), "One side has no sidewalk");
+        let v = against_traffic().view();
+        assert_eq!(detail(&v, "side", &en()), "A lane runs against traffic that keeps right");
+        assert!(!check(&v, "side").ok);
+        // Traffic on the left.
+        let mut e = Editor::new(0);
+        e.set_region(REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap());
+        assert_eq!(label(&e.view(), "side", &en()), "Traffic keeps left");
+        assert_eq!(detail(&Editor::new(3).view(), "edges", &en()), "A freeway has no sidewalks");
+    }
+
+    #[test]
+    fn a_measure_that_cannot_be_applied_says_why_in_words() {
+        let reason = |sample: usize, code: &str, i18n: &I18n| {
+            Editor::new(sample).view().measures.into_iter().find(|m| m.code == code).unwrap().unavailable.map(|s| say_now(i18n, Units::Metres, &s))
+        };
+        assert_eq!(reason(1, "B2", &en()).as_deref(), Some("Freeways only"));
+        assert_eq!(reason(3, "A1", &en()).as_deref(), Some("Not for a freeway"));
+        assert_eq!(reason(1, "B2", &fr()).as_deref(), Some("Autoroutes seulement"));
+        assert_eq!(reason(3, "A1", &fr()).as_deref(), Some("Pas pour une autoroute"));
     }
 
     #[test]
     fn the_status_line_counts_failing_checks() {
-        assert_eq!(failing_text(1), "1 check fails");
-        assert_eq!(failing_text(3), "3 checks fail");
+        assert_eq!(failing_text(1, &en()), "1 check fails");
+        assert_eq!(failing_text(3, &en()), "3 checks fail");
+    }
+
+    #[test]
+    fn checks_failing_counts_read_right_in_both_languages() {
+        assert_eq!(failing_text(1, &en()), "1 check fails");
+        assert_eq!(failing_text(2, &en()), "2 checks fail");
+        assert_eq!(failing_text(0, &fr()), "0 vérification échoue");
+        assert_eq!(failing_text(1, &fr()), "1 vérification échoue");
+        assert_eq!(failing_text(2, &fr()), "2 vérifications échouent");
+    }
+
+    #[test]
+    fn the_checks_are_said_in_french() {
+        let mut e = Editor::new(0);
+        let v = e.view();
+        assert_eq!(detail(&v, "fits", &fr()), "Chaque mètre est utilisé");
+        let said = detail(&v, "access", &fr());
+        assert!(said.starts_with(if check(&v, "access").ok { "Une voie de " } else { "Aucune voie de " }) && said.ends_with("\u{a0}m ou plus"), "{said}");
+        let labels: Vec<String> = ["fits", "edges", "access", "side"].iter().map(|id| label(&v, id, &fr())).collect();
+        assert_eq!(
+            labels,
+            ["Respecte la largeur de la rue", "Trottoir des deux côtés", "Place pour les véhicules d’urgence", "La circulation se fait à droite"]
+        );
+        assert_eq!(detail(&v, "edges", &fr()), "Des deux côtés");
+        assert_eq!(detail(&v, "side", &fr()), "Les voies vont dans le sens de la circulation de cette région");
+        let first = v.segments[0].uid;
+        e.set_width(first, 3_800);
+        assert_eq!(detail(&e.view(), "fits", &fr()), "0,5\u{a0}m de trop. Rétrécissez ou retirez un élément.");
+        let mut e = Editor::new(0);
+        e.remove(first);
+        let v = e.view();
+        assert_eq!(detail(&v, "fits", &fr()), "Il reste 3,3\u{a0}m à utiliser");
+        assert_eq!(detail(&v, "edges", &fr()), "Un côté n’a pas de trottoir");
+        assert_eq!(detail(&Editor::new(3).view(), "edges", &fr()), "Une autoroute n’a pas de trottoir");
+        assert_eq!(detail(&against_traffic().view(), "side", &fr()), "Une voie circule à contre-sens de la circulation, qui se fait à droite");
+    }
+
+    #[test]
+    fn a_percentage_is_written_the_french_way_in_french() {
+        assert_eq!(capacity_change(1_000, 1_120, Locale::FrCa), "+12\u{a0}%");
+        assert_eq!(capacity_change(1_000, 920, Locale::FrCa), "\u{2212}8\u{a0}%");
+        assert_eq!(capacity_change(1_000, 1_000, Locale::FrCa), "0");
     }
 }

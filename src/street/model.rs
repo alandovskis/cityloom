@@ -4,7 +4,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, Side, StreetClass, kind_index};
+use crate::shared::provenance::OsmRef;
 use crate::street::measures;
+
+pub use crate::shared::said::{Arg, Said};
 
 #[cfg(test)]
 mod fixtures;
@@ -52,6 +55,10 @@ pub struct Variant {
     /// End of the window (not included). Earlier than `from_min` means the
     /// window runs past midnight.
     pub to_min: i32,
+    /// The days of the week it applies on, as OSM writes them (`Mo-Fr`), where the window is not every day.
+    /// Only said: the sheet's clock has no day.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub days: Option<String>,
 }
 
 /// Time of day is kept in quarter hours; a window is a set of those.
@@ -69,8 +76,25 @@ fn valid_window(from_min: i32, to_min: i32) -> bool {
     ok(from_min) && ok(to_min) && from_min != to_min
 }
 
-fn clock(min: i32) -> String {
-    format!("{:02}:{:02}", min / 60, min % 60)
+fn kind_lower(kind: usize) -> Arg {
+    Arg::KindLower(KINDS[kind].id)
+}
+
+/// Which side of the road traffic keeps to, as a sentence: the label of a change and of a check.
+fn side_said(side: Side) -> Said {
+    match side {
+        Side::Right => Said::new("side-keeps-right"),
+        Side::Left => Said::new("side-keeps-left"),
+    }
+}
+
+/// A piece of `base` kind taking `kind` between two times of day.
+fn window_said(base: usize, kind: usize, from_min: i32, to_min: i32) -> Said {
+    Said::new("rev-window")
+        .with("base", Arg::Kind(KINDS[base].id))
+        .with("kind", kind_lower(kind))
+        .with("from", Arg::Clock(from_min))
+        .with("to", Arg::Clock(to_min))
 }
 
 impl Segment {
@@ -166,6 +190,9 @@ pub struct Street {
     pub side: Side,
     pub segments: Vec<Segment>,
     pub next_uid: u32,
+    /// The OSM ways it was made from. The sample streets are made from none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source: Vec<OsmRef>,
 }
 
 fn flip(d: &mut Option<usize>) {
@@ -175,12 +202,24 @@ fn flip(d: &mut Option<usize>) {
 }
 
 /// One piece of a street, as read from a road of the network.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Piece {
     pub kind: usize,
     pub width_mm: i32,
     /// Index into `DIRECTIONS`, for a kind that has one.
     pub direction: Option<usize>,
+    /// The times of day it is another kind; they must not overlap.
+    pub variants: Vec<Window>,
+}
+
+/// A time of day, in minutes after midnight and on quarter hours as `Variant`'s are, that a piece is of another kind.
+#[derive(Clone, Debug)]
+pub struct Window {
+    pub kind: usize,
+    pub from_min: i32,
+    pub to_min: i32,
+    /// The days of the week, as `Variant::days`.
+    pub days: Option<String>,
 }
 
 impl Street {
@@ -195,15 +234,25 @@ impl Street {
             .map(|(i, p)| {
                 let k = &KINDS[p.kind];
                 let mut g = Segment::new(i as u32 + 1, p.kind, p.width_mm.clamp(k.min_mm, k.max_mm));
-                g.direction = match k.direction {
-                    DirectionRule::None => None,
-                    DirectionRule::Required => Some(p.direction.unwrap_or(0)),
-                    DirectionRule::Optional => p.direction,
-                };
+                g.direction = direction_for(p.kind, p.direction);
+                g.variants = p
+                    .variants
+                    .iter()
+                    .map(|w| Variant {
+                        kind: w.kind,
+                        material: KINDS[w.kind].materials[0],
+                        direction: direction_for(w.kind, g.direction),
+                        from_min: w.from_min,
+                        to_min: w.to_min,
+                        days: w.days.clone(),
+                    })
+                    .collect();
+                let (lo, hi) = g.bounds();
+                g.width_mm = p.width_mm.clamp(lo, hi);
                 g
             })
             .collect();
-        Street { class, name: None, row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1 }
+        Street { class, name: None, row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1, source: Vec::new() }
     }
 
     /// The same street, called `name`.
@@ -271,7 +320,7 @@ impl Street {
 
 #[derive(Clone, Debug)]
 struct State {
-    label: String,
+    label: Said,
     segments: Vec<Segment>,
 }
 
@@ -279,6 +328,8 @@ pub struct Editor {
     class: StreetClass,
     /// What the street is called, where it has a name of its own.
     street_name: Option<String>,
+    /// The OSM ways it was made from.
+    source: Vec<OsmRef>,
     /// Index into `REGIONS`. A setting of the sheet, not part of the history.
     region: usize,
     /// The time of day the sheet shows, in minutes. Also a setting, not history.
@@ -289,7 +340,7 @@ pub struct Editor {
     next_uid: u32,
     selected: Option<u32>,
     gesture: Option<Vec<Segment>>,
-    pending_label: String,
+    pending_label: Option<Said>,
 }
 
 /// The direction a piece takes when it becomes `kind`, keeping the one it has.
@@ -335,6 +386,7 @@ impl Editor {
             side: REGIONS[self.region].drive_side,
             segments: self.current().clone(),
             next_uid: self.next_uid,
+            source: self.source.clone(),
         }
     }
 
@@ -348,18 +400,19 @@ impl Editor {
         let mut e = Editor {
             class: now.class,
             street_name: now.name.clone(),
+            source: now.source.clone(),
             region,
             time_min: 12 * 60,
             row_mm: now.row_mm,
-            states: vec![State { label: "Street today".into(), segments: today.segments }],
+            states: vec![State { label: Said::new("street-today"), segments: today.segments }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
             selected: None,
             gesture: None,
-            pending_label: String::new(),
+            pending_label: None,
         };
         if now.segments != e.states[0].segments {
-            e.push("Earlier changes".into(), now.segments);
+            e.push(Said::new("rev-earlier"), now.segments);
         }
         e
     }
@@ -374,14 +427,14 @@ impl Editor {
 
     /// Runs an edit against a copy, then either records it as a revision,
     /// or, inside a gesture, applies it without recording.
-    fn edit<F>(&mut self, label: String, f: F) -> bool
+    fn edit<F>(&mut self, label: Said, f: F) -> bool
     where
         F: FnOnce(&mut Vec<Segment>) -> bool,
     {
         if self.gesture.is_some() {
             let changed = f(self.current_mut());
             if changed {
-                self.pending_label = label;
+                self.pending_label = Some(label);
             }
             return changed;
         }
@@ -393,7 +446,7 @@ impl Editor {
         true
     }
 
-    fn push(&mut self, label: String, segments: Vec<Segment>) {
+    fn push(&mut self, label: Said, segments: Vec<Segment>) {
         self.states.truncate(self.cursor + 1);
         self.states.push(State { label, segments });
         self.cursor += 1;
@@ -405,7 +458,7 @@ impl Editor {
     pub fn begin_gesture(&mut self) {
         if self.gesture.is_none() {
             self.gesture = Some(self.current().clone());
-            self.pending_label.clear();
+            self.pending_label = None;
         }
     }
 
@@ -419,7 +472,10 @@ impl Editor {
         }
         // The live state was mutated in place; restore it, then record it.
         *self.current_mut() = baseline;
-        let label = std::mem::take(&mut self.pending_label);
+        // An edit that changed anything left its label; without one there is nothing to record.
+        let Some(label) = self.pending_label.take() else {
+            return false;
+        };
         self.push(label, now);
         true
     }
@@ -449,7 +505,7 @@ impl Editor {
         let width = if remaining >= k.min_mm { (remaining / SNAP_MM * SNAP_MM).clamp(k.min_mm, k.default_mm) } else { k.default_mm };
         let uid = self.new_uid();
         let seg = Segment::new(uid, kind, width);
-        self.edit(format!("Add {}", k.name.to_lowercase()), |segs| {
+        self.edit(Said::new("rev-add").with("kind", kind_lower(kind)), |segs| {
             let at = index.min(segs.len());
             segs.insert(at, seg);
             true
@@ -462,7 +518,7 @@ impl Editor {
         let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
             return false;
         };
-        let name = KINDS[self.current()[pos].kind_at(self.time_min)].name.to_lowercase();
+        let name = kind_lower(self.current()[pos].kind_at(self.time_min));
         let neighbour = if pos + 1 < self.current().len() {
             Some(self.current()[pos + 1].uid)
         } else if pos > 0 {
@@ -470,7 +526,7 @@ impl Editor {
         } else {
             None
         };
-        let changed = self.edit(format!("Remove {name}"), |segs| {
+        let changed = self.edit(Said::new("rev-remove").with("kind", name), |segs| {
             segs.remove(pos);
             true
         });
@@ -485,8 +541,8 @@ impl Editor {
         let Some(pos) = self.current().iter().position(|s| s.uid == uid) else {
             return false;
         };
-        let name = KINDS[self.current()[pos].kind_at(self.time_min)].name.to_lowercase();
-        let changed = self.edit(format!("Move {name}"), |segs| {
+        let name = kind_lower(self.current()[pos].kind_at(self.time_min));
+        let changed = self.edit(Said::new("rev-move").with("kind", name), |segs| {
             let seg = segs.remove(pos);
             let at = index.min(segs.len());
             segs.insert(at, seg);
@@ -505,10 +561,10 @@ impl Editor {
             return false;
         };
         let seg = &self.current()[pos];
-        let kind = &KINDS[seg.kind_at(self.time_min)];
+        let kind = seg.kind_at(self.time_min);
         let (lo, hi) = seg.bounds();
         let w = (((width_mm as f64 / 10.0).round() as i32) * 10).clamp(lo, hi);
-        let label = format!("Resize {}", kind.name.to_lowercase());
+        let label = Said::new("rev-resize").with("kind", kind_lower(kind));
         self.edit(label, |segs| {
             segs[pos].width_mm = w;
             true
@@ -526,7 +582,7 @@ impl Editor {
         if !kind.materials.contains(&material) {
             return false;
         }
-        let label = format!("{} surface: {}", kind.name, MATERIALS[material].name.to_lowercase());
+        let label = Said::new("rev-surface").with("kind", Arg::Kind(kind.id)).with("material", Arg::MaterialLower(MATERIALS[material].id));
         self.edit(label, |segs| {
             let target = match active {
                 Some(vi) => &mut segs[pos].variants[vi].material,
@@ -548,8 +604,8 @@ impl Editor {
         if !kind.has_curb || curb.is_some_and(|c| !kind.curbs.contains(&c)) {
             return false;
         }
-        let what = curb.map_or("none".to_string(), |c| CURBS[c].name.to_lowercase());
-        let label = format!("{} curb: {what}", kind.name);
+        let what = curb.map_or(Arg::Msg("rev-word-none"), |c| Arg::CurbLower(CURBS[c].id));
+        let label = Said::new("rev-curb").with("kind", Arg::Kind(kind.id)).with("curb", what);
         self.edit(label, |segs| {
             let changed = segs[pos].curb != curb;
             segs[pos].curb = curb;
@@ -567,7 +623,8 @@ impl Editor {
         if kind.id != "bus" {
             return false;
         }
-        let label = format!("{} vehicle: {}", kind.name, if tram { "tram" } else { "bus" });
+        let label =
+            Said::new("rev-vehicle").with("kind", Arg::Kind(kind.id)).with("vehicle", if tram { Arg::Msg("rev-word-tram") } else { Arg::Msg("rev-word-bus") });
         self.edit(label, |segs| {
             let changed = segs[pos].tram != tram;
             segs[pos].tram = tram;
@@ -592,8 +649,8 @@ impl Editor {
         if !allowed || direction.is_some_and(|d| d >= DIRECTIONS.len()) {
             return false;
         }
-        let what = direction.map_or("two-way".to_string(), |d| DIRECTIONS[d].name.to_lowercase());
-        let label = format!("{} direction: {what}", kind.name);
+        let what = direction.map_or(Arg::Msg("rev-word-two-way"), |d| Arg::DirectionLower(DIRECTIONS[d].id));
+        let label = Said::new("rev-direction").with("kind", Arg::Kind(kind.id)).with("direction", what);
         self.edit(label, |segs| {
             let target = match active {
                 Some(vi) => &mut segs[pos].variants[vi].direction,
@@ -623,7 +680,7 @@ impl Editor {
         if self.states.len() == 1 {
             default_directions(&mut self.states[0].segments, side);
         } else {
-            let label = format!("Traffic keeps {}", if side == Side::Right { "right" } else { "left" });
+            let label = side_said(side);
             self.edit(label, |segs| {
                 let mut changed = false;
                 for s in segs.iter_mut() {
@@ -676,11 +733,10 @@ impl Editor {
         let Some(&(from_min, to_min)) = windows.iter().find(|(f, t)| window_mask(*f, *t) & used == 0) else {
             return false;
         };
-        let name = KINDS[seg.kind].name;
-        let label = format!("{} is {} {}-{}", name, KINDS[kind].name.to_lowercase(), clock(from_min), clock(to_min));
+        let label = window_said(seg.kind, kind, from_min, to_min);
         self.edit(label, |segs| {
             let d = &mut segs[pos];
-            d.variants.push(Variant { kind, material: KINDS[kind].materials[0], direction: direction_for(kind, d.direction), from_min, to_min });
+            d.variants.push(Variant { kind, material: KINDS[kind].materials[0], direction: direction_for(kind, d.direction), from_min, to_min, days: None });
             let (lo, hi) = d.bounds();
             d.width_mm = d.width_mm.clamp(lo, hi);
             true
@@ -699,7 +755,7 @@ impl Editor {
         if v.kind == kind || !seg.alt_kinds_except(Some(index)).contains(&kind) {
             return false;
         }
-        let label = format!("{} is {} {}-{}", KINDS[seg.kind].name, KINDS[kind].name.to_lowercase(), clock(v.from_min), clock(v.to_min));
+        let label = window_said(seg.kind, kind, v.from_min, v.to_min);
         self.edit(label, |segs| {
             let d = &mut segs[pos];
             let keep = d.variants[index].direction.or(d.direction);
@@ -730,8 +786,8 @@ impl Editor {
         if !allowed || direction.is_some_and(|d| d >= DIRECTIONS.len()) || v.direction == direction {
             return false;
         }
-        let what = direction.map_or("two-way".to_string(), |d| DIRECTIONS[d].name.to_lowercase());
-        let label = format!("{} {} direction: {what}", KINDS[seg.kind].name, KINDS[v.kind].name.to_lowercase());
+        let what = direction.map_or(Arg::Msg("rev-word-two-way"), |d| Arg::DirectionLower(DIRECTIONS[d].id));
+        let label = Said::new("rev-variant-direction").with("base", Arg::Kind(KINDS[seg.kind].id)).with("kind", kind_lower(v.kind)).with("direction", what);
         self.edit(label, |segs| {
             segs[pos].variants[index].direction = direction;
             true
@@ -753,7 +809,7 @@ impl Editor {
         if mask & others != 0 {
             return false;
         }
-        let label = format!("{} is {} {}-{}", KINDS[seg.kind].name, KINDS[seg.variants[index].kind].name.to_lowercase(), clock(from_min), clock(to_min));
+        let label = window_said(seg.kind, seg.variants[index].kind, from_min, to_min);
         self.edit(label, |segs| {
             let v = &mut segs[pos].variants[index];
             let changed = (v.from_min, v.to_min) != (from_min, to_min);
@@ -771,7 +827,7 @@ impl Editor {
         if index >= seg.variants.len() {
             return false;
         }
-        let label = format!("Remove other times from {}", KINDS[seg.kind].name.to_lowercase());
+        let label = Said::new("rev-variant-remove").with("kind", kind_lower(seg.kind));
         self.edit(label, |segs| {
             segs[pos].variants.remove(index);
             true
@@ -789,7 +845,7 @@ impl Editor {
         let Some(arranged) = measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, self.class.is_freeway(), &mut next_uid) else {
             return false;
         };
-        let ok = self.edit(format!("{} {}", def.code, def.name), |segs| {
+        let ok = self.edit(Said::new("rev-measure").with("code", Arg::Text(def.code.to_string())).with("name", Arg::Measure(def.code)), |segs| {
             *segs = arranged;
             true
         });
@@ -819,7 +875,7 @@ impl Editor {
             return false;
         }
         let (l, r) = (&base[left_index], &base[left_index + 1]);
-        let (lk, rk) = (&KINDS[l.kind_at(self.time_min)], &KINDS[r.kind_at(self.time_min)]);
+        let (lk, rk) = (l.kind_at(self.time_min), r.kind_at(self.time_min));
         let pair = l.width_mm + r.width_mm;
         // Left width limits from both segments' allowed ranges.
         let ((llo, lhi), (rlo, rhi)) = (l.bounds(), r.bounds());
@@ -829,7 +885,7 @@ impl Editor {
             return false;
         }
         let left = snap(l.width_mm + delta_mm).clamp(lo, hi);
-        let label = format!("Resize {} and {}", lk.name.to_lowercase(), rk.name.to_lowercase());
+        let label = Said::new("rev-resize-pair").with("a", kind_lower(lk)).with("b", kind_lower(rk));
         let (lu, ru) = (l.uid, r.uid);
         self.apply_widths(label, &[(lu, left), (ru, pair - left)])
     }
@@ -843,14 +899,14 @@ impl Editor {
         let Some(s) = base.iter().find(|s| s.uid == uid) else {
             return false;
         };
-        let kind = &KINDS[s.kind_at(self.time_min)];
+        let kind = s.kind_at(self.time_min);
         let (lo, hi) = s.bounds();
         let w = snap(s.width_mm + delta_mm).clamp(lo, hi);
-        let label = format!("Resize {}", kind.name.to_lowercase());
+        let label = Said::new("rev-resize").with("kind", kind_lower(kind));
         self.apply_widths(label, &[(uid, w)])
     }
 
-    fn apply_widths(&mut self, label: String, widths: &[(u32, i32)]) -> bool {
+    fn apply_widths(&mut self, label: Said, widths: &[(u32, i32)]) -> bool {
         self.edit(label, |segs| {
             let mut changed = false;
             for (uid, w) in widths {
@@ -894,7 +950,7 @@ impl Editor {
         if existing == *self.current() {
             return false;
         }
-        self.push("Reset to existing".into(), existing);
+        self.push(Said::new("rev-reset"), existing);
         self.selected = None;
         true
     }
@@ -972,6 +1028,7 @@ impl Editor {
             can_undo: self.cursor > 0,
             can_redo: self.cursor + 1 < self.states.len(),
             changed: segs != existing,
+            source: self.source.clone(),
         }
     }
 
@@ -984,16 +1041,11 @@ impl Editor {
             .map(|(f, d)| {
                 let can_apply = measures::arrange(d.code, raw, self.row_mm, side, freeway, &mut self.next_uid.clone()).is_some();
                 let unavailable = (!can_apply).then(|| match d.freeway {
-                    Some(only) if only != freeway => {
-                        if only {
-                            "Freeways only"
-                        } else {
-                            "Not for a freeway"
-                        }
-                    }
-                    _ => "Will not fit",
+                    Some(true) if !freeway => Said::new("unavailable-freeways-only"),
+                    Some(false) if freeway => Said::new("unavailable-not-freeway"),
+                    _ => Said::new("measure-will-not-fit"),
                 });
-                MeasureView { code: d.code, name: d.name, present: f.present, problems: f.problems, can_apply, unavailable }
+                MeasureView { code: d.code, present: f.present, problems: f.problems, can_apply, unavailable }
             })
             .collect()
     }
@@ -1025,6 +1077,7 @@ impl Editor {
                             direction: v.direction.map(|d| DIRECTIONS[d].id),
                             from_min: v.from_min,
                             to_min: v.to_min,
+                            days: v.days.clone(),
                         })
                         .collect(),
                     active_variant: s.variant_at(self.time_min),
@@ -1049,7 +1102,7 @@ fn shares(segs: &[Segment]) -> Vec<Share> {
         .iter()
         .map(|m| {
             let mm: i32 = segs.iter().filter(|s| KINDS[s.kind].mode == *m).map(|s| s.width_mm).sum();
-            Share { mode: *m, label: m.label(), mm, pct: (mm as f64 * 100.0 / t as f64).round() as i32 }
+            Share { mode: *m, mm, pct: (mm as f64 * 100.0 / t as f64).round() as i32 }
         })
         .collect()
 }
@@ -1072,41 +1125,50 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check
     let lanes: Vec<usize> = segs.iter().filter(|s| required_direction(s)).filter_map(|s| s.direction).collect();
     let (wrong_first, wrong_then) = if side == Side::Right { (0, 1) } else { (1, 0) };
     let keeps = lanes.iter().position(|&d| d == wrong_first).is_none_or(|i| !lanes[i..].contains(&wrong_then));
-    let side_name = if side == Side::Right { "right" } else { "left" };
     vec![
         Check {
             id: "fits",
             ok: fits,
-            amount_mm: delta.abs(),
-            label: "Fits the street width",
-            detail: if fits { if delta == 0 { "Exactly full".into() } else { format!("{} mm left to use", -delta) } } else { format!("{delta} mm over") },
+            label: Said::new("check-label-fits"),
+            detail: if !fits {
+                Said::new("check-fits-over").with("amount", Arg::Length(delta))
+            } else if delta == 0 {
+                Said::new("check-fits-full")
+            } else {
+                Said::new("fit-left").with("amount", Arg::Length(-delta))
+            },
         },
         Check {
             id: "edges",
             ok: both_edges,
-            amount_mm: 0,
-            label: "Sidewalk on both sides",
+            label: Said::new("check-label-edges"),
             detail: if freeway {
-                "A freeway has no sidewalks".into()
+                Said::new("check-detail-no-sidewalks")
             } else if both_edges {
-                "Both sides".into()
+                Said::new("check-detail-both-sides")
             } else {
-                "One side has no sidewalk".into()
+                Said::new("check-detail-one-side")
             },
         },
         Check {
             id: "access",
             ok: access,
-            amount_mm: ACCESS_LANE_MM,
-            label: "Room for emergency vehicles",
-            detail: if access { "A lane of 3.0 m or more".into() } else { "No lane of 3.0 m or more".into() },
+            label: Said::new("check-label-access"),
+            detail: if access {
+                Said::new("check-access-ok").with("amount", Arg::Length(ACCESS_LANE_MM))
+            } else {
+                Said::new("check-access-bad").with("amount", Arg::Length(ACCESS_LANE_MM))
+            },
         },
         Check {
             id: "side",
             ok: keeps,
-            amount_mm: 0,
-            label: if side == Side::Right { "Traffic keeps right" } else { "Traffic keeps left" },
-            detail: if keeps { "Lanes run the way this region drives".into() } else { format!("A lane runs against traffic that keeps {side_name}") },
+            label: side_said(side),
+            detail: match (keeps, side) {
+                (true, _) => Said::new("check-detail-side-ok"),
+                (false, Side::Right) => Said::new("check-detail-side-bad").with("side", Arg::Msg("side-word-right")),
+                (false, Side::Left) => Said::new("check-detail-side-bad").with("side", Arg::Msg("side-word-left")),
+            },
         },
     ]
 }
@@ -1142,12 +1204,12 @@ pub struct VariantView {
     pub material: &'static str,
     pub from_min: i32,
     pub to_min: i32,
+    pub days: Option<String>,
 }
 
 #[derive(Serialize)]
 pub struct Share {
     pub mode: Mode,
-    pub label: &'static str,
     pub mm: i32,
     pub pct: i32,
 }
@@ -1164,28 +1226,25 @@ pub struct Outcomes {
 pub struct Check {
     pub id: &'static str,
     pub ok: bool,
-    /// The length the detail speaks of, so the page can print it in its units.
-    pub amount_mm: i32,
-    pub label: &'static str,
-    pub detail: String,
+    pub label: Said,
+    pub detail: Said,
 }
 
 #[derive(Serialize)]
 pub struct MeasureView {
     pub code: &'static str,
-    pub name: &'static str,
     pub present: bool,
-    pub problems: Vec<String>,
+    pub problems: Vec<measures::Problem>,
     /// The street can be arranged as this measure.
     pub can_apply: bool,
     /// Why not, when it cannot be.
-    pub unavailable: Option<&'static str>,
+    pub unavailable: Option<Said>,
 }
 
 #[derive(Serialize)]
 pub struct Revision {
     pub step: usize,
-    pub label: String,
+    pub label: Said,
 }
 
 #[derive(Serialize)]
@@ -1210,21 +1269,28 @@ pub struct View {
     pub can_undo: bool,
     pub can_redo: bool,
     pub changed: bool,
+    /// The OSM ways the street was made from.
+    pub source: Vec<OsmRef>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// What a message of the model says in English, as the page shows it.
+    fn says(said: &Said) -> String {
+        crate::street::text::say_now(&crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres, said)
+    }
+
     #[test]
     fn a_street_made_of_given_pieces_is_sound_and_as_wide_as_they_are() {
         let kind = |id| kind_index(id).unwrap();
         let pieces = [
-            Piece { kind: kind("sidewalk"), width_mm: 2000, direction: None },
-            Piece { kind: kind("travel"), width_mm: 3200, direction: Some(1) },
-            Piece { kind: kind("travel"), width_mm: 3200, direction: Some(0) },
-            Piece { kind: kind("bike"), width_mm: 1500, direction: None },
-            Piece { kind: kind("sidewalk"), width_mm: 2000, direction: Some(0) },
+            Piece { kind: kind("sidewalk"), width_mm: 2000, direction: None, variants: Vec::new() },
+            Piece { kind: kind("travel"), width_mm: 3200, direction: Some(1), variants: Vec::new() },
+            Piece { kind: kind("travel"), width_mm: 3200, direction: Some(0), variants: Vec::new() },
+            Piece { kind: kind("bike"), width_mm: 1500, direction: None, variants: Vec::new() },
+            Piece { kind: kind("sidewalk"), width_mm: 2000, direction: Some(0), variants: Vec::new() },
         ];
         let s = Street::imported(StreetClass::Local, Side::Left, &pieces);
         assert!(s.is_sound());
@@ -1238,16 +1304,60 @@ mod tests {
     }
 
     #[test]
+    fn a_street_keeps_the_osm_ways_it_came_from_through_the_editor_and_says_when_it_was_changed() {
+        use crate::shared::provenance::OsmRef;
+        let travel = kind("travel");
+        let mut street = Street::imported(StreetClass::Local, Side::Right, &[Piece { kind: travel, width_mm: 3200, direction: Some(0), variants: Vec::new() }]);
+        street.source = vec![OsmRef { id: 4687530, version: Some(49) }, OsmRef { id: 7, version: None }];
+        let mut e = Editor::from_street(&street, &street, 0);
+        assert_eq!(e.view().source, street.source);
+        assert!(!e.view().changed);
+        let uid = e.view().segments[0].uid;
+        assert!(e.nudge_width(uid, 100));
+        assert!(e.view().changed);
+        assert_eq!(e.snapshot().source, street.source);
+        // opened on a street that was changed before, it is changed
+        assert!(Editor::from_street(&street, &e.snapshot(), 0).view().changed);
+        e.undo();
+        assert!(!e.view().changed);
+    }
+
+    #[test]
     fn a_piece_wider_or_narrower_than_its_kind_allows_is_brought_inside() {
         let kind = kind_index("travel").unwrap();
         let s = Street::imported(
             StreetClass::Local,
             Side::Right,
-            &[Piece { kind, width_mm: 100, direction: Some(0) }, Piece { kind, width_mm: 99_000, direction: Some(1) }],
+            &[
+                Piece { kind, width_mm: 100, direction: Some(0), variants: Vec::new() },
+                Piece { kind, width_mm: 99_000, direction: Some(1), variants: Vec::new() },
+            ],
         );
         assert_eq!(s.segments[0].width_mm, KINDS[kind].min_mm);
         assert_eq!(s.segments[1].width_mm, KINDS[kind].max_mm);
         assert_eq!(s.row_mm, KINDS[kind].min_mm + KINDS[kind].max_mm);
+    }
+
+    #[test]
+    fn a_piece_with_windows_is_its_kind_outside_them_and_the_window_kind_inside() {
+        let (parking, bus) = (kind("parking"), kind("bus"));
+        let piece = Piece {
+            kind: parking,
+            width_mm: 3400,
+            direction: Some(0),
+            variants: vec![Window { kind: bus, from_min: 6 * 60, to_min: 10 * 60, days: Some("Mo-Fr".into()) }],
+        };
+        let s = Street::imported(StreetClass::Local, Side::Right, &[piece]);
+        assert!(s.is_sound());
+        let g = &s.segments[0];
+        assert_eq!((g.kind, g.variants.len()), (parking, 1));
+        assert_eq!((g.variants[0].kind, g.variants[0].from_min, g.variants[0].to_min), (bus, 360, 600));
+        assert_eq!((g.kind_at(8 * 60), g.kind_at(12 * 60)), (bus, parking));
+        // the width is one both kinds allow
+        assert_eq!(g.width_mm, 3000);
+        assert_eq!(g.variants[0].direction, g.direction);
+        assert_eq!(g.variants[0].days.as_deref(), Some("Mo-Fr"));
+        assert_eq!(s.segments[0].variants[0].days, Editor::from_street(&s, &s, 0).view().segments[0].variants[0].days);
     }
 
     fn ids(e: &Editor) -> Vec<&'static str> {
@@ -1281,8 +1391,8 @@ mod tests {
                     v.measures.iter().filter(|m| m.present).map(|m| m.code).collect::<Vec<_>>()
                 );
                 // A narrow street squeezes the bus lanes; that is the one thing it may be told off for.
-                assert!(found.problems.iter().all(|p| p.starts_with("A bus lane is")), "{}: {:?}", d.code, found.problems);
-                assert!(v.revisions.last().unwrap().label.starts_with(d.code));
+                assert!(found.problems.iter().all(|p| matches!(p, measures::Problem::NarrowTransitLane { .. })), "{}: {:?}", d.code, found.problems);
+                assert!(says(&v.revisions.last().unwrap().label).starts_with(d.code));
             }
         }
     }
@@ -1313,10 +1423,11 @@ mod tests {
 
     #[test]
     fn a_measure_that_cannot_be_applied_says_why() {
-        let reason = |sample: usize, code: &str| Editor::new(sample).view().measures.into_iter().find(|m| m.code == code).unwrap().unavailable;
-        assert_eq!(reason(1, "B2"), Some("Freeways only"));
-        assert_eq!(reason(1, "E3"), Some("Freeways only"));
-        assert_eq!(reason(3, "A1"), Some("Not for a freeway"));
+        let reason =
+            |sample: usize, code: &str| Editor::new(sample).view().measures.into_iter().find(|m| m.code == code).unwrap().unavailable.map(|s| says(&s));
+        assert_eq!(reason(1, "B2").as_deref(), Some("Freeways only"));
+        assert_eq!(reason(1, "E3").as_deref(), Some("Freeways only"));
+        assert_eq!(reason(3, "A1").as_deref(), Some("Not for a freeway"));
         assert_eq!(reason(1, "A1"), None);
         assert_eq!(reason(3, "B2"), None);
     }
@@ -1327,7 +1438,7 @@ mod tests {
         for sample in 0..SAMPLES.len() {
             for m in Editor::new(sample).view().measures {
                 assert_eq!(m.unavailable.is_some(), !m.can_apply, "{} on {}", m.code, SAMPLES[sample].name);
-                if m.unavailable == Some("Will not fit") {
+                if m.unavailable.as_ref().map(says).as_deref() == Some("Will not fit") {
                     fits_not += 1;
                 }
             }
@@ -1404,7 +1515,8 @@ mod tests {
         let v = e.view();
         assert_eq!(v.delta_mm, 1800);
         assert!(!v.checks[0].ok);
-        assert_eq!(v.checks[0].detail, "1800 mm over");
+        assert_eq!(v.checks[0].detail, Said::new("check-fits-over").with("amount", Arg::Length(1800)));
+        assert_eq!(says(&v.checks[0].detail), "1.8 m too wide. Narrow or remove a piece.");
     }
 
     #[test]
@@ -1617,7 +1729,7 @@ mod tests {
         assert!(!e.view().can_undo);
         assert!(e.set_material(parking, permeable));
         assert_eq!(e.view().segments[1].material, "permeable");
-        assert_eq!(e.view().revisions[0].label, "Parking surface: permeable paving");
+        assert_eq!(says(&e.view().revisions[0].label), "Parking surface: permeable paving");
         assert!(!e.set_material(parking, permeable)); // unchanged
         assert!(!e.set_material(9999, permeable)); // unknown piece
     }
@@ -1681,7 +1793,7 @@ mod tests {
         assert!(!e.set_direction(lane, Some(9)));
         assert!(!e.set_direction(lane, Some(1))); // unchanged
         assert!(e.set_direction(lane, Some(0)));
-        assert_eq!(e.view().revisions[0].label, "Driving lane direction: away from you");
+        assert_eq!(says(&e.view().revisions[0].label), "Driving lane direction: away from you");
         assert!(e.undo());
         let walk = e.current()[0].uid;
         assert!(!e.set_direction(walk, Some(0))); // sidewalks have none
@@ -1689,7 +1801,7 @@ mod tests {
         assert_eq!(e.view().segments[1].direction, None);
         assert!(e.set_direction(bike, Some(0)));
         assert!(e.set_direction(bike, None));
-        assert_eq!(e.view().revisions.last().unwrap().label, "Bike lane direction: two-way");
+        assert_eq!(says(&e.view().revisions.last().unwrap().label), "Bike lane direction: two-way");
         assert!(e.undo());
         assert_eq!(e.view().segments[1].direction, Some("away"));
     }
@@ -1713,7 +1825,7 @@ mod tests {
         e.add(kind("bike"), 0);
         assert!(e.set_region(0));
         assert_eq!(dirs(&e), [Some("toward"), Some("away")]);
-        assert_eq!(e.view().revisions.last().unwrap().label, "Traffic keeps right");
+        assert_eq!(says(&e.view().revisions.last().unwrap().label), "Traffic keeps right");
         assert!(e.view().checks.iter().find(|c| c.id == "side").unwrap().ok);
         // a region on the same side leaves the lanes alone
         let us = REGIONS.iter().position(|r| r.id == "united-states").unwrap();
@@ -1726,7 +1838,7 @@ mod tests {
         assert_eq!(dirs(&e), [Some("away"), Some("toward")]);
         let side = e.view().checks.into_iter().find(|c| c.id == "side").unwrap();
         assert!(!side.ok);
-        assert_eq!(side.label, "Traffic keeps right");
+        assert_eq!(says(&side.label), "Traffic keeps right");
         assert!(e.redo());
         // a one-way street has nothing to conflict
         let lanes: Vec<u32> = e.current().iter().filter(|s| s.kind == kind("travel")).map(|s| s.uid).collect();
@@ -1744,7 +1856,7 @@ mod tests {
         let bus = kind("bus");
         let base_pph = e.view().outcomes.capacity_pph;
         assert!(e.add_variant(parking));
-        assert_eq!(e.view().revisions[0].label, "Parking is transit lane 07:00-10:00");
+        assert_eq!(says(&e.view().revisions[0].label), "Parking is transit lane 07:00-10:00");
         assert_eq!(e.view().segments[1].width_mm, 3000); // a bus lane needs 3.0 m
         // shown at midday it is still parking; at 08:00 it is a bus lane
         assert_eq!(e.view().segments[1].kind, kind("parking"));
@@ -1828,7 +1940,7 @@ mod tests {
         let island = CURBS.iter().position(|c| c.id == "island").unwrap();
         assert!(e.set_curb(bike, Some(island)));
         assert_eq!(e.view().segments[1].curb, Some("island"));
-        assert_eq!(e.view().revisions.last().unwrap().label, "Bike lane curb: bus boarding island");
+        assert_eq!(says(&e.view().revisions.last().unwrap().label), "Bike lane curb: bus boarding island");
         for k in KINDS.iter().filter(|k| k.has_curb) {
             assert!(!k.curbs.is_empty() && k.curbs.iter().all(|&c| c < CURBS.len()), "{}", k.id);
             assert!(k.curbs.contains(&DEFAULT_CURB), "{}", k.id);
@@ -1845,7 +1957,7 @@ mod tests {
         assert!(!e.view().segments[2].tram);
         assert!(e.set_tram(bus, true));
         assert!(e.view().segments[2].tram);
-        assert_eq!(e.view().revisions.last().unwrap().label, "Transit lane vehicle: tram");
+        assert_eq!(says(&e.view().revisions.last().unwrap().label), "Transit lane vehicle: tram");
         assert!(!e.set_tram(bus, true)); // unchanged
         assert!(e.undo());
         assert!(!e.view().segments[2].tram);
@@ -1874,7 +1986,7 @@ mod tests {
         assert!(!e.set_curb(walk, Some(DEFAULT_CURB))); // unchanged
         assert!(e.set_curb(walk, Some(0)));
         assert_eq!(e.view().segments[0].curb, Some("granite"));
-        assert_eq!(e.view().revisions[0].label, "Sidewalk curb: granite");
+        assert_eq!(says(&e.view().revisions[0].label), "Sidewalk curb: granite");
         assert!(e.set_curb(walk, CURBS.iter().position(|c| c.id == "planted")));
         assert_eq!(e.view().segments[0].curb, Some("planted"));
         assert!(e.undo());
@@ -1882,11 +1994,11 @@ mod tests {
         assert_eq!(e.view().segments[0].curb, Some("bikefriendly"));
         assert!(e.undo());
         assert!(e.set_curb(walk, CURBS.iter().position(|c| c.id == "kassel")));
-        assert_eq!(e.view().revisions[1].label, "Sidewalk curb: bus-friendly curb");
+        assert_eq!(says(&e.view().revisions[1].label), "Sidewalk curb: bus-friendly curb");
         assert!(e.undo());
         assert!(e.set_curb(walk, None));
         assert_eq!(e.view().segments[0].curb, None);
-        assert_eq!(e.view().revisions[1].label, "Sidewalk curb: none");
+        assert_eq!(says(&e.view().revisions[1].label), "Sidewalk curb: none");
         assert!(e.undo());
         assert_eq!(e.view().segments[0].curb, Some("granite"));
     }
@@ -1921,7 +2033,7 @@ mod tests {
         let v = again.view();
         assert!(v.changed);
         assert_eq!(v.revisions.len(), 1);
-        assert_eq!(v.revisions[0].label, "Earlier changes");
+        assert_eq!(says(&v.revisions[0].label), "Earlier changes");
         assert_eq!(again.snapshot(), now);
         // Start over goes back to the street as first laid out, and can be undone.
         assert!(again.reset());

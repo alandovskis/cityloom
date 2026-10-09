@@ -10,7 +10,8 @@ use crate::shared::ports::Scheduler;
 /// How long after the last change it is kept, in milliseconds.
 const DELAY_MS: u32 = 250;
 
-/// Said once when what a page makes cannot be kept.
+/// Said once when what a page makes cannot be kept. The junction and map pages, which hold no `I18n`, say it
+/// in this English; the street page says the shell message `not-kept`, which has the same English.
 pub const NOT_KEPT: &str = "This browser is not keeping your changes, so other pages will not see them.";
 
 pub struct Keeper {

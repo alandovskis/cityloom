@@ -32,6 +32,15 @@ test.describe("the street editor on a street of the city", () => {
     await expect(page.locator("#reset")).toBeDisabled();
   });
 
+  test("choosing French in the settings menu changes the page's language and its markup", async ({ page }) => {
+    await page.locator("#account-btn").click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await page.locator('[data-lang="fr-CA"]').click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+    await expect(page.locator('[data-lang="fr-CA"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#account-menu .menu-h").first()).toHaveText("Réglages");
+  });
+
   test("the welcome note is shown at first and put away until asked for again", async ({ page }) => {
     await expect(page.locator("#welcome")).toBeVisible();
     await page.locator("#welcome-dismiss").click();
@@ -209,6 +218,16 @@ test.describe("the street editor on a street of the city", () => {
     await expect(page.locator("#fit")).toHaveText(/0\.3 m of the street is still unused\.$/);
   });
 
+  test("a width typed with a decimal comma is read as a decimal", async ({ page }) => {
+    await selectFirstPiece(page);
+    await page.keyboard.press("Enter");
+    const width = page.locator("#inspector input").first();
+    await expect(width).toBeFocused();
+    await width.fill("2,5");
+    await width.press("Enter");
+    await expect(width).toHaveValue("2.50");
+  });
+
   test("the notes list the width shared out, the checks, the changes and the transit measures", async ({ page }) => {
     await expect(page.locator("#space")).not.toBeEmpty();
     await page.locator("#t-checks").click();
@@ -244,6 +263,37 @@ test.describe("what the street editor keeps in the city", () => {
     await expect(page.locator("#street-sub")).not.toHaveText("");
     await expect(page.locator("a.back")).toHaveAttribute("href", "map.html");
     await expect(page.locator('.surface[href="intersection.html"]')).toHaveCount(0);
+  });
+
+  test("keeps its own title, named for the street, when the language changes", async ({ page }) => {
+    await openStreet(page);
+    await expect(page).toHaveTitle(/between .* and .* · CityLoom/);
+    const name = (await page.locator("#street-name").textContent()) ?? "";
+    expect(name).not.toBe("");
+    await page.locator("#account-btn").click();
+    await page.locator('[data-lang="fr-CA"]').click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+    await expect(page).toHaveTitle(/ entre .* et .* · CityLoom$/);
+    await expect(page).toHaveTitle(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} entre `));
+    await page.locator('[data-lang="en"]').click();
+    await expect(page).toHaveTitle(/between .* and .* · CityLoom/);
+  });
+
+  test("says which OpenStreetMap ways it was made from, and whether it has been changed", async ({ page }) => {
+    await openStreet(page);
+    const block = page.locator("#title-block");
+    await expect(block.locator('a[href^="https://www.openstreetmap.org/way/"]').first()).toHaveText(
+      /^way \d+( v\d+)?$/,
+    );
+    await expect(block.locator("#tb-state")).toHaveText("As imported");
+    await selectFirstPiece(page);
+    await page.keyboard.press("Enter");
+    const width = page.locator("#inspector input").first();
+    await width.fill(String(Math.round((Number(await width.inputValue()) - 0.3) * 10) / 10));
+    await width.press("Enter");
+    await expect(block.locator("#tb-state")).toHaveText("Edited");
+    await page.reload();
+    await expect(block.locator("#tb-state")).toHaveText("Edited");
   });
 
   test("what is changed is kept in the city across a reload", async ({ page }) => {

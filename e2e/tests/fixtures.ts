@@ -12,6 +12,15 @@ import { expect, test as base, type BrowserContext, type Page } from "@playwrigh
  *  something else asks for it with its own `page.route`, which wins over these. */
 export const test = base.extend<{ errors: string[]; world: void }>({
   context: async ({ context }, use) => {
+    // Every spec starts in English whatever the machine's language is; a spec that switches to
+    // French and reloads keeps it, because the choice is only stored when there is none.
+    await context.addInitScript(() => {
+      try {
+        if (localStorage.getItem("cityloom-lang") === null) localStorage.setItem("cityloom-lang", "en");
+      } catch {
+        // storage is blocked: the page falls back to its own default
+      }
+    });
     await serveBasemap(context);
     await use(context);
   },

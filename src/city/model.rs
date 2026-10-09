@@ -16,9 +16,21 @@ use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass};
+use crate::shared::provenance::OsmRef;
+use crate::shared::said::Said;
 #[cfg(test)]
 use crate::street::model::SAMPLES;
 use crate::street::model::{Editor, Street};
+
+thread_local! {
+    static ENGLISH: std::rc::Rc<crate::shared::i18n::I18n> = crate::i18n_for(crate::shared::i18n::Locale::En);
+}
+
+/// What the street said, in English: the map's list of places says what fails in English until the
+/// map page is translated.
+fn english(said: &Said) -> String {
+    ENGLISH.with(|i18n| crate::shared::said::say_now(i18n, crate::shared::units::Units::Metres, said))
+}
 
 /// Bump when what is saved changes shape; an older save is then left behind.
 const SAVE_VERSION: u32 = 2;
@@ -30,16 +42,18 @@ pub(super) struct NodeDef {
     pub(super) junction: bool,
     pub(super) control: usize,
     pub(super) corner_mm: i32,
+    /// The OSM nodes it was made from.
+    pub(super) source: Vec<OsmRef>,
 }
 
 #[cfg(test)]
 const fn junction_at(x_m: i32, y_m: i32, control: usize, corner_mm: i32) -> NodeDef {
-    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: true, control, corner_mm, source: Vec::new() }
 }
 
 #[cfg(test)]
 const fn gate_at(x_m: i32, y_m: i32) -> NodeDef {
-    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0 }
+    NodeDef { x_mm: x_m * 1000, y_mm: y_m * 1000, junction: false, control: 0, corner_mm: 0, source: Vec::new() }
 }
 
 pub(super) struct EdgeDef {
@@ -368,7 +382,7 @@ impl Layout {
             .collect();
         junction::normalize(&mut arms, 0);
         tune_corners(&mut arms, def.control, def.corner_mm);
-        let mut s = State { label: "Junction today".into(), arms, control: def.control, ring_extra_mm: 0, bus: None, cycle: None };
+        let mut s = State { label: "Junction today".into(), arms, control: def.control, ring_extra_mm: 0, bus: None, cycle: None, source: def.source.clone() };
         forget_streets(&mut s);
         s
     }
@@ -411,7 +425,7 @@ impl Layout {
 /// nothing suits keeps `preferred`.
 fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
     use crate::junction::model::{MAX_CORNER_MM, MIN_CORNER_MM, RING_STEP_MM};
-    let state = |arms: &[Arm]| State { label: String::new(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None };
+    let state = |arms: &[Arm]| State { label: String::new(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None, source: Vec::new() };
     let mut radii: Vec<i32> = (MIN_CORNER_MM..=MAX_CORNER_MM).step_by(RING_STEP_MM as usize).collect();
     radii.sort_by_key(|r| ((r - preferred).abs(), *r));
     for i in 0..arms.len() {
@@ -500,13 +514,16 @@ impl City {
         for (uid, street) in saved.streets {
             let ok = city.today_streets.get(&uid).is_some_and(|t| t.class == street.class && t.row_mm == street.row_mm);
             if ok && street.is_sound() {
-                city.streets.insert(uid, street);
+                // where a street came from is not something an edit changes, and older saves did not say
+                let source = city.today_streets[&uid].source.clone();
+                city.streets.insert(uid, Street { source, ..street });
             }
         }
         for (uid, state) in saved.junctions {
             let node = (uid as usize).checked_sub(1).filter(|&n| n < city.layout.nodes.len() && city.layout.nodes[n].junction);
             if node.is_some_and(|n| city.layout.junction_fits(&state, n)) {
-                city.junctions.insert(uid, state);
+                let source = city.today_junctions[&uid].source.clone();
+                city.junctions.insert(uid, State { source, ..state });
             }
         }
         city
@@ -623,8 +640,8 @@ impl City {
             let now = &self.streets[&uid];
             let editor = Editor::from_street(today, now, region);
             let v = editor.view();
-            let at_first: Vec<String> = Editor::from_street(today, today, region).view().checks.iter().filter(|c| !c.ok).map(|c| c.label.to_string()).collect();
-            let failing: Vec<String> = v.checks.iter().filter(|c| !c.ok && !at_first.iter().any(|l| l == c.label)).map(|c| c.label.to_string()).collect();
+            let at_first: Vec<&str> = Editor::from_street(today, today, region).view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect();
+            let failing: Vec<String> = v.checks.iter().filter(|c| !c.ok && !at_first.contains(&c.id)).map(|c| english(&c.label)).collect();
             let row = v.row_mm;
             let shape = self.layout.shape_of(i);
             edges.push(EdgeView {

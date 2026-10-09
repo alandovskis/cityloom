@@ -1001,14 +1001,15 @@ mod tests {
     fn area_vm() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<MemoryStorage>) {
         let (ports, _, storage) = test_ports();
         let area = Area::new("Bendville", 45.5, -73.6);
-        let node = |id, x_m, y_m| Node { id, osm_nodes: vec![id as i64], x_m, y_m, junction: false, control: Control::None };
-        let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0 };
+        let node = |id, x_m, y_m| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m, junction: false, control: Control::None };
+        let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, hours: None };
         let network = Network {
             left_hand: false,
             nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
             roads: vec![Road {
                 id: 1,
                 osm_ways: vec![7],
+                osm_versions: Default::default(),
                 name: Some("Bend Street".into()),
                 highway: "residential".into(),
                 from: 1,

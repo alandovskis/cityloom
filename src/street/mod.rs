@@ -23,7 +23,11 @@ use wasm_bindgen::prelude::*;
 
 use crate::city::binding::{CityBinding, Place};
 use crate::city::store::CityStore;
+use crate::shared::i18n::Resources;
 use crate::shared::platform::browser_ports;
+
+/// What the street page says, in both languages.
+pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
 
 /// One street being edited. The page drives it through the components the
 /// module mounts; the script only starts it up and hands it what the shell
@@ -36,7 +40,7 @@ impl Sheet {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.0.clone(), "piece details", true);
+        crate::shell::mount(self.0.i18n().clone(), self.0.clone(), "details-piece", true);
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -99,5 +103,7 @@ pub fn open_street(edge: u32) -> Option<Sheet> {
     let store = CityStore::current(ports.storage.clone());
     let street = store.open().street_editor(edge, store.region())?;
     let place = Place::Street(edge);
-    Some(Sheet(vm::StreetVm::new(ports, street, Some(CityBinding { store, place }))))
+    // One instance for the page: the shell switches it and the street's words follow.
+    let i18n = crate::i18n_browser(&ports);
+    Some(Sheet(vm::StreetVm::new(ports, i18n, street, Some(CityBinding { store, place }))))
 }

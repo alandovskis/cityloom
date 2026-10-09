@@ -9,6 +9,7 @@ use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
 use crate::shared::bind::current_element;
+use crate::shared::i18n::Args;
 use crate::street::keys::{self, Action};
 use crate::street::svg::{Geometry, Interaction, Moving, street_label, street_svg};
 use crate::street::vm::StreetVm;
@@ -114,7 +115,10 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
         ui.fresh = over && !was_over.get_value();
         was_over.set_value(over);
         fresh.set_value(ui.fresh);
-        let out = street_svg(&v, width.get(), units, &ui);
+        let i18n = w.i18n();
+        // Read so the drawing is made again, with its words, when the language is switched.
+        i18n.locale();
+        let out = street_svg(&v, &i18n, width.get(), units, &ui);
         geometry.set_value(out.geometry);
         row_right.set_value(out.row_right);
         out.markup
@@ -216,14 +220,17 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
     };
 
     view! {
-        <div class="wrap" id="wrap" tabindex="0" role="group" aria-label="Street cross-section editor" aria-describedby="keys" node_ref=wrap on:keydown=keydown>
+        <div class="wrap" id="wrap" tabindex="0" role="group" aria-label=move || w.i18n().tr("view-section-label", &Args::new()) aria-describedby="keys" node_ref=wrap on:keydown=keydown>
             <svg
                 id="drawing"
                 xmlns="http://www.w3.org/2000/svg"
                 role="img"
                 aria-label=move || {
                     let (v, units) = w.now();
-                    street_label(&v, units)
+                    let i18n = w.i18n();
+                    // Read so the label is drawn again when the language is switched.
+                    i18n.locale();
+                    street_label(&v, &i18n, units)
                 }
                 width=move || size().width.to_string()
                 height=move || height().to_string()

@@ -16,6 +16,8 @@ pub const CITY_KEY: &str = "cityloom-city";
 pub const AREA_KEY: &str = "cityloom-area";
 /// The street network of an area, as `osm_import` made it; the area's key follows.
 pub const NETWORK_KEY: &str = "cityloom-network";
+/// The checksum of the metro tile an area's network was made from, where it was; the area's key follows.
+pub const CHECKSUM_KEY: &str = "cityloom-checksum";
 pub const REGION_KEY: &str = "cityloom-region";
 
 #[derive(Clone)]
@@ -78,7 +80,19 @@ impl CityStore {
 
     /// Keeps the street network the area's city is made from. Says whether it was kept.
     pub fn keep_network(&self, network: &Network) -> bool {
+        self.keep_network_from(network, None)
+    }
+
+    /// The same for a network made from a metro tile that had `checksum`, which is kept with it so that a
+    /// later visit can tell whether the tile has changed.
+    pub fn keep_network_from(&self, network: &Network, checksum: Option<&str>) -> bool {
         serde_json::to_string(network).is_ok_and(|json| self.storage.remember(&self.key(NETWORK_KEY), &json))
+            && self.storage.remember(&self.key(CHECKSUM_KEY), checksum.unwrap_or_default())
+    }
+
+    /// The checksum of the tile the area's network was made from, if it was made from one that had it.
+    pub fn checksum(&self) -> Option<String> {
+        self.storage.recall(&self.key(CHECKSUM_KEY)).filter(|c| !c.is_empty())
     }
 
     /// Whether the area's street network is kept.
@@ -138,6 +152,20 @@ mod tests {
     fn store() -> (CityStore, Rc<crate::shared::ports::MemoryStorage>) {
         let (ports, _, storage) = test_ports();
         (CityStore::sample(ports.storage), storage)
+    }
+
+    #[test]
+    fn the_checksum_of_the_data_an_area_was_made_from_is_kept_with_its_network_and_for_that_area_only() {
+        let (ports, ..) = test_ports();
+        let area = |name, lon| CityStore::for_area(ports.storage.clone(), Area::new(name, 1.0, lon));
+        let (a, b) = (area("A", 2.0), area("B", 3.0));
+        let network = Network::default();
+        assert_eq!(a.checksum(), None);
+        assert!(a.keep_network_from(&network, Some("ab12")));
+        assert_eq!((a.checksum().as_deref(), b.checksum()), (Some("ab12"), None));
+        assert!(a.keep_network_from(&network, None), "a network made from data with no checksum has none");
+        assert_eq!(a.checksum(), None);
+        assert!(b.keep_network(&network) && b.checksum().is_none());
     }
 
     #[test]
@@ -211,14 +239,16 @@ mod tests {
 
     fn tiny_network() -> Network {
         use osm_network::{Control, Lane, LaneKind, Node, Road, Way};
-        let node = |id, x_m, junction| Node { id, osm_nodes: vec![id as i64], x_m, y_m: 0.0, junction, control: Control::None };
-        let lane = |kind, way| Lane { kind, way, width_m: 3.0 };
+        let node =
+            |id, x_m, junction| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m: 0.0, junction, control: Control::None };
+        let lane = |kind, way| Lane { kind, way, width_m: 3.0, hours: None };
         Network {
             left_hand: false,
             nodes: vec![node(1, 0.0, false), node(2, 100.0, false)],
             roads: vec![Road {
                 id: 1,
                 osm_ways: vec![7],
+                osm_versions: Default::default(),
                 name: Some("Only Street".into()),
                 highway: "residential".into(),
                 from: 1,

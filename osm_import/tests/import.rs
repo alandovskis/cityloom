@@ -76,3 +76,64 @@ fn a_street_with_no_sidewalk_tags_gets_a_sidewalk_on_each_side() {
     let sidewalks = |way| side.lanes.iter().filter(|l| l.kind == LaneKind::Sidewalk && l.way == way).count();
     assert_eq!((sidewalks(Way::Forward), sidewalks(Way::Backward)), (1, 1), "{:?}", side.lanes);
 }
+
+const RENE_LEVESQUE: &[u8] = include_bytes!("rene_levesque.osm");
+
+#[test]
+fn a_bus_lane_tagged_with_hours_keeps_them() {
+    use osm_import::LaneKind;
+    let net = import(RENE_LEVESQUE).expect("the boulevard reads");
+    assert!(!net.roads.is_empty());
+    for road in &net.roads {
+        let bus: Vec<_> = road.lanes.iter().filter(|l| l.kind == LaneKind::Bus).collect();
+        assert_eq!(bus.len(), 1, "{:?}", road.lanes);
+        assert_eq!(bus[0].hours.as_deref(), Some("Mo-Fr 06:00-10:00,14:30-19:00"), "{:?}", road.osm_ways);
+        assert!(road.lanes.iter().filter(|l| l.kind != LaneKind::Bus).all(|l| l.hours.is_none()));
+    }
+}
+
+#[test]
+fn a_road_and_a_node_remember_the_version_of_each_osm_way_and_node_they_were_made_from() {
+    let net = import(RENE_LEVESQUE).unwrap();
+    for road in &net.roads {
+        let want = if road.osm_ways == [4687530] { 49 } else { 26 };
+        assert_eq!(road.osm_versions.get(&road.osm_ways[0]), Some(&want), "{road:?}");
+        assert_eq!(road.osm_versions.len(), road.osm_ways.len());
+    }
+    let version = |osm: i64| net.nodes.iter().find(|n| n.osm_nodes == [osm]).map(|n| n.osm_versions.get(&osm).copied());
+    assert_eq!(version(29796354), Some(Some(5)));
+    assert_eq!(version(9041670850), Some(Some(1)));
+}
+
+const SIDEWALKS: &[u8] = include_bytes!("sidewalks.osm");
+
+/// Which sides of a road have a sidewalk: (left, right), looking from its first end to its last.
+fn sidewalks_of(net: &osm_import::Network, name: &str) -> (bool, bool) {
+    use osm_import::LaneKind;
+    let road = net.roads.iter().find(|r| r.name.as_deref() == Some(name)).unwrap_or_else(|| panic!("no road {name}"));
+    let walk = |l: Option<&osm_import::Lane>| l.is_some_and(|l| l.kind == LaneKind::Sidewalk);
+    (walk(road.lanes.first()), walk(road.lanes.last()))
+}
+
+#[test]
+fn a_side_tagged_with_a_sidewalk_has_one_and_a_side_not_tagged_has_none() {
+    let net = import(SIDEWALKS).unwrap();
+    assert_eq!(sidewalks_of(&net, "left yes right no"), (true, false));
+    assert_eq!(sidewalks_of(&net, "left yes only"), (true, false));
+    assert_eq!(sidewalks_of(&net, "right yes only"), (false, true));
+    assert_eq!(sidewalks_of(&net, "left no only"), (false, false));
+    assert_eq!(sidewalks_of(&net, "left no right no"), (false, false));
+}
+
+#[test]
+fn a_sidewalk_mapped_separately_is_drawn_beside_the_road() {
+    let net = import(SIDEWALKS).unwrap();
+    assert_eq!(sidewalks_of(&net, "left no right separate"), (false, true));
+    assert_eq!(sidewalks_of(&net, "left separate right yes"), (true, true));
+}
+
+#[test]
+fn a_road_with_neither_side_tagged_is_given_sidewalks_as_before() {
+    let net = import(SIDEWALKS).unwrap();
+    assert_eq!(sidewalks_of(&net, "nothing tagged"), (true, true), "a street with no tags is given sidewalks as before");
+}

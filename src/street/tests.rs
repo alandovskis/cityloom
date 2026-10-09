@@ -6,9 +6,10 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::shared::catalogue::KINDS;
+use crate::shared::i18n::Locale;
 use crate::shared::live;
 use crate::shared::testing::{button_tag, count, html};
-use crate::shared::units::Units;
+use crate::shared::units::{Units, group_thousands};
 use crate::street::keys::Action as StreetAction;
 use crate::street::model::Editor;
 use crate::street::vm::StreetVm;
@@ -17,7 +18,7 @@ use crate::street::{inspector, notes, page, view};
 // ---- what the keys do on the street ---------------------------------------------------
 
 fn street_watch() -> (Rc<StreetVm>, SheetWatch) {
-    let s = StreetVm::new(crate::shared::platform::browser_ports(), Editor::new(0), None);
+    let s = StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::new(0), None);
     let w = SheetWatch::new(s.clone());
     live::take_said();
     (s, w)
@@ -92,7 +93,7 @@ fn removing_takes_the_selected_piece_away() {
 }
 
 fn street_shared(sample: usize) -> Rc<StreetVm> {
-    StreetVm::new(crate::shared::platform::browser_ports(), Editor::new(sample), None)
+    StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::new(sample), None)
 }
 
 fn street_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
@@ -257,7 +258,7 @@ fn the_capacity_table_says_how_many_people_move_and_how_that_changed() {
     let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
     assert!(h.contains("People per hour") && h.contains("class=\"zero\">0<"));
     let v = s.view();
-    assert!(h.contains(&notes::thousands(v.outcomes.capacity_pph)));
+    assert!(h.contains(&group_thousands(v.outcomes.capacity_pph.into(), Locale::En)));
     let u = segment(&s, 2);
     s.edit(|e| e.set_width(u, 3_000));
     let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
@@ -299,7 +300,22 @@ fn the_street_s_changes_start_from_the_street_today_and_list_each_edit() {
     let u = segment(&s, 0);
     s.edit(|e| e.remove(u));
     let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
-    assert!(!h.contains("base now") && h.contains("class=\"now\"") && h.contains(&s.view().revisions[0].label));
+    assert!(!h.contains("base now") && h.contains("class=\"now\"") && h.contains("<td>Remove sidewalk</td>"), "{h}");
+}
+
+#[test]
+fn the_changes_list_is_drawn_again_in_the_language_the_shell_switches() {
+    let owner = Owner::new();
+    owner.set();
+    let s = street_shared_in(0, Locale::En);
+    let u = segment(&s, 0);
+    s.edit(|e| e.remove(u));
+    let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
+    assert!(h.contains("<td>Remove sidewalk</td>") && h.contains("Street today"), "{h}");
+    s.i18n().set(Locale::FrCa);
+    let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
+    assert!(h.contains("<td>Retrait\u{a0}: trottoir</td>") && h.contains("La rue aujourd’hui"), "{h}");
+    assert!(!h.contains("Remove sidewalk"), "{h}");
 }
 
 #[test]
@@ -324,27 +340,50 @@ fn nothing_selected_the_street_panel_says_how_to_begin() {
 }
 
 #[test]
-fn a_selected_piece_s_panel_has_its_width_surface_and_position() {
+fn a_width_typed_with_a_comma_is_committed() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = street_watch();
+    let at = s.view().segments.iter().position(|g| g.min_mm <= 2_500 && g.max_mm >= 2_500 && g.width_mm != 2_500).expect("a piece 2.5 m can fit");
+    let u = segment(&s, at);
+    assert!(inspector::commit_width(w, u, "2,5"));
+    assert_eq!(s.view().segments[at].width_mm, 2_500);
+    assert!(!inspector::commit_width(w, u, "abc"));
+    assert_eq!(s.view().segments[at].width_mm, 2_500);
+}
+
+#[test]
+fn the_arrow_keys_step_the_width_field() {
+    assert_eq!(inspector::width_key("ArrowUp"), Some(1));
+    assert_eq!(inspector::width_key("ArrowDown"), Some(-1));
+    assert_eq!(inspector::width_key("Enter"), None);
+}
+
+#[test]
+fn the_width_field_is_text_so_a_comma_reaches_it() {
+    let s = street_shared(0);
+    let u = segment(&s, 2);
+    s.edit(|e| e.select(Some(u)));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains("id=\"width\"") && h.contains("type=\"text\"") && h.contains("inputmode=\"decimal\""));
+    assert!(!h.contains("type=\"number\""));
+}
+
+#[test]
+fn a_selected_piece_s_panel_has_its_width_and_surface_and_no_buttons_to_move_it() {
     let s = street_shared(0);
     let u = segment(&s, 2);
     s.edit(|e| e.select(Some(u)));
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains(">Driving lane</h2>") && h.contains("3.3 m wide \u{b7} 3 of 6"));
-    for want in ["Width", "Surface", "What it is paved with.", "Position", "Move left", "Move right", "Allowed "] {
+    for want in ["Width", "Surface", "What it is paved with.", "Allowed "] {
         assert!(h.contains(want), "{want}");
+    }
+    for not in ["Position", "Move left", "Move right"] {
+        assert!(!h.contains(not), "{not}");
     }
     assert!(h.contains("id=\"width\"") && h.contains("value=\"3.30\"") && h.contains("aria-label=\"Narrower by 0.1 m\""));
     assert_eq!(count(&h, "aria-checked=\"true\""), 2, "a surface and a direction are chosen");
-}
-
-#[test]
-fn the_end_pieces_cannot_be_moved_past_the_ends() {
-    let s = street_shared(0);
-    let u = segment(&s, 0);
-    s.edit(|e| e.select(Some(u)));
-    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    let left = h.split("Move left").next().unwrap().rsplit("<button").next().unwrap();
-    assert!(left.contains("disabled"));
 }
 
 #[test]
@@ -363,19 +402,74 @@ fn a_planting_strip_is_about_planting_and_a_transit_lane_can_carry_trams() {
 }
 
 #[test]
-fn the_rarer_settings_sit_under_one_disclosure_that_is_open_for_a_piece_with_other_times() {
+fn every_setting_of_a_piece_is_shown_with_nothing_to_open() {
     let s = street_shared(1);
     let u = segment(&s, 3);
     s.edit(|e| e.select(Some(u)));
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    assert!(h.contains("class=\"insp-more\"") && h.contains("More about this piece") && h.contains("Other times") && h.contains("Direction"));
-    assert!(h.contains("Add other times"));
-    let tag = h.split("class=\"insp-more\"").nth(1).unwrap().split('>').next().unwrap().to_string();
-    assert!(!tag.contains("open"), "{tag}");
+    assert!(!h.contains("<details") && !h.contains("insp-more") && !h.contains("More about this piece"), "{h}");
+    assert!(h.contains(">Other times</h3>") && h.contains("Add other times") && h.contains(">Direction</h3>"));
     s.edit(|e| e.add_variant(u));
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
     assert_eq!(count(&h, "class=\"var now\"") + count(&h, "class=\"var\""), 1);
     assert!(h.contains("aria-label=\"Type 1\"") && h.contains("aria-label=\"From\"") && h.contains("aria-label=\"To\""));
+}
+
+#[test]
+fn a_sidewalk_shows_its_curb_with_the_rest_and_a_planting_strip_has_no_direction() {
+    let s = street_shared(0);
+    let walk = segment(&s, 0);
+    s.edit(|e| e.select(Some(walk)));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Curb</h3>") && !h.contains("<details"));
+    let s = street_shared(1);
+    let planting = s.view().segments.iter().find(|x| KINDS[x.kind].id == "planting").unwrap().uid;
+    s.edit(|e| e.select(Some(planting)));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(!h.contains(">Direction</h3>") && !h.contains("<details"));
+}
+
+#[test]
+fn the_days_of_a_window_are_said_in_its_row_and_a_window_of_every_day_says_none() {
+    use crate::shared::catalogue::{Side, StreetClass, kind_index};
+    use crate::street::model::{Piece, Street, Window};
+    let kind = |id| kind_index(id).unwrap();
+    let rows = |days: Option<&str>| {
+        let window = Window { kind: kind("bus"), from_min: 360, to_min: 600, days: days.map(str::to_string) };
+        let street =
+            Street::imported(StreetClass::Local, Side::Right, &[Piece { kind: kind("parking"), width_mm: 3000, direction: Some(0), variants: vec![window] }]);
+        let s = StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::from_street(&street, &street, 0), None);
+        let u = segment(&s, 0);
+        s.edit(|e| e.select(Some(u)));
+        street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> })
+    };
+    let h = rows(Some("Mo-Fr"));
+    assert!(h.contains("class=\"var-days\"") && h.contains("Mo-Fr"), "{h}");
+    assert!(!rows(None).contains("var-days"));
+}
+
+#[test]
+fn the_title_block_links_the_osm_ways_and_says_whether_the_street_was_changed() {
+    use crate::shared::catalogue::{Side, StreetClass, kind_index};
+    use crate::shared::provenance::OsmRef;
+    use crate::street::model::{Piece, Street};
+    let travel = kind_index("travel").unwrap();
+    let mut street = Street::imported(StreetClass::Local, Side::Right, &[Piece { kind: travel, width_mm: 3200, direction: Some(0), variants: Vec::new() }]);
+    street.source = vec![OsmRef { id: 4687530, version: Some(49) }, OsmRef { id: 7, version: None }];
+    let s = StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::from_street(&street, &street, 0), None);
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(h.contains("href=\"https://www.openstreetmap.org/way/4687530\"") && h.contains(">way 4687530 v49<"), "{h}");
+    assert!(h.contains(">way 7<") && h.contains("id=\"tb-state\">As imported<"), "{h}");
+    let u = segment(&s, 0);
+    s.edit(|e| e.nudge_width(u, 100));
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(h.contains("id=\"tb-state\">Edited<"), "{h}");
+}
+
+#[test]
+fn the_title_block_of_a_sandbox_street_does_not_link_to_openstreetmap() {
+    let h = street_html(|| view! { <page::TitleBlock vm=street_shared(0)/> });
+    assert!(!h.contains("openstreetmap.org"), "{h}");
 }
 
 #[test]
@@ -397,6 +491,332 @@ fn the_panel_s_lengths_and_steps_follow_the_units() {
     let u = segment(&s, 2);
     s.edit(|e| e.select(Some(u)));
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
-    assert!(h.contains("10.8 ft wide") && h.contains("aria-label=\"Narrower by 1.0 ft\"") && h.contains("step=\"0.25\""));
+    assert!(h.contains("10.8 ft wide") && h.contains("aria-label=\"Narrower by 1.0 ft\""));
     assert!(h.contains("Allowed ") && h.contains(" ft"));
+}
+
+// ---- the notes in French ----------------------------------------------------------------
+
+fn street_shared_in(sample: usize, locale: Locale) -> Rc<StreetVm> {
+    StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), Editor::new(sample), None)
+}
+
+#[test]
+fn the_space_and_capacity_tables_are_in_french() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let u = segment(&s, 0);
+    s.edit(|e| e.remove(u));
+    let h = street_html(|| view! { <notes::Space vm=s.clone()/> });
+    assert!(h.contains("Largeur par usage, en mètres") && h.contains("Votre aménagement") && h.contains("Marche"));
+    assert!(!h.contains("Your design") && !h.contains("Width by use"));
+    let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
+    assert!(h.contains("Personnes par heure") && !h.contains("People per hour"));
+}
+
+#[test]
+fn the_checks_and_their_count_are_in_french() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(h.contains("\u{a0}: réussite") && h.contains("Chaque mètre est utilisé") && !h.contains(": passes"));
+    let u = segment(&s, 0);
+    s.edit(|e| e.set_width(u, 3_800));
+    let pill = street_html(|| view! { <notes::FitChecks vm=s.clone()/> });
+    assert!(pill.contains("1 vérification échoue") && !pill.contains("1 check fails"));
+    let badge = street_html(|| view! { <notes::ChecksBadge vm=s.clone()/> });
+    assert!(badge.contains("en échec") && !badge.contains(" fail"));
+}
+
+#[test]
+fn the_changes_and_the_measures_are_in_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
+    assert!(h.contains("La rue aujourd’hui") && h.contains("Étape") && !h.contains("Street today"));
+    let h = street_html(|| view! { <notes::Measures vm=s.clone()/> });
+    assert!(h.contains("Réorganiser") && h.contains("Se règle à une intersection") && h.contains("Non modélisé"));
+    assert!(h.contains("Aménagements de voies le long de la rue.") && !h.contains("Lane arrangements along the street."));
+    assert!(!h.contains(">Arrange<") && !h.contains("Set at a junction") && !h.contains("Not modelled"));
+}
+
+#[test]
+fn the_notes_are_drawn_again_in_the_language_the_shell_switches() {
+    let owner = Owner::new();
+    owner.set();
+    let s = street_shared_in(0, Locale::En);
+    let i18n = s.i18n().clone();
+    // The same instance the view-model holds, so switching it changes what the notes say.
+    let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
+    assert!(h.contains("People per hour"));
+    i18n.set(Locale::FrCa);
+    let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
+    assert!(h.contains("Personnes par heure"));
+}
+
+#[test]
+fn the_checks_and_their_count_are_said_in_english_with_no_stray_space() {
+    let s = street_shared(0);
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(h.contains("<span class=\"sr-only\">: passes</span>"), "{h}");
+    let u = segment(&s, 0);
+    s.edit(|e| e.set_width(u, 3_800));
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(h.contains("<span class=\"sr-only\">: fails</span>"), "{h}");
+    let badge = street_html(|| view! { <notes::ChecksBadge vm=s.clone()/> });
+    assert!(badge.contains("<span class=\"sr-only\"> fail</span>"), "{badge}");
+}
+
+#[test]
+fn the_checks_and_why_a_measure_is_unavailable_are_said_in_french_and_follow_the_switch() {
+    let owner = Owner::new();
+    owner.set();
+    let s = street_shared_in(0, Locale::En);
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(h.contains("Fits the street width") && h.contains("Both sides") && h.contains("Room for emergency vehicles"), "{h}");
+    let m = street_html(|| view! { <notes::Measures vm=s.clone()/> });
+    assert!(m.contains("Freeways only"), "{m}");
+    s.i18n().set(Locale::FrCa);
+    let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
+    assert!(h.contains("Respecte la largeur de la rue") && h.contains("Des deux côtés") && h.contains("Place pour les véhicules d’urgence"), "{h}");
+    assert!(!h.contains("Fits the street width") && !h.contains("Both sides"), "{h}");
+    let m = street_html(|| view! { <notes::Measures vm=s.clone()/> });
+    assert!(m.contains("Autoroutes seulement") && !m.contains("Freeways only"), "{m}");
+}
+
+// ---- the page around the section, in French ------------------------------------------------
+
+#[test]
+fn the_heading_and_the_title_block_are_in_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends())/> });
+    assert!(h.contains("Carte de la ville") && h.contains("Coupe transversale de la rue") && h.contains("de large"), "{h}");
+    assert!(h.contains("entre ") && h.contains(" et <a href=\"intersection.html?junction=2\">Junction 4</a>"), "{h}");
+    assert!(!h.contains("City map") && !h.contains("Street cross-section") && !h.contains("between") && !h.contains(" wide"), "{h}");
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(h.contains(">Rue<") && h.contains(">Largeur<") && h.contains("Modifications apportées"), "{h}");
+    assert!(!h.contains(">Width<") && !h.contains("Changes made"), "{h}");
+}
+
+#[test]
+fn the_drawing_s_group_is_named_in_the_language_of_the_page() {
+    let s = street_shared(0);
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(h.contains("aria-label=\"Street cross-section editor\""), "{h}");
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(h.contains("aria-label=\"Éditeur de coupe transversale de la rue\"") && !h.contains("Street cross-section editor"), "{h}");
+}
+
+#[test]
+fn the_history_buttons_are_in_french() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <page::History vm=s.clone()/> });
+    assert!(h.contains("Annuler") && h.contains("Rétablir") && h.contains("Recommencer") && h.contains("Outils de la feuille"), "{h}");
+    assert!(!h.contains(">Undo<") && !h.contains("Start over") && !h.contains("Sheet tools"), "{h}");
+}
+
+#[test]
+fn the_add_menu_is_in_french() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
+    assert!(h.contains("Ajouter un élément") && h.contains("Se place après l’élément sélectionné."), "{h}");
+    assert!(h.contains("class=\"add-group-h\">Marche<") && h.contains("<b>Trottoir</b>"), "{h}");
+    assert!(!h.contains("Add a piece") && !h.contains("Goes after") && !h.contains(">Walking<") && !h.contains(">Sidewalk<"), "{h}");
+}
+
+#[test]
+fn the_clock_and_the_welcome_are_in_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    s.edit(|e| e.apply_measure("B3"));
+    let timed = s.view().segments.iter().find(|x| !x.variants.is_empty()).unwrap().uid;
+    s.edit(|e| e.select(Some(timed)));
+    let h = street_html(|| view! { <page::Clock vm=s.clone()/> });
+    assert!(h.contains("Heure de la journée") && h.contains(" sauf "), "{h}");
+    assert!(!h.contains("Time of day") && !h.contains("except"), "{h}");
+    let t = street_html(|| view! { <page::TimeNote vm=s.clone()/> });
+    assert!(t.contains("Les chiffres valent pour 12:00."), "{t}");
+    let h = street_html(|| view! { <page::Welcome vm=s.clone()/> });
+    assert!(h.contains("Ajoutez un élément") && h.contains("Compris") && !h.contains("Got it"), "{h}");
+}
+
+#[test]
+fn the_clock_note_names_the_days_in_each_language() {
+    let en = crate::i18n_for(Locale::En);
+    let fr = crate::i18n_for(Locale::FrCa);
+    let mut e = Editor::new(1);
+    assert!(e.apply_measure("B3"));
+    let mut seg = e.view().segments.into_iter().find(|x| !x.variants.is_empty()).unwrap();
+    seg.base_kind = KINDS.iter().position(|k| k.id == "sidewalk").unwrap();
+    seg.variants[0].kind = KINDS.iter().position(|k| k.id == "bike").unwrap();
+    seg.variants[0].from_min = 420;
+    seg.variants[0].to_min = 600;
+    seg.variants[0].days = Some("Mo-Fr,Su".into());
+    seg.variants.truncate(1);
+    assert_eq!(page::clock_note(&seg, &en), "Sidewalk except bike lane Mo-Fr,Su 07:00\u{2013}10:00");
+    assert_eq!(page::clock_note(&seg, &fr), "Trottoir sauf piste cyclable lun.-ven.,dim. 07:00\u{2013}10:00");
+}
+
+#[test]
+fn the_window_title_names_the_street_and_where_it_runs_in_each_language() {
+    let en = crate::i18n_for(Locale::En);
+    let fr = crate::i18n_for(Locale::FrCa);
+    let ends = ["Rue A".to_string(), "Rue B".to_string()];
+    assert_eq!(page::page_title(&en, "Main St", &ends), "Main St between Rue A and Rue B \u{b7} CityLoom");
+    assert_eq!(page::page_title(&fr, "Main St", &ends), "Main St entre Rue A et Rue B \u{b7} CityLoom");
+    assert_eq!(page::page_title(&en, "Main St", &[]), "CityLoom street editor");
+    assert_eq!(page::page_title(&fr, "Main St", &[]), "Éditeur de rues CityLoom");
+}
+
+// ---- the measures' words ----------------------------------------------------------------
+
+#[test]
+fn the_measures_are_named_and_explained_in_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let h = street_html(|| view! { <notes::Measures vm=s.clone()/> });
+    assert!(h.contains("Voies centrales réservées au transport en commun"), "{h}");
+    assert!(h.contains("Réorganiser la rue selon B1 Voies centrales réservées au transport en commun"));
+    assert!(h.contains("n’a pas de phasage de feux à prioriser"));
+    assert!(!h.contains("Center-Running Transit Lanes") && !h.contains("Transit Signal Priority") && !h.contains("CityLoom has no signal timing"));
+}
+
+#[test]
+fn a_measure_s_problems_are_said_in_each_language() {
+    let narrow = |locale| {
+        let s = street_shared_in(1, locale);
+        assert!(s.edit(|e| e.apply_measure("B1")));
+        let bus = s.view().segments.iter().find(|g| KINDS[g.kind].id == "bus").unwrap().uid;
+        s.edit(|e| e.set_width(bus, 3_000));
+        street_html(|| view! { <notes::Measures vm=s.clone()/> })
+    };
+    let h = narrow(Locale::En);
+    assert!(h.contains("A bus lane is 3000 mm wide, and a transit lane wants 3300 mm"), "{h}");
+    let h = narrow(Locale::FrCa);
+    assert!(h.contains("Une voie d’autobus mesure 3000\u{a0}mm de large, alors qu’une voie de transport en commun en exige 3300\u{a0}mm"), "{h}");
+    assert!(!h.contains("A bus lane is"));
+}
+
+// ---- the piece panel -------------------------------------------------------------------
+
+fn select_in(sample: usize, locale: Locale, pick: impl Fn(&StreetVm) -> u32) -> Rc<StreetVm> {
+    let s = street_shared_in(sample, locale);
+    let u = pick(&s);
+    s.edit(|e| e.select(Some(u)));
+    s
+}
+
+#[test]
+fn the_piece_panel_is_in_french() {
+    let s = select_in(0, Locale::FrCa, |s| segment(s, 2));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Voie de circulation</h2>") && h.contains("3,3\u{a0}m de large · 3 sur 6"), "{h}");
+    assert!(h.contains(">Largeur</h3>") && h.contains(">Revêtement</h3>") && h.contains("Le matériau qui le recouvre."), "{h}");
+    assert!(h.contains("Asphalte") && h.contains("Valeurs permises\u{a0}: de ") && h.contains(">Direction</h3>"), "{h}");
+    assert!(h.contains("aria-label=\"Rétrécir de 0,1\u{a0}m\"") && h.contains("aria-label=\"Élargir de 0,1\u{a0}m\""), "{h}");
+    assert!(h.contains("S’éloigne de vous"), "{h}");
+    for en in ["Width", "Surface", "What it is paved with.", "Allowed ", "Narrower by", "Driving lane", "Away from you", "wide"] {
+        assert!(!h.contains(en), "{en}");
+    }
+}
+
+#[test]
+fn the_width_field_and_its_range_follow_the_decimal_mark_of_the_language_and_round_trip() {
+    let owner = Owner::new();
+    owner.set();
+    let s = select_in(0, Locale::FrCa, |s| segment(s, 2));
+    let w = SheetWatch::new(s.clone());
+    let u = segment(&s, 2);
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains("value=\"3,30\""), "{h}");
+    let (min, max) = (s.view().segments[2].min_mm, s.view().segments[2].max_mm);
+    let (lo, hi) = (Units::Metres.fixed_in(min, 2, Locale::FrCa), Units::Metres.fixed_in(max, 2, Locale::FrCa));
+    assert!(lo.contains(',') && hi.contains(','));
+    assert!(h.contains(&format!("de {lo} à {hi}\u{a0}m")), "{h}");
+    // What the field holds, typed back, is the same width.
+    let typed = Units::Metres.fixed_in(2_700, 2, Locale::FrCa);
+    assert_eq!(typed, "2,70");
+    assert!(inspector::commit_width(w, u, &typed));
+    assert_eq!(s.view().segments[2].width_mm, 2_700);
+    assert_eq!(Units::Metres.fixed_in(s.view().segments[2].width_mm, 2, Locale::FrCa), typed);
+}
+
+#[test]
+fn the_empty_panel_the_vehicle_and_the_other_settings_are_in_french() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains("Sélectionnez un élément pour modifier sa largeur et son revêtement.") && !h.contains("Select a piece"), "{h}");
+    let s = street_shared_in(1, Locale::FrCa);
+    assert!(s.edit(|e| e.apply_measure("B1")));
+    let bus = s.view().segments.iter().find(|x| KINDS[x.kind].id == "bus").unwrap().uid;
+    s.edit(|e| e.select(Some(bus)));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Véhicule</h3>") && h.contains(">Autobus</button>") && h.contains(">Tramway</button>") && !h.contains("Vehicle"), "{h}");
+    let s = select_in(1, Locale::FrCa, |s| segment(s, 3));
+    let u = segment(&s, 3);
+    s.edit(|e| e.add_variant(u));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Autres périodes</h3>") && h.contains("Ajouter d’autres périodes") && h.contains("le reste de la journée."), "{h}");
+    assert!(h.contains("aria-label=\"Type 1\"") && h.contains("aria-label=\"De\"") && h.contains("aria-label=\"À\""), "{h}");
+    assert!(!h.contains("Other times") && !h.contains("Add other times") && !h.contains("aria-label=\"From\""), "{h}");
+    let walk = select_in(0, Locale::FrCa, |s| segment(s, 0));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=walk.clone()/> });
+    assert!(h.contains(">Bordure</h3>") && h.contains("Aucune (au ras du sol)") && h.contains("Granit") && !h.contains("None (flush)"), "{h}");
+}
+
+#[test]
+fn the_panel_is_drawn_again_in_the_language_the_shell_switches() {
+    let owner = Owner::new();
+    owner.set();
+    let s = select_in(0, Locale::En, |s| segment(s, 2));
+    let i18n = s.i18n().clone();
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Driving lane</h2>") && h.contains("value=\"3.30\""));
+    i18n.set(Locale::FrCa);
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains(">Voie de circulation</h2>") && h.contains("value=\"3,30\"") && !h.contains("value=\"3.30\""), "{h}");
+}
+
+#[test]
+fn the_drawing_is_in_french_when_the_page_is() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(h.contains("Aujourd’hui") && h.contains("Votre aménagement") && h.contains("Coupe transversale de"), "{h}");
+    assert!(!h.contains(">Today<") && !h.contains("Cross-section of"), "{h}");
+    let e = street_shared(0);
+    let h = street_html(|| view! { <view::StreetDrawing vm=e.clone()/> });
+    assert!(h.contains(">Today<"), "{h}");
+    e.i18n().set(Locale::FrCa);
+    let h = street_html(|| view! { <view::StreetDrawing vm=e.clone()/> });
+    assert!(h.contains(">Aujourd’hui<") && !h.contains(">Today<"), "{h}");
+}
+
+#[test]
+fn the_group_ids_are_those_of_the_add_menu() {
+    let menu: Vec<&str> = page::ADD_GROUPS.iter().map(|(id, _)| *id).collect();
+    assert_eq!(menu, crate::shared::catalogue::GROUP_IDS);
+}
+
+#[test]
+fn the_lengths_around_the_section_follow_the_language() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let row = s.view().row_mm;
+    let fr = Units::Metres.length_fine_in(row, Locale::FrCa);
+    let en = Units::Metres.length_fine_in(row, Locale::En);
+    assert!(fr.contains(',') && fr.contains('\u{a0}') && en.contains('.'), "{fr} {en}");
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
+    assert!(h.contains(&format!(">{fr}<")) && !h.contains(&en), "{h}");
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(h.contains(&format!(">{fr}<")) && !h.contains(&en), "{h}");
+    let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
+    let sidewalk = KINDS.iter().find(|k| k.id == "sidewalk").expect("a sidewalk kind").default_mm;
+    let fr_dw = Units::Metres.length_fine_in(sidewalk, Locale::FrCa);
+    let en_dw = Units::Metres.length_fine_in(sidewalk, Locale::En);
+    assert!(h.contains(&format!("class=\"dw\">{fr_dw}<")) && !h.contains(&format!("class=\"dw\">{en_dw}<")), "{h}");
+    // the English page keeps its point
+    let e = street_shared(1);
+    let h = street_html(|| view! { <page::TitleBlock vm=e.clone()/> });
+    assert!(h.contains(&format!(">{en}<")), "{h}");
+}
+
+#[test]
+fn the_street_ftl_files_have_the_same_messages_and_variables() {
+    use crate::shared::i18n::tests::parity_problems;
+    assert_eq!(parity_problems(crate::street::RESOURCES.en, crate::street::RESOURCES.fr), Vec::<String>::new());
 }

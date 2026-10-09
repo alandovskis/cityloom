@@ -4,6 +4,7 @@
 //! millimetres and angles integer degrees. Everything here is synthetic.
 
 use crate::shared::catalogue::{KINDS, Material, REGIONS, Side, StreetClass, is_roadway};
+use crate::shared::provenance::OsmRef;
 use serde::{Deserialize, Serialize};
 
 use crate::junction::geometry::gap;
@@ -184,6 +185,9 @@ pub struct State {
     pub bus: Option<(u32, u32)>,
     /// Width of a cycle track around the outside of a roundabout, if it has one.
     pub cycle: Option<i32>,
+    /// The OSM nodes it was made from. The sample junctions are made from none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source: Vec<OsmRef>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

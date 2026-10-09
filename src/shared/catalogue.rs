@@ -116,18 +116,18 @@ impl StreetClass {
 /// of the road traffic keeps to. Synthetic placeholder list.
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct Region {
+    /// Its name is the message `region-<id>` (`shell/i18n`).
     pub id: &'static str,
-    pub name: &'static str,
     pub drive_side: Side,
 }
 
 pub const REGIONS: [Region; 6] = [
-    Region { id: "canada", name: "Canada", drive_side: Side::Right },
-    Region { id: "united-states", name: "United States", drive_side: Side::Right },
-    Region { id: "germany", name: "Germany", drive_side: Side::Right },
-    Region { id: "united-kingdom", name: "United Kingdom", drive_side: Side::Left },
-    Region { id: "australia", name: "Australia", drive_side: Side::Left },
-    Region { id: "japan", name: "Japan", drive_side: Side::Left },
+    Region { id: "canada", drive_side: Side::Right },
+    Region { id: "united-states", drive_side: Side::Right },
+    Region { id: "germany", drive_side: Side::Right },
+    Region { id: "united-kingdom", drive_side: Side::Left },
+    Region { id: "australia", drive_side: Side::Left },
+    Region { id: "japan", drive_side: Side::Left },
 ];
 
 pub const CURBS: [Material; 7] = [
@@ -408,4 +408,120 @@ pub fn kind_index(id: &str) -> Option<usize> {
 /// Whether a kind of piece is part of the roadway, as opposed to the footway or the green.
 pub fn is_roadway(kind: usize) -> bool {
     !matches!(KINDS[kind].mode, Mode::Foot | Mode::Green)
+}
+
+/// The groups the add menu sorts the kinds into, in its order. A group's name is the message `group-<id>`.
+pub const GROUP_IDS: [&str; 7] = ["walking", "greenery", "cycling", "transit", "roadway", "furniture", "utilities"];
+
+/// The message that names a kind of piece (`street/i18n`).
+pub fn kind_key(id: &str) -> String {
+    format!("kind-{id}")
+}
+
+/// The message that gives a kind's two-letter mark, shown where its name does not fit.
+pub fn mark_key(id: &str) -> String {
+    format!("kind-mark-{id}")
+}
+
+/// The message that names a group of kinds.
+pub fn group_key(id: &str) -> String {
+    format!("group-{id}")
+}
+
+/// The message that names a surface material.
+pub fn material_key(id: &str) -> String {
+    format!("material-{id}")
+}
+
+/// The message that names a kind of curb.
+pub fn curb_key(id: &str) -> String {
+    format!("curb-{id}")
+}
+
+/// The message that names a direction of travel.
+pub fn direction_key(id: &str) -> String {
+    format!("direction-{id}")
+}
+
+/// The message that names a mode.
+pub fn mode_key(mode: Mode) -> &'static str {
+    match mode {
+        Mode::Foot => "mode-foot",
+        Mode::Bike => "mode-bike",
+        Mode::Transit => "mode-transit",
+        Mode::Vehicle => "mode-vehicle",
+        Mode::Green => "mode-green",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shared::i18n::{Args, Locale};
+
+    /// The display word of each group, as the add menu shows it today.
+    const GROUP_WORDS: [&str; 7] = ["Walking", "Greenery", "Cycling", "Transit", "Roadway", "Furniture", "Utilities"];
+
+    #[test]
+    fn every_catalogue_kind_mode_and_group_has_a_message_in_both_languages() {
+        for locale in Locale::ALL {
+            let i = crate::i18n_for(locale);
+            for k in KINDS.iter() {
+                i.tr_now(&kind_key(k.id), &Args::new());
+            }
+            for k in KINDS.iter() {
+                i.tr_now(&mark_key(k.id), &Args::new());
+            }
+            for m in Mode::ALL {
+                i.tr_now(mode_key(m), &Args::new());
+            }
+            for g in GROUP_IDS {
+                i.tr_now(&group_key(g), &Args::new());
+            }
+            assert!(i.missing().is_empty(), "{:?}: {:?}", locale, i.missing());
+        }
+    }
+
+    #[test]
+    fn the_english_messages_say_what_the_names_and_labels_still_say() {
+        let i = crate::i18n_for(Locale::En);
+        for k in KINDS.iter() {
+            assert_eq!(i.tr_now(&kind_key(k.id), &Args::new()), k.name, "{}", k.id);
+        }
+        for k in KINDS.iter() {
+            assert_eq!(i.tr_now(&mark_key(k.id), &Args::new()), k.mark, "{}", k.id);
+        }
+        for m in Mode::ALL {
+            assert_eq!(i.tr_now(mode_key(m), &Args::new()), m.label(), "{m:?}");
+        }
+        for (g, word) in GROUP_IDS.iter().zip(GROUP_WORDS) {
+            assert_eq!(i.tr_now(&group_key(g), &Args::new()), word, "{g}");
+        }
+    }
+
+    #[test]
+    fn the_keys_are_the_ids_with_a_prefix() {
+        assert_eq!(kind_key("bikerack"), "kind-bikerack");
+        assert_eq!(mode_key(Mode::Vehicle), "mode-vehicle");
+        assert_eq!(group_key("walking"), "group-walking");
+    }
+
+    #[test]
+    fn every_material_curb_and_direction_has_a_message_in_both_languages_and_english_says_the_name() {
+        for locale in Locale::ALL {
+            let i = crate::i18n_for(locale);
+            for (key, name) in MATERIALS
+                .iter()
+                .map(|m| (material_key(m.id), m.name))
+                .chain(CURBS.iter().map(|c| (curb_key(c.id), c.name)))
+                .chain(DIRECTIONS.iter().map(|d| (direction_key(d.id), d.name)))
+            {
+                let said = i.tr_now(&key, &Args::new());
+                if locale == Locale::En {
+                    assert_eq!(said, name, "{key}");
+                }
+            }
+            assert!(i.missing().is_empty(), "{:?}: {:?}", locale, i.missing());
+        }
+    }
 }

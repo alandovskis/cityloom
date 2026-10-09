@@ -8,7 +8,25 @@ use serde_json::Value;
 use crate::junction::geometry::*;
 use crate::junction::model::*;
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
-use crate::street::model::{Check, Revision};
+use crate::shared::provenance::OsmRef;
+
+/// One rule of the junction and whether it holds (English until the junction page is translated).
+#[derive(Serialize)]
+pub struct Check {
+    pub id: &'static str,
+    pub ok: bool,
+    /// The length the detail speaks of, so the page can print it in its units.
+    pub amount_mm: i32,
+    pub label: &'static str,
+    pub detail: String,
+}
+
+/// One step of the junction's history.
+#[derive(Serialize)]
+pub struct Revision {
+    pub step: usize,
+    pub label: String,
+}
 
 /// Ring width of a roundabout, and the smallest island in its middle.
 const RING_WIDTH_MM: f64 = 6_000.0;
@@ -437,6 +455,8 @@ pub struct JView {
     pub can_undo: bool,
     pub can_redo: bool,
     pub changed: bool,
+    /// The OSM nodes the junction was made from.
+    pub source: Vec<OsmRef>,
 }
 
 /// Every pair of streets a bus lane could join across a roundabout, the one
@@ -886,6 +906,7 @@ impl Junction {
             can_undo: self.can_undo(),
             can_redo: self.can_redo(),
             changed: self.changed(),
+            source: s.source.clone(),
         }
     }
 }

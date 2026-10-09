@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
+use crate::shared::i18n::I18n;
 use crate::shared::units::Units;
 use crate::street::keys::Action;
 use crate::street::model::{Editor, SegView, View};
@@ -35,6 +36,11 @@ impl SheetWatch {
     /// The view as it is now, for an event handler: nothing is watched.
     pub fn view_now(&self) -> Rc<View> {
         self.vm.with_value(|v| v.view_now())
+    }
+
+    /// The page's words, for a view: ask with `tr` so it is drawn again on a language switch.
+    pub fn i18n(&self) -> Rc<I18n> {
+        self.vm.with_value(|v| v.i18n().clone())
     }
 
     pub fn units(&self) -> Units {

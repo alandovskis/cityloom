@@ -118,6 +118,19 @@ test.describe("the junction editor on a junction of the city", () => {
 });
 
 test.describe("what the junction editor keeps in the city", () => {
+  test("says which OpenStreetMap nodes it was made from, and whether it has been changed", async ({ page }) => {
+    await openJunction(page);
+    const block = page.locator("#title-block");
+    await expect(block.locator('a[href^="https://www.openstreetmap.org/node/"]').first()).toHaveText(
+      /^node \d+( v\d+)?$/,
+    );
+    await expect(block.locator("#tb-state")).toHaveText("As imported");
+    await turns(page).first().click();
+    await expect(block.locator("#tb-state")).toHaveText("Edited");
+    await page.reload();
+    await expect(block.locator("#tb-state")).toHaveText("Edited");
+  });
+
   test("what is changed is kept across a reload and shown on the map", async ({ page }) => {
     await openJunction(page);
     const turn = turns(page).first();

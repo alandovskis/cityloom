@@ -26,9 +26,19 @@ pub struct Measure {
     pub note: &'static str,
 }
 
-const LINEAR: &str = "Linear continuous measures";
-const LOCAL: &str = "Localized measures";
-const AREA: &str = "Area-wide measures";
+pub const LINEAR: &str = "Linear continuous measures";
+pub const LOCAL: &str = "Localized measures";
+pub const AREA: &str = "Area-wide measures";
+
+/// The message that names a measure (`street/i18n`), by its lowercase code.
+pub fn name_key(code: &str) -> String {
+    format!("atlas-{}-name", code.to_lowercase())
+}
+
+/// The message that says why a measure is not modelled; only those with a `note` have one.
+pub fn note_key(code: &str) -> String {
+    format!("atlas-{}-note", code.to_lowercase())
+}
 
 const fn m(code: &'static str, name: &'static str, family: &'static str, group: &'static str, place: Where, note: &'static str) -> Measure {
     Measure { code, name, family, group, place, note }
@@ -112,6 +122,28 @@ mod tests {
     fn what_cannot_be_modelled_says_why() {
         for m in MEASURES.iter().filter(|m| m.place == Where::Not) {
             assert!(!m.note.is_empty(), "{}", m.code);
+        }
+    }
+
+    #[test]
+    fn every_measure_is_named_and_every_note_is_said_in_both_languages() {
+        use crate::shared::i18n::{Args, Locale};
+        for locale in [Locale::En, Locale::FrCa] {
+            let i = crate::i18n_for(locale);
+            for m in MEASURES.iter() {
+                let name = i.tr_now(&name_key(m.code), &Args::new());
+                assert!(!name.is_empty(), "{}", m.code);
+                if locale == Locale::En {
+                    assert_eq!(name, m.name, "{}", m.code);
+                }
+                if !m.note.is_empty() {
+                    let note = i.tr_now(&note_key(m.code), &Args::new());
+                    if locale == Locale::En {
+                        assert_eq!(note, m.note, "{}", m.code);
+                    }
+                }
+            }
+            assert!(i.missing().is_empty(), "{:?}: {:?}", locale, i.missing());
         }
     }
 }

@@ -400,6 +400,30 @@ fn the_title_block_gives_the_name_the_streets_and_the_changes_made() {
 }
 
 #[test]
+fn the_title_block_links_the_osm_nodes_and_says_whether_the_junction_was_changed() {
+    use crate::shared::provenance::OsmRef;
+    let mut state = Junction::new(0).current().clone();
+    for a in &mut state.arms {
+        a.edge = a.uid + 10;
+    }
+    state.source = vec![OsmRef { id: 29796354, version: Some(5) }, OsmRef { id: 9, version: None }];
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), Junction::from_city("Junction 4", &state, &state, 0).unwrap(), None);
+    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
+    assert!(h.contains("href=\"https://www.openstreetmap.org/node/29796354\"") && h.contains(">node 29796354 v5<"), "{h}");
+    assert!(h.contains(">node 9<") && h.contains("id=\"tb-state\">As imported<"), "{h}");
+    let n = arm(&s, 0);
+    s.edit(|j| j.set_corner(n, 7_000));
+    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
+    assert!(h.contains("id=\"tb-state\">Edited<"), "{h}");
+}
+
+#[test]
+fn the_title_block_of_a_junction_with_no_source_does_not_link_to_openstreetmap() {
+    let h = html(|| view! { <page::TitleBlock vm=shared(0)/> }.into_any());
+    assert!(!h.contains("openstreetmap.org"), "{h}");
+}
+
+#[test]
 fn the_status_line_says_whether_the_junction_works() {
     let s = shared(0);
     let h = html(|| view! { <page::Fit vm=s.clone()/> }.into_any());

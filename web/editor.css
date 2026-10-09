@@ -1057,23 +1057,6 @@ svg pattern circle {
   color: var(--ink-2);
   font-size: 13px;
 }
-.insp-more > summary {
-  padding: 6px 0;
-  color: var(--ink-2);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.insp-more > summary:hover {
-  color: var(--ink);
-}
-.insp-more[open] > summary {
-  margin-bottom: 8px;
-}
-.insp-more > .insp-sec + .insp-sec {
-  margin-top: 14px;
-}
-
 .wfield {
   display: inline-flex;
   align-items: center;
@@ -1288,6 +1271,11 @@ svg pattern circle {
   gap: 6px;
   font-size: 14px;
 }
+.var-days {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  color: var(--ink-2);
+}
 .var-times input {
   width: 0;
   flex: 1;
@@ -1301,23 +1289,6 @@ svg pattern circle {
   width: 100%;
   justify-content: center;
   white-space: nowrap;
-}
-.move-btns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-.move-btns .btn {
-  justify-content: center;
-  white-space: nowrap;
-}
-.move-btns .btn svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
 }
 .check {
   display: flex;
@@ -1649,6 +1620,13 @@ svg pattern circle {
   padding: 12px 20px 14px;
   border-top: 1px solid var(--rule);
 }
+.tb-full {
+  grid-column: 1 / -1;
+}
+.tb-src {
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
 
 /* ---- the Add menu --------------------------------------------------------------- */
 
@@ -1759,11 +1737,6 @@ svg pattern circle {
   .inspector select,
   .var input[type="time"] {
     min-height: 44px;
-  }
-  .insp-more > summary {
-    min-height: 44px;
-    display: flex;
-    align-items: center;
   }
   .turn {
     min-width: 44px;

@@ -8,6 +8,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::shared::catalogue::{REGIONS, Side};
+use crate::shared::i18n::{Args, I18n, LANG_KEY, Locale};
 use crate::shared::ports::Ports;
 use crate::shared::units::Units;
 
@@ -61,10 +62,11 @@ impl Theme {
         }
     }
 
-    pub fn name(self) -> &'static str {
+    /// The message that names it.
+    fn message(self) -> &'static str {
         match self {
-            Theme::Light => "Light",
-            Theme::Dark => "Dark",
+            Theme::Light => "theme-light",
+            Theme::Dark => "theme-dark",
         }
     }
 
@@ -86,8 +88,9 @@ pub struct RegionOption {
 
 pub struct ShellVm {
     ports: Ports,
+    i18n: Rc<I18n>,
     target: Rc<dyn Target>,
-    /// What the left sidebar holds on this page: "piece details", "details", "places".
+    /// The message that names what the left sidebar holds on this page: `details-piece`, `details-details`, `details-places`.
     details_word: &'static str,
     tabs: Vec<String>,
     units: ArcRwSignal<Units>,
@@ -100,10 +103,11 @@ pub struct ShellVm {
     tab: ArcRwSignal<String>,
 }
 
-fn side_word(side: Side) -> &'static str {
+/// The message that names a side of the road.
+fn side_message(side: Side) -> &'static str {
     match side {
-        Side::Left => "left",
-        Side::Right => "right",
+        Side::Left => "drive-left",
+        Side::Right => "drive-right",
     }
 }
 
@@ -115,14 +119,15 @@ fn capitalised(s: &str) -> String {
 impl ShellVm {
     /// The shell of a page whose notes have `tabs`, by id. What was chosen on an
     /// earlier visit is restored; the region is given to the page's model.
-    pub fn new(ports: Ports, target: Rc<dyn Target>, details_word: &'static str, tabs: Vec<String>, system_dark: bool) -> Rc<ShellVm> {
-        ShellVm::new_with(ports, target, details_word, tabs, system_dark, true)
+    pub fn new(ports: Ports, i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str, tabs: Vec<String>, system_dark: bool) -> Rc<ShellVm> {
+        ShellVm::new_with(ports, i18n, target, details_word, tabs, system_dark, true)
     }
 
     /// As `new`, with whether the notes start open when the person has not chosen:
     /// a page that cannot spare the room for them on a narrow screen says no.
     pub fn new_with(
         ports: Ports,
+        i18n: Rc<I18n>,
         target: Rc<dyn Target>,
         details_word: &'static str,
         tabs: Vec<String>,
@@ -140,6 +145,7 @@ impl ShellVm {
             _ => notes_default_open,
         };
         let vm = ShellVm {
+            i18n,
             target,
             details_word,
             tabs,
@@ -157,6 +163,31 @@ impl ShellVm {
         Rc::new(vm)
     }
 
+    // ---- language ----
+
+    /// The words, for a view that puts them in the markup.
+    pub fn i18n(&self) -> Rc<I18n> {
+        self.i18n.clone()
+    }
+
+    /// The language in use; a view that reads it is drawn again when it changes.
+    pub fn locale(&self) -> Locale {
+        self.i18n.locale()
+    }
+
+    /// The person chose a language: the words change, it is remembered, the document says which it is in, and
+    /// the change is said in the new language. A store that refuses does not stop the switch: it holds for this visit.
+    pub fn set_locale(&self, locale: Locale) {
+        self.i18n.set(locale);
+        self.ports.storage.remember(LANG_KEY, locale.tag());
+        self.ports.page.set_lang(locale.tag());
+        self.ports.announcer.say(&self.say("lang-announced"));
+    }
+
+    fn say(&self, key: &str) -> String {
+        self.i18n.tr_now(key, &Args::new())
+    }
+
     // ---- units ----
 
     pub fn units(&self) -> Units {
@@ -171,7 +202,15 @@ impl ShellVm {
     // ---- region ----
 
     pub fn regions(&self) -> Vec<RegionOption> {
-        REGIONS.iter().map(|r| RegionOption { id: r.id, label: format!("{} ({})", r.name, side_word(r.drive_side)) }).collect()
+        REGIONS
+            .iter()
+            .map(|r| {
+                let args = Args::new()
+                    .str("region", self.i18n.tr(&format!("region-{}", r.id), &Args::new()))
+                    .str("side", self.i18n.tr(side_message(r.drive_side), &Args::new()));
+                RegionOption { id: r.id, label: self.i18n.tr("region-label", &args) }
+            })
+            .collect()
     }
 
     /// The id of the region the page's model holds.
@@ -184,7 +223,8 @@ impl ShellVm {
         self.take_region(Some(id));
         self.ports.storage.remember(REGION_KEY, id);
         if let Some(r) = REGIONS.iter().find(|r| r.id == self.target.region_id()) {
-            self.ports.announcer.say(&format!("{}: traffic keeps {}.", r.name, side_word(r.drive_side)));
+            let args = Args::new().str("region", self.say(&format!("region-{}", r.id))).str("side", self.say(side_message(r.drive_side)));
+            self.ports.announcer.say(&self.i18n.tr_now("region-announced", &args));
         }
     }
 
@@ -214,7 +254,8 @@ impl ShellVm {
     pub fn choose_theme(&self, theme: Theme) {
         self.theme.set(Some(theme));
         self.ports.storage.remember(THEME_KEY, theme.word());
-        self.ports.announcer.say(&format!("{} theme.", theme.name()));
+        let args = Args::new().str("theme", self.say(theme.message()));
+        self.ports.announcer.say(&self.i18n.tr_now("theme-announced", &args));
     }
 
     // ---- the account menu ----
@@ -252,15 +293,15 @@ impl ShellVm {
         let open = !self.inspector_open.get_untracked();
         self.inspector_open.set(open);
         self.ports.storage.remember(INSPECTOR_KEY, if open { "open" } else { "closed" });
-        let word = capitalised(self.details_word);
-        self.ports.announcer.say(&format!("{word} {}.", if open { "shown" } else { "hidden" }));
+        let args = Args::new().str("what", capitalised(&self.say(self.details_word)));
+        self.ports.announcer.say(&self.i18n.tr_now(if open { "details-shown" } else { "details-hidden" }, &args));
     }
 
     pub fn toggle_notes(&self) {
         let open = !self.notes_open.get_untracked();
         self.notes_open.set(open);
         self.ports.storage.remember(NOTES_KEY, if open { "open" } else { "closed" });
-        self.ports.announcer.say(if open { "Notes shown." } else { "Notes hidden." });
+        self.ports.announcer.say(&self.say(if open { "notes-shown" } else { "notes-hidden" }));
     }
 
     // ---- the notes tabs ----
@@ -302,7 +343,8 @@ impl ShellVm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::ports::{MemoryStorage, RecordingAnnouncer, Storage, test_ports};
+    use crate::shared::i18n::{Args, LANG_KEY};
+    use crate::shared::ports::{FakePage, MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_page};
     use std::cell::{Cell, RefCell};
 
     struct Page {
@@ -333,22 +375,117 @@ mod tests {
         page: Rc<Page>,
         said: Rc<RecordingAnnouncer>,
         storage: Rc<MemoryStorage>,
+        /// The document the shell tells its language to.
+        doc: Rc<FakePage>,
+    }
+
+    fn en() -> Rc<I18n> {
+        I18n::new(Locale::En, &[crate::shell::RESOURCES])
     }
 
     fn tabs() -> Vec<String> {
         ["t-space", "t-checks", "t-changes"].map(String::from).to_vec()
     }
 
-    fn rig_with(prepare: impl FnOnce(&MemoryStorage)) -> Rig {
-        let (ports, said, storage) = test_ports();
+    fn new_page() -> Rc<Page> {
+        Rc::new(Page { units: Cell::new(Units::Metres), region: RefCell::new("canada".into()), takes: Cell::new(true) })
+    }
+
+    /// The ports of a test with an announcer that records, plus the document and the storage.
+    fn ports_for_test() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorage>, Rc<FakePage>) {
+        let (mut ports, doc, storage) = test_ports_with_page();
+        let said = Rc::new(RecordingAnnouncer::default());
+        ports.announcer = said.clone();
+        (ports, said, storage, doc)
+    }
+
+    fn rig_in_with(locale: Locale, prepare: impl FnOnce(&MemoryStorage)) -> Rig {
+        let (ports, said, storage, doc) = ports_for_test();
         prepare(&storage);
-        let page = Rc::new(Page { units: Cell::new(Units::Metres), region: RefCell::new("canada".into()), takes: Cell::new(true) });
-        let vm = ShellVm::new(ports, Rc::new(Fake(page.clone())), "piece details", tabs(), false);
-        Rig { vm, page, said, storage }
+        let page = new_page();
+        let vm = ShellVm::new(ports, I18n::new(locale, &[crate::shell::RESOURCES]), Rc::new(Fake(page.clone())), "details-piece", tabs(), false);
+        Rig { vm, page, said, storage, doc }
+    }
+
+    fn rig_with(prepare: impl FnOnce(&MemoryStorage)) -> Rig {
+        rig_in_with(Locale::En, prepare)
+    }
+
+    fn rig_in(locale: Locale) -> Rig {
+        rig_in_with(locale, |_| {})
     }
 
     fn rig() -> Rig {
-        rig_with(|_| {})
+        rig_in(Locale::En)
+    }
+
+    fn rig_with_blocked_storage() -> Rig {
+        rig_in_with(Locale::En, |s| s.blocked(true))
+    }
+
+    #[test]
+    fn choosing_french_changes_the_locale_remembers_it_sets_the_page_s_lang_and_says_so_in_french() {
+        let r = rig();
+        r.vm.set_locale(Locale::FrCa);
+        assert_eq!(r.vm.locale(), Locale::FrCa);
+        assert_eq!(r.storage.recall(LANG_KEY).as_deref(), Some("fr-CA"));
+        assert_eq!(*r.doc.lang.borrow(), "fr-CA");
+        assert_eq!(r.said.take(), vec!["Langue\u{a0}: français."]);
+    }
+
+    #[test]
+    fn choosing_english_says_so_in_english() {
+        let r = rig_in(Locale::FrCa);
+        r.vm.set_locale(Locale::En);
+        assert_eq!((r.storage.recall(LANG_KEY).as_deref(), r.doc.lang.borrow().as_str()), (Some("en"), "en"));
+        assert_eq!(r.said.take(), vec!["Language: English."]);
+    }
+
+    #[test]
+    fn the_language_switches_for_the_session_even_when_storage_is_blocked() {
+        let r = rig_with_blocked_storage();
+        r.vm.set_locale(Locale::FrCa);
+        assert_eq!(r.vm.locale(), Locale::FrCa);
+        assert_eq!(*r.doc.lang.borrow(), "fr-CA");
+    }
+
+    #[test]
+    fn the_shell_starts_in_the_language_that_was_detected() {
+        let r = rig_in(Locale::FrCa);
+        assert_eq!(r.vm.locale(), Locale::FrCa);
+    }
+
+    #[test]
+    fn announcements_follow_the_language() {
+        let r = rig_in(Locale::FrCa);
+        r.vm.toggle_notes();
+        r.vm.toggle_inspector();
+        r.vm.choose_theme(Theme::Dark);
+        r.vm.choose_region("united-kingdom");
+        assert_eq!(
+            r.said.take(),
+            vec!["Notes masquées.", "Détails des éléments masqués.", "Thème sombre.", "Royaume-Uni\u{a0}: la circulation se fait à gauche."]
+        );
+    }
+
+    #[test]
+    fn the_regions_are_listed_in_the_language() {
+        let r = rig_in(Locale::FrCa);
+        assert_eq!(r.vm.regions()[1].label, "États-Unis (droite)");
+        r.vm.set_locale(Locale::En);
+        assert_eq!(r.vm.regions()[1].label, "United States (right)");
+    }
+
+    #[test]
+    fn every_region_has_a_name_in_both_languages() {
+        let i = I18n::new(Locale::FrCa, &[crate::shell::RESOURCES]);
+        for r in REGIONS {
+            i.tr_now(&format!("region-{}", r.id), &Args::new());
+            i.set(Locale::En);
+            i.tr_now(&format!("region-{}", r.id), &Args::new());
+            i.set(Locale::FrCa);
+        }
+        assert_eq!(i.missing(), Vec::<String>::new());
     }
 
     #[test]
@@ -457,11 +594,11 @@ mod tests {
     }
 
     fn rig_notes(default_open: bool, prepare: impl FnOnce(&MemoryStorage)) -> Rig {
-        let (ports, said, storage) = test_ports();
+        let (ports, said, storage, doc) = ports_for_test();
         prepare(&storage);
-        let page = Rc::new(Page { units: Cell::new(Units::Metres), region: RefCell::new("canada".into()), takes: Cell::new(true) });
-        let vm = ShellVm::new_with(ports, Rc::new(Fake(page.clone())), "details", tabs(), false, default_open);
-        Rig { vm, page, said, storage }
+        let page = new_page();
+        let vm = ShellVm::new_with(ports, en(), Rc::new(Fake(page.clone())), "details-details", tabs(), false, default_open);
+        Rig { vm, page, said, storage, doc }
     }
 
     #[test]
@@ -496,9 +633,8 @@ mod tests {
 
     #[test]
     fn the_left_sidebar_is_named_for_what_the_page_puts_in_it() {
-        let (ports, said, _) = test_ports();
-        let page = Rc::new(Page { units: Cell::new(Units::Metres), region: RefCell::new("canada".into()), takes: Cell::new(true) });
-        let vm = ShellVm::new(ports, Rc::new(Fake(page)), "places", vec![], false);
+        let (ports, said, _, _) = ports_for_test();
+        let vm = ShellVm::new(ports, en(), Rc::new(Fake(new_page())), "details-places", vec![], false);
         vm.toggle_inspector();
         assert_eq!(said.take(), vec!["Places hidden."]);
     }
@@ -537,9 +673,9 @@ mod tests {
 
     #[test]
     fn a_page_with_nothing_of_its_own_to_bind_still_has_the_menu_and_keeps_what_is_chosen() {
-        let (ports, _, storage) = test_ports();
+        let (ports, _, storage, _) = ports_for_test();
         storage.remember(REGION_KEY, "united-kingdom");
-        let vm = ShellVm::new(ports, Rc::new(Bare::default()), "details", tabs(), false);
+        let vm = ShellVm::new(ports, en(), Rc::new(Bare::default()), "details-details", tabs(), false);
         assert_eq!(vm.region(), "united-kingdom");
         vm.set_units(Units::Feet);
         assert_eq!(vm.units(), Units::Feet);
