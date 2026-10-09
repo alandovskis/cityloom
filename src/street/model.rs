@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, Side, StreetClass, kind_index};
+use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, Side, StreetClass, class_key, kind_index};
 use crate::shared::provenance::OsmRef;
 use crate::street::measures;
 
@@ -195,6 +195,15 @@ pub struct Street {
     pub source: Vec<OsmRef>,
 }
 
+/// What a street is called: its own name (data, said as it is), or else what sort of street it is.
+fn title_of(name: Option<&str>, class: StreetClass) -> Said {
+    match (name, class) {
+        (Some(name), _) => Said::new("city-name").with("name", Arg::Text(name.to_string())),
+        (None, StreetClass::Motorway) => Said::new("city-unnamed-motorway"),
+        (None, class) => Said::new("city-unnamed").with("class", Arg::Msg(class_key(class))),
+    }
+}
+
 fn flip(d: &mut Option<usize>) {
     if let Some(d) = d {
         *d = 1 - *d;
@@ -261,9 +270,9 @@ impl Street {
         self
     }
 
-    /// What it is called.
-    pub fn title(&self) -> String {
-        self.name.clone().unwrap_or_default()
+    /// What it is called: its own name, or else what sort of street it is.
+    pub fn title(&self) -> Said {
+        title_of(self.name.as_deref(), self.class)
     }
 
     /// The same street with its lanes written for `side`: running the other
@@ -1010,7 +1019,7 @@ impl Editor {
         let at = |v: &[Segment]| v.iter().map(|s| s.at(self.time_min)).collect::<Vec<_>>();
         let (now, existing_now) = (at(segs), at(existing));
         View {
-            name: self.street_name.clone().unwrap_or_default(),
+            name: title_of(self.street_name.as_deref(), self.class),
             class: self.class,
             region: REGIONS[self.region].id,
             row_mm: self.row_mm,
@@ -1249,7 +1258,8 @@ pub struct Revision {
 
 #[derive(Serialize)]
 pub struct View {
-    pub name: String,
+    /// What the street is called: its own name, or else what sort of street it is.
+    pub name: Said,
     pub class: StreetClass,
     pub region: &'static str,
     /// The time of day shown, in minutes after midnight.
@@ -1472,9 +1482,25 @@ mod tests {
     }
 
     #[test]
+    fn a_street_is_titled_by_its_name_or_else_by_its_class_in_each_language() {
+        use crate::shared::i18n::Locale;
+        use crate::shared::said::say_now;
+        use crate::shared::units::Units;
+        let say = |locale, s: &Street| say_now(&crate::i18n_for(locale), Units::Metres, &s.title());
+        let local = Street::imported(StreetClass::Local, Side::Right, &[]);
+        assert_eq!((say(Locale::En, &local), say(Locale::FrCa, &local)), ("Unnamed local street".into(), "Rue locale sans nom".into()));
+        let motorway = Street::imported(StreetClass::Motorway, Side::Right, &[]);
+        assert_eq!(motorway.title(), Said::new("city-unnamed-motorway"));
+        assert_eq!((say(Locale::En, &motorway), say(Locale::FrCa, &motorway)), ("Unnamed motorway".into(), "Autoroute sans nom".into()));
+        let named = local.named("Rue Rachel Est");
+        assert_eq!(named.title(), Said::new("city-name").with("name", Arg::Text("Rue Rachel Est".into())));
+        assert_eq!((say(Locale::En, &named), say(Locale::FrCa, &named)), ("Rue Rachel Est".into(), "Rue Rachel Est".into()));
+    }
+
+    #[test]
     fn a_street_is_what_it_is_given_and_has_no_template_to_fall_back_on() {
         let s = Street::imported(StreetClass::Local, Side::Right, &[]);
-        assert_eq!(s.title(), "");
+        assert_eq!(s.title(), Said::new("city-unnamed").with("class", Arg::Msg("class-local")));
         assert!(!s.class.is_freeway());
         assert!(Street::imported(StreetClass::Motorway, Side::Right, &[]).class.is_freeway());
     }

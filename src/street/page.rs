@@ -10,7 +10,7 @@ use crate::city::model::City;
 use crate::shared::catalogue::{KINDS, group_key, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
-use crate::shared::said::hhmm;
+use crate::shared::said::{self, hhmm};
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
 use crate::street::model::{SegView, View};
@@ -159,6 +159,11 @@ fn say(w: SheetWatch, key: &'static str) -> impl Fn() -> String + 'static {
     move || w.i18n().tr(key, &Args::new())
 }
 
+/// What the street is called, in the language of the page.
+fn street_title(w: SheetWatch) -> String {
+    said::say(&w.i18n(), w.units(), &w.view().name)
+}
+
 fn end_link(e: &StreetEnd) -> impl IntoView {
     let name = e.name.clone();
     e.junction
@@ -176,7 +181,7 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
     {
         let names: Vec<String> = ends.iter().flatten().map(|e| e.name.clone()).collect();
         Effect::new(move |_| {
-            document().set_title(&page_title(&w.i18n(), &w.view().name, &names));
+            document().set_title(&page_title(&w.i18n(), &street_title(w), &names));
         });
     }
     let linked = ends.is_some();
@@ -196,7 +201,7 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
         _ => ().into_any(),
     });
     view! {
-        <h1 id="street-name">{move || w.view().name.clone()}</h1>
+        <h1 id="street-name">{move || street_title(w)}</h1>
         <p class="street-sub" id="street-sub">
             {linked.then(|| view! { {back_link(w)} " " <span aria-hidden="true">"\u{b7}"</span> " " })}
             <span>{say(w, "header-section")}</span>
@@ -213,7 +218,7 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
 pub fn TitleBlock(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     view! {
-        <div class="tb-cell tb-wide"><span>{say(w, "block-street")}</span><b id="tb-street">{move || w.view().name.clone()}</b></div>
+        <div class="tb-cell tb-wide"><span>{say(w, "block-street")}</span><b id="tb-street">{move || street_title(w)}</b></div>
         <div class="tb-cell"><span>{say(w, "block-width")}</span><b id="tb-row" class="fig">{move || w.units().length_fine_in(w.view().row_mm, w.i18n().locale())}</b></div>
         <div class="tb-cell"><span>{say(w, "block-changes")}</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
         {move || {

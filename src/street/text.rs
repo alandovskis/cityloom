@@ -286,7 +286,7 @@ mod tests {
         for locale in Locale::ALL {
             let i18n = crate::i18n_for(locale);
             // Every argument any of them takes, so that a message is found whatever it is about.
-            let args = ["kind", "a", "b", "material", "curb", "vehicle", "direction", "base", "from", "to", "code", "name", "amount", "side"]
+            let args = ["kind", "a", "b", "material", "curb", "vehicle", "direction", "base", "from", "to", "code", "name", "amount", "side", "class"]
                 .into_iter()
                 .fold(Args::new(), |args, name| args.str(name, "x"));
             for key in &keys {

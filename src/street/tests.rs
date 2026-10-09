@@ -134,6 +134,23 @@ fn the_street_heading_names_the_street_and_says_how_wide_it_is() {
 }
 
 #[test]
+fn a_street_without_a_name_is_headed_by_its_class_in_the_language_of_the_page() {
+    use crate::shared::catalogue::Side;
+    use crate::street::model::Street;
+    let unnamed = Street { name: None, ..Street::sample(0, Side::Right) };
+    let s = StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::from_street(&unnamed, &unnamed, 0), None);
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
+    assert!(h.contains(">Unnamed local street</h1>"), "{h}");
+    let b = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(b.contains(">Unnamed local street</b>"), "{b}");
+    let d = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(d.contains("Cross-section of Unnamed local street."), "{d}");
+    s.i18n().set(Locale::FrCa);
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
+    assert!(h.contains(">Rue locale sans nom</h1>"), "{h}");
+}
+
+#[test]
 fn a_city_street_s_heading_links_back_and_to_the_junctions_it_runs_between() {
     let s = street_shared(1);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends())/> });

@@ -417,14 +417,13 @@ pub fn is_roadway(kind: usize) -> bool {
 pub const GROUP_IDS: [&str; 7] = ["walking", "greenery", "cycling", "transit", "roadway", "furniture", "utilities"];
 
 /// The message that names a class of street, as a word to put in a sentence (`city/i18n`).
-pub fn class_key(class: StreetClass) -> String {
-    let id = match class {
-        StreetClass::Motorway => "motorway",
-        StreetClass::Arterial => "arterial",
-        StreetClass::Collector => "collector",
-        StreetClass::Local => "local",
-    };
-    format!("class-{id}")
+pub fn class_key(class: StreetClass) -> &'static str {
+    match class {
+        StreetClass::Motorway => "class-motorway",
+        StreetClass::Arterial => "class-arterial",
+        StreetClass::Collector => "class-collector",
+        StreetClass::Local => "class-local",
+    }
 }
 
 /// The message that names a kind of piece (`street/i18n`).
@@ -518,7 +517,7 @@ mod tests {
         for locale in Locale::ALL {
             let i18n = crate::i18n_for(locale);
             for class in StreetClass::ALL {
-                assert!(i18n.has_message(&class_key(class), locale), "{} in {}", class_key(class), locale.tag());
+                assert!(i18n.has_message(class_key(class), locale), "{} in {}", class_key(class), locale.tag());
             }
         }
         assert_eq!(class_key(StreetClass::Local), "class-local");

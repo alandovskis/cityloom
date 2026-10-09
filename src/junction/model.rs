@@ -258,7 +258,17 @@ pub struct Profile {
 /// of the road of `region`.
 pub fn profile_of(street: &Street, region: usize) -> Profile {
     let e = Editor::from_street(street, street, region);
-    read_profile(&e.view(), street.title())
+    read_profile(&e.view(), english(&street.title()))
+}
+
+thread_local! {
+    static ENGLISH: std::rc::Rc<crate::shared::i18n::I18n> = crate::i18n_for(crate::shared::i18n::Locale::En);
+}
+
+/// What the city or a street says, in English: the junction's own words are English until its slice is
+/// translated, and the names it reads (a street's title) are put in the same language.
+pub(crate) fn english(said: &crate::shared::said::Said) -> String {
+    ENGLISH.with(|i18n| crate::shared::said::say_now(i18n, crate::shared::units::Units::Metres, said))
 }
 
 impl Arm {
@@ -307,7 +317,7 @@ impl Arm {
     }
 
     pub fn street_name(&self) -> String {
-        self.section.as_ref().map_or_else(String::new, Street::title)
+        self.section.as_ref().map_or_else(String::new, |s| english(&s.title()))
     }
 
     pub fn row_mm(&self) -> i32 {
@@ -1288,7 +1298,7 @@ mod tests {
         let j = city.junction_editor(node, 0).unwrap();
         for a in &j.current().arms {
             let section = a.section.as_ref().expect("a city arm carries its street");
-            assert_eq!(a.street_name(), section.title());
+            assert_eq!(a.street_name(), english(&section.title()));
             assert_eq!(a.row_mm(), section.row_mm);
             assert_eq!(a.class(), Some(section.class));
         }

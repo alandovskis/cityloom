@@ -1,4 +1,5 @@
 # Les noms que l’application invente pour les lieux et les rues de la ville (src/city/model.rs).
+city-name = { $name }
 class-motorway = autoroutière
 class-arterial = artérielle
 class-collector = collectrice

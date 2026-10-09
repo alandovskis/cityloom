@@ -350,7 +350,7 @@ impl Layout {
 
     fn edge_name(&self, edge: usize) -> String {
         let e = &self.edges[edge];
-        let kind = e.name.clone().unwrap_or_else(|| e.section.title());
+        let kind = e.name.clone().unwrap_or_else(|| english(&e.section.title()));
         if !self.nodes[e.a].junction && !self.nodes[e.b].junction {
             format!("{kind} · through the city")
         } else {
@@ -649,7 +649,7 @@ impl City {
                 a: node_uid(e.a),
                 b: node_uid(e.b),
                 name: self.layout.edge_name(i),
-                kind: now.title(),
+                kind: english(&now.title()),
                 row_mm: row,
                 total_mm: v.total_mm,
                 length_mm: path_mm(&shape).round() as i32,

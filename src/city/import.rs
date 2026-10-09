@@ -518,13 +518,13 @@ mod tests {
         let v = city.view(0);
         let main = v.edges.iter().find(|e| e.name.starts_with("Main Street")).unwrap();
         assert_eq!(main.kind, "Main Street");
-        assert_eq!(city.street_editor(main.uid, 0).unwrap().view().name, "Main Street");
+        assert_eq!(city.street_editor(main.uid, 0).unwrap().view().name, Street::imported(StreetClass::Local, Side::Right, &[]).named("Main Street").title());
         let junction = v.nodes.iter().find(|n| n.junction).unwrap();
         let arms: Vec<String> = city.junction_editor(junction.uid, 0).unwrap().view().arms.iter().map(|a| a.street.clone()).collect();
         assert_eq!(arms.iter().filter(|n| *n == "Main Street").count(), 2);
         assert_eq!(arms.iter().filter(|n| *n == "Side Road").count(), 2);
         // and a name survives being kept and opened again
-        assert_eq!(Street::imported(StreetClass::Local, Side::Right, &[]).named("X").title(), "X");
+        assert_eq!(Street::imported(StreetClass::Local, Side::Right, &[]).named("X").name.as_deref(), Some("X"));
     }
 
     #[test]

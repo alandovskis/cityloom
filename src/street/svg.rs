@@ -6,6 +6,7 @@ use std::fmt::Write;
 
 use crate::shared::catalogue::{KINDS, kind_key, mark_key};
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::said::say;
 use crate::shared::symbols::{SymbolOpts, symbol};
 use crate::shared::units::Units;
 use crate::street::model::{SegView, View};
@@ -252,7 +253,7 @@ fn curbs(v: &View, g: &Geometry) -> String {
 pub fn street_label(v: &View, i18n: &I18n, units: Units) -> String {
     let locale = i18n.locale();
     let args = Args::new()
-        .str("name", v.name.clone())
+        .str("name", say(i18n, units, &v.name))
         .num("count", v.segments.len() as i64)
         .str("total", units.length_fine_in(v.total_mm, locale))
         .str("row", units.length_fine_in(v.row_mm, locale))

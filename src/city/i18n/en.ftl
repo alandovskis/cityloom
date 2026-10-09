@@ -1,4 +1,5 @@
 # The names the app invents for the city's places and streets (src/city/model.rs).
+city-name = { $name }
 class-motorway = motorway
 class-arterial = arterial
 class-collector = collector
