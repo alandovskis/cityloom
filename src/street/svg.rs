@@ -907,7 +907,10 @@ mod tests {
         e.set_width(u, e.view().segments[0].width_mm + 1_000);
         let v = e.view();
         let s = street_svg(&v, &fr(), 1050.0, Units::Metres, &Interaction::default());
-        assert!(s.markup.contains(">1,0\u{a0}m de trop<") && !s.markup.contains("too wide"), "{}", s.markup);
+        assert!(
+            s.markup.contains(">1,0\u{a0}m de trop<") && !s.markup.contains("too wide"),
+            "Expected French overflow wording and no English fallback"
+        );
     }
 
     #[test]
