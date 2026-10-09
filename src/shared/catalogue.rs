@@ -106,6 +106,9 @@ pub enum StreetClass {
 }
 
 impl StreetClass {
+    /// Every class, from the widest-reaching road to the quietest.
+    pub const ALL: [StreetClass; 4] = [StreetClass::Motorway, StreetClass::Arterial, StreetClass::Collector, StreetClass::Local];
+
     /// A limited-access road: no sidewalks, and a median and shoulders instead.
     pub fn is_freeway(self) -> bool {
         self == StreetClass::Motorway
@@ -413,6 +416,17 @@ pub fn is_roadway(kind: usize) -> bool {
 /// The groups the add menu sorts the kinds into, in its order. A group's name is the message `group-<id>`.
 pub const GROUP_IDS: [&str; 7] = ["walking", "greenery", "cycling", "transit", "roadway", "furniture", "utilities"];
 
+/// The message that names a class of street, as a word to put in a sentence (`city/i18n`).
+pub fn class_key(class: StreetClass) -> String {
+    let id = match class {
+        StreetClass::Motorway => "motorway",
+        StreetClass::Arterial => "arterial",
+        StreetClass::Collector => "collector",
+        StreetClass::Local => "local",
+    };
+    format!("class-{id}")
+}
+
 /// The message that names a kind of piece (`street/i18n`).
 pub fn kind_key(id: &str) -> String {
     format!("kind-{id}")
@@ -497,6 +511,17 @@ mod tests {
         for (g, word) in GROUP_IDS.iter().zip(GROUP_WORDS) {
             assert_eq!(i.tr_now(&group_key(g), &Args::new()), word, "{g}");
         }
+    }
+
+    #[test]
+    fn every_street_class_has_a_message_in_both_languages() {
+        for locale in Locale::ALL {
+            let i18n = crate::i18n_for(locale);
+            for class in StreetClass::ALL {
+                assert!(i18n.has_message(&class_key(class), locale), "{} in {}", class_key(class), locale.tag());
+            }
+        }
+        assert_eq!(class_key(StreetClass::Local), "class-local");
     }
 
     #[test]

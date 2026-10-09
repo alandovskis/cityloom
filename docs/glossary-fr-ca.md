@@ -1,6 +1,6 @@
 # Glossaire anglais / français (Canada)
 
-The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl` and `src/street/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled.
+The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl` and `src/street/i18n/fr.ftl` and `src/city/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled.
 
 ## Style rules
 
@@ -105,6 +105,16 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Changes list and announcements | Sidewalk on both sides | Trottoir des deux côtés |  |
 | Changes list and announcements | Room for emergency vehicles | Place pour les véhicules d’urgence |  |
 | Changes list and announcements | Freeway | Autoroute | Chosen as the Québec road term, to confirm; the measures that are `Freeways only` are `Autoroutes seulement`. |
+| City names | Unnamed {class} street | `Rue { $class } sans nom` | The class is an adjective: `autoroutière`, `artérielle`, `collectrice`, `locale`. A motorway has its own message, `Autoroute sans nom`, because `rue autoroutière` is not said. To confirm. |
+| City names | Junction N | `Jonction N` | `Intersection` is also used in Québec; `jonction` follows the app's junction editor. To confirm. |
+| City names | Main Street junction (one street) | `Jonction Rue Principale` | To confirm. |
+| City names | A, B and N more | `A, B et N autres` | `1 autre` for one. |
+| City names | End of X | `Bout de X` | In a sentence: `le bout de X`. To confirm (`extrémité de X`, `fin de X`). |
+| City names | Connection on X | `Raccordement sur X` | In a sentence: `un raccordement sur X`. To confirm. |
+| City names | Edge of the map | `Limite de la carte` | In a sentence: `la limite de la carte`. |
+| City names | Kind · here to there | `Genre · de A à B` | `à travers la ville` for an edge between two non-junctions. |
+| City names | Cannot be drawn with the streets as they are | `Ne peut pas être dessinée avec les rues telles qu’elles sont` | To confirm. |
+| City names | Junction today / Earlier changes | `Jonction aujourd’hui` / `Modifications antérieures` | The junction's default history labels. |
 
 ## Terms to confirm
 
