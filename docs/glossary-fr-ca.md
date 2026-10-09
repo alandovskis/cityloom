@@ -172,5 +172,6 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | as first laid out (map page) | `telle que tracée au départ` | `telle qu’aménagée à l’origine` (suggestion) |
 | Sheet tools (map page, a toolbar's name) | `Outils de la feuille` | `Outils` (suggestion) |
 | place (map page) | `lieu` | `endroit` (suggestion) |
+| Changed (map page: a place's tag `map-changed`, `map-state-changed`; the hero drawing's `map-svg-changed`) | `Modifié` (agrees with `lieu`) | `Modifiée`, agreeing with the `rue` or `jonction` it marks (both feminine) |
 | Find a place, like Kreuzberg, Berlin (home page) | `Chercher un lieu, comme Kreuzberg, Berlin` | `Chercher un lieu, par exemple Kreuzberg, Berlin` (suggestion) |
 | Searching… (home page) | `Recherche en cours…` | `Recherche…` (suggestion) |

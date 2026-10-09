@@ -366,7 +366,7 @@ fn zero_and_one_are_singular_in_french_and_zero_is_plural_in_english_in_every_co
     let none = |a: Args| a;
     let names = |a: Args| a.str("names", "X");
     let shown = |a: Args| a.num("shown", 8);
-    let cases: [(&str, fn(Args) -> Args, [&str; 3], [&str; 3]); 9] = [
+    let cases: [(&str, fn(Args) -> Args, [&str; 3], [&str; 3]); 8] = [
         ("map-streets", none, ["0 streets", "1 street", "2 streets"], ["0 rue", "1 rue", "2 rues"]),
         ("map-junction-count", none, ["0 junctions", "1 junction", "2 junctions"], ["0 jonction", "1 jonction", "2 jonctions"]),
         (
@@ -393,16 +393,6 @@ fn zero_and_one_are_singular_in_french_and_zero_is_plural_in_english_in_every_co
                 "0 lieu est à corriger. Ouvrez-le pour voir ce qui ne va pas et le corriger.",
                 "1 lieu est à corriger. Ouvrez-le pour voir ce qui ne va pas et le corriger.",
                 "2 lieux sont à corriger. Ouvrez-en un pour voir ce qui ne va pas et le corriger.",
-            ],
-        ),
-        (
-            "map-checks-pass",
-            none,
-            ["Every check passes in all 0 places.", "Every check passes in all 1 places.", "Every check passes in all 2 places."],
-            [
-                "Toutes les vérifications réussissent dans l’unique lieu.",
-                "Toutes les vérifications réussissent dans l’unique lieu.",
-                "Toutes les vérifications réussissent dans les 2 lieux.",
             ],
         ),
         (
@@ -440,6 +430,10 @@ fn zero_and_one_are_singular_in_french_and_zero_is_plural_in_english_in_every_co
         assert_eq!(counted(&en, key, extra), english.map(String::from), "{key} in English");
         assert_eq!(counted(&fr, key, extra), french.map(String::from), "{key} in French");
     }
+    // `map-checks-pass` is never said of 0 places (a city with none says `map-checks-no-places`), so only 1 and 2.
+    let pass = counted(&fr, "map-checks-pass", none);
+    assert_eq!(pass[1..], ["Toutes les vérifications réussissent dans l’unique lieu.", "Toutes les vérifications réussissent dans les 2 lieux."]);
+    assert_eq!(counted(&en, "map-checks-pass", none)[2], "Every check passes in all 2 places.");
     let more = |a: Args| a.str("names", "X");
     assert_eq!(counted(&fr, "map-status-bad-more", more)[1], "1 lieu à corriger\u{a0}: X et d’autres.");
     assert_eq!(counted(&en, "map-status-bad-more", more)[2], "2 places need attention: X and more.");

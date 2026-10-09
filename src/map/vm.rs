@@ -366,13 +366,12 @@ impl MapVm {
     /// looked for in a place's name and small print first, so that "junction 4"
     /// finds Junction 4 and the streets that end there and not every junction of
     /// four streets; when that finds nothing, each word is looked for on its own.
-    /// What is looked in is the text the page shows, in its language: the rows
-    /// are made from the locale read with `locale()`, so the results follow a switch.
+    /// What is looked in is the text the page shows, in its language, worded with the
+    /// tracked `say`, so the results follow a switch of language or units.
     fn narrowed(&self) -> (Vec<PlaceRow>, Vec<PlaceRow>) {
         let terms = self.terms();
         let (junctions, streets) = (self.junction_rows(), self.street_rows());
-        let units = self.core.units_now();
-        let shown = |s: &Said| said::say_now(&self.i18n, units, s);
+        let shown = |s: &Said| self.say(s);
         let text = |r: &PlaceRow| format!("{} {}", shown(&r.name), shown(&r.sub)).to_lowercase();
         let phrase = terms.join(" ");
         let by_phrase = |rows: &[PlaceRow]| rows.iter().filter(|r| text(r).contains(&phrase)).cloned().collect::<Vec<_>>();
@@ -803,6 +802,19 @@ mod tests {
         vm.set_search("signal");
         let found = vm.results();
         assert!(!found.is_empty() && found.iter().all(|r| sub_of(&vm, r).to_lowercase().contains("traffic signal")));
+    }
+
+    #[test]
+    fn what_a_search_finds_follows_a_switch_of_language() {
+        let (vm, ..) = vm();
+        vm.set_search("jonction 4");
+        let owner = Owner::new();
+        owner.set();
+        let v = StoredValue::new_local(vm.clone());
+        let found = Memo::new(move |_| v.with_value(|vm| vm.results().len()));
+        assert_eq!(found.get(), 0, "nothing is called a jonction in English");
+        vm.i18n().set(Locale::FrCa);
+        assert!(found.get() > 0, "the results are worked out again from the French the page now shows");
     }
 
     #[test]
