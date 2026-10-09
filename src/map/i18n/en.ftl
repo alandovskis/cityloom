@@ -115,6 +115,18 @@ map-reset-armed = Press again to start over
 map-reset-armed-said = This puts every street and junction back as first laid out. Press again to confirm.
 map-reset-done = The city is back as it was first laid out.
 
+## The home page's markup (web/index.html)
+map-home-title = CityLoom: redesign the streets of your city
+map-home-description = Pick any street or junction of the city, rearrange it, and see at once what still works.
+map-home-brand = CityLoom, home
+map-home-heading = Redesign the streets of your city.
+map-home-lead = Find a place, pick a street or junction on its map, and rearrange it. You see straight away what still works.
+map-home-open-map = Open the city map
+# The credit is three pieces around a link: map-home-streets-by, then the link map-home-osm-contributors, then a full stop in the markup.
+map-home-streets-by = Streets ©
+map-home-osm-contributors = OpenStreetMap contributors
+map-home-placeholders = The widths and rules the checks use are placeholders.
+
 ## The home page's hero (src/map/home.rs, src/map/svg.rs)
 # `city` is the city's name (data), `counts` is map-counts.
 map-hero-facts = { $city }: { $counts }.

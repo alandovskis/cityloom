@@ -196,6 +196,24 @@ test("the map page can be read in French and the choice is kept", async ({ page 
   await expect(page.locator("#reset-label")).toHaveText("Recommencer");
 });
 
+test("the home page can be read in French and the choice is kept", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("h1")).toHaveText("Redesign the streets of your city.");
+  await chooseFrench(page);
+  await expect(page.locator("h1")).toHaveText("Réaménagez les rues de votre ville.");
+  await expect(page.locator("#search")).toHaveAttribute("placeholder", "Chercher un lieu, comme Kreuzberg, Berlin");
+  await expect(page.locator(".search-go")).toHaveText("Chercher");
+  await expect(page.locator(".hero-note a")).toHaveText("les contributeurs d’OpenStreetMap");
+  await expect(page.locator(".hero-facts")).toContainText("rues");
+  await expect(page).toHaveTitle("CityLoom : réaménagez les rues de votre ville");
+  await page.reload();
+  await expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+  await expect(page.locator("h1")).toHaveText("Réaménagez les rues de votre ville.");
+});
+
 // The pages that are not translated are English from top to bottom, so the document says so even for a
 // reader who chose French on another page (a screen reader would read English words with French rules).
 test("a page that is not translated keeps lang=en for a reader who chose French", async ({ page }) => {

@@ -79,7 +79,8 @@ pub fn mount_home() -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = browser_ports();
-    let i18n = crate::unmigrated_i18n();
+    // One instance for the page: the shell switches it, and the hero and the search follow.
+    let i18n = crate::i18n_browser(&ports);
     let vm = vm::MapVm::new(ports, i18n.clone());
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
@@ -88,6 +89,6 @@ pub fn mount_home() -> MapPage {
     };
     mount("hero-map-slot", view! { <home::HeroMap vm=vm.clone()/> }.into_any());
     mount("search-slot", view! { <crate::place::view::AreaSearch vm=crate::place::vm::AreaVm::new(browser_ports(), i18n.clone())/> }.into_any());
-    mount("hero-facts-slot", view! { <home::HeroFacts vm=vm.clone()/> }.into_any());
+    mount("hero-facts-slot", view! { <home::HeroFacts vm=vm.clone()/><home::HomeTitle vm=vm.clone()/> }.into_any());
     MapPage(vm, i18n)
 }

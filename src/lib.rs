@@ -61,7 +61,8 @@ pub fn i18n_for(locale: shared::i18n::Locale) -> std::rc::Rc<shared::i18n::I18n>
     shared::i18n::I18n::new(locale, RESOURCES)
 }
 
-/// The words of a page that is not translated (home, map, junction): English, whatever language is stored,
+/// The words of a page that is not translated (the junction page, and the shell-only page `mount_bare_shell`
+/// makes of a junction that cannot be drawn): English, whatever language is stored,
 /// and the document is not told otherwise, so its `lang` stays the English its markup says. A screen reader
 /// would pronounce English text with French rules under `lang="fr-CA"`.
 pub fn unmigrated_i18n() -> std::rc::Rc<shared::i18n::I18n> {

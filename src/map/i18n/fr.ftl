@@ -121,6 +121,18 @@ map-reset-armed = Appuyez de nouveau pour recommencer
 map-reset-armed-said = Toutes les rues et jonctions reviendront telles que tracées au départ. Appuyez de nouveau pour confirmer.
 map-reset-done = La ville est revenue telle que tracée au départ.
 
+## Le balisage de la page d’accueil (web/index.html)
+map-home-title = CityLoom : réaménagez les rues de votre ville
+map-home-description = Choisissez n’importe quelle rue ou jonction de la ville, réorganisez-la et voyez aussitôt ce qui fonctionne toujours.
+map-home-brand = CityLoom, accueil
+map-home-heading = Réaménagez les rues de votre ville.
+map-home-lead = Trouvez un lieu, choisissez une rue ou une jonction sur sa carte et réorganisez-la. Vous voyez tout de suite ce qui fonctionne toujours.
+map-home-open-map = Ouvrir la carte de la ville
+# La mention est en trois morceaux autour d’un lien : map-home-streets-by, puis le lien map-home-osm-contributors, puis un point dans le balisage.
+map-home-streets-by = Rues ©
+map-home-osm-contributors = les contributeurs d’OpenStreetMap
+map-home-placeholders = Les largeurs et les règles qu’utilisent les vérifications sont provisoires.
+
 ## Le bandeau de la page d’accueil (src/map/home.rs, src/map/svg.rs)
 # `city` est le nom de la ville (une donnée), `counts` est map-counts.
 map-hero-facts = { $city } : { $counts }.

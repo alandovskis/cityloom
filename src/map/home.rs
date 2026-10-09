@@ -72,6 +72,13 @@ pub fn HeroMap(vm: Rc<MapVm>) -> impl IntoView {
     }
 }
 
+/// The home page's window title, in the language of the page. The shell leaves `<title>` to the page.
+#[component]
+pub fn HomeTitle(vm: Rc<MapVm>) -> impl IntoView {
+    let vm = Bound::new(vm);
+    Effect::new(move |_| document().set_title(&vm.with(|v| v.word("map-home-title"))));
+}
+
 /// How the city stands: its name and size, and whether it works.
 #[component]
 pub fn HeroFacts(vm: Rc<MapVm>) -> impl IntoView {

@@ -134,6 +134,12 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Place search (home page) | the roads … could not be fetched | les rues … n’ont pas pu être obtenues | The roads are `rues`, as everywhere in the app. The error in brackets is the browser's own, not translated. |
 | Place search (home page) | storage (the browser's) | stockage |  |
 | Place search (home page) | tile index | index des tuiles | Never shown to a person today: the loader goes on without it. |
+| Home page | Redesign the streets of your city | Réaménagez les rues de votre ville | `réaménager` for redesigning a street, `réorganiser` for Arrange. |
+| Home page | rearrange (a street) | réorganiser | As Arrange on the street page. |
+| Home page | Open the city map | Ouvrir la carte de la ville |  |
+| Home page | home (the brand link) | accueil |  |
+| Home page | Streets © OpenStreetMap contributors | Rues © les contributeurs d’OpenStreetMap | OpenStreetMap's own French credit is `© les contributeurs d’OpenStreetMap`. |
+| Home page | placeholders (the rules the checks use) | provisoires | As the map page's `exemples`; to confirm, see below. |
 
 ## Terms to confirm
 
@@ -175,3 +181,5 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Changed (map page: a place's tag `map-changed`, `map-state-changed`; the hero drawing's `map-svg-changed`) | `Modifié` (agrees with `lieu`) | `Modifiée`, agreeing with the `rue` or `jonction` it marks (both feminine) |
 | Find a place, like Kreuzberg, Berlin (home page) | `Chercher un lieu, comme Kreuzberg, Berlin` | `Chercher un lieu, par exemple Kreuzberg, Berlin` (suggestion) |
 | Searching… (home page) | `Recherche en cours…` | `Recherche…` (suggestion) |
+| Redesign (home page) | `Réaménagez` | `Repensez` (suggestion) |
+| placeholders (home page: the widths and rules are placeholders) | `provisoires` | `des exemples`, as the map page's fine print (suggestion) |
