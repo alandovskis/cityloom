@@ -30,6 +30,8 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/map/view.rs", include_str!("map/view.rs")),
     ("src/map/overlay.rs", include_str!("map/overlay.rs")),
     ("src/map/mod.rs", include_str!("map/mod.rs")),
+    ("src/map/home.rs", include_str!("map/home.rs")),
+    ("src/map/svg.rs", include_str!("map/svg.rs")),
     ("src/place/mod.rs", include_str!("place/mod.rs")),
     ("src/place/area.rs", include_str!("place/area.rs")),
     ("src/place/loader.rs", include_str!("place/loader.rs")),
@@ -359,6 +361,8 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("changes-lead", "the id of an element of the map page"),
     ("hero-map-slot", "the id of an element of the home page"),
     ("hero-facts-slot", "the id of an element of the home page"),
+    ("m-walk", "a CSS class of the hero map's drawing"),
+    ("m-shoulder", "a CSS class of the hero map's drawing"),
 ];
 
 /// The message-id-shaped literals in `src` as `(line, literal)`.

@@ -115,6 +115,14 @@ map-reset-armed = Press again to start over
 map-reset-armed-said = This puts every street and junction back as first laid out. Press again to confirm.
 map-reset-done = The city is back as it was first laid out.
 
+## The home page's hero (src/map/home.rs, src/map/svg.rs)
+# `city` is the city's name (data), `counts` is map-counts.
+map-hero-facts = { $city }: { $counts }.
+# The name of a changed street on the drawing; `name` is the street's.
+map-svg-name-changed = { $name } · changed
+# The tag under a changed junction on the drawing.
+map-svg-changed = changed
+
 ## Where there is no map
 map-basemap-missing = The basemap could not be loaded. Build it with `just prepare`, then reload the page.
 map-basemap-outside = There is no basemap for this place. The map covers the Montréal area.

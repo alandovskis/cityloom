@@ -12,6 +12,7 @@ use leptos::web_sys::Element;
 use crate::map::svg::map_svg;
 use crate::map::vm::MapVm;
 use crate::shared::bind::Bound;
+use crate::shared::i18n::Args;
 use crate::shared::tick::Tick;
 
 /// The whole city, drawn as on the map but only to look at: nothing in it can be
@@ -79,7 +80,7 @@ pub fn HeroFacts(vm: Rc<MapVm>) -> impl IntoView {
     view! {
         <p class=move || if works.get() { "hero-facts" } else { "hero-facts bad" } role="status">
             <Tick works=works/>
-            <span>{move || vm.with(|v| format!("{}: {}.", v.title(), v.counts()))}</span>
+            <span>{move || vm.with(|v| v.i18n().tr("map-hero-facts", &Args::new().str("city", v.title()).str("counts", v.counts())))}</span>
             " "
             <span>{move || vm.with(|v| v.status().text)}</span>
         </p>

@@ -121,6 +121,14 @@ map-reset-armed = Appuyez de nouveau pour recommencer
 map-reset-armed-said = Toutes les rues et jonctions reviendront telles que tracées au départ. Appuyez de nouveau pour confirmer.
 map-reset-done = La ville est revenue telle que tracée au départ.
 
+## Le bandeau de la page d’accueil (src/map/home.rs, src/map/svg.rs)
+# `city` est le nom de la ville (une donnée), `counts` est map-counts.
+map-hero-facts = { $city } : { $counts }.
+# Le nom d’une rue modifiée sur le dessin ; `name` est celui de la rue. « Modifié » s’accorde avec « lieu ».
+map-svg-name-changed = { $name } · modifié
+# L’étiquette sous une jonction modifiée sur le dessin.
+map-svg-changed = modifié
+
 ## Là où il n’y a pas de carte
 map-basemap-missing = Le fond de carte n’a pas pu être chargé. Construisez-le avec `just prepare`, puis rechargez la page.
 map-basemap-outside = Il n’y a pas de fond de carte pour ce lieu. La carte couvre la région de Montréal.

@@ -239,6 +239,24 @@ fn the_hero_facts_name_the_city_and_say_whether_it_works() {
     assert!(h.contains("class=\"hero-facts bad\"") && h.contains("needs attention") && !h.contains("tick"));
 }
 
+#[test]
+fn the_hero_speaks_french_with_no_english_left() {
+    let (vm, storage) = map_vm_in(Locale::FrCa);
+    let h = map_html(|| view! { <home::HeroFacts vm=vm.clone()/> });
+    assert!(h.contains("Sample city\u{a0}: 9 jonctions, 23 rues."), "the city's name is data, the rest French: {h}");
+    assert!(h.contains("Toutes les vérifications réussissent."), "{h}");
+    change_a_street(&vm, &storage, 1_000);
+    let map = map_html(|| view! { <home::HeroMap vm=vm.clone()/> });
+    assert!(map.contains(" \u{b7} modifié<") || map.contains(">modifié<"), "a changed place is tagged in French: {map}");
+    // Not " streets": a junction's control ("side streets stop") is in English until the junction is translated.
+    for english in ["changed", "Changed", "junctions", "Every check", "Opens the", " wide."] {
+        assert!(!map.contains(english), "{english:?} in the hero map");
+    }
+    for english in ["junctions", "streets", "Every check"] {
+        assert!(!h.contains(english), "{english:?} in the hero facts");
+    }
+}
+
 // ---- in French ------------------------------------------------------------------------------
 
 /// Every view of the map page, drawn to HTML, with a street changed so it fails and the search open.

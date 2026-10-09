@@ -7,7 +7,7 @@ use std::fmt::Write;
 
 use crate::city::model::{CityView, EdgeView, NodeView};
 use crate::map::vm::{junction_label, street_label};
-use crate::shared::i18n::I18n;
+use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::say;
 use crate::shared::symbols::HATCH;
 use crate::shared::units::Units;
@@ -180,17 +180,18 @@ pub fn map_svg(v: &CityView, k: f64, units: Units, i18n: &I18n) -> String {
             ang += 180.0;
         }
         let (x, y) = l.g.at(0.0, tm);
+        let kind = say(i18n, units, &l.e.kind);
+        let name = if l.e.edited { i18n.tr("map-svg-name-changed", &Args::new().str("name", kind)) } else { kind };
         write!(
             s,
-            "<text class=\"m-name\" transform=\"translate({} {}) rotate({})\" dy=\"{}\" text-anchor=\"middle\" font-size=\"{}\" stroke-width=\"{}\">{}{}</text>",
+            "<text class=\"m-name\" transform=\"translate({} {}) rotate({})\" dy=\"{}\" text-anchor=\"middle\" font-size=\"{}\" stroke-width=\"{}\">{}</text>",
             r2(x),
             r2(y),
             r2(ang),
             r2(-(l.row / 2.0 + px(6.0))),
             r2(px(13.0)),
             r2(px(4.0)),
-            esc(&say(i18n, units, &l.e.kind)),
-            if l.e.edited { " \u{b7} changed" } else { "" }
+            esc(&name)
         )
         .unwrap();
     }
@@ -212,10 +213,11 @@ pub fn map_svg(v: &CityView, k: f64, units: Units, i18n: &I18n) -> String {
         if n.edited {
             write!(
                 s,
-                "<text class=\"m-tag\" text-anchor=\"middle\" y=\"{}\" font-size=\"{}\" stroke-width=\"{}\">changed</text>",
+                "<text class=\"m-tag\" text-anchor=\"middle\" y=\"{}\" font-size=\"{}\" stroke-width=\"{}\">{}</text>",
                 r2(px(26.0)),
                 r2(px(12.0)),
-                r2(px(4.0))
+                r2(px(4.0)),
+                esc(&i18n.tr("map-svg-changed", &Args::new()))
             )
             .unwrap();
         }
@@ -265,7 +267,7 @@ mod tests {
         City::new().view(0)
     }
 
-    /// The hero is English until the home page is translated.
+    /// The drawing in English; the French one is drawn in `map::tests` (`the_hero_speaks_french_with_no_english_left`).
     fn en() -> std::rc::Rc<I18n> {
         crate::i18n_for(crate::shared::i18n::Locale::En)
     }
