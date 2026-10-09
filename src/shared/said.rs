@@ -44,6 +44,8 @@ pub enum Arg {
     Length(i32),
     /// Another message, by key, said in its place.
     Msg(&'static str),
+    /// Another message with its own things, said in its place.
+    Said(Box<Said>),
 }
 
 /// A message key with the things it is about.
@@ -95,6 +97,7 @@ fn put_into_words(i18n: &I18n, units: Units, said: &Said, watched: bool) -> Stri
             Arg::Clock(min) => args.str(arg_name, hhmm(*min)),
             Arg::Length(mm) => args.str(arg_name, units.length_fine_in(*mm, locale)),
             Arg::Msg(key) => args.str(arg_name, tr(key, &Args::new())),
+            Arg::Said(inner) => args.str(arg_name, put_into_words(i18n, units, inner, watched)),
         };
     }
     tr(said.key, &args)
@@ -149,6 +152,16 @@ mod tests {
         assert_eq!(en(&over), "1.8 m too wide. Narrow or remove a piece.");
         assert_eq!(fr(&over), "1,8\u{a0}m de trop. Rétrécissez ou retirez un élément.");
         assert_eq!(say_now(&crate::i18n_for(Locale::En), Units::Feet, &over), "5.9 ft too wide. Narrow or remove a piece.");
+    }
+
+    #[test]
+    fn a_said_can_be_an_argument_of_another() {
+        // `edit-undone` takes `$fit`; the inner message is worded in the same language.
+        let inner = Said::new("street-today");
+        let outer = Said::new("edit-undone").with("fit", Arg::Said(Box::new(inner.clone())));
+        assert_eq!(en(&outer), format!("Undone. {}.", en(&inner)));
+        assert_eq!(fr(&outer), format!("Annulé. {}.", fr(&inner)));
+        assert_ne!(en(&inner), fr(&inner));
     }
 
     #[test]
