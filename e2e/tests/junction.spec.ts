@@ -22,6 +22,12 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator('.surface[href="street.html"]')).toHaveCount(0);
   });
 
+  test("a raised table is switched on from the details and drawn with its ramps", async ({ page }) => {
+    await expect(page.locator("#drawing .raised-ramp")).toHaveCount(0);
+    await page.getByRole("checkbox", { name: "Raise the whole junction to sidewalk height" }).check();
+    await expect(page.locator("#drawing .raised-ramp").first()).toBeVisible();
+  });
+
   test("starts as the city lays it out and says how many streets meet and whether it works", async ({ page }) => {
     await expect(page.locator("#arm-count")).toHaveText(/^[3-5] streets$/);
     await expect(page.locator("#fit")).toContainText(/^[3-5] streets, /);

@@ -390,10 +390,33 @@ fn cycle_track(w: Watch, cycle: Memo<bool>) -> impl IntoView {
     )
 }
 
+/// The switch that raises the whole junction to sidewalk height.
+fn raised_table(w: Watch, raised: Memo<bool>) -> impl IntoView {
+    section(
+        w,
+        "i-h-raised",
+        "jn-insp-raised",
+        view! {
+            <ul class="opts">
+                {option_btn(
+                    move || raised.get(),
+                    || false,
+                    ().into_any(),
+                    words(w, "jn-insp-raised-option"),
+                    move || {
+                        w.edit(|j| j.set_raised(!raised.get_untracked()));
+                    },
+                )}
+            </ul>
+        },
+    )
+}
+
 /// The junction's control, and what only a roundabout has.
 fn control_section(w: Watch) -> impl IntoView {
     let ring = Memo::new(move |_| w.view().ring.is_some());
     let cycle = Memo::new(move |_| w.view().ring.as_ref().is_some_and(|r| r.cycle_mm.is_some()));
+    let raised = Memo::new(move |_| w.view().raised);
     let control = section(
         w,
         "i-h-control",
@@ -417,6 +440,7 @@ fn control_section(w: Watch) -> impl IntoView {
     );
     view! {
         {control}
+        {move || (!ring.get()).then(|| raised_table(w, raised))}
         {move || ring.get().then(|| ring_size(w))}
         {move || ring.get().then(|| cycle_track(w, cycle))}
         {move || (ring.get() && cycle.get()).then(|| cycle_width(w, "jn-insp-track-hint-inside"))}
