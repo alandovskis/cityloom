@@ -323,6 +323,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         road: String,
         bulb: String,
         curb: String,
+        raised: String,
         corebike: String,
         cross: String,
         mark: String,
@@ -474,6 +475,13 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         }
     } else {
         write!(l.road, "<path class=\"road\" d=\"{}\"/>", p.path_d(&v.core)).unwrap();
+    }
+
+    if v.arms.iter().any(|a| a.raised.is_some()) {
+        write!(l.raised, "<path class=\"raised-top\" d=\"{}\"/>", p.path_d(&v.core)).unwrap();
+        for r in v.arms.iter().filter_map(|a| a.raised.as_ref()) {
+            write!(l.raised, "<path class=\"raised-top\" d=\"{}\"/><path class=\"raised-ramp\" d=\"{}\"/>", p.path_d(&r.top), p.path_d(&r.ramp)).unwrap();
+        }
     }
 
     for c in &v.corners {
@@ -638,8 +646,8 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
     }
 
     let markup = format!(
-        "<defs>{defs}</defs><g class=\"plan\">{}{}{}{}{}{}{}{}{}{}{}{}{}{}</g>{furniture}",
-        l.wedge, l.arm, l.lane, l.measure, l.road, l.corebike, l.bulb, l.curb, l.cross, l.mark, l.sel, l.mv, l.label, l.grip
+        "<defs>{defs}</defs><g class=\"plan\">{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}</g>{furniture}",
+        l.wedge, l.arm, l.lane, l.measure, l.road, l.raised, l.corebike, l.bulb, l.curb, l.cross, l.mark, l.sel, l.mv, l.label, l.grip
     );
     PlanSvg { frame: f, label: plan_label(v, i18n), markup }
 }
@@ -679,6 +687,16 @@ mod tests {
         // the strips never leave the core, whose edge between two straight-through arms need not follow their curbs
         assert_eq!(count(&s.markup, "<clipPath id=\"core-clip\">"), 1);
         assert_eq!(count(&s.markup, "clip-path=\"url(#core-clip)\""), 1);
+    }
+
+    #[test]
+    fn a_raised_junction_is_drawn_with_its_top_and_ramps() {
+        let mut j = Junction::new(0);
+        assert_eq!(count(&svg(&j).markup, "raised-"), 0);
+        assert!(j.set_raised(true));
+        let s = svg(&j);
+        assert_eq!(count(&s.markup, "class=\"raised-top\""), 5, "the core and four arms");
+        assert_eq!(count(&s.markup, "class=\"raised-ramp\""), 4);
     }
 
     #[test]

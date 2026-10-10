@@ -55,6 +55,11 @@ const CORE_BIKE_MM: f64 = 5_000.0;
 /// Synthetic thresholds for the checks.
 const MAX_STAGE_MM: i32 = 15_000;
 const MAX_TURN_KMH: f64 = 20.0;
+/// The most a turn may do beside a crossing on a raised table, which slows traffic. The fastest corner the editor
+/// allows (15 m) does 23.9 km/h, so this still flags the widest corners.
+const RAISED_TURN_KMH: f64 = 23.0;
+/// How long the ramp up to a raised table is: 160 mm in 15.
+const RAMP_MM: f64 = 2_400.0;
 const MIN_SIDEWALK_AT_CORNER_MM: f64 = 1_800.0;
 const MAX_SIGNAL_ARMS: usize = 4;
 
@@ -328,6 +333,14 @@ pub struct MeasureTag {
 }
 
 #[derive(Serialize)]
+pub struct RaisedView {
+    /// The carriageway from the mouth to the far side of the crossing, level with the sidewalk.
+    pub top: Vec<Value>,
+    /// The ramp up to it.
+    pub ramp: Vec<Value>,
+}
+
+#[derive(Serialize)]
 pub struct ArmView {
     pub uid: u32,
     /// The city street this arm is, or 0 outside a city.
@@ -340,6 +353,8 @@ pub struct ArmView {
     pub pieces: Vec<PieceView>,
     /// The arm's outer bike lanes, carried into the core from its mouth: the lane arrives, and where.
     pub core_bike: Vec<Vec<Value>>,
+    /// The flat top and the ramp of a raised table on this arm.
+    pub raised: Option<RaisedView>,
     /// No-parking stretches beside the curb, drawn as plain road.
     pub gaps: Vec<Vec<Value>>,
     pub bulbs: [Option<Vec<Value>>; 2],
@@ -456,6 +471,8 @@ pub struct JView {
     pub control_index: usize,
     pub ring: Option<RingView>,
     pub ring_extra_mm: i32,
+    /// The junction is a raised table.
+    pub raised: bool,
     /// The bus lane across the middle of a roundabout, if there is one.
     pub bus: Option<BusView>,
     /// Pairs of streets it could join, the straightest first.
@@ -669,6 +686,8 @@ impl Junction {
                     }
                 }
             }
+            let raised = (s.raised && lay.ring.is_none())
+                .then(|| RaisedView { top: poly(&strip(l.bearing, l.cl, l.cr, l.mouth, far)), ramp: poly(&strip(l.bearing, l.cl, l.cr, far, far + RAMP_MM)) });
             for c in strip(l.bearing, l.pl, l.pr, len, len) {
                 widen(c);
             }
@@ -753,6 +772,7 @@ impl Junction {
                 corner_mm: a.corner_mm,
                 pieces,
                 core_bike,
+                raised,
                 gaps,
                 bulbs,
                 crossing,
@@ -828,7 +848,9 @@ impl Junction {
                 radius_mm: radius,
                 speed_kmh: if c.fillet.is_some() { speed_kmh(radius) } else { 0.0 },
                 ok,
-                fast: c.fillet.is_some() && speed_kmh(radius) > MAX_TURN_KMH && (s.arms[c.a].crossing.is_some() || s.arms[c.b].crossing.is_some()),
+                fast: c.fillet.is_some()
+                    && speed_kmh(radius) > if s.raised { RAISED_TURN_KMH } else { MAX_TURN_KMH }
+                    && (s.arms[c.a].crossing.is_some() || s.arms[c.b].crossing.is_some()),
                 straight: c.fillet.is_none(),
                 walk: is_walk(la.prof.edge_kind[1]) || is_walk(lb.prof.edge_kind[0]),
                 wedge,
@@ -917,6 +939,7 @@ impl Junction {
                 circulation: if side == Side::Right { "anticlockwise" } else { "clockwise" },
             }),
             ring_extra_mm: s.ring_extra_mm,
+            raised: s.raised && ring.is_none(),
             bus: s.bus.and_then(|(a, b)| {
                 let ends = |u: u32| s.arms.iter().position(|x| x.uid == u).map(|i| at(lay.arms[i].bearing, s.arms[i].offset_mm as f64, lay.arms[i].mouth));
                 let (pa, pb) = (ends(a)?, ends(b)?);
@@ -1388,6 +1411,55 @@ mod tests {
         let v = j.view();
         assert!(v.ring.is_some());
         assert!(v.arms.iter().all(|a| a.core_bike.is_empty()));
+    }
+
+    #[test]
+    fn a_raised_junction_has_a_top_and_a_ramp_on_every_arm() {
+        let mut j = Junction::new(0);
+        assert!(j.view().arms.iter().all(|a| a.raised.is_none()) && !j.view().raised);
+        assert!(j.set_raised(true));
+        let v = j.view();
+        assert!(v.raised);
+        assert!(v.arms.iter().all(|a| a.raised.as_ref().is_some_and(|r| r.top.len() > 2 && r.ramp.len() > 2)));
+    }
+
+    #[test]
+    fn a_raised_junction_without_crossings_ramps_from_the_mouth() {
+        let mut j = Junction::new(0);
+        for a in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_crossing(a, false));
+        }
+        assert!(j.set_raised(true));
+        assert!(j.view().arms.iter().all(|a| a.raised.is_some()));
+    }
+
+    #[test]
+    fn a_roundabout_draws_no_table_even_if_its_save_says_raised() {
+        let mut state = Junction::new(0).current().clone();
+        state.control = ROUNDABOUT;
+        state.raised = true;
+        for a in &mut state.arms {
+            a.edge = a.uid;
+        }
+        let j = Junction::from_city(Said::new("city-name").with("name", Arg::Text("Test".into())), &state, &state, 0).expect("draws");
+        assert!(!j.view().raised);
+        assert!(j.view().arms.iter().all(|a| a.raised.is_none()));
+    }
+
+    #[test]
+    fn a_raised_table_allows_a_faster_turn_beside_a_crossing_but_not_a_much_faster_one() {
+        let fast = |radius: i32, raised: bool| {
+            let mut j = Junction::new(0);
+            let n = arm_of(&j, 0);
+            assert!(j.set_corner(n, radius));
+            if raised {
+                assert!(j.set_raised(true));
+            }
+            j.view().corners.iter().find(|c| c.uid == n).unwrap().fast
+        };
+        assert!(fast(12_000, false), "21 km/h is over the 20 km/h limit");
+        assert!(!fast(12_000, true), "and under the 23 km/h one of a table");
+        assert!(fast(15_000, true), "24 km/h is over it");
     }
 
     fn arm_of(j: &Junction, bearing: i32) -> u32 {
