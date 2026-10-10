@@ -50,6 +50,8 @@ const PARK_CLEAR_MM: f64 = 1_000.0;
 const NO_CROSSING_CLEAR_MM: f64 = 4_000.0;
 /// How far past its mouth the corner pavement is drawn as one piece.
 const WEDGE_MM: f64 = 3_000.0;
+/// How far an arm's outer bike lane runs into the junction core.
+const CORE_BIKE_MM: f64 = 5_000.0;
 /// Synthetic thresholds for the checks.
 const MAX_STAGE_MM: i32 = 15_000;
 const MAX_TURN_KMH: f64 = 20.0;
@@ -336,6 +338,8 @@ pub struct ArmView {
     pub offset_mm: i32,
     pub corner_mm: i32,
     pub pieces: Vec<PieceView>,
+    /// The arm's outer bike lanes, carried into the core from its mouth: the lane arrives, and where.
+    pub core_bike: Vec<Vec<Value>>,
     /// No-parking stretches beside the curb, drawn as plain road.
     pub gaps: Vec<Vec<Value>>,
     pub bulbs: [Option<Vec<Value>>; 2],
@@ -373,6 +377,8 @@ pub struct CornerView {
     /// Turns here are faster than is safe beside a crossing.
     pub fast: bool,
     pub straight: bool,
+    /// A bordering arm has a sidewalk next to its curb here, so the corner is pavement for walking.
+    pub walk: bool,
     pub wedge: Vec<Value>,
     pub curb: Vec<Value>,
     /// The direction the corner's arc bulges.
@@ -650,6 +656,19 @@ impl Junction {
                 }
                 pieces.push(PieceView { kind: p.kind, material: p.material, direction: p.direction, poly: poly(&strip(l.bearing, x0, x1, t0, len)) });
             }
+            // The outermost lanes of the carriageway that are not parked on: a bike lane beside parking arrives too.
+            let moving = |p: &Piece| is_roadway(p.kind) && !matches!(KINDS[p.kind].id, "parking" | "loading");
+            let first_out = l.prof.pieces.iter().position(moving);
+            let last_out = l.prof.pieces.iter().rposition(moving);
+            let mut core_bike = Vec::new();
+            if lay.ring.is_none() {
+                for (pi, p) in l.prof.pieces.iter().enumerate() {
+                    if KINDS[p.kind].id == "bike" && (Some(pi) == first_out || Some(pi) == last_out) {
+                        let (x0, x1) = (l.lat(off, p.x_mm), l.lat(off, p.x_mm + p.width_mm));
+                        core_bike.push(poly(&strip(l.bearing, x0, x1, (l.strip0 - CORE_BIKE_MM).max(0.0), l.strip0)));
+                    }
+                }
+            }
             for c in strip(l.bearing, l.pl, l.pr, len, len) {
                 widen(c);
             }
@@ -733,6 +752,7 @@ impl Junction {
                 offset_mm: a.offset_mm,
                 corner_mm: a.corner_mm,
                 pieces,
+                core_bike,
                 gaps,
                 bulbs,
                 crossing,
@@ -810,6 +830,7 @@ impl Junction {
                 ok,
                 fast: c.fillet.is_some() && speed_kmh(radius) > MAX_TURN_KMH && (s.arms[c.a].crossing.is_some() || s.arms[c.b].crossing.is_some()),
                 straight: c.fillet.is_none(),
+                walk: is_walk(la.prof.edge_kind[1]) || is_walk(lb.prof.edge_kind[0]),
                 wedge,
                 curb,
                 bisector: bis,
@@ -920,6 +941,11 @@ impl Junction {
             source: s.source.clone(),
         }
     }
+}
+
+/// Whether the piece next to a curb is a sidewalk.
+fn is_walk(kind: Option<usize>) -> bool {
+    kind.is_some_and(|k| KINDS[k].id == "sidewalk")
 }
 
 /// How far out the plain pavement of the corner runs: past the crossing, where
@@ -1280,6 +1306,89 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
 mod tests {
     use super::*;
     use crate::shared::testing::{en, fr};
+
+    #[test]
+    fn a_corner_has_a_sidewalk_where_an_arm_has_one_beside_its_curb() {
+        let with = junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]).view();
+        assert!(with.corners.iter().all(|c| c.walk), "every arm has a sidewalk");
+        let without = junction_of(&[("travel", 3200), ("travel", 3200)]).view();
+        assert!(without.corners.iter().all(|c| !c.walk), "no arm has one, and the carriageway reaches the property line");
+    }
+
+    #[test]
+    fn a_planting_strip_at_the_curb_is_not_a_sidewalk_corner() {
+        let v = junction_of(&[("sidewalk", 2000), ("planting", 1500), ("travel", 3200), ("travel", 3200), ("planting", 1500), ("sidewalk", 2000)]).view();
+        assert!(v.corners.iter().all(|c| !c.walk));
+    }
+
+    #[test]
+    fn one_arm_with_a_sidewalk_is_enough_for_its_corners() {
+        use crate::shared::catalogue::{StreetClass, kind_index};
+        use crate::street::model::{Piece, Street};
+        let piece = |id: &str, width_mm| Piece { kind: kind_index(id).unwrap(), width_mm, direction: (id == "travel").then_some(1), variants: Vec::new() };
+        let walked = Street::imported(
+            StreetClass::Local,
+            Side::Right,
+            &[piece("sidewalk", 2000), piece("travel", 3200), piece("travel", 3200), piece("sidewalk", 2000)],
+        );
+        let bare = Street::imported(StreetClass::Local, Side::Right, &[piece("travel", 3200), piece("travel", 3200)]);
+        let mut state = Junction::new(0).current().clone();
+        for a in &mut state.arms {
+            a.edge = a.uid;
+            a.section = Some(if a.bearing == 0 { walked.clone() } else { bare.clone() });
+        }
+        let j = Junction::from_city(Said::new("city-name").with("name", Arg::Text("Test".into())), &state, &state, 0).expect("draws");
+        let walks: Vec<bool> = j.view().corners.iter().map(|c| c.walk).collect();
+        assert_eq!(walks.iter().filter(|w| **w).count(), 2, "the two corners beside the walked arm: {walks:?}");
+    }
+
+    const BIKED: [(&str, i32); 6] = [("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)];
+
+    #[test]
+    fn an_outer_bike_lane_continues_into_the_core() {
+        let v = junction_of(&BIKED).view();
+        assert!(v.arms.iter().all(|a| a.core_bike.len() == 2), "one strip for each side");
+        let none = junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]).view();
+        assert!(none.arms.iter().all(|a| a.core_bike.is_empty()));
+    }
+
+    #[test]
+    fn a_bike_lane_between_travel_lanes_is_not_continued() {
+        let v = junction_of(&[("sidewalk", 2000), ("travel", 3200), ("bike", 1500), ("travel", 3200), ("sidewalk", 2000)]).view();
+        assert!(v.arms.iter().all(|a| a.core_bike.is_empty()));
+    }
+
+    #[test]
+    fn a_road_of_one_bike_lane_has_one_strip() {
+        let v = junction_of(&[("sidewalk", 2000), ("bike", 2500), ("sidewalk", 2000)]).view();
+        assert!(v.arms.iter().all(|a| a.core_bike.len() == 1), "the first and the last roadway piece are the same piece");
+    }
+
+    #[test]
+    fn a_bike_lane_outside_parking_is_continued() {
+        let v = junction_of(&[
+            ("sidewalk", 2000),
+            ("parking", 2000),
+            ("bike", 1500),
+            ("travel", 3200),
+            ("travel", 3200),
+            ("bike", 1500),
+            ("parking", 2000),
+            ("sidewalk", 2000),
+        ])
+        .view();
+        assert!(v.arms.iter().all(|a| a.core_bike.len() == 2), "the parking lanes give way to the road at the mouth, the bike lanes arrive");
+    }
+
+    #[test]
+    fn a_roundabout_continues_no_bike_lane() {
+        let mut j = junction_of(&BIKED);
+        assert!(j.view().arms.iter().all(|a| !a.core_bike.is_empty()));
+        j.set_control(ROUNDABOUT);
+        let v = j.view();
+        assert!(v.ring.is_some());
+        assert!(v.arms.iter().all(|a| a.core_bike.is_empty()));
+    }
 
     fn arm_of(j: &Junction, bearing: i32) -> u32 {
         j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid
