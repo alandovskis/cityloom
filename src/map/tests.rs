@@ -411,7 +411,7 @@ fn zero_and_one_are_singular_in_french_and_zero_is_plural_in_english_in_every_co
         (
             "map-status-ok",
             none,
-            ["0 places. Every check passes.", "1 places. Every check passes.", "2 places. Every check passes."],
+            ["0 places. Every check passes.", "1 place. Every check passes.", "2 places. Every check passes."],
             [
                 "0 lieu. Toutes les vérifications réussissent.",
                 "1 lieu. Toutes les vérifications réussissent.",
@@ -432,7 +432,14 @@ fn zero_and_one_are_singular_in_french_and_zero_is_plural_in_english_in_every_co
     // `map-checks-pass` is never said of 0 places (a city with none says `map-checks-no-places`), so only 1 and 2.
     let pass = counted(&fr, "map-checks-pass", none);
     assert_eq!(pass[1..], ["Toutes les vérifications réussissent dans l’unique lieu.", "Toutes les vérifications réussissent dans les 2 lieux."]);
-    assert_eq!(counted(&en, "map-checks-pass", none)[2], "Every check passes in all 2 places.");
+    let pass_en = counted(&en, "map-checks-pass", none);
+    assert_eq!(pass_en[1..], ["Every check passes in the one place.", "Every check passes in all 2 places."]);
+    // `map-search-none` counts the places under `places`, not `n`.
+    let none_found = |i18n: &I18n, places: i64| i18n.tr_now("map-search-none", &Args::new().str("query", "zz").num("places", places));
+    assert_eq!(none_found(&en, 1), "No places match “zz”. Clear the search to see the one place.");
+    assert_eq!(none_found(&en, 2), "No places match “zz”. Clear the search to see all 2.");
+    assert_eq!(none_found(&fr, 1), "Aucun lieu ne correspond à «\u{a0}zz\u{a0}». Effacez la recherche pour revoir l’unique lieu.");
+    assert_eq!(none_found(&fr, 2), "Aucun lieu ne correspond à «\u{a0}zz\u{a0}». Effacez la recherche pour revoir les 2 lieux.");
     let more = |a: Args| a.str("names", "X");
     assert_eq!(counted(&fr, "map-status-bad-more", more)[1], "1 lieu à corriger\u{a0}: X et d’autres.");
     assert_eq!(counted(&en, "map-status-bad-more", more)[2], "2 places need attention: X and more.");

@@ -69,7 +69,10 @@ map-search-label = Search places
 map-search-go = Search
 map-search-results = Places found
 map-search-no-places = There are no places to search.
-map-search-none = No places match “{ $query }”. Clear the search to see all { $places }.
+map-search-none = No places match “{ $query }”. Clear the search to see { $places ->
+    [one] the one place
+   *[other] all { $places }
+}.
 map-search-found = { $n ->
     [one] { $n } place matches
    *[other] { $n } places match
@@ -85,7 +88,10 @@ map-checks-failing = { $n ->
     [one] { $n } place needs
    *[other] { $n } places need
 } attention. Open one to see what is wrong and fix it.
-map-checks-pass = Every check passes in all { $n } places.
+map-checks-pass = { $n ->
+    [one] Every check passes in the one place.
+   *[other] Every check passes in all { $n } places.
+}
 map-changes-no-places = There are no places to change.
 map-changes-some = { $n ->
     [one] { $n } place
@@ -99,7 +105,10 @@ map-note-street = { $kind }, { $ends }
 
 ## The status line
 map-nothing-to-show = No roads to show.
-map-status-ok = { $n } places. Every check passes.
+map-status-ok = { $n ->
+    [one] { $n } place. Every check passes.
+   *[other] { $n } places. Every check passes.
+}
 map-status-bad = { $n ->
     [one] { $n } place needs
    *[other] { $n } places need

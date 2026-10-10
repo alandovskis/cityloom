@@ -69,7 +69,10 @@ map-search-label = Rechercher des lieux
 map-search-go = Rechercher
 map-search-results = Lieux trouvés
 map-search-no-places = Il n’y a aucun lieu à rechercher.
-map-search-none = Aucun lieu ne correspond à « { $query } ». Effacez la recherche pour revoir les { $places } lieux.
+map-search-none = Aucun lieu ne correspond à « { $query } ». Effacez la recherche pour revoir { $places ->
+    [one] l’unique lieu
+   *[other] les { $places } lieux
+}.
 map-search-found = { $n ->
     [one] { $n } lieu correspond
    *[other] { $n } lieux correspondent
