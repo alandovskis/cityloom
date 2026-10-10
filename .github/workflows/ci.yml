@@ -198,7 +198,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends osmium-tool
-          just prepare
+          # osmium needs a gigabyte for each tile it cuts at once, and the runner has 16 GB.
+          just prepare --batch 2
 
       - run: npm install --global @railway/cli@${{ env.RAILWAY_CLI_VERSION }}
       - run: just deploy

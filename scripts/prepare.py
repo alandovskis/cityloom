@@ -3,7 +3,7 @@
 is not there, then the road tiles (scripts/metro_tiles.py) and the basemap's tiles (scripts/basemap_tiles.py)
 cut from it.
 
-    scripts/prepare.py [quebec-latest.osm.pbf] [--refresh]
+    scripts/prepare.py [quebec-latest.osm.pbf] [--refresh] [--batch N]
 
 The extract is Geofabrik's (https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf, about
 1.2 GB). It is kept in data/ (not in git); a later run reads it from there, and --refresh downloads a newer one.
@@ -68,13 +68,17 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("extract", type=Path, nargs="?", default=EXTRACT, help="where the extract is, or is put")
     ap.add_argument("--refresh", action="store_true", help="download the extract again, even if it is there")
+    ap.add_argument(
+        "--batch", type=int, help="tiles cut in one osmium run (metro_tiles.py's --batch): fewer take less memory"
+    )
     args = ap.parse_args()
     if args.refresh or not args.extract.exists():
         download(URL, args.extract)
     print(f"extract: {args.extract} ({args.extract.stat().st_size / 1e6:.0f} MB)", file=sys.stderr)
-    for script in ("metro_tiles.py", "basemap_tiles.py"):
+    scripts = {"metro_tiles.py": ["--batch", str(args.batch)] if args.batch else [], "basemap_tiles.py": []}
+    for script, options in scripts.items():
         print(f"\n== {script}", file=sys.stderr)
-        subprocess.run([sys.executable, str(SCRIPTS / script), str(args.extract)], check=True, cwd=ROOT)
+        subprocess.run([sys.executable, str(SCRIPTS / script), str(args.extract), *options], check=True, cwd=ROOT)
 
 
 if __name__ == "__main__":
