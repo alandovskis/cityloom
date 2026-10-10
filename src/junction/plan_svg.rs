@@ -500,12 +500,15 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
     for a in &v.arms {
         if let Some(c) = &a.crossing {
             let d = p.path_d(&c.poly);
-            write!(
-                l.cross,
-                "<g data-role=\"crossing\" data-uid=\"{}\"><path class=\"crossing\" d=\"{d}\"/><path fill=\"url(#zb-{})\" class=\"zebra-fill\" d=\"{d}\"/></g>",
-                a.uid, a.uid
-            )
-            .unwrap();
+            let surface = if c.continuous {
+                p.piece("continuous k-sidewalk", "sidewalk", &d)
+            } else {
+                format!("<path fill=\"url(#zb-{})\" class=\"zebra-fill\" d=\"{d}\"/>", a.uid)
+            };
+            write!(l.cross, "<g data-role=\"crossing\" data-uid=\"{}\"><path class=\"crossing\" d=\"{d}\"/>{surface}</g>", a.uid).unwrap();
+            for ramp in &c.ramps {
+                write!(l.cross, "<path class=\"continuous-ramp\" d=\"{}\"/>", p.path_d(ramp)).unwrap();
+            }
             if let Some(i) = &c.island_poly {
                 write!(l.cross, "<g data-role=\"crossing\" data-uid=\"{}\">{}</g>", a.uid, p.piece("island k-sidewalk", "sidewalk", &p.path_d(i))).unwrap();
             }
@@ -716,6 +719,19 @@ mod tests {
         assert!(j.set_raised(true));
         assert!(plan_label(&j.view(), &en).ends_with("Raised table."));
         assert!(plan_label(&j.view(), &fr).ends_with("Carrefour surélevé."));
+    }
+
+    #[test]
+    fn a_continuous_crossing_is_drawn_as_sidewalk_with_ramps_in_place_of_its_zebra() {
+        let mut j = Junction::new(0);
+        let zebras = count(&svg(&j).markup, "class=\"zebra-fill\"");
+        assert!(zebras >= 4);
+        assert_eq!(count(&svg(&j).markup, "continuous"), 0);
+        assert!(j.set_continuous(arm_at(&j, 0), true));
+        let s = svg(&j);
+        assert_eq!(count(&s.markup, "class=\"continuous k-sidewalk\""), 1);
+        assert_eq!(count(&s.markup, "class=\"continuous-ramp\""), 2);
+        assert_eq!(count(&s.markup, "class=\"zebra-fill\""), zebras - 1, "the other streets keep their zebras");
     }
 
     #[test]
