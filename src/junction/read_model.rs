@@ -943,13 +943,13 @@ impl Junction {
     }
 }
 
-/// How far out the plain pavement of the corner runs: past the crossing, where
-/// planting and the median take over.
 /// Whether the piece next to a curb is a sidewalk.
 fn is_walk(kind: Option<usize>) -> bool {
     kind.is_some_and(|k| KINDS[k].id == "sidewalk")
 }
 
+/// How far out the plain pavement of the corner runs: past the crossing, where
+/// planting and the median take over.
 fn clear_far(a: &Arm, l: &ArmLayout) -> f64 {
     let crossing = a.crossing.map_or(0.0, |c| (c.setback_mm + c.width_mm) as f64);
     (l.mouth + crossing + 1_500.0).max(l.mouth + WEDGE_MM)
