@@ -377,11 +377,17 @@ impl MapVm {
         let (junctions, streets) = (self.junction_rows(), self.street_rows());
         // Each row is worded once, here: both passes below read the same text.
         let worded = |rows: Vec<PlaceRow>| -> Vec<(PlaceRow, String)> {
-            rows.into_iter().map(|r| { let text = fold(&format!("{} {}", self.say(&r.name), self.say(&r.sub))); (r, text) }).collect()
+            rows.into_iter()
+                .map(|r| {
+                    let text = fold(&format!("{} {}", self.say(&r.name), self.say(&r.sub)));
+                    (r, text)
+                })
+                .collect()
         };
         let (junctions, streets) = (worded(junctions), worded(streets));
         let phrase = terms.join(" ");
-        let keep = |rows: &[(PlaceRow, String)], found: &dyn Fn(&str) -> bool| rows.iter().filter(|(_, t)| found(t)).map(|(r, _)| r.clone()).collect::<Vec<_>>();
+        let keep =
+            |rows: &[(PlaceRow, String)], found: &dyn Fn(&str) -> bool| rows.iter().filter(|(_, t)| found(t)).map(|(r, _)| r.clone()).collect::<Vec<_>>();
         let by_phrase = |t: &str| t.contains(&phrase);
         let by_words = |t: &str| terms.iter().all(|w| t.contains(w.as_str()));
         let (j, st) = (keep(&junctions, &by_phrase), keep(&streets, &by_phrase));

@@ -16,7 +16,10 @@ const LEFT_OUT: &[(&str, &str)] = &[
     ("src/map/tests.rs", "test-only"),
     ("src/junction/tests.rs", "test-only"),
     ("src/junction/model/fixtures.rs", "test-only"),
-    ("src/shared/atlas.rs", "the Atlas's English names, groups and notes are source data; what a person reads goes through `name_key` / `note_key` / `group_name_key`, and a test holds the English .ftl names and notes equal to them"),
+    (
+        "src/shared/atlas.rs",
+        "the Atlas's English names, groups and notes are source data; what a person reads goes through `name_key` / `note_key` / `group_name_key`, and a test holds the English .ftl names and notes equal to them",
+    ),
 ];
 
 const MIGRATED: &[(&str, &str)] = &[
