@@ -1279,16 +1279,7 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::i18n::Locale;
-    use crate::shared::units::Units;
-
-    fn en(said: &Said) -> String {
-        crate::shared::said::say_now(&crate::i18n_for(Locale::En), Units::Metres, said)
-    }
-
-    fn fr(said: &Said) -> String {
-        crate::shared::said::say_now(&crate::i18n_for(Locale::FrCa), Units::Metres, said)
-    }
+    use crate::shared::testing::{en, fr};
 
     fn arm_of(j: &Junction, bearing: i32) -> u32 {
         j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid

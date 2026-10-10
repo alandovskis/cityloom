@@ -208,17 +208,8 @@ mod tests {
     use crate::junction::model::CONTROLS;
     use crate::junction::model::SIGNAL;
     use crate::shared::catalogue::KINDS;
-    use crate::shared::i18n::Locale;
-    use crate::shared::said::{Arg, Said, say_now};
-    use crate::shared::units::Units;
-
-    fn en(said: &Said) -> String {
-        say_now(&crate::i18n_for(Locale::En), Units::Metres, said)
-    }
-
-    fn fr(said: &Said) -> String {
-        say_now(&crate::i18n_for(Locale::FrCa), Units::Metres, said)
-    }
+    use crate::shared::said::{Arg, Said};
+    use crate::shared::testing::{en, fr};
 
     fn lane(kind: LaneKind, way: Way, width_m: f64) -> Lane {
         Lane { kind, way, width_m, hours: None }

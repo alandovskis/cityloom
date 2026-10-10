@@ -453,7 +453,8 @@ impl Layout {
 /// nothing suits keeps `preferred`.
 fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
     use crate::junction::model::{MAX_CORNER_MM, MIN_CORNER_MM, RING_STEP_MM};
-    let state = |arms: &[Arm]| State { label: junction::unlabelled(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None, source: Vec::new() };
+    let state =
+        |arms: &[Arm]| State { label: junction::unlabelled(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None, source: Vec::new() };
     let mut radii: Vec<i32> = (MIN_CORNER_MM..=MAX_CORNER_MM).step_by(RING_STEP_MM as usize).collect();
     radii.sort_by_key(|r| ((r - preferred).abs(), *r));
     for i in 0..arms.len() {
@@ -839,9 +840,7 @@ pub struct CityView {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::i18n::Locale;
-    use crate::shared::said::{Arg, say_now};
-    use crate::shared::units::Units;
+    use crate::shared::said::Arg;
 
     fn junction_number(node: usize) -> usize {
         Layout::sample().junction_number(node)
@@ -851,13 +850,7 @@ mod tests {
         Layout::sample().edges_at(node)
     }
 
-    fn en(said: &Said) -> String {
-        say_now(&crate::i18n_for(Locale::En), Units::Metres, said)
-    }
-
-    fn fr(said: &Said) -> String {
-        say_now(&crate::i18n_for(Locale::FrCa), Units::Metres, said)
-    }
+    use crate::shared::testing::{en, fr};
 
     /// The sample layout with names given to some of its streets, by edge index.
     fn named(names: &[(usize, &str)]) -> Layout {

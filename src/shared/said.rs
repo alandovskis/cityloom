@@ -111,13 +111,7 @@ mod tests {
     use super::*;
     use crate::shared::i18n::Locale;
 
-    fn en(said: &Said) -> String {
-        say_now(&crate::i18n_for(Locale::En), Units::Metres, said)
-    }
-
-    fn fr(said: &Said) -> String {
-        say_now(&crate::i18n_for(Locale::FrCa), Units::Metres, said)
-    }
+    use crate::shared::testing::{en, fr};
 
     #[test]
     fn a_time_of_day_is_written_hours_and_minutes_and_the_hour_wraps() {

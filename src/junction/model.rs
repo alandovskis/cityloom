@@ -1313,16 +1313,8 @@ pub fn valid(s: &State, region: usize) -> bool {
 mod tests {
     use super::*;
     use crate::shared::i18n::Locale;
-    use crate::shared::units::Units;
+    use crate::shared::testing::{en, fr};
     use crate::street::model::SAMPLES;
-
-    fn en(said: &Said) -> String {
-        crate::shared::said::say_now(&crate::i18n_for(Locale::En), Units::Metres, said)
-    }
-
-    fn fr(said: &Said) -> String {
-        crate::shared::said::say_now(&crate::i18n_for(Locale::FrCa), Units::Metres, said)
-    }
 
     fn named(name: &str) -> Said {
         Said::new("city-name").with("name", Arg::Text(name.into()))
