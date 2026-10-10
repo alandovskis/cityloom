@@ -9,7 +9,7 @@ use crate::junction::read_model::JView;
 use crate::junction::text::{arms_text, fit_text};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
-use crate::shared::catalogue::KINDS;
+use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::provenance::Sources;
 use crate::shared::tick::Tick;
 
@@ -32,13 +32,13 @@ fn swatch_rects(id: &str, x: f64, width: f64) -> impl IntoView {
 #[component]
 pub fn Header(vm: Rc<JunctionVm>) -> impl IntoView {
     let w = Watch::new(vm);
-    let name = move || w.view().name.clone();
+    let name = move || w.say(&w.view().name);
     let linked = move || w.view().linked;
-    let arms = move || arms_text(&w.view());
+    let arms = move || arms_text(&w.view(), &w.i18n());
     #[cfg(target_arch = "wasm32")]
     Effect::new(move |_| {
         if w.view().linked {
-            document().set_title(&format!("{} · CityLoom", w.view().name));
+            document().set_title(&format!("{} · CityLoom", w.say(&w.view().name)));
         }
     });
     view! {
@@ -66,7 +66,7 @@ pub fn Header(vm: Rc<JunctionVm>) -> impl IntoView {
 pub fn TitleBlock(vm: Rc<JunctionVm>) -> impl IntoView {
     let w = Watch::new(vm);
     view! {
-        <div class="tb-cell tb-wide"><span>"Junction"</span><b id="tb-street">{move || w.view().name.clone()}</b></div>
+        <div class="tb-cell tb-wide"><span>"Junction"</span><b id="tb-street">{move || w.say(&w.view().name)}</b></div>
         <div class="tb-cell"><span>"Streets"</span><b id="tb-row" class="fig">{move || w.view().arms.len().to_string()}</b></div>
         <div class="tb-cell"><span>"Changes made"</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
         {move || {
@@ -90,7 +90,7 @@ pub fn Fit(vm: Rc<JunctionVm>) -> impl IntoView {
     view! {
         <p id="fit" class=move || if works.get() { "fit" } else { "fit bad" } role="status">
             <Tick works=works/>
-            {move || fit_text(&w.view())}
+            {move || fit_text(&w.view(), &w.i18n())}
         </p>
     }
 }
@@ -125,7 +125,7 @@ pub fn Key(vm: Rc<JunctionVm>) -> impl IntoView {
                 view! {
                     <li>
                         <svg class="swatch" viewBox="0 0 44 22" aria-hidden="true" focusable="false">{swatch_rects(KINDS[k].id, 0.0, 44.0)}</svg>
-                        {KINDS[k].name}
+                        {w.tr(&kind_key(KINDS[k].id))}
                     </li>
                 }
             })

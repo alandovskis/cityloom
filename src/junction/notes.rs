@@ -11,6 +11,8 @@ use crate::junction::turns::compass;
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
 use crate::shared::atlas::{MEASURES, Where};
+use crate::shared::i18n::I18n;
+use crate::shared::said::say;
 use crate::shared::units::Units;
 
 /// How far it is to cross: the length, or the stages and their length.
@@ -19,8 +21,9 @@ fn crossing_text(c: &CrossingView, units: Units) -> String {
 }
 
 /// What a check says, with the length it speaks of in the units shown.
-fn check_detail(c: &Check, units: Units) -> String {
-    if c.id == "crossing" && c.amount_mm != 0 { format!("{}: {}", c.detail, units.length(c.amount_mm)) } else { c.detail.clone() }
+fn check_detail(c: &Check, i18n: &I18n, units: Units) -> String {
+    let detail = say(i18n, units, &c.detail);
+    if c.id == "crossing" && c.amount_mm != 0 { format!("{}: {}", detail, units.length(c.amount_mm)) } else { detail }
 }
 
 /// Why the conflict counts are what they are, where that is not obvious.
@@ -71,7 +74,7 @@ pub fn Across(vm: Rc<JunctionVm>) -> impl IntoView {
                 let lanes = if a.enters { a.lanes.len() } else { 0 };
                 view! {
                     <tr>
-                        <th scope="row"><span class="dirtag">{compass(a.bearing)}</span>{a.street.clone()}</th>
+                        <th scope="row"><span class="dirtag">{compass(a.bearing)}</span>{watch.say(&a.street)}</th>
                         {across}
                         <td>{lanes}</td>
                     </tr>
@@ -136,8 +139,8 @@ pub fn Checks(vm: Rc<JunctionVm>) -> impl IntoView {
                     <li class=if k.ok { "ok" } else { "bad" }>
                         {icon(k.ok)}
                         <div>
-                            <b>{k.label}<span class="sr-only">{if k.ok { ": passes" } else { ": fails" }}</span></b>
-                            <span>{check_detail(k, units)}</span>
+                            <b>{watch.say(&k.label)}<span class="sr-only">{if k.ok { ": passes" } else { ": fails" }}</span></b>
+                            <span>{check_detail(k, &watch.i18n(), units)}</span>
                         </div>
                     </li>
                 }
@@ -213,7 +216,7 @@ pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
             .revisions
             .iter()
             .enumerate()
-            .map(|(i, r)| view! { <tr class=if Some(i) == last { "now" } else { "" }><td>{r.step}</td><td>{r.label.clone()}</td></tr> })
+            .map(|(i, r)| view! { <tr class=if Some(i) == last { "now" } else { "" }><td>{r.step}</td><td>{watch.say(&r.label)}</td></tr> })
             .collect_view();
         view! {
             <thead>
@@ -238,6 +241,7 @@ pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
 mod tests {
     use crate::junction::model::*;
     use crate::junction::read_model::Check;
+    use crate::shared::said::Said;
     use crate::shared::units::Units;
 
     use super::*;
@@ -266,19 +270,21 @@ mod tests {
     }
 
     fn check(id: &'static str, amount_mm: i32) -> Check {
-        Check { id, ok: false, amount_mm, label: "A check", detail: "Too much".into() }
+        Check { id, ok: false, amount_mm, label: Said::new("jn-check-crossing"), detail: Said::new("jn-check-crossing-ok") }
     }
 
     #[test]
     fn a_crossing_check_names_its_length_in_the_units_shown() {
-        assert_eq!(check_detail(&check("crossing", 9_000), Units::Metres), "Too much: 9.0 m");
-        assert_eq!(check_detail(&check("crossing", 9_000), Units::Feet), "Too much: 29.5 ft");
+        let en = crate::i18n_for(crate::shared::i18n::Locale::En);
+        assert_eq!(check_detail(&check("crossing", 9_000), &en, Units::Metres), "Longest crossing in one go: 9.0 m");
+        assert_eq!(check_detail(&check("crossing", 9_000), &en, Units::Feet), "Longest crossing in one go: 29.5 ft");
     }
 
     #[test]
     fn other_checks_and_a_crossing_check_without_a_length_say_only_their_detail() {
-        assert_eq!(check_detail(&check("turning-speed", 9_000), Units::Metres), "Too much");
-        assert_eq!(check_detail(&check("crossing", 0), Units::Metres), "Too much");
+        let en = crate::i18n_for(crate::shared::i18n::Locale::En);
+        assert_eq!(check_detail(&check("turning-speed", 9_000), &en, Units::Metres), "Longest crossing in one go");
+        assert_eq!(check_detail(&check("crossing", 0), &en, Units::Metres), "Longest crossing in one go");
     }
 
     #[test]

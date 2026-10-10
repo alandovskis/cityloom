@@ -92,9 +92,10 @@ fn label(i18n: &I18n, units: Units, what: String, (ok, failing, edited): (bool, 
     sentences.join(" ")
 }
 
-/// The junction's control as data: in English until the junction's words are translated.
-fn control(n: &NodeView) -> &'static str {
-    n.control.unwrap_or_default()
+/// The junction's control, named by the junction's message for it.
+fn control(n: &NodeView, lower: bool) -> Arg {
+    let key = n.control.unwrap_or("jn-control-uncontrolled");
+    if lower { Arg::MsgLower(key) } else { Arg::Msg(key) }
 }
 
 /// How a junction on the map is told to a screen reader.
@@ -102,10 +103,7 @@ pub fn junction_label(n: &NodeView, i18n: &I18n, units: Units) -> String {
     let what = said::say(
         i18n,
         units,
-        &Said::new("map-label-junction")
-            .with("name", Arg::Said(Box::new(n.name.clone())))
-            .with("control", Arg::Text(control(n).to_lowercase()))
-            .with("streets", streets(n.arms)),
+        &Said::new("map-label-junction").with("name", Arg::Said(Box::new(n.name.clone()))).with("control", control(n, true)).with("streets", streets(n.arms)),
     );
     label(i18n, units, what, (n.ok, &n.failing, n.edited), "map-opens-junction")
 }
@@ -296,7 +294,7 @@ impl MapVm {
                 href: junction_href(n.uid),
                 hot: format!("j-{}", n.uid),
                 name: n.name.clone(),
-                sub: Said::new("map-junction-sub").with("control", Arg::Text(control(n).to_string())).with("streets", streets(n.arms)),
+                sub: Said::new("map-junction-sub").with("control", control(n, false)).with("streets", streets(n.arms)),
                 tag: Self::tag(n.ok, n.edited),
             })
             .collect()

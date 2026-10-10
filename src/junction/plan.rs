@@ -110,7 +110,7 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
     let markup = move || {
         let (v, units) = w.now();
         let (width, window) = viewport.get();
-        let out = plan_svg(&v, width, window, units);
+        let out = plan_svg(&v, &w.i18n(), width, window, units);
         w.set_frame(out.frame);
         out.markup
     };

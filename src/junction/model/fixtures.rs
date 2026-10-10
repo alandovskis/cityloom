@@ -50,13 +50,13 @@ impl Junction {
     pub fn new(sample: usize) -> Junction {
         let mut j = Junction {
             linked: false,
-            name: String::new(),
+            name: Said::new("city-name").with("name", Arg::Text(String::new())),
             region: 0,
             states: Vec::new(),
             cursor: 0,
             selected: Target::None,
             gesture: None,
-            pending_label: String::new(),
+            pending_label: earlier(),
             refusal: None,
         };
         j.load_sample(sample);
@@ -66,7 +66,7 @@ impl Junction {
     pub fn load_sample(&mut self, sample: usize) {
         let sample = sample.min(JUNCTION_SAMPLES.len() - 1);
         let s = &JUNCTION_SAMPLES[sample];
-        self.name = s.name.to_string();
+        self.name = Said::new("city-name").with("name", Arg::Text(s.name.to_string()));
         let mut arms: Vec<Arm> = s
             .arms
             .iter()
@@ -82,7 +82,7 @@ impl Junction {
             .collect();
         arms.sort_by_key(|a| a.bearing);
         normalize(&mut arms, self.region);
-        self.states = vec![State { label: "Junction today".into(), arms, control: s.control, ring_extra_mm: 0, bus: None, cycle: None, source: Vec::new() }];
+        self.states = vec![State { label: today(), arms, control: s.control, ring_extra_mm: 0, bus: None, cycle: None, source: Vec::new() }];
         self.cursor = 0;
         self.selected = Target::None;
         self.gesture = None;

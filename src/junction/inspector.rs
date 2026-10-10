@@ -8,8 +8,26 @@ use leptos::prelude::*;
 use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 
 use crate::junction::model::*;
+use crate::junction::model::{LEFT, THROUGH};
 use crate::junction::read_model::{CrossingView, JView};
-use crate::junction::turns::{compass, turn_glyph, turn_name, turn_word};
+use crate::junction::turns::{compass, turn_glyph};
+
+fn turn_word(class: u8) -> &'static str {
+    match class {
+        LEFT => "left",
+        THROUGH => "straight on",
+        _ => "right",
+    }
+}
+
+/// How a class of turn is named at the start of a sentence.
+fn turn_name(class: u8) -> &'static str {
+    match class {
+        LEFT => "Left",
+        THROUGH => "Straight on",
+        _ => "Right",
+    }
+}
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
 use crate::shared::units::Units;
@@ -230,7 +248,7 @@ fn bus_choice(w: Watch) -> impl IntoView {
             .iter()
             .map(|o| {
                 let (a, b) = (o.a, o.b);
-                view! { <option value=format!("{a}-{b}") prop:selected=cur == Some((a, b))>{o.label.clone()}</option> }
+                view! { <option value=format!("{a}-{b}") prop:selected=cur == Some((a, b))>{w.say(&o.label)}</option> }
             })
             .collect_view()
     };
@@ -298,7 +316,7 @@ fn control_section(w: Watch) -> impl IntoView {
                 {CONTROLS
                     .iter()
                     .enumerate()
-                    .map(|(i, c)| view! { <option value=i.to_string() prop:selected=move || w.view().control_index == i>{c.name}</option> })
+                    .map(|(i, c)| view! { <option value=i.to_string() prop:selected=move || w.view().control_index == i>{w.tr(c.key)}</option> })
                     .collect_view()}
             </select>
         },
@@ -327,7 +345,7 @@ fn bus_panel(w: Watch) -> AnyView {
         let v = w.view();
         let Some(b) = v.bus.as_ref() else { return String::new() };
         let pair = (b.from.min(b.to), b.from.max(b.to));
-        v.bus_options.iter().find(|o| (o.a, o.b) == pair).map(|o| o.label.clone()).unwrap_or_default()
+        v.bus_options.iter().find(|o| (o.a, o.b) == pair).map(|o| w.say(&o.label)).unwrap_or_default()
     };
     view! {
         {head(|| "Bus lane".to_string(), label)}
@@ -412,7 +430,7 @@ fn dest_button(w: Watch, uid: u32, lane: usize, to: u32) -> impl IntoView {
     let v = w.view_now();
     let a = v.arms.iter().find(|a| a.uid == uid);
     let d = a.and_then(|a| a.lanes.get(lane)).and_then(|l| l.dests.iter().find(|d| d.uid == to));
-    let (class, label) = d.map_or((0, String::new()), |d| (d.class, d.label.clone()));
+    let (class, label) = d.map_or((0, String::new()), |d| (d.class, w.say(&d.label)));
     let bearing = v.arms.iter().find(|x| x.uid == to).map_or(0, |x| x.bearing);
     let state = move || {
         w.arm(uid, |a| a.lanes.get(lane).and_then(|l| l.dests.iter().find(|d| d.uid == to).map(|d| (d.on, d.open, l.bad))))
@@ -468,7 +486,7 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
     let sub = move || {
         w.arm(uid, |a| {
             let note = lane_note(a.lanes.len(), lane);
-            if note.is_empty() { a.label.clone() } else { format!("{} · {note}", a.label) }
+            if note.is_empty() { w.say(&a.label) } else { format!("{} · {note}", w.say(&a.label)) }
         })
         .unwrap_or_default()
     };
@@ -484,7 +502,7 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
     let option = move |to: u32| {
         let v = w.view_now();
         let d = v.arms.iter().find(|a| a.uid == uid).and_then(|a| a.lanes.get(lane)).and_then(|l| l.dests.iter().find(|d| d.uid == to));
-        let (class, label) = d.map_or((0, String::new()), |d| (d.class, d.label.clone()));
+        let (class, label) = d.map_or((0, String::new()), |d| (d.class, w.say(&d.label)));
         let state = move || {
             w.arm(uid, |a| a.lanes.get(lane).and_then(|l| l.dests.iter().find(|d| d.uid == to).map(|d| (d.on, d.open)))).flatten().unwrap_or((false, false))
         };
@@ -644,7 +662,7 @@ fn choice(
                     .iter()
                     .enumerate()
                     .map(|(i, o)| {
-                        let text = if o.code.is_empty() { o.name.to_string() } else { format!("{} {}", o.code, o.name) };
+                        let text = if o.code.is_empty() { w.tr(o.key) } else { format!("{} {}", o.code, w.tr(o.key)) };
                         view! { <option value=i.to_string() prop:selected=move || w.arm(uid, |a| current(&a.transit) == i).unwrap_or(false)>{text}</option> }
                     })
                     .collect_view()}
@@ -659,7 +677,7 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
     let kind = Memo::new(move |_| w.arm(uid, |a| a.transit.approach_kind).unwrap_or("none"));
     let problems = move || {
         let list = w.arm(uid, |a| a.transit.problems.clone()).unwrap_or_default();
-        (!list.is_empty()).then(|| view! { <ul class="problems">{list.into_iter().map(|p| view! { <li>{p}</li> }).collect_view()}</ul> })
+        (!list.is_empty()).then(|| view! { <ul class="problems">{list.into_iter().map(|p| view! { <li>{w.say(&p)}</li> }).collect_view()}</ul> })
     };
     let length_field = move || {
         let queue = kind.get() == "queue";
@@ -718,7 +736,7 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
 }
 
 fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
-    let name = move || w.arm(uid, |a| a.street.to_string()).unwrap_or_default();
+    let name = move || w.arm(uid, |a| w.say(&a.street)).unwrap_or_default();
     let sub = move || w.arm(uid, |a| format!("{}, {}° · {} road", compass(a.bearing), a.bearing, w.units().length(a.road_mm))).unwrap_or_default();
     if crossing_only {
         return view! { {head(name, sub)} {crossing_section(w, uid)} {control_section(w)} }.into_any();

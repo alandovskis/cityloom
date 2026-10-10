@@ -413,7 +413,7 @@ impl Layout {
             .collect();
         junction::normalize(&mut arms, 0);
         tune_corners(&mut arms, def.control, def.corner_mm);
-        let mut s = State { label: "Junction today".into(), arms, control: def.control, ring_extra_mm: 0, bus: None, cycle: None, source: def.source.clone() };
+        let mut s = State { label: junction::today(), arms, control: def.control, ring_extra_mm: 0, bus: None, cycle: None, source: def.source.clone() };
         forget_streets(&mut s);
         s
     }
@@ -456,7 +456,7 @@ impl Layout {
 /// nothing suits keeps `preferred`.
 fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
     use crate::junction::model::{MAX_CORNER_MM, MIN_CORNER_MM, RING_STEP_MM};
-    let state = |arms: &[Arm]| State { label: String::new(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None, source: Vec::new() };
+    let state = |arms: &[Arm]| State { label: junction::earlier(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None, source: Vec::new() };
     let mut radii: Vec<i32> = (MIN_CORNER_MM..=MAX_CORNER_MM).step_by(RING_STEP_MM as usize).collect();
     radii.sort_by_key(|r| ((r - preferred).abs(), *r));
     for i in 0..arms.len() {
@@ -464,7 +464,7 @@ fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
         let found = radii.iter().any(|&r| {
             arms[i].corner_mm = r;
             let s = state(arms);
-            Junction::from_city("", &s, &s, 0).is_some_and(|j| j.view().corners.iter().any(|c| c.uid == uid && c.ok && !c.fast))
+            Junction::from_city(junction::earlier(), &s, &s, 0).is_some_and(|j| j.view().corners.iter().any(|c| c.uid == uid && c.ok && !c.fast))
         });
         if !found {
             arms[i].corner_mm = preferred;
@@ -479,7 +479,7 @@ fn forget_streets(s: &mut State) {
 }
 
 fn same_junction(a: &State, b: &State) -> bool {
-    State { label: String::new(), ..a.clone() } == State { label: String::new(), ..b.clone() }
+    State { label: junction::earlier(), ..a.clone() } == State { label: junction::earlier(), ..b.clone() }
 }
 
 /// The street an arm reads: the city's street as seen looking out from `node`.
@@ -518,7 +518,7 @@ impl City {
             }
             // A meeting the junction editor cannot draw (every road leaving to one side, say) is left as
             // a plain connection of streets.
-            if Junction::from_city("", &s, &s, region).is_none() {
+            if Junction::from_city(junction::earlier(), &s, &s, region).is_none() {
                 layout.nodes[n].junction = false;
                 continue;
             }
@@ -628,13 +628,8 @@ impl City {
         let Some(n) = self.node_index(node) else { return Vec::new() };
         let Some(state) = self.today_junctions.get(&node) else { return Vec::new() };
         let today = self.with_streets_of(&self.today_streets, n, state);
-        Junction::from_city("", &today, &today, region).map_or_else(Vec::new, |j| j.view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect())
-    }
-
-    /// The checks junction `j` fails that it did not fail as first laid out, in English: the junction's
-    /// checks are worded in English until its slice is translated, when this goes.
-    fn junction_failing_english(j: &Junction, at_first: &[&str]) -> Vec<String> {
-        j.view().checks.iter().filter(|c| !c.ok && !at_first.contains(&c.id)).map(|c| c.label.to_string()).collect()
+        Junction::from_city(junction::earlier(), &today, &today, region)
+            .map_or_else(Vec::new, |j| j.view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect())
     }
 
     /// The junction editor on one junction of the city, reading the streets as
@@ -643,8 +638,7 @@ impl City {
         let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
         let today = self.with_streets(n, self.today_junctions.get(&node)?);
         let now = self.with_streets(n, self.junctions.get(&node)?);
-        // The junction editor is still English: it is given the junction's name in English.
-        Junction::from_city(&junction::english(&self.layout.node_name(n)), &today, &now, region)
+        Junction::from_city(self.layout.node_name(n), &today, &now, region)
     }
 
     /// Keeps what the junction editor has made of a junction.
@@ -722,14 +716,11 @@ impl City {
                 let now = &self.junctions[&uid];
                 v.edited = !same_junction(now, &self.today_junctions[&uid]);
                 v.arms = now.arms.len();
-                v.control = Some(junction::CONTROLS[now.control].name);
+                v.control = Some(junction::control_key(now.control));
                 match self.junction_editor(uid, region) {
                     Some(j) => {
                         let at_first = self.failing_today(uid, region);
-                        v.failing = Self::junction_failing_english(&j, &at_first)
-                            .into_iter()
-                            .map(|text| Said::new("city-text").with("text", Arg::Text(text)))
-                            .collect();
+                        v.failing = j.view().checks.iter().filter(|c| !c.ok && !at_first.contains(&c.id)).map(|c| c.label.clone()).collect();
                         v.ok = v.failing.is_empty();
                     }
                     None => {
@@ -824,7 +815,7 @@ pub struct NodeView {
     /// A junction of streets, or else where a street leaves the map.
     pub junction: bool,
     pub radius_mm: i32,
-    /// The junction's control, in English until the junction's words are translated.
+    /// The message that names the junction's control (`junction::control_key`).
     pub control: Option<&'static str>,
     pub arms: usize,
     pub edited: bool,
@@ -1023,7 +1014,9 @@ mod tests {
 
         let back = City::load(&city.save());
         assert_eq!(back.streets, city.streets);
-        assert_eq!(back.junctions, city.junctions);
+        // A junction comes back the same but for its history label, which is not kept.
+        assert_eq!(back.junctions.keys().collect::<Vec<_>>(), city.junctions.keys().collect::<Vec<_>>());
+        assert!(back.junctions.iter().all(|(k, s)| same_junction(s, &city.junctions[k]) && s.label == junction::earlier()));
         let v = back.view(0);
         assert!(v.edges[0].edited && v.nodes[1].edited);
         assert_eq!(v.edited, 2);
@@ -1187,6 +1180,8 @@ mod tests {
         assert!(j.set_corner(arm, 4_500));
         assert!(city.keep_junction(node_uid(1), j.snapshot()));
         let mut saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        assert!(saved["junctions"]["2"].is_object(), "the edited junction is saved");
+        assert_eq!(saved["junctions"]["2"].get("label"), None, "a junction's history label is not kept: {}", saved["junctions"]["2"]);
         saved["junctions"]["2"]["label"] = serde_json::json!("Remove Main (N)");
         let back = City::load(&saved.to_string());
         assert!(back.view(0).nodes[1].edited, "the edited junction is kept");

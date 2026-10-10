@@ -1,7 +1,5 @@
 # The names the app invents for the city's places and streets (src/city/model.rs).
 city-name = { $name }
-# Words the junction slice still gives in English (a check it fails), until it is translated.
-city-text = { $text }
 class-motorway = motorway
 class-arterial = arterial
 class-collector = collector

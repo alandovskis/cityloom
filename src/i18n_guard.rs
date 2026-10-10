@@ -40,6 +40,10 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/place/tiles.rs", include_str!("place/tiles.rs")),
     ("src/place/vm.rs", include_str!("place/vm.rs")),
     ("src/place/view.rs", include_str!("place/view.rs")),
+    ("src/junction/model.rs", include_str!("junction/model.rs")),
+    ("src/junction/read_model.rs", include_str!("junction/read_model.rs")),
+    ("src/junction/text.rs", include_str!("junction/text.rs")),
+    ("src/junction/turns.rs", include_str!("junction/turns.rs")),
 ];
 
 /// Attributes whose value is text a person reads (also as `attr:<name>`).
@@ -86,6 +90,10 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("LineString", "a GeoJSON geometry type, data for MapLibre"),
     ("Point", "a GeoJSON geometry type, data for MapLibre"),
     ("Plateau Mont-Royal, Montréal", "the default area's own name: a place name is data, like the names the place search gives"),
+    ("an arm carries the street it reads", "a panic message about the code, never shown"),
+    ("a junction state is always drawable", "a panic message about the code, never shown"),
+    (" on", "a CSS class appended to a class list"),
+    (" bad", "a CSS class appended to a class list"),
 ];
 
 fn is_path_data(s: &str) -> bool {
@@ -363,6 +371,16 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("hero-facts-slot", "the id of an element of the home page"),
     ("m-walk", "a CSS class of the hero map's drawing"),
     ("m-shoulder", "a CSS class of the hero map's drawing"),
+    ("queue-offset", "the id of a junction approach measure, data for the page"),
+    ("queue-curb", "the id of a junction approach measure, data for the page"),
+    ("queue-virtual", "the id of a junction approach measure, data for the page"),
+    ("gate-signal", "the id of a junction approach measure, data for the page"),
+    ("gate-yield", "the id of a junction approach measure, data for the page"),
+    ("dead-end", "the id of a junction turn rule, data for the page"),
+    ("lanes-cover", "the id of a junction check"),
+    ("lanes-follow", "the id of a junction check"),
+    ("turning-speed", "the id of a junction check"),
+    ("corner-room", "the id of a junction check"),
 ];
 
 /// The message-id-shaped literals in `src` as `(line, literal)`.

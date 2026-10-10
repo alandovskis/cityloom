@@ -1,7 +1,5 @@
 # Les noms que l’application invente pour les lieux et les rues de la ville (src/city/model.rs).
 city-name = { $name }
-# Les mots que la jonction donne encore en anglais (une vérification qui échoue), en attendant sa traduction.
-city-text = { $text }
 class-motorway = autoroutière
 class-arterial = artérielle
 class-collector = collectrice

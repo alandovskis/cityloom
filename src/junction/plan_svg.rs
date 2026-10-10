@@ -10,6 +10,8 @@ use crate::junction::model::{LEFT, RIGHT, THROUGH};
 use crate::junction::read_model::{ArmView, JView, LaneView};
 use crate::junction::turns::compass;
 use crate::shared::catalogue::KINDS;
+use crate::shared::i18n::I18n;
+use crate::shared::said::{Said, say};
 use crate::shared::units::Units;
 
 type P = (f64, f64);
@@ -285,7 +287,8 @@ pub fn plan_label(v: &JView) -> String {
 }
 
 /// The plan for a drawing `width` wide in a window `window_height` high.
-pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> PlanSvg {
+pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> PlanSvg {
+    let said = |s: &Said| say(i18n, units, s);
     let f = Frame::fit(v.bounds, width, window_height);
     let p = Plan { v, f, units };
     let zebra = (600.0 * f.scale).max(4.0);
@@ -365,7 +368,7 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
                 p.path_d(&lane.poly),
                 i + 1,
                 a.lanes.len(),
-                esc(&a.label)
+                esc(&said(&a.label))
             )
             .unwrap();
         }
@@ -533,7 +536,7 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
             if p.is_sel("arm", a.uid) { " t-blue" } else { "" },
             f1(x),
             f1(y1),
-            esc(&a.street),
+            esc(&said(&a.street)),
             f1(x),
             f1(y1 + 17.0),
             compass(a.bearing),
@@ -551,7 +554,7 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
         }
         // the end grip: always there, since turning a street is the main move
         let (ex, ey) = f.at(a.end);
-        l.grip += &p.grip(ex - ld.0 * 20.0, ey - ld.1 * 20.0, a.bearing as f64, "grip-arm", a.uid, &format!("Turn {}", a.label));
+        l.grip += &p.grip(ex - ld.0 * 20.0, ey - ld.1 * 20.0, a.bearing as f64, "grip-arm", a.uid, &format!("Turn {}", said(&a.label)));
     }
 
     // grips and the outline of a selected corner or crossing
@@ -585,7 +588,7 @@ pub fn plan_svg(v: &JView, width: f64, window_height: f64, units: Units) -> Plan
                     if m.allowed && !m.lane { " bad" } else { "" },
                     if m.indirect { " indirect" } else { "" },
                     if m.allowed { " marker-end=\"url(#mv-head)\"" } else { "" },
-                    esc(m.blocked.unwrap_or(""))
+                    esc(&m.blocked.as_ref().map(said).unwrap_or_default())
                 )
                 .unwrap();
                 if !m.allowed {
@@ -618,7 +621,7 @@ mod tests {
     use crate::junction::model::*;
 
     fn svg(j: &Junction) -> PlanSvg {
-        plan_svg(&j.view(), 1000.0, 1000.0, Units::Metres)
+        plan_svg(&j.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), 1000.0, 1000.0, Units::Metres)
     }
 
     fn count(s: &str, needle: &str) -> usize {
@@ -658,7 +661,7 @@ mod tests {
         assert_eq!(count(&s.markup, "class=\"zebra-fill\""), 4);
         assert_eq!(count(&s.markup, "<pattern id=\"zb-"), 4);
         assert!(s.markup.contains(">2 × 9.0</text>") && s.markup.contains(">11.4</text>"));
-        let ft = plan_svg(&j.view(), 1000.0, 1000.0, Units::Feet);
+        let ft = plan_svg(&j.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), 1000.0, 1000.0, Units::Feet);
         assert!(ft.markup.contains(">2 × 29.5</text>") && ft.markup.contains(">37.4</text>"));
         assert!(ft.markup.contains("20 m") == false && ft.markup.contains("66 ft"));
     }
@@ -829,7 +832,7 @@ mod tests {
         let j = Junction::new(0);
         // Sample Street 1 is the east arm, then the west.
         assert_eq!(anchors(&svg(&j).markup, "Sample Street 1"), vec!["start", "end"]);
-        let narrow = plan_svg(&j.view(), 400.0, 1000.0, Units::Metres);
+        let narrow = plan_svg(&j.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), 400.0, 1000.0, Units::Metres);
         assert!(narrow.frame.narrow);
         assert_eq!(anchors(&narrow.markup, "Sample Street 1"), vec!["end", "start"]);
         // Streets that run up and down are centred either way.
@@ -839,7 +842,7 @@ mod tests {
     #[test]
     fn on_a_narrow_drawing_a_sideways_arm_s_name_and_width_clear_the_road() {
         let j = Junction::new(0);
-        let s = plan_svg(&j.view(), 390.0, 1000.0, Units::Metres);
+        let s = plan_svg(&j.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), 390.0, 1000.0, Units::Metres);
         let centre = s.frame.at((0.0, 0.0)).1;
         let half_road = 11_400.0 * s.frame.scale / 2.0;
         let tail = ">Sample Street 1</text>";

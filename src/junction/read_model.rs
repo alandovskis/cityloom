@@ -9,23 +9,34 @@ use crate::junction::geometry::*;
 use crate::junction::model::*;
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::shared::provenance::OsmRef;
+use crate::shared::said::{Arg, Said};
 
-/// One rule of the junction and whether it holds (English until the junction page is translated).
+/// One rule of the junction and whether it holds, said as data.
 #[derive(Serialize)]
 pub struct Check {
     pub id: &'static str,
     pub ok: bool,
     /// The length the detail speaks of, so the page can print it in its units.
     pub amount_mm: i32,
-    pub label: &'static str,
-    pub detail: String,
+    pub label: Said,
+    pub detail: Said,
 }
 
 /// One step of the junction's history.
 #[derive(Serialize)]
 pub struct Revision {
     pub step: usize,
-    pub label: String,
+    pub label: Said,
+}
+
+/// Things said one after another, as one: "A; B; C".
+fn list(items: Vec<Said>) -> Option<Said> {
+    items.into_iter().reduce(|head, tail| Said::new("jn-list").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail))))
+}
+
+/// Two arms, from one to the other.
+fn arm_to_arm(from: Said, to: Said) -> Said {
+    Said::new("jn-arm-to-arm").with("from", Arg::Said(Box::new(from))).with("to", Arg::Said(Box::new(to)))
 }
 
 /// Ring width of a roundabout, and the smallest island in its middle.
@@ -248,7 +259,7 @@ pub struct LaneView {
 #[derive(Serialize)]
 pub struct DestView {
     pub uid: u32,
-    pub label: String,
+    pub label: Said,
     #[serde(serialize_with = "word")]
     pub class: u8,
     pub on: bool,
@@ -294,7 +305,7 @@ pub struct TransitView {
     pub island: Option<Vec<Value>>,
     pub icon_at: P,
     /// What a measure here needs and does not have.
-    pub problems: Vec<String>,
+    pub problems: Vec<Said>,
     /// What kind of approach measure there is: none, queue, virtual or gate.
     pub approach_kind: &'static str,
     /// The gate gives way to the buses it lets through, rather than a signal.
@@ -319,8 +330,8 @@ pub struct ArmView {
     pub uid: u32,
     /// The city street this arm is, or 0 outside a city.
     pub edge: u32,
-    pub label: String,
-    pub street: String,
+    pub label: Said,
+    pub street: Said,
     pub bearing: i32,
     pub offset_mm: i32,
     pub corner_mm: i32,
@@ -377,7 +388,7 @@ pub struct MoveView {
     pub class: u8,
     pub allowed: bool,
     /// Why a measure stops this turn, if one does.
-    pub blocked: Option<&'static str>,
+    pub blocked: Option<Said>,
     /// The turn is made the indirect way (L2).
     pub indirect: bool,
     pub lane: bool,
@@ -415,7 +426,7 @@ pub struct BusView {
 pub struct BusOption {
     pub a: u32,
     pub b: u32,
-    pub label: String,
+    pub label: Said,
 }
 
 #[derive(Serialize)]
@@ -428,7 +439,7 @@ pub struct Selection {
 
 #[derive(Serialize)]
 pub struct JView {
-    pub name: String,
+    pub name: Said,
     /// A place in a city: its streets are the city's.
     pub linked: bool,
     /// A street can be taken away: the junction is not the city's and keeps three.
@@ -469,7 +480,7 @@ fn bus_options(s: &State) -> Vec<BusOption> {
     for (i, a) in s.arms.iter().enumerate() {
         for b in &s.arms[i + 1..] {
             let off = (gap(a.bearing, b.bearing) as i32 - 180).abs();
-            v.push((off, BusOption { a: a.uid, b: b.uid, label: format!("{} to {}", arm_name(a), arm_name(b)) }));
+            v.push((off, BusOption { a: a.uid, b: b.uid, label: arm_to_arm(arm_name(a), arm_name(b)) }));
         }
     }
     v.sort_by_key(|(off, o)| (*off, o.a, o.b));
@@ -869,7 +880,7 @@ impl Junction {
             Target::Cycle => Selection { kind: Some("cycle"), uid: 0, lane: 0 },
         };
         JView {
-            name: self.name().to_string(),
+            name: self.name().clone(),
             linked: self.is_linked(),
             can_remove: !self.is_linked() && n > MIN_ARMS,
             region: REGIONS[region].id,
@@ -900,7 +911,7 @@ impl Junction {
             movements,
             conflicts,
             checks,
-            revisions: self.revisions().enumerate().map(|(i, l)| Revision { step: i + 1, label: l.to_string() }).collect(),
+            revisions: self.revisions().enumerate().map(|(i, l)| Revision { step: i + 1, label: l.clone() }).collect(),
             selected,
             bounds: [mins.0, mins.1, maxs.0, maxs.1],
             can_undo: self.can_undo(),
@@ -934,7 +945,7 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
     // However far a measure reaches, it stays on the arm as drawn.
     let reach = |t: f64| t.min(len - 1_500.0);
     let mut problems = Vec::new();
-    let name = arm_name(a);
+    let problem = |key: &'static str| Said::new(key).with("arm", Arg::Said(Box::new(arm_name(a))));
 
     let (lo, hi) = range(0.0, lane_w);
     let bus = a.bus_lane.then(|| poly(&strip(l.bearing, lo, hi, l.mouth, len)));
@@ -944,7 +955,7 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
         Q_OFFSET => {
             let (lo, hi) = range(park, park + lane_w);
             if park == 0.0 {
-                problems.push(format!("{name}: an offset queue jump needs parking beside the curb to sit beside"));
+                problems.push(problem("jn-problem-offset-parking"));
             }
             Some(strip(l.bearing, lo, hi, l.mouth, reach(stop_t + queue_len)))
         }
@@ -957,7 +968,7 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
     let queue = queue_pts.as_ref().map(|p| poly(p));
     let loop_pts = (a.approach == Q_VIRTUAL).then(|| {
         if s.control != SIGNAL {
-            problems.push(format!("{name}: a virtual queue jump needs a traffic signal"));
+            problems.push(problem("jn-problem-virtual-signal"));
         }
         let (lo, hi) = range(0.0, lane_w);
         strip(l.bearing, lo, hi, stop_t + 2_000.0, stop_t + 5_000.0)
@@ -965,10 +976,10 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
     let virtual_loop = loop_pts.as_ref().map(|p| poly(p));
     let gate = matches!(a.approach, GATE_SIGNAL | GATE_YIELD).then(|| {
         if !a.bus_lane {
-            problems.push(format!("{name}: a bus gate lets a bus lane through, so it needs a bus lane"));
+            problems.push(problem("jn-problem-gate-bus-lane"));
         }
         if l.prof.enter_x.len() < 2 && a.bus_lane {
-            problems.push(format!("{name}: a bus gate needs a traffic lane to hold back"));
+            problems.push(problem("jn-problem-gate-lane"));
         }
         let t = reach(stop_t + queue_len);
         [at(l.bearing, l.lat(off, l.prof.enter_span.0), t), at(l.bearing, l.lat(off, l.prof.enter_span.1), t)]
@@ -977,7 +988,7 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
     let (stop_poly, stop_at) = match a.stop {
         STOP_BULB => {
             if park == 0.0 {
-                problems.push(format!("{name}: a bus bulb extends the curb into parking, and there is none"));
+                problems.push(problem("jn-problem-bulb-parking"));
             }
             let w = if park > 0.0 { park } else { 2_400.0 };
             let (lo, hi) = range(0.0, w);
@@ -985,10 +996,10 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
         }
         STOP_PLATFORM => {
             if s.control != SIGNAL {
-                problems.push(format!("{name}: a signal-protected platform needs a traffic signal"));
+                problems.push(problem("jn-problem-platform-signal"));
             }
             if !has_crossing {
-                problems.push(format!("{name}: a platform in the street needs a crossing to reach it"));
+                problems.push(problem("jn-problem-platform-crossing"));
             }
             let (lo, hi) = range(lane_w, lane_w + 2_500.0);
             (Some(poly(&strip(l.bearing, lo, hi, far + 3_000.0, far + 11_000.0))), Some(at(l.bearing, (lo + hi) / 2.0, far + 7_000.0)))
@@ -999,7 +1010,7 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
     let mid = (l.cl + l.cr) / 2.0;
     let bollards = if a.filter {
         if !a.bus_lane {
-            problems.push(format!("{name}: a modal filter needs a bus lane for the buses that pass"));
+            problems.push(problem("jn-problem-filter-bus-lane"));
         }
         let mut v = Vec::new();
         let mut x = l.cl + 900.0;
@@ -1163,98 +1174,104 @@ fn sample_path(path: &[Value]) -> Vec<P> {
 }
 
 fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView], lay: &Layout) -> Vec<Check> {
-    let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or(String::new(), |a| a.label.clone());
+    let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| Said::new("city-name").with("name", Arg::Text(String::new())), |a| a.label.clone());
+    let arms_of = |uids: Vec<u32>| list(uids.into_iter().map(name).collect());
+    let check = |id: &'static str, label: &'static str, ok: Said, bad: Option<Said>| Check {
+        id,
+        ok: bad.is_none(),
+        amount_mm: 0,
+        label: Said::new(label),
+        detail: bad.unwrap_or(ok),
+    };
     let mut out = Vec::new();
 
     // Every allowed turn has a lane that serves it.
-    let mut no_lane = Vec::new();
-    for m in moves.iter().filter(|m| m.allowed && !m.lane) {
-        no_lane.push(format!("{} to {} ({} turn)", name(m.from), name(m.to), class_word(m.class)));
-    }
-    no_lane.sort();
-    no_lane.dedup();
-    out.push(Check {
-        id: "lanes-cover",
-        ok: no_lane.is_empty(),
-        amount_mm: 0,
-        label: "Lanes cover every turn",
-        detail: if no_lane.is_empty() { "Each allowed turn has a lane".into() } else { format!("No lane for {}", no_lane.join("; ")) },
-    });
+    let no_lane = list(
+        moves
+            .iter()
+            .filter(|m| m.allowed && !m.lane)
+            .map(|m| {
+                let key = match m.class {
+                    LEFT => "jn-no-lane-left",
+                    THROUGH => "jn-no-lane-through",
+                    _ => "jn-no-lane-right",
+                };
+                Said::new(key).with("from", Arg::Said(Box::new(name(m.from)))).with("to", Arg::Said(Box::new(name(m.to))))
+            })
+            .collect(),
+    );
+    out.push(check(
+        "lanes-cover",
+        "jn-check-lanes-cover",
+        Said::new("jn-check-lanes-cover-ok"),
+        no_lane.map(|l| Said::new("jn-check-lanes-cover-bad").with("turns", Arg::Said(Box::new(l)))),
+    ));
 
     // Every lane points at a turn that is allowed.
     let mut dead = Vec::new();
     for a in arms {
         for (i, l) in a.lanes.iter().enumerate() {
             if l.bad {
-                dead.push(format!("{} lane {}", a.label, i + 1));
+                dead.push(Said::new("jn-lane-of").with("arm", Arg::Said(Box::new(a.label.clone()))).with("n", Arg::Num(i as i64 + 1)));
             }
         }
     }
-    out.push(Check {
-        id: "lanes-follow",
-        ok: dead.is_empty(),
-        amount_mm: 0,
-        label: "Lanes follow the turn bans",
-        detail: if dead.is_empty() { "No lane points at a banned turn".into() } else { format!("Points at banned turns: {}", dead.join("; ")) },
-    });
+    out.push(check(
+        "lanes-follow",
+        "jn-check-lanes-follow",
+        Said::new("jn-check-lanes-follow-ok"),
+        list(dead).map(|l| Said::new("jn-check-lanes-follow-bad").with("lanes", Arg::Said(Box::new(l)))),
+    ));
 
     // Crossing distance.
     let longest = arms.iter().filter_map(|a| a.crossing.as_ref().map(|c| (c, a))).max_by_key(|(c, _)| c.stage_mm);
     out.push(match longest {
-        None => Check { id: "crossing", ok: true, amount_mm: 0, label: "Crossing distance", detail: "No crossings marked".into() },
+        None => check("crossing", "jn-check-crossing", Said::new("jn-check-crossing-none"), None),
         Some((c, a)) => {
             let d = c.stage_mm;
-            let detail = if d <= MAX_STAGE_MM {
-                "Longest crossing in one go".into()
+            let key = if d <= MAX_STAGE_MM {
+                "jn-check-crossing-ok"
             } else if a.can_island && !c.island && (c.distance_mm - ISLAND_MM) / 2 <= MAX_STAGE_MM {
                 // The island is the editor's to suggest, not to place: where it would bring each stage within reach, say so.
-                format!("{} is too far to cross in one go. A refuge island in the middle would split it in two", a.label)
+                "jn-check-crossing-island"
             } else {
-                format!("{} is too far to cross in one go", a.label)
+                "jn-check-crossing-far"
             };
-            Check { id: "crossing", ok: d <= MAX_STAGE_MM, amount_mm: d, label: "Crossing distance", detail }
+            let detail = Said::new(key).with("arm", Arg::Said(Box::new(a.label.clone())));
+            Check { id: "crossing", ok: d <= MAX_STAGE_MM, amount_mm: d, label: Said::new("jn-check-crossing"), detail }
         }
     });
 
     // Turning speed across a marked crossing.
-    let fast: Vec<String> = corners.iter().filter(|c| c.fast).map(|c| name(c.uid)).collect();
-    out.push(Check {
-        id: "turning-speed",
-        ok: fast.is_empty(),
-        amount_mm: 0,
-        label: "Slow turns at crossings",
-        detail: if fast.is_empty() { "Turns are slow enough beside every crossing".into() } else { format!("Fast corner after {}", fast.join("; ")) },
-    });
+    let fast = arms_of(corners.iter().filter(|c| c.fast).map(|c| c.uid).collect());
+    out.push(check(
+        "turning-speed",
+        "jn-check-turning-speed",
+        Said::new("jn-check-turning-speed-ok"),
+        fast.map(|l| Said::new("jn-check-turning-speed-bad").with("arms", Arg::Said(Box::new(l)))),
+    ));
 
     // Sidewalk left at the corner.
-    let thin: Vec<String> = corners.iter().filter(|c| !c.ok).map(|c| name(c.uid)).collect();
-    out.push(Check {
-        id: "corner-room",
-        ok: thin.is_empty(),
-        amount_mm: 0,
-        label: "Sidewalk survives the corner",
-        detail: if thin.is_empty() { "Every corner leaves room to stand".into() } else { format!("Corner after {} eats the sidewalk", thin.join("; ")) },
-    });
+    let thin = arms_of(corners.iter().filter(|c| !c.ok).map(|c| c.uid).collect());
+    out.push(check(
+        "corner-room",
+        "jn-check-corner-room",
+        Said::new("jn-check-corner-room-ok"),
+        thin.map(|l| Said::new("jn-check-corner-room-bad").with("arms", Arg::Said(Box::new(l)))),
+    ));
 
     // Transit priority measures have what they need.
-    let problems: Vec<&str> = arms.iter().flat_map(|a| a.transit.problems.iter().map(String::as_str)).collect();
-    out.push(Check {
-        id: "transit",
-        ok: problems.is_empty(),
-        amount_mm: 0,
-        label: "Transit measures work",
-        detail: if problems.is_empty() { "Each measure has what it needs".into() } else { problems.join("; ") },
-    });
+    let problems = list(arms.iter().flat_map(|a| a.transit.problems.iter().cloned()).collect());
+    out.push(check("transit", "jn-check-transit", Said::new("jn-check-transit-ok"), problems));
 
     // Signals.
     let signal_ok = s.control != SIGNAL || s.arms.len() <= MAX_SIGNAL_ARMS;
-    out.push(Check {
-        id: "signal",
-        ok: signal_ok,
-        amount_mm: 0,
-        label: "Signal has room",
-        detail: if signal_ok { "Few enough streets for a signal".into() } else { format!("{} streets is too many for one signal", s.arms.len()) },
-    });
+    out.push(check(
+        "signal",
+        "jn-check-signal",
+        Said::new("jn-check-signal-ok"),
+        (!signal_ok).then(|| Said::new("jn-check-signal-bad").with("n", Arg::Num(s.arms.len() as i64))),
+    ));
     let _ = lay;
     out
 }
@@ -1262,6 +1279,16 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::i18n::Locale;
+    use crate::shared::units::Units;
+
+    fn en(said: &Said) -> String {
+        crate::shared::said::say_now(&crate::i18n_for(Locale::En), Units::Metres, said)
+    }
+
+    fn fr(said: &Said) -> String {
+        crate::shared::said::say_now(&crate::i18n_for(Locale::FrCa), Units::Metres, said)
+    }
 
     fn arm_of(j: &Junction, bearing: i32) -> u32 {
         j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid
@@ -1285,20 +1312,25 @@ mod tests {
         let v = j.view();
         let check = v.checks.iter().find(|c| c.id == "crossing").unwrap();
         assert!(!check.ok);
-        assert_eq!(check.detail, "Sample Avenue 2 (north) is too far to cross in one go. A refuge island in the middle would split it in two");
+        assert_eq!(en(&check.detail), "Sample Avenue 2 (north) is too far to cross in one go. A refuge island in the middle would split it in two");
+        assert_eq!(
+            fr(&check.detail),
+            "Sample Avenue 2 (nord)\u{a0}: trop long à traverser d’un seul coup. Un îlot refuge au centre couperait la traversée en deux"
+        );
+        assert_eq!((en(&check.label), fr(&check.label)), ("Crossing distance".into(), "Distance de traversée".into()));
         // With the island on, there is nothing to suggest.
         assert!(j.set_island(n, true));
         let v = j.view();
         let check = v.checks.iter().find(|c| c.id == "crossing").unwrap();
         assert!(check.ok);
-        assert_eq!(check.detail, "Longest crossing in one go");
+        assert_eq!(en(&check.detail), "Longest crossing in one go");
     }
 
     #[test]
     fn every_sample_starts_sound() {
         for i in 0..JUNCTION_SAMPLES.len() {
             let v = Junction::new(i).view();
-            let failing: Vec<_> = v.checks.iter().filter(|c| !c.ok).map(|c| format!("{}: {}", c.id, c.detail)).collect();
+            let failing: Vec<_> = v.checks.iter().filter(|c| !c.ok).map(|c| format!("{}: {}", c.id, en(&c.detail))).collect();
             assert!(failing.is_empty(), "{}: {failing:?}", JUNCTION_SAMPLES[i].name);
         }
     }
@@ -1309,11 +1341,8 @@ mod tests {
         j.set_control(ROUNDABOUT);
         let opts = j.view().bus_options;
         assert_eq!(opts.len(), 6);
-        assert_eq!(
-            opts[0].label.contains("north") && opts[0].label.contains("south") || opts[0].label.contains("east") && opts[0].label.contains("west"),
-            true,
-            "straightest first"
-        );
+        let first = en(&opts[0].label);
+        assert_eq!(first.contains("north") && first.contains("south") || first.contains("east") && first.contains("west"), true, "straightest first");
         assert!(j.set_bus(Some((opts[0].a, opts[0].b))));
         let v = j.view();
         let bus = v.bus.unwrap();
@@ -1348,7 +1377,7 @@ mod tests {
         assert!(j.set_approach(n, GATE_SIGNAL));
         assert!(!transit(&j).ok);
         assert!(j.set_bus_lane(n, true));
-        assert!(transit(&j).ok, "{}", transit(&j).detail);
+        assert!(transit(&j).ok, "{}", en(&transit(&j).detail));
         // A virtual queue jump needs a signal; take the signal away.
         assert!(j.set_approach(e, Q_VIRTUAL));
         assert!(transit(&j).ok);
@@ -1739,7 +1768,7 @@ mod tests {
         for a in &mut state.arms {
             a.edge = a.uid;
         }
-        let j = Junction::from_city("Test", &state, &state, 0).unwrap();
+        let j = Junction::from_city(Said::new("city-name").with("name", Arg::Text("Test".into())), &state, &state, 0).unwrap();
         assert!(!j.view().can_remove);
     }
 
@@ -1747,7 +1776,7 @@ mod tests {
     fn a_curb_bulge_is_offered_only_beside_parking() {
         let j = Junction::new(1); // Sample Street 1 has parking both sides; Sample Lane 3 on one
         let v = j.view();
-        let by = |sample: usize| v.arms.iter().find(|a| a.street == crate::street::model::SAMPLES[sample].name).unwrap().can_bulb;
+        let by = |sample: usize| v.arms.iter().find(|a| en(&a.street) == crate::street::model::SAMPLES[sample].name).unwrap().can_bulb;
         assert_eq!(by(0), [true, true]);
         assert_eq!(by(2), [false, true]);
     }

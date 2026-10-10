@@ -13,11 +13,87 @@ use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::Units;
 
 fn shared(sample: usize) -> Rc<JunctionVm> {
-    JunctionVm::new(crate::shared::platform::browser_ports(), Junction::new(sample), None)
+    JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(crate::shared::i18n::Locale::En), Junction::new(sample), None)
 }
 
 fn arm(shared: &JunctionVm, bearing: i32) -> u32 {
     shared.read(|j| j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid)
+}
+
+// ---- the messages ----------------------------------------------------------------
+
+#[test]
+fn the_junction_ftl_files_have_the_same_messages_and_variables() {
+    use crate::shared::i18n::tests::parity_problems;
+    assert_eq!(parity_problems(super::RESOURCES.en, super::RESOURCES.fr), Vec::<String>::new());
+}
+
+#[test]
+fn the_checks_and_the_history_of_a_junction_speak_french_with_no_english_left() {
+    use crate::shared::i18n::Locale;
+    use crate::shared::said::say_now;
+    let fr = crate::i18n_for(Locale::FrCa);
+    let say = |s: &crate::shared::said::Said| say_now(&fr, Units::Metres, s);
+    // A junction that fails every check it can, with a history of each kind of edit.
+    let mut j = Junction::new(3); // five ways: too many streets for a signal
+    let (n, e) = (j.current().arms[0].uid, j.current().arms[1].uid);
+    assert!(j.set_control(SIGNAL));
+    let _ = j.set_corner(n, 9_000);
+    assert!(j.set_approach(n, GATE_SIGNAL));
+    assert!(j.set_stop(e, STOP_PLATFORM));
+    assert!(j.set_filter(e, true));
+    assert!(j.set_rule(e, RULE_RIRO));
+    let lane_to = j.arm(n).unwrap().lanes[0].to[0];
+    let _ = j.set_lane_dest(n, 0, lane_to, false);
+    let v = j.view();
+    assert!(v.checks.iter().filter(|c| !c.ok).count() >= 3, "{:?}", v.checks.iter().map(|c| (c.id, c.ok)).collect::<Vec<_>>());
+    let mut text: Vec<String> = v.checks.iter().flat_map(|c| [say(&c.label), say(&c.detail)]).collect();
+    text.extend(v.revisions.iter().map(|r| say(&r.label)));
+    text.extend(v.arms.iter().flat_map(|a| a.transit.problems.iter().map(say)));
+    text.extend(v.movements.iter().filter_map(|m| m.blocked.as_ref().map(say)));
+    let all = text.join("\n");
+    for english in [
+        "Lanes",
+        "Crossing",
+        "crossing",
+        "Sidewalk",
+        "Signal has",
+        "one signal",
+        "Transit",
+        " to ",
+        "Corner",
+        "Control",
+        "north",
+        "south",
+        "east",
+        "west",
+        "needs",
+        "streets",
+        "turn",
+        "lane",
+        "Left",
+        "Right-in",
+        "dead end",
+        "modal filter lets",
+    ] {
+        assert!(!all.contains(english), "{english:?} in:\n{all}");
+    }
+    assert!(all.contains("Signalisation\u{a0}: feux de circulation"), "{all}");
+    assert_eq!(fr.missing(), Vec::<String>::new());
+}
+
+#[test]
+fn the_turn_table_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::FrCa), Junction::new(0), None);
+    let e = arm(&s, 90);
+    s.edit(|j| j.set_rule(e, RULE_DEAD_END));
+    let h = html(|| view! { <turns::Turns vm=s.clone()/> }.into_any());
+    assert!(h.contains("Sample Avenue 2 (nord) vers Sample Street 1 (est)\u{a0}: virage à gauche"), "{h}");
+    assert!(h.contains("Virages permis.") && h.contains(">O<") && h.contains("impossible. Un cul-de-sac"), "{h}");
+    for english in ["Turns allowed", "From", " to ", " turn", "allowed", "north", ">W<"] {
+        assert!(!h.contains(english), "{english:?} in {h}");
+    }
 }
 
 // ---- turns ---------------------------------------------------------------------
@@ -117,7 +193,7 @@ fn the_changes_start_from_the_junction_today_and_list_each_edit() {
     let n = arm(&s, 0);
     s.edit(|j| j.set_corner(n, 7_000));
     let h = html(|| view! { <notes::Revisions vm=s.clone()/> }.into_any());
-    assert!(h.contains("7000 mm radius"));
+    assert!(h.contains("7.0 m radius"));
     assert!(h.contains("class=\"now\""));
     assert!(!h.contains("base now"));
 }
@@ -203,8 +279,9 @@ fn a_city_junction_s_streets_link_to_the_street_editor_and_cannot_be_removed() {
     for a in &mut state.arms {
         a.edge = a.uid + 10;
     }
-    let j = Junction::from_city("Test", &state, &state, 0).unwrap();
-    let s = JunctionVm::new(crate::shared::platform::browser_ports(), j, None);
+    let j = Junction::from_city(crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into())), &state, &state, 0)
+        .unwrap();
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(crate::shared::i18n::Locale::En), j, None);
     let e = arm(&s, 90);
     s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
@@ -371,7 +448,13 @@ fn linked_shared() -> Rc<JunctionVm> {
     for a in &mut state.arms {
         a.edge = a.uid + 10;
     }
-    JunctionVm::new(crate::shared::platform::browser_ports(), Junction::from_city("Junction 4", &state, &state, 0).unwrap(), None)
+    JunctionVm::new(
+        crate::shared::platform::browser_ports(),
+        crate::i18n_for(crate::shared::i18n::Locale::En),
+        Junction::from_city(crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Junction 4".into())), &state, &state, 0)
+            .unwrap(),
+        None,
+    )
 }
 
 #[test]
@@ -407,7 +490,13 @@ fn the_title_block_links_the_osm_nodes_and_says_whether_the_junction_was_changed
         a.edge = a.uid + 10;
     }
     state.source = vec![OsmRef { id: 29796354, version: Some(5) }, OsmRef { id: 9, version: None }];
-    let s = JunctionVm::new(crate::shared::platform::browser_ports(), Junction::from_city("Junction 4", &state, &state, 0).unwrap(), None);
+    let s = JunctionVm::new(
+        crate::shared::platform::browser_ports(),
+        crate::i18n_for(crate::shared::i18n::Locale::En),
+        Junction::from_city(crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Junction 4".into())), &state, &state, 0)
+            .unwrap(),
+        None,
+    );
     let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
     assert!(h.contains("href=\"https://www.openstreetmap.org/node/29796354\"") && h.contains(">node 29796354 v5<"), "{h}");
     assert!(h.contains(">node 9<") && h.contains("id=\"tb-state\">As imported<"), "{h}");

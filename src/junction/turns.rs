@@ -9,29 +9,32 @@ use crate::junction::model::{LEFT, THROUGH};
 use crate::junction::read_model::JView;
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
+use crate::shared::i18n::Args;
 
 const COMPASS: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+const COMPASS_KEYS: [&str; 8] = [
+    "jn-compass-short-n",
+    "jn-compass-short-ne",
+    "jn-compass-short-e",
+    "jn-compass-short-se",
+    "jn-compass-short-s",
+    "jn-compass-short-sw",
+    "jn-compass-short-w",
+    "jn-compass-short-nw",
+];
 
-/// The compass point a bearing is nearest.
+fn point(bearing: i32) -> usize {
+    ((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8
+}
+
+/// The compass point a bearing is nearest, as the English tag (still read by the views Task 7 translates).
 pub fn compass(bearing: i32) -> &'static str {
-    COMPASS[((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8]
+    COMPASS[point(bearing)]
 }
 
-pub fn turn_word(class: u8) -> &'static str {
-    match class {
-        LEFT => "left",
-        THROUGH => "straight on",
-        _ => "right",
-    }
-}
-
-/// How a class of turn is named at the start of a sentence.
-pub fn turn_name(class: u8) -> &'static str {
-    match class {
-        LEFT => "Left",
-        THROUGH => "Straight on",
-        _ => "Right",
-    }
+/// The message of the compass point a bearing is nearest, as a short tag ("NE").
+pub fn compass_key(bearing: i32) -> &'static str {
+    COMPASS_KEYS[point(bearing)]
 }
 
 /// A turn arrow, pointing up, in a 16 by 16 box: the stem and its branch.
@@ -49,15 +52,15 @@ pub fn turn_glyph(class: u8, size: u32) -> impl IntoView {
     }
 }
 
-fn table(v: &JView, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
+fn table(v: &JView, w: Watch, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
     let columns = v
         .arms
         .iter()
         .map(|c| {
-            let (title, text) = (c.label.clone(), c.label.clone());
+            let (title, text) = (w.say(&c.label), w.say(&c.label));
             view! {
                 <th scope="col" title=title>
-                    <span aria-hidden="true">{compass(c.bearing)}</span>
+                    <span aria-hidden="true">{w.tr(compass_key(c.bearing))}</span>
                     <span class="sr-only">{text}</span>
                 </th>
             }
@@ -77,11 +80,17 @@ fn table(v: &JView, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
                     let Some(m) = v.movements.iter().find(|m| m.from == a.uid && m.to == b.uid) else {
                         return view! { <td class="zero" aria-hidden="true">"–"</td> }.into_any();
                     };
-                    let name = format!("{} to {}: {} turn", a.label, b.label, turn_word(m.class));
+                    let cell = match m.class {
+                        LEFT => "jn-turn-cell-left",
+                        THROUGH => "jn-turn-cell-through",
+                        _ => "jn-turn-cell-right",
+                    };
+                    let i18n = w.i18n();
+                    let name = i18n.tr(cell, &Args::new().str("from", w.say(&a.label)).str("to", w.say(&b.label)));
                     let bad = m.allowed && !m.lane;
-                    if let Some(why) = m.blocked {
-                        let title = why.to_string();
-                        let label = format!("{name}: not possible. {why}");
+                    if let Some(why) = &m.blocked {
+                        let title = w.say(why);
+                        let label = i18n.tr("jn-turn-blocked", &Args::new().str("turn", name).str("why", title.clone()));
                         return view! {
                             <td>
                                 <button type="button" class="turn locked" disabled title=title aria-label=label>
@@ -92,16 +101,14 @@ fn table(v: &JView, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
                         .into_any();
                     }
                     let class = format!("turn{}{}", if m.allowed { " on" } else { "" }, if bad { " bad" } else { "" });
-                    let label = format!(
-                        "{name}{}",
-                        if !m.allowed {
-                            ", not allowed"
-                        } else if bad {
-                            ", allowed, no lane serves it"
-                        } else {
-                            ", allowed"
-                        }
-                    );
+                    let state = if !m.allowed {
+                        "jn-turn-banned"
+                    } else if bad {
+                        "jn-turn-unserved"
+                    } else {
+                        "jn-turn-allowed"
+                    };
+                    let label = i18n.tr(state, &Args::new().str("turn", name));
                     let (from, to, allowed) = (a.uid, b.uid, m.allowed);
                     let toggle = toggle.clone();
                     view! {
@@ -120,11 +127,11 @@ fn table(v: &JView, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
                     .into_any()
                 })
                 .collect_view();
-            let (title, text) = (a.label.clone(), a.label.clone());
+            let (title, text) = (w.say(&a.label), w.say(&a.label));
             view! {
                 <tr>
                     <th scope="row" title=title>
-                        <span class="dirtag">{compass(a.bearing)}</span>
+                        <span class="dirtag">{w.tr(compass_key(a.bearing))}</span>
                         <span class="sr-only">{text}</span>
                     </th>
                     {cells}
@@ -133,12 +140,10 @@ fn table(v: &JView, toggle: &Rc<dyn Fn(u32, u32, bool)>) -> AnyView {
         })
         .collect_view();
     view! {
-        <caption class="sr-only">
-            "Turns allowed. Rows are the street traffic comes from, columns the street it goes to."
-        </caption>
+        <caption class="sr-only">{w.tr("jn-turns-caption")}</caption>
         <thead>
             <tr>
-                <th scope="col"><span class="sr-only">"From"</span></th>
+                <th scope="col"><span class="sr-only">{w.tr("jn-turns-from")}</span></th>
                 {columns}
             </tr>
         </thead>
@@ -158,7 +163,7 @@ pub fn Turns(vm: Rc<JunctionVm>) -> impl IntoView {
     let toggle = StoredValue::new_local(toggle);
     move || {
         let v = w.view();
-        toggle.with_value(|t| table(&v, t))
+        toggle.with_value(|t| table(&v, w, t))
     }
 }
 
@@ -174,5 +179,7 @@ mod tests {
         assert_eq!(compass(90), "E");
         assert_eq!(compass(359), "N");
         assert_eq!(compass(-45), "NW");
+        assert_eq!(compass_key(-45), "jn-compass-short-nw");
+        assert_eq!(compass_key(23), "jn-compass-short-ne");
     }
 }

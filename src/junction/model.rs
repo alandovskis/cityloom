@@ -3,8 +3,9 @@
 //! Pure Rust like `model.rs`, so it is tested natively. Lengths are integer
 //! millimetres and angles integer degrees. Everything here is synthetic.
 
-use crate::shared::catalogue::{KINDS, Material, REGIONS, Side, StreetClass, is_roadway};
+use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass, is_roadway};
 use crate::shared::provenance::OsmRef;
+use crate::shared::said::{Arg, Said};
 use serde::{Deserialize, Serialize};
 
 use crate::junction::geometry::gap;
@@ -25,21 +26,35 @@ pub const ALL_WAY_STOP: usize = 2;
 pub const SIGNAL: usize = 3;
 pub const ROUNDABOUT: usize = 4;
 
-pub const CONTROLS: [Material; 5] = [
-    Material { id: "uncontrolled", name: "No control" },
-    Material { id: "priority", name: "Side streets stop" },
-    Material { id: "stop", name: "All-way stop" },
-    Material { id: "signal", name: "Traffic signal" },
-    Material { id: "roundabout", name: "Roundabout" },
+/// How a junction is run: its id, and the message that names it.
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+pub struct Control {
+    pub id: &'static str,
+    #[serde(skip)]
+    pub key: &'static str,
+}
+
+pub const CONTROLS: [Control; 5] = [
+    Control { id: "uncontrolled", key: "jn-control-uncontrolled" },
+    Control { id: "priority", key: "jn-control-priority" },
+    Control { id: "stop", key: "jn-control-stop" },
+    Control { id: "signal", key: "jn-control-signal" },
+    Control { id: "roundabout", key: "jn-control-roundabout" },
 ];
 
+/// The message that names control `i` (an index into `CONTROLS`).
+pub fn control_key(i: usize) -> &'static str {
+    CONTROLS[i].key
+}
+
 /// One entry of a short list a junction measure is chosen from. `code` is the
-/// Transit Priority Atlas toolbox code.
+/// Transit Priority Atlas toolbox code; `key` the message that names it.
 #[derive(Clone, Copy, Debug, serde::Serialize)]
 pub struct Item {
     pub id: &'static str,
     pub code: &'static str,
-    pub name: &'static str,
+    #[serde(skip)]
+    pub key: &'static str,
 }
 
 pub const Q_OFFSET: usize = 1;
@@ -52,21 +67,21 @@ pub const GATE_YIELD: usize = 5;
 /// transit lane, a virtual lane made by signals, or a gate that stops the
 /// other traffic upstream.
 pub const APPROACHES: [Item; 6] = [
-    Item { id: "none", code: "", name: "None" },
-    Item { id: "queue-offset", code: "G1", name: "Offset queue-jump lane" },
-    Item { id: "queue-curb", code: "G2", name: "Curbside queue-jump lane" },
-    Item { id: "queue-virtual", code: "G3", name: "Virtual queue-jump lane" },
-    Item { id: "gate-signal", code: "H1", name: "Signal-controlled bus gate" },
-    Item { id: "gate-yield", code: "H2", name: "Yield-controlled bus gate" },
+    Item { id: "none", code: "", key: "jn-approach-none" },
+    Item { id: "queue-offset", code: "G1", key: "jn-measure-g1" },
+    Item { id: "queue-curb", code: "G2", key: "jn-measure-g2" },
+    Item { id: "queue-virtual", code: "G3", key: "jn-measure-g3" },
+    Item { id: "gate-signal", code: "H1", key: "jn-measure-h1" },
+    Item { id: "gate-yield", code: "H2", key: "jn-measure-h2" },
 ];
 
 pub const STOP_BULB: usize = 1;
 pub const STOP_PLATFORM: usize = 2;
 
 pub const STOPS: [Item; 3] = [
-    Item { id: "none", code: "", name: "No bus stop" },
-    Item { id: "bulb", code: "M1", name: "Bus bulb" },
-    Item { id: "platform", code: "M2", name: "Signal-protected on-street platform" },
+    Item { id: "none", code: "", key: "jn-stop-none" },
+    Item { id: "bulb", code: "M1", key: "jn-measure-m1" },
+    Item { id: "platform", code: "M2", key: "jn-measure-m2" },
 ];
 
 /// The Atlas code of the transit modal filter, which an arm has or has not.
@@ -78,11 +93,11 @@ pub const RULE_RIRO: usize = 3;
 pub const RULE_DEAD_END: usize = 4;
 
 pub const RULES: [Item; 5] = [
-    Item { id: "none", code: "", name: "No turn management" },
-    Item { id: "around", code: "L1", name: "Indirect left turn via alternative itinerary" },
-    Item { id: "within", code: "L2", name: "Indirect left turn within the intersection" },
-    Item { id: "riro", code: "L3", name: "Right-in/right-out" },
-    Item { id: "dead-end", code: "L4", name: "Dead-ending of a lateral street" },
+    Item { id: "none", code: "", key: "jn-rule-none" },
+    Item { id: "around", code: "L1", key: "jn-measure-l1" },
+    Item { id: "within", code: "L2", key: "jn-measure-l2" },
+    Item { id: "riro", code: "L3", key: "jn-measure-l3" },
+    Item { id: "dead-end", code: "L4", key: "jn-measure-l4" },
 ];
 
 /// How far a queue jump runs back from the stop line, or a gate stands
@@ -175,7 +190,10 @@ pub struct Arm {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct State {
-    pub label: String,
+    /// What the step to this state was, for the history of one visit to the page. It is not kept:
+    /// a saved state comes back as "Earlier changes" (and an older save's `label` is ignored).
+    #[serde(skip, default = "earlier")]
+    pub label: Said,
     pub arms: Vec<Arm>,
     pub control: usize,
     /// Roundabout size above the least that keeps the arms apart.
@@ -220,6 +238,16 @@ impl Target {
     }
 }
 
+/// The label of a state whose own label is not known: one read back from storage.
+pub fn earlier() -> Said {
+    Said::new("city-earlier")
+}
+
+/// The label of the junction as the city first laid it out.
+pub fn today() -> Said {
+    Said::new("city-junction-today")
+}
+
 // ---- the street an arm reads ------------------------------------------------
 
 /// One piece of an arm's section, as read from its sample street.
@@ -237,7 +265,7 @@ pub struct Piece {
 /// "away" traffic leaves the junction and "toward" traffic enters it.
 #[derive(Clone, Debug)]
 pub struct Profile {
-    pub name: String,
+    pub name: Said,
     pub row_mm: i32,
     pub pieces: Vec<Piece>,
     /// Extent of the carriageway across the section.
@@ -258,18 +286,7 @@ pub struct Profile {
 /// of the road of `region`.
 pub fn profile_of(street: &Street, region: usize) -> Profile {
     let e = Editor::from_street(street, street, region);
-    read_profile(&e.view(), english(&street.title()))
-}
-
-thread_local! {
-    static ENGLISH: std::rc::Rc<crate::shared::i18n::I18n> = crate::i18n_for(crate::shared::i18n::Locale::En);
-}
-
-/// What the city or a street says, in English: the junction's own words are English until its slice is
-/// translated, and the names it reads (a street's title) are put in the same language. Removed when the
-/// junction is translated (Tasks 6 and 7 of the bilingual plan).
-pub(crate) fn english(said: &crate::shared::said::Said) -> String {
-    ENGLISH.with(|i18n| crate::shared::said::say_now(i18n, crate::shared::units::Units::Metres, said))
+    read_profile(&e.view(), street.title())
 }
 
 impl Arm {
@@ -317,8 +334,9 @@ impl Arm {
         p
     }
 
-    pub fn street_name(&self) -> String {
-        self.section.as_ref().map_or_else(String::new, |s| english(&s.title()))
+    /// The name of the street the arm reads; a junction outside a city reads one always.
+    pub fn street_name(&self) -> Said {
+        self.section.as_ref().map_or_else(|| Said::new("city-name").with("name", Arg::Text(String::new())), Street::title)
     }
 
     pub fn row_mm(&self) -> i32 {
@@ -331,7 +349,7 @@ impl Arm {
     }
 }
 
-fn read_profile(view: &View, name: String) -> Profile {
+fn read_profile(view: &View, name: Said) -> Profile {
     let pieces: Vec<Piece> =
         view.segments.iter().map(|s| Piece { kind: s.kind, material: s.material, x_mm: s.x_mm, width_mm: s.width_mm, direction: s.direction }).collect();
     let road: Vec<&Piece> = pieces.iter().filter(|p| is_roadway(p.kind)).collect();
@@ -399,39 +417,53 @@ pub fn default_uses(i: usize, n: usize, avail: u8) -> u8 {
     }
 }
 
-fn compass(bearing: i32) -> &'static str {
-    const NAMES: [&str; 8] = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
-    NAMES[(((bearing + 22).rem_euclid(360)) / 45) as usize]
+/// The point of the compass a bearing is nearest, named in a sentence ("north-east").
+pub fn compass(bearing: i32) -> Said {
+    const KEYS: [&str; 8] =
+        ["jn-compass-n", "jn-compass-ne", "jn-compass-e", "jn-compass-se", "jn-compass-s", "jn-compass-sw", "jn-compass-w", "jn-compass-nw"];
+    Said::new(KEYS[(((bearing + 22).rem_euclid(360)) / 45) as usize])
 }
 
-pub fn arm_name(a: &Arm) -> String {
-    format!("{} ({})", a.street_name(), compass(a.bearing))
+/// An arm by its street and the way it leaves the junction: "Main Street (north)".
+pub fn arm_name(a: &Arm) -> Said {
+    Said::new("jn-arm-name").with("street", Arg::Said(Box::new(a.street_name()))).with("compass", Arg::Said(Box::new(compass(a.bearing))))
+}
+
+/// Something said about one arm.
+fn about(key: &'static str, a: &Arm) -> Said {
+    Said::new(key).with("arm", Arg::Said(Box::new(arm_name(a))))
+}
+
+/// The word for switching a feature on or off, said in the middle of a label.
+fn change(on: bool) -> Arg {
+    Arg::Msg(if on { "jn-word-add" } else { "jn-word-remove" })
 }
 
 /// Why traffic may not turn from arm `i` into arm `j`, when a measure stops
 /// it: a dead end, a transit modal filter, right-in/right-out, or a left turn
 /// sent round another way.
-pub fn blocked(arms: &[Arm], i: usize, j: usize) -> Option<&'static str> {
+pub fn blocked(arms: &[Arm], i: usize, j: usize) -> Option<Said> {
     let (a, b) = (&arms[i], &arms[j]);
     let class = turn_class(a.bearing, b.bearing);
-    if a.rule == RULE_DEAD_END || b.rule == RULE_DEAD_END {
-        Some("A dead end")
+    let key = if a.rule == RULE_DEAD_END || b.rule == RULE_DEAD_END {
+        "jn-blocked-dead-end"
     } else if a.filter || b.filter {
-        Some("A transit modal filter lets only buses through")
+        "jn-blocked-filter"
     } else if a.rule == RULE_RIRO && class != RIGHT {
-        Some("Right-in/right-out: only right turns leave")
+        "jn-blocked-riro-leave"
     } else if b.rule == RULE_RIRO && class != RIGHT {
-        Some("Right-in/right-out: only right turns enter")
+        "jn-blocked-riro-enter"
     } else if a.rule == RULE_AROUND && class == LEFT {
-        Some("Left turns go round by another street")
+        "jn-blocked-around"
     } else {
-        None
-    }
+        return None;
+    };
+    Some(Said::new(key))
 }
 
 // ---- the editor ---------------------------------------------------------------
 
-/// Why an edit was refused, in words for the resident.
+/// Why an edit was refused; the view-model words it for the resident.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Refusal {
     NeedsThreeStreets,
@@ -458,17 +490,18 @@ impl Refusal {
         Refusal::DoesNotFit,
     ];
 
-    pub fn message(self) -> &'static str {
+    /// The message that says why.
+    pub fn key(self) -> &'static str {
         match self {
-            Refusal::NeedsThreeStreets => "A junction needs at least three streets.",
-            Refusal::LinkedNoRemove => "The streets here belong to the city, so they cannot be removed.",
-            Refusal::RoundaboutTooBig => "The streets are too wide to fit a roundabout.",
-            Refusal::BearingBlocked => "That is too close to a neighbouring street, or leaves a gap wider than a straight road.",
-            Refusal::LastWayOut => "A street has to keep at least one way out.",
-            Refusal::LaneNeedsStreet => "A lane has to go to at least one street.",
-            Refusal::IslandRoadTooNarrow => "This road is too narrow for an island.",
-            Refusal::BulbNoParking => "There is no parking on that side to give up.",
-            Refusal::DoesNotFit => "That change does not fit.",
+            Refusal::NeedsThreeStreets => "jn-refusal-needs-three-streets",
+            Refusal::LinkedNoRemove => "jn-refusal-linked-no-remove",
+            Refusal::RoundaboutTooBig => "jn-refusal-roundabout-too-big",
+            Refusal::BearingBlocked => "jn-refusal-bearing-blocked",
+            Refusal::LastWayOut => "jn-refusal-last-way-out",
+            Refusal::LaneNeedsStreet => "jn-refusal-lane-needs-street",
+            Refusal::IslandRoadTooNarrow => "jn-refusal-island-road-too-narrow",
+            Refusal::BulbNoParking => "jn-refusal-bulb-no-parking",
+            Refusal::DoesNotFit => "jn-refusal-does-not-fit",
         }
     }
 }
@@ -477,14 +510,14 @@ pub struct Junction {
     /// Set when the junction is a place in a city: its streets are the city's
     /// and its name is the city's, so its streets cannot be removed.
     linked: bool,
-    name: String,
+    name: Said,
     /// Index into `REGIONS`. A setting of the sheet, not part of the history.
     pub region: usize,
     states: Vec<State>,
     cursor: usize,
     pub selected: Target,
     gesture: Option<State>,
-    pending_label: String,
+    pending_label: Said,
     /// Why the last edit was refused; None once one is taken.
     refusal: Option<Refusal>,
 }
@@ -499,7 +532,7 @@ impl Junction {
     /// the streets have changed so that `now` can no longer be drawn it is
     /// eased (small corners, no offsets, no roundabout) before it is given up
     /// for `today`. None when not even `today` can be drawn.
-    pub fn from_city(name: &str, today: &State, now: &State, region: usize) -> Option<Junction> {
+    pub fn from_city(name: Said, today: &State, now: &State, region: usize) -> Option<Junction> {
         let settle = |s: &State| {
             let mut s = s.clone();
             normalize(&mut s.arms, region);
@@ -509,18 +542,18 @@ impl Junction {
         let now = ease(&settle(now), region);
         let mut j = Junction {
             linked: true,
-            name: name.to_string(),
+            name,
             region,
-            states: vec![State { label: "Junction today".into(), ..today.clone() }],
+            states: vec![State { label: self::today(), ..today.clone() }],
             cursor: 0,
             selected: Target::None,
             gesture: None,
-            pending_label: String::new(),
+            pending_label: earlier(),
             refusal: None,
         };
-        let same = |a: &State, b: &State| State { label: String::new(), ..a.clone() } == State { label: String::new(), ..b.clone() };
+        let same = |a: &State, b: &State| State { label: earlier(), ..a.clone() } == State { label: earlier(), ..b.clone() };
         if let Some(now) = now.filter(|n| !same(n, &today)) {
-            j.states.push(State { label: "Earlier changes".into(), ..now });
+            j.states.push(State { label: earlier(), ..now });
             j.cursor = 1;
         }
         Some(j)
@@ -535,7 +568,7 @@ impl Junction {
         s
     }
 
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &Said {
         &self.name
     }
 
@@ -563,8 +596,8 @@ impl Junction {
         self.cursor + 1 < self.states.len()
     }
 
-    pub fn revisions(&self) -> impl Iterator<Item = &str> {
-        self.states.iter().skip(1).take(self.cursor).map(|s| s.label.as_str())
+    pub fn revisions(&self) -> impl Iterator<Item = &Said> {
+        self.states.iter().skip(1).take(self.cursor).map(|s| &s.label)
     }
 
     pub fn drive_side(&self) -> Side {
@@ -590,7 +623,7 @@ impl Junction {
     /// Runs an edit on a copy and records it as a revision, or, inside a
     /// gesture, applies it without recording. Rejects an edit that leaves the
     /// junction invalid.
-    fn edit<F>(&mut self, label: String, f: F) -> bool
+    fn edit<F>(&mut self, label: Said, f: F) -> bool
     where
         F: FnOnce(&mut State) -> bool,
     {
@@ -598,7 +631,7 @@ impl Junction {
     }
 
     /// Like `edit`, with the reason to give when the result cannot be drawn.
-    fn edit_why<F>(&mut self, why: Refusal, label: String, f: F) -> bool
+    fn edit_why<F>(&mut self, why: Refusal, label: Said, f: F) -> bool
     where
         F: FnOnce(&mut State) -> bool,
     {
@@ -652,7 +685,7 @@ impl Junction {
     pub fn begin_gesture(&mut self) {
         if self.gesture.is_none() {
             self.gesture = Some(self.current().clone());
-            self.pending_label.clear();
+            self.pending_label = earlier();
         }
     }
 
@@ -663,7 +696,7 @@ impl Junction {
             return false;
         }
         *self.current_mut() = baseline;
-        now.label = std::mem::take(&mut self.pending_label);
+        now.label = std::mem::replace(&mut self.pending_label, earlier());
         self.states.truncate(self.cursor + 1);
         self.states.push(now);
         self.cursor += 1;
@@ -772,14 +805,14 @@ impl Junction {
 
     // ---- edits ------------------------------------------------------------
 
-    fn arm_edit<F>(&mut self, uid: u32, label: impl FnOnce(&Arm) -> String, f: F) -> bool
+    fn arm_edit<F>(&mut self, uid: u32, label: impl FnOnce(&Arm) -> Said, f: F) -> bool
     where
         F: FnOnce(&mut Arm) -> bool,
     {
         self.arm_edit_why(Refusal::DoesNotFit, uid, label, f)
     }
 
-    fn arm_edit_why<F>(&mut self, why: Refusal, uid: u32, label: impl FnOnce(&Arm) -> String, f: F) -> bool
+    fn arm_edit_why<F>(&mut self, why: Refusal, uid: u32, label: impl FnOnce(&Arm) -> Said, f: F) -> bool
     where
         F: FnOnce(&mut Arm) -> bool,
     {
@@ -796,7 +829,7 @@ impl Junction {
         if self.current().arms.len() <= MIN_ARMS {
             return self.refuse(Refusal::NeedsThreeStreets);
         }
-        let label = format!("Remove {}", arm_name(a));
+        let label = about("jn-rev-remove", a);
         let ok = self.edit(label, |s| {
             s.arms.retain(|a| a.uid != uid);
             true
@@ -812,7 +845,7 @@ impl Junction {
         self.arm_edit_why(
             Refusal::BearingBlocked,
             uid,
-            |a| format!("{} bearing: {b}°", a.street_name()),
+            |a| Said::new("jn-rev-bearing").with("street", Arg::Said(Box::new(a.street_name()))).with("degrees", Arg::Num(b.into())),
             |a| {
                 a.bearing = b;
                 true
@@ -825,7 +858,7 @@ impl Junction {
         let region = self.region;
         self.arm_edit(
             uid,
-            |a| format!("{} offset: {mm} mm", arm_name(a)),
+            |a| about("jn-rev-offset", a).with("length", Arg::Length(mm)),
             |a| {
                 let half = a.profile(region).road_mm() / 2;
                 if mm.abs() > half {
@@ -845,7 +878,7 @@ impl Junction {
         }
         self.arm_edit(
             uid,
-            |a| format!("Corner after {}: {mm} mm radius", arm_name(a)),
+            |a| about("jn-rev-corner", a).with("length", Arg::Length(mm)),
             |a| {
                 a.corner_mm = mm;
                 true
@@ -856,7 +889,7 @@ impl Junction {
     pub fn set_crossing(&mut self, uid: u32, on: bool) -> bool {
         self.arm_edit(
             uid,
-            |a| format!("{} crossing: {}", arm_name(a), if on { "add" } else { "remove" }),
+            |a| about("jn-rev-crossing", a).with("change", change(on)),
             |a| {
                 a.crossing = on.then_some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false });
                 true
@@ -869,7 +902,7 @@ impl Junction {
         if !(MIN_SETBACK_MM..=MAX_SETBACK_MM).contains(&mm) {
             return self.refuse(Refusal::DoesNotFit);
         }
-        self.arm_edit(uid, |a| format!("{} crossing set back {mm} mm", arm_name(a)), |a| a.crossing.as_mut().map(|c| c.setback_mm = mm).is_some())
+        self.arm_edit(uid, |a| about("jn-rev-setback", a).with("length", Arg::Length(mm)), |a| a.crossing.as_mut().map(|c| c.setback_mm = mm).is_some())
     }
 
     pub fn set_crossing_width(&mut self, uid: u32, mm: i32) -> bool {
@@ -877,7 +910,7 @@ impl Junction {
         if !(MIN_CROSSING_MM..=MAX_CROSSING_MM).contains(&mm) {
             return self.refuse(Refusal::DoesNotFit);
         }
-        self.arm_edit(uid, |a| format!("{} crossing {mm} mm wide", arm_name(a)), |a| a.crossing.as_mut().map(|c| c.width_mm = mm).is_some())
+        self.arm_edit(uid, |a| about("jn-rev-crossing-width", a).with("length", Arg::Length(mm)), |a| a.crossing.as_mut().map(|c| c.width_mm = mm).is_some())
     }
 
     pub fn set_island(&mut self, uid: u32, on: bool) -> bool {
@@ -885,11 +918,7 @@ impl Junction {
         if on && self.arm(uid).is_some_and(|a| a.profile(region).road_mm() < ISLAND_MIN_ROAD_MM) {
             return self.refuse(Refusal::IslandRoadTooNarrow);
         }
-        self.arm_edit(
-            uid,
-            |a| format!("{} refuge island: {}", arm_name(a), if on { "add" } else { "remove" }),
-            |a| a.crossing.as_mut().map(|c| c.island = on).is_some(),
-        )
+        self.arm_edit(uid, |a| about("jn-rev-island", a).with("change", change(on)), |a| a.crossing.as_mut().map(|c| c.island = on).is_some())
     }
 
     /// Side 0 is the arm's left curb, 1 its right.
@@ -898,13 +927,13 @@ impl Junction {
         if side > 1 {
             return self.refuse(Refusal::DoesNotFit);
         }
-        let word = if side == 0 { "left" } else { "right" };
+        let key = if side == 0 { "jn-rev-bulb-left" } else { "jn-rev-bulb-right" };
         if on && self.arm(uid).is_some_and(|a| a.profile(region).park[side] == 0) {
             return self.refuse(Refusal::BulbNoParking);
         }
         self.arm_edit(
             uid,
-            |a| format!("{} {word} bulb-out: {}", arm_name(a), if on { "add" } else { "remove" }),
+            |a| about(key, a).with("change", change(on)),
             |a| {
                 a.bulb[side] = on;
                 true
@@ -923,7 +952,11 @@ impl Junction {
         }
         self.arm_edit(
             uid,
-            |a| format!("{} lane {}: {} {dest}", arm_name(a), lane + 1, if on { "to" } else { "not to" }),
+            |a| {
+                about(if on { "jn-rev-lane-to" } else { "jn-rev-lane-not-to" }, a)
+                    .with("lane", Arg::Num(lane as i64 + 1))
+                    .with("dest", Arg::Said(Box::new(dest)))
+            },
             |a| {
                 let Some(l) = a.lanes.get_mut(lane) else { return false };
                 if on {
@@ -945,7 +978,7 @@ impl Junction {
     pub fn set_bus_lane(&mut self, uid: u32, on: bool) -> bool {
         self.arm_edit(
             uid,
-            |a| format!("{} bus lane: {}", arm_name(a), if on { "add" } else { "remove" }),
+            |a| about("jn-rev-bus-lane", a).with("change", change(on)),
             |a| {
                 a.bus_lane = on;
                 true
@@ -960,17 +993,7 @@ impl Junction {
         }
         self.arm_edit(
             uid,
-            |a| {
-                format!(
-                    "{}: {}",
-                    arm_name(a),
-                    if approach == 0 {
-                        "no approach measure".to_string()
-                    } else {
-                        format!("{} {}", APPROACHES[approach].code, APPROACHES[approach].name.to_lowercase())
-                    }
-                )
-            },
+            |a| measure(a, &APPROACHES[approach], "jn-rev-no-approach"),
             |a| {
                 a.approach = approach;
                 true
@@ -985,7 +1008,7 @@ impl Junction {
         }
         self.arm_edit(
             uid,
-            |a| format!("{} approach measure: {mm} mm", arm_name(a)),
+            |a| about("jn-rev-approach-len", a).with("length", Arg::Length(mm)),
             |a| {
                 a.approach_mm = mm;
                 true
@@ -1000,13 +1023,7 @@ impl Junction {
         }
         self.arm_edit(
             uid,
-            |a| {
-                format!(
-                    "{}: {}",
-                    arm_name(a),
-                    if stop == 0 { "no bus stop".to_string() } else { format!("{} {}", STOPS[stop].code, STOPS[stop].name.to_lowercase()) }
-                )
-            },
+            |a| measure(a, &STOPS[stop], "jn-rev-no-stop"),
             |a| {
                 a.stop = stop;
                 true
@@ -1021,13 +1038,7 @@ impl Junction {
         }
         self.arm_edit(
             uid,
-            |a| {
-                format!(
-                    "{}: {}",
-                    arm_name(a),
-                    if rule == 0 { "no turn management".to_string() } else { format!("{} {}", RULES[rule].code, RULES[rule].name.to_lowercase()) }
-                )
-            },
+            |a| measure(a, &RULES[rule], "jn-rev-no-rule"),
             |a| {
                 a.rule = rule;
                 true
@@ -1038,7 +1049,7 @@ impl Junction {
     pub fn set_filter(&mut self, uid: u32, on: bool) -> bool {
         self.arm_edit(
             uid,
-            |a| format!("{} transit modal filter (N1): {}", arm_name(a), if on { "add" } else { "remove" }),
+            |a| about("jn-rev-filter", a).with("change", change(on)),
             |a| {
                 a.filter = on;
                 true
@@ -1051,7 +1062,9 @@ impl Junction {
         if from == to {
             return self.refuse(Refusal::DoesNotFit);
         }
-        let label = format!("{} to {}: {}", arm_name(a), arm_name(b), if allowed { "allow" } else { "no turn" });
+        let label = Said::new(if allowed { "jn-rev-turn-allow" } else { "jn-rev-turn-ban" })
+            .with("from", Arg::Said(Box::new(arm_name(a))))
+            .with("to", Arg::Said(Box::new(arm_name(b))));
         let others = self.current().arms.len() - 1;
         // An arm keeps at least one way out.
         if !allowed && a.banned.len() + 2 > others && !a.banned.contains(&to) {
@@ -1081,7 +1094,7 @@ impl Junction {
         }
         // Only a roundabout can leave a junction that cannot be drawn.
         let why = if control == ROUNDABOUT { Refusal::RoundaboutTooBig } else { Refusal::DoesNotFit };
-        self.edit_why(why, format!("Control: {}", CONTROLS[control].name.to_lowercase()), |s| {
+        self.edit_why(why, Said::new("jn-rev-control").with("control", Arg::MsgLower(control_key(control))), |s| {
             s.control = control;
             true
         })
@@ -1093,10 +1106,12 @@ impl Junction {
         let pair = pair.map(|(a, b)| (a.min(b), a.max(b)));
         let label = match pair {
             Some((a, b)) => match (self.arm(a), self.arm(b)) {
-                (Some(x), Some(y)) => format!("Bus lane across the middle: {} to {}", arm_name(x), arm_name(y)),
+                (Some(x), Some(y)) => {
+                    Said::new("jn-rev-bus-across").with("from", Arg::Said(Box::new(arm_name(x)))).with("to", Arg::Said(Box::new(arm_name(y))))
+                }
                 _ => return self.refuse(Refusal::DoesNotFit),
             },
-            None => "Bus lane across the middle: remove".into(),
+            None => Said::new("jn-rev-bus-across-remove"),
         };
         self.edit(label, |s| {
             if pair.is_some() && (s.control != ROUNDABOUT || pair.is_some_and(|(a, b)| a == b)) {
@@ -1115,8 +1130,8 @@ impl Junction {
             return self.refuse(Refusal::DoesNotFit);
         }
         let label = match width {
-            Some(w) => format!("Cycle track around the roundabout: {w} mm"),
-            None => "Cycle track around the roundabout: remove".into(),
+            Some(w) => Said::new("jn-rev-cycle").with("length", Arg::Length(w)),
+            None => Said::new("jn-rev-cycle-remove"),
         };
         self.edit(label, |s| {
             if width.is_some() && s.control != ROUNDABOUT {
@@ -1180,10 +1195,19 @@ impl Junction {
         if !(0..=MAX_RING_MM).contains(&extra) {
             return self.refuse(Refusal::DoesNotFit);
         }
-        self.edit(format!("Roundabout: {extra} mm larger"), |s| {
+        self.edit(Said::new("jn-rev-ring").with("length", Arg::Length(extra)), |s| {
             s.ring_extra_mm = extra;
             true
         })
+    }
+}
+
+/// The label of choosing a measure from a list for an arm: its code and name, or `none` for the first entry.
+fn measure(a: &Arm, item: &Item, none: &'static str) -> Said {
+    if item.code.is_empty() {
+        about(none, a)
+    } else {
+        about("jn-rev-measure", a).with("code", Arg::Text(item.code.to_string())).with("measure", Arg::MsgLower(item.key))
     }
 }
 
@@ -1281,7 +1305,21 @@ pub fn valid(s: &State, region: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::i18n::Locale;
+    use crate::shared::units::Units;
     use crate::street::model::SAMPLES;
+
+    fn en(said: &Said) -> String {
+        crate::shared::said::say_now(&crate::i18n_for(Locale::En), Units::Metres, said)
+    }
+
+    fn fr(said: &Said) -> String {
+        crate::shared::said::say_now(&crate::i18n_for(Locale::FrCa), Units::Metres, said)
+    }
+
+    fn named(name: &str) -> Said {
+        Said::new("city-name").with("name", Arg::Text(name.into()))
+    }
 
     #[test]
     fn a_junction_from_a_city_has_the_name_the_city_gives_it() {
@@ -1289,7 +1327,7 @@ mod tests {
         let view = city.view(0);
         let node = view.nodes.iter().find(|n| n.junction).unwrap();
         let j = city.junction_editor(node.uid, 0).unwrap();
-        assert_eq!(j.view().name, english(&node.name));
+        assert_eq!(j.view().name, node.name);
     }
 
     #[test]
@@ -1299,7 +1337,7 @@ mod tests {
         let j = city.junction_editor(node, 0).unwrap();
         for a in &j.current().arms {
             let section = a.section.as_ref().expect("a city arm carries its street");
-            assert_eq!(a.street_name(), english(&section.title()));
+            assert_eq!(a.street_name(), section.title());
             assert_eq!(a.row_mm(), section.row_mm);
             assert_eq!(a.class(), Some(section.class));
         }
@@ -1335,7 +1373,7 @@ mod tests {
 
     /// Which sample street an arm of a sample junction reads.
     fn sample_of(a: &Arm) -> usize {
-        let name = a.street_name();
+        let name = en(&a.street_name());
         SAMPLES.iter().position(|s| s.name == name).expect("an arm of a sample junction reads a sample street")
     }
 
@@ -1616,7 +1654,7 @@ mod tests {
         for a in &mut state.arms {
             a.edge = a.uid;
         }
-        Junction::from_city("Test junction", &state, &state, 0).expect("the sample draws")
+        Junction::from_city(named("Test junction"), &state, &state, 0).expect("the sample draws")
     }
 
     #[test]
@@ -1625,7 +1663,7 @@ mod tests {
         assert!(j.is_linked());
         let uid = j.current().arms[0].uid;
         assert!(!j.remove_arm(uid));
-        assert_eq!(j.view().name, "Test junction");
+        assert_eq!(en(&j.view().name), "Test junction");
         assert!(j.view().linked);
         // What it keeps for the city has no street attached.
         assert!(j.snapshot().arms.iter().all(|a| a.section.is_none() && a.edge != 0));
@@ -1647,7 +1685,7 @@ mod tests {
                 a.section = Some(narrow.clone());
             }
         }
-        let j = Junction::from_city("Test", &state, &state, 0).unwrap();
+        let j = Junction::from_city(named("Test"), &state, &state, 0).unwrap();
         let arm = j.current().arms.iter().find(|a| sample_of(a) == 0).unwrap();
         assert_eq!(arm.profile(0).park, [0, 0]);
         assert!(profile(0, 0).park != [0, 0]);
@@ -1666,9 +1704,10 @@ mod tests {
         attach(&mut today);
         let mut state = today.clone();
         state.control = PRIORITY;
-        let mut j = Junction::from_city("Test", &today, &state, 0).unwrap();
+        let mut j = Junction::from_city(named("Test"), &today, &state, 0).unwrap();
         assert!(j.changed());
-        assert_eq!(j.revisions().collect::<Vec<_>>(), ["Earlier changes"]);
+        assert_eq!(j.revisions().map(en).collect::<Vec<_>>(), ["Earlier changes"]);
+        assert_eq!(j.revisions().map(fr).collect::<Vec<_>>(), ["Modifications antérieures"]);
         assert_eq!(j.current().control, PRIORITY);
         assert!(j.undo());
         assert_eq!(j.current().control, SIGNAL);
@@ -1798,10 +1837,77 @@ mod tests {
     }
 
     #[test]
-    fn every_refusal_has_a_message() {
-        for r in Refusal::ALL {
-            assert!(r.message().ends_with('.'), "{r:?}");
+    fn every_refusal_has_a_message_in_both_languages() {
+        for locale in Locale::ALL {
+            let i18n = crate::i18n_for(locale);
+            for r in Refusal::ALL {
+                assert!(i18n.has_message(r.key(), locale), "{r:?} in {}", locale.tag());
+                assert!(i18n.tr_now(r.key(), &crate::shared::i18n::Args::new()).ends_with('.'), "{r:?} in {}", locale.tag());
+            }
         }
+        assert_eq!(en(&Said::new(Refusal::DoesNotFit.key())), "That change does not fit.");
+    }
+
+    #[test]
+    fn every_control_and_compass_point_has_a_message_in_both_languages() {
+        for locale in Locale::ALL {
+            let i18n = crate::i18n_for(locale);
+            for i in 0..CONTROLS.len() {
+                assert!(i18n.has_message(control_key(i), locale), "{} in {}", control_key(i), locale.tag());
+            }
+            for b in (0..360).step_by(45) {
+                assert!(i18n.has_message(compass(b).key, locale), "{b} in {}", locale.tag());
+            }
+            for item in APPROACHES.iter().chain(&STOPS).chain(&RULES) {
+                assert!(i18n.has_message(item.key, locale), "{} in {}", item.key, locale.tag());
+            }
+        }
+        assert_eq!(en(&Said::new(control_key(SIGNAL))), "Traffic signal");
+        assert_eq!(fr(&Said::new(control_key(ROUNDABOUT))), "Carrefour giratoire");
+        assert_eq!((en(&compass(45)), fr(&compass(225))), ("north-east".into(), "sud-ouest".into()));
+    }
+
+    #[test]
+    fn what_each_edit_was_is_said_as_it_was_in_english_and_also_in_french() {
+        let last = |j: &Junction| j.revisions().last().cloned().expect("the edit was taken");
+        let mut table: Vec<(Said, &str)> = Vec::new();
+        let mut j = Junction::new(0);
+        let (n, e, s) = (arm_at(&j, 0), arm_at(&j, 90), arm_at(&j, 180));
+        assert!(j.set_corner(n, 7_000));
+        table.push((last(&j), "Corner after Sample Avenue 2 (north): 7.0 m radius"));
+        assert!(j.set_control(ALL_WAY_STOP));
+        table.push((last(&j), "Control: all-way stop"));
+        assert!(j.set_turn(n, e, false));
+        table.push((last(&j), "Sample Avenue 2 (north) to Sample Street 1 (east): no turn"));
+        assert!(j.set_island(e, true));
+        table.push((last(&j), "Sample Street 1 (east) refuge island: add"));
+        assert!(j.set_bulb(e, 0, true));
+        table.push((last(&j), "Sample Street 1 (east) left bulb-out: add"));
+        assert!(j.set_crossing(e, false));
+        table.push((last(&j), "Sample Street 1 (east) crossing: remove"));
+        let lane_to = j.arm(n).unwrap().lanes[0].to[0];
+        assert!(j.set_lane_dest(n, 0, lane_to, false));
+        table.push((last(&j), "Sample Avenue 2 (north) lane 1: not to Sample Street 1 (east)"));
+        assert!(j.set_approach(s, Q_CURB));
+        table.push((last(&j), "Sample Avenue 2 (south): G2 curbside queue-jump lane"));
+        assert!(j.set_stop(s, 0) || j.set_stop(s, STOP_BULB));
+        assert!(j.remove_arm(e));
+        table.push((last(&j), "Remove Sample Street 1 (east)"));
+        let mut k = Junction::new(0);
+        assert!(k.set_control(ROUNDABOUT));
+        assert!(k.set_ring(1_500));
+        table.push((last(&k), "Roundabout: 1.5 m larger"));
+        assert!(k.set_bearing(arm_at(&k, 90), 95));
+        table.push((last(&k), "Sample Street 1 bearing: 95°"));
+        for (said, english) in &table {
+            assert_eq!(en(said), *english);
+            let french = fr(said);
+            assert_ne!(french, *english, "{english} is said in French too");
+            for word in ["Corner", "Control", "Remove", "Roundabout", "bearing", " to ", "add", "remove", "lane", "no turn", "north", "east"] {
+                assert!(!french.contains(word), "{word:?} in {french:?}");
+            }
+        }
+        assert_eq!(fr(&table[0].0), "Coin après Sample Avenue 2 (nord)\u{a0}: rayon de 7,0\u{a0}m");
     }
 
     #[test]
@@ -1865,7 +1971,7 @@ mod tests {
     fn an_edit_that_cannot_be_drawn_is_refused_with_the_reason_it_was_given() {
         let mut j = Junction::new(0);
         // Two streets on one bearing cannot be drawn.
-        assert!(!j.edit_why(Refusal::RoundaboutTooBig, "x".into(), |s| {
+        assert!(!j.edit_why(Refusal::RoundaboutTooBig, earlier(), |s| {
             s.arms[1].bearing = s.arms[0].bearing;
             true
         }));

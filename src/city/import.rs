@@ -361,7 +361,7 @@ mod tests {
         assert_eq!((v.nodes.len(), v.edges.len()), (5, 4));
         let junctions: Vec<_> = v.nodes.iter().filter(|n| n.junction).collect();
         assert_eq!(junctions.len(), 1);
-        assert_eq!((junctions[0].arms, junctions[0].control), (4, Some(CONTROLS[SIGNAL].name)));
+        assert_eq!((junctions[0].arms, junctions[0].control), (4, Some(CONTROLS[SIGNAL].key)));
         assert!(city.junction_editor(junctions[0].uid, 0).is_some());
     }
 
@@ -619,7 +619,7 @@ mod tests {
         assert_eq!(main.kind, Said::new("city-name").with("name", Arg::Text("Main Street".into())));
         assert_eq!(city.street_editor(main.uid, 0).unwrap().view().name, Street::imported(StreetClass::Local, Side::Right, &[]).named("Main Street").title());
         let junction = v.nodes.iter().find(|n| n.junction).unwrap();
-        let arms: Vec<String> = city.junction_editor(junction.uid, 0).unwrap().view().arms.iter().map(|a| a.street.clone()).collect();
+        let arms: Vec<String> = city.junction_editor(junction.uid, 0).unwrap().view().arms.iter().map(|a| en(&a.street)).collect();
         assert_eq!(arms.iter().filter(|n| *n == "Main Street").count(), 2);
         assert_eq!(arms.iter().filter(|n| *n == "Side Road").count(), 2);
         // and a name survives being kept and opened again

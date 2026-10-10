@@ -42,7 +42,6 @@ mod tests {
         assert_eq!(say("city-a-connection-on", street()), "a connection on Main Street");
         assert_eq!(say("city-the-edge-of-the-map", Args::new()), "the edge of the map");
         assert_eq!(say("city-edge-through", Args::new()), "through the city");
-        assert_eq!(say("city-text", Args::new().str("text", "Corner radius")), "Corner radius");
     }
 
     #[test]

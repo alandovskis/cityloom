@@ -248,8 +248,7 @@ fn the_hero_speaks_french_with_no_english_left() {
     change_a_street(&vm, &storage, 1_000);
     let map = map_html(|| view! { <home::HeroMap vm=vm.clone()/> });
     assert!(map.contains(" \u{b7} modifié<") || map.contains(">modifié<"), "a changed place is tagged in French: {map}");
-    // Not " streets": a junction's control ("side streets stop") is in English until the junction is translated.
-    for english in ["changed", "Changed", "junctions", "Every check", "Opens the", " wide."] {
+    for english in ["changed", "Changed", "junctions", "streets", "Every check", "Opens the", " wide.", "Traffic signal", "traffic signal", "stop"] {
         assert!(!map.contains(english), "{english:?} in the hero map");
     }
     for english in ["junctions", "streets", "Every check"] {
