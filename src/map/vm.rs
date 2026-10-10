@@ -40,6 +40,12 @@ pub enum BasemapState {
 }
 
 /// The place a `hot` name (`s-7`, `j-3`) opens.
+/// Text as the search compares it: lower case, with the typographic apostrophe and the no-break spaces
+/// the French page shows made the plain ones a keyboard types.
+fn fold(text: &str) -> String {
+    text.to_lowercase().replace('\u{2019}', "'").replace(['\u{a0}', '\u{202f}'], " ")
+}
+
 fn href_of(hot: &str) -> Option<String> {
     let (kind, uid) = hot.split_once('-')?;
     let uid: u32 = uid.parse().ok()?;
@@ -357,7 +363,7 @@ impl MapVm {
 
     /// The words searched for, lower case.
     fn terms(&self) -> Vec<String> {
-        self.search.get().to_lowercase().split_whitespace().map(String::from).collect()
+        fold(&self.search.get()).split_whitespace().map(String::from).collect()
     }
 
     /// The junctions and the streets that the search leaves. The whole phrase is
@@ -369,13 +375,17 @@ impl MapVm {
     fn narrowed(&self) -> (Vec<PlaceRow>, Vec<PlaceRow>) {
         let terms = self.terms();
         let (junctions, streets) = (self.junction_rows(), self.street_rows());
-        let shown = |s: &Said| self.say(s);
-        let text = |r: &PlaceRow| format!("{} {}", shown(&r.name), shown(&r.sub)).to_lowercase();
+        // Each row is worded once, here: both passes below read the same text.
+        let worded = |rows: Vec<PlaceRow>| -> Vec<(PlaceRow, String)> {
+            rows.into_iter().map(|r| { let text = fold(&format!("{} {}", self.say(&r.name), self.say(&r.sub))); (r, text) }).collect()
+        };
+        let (junctions, streets) = (worded(junctions), worded(streets));
         let phrase = terms.join(" ");
-        let by_phrase = |rows: &[PlaceRow]| rows.iter().filter(|r| text(r).contains(&phrase)).cloned().collect::<Vec<_>>();
-        let by_words = |rows: &[PlaceRow]| rows.iter().filter(|r| terms.iter().all(|t| text(r).contains(t.as_str()))).cloned().collect::<Vec<_>>();
-        let (j, st) = (by_phrase(&junctions), by_phrase(&streets));
-        if j.is_empty() && st.is_empty() { (by_words(&junctions), by_words(&streets)) } else { (j, st) }
+        let keep = |rows: &[(PlaceRow, String)], found: &dyn Fn(&str) -> bool| rows.iter().filter(|(_, t)| found(t)).map(|(r, _)| r.clone()).collect::<Vec<_>>();
+        let by_phrase = |t: &str| t.contains(&phrase);
+        let by_words = |t: &str| terms.iter().all(|w| t.contains(w.as_str()));
+        let (j, st) = (keep(&junctions, &by_phrase), keep(&streets, &by_phrase));
+        if j.is_empty() && st.is_empty() { (keep(&junctions, &by_words), keep(&streets, &by_words)) } else { (j, st) }
     }
 
     /// How the search came out, or nothing when nothing is searched for.
@@ -813,6 +823,12 @@ mod tests {
         assert_eq!(found.get(), 0, "nothing is called a jonction in English");
         vm.i18n().set(Locale::FrCa);
         assert!(found.get() > 0, "the results are worked out again from the French the page now shows");
+    }
+
+    #[test]
+    fn folding_makes_the_typed_and_the_typographic_characters_one() {
+        assert_eq!(fold("Bout d\u{2019}Une RUE"), "bout d'une rue");
+        assert_eq!(fold("12,0\u{a0}m \u{202f}x"), "12,0 m  x");
     }
 
     #[test]
