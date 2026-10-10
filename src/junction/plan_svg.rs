@@ -367,6 +367,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         )
         .unwrap();
         l.measure += &p.measure_marks(a);
+        let arm = said(&a.label);
         for (i, lane) in a.lanes.iter().enumerate() {
             write!(
                 l.lane,
@@ -374,7 +375,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
                 if p.is_lane(a.uid, i) { " on" } else { "" },
                 a.uid,
                 p.path_d(&lane.poly),
-                esc(&tr("jn-sel-lane", Args::new().num("n", i as i64 + 1).num("count", a.lanes.len() as i64).str("arm", said(&a.label))))
+                esc(&tr("jn-sel-lane", Args::new().num("n", i as i64 + 1).num("count", a.lanes.len() as i64).str("arm", arm.clone())))
             )
             .unwrap();
         }
