@@ -707,6 +707,9 @@ svg pattern circle {
 #drawing .wedge-g[data-role="none"] {
   cursor: default;
 }
+#drawing .core-bike {
+  stroke-dasharray: 5 3;
+}
 #drawing .wedge.bare {
   fill: var(--k-planting);
   fill-opacity: 0.4;

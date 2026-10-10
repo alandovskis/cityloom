@@ -323,6 +323,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         road: String,
         bulb: String,
         curb: String,
+        corebike: String,
         cross: String,
         mark: String,
         sel: String,
@@ -346,6 +347,9 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
     }
 
     for a in &v.arms {
+        for d in &a.core_bike {
+            l.corebike += &p.piece("core-bike k-bike", "bike", &p.path_d(d));
+        }
         let mut g = String::new();
         for piece in &a.pieces {
             let id = KINDS[piece.kind].id;
@@ -627,8 +631,8 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
     );
 
     let markup = format!(
-        "<defs>{defs}</defs><g class=\"plan\">{}{}{}{}{}{}{}{}{}{}{}{}{}</g>{furniture}",
-        l.wedge, l.arm, l.lane, l.measure, l.road, l.bulb, l.curb, l.cross, l.mark, l.sel, l.mv, l.label, l.grip
+        "<defs>{defs}</defs><g class=\"plan\">{}{}{}{}{}{}{}{}{}{}{}{}{}{}</g>{furniture}",
+        l.wedge, l.arm, l.lane, l.measure, l.road, l.corebike, l.bulb, l.curb, l.cross, l.mark, l.sel, l.mv, l.label, l.grip
     );
     PlanSvg { frame: f, label: plan_label(v, i18n), markup }
 }
@@ -657,6 +661,14 @@ mod tests {
         assert_eq!(count(&s.markup, "class=\"wedge k-sidewalk\""), 0);
         let walked = svg(&junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]));
         assert_eq!(count(&walked.markup, "class=\"wedge k-sidewalk\""), 4);
+    }
+
+    #[test]
+    fn bike_lanes_are_drawn_in_the_core() {
+        let s = svg(&junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]));
+        assert_eq!(count(&s.markup, "class=\"core-bike k-bike\""), 8);
+        let none = svg(&junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]));
+        assert_eq!(count(&none.markup, "core-bike"), 0);
     }
 
     #[test]
