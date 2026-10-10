@@ -173,6 +173,24 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction | Sidewalk survives the corner / eats the sidewalk | Le trottoir survit au coin / gruge le trottoir | `gruger` is Québec usage; to confirm, see below. |
 | Junction | One check needs attention: … | Une vérification est à corriger : … | As the map's `À corriger`. |
 | Junction | Started over from the junction as it is today | Retour à la jonction telle qu’elle est aujourd’hui |  |
+| Junction | Points at banned turns: … | Voies menant à des virages interdits : … | A check's failing detail; the lanes are its subject. |
+| Junction page | Junction plan | Plan de la jonction | As the map page's `Ouvre le plan de la jonction`. |
+| Junction page | Junction plan editor (the plan's name) | Éditeur du plan de la jonction |  |
+| Junction page | Edited / As imported (title block) | Modifiée / Telle qu’importée | Feminine, agreeing with `jonction`; the street page's are `Modifié` / `Tel qu’importé`. |
+| Junction page | Data (title block) | Données |  |
+| Junction page | To cross / Lanes in | À traverser / Voies entrantes | Columns of the Getting across table; a street with no crossing says `aucun` (a `passage`). |
+| Junction page | Crossing / Merging / Splitting / All (conflict points) | Croisement / Convergence / Divergence / Total |  |
+| Junction page | path (of a turn) | trajectoire |  |
+| Junction page | In use on N, E | Utilisée sur N, E | Agrees with `mesure`. |
+| Junction page | Set on a street (a measure) | Se règle sur une rue | One of this junction's streets, in the panel beside the plan. |
+| Junction page | Street editor | Éditeur de rue | Short form of `Éditeur de coupe transversale de la rue`. |
+| Junction page | Not modelled (a measure) | Non modélisée | Agrees with `mesure`; the street page's column is `Non modélisé`. |
+| Junction page | Junction today | Jonction aujourd’hui | As the city's history label. |
+| Junction plan | Plan of the junction, north up | Plan de la jonction, nord en haut |  |
+| Junction plan | N · 20.0 m road | N · chaussée de 20,0 m | `· décalée de 0,5 m` when shifted (agrees with `chaussée`). |
+| Junction plan | Bus only (road marking) | Autobus seulement |  |
+| Junction plan | Turn X (a grip) | Faire pivoter X |  |
+| Junction plan | Change the corner radius / Move the crossing | Modifier le rayon du coin / Déplacer le passage pour piétons |  |
 
 ## Terms to confirm
 
@@ -223,3 +241,8 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | eats the sidewalk (junction check) | `gruge le trottoir` | `empiète sur le trottoir` (suggestion, more neutral) |
 | bulb-out (junction) | `avancée de trottoir` | `saillie de trottoir` (suggestion) |
 | Signal has room (junction check) | `Les feux ont de la place` | `Assez peu de rues pour des feux` is its passing detail; `Feux possibles` (suggestion) |
+| Merging / Splitting (junction conflict points) | `Convergence` / `Divergence` | `Insertion` / `Séparation` (suggestion) |
+| A signal takes turns (junction note) | `Les feux alternent les mouvements` | `Les feux attribuent le passage à tour de rôle` (suggestion) |
+| Turn X (junction grip) | `Faire pivoter X` | `Tourner X` (suggestion) |
+| Street editor (junction measures) | `Éditeur de rue` | `Éditeur de coupe transversale` (suggestion, longer) |
+| Bus only (junction road marking) | `Autobus seulement` | `Réservé aux autobus` (suggestion) |
