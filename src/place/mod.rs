@@ -120,9 +120,8 @@ mod tests {
 /// empty string when the city is ready, or with what went wrong, in words; the city is then the
 /// sample, so the page still works.
 ///
-/// What went wrong is worded in the language the document says it is in: a translated page's head script
-/// sets `<html lang>` from the stored choice before any module runs, and a page that is not translated keeps
-/// its English `lang`, so a French reader is not told French over English markup.
+/// What went wrong is worded in the language the document says it is in: each page's head script sets
+/// `<html lang>` from the stored choice before any module runs.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn prepare_city() -> js_sys::Promise {

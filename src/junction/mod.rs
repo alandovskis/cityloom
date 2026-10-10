@@ -85,6 +85,12 @@ pub fn mount_page(plan: &Plan) {
     mount("revs", view! { <notes::Revisions vm=vm/> }.into_any());
 }
 
+/// The words of the junction page, and of the page of a junction that cannot be drawn: the stored language, or
+/// the browser's, which the document is then told it is in.
+fn page_i18n(ports: &crate::shared::ports::Ports) -> Rc<crate::shared::i18n::I18n> {
+    crate::i18n_browser(ports)
+}
+
 /// Whether the city kept in this browser has junction `node`; the page goes back to the map when it has not.
 #[wasm_bindgen]
 pub fn junction_exists(node: u32) -> bool {
@@ -98,7 +104,7 @@ pub fn mount_bare_shell(node: u32) {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = browser_ports();
-    let i18n = crate::unmigrated_i18n();
+    let i18n = page_i18n(&ports);
     let name = CityStore::current(ports.storage.clone()).open().junction_name(node);
     let doc = leptos::prelude::document();
     let find = |selector: &str| doc.query_selector(selector).ok().flatten();
@@ -131,6 +137,6 @@ pub fn open_junction(node: u32) -> Option<Plan> {
     let store = CityStore::current(ports.storage.clone());
     let junction = store.open().junction_editor(node, store.region())?;
     let place = Place::Junction(node);
-    let i18n = crate::unmigrated_i18n();
+    let i18n = page_i18n(&ports);
     Some(Plan(vm::JunctionVm::new(ports, i18n, junction, Some(CityBinding { store, place }))))
 }

@@ -1100,6 +1100,19 @@ fn a_junction_that_cannot_be_drawn_follows_a_switch_of_language() {
     assert_eq!(words.get(), ("Jonction 4 · CityLoom".to_string(), "Jonction 4".to_string()));
 }
 
+#[test]
+fn the_junction_page_and_the_page_of_one_that_cannot_be_drawn_start_in_the_stored_language() {
+    // open_junction and mount_bare_shell both take their words from page_i18n.
+    use crate::shared::i18n::{LANG_KEY, Locale};
+    let (ports, page, _) = crate::shared::ports::test_ports_with_page();
+    ports.storage.remember(LANG_KEY, "fr-CA");
+    let i18n = super::page_i18n(&ports);
+    assert_eq!(i18n.locale_now(), Locale::FrCa);
+    assert_eq!(*page.lang.borrow(), "fr-CA", "the document says the language the page is in");
+    let h = html(|| view! { <page::Stuck i18n=i18n.clone()/> }.into_any());
+    assert!(h.contains("Cette jonction ne peut pas être dessinée"), "{h}");
+}
+
 // ---- the page's markup ----------------------------------------------------------------------
 
 const INTERSECTION_HTML: &str = include_str!("../../web/intersection.html");
@@ -1129,10 +1142,11 @@ fn the_english_text_in_intersection_html_is_the_english_message() {
 }
 
 #[test]
-fn intersection_html_has_a_language_row() {
+fn intersection_html_has_a_language_row_and_sets_the_language_in_the_head() {
     assert!(INTERSECTION_HTML.contains(r#"data-lang="en" lang="en" aria-pressed="true">English<"#));
     assert!(INTERSECTION_HTML.contains(r#"data-lang="fr-CA" lang="fr" aria-pressed="false">Français<"#));
     assert_eq!(INTERSECTION_HTML.matches("<script>").count(), 1);
+    assert!(INTERSECTION_HTML.contains(r#"localStorage.getItem("cityloom-lang")"#));
     // The header sets the window title from the junction's name, so the shell does not write it.
     assert!(!INTERSECTION_HTML.contains("<title data-i18n"));
 }

@@ -214,10 +214,34 @@ test("the home page can be read in French and the choice is kept", async ({ page
   await expect(page.locator("h1")).toHaveText("Réaménagez les rues de votre ville.");
 });
 
-// The pages that are not translated are English from top to bottom, so the document says so even for a
-// reader who chose French on another page (a screen reader would read English words with French rules).
-test("a page that is not translated keeps lang=en for a reader who chose French", async ({ page }) => {
-  await storedFrench(page);
+test("the junction page can be read in French and the choice is kept", async ({ page }) => {
   await openJunction(page);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("#h-turns")).toHaveText("Turns allowed");
+  await expect(page.locator("#inspector")).toContainText("Junction control");
+  await chooseFrench(page);
+  // The markup, the views and the panel beside the plan follow the switch without a reload.
+  await expect(page.locator("#h-turns")).toHaveText("Virages permis");
+  await expect(page.locator("#inspector")).toContainText("Signalisation de la jonction");
+  await expect(page.locator("#arm-count")).toHaveText(/^\d rues$/);
+  await expect(page.locator("#undo")).toHaveText(/Annuler/);
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+  await expect(page.locator("#h-turns")).toHaveText("Virages permis");
+  await expect(page.locator("#inspector")).toContainText("Signalisation de la jonction");
+});
+
+test("a junction page opened in French is French from the first paint", async ({ page }) => {
+  await storedFrench(page);
+  await openJunction(page);
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+  await expect(page.locator("#arm-count")).toHaveText(/^\d rues$/);
+  await expect(page.locator("#inspector")).toContainText(
+    "Sélectionnez une rue, un coin ou un passage pour piétons à modifier.",
+  );
+  await expect(page).toHaveTitle(/ · CityLoom$/);
+  const text = await page.locator("body").innerText();
+  for (const phrase of ["Junction control", "Select a street", "Turns allowed", "Getting across", "Undo", "Streets"]) {
+    expect(text, phrase).not.toContain(phrase);
+  }
 });
