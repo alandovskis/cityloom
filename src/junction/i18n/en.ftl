@@ -65,6 +65,7 @@ jn-refusal-lane-needs-street = A lane has to go to at least one street.
 jn-refusal-island-road-too-narrow = This road is too narrow for an island.
 jn-refusal-bulb-no-parking = There is no parking on that side to give up.
 jn-refusal-does-not-fit = That change does not fit.
+jn-refusal-raised-roundabout = A roundabout cannot be a raised table.
 
 ## What each change was, in the history
 jn-word-add = add
@@ -95,6 +96,7 @@ jn-rev-bus-across = Bus lane across the middle: { $from } to { $to }
 jn-rev-bus-across-remove = Bus lane across the middle: remove
 jn-rev-cycle = Cycle track around the roundabout: { $length }
 jn-rev-cycle-remove = Cycle track around the roundabout: remove
+jn-rev-raised = Raised table: { $change }
 jn-rev-ring = Roundabout: { $length } larger
 
 ## The checks

@@ -65,6 +65,7 @@ jn-refusal-lane-needs-street = Une voie doit mener à au moins une rue.
 jn-refusal-island-road-too-narrow = Cette chaussée est trop étroite pour un îlot.
 jn-refusal-bulb-no-parking = Il n’y a pas de stationnement à céder de ce côté.
 jn-refusal-does-not-fit = Cette modification ne convient pas.
+jn-refusal-raised-roundabout = Un carrefour giratoire ne peut pas être surélevé.
 
 ## Ce qu’a été chaque modification, dans l’historique
 jn-word-add = ajout
@@ -95,6 +96,7 @@ jn-rev-bus-across = Voie d’autobus par le centre : { $from } vers { $to }
 jn-rev-bus-across-remove = Voie d’autobus par le centre : retrait
 jn-rev-cycle = Piste cyclable autour du carrefour giratoire : { $length }
 jn-rev-cycle-remove = Piste cyclable autour du carrefour giratoire : retrait
+jn-rev-raised = Carrefour surélevé : { $change }
 jn-rev-ring = Carrefour giratoire : { $length } plus grand
 
 ## Les vérifications

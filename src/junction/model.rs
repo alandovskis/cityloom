@@ -203,6 +203,10 @@ pub struct State {
     pub bus: Option<(u32, u32)>,
     /// Width of a cycle track around the outside of a roundabout, if it has one.
     pub cycle: Option<i32>,
+    /// The whole carriageway of the junction, crossings included, is raised to sidewalk height, with a ramp on
+    /// each arm. Never a roundabout's.
+    #[serde(default)]
+    pub raised: bool,
     /// The OSM nodes it was made from. The sample junctions are made from none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source: Vec<OsmRef>,
@@ -499,10 +503,11 @@ pub enum Refusal {
     IslandRoadTooNarrow,
     BulbNoParking,
     DoesNotFit,
+    RaisedNeedsCrossroads,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 9] = [
+    pub const ALL: [Refusal; 10] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -512,6 +517,7 @@ impl Refusal {
         Refusal::IslandRoadTooNarrow,
         Refusal::BulbNoParking,
         Refusal::DoesNotFit,
+        Refusal::RaisedNeedsCrossroads,
     ];
 
     /// The message that says why.
@@ -526,6 +532,7 @@ impl Refusal {
             Refusal::IslandRoadTooNarrow => "jn-refusal-island-road-too-narrow",
             Refusal::BulbNoParking => "jn-refusal-bulb-no-parking",
             Refusal::DoesNotFit => "jn-refusal-does-not-fit",
+            Refusal::RaisedNeedsCrossroads => "jn-refusal-raised-roundabout",
         }
     }
 }
@@ -668,6 +675,9 @@ impl Junction {
         normalize(&mut next.arms, region);
         if next.control != ROUNDABOUT {
             next.cycle = None;
+        }
+        if next.control == ROUNDABOUT {
+            next.raised = false;
         }
         // A bus lane needs a roundabout and both its streets.
         if let Some((a, b)) = next.bus {
@@ -1120,6 +1130,17 @@ impl Junction {
         let why = if control == ROUNDABOUT { Refusal::RoundaboutTooBig } else { Refusal::DoesNotFit };
         self.edit_why(why, Said::new("jn-rev-control").with("control", Arg::MsgLower(control_key(control))), |s| {
             s.control = control;
+            true
+        })
+    }
+
+    /// Raises the whole junction to sidewalk height, or makes it flat again. A roundabout has no table.
+    pub fn set_raised(&mut self, on: bool) -> bool {
+        if self.current().control == ROUNDABOUT {
+            return self.refuse(Refusal::RaisedNeedsCrossroads);
+        }
+        self.edit(Said::new("jn-rev-raised").with("change", change(on)), |s| {
+            s.raised = on;
             true
         })
     }
@@ -1853,6 +1874,45 @@ mod tests {
     }
 
     #[test]
+    fn a_junction_is_raised_and_flat_again_and_undo_goes_back() {
+        let mut j = Junction::new(0);
+        assert!(!j.current().raised);
+        assert!(j.set_raised(true));
+        assert!(j.current().raised);
+        assert!(!j.set_raised(true), "nothing changes");
+        assert!(j.undo());
+        assert!(!j.current().raised);
+        assert!(j.redo());
+        assert!(j.set_raised(false));
+        assert!(!j.current().raised);
+    }
+
+    #[test]
+    fn a_roundabout_cannot_be_a_raised_table_and_becoming_one_flattens_it() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(!j.set_raised(true));
+        assert_eq!(j.refusal(), Some(Refusal::RaisedNeedsCrossroads));
+        let mut k = Junction::new(0);
+        assert!(k.set_raised(true));
+        assert!(k.set_control(ROUNDABOUT));
+        assert!(!k.current().raised);
+        assert!(k.undo());
+        assert!(k.current().raised, "undo brings the table back");
+    }
+
+    #[test]
+    fn raising_a_junction_is_said_in_both_languages() {
+        let mut j = Junction::new(0);
+        assert!(j.set_raised(true));
+        let said = j.revisions().last().cloned().unwrap();
+        assert_eq!(en(&said), "Raised table: add");
+        assert_eq!(fr(&said), "Carrefour surélevé\u{a0}: ajout");
+        assert!(j.set_raised(false));
+        assert_eq!(en(&j.revisions().last().cloned().unwrap()), "Raised table: remove");
+    }
+
+    #[test]
     fn every_refusal_has_a_message_in_both_languages() {
         for locale in Locale::ALL {
             let i18n = crate::i18n_for(locale);
@@ -2022,6 +2082,7 @@ mod tests {
             ("control", Box::new(|j| j.set_control(99))),
             ("bus", Box::new(move |j| j.set_bus(Some((n, e))))),
             ("cycle", Box::new(|j| j.set_cycle(Some(2_000)))),
+            ("raised on a roundabout", Box::new(|j| j.set_control(ROUNDABOUT) && j.set_raised(true))),
             ("cycle width", Box::new(|j| j.set_cycle(Some(99_000)))),
             ("ring", Box::new(|j| j.set_ring(-500))),
             ("unknown arm", Box::new(|j| j.set_offset(9_999, 100))),
