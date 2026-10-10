@@ -52,6 +52,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/junction/notes.rs", include_str!("junction/notes.rs")),
     ("src/junction/plan.rs", include_str!("junction/plan.rs")),
     ("src/junction/plan_svg.rs", include_str!("junction/plan_svg.rs")),
+    ("src/junction/inspector.rs", include_str!("junction/inspector.rs")),
 ];
 
 /// Attributes whose value is text a person reads (also as `attr:<name>`).
@@ -352,6 +353,20 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("t-checks", "the id of a tab of the page"),
     ("i-h-dir", "the id of an inspector heading"),
     ("i-h-curb", "the id of an inspector heading"),
+    ("i-h-ring", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-cycle-width", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-bus", "the id of a heading of the junction's inspector, which its list is labelled by"),
+    ("i-h-cycle", "the id of a heading of the junction's inspector"),
+    ("i-h-control", "the id of a heading of the junction's inspector, which its list is labelled by"),
+    ("i-h-corner", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-setback", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-cwidth", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-refuge", "the id of a heading of the junction's inspector"),
+    ("i-h-bulb", "the id of a heading of the junction's inspector"),
+    ("i-h-alen", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-bearing", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-offset", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-street", "the id of a heading of the junction's inspector"),
     ("m-planted", "a CSS class of the drawing"),
     ("dim-warn", "a CSS class of the drawing"),
     ("t-warn", "a CSS class of the drawing"),

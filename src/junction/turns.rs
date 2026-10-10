@@ -11,7 +11,6 @@ use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
 use crate::shared::i18n::Args;
 
-const COMPASS: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 const COMPASS_KEYS: [&str; 8] = [
     "jn-compass-short-n",
     "jn-compass-short-ne",
@@ -25,11 +24,6 @@ const COMPASS_KEYS: [&str; 8] = [
 
 fn point(bearing: i32) -> usize {
     ((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8
-}
-
-/// The compass point a bearing is nearest, as the English tag; only the inspector still reads it, until it is translated.
-pub fn compass(bearing: i32) -> &'static str {
-    COMPASS[point(bearing)]
 }
 
 /// The message of the compass point a bearing is nearest, as a short tag ("NE").
@@ -173,12 +167,10 @@ mod tests {
 
     #[test]
     fn a_bearing_names_its_nearest_compass_point() {
-        assert_eq!(compass(0), "N");
-        assert_eq!(compass(22), "N");
-        assert_eq!(compass(23), "NE");
-        assert_eq!(compass(90), "E");
-        assert_eq!(compass(359), "N");
-        assert_eq!(compass(-45), "NW");
+        assert_eq!(compass_key(0), "jn-compass-short-n");
+        assert_eq!(compass_key(22), "jn-compass-short-n");
+        assert_eq!(compass_key(90), "jn-compass-short-e");
+        assert_eq!(compass_key(359), "jn-compass-short-n");
         assert_eq!(compass_key(-45), "jn-compass-short-nw");
         assert_eq!(compass_key(23), "jn-compass-short-ne");
     }

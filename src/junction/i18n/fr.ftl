@@ -224,3 +224,109 @@ jn-svg-road-shifted = { $compass } · chaussée de { $width } · décalée de { 
 jn-grip-turn = Faire pivoter { $arm }
 jn-grip-corner = Modifier le rayon du coin
 jn-grip-crossing = Déplacer le passage pour piétons
+
+## Le panneau à côté du plan : ce qui est sélectionné et de quoi le modifier (src/junction/inspector.rs)
+jn-insp-empty = Sélectionnez une rue, un coin ou un passage pour piétons à modifier.
+jn-insp-control = Signalisation de la jonction
+jn-insp-ring-size = Taille du carrefour giratoire
+# L’étiquette après la taille du carrefour giratoire : « m de diamètre ».
+jn-insp-unit-across = { $unit } de diamètre
+jn-insp-ring-hint = Diamètre extérieur. Au moins { $length } avec ces rues.
+# Les boutons de part et d’autre d’un champ numérique, pour un lecteur d’écran : « Réduire de 0,5 m ».
+jn-insp-smaller = Réduire de { $step }
+jn-insp-larger = Agrandir de { $step }
+jn-insp-narrower = Rétrécir de { $step }
+jn-insp-wider = Élargir de { $step }
+jn-insp-tighter = Resserrer de { $step }
+jn-insp-closer = Rapprocher de { $step }
+jn-insp-farther = Éloigner de { $step }
+jn-insp-shorter = Raccourcir de { $step }
+jn-insp-longer = Allonger de { $step }
+jn-insp-shift-left = Décaler de { $step } vers la gauche
+jn-insp-shift-right = Décaler de { $step } vers la droite
+jn-insp-anticlockwise = Faire pivoter de { $degrees }° dans le sens antihoraire
+jn-insp-clockwise = Faire pivoter de { $degrees }° dans le sens horaire
+# Les longueurs qu’un champ accepte : « De 1,0 m à 15,0 m ».
+jn-insp-range = De { $min } à { $max }
+jn-insp-track-width = Largeur de la piste
+jn-insp-track-hint-inside = De { $min } à { $max }. Elle prend de la place à la chaussée, dans le même cercle.
+jn-insp-track-hint-crossing = De { $min } à { $max }. Les cyclistes traversent chaque rue là où elle rejoint l’anneau.
+jn-insp-bus-across = Voie d’autobus par le centre
+jn-insp-bus-none = Aucune voie d’autobus
+jn-insp-bus-note = Une voie de { $width } réservée aux autobus, tout droit à travers l’îlot. Elle traverse l’anneau là où elle entre et là où elle sort.
+jn-insp-bus-offer = Permet aux autobus de couper à travers l’îlot entre deux rues.
+jn-insp-cycle = Piste cyclable
+jn-insp-cycle-option = Piste tout autour, à l’extérieur
+jn-insp-bus = Voie d’autobus
+jn-insp-bus-remove = Retirer la voie d’autobus
+jn-insp-cycle-sub = Tout autour du carrefour giratoire, à l’extérieur
+jn-insp-cycle-remove = Retirer la piste cyclable
+jn-insp-corner = Coin
+jn-insp-curb-radius = Rayon de la bordure
+jn-insp-corner-hint = De { $min } à { $max }. Les voitures tournent ici à environ { $speed }{ " " }km/h.
+jn-insp-corner-note = Un coin serré ralentit les voitures qui tournent et raccourcit la traversée à pied. Un coin large les laisse tourner plus vite.
+# Le bouton d’un virage d’une voie, pour un lecteur d’écran : « Voie 1 vers Rue Principale (sud), tout droit ».
+jn-insp-dest-left = Voie { $n } vers { $street }, à gauche
+jn-insp-dest-through = Voie { $n } vers { $street }, tout droit
+jn-insp-dest-right = Voie { $n } vers { $street }, à droite
+jn-insp-lane = Voie { $n }
+# La place d’une voie parmi celles de sa rue.
+jn-insp-lane-only = la seule voie
+jn-insp-lane-middle = la plus près du centre
+jn-insp-lane-curb = la plus près de la bordure
+jn-insp-lane-title = Voie { $n } sur { $count }
+# Sous le titre d’une voie : sa rue et sa place, « Rue Principale (nord) · la plus près de la bordure ».
+jn-insp-lane-sub = { $arm } · { $place }
+jn-insp-lane-banned = Chaque rue où elle mène est interdite. Ajoutez une rue, ou permettez un virage.
+jn-insp-lane-width = { $width } de large. Une voie doit mener à au moins une rue.
+jn-insp-goes-left = À gauche vers { $street }
+jn-insp-goes-through = Tout droit vers { $street }
+jn-insp-goes-right = À droite vers { $street }
+# Une rue où une voie ne peut pas mener, parce que sa circulation ne fait qu’entrer.
+jn-insp-one-way-in = { $goes } (sens unique vers la jonction)
+jn-insp-lane-goes = Où mène cette voie
+jn-insp-whole-street = Sélectionner toute la rue
+jn-insp-setback = Retrait par rapport à la jonction
+jn-insp-crossing-width = Largeur du passage pour piétons
+jn-insp-bulb-left = Avancée de trottoir à gauche
+jn-insp-bulb-right = Avancée de trottoir à droite
+jn-insp-no-parking = { $bulb } (pas de stationnement de ce côté)
+jn-insp-crossing = Passage pour piétons
+jn-insp-crossing-stages = { $n ->
+    [one] { $n } traversée de { $length }
+   *[other] { $n } traversées de { $length }
+}
+jn-insp-crossing-one-go = { $length } à traverser
+jn-insp-too-far = { $crossing }. Trop long à traverser d’un seul coup.
+jn-insp-crossing-remove = Retirer le passage pour piétons
+jn-insp-crossing-mark = Marquer un passage pour piétons
+jn-insp-halfway = Îlot à mi-traversée
+jn-insp-island = Îlot refuge au centre
+jn-insp-island-narrow = Îlot refuge (chaussée trop étroite)
+jn-insp-shorten = Raccourcir la traversée
+jn-insp-transit = Priorité au transport en commun
+jn-insp-bus-lane-in = Voie réservée aux autobus en entrée
+jn-insp-approach = À l’approche
+jn-insp-stop = Arrêt d’autobus
+jn-insp-rule = Virages
+# Une mesure dans une liste, avec son code de l’Atlas : « G2 Voie de dépassement de file en bordure de trottoir ».
+jn-insp-coded = { $code } { $name }
+jn-insp-filter = Filtre modal pour le transport en commun
+jn-insp-queue-length = Longueur de la voie de dépassement de file
+jn-insp-gate-distance = Distance de la porte d’autobus en amont
+# Sous le nom d’une rue : sa direction, son orientation et sa largeur, « E, 90° · chaussée de 11,4 m ».
+jn-insp-arm-sub = { $compass }, { $degrees }° · chaussée de { $width }
+jn-insp-direction = Orientation
+jn-insp-direction-hint = Dans le sens horaire à partir du nord. Au moins { $degrees }° de ses voisines.
+jn-insp-shift = Décalage latéral
+jn-insp-shift-hint = Jusqu’à { $length } d’un côté ou de l’autre. Vu depuis la jonction.
+jn-insp-street = Rue
+jn-insp-cross-section = Ouvrir la coupe transversale
+jn-insp-street-note = Cette rue appartient à la ville. Son aménagement se modifie dans l’éditeur de rue, et les modifications faites là-bas s’affichent ici.
+jn-insp-remove-street = Retirer cette rue
+jn-insp-min-arms = { $n ->
+    [one] Une jonction compte au moins { $n } rue.
+   *[other] Une jonction compte au moins { $n } rues.
+}
+jn-insp-lanes-in = Voies entrantes
+jn-insp-one-way-out = Sens unique sortant. Aucune voie n’entre.

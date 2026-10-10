@@ -191,6 +191,30 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction plan | Bus only (road marking) | Autobus seulement |  |
 | Junction plan | Turn X (a grip) | Faire pivoter X |  |
 | Junction plan | Change the corner radius / Move the crossing | Modifier le rayon du coin / Déplacer le passage pour piétons |  |
+| Junction inspector | Junction control (a heading) | Signalisation de la jonction |  |
+| Junction inspector | Smaller / Larger / Narrower / Wider / Tighter / Closer / Farther / Shorter / Longer by 0.5 m (steppers) | Réduire / Agrandir / Rétrécir / Élargir / Resserrer / Rapprocher / Éloigner / Raccourcir / Allonger de 0,5 m | Verbs, as the street page's `Élargir de` / `Rétrécir de`, so nothing agrees with a gender. |
+| Junction inspector | Shift left / right by 0.1 m | Décaler de 0,1 m vers la gauche / la droite |  |
+| Junction inspector | Turn anticlockwise / clockwise by 5° | Faire pivoter de 5° dans le sens antihoraire / horaire | As the plan's grip, `Faire pivoter`. No space before `°` (an angle). |
+| Junction inspector | 1.0 m to 15.0 m (a field's range) | De 1,0 m à 15,0 m |  |
+| Junction inspector | Size of the roundabout / m across | Taille du carrefour giratoire / m de diamètre |  |
+| Junction inspector | Track width / Track around the outside | Largeur de la piste / Piste tout autour, à l’extérieur |  |
+| Junction inspector | Bus lane through the middle / No bus lane | Voie d’autobus par le centre / Aucune voie d’autobus | As the selection's `Voie d’autobus par le centre`. |
+| Junction inspector | the ring (of a roundabout) | l’anneau |  |
+| Junction inspector | Curb radius | Rayon de la bordure |  |
+| Junction inspector | Lane 2 of 2 / the only lane / nearest the middle / nearest the curb | Voie 2 sur 2 / la seule voie / la plus près du centre / la plus près de la bordure |  |
+| Junction inspector | Left / Straight on / Right to X (where a lane goes) | À gauche / Tout droit / À droite vers X |  |
+| Junction inspector | Where this lane goes / Select the whole street | Où mène cette voie / Sélectionner toute la rue |  |
+| Junction inspector | Set back from the junction | Retrait par rapport à la jonction | As the history's `en retrait de`. |
+| Junction inspector | 2 stages of 9.0 m / 11.4 m to cross | 2 traversées de 9,0 m / 11,4 m à traverser |  |
+| Junction inspector | Halfway island / Refuge island in the middle | Îlot à mi-traversée / Îlot refuge au centre |  |
+| Junction inspector | Left / Right curb bulge | Avancée de trottoir à gauche / à droite | As the history's bulb-out. |
+| Junction inspector | Shorten the crossing | Raccourcir la traversée |  |
+| Junction inspector | Transit priority / At the approach / Bus stop / Turns | Priorité au transport en commun / À l’approche / Arrêt d’autobus / Virages |  |
+| Junction inspector | Transit modal filter | Filtre modal pour le transport en commun | As the Atlas name `N1`. |
+| Junction inspector | Direction (of an arm) | Orientation | The glossary's bearing. |
+| Junction inspector | Shift sideways | Décalage latéral |  |
+| Junction inspector | Open the cross-section | Ouvrir la coupe transversale | As the map page's `Ouvre la coupe transversale de la rue`. |
+| Junction inspector | Lanes coming in | Voies entrantes | As the Getting across table's column. |
 
 ## Terms to confirm
 
@@ -246,3 +270,10 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Turn X (junction grip) | `Faire pivoter X` | `Tourner X` (suggestion) |
 | Street editor (junction measures) | `Éditeur de rue` | `Éditeur de coupe transversale` (suggestion, longer) |
 | Bus only (junction road marking) | `Autobus seulement` | `Réservé aux autobus` (suggestion) |
+| (one way in) (junction inspector: a street a lane cannot go to) | `(sens unique vers la jonction)` | `(sens unique entrant)` (suggestion) |
+| One way out (junction inspector) | `Sens unique sortant` | `Sens unique, en sortie seulement` (suggestion) |
+| Bus lane along the way in (junction inspector) | `Voie réservée aux autobus en entrée` | `Voie réservée aux autobus à l’approche` (suggestion; `À l’approche` is already the approach measures' list) |
+| Halfway island (junction inspector heading) | `Îlot à mi-traversée` | `Îlot refuge` (suggestion, shorter) |
+| Curb radius (junction inspector) | `Rayon de la bordure` | `Rayon de bordure`, `Rayon du coin` (suggestion) |
+| Gate distance upstream (junction inspector) | `Distance de la porte d’autobus en amont` | |
+| Tighter (a corner, junction stepper) | `Resserrer` | `Réduire le rayon` (suggestion) |

@@ -224,3 +224,109 @@ jn-svg-road-shifted = { $compass } · { $width } road · shifted { $offset }
 jn-grip-turn = Turn { $arm }
 jn-grip-corner = Change the corner radius
 jn-grip-crossing = Move the crossing
+
+## The panel beside the plan: what is selected and the controls to change it (src/junction/inspector.rs)
+jn-insp-empty = Select a street, corner or crossing to change it.
+jn-insp-control = Junction control
+jn-insp-ring-size = Size of the roundabout
+# The tag after the roundabout's size: "m across".
+jn-insp-unit-across = { $unit } across
+jn-insp-ring-hint = Across the outside. No smaller than { $length } with these streets.
+# The buttons either side of a number field, for a screen reader: "Smaller by 0.5 m".
+jn-insp-smaller = Smaller by { $step }
+jn-insp-larger = Larger by { $step }
+jn-insp-narrower = Narrower by { $step }
+jn-insp-wider = Wider by { $step }
+jn-insp-tighter = Tighter by { $step }
+jn-insp-closer = Closer by { $step }
+jn-insp-farther = Farther by { $step }
+jn-insp-shorter = Shorter by { $step }
+jn-insp-longer = Longer by { $step }
+jn-insp-shift-left = Shift left by { $step }
+jn-insp-shift-right = Shift right by { $step }
+jn-insp-anticlockwise = Turn anticlockwise by { $degrees }°
+jn-insp-clockwise = Turn clockwise by { $degrees }°
+# The lengths a field takes: "1.0 m to 15.0 m".
+jn-insp-range = { $min } to { $max }
+jn-insp-track-width = Track width
+jn-insp-track-hint-inside = { $min } to { $max }. It takes space from the carriageway inside the same circle.
+jn-insp-track-hint-crossing = { $min } to { $max }. Cyclists cross every street where it meets the ring.
+jn-insp-bus-across = Bus lane through the middle
+jn-insp-bus-none = No bus lane
+jn-insp-bus-note = A { $width } bus-only lane straight across the island. It crosses the ring where it enters and leaves.
+jn-insp-bus-offer = Lets buses cut across the island between two streets.
+jn-insp-cycle = Cycle track
+jn-insp-cycle-option = Track around the outside
+jn-insp-bus = Bus lane
+jn-insp-bus-remove = Remove the bus lane
+jn-insp-cycle-sub = Round the outside of the roundabout
+jn-insp-cycle-remove = Remove the cycle track
+jn-insp-corner = Corner
+jn-insp-curb-radius = Curb radius
+jn-insp-corner-hint = { $min } to { $max }. Cars turn here at about { $speed } km/h.
+jn-insp-corner-note = A tight corner slows turning cars and shortens the walk across. A wide one lets them swing through faster.
+# A lane's turn button, for a screen reader: "Lane 1 to Main Street (south), straight on".
+jn-insp-dest-left = Lane { $n } to { $street }, left
+jn-insp-dest-through = Lane { $n } to { $street }, straight on
+jn-insp-dest-right = Lane { $n } to { $street }, right
+jn-insp-lane = Lane { $n }
+# Where a lane sits among its street's lanes.
+jn-insp-lane-only = the only lane
+jn-insp-lane-middle = nearest the middle
+jn-insp-lane-curb = nearest the curb
+jn-insp-lane-title = Lane { $n } of { $count }
+# Under a lane's title: its street and where it sits, "Main Street (north) · nearest the curb".
+jn-insp-lane-sub = { $arm } · { $place }
+jn-insp-lane-banned = Every street it goes to is banned. Add a street, or allow a turn.
+jn-insp-lane-width = { $width } wide. A lane has to go to at least one street.
+jn-insp-goes-left = Left to { $street }
+jn-insp-goes-through = Straight on to { $street }
+jn-insp-goes-right = Right to { $street }
+# A street a lane cannot go to, because its traffic only comes in.
+jn-insp-one-way-in = { $goes } (one way in)
+jn-insp-lane-goes = Where this lane goes
+jn-insp-whole-street = Select the whole street
+jn-insp-setback = Set back from the junction
+jn-insp-crossing-width = Crossing width
+jn-insp-bulb-left = Left curb bulge
+jn-insp-bulb-right = Right curb bulge
+jn-insp-no-parking = { $bulb } (no parking there)
+jn-insp-crossing = Crossing
+jn-insp-crossing-stages = { $n ->
+    [one] { $n } stage of { $length }
+   *[other] { $n } stages of { $length }
+}
+jn-insp-crossing-one-go = { $length } to cross
+jn-insp-too-far = { $crossing }. Too far in one go.
+jn-insp-crossing-remove = Remove the crossing
+jn-insp-crossing-mark = Mark a crossing
+jn-insp-halfway = Halfway island
+jn-insp-island = Refuge island in the middle
+jn-insp-island-narrow = Refuge island (road too narrow)
+jn-insp-shorten = Shorten the crossing
+jn-insp-transit = Transit priority
+jn-insp-bus-lane-in = Bus lane along the way in
+jn-insp-approach = At the approach
+jn-insp-stop = Bus stop
+jn-insp-rule = Turns
+# A measure in a list, with its Atlas code: "G2 Curbside queue-jump lane".
+jn-insp-coded = { $code } { $name }
+jn-insp-filter = Transit modal filter
+jn-insp-queue-length = Length of the queue jump
+jn-insp-gate-distance = Gate distance upstream
+# Under a street's name: the way it leaves, its bearing and its width, "E, 90° · 11.4 m road".
+jn-insp-arm-sub = { $compass }, { $degrees }° · { $width } road
+jn-insp-direction = Direction
+jn-insp-direction-hint = Clockwise from north. At least { $degrees }° from its neighbours.
+jn-insp-shift = Shift sideways
+jn-insp-shift-hint = Up to { $length } either way. Looking out from the junction.
+jn-insp-street = Street
+jn-insp-cross-section = Open the cross-section
+jn-insp-street-note = This street belongs to the city. Its layout is edited in the street editor, and changes there show here.
+jn-insp-remove-street = Remove this street
+jn-insp-min-arms = { $n ->
+    [one] A junction needs at least { $n } street.
+   *[other] A junction needs at least { $n } streets.
+}
+jn-insp-lanes-in = Lanes coming in
+jn-insp-one-way-out = One way out. No lanes come in.

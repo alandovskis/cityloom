@@ -725,3 +725,327 @@ fn the_junction_page_asks_for_no_message_that_is_missing_in_french() {
     });
     assert_eq!(s.i18n().missing(), Vec::<String>::new());
 }
+
+// ---- the panel in French ----------------------------------------------------------------
+
+/// English that must not be left in the panel beside the plan, whatever is selected. The sample streets are
+/// named "Sample Street 1", "Sample Avenue 2"…, so "Street" alone is not on the list.
+const PANEL_ENGLISH: &[&str] = &[
+    "Select a",
+    "Junction control",
+    "Size of the",
+    "across",
+    "Cycle track",
+    "Track",
+    "Bus lane",
+    "Remove",
+    "Corner",
+    "Curb",
+    "curb",
+    "Smaller",
+    "Larger",
+    "Tighter",
+    "Wider",
+    "Narrower",
+    "Closer",
+    "Farther",
+    "Shorter",
+    "Longer",
+    "Shift",
+    "clockwise",
+    ">Lane ",
+    "\"Lane ",
+    "Where this",
+    "Set back",
+    "Crossing",
+    "crossing",
+    "Halfway",
+    "Refuge",
+    "Shorten",
+    "Mark a",
+    "Transit",
+    "At the approach",
+    "Bus stop",
+    "Turns",
+    "Length of",
+    "Gate distance",
+    "Direction",
+    "Clockwise",
+    "neighbours",
+    "Open the",
+    "belongs to",
+    "One way",
+    "one way",
+    "coming in",
+    " road",
+    " to ",
+    "stages",
+    "Straight on",
+    "Left",
+    "Right",
+    "nearest",
+    "only lane",
+    "Cars turn",
+    "wide",
+    "parking",
+    "needs at least",
+    "No bus",
+    "Lets buses",
+    "Round the",
+];
+
+/// The panel of `s` in French, checked against the English list and for the French phrases.
+fn panel_speaks_french(s: &Rc<JunctionVm>, french: &[&str]) {
+    speaks_french(&panel(s), PANEL_ENGLISH, french);
+    assert_eq!(s.i18n().missing(), Vec::<String>::new());
+}
+
+#[test]
+fn the_panel_with_nothing_selected_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    panel_speaks_french(&s, &["Sélectionnez une rue, un coin ou un passage pour piétons à modifier.", "Signalisation de la jonction", "Feux de circulation"]);
+}
+
+#[test]
+fn the_panel_of_a_roundabout_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    panel_speaks_french(
+        &s,
+        &[
+            "Taille du carrefour giratoire",
+            "m de diamètre",
+            "Diamètre extérieur. Au moins ",
+            "aria-label=\"Réduire de 0,5\u{a0}m\"",
+            "aria-label=\"Agrandir de 0,5\u{a0}m\"",
+            "Piste cyclable",
+            "Piste tout autour, à l’extérieur",
+            "Voie d’autobus par le centre",
+            "Aucune voie d’autobus",
+            "Permet aux autobus de couper à travers l’îlot entre deux rues.",
+        ],
+    );
+    let (n, so) = (arm(&s, 0), arm(&s, 180));
+    s.edit(|j| j.set_cycle_track(true));
+    s.edit(|j| j.set_bus(Some((n, so))));
+    panel_speaks_french(
+        &s,
+        &[
+            "Largeur de la piste",
+            "De 1,5\u{a0}m à 3,0\u{a0}m. Elle prend de la place à la chaussée, dans le même cercle.",
+            "aria-label=\"Rétrécir de 0,5\u{a0}m\"",
+            "aria-label=\"Élargir de 0,5\u{a0}m\"",
+            "Une voie de 3,5\u{a0}m réservée aux autobus, tout droit à travers l’îlot.",
+        ],
+    );
+    s.edit(|j| j.select(Target::Bus));
+    panel_speaks_french(&s, &[">Voie d’autobus<", "Retirer la voie d’autobus", "Une voie de 3,5\u{a0}m réservée aux autobus"]);
+    s.edit(|j| j.select(Target::Cycle));
+    panel_speaks_french(
+        &s,
+        &[">Piste cyclable<", "Tout autour du carrefour giratoire, à l’extérieur", "Les cyclistes traversent chaque rue", "Retirer la piste cyclable"],
+    );
+}
+
+#[test]
+fn the_panel_of_a_corner_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Corner(n)));
+    panel_speaks_french(
+        &s,
+        &[
+            ">Coin<",
+            ">N vers E<",
+            "Rayon de la bordure",
+            "aria-label=\"Resserrer de 0,5\u{a0}m\"",
+            "aria-label=\"Élargir de 0,5\u{a0}m\"",
+            "De 1,0\u{a0}m à 15,0\u{a0}m. Les voitures tournent ici à environ ",
+            "\u{a0}km/h.",
+            "Un coin serré ralentit les voitures",
+        ],
+    );
+}
+
+#[test]
+fn the_panel_of_a_crossing_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let (n, e) = (arm(&s, 0), arm(&s, 90));
+    s.edit(|j| j.select(Target::Crossing(e)));
+    panel_speaks_french(
+        &s,
+        &[
+            "E, 90° · chaussée de 11,4\u{a0}m",
+            ">Passage pour piétons<",
+            "11,4\u{a0}m à traverser",
+            "Retirer le passage pour piétons",
+            "Retrait par rapport à la jonction",
+            "aria-label=\"Rapprocher de 0,5\u{a0}m\"",
+            "aria-label=\"Éloigner de 0,5\u{a0}m\"",
+            "De 2,0\u{a0}m à 8,0\u{a0}m",
+            "Largeur du passage pour piétons",
+            "De 2,0\u{a0}m à 6,0\u{a0}m",
+            "Îlot à mi-traversée",
+            "Îlot refuge",
+            "Raccourcir la traversée",
+            "Avancée de trottoir à gauche",
+            "Avancée de trottoir à droite",
+        ],
+    );
+    s.edit(|j| j.select(Target::Crossing(n)));
+    panel_speaks_french(&s, &["2 traversées de 9,0\u{a0}m"]);
+}
+
+#[test]
+fn the_panel_of_a_street_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    panel_speaks_french(
+        &s,
+        &[
+            "Sample Street 1",
+            "E, 90° · chaussée de 11,4\u{a0}m",
+            "Voies entrantes",
+            ">Voie 1<",
+            "aria-label=\"Voie 1 vers ",
+            "Priorité au transport en commun",
+            "Voie réservée aux autobus en entrée",
+            "À l’approche",
+            "Arrêt d’autobus",
+            ">Virages<",
+            "N1 Filtre modal pour le transport en commun",
+            ">Orientation<",
+            "aria-label=\"Faire pivoter de 5° dans le sens antihoraire\"",
+            "aria-label=\"Faire pivoter de 5° dans le sens horaire\"",
+            "Dans le sens horaire à partir du nord. Au moins 30° de ses voisines.",
+            "Décalage latéral",
+            "aria-label=\"Décaler de 0,1\u{a0}m vers la gauche\"",
+            "aria-label=\"Décaler de 0,1\u{a0}m vers la droite\"",
+            "Jusqu’à ",
+            "Retirer cette rue",
+        ],
+    );
+    s.edit(|j| j.set_crossing(e, false));
+    panel_speaks_french(&s, &["Marquer un passage pour piétons"]);
+    s.edit(|j| j.set_approach(e, Q_CURB));
+    panel_speaks_french(&s, &["Longueur de la voie de dépassement de file", "aria-label=\"Raccourcir de ", "aria-label=\"Allonger de ", "G2 Voie"]);
+    s.edit(|j| j.set_approach(e, GATE_SIGNAL));
+    panel_speaks_french(&s, &["Distance de la porte d’autobus en amont"]);
+}
+
+#[test]
+fn the_panel_of_a_street_that_cannot_be_removed_says_why_in_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let w = arm(&s, 270);
+    s.edit(|j| j.remove_arm(w));
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    panel_speaks_french(&s, &["Une jonction compte au moins 3 rues."]);
+}
+
+#[test]
+fn the_panel_of_a_city_street_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = linked_in(Locale::FrCa);
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    panel_speaks_french(&s, &[">Rue<", "Ouvrir la coupe transversale", "Cette rue appartient à la ville."]);
+}
+
+#[test]
+fn the_panel_of_a_lane_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Lane(n, 1)));
+    panel_speaks_french(
+        &s,
+        &[
+            "Voie 2 sur 2",
+            "Sample Avenue 2 (nord) · la plus près de la bordure",
+            "Où mène cette voie",
+            "Tout droit vers Sample Avenue 2 (sud)",
+            "Sélectionner toute la rue",
+            "\u{a0}m de large. Une voie doit mener à au moins une rue.",
+        ],
+    );
+    s.edit(|j| j.select(Target::Lane(n, 0)));
+    panel_speaks_french(&s, &["la plus près du centre"]);
+}
+
+/// The first sample junction with an arm that `pick` chooses, made in French, and that arm.
+fn sample_with(pick: impl Fn(&crate::junction::read_model::ArmView) -> bool) -> (Rc<JunctionVm>, u32) {
+    use crate::shared::i18n::Locale;
+    for sample in 0..JUNCTION_SAMPLES.len() {
+        let s = shared_in(sample, Locale::FrCa);
+        if let Some(a) = s.view_now().arms.iter().find(|a| pick(a)) {
+            return (s.clone(), a.uid);
+        }
+    }
+    panic!("no sample junction has such an arm");
+}
+
+#[test]
+fn the_panel_of_a_narrow_road_speaks_french() {
+    // "Sample Lane 3" is too narrow for an island and has parking on one side only.
+    let (s, uid) = sample_with(|a| a.crossing.is_some() && !a.can_island);
+    s.edit(|j| j.select(Target::Crossing(uid)));
+    panel_speaks_french(&s, &["Îlot refuge (chaussée trop étroite)", "Avancée de trottoir à gauche (pas de stationnement de ce côté)"]);
+}
+
+#[test]
+fn a_one_way_street_s_words_speak_french() {
+    // No sample junction has a one-way street, so the words are checked as the panel asks for them.
+    use crate::junction::inspector::goes_text;
+    use crate::shared::i18n::{Args, Locale};
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    assert_eq!(goes_text(&en, LEFT, "X".into(), false), "Left to X (one way in)");
+    assert_eq!(goes_text(&fr, LEFT, "X".into(), false), "À gauche vers X (sens unique vers la jonction)");
+    assert_eq!(goes_text(&fr, RIGHT, "X".into(), true), "À droite vers X");
+    assert_eq!(fr.tr_now("jn-insp-one-way-out", &Args::new()), "Sens unique sortant. Aucune voie n’entre.");
+}
+
+#[test]
+fn a_crossing_too_far_for_one_go_says_so_in_french() {
+    use crate::junction::inspector::crossing_range;
+    use crate::shared::i18n::Locale;
+    let fr = crate::i18n_for(Locale::FrCa);
+    let mut c = Junction::new(0).view().arms.into_iter().find(|a| a.bearing == 90).unwrap().crossing.unwrap();
+    c.too_far = true;
+    assert_eq!(crossing_range(&c, &fr, Units::Metres), "11,4\u{a0}m à traverser. Trop long à traverser d’un seul coup.");
+}
+
+#[test]
+fn the_panel_s_plurals_are_singular_at_zero_and_one_in_french() {
+    use crate::shared::i18n::{Args, Locale};
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let stages = |i: &crate::shared::i18n::I18n, n: i64| i.tr_now("jn-insp-crossing-stages", &Args::new().num("n", n).str("length", "9"));
+    assert_eq!([0, 1, 2].map(|n| stages(&en, n)), ["0 stages of 9", "1 stage of 9", "2 stages of 9"]);
+    assert_eq!([0, 1, 2].map(|n| stages(&fr, n)), ["0 traversée de 9", "1 traversée de 9", "2 traversées de 9"]);
+    let arms = |i: &crate::shared::i18n::I18n, n: i64| i.tr_now("jn-insp-min-arms", &Args::new().num("n", n));
+    assert_eq!(
+        [0, 1, 2].map(|n| arms(&en, n)),
+        ["A junction needs at least 0 streets.", "A junction needs at least 1 street.", "A junction needs at least 2 streets."]
+    );
+    assert_eq!(
+        [0, 1, 2].map(|n| arms(&fr, n)),
+        ["Une jonction compte au moins 0 rue.", "Une jonction compte au moins 1 rue.", "Une jonction compte au moins 2 rues."]
+    );
+}
+
+#[test]
+fn the_panel_s_steppers_follow_the_units() {
+    let s = shared(0);
+    s.set_units(Units::Feet);
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Corner(n)));
+    let h = panel(&s);
+    assert!(h.contains("aria-label=\"Tighter by 1.6 ft\""), "{h}");
+}
