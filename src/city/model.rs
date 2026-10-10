@@ -19,8 +19,8 @@ use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
-use crate::street::model::{SAMPLES, named_said, unnamed_said};
-use crate::street::model::{Editor, Street};
+use crate::street::model::SAMPLES;
+use crate::street::model::{Editor, Street, named_said, unnamed_said};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
 const SAVE_VERSION: u32 = 2;
@@ -764,7 +764,7 @@ pub struct PieceView {
 }
 
 /// One end of a street: a junction, or where it leaves the map.
-#[derive(Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct EndView {
     pub uid: u32,
     pub name: Said,

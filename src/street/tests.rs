@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
+use crate::city::model::EndView;
 use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::Locale;
 use crate::shared::live;
@@ -100,11 +101,11 @@ fn street_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
     html(|| f().into_any())
 }
 
-fn street_ends() -> Vec<page::StreetEnd> {
+fn street_ends() -> Vec<EndView> {
     use crate::shared::said::{Arg, Said};
     vec![
-        page::StreetEnd { name: Said::new("city-the-edge-of-the-map"), junction: false, uid: 0 },
-        page::StreetEnd { name: Said::new("city-junction-number").with("n", Arg::Num(4)), junction: true, uid: 2 },
+        EndView { name: Said::new("city-the-edge-of-the-map"), junction: false, uid: 0 },
+        EndView { name: Said::new("city-junction-number").with("n", Arg::Num(4)), junction: true, uid: 2 },
     ]
 }
 

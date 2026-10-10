@@ -66,7 +66,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let vm = sheet.0.clone();
-    let ends = edge.map(|edge| page::street_ends(&CityStore::current(browser_ports().storage).open(), edge));
+    let ends = edge.map(|edge| CityStore::current(browser_ports().storage).open().street_ends(edge));
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
