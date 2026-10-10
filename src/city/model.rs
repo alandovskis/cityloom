@@ -19,7 +19,7 @@ use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass, class_key};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
-use crate::street::model::SAMPLES;
+use crate::street::model::{SAMPLES, named_said};
 use crate::street::model::{Editor, Street};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
@@ -376,7 +376,7 @@ impl Layout {
     /// What a street is called: the name the network gives it, or else its section's title.
     pub(super) fn edge_kind(&self, edge: usize) -> Said {
         let e = &self.edges[edge];
-        e.name.as_ref().map_or_else(|| e.section.title(), |name| Said::new("city-name").with("name", Arg::Text(name.clone())))
+        e.name.as_ref().map_or_else(|| e.section.title(), |name| named_said(name))
     }
 
     /// Where a street runs: from one place to another, or through the city where neither end is a junction.

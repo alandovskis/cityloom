@@ -9,7 +9,7 @@ use crate::shared::said::{Arg, Said};
 use serde::{Deserialize, Serialize};
 
 use crate::junction::geometry::gap;
-use crate::street::model::{Editor, Street, View};
+use crate::street::model::{Editor, Street, View, named_said};
 
 #[cfg(test)]
 mod fixtures;
@@ -336,7 +336,7 @@ impl Arm {
 
     /// The name of the street the arm reads; a junction outside a city reads one always.
     pub fn street_name(&self) -> Said {
-        self.section.as_ref().map_or_else(|| Said::new("city-name").with("name", Arg::Text(String::new())), Street::title)
+        self.section.as_ref().map_or_else(|| named_said(""), Street::title)
     }
 
     pub fn row_mm(&self) -> i32 {

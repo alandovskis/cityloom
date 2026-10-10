@@ -50,7 +50,7 @@ impl Junction {
     pub fn new(sample: usize) -> Junction {
         let mut j = Junction {
             linked: false,
-            name: Said::new("city-name").with("name", Arg::Text(String::new())),
+            name: crate::street::model::named_said(""),
             region: 0,
             states: Vec::new(),
             cursor: 0,
@@ -66,7 +66,7 @@ impl Junction {
     pub fn load_sample(&mut self, sample: usize) {
         let sample = sample.min(JUNCTION_SAMPLES.len() - 1);
         let s = &JUNCTION_SAMPLES[sample];
-        self.name = Said::new("city-name").with("name", Arg::Text(s.name.to_string()));
+        self.name = crate::street::model::named_said(s.name);
         let mut arms: Vec<Arm> = s
             .arms
             .iter()

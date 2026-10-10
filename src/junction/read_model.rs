@@ -1174,7 +1174,7 @@ fn sample_path(path: &[Value]) -> Vec<P> {
 }
 
 fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView], lay: &Layout) -> Vec<Check> {
-    let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| Said::new("city-name").with("name", Arg::Text(String::new())), |a| a.label.clone());
+    let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
     let arms_of = |uids: Vec<u32>| list(uids.into_iter().map(name).collect());
     let check = |id: &'static str, label: &'static str, ok: Said, bad: Option<Said>| Check {
         id,

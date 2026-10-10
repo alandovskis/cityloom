@@ -195,10 +195,15 @@ pub struct Street {
     pub source: Vec<OsmRef>,
 }
 
+/// A name that is data, said as it is: a street's, a place's, a junction's.
+pub fn named_said(name: &str) -> Said {
+    Said::new("city-name").with("name", Arg::Text(name.to_string()))
+}
+
 /// What a street is called: its own name (data, said as it is), or else what sort of street it is.
 fn title_of(name: Option<&str>, class: StreetClass) -> Said {
     match (name, class) {
-        (Some(name), _) => Said::new("city-name").with("name", Arg::Text(name.to_string())),
+        (Some(name), _) => named_said(name),
         (None, StreetClass::Motorway) => Said::new("city-unnamed-motorway"),
         (None, class) => Said::new("city-unnamed").with("class", Arg::Msg(class_key(class))),
     }
