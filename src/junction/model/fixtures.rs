@@ -95,3 +95,20 @@ impl Junction {
         arm
     }
 }
+
+/// A four-way, in a city, whose every arm reads a street of these pieces, left to right: (kind id, width in mm).
+pub fn junction_of(pieces: &[(&str, i32)]) -> Junction {
+    use crate::shared::catalogue::{Side, StreetClass, kind_index};
+    use crate::street::model::Piece;
+    let pieces: Vec<Piece> = pieces
+        .iter()
+        .map(|&(id, width_mm)| Piece { kind: kind_index(id).unwrap(), width_mm, direction: (id == "travel").then_some(1), variants: Vec::new() })
+        .collect();
+    let street = Street::imported(StreetClass::Local, Side::Right, &pieces);
+    let mut state = Junction::new(0).current().clone();
+    for a in &mut state.arms {
+        a.section = Some(street.clone());
+        a.edge = a.uid;
+    }
+    Junction::from_city(named_said("Test"), &state, &state, 0).expect("the street draws")
+}

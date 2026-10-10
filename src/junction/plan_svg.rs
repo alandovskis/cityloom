@@ -340,7 +340,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
             "<g class=\"wedge-g\" data-role=\"{}\" data-uid=\"{}\">{}</g>",
             if c.straight { "none" } else { "corner" },
             c.uid,
-            p.piece("wedge k-sidewalk", "sidewalk", &d)
+            if c.walk { p.piece("wedge k-sidewalk", "sidewalk", &d) } else { format!("<path class=\"wedge bare\" d=\"{d}\"/>") }
         )
         .unwrap();
     }
@@ -648,6 +648,15 @@ mod tests {
 
     fn arm_at(j: &Junction, bearing: i32) -> u32 {
         j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid
+    }
+
+    #[test]
+    fn a_corner_without_a_sidewalk_is_drawn_bare() {
+        let s = svg(&junction_of(&[("travel", 3200), ("travel", 3200)]));
+        assert_eq!(count(&s.markup, "class=\"wedge bare\""), 4);
+        assert_eq!(count(&s.markup, "class=\"wedge k-sidewalk\""), 0);
+        let walked = svg(&junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]));
+        assert_eq!(count(&walked.markup, "class=\"wedge k-sidewalk\""), 4);
     }
 
     #[test]

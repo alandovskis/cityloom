@@ -373,6 +373,8 @@ pub struct CornerView {
     /// Turns here are faster than is safe beside a crossing.
     pub fast: bool,
     pub straight: bool,
+    /// A bordering arm has a sidewalk next to its curb here, so the corner is pavement for walking.
+    pub walk: bool,
     pub wedge: Vec<Value>,
     pub curb: Vec<Value>,
     /// The direction the corner's arc bulges.
@@ -810,6 +812,7 @@ impl Junction {
                 ok,
                 fast: c.fillet.is_some() && speed_kmh(radius) > MAX_TURN_KMH && (s.arms[c.a].crossing.is_some() || s.arms[c.b].crossing.is_some()),
                 straight: c.fillet.is_none(),
+                walk: is_walk(la.prof.edge_kind[1]) || is_walk(lb.prof.edge_kind[0]),
                 wedge,
                 curb,
                 bisector: bis,
@@ -924,6 +927,11 @@ impl Junction {
 
 /// How far out the plain pavement of the corner runs: past the crossing, where
 /// planting and the median take over.
+/// Whether the piece next to a curb is a sidewalk.
+fn is_walk(kind: Option<usize>) -> bool {
+    kind.is_some_and(|k| KINDS[k].id == "sidewalk")
+}
+
 fn clear_far(a: &Arm, l: &ArmLayout) -> f64 {
     let crossing = a.crossing.map_or(0.0, |c| (c.setback_mm + c.width_mm) as f64);
     (l.mouth + crossing + 1_500.0).max(l.mouth + WEDGE_MM)
@@ -1280,6 +1288,41 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
 mod tests {
     use super::*;
     use crate::shared::testing::{en, fr};
+
+    #[test]
+    fn a_corner_has_a_sidewalk_where_an_arm_has_one_beside_its_curb() {
+        let with = junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]).view();
+        assert!(with.corners.iter().all(|c| c.walk), "every arm has a sidewalk");
+        let without = junction_of(&[("travel", 3200), ("travel", 3200)]).view();
+        assert!(without.corners.iter().all(|c| !c.walk), "no arm has one, and the carriageway reaches the property line");
+    }
+
+    #[test]
+    fn a_planting_strip_at_the_curb_is_not_a_sidewalk_corner() {
+        let v = junction_of(&[("sidewalk", 2000), ("planting", 1500), ("travel", 3200), ("travel", 3200), ("planting", 1500), ("sidewalk", 2000)]).view();
+        assert!(v.corners.iter().all(|c| !c.walk));
+    }
+
+    #[test]
+    fn one_arm_with_a_sidewalk_is_enough_for_its_corners() {
+        use crate::shared::catalogue::{StreetClass, kind_index};
+        use crate::street::model::{Piece, Street};
+        let piece = |id: &str, width_mm| Piece { kind: kind_index(id).unwrap(), width_mm, direction: (id == "travel").then_some(1), variants: Vec::new() };
+        let walked = Street::imported(
+            StreetClass::Local,
+            Side::Right,
+            &[piece("sidewalk", 2000), piece("travel", 3200), piece("travel", 3200), piece("sidewalk", 2000)],
+        );
+        let bare = Street::imported(StreetClass::Local, Side::Right, &[piece("travel", 3200), piece("travel", 3200)]);
+        let mut state = Junction::new(0).current().clone();
+        for a in &mut state.arms {
+            a.edge = a.uid;
+            a.section = Some(if a.bearing == 0 { walked.clone() } else { bare.clone() });
+        }
+        let j = Junction::from_city(Said::new("city-name").with("name", Arg::Text("Test".into())), &state, &state, 0).expect("draws");
+        let walks: Vec<bool> = j.view().corners.iter().map(|c| c.walk).collect();
+        assert_eq!(walks.iter().filter(|w| **w).count(), 2, "the two corners beside the walked arm: {walks:?}");
+    }
 
     fn arm_of(j: &Junction, bearing: i32) -> u32 {
         j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid

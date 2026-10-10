@@ -707,6 +707,10 @@ svg pattern circle {
 #drawing .wedge-g[data-role="none"] {
   cursor: default;
 }
+#drawing .wedge.bare {
+  fill: var(--k-planting);
+  fill-opacity: 0.4;
+}
 #drawing .piece {
   stroke: var(--ink-2);
   stroke-width: 0.8;

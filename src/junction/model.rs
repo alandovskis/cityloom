@@ -14,7 +14,7 @@ use crate::street::model::{Editor, Street, View, named_said};
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::JUNCTION_SAMPLES;
+pub use fixtures::{JUNCTION_SAMPLES, junction_of};
 
 pub const LEFT: u8 = 1;
 pub const THROUGH: u8 = 2;
@@ -287,6 +287,9 @@ pub struct Profile {
     pub leave_span: (i32, i32),
     /// Width of parking or loading beside the left and right curb, or 0.
     pub park: [i32; 2],
+    /// What lies just beyond the left and right curb: the kind (an index into `KINDS`) of the nearest piece
+    /// outside the carriageway, or `None` where the carriageway reaches the property line.
+    pub edge_kind: [Option<usize>; 2],
 }
 
 /// The profile of a street a city holds, with its lanes written for the side
@@ -375,8 +378,22 @@ fn read_profile(view: &View, name: Said) -> Profile {
         })
     };
     let park = |p: Option<&&Piece>| p.map_or(0, |p| if matches!(KINDS[p.kind].id, "parking" | "loading") { p.width_mm } else { 0 });
+    let beyond_l = pieces.iter().filter(|p| p.x_mm + p.width_mm <= road_l).max_by_key(|p| p.x_mm).map(|p| p.kind);
+    let beyond_r = pieces.iter().filter(|p| p.x_mm >= road_r).min_by_key(|p| p.x_mm).map(|p| p.kind);
     let (enter_x, leave_x, enter_span, leave_span) = (lanes("toward"), lanes("away"), span("toward"), span("away"));
-    Profile { name, row_mm: view.row_mm, park: [park(road.first()), park(road.last())], pieces, road_l, road_r, enter_x, leave_x, enter_span, leave_span }
+    Profile {
+        name,
+        row_mm: view.row_mm,
+        park: [park(road.first()), park(road.last())],
+        edge_kind: [beyond_l, beyond_r],
+        pieces,
+        road_l,
+        road_r,
+        enter_x,
+        leave_x,
+        enter_span,
+        leave_span,
+    }
 }
 
 impl Profile {
