@@ -203,6 +203,9 @@ test.describe("a length typed in a junction number field", () => {
     await width.fill("abc");
     await width.press("Enter");
     await expect(width).toHaveValue("2,5");
+    await width.fill("9,5");
+    await width.press("Enter");
+    await expect(width).toHaveValue("2,5");
   });
 
   test("is read with a point in English", async ({ page }) => {

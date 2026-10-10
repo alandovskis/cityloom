@@ -181,6 +181,7 @@ fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>
     let (down, up, keyed) = (on_step.clone(), on_step.clone(), on_step);
     let Num { id, label, minus, plus, value, tag, hint: note } = n;
     let hint_id = format!("{id}-hint");
+    let described_by = hint_id.clone();
     view! {
         <section class="insp-sec">
             <h3 class="note-h" id=id>{words(w, label)}</h3>
@@ -196,7 +197,7 @@ fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>
                         value=move || value.get()
                         prop:value=move || value.get()
                         aria-labelledby=id
-                        aria-describedby=hint_id.clone()
+                        aria-describedby=move || (!note.get().is_empty()).then(|| described_by.clone())
                         on:keydown=move |ev| {
                             if let Some(dir) = step_key(&ev.key()) {
                                 ev.prevent_default();
@@ -205,9 +206,9 @@ fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>
                         }
                         on:change=move |ev| {
                             let input = event_target::<HtmlInputElement>(&ev);
-                            if !commit_typed(&input.value(), &*on_set) {
-                                input.set_value(&value.get_untracked());
-                            }
+                            commit_typed(&input.value(), &*on_set);
+                            // What the field holds is the model's value, whether it took the edit or refused it.
+                            input.set_value(&value.get_untracked());
                         }
                     />
                     <span class="unit-tag" aria-hidden="true">{move || tag.get()}</span>
@@ -250,6 +251,15 @@ pub fn commit_typed(typed: &str, set: &dyn Fn(f64)) -> bool {
 /// Sets the cycle track's width from what was typed, in the units shown; false when it is not a number.
 pub fn commit_cycle(w: Watch, typed: &str) -> bool {
     commit_typed(typed, &|v| set_cycle_width(w, v))
+}
+
+/// Turns a street to the degrees typed: a fraction is rounded, and the model snaps it to its step.
+pub fn commit_bearing(w: Watch, uid: u32, typed: &str) -> bool {
+    commit_typed(typed, &|v| set_bearing_degrees(w, uid, v))
+}
+
+fn set_bearing_degrees(w: Watch, uid: u32, degrees: f64) {
+    w.edit(|j| j.set_bearing(uid, degrees.round() as i32));
 }
 
 fn set_cycle_width(w: Watch, typed: f64) {
@@ -906,7 +916,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
             w,
             direction,
             move |dir| { w.edit(|j| j.step_bearing(uid, dir)); },
-            move |v| { w.edit(|j| j.set_bearing(uid, v.round() as i32)); },
+            move |v| set_bearing_degrees(w, uid, v),
         )}
         {num_field(
             w,

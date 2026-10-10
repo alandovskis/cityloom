@@ -1226,8 +1226,39 @@ fn a_typed_length_outside_what_fits_is_refused_by_the_model() {
     let (s, w) = watch(0);
     roundabout_with_cycle_track(&s);
     let before = cycle_width_mm(&s);
+    crate::shared::live::take_said();
     assert!(inspector::commit_cycle(w, "9,5"));
     assert_eq!(cycle_width_mm(&s), before);
+    assert!(!crate::shared::live::take_said().is_empty(), "the refusal is announced");
+    // What the field is made to hold again is the model's value.
+    assert!(panel(&s).contains(&format!("value=\"{}\"", Units::Metres.fixed(before.unwrap(), 1))));
+}
+
+#[test]
+fn a_bearing_typed_with_a_comma_is_rounded_and_snapped_like_any_other() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = watch(0);
+    let n = arm(&s, 0);
+    assert!(inspector::commit_bearing(w, n, "20"));
+    let ninety = s.read(|j| j.arm(n).unwrap().bearing);
+    assert_eq!(ninety, 20);
+    assert!(inspector::commit_bearing(w, n, "20,5"));
+    assert_eq!(s.read(|j| j.arm(n).unwrap().bearing), 20, "20,5 is 21, and the nearest step is 20");
+    assert!(inspector::commit_bearing(w, n, "22,5"));
+    assert_eq!(s.read(|j| j.arm(n).unwrap().bearing), 25);
+    assert!(!inspector::commit_bearing(w, n, "north"));
+}
+
+#[test]
+fn a_field_with_no_hint_is_not_described_by_one() {
+    let s = shared(0);
+    s.select(Target::Arm(arm(&s, 0)));
+    let h = panel(&s);
+    for id in h.split("aria-describedby=\"").skip(1) {
+        let id = id.split('"').next().unwrap();
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id} is described by nothing");
+    }
 }
 
 #[test]
