@@ -49,7 +49,7 @@ map-junction-count = { $n ->
 map-counts = { $junctions }, { $streets }
 
 ## A place in a list: its small print, and the tag that says how it stands
-# `control` is the junction's control (in English until the junction is translated), `streets` is map-streets.
+# `control` is the junction's control (a jn-control-* message), `streets` is map-streets.
 map-junction-sub = { $control }, { $streets }
 map-street-sub = { $ends } · { $width }
 map-state-works = Works

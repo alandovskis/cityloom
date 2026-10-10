@@ -49,7 +49,7 @@ map-junction-count = { $n ->
 map-counts = { $junctions }, { $streets }
 
 ## Un lieu dans une liste : ses précisions, et l’étiquette qui dit où il en est
-# `control` est le mode de contrôle de la jonction (en anglais tant que la jonction n’est pas traduite), `streets` est map-streets.
+# `control` est la signalisation de la jonction (un message jn-control-*), `streets` est map-streets.
 map-junction-sub = { $control }, { $streets }
 map-street-sub = { $ends } · { $width }
 map-state-works = Fonctionne

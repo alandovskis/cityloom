@@ -1,6 +1,6 @@
 # Glossaire anglais / français (Canada)
 
-The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl`, `src/map/i18n/fr.ftl` and `src/place/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled.
+The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl`, `src/map/i18n/fr.ftl`, `src/place/i18n/fr.ftl` and `src/junction/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled.
 
 ## Style rules
 
@@ -140,6 +140,39 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Home page | home (the brand link) | accueil |  |
 | Home page | Streets © OpenStreetMap contributors | Rues © les contributeurs d’OpenStreetMap | OpenStreetMap's own French credit is `© les contributeurs d’OpenStreetMap`. |
 | Home page | placeholders (the rules the checks use) | provisoires | As the map page's `exemples`; to confirm, see below. |
+| Junction | junction | jonction | As in the city's names (`Jonction 4`); `intersection` only in the Atlas name `L2`. |
+| Junction | arm (one street at a junction) | branche | Not shown alone: an arm is said `Rue (nord)`. |
+| Junction | north, north-east … (in a sentence) | nord, nord-est, est, sud-est, sud, sud-ouest, ouest, nord-ouest | Lowercase in brackets after the street: `Rue Principale (nord)`. |
+| Junction | N, NE, E, SE, S, SW, W, NW (tags) | N, NE, E, SE, S, SO, O, NO |  |
+| Junction | control (how a junction is run) | signalisation | `Signalisation : feux de circulation` in the history. |
+| Junction | No control | Aucune signalisation | To confirm, see below. |
+| Junction | Side streets stop | Arrêt sur les rues secondaires | To confirm, see below. |
+| Junction | All-way stop | Arrêt toutes directions |  |
+| Junction | Traffic signal | Feux de circulation | Plural, as in Québec; lowercase in a sentence. |
+| Junction | Roundabout | Carrefour giratoire |  |
+| Junction | crossing (for people on foot) | passage pour piétons |  |
+| Junction | refuge island | îlot refuge |  |
+| Junction | bulb-out (curb extension) | avancée de trottoir | As the Atlas's bus bulb (`Avancée de trottoir pour autobus`). |
+| Junction | corner radius / Corner after X | rayon / Coin après X |  |
+| Junction | bearing | orientation |  |
+| Junction | offset (of an arm) | décalage |  |
+| Junction | lane (driving) | voie |  |
+| Junction | bus lane | voie réservée aux autobus | Across a roundabout's middle: `voie d’autobus par le centre`. |
+| Junction | cycle track | piste cyclable |  |
+| Junction | turn / left turn / straight on / right turn | virage / virage à gauche / tout droit / virage à droite |  |
+| Junction | allowed / not allowed (a turn) | permis / interdit |  |
+| Junction | add / remove (at the end of a history label) | ajout / retrait | Nouns, as on the street page. |
+| Junction | approach measure | mesure d’approche |  |
+| Junction | turn management | gestion des virages |  |
+| Junction | dead end | cul-de-sac |  |
+| Junction | Right-in/right-out | Entrée et sortie à droite seulement | As the Atlas name `L3`; shortened to `Entrée et sortie à droite` where it says why a turn is blocked. |
+| Junction | queue jump (G1 to G3) | voie de dépassement de file | Singular forms of the Atlas names: `Voie décalée de dépassement de file`, `… en bordure de trottoir`, `Voie virtuelle …`. |
+| Junction | bus gate (H1, H2) | porte d’autobus | `à feux de signalisation`, `à cédez le passage`, as the Atlas names. |
+| Junction | Signal-protected on-street platform | Quai sur rue protégé par des feux |  |
+| Junction | Crossing distance | Distance de traversée | A check's label; the other check labels are whole sentences (`Les voies couvrent chaque virage`). |
+| Junction | Sidewalk survives the corner / eats the sidewalk | Le trottoir survit au coin / gruge le trottoir | `gruger` is Québec usage; to confirm, see below. |
+| Junction | One check needs attention: … | Une vérification est à corriger : … | As the map's `À corriger`. |
+| Junction | Started over from the junction as it is today | Retour à la jonction telle qu’elle est aujourd’hui |  |
 
 ## Terms to confirm
 
@@ -183,3 +216,10 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Searching… (home page) | `Recherche en cours…` | `Recherche…` (suggestion) |
 | Redesign (home page) | `Réaménagez` | `Repensez` (suggestion) |
 | placeholders (home page: the widths and rules are placeholders) | `provisoires` | `des exemples`, as the map page's fine print (suggestion) |
+| No control (junction) | `Aucune signalisation` | `Sans contrôle`, `Aucun contrôle` (suggestion) |
+| Side streets stop (junction) | `Arrêt sur les rues secondaires` | `Arrêt sur la rue secondaire`, `Priorité à la rue principale` (suggestion) |
+| control (junction: how it is run) | `signalisation` | `contrôle`, `régulation` (suggestion) |
+| Junction (the editor's word) | `jonction` | `intersection`, `carrefour` (both usual in Québec) |
+| eats the sidewalk (junction check) | `gruge le trottoir` | `empiète sur le trottoir` (suggestion, more neutral) |
+| bulb-out (junction) | `avancée de trottoir` | `saillie de trottoir` (suggestion) |
+| Signal has room (junction check) | `Les feux ont de la place` | `Assez peu de rues pour des feux` is its passing detail; `Feux possibles` (suggestion) |
