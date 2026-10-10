@@ -14,7 +14,7 @@ use crate::junction::turns::{compass_key, turn_glyph};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
 use crate::shared::i18n::{Args, I18n};
-use crate::shared::units::Units;
+use crate::shared::units::{Units, parse_number};
 
 // ---- text the panel is made of ---------------------------------------------
 
@@ -75,14 +75,6 @@ fn range_args(i18n: &I18n, units: Units, lo: i32, hi: i32) -> Args {
 
 fn range_text(i18n: &I18n, units: Units, lo: i32, hi: i32) -> String {
     i18n.tr("jn-insp-range", &range_args(i18n, units, lo, hi))
-}
-
-/// How much a stepper moves a typed length, as the field's `step` says it.
-fn step_attr(units: Units) -> &'static str {
-    match units {
-        Units::Metres => "0.1",
-        Units::Feet => "0.5",
-    }
 }
 
 // ---- words, asked for where the view draws them ----------------------------------
@@ -175,10 +167,7 @@ struct Num {
     label: &'static str,
     minus: Signal<String>,
     plus: Signal<String>,
-    min: Option<&'static str>,
-    max: Option<&'static str>,
     value: Signal<String>,
-    step: Signal<String>,
     tag: Signal<String>,
     hint: Signal<String>,
 }
@@ -189,8 +178,9 @@ fn num_field(w: Watch, n: Num, on_step: impl Fn(i32) + 'static, on_set: impl Fn(
 
 /// The markup of a number field, made once for every field of the panel.
 fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>) -> AnyView {
-    let (down, up) = (on_step.clone(), on_step);
-    let Num { id, label, minus, plus, min, max, value, step, tag, hint: note } = n;
+    let (down, up, keyed) = (on_step.clone(), on_step.clone(), on_step);
+    let Num { id, label, minus, plus, value, tag, hint: note } = n;
+    let hint_id = format!("{id}-hint");
     view! {
         <section class="insp-sec">
             <h3 class="note-h" id=id>{words(w, label)}</h3>
@@ -200,19 +190,23 @@ fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>
                 </button>
                 <span class="wfield">
                     <input
-                        type="number"
+                        type="text"
                         inputmode="decimal"
-                        step=move || step.get()
-                        min=min
-                        max=max
+                        autocomplete="off"
                         value=move || value.get()
                         prop:value=move || value.get()
                         aria-labelledby=id
+                        aria-describedby=hint_id.clone()
+                        on:keydown=move |ev| {
+                            if let Some(dir) = step_key(&ev.key()) {
+                                ev.prevent_default();
+                                keyed(dir);
+                            }
+                        }
                         on:change=move |ev| {
                             let input = event_target::<HtmlInputElement>(&ev);
-                            match input.value().parse::<f64>() {
-                                Ok(v) if v.is_finite() => on_set(v),
-                                _ => input.set_value(&value.get_untracked()),
+                            if !commit_typed(&input.value(), &*on_set) {
+                                input.set_value(&value.get_untracked());
                             }
                         }
                     />
@@ -222,10 +216,44 @@ fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>
                     <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
                 </button>
             </div>
-            {hint(note)}
+            {hint_with_id(note, hint_id)}
         </section>
     }
     .into_any()
+}
+
+/// A hint that a field is described by.
+fn hint_with_id(text: Signal<String>, id: String) -> impl IntoView {
+    move || {
+        let t = text.get();
+        (!t.is_empty()).then(|| view! { <p class="insp-range" id=id.clone()>{t}</p> })
+    }
+}
+
+/// The step an arrow key makes in a number field, as the browser's spinner did.
+pub fn step_key(key: &str) -> Option<i32> {
+    match key {
+        "ArrowUp" => Some(1),
+        "ArrowDown" => Some(-1),
+        _ => None,
+    }
+}
+
+/// Hands what was typed (a comma or a point for the decimal mark) to `set`;
+/// false when it is not a number.
+pub fn commit_typed(typed: &str, set: &dyn Fn(f64)) -> bool {
+    let Some(v) = parse_number(typed) else { return false };
+    set(v);
+    true
+}
+
+/// Sets the cycle track's width from what was typed, in the units shown; false when it is not a number.
+pub fn commit_cycle(w: Watch, typed: &str) -> bool {
+    commit_typed(typed, &|v| set_cycle_width(w, v))
+}
+
+fn set_cycle_width(w: Watch, typed: f64) {
+    w.edit(|j| j.set_cycle(Some(w.units_now().mm(typed))));
 }
 
 fn derived(w: Watch, f: impl Fn(&JView, Units) -> String + Send + Sync + 'static) -> Signal<String> {
@@ -239,11 +267,7 @@ fn range_hint(w: Watch, lo: i32, hi: i32) -> Signal<String> {
 
 /// A length in the field's units, to `places`, of whatever `mm` reads.
 fn length_signal(w: Watch, places: usize, mm: impl Fn(&JView) -> i32 + Send + Sync + 'static) -> Signal<String> {
-    derived(w, move |v, u| u.fixed(mm(v), places))
-}
-
-fn step_signal(w: Watch) -> Signal<String> {
-    Signal::derive(move || step_attr(w.units()).to_string())
+    derived(w, move |v, u| u.fixed_in(mm(v), places, w.i18n().locale()))
 }
 
 fn unit_tag(w: Watch) -> Signal<String> {
@@ -258,10 +282,7 @@ fn ring_size(w: Watch) -> impl IntoView {
         label: "jn-insp-ring-size",
         minus: stepper(w, "jn-insp-smaller", RING_STEP_MM),
         plus: stepper(w, "jn-insp-larger", RING_STEP_MM),
-        min: None,
-        max: None,
         value: length_signal(w, 1, |v| v.ring.as_ref().map_or(0, |r| r.radius_mm * 2)),
-        step: step_signal(w),
         tag: Signal::derive(move || tr(w, "jn-insp-unit-across", Args::new().str("unit", w.units().word()))),
         hint: derived(w, move |v, _| with_length(w, "jn-insp-ring-hint", "length", v.ring.as_ref().map_or(0, |r| r.floor_mm * 2))),
     };
@@ -284,10 +305,7 @@ fn cycle_width(w: Watch, note: &'static str) -> impl IntoView {
         label: "jn-insp-track-width",
         minus: stepper(w, "jn-insp-narrower", RING_STEP_MM),
         plus: stepper(w, "jn-insp-wider", RING_STEP_MM),
-        min: None,
-        max: None,
         value: length_signal(w, 1, |v| v.ring.as_ref().and_then(|r| r.cycle_mm).unwrap_or(0)),
-        step: step_signal(w),
         tag: unit_tag(w),
         hint: Signal::derive(move || tr(w, note, range_args(&w.i18n(), w.units(), CYCLE_MIN_MM, CYCLE_MAX_MM))),
     };
@@ -297,9 +315,7 @@ fn cycle_width(w: Watch, note: &'static str) -> impl IntoView {
         move |dir| {
             w.edit(|j| j.step_cycle(dir));
         },
-        move |v| {
-            w.edit(|j| j.set_cycle(Some(w.units_now().mm(v))));
-        },
+        move |v| set_cycle_width(w, v),
     )
 }
 
@@ -470,10 +486,7 @@ fn corner_panel(w: Watch, uid: u32) -> AnyView {
         label: "jn-insp-curb-radius",
         minus: stepper(w, "jn-insp-tighter", RING_STEP_MM),
         plus: stepper(w, "jn-insp-wider", RING_STEP_MM),
-        min: None,
-        max: None,
         value: length_signal(w, 1, move |v| v.corners.iter().find(|c| c.uid == uid).map_or(0, |c| c.radius_mm)),
-        step: step_signal(w),
         tag: unit_tag(w),
         hint: derived(w, move |v, u| {
             let speed = v.corners.iter().find(|c| c.uid == uid).map_or(0.0, |c| c.speed_kmh);
@@ -626,10 +639,7 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
         label: "jn-insp-setback",
         minus: stepper(w, "jn-insp-closer", RING_STEP_MM),
         plus: stepper(w, "jn-insp-farther", RING_STEP_MM),
-        min: None,
-        max: None,
         value: length_signal(w, 1, move |v| v.arms.iter().find(|a| a.uid == uid).and_then(|a| a.crossing.as_ref()).map_or(0, |c| c.setback_mm)),
-        step: step_signal(w),
         tag: unit_tag(w),
         hint: range_hint(w, MIN_SETBACK_MM, MAX_SETBACK_MM),
     };
@@ -638,10 +648,7 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
         label: "jn-insp-crossing-width",
         minus: stepper(w, "jn-insp-narrower", RING_STEP_MM),
         plus: stepper(w, "jn-insp-wider", RING_STEP_MM),
-        min: None,
-        max: None,
         value: length_signal(w, 1, move |v| v.arms.iter().find(|a| a.uid == uid).and_then(|a| a.crossing.as_ref()).map_or(0, |c| c.width_mm)),
-        step: step_signal(w),
         tag: unit_tag(w),
         hint: range_hint(w, MIN_CROSSING_MM, MAX_CROSSING_MM),
     };
@@ -780,10 +787,7 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
                 label: if queue { "jn-insp-queue-length" } else { "jn-insp-gate-distance" },
                 minus: stepper(w, "jn-insp-shorter", APPROACH_STEP_MM),
                 plus: stepper(w, "jn-insp-longer", APPROACH_STEP_MM),
-                min: None,
-                max: None,
                 value: length_signal(w, 1, move |v| v.arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.transit.approach_mm)),
-                step: step_signal(w),
                 tag: unit_tag(w),
                 hint: range_hint(w, APPROACH_MIN_MM, APPROACH_MAX_MM),
             };
@@ -849,10 +853,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         label: "jn-insp-direction",
         minus: Signal::derive(move || tr(w, "jn-insp-anticlockwise", Args::new().num("degrees", BEARING_STEP as i64))),
         plus: Signal::derive(move || tr(w, "jn-insp-clockwise", Args::new().num("degrees", BEARING_STEP as i64))),
-        min: Some("0"),
-        max: Some("355"),
         value: Signal::derive(move || w.arm(uid, |a| a.bearing.to_string()).unwrap_or_default()),
-        step: Signal::derive(|| BEARING_STEP.to_string()),
         tag: Signal::derive(|| "°".to_string()),
         hint: Signal::derive(move || tr(w, "jn-insp-direction-hint", Args::new().num("degrees", MIN_SEPARATION as i64))),
     };
@@ -861,10 +862,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         label: "jn-insp-shift",
         minus: stepper(w, "jn-insp-shift-left", OFFSET_STEP_MM),
         plus: stepper(w, "jn-insp-shift-right", OFFSET_STEP_MM),
-        min: None,
-        max: None,
         value: length_signal(w, 2, move |v| v.arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.offset_mm)),
-        step: step_signal(w),
         tag: unit_tag(w),
         hint: derived(w, move |v, _| with_length(w, "jn-insp-shift-hint", "length", v.arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.max_offset_mm))),
     };
@@ -992,8 +990,6 @@ mod tests {
         assert_eq!(range_text(&en, Units::Metres, 1_000, 15_000), "1.0 m to 15.0 m");
         assert_eq!(range_text(&en, Units::Feet, 3_048, 6_096), "10.0 ft to 20.0 ft");
         assert_eq!(range_text(&fr, Units::Metres, 1_000, 15_000), "De 1,0\u{a0}m à 15,0\u{a0}m");
-        assert_eq!(step_attr(Units::Metres), "0.1");
-        assert_eq!(step_attr(Units::Feet), "0.5");
     }
 
     #[test]

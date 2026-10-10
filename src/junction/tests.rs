@@ -1170,3 +1170,98 @@ fn intersection_html_leaves_no_text_without_its_message() {
     }
     assert!(INTERSECTION_HTML.contains(r#"<meta name="description" data-i18n-content="jn-page-description""#));
 }
+
+// ---- the number fields ----------------------------------------------------------------
+
+fn cycle_width_mm(s: &JunctionVm) -> Option<i32> {
+    s.read(|j| j.current().cycle)
+}
+
+fn roundabout_with_cycle_track(s: &JunctionVm) {
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    s.edit(|j| j.set_cycle_track(true));
+}
+
+#[test]
+fn a_length_typed_with_a_comma_or_a_point_is_read_as_a_decimal() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = watch(0);
+    roundabout_with_cycle_track(&s);
+    s.edit(|j| j.set_cycle(Some(1_500)));
+    assert!(inspector::commit_cycle(w, "2,5"));
+    assert_eq!(cycle_width_mm(&s), Some(2_500));
+    s.edit(|j| j.set_cycle(Some(1_500)));
+    assert!(inspector::commit_cycle(w, "2.5"));
+    assert_eq!(cycle_width_mm(&s), Some(2_500));
+}
+
+#[test]
+fn a_length_typed_in_feet_is_converted() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = watch(0);
+    roundabout_with_cycle_track(&s);
+    s.set_units(Units::Feet);
+    assert!(inspector::commit_cycle(w, "8,2"));
+    assert_eq!(cycle_width_mm(&s), Some(2_500));
+}
+
+#[test]
+fn what_is_not_a_number_is_not_committed() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = watch(0);
+    roundabout_with_cycle_track(&s);
+    let before = cycle_width_mm(&s);
+    assert!(!inspector::commit_cycle(w, "abc"));
+    assert!(!inspector::commit_cycle(w, "1,2,3"));
+    assert_eq!(cycle_width_mm(&s), before);
+}
+
+#[test]
+fn a_typed_length_outside_what_fits_is_refused_by_the_model() {
+    let owner = Owner::new();
+    owner.set();
+    let (s, w) = watch(0);
+    roundabout_with_cycle_track(&s);
+    let before = cycle_width_mm(&s);
+    assert!(inspector::commit_cycle(w, "9,5"));
+    assert_eq!(cycle_width_mm(&s), before);
+}
+
+#[test]
+fn the_arrow_keys_step_a_number_field() {
+    assert_eq!(inspector::step_key("ArrowUp"), Some(1));
+    assert_eq!(inspector::step_key("ArrowDown"), Some(-1));
+    assert_eq!(inspector::step_key("Enter"), None);
+}
+
+#[test]
+fn every_number_field_is_text_that_asks_for_a_decimal_keyboard() {
+    let s = shared_in(0, crate::shared::i18n::Locale::FrCa);
+    roundabout_with_cycle_track(&s);
+    let ring = panel(&s);
+    s.select(Target::Arm(arm(&s, 0)));
+    let street = panel(&s);
+    s.select(Target::Corner(arm(&s, 0)));
+    let corner = panel(&s);
+    for h in [&ring, &street, &corner] {
+        assert!(!h.contains("type=\"number\""), "{h}");
+        assert!(count(h, "inputmode=\"decimal\"") >= 1, "{h}");
+        assert_eq!(count(h, "<input"), count(h, "type=\"text\""), "{h}");
+    }
+    assert!(count(&ring, "type=\"text\"") >= 2, "the ring's size and the track's width");
+}
+
+#[test]
+fn a_length_is_held_with_the_decimal_mark_of_the_language() {
+    let s = shared_in(0, crate::shared::i18n::Locale::FrCa);
+    roundabout_with_cycle_track(&s);
+    s.edit(|j| j.set_cycle(Some(2_500)));
+    assert!(panel(&s).contains("value=\"2,5\""));
+    let en = shared(0);
+    roundabout_with_cycle_track(&en);
+    en.edit(|j| j.set_cycle(Some(2_500)));
+    assert!(panel(&en).contains("value=\"2.5\""));
+}

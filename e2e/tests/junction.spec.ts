@@ -178,3 +178,40 @@ test.describe("what the junction editor keeps in the city", () => {
     expect(await page.locator("#drawing").innerHTML()).not.toBe(before);
   });
 });
+
+// A number field takes the decimal mark of the page's language, and a point too.
+const cycleWidth = async (page: Page, control: string, track: RegExp) => {
+  await page.locator("#inspector select").first().selectOption({ label: control });
+  await page.getByRole("checkbox", { name: track }).click();
+  return page.locator('#inspector input[aria-labelledby="i-h-cycle-width"]');
+};
+
+test.describe("a length typed in a junction number field", () => {
+  test("is read with a decimal comma in French and shown with one", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("cityloom-lang", "fr-CA"));
+    await openJunction(page);
+    const width = await cycleWidth(page, "Carrefour giratoire", /Piste tout autour/);
+    await expect(width).toHaveAttribute("inputmode", "decimal");
+    await expect(width).toHaveAttribute("type", "text");
+    await width.fill("2,5");
+    await width.press("Enter");
+    await expect(width).toHaveValue("2,5");
+    await width.press("ArrowDown");
+    await expect(width).toHaveValue("2,0");
+    await width.press("ArrowUp");
+    await expect(width).toHaveValue("2,5");
+    await width.fill("abc");
+    await width.press("Enter");
+    await expect(width).toHaveValue("2,5");
+  });
+
+  test("is read with a point in English", async ({ page }) => {
+    await openJunction(page);
+    const width = await cycleWidth(page, "Roundabout", /Track around the outside/);
+    await width.fill("2.5");
+    await width.press("Enter");
+    await expect(width).toHaveValue("2.5");
+    await width.press("ArrowDown");
+    await expect(width).toHaveValue("2.0");
+  });
+});
