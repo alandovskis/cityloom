@@ -1049,3 +1049,60 @@ fn the_panel_s_steppers_follow_the_units() {
     let h = panel(&s);
     assert!(h.contains("aria-label=\"Tighter by 1.6 ft\""), "{h}");
 }
+
+// ---- the page's markup ----------------------------------------------------------------------
+
+const INTERSECTION_HTML: &str = include_str!("../../web/intersection.html");
+
+#[test]
+fn every_data_i18n_key_in_intersection_html_exists_in_both_languages() {
+    use crate::shared::i18n::{Args, Locale};
+    use crate::shell::view::i18n_keys;
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let keys = i18n_keys(INTERSECTION_HTML);
+    assert!(keys.len() > 45, "the page should have been converted: {}", keys.len());
+    for (key, _) in keys {
+        en.tr_now(&key, &Args::new());
+        fr.tr_now(&key, &Args::new());
+    }
+    assert_eq!(en.missing(), Vec::<String>::new(), "missing in en");
+    assert_eq!(fr.missing(), Vec::<String>::new(), "missing in fr");
+}
+
+#[test]
+fn the_english_text_in_intersection_html_is_the_english_message() {
+    use crate::shared::i18n::{Args, Locale};
+    let en = crate::i18n_for(Locale::En);
+    for (key, fallback) in crate::shell::view::i18n_keys(INTERSECTION_HTML) {
+        assert_eq!(fallback, en.tr_now(&key, &Args::new()), "{key}");
+    }
+}
+
+#[test]
+fn intersection_html_has_a_language_row() {
+    assert!(INTERSECTION_HTML.contains(r#"data-lang="en" lang="en" aria-pressed="true">English<"#));
+    assert!(INTERSECTION_HTML.contains(r#"data-lang="fr-CA" lang="fr" aria-pressed="false">Français<"#));
+    assert_eq!(INTERSECTION_HTML.matches("<script>").count(), 1);
+    // The header sets the window title from the junction's name, so the shell does not write it.
+    assert!(!INTERSECTION_HTML.contains("<title data-i18n"));
+}
+
+#[test]
+fn intersection_html_leaves_no_text_without_its_message() {
+    // Every text between tags in the body that holds a letter is a message, unless it is a unit, a key cap, a
+    // language's own name or the Atlas's name.
+    use crate::shell::view::i18n_keys;
+    let body = &INTERSECTION_HTML[INTERSECTION_HTML.find("<body>").unwrap()..];
+    let translated: Vec<String> = i18n_keys(body).into_iter().map(|(_, text)| text).collect();
+    let own = ["m", "ft", "Z", "English", "Français", "Transit Priority Atlas"];
+    for piece in body.split('>').filter_map(|p| p.split('<').next()).map(str::trim).filter(|t| !t.is_empty()) {
+        if piece.chars().any(char::is_alphabetic) && !own.contains(&piece) {
+            assert!(translated.iter().any(|t| t == piece), "{piece:?} has no message");
+        }
+    }
+    // The text people read in attributes is translated too.
+    for attr in ["aria-label=\"", "title=\""] {
+        assert_eq!(INTERSECTION_HTML.matches(&format!(" {attr}")).count(), INTERSECTION_HTML.matches(&format!(" data-i18n-{attr}")).count(), "{attr}");
+    }
+    assert!(INTERSECTION_HTML.contains(r#"<meta name="description" data-i18n-content="jn-page-description""#));
+}

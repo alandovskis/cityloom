@@ -225,6 +225,35 @@ jn-grip-turn = Turn { $arm }
 jn-grip-corner = Change the corner radius
 jn-grip-crossing = Move the crossing
 
+## The page's markup (web/intersection.html); the window title is the header's jn-title
+jn-page-description = Change how a junction of streets works: corners, crossings, lanes, turns and control.
+jn-page-editors = Editors
+jn-page-map = Map
+jn-page-details = Details
+jn-page-details-toggle-title = Show or hide the details ( [ )
+jn-page-key-select = select
+jn-page-key-change = change
+jn-page-key-turn = turn a street
+jn-page-key-remove = remove
+jn-page-key-details-notes = details, notes
+jn-page-key-undo = undo
+jn-page-details-panel = Selected street, corner or crossing
+jn-page-plan-key = Key to the strips
+jn-page-tab-streets = Streets
+jn-page-tab-measures = Measures
+jn-page-across = Getting across
+jn-page-turns = Turns allowed
+jn-page-turns-hint = Each row is a street traffic comes from. Press a cell to allow or ban that turn.
+jn-page-conflicts = Where paths meet
+jn-page-does-it-work = Does it work?
+jn-page-your-changes = Your changes
+jn-page-measures = Transit priority measures
+# Around a link to the Transit Priority Atlas, whose name is not translated: "The toolbox of the Transit Priority Atlas, and where…".
+jn-page-measures-hint-a = The toolbox of the
+jn-page-measures-hint-b = , and where CityLoom models each measure.
+jn-page-fine-print = Sample numbers and limits for now, not real measurements.
+jn-page-about = About this junction
+
 ## The panel beside the plan: what is selected and the controls to change it (src/junction/inspector.rs)
 jn-insp-empty = Select a street, corner or crossing to change it.
 jn-insp-control = Junction control

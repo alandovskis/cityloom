@@ -191,6 +191,11 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction plan | Bus only (road marking) | Autobus seulement |  |
 | Junction plan | Turn X (a grip) | Faire pivoter X |  |
 | Junction plan | Change the corner radius / Move the crossing | Modifier le rayon du coin / Déplacer le passage pour piétons |  |
+| Junction page | Details (the left panel's button) | Détails |  |
+| Junction page | Streets / Measures (notes tabs) | Rues / Mesures | Checks and Changes are the shell's `Vérifications` / `Modifications`. |
+| Junction page | Where paths meet | Où les trajectoires se rencontrent |  |
+| Junction page | Key to the strips (the plan's legend) | Légende des bandes |  |
+| Junction page | turn a street (keyboard list) | faire pivoter une rue | As the plan's grip. |
 | Junction inspector | Junction control (a heading) | Signalisation de la jonction |  |
 | Junction inspector | Smaller / Larger / Narrower / Wider / Tighter / Closer / Farther / Shorter / Longer by 0.5 m (steppers) | Réduire / Agrandir / Rétrécir / Élargir / Resserrer / Rapprocher / Éloigner / Raccourcir / Allonger de 0,5 m | Verbs, as the street page's `Élargir de` / `Rétrécir de`, so nothing agrees with a gender. |
 | Junction inspector | Shift left / right by 0.1 m | Décaler de 0,1 m vers la gauche / la droite |  |
@@ -277,3 +282,5 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Curb radius (junction inspector) | `Rayon de la bordure` | `Rayon de bordure`, `Rayon du coin` (suggestion) |
 | Gate distance upstream (junction inspector) | `Distance de la porte d’autobus en amont` | |
 | Tighter (a corner, junction stepper) | `Resserrer` | `Réduire le rayon` (suggestion) |
+| Getting across (junction notes heading) | `Traverser` | `Pour traverser`, `Traversées` (suggestion) |
+| The toolbox of the Transit Priority Atlas, and where CityLoom models each measure (junction page) | `La boîte à outils du Transit Priority Atlas, et l’endroit où CityLoom modélise chaque mesure` | The Atlas keeps its English name, as on the street page (`d’après le Transit Priority Atlas`). |

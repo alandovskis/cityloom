@@ -225,6 +225,35 @@ jn-grip-turn = Faire pivoter { $arm }
 jn-grip-corner = Modifier le rayon du coin
 jn-grip-crossing = Déplacer le passage pour piétons
 
+## Le balisage de la page (web/intersection.html); le titre de la fenêtre est le jn-title de l’en-tête
+jn-page-description = Modifiez le fonctionnement d’une jonction de rues : coins, passages pour piétons, voies, virages et signalisation.
+jn-page-editors = Éditeurs
+jn-page-map = Carte
+jn-page-details = Détails
+jn-page-details-toggle-title = Afficher ou masquer les détails ( [ )
+jn-page-key-select = sélectionner
+jn-page-key-change = modifier
+jn-page-key-turn = faire pivoter une rue
+jn-page-key-remove = retirer
+jn-page-key-details-notes = détails, notes
+jn-page-key-undo = annuler
+jn-page-details-panel = Rue, coin ou passage pour piétons sélectionné
+jn-page-plan-key = Légende des bandes
+jn-page-tab-streets = Rues
+jn-page-tab-measures = Mesures
+jn-page-across = Traverser
+jn-page-turns = Virages permis
+jn-page-turns-hint = Chaque ligne est une rue d’où vient la circulation. Appuyez sur une case pour permettre ou interdire ce virage.
+jn-page-conflicts = Où les trajectoires se rencontrent
+jn-page-does-it-work = Est-ce que ça fonctionne?
+jn-page-your-changes = Vos modifications
+jn-page-measures = Mesures de priorité pour le transport en commun
+# Autour d’un lien vers le Transit Priority Atlas, dont le nom n’est pas traduit : « La boîte à outils du Transit Priority Atlas, et… ».
+jn-page-measures-hint-a = La boîte à outils du
+jn-page-measures-hint-b = , et l’endroit où CityLoom modélise chaque mesure.
+jn-page-fine-print = Chiffres et limites d’exemple pour l’instant, pas de vraies mesures.
+jn-page-about = À propos de cette jonction
+
 ## Le panneau à côté du plan : ce qui est sélectionné et de quoi le modifier (src/junction/inspector.rs)
 jn-insp-empty = Sélectionnez une rue, un coin ou un passage pour piétons à modifier.
 jn-insp-control = Signalisation de la jonction
