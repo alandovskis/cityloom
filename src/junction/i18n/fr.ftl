@@ -217,6 +217,7 @@ jn-col-what-changed = Ce qui a changé
 jn-plan-editor = Éditeur du plan de la jonction
 jn-plan-label = Plan de la jonction, nord en haut. { $arms }.
 jn-plan-label-roundabout = Plan de la jonction, nord en haut. { $arms }. Carrefour giratoire.
+jn-plan-label-raised = Plan de la jonction, nord en haut. { $arms }. Carrefour surélevé.
 jn-svg-scale = Échelle
 jn-svg-bus-only = Autobus seulement
 # Sous le nom d’une rue : sa direction et sa largeur, « N · chaussée de 20,0 m ».

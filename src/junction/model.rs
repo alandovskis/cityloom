@@ -503,7 +503,7 @@ pub enum Refusal {
     IslandRoadTooNarrow,
     BulbNoParking,
     DoesNotFit,
-    RaisedNeedsCrossroads,
+    RaisedOnRoundabout,
 }
 
 impl Refusal {
@@ -517,7 +517,7 @@ impl Refusal {
         Refusal::IslandRoadTooNarrow,
         Refusal::BulbNoParking,
         Refusal::DoesNotFit,
-        Refusal::RaisedNeedsCrossroads,
+        Refusal::RaisedOnRoundabout,
     ];
 
     /// The message that says why.
@@ -532,7 +532,7 @@ impl Refusal {
             Refusal::IslandRoadTooNarrow => "jn-refusal-island-road-too-narrow",
             Refusal::BulbNoParking => "jn-refusal-bulb-no-parking",
             Refusal::DoesNotFit => "jn-refusal-does-not-fit",
-            Refusal::RaisedNeedsCrossroads => "jn-refusal-raised-roundabout",
+            Refusal::RaisedOnRoundabout => "jn-refusal-raised-roundabout",
         }
     }
 }
@@ -567,6 +567,9 @@ impl Junction {
         let settle = |s: &State| {
             let mut s = s.clone();
             normalize(&mut s.arms, region);
+            if s.control == ROUNDABOUT {
+                s.raised = false;
+            }
             s
         };
         let today = ease(&settle(today), region)?;
@@ -1137,7 +1140,7 @@ impl Junction {
     /// Raises the whole junction to sidewalk height, or makes it flat again. A roundabout has no table.
     pub fn set_raised(&mut self, on: bool) -> bool {
         if self.current().control == ROUNDABOUT {
-            return self.refuse(Refusal::RaisedNeedsCrossroads);
+            return self.refuse(Refusal::RaisedOnRoundabout);
         }
         self.edit(Said::new("jn-rev-raised").with("change", change(on)), |s| {
             s.raised = on;
@@ -1892,13 +1895,27 @@ mod tests {
         let mut j = Junction::new(0);
         assert!(j.set_control(ROUNDABOUT));
         assert!(!j.set_raised(true));
-        assert_eq!(j.refusal(), Some(Refusal::RaisedNeedsCrossroads));
+        assert_eq!(j.refusal(), Some(Refusal::RaisedOnRoundabout));
         let mut k = Junction::new(0);
         assert!(k.set_raised(true));
         assert!(k.set_control(ROUNDABOUT));
         assert!(!k.current().raised);
         assert!(k.undo());
         assert!(k.current().raised, "undo brings the table back");
+    }
+
+    #[test]
+    fn a_roundabout_loaded_from_a_save_that_says_raised_is_not_raised() {
+        let mut state = Junction::new(0).current().clone();
+        state.control = ROUNDABOUT;
+        state.raised = true;
+        for a in &mut state.arms {
+            a.edge = a.uid;
+        }
+        let mut j = Junction::from_city(named("Test"), &state, &state, 0).expect("draws");
+        assert!(!j.current().raised);
+        assert!(j.set_control(SIGNAL));
+        assert!(!j.current().raised, "it does not turn into a table nobody asked for");
     }
 
     #[test]

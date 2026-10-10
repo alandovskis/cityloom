@@ -714,13 +714,13 @@ svg pattern circle {
 }
 #drawing .raised-top {
   fill: var(--k-sidewalk);
-  fill-opacity: 0.85;
+  fill-opacity: 0.4;
   stroke: none;
   pointer-events: none;
 }
 #drawing .raised-ramp {
   fill: var(--k-sidewalk);
-  fill-opacity: 0.5;
+  fill-opacity: 0.3;
   stroke: var(--ink-2);
   stroke-width: 0.8;
   stroke-dasharray: 5 3;

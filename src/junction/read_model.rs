@@ -615,6 +615,8 @@ impl Junction {
         // rebuilt here. A gesture may hold a state the layout rejects only if a
         // rule above was skipped, so fall back to the last good one.
         let lay = layout(s, region).expect("a junction state is always drawable");
+        // A roundabout is never a table, whatever its state says.
+        let raised = s.raised && lay.ring.is_none();
         let n = s.arms.len();
         let side = self.drive_side();
         let classes: Vec<u8> = (0..n).map(|i| classes_of(&s.arms, i)).collect();
@@ -686,7 +688,7 @@ impl Junction {
                     }
                 }
             }
-            let raised = (s.raised && lay.ring.is_none())
+            let table = raised
                 .then(|| RaisedView { top: poly(&strip(l.bearing, l.cl, l.cr, l.mouth, far)), ramp: poly(&strip(l.bearing, l.cl, l.cr, far, far + RAMP_MM)) });
             for c in strip(l.bearing, l.pl, l.pr, len, len) {
                 widen(c);
@@ -772,7 +774,7 @@ impl Junction {
                 corner_mm: a.corner_mm,
                 pieces,
                 core_bike,
-                raised,
+                raised: table,
                 gaps,
                 bulbs,
                 crossing,
@@ -849,7 +851,7 @@ impl Junction {
                 speed_kmh: if c.fillet.is_some() { speed_kmh(radius) } else { 0.0 },
                 ok,
                 fast: c.fillet.is_some()
-                    && speed_kmh(radius) > if s.raised { RAISED_TURN_KMH } else { MAX_TURN_KMH }
+                    && speed_kmh(radius) > if raised { RAISED_TURN_KMH } else { MAX_TURN_KMH }
                     && (s.arms[c.a].crossing.is_some() || s.arms[c.b].crossing.is_some()),
                 straight: c.fillet.is_none(),
                 walk: is_walk(la.prof.edge_kind[1]) || is_walk(lb.prof.edge_kind[0]),
@@ -939,7 +941,7 @@ impl Junction {
                 circulation: if side == Side::Right { "anticlockwise" } else { "clockwise" },
             }),
             ring_extra_mm: s.ring_extra_mm,
-            raised: s.raised && ring.is_none(),
+            raised,
             bus: s.bus.and_then(|(a, b)| {
                 let ends = |u: u32| s.arms.iter().position(|x| x.uid == u).map(|i| at(lay.arms[i].bearing, s.arms[i].offset_mm as f64, lay.arms[i].mouth));
                 let (pa, pb) = (ends(a)?, ends(b)?);
@@ -1444,6 +1446,7 @@ mod tests {
         let j = Junction::from_city(Said::new("city-name").with("name", Arg::Text("Test".into())), &state, &state, 0).expect("draws");
         assert!(!j.view().raised);
         assert!(j.view().arms.iter().all(|a| a.raised.is_none()));
+        assert!(j.view().corners.iter().all(|c| !c.fast));
     }
 
     #[test]
