@@ -268,6 +268,7 @@ const breakJunctions = async (page: Page) => {
   await expect(page.locator("#fit")).not.toHaveText("");
   // The edit is kept after a debounce; leaving the page flushes it.
   await page.goto("/map.html");
+  await mapReady(page);
   await page.evaluate(() => {
     const key = Object.keys(localStorage).find((k) => k.startsWith("cityloom-city:"))!;
     const city = JSON.parse(localStorage.getItem(key)!);

@@ -283,4 +283,5 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Gate distance upstream (junction inspector) | `Distance de la porte d’autobus en amont` | |
 | Tighter (a corner, junction stepper) | `Resserrer` | `Réduire le rayon` (suggestion) |
 | Getting across (junction notes heading) | `Traverser` | `Pour traverser`, `Traversées` (suggestion) |
+| Feet (the unit, `Units::word()`) | `ft`, as in English | `pi`, the OQLF symbol for `pied`. Owner decision: French shows `ft` today. |
 | The toolbox of the Transit Priority Atlas, and where CityLoom models each measure (junction page) | `La boîte à outils du Transit Priority Atlas, et l’endroit où CityLoom modélise chaque mesure` | The Atlas keeps its English name, as on the street page (`d’après le Transit Priority Atlas`). |

@@ -464,6 +464,7 @@ fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
         let found = radii.iter().any(|&r| {
             arms[i].corner_mm = r;
             let s = state(arms);
+            // `from_city` wants a name for the junction; `earlier()` is a throwaway here, nothing shows it.
             Junction::from_city(junction::earlier(), &s, &s, 0).is_some_and(|j| j.view().corners.iter().any(|c| c.uid == uid && c.ok && !c.fast))
         });
         if !found {
@@ -518,6 +519,7 @@ impl City {
             }
             // A meeting the junction editor cannot draw (every road leaving to one side, say) is left as
             // a plain connection of streets.
+            // As in `tune_corners`, the name is a throwaway: this only asks whether the junction can be drawn.
             if Junction::from_city(junction::earlier(), &s, &s, region).is_none() {
                 layout.nodes[n].junction = false;
                 continue;
