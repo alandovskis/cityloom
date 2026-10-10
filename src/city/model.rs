@@ -410,7 +410,8 @@ impl Layout {
             .collect();
         junction::normalize(&mut arms, 0);
         tune_corners(&mut arms, def.control, def.corner_mm);
-        let mut s = State { label: junction::today(), arms, control: def.control, ring_extra_mm: 0, bus: None, cycle: None, source: def.source.clone() };
+        let mut s =
+            State { label: junction::today(), arms, control: def.control, ring_extra_mm: 0, bus: None, cycle: None, raised: false, source: def.source.clone() };
         forget_streets(&mut s);
         s
     }
@@ -453,8 +454,16 @@ impl Layout {
 /// nothing suits keeps `preferred`.
 fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
     use crate::junction::model::{MAX_CORNER_MM, MIN_CORNER_MM, RING_STEP_MM};
-    let state =
-        |arms: &[Arm]| State { label: junction::unlabelled(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None, source: Vec::new() };
+    let state = |arms: &[Arm]| State {
+        label: junction::unlabelled(),
+        arms: arms.to_vec(),
+        control,
+        ring_extra_mm: 0,
+        bus: None,
+        cycle: None,
+        raised: false,
+        source: Vec::new(),
+    };
     let mut radii: Vec<i32> = (MIN_CORNER_MM..=MAX_CORNER_MM).step_by(RING_STEP_MM as usize).collect();
     radii.sort_by_key(|r| ((r - preferred).abs(), *r));
     for i in 0..arms.len() {
@@ -1153,6 +1162,24 @@ mod tests {
         let failing = &v.edges[1].failing;
         assert!(!failing.is_empty());
         assert!(failing.iter().all(|f| en(f) != fr(f)), "{failing:?}");
+    }
+
+    #[test]
+    fn a_saved_junction_without_a_raised_table_loads_and_one_with_it_keeps_it() {
+        let mut city = City::new();
+        let mut j = city.junction_editor(node_uid(1), 0).unwrap();
+        assert!(j.set_raised(true));
+        assert!(city.keep_junction(node_uid(1), j.snapshot()));
+        let saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        assert_eq!(saved["junctions"]["2"]["raised"], serde_json::json!(true));
+        let back = City::load(&saved.to_string());
+        assert!(back.junctions[&node_uid(1)].raised, "a table is kept");
+
+        let mut older = saved.clone();
+        older["junctions"]["2"].as_object_mut().unwrap().remove("raised");
+        let back = City::load(&older.to_string());
+        assert!(back.junctions.contains_key(&node_uid(1)), "the save is not discarded");
+        assert!(!back.junctions[&node_uid(1)].raised, "a save made before the table has none");
     }
 
     #[test]

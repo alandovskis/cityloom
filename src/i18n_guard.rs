@@ -382,6 +382,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("i-h-cycle-width", "the id of a heading of the junction's inspector, which its field is labelled by"),
     ("i-h-bus", "the id of a heading of the junction's inspector, which its list is labelled by"),
     ("i-h-cycle", "the id of a heading of the junction's inspector"),
+    ("i-h-raised", "the id of a heading of the junction's inspector"),
     ("i-h-control", "the id of a heading of the junction's inspector, which its list is labelled by"),
     ("i-h-corner", "the id of a heading of the junction's inspector, which its field is labelled by"),
     ("i-h-setback", "the id of a heading of the junction's inspector, which its field is labelled by"),

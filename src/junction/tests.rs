@@ -239,6 +239,24 @@ fn a_roundabout_adds_its_size_cycle_track_and_bus_lane() {
 }
 
 #[test]
+fn a_junction_offers_a_raised_table_until_it_is_a_roundabout() {
+    let s = shared(0);
+    let h = panel(&s);
+    assert!(h.contains("Raised table") && h.contains("Raise the whole junction to sidewalk height"));
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    assert!(!panel(&s).contains("Raise the whole junction to sidewalk height"));
+}
+
+#[test]
+fn the_raised_table_switch_is_worded_in_french_too() {
+    let i18n = crate::i18n_for(crate::shared::i18n::Locale::FrCa);
+    for key in ["jn-insp-raised", "jn-insp-raised-option"] {
+        assert!(i18n.has_message(key, crate::shared::i18n::Locale::FrCa), "{key}");
+    }
+    assert_eq!(i18n.tr_now("jn-insp-raised", &crate::shared::i18n::Args::new()), "Carrefour surélevé");
+}
+
+#[test]
 fn a_street_s_panel_has_its_lanes_crossing_transit_direction_and_street() {
     let s = shared(0);
     let e = arm(&s, 90);

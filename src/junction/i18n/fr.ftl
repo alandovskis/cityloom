@@ -65,6 +65,7 @@ jn-refusal-lane-needs-street = Une voie doit mener à au moins une rue.
 jn-refusal-island-road-too-narrow = Cette chaussée est trop étroite pour un îlot.
 jn-refusal-bulb-no-parking = Il n’y a pas de stationnement à céder de ce côté.
 jn-refusal-does-not-fit = Cette modification ne convient pas.
+jn-refusal-raised-roundabout = Un carrefour giratoire ne peut pas être surélevé.
 
 ## Ce qu’a été chaque modification, dans l’historique
 jn-word-add = ajout
@@ -95,6 +96,7 @@ jn-rev-bus-across = Voie d’autobus par le centre : { $from } vers { $to }
 jn-rev-bus-across-remove = Voie d’autobus par le centre : retrait
 jn-rev-cycle = Piste cyclable autour du carrefour giratoire : { $length }
 jn-rev-cycle-remove = Piste cyclable autour du carrefour giratoire : retrait
+jn-rev-raised = Carrefour surélevé : { $change }
 jn-rev-ring = Carrefour giratoire : { $length } plus grand
 
 ## Les vérifications
@@ -215,6 +217,7 @@ jn-col-what-changed = Ce qui a changé
 jn-plan-editor = Éditeur du plan de la jonction
 jn-plan-label = Plan de la jonction, nord en haut. { $arms }.
 jn-plan-label-roundabout = Plan de la jonction, nord en haut. { $arms }. Carrefour giratoire.
+jn-plan-label-raised = Plan de la jonction, nord en haut. { $arms }. Carrefour surélevé.
 jn-svg-scale = Échelle
 jn-svg-bus-only = Autobus seulement
 # Sous le nom d’une rue : sa direction et sa largeur, « N · chaussée de 20,0 m ».
@@ -293,6 +296,8 @@ jn-insp-bus = Voie d’autobus
 jn-insp-bus-remove = Retirer la voie d’autobus
 jn-insp-cycle-sub = Tout autour du carrefour giratoire, à l’extérieur
 jn-insp-cycle-remove = Retirer la piste cyclable
+jn-insp-raised = Carrefour surélevé
+jn-insp-raised-option = Surélever tout le carrefour au niveau du trottoir
 jn-insp-corner = Coin
 jn-insp-curb-radius = Rayon de la bordure
 jn-insp-corner-hint = De { $min } à { $max }. Les voitures tournent ici à environ { $speed }{ " " }km/h.

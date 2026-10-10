@@ -65,6 +65,7 @@ jn-refusal-lane-needs-street = A lane has to go to at least one street.
 jn-refusal-island-road-too-narrow = This road is too narrow for an island.
 jn-refusal-bulb-no-parking = There is no parking on that side to give up.
 jn-refusal-does-not-fit = That change does not fit.
+jn-refusal-raised-roundabout = A roundabout cannot be a raised table.
 
 ## What each change was, in the history
 jn-word-add = add
@@ -95,6 +96,7 @@ jn-rev-bus-across = Bus lane across the middle: { $from } to { $to }
 jn-rev-bus-across-remove = Bus lane across the middle: remove
 jn-rev-cycle = Cycle track around the roundabout: { $length }
 jn-rev-cycle-remove = Cycle track around the roundabout: remove
+jn-rev-raised = Raised table: { $change }
 jn-rev-ring = Roundabout: { $length } larger
 
 ## The checks
@@ -215,6 +217,7 @@ jn-col-what-changed = What changed
 jn-plan-editor = Junction plan editor
 jn-plan-label = Plan of the junction, north up. { $arms }.
 jn-plan-label-roundabout = Plan of the junction, north up. { $arms }. Roundabout.
+jn-plan-label-raised = Plan of the junction, north up. { $arms }. Raised table.
 jn-svg-scale = Scale
 jn-svg-bus-only = Bus only
 # Under a street's name: the way it leaves and its width, "N · 20.0 m road".
@@ -293,6 +296,8 @@ jn-insp-bus = Bus lane
 jn-insp-bus-remove = Remove the bus lane
 jn-insp-cycle-sub = Round the outside of the roundabout
 jn-insp-cycle-remove = Remove the cycle track
+jn-insp-raised = Raised table
+jn-insp-raised-option = Raise the whole junction to sidewalk height
 jn-insp-corner = Corner
 jn-insp-curb-radius = Curb radius
 jn-insp-corner-hint = { $min } to { $max }. Cars turn here at about { $speed } km/h.
