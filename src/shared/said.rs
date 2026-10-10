@@ -44,6 +44,8 @@ pub enum Arg {
     Length(i32),
     /// Another message, by key, said in its place.
     Msg(&'static str),
+    /// Another message, by key, said in the middle of a sentence (in lower case).
+    MsgLower(&'static str),
     /// Another message with its own things, said in its place.
     Said(Box<Said>),
 }
@@ -97,6 +99,7 @@ fn put_into_words(i18n: &I18n, units: Units, said: &Said, watched: bool) -> Stri
             Arg::Clock(min) => args.str(arg_name, hhmm(*min)),
             Arg::Length(mm) => args.str(arg_name, units.length_fine_in(*mm, locale)),
             Arg::Msg(key) => args.str(arg_name, tr(key, &Args::new())),
+            Arg::MsgLower(key) => args.str(arg_name, tr(key, &Args::new()).to_lowercase()),
             Arg::Said(inner) => args.str(arg_name, put_into_words(i18n, units, inner, watched)),
         };
     }
@@ -134,6 +137,8 @@ mod tests {
         assert_eq!((en(&curb), fr(&curb)), ("Sidewalk curb: granite".into(), "Trottoir, bordure\u{a0}: granit".into()));
         let none = Said::new("rev-curb").with("kind", Arg::Kind("sidewalk")).with("curb", Arg::Msg("rev-word-none"));
         assert_eq!((en(&none), fr(&none)), ("Sidewalk curb: none".into(), "Trottoir, bordure\u{a0}: aucune".into()));
+        let lower = Said::new("rev-curb").with("kind", Arg::Kind("sidewalk")).with("curb", Arg::MsgLower("kind-planting"));
+        assert_eq!((en(&lower), fr(&lower)), ("Sidewalk curb: planting strip".into(), "Trottoir, bordure\u{a0}: bande plantée".into()));
         let way = Said::new("rev-direction").with("kind", Arg::Kind("travel")).with("direction", Arg::DirectionLower("away"));
         assert_eq!((en(&way), fr(&way)), ("Driving lane direction: away from you".into(), "Voie de circulation, sens\u{a0}: s’éloigne de vous".into()));
         let window = Said::new("rev-window")
