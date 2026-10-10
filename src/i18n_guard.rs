@@ -7,6 +7,12 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
+// The non-test files of `map`, `place`, `junction` and `city` that are not in `MIGRATED`, and why. Every other
+// one is, so a new file of these slices is scanned from the day it is added (or must be listed here).
+//   city/store.rs      storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)
+//   map/style.rs       MapLibre style JSON (layer ids, paint property names): data for the map library, not text
+//   shared/atlas.rs    the Atlas's own English names and notes, which are source data; they are not translated
+//   junction/tests.rs, map/tests.rs, junction/model/fixtures.rs   test-only files
 const MIGRATED: &[(&str, &str)] = &[
     // Files are added here as their task completes.
     ("src/street/text.rs", include_str!("street/text.rs")),
@@ -53,6 +59,13 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/junction/plan.rs", include_str!("junction/plan.rs")),
     ("src/junction/plan_svg.rs", include_str!("junction/plan_svg.rs")),
     ("src/junction/inspector.rs", include_str!("junction/inspector.rs")),
+    ("src/city/binding.rs", include_str!("city/binding.rs")),
+    ("src/city/import.rs", include_str!("city/import.rs")),
+    ("src/city/model.rs", include_str!("city/model.rs")),
+    ("src/junction/frame.rs", include_str!("junction/frame.rs")),
+    ("src/junction/geometry.rs", include_str!("junction/geometry.rs")),
+    ("src/map/camera.rs", include_str!("map/camera.rs")),
+    ("src/map/projection.rs", include_str!("map/projection.rs")),
 ];
 
 /// Attributes whose value is text a person reads (also as `attr:<name>`).
@@ -94,6 +107,8 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("(min-width: 1360px)", "a media query"),
     ("recipes use catalogue kinds", "a panic message about the code, never shown"),
     ("catalogue kind", "a panic message about the code, never shown"),
+    ("the catalogue has every kind of lane", "a panic message about the code, never shown"),
+    ("the city serialises", "a panic message about the code, never shown"),
     ("Feature", "a GeoJSON type name, data for MapLibre"),
     ("FeatureCollection", "a GeoJSON type name, data for MapLibre"),
     ("LineString", "a GeoJSON geometry type, data for MapLibre"),
@@ -452,7 +467,7 @@ fn every_message_id_used_in_a_migrated_file_exists_in_both_languages() {
     let mut found = Vec::new();
     // The scan must be seeing the keys (a scan that finds none passes for nothing).
     let seen: usize = MIGRATED.iter().map(|(_, src)| message_ids(src).len()).sum();
-    assert!(seen > 150, "only {seen} message ids seen in the migrated files");
+    assert!(seen > 450, "only {seen} message ids seen in the migrated files");
     for locale in [Locale::En, Locale::FrCa] {
         let i18n = crate::i18n_for(locale);
         for (path, src) in MIGRATED {
@@ -460,6 +475,21 @@ fn every_message_id_used_in_a_migrated_file_exists_in_both_languages() {
         }
     }
     assert!(found.is_empty(), "keys that are not messages:\n{}", found.join("\n"));
+}
+
+/// The entries of an allow-list that no migrated file mentions any more: they are dead, and a list that keeps
+/// them hides what it really excuses.
+fn dead_entries<'a>(entries: &'a [(&'a str, &'a str)]) -> Vec<&'a str> {
+    entries.iter().map(|(l, _)| *l).filter(|l| !MIGRATED.iter().any(|(_, src)| src.contains(l))).collect()
+}
+
+#[test]
+fn no_allowed_literal_or_non_message_id_is_dead() {
+    assert_eq!(dead_entries(ALLOWED_LITERALS), Vec::<&str>::new(), "ALLOWED_LITERALS entries that no migrated file has");
+    assert_eq!(dead_entries(NOT_MESSAGE_IDS), Vec::<&str>::new(), "NOT_MESSAGE_IDS entries that no migrated file has");
+    for (l, reason) in ALLOWED_LITERALS.iter().chain(NOT_MESSAGE_IDS) {
+        assert!(!reason.trim().is_empty(), "{l:?} has no reason");
+    }
 }
 
 #[cfg(test)]
