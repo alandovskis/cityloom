@@ -888,10 +888,7 @@ mod tests {
         let fr_svg = street_svg(&v, &fr(), 1050.0, Units::Metres, &Interaction::default());
         let en_svg = street_svg(&v, &en(), 1050.0, Units::Metres, &Interaction::default());
         // The piece widths, the unused space and the two totals.
-        assert!(
-            fr_svg.markup.contains(">3,3\u{a0}m<") && fr_svg.markup.contains(">Inutilisé<"),
-            "French SVG did not contain expected localized markers"
-        );
+        assert!(fr_svg.markup.contains(">3,3\u{a0}m<") && fr_svg.markup.contains(">Inutilisé<"), "French SVG did not contain expected localized markers");
         assert!(fr_svg.markup.contains("Votre aménagement\u{a0}: 14,7\u{a0}m"));
         assert!(en_svg.markup.contains(">3.3 m<") && en_svg.markup.contains(">Your design 14.7 m<"));
         for dotted in [">3.3", "14.7 m", "14.7\u{a0}m", "18.0 m", "18.0\u{a0}m"] {
@@ -908,10 +905,7 @@ mod tests {
         e.set_width(u, e.view().segments[0].width_mm + 1_000);
         let v = e.view();
         let s = street_svg(&v, &fr(), 1050.0, Units::Metres, &Interaction::default());
-        assert!(
-            s.markup.contains(">1,0\u{a0}m de trop<") && !s.markup.contains("too wide"),
-            "Expected French overflow wording and no English fallback"
-        );
+        assert!(s.markup.contains(">1,0\u{a0}m de trop<") && !s.markup.contains("too wide"), "Expected French overflow wording and no English fallback");
     }
 
     #[test]
@@ -920,10 +914,7 @@ mod tests {
         let u = uid(&e, 0);
         e.set_width(u, KINDS[0].min_mm);
         let s = street_svg(&e.view(), &fr(), 680.0, Units::Metres, &Interaction::default());
-        assert!(
-            s.markup.contains(">TO</text>"),
-            "Expected French mark TO in SVG markup"
-        );
+        assert!(s.markup.contains(">TO</text>"), "Expected French mark TO in SVG markup");
         let mut one = Editor::new(0);
         while one.view().segments.len() > 1 {
             let u = uid(&one, 0);
