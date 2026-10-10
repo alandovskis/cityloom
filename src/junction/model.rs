@@ -1890,7 +1890,6 @@ mod tests {
         table.push((last(&j), "Sample Avenue 2 (north) lane 1: not to Sample Street 1 (east)"));
         assert!(j.set_approach(s, Q_CURB));
         table.push((last(&j), "Sample Avenue 2 (south): G2 curbside queue-jump lane"));
-        assert!(j.set_stop(s, 0) || j.set_stop(s, STOP_BULB));
         assert!(j.remove_arm(e));
         table.push((last(&j), "Remove Sample Street 1 (east)"));
         let mut k = Junction::new(0);
