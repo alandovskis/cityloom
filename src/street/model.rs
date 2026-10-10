@@ -204,8 +204,18 @@ pub fn named_said(name: &str) -> Said {
 fn title_of(name: Option<&str>, class: StreetClass) -> Said {
     match (name, class) {
         (Some(name), _) => named_said(name),
-        (None, StreetClass::Motorway) => Said::new("city-unnamed-motorway"),
-        (None, class) => Said::new("city-unnamed").with("class", Arg::Msg(class_key(class))),
+        (None, class) => unnamed_said(class, false),
+    }
+}
+
+/// A road with no name, said as what sort of road it is: as a title ("Unnamed local street") or, with
+/// `in_sentence`, as a phrase ("an unnamed local street"). A motorway has a message of its own.
+pub fn unnamed_said(class: StreetClass, in_sentence: bool) -> Said {
+    match (class, in_sentence) {
+        (StreetClass::Motorway, false) => Said::new("city-unnamed-motorway"),
+        (StreetClass::Motorway, true) => Said::new("city-unnamed-motorway-in-sentence"),
+        (class, false) => Said::new("city-unnamed").with("class", Arg::Msg(class_key(class))),
+        (class, true) => Said::new("city-unnamed-in-sentence").with("class", Arg::Msg(class_key(class))),
     }
 }
 

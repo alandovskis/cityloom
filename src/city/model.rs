@@ -15,11 +15,11 @@ use serde::{Deserialize, Serialize};
 use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
-use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass, class_key};
+use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
-use crate::street::model::{SAMPLES, named_said};
+use crate::street::model::{SAMPLES, named_said, unnamed_said};
 use crate::street::model::{Editor, Street};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
@@ -340,10 +340,7 @@ impl Layout {
     /// where every road there has a name, of its own or in its section (the sample city's streets).
     fn unnamed_at(&self, node: usize) -> Option<Said> {
         let e = self.edges_at(node).into_iter().map(|e| &self.edges[e]).find(|e| e.name.is_none() && e.section.name.is_none())?;
-        Some(match e.section.class {
-            StreetClass::Motorway => Said::new("city-unnamed-motorway-in-sentence"),
-            class => Said::new("city-unnamed-in-sentence").with("class", Arg::Msg(class_key(class))),
-        })
+        Some(unnamed_said(e.section.class, true))
     }
 
     /// A place that is not a junction, in the words of `forms`: the end of a street, a connection on one, or
