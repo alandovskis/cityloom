@@ -288,7 +288,7 @@ pub fn SearchBox(vm: Rc<MapVm>) -> impl IntoView {
         });
         on_cleanup(move || handle.remove());
     }
-    let open = move || vm.with(|v| v.search_note().is_some());
+    let open = move || vm.with(|v| v.searching());
     let active = move || vm.with(|v| v.active_result());
     let keydown = move |e: KeyboardEvent| match e.key().as_str() {
         "ArrowDown" => {

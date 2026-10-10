@@ -39,13 +39,13 @@ pub enum BasemapState {
     Unavailable(&'static str),
 }
 
-/// The place a `hot` name (`s-7`, `j-3`) opens.
 /// Text as the search compares it: lower case, with the typographic apostrophe and the no-break spaces
 /// the French page shows made the plain ones a keyboard types.
 fn fold(text: &str) -> String {
     text.to_lowercase().replace('\u{2019}', "'").replace(['\u{a0}', '\u{202f}'], " ")
 }
 
+/// The place a `hot` name (`s-7`, `j-3`) opens.
 fn href_of(hot: &str) -> Option<String> {
     let (kind, uid) = hot.split_once('-')?;
     let uid: u32 = uid.parse().ok()?;
@@ -394,6 +394,11 @@ impl MapVm {
         if j.is_empty() && st.is_empty() { (keep(&junctions, &by_words), keep(&streets, &by_words)) } else { (j, st) }
     }
 
+    /// Whether something is searched for: the dropdown is open then, with the places or with what to do.
+    pub fn searching(&self) -> bool {
+        !self.terms().is_empty()
+    }
+
     /// How the search came out, or nothing when nothing is searched for.
     pub fn search_note(&self) -> Option<String> {
         if self.terms().is_empty() {
@@ -431,17 +436,24 @@ impl MapVm {
         self.view().edges.iter().find(|e| e.uid == uid).map(|e| street_label(e, &self.i18n, units)).unwrap_or_default()
     }
 
-    /// Every place, as the notes list them: junctions, then streets.
-    fn places_for_notes<'a>(&self, v: &'a CityView) -> Vec<(NoteItem, bool, bool, &'a [Said])> {
+    /// Every place, as the notes list them: junctions, then streets. Each is its link, its name still
+    /// unworded (only the places a note lists need words, see `note_item`), whether it works, whether it
+    /// was changed and what fails.
+    fn places_for_notes<'a>(&self, v: &'a CityView) -> Vec<(String, Said, bool, bool, &'a [Said])> {
         let mut all = Vec::new();
         for n in Self::junctions(v) {
-            all.push((NoteItem { href: junction_href(n.uid), name: self.say(&n.name), detail: String::new() }, n.ok, n.edited, n.failing.as_slice()));
+            all.push((junction_href(n.uid), n.name.clone(), n.ok, n.edited, n.failing.as_slice()));
         }
         for e in &v.edges {
             let name = Said::new("map-note-street").with("kind", Arg::Said(Box::new(e.kind.clone()))).with("ends", Arg::Said(Box::new(e.ends.clone())));
-            all.push((NoteItem { href: street_href(e.uid), name: self.say(&name), detail: String::new() }, e.ok, e.edited, e.failing.as_slice()));
+            all.push((street_href(e.uid), name, e.ok, e.edited, e.failing.as_slice()));
         }
         all
+    }
+
+    /// A place of `places_for_notes` as a line of a note, its name worded in the language now.
+    fn note_item(&self, href: String, name: &Said) -> NoteItem {
+        NoteItem { href, name: self.say(name), detail: String::new() }
     }
 
     /// The places that need attention, with what is wrong.
@@ -449,8 +461,9 @@ impl MapVm {
         let v = self.view();
         self.places_for_notes(&v)
             .into_iter()
-            .filter(|p| !p.1)
-            .map(|(mut i, _, _, f)| {
+            .filter(|p| !p.2)
+            .map(|(href, name, _, _, f)| {
+                let mut i = self.note_item(href, &name);
                 i.detail = all_said(&self.i18n, self.units(), f).join("; ");
                 i
             })
@@ -463,7 +476,7 @@ impl MapVm {
         }
         let v = self.view();
         let all = self.places_for_notes(&v);
-        let failing = all.iter().filter(|p| !p.1).count();
+        let failing = all.iter().filter(|p| !p.2).count();
         if failing > 0 {
             self.i18n.tr("map-checks-failing", &Args::new().num("n", failing as i64))
         } else {
@@ -476,8 +489,9 @@ impl MapVm {
         let v = self.view();
         self.places_for_notes(&v)
             .into_iter()
-            .filter(|p| p.2)
-            .map(|(mut i, ok, _, f)| {
+            .filter(|p| p.3)
+            .map(|(href, name, ok, _, f)| {
+                let mut i = self.note_item(href, &name);
                 i.detail = if ok {
                     self.word("map-still-works")
                 } else {
@@ -493,7 +507,7 @@ impl MapVm {
         if self.has_no_places() {
             return self.word("map-changes-no-places");
         }
-        let n = self.changed_items().len();
+        let n = self.places_for_notes(&self.view()).iter().filter(|p| p.3).count();
         if n > 0 { self.i18n.tr("map-changes-some", &Args::new().num("n", n as i64)) } else { self.word("map-changes-none") }
     }
 
@@ -504,7 +518,7 @@ impl MapVm {
             return Status { text: self.word("map-nothing-to-show"), bad: true };
         }
         let v = self.view();
-        let bad: Vec<String> = self.places_for_notes(&v).into_iter().filter(|p| !p.1).map(|p| p.0.name).collect();
+        let bad: Vec<String> = self.places_for_notes(&v).into_iter().filter(|p| !p.2).map(|p| self.say(&p.1)).collect();
         if bad.is_empty() {
             return Status { text: self.i18n.tr("map-status-ok", &Args::new().num("n", v.places as i64)), bad: false };
         }
@@ -829,6 +843,16 @@ mod tests {
         assert_eq!(found.get(), 0, "nothing is called a jonction in English");
         vm.i18n().set(Locale::FrCa);
         assert!(found.get() > 0, "the results are worked out again from the French the page now shows");
+    }
+
+    #[test]
+    fn the_dropdown_is_open_exactly_when_something_is_searched_for() {
+        let (vm, ..) = vm();
+        assert!(!vm.searching());
+        vm.set_search("   ");
+        assert!(!vm.searching() && vm.search_note().is_none());
+        vm.set_search("zzz");
+        assert!(vm.searching() && vm.search_note().is_some());
     }
 
     #[test]
