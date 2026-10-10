@@ -93,7 +93,10 @@ pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
             let radius = v.corners.iter().find(|c| c.uid == s.uid).map_or(0, |c| c.radius_mm);
             i18n.tr_now("jn-sel-corner", &args.str("radius", units.length_in(radius, locale)))
         }
-        _ => i18n.tr_now("jn-sel-crossing", &args),
+        _ => {
+            let continuous = arm.and_then(|a| a.crossing.as_ref()).is_some_and(|c| c.continuous);
+            i18n.tr_now(if continuous { "jn-sel-crossing-continuous" } else { "jn-sel-crossing" }, &args)
+        }
     })
 }
 
@@ -214,6 +217,18 @@ mod tests {
         assert_eq!(say(&j, Units::Metres), "Crossing on Sample Avenue 2 (north)");
         j.select(Target::Lane(n, 1));
         assert_eq!(say(&j, Units::Metres), "Lane 2 of 2, Sample Avenue 2 (north)");
+    }
+
+    #[test]
+    fn a_continuous_crossing_is_selected_as_a_continuous_sidewalk_in_both_languages() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        assert!(j.set_continuous(n, true));
+        j.select(Target::Crossing(n));
+        assert_eq!(selection_text(&j.view(), &en(), Units::Metres).unwrap(), "Continuous sidewalk across Sample Avenue 2 (north)");
+        assert_eq!(selection_text(&j.view(), &fr(), Units::Metres).unwrap(), "Trottoir continu à travers Sample Avenue 2 (nord)");
+        assert!(j.set_continuous(n, false));
+        assert_eq!(selection_text(&j.view(), &en(), Units::Metres).unwrap(), "Crossing on Sample Avenue 2 (north)");
     }
 
     #[test]

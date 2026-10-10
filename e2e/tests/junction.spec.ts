@@ -28,6 +28,14 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#drawing .raised-ramp").first()).toBeVisible();
   });
 
+  test("a street's crossing is made a continuous sidewalk from its details and drawn with ramps", async ({ page }) => {
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator("#drawing .continuous-ramp")).toHaveCount(0);
+    await page.getByRole("checkbox", { name: "Sidewalk runs on across the street" }).check();
+    await expect(page.locator("#drawing .continuous-ramp").first()).toBeVisible();
+  });
+
   test("starts as the city lays it out and says how many streets meet and whether it works", async ({ page }) => {
     await expect(page.locator("#arm-count")).toHaveText(/^[3-5] streets$/);
     await expect(page.locator("#fit")).toContainText(/^[3-5] streets, /);

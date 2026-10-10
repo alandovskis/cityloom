@@ -161,6 +161,7 @@ jn-sel-arm = { $arm }, { $degrees ->
 }
 jn-sel-corner = Corner after { $arm }, { $radius } radius
 jn-sel-crossing = Crossing on { $arm }
+jn-sel-crossing-continuous = Continuous sidewalk across { $arm }
 
 ## The turns table
 jn-turns-caption = Turns allowed. Rows are the street traffic comes from, columns the street it goes to.
@@ -299,6 +300,8 @@ jn-insp-cycle-sub = Round the outside of the roundabout
 jn-insp-cycle-remove = Remove the cycle track
 jn-insp-raised = Raised table
 jn-insp-raised-option = Raise the whole junction to sidewalk height
+jn-insp-continuous = Continuous sidewalk
+jn-insp-continuous-option = Sidewalk runs on across the street
 jn-insp-corner = Corner
 jn-insp-curb-radius = Curb radius
 jn-insp-corner-hint = { $min } to { $max }. Cars turn here at about { $speed } km/h.

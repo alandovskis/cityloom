@@ -161,6 +161,7 @@ jn-sel-arm = { $arm }, { $degrees ->
 }
 jn-sel-corner = Coin après { $arm }, rayon de { $radius }
 jn-sel-crossing = Passage pour piétons sur { $arm }
+jn-sel-crossing-continuous = Trottoir continu à travers { $arm }
 
 ## Le tableau des virages
 jn-turns-caption = Virages permis. Les lignes sont la rue d’où vient la circulation, les colonnes la rue où elle va.
@@ -299,6 +300,8 @@ jn-insp-cycle-sub = Tout autour du carrefour giratoire, à l’extérieur
 jn-insp-cycle-remove = Retirer la piste cyclable
 jn-insp-raised = Carrefour surélevé
 jn-insp-raised-option = Surélever tout le carrefour au niveau du trottoir
+jn-insp-continuous = Trottoir continu
+jn-insp-continuous-option = Le trottoir se poursuit à travers la rue
 jn-insp-corner = Coin
 jn-insp-curb-radius = Rayon de la bordure
 jn-insp-corner-hint = De { $min } à { $max }. Les voitures tournent ici à environ { $speed }{ " " }km/h.
