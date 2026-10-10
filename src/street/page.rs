@@ -680,7 +680,8 @@ mod tests {
         s.variants[0].to_min = 600;
         let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
         let note = clock_note(&s, &i18n);
-        assert!(note.starts_with(KINDS[s.base_kind].name) && note.contains(" except "), "{note}");
+        let base = i18n.tr_now(&crate::shared::catalogue::kind_key(KINDS[s.base_kind].id), &crate::shared::i18n::Args::new());
+        assert!(note.starts_with(&base) && note.contains(" except "), "{note}");
         assert!(note.contains("07:00\u{2013}10:00"), "{note}");
         s.variants[0].days = Some("Mo-Fr".into());
         assert!(clock_note(&s, &i18n).contains("Mo-Fr 07:00\u{2013}10:00"), "{}", clock_note(&s, &i18n));

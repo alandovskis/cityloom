@@ -778,7 +778,7 @@ mod tests {
         let sidewalk = &KINDS[0];
         assert_eq!(sidewalk.id, "sidewalk");
         assert_eq!(narrow(sidewalk.min_mm), sidewalk.mark);
-        assert_eq!(narrow(3_300), sidewalk.name);
+        assert_eq!(narrow(3_300), "Sidewalk");
     }
 
     #[test]

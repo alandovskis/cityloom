@@ -153,7 +153,7 @@ mod tests {
         let s = &v.segments[1];
         assert_eq!(
             selection_text(&v, &en(), Units::Metres).unwrap(),
-            format!("{}, {} m, 2 of {}", KINDS[s.kind].name, Units::Metres.fine(s.width_mm), v.segments.len())
+            format!("{}, {} m, 2 of {}", en().tr_now(&kind_key(KINDS[s.kind].id), &Args::new()), Units::Metres.fine(s.width_mm), v.segments.len())
         );
     }
 
