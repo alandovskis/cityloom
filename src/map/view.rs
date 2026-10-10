@@ -24,6 +24,18 @@ fn word(vm: Vm, key: &'static str) -> impl Fn() -> String + Copy + 'static {
     move || vm.with(|v| v.word(key))
 }
 
+/// The window's title, in the language of the page (the shell leaves `<title>` to the page).
+#[component]
+pub fn MapTitle(vm: Rc<MapVm>) -> impl IntoView {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let vm = Bound::new(vm);
+        Effect::new(move |_| document().set_title(&vm.with(|v| v.word("map-page-title"))));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = vm;
+}
+
 #[component]
 pub fn MapTools(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);

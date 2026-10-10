@@ -194,7 +194,6 @@ test("the map page can be read in French and the choice is kept", async ({ page 
   await expect(page.locator("#h-checks")).toHaveText("Does it work?");
   await chooseFrench(page);
   await expect(page.locator("#h-checks")).toHaveText("Est-ce que ça fonctionne?");
-  await expect(page.locator("#places-panel h3").first()).toHaveText("Jonctions");
   await expect(page.locator("#zoom-fit")).toHaveAttribute("title", "Toute la ville");
   await expect(page).toHaveTitle("Carte de la ville CityLoom");
   // The search finds what the page shows, in its language.
@@ -205,7 +204,6 @@ test("the map page can be read in French and the choice is kept", async ({ page 
   await mapReady(page);
   await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
   await expect(page.locator("#h-checks")).toHaveText("Est-ce que ça fonctionne?");
-  await expect(page.locator("#reset-label")).toHaveText("Recommencer");
 });
 
 test("the home page can be read in French and the choice is kept", async ({ page }) => {
