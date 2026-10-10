@@ -7,13 +7,18 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-// The non-test files of `map`, `place`, `junction` and `city` that are not in `MIGRATED`, and why. Every other
-// one is, so a new file of these slices is scanned from the day it is added (or must be listed here).
-//   city/store.rs      storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)
-//   map/style.rs       MapLibre style JSON (layer ids, paint property names): data for the map library, not text
-//   shared/atlas.rs    the Atlas's English names, groups and notes are source data; what a person reads goes through
-//                      `name_key` / `note_key` / `group_name_key`, and a test holds the English .ftl names and notes equal to them
-//   junction/tests.rs, map/tests.rs, junction/model/fixtures.rs   test-only files
+/// The `.rs` files of `map`, `place`, `junction` and `city` that are not in `MIGRATED`, and why. Every other
+/// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
+/// the day it is added.
+const LEFT_OUT: &[(&str, &str)] = &[
+    ("src/city/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
+    ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
+    ("src/map/tests.rs", "test-only"),
+    ("src/junction/tests.rs", "test-only"),
+    ("src/junction/model/fixtures.rs", "test-only"),
+    ("src/shared/atlas.rs", "the Atlas's English names, groups and notes are source data; what a person reads goes through `name_key` / `note_key` / `group_name_key`, and a test holds the English .ftl names and notes equal to them"),
+];
+
 const MIGRATED: &[(&str, &str)] = &[
     // Files are added here as their task completes.
     ("src/street/text.rs", include_str!("street/text.rs")),
@@ -496,6 +501,31 @@ fn dead_entries<'a>(entries: &'a [(&'a str, &'a str)], sources: &[&str]) -> Vec<
 
 fn migrated_sources() -> Vec<&'static str> {
     MIGRATED.iter().map(|(_, src)| *src).collect()
+}
+
+/// Every `.rs` file under `dir` (relative to the crate root), as `src/...` paths.
+fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            rust_files(&path, out);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            let rel = path.strip_prefix(env!("CARGO_MANIFEST_DIR")).unwrap();
+            out.push(rel.to_string_lossy().replace('\\', "/"));
+        }
+    }
+}
+
+#[test]
+fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
+    let mut files = Vec::new();
+    for slice in ["map", "place", "junction", "city"] {
+        rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
+    }
+    let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();
+    assert!(unlisted.is_empty(), "add to MIGRATED, or to LEFT_OUT with a reason: {unlisted:?}");
+    let gone: Vec<_> = LEFT_OUT.iter().filter(|(name, _)| !std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(name).exists()).collect();
+    assert!(gone.is_empty(), "LEFT_OUT names files that do not exist: {gone:?}");
 }
 
 #[test]
