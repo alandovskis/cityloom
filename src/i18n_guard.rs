@@ -11,7 +11,8 @@ use proc_macro2::{Delimiter, TokenStream, TokenTree};
 // one is, so a new file of these slices is scanned from the day it is added (or must be listed here).
 //   city/store.rs      storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)
 //   map/style.rs       MapLibre style JSON (layer ids, paint property names): data for the map library, not text
-//   shared/atlas.rs    the Atlas's own English names and notes, which are source data; they are not translated
+//   shared/atlas.rs    the Atlas's English names, groups and notes are source data; what a person reads goes through
+//                      `name_key` / `note_key` / `group_name_key`, and a test holds the English .ftl names and notes equal to them
 //   junction/tests.rs, map/tests.rs, junction/model/fixtures.rs   test-only files
 const MIGRATED: &[(&str, &str)] = &[
     // Files are added here as their task completes.
@@ -477,16 +478,30 @@ fn every_message_id_used_in_a_migrated_file_exists_in_both_languages() {
     assert!(found.is_empty(), "keys that are not messages:\n{}", found.join("\n"));
 }
 
-/// The entries of an allow-list that no migrated file mentions any more: they are dead, and a list that keeps
-/// them hides what it really excuses.
-fn dead_entries<'a>(entries: &'a [(&'a str, &'a str)]) -> Vec<&'a str> {
-    entries.iter().map(|(l, _)| *l).filter(|l| !MIGRATED.iter().any(|(_, src)| src.contains(l))).collect()
+/// The entries of an allow-list that no string literal of the sources is any more (as a whole, or as one of the
+/// pieces the guard judges: `"piece k-{}"` is the piece `"piece k-"`): they are dead, and a list that keeps them
+/// hides what it really excuses. Comments and the text of other literals do not keep an entry alive.
+fn dead_entries<'a>(entries: &'a [(&'a str, &'a str)], sources: &[&str]) -> Vec<&'a str> {
+    let mut seen = std::collections::HashSet::new();
+    for src in sources {
+        if let Ok(stream) = TokenStream::from_str(src) {
+            walk(stream, &mut |_, s| {
+                seen.insert(s.to_string());
+                seen.extend(pieces(s));
+            });
+        }
+    }
+    entries.iter().map(|(l, _)| *l).filter(|l| !seen.contains(*l)).collect()
+}
+
+fn migrated_sources() -> Vec<&'static str> {
+    MIGRATED.iter().map(|(_, src)| *src).collect()
 }
 
 #[test]
 fn no_allowed_literal_or_non_message_id_is_dead() {
-    assert_eq!(dead_entries(ALLOWED_LITERALS), Vec::<&str>::new(), "ALLOWED_LITERALS entries that no migrated file has");
-    assert_eq!(dead_entries(NOT_MESSAGE_IDS), Vec::<&str>::new(), "NOT_MESSAGE_IDS entries that no migrated file has");
+    assert_eq!(dead_entries(ALLOWED_LITERALS, &migrated_sources()), Vec::<&str>::new(), "ALLOWED_LITERALS entries that no migrated file has");
+    assert_eq!(dead_entries(NOT_MESSAGE_IDS, &migrated_sources()), Vec::<&str>::new(), "NOT_MESSAGE_IDS entries that no migrated file has");
     for (l, reason) in ALLOWED_LITERALS.iter().chain(NOT_MESSAGE_IDS) {
         assert!(!reason.trim().is_empty(), "{l:?} has no reason");
     }
@@ -498,6 +513,15 @@ mod tests {
 
     fn words(src: &str) -> Vec<String> {
         offenders(src).into_iter().map(|(_, l)| l).collect()
+    }
+
+    #[test]
+    fn a_dead_allow_list_entry_is_found_by_the_literals_not_by_the_text() {
+        let entries: &[(&str, &str)] = &[(" on", "r"), ("Point", "r"), ("piece k-", "r"), ("gone", "r")];
+        let src = "// a Point in a comment, and gone too\nfn f() { let a = \"x on\"; let b = \"Point\"; let c = format!(\"piece k-{}\", 1); }";
+        // " on" is only inside another literal, "gone" only in a comment.
+        assert_eq!(dead_entries(entries, &[src]), vec![" on", "gone"]);
+        assert_eq!(dead_entries(entries, &["fn f() { let a = \" on\"; }"]), vec!["Point", "piece k-", "gone"]);
     }
 
     #[test]
