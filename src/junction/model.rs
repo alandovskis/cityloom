@@ -238,9 +238,16 @@ impl Target {
     }
 }
 
-/// The label of a state whose own label is not known: one read back from storage.
+/// The label of a state whose own label is not known: one read back from storage. It is shown, in the
+/// history, as "Earlier changes".
 pub fn earlier() -> Said {
     Said::new("city-earlier")
+}
+
+/// A name or label that stands for nothing: where a `Said` is needed and nothing shows it (a junction
+/// opened to be checked, two states compared for everything but their label).
+pub fn unlabelled() -> Said {
+    named_said("")
 }
 
 /// The label of the junction as the city first laid it out.
@@ -551,7 +558,7 @@ impl Junction {
             pending_label: earlier(),
             refusal: None,
         };
-        let same = |a: &State, b: &State| State { label: earlier(), ..a.clone() } == State { label: earlier(), ..b.clone() };
+        let same = |a: &State, b: &State| State { label: unlabelled(), ..a.clone() } == State { label: unlabelled(), ..b.clone() };
         if let Some(now) = now.filter(|n| !same(n, &today)) {
             j.states.push(State { label: earlier(), ..now });
             j.cursor = 1;

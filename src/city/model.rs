@@ -453,7 +453,7 @@ impl Layout {
 /// nothing suits keeps `preferred`.
 fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
     use crate::junction::model::{MAX_CORNER_MM, MIN_CORNER_MM, RING_STEP_MM};
-    let state = |arms: &[Arm]| State { label: junction::earlier(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None, source: Vec::new() };
+    let state = |arms: &[Arm]| State { label: junction::unlabelled(), arms: arms.to_vec(), control, ring_extra_mm: 0, bus: None, cycle: None, source: Vec::new() };
     let mut radii: Vec<i32> = (MIN_CORNER_MM..=MAX_CORNER_MM).step_by(RING_STEP_MM as usize).collect();
     radii.sort_by_key(|r| ((r - preferred).abs(), *r));
     for i in 0..arms.len() {
@@ -461,8 +461,8 @@ fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
         let found = radii.iter().any(|&r| {
             arms[i].corner_mm = r;
             let s = state(arms);
-            // `from_city` wants a name for the junction; `earlier()` is a throwaway here, nothing shows it.
-            Junction::from_city(junction::earlier(), &s, &s, 0).is_some_and(|j| j.view().corners.iter().any(|c| c.uid == uid && c.ok && !c.fast))
+            // `from_city` wants a name for the junction; `unlabelled()` is a throwaway here, nothing shows it.
+            Junction::from_city(junction::unlabelled(), &s, &s, 0).is_some_and(|j| j.view().corners.iter().any(|c| c.uid == uid && c.ok && !c.fast))
         });
         if !found {
             arms[i].corner_mm = preferred;
@@ -477,7 +477,7 @@ fn forget_streets(s: &mut State) {
 }
 
 fn same_junction(a: &State, b: &State) -> bool {
-    State { label: junction::earlier(), ..a.clone() } == State { label: junction::earlier(), ..b.clone() }
+    State { label: junction::unlabelled(), ..a.clone() } == State { label: junction::unlabelled(), ..b.clone() }
 }
 
 /// The street an arm reads: the city's street as seen looking out from `node`.
@@ -517,7 +517,7 @@ impl City {
             // A meeting the junction editor cannot draw (every road leaving to one side, say) is left as
             // a plain connection of streets.
             // As in `tune_corners`, the name is a throwaway: this only asks whether the junction can be drawn.
-            if Junction::from_city(junction::earlier(), &s, &s, region).is_none() {
+            if Junction::from_city(junction::unlabelled(), &s, &s, region).is_none() {
                 layout.nodes[n].junction = false;
                 continue;
             }
@@ -627,7 +627,7 @@ impl City {
         let Some(n) = self.node_index(node) else { return Vec::new() };
         let Some(state) = self.today_junctions.get(&node) else { return Vec::new() };
         let today = self.with_streets_of(&self.today_streets, n, state);
-        Junction::from_city(junction::earlier(), &today, &today, region)
+        Junction::from_city(junction::unlabelled(), &today, &today, region)
             .map_or_else(Vec::new, |j| j.view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect())
     }
 
