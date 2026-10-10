@@ -27,7 +27,7 @@ fn point(bearing: i32) -> usize {
     ((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8
 }
 
-/// The compass point a bearing is nearest, as the English tag (still read by the views Task 7 translates).
+/// The compass point a bearing is nearest, as the English tag; only the inspector still reads it, until it is translated.
 pub fn compass(bearing: i32) -> &'static str {
     COMPASS[point(bearing)]
 }

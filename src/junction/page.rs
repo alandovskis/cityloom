@@ -10,6 +10,8 @@ use crate::junction::text::{arms_text, fit_text};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
 use crate::shared::catalogue::{KINDS, kind_key};
+#[cfg(target_arch = "wasm32")]
+use crate::shared::i18n::Args;
 use crate::shared::provenance::Sources;
 use crate::shared::tick::Tick;
 
@@ -38,7 +40,7 @@ pub fn Header(vm: Rc<JunctionVm>) -> impl IntoView {
     #[cfg(target_arch = "wasm32")]
     Effect::new(move |_| {
         if w.view().linked {
-            document().set_title(&format!("{} · CityLoom", w.say(&w.view().name)));
+            document().set_title(&w.i18n().tr("jn-title", &Args::new().str("name", w.say(&w.view().name))));
         }
     });
     view! {
@@ -47,13 +49,13 @@ pub fn Header(vm: Rc<JunctionVm>) -> impl IntoView {
             {move || linked().then(|| view! {
                 <a class="back" href="map.html">
                     <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" focusable="false"><path d="M12 7H2M6 3 2 7l4 4"/></svg>
-                    "City map"
+                    {move || w.tr("jn-city-map")}
                 </a>
                 " "
                 <span aria-hidden="true">"·"</span>
                 " "
             })}
-            <span>"Junction plan"</span>
+            <span>{move || w.tr("jn-plan")}</span>
             " "
             <span aria-hidden="true">"·"</span>
             " "
@@ -66,16 +68,19 @@ pub fn Header(vm: Rc<JunctionVm>) -> impl IntoView {
 pub fn TitleBlock(vm: Rc<JunctionVm>) -> impl IntoView {
     let w = Watch::new(vm);
     view! {
-        <div class="tb-cell tb-wide"><span>"Junction"</span><b id="tb-street">{move || w.say(&w.view().name)}</b></div>
-        <div class="tb-cell"><span>"Streets"</span><b id="tb-row" class="fig">{move || w.view().arms.len().to_string()}</b></div>
-        <div class="tb-cell"><span>"Changes made"</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
+        <div class="tb-cell tb-wide"><span>{move || w.tr("jn-block-junction")}</span><b id="tb-street">{move || w.say(&w.view().name)}</b></div>
+        <div class="tb-cell"><span>{move || w.tr("jn-block-streets")}</span><b id="tb-row" class="fig">{move || w.view().arms.len().to_string()}</b></div>
+        <div class="tb-cell"><span>{move || w.tr("jn-block-changes")}</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
         {move || {
             let source = w.view().source.clone();
             (!source.is_empty())
                 .then(|| {
                     view! {
-                        <div class="tb-cell tb-full"><span>"OpenStreetMap"</span><b class="tb-src"><Sources kind="node" refs=source/></b></div>
-                        <div class="tb-cell tb-full"><span>"Data"</span><b id="tb-state">{move || if w.view().changed { "Edited" } else { "As imported" }}</b></div>
+                        <div class="tb-cell tb-full"><span>{move || w.tr("jn-block-osm")}</span><b class="tb-src"><Sources kind="node" refs=source/></b></div>
+                        <div class="tb-cell tb-full">
+                            <span>{move || w.tr("jn-block-data")}</span>
+                            <b id="tb-state">{move || w.tr(if w.view().changed { "jn-block-edited" } else { "jn-block-imported" })}</b>
+                        </div>
                     }
                 })
         }}
@@ -101,15 +106,15 @@ pub fn History(vm: Rc<JunctionVm>) -> impl IntoView {
     view! {
         <button type="button" id="undo" class="btn" disabled=move || !w.view().can_undo on:click=move |_| { w.undo(); }>
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M5.5 3 2.5 6l3 3M2.5 6H10a3.5 3.5 0 0 1 0 7H6"/></svg>
-            "Undo"
+            {move || w.tr("jn-undo")}
         </button>
         <button type="button" id="redo" class="btn" disabled=move || !w.view().can_redo on:click=move |_| { w.redo(); }>
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M10.5 3l3 3-3 3M13.5 6H6a3.5 3.5 0 0 0 0 7h4"/></svg>
-            "Redo"
+            {move || w.tr("jn-redo")}
         </button>
         <button type="button" id="reset" class="btn" disabled=move || !w.view().changed on:click=move |_| { w.reset(); }>
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>
-            "Start over"
+            {move || w.tr("jn-reset")}
         </button>
     }
 }

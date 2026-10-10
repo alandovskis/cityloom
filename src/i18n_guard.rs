@@ -44,6 +44,14 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/junction/read_model.rs", include_str!("junction/read_model.rs")),
     ("src/junction/text.rs", include_str!("junction/text.rs")),
     ("src/junction/turns.rs", include_str!("junction/turns.rs")),
+    ("src/junction/vm.rs", include_str!("junction/vm.rs")),
+    ("src/junction/watch.rs", include_str!("junction/watch.rs")),
+    ("src/junction/keys.rs", include_str!("junction/keys.rs")),
+    ("src/junction/mod.rs", include_str!("junction/mod.rs")),
+    ("src/junction/page.rs", include_str!("junction/page.rs")),
+    ("src/junction/notes.rs", include_str!("junction/notes.rs")),
+    ("src/junction/plan.rs", include_str!("junction/plan.rs")),
+    ("src/junction/plan_svg.rs", include_str!("junction/plan_svg.rs")),
 ];
 
 /// Attributes whose value is text a person reads (also as `attr:<name>`).
@@ -94,6 +102,20 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("a junction state is always drawable", "a panic message about the code, never shown"),
     (" on", "a CSS class appended to a class list"),
     (" bad", "a CSS class appended to a class list"),
+    (" dim-warn", "a CSS class of the junction plan, appended to a class list"),
+    (" t-warn", "a CSS class of the junction plan, appended to a class list"),
+    (" dead", "a CSS class of the junction plan, appended to a class list"),
+    (" no", "a CSS class of the junction plan, appended to a class list"),
+    (" indirect", "a CSS class of the junction plan, appended to a class list"),
+    ("stop-line yield", "CSS classes of the junction plan"),
+    ("bulb measure-stop k-sidewalk", "CSS classes of the junction plan"),
+    ("island k-sidewalk", "CSS classes of the junction plan"),
+    ("wedge k-sidewalk", "CSS classes of the junction plan"),
+    ("bulb k-sidewalk", "CSS classes of the junction plan"),
+    ("piece k-", "CSS classes of the junction plan, the kind's id appended"),
+    ("piece k-bus", "CSS classes of the junction plan"),
+    ("piece k-bus queue", "CSS classes of the junction plan"),
+    ("piece k-bus bus-lane", "CSS classes of the junction plan"),
 ];
 
 fn is_path_data(s: &str) -> bool {
@@ -381,6 +403,13 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("lanes-follow", "the id of a junction check"),
     ("turning-speed", "the id of a junction check"),
     ("corner-room", "the id of a junction check"),
+    ("conflict-note", "the id of an element of the junction page"),
+    ("grip-arm", "the data-role of a grip on the junction plan"),
+    ("grip-corner", "the data-role of a grip on the junction plan"),
+    ("grip-crossing", "the data-role of a grip on the junction plan"),
+    ("data-lane", "the name of a data- attribute of a lane on the junction plan"),
+    ("stop-line", "a CSS class of the junction plan"),
+    ("dead-cap", "a CSS class of the junction plan"),
 ];
 
 /// The message-id-shaped literals in `src` as `(line, literal)`.

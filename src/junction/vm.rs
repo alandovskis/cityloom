@@ -14,7 +14,7 @@ use crate::junction::read_model::JView;
 use crate::junction::text;
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
-use crate::shared::keeper::{Keeper, NOT_KEPT};
+use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
 use crate::shared::units::Units;
 
@@ -47,7 +47,7 @@ impl JunctionVm {
                     move || keep.upgrade().is_some_and(|vm| vm.keep_now()),
                     move || {
                         if let Some(vm) = told.upgrade() {
-                            vm.ports.announcer.say(NOT_KEPT);
+                            vm.ports.announcer.say(&vm.i18n.tr_now("not-kept", &Args::new()));
                         }
                     },
                 )
@@ -235,6 +235,7 @@ mod tests {
     use super::*;
     use crate::city::binding::Place;
     use crate::city::store::CityStore;
+    use crate::shared::keeper::NOT_KEPT;
     use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_time};
 
     struct Rig {

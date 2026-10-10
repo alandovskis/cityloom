@@ -7,39 +7,52 @@ use leptos::prelude::*;
 
 use crate::junction::read_model::Check;
 use crate::junction::read_model::{CrossingView, JView};
-use crate::junction::turns::compass;
+use crate::junction::turns::compass_key;
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
-use crate::shared::atlas::{MEASURES, Where};
-use crate::shared::i18n::I18n;
+use crate::shared::atlas::{LINEAR, LOCAL, MEASURES, Where, name_key, note_key};
+use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::said::say;
 use crate::shared::units::Units;
 
-/// How far it is to cross: the length, or the stages and their length.
-fn crossing_text(c: &CrossingView, units: Units) -> String {
-    if c.stages > 1 { format!("{} × {}", c.stages, units.number(c.stage_mm)) } else { units.number(c.distance_mm) }
+/// How far it is to cross: the length, or the stages and their length, written in `locale`.
+fn crossing_text(c: &CrossingView, units: Units, locale: Locale) -> String {
+    if c.stages > 1 { format!("{} × {}", c.stages, units.number_in(c.stage_mm, locale)) } else { units.number_in(c.distance_mm, locale) }
 }
 
-/// What a check says, with the length it speaks of in the units shown.
+/// What a check says, with the length it speaks of in the units shown; drawn again when the language changes.
 fn check_detail(c: &Check, i18n: &I18n, units: Units) -> String {
     let detail = say(i18n, units, &c.detail);
-    if c.id == "crossing" && c.amount_mm != 0 { format!("{}: {}", detail, units.length(c.amount_mm)) } else { detail }
-}
-
-/// Why the conflict counts are what they are, where that is not obvious.
-fn conflict_note(v: &JView) -> &'static str {
-    if v.conflicts.by_phase {
-        "A signal takes turns, so paths that cross do not meet at the same time."
-    } else if v.ring.is_some() {
-        "Traffic in a roundabout only merges and splits; it never crosses."
+    if c.id == "crossing" && c.amount_mm != 0 {
+        i18n.tr("jn-check-length", &Args::new().str("detail", detail).str("length", units.length_in(c.amount_mm, i18n.locale())))
     } else {
-        ""
+        detail
     }
 }
 
-/// The compass points of the arms a measure is in use on, in arm order.
+/// The message that says why the conflict counts are what they are, where that is not obvious.
+fn conflict_note(v: &JView) -> Option<&'static str> {
+    if v.conflicts.by_phase {
+        Some("jn-conflicts-signal")
+    } else if v.ring.is_some() {
+        Some("jn-conflicts-roundabout")
+    } else {
+        None
+    }
+}
+
+/// The messages of the compass points of the arms a measure is in use on, in arm order.
 fn used_on(v: &JView, code: &str) -> Vec<&'static str> {
-    v.arms.iter().filter(|a| a.transit.codes.contains(&code)).map(|a| compass(a.bearing)).collect()
+    v.arms.iter().filter(|a| a.transit.codes.contains(&code)).map(|a| compass_key(a.bearing)).collect()
+}
+
+/// The message that names a group of the Atlas, as the street page names it.
+fn group_key(group: &str) -> &'static str {
+    match group {
+        LINEAR => "group-name-linear",
+        LOCAL => "group-name-local",
+        _ => "group-name-area",
+    }
 }
 
 /// The Atlas's groups of measures, in the order they are listed.
@@ -63,18 +76,19 @@ pub fn Across(vm: Rc<JunctionVm>) -> impl IntoView {
     let watch = Watch::new(vm);
     move || {
         let (v, units) = watch.now();
+        let locale = watch.i18n().locale();
         let rows = v
             .arms
             .iter()
             .map(|a| {
                 let across = match &a.crossing {
-                    Some(c) => view! { <td class=if c.too_far { "bad" } else { "" }>{crossing_text(c, units)}</td> }.into_any(),
-                    None => view! { <td class="zero">"none"</td> }.into_any(),
+                    Some(c) => view! { <td class=if c.too_far { "bad" } else { "" }>{crossing_text(c, units, locale)}</td> }.into_any(),
+                    None => view! { <td class="zero">{watch.tr("jn-across-none")}</td> }.into_any(),
                 };
                 let lanes = if a.enters { a.lanes.len() } else { 0 };
                 view! {
                     <tr>
-                        <th scope="row"><span class="dirtag">{compass(a.bearing)}</span>{watch.say(&a.street)}</th>
+                        <th scope="row"><span class="dirtag">{watch.tr(compass_key(a.bearing))}</span>{watch.say(&a.street)}</th>
                         {across}
                         <td>{lanes}</td>
                     </tr>
@@ -82,12 +96,12 @@ pub fn Across(vm: Rc<JunctionVm>) -> impl IntoView {
             })
             .collect_view();
         view! {
-            <caption class="sr-only">"How far it is to cross each street, and how many lanes come in"</caption>
+            <caption class="sr-only">{watch.tr("jn-across-caption")}</caption>
             <thead>
                 <tr>
-                    <th scope="col">"Street"</th>
-                    <th scope="col">"To cross"</th>
-                    <th scope="col">"Lanes in"</th>
+                    <th scope="col">{watch.tr("jn-across-street")}</th>
+                    <th scope="col">{watch.tr("jn-across-to-cross")}</th>
+                    <th scope="col">{watch.tr("jn-across-lanes-in")}</th>
                 </tr>
             </thead>
             <tbody>{rows}</tbody>
@@ -103,18 +117,18 @@ pub fn Conflicts(vm: Rc<JunctionVm>) -> impl IntoView {
         let (v, _) = watch.now();
         let c = &v.conflicts;
         view! {
-            <caption class="sr-only">"Points where the paths of allowed turns meet"</caption>
+            <caption class="sr-only">{watch.tr("jn-conflicts-caption")}</caption>
             <thead>
                 <tr>
-                    <th scope="col">"Kind"</th>
-                    <th scope="col">"Points"</th>
+                    <th scope="col">{watch.tr("jn-conflicts-kind")}</th>
+                    <th scope="col">{watch.tr("jn-conflicts-points")}</th>
                 </tr>
             </thead>
             <tbody>
-                <tr><th scope="row">"Crossing"</th><td>{c.crossing}</td></tr>
-                <tr><th scope="row">"Merging"</th><td>{c.merging}</td></tr>
-                <tr><th scope="row">"Splitting"</th><td>{c.diverging}</td></tr>
-                <tr class="total"><th scope="row">"All"</th><td>{c.crossing + c.merging + c.diverging}</td></tr>
+                <tr><th scope="row">{watch.tr("jn-conflicts-crossing")}</th><td>{c.crossing}</td></tr>
+                <tr><th scope="row">{watch.tr("jn-conflicts-merging")}</th><td>{c.merging}</td></tr>
+                <tr><th scope="row">{watch.tr("jn-conflicts-splitting")}</th><td>{c.diverging}</td></tr>
+                <tr class="total"><th scope="row">{watch.tr("jn-conflicts-all")}</th><td>{c.crossing + c.merging + c.diverging}</td></tr>
             </tbody>
         }
         .into_any()
@@ -124,7 +138,7 @@ pub fn Conflicts(vm: Rc<JunctionVm>) -> impl IntoView {
 #[component]
 pub fn ConflictNote(vm: Rc<JunctionVm>) -> impl IntoView {
     let watch = Watch::new(vm);
-    move || conflict_note(&watch.now().0)
+    move || conflict_note(&watch.view()).map(|key| watch.tr(key)).unwrap_or_default()
 }
 
 #[component]
@@ -139,7 +153,7 @@ pub fn Checks(vm: Rc<JunctionVm>) -> impl IntoView {
                     <li class=if k.ok { "ok" } else { "bad" }>
                         {icon(k.ok)}
                         <div>
-                            <b>{watch.say(&k.label)}<span class="sr-only">{if k.ok { ": passes" } else { ": fails" }}</span></b>
+                            <b>{watch.say(&k.label)}<span class="sr-only">{watch.tr(if k.ok { "jn-check-passes" } else { "jn-check-fails" })}</span></b>
                             <span>{check_detail(k, &watch.i18n(), units)}</span>
                         </div>
                     </li>
@@ -165,18 +179,20 @@ pub fn Measures(vm: Rc<JunctionVm>) -> impl IntoView {
                     .map(|m| {
                         let on = used_on(&v, m.code);
                         let state = if !on.is_empty() {
-                            view! { <b class="m-on">{format!("In use on {}", on.join(", "))}</b> }.into_any()
+                            let arms: Vec<String> = on.iter().map(|key| watch.tr(key)).collect();
+                            let in_use = watch.i18n().tr("jn-measure-in-use", &Args::new().str("arms", arms.join(", ")));
+                            view! { <b class="m-on">{in_use}</b> }.into_any()
                         } else {
                             match m.place {
-                                Where::Junction => "Set on a street".into_any(),
-                                Where::Street => "Street editor".into_any(),
-                                Where::Not => view! { <span class="m-not">"Not modelled"</span> }.into_any(),
+                                Where::Junction => watch.tr("jn-measure-on-street").into_any(),
+                                Where::Street => watch.tr("jn-measure-street-editor").into_any(),
+                                Where::Not => view! { <span class="m-not">{watch.tr("jn-measure-not-modelled")}</span> }.into_any(),
                             }
                         };
-                        let note = (!m.note.is_empty()).then(|| view! { <small>{m.note}</small> });
+                        let note = (!m.note.is_empty()).then(|| view! { <small>{watch.tr(&note_key(m.code))}</small> });
                         view! {
                             <tr>
-                                <th scope="row"><span class="dirtag">{m.code}</span>{m.name}{note}</th>
+                                <th scope="row"><span class="dirtag">{m.code}</span>{watch.tr(&name_key(m.code))}{note}</th>
                                 <td>{state}</td>
                             </tr>
                         }
@@ -184,7 +200,7 @@ pub fn Measures(vm: Rc<JunctionVm>) -> impl IntoView {
                     .collect_view();
                 view! {
                     <tbody>
-                        <tr class="m-group"><th colspan="2" scope="colgroup">{group}</th></tr>
+                        <tr class="m-group"><th colspan="2" scope="colgroup">{watch.tr(group_key(group))}</th></tr>
                         {rows}
                     </tbody>
                 }
@@ -221,14 +237,14 @@ pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
         view! {
             <thead>
                 <tr>
-                    <th scope="col">"Step"</th>
-                    <th scope="col">"What changed"</th>
+                    <th scope="col">{watch.tr("jn-col-step")}</th>
+                    <th scope="col">{watch.tr("jn-col-what-changed")}</th>
                 </tr>
             </thead>
             <tbody>
                 <tr class=if v.revisions.is_empty() { "base now" } else { "base" }>
                     <td>"—"</td>
-                    <td>"Junction today"</td>
+                    <td>{watch.tr("jn-today")}</td>
                 </tr>
                 {rows}
             </tbody>
@@ -256,8 +272,9 @@ mod tests {
         let north = arm_view(&j, 0); // the avenue
         let c = north.crossing.as_ref().unwrap();
         assert_eq!(c.stages, 2);
-        assert_eq!(crossing_text(c, Units::Metres), "2 × 9.0");
-        assert_eq!(crossing_text(c, Units::Feet), "2 × 29.5");
+        assert_eq!(crossing_text(c, Units::Metres, Locale::En), "2 × 9.0");
+        assert_eq!(crossing_text(c, Units::Feet, Locale::En), "2 × 29.5");
+        assert_eq!(crossing_text(c, Units::Metres, Locale::FrCa), "2 × 9,0");
     }
 
     #[test]
@@ -266,7 +283,7 @@ mod tests {
         let east = arm_view(&j, 90);
         let c = east.crossing.as_ref().unwrap();
         assert_eq!(c.stages, 1);
-        assert_eq!(crossing_text(c, Units::Metres), Units::Metres.number(c.distance_mm));
+        assert_eq!(crossing_text(c, Units::Metres, Locale::En), Units::Metres.number(c.distance_mm));
     }
 
     fn check(id: &'static str, amount_mm: i32) -> Check {
@@ -278,6 +295,8 @@ mod tests {
         let en = crate::i18n_for(crate::shared::i18n::Locale::En);
         assert_eq!(check_detail(&check("crossing", 9_000), &en, Units::Metres), "Longest crossing in one go: 9.0 m");
         assert_eq!(check_detail(&check("crossing", 9_000), &en, Units::Feet), "Longest crossing in one go: 29.5 ft");
+        let fr = crate::i18n_for(Locale::FrCa);
+        assert_eq!(check_detail(&check("crossing", 9_000), &fr, Units::Metres), "Plus longue traversée d’un seul coup\u{a0}: 9,0\u{a0}m");
     }
 
     #[test]
@@ -290,11 +309,11 @@ mod tests {
     #[test]
     fn the_note_on_conflicts_depends_on_how_the_junction_is_run() {
         let mut j = Junction::new(0); // a signal
-        assert_eq!(conflict_note(&j.view()), "A signal takes turns, so paths that cross do not meet at the same time.");
+        assert_eq!(conflict_note(&j.view()), Some("jn-conflicts-signal"));
         assert!(j.set_control(ALL_WAY_STOP));
-        assert_eq!(conflict_note(&j.view()), "");
+        assert_eq!(conflict_note(&j.view()), None);
         assert!(j.set_control(ROUNDABOUT));
-        assert_eq!(conflict_note(&j.view()), "Traffic in a roundabout only merges and splits; it never crosses.");
+        assert_eq!(conflict_note(&j.view()), Some("jn-conflicts-roundabout"));
     }
 
     #[test]
@@ -308,13 +327,15 @@ mod tests {
         j.set_filter(n, true);
         j.set_bus_lane(n, true);
         let v = j.view();
-        assert_eq!(used_on(&v, "N1"), vec!["N", "E"]);
-        assert_eq!(used_on(&v, "G2"), vec!["E"]);
+        assert_eq!(used_on(&v, "N1"), vec!["jn-compass-short-n", "jn-compass-short-e"]);
+        assert_eq!(used_on(&v, "G2"), vec!["jn-compass-short-e"]);
         assert!(used_on(&v, "L1").is_empty());
     }
 
     #[test]
     fn the_atlas_groups_come_in_the_order_they_are_listed() {
         assert_eq!(atlas_groups(), vec!["Linear continuous measures", "Localized measures", "Area-wide measures"]);
+        let keys: Vec<&str> = atlas_groups().into_iter().map(group_key).collect();
+        assert_eq!(keys, vec!["group-name-linear", "group-name-local", "group-name-area"]);
     }
 }

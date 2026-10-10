@@ -567,3 +567,161 @@ fn the_plan_follows_the_units_and_the_selection() {
     assert!(h.contains("2 × 29.5") && h.contains("66 ft"));
     assert_eq!(count(&h, "class=\"arm on\""), 1);
 }
+
+// ---- the page in French ---------------------------------------------------------------
+
+fn shared_in(sample: usize, locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
+    JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), Junction::new(sample), None)
+}
+
+fn linked_in(locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
+    let mut state = Junction::new(0).current().clone();
+    for a in &mut state.arms {
+        a.edge = a.uid + 10;
+    }
+    state.source = vec![crate::shared::provenance::OsmRef { id: 9, version: None }];
+    let name = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Jonction 4".into()));
+    JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), Junction::from_city(name, &state, &state, 0).unwrap(), None)
+}
+
+/// Fails on the first of `english` found in `h`, and on the first of `french` missing from it.
+fn speaks_french(h: &str, english: &[&str], french: &[&str]) {
+    for e in english {
+        assert!(!h.contains(e), "{e:?} in:\n{h}");
+    }
+    for f in french {
+        assert!(h.contains(f), "{f:?} missing from:\n{h}");
+    }
+}
+
+/// English that must not be left on a French junction page, whatever the view.
+const ENGLISH: &[&str] = &["Junction plan", "Does it work", "Your changes", "Turns allowed", "Where paths meet", "streets", "Every check"];
+
+#[test]
+fn the_page_around_the_plan_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = linked_in(Locale::FrCa);
+    let h = html(|| view! { <page::Header vm=s.clone()/> }.into_any());
+    speaks_french(&h, &[ENGLISH, &["City map"]].concat(), &["Carte de la ville", "Plan de la jonction", ">4 rues<", ">Jonction 4</h1>"]);
+    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
+    speaks_french(
+        &h,
+        &["Junction<", "Streets", "Changes made", "Data", "As imported"],
+        &[">Jonction<", ">Rues<", "Modifications apportées", "Données", "Telle qu’importée"],
+    );
+    let h = html(|| view! { <page::Fit vm=s.clone()/> }.into_any());
+    speaks_french(&h, ENGLISH, &["4 rues, feux de circulation. Toutes les vérifications réussissent."]);
+    let h = html(|| view! { <page::History vm=s.clone()/> }.into_any());
+    speaks_french(&h, &["Undo", "Redo", "Start over"], &["Annuler", "Rétablir", "Recommencer"]);
+}
+
+#[test]
+fn the_notes_speak_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let (n, e) = (arm(&s, 0), arm(&s, 90));
+    s.edit(|j| j.set_bus_lane(e, true));
+    s.edit(|j| j.set_approach(e, Q_CURB));
+    s.edit(|j| j.set_corner(n, 7_000));
+    s.edit(|j| j.set_crossing(e, false));
+    let h = html(|| view! { <notes::Across vm=s.clone()/> }.into_any());
+    speaks_french(
+        &h,
+        &["How far", ">Street<", "To cross", "Lanes in", ">none<", ">W<"],
+        &["Rue", "À traverser", "Voies entrantes", ">aucun<", ">O<", "2 × 9,0"],
+    );
+    let h = html(|| view! { <notes::Conflicts vm=s.clone()/> }.into_any());
+    speaks_french(&h, &["Points where", "Kind", "Merging", "Splitting", ">All<"], &["Type", "Croisement", "Convergence", "Divergence", "Total"]);
+    let h = html(|| view! { <notes::ConflictNote vm=s.clone()/> }.into_any());
+    speaks_french(&h, &["A signal takes turns"], &["Les feux"]);
+    let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
+    speaks_french(&h, &[": passes", "Longest crossing", " m<"], &["\u{a0}: réussite", "Plus longue traversée d’un seul coup\u{a0}: 11,4\u{a0}m"]);
+    let h = html(|| view! { <notes::Measures vm=s.clone()/> }.into_any());
+    speaks_french(
+        &h,
+        &["In use on", "Street editor", "Not modelled", "Set on a street", "Localized measures", "Curbside Queue-Jump Lanes", "under development"],
+        &[
+            "Utilisée sur E",
+            "Éditeur de rue",
+            "Non modélisée",
+            "Mesures ponctuelles",
+            "Voies de dépassement de file en bordure de trottoir",
+            "en développement",
+        ],
+    );
+    let h = html(|| view! { <notes::Revisions vm=s.clone()/> }.into_any());
+    speaks_french(
+        &h,
+        &["Step", "What changed", "Junction today", "Corner after"],
+        &["Étape", "Ce qui a changé", "Jonction aujourd’hui", "Coin après Sample Avenue 2 (nord)"],
+    );
+}
+
+#[test]
+fn the_plan_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let (n, e) = (arm(&s, 0), arm(&s, 90));
+    s.edit(|j| j.set_offset(e, 500));
+    s.edit(|j| j.select(Target::Corner(n)));
+    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
+    speaks_french(
+        &h,
+        &[ENGLISH, &["Plan of the junction", "north up", "Scale", " road", "shifted", "Turn ", "Change the corner radius", "Lane 1 of"]].concat(),
+        &[
+            "aria-label=\"Éditeur du plan de la jonction\"",
+            "Plan de la jonction, nord en haut. 4 rues.",
+            ">Échelle<",
+            "E · chaussée de 11,4\u{a0}m · décalée de 0,5\u{a0}m",
+            "Faire pivoter Sample Street 1 (est)",
+            "Modifier le rayon du coin",
+            "Voie 1 sur 2, Sample Avenue 2 (nord)",
+            ">20\u{a0}m<",
+            ">2 × 9,0<",
+        ],
+    );
+    s.edit(|j| j.select(Target::Crossing(n)));
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    let so = arm(&s, 180);
+    s.edit(|j| j.set_bus(Some((n, so))));
+    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
+    speaks_french(&h, &["Move the crossing", "Bus only", "Roundabout."], &["Déplacer le passage pour piétons", "Autobus seulement", "Carrefour giratoire."]);
+}
+
+#[test]
+fn a_switch_of_language_draws_the_plan_its_label_and_the_status_again() {
+    use crate::junction::plan_svg::{plan_label, plan_svg};
+    use crate::junction::text::{arms_text, fit_text};
+    use crate::shared::i18n::Locale;
+    let owner = Owner::new();
+    owner.set();
+    let i18n = crate::i18n_for(Locale::En);
+    // What the views' closures do: they word the junction from the shared words, so they track them.
+    let shared = StoredValue::new_local((i18n.clone(), Junction::new(0).view()));
+    let markup = Memo::new(move |_| shared.with_value(|(i18n, v)| plan_svg(v, i18n, 1000.0, 1000.0, Units::Metres).markup));
+    let label = Memo::new(move |_| shared.with_value(|(i18n, v)| plan_label(v, i18n)));
+    let status = Memo::new(move |_| shared.with_value(|(i18n, v)| format!("{} / {}", arms_text(v, i18n), fit_text(v, i18n))));
+    assert!(markup.get().contains(">Scale<") && label.get().starts_with("Plan of the junction") && status.get().starts_with("4 streets"));
+    i18n.set(Locale::FrCa);
+    assert!(markup.get().contains(">Échelle<") && !markup.get().contains(">Scale<"), "{}", markup.get());
+    assert!(label.get().starts_with("Plan de la jonction, nord en haut."), "{}", label.get());
+    assert!(status.get().starts_with("4 rues / 4 rues, feux de circulation."), "{}", status.get());
+}
+
+#[test]
+fn the_junction_page_asks_for_no_message_that_is_missing_in_french() {
+    use crate::shared::i18n::Locale;
+    let s = linked_in(Locale::FrCa);
+    let n = arm(&s, 0);
+    s.edit(|j| j.set_corner(n, 7_000));
+    s.edit(|j| j.select(Target::Arm(n)));
+    let _ = html(|| {
+        view! {
+            <page::Header vm=s.clone()/><page::TitleBlock vm=s.clone()/><page::Fit vm=s.clone()/><page::History vm=s.clone()/><page::Key vm=s.clone()/>
+            <notes::Across vm=s.clone()/><notes::Conflicts vm=s.clone()/><notes::ConflictNote vm=s.clone()/><notes::Checks vm=s.clone()/>
+            <notes::Measures vm=s.clone()/><notes::Revisions vm=s.clone()/><plan::PlanDrawing vm=s.clone()/><turns::Turns vm=s.clone()/>
+        }
+        .into_any()
+    });
+    assert_eq!(s.i18n().missing(), Vec::<String>::new());
+}

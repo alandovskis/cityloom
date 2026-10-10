@@ -8,9 +8,10 @@ use serde_json::Value;
 use crate::junction::frame::Frame;
 use crate::junction::model::{LEFT, RIGHT, THROUGH};
 use crate::junction::read_model::{ArmView, JView, LaneView};
-use crate::junction::turns::compass;
+use crate::junction::text::arms_text;
+use crate::junction::turns::compass_key;
 use crate::shared::catalogue::KINDS;
-use crate::shared::i18n::I18n;
+use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::said::{Said, say};
 use crate::shared::units::Units;
 
@@ -50,6 +51,9 @@ struct Plan<'a> {
     v: &'a JView,
     f: Frame,
     units: Units,
+    i18n: &'a I18n,
+    /// The language the numbers are written in, read once so the drawing is made again on a switch.
+    locale: Locale,
 }
 
 impl Plan<'_> {
@@ -201,7 +205,8 @@ impl Plan<'_> {
         let ang = (q1.1 - q0.1).atan2(q1.0 - q0.0);
         let tk = ((ang + 0.785).cos() * 5.0, (ang + 0.785).sin() * 5.0);
         let tick = |p: P| format!("M{} {}L{} {}", f1(p.0 - tk.0), f1(p.1 - tk.1), f1(p.0 + tk.0), f1(p.1 + tk.1));
-        let text = if c.stages > 1 { format!("{} × {}", c.stages, self.units.number(c.stage_mm)) } else { self.units.number(c.distance_mm) };
+        let number = |mm: i32| self.units.number_in(mm, self.locale);
+        let text = if c.stages > 1 { format!("{} × {}", c.stages, number(c.stage_mm)) } else { number(c.distance_mm) };
         let warn = c.too_far;
         format!(
             "<path class=\"dim{}\" d=\"M{} {}L{} {}{}{}\"/><text class=\"t-dim t-halo{}\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{text}</text>",
@@ -267,12 +272,11 @@ impl Plan<'_> {
                 )
             })
             .collect();
-        let end = match self.units {
-            Units::Metres => "20 m".to_string(),
-            Units::Feet => format!("{} ft", (20_000.0_f64 / 304.8).round()),
-        };
+        // Twenty metres, or the whole feet nearest them.
+        let end = self.units.length_whole_in(20_000, self.locale);
+        let scale = esc(&self.i18n.tr("jn-svg-scale", &Args::new()));
         format!(
-            "<g class=\"scale\"><text class=\"t-label\" x=\"{x}\" y=\"{y}\">Scale</text>{blocks}<text class=\"t-dim\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">0</text><text class=\"t-dim\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{end}</text></g>",
+            "<g class=\"scale\"><text class=\"t-label\" x=\"{x}\" y=\"{y}\">{scale}</text>{blocks}<text class=\"t-dim\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">0</text><text class=\"t-dim\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{end}</text></g>",
             f1(x + 36.0),
             y + 20.0,
             f1(x + 36.0 + 5.0 * block),
@@ -281,16 +285,20 @@ impl Plan<'_> {
     }
 }
 
-/// What a screen reader is told the drawing is.
-pub fn plan_label(v: &JView) -> String {
-    format!("Plan of the junction, north up. {} streets. {}", v.arms.len(), if v.control == "roundabout" { "Roundabout." } else { "" })
+/// What a screen reader is told the drawing is, drawn again when the language changes.
+pub fn plan_label(v: &JView, i18n: &I18n) -> String {
+    let key = if v.control == "roundabout" { "jn-plan-label-roundabout" } else { "jn-plan-label" };
+    i18n.tr(key, &Args::new().str("arms", arms_text(v, i18n)))
 }
 
-/// The plan for a drawing `width` wide in a window `window_height` high.
+/// The plan for a drawing `width` wide in a window `window_height` high. Its words are asked for
+/// with the tracked `tr` and `say`, so a view that draws it draws it again when the language changes.
 pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> PlanSvg {
     let said = |s: &Said| say(i18n, units, s);
+    let tr = |key: &str, args: Args| i18n.tr(key, &args);
+    let locale = i18n.locale();
     let f = Frame::fit(v.bounds, width, window_height);
-    let p = Plan { v, f, units };
+    let p = Plan { v, f, units, i18n, locale };
     let zebra = (600.0 * f.scale).max(4.0);
     let zebra = (zebra * 10.0).round() / 10.0;
 
@@ -362,13 +370,11 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         for (i, lane) in a.lanes.iter().enumerate() {
             write!(
                 l.lane,
-                "<path class=\"lane-hit{}\" data-role=\"lane\" data-uid=\"{}\" data-lane=\"{i}\" d=\"{}\"><title>Lane {} of {}, {}</title></path>",
+                "<path class=\"lane-hit{}\" data-role=\"lane\" data-uid=\"{}\" data-lane=\"{i}\" d=\"{}\"><title>{}</title></path>",
                 if p.is_lane(a.uid, i) { " on" } else { "" },
                 a.uid,
                 p.path_d(&lane.poly),
-                i + 1,
-                a.lanes.len(),
-                esc(&said(&a.label))
+                esc(&tr("jn-sel-lane", Args::new().num("n", i as i64 + 1).num("count", a.lanes.len() as i64).str("arm", said(&a.label))))
             )
             .unwrap();
         }
@@ -430,7 +436,14 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
             if v.selected.kind == Some("bus") {
                 write!(l.sel, "<path class=\"sel-box\" d=\"{d}\"/>").unwrap();
             }
-            write!(l.label, "<text class=\"t-mark t-halo\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">Bus only</text>", f1(cx), f1(cy + 5.0)).unwrap();
+            write!(
+                l.label,
+                "<text class=\"t-mark t-halo\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>",
+                f1(cx),
+                f1(cy + 5.0),
+                esc(&tr("jn-svg-bus-only", Args::new()))
+            )
+            .unwrap();
         }
         // circulation arrows on the ring, between the streets
         let mid = (ring.road_mm as f64 - 3000.0) * f.scale;
@@ -529,18 +542,21 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         } else {
             ly + 26.0
         };
-        let shifted = if a.offset_mm != 0 { format!(" · shifted {}", units.length(a.offset_mm.abs())) } else { String::new() };
+        let road = Args::new().str("compass", tr(compass_key(a.bearing), Args::new())).str("width", units.length_in(a.road_mm, locale));
+        let road = match a.offset_mm {
+            0 => tr("jn-svg-road", road),
+            mm => tr("jn-svg-road-shifted", road.str("offset", units.length_in(mm.abs(), locale))),
+        };
         write!(
             l.label,
-            "<text class=\"t-mark t-halo{}\" x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\">{}</text><text class=\"t-note t-halo t-soft\" x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\">{} · {} road{shifted}</text>",
+            "<text class=\"t-mark t-halo{}\" x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\">{}</text><text class=\"t-note t-halo t-soft\" x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\">{}</text>",
             if p.is_sel("arm", a.uid) { " t-blue" } else { "" },
             f1(x),
             f1(y1),
             esc(&said(&a.street)),
             f1(x),
             f1(y1 + 17.0),
-            compass(a.bearing),
-            units.length(a.road_mm)
+            esc(&road)
         )
         .unwrap();
 
@@ -554,7 +570,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         }
         // the end grip: always there, since turning a street is the main move
         let (ex, ey) = f.at(a.end);
-        l.grip += &p.grip(ex - ld.0 * 20.0, ey - ld.1 * 20.0, a.bearing as f64, "grip-arm", a.uid, &format!("Turn {}", said(&a.label)));
+        l.grip += &p.grip(ex - ld.0 * 20.0, ey - ld.1 * 20.0, a.bearing as f64, "grip-arm", a.uid, &tr("jn-grip-turn", Args::new().str("arm", said(&a.label))));
     }
 
     // grips and the outline of a selected corner or crossing
@@ -565,7 +581,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         }
         write!(l.sel, "<path class=\"sel-line\" d=\"{}\"/>", p.path_d(&c.curb)).unwrap();
         let (gx, gy) = f.at(c.handle);
-        l.grip += &p.grip(gx, gy, bis.1.atan2(bis.0).to_degrees(), "grip-corner", c.uid, "Change the corner radius");
+        l.grip += &p.grip(gx, gy, bis.1.atan2(bis.0).to_degrees(), "grip-corner", c.uid, &tr("jn-grip-corner", Args::new()));
     }
     for a in &v.arms {
         let Some(c) = &a.crossing else { continue };
@@ -573,7 +589,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
             continue;
         }
         let (gx, gy) = f.at(c.handle);
-        l.grip += &p.grip(gx, gy, a.bearing as f64 - 90.0, "grip-crossing", a.uid, "Move the crossing");
+        l.grip += &p.grip(gx, gy, a.bearing as f64 - 90.0, "grip-crossing", a.uid, &tr("jn-grip-crossing", Args::new()));
     }
 
     // the turns of a selected street
@@ -612,7 +628,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         "<defs>{defs}</defs><g class=\"plan\">{}{}{}{}{}{}{}{}{}{}{}{}{}</g>{furniture}",
         l.wedge, l.arm, l.lane, l.measure, l.road, l.bulb, l.curb, l.cross, l.mark, l.sel, l.mv, l.label, l.grip
     );
-    PlanSvg { frame: f, label: plan_label(v), markup }
+    PlanSvg { frame: f, label: plan_label(v, i18n), markup }
 }
 
 #[cfg(test)]
@@ -873,7 +889,7 @@ mod tests {
     #[test]
     fn the_label_says_how_many_streets_there_are() {
         let s = svg(&Junction::new(1));
-        assert_eq!(s.label, "Plan of the junction, north up. 3 streets. ");
+        assert_eq!(s.label, "Plan of the junction, north up. 3 streets.");
     }
 
     #[test]

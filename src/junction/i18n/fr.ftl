@@ -1,5 +1,5 @@
 # Ce que dit la jonction : son modèle (src/junction/model.rs, read_model.rs), ses annonces
-# (src/junction/text.rs) et le tableau des virages (src/junction/turns.rs).
+# (src/junction/text.rs), le tableau des virages (src/junction/turns.rs) et les vues de la page.
 
 ## Comment la jonction est réglée
 jn-control-uncontrolled = Aucune signalisation
@@ -106,7 +106,7 @@ jn-no-lane-through = { $from } vers { $to } (tout droit)
 jn-no-lane-right = { $from } vers { $to } (virage à droite)
 jn-check-lanes-follow = Les voies respectent les virages interdits
 jn-check-lanes-follow-ok = Aucune voie ne mène à un virage interdit
-jn-check-lanes-follow-bad = Mènent à des virages interdits : { $lanes }
+jn-check-lanes-follow-bad = Voies menant à des virages interdits : { $lanes }
 jn-lane-of = { $arm }, voie { $n }
 jn-check-crossing = Distance de traversée
 jn-check-crossing-none = Aucun passage pour piétons marqué
@@ -169,3 +169,58 @@ jn-turn-blocked = { $turn } : impossible. { $why }
 jn-turn-banned = { $turn }, interdit
 jn-turn-unserved = { $turn }, permis, aucune voie ne le dessert
 jn-turn-allowed = { $turn }, permis
+
+## La page autour du plan : en-tête, titre de la fenêtre, cartouche et historique (src/junction/page.rs)
+jn-title = { $name } · CityLoom
+jn-city-map = Carte de la ville
+jn-plan = Plan de la jonction
+jn-block-junction = Jonction
+jn-block-streets = Rues
+jn-block-changes = Modifications apportées
+jn-block-osm = OpenStreetMap
+jn-block-data = Données
+jn-block-edited = Modifiée
+jn-block-imported = Telle qu’importée
+jn-undo = Annuler
+jn-redo = Rétablir
+jn-reset = Recommencer
+
+## Les notes à côté du plan (src/junction/notes.rs)
+jn-across-caption = La distance à traverser sur chaque rue, et le nombre de voies entrantes
+jn-across-street = Rue
+jn-across-to-cross = À traverser
+jn-across-lanes-in = Voies entrantes
+jn-across-none = aucun
+jn-conflicts-caption = Points où se rencontrent les trajectoires des virages permis
+jn-conflicts-kind = Type
+jn-conflicts-points = Points
+jn-conflicts-crossing = Croisement
+jn-conflicts-merging = Convergence
+jn-conflicts-splitting = Divergence
+jn-conflicts-all = Total
+jn-conflicts-signal = Les feux alternent les mouvements : des trajectoires qui se croisent ne se rencontrent pas en même temps.
+jn-conflicts-roundabout = Dans un carrefour giratoire, la circulation ne fait que converger et diverger; elle ne se croise jamais.
+jn-check-passes = { " " }: réussite
+jn-check-fails = { " " }: échec
+# Le détail d’une vérification avec la longueur dont il parle : « Plus longue traversée d’un seul coup : 11,4 m ».
+jn-check-length = { $detail } : { $length }
+jn-measure-in-use = Utilisée sur { $arms }
+jn-measure-on-street = Se règle sur une rue
+jn-measure-street-editor = Éditeur de rue
+jn-measure-not-modelled = Non modélisée
+jn-col-step = Étape
+jn-col-what-changed = Ce qui a changé
+jn-today = Jonction aujourd’hui
+
+## Le plan (src/junction/plan.rs, plan_svg.rs)
+jn-plan-editor = Éditeur du plan de la jonction
+jn-plan-label = Plan de la jonction, nord en haut. { $arms }.
+jn-plan-label-roundabout = Plan de la jonction, nord en haut. { $arms }. Carrefour giratoire.
+jn-svg-scale = Échelle
+jn-svg-bus-only = Autobus seulement
+# Sous le nom d’une rue : sa direction et sa largeur, « N · chaussée de 20,0 m ».
+jn-svg-road = { $compass } · chaussée de { $width }
+jn-svg-road-shifted = { $compass } · chaussée de { $width } · décalée de { $offset }
+jn-grip-turn = Faire pivoter { $arm }
+jn-grip-corner = Modifier le rayon du coin
+jn-grip-crossing = Déplacer le passage pour piétons

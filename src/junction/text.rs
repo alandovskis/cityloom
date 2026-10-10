@@ -1,47 +1,79 @@
 //! What the page says in words after the junction changes: the status line, and
 //! what a screen reader is told about an edit or a selection.
+//!
+//! A view words the status with `arms_text` and `fit_text`, which ask with the tracked `tr` and
+//! `say`, so it is drawn again when the language is switched; a command uses the `_now` forms.
 
 use crate::junction::model::control_key;
 use crate::junction::read_model::JView;
 use crate::shared::i18n::{Args, I18n};
-use crate::shared::said::{Arg, Said, say_now};
+use crate::shared::said::{Arg, Said, say, say_now};
 use crate::shared::units::Units;
 
-/// "5 streets".
-pub fn arms_text(v: &JView, i18n: &I18n) -> String {
-    i18n.tr_now("jn-arms", &Args::new().num("n", v.arms.len() as i64))
+/// How a message is asked for: tracked for a view, or as it is now for a command.
+#[derive(Clone, Copy)]
+struct Words<'a> {
+    i18n: &'a I18n,
+    watched: bool,
 }
 
-/// The status line: what needs attention, or that every check passes.
-pub fn fit_text(v: &JView, i18n: &I18n) -> String {
-    let bad: Vec<&Said> = v.checks.iter().filter(|c| !c.ok).map(|c| &c.label).collect();
-    let units = Units::Metres; // the checks' labels speak of no length
-    match bad.len() {
-        0 => i18n.tr_now(
-            "jn-fit-ok",
-            &Args::new().str("arms", arms_text(v, i18n)).str("control", i18n.tr_now(control_key(v.control_index), &Args::new()).to_lowercase()),
-        ),
-        n => {
-            let list = bad
-                .into_iter()
-                .cloned()
-                .reduce(|head, tail| Said::new("jn-list-comma").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail))))
-                .map(|l| say_now(i18n, units, &l).to_lowercase())
-                .unwrap_or_default();
-            i18n.tr_now("jn-fit-bad", &Args::new().num("n", n as i64).str("checks", list))
+impl Words<'_> {
+    fn tr(self, key: &str, args: &Args) -> String {
+        if self.watched { self.i18n.tr(key, args) } else { self.i18n.tr_now(key, args) }
+    }
+
+    fn say(self, said: &Said) -> String {
+        // The words of the status line speak of no length.
+        if self.watched { say(self.i18n, Units::Metres, said) } else { say_now(self.i18n, Units::Metres, said) }
+    }
+
+    fn arms(self, v: &JView) -> String {
+        self.tr("jn-arms", &Args::new().num("n", v.arms.len() as i64))
+    }
+
+    fn fit(self, v: &JView) -> String {
+        let bad: Vec<&Said> = v.checks.iter().filter(|c| !c.ok).map(|c| &c.label).collect();
+        match bad.len() {
+            0 => {
+                self.tr("jn-fit-ok", &Args::new().str("arms", self.arms(v)).str("control", self.tr(control_key(v.control_index), &Args::new()).to_lowercase()))
+            }
+            n => {
+                let list = bad
+                    .into_iter()
+                    .cloned()
+                    .reduce(|head, tail| Said::new("jn-list-comma").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail))))
+                    .map(|l| self.say(&l).to_lowercase())
+                    .unwrap_or_default();
+                self.tr("jn-fit-bad", &Args::new().num("n", n as i64).str("checks", list))
+            }
         }
     }
 }
 
+/// "5 streets", for a view: drawn again when the language changes.
+pub fn arms_text(v: &JView, i18n: &I18n) -> String {
+    Words { i18n, watched: true }.arms(v)
+}
+
+/// The status line, for a view: what needs attention, or that every check passes.
+pub fn fit_text(v: &JView, i18n: &I18n) -> String {
+    Words { i18n, watched: true }.fit(v)
+}
+
+/// The status line, for a command: nothing is watched.
+pub fn fit_text_now(v: &JView, i18n: &I18n) -> String {
+    Words { i18n, watched: false }.fit(v)
+}
+
 /// What the last edit was, and where the junction stands.
 pub fn edit_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
-    v.revisions.last().map(|r| i18n.tr_now("jn-edit", &Args::new().str("edit", say_now(i18n, units, &r.label)).str("fit", fit_text(v, i18n))))
+    v.revisions.last().map(|r| i18n.tr_now("jn-edit", &Args::new().str("edit", say_now(i18n, units, &r.label)).str("fit", fit_text_now(v, i18n))))
 }
 
 /// A sample junction was loaded.
 #[cfg(test)]
 pub fn sample_text(v: &JView, i18n: &I18n) -> String {
-    format!("{}. {}", say_now(i18n, Units::Metres, &v.name), fit_text(v, i18n))
+    format!("{}. {}", say_now(i18n, Units::Metres, &v.name), fit_text_now(v, i18n))
 }
 
 /// What is selected, for a screen reader; nothing when nothing is.
@@ -115,6 +147,8 @@ mod tests {
         let (en, fr) = (en(), fr());
         let cases: [(&str, &'static str, [&str; 3], [&str; 3]); 4] = [
             ("jn-arms", "n", ["0 streets", "1 street", "2 streets"], ["0 rue", "1 rue", "2 rues"]),
+            // The status line says "jn-fit-ok" when no check fails, so it never asks for this one with 0;
+            // the 0 case only pins how each language's plural rule reads it.
             (
                 "jn-fit-bad",
                 "n",

@@ -1,5 +1,5 @@
 # What the junction says: its model (src/junction/model.rs, read_model.rs), its announcements
-# (src/junction/text.rs) and the turns table (src/junction/turns.rs).
+# (src/junction/text.rs), the turns table (src/junction/turns.rs) and the page's views.
 
 ## How a junction is run
 jn-control-uncontrolled = No control
@@ -169,3 +169,58 @@ jn-turn-blocked = { $turn }: not possible. { $why }
 jn-turn-banned = { $turn }, not allowed
 jn-turn-unserved = { $turn }, allowed, no lane serves it
 jn-turn-allowed = { $turn }, allowed
+
+## The page around the plan: heading, window title, title block and history (src/junction/page.rs)
+jn-title = { $name } · CityLoom
+jn-city-map = City map
+jn-plan = Junction plan
+jn-block-junction = Junction
+jn-block-streets = Streets
+jn-block-changes = Changes made
+jn-block-osm = OpenStreetMap
+jn-block-data = Data
+jn-block-edited = Edited
+jn-block-imported = As imported
+jn-undo = Undo
+jn-redo = Redo
+jn-reset = Start over
+
+## The notes beside the plan (src/junction/notes.rs)
+jn-across-caption = How far it is to cross each street, and how many lanes come in
+jn-across-street = Street
+jn-across-to-cross = To cross
+jn-across-lanes-in = Lanes in
+jn-across-none = none
+jn-conflicts-caption = Points where the paths of allowed turns meet
+jn-conflicts-kind = Kind
+jn-conflicts-points = Points
+jn-conflicts-crossing = Crossing
+jn-conflicts-merging = Merging
+jn-conflicts-splitting = Splitting
+jn-conflicts-all = All
+jn-conflicts-signal = A signal takes turns, so paths that cross do not meet at the same time.
+jn-conflicts-roundabout = Traffic in a roundabout only merges and splits; it never crosses.
+jn-check-passes = : passes
+jn-check-fails = : fails
+# A check's detail with the length it speaks of: "Longest crossing in one go: 11.4 m".
+jn-check-length = { $detail }: { $length }
+jn-measure-in-use = In use on { $arms }
+jn-measure-on-street = Set on a street
+jn-measure-street-editor = Street editor
+jn-measure-not-modelled = Not modelled
+jn-col-step = Step
+jn-col-what-changed = What changed
+jn-today = Junction today
+
+## The plan (src/junction/plan.rs, plan_svg.rs)
+jn-plan-editor = Junction plan editor
+jn-plan-label = Plan of the junction, north up. { $arms }.
+jn-plan-label-roundabout = Plan of the junction, north up. { $arms }. Roundabout.
+jn-svg-scale = Scale
+jn-svg-bus-only = Bus only
+# Under a street's name: the way it leaves and its width, "N · 20.0 m road".
+jn-svg-road = { $compass } · { $width } road
+jn-svg-road-shifted = { $compass } · { $width } road · shifted { $offset }
+jn-grip-turn = Turn { $arm }
+jn-grip-corner = Change the corner radius
+jn-grip-crossing = Move the crossing
