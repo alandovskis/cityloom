@@ -1183,6 +1183,30 @@ mod tests {
     }
 
     #[test]
+    fn a_saved_crossing_without_the_continuous_field_loads_and_one_with_it_keeps_it() {
+        let mut city = City::new();
+        let mut j = city.junction_editor(node_uid(1), 0).unwrap();
+        let arm = j.current().arms.iter().find(|a| a.crossing.is_some()).expect("a street with a crossing").uid;
+        assert!(j.set_continuous(arm, true));
+        assert!(city.keep_junction(node_uid(1), j.snapshot()));
+        let saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        let continuous: Vec<bool> = saved["junctions"]["2"]["arms"].as_array().unwrap().iter().filter_map(|a| a["crossing"]["continuous"].as_bool()).collect();
+        assert!(continuous.contains(&true), "it is saved: {continuous:?}");
+        let back = City::load(&saved.to_string());
+        assert!(back.junctions[&node_uid(1)].arms.iter().any(|a| a.crossing.is_some_and(|c| c.continuous)));
+
+        let mut older = saved.clone();
+        for a in older["junctions"]["2"]["arms"].as_array_mut().unwrap() {
+            if let Some(c) = a["crossing"].as_object_mut() {
+                c.remove("continuous");
+            }
+        }
+        let back = City::load(&older.to_string());
+        assert!(back.junctions.contains_key(&node_uid(1)), "the save is not discarded");
+        assert!(back.junctions[&node_uid(1)].arms.iter().all(|a| !a.crossing.is_some_and(|c| c.continuous)));
+    }
+
+    #[test]
     fn a_saved_junction_from_the_earlier_version_with_a_label_still_loads() {
         let mut city = City::new();
         let mut j = city.junction_editor(node_uid(1), 0).unwrap();

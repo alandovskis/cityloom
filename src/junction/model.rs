@@ -143,6 +143,9 @@ pub struct Crossing {
     pub setback_mm: i32,
     pub width_mm: i32,
     pub island: bool,
+    /// The sidewalk runs on across the mouth of the street at its own level, in place of a zebra.
+    #[serde(default)]
+    pub continuous: bool,
 }
 
 /// An entering lane and the streets it can go to, by their uids.
@@ -314,7 +317,7 @@ impl Arm {
             offset_mm,
             corner_mm: DEFAULT_CORNER_MM,
             lanes: Vec::new(),
-            crossing: Some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false }),
+            crossing: Some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false, continuous: false }),
             bulb: [false, false],
             banned: Vec::new(),
             bus_lane: false,
@@ -928,7 +931,7 @@ impl Junction {
             uid,
             |a| about("jn-rev-crossing", a).with("change", change(on)),
             |a| {
-                a.crossing = on.then_some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false });
+                a.crossing = on.then_some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false, continuous: false });
                 true
             },
         )
@@ -956,6 +959,11 @@ impl Junction {
             return self.refuse(Refusal::IslandRoadTooNarrow);
         }
         self.arm_edit(uid, |a| about("jn-rev-island", a).with("change", change(on)), |a| a.crossing.as_mut().map(|c| c.island = on).is_some())
+    }
+
+    /// Makes the street's crossing a continuous sidewalk, or a plain one again.
+    pub fn set_continuous(&mut self, uid: u32, on: bool) -> bool {
+        self.arm_edit(uid, |a| about("jn-rev-continuous", a).with("change", change(on)), |a| a.crossing.as_mut().map(|c| c.continuous = on).is_some())
     }
 
     /// Side 0 is the arm's left curb, 1 its right.
@@ -1930,6 +1938,48 @@ mod tests {
     }
 
     #[test]
+    fn a_crossing_is_made_a_continuous_sidewalk_and_flat_again_and_undo_goes_back() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        let on = |j: &Junction| j.arm(n).unwrap().crossing.unwrap().continuous;
+        assert!(!on(&j));
+        assert!(j.set_continuous(n, true));
+        assert!(on(&j));
+        assert!(!j.set_continuous(n, true), "nothing changes");
+        assert!(j.undo());
+        assert!(!on(&j));
+        assert!(j.redo());
+        assert!(j.set_continuous(n, false));
+        assert!(!on(&j));
+    }
+
+    #[test]
+    fn a_street_with_no_crossing_cannot_be_continuous_and_removing_the_crossing_takes_it_away() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        assert!(j.set_crossing(n, false));
+        assert!(!j.set_continuous(n, true));
+        assert!(j.refusal().is_some());
+        assert!(j.undo());
+        assert!(j.set_continuous(n, true));
+        assert!(j.set_crossing(n, false));
+        assert!(j.set_crossing(n, true));
+        assert!(!j.arm(n).unwrap().crossing.unwrap().continuous, "a new crossing is a plain one");
+        assert!(j.undo() && j.undo());
+        assert!(j.arm(n).unwrap().crossing.unwrap().continuous, "undo brings the continuous crossing back");
+    }
+
+    #[test]
+    fn a_continuous_sidewalk_is_said_in_both_languages() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        assert!(j.set_continuous(n, true));
+        let said = j.revisions().last().cloned().unwrap();
+        assert_eq!(en(&said), "Sample Avenue 2 (north) continuous sidewalk: add");
+        assert_eq!(fr(&said), "Sample Avenue 2 (nord), trottoir continu\u{a0}: ajout");
+    }
+
+    #[test]
     fn every_refusal_has_a_message_in_both_languages() {
         for locale in Locale::ALL {
             let i18n = crate::i18n_for(locale);
@@ -2099,6 +2149,7 @@ mod tests {
             ("control", Box::new(|j| j.set_control(99))),
             ("bus", Box::new(move |j| j.set_bus(Some((n, e))))),
             ("cycle", Box::new(|j| j.set_cycle(Some(2_000)))),
+            ("continuous without a crossing", Box::new(move |j| j.set_crossing(n, false) && j.set_continuous(n, true))),
             ("raised on a roundabout", Box::new(|j| j.set_control(ROUNDABOUT) && j.set_raised(true))),
             ("cycle width", Box::new(|j| j.set_cycle(Some(99_000)))),
             ("ring", Box::new(|j| j.set_ring(-500))),

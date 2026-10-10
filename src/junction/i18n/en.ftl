@@ -78,6 +78,7 @@ jn-rev-crossing = { $arm } crossing: { $change }
 jn-rev-setback = { $arm } crossing set back { $length }
 jn-rev-crossing-width = { $arm } crossing { $length } wide
 jn-rev-island = { $arm } refuge island: { $change }
+jn-rev-continuous = { $arm } continuous sidewalk: { $change }
 jn-rev-bulb-left = { $arm } left bulb-out: { $change }
 jn-rev-bulb-right = { $arm } right bulb-out: { $change }
 jn-rev-lane-to = { $arm } lane { $lane }: to { $dest }
