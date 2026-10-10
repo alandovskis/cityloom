@@ -708,6 +708,8 @@ svg pattern circle {
   cursor: default;
 }
 #drawing .core-bike {
+  stroke: var(--ink-2);
+  stroke-width: 0.8;
   stroke-dasharray: 5 3;
 }
 #drawing .wedge.bare {

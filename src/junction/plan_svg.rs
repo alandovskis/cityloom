@@ -302,7 +302,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
     let zebra = (600.0 * f.scale).max(4.0);
     let zebra = (zebra * 10.0).round() / 10.0;
 
-    let defs: String = v
+    let mut defs: String = v
         .arms
         .iter()
         .filter(|a| a.crossing.is_some())
@@ -630,6 +630,13 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         p.scale_bar(20.0, f.height - 30.0)
     );
 
+    // A bike lane's stub runs straight in from the mouth, and where two arms' curbs do not line up the core's edge
+    // between them is not straight along it, so the stubs are clipped to the core.
+    if !l.corebike.is_empty() {
+        write!(defs, "<clipPath id=\"core-clip\"><path d=\"{}\"/></clipPath>", p.path_d(&v.core)).unwrap();
+        l.corebike = format!("<g clip-path=\"url(#core-clip)\">{}</g>", l.corebike);
+    }
+
     let markup = format!(
         "<defs>{defs}</defs><g class=\"plan\">{}{}{}{}{}{}{}{}{}{}{}{}{}{}</g>{furniture}",
         l.wedge, l.arm, l.lane, l.measure, l.road, l.corebike, l.bulb, l.curb, l.cross, l.mark, l.sel, l.mv, l.label, l.grip
@@ -669,6 +676,9 @@ mod tests {
         assert_eq!(count(&s.markup, "class=\"core-bike k-bike\""), 8);
         let none = svg(&junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]));
         assert_eq!(count(&none.markup, "core-bike"), 0);
+        // the strips never leave the core, whose edge between two straight-through arms need not follow their curbs
+        assert_eq!(count(&s.markup, "<clipPath id=\"core-clip\">"), 1);
+        assert_eq!(count(&s.markup, "clip-path=\"url(#core-clip)\""), 1);
     }
 
     #[test]

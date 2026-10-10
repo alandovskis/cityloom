@@ -656,10 +656,14 @@ impl Junction {
                 }
                 pieces.push(PieceView { kind: p.kind, material: p.material, direction: p.direction, poly: poly(&strip(l.bearing, x0, x1, t0, len)) });
             }
+            // The outermost lanes of the carriageway that are not parked on: a bike lane beside parking arrives too.
+            let moving = |p: &Piece| is_roadway(p.kind) && !matches!(KINDS[p.kind].id, "parking" | "loading");
+            let first_out = l.prof.pieces.iter().position(moving);
+            let last_out = l.prof.pieces.iter().rposition(moving);
             let mut core_bike = Vec::new();
             if lay.ring.is_none() {
                 for (pi, p) in l.prof.pieces.iter().enumerate() {
-                    if KINDS[p.kind].id == "bike" && (Some(pi) == first_road || Some(pi) == last_road) {
+                    if KINDS[p.kind].id == "bike" && (Some(pi) == first_out || Some(pi) == last_out) {
                         let (x0, x1) = (l.lat(off, p.x_mm), l.lat(off, p.x_mm + p.width_mm));
                         core_bike.push(poly(&strip(l.bearing, x0, x1, (l.strip0 - CORE_BIKE_MM).max(0.0), l.strip0)));
                     }
@@ -1358,6 +1362,22 @@ mod tests {
     fn a_road_of_one_bike_lane_has_one_strip() {
         let v = junction_of(&[("sidewalk", 2000), ("bike", 2500), ("sidewalk", 2000)]).view();
         assert!(v.arms.iter().all(|a| a.core_bike.len() == 1), "the first and the last roadway piece are the same piece");
+    }
+
+    #[test]
+    fn a_bike_lane_outside_parking_is_continued() {
+        let v = junction_of(&[
+            ("sidewalk", 2000),
+            ("parking", 2000),
+            ("bike", 1500),
+            ("travel", 3200),
+            ("travel", 3200),
+            ("bike", 1500),
+            ("parking", 2000),
+            ("sidewalk", 2000),
+        ])
+        .view();
+        assert!(v.arms.iter().all(|a| a.core_bike.len() == 2), "the parking lanes give way to the road at the mouth, the bike lanes arrive");
     }
 
     #[test]
