@@ -235,7 +235,7 @@ pub fn Revisions(vm: Rc<JunctionVm>) -> impl IntoView {
             <tbody>
                 <tr class=if v.revisions.is_empty() { "base now" } else { "base" }>
                     <td>"—"</td>
-                    <td>{watch.tr("jn-today")}</td>
+                    <td>{watch.tr("city-junction-today")}</td>
                 </tr>
                 {rows}
             </tbody>

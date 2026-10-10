@@ -210,7 +210,6 @@ jn-measure-street-editor = Éditeur de rue
 jn-measure-not-modelled = Non modélisée
 jn-col-step = Étape
 jn-col-what-changed = Ce qui a changé
-jn-today = Jonction aujourd’hui
 
 ## Le plan (src/junction/plan.rs, plan_svg.rs)
 jn-plan-editor = Éditeur du plan de la jonction

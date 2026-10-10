@@ -127,7 +127,6 @@ map-reset-done = The city is back as it was first laid out.
 ## The home page's markup (web/index.html)
 map-home-title = CityLoom: redesign the streets of your city
 map-home-description = Pick any street or junction of the city, rearrange it, and see at once what still works.
-map-home-brand = CityLoom, home
 map-home-heading = Redesign the streets of your city.
 map-home-lead = Find a place, pick a street or junction on its map, and rearrange it. You see straight away what still works.
 map-home-open-map = Open the city map

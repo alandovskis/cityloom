@@ -210,7 +210,6 @@ jn-measure-street-editor = Street editor
 jn-measure-not-modelled = Not modelled
 jn-col-step = Step
 jn-col-what-changed = What changed
-jn-today = Junction today
 
 ## The plan (src/junction/plan.rs, plan_svg.rs)
 jn-plan-editor = Junction plan editor

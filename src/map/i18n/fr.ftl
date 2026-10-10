@@ -127,7 +127,6 @@ map-reset-done = La ville est revenue telle que tracée au départ.
 ## Le balisage de la page d’accueil (web/index.html)
 map-home-title = CityLoom : réaménagez les rues de votre ville
 map-home-description = Choisissez n’importe quelle rue ou jonction de la ville, réorganisez-la et voyez aussitôt ce qui fonctionne toujours.
-map-home-brand = CityLoom, accueil
 map-home-heading = Réaménagez les rues de votre ville.
 map-home-lead = Trouvez un lieu, choisissez une rue ou une jonction sur sa carte et réorganisez-la. Vous voyez tout de suite ce qui fonctionne toujours.
 map-home-open-map = Ouvrir la carte de la ville
