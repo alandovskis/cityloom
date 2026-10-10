@@ -133,3 +133,72 @@ jobs:
           case "$RESULTS" in
             *failure*|*cancelled*|*skipped*) exit 1 ;;
           esac
+
+  # Only a green main goes live. Needs the RAILWAY_TOKEN secret (a project token for the cityloom project's
+  # production environment) in the `production` environment.
+  deploy:
+    name: Deploy to Railway
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [ci]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    environment: production
+    # Deploys run one at a time, in order, and are never cancelled half way.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      RAILWAY_CLI_VERSION: 5.64.2
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: ${{ env.JUST_VERSION }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # The same wasm-bindgen-cli cache as the browser tests, plus the pinned Railway CLI.
+      - id: wasm-bindgen
+        run: echo "version=$(just --evaluate wasm_bindgen)" >> "$GITHUB_OUTPUT"
+      - id: tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tools
+          key: wasm-bindgen-cli-${{ runner.os }}-${{ steps.wasm-bindgen.outputs.version }}
+      - if: steps.tools.outputs.cache-hit != 'true'
+        run: cargo install wasm-bindgen-cli --version ${{ steps.wasm-bindgen.outputs.version }} --root .tools
+      - run: npm ci
+
+      # The tiles are made from Geofabrik's Quebec extract (1.2 GB) and take a long time, so keep them until the
+      # scripts that make them change. Run the workflow again after clearing the cache to take a newer extract.
+      - id: tiles
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            web/data/metro
+            web/data/basemap/montreal.pmtiles
+          key: tiles-${{ hashFiles('scripts/prepare.py', 'scripts/metro_tiles.py', 'scripts/basemap_tiles.py') }}
+      - if: steps.tiles.outputs.cache-hit != 'true'
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - if: steps.tiles.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends osmium-tool
+          just prepare
+
+      - run: npm install --global @railway/cli@${{ env.RAILWAY_CLI_VERSION }}
+      - run: just deploy

@@ -14,7 +14,7 @@ cargo test shell::vm # one module; a full test name also works
 just build           # release wasm of both modules + wasm-bindgen into web/pkg (gitignored); scripts/build.sh does the work
 just prepare         # downloads Geofabrik's Quebec extract into data/ if it is not there (about 1.2 GB; `--refresh` takes a newer one), then cuts the metro area's roads into web/data/metro (needs osmium-tool) and builds the map page's basemap, web/data/basemap/montreal.pmtiles, with Planetiler (needs Java 21+); both gitignored. Nothing needs the road tiles: without them every place, the default one too, comes from Overpass. Without the basemap the map page says so and shows no map
 just e2e             # builds, then runs the Playwright tests in e2e/; `just e2e tests/street.spec.ts` for one spec
-just deploy          # build, then upload the site to the Railway project cityloom (scripts/deploy.sh; needs the Railway CLI logged in and `just prepare`'s tiles; it serves web/ with e2e/serve.mjs, per deploy/Dockerfile)
+just deploy          # build, then upload the site to the Railway project cityloom (scripts/deploy.sh; needs the Railway CLI logged in and `just prepare`'s tiles; it serves web/ with e2e/serve.mjs, per deploy/Dockerfile; CI's `deploy` job runs it on every push to main once the other jobs pass, making the tiles itself (cached) and using the `RAILWAY_TOKEN` secret of the `production` environment)
 just check           # everything
 just format          # rustfmt (rustfmt.toml) + Prettier; `just format-check` only checks, as CI does
 just serve           # http://127.0.0.1:8137/ (runs `node e2e/serve.mjs`: the basemap's PMTiles need range requests; E2E_PORT moves the port, for Playwright too)
