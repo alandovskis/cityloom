@@ -403,7 +403,7 @@ fn every_data_i18n_key_in_map_html_exists_in_both_languages() {
     use crate::shell::view::i18n_keys;
     let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
     let keys = i18n_keys(MAP_HTML);
-    assert!(keys.len() > 35, "the page should have been converted: {}", keys.len());
+    assert!(keys.len() > 32, "the page should have been converted: {}", keys.len());
     for (key, _) in keys {
         en.tr_now(&key, &Args::new());
         fr.tr_now(&key, &Args::new());
@@ -445,7 +445,7 @@ fn every_data_i18n_key_in_index_html_exists_in_both_languages() {
     use crate::shell::view::i18n_keys;
     let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
     let keys = i18n_keys(INDEX_HTML);
-    assert!(keys.len() >= 19, "the page should have been converted: {}", keys.len());
+    assert!(keys.len() >= 17, "the page should have been converted: {}", keys.len());
     for (key, _) in keys {
         en.tr_now(&key, &Args::new());
         fr.tr_now(&key, &Args::new());

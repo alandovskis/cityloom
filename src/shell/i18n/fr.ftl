@@ -33,6 +33,7 @@ ui-theme-dark = Sombre
 ui-language = Langue
 ui-how = Comment ça marche
 ui-print = Imprimer cette fiche
+ui-help = Aide
 ui-keyboard = Clavier
 ui-credits = Crédits
 ui-notes = Notes

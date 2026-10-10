@@ -10,6 +10,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::units::Units;
+use crate::shell::popover::PopoverViewModel;
 use crate::shell::vm::{RegionOption, ShellVm, Target, Theme};
 
 fn listen<E: JsCast + 'static>(target: &EventTarget, event: &str, mut f: impl FnMut(E) + 'static) {
@@ -204,39 +205,60 @@ fn bind_theme(vm: &Rc<ShellVm>, dark: Option<MediaQueryList>) {
     });
 }
 
+/// The settings and the help (the keyboard shortcuts) are two popovers that work alike.
 fn bind_menu(vm: &Rc<ShellVm>) {
-    let (Some(btn), Some(menu)) = (by_id("account-btn"), by_id("account-menu")) else { return };
+    let account = bind_popover(&vm.settings(), "account-btn", "account-menu", "account-btn-label", "account-heading");
+    let help = bind_popover(&vm.help(), "help-btn", "help-menu", "help-btn-label", "help-heading");
+    let popovers: Vec<(Element, Rc<PopoverViewModel>)> =
+        [(account, vm.settings()), (help, vm.help())].into_iter().filter_map(|(b, p)| b.map(|b| (b, p))).collect();
     let v = vm.clone();
-    listen(&btn, "click", move |_: MouseEvent| v.toggle_menu());
+    listen(&document(), "keydown", move |e: KeyboardEvent| {
+        if e.key() != "Escape" {
+            return;
+        }
+        let open = popovers.iter().find(|(_, p)| p.is_open_now()).map(|(b, _)| b.clone());
+        if v.escape() {
+            e.stop_propagation();
+            if let Some(b) = open.and_then(|b| b.dyn_into::<HtmlElement>().ok()) {
+                let _ = b.focus();
+            }
+        }
+    });
+}
+
+/// Binds a button and the popover it opens to `vm`; none of this if the page has not both. The words of the
+/// button and of the heading come from `vm`. Gives back the button.
+fn bind_popover(vm: &Rc<PopoverViewModel>, button: &str, popover: &str, label: &str, heading: &str) -> Option<Element> {
+    let (btn, menu) = (by_id(button)?, by_id(popover)?);
+    let v = vm.clone();
+    listen(&btn, "click", move |_: MouseEvent| v.toggle());
     let (v, m, b) = (vm.clone(), menu.clone(), btn.clone());
     listen(&document(), "pointerdown", move |e: Event| {
         let inside = |el: &Element| e.target().and_then(|t| t.dyn_into::<leptos::web_sys::Node>().ok()).is_some_and(|n| el.contains(Some(&n)));
-        if v.menu_open() && !inside(&m) && !inside(&b) {
-            v.close_menu();
-        }
-    });
-    let (v, b) = (vm.clone(), btn.clone());
-    listen(&document(), "keydown", move |e: KeyboardEvent| {
-        if e.key() == "Escape" && v.escape() {
-            e.stop_propagation();
-            if let Ok(b) = b.clone().dyn_into::<HtmlElement>() {
-                let _ = b.focus();
-            }
+        if v.is_open_now() && !inside(&m) && !inside(&b) {
+            v.close();
         }
     });
     let (v, m, b) = (vm.clone(), menu.clone(), btn.clone());
     listen(&menu, "focusout", move |e: leptos::web_sys::FocusEvent| {
         let Some(to) = e.related_target().and_then(|t| t.dyn_into::<leptos::web_sys::Node>().ok()) else { return };
         if !m.contains(Some(&to)) && !b.contains(Some(&to)) {
-            v.close_menu();
+            v.close();
         }
     });
-    let v = vm.clone();
+    let (v, b) = (vm.clone(), btn.clone());
     Effect::new(move |_| {
-        let open = v.menu_open();
+        let open = v.open();
         menu.unchecked_ref::<HtmlElement>().set_hidden(!open);
-        let _ = btn.set_attribute("aria-expanded", &open.to_string());
+        let _ = b.set_attribute("aria-expanded", &open.to_string());
     });
+    for (id, words) in [(label, PopoverViewModel::label as fn(&PopoverViewModel) -> String), (heading, PopoverViewModel::heading)] {
+        if let Some(el) = by_id(id) {
+            let v = vm.clone();
+            Effect::new(move |_| el.set_text_content(Some(&words(&v))));
+        }
+    }
+    Some(btn)
 }
 
 fn bind_sidebars(vm: &Rc<ShellVm>) {

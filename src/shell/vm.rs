@@ -11,6 +11,7 @@ use crate::shared::catalogue::{REGIONS, Side};
 use crate::shared::i18n::{Args, I18n, LANG_KEY, Locale};
 use crate::shared::ports::Ports;
 use crate::shared::units::Units;
+use crate::shell::popover::PopoverViewModel;
 
 pub const REGION_KEY: &str = crate::city::store::REGION_KEY;
 pub const THEME_KEY: &str = "cityloom-theme";
@@ -97,7 +98,8 @@ pub struct ShellVm {
     theme: ArcRwSignal<Option<Theme>>,
     system_dark: ArcRwSignal<bool>,
     region: ArcRwSignal<String>,
-    menu_open: ArcRwSignal<bool>,
+    settings: Rc<PopoverViewModel>,
+    help: Rc<PopoverViewModel>,
     inspector_open: ArcRwSignal<bool>,
     notes_open: ArcRwSignal<bool>,
     tab: ArcRwSignal<String>,
@@ -145,6 +147,8 @@ impl ShellVm {
             _ => notes_default_open,
         };
         let vm = ShellVm {
+            settings: PopoverViewModel::new(i18n.clone(), "ui-settings", "ui-settings"),
+            help: PopoverViewModel::new(i18n.clone(), "ui-help", "ui-keyboard"),
             i18n,
             target,
             details_word,
@@ -153,7 +157,6 @@ impl ShellVm {
             theme: ArcRwSignal::new(theme),
             system_dark: ArcRwSignal::new(system_dark),
             region: ArcRwSignal::new(String::new()),
-            menu_open: ArcRwSignal::new(false),
             inspector_open: ArcRwSignal::new(inspector_open),
             notes_open: ArcRwSignal::new(notes_open),
             tab: ArcRwSignal::new(tab),
@@ -260,22 +263,47 @@ impl ShellVm {
 
     // ---- the account menu ----
 
+    /// The settings popover: its button, heading and whether it is open.
+    pub fn settings(&self) -> Rc<PopoverViewModel> {
+        self.settings.clone()
+    }
+
+    /// The help popover (the keyboard shortcuts); never open together with the settings.
+    pub fn help(&self) -> Rc<PopoverViewModel> {
+        self.help.clone()
+    }
+
     pub fn menu_open(&self) -> bool {
-        self.menu_open.get()
+        self.settings.open()
     }
 
     pub fn toggle_menu(&self) {
-        self.menu_open.update(|o| *o = !*o);
+        self.help.close();
+        self.settings.toggle();
     }
 
     pub fn close_menu(&self) {
-        self.menu_open.set(false);
+        self.settings.close();
     }
 
-    /// Escape: closes the menu if it is open, and says whether it did.
+    pub fn help_open(&self) -> bool {
+        self.help.open()
+    }
+
+    pub fn toggle_help(&self) {
+        self.settings.close();
+        self.help.toggle();
+    }
+
+    pub fn close_help(&self) {
+        self.help.close();
+    }
+
+    /// Escape: closes the settings or the help if one is open, and says whether it did.
     pub fn escape(&self) -> bool {
-        let was = self.menu_open.get_untracked();
-        self.menu_open.set(false);
+        let was = self.settings.is_open_now() || self.help.is_open_now();
+        self.settings.close();
+        self.help.close();
         was
     }
 
@@ -576,6 +604,24 @@ mod tests {
         r.vm.toggle_menu();
         r.vm.close_menu();
         assert!(!r.vm.menu_open());
+    }
+
+    #[test]
+    fn the_help_opens_and_closes_beside_the_menu_never_with_it_and_escape_closes_either() {
+        let r = rig();
+        assert!(!r.vm.help_open());
+        r.vm.toggle_help();
+        assert!(r.vm.help_open());
+        r.vm.toggle_menu();
+        assert!((r.vm.menu_open(), r.vm.help_open()) == (true, false), "opening the menu closes the help");
+        r.vm.toggle_help();
+        assert!((r.vm.menu_open(), r.vm.help_open()) == (false, true), "and the other way round");
+        assert!(r.vm.escape());
+        assert!(!r.vm.help_open());
+        assert!(!r.vm.escape());
+        r.vm.toggle_help();
+        r.vm.close_help();
+        assert!(!r.vm.help_open());
     }
 
     #[test]

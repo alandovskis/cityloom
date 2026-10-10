@@ -52,6 +52,28 @@ for (const p of PAGES) {
       await expect(menu).toBeHidden();
     });
 
+    test("the keyboard shortcuts are under Help, not in the settings menu, and only one of the two is open", async ({
+      page,
+    }) => {
+      const help = page.locator("#help-menu");
+      const button = page.locator("#help-btn");
+      const settings = page.locator("#account-menu");
+      await expect(help).toBeHidden();
+      await expect(settings.locator("#keys")).toHaveCount(0);
+      await button.click();
+      await expect(help).toBeVisible();
+      await expect(help.locator("#keys")).toBeVisible();
+      await expect(button).toHaveAttribute("aria-expanded", "true");
+      await page.locator("#account-btn").click();
+      await expect(settings).toBeVisible();
+      await expect(help).toBeHidden();
+      await button.click();
+      await expect(settings).toBeHidden();
+      await page.keyboard.press("Escape");
+      await expect(help).toBeHidden();
+      await expect(button).toBeFocused();
+    });
+
     test("the units toggle says which is in use", async ({ page }) => {
       await page.locator("#account-btn").click();
       await expect(page.locator('[data-unit="m"]')).toHaveAttribute("aria-pressed", "true");

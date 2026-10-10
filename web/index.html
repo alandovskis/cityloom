@@ -20,9 +20,9 @@
     </nav>
     <div class="top-end">
       <div class="account">
-        <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" data-i18n-aria-label="ui-settings" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
+        <button type="button" id="account-btn" class="btn quiet" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 5h11M2.5 11h11"/><circle cx="6" cy="5" r="1.6"/><circle cx="10.5" cy="11" r="1.6"/></svg><span id="account-btn-label"></span></button>
         <div id="account-menu" class="menu" hidden>
-          <p class="menu-h" data-i18n="ui-settings">Settings</p>
+          <p class="menu-h" id="account-heading"></p>
           <div class="menu-row">
             <span id="units-label" data-i18n="ui-units">Units</span>
             <div class="units" role="group" aria-labelledby="units-label">

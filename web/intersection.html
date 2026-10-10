@@ -24,9 +24,23 @@
       <button type="button" id="inspector-toggle" class="btn quiet" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" data-i18n-title="jn-page-details-toggle-title" title="Show or hide the details ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span data-i18n="jn-page-details">Details</span></button>
       <button type="button" id="notes-toggle" class="btn quiet" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" data-i18n-title="ui-notes-toggle-title" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span data-i18n="ui-notes">Notes</span></button>
       <div class="account">
-        <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" data-i18n-aria-label="ui-settings" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
+        <button type="button" id="help-btn" class="btn quiet" aria-haspopup="true" aria-expanded="false" aria-controls="help-menu"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6"/><path d="M6.2 6.3a1.9 1.9 0 1 1 2.7 1.7c-.6.3-.9.7-.9 1.3M8 11.5v.01"/></svg><span id="help-btn-label"></span></button>
+        <div id="help-menu" class="menu" hidden>
+          <p class="menu-h" id="help-heading"></p>
+          <p id="keys" class="keys">
+            <span><kbd>←</kbd> <kbd>→</kbd> <span data-i18n="jn-page-key-select">select</span></span>
+            <span><kbd>+</kbd> <kbd>−</kbd> <span data-i18n="jn-page-key-change">change</span></span>
+            <span><kbd data-i18n="ui-key-shift">Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> <span data-i18n="jn-page-key-turn">turn a street</span></span>
+            <span><kbd data-i18n="ui-key-delete">Delete</kbd> <span data-i18n="jn-page-key-remove">remove</span></span>
+            <span><kbd>[</kbd> <kbd>]</kbd> <span data-i18n="jn-page-key-details-notes">details, notes</span></span>
+            <span><kbd data-i18n="ui-key-ctrl">Ctrl</kbd> <kbd>Z</kbd> <span data-i18n="jn-page-key-undo">undo</span></span>
+          </p>
+        </div>
+      </div>
+      <div class="account">
+        <button type="button" id="account-btn" class="btn quiet" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 5h11M2.5 11h11"/><circle cx="6" cy="5" r="1.6"/><circle cx="10.5" cy="11" r="1.6"/></svg><span id="account-btn-label"></span></button>
         <div id="account-menu" class="menu" hidden>
-          <p class="menu-h" data-i18n="ui-settings">Settings</p>
+          <p class="menu-h" id="account-heading"></p>
           <div class="menu-row">
             <span id="units-label" data-i18n="ui-units">Units</span>
             <div class="units" role="group" aria-labelledby="units-label">
@@ -53,17 +67,6 @@
             </div>
           </div>
           <p class="menu-act"><button type="button" id="print" class="btn"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2V6h11v5.5h-2M4.5 9.5h7v4h-7z"/></svg><span data-i18n="ui-print">Print this sheet</span></button></p>
-          <div class="menu-keys">
-            <p class="menu-h" data-i18n="ui-keyboard">Keyboard</p>
-            <p id="keys" class="keys">
-              <span><kbd>←</kbd> <kbd>→</kbd> <span data-i18n="jn-page-key-select">select</span></span>
-              <span><kbd>+</kbd> <kbd>−</kbd> <span data-i18n="jn-page-key-change">change</span></span>
-              <span><kbd data-i18n="ui-key-shift">Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> <span data-i18n="jn-page-key-turn">turn a street</span></span>
-              <span><kbd data-i18n="ui-key-delete">Delete</kbd> <span data-i18n="jn-page-key-remove">remove</span></span>
-              <span><kbd>[</kbd> <kbd>]</kbd> <span data-i18n="jn-page-key-details-notes">details, notes</span></span>
-              <span><kbd data-i18n="ui-key-ctrl">Ctrl</kbd> <kbd>Z</kbd> <span data-i18n="jn-page-key-undo">undo</span></span>
-            </p>
-          </div>
           <p class="menu-foot"><a href="credits.html" data-i18n="ui-credits">Credits</a></p>
         </div>
       </div>

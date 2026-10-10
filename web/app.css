@@ -369,26 +369,6 @@ a.btn {
   position: relative;
   margin-left: 6px;
 }
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--fill);
-  cursor: pointer;
-}
-.avatar:hover {
-  background: var(--accent-wash);
-}
-.avatar svg {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 1.8;
-  stroke-linecap: round;
-}
 
 /* The search: the first thing in the bar, and the largest. */
 .search {
@@ -1205,11 +1185,6 @@ a.btn {
   background: var(--warn-wash);
   color: var(--warn);
   box-shadow: var(--shadow-soft), inset 0 0 0 1px var(--warn-line);
-}
-.menu-keys {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--rule);
 }
 .keys {
   display: grid;

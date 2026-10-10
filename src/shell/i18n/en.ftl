@@ -33,6 +33,7 @@ ui-theme-dark = Dark
 ui-language = Language
 ui-how = How this works
 ui-print = Print this sheet
+ui-help = Help
 ui-keyboard = Keyboard
 ui-credits = Credits
 ui-notes = Notes
