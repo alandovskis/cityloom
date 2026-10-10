@@ -58,7 +58,7 @@ map-state-bad = Needs attention
 
 ## How a place is told to a screen reader, sentence by sentence
 map-label-junction = { $name }, { $control }, { $streets }.
-map-label-street = { $kind }, { $ends }, { $width } wide.
+map-label-street = { $street }, { $ends }, { $width } wide.
 map-needs-attention = Needs attention: { $failing }.
 map-changed = Changed.
 map-opens-junction = Opens the junction plan.
@@ -101,7 +101,7 @@ map-changes-none = Nothing changed yet. Open a street or a junction to change it
 map-still-works = Still works
 map-detail-needs-attention = Needs attention: { $failing }
 # A street in the notes: what it is called and where it runs.
-map-note-street = { $kind }, { $ends }
+map-note-street = { $street }, { $ends }
 
 ## The status line
 map-nothing-to-show = No roads to show.

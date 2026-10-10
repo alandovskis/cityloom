@@ -271,7 +271,7 @@ mod tests {
         let v = s.open().view(0);
         assert_eq!((v.name.as_str(), v.edges.len()), ("Testville", 1));
         assert_eq!(
-            crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres, &v.edges[0].kind),
+            crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres, &v.edges[0].called),
             "Only Street"
         );
     }

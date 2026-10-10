@@ -32,7 +32,7 @@ mod tests {
         assert_eq!(say("city-junction-of-many", Args::new().str("a", "A").str("b", "B").num("rest", 1)), "A, B and 1 more");
         assert_eq!(say("city-junction-of-many", Args::new().str("a", "A").str("b", "B").num("rest", 3)), "A, B and 3 more");
         assert_eq!(say("city-edge-between", Args::new().str("from", "X").str("to", "Y")), "X to Y");
-        assert_eq!(say("city-edge-name", Args::new().str("kind", "K").str("ends", "X to Y")), "K · X to Y");
+        assert_eq!(say("city-edge-name", Args::new().str("street", "K").str("ends", "X to Y")), "K · X to Y");
         assert_eq!(say("city-unnamed", Args::new().str("class", "local")), "Unnamed local street");
         let street = || Args::new().str("street", "Main Street");
         assert_eq!(say("city-end-of", street()), "End of Main Street");
@@ -55,7 +55,7 @@ mod tests {
         assert_eq!(between(&end, &connection), "entre le bout de Main et un raccordement sur Main");
         assert_eq!(between(&edge, &end), "entre la limite de la carte et le bout de Main");
         assert_eq!(between(&connection, &edge), "entre un raccordement sur Main et la limite de la carte");
-        let name = i.tr_now("city-edge-name", &Args::new().str("kind", "K").str("ends", between(&end, &edge)));
+        let name = i.tr_now("city-edge-name", &Args::new().str("street", "K").str("ends", between(&end, &edge)));
         assert_eq!(name, "K · entre le bout de Main et la limite de la carte");
     }
 

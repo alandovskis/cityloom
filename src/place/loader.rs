@@ -280,7 +280,7 @@ mod tests {
             crate::shared::said::say_now(
                 &crate::i18n_for(crate::shared::i18n::Locale::En),
                 crate::shared::units::Units::Metres,
-                &store.open().view(0).edges[0].kind
+                &store.open().view(0).edges[0].called
             ),
             "Changed Street"
         );
@@ -336,7 +336,7 @@ mod tests {
                 crate::shared::said::say_now(
                     &crate::i18n_for(crate::shared::i18n::Locale::En),
                     crate::shared::units::Units::Metres,
-                    &store.open().view(0).edges[0].kind
+                    &store.open().view(0).edges[0].called
                 ),
                 "Only Street",
                 "step {step}"

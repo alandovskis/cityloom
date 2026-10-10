@@ -180,7 +180,7 @@ pub fn map_svg(v: &CityView, k: f64, units: Units, i18n: &I18n) -> String {
             ang += 180.0;
         }
         let (x, y) = l.g.at(0.0, tm);
-        let kind = say(i18n, units, &l.e.kind);
+        let kind = say(i18n, units, &l.e.called);
         let name = if l.e.edited { i18n.tr("map-svg-name-changed", &Args::new().str("name", kind)) } else { kind };
         write!(
             s,

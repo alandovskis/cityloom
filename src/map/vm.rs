@@ -120,7 +120,7 @@ pub fn street_label(e: &EdgeView, i18n: &I18n, units: Units) -> String {
         i18n,
         units,
         &Said::new("map-label-street")
-            .with("kind", Arg::Said(Box::new(e.kind.clone())))
+            .with("street", Arg::Said(Box::new(e.called.clone())))
             .with("ends", Arg::Said(Box::new(e.ends.clone())))
             .with("width", Arg::Text(units.length_in(e.row_mm, i18n.locale()))),
     );
@@ -315,7 +315,7 @@ impl MapVm {
             .map(|e| PlaceRow {
                 href: street_href(e.uid),
                 hot: format!("s-{}", e.uid),
-                name: e.kind.clone(),
+                name: e.called.clone(),
                 sub: Said::new("map-street-sub").with("ends", Arg::Said(Box::new(e.ends.clone()))).with("width", Arg::Text(units.length_in(e.row_mm, locale))),
                 tag: Self::tag(e.ok, e.edited),
             })
@@ -445,7 +445,7 @@ impl MapVm {
             all.push((junction_href(n.uid), n.name.clone(), n.ok, n.edited, n.failing.as_slice()));
         }
         for e in &v.edges {
-            let name = Said::new("map-note-street").with("kind", Arg::Said(Box::new(e.kind.clone()))).with("ends", Arg::Said(Box::new(e.ends.clone())));
+            let name = Said::new("map-note-street").with("street", Arg::Said(Box::new(e.called.clone()))).with("ends", Arg::Said(Box::new(e.ends.clone())));
             all.push((street_href(e.uid), name, e.ok, e.edited, e.failing.as_slice()));
         }
         all

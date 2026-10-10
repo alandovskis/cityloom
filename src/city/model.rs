@@ -371,7 +371,7 @@ impl Layout {
     }
 
     /// What a street is called: the name the network gives it, or else its section's title.
-    pub(super) fn edge_kind(&self, edge: usize) -> Said {
+    pub(super) fn edge_title(&self, edge: usize) -> Said {
         let e = &self.edges[edge];
         e.name.as_ref().map_or_else(|| e.section.title(), |name| named_said(name))
     }
@@ -677,7 +677,7 @@ impl City {
                 uid,
                 a: node_uid(e.a),
                 b: node_uid(e.b),
-                kind: self.layout.edge_kind(i),
+                called: self.layout.edge_title(i),
                 ends: self.layout.edge_ends(i),
                 row_mm: row,
                 total_mm: v.total_mm,
@@ -778,7 +778,7 @@ pub struct EdgeView {
     pub a: u32,
     pub b: u32,
     /// What the street is called: its own name, or what sort of street it is.
-    pub kind: Said,
+    pub called: Said,
     /// Where it runs: from one place to another, or through the city.
     pub ends: Said,
     pub row_mm: i32,
@@ -800,7 +800,7 @@ pub struct EdgeView {
 impl EdgeView {
     /// The street's whole name: what it is called and where it runs.
     pub fn name(&self) -> Said {
-        Said::new("city-edge-name").with("kind", Arg::Said(Box::new(self.kind.clone()))).with("ends", Arg::Said(Box::new(self.ends.clone())))
+        Said::new("city-edge-name").with("street", Arg::Said(Box::new(self.called.clone()))).with("ends", Arg::Said(Box::new(self.ends.clone())))
     }
 }
 
@@ -1100,7 +1100,7 @@ mod tests {
     #[test]
     fn names_say_where_a_street_goes() {
         let layout = Layout::sample();
-        assert_eq!(en(&layout.edge_kind(0)), "Sample Avenue 2");
+        assert_eq!(en(&layout.edge_title(0)), "Sample Avenue 2");
         assert_eq!(en(&layout.edge_ends(0)), "the edge of the map to Junction 4");
         assert_eq!(fr(&layout.edge_ends(0)), "entre la limite de la carte et Jonction 4");
         assert_eq!(en(&layout.edge_ends(22)), "through the city");

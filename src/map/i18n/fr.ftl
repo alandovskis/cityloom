@@ -58,7 +58,7 @@ map-state-bad = À corriger
 
 ## Comment un lieu est dit à un lecteur d’écran, phrase par phrase
 map-label-junction = { $name }, { $control }, { $streets }.
-map-label-street = { $kind }, { $ends }, { $width } de large.
+map-label-street = { $street }, { $ends }, { $width } de large.
 map-needs-attention = À corriger : { $failing }.
 map-changed = Modifié.
 map-opens-junction = Ouvre le plan de la jonction.
@@ -101,7 +101,7 @@ map-changes-none = Rien n’a encore été modifié. Ouvrez une rue ou une jonct
 map-still-works = Fonctionne toujours
 map-detail-needs-attention = À corriger : { $failing }
 # Une rue dans les notes : son nom et son tracé.
-map-note-street = { $kind }, { $ends }
+map-note-street = { $street }, { $ends }
 
 ## La ligne d’état
 map-nothing-to-show = Aucune rue à afficher.

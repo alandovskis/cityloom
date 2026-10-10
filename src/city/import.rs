@@ -379,7 +379,7 @@ mod tests {
     fn a_street_has_the_lanes_and_name_of_its_road() {
         let city = City::from_network(&crossing(), "Testville");
         let v = city.view(0);
-        let main = v.edges.iter().find(|e| en(&e.kind) == "Main Street").expect("named for the road");
+        let main = v.edges.iter().find(|e| en(&e.called) == "Main Street").expect("named for the road");
         assert_eq!(main.row_mm, 2000 + 3000 + 3000 + 2000);
         assert!(city.street_editor(main.uid, 0).is_some());
         let junction = en(&v.nodes.iter().find(|n| n.junction).unwrap().name);
@@ -485,9 +485,9 @@ mod tests {
         let (residential, motorway) = (edge(1), edge(2));
         assert_eq!(layout.edges[residential].name, None);
         assert_eq!(layout.edges[residential].section.name, None, "the stored network holds no wording");
-        let kind = &city.view(0).edges[residential].kind;
+        let kind = &city.view(0).edges[residential].called;
         assert_eq!((en(kind), fr(kind)), ("Unnamed local street".into(), "Rue locale sans nom".into()));
-        let kind = &city.view(0).edges[motorway].kind;
+        let kind = &city.view(0).edges[motorway].called;
         assert_eq!((en(kind), fr(kind)), ("Unnamed motorway".into(), "Autoroute sans nom".into()));
         assert!(!city.save().contains("Unnamed"));
         // a save from before kept the English it named an unnamed street with; the name comes from the network
@@ -606,8 +606,8 @@ mod tests {
     fn the_editors_call_a_street_by_its_own_name_and_not_by_its_kind() {
         let city = City::from_network(&crossing(), "Testville");
         let v = city.view(0);
-        let main = v.edges.iter().find(|e| en(&e.kind) == "Main Street").unwrap();
-        assert_eq!(main.kind, Said::new("city-name").with("name", Arg::Text("Main Street".into())));
+        let main = v.edges.iter().find(|e| en(&e.called) == "Main Street").unwrap();
+        assert_eq!(main.called, Said::new("city-name").with("name", Arg::Text("Main Street".into())));
         assert_eq!(city.street_editor(main.uid, 0).unwrap().view().name, Street::imported(StreetClass::Local, Side::Right, &[]).named("Main Street").title());
         let junction = v.nodes.iter().find(|n| n.junction).unwrap();
         let arms: Vec<String> = city.junction_editor(junction.uid, 0).unwrap().view().arms.iter().map(|a| en(&a.street)).collect();
