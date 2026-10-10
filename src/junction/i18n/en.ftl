@@ -254,6 +254,10 @@ jn-page-measures-hint-b = , and where CityLoom models each measure.
 jn-page-fine-print = Sample numbers and limits for now, not real measurements.
 jn-page-about = About this junction
 
+## The page of a junction that cannot be drawn (src/junction/page.rs: Stuck)
+jn-stuck-title = This junction cannot be drawn
+jn-stuck-text = The streets that meet here have been changed so that they no longer make a junction. Give the streets their room back, or start the city over from the map.
+
 ## The panel beside the plan: what is selected and the controls to change it (src/junction/inspector.rs)
 jn-insp-empty = Select a street, corner or crossing to change it.
 jn-insp-control = Junction control

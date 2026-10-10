@@ -254,6 +254,10 @@ jn-page-measures-hint-b = , et l’endroit où CityLoom modélise chaque mesure.
 jn-page-fine-print = Chiffres et limites d’exemple pour l’instant, pas de vraies mesures.
 jn-page-about = À propos de cette jonction
 
+## La page d’une jonction qui ne peut pas être dessinée (src/junction/page.rs : Stuck)
+jn-stuck-title = Cette jonction ne peut pas être dessinée
+jn-stuck-text = Les rues qui se rencontrent ici ont été modifiées de sorte qu’elles ne forment plus une jonction. Redonnez de la place aux rues, ou recommencez la ville à partir de la carte.
+
 ## Le panneau à côté du plan : ce qui est sélectionné et de quoi le modifier (src/junction/inspector.rs)
 jn-insp-empty = Sélectionnez une rue, un coin ou un passage pour piétons à modifier.
 jn-insp-control = Signalisation de la jonction

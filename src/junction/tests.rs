@@ -1050,6 +1050,56 @@ fn the_panel_s_steppers_follow_the_units() {
     assert!(h.contains("aria-label=\"Tighter by 1.6 ft\""), "{h}");
 }
 
+// ---- a junction that cannot be drawn ---------------------------------------------------------
+
+fn junction_four() -> crate::shared::said::Said {
+    crate::shared::said::Said::new("city-junction-number").with("n", crate::shared::said::Arg::Num(4))
+}
+
+#[test]
+fn a_junction_that_cannot_be_drawn_says_so_in_english() {
+    use crate::shared::i18n::Locale;
+    let i18n = crate::i18n_for(Locale::En);
+    let h = html(|| view! { <page::StuckHeader i18n=i18n.clone() name=junction_four()/><page::Stuck i18n=i18n.clone()/> }.into_any());
+    for want in [
+        "<h1 id=\"street-name\">Junction 4</h1>",
+        "class=\"stuck\"",
+        ">This junction cannot be drawn</h2>",
+        "The streets that meet here have been changed so that they no longer make a junction.",
+        "href=\"map.html\"",
+        ">City map</a>",
+    ] {
+        assert!(h.contains(want), "{want:?} missing from:\n{h}");
+    }
+}
+
+#[test]
+fn a_junction_that_cannot_be_drawn_says_so_in_french() {
+    use crate::shared::i18n::Locale;
+    let i18n = crate::i18n_for(Locale::FrCa);
+    let h = html(|| view! { <page::StuckHeader i18n=i18n.clone() name=junction_four()/><page::Stuck i18n=i18n.clone()/> }.into_any());
+    speaks_french(
+        &h,
+        &["Junction", "cannot be drawn", "The streets", "City map"],
+        &[">Jonction 4</h1>", ">Cette jonction ne peut pas être dessinée</h2>", "Redonnez de la place aux rues", ">Carte de la ville</a>"],
+    );
+    assert_eq!(i18n.missing(), Vec::<String>::new());
+}
+
+#[test]
+fn a_junction_that_cannot_be_drawn_follows_a_switch_of_language() {
+    use crate::junction::page::stuck_words;
+    use crate::shared::i18n::Locale;
+    let owner = Owner::new();
+    owner.set();
+    let i18n = crate::i18n_for(Locale::En);
+    let held = StoredValue::new_local(i18n.clone());
+    let words = Memo::new(move |_| held.with_value(|i| stuck_words(i, &junction_four())));
+    assert_eq!(words.get().0, "Junction 4 · CityLoom");
+    i18n.set(Locale::FrCa);
+    assert_eq!(words.get(), ("Jonction 4 · CityLoom".to_string(), "Jonction 4".to_string()));
+}
+
 // ---- the page's markup ----------------------------------------------------------------------
 
 const INTERSECTION_HTML: &str = include_str!("../../web/intersection.html");

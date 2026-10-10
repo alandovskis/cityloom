@@ -85,16 +85,41 @@ pub fn mount_page(plan: &Plan) {
     mount("revs", view! { <notes::Revisions vm=vm/> }.into_any());
 }
 
-/// The name of a junction of the city kept in this browser; empty when there is none. It is worded in
-/// English, as the rest of the junction page is, until that page is translated.
+/// Whether the city kept in this browser has junction `node`; the page goes back to the map when it has not.
 #[wasm_bindgen]
-pub fn junction_name(node: u32) -> String {
-    let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
-    CityStore::current(browser_ports().storage)
-        .open()
-        .junction_name(node)
-        .map(|name| crate::shared::said::say_now(&i18n, crate::shared::units::Units::Metres, &name))
-        .unwrap_or_default()
+pub fn junction_exists(node: u32) -> bool {
+    CityStore::current(browser_ports().storage).open().junction_name(node).is_some()
+}
+
+/// The page of junction `node` when the streets that meet there can no longer be drawn as a junction: it says
+/// so under the junction's name, and keeps the shell every page shares (the settings menu and the sidebars).
+#[wasm_bindgen]
+pub fn mount_bare_shell(node: u32) {
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let ports = browser_ports();
+    let i18n = crate::unmigrated_i18n();
+    let name = CityStore::current(ports.storage.clone()).open().junction_name(node);
+    let doc = leptos::prelude::document();
+    let find = |selector: &str| doc.query_selector(selector).ok().flatten();
+    // Nothing here can be drawn or changed: the plan, its tools and its status make way for the panel.
+    if let Some(tools) = find(".tools") {
+        let _ = tools.set_attribute("hidden", "");
+    }
+    for selector in [".plan-drawing", ".statusbar"] {
+        if let Some(el) = find(selector) {
+            el.remove();
+        }
+    }
+    if let (Some(at), Some(name)) = (find("#street"), name) {
+        let i18n = i18n.clone();
+        leptos::mount::mount_to(at.unchecked_into(), move || view! { <page::StuckHeader i18n=i18n name=name/> }).forget();
+    }
+    if let Some(at) = find(".stage-main") {
+        let i18n = i18n.clone();
+        leptos::mount::mount_to(at.unchecked_into(), move || view! { <page::Stuck i18n=i18n/> }).forget();
+    }
+    crate::shell::mount(i18n, Rc::new(crate::shell::Bare::default()), "details-details", true);
 }
 
 /// The junction editor on one junction of the city kept in this browser, which

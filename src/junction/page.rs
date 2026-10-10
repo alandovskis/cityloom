@@ -10,10 +10,11 @@ use crate::junction::text::{arms_text, fit_text};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
 use crate::shared::catalogue::{KINDS, kind_key};
-#[cfg(target_arch = "wasm32")]
-use crate::shared::i18n::Args;
+use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
+use crate::shared::said::{Said, say};
 use crate::shared::tick::Tick;
+use crate::shared::units::Units;
 
 /// The kinds of piece that appear in the plan, in the order the catalogue lists them.
 pub fn key_kinds(v: &JView) -> Vec<usize> {
@@ -135,6 +136,38 @@ pub fn Key(vm: Rc<JunctionVm>) -> impl IntoView {
                 }
             })
             .collect_view()
+    }
+}
+
+/// The window title and the heading of the page of a junction that cannot be drawn, in the language of the
+/// page. It asks with the tracked `tr` and `say`, so a view that calls it follows a switch of language.
+pub fn stuck_words(i18n: &I18n, name: &Said) -> (String, String) {
+    // A junction's name holds no length, so the units do not matter.
+    let name = say(i18n, Units::default(), name);
+    (i18n.tr("jn-title", &Args::new().str("name", name.clone())), name)
+}
+
+/// The heading of the page of a junction that cannot be drawn: its name, which also names the window.
+#[component]
+pub fn StuckHeader(i18n: Rc<I18n>, name: Said) -> impl IntoView {
+    let held = StoredValue::new_local((i18n, name));
+    let words = move || held.with_value(|(i18n, name)| stuck_words(i18n, name));
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| document().set_title(&words().0));
+    view! { <h1 id="street-name">{move || words().1}</h1> }
+}
+
+/// What the page of a junction says when the streets that meet there no longer make a junction.
+#[component]
+pub fn Stuck(i18n: Rc<I18n>) -> impl IntoView {
+    let held = StoredValue::new_local(i18n);
+    let tr = move |key: &'static str| move || held.with_value(|i18n| i18n.tr(key, &Args::new()));
+    view! {
+        <div class="stuck">
+            <h2 class="note-h">{tr("jn-stuck-title")}</h2>
+            <p>{tr("jn-stuck-text")}</p>
+            <p><a class="back" href="map.html">{tr("jn-city-map")}</a></p>
+        </div>
     }
 }
 
