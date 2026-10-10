@@ -618,7 +618,8 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         }
     }
 
-    // north mark and scale bar
+    // North mark and scale bar. The `N` stays a literal on purpose: it is the map symbol for north, the same in
+    // English and in French (nord), and the plan's label already says "north up" in words.
     let furniture = format!(
         "<g class=\"north\" transform=\"translate(34 44)\"><circle r=\"15\"/><path d=\"M0 11V-9M-4 -4 0 -10l4 6\"/><text class=\"t-label\" y=\"-20\" text-anchor=\"middle\">N</text></g>{}",
         p.scale_bar(20.0, f.height - 30.0)

@@ -47,7 +47,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::shared::atlas::{AREA, LINEAR, LOCAL, MEASURES, Where, name_key, note_key};
+use crate::shared::atlas::{AREA, LINEAR, LOCAL, MEASURES, Where, group_name_key, name_key, note_key};
 use crate::shared::catalogue::mode_key;
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
@@ -253,16 +253,6 @@ fn group_note_key(group: &str) -> Option<&'static str> {
         LINEAR => Some("group-note-linear"),
         LOCAL => Some("group-note-local"),
         AREA => Some("group-note-area"),
-        _ => None,
-    }
-}
-
-/// The key of a group's name.
-fn group_name_key(group: &str) -> Option<&'static str> {
-    match group {
-        LINEAR => Some("group-name-linear"),
-        LOCAL => Some("group-name-local"),
-        AREA => Some("group-name-area"),
         _ => None,
     }
 }
