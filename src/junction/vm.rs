@@ -235,7 +235,6 @@ mod tests {
     use super::*;
     use crate::city::binding::Place;
     use crate::city::store::CityStore;
-    use crate::shared::keeper::NOT_KEPT;
     use crate::shared::ports::{ManualScheduler, MemoryStorage, RecordingAnnouncer, Storage, test_ports_with_time};
 
     struct Rig {
@@ -411,7 +410,7 @@ mod tests {
         r.time.advance(300);
         r.vm.edit(|j| j.set_corner(n, 7_500));
         r.time.advance(300);
-        assert_eq!(r.said.take(), vec![NOT_KEPT]);
+        assert_eq!(r.said.take(), vec![crate::i18n_for(crate::shared::i18n::Locale::En).tr_now("not-kept", &crate::shared::i18n::Args::new())]);
         assert_eq!(r.vm.read(|j| j.arm(n).unwrap().corner_mm), 7_500);
     }
 }
