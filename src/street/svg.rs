@@ -6,6 +6,7 @@ use std::fmt::Write;
 
 use crate::shared::catalogue::{KINDS, kind_key, mark_key};
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::said::say;
 use crate::shared::symbols::{SymbolOpts, symbol};
 use crate::shared::units::Units;
 use crate::street::model::{SegView, View};
@@ -252,7 +253,7 @@ fn curbs(v: &View, g: &Geometry) -> String {
 pub fn street_label(v: &View, i18n: &I18n, units: Units) -> String {
     let locale = i18n.locale();
     let args = Args::new()
-        .str("name", v.name.clone())
+        .str("name", say(i18n, units, &v.name))
         .num("count", v.segments.len() as i64)
         .str("total", units.length_fine_in(v.total_mm, locale))
         .str("row", units.length_fine_in(v.row_mm, locale))
@@ -777,7 +778,7 @@ mod tests {
         let sidewalk = &KINDS[0];
         assert_eq!(sidewalk.id, "sidewalk");
         assert_eq!(narrow(sidewalk.min_mm), sidewalk.mark);
-        assert_eq!(narrow(3_300), sidewalk.name);
+        assert_eq!(narrow(3_300), "Sidewalk");
     }
 
     #[test]
@@ -887,10 +888,7 @@ mod tests {
         let fr_svg = street_svg(&v, &fr(), 1050.0, Units::Metres, &Interaction::default());
         let en_svg = street_svg(&v, &en(), 1050.0, Units::Metres, &Interaction::default());
         // The piece widths, the unused space and the two totals.
-        assert!(
-            fr_svg.markup.contains(">3,3\u{a0}m<") && fr_svg.markup.contains(">Inutilisé<"),
-            "French SVG did not contain expected localized markers"
-        );
+        assert!(fr_svg.markup.contains(">3,3\u{a0}m<") && fr_svg.markup.contains(">Inutilisé<"), "French SVG did not contain expected localized markers");
         assert!(fr_svg.markup.contains("Votre aménagement\u{a0}: 14,7\u{a0}m"));
         assert!(en_svg.markup.contains(">3.3 m<") && en_svg.markup.contains(">Your design 14.7 m<"));
         for dotted in [">3.3", "14.7 m", "14.7\u{a0}m", "18.0 m", "18.0\u{a0}m"] {
@@ -907,10 +905,7 @@ mod tests {
         e.set_width(u, e.view().segments[0].width_mm + 1_000);
         let v = e.view();
         let s = street_svg(&v, &fr(), 1050.0, Units::Metres, &Interaction::default());
-        assert!(
-            s.markup.contains(">1,0\u{a0}m de trop<") && !s.markup.contains("too wide"),
-            "Expected French overflow wording and no English fallback"
-        );
+        assert!(s.markup.contains(">1,0\u{a0}m de trop<") && !s.markup.contains("too wide"), "Expected French overflow wording and no English fallback");
     }
 
     #[test]
@@ -919,10 +914,7 @@ mod tests {
         let u = uid(&e, 0);
         e.set_width(u, KINDS[0].min_mm);
         let s = street_svg(&e.view(), &fr(), 680.0, Units::Metres, &Interaction::default());
-        assert!(
-            s.markup.contains(">TO</text>"),
-            "Expected French mark TO in SVG markup"
-        );
+        assert!(s.markup.contains(">TO</text>"), "Expected French mark TO in SVG markup");
         let mut one = Editor::new(0);
         while one.view().segments.len() > 1 {
             let u = uid(&one, 0);

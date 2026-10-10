@@ -14,6 +14,7 @@ use crate::junction::plan_svg::{plan_label, plan_svg};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
 use crate::shared::bind::current_element;
+use crate::shared::i18n::Args;
 
 /// What a grip is dragging.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -110,7 +111,7 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
     let markup = move || {
         let (v, units) = w.now();
         let (width, window) = viewport.get();
-        let out = plan_svg(&v, width, window, units);
+        let out = plan_svg(&v, &w.i18n(), width, window, units);
         w.set_frame(out.frame);
         out.markup
     };
@@ -178,12 +179,12 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
     };
 
     view! {
-      <div class="wrap" id="wrap" tabindex="0" role="group" aria-label="Junction plan editor" aria-describedby="keys" node_ref=wrap on:keydown=keydown>
+      <div class="wrap" id="wrap" tabindex="0" role="group" aria-label=move || w.i18n().tr("jn-plan-editor", &Args::new()) aria-describedby="keys" node_ref=wrap on:keydown=keydown>
         <svg
             id="drawing"
             xmlns="http://www.w3.org/2000/svg"
             role="img"
-            aria-label=move || plan_label(&w.view())
+            aria-label=move || plan_label(&w.view(), &w.i18n())
             width=move || size().width.to_string()
             height=move || size().height.to_string()
             viewBox=move || {

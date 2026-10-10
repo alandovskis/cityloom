@@ -7,6 +7,21 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
+/// The `.rs` files of `map`, `place`, `junction` and `city` that are not in `MIGRATED`, and why. Every other
+/// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
+/// the day it is added.
+const LEFT_OUT: &[(&str, &str)] = &[
+    ("src/city/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
+    ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
+    ("src/map/tests.rs", "test-only"),
+    ("src/junction/tests.rs", "test-only"),
+    ("src/junction/model/fixtures.rs", "test-only"),
+    (
+        "src/shared/atlas.rs",
+        "the Atlas's English names, groups and notes are source data; what a person reads goes through `name_key` / `note_key` / `group_name_key`, and a test holds the English .ftl names and notes equal to them",
+    ),
+];
+
 const MIGRATED: &[(&str, &str)] = &[
     // Files are added here as their task completes.
     ("src/street/text.rs", include_str!("street/text.rs")),
@@ -20,11 +35,46 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/shared/said.rs", include_str!("shared/said.rs")),
     ("src/street/vm.rs", include_str!("street/vm.rs")),
     ("src/street/keys.rs", include_str!("street/keys.rs")),
+    ("src/city/mod.rs", include_str!("city/mod.rs")),
     ("src/street/watch.rs", include_str!("street/watch.rs")),
     ("src/street/mod.rs", include_str!("street/mod.rs")),
     ("src/shell/vm.rs", include_str!("shell/vm.rs")),
     ("src/shell/view.rs", include_str!("shell/view.rs")),
     ("src/shell/mod.rs", include_str!("shell/mod.rs")),
+    ("src/map/vm.rs", include_str!("map/vm.rs")),
+    ("src/map/view.rs", include_str!("map/view.rs")),
+    ("src/map/overlay.rs", include_str!("map/overlay.rs")),
+    ("src/map/mod.rs", include_str!("map/mod.rs")),
+    ("src/map/home.rs", include_str!("map/home.rs")),
+    ("src/map/svg.rs", include_str!("map/svg.rs")),
+    ("src/place/mod.rs", include_str!("place/mod.rs")),
+    ("src/place/area.rs", include_str!("place/area.rs")),
+    ("src/place/loader.rs", include_str!("place/loader.rs")),
+    ("src/place/nominatim.rs", include_str!("place/nominatim.rs")),
+    ("src/place/overpass.rs", include_str!("place/overpass.rs")),
+    ("src/place/tiles.rs", include_str!("place/tiles.rs")),
+    ("src/place/vm.rs", include_str!("place/vm.rs")),
+    ("src/place/view.rs", include_str!("place/view.rs")),
+    ("src/junction/model.rs", include_str!("junction/model.rs")),
+    ("src/junction/read_model.rs", include_str!("junction/read_model.rs")),
+    ("src/junction/text.rs", include_str!("junction/text.rs")),
+    ("src/junction/turns.rs", include_str!("junction/turns.rs")),
+    ("src/junction/vm.rs", include_str!("junction/vm.rs")),
+    ("src/junction/watch.rs", include_str!("junction/watch.rs")),
+    ("src/junction/keys.rs", include_str!("junction/keys.rs")),
+    ("src/junction/mod.rs", include_str!("junction/mod.rs")),
+    ("src/junction/page.rs", include_str!("junction/page.rs")),
+    ("src/junction/notes.rs", include_str!("junction/notes.rs")),
+    ("src/junction/plan.rs", include_str!("junction/plan.rs")),
+    ("src/junction/plan_svg.rs", include_str!("junction/plan_svg.rs")),
+    ("src/junction/inspector.rs", include_str!("junction/inspector.rs")),
+    ("src/city/binding.rs", include_str!("city/binding.rs")),
+    ("src/city/import.rs", include_str!("city/import.rs")),
+    ("src/city/model.rs", include_str!("city/model.rs")),
+    ("src/junction/frame.rs", include_str!("junction/frame.rs")),
+    ("src/junction/geometry.rs", include_str!("junction/geometry.rs")),
+    ("src/map/camera.rs", include_str!("map/camera.rs")),
+    ("src/map/projection.rs", include_str!("map/projection.rs")),
 ];
 
 /// Attributes whose value is text a person reads (also as `attr:<name>`).
@@ -66,6 +116,31 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("(min-width: 1360px)", "a media query"),
     ("recipes use catalogue kinds", "a panic message about the code, never shown"),
     ("catalogue kind", "a panic message about the code, never shown"),
+    ("the catalogue has every kind of lane", "a panic message about the code, never shown"),
+    ("the city serialises", "a panic message about the code, never shown"),
+    ("Feature", "a GeoJSON type name, data for MapLibre"),
+    ("FeatureCollection", "a GeoJSON type name, data for MapLibre"),
+    ("LineString", "a GeoJSON geometry type, data for MapLibre"),
+    ("Point", "a GeoJSON geometry type, data for MapLibre"),
+    ("Plateau Mont-Royal, Montréal", "the default area's own name: a place name is data, like the names the place search gives"),
+    ("an arm carries the street it reads", "a panic message about the code, never shown"),
+    ("a junction state is always drawable", "a panic message about the code, never shown"),
+    (" on", "a CSS class appended to a class list"),
+    (" bad", "a CSS class appended to a class list"),
+    (" dim-warn", "a CSS class of the junction plan, appended to a class list"),
+    (" t-warn", "a CSS class of the junction plan, appended to a class list"),
+    (" dead", "a CSS class of the junction plan, appended to a class list"),
+    (" no", "a CSS class of the junction plan, appended to a class list"),
+    (" indirect", "a CSS class of the junction plan, appended to a class list"),
+    ("stop-line yield", "CSS classes of the junction plan"),
+    ("bulb measure-stop k-sidewalk", "CSS classes of the junction plan"),
+    ("island k-sidewalk", "CSS classes of the junction plan"),
+    ("wedge k-sidewalk", "CSS classes of the junction plan"),
+    ("bulb k-sidewalk", "CSS classes of the junction plan"),
+    ("piece k-", "CSS classes of the junction plan, the kind's id appended"),
+    ("piece k-bus", "CSS classes of the junction plan"),
+    ("piece k-bus queue", "CSS classes of the junction plan"),
+    ("piece k-bus bus-lane", "CSS classes of the junction plan"),
 ];
 
 fn is_path_data(s: &str) -> bool {
@@ -302,6 +377,20 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("t-checks", "the id of a tab of the page"),
     ("i-h-dir", "the id of an inspector heading"),
     ("i-h-curb", "the id of an inspector heading"),
+    ("i-h-ring", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-cycle-width", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-bus", "the id of a heading of the junction's inspector, which its list is labelled by"),
+    ("i-h-cycle", "the id of a heading of the junction's inspector"),
+    ("i-h-control", "the id of a heading of the junction's inspector, which its list is labelled by"),
+    ("i-h-corner", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-setback", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-cwidth", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-refuge", "the id of a heading of the junction's inspector"),
+    ("i-h-bulb", "the id of a heading of the junction's inspector"),
+    ("i-h-alen", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-bearing", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-offset", "the id of a heading of the junction's inspector, which its field is labelled by"),
+    ("i-h-street", "the id of a heading of the junction's inspector"),
     ("m-planted", "a CSS class of the drawing"),
     ("dim-warn", "a CSS class of the drawing"),
     ("t-warn", "a CSS class of the drawing"),
@@ -331,6 +420,35 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("data-unit", "the name of an attribute"),
     ("data-theme-set", "the name of an attribute"),
     ("data-theme", "the name of an attribute"),
+    ("data-covers", "the name of a data- attribute marking what floats over the map"),
+    ("search-slot", "the id of an element of the map and home pages"),
+    ("reset-slot", "the id of an element of the map page"),
+    ("map-tools-slot", "the id of an element of the map page"),
+    ("map-slot", "the id of an element of the map page"),
+    ("plan-key", "the id of an element of the map page"),
+    ("checks-lead", "the id of an element of the map page"),
+    ("changes-lead", "the id of an element of the map page"),
+    ("hero-map-slot", "the id of an element of the home page"),
+    ("hero-facts-slot", "the id of an element of the home page"),
+    ("m-walk", "a CSS class of the hero map's drawing"),
+    ("m-shoulder", "a CSS class of the hero map's drawing"),
+    ("queue-offset", "the id of a junction approach measure, data for the page"),
+    ("queue-curb", "the id of a junction approach measure, data for the page"),
+    ("queue-virtual", "the id of a junction approach measure, data for the page"),
+    ("gate-signal", "the id of a junction approach measure, data for the page"),
+    ("gate-yield", "the id of a junction approach measure, data for the page"),
+    ("dead-end", "the id of a junction turn rule, data for the page"),
+    ("lanes-cover", "the id of a junction check"),
+    ("lanes-follow", "the id of a junction check"),
+    ("turning-speed", "the id of a junction check"),
+    ("corner-room", "the id of a junction check"),
+    ("conflict-note", "the id of an element of the junction page"),
+    ("grip-arm", "the data-role of a grip on the junction plan"),
+    ("grip-corner", "the data-role of a grip on the junction plan"),
+    ("grip-crossing", "the data-role of a grip on the junction plan"),
+    ("data-lane", "the name of a data- attribute of a lane on the junction plan"),
+    ("stop-line", "a CSS class of the junction plan"),
+    ("dead-cap", "a CSS class of the junction plan"),
 ];
 
 /// The message-id-shaped literals in `src` as `(line, literal)`.
@@ -358,7 +476,7 @@ fn every_message_id_used_in_a_migrated_file_exists_in_both_languages() {
     let mut found = Vec::new();
     // The scan must be seeing the keys (a scan that finds none passes for nothing).
     let seen: usize = MIGRATED.iter().map(|(_, src)| message_ids(src).len()).sum();
-    assert!(seen > 150, "only {seen} message ids seen in the migrated files");
+    assert!(seen > 450, "only {seen} message ids seen in the migrated files");
     for locale in [Locale::En, Locale::FrCa] {
         let i18n = crate::i18n_for(locale);
         for (path, src) in MIGRATED {
@@ -368,12 +486,75 @@ fn every_message_id_used_in_a_migrated_file_exists_in_both_languages() {
     assert!(found.is_empty(), "keys that are not messages:\n{}", found.join("\n"));
 }
 
+/// The entries of an allow-list that no string literal of the sources is any more (as a whole, or as one of the
+/// pieces the guard judges: `"piece k-{}"` is the piece `"piece k-"`): they are dead, and a list that keeps them
+/// hides what it really excuses. Comments and the text of other literals do not keep an entry alive.
+fn dead_entries<'a>(entries: &'a [(&'a str, &'a str)], sources: &[&str]) -> Vec<&'a str> {
+    let mut seen = std::collections::HashSet::new();
+    for src in sources {
+        if let Ok(stream) = TokenStream::from_str(src) {
+            walk(stream, &mut |_, s| {
+                seen.insert(s.to_string());
+                seen.extend(pieces(s));
+            });
+        }
+    }
+    entries.iter().map(|(l, _)| *l).filter(|l| !seen.contains(*l)).collect()
+}
+
+fn migrated_sources() -> Vec<&'static str> {
+    MIGRATED.iter().map(|(_, src)| *src).collect()
+}
+
+/// Every `.rs` file under `dir` (relative to the crate root), as `src/...` paths.
+fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            rust_files(&path, out);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            let rel = path.strip_prefix(env!("CARGO_MANIFEST_DIR")).unwrap();
+            out.push(rel.to_string_lossy().replace('\\', "/"));
+        }
+    }
+}
+
+#[test]
+fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
+    let mut files = Vec::new();
+    for slice in ["map", "place", "junction", "city"] {
+        rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
+    }
+    let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();
+    assert!(unlisted.is_empty(), "add to MIGRATED, or to LEFT_OUT with a reason: {unlisted:?}");
+    let gone: Vec<_> = LEFT_OUT.iter().filter(|(name, _)| !std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(name).exists()).collect();
+    assert!(gone.is_empty(), "LEFT_OUT names files that do not exist: {gone:?}");
+}
+
+#[test]
+fn no_allowed_literal_or_non_message_id_is_dead() {
+    assert_eq!(dead_entries(ALLOWED_LITERALS, &migrated_sources()), Vec::<&str>::new(), "ALLOWED_LITERALS entries that no migrated file has");
+    assert_eq!(dead_entries(NOT_MESSAGE_IDS, &migrated_sources()), Vec::<&str>::new(), "NOT_MESSAGE_IDS entries that no migrated file has");
+    for (l, reason) in ALLOWED_LITERALS.iter().chain(NOT_MESSAGE_IDS) {
+        assert!(!reason.trim().is_empty(), "{l:?} has no reason");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn words(src: &str) -> Vec<String> {
         offenders(src).into_iter().map(|(_, l)| l).collect()
+    }
+
+    #[test]
+    fn a_dead_allow_list_entry_is_found_by_the_literals_not_by_the_text() {
+        let entries: &[(&str, &str)] = &[(" on", "r"), ("Point", "r"), ("piece k-", "r"), ("gone", "r")];
+        let src = "// a Point in a comment, and gone too\nfn f() { let a = \"x on\"; let b = \"Point\"; let c = format!(\"piece k-{}\", 1); }";
+        // " on" is only inside another literal, "gone" only in a comment.
+        assert_eq!(dead_entries(entries, &[src]), vec![" on", "gone"]);
+        assert_eq!(dead_entries(entries, &["fn f() { let a = \" on\"; }"]), vec!["Point", "piece k-", "gone"]);
     }
 
     #[test]

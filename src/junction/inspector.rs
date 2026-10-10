@@ -1,6 +1,7 @@
 //! The panel beside the plan: what is selected, and the controls to change it.
 //! Every control reads the model's view and edits through the model; a control
 //! that stays on the panel keeps its element, and so its focus, across edits.
+//! Its words are asked for in the views' closures, so they follow a switch of language.
 
 use std::rc::Rc;
 
@@ -9,42 +10,99 @@ use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 
 use crate::junction::model::*;
 use crate::junction::read_model::{CrossingView, JView};
-use crate::junction::turns::{compass, turn_glyph, turn_name, turn_word};
+use crate::junction::turns::{compass_key, turn_glyph};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
-use crate::shared::units::Units;
+use crate::shared::i18n::{Args, I18n};
+use crate::shared::units::{Units, parse_number};
 
 // ---- text the panel is made of ---------------------------------------------
 
-/// Where a lane sits among its street's lanes, when that is worth saying.
-fn lane_note(lanes: usize, i: usize) -> &'static str {
+/// The message of a lane's turn button, for a screen reader: "Lane 1 to Main Street (south), straight on".
+fn dest_key(class: u8) -> &'static str {
+    match class {
+        LEFT => "jn-insp-dest-left",
+        THROUGH => "jn-insp-dest-through",
+        _ => "jn-insp-dest-right",
+    }
+}
+
+/// The message of where a lane goes, at the start of a sentence: "Straight on to Main Street (south)".
+fn goes_key(class: u8) -> &'static str {
+    match class {
+        LEFT => "jn-insp-goes-left",
+        THROUGH => "jn-insp-goes-through",
+        _ => "jn-insp-goes-right",
+    }
+}
+
+/// Where a lane goes, as its option says it: "Straight on to Main Street (south)", and why it cannot when
+/// the street's traffic only comes in.
+pub fn goes_text(i18n: &I18n, class: u8, street: String, open: bool) -> String {
+    let goes = i18n.tr(goes_key(class), &Args::new().str("street", street));
+    if open { goes } else { i18n.tr("jn-insp-one-way-in", &Args::new().str("goes", goes)) }
+}
+
+/// The message of where a lane sits among its street's lanes, when that is worth saying.
+fn lane_note(lanes: usize, i: usize) -> Option<&'static str> {
     if lanes == 1 {
-        "the only lane"
+        Some("jn-insp-lane-only")
     } else if i == 0 {
-        "nearest the middle"
+        Some("jn-insp-lane-middle")
     } else if i + 1 == lanes {
-        "nearest the curb"
+        Some("jn-insp-lane-curb")
     } else {
-        ""
+        None
     }
 }
 
-/// What the Crossing section says about the crossing as it stands.
-fn crossing_range(c: &CrossingView, units: Units) -> String {
-    let how = if c.stages > 1 { format!("{} stages of {}", c.stages, units.length(c.stage_mm)) } else { format!("{} to cross", units.length(c.distance_mm)) };
-    if c.too_far { format!("{how}. Too far in one go.") } else { how }
+/// What the Crossing section says about the crossing as it stands, in the language of the page.
+pub fn crossing_range(c: &CrossingView, i18n: &I18n, units: Units) -> String {
+    let locale = i18n.locale();
+    let how = if c.stages > 1 {
+        i18n.tr("jn-insp-crossing-stages", &Args::new().num("n", c.stages as i64).str("length", units.length_in(c.stage_mm, locale)))
+    } else {
+        i18n.tr("jn-insp-crossing-one-go", &Args::new().str("length", units.length_in(c.distance_mm, locale)))
+    };
+    if c.too_far { i18n.tr("jn-insp-too-far", &Args::new().str("crossing", how)) } else { how }
 }
 
-/// How much a stepper moves a typed length, as the field's `step` says it.
-fn step_attr(units: Units) -> &'static str {
-    match units {
-        Units::Metres => "0.1",
-        Units::Feet => "0.5",
-    }
+/// The lengths a field takes, as the arguments of a message.
+fn range_args(i18n: &I18n, units: Units, lo: i32, hi: i32) -> Args {
+    let locale = i18n.locale();
+    Args::new().str("min", units.length_in(lo, locale)).str("max", units.length_in(hi, locale))
 }
 
-fn range_text(units: Units, lo: i32, hi: i32) -> String {
-    format!("{} to {}", units.length(lo), units.length(hi))
+fn range_text(i18n: &I18n, units: Units, lo: i32, hi: i32) -> String {
+    i18n.tr("jn-insp-range", &range_args(i18n, units, lo, hi))
+}
+
+// ---- words, asked for where the view draws them ----------------------------------
+
+/// A message of the panel, as a view draws it, drawn again when the language changes. Every word of the
+/// panel is this one closure type, so the views are not made again for each.
+fn words(w: Watch, key: &'static str) -> impl Fn() -> String + Copy + Send + Sync + 'static {
+    move || w.tr(key)
+}
+
+/// A message of the panel with its arguments, drawn again when the language changes.
+fn tr(w: Watch, key: &str, args: Args) -> String {
+    w.i18n().tr(key, &args)
+}
+
+/// A length in the units shown and the language of the page.
+fn length(w: Watch, mm: i32) -> String {
+    w.units().length_in(mm, w.i18n().locale())
+}
+
+/// A message about one length.
+fn with_length(w: Watch, key: &str, name: &'static str, mm: i32) -> String {
+    tr(w, key, Args::new().str(name, length(w, mm)))
+}
+
+/// A stepper's name, for a screen reader: what it does, by how much.
+fn stepper(w: Watch, key: &'static str, mm: i32) -> Signal<String> {
+    Signal::derive(move || with_length(w, key, "step", mm))
 }
 
 // ---- small pieces -------------------------------------------------------------
@@ -65,27 +123,33 @@ fn option_btn(
     glyph: AnyView,
     name: impl Fn() -> String + Send + Sync + 'static,
     on_click: impl Fn() + 'static,
-) -> impl IntoView {
+) -> AnyView {
+    option_view(Signal::derive(checked), Signal::derive(disabled), glyph, Signal::derive(name), Box::new(on_click))
+}
+
+/// The markup of an option, made once for every option of the panel.
+fn option_view(checked: Signal<bool>, disabled: Signal<bool>, glyph: AnyView, name: Signal<String>, on_click: Box<dyn Fn()>) -> AnyView {
     view! {
         <li>
             <button
                 type="button"
                 class="opt"
                 role="checkbox"
-                aria-checked=move || checked().to_string()
+                aria-checked=move || checked.get().to_string()
                 tabindex="0"
-                disabled=disabled
+                disabled=move || disabled.get()
                 on:click=move |_| on_click()
             >
-                {glyph}<span>{name}</span>{tick()}
+                {glyph}<span>{move || name.get()}</span>{tick()}
             </button>
         </li>
     }
+    .into_any()
 }
 
-/// A section with a heading, a note under it, and its contents.
-fn section(id: &'static str, heading: &'static str, body: impl IntoView) -> impl IntoView {
-    view! { <section class="insp-sec"><h3 class="note-h" id=id>{heading}</h3>{body}</section> }
+/// A section with a heading (a message) and its contents.
+fn section(w: Watch, id: &'static str, heading: &'static str, body: impl IntoView) -> impl IntoView {
+    view! { <section class="insp-sec"><h3 class="note-h" id=id>{words(w, heading)}</h3>{body}</section> }
 }
 
 fn hint(text: Signal<String>) -> impl IntoView {
@@ -99,73 +163,121 @@ fn hint(text: Signal<String>) -> impl IntoView {
 /// panel is drawn; the steppers and the typed value are told what to do.
 struct Num {
     id: &'static str,
+    /// The message of the field's heading.
     label: &'static str,
-    minus: &'static str,
-    plus: &'static str,
-    min: Option<&'static str>,
-    max: Option<&'static str>,
+    minus: Signal<String>,
+    plus: Signal<String>,
     value: Signal<String>,
-    step: Signal<String>,
     tag: Signal<String>,
     hint: Signal<String>,
 }
 
-fn num_field(n: Num, on_step: impl Fn(i32) + Clone + 'static, on_set: impl Fn(f64) + 'static) -> impl IntoView {
-    let (down, up) = (on_step.clone(), on_step);
-    let value = n.value;
-    let step = n.step;
-    let tag = n.tag;
+fn num_field(w: Watch, n: Num, on_step: impl Fn(i32) + 'static, on_set: impl Fn(f64) + 'static) -> AnyView {
+    num_view(w, n, Rc::new(on_step), Box::new(on_set))
+}
+
+/// The markup of a number field, made once for every field of the panel.
+fn num_view(w: Watch, n: Num, on_step: Rc<dyn Fn(i32)>, on_set: Box<dyn Fn(f64)>) -> AnyView {
+    let (down, up, keyed) = (on_step.clone(), on_step.clone(), on_step);
+    let Num { id, label, minus, plus, value, tag, hint: note } = n;
+    let hint_id = format!("{id}-hint");
+    let described_by = hint_id.clone();
     view! {
         <section class="insp-sec">
-            <h3 class="note-h" id=n.id>{n.label}</h3>
+            <h3 class="note-h" id=id>{words(w, label)}</h3>
             <div class="stepper">
-                <button type="button" class="ico" aria-label=n.minus on:click=move |_| down(-1)>
+                <button type="button" class="ico" aria-label=move || minus.get() on:click=move |_| down(-1)>
                     <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
                 </button>
                 <span class="wfield">
                     <input
-                        type="number"
+                        type="text"
                         inputmode="decimal"
-                        step=move || step.get()
-                        min=n.min
-                        max=n.max
+                        autocomplete="off"
                         value=move || value.get()
                         prop:value=move || value.get()
-                        aria-labelledby=n.id
+                        aria-labelledby=id
+                        aria-describedby=move || (!note.get().is_empty()).then(|| described_by.clone())
+                        on:keydown=move |ev| {
+                            if let Some(dir) = step_key(&ev.key()) {
+                                ev.prevent_default();
+                                keyed(dir);
+                            }
+                        }
                         on:change=move |ev| {
                             let input = event_target::<HtmlInputElement>(&ev);
-                            match input.value().parse::<f64>() {
-                                Ok(v) if v.is_finite() => on_set(v),
-                                _ => input.set_value(&value.get_untracked()),
-                            }
+                            commit_typed(&input.value(), &*on_set);
+                            // What the field holds is the model's value, whether it took the edit or refused it.
+                            input.set_value(&value.get_untracked());
                         }
                     />
                     <span class="unit-tag" aria-hidden="true">{move || tag.get()}</span>
                 </span>
-                <button type="button" class="ico" aria-label=n.plus on:click=move |_| up(1)>
+                <button type="button" class="ico" aria-label=move || plus.get() on:click=move |_| up(1)>
                     <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
                 </button>
             </div>
-            {hint(n.hint)}
+            {hint_with_id(note, hint_id)}
         </section>
     }
+    .into_any()
+}
+
+/// A hint that a field is described by.
+fn hint_with_id(text: Signal<String>, id: String) -> impl IntoView {
+    move || {
+        let t = text.get();
+        (!t.is_empty()).then(|| view! { <p class="insp-range" id=id.clone()>{t}</p> })
+    }
+}
+
+/// The step an arrow key makes in a number field, as the browser's spinner did.
+pub fn step_key(key: &str) -> Option<i32> {
+    match key {
+        "ArrowUp" => Some(1),
+        "ArrowDown" => Some(-1),
+        _ => None,
+    }
+}
+
+/// Hands what was typed (a comma or a point for the decimal mark) to `set`;
+/// false when it is not a number.
+pub fn commit_typed(typed: &str, set: &dyn Fn(f64)) -> bool {
+    let Some(v) = parse_number(typed) else { return false };
+    set(v);
+    true
+}
+
+/// Sets the cycle track's width from what was typed, in the units shown; false when it is not a number.
+pub fn commit_cycle(w: Watch, typed: &str) -> bool {
+    commit_typed(typed, &|v| set_cycle_width(w, v))
+}
+
+/// Turns a street to the degrees typed: a fraction is rounded, and the model snaps it to its step.
+pub fn commit_bearing(w: Watch, uid: u32, typed: &str) -> bool {
+    commit_typed(typed, &|v| set_bearing_degrees(w, uid, v))
+}
+
+fn set_bearing_degrees(w: Watch, uid: u32, degrees: f64) {
+    w.edit(|j| j.set_bearing(uid, degrees.round() as i32));
+}
+
+fn set_cycle_width(w: Watch, typed: f64) {
+    w.edit(|j| j.set_cycle(Some(w.units_now().mm(typed))));
 }
 
 fn derived(w: Watch, f: impl Fn(&JView, Units) -> String + Send + Sync + 'static) -> Signal<String> {
     Signal::derive(move || f(&w.view(), w.units()))
 }
 
-fn constant(text: &'static str) -> Signal<String> {
-    Signal::derive(move || text.to_string())
+/// A hint of the lengths a field takes.
+fn range_hint(w: Watch, lo: i32, hi: i32) -> Signal<String> {
+    Signal::derive(move || range_text(&w.i18n(), w.units(), lo, hi))
 }
 
 /// A length in the field's units, to `places`, of whatever `mm` reads.
 fn length_signal(w: Watch, places: usize, mm: impl Fn(&JView) -> i32 + Send + Sync + 'static) -> Signal<String> {
-    derived(w, move |v, u| u.fixed(mm(v), places))
-}
-
-fn step_signal(w: Watch) -> Signal<String> {
-    Signal::derive(move || step_attr(w.units()).to_string())
+    derived(w, move |v, u| u.fixed_in(mm(v), places, w.i18n().locale()))
 }
 
 fn unit_tag(w: Watch) -> Signal<String> {
@@ -177,17 +289,15 @@ fn unit_tag(w: Watch) -> Signal<String> {
 fn ring_size(w: Watch) -> impl IntoView {
     let spec = Num {
         id: "i-h-ring",
-        label: "Size of the roundabout",
-        minus: "Smaller by 0.5 m",
-        plus: "Larger by 0.5 m",
-        min: None,
-        max: None,
+        label: "jn-insp-ring-size",
+        minus: stepper(w, "jn-insp-smaller", RING_STEP_MM),
+        plus: stepper(w, "jn-insp-larger", RING_STEP_MM),
         value: length_signal(w, 1, |v| v.ring.as_ref().map_or(0, |r| r.radius_mm * 2)),
-        step: step_signal(w),
-        tag: Signal::derive(move || format!("{} across", w.units().word())),
-        hint: derived(w, |v, u| format!("Across the outside. No smaller than {} with these streets.", u.length(v.ring.as_ref().map_or(0, |r| r.floor_mm * 2)))),
+        tag: Signal::derive(move || tr(w, "jn-insp-unit-across", Args::new().str("unit", w.units().word()))),
+        hint: derived(w, move |v, _| with_length(w, "jn-insp-ring-hint", "length", v.ring.as_ref().map_or(0, |r| r.floor_mm * 2))),
     };
     num_field(
+        w,
         spec,
         move |dir| {
             w.edit(|j| j.step_ring(dir));
@@ -198,28 +308,30 @@ fn ring_size(w: Watch) -> impl IntoView {
     )
 }
 
-fn cycle_width(w: Watch, tail: &'static str) -> impl IntoView {
+/// The cycle track's width; `note` is the message of its hint, which says what the width costs.
+fn cycle_width(w: Watch, note: &'static str) -> impl IntoView {
     let spec = Num {
         id: "i-h-cycle-width",
-        label: "Track width",
-        minus: "Narrower by 0.5 m",
-        plus: "Wider by 0.5 m",
-        min: None,
-        max: None,
+        label: "jn-insp-track-width",
+        minus: stepper(w, "jn-insp-narrower", RING_STEP_MM),
+        plus: stepper(w, "jn-insp-wider", RING_STEP_MM),
         value: length_signal(w, 1, |v| v.ring.as_ref().and_then(|r| r.cycle_mm).unwrap_or(0)),
-        step: step_signal(w),
         tag: unit_tag(w),
-        hint: derived(w, move |_, u| format!("{}. {tail}", range_text(u, CYCLE_MIN_MM, CYCLE_MAX_MM))),
+        hint: Signal::derive(move || tr(w, note, range_args(&w.i18n(), w.units(), CYCLE_MIN_MM, CYCLE_MAX_MM))),
     };
     num_field(
+        w,
         spec,
         move |dir| {
             w.edit(|j| j.step_cycle(dir));
         },
-        move |v| {
-            w.edit(|j| j.set_cycle(Some(w.units_now().mm(v))));
-        },
+        move |v| set_cycle_width(w, v),
     )
+}
+
+/// What the bus lane across a roundabout's island is.
+fn bus_note(w: Watch) -> Option<String> {
+    w.view().bus.as_ref().map(|b| with_length(w, "jn-insp-bus-note", "width", b.width_mm))
 }
 
 fn bus_choice(w: Watch) -> impl IntoView {
@@ -230,18 +342,16 @@ fn bus_choice(w: Watch) -> impl IntoView {
             .iter()
             .map(|o| {
                 let (a, b) = (o.a, o.b);
-                view! { <option value=format!("{a}-{b}") prop:selected=cur == Some((a, b))>{o.label.clone()}</option> }
+                view! { <option value=format!("{a}-{b}") prop:selected=cur == Some((a, b))>{w.say(&o.label)}</option> }
             })
             .collect_view()
     };
     let none_selected = move || w.view().bus.is_none();
-    let note = Signal::derive(move || match w.view().bus.as_ref() {
-        Some(b) => format!("A {} bus-only lane straight across the island. It crosses the ring where it enters and leaves.", w.units().length(b.width_mm)),
-        None => "Lets buses cut across the island between two streets.".to_string(),
-    });
+    let note = Signal::derive(move || bus_note(w).unwrap_or_else(|| w.tr("jn-insp-bus-offer")));
     section(
+        w,
         "i-h-bus",
-        "Bus lane through the middle",
+        "jn-insp-bus-across",
         view! {
             <select
                 aria-labelledby="i-h-bus"
@@ -251,7 +361,7 @@ fn bus_choice(w: Watch) -> impl IntoView {
                     w.edit(|j| j.set_bus(pair));
                 }
             >
-                <option value="" prop:selected=none_selected>"No bus lane"</option>
+                <option value="" prop:selected=none_selected>{words(w, "jn-insp-bus-none")}</option>
                 {options}
             </select>
             {hint(note)}
@@ -261,15 +371,16 @@ fn bus_choice(w: Watch) -> impl IntoView {
 
 fn cycle_track(w: Watch, cycle: Memo<bool>) -> impl IntoView {
     section(
+        w,
         "i-h-cycle",
-        "Cycle track",
+        "jn-insp-cycle",
         view! {
             <ul class="opts">
                 {option_btn(
                     move || cycle.get(),
                     || false,
                     ().into_any(),
-                    || "Track around the outside".to_string(),
+                    words(w, "jn-insp-cycle-option"),
                     move || {
                         w.edit(|j| j.set_cycle_track(!cycle.get_untracked()));
                     },
@@ -284,8 +395,9 @@ fn control_section(w: Watch) -> impl IntoView {
     let ring = Memo::new(move |_| w.view().ring.is_some());
     let cycle = Memo::new(move |_| w.view().ring.as_ref().is_some_and(|r| r.cycle_mm.is_some()));
     let control = section(
+        w,
         "i-h-control",
-        "Junction control",
+        "jn-insp-control",
         view! {
             <select
                 aria-labelledby="i-h-control"
@@ -298,7 +410,7 @@ fn control_section(w: Watch) -> impl IntoView {
                 {CONTROLS
                     .iter()
                     .enumerate()
-                    .map(|(i, c)| view! { <option value=i.to_string() prop:selected=move || w.view().control_index == i>{c.name}</option> })
+                    .map(|(i, c)| view! { <option value=i.to_string() prop:selected=move || w.view().control_index == i>{words(w, c.key)}</option> })
                     .collect_view()}
             </select>
         },
@@ -307,19 +419,24 @@ fn control_section(w: Watch) -> impl IntoView {
         {control}
         {move || ring.get().then(|| ring_size(w))}
         {move || ring.get().then(|| cycle_track(w, cycle))}
-        {move || (ring.get() && cycle.get()).then(|| cycle_width(w, "It takes space from the carriageway inside the same circle."))}
+        {move || (ring.get() && cycle.get()).then(|| cycle_width(w, "jn-insp-track-hint-inside"))}
         {move || ring.get().then(|| bus_choice(w))}
     }
 }
 
 // ---- what is selected ----------------------------------------------------------
 
-fn head(name: impl Fn() -> String + Send + Sync + 'static, sub: impl Fn() -> String + Send + Sync + 'static) -> impl IntoView {
-    view! { <div class="insp-head"><div><h2 class="insp-name">{name}</h2><p class="insp-sub">{sub}</p></div></div> }
+fn head(name: impl Fn() -> String + Send + Sync + 'static, sub: impl Fn() -> String + Send + Sync + 'static) -> AnyView {
+    head_view(Signal::derive(name), Signal::derive(sub))
 }
 
-fn danger_button(label: &'static str, on_click: impl Fn() + 'static) -> impl IntoView {
-    view! { <section class="insp-sec"><button type="button" class="btn danger" on:click=move |_| on_click()>{btn_icon(false)}{label}</button></section> }
+/// The markup of the panel's heading, made once for every heading.
+fn head_view(name: Signal<String>, sub: Signal<String>) -> AnyView {
+    view! { <div class="insp-head"><div><h2 class="insp-name">{move || name.get()}</h2><p class="insp-sub">{move || sub.get()}</p></div></div> }.into_any()
+}
+
+fn danger_button(w: Watch, label: &'static str, on_click: impl Fn() + 'static) -> impl IntoView {
+    view! { <section class="insp-sec"><button type="button" class="btn danger" on:click=move |_| on_click()>{btn_icon(false)}{words(w, label)}</button></section> }
 }
 
 fn bus_panel(w: Watch) -> AnyView {
@@ -327,21 +444,15 @@ fn bus_panel(w: Watch) -> AnyView {
         let v = w.view();
         let Some(b) = v.bus.as_ref() else { return String::new() };
         let pair = (b.from.min(b.to), b.from.max(b.to));
-        v.bus_options.iter().find(|o| (o.a, o.b) == pair).map(|o| o.label.clone()).unwrap_or_default()
+        v.bus_options.iter().find(|o| (o.a, o.b) == pair).map(|o| w.say(&o.label)).unwrap_or_default()
     };
     view! {
-        {head(|| "Bus lane".to_string(), label)}
+        {head(words(w, "jn-insp-bus"), label)}
         <section class="insp-sec">
-            {hint(Signal::derive(move || match w.view().bus.as_ref() {
-                Some(b) => format!(
-                    "A {} bus-only lane straight across the island. It crosses the ring where it enters and leaves.",
-                    w.units().length(b.width_mm)
-                ),
-                None => String::new(),
-            }))}
+            {hint(Signal::derive(move || bus_note(w).unwrap_or_default()))}
         </section>
         {control_section(w)}
-        {danger_button("Remove the bus lane", move || {
+        {danger_button(w, "jn-insp-bus-remove", move || {
             w.edit(|j| j.set_bus(None));
         })}
     }
@@ -350,10 +461,10 @@ fn bus_panel(w: Watch) -> AnyView {
 
 fn cycle_panel(w: Watch) -> AnyView {
     view! {
-        {head(|| "Cycle track".to_string(), || "Round the outside of the roundabout".to_string())}
-        {cycle_width(w, "Cyclists cross every street where it meets the ring.")}
+        {head(words(w, "jn-insp-cycle"), words(w, "jn-insp-cycle-sub"))}
+        {cycle_width(w, "jn-insp-track-hint-crossing")}
         {control_section(w)}
-        {danger_button("Remove the cycle track", move || {
+        {danger_button(w, "jn-insp-cycle-remove", move || {
             w.edit(|j| j.set_cycle_track(false));
         })}
     }
@@ -362,37 +473,40 @@ fn cycle_panel(w: Watch) -> AnyView {
 
 fn junction_panel(w: Watch) -> AnyView {
     view! {
-        <p class="insp-empty">"Select a street, corner or crossing to change it."</p>
+        <p class="insp-empty">{words(w, "jn-insp-empty")}</p>
         {control_section(w)}
     }
     .into_any()
 }
 
+/// The short tag of the way an arm leaves, or nothing when there is no such arm.
+fn compass_tag(w: Watch, arm: Option<&crate::junction::read_model::ArmView>) -> String {
+    arm.map(|a| w.tr(compass_key(a.bearing))).unwrap_or_default()
+}
+
 fn corner_panel(w: Watch, uid: u32) -> AnyView {
     let sub = move || {
         let v = w.view();
-        let from = v.arms.iter().find(|a| a.uid == uid).map_or("", |a| compass(a.bearing));
-        let to = v.corners.iter().find(|c| c.uid == uid).and_then(|c| v.arms.iter().find(|a| a.uid == c.next_uid)).map_or("", |a| compass(a.bearing));
-        format!("{from} to {to}")
+        let from = compass_tag(w, v.arms.iter().find(|a| a.uid == uid));
+        let to = compass_tag(w, v.corners.iter().find(|c| c.uid == uid).and_then(|c| v.arms.iter().find(|a| a.uid == c.next_uid)));
+        tr(w, "jn-arm-to-arm", Args::new().str("from", from).str("to", to))
     };
     let spec = Num {
         id: "i-h-corner",
-        label: "Curb radius",
-        minus: "Tighter by 0.5 m",
-        plus: "Wider by 0.5 m",
-        min: None,
-        max: None,
+        label: "jn-insp-curb-radius",
+        minus: stepper(w, "jn-insp-tighter", RING_STEP_MM),
+        plus: stepper(w, "jn-insp-wider", RING_STEP_MM),
         value: length_signal(w, 1, move |v| v.corners.iter().find(|c| c.uid == uid).map_or(0, |c| c.radius_mm)),
-        step: step_signal(w),
         tag: unit_tag(w),
         hint: derived(w, move |v, u| {
             let speed = v.corners.iter().find(|c| c.uid == uid).map_or(0.0, |c| c.speed_kmh);
-            format!("{}. Cars turn here at about {} km/h.", range_text(u, MIN_CORNER_MM, MAX_CORNER_MM), speed.round())
+            tr(w, "jn-insp-corner-hint", range_args(&w.i18n(), u, MIN_CORNER_MM, MAX_CORNER_MM).num("speed", speed.round() as i64))
         }),
     };
     view! {
-        {head(|| "Corner".to_string(), sub)}
+        {head(words(w, "jn-insp-corner"), sub)}
         {num_field(
+            w,
             spec,
             move |dir| {
                 w.edit(|j| j.step_corner(uid, dir));
@@ -401,7 +515,7 @@ fn corner_panel(w: Watch, uid: u32) -> AnyView {
                 w.edit(|j| j.set_corner(uid, w.units_now().mm(v)));
             },
         )}
-        <p class="insp-empty">"A tight corner slows turning cars and shortens the walk across. A wide one lets them swing through faster."</p>
+        <p class="insp-empty">{words(w, "jn-insp-corner-note")}</p>
         {control_section(w)}
     }
     .into_any()
@@ -410,16 +524,16 @@ fn corner_panel(w: Watch, uid: u32) -> AnyView {
 /// One street a lane may go to, as a turn button on its row.
 fn dest_button(w: Watch, uid: u32, lane: usize, to: u32) -> impl IntoView {
     let v = w.view_now();
-    let a = v.arms.iter().find(|a| a.uid == uid);
-    let d = a.and_then(|a| a.lanes.get(lane)).and_then(|l| l.dests.iter().find(|d| d.uid == to));
-    let (class, label) = d.map_or((0, String::new()), |d| (d.class, d.label.clone()));
-    let bearing = v.arms.iter().find(|x| x.uid == to).map_or(0, |x| x.bearing);
+    let class = v.arms.iter().find(|a| a.uid == uid).and_then(|a| a.lanes.get(lane)).and_then(|l| l.dests.iter().find(|d| d.uid == to)).map_or(0, |d| d.class);
+    let label =
+        move || w.arm(uid, |a| a.lanes.get(lane).and_then(|l| l.dests.iter().find(|d| d.uid == to)).map(|d| w.say(&d.label))).flatten().unwrap_or_default();
+    let tag = move || compass_tag(w, w.view().arms.iter().find(|x| x.uid == to));
     let state = move || {
         w.arm(uid, |a| a.lanes.get(lane).and_then(|l| l.dests.iter().find(|d| d.uid == to).map(|d| (d.on, d.open, l.bad))))
             .flatten()
             .unwrap_or((false, false, false))
     };
-    let name = format!("Lane {} to {}, {}", lane + 1, label, turn_word(class));
+    let name = move || tr(w, dest_key(class), Args::new().num("n", lane as i64 + 1).str("street", label()));
     view! {
         <button
             type="button"
@@ -429,7 +543,7 @@ fn dest_button(w: Watch, uid: u32, lane: usize, to: u32) -> impl IntoView {
             }
             aria-pressed=move || state().0.to_string()
             disabled=move || !state().1
-            title=label.clone()
+            title=label
             aria-label=name
             on:click=move |_| {
                 let on = state().0;
@@ -437,7 +551,7 @@ fn dest_button(w: Watch, uid: u32, lane: usize, to: u32) -> impl IntoView {
             }
         >
             {turn_glyph(class, 16)}
-            <span aria-hidden="true">{compass(bearing)}</span>
+            <span aria-hidden="true">{tag}</span>
         </button>
     }
 }
@@ -450,11 +564,11 @@ fn dest_uids(w: Watch, uid: u32, lane: usize) -> Memo<Vec<u32>> {
 fn lane_row(w: Watch, uid: u32, i: usize) -> impl IntoView {
     let dests = dest_uids(w, uid, i);
     let bad = move || w.arm(uid, |a| a.lanes.get(i).is_some_and(|l| l.bad)).unwrap_or(false);
-    let note = move || w.arm(uid, |a| lane_note(a.lanes.len(), i)).unwrap_or("");
+    let note = move || w.arm(uid, |a| lane_note(a.lanes.len(), i)).flatten().map(|key| w.tr(key)).unwrap_or_default();
     view! {
         <li class=move || if bad() { "lane-row bad" } else { "lane-row" }>
             <button type="button" class="lane-pick" on:click=move |_| w.select(Target::Lane(uid, i))>
-                <span>{format!("Lane {}", i + 1)}<small>{note}</small></span>
+                <span>{move || tr(w, "jn-insp-lane", Args::new().num("n", i as i64 + 1))}<small>{note}</small></span>
             </button>
             <span class="turns-btns">
                 <For each=move || dests.get() key=|d| *d children=move |d| dest_button(w, uid, i, d)/>
@@ -466,33 +580,43 @@ fn lane_row(w: Watch, uid: u32, i: usize) -> impl IntoView {
 fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
     let dests = dest_uids(w, uid, lane);
     let sub = move || {
-        w.arm(uid, |a| {
-            let note = lane_note(a.lanes.len(), lane);
-            if note.is_empty() { a.label.clone() } else { format!("{} · {note}", a.label) }
+        w.arm(uid, |a| match lane_note(a.lanes.len(), lane) {
+            Some(key) => tr(w, "jn-insp-lane-sub", Args::new().str("arm", w.say(&a.label)).str("place", w.tr(key))),
+            None => w.say(&a.label),
         })
         .unwrap_or_default()
     };
-    let title = move || w.arm(uid, |a| format!("Lane {} of {}", lane + 1, a.lanes.len())).unwrap_or_default();
+    let title =
+        move || w.arm(uid, |a| tr(w, "jn-insp-lane-title", Args::new().num("n", lane as i64 + 1).num("count", a.lanes.len() as i64))).unwrap_or_default();
     let range = Signal::derive(move || {
         w.arm(uid, |a| match a.lanes.get(lane) {
-            Some(l) if l.bad => "Every street it goes to is banned. Add a street, or allow a turn.".to_string(),
-            Some(l) => format!("{} wide. A lane has to go to at least one street.", w.units().length(l.width_mm)),
+            Some(l) if l.bad => w.tr("jn-insp-lane-banned"),
+            Some(l) => with_length(w, "jn-insp-lane-width", "width", l.width_mm),
             None => String::new(),
         })
         .unwrap_or_default()
     });
     let option = move |to: u32| {
-        let v = w.view_now();
-        let d = v.arms.iter().find(|a| a.uid == uid).and_then(|a| a.lanes.get(lane)).and_then(|l| l.dests.iter().find(|d| d.uid == to));
-        let (class, label) = d.map_or((0, String::new()), |d| (d.class, d.label.clone()));
-        let state = move || {
-            w.arm(uid, |a| a.lanes.get(lane).and_then(|l| l.dests.iter().find(|d| d.uid == to).map(|d| (d.on, d.open)))).flatten().unwrap_or((false, false))
+        let dest = move || {
+            w.arm(uid, |a| a.lanes.get(lane).and_then(|l| l.dests.iter().find(|d| d.uid == to)).map(|d| (d.class, w.say(&d.label), d.on, d.open))).flatten()
         };
+        let class = w
+            .view_now()
+            .arms
+            .iter()
+            .find(|a| a.uid == uid)
+            .and_then(|a| a.lanes.get(lane))
+            .and_then(|l| l.dests.iter().find(|d| d.uid == to))
+            .map_or(0, |d| d.class);
+        let state = move || dest().map_or((false, false), |(_, _, on, open)| (on, open));
         option_btn(
             move || state().0,
             move || !state().1,
             turn_glyph(class, 22).into_any(),
-            move || format!("{} to {}{}", turn_name(class), label, if state().1 { "" } else { " (one way in)" }),
+            move || {
+                let (class, label, _, open) = dest().unwrap_or((class, String::new(), false, false));
+                goes_text(&w.i18n(), class, label, open)
+            },
             move || {
                 let on = state().0;
                 w.edit(|j| j.set_lane_dest(uid, lane, to, !on));
@@ -502,12 +626,12 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
     view! {
         {head(title, sub)}
         <section class="insp-sec">
-            <h3 class="note-h" id="i-h-serves">"Where this lane goes"</h3>
+            <h3 class="note-h" id="i-h-serves">{words(w, "jn-insp-lane-goes")}</h3>
             <ul class="opts"><For each=move || dests.get() key=|d| *d children=option/></ul>
             {hint(range)}
         </section>
         <section class="insp-sec">
-            <button type="button" class="btn" on:click=move |_| w.select(Target::Arm(uid))>"Select the whole street"</button>
+            <button type="button" class="btn" on:click=move |_| w.select(Target::Arm(uid))>{words(w, "jn-insp-whole-street")}</button>
         </section>
         {control_section(w)}
     }
@@ -517,32 +641,26 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
 // ---- a street ------------------------------------------------------------------
 
 fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
-    let range = Signal::derive(move || w.arm(uid, |a| a.crossing.as_ref().map(|c| crossing_range(c, w.units()))).flatten().unwrap_or_default());
+    let range = Signal::derive(move || w.arm(uid, |a| a.crossing.as_ref().map(|c| crossing_range(c, &w.i18n(), w.units()))).flatten().unwrap_or_default());
     let island = move || w.arm(uid, |a| a.crossing.as_ref().is_some_and(|c| c.island)).unwrap_or(false);
     let can_island = move || w.arm(uid, |a| a.can_island).unwrap_or(false);
     let setback = Num {
         id: "i-h-setback",
-        label: "Set back from the junction",
-        minus: "Closer by 0.5 m",
-        plus: "Farther by 0.5 m",
-        min: None,
-        max: None,
+        label: "jn-insp-setback",
+        minus: stepper(w, "jn-insp-closer", RING_STEP_MM),
+        plus: stepper(w, "jn-insp-farther", RING_STEP_MM),
         value: length_signal(w, 1, move |v| v.arms.iter().find(|a| a.uid == uid).and_then(|a| a.crossing.as_ref()).map_or(0, |c| c.setback_mm)),
-        step: step_signal(w),
         tag: unit_tag(w),
-        hint: derived(w, |_, u| range_text(u, MIN_SETBACK_MM, MAX_SETBACK_MM)),
+        hint: range_hint(w, MIN_SETBACK_MM, MAX_SETBACK_MM),
     };
     let width = Num {
         id: "i-h-cwidth",
-        label: "Crossing width",
-        minus: "Narrower by 0.5 m",
-        plus: "Wider by 0.5 m",
-        min: None,
-        max: None,
+        label: "jn-insp-crossing-width",
+        minus: stepper(w, "jn-insp-narrower", RING_STEP_MM),
+        plus: stepper(w, "jn-insp-wider", RING_STEP_MM),
         value: length_signal(w, 1, move |v| v.arms.iter().find(|a| a.uid == uid).and_then(|a| a.crossing.as_ref()).map_or(0, |c| c.width_mm)),
-        step: step_signal(w),
         tag: unit_tag(w),
-        hint: derived(w, |_, u| range_text(u, MIN_CROSSING_MM, MAX_CROSSING_MM)),
+        hint: range_hint(w, MIN_CROSSING_MM, MAX_CROSSING_MM),
     };
     let bulb = move |side: usize| {
         let has = move || w.arm(uid, |a| a.can_bulb[side]).unwrap_or(false);
@@ -550,7 +668,10 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
             move || w.arm(uid, |a| a.bulbs[side].is_some()).unwrap_or(false),
             move || !has(),
             ().into_any(),
-            move || format!("{} curb bulge{}", if side == 0 { "Left" } else { "Right" }, if has() { "" } else { " (no parking there)" }),
+            move || {
+                let bulb = w.tr(if side == 0 { "jn-insp-bulb-left" } else { "jn-insp-bulb-right" });
+                if has() { bulb } else { tr(w, "jn-insp-no-parking", Args::new().str("bulb", bulb)) }
+            },
             move || {
                 let on = w.arm(uid, |a| a.bulbs[side].is_some()).unwrap_or(false);
                 w.edit(|j| j.set_bulb(uid, side, !on));
@@ -559,11 +680,12 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
     };
     view! {
         <section class="insp-sec">
-            <h3 class="note-h" id="i-h-cross">"Crossing"</h3>
+            <h3 class="note-h" id="i-h-cross">{words(w, "jn-insp-crossing")}</h3>
             {hint(range)}
-            <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.set_crossing(uid, false)); }>{btn_icon(false)}"Remove the crossing"</button>
+            <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.set_crossing(uid, false)); }>{btn_icon(false)}{words(w, "jn-insp-crossing-remove")}</button>
         </section>
         {num_field(
+            w,
             setback,
             move |dir| {
                 w.edit(|j| j.step_setback(uid, dir));
@@ -573,6 +695,7 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
             },
         )}
         {num_field(
+            w,
             width,
             move |dir| {
                 w.edit(|j| j.step_crossing_width(uid, dir));
@@ -582,21 +705,22 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
             },
         )}
         {section(
+            w,
             "i-h-refuge",
-            "Halfway island",
+            "jn-insp-halfway",
             view! {
                 <ul class="opts">
                     {option_btn(
                         island,
                         move || !can_island(),
                         ().into_any(),
-                        move || if can_island() { "Refuge island in the middle".to_string() } else { "Refuge island (road too narrow)".to_string() },
+                        move || w.tr(if can_island() { "jn-insp-island" } else { "jn-insp-island-narrow" }),
                         move || { w.edit(|j| j.set_island(uid, !island())); },
                     )}
                 </ul>
             },
         )}
-        {section("i-h-bulb", "Shorten the crossing", view! { <ul class="opts">{bulb(0)}{bulb(1)}</ul> })}
+        {section(w, "i-h-bulb", "jn-insp-shorten", view! { <ul class="opts">{bulb(0)}{bulb(1)}</ul> })}
     }
 }
 
@@ -608,8 +732,8 @@ fn crossing_section(w: Watch, uid: u32) -> impl IntoView {
         } else {
             view! {
                 <section class="insp-sec">
-                    <h3 class="note-h" id="i-h-cross">"Crossing"</h3>
-                    <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.set_crossing(uid, true)); }>{btn_icon(true)}"Mark a crossing"</button>
+                    <h3 class="note-h" id="i-h-cross">{words(w, "jn-insp-crossing")}</h3>
+                    <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.set_crossing(uid, true)); }>{btn_icon(true)}{words(w, "jn-insp-crossing-mark")}</button>
                 </section>
             }
             .into_any()
@@ -617,7 +741,12 @@ fn crossing_section(w: Watch, uid: u32) -> impl IntoView {
     }
 }
 
-/// A list of items to choose one from, by position in a catalogue.
+/// A measure's name in a list, after its Atlas code when it has one.
+fn coded(w: Watch, code: &str, key: &str) -> String {
+    if code.is_empty() { w.tr(key) } else { tr(w, "jn-insp-coded", Args::new().str("code", code.to_string()).str("name", w.tr(key))) }
+}
+
+/// A list of items to choose one from, by position in a catalogue; `label` is the message of its name.
 fn choice(
     w: Watch,
     key: &'static str,
@@ -631,7 +760,7 @@ fn choice(
     let labelled = id.clone();
     view! {
         <label class="fld">
-            <span id=id>{label}</span>
+            <span id=id>{words(w, label)}</span>
             <select
                 aria-labelledby=labelled
                 on:change=move |ev| {
@@ -644,8 +773,7 @@ fn choice(
                     .iter()
                     .enumerate()
                     .map(|(i, o)| {
-                        let text = if o.code.is_empty() { o.name.to_string() } else { format!("{} {}", o.code, o.name) };
-                        view! { <option value=i.to_string() prop:selected=move || w.arm(uid, |a| current(&a.transit) == i).unwrap_or(false)>{text}</option> }
+                        view! { <option value=i.to_string() prop:selected=move || w.arm(uid, |a| current(&a.transit) == i).unwrap_or(false)>{move || coded(w, o.code, o.key)}</option> }
                     })
                     .collect_view()}
             </select>
@@ -659,24 +787,22 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
     let kind = Memo::new(move |_| w.arm(uid, |a| a.transit.approach_kind).unwrap_or("none"));
     let problems = move || {
         let list = w.arm(uid, |a| a.transit.problems.clone()).unwrap_or_default();
-        (!list.is_empty()).then(|| view! { <ul class="problems">{list.into_iter().map(|p| view! { <li>{p}</li> }).collect_view()}</ul> })
+        (!list.is_empty()).then(|| view! { <ul class="problems">{list.into_iter().map(|p| view! { <li>{w.say(&p)}</li> }).collect_view()}</ul> })
     };
     let length_field = move || {
         let queue = kind.get() == "queue";
         matches!(kind.get(), "queue" | "gate").then(|| {
             let spec = Num {
                 id: "i-h-alen",
-                label: if queue { "Length of the queue jump" } else { "Gate distance upstream" },
-                minus: "Shorter by 5 m",
-                plus: "Longer by 5 m",
-                min: None,
-                max: None,
+                label: if queue { "jn-insp-queue-length" } else { "jn-insp-gate-distance" },
+                minus: stepper(w, "jn-insp-shorter", APPROACH_STEP_MM),
+                plus: stepper(w, "jn-insp-longer", APPROACH_STEP_MM),
                 value: length_signal(w, 1, move |v| v.arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.transit.approach_mm)),
-                step: step_signal(w),
                 tag: unit_tag(w),
-                hint: derived(w, |_, u| range_text(u, APPROACH_MIN_MM, APPROACH_MAX_MM)),
+                hint: range_hint(w, APPROACH_MIN_MM, APPROACH_MAX_MM),
             };
             num_field(
+                w,
                 spec,
                 move |dir| {
                     w.edit(|j| j.step_approach_len(uid, dir));
@@ -689,25 +815,25 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
     };
     view! {
         <section class="insp-sec">
-            <h3 class="note-h" id="i-h-transit">"Transit priority"</h3>
+            <h3 class="note-h" id="i-h-transit">{words(w, "jn-insp-transit")}</h3>
             <ul class="opts">
                 {option_btn(
                     bus_lane,
                     || false,
                     ().into_any(),
-                    || "Bus lane along the way in".to_string(),
+                    words(w, "jn-insp-bus-lane-in"),
                     move || { w.edit(|j| j.set_bus_lane(uid, !bus_lane())); },
                 )}
             </ul>
-            {choice(w, "approach", "At the approach", &APPROACHES, |t| t.approach, move |j, i| j.set_approach(uid, i), uid)}
-            {choice(w, "stop", "Bus stop", &STOPS, |t| t.stop, move |j, i| j.set_stop(uid, i), uid)}
-            {choice(w, "rule", "Turns", &RULES, |t| t.rule, move |j, i| j.set_rule(uid, i), uid)}
+            {choice(w, "approach", "jn-insp-approach", &APPROACHES, |t| t.approach, move |j, i| j.set_approach(uid, i), uid)}
+            {choice(w, "stop", "jn-insp-stop", &STOPS, |t| t.stop, move |j, i| j.set_stop(uid, i), uid)}
+            {choice(w, "rule", "jn-insp-rule", &RULES, |t| t.rule, move |j, i| j.set_rule(uid, i), uid)}
             <ul class="opts">
                 {option_btn(
                     filter,
                     || false,
                     ().into_any(),
-                    || format!("{FILTER_CODE} Transit modal filter"),
+                    move || coded(w, FILTER_CODE, "jn-insp-filter"),
                     move || { w.edit(|j| j.set_filter(uid, !filter())); },
                 )}
             </ul>
@@ -718,8 +844,14 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
 }
 
 fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
-    let name = move || w.arm(uid, |a| a.street.to_string()).unwrap_or_default();
-    let sub = move || w.arm(uid, |a| format!("{}, {}° · {} road", compass(a.bearing), a.bearing, w.units().length(a.road_mm))).unwrap_or_default();
+    let name = move || w.arm(uid, |a| w.say(&a.street)).unwrap_or_default();
+    let sub = move || {
+        w.arm(uid, |a| {
+            let args = Args::new().str("compass", w.tr(compass_key(a.bearing))).num("degrees", a.bearing as i64).str("width", length(w, a.road_mm));
+            tr(w, "jn-insp-arm-sub", args)
+        })
+        .unwrap_or_default()
+    };
     if crossing_only {
         return view! { {head(name, sub)} {crossing_section(w, uid)} {control_section(w)} }.into_any();
     }
@@ -728,39 +860,31 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
     let linked = w.view_now().linked;
     let direction = Num {
         id: "i-h-bearing",
-        label: "Direction",
-        minus: "Turn anticlockwise by 5°",
-        plus: "Turn clockwise by 5°",
-        min: Some("0"),
-        max: Some("355"),
+        label: "jn-insp-direction",
+        minus: Signal::derive(move || tr(w, "jn-insp-anticlockwise", Args::new().num("degrees", BEARING_STEP as i64))),
+        plus: Signal::derive(move || tr(w, "jn-insp-clockwise", Args::new().num("degrees", BEARING_STEP as i64))),
         value: Signal::derive(move || w.arm(uid, |a| a.bearing.to_string()).unwrap_or_default()),
-        step: Signal::derive(|| BEARING_STEP.to_string()),
-        tag: constant("°"),
-        hint: constant("Clockwise from north. At least 30° from its neighbours."),
+        tag: Signal::derive(|| "°".to_string()),
+        hint: Signal::derive(move || tr(w, "jn-insp-direction-hint", Args::new().num("degrees", MIN_SEPARATION as i64))),
     };
     let offset = Num {
         id: "i-h-offset",
-        label: "Shift sideways",
-        minus: "Shift left by 0.1 m",
-        plus: "Shift right by 0.1 m",
-        min: None,
-        max: None,
+        label: "jn-insp-shift",
+        minus: stepper(w, "jn-insp-shift-left", OFFSET_STEP_MM),
+        plus: stepper(w, "jn-insp-shift-right", OFFSET_STEP_MM),
         value: length_signal(w, 2, move |v| v.arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.offset_mm)),
-        step: step_signal(w),
         tag: unit_tag(w),
-        hint: derived(w, move |v, u| {
-            let max = v.arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.max_offset_mm);
-            format!("Up to {} either way. Looking out from the junction.", u.length(max))
-        }),
+        hint: derived(w, move |v, _| with_length(w, "jn-insp-shift-hint", "length", v.arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.max_offset_mm))),
     };
     let street = {
         let edge = w.view_now().arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.edge);
         section(
+            w,
             "i-h-street",
-            "Street",
+            "jn-insp-street",
             view! {
-                <a class="btn" href=format!("street.html?street={edge}")>"Open the cross-section"</a>
-                <p class="insp-range">"This street belongs to the city. Its layout is edited in the street editor, and changes there show here."</p>
+                <a class="btn" href=format!("street.html?street={edge}")>{words(w, "jn-insp-cross-section")}</a>
+                <p class="insp-range">{words(w, "jn-insp-street-note")}</p>
             },
         )
         .into_any()
@@ -770,30 +894,32 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         view! {
             <section class="insp-sec">
                 <button type="button" class="btn danger" disabled=move || !can() on:click=move |_| { w.edit(|j| j.remove_arm(uid)); }>
-                    {btn_icon(false)}"Remove this street"
+                    {btn_icon(false)}{words(w, "jn-insp-remove-street")}
                 </button>
-                {move || (!can()).then(|| view! { <p class="insp-range">{format!("A junction needs at least {MIN_ARMS} streets.")}</p> })}
+                {move || (!can()).then(|| view! { <p class="insp-range">{move || tr(w, "jn-insp-min-arms", Args::new().num("n", MIN_ARMS as i64))}</p> })}
             </section>
         }
     });
     view! {
         {head(name, sub)}
         <section class="insp-sec">
-            <h3 class="note-h" id="i-h-lanes">"Lanes coming in"</h3>
+            <h3 class="note-h" id="i-h-lanes">{words(w, "jn-insp-lanes-in")}</h3>
             {move || if enters.get() {
                 view! { <ul class="lanes"><For each=move || 0..lanes.get() key=|i| *i children=move |i| lane_row(w, uid, i)/></ul> }.into_any()
             } else {
-                view! { <p class="insp-range">"One way out. No lanes come in."</p> }.into_any()
+                view! { <p class="insp-range">{words(w, "jn-insp-one-way-out")}</p> }.into_any()
             }}
         </section>
         {crossing_section(w, uid)}
         {transit_section(w, uid)}
         {num_field(
+            w,
             direction,
             move |dir| { w.edit(|j| j.step_bearing(uid, dir)); },
-            move |v| { w.edit(|j| j.set_bearing(uid, v.round() as i32)); },
+            move |v| set_bearing_degrees(w, uid, v),
         )}
         {num_field(
+            w,
             offset,
             move |dir| { w.edit(|j| j.step_offset(uid, dir)); },
             move |v| { w.edit(|j| j.set_offset(uid, w.units_now().mm(v))); },
@@ -830,44 +956,75 @@ pub fn Inspector(vm: Rc<JunctionVm>) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::i18n::Locale;
 
     fn crossing(j: &Junction, bearing: i32) -> CrossingView {
         j.view().arms.into_iter().find(|a| a.bearing == bearing).unwrap().crossing.unwrap()
     }
 
     #[test]
+    fn a_number_field_with_an_empty_hint_is_not_described_by_one() {
+        let vm = crate::junction::vm::JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Junction::new(0), None);
+        let w = Watch::new(vm);
+        let field = |hint: &'static str| Num {
+            id: "f",
+            label: "jn-insp-ring-hint",
+            minus: Signal::derive(String::new),
+            plus: Signal::derive(String::new),
+            value: Signal::derive(|| "1".to_string()),
+            tag: Signal::derive(String::new),
+            hint: Signal::derive(move || hint.to_string()),
+        };
+        let html = |hint| crate::shared::testing::html(move || num_view(w, field(hint), Rc::new(|_| {}), Box::new(|_| {})));
+        assert!(!html("").contains("aria-describedby"));
+        assert!(html("1 m to 2 m").contains("aria-describedby=\"f-hint\""));
+    }
+
+    #[test]
     fn a_lane_is_placed_among_its_street_s_lanes() {
-        assert_eq!(lane_note(1, 0), "the only lane");
-        assert_eq!(lane_note(2, 0), "nearest the middle");
-        assert_eq!(lane_note(2, 1), "nearest the curb");
-        assert_eq!(lane_note(3, 1), "");
+        assert_eq!(lane_note(1, 0), Some("jn-insp-lane-only"));
+        assert_eq!(lane_note(2, 0), Some("jn-insp-lane-middle"));
+        assert_eq!(lane_note(2, 1), Some("jn-insp-lane-curb"));
+        assert_eq!(lane_note(3, 1), None);
     }
 
     #[test]
     fn a_crossing_in_stages_is_described_by_its_stages() {
+        let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
         let j = Junction::new(0);
-        assert_eq!(crossing_range(&crossing(&j, 0), Units::Metres), "2 stages of 9.0 m");
-        assert_eq!(crossing_range(&crossing(&j, 0), Units::Feet), "2 stages of 29.5 ft");
+        assert_eq!(crossing_range(&crossing(&j, 0), &en, Units::Metres), "2 stages of 9.0 m");
+        assert_eq!(crossing_range(&crossing(&j, 0), &en, Units::Feet), "2 stages of 29.5 ft");
+        assert_eq!(crossing_range(&crossing(&j, 0), &fr, Units::Metres), "2 traversées de 9,0\u{a0}m");
     }
 
     #[test]
     fn a_crossing_in_one_go_is_described_by_its_length() {
+        let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
         let j = Junction::new(0);
-        assert_eq!(crossing_range(&crossing(&j, 90), Units::Metres), "11.4 m to cross");
+        assert_eq!(crossing_range(&crossing(&j, 90), &en, Units::Metres), "11.4 m to cross");
+        assert_eq!(crossing_range(&crossing(&j, 90), &fr, Units::Metres), "11,4\u{a0}m à traverser");
     }
 
     #[test]
     fn a_crossing_that_is_too_far_says_so() {
         let mut c = crossing(&Junction::new(0), 90);
         c.too_far = true;
-        assert_eq!(crossing_range(&c, Units::Metres), "11.4 m to cross. Too far in one go.");
+        assert_eq!(crossing_range(&c, &crate::i18n_for(Locale::En), Units::Metres), "11.4 m to cross. Too far in one go.");
     }
 
     #[test]
     fn a_range_is_written_in_the_units_shown() {
-        assert_eq!(range_text(Units::Metres, 1_000, 15_000), "1.0 m to 15.0 m");
-        assert_eq!(range_text(Units::Feet, 3_048, 6_096), "10.0 ft to 20.0 ft");
-        assert_eq!(step_attr(Units::Metres), "0.1");
-        assert_eq!(step_attr(Units::Feet), "0.5");
+        let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+        assert_eq!(range_text(&en, Units::Metres, 1_000, 15_000), "1.0 m to 15.0 m");
+        assert_eq!(range_text(&en, Units::Feet, 3_048, 6_096), "10.0 ft to 20.0 ft");
+        assert_eq!(range_text(&fr, Units::Metres, 1_000, 15_000), "De 1,0\u{a0}m à 15,0\u{a0}m");
+    }
+
+    #[test]
+    fn each_class_of_turn_has_its_own_words() {
+        let en = crate::i18n_for(Locale::En);
+        let words = |key: &str| en.tr_now(key, &Args::new().num("n", 1).str("street", "X"));
+        assert_eq!([LEFT, THROUGH, RIGHT].map(|c| words(dest_key(c))), ["Lane 1 to X, left", "Lane 1 to X, straight on", "Lane 1 to X, right"]);
+        assert_eq!([LEFT, THROUGH, RIGHT].map(|c| words(goes_key(c))), ["Left to X", "Straight on to X", "Right to X"]);
     }
 }

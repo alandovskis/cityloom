@@ -26,20 +26,24 @@ use wasm_bindgen::prelude::*;
 
 use crate::city::binding::{CityBinding, Place};
 use crate::city::store::CityStore;
+use crate::shared::i18n::Resources;
 use crate::shared::platform::browser_ports;
+
+/// What the junction says, in both languages.
+pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
 
 /// One junction being edited. The page drives it through the components the
 /// module mounts; the script only starts it up and hands it what the shell
 /// chooses (units, region).
 #[wasm_bindgen]
-pub struct Plan(Rc<vm::JunctionVm>, Rc<crate::shared::i18n::I18n>);
+pub struct Plan(Rc<vm::JunctionVm>);
 
 #[wasm_bindgen]
 impl Plan {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
-        crate::shell::mount(self.1.clone(), self.0.clone(), "details-details", true);
+        crate::shell::mount(self.0.i18n().clone(), self.0.clone(), "details-details", true);
     }
 
     /// The page is being left: what is waiting to be kept in the city is kept now.
@@ -81,10 +85,47 @@ pub fn mount_page(plan: &Plan) {
     mount("revs", view! { <notes::Revisions vm=vm/> }.into_any());
 }
 
-/// The name of a junction of the city kept in this browser; empty when there is none.
+/// The words of the junction page, and of the page of a junction that cannot be drawn: the stored language, or
+/// the browser's, which the document is then told it is in.
+fn page_i18n(ports: &crate::shared::ports::Ports) -> Rc<crate::shared::i18n::I18n> {
+    crate::i18n_browser(ports)
+}
+
+/// Whether the city kept in this browser has junction `node`; the page goes back to the map when it has not.
 #[wasm_bindgen]
-pub fn junction_name(node: u32) -> String {
-    CityStore::current(browser_ports().storage).open().junction_name(node).unwrap_or_default()
+pub fn junction_exists(node: u32) -> bool {
+    CityStore::current(browser_ports().storage).open().junction_name(node).is_some()
+}
+
+/// The page of junction `node` when the streets that meet there can no longer be drawn as a junction: it says
+/// so under the junction's name, and keeps the shell every page shares (the settings menu and the sidebars).
+#[wasm_bindgen]
+pub fn mount_bare_shell(node: u32) {
+    // Components create effects as they are built, before any is mounted.
+    let _ = any_spawner::Executor::init_wasm_bindgen();
+    let ports = browser_ports();
+    let i18n = page_i18n(&ports);
+    let name = CityStore::current(ports.storage.clone()).open().junction_name(node);
+    let doc = leptos::prelude::document();
+    let find = |selector: &str| doc.query_selector(selector).ok().flatten();
+    // Nothing here can be drawn or changed: the plan, its tools and its status make way for the panel.
+    if let Some(tools) = find(".tools") {
+        let _ = tools.set_attribute("hidden", "");
+    }
+    for selector in [".plan-drawing", ".statusbar"] {
+        if let Some(el) = find(selector) {
+            el.remove();
+        }
+    }
+    if let (Some(at), Some(name)) = (find("#street"), name) {
+        let i18n = i18n.clone();
+        leptos::mount::mount_to(at.unchecked_into(), move || view! { <page::StuckHeader i18n=i18n name=name/> }).forget();
+    }
+    if let Some(at) = find(".stage-main") {
+        let i18n = i18n.clone();
+        leptos::mount::mount_to(at.unchecked_into(), move || view! { <page::Stuck i18n=i18n/> }).forget();
+    }
+    crate::shell::mount(i18n, Rc::new(crate::shell::Bare::default()), "details-details", true);
 }
 
 /// The junction editor on one junction of the city kept in this browser, which
@@ -96,6 +137,6 @@ pub fn open_junction(node: u32) -> Option<Plan> {
     let store = CityStore::current(ports.storage.clone());
     let junction = store.open().junction_editor(node, store.region())?;
     let place = Place::Junction(node);
-    let i18n = crate::unmigrated_i18n();
-    Some(Plan(vm::JunctionVm::new(ports, junction, Some(CityBinding { store, place })), i18n))
+    let i18n = page_i18n(&ports);
+    Some(Plan(vm::JunctionVm::new(ports, i18n, junction, Some(CityBinding { store, place }))))
 }

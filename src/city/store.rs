@@ -270,7 +270,10 @@ mod tests {
         assert!(s.has_network());
         let v = s.open().view(0);
         assert_eq!((v.name.as_str(), v.edges.len()), ("Testville", 1));
-        assert!(v.edges[0].name.starts_with("Only Street"));
+        assert_eq!(
+            crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres, &v.edges[0].called),
+            "Only Street"
+        );
     }
 
     #[test]

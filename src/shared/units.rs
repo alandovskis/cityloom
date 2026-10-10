@@ -114,6 +114,11 @@ impl Units {
     pub fn length(self, mm: i32) -> String {
         self.length_in(mm, Locale::En)
     }
+
+    /// A length with its unit, to the whole unit, as a scale bar marks it: 20 m, 66 ft.
+    pub fn length_whole_in(self, mm: i32, locale: Locale) -> String {
+        format!("{}{}{}", self.fixed_in(mm, 0, locale), unit_gap(locale), self.word())
+    }
 }
 
 /// The decimal mark of the language, given a number written with a point.
@@ -160,6 +165,8 @@ mod tests {
         assert_eq!(Units::Metres.length_fine_in(3_250, Locale::FrCa), "3,25\u{a0}m");
         assert_eq!(Units::Feet.length_in(3_048, Locale::FrCa), "10,0\u{a0}ft");
         assert_eq!(Units::Metres.length_in(11_400, Locale::En), "11.4 m");
+        assert_eq!(Units::Metres.length_whole_in(20_000, Locale::FrCa), "20\u{a0}m");
+        assert_eq!(Units::Feet.length_whole_in(20_000, Locale::En), "66 ft");
     }
 
     #[test]

@@ -5,12 +5,12 @@
 use std::rc::Rc;
 
 use leptos::prelude::*;
-use serde::Deserialize;
 
+use crate::city::model::EndView;
 use crate::shared::catalogue::{KINDS, group_key, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
-use crate::shared::said::hhmm;
+use crate::shared::said::{self, hhmm};
 use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
 use crate::street::model::{SegView, View};
@@ -129,14 +129,6 @@ pub fn page_title(i18n: &I18n, street: &str, ends: &[String]) -> String {
     i18n.tr("title-between", &Args::new().str("street", street).str("ends", ends_list(ends, i18n)))
 }
 
-/// The ends of a street that belongs to a city: a junction, or where it leaves the map.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct StreetEnd {
-    pub name: String,
-    pub junction: bool,
-    pub uid: u32,
-}
-
 // ---- the components ----------------------------------------------------------------------
 
 fn back_link(w: SheetWatch) -> impl IntoView {
@@ -153,24 +145,30 @@ fn say(w: SheetWatch, key: &'static str) -> impl Fn() -> String + 'static {
     move || w.i18n().tr(key, &Args::new())
 }
 
-fn end_link(e: &StreetEnd) -> impl IntoView {
+/// What the street is called, in the language of the page.
+fn street_title(w: SheetWatch) -> String {
+    said::say(&w.i18n(), w.units(), &w.view().name)
+}
+
+/// One end of the street, named in the language of the page: a link where it is a junction.
+fn end_link(w: SheetWatch, e: &EndView) -> impl IntoView {
     let name = e.name.clone();
-    e.junction
-        .then(|| format!("intersection.html?junction={}", e.uid))
-        .map_or_else(|| name.clone().into_any(), |href| view! { <a href=href>{name.clone()}</a> }.into_any())
+    let words = move || said::say(&w.i18n(), w.units(), &name);
+    if e.junction { view! { <a href=format!("intersection.html?junction={}", e.uid)>{words}</a> }.into_any() } else { words.into_any() }
 }
 
 /// The street's name and how wide it is; for a street of a city, the way back to
 /// the map and the two places it runs between.
 #[component]
-pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl IntoView {
+pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     // This page owns the window's title; it is written again when the street or the language changes.
     #[cfg(target_arch = "wasm32")]
     {
-        let names: Vec<String> = ends.iter().flatten().map(|e| e.name.clone()).collect();
+        let ends: Vec<said::Said> = ends.iter().flatten().map(|e| e.name.clone()).collect();
         Effect::new(move |_| {
-            document().set_title(&page_title(&w.i18n(), &w.view().name, &names));
+            let names: Vec<String> = ends.iter().map(|e| said::say(&w.i18n(), w.units(), e)).collect();
+            document().set_title(&page_title(&w.i18n(), &street_title(w), &names));
         });
     }
     let linked = ends.is_some();
@@ -181,16 +179,16 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
             " "
             <span>
                 {move || format!("{} ", w.i18n().tr("header-between", &Args::new()))}
-                {end_link(a)}
+                {end_link(w, a)}
                 {move || format!(" {} ", w.i18n().tr("header-and", &Args::new()))}
-                {end_link(b)}
+                {end_link(w, b)}
             </span>
         }
         .into_any(),
         _ => ().into_any(),
     });
     view! {
-        <h1 id="street-name">{move || w.view().name.clone()}</h1>
+        <h1 id="street-name">{move || street_title(w)}</h1>
         <p class="street-sub" id="street-sub">
             {linked.then(|| view! { {back_link(w)} " " <span aria-hidden="true">"\u{b7}"</span> " " })}
             <span>{say(w, "header-section")}</span>
@@ -207,7 +205,7 @@ pub fn StreetHeader(vm: Rc<StreetVm>, ends: Option<Vec<StreetEnd>>) -> impl Into
 pub fn TitleBlock(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     view! {
-        <div class="tb-cell tb-wide"><span>{say(w, "block-street")}</span><b id="tb-street">{move || w.view().name.clone()}</b></div>
+        <div class="tb-cell tb-wide"><span>{say(w, "block-street")}</span><b id="tb-street">{move || street_title(w)}</b></div>
         <div class="tb-cell"><span>{say(w, "block-width")}</span><b id="tb-row" class="fig">{move || w.units().length_fine_in(w.view().row_mm, w.i18n().locale())}</b></div>
         <div class="tb-cell"><span>{say(w, "block-changes")}</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
         {move || {
@@ -667,7 +665,8 @@ mod tests {
         s.variants[0].to_min = 600;
         let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
         let note = clock_note(&s, &i18n);
-        assert!(note.starts_with(KINDS[s.base_kind].name) && note.contains(" except "), "{note}");
+        let base = i18n.tr_now(&crate::shared::catalogue::kind_key(KINDS[s.base_kind].id), &crate::shared::i18n::Args::new());
+        assert!(note.starts_with(&base) && note.contains(" except "), "{note}");
         assert!(note.contains("07:00\u{2013}10:00"), "{note}");
         s.variants[0].days = Some("Mo-Fr".into());
         assert!(clock_note(&s, &i18n).contains("Mo-Fr 07:00\u{2013}10:00"), "{}", clock_note(&s, &i18n));
@@ -676,10 +675,12 @@ mod tests {
     }
 
     #[test]
-    fn the_ends_of_a_city_street_are_read_from_the_json_the_city_gives() {
-        let ends: Vec<StreetEnd> =
-            serde_json::from_str(r#"[{"name":"Junction 1","junction":true,"uid":3},{"name":"Edge of the map","junction":false,"uid":0}]"#).unwrap();
-        assert_eq!(ends[0], StreetEnd { name: "Junction 1".into(), junction: true, uid: 3 });
-        assert!(!ends[1].junction);
+    fn the_ends_of_a_city_street_are_read_from_the_city() {
+        let city = crate::city::model::City::new();
+        let ends = city.street_ends(1);
+        let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
+        let read = |e: &EndView| (said::say_now(&i18n, crate::shared::units::Units::Metres, &e.name), e.junction, e.uid);
+        assert_eq!(ends.iter().map(read).collect::<Vec<_>>(), [("the edge of the map".to_string(), false, 1), ("Junction 4".to_string(), true, 2)]);
+        assert!(city.street_ends(99).is_empty());
     }
 }

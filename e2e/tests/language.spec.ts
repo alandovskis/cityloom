@@ -147,17 +147,29 @@ const expectFits = async (page: Page) => {
 };
 
 // English is the baseline: French may not overflow where English does not. English fits at all four widths,
-// so none is left out of the French check.
-test("English text does not overflow the page", async ({ page }) => {
-  await openStreet(page);
-  await expectFits(page);
-});
+// so none is left out of the French check. Every page is checked, each in both languages.
+const OPENERS: { name: string; open: (page: Page) => Promise<unknown>; ready?: (page: Page) => Promise<void> }[] = [
+  { name: "home", open: (page) => page.goto("/") },
+  { name: "map", open: (page) => page.goto("/map.html"), ready: mapReady },
+  { name: "street", open: (page) => openStreet(page) },
+  { name: "junction", open: (page) => openJunction(page) },
+];
 
-test("French text does not overflow the page", async ({ page }) => {
-  await storedFrench(page);
-  await openStreet(page);
-  await expectFits(page);
-});
+for (const { name, open, ready } of OPENERS) {
+  test(`English text does not overflow the ${name} page`, async ({ page }) => {
+    await open(page);
+    await ready?.(page);
+    await expectFits(page);
+  });
+
+  test(`French text does not overflow the ${name} page`, async ({ page }) => {
+    await storedFrench(page);
+    await open(page);
+    await ready?.(page);
+    await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+    await expectFits(page);
+  });
+}
 
 test("a French reader types a decimal comma", async ({ page }) => {
   await storedFrench(page);
@@ -175,13 +187,125 @@ test("a French reader types a decimal comma", async ({ page }) => {
   await expect(fit).not.toContainText("too wide");
 });
 
-// The pages that are not translated are English from top to bottom, so the document says so even for a
-// reader who chose French on the street page (a screen reader would read English words with French rules).
-test("a page that is not translated keeps lang=en for a reader who chose French", async ({ page }) => {
-  await storedFrench(page);
+test("the map page can be read in French and the choice is kept", async ({ page }) => {
   await page.goto("/map.html");
   await mapReady(page);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("#h-checks")).toHaveText("Does it work?");
+  await chooseFrench(page);
+  await expect(page.locator("#h-checks")).toHaveText("Est-ce que ça fonctionne?");
+  await expect(page.locator("#places-panel h3").first()).toHaveText("Jonctions");
+  await expect(page.locator("#zoom-fit")).toHaveAttribute("title", "Toute la ville");
+  await expect(page).toHaveTitle("Carte de la ville CityLoom");
+  // The search finds what the page shows, in its language.
+  // A junction's small print counts its streets: "4 rues".
+  await page.locator("#search").fill("rues");
+  await expect(page.locator("#search-results [role=option]").first()).toContainText(/\d rues/);
+  await page.reload();
+  await mapReady(page);
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+  await expect(page.locator("#h-checks")).toHaveText("Est-ce que ça fonctionne?");
+  await expect(page.locator("#reset-label")).toHaveText("Recommencer");
+});
+
+test("the home page can be read in French and the choice is kept", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("h1")).toHaveText("Redesign the streets of your city.");
+  await chooseFrench(page);
+  await expect(page.locator("h1")).toHaveText("Réaménagez les rues de votre ville.");
+  await expect(page.locator("#search")).toHaveAttribute("placeholder", "Chercher un lieu, comme Kreuzberg, Berlin");
+  await expect(page.locator(".search-go")).toHaveText("Chercher");
+  await expect(page.locator(".hero-note a")).toHaveText("les contributeurs d’OpenStreetMap");
+  await expect(page.locator(".hero-facts")).toContainText("rues");
+  await expect(page).toHaveTitle("CityLoom : réaménagez les rues de votre ville");
+  await page.reload();
+  await expect(page.locator("#hero-facts-slot .hero-facts")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+  await expect(page.locator("h1")).toHaveText("Réaménagez les rues de votre ville.");
+});
+
+test("the junction page can be read in French and the choice is kept", async ({ page }) => {
   await openJunction(page);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("#h-turns")).toHaveText("Turns allowed");
+  await expect(page.locator("#inspector")).toContainText("Junction control");
+  await chooseFrench(page);
+  // The markup, the views and the panel beside the plan follow the switch without a reload.
+  await expect(page.locator("#h-turns")).toHaveText("Virages permis");
+  await expect(page.locator("#inspector")).toContainText("Signalisation de la jonction");
+  await expect(page.locator("#arm-count")).toHaveText(/^\d rues$/);
+  await expect(page.locator("#undo")).toHaveText(/Annuler/);
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+  await expect(page.locator("#h-turns")).toHaveText("Virages permis");
+  await expect(page.locator("#inspector")).toContainText("Signalisation de la jonction");
+});
+
+test("a junction page opened in French is French from the first paint", async ({ page }) => {
+  await storedFrench(page);
+  await openJunction(page);
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+  await expect(page.locator("#arm-count")).toHaveText(/^\d rues$/);
+  await expect(page.locator("#inspector")).toContainText(
+    "Sélectionnez une rue, un coin ou un passage pour piétons à modifier.",
+  );
+  await expect(page).toHaveTitle(/ · CityLoom$/);
+  const text = await page.locator("body").innerText();
+  for (const phrase of ["Junction control", "Select a street", "Turns allowed", "Getting across", "Undo", "Streets"]) {
+    expect(text, phrase).not.toContain(phrase);
+  }
+});
+
+/** Makes every junction of the city undrawable, the way a person could: an edit is made on the street page,
+ *  then the stored city is read and every segment widened, each street's row left as it was (a saved street
+ *  whose row changed is not taken back). */
+const breakJunctions = async (page: Page) => {
+  await openStreet(page);
+  await selectFirstPiece(page);
+  await page.keyboard.press("+");
+  await expect(page.locator("#fit")).not.toHaveText("");
+  // The edit is kept after a debounce; leaving the page flushes it.
+  await page.goto("/map.html");
+  await mapReady(page);
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith("cityloom-city:"))!;
+    const city = JSON.parse(localStorage.getItem(key)!);
+    for (const street of Object.values<any>(city.streets))
+      for (const segment of street.segments) segment.width_mm *= 40;
+    localStorage.setItem(key, JSON.stringify(city));
+  });
+};
+
+test("a junction that cannot be drawn says so, keeps its shell and follows the language", async ({ page }) => {
+  await breakJunctions(page);
+  const href = await openJunction(page);
+  // No redirect to the map: the page of the junction stays, with its name and its panel.
+  expect(page.url()).toContain(href);
+  const stuck = page.locator(".stuck");
+  await expect(stuck.locator(".note-h")).toHaveText("This junction cannot be drawn");
+  await expect(page.locator(".tools")).toBeHidden();
+  await expect(page.locator(".plan-drawing")).toHaveCount(0);
+  const name = ((await page.locator("#street-name").textContent()) ?? "").trim();
+  expect(name).not.toBe("");
+  expect(await page.title()).toContain(name);
+  await expect(stuck.locator("a.back")).toHaveAttribute("href", "map.html");
+
+  // The shell still works: the settings menu opens and the language switch re-words the panel.
+  await chooseFrench(page);
+  await expect(stuck.locator(".note-h")).toHaveText("Cette jonction ne peut pas être dessinée");
+  await expect(page.locator('[data-lang="fr-CA"]')).toHaveAttribute("aria-pressed", "true");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+  await expect(stuck.locator(".note-h")).toHaveText("Cette jonction ne peut pas être dessinée");
+  await expect(page.locator(".tools")).toBeHidden();
+});
+
+test("a junction that cannot be drawn fits the page in French", async ({ page }) => {
+  await breakJunctions(page);
+  await storedFrench(page);
+  await openJunction(page);
+  await expect(page.locator(".stuck")).toBeVisible();
+  await expectFits(page);
 });

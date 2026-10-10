@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CityLoom: redesign the streets of your city</title>
-  <meta name="description" content="Pick any street or junction of the city, rearrange it, and see at once what still works.">
+  <meta name="description" data-i18n-content="map-home-description" content="Pick any street or junction of the city, rearrange it, and see at once what still works.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var l=localStorage.getItem("cityloom-lang");if(l==="en"||l==="fr-CA")document.documentElement.lang=l}catch(e){}</script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="app.css">
@@ -14,34 +14,41 @@
 </head>
 <body class="home">
   <header class="bar" data-covers>
-    <a class="brand" href="index.html" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
-    <nav class="surfaces" aria-label="Editors">
-      <a href="map.html" class="surface">Map</a>
+    <a class="brand" href="index.html" data-i18n-aria-label="ui-home" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
+    <nav class="surfaces" data-i18n-aria-label="map-editors" aria-label="Editors">
+      <a href="map.html" class="surface" data-i18n="map-nav-map">Map</a>
     </nav>
     <div class="top-end">
       <div class="account">
-        <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
+        <button type="button" id="account-btn" class="avatar" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu" data-i18n-aria-label="ui-settings" aria-label="Settings"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><circle cx="16" cy="12.5" r="5"/><path d="M6.5 27c0-5.2 4.2-8.5 9.5-8.5s9.5 3.3 9.5 8.5"/></svg></button>
         <div id="account-menu" class="menu" hidden>
-          <p class="menu-h">Settings</p>
+          <p class="menu-h" data-i18n="ui-settings">Settings</p>
           <div class="menu-row">
-            <span id="units-label">Units</span>
+            <span id="units-label" data-i18n="ui-units">Units</span>
             <div class="units" role="group" aria-labelledby="units-label">
               <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
               <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
             </div>
           </div>
           <div class="menu-row">
-            <label for="region">Region</label>
+            <label for="region" data-i18n="ui-region">Region</label>
             <select id="region"></select>
           </div>
           <div class="menu-row">
-            <span id="theme-label">Theme</span>
+            <span id="theme-label" data-i18n="ui-theme">Theme</span>
             <div class="units" role="group" aria-labelledby="theme-label">
-              <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false">Light</button>
-              <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false">Dark</button>
+              <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false" data-i18n="ui-theme-light">Light</button>
+              <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false" data-i18n="ui-theme-dark">Dark</button>
             </div>
           </div>
-          <p class="menu-foot"><a href="credits.html">Credits</a></p>
+          <div class="menu-row">
+            <span id="lang-label" data-i18n="ui-language">Language</span>
+            <div class="units" role="group" aria-labelledby="lang-label">
+              <button type="button" class="unit" data-lang="en" lang="en" aria-pressed="true">English</button>
+              <button type="button" class="unit" data-lang="fr-CA" lang="fr" aria-pressed="false">Français</button>
+            </div>
+          </div>
+          <p class="menu-foot"><a href="credits.html" data-i18n="ui-credits">Credits</a></p>
         </div>
       </div>
     </div>
@@ -51,14 +58,14 @@
 
   <main class="hero">
     <div class="hero-card" data-covers="left">
-      <h1>Redesign the streets of your city.</h1>
-      <p class="lead">Find a place, pick a street or junction on its map, and rearrange it. You see straight away what still works.</p>
+      <h1 data-i18n="map-home-heading">Redesign the streets of your city.</h1>
+      <p class="lead" data-i18n="map-home-lead">Find a place, pick a street or junction on its map, and rearrange it. You see straight away what still works.</p>
       <div class="hero-search" id="search-slot"></div>
       <div class="hero-actions">
-        <a class="btn" href="map.html">Open the city map</a>
+        <a class="btn" href="map.html" data-i18n="map-home-open-map">Open the city map</a>
       </div>
       <div id="hero-facts-slot"></div>
-      <p class="hero-note">Streets © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>. The widths and rules the checks use are placeholders.</p>
+      <p class="hero-note"><span data-i18n="map-home-streets-by">Streets ©</span> <a href="https://www.openstreetmap.org/copyright" data-i18n="map-home-osm-contributors">OpenStreetMap contributors</a>. <span data-i18n="map-home-placeholders">The widths and rules the checks use are placeholders.</span></p>
     </div>
   </main>
 

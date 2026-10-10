@@ -164,8 +164,6 @@ impl Layout {
             let n = nodes[index[&id]];
             mm_of(n.x_m, n.y_m)
         };
-        let street_name = |r: &osm_network::Road| r.name.clone().unwrap_or_else(|| format!("Unnamed {}", r.highway.replace('_', " ")));
-
         let edges: Vec<EdgeDef> = roads
             .iter()
             .map(|r| {
@@ -176,10 +174,10 @@ impl Layout {
                     a: index[&r.from],
                     b: index[&r.to],
                     class,
-                    name: Some(street_name(r)),
+                    name: r.name.clone(),
                     headings: headings(&r.points),
                     shape: shape_mm(&r.points, node_mm(r.from), node_mm(r.to), &mm_of),
-                    section: Street { source: refs(&r.osm_ways, &r.osm_versions), ..Street::imported(class, side, &pieces).named(&street_name(r)) },
+                    section: Street { name: r.name.clone(), source: refs(&r.osm_ways, &r.osm_versions), ..Street::imported(class, side, &pieces) },
                 }
             })
             .collect();
@@ -210,6 +208,8 @@ mod tests {
     use crate::junction::model::CONTROLS;
     use crate::junction::model::SIGNAL;
     use crate::shared::catalogue::KINDS;
+    use crate::shared::said::{Arg, Said};
+    use crate::shared::testing::{en, fr};
 
     fn lane(kind: LaneKind, way: Way, width_m: f64) -> Lane {
         Lane { kind, way, width_m, hours: None }
@@ -352,7 +352,7 @@ mod tests {
         assert_eq!((v.nodes.len(), v.edges.len()), (5, 4));
         let junctions: Vec<_> = v.nodes.iter().filter(|n| n.junction).collect();
         assert_eq!(junctions.len(), 1);
-        assert_eq!((junctions[0].arms, junctions[0].control), (4, Some(CONTROLS[SIGNAL].name)));
+        assert_eq!((junctions[0].arms, junctions[0].control), (4, Some(CONTROLS[SIGNAL].key)));
         assert!(city.junction_editor(junctions[0].uid, 0).is_some());
     }
 
@@ -379,12 +379,13 @@ mod tests {
     fn a_street_has_the_lanes_and_name_of_its_road() {
         let city = City::from_network(&crossing(), "Testville");
         let v = city.view(0);
-        let main = v.edges.iter().find(|e| e.name.starts_with("Main Street")).expect("named for the road");
+        let main = v.edges.iter().find(|e| en(&e.called) == "Main Street").expect("named for the road");
         assert_eq!(main.row_mm, 2000 + 3000 + 3000 + 2000);
         assert!(city.street_editor(main.uid, 0).is_some());
-        let junction = v.nodes.iter().find(|n| n.junction).unwrap();
-        assert!(junction.name.contains("Main Street") && junction.name.contains("Side Road"), "{}", junction.name);
-        assert!(v.nodes.iter().filter(|n| !n.junction).all(|n| n.name.starts_with("End of ")), "{:?}", v.nodes.iter().map(|n| &n.name).collect::<Vec<_>>());
+        let junction = en(&v.nodes.iter().find(|n| n.junction).unwrap().name);
+        assert!(junction.contains("Main Street") && junction.contains("Side Road"), "{junction}");
+        let ends: Vec<String> = v.nodes.iter().filter(|n| !n.junction).map(|n| en(&n.name)).collect();
+        assert!(ends.iter().all(|n| n.starts_with("End of ")), "{ends:?}");
     }
 
     /// A node at the origin with a road to each of the given points, all of them junction-like in the data.
@@ -430,19 +431,19 @@ mod tests {
     fn a_places_title_follows_the_names_of_the_streets_that_meet_there() {
         let mut layout = Layout::from_network(&crossing(), "Testville");
         let junction = layout.nodes.iter().position(|n| n.junction).unwrap();
-        assert_eq!(layout.node_name(junction), "Side Road and Main Street");
-        assert_eq!(layout.end_name(junction), "Side Road and Main Street");
+        assert_eq!(en(&layout.node_name(junction)), "Side Road and Main Street");
+        assert_eq!(en(&layout.end_name(junction)), "Side Road and Main Street");
         let gate = layout.nodes.iter().position(|n| !n.junction).unwrap();
         let street = layout.edges[layout.edges_at(gate)[0]].name.clone().unwrap();
-        assert_eq!(layout.node_name(gate), format!("End of {street}"));
-        assert_eq!(layout.end_name(gate), format!("the end of {street}"));
+        assert_eq!(en(&layout.node_name(gate)), format!("End of {street}"));
+        assert_eq!(en(&layout.end_name(gate)), format!("the end of {street}"));
         // the title is not kept: renaming a street changes it
         for e in &mut layout.edges {
             if e.name.as_deref() == Some("Side Road") {
                 e.name = Some("Renamed Road".into());
             }
         }
-        assert_eq!(layout.node_name(junction), "Renamed Road and Main Street");
+        assert_eq!(en(&layout.node_name(junction)), "Renamed Road and Main Street");
     }
 
     #[test]
@@ -451,7 +452,7 @@ mod tests {
         let v = City::from_network(&net, "Fan").view(0);
         let meeting = v.nodes.iter().find(|n| n.uid == 1).unwrap();
         assert!(!meeting.junction);
-        assert_eq!(meeting.name, "Connection on Side Road");
+        assert_eq!(en(&meeting.name), "Connection on Side Road");
     }
 
     #[test]
@@ -470,6 +471,95 @@ mod tests {
         ] {
             assert_eq!(class_of(highway), class, "{highway}");
         }
+    }
+
+    #[test]
+    fn a_road_without_a_name_keeps_none_and_is_titled_by_its_class_in_each_language() {
+        let mut net = crossing();
+        net.roads[0].name = None;
+        net.roads[1].name = None;
+        net.roads[1].highway = "motorway".into();
+        let layout = Layout::from_network(&net, "Nameless");
+        let city = City::on(Layout::from_network(&net, "Nameless"));
+        let edge = |road: u32| layout.edges.iter().position(|e| e.section.source.first().is_some_and(|s| s.id == road as i64 * 100)).unwrap();
+        let (residential, motorway) = (edge(1), edge(2));
+        assert_eq!(layout.edges[residential].name, None);
+        assert_eq!(layout.edges[residential].section.name, None, "the stored network holds no wording");
+        let kind = &city.view(0).edges[residential].called;
+        assert_eq!((en(kind), fr(kind)), ("Unnamed local street".into(), "Rue locale sans nom".into()));
+        let kind = &city.view(0).edges[motorway].called;
+        assert_eq!((en(kind), fr(kind)), ("Unnamed motorway".into(), "Autoroute sans nom".into()));
+        assert!(!city.save().contains("Unnamed"));
+        // a save from before kept the English it named an unnamed street with; the name comes from the network
+        let mut city = City::on(Layout::from_network(&net, "Nameless"));
+        let mut e = city.street_editor(residential as u32 + 1, 0).unwrap();
+        let piece = e.view().segments[0].uid;
+        e.nudge_width(piece, -100);
+        assert!(city.keep_street(residential as u32 + 1, e.snapshot()));
+        let old = city.save().replacen("\"name\":null", "\"name\":\"Unnamed residential\"", 1);
+        assert!(old.contains("Unnamed residential"));
+        let back = City::load_on(Layout::from_network(&net, "Nameless"), &old);
+        assert!(back.view(0).edges[residential].edited, "the edit is kept");
+        assert_eq!(en(&back.street_editor(residential as u32 + 1, 0).unwrap().view().name), "Unnamed local street");
+    }
+
+    #[test]
+    fn a_place_on_roads_without_names_is_named_for_the_unnamed_road_and_not_the_map_edge() {
+        let mut net = crossing();
+        net.roads[0].name = None;
+        let layout = Layout::from_network(&net, "Nameless");
+        // the far end of the unnamed road, which only it reaches
+        let dead_end = layout.nodes.iter().position(|n| n.source.first().is_some_and(|s| s.id == 20)).unwrap();
+        assert_eq!(
+            (en(&layout.node_name(dead_end)), fr(&layout.node_name(dead_end))),
+            ("End of an unnamed local street".into(), "Bout d’une rue locale sans nom".into())
+        );
+        assert_eq!(
+            (en(&layout.end_name(dead_end)), fr(&layout.end_name(dead_end))),
+            ("the end of an unnamed local street".into(), "le bout d’une rue locale sans nom".into())
+        );
+        let edge = layout.edges_at(dead_end)[0];
+        assert_eq!(en(&layout.edge_ends(edge)), "Main Street and Side Road to the end of an unnamed local street");
+        // the other ends keep the names of their roads
+        let named_end = layout.nodes.iter().position(|n| n.source.first().is_some_and(|s| s.id == 30)).unwrap();
+        assert_eq!(en(&layout.node_name(named_end)), "End of Main Street");
+
+        // two unnamed roads meeting where no junction is drawn: a connection on the road, not the edge of the map
+        let mut net = star(&[(0.0, 200.0), (0.0, -200.0)]);
+        for r in &mut net.roads {
+            r.name = None;
+        }
+        let layout = Layout::from_network(&net, "Through");
+        let middle = layout.nodes.iter().position(|n| n.source.first().is_some_and(|s| s.id == 10)).unwrap();
+        assert!(!layout.nodes[middle].junction);
+        assert_eq!(
+            (en(&layout.node_name(middle)), fr(&layout.node_name(middle))),
+            ("Connection on an unnamed local street".into(), "Raccordement sur une rue locale sans nom".into())
+        );
+        assert_eq!(en(&layout.end_name(middle)), "a connection on an unnamed local street");
+        // an unnamed motorway is said as a motorway
+        let mut net = net;
+        for r in &mut net.roads {
+            r.highway = "motorway".into();
+        }
+        let layout = Layout::from_network(&net, "Fast");
+        assert_eq!(
+            (en(&layout.node_name(middle)), fr(&layout.node_name(middle))),
+            ("Connection on an unnamed motorway".into(), "Raccordement sur une autoroute sans nom".into())
+        );
+        assert_eq!(
+            fr(&layout.end_name(layout.nodes.iter().position(|n| n.source.first().is_some_and(|s| s.id == 2)).unwrap())),
+            "le bout d’une autoroute sans nom"
+        );
+
+        // a junction of roads without names is still numbered
+        let mut net = crossing();
+        for r in &mut net.roads {
+            r.name = None;
+        }
+        let layout = Layout::from_network(&net, "Nameless");
+        let junction = layout.nodes.iter().position(|n| n.junction).unwrap();
+        assert_eq!((en(&layout.node_name(junction)), fr(&layout.node_name(junction))), ("Junction 1".into(), "Jonction 1".into()));
     }
 
     #[test]
@@ -508,7 +598,7 @@ mod tests {
         e.nudge_width(uid, 100);
         assert!(city.keep_street(v.edges[0].uid, e.snapshot()));
         let v = city.view(0);
-        assert_eq!(v.edges[0].failing, vec!["Fits the street width".to_string()]);
+        assert_eq!(v.edges[0].failing.iter().map(en).collect::<Vec<_>>(), ["Fits the street width"]);
         assert_eq!(v.failing, 1);
     }
 
@@ -516,15 +606,15 @@ mod tests {
     fn the_editors_call_a_street_by_its_own_name_and_not_by_its_kind() {
         let city = City::from_network(&crossing(), "Testville");
         let v = city.view(0);
-        let main = v.edges.iter().find(|e| e.name.starts_with("Main Street")).unwrap();
-        assert_eq!(main.kind, "Main Street");
-        assert_eq!(city.street_editor(main.uid, 0).unwrap().view().name, "Main Street");
+        let main = v.edges.iter().find(|e| en(&e.called) == "Main Street").unwrap();
+        assert_eq!(main.called, Said::new("city-name").with("name", Arg::Text("Main Street".into())));
+        assert_eq!(city.street_editor(main.uid, 0).unwrap().view().name, Street::imported(StreetClass::Local, Side::Right, &[]).named("Main Street").title());
         let junction = v.nodes.iter().find(|n| n.junction).unwrap();
-        let arms: Vec<String> = city.junction_editor(junction.uid, 0).unwrap().view().arms.iter().map(|a| a.street.clone()).collect();
+        let arms: Vec<String> = city.junction_editor(junction.uid, 0).unwrap().view().arms.iter().map(|a| en(&a.street)).collect();
         assert_eq!(arms.iter().filter(|n| *n == "Main Street").count(), 2);
         assert_eq!(arms.iter().filter(|n| *n == "Side Road").count(), 2);
         // and a name survives being kept and opened again
-        assert_eq!(Street::imported(StreetClass::Local, Side::Right, &[]).named("X").title(), "X");
+        assert_eq!(Street::imported(StreetClass::Local, Side::Right, &[]).named("X").name.as_deref(), Some("X"));
     }
 
     #[test]

@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
+use crate::city::model::EndView;
 use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::Locale;
 use crate::shared::live;
@@ -100,8 +101,12 @@ fn street_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
     html(|| f().into_any())
 }
 
-fn street_ends() -> Vec<page::StreetEnd> {
-    vec![page::StreetEnd { name: "the edge of the map".into(), junction: false, uid: 0 }, page::StreetEnd { name: "Junction 4".into(), junction: true, uid: 2 }]
+fn street_ends() -> Vec<EndView> {
+    use crate::shared::said::{Arg, Said};
+    vec![
+        EndView { name: Said::new("city-the-edge-of-the-map"), junction: false, uid: 0 },
+        EndView { name: Said::new("city-junction-number").with("n", Arg::Num(4)), junction: true, uid: 2 },
+    ]
 }
 
 #[test]
@@ -131,6 +136,23 @@ fn the_street_heading_names_the_street_and_says_how_wide_it_is() {
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
     assert!(h.contains(">Sample Street 1</h1>") && h.contains("Street cross-section") && h.contains(">18.0 m</b>"));
     assert!(!h.contains("City map") && !h.contains("between"));
+}
+
+#[test]
+fn a_street_without_a_name_is_headed_by_its_class_in_the_language_of_the_page() {
+    use crate::shared::catalogue::Side;
+    use crate::street::model::Street;
+    let unnamed = Street { name: None, ..Street::sample(0, Side::Right) };
+    let s = StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::from_street(&unnamed, &unnamed, 0), None);
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
+    assert!(h.contains(">Unnamed local street</h1>"), "{h}");
+    let b = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(b.contains(">Unnamed local street</b>"), "{b}");
+    let d = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(d.contains("Cross-section of Unnamed local street."), "{d}");
+    s.i18n().set(Locale::FrCa);
+    let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
+    assert!(h.contains(">Rue locale sans nom</h1>"), "{h}");
 }
 
 #[test]
@@ -588,7 +610,7 @@ fn the_heading_and_the_title_block_are_in_french() {
     let s = street_shared_in(1, Locale::FrCa);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=Some(street_ends())/> });
     assert!(h.contains("Carte de la ville") && h.contains("Coupe transversale de la rue") && h.contains("de large"), "{h}");
-    assert!(h.contains("entre ") && h.contains(" et <a href=\"intersection.html?junction=2\">Junction 4</a>"), "{h}");
+    assert!(h.contains("entre ") && h.contains("la limite de la carte") && h.contains(" et <a href=\"intersection.html?junction=2\">Jonction 4</a>"), "{h}");
     assert!(!h.contains("City map") && !h.contains("Street cross-section") && !h.contains("between") && !h.contains(" wide"), "{h}");
     let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
     assert!(h.contains(">Rue<") && h.contains(">Largeur<") && h.contains("Modifications apportées"), "{h}");

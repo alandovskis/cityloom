@@ -20,7 +20,11 @@ use leptos::prelude::*;
 use leptos::web_sys::HtmlElement;
 use wasm_bindgen::prelude::*;
 
+use crate::shared::i18n::Resources;
 use crate::shared::platform::browser_ports;
+
+/// What the map page says, in both languages.
+pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr: include_str!("i18n/fr.ftl") };
 
 /// The map page as the script sees it: what the pages around it ask of it.
 #[wasm_bindgen]
@@ -42,8 +46,9 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = crate::shared::ports::Ports { mapper: Rc::new(crate::shared::platform::BrowserMapper::new(basemap)), ..browser_ports() };
-    let i18n = crate::unmigrated_i18n();
-    let vm = vm::MapVm::new(ports);
+    // One instance for the page: the shell switches it and the map's words follow.
+    let i18n = crate::i18n_browser(&ports);
+    let vm = vm::MapVm::new(ports, i18n.clone());
     vm.attach();
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
@@ -74,15 +79,16 @@ pub fn mount_home() -> MapPage {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let ports = browser_ports();
-    let i18n = crate::unmigrated_i18n();
-    let vm = vm::MapVm::new(ports);
+    // One instance for the page: the shell switches it, and the hero and the search follow.
+    let i18n = crate::i18n_browser(&ports);
+    let vm = vm::MapVm::new(ports, i18n.clone());
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
     mount("hero-map-slot", view! { <home::HeroMap vm=vm.clone()/> }.into_any());
-    mount("search-slot", view! { <crate::place::view::AreaSearch vm=crate::place::vm::AreaVm::new(browser_ports())/> }.into_any());
-    mount("hero-facts-slot", view! { <home::HeroFacts vm=vm.clone()/> }.into_any());
+    mount("search-slot", view! { <crate::place::view::AreaSearch vm=crate::place::vm::AreaVm::new(browser_ports(), i18n.clone())/> }.into_any());
+    mount("hero-facts-slot", view! { <home::HeroFacts vm=vm.clone()/><home::HomeTitle vm=vm.clone()/> }.into_any());
     MapPage(vm, i18n)
 }

@@ -10,11 +10,16 @@ use crate::shared::testing::{button_tag, count, html};
 use crate::city::store::CityStore;
 use crate::map::view as map_ui;
 use crate::map::vm::MapVm;
+use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::ports::{MemoryStorage, test_ports};
 
 fn map_vm() -> (Rc<MapVm>, Rc<MemoryStorage>) {
+    map_vm_in(Locale::En)
+}
+
+fn map_vm_in(locale: Locale) -> (Rc<MapVm>, Rc<MemoryStorage>) {
     let (ports, _, storage) = test_ports();
-    (MapVm::on_sample(ports), storage)
+    (MapVm::on_sample(ports, crate::i18n_for(locale)), storage)
 }
 
 fn map_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
@@ -67,7 +72,7 @@ fn the_map_tools_zoom_in_out_and_to_the_whole_city() {
 #[test]
 fn a_map_page_with_nothing_to_show_says_why() {
     let (ports, ..) = test_ports();
-    let vm = MapVm::new(ports); // the default area, whose roads are not kept: so no map
+    let vm = MapVm::new(ports, crate::i18n_for(Locale::En)); // the default area, whose roads are not kept: so no map
     let h = map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
     assert!(h.contains("role=\"status\"") && h.contains("The roads of this place could not be loaded"), "{h}");
     assert!(!h.contains("hidden"), "{h}");
@@ -76,7 +81,7 @@ fn a_map_page_with_nothing_to_show_says_why() {
 #[test]
 fn a_map_page_whose_area_s_roads_were_not_had_lists_nothing_and_names_the_area() {
     let (ports, _, _) = test_ports(); // the default area, whose roads are not kept
-    let vm = MapVm::new(ports);
+    let vm = MapVm::new(ports, crate::i18n_for(Locale::En));
     let area = crate::place::area::default_area().name;
     let h = map_html(|| view! { <map_ui::MapHeader vm=vm.clone()/> });
     assert!(h.contains(&format!(">{area}</h1>")) && h.contains("0 junctions, 0 streets") && !h.contains("Sample city"), "{h}");
@@ -232,4 +237,302 @@ fn the_hero_facts_name_the_city_and_say_whether_it_works() {
     change_a_street(&vm, &storage, 1_000);
     let h = map_html(|| view! { <home::HeroFacts vm=vm.clone()/> });
     assert!(h.contains("class=\"hero-facts bad\"") && h.contains("needs attention") && !h.contains("tick"));
+}
+
+#[test]
+fn the_hero_speaks_french_with_no_english_left() {
+    let (vm, storage) = map_vm_in(Locale::FrCa);
+    let h = map_html(|| view! { <home::HeroFacts vm=vm.clone()/> });
+    assert!(h.contains("Sample city\u{a0}: 9 jonctions, 23 rues."), "the city's name is data, the rest French: {h}");
+    assert!(h.contains("Toutes les vérifications réussissent."), "{h}");
+    change_a_street(&vm, &storage, 1_000);
+    let map = map_html(|| view! { <home::HeroMap vm=vm.clone()/> });
+    assert!(map.contains(" \u{b7} modifié<") || map.contains(">modifié<"), "a changed place is tagged in French: {map}");
+    for english in ["changed", "Changed", "junctions", "streets", "Every check", "Opens the", " wide.", "Traffic signal", "traffic signal", "stop"] {
+        assert!(!map.contains(english), "{english:?} in the hero map");
+    }
+    for english in ["junctions", "streets", "Every check"] {
+        assert!(!h.contains(english), "{english:?} in the hero facts");
+    }
+}
+
+// ---- in French ------------------------------------------------------------------------------
+
+/// Every view of the map page, drawn to HTML, with a street changed so it fails and the search open.
+fn every_view(vm: &Rc<MapVm>) -> String {
+    let mut h = String::new();
+    h += &map_html(|| view! { <map_ui::MapHeader vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::ResetButton vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::MapTools vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::Legend vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::Status vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::Places vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::ChecksLead vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::Checks vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::ChangesLead vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::Changes vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::TitleBlock vm=vm.clone()/> });
+    h += &map_html(|| view! { <map_ui::SearchBox vm=vm.clone()/> });
+    h
+}
+
+/// English words the map page says, none of which a French page may show.
+const ENGLISH: [&str; 23] = [
+    "Does it work",
+    "Key to the map",
+    "Opens the",
+    "Needs attention",
+    "City map",
+    "Start over",
+    "Zoom out",
+    "Zoom in",
+    "Whole city",
+    "Search places",
+    "Places found",
+    "Press a junction",
+    "Junctions",
+    "Streets",
+    "Places",
+    "Changed",
+    "Still works",
+    "Works",
+    "place needs",
+    "places match",
+    "place matches",
+    "Every check",
+    " junction",
+];
+
+#[test]
+fn every_view_of_the_map_page_speaks_french_with_no_english_left() {
+    let (vm, storage) = map_vm_in(Locale::FrCa);
+    change_a_street(&vm, &storage, 1_000);
+    vm.set_search("rue");
+    let h = every_view(&vm);
+    for english in ENGLISH {
+        assert!(!h.contains(english), "{english:?} in {h}");
+    }
+    for french in ["Carte de la ville", "Jonctions", "Rues", "Lieux", "À corriger", "Recommencer", "Toute la ville", "Rechercher des lieux"] {
+        assert!(h.contains(french), "{french:?} in {h}");
+    }
+    assert!(h.contains("1 lieu à corriger\u{a0}: "), "the status line, with a no-break space before the colon: {h}");
+    assert_eq!(vm.i18n().missing(), Vec::<String>::new());
+}
+
+#[test]
+fn a_french_map_page_with_nothing_to_show_says_why_in_french() {
+    let (ports, ..) = test_ports();
+    let vm = MapVm::new(ports, crate::i18n_for(Locale::FrCa));
+    let h = map_html(|| view! { <map_ui::MapView vm=vm.clone()/> });
+    assert!(h.contains("Les rues de ce lieu n’ont pas pu être chargées"), "{h}");
+    let h = map_html(|| view! { <map_ui::Status vm=vm.clone()/> });
+    assert!(h.contains("Aucune rue à afficher."), "{h}");
+}
+
+#[test]
+fn the_places_list_and_the_status_follow_a_switch_of_language_without_a_new_view_model() {
+    let (vm, storage) = map_vm();
+    change_a_street(&vm, &storage, 1_000);
+    let owner = Owner::new();
+    owner.set();
+    let v = StoredValue::new_local(vm.clone());
+    let status = Memo::new(move |_| v.with_value(|vm| vm.status().text));
+    let first_row = Memo::new(move |_| v.with_value(|vm| vm.junction_label(vm.view().nodes.iter().find(|n| n.junction).unwrap().uid)));
+    assert!(status.get().starts_with("1 place needs attention: "));
+    assert!(first_row.get().ends_with("Opens the junction plan."));
+    vm.i18n().set(Locale::FrCa);
+    assert!(status.get().starts_with("1 lieu à corriger"), "{}", status.get());
+    assert!(first_row.get().ends_with("Ouvre le plan de la jonction."), "{}", first_row.get());
+}
+
+// ---- the messages ---------------------------------------------------------------------------
+
+#[test]
+fn the_map_ftl_files_have_the_same_messages_and_variables() {
+    use crate::shared::i18n::tests::parity_problems;
+    assert_eq!(parity_problems(crate::map::RESOURCES.en, crate::map::RESOURCES.fr), Vec::<String>::new());
+}
+
+/// A plural message said for 0, 1 and 2 in one language.
+fn counted(i18n: &I18n, key: &str, extra: fn(Args) -> Args) -> [String; 3] {
+    [0, 1, 2].map(|n| i18n.tr_now(key, &extra(Args::new().num("n", n))))
+}
+
+#[test]
+fn zero_and_one_are_singular_in_french_and_zero_is_plural_in_english_in_every_count() {
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let none = |a: Args| a;
+    let names = |a: Args| a.str("names", "X");
+    let shown = |a: Args| a.num("shown", 8);
+    let cases: [(&str, fn(Args) -> Args, [&str; 3], [&str; 3]); 8] = [
+        ("map-streets", none, ["0 streets", "1 street", "2 streets"], ["0 rue", "1 rue", "2 rues"]),
+        ("map-junction-count", none, ["0 junctions", "1 junction", "2 junctions"], ["0 jonction", "1 jonction", "2 jonctions"]),
+        (
+            "map-search-found",
+            none,
+            ["0 places match", "1 place matches", "2 places match"],
+            ["0 lieu correspond", "1 lieu correspond", "2 lieux correspondent"],
+        ),
+        (
+            "map-search-found-more",
+            shown,
+            ["0 places match · showing the first 8", "1 place matches · showing the first 8", "2 places match · showing the first 8"],
+            ["0 lieu correspond · 8 premiers affichés", "1 lieu correspond · 8 premiers affichés", "2 lieux correspondent · 8 premiers affichés"],
+        ),
+        (
+            "map-checks-failing",
+            none,
+            [
+                "0 places need attention. Open one to see what is wrong and fix it.",
+                "1 place needs attention. Open one to see what is wrong and fix it.",
+                "2 places need attention. Open one to see what is wrong and fix it.",
+            ],
+            [
+                "0 lieu est à corriger. Ouvrez-le pour voir ce qui ne va pas et le corriger.",
+                "1 lieu est à corriger. Ouvrez-le pour voir ce qui ne va pas et le corriger.",
+                "2 lieux sont à corriger. Ouvrez-en un pour voir ce qui ne va pas et le corriger.",
+            ],
+        ),
+        (
+            "map-changes-some",
+            none,
+            [
+                "0 places changed from the city as first laid out.",
+                "1 place changed from the city as first laid out.",
+                "2 places changed from the city as first laid out.",
+            ],
+            [
+                "0 lieu modifié par rapport à la ville telle que tracée au départ.",
+                "1 lieu modifié par rapport à la ville telle que tracée au départ.",
+                "2 lieux modifiés par rapport à la ville telle que tracée au départ.",
+            ],
+        ),
+        (
+            "map-status-ok",
+            none,
+            ["0 places. Every check passes.", "1 place. Every check passes.", "2 places. Every check passes."],
+            [
+                "0 lieu. Toutes les vérifications réussissent.",
+                "1 lieu. Toutes les vérifications réussissent.",
+                "2 lieux. Toutes les vérifications réussissent.",
+            ],
+        ),
+        (
+            "map-status-bad",
+            names,
+            ["0 places need attention: X.", "1 place needs attention: X.", "2 places need attention: X."],
+            ["0 lieu à corriger\u{a0}: X.", "1 lieu à corriger\u{a0}: X.", "2 lieux à corriger\u{a0}: X."],
+        ),
+    ];
+    for (key, extra, english, french) in cases {
+        assert_eq!(counted(&en, key, extra), english.map(String::from), "{key} in English");
+        assert_eq!(counted(&fr, key, extra), french.map(String::from), "{key} in French");
+    }
+    // `map-checks-pass` is never said of 0 places (a city with none says `map-checks-no-places`), so only 1 and 2.
+    let pass = counted(&fr, "map-checks-pass", none);
+    assert_eq!(pass[1..], ["Toutes les vérifications réussissent dans l’unique lieu.", "Toutes les vérifications réussissent dans les 2 lieux."]);
+    let pass_en = counted(&en, "map-checks-pass", none);
+    assert_eq!(pass_en[1..], ["Every check passes in the one place.", "Every check passes in all 2 places."]);
+    // `map-search-none` counts the places under `places`, not `n`.
+    let none_found = |i18n: &I18n, places: i64| i18n.tr_now("map-search-none", &Args::new().str("query", "zz").num("places", places));
+    assert_eq!(none_found(&en, 1), "No places match “zz”. Clear the search to see the one place.");
+    assert_eq!(none_found(&en, 2), "No places match “zz”. Clear the search to see all 2.");
+    assert_eq!(none_found(&fr, 1), "Aucun lieu ne correspond à «\u{a0}zz\u{a0}». Effacez la recherche pour revoir l’unique lieu.");
+    assert_eq!(none_found(&fr, 2), "Aucun lieu ne correspond à «\u{a0}zz\u{a0}». Effacez la recherche pour revoir les 2 lieux.");
+    let more = |a: Args| a.str("names", "X");
+    assert_eq!(counted(&fr, "map-status-bad-more", more)[1], "1 lieu à corriger\u{a0}: X et d’autres.");
+    assert_eq!(counted(&en, "map-status-bad-more", more)[2], "2 places need attention: X and more.");
+}
+
+// ---- the page's markup ----------------------------------------------------------------------
+
+const MAP_HTML: &str = include_str!("../../web/map.html");
+
+#[test]
+fn every_data_i18n_key_in_map_html_exists_in_both_languages() {
+    use crate::shell::view::i18n_keys;
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let keys = i18n_keys(MAP_HTML);
+    assert!(keys.len() > 35, "the page should have been converted: {}", keys.len());
+    for (key, _) in keys {
+        en.tr_now(&key, &Args::new());
+        fr.tr_now(&key, &Args::new());
+    }
+    assert_eq!(en.missing(), Vec::<String>::new(), "missing in en");
+    assert_eq!(fr.missing(), Vec::<String>::new(), "missing in fr");
+}
+
+#[test]
+fn the_english_text_in_map_html_is_the_english_message() {
+    let en = crate::i18n_for(Locale::En);
+    for (key, fallback) in crate::shell::view::i18n_keys(MAP_HTML) {
+        assert_eq!(fallback, en.tr_now(&key, &Args::new()), "{key}");
+    }
+}
+
+#[test]
+fn map_html_has_a_language_row_and_sets_the_language_in_the_head() {
+    assert!(MAP_HTML.contains(r#"data-lang="en" lang="en" aria-pressed="true">English<"#));
+    assert!(MAP_HTML.contains(r#"data-lang="fr-CA" lang="fr" aria-pressed="false">Français<"#));
+    assert_eq!(MAP_HTML.matches("<script>").count(), 1);
+    assert!(MAP_HTML.contains(r#"localStorage.getItem("cityloom-lang")"#));
+}
+
+#[test]
+fn the_window_title_of_the_map_page_is_its_header_s_message_in_english() {
+    // The header sets the title in the language of the page; the markup's own is the English message.
+    let en = crate::i18n_for(Locale::En);
+    assert!(MAP_HTML.contains(&format!("<title>{}</title>", en.tr_now("map-page-title", &Args::new()))));
+    assert!(!MAP_HTML.contains("<title data-i18n"), "the shell does not write the title");
+}
+
+// ---- the home page's markup -----------------------------------------------------------------
+
+const INDEX_HTML: &str = include_str!("../../web/index.html");
+
+#[test]
+fn every_data_i18n_key_in_index_html_exists_in_both_languages() {
+    use crate::shell::view::i18n_keys;
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let keys = i18n_keys(INDEX_HTML);
+    assert!(keys.len() >= 19, "the page should have been converted: {}", keys.len());
+    for (key, _) in keys {
+        en.tr_now(&key, &Args::new());
+        fr.tr_now(&key, &Args::new());
+    }
+    assert_eq!(en.missing(), Vec::<String>::new(), "missing in en");
+    assert_eq!(fr.missing(), Vec::<String>::new(), "missing in fr");
+}
+
+#[test]
+fn the_english_text_in_index_html_is_the_english_message() {
+    let en = crate::i18n_for(Locale::En);
+    for (key, fallback) in crate::shell::view::i18n_keys(INDEX_HTML) {
+        assert_eq!(fallback, en.tr_now(&key, &Args::new()), "{key}");
+    }
+}
+
+#[test]
+fn index_html_has_a_language_row_and_sets_the_language_in_the_head() {
+    assert!(INDEX_HTML.contains(r#"data-lang="en" lang="en" aria-pressed="true">English<"#));
+    assert!(INDEX_HTML.contains(r#"data-lang="fr-CA" lang="fr" aria-pressed="false">Français<"#));
+    assert_eq!(INDEX_HTML.matches("<script>").count(), 1);
+    assert!(INDEX_HTML.contains(r#"localStorage.getItem("cityloom-lang")"#));
+}
+
+#[test]
+fn the_window_title_of_the_home_page_is_its_message_in_english() {
+    // mount_home sets the title in the language of the page; the markup's own is the English message.
+    let en = crate::i18n_for(Locale::En);
+    assert!(INDEX_HTML.contains(&format!("<title>{}</title>", en.tr_now("map-home-title", &Args::new()))));
+    assert!(!INDEX_HTML.contains("<title data-i18n"), "the shell does not write the title");
+}
+
+#[test]
+fn the_openstreetmap_credit_stays_a_link_and_reads_naturally_in_both_languages() {
+    assert!(INDEX_HTML.contains(r#"<a href="https://www.openstreetmap.org/copyright" data-i18n="map-home-osm-contributors">"#));
+    let credit = |i18n: &I18n| ["map-home-streets-by", "map-home-osm-contributors"].map(|k| i18n.tr_now(k, &Args::new())).join(" ");
+    assert_eq!(credit(&crate::i18n_for(Locale::En)), "Streets © OpenStreetMap contributors");
+    assert_eq!(credit(&crate::i18n_for(Locale::FrCa)), "Rues © les contributeurs d’OpenStreetMap");
 }

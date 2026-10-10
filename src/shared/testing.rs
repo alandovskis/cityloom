@@ -3,6 +3,16 @@
 use leptos::prelude::*;
 use leptos::tachys::view::RenderHtml;
 
+/// What a `Said` says in English, in metres.
+pub fn en(said: &crate::shared::said::Said) -> String {
+    crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres, said)
+}
+
+/// What a `Said` says in Canadian French, in metres.
+pub fn fr(said: &crate::shared::said::Said) -> String {
+    crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::FrCa), crate::shared::units::Units::Metres, said)
+}
+
 /// A component drawn to HTML.
 pub fn html(view: impl FnOnce() -> AnyView) -> String {
     let owner = Owner::new();

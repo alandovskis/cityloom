@@ -13,7 +13,8 @@ use crate::junction::model::{Junction, Refusal, Target};
 use crate::junction::read_model::JView;
 use crate::junction::text;
 use crate::shared::core::{Core, Presents};
-use crate::shared::keeper::{Keeper, NOT_KEPT};
+use crate::shared::i18n::{Args, I18n};
+use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
 use crate::shared::units::Units;
 
@@ -27,6 +28,7 @@ impl Presents for Junction {
 pub struct JunctionVm {
     core: Core<Junction>,
     ports: Ports,
+    i18n: Rc<I18n>,
     keeper: Option<Rc<Keeper>>,
     binding: Option<CityBinding>,
     /// How the plan was last drawn, for turning a pointer position into a point on it.
@@ -34,9 +36,9 @@ pub struct JunctionVm {
 }
 
 impl JunctionVm {
-    /// A junction to edit. Bound to a place in the city, what is made is written
-    /// back to it; otherwise it is a sandbox.
-    pub fn new(ports: Ports, junction: Junction, binding: Option<CityBinding>) -> Rc<JunctionVm> {
+    /// A junction to edit, saying what it says in the language of `i18n`. Bound to a place in the
+    /// city, what is made is written back to it; otherwise it is a sandbox.
+    pub fn new(ports: Ports, i18n: Rc<I18n>, junction: Junction, binding: Option<CityBinding>) -> Rc<JunctionVm> {
         Rc::new_cyclic(|me: &std::rc::Weak<JunctionVm>| {
             let keeper = binding.is_some().then(|| {
                 let (keep, told) = (me.clone(), me.clone());
@@ -45,16 +47,21 @@ impl JunctionVm {
                     move || keep.upgrade().is_some_and(|vm| vm.keep_now()),
                     move || {
                         if let Some(vm) = told.upgrade() {
-                            vm.ports.announcer.say(NOT_KEPT);
+                            vm.ports.announcer.say(&vm.i18n.tr_now("not-kept", &Args::new()));
                         }
                     },
                 )
             });
-            JunctionVm { core: Core::new(junction), ports, keeper, binding, frame: Cell::new(None) }
+            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding, frame: Cell::new(None) }
         })
     }
 
     // ---- what the views read ----
+
+    /// The words of the page, in its language.
+    pub fn i18n(&self) -> &Rc<I18n> {
+        &self.i18n
+    }
 
     /// The view, which a view that reads it draws again when the junction changes.
     pub fn view(&self) -> Rc<JView> {
@@ -151,7 +158,7 @@ impl JunctionVm {
     pub fn undo(&self) -> bool {
         let done = self.edit(|j| j.undo());
         if done {
-            self.ports.announcer.say(text::UNDONE);
+            self.ports.announcer.say(&self.i18n.tr_now("jn-undone", &Args::new()));
         }
         done
     }
@@ -167,7 +174,7 @@ impl JunctionVm {
     pub fn reset(&self) -> bool {
         let done = self.edit(|j| j.reset());
         if done {
-            self.ports.announcer.say(text::STARTED_OVER);
+            self.ports.announcer.say(&self.i18n.tr_now("jn-started-over", &Args::new()));
         }
         done
     }
@@ -175,7 +182,7 @@ impl JunctionVm {
     #[cfg(test)]
     pub fn load_sample(&self, sample: usize) {
         self.edit(|j| j.load_sample(sample));
-        self.ports.announcer.say(&text::sample_text(&self.view_now()));
+        self.ports.announcer.say(&text::sample_text(&self.view_now(), &self.i18n));
     }
 
     /// The page is being left: what is waiting to be kept is kept now.
@@ -192,18 +199,18 @@ impl JunctionVm {
     }
 
     fn say_edit(&self) {
-        if let Some(t) = text::edit_text(&self.view_now()) {
+        if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
             self.ports.announcer.say(&t);
         }
     }
 
     fn say_refusal(&self) {
         let why = self.core.read(|j| j.refusal()).unwrap_or(Refusal::DoesNotFit);
-        self.ports.announcer.say(why.message());
+        self.ports.announcer.say(&self.i18n.tr_now(why.key(), &Args::new()));
     }
 
     fn say_selection(&self) {
-        if let Some(t) = text::selection_text(&self.view_now(), self.units_now()) {
+        if let Some(t) = text::selection_text(&self.view_now(), &self.i18n, self.units_now()) {
             self.ports.announcer.say(&t);
         }
     }
@@ -239,7 +246,7 @@ mod tests {
 
     fn rig(sample: usize) -> Rig {
         let (ports, said, storage, time) = test_ports_with_time();
-        Rig { vm: JunctionVm::new(ports, Junction::new(sample), None), said, time, storage }
+        Rig { vm: JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), Junction::new(sample), None), said, time, storage }
     }
 
     fn city_rig() -> (Rig, CityBinding) {
@@ -248,7 +255,7 @@ mod tests {
         let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
         let junction = store.open().junction_editor(node, 0).unwrap();
         let binding = CityBinding { store, place: Place::Junction(node) };
-        (Rig { vm: JunctionVm::new(ports, junction, Some(binding.clone())), said, time, storage }, binding)
+        (Rig { vm: JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), junction, Some(binding.clone())), said, time, storage }, binding)
     }
 
     fn arm(vm: &JunctionVm, bearing: i32) -> u32 {
@@ -294,7 +301,7 @@ mod tests {
         let r = rig(0);
         let n = arm(&r.vm, 0);
         assert!(r.vm.apply(|j| j.set_corner(n, 7_000)));
-        assert_eq!(r.said.take(), vec!["Corner after Sample Avenue 2 (north): 7000 mm radius. 4 streets, traffic signal. Every check passes."]);
+        assert_eq!(r.said.take(), vec!["Corner after Sample Avenue 2 (north): 7.0 m radius. 4 streets, traffic signal. Every check passes."]);
         assert!(!r.vm.apply(|j| j.set_corner(n, 99_000)));
         assert_eq!(r.said.take(), vec!["That change does not fit."]);
         assert_eq!(r.vm.version().get_untracked(), 2, "a refused edit still asks the views to look again");
@@ -403,7 +410,7 @@ mod tests {
         r.time.advance(300);
         r.vm.edit(|j| j.set_corner(n, 7_500));
         r.time.advance(300);
-        assert_eq!(r.said.take(), vec![NOT_KEPT]);
+        assert_eq!(r.said.take(), vec![crate::i18n_for(crate::shared::i18n::Locale::En).tr_now("not-kept", &crate::shared::i18n::Args::new())]);
         assert_eq!(r.vm.read(|j| j.arm(n).unwrap().corner_mm), 7_500);
     }
 }

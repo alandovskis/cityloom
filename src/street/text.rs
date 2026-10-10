@@ -153,7 +153,7 @@ mod tests {
         let s = &v.segments[1];
         assert_eq!(
             selection_text(&v, &en(), Units::Metres).unwrap(),
-            format!("{}, {} m, 2 of {}", KINDS[s.kind].name, Units::Metres.fine(s.width_mm), v.segments.len())
+            format!("{}, {} m, 2 of {}", en().tr_now(&kind_key(KINDS[s.kind].id), &Args::new()), Units::Metres.fine(s.width_mm), v.segments.len())
         );
     }
 
@@ -286,7 +286,7 @@ mod tests {
         for locale in Locale::ALL {
             let i18n = crate::i18n_for(locale);
             // Every argument any of them takes, so that a message is found whatever it is about.
-            let args = ["kind", "a", "b", "material", "curb", "vehicle", "direction", "base", "from", "to", "code", "name", "amount", "side"]
+            let args = ["kind", "a", "b", "material", "curb", "vehicle", "direction", "base", "from", "to", "code", "name", "amount", "side", "class"]
                 .into_iter()
                 .fold(Args::new(), |args, name| args.str(name, "x"));
             for key in &keys {

@@ -30,6 +30,16 @@ pub const LINEAR: &str = "Linear continuous measures";
 pub const LOCAL: &str = "Localized measures";
 pub const AREA: &str = "Area-wide measures";
 
+/// The message that names a group of measures (`street/i18n`); None for a group the Atlas does not have.
+pub fn group_name_key(group: &str) -> Option<&'static str> {
+    match group {
+        LINEAR => Some("group-name-linear"),
+        LOCAL => Some("group-name-local"),
+        AREA => Some("group-name-area"),
+        _ => None,
+    }
+}
+
 /// The message that names a measure (`street/i18n`), by its lowercase code.
 pub fn name_key(code: &str) -> String {
     format!("atlas-{}-name", code.to_lowercase())
@@ -145,5 +155,12 @@ mod tests {
             }
             assert!(i.missing().is_empty(), "{:?}: {:?}", locale, i.missing());
         }
+    }
+
+    #[test]
+    fn every_group_of_measures_has_its_own_name_and_no_other_group_has_one() {
+        assert_eq!([LINEAR, LOCAL, AREA].map(group_name_key), [Some("group-name-linear"), Some("group-name-local"), Some("group-name-area")]);
+        assert!(MEASURES.iter().all(|m| group_name_key(m.group).is_some()));
+        assert_eq!(group_name_key("Something else"), None, "an unknown group is not named as one it is not");
     }
 }

@@ -56,16 +56,17 @@ impl Sheet {
 
 /// Draws the street page into the elements it keeps for them: the section, its
 /// heading and status, undo and redo, the menu to add a piece, the time of day,
-/// the details of the selected piece, and the notes beside it. `ends`, for a
-/// street of a city, is the JSON of the places it runs between.
+/// the details of the selected piece, and the notes beside it. `edge`, for a
+/// street of the city kept in this browser, is the street: its header names the
+/// places it runs between.
 #[wasm_bindgen]
-pub fn mount_street_page(sheet: &Sheet, ends: Option<String>) {
+pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
     let vm = sheet.0.clone();
-    let ends: Option<Vec<page::StreetEnd>> = ends.and_then(|json| serde_json::from_str(&json).ok());
+    let ends = edge.map(|edge| CityStore::current(browser_ports().storage).open().street_ends(edge));
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
@@ -86,13 +87,6 @@ pub fn mount_street_page(sheet: &Sheet, ends: Option<String>) {
     mount("checks", view! { <notes::Checks vm=vm.clone()/> }.into_any());
     mount("revs", view! { <notes::Revisions vm=vm.clone()/> }.into_any());
     mount("measures", view! { <notes::Measures vm=vm/> }.into_any());
-}
-
-/// The two ends of a street of the city kept in this browser as JSON: each a
-/// junction or where it leaves the map.
-#[wasm_bindgen]
-pub fn street_ends(edge: u32) -> String {
-    crate::json(&CityStore::current(browser_ports().storage).open().street_ends(edge))
 }
 
 /// The street editor on one street of the city kept in this browser, which

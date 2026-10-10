@@ -17,22 +17,11 @@ pub enum Mode {
 
 impl Mode {
     pub const ALL: [Mode; 5] = [Mode::Foot, Mode::Bike, Mode::Transit, Mode::Vehicle, Mode::Green];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Mode::Foot => "Walking",
-            Mode::Bike => "Biking",
-            Mode::Transit => "Transit",
-            Mode::Vehicle => "Cars and trucks",
-            Mode::Green => "Greenery",
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct Kind {
     pub id: &'static str,
-    pub name: &'static str,
     /// Two-letter mark used on the sheet and in the schedule.
     pub mark: &'static str,
     pub mode: Mode,
@@ -106,6 +95,9 @@ pub enum StreetClass {
 }
 
 impl StreetClass {
+    /// Every class, from the widest-reaching road to the quietest.
+    pub const ALL: [StreetClass; 4] = [StreetClass::Motorway, StreetClass::Arterial, StreetClass::Collector, StreetClass::Local];
+
     /// A limited-access road: no sidewalks, and a median and shoulders instead.
     pub fn is_freeway(self) -> bool {
         self == StreetClass::Motorway
@@ -146,7 +138,6 @@ pub const DEFAULT_CURB: usize = 1;
 pub const KINDS: [Kind; 17] = [
     Kind {
         id: "sidewalk",
-        name: "Sidewalk",
         mark: "SW",
         mode: Mode::Foot,
         default_mm: 3000,
@@ -161,7 +152,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "planting",
-        name: "Planting strip",
         mark: "PL",
         mode: Mode::Green,
         default_mm: 1800,
@@ -176,7 +166,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "bike",
-        name: "Bike lane",
         mark: "BL",
         mode: Mode::Bike,
         default_mm: 1800,
@@ -191,7 +180,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "travel",
-        name: "Driving lane",
         mark: "TL",
         mode: Mode::Vehicle,
         default_mm: 3300,
@@ -206,7 +194,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "bus",
-        name: "Transit lane",
         mark: "TR",
         mode: Mode::Transit,
         default_mm: 3300,
@@ -221,7 +208,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "parking",
-        name: "Parking",
         mark: "PK",
         mode: Mode::Vehicle,
         default_mm: 2400,
@@ -236,7 +222,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "median",
-        name: "Planted median",
         mark: "MD",
         mode: Mode::Green,
         default_mm: 1800,
@@ -251,7 +236,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "loading",
-        name: "Loading zone",
         mark: "LZ",
         mode: Mode::Vehicle,
         default_mm: 2400,
@@ -266,7 +250,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "shoulder",
-        name: "Shoulder",
         mark: "SD",
         mode: Mode::Vehicle,
         default_mm: 3000,
@@ -281,7 +264,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "bikerack",
-        name: "Bike rack",
         mark: "BR",
         mode: Mode::Foot,
         default_mm: 1200,
@@ -296,7 +278,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "bikeshare",
-        name: "Bikeshare station",
         mark: "BS",
         mode: Mode::Foot,
         default_mm: 2000,
@@ -311,7 +292,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "pole",
-        name: "Utility pole",
         mark: "UP",
         mode: Mode::Foot,
         default_mm: 600,
@@ -326,7 +306,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "busshelter",
-        name: "Bus shelter",
         mark: "SH",
         mode: Mode::Foot,
         default_mm: 1500,
@@ -341,7 +320,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "busstation",
-        name: "Bus station",
         mark: "ST",
         mode: Mode::Foot,
         default_mm: 3000,
@@ -356,7 +334,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "bench",
-        name: "Bench",
         mark: "BN",
         mode: Mode::Foot,
         default_mm: 700,
@@ -371,7 +348,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "terrace",
-        name: "Café terrace",
         mark: "CT",
         mode: Mode::Foot,
         default_mm: 2000,
@@ -386,7 +362,6 @@ pub const KINDS: [Kind; 17] = [
     },
     Kind {
         id: "streetlamp",
-        name: "Street lamp",
         mark: "SL",
         mode: Mode::Foot,
         default_mm: 500,
@@ -412,6 +387,16 @@ pub fn is_roadway(kind: usize) -> bool {
 
 /// The groups the add menu sorts the kinds into, in its order. A group's name is the message `group-<id>`.
 pub const GROUP_IDS: [&str; 7] = ["walking", "greenery", "cycling", "transit", "roadway", "furniture", "utilities"];
+
+/// The message that names a class of street, as a word to put in a sentence (`city/i18n`).
+pub fn class_key(class: StreetClass) -> &'static str {
+    match class {
+        StreetClass::Motorway => "class-motorway",
+        StreetClass::Arterial => "class-arterial",
+        StreetClass::Collector => "class-collector",
+        StreetClass::Local => "class-local",
+    }
+}
 
 /// The message that names a kind of piece (`street/i18n`).
 pub fn kind_key(id: &str) -> String {
@@ -483,20 +468,27 @@ mod tests {
     }
 
     #[test]
-    fn the_english_messages_say_what_the_names_and_labels_still_say() {
+    fn the_english_messages_say_what_the_marks_and_groups_still_say() {
         let i = crate::i18n_for(Locale::En);
-        for k in KINDS.iter() {
-            assert_eq!(i.tr_now(&kind_key(k.id), &Args::new()), k.name, "{}", k.id);
-        }
+        assert_eq!(i.tr_now(&kind_key("sidewalk"), &Args::new()), "Sidewalk");
+        assert_eq!(i.tr_now(mode_key(Mode::Vehicle), &Args::new()), "Cars and trucks");
         for k in KINDS.iter() {
             assert_eq!(i.tr_now(&mark_key(k.id), &Args::new()), k.mark, "{}", k.id);
-        }
-        for m in Mode::ALL {
-            assert_eq!(i.tr_now(mode_key(m), &Args::new()), m.label(), "{m:?}");
         }
         for (g, word) in GROUP_IDS.iter().zip(GROUP_WORDS) {
             assert_eq!(i.tr_now(&group_key(g), &Args::new()), word, "{g}");
         }
+    }
+
+    #[test]
+    fn every_street_class_has_a_message_in_both_languages() {
+        for locale in Locale::ALL {
+            let i18n = crate::i18n_for(locale);
+            for class in StreetClass::ALL {
+                assert!(i18n.has_message(class_key(class), locale), "{} in {}", class_key(class), locale.tag());
+            }
+        }
+        assert_eq!(class_key(StreetClass::Local), "class-local");
     }
 
     #[test]

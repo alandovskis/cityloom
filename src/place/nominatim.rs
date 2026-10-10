@@ -3,6 +3,7 @@
 use serde::Deserialize;
 
 use super::{Bounds, encode};
+use crate::shared::said::{Arg, Said};
 
 const ENDPOINT: &str = "https://nominatim.openstreetmap.org/search";
 
@@ -30,8 +31,8 @@ struct Hit {
 
 /// The places in a Nominatim answer, best first. An answer that is not what
 /// Nominatim sends is an error; a hit that lacks a position is left out.
-pub fn parse(body: &[u8]) -> Result<Vec<Place>, String> {
-    let hits: Vec<Hit> = serde_json::from_slice(body).map_err(|e| format!("the place search answered something unexpected ({e})"))?;
+pub fn parse(body: &[u8]) -> Result<Vec<Place>, Said> {
+    let hits: Vec<Hit> = serde_json::from_slice(body).map_err(|e| Said::new("place-search-unexpected").with("e", Arg::Text(e.to_string())))?;
     Ok(hits.into_iter().filter_map(place).collect())
 }
 
@@ -66,6 +67,8 @@ mod tests {
     #[test]
     fn nothing_found_is_an_empty_list_and_a_wrong_answer_is_an_error() {
         assert_eq!(parse(b"[]").unwrap(), vec![]);
-        assert!(parse(b"<html>rate limited</html>").unwrap_err().contains("unexpected"));
+        let wrong = parse(b"<html>rate limited</html>").unwrap_err();
+        let en = crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres, &wrong);
+        assert!(en.starts_with("the place search answered something unexpected (expected value"), "{en}");
     }
 }

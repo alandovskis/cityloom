@@ -4,7 +4,7 @@
 
 import init, {
   hatches,
-  junction_name,
+  junction_exists,
   mount_bare_shell,
   mount_page,
   open_junction,
@@ -20,22 +20,16 @@ const { HATCH, MATERIAL_HATCH, CURB_HATCH } = JSON.parse(hatches());
 // The page edits a junction of the city (`?junction=3`), reading its streets from the city, and writes each
 // change back. It is reached from the map: without a junction of the city it goes there.
 const placeId = placeParam("junction");
-const placeName = placeId ? junction_name(placeId) : "";
-const held = placeId ? open_junction(placeId) : undefined;
-if (!placeName) {
+if (!placeId || !junction_exists(placeId)) {
   location.replace("map.html");
   await new Promise(() => {});
 }
-if (!held) {
-  // The streets here have been changed so that the junction cannot be drawn.
-  mount_bare_shell(); // only the settings menu and the sidebars have anything to do here
-  document.getElementById("street-name").textContent = placeName;
-  document.querySelector(".tools").hidden = true;
-  document.querySelector(".stage-main").innerHTML =
-    `<div class="stuck"><h2 class="note-h">This junction cannot be drawn</h2><p>The streets that meet here have been changed so that they no longer make a junction. Give the streets their room back, or start the city over from the map.</p><p><a class="back" href="map.html">City map</a></p></div>`;
+const plan = open_junction(placeId);
+if (!plan) {
+  // The streets here have been changed so that the junction cannot be drawn: the module says so.
+  mount_bare_shell(placeId);
   await new Promise(() => {});
 }
-const plan = held;
 
 // The hatch patterns the plan and the swatches are filled with.
 document.getElementById("defs").innerHTML =

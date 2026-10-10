@@ -121,7 +121,10 @@ impl I18n {
 
     /// Whether `key` is a message with a value in `locale`'s own bundle (no fallback to English).
     pub fn has_message(&self, key: &str, locale: Locale) -> bool {
-        let b = if locale == Locale::En { &self.en } else { &self.fr };
+        let b = match locale {
+            Locale::En => &self.en,
+            Locale::FrCa => &self.fr,
+        };
         b.get_message(key).is_some_and(|m| m.value().is_some())
     }
 
@@ -139,7 +142,10 @@ impl I18n {
     }
 
     fn format(&self, locale: Locale, key: &str, args: &Args) -> Option<String> {
-        let b = if locale == Locale::En { &self.en } else { &self.fr };
+        let b = match locale {
+            Locale::En => &self.en,
+            Locale::FrCa => &self.fr,
+        };
         let pattern = b.get_message(key)?.value()?;
         let mut errors = Vec::new();
         let text = b.format_pattern(pattern, Some(&args.0), &mut errors).into_owned();

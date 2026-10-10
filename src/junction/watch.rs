@@ -8,6 +8,8 @@ use crate::junction::keys::{Action, Step};
 use crate::junction::model::{Junction, Target};
 use crate::junction::read_model::{ArmView, JView};
 use crate::junction::vm::JunctionVm;
+use crate::shared::i18n::{Args, I18n};
+use crate::shared::said::{Said, say};
 use crate::shared::units::Units;
 
 /// What a component reads of the junction view-model and tells it. The view-model
@@ -21,6 +23,21 @@ pub struct Watch {
 impl Watch {
     pub fn new(vm: Rc<JunctionVm>) -> Watch {
         Watch { vm: StoredValue::new_local(vm) }
+    }
+
+    pub fn i18n(&self) -> Rc<I18n> {
+        self.vm.with_value(|v| v.i18n().clone())
+    }
+
+    /// What the model said, in words in the language of the page, drawn again when the language or
+    /// the units change.
+    pub fn say(&self, said: &Said) -> String {
+        self.vm.with_value(|v| say(v.i18n(), v.units(), said))
+    }
+
+    /// A message of the page, drawn again when the language changes.
+    pub fn tr(&self, key: &str) -> String {
+        self.vm.with_value(|v| v.i18n().tr(key, &Args::new()))
     }
 
     pub fn version(&self) -> RwSignal<u32> {

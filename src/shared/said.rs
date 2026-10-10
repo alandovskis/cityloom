@@ -44,6 +44,10 @@ pub enum Arg {
     Length(i32),
     /// Another message, by key, said in its place.
     Msg(&'static str),
+    /// Another message, by key, said in the middle of a sentence (in lower case).
+    MsgLower(&'static str),
+    /// Another message with its own things, said in its place.
+    Said(Box<Said>),
 }
 
 /// A message key with the things it is about.
@@ -95,6 +99,8 @@ fn put_into_words(i18n: &I18n, units: Units, said: &Said, watched: bool) -> Stri
             Arg::Clock(min) => args.str(arg_name, hhmm(*min)),
             Arg::Length(mm) => args.str(arg_name, units.length_fine_in(*mm, locale)),
             Arg::Msg(key) => args.str(arg_name, tr(key, &Args::new())),
+            Arg::MsgLower(key) => args.str(arg_name, tr(key, &Args::new()).to_lowercase()),
+            Arg::Said(inner) => args.str(arg_name, put_into_words(i18n, units, inner, watched)),
         };
     }
     tr(said.key, &args)
@@ -105,13 +111,7 @@ mod tests {
     use super::*;
     use crate::shared::i18n::Locale;
 
-    fn en(said: &Said) -> String {
-        say_now(&crate::i18n_for(Locale::En), Units::Metres, said)
-    }
-
-    fn fr(said: &Said) -> String {
-        say_now(&crate::i18n_for(Locale::FrCa), Units::Metres, said)
-    }
+    use crate::shared::testing::{en, fr};
 
     #[test]
     fn a_time_of_day_is_written_hours_and_minutes_and_the_hour_wraps() {
@@ -131,6 +131,8 @@ mod tests {
         assert_eq!((en(&curb), fr(&curb)), ("Sidewalk curb: granite".into(), "Trottoir, bordure\u{a0}: granit".into()));
         let none = Said::new("rev-curb").with("kind", Arg::Kind("sidewalk")).with("curb", Arg::Msg("rev-word-none"));
         assert_eq!((en(&none), fr(&none)), ("Sidewalk curb: none".into(), "Trottoir, bordure\u{a0}: aucune".into()));
+        let lower = Said::new("rev-curb").with("kind", Arg::Kind("sidewalk")).with("curb", Arg::MsgLower("kind-planting"));
+        assert_eq!((en(&lower), fr(&lower)), ("Sidewalk curb: planting strip".into(), "Trottoir, bordure\u{a0}: bande plantée".into()));
         let way = Said::new("rev-direction").with("kind", Arg::Kind("travel")).with("direction", Arg::DirectionLower("away"));
         assert_eq!((en(&way), fr(&way)), ("Driving lane direction: away from you".into(), "Voie de circulation, sens\u{a0}: s’éloigne de vous".into()));
         let window = Said::new("rev-window")
@@ -149,6 +151,16 @@ mod tests {
         assert_eq!(en(&over), "1.8 m too wide. Narrow or remove a piece.");
         assert_eq!(fr(&over), "1,8\u{a0}m de trop. Rétrécissez ou retirez un élément.");
         assert_eq!(say_now(&crate::i18n_for(Locale::En), Units::Feet, &over), "5.9 ft too wide. Narrow or remove a piece.");
+    }
+
+    #[test]
+    fn a_said_can_be_an_argument_of_another() {
+        // `edit-undone` takes `$fit`; the inner message is worded in the same language.
+        let inner = Said::new("street-today");
+        let outer = Said::new("edit-undone").with("fit", Arg::Said(Box::new(inner.clone())));
+        assert_eq!(en(&outer), format!("Undone. {}.", en(&inner)));
+        assert_eq!(fr(&outer), format!("Annulé. {}.", fr(&inner)));
+        assert_ne!(en(&inner), fr(&inner));
     }
 
     #[test]

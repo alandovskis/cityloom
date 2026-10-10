@@ -2,7 +2,7 @@
 // WebAssembly module (`mount_street_page`); this opens the street, keeps what
 // it makes in the city, and sets up what every page shares.
 
-import init, { hatches, mount_street_page, open_street, prepare_city, street_ends } from "./pkg/cityloom_editor.js";
+import init, { hatches, mount_street_page, open_street, prepare_city } from "./pkg/cityloom_editor.js";
 import { placeParam } from "./city.js";
 
 await init();
@@ -25,6 +25,6 @@ document.getElementById("defs").innerHTML =
 // What is waiting to be kept in the city is kept when the page is left.
 addEventListener("pagehide", () => sheet.flush());
 
-mount_street_page(sheet, street_ends(placeId));
+mount_street_page(sheet, placeId);
 
 sheet.mount_shell();
