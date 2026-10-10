@@ -32,8 +32,10 @@ HIGHWAYS = (
     "motorway,motorway_link,trunk,trunk_link,primary,primary_link,secondary,secondary_link,"
     "tertiary,tertiary_link,unclassified,residential,living_street,service,pedestrian"
 )
-# What osmium allows in one run.
-MAX_EXTRACTS = 500
+# Extracts per osmium run. osmium keeps a set of ids for each extract it cuts at once, a gigabyte or more apiece for
+# the dense tiles of the city (5 took 11 GB, 20 took 22 GB, where 2 take under 6 GB with the rest of the script), so
+# cutting many at once does not fit a CI runner's 16 GB.
+MAX_EXTRACTS = 2
 # An empty tile is a file with only a header.
 EMPTY_BYTES = 400
 
@@ -83,7 +85,7 @@ def main():
         old.unlink()
     OUT.mkdir(parents=True, exist_ok=True)
 
-    # osmium cuts at most 500 extracts in a run, and has them all open at once.
+    # osmium has all of a run's extracts open at once.
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (min(max(soft, MAX_EXTRACTS + 64), hard), hard))
     extracts = [
