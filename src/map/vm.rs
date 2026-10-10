@@ -2,7 +2,7 @@
 //! attention and what has changed, where the camera is, and what pressing
 //! "start over" means. The view binds to its properties and sends it commands.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 
 use leptos::prelude::*;
@@ -14,7 +14,7 @@ use crate::map::overlay;
 use crate::map::projection::Projection;
 use crate::map::style;
 use crate::shared::core::{Core, Presents};
-use crate::shared::i18n::{Args, I18n};
+use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::ports::{MapEvent, Ports};
 use crate::shared::said::{self, Arg, Said};
 use crate::shared::units::Units;
@@ -179,6 +179,17 @@ pub enum ResetOutcome {
     Done,
 }
 
+/// The junction rows and the street rows, each with its folded text (see `MapVm::worded_rows`).
+type WordedRows = (Vec<(PlaceRow, String)>, Vec<(PlaceRow, String)>);
+
+/// `WordedRows`, for the city view, language and units they were worded for.
+struct Worded {
+    view: Rc<CityView>,
+    locale: Locale,
+    units: Units,
+    rows: Rc<WordedRows>,
+}
+
 pub struct MapVm {
     me: Weak<MapVm>,
     core: Core<CityModel>,
@@ -193,6 +204,8 @@ pub struct MapVm {
     search: ArcRwSignal<String>,
     /// The result the arrow keys have moved to, by index into `results`.
     active: ArcRwSignal<Option<usize>>,
+    /// The places worded for the search, until the city, the language or the units change.
+    worded: RefCell<Option<Worded>>,
 }
 
 impl MapVm {
@@ -229,6 +242,7 @@ impl MapVm {
             armed: ArcRwSignal::new(false),
             search: ArcRwSignal::new(String::new()),
             active: ArcRwSignal::new(None),
+            worded: RefCell::new(None),
         })
     }
 
@@ -366,17 +380,19 @@ impl MapVm {
         fold(&self.search.get()).split_whitespace().map(String::from).collect()
     }
 
-    /// The junctions and the streets that the search leaves. The whole phrase is
-    /// looked for in a place's name and small print first, so that "junction 4"
-    /// finds Junction 4 and the streets that end there and not every junction of
-    /// four streets; when that finds nothing, each word is looked for on its own.
-    /// What is looked in is the text the page shows, in its language, worded with the
-    /// tracked `say`, so the results follow a switch of language or units.
-    fn narrowed(&self) -> (Vec<PlaceRow>, Vec<PlaceRow>) {
-        let terms = self.terms();
-        let (junctions, streets) = (self.junction_rows(), self.street_rows());
-        // Each row is worded once, here: both passes below read the same text.
-        let worded = |rows: Vec<PlaceRow>| -> Vec<(PlaceRow, String)> {
+    /// The junction rows and the street rows, each with the folded text the page shows for it, worded once
+    /// for the city, the language and the units they were worded for. Reading it is tracked, so a closure
+    /// that reads it draws again when any of the three changes; typing does not word the places again.
+    fn worded_rows(&self) -> Rc<WordedRows> {
+        let (view, locale, units) = (self.view(), self.i18n.locale(), self.units());
+        if let Some(w) = &*self.worded.borrow()
+            && Rc::ptr_eq(&w.view, &view)
+            && w.locale == locale
+            && w.units == units
+        {
+            return w.rows.clone();
+        }
+        let word = |rows: Vec<PlaceRow>| -> Vec<(PlaceRow, String)> {
             rows.into_iter()
                 .map(|r| {
                     let text = fold(&format!("{} {}", self.say(&r.name), self.say(&r.sub)));
@@ -384,14 +400,28 @@ impl MapVm {
                 })
                 .collect()
         };
-        let (junctions, streets) = (worded(junctions), worded(streets));
+        let rows = Rc::new((word(self.junction_rows()), word(self.street_rows())));
+        *self.worded.borrow_mut() = Some(Worded { view, locale, units, rows: rows.clone() });
+        rows
+    }
+
+    /// The junctions and the streets that the search leaves. The whole phrase is
+    /// looked for in a place's name and small print first, so that "junction 4"
+    /// finds Junction 4 and the streets that end there and not every junction of
+    /// four streets; when that finds nothing, each word is looked for on its own.
+    /// What is looked in is the text the page shows, in its language, worded by
+    /// `worded_rows`, so the results follow a switch of language or units.
+    fn narrowed(&self) -> (Vec<PlaceRow>, Vec<PlaceRow>) {
+        let terms = self.terms();
+        let worded = self.worded_rows();
+        let (junctions, streets) = (&worded.0, &worded.1);
         let phrase = terms.join(" ");
         let keep =
             |rows: &[(PlaceRow, String)], found: &dyn Fn(&str) -> bool| rows.iter().filter(|(_, t)| found(t)).map(|(r, _)| r.clone()).collect::<Vec<_>>();
         let by_phrase = |t: &str| t.contains(&phrase);
         let by_words = |t: &str| terms.iter().all(|w| t.contains(w.as_str()));
-        let (j, st) = (keep(&junctions, &by_phrase), keep(&streets, &by_phrase));
-        if j.is_empty() && st.is_empty() { (keep(&junctions, &by_words), keep(&streets, &by_words)) } else { (j, st) }
+        let (j, st) = (keep(junctions, &by_phrase), keep(streets, &by_phrase));
+        if j.is_empty() && st.is_empty() { (keep(junctions, &by_words), keep(streets, &by_words)) } else { (j, st) }
     }
 
     /// Whether something is searched for: the dropdown is open then, with the places or with what to do.
@@ -843,6 +873,27 @@ mod tests {
         assert_eq!(found.get(), 0, "nothing is called a jonction in English");
         vm.i18n().set(Locale::FrCa);
         assert!(found.get() > 0, "the results are worked out again from the French the page now shows");
+    }
+
+    #[test]
+    fn the_places_are_worded_once_until_the_city_the_language_or_the_units_change() {
+        let (vm, _, storage) = vm();
+        let first = vm.worded_rows();
+        vm.set_search("avenue");
+        assert!(Rc::ptr_eq(&first, &vm.worded_rows()), "typing does not word the places again");
+        vm.set_search("avenue 1");
+        let _ = (vm.results(), vm.search_note());
+        assert!(Rc::ptr_eq(&first, &vm.worded_rows()));
+        vm.i18n().set(Locale::FrCa);
+        let french = vm.worded_rows();
+        assert!(!Rc::ptr_eq(&first, &french), "a switch of language words them again");
+        assert!(Rc::ptr_eq(&french, &vm.worded_rows()));
+        vm.set_units(Units::Feet);
+        let feet = vm.worded_rows();
+        assert!(!Rc::ptr_eq(&french, &feet), "so does a change of units");
+        nudge_street(&storage, vm.view().edges[0].uid, -100);
+        vm.reload();
+        assert!(!Rc::ptr_eq(&feet, &vm.worded_rows()), "and an edit of the city");
     }
 
     #[test]
