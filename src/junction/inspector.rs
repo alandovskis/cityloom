@@ -963,6 +963,24 @@ mod tests {
     }
 
     #[test]
+    fn a_number_field_with_an_empty_hint_is_not_described_by_one() {
+        let vm = crate::junction::vm::JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Junction::new(0), None);
+        let w = Watch::new(vm);
+        let field = |hint: &'static str| Num {
+            id: "f",
+            label: "jn-insp-ring-hint",
+            minus: Signal::derive(String::new),
+            plus: Signal::derive(String::new),
+            value: Signal::derive(|| "1".to_string()),
+            tag: Signal::derive(String::new),
+            hint: Signal::derive(move || hint.to_string()),
+        };
+        let html = |hint| crate::shared::testing::html(move || num_view(w, field(hint), Rc::new(|_| {}), Box::new(|_| {})));
+        assert!(!html("").contains("aria-describedby"));
+        assert!(html("1 m to 2 m").contains("aria-describedby=\"f-hint\""));
+    }
+
+    #[test]
     fn a_lane_is_placed_among_its_street_s_lanes() {
         assert_eq!(lane_note(1, 0), Some("jn-insp-lane-only"));
         assert_eq!(lane_note(2, 0), Some("jn-insp-lane-middle"));

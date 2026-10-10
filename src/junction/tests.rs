@@ -1229,7 +1229,8 @@ fn a_typed_length_outside_what_fits_is_refused_by_the_model() {
     crate::shared::live::take_said();
     assert!(inspector::commit_cycle(w, "9,5"));
     assert_eq!(cycle_width_mm(&s), before);
-    assert!(!crate::shared::live::take_said().is_empty(), "the refusal is announced");
+    let refusal = crate::i18n_for(crate::shared::i18n::Locale::En).tr_now("jn-refusal-does-not-fit", &crate::shared::i18n::Args::new());
+    assert_eq!(crate::shared::live::take_said(), [refusal], "the refusal is announced");
     // What the field is made to hold again is the model's value.
     assert!(panel(&s).contains(&format!("value=\"{}\"", Units::Metres.fixed(before.unwrap(), 1))));
 }
@@ -1255,10 +1256,13 @@ fn a_field_with_no_hint_is_not_described_by_one() {
     let s = shared(0);
     s.select(Target::Arm(arm(&s, 0)));
     let h = panel(&s);
+    let mut described = 0;
     for id in h.split("aria-describedby=\"").skip(1) {
         let id = id.split('"').next().unwrap();
         assert!(h.contains(&format!("id=\"{id}\"")), "{id} is described by nothing");
+        described += 1;
     }
+    assert!(described >= 1, "the street's panel has fields with hints, so the check looked at something");
 }
 
 #[test]
