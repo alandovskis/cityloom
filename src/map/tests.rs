@@ -485,3 +485,10 @@ fn the_openstreetmap_credit_stays_a_link_and_reads_naturally_in_both_languages()
     assert_eq!(credit(&crate::i18n_for(Locale::En)), "Streets © OpenStreetMap contributors");
     assert_eq!(credit(&crate::i18n_for(Locale::FrCa)), "Rues © les contributeurs d’OpenStreetMap");
 }
+
+#[test]
+fn map_html_has_one_h1_the_city_map() {
+    let html = include_str!("../../web/map.html");
+    assert_eq!(html.matches("<h1").count(), 1);
+    assert!(html.contains(r#"<h1 id="h-drawing" class="sr-only" data-i18n="map-city-map">City map</h1>"#));
+}
