@@ -718,6 +718,12 @@ svg pattern circle {
   stroke: none;
   pointer-events: none;
 }
+#drawing .corner-bike,
+#drawing .corner-island {
+  stroke: var(--ink-2);
+  stroke-width: 0.8;
+  pointer-events: none;
+}
 #drawing .bike-box {
   stroke: var(--ink-2);
   stroke-width: 0.8;
