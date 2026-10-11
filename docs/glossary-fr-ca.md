@@ -51,8 +51,6 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page notes | Step | Étape |  |
 | Street page notes | check (of the street) | vérification | `0` and `1` are singular, as in CLDR. |
 | Street page notes | passes / fails | réussite / échec | Nouns, so they agree with any check's name. |
-| Street page notes | Set at a junction | Se règle à une intersection |  |
-| Street page notes | Not modelled | Non modélisé |  |
 | Street page frame | City map | Carte de la ville |  |
 | Street page frame | Street cross-section | Coupe transversale de la rue |  |
 | Street page frame | 12 m wide | 12 m de large |  |
@@ -181,10 +179,6 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction page | To cross / Lanes in | À traverser / Voies entrantes | Columns of the Getting across table; a street with no crossing says `aucun` (a `passage`). |
 | Junction page | Crossing / Merging / Splitting / All (conflict points) | Croisement / Convergence / Divergence / Total |  |
 | Junction page | path (of a turn) | trajectoire |  |
-| Junction page | In use on N, E | Utilisée sur N, E | Agrees with `mesure`. |
-| Junction page | Set on a street (a measure) | Se règle sur une rue | One of this junction's streets, in the panel beside the plan. |
-| Junction page | Street editor | Éditeur de rue | Short form of `Éditeur de coupe transversale de la rue`. |
-| Junction page | Not modelled (a measure) | Non modélisée | Agrees with `mesure`; the street page's column is `Non modélisé`. |
 | Junction page | Junction today | Jonction aujourd’hui | As the city's history label. |
 | Junction plan | Plan of the junction, north up | Plan de la jonction, nord en haut |  |
 | Junction plan | N · 20.0 m road | N · chaussée de 20,0 m | `· décalée de 0,5 m` when shifted (agrees with `chaussée`). |
@@ -278,7 +272,6 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Merging / Splitting (junction conflict points) | `Convergence` / `Divergence` | `Insertion` / `Séparation` (suggestion) |
 | A signal takes turns (junction note) | `Les feux alternent les mouvements` | `Les feux attribuent le passage à tour de rôle` (suggestion) |
 | Turn X (junction grip) | `Faire pivoter X` | `Tourner X` (suggestion) |
-| Street editor (junction measures) | `Éditeur de rue` | `Éditeur de coupe transversale` (suggestion, longer) |
 | Bus only (junction road marking) | `Autobus seulement` | `Réservé aux autobus` (suggestion) |
 | (one way in) (junction inspector: a street a lane cannot go to) | `(sens unique vers la jonction)` | `(sens unique entrant)` (suggestion) |
 | One way out (junction inspector) | `Sens unique sortant` | `Sens unique, en sortie seulement` (suggestion) |
@@ -289,7 +282,6 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Tighter (a corner, junction stepper) | `Resserrer` | `Réduire le rayon` (suggestion) |
 | Getting across (junction notes heading) | `Traverser` | `Pour traverser`, `Traversées` (suggestion) |
 | Feet (the unit, `Units::word()`) | `ft`, as in English | `pi`, the OQLF symbol for `pied`. Owner decision: French shows `ft` today. |
-| The toolbox of the Transit Priority Atlas, and where CityLoom models each measure (junction page) | `La boîte à outils du Transit Priority Atlas, et l’endroit où CityLoom modélise chaque mesure` | The Atlas keeps its English name, as on the street page (`d’après le Transit Priority Atlas`). |
 | Raised table (junction) | `Carrefour surélevé` | `Intersection surélevée`; `carrefour` is the word of `Carrefour giratoire`, where the app's own `Jonction` names a place of the city |
 | Continuous sidewalk (junction) | `Trottoir continu` | `Trottoir traversant`, `Trottoir prolongé` (suggestion) |
 | Bike box (junction) | `Sas cyclable` | `Case avancée pour cyclistes`, `Boîte vélo` (suggestion) |
