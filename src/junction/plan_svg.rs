@@ -142,11 +142,12 @@ impl Plan<'_> {
         }
         let (x, y) = self.f.at(l.at);
         format!(
-            "<g class=\"lane-arrow{}\" transform=\"translate({} {}) rotate({})\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
+            "<g class=\"lane-arrow{}\" transform=\"translate({} {}) rotate({})\" style=\"--arrow:{}\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
             if l.bad { " bad" } else { "" },
             f1(x),
             f1(y),
-            l.heading
+            l.heading,
+            f1(h)
         )
     }
 
@@ -480,14 +481,16 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
             let ang = *b as f64 + gap as f64 / 2.0;
             let (dx, dy) = dir_of(ang);
             let heading = ang + if ccw { -90.0 } else { 90.0 };
-            let h = 20.0_f64.min(mid * 0.5);
-            let d = format!("M0 {}V{}M-4 {}L0 {}L4 {}", h / 2.0, -h / 2.0, -h / 2.0 + 4.0, -h / 2.0, -h / 2.0 + 4.0);
+            let h = 34.0_f64.min(mid * 0.85);
+            let head = h * 0.2;
+            let d = format!("M0 {}V{}M{} {}L0 {}L{} {}", h / 2.0, -h / 2.0, -head, -h / 2.0 + head, -h / 2.0, head, -h / 2.0 + head);
             write!(
                 l.mark,
-                "<g class=\"lane-arrow\" transform=\"translate({} {}) rotate({})\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
+                "<g class=\"lane-arrow\" transform=\"translate({} {}) rotate({})\" style=\"--arrow:{}\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
                 f1(cx + dx * mid),
                 f1(cy + dy * mid),
-                f1(heading)
+                f1(heading),
+                f1(h)
             )
             .unwrap();
         }
@@ -529,20 +532,22 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
             l.label += &p.crossing_dim(a);
         }
         l.mark += &p.control_marker(a);
-        let arrow = (2600.0 * f.scale).clamp(16.0, 34.0);
+        let arrow = lane_arrow_size(f.scale, &a.lanes);
         for lane in &a.lanes {
             l.mark += &p.lane_arrow(lane, arrow);
         }
         for out in &a.leave_arrows {
             let (x, y) = f.at(out.at);
-            let h = (1800.0 * f.scale).clamp(12.0, 22.0);
-            let d = format!("M0 {}V{}M-3.5 {}L0 {}L3.5 {}", h / 2.0, -h / 2.0, -h / 2.0 + 3.5, -h / 2.0, -h / 2.0 + 3.5);
+            let h = leave_arrow_size(f.scale);
+            let head = h * 0.19;
+            let d = format!("M0 {}V{}M{} {}L0 {}L{} {}", h / 2.0, -h / 2.0, -head, -h / 2.0 + head, -h / 2.0, head, -h / 2.0 + head);
             write!(
                 l.mark,
-                "<g class=\"lane-arrow out\" transform=\"translate({} {}) rotate({})\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
+                "<g class=\"lane-arrow out\" transform=\"translate({} {}) rotate({})\" style=\"--arrow:{}\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
                 f1(x),
                 f1(y),
-                out.heading
+                out.heading,
+                f1(h)
             )
             .unwrap();
         }
@@ -674,6 +679,29 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
     PlanSvg { frame: f, label: plan_label(v, i18n), markup }
 }
 
+/// How tall the turn arrows on an arm's entering lanes are, in pixels: about
+/// 5.2 m on the ground, from 32 to 68 px. Never so long that it reaches the
+/// crossing or stop line (it sits 5.5 m back, so half its length stays under
+/// 3 m, leaving 2.5 m), and never so
+/// wide that a lane with a turn arrow (0.84 of its length across) overflows its
+/// own width.
+const ARROW_PER_MM: f64 = 5_200.0;
+const ARROW_MAX_HALF_MM: f64 = 3_000.0;
+const TURN_ARROW_WIDTH: f64 = 0.84;
+
+fn lane_arrow_size(scale: f64, lanes: &[LaneView]) -> f64 {
+    let mut size = (ARROW_PER_MM * scale).clamp(32.0, 68.0).min(2.0 * ARROW_MAX_HALF_MM * scale);
+    for l in lanes.iter().filter(|l| l.uses & (LEFT | RIGHT) != 0) {
+        size = size.min(0.95 * l.width_mm as f64 * scale / TURN_ARROW_WIDTH);
+    }
+    size
+}
+
+/// The small arrow where a street's traffic leaves the junction, in pixels.
+fn leave_arrow_size(scale: f64) -> f64 {
+    (3_600.0 * scale).clamp(24.0, 44.0).min(2.0 * ARROW_MAX_HALF_MM * scale)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -774,6 +802,32 @@ mod tests {
         assert_eq!(f1(-0.04), "0");
         assert_eq!(f1(0.05), "0.1");
         assert_eq!(f1(-3.26), "-3.3");
+    }
+
+    #[test]
+    fn the_arrows_are_about_twice_the_size_they_were_and_stay_clear_of_the_stop_line() {
+        let j = Junction::new(0);
+        let v = j.view();
+        let lanes: Vec<&LaneView> = v.arms.iter().flat_map(|a| a.lanes.iter()).collect();
+        // on a typical screen the old arrows were 34 px (turn) and 22 px (leaving) at most
+        let owned: Vec<LaneView> = Vec::new();
+        assert_eq!(lane_arrow_size(0.02, &owned), 68.0);
+        assert_eq!(leave_arrow_size(0.02), 44.0);
+        assert_eq!(lane_arrow_size(0.01, &owned), 52.0);
+        // a turn arrow never overflows its lane
+        for l in lanes.iter().filter(|l| l.uses & (LEFT | RIGHT) != 0) {
+            for scale in [0.005, 0.01, 0.02, 0.04] {
+                let size = lane_arrow_size(scale, std::slice::from_ref(*l));
+                assert!(size * TURN_ARROW_WIDTH <= l.width_mm as f64 * scale + 0.001, "{size} px at {scale}");
+            }
+        }
+        // at every scale the arrow's near end stays at least 2.5 m from the junction's edge, clear of the crossing and the stop line
+        for scale in [0.002, 0.004, 0.006, 0.01, 0.02, 0.05] {
+            for size in [lane_arrow_size(scale, &owned), leave_arrow_size(scale)] {
+                let near_mm = crate::junction::read_model::ARROW_FROM_EDGE_MM - size / 2.0 / scale;
+                assert!(near_mm >= 2_500.0 - 0.001, "scale {scale}: the arrow reaches {near_mm} mm from the junction edge");
+            }
+        }
     }
 
     #[test]
