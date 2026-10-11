@@ -119,7 +119,6 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("recipes use catalogue kinds", "a panic message about the code, never shown"),
     ("catalogue kind", "a panic message about the code, never shown"),
     ("the catalogue has every kind of lane", "a panic message about the code, never shown"),
-    ("the city serialises", "a panic message about the code, never shown"),
     ("Feature", "a GeoJSON type name, data for MapLibre"),
     ("FeatureCollection", "a GeoJSON type name, data for MapLibre"),
     ("LineString", "a GeoJSON geometry type, data for MapLibre"),

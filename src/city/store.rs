@@ -7,9 +7,12 @@ use std::rc::Rc;
 
 use osm_network::Network;
 
+use crate::city::edits::{self, DAMAGED_KEY, Document, EDITS_KEY, Edits};
 use crate::city::model::{City, Layout};
+use crate::junction::model::State;
 use crate::place::area::{Area, default_area};
 use crate::shared::ports::Storage;
+use crate::street::model::Street;
 
 pub const CITY_KEY: &str = "cityloom-city";
 /// The area the person is working in, which every page opens its city from.
@@ -28,13 +31,22 @@ pub struct CityStore {
     /// In the tests: the hand-made city they are written against, kept under the keys of no area.
     #[cfg(test)]
     sample: bool,
+    /// In the tests: the hand-made city with none of the OpenStreetMap ids its places are made from.
+    #[cfg(test)]
+    keyless: bool,
 }
 
 impl CityStore {
     /// The store of the hand-made city the tests use. It is not part of the app.
     #[cfg(test)]
     pub fn sample(storage: Rc<dyn Storage>) -> CityStore {
-        CityStore { storage, area: default_area(), sample: true }
+        CityStore { storage, area: default_area(), sample: true, keyless: false }
+    }
+
+    /// The same, with every place stripped of the OpenStreetMap ids its key is made from, so that none has a key.
+    #[cfg(test)]
+    pub fn sample_without_osm_ids(storage: Rc<dyn Storage>) -> CityStore {
+        CityStore { keyless: true, ..CityStore::sample(storage) }
     }
 
     /// The store of the city made from `area`. Its street network has to be
@@ -45,6 +57,8 @@ impl CityStore {
             area,
             #[cfg(test)]
             sample: false,
+            #[cfg(test)]
+            keyless: false,
         }
     }
 
@@ -111,21 +125,74 @@ impl CityStore {
     fn layout(&self) -> Layout {
         #[cfg(test)]
         if self.sample {
-            return Layout::sample();
+            let mut layout = Layout::sample();
+            if self.keyless {
+                layout.nodes.iter_mut().for_each(|n| n.source.clear());
+                layout.edges.iter_mut().for_each(|e| e.section.source.clear());
+            }
+            return layout;
         }
         Layout::from_network(&self.network().unwrap_or_default(), &self.area.name)
     }
 
-    /// The city as it is kept, or as first laid out when nothing usable is.
-    pub fn open(&self) -> City {
-        City::load_old(self.layout(), &self.storage.recall(&self.key(CITY_KEY)).unwrap_or_default())
+    fn document(&self) -> Document {
+        edits::parse(self.storage.recall(EDITS_KEY).as_deref())
     }
 
-    /// Applies `change` to the city as it is kept now and keeps the result.
-    /// Says whether the change was taken and kept.
-    pub fn write(&self, change: impl FnOnce(&mut City) -> bool) -> bool {
+    /// The edits as kept: none when there are none, they are damaged or they come from a newer version.
+    fn edits(&self) -> Edits {
+        match self.document() {
+            Document::Current(e) => e,
+            _ => Edits::new(),
+        }
+    }
+
+    /// The city as it is kept, or as first laid out when nothing usable is.
+    pub fn open(&self) -> City {
+        City::load_on(self.layout(), &self.edits())
+    }
+
+    /// Takes `street` as street `edge`'s state, as the city as kept now allows, and keeps that one record. Says
+    /// whether it was taken and kept (not where the street has no key or the document is a newer version's).
+    pub fn write_street(&self, edge: u32, street: Street) -> bool {
         let mut city = self.open();
-        change(&mut city) && self.storage.remember(&self.key(CITY_KEY), &city.legacy_save())
+        if !city.keep_street(edge, street) {
+            return false;
+        }
+        let Some((key, record)) = city.street_record(edge) else { return false };
+        self.upsert(|e| {
+            e.streets.insert(key, record);
+        })
+    }
+
+    /// The same for the junction at `node`.
+    pub fn write_junction(&self, node: u32, state: State) -> bool {
+        let mut city = self.open();
+        if !city.keep_junction(node, state) {
+            return false;
+        }
+        let Some((key, record)) = city.junction_record(node) else { return false };
+        self.upsert(|e| {
+            e.junctions.insert(key, record);
+        })
+    }
+
+    /// Changes the document as it is kept now and keeps it, every record `change` leaves alone as it was. A
+    /// damaged document is copied aside first; one from a newer version is not written over.
+    fn upsert(&self, change: impl FnOnce(&mut Edits)) -> bool {
+        let mut edits = match self.document() {
+            Document::Future => return false,
+            Document::Damaged(raw) => {
+                if !self.storage.remember(DAMAGED_KEY, &raw) {
+                    return false;
+                }
+                Edits::new()
+            }
+            Document::Empty => Edits::new(),
+            Document::Current(e) => e,
+        };
+        change(&mut edits);
+        self.storage.remember(EDITS_KEY, &edits.to_json())
     }
 
     /// The index of the region the person chose, which the pages share; the
@@ -139,7 +206,9 @@ impl CityStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::ports::test_ports;
+    use crate::city::edits::{self, Document, Edits, StreetRecord};
+    use crate::shared::ports::{MemoryStorage, test_ports};
+    use crate::street::model::Street;
 
     fn store() -> (CityStore, Rc<crate::shared::ports::MemoryStorage>) {
         let (ports, _, storage) = test_ports();
@@ -168,50 +237,156 @@ mod tests {
         assert!(v.places > 0);
     }
 
+    /// Street `uid` of the sample city with 100 mm moved between its first two pieces (the class and total width
+    /// are kept).
+    fn narrowed(store: &CityStore, uid: u32) -> Street {
+        let mut s = store.open().street_editor(uid, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        s
+    }
+
+    /// The edits document as kept.
+    fn document(storage: &MemoryStorage) -> Edits {
+        let Document::Current(e) = edits::parse(storage.recall(EDITS_KEY).as_deref()) else { panic!("no current document") };
+        e
+    }
+
     #[test]
-    fn what_a_page_writes_is_kept_and_found_by_the_next() {
-        let (s, _) = store();
-        let street = s.open().view(0).edges[0].uid;
-        assert!(s.write(|c| {
-            let mut e = c.street_editor(street, 0).unwrap();
-            let u = e.view().segments[0].uid;
-            e.nudge_width(u, 100);
-            c.keep_street(street, e.snapshot())
-        }));
-        assert_eq!(s.open().view(0).edited, 1);
+    fn an_edit_is_kept_in_the_edits_document_under_its_key() {
+        let (store, storage) = store();
+        let edited = narrowed(&store, 1);
+        assert!(store.write_street(1, edited.clone()));
+        let e = document(&storage);
+        assert_eq!(e.streets.len(), 1);
+        assert!(e.streets.keys().next().unwrap().starts_with("w2000~"), "the key is built from the OSM ids");
+        assert_eq!(store.open().street_editor(1, 0).unwrap().snapshot(), edited, "and it is what the store opens");
+        assert_eq!(store.open().view(0).edited, 1);
+    }
+
+    #[test]
+    fn a_junction_is_kept_in_the_edits_document_under_its_key() {
+        let (store, storage) = store();
+        let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let mut j = store.open().junction_editor(node, 0).unwrap();
+        let arm = j.current().arms[0].uid;
+        assert!(j.set_corner(arm, 7_000));
+        assert!(store.write_junction(node, j.snapshot()));
+        assert_eq!(document(&storage).junctions.len(), 1);
+        assert_eq!(store.open().view(0).edited, 1);
+    }
+
+    #[test]
+    fn writing_one_place_leaves_every_other_record_as_it_was() {
+        let (store, storage) = store();
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        let first = document(&storage).streets.clone();
+        assert!(store.write_street(2, narrowed(&store, 2)));
+        let after = document(&storage);
+        assert_eq!(after.streets.len(), 2);
+        for (key, record) in &first {
+            assert_eq!(&after.streets[key], record, "the record of {key} was rewritten");
+        }
+    }
+
+    #[test]
+    fn a_record_that_matches_no_place_survives_a_write_of_another_place() {
+        let (store, storage) = store();
+        let mut stranger = Edits::new();
+        let record = StreetRecord { ways: [77].into(), nodes: [1, 2].into(), street: narrowed(&store, 3) };
+        stranger.streets.insert("w77~n1~n2".into(), record.clone());
+        storage.remember(EDITS_KEY, &stranger.to_json());
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        assert_eq!(document(&storage).streets["w77~n1~n2"], record);
+    }
+
+    #[test]
+    fn an_area_s_edit_does_not_remove_the_records_of_other_areas() {
+        let (ports, _, storage) = test_ports();
+        let area = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
+        area.keep_network(&tiny_network());
+        let mut elsewhere = Edits::new();
+        let record =
+            StreetRecord { ways: [500].into(), nodes: [8, 9].into(), street: CityStore::sample(ports.storage).open().street_editor(1, 0).unwrap().snapshot() };
+        elsewhere.streets.insert("w500~n8~n9".into(), record.clone());
+        storage.remember(EDITS_KEY, &elsewhere.to_json());
+        let street = area.open().view(0).edges[0].uid;
+        let mut s = area.open().street_editor(street, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(area.write_street(street, s));
+        let e = document(&storage);
+        assert_eq!(e.streets.len(), 2);
+        assert_eq!(e.streets["w500~n8~n9"], record);
+    }
+
+    #[test]
+    fn a_damaged_document_is_backed_up_before_the_first_write_replaces_it() {
+        let (store, storage) = store();
+        storage.remember(EDITS_KEY, "{broken");
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        assert_eq!(storage.recall(DAMAGED_KEY).as_deref(), Some("{broken"));
+        assert_eq!(document(&storage).streets.len(), 1);
+    }
+
+    #[test]
+    fn a_damaged_document_that_cannot_be_backed_up_is_not_replaced() {
+        let (store, storage) = store();
+        storage.remember(EDITS_KEY, "{broken");
+        storage.blocked(true);
+        assert!(!store.write_street(1, narrowed(&store, 1)));
+        storage.blocked(false);
+        assert_eq!(storage.recall(EDITS_KEY).as_deref(), Some("{broken"));
+    }
+
+    #[test]
+    fn a_document_from_a_newer_version_is_left_alone_and_the_write_says_it_was_not_kept() {
+        let (store, storage) = store();
+        let newer = r#"{"version":4,"streets":{},"junctions":{},"future":true}"#;
+        storage.remember(EDITS_KEY, newer);
+        assert!(!store.write_street(1, narrowed(&store, 1)));
+        assert_eq!(storage.recall(EDITS_KEY).as_deref(), Some(newer));
+        assert_eq!(storage.recall(DAMAGED_KEY), None, "a newer document is not a damaged one");
+        assert_eq!(store.open().view(0).edited, 0, "and it is not read");
+    }
+
+    #[test]
+    fn a_place_with_no_key_is_not_written() {
+        let (ports, _, storage) = test_ports();
+        let store = CityStore::sample_without_osm_ids(ports.storage);
+        let s = narrowed(&store, 1);
+        assert!(!store.write_street(1, s));
+        assert!(storage.recall(EDITS_KEY).is_none_or(|_| document(&storage).streets.is_empty()));
     }
 
     #[test]
     fn a_change_that_is_not_taken_is_not_kept() {
-        let (s, st) = store();
-        assert!(!s.write(|_| false));
-        assert_eq!(st.recall(CITY_KEY), None);
+        let (store, storage) = store();
+        let mut wrong = narrowed(&store, 1);
+        wrong.row_mm += 100; // the street no longer has the room it had
+        assert!(!store.write_street(1, wrong));
+        assert!(!store.write_street(999, narrowed(&store, 1)), "no such street");
+        assert_eq!(storage.recall(EDITS_KEY), None);
     }
 
     #[test]
     fn a_blocked_storage_says_the_change_was_not_kept() {
-        let (s, st) = store();
-        st.blocked(true);
-        assert!(!s.write(|_| true));
+        let (store, storage) = store();
+        let edited = narrowed(&store, 1);
+        storage.blocked(true);
+        assert!(!store.write_street(1, edited));
     }
 
     #[test]
-    fn a_page_writes_against_what_another_tab_kept_not_over_it() {
-        let (s, _) = store();
-        let v = s.open().view(0);
-        let (a, b) = (v.edges[0].uid, v.edges[1].uid);
-        let nudge = |street: u32| {
-            move |c: &mut City| {
-                let mut e = c.street_editor(street, 0).unwrap();
-                let u = e.view().segments[0].uid;
-                e.nudge_width(u, 100);
-                c.keep_street(street, e.snapshot())
-            }
-        };
-        // Two pages opened the city at the same time; each writes its own street.
-        assert!(s.write(nudge(a)));
-        assert!(s.write(nudge(b)));
-        assert_eq!(s.open().view(0).edited, 2);
+    fn another_tabs_change_to_a_different_place_is_not_written_over() {
+        let (ports, _, storage) = test_ports();
+        let (tab_a, tab_b) = (CityStore::sample(ports.storage.clone()), CityStore::sample(ports.storage));
+        // both tabs opened the city before either wrote
+        let (a, b) = (narrowed(&tab_a, 1), narrowed(&tab_b, 2));
+        assert!(tab_a.write_street(1, a));
+        assert!(tab_b.write_street(2, b));
+        assert_eq!(document(&storage).streets.len(), 2);
+        assert_eq!(tab_a.open().view(0).edited, 2);
     }
 
     fn tiny_network() -> Network {
@@ -254,20 +429,19 @@ mod tests {
     }
 
     #[test]
-    fn what_is_edited_in_an_area_is_kept_under_that_area_and_not_under_the_test_city_s() {
+    fn what_is_edited_in_an_area_is_found_again_there_and_is_not_taken_by_another_city() {
         let (ports, _, storage) = test_ports();
         let area = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
         area.keep_network(&tiny_network());
         let street = area.open().view(0).edges[0].uid;
-        assert!(area.write(|c| {
-            let mut e = c.street_editor(street, 0).unwrap();
-            let u = e.view().segments[0].uid;
-            e.nudge_width(u, 100);
-            c.keep_street(street, e.snapshot())
-        }));
+        let mut s = area.open().street_editor(street, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(area.write_street(street, s));
         assert_eq!(area.open().view(0).edited, 1);
-        assert_eq!(storage.recall(CITY_KEY), None, "the key of no area is untouched");
-        assert_eq!(CityStore::sample(ports.storage.clone()).open().view(0).edited, 0);
+        assert_eq!(document(&storage).streets.keys().collect::<Vec<_>>(), ["w7~n1~n2"]);
+        assert_eq!(storage.recall(CITY_KEY), None, "the old document is not written");
+        assert_eq!(CityStore::sample(ports.storage.clone()).open().view(0).edited, 0, "the record matches no place of another city");
         let other = CityStore::for_area(ports.storage, Area::new("Elsewhere", 5.0, 6.0));
         assert!(!other.has_network());
     }

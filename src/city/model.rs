@@ -24,6 +24,7 @@ use crate::street::model::SAMPLES;
 use crate::street::model::{Editor, Street, named_said, unnamed_said};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
+#[cfg_attr(not(test), allow(dead_code))] // read by the migration of the old save (plan task 7)
 const SAVE_VERSION: u32 = 2;
 
 pub(super) struct NodeDef {
@@ -150,7 +151,8 @@ fn node_uid(i: usize) -> u32 {
     i as u32 + 1
 }
 
-/// What the city keeps between visits.
+/// What the city kept between visits before the edits document: only the migration reads it.
+#[cfg_attr(not(test), allow(dead_code))] // read by the migration of the old save (plan task 7)
 #[derive(Serialize, Deserialize)]
 struct Saved {
     version: u32,
@@ -636,6 +638,7 @@ impl City {
     }
 
     /// The city as an older version kept it, by position: only for moving that save to the edits.
+    #[cfg_attr(not(test), allow(dead_code))] // read by the migration of the old save (plan task 7)
     pub(super) fn load_old(layout: Layout, json: &str) -> City {
         let mut city = City::on(layout);
         let Ok(saved) = serde_json::from_str::<Saved>(json) else { return city };
@@ -663,7 +666,7 @@ impl City {
     }
 
     /// What an older version kept the city as, to build old saves in tests.
-    // Until the store keeps the edits document (plan task 6) it still writes this shape; Task 6 makes it test-only.
+    #[cfg(test)]
     pub(super) fn legacy_save(&self) -> String {
         let saved = Saved { version: SAVE_VERSION, streets: self.streets.clone(), junctions: self.junctions.clone() };
         serde_json::to_string(&saved).expect("the city serialises")
