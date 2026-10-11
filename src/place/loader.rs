@@ -246,10 +246,11 @@ mod tests {
         tiles::with_importer("new")
     }
 
+    /// What `kept_from` gives back: the ports, the fakes behind them, the store and what the load said.
+    type Kept = (crate::shared::ports::Ports, Rc<crate::shared::ports::FakeFetcher>, Rc<crate::shared::ports::FakeImporter>, CityStore, Seen<Result<(), Said>>);
+
     /// Testville with its network kept as made from a tile that had `checksum`, and its load begun.
-    fn kept_from(
-        checksum: Option<&str>,
-    ) -> (crate::shared::ports::Ports, Rc<crate::shared::ports::FakeFetcher>, Rc<crate::shared::ports::FakeImporter>, CityStore, Seen<Result<(), Said>>) {
+    fn kept_from(checksum: Option<&str>) -> Kept {
         let (ports, fetcher, importer) = test_ports_with_fetcher();
         let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
         store.keep_network_from(&serde_json::from_str(NETWORK).unwrap(), checksum);

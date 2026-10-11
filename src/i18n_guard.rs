@@ -310,11 +310,11 @@ fn walk(stream: TokenStream, visit: &mut dyn FnMut(usize, &str)) {
                 continue;
             }
         }
-        if let Some(name) = attribute_at(&t, i) {
-            if !is_scanned_attr(&name) {
-                i = value_end(&t, i);
-                continue;
-            }
+        if let Some(name) = attribute_at(&t, i)
+            && !is_scanned_attr(&name)
+        {
+            i = value_end(&t, i);
+            continue;
         }
         match &t[i] {
             TokenTree::Group(g) => walk(g.stream(), visit),

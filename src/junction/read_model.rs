@@ -157,7 +157,7 @@ pub fn layout(s: &State, region: usize) -> Option<Layout> {
         }
         for i in 0..n {
             let j = (i + 1) % n;
-            corners.push(CornerLayout { a: i, b: j, delta: gap(s.arms[i].bearing, s.arms[j].bearing) as i32, fillet: None });
+            corners.push(CornerLayout { a: i, b: j, delta: gap(s.arms[i].bearing, s.arms[j].bearing), fillet: None });
         }
         return Some(Layout { arms, corners, ring: Some(RingLayout { radius, floor }) });
     }
@@ -165,7 +165,7 @@ pub fn layout(s: &State, region: usize) -> Option<Layout> {
     let mut mouths = vec![0.0f64; n];
     for i in 0..n {
         let j = (i + 1) % n;
-        let delta = gap(s.arms[i].bearing, s.arms[j].bearing) as i32;
+        let delta = gap(s.arms[i].bearing, s.arms[j].bearing);
         let fillet = if delta == 180 {
             None
         } else {
@@ -526,7 +526,7 @@ fn bus_options(s: &State) -> Vec<BusOption> {
     let mut v: Vec<(i32, BusOption)> = Vec::new();
     for (i, a) in s.arms.iter().enumerate() {
         for b in &s.arms[i + 1..] {
-            let off = (gap(a.bearing, b.bearing) as i32 - 180).abs();
+            let off = (gap(a.bearing, b.bearing) - 180).abs();
             v.push((off, BusOption { a: a.uid, b: b.uid, label: arm_to_arm(arm_name(a), arm_name(b)) }));
         }
     }
@@ -560,7 +560,7 @@ fn priority_pair(arms: &[Arm]) -> [usize; 2] {
     let mut best = ([0, 1], i32::MAX);
     for i in 0..n {
         for j in i + 1..n {
-            let d = (gap(arms[i].bearing, arms[j].bearing) as i32 - 180).abs();
+            let d = (gap(arms[i].bearing, arms[j].bearing) - 180).abs();
             let wide = arms[i].row_mm() + arms[j].row_mm();
             let score = d * 100_000 - wide;
             if score < best.1 {

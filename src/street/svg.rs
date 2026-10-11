@@ -7,7 +7,7 @@ use std::fmt::Write;
 use crate::shared::catalogue::{KINDS, kind_key, mark_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::say;
-use crate::shared::symbols::{SymbolOpts, symbol};
+use crate::shared::symbols::{Placement, SymbolOpts, symbol};
 use crate::shared::units::Units;
 use crate::street::model::{SegView, View};
 use crate::street::text::fit_phrase;
@@ -371,7 +371,7 @@ pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interact
             s.uid,
             rows.top,
             body_bottom - rows.top,
-            symbol(k.id, cx, ground, scale * 1000.0, w, s.width_mm as f64 / 1000.0, g.factor, opts),
+            symbol(k.id, Placement { cx, ground_y: ground, px_per_m: scale * 1000.0, seg_px: w, wm: s.width_mm as f64 / 1000.0, f: g.factor }, opts),
             k.id,
             rows.slab,
             rows.slab,

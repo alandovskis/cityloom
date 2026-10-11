@@ -402,9 +402,22 @@ fn native_width(kind_id: &str, wm: f64, o: SymbolOpts) -> f64 {
     }
 }
 
-/// The symbol for a segment of `kind_id`, standing at `cx` on the ground line `ground_y`,
-/// `seg_px` wide on the page and `wm` metres wide. Empty when it would be too small to read.
-pub fn symbol(kind_id: &str, cx: f64, ground_y: f64, px_per_m: f64, seg_px: f64, wm: f64, f: f64, o: SymbolOpts) -> String {
+/// Where and how large a symbol stands: at `cx` on the ground line `ground_y`, on a page of
+/// `px_per_m` pixels to the metre, `seg_px` wide on the page and `wm` metres wide, drawn at the
+/// page's size factor `f`.
+#[derive(Clone, Copy, Debug)]
+pub struct Placement {
+    pub cx: f64,
+    pub ground_y: f64,
+    pub px_per_m: f64,
+    pub seg_px: f64,
+    pub wm: f64,
+    pub f: f64,
+}
+
+/// The symbol for a segment of `kind_id`, placed by `at`. Empty when it would be too small to read.
+pub fn symbol(kind_id: &str, at: Placement, o: SymbolOpts) -> String {
+    let Placement { cx, ground_y, px_per_m, seg_px, wm, f } = at;
     let base = (px_per_m / 44.0).min(1.2 * f);
     let fit = seg_px * 0.86 / native_width(kind_id, wm, o);
     let k = base.min(fit);
@@ -462,7 +475,7 @@ mod tests {
     use crate::shared::catalogue::KINDS;
 
     fn sym(kind: &str, wm: f64, o: SymbolOpts) -> String {
-        symbol(kind, 100.0, 300.0, wm * 55.0, wm * 55.0, wm, 1.0, o)
+        symbol(kind, Placement { cx: 100.0, ground_y: 300.0, px_per_m: wm * 55.0, seg_px: wm * 55.0, wm, f: 1.0 }, o)
     }
 
     #[test]
@@ -574,18 +587,18 @@ mod tests {
     #[test]
     fn a_symbol_shrinks_to_fit_a_narrow_segment_and_goes_when_it_would_be_too_small() {
         let scale = |s: &str| -> f64 { s.split("scale(").nth(1).unwrap().split(')').next().unwrap().parse().unwrap() };
-        let roomy = symbol("travel", 0.0, 0.0, 55.0 * 3.0, 3.0 * 55.0, 3.0, 1.0, SymbolOpts::default());
-        let tight = symbol("travel", 0.0, 0.0, 55.0 * 3.0, 60.0, 3.0, 1.0, SymbolOpts::default());
+        let roomy = symbol("travel", Placement { cx: 0.0, ground_y: 0.0, px_per_m: 55.0 * 3.0, seg_px: 3.0 * 55.0, wm: 3.0, f: 1.0 }, SymbolOpts::default());
+        let tight = symbol("travel", Placement { cx: 0.0, ground_y: 0.0, px_per_m: 55.0 * 3.0, seg_px: 60.0, wm: 3.0, f: 1.0 }, SymbolOpts::default());
         assert!(scale(&tight) < scale(&roomy));
         assert!((scale(&tight) - 60.0 * 0.86 / 100.0).abs() < 1e-9);
-        assert_eq!(symbol("travel", 0.0, 0.0, 55.0, 20.0, 3.0, 1.0, SymbolOpts::default()), "");
+        assert_eq!(symbol("travel", Placement { cx: 0.0, ground_y: 0.0, px_per_m: 55.0, seg_px: 20.0, wm: 3.0, f: 1.0 }, SymbolOpts::default()), "");
     }
 
     #[test]
     fn a_symbol_is_never_drawn_bigger_than_the_page_s_factor_allows() {
-        let big = symbol("bike", 0.0, 0.0, 400.0, 400.0, 3.0, 1.0, SymbolOpts::default());
+        let big = symbol("bike", Placement { cx: 0.0, ground_y: 0.0, px_per_m: 400.0, seg_px: 400.0, wm: 3.0, f: 1.0 }, SymbolOpts::default());
         assert!(big.contains("scale(1.2)"));
-        let small_page = symbol("bike", 0.0, 0.0, 400.0, 400.0, 3.0, 0.9, SymbolOpts::default());
+        let small_page = symbol("bike", Placement { cx: 0.0, ground_y: 0.0, px_per_m: 400.0, seg_px: 400.0, wm: 3.0, f: 0.9 }, SymbolOpts::default());
         assert!(small_page.contains("scale(1.08)"));
     }
 
