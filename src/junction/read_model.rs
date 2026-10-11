@@ -52,6 +52,8 @@ const NO_CROSSING_CLEAR_MM: f64 = 4_000.0;
 const WEDGE_MM: f64 = 3_000.0;
 /// How far an arm's outer bike lane runs into the junction core.
 const CORE_BIKE_MM: f64 = 5_000.0;
+/// How deep a bike box is.
+const BIKE_BOX_MM: f64 = 3_000.0;
 /// Synthetic thresholds for the checks.
 const MAX_STAGE_MM: i32 = 15_000;
 const MAX_TURN_KMH: f64 = 20.0;
@@ -364,6 +366,10 @@ pub struct ArmView {
     pub bulbs: [Option<Vec<Value>>; 2],
     pub crossing: Option<CrossingView>,
     pub stop_line: Option<[P; 2]>,
+    /// The bike box across the entering lanes, ahead of the stop line.
+    pub bike_box: Option<Vec<Value>>,
+    /// The street has a bike lane to reach a box from, cars enter, and the junction is not a roundabout.
+    pub can_bike_box: bool,
     pub lanes: Vec<LaneView>,
     pub leave_arrows: Vec<LaneView>,
     /// "free", "stop", "yield" or "signal" for the entering traffic.
@@ -729,10 +735,15 @@ impl Junction {
             });
             let enters = !l.prof.enter_x.is_empty();
             let leaves = !l.prof.leave_x.is_empty();
+            let boxed = a.bike_box && enters && lay.ring.is_none();
+            let box_mm = if boxed { BIKE_BOX_MM } else { 0.0 };
+            let lat = |x: i32| l.lat(off, x);
             let stop_line = (cx.is_some() && enters).then(|| {
-                let t = far + 600.0;
-                [at(l.bearing, l.lat(off, l.prof.enter_span.0), t), at(l.bearing, l.lat(off, l.prof.enter_span.1), t)]
+                let t = far + 600.0 + box_mm;
+                [at(l.bearing, lat(l.prof.enter_span.0), t), at(l.bearing, lat(l.prof.enter_span.1), t)]
             });
+            let bike_box = boxed.then(|| poly(&strip(l.bearing, lat(l.prof.enter_span.0), lat(l.prof.enter_span.1), far + 600.0, far + 600.0 + BIKE_BOX_MM)));
+            let can_bike_box = enters && lay.ring.is_none() && !l.prof.outer_bike().is_empty();
             let arrow_t = if cx.is_some() { far + 5_000.0 } else { l.mouth + 6_000.0 };
             let lanes = l
                 .prof
@@ -784,6 +795,8 @@ impl Junction {
                 bulbs,
                 crossing,
                 stop_line,
+                bike_box,
+                can_bike_box,
                 lanes,
                 leave_arrows,
                 role: control_role(s, i),
@@ -1565,6 +1578,61 @@ mod tests {
         assert!(fast(&[true, false], &[true, true]), "one continuous, one zebra: still 20");
         assert!(!fast(&[true, true], &[true, true]), "both continuous");
         assert!(!fast(&[true, false], &[true, false]), "one continuous, the other street has no crossing");
+    }
+
+    #[test]
+    fn a_bike_box_spans_the_entering_lanes_ahead_of_the_stop_line_and_moves_the_stop_line_back() {
+        let mut j = junction_of(&BIKED);
+        let n = arm_of(&j, 0);
+        let arm = |j: &Junction| {
+            let v = j.view();
+            let a = v.arms.iter().find(|a| a.uid == n).unwrap();
+            (a.bike_box.clone(), a.stop_line, a.can_bike_box, a.crossing.as_ref().map(|c| (c.setback_mm, c.width_mm)))
+        };
+        let (none, stop0, can, cx) = arm(&j);
+        assert!(none.is_none() && can);
+        assert!(j.set_bike_box(n, true));
+        let (boxed, stop1, ..) = arm(&j);
+        let mouth = layout(j.current(), 0).unwrap().arms[0].mouth;
+        let (setback, width) = cx.unwrap();
+        let far = mouth + (setback + width) as f64;
+        let (t0, t1) = along(&boxed.unwrap(), 0.0);
+        assert!((t0 - (far + 600.0)).abs() < 2.0 && (t1 - (far + 3_600.0)).abs() < 2.0, "{t0}..{t1} from {far}");
+        let d = crate::junction::geometry::dir(0.0);
+        let t = |s: Option<[P; 2]>| {
+            let p = s.unwrap()[0];
+            p.0 * d.0 + p.1 * d.1
+        };
+        assert!((t(stop1) - t(stop0) - 3_000.0).abs() < 2.0, "the stop line moves back by the box's depth");
+    }
+
+    #[test]
+    fn a_street_with_no_crossing_has_its_box_from_the_mouth() {
+        let mut j = junction_of(&BIKED);
+        let n = arm_of(&j, 0);
+        assert!(j.set_crossing(n, false));
+        assert!(j.set_bike_box(n, true));
+        let v = j.view();
+        let boxed = v.arms.iter().find(|a| a.uid == n).unwrap().bike_box.clone().unwrap();
+        let mouth = layout(j.current(), 0).unwrap().arms[0].mouth;
+        assert!((along(&boxed, 0.0).0 - (mouth + 600.0)).abs() < 2.0);
+    }
+
+    #[test]
+    fn no_bike_box_is_offered_without_a_lane_or_on_a_roundabout_and_a_loaded_roundabout_draws_none() {
+        let plain = junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]).view();
+        assert!(plain.arms.iter().all(|a| !a.can_bike_box && a.bike_box.is_none()));
+        let mut ring = junction_of(&BIKED);
+        assert!(ring.set_control(ROUNDABOUT));
+        assert!(ring.view().arms.iter().all(|a| !a.can_bike_box && a.bike_box.is_none()));
+        let mut state = junction_of(&BIKED).current().clone();
+        state.control = ROUNDABOUT;
+        for a in &mut state.arms {
+            a.bike_box = true;
+            a.edge = a.uid;
+        }
+        let loaded = Junction::from_city(Said::new("city-name").with("name", Arg::Text("Test".into())), &state, &state, 0).expect("draws");
+        assert!(loaded.view().arms.iter().all(|a| a.bike_box.is_none()));
     }
 
     fn arm_of(j: &Junction, bearing: i32) -> u32 {

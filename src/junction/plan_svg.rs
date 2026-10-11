@@ -363,6 +363,9 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
             let id = KINDS[piece.kind].id;
             g += &p.piece(&format!("piece k-{id}"), id, &p.path_d(&piece.poly));
         }
+        if let Some(b) = &a.bike_box {
+            g += &p.piece("bike-box k-bike", "bike", &p.path_d(b));
+        }
         let t = &a.transit;
         if let Some(bus) = &t.bus {
             g += &p.piece("piece k-bus", "bus", &p.path_d(bus));
@@ -732,6 +735,16 @@ mod tests {
         assert_eq!(count(&s.markup, "class=\"continuous k-sidewalk\""), 1);
         assert_eq!(count(&s.markup, "class=\"continuous-ramp\""), 2);
         assert_eq!(count(&s.markup, "class=\"zebra-fill\""), zebras - 1, "the other streets keep their zebras");
+    }
+
+    #[test]
+    fn a_bike_box_is_drawn_ahead_of_the_stop_line() {
+        let mut j = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+        assert_eq!(count(&svg(&j).markup, "bike-box"), 0);
+        assert!(j.set_bike_box(arm_at(&j, 0), true));
+        assert_eq!(count(&svg(&j).markup, "class=\"bike-box k-bike\""), 1);
+        assert!(j.set_control(ROUNDABOUT));
+        assert_eq!(count(&svg(&j).markup, "bike-box"), 0);
     }
 
     #[test]
