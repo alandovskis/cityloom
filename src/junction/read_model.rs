@@ -1297,7 +1297,7 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
             let d = c.stage_mm;
             let key = if d <= MAX_STAGE_MM {
                 "jn-check-crossing-ok"
-            } else if a.can_island && !c.island && (c.distance_mm - ISLAND_MM) / 2 <= MAX_STAGE_MM {
+            } else if a.can_island && !c.island && !c.continuous && (c.distance_mm - ISLAND_MM) / 2 <= MAX_STAGE_MM {
                 // The island is the editor's to suggest, not to place: where it would bring each stage within reach, say so.
                 "jn-check-crossing-island"
             } else {
@@ -1519,6 +1519,21 @@ mod tests {
         let v = j.view();
         let c = v.arms.iter().find(|a| a.uid == n).unwrap().crossing.as_ref().unwrap();
         assert!(c.continuous && c.ramps.is_empty(), "the table's own ramps are the steps");
+    }
+
+    #[test]
+    fn a_continuous_crossing_is_not_advised_an_island_it_cannot_have() {
+        let mut street = vec![("sidewalk", 2000)];
+        street.extend((0..5).map(|_| ("travel", 3500)));
+        street.push(("sidewalk", 2000));
+        let mut j = junction_of(&street);
+        let detail = |j: &Junction| en(&j.view().checks.iter().find(|c| c.id == "crossing").unwrap().detail);
+        assert!(detail(&j).contains("refuge island"), "an island would help a 17.5 m crossing: {}", detail(&j));
+        for uid in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_continuous(uid, true));
+        }
+        let said = detail(&j);
+        assert!(said.contains("too far to cross in one go") && !said.contains("refuge island"), "{said}");
     }
 
     #[test]

@@ -978,7 +978,11 @@ impl Junction {
     pub fn set_continuous(&mut self, uid: u32, on: bool) -> bool {
         self.arm_edit(
             uid,
-            |a| about("jn-rev-continuous", a).with("change", change(on)),
+            |a| {
+                // Taking the refuge island away is said in the same breath, or a screen reader would never hear of it.
+                let island_goes = on && a.crossing.is_some_and(|c| c.island);
+                about(if island_goes { "jn-rev-continuous-island" } else { "jn-rev-continuous" }, a).with("change", change(on))
+            },
             |a| {
                 a.crossing.as_mut().is_some_and(|c| {
                     c.continuous = on;
@@ -2024,13 +2028,25 @@ mod tests {
     }
 
     #[test]
-    fn a_continuous_sidewalk_is_said_in_both_languages() {
+    fn making_a_crossing_continuous_says_when_it_takes_the_island_away() {
         let mut j = Junction::new(0);
         let n = arm_at(&j, 0);
         assert!(j.set_continuous(n, true));
         let said = j.revisions().last().cloned().unwrap();
-        assert_eq!(en(&said), "Sample Avenue 2 (north) continuous sidewalk: add");
-        assert_eq!(fr(&said), "Sample Avenue 2 (nord), trottoir continu\u{a0}: ajout");
+        assert_eq!(en(&said), "Sample Avenue 2 (north) continuous sidewalk: add; refuge island removed");
+        assert_eq!(fr(&said), "Sample Avenue 2 (nord), trottoir continu\u{a0}: ajout; îlot refuge retiré");
+        assert!(j.set_continuous(n, false));
+        assert_eq!(en(&j.revisions().last().cloned().unwrap()), "Sample Avenue 2 (north) continuous sidewalk: remove");
+    }
+
+    #[test]
+    fn a_continuous_sidewalk_is_said_in_both_languages() {
+        let mut j = Junction::new(0);
+        let e = arm_at(&j, 90); // no island there
+        assert!(j.set_continuous(e, true));
+        let said = j.revisions().last().cloned().unwrap();
+        assert_eq!(en(&said), "Sample Street 1 (east) continuous sidewalk: add");
+        assert_eq!(fr(&said), "Sample Street 1 (est), trottoir continu\u{a0}: ajout");
     }
 
     #[test]

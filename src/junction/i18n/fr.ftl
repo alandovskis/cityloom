@@ -79,6 +79,7 @@ jn-rev-setback = { $arm }, passage pour piétons en retrait de { $length }
 jn-rev-crossing-width = { $arm }, passage pour piétons de { $length } de large
 jn-rev-island = { $arm }, îlot refuge : { $change }
 jn-rev-continuous = { $arm }, trottoir continu : { $change }
+jn-rev-continuous-island = { $arm }, trottoir continu : { $change }; îlot refuge retiré
 jn-rev-bulb-left = { $arm }, avancée de trottoir à gauche : { $change }
 jn-rev-bulb-right = { $arm }, avancée de trottoir à droite : { $change }
 jn-rev-lane-to = { $arm }, voie { $lane } : vers { $dest }
