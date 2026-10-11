@@ -347,7 +347,10 @@ fn the_transit_priority_section_offers_the_lane_measures_and_nothing_else() {
     assert!(count(&h, "class=\"btn m-apply\"") >= 10);
     assert!(h.contains("Arrange the street as B1 Center-Running Transit Lanes"));
     assert!(h.contains("Freeways only"));
-    assert!(!h.contains("Set at a junction") && !h.contains("Not modelled"), "only this editor's measures: {h}");
+    let street_measures = crate::shared::atlas::MEASURES.iter().filter(|m| m.place == crate::shared::atlas::Where::Street).count();
+    assert_eq!(count(&h, "<tr"), street_measures, "one row per street measure: {h}");
+    assert!(!h.contains("Offset Queue-Jump Lanes"), "a junction measure is not here: {h}");
+    assert!(!h.contains("Transit Signal Priority"), "a measure that is not modelled is not here: {h}");
     assert!(s.edit(|e| e.apply_measure("B3")));
     let h = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
     assert!(h.contains("This street") && !h.contains("Arrange the street as B3"));
