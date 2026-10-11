@@ -21,10 +21,13 @@ st-sample-numbers = chiffres d’exemple
 st-does-it-work = Est-ce que ça fonctionne?
 st-sample-limits = limites d’exemple
 st-your-changes = Vos modifications
-st-measures-heading = Mesures de priorité pour le transport en commun
-st-measures-hint-a = Des façons de donner la priorité aux autobus, d’après le
-st-measures-hint-b = Réorganiser conserve les trottoirs et redessine la chaussée selon cette mesure. Vous pouvez l’annuler.
+st-transit-heading = Priorité au transport en commun
+st-transit-hint = Réorganiser conserve les trottoirs et redessine la chaussée selon cette mesure. Vous pouvez l’annuler.
+st-transit-col-measure = Mesure
+st-transit-col-arrange = Cette rue
 st-about-street = À propos de cette rue
+st-provenance-heading = D’où vient cette rue
+st-no-source = Cette rue ne vient pas d’OpenStreetMap.
 
 # Le catalogue : les genres d’éléments, les modes et les groupes du menu d’ajout (src/shared/catalogue.rs).
 kind-sidewalk = Trottoir
@@ -96,18 +99,10 @@ failing =
         [one] { $n } vérification échoue
        *[other] { $n } vérifications échouent
     }
-group-name-linear = Mesures linéaires continues
-group-name-local = Mesures ponctuelles
-group-name-area = Mesures à l’échelle d’un secteur
-group-note-linear = Aménagements de voies le long de la rue. Réorganiser dispose la chaussée selon cette mesure.
-group-note-local = Éléments propres à une intersection. Réglez-les sur la page de l’intersection.
-group-note-area = Elles couvrent de nombreuses rues; elles ne sont donc pas modélisées ici.
 measure-arrange = Réorganiser
 measure-arrange-label = Réorganiser la rue selon { $code } { $name }
 measure-this-street = Cette rue
 measure-will-not-fit = Ne rentre pas
-measure-set-at-junction = Se règle à une intersection
-measure-not-modelled = Non modélisé
 
 # Le tour de la coupe : titre, titre de la fenêtre, cartouche, historique, menu d’ajout, horloge et accueil (src/street/page.rs).
 header-city-map = Carte de la ville

@@ -76,7 +76,21 @@
   </header>
 
   <aside class="panel left" id="details-panel" data-i18n-aria-label="st-piece-details" aria-label="Piece details" data-covers>
-    <div class="panel-body inspector" id="inspector"></div>
+    <div class="panel-body">
+      <div class="inspector" id="inspector"></div>
+      <section aria-labelledby="h-transit">
+        <h2 id="h-transit" class="note-h" data-i18n="st-transit-heading">Transit priority</h2>
+        <p class="hint" data-i18n="st-transit-hint">Arrange keeps the sidewalks and lays the roadway out again as that measure. You can undo it.</p>
+        <table class="nt measures" id="transit-priority" aria-labelledby="h-transit">
+          <thead class="sr-only">
+            <tr>
+              <th scope="col" data-i18n="st-transit-col-measure">Measure</th>
+              <th scope="col" data-i18n="st-transit-col-arrange">This street</th>
+            </tr>
+          </thead>
+        </table>
+      </section>
+    </div>
   </aside>
 
   <main class="stage">
@@ -111,7 +125,7 @@
       <button type="button" role="tab" class="tab" id="t-space" aria-controls="p-space" aria-selected="true" data-i18n="ui-tab-width">Width</button>
       <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="false" tabindex="-1"><span data-i18n="ui-tab-checks">Checks</span><span id="checks-n-slot" style="display: contents"></span></button>
       <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>
-      <button type="button" role="tab" class="tab" id="t-measures" aria-controls="p-measures" aria-selected="false" tabindex="-1" data-i18n="ui-tab-transit">Transit</button>
+      <button type="button" role="tab" class="tab" id="t-provenance" aria-controls="p-provenance" aria-selected="false" tabindex="-1" data-i18n="ui-tab-provenance">Provenance</button>
     </div>
     <div class="panel-body">
       <div class="panel-tab" id="p-space" role="tabpanel" aria-labelledby="t-space">
@@ -140,11 +154,10 @@
           </section>
         </div>
       
-        <div class="panel-tab" id="p-measures" role="tabpanel" aria-labelledby="t-measures" hidden>
-          <section aria-labelledby="h-measures">
-            <h2 id="h-measures" class="note-h" data-i18n="st-measures-heading">Transit priority measures</h2>
-            <p class="hint"><span data-i18n="st-measures-hint-a">Ways to give buses priority, from the</span> <a href="https://tpa.transitcosts.com/atlas/toolbox">Transit Priority Atlas</a>. <span data-i18n="st-measures-hint-b">Arrange keeps the sidewalks and lays the roadway out again as that measure. You can undo it.</span></p>
-            <table class="nt measures" id="measures"></table>
+        <div class="panel-tab" id="p-provenance" role="tabpanel" aria-labelledby="t-provenance" hidden>
+          <section aria-labelledby="h-provenance">
+            <h2 id="h-provenance" class="note-h" data-i18n="st-provenance-heading">Where this street came from</h2>
+            <div id="provenance"></div>
           </section>
         </div>
     </div>

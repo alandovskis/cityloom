@@ -119,6 +119,9 @@ for (const p of PAGES) {
         await expect(live(page)).toHaveText(p.details);
         await page.reload();
         await expect(page.locator("html")).toHaveAttribute("data-inspector", "closed");
+        // A head script sets that attribute at once; the key is bound only when the shell is mounted, which
+        // is when the region list is filled.
+        await expect(page.locator("#region option")).toHaveCount(6);
         await page.keyboard.press("[");
         await expect(page.locator("html")).not.toHaveAttribute("data-inspector", "closed");
       });

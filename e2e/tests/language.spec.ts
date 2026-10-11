@@ -109,7 +109,7 @@ test("nothing of the page is left in English once it is French, a piece selected
   await expect(page.locator("#fit")).not.toHaveText("");
   await expectNoEnglish(page, "after a nudge");
 
-  for (const tab of ["#t-checks", "#t-changes", "#t-measures"]) {
+  for (const tab of ["#t-checks", "#t-changes", "#t-provenance"]) {
     await page.locator(tab).click();
     await expect(page.locator(tab)).toHaveAttribute("aria-selected", "true");
     await expectNoEnglish(page, `on the ${tab} tab`);

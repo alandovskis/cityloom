@@ -18,7 +18,7 @@ const LEFT_OUT: &[(&str, &str)] = &[
     ("src/junction/model/fixtures.rs", "test-only"),
     (
         "src/shared/atlas.rs",
-        "the Atlas's English names, groups and notes are source data; what a person reads goes through `name_key` / `note_key` / `group_name_key`, and a test holds the English .ftl names and notes equal to them",
+        "the Atlas's English names and notes are source data; what a person reads goes through `name_key` / `note_key`, and a test holds the English .ftl names and notes equal to them",
     ),
 ];
 
@@ -379,6 +379,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("cityloom-welcome", "a storage key"),
     ("notes-toggle", "the id of an element of the page"),
     ("inspector-toggle", "the id of an element of the page"),
+    ("transit-priority", "the id of the left panel's table of lane measures, which the street page mounts into"),
     ("t-checks", "the id of a tab of the page"),
     ("i-h-dir", "the id of an inspector heading"),
     ("i-h-curb", "the id of an inspector heading"),

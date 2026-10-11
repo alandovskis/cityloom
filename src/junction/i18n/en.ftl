@@ -217,10 +217,6 @@ jn-check-passes = : passes
 jn-check-fails = : fails
 # A check's detail with the length it speaks of: "Longest crossing in one go: 11.4 m".
 jn-check-length = { $detail }: { $length }
-jn-measure-in-use = In use on { $arms }
-jn-measure-on-street = Set on a street
-jn-measure-street-editor = Street editor
-jn-measure-not-modelled = Not modelled
 jn-col-step = Step
 jn-col-what-changed = What changed
 
@@ -253,19 +249,16 @@ jn-page-key-undo = undo
 jn-page-details-panel = Selected street, corner or crossing
 jn-page-plan-key = Key to the strips
 jn-page-tab-streets = Streets
-jn-page-tab-measures = Measures
 jn-page-across = Getting across
 jn-page-turns = Turns allowed
 jn-page-turns-hint = Each row is a street traffic comes from. Press a cell to allow or ban that turn.
 jn-page-conflicts = Where paths meet
 jn-page-does-it-work = Does it work?
 jn-page-your-changes = Your changes
-jn-page-measures = Transit priority measures
-# Around a link to the Transit Priority Atlas, whose name is not translated: "The toolbox of the Transit Priority Atlas, and where…".
-jn-page-measures-hint-a = The toolbox of the
-jn-page-measures-hint-b = , and where CityLoom models each measure.
 jn-page-fine-print = Sample numbers and limits for now, not real measurements.
 jn-page-about = About this junction
+jn-provenance-heading = Where this junction came from
+jn-no-source = This junction was not made from OpenStreetMap.
 
 ## The page of a junction that cannot be drawn (src/junction/page.rs: Stuck)
 jn-stuck-title = This junction cannot be drawn
