@@ -394,6 +394,14 @@ pub struct ArmView {
 }
 
 #[derive(Serialize)]
+pub struct ProtectedView {
+    /// The bike track round the corner, between the curb and the island.
+    pub track: Vec<Value>,
+    /// The corner island inside it.
+    pub island: Vec<Value>,
+}
+
+#[derive(Serialize)]
 pub struct CornerView {
     /// The arm this corner is clockwise of.
     pub uid: u32,
@@ -406,6 +414,10 @@ pub struct CornerView {
     pub straight: bool,
     /// A bordering arm has a sidewalk next to its curb here, so the corner is pavement for walking.
     pub walk: bool,
+    /// The corner is protected: the bike track and the island.
+    pub protected: Option<ProtectedView>,
+    /// The message that says why the corner cannot be protected, when it cannot.
+    pub protected_why: Option<&'static str>,
     pub wedge: Vec<Value>,
     pub curb: Vec<Value>,
     /// The direction the corner's arc bulges.
@@ -629,6 +641,11 @@ impl Junction {
         let lay = layout(s, region).expect("a junction state is always drawable");
         // A roundabout is never a table, whatever its state says.
         let raised = s.raised && lay.ring.is_none();
+        // Which corners are protected: the flag of the arm before, where the corner can stand.
+        let n_arms = s.arms.len();
+        let blockers: Vec<Option<ProtectedBlocker>> =
+            (0..n_arms).map(|i| protected_blocker(s, i, &lay.arms[i].prof, &lay.arms[(i + 1) % n_arms].prof)).collect();
+        let protected_at: Vec<bool> = (0..n_arms).map(|i| s.arms[i].protected && blockers[i].is_none()).collect();
         let n = s.arms.len();
         let side = self.drive_side();
         let classes: Vec<u8> = (0..n).map(|i| classes_of(&s.arms, i)).collect();
@@ -689,9 +706,25 @@ impl Junction {
             }
             let mut core_bike = Vec::new();
             if lay.ring.is_none() {
+                let sides = l.prof.outer_bike_sides();
+                let (left_protected, right_protected) = (protected_at[(i + n_arms - 1) % n_arms], protected_at[i]);
                 for pi in l.prof.outer_bike() {
+                    let (on_left, on_right) = (sides[0] == Some(pi), sides[1] == Some(pi));
                     let p = &l.prof.pieces[pi];
                     let (x0, x1) = (l.lat(off, p.x_mm), l.lat(off, p.x_mm + p.width_mm));
+                    // The corner's track replaces the stub on the sides it runs round, but the lane still has to reach
+                    // the track: where the track starts nearer the middle than the mouth, a lead-in joins them.
+                    if (!on_left || left_protected) && (!on_right || right_protected) {
+                        let heading = dir(l.bearing);
+                        let along = |p: P| p.0 * heading.0 + p.1 * heading.1;
+                        let left = lay.corners[(i + n_arms - 1) % n_arms].fillet.as_ref().map(|f| along(f.b));
+                        let right = lay.corners[i].fillet.as_ref().map(|f| along(f.a));
+                        let start = [left.filter(|_| on_left), right.filter(|_| on_right)].into_iter().flatten().fold(f64::MAX, f64::min);
+                        if start < l.strip0 - 1.0 {
+                            core_bike.push(poly(&strip(l.bearing, x0, x1, start, l.strip0)));
+                        }
+                        continue;
+                    }
                     core_bike.push(poly(&strip(l.bearing, x0, x1, (l.strip0 - CORE_BIKE_MM).max(0.0), l.strip0)));
                 }
             }
@@ -866,6 +899,23 @@ impl Junction {
                 }
                 None => (scale(add(ca_in, cb_in), 0.5), None, true),
             };
+            let protected = match (&c.fillet, protected_at[c.a]) {
+                (Some(f), true) => {
+                    let sides = (la.prof.curb_bike_sides()[1], lb.prof.curb_bike_sides()[0]);
+                    let width = |prof: &Profile, i: Option<usize>| i.map_or(0, |i| prof.pieces[i].width_mm) as f64;
+                    let w = width(&la.prof, sides.0).min(width(&lb.prof, sides.1));
+                    let sweep = cross(sub(f.a, f.o), sub(f.b, f.o)) > 0.0;
+                    // The point on the ray from the fillet's centre through `p`, at radius `r`.
+                    let on = |p: P, r: f64| add(f.o, scale(sub(p, f.o), r / f.r));
+                    let (r1, r2) = (f.r + w, f.r + w + protected_island_mm(&la.prof, &lb.prof) as f64);
+                    let (a1, b1, a2, b2) = (on(f.a, r1), on(f.b, r1), on(f.a, r2), on(f.b, r2));
+                    Some(ProtectedView {
+                        track: vec![m(f.a), arc(f.r, false, sweep, f.b), l_(b1), arc(r1, false, !sweep, a1), z()],
+                        island: vec![m(a1), arc(r1, false, sweep, b1), l_(b2), arc(r2, false, !sweep, a2), z()],
+                    })
+                }
+                _ => None,
+            };
             corners.push(CornerView {
                 uid: ua,
                 next_uid: ub,
@@ -882,6 +932,8 @@ impl Junction {
                     && (s.arms[c.a].crossing.is_some() || s.arms[c.b].crossing.is_some()),
                 straight: c.fillet.is_none(),
                 walk: is_walk(la.prof.edge_kind[1]) || is_walk(lb.prof.edge_kind[0]),
+                protected,
+                protected_why: blockers[c.a].map(ProtectedBlocker::key),
                 wedge,
                 curb,
                 bisector: bis,
@@ -1635,6 +1687,160 @@ mod tests {
         assert!(priority.set_control(PRIORITY));
         let reasons = why(&priority);
         assert!(reasons.contains(&Some("jn-insp-bike-box-free")) && reasons.contains(&None), "{reasons:?}");
+    }
+
+    /// The points a path's commands end at (M and L carry x y, A carries its end last).
+    fn ends(path: &[Value]) -> Vec<P> {
+        path.iter()
+            .filter_map(|v| {
+                let a = v.as_array()?;
+                match a.first()?.as_str()? {
+                    "M" | "L" => Some((a[1].as_f64()?, a[2].as_f64()?)),
+                    "A" => Some((a[4].as_f64()?, a[5].as_f64()?)),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_protected_corner_has_a_bike_track_and_a_corner_island_round_its_curb() {
+        let mut j = junction_of(&BIKED);
+        let n = arm_of(&j, 0);
+        let corner = |j: &Junction| {
+            let v = j.view();
+            let c = v.corners.iter().find(|c| c.uid == n).unwrap();
+            (c.protected.as_ref().map(|p| (p.track.clone(), p.island.clone())), c.protected_why)
+        };
+        assert!(corner(&j).0.is_none());
+        assert!(j.set_protected(n, true));
+        let (pv, why) = corner(&j);
+        let (track, island) = pv.unwrap();
+        assert!(why.is_none());
+        let lay = layout(j.current(), 0).unwrap();
+        let f = lay.corners[j.current().arms.iter().position(|a| a.uid == n).unwrap()].fillet.as_ref().unwrap();
+        let (w, i) = (1_500.0, 2_000.0);
+        let d = |p: &P| ((p.0 - f.o.0).powi(2) + (p.1 - f.o.1).powi(2)).sqrt();
+        for p in ends(&track) {
+            assert!(d(&p) >= f.r - 2.0 && d(&p) <= f.r + w + 2.0, "track point {p:?} at {} (r {})", d(&p), f.r);
+        }
+        for p in ends(&island) {
+            assert!(d(&p) >= f.r + w - 2.0 && d(&p) <= f.r + w + i + 2.0, "island point {p:?} at {}", d(&p));
+        }
+        assert!(ends(&track).iter().any(|p| (d(p) - (f.r + w)).abs() < 2.0), "the track reaches the island's side");
+    }
+
+    #[test]
+    fn the_island_leaves_the_street_a_lane_and_the_arcs_turn_the_way_the_curb_does() {
+        let mut j = junction_of(&BIKED);
+        for uid in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_protected(uid, true));
+        }
+        let v = j.view();
+        let lay = layout(j.current(), 0).unwrap();
+        for (i, c) in v.corners.iter().enumerate() {
+            let p = c.protected.as_ref().expect("protected");
+            let f = lay.corners[i].fillet.as_ref().unwrap();
+            let d = |q: &P| ((q.0 - f.o.0).powi(2) + (q.1 - f.o.1).powi(2)).sqrt();
+            // 9.4 m of road, 1.5 m lanes at the curbs, 3 m kept clear: the island is at most (9.4 - 3) / 2 - 1.5 = 1.7 m deep
+            let reach = ends(&p.island).iter().map(d).fold(0.0, f64::max) - f.r - 1_500.0;
+            assert!((reach - 1_700.0).abs() < 2.0, "corner {i}: the island is {reach} deep");
+            // the arcs sweep the way the curb's arc does, so the crescents lie on the carriageway side of it
+            let sweep = |path: &[Value]| path.iter().find(|v| v[0] == "A").map(|v| v[3].clone());
+            assert_eq!(sweep(&p.track), sweep(&c.curb), "corner {i}");
+            assert_eq!(sweep(&p.island), sweep(&c.curb), "corner {i}");
+        }
+    }
+
+    #[test]
+    fn the_track_follows_the_curb_on_a_five_way_s_obtuse_and_acute_corners_too() {
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::{Piece, Street};
+        let pieces: Vec<Piece> = BIKED
+            .iter()
+            .map(|&(id, w)| Piece { kind: kind_index(id).unwrap(), width_mm: w, direction: (id == "travel").then_some(1), variants: Vec::new() })
+            .collect();
+        let street = Street::imported(StreetClass::Local, Side::Right, &pieces);
+        let mut state = Junction::new(3).current().clone(); // the five-way sample
+        for a in &mut state.arms {
+            a.section = Some(street.clone());
+            a.edge = a.uid;
+        }
+        let mut j = Junction::from_city(Said::new("city-name").with("name", Arg::Text("Test".into())), &state, &state, 0).expect("draws");
+        let lay = layout(j.current(), 0).unwrap();
+        for (i, uid) in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>().into_iter().enumerate() {
+            assert!(j.set_protected(uid, true), "corner {i}");
+            let v = j.view();
+            let p = v.corners[i].protected.as_ref().expect("protected");
+            let f = lay.corners[i].fillet.as_ref().unwrap();
+            let d = |q: &P| ((q.0 - f.o.0).powi(2) + (q.1 - f.o.1).powi(2)).sqrt();
+            assert!(ends(&p.track).iter().all(|q| d(q) >= f.r - 2.0 && d(q) <= f.r + 1_500.0 + 2.0), "corner {i}");
+            assert!(ends(&p.island).iter().all(|q| d(q) >= f.r + 1_500.0 - 2.0 && d(q) <= f.r + 3_500.0 + 2.0), "corner {i}");
+        }
+    }
+
+    #[test]
+    fn a_corner_that_cannot_be_protected_says_why() {
+        let why = |j: &Junction| j.view().corners.iter().map(|c| c.protected_why).collect::<Vec<_>>();
+        assert!(why(&junction_of(&BIKED)).iter().all(|w| w.is_none()));
+        let plain = junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]);
+        assert!(why(&plain).iter().all(|w| *w == Some("jn-insp-protected-no-lane")));
+        let mut ring = junction_of(&BIKED);
+        assert!(ring.set_control(ROUNDABOUT));
+        assert!(why(&ring).iter().all(|w| *w == Some("jn-insp-protected-roundabout")));
+        let mut state = junction_of(&BIKED).current().clone();
+        state.arms.retain(|a| a.bearing != 270);
+        let t = Junction::from_city(Said::new("city-name").with("name", Arg::Text("Test".into())), &state, &state, 0).expect("draws");
+        let reasons = why(&t);
+        assert!(reasons.contains(&Some("jn-insp-protected-straight")) && reasons.contains(&None), "{reasons:?}");
+    }
+
+    #[test]
+    fn a_protected_corner_replaces_the_two_core_bike_stubs_on_its_sides() {
+        let mut j = junction_of(&BIKED);
+        let stubs = |j: &Junction| j.view().arms.iter().map(|a| a.core_bike.len()).sum::<usize>();
+        assert_eq!(stubs(&j), 8);
+        let n = arm_of(&j, 0);
+        assert!(j.set_protected(n, true));
+        assert_eq!(stubs(&j), 6, "arm 0's right and the next arm's left");
+        let v = j.view();
+        let next = v.corners.iter().find(|c| c.uid == n).unwrap().next_uid;
+        assert_eq!(v.arms.iter().find(|a| a.uid == n).unwrap().core_bike.len(), 1);
+        assert_eq!(v.arms.iter().find(|a| a.uid == next).unwrap().core_bike.len(), 1);
+    }
+
+    #[test]
+    fn the_bike_lane_reaches_the_track_where_the_two_corners_of_a_street_meet_it_at_different_distances() {
+        let mut j = junction_of(&BIKED);
+        let n = arm_of(&j, 0);
+        let before = arm_of(&j, 270);
+        // the corner before arm 0 is wide and sets its mouth back; arm 0's own corner is tight
+        assert!(j.set_corner(before, 9_000));
+        assert!(j.set_corner(n, 3_000));
+        assert!(j.set_protected(n, true));
+        let lay = layout(j.current(), 0).unwrap();
+        let mouth = lay.arms[0].mouth;
+        let v = j.view();
+        let arm = v.arms.iter().find(|a| a.uid == n).unwrap();
+        assert_eq!(arm.core_bike.len(), 2, "the left stub, and a lead-in where the right one was");
+        let f = lay.corners[0].fillet.as_ref().unwrap();
+        let d = crate::junction::geometry::dir(0.0);
+        let tangent = f.a.0 * d.0 + f.a.1 * d.1;
+        assert!(mouth - tangent > 500.0, "the corners differ: tangent {tangent}, mouth {mouth}");
+        let lead = arm.core_bike.iter().map(|s| along(s, 0.0)).find(|(lo, _)| (lo - tangent).abs() < 2.0).expect("a lead-in from the tangent point");
+        assert!((lead.1 - mouth).abs() < 2.0, "to the arm's lane at the mouth: {lead:?}");
+    }
+
+    #[test]
+    fn a_roundabout_loaded_with_a_protected_corner_draws_none() {
+        let mut state = junction_of(&BIKED).current().clone();
+        state.control = ROUNDABOUT;
+        for a in &mut state.arms {
+            a.protected = true;
+            a.edge = a.uid;
+        }
+        let j = Junction::from_city(Said::new("city-name").with("name", Arg::Text("Test".into())), &state, &state, 0).expect("draws");
+        assert!(j.view().corners.iter().all(|c| c.protected.is_none()));
     }
 
     #[test]

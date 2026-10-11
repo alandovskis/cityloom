@@ -330,6 +330,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         bulb: String,
         curb: String,
         raised: String,
+        corner: String,
         table: String,
         corebike: String,
         cross: String,
@@ -352,6 +353,13 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
             if c.walk { p.piece("wedge k-sidewalk", "sidewalk", &d) } else { format!("<path class=\"wedge bare\" d=\"{d}\"/>") }
         )
         .unwrap();
+    }
+
+    for c in &v.corners {
+        if let Some(pr) = &c.protected {
+            l.corner += &p.piece("corner-bike k-bike", "bike", &p.path_d(&pr.track));
+            l.corner += &p.piece("corner-island k-sidewalk", "sidewalk", &p.path_d(&pr.island));
+        }
     }
 
     for a in &v.arms {
@@ -660,8 +668,8 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
     }
 
     let markup = format!(
-        "<defs>{defs}</defs><g class=\"plan\">{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}</g>{furniture}",
-        l.wedge, l.arm, l.lane, l.table, l.measure, l.road, l.raised, l.corebike, l.bulb, l.curb, l.cross, l.mark, l.sel, l.mv, l.label, l.grip
+        "<defs>{defs}</defs><g class=\"plan\">{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}</g>{furniture}",
+        l.wedge, l.arm, l.lane, l.table, l.measure, l.road, l.raised, l.corner, l.corebike, l.bulb, l.curb, l.cross, l.mark, l.sel, l.mv, l.label, l.grip
     );
     PlanSvg { frame: f, label: plan_label(v, i18n), markup }
 }
@@ -745,6 +753,18 @@ mod tests {
         assert_eq!(count(&svg(&j).markup, "class=\"bike-box k-bike\""), 1);
         assert!(j.set_control(ROUNDABOUT));
         assert_eq!(count(&svg(&j).markup, "bike-box"), 0);
+    }
+
+    #[test]
+    fn a_protected_corner_is_drawn_with_its_track_and_island() {
+        let mut j = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+        assert_eq!(count(&svg(&j).markup, "corner-"), 0);
+        assert!(j.set_protected(arm_at(&j, 0), true));
+        let s = svg(&j);
+        assert_eq!(count(&s.markup, "class=\"corner-bike k-bike\""), 1);
+        assert_eq!(count(&s.markup, "class=\"corner-island k-sidewalk\""), 1);
+        assert!(j.set_control(ROUNDABOUT));
+        assert_eq!(count(&svg(&j).markup, "corner-"), 0);
     }
 
     #[test]

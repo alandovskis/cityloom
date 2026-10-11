@@ -540,6 +540,7 @@ fn corner_panel(w: Watch, uid: u32) -> AnyView {
             },
         )}
         <p class="insp-empty">{words(w, "jn-insp-corner-note")}</p>
+        {protected_section(w, uid)}
         {control_section(w)}
     }
     .into_any()
@@ -846,6 +847,28 @@ fn bike_box_section(w: Watch, uid: u32) -> impl IntoView {
                     ().into_any(),
                     move || w.tr(why().unwrap_or("jn-insp-bike-box-option")),
                     move || { w.edit(|j| j.set_bike_box(uid, !on())); },
+                )}
+            </ul>
+        },
+    )
+}
+
+/// The switch that protects a corner: a bike track round a corner island. Disabled, and saying why, where the corner cannot be.
+fn protected_section(w: Watch, uid: u32) -> impl IntoView {
+    let why = move || w.view().corners.iter().find(|c| c.uid == uid).and_then(|c| c.protected_why);
+    let on = move || w.view().corners.iter().find(|c| c.uid == uid).is_some_and(|c| c.protected.is_some());
+    section(
+        w,
+        "i-h-protected",
+        "jn-insp-protected",
+        view! {
+            <ul class="opts">
+                {option_btn(
+                    on,
+                    move || why().is_some(),
+                    ().into_any(),
+                    move || w.tr(why().unwrap_or("jn-insp-protected-option")),
+                    move || { w.edit(|j| j.set_protected(uid, !on())); },
                 )}
             </ul>
         },

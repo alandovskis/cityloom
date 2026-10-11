@@ -50,6 +50,23 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#drawing .bike-box").first()).toBeVisible();
   });
 
+  test("a corner can be protected from its details, or says why it cannot", async ({ page }) => {
+    await page.locator("#wrap").focus();
+    const protect = page
+      .locator("#inspector")
+      .getByRole("checkbox", { name: /^(Bike track round a corner island|Protected corner \()/ });
+    // The panel of a corner has the switch: arrow through the streets, crossings and corners until one shows.
+    for (let i = 0; i < 16 && !(await protect.isVisible().catch(() => false)); i++)
+      await page.keyboard.press("ArrowRight");
+    await expect(protect).toBeVisible();
+    if (await protect.isEnabled()) {
+      await protect.check();
+      await expect(page.locator("#drawing .corner-island").first()).toBeVisible();
+    } else {
+      await expect(protect).toHaveAccessibleName(/^Protected corner \(/);
+    }
+  });
+
   test("starts as the city lays it out and says how many streets meet and whether it works", async ({ page }) => {
     await expect(page.locator("#arm-count")).toHaveText(/^[3-5] streets$/);
     await expect(page.locator("#fit")).toContainText(/^[3-5] streets, /);
