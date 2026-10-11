@@ -737,9 +737,17 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
                 <ul class="opts">
                     {option_btn(
                         island,
-                        move || !can_island(),
+                        move || !can_island() || continuous(),
                         ().into_any(),
-                        move || w.tr(if can_island() { "jn-insp-island" } else { "jn-insp-island-narrow" }),
+                        move || {
+                            w.tr(if continuous() {
+                                "jn-insp-island-continuous"
+                            } else if can_island() {
+                                "jn-insp-island"
+                            } else {
+                                "jn-insp-island-narrow"
+                            })
+                        },
                         move || { w.edit(|j| j.set_island(uid, !island())); },
                     )}
                 </ul>

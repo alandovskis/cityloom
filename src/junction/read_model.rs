@@ -720,7 +720,7 @@ impl Junction {
                     poly: poly(&strip(l.bearing, cl, cr, t0, t1)),
                     island_poly: island,
                     continuous: c.continuous,
-                    ramps: if c.continuous {
+                    ramps: if c.continuous && !raised {
                         vec![poly(&strip(l.bearing, cl, cr, (t0 - RAMP_MM).max(l.mouth), t0)), poly(&strip(l.bearing, cl, cr, t1, t1 + RAMP_MM))]
                     } else {
                         Vec::new()
@@ -1508,6 +1508,17 @@ mod tests {
         let (inner, outer) = (along(&ramps[0], 0.0), along(&ramps[1], 0.0));
         assert!((inner.0 - (t0 - 2_400.0)).abs() < 2.0 && (inner.1 - t0).abs() < 2.0, "{inner:?} vs {t0}");
         assert!((outer.0 - t1).abs() < 2.0 && (outer.1 - (t1 + 2_400.0)).abs() < 2.0, "{outer:?} vs {t1}");
+    }
+
+    #[test]
+    fn a_continuous_crossing_on_a_raised_table_draws_no_ramps_of_its_own() {
+        let mut j = Junction::new(0);
+        let n = arm_of(&j, 0);
+        assert!(j.set_continuous(n, true));
+        assert!(j.set_raised(true));
+        let v = j.view();
+        let c = v.arms.iter().find(|a| a.uid == n).unwrap().crossing.as_ref().unwrap();
+        assert!(c.continuous && c.ramps.is_empty(), "the table's own ramps are the steps");
     }
 
     #[test]

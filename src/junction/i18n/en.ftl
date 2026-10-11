@@ -344,6 +344,7 @@ jn-insp-crossing-mark = Mark a crossing
 jn-insp-halfway = Halfway island
 jn-insp-island = Refuge island in the middle
 jn-insp-island-narrow = Refuge island (road too narrow)
+jn-insp-island-continuous = Refuge island (not on a continuous sidewalk)
 jn-insp-shorten = Shorten the crossing
 jn-insp-transit = Transit priority
 jn-insp-bus-lane-in = Bus lane along the way in

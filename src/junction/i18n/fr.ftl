@@ -344,6 +344,7 @@ jn-insp-crossing-mark = Marquer un passage pour piétons
 jn-insp-halfway = Îlot à mi-traversée
 jn-insp-island = Îlot refuge au centre
 jn-insp-island-narrow = Îlot refuge (chaussée trop étroite)
+jn-insp-island-continuous = Îlot refuge (pas sur un trottoir continu)
 jn-insp-shorten = Raccourcir la traversée
 jn-insp-transit = Priorité au transport en commun
 jn-insp-bus-lane-in = Voie réservée aux autobus en entrée
