@@ -243,7 +243,7 @@ mod tests {
 
     /// What the loader keeps for a tile whose checksum in the index is `new`: that, and the version of the importer.
     fn new() -> String {
-        format!("new+i{}", tiles::IMPORTER_VERSION)
+        tiles::with_importer("new")
     }
 
     /// Testville with its network kept as made from a tile that had `checksum`, and its load begun.

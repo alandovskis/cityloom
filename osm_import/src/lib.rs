@@ -70,17 +70,19 @@ fn read_streets(osm: &[u8], clip: Option<Vec<geom::LonLat>>, config: MapConfig, 
     Ok((streets, doc))
 }
 
-/// A way tagged `sidewalk:left`, `sidewalk:right` and/or `sidewalk:both` (and not `sidewalk`) is given the `sidewalk`
-/// they say. osm2streets takes a side not marked `no` to have one but then leaves out one mapped as `separate`, and
+/// A way tagged `sidewalk=separate` is given `sidewalk=both`, which says the same. A way tagged `sidewalk:left`,
+/// `sidewalk:right` and/or `sidewalk:both` (and not `sidewalk`) is given the `sidewalk` they say. osm2streets takes a side not marked `no` to have one but then leaves out one mapped as `separate`, and
 /// takes a side that is not tagged at all to have one as well. Here a side has a sidewalk whatever it is tagged,
 /// except `no`, and a side not tagged has none. The sidewalk beside the road is shown whether it is part of the
 /// road's own way or a separate way of its own. `both` is the shorthand for the two sides, and a side tagged on its
 /// own says more than it does.
 fn explicit_sidewalks(tags: &mut Tags) {
-    // `sidewalk=separate` says the same of both sides, and osm2streets leaves it out
+    // `sidewalk=separate` is the shorthand `sidewalk:both=separate`, which osm2streets leaves out
     if tags.is("sidewalk", "separate") {
-        tags.insert("sidewalk", "both");
-        return;
+        tags.remove("sidewalk");
+        if !tags.contains_key("sidewalk:both") {
+            tags.insert("sidewalk:both", "separate");
+        }
     }
     if tags.contains_key("sidewalk") || !["sidewalk:left", "sidewalk:right", "sidewalk:both"].iter().any(|k| tags.contains_key(*k)) {
         return;
@@ -241,6 +243,9 @@ mod tests {
         let pair = |k: &str, v: &str| (k.to_string(), v.to_string());
         assert_eq!(sidewalks(&[("sidewalk", "separate")]), [pair("sidewalk", "both")]);
         assert_eq!(sidewalks(&[("sidewalk", "left"), ("sidewalk:both", "yes")]).len(), 2, "a way that says `sidewalk` is left as it is");
+        // a side tagged on its own overrides the shorthand, `separate` as much as `both`
+        assert_eq!(sidewalks(&[("sidewalk", "separate"), ("sidewalk:left", "no")]), [pair("sidewalk", "right")]);
+        assert_eq!(sidewalks(&[("sidewalk", "separate"), ("sidewalk:right", "no"), ("sidewalk:left", "yes")]), [pair("sidewalk", "left")]);
     }
 
     #[test]
