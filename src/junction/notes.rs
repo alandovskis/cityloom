@@ -10,7 +10,6 @@ use crate::junction::read_model::{CrossingView, JView};
 use crate::junction::turns::compass_key;
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
-use crate::shared::atlas::{MEASURES, Where, group_name_key, name_key, note_key};
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::said::say;
 use crate::shared::units::Units;
@@ -44,17 +43,6 @@ fn conflict_note(v: &JView) -> Option<&'static str> {
 /// The messages of the compass points of the arms a measure is in use on, in arm order.
 fn used_on(v: &JView, code: &str) -> Vec<&'static str> {
     v.arms.iter().filter(|a| a.transit.codes.contains(&code)).map(|a| compass_key(a.bearing)).collect()
-}
-
-/// The Atlas's groups of measures, in the order they are listed.
-fn atlas_groups() -> Vec<&'static str> {
-    let mut groups: Vec<&'static str> = Vec::new();
-    for m in &MEASURES {
-        if !groups.contains(&m.group) {
-            groups.push(m.group);
-        }
-    }
-    groups
 }
 
 fn icon(ok: bool) -> impl IntoView {
@@ -148,52 +136,6 @@ pub fn Checks(vm: Rc<JunctionVm>) -> impl IntoView {
                             <span>{check_detail(k, &watch.i18n(), units)}</span>
                         </div>
                     </li>
-                }
-            })
-            .collect_view()
-    }
-}
-
-/// Every measure of the Transit Priority Atlas toolbox, with where it is
-/// modelled and where this junction uses it.
-#[component]
-pub fn Measures(vm: Rc<JunctionVm>) -> impl IntoView {
-    let watch = Watch::new(vm);
-    move || {
-        let (v, _) = watch.now();
-        atlas_groups()
-            .into_iter()
-            .map(|group| {
-                let rows = MEASURES
-                    .iter()
-                    .filter(|m| m.group == group)
-                    .map(|m| {
-                        let on = used_on(&v, m.code);
-                        let state = if !on.is_empty() {
-                            let arms: Vec<String> = on.iter().map(|key| watch.tr(key)).collect();
-                            let in_use = watch.i18n().tr("jn-measure-in-use", &Args::new().str("arms", arms.join(", ")));
-                            view! { <b class="m-on">{in_use}</b> }.into_any()
-                        } else {
-                            match m.place {
-                                Where::Junction => watch.tr("jn-measure-on-street").into_any(),
-                                Where::Street => watch.tr("jn-measure-street-editor").into_any(),
-                                Where::Not => view! { <span class="m-not">{watch.tr("jn-measure-not-modelled")}</span> }.into_any(),
-                            }
-                        };
-                        let note = (!m.note.is_empty()).then(|| view! { <small>{watch.tr(&note_key(m.code))}</small> });
-                        view! {
-                            <tr>
-                                <th scope="row"><span class="dirtag">{m.code}</span>{watch.tr(&name_key(m.code))}{note}</th>
-                                <td>{state}</td>
-                            </tr>
-                        }
-                    })
-                    .collect_view();
-                view! {
-                    <tbody>
-                        <tr class="m-group"><th colspan="2" scope="colgroup">{group_name_key(group).map_or_else(|| group.to_string(), |key| watch.tr(key))}</th></tr>
-                        {rows}
-                    </tbody>
                 }
             })
             .collect_view()
@@ -321,12 +263,5 @@ mod tests {
         assert_eq!(used_on(&v, "N1"), vec!["jn-compass-short-n", "jn-compass-short-e"]);
         assert_eq!(used_on(&v, "G2"), vec!["jn-compass-short-e"]);
         assert!(used_on(&v, "L1").is_empty());
-    }
-
-    #[test]
-    fn the_atlas_groups_come_in_the_order_they_are_listed() {
-        assert_eq!(atlas_groups(), vec!["Linear continuous measures", "Localized measures", "Area-wide measures"]);
-        let keys: Vec<&str> = atlas_groups().into_iter().filter_map(group_name_key).collect();
-        assert_eq!(keys, vec!["group-name-linear", "group-name-local", "group-name-area"]);
     }
 }

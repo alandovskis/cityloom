@@ -198,18 +198,6 @@ fn the_changes_start_from_the_junction_today_and_list_each_edit() {
     assert!(!h.contains("base now"));
 }
 
-#[test]
-fn the_measures_say_where_each_is_modelled_and_where_it_is_in_use() {
-    let s = shared(0);
-    let e = arm(&s, 90);
-    s.edit(|j| j.set_bus_lane(e, true));
-    s.edit(|j| j.set_approach(e, Q_CURB));
-    let h = html(|| view! { <notes::Measures vm=s.clone()/> }.into_any());
-    assert_eq!(count(&h, "<tbody>"), 3);
-    assert!(h.contains("In use on E"));
-    assert!(h.contains("Street editor") && h.contains("Not modelled"));
-}
-
 // ---- inspector -----------------------------------------------------------------
 
 fn panel(s: &Rc<JunctionVm>) -> String {
@@ -594,34 +582,63 @@ fn the_title_block_gives_the_name_the_streets_and_the_changes_made() {
     );
 }
 
-#[test]
-fn the_title_block_links_the_osm_nodes_and_says_whether_the_junction_was_changed() {
+fn osm_junction_shared(locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
     use crate::shared::provenance::OsmRef;
     let mut state = Junction::new(0).current().clone();
     for a in &mut state.arms {
         a.edge = a.uid + 10;
     }
     state.source = vec![OsmRef { id: 29796354, version: Some(5) }, OsmRef { id: 9, version: None }];
-    let s = JunctionVm::new(
+    JunctionVm::new(
         crate::shared::platform::browser_ports(),
-        crate::i18n_for(crate::shared::i18n::Locale::En),
+        crate::i18n_for(locale),
         Junction::from_city(crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Junction 4".into())), &state, &state, 0)
             .unwrap(),
         None,
-    );
-    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
+    )
+}
+
+#[test]
+fn the_provenance_links_the_osm_nodes_and_says_whether_the_junction_was_changed() {
+    let s = osm_junction_shared(crate::shared::i18n::Locale::En);
+    let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());
     assert!(h.contains("href=\"https://www.openstreetmap.org/node/29796354\"") && h.contains(">node 29796354 v5<"), "{h}");
     assert!(h.contains(">node 9<") && h.contains("id=\"tb-state\">As imported<"), "{h}");
     let n = arm(&s, 0);
-    s.edit(|j| j.set_corner(n, 7_000));
-    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
+    s.edit(|j| j.set_filter(n, true));
+    let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());
     assert!(h.contains("id=\"tb-state\">Edited<"), "{h}");
 }
 
 #[test]
-fn the_title_block_of_a_junction_with_no_source_does_not_link_to_openstreetmap() {
-    let h = html(|| view! { <page::TitleBlock vm=shared(0)/> }.into_any());
-    assert!(!h.contains("openstreetmap.org"), "{h}");
+fn a_junction_with_no_source_says_so() {
+    use crate::shared::i18n::Locale;
+    let h = html(|| view! { <page::Provenance vm=shared(0)/> }.into_any());
+    assert!(h.contains("This junction was not made from OpenStreetMap."), "{h}");
+    assert!(!h.contains("openstreetmap.org") && !h.contains("tb-state"), "{h}");
+    let fr = shared_in(0, Locale::FrCa);
+    let h = html(|| view! { <page::Provenance vm=fr.clone()/> }.into_any());
+    assert!(h.contains("Cette jonction ne vient pas d’OpenStreetMap.") && !h.contains("was not made"), "{h}");
+}
+
+#[test]
+fn the_provenance_follows_the_language_switch() {
+    use crate::shared::i18n::Locale;
+    let owner = Owner::new();
+    owner.set();
+    let s = osm_junction_shared(Locale::En);
+    let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());
+    assert!(h.contains(">Data<") && h.contains("As imported"), "{h}");
+    s.i18n().set(Locale::FrCa);
+    let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());
+    assert!(h.contains(">Données<") && h.contains("Telle qu’importée") && !h.contains("As imported"), "{h}");
+}
+
+#[test]
+fn the_title_block_no_longer_holds_the_sources() {
+    let s = osm_junction_shared(crate::shared::i18n::Locale::En);
+    let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
+    assert!(!h.contains("openstreetmap.org") && !h.contains("tb-state") && !h.contains("OpenStreetMap"), "{h}");
 }
 
 #[test]
@@ -716,11 +733,9 @@ fn the_page_around_the_plan_speaks_french() {
     let h = html(|| view! { <page::Header vm=s.clone()/> }.into_any());
     speaks_french(&h, &[ENGLISH, &["City map"]].concat(), &["Carte de la ville", "Plan de la jonction", ">4 rues<", ">Jonction 4</h1>"]);
     let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
-    speaks_french(
-        &h,
-        &["Junction<", "Streets", "Changes made", "Data", "As imported"],
-        &[">Jonction<", ">Rues<", "Modifications apportées", "Données", "Telle qu’importée"],
-    );
+    speaks_french(&h, &["Junction<", "Streets", "Changes made"], &[">Jonction<", ">Rues<", "Modifications apportées"]);
+    let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());
+    speaks_french(&h, &["Data", "As imported"], &["Données", "Telle qu’importée"]);
     let h = html(|| view! { <page::Fit vm=s.clone()/> }.into_any());
     speaks_french(&h, ENGLISH, &["4 rues, feux de circulation. Toutes les vérifications réussissent."]);
     let h = html(|| view! { <page::History vm=s.clone()/> }.into_any());
@@ -748,19 +763,6 @@ fn the_notes_speak_french() {
     speaks_french(&h, &["A signal takes turns"], &["Les feux"]);
     let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
     speaks_french(&h, &[": passes", "Longest crossing", " m<"], &["\u{a0}: réussite", "Plus longue traversée d’un seul coup\u{a0}: 11,4\u{a0}m"]);
-    let h = html(|| view! { <notes::Measures vm=s.clone()/> }.into_any());
-    speaks_french(
-        &h,
-        &["In use on", "Street editor", "Not modelled", "Set on a street", "Localized measures", "Curbside Queue-Jump Lanes", "under development"],
-        &[
-            "Utilisée sur E",
-            "Éditeur de rue",
-            "Non modélisée",
-            "Mesures ponctuelles",
-            "Voies de dépassement de file en bordure de trottoir",
-            "en développement",
-        ],
-    );
     let h = html(|| view! { <notes::Revisions vm=s.clone()/> }.into_any());
     speaks_french(
         &h,
@@ -829,9 +831,9 @@ fn the_junction_page_asks_for_no_message_that_is_missing_in_french() {
     s.edit(|j| j.select(Target::Arm(n)));
     let _ = html(|| {
         view! {
-            <page::Header vm=s.clone()/><page::TitleBlock vm=s.clone()/><page::Fit vm=s.clone()/><page::History vm=s.clone()/><page::Key vm=s.clone()/>
+            <page::Header vm=s.clone()/><page::TitleBlock vm=s.clone()/><page::Provenance vm=s.clone()/><page::Fit vm=s.clone()/><page::History vm=s.clone()/><page::Key vm=s.clone()/>
             <notes::Across vm=s.clone()/><notes::Conflicts vm=s.clone()/><notes::ConflictNote vm=s.clone()/><notes::Checks vm=s.clone()/>
-            <notes::Measures vm=s.clone()/><notes::Revisions vm=s.clone()/><plan::PlanDrawing vm=s.clone()/><turns::Turns vm=s.clone()/>
+            <notes::Revisions vm=s.clone()/><plan::PlanDrawing vm=s.clone()/><turns::Turns vm=s.clone()/>
         }
         .into_any()
     });
@@ -1235,7 +1237,7 @@ fn every_data_i18n_key_in_intersection_html_exists_in_both_languages() {
     use crate::shell::view::i18n_keys;
     let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
     let keys = i18n_keys(INTERSECTION_HTML);
-    assert!(keys.len() > 44, "the page should have been converted: {}", keys.len());
+    assert!(keys.len() > 40, "the page should have been converted: {}", keys.len());
     for (key, _) in keys {
         en.tr_now(&key, &Args::new());
         fr.tr_now(&key, &Args::new());
