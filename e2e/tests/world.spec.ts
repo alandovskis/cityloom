@@ -25,7 +25,10 @@ test("what is kept for the area is kept under its own keys", async ({ page }) =>
   await expect(page.locator("#title-block")).toContainText("Plateau");
   const keys = await page.evaluate(() => Object.keys(localStorage));
   expect(keys.some((k) => k.startsWith("cityloom-network:45.5261,-73.5978"))).toBe(true);
-  expect(keys).not.toContain("cityloom-city");
+  expect(keys.filter((k) => k.startsWith("cityloom-city"))).toEqual([]);
+  // the document exists (an empty one marks the move of older saves as done) and holds no edit
+  const edits = await page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-edits") ?? "null"));
+  expect(edits).toEqual({ version: 3, streets: {}, junctions: {} });
 });
 
 test("an area is made again when the checksum of its tile changes, and not otherwise", async ({ page }) => {

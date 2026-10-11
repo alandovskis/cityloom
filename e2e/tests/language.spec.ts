@@ -257,7 +257,7 @@ test("a junction page opened in French is French from the first paint", async ({
 });
 
 /** Makes every junction of the city undrawable, the way a person could: an edit is made on the street page,
- *  then the stored city is read and every segment widened, each street's row left as it was (a saved street
+ *  then the stored edits are read and every segment widened, each street's row left as it was (a saved street
  *  whose row changed is not taken back). */
 const breakJunctions = async (page: Page) => {
   await openStreet(page);
@@ -268,11 +268,10 @@ const breakJunctions = async (page: Page) => {
   await page.goto("/map.html");
   await mapReady(page);
   await page.evaluate(() => {
-    const key = Object.keys(localStorage).find((k) => k.startsWith("cityloom-city:"))!;
-    const city = JSON.parse(localStorage.getItem(key)!);
-    for (const street of Object.values<any>(city.streets))
-      for (const segment of street.segments) segment.width_mm *= 40;
-    localStorage.setItem(key, JSON.stringify(city));
+    const edits = JSON.parse(localStorage.getItem("cityloom-edits")!);
+    for (const record of Object.values<any>(edits.streets))
+      for (const segment of record.street.segments) segment.width_mm *= 40;
+    localStorage.setItem("cityloom-edits", JSON.stringify(edits));
   });
 };
 
