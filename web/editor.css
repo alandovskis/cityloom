@@ -1780,6 +1780,7 @@ dl.prov dd:last-child {
     border-radius: 0;
     overflow: visible;
     background: transparent;
+    order: 1;
   }
   .stage-main {
     position: static;
@@ -1792,9 +1793,6 @@ dl.prov dd:last-child {
   .panel.right {
     order: 3;
     bottom: auto;
-  }
-  .stage {
-    order: 1;
   }
   .stage-head {
     align-items: stretch;
