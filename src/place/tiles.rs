@@ -17,6 +17,13 @@ pub const DIR: &str = "data/metro";
 /// The index of the tiles there are, `data/metro/index.json`.
 pub const INDEX_URL: &str = "data/metro/index.json";
 
+/// The version of what `osm_import` makes of a tile. Raise it when the importer's output changes for the same data,
+/// so that the areas already kept are read again.
+///
+/// 2: a bike track or a sidewalk mapped as a way of its own (`cycleway:both=separate`, `sidewalk:both=separate`) is a
+/// lane beside the road.
+pub const IMPORTER_VERSION: u32 = 2;
+
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct Index {
     /// The south-west corner of tile 0_0, in degrees.
@@ -57,9 +64,11 @@ impl Index {
         self.name_at(lat, lon).map(|name| format!("{DIR}/{name}.osm.pbf"))
     }
 
-    /// The checksum of that tile's file, if the index gives one.
+    /// What an area read from that tile is kept as made from: the checksum of the tile's file, if the index gives
+    /// one, and the version of the importer that read it. An area kept by an earlier importer therefore reads as
+    /// stale and is read again, once.
     pub fn checksum_at(&self, lat: f64, lon: f64) -> Option<String> {
-        self.checksums.get(&self.name_at(lat, lon)?).cloned()
+        self.checksums.get(&self.name_at(lat, lon)?).map(|sum| format!("{sum}+i{IMPORTER_VERSION}"))
     }
 }
 
@@ -89,7 +98,7 @@ mod tests {
     #[test]
     fn a_tile_has_the_checksum_the_index_gives_it_if_it_gives_one() {
         let index = Index::parse(br#"{"lon0":-74.40,"lat0":45.20,"dlon":0.0257,"dlat":0.018,"tiles":["12_9","12_10"],"checksums":{"12_9":"ab12"}}"#).unwrap();
-        assert_eq!(index.checksum_at(45.37, -74.08).as_deref(), Some("ab12"));
+        assert_eq!(index.checksum_at(45.37, -74.08), Some(format!("ab12+i{IMPORTER_VERSION}")), "with the importer's version");
         assert_eq!(index.checksum_at(45.39, -74.08), None, "that tile has none");
         assert_eq!(index.checksum_at(48.85, 2.35), None, "no tile");
         assert_eq!(Index::parse(INDEX).unwrap().checksum_at(45.37, -74.08), None, "an index with none");
