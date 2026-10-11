@@ -248,6 +248,7 @@ a.btn {
 .brand {
   display: flex;
   align-items: center;
+  min-height: 40px;
   gap: 10px;
   color: var(--ink);
   text-decoration: none;
@@ -444,7 +445,7 @@ a.btn {
   background: var(--fill);
 }
 .unit {
-  min-height: 30px;
+  min-height: 40px;
   padding: 0 12px;
   border: 0;
   border-radius: 8px;
@@ -619,7 +620,7 @@ a.btn {
 }
 .tab {
   flex: 1;
-  min-height: 34px;
+  min-height: 40px;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -1141,7 +1142,7 @@ a.btn {
 
 /* ---- touch, small screens, motion ------------------------------------------- */
 
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .btn,
   .tab,
   .unit {

@@ -1115,13 +1115,13 @@ svg pattern circle {
 }
 .stepper {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
   align-items: center;
   gap: 6px;
 }
 .stepper .ico {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
 }
 .stepper .wfield {
   display: flex;
@@ -1148,8 +1148,8 @@ svg pattern circle {
 .ico {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 1px solid var(--field-line);
   border-radius: 10px;
@@ -1270,7 +1270,7 @@ svg pattern circle {
 }
 .var select,
 .var input[type="time"] {
-  min-height: 32px;
+  min-height: 40px;
   font-size: 14px;
 }
 .var select[data-ivdir] {
@@ -1306,7 +1306,7 @@ svg pattern circle {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
+  min-height: 40px;
   font-size: 15px;
   cursor: pointer;
 }
@@ -1381,8 +1381,8 @@ svg pattern circle {
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 1px solid var(--field-line);
   border-radius: 8px;
@@ -1730,7 +1730,7 @@ svg pattern circle {
 
 /* ---- touch, small screens, motion --------------------------------------------- */
 
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .add-item,
   .check,
   .fit-checks {
