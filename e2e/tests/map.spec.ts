@@ -185,6 +185,17 @@ test.describe("the city map", () => {
     expect((await centre(page)).lat).toBeLessThan(start.lat);
   });
 
+  test("with reduced motion the camera moves at once, without easing", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.reload();
+    await mapReady(page);
+    const fitted = await zoom(page);
+    await page.locator("#basemap").focus();
+    await page.keyboard.press("+");
+    await expect.poll(() => zoom(page)).toBeGreaterThan(fitted + 0.3);
+    expect(await page.evaluate(() => (window as any).cityloomMap.isMoving())).toBe(false);
+  });
+
   test("the map is one stop for the keyboard: its canvas is not a second one", async ({ page }) => {
     await expect(page.locator("#basemap canvas")).toHaveAttribute("tabindex", "-1");
     await page.locator("#basemap").focus();

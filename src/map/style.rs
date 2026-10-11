@@ -12,6 +12,9 @@ pub const CHANGED: &str = "#2563eb";
 pub const BAD: &str = "#dc2626";
 /// The place the pointer or the focus is on.
 const HOT: &str = "#f59e0b";
+/// The edge of the place the pointer or the focus is on: dark where the road's own edge is white, so the highlight
+/// is not carried by its hue alone.
+const HOT_OUTLINE: &str = "#111827";
 
 /// MapLibre's zoom 0 shows the earth on one 512-pixel tile: this many pixels to a metre there, at this
 /// latitude. A width in metres is that times two to the zoom.
@@ -34,6 +37,11 @@ fn colour() -> Value {
     json!(["case", ["boolean", ["feature-state", "hot"], false], HOT, ["match", ["get", "status"], "bad", BAD, "changed", CHANGED, OK]])
 }
 
+/// `white`, or the dark outline where the place is the highlighted one.
+fn edge() -> Value {
+    json!(["case", ["boolean", ["feature-state", "hot"], false], HOT_OUTLINE, "#ffffff"])
+}
+
 /// The layers, as JSON, for a place at this latitude.
 pub fn layers(lat: f64) -> String {
     json!([
@@ -41,7 +49,7 @@ pub fn layers(lat: f64) -> String {
             "id": "places-casing", "type": "line", "source": SOURCE,
             "filter": ["==", ["geometry-type"], "LineString"],
             "layout": { "line-cap": "butt", "line-join": "round" },
-            "paint": { "line-color": "#ffffff", "line-opacity": 0.9, "line-width": metres("width_m", lat, 3.0, 3.0) }
+            "paint": { "line-color": edge(), "line-opacity": 0.9, "line-width": metres("width_m", lat, 3.0, 3.0) }
         },
         {
             "id": "places-street", "type": "line", "source": SOURCE,
@@ -52,7 +60,7 @@ pub fn layers(lat: f64) -> String {
         {
             "id": "places-junction", "type": "circle", "source": SOURCE,
             "filter": ["==", ["geometry-type"], "Point"],
-            "paint": { "circle-color": colour(), "circle-radius": metres("radius_m", lat, 5.0, 0.0), "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 }
+            "paint": { "circle-color": colour(), "circle-radius": metres("radius_m", lat, 5.0, 0.0), "circle-stroke-color": edge(), "circle-stroke-width": 2 }
         }
     ])
     .to_string()
@@ -84,6 +92,15 @@ mod tests {
         assert!(colour.contains("feature-state") && colour.contains("\"status\""));
         for c in [OK, CHANGED, BAD] {
             assert!(colour.contains(c), "{c} in {colour}");
+        }
+    }
+
+    #[test]
+    fn the_highlighted_place_is_outlined_dark_so_it_is_not_told_by_its_colour_alone() {
+        let l = layers(45.5);
+        for (layer, property) in [(&l[0], "line-color"), (&l[2], "circle-stroke-color")] {
+            let outline = layer["paint"][property].to_string();
+            assert!(outline.contains("feature-state") && outline.contains(HOT_OUTLINE) && outline.contains("#ffffff"), "{outline}");
         }
     }
 

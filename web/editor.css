@@ -5,53 +5,24 @@
 
 :root {
   /* What the editors draw, beyond the map's tints. */
-  --sky: #e9f3fb;
-  --s-tree: #6fb35e;
-  --s-car: #dfe5ec;
-  --s-bus: #f2a99b;
-  --s-van: #f1cd55;
-  --s-coat-0: #ee9b78;
-  --s-coat-1: #74aede;
-  --danger: #b8231a;
-  --dark-hatch: #aeb8c2;
+  --sky: light-dark(#e9f3fb, #17222e);
+  --s-tree: light-dark(#6fb35e, #55924a);
+  --s-car: light-dark(#dfe5ec, #3a4651);
+  --s-bus: light-dark(#f2a99b, #8a4b43);
+  --s-van: light-dark(#f1cd55, #c0a02c);
+  --s-coat-0: light-dark(#ee9b78, #d27753);
+  --s-coat-1: light-dark(#74aede, #5590c4);
+  --danger: light-dark(#b8231a, #ff8073);
+  --dark-hatch: light-dark(#aeb8c2, #8c98a4);
   /* The asphalt of a street in section: a little darker than the map's white road. */
-  --k-travel: #c3cbd3;
-  --k-parking: #b4bdc7;
-  --road: #ffffff;
+  --k-travel: light-dark(#c3cbd3, #333c45);
+  --k-parking: light-dark(#b4bdc7, #3d4750);
   --panel-w: 300px;
   --notes-w: 340px;
   --rw: calc(var(--pad) + var(--notes-w));
   --kc: transparent;
   /* Rust-drawn swatches still fill with this name. */
   --sheet: var(--panel);
-}
-:root[data-theme="dark"] {
-  --sky: #17222e;
-  --s-tree: #55924a;
-  --s-car: #3a4651;
-  --s-bus: #8a4b43;
-  --s-van: #c0a02c;
-  --s-coat-0: #d27753;
-  --s-coat-1: #5590c4;
-  --danger: #ff8073;
-  --dark-hatch: #8c98a4;
-  --k-travel: #333c45;
-  --k-parking: #3d4750;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --sky: #17222e;
-    --s-tree: #55924a;
-    --s-car: #3a4651;
-    --s-bus: #8a4b43;
-    --s-van: #c0a02c;
-    --s-coat-0: #d27753;
-    --s-coat-1: #5590c4;
-    --danger: #ff8073;
-    --dark-hatch: #8c98a4;
-    --k-travel: #333c45;
-    --k-parking: #3d4750;
-  }
 }
 
 /* ---- the page: bar, two cards, and a column of work between them ---------- */
@@ -1144,13 +1115,13 @@ svg pattern circle {
 }
 .stepper {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
   align-items: center;
   gap: 6px;
 }
 .stepper .ico {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
 }
 .stepper .wfield {
   display: flex;
@@ -1177,8 +1148,8 @@ svg pattern circle {
 .ico {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 1px solid var(--field-line);
   border-radius: 10px;
@@ -1299,7 +1270,7 @@ svg pattern circle {
 }
 .var select,
 .var input[type="time"] {
-  min-height: 32px;
+  min-height: 40px;
   font-size: 14px;
 }
 .var select[data-ivdir] {
@@ -1335,7 +1306,7 @@ svg pattern circle {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
+  min-height: 40px;
   font-size: 15px;
   cursor: pointer;
 }
@@ -1410,8 +1381,8 @@ svg pattern circle {
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 1px solid var(--field-line);
   border-radius: 8px;
@@ -1759,7 +1730,7 @@ svg pattern circle {
 
 /* ---- touch, small screens, motion --------------------------------------------- */
 
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .add-item,
   .check,
   .fit-checks {

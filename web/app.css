@@ -3,29 +3,34 @@
    cards. One blue for what is chosen, amber for what needs attention. */
 
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
 
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
-  --land: #e2e7ec;
-  --panel: #ffffff;
-  --ink: #111827;
-  --ink-2: #4b5563;
-  --ink-3: #5f6b7a;
-  --rule: #e5e8ec;
-  --fill: #f1f3f5;
-  --field-line: #cdd3da;
+  --land: light-dark(#e2e7ec, #0f1317);
+  --panel: light-dark(#ffffff, #1b2127);
+  --ink: light-dark(#111827, #e8edf2);
+  --ink-2: light-dark(#4b5563, #b7c1cb);
+  --ink-3: light-dark(#536070, #9aa6b2);
+  --rule: light-dark(#e5e8ec, #2c343c);
+  --fill: light-dark(#f1f3f5, #252d35);
+  --field-line: light-dark(#7f8a96, #6b7783);
 
-  --accent: #2563eb;
-  --accent-ink: #ffffff;
-  --accent-wash: #e8effd;
-  --accent-line: rgb(37 99 235 / 0.4);
+  --accent: light-dark(#2563eb, #8ab4ff);
+  --accent-ink: light-dark(#ffffff, #0b1220);
+  --accent-wash: light-dark(#e8effd, rgb(138 180 255 / 0.16));
+  --accent-line: light-dark(rgb(37 99 235 / 0.4), rgb(138 180 255 / 0.45));
 
-  --warn: #92400e;
-  --warn-wash: #fef3c7;
+  --warn: light-dark(#92400e, #fcd34d);
+  --warn-wash: light-dark(#fef3c7, rgb(245 158 11 / 0.18));
   --warn-line: #f59e0b;
-  --ok: #166534;
-  --ok-wash: #dcfce7;
+  --ok: light-dark(#166534, #86efac);
+  --ok-wash: light-dark(#dcfce7, rgb(34 197 94 / 0.16));
+  /* The map's place colours, the same in both themes: src/map/style.rs paints them in
+     MapLibre, where a CSS variable cannot reach, so the key repeats them here. */
+  --map-ok: #4b6b8a;
+  --map-changed: #2563eb;
+  --map-bad: #dc2626;
 
   --shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 8px 24px rgb(15 23 42 / 0.12);
   --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.08), 0 2px 8px rgb(15 23 42 / 0.06);
@@ -42,120 +47,40 @@
   --rw: calc(var(--pad) + var(--panel-w));
 
   /* The drawing of the city. */
-  --casing: #7d8996;
-  --road: #ffffff;
-  --k-sidewalk: #cfd7de;
-  --k-planting: #a5d696;
-  --k-bike: #7fd3c3;
-  --k-travel: #ffffff;
-  --k-bus: #f2a99b;
-  --k-parking: #b9c2cc;
-  --k-median: #93c98a;
-  --k-loading: #f6d777;
-  --k-shoulder: #cbd3db;
-  --k-bikerack: #cdd6e2;
-  --k-bikeshare: #b5c7e8;
-  --k-pole: #9aa4b0;
-  --k-busshelter: #f6c9bf;
-  --k-busstation: #eeb8ab;
-  --k-bench: #d8c8ad;
-  --k-terrace: #f1dca0;
-  --k-streetlamp: #d9dcc0;
+  --casing: light-dark(#7d8996, #6a7886);
+  --road: light-dark(#ffffff, #3a4550);
+  --k-sidewalk: light-dark(#cfd7de, #27303a);
+  --k-planting: light-dark(#a5d696, #3c6a39);
+  --k-bike: light-dark(#7fd3c3, #2f7468);
+  --k-travel: light-dark(#ffffff, #3a4550);
+  --k-bus: light-dark(#f2a99b, #8a4b43);
+  --k-parking: light-dark(#b9c2cc, #2f3943);
+  --k-median: light-dark(#93c98a, #3f7438);
+  --k-loading: light-dark(#f6d777, #8a7a2b);
+  --k-shoulder: light-dark(#cbd3db, #232b33);
+  --k-bikerack: light-dark(#cdd6e2, #46525f);
+  --k-bikeshare: light-dark(#b5c7e8, #3f5a85);
+  --k-pole: light-dark(#9aa4b0, #75808c);
+  --k-busshelter: light-dark(#f6c9bf, #7a4039);
+  --k-busstation: light-dark(#eeb8ab, #6d3832);
+  --k-bench: light-dark(#d8c8ad, #6e5d48);
+  --k-terrace: light-dark(#f1dca0, #7d6a30);
+  --k-streetlamp: light-dark(#d9dcc0, #5d6148);
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+}
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --land: #0f1317;
-  --panel: #1b2127;
-  --ink: #e8edf2;
-  --ink-2: #b7c1cb;
-  --ink-3: #9aa6b2;
-  --rule: #2c343c;
-  --fill: #252d35;
-  --field-line: #3b454f;
-
-  --accent: #8ab4ff;
-  --accent-ink: #0b1220;
-  --accent-wash: rgb(138 180 255 / 0.16);
-  --accent-line: rgb(138 180 255 / 0.45);
-
-  --warn: #fcd34d;
-  --warn-wash: rgb(245 158 11 / 0.18);
-  --warn-line: #f59e0b;
-  --ok: #86efac;
-  --ok-wash: rgb(34 197 94 / 0.16);
-
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px rgb(0 0 0 / 0.5);
   --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
-
-  --casing: #6a7886;
-  --road: #3a4550;
-  --k-sidewalk: #27303a;
-  --k-planting: #3c6a39;
-  --k-bike: #2f7468;
-  --k-travel: #3a4550;
-  --k-bus: #8a4b43;
-  --k-parking: #2f3943;
-  --k-median: #3f7438;
-  --k-loading: #8a7a2b;
-  --k-shoulder: #232b33;
-  --k-bikerack: #46525f;
-  --k-bikeshare: #3f5a85;
-  --k-pole: #75808c;
-  --k-busshelter: #7a4039;
-  --k-busstation: #6d3832;
-  --k-bench: #6e5d48;
-  --k-terrace: #7d6a30;
-  --k-streetlamp: #5d6148;
 }
-
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    color-scheme: dark;
-
-    --land: #0f1317;
-    --panel: #1b2127;
-    --ink: #e8edf2;
-    --ink-2: #b7c1cb;
-    --ink-3: #9aa6b2;
-    --rule: #2c343c;
-    --fill: #252d35;
-    --field-line: #3b454f;
-
-    --accent: #8ab4ff;
-    --accent-ink: #0b1220;
-    --accent-wash: rgb(138 180 255 / 0.16);
-    --accent-line: rgb(138 180 255 / 0.45);
-
-    --warn: #fcd34d;
-    --warn-wash: rgb(245 158 11 / 0.18);
-    --warn-line: #f59e0b;
-    --ok: #86efac;
-    --ok-wash: rgb(34 197 94 / 0.16);
-
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px rgb(0 0 0 / 0.5);
     --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
-
-    --casing: #6a7886;
-    --road: #3a4550;
-    --k-sidewalk: #27303a;
-    --k-planting: #3c6a39;
-    --k-bike: #2f7468;
-    --k-travel: #3a4550;
-    --k-bus: #8a4b43;
-    --k-parking: #2f3943;
-    --k-median: #3f7438;
-    --k-loading: #8a7a2b;
-    --k-shoulder: #232b33;
-    --k-bikerack: #46525f;
-    --k-bikeshare: #3f5a85;
-    --k-pole: #75808c;
-    --k-busshelter: #7a4039;
-    --k-busstation: #6d3832;
-    --k-bench: #6e5d48;
-    --k-terrace: #7d6a30;
-    --k-streetlamp: #5d6148;
   }
 }
 
@@ -323,6 +248,7 @@ a.btn {
 .brand {
   display: flex;
   align-items: center;
+  min-height: 40px;
   gap: 10px;
   color: var(--ink);
   text-decoration: none;
@@ -519,7 +445,7 @@ a.btn {
   background: var(--fill);
 }
 .unit {
-  min-height: 30px;
+  min-height: 40px;
   padding: 0 12px;
   border: 0;
   border-radius: 8px;
@@ -542,6 +468,12 @@ a.btn {
 .menu-foot {
   margin-top: 10px;
   font-size: 13px;
+}
+.menu-foot .version {
+  color: var(--ink-3);
+}
+.menu-foot .version:not(:empty)::before {
+  content: "\00b7  ";
 }
 
 /* ---- the panels ------------------------------------------------------------- */
@@ -694,7 +626,7 @@ a.btn {
 }
 .tab {
   flex: 1;
-  min-height: 34px;
+  min-height: 40px;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -843,13 +775,13 @@ a.btn {
   vertical-align: -1px;
 }
 .dot-ok {
-  background: #4b6b8a;
+  background: var(--map-ok);
 }
 .dot-changed {
-  background: #2563eb;
+  background: var(--map-changed);
 }
 .dot-bad {
-  background: #dc2626;
+  background: var(--map-bad);
 }
 
 /* The home page's backdrop: the city drawn as an SVG. */
@@ -1216,7 +1148,7 @@ a.btn {
 
 /* ---- touch, small screens, motion ------------------------------------------- */
 
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   .btn,
   .tab,
   .unit {

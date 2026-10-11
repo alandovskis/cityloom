@@ -57,3 +57,22 @@ fn the_region_list_is_made_of_the_options_it_is_given() {
         region_options_html(&[RegionOption { id: "canada", label: "Canada (droite)".into() }, RegionOption { id: "japan", label: "Japon (gauche)".into() }]);
     assert_eq!(html, "<option value=\"canada\">Canada (droite)</option><option value=\"japan\">Japon (gauche)</option>");
 }
+
+#[test]
+fn the_version_label_says_the_crate_version_in_both_languages() {
+    let version = env!("CARGO_PKG_VERSION");
+    assert_eq!(crate::shell::view::version_label(&crate::i18n_for(Locale::En)), format!("Version {version}"));
+    assert_eq!(crate::shell::view::version_label(&crate::i18n_for(Locale::FrCa)), format!("Version {version}"));
+}
+
+#[test]
+fn every_page_with_a_menu_has_a_place_for_the_version() {
+    for (name, html) in [
+        ("index", include_str!("../../web/index.html")),
+        ("map", include_str!("../../web/map.html")),
+        ("street", include_str!("../../web/street.html")),
+        ("intersection", include_str!("../../web/intersection.html")),
+    ] {
+        assert_eq!(html.matches("data-version").count(), 1, "{name}.html");
+    }
+}
