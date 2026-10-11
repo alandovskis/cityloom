@@ -77,6 +77,73 @@ pub fn parse(stored: Option<&str>) -> Document {
     }
 }
 
+/// What identifies a place, or a stored record, when they are matched: its key and the OpenStreetMap ids it was
+/// made from (a junction has no `ways`).
+// Used by `City::load_on` (plan task 5); the allows go there.
+#[allow(dead_code)]
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Ids {
+    pub key: Option<String>,
+    pub ways: BTreeSet<i64>,
+    pub nodes: BTreeSet<i64>,
+}
+
+#[allow(dead_code)] // plan task 5 uses these
+impl Ids {
+    pub fn from_street_record(key: &str, r: &StreetRecord) -> Ids {
+        Ids { key: Some(key.to_string()), ways: r.ways.clone(), nodes: r.nodes.clone() }
+    }
+
+    pub fn from_junction_record(key: &str, r: &JunctionRecord) -> Ids {
+        Ids { key: Some(key.to_string()), ways: BTreeSet::new(), nodes: r.nodes.clone() }
+    }
+
+    /// How much a place and a record have in common. A street (it has ways) needs a shared way and a shared end.
+    fn overlap(&self, other: &Ids) -> usize {
+        let nodes = self.nodes.intersection(&other.nodes).count();
+        if self.ways.is_empty() && other.ways.is_empty() {
+            return nodes;
+        }
+        let ways = self.ways.intersection(&other.ways).count();
+        if ways == 0 || nodes == 0 { 0 } else { ways + nodes }
+    }
+}
+
+/// For each place, the index of the record it takes. An exact key wins; otherwise the record with the largest
+/// overlap, if that is unique. A record wanted by several places goes to the one with the larger score; a tie
+/// gives it to nobody.
+#[allow(dead_code)] // plan task 5 uses this
+pub fn assign(places: &[Ids], records: &[Ids]) -> Vec<Option<usize>> {
+    let score = |p: &Ids, r: &Ids| if p.key.is_some() && p.key == r.key { usize::MAX } else { p.overlap(r) };
+    let mut want: Vec<Option<usize>> = places
+        .iter()
+        .map(|p| {
+            let best = records.iter().map(|r| score(p, r)).max().unwrap_or(0);
+            if best == 0 {
+                return None;
+            }
+            let mut top = records.iter().enumerate().filter(|(_, r)| score(p, r) == best).map(|(i, _)| i);
+            let first = top.next()?;
+            top.next().is_none().then_some(first)
+        })
+        .collect();
+    for ri in 0..records.len() {
+        let claimants: Vec<usize> = (0..places.len()).filter(|&pi| want[pi] == Some(ri)).collect();
+        if claimants.len() < 2 {
+            continue;
+        }
+        let top = claimants.iter().map(|&pi| score(&places[pi], &records[ri])).max().unwrap_or(0);
+        let winners: Vec<usize> = claimants.iter().copied().filter(|&pi| score(&places[pi], &records[ri]) == top).collect();
+        let keep = (winners.len() == 1).then(|| winners[0]);
+        for &pi in &claimants {
+            if Some(pi) != keep {
+                want[pi] = None;
+            }
+        }
+    }
+    want
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,5 +176,84 @@ mod tests {
         assert_eq!(raw, "{not json");
         assert!(matches!(parse(Some(r#"{"version":3,"streets":5}"#)), Document::Damaged(_)));
         assert!(matches!(parse(Some(r#"{"version":2,"streets":{},"junctions":{}}"#)), Document::Damaged(_)), "an old shape is not this document");
+    }
+
+    fn ids(key: Option<&str>, ways: &[i64], nodes: &[i64]) -> Ids {
+        Ids { key: key.map(str::to_string), ways: ways.iter().copied().collect(), nodes: nodes.iter().copied().collect() }
+    }
+
+    #[test]
+    fn a_record_goes_to_the_place_with_its_key() {
+        let places = [ids(Some("n5"), &[], &[5]), ids(Some("n9"), &[], &[9])];
+        let records = [ids(Some("n9"), &[], &[9]), ids(Some("n5"), &[], &[5])];
+        assert_eq!(assign(&places, &records), [Some(1), Some(0)]);
+    }
+
+    #[test]
+    fn a_junction_whose_key_changed_is_found_by_a_shared_osm_node() {
+        // OSM merged node 5 into a cluster whose smallest id is now 3
+        let places = [ids(Some("n3"), &[], &[3, 5])];
+        let records = [ids(Some("n5"), &[], &[5])];
+        assert_eq!(assign(&places, &records), [Some(0)]);
+    }
+
+    #[test]
+    fn a_street_needs_a_shared_way_and_a_shared_end() {
+        let record = [ids(Some("w7~n1~n2"), &[7], &[1, 2])];
+        assert_eq!(
+            assign(&[ids(Some("w7~n2~n9"), &[7], &[2, 9])], &record),
+            [Some(0)],
+            "the way was cut at a new junction: it still shares the way and an end"
+        );
+        assert_eq!(assign(&[ids(Some("w8~n1~n2"), &[8], &[1, 2])], &record), [None], "same ends, other way");
+        assert_eq!(assign(&[ids(Some("w7~n8~n9"), &[7], &[8, 9])], &record), [None], "same way, other ends");
+    }
+
+    #[test]
+    fn two_places_claiming_one_record_give_it_to_the_larger_overlap_or_to_nobody() {
+        let record = [ids(Some("n1"), &[], &[1, 2, 3])];
+        assert_eq!(assign(&[ids(Some("n7"), &[], &[1, 2]), ids(Some("n8"), &[], &[3])], &record), [Some(0), None]);
+        assert_eq!(assign(&[ids(Some("n7"), &[], &[1]), ids(Some("n8"), &[], &[2])], &record), [None, None], "a tie is nobody's");
+    }
+
+    #[test]
+    fn the_place_with_the_exact_key_beats_an_overlapping_one() {
+        let record = [ids(Some("n1"), &[], &[1, 2, 3])];
+        let places = [ids(Some("n9"), &[], &[1, 2, 3]), ids(Some("n1"), &[], &[1])];
+        assert_eq!(assign(&places, &record), [None, Some(0)]);
+    }
+
+    #[test]
+    fn a_place_overlapping_two_records_equally_takes_neither() {
+        let records = [ids(Some("n1"), &[], &[1]), ids(Some("n2"), &[], &[2])];
+        assert_eq!(assign(&[ids(Some("n9"), &[], &[1, 2])], &records), [None]);
+    }
+
+    #[test]
+    fn a_place_without_a_key_matches_only_by_overlap_and_may_match_nothing() {
+        assert_eq!(assign(&[ids(None, &[], &[])], &[ids(Some("n1"), &[], &[1])]), [None]);
+        assert_eq!(assign(&[ids(None, &[], &[1])], &[ids(Some("n1"), &[], &[1])]), [Some(0)]);
+    }
+
+    #[test]
+    fn a_record_read_from_the_store_carries_its_key_and_ids() {
+        let street =
+            StreetRecord { ways: [7].into(), nodes: [1, 2].into(), street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right) };
+        assert_eq!(Ids::from_street_record("w7~n1~n2", &street), ids(Some("w7~n1~n2"), &[7], &[1, 2]));
+        let junction = JunctionRecord {
+            nodes: [4, 5].into(),
+            state: State {
+                label: crate::junction::model::unlabelled(),
+                arms: vec![],
+                control: 0,
+                ring_extra_mm: 0,
+                bus: None,
+                cycle: None,
+                raised: false,
+                source: Default::default(),
+            },
+            arm_streets: BTreeMap::new(),
+        };
+        assert_eq!(Ids::from_junction_record("n4", &junction), ids(Some("n4"), &[], &[4, 5]));
     }
 }
