@@ -115,13 +115,13 @@ impl Ids {
 #[allow(dead_code)] // plan task 5 uses this
 pub fn assign(places: &[Ids], records: &[Ids]) -> Vec<Option<usize>> {
     // An exact key outranks any overlap; places sharing a key are told apart by their overlap.
-    const EXACT: usize = 1 << 32;
-    let score = |p: &Ids, r: &Ids| if p.key.is_some() && p.key == r.key { EXACT + p.overlap(r) } else { p.overlap(r) };
+    let score = |p: &Ids, r: &Ids| (p.key.is_some() && p.key == r.key, p.overlap(r));
+    let none = (false, 0);
     let mut want: Vec<Option<usize>> = places
         .iter()
         .map(|p| {
-            let best = records.iter().map(|r| score(p, r)).max().unwrap_or(0);
-            if best == 0 {
+            let best = records.iter().map(|r| score(p, r)).max().unwrap_or(none);
+            if best == none {
                 return None;
             }
             let mut top = records.iter().enumerate().filter(|(_, r)| score(p, r) == best).map(|(i, _)| i);
@@ -134,7 +134,7 @@ pub fn assign(places: &[Ids], records: &[Ids]) -> Vec<Option<usize>> {
         if claimants.len() < 2 {
             continue;
         }
-        let top = claimants.iter().map(|&pi| score(&places[pi], &records[ri])).max().unwrap_or(0);
+        let top = claimants.iter().map(|&pi| score(&places[pi], &records[ri])).max().unwrap_or(none);
         let winners: Vec<usize> = claimants.iter().copied().filter(|&pi| score(&places[pi], &records[ri]) == top).collect();
         let keep = (winners.len() == 1).then(|| winners[0]);
         for &pi in &claimants {
