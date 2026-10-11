@@ -154,8 +154,11 @@ fn a_bike_track_mapped_separately_is_a_bike_lane_beside_the_road() {
     assert_eq!(bike_sides_of(&net, "both separate"), (true, true));
     assert_eq!(bike_sides_of(&net, "track left only"), (true, false));
     assert_eq!(bike_sides_of(&net, "track right only"), (false, true));
-    // a plain `cycleway` tag is a track on the road's right side, as osm2streets reads `cycleway=track`
+    // a plain `cycleway` tag is a track on a one-way road's right side, as osm2streets reads `cycleway=track` ...
     assert_eq!(bike_sides_of(&net, "cycleway separate"), (false, true));
+    // ... and on both sides of a two-way road
+    assert_eq!(bike_sides_of(&net, "two-way both separate"), (true, true));
+    assert_eq!(bike_sides_of(&net, "two-way cycleway separate"), (true, true));
     assert_eq!(bike_sides_of(&net, "nothing tagged"), (false, false));
 }
 
@@ -175,4 +178,10 @@ fn the_sidewalk_both_shorthand_is_read_as_the_two_sides() {
     assert_eq!(sidewalks_of(&net, "sidewalk both no"), (false, false));
     assert_eq!(sidewalks_of(&net, "sidewalk both yes"), (true, true));
     assert_eq!(sidewalks_of(&net, "sidewalk both yes left no"), (false, true));
+}
+
+#[test]
+fn a_plain_separate_sidewalk_tag_is_a_sidewalk_on_each_side() {
+    let net = import(TRACKS).unwrap();
+    assert_eq!(sidewalks_of(&net, "sidewalk plain separate"), (true, true));
 }

@@ -24,4 +24,13 @@
 <node id="71" lat="45.5140" lon="-73.6000"></node>
 <node id="72" lat="45.5140" lon="-73.5980"></node>
 <way id="107"><nd ref="71"/><nd ref="72"/><tag k="highway" v="residential"/><tag k="sidewalk:both" v="yes"/><tag k="sidewalk:left" v="no"/><tag k="name" v="sidewalk both yes left no"/></way>
+<node id="81" lat="45.5160" lon="-73.6000"></node>
+<node id="82" lat="45.5160" lon="-73.5980"></node>
+<way id="108"><nd ref="81"/><nd ref="82"/><tag k="highway" v="residential"/><tag k="cycleway:both" v="separate"/><tag k="sidewalk:both" v="no"/><tag k="name" v="two-way both separate"/></way>
+<node id="91" lat="45.5180" lon="-73.6000"></node>
+<node id="92" lat="45.5180" lon="-73.5980"></node>
+<way id="109"><nd ref="91"/><nd ref="92"/><tag k="highway" v="residential"/><tag k="cycleway" v="separate"/><tag k="sidewalk:both" v="no"/><tag k="name" v="two-way cycleway separate"/></way>
+<node id="101" lat="45.5200" lon="-73.6000"></node>
+<node id="102" lat="45.5200" lon="-73.5980"></node>
+<way id="110"><nd ref="101"/><nd ref="102"/><tag k="highway" v="residential"/><tag k="sidewalk" v="separate"/><tag k="name" v="sidewalk plain separate"/></way>
 </osm>

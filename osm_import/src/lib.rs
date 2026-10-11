@@ -77,6 +77,11 @@ fn read_streets(osm: &[u8], clip: Option<Vec<geom::LonLat>>, config: MapConfig, 
 /// road's own way or a separate way of its own. `both` is the shorthand for the two sides, and a side tagged on its
 /// own says more than it does.
 fn explicit_sidewalks(tags: &mut Tags) {
+    // `sidewalk=separate` says the same of both sides, and osm2streets leaves it out
+    if tags.is("sidewalk", "separate") {
+        tags.insert("sidewalk", "both");
+        return;
+    }
     if tags.contains_key("sidewalk") || !["sidewalk:left", "sidewalk:right", "sidewalk:both"].iter().any(|k| tags.contains_key(*k)) {
         return;
     }
@@ -96,7 +101,9 @@ fn explicit_sidewalks(tags: &mut Tags) {
 /// A side whose bike track is mapped as a way of its own (`cycleway:left=separate`, `cycleway:right=separate`,
 /// `cycleway:both=separate` or `cycleway=separate`) has the bike track beside the road that it has, as a sidewalk
 /// mapped separately has its sidewalk: osm2streets leaves a track mapped as `separate` out of the road's lanes, and
-/// the way that is the track itself is not kept (it is not among the highways the data holds).
+/// the way that is the track itself is not kept (it is not among the highways the data holds). Whether the track
+/// runs one way or both is what the road's own tags say; a track mapped as a way of its own with `oneway=no` on that
+/// way is shown as running with the traffic.
 fn explicit_cycleways(tags: &mut Tags) {
     for key in ["cycleway", "cycleway:left", "cycleway:right", "cycleway:both"] {
         if tags.is(key, "separate") {
@@ -227,6 +234,13 @@ mod tests {
         assert_eq!(cycleways(&tags).len(), 4);
         assert!(cycleways(&tags).contains(&("cycleway:left".to_string(), "lane".to_string())));
         assert!(cycleways(&tags).contains(&("cycleway:both".to_string(), "track".to_string())));
+    }
+
+    #[test]
+    fn a_plain_separate_sidewalk_tag_is_a_sidewalk_on_each_side_and_the_both_shorthand_is_left_beside_a_sidewalk_tag() {
+        let pair = |k: &str, v: &str| (k.to_string(), v.to_string());
+        assert_eq!(sidewalks(&[("sidewalk", "separate")]), [pair("sidewalk", "both")]);
+        assert_eq!(sidewalks(&[("sidewalk", "left"), ("sidewalk:both", "yes")]).len(), 2, "a way that says `sidewalk` is left as it is");
     }
 
     #[test]

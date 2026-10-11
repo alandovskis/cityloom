@@ -18,7 +18,8 @@ pub const DIR: &str = "data/metro";
 pub const INDEX_URL: &str = "data/metro/index.json";
 
 /// The version of what `osm_import` makes of a tile. Raise it when the importer's output changes for the same data,
-/// so that the areas already kept are read again.
+/// so that the areas kept from a tile are read again. (An area read from Overpass keeps no checksum and is not
+/// read again.)
 ///
 /// 2: a bike track or a sidewalk mapped as a way of its own (`cycleway:both=separate`, `sidewalk:both=separate`) is a
 /// lane beside the road.
