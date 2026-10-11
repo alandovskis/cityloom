@@ -176,6 +176,9 @@ pub struct Arm {
     pub crossing: Option<Crossing>,
     /// Curb extension at the arm's left and right curb.
     pub bulb: [bool; 2],
+    /// A waiting box for cyclists across the entering lanes, ahead of the cars' stop line.
+    #[serde(default)]
+    pub bike_box: bool,
     /// Arms this arm may not turn into.
     pub banned: Vec<u32>,
     /// A transit lane runs along the entering curb all the way in.
@@ -319,6 +322,7 @@ impl Arm {
             lanes: Vec::new(),
             crossing: Some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false, continuous: false }),
             bulb: [false, false],
+            bike_box: false,
             banned: Vec::new(),
             bus_lane: false,
             approach: 0,
@@ -404,6 +408,15 @@ fn read_profile(view: &View, name: Said) -> Profile {
 }
 
 impl Profile {
+    /// The indexes into `pieces` of the bike lanes beside the carriageway's edges: the outermost lanes that are not
+    /// parked on, so a bike lane outside parking counts and one between travel lanes does not.
+    pub fn outer_bike(&self) -> Vec<usize> {
+        let moving = |p: &Piece| is_roadway(p.kind) && !matches!(KINDS[p.kind].id, "parking" | "loading");
+        let first = self.pieces.iter().position(moving);
+        let last = self.pieces.iter().rposition(moving);
+        self.pieces.iter().enumerate().filter(|(i, p)| KINDS[p.kind].id == "bike" && (Some(*i) == first || Some(*i) == last)).map(|(i, _)| i).collect()
+    }
+
     pub fn road_mm(&self) -> i32 {
         self.road_r - self.road_l
     }
@@ -507,10 +520,11 @@ pub enum Refusal {
     BulbNoParking,
     DoesNotFit,
     RaisedOnRoundabout,
+    BikeBoxNotHere,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 10] = [
+    pub const ALL: [Refusal; 11] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -521,6 +535,7 @@ impl Refusal {
         Refusal::BulbNoParking,
         Refusal::DoesNotFit,
         Refusal::RaisedOnRoundabout,
+        Refusal::BikeBoxNotHere,
     ];
 
     /// The message that says why.
@@ -536,6 +551,7 @@ impl Refusal {
             Refusal::BulbNoParking => "jn-refusal-bulb-no-parking",
             Refusal::DoesNotFit => "jn-refusal-does-not-fit",
             Refusal::RaisedOnRoundabout => "jn-refusal-raised-roundabout",
+            Refusal::BikeBoxNotHere => "jn-refusal-bike-box-not-here",
         }
     }
 }
@@ -684,6 +700,9 @@ impl Junction {
         }
         if next.control == ROUNDABOUT {
             next.raised = false;
+            for a in &mut next.arms {
+                a.bike_box = false;
+            }
         }
         // A bus lane needs a roundabout and both its streets.
         if let Some((a, b)) = next.bus {
@@ -989,6 +1008,30 @@ impl Junction {
                     c.island = c.island && !on;
                     true
                 })
+            },
+        )
+    }
+
+    /// Puts a bike box ahead of the cars' stop line, or takes it away. It needs a bike lane to reach it, a street cars
+    /// enter, and a junction that is not a roundabout.
+    pub fn set_bike_box(&mut self, uid: u32, on: bool) -> bool {
+        let region = self.region;
+        if on {
+            let here = self.current().control != ROUNDABOUT
+                && self.arm(uid).is_some_and(|a| {
+                    let p = a.profile(region);
+                    !p.outer_bike().is_empty() && !p.enter_x.is_empty()
+                });
+            if !here {
+                return self.refuse(Refusal::BikeBoxNotHere);
+            }
+        }
+        self.arm_edit(
+            uid,
+            |a| about("jn-rev-bike-box", a).with("change", change(on)),
+            |a| {
+                a.bike_box = on;
+                true
             },
         )
     }
@@ -1360,6 +1403,7 @@ pub fn normalize(arms: &mut [Arm], region: usize) {
         }
         a.banned.retain(|b| uids.contains(b) && *b != a.uid);
         a.bulb = [a.bulb[0] && p.park[0] > 0, a.bulb[1] && p.park[1] > 0];
+        a.bike_box = a.bike_box && !p.outer_bike().is_empty() && n > 0;
         if let Some(c) = a.crossing.as_mut() {
             c.island = c.island && p.road_mm() >= ISLAND_MIN_ROAD_MM && !c.continuous;
         }
@@ -2049,6 +2093,117 @@ mod tests {
         assert_eq!(fr(&said), "Sample Street 1 (est), trottoir continu\u{a0}: ajout");
     }
 
+    const BIKED: [(&str, i32); 6] = [("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)];
+
+    /// A street of these pieces left to right whose travel lanes run `travel_dir` (1 toward the junction, 0 away).
+    fn street_of(pieces: &[(&str, i32)], travel_dir: usize) -> Street {
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::Piece;
+        let pieces: Vec<Piece> = pieces
+            .iter()
+            .map(|&(id, width_mm)| Piece { kind: kind_index(id).unwrap(), width_mm, direction: (id == "travel").then_some(travel_dir), variants: Vec::new() })
+            .collect();
+        Street::imported(StreetClass::Local, Side::Right, &pieces)
+    }
+
+    /// The sample four-way with every arm reading `street`, as a junction of a city.
+    fn junction_reading(street: &Street) -> Junction {
+        let mut state = Junction::new(0).current().clone();
+        for a in &mut state.arms {
+            a.section = Some(street.clone());
+            a.edge = a.uid;
+        }
+        Junction::from_city(named("Test"), &state, &state, 0).expect("the street draws")
+    }
+
+    #[test]
+    fn the_outer_bike_lanes_are_beside_the_curb_or_beside_parking_and_never_between_travel_lanes() {
+        let lanes = |pieces: &[(&str, i32)]| junction_of(pieces).current().arms[0].profile(0).outer_bike();
+        assert_eq!(lanes(&BIKED), vec![1, 4]);
+        assert_eq!(lanes(&[("sidewalk", 2000), ("parking", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]), vec![2]);
+        assert!(lanes(&[("sidewalk", 2000), ("travel", 3200), ("bike", 1500), ("travel", 3200), ("sidewalk", 2000)]).is_empty());
+        assert!(lanes(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]).is_empty());
+    }
+
+    #[test]
+    fn a_bike_box_is_switched_on_and_off_and_undo_goes_back() {
+        let mut j = junction_of(&BIKED);
+        let a = j.current().arms[0].uid;
+        let on = |j: &Junction| j.arm(a).unwrap().bike_box;
+        assert!(!on(&j));
+        assert!(j.set_bike_box(a, true));
+        assert!(on(&j));
+        assert!(!j.set_bike_box(a, true), "nothing changes");
+        assert!(j.undo());
+        assert!(!on(&j));
+        assert!(j.redo());
+        assert!(j.set_bike_box(a, false));
+        assert!(!on(&j));
+    }
+
+    #[test]
+    fn a_bike_box_needs_a_bike_lane_a_street_cars_enter_and_no_roundabout() {
+        let mut none = junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]);
+        let a = none.current().arms[0].uid;
+        assert!(!none.set_bike_box(a, true));
+        assert_eq!(none.refusal(), Some(Refusal::BikeBoxNotHere));
+
+        let mut out = junction_reading(&street_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)], 0));
+        let a = out.current().arms[0].uid;
+        assert!(!out.set_bike_box(a, true), "no lane comes in");
+        assert_eq!(out.refusal(), Some(Refusal::BikeBoxNotHere));
+
+        let mut ring = junction_of(&BIKED);
+        assert!(ring.set_control(ROUNDABOUT));
+        let a = ring.current().arms[0].uid;
+        assert!(!ring.set_bike_box(a, true));
+        assert_eq!(ring.refusal(), Some(Refusal::BikeBoxNotHere));
+    }
+
+    #[test]
+    fn a_roundabout_takes_every_bike_box_away_and_undo_brings_them_back() {
+        let mut j = junction_of(&BIKED);
+        for uid in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_bike_box(uid, true));
+        }
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(j.current().arms.iter().all(|a| !a.bike_box));
+        assert!(j.undo());
+        assert!(j.current().arms.iter().all(|a| a.bike_box));
+    }
+
+    #[test]
+    fn a_saved_bike_box_on_a_street_that_lost_its_bike_lane_is_dropped() {
+        let mut state = junction_of(&BIKED).current().clone();
+        let plain = street_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)], 1);
+        for a in &mut state.arms {
+            a.bike_box = true;
+            a.section = Some(plain.clone());
+            a.edge = a.uid;
+        }
+        let j = Junction::from_city(named("Test"), &state, &state, 0).expect("draws");
+        assert!(j.current().arms.iter().all(|a| !a.bike_box));
+    }
+
+    #[test]
+    fn a_saved_arm_without_the_bike_box_field_loads() {
+        let mut v = serde_json::to_value(Junction::new(0).current()).unwrap();
+        assert_eq!(v["arms"][0]["bike_box"], serde_json::json!(false));
+        v["arms"][0].as_object_mut().unwrap().remove("bike_box");
+        let back: State = serde_json::from_value(v).expect("an older save loads");
+        assert!(!back.arms[0].bike_box);
+    }
+
+    #[test]
+    fn a_bike_box_is_said_in_both_languages() {
+        let mut j = junction_of(&BIKED);
+        let a = j.current().arms[0].uid;
+        assert!(j.set_bike_box(a, true));
+        let said = j.revisions().last().cloned().unwrap();
+        assert!(en(&said).ends_with("bike box: add"), "{}", en(&said));
+        assert!(fr(&said).ends_with("sas cyclable\u{a0}: ajout"), "{}", fr(&said));
+    }
+
     #[test]
     fn every_refusal_has_a_message_in_both_languages() {
         for locale in Locale::ALL {
@@ -2220,6 +2375,7 @@ mod tests {
             ("bus", Box::new(move |j| j.set_bus(Some((n, e))))),
             ("cycle", Box::new(|j| j.set_cycle(Some(2_000)))),
             ("continuous without a crossing", Box::new(move |j| j.set_crossing(n, false) && j.set_continuous(n, true))),
+            ("bike box on a roundabout", Box::new(move |j| j.set_control(ROUNDABOUT) && j.set_bike_box(n, true))),
             ("raised on a roundabout", Box::new(|j| j.set_control(ROUNDABOUT) && j.set_raised(true))),
             ("cycle width", Box::new(|j| j.set_cycle(Some(99_000)))),
             ("ring", Box::new(|j| j.set_ring(-500))),

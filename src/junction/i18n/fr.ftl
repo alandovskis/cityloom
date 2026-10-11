@@ -66,6 +66,7 @@ jn-refusal-island-road-too-narrow = Cette chaussée est trop étroite pour un î
 jn-refusal-bulb-no-parking = Il n’y a pas de stationnement à céder de ce côté.
 jn-refusal-does-not-fit = Cette modification ne convient pas.
 jn-refusal-raised-roundabout = Un carrefour giratoire ne peut pas être surélevé.
+jn-refusal-bike-box-not-here = Un sas cyclable demande une piste cyclable sur une rue où les voitures entrent, à un carrefour qui n’est pas giratoire.
 
 ## Ce qu’a été chaque modification, dans l’historique
 jn-word-add = ajout
@@ -78,6 +79,7 @@ jn-rev-crossing = { $arm }, passage pour piétons : { $change }
 jn-rev-setback = { $arm }, passage pour piétons en retrait de { $length }
 jn-rev-crossing-width = { $arm }, passage pour piétons de { $length } de large
 jn-rev-island = { $arm }, îlot refuge : { $change }
+jn-rev-bike-box = { $arm }, sas cyclable : { $change }
 jn-rev-continuous = { $arm }, trottoir continu : { $change }
 jn-rev-continuous-island = { $arm }, trottoir continu : { $change }; îlot refuge retiré
 jn-rev-bulb-left = { $arm }, avancée de trottoir à gauche : { $change }

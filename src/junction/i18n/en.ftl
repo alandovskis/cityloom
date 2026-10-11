@@ -66,6 +66,7 @@ jn-refusal-island-road-too-narrow = This road is too narrow for an island.
 jn-refusal-bulb-no-parking = There is no parking on that side to give up.
 jn-refusal-does-not-fit = That change does not fit.
 jn-refusal-raised-roundabout = A roundabout cannot be a raised table.
+jn-refusal-bike-box-not-here = A bike box needs a bike lane on a street that cars enter, at a junction that is not a roundabout.
 
 ## What each change was, in the history
 jn-word-add = add
@@ -78,6 +79,7 @@ jn-rev-crossing = { $arm } crossing: { $change }
 jn-rev-setback = { $arm } crossing set back { $length }
 jn-rev-crossing-width = { $arm } crossing { $length } wide
 jn-rev-island = { $arm } refuge island: { $change }
+jn-rev-bike-box = { $arm } bike box: { $change }
 jn-rev-continuous = { $arm } continuous sidewalk: { $change }
 jn-rev-continuous-island = { $arm } continuous sidewalk: { $change }; refuge island removed
 jn-rev-bulb-left = { $arm } left bulb-out: { $change }

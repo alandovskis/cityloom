@@ -679,17 +679,12 @@ impl Junction {
                 }
                 pieces.push(PieceView { kind: p.kind, material: p.material, direction: p.direction, poly: poly(&strip(l.bearing, x0, x1, t0, len)) });
             }
-            // The outermost lanes of the carriageway that are not parked on: a bike lane beside parking arrives too.
-            let moving = |p: &Piece| is_roadway(p.kind) && !matches!(KINDS[p.kind].id, "parking" | "loading");
-            let first_out = l.prof.pieces.iter().position(moving);
-            let last_out = l.prof.pieces.iter().rposition(moving);
             let mut core_bike = Vec::new();
             if lay.ring.is_none() {
-                for (pi, p) in l.prof.pieces.iter().enumerate() {
-                    if KINDS[p.kind].id == "bike" && (Some(pi) == first_out || Some(pi) == last_out) {
-                        let (x0, x1) = (l.lat(off, p.x_mm), l.lat(off, p.x_mm + p.width_mm));
-                        core_bike.push(poly(&strip(l.bearing, x0, x1, (l.strip0 - CORE_BIKE_MM).max(0.0), l.strip0)));
-                    }
+                for pi in l.prof.outer_bike() {
+                    let p = &l.prof.pieces[pi];
+                    let (x0, x1) = (l.lat(off, p.x_mm), l.lat(off, p.x_mm + p.width_mm));
+                    core_bike.push(poly(&strip(l.bearing, x0, x1, (l.strip0 - CORE_BIKE_MM).max(0.0), l.strip0)));
                 }
             }
             let table = raised
