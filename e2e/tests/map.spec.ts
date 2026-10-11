@@ -157,6 +157,7 @@ test.describe("the city map", () => {
     await page.locator("#zoom-out").click();
     await page.locator("#zoom-fit").click();
     await expect.poll(async () => Math.abs((await zoom(page)) - fitted)).toBeLessThan(0.05);
+    expect(Math.abs((await zoom(page)) - fitted)).toBeLessThan(0.05);
   });
 
   test("the keys move the map when it has focus: zoom and the four directions", async ({ page }) => {
