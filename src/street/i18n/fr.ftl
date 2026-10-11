@@ -97,9 +97,6 @@ failing =
         [one] { $n } vérification échoue
        *[other] { $n } vérifications échouent
     }
-group-name-linear = Mesures linéaires continues
-group-name-local = Mesures ponctuelles
-group-name-area = Mesures à l’échelle d’un secteur
 measure-arrange = Réorganiser
 measure-arrange-label = Réorganiser la rue selon { $code } { $name }
 measure-this-street = Cette rue

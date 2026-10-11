@@ -97,9 +97,6 @@ failing =
         [one] 1 check fails
        *[other] { $n } checks fail
     }
-group-name-linear = Linear continuous measures
-group-name-local = Localized measures
-group-name-area = Area-wide measures
 measure-arrange = Arrange
 measure-arrange-label = Arrange the street as { $code } { $name }
 measure-this-street = This street
