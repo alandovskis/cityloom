@@ -38,6 +38,12 @@ format-check:
     cargo fmt --check
     cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js
 
+# What the SonarCloud analysis reads, in target/sonar: the Rust coverage as LCOV (host tests only: the wasm-only code and the browser tests are not measured) and Clippy's findings as JSON. Sonar judges the findings, so lints are capped at warnings here; a build error still fails. Needs cargo-llvm-cov (`cargo install cargo-llvm-cov --locked`) and the llvm-tools component.
+sonar-reports:
+    mkdir -p target/sonar
+    cargo llvm-cov --workspace --lcov --output-path target/sonar/lcov.info
+    cargo clippy --workspace --message-format=json -- --cap-lints warn > target/sonar/clippy.json
+
 # Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool) and build the basemap in web/data/basemap (needs Java 21+). `just prepare --refresh` downloads a newer extract.
 prepare *args:
     ./scripts/prepare.py {{args}}
