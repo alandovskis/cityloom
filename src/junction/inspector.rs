@@ -668,6 +668,7 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
     let range = Signal::derive(move || w.arm(uid, |a| a.crossing.as_ref().map(|c| crossing_range(c, &w.i18n(), w.units()))).flatten().unwrap_or_default());
     let island = move || w.arm(uid, |a| a.crossing.as_ref().is_some_and(|c| c.island)).unwrap_or(false);
     let can_island = move || w.arm(uid, |a| a.can_island).unwrap_or(false);
+    let continuous = move || w.arm(uid, |a| a.crossing.as_ref().is_some_and(|c| c.continuous)).unwrap_or(false);
     let setback = Num {
         id: "i-h-setback",
         label: "jn-insp-setback",
@@ -736,10 +737,34 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
                 <ul class="opts">
                     {option_btn(
                         island,
-                        move || !can_island(),
+                        move || !can_island() || continuous(),
                         ().into_any(),
-                        move || w.tr(if can_island() { "jn-insp-island" } else { "jn-insp-island-narrow" }),
+                        move || {
+                            w.tr(if continuous() {
+                                "jn-insp-island-continuous"
+                            } else if can_island() {
+                                "jn-insp-island"
+                            } else {
+                                "jn-insp-island-narrow"
+                            })
+                        },
                         move || { w.edit(|j| j.set_island(uid, !island())); },
+                    )}
+                </ul>
+            },
+        )}
+        {section(
+            w,
+            "i-h-continuous",
+            "jn-insp-continuous",
+            view! {
+                <ul class="opts">
+                    {option_btn(
+                        continuous,
+                        || false,
+                        ().into_any(),
+                        words(w, "jn-insp-continuous-option"),
+                        move || { w.edit(|j| j.set_continuous(uid, !continuous())); },
                     )}
                 </ul>
             },

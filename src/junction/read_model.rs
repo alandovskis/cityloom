@@ -281,6 +281,10 @@ pub struct CrossingView {
     pub island: bool,
     pub poly: Vec<Value>,
     pub island_poly: Option<Vec<Value>>,
+    /// The crossing is a continuous sidewalk.
+    pub continuous: bool,
+    /// The ramps up to a continuous sidewalk: the strip before the crossing (not before the mouth), then the one beyond it.
+    pub ramps: Vec<Vec<Value>>,
     /// Ends of the crossing's far side and the position of its handle.
     pub handle: P,
     pub distance_mm: i32,
@@ -715,6 +719,12 @@ impl Junction {
                     island: c.island,
                     poly: poly(&strip(l.bearing, cl, cr, t0, t1)),
                     island_poly: island,
+                    continuous: c.continuous,
+                    ramps: if c.continuous && !raised {
+                        vec![poly(&strip(l.bearing, cl, cr, (t0 - RAMP_MM).max(l.mouth), t0)), poly(&strip(l.bearing, cl, cr, t1, t1 + RAMP_MM))]
+                    } else {
+                        Vec::new()
+                    },
                     handle: at(l.bearing, (cl + cr) / 2.0 - (cr - cl) * 0.28, t1),
                     distance_mm: distance,
                     stage_mm: if c.island { (distance - ISLAND_MM) / 2 } else { distance },
@@ -851,7 +861,12 @@ impl Junction {
                 speed_kmh: if c.fillet.is_some() { speed_kmh(radius) } else { 0.0 },
                 ok,
                 fast: c.fillet.is_some()
-                    && speed_kmh(radius) > if raised { RAISED_TURN_KMH } else { MAX_TURN_KMH }
+                    && speed_kmh(radius)
+                        > if raised || [&s.arms[c.a], &s.arms[c.b]].iter().all(|a| a.crossing.is_none_or(|x| x.continuous)) {
+                            RAISED_TURN_KMH
+                        } else {
+                            MAX_TURN_KMH
+                        }
                     && (s.arms[c.a].crossing.is_some() || s.arms[c.b].crossing.is_some()),
                 straight: c.fillet.is_none(),
                 walk: is_walk(la.prof.edge_kind[1]) || is_walk(lb.prof.edge_kind[0]),
@@ -1282,7 +1297,7 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
             let d = c.stage_mm;
             let key = if d <= MAX_STAGE_MM {
                 "jn-check-crossing-ok"
-            } else if a.can_island && !c.island && (c.distance_mm - ISLAND_MM) / 2 <= MAX_STAGE_MM {
+            } else if a.can_island && !c.island && !c.continuous && (c.distance_mm - ISLAND_MM) / 2 <= MAX_STAGE_MM {
                 // The island is the editor's to suggest, not to place: where it would bring each stage within reach, say so.
                 "jn-check-crossing-island"
             } else {
@@ -1463,6 +1478,98 @@ mod tests {
         assert!(fast(12_000, false), "21 km/h is over the 20 km/h limit");
         assert!(!fast(12_000, true), "and under the 23 km/h one of a table");
         assert!(fast(15_000, true), "24 km/h is over it");
+    }
+
+    /// How far along an arm at `bearing` (its lateral offset 0) a polygon reaches, from the centre of the junction.
+    fn along(poly: &[Value], bearing: f64) -> (f64, f64) {
+        let d = crate::junction::geometry::dir(bearing);
+        let ts: Vec<f64> = poly.iter().filter_map(|v| Some(v.get(1)?.as_f64()? * d.0 + v.get(2)?.as_f64()? * d.1)).collect();
+        (ts.iter().cloned().fold(f64::MAX, f64::min), ts.iter().cloned().fold(f64::MIN, f64::max))
+    }
+
+    #[test]
+    fn a_continuous_crossing_has_a_ramp_on_each_side_and_a_plain_one_has_none() {
+        let mut j = Junction::new(0);
+        let n = arm_of(&j, 0);
+        // (continuous, setback, width, ramps)
+        let cx = |j: &Junction| {
+            let v = j.view();
+            let c = v.arms.iter().find(|a| a.uid == n).unwrap().crossing.as_ref().unwrap();
+            (c.continuous, c.setback_mm, c.width_mm, c.ramps.clone())
+        };
+        let plain = cx(&j);
+        assert!(plain.3.is_empty() && !plain.0);
+        assert!(j.set_continuous(n, true));
+        let (continuous, setback_mm, width_mm, ramps) = cx(&j);
+        assert!(continuous);
+        assert_eq!(ramps.len(), 2);
+        let mouth = layout(j.current(), 0).unwrap().arms[0].mouth;
+        let (t0, t1) = (mouth + setback_mm as f64, mouth + (setback_mm + width_mm) as f64);
+        let (inner, outer) = (along(&ramps[0], 0.0), along(&ramps[1], 0.0));
+        assert!((inner.0 - (t0 - 2_400.0)).abs() < 2.0 && (inner.1 - t0).abs() < 2.0, "{inner:?} vs {t0}");
+        assert!((outer.0 - t1).abs() < 2.0 && (outer.1 - (t1 + 2_400.0)).abs() < 2.0, "{outer:?} vs {t1}");
+    }
+
+    #[test]
+    fn a_continuous_crossing_on_a_raised_table_draws_no_ramps_of_its_own() {
+        let mut j = Junction::new(0);
+        let n = arm_of(&j, 0);
+        assert!(j.set_continuous(n, true));
+        assert!(j.set_raised(true));
+        let v = j.view();
+        let c = v.arms.iter().find(|a| a.uid == n).unwrap().crossing.as_ref().unwrap();
+        assert!(c.continuous && c.ramps.is_empty(), "the table's own ramps are the steps");
+    }
+
+    #[test]
+    fn a_continuous_crossing_is_not_advised_an_island_it_cannot_have() {
+        let mut street = vec![("sidewalk", 2000)];
+        street.extend((0..5).map(|_| ("travel", 3500)));
+        street.push(("sidewalk", 2000));
+        let mut j = junction_of(&street);
+        let detail = |j: &Junction| en(&j.view().checks.iter().find(|c| c.id == "crossing").unwrap().detail);
+        assert!(detail(&j).contains("refuge island"), "an island would help a 17.5 m crossing: {}", detail(&j));
+        for uid in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_continuous(uid, true));
+        }
+        let said = detail(&j);
+        assert!(said.contains("too far to cross in one go") && !said.contains("refuge island"), "{said}");
+    }
+
+    #[test]
+    fn the_inner_ramp_stops_at_the_mouth_when_the_crossing_is_set_back_least() {
+        let mut j = Junction::new(0);
+        let n = arm_of(&j, 0);
+        assert!(j.set_setback(n, MIN_SETBACK_MM));
+        assert!(j.set_continuous(n, true));
+        let v = j.view();
+        let c = v.arms.iter().find(|a| a.uid == n).unwrap().crossing.as_ref().unwrap();
+        let mouth = layout(j.current(), 0).unwrap().arms[0].mouth;
+        let inner = along(&c.ramps[0], 0.0);
+        assert!((inner.0 - mouth).abs() < 2.0, "{inner:?} from {mouth}");
+    }
+
+    #[test]
+    fn a_corner_beside_only_continuous_crossings_may_turn_at_the_table_speed() {
+        // a 12 m corner turns at 21 km/h: over 20, under 23
+        let fast = |continuous: &[bool; 2], crossing: &[bool; 2]| {
+            let mut j = Junction::new(0);
+            let n = arm_of(&j, 0);
+            assert!(j.set_corner(n, 12_000));
+            let next = j.view().corners.iter().find(|c| c.uid == n).unwrap().next_uid;
+            for (i, uid) in [n, next].into_iter().enumerate() {
+                if !crossing[i] {
+                    assert!(j.set_crossing(uid, false));
+                } else if continuous[i] {
+                    assert!(j.set_continuous(uid, true));
+                }
+            }
+            j.view().corners.iter().find(|c| c.uid == n).unwrap().fast
+        };
+        assert!(fast(&[false, false], &[true, true]), "zebras on both: 20 km/h");
+        assert!(fast(&[true, false], &[true, true]), "one continuous, one zebra: still 20");
+        assert!(!fast(&[true, true], &[true, true]), "both continuous");
+        assert!(!fast(&[true, false], &[true, false]), "one continuous, the other street has no crossing");
     }
 
     fn arm_of(j: &Junction, bearing: i32) -> u32 {

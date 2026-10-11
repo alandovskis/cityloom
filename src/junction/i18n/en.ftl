@@ -78,6 +78,8 @@ jn-rev-crossing = { $arm } crossing: { $change }
 jn-rev-setback = { $arm } crossing set back { $length }
 jn-rev-crossing-width = { $arm } crossing { $length } wide
 jn-rev-island = { $arm } refuge island: { $change }
+jn-rev-continuous = { $arm } continuous sidewalk: { $change }
+jn-rev-continuous-island = { $arm } continuous sidewalk: { $change }; refuge island removed
 jn-rev-bulb-left = { $arm } left bulb-out: { $change }
 jn-rev-bulb-right = { $arm } right bulb-out: { $change }
 jn-rev-lane-to = { $arm } lane { $lane }: to { $dest }
@@ -160,6 +162,7 @@ jn-sel-arm = { $arm }, { $degrees ->
 }
 jn-sel-corner = Corner after { $arm }, { $radius } radius
 jn-sel-crossing = Crossing on { $arm }
+jn-sel-crossing-continuous = Continuous sidewalk across { $arm }
 
 ## The turns table
 jn-turns-caption = Turns allowed. Rows are the street traffic comes from, columns the street it goes to.
@@ -298,6 +301,8 @@ jn-insp-cycle-sub = Round the outside of the roundabout
 jn-insp-cycle-remove = Remove the cycle track
 jn-insp-raised = Raised table
 jn-insp-raised-option = Raise the whole junction to sidewalk height
+jn-insp-continuous = Continuous sidewalk
+jn-insp-continuous-option = Sidewalk runs on across the street
 jn-insp-corner = Corner
 jn-insp-curb-radius = Curb radius
 jn-insp-corner-hint = { $min } to { $max }. Cars turn here at about { $speed } km/h.
@@ -340,6 +345,7 @@ jn-insp-crossing-mark = Mark a crossing
 jn-insp-halfway = Halfway island
 jn-insp-island = Refuge island in the middle
 jn-insp-island-narrow = Refuge island (road too narrow)
+jn-insp-island-continuous = Refuge island (not on a continuous sidewalk)
 jn-insp-shorten = Shorten the crossing
 jn-insp-transit = Transit priority
 jn-insp-bus-lane-in = Bus lane along the way in

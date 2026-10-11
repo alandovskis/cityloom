@@ -78,6 +78,8 @@ jn-rev-crossing = { $arm }, passage pour piétons : { $change }
 jn-rev-setback = { $arm }, passage pour piétons en retrait de { $length }
 jn-rev-crossing-width = { $arm }, passage pour piétons de { $length } de large
 jn-rev-island = { $arm }, îlot refuge : { $change }
+jn-rev-continuous = { $arm }, trottoir continu : { $change }
+jn-rev-continuous-island = { $arm }, trottoir continu : { $change }; îlot refuge retiré
 jn-rev-bulb-left = { $arm }, avancée de trottoir à gauche : { $change }
 jn-rev-bulb-right = { $arm }, avancée de trottoir à droite : { $change }
 jn-rev-lane-to = { $arm }, voie { $lane } : vers { $dest }
@@ -160,6 +162,7 @@ jn-sel-arm = { $arm }, { $degrees ->
 }
 jn-sel-corner = Coin après { $arm }, rayon de { $radius }
 jn-sel-crossing = Passage pour piétons sur { $arm }
+jn-sel-crossing-continuous = Trottoir continu à travers { $arm }
 
 ## Le tableau des virages
 jn-turns-caption = Virages permis. Les lignes sont la rue d’où vient la circulation, les colonnes la rue où elle va.
@@ -298,6 +301,8 @@ jn-insp-cycle-sub = Tout autour du carrefour giratoire, à l’extérieur
 jn-insp-cycle-remove = Retirer la piste cyclable
 jn-insp-raised = Carrefour surélevé
 jn-insp-raised-option = Surélever tout le carrefour au niveau du trottoir
+jn-insp-continuous = Trottoir continu
+jn-insp-continuous-option = Le trottoir se poursuit à travers la rue
 jn-insp-corner = Coin
 jn-insp-curb-radius = Rayon de la bordure
 jn-insp-corner-hint = De { $min } à { $max }. Les voitures tournent ici à environ { $speed }{ " " }km/h.
@@ -340,6 +345,7 @@ jn-insp-crossing-mark = Marquer un passage pour piétons
 jn-insp-halfway = Îlot à mi-traversée
 jn-insp-island = Îlot refuge au centre
 jn-insp-island-narrow = Îlot refuge (chaussée trop étroite)
+jn-insp-island-continuous = Îlot refuge (pas sur un trottoir continu)
 jn-insp-shorten = Raccourcir la traversée
 jn-insp-transit = Priorité au transport en commun
 jn-insp-bus-lane-in = Voie réservée aux autobus en entrée

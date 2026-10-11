@@ -257,6 +257,28 @@ fn the_raised_table_switch_is_worded_in_french_too() {
 }
 
 #[test]
+fn a_continuous_sidewalk_says_why_its_street_has_no_island_switch() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    assert!(panel(&s).contains("Refuge island in the middle"));
+    s.edit(|j| j.set_continuous(e, true));
+    let h = panel(&s);
+    assert!(h.contains("Refuge island (not on a continuous sidewalk)") && !h.contains("Refuge island in the middle"));
+}
+
+#[test]
+fn a_street_with_a_crossing_offers_a_continuous_sidewalk_and_one_without_does_not() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = panel(&s);
+    assert!(h.contains("Continuous sidewalk") && h.contains("Sidewalk runs on across the street"));
+    s.edit(|j| j.set_crossing(e, false));
+    assert!(!panel(&s).contains("Sidewalk runs on across the street"));
+}
+
+#[test]
 fn a_street_s_panel_has_its_lanes_crossing_transit_direction_and_street() {
     let s = shared(0);
     let e = arm(&s, 90);
