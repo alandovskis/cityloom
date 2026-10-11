@@ -47,7 +47,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::shared::atlas::{AREA, LINEAR, LOCAL, MEASURES, Where, group_name_key, name_key, note_key};
+use crate::shared::atlas::{MEASURES, Where, name_key};
 use crate::shared::catalogue::mode_key;
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
@@ -247,78 +247,48 @@ pub fn Revisions(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// The key of what each group of the Atlas toolbox means here, in one line.
-fn group_note_key(group: &str) -> Option<&'static str> {
-    match group {
-        LINEAR => Some("group-note-linear"),
-        LOCAL => Some("group-note-local"),
-        AREA => Some("group-note-area"),
-        _ => None,
+/// The cell of a lane measure this editor models: that it is the street's, the button that arranges
+/// the street as it, or why it cannot be.
+fn street_state(w: SheetWatch, i18n: &I18n, units: Units, code: &'static str, f: &crate::street::model::MeasureView) -> AnyView {
+    if f.present {
+        view! { <b class="m-on">{plain(i18n, "measure-this-street")}</b> }.into_any()
+    } else if f.can_apply {
+        let label = i18n.tr("measure-arrange-label", &Args::new().str("code", code).str("name", plain(i18n, &name_key(code))));
+        view! {
+            <button type="button" class="btn m-apply" aria-label=label on:click=move |_| { w.apply_measure(code); }>
+                {plain(i18n, "measure-arrange")}
+            </button>
+        }
+        .into_any()
+    } else {
+        let why = f.unavailable.as_ref().map_or_else(|| plain(i18n, "measure-will-not-fit"), |why| say(i18n, units, why));
+        view! { <span class="m-not">{why}</span> }.into_any()
     }
 }
 
-/// Every measure of the Transit Priority Atlas toolbox: the lane arrangements can
-/// be recognised in this street and laid out from its width; the rest say where
-/// they are set, or why they are not modelled.
+/// The lane measures of the Transit Priority Atlas that can be laid out in this street, with the
+/// button that arranges the street as each (the left sidebar's section).
 #[component]
-pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
+pub fn TransitPriority(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
-    let mut groups: Vec<&'static str> = Vec::new();
-    for m in &MEASURES {
-        if !groups.contains(&m.group) {
-            groups.push(m.group);
-        }
-    }
     move || {
         let (v, units) = w.now();
         let i18n = w.i18n();
-        groups
+        let rows = MEASURES
             .iter()
-            .map(|group| {
-                let rows = MEASURES
-                    .iter()
-                    .filter(|m| m.group == *group)
-                    .map(|m| {
-                        let found = (m.place == Where::Street).then(|| v.measures.iter().find(|f| f.code == m.code)).flatten();
-                        let state = match (m.place, found) {
-                            (Where::Street, Some(f)) if f.present => view! { <b class="m-on">{plain(&i18n, "measure-this-street")}</b> }.into_any(),
-                            (Where::Street, Some(f)) if f.can_apply => {
-                                let code = m.code;
-                                let label = i18n.tr("measure-arrange-label", &Args::new().str("code", m.code).str("name", plain(&i18n, &name_key(m.code))));
-                                view! {
-                                    <button type="button" class="btn m-apply" aria-label=label on:click=move |_| { w.apply_measure(code); }>
-                                        {plain(&i18n, "measure-arrange")}
-                                    </button>
-                                }
-                                .into_any()
-                            }
-                            (Where::Street, Some(f)) => {
-                                let why = f.unavailable.as_ref().map_or_else(|| plain(&i18n, "measure-will-not-fit"), |why| say(&i18n, units, why));
-                                view! { <span class="m-not">{why}</span> }.into_any()
-                            }
-                            (Where::Junction, _) => plain(&i18n, "measure-set-at-junction").into_any(),
-                            _ => view! { <span class="m-not">{plain(&i18n, "measure-not-modelled")}</span> }.into_any(),
-                        };
-                        let note = (m.place != Where::Street && !m.note.is_empty()).then(|| view! { <small>{plain(&i18n, &note_key(m.code))}</small> });
-                        let problems = found.filter(|f| f.present).map(|f| f.problems.iter().map(|p| view! { <small class="m-problem">{p.say(&i18n)}</small> }).collect_view());
-                        view! {
-                            <tr>
-                                <th scope="row"><span class="dirtag">{m.code}</span>{plain(&i18n, &name_key(m.code))}{note}{problems}</th>
-                                <td>{state}</td>
-                            </tr>
-                        }
-                    })
-                    .collect_view();
-                let note = group_note_key(group).map(|k| plain(&i18n, k));
-                let name = group_name_key(group).map_or_else(|| group.to_string(), |k| plain(&i18n, k));
-                view! {
-                    <tbody>
-                        <tr class="m-group"><th colspan="2" scope="colgroup">{name}{note.map(|note| view! { <small class="m-group-note">{note}</small> })}</th></tr>
-                        {rows}
-                    </tbody>
-                }
+            .filter(|m| m.place == Where::Street)
+            .filter_map(|m| {
+                let f = v.measures.iter().find(|f| f.code == m.code)?;
+                let problems = f.present.then(|| f.problems.iter().map(|p| view! { <small class="m-problem">{p.say(&i18n)}</small> }).collect_view());
+                Some(view! {
+                    <tr>
+                        <th scope="row"><span class="dirtag">{m.code}</span>{plain(&i18n, &name_key(m.code))}{problems}</th>
+                        <td>{street_state(w, &i18n, units, m.code, f)}</td>
+                    </tr>
+                })
             })
-            .collect_view()
+            .collect_view();
+        view! { <tbody>{rows}</tbody> }
     }
 }
 

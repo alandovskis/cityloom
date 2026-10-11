@@ -21,10 +21,13 @@ st-sample-numbers = sample numbers
 st-does-it-work = Does it work?
 st-sample-limits = sample limits
 st-your-changes = Your changes
-st-measures-heading = Transit priority measures
-st-measures-hint-a = Ways to give buses priority, from the
-st-measures-hint-b = Arrange keeps the sidewalks and lays the roadway out again as that measure. You can undo it.
+st-transit-heading = Transit priority
+st-transit-hint = Arrange keeps the sidewalks and lays the roadway out again as that measure. You can undo it.
+st-transit-col-measure = Measure
+st-transit-col-arrange = This street
 st-about-street = About this street
+st-provenance-heading = Where this street came from
+st-no-source = This street was not made from OpenStreetMap.
 
 # The catalogue: kinds of piece, modes and the groups of the add menu (src/shared/catalogue.rs).
 kind-sidewalk = Sidewalk
@@ -96,18 +99,10 @@ failing =
         [one] 1 check fails
        *[other] { $n } checks fail
     }
-group-name-linear = Linear continuous measures
-group-name-local = Localized measures
-group-name-area = Area-wide measures
-group-note-linear = Lane arrangements along the street. Arrange lays the roadway out as that measure.
-group-note-local = Features at one junction. Set them on the intersection page.
-group-note-area = They cover many streets, so they are not modelled here.
 measure-arrange = Arrange
 measure-arrange-label = Arrange the street as { $code } { $name }
 measure-this-street = This street
 measure-will-not-fit = Will not fit
-measure-set-at-junction = Set at a junction
-measure-not-modelled = Not modelled
 
 # The page around the section: heading, window title, title block, history, add menu, clock and welcome (src/street/page.rs).
 header-city-map = City map

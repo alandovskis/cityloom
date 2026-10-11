@@ -208,19 +208,28 @@ pub fn TitleBlock(vm: Rc<StreetVm>) -> impl IntoView {
         <div class="tb-cell tb-wide"><span>{say(w, "block-street")}</span><b id="tb-street">{move || street_title(w)}</b></div>
         <div class="tb-cell"><span>{say(w, "block-width")}</span><b id="tb-row" class="fig">{move || w.units().length_fine_in(w.view().row_mm, w.i18n().locale())}</b></div>
         <div class="tb-cell"><span>{say(w, "block-changes")}</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
-        {move || {
-            let source = w.view().source.clone();
-            (!source.is_empty())
-                .then(|| {
-                    view! {
-                        <div class="tb-cell tb-full"><span>{say(w, "block-osm")}</span><b class="tb-src"><Sources kind="way" refs=source/></b></div>
-                        <div class="tb-cell tb-full">
-                            <span>{say(w, "block-data")}</span>
-                            <b id="tb-state">{move || w.i18n().tr(if w.view().changed { "block-edited" } else { "block-imported" }, &Args::new())}</b>
-                        </div>
-                    }
-                })
-        }}
+    }
+}
+
+/// Where the street came from: the OpenStreetMap ways it was made from, and whether it has
+/// been edited since (the Provenance tab).
+#[component]
+pub fn Provenance(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    move || {
+        let source = w.view().source.clone();
+        if source.is_empty() {
+            return view! { <p class="hint">{say(w, "st-no-source")}</p> }.into_any();
+        }
+        view! {
+            <dl class="prov">
+                <dt>{say(w, "block-osm")}</dt>
+                <dd class="tb-src"><Sources kind="way" refs=source/></dd>
+                <dt>{say(w, "block-data")}</dt>
+                <dd id="tb-state">{move || w.i18n().tr(if w.view().changed { "block-edited" } else { "block-imported" }, &Args::new())}</dd>
+            </dl>
+        }
+        .into_any()
     }
 }
 

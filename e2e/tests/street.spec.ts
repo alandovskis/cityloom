@@ -238,7 +238,9 @@ test.describe("the street editor on a street of the city", () => {
     await expect(width).toHaveValue("2.50");
   });
 
-  test("the notes list the width shared out, the checks, the changes and the transit measures", async ({ page }) => {
+  test("the notes list the width shared out, the checks, the changes and where the street came from", async ({
+    page,
+  }) => {
     await expect(page.locator("#space")).not.toBeEmpty();
     await page.locator("#t-checks").click();
     await expect(page.locator("#checks li").first()).toBeVisible();
@@ -246,13 +248,13 @@ test.describe("the street editor on a street of the city", () => {
     await page.keyboard.press("Delete");
     await page.locator("#t-changes").click();
     await expect(page.locator("#revs tbody tr")).toHaveCount(2);
-    await page.locator("#t-measures").click();
-    await expect(page.locator("#t-measures")).toHaveAttribute("aria-selected", "true");
+    await page.locator("#t-provenance").click();
+    await expect(page.locator("#t-provenance")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#p-provenance")).toBeVisible();
   });
 
   test("an Atlas measure is arranged on a street it suits, and the change can be undone", async ({ page }) => {
-    await page.locator("#t-measures").click();
-    await page.locator(".m-apply:not([disabled])").first().click();
+    await page.locator("#transit-priority .m-apply").first().click();
     await expect(page.locator("#undo")).toBeEnabled();
     await expect(live(page)).not.toBeEmpty();
     await page.locator("#undo").click();
@@ -263,6 +265,27 @@ test.describe("the street editor on a street of the city", () => {
     await page.locator("#account-btn").click();
     await page.locator('[data-unit="ft"]').click();
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /ft of /);
+  });
+
+  test("the left panel is one scroller holding the inspector and the transit priority section", async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await selectFirstPiece(page);
+    const panel = page.locator("#details-panel");
+    await expect(panel.locator(":scope > .panel-body")).toHaveCount(1);
+    const body = panel.locator(":scope > .panel-body");
+    await expect(body.locator("#inspector")).toHaveCount(1);
+    await expect(body.locator("#transit-priority")).toHaveCount(1);
+    await expect(panel.locator(".panel-body")).toHaveCount(1);
+    // The inspector takes the height of its own content, not half of the panel.
+    const inspector = await page
+      .locator("#inspector")
+      .evaluate((el) => ({ box: el.getBoundingClientRect().height, content: el.scrollHeight }));
+    expect(inspector.box).toBeGreaterThanOrEqual(inspector.content - 1);
+    // The width field is reachable: inside the panel, or by scrolling the one scroller.
+    await page.locator("#width").scrollIntoViewIfNeeded();
+    const [field, area] = await Promise.all([page.locator("#width").boundingBox(), body.boundingBox()]);
+    expect(field!.y).toBeGreaterThanOrEqual(area!.y - 1);
+    expect(field!.y + field!.height).toBeLessThanOrEqual(area!.y + area!.height + 1);
   });
 });
 
@@ -291,7 +314,8 @@ test.describe("what the street editor keeps in the city", () => {
 
   test("says which OpenStreetMap ways it was made from, and whether it has been changed", async ({ page }) => {
     await openStreet(page);
-    const block = page.locator("#title-block");
+    await page.locator("#t-provenance").click();
+    const block = page.locator("#p-provenance");
     await expect(block.locator('a[href^="https://www.openstreetmap.org/way/"]').first()).toHaveText(
       /^way \d+( v\d+)?$/,
     );
@@ -303,6 +327,7 @@ test.describe("what the street editor keeps in the city", () => {
     await width.press("Enter");
     await expect(block.locator("#tb-state")).toHaveText("Edited");
     await page.reload();
+    await page.locator("#t-provenance").click();
     await expect(block.locator("#tb-state")).toHaveText("Edited");
   });
 

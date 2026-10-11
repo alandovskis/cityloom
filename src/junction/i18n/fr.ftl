@@ -217,10 +217,6 @@ jn-check-passes = { " " }: réussite
 jn-check-fails = { " " }: échec
 # Le détail d’une vérification avec la longueur dont il parle : « Plus longue traversée d’un seul coup : 11,4 m ».
 jn-check-length = { $detail } : { $length }
-jn-measure-in-use = Utilisée sur { $arms }
-jn-measure-on-street = Se règle sur une rue
-jn-measure-street-editor = Éditeur de rue
-jn-measure-not-modelled = Non modélisée
 jn-col-step = Étape
 jn-col-what-changed = Ce qui a changé
 
@@ -253,19 +249,16 @@ jn-page-key-undo = annuler
 jn-page-details-panel = Rue, coin ou passage pour piétons sélectionné
 jn-page-plan-key = Légende des bandes
 jn-page-tab-streets = Rues
-jn-page-tab-measures = Mesures
 jn-page-across = Traverser
 jn-page-turns = Virages permis
 jn-page-turns-hint = Chaque ligne est une rue d’où vient la circulation. Appuyez sur une case pour permettre ou interdire ce virage.
 jn-page-conflicts = Où les trajectoires se rencontrent
 jn-page-does-it-work = Est-ce que ça fonctionne?
 jn-page-your-changes = Vos modifications
-jn-page-measures = Mesures de priorité pour le transport en commun
-# Autour d’un lien vers le Transit Priority Atlas, dont le nom n’est pas traduit : « La boîte à outils du Transit Priority Atlas, et… ».
-jn-page-measures-hint-a = La boîte à outils du
-jn-page-measures-hint-b = , et l’endroit où CityLoom modélise chaque mesure.
 jn-page-fine-print = Chiffres et limites d’exemple pour l’instant, pas de vraies mesures.
 jn-page-about = À propos de cette jonction
+jn-provenance-heading = D’où vient cette jonction
+jn-no-source = Cette jonction ne vient pas d’OpenStreetMap.
 
 ## La page d’une jonction qui ne peut pas être dessinée (src/junction/page.rs : Stuck)
 jn-stuck-title = Cette jonction ne peut pas être dessinée
