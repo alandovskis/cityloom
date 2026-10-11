@@ -469,11 +469,16 @@ a.btn {
   margin-top: 10px;
   font-size: 13px;
 }
-.menu-foot .version {
+.site-foot {
+  position: fixed;
+  left: var(--pad);
+  bottom: 0;
+  z-index: 5;
+  height: var(--pad);
   color: var(--ink-3);
-}
-.menu-foot .version:not(:empty)::before {
-  content: "\00b7  ";
+  font-size: 12px;
+  line-height: var(--pad);
+  pointer-events: none;
 }
 
 /* ---- the panels ------------------------------------------------------------- */
@@ -752,12 +757,13 @@ a.btn {
   display: none;
 }
 /* MapLibre's corners are the map's, which runs under the floating panels: the scale goes beside the left
-   panel an editor has (and at the edge when there is none), and the status bar leaves room for it (`.statusbar`). The
+   panel an editor has (and at the edge when there is none), above the footer, and the status bar leaves room for it (`.statusbar`). The
    attribution, which opens leftwards into a line of text, stands on the zoom buttons (`.zoom-dock`: three
    44px buttons and two 1px rules), its right edge in line with theirs, clear of the status bar and the Notes.
    Each control keeps MapLibre's own 10px margin. */
 .drawing .maplibregl-ctrl-bottom-left {
   left: var(--lw);
+  bottom: var(--pad);
 }
 .drawing .maplibregl-ctrl-bottom-right {
   right: calc(var(--rw) + var(--pad) - 10px);
@@ -1165,6 +1171,13 @@ a.btn {
 
 /* Under 900px the panels stack below the map instead of floating over it. */
 @media (max-width: 899px) {
+  /* The page scrolls here, so the footer ends it instead of floating over it. */
+  .site-foot {
+    order: 4;
+    position: static;
+    height: auto;
+    padding: 4px var(--pad) 12px;
+  }
   :root {
     --bar-h: auto;
     --lw: 0px;

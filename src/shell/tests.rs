@@ -66,7 +66,7 @@ fn the_version_label_says_the_crate_version_in_both_languages() {
 }
 
 #[test]
-fn every_page_with_a_menu_has_a_place_for_the_version() {
+fn every_app_page_shows_the_version_in_its_footer() {
     for (name, html) in [
         ("index", include_str!("../../web/index.html")),
         ("map", include_str!("../../web/map.html")),
@@ -74,5 +74,7 @@ fn every_page_with_a_menu_has_a_place_for_the_version() {
         ("intersection", include_str!("../../web/intersection.html")),
     ] {
         assert_eq!(html.matches("data-version").count(), 1, "{name}.html");
+        let footer = html.split("<footer").nth(1).unwrap_or_else(|| panic!("{name}.html has no footer")).split("</footer>").next().unwrap();
+        assert!(footer.contains("data-version"), "{name}.html: the version is not in the footer");
     }
 }

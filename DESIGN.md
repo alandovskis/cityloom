@@ -403,5 +403,5 @@ A page to read (credits) is one white 16px card, 720px wide, on the land, with a
 - **Don't** reintroduce the old `sheet`, `blue-pencil`, `warning` and `mark-1..5` tokens; they no longer exist in the build.
 
 ### Recorded, not canonized
-The menu's foot carries the Credits link and the product's version (`data-version`, from `Cargo.toml`), in `ink-3` 13px. The `#000` in the editors' mask gradient is a mask value, not a colour on screen. The credits headline keeps the 1.1 headline leading above; the detector's tight-leading note on `credits.html` could not be traced to any other text (every other line there computes at 1.3 or more).
+The footer (`.site-foot`) carries the product's version (`data-version`, from `Cargo.toml`), in `ink-3` 12px: fixed in the 16px gutter at the bottom left on wide screens (the map's scale stands above it), and the last thing on the page under 900px. The `#000` in the editors' mask gradient is a mask value, not a colour on screen. The credits headline keeps the 1.1 headline leading above; the detector's tight-leading note on `credits.html` could not be traced to any other text (every other line there computes at 1.3 or more).
 The surface briefs quote an older land value (#e9edf0); the build's `land` (#e2e7ec) governs.
