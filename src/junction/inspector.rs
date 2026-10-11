@@ -830,6 +830,28 @@ fn choice(
     }
 }
 
+/// The switch for a bike box ahead of the cars' stop line; off, and saying why, where the street cannot have one.
+fn bike_box_section(w: Watch, uid: u32) -> impl IntoView {
+    let can = move || w.arm(uid, |a| a.can_bike_box).unwrap_or(false);
+    let on = move || w.arm(uid, |a| a.bike_box.is_some()).unwrap_or(false);
+    section(
+        w,
+        "i-h-bike-box",
+        "jn-insp-bike-box",
+        view! {
+            <ul class="opts">
+                {option_btn(
+                    on,
+                    move || !can(),
+                    ().into_any(),
+                    move || w.tr(if can() { "jn-insp-bike-box-option" } else { "jn-insp-bike-box-unavailable" }),
+                    move || { w.edit(|j| j.set_bike_box(uid, !on())); },
+                )}
+            </ul>
+        },
+    )
+}
+
 fn transit_section(w: Watch, uid: u32) -> impl IntoView {
     let bus_lane = move || w.arm(uid, |a| a.transit.bus_lane).unwrap_or(false);
     let filter = move || w.arm(uid, |a| a.transit.filter).unwrap_or(false);
@@ -961,6 +983,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         </section>
         {crossing_section(w, uid)}
         {transit_section(w, uid)}
+        {bike_box_section(w, uid)}
         {num_field(
             w,
             direction,
