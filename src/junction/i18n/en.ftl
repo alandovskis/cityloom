@@ -67,7 +67,7 @@ jn-refusal-bulb-no-parking = There is no parking on that side to give up.
 jn-refusal-does-not-fit = That change does not fit.
 jn-refusal-raised-roundabout = A roundabout cannot be a raised table.
 jn-refusal-bike-box-not-here = A bike box needs a bike lane on a street where cars enter and stop, at a junction that is not a roundabout.
-jn-refusal-protected-not-here = A protected corner needs a bike lane beside the curb of each of the two streets, a real corner and no roundabout.
+jn-refusal-protected-not-here = A protected corner needs a bike lane at the curb of each of the two streets, a real corner, room for the island and no roundabout.
 
 ## What each change was, in the history
 jn-word-add = add
@@ -360,11 +360,12 @@ jn-insp-bike-box-roundabout = Bike box (not at a roundabout)
 jn-insp-bike-box-no-lane = Bike box (needs a bike lane on this street)
 jn-insp-bike-box-no-entry = Bike box (needs a lane that cars enter by)
 jn-insp-bike-box-free = Bike box (cars do not stop on this street)
-jn-insp-protected-roundabout = Protected corner (not at a roundabout)
-jn-insp-protected-straight = Protected corner (this corner is a straight line)
-jn-insp-protected-no-lane = Protected corner (needs a bike lane beside the curb of both streets)
 jn-insp-protected = Protected corner
 jn-insp-protected-option = Bike track round a corner island
+jn-insp-protected-roundabout = Protected corner (not at a roundabout)
+jn-insp-protected-straight = Protected corner (this corner is a straight line)
+jn-insp-protected-no-lane = Protected corner (needs a bike lane at the curb of both streets)
+jn-insp-protected-no-room = Protected corner (the street is too narrow for the island)
 jn-insp-shorten = Shorten the crossing
 jn-insp-transit = Transit priority
 jn-insp-bus-lane-in = Bus lane along the way in

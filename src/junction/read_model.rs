@@ -54,8 +54,6 @@ const WEDGE_MM: f64 = 3_000.0;
 const CORE_BIKE_MM: f64 = 5_000.0;
 /// How deep a bike box is.
 const BIKE_BOX_MM: f64 = 3_000.0;
-/// How deep a corner island is.
-const PROTECTED_ISLAND_MM: f64 = 2_000.0;
 /// Synthetic thresholds for the checks.
 const MAX_STAGE_MM: i32 = 15_000;
 const MAX_TURN_KMH: f64 = 20.0;
@@ -712,12 +710,21 @@ impl Junction {
                 let (left_protected, right_protected) = (protected_at[(i + n_arms - 1) % n_arms], protected_at[i]);
                 for pi in l.prof.outer_bike() {
                     let (on_left, on_right) = (sides[0] == Some(pi), sides[1] == Some(pi));
-                    // The corner's track replaces the stub on the sides it runs round.
-                    if (!on_left || left_protected) && (!on_right || right_protected) {
-                        continue;
-                    }
                     let p = &l.prof.pieces[pi];
                     let (x0, x1) = (l.lat(off, p.x_mm), l.lat(off, p.x_mm + p.width_mm));
+                    // The corner's track replaces the stub on the sides it runs round, but the lane still has to reach
+                    // the track: where the track starts nearer the middle than the mouth, a lead-in joins them.
+                    if (!on_left || left_protected) && (!on_right || right_protected) {
+                        let heading = dir(l.bearing);
+                        let along = |p: P| p.0 * heading.0 + p.1 * heading.1;
+                        let left = lay.corners[(i + n_arms - 1) % n_arms].fillet.as_ref().map(|f| along(f.b));
+                        let right = lay.corners[i].fillet.as_ref().map(|f| along(f.a));
+                        let start = [left.filter(|_| on_left), right.filter(|_| on_right)].into_iter().flatten().fold(f64::MAX, f64::min);
+                        if start < l.strip0 - 1.0 {
+                            core_bike.push(poly(&strip(l.bearing, x0, x1, start, l.strip0)));
+                        }
+                        continue;
+                    }
                     core_bike.push(poly(&strip(l.bearing, x0, x1, (l.strip0 - CORE_BIKE_MM).max(0.0), l.strip0)));
                 }
             }
@@ -894,13 +901,13 @@ impl Junction {
             };
             let protected = match (&c.fillet, protected_at[c.a]) {
                 (Some(f), true) => {
-                    let sides = (la.prof.outer_bike_sides()[1], lb.prof.outer_bike_sides()[0]);
+                    let sides = (la.prof.curb_bike_sides()[1], lb.prof.curb_bike_sides()[0]);
                     let width = |prof: &Profile, i: Option<usize>| i.map_or(0, |i| prof.pieces[i].width_mm) as f64;
                     let w = width(&la.prof, sides.0).min(width(&lb.prof, sides.1));
                     let sweep = cross(sub(f.a, f.o), sub(f.b, f.o)) > 0.0;
                     // The point on the ray from the fillet's centre through `p`, at radius `r`.
                     let on = |p: P, r: f64| add(f.o, scale(sub(p, f.o), r / f.r));
-                    let (r1, r2) = (f.r + w, f.r + w + PROTECTED_ISLAND_MM);
+                    let (r1, r2) = (f.r + w, f.r + w + protected_island_mm(&la.prof, &lb.prof) as f64);
                     let (a1, b1, a2, b2) = (on(f.a, r1), on(f.b, r1), on(f.a, r2), on(f.b, r2));
                     Some(ProtectedView {
                         track: vec![m(f.a), arc(f.r, false, sweep, f.b), l_(b1), arc(r1, false, !sweep, a1), z()],
@@ -1724,6 +1731,28 @@ mod tests {
     }
 
     #[test]
+    fn the_island_leaves_the_street_a_lane_and_the_arcs_turn_the_way_the_curb_does() {
+        let mut j = junction_of(&BIKED);
+        for uid in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_protected(uid, true));
+        }
+        let v = j.view();
+        let lay = layout(j.current(), 0).unwrap();
+        for (i, c) in v.corners.iter().enumerate() {
+            let p = c.protected.as_ref().expect("protected");
+            let f = lay.corners[i].fillet.as_ref().unwrap();
+            let d = |q: &P| ((q.0 - f.o.0).powi(2) + (q.1 - f.o.1).powi(2)).sqrt();
+            // 9.4 m of road, 1.5 m lanes at the curbs, 3 m kept clear: the island is at most (9.4 - 3) / 2 - 1.5 = 1.7 m deep
+            let reach = ends(&p.island).iter().map(d).fold(0.0, f64::max) - f.r - 1_500.0;
+            assert!((reach - 1_700.0).abs() < 2.0, "corner {i}: the island is {reach} deep");
+            // the arcs sweep the way the curb's arc does, so the crescents lie on the carriageway side of it
+            let sweep = |path: &[Value]| path.iter().find(|v| v[0] == "A").map(|v| v[3].clone());
+            assert_eq!(sweep(&p.track), sweep(&c.curb), "corner {i}");
+            assert_eq!(sweep(&p.island), sweep(&c.curb), "corner {i}");
+        }
+    }
+
+    #[test]
     fn the_track_follows_the_curb_on_a_five_way_s_obtuse_and_acute_corners_too() {
         use crate::shared::catalogue::{Side, StreetClass, kind_index};
         use crate::street::model::{Piece, Street};
@@ -1778,6 +1807,28 @@ mod tests {
         let next = v.corners.iter().find(|c| c.uid == n).unwrap().next_uid;
         assert_eq!(v.arms.iter().find(|a| a.uid == n).unwrap().core_bike.len(), 1);
         assert_eq!(v.arms.iter().find(|a| a.uid == next).unwrap().core_bike.len(), 1);
+    }
+
+    #[test]
+    fn the_bike_lane_reaches_the_track_where_the_two_corners_of_a_street_meet_it_at_different_distances() {
+        let mut j = junction_of(&BIKED);
+        let n = arm_of(&j, 0);
+        let before = arm_of(&j, 270);
+        // the corner before arm 0 is wide and sets its mouth back; arm 0's own corner is tight
+        assert!(j.set_corner(before, 9_000));
+        assert!(j.set_corner(n, 3_000));
+        assert!(j.set_protected(n, true));
+        let lay = layout(j.current(), 0).unwrap();
+        let mouth = lay.arms[0].mouth;
+        let v = j.view();
+        let arm = v.arms.iter().find(|a| a.uid == n).unwrap();
+        assert_eq!(arm.core_bike.len(), 2, "the left stub, and a lead-in where the right one was");
+        let f = lay.corners[0].fillet.as_ref().unwrap();
+        let d = crate::junction::geometry::dir(0.0);
+        let tangent = f.a.0 * d.0 + f.a.1 * d.1;
+        assert!(mouth - tangent > 500.0, "the corners differ: tangent {tangent}, mouth {mouth}");
+        let lead = arm.core_bike.iter().map(|s| along(s, 0.0)).find(|(lo, _)| (lo - tangent).abs() < 2.0).expect("a lead-in from the tangent point");
+        assert!((lead.1 - mouth).abs() < 2.0, "to the arm's lane at the mouth: {lead:?}");
     }
 
     #[test]

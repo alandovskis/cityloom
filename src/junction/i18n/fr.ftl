@@ -67,7 +67,7 @@ jn-refusal-bulb-no-parking = Il n’y a pas de stationnement à céder de ce cô
 jn-refusal-does-not-fit = Cette modification ne convient pas.
 jn-refusal-raised-roundabout = Un carrefour giratoire ne peut pas être surélevé.
 jn-refusal-bike-box-not-here = Un sas cyclable exige une piste cyclable sur une rue où les voitures entrent et s’arrêtent, à un carrefour qui n’est pas giratoire.
-jn-refusal-protected-not-here = Un coin protégé exige une piste cyclable le long du trottoir de chacune des deux rues, un vrai coin et un carrefour qui n’est pas giratoire.
+jn-refusal-protected-not-here = Un coin protégé exige une piste cyclable le long de la bordure de chacune des deux rues, un vrai coin, assez de place pour l’îlot et pas de carrefour giratoire.
 
 ## Ce qu’a été chaque modification, dans l’historique
 jn-word-add = ajout
@@ -360,11 +360,12 @@ jn-insp-bike-box-roundabout = Sas cyclable (pas à un carrefour giratoire)
 jn-insp-bike-box-no-lane = Sas cyclable (exige une piste cyclable sur cette rue)
 jn-insp-bike-box-no-entry = Sas cyclable (exige une voie d’entrée pour les voitures)
 jn-insp-bike-box-free = Sas cyclable (les voitures ne s’arrêtent pas sur cette rue)
-jn-insp-protected-roundabout = Coin protégé (pas à un carrefour giratoire)
-jn-insp-protected-straight = Coin protégé (ce coin est une ligne droite)
-jn-insp-protected-no-lane = Coin protégé (exige une piste cyclable le long du trottoir des deux rues)
 jn-insp-protected = Coin protégé
 jn-insp-protected-option = Piste cyclable autour d’un îlot de coin
+jn-insp-protected-roundabout = Coin protégé (pas à un carrefour giratoire)
+jn-insp-protected-straight = Coin protégé (ce coin est une ligne droite)
+jn-insp-protected-no-lane = Coin protégé (exige une piste cyclable le long de la bordure des deux rues)
+jn-insp-protected-no-room = Coin protégé (la rue est trop étroite pour l’îlot)
 jn-insp-shorten = Raccourcir la traversée
 jn-insp-transit = Priorité au transport en commun
 jn-insp-bus-lane-in = Voie réservée aux autobus en entrée

@@ -276,14 +276,14 @@ fn a_corner_between_streets_with_bike_lanes_offers_a_protected_corner_and_others
     s.edit(|j| j.select(Target::Corner(uid)));
     let h = panel(&s);
     assert!(h.contains("Protected corner") && h.contains("Bike track round a corner island"));
-    assert!(!h.contains("needs a bike lane beside the curb"));
+    assert!(!h.contains("needs a bike lane at the curb"));
     s.edit(|j| j.set_protected(uid, true));
     assert!(panel(&s).contains("Bike track round a corner island"));
 
     let plain = shared(0);
     let n = arm(&plain, 0);
     plain.edit(|j| j.select(Target::Corner(n)));
-    assert!(panel(&plain).contains("Protected corner (needs a bike lane beside the curb of both streets)"));
+    assert!(panel(&plain).contains("Protected corner (needs a bike lane at the curb of both streets)"));
 }
 
 #[test]

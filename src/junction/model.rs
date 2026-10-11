@@ -421,6 +421,13 @@ impl Profile {
         [bike(self.pieces.iter().position(moving)), bike(self.pieces.iter().rposition(moving))]
     }
 
+    /// The bike lane that touches the left and the right curb (indexes into `pieces`): the first or last piece of the
+    /// carriageway itself, so a bike lane outside a parking lane is not one.
+    pub fn curb_bike_sides(&self) -> [Option<usize>; 2] {
+        let bike = |i: Option<usize>| i.filter(|&i| KINDS[self.pieces[i].kind].id == "bike");
+        [bike(self.pieces.iter().position(|p| is_roadway(p.kind))), bike(self.pieces.iter().rposition(|p| is_roadway(p.kind)))]
+    }
+
     /// The indexes into `pieces` of the bike lanes beside the carriageway's edges.
     pub fn outer_bike(&self) -> Vec<usize> {
         let [left, right] = self.outer_bike_sides();
@@ -462,6 +469,22 @@ pub enum ProtectedBlocker {
     Roundabout,
     Straight,
     NoLane,
+    NoRoom,
+}
+
+/// How deep a corner island is, at most.
+pub const PROTECTED_ISLAND_MM: i32 = 2_000;
+/// The least a corner island is worth drawing.
+pub const MIN_PROTECTED_ISLAND_MM: i32 = 500;
+/// What a street keeps clear between the corner islands on its two sides: a lane.
+pub const PROTECTED_CLEAR_MM: i32 = 3_000;
+
+/// How deep the corner island of the corner between a street reading `pa` and the next reading `pb` can be: the track
+/// and the island take their width from each curb of a street, and a lane must stay clear between the two sides.
+pub fn protected_island_mm(pa: &Profile, pb: &Profile) -> i32 {
+    let lane = |p: &Profile| p.curb_bike_sides().into_iter().flatten().map(|i| p.pieces[i].width_mm).max().unwrap_or(0);
+    let room = |p: &Profile| (p.road_mm() - PROTECTED_CLEAR_MM) / 2 - lane(p);
+    room(pa).min(room(pb)).min(PROTECTED_ISLAND_MM)
 }
 
 impl ProtectedBlocker {
@@ -471,21 +494,24 @@ impl ProtectedBlocker {
             ProtectedBlocker::Roundabout => "jn-insp-protected-roundabout",
             ProtectedBlocker::Straight => "jn-insp-protected-straight",
             ProtectedBlocker::NoLane => "jn-insp-protected-no-lane",
+            ProtectedBlocker::NoRoom => "jn-insp-protected-no-room",
         }
     }
 }
 
 /// What stops the corner between arm `i` (street `pa`) and the next arm (street `pb`) from being protected: it needs a
-/// real corner (a 180 degree gap has none to follow), a bike lane beside the right curb of arm `i` and one beside the
-/// left curb of the next arm (the two curbs the corner joins), and a junction that is not a roundabout.
+/// real corner (a 180 degree gap has none to follow), a bike lane at the right curb of arm `i` and one at the left curb
+/// of the next arm (the two curbs the corner joins), room for the island, and a junction that is not a roundabout.
 pub fn protected_blocker(s: &State, i: usize, pa: &Profile, pb: &Profile) -> Option<ProtectedBlocker> {
     let next = (i + 1) % s.arms.len();
     if s.control == ROUNDABOUT {
         Some(ProtectedBlocker::Roundabout)
-    } else if gap(s.arms[i].bearing, s.arms[next].bearing) as i32 == 180 {
+    } else if gap(s.arms[i].bearing, s.arms[next].bearing) == 180 {
         Some(ProtectedBlocker::Straight)
-    } else if pa.outer_bike_sides()[1].is_none() || pb.outer_bike_sides()[0].is_none() {
+    } else if pa.curb_bike_sides()[1].is_none() || pb.curb_bike_sides()[0].is_none() {
         Some(ProtectedBlocker::NoLane)
+    } else if protected_island_mm(pa, pb) < MIN_PROTECTED_ISLAND_MM {
+        Some(ProtectedBlocker::NoRoom)
     } else {
         None
     }
@@ -2361,6 +2387,50 @@ mod tests {
         assert_eq!(sides(&[("sidewalk", 2000), ("parking", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]), [Some(2), None]);
         assert_eq!(sides(&[("sidewalk", 2000), ("bike", 2500), ("sidewalk", 2000)]), [Some(1), Some(1)]);
         assert_eq!(junction_of(&BIKED).current().arms[0].profile(0).outer_bike(), vec![1, 4]);
+    }
+
+    #[test]
+    fn the_bike_lane_a_protected_corner_follows_touches_the_curb() {
+        let sides = |pieces: &[(&str, i32)]| junction_of(pieces).current().arms[0].profile(0).curb_bike_sides();
+        assert_eq!(sides(&BIKED), [Some(1), Some(4)]);
+        assert_eq!(
+            sides(&[
+                ("sidewalk", 2000),
+                ("parking", 2000),
+                ("bike", 1500),
+                ("travel", 3200),
+                ("travel", 3200),
+                ("bike", 1500),
+                ("parking", 2000),
+                ("sidewalk", 2000)
+            ]),
+            [None, None]
+        );
+        assert_eq!(sides(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]), [Some(1), None]);
+    }
+
+    #[test]
+    fn a_corner_needs_a_lane_at_the_curb_and_room_for_the_island() {
+        let mut parked = junction_of(&[
+            ("sidewalk", 2000),
+            ("parking", 2000),
+            ("bike", 1500),
+            ("travel", 3200),
+            ("travel", 3200),
+            ("bike", 1500),
+            ("parking", 2000),
+            ("sidewalk", 2000),
+        ]);
+        let a = parked.current().arms[0].uid;
+        assert!(!parked.set_protected(a, true), "the lane is outside parking, not at the curb");
+        // a one-way 6.2 m street: the track and an island on each side would leave less than a lane
+        let mut narrow = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+        let a = narrow.current().arms[0].uid;
+        assert!(!narrow.set_protected(a, true));
+        assert_eq!(narrow.refusal(), Some(Refusal::ProtectedNotHere));
+        let mut wide = junction_of(&BIKED);
+        let a = wide.current().arms[0].uid;
+        assert!(wide.set_protected(a, true));
     }
 
     #[test]
