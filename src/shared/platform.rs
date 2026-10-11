@@ -189,7 +189,7 @@ extern "C" {
     #[wasm_bindgen(method, js_name = setPlaces)]
     fn set_places(this: &Basemap, layers: &str, data: &str);
     #[wasm_bindgen(method)]
-    fn fit(this: &Basemap, west: f64, south: f64, east: f64, north: f64, top: f64, right: f64, bottom: f64, left: f64);
+    fn fit(this: &Basemap, bounds: &[f64], insets: &[f64]);
     #[wasm_bindgen(method, js_name = zoomBy)]
     fn zoom_by(this: &Basemap, factor: f64);
     #[wasm_bindgen(method, js_name = panBy)]
@@ -215,8 +215,8 @@ impl crate::shared::ports::Mapper for BrowserMapper {
     fn set_places(&self, layers: &str, data: &str) {
         self.0.set_places(layers, data);
     }
-    fn fit(&self, [w, s, e, n]: [f64; 4], [top, right, bottom, left]: [f64; 4]) {
-        self.0.fit(w, s, e, n, top, right, bottom, left);
+    fn fit(&self, bounds: [f64; 4], insets: [f64; 4]) {
+        self.0.fit(&bounds, &insets);
     }
     fn zoom_by(&self, factor: f64) {
         self.0.zoom_by(factor);
