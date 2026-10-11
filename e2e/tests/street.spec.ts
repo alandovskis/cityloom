@@ -266,6 +266,27 @@ test.describe("the street editor on a street of the city", () => {
     await page.locator('[data-unit="ft"]').click();
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /ft of /);
   });
+
+  test("the left panel is one scroller holding the inspector and the transit priority section", async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await selectFirstPiece(page);
+    const panel = page.locator("#details-panel");
+    await expect(panel.locator(":scope > .panel-body")).toHaveCount(1);
+    const body = panel.locator(":scope > .panel-body");
+    await expect(body.locator("#inspector")).toHaveCount(1);
+    await expect(body.locator("#transit-priority")).toHaveCount(1);
+    await expect(panel.locator(".panel-body")).toHaveCount(1);
+    // The inspector takes the height of its own content, not half of the panel.
+    const inspector = await page
+      .locator("#inspector")
+      .evaluate((el) => ({ box: el.getBoundingClientRect().height, content: el.scrollHeight }));
+    expect(inspector.box).toBeGreaterThanOrEqual(inspector.content - 1);
+    // The width field is reachable: inside the panel, or by scrolling the one scroller.
+    await page.locator("#width").scrollIntoViewIfNeeded();
+    const [field, area] = await Promise.all([page.locator("#width").boundingBox(), body.boundingBox()]);
+    expect(field!.y).toBeGreaterThanOrEqual(area!.y - 1);
+    expect(field!.y + field!.height).toBeLessThanOrEqual(area!.y + area!.height + 1);
+  });
 });
 
 test.describe("what the street editor keeps in the city", () => {

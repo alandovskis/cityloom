@@ -1023,6 +1023,10 @@ svg pattern circle {
   gap: 18px;
   min-width: 0;
 }
+/* The transit priority section follows the inspector in the same scroller. */
+.inspector + section {
+  margin-top: 18px;
+}
 .insp-empty {
   margin: 0;
   color: var(--ink-2);
