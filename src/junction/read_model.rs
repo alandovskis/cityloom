@@ -5,8 +5,16 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::junction::geometry::*;
-use crate::junction::model::*;
+use crate::junction::geometry::{
+    P, add, arc, at, cross, dir, dist, fillet_setback, gap, l, m, meet, on_circle, poly, polylines_cross, quad, ring_arc, sample_quad, scale, strip, sub, z,
+};
+use crate::junction::model::{
+    ALL_WAY_STOP, APPROACHES, ARM_LENGTH_MM, Arm, BUS_LANE_MM, BikeBoxBlocker, CONTROLS, FILTER_CODE, GATE_SIGNAL, GATE_YIELD, ISLAND_MIN_ROAD_MM, ISLAND_MM,
+    Junction, LEFT, MAX_RING_MM, MIN_ARMS, PRIORITY, Profile, ProtectedBlocker, Q_CURB, Q_OFFSET, Q_VIRTUAL, RIGHT, RING_STEP_MM, ROUNDABOUT, RULE_AROUND,
+    RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH, TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker,
+    blocked, classes_of, protected_blocker, protected_island_mm, turn_class,
+};
+
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
@@ -1409,6 +1417,7 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::junction::model::{DEFAULT_SETBACK_MM, JUNCTION_SAMPLES, MIN_SETBACK_MM, junction_of};
     use crate::shared::testing::{en, fr};
 
     #[test]
