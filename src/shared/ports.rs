@@ -16,6 +16,8 @@ pub trait Announcer {
 pub trait Storage {
     fn recall(&self, key: &str) -> Option<String>;
     fn remember(&self, key: &str, value: &str) -> bool;
+    /// Every key the storage holds.
+    fn keys(&self) -> Vec<String>;
 }
 
 /// Runs something after a delay, which can be called off.
@@ -159,6 +161,10 @@ impl Storage for MemoryStorage {
         }
         self.kept.borrow_mut().insert(key.to_string(), value.to_string());
         true
+    }
+
+    fn keys(&self) -> Vec<String> {
+        self.kept.borrow().keys().cloned().collect()
     }
 }
 
@@ -447,6 +453,17 @@ mod tests {
         s.blocked(true);
         assert!(!s.remember("k", "w"));
         assert_eq!(s.recall("k").as_deref(), Some("v"));
+    }
+
+    #[test]
+    fn a_storage_lists_the_keys_it_holds() {
+        let s = MemoryStorage::default();
+        assert!(s.keys().is_empty());
+        s.remember("a", "1");
+        s.remember("b:2", "2");
+        let mut keys = s.keys();
+        keys.sort();
+        assert_eq!(keys, ["a", "b:2"]);
     }
 
     #[test]

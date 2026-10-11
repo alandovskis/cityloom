@@ -26,6 +26,10 @@ impl Storage for BrowserStorage {
     fn remember(&self, key: &str, value: &str) -> bool {
         store::remember(key, value)
     }
+
+    fn keys(&self) -> Vec<String> {
+        store::keys()
+    }
 }
 
 /// Timers, kept by id so that they can be called off.
