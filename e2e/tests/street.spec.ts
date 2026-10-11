@@ -251,8 +251,7 @@ test.describe("the street editor on a street of the city", () => {
   });
 
   test("an Atlas measure is arranged on a street it suits, and the change can be undone", async ({ page }) => {
-    await page.locator("#t-measures").click();
-    await page.locator(".m-apply:not([disabled])").first().click();
+    await page.locator("#transit-priority .m-apply").first().click();
     await expect(page.locator("#undo")).toBeEnabled();
     await expect(live(page)).not.toBeEmpty();
     await page.locator("#undo").click();

@@ -86,6 +86,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("cap", view! { <notes::Capacity vm=vm.clone()/> }.into_any());
     mount("checks", view! { <notes::Checks vm=vm.clone()/> }.into_any());
     mount("revs", view! { <notes::Revisions vm=vm.clone()/> }.into_any());
+    mount("transit-priority", view! { <notes::TransitPriority vm=vm.clone()/> }.into_any());
     mount("measures", view! { <notes::Measures vm=vm/> }.into_any());
 }
 

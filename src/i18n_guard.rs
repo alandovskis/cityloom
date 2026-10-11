@@ -379,6 +379,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("cityloom-welcome", "a storage key"),
     ("notes-toggle", "the id of an element of the page"),
     ("inspector-toggle", "the id of an element of the page"),
+    ("transit-priority", "the id of the left panel's table of lane measures, which the street page mounts into"),
     ("t-checks", "the id of a tab of the page"),
     ("i-h-dir", "the id of an inspector heading"),
     ("i-h-curb", "the id of an inspector heading"),

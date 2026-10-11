@@ -355,6 +355,29 @@ fn the_measures_offer_to_arrange_what_fits_and_say_what_is_present_or_why_not() 
 }
 
 #[test]
+fn the_transit_priority_section_offers_the_lane_measures_and_nothing_else() {
+    let s = street_shared(1);
+    let h = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
+    assert!(count(&h, "class=\"btn m-apply\"") >= 10);
+    assert!(h.contains("Arrange the street as B1 Center-Running Transit Lanes"));
+    assert!(h.contains("Freeways only"));
+    assert!(!h.contains("Set at a junction") && !h.contains("Not modelled"), "only this editor's measures: {h}");
+    assert!(s.edit(|e| e.apply_measure("B3")));
+    let h = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
+    assert!(h.contains("This street") && !h.contains("Arrange the street as B3"));
+}
+
+#[test]
+fn the_transit_priority_section_is_in_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let h = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
+    assert!(h.contains("Réorganiser") && !h.contains(">Arrange<"), "{h}");
+    assert!(!h.contains("Set at a junction") && !h.contains("Non modélisé"), "{h}");
+    let i18n = s.i18n().clone();
+    assert_eq!(i18n.tr_now("st-transit-heading", &Default::default()), "Priorité au transport en commun");
+}
+
+#[test]
 fn nothing_selected_the_street_panel_says_how_to_begin() {
     let s = street_shared(0);
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });

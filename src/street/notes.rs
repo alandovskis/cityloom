@@ -257,6 +257,51 @@ fn group_note_key(group: &str) -> Option<&'static str> {
     }
 }
 
+/// The cell of a lane measure this editor models: that it is the street's, the button that arranges
+/// the street as it, or why it cannot be.
+fn street_state(w: SheetWatch, i18n: &I18n, units: Units, code: &'static str, f: &crate::street::model::MeasureView) -> AnyView {
+    if f.present {
+        view! { <b class="m-on">{plain(i18n, "measure-this-street")}</b> }.into_any()
+    } else if f.can_apply {
+        let label = i18n.tr("measure-arrange-label", &Args::new().str("code", code).str("name", plain(i18n, &name_key(code))));
+        view! {
+            <button type="button" class="btn m-apply" aria-label=label on:click=move |_| { w.apply_measure(code); }>
+                {plain(i18n, "measure-arrange")}
+            </button>
+        }
+        .into_any()
+    } else {
+        let why = f.unavailable.as_ref().map_or_else(|| plain(i18n, "measure-will-not-fit"), |why| say(i18n, units, why));
+        view! { <span class="m-not">{why}</span> }.into_any()
+    }
+}
+
+/// The lane measures of the Transit Priority Atlas that can be laid out in this street, with the
+/// button that arranges the street as each (the left sidebar's section).
+#[component]
+pub fn TransitPriority(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    move || {
+        let (v, units) = w.now();
+        let i18n = w.i18n();
+        let rows = MEASURES
+            .iter()
+            .filter(|m| m.place == Where::Street)
+            .filter_map(|m| {
+                let f = v.measures.iter().find(|f| f.code == m.code)?;
+                let problems = f.present.then(|| f.problems.iter().map(|p| view! { <small class="m-problem">{p.say(&i18n)}</small> }).collect_view());
+                Some(view! {
+                    <tr>
+                        <th scope="row"><span class="dirtag">{m.code}</span>{plain(&i18n, &name_key(m.code))}{problems}</th>
+                        <td>{street_state(w, &i18n, units, m.code, f)}</td>
+                    </tr>
+                })
+            })
+            .collect_view();
+        view! { <tbody>{rows}</tbody> }
+    }
+}
+
 /// Every measure of the Transit Priority Atlas toolbox: the lane arrangements can
 /// be recognised in this street and laid out from its width; the rest say where
 /// they are set, or why they are not modelled.
@@ -281,21 +326,7 @@ pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
                     .map(|m| {
                         let found = (m.place == Where::Street).then(|| v.measures.iter().find(|f| f.code == m.code)).flatten();
                         let state = match (m.place, found) {
-                            (Where::Street, Some(f)) if f.present => view! { <b class="m-on">{plain(&i18n, "measure-this-street")}</b> }.into_any(),
-                            (Where::Street, Some(f)) if f.can_apply => {
-                                let code = m.code;
-                                let label = i18n.tr("measure-arrange-label", &Args::new().str("code", m.code).str("name", plain(&i18n, &name_key(m.code))));
-                                view! {
-                                    <button type="button" class="btn m-apply" aria-label=label on:click=move |_| { w.apply_measure(code); }>
-                                        {plain(&i18n, "measure-arrange")}
-                                    </button>
-                                }
-                                .into_any()
-                            }
-                            (Where::Street, Some(f)) => {
-                                let why = f.unavailable.as_ref().map_or_else(|| plain(&i18n, "measure-will-not-fit"), |why| say(&i18n, units, why));
-                                view! { <span class="m-not">{why}</span> }.into_any()
-                            }
+                            (Where::Street, Some(f)) => street_state(w, &i18n, units, m.code, f),
                             (Where::Junction, _) => plain(&i18n, "measure-set-at-junction").into_any(),
                             _ => view! { <span class="m-not">{plain(&i18n, "measure-not-modelled")}</span> }.into_any(),
                         };
