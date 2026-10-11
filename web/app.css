@@ -41,6 +41,8 @@
 
   --pad: 16px;
   --bar-h: 64px;
+  /* The width of a sidebar's edge tab. */
+  --tab-w: 40px;
   --panel-w: 360px;
   /* How far the panels reach in from each side, for what floats between them. */
   --lw: calc(var(--pad) + var(--panel-w));
@@ -928,19 +930,19 @@ a.btn {
   pointer-events: all;
 }
 
-/* The map page's button for the Notes: a tab down the right-hand side, against the Notes (`--rw` is how far they
-   reach in, nothing when they are hidden), its text running downwards. */
-.notes-tab {
+/* The button for a sidebar: a tab down the window's edge, against the sidebar (`--lw` / `--rw` are how far it reaches
+   in, nothing when it is hidden), its text running downwards. The map page has the Notes' on the right; the editors
+   have the details' on the left too. Under 900px the sidebars stack below the page (`--lw` and `--rw` are nothing), so
+   the tabs stay at the window's edge, as on the map. */
+.edge-tab {
   position: fixed;
   z-index: 11;
   top: 50%;
-  right: var(--rw);
   transform: translateY(-50%);
   writing-mode: vertical-rl;
-  min-width: 44px;
+  min-width: var(--tab-w);
   padding: 16px 0;
   border: 0;
-  border-radius: 14px 0 0 14px;
   background: var(--panel);
   color: var(--ink);
   box-shadow: var(--shadow);
@@ -948,10 +950,18 @@ a.btn {
   font-weight: 600;
   cursor: pointer;
 }
-.notes-tab:hover {
+.edge-tab.right {
+  right: var(--rw);
+  border-radius: 14px 0 0 14px;
+}
+.edge-tab.left {
+  left: var(--lw);
+  border-radius: 0 14px 14px 0;
+}
+.edge-tab:hover {
   background: var(--fill);
 }
-.notes-tab[aria-expanded="true"] {
+.edge-tab[aria-expanded="true"] {
   color: var(--accent);
 }
 
@@ -1211,6 +1221,8 @@ a.btn {
   .top-end {
     grid-column: 2;
     grid-row: 1;
+    /* the column is as wide as the rows that span it need, so the buttons keep to the bar's end */
+    justify-content: flex-end;
   }
   body {
     display: flex;

@@ -72,19 +72,28 @@ pub fn TitleBlock(vm: Rc<JunctionVm>) -> impl IntoView {
         <div class="tb-cell tb-wide"><span>{move || w.tr("jn-block-junction")}</span><b id="tb-street">{move || w.say(&w.view().name)}</b></div>
         <div class="tb-cell"><span>{move || w.tr("jn-block-streets")}</span><b id="tb-row" class="fig">{move || w.view().arms.len().to_string()}</b></div>
         <div class="tb-cell"><span>{move || w.tr("jn-block-changes")}</span><b id="tb-changes" class="fig">{move || w.view().revisions.len().to_string()}</b></div>
-        {move || {
-            let source = w.view().source.clone();
-            (!source.is_empty())
-                .then(|| {
-                    view! {
-                        <div class="tb-cell tb-full"><span>{move || w.tr("jn-block-osm")}</span><b class="tb-src"><Sources kind="node" refs=source/></b></div>
-                        <div class="tb-cell tb-full">
-                            <span>{move || w.tr("jn-block-data")}</span>
-                            <b id="tb-state">{move || w.tr(if w.view().changed { "jn-block-edited" } else { "jn-block-imported" })}</b>
-                        </div>
-                    }
-                })
-        }}
+    }
+}
+
+/// Where the junction came from: the OpenStreetMap nodes it was made from, and whether it has
+/// been edited since (the Provenance tab).
+#[component]
+pub fn Provenance(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
+    move || {
+        let source = w.view().source.clone();
+        if source.is_empty() {
+            return view! { <p class="hint">{w.tr("jn-no-source")}</p> }.into_any();
+        }
+        view! {
+            <dl class="prov">
+                <dt>{move || w.tr("jn-block-osm")}</dt>
+                <dd class="tb-src"><Sources kind="node" refs=source/></dd>
+                <dt>{move || w.tr("jn-block-data")}</dt>
+                <dd id="tb-state">{move || w.tr(if w.view().changed { "jn-block-edited" } else { "jn-block-imported" })}</dd>
+            </dl>
+        }
+        .into_any()
     }
 }
 

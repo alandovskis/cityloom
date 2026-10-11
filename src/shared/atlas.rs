@@ -20,24 +20,8 @@ pub enum Where {
 pub struct Measure {
     pub code: &'static str,
     pub name: &'static str,
-    pub family: &'static str,
-    pub group: &'static str,
     pub place: Where,
     pub note: &'static str,
-}
-
-pub const LINEAR: &str = "Linear continuous measures";
-pub const LOCAL: &str = "Localized measures";
-pub const AREA: &str = "Area-wide measures";
-
-/// The message that names a group of measures (`street/i18n`); None for a group the Atlas does not have.
-pub fn group_name_key(group: &str) -> Option<&'static str> {
-    match group {
-        LINEAR => Some("group-name-linear"),
-        LOCAL => Some("group-name-local"),
-        AREA => Some("group-name-area"),
-        _ => None,
-    }
 }
 
 /// The message that names a measure (`street/i18n`), by its lowercase code.
@@ -50,69 +34,41 @@ pub fn note_key(code: &str) -> String {
     format!("atlas-{}-note", code.to_lowercase())
 }
 
-const fn m(code: &'static str, name: &'static str, family: &'static str, group: &'static str, place: Where, note: &'static str) -> Measure {
-    Measure { code, name, family, group, place, note }
+const fn m(code: &'static str, name: &'static str, place: Where, note: &'static str) -> Measure {
+    Measure { code, name, place, note }
 }
 
 pub const MEASURES: [Measure; 30] = [
-    m("A1", "Transit Streets", "A Transit-priority streets", LINEAR, Where::Street, ""),
-    m("A2", "Transit Ways", "A Transit-priority streets", LINEAR, Where::Street, ""),
-    m("A3", "Transit and Direct Access Streets", "A Transit-priority streets", LINEAR, Where::Street, ""),
-    m("B1", "Center-Running Transit Lanes", "B Center-running transit lanes", LINEAR, Where::Street, ""),
-    m("B2", "Center-Running Transit Lanes on Freeway Medians", "B Center-running transit lanes", LINEAR, Where::Street, ""),
-    m("B3", "Static Alternate-Direction Center-Running Transit Lanes", "B Center-running transit lanes", LINEAR, Where::Street, ""),
-    m("B4", "Dynamic Alternate-Direction Center-Running Transit Lanes", "B Center-running transit lanes", LINEAR, Where::Street, ""),
-    m("C1", "Edge-Running Bidirectional Transit Lanes", "C Edge-running bidirectional transit lanes", LINEAR, Where::Street, ""),
-    m("D1", "Offset Transit Lanes", "D Offset transit lanes", LINEAR, Where::Street, ""),
-    m("E1", "Curb-Adjacent Transit Lanes", "E Curbside transit lanes", LINEAR, Where::Street, ""),
-    m("E2", "Curb-Adjacent Reversible Parking and Transit Lanes", "E Curbside transit lanes", LINEAR, Where::Street, ""),
-    m("E3", "Transit Lanes on Freeway Shoulders", "E Curbside transit lanes", LINEAR, Where::Street, ""),
-    m("F1", "Contraflow Transit Lanes", "F Contraflow transit lanes", LINEAR, Where::Street, ""),
-    m("F2", "Offset Contraflow Transit Lanes", "F Contraflow transit lanes", LINEAR, Where::Street, ""),
-    m("G1", "Offset Queue-Jump Lanes", "G Queue jumps", LINEAR, Where::Junction, ""),
-    m("G2", "Curbside Queue-Jump Lanes", "G Queue jumps", LINEAR, Where::Junction, ""),
-    m("G3", "Virtual Queue-Jump Lane", "G Queue jumps", LINEAR, Where::Junction, ""),
-    m("H1", "Signal-Controlled Bus Gates", "H Pre-signals and pre-yields", LOCAL, Where::Junction, ""),
-    m("H2", "Yield-Controlled Bus Gates", "H Pre-signals and pre-yields", LOCAL, Where::Junction, ""),
-    m("L1", "Indirect Left Turn via Alternative Itinerary", "L Turn conflicts management", LOCAL, Where::Junction, ""),
-    m("L2", "Indirect Left Turn within the Intersection", "L Turn conflicts management", LOCAL, Where::Junction, ""),
-    m("L3", "Right-In/Right-Out", "L Turn conflicts management", LOCAL, Where::Junction, ""),
-    m("L4", "Dead-Ending of Lateral Streets", "L Turn conflicts management", LOCAL, Where::Junction, ""),
-    m("M1", "Bus Bulbs", "M Bus stop related", LOCAL, Where::Junction, ""),
-    m("M2", "Signal-Protected On-Street Platforms", "M Bus stop related", LOCAL, Where::Junction, ""),
-    m("N1", "Transit Modal Filter", "N Transit modal filters", LOCAL, Where::Junction, ""),
-    m(
-        "TSP",
-        "Transit Signal Priority",
-        "TSP Transit signal priority",
-        LOCAL,
-        Where::Not,
-        "The Atlas lists it as under development, and CityLoom has no signal timing to prioritise.",
-    ),
-    m(
-        "Z1",
-        "Limited Traffic Areas",
-        "Z Areas with access restrictions",
-        AREA,
-        Where::Not,
-        "An area of many streets, and CityLoom edits one street or one junction.",
-    ),
-    m(
-        "W-D",
-        "Dynamic Congestion Pricing",
-        "W Congestion and road pricing",
-        AREA,
-        Where::Not,
-        "The Atlas lists it as in development, and a price needs a city and demand to act on.",
-    ),
-    m(
-        "W-F",
-        "Fixed-Fee Road Pricing",
-        "W Congestion and road pricing",
-        AREA,
-        Where::Not,
-        "The Atlas lists it as in development, and a price needs a city and demand to act on.",
-    ),
+    m("A1", "Transit Streets", Where::Street, ""),
+    m("A2", "Transit Ways", Where::Street, ""),
+    m("A3", "Transit and Direct Access Streets", Where::Street, ""),
+    m("B1", "Center-Running Transit Lanes", Where::Street, ""),
+    m("B2", "Center-Running Transit Lanes on Freeway Medians", Where::Street, ""),
+    m("B3", "Static Alternate-Direction Center-Running Transit Lanes", Where::Street, ""),
+    m("B4", "Dynamic Alternate-Direction Center-Running Transit Lanes", Where::Street, ""),
+    m("C1", "Edge-Running Bidirectional Transit Lanes", Where::Street, ""),
+    m("D1", "Offset Transit Lanes", Where::Street, ""),
+    m("E1", "Curb-Adjacent Transit Lanes", Where::Street, ""),
+    m("E2", "Curb-Adjacent Reversible Parking and Transit Lanes", Where::Street, ""),
+    m("E3", "Transit Lanes on Freeway Shoulders", Where::Street, ""),
+    m("F1", "Contraflow Transit Lanes", Where::Street, ""),
+    m("F2", "Offset Contraflow Transit Lanes", Where::Street, ""),
+    m("G1", "Offset Queue-Jump Lanes", Where::Junction, ""),
+    m("G2", "Curbside Queue-Jump Lanes", Where::Junction, ""),
+    m("G3", "Virtual Queue-Jump Lane", Where::Junction, ""),
+    m("H1", "Signal-Controlled Bus Gates", Where::Junction, ""),
+    m("H2", "Yield-Controlled Bus Gates", Where::Junction, ""),
+    m("L1", "Indirect Left Turn via Alternative Itinerary", Where::Junction, ""),
+    m("L2", "Indirect Left Turn within the Intersection", Where::Junction, ""),
+    m("L3", "Right-In/Right-Out", Where::Junction, ""),
+    m("L4", "Dead-Ending of Lateral Streets", Where::Junction, ""),
+    m("M1", "Bus Bulbs", Where::Junction, ""),
+    m("M2", "Signal-Protected On-Street Platforms", Where::Junction, ""),
+    m("N1", "Transit Modal Filter", Where::Junction, ""),
+    m("TSP", "Transit Signal Priority", Where::Not, "The Atlas lists it as under development, and CityLoom has no signal timing to prioritise."),
+    m("Z1", "Limited Traffic Areas", Where::Not, "An area of many streets, and CityLoom edits one street or one junction."),
+    m("W-D", "Dynamic Congestion Pricing", Where::Not, "The Atlas lists it as in development, and a price needs a city and demand to act on."),
+    m("W-F", "Fixed-Fee Road Pricing", Where::Not, "The Atlas lists it as in development, and a price needs a city and demand to act on."),
 ];
 
 #[cfg(test)]
@@ -155,12 +111,5 @@ mod tests {
             }
             assert!(i.missing().is_empty(), "{:?}: {:?}", locale, i.missing());
         }
-    }
-
-    #[test]
-    fn every_group_of_measures_has_its_own_name_and_no_other_group_has_one() {
-        assert_eq!([LINEAR, LOCAL, AREA].map(group_name_key), [Some("group-name-linear"), Some("group-name-local"), Some("group-name-area")]);
-        assert!(MEASURES.iter().all(|m| group_name_key(m.group).is_some()));
-        assert_eq!(group_name_key("Something else"), None, "an unknown group is not named as one it is not");
     }
 }
