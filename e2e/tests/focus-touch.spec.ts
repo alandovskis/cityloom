@@ -1,6 +1,6 @@
 import type { Locator } from "@playwright/test";
 
-import { expect, openStreet, test } from "./fixtures";
+import { expect, openJunction, openStreet, test } from "./fixtures";
 
 /** What a keyboard user sees on a focused control: a ring of its own, not only a tint. */
 const ring = (field: Locator) =>
@@ -13,6 +13,8 @@ const ring = (field: Locator) =>
     probe.remove();
     return { style: s.outlineStyle, width: parseFloat(s.outlineWidth), color: s.outlineColor, accent };
   });
+
+const touchAction = (el: Locator) => el.first().evaluate((e) => getComputedStyle(e).touchAction);
 
 for (const theme of ["light", "dark"]) {
   test.describe(`the focus ring, ${theme} theme`, () => {
@@ -40,3 +42,24 @@ for (const theme of ["light", "dark"]) {
     });
   });
 }
+
+test.describe("a touch drag moves the piece, it does not scroll the page", () => {
+  test("on the street, the pieces and every handle take no browser pan", async ({ page }) => {
+    await openStreet(page);
+    await expect(page.locator('#drawing [data-role="seg"]').first()).toBeVisible();
+    expect(await touchAction(page.locator('#drawing [data-role="seg"]'))).toBe("none");
+    expect(await touchAction(page.locator('#drawing [data-role="handle"]'))).toBe("none");
+    expect(await touchAction(page.locator('#drawing [data-role="edge"]'))).toBe("none");
+  });
+
+  test("on the junction, every grip takes no browser pan", async ({ page }) => {
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    for (const role of ["grip-arm", "grip-corner", "grip-crossing"]) {
+      const grips = page.locator(`#drawing [data-role="${role}"]`);
+      if ((await grips.count()) === 0) continue;
+      expect(await touchAction(grips), role).toBe("none");
+    }
+    expect(await page.locator('#drawing [data-role="grip-arm"]').count()).toBeGreaterThan(0);
+  });
+});
