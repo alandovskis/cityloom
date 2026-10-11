@@ -217,6 +217,29 @@ fn panel(s: &Rc<JunctionVm>) -> String {
 }
 
 #[test]
+fn a_selected_street_offers_a_control_for_each_junction_measure_of_the_atlas() {
+    use crate::shared::i18n::{Args, Locale};
+    let s = shared(0);
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = panel(&s);
+    let en = crate::i18n_for(Locale::En);
+    let coded: Vec<(&str, &str)> = APPROACHES
+        .iter()
+        .chain(&STOPS)
+        .chain(&RULES)
+        .map(|i| (i.code, i.key))
+        .chain([(FILTER_CODE, "jn-insp-filter")])
+        .filter(|(c, _)| !c.is_empty())
+        .collect();
+    assert_eq!(coded.len(), 12);
+    for (code, key) in coded {
+        let want = format!("{code} {}", en.tr_now(key, &Args::new()));
+        assert!(h.contains(&want), "the inspector has no control named {want:?}");
+    }
+}
+
+#[test]
 fn with_nothing_selected_the_panel_offers_the_junction_s_control() {
     let s = shared(0);
     let h = panel(&s);
