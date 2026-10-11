@@ -179,6 +179,10 @@ pub struct Arm {
     /// A waiting box for cyclists across the entering lanes, ahead of the cars' stop line.
     #[serde(default)]
     pub bike_box: bool,
+    /// The corner clockwise of this arm is a protected corner: the bike lanes of the two streets go round it on a
+    /// track of their own, round a corner island.
+    #[serde(default)]
+    pub protected: bool,
     /// Arms this arm may not turn into.
     pub banned: Vec<u32>,
     /// A transit lane runs along the entering curb all the way in.
@@ -323,6 +327,7 @@ impl Arm {
             crossing: Some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false, continuous: false }),
             bulb: [false, false],
             bike_box: false,
+            protected: false,
             banned: Vec::new(),
             bus_lane: false,
             approach: 0,
@@ -408,13 +413,20 @@ fn read_profile(view: &View, name: Said) -> Profile {
 }
 
 impl Profile {
-    /// The indexes into `pieces` of the bike lanes beside the carriageway's edges: the outermost lanes that are not
-    /// parked on, so a bike lane outside parking counts and one between travel lanes does not.
-    pub fn outer_bike(&self) -> Vec<usize> {
+    /// The bike lane beside the left and the right curb (indexes into `pieces`), if there is one: the outermost lane
+    /// that is not parked on, so a bike lane outside parking counts and one between travel lanes does not.
+    pub fn outer_bike_sides(&self) -> [Option<usize>; 2] {
         let moving = |p: &Piece| is_roadway(p.kind) && !matches!(KINDS[p.kind].id, "parking" | "loading");
-        let first = self.pieces.iter().position(moving);
-        let last = self.pieces.iter().rposition(moving);
-        self.pieces.iter().enumerate().filter(|(i, p)| KINDS[p.kind].id == "bike" && (Some(*i) == first || Some(*i) == last)).map(|(i, _)| i).collect()
+        let bike = |i: Option<usize>| i.filter(|&i| KINDS[self.pieces[i].kind].id == "bike");
+        [bike(self.pieces.iter().position(moving)), bike(self.pieces.iter().rposition(moving))]
+    }
+
+    /// The indexes into `pieces` of the bike lanes beside the carriageway's edges.
+    pub fn outer_bike(&self) -> Vec<usize> {
+        let [left, right] = self.outer_bike_sides();
+        let mut v: Vec<usize> = left.into_iter().chain(right).collect();
+        v.dedup();
+        v
     }
 
     pub fn road_mm(&self) -> i32 {
@@ -441,6 +453,41 @@ impl BikeBoxBlocker {
             BikeBoxBlocker::NoEntry => "jn-insp-bike-box-no-entry",
             BikeBoxBlocker::Free => "jn-insp-bike-box-free",
         }
+    }
+}
+
+/// Why a corner cannot be protected.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProtectedBlocker {
+    Roundabout,
+    Straight,
+    NoLane,
+}
+
+impl ProtectedBlocker {
+    /// The message that says it, as the name of the switch that cannot be pressed.
+    pub fn key(self) -> &'static str {
+        match self {
+            ProtectedBlocker::Roundabout => "jn-insp-protected-roundabout",
+            ProtectedBlocker::Straight => "jn-insp-protected-straight",
+            ProtectedBlocker::NoLane => "jn-insp-protected-no-lane",
+        }
+    }
+}
+
+/// What stops the corner between arm `i` (street `pa`) and the next arm (street `pb`) from being protected: it needs a
+/// real corner (a 180 degree gap has none to follow), a bike lane beside the right curb of arm `i` and one beside the
+/// left curb of the next arm (the two curbs the corner joins), and a junction that is not a roundabout.
+pub fn protected_blocker(s: &State, i: usize, pa: &Profile, pb: &Profile) -> Option<ProtectedBlocker> {
+    let next = (i + 1) % s.arms.len();
+    if s.control == ROUNDABOUT {
+        Some(ProtectedBlocker::Roundabout)
+    } else if gap(s.arms[i].bearing, s.arms[next].bearing) as i32 == 180 {
+        Some(ProtectedBlocker::Straight)
+    } else if pa.outer_bike_sides()[1].is_none() || pb.outer_bike_sides()[0].is_none() {
+        Some(ProtectedBlocker::NoLane)
+    } else {
+        None
     }
 }
 
@@ -559,10 +606,11 @@ pub enum Refusal {
     DoesNotFit,
     RaisedOnRoundabout,
     BikeBoxNotHere,
+    ProtectedNotHere,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 11] = [
+    pub const ALL: [Refusal; 12] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -574,6 +622,7 @@ impl Refusal {
         Refusal::DoesNotFit,
         Refusal::RaisedOnRoundabout,
         Refusal::BikeBoxNotHere,
+        Refusal::ProtectedNotHere,
     ];
 
     /// The message that says why.
@@ -590,6 +639,7 @@ impl Refusal {
             Refusal::DoesNotFit => "jn-refusal-does-not-fit",
             Refusal::RaisedOnRoundabout => "jn-refusal-raised-roundabout",
             Refusal::BikeBoxNotHere => "jn-refusal-bike-box-not-here",
+            Refusal::ProtectedNotHere => "jn-refusal-protected-not-here",
         }
     }
 }
@@ -1065,6 +1115,27 @@ impl Junction {
         )
     }
 
+    /// Protects the corner clockwise of arm `uid`, or makes it plain again. See `protected_blocker` for where it may stand.
+    pub fn set_protected(&mut self, uid: u32, on: bool) -> bool {
+        let region = self.region;
+        let Some(at) = self.current().arms.iter().position(|a| a.uid == uid) else { return self.refuse(Refusal::DoesNotFit) };
+        if on {
+            let s = self.current();
+            let next = (at + 1) % s.arms.len();
+            if protected_blocker(s, at, &s.arms[at].profile(region), &s.arms[next].profile(region)).is_some() {
+                return self.refuse(Refusal::ProtectedNotHere);
+            }
+        }
+        self.arm_edit(
+            uid,
+            |a| about("jn-rev-protected", a).with("change", change(on)),
+            |a| {
+                a.protected = on;
+                true
+            },
+        )
+    }
+
     /// Side 0 is the arm's left curb, 1 its right.
     pub fn set_bulb(&mut self, uid: u32, side: usize, on: bool) -> bool {
         let region = self.region;
@@ -1242,8 +1313,13 @@ impl Junction {
         let mut after = self.current().clone();
         after.control = control;
         settle_table_and_boxes(&mut after, self.region);
-        let boxes_go = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.bike_box && !b.bike_box);
-        let key = if boxes_go { "jn-rev-control-boxes" } else { "jn-rev-control" };
+        let lost = |f: fn(&Arm) -> bool| self.current().arms.iter().zip(&after.arms).any(|(a, b)| f(a) && !f(b));
+        let key = match (lost(|a| a.bike_box), lost(|a| a.protected)) {
+            (true, true) => "jn-rev-control-both",
+            (true, false) => "jn-rev-control-boxes",
+            (false, true) => "jn-rev-control-protected",
+            (false, false) => "jn-rev-control",
+        };
         self.edit_why(why, Said::new(key).with("control", Arg::MsgLower(control_key(control))), |s| {
             s.control = control;
             true
@@ -1394,6 +1470,12 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
     let blocked: Vec<bool> = (0..s.arms.len()).map(|i| bike_box_blocker(s, i, &s.arms[i].profile(region)).is_some()).collect();
     for (a, blocked) in s.arms.iter_mut().zip(blocked) {
         a.bike_box = a.bike_box && !blocked;
+    }
+    let n = s.arms.len();
+    let profiles: Vec<Profile> = s.arms.iter().map(|a| a.profile(region)).collect();
+    let stands: Vec<bool> = (0..n).map(|i| protected_blocker(s, i, &profiles[i], &profiles[(i + 1) % n]).is_none()).collect();
+    for (a, stands) in s.arms.iter_mut().zip(stands) {
+        a.protected = a.protected && stands;
     }
 }
 
@@ -2271,6 +2353,110 @@ mod tests {
     }
 
     #[test]
+    fn the_bike_lane_beside_each_curb_is_found_and_outer_bike_still_agrees() {
+        let sides = |pieces: &[(&str, i32)]| junction_of(pieces).current().arms[0].profile(0).outer_bike_sides();
+        assert_eq!(sides(&BIKED), [Some(1), Some(4)]);
+        assert_eq!(sides(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]), [Some(1), None]);
+        assert_eq!(sides(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]), [None, Some(3)]);
+        assert_eq!(sides(&[("sidewalk", 2000), ("parking", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]), [Some(2), None]);
+        assert_eq!(sides(&[("sidewalk", 2000), ("bike", 2500), ("sidewalk", 2000)]), [Some(1), Some(1)]);
+        assert_eq!(junction_of(&BIKED).current().arms[0].profile(0).outer_bike(), vec![1, 4]);
+    }
+
+    #[test]
+    fn a_corner_is_protected_and_plain_again_and_undo_goes_back() {
+        let mut j = junction_of(&BIKED);
+        let a = j.current().arms[0].uid;
+        let on = |j: &Junction| j.arm(a).unwrap().protected;
+        assert!(!on(&j));
+        assert!(j.set_protected(a, true));
+        assert!(on(&j));
+        assert!(!j.set_protected(a, true), "nothing changes");
+        assert!(j.undo());
+        assert!(!on(&j));
+        assert!(j.redo());
+        assert!(j.set_protected(a, false));
+        assert!(!on(&j));
+    }
+
+    #[test]
+    fn a_corner_needs_a_bike_lane_beside_the_curb_of_each_street_a_real_corner_and_no_roundabout() {
+        let refused = |j: &mut Junction| {
+            let a = j.current().arms[0].uid;
+            assert!(!j.set_protected(a, true));
+            assert_eq!(j.refusal(), Some(Refusal::ProtectedNotHere));
+        };
+        refused(&mut junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]));
+        // a lane beside the left curb only (or the right only): the corner joins arm i's right curb and the next arm's left one
+        refused(&mut junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]));
+        refused(&mut junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]));
+        let mut ring = junction_of(&BIKED);
+        assert!(ring.set_control(ROUNDABOUT));
+        refused(&mut ring);
+        // a three-way: the gap from the arm at 180 to the arm at 0 is a straight line, the one from 0 to 90 is a corner
+        let mut state = junction_of(&BIKED).current().clone();
+        state.arms.retain(|a| a.bearing != 270);
+        let mut t = Junction::from_city(named("Test"), &state, &state, 0).expect("draws");
+        let (arm_0, arm_180) = (arm_at(&t, 0), arm_at(&t, 180));
+        assert!(!t.set_protected(arm_180, true), "no corner to follow");
+        assert_eq!(t.refusal(), Some(Refusal::ProtectedNotHere));
+        assert!(t.set_protected(arm_0, true));
+    }
+
+    #[test]
+    fn a_roundabout_takes_every_protected_corner_away_and_says_so_and_undo_brings_them_back() {
+        let mut j = junction_of(&BIKED);
+        for uid in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_protected(uid, true));
+        }
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(j.current().arms.iter().all(|a| !a.protected));
+        let said = j.revisions().last().cloned().unwrap();
+        assert!(en(&said).ends_with("; protected corners removed"), "{}", en(&said));
+        assert!(fr(&said).ends_with("; coins protégés retirés"), "{}", fr(&said));
+        assert!(j.undo());
+        assert!(j.current().arms.iter().all(|a| a.protected));
+        let mut k = junction_of(&BIKED);
+        for uid in k.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(k.set_protected(uid, true) && k.set_bike_box(uid, true));
+        }
+        assert!(k.set_control(ROUNDABOUT));
+        assert!(en(&k.revisions().last().cloned().unwrap()).ends_with("; bike boxes and protected corners removed"));
+    }
+
+    #[test]
+    fn a_saved_protected_corner_that_no_longer_stands_is_dropped_on_load() {
+        let mut state = junction_of(&BIKED).current().clone();
+        let plain = street_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)], 1);
+        for a in &mut state.arms {
+            a.protected = true;
+            a.section = Some(plain.clone());
+            a.edge = a.uid;
+        }
+        let j = Junction::from_city(named("Test"), &state, &state, 0).expect("draws");
+        assert!(j.current().arms.iter().all(|a| !a.protected));
+    }
+
+    #[test]
+    fn a_saved_arm_without_the_protected_field_loads() {
+        let mut v = serde_json::to_value(Junction::new(0).current()).unwrap();
+        assert_eq!(v["arms"][0]["protected"], serde_json::json!(false));
+        v["arms"][0].as_object_mut().unwrap().remove("protected");
+        let back: State = serde_json::from_value(v).expect("an older save loads");
+        assert!(!back.arms[0].protected);
+    }
+
+    #[test]
+    fn a_protected_corner_is_said_in_both_languages() {
+        let mut j = junction_of(&BIKED);
+        let a = j.current().arms[0].uid;
+        assert!(j.set_protected(a, true));
+        let said = j.revisions().last().cloned().unwrap();
+        assert!(en(&said).ends_with("protected: add"), "{}", en(&said));
+        assert!(fr(&said).ends_with("protégé\u{a0}: ajout"), "{}", fr(&said));
+    }
+
+    #[test]
     fn a_bike_box_on_an_unknown_street_is_refused_as_any_edit_of_one_is() {
         let mut j = junction_of(&BIKED);
         assert!(!j.set_bike_box(9_999, true));
@@ -2489,6 +2675,7 @@ mod tests {
             ("bus", Box::new(move |j| j.set_bus(Some((n, e))))),
             ("cycle", Box::new(|j| j.set_cycle(Some(2_000)))),
             ("continuous without a crossing", Box::new(move |j| j.set_crossing(n, false) && j.set_continuous(n, true))),
+            ("protected on a roundabout", Box::new(move |j| j.set_control(ROUNDABOUT) && j.set_protected(n, true))),
             ("bike box on a roundabout", Box::new(move |j| j.set_control(ROUNDABOUT) && j.set_bike_box(n, true))),
             ("raised on a roundabout", Box::new(|j| j.set_control(ROUNDABOUT) && j.set_raised(true))),
             ("cycle width", Box::new(|j| j.set_cycle(Some(99_000)))),
