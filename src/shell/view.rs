@@ -115,6 +115,11 @@ pub fn i18n_keys(html: &str) -> Vec<(String, String)> {
 /// Puts the words of the active language into the markup under `root`. It reads the locale, so run in an
 /// effect it is done again when the language changes. The `<title>` is deliberately left out: the page that
 /// knows its own title (a street named for where it runs) sets it, so it carries no `data-i18n`.
+/// "Version 0.2.0": the editor crate's own version, which is the product's.
+pub fn version_label(i18n: &I18n) -> String {
+    i18n.tr("ui-version", &Args::new().str("version", env!("CARGO_PKG_VERSION")))
+}
+
 pub fn apply_translations(root: &Element, i18n: &I18n) {
     let _ = i18n.locale();
     let each = |selector: &str| -> Vec<Element> {
@@ -124,6 +129,9 @@ pub fn apply_translations(root: &Element, i18n: &I18n) {
     for el in each("[data-i18n]") {
         let key = el.get_attribute("data-i18n").unwrap_or_default();
         el.set_text_content(Some(&i18n.tr(&key, &Args::new())));
+    }
+    for el in each("[data-version]") {
+        el.set_text_content(Some(&version_label(i18n)));
     }
     for name in TRANSLATED_ATTRIBUTES {
         for el in each(&format!("[data-i18n-{name}]")) {

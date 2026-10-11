@@ -117,11 +117,27 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+  # Every pull request raises the version in Cargo.toml (semantic versioning); the pages show it in the menu.
+  version:
+    name: Version bump
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: scripts/check-version.sh "origin/$BASE_REF"
+
   # One check to require in branch protection, whatever jobs are added later.
   ci:
     name: CI
     if: always()
-    needs: [format, test, e2e]
+    needs: [format, test, e2e, version]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:

@@ -469,6 +469,12 @@ a.btn {
   margin-top: 10px;
   font-size: 13px;
 }
+.menu-foot .version {
+  color: var(--ink-3);
+}
+.menu-foot .version:not(:empty)::before {
+  content: "\00b7  ";
+}
 
 /* ---- the panels ------------------------------------------------------------- */
 

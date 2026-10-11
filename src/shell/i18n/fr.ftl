@@ -36,6 +36,7 @@ ui-print = Imprimer cette fiche
 ui-help = Aide
 ui-keyboard = Clavier
 ui-credits = Crédits
+ui-version = Version { $version }
 ui-notes = Notes
 ui-notes-toggle-title = Afficher ou masquer les notes ( ] )
 ui-notes-sections = Sections des notes
