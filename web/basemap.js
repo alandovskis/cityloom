@@ -8,6 +8,10 @@ const TILES = "data/basemap/montreal.pmtiles";
 // MapLibre needs absolute addresses for what a style names.
 const here = (path) => new URL(path, document.baseURI).href;
 
+// Someone who asks for less motion gets the camera there at once.
+const still = matchMedia("(prefers-reduced-motion: reduce)");
+const ms = (duration) => (still.matches ? 0 : duration);
+
 const themeNow = () => {
   const set = document.documentElement.dataset.theme;
   if (set === "light" || set === "dark") return set;
@@ -182,15 +186,15 @@ export async function createBasemap(container) {
           [west, south],
           [east, north],
         ],
-        { padding: { top, right, bottom, left }, duration: 300 },
+        { padding: { top, right, bottom, left }, duration: ms(300) },
       );
     },
     zoomBy(factor) {
-      map.easeTo({ zoom: map.getZoom() + Math.log2(factor), duration: 200 });
+      map.easeTo({ zoom: map.getZoom() + Math.log2(factor), duration: ms(200) });
     },
     // A positive dx moves the view east, a positive dy south.
     panBy(dx, dy) {
-      map.panBy([dx, dy], { duration: 150 });
+      map.panBy([dx, dy], { duration: ms(150) });
     },
     highlight(next) {
       if (styled && map.getSource("places") && hot) map.setFeatureState({ source: "places", id: hot }, { hot: false });
