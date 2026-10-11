@@ -571,6 +571,10 @@ fn priority_pair(arms: &[Arm]) -> [usize; 2] {
     best.0
 }
 
+/// How far from the junction's edge the middle of a lane's arrow sits: past the
+/// crossing and the stop line, so even the bigger arrows (`plan_svg`) clear them.
+pub const ARROW_FROM_EDGE_MM: f64 = 5_500.0;
+
 fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, head: i32, uses: u8) -> LaneView {
     let w = a.prof.pieces.iter().find(|p| p.x_mm + p.width_mm / 2 == x_mm && KINDS[p.kind].id == "travel").map_or(3_000, |p| p.width_mm);
     let c = a.lat(off, x_mm);
@@ -780,7 +784,7 @@ impl Junction {
             });
             let bike_box = boxed.then(|| poly(&strip(l.bearing, lat(l.prof.enter_span.0), lat(l.prof.enter_span.1), far + 600.0, far + 600.0 + BIKE_BOX_MM)));
             let can_bike_box = blocker.is_none();
-            let arrow_t = if cx.is_some() { far + 5_000.0 } else { l.mouth + 6_000.0 };
+            let arrow_t = if cx.is_some() { far + ARROW_FROM_EDGE_MM } else { l.mouth + ARROW_FROM_EDGE_MM + 1_000.0 };
             let lanes = l
                 .prof
                 .enter_x

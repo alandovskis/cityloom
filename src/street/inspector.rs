@@ -110,7 +110,7 @@ fn curb_swatch(id: Option<&'static str>) -> AnyView {
 fn direction_swatch(id: Option<&'static str>) -> AnyView {
     match id {
         None => view! { <svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false"><path class="dir-x" d="M8,11 H36 M12,7 L8,11 L12,15 M32,7 L36,11 L32,15"/></svg> }.into_any(),
-        Some(id) => view! { <svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false" inner_html=crate::street::svg::dir_glyph(id, 22.0, 11.0)></svg> }.into_any(),
+        Some(id) => view! { <svg class="swatch none" viewBox="0 0 44 22" aria-hidden="true" focusable="false" inner_html=crate::street::svg::dir_glyph(id, 22.0, 11.0, 18.0)></svg> }.into_any(),
     }
 }
 
