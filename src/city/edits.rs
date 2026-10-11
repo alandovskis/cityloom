@@ -114,7 +114,9 @@ impl Ids {
 /// gives it to nobody.
 #[allow(dead_code)] // plan task 5 uses this
 pub fn assign(places: &[Ids], records: &[Ids]) -> Vec<Option<usize>> {
-    let score = |p: &Ids, r: &Ids| if p.key.is_some() && p.key == r.key { usize::MAX } else { p.overlap(r) };
+    // An exact key outranks any overlap; places sharing a key are told apart by their overlap.
+    const EXACT: usize = 1 << 32;
+    let score = |p: &Ids, r: &Ids| if p.key.is_some() && p.key == r.key { EXACT + p.overlap(r) } else { p.overlap(r) };
     let mut want: Vec<Option<usize>> = places
         .iter()
         .map(|p| {
@@ -255,5 +257,35 @@ mod tests {
             arm_streets: BTreeMap::new(),
         };
         assert_eq!(Ids::from_junction_record("n4", &junction), ids(Some("n4"), &[], &[4, 5]));
+    }
+
+    #[test]
+    fn places_with_the_same_key_are_told_apart_by_overlap_and_a_tie_is_nobodys() {
+        let record = [ids(Some("n1"), &[], &[1, 2])];
+        assert_eq!(assign(&[ids(Some("n1"), &[], &[1]), ids(Some("n1"), &[], &[1, 2])], &record), [None, Some(0)]);
+        assert_eq!(assign(&[ids(Some("n1"), &[], &[1]), ids(Some("n1"), &[], &[2])], &record), [None, None]);
+    }
+
+    #[test]
+    fn two_street_places_claiming_one_record_give_it_to_the_larger_overlap() {
+        let record = [ids(Some("w7~n1~n2"), &[7], &[1, 2])];
+        let places = [ids(Some("w7~n2~n9"), &[7], &[2, 9]), ids(Some("w7~n1~n2~x"), &[7], &[1, 2])];
+        assert_eq!(assign(&places, &record), [None, Some(0)]);
+        let tied = [ids(Some("w7~n2~n9"), &[7], &[2, 9]), ids(Some("w7~n1~n8"), &[7], &[1, 8])];
+        assert_eq!(assign(&tied, &record), [None, None], "a tie is nobody's");
+    }
+
+    #[test]
+    fn the_street_with_the_exact_key_beats_a_larger_overlap() {
+        let record = [ids(Some("w7~n1~n2"), &[7], &[1, 2])];
+        let places = [ids(Some("w7~n1~n2~cut"), &[7, 8], &[1, 2, 3]), ids(Some("w7~n1~n2"), &[7], &[1, 2])];
+        assert_eq!(assign(&places, &record), [None, Some(0)]);
+    }
+
+    #[test]
+    fn the_junction_with_the_exact_key_beats_a_larger_overlap_even_when_it_overlaps_little() {
+        let record = [ids(Some("n1"), &[], &[1, 2, 3])];
+        let places = [ids(Some("n9"), &[], &[1, 2, 3]), ids(Some("n1"), &[], &[7])];
+        assert_eq!(assign(&places, &record), [None, Some(0)]);
     }
 }
