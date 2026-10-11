@@ -180,14 +180,24 @@ test.describe("the street editor on a street of the city", () => {
   }
 
   test("a boundary between two pieces is dragged to share width between them", async ({ page }) => {
-    const handle = page.locator('#drawing [data-role="handle"]').first();
-    const box = (await handle.boundingBox())!;
-    const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
-    await page.mouse.move(x, y);
-    await page.mouse.down();
-    await page.mouse.move(x + 40, y, { steps: 6 });
-    await page.mouse.up();
-    await expect(live(page)).toContainText("Resize");
+    // A boundary that cannot grow (a sidewalk against a planting strip, say) says nothing: take the first that resizes.
+    const handles = page.locator('#drawing [data-role="handle"]');
+    let resized = false;
+    for (let i = 0; i < (await handles.count()) && !resized; i++) {
+      const box = (await handles.nth(i).boundingBox())!;
+      const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + 40, y, { steps: 6 });
+      await page.mouse.up();
+      resized = await expect(live(page))
+        .toContainText("Resize", { timeout: 1500 })
+        .then(
+          () => true,
+          () => false,
+        );
+    }
+    expect(resized, "one boundary of the street shares width").toBe(true);
     await expect(page.locator("#fit")).toHaveText("Every metre of the street is used.");
     await expect(page.locator("#undo")).toBeEnabled();
     await page.locator("#t-changes").click();

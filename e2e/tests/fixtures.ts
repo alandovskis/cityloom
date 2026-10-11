@@ -83,6 +83,15 @@ export async function serveWorld(page: Page) {
  *  in the order of its number. */
 export async function placesOnMap(page: Page) {
   await mapReady(page);
+  // The junctions and the streets are drawn from their own tiles: wait until both are there.
+  await page.waitForFunction(
+    () => {
+      const hots = (window as any).cityloomMap.querySourceFeatures("places").map((f: any) => String(f.properties.hot));
+      return hots.some((h: string) => h.startsWith("j-")) && hots.some((h: string) => h.startsWith("s-"));
+    },
+    undefined,
+    { timeout: 15_000 },
+  );
   return page.evaluate(() => {
     const hots = new Set<string>();
     for (const f of (window as any).cityloomMap.querySourceFeatures("places")) hots.add(f.properties.hot);

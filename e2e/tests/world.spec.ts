@@ -47,11 +47,13 @@ test("an area is made again when the checksum of its tile changes, and not other
     if (request.url().endsWith("/data/metro/0_0.osm.pbf")) tileReads++;
   });
   const key = "cityloom-checksum:45.5261,-73.5978";
+  // what is kept is the tile's checksum and the version of the importer (`IMPORTER_VERSION` in src/place/tiles.rs)
+  const IMPORTER = "+i2";
   const stored = () => page.evaluate((k) => localStorage.getItem(k), key);
 
   await page.goto("/map.html");
   await expect(page.locator("#title-block")).toContainText("Plateau");
-  expect([tileReads, await stored()]).toEqual([1, "one"]);
+  expect([tileReads, await stored()]).toEqual([1, `one${IMPORTER}`]);
 
   await page.reload();
   await expect(page.locator("#title-block")).toContainText("Plateau");
@@ -60,5 +62,5 @@ test("an area is made again when the checksum of its tile changes, and not other
   checksum = "two";
   await page.reload();
   await expect(page.locator("#title-block")).toContainText("Plateau");
-  expect([tileReads, await stored()]).toEqual([2, "two"]);
+  expect([tileReads, await stored()]).toEqual([2, `two${IMPORTER}`]);
 });

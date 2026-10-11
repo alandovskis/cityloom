@@ -56,6 +56,7 @@ fn read_streets(osm: &[u8], clip: Option<Vec<geom::LonLat>>, config: MapConfig, 
     }
     for way in doc.ways.values_mut().chain(doc.clipped_copied_ways.iter_mut().map(|(_, way)| way)) {
         explicit_sidewalks(&mut way.tags);
+        explicit_cycleways(&mut way.tags);
     }
     for (id, way) in doc.ways.iter().chain(doc.clipped_copied_ways.iter().map(|(id, way)| (id, way))) {
         extract.handle_way(*id, way, &streets.config);
@@ -69,16 +70,24 @@ fn read_streets(osm: &[u8], clip: Option<Vec<geom::LonLat>>, config: MapConfig, 
     Ok((streets, doc))
 }
 
-/// A way tagged `sidewalk:left` and/or `sidewalk:right` (and not `sidewalk`) is given the `sidewalk` they say.
-/// osm2streets takes a side not marked `no` to have one but then leaves out one mapped as `separate`, and takes a
-/// side that is not tagged at all to have one as well. Here a side has a sidewalk whatever it is tagged, except
-/// `no`, and a side not tagged has none. The sidewalk beside the road is shown whether it is part of the road's
-/// own way or a separate way of its own.
+/// A way tagged `sidewalk=separate` is given `sidewalk=both`, which says the same. A way tagged `sidewalk:left`,
+/// `sidewalk:right` and/or `sidewalk:both` (and not `sidewalk`) is given the `sidewalk` they say. osm2streets takes a side not marked `no` to have one but then leaves out one mapped as `separate`, and
+/// takes a side that is not tagged at all to have one as well. Here a side has a sidewalk whatever it is tagged,
+/// except `no`, and a side not tagged has none. The sidewalk beside the road is shown whether it is part of the
+/// road's own way or a separate way of its own. `both` is the shorthand for the two sides, and a side tagged on its
+/// own says more than it does.
 fn explicit_sidewalks(tags: &mut Tags) {
-    if tags.contains_key("sidewalk") || !(tags.contains_key("sidewalk:left") || tags.contains_key("sidewalk:right")) {
+    // `sidewalk=separate` is the shorthand `sidewalk:both=separate`, which osm2streets leaves out
+    if tags.is("sidewalk", "separate") {
+        tags.remove("sidewalk");
+        if !tags.contains_key("sidewalk:both") {
+            tags.insert("sidewalk:both", "separate");
+        }
+    }
+    if tags.contains_key("sidewalk") || !["sidewalk:left", "sidewalk:right", "sidewalk:both"].iter().any(|k| tags.contains_key(*k)) {
         return;
     }
-    let has = |side: &str| tags.get(side).is_some_and(|v| v != "no" && v != "none");
+    let has = |side: &str| tags.get(side).or_else(|| tags.get("sidewalk:both")).is_some_and(|v| v != "no" && v != "none");
     let value = match (has("sidewalk:left"), has("sidewalk:right")) {
         (true, true) => "both",
         (true, false) => "left",
@@ -87,7 +96,22 @@ fn explicit_sidewalks(tags: &mut Tags) {
     };
     tags.remove("sidewalk:left");
     tags.remove("sidewalk:right");
+    tags.remove("sidewalk:both");
     tags.insert("sidewalk", value);
+}
+
+/// A side whose bike track is mapped as a way of its own (`cycleway:left=separate`, `cycleway:right=separate`,
+/// `cycleway:both=separate` or `cycleway=separate`) has the bike track beside the road that it has, as a sidewalk
+/// mapped separately has its sidewalk: osm2streets leaves a track mapped as `separate` out of the road's lanes, and
+/// the way that is the track itself is not kept (it is not among the highways the data holds). Whether the track
+/// runs one way or both is what the road's own tags say; a track mapped as a way of its own with `oneway=no` on that
+/// way is shown as running with the traffic.
+fn explicit_cycleways(tags: &mut Tags) {
+    for key in ["cycleway", "cycleway:left", "cycleway:right", "cycleway:both"] {
+        if tags.is(key, "separate") {
+            tags.insert(key, "track");
+        }
+    }
 }
 
 fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
@@ -190,6 +214,47 @@ mod tests {
         let tags = [("highway", "residential"), ("sidewalk", "left"), ("sidewalk:right", "yes")];
         assert_eq!(sidewalks(&tags).len(), 3);
         assert_eq!(sidewalks(&[("highway", "residential")]), [("highway".to_string(), "residential".to_string())]);
+    }
+
+    fn cycleways(tags: &[(&str, &str)]) -> Vec<(String, String)> {
+        let mut tags = Tags::new(tags.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect());
+        explicit_cycleways(&mut tags);
+        tags.into_inner().into_iter().collect()
+    }
+
+    #[test]
+    fn a_bike_track_mapped_separately_becomes_a_bike_track_on_that_side() {
+        let pair = |k: &str, v: &str| (k.to_string(), v.to_string());
+        assert_eq!(cycleways(&[("cycleway:both", "separate")]), [pair("cycleway:both", "track")]);
+        assert_eq!(cycleways(&[("cycleway:left", "separate"), ("cycleway:right", "no")]), [pair("cycleway:left", "track"), pair("cycleway:right", "no")]);
+        assert_eq!(cycleways(&[("cycleway", "separate")]), [pair("cycleway", "track")]);
+    }
+
+    #[test]
+    fn a_bike_lane_tagged_any_other_way_is_left_as_it_is() {
+        let tags = [("cycleway:left", "lane"), ("cycleway:right", "shared_lane"), ("cycleway", "no"), ("cycleway:both", "track")];
+        assert_eq!(cycleways(&tags).len(), 4);
+        assert!(cycleways(&tags).contains(&("cycleway:left".to_string(), "lane".to_string())));
+        assert!(cycleways(&tags).contains(&("cycleway:both".to_string(), "track".to_string())));
+    }
+
+    #[test]
+    fn a_plain_separate_sidewalk_tag_is_a_sidewalk_on_each_side_and_the_both_shorthand_is_left_beside_a_sidewalk_tag() {
+        let pair = |k: &str, v: &str| (k.to_string(), v.to_string());
+        assert_eq!(sidewalks(&[("sidewalk", "separate")]), [pair("sidewalk", "both")]);
+        assert_eq!(sidewalks(&[("sidewalk", "left"), ("sidewalk:both", "yes")]).len(), 2, "a way that says `sidewalk` is left as it is");
+        // a side tagged on its own overrides the shorthand, `separate` as much as `both`
+        assert_eq!(sidewalks(&[("sidewalk", "separate"), ("sidewalk:left", "no")]), [pair("sidewalk", "right")]);
+        assert_eq!(sidewalks(&[("sidewalk", "separate"), ("sidewalk:right", "no"), ("sidewalk:left", "yes")]), [pair("sidewalk", "left")]);
+    }
+
+    #[test]
+    fn the_both_shorthand_gives_a_sidewalk_on_each_side_and_a_side_tagged_on_its_own_overrides_it() {
+        let pair = |k: &str, v: &str| (k.to_string(), v.to_string());
+        assert_eq!(sidewalks(&[("sidewalk:both", "separate")]), [pair("sidewalk", "both")]);
+        assert_eq!(sidewalks(&[("sidewalk:both", "no")]), [pair("sidewalk", "none")]);
+        assert_eq!(sidewalks(&[("sidewalk:both", "yes"), ("sidewalk:left", "no")]), [pair("sidewalk", "right")]);
+        assert_eq!(sidewalks(&[("sidewalk:both", "no"), ("sidewalk:right", "yes")]), [pair("sidewalk", "right")]);
     }
 
     fn hours(key: &str, value: &str) -> Option<String> {

@@ -241,6 +241,11 @@ mod tests {
     /// A tile of Testville with a checksum, and the index that names it.
     const SUMMED: &str = r#"{"lon0":1.9,"lat0":0.9,"dlon":0.0257,"dlat":0.018,"tiles":["3_5"],"checksums":{"3_5":"new"}}"#;
 
+    /// What the loader keeps for a tile whose checksum in the index is `new`: that, and the version of the importer.
+    fn new() -> String {
+        tiles::with_importer("new")
+    }
+
     /// Testville with its network kept as made from a tile that had `checksum`, and its load begun.
     fn kept_from(
         checksum: Option<&str>,
@@ -256,12 +261,24 @@ mod tests {
 
     #[test]
     fn an_area_already_kept_is_not_read_again_while_its_tile_is_the_same() {
-        let (_, fetcher, _, store, result) = kept_from(Some("new"));
+        let (_, fetcher, _, store, result) = kept_from(Some(&new()));
         assert_eq!(fetcher.asked(), vec![("data/metro/index.json".to_string(), None)]);
         fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
         assert!(fetcher.asked().is_empty(), "the tile is not fetched again");
         assert_eq!(result.borrow_mut().take(), Some(Ok(())));
-        assert_eq!(store.checksum().as_deref(), Some("new"));
+        assert_eq!(store.checksum().as_deref(), Some(new().as_str()));
+    }
+
+    #[test]
+    fn an_area_made_by_an_earlier_importer_is_read_again_once_though_its_tile_is_the_same() {
+        // what an earlier version kept: the tile's checksum as the index gives it, with no importer version
+        let (_, fetcher, importer, store, result) = kept_from(Some("new"));
+        fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
+        assert_eq!(fetcher.asked(), vec![("data/metro/3_5.osm.pbf".to_string(), None)]);
+        fetcher.answer(Ok(b"TILE".to_vec()));
+        importer.answer(Ok(NETWORK.to_string()));
+        assert_eq!(result.borrow_mut().take(), Some(Ok(())));
+        assert_eq!(store.checksum().as_deref(), Some(new().as_str()), "kept as made by this importer: not read again");
     }
 
     #[test]
@@ -275,7 +292,7 @@ mod tests {
         let two_roads = NETWORK.replace(r#""name":"Only Street""#, r#""name":"Changed Street""#);
         importer.answer(Ok(two_roads));
         assert_eq!(result.borrow_mut().take(), Some(Ok(())));
-        assert_eq!(store.checksum().as_deref(), Some("new"));
+        assert_eq!(store.checksum().as_deref(), Some(new().as_str()));
         assert_eq!(
             crate::shared::said::say_now(
                 &crate::i18n_for(crate::shared::i18n::Locale::En),
@@ -292,7 +309,7 @@ mod tests {
         fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
         fetcher.answer(Ok(b"TILE".to_vec()));
         importer.answer(Ok(NETWORK.to_string()));
-        assert_eq!(store.checksum().as_deref(), Some("new"));
+        assert_eq!(store.checksum().as_deref(), Some(new().as_str()));
     }
 
     #[test]
@@ -352,7 +369,7 @@ mod tests {
         fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
         fetcher.answer(Ok(b"TILE".to_vec()));
         importer.answer(Ok(NETWORK.to_string()));
-        assert_eq!(store.checksum().as_deref(), Some("new"));
+        assert_eq!(store.checksum().as_deref(), Some(new().as_str()));
 
         let (ports, fetcher, importer) = test_ports_with_fetcher();
         let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
