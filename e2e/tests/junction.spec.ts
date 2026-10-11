@@ -162,6 +162,42 @@ test.describe("the junction editor on a junction of the city", () => {
   });
 });
 
+// Each junction measure of the Atlas: set on an arm from the inspector, it shows its code on the plan.
+const JUNCTION_MEASURES = [
+  { code: "G1", list: "At the approach", name: "Offset queue-jump lane", busLane: false },
+  { code: "G2", list: "At the approach", name: "Curbside queue-jump lane", busLane: false },
+  { code: "G3", list: "At the approach", name: "Virtual queue-jump lane", busLane: false },
+  { code: "H1", list: "At the approach", name: "Signal-controlled bus gate", busLane: true },
+  { code: "H2", list: "At the approach", name: "Yield-controlled bus gate", busLane: true },
+  { code: "M1", list: "Bus stop", name: "Bus bulb", busLane: false },
+  { code: "M2", list: "Bus stop", name: "Signal-protected on-street platform", busLane: false },
+  { code: "L1", list: "Turns", name: "Indirect left turn via alternative itinerary", busLane: false },
+  { code: "L2", list: "Turns", name: "Indirect left turn within the intersection", busLane: false },
+  { code: "L3", list: "Turns", name: "Right-in/right-out", busLane: false },
+  { code: "L4", list: "Turns", name: "Dead-ending of a lateral street", busLane: false },
+  { code: "N1", list: null, name: "Transit modal filter", busLane: false },
+];
+
+test.describe("the junction measures of the Atlas", () => {
+  for (const m of JUNCTION_MEASURES) {
+    test(`${m.code} ${m.name} is set on an arm and its code is on the plan`, async ({ page }) => {
+      await openJunction(page);
+      await page.locator("#drawing g.arm").first().click();
+      const tag = page.locator("#drawing text.measure-tag", { hasText: new RegExp(`^${m.code}$`) });
+      await expect(tag).toHaveCount(0);
+      if (m.busLane) {
+        await page.getByRole("checkbox", { name: "Bus lane along the way in" }).click();
+      }
+      if (m.list) {
+        await page.getByLabel(m.list, { exact: true }).selectOption({ label: `${m.code} ${m.name}` });
+      } else {
+        await page.getByRole("checkbox", { name: `${m.code} ${m.name}` }).click();
+      }
+      await expect(tag.first()).toBeVisible();
+    });
+  }
+});
+
 test.describe("what the junction editor keeps in the city", () => {
   test("says which OpenStreetMap nodes it was made from, and whether it has been changed", async ({ page }) => {
     await openJunction(page);
