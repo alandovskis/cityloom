@@ -370,6 +370,8 @@ pub struct ArmView {
     pub bike_box: Option<Vec<Value>>,
     /// The street has a bike lane to reach a box from, cars enter, and the junction is not a roundabout.
     pub can_bike_box: bool,
+    /// The message that says why not, when `can_bike_box` is false.
+    pub bike_box_why: Option<&'static str>,
     pub lanes: Vec<LaneView>,
     pub leave_arrows: Vec<LaneView>,
     /// "free", "stop", "yield" or "signal" for the entering traffic.
@@ -735,9 +737,8 @@ impl Junction {
             });
             let enters = !l.prof.enter_x.is_empty();
             let leaves = !l.prof.leave_x.is_empty();
-            // A box is for cyclists to wait at a stop line, so an approach cars do not stop at has none.
-            let role = control_role(s, i);
-            let boxed = a.bike_box && enters && lay.ring.is_none() && role != "free";
+            let blocker = bike_box_blocker(s, i, &l.prof);
+            let boxed = a.bike_box && blocker.is_none();
             let box_mm = if boxed { BIKE_BOX_MM } else { 0.0 };
             let lat = |x: i32| l.lat(off, x);
             let stop_line = ((cx.is_some() || boxed) && enters).then(|| {
@@ -745,7 +746,7 @@ impl Junction {
                 [at(l.bearing, lat(l.prof.enter_span.0), t), at(l.bearing, lat(l.prof.enter_span.1), t)]
             });
             let bike_box = boxed.then(|| poly(&strip(l.bearing, lat(l.prof.enter_span.0), lat(l.prof.enter_span.1), far + 600.0, far + 600.0 + BIKE_BOX_MM)));
-            let can_bike_box = enters && lay.ring.is_none() && role != "free" && !l.prof.outer_bike().is_empty();
+            let can_bike_box = blocker.is_none();
             let arrow_t = if cx.is_some() { far + 5_000.0 } else { l.mouth + 6_000.0 };
             let lanes = l
                 .prof
@@ -799,9 +800,10 @@ impl Junction {
                 stop_line,
                 bike_box,
                 can_bike_box,
+                bike_box_why: blocker.map(BikeBoxBlocker::key),
                 lanes,
                 leave_arrows,
-                role,
+                role: control_role(s, i),
                 outline: poly(&strip(l.bearing, l.pl, l.pr, l.mouth, len)),
                 end: at(l.bearing, off, len),
                 mouth_at: at(l.bearing, off, l.mouth),
@@ -1618,6 +1620,21 @@ mod tests {
         let boxed = v.arms.iter().find(|a| a.uid == n).unwrap().bike_box.clone().unwrap();
         let mouth = layout(j.current(), 0).unwrap().arms[0].mouth;
         assert!((along(&boxed, 0.0).0 - (mouth + 600.0)).abs() < 2.0);
+    }
+
+    #[test]
+    fn a_street_that_cannot_have_a_bike_box_says_why() {
+        let why = |j: &Junction| j.view().arms.iter().map(|a| a.bike_box_why).collect::<Vec<_>>();
+        assert!(why(&junction_of(&BIKED)).iter().all(|w| w.is_none()));
+        let plain = junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]);
+        assert!(why(&plain).iter().all(|w| *w == Some("jn-insp-bike-box-no-lane")));
+        let mut ring = junction_of(&BIKED);
+        assert!(ring.set_control(ROUNDABOUT));
+        assert!(why(&ring).iter().all(|w| *w == Some("jn-insp-bike-box-roundabout")));
+        let mut priority = junction_of(&BIKED);
+        assert!(priority.set_control(PRIORITY));
+        let reasons = why(&priority);
+        assert!(reasons.contains(&Some("jn-insp-bike-box-free")) && reasons.contains(&None), "{reasons:?}");
     }
 
     #[test]

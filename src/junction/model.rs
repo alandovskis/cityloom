@@ -422,6 +422,44 @@ impl Profile {
     }
 }
 
+/// Why a street cannot have a bike box. The one rule the edit, the settling of a state, the view and the details
+/// panel all ask.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BikeBoxBlocker {
+    Roundabout,
+    NoLane,
+    NoEntry,
+    Free,
+}
+
+impl BikeBoxBlocker {
+    /// The message that says it, as the name of the switch that cannot be pressed.
+    pub fn key(self) -> &'static str {
+        match self {
+            BikeBoxBlocker::Roundabout => "jn-insp-bike-box-roundabout",
+            BikeBoxBlocker::NoLane => "jn-insp-bike-box-no-lane",
+            BikeBoxBlocker::NoEntry => "jn-insp-bike-box-no-entry",
+            BikeBoxBlocker::Free => "jn-insp-bike-box-free",
+        }
+    }
+}
+
+/// What stops arm `i` of `s`, whose street reads as `p`, from having a bike box: it needs a bike lane to reach it, a
+/// lane cars enter by, a stop line (a free approach has none), and a junction that is not a roundabout.
+pub fn bike_box_blocker(s: &State, i: usize, p: &Profile) -> Option<BikeBoxBlocker> {
+    if s.control == ROUNDABOUT {
+        Some(BikeBoxBlocker::Roundabout)
+    } else if p.outer_bike().is_empty() {
+        Some(BikeBoxBlocker::NoLane)
+    } else if p.enter_x.is_empty() {
+        Some(BikeBoxBlocker::NoEntry)
+    } else if crate::junction::read_model::control_role(s, i) == "free" {
+        Some(BikeBoxBlocker::Free)
+    } else {
+        None
+    }
+}
+
 // ---- movements --------------------------------------------------------------
 
 /// The class of the turn from entering `from` to leaving `to`: within 35
@@ -586,7 +624,7 @@ impl Junction {
         let settle = |s: &State| {
             let mut s = s.clone();
             normalize(&mut s.arms, region);
-            settle_table_and_boxes(&mut s);
+            settle_table_and_boxes(&mut s, region);
             s
         };
         let today = ease(&settle(today), region)?;
@@ -665,6 +703,7 @@ impl Junction {
         let r = self.region;
         for s in &mut self.states {
             normalize(&mut s.arms, r);
+            settle_table_and_boxes(s, r);
         }
         true
     }
@@ -696,7 +735,7 @@ impl Junction {
         if next.control != ROUNDABOUT {
             next.cycle = None;
         }
-        settle_table_and_boxes(&mut next);
+        settle_table_and_boxes(&mut next, region);
         // A bus lane needs a roundabout and both its streets.
         if let Some((a, b)) = next.bus {
             if next.control != ROUNDABOUT || !next.arms.iter().any(|x| x.uid == a) || !next.arms.iter().any(|x| x.uid == b) {
@@ -1012,10 +1051,7 @@ impl Junction {
         let Some(at) = self.current().arms.iter().position(|a| a.uid == uid) else { return self.refuse(Refusal::DoesNotFit) };
         if on {
             let s = self.current();
-            let p = s.arms[at].profile(region);
-            let here =
-                s.control != ROUNDABOUT && crate::junction::read_model::control_role(s, at) != "free" && !p.outer_bike().is_empty() && !p.enter_x.is_empty();
-            if !here {
+            if bike_box_blocker(s, at, &s.arms[at].profile(region)).is_some() {
                 return self.refuse(Refusal::BikeBoxNotHere);
             }
         }
@@ -1202,7 +1238,13 @@ impl Junction {
         }
         // Only a roundabout can leave a junction that cannot be drawn.
         let why = if control == ROUNDABOUT { Refusal::RoundaboutTooBig } else { Refusal::DoesNotFit };
-        self.edit_why(why, Said::new("jn-rev-control").with("control", Arg::MsgLower(control_key(control))), |s| {
+        // A change that takes bike boxes away says so, or a screen reader would never hear of it.
+        let mut after = self.current().clone();
+        after.control = control;
+        settle_table_and_boxes(&mut after, self.region);
+        let boxes_go = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.bike_box && !b.bike_box);
+        let key = if boxes_go { "jn-rev-control-boxes" } else { "jn-rev-control" };
+        self.edit_why(why, Said::new(key).with("control", Arg::MsgLower(control_key(control))), |s| {
             s.control = control;
             true
         })
@@ -1343,21 +1385,21 @@ pub fn widest_gap(arms: &[Arm]) -> i32 {
     snap(start + width / 2, BEARING_STEP).rem_euclid(360)
 }
 
-/// A state that can be drawn, or the nearest to it that can: first with the
-/// corners as small as they go, then with offsets, a roundabout and its extras
-/// undone. None when neither can be drawn.
-/// A roundabout is no raised table and has no bike boxes, and an approach that does not stop has none: whatever put
-/// them there (an edit, a save), they go.
-fn settle_table_and_boxes(s: &mut State) {
+/// A roundabout is no raised table, and a bike box stands only where `bike_box_blocker` allows one: whatever put it
+/// elsewhere (an edit, a save), it goes.
+fn settle_table_and_boxes(s: &mut State, region: usize) {
     if s.control == ROUNDABOUT {
         s.raised = false;
     }
-    let free: Vec<bool> = (0..s.arms.len()).map(|i| s.control == ROUNDABOUT || crate::junction::read_model::control_role(s, i) == "free").collect();
-    for (a, free) in s.arms.iter_mut().zip(free) {
-        a.bike_box = a.bike_box && !free;
+    let blocked: Vec<bool> = (0..s.arms.len()).map(|i| bike_box_blocker(s, i, &s.arms[i].profile(region)).is_some()).collect();
+    for (a, blocked) in s.arms.iter_mut().zip(blocked) {
+        a.bike_box = a.bike_box && !blocked;
     }
 }
 
+/// A state that can be drawn, or the nearest to it that can: first with the
+/// corners as small as they go, then with offsets, a roundabout and its extras
+/// undone. None when neither can be drawn.
 fn ease(s: &State, region: usize) -> Option<State> {
     if valid(s, region) {
         return Some(s.clone());
@@ -1408,7 +1450,6 @@ pub fn normalize(arms: &mut [Arm], region: usize) {
         }
         a.banned.retain(|b| uids.contains(b) && *b != a.uid);
         a.bulb = [a.bulb[0] && p.park[0] > 0, a.bulb[1] && p.park[1] > 0];
-        a.bike_box = a.bike_box && !p.outer_bike().is_empty() && n > 0;
         if let Some(c) = a.crossing.as_mut() {
             c.island = c.island && p.road_mm() >= ISLAND_MIN_ROAD_MM && !c.continuous;
         }
@@ -2205,6 +2246,28 @@ mod tests {
         assert_eq!(j.refusal(), Some(Refusal::BikeBoxNotHere));
         assert!(j.undo());
         assert!(j.current().arms.iter().all(|a| a.bike_box), "undo brings them back");
+    }
+
+    #[test]
+    fn a_control_change_that_takes_bike_boxes_away_says_so() {
+        let boxed = || {
+            let mut j = junction_of(&BIKED);
+            for uid in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+                assert!(j.set_bike_box(uid, true));
+            }
+            j
+        };
+        let last = |j: &Junction| j.revisions().last().cloned().unwrap();
+        let mut keeps = boxed();
+        assert!(keeps.set_control(ALL_WAY_STOP));
+        assert_eq!(en(&last(&keeps)), "Control: all-way stop", "every approach still stops: nothing is lost");
+        let mut loses = boxed();
+        assert!(loses.set_control(PRIORITY));
+        assert!(en(&last(&loses)).ends_with("; bike boxes removed"), "{}", en(&last(&loses)));
+        assert!(fr(&last(&loses)).ends_with("; sas cyclables retirés"), "{}", fr(&last(&loses)));
+        let mut plain = junction_of(&BIKED);
+        assert!(plain.set_control(PRIORITY));
+        assert!(!en(&last(&plain)).contains("removed"), "no box, nothing to say");
     }
 
     #[test]

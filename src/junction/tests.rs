@@ -283,18 +283,18 @@ fn a_street_with_a_bike_lane_offers_a_bike_box_and_one_without_says_why_it_canno
     let plain = shared(0);
     let e = arm(&plain, 90);
     plain.edit(|j| j.select(Target::Arm(e)));
-    assert!(panel(&plain).contains("Bike box (needs a bike lane on a street where cars enter and stop)"));
+    assert!(panel(&plain).contains("Bike box (needs a bike lane on this street)"));
 }
 
 #[test]
-fn a_roundabout_has_no_bike_box_switch() {
+fn a_roundabout_says_it_has_no_bike_box() {
     use crate::junction::model::junction_of;
     let mut biked = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
     assert!(biked.set_control(ROUNDABOUT));
     let uid = biked.current().arms[0].uid;
     let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(crate::shared::i18n::Locale::En), biked, None);
     s.edit(|j| j.select(Target::Arm(uid)));
-    assert!(!panel(&s).contains("Bike box"));
+    assert!(panel(&s).contains("Bike box (not at a roundabout)") && !panel(&s).contains("Waiting box for cyclists"));
 }
 
 #[test]

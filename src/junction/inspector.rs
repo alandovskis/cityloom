@@ -832,7 +832,7 @@ fn choice(
 
 /// The switch for a bike box ahead of the cars' stop line; off, and saying why, where the street cannot have one.
 fn bike_box_section(w: Watch, uid: u32) -> impl IntoView {
-    let can = move || w.arm(uid, |a| a.can_bike_box).unwrap_or(false);
+    let why = move || w.arm(uid, |a| a.bike_box_why).flatten();
     let on = move || w.arm(uid, |a| a.bike_box.is_some()).unwrap_or(false);
     section(
         w,
@@ -842,9 +842,9 @@ fn bike_box_section(w: Watch, uid: u32) -> impl IntoView {
             <ul class="opts">
                 {option_btn(
                     on,
-                    move || !can(),
+                    move || why().is_some(),
                     ().into_any(),
-                    move || w.tr(if can() { "jn-insp-bike-box-option" } else { "jn-insp-bike-box-unavailable" }),
+                    move || w.tr(why().unwrap_or("jn-insp-bike-box-option")),
                     move || { w.edit(|j| j.set_bike_box(uid, !on())); },
                 )}
             </ul>
@@ -926,7 +926,6 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
     if crossing_only {
         return view! { {head(name, sub)} {crossing_section(w, uid)} {control_section(w)} }.into_any();
     }
-    let ring = Memo::new(move |_| w.view().ring.is_some());
     let enters = Memo::new(move |_| w.arm(uid, |a| a.enters).unwrap_or(false));
     let lanes = Memo::new(move |_| w.arm(uid, |a| a.lanes.len()).unwrap_or(0));
     let linked = w.view_now().linked;
@@ -984,7 +983,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         </section>
         {crossing_section(w, uid)}
         {transit_section(w, uid)}
-        {move || (!ring.get()).then(|| bike_box_section(w, uid))}
+        {bike_box_section(w, uid)}
         {num_field(
             w,
             direction,
