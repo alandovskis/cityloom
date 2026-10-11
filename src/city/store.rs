@@ -466,6 +466,22 @@ mod tests {
     }
 
     #[test]
+    fn a_street_that_leaves_the_area_is_kept_though_its_far_end_is_no_osm_node() {
+        let (ports, _, storage) = test_ports();
+        let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
+        let mut network = tiny_network();
+        network.nodes[1].osm_nodes.clear(); // where the road is cut at the area's box
+        area.keep_network(&network);
+        let street = area.open().view(0).edges[0].uid;
+        let mut s = area.open().street_editor(street, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(area.write_street(street, s));
+        assert_eq!(document(&storage).streets.keys().collect::<Vec<_>>(), ["w7~n1~x"]);
+        assert_eq!(area.open().view(0).edited, 1);
+    }
+
+    #[test]
     fn pages_open_the_area_that_was_chosen_and_the_default_before_one_is() {
         let (ports, _, storage) = test_ports();
         assert_eq!(CityStore::current_area(&*storage), default_area());

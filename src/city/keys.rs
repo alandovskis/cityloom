@@ -9,11 +9,18 @@ pub fn junction_key(source: &[OsmRef]) -> Option<String> {
     source.iter().map(|r| r.id).min().map(|id| format!("n{id}"))
 }
 
+/// What stands for the end of a street where the road leaves the area's box: that end is a node the importer made,
+/// with no OpenStreetMap node.
+const OPEN_END: &str = "x";
+
 /// A street's key: `w` and its smallest way, then the keys of its two ends in sorted order (so the pieces of one way
-/// differ, and which end is `a` does not matter).
+/// differ, and which end is `a` does not matter). An end with no OpenStreetMap node, where a road leaves the area's
+/// box, is `x`: such a street is still told from the other pieces of its way, and is found again in another area
+/// through the ways and nodes it shares.
 pub fn street_key(ways: &[OsmRef], end_a: &[OsmRef], end_b: &[OsmRef]) -> Option<String> {
     let way = ways.iter().map(|r| r.id).min()?;
-    let mut ends = [junction_key(end_a)?, junction_key(end_b)?];
+    let end = |source: &[OsmRef]| junction_key(source).unwrap_or_else(|| OPEN_END.to_string());
+    let mut ends = [end(end_a), end(end_b)];
     ends.sort();
     Some(format!("w{way}~{}~{}", ends[0], ends[1]))
 }
@@ -58,9 +65,14 @@ mod tests {
     }
 
     #[test]
-    fn a_street_whose_way_or_either_end_has_no_osm_id_has_no_key() {
+    fn a_street_whose_way_has_no_osm_id_has_no_key() {
         assert_eq!(street_key(&[], &refs(&[1]), &refs(&[2])), None);
-        assert_eq!(street_key(&refs(&[7]), &[], &refs(&[2])), None);
-        assert_eq!(street_key(&refs(&[7]), &refs(&[1]), &[]), None);
+    }
+
+    #[test]
+    fn a_street_leaving_the_area_is_keyed_by_its_other_end_alone() {
+        assert_eq!(street_key(&refs(&[7]), &[], &refs(&[2])).as_deref(), Some("w7~n2~x"));
+        assert_eq!(street_key(&refs(&[7]), &refs(&[2]), &[]), street_key(&refs(&[7]), &[], &refs(&[2])));
+        assert_eq!(street_key(&refs(&[7]), &[], &[]).as_deref(), Some("w7~x~x"));
     }
 }
