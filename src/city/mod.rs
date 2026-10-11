@@ -3,6 +3,7 @@
 //! place of it writes back.
 
 pub mod binding;
+pub mod edits;
 pub mod import;
 pub mod keys;
 pub mod model;

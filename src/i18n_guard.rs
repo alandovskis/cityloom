@@ -11,6 +11,7 @@ use proc_macro2::{Delimiter, TokenStream, TokenTree};
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
+    ("src/city/edits.rs", "the stored document and its storage keys; it holds no wording (the keys are kebab-case, but not messages)"),
     ("src/city/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
     ("src/map/tests.rs", "test-only"),
