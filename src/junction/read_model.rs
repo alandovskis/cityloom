@@ -524,7 +524,7 @@ fn heading(bearing: f64) -> i32 {
     (bearing + 180.0).rem_euclid(360.0).round() as i32
 }
 
-fn control_role(s: &State, i: usize) -> &'static str {
+pub fn control_role(s: &State, i: usize) -> &'static str {
     match s.control {
         SIGNAL => "signal",
         ALL_WAY_STOP => "stop",
@@ -735,15 +735,17 @@ impl Junction {
             });
             let enters = !l.prof.enter_x.is_empty();
             let leaves = !l.prof.leave_x.is_empty();
-            let boxed = a.bike_box && enters && lay.ring.is_none();
+            // A box is for cyclists to wait at a stop line, so an approach cars do not stop at has none.
+            let role = control_role(s, i);
+            let boxed = a.bike_box && enters && lay.ring.is_none() && role != "free";
             let box_mm = if boxed { BIKE_BOX_MM } else { 0.0 };
             let lat = |x: i32| l.lat(off, x);
-            let stop_line = (cx.is_some() && enters).then(|| {
+            let stop_line = ((cx.is_some() || boxed) && enters).then(|| {
                 let t = far + 600.0 + box_mm;
                 [at(l.bearing, lat(l.prof.enter_span.0), t), at(l.bearing, lat(l.prof.enter_span.1), t)]
             });
             let bike_box = boxed.then(|| poly(&strip(l.bearing, lat(l.prof.enter_span.0), lat(l.prof.enter_span.1), far + 600.0, far + 600.0 + BIKE_BOX_MM)));
-            let can_bike_box = enters && lay.ring.is_none() && !l.prof.outer_bike().is_empty();
+            let can_bike_box = enters && lay.ring.is_none() && role != "free" && !l.prof.outer_bike().is_empty();
             let arrow_t = if cx.is_some() { far + 5_000.0 } else { l.mouth + 6_000.0 };
             let lanes = l
                 .prof
@@ -752,7 +754,7 @@ impl Junction {
                 .zip(&a.lanes)
                 .map(|(&x, lane)| {
                     let uses = lane.to.iter().filter_map(|t| s.arms.iter().find(|b| b.uid == *t)).fold(0, |m, b| m | turn_class(a.bearing, b.bearing));
-                    let mut v = lane_view(l, off, x, arrow_t, heading(l.bearing), uses);
+                    let mut v = lane_view(l, off, x, arrow_t + box_mm, heading(l.bearing), uses);
                     let mut dests: Vec<(i32, DestView)> = s
                         .arms
                         .iter()
@@ -799,7 +801,7 @@ impl Junction {
                 can_bike_box,
                 lanes,
                 leave_arrows,
-                role: control_role(s, i),
+                role,
                 outline: poly(&strip(l.bearing, l.pl, l.pr, l.mouth, len)),
                 end: at(l.bearing, off, len),
                 mouth_at: at(l.bearing, off, l.mouth),
@@ -1616,6 +1618,50 @@ mod tests {
         let boxed = v.arms.iter().find(|a| a.uid == n).unwrap().bike_box.clone().unwrap();
         let mouth = layout(j.current(), 0).unwrap().arms[0].mouth;
         assert!((along(&boxed, 0.0).0 - (mouth + 600.0)).abs() < 2.0);
+    }
+
+    #[test]
+    fn a_free_approach_is_offered_no_bike_box() {
+        let mut j = junction_of(&BIKED);
+        assert!(j.set_control(PRIORITY));
+        let v = j.view();
+        for a in &v.arms {
+            assert_eq!(a.can_bike_box, a.role != "free", "{} is {}", a.bearing, a.role);
+        }
+        assert!(v.arms.iter().any(|a| a.role == "free") && v.arms.iter().any(|a| a.role != "free"));
+    }
+
+    #[test]
+    fn a_street_with_no_crossing_still_has_a_stop_line_behind_its_box() {
+        let mut j = junction_of(&BIKED);
+        let n = arm_of(&j, 0);
+        assert!(j.set_crossing(n, false));
+        let stop = |j: &Junction| j.view().arms.iter().find(|a| a.uid == n).unwrap().stop_line;
+        assert!(stop(&j).is_none());
+        assert!(j.set_bike_box(n, true));
+        assert!(stop(&j).is_some());
+    }
+
+    #[test]
+    fn the_box_is_as_wide_as_the_stop_line_and_the_arrows_stay_clear_of_it() {
+        let mut j = junction_of(&BIKED);
+        let n = arm_of(&j, 0);
+        let lane = |j: &Junction| {
+            let v = j.view();
+            let a = v.arms.iter().find(|a| a.uid == n).unwrap();
+            (a.bike_box.clone(), a.stop_line, a.lanes[0].at)
+        };
+        let (_, _, arrow0) = lane(&j);
+        assert!(j.set_bike_box(n, true));
+        let (boxed, stop, arrow1) = lane(&j);
+        let xs: Vec<f64> = boxed.unwrap().iter().filter_map(|v| v.get(1)?.as_f64()).collect();
+        let (lo, hi) = (xs.iter().cloned().fold(f64::MAX, f64::min), xs.iter().cloned().fold(f64::MIN, f64::max));
+        let stop = stop.unwrap();
+        let (a, b) = (stop[0].0.min(stop[1].0), stop[0].0.max(stop[1].0));
+        assert!((lo - a).abs() < 2.0 && (hi - b).abs() < 2.0, "box {lo}..{hi}, stop line {a}..{b}");
+        let d = crate::junction::geometry::dir(0.0);
+        let moved = (arrow1.0 - arrow0.0) * d.0 + (arrow1.1 - arrow0.1) * d.1;
+        assert!((moved - 3_000.0).abs() < 2.0, "the entering arrows move back with the stop line: {moved}");
     }
 
     #[test]

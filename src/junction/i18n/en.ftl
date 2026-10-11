@@ -66,7 +66,7 @@ jn-refusal-island-road-too-narrow = This road is too narrow for an island.
 jn-refusal-bulb-no-parking = There is no parking on that side to give up.
 jn-refusal-does-not-fit = That change does not fit.
 jn-refusal-raised-roundabout = A roundabout cannot be a raised table.
-jn-refusal-bike-box-not-here = A bike box needs a bike lane on a street that cars enter, at a junction that is not a roundabout.
+jn-refusal-bike-box-not-here = A bike box needs a bike lane on a street where cars enter and stop, at a junction that is not a roundabout.
 
 ## What each change was, in the history
 jn-word-add = add
@@ -350,7 +350,7 @@ jn-insp-island-narrow = Refuge island (road too narrow)
 jn-insp-island-continuous = Refuge island (not on a continuous sidewalk)
 jn-insp-bike-box = Bike box
 jn-insp-bike-box-option = Waiting box for cyclists ahead of the cars
-jn-insp-bike-box-unavailable = Bike box (needs a bike lane on a street cars enter)
+jn-insp-bike-box-unavailable = Bike box (needs a bike lane on a street where cars enter and stop)
 jn-insp-shorten = Shorten the crossing
 jn-insp-transit = Transit priority
 jn-insp-bus-lane-in = Bus lane along the way in

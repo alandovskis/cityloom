@@ -276,14 +276,25 @@ fn a_street_with_a_bike_lane_offers_a_bike_box_and_one_without_says_why_it_canno
     s.edit(|j| j.select(Target::Arm(uid)));
     let h = panel(&s);
     assert!(h.contains("Bike box") && h.contains("Waiting box for cyclists ahead of the cars"));
-    assert!(!h.contains("needs a bike lane on a street cars enter"));
+    assert!(!h.contains("needs a bike lane"));
     s.edit(|j| j.set_bike_box(uid, true));
     assert!(panel(&s).contains("Waiting box for cyclists ahead of the cars"));
 
     let plain = shared(0);
     let e = arm(&plain, 90);
     plain.edit(|j| j.select(Target::Arm(e)));
-    assert!(panel(&plain).contains("Bike box (needs a bike lane on a street cars enter)"));
+    assert!(panel(&plain).contains("Bike box (needs a bike lane on a street where cars enter and stop)"));
+}
+
+#[test]
+fn a_roundabout_has_no_bike_box_switch() {
+    use crate::junction::model::junction_of;
+    let mut biked = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+    assert!(biked.set_control(ROUNDABOUT));
+    let uid = biked.current().arms[0].uid;
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(crate::shared::i18n::Locale::En), biked, None);
+    s.edit(|j| j.select(Target::Arm(uid)));
+    assert!(!panel(&s).contains("Bike box"));
 }
 
 #[test]

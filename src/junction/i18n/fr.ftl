@@ -66,7 +66,7 @@ jn-refusal-island-road-too-narrow = Cette chaussée est trop étroite pour un î
 jn-refusal-bulb-no-parking = Il n’y a pas de stationnement à céder de ce côté.
 jn-refusal-does-not-fit = Cette modification ne convient pas.
 jn-refusal-raised-roundabout = Un carrefour giratoire ne peut pas être surélevé.
-jn-refusal-bike-box-not-here = Un sas cyclable demande une piste cyclable sur une rue où les voitures entrent, à un carrefour qui n’est pas giratoire.
+jn-refusal-bike-box-not-here = Un sas cyclable exige une piste cyclable sur une rue où les voitures entrent et s’arrêtent, à un carrefour qui n’est pas giratoire.
 
 ## Ce qu’a été chaque modification, dans l’historique
 jn-word-add = ajout
@@ -350,7 +350,7 @@ jn-insp-island-narrow = Îlot refuge (chaussée trop étroite)
 jn-insp-island-continuous = Îlot refuge (pas sur un trottoir continu)
 jn-insp-bike-box = Sas cyclable
 jn-insp-bike-box-option = Sas d’attente pour les cyclistes devant les voitures
-jn-insp-bike-box-unavailable = Sas cyclable (demande une piste cyclable sur une rue où les voitures entrent)
+jn-insp-bike-box-unavailable = Sas cyclable (exige une piste cyclable sur une rue où les voitures entrent et s’arrêtent)
 jn-insp-shorten = Raccourcir la traversée
 jn-insp-transit = Priorité au transport en commun
 jn-insp-bus-lane-in = Voie réservée aux autobus en entrée

@@ -926,6 +926,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
     if crossing_only {
         return view! { {head(name, sub)} {crossing_section(w, uid)} {control_section(w)} }.into_any();
     }
+    let ring = Memo::new(move |_| w.view().ring.is_some());
     let enters = Memo::new(move |_| w.arm(uid, |a| a.enters).unwrap_or(false));
     let lanes = Memo::new(move |_| w.arm(uid, |a| a.lanes.len()).unwrap_or(0));
     let linked = w.view_now().linked;
@@ -983,7 +984,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         </section>
         {crossing_section(w, uid)}
         {transit_section(w, uid)}
-        {bike_box_section(w, uid)}
+        {move || (!ring.get()).then(|| bike_box_section(w, uid))}
         {num_field(
             w,
             direction,
