@@ -40,11 +40,6 @@ fn conflict_note(v: &JView) -> Option<&'static str> {
     }
 }
 
-/// The messages of the compass points of the arms a measure is in use on, in arm order.
-fn used_on(v: &JView, code: &str) -> Vec<&'static str> {
-    v.arms.iter().filter(|a| a.transit.codes.contains(&code)).map(|a| compass_key(a.bearing)).collect()
-}
-
 fn icon(ok: bool) -> impl IntoView {
     let d = if ok { "M2.5 8.5 6.5 12.5 13.5 3.5" } else { "M3 3l10 10M13 3 3 13" };
     view! { <svg viewBox="0 0 16 16" aria-hidden="true"><path d=d/></svg> }
@@ -247,21 +242,5 @@ mod tests {
         assert_eq!(conflict_note(&j.view()), None);
         assert!(j.set_control(ROUNDABOUT));
         assert_eq!(conflict_note(&j.view()), Some("jn-conflicts-roundabout"));
-    }
-
-    #[test]
-    fn a_measure_is_in_use_on_the_arms_that_have_it_in_arm_order() {
-        let mut j = Junction::new(0);
-        let (n, e) = (arm_view(&j, 0).uid, arm_view(&j, 90).uid);
-        assert!(used_on(&j.view(), "N1").is_empty());
-        j.set_bus_lane(e, true);
-        j.set_filter(e, true);
-        j.set_approach(e, Q_CURB);
-        j.set_filter(n, true);
-        j.set_bus_lane(n, true);
-        let v = j.view();
-        assert_eq!(used_on(&v, "N1"), vec!["jn-compass-short-n", "jn-compass-short-e"]);
-        assert_eq!(used_on(&v, "G2"), vec!["jn-compass-short-e"]);
-        assert!(used_on(&v, "L1").is_empty());
     }
 }
