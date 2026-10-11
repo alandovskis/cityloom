@@ -79,8 +79,6 @@ pub fn parse(stored: Option<&str>) -> Document {
 
 /// What identifies a place, or a stored record, when they are matched: its key and the OpenStreetMap ids it was
 /// made from (a junction has no `ways`).
-// Used by `City::load_on` (plan task 5); the allows go there.
-#[allow(dead_code)]
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Ids {
     pub key: Option<String>,
@@ -88,7 +86,6 @@ pub struct Ids {
     pub nodes: BTreeSet<i64>,
 }
 
-#[allow(dead_code)] // plan task 5 uses these
 impl Ids {
     pub fn from_street_record(key: &str, r: &StreetRecord) -> Ids {
         Ids { key: Some(key.to_string()), ways: r.ways.clone(), nodes: r.nodes.clone() }
@@ -112,7 +109,6 @@ impl Ids {
 /// For each place, the index of the record it takes. An exact key wins; otherwise the record with the largest
 /// overlap, if that is unique. A record wanted by several places goes to the one with the larger score; a tie
 /// gives it to nobody.
-#[allow(dead_code)] // plan task 5 uses this
 pub fn assign(places: &[Ids], records: &[Ids]) -> Vec<Option<usize>> {
     // An exact key outranks any overlap; places sharing a key are told apart by their overlap.
     let score = |p: &Ids, r: &Ids| (p.key.is_some() && p.key == r.key, p.overlap(r));

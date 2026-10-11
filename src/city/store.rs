@@ -118,14 +118,14 @@ impl CityStore {
 
     /// The city as it is kept, or as first laid out when nothing usable is.
     pub fn open(&self) -> City {
-        City::load_on(self.layout(), &self.storage.recall(&self.key(CITY_KEY)).unwrap_or_default())
+        City::load_old(self.layout(), &self.storage.recall(&self.key(CITY_KEY)).unwrap_or_default())
     }
 
     /// Applies `change` to the city as it is kept now and keeps the result.
     /// Says whether the change was taken and kept.
     pub fn write(&self, change: impl FnOnce(&mut City) -> bool) -> bool {
         let mut city = self.open();
-        change(&mut city) && self.storage.remember(&self.key(CITY_KEY), &city.save())
+        change(&mut city) && self.storage.remember(&self.key(CITY_KEY), &city.legacy_save())
     }
 
     /// The index of the region the person chose, which the pages share; the
