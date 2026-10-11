@@ -1207,6 +1207,24 @@ mod tests {
     }
 
     #[test]
+    fn a_save_made_before_the_bike_box_loads_with_none() {
+        let mut city = City::new();
+        let mut j = city.junction_editor(node_uid(1), 0).unwrap();
+        let arm = j.current().arms[0].uid;
+        assert!(j.set_corner(arm, 4_500));
+        assert!(city.keep_junction(node_uid(1), j.snapshot()));
+        let mut saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        let arms = saved["junctions"]["2"]["arms"].as_array_mut().unwrap();
+        assert!(arms.iter().all(|a| a["bike_box"] == serde_json::json!(false)), "the field is saved");
+        for a in arms.iter_mut() {
+            a.as_object_mut().unwrap().remove("bike_box");
+        }
+        let back = City::load(&saved.to_string());
+        assert!(back.view(0).nodes[1].edited, "the junction is kept, the save is not discarded");
+        assert!(back.junctions[&node_uid(1)].arms.iter().all(|a| !a.bike_box));
+    }
+
+    #[test]
     fn a_saved_junction_from_the_earlier_version_with_a_label_still_loads() {
         let mut city = City::new();
         let mut j = city.junction_editor(node_uid(1), 0).unwrap();

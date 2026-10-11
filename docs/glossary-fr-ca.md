@@ -222,6 +222,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction inspector | Lanes coming in | Voies entrantes | As the Getting across table's column. |
 | Junction inspector | Raised table | Carrefour surélevé | To confirm, see below. |
 | Junction inspector | Continuous sidewalk | Trottoir continu | To confirm, see below. |
+| Junction inspector | Bike box | Sas cyclable | To confirm, see below. |
 
 ## Terms to confirm
 
@@ -289,3 +290,4 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | The toolbox of the Transit Priority Atlas, and where CityLoom models each measure (junction page) | `La boîte à outils du Transit Priority Atlas, et l’endroit où CityLoom modélise chaque mesure` | The Atlas keeps its English name, as on the street page (`d’après le Transit Priority Atlas`). |
 | Raised table (junction) | `Carrefour surélevé` | `Intersection surélevée`; `carrefour` is the word of `Carrefour giratoire`, where the app's own `Jonction` names a place of the city |
 | Continuous sidewalk (junction) | `Trottoir continu` | `Trottoir traversant`, `Trottoir prolongé` (suggestion) |
+| Bike box (junction) | `Sas cyclable` | `Case avancée pour cyclistes`, `Boîte vélo` (suggestion) |

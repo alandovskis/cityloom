@@ -718,6 +718,10 @@ svg pattern circle {
   stroke: none;
   pointer-events: none;
 }
+#drawing .bike-box {
+  stroke: var(--ink-2);
+  stroke-width: 0.8;
+}
 #drawing .continuous-ramp {
   fill: var(--k-sidewalk);
   fill-opacity: 0.5;

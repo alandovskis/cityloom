@@ -36,6 +36,20 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#drawing .continuous-ramp").first()).toBeVisible();
   });
 
+  test("a street with a bike lane is given a bike box from its details and it is drawn", async ({ page }) => {
+    await page.locator("#wrap").focus();
+    await expect(page.locator("#drawing .bike-box")).toHaveCount(0);
+    const box = page
+      .locator("#inspector")
+      .getByRole("checkbox", { name: /^(Waiting box for cyclists ahead of the cars|Bike box \()/ });
+    // Each street takes three presses (the street, its crossing, the corner): find the first with a bike lane to reach a box from.
+    await page.keyboard.press("ArrowRight");
+    for (let i = 0; i < 16 && !(await box.isEnabled({ timeout: 500 }).catch(() => false)); i++)
+      await page.keyboard.press("ArrowRight");
+    await box.check();
+    await expect(page.locator("#drawing .bike-box").first()).toBeVisible();
+  });
+
   test("starts as the city lays it out and says how many streets meet and whether it works", async ({ page }) => {
     await expect(page.locator("#arm-count")).toHaveText(/^[3-5] streets$/);
     await expect(page.locator("#fit")).toContainText(/^[3-5] streets, /);
