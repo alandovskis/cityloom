@@ -168,6 +168,7 @@ jn-sel-arm = { $arm }, { $degrees ->
    *[other] { $degrees } degrees
 }
 jn-sel-corner = Corner after { $arm }, { $radius } radius
+jn-sel-corner-protected = Protected corner after { $arm }, { $radius } radius
 jn-sel-crossing = Crossing on { $arm }
 jn-sel-crossing-continuous = Continuous sidewalk across { $arm }
 
@@ -362,6 +363,8 @@ jn-insp-bike-box-free = Bike box (cars do not stop on this street)
 jn-insp-protected-roundabout = Protected corner (not at a roundabout)
 jn-insp-protected-straight = Protected corner (this corner is a straight line)
 jn-insp-protected-no-lane = Protected corner (needs a bike lane beside the curb of both streets)
+jn-insp-protected = Protected corner
+jn-insp-protected-option = Bike track round a corner island
 jn-insp-shorten = Shorten the crossing
 jn-insp-transit = Transit priority
 jn-insp-bus-lane-in = Bus lane along the way in

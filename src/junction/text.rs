@@ -90,8 +90,10 @@ pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
         "lane" => i18n.tr_now("jn-sel-lane", &args.num("n", s.lane as i64 + 1).num("count", arm.map_or(0, |a| a.lanes.len()) as i64)),
         "arm" => i18n.tr_now("jn-sel-arm", &args.num("degrees", arm.map_or(0, |a| a.bearing).into())),
         "corner" => {
-            let radius = v.corners.iter().find(|c| c.uid == s.uid).map_or(0, |c| c.radius_mm);
-            i18n.tr_now("jn-sel-corner", &args.str("radius", units.length_in(radius, locale)))
+            let corner = v.corners.iter().find(|c| c.uid == s.uid);
+            let radius = corner.map_or(0, |c| c.radius_mm);
+            let key = if corner.is_some_and(|c| c.protected.is_some()) { "jn-sel-corner-protected" } else { "jn-sel-corner" };
+            i18n.tr_now(key, &args.str("radius", units.length_in(radius, locale)))
         }
         _ => {
             let continuous = arm.and_then(|a| a.crossing.as_ref()).is_some_and(|c| c.continuous);
@@ -229,6 +231,20 @@ mod tests {
         assert_eq!(selection_text(&j.view(), &fr(), Units::Metres).unwrap(), "Trottoir continu à travers Sample Avenue 2 (nord)");
         assert!(j.set_continuous(n, false));
         assert_eq!(selection_text(&j.view(), &en(), Units::Metres).unwrap(), "Crossing on Sample Avenue 2 (north)");
+    }
+
+    #[test]
+    fn a_protected_corner_is_selected_as_a_protected_corner_in_both_languages() {
+        let mut j =
+            crate::junction::model::junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+        let n = j.current().arms[0].uid;
+        assert!(j.set_protected(n, true));
+        j.select(Target::Corner(n));
+        let english = selection_text(&j.view(), &en(), Units::Metres).unwrap();
+        assert!(english.starts_with("Protected corner after"), "{english}");
+        assert!(selection_text(&j.view(), &fr(), Units::Metres).unwrap().starts_with("Coin protégé après"));
+        assert!(j.set_protected(n, false));
+        assert!(selection_text(&j.view(), &en(), Units::Metres).unwrap().starts_with("Corner after"));
     }
 
     #[test]

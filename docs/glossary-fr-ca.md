@@ -223,6 +223,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction inspector | Raised table | Carrefour surélevé | To confirm, see below. |
 | Junction inspector | Continuous sidewalk | Trottoir continu | To confirm, see below. |
 | Junction inspector | Bike box | Sas cyclable | To confirm, see below. |
+| Junction inspector | Protected corner | Coin protégé | To confirm, see below. |
 
 ## Terms to confirm
 
@@ -291,3 +292,4 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Raised table (junction) | `Carrefour surélevé` | `Intersection surélevée`; `carrefour` is the word of `Carrefour giratoire`, where the app's own `Jonction` names a place of the city |
 | Continuous sidewalk (junction) | `Trottoir continu` | `Trottoir traversant`, `Trottoir prolongé` (suggestion) |
 | Bike box (junction) | `Sas cyclable` | `Case avancée pour cyclistes`, `Boîte vélo` (suggestion) |
+| Protected corner / corner island (junction) | `Coin protégé`, `Îlot de coin` | `Intersection protégée`, `Îlot d’angle` (suggestion) |

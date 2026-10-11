@@ -168,6 +168,7 @@ jn-sel-arm = { $arm }, { $degrees ->
    *[other] { $degrees } degrés
 }
 jn-sel-corner = Coin après { $arm }, rayon de { $radius }
+jn-sel-corner-protected = Coin protégé après { $arm }, rayon de { $radius }
 jn-sel-crossing = Passage pour piétons sur { $arm }
 jn-sel-crossing-continuous = Trottoir continu à travers { $arm }
 
@@ -362,6 +363,8 @@ jn-insp-bike-box-free = Sas cyclable (les voitures ne s’arrêtent pas sur cett
 jn-insp-protected-roundabout = Coin protégé (pas à un carrefour giratoire)
 jn-insp-protected-straight = Coin protégé (ce coin est une ligne droite)
 jn-insp-protected-no-lane = Coin protégé (exige une piste cyclable le long du trottoir des deux rues)
+jn-insp-protected = Coin protégé
+jn-insp-protected-option = Piste cyclable autour d’un îlot de coin
 jn-insp-shorten = Raccourcir la traversée
 jn-insp-transit = Priorité au transport en commun
 jn-insp-bus-lane-in = Voie réservée aux autobus en entrée

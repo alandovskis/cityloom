@@ -268,6 +268,25 @@ fn a_continuous_sidewalk_says_why_its_street_has_no_island_switch() {
 }
 
 #[test]
+fn a_corner_between_streets_with_bike_lanes_offers_a_protected_corner_and_others_say_why_not() {
+    use crate::junction::model::junction_of;
+    let biked = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+    let uid = biked.current().arms[0].uid;
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(crate::shared::i18n::Locale::En), biked, None);
+    s.edit(|j| j.select(Target::Corner(uid)));
+    let h = panel(&s);
+    assert!(h.contains("Protected corner") && h.contains("Bike track round a corner island"));
+    assert!(!h.contains("needs a bike lane beside the curb"));
+    s.edit(|j| j.set_protected(uid, true));
+    assert!(panel(&s).contains("Bike track round a corner island"));
+
+    let plain = shared(0);
+    let n = arm(&plain, 0);
+    plain.edit(|j| j.select(Target::Corner(n)));
+    assert!(panel(&plain).contains("Protected corner (needs a bike lane beside the curb of both streets)"));
+}
+
+#[test]
 fn a_street_with_a_bike_lane_offers_a_bike_box_and_one_without_says_why_it_cannot() {
     use crate::junction::model::junction_of;
     let biked = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
