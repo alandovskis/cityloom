@@ -1,6 +1,6 @@
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
-import { expect, openJunction, openStreet, test } from "./fixtures";
+import { expect, mapReady, openJunction, openStreet, test } from "./fixtures";
 
 /** What a keyboard user sees on a focused control: a ring of its own, not only a tint. */
 const ring = (field: Locator) =>
@@ -63,3 +63,29 @@ test.describe("a touch drag moves the piece, it does not scroll the page", () =>
     expect(await page.locator('#drawing [data-role="grip-arm"]').count()).toBeGreaterThan(0);
   });
 });
+
+const pages: [string, (p: Page) => Promise<unknown>][] = [
+  ["home", (p) => p.goto("/")],
+  [
+    "map",
+    async (p) => {
+      await p.goto("/map.html");
+      await mapReady(p);
+    },
+  ],
+  ["street", openStreet],
+  ["junction", openJunction],
+];
+for (const [name, open] of pages) {
+  test(`the settings menu fits a 360px phone (${name})`, async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    await open(page);
+    // The shell is bound once the footer holds the version.
+    await expect(page.locator("[data-version]").first()).not.toBeEmpty();
+    await page.locator("#account-btn").click();
+    await expect(page.locator("#account-menu")).toBeVisible();
+    const menu = (await page.locator("#account-menu").boundingBox())!;
+    expect(menu.x).toBeGreaterThanOrEqual(0);
+    expect(menu.x + menu.width).toBeLessThanOrEqual(360);
+  });
+}
