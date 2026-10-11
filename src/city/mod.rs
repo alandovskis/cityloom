@@ -4,6 +4,7 @@
 
 pub mod binding;
 pub mod import;
+pub mod keys;
 pub mod model;
 pub mod store;
 

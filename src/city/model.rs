@@ -236,17 +236,24 @@ impl Layout {
     pub fn sample() -> Layout {
         let edges = EDGES
             .iter()
-            .map(|e| EdgeDef {
+            .enumerate()
+            .map(|(i, e)| EdgeDef {
                 a: e.a,
                 b: e.b,
                 class: SAMPLES[e.fixture].class,
                 name: None,
-                section: Street::sample(e.fixture, Side::Right),
+                section: Street { source: vec![OsmRef { id: 2000 + i as i64, version: None }], ..Street::sample(e.fixture, Side::Right) },
                 headings: None,
                 shape: None,
             })
             .collect();
-        Layout { name: NAME.to_string(), side: Side::Right, nodes: NODES.into_iter().collect(), edges, origin_m: None }
+        Layout {
+            name: NAME.to_string(),
+            side: Side::Right,
+            nodes: NODES.into_iter().enumerate().map(|(i, n)| NodeDef { source: vec![OsmRef { id: 1000 + i as i64, version: None }], ..n }).collect(),
+            edges,
+            origin_m: None,
+        }
     }
 }
 
@@ -264,6 +271,19 @@ fn path_mm(points: &[(i32, i32)]) -> f64 {
 }
 
 impl Layout {
+    /// The key of the junction at `node`, from the OpenStreetMap nodes it was made from.
+    #[allow(dead_code)] // used by the store once places are kept by key
+    pub(super) fn node_key(&self, node: usize) -> Option<String> {
+        super::keys::junction_key(&self.nodes[node].source)
+    }
+
+    /// The key of the street `edge`, from its ways and the nodes at its ends.
+    #[allow(dead_code)] // used by the store once places are kept by key
+    pub(super) fn edge_key(&self, edge: usize) -> Option<String> {
+        let e = &self.edges[edge];
+        super::keys::street_key(&e.section.source, &self.nodes[e.a].source, &self.nodes[e.b].source)
+    }
+
     /// The street's centreline from node `a` to node `b`, in millimetres: its own shape, or the straight line.
     fn shape_of(&self, edge: usize) -> Vec<(i32, i32)> {
         let e = &self.edges[edge];
@@ -844,6 +864,16 @@ pub struct CityView {
 mod tests {
     use super::*;
     use crate::shared::said::Arg;
+
+    #[test]
+    fn every_place_of_the_sample_city_has_a_key_and_no_two_places_share_one() {
+        let layout = Layout::sample();
+        let mut keys: Vec<Option<String>> = (0..layout.nodes.len()).filter(|&n| layout.nodes[n].junction).map(|n| layout.node_key(n)).collect();
+        keys.extend((0..layout.edges.len()).map(|e| layout.edge_key(e)));
+        assert!(keys.iter().all(Option::is_some));
+        let distinct: std::collections::BTreeSet<_> = keys.iter().collect();
+        assert_eq!(distinct.len(), keys.len());
+    }
 
     fn junction_number(node: usize) -> usize {
         Layout::sample().junction_number(node)
