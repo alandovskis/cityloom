@@ -6,10 +6,10 @@ colors:
   panel: "#ffffff"
   ink: "#111827"
   ink-2: "#4b5563"
-  ink-3: "#5f6b7a"
+  ink-3: "#536070"
   rule: "#e5e8ec"
   fill: "#f1f3f5"
-  field-line: "#cdd3da"
+  field-line: "#7f8a96"
   accent: "#2563eb"
   accent-ink: "#ffffff"
   accent-wash: "#e8effd"
@@ -20,6 +20,9 @@ colors:
   ok-wash: "#dcfce7"
   danger: "#b8231a"
   casing: "#7d8996"
+  map-ok: "#4b6b8a"
+  map-changed: "#2563eb"
+  map-bad: "#dc2626"
   k-sidewalk: "#cfd7de"
   k-planting: "#a5d696"
   k-bike: "#7fd3c3"
@@ -52,7 +55,7 @@ colors:
   dark-ink-3: "#9aa6b2"
   dark-rule: "#2c343c"
   dark-fill: "#252d35"
-  dark-field-line: "#3b454f"
+  dark-field-line: "#6b7783"
   dark-accent: "#8ab4ff"
   dark-accent-ink: "#0b1220"
   dark-accent-wash: "rgb(138 180 255 / 0.16)"
@@ -117,13 +120,25 @@ typography:
     fontSize: "13px"
     fontWeight: 600
     lineHeight: 1.45
+  control:
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    fontSize: "14px"
+    fontWeight: 600
+    lineHeight: 1.45
+  lead:
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+    fontSize: "16px"
+    fontWeight: 400
+    lineHeight: 1.45
 rounded:
   card: "16px"
   search: "14px"
   ctl: "12px"
   field: "10px"
   tab: "9px"
+  tile: "8px"
   kbd: "6px"
+  swatch: "3px"
   pill: "999px"
 spacing:
   pad: "16px"
@@ -186,7 +201,7 @@ components:
     backgroundColor: "{colors.panel}"
     textColor: "{colors.ink}"
     rounded: "{rounded.tab}"
-    height: "34px"
+    height: "40px"
   chip-tray:
     backgroundColor: "{colors.panel}"
     rounded: "{rounded.ctl}"
@@ -235,8 +250,8 @@ A cool, near-neutral grey-blue ground with white cards, a single saturated blue,
 ### Neutral
 - **Land** (`land` #e2e7ec; dark #0f1317): the page ground, the map ground, the search field at rest.
 - **Panel White** (`panel` #ffffff; dark #1b2127): every card, bar, menu and plate.
-- **Ink** (`ink` #111827), **Ink 2** (`ink-2` #4b5563), **Ink 3** (`ink-3` #5f6b7a): text, secondary text, and tertiary text and linework. Dark: #e8edf2, #b7c1cb, #9aa6b2.
-- **Rule** (`rule` #e5e8ec) hairline dividers; **Fill** (`fill` #f1f3f5) hover and segmented-control wells; **Field Line** (`field-line` #cdd3da) borders of buttons and inputs.
+- **Ink** (`ink` #111827), **Ink 2** (`ink-2` #4b5563), **Ink 3** (`ink-3` #536070): text, secondary text, and tertiary text and linework. Dark: #e8edf2, #b7c1cb, #9aa6b2.
+- **Rule** (`rule` #e5e8ec) hairline dividers; **Fill** (`fill` #f1f3f5) hover and segmented-control wells; **Field Line** (`field-line` #7f8a96; dark #6b7783) borders of buttons and inputs, at least 3:1 against the card they sit on (WCAG 1.4.11); `ink-3` is at least 4.5:1 on `land`.
 
 ### The drawing tints
 Flat, pale, named. Lane and strip kinds: sidewalk #cfd7de, planting #a5d696, bike #7fd3c3, transit lane #f2a99b, parking (map) #b9c2cc, median #93c98a, loading #f6d777, shoulder #cbd3db, bike rack #cdd6e2, bike share #b5c7e8, pole #9aa4b0. The map draws travel lanes and roads white inside a `casing` #7d8996 outline; the street section draws travel and parking a little darker (#c3cbd3, #b4bdc7) so the asphalt reads on a white plate. The editors add sky #e9f3fb, tree #6fb35e, car #dfe5ec, van #f1cd55 and two pedestrian coat colours. In dark, each tint steps to a deep, lower-chroma equivalent (see frontmatter).
@@ -248,7 +263,7 @@ Flat, pale, named. Lane and strip kinds: sidewalk #cfd7de, planting #a5d696, bik
 
 **The Green Only Passes Rule.** Green appears only on "passes" states. A green element is a statement that the city, street or junction works.
 
-**The Both Themes Rule.** Every colour token has a dark twin of the same name. A new token ships with both. Dark uses a lighter blue (#8ab4ff) and a lighter amber (#fcd34d) text, with washes at 16 to 18% alpha instead of pale fills.
+**The Both Themes Rule.** Every colour token has a dark twin of the same name. A new token ships with both. In `app.css` and `editor.css` a token is one `light-dark(light, dark)` declaration (the two shadows, which are not colours, are the exception); the page's `color-scheme` follows the system, or `data-theme` when one is chosen. Dark uses a lighter blue (#8ab4ff) and a lighter amber (#fcd34d) text, with washes at 16 to 18% alpha instead of pale fills.
 
 ## Typography
 
@@ -263,6 +278,7 @@ Flat, pale, named. Lane and strip kinds: sidewalk #cfd7de, planting #a5d696, bik
 - **Title** (700, 24px, 1.15, -0.015em): the place or street name in a title card or panel head. 20px/700 for the piece name in the inspector.
 - **Section** (700, 15px; 14px in the inspector with a hairline beneath): note headings.
 - **Body** (400, 15px, 1.45): rows, notes, fields. Lead copy 17 to 20px in `ink-2`; reading text capped at 62 to 72ch.
+- **Control** (600, 14px) and **Lead** (400, 16px): button and menu text, and the inspector's reading text.
 - **Label** (600, 13px; 12px for chips and table cells): sub-lines, hints, keys, status pills. Secondary text is 13 to 14px in `ink-2` or `ink-3`.
 - Drawing text uses the same stack: 13px/600 labels, 15px dimensions and marks, with a panel-coloured halo where it crosses linework.
 
@@ -309,7 +325,7 @@ Hybrid: a white card over a tinted land is the main depth cue, supported by two 
 
 ## Shapes
 
-Soft and rounded, from the card down. Cards are 16px (`rounded.card`); the search field 14px; buttons and tray chips 12px; fields, rows, pieces of a menu and icon buttons 10px; tabs inside a segmented control 9px; keycaps 6px; status chips and row badges are full pills. The avatar is a circle. A segmented control is an inset well (`fill`) holding a raised white segment.
+Soft and rounded, from the card down. Cards are 16px (`rounded.card`); the search field 14px; buttons and tray chips 12px; fields, rows, pieces of a menu and icon buttons 10px; tabs inside a segmented control 9px; menu tiles and hit areas 8px; keycaps 6px; swatch corners 3px; status chips and row badges are full pills. The avatar is a circle. A segmented control is an inset well (`fill`) holding a raised white segment.
 
 Drawings are flat. Lane and strip kinds are filled rectangles with mid-grey linework (`ink-2` strokes at 0.8 to 1.6px) and a faint pattern at 30% opacity under the fill. Junctions on the map are white discs ringed in blue with a blue numeral. Selection is a 2.5px blue box; a drag ghost is a blue wash with a dashed blue outline; overflow is a 2px amber cloud that draws itself in once.
 
@@ -387,4 +403,5 @@ A page to read (credits) is one white 16px card, 720px wide, on the land, with a
 - **Don't** reintroduce the old `sheet`, `blue-pencil`, `warning` and `mark-1..5` tokens; they no longer exist in the build.
 
 ### Recorded, not canonized
-The home hero search border is a hard-coded #7b8794 rather than a token, and the three theme blocks in `app.css` repeat the dark values by hand; both are drift the build carries, not rules for new surfaces. The surface briefs quote an older land value (#e9edf0); the build's `land` (#e2e7ec) governs.
+The menu's foot carries the Credits link and the product's version (`data-version`, from `Cargo.toml`), in `ink-3` 13px. The `#000` in the editors' mask gradient is a mask value, not a colour on screen. The credits headline keeps the 1.1 headline leading above; the detector's tight-leading note on `credits.html` could not be traced to any other text (every other line there computes at 1.3 or more).
+The surface briefs quote an older land value (#e9edf0); the build's `land` (#e2e7ec) governs.
