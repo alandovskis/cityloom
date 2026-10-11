@@ -42,6 +42,9 @@ EMPTY_BYTES = 400
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "web" / "data" / "metro"
+# Where the extract is cut in steps: in the project, which only its owner writes to, not in a shared temporary directory.
+WORK = ROOT / "data" / "metro-work"
+TILE_GLOB = "*.osm.pbf"
 
 
 def osmium(*args):
@@ -71,13 +74,14 @@ def batch_size(text):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("extract", type=Path)
-    ap.add_argument("workdir", type=Path, nargs="?", default=Path("/tmp/cityloom-metro"))
+    ap.add_argument("workdir", type=Path, nargs="?", default=WORK)
     ap.add_argument(
         "--batch", type=batch_size, default=MAX_EXTRACTS, metavar=f"1..{MAX_EXTRACTS}",
         help="tiles cut in one osmium run: fewer take less memory (default %(default)s)",
     )
     args = ap.parse_args()
-    source, work, batch = args.extract.resolve(), args.workdir, args.batch
+    # Absolute paths, so none can be read by osmium as an option.
+    source, work, batch = args.extract.resolve(), args.workdir.resolve(), args.batch
     if not source.is_file():
         sys.exit(
             f"{source} does not exist. Download the Quebec extract first (about 1.2 GB):\n"
@@ -94,7 +98,7 @@ def main():
     print("keeping the roads", flush=True)
     osmium("tags-filter", metro, f"w/highway={HIGHWAYS}", "-o", roads, "--overwrite")
 
-    for old in OUT.glob("*.osm.pbf"):
+    for old in OUT.glob(TILE_GLOB):
         old.unlink()
     OUT.mkdir(parents=True, exist_ok=True)
 
@@ -121,8 +125,8 @@ def main():
         config.write_text(json.dumps({"directory": str(OUT), "extracts": extracts[i : i + batch]}))
         osmium("extract", "--config", config, roads, "--overwrite")
 
-    kept = sorted(p for p in OUT.glob("*.osm.pbf") if p.stat().st_size > EMPTY_BYTES)
-    for p in OUT.glob("*.osm.pbf"):
+    kept = sorted(p for p in OUT.glob(TILE_GLOB) if p.stat().st_size > EMPTY_BYTES)
+    for p in OUT.glob(TILE_GLOB):
         if p not in kept:
             p.unlink()
     write_index(kept)
