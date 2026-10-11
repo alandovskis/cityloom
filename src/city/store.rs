@@ -8,6 +8,7 @@ use std::rc::Rc;
 use osm_network::Network;
 
 use crate::city::edits::{self, DAMAGED_KEY, Document, EDITS_KEY, Edits};
+use crate::city::migrate::migrate;
 use crate::city::model::{City, Layout};
 use crate::junction::model::State;
 use crate::place::area::{Area, default_area};
@@ -139,6 +140,11 @@ impl CityStore {
         edits::parse(self.storage.recall(EDITS_KEY).as_deref())
     }
 
+    /// Moves the per-area saves of an older version into the edits document, once (a no-op where it exists).
+    fn migrate(&self) {
+        migrate(&*self.storage);
+    }
+
     /// The edits as kept: none when there are none, they are damaged or they come from a newer version.
     fn edits(&self) -> Edits {
         match self.document() {
@@ -149,6 +155,7 @@ impl CityStore {
 
     /// The city as it is kept, or as first laid out when nothing usable is.
     pub fn open(&self) -> City {
+        self.migrate();
         City::load_on(self.layout(), &self.edits())
     }
 
@@ -360,13 +367,25 @@ mod tests {
     }
 
     #[test]
+    fn opening_the_city_moves_the_old_saves_first_and_only_once() {
+        let (ports, _, storage) = test_ports();
+        let store = CityStore::for_area(ports.storage, Area::new("A", 45.5, -73.5));
+        assert_eq!(storage.recall(EDITS_KEY), None);
+        store.open();
+        assert!(document(&storage).streets.is_empty(), "nothing to move: the document is made empty");
+        storage.remember("cityloom-city:9.0000,9.0000", "{}");
+        store.open();
+        assert_eq!(storage.recall(EDITS_KEY), Some(Edits::new().to_json()), "the document is not made again");
+    }
+
+    #[test]
     fn a_change_that_is_not_taken_is_not_kept() {
         let (store, storage) = store();
         let mut wrong = narrowed(&store, 1);
         wrong.row_mm += 100; // the street no longer has the room it had
         assert!(!store.write_street(1, wrong));
         assert!(!store.write_street(999, narrowed(&store, 1)), "no such street");
-        assert_eq!(storage.recall(EDITS_KEY), None);
+        assert!(document(&storage).streets.is_empty(), "only the empty document that marks the migration done");
     }
 
     #[test]

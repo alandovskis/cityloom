@@ -148,6 +148,12 @@ impl MemoryStorage {
     pub fn blocked(&self, blocked: bool) {
         self.blocked.set(blocked);
     }
+
+    /// Removes what is kept under `key`, as clearing a browser's site data would.
+    #[cfg(test)]
+    pub fn forget(&self, key: &str) {
+        self.kept.borrow_mut().remove(key);
+    }
 }
 
 impl Storage for MemoryStorage {

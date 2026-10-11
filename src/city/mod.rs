@@ -6,6 +6,7 @@ pub mod binding;
 pub mod edits;
 pub mod import;
 pub mod keys;
+pub mod migrate;
 pub mod model;
 pub mod store;
 

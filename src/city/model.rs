@@ -24,7 +24,6 @@ use crate::street::model::SAMPLES;
 use crate::street::model::{Editor, Street, named_said, unnamed_said};
 
 /// Bump when what is saved changes shape; an older save is then left behind.
-#[cfg_attr(not(test), allow(dead_code))] // read by the migration of the old save (plan task 7)
 const SAVE_VERSION: u32 = 2;
 
 pub(super) struct NodeDef {
@@ -151,8 +150,14 @@ fn node_uid(i: usize) -> u32 {
     i as u32 + 1
 }
 
+/// A place of the layout, by its index: a node, or an edge.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum At {
+    Node(usize),
+    Edge(usize),
+}
+
 /// What the city kept between visits before the edits document: only the migration reads it.
-#[cfg_attr(not(test), allow(dead_code))] // read by the migration of the old save (plan task 7)
 #[derive(Serialize, Deserialize)]
 struct Saved {
     version: u32,
@@ -298,6 +303,24 @@ impl Layout {
     /// What identifies the junction at `node` when an edit is matched to it: its key and its nodes.
     fn junction_ids(&self, node: usize) -> Ids {
         Ids { key: self.node_key(node), ways: Default::default(), nodes: super::keys::ids(&self.nodes[node].source) }
+    }
+
+    /// How far, in metres, a place lies from the centre of the area box its network was cut to (a street is
+    /// taken to be where the middle of its centreline is). Network metres are measured from that box's
+    /// south-west corner, and `origin_m` is where the layout's origin lies in them. A layout on no network has
+    /// no such centre, so its places are infinitely far.
+    pub(super) fn centre_distance_m(&self, at: At) -> f64 {
+        let Some((ox, oy)) = self.origin_m else { return f64::MAX };
+        let (x_mm, y_mm) = match at {
+            At::Node(n) => (self.nodes[n].x_mm as f64, self.nodes[n].y_mm as f64),
+            At::Edge(e) => {
+                let shape = self.shape_of(e);
+                let (a, b) = (shape[(shape.len() - 1) / 2], shape[shape.len() / 2]);
+                ((a.0 as f64 + b.0 as f64) / 2.0, (a.1 as f64 + b.1 as f64) / 2.0)
+            }
+        };
+        let (x, y) = (ox + x_mm / 1000.0, oy - y_mm / 1000.0);
+        (x - crate::place::area::HALF_M).hypot(y - crate::place::area::HALF_M)
     }
 
     /// The street's centreline from node `a` to node `b`, in millimetres: its own shape, or the straight line.
@@ -638,7 +661,6 @@ impl City {
     }
 
     /// The city as an older version kept it, by position: only for moving that save to the edits.
-    #[cfg_attr(not(test), allow(dead_code))] // read by the migration of the old save (plan task 7)
     pub(super) fn load_old(layout: Layout, json: &str) -> City {
         let mut city = City::on(layout);
         let Ok(saved) = serde_json::from_str::<Saved>(json) else { return city };
@@ -663,6 +685,36 @@ impl City {
             }
         }
         city
+    }
+
+    /// The same, or None unless `json` is a save of the version this reads (a save that is skipped can then be
+    /// told from one that changed nothing).
+    pub(super) fn load_old_checked(layout: Layout, json: &str) -> Option<City> {
+        serde_json::from_str::<Saved>(json).ok().filter(|s| s.version == SAVE_VERSION)?;
+        Some(City::load_old(layout, json))
+    }
+
+    /// Each street changed from how it was first laid out, with its distance from the centre of its area and the
+    /// key and record to keep it by; a street with no key is not here.
+    pub(super) fn edited_streets(&self) -> Vec<(f64, String, StreetRecord)> {
+        let changed = self.streets.iter().filter(|(uid, s)| self.today_streets.get(uid) != Some(s));
+        changed
+            .filter_map(|(&uid, _)| {
+                let (key, record) = self.street_record(uid)?;
+                Some((self.layout.centre_distance_m(At::Edge(self.edge_index(uid)?)), key, record))
+            })
+            .collect()
+    }
+
+    /// The same for junctions (the label is not an edit).
+    pub(super) fn edited_junctions(&self) -> Vec<(f64, String, JunctionRecord)> {
+        let changed = self.junctions.iter().filter(|(uid, s)| self.today_junctions.get(uid).is_none_or(|t| !same_junction(t, s)));
+        changed
+            .filter_map(|(&uid, _)| {
+                let (key, record) = self.junction_record(uid)?;
+                Some((self.layout.centre_distance_m(At::Node(self.node_index(uid)?)), key, record))
+            })
+            .collect()
     }
 
     /// What an older version kept the city as, to build old saves in tests.
