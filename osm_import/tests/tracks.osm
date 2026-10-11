@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+<node id="1" lat="45.5000" lon="-73.6000"></node>
+<node id="2" lat="45.5000" lon="-73.5980"></node>
+<way id="100"><nd ref="1"/><nd ref="2"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="cycleway:both" v="separate"/><tag k="sidewalk:both" v="separate"/><tag k="name" v="both separate"/></way>
+<node id="11" lat="45.5020" lon="-73.6000"></node>
+<node id="12" lat="45.5020" lon="-73.5980"></node>
+<way id="101"><nd ref="11"/><nd ref="12"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="sidewalk:both" v="no"/><tag k="name" v="track left only"/></way>
+<node id="21" lat="45.5040" lon="-73.6000"></node>
+<node id="22" lat="45.5040" lon="-73.5980"></node>
+<way id="102"><nd ref="21"/><nd ref="22"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="cycleway:left" v="no"/><tag k="cycleway:right" v="separate"/><tag k="sidewalk:both" v="no"/><tag k="name" v="track right only"/></way>
+<node id="31" lat="45.5060" lon="-73.6000"></node>
+<node id="32" lat="45.5060" lon="-73.5980"></node>
+<way id="103"><nd ref="31"/><nd ref="32"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="cycleway" v="separate"/><tag k="sidewalk:both" v="no"/><tag k="name" v="cycleway separate"/></way>
+<node id="41" lat="45.5080" lon="-73.6000"></node>
+<node id="42" lat="45.5080" lon="-73.5980"></node>
+<way id="104"><nd ref="41"/><nd ref="42"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="name" v="nothing tagged"/></way>
+<node id="51" lat="45.5100" lon="-73.6000"></node>
+<node id="52" lat="45.5100" lon="-73.5980"></node>
+<way id="105"><nd ref="51"/><nd ref="52"/><tag k="highway" v="residential"/><tag k="sidewalk:both" v="no"/><tag k="name" v="sidewalk both no"/></way>
+<node id="61" lat="45.5120" lon="-73.6000"></node>
+<node id="62" lat="45.5120" lon="-73.5980"></node>
+<way id="106"><nd ref="61"/><nd ref="62"/><tag k="highway" v="residential"/><tag k="sidewalk:both" v="yes"/><tag k="name" v="sidewalk both yes"/></way>
+<node id="71" lat="45.5140" lon="-73.6000"></node>
+<node id="72" lat="45.5140" lon="-73.5980"></node>
+<way id="107"><nd ref="71"/><nd ref="72"/><tag k="highway" v="residential"/><tag k="sidewalk:both" v="yes"/><tag k="sidewalk:left" v="no"/><tag k="name" v="sidewalk both yes left no"/></way>
+</osm>

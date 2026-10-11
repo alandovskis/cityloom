@@ -137,3 +137,42 @@ fn a_road_with_neither_side_tagged_is_given_sidewalks_as_before() {
     let net = import(SIDEWALKS).unwrap();
     assert_eq!(sidewalks_of(&net, "nothing tagged"), (true, true), "a street with no tags is given sidewalks as before");
 }
+
+const TRACKS: &[u8] = include_bytes!("tracks.osm");
+
+/// Whether the outermost lane on each side of a road, leaving sidewalks out, is a bike lane: (left, right).
+fn bike_sides_of(net: &osm_import::Network, name: &str) -> (bool, bool) {
+    use osm_import::LaneKind;
+    let road = net.roads.iter().find(|r| r.name.as_deref() == Some(name)).unwrap_or_else(|| panic!("no road {name}"));
+    let lanes: Vec<_> = road.lanes.iter().filter(|l| l.kind != LaneKind::Sidewalk).collect();
+    (lanes.first().is_some_and(|l| l.kind == LaneKind::Bike), lanes.last().is_some_and(|l| l.kind == LaneKind::Bike))
+}
+
+#[test]
+fn a_bike_track_mapped_separately_is_a_bike_lane_beside_the_road() {
+    let net = import(TRACKS).unwrap();
+    assert_eq!(bike_sides_of(&net, "both separate"), (true, true));
+    assert_eq!(bike_sides_of(&net, "track left only"), (true, false));
+    assert_eq!(bike_sides_of(&net, "track right only"), (false, true));
+    // a plain `cycleway` tag is a track on the road's right side, as osm2streets reads `cycleway=track`
+    assert_eq!(bike_sides_of(&net, "cycleway separate"), (false, true));
+    assert_eq!(bike_sides_of(&net, "nothing tagged"), (false, false));
+}
+
+#[test]
+fn a_road_with_separate_sidewalks_and_a_separate_track_has_both_on_both_sides_in_order() {
+    use osm_import::LaneKind::{Bike, Buffer, Driving, Sidewalk};
+    let net = import(TRACKS).unwrap();
+    let road = net.roads.iter().find(|r| r.name.as_deref() == Some("both separate")).unwrap();
+    let kinds: Vec<_> = road.lanes.iter().map(|l| l.kind).collect();
+    assert_eq!(kinds, [Sidewalk, Bike, Buffer, Driving, Driving, Buffer, Bike, Sidewalk]);
+}
+
+#[test]
+fn the_sidewalk_both_shorthand_is_read_as_the_two_sides() {
+    let net = import(TRACKS).unwrap();
+    assert_eq!(sidewalks_of(&net, "both separate"), (true, true));
+    assert_eq!(sidewalks_of(&net, "sidewalk both no"), (false, false));
+    assert_eq!(sidewalks_of(&net, "sidewalk both yes"), (true, true));
+    assert_eq!(sidewalks_of(&net, "sidewalk both yes left no"), (false, true));
+}
