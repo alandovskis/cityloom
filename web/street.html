@@ -21,8 +21,6 @@
       <a href="map.html" class="surface" data-i18n="st-map">Map</a>
     </nav>
     <div class="top-end">
-      <button type="button" id="inspector-toggle" class="btn quiet" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" data-i18n-title="st-details-toggle-title" title="Show or hide the piece details ( [ )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M6 3v10"/></svg><span data-i18n="st-piece-details">Piece details</span></button>
-      <button type="button" id="notes-toggle" class="btn quiet" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" data-i18n-title="ui-notes-toggle-title" title="Show or hide the notes ( ] )"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M10 3v10"/></svg><span data-i18n="ui-notes">Notes</span></button>
       <div class="account">
         <button type="button" id="help-btn" class="btn quiet" aria-haspopup="true" aria-expanded="false" aria-controls="help-menu"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6"/><path d="M6.2 6.3a1.9 1.9 0 1 1 2.7 1.7c-.6.3-.9.7-.9 1.3M8 11.5v.01"/></svg><span id="help-btn-label"></span></button>
         <div id="help-menu" class="menu" hidden>
@@ -74,6 +72,9 @@
       </div>
     </div>
   </header>
+
+  <button type="button" id="inspector-toggle" class="edge-tab left" aria-controls="inspector" aria-expanded="true" aria-keyshortcuts="[" data-i18n-title="st-details-toggle-title" title="Show or hide the piece details ( [ )" data-i18n="st-piece-details">Piece details</button>
+  <button type="button" id="notes-toggle" class="edge-tab right" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" data-i18n-title="ui-notes-toggle-title" title="Show or hide the notes ( ] )" data-i18n="ui-notes">Notes</button>
 
   <aside class="panel left" id="details-panel" data-i18n-aria-label="st-piece-details" aria-label="Piece details" data-covers>
     <div class="panel-body inspector" id="inspector"></div>

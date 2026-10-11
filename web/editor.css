@@ -54,8 +54,9 @@
   position: absolute;
   top: calc(var(--pad) + var(--bar-h) + 12px);
   bottom: var(--pad);
-  left: calc(var(--lw) + var(--pad));
-  right: calc(var(--rw) + var(--pad));
+  /* the sidebars' edge tabs stand in the room between the drawing and each side */
+  left: calc(var(--lw) + var(--tab-w));
+  right: calc(var(--rw) + var(--tab-w));
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -65,10 +66,10 @@
   padding: 2px 2px 4px;
 }
 :root[data-inspector="closed"] .stage-main {
-  left: var(--pad);
+  left: var(--tab-w);
 }
 :root[data-notes="closed"] .stage-main {
-  right: var(--pad);
+  right: var(--tab-w);
 }
 .stage-head {
   display: flex;
@@ -159,7 +160,7 @@
     display: none;
   }
   :root:not([data-notes="open"]) .stage-main {
-    right: var(--pad);
+    right: var(--tab-w);
   }
 }
 

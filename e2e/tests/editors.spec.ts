@@ -82,3 +82,37 @@ test("on a phone the panels stack under the drawing, and nothing overlaps it", a
   expect(below(drawing, status)).toBe(true);
   expect(below(drawing, left)).toBe(true);
 });
+
+for (const p of [
+  { name: "street", open: openStreet },
+  { name: "junction", open: openJunction },
+]) {
+  test.describe(`the ${p.name} editor's sidebar tabs`, () => {
+    test.use({ viewport: { width: 1440, height: 900 } });
+
+    test("each sidebar has an edge tab outside the header, at its panel's edge, that moves when it collapses", async ({
+      page,
+    }) => {
+      await p.open(page);
+      await expect(page.locator("#drawing")).toBeVisible();
+      const width = page.viewportSize()!.width;
+      for (const side of [
+        { toggle: "#inspector-toggle", panel: "#details-panel", attr: "data-inspector" },
+        { toggle: "#notes-toggle", panel: "#notes", attr: "data-notes" },
+      ]) {
+        const tab = page.locator(side.toggle);
+        const left = side.attr === "data-inspector";
+        await expect(page.locator(`.bar ${side.toggle}`)).toHaveCount(0);
+        expect(await tab.evaluate((el) => getComputedStyle(el).writingMode)).toBe("vertical-rl");
+        const open = (await tab.boundingBox())!;
+        const panel = (await page.locator(side.panel).boundingBox())!;
+        expect(left ? open.x : open.x + open.width).toBeCloseTo(left ? panel.x + panel.width : panel.x, 0);
+        await tab.click();
+        await expect(page.locator("html")).toHaveAttribute(side.attr, "closed");
+        const shut = (await tab.boundingBox())!;
+        expect(left ? shut.x : shut.x + shut.width).toBeCloseTo(left ? 0 : width, 0);
+        expect(shut.height).toBeGreaterThan(shut.width);
+      }
+    });
+  });
+}
