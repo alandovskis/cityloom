@@ -47,7 +47,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::shared::atlas::{AREA, LINEAR, LOCAL, MEASURES, Where, group_name_key, name_key, note_key};
+use crate::shared::atlas::{MEASURES, Where, name_key};
 use crate::shared::catalogue::mode_key;
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
@@ -247,16 +247,6 @@ pub fn Revisions(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// The key of what each group of the Atlas toolbox means here, in one line.
-fn group_note_key(group: &str) -> Option<&'static str> {
-    match group {
-        LINEAR => Some("group-note-linear"),
-        LOCAL => Some("group-note-local"),
-        AREA => Some("group-note-area"),
-        _ => None,
-    }
-}
-
 /// The cell of a lane measure this editor models: that it is the street's, the button that arranges
 /// the street as it, or why it cannot be.
 fn street_state(w: SheetWatch, i18n: &I18n, units: Units, code: &'static str, f: &crate::street::model::MeasureView) -> AnyView {
@@ -299,57 +289,6 @@ pub fn TransitPriority(vm: Rc<StreetVm>) -> impl IntoView {
             })
             .collect_view();
         view! { <tbody>{rows}</tbody> }
-    }
-}
-
-/// Every measure of the Transit Priority Atlas toolbox: the lane arrangements can
-/// be recognised in this street and laid out from its width; the rest say where
-/// they are set, or why they are not modelled.
-#[component]
-pub fn Measures(vm: Rc<StreetVm>) -> impl IntoView {
-    let w = SheetWatch::new(vm);
-    let mut groups: Vec<&'static str> = Vec::new();
-    for m in &MEASURES {
-        if !groups.contains(&m.group) {
-            groups.push(m.group);
-        }
-    }
-    move || {
-        let (v, units) = w.now();
-        let i18n = w.i18n();
-        groups
-            .iter()
-            .map(|group| {
-                let rows = MEASURES
-                    .iter()
-                    .filter(|m| m.group == *group)
-                    .map(|m| {
-                        let found = (m.place == Where::Street).then(|| v.measures.iter().find(|f| f.code == m.code)).flatten();
-                        let state = match (m.place, found) {
-                            (Where::Street, Some(f)) => street_state(w, &i18n, units, m.code, f),
-                            (Where::Junction, _) => plain(&i18n, "measure-set-at-junction").into_any(),
-                            _ => view! { <span class="m-not">{plain(&i18n, "measure-not-modelled")}</span> }.into_any(),
-                        };
-                        let note = (m.place != Where::Street && !m.note.is_empty()).then(|| view! { <small>{plain(&i18n, &note_key(m.code))}</small> });
-                        let problems = found.filter(|f| f.present).map(|f| f.problems.iter().map(|p| view! { <small class="m-problem">{p.say(&i18n)}</small> }).collect_view());
-                        view! {
-                            <tr>
-                                <th scope="row"><span class="dirtag">{m.code}</span>{plain(&i18n, &name_key(m.code))}{note}{problems}</th>
-                                <td>{state}</td>
-                            </tr>
-                        }
-                    })
-                    .collect_view();
-                let note = group_note_key(group).map(|k| plain(&i18n, k));
-                let name = group_name_key(group).map_or_else(|| group.to_string(), |k| plain(&i18n, k));
-                view! {
-                    <tbody>
-                        <tr class="m-group"><th colspan="2" scope="colgroup">{name}{note.map(|note| view! { <small class="m-group-note">{note}</small> })}</th></tr>
-                        {rows}
-                    </tbody>
-                }
-            })
-            .collect_view()
     }
 }
 

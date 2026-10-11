@@ -192,6 +192,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction plan | Turn X (a grip) | Faire pivoter X |  |
 | Junction plan | Change the corner radius / Move the crossing | Modifier le rayon du coin / Déplacer le passage pour piétons |  |
 | Junction page | Details (the left panel's button) | Détails |  |
+| Street page | Provenance (a notes tab) | Provenance | Where the street came from (`D’où vient cette rue`); the same word in both languages. |
 | Junction page | Streets / Measures (notes tabs) | Rues / Mesures | Checks and Changes are the shell's `Vérifications` / `Modifications`. |
 | Junction page | Where paths meet | Où les trajectoires se rencontrent |  |
 | Junction page | Key to the strips (the plan's legend) | Légende des bandes |  |

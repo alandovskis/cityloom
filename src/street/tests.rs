@@ -341,20 +341,6 @@ fn the_changes_list_is_drawn_again_in_the_language_the_shell_switches() {
 }
 
 #[test]
-fn the_measures_offer_to_arrange_what_fits_and_say_what_is_present_or_why_not() {
-    let s = street_shared(1);
-    let h = street_html(|| view! { <notes::Measures vm=s.clone()/> });
-    assert_eq!(count(&h, "<tbody>"), 3);
-    assert!(count(&h, "class=\"btn m-apply\"") >= 10);
-    assert!(h.contains("Arrange the street as B1 Center-Running Transit Lanes"));
-    assert!(h.contains("Freeways only") && h.contains("Not modelled") && h.contains("Set at a junction"));
-    assert!(h.contains("Lane arrangements along the street."));
-    assert!(s.edit(|e| e.apply_measure("B3")));
-    let h = street_html(|| view! { <notes::Measures vm=s.clone()/> });
-    assert!(h.contains("This street") && !h.contains("Arrange the street as B3"));
-}
-
-#[test]
 fn the_transit_priority_section_offers_the_lane_measures_and_nothing_else() {
     let s = street_shared(1);
     let h = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
@@ -493,28 +479,56 @@ fn the_days_of_a_window_are_said_in_its_row_and_a_window_of_every_day_says_none(
     assert!(!rows(None).contains("var-days"));
 }
 
-#[test]
-fn the_title_block_links_the_osm_ways_and_says_whether_the_street_was_changed() {
+fn osm_street_shared(locale: Locale) -> Rc<StreetVm> {
     use crate::shared::catalogue::{Side, StreetClass, kind_index};
     use crate::shared::provenance::OsmRef;
     use crate::street::model::{Piece, Street};
     let travel = kind_index("travel").unwrap();
     let mut street = Street::imported(StreetClass::Local, Side::Right, &[Piece { kind: travel, width_mm: 3200, direction: Some(0), variants: Vec::new() }]);
     street.source = vec![OsmRef { id: 4687530, version: Some(49) }, OsmRef { id: 7, version: None }];
-    let s = StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::from_street(&street, &street, 0), None);
-    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), Editor::from_street(&street, &street, 0), None)
+}
+
+#[test]
+fn the_provenance_links_the_osm_ways_and_says_whether_the_street_was_changed() {
+    let s = osm_street_shared(Locale::En);
+    let h = street_html(|| view! { <page::Provenance vm=s.clone()/> });
     assert!(h.contains("href=\"https://www.openstreetmap.org/way/4687530\"") && h.contains(">way 4687530 v49<"), "{h}");
     assert!(h.contains(">way 7<") && h.contains("id=\"tb-state\">As imported<"), "{h}");
     let u = segment(&s, 0);
     s.edit(|e| e.nudge_width(u, 100));
-    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    let h = street_html(|| view! { <page::Provenance vm=s.clone()/> });
     assert!(h.contains("id=\"tb-state\">Edited<"), "{h}");
 }
 
 #[test]
-fn the_title_block_of_a_sandbox_street_does_not_link_to_openstreetmap() {
-    let h = street_html(|| view! { <page::TitleBlock vm=street_shared(0)/> });
-    assert!(!h.contains("openstreetmap.org"), "{h}");
+fn a_street_with_no_source_says_so() {
+    let s = street_shared(0);
+    let h = street_html(|| view! { <page::Provenance vm=s.clone()/> });
+    assert!(h.contains("This street was not made from OpenStreetMap."), "{h}");
+    assert!(!h.contains("openstreetmap.org") && !h.contains("tb-state"), "{h}");
+    let fr = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <page::Provenance vm=fr.clone()/> });
+    assert!(h.contains("Cette rue ne vient pas d’OpenStreetMap.") && !h.contains("was not made"), "{h}");
+}
+
+#[test]
+fn the_provenance_follows_the_language_switch() {
+    let owner = Owner::new();
+    owner.set();
+    let s = osm_street_shared(Locale::En);
+    let h = street_html(|| view! { <page::Provenance vm=s.clone()/> });
+    assert!(h.contains(">Data<") && h.contains("As imported"), "{h}");
+    s.i18n().set(Locale::FrCa);
+    let h = street_html(|| view! { <page::Provenance vm=s.clone()/> });
+    assert!(h.contains(">Données<") && h.contains("Tel qu’importé") && !h.contains("As imported"), "{h}");
+}
+
+#[test]
+fn the_title_block_no_longer_holds_the_sources() {
+    let s = osm_street_shared(Locale::En);
+    let h = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
+    assert!(!h.contains("openstreetmap.org") && !h.contains("tb-state") && !h.contains("OpenStreetMap"), "{h}");
 }
 
 #[test]
@@ -572,14 +586,10 @@ fn the_checks_and_their_count_are_in_french() {
 }
 
 #[test]
-fn the_changes_and_the_measures_are_in_french() {
+fn the_changes_are_in_french() {
     let s = street_shared_in(1, Locale::FrCa);
     let h = street_html(|| view! { <notes::Revisions vm=s.clone()/> });
     assert!(h.contains("La rue aujourd’hui") && h.contains("Étape") && !h.contains("Street today"));
-    let h = street_html(|| view! { <notes::Measures vm=s.clone()/> });
-    assert!(h.contains("Réorganiser") && h.contains("Se règle à une intersection") && h.contains("Non modélisé"));
-    assert!(h.contains("Aménagements de voies le long de la rue.") && !h.contains("Lane arrangements along the street."));
-    assert!(!h.contains(">Arrange<") && !h.contains("Set at a junction") && !h.contains("Not modelled"));
 }
 
 #[test]
@@ -616,13 +626,13 @@ fn the_checks_and_why_a_measure_is_unavailable_are_said_in_french_and_follow_the
     let s = street_shared_in(0, Locale::En);
     let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
     assert!(h.contains("Fits the street width") && h.contains("Both sides") && h.contains("Room for emergency vehicles"), "{h}");
-    let m = street_html(|| view! { <notes::Measures vm=s.clone()/> });
+    let m = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
     assert!(m.contains("Freeways only"), "{m}");
     s.i18n().set(Locale::FrCa);
     let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
     assert!(h.contains("Respecte la largeur de la rue") && h.contains("Des deux côtés") && h.contains("Place pour les véhicules d’urgence"), "{h}");
     assert!(!h.contains("Fits the street width") && !h.contains("Both sides"), "{h}");
-    let m = street_html(|| view! { <notes::Measures vm=s.clone()/> });
+    let m = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
     assert!(m.contains("Autoroutes seulement") && !m.contains("Freeways only"), "{m}");
 }
 
@@ -715,11 +725,10 @@ fn the_window_title_names_the_street_and_where_it_runs_in_each_language() {
 #[test]
 fn the_measures_are_named_and_explained_in_french() {
     let s = street_shared_in(1, Locale::FrCa);
-    let h = street_html(|| view! { <notes::Measures vm=s.clone()/> });
+    let h = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
     assert!(h.contains("Voies centrales réservées au transport en commun"), "{h}");
     assert!(h.contains("Réorganiser la rue selon B1 Voies centrales réservées au transport en commun"));
-    assert!(h.contains("n’a pas de phasage de feux à prioriser"));
-    assert!(!h.contains("Center-Running Transit Lanes") && !h.contains("Transit Signal Priority") && !h.contains("CityLoom has no signal timing"));
+    assert!(!h.contains("Center-Running Transit Lanes"), "{h}");
 }
 
 #[test]
@@ -729,7 +738,7 @@ fn a_measure_s_problems_are_said_in_each_language() {
         assert!(s.edit(|e| e.apply_measure("B1")));
         let bus = s.view().segments.iter().find(|g| KINDS[g.kind].id == "bus").unwrap().uid;
         s.edit(|e| e.set_width(bus, 3_000));
-        street_html(|| view! { <notes::Measures vm=s.clone()/> })
+        street_html(|| view! { <notes::TransitPriority vm=s.clone()/> })
     };
     let h = narrow(Locale::En);
     assert!(h.contains("A bus lane is 3000 mm wide, and a transit lane wants 3300 mm"), "{h}");

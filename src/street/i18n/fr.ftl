@@ -23,10 +23,9 @@ st-sample-limits = limites d’exemple
 st-your-changes = Vos modifications
 st-transit-heading = Priorité au transport en commun
 st-transit-hint = Réorganiser conserve les trottoirs et redessine la chaussée selon cette mesure. Vous pouvez l’annuler.
-st-measures-heading = Mesures de priorité pour le transport en commun
-st-measures-hint-a = Des façons de donner la priorité aux autobus, d’après le
-st-measures-hint-b = Réorganiser conserve les trottoirs et redessine la chaussée selon cette mesure. Vous pouvez l’annuler.
 st-about-street = À propos de cette rue
+st-provenance-heading = D’où vient cette rue
+st-no-source = Cette rue ne vient pas d’OpenStreetMap.
 
 # Le catalogue : les genres d’éléments, les modes et les groupes du menu d’ajout (src/shared/catalogue.rs).
 kind-sidewalk = Trottoir
@@ -108,8 +107,6 @@ measure-arrange = Réorganiser
 measure-arrange-label = Réorganiser la rue selon { $code } { $name }
 measure-this-street = Cette rue
 measure-will-not-fit = Ne rentre pas
-measure-set-at-junction = Se règle à une intersection
-measure-not-modelled = Non modélisé
 
 # Le tour de la coupe : titre, titre de la fenêtre, cartouche, historique, menu d’ajout, horloge et accueil (src/street/page.rs).
 header-city-map = Carte de la ville

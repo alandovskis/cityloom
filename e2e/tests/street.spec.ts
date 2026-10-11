@@ -238,7 +238,9 @@ test.describe("the street editor on a street of the city", () => {
     await expect(width).toHaveValue("2.50");
   });
 
-  test("the notes list the width shared out, the checks, the changes and the transit measures", async ({ page }) => {
+  test("the notes list the width shared out, the checks, the changes and where the street came from", async ({
+    page,
+  }) => {
     await expect(page.locator("#space")).not.toBeEmpty();
     await page.locator("#t-checks").click();
     await expect(page.locator("#checks li").first()).toBeVisible();
@@ -246,8 +248,9 @@ test.describe("the street editor on a street of the city", () => {
     await page.keyboard.press("Delete");
     await page.locator("#t-changes").click();
     await expect(page.locator("#revs tbody tr")).toHaveCount(2);
-    await page.locator("#t-measures").click();
-    await expect(page.locator("#t-measures")).toHaveAttribute("aria-selected", "true");
+    await page.locator("#t-provenance").click();
+    await expect(page.locator("#t-provenance")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#p-provenance")).toBeVisible();
   });
 
   test("an Atlas measure is arranged on a street it suits, and the change can be undone", async ({ page }) => {
@@ -290,7 +293,8 @@ test.describe("what the street editor keeps in the city", () => {
 
   test("says which OpenStreetMap ways it was made from, and whether it has been changed", async ({ page }) => {
     await openStreet(page);
-    const block = page.locator("#title-block");
+    await page.locator("#t-provenance").click();
+    const block = page.locator("#p-provenance");
     await expect(block.locator('a[href^="https://www.openstreetmap.org/way/"]').first()).toHaveText(
       /^way \d+( v\d+)?$/,
     );
@@ -302,6 +306,7 @@ test.describe("what the street editor keeps in the city", () => {
     await width.press("Enter");
     await expect(block.locator("#tb-state")).toHaveText("Edited");
     await page.reload();
+    await page.locator("#t-provenance").click();
     await expect(block.locator("#tb-state")).toHaveText("Edited");
   });
 

@@ -23,10 +23,9 @@ st-sample-limits = sample limits
 st-your-changes = Your changes
 st-transit-heading = Transit priority
 st-transit-hint = Arrange keeps the sidewalks and lays the roadway out again as that measure. You can undo it.
-st-measures-heading = Transit priority measures
-st-measures-hint-a = Ways to give buses priority, from the
-st-measures-hint-b = Arrange keeps the sidewalks and lays the roadway out again as that measure. You can undo it.
 st-about-street = About this street
+st-provenance-heading = Where this street came from
+st-no-source = This street was not made from OpenStreetMap.
 
 # The catalogue: kinds of piece, modes and the groups of the add menu (src/shared/catalogue.rs).
 kind-sidewalk = Sidewalk
@@ -108,8 +107,6 @@ measure-arrange = Arrange
 measure-arrange-label = Arrange the street as { $code } { $name }
 measure-this-street = This street
 measure-will-not-fit = Will not fit
-measure-set-at-junction = Set at a junction
-measure-not-modelled = Not modelled
 
 # The page around the section: heading, window title, title block, history, add menu, clock and welcome (src/street/page.rs).
 header-city-map = City map
