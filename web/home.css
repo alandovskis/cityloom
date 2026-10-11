@@ -84,7 +84,7 @@ body.home {
 .hero-search .search input {
   height: 64px;
   padding: 0 128px 0 58px;
-  border: 2px solid #7b8794;
+  border: 2px solid var(--field-line);
   border-radius: 14px;
   background: var(--panel);
   box-shadow: var(--shadow-soft);
