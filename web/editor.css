@@ -797,22 +797,38 @@ svg pattern circle {
 #drawing .lane-arrow path {
   fill: none;
   stroke: var(--ink-2);
-  stroke-width: 1.8;
+  stroke-width: calc(var(--arrow, 36) * 0.07px);
   stroke-linecap: round;
   stroke-linejoin: round;
   pointer-events: none;
 }
 #drawing .lane-arrow path.halo {
   stroke: var(--panel);
-  stroke-width: 5;
+  stroke-width: calc(var(--arrow, 36) * 0.16px);
 }
 #drawing .lane-arrow.out path:not(.halo) {
   stroke: var(--ink-3);
-  stroke-width: 1.4;
+  stroke-width: calc(var(--arrow, 36) * 0.075px);
 }
 #drawing .lane-arrow.bad path:not(.halo) {
   stroke: var(--warn-line);
-  stroke-width: 2.4;
+  stroke-width: calc(var(--arrow, 36) * 0.09px);
+}
+/* The one-way arrow on a slab: 28 px tall at the usual size, ringed in the page colour so it reads over the hatching. */
+.dir,
+.dir-halo {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.dir {
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+.dir-halo {
+  stroke: var(--panel);
+  stroke-width: 7;
 }
 #drawing .sel-line {
   fill: none;

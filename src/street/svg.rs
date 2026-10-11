@@ -166,11 +166,29 @@ fn surface_course(x: f64, y: f64, w: f64, material: &str) -> String {
     )
 }
 
-/// Traffic direction as an arrow: up runs away from you, down comes toward you.
-/// The paler outline under the arrow keeps it readable over hatching.
-pub fn dir_glyph(direction: &str, cx: f64, cy: f64) -> String {
+/// How tall the one-way arrow is in a slab `slab` pixels tall: most of it, so
+/// the arrow reads from across the drawing.
+pub fn dir_height(slab: f64) -> f64 {
+    (slab * 0.82).round()
+}
+
+/// Traffic direction as an arrow `h` tall and `0.64 h` across its head: up runs
+/// away from you, down comes toward you. The paler outline under the arrow keeps
+/// it readable over hatching.
+pub fn dir_glyph(direction: &str, cx: f64, cy: f64, h: f64) -> String {
     let d = if direction == "toward" { 1.0 } else { -1.0 };
-    let path = format!("M{cx},{} V{} M{},{} L{cx},{} L{},{}", cy - 7.0 * d, cy + 7.0 * d, cx - 4.5, cy + 2.5 * d, cy + 7.0 * d, cx + 4.5, cy + 2.5 * d);
+    let r = |v: f64| (v * 100.0).round() / 100.0;
+    let (half, head) = (h / 2.0, r(h * 0.32));
+    let path = format!(
+        "M{cx},{} V{} M{},{} L{cx},{} L{},{}",
+        cy - half * d,
+        cy + half * d,
+        r(cx - head),
+        r(cy + (half - head) * d),
+        cy + half * d,
+        r(cx + head),
+        r(cy + (half - head) * d)
+    );
     format!("<path class=\"dir-halo\" d=\"{path}\"/><path class=\"dir\" d=\"{path}\"/>")
 }
 
@@ -380,7 +398,7 @@ pub fn street_svg(v: &View, i18n: &I18n, width: f64, units: Units, ui: &Interact
         )
         .unwrap();
         if let (Some(d), true) = (s.direction, w >= 26.0) {
-            p += &dir_glyph(d, cx, ground + rows.slab / 2.0);
+            p += &dir_glyph(d, cx, ground + rows.slab / 2.0, dir_height(rows.slab).min((w - 6.0) / 0.64));
         }
         if k.id == "parking" && w >= 22.0 {
             write!(p, "<text class=\"slab-p\" x=\"{cx}\" y=\"{}\" text-anchor=\"middle\" font-size=\"20\">P</text>", ground + rows.slab / 2.0 + 7.0).unwrap();
@@ -754,12 +772,28 @@ mod tests {
     }
 
     #[test]
+    fn the_direction_arrow_fills_most_of_the_slab_and_its_head_fits_the_narrowest_slab_that_gets_one() {
+        // 34 px slabs at factor 1: the arrow was 14 px tall, it is now 28 (2x).
+        assert_eq!(dir_height(34.0), 28.0);
+        let h = dir_height(34.0);
+        assert!(h < 34.0 - 4.0, "it keeps clear of the slab's top and bottom");
+        // 26 px is the narrowest slab that draws one; the head (0.64 h across) fits with a margin
+        assert!(h * 0.64 <= 26.0 - 6.0 + 0.001);
+        let e = Editor::new(0);
+        let drawn = svg(&e).markup;
+        let tall = drawn.split("class=\"dir\" d=\"M").nth(1).expect("an arrow").split('"').next().unwrap();
+        let ys: Vec<f64> = tall.split(|c| c == ',' || c == ' ' || c == 'V' || c == 'L' || c == 'M').filter_map(|v| v.parse().ok()).collect();
+        let (lo, hi) = (ys.iter().cloned().fold(f64::MAX, f64::min), ys.iter().cloned().fold(f64::MIN, f64::max));
+        assert!(hi - lo >= 20.0, "the arrow drawn in the sheet is at least 20 px tall, not the old 14");
+    }
+
+    #[test]
     fn a_direction_arrow_points_up_away_from_you_and_down_toward_you() {
         assert_eq!(
-            dir_glyph("away", 10.0, 10.0),
-            "<path class=\"dir-halo\" d=\"M10,17 V3 M5.5,7.5 L10,3 L14.5,7.5\"/><path class=\"dir\" d=\"M10,17 V3 M5.5,7.5 L10,3 L14.5,7.5\"/>"
+            dir_glyph("away", 10.0, 20.0, 28.0),
+            "<path class=\"dir-halo\" d=\"M10,34 V6 M1.04,14.96 L10,6 L18.96,14.96\"/><path class=\"dir\" d=\"M10,34 V6 M1.04,14.96 L10,6 L18.96,14.96\"/>"
         );
-        assert!(dir_glyph("toward", 10.0, 10.0).contains("d=\"M10,3 V17 M5.5,12.5 L10,17 L14.5,12.5\""));
+        assert!(dir_glyph("toward", 10.0, 20.0, 28.0).contains("d=\"M10,6 V34 M1.04,25.04 L10,34 L18.96,25.04\""));
     }
 
     #[test]
