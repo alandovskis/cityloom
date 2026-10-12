@@ -910,10 +910,10 @@ svg pattern circle {
   stroke-linejoin: round;
   pointer-events: none;
 }
-/* The drawing's head: the toggle between the section and the 2.5D, at the right of the tools' row, right
-   above the drawing. It is not a band of its own in the drawing's card, which would push the status line
-   under the card out of view at 1440 by 900. Its buttons are as tall as the tools'. */
-.drawing-head {
+/* The toggle between the section and the 2.5D, a pill like the tools at the right of their row, right above
+   the drawing. It is not a band of its own in the drawing's card, which would push the status line under the
+   card out of view at 1440 by 900. Its buttons are as tall as the tools'. */
+.view-mode-tools {
   margin-inline-start: auto;
   padding: 6px;
   border-radius: var(--r-card);
