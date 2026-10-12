@@ -148,10 +148,14 @@ impl ShellVm {
             Some("open") => true,
             _ => notes_default_open,
         };
+        let settings = PopoverViewModel::new(i18n.clone(), "ui-settings", "ui-settings");
+        let help = PopoverViewModel::new(i18n.clone(), "ui-help", "ui-keyboard");
+        let share = ShareViewModel::new(i18n.clone());
+        PopoverViewModel::exclusive(&[&settings, &help, &share.popover()]);
         let vm = ShellVm {
-            settings: PopoverViewModel::new(i18n.clone(), "ui-settings", "ui-settings"),
-            help: PopoverViewModel::new(i18n.clone(), "ui-help", "ui-keyboard"),
-            share: ShareViewModel::new(i18n.clone()),
+            settings,
+            help,
+            share,
             i18n,
             target,
             details_word,
@@ -286,8 +290,6 @@ impl ShellVm {
     }
 
     pub fn toggle_menu(&self) {
-        self.help.close();
-        self.share.popover().close();
         self.settings.toggle();
     }
 
@@ -300,8 +302,6 @@ impl ShellVm {
     }
 
     pub fn toggle_help(&self) {
-        self.settings.close();
-        self.share.popover().close();
         self.help.toggle();
     }
 
@@ -314,8 +314,6 @@ impl ShellVm {
     }
 
     pub fn toggle_share(&self) {
-        self.settings.close();
-        self.help.close();
         self.share.popover().toggle();
     }
 
