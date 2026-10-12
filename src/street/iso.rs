@@ -4,9 +4,10 @@
 //! the section is where the street is edited.
 //!
 //! The rises are exaggerated: a curb or a sidewalk stands 150 mm, a few pixels at the scale a whole
-//! street is drawn at, so the slabs and curbs are drawn `RISE` times as high as they stand (the height
-//! tables keep the true heights). The things that stand on the pieces keep their own size and sit on the
-//! exaggerated tops.
+//! street is drawn at, so the slabs, and the curbs with them, are drawn `RISE` times as high as they stand
+//! (the height tables keep the true heights). What a curb stands above its own piece (a bike lane's divider)
+//! is drawn true, so that it does not bury a narrow lane (`curb_top_mm`). The things that stand on the
+//! pieces keep their own size and sit on the drawn tops.
 
 use std::fmt::Write;
 
@@ -113,6 +114,14 @@ pub fn curb_height_mm(curb: &str) -> i32 {
     }
 }
 
+/// How high the top of a curb on a piece of this kind is drawn, in millimetres of the drawing: as high as the
+/// piece, exaggerated with it, and what the curb stands above the piece at its true height. A bike lane is at the
+/// roadway's level, so its curb is a divider drawn true: exaggerated, its wall would cover half a narrow lane.
+pub fn curb_top_mm(curb: &str, kind_id: &str) -> f64 {
+    let h = height_mm(kind_id);
+    drawn_mm(h) + (curb_height_mm(curb) - h).max(0) as f64
+}
+
 /// A piece narrower than this on screen draws without what stands on it and without its arrow. It is below the
 /// section's 26 px: the 2.5D draws a street smaller (it fits the recession across too), and a tree is a box
 /// standing up off its strip, so it reads on a 1.5 m strip at 760 px (about 21 px).
@@ -202,7 +211,7 @@ fn curb(out: &mut String, p: &Projection, v: &View, i: usize, right: bool) {
     let Some(c) = s.curb else { return };
     let id = KINDS[s.kind].id;
     let (h, l) = (drawn_mm(height_mm(id)), STRETCH_MM);
-    let top = drawn_mm(curb_height_mm(c).max(height_mm(id)));
+    let top = curb_top_mm(c, id);
     let cw = curb_width_mm(c).min(s.width_mm as f64 / 2.0);
     let edge = (s.x_mm + s.width_mm) as f64;
     let (x0, x1) = if right { (edge - cw, edge) } else { (s.x_mm as f64, s.x_mm as f64 + cw) };
@@ -270,7 +279,7 @@ fn blocks(v: &View, i: usize, p: &Projection) -> Vec<Block> {
         out.push(Block { solid: Solid::Shelter, x: (cx - d / 2.0, cx + d / 2.0), y: (h, h + 2_500.0), z: (18_000.0, 22_000.0) });
     }
     if let Some(c) = s.curb.filter(|c| id == "bike" && *c != "island") {
-        let (top, cw) = (drawn_mm(curb_height_mm(c).max(height_mm(id))), curb_width_mm(c).min(w / 2.0));
+        let (top, cw) = (curb_top_mm(c, id), curb_width_mm(c).min(w / 2.0));
         for right in curb_edges(v, i) {
             let px = if right { x0 + w - cw / 2.0 } else { x0 + cw / 2.0 };
             for z in along(2_000.0, 4_000.0) {
@@ -335,9 +344,9 @@ fn arrow_shape(w: f64) -> (f64, f64) {
 /// its highest part.
 fn outline(out: &mut String, p: &Projection, v: &View, i: usize) {
     let s = &v.segments[i];
-    let h = height_mm(KINDS[s.kind].id);
-    let curb_top = s.curb.filter(|_| !curb_edges(v, i).is_empty()).map_or(h, |c| curb_height_mm(c).max(h));
-    let (x0, x1, top, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, drawn_mm(curb_top), STRETCH_MM);
+    let id = KINDS[s.kind].id;
+    let top = s.curb.filter(|_| !curb_edges(v, i).is_empty()).map_or(drawn_mm(height_mm(id)), |c| curb_top_mm(c, id));
+    let (x0, x1, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, STRETCH_MM);
     let low = beside(v, i).min(top);
     write!(
         out,
@@ -556,10 +565,11 @@ mod tests {
         let v = e.view();
         let scale = Projection::fit(1050.0, v.row_mm.max(v.total_mm)).scale;
         let m = iso_svg(&v, &en(), 1050.0).markup;
-        // The sidewalk's front face, and the front face of the bike lane's first curb block (its slab is the first group).
+        // The sidewalk's front face is exaggerated; the front face of the bike lane's first curb block (its slab is the
+        // first group), a divider standing above a lane at the roadway's level, is drawn true (`curb_top_mm`).
         let sidewalk = v.segments[0].uid;
         assert!((rise_of(&m, sidewalk, 1, "iso-front ") - 450.0 * scale).abs() < 0.02, "{}", rise_of(&m, sidewalk, 1, "iso-front "));
-        assert!((rise_of(&m, bike, 2, "iso-curb") - 450.0 * scale).abs() < 0.02, "{}", rise_of(&m, bike, 2, "iso-curb"));
+        assert!((rise_of(&m, bike, 2, "iso-curb") - 150.0 * scale).abs() < 0.02, "{}", rise_of(&m, bike, 2, "iso-curb"));
     }
 
     #[test]
@@ -611,6 +621,17 @@ mod tests {
         let m = drawn(&e);
         assert_eq!(count(&m, "class=\"iso-curb\""), 2 + 2 * 3);
         assert!(!m.contains("NaN"));
+    }
+
+    #[test]
+    fn a_curb_rises_with_its_piece_and_what_it_stands_above_the_piece_is_drawn_true() {
+        // A sidewalk's curb is as high as the sidewalk, exaggerated with it; an island's 50 mm more is drawn true.
+        assert_eq!(curb_top_mm("concrete", "sidewalk"), drawn_mm(150));
+        assert_eq!(curb_top_mm("island", "sidewalk"), drawn_mm(150) + 50.0);
+        // A bike lane is at the roadway's level: its curb is a divider standing its true height, so that it does not
+        // cover half the lane.
+        assert_eq!(curb_top_mm("concrete", "bike"), 150.0);
+        assert_eq!(curb_top_mm("bikefriendly", "bike"), 60.0);
     }
 
     #[test]
