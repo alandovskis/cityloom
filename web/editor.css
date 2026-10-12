@@ -830,6 +830,32 @@ svg pattern circle {
   stroke: var(--panel);
   stroke-width: 7;
 }
+/* ---- the street in 2.5D (street/iso.rs) ---- */
+.iso-ground {
+  fill: var(--fill);
+  stroke: none;
+}
+.iso-top,
+.iso-front,
+.iso-side,
+.iso-curb {
+  stroke: var(--ink-2);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+/* Each face keeps its piece's tint; the faces turned from the eye are a shade darker so the depth reads. */
+.iso-front {
+  filter: brightness(0.9);
+}
+.iso-side {
+  filter: brightness(0.78);
+}
+.iso-curb {
+  fill: var(--ink-3);
+}
+.iso-piece:hover .iso-top {
+  stroke-width: 2;
+}
 #drawing .sel-line {
   fill: none;
   stroke: var(--accent);
