@@ -109,23 +109,6 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
                 None => {}
             }
         });
-        // V switches the drawing between the section and the 2.5D, anywhere but in a field (`keys::switches_view`).
-        window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
-            let key = e.key();
-            let press = keys::Press {
-                key: &key,
-                ctrl: e.ctrl_key(),
-                meta: e.meta_key(),
-                alt: e.alt_key(),
-                repeat: e.repeat(),
-                composing: e.is_composing(),
-                taken: e.default_prevented() || typing(&e),
-            };
-            if keys::switches_view(&press) {
-                e.prevent_default();
-                w.toggle_mode();
-            }
-        });
     }
 
     let markup = move || {
@@ -229,6 +212,29 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
             }
         }
     };
+
+    // V switches the drawing between the section and the 2.5D, anywhere but in a field (`keys::switches_view`).
+    // A drag under way is finished first and kept: the section it is on goes, and with it the pointer's release,
+    // and what the drag has done is already on screen, so it becomes an edit that can be undone.
+    #[cfg(target_arch = "wasm32")]
+    window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
+        let key = e.key();
+        let press = keys::Press {
+            key: &key,
+            ctrl: e.ctrl_key(),
+            meta: e.meta_key(),
+            alt: e.alt_key(),
+            repeat: e.repeat(),
+            composing: e.is_composing(),
+            taken: e.default_prevented() || typing(&e),
+        };
+        if keys::switches_view(&press) {
+            e.prevent_default();
+            tapped.set_value(false);
+            finish(true);
+            w.toggle_mode();
+        }
+    });
 
     let keydown = move |e: KeyboardEvent| {
         if e.meta_key() || e.ctrl_key() || e.alt_key() {
