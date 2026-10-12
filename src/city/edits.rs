@@ -228,23 +228,43 @@ pub fn assign(places: &[Ids], records: &[Ids]) -> Vec<Option<usize>> {
         (p.key.is_some() && p.key == r.key, overlap, overlap > 0 && p.same_way(r))
     };
     let none = (false, 0, false);
+    // only a record with the place's key or one of its nodes can score: the others are never looked at, so a load
+    // is not places × records
+    let mut by_key: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    let mut by_node: BTreeMap<i64, Vec<usize>> = BTreeMap::new();
+    for (ri, r) in records.iter().enumerate() {
+        if let Some(k) = &r.key {
+            by_key.entry(k).or_default().push(ri);
+        }
+        for &n in &r.nodes {
+            by_node.entry(n).or_default().push(ri);
+        }
+    }
+    let candidates = |p: &Ids| -> BTreeSet<usize> {
+        let keyed = p.key.as_deref().and_then(|k| by_key.get(k)).into_iter().flatten();
+        let shared = p.nodes.iter().filter_map(|n| by_node.get(n)).flatten();
+        keyed.chain(shared).copied().collect()
+    };
     let mut want: Vec<Option<usize>> = places
         .iter()
         .map(|p| {
-            let best = records.iter().map(|r| score(p, r)).max().unwrap_or(none);
+            let scored: Vec<(usize, _)> = candidates(p).into_iter().map(|ri| (ri, score(p, &records[ri]))).collect();
+            let best = scored.iter().map(|&(_, s)| s).max().unwrap_or(none);
             if best == none {
                 return None;
             }
-            let mut top = records.iter().enumerate().filter(|(_, r)| score(p, r) == best).map(|(i, _)| i);
+            let mut top = scored.iter().filter(|&&(_, s)| s == best).map(|&(ri, _)| ri);
             let first = top.next()?;
             top.next().is_none().then_some(first)
         })
         .collect();
-    for ri in 0..records.len() {
-        let claimants: Vec<usize> = (0..places.len()).filter(|&pi| want[pi] == Some(ri)).collect();
-        if claimants.len() < 2 {
-            continue;
+    let mut claimants: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (pi, w) in want.iter().enumerate() {
+        if let Some(ri) = *w {
+            claimants.entry(ri).or_default().push(pi);
         }
+    }
+    for (ri, claimants) in claimants.into_iter().filter(|(_, c)| c.len() > 1) {
         let top = claimants.iter().map(|&pi| score(&places[pi], &records[ri])).max().unwrap_or(none);
         let winners: Vec<usize> = claimants.iter().copied().filter(|&pi| score(&places[pi], &records[ri]) == top).collect();
         let keep = (winners.len() == 1).then(|| winners[0]);
