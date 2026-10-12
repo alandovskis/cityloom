@@ -135,6 +135,47 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#arm-count")).toHaveText(count);
   });
 
+  test("the 2.5D view is looked at, follows an edit, and is remembered across a reload", async ({ page }) => {
+    const plan = page.locator("#view-plan");
+    const iso = page.locator("#view-iso");
+    await expect(page.locator("#drawing .iso")).toHaveCount(0);
+    await expect(plan).toHaveAttribute("aria-pressed", "true");
+
+    await iso.click();
+    await expect(page.locator("#drawing .iso")).toHaveCount(1);
+    await expect(page.locator("#drawing .iso-top").first()).toBeVisible();
+    await expect(page.locator("#drawing [data-role^='grip']")).toHaveCount(0);
+    await expect(iso).toHaveAttribute("aria-pressed", "true");
+    await expect(live(page)).toHaveText("Showing the junction in 2.5D.");
+
+    // The keyboard still edits the junction, and the picture follows.
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator("#drawing .sel-box")).toHaveCount(1);
+    const selected = await page.locator("#drawing").innerHTML();
+    // A street turns only where it keeps clear of its neighbours: one way or the other. The first turn is
+    // waited for before the second is tried, or the two could cancel.
+    const said = await live(page).innerText();
+    await page.keyboard.press("Shift+ArrowRight");
+    await expect(live(page)).not.toHaveText(said);
+    if (!/bearing/.test(await live(page).innerText())) await page.keyboard.press("Shift+ArrowLeft");
+    await expect(live(page)).toContainText("bearing");
+    await expect.poll(async () => page.locator("#drawing").innerHTML()).not.toBe(selected);
+    await expect(page.locator("#drawing .iso")).toHaveCount(1);
+
+    // The choice is kept.
+    await page.reload();
+    await expect(page.locator("#drawing .iso")).toHaveCount(1);
+    await expect(page.locator("#view-iso")).toHaveAttribute("aria-pressed", "true");
+
+    // V goes back to the plan from anywhere on the page.
+    await page.keyboard.press("v");
+    await expect(page.locator("#drawing .iso")).toHaveCount(0);
+    await expect(page.locator("#drawing g.arm").first()).toBeVisible();
+    await expect(page.locator("#view-plan")).toHaveAttribute("aria-pressed", "true");
+    await expect(live(page)).toHaveText("Showing the plan.");
+  });
+
   test("a street is pressed on the plan to select it, and its handle is dragged to turn it", async ({ page }) => {
     const arm = page.locator("#drawing g.arm").first();
     const uid = await arm.getAttribute("data-uid");

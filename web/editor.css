@@ -742,6 +742,16 @@ svg pattern circle {
   stroke-opacity: 0.55;
   stroke-linejoin: round;
 }
+#drawing .iso-post {
+  stroke: var(--ink-2);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+#drawing .iso-head {
+  fill: var(--ink);
+  stroke: var(--panel);
+  stroke-width: 1;
+}
 #drawing .iso-ramp {
   stroke: var(--ink-2);
   stroke-width: 0.6;

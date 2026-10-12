@@ -87,10 +87,12 @@ pub struct IsoFrame {
 }
 
 impl IsoFrame {
-    pub fn fit(bounds: [f64; 4], width: f64, window_height: f64) -> IsoFrame {
+    /// The frame for a drawing `width` wide in a window `window_height` high, as big as the plan's, that holds
+    /// the points of `content` (on the ground) and the tallest thing standing above them. `bounds` is the plan's,
+    /// which only sizes the drawing: it has room round the junction for the street names the picture has none of.
+    pub fn fit(bounds: [f64; 4], content: &[P], width: f64, window_height: f64) -> IsoFrame {
         let plan = Frame::fit(bounds, width, window_height);
-        let [x0, y0, x1, y1] = bounds;
-        let ground: Vec<P> = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)].into_iter().map(|c| project(c, 0.0)).collect();
+        let ground: Vec<P> = content.iter().map(|&c| project(c, 0.0)).collect();
         let (min_x, max_x) = ground.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.0), hi.max(p.0)));
         let (min_y, max_y) = ground.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.1), hi.max(p.1)));
         let min_y = min_y - TALLEST_MM * LIFT;
@@ -295,6 +297,17 @@ impl Draw {
     }
 }
 
+/// The points the picture reaches on the ground: each arm from its mouth to its end, the core, and a
+/// roundabout's ring. Everything drawn is inside them.
+fn content_points(v: &JView) -> Vec<P> {
+    let mut pts: Vec<P> = v.arms.iter().flat_map(|a| flatten(&a.outline)).chain(flatten(&v.core)).collect();
+    if let Some(ring) = &v.ring {
+        let r = ring.radius_mm as f64;
+        pts.extend([(r, 0.0), (-r, 0.0), (0.0, r), (0.0, -r)]);
+    }
+    pts
+}
+
 /// What a screen reader is told the picture is, drawn again when the language changes.
 pub fn iso_label(v: &JView, i18n: &I18n) -> String {
     i18n.tr("jn-iso-label", &Args::new().str("arms", arms_text(v, i18n)))
@@ -302,7 +315,7 @@ pub fn iso_label(v: &JView, i18n: &I18n) -> String {
 
 /// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high.
 pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
-    let f = IsoFrame::fit(v.bounds, width, window_height);
+    let f = IsoFrame::fit(v.bounds, &content_points(v), width, window_height);
     let mut d = Draw { f, flat: String::new(), solids: Vec::new(), posts: String::new(), sel: String::new() };
     let wall = height_of("sidewalk");
 
@@ -340,6 +353,10 @@ pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
                 h if h > 0.0 => d.stand(id, foot, h, true),
                 _ => d.lay(id, &foot),
             }
+        }
+        // Where there is no parking beside the curb the road runs on, over the parking piece.
+        for gap in &a.gaps {
+            d.lay("travel", &flatten(gap));
         }
         for lane in &a.core_bike {
             d.lay("bike", &flatten(lane));
@@ -421,6 +438,25 @@ mod tests {
         // A travel lane is drawn, but never with a side.
         assert!(count(&s.markup, "iso-flat k-travel") > 0);
         assert_eq!(count(&s.markup, "iso-side k-travel"), 0);
+    }
+
+    #[test]
+    fn a_stretch_with_no_parking_beside_the_curb_is_drawn_as_road_over_the_parking() {
+        let v = Junction::new(0).view();
+        let s = iso_svg(&v, 1000.0, 1000.0);
+        let arm = v.arms.iter().find(|a| !a.gaps.is_empty()).expect("the first sample has no-parking stretches beside its crossings");
+        let d: String = flatten(&arm.gaps[0])
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let (x, y) = s.frame.at(*p, 0.0);
+                format!("{}{} {}", if i == 0 { "M" } else { "L" }, f1(x), f1(y))
+            })
+            .collect::<String>()
+            + "Z";
+        let at = s.markup.find(&format!("class=\"iso-flat k-travel\" d=\"{d}\"")).expect("the gap is drawn as road");
+        // It is painted after the arm's parking, which it covers.
+        assert!(at > s.markup.find("iso-flat k-parking").unwrap());
     }
 
     #[test]
@@ -580,8 +616,9 @@ mod tests {
     fn the_whole_junction_and_its_tallest_post_are_inside_the_drawing() {
         for width in [320.0, 400.0, 1000.0] {
             let b = [-20_000.0, -20_000.0, 20_000.0, 20_000.0];
-            let f = IsoFrame::fit(b, width, 1000.0);
-            for corner in [(b[0], b[1]), (b[2], b[1]), (b[2], b[3]), (b[0], b[3])] {
+            let corners = [(b[0], b[1]), (b[2], b[1]), (b[2], b[3]), (b[0], b[3])];
+            let f = IsoFrame::fit(b, &corners, width, 1000.0);
+            for corner in corners {
                 for h in [0.0, TALLEST_MM] {
                     let (x, y) = f.at(corner, h);
                     assert!(x >= 0.0 && x <= f.width && y >= 0.0 && y <= f.height, "{width}: {corner:?} {h} -> {x},{y}");
@@ -593,9 +630,24 @@ mod tests {
     #[test]
     fn the_drawing_is_as_wide_and_as_tall_as_the_plans() {
         let b = [-20_000.0, -20_000.0, 20_000.0, 20_000.0];
-        let f = IsoFrame::fit(b, 1000.0, 1000.0);
+        let f = IsoFrame::fit(b, &[(0.0, 0.0), (1000.0, 1000.0)], 1000.0, 1000.0);
         let plan = crate::junction::frame::Frame::fit(b, 1000.0, 1000.0);
         assert_eq!((f.width, f.height), (plan.width, plan.height));
+    }
+
+    #[test]
+    fn the_junction_fills_most_of_the_drawing_and_none_of_it_is_outside() {
+        for sample in 0..4 {
+            let j = Junction::new(sample);
+            let v = j.view();
+            let s = iso_svg(&v, 1000.0, 1000.0);
+            let pts: Vec<(f64, f64)> = v.arms.iter().flat_map(|a| flatten(&a.outline)).map(|p| s.frame.at(p, 0.0)).collect();
+            let (min_x, max_x) = pts.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.0), hi.max(p.0)));
+            let (min_y, max_y) = pts.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.1), hi.max(p.1)));
+            assert!(min_x >= 0.0 && max_x <= s.frame.width && min_y >= 0.0 && max_y <= s.frame.height, "sample {sample}");
+            let (across, down) = ((max_x - min_x) / s.frame.width, (max_y - min_y) / s.frame.height);
+            assert!(across > 0.6 || down > 0.6, "sample {sample}: {across:.2} across, {down:.2} down");
+        }
     }
 
     #[test]
