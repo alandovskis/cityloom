@@ -243,6 +243,9 @@ mod tests {
             self.inner.remember(EDITS_KEY, &self.theirs);
             self.inner.keys()
         }
+        fn first_time(&self, what: &str) -> bool {
+            self.inner.first_time(what)
+        }
     }
 
     #[test]

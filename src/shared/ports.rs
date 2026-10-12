@@ -18,6 +18,9 @@ pub trait Storage {
     fn remember(&self, key: &str, value: &str) -> bool;
     /// Every key the storage holds.
     fn keys(&self) -> Vec<String>;
+    /// Whether `what` is asked for the first time of this storage on this page, which marks it asked. Held in
+    /// memory, not kept: every store a page makes on the same storage shares it, and the next page starts afresh.
+    fn first_time(&self, what: &str) -> bool;
 }
 
 /// Runs something after a delay, which can be called off.
@@ -142,11 +145,32 @@ impl Announcer for RecordingAnnouncer {
 pub struct MemoryStorage {
     kept: RefCell<HashMap<String, String>>,
     blocked: std::cell::Cell<bool>,
+    /// Keys it refuses to keep anything under.
+    refused: RefCell<std::collections::HashSet<String>>,
+    /// What was asked for the first time (`Storage::first_time`).
+    asked: RefCell<std::collections::HashSet<String>>,
 }
 
 impl MemoryStorage {
     pub fn blocked(&self, blocked: bool) {
         self.blocked.set(blocked);
+    }
+
+    /// Refuses to keep anything under `key` from now on, as a storage near its quota refuses a large value.
+    #[cfg(test)]
+    pub fn refuse(&self, key: &str) {
+        self.refused.borrow_mut().insert(key.to_string());
+    }
+
+    #[cfg(test)]
+    pub fn refuse_nothing(&self) {
+        self.refused.borrow_mut().clear();
+    }
+
+    /// Forgets what was asked for the first time, as a new page of the same browser storage would.
+    #[cfg(test)]
+    pub fn next_page(&self) {
+        self.asked.borrow_mut().clear();
     }
 
     /// Removes what is kept under `key`, as clearing a browser's site data would.
@@ -162,7 +186,7 @@ impl Storage for MemoryStorage {
     }
 
     fn remember(&self, key: &str, value: &str) -> bool {
-        if self.blocked.get() {
+        if self.blocked.get() || self.refused.borrow().contains(key) {
             return false;
         }
         self.kept.borrow_mut().insert(key.to_string(), value.to_string());
@@ -171,6 +195,10 @@ impl Storage for MemoryStorage {
 
     fn keys(&self) -> Vec<String> {
         self.kept.borrow().keys().cloned().collect()
+    }
+
+    fn first_time(&self, what: &str) -> bool {
+        self.asked.borrow_mut().insert(what.to_string())
     }
 }
 
