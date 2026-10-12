@@ -7,7 +7,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::junction::model::*;
-use crate::junction::vm::JunctionVm;
+use crate::junction::vm::{DrawMode, JunctionVm};
 use crate::junction::{inspector, notes, page, plan, turns};
 use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::Units;
@@ -695,6 +695,54 @@ fn the_plan_follows_the_units_and_the_selection() {
     let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
     assert!(h.contains("2 × 29.5") && h.contains("66 ft"));
     assert_eq!(count(&h, "class=\"arm on\""), 1);
+}
+
+fn shared_mode(mode: DrawMode, locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
+    let vm = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), Junction::new(0), None);
+    vm.set_mode(mode);
+    vm
+}
+
+#[test]
+fn the_drawing_is_the_2_5d_picture_in_iso_mode_with_no_grips_and_a_label_of_its_own() {
+    use crate::shared::i18n::Locale;
+    let s = shared_mode(DrawMode::Iso, Locale::En);
+    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
+    assert!(h.contains("class=\"iso\"") && !h.contains("class=\"plan\""), "{h}");
+    assert!(!h.contains("data-role=\"grip") && !h.contains("data-role=\"arm\""), "{h}");
+    assert!(h.contains("2.5D view of the junction. 4 streets."), "{h}");
+    let f = shared_mode(DrawMode::Iso, Locale::FrCa);
+    let h = html(|| view! { <plan::PlanDrawing vm=f.clone()/> }.into_any());
+    assert!(h.contains("Vue en 2,5D de la jonction. 4 rues."), "{h}");
+}
+
+#[test]
+fn the_view_toggle_is_a_group_of_two_buttons_and_the_view_shown_is_pressed() {
+    use crate::shared::i18n::Locale;
+    let s = shared_mode(DrawMode::Plan, Locale::En);
+    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
+    assert!(h.contains("<fieldset") && h.contains("id=\"view-mode\""), "{h}");
+    assert!(h.contains(">View</legend>"), "{h}");
+    assert!(button_tag(&h, "view-plan").contains("aria-pressed=\"true\""));
+    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"false\""));
+    // V goes to the view not shown, so only that button carries it.
+    assert!(button_tag(&h, "view-iso").contains("aria-keyshortcuts=\"V\""));
+    assert!(!button_tag(&h, "view-plan").contains("aria-keyshortcuts"));
+    assert!(h.contains(">Plan</button>") && h.contains(">2.5D</button>"), "{h}");
+    s.set_mode(DrawMode::Iso);
+    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
+    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"true\""));
+    assert!(button_tag(&h, "view-plan").contains("aria-pressed=\"false\""));
+    assert!(button_tag(&h, "view-plan").contains("aria-keyshortcuts=\"V\""));
+    assert!(!button_tag(&h, "view-iso").contains("aria-keyshortcuts"));
+}
+
+#[test]
+fn the_view_toggle_reads_plan_and_2_5d_in_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_mode(DrawMode::Plan, Locale::FrCa);
+    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
+    assert!(h.contains(">Plan</button>") && h.contains(">2,5D</button>") && h.contains(">Affichage</legend>"), "{h}");
 }
 
 // ---- the page in French ---------------------------------------------------------------

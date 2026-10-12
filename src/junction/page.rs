@@ -7,7 +7,7 @@ use leptos::prelude::*;
 
 use crate::junction::read_model::JView;
 use crate::junction::text::{arms_text, fit_text};
-use crate::junction::vm::JunctionVm;
+use crate::junction::vm::{DrawMode, JunctionVm};
 use crate::junction::watch::Watch;
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
@@ -126,6 +126,27 @@ pub fn History(vm: Rc<JunctionVm>) -> impl IntoView {
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>
             {move || w.tr("jn-reset")}
         </button>
+    }
+}
+
+/// The two ways the drawing shows the junction, the plan and the 2.5D: a group of two buttons, the one shown
+/// pressed. `V` does the same anywhere on the page.
+#[component]
+pub fn ViewToggle(vm: Rc<JunctionVm>) -> impl IntoView {
+    let w = Watch::new(vm);
+    let pressed = move |mode: DrawMode| move || (w.mode() == mode).to_string();
+    // V goes to the view not shown: only its button says so.
+    let shortcut = move |mode: DrawMode| move || (w.mode() != mode).then_some("V");
+    view! {
+        <fieldset class="units view-mode" id="view-mode">
+            <legend class="sr-only">{move || w.tr("jn-view-group")}</legend>
+            <button type="button" class="unit" id="view-plan" aria-pressed=pressed(DrawMode::Plan) aria-keyshortcuts=shortcut(DrawMode::Plan) on:click=move |_| w.set_mode(DrawMode::Plan)>
+                {move || w.tr("jn-view-plan")}
+            </button>
+            <button type="button" class="unit" id="view-iso" aria-pressed=pressed(DrawMode::Iso) aria-keyshortcuts=shortcut(DrawMode::Iso) on:click=move |_| w.set_mode(DrawMode::Iso)>
+                {move || w.tr("jn-view-iso")}
+            </button>
+        </fieldset>
     }
 }
 

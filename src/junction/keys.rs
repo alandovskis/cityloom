@@ -48,9 +48,47 @@ pub fn on_plan(key: &str, shift: bool, selected: Option<&str>) -> Option<(Action
     }
 }
 
+/// A key pressed on the page, as far as switching the view cares.
+#[derive(Clone, Copy, Debug)]
+pub struct Press<'a> {
+    pub key: &'a str,
+    pub ctrl: bool,
+    pub meta: bool,
+    pub alt: bool,
+    /// The key is held down and this is a repeat of it.
+    pub repeat: bool,
+    /// An input method is composing text.
+    pub composing: bool,
+    /// A field has the key (the person is typing) or another handler has taken it.
+    pub taken: bool,
+}
+
+/// Whether a key pressed on the page switches the drawing between the plan and the 2.5D: `V`, pressed once,
+/// without Ctrl, Cmd or Alt, not while composing, and not taken by a field or by another handler. It is the
+/// letter on the person's layout (`key`, not `code`); the toggle's buttons are there for a layout without it.
+pub fn switches_view(p: &Press) -> bool {
+    !(p.ctrl || p.meta || p.alt) && p.key.eq_ignore_ascii_case("v") && !p.repeat && !p.composing && !p.taken
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn press(key: &str) -> Press<'_> {
+        Press { key, ctrl: false, meta: false, alt: false, repeat: false, composing: false, taken: false }
+    }
+
+    #[test]
+    fn v_switches_the_view_once_and_only_when_nothing_else_has_the_key() {
+        assert!(switches_view(&press("v")) && switches_view(&press("V")));
+        assert!(!switches_view(&press("b")));
+        assert!(!switches_view(&Press { ctrl: true, ..press("v") }));
+        assert!(!switches_view(&Press { meta: true, ..press("v") }));
+        assert!(!switches_view(&Press { alt: true, ..press("v") }));
+        assert!(!switches_view(&Press { repeat: true, ..press("v") }));
+        assert!(!switches_view(&Press { composing: true, ..press("v") }));
+        assert!(!switches_view(&Press { taken: true, ..press("v") }));
+    }
 
     #[test]
     fn the_arrows_move_the_selection_round_the_junction() {

@@ -72,6 +72,7 @@ pub fn mount_page(plan: &Plan) {
     };
     mount("scroll", view! { <plan::PlanDrawing vm=vm.clone()/> }.into_any());
     mount("street", view! { <page::Header vm=vm.clone()/> }.into_any());
+    mount("view-mode-slot", view! { <page::ViewToggle vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <page::TitleBlock vm=vm.clone()/> }.into_any());
     mount("fit-slot", view! { <page::Fit vm=vm.clone()/> }.into_any());
     mount("history", view! { <page::History vm=vm.clone()/> }.into_any());

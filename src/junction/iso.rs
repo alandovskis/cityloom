@@ -9,7 +9,9 @@ use serde_json::Value;
 use crate::junction::frame::Frame;
 use crate::junction::geometry::{sample_arc, sample_quad};
 use crate::junction::read_model::JView;
+use crate::junction::text::arms_text;
 use crate::shared::catalogue::KINDS;
+use crate::shared::i18n::{Args, I18n};
 
 type P = (f64, f64);
 
@@ -291,6 +293,11 @@ impl Draw {
         let solids: String = self.solids.iter().map(|s| self.render(s)).collect();
         format!("{}<g class=\"iso\">{}{solids}{}{}</g>", shades(), self.flat, self.posts, self.sel)
     }
+}
+
+/// What a screen reader is told the picture is, drawn again when the language changes.
+pub fn iso_label(v: &JView, i18n: &I18n) -> String {
+    i18n.tr("jn-iso-label", &Args::new().str("arms", arms_text(v, i18n)))
 }
 
 /// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high.
