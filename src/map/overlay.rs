@@ -1,9 +1,12 @@
 //! The city's places as GeoJSON for the map: each street along its real centreline, each junction a point.
 
+use std::collections::BTreeSet;
+
 use serde_json::{Value, json};
 
 use crate::city::model::CityView;
 use crate::city::projection::Projection;
+use crate::restriction::model::{LonLat, Restriction};
 
 /// How a place stands: needing attention beats having been changed.
 fn status(ok: bool, edited: bool) -> &'static str {
@@ -26,13 +29,14 @@ fn position(p: &Projection, x_mm: i32, y_mm: i32) -> [f64; 2] {
     [r6(lon), r6(lat)]
 }
 
-/// The streets and junctions of the city as a GeoJSON feature collection.
-pub fn places(v: &CityView, p: &Projection) -> String {
+/// The streets and junctions of the city as a GeoJSON feature collection. A street in `conflicts` (by uid) has what
+/// the rule of an area it is inside does not allow.
+pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String {
     let mut features: Vec<Value> = Vec::with_capacity(v.edges.len() + v.nodes.len());
     for e in &v.edges {
         features.push(json!({
             "type": "Feature",
-            "properties": { "hot": format!("s-{}", e.uid), "status": status(e.ok, e.edited), "width_m": e.row_mm as f64 / 1000.0 },
+            "properties": { "hot": format!("s-{}", e.uid), "status": status(e.ok, e.edited), "width_m": e.row_mm as f64 / 1000.0, "conflict": conflicts.contains(&e.uid) },
             "geometry": { "type": "LineString", "coordinates": e.shape_mm.iter().map(|q| position(p, q[0], q[1])).collect::<Vec<_>>() },
         }));
     }
@@ -42,6 +46,57 @@ pub fn places(v: &CityView, p: &Projection) -> String {
             "properties": { "hot": format!("j-{}", n.uid), "status": status(n.ok, n.edited), "radius_m": n.radius_mm as f64 / 1000.0 },
             "geometry": { "type": "Point", "coordinates": position(p, n.x_mm, n.y_mm) },
         }));
+    }
+    json!({ "type": "FeatureCollection", "features": features }).to_string()
+}
+
+/// A ring of corners as GeoJSON wants a polygon's: closed, the first corner again at the end.
+fn closed(ring: &[LonLat]) -> Vec<[f64; 2]> {
+    let mut c: Vec<[f64; 2]> = ring.iter().map(|p| [r6(p[0]), r6(p[1])]).collect();
+    if let Some(&first) = c.first() {
+        c.push(first);
+    }
+    c
+}
+
+/// The restrictions as GeoJSON: each a polygon with its id and rule, the selected one marked and its corners as
+/// points to drag. `moving` is the selected one's outline while a corner of it is dragged.
+pub fn areas(list: &[Restriction], selected: Option<&str>, moving: Option<&[LonLat]>) -> String {
+    let mut features: Vec<Value> = Vec::new();
+    for r in list {
+        let on = selected == Some(r.id.as_str());
+        let ring = if on { moving.unwrap_or(&r.ring) } else { &r.ring };
+        features.push(json!({
+            "type": "Feature",
+            "properties": { "area": r.id, "rule": r.rule.id(), "selected": on },
+            "geometry": { "type": "Polygon", "coordinates": [closed(ring)] },
+        }));
+        if on {
+            for (i, c) in ring.iter().enumerate() {
+                features.push(json!({
+                    "type": "Feature",
+                    "properties": { "area": r.id, "i": i },
+                    "geometry": { "type": "Point", "coordinates": [r6(c[0]), r6(c[1])] },
+                }));
+            }
+        }
+    }
+    json!({ "type": "FeatureCollection", "features": features }).to_string()
+}
+
+/// The outline being drawn: the area it would close once it has three corners, the path so far, and each corner,
+/// the first marked (pressing it closes the outline).
+pub fn draft(corners: &[LonLat]) -> String {
+    let at = |c: &LonLat| [r6(c[0]), r6(c[1])];
+    let mut features: Vec<Value> = Vec::new();
+    if corners.len() >= 3 {
+        features.push(json!({ "type": "Feature", "properties": { "part": "fill" }, "geometry": { "type": "Polygon", "coordinates": [closed(corners)] } }));
+    }
+    if corners.len() >= 2 {
+        features.push(json!({ "type": "Feature", "properties": { "part": "path" }, "geometry": { "type": "LineString", "coordinates": corners.iter().map(at).collect::<Vec<_>>() } }));
+    }
+    for (i, c) in corners.iter().enumerate() {
+        features.push(json!({ "type": "Feature", "properties": { "i": i, "first": i == 0 }, "geometry": { "type": "Point", "coordinates": at(c) } }));
     }
     json!({ "type": "FeatureCollection", "features": features }).to_string()
 }
@@ -58,6 +113,8 @@ pub fn bounds(v: &CityView, p: &Projection) -> Option<[f64; 4]> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use osm_network::{Control, Lane, LaneKind, Network, Node, Road, Way};
     use serde_json::Value;
 
@@ -65,6 +122,7 @@ mod tests {
     use crate::city::model::City;
     use crate::city::projection::Projection;
     use crate::place::area::Area;
+    use crate::restriction::model::{Restriction, Rule};
 
     /// One street that bends: east for 80 m, then north-east to a point 100 m east and 50 m north.
     fn bent_road() -> Network {
@@ -99,7 +157,7 @@ mod tests {
     fn a_street_is_a_line_along_its_centreline_with_the_place_it_opens_and_how_it_stands() {
         let v = City::from_network(&bent_road(), "Bendville").view(0);
         let p = projection(&v);
-        let fc = parse(&places(&v, &p));
+        let fc = parse(&places(&v, &p, &BTreeSet::new()));
         let features = fc["features"].as_array().unwrap();
         assert_eq!(features.len(), 1, "one street and no junction");
         let f = &features[0];
@@ -124,7 +182,8 @@ mod tests {
     fn a_street_that_fails_or_has_been_changed_says_so() {
         let mut v = City::from_network(&bent_road(), "Bendville").view(0);
         let p = projection(&v);
-        let status = |v: &crate::city::model::CityView| parse(&places(v, &p))["features"][0]["properties"]["status"].as_str().unwrap().to_string();
+        let status =
+            |v: &crate::city::model::CityView| parse(&places(v, &p, &BTreeSet::new()))["features"][0]["properties"]["status"].as_str().unwrap().to_string();
         assert_eq!(status(&v), "ok");
         v.edges[0].edited = true;
         assert_eq!(status(&v), "changed");
@@ -136,7 +195,7 @@ mod tests {
     fn a_junction_is_a_point_with_its_radius_and_a_street_end_is_not_drawn() {
         let v = City::new().view(0); // the sample city has junctions and gates
         let p = Projection::new(Area::new("Sample", 45.5, -73.6).bounds(), [0.0, 0.0]);
-        let fc = parse(&places(&v, &p));
+        let fc = parse(&places(&v, &p, &BTreeSet::new()));
         let points: Vec<&Value> = fc["features"].as_array().unwrap().iter().filter(|f| f["geometry"]["type"] == "Point").collect();
         assert_eq!(points.len(), v.nodes.iter().filter(|n| n.junction).count());
         assert!(points.iter().all(|f| f["properties"]["hot"].as_str().unwrap().starts_with("j-") && f["properties"]["radius_m"].as_f64().unwrap() > 0.0));
@@ -149,10 +208,66 @@ mod tests {
         let v = City::from_network(&bent_road(), "Bendville").view(0);
         let p = projection(&v);
         let [w, s, e, n] = bounds(&v, &p).unwrap();
-        for c in parse(&places(&v, &p))["features"][0]["geometry"]["coordinates"].as_array().unwrap() {
+        for c in parse(&places(&v, &p, &BTreeSet::new()))["features"][0]["geometry"]["coordinates"].as_array().unwrap() {
             let (lon, lat) = (c[0].as_f64().unwrap(), c[1].as_f64().unwrap());
             assert!(w - 1e-6 <= lon && lon <= e + 1e-6 && s - 1e-6 <= lat && lat <= n + 1e-6, "{c} outside {w} {s} {e} {n}");
         }
         assert!(w < e && s < n);
+    }
+
+    #[test]
+    fn a_street_in_conflict_with_an_area_says_so() {
+        let v = City::from_network(&bent_road(), "Bendville").view(0);
+        let p = projection(&v);
+        let conflict = |set: BTreeSet<u32>| parse(&places(&v, &p, &set))["features"][0]["properties"]["conflict"].as_bool().unwrap();
+        assert!(!conflict(BTreeSet::new()));
+        assert!(conflict([1].into()));
+    }
+
+    fn area(id: &str, rule: Rule) -> Restriction {
+        Restriction { id: id.into(), name: String::new(), rule, ring: vec![[-73.6, 45.5], [-73.59, 45.5], [-73.59, 45.51]] }
+    }
+
+    #[test]
+    fn an_area_is_a_closed_polygon_with_its_id_and_rule_and_the_selected_one_has_its_corners() {
+        let list = [area("r1", Rule::CarFree), area("r2", Rule::SpeedLimit { kmh: 30 })];
+        let fc = parse(&areas(&list, Some("r2"), None));
+        let f = fc["features"].as_array().unwrap();
+        assert_eq!(f.len(), 2 + 3, "two outlines and the selected one's three corners");
+        assert_eq!(f[0]["geometry"]["type"], "Polygon");
+        assert_eq!(f[0]["properties"]["area"], "r1");
+        assert_eq!(f[0]["properties"]["rule"], "car_free");
+        assert_eq!(f[0]["properties"]["selected"], false);
+        let ring = f[0]["geometry"]["coordinates"][0].as_array().unwrap();
+        assert_eq!(ring.len(), 4, "closed: the first corner again");
+        assert_eq!(ring[0], ring[3]);
+        assert_eq!(f[1]["properties"]["selected"], true);
+        assert_eq!(f[2]["geometry"]["type"], "Point");
+        assert_eq!((f[2]["properties"]["area"].as_str(), f[2]["properties"]["i"].as_u64()), (Some("r2"), Some(0)));
+    }
+
+    #[test]
+    fn the_selected_area_is_drawn_where_its_corner_is_being_dragged() {
+        let list = [area("r1", Rule::CarFree)];
+        let moved = [[-73.61, 45.5], [-73.59, 45.5], [-73.59, 45.51]];
+        let fc = parse(&areas(&list, Some("r1"), Some(&moved)));
+        assert_eq!(fc["features"][0]["geometry"]["coordinates"][0][0], serde_json::json!([-73.61, 45.5]));
+        assert_eq!(fc["features"][1]["geometry"]["coordinates"], serde_json::json!([-73.61, 45.5]));
+        let fc = parse(&areas(&list, None, Some(&moved)));
+        assert_eq!(fc["features"][0]["geometry"]["coordinates"][0][0], serde_json::json!([-73.6, 45.5]), "only the selected one moves");
+    }
+
+    #[test]
+    fn the_outline_being_drawn_is_its_corners_the_path_and_once_it_can_close_its_area() {
+        assert!(parse(&draft(&[]))["features"].as_array().unwrap().is_empty());
+        let one = parse(&draft(&[[-73.6, 45.5]]));
+        assert_eq!(one["features"].as_array().unwrap().len(), 1);
+        assert_eq!(one["features"][0]["properties"]["first"], true);
+        let three = parse(&draft(&[[-73.6, 45.5], [-73.59, 45.5], [-73.59, 45.51]]));
+        let parts: Vec<String> = three["features"].as_array().unwrap().iter().map(|f| f["geometry"]["type"].as_str().unwrap().to_string()).collect();
+        assert_eq!(parts, ["Polygon", "LineString", "Point", "Point", "Point"]);
+        assert_eq!(three["features"][0]["properties"]["part"], "fill");
+        assert_eq!(three["features"][1]["properties"]["part"], "path");
+        assert_eq!(three["features"][4]["properties"]["i"], 2);
     }
 }

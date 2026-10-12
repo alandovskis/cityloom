@@ -106,6 +106,7 @@ const ALLOWED: &[&str] = &[
 
 /// Literals that look like words and are not, each with the reason. Empty unless needed.
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
+    ("Polygon", "a GeoJSON geometry type, data for MapLibre"),
     (" fresh", "a CSS class appended to a class list"),
     (" lifted", "a CSS class appended to a class list"),
     (" active", "a CSS class appended to a class list"),

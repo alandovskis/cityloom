@@ -656,7 +656,7 @@ impl MapVm {
         if self.basemap.get_untracked() != BasemapState::Ready {
             return;
         }
-        self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&self.core.view_now(), &projection));
+        self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&self.core.view_now(), &projection, &Default::default()));
     }
 
     /// Sends the place the pointer or the focus is on to the map.
