@@ -618,11 +618,12 @@ impl MapVm {
         match event {
             MapEvent::Ready { bounds } => self.tiles_ready(bounds),
             MapEvent::Failed => self.give_up(MISSING),
-            MapEvent::Pick { hot } => {
-                if let Some(href) = href_of(&hot) {
+            MapEvent::Press { hot, .. } => {
+                if let Some(href) = hot.as_deref().and_then(href_of) {
                     self.ports.navigator.go(&href);
                 }
             }
+            MapEvent::Vertex { .. } => {}
             MapEvent::Hover { hot } => self.set_hot(hot),
             MapEvent::Moved => self.moved.set(true),
         }
@@ -1217,9 +1218,11 @@ mod tests {
     #[test]
     fn pressing_a_place_opens_it_and_the_pointer_over_one_makes_it_hot() {
         let (vm, mapper, navigator, _) = area_vm();
-        mapper.say(MapEvent::Pick { hot: "s-1".into() });
-        mapper.say(MapEvent::Pick { hot: "j-3".into() });
-        mapper.say(MapEvent::Pick { hot: "nonsense".into() });
+        let press = |hot: Option<&str>| MapEvent::Press { at: [-73.6, 45.5], hot: hot.map(String::from), area: None, vertex: None };
+        mapper.say(press(Some("s-1")));
+        mapper.say(press(Some("j-3")));
+        mapper.say(press(Some("nonsense")));
+        mapper.say(press(None));
         assert_eq!(navigator.take(), vec!["street.html?street=1".to_string(), "intersection.html?junction=3".to_string()]);
         mapper.say(MapEvent::Hover { hot: Some("s-1".into()) });
         assert_eq!(vm.hot().as_deref(), Some("s-1"));

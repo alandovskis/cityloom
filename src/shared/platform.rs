@@ -188,6 +188,13 @@ extern "C" {
     pub type Basemap;
     #[wasm_bindgen(method, js_name = setPlaces)]
     fn set_places(this: &Basemap, layers: &str, data: &str);
+    #[wasm_bindgen(method, js_name = setRestrictions)]
+    fn set_restrictions(this: &Basemap, layers: &str, data: &str);
+    #[wasm_bindgen(method, js_name = setDraft)]
+    fn set_draft(this: &Basemap, layers: &str, data: &str);
+    /// The middle of the view, as a `Float64Array` of longitude and latitude.
+    #[wasm_bindgen(method)]
+    fn centre(this: &Basemap) -> Vec<f64>;
     #[wasm_bindgen(method)]
     fn fit(this: &Basemap, west: f64, south: f64, east: f64, north: f64, top: f64, right: f64, bottom: f64, left: f64);
     #[wasm_bindgen(method, js_name = zoomBy)]
@@ -214,6 +221,16 @@ impl BrowserMapper {
 impl crate::shared::ports::Mapper for BrowserMapper {
     fn set_places(&self, layers: &str, data: &str) {
         self.0.set_places(layers, data);
+    }
+    fn set_restrictions(&self, layers: &str, data: &str) {
+        self.0.set_restrictions(layers, data);
+    }
+    fn set_draft(&self, layers: &str, data: &str) {
+        self.0.set_draft(layers, data);
+    }
+    fn centre(&self) -> [f64; 2] {
+        let c = self.0.centre();
+        [c.first().copied().unwrap_or(0.0), c.get(1).copied().unwrap_or(0.0)]
     }
     fn fit(&self, [w, s, e, n]: [f64; 4], [top, right, bottom, left]: [f64; 4]) {
         self.0.fit(w, s, e, n, top, right, bottom, left);
