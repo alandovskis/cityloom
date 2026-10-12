@@ -215,9 +215,6 @@ pub struct MapVm {
     worded: RefCell<Option<Worded>>,
     /// The area restrictions: the Restrictions tab, and what the map shows of them.
     areas: Rc<AreasVm>,
-    /// The area whose corner the map last said was let go, until the map says anything else: the click that a
-    /// corner pressed and let go makes is the corner's, not a press on what lies under it.
-    dropped_on: RefCell<Option<String>>,
 }
 
 impl MapVm {
@@ -256,7 +253,6 @@ impl MapVm {
             active: ArcRwSignal::new(None),
             worded: RefCell::new(None),
             areas,
-            dropped_on: RefCell::new(None),
         })
     }
 
@@ -641,14 +637,12 @@ impl MapVm {
 
     /// What the map says. While an outline is drawn a press is always a corner of it (or closes it, on its first
     /// corner), whatever lies under it; while one is named a press does nothing. Otherwise a press on a place opens
-    /// it, even inside an area, and a press elsewhere selects the area there, or none. A corner let go is the
-    /// areas'; the click that comes with it, if the map tells of one, is not taken as a press.
+    /// it, even inside an area, and a press elsewhere selects the area there, or none. A corner dragged is the
+    /// areas'; the map tells of no press for the click that ends it.
     fn on_map_event(&self, event: MapEvent) {
-        let dropped_on = self.dropped_on.take();
         match event {
             MapEvent::Ready { bounds } => self.tiles_ready(bounds),
             MapEvent::Failed => self.give_up(MISSING),
-            MapEvent::Press { area, .. } if area.is_some() && area == dropped_on => {}
             MapEvent::Press { at, hot, area, vertex } => match self.areas.draw_now() {
                 Draw::Drawing(_) => self.areas.on_press(at, vertex),
                 Draw::Naming(_) => {}
@@ -657,12 +651,7 @@ impl MapVm {
                     None => self.areas.select(area.as_deref()),
                 },
             },
-            MapEvent::Vertex { area, index, at, done } => {
-                if done {
-                    *self.dropped_on.borrow_mut() = Some(area.clone());
-                }
-                self.areas.drag_vertex(&area, index, at, done);
-            }
+            MapEvent::Vertex { area, index, at, done } => self.areas.drag_vertex(&area, index, at, done),
             MapEvent::Hover { hot } => self.set_hot(hot),
             MapEvent::Moved => self.moved.set(true),
         }
@@ -1547,38 +1536,30 @@ mod tests {
     }
 
     #[test]
-    fn a_click_on_a_corner_of_the_selected_area_moves_nothing_and_does_not_open_the_street_under_it() {
+    fn a_corner_pressed_and_let_go_without_a_move_moves_nothing_and_the_next_press_opens_the_street() {
         let (vm, mapper, navigator, storage) = car_free_bendville();
         let corner = vm.areas().find_now("r1").unwrap().ring[0];
         let kept = storage.recall(crate::restriction::store::RESTRICTIONS_KEY);
-        // A corner pressed and let go without a move: the map tells only of the drop, then of the click itself.
+        // What the map tells of a corner clicked: the drop alone (it swallows the click that follows).
         mapper.say(MapEvent::Vertex { area: "r1".into(), index: 0, at: corner, done: true });
-        mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
-        assert!(navigator.take().is_empty(), "the click was the corner's");
+        assert!(navigator.take().is_empty(), "a drop opens nothing");
         assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"), "and the area stays selected");
         assert_eq!(storage.recall(crate::restriction::store::RESTRICTIONS_KEY), kept, "nothing moved");
-        // The next press is a press again.
         mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
         assert_eq!(navigator.take(), ["street.html?street=1"]);
     }
 
     #[test]
-    fn a_press_after_a_corner_drop_is_a_press_once_anything_else_was_said_between_them() {
+    fn a_press_while_drawing_right_after_a_corner_drop_is_a_corner_and_opens_nothing() {
         let (vm, mapper, navigator, _) = car_free_bendville();
         let corner = vm.areas().find_now("r1").unwrap().ring[0];
-        let drop = || MapEvent::Vertex { area: "r1".into(), index: 0, at: corner, done: true };
-        let press = || MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None };
-        // The map swallowed the click of the drop itself; the pointer moved on before the next press.
-        mapper.say(drop());
-        mapper.say(MapEvent::Hover { hot: None });
-        mapper.say(press());
-        mapper.say(drop());
-        mapper.say(MapEvent::Moved);
-        mapper.say(press());
-        // A press outside the area that was dropped on is not the drop's click.
-        mapper.say(drop());
-        mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: None, vertex: None });
-        assert_eq!(navigator.take(), ["street.html?street=1"; 3]);
+        let to = [corner[0] - 0.0001, corner[1]];
+        mapper.say(MapEvent::Vertex { area: "r1".into(), index: 0, at: to, done: false });
+        mapper.say(MapEvent::Vertex { area: "r1".into(), index: 0, at: to, done: true });
+        assert!(vm.areas().start());
+        mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
+        assert_eq!(vm.areas().draw_now().corners(), &[corner], "a press while drawing is always a corner");
+        assert!(navigator.take().is_empty());
     }
 
     #[test]
