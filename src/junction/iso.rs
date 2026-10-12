@@ -125,6 +125,23 @@ struct Solid {
     sides: bool,
 }
 
+/// How far a vertex of a ramp may be from the edge it meets and still be on it.
+const RAMP_TOLERANCE_MM: f64 = 50.0;
+
+fn distance_to_segment(p: P, a: P, b: P) -> f64 {
+    let ab = (b.0 - a.0, b.1 - a.1);
+    let len2 = ab.0 * ab.0 + ab.1 * ab.1;
+    let t = if len2 < 1e-9 { 0.0 } else { (((p.0 - a.0) * ab.0 + (p.1 - a.1) * ab.1) / len2).clamp(0.0, 1.0) };
+    (p.0 - a.0 - t * ab.0).hypot(p.1 - a.1 - t * ab.1)
+}
+
+/// Each vertex of `foot` with `h_mm` where it lies on the boundary of `top` and 0 where it does not: the slope of a
+/// ramp rises from the road to the edge it meets.
+fn lift_to(foot: &[P], top: &[P], h_mm: f64) -> Vec<(P, f64)> {
+    let near = |p: P| (0..top.len()).any(|i| distance_to_segment(p, top[i], top[(i + 1) % top.len()]) < RAMP_TOLERANCE_MM);
+    foot.iter().map(|&p| (p, if near(p) { h_mm } else { 0.0 })).collect()
+}
+
 struct Draw {
     f: IsoFrame,
     flat: String,
@@ -149,6 +166,30 @@ impl Draw {
         }
         let d = self.path(foot, 0.0);
         write!(self.flat, "<path class=\"iso-flat k-{kind_id}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#h-{kind_id})\" d=\"{d}\"/>").unwrap();
+    }
+
+    /// A surface `h_mm` high with no wall round it, a table's top or a continuous sidewalk, drawn over what lies
+    /// on the ground.
+    fn table(&mut self, kind_id: &str, foot: &[P], h_mm: f64) {
+        if foot.len() < 3 {
+            return;
+        }
+        let d = self.path(foot, h_mm);
+        write!(self.flat, "<path class=\"iso-table iso-flat k-{kind_id}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#h-{kind_id})\" d=\"{d}\"/>").unwrap();
+    }
+
+    /// A ramp from the ground up to `top`: its vertices on the top's edge at `h_mm`, the rest on the ground.
+    fn ramp(&mut self, kind_id: &str, foot: &[P], top: &[P], h_mm: f64) {
+        if foot.len() < 3 {
+            return;
+        }
+        let mut d = String::new();
+        for (i, (p, h)) in lift_to(foot, top, h_mm).into_iter().enumerate() {
+            let (x, y) = self.f.at(p, h);
+            write!(d, "{}{} {}", if i == 0 { "M" } else { "L" }, f1(x), f1(y)).unwrap();
+        }
+        d.push('Z');
+        write!(self.flat, "<path class=\"iso-ramp k-{kind_id}\" d=\"{d}\"/>").unwrap();
     }
 
     fn stand(&mut self, kind_id: &'static str, foot: Vec<P>, h_mm: f64, sides: bool) {
@@ -263,6 +304,24 @@ pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
         }
     }
 
+    // Surfaces raised to the sidewalk's level go over the road they are on, so they come after everything flat.
+    if v.raised && v.ring.is_none() {
+        d.table("sidewalk", &flatten(&v.core), wall);
+    }
+    for a in &v.arms {
+        if let Some(r) = &a.raised {
+            let top = flatten(&r.top);
+            d.table("sidewalk", &top, wall);
+            d.ramp("travel", &flatten(&r.ramp), &top, wall);
+        }
+        let Some(c) = a.crossing.as_ref().filter(|c| c.continuous) else { continue };
+        let top = flatten(&c.poly);
+        d.table("sidewalk", &top, wall);
+        for ramp in &c.ramps {
+            d.ramp("sidewalk", &flatten(ramp), &top, wall);
+        }
+    }
+
     IsoSvg { frame: f, markup: d.finish() }
 }
 
@@ -339,6 +398,39 @@ mod tests {
             assert!(!s.markup.contains("NaN") && !s.markup.contains("inf"), "sample {sample}");
             assert!(count(&s.markup, "iso-flat") + count(&s.markup, "iso-solid") > 0, "sample {sample}");
         }
+    }
+
+    #[test]
+    fn the_vertices_of_a_ramp_that_touch_the_top_are_lifted_and_the_others_stay_down() {
+        let top = vec![(0.0, 0.0), (1000.0, 0.0), (1000.0, 1000.0), (0.0, 1000.0)];
+        let ramp = vec![(0.0, 1000.0), (1000.0, 1000.0), (1000.0, 2000.0), (0.0, 2000.0)];
+        let lifted = lift_to(&ramp, &top, 150.0);
+        assert_eq!(lifted.iter().map(|(_, h)| *h).collect::<Vec<_>>(), vec![150.0, 150.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn a_raised_junction_has_a_top_at_sidewalk_height_and_sloped_ramps() {
+        let mut j = Junction::new(0);
+        assert_eq!(count(&svg(&j).markup, "iso-ramp"), 0);
+        assert!(j.set_raised(true));
+        let s = svg(&j);
+        assert_eq!(count(&s.markup, "iso-table"), 5, "the core and four arms");
+        assert_eq!(count(&s.markup, "class=\"iso-ramp "), 4);
+        // The top has no wall round it.
+        assert_eq!(count(&s.markup, "iso-side k-travel"), 0);
+    }
+
+    #[test]
+    fn a_continuous_crossing_is_sidewalk_height_with_ramps_and_a_zebra_crossing_is_flat() {
+        let mut j = Junction::new(0);
+        let arm = j.current().arms[0].uid;
+        let flat = svg(&j);
+        assert_eq!(count(&flat.markup, "iso-ramp"), 0);
+        assert_eq!(count(&flat.markup, "iso-table"), 0);
+        assert!(j.set_continuous(arm, true));
+        let s = svg(&j);
+        assert_eq!(count(&s.markup, "iso-table"), 1);
+        assert_eq!(count(&s.markup, "class=\"iso-ramp "), 2, "the strip before the crossing and the one beyond it");
     }
 
     #[test]
