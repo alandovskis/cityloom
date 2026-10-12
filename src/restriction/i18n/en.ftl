@@ -49,6 +49,8 @@ restriction-corner-removed = { $n ->
    *[other] Corner removed. { $n } corners left.
 }
 restriction-corner-moved = Corner moved.
+# A corner dropped on an outline whose corners another tab changed meanwhile.
+restriction-corner-stale = The outline was changed in another tab, so the corner was not moved.
 restriction-closed = The outline is closed. Choose its rule and name, then save it.
 restriction-cancelled = Drawing cancelled.
 restriction-corners = { $n ->

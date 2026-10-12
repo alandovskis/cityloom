@@ -420,21 +420,40 @@ impl AreasVm {
     }
 
     /// A corner of the selected area dragged on the map: shown as it moves, and when let go kept if the outline is
-    /// still valid, else refused with the reason. Let go where it was (pressed without a move, or brought back), it
-    /// is neither kept again nor said. Only the selected area's corners move, and none while an outline is drawn.
+    /// still valid, else refused with the reason. The map tells of a move before the corner is let go only after a
+    /// real one, so a drop with none before is a press: nothing moved, nothing kept or said. A corner moved and
+    /// brought back where it was is not kept again either. The drop changes only that corner of the outline as it
+    /// is kept now, so another tab's change to another corner stays; if that tab changed how many corners there
+    /// are, the drop is refused. Only the selected area's corners move, and none while an outline is drawn.
     pub fn drag_vertex(&self, area: &str, index: usize, at: LonLat, done: bool) {
         if self.draw.get_untracked() != Draw::Idle || self.selected.get_untracked().as_deref() != Some(area) {
             return;
         }
-        let Some(r) = self.find_now(area) else { return };
-        let mut ring = self.moving.get_untracked().filter(|(id, _)| id == area).map_or(r.ring.clone(), |(_, ring)| ring);
-        let Some(corner) = ring.get_mut(index) else { return };
-        *corner = at;
-        if !done {
-            self.moving.set(Some((area.to_string(), ring)));
+        let moving = self.moving.get_untracked().filter(|(id, _)| id == area).map(|(_, ring)| ring);
+        if done {
+            self.moving.set(None);
+            if let Some(dragged) = moving {
+                self.drop_corner(area, index, at, dragged.len());
+            }
             return;
         }
-        self.moving.set(None);
+        let Some(mut ring) = moving.or_else(|| self.find_now(area).map(|r| r.ring)) else { return };
+        let Some(corner) = ring.get_mut(index) else { return };
+        *corner = at;
+        self.moving.set(Some((area.to_string(), ring)));
+    }
+
+    /// Keeps the corner `index` of `area` at `at`, in the outline as it is kept now, which had `corners` corners
+    /// when the drag started.
+    fn drop_corner(&self, area: &str, index: usize, at: LonLat, corners: usize) {
+        self.reload();
+        let Some(r) = self.find_now(area) else { return };
+        if r.ring.len() != corners {
+            return self.tell("restriction-corner-stale", Args::new());
+        }
+        let mut ring = r.ring.clone();
+        let Some(corner) = ring.get_mut(index) else { return };
+        *corner = at;
         if same_outline(&ring, &r.ring) {
             return;
         }
@@ -858,6 +877,7 @@ mod tests {
         assert_eq!(said.take(), ["The outline crosses itself. Move or remove a corner."]);
         assert_eq!(vm.find_now("r1").unwrap().ring[0], SQUARE[0]);
         assert_eq!(vm.moving(), None);
+        vm.drag_vertex("r1", 0, out, false);
         vm.drag_vertex("r1", 0, out, true);
         assert_eq!(said.take(), ["Corner moved."]);
         assert_eq!(vm.find_now("r1").unwrap().ring[0], out);
@@ -894,6 +914,7 @@ mod tests {
         declare(&vm, "A");
         said.take();
         storage.blocked(true);
+        vm.drag_vertex("r1", 0, [-73.61, 45.52], false);
         vm.drag_vertex("r1", 0, [-73.61, 45.52], true);
         assert_eq!(said.take(), ["The area rules could not be saved in this browser."]);
         assert_eq!(vm.find_now("r1").unwrap().ring[0], SQUARE[0]);
@@ -1015,5 +1036,47 @@ mod tests {
         assert!(RestrictionStore::new(storage.clone()).remove("r1"));
         vm.reload();
         closes_as_a_new_area(&vm, &said);
+    }
+
+    #[test]
+    fn a_corner_let_go_with_no_move_before_is_not_moved_wherever_the_map_says_it_is() {
+        let (vm, _, said, storage) = rig();
+        declare(&vm, "A");
+        said.take();
+        let kept = storage.recall(RESTRICTIONS_KEY);
+        // The map tells of a move before it is let go only after a real one: a lone drop is a press, however far off.
+        vm.drag_vertex("r1", 0, [-73.61, 45.52], true);
+        assert!(said.take().is_empty());
+        assert_eq!(storage.recall(RESTRICTIONS_KEY), kept);
+    }
+
+    #[test]
+    fn a_corner_dropped_keeps_what_another_tab_changed_in_the_same_outline() {
+        let (vm, _, said, storage) = rig();
+        declare(&vm, "A");
+        said.take();
+        let other = RestrictionStore::new(storage.clone());
+        let out = [-73.61, 45.52];
+        vm.drag_vertex("r1", 0, out, false);
+        let theirs = [-73.585, 45.535];
+        assert!(other.update("r1", |r| r.ring[2] = theirs));
+        vm.drag_vertex("r1", 0, out, true);
+        assert_eq!(said.take(), ["Corner moved."]);
+        assert_eq!(vm.find_now("r1").unwrap().ring, vec![out, SQUARE[1], theirs, SQUARE[3]]);
+        assert_eq!(other.all()[0].ring, vec![out, SQUARE[1], theirs, SQUARE[3]]);
+    }
+
+    #[test]
+    fn a_corner_dropped_on_an_outline_another_tab_redrew_meanwhile_is_refused_and_theirs_kept() {
+        let (vm, _, said, storage) = rig();
+        declare(&vm, "A");
+        said.take();
+        let other = RestrictionStore::new(storage.clone());
+        vm.drag_vertex("r1", 0, [-73.61, 45.52], false);
+        assert!(other.update("r1", |r| r.ring = SQUARE[..3].to_vec()));
+        vm.drag_vertex("r1", 0, [-73.61, 45.52], true);
+        assert_eq!(said.take(), ["The outline was changed in another tab, so the corner was not moved."]);
+        assert_eq!(vm.find_now("r1").unwrap().ring, SQUARE[..3].to_vec());
+        assert_eq!(vm.moving(), None);
     }
 }

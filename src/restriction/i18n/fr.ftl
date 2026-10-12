@@ -44,6 +44,7 @@ restriction-corner-removed = { $n ->
    *[other] Coin retiré. Il reste { $n } coins.
 }
 restriction-corner-moved = Coin déplacé.
+restriction-corner-stale = Le contour a été modifié dans un autre onglet; le coin n’a donc pas été déplacé.
 restriction-closed = Le contour est fermé. Choisissez sa règle et son nom, puis enregistrez-le.
 restriction-cancelled = Tracé annulé.
 restriction-corners = { $n ->
