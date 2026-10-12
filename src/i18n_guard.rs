@@ -11,8 +11,6 @@ use proc_macro2::{Delimiter, TokenStream, TokenTree};
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
-    ("src/city/migrate.rs", "moves the old saves under their storage keys; it holds no wording (the keys are kebab-case, but not messages)"),
-    ("src/city/edits.rs", "the stored document and its storage keys; it holds no wording (the keys are kebab-case, but not messages)"),
     ("src/city/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
     ("src/map/tests.rs", "test-only"),
@@ -74,6 +72,8 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/city/import.rs", include_str!("city/import.rs")),
     ("src/city/keys.rs", include_str!("city/keys.rs")),
     ("src/city/model.rs", include_str!("city/model.rs")),
+    ("src/city/edits.rs", include_str!("city/edits.rs")),
+    ("src/city/migrate.rs", include_str!("city/migrate.rs")),
     ("src/junction/frame.rs", include_str!("junction/frame.rs")),
     ("src/junction/geometry.rs", include_str!("junction/geometry.rs")),
     ("src/map/camera.rs", include_str!("map/camera.rs")),
@@ -120,6 +120,7 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("recipes use catalogue kinds", "a panic message about the code, never shown"),
     ("catalogue kind", "a panic message about the code, never shown"),
     ("the catalogue has every kind of lane", "a panic message about the code, never shown"),
+    ("the edits serialise", "a panic message about the code, never shown"),
     ("Feature", "a GeoJSON type name, data for MapLibre"),
     ("FeatureCollection", "a GeoJSON type name, data for MapLibre"),
     ("LineString", "a GeoJSON geometry type, data for MapLibre"),
@@ -379,6 +380,8 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("data-uid", "the name of a data- attribute of an SVG handle"),
     ("data-i", "the name of a data- attribute of an SVG handle"),
     ("cityloom-welcome", "a storage key"),
+    ("cityloom-edits", "a storage key: where the edits document is kept"),
+    ("cityloom-edits-damaged", "a storage key: where a damaged edits document is copied"),
     ("notes-toggle", "the id of an element of the page"),
     ("inspector-toggle", "the id of an element of the page"),
     ("transit-priority", "the id of the left panel's table of lane measures, which the street page mounts into"),
