@@ -61,9 +61,11 @@ mod kept {
     use std::rc::Rc;
 
     use cityloom_editor::city::edits::{self, Document, EDITS_KEY, Edits};
+    use cityloom_editor::city::model::CityView;
     use cityloom_editor::city::store::CityStore;
+    use cityloom_editor::junction::model::RING_STEP_MM;
+    use cityloom_editor::map::projection::Projection;
     use cityloom_editor::place::area::{Area, default_area};
-    use cityloom_editor::shared::catalogue::KINDS;
     use cityloom_editor::shared::ports::{MemoryStorage, Storage};
 
     const TILE: &[u8] = include_bytes!("../../e2e/fixtures/plateau.osm.pbf");
@@ -76,10 +78,10 @@ mod kept {
         store
     }
 
-    /// The default area moved `dx_m` metres east.
-    fn shifted(dx_m: f64) -> Area {
+    /// The default area moved `dx_m` metres east and `dy_m` north.
+    fn shifted(dx_m: f64, dy_m: f64) -> Area {
         let a = default_area();
-        Area::new("shifted", a.lat, a.lon + dx_m / (111_320.0 * a.lat.to_radians().cos()))
+        Area::new("shifted", a.lat + dy_m / 111_320.0, a.lon + dx_m / (111_320.0 * a.lat.to_radians().cos()))
     }
 
     fn document(storage: &MemoryStorage) -> Edits {
@@ -97,44 +99,50 @@ mod kept {
         refused: usize,
     }
 
-    /// Edits every street and junction of the area and keeps each as the store's writes do (the place's record
-    /// under its key, every other record left as it is), then opens the city again. One open for all the writes:
-    /// a write opens the whole city, which takes about a second in a debug build.
-    fn edit_everything(store: &CityStore, storage: &MemoryStorage) -> (Tally, Tally) {
+    /// Where the places edited in an area lie on the earth, by the key of their record: a street's centreline and a
+    /// junction's point, as [lon, lat].
+    #[derive(Default)]
+    struct Placed {
+        streets: BTreeMap<String, Vec<[f64; 2]>>,
+        junctions: BTreeMap<String, [f64; 2]>,
+    }
+
+    fn projection(store: &CityStore, view: &CityView) -> Projection {
+        let o = view.origin_m.expect("a city made from a network");
+        Projection::new(store.area().bounds(), o)
+    }
+
+    /// Edits every street and junction of the area, each with a mark of its own (a street's `next_uid`, a
+    /// junction's ring, both raised by its place in the city), and keeps each as the store's writes do (the
+    /// place's record under its key, every other record left as it is), then opens the city again. One open for
+    /// all the writes: a write opens the whole city, which takes about a second in a debug build.
+    fn edit_everything(store: &CityStore, storage: &MemoryStorage) -> (Tally, Tally, Placed) {
         let mut city = store.open();
         let view = city.view(0);
+        let at = projection(store, &view);
         let mut edits = document(storage);
-        let (mut streets, mut junctions) = (Tally::default(), Tally::default());
+        let (mut streets, mut junctions, mut placed) = (Tally::default(), Tally::default(), Placed::default());
         let mut written = (Vec::new(), Vec::new());
-        for e in &view.edges {
+        for (i, e) in view.edges.iter().enumerate() {
             let mut s = city.street_editor(e.uid, 0).expect("every street opens").snapshot();
-            if s.segments.len() >= 2 {
-                s.segments[0].width_mm -= 100;
-                s.segments[1].width_mm += 100;
-            } else {
-                // a street of one piece gets another surface
-                let piece = &mut s.segments[0];
-                let other = KINDS[piece.kind].materials.iter().copied().find(|&m| m != piece.material).expect("a kind with a second surface");
-                piece.material = other;
-            }
+            s.next_uid += 1 + i as u32;
             assert!(city.keep_street(e.uid, s));
             match city.street_record(e.uid) {
                 Some((key, record)) => {
+                    placed.streets.insert(key.clone(), e.shape_mm.iter().map(|p| at.lon_lat(p[0], p[1])).collect());
                     edits.streets.insert(key, record);
                     written.0.push(e.uid);
                 }
                 None => streets.refused += 1,
             }
         }
-        for n in view.nodes.iter().filter(|n| n.junction) {
-            let mut j = city.junction_editor(n.uid, 0).expect("every junction opens");
-            // a corner rounded otherwise: the first arm and radius the junction allows
-            let arms: Vec<(u32, i32)> = j.current().arms.iter().map(|a| (a.uid, a.corner_mm)).collect();
-            let changed = arms.iter().any(|&(uid, now)| [7_000, 6_000, 5_000, 8_000, 3_000].into_iter().any(|mm| mm != now && j.set_corner(uid, mm)));
-            assert!(changed, "no corner of {} can be changed", n.uid);
-            assert!(city.keep_junction(n.uid, j.snapshot()));
+        for (i, n) in view.nodes.iter().filter(|n| n.junction).enumerate() {
+            let mut state = city.junction_editor(n.uid, 0).expect("every junction opens").snapshot();
+            state.ring_extra_mm = (1 + i as i32) * RING_STEP_MM;
+            assert!(city.keep_junction(n.uid, state), "junction {} takes a ring", n.uid);
             match city.junction_record(n.uid) {
                 Some((key, record)) => {
+                    placed.junctions.insert(key.clone(), at.lon_lat(n.x_mm, n.y_mm));
                     edits.junctions.insert(key, record);
                     written.1.push(n.uid);
                 }
@@ -151,7 +159,60 @@ mod kept {
             let tally = &mut junctions;
             if back.nodes.iter().any(|x| x.uid == uid && x.edited) { tally.back += 1 } else { tally.lost += 1 }
         }
-        (streets, junctions)
+        (streets, junctions, placed)
+    }
+
+    /// Positions as metres east and north of `origin`.
+    fn metres(p: [f64; 2], origin: [f64; 2]) -> (f64, f64) {
+        ((p[0] - origin[0]) * 111_320.0 * origin[1].to_radians().cos(), (p[1] - origin[1]) * 111_320.0)
+    }
+
+    fn distance_to_line(p: (f64, f64), line: &[(f64, f64)]) -> f64 {
+        line.windows(2)
+            .map(|w| {
+                let (a, b) = (w[0], w[1]);
+                let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+                let t = if dx == 0.0 && dy == 0.0 { 0.0 } else { (((p.0 - a.0) * dx + (p.1 - a.1) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0) };
+                (p.0 - a.0 - t * dx).hypot(p.1 - a.1 - t * dy)
+            })
+            .fold(f64::MAX, f64::min)
+    }
+
+    /// The points a quarter, half and three quarters along a line.
+    fn inner_points(line: &[(f64, f64)]) -> Vec<(f64, f64)> {
+        let length: f64 = line.windows(2).map(|w| (w[1].0 - w[0].0).hypot(w[1].1 - w[0].1)).sum();
+        [0.25, 0.5, 0.75]
+            .into_iter()
+            .filter_map(|f| {
+                let mut left = f * length;
+                for w in line.windows(2) {
+                    let d = (w[1].0 - w[0].0).hypot(w[1].1 - w[0].1);
+                    if left <= d && d > 0.0 {
+                        return Some((w[0].0 + (w[1].0 - w[0].0) * left / d, w[0].1 + (w[1].1 - w[0].1) * left / d));
+                    }
+                    left -= d;
+                }
+                None
+            })
+            .collect()
+    }
+
+    /// How near two centrelines are, in metres: the nearest that a point well inside one (a quarter, half or
+    /// three quarters along) comes to the other. Two pieces of a way that only meet at a junction are far apart.
+    fn apart_m(a: &[[f64; 2]], b: &[[f64; 2]]) -> f64 {
+        let origin = a[0];
+        let (a, b): (Vec<_>, Vec<_>) = (a.iter().map(|&p| metres(p, origin)).collect(), b.iter().map(|&p| metres(p, origin)).collect());
+        let near = |from: &[(f64, f64)], to: &[(f64, f64)]| inner_points(from).into_iter().map(|p| distance_to_line(p, to)).fold(f64::MAX, f64::min);
+        near(&a, &b).min(near(&b, &a))
+    }
+
+    /// Whether `line` is of the same piece of road as the edited street `took`: of the edited streets made from one
+    /// of the same ways, it is the nearest (osm2streets may draw the same piece tens of metres apart in two areas,
+    /// where it moves a junction's point, so nearness is measured against the other pieces, not in metres).
+    fn same_piece(line: &[[f64; 2]], ways: &BTreeSet<i64>, took: &str, edits: &Edits, placed: &Placed) -> bool {
+        let d = |key: &str| apart_m(line, &placed.streets[key]);
+        let best = edits.streets.iter().filter(|(_, s)| !s.ways.is_disjoint(ways)).map(|(k, _)| d(k)).fold(f64::MAX, f64::min);
+        d(took) <= best + 1.0
     }
 
     #[test]
@@ -181,21 +242,28 @@ mod kept {
     #[test]
     fn every_street_and_junction_of_the_default_area_edited_and_opened_again_keeps_its_edit() {
         let storage = Rc::new(MemoryStorage::default());
-        let (streets, junctions) = edit_everything(&store(&storage, default_area()), &storage);
+        let (streets, junctions, _) = edit_everything(&store(&storage, default_area()), &storage);
         println!("default area: streets {streets:?}, junctions {junctions:?}");
         assert_eq!((streets.lost, streets.refused), (0, 0), "streets: {streets:?}");
         assert_eq!((junctions.lost, junctions.refused), (0, 0), "junctions: {junctions:?}");
     }
 
     /// How many places of an area show an edit made in the default area: of those made from the same
-    /// OpenStreetMap ids as an edited place there, and of those the importer made the same in both areas.
+    /// OpenStreetMap ids as an edited place there, and of those the importer made the same in both areas; and how
+    /// many took the edit of another place (not the same piece of road, or not the same junction).
     #[derive(Debug, Default, Clone, Copy)]
     struct Follow {
         /// Of the places that overlap an edited place in its ids, how many show an edit.
         overlapping: (usize, usize),
-        /// Of the places that are the same in both areas (a street: the same ways and the same width; a junction:
+        /// Of the places that are the same in both areas (a street: the same ways, width and class; a junction:
         /// the same nodes and as many arms), how many show the edit.
         same: (usize, usize),
+        /// Places that took an edit, and of those, how many took one made on another place.
+        took: usize,
+        wrong: usize,
+        /// The check itself: other pieces of a street's way that meet it at an end, and of those, how many the
+        /// check tells from the piece the street took.
+        rivals: (usize, usize),
     }
 
     impl Follow {
@@ -210,9 +278,11 @@ mod kept {
     }
 
     /// (junctions, cut streets, other streets).
-    fn followed(storage: &Rc<MemoryStorage>, area: Area, edits: &Edits) -> [Follow; 3] {
-        let city = store(storage, area).open();
+    fn followed(storage: &Rc<MemoryStorage>, area: Area, edits: &Edits, placed: &Placed) -> [Follow; 3] {
+        let store = store(storage, area);
+        let city = store.open();
         let view = city.view(0);
+        let at = projection(&store, &view);
         let mut out = [Follow::default(); 3];
         for n in view.nodes.iter().filter(|n| n.junction) {
             let Some((_, r)) = city.junction_record(n.uid) else { continue };
@@ -221,38 +291,79 @@ mod kept {
                 let same = from.iter().any(|j| j.nodes == r.nodes && j.arm_streets.len() == r.arm_streets.len());
                 out[0].count(n.edited, same);
             }
+            if let Some(took) = city.took_junction(n.uid) {
+                // the edit applied is the record's (its mark), and the record was made on this junction
+                let record = &edits.junctions[took];
+                let here = metres(at.lon_lat(n.x_mm, n.y_mm), placed.junctions[took]);
+                let right = r.state.ring_extra_mm == record.state.ring_extra_mm && !record.nodes.is_disjoint(&r.nodes) && here.0.hypot(here.1) < 3.0;
+                out[0].took += 1;
+                out[0].wrong += usize::from(!right);
+            }
         }
         for e in &view.edges {
             let Some((key, r)) = city.street_record(e.uid) else { continue };
             let from: Vec<(&String, _)> = edits.streets.iter().filter(|(_, s)| !s.ways.is_disjoint(&r.ways) && !s.nodes.is_disjoint(&r.nodes)).collect();
-            if from.is_empty() {
-                continue;
-            }
             let cut = key.contains("~x") || from.iter().any(|(k, _)| k.contains("~x"));
-            let same = from.iter().any(|(_, s)| s.ways == r.ways && s.street.row_mm == r.street.row_mm && s.street.class == r.street.class);
-            out[if cut { 1 } else { 2 }].count(e.edited, same);
+            let kind = &mut out[if cut { 1 } else { 2 }];
+            if !from.is_empty() {
+                let same = from.iter().any(|(_, s)| s.ways == r.ways && s.street.row_mm == r.street.row_mm && s.street.class == r.street.class);
+                kind.count(e.edited, same);
+            }
+            if let Some(took) = city.took_street(e.uid) {
+                let record = &edits.streets[took];
+                let line: Vec<[f64; 2]> = e.shape_mm.iter().map(|p| at.lon_lat(p[0], p[1])).collect();
+                // the edit applied is the record's (its mark), made from a way of this street, on the same piece: by
+                // its OpenStreetMap ids where both ends are nodes of the same key, else by where it lies
+                let same_ids = took == key && !key.contains("~x");
+                let right = r.street.next_uid == record.street.next_uid
+                    && !record.ways.is_disjoint(&r.ways)
+                    && (record.nodes.is_empty() || !record.nodes.is_disjoint(&r.nodes))
+                    && (same_ids || same_piece(&line, &r.ways, took, edits, placed));
+                kind.took += 1;
+                kind.wrong += usize::from(!right);
+                for (rival, _) in edits.streets.iter().filter(|(k, s)| *k != took && !s.ways.is_disjoint(&r.ways) && !s.nodes.is_disjoint(&record.nodes)) {
+                    kind.rivals.1 += 1;
+                    kind.rivals.0 += usize::from(!same_piece(&line, &r.ways, rival, edits, placed));
+                }
+            }
         }
         out
     }
 
     #[test]
-    fn edits_follow_their_places_into_areas_shifted_east_and_west() {
+    fn edits_follow_their_places_into_shifted_areas_and_never_onto_another_place() {
         let storage = Rc::new(MemoryStorage::default());
-        edit_everything(&store(&storage, default_area()), &storage);
+        let (.., placed) = edit_everything(&store(&storage, default_area()), &storage);
         let edits = document(&storage);
-        let ids: BTreeSet<i64> = edits.streets.values().flat_map(|s| s.ways.iter().copied()).collect();
-        assert!(!ids.is_empty());
-        let shifts: Vec<(f64, [Follow; 3])> = [150.0, -150.0].into_iter().map(|dx| (dx, followed(&storage, shifted(dx), &edits))).collect();
-        for (dx, [junctions, cut, other]) in &shifts {
+        let shifts: Vec<((f64, f64), [Follow; 3])> = [(150.0, 0.0), (-150.0, 0.0), (0.0, 150.0), (0.0, -150.0)]
+            .into_iter()
+            .map(|(dx, dy)| ((dx, dy), followed(&storage, shifted(dx, dy), &edits, &placed)))
+            .collect();
+        for ((dx, dy), [junctions, cut, other]) in &shifts {
             println!(
-                "shifted {dx} m (followed, of): junctions {:?} overlapping, {:?} the same; cut streets {:?}, {:?}; other streets {:?}, {:?}",
-                junctions.overlapping, junctions.same, cut.overlapping, cut.same, other.overlapping, other.same
+                "shifted ({dx}, {dy}) m (followed, of): junctions {:?} overlapping, {:?} the same, took {} wrong {}; cut streets {:?}, {:?}, took {} wrong {} (rivals told apart {:?}); other streets {:?}, {:?}, took {} wrong {} (rivals told apart {:?})",
+                junctions.overlapping,
+                junctions.same,
+                junctions.took,
+                junctions.wrong,
+                cut.overlapping,
+                cut.same,
+                cut.took,
+                cut.wrong,
+                cut.rivals,
+                other.overlapping,
+                other.same,
+                other.took,
+                other.wrong,
+                other.rivals
             );
         }
-        for (dx, kinds) in shifts {
+        for (shift, kinds) in shifts {
             for (what, f) in ["junctions", "cut streets", "other streets"].into_iter().zip(kinds) {
-                assert_eq!(f.same.0, f.same.1, "{dx} m: every one of the {what} the importer made the same in both areas follows: {f:?}");
-                assert!(f.overlapping.0 * 100 >= f.overlapping.1 * 95, "{dx} m: {what} {f:?}");
+                assert_eq!(f.wrong, 0, "{shift:?}: {what} that took the edit of another place: {f:?}");
+                assert!(f.rivals.0 * 100 >= f.rivals.1 * 90, "{shift:?}: the check tells the other pieces of a way apart: {f:?}");
+                assert!(f.same.0 * 100 >= f.same.1 * 95, "{shift:?}: {what} the importer made the same in both areas: {f:?}");
+                assert!(f.overlapping.0 * 100 >= f.overlapping.1 * 90, "{shift:?}: {what} {f:?}");
             }
         }
     }
