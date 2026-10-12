@@ -897,13 +897,13 @@ fn each_area_holding_the_street_is_a_check_and_a_failing_one_is_counted() {
     let vm = bendville_street(&[("Car zone", Rule::CarFree), ("Slow zone", Rule::SpeedLimit { kmh: 30 })], Locale::En);
     let h = street_html(|| view! { <notes::Checks vm=vm.clone()/> });
     assert!(h.contains("Area rule: Car zone") && h.contains("Car-free: the street does not keep to it.") && h.contains("It has 2 driving lanes."), "{h}");
-    assert!(h.contains("Area rule: Slow zone") && h.contains("For information only"), "{h}");
+    assert!(h.contains("Area rule: Slow zone") && h.contains("<span class=\"sr-only\">: for information only</span>"), "{h}");
     let editor_failing = vm.view_now().checks.iter().filter(|c| !c.ok).count();
     let n = editor_failing + 1;
     let pill = street_html(|| view! { <notes::FitChecks vm=vm.clone()/> });
     assert!(pill.contains(&format!("{n} check")), "the car-free row counts, the speed limit does not: {pill}");
     let badge = street_html(|| view! { <notes::ChecksBadge vm=vm.clone()/> });
-    assert!(badge.contains(&format!(">{n}<")) || badge.contains(&format!(">{n}")), "{badge}");
+    assert!(badge.contains(&format!("id=\"checks-n\"")) && badge.contains(&format!(">{n}<span class=\"sr-only\">")), "{badge}");
 }
 
 #[test]
@@ -911,8 +911,15 @@ fn the_area_rows_are_said_in_french_too() {
     use crate::restriction::model::Rule;
     let vm = bendville_street(&[("Zone piétonne", Rule::CarFree), ("Zone lente", Rule::SpeedLimit { kmh: 30 })], Locale::FrCa);
     let h = street_html(|| view! { <notes::Checks vm=vm.clone()/> });
-    assert!(h.contains("Zone piétonne") && h.contains("À titre indicatif"), "{h}");
+    assert!(h.contains("Règle de zone\u{a0}: Zone piétonne") && h.contains("la rue ne la respecte pas."), "{h}");
+    assert!(h.contains("<span class=\"sr-only\">\u{a0}: échec</span>") && h.contains("<span class=\"sr-only\">\u{a0}: à titre indicatif</span>"), "{h}");
     assert!(!h.contains("Area rule"), "{h}");
+    let editor_failing = vm.view_now().checks.iter().filter(|c| !c.ok).count();
+    let n = editor_failing + 1;
+    let pill = street_html(|| view! { <notes::FitChecks vm=vm.clone()/> });
+    assert!(pill.contains(&n.to_string()), "{pill}");
+    let badge = street_html(|| view! { <notes::ChecksBadge vm=vm.clone()/> });
+    assert!(badge.contains(&format!(">{n}<span class=\"sr-only\">")), "{badge}");
 }
 
 #[test]

@@ -504,4 +504,17 @@ mod tests {
         assert!(rig(0).vm.area_checks().is_empty(), "a sandbox street lies nowhere");
         assert!(city_rig().0.vm.area_checks().is_empty(), "the sample city lies nowhere");
     }
+
+    #[test]
+    fn a_city_with_a_network_but_a_layout_that_lies_nowhere_has_no_area_check_even_under_an_area() {
+        let (ports, _, storage, _) = test_ports_with_time();
+        let everywhere = vec![[-180.0, -85.0], [180.0, -85.0], [180.0, 85.0], [-180.0, 85.0]];
+        RestrictionStore::new(storage.clone()).add("Everywhere", Rule::CarFree, everywhere).unwrap();
+        let store = CityStore::sample(ports.storage.clone());
+        assert!(store.has_network() && store.open().origin_m().is_none());
+        let edge = store.open().view(0).edges[0].uid;
+        let street = store.open().street_editor(edge, 0).unwrap();
+        let binding = CityBinding { store, place: Place::Street(edge) };
+        assert!(StreetVm::new(ports, crate::i18n_for(Locale::En), street, Some(binding)).area_checks().is_empty());
+    }
 }
