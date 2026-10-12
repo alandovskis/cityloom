@@ -1,6 +1,6 @@
 # Glossaire anglais / français (Canada)
 
-The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl`, `src/map/i18n/fr.ftl`, `src/place/i18n/fr.ftl` and `src/junction/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled. MapLibre’s own control strings, the basemap’s labels, OSM data and `web/credits.html` stay English.
+The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl`, `src/map/i18n/fr.ftl`, `src/place/i18n/fr.ftl` and `src/junction/i18n/fr.ftl` and `src/restriction/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled. MapLibre’s own control strings, the basemap’s labels, OSM data and `web/credits.html` stay English.
 
 ## Style rules
 
@@ -124,6 +124,16 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Map page | Press again to start over | Appuyez de nouveau pour recommencer | `Recommencer` as on the street page. |
 | Map page | Editors (the navigation) | Éditeurs |  |
 | Map page | Sheet tools | Outils de la feuille | To confirm, see below. |
+| Map page | Area rules (the tab) | Règles de zone | To confirm, see below. |
+| Map page | area (of a restriction) | zone |  |
+| Map page | corner (of an outline) | coin | Not `sommet`. |
+| Map page | Declare an area | Déclarer une zone |  |
+| Map page | Redraw | Retracer |  |
+| Map page | Car-free | Zone sans voitures | To confirm, see below. |
+| Map page | Bus and bike only | Autobus et vélos seulement | To confirm, see below. |
+| Map page | Speed limit | Limite de vitesse |  |
+| Map page | No parking or loading | Stationnement et chargement interdits | To confirm, see below. |
+| Map page | Conflicts with an area rule | En conflit avec une règle de zone |  |
 | Place search (home page) | Find a place | Chercher un lieu | `lieu`, as on the map page. |
 | Place search (home page) | Find / Open (the button) | Chercher / Ouvrir |  |
 | Place search (home page) | 2 places found | 2 lieux trouvés | `0` and `1` are singular: `1 lieu trouvé`. |
@@ -257,6 +267,10 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | as first laid out (map page) | `telle que tracée au départ` | `telle qu’aménagée à l’origine` (suggestion) |
 | Sheet tools (map page, a toolbar's name) | `Outils de la feuille` | `Outils` (suggestion) |
 | place (map page) | `lieu` | `endroit` (suggestion) |
+| Car-free (an area rule) | `Zone sans voitures` | `Sans voitures` (shorter, as the English) |
+| Bus and bike only (an area rule) | `Autobus et vélos seulement` | `Réservée aux autobus et aux vélos` (suggestion) |
+| No parking or loading (an area rule) | `Stationnement et chargement interdits` | `Interdiction de stationner et de livrer` (suggestion) |
+| Area rules (the map's tab) | `Règles de zone` | `Restrictions de zone` (suggestion) |
 | Changed (map page: a place's tag `map-changed`, `map-state-changed`; the hero drawing's `map-svg-changed`) | `Modifié` (agrees with `lieu`) | `Modifiée`, agreeing with the `rue` or `jonction` it marks (both feminine) |
 | Find a place, like Kreuzberg, Berlin (home page) | `Chercher un lieu, comme Kreuzberg, Berlin` | `Chercher un lieu, par exemple Kreuzberg, Berlin` (suggestion) |
 | Searching… (home page) | `Recherche en cours…` | `Recherche…` (suggestion) |
