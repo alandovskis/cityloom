@@ -769,6 +769,28 @@ a.btn {
   padding: 10px 0 0;
   font-size: 14px;
 }
+/* From the keyboard a corner is placed at the centre of the map: a cross marks it while an outline is drawn,
+   in the ink of the page with a halo of its panel colour, so it shows on a light map and a dark one. */
+.basemap[data-drawing]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    linear-gradient(var(--ink), var(--ink)) center / 2px 100% no-repeat,
+    linear-gradient(var(--ink), var(--ink)) center / 100% 2px no-repeat;
+  filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
+}
+/* While drawing a press anywhere places a corner, over a street too: the cross beats the pointer hand
+   `web/basemap.js` sets on the canvas over a place. */
+.basemap[data-drawing] .maplibregl-canvas {
+  cursor: crosshair !important;
+}
 .title-block {
   display: grid;
   grid-template-columns: 1fr auto auto;
