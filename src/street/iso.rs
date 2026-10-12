@@ -349,8 +349,8 @@ fn outline(out: &mut String, p: &Projection, v: &View, i: usize) {
 ///
 /// What is drawn is ordered so that nothing needs sorting by depth: the ground, then the strips from
 /// the lowest to the highest (a raised piece stands in front of the roadway beside it on both sides),
-/// each piece's slab before its curbs. Then the one-way arrows, then what stands on the pieces from
-/// far to near, and last the selected piece's outline.
+/// each piece's slab, then its one-way arrow, before its curbs. Then what stands on the pieces from far to
+/// near, and last the selected piece's outline.
 pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let span = v.row_mm.max(v.total_mm);
     let p = Projection::fit(width, span);
@@ -379,11 +379,12 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
             Some(right) => curb(&mut out, &p, v, i, right),
         }
         out.push_str("</g>");
+        // A lane's arrow lies on its own strip, so its curbs and any higher piece, drawn later, stand over it.
+        if edge.is_none() {
+            arrow(&mut out, &p, s);
+        }
     }
 
-    for s in &v.segments {
-        arrow(&mut out, &p, s);
-    }
     // What stands on the pieces, so that a nearer box covers the ones behind it: piece by piece from left
     // to right (each box stays inside its piece, and the eye sees the right sides, so a box on a piece
     // further right is the nearer wherever two overlap), and on each piece from the far end to the near and
@@ -790,6 +791,43 @@ mod tests {
         assert!(ARROW_AT_MM + len / 2.0 < hidden_from, "{} vs {hidden_from}", ARROW_AT_MM + len / 2.0);
     }
 
+    /// Sample Street 1 with two one-way bike lanes, each 1.8 m and curbed: one between the driving lanes (a curb on
+    /// each edge) and one between the right parking lane and the sidewalk (a curb on its left, the sidewalk raised on
+    /// its right).
+    fn one_way_bikes() -> (Editor, u32, u32) {
+        let mut e = Editor::new(0);
+        let bike = kind_index("bike").unwrap();
+        let middle = e.add(bike, 3);
+        let kerbside = e.add(bike, 6);
+        assert!(e.set_direction(middle, Some(0)) && e.set_direction(kerbside, Some(0)));
+        (e, middle, kerbside)
+    }
+
+    #[test]
+    fn a_lane_s_arrow_is_drawn_with_its_strip_so_its_curbs_and_a_higher_neighbour_stand_over_it() {
+        let (e, middle, kerbside) = one_way_bikes();
+        let v = e.view();
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        assert_eq!(count(&m, "class=\"iso-dir\""), 4);
+        for uid in [middle, kerbside] {
+            let open = format!("<g class=\"iso-piece\" data-uid=\"{uid}\">");
+            let slab = m.find(&open).expect("the slab is drawn");
+            // The arrow follows the lane's own strip straight away...
+            let after = slab + m[slab..].find("</g>").unwrap() + 4;
+            assert!(m[after..].starts_with("<g class=\"iso-dir\""), "{uid}: {}", &m[after..after + 60]);
+            // ...and comes before the lane's curb blocks.
+            let curbs: Vec<usize> = m.match_indices(&open).skip(1).map(|(at, _)| at).collect();
+            assert!(!curbs.is_empty() && curbs.iter().all(|c| *c > after), "{uid}");
+        }
+        // The kerbside lane's right neighbour, the raised sidewalk, is drawn over its arrow.
+        let pos = v.segments.iter().position(|s| s.uid == kerbside).unwrap();
+        let sidewalk = v.segments[pos + 1].uid;
+        assert_eq!(KINDS[v.segments[pos + 1].kind].id, "sidewalk");
+        let slab = m.find(&format!("<g class=\"iso-piece\" data-uid=\"{kerbside}\">")).unwrap();
+        let arrow = slab + m[slab..].find("<g class=\"iso-dir\"").unwrap();
+        assert!(m.find(&format!("<g class=\"iso-piece\" data-uid=\"{sidewalk}\">")).unwrap() > arrow);
+    }
+
     #[test]
     fn a_bus_shelter_stands_on_its_piece_and_a_bike_lane_s_curb_carries_posts() {
         let mut e = Editor::new(0);
@@ -896,8 +934,10 @@ mod tests {
         use crate::shared::symbols::{CURB_HATCH, HATCH, MATERIAL_HATCH};
         let root = env!("CARGO_MANIFEST_DIR");
         let defs: String = HATCH.iter().chain(MATERIAL_HATCH.iter()).chain(CURB_HATCH.iter()).map(|(_, s)| *s).collect();
-        let streets: Vec<(String, Editor)> =
-            (0..4).map(|i| (format!("sample {i}"), Editor::new(i))).chain(std::iter::once(("furnished".to_string(), furnished()))).collect();
+        let streets: Vec<(String, Editor)> = (0..4)
+            .map(|i| (format!("sample {i}"), Editor::new(i)))
+            .chain([("furnished".to_string(), furnished()), ("one-way bikes".to_string(), one_way_bikes().0)])
+            .collect();
         let mut body = String::new();
         for (name, e) in &streets {
             for width in [1050.0, 760.0, 600.0] {
