@@ -152,12 +152,18 @@ fn in_2_5d_the_drawing_is_the_street_in_depth_with_no_handles_and_the_keys_still
 }
 
 #[test]
-fn in_2_5d_the_group_keeps_the_section_s_height_so_the_card_does_not_jump() {
+fn the_group_is_as_tall_as_the_taller_view_in_both_so_switching_does_not_make_the_card_jump() {
+    use crate::street::iso::iso_height;
     use crate::street::svg::Geometry;
-    let s = street_in(ViewMode::Iso, Locale::En);
-    let section = Geometry::fit(1050.0, s.view().row_mm).rows.height;
-    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-    assert!(h.contains(&format!("min-height:{section}px")), "{section} {h}");
+    for mode in [ViewMode::Section, ViewMode::Iso] {
+        let s = street_in(mode, Locale::En);
+        let v = s.view();
+        let (section, iso) = (Geometry::fit(1050.0, v.row_mm).rows.height, iso_height(&v, 1050.0));
+        // At 1050 px the 2.5D of this street is the taller.
+        assert!(iso > section, "{iso} {section}");
+        let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+        assert!(h.contains(&format!("min-height:{iso}px")), "{mode:?} {iso} {h}");
+    }
 }
 
 #[test]

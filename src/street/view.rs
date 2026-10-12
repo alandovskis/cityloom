@@ -11,7 +11,7 @@ use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
 use crate::shared::bind::current_element;
 use crate::shared::i18n::Args;
-use crate::street::iso::{iso_label, iso_svg};
+use crate::street::iso::{iso_height, iso_label, iso_svg};
 use crate::street::keys::{self, Action};
 use crate::street::svg::{Geometry, Interaction, Moving, street_label, street_svg};
 use crate::street::vm::{StreetVm, ViewMode};
@@ -300,10 +300,10 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
     };
 
     view! {
-        <div class="wrap" id="wrap" tabindex="0" role="group" aria-label=move || w.i18n().tr("view-section-label", &Args::new()) aria-describedby="keys" node_ref=wrap on:keydown=keydown
-            // As tall as the section in either view, so switching does not make the card jump; the 2.5D,
-            // most often the shorter, is centred in it.
-            style:min-height=move || format!("{}px", height())
+        <div class="wrap views" id="wrap" tabindex="0" role="group" aria-label=move || w.i18n().tr("view-section-label", &Args::new()) aria-describedby="keys" node_ref=wrap on:keydown=keydown
+            // As tall as the taller of the two views in either, so switching does not make the card jump; the
+            // shorter is centred in it.
+            style:min-height=move || format!("{}px", height().max(iso_height(&w.view(), width.get())))
         >
             {move || match w.mode() {
                 ViewMode::Section => section().into_any(),

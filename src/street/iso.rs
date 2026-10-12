@@ -356,6 +356,16 @@ fn outline(out: &mut String, p: &Projection, v: &View, i: usize) {
     .unwrap();
 }
 
+/// How wide the scene is across: the street, or the pieces where they run over it.
+fn span_mm(v: &View) -> i32 {
+    v.row_mm.max(v.total_mm)
+}
+
+/// How tall the 2.5D of this street is drawn `width` wide, without drawing it.
+pub fn iso_height(v: &View, width: f64) -> f64 {
+    Projection::fit(width, span_mm(v)).height
+}
+
 /// The street in 2.5D, drawn `width` wide: a stretch of `STRETCH_MM` seen obliquely, from the same
 /// view the section is drawn from. Hovering a piece names it.
 ///
@@ -364,7 +374,7 @@ fn outline(out: &mut String, p: &Projection, v: &View, i: usize) {
 /// each piece's slab, then its one-way arrow, before its curbs. Then what stands on the pieces from far to
 /// near, and last the selected piece's outline.
 pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
-    let span = v.row_mm.max(v.total_mm);
+    let span = span_mm(v);
     let p = Projection::fit(width, span);
     let (w, l) = (span as f64, STRETCH_MM);
     let mut out = String::new();
@@ -632,6 +642,17 @@ mod tests {
         // cover half the lane.
         assert_eq!(curb_top_mm("concrete", "bike"), 150.0);
         assert_eq!(curb_top_mm("bikefriendly", "bike"), 60.0);
+    }
+
+    #[test]
+    fn the_height_of_the_2_5d_is_known_without_drawing_it() {
+        let mut e = Editor::new(0);
+        e.add(kind_index("travel").unwrap(), 2);
+        for e in [Editor::new(0), Editor::new(1), e] {
+            for width in [400.0, 600.0, 760.0, 1050.0, 1440.0] {
+                assert_eq!(iso_height(&e.view(), width), iso_svg(&e.view(), &en(), width).height, "{width}");
+            }
+        }
     }
 
     #[test]

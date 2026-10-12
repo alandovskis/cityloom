@@ -201,8 +201,8 @@
 .plan-drawing > .scroll {
   overflow: hidden;
 }
-/* The 2.5D is centred in the section's height (street/view.rs keeps it as the group's min-height). */
-.wrap:has(> #drawing.iso) {
+/* The street's group is as tall as the taller of its two views (street/view.rs); the shorter is centred. */
+.wrap.views {
   display: flex;
   flex-direction: column;
   justify-content: center;
