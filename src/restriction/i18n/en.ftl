@@ -1,4 +1,4 @@
-# What an area restriction says (src/restriction, and the map's Restrictions tab: src/map/areas.rs, src/map/areas_view.rs).
+# What an area restriction says (src/restriction, and the map's Area rules panel: src/map/areas.rs, src/map/areas_view.rs).
 
 ## Refusals of an outline
 restriction-refused-too-few = An area needs at least three corners, not all in a line.
@@ -104,8 +104,9 @@ restriction-street-keeps = Keeps to the rule.
 restriction-street-inside = Inside the area.
 restriction-legend-conflict = Conflicts with an area rule
 
-## The tab (web/map.html and src/map/areas_view.rs)
-restriction-tab = Area rules
+## The panel (web/map.html and src/map/areas_view.rs)
+restriction-panel = Area rules
+restriction-toggle-title = Show or hide the area rules ( [ )
 restriction-heading = Rules over an area
 restriction-declare = Declare an area
 restriction-drawing-help = Click the map to place each corner, then click the first corner or press Finish. From the keyboard, move the map with the arrow keys, press Enter on it to place a corner at its centre, and Shift+Enter to finish. Backspace removes the last corner; Escape cancels while the map has focus.

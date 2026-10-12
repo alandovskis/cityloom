@@ -74,10 +74,12 @@ test.describe("the city map", () => {
     expect(kinds.sort()).toEqual(["LineString", "Point"]);
   });
 
-  test("has no left sidebar: the map runs to the edge of the window", async ({ page }) => {
+  test("has no list of places: the area rules float on the left and the map runs to the edge of the window", async ({
+    page,
+  }) => {
     await expect(page.locator("#places-panel")).toHaveCount(0);
-    await expect(page.locator("#inspector-toggle")).toHaveCount(0);
     await expect(page.locator("#reset")).toHaveCount(0);
+    await expect(page.locator("#areas-panel")).toBeVisible();
     const map = (await page.locator("#basemap").boundingBox())!;
     expect(map.x).toBe(0);
   });
@@ -215,7 +217,7 @@ test.describe("the city map", () => {
     await expect(page.locator(".maplibregl-ctrl-scale")).toContainText(/(ft|mi)$/);
   });
 
-  test("the scale and the attribution stay clear of the Notes, the status bar and the zoom buttons", async ({
+  test("the scale and the attribution stay clear of the panels, the status bar and the zoom buttons", async ({
     page,
   }) => {
     const box = async (selector: string) => (await page.locator(selector).boundingBox())!;
@@ -224,9 +226,10 @@ test.describe("the city map", () => {
     await expect(page.locator(".maplibregl-ctrl-attrib")).toContainText("OpenStreetMap");
     const map = await box("#basemap");
     const scale = await box(".maplibregl-ctrl-scale");
-    expect(scale.x - map.x).toBeLessThan(24);
+    const left = await box("#areas-panel");
+    expect(scale.x - (left.x + left.width)).toBeLessThan(24);
     const attribution = await box(".maplibregl-ctrl-attrib");
-    for (const covers of ["#notes", ".statusbar", "#map-tools-slot"]) {
+    for (const covers of ["#areas-panel", "#notes", ".statusbar", "#map-tools-slot"]) {
       expect(overlaps(scale, await box(covers)), `the scale under ${covers}`).toBe(false);
       expect(overlaps(attribution, await box(covers)), `the attribution under ${covers}`).toBe(false);
     }

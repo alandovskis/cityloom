@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en" data-left="none">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CityLoom city map</title>
   <meta name="description" data-i18n-content="map-page-description" content="See the whole city at once and open any street or junction to change it.">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;var l=localStorage.getItem("cityloom-lang");if(l==="en"||l==="fr-CA")document.documentElement.lang=l}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";var l=localStorage.getItem("cityloom-lang");if(l==="en"||l==="fr-CA")document.documentElement.lang=l}catch(e){}</script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="app.css">
@@ -31,6 +31,7 @@
             <span><kbd>+</kbd> <kbd>−</kbd> <span data-i18n="map-key-zoom">zoom</span></span>
             <span><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> <span data-i18n="map-key-move">move the map</span></span>
             <span><kbd>0</kbd> <span data-i18n="map-key-whole">whole city</span></span>
+            <span><kbd>[</kbd> <span data-i18n="map-key-areas">area rules</span></span>
             <span><kbd>]</kbd> <span data-i18n="map-key-panels">notes</span></span>
           </p>
         </div>
@@ -83,13 +84,22 @@
   </main>
   <footer class="site-foot"><span data-version></span></footer>
 
+  <button type="button" id="inspector-toggle" class="edge-tab left" data-covers="left" aria-controls="areas-panel" aria-expanded="true" aria-keyshortcuts="[" data-i18n-title="restriction-toggle-title" title="Show or hide the area rules ( [ )" data-i18n="restriction-panel">Area rules</button>
   <button type="button" id="notes-toggle" class="edge-tab right" data-covers="right" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" data-i18n-title="ui-notes-toggle-title" title="Show or hide the notes ( ] )" data-i18n="ui-notes">Notes</button>
+
+  <aside class="panel left" id="areas-panel" data-i18n-aria-label="restriction-panel" aria-label="Area rules" data-covers>
+    <div class="panel-body">
+      <section aria-labelledby="h-areas">
+        <h2 id="h-areas" class="note-h" data-i18n="restriction-heading">Rules over an area</h2>
+        <div id="areas-slot"></div>
+      </section>
+    </div>
+  </aside>
 
   <aside class="panel right notes" id="notes" data-i18n-aria-label="ui-notes" aria-label="Notes" data-covers>
     <div class="tabs" role="tablist" data-i18n-aria-label="ui-notes-sections" aria-label="Notes sections">
       <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="true" data-i18n="ui-tab-checks">Checks</button>
       <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>
-      <button type="button" role="tab" class="tab" id="t-areas" aria-controls="p-areas" aria-selected="false" tabindex="-1" data-i18n="restriction-tab">Area rules</button>
     </div>
     <div class="panel-body">
       <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks">
@@ -104,12 +114,6 @@
           <h2 id="h-changes" class="note-h" data-i18n="map-your-changes">Your changes</h2>
           <p class="hint" id="changes-lead"></p>
           <ul class="checks places-list" id="changes"></ul>
-        </section>
-      </div>
-      <div class="panel-tab" id="p-areas" role="tabpanel" aria-labelledby="t-areas" hidden>
-        <section aria-labelledby="h-areas">
-          <h2 id="h-areas" class="note-h" data-i18n="restriction-heading">Rules over an area</h2>
-          <div id="areas-slot"></div>
         </section>
       </div>
       <section class="key-section" aria-labelledby="h-key">

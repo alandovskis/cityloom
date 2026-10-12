@@ -91,7 +91,7 @@ pub struct ShellVm {
     ports: Ports,
     i18n: Rc<I18n>,
     target: Rc<dyn Target>,
-    /// The message that names what the left sidebar holds on this page: `details-piece`, `details-details`, `details-places`.
+    /// The message that names what the left sidebar holds on this page: `details-piece`, `details-details`, `details-places`, `details-areas`.
     details_word: &'static str,
     tabs: Vec<String>,
     units: ArcRwSignal<Units>,
@@ -683,6 +683,20 @@ mod tests {
         let vm = ShellVm::new(ports, en(), Rc::new(Fake(new_page())), "details-places", vec![], false);
         vm.toggle_inspector();
         assert_eq!(said.take(), vec!["Places hidden."]);
+    }
+
+    #[test]
+    fn the_maps_left_panel_is_announced_as_the_area_rules_in_both_languages() {
+        for (locale, hidden, shown) in [
+            (Locale::En, "Area rules hidden.", "Area rules shown."),
+            (Locale::FrCa, "Détails des règles de zone masqués.", "Détails des règles de zone affichés."),
+        ] {
+            let (ports, said, _, _) = ports_for_test();
+            let vm = ShellVm::new(ports, I18n::new(locale, &[crate::shell::RESOURCES]), Rc::new(Fake(new_page())), "details-areas", vec![], false);
+            vm.toggle_inspector();
+            vm.toggle_inspector();
+            assert_eq!(said.take(), vec![hidden, shown]);
+        }
     }
 
     #[test]

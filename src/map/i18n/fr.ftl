@@ -18,6 +18,7 @@ map-key-open = ouvrir
 map-key-zoom = zoom
 map-key-move = déplacer la carte
 map-key-whole = toute la ville
+map-key-areas = règles de zone
 map-key-panels = notes
 
 ## L’en-tête, les outils et les panneaux
@@ -91,7 +92,7 @@ map-checks-pass = { $n ->
 map-checks-conflicts = { $streets ->
     [one] Une rue est
    *[other] { $streets } rues sont
-} en conflit avec une règle de zone. L’onglet Règles de zone { $streets ->
+} en conflit avec une règle de zone. Le panneau Règles de zone { $streets ->
     [one] la
    *[other] les
 } liste.

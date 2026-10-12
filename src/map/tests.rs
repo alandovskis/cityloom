@@ -492,7 +492,7 @@ fn map_html_has_one_h1_the_city_map() {
     assert!(html.contains(r#"<h1 id="h-drawing" class="sr-only" data-i18n="map-city-map">City map</h1>"#));
 }
 
-// ---- the Restrictions tab ------------------------------------------------------------------
+// ---- the Area rules panel ------------------------------------------------------------------
 
 use crate::map::areas_view::Areas;
 use crate::restriction::fixtures::{bent_midpoint, bent_store, square};
@@ -658,9 +658,23 @@ fn the_drawing_and_the_naming_speak_french_with_no_english_left() {
 }
 
 #[test]
-fn map_html_has_the_area_rules_tab_and_its_panel() {
-    assert!(MAP_HTML.contains("id=\"t-areas\"") && MAP_HTML.contains("aria-controls=\"p-areas\"") && MAP_HTML.contains("data-i18n=\"restriction-tab\""));
-    assert!(MAP_HTML.contains("id=\"p-areas\"") && MAP_HTML.contains("id=\"areas-slot\""));
+fn map_html_has_the_area_rules_in_a_left_panel_and_not_in_the_notes() {
+    assert!(!MAP_HTML.contains("id=\"t-areas\"") && !MAP_HTML.contains("id=\"p-areas\"") && !MAP_HTML.contains("data-left=\"none\""));
+    assert!(
+        MAP_HTML.contains(
+            r#"id="inspector-toggle" class="edge-tab left" data-covers="left" aria-controls="areas-panel" aria-expanded="true" aria-keyshortcuts="[""#
+        )
+    );
+    assert!(MAP_HTML.contains(r#"<aside class="panel left" id="areas-panel""#));
+    let panel = &MAP_HTML[MAP_HTML.find("id=\"areas-panel\"").unwrap()..];
+    assert!(panel[..panel.find("</aside>").unwrap()].contains("id=\"areas-slot\""));
+    assert!(MAP_HTML.contains(r#"localStorage.getItem("cityloom-inspector")==="closed""#), "the head script restores a closed panel");
+}
+
+#[test]
+fn the_keyboard_help_lists_the_key_for_the_area_rules_beside_the_notes() {
+    assert!(MAP_HTML.contains(r#"<kbd>[</kbd> <span data-i18n="map-key-areas">area rules</span>"#));
+    assert!(MAP_HTML.contains(r#"<kbd>]</kbd> <span data-i18n="map-key-panels">notes</span>"#));
 }
 
 #[test]
@@ -695,11 +709,9 @@ fn a_name_that_looks_like_markup_is_shown_as_text() {
 }
 
 #[test]
-fn the_tab_is_opened_through_the_shell_s_own_controls_only_where_it_is_not_shown() {
+fn the_panel_is_opened_through_the_shell_s_own_toggle_only_where_it_is_closed() {
     use crate::map::areas_view::reveal_clicks;
-    assert_eq!(reveal_clicks(Some("true"), Some("true")), Vec::<&str>::new());
-    assert_eq!(reveal_clicks(Some("true"), Some("false")), ["t-areas"]);
-    assert_eq!(reveal_clicks(Some("false"), Some("true")), ["notes-toggle"]);
-    assert_eq!(reveal_clicks(Some("false"), Some("false")), ["notes-toggle", "t-areas"]);
-    assert_eq!(reveal_clicks(None, None), ["t-areas"], "no toggle on the page: only the tab");
+    assert_eq!(reveal_clicks(Some("true")), Vec::<&str>::new());
+    assert_eq!(reveal_clicks(Some("false")), ["inspector-toggle"]);
+    assert_eq!(reveal_clicks(None), Vec::<&str>::new(), "no toggle on the page: nothing to press");
 }

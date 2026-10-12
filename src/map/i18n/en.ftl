@@ -18,6 +18,7 @@ map-key-open = open
 map-key-zoom = zoom
 map-key-move = move the map
 map-key-whole = whole city
+map-key-areas = area rules
 map-key-panels = notes
 
 ## The heading, the tools and the panels
@@ -91,7 +92,7 @@ map-checks-pass = { $n ->
 map-checks-conflicts = { $streets ->
     [one] One street conflicts
    *[other] { $streets } streets conflict
-} with an area rule. The Area rules tab lists { $streets ->
+} with an area rule. The Area rules panel lists { $streets ->
     [one] it
    *[other] them
 }.

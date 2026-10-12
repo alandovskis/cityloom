@@ -1,7 +1,7 @@
-//! The Area rules tab of the map's notes: the area rules, declaring one by drawing it on the map, and changing or
+//! The Area rules panel on the left of the map page: the area rules, declaring one by drawing it on the map, and changing or
 //! deleting the one selected. The views show what the map's view-model says and send it what the person does.
 //!
-//! Where the keyboard's focus goes when the tab changes what it shows is the views' to say, since a control that
+//! Where the keyboard's focus goes when the panel changes what it shows is the views' to say, since a control that
 //! was pressed may be gone: drawing starts on the map (Enter places a corner there), a closed outline asks for its
 //! rule in the form (the map takes no key from it), and back in the list the selected area's row, or Declare, has it
 //! if it was lost.
@@ -17,12 +17,12 @@ use crate::shared::bind::Bound;
 
 type Vm = Bound<MapVm>;
 
-/// A message of the tab, for a view: it follows a switch of language.
+/// A message of the panel, for a view: it follows a switch of language.
 fn word(vm: Vm, key: &'static str) -> impl Fn() -> String + Copy + 'static {
     move || vm.with(|v| v.areas().word(key))
 }
 
-/// What the tab shows: the list, the outline being drawn, or the closed outline's rule and name.
+/// What the panel shows: the list, the outline being drawn, or the closed outline's rule and name.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Stage {
     List,
@@ -30,7 +30,7 @@ enum Stage {
     Naming,
 }
 
-/// Moves the keyboard's focus to the element `id` once the tab is drawn; with `only_if_lost`, only when nothing has
+/// Moves the keyboard's focus to the element `id` once the panel is drawn; with `only_if_lost`, only when nothing has
 /// it (the control pressed is gone).
 fn focus_later(id: String, only_if_lost: bool) {
     #[cfg(target_arch = "wasm32")]
@@ -58,39 +58,35 @@ fn focus_list(vm: Vm) {
     }
 }
 
-/// The shell's own controls to press so the Area rules tab is shown, given the Notes toggle's `aria-expanded` and
-/// the tab's `aria-selected`: the toggle if the Notes are closed, then the tab if another is chosen. The map slice
-/// does not reach the shell's view-model; it presses what a person would.
+/// The shell's own control to press so the Area rules panel is shown, given the left toggle's `aria-expanded`: the
+/// toggle, if the panel is closed. The map slice does not reach the shell's view-model; it presses what a person would.
 #[cfg(any(target_arch = "wasm32", test))]
-pub(crate) fn reveal_clicks(notes_expanded: Option<&str>, tab_selected: Option<&str>) -> Vec<&'static str> {
-    let mut clicks = Vec::new();
-    if notes_expanded == Some("false") {
-        clicks.push("notes-toggle");
-    }
-    if tab_selected != Some("true") {
-        clicks.push("t-areas");
-    }
-    clicks
+pub(crate) fn reveal_clicks(panel_expanded: Option<&str>) -> Vec<&'static str> {
+    if panel_expanded == Some("false") { vec!["inspector-toggle"] } else { Vec::new() }
 }
 
-/// Shows the Area rules tab, where an outline is finished, cancelled and named, wherever the person had gone: a
+/// Shows the Area rules panel, where an outline is finished, cancelled and named, wherever the person had gone: a
 /// closed outline takes no key from the map, so its form must be reachable.
-fn reveal() {
+fn reveal(vm: Vm) {
     #[cfg(target_arch = "wasm32")]
     {
         use leptos::wasm_bindgen::JsCast;
 
         let doc = leptos::prelude::document();
         let attr = |id: &str, name: &str| doc.get_element_by_id(id).and_then(|el| el.get_attribute(name));
-        for id in reveal_clicks(attr("notes-toggle", "aria-expanded").as_deref(), attr("t-areas", "aria-selected").as_deref()) {
+        for id in reveal_clicks(attr("inspector-toggle", "aria-expanded").as_deref()) {
             if let Some(el) = doc.get_element_by_id(id).and_then(|el| el.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
                 el.click();
+                // The shell said the panel was shown, over what the outline had just said: say that again.
+                vm.with(|v| v.areas().repeat_last());
             }
         }
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = vm;
 }
 
-/// The tab: the list, or the outline being drawn, or the closed outline's rule and name.
+/// The panel: the list, or the outline being drawn, or the closed outline's rule and name.
 #[component]
 pub fn Areas(vm: Rc<MapVm>) -> impl IntoView {
     let vm = Bound::new(vm);
@@ -116,7 +112,7 @@ pub fn Areas(vm: Rc<MapVm>) -> impl IntoView {
         });
         on_cleanup(move || handle.remove());
     }
-    // Only a change of stage draws the tab again: a corner placed or a rule chosen keeps the controls (and the focus).
+    // Only a change of stage draws the panel again: a corner placed or a rule chosen keeps the controls (and the focus).
     let stage = Memo::new(move |_| match vm.with(|v| v.areas().draw()) {
         Draw::Idle => Stage::List,
         Draw::Drawing(_) => Stage::Drawing,
@@ -304,9 +300,9 @@ fn rule_picker(vm: Vm, id: Option<String>) -> impl IntoView {
 }
 
 fn drawing(vm: Vm) -> impl IntoView {
-    // Finish and Cancel are in the tab: it is shown. The keyboard places corners on the map: it goes there, where
+    // Finish and Cancel are in the panel: it is shown. The keyboard places corners on the map: it goes there, where
     // Enter places one at the cross.
-    reveal();
+    reveal(vm);
     focus_later("basemap".to_string(), false);
     let few = move || vm.with(|v| v.areas().draw().corners().len()) < 3;
     view! {
@@ -325,7 +321,7 @@ fn drawing(vm: Vm) -> impl IntoView {
 
 fn naming(vm: Vm) -> impl IntoView {
     // The map takes no key from a closed outline: the form, where its rule is chosen first, does.
-    reveal();
+    reveal(vm);
     focus_later("area-rule".to_string(), false);
     view! {
         <form class="area-form" on:submit=move |e| {

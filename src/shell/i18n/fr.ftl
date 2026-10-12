@@ -11,6 +11,7 @@ details-hidden = { $what } masqués.
 details-piece = détails des éléments
 details-details = détails
 details-places = lieux
+details-areas = détails des règles de zone
 region-announced = { $region } : la circulation se fait à { $side }.
 region-label = { $region } ({ $side })
 drive-left = gauche

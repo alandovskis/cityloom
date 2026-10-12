@@ -129,7 +129,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Map page | Press again to start over | Appuyez de nouveau pour recommencer | `Recommencer` as on the street page. |
 | Map page | Editors (the navigation) | Éditeurs |  |
 | Map page | Sheet tools | Outils de la feuille | To confirm, see below. |
-| Map page | Area rules (the tab) | Règles de zone | To confirm, see below. |
+| Map page | Area rules (the panel) | Règles de zone | To confirm, see below. |
 | Map page | area (of a restriction) | zone |  |
 | Map page | outline (of an area) | contour |  |
 | Map page | Rules over an area (the tab's heading) | Règles sur une zone | To confirm, see below. |
@@ -277,7 +277,7 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Car-free (an area rule) | `Zone sans voitures` | `Sans voitures` (shorter, as the English) |
 | Bus and bike only (an area rule) | `Autobus et vélos seulement` | `Réservée aux autobus et aux vélos` (suggestion) |
 | No parking or loading (an area rule) | `Stationnement et chargement interdits` | `Interdiction de stationner et de livrer` (suggestion) |
-| Area rules (the map's tab) | `Règles de zone` | `Restrictions de zone` (suggestion) |
+| Area rules (the map's panel) | `Règles de zone` | `Restrictions de zone` (suggestion) |
 | Rules over an area (the tab's heading) | `Règles sur une zone` | `Règles d’une zone` (suggestion) |
 | Changed (map page: a place's tag `map-changed`, `map-state-changed`; the hero drawing's `map-svg-changed`) | `Modifié` (agrees with `lieu`) | `Modifiée`, agreeing with the `rue` or `jonction` it marks (both feminine) |
 | Find a place, like Kreuzberg, Berlin (home page) | `Chercher un lieu, comme Kreuzberg, Berlin` | `Chercher un lieu, par exemple Kreuzberg, Berlin` (suggestion) |
