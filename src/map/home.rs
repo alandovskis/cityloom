@@ -52,7 +52,7 @@ pub fn HeroMap(vm: Rc<MapVm>) -> impl IntoView {
         });
         // What the other pages wrote is read again when the page is shown, and when another tab writes.
         window_event_listener(leptos::ev::storage, move |e: leptos::web_sys::StorageEvent| {
-            if e.key().is_none_or(|k| k == crate::city::store::CITY_KEY) {
+            if e.key().is_none_or(|k| k == crate::city::edits::EDITS_KEY) {
                 vm.with(|v| v.reload());
             }
         });

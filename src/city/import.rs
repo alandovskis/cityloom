@@ -258,7 +258,7 @@ mod tests {
         assert!(e.nudge_width(u, 100));
         assert!(city.keep_street(edge, e.snapshot()));
         // the save as an older version wrote it: none of its places has a source
-        let mut saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        let mut saved: serde_json::Value = serde_json::from_str(&city.legacy_save()).unwrap();
         fn strip(v: &mut serde_json::Value) {
             match v {
                 serde_json::Value::Object(m) => {
@@ -270,7 +270,7 @@ mod tests {
             }
         }
         strip(&mut saved);
-        let loaded = City::load_on(Layout::from_network(&net, "Testville"), &saved.to_string());
+        let loaded = City::load_old(Layout::from_network(&net, "Testville"), &saved.to_string());
         let v = loaded.view(0);
         assert_eq!((v.edited, v.edges[0].edited), (1, true));
         let source = loaded.street_editor(edge, 0).unwrap().view().source;
@@ -489,16 +489,16 @@ mod tests {
         assert_eq!((en(kind), fr(kind)), ("Unnamed local street".into(), "Rue locale sans nom".into()));
         let kind = &city.view(0).edges[motorway].called;
         assert_eq!((en(kind), fr(kind)), ("Unnamed motorway".into(), "Autoroute sans nom".into()));
-        assert!(!city.save().contains("Unnamed"));
+        assert!(!city.legacy_save().contains("Unnamed"));
         // a save from before kept the English it named an unnamed street with; the name comes from the network
         let mut city = City::on(Layout::from_network(&net, "Nameless"));
         let mut e = city.street_editor(residential as u32 + 1, 0).unwrap();
         let piece = e.view().segments[0].uid;
         e.nudge_width(piece, -100);
         assert!(city.keep_street(residential as u32 + 1, e.snapshot()));
-        let old = city.save().replacen("\"name\":null", "\"name\":\"Unnamed residential\"", 1);
+        let old = city.legacy_save().replacen("\"name\":null", "\"name\":\"Unnamed residential\"", 1);
         assert!(old.contains("Unnamed residential"));
-        let back = City::load_on(Layout::from_network(&net, "Nameless"), &old);
+        let back = City::load_old(Layout::from_network(&net, "Nameless"), &old);
         assert!(back.view(0).edges[residential].edited, "the edit is kept");
         assert_eq!(en(&back.street_editor(residential as u32 + 1, 0).unwrap().view().name), "Unnamed local street");
     }
