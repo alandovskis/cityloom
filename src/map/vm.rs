@@ -674,6 +674,7 @@ impl MapVm {
             MapEvent::Vertex { area, index, at, done } => self.areas.drag_vertex(&area, index, at, done),
             MapEvent::Hover { hot } => self.set_hot(hot),
             MapEvent::Moved => self.moved.set(true),
+            MapEvent::View { .. } => {}
         }
     }
 
