@@ -207,9 +207,12 @@ impl AreasVm {
 
     /// Applies a step to the outline and says what came of it.
     fn step(&self, step: Step) -> Outcome {
-        let mut draw = self.draw.get_untracked();
+        let before = self.draw.get_untracked();
+        let mut draw = before.clone();
         let mut outcome = draw.step(step);
-        self.draw.set(draw);
+        if draw != before {
+            self.draw.set(draw);
+        }
         if outcome == Outcome::Closed && !self.closed() {
             outcome = Outcome::Refused(Said::new("restriction-not-kept"));
         }
@@ -267,11 +270,9 @@ impl AreasVm {
         }
         self.selected.set(None);
         self.moving.set(None);
-        let started = self.step(Step::Start) == Outcome::Started;
-        if started {
-            self.tell("restriction-started", Args::new());
-        }
-        started
+        self.step(Step::Start);
+        self.tell("restriction-started", Args::new());
+        true
     }
 
     /// Starts drawing a new outline for the area `id`, which keeps its name and rule. False, and nothing changes,
@@ -344,6 +345,8 @@ impl AreasVm {
     pub fn save(&self) -> bool {
         let Draw::Naming(ring) = self.draw.get_untracked() else { return false };
         let Some(r) = self.store.add(&self.name.get_untracked(), self.rule.get_untracked(), ring) else {
+            // Another tab may have written a document this build cannot: the lead then says so.
+            self.reload();
             self.tell("restriction-not-kept", Args::new());
             return false;
         };
@@ -471,9 +474,10 @@ impl AreasVm {
         self.tell(if kept { "restriction-corner-moved" } else { "restriction-not-kept" }, Args::new());
     }
 
-    /// What a key pressed on the map does to the outline being drawn, or to the selection; says whether it was one of its keys. Arrow
-    /// keys stay the map's, so the map can be moved between corners. A closed outline takes no key from the map:
-    /// its rule and name are in the tab's form, where Escape belongs to the field, and only Cancel lets it go.
+    /// What a key pressed on the map does to the outline being drawn, or to the selection; says whether it was one
+    /// of its keys. Arrow keys stay the map's, so the map can be moved between corners. A closed outline takes no
+    /// key from the map: its rule and name are in the tab's form, where Escape belongs to the field, and only Cancel
+    /// lets it go.
     pub fn press_key(&self, key: &str, shift: bool) -> bool {
         let draw = self.draw.get_untracked();
         match (&draw, key) {
@@ -1157,5 +1161,17 @@ mod tests {
                 format!("Zone rétablie{n}: «{n}Mile End{n}»."),
             ]
         );
+    }
+
+    #[test]
+    fn a_save_refused_because_a_newer_build_wrote_the_document_meanwhile_shows_it() {
+        let (vm, _, said, storage) = rig();
+        draw_square(&vm);
+        said.take();
+        storage.remember(RESTRICTIONS_KEY, r#"{"version":2,"restrictions":{}}"#);
+        assert!(!vm.save());
+        assert_eq!(said.take(), ["The area rules could not be saved in this browser."]);
+        assert!(vm.is_future());
+        assert!(vm.lead().starts_with("These area rules were saved by a newer version"));
     }
 }
