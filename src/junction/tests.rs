@@ -697,6 +697,15 @@ fn the_plan_follows_the_units_and_the_selection() {
     assert_eq!(count(&h, "class=\"arm on\""), 1);
 }
 
+#[test]
+fn the_keyboard_help_names_v_for_the_view_in_both_languages() {
+    use crate::shared::i18n::{Args, Locale};
+    let page = include_str!("../../web/intersection.html");
+    assert!(page.contains("<kbd>V</kbd> <span data-i18n=\"jn-page-key-view\">"), "the page's key help lists V");
+    assert_eq!(crate::i18n_for(Locale::En).tr("jn-page-key-view", &Args::new()), "plan, 2.5D");
+    assert_eq!(crate::i18n_for(Locale::FrCa).tr("jn-page-key-view", &Args::new()), "plan, 2,5D");
+}
+
 fn shared_mode(mode: DrawMode, locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
     let vm = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), Junction::new(0), None);
     vm.set_mode(mode);
@@ -1320,7 +1329,7 @@ fn intersection_html_leaves_no_text_without_its_message() {
     use crate::shell::view::i18n_keys;
     let body = &INTERSECTION_HTML[INTERSECTION_HTML.find("<body>").unwrap()..];
     let translated: Vec<String> = i18n_keys(body).into_iter().map(|(_, text)| text).collect();
-    let own = ["m", "ft", "Z", "English", "Français", "Transit Priority Atlas"];
+    let own = ["m", "ft", "Z", "V", "English", "Français", "Transit Priority Atlas"];
     for piece in body.split('>').filter_map(|p| p.split('<').next()).map(str::trim).filter(|t| !t.is_empty()) {
         if piece.chars().any(char::is_alphabetic) && !own.contains(&piece) {
             assert!(translated.iter().any(|t| t == piece), "{piece:?} has no message");

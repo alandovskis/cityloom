@@ -252,6 +252,7 @@ jn-page-key-change = change
 jn-page-key-turn = turn a street
 jn-page-key-remove = remove
 jn-page-key-details-notes = details, notes
+jn-page-key-view = plan, 2.5D
 jn-page-key-undo = undo
 jn-page-details-panel = Selected street, corner or crossing
 jn-page-plan-key = Key to the strips

@@ -742,6 +742,11 @@ svg pattern circle {
   stroke-opacity: 0.55;
   stroke-linejoin: round;
 }
+#drawing .iso-zebra,
+#drawing .iso-stopline {
+  fill: var(--ink-2);
+  stroke: none;
+}
 #drawing .iso-post {
   stroke: var(--ink-2);
   stroke-width: 1.4;

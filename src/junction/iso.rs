@@ -29,6 +29,11 @@ const SIGNAL_POST_MM: f64 = 2500.0;
 const SIGN_POST_MM: f64 = 2000.0;
 const BOLLARD_MM: f64 = 900.0;
 
+/// How wide a zebra stripe is, and the gap between two, as the plan draws them.
+const ZEBRA_MM: f64 = 600.0;
+/// How thick a stop line is.
+const STOP_LINE_MM: f64 = 300.0;
+
 /// The steps a curve is sampled in.
 const CURVE_STEPS: usize = 12;
 
@@ -143,8 +148,9 @@ fn shades() -> String {
     )
 }
 
-/// How far a vertex of a ramp may be from the edge it meets and still be on it.
-const RAMP_TOLERANCE_MM: f64 = 50.0;
+/// How far a vertex may be from an edge and still be on it: where a ramp meets its top, where one surface meets
+/// another.
+const EDGE_TOLERANCE_MM: f64 = 50.0;
 
 fn distance_to_segment(p: P, a: P, b: P) -> f64 {
     let ab = (b.0 - a.0, b.1 - a.1);
@@ -155,15 +161,21 @@ fn distance_to_segment(p: P, a: P, b: P) -> f64 {
 
 /// Each vertex of `foot` with `h_mm` where it lies on the boundary of `top` and 0 where it does not: the slope of a
 /// ramp rises from the road to the edge it meets.
+fn near_boundary(p: P, poly: &[P]) -> bool {
+    (0..poly.len()).any(|i| distance_to_segment(p, poly[i], poly[(i + 1) % poly.len()]) < EDGE_TOLERANCE_MM)
+}
+
 fn lift_to(foot: &[P], top: &[P], h_mm: f64) -> Vec<(P, f64)> {
-    let near = |p: P| (0..top.len()).any(|i| distance_to_segment(p, top[i], top[(i + 1) % top.len()]) < RAMP_TOLERANCE_MM);
-    foot.iter().map(|&p| (p, if near(p) { h_mm } else { 0.0 })).collect()
+    foot.iter().map(|&p| (p, if near_boundary(p, top) { h_mm } else { 0.0 })).collect()
 }
 
 struct Draw {
     f: IsoFrame,
     flat: String,
     solids: Vec<Solid>,
+    /// The footprints and heights of the surfaces with no wall round them, which a solid level with one does not
+    /// show a wall against.
+    tables: Vec<(Vec<P>, f64)>,
     /// Posts with their heads, painted over the solids.
     posts: String,
     /// The outline of the selected arm, painted last.
@@ -171,6 +183,10 @@ struct Draw {
 }
 
 impl Draw {
+    fn new(f: IsoFrame) -> Draw {
+        Draw { f, flat: String::new(), solids: Vec::new(), tables: Vec::new(), posts: String::new(), sel: String::new() }
+    }
+
     fn path(&self, pts: &[P], h_mm: f64) -> String {
         let mut d = String::new();
         for (i, p) in pts.iter().enumerate() {
@@ -190,12 +206,46 @@ impl Draw {
         write!(self.flat, "<path class=\"iso-flat k-{kind_id}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#h-{kind_id})\" d=\"{d}\"/>").unwrap();
     }
 
+    /// The stripes of a zebra crossing: `foot` is its four corners, across the street first. They run the length
+    /// of the crossing, as wide as the gaps between them.
+    fn zebra(&mut self, foot: &[P], h_mm: f64) {
+        if foot.len() != 4 {
+            return;
+        }
+        let (p0, p1, p3) = (foot[0], foot[1], foot[3]);
+        let across = (p1.0 - p0.0, p1.1 - p0.1);
+        let len = across.0.hypot(across.1);
+        if len < 1e-9 {
+            return;
+        }
+        let along = (p3.0 - p0.0, p3.1 - p0.1);
+        for k in 0..(len / (2.0 * ZEBRA_MM)).ceil() as usize {
+            let (t0, t1) = (2.0 * k as f64 * ZEBRA_MM / len, ((2.0 * k as f64 + 1.0) * ZEBRA_MM / len).min(1.0));
+            let (a, b) = ((p0.0 + across.0 * t0, p0.1 + across.1 * t0), (p0.0 + across.0 * t1, p0.1 + across.1 * t1));
+            let d = self.path(&[a, b, (b.0 + along.0, b.1 + along.1), (a.0 + along.0, a.1 + along.1)], h_mm);
+            write!(self.flat, "<path class=\"iso-zebra\" d=\"{d}\"/>").unwrap();
+        }
+    }
+
+    /// A stop line from `a` to `b`.
+    fn stop_line(&mut self, a: P, b: P, h_mm: f64) {
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let len = dx.hypot(dy);
+        if len < 1e-9 {
+            return;
+        }
+        let n = (-dy / len * STOP_LINE_MM / 2.0, dx / len * STOP_LINE_MM / 2.0);
+        let d = self.path(&[(a.0 + n.0, a.1 + n.1), (b.0 + n.0, b.1 + n.1), (b.0 - n.0, b.1 - n.1), (a.0 - n.0, a.1 - n.1)], h_mm);
+        write!(self.flat, "<path class=\"iso-stopline\" d=\"{d}\"/>").unwrap();
+    }
+
     /// A surface `h_mm` high with no wall round it, a table's top or a continuous sidewalk, drawn over what lies
     /// on the ground.
     fn table(&mut self, kind_id: &str, foot: &[P], h_mm: f64) {
         if foot.len() < 3 {
             return;
         }
+        self.tables.push((foot.to_vec(), h_mm));
         let d = self.path(foot, h_mm);
         write!(self.flat, "<path class=\"iso-table iso-flat k-{kind_id}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#h-{kind_id})\" d=\"{d}\"/>").unwrap();
     }
@@ -227,20 +277,28 @@ impl Draw {
         view_point(c).1
     }
 
-    fn render(&self, s: &Solid) -> String {
+    /// Whether the edge `a`-`b` of solid `i` is shared with a surface as high as it is, which a curb would be
+    /// drawn across for nothing: the solids and the tops that lie against it.
+    fn meets_level(&self, i: usize, a: P, b: P) -> bool {
+        let h = self.solids[i].h_mm;
+        let on = |foot: &[P]| near_boundary(a, foot) && near_boundary(b, foot);
+        self.solids.iter().enumerate().any(|(j, o)| j != i && o.h_mm == h && on(&o.foot)) || self.tables.iter().any(|(t, th)| *th == h && on(t))
+    }
+
+    fn render(&self, i: usize, s: &Solid) -> String {
         let id = s.kind_id;
         let mut g = format!("<g class=\"iso-solid\" data-depth=\"{}\">", f1(Self::depth(s)));
         if s.sides {
             let seen: Vec<P> = s.foot.iter().map(|p| view_point(*p)).collect();
             let n = seen.len();
             let area: f64 = (0..n).map(|i| seen[i].0 * seen[(i + 1) % n].1 - seen[(i + 1) % n].0 * seen[i].1).sum();
-            for i in 0..n {
-                let (a, b) = (seen[i], seen[(i + 1) % n]);
+            for k in 0..n {
+                let (a, b) = (seen[k], seen[(k + 1) % n]);
                 // The edge's outward normal points towards the viewer when its depth component is positive.
                 let e = (b.0 - a.0, b.1 - a.1);
                 let toward_viewer = if area > 0.0 { -e.0 } else { e.0 } > 0.0;
-                if toward_viewer {
-                    let (pa, pb) = (s.foot[i], s.foot[(i + 1) % n]);
+                let (pa, pb) = (s.foot[k], s.foot[(k + 1) % n]);
+                if toward_viewer && !self.meets_level(i, pa, pb) {
                     let ((x0, y0), (x1, y1)) = (self.f.at(pa, 0.0), self.f.at(pb, 0.0));
                     let ((x2, y2), (x3, y3)) = (self.f.at(pb, s.h_mm), self.f.at(pa, s.h_mm));
                     write!(
@@ -292,7 +350,7 @@ impl Draw {
 
     fn finish(mut self) -> String {
         self.solids.sort_by(|a, b| Self::depth(a).total_cmp(&Self::depth(b)));
-        let solids: String = self.solids.iter().map(|s| self.render(s)).collect();
+        let solids: String = self.solids.iter().enumerate().map(|(i, s)| self.render(i, s)).collect();
         format!("{}<g class=\"iso\">{}{solids}{}{}</g>", shades(), self.flat, self.posts, self.sel)
     }
 }
@@ -316,7 +374,7 @@ pub fn iso_label(v: &JView, i18n: &I18n) -> String {
 /// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high.
 pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
     let f = IsoFrame::fit(v.bounds, &content_points(v), width, window_height);
-    let mut d = Draw { f, flat: String::new(), solids: Vec::new(), posts: String::new(), sel: String::new() };
+    let mut d = Draw::new(f);
     let wall = height_of("sidewalk");
 
     // the carriageway where the streets meet, and a roundabout's ring and island
@@ -329,7 +387,16 @@ pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
                 })
                 .collect()
         };
-        d.lay("travel", &circle(ring.radius_mm as f64));
+        if ring.cycle_mm.is_some_and(|c| c != 0) {
+            // The cycle track is the band outside the carriageway: the whole ring in its colour, the carriageway over it.
+            d.lay("bike", &circle(ring.radius_mm as f64));
+            d.lay("travel", &circle(ring.road_mm as f64));
+        } else {
+            d.lay("travel", &circle(ring.radius_mm as f64));
+        }
+        if let Some(bus) = &v.bus {
+            d.lay("bus", &flatten(&bus.poly));
+        }
         d.stand("median", circle(ring.island_mm as f64), height_of("median"), true);
     } else {
         d.lay("travel", &flatten(&v.core));
@@ -358,6 +425,14 @@ pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
         for gap in &a.gaps {
             d.lay("travel", &flatten(gap));
         }
+        // The bus lane and the queue jump run over the arm's pieces; a stop's bulb and an island stand like a sidewalk.
+        let t = &a.transit;
+        for lane in [&t.bus, &t.queue].into_iter().flatten() {
+            d.lay("bus", &flatten(lane));
+        }
+        for poly in [&t.stop_poly, &t.island].into_iter().flatten() {
+            d.stand("sidewalk", flatten(poly), wall, true);
+        }
         for lane in &a.core_bike {
             d.lay("bike", &flatten(lane));
         }
@@ -381,6 +456,14 @@ pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
             let top = flatten(&r.top);
             d.table("sidewalk", &top, wall);
             d.ramp("travel", &flatten(&r.ramp), &top, wall);
+        }
+        // The markings lie on the road, or on the table where it is raised.
+        let level = if a.raised.is_some() { wall } else { 0.0 };
+        if let Some([from, to]) = a.stop_line {
+            d.stop_line(from, to, level);
+        }
+        if let Some(c) = a.crossing.as_ref().filter(|c| !c.continuous) {
+            d.zebra(&flatten(&c.poly), level);
         }
         if let Some([end, _]) = a.stop_line {
             match a.role {
@@ -457,6 +540,96 @@ mod tests {
         let at = s.markup.find(&format!("class=\"iso-flat k-travel\" d=\"{d}\"")).expect("the gap is drawn as road");
         // It is painted after the arm's parking, which it covers.
         assert!(at > s.markup.find("iso-flat k-parking").unwrap());
+    }
+
+    fn frame() -> IsoFrame {
+        IsoFrame::fit([-5000.0, -5000.0, 5000.0, 5000.0], &[(-5000.0, -5000.0), (5000.0, 5000.0)], 1000.0, 1000.0)
+    }
+
+    fn square(x0: f64, x1: f64) -> Vec<(f64, f64)> {
+        vec![(x0, 0.0), (x1, 0.0), (x1, 1000.0), (x0, 1000.0)]
+    }
+
+    fn walls(d: Draw) -> usize {
+        count(&d.finish(), "class=\"iso-side ")
+    }
+
+    #[test]
+    fn no_wall_is_drawn_where_two_surfaces_at_the_same_height_meet_and_one_is_where_they_differ() {
+        let mut one = Draw::new(frame());
+        one.stand("sidewalk", square(0.0, 1000.0), 150.0, true);
+        let alone = walls(one);
+        assert!(alone > 0);
+        let pair = |h: f64| {
+            let mut d = Draw::new(frame());
+            d.stand("sidewalk", square(0.0, 1000.0), 150.0, true);
+            d.stand("median", square(1000.0, 2000.0), h, true);
+            walls(d)
+        };
+        assert_eq!(pair(150.0), 2 * alone - 1, "the wall where they touch is not drawn");
+        assert_eq!(pair(300.0), 2 * alone, "a step is a wall");
+        let mut table = Draw::new(frame());
+        table.stand("sidewalk", square(0.0, 1000.0), 150.0, true);
+        table.table("sidewalk", &square(1000.0, 2000.0), 150.0);
+        assert_eq!(walls(table), alone - 1, "nor is one where a surface level with it begins");
+    }
+
+    #[test]
+    fn a_raised_junction_has_fewer_walls_than_its_sidewalks_have_edges_facing_the_viewer() {
+        let flat = Junction::new(0).view();
+        let mut j = Junction::new(0);
+        assert!(j.set_raised(true));
+        let raised = j.view();
+        let (a, b) = (count(&iso_svg(&flat, 1000.0, 1000.0).markup, "class=\"iso-side "), count(&iso_svg(&raised, 1000.0, 1000.0).markup, "class=\"iso-side "));
+        assert!(b < a, "raising the junction to the sidewalk's level takes walls away: {a} -> {b}");
+    }
+
+    #[test]
+    fn a_zebra_crossing_has_stripes_and_a_stop_line_is_drawn_flat() {
+        let mut j = Junction::new(0);
+        let v = j.view();
+        let m = iso_svg(&v, 1000.0, 1000.0).markup;
+        let stops = v.arms.iter().filter(|a| a.stop_line.is_some()).count();
+        assert!(stops > 0);
+        assert_eq!(count(&m, "class=\"iso-stopline\""), stops);
+        let zebras = v.arms.iter().filter_map(|a| a.crossing.as_ref()).filter(|c| !c.continuous).count();
+        assert!(zebras > 0);
+        let bars = count(&m, "class=\"iso-zebra\"");
+        assert!(bars >= 3 * zebras, "{bars} stripes for {zebras} crossings");
+        let arm = j.current().arms[0].uid;
+        assert!(j.set_continuous(arm, true));
+        let after = count(&iso_svg(&j.view(), 1000.0, 1000.0).markup, "class=\"iso-zebra\"");
+        assert!(after < bars, "a continuous sidewalk has no stripes: {bars} -> {after}");
+    }
+
+    #[test]
+    fn transit_measures_are_drawn_a_bus_queue_lane_a_stop_bulb_and_an_island() {
+        let mut j = Junction::new(0);
+        let e = j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid;
+        let base = svg(&j).markup;
+        assert!(j.set_bus_lane(e, true));
+        assert!(j.set_approach(e, Q_CURB));
+        let m = svg(&j).markup;
+        assert!(count(&m, "iso-flat k-bus") > count(&base, "iso-flat k-bus"), "the bus lane and the queue jump");
+        assert!(j.set_stop(e, STOP_BULB));
+        let with_stop = count(&svg(&j).markup, "iso-top k-sidewalk");
+        assert_eq!(with_stop, count(&m, "iso-top k-sidewalk") + 1, "the stop's bulb stands like a sidewalk");
+        assert!(j.set_rule(e, RULE_RIRO));
+        assert_eq!(count(&svg(&j).markup, "iso-top k-sidewalk"), with_stop + 1, "the right-in right-out island");
+    }
+
+    #[test]
+    fn a_roundabout_draws_its_cycle_track_and_its_bus_lane() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT));
+        let plain = svg(&j).markup;
+        let (n, so) = (j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid, j.current().arms.iter().find(|a| a.bearing == 180).unwrap().uid);
+        assert!(j.set_bus(Some((n, so))));
+        assert!(j.set_cycle(Some(2_000)));
+        let m = svg(&j).markup;
+        assert!(count(&m, "iso-flat k-bike") > count(&plain, "iso-flat k-bike"), "the cycle track round the ring");
+        assert!(count(&m, "iso-flat k-bus") > count(&plain, "iso-flat k-bus"), "the bus lane across it");
+        assert!(!m.contains("NaN"));
     }
 
     #[test]

@@ -252,6 +252,7 @@ jn-page-key-change = modifier
 jn-page-key-turn = faire pivoter une rue
 jn-page-key-remove = retirer
 jn-page-key-details-notes = détails, notes
+jn-page-key-view = plan, 2,5D
 jn-page-key-undo = annuler
 jn-page-details-panel = Rue, coin ou passage pour piétons sélectionné
 jn-page-plan-key = Légende des bandes
