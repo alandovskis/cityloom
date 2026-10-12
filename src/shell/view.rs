@@ -11,6 +11,7 @@ use wasm_bindgen::prelude::*;
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::units::Units;
 use crate::shell::popover::PopoverViewModel;
+use crate::shell::share_view::ShareMenu;
 use crate::shell::vm::{RegionOption, ShellVm, Target, Theme};
 
 fn listen<E: JsCast + 'static>(target: &EventTarget, event: &str, mut f: impl FnMut(E) + 'static) {
@@ -49,6 +50,11 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         dark.as_ref().is_some_and(|m| m.matches()),
         roomy || !notes_give_way,
     );
+    // The pages that have a Share button keep a slot for it; its markup is made here, once.
+    if let Some(slot) = by_id("share-slot") {
+        let i18n = vm.i18n();
+        leptos::mount::mount_to(slot.unchecked_into(), move || view! { <ShareMenu i18n=i18n/> }).forget();
+    }
     // The effects live as long as the page.
     let owner = Owner::new();
     owner.with(|| {
