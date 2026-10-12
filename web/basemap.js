@@ -202,11 +202,14 @@ export async function createBasemap(container) {
   map.on("moveend", emitView);
   map.on("resize", emitView);
   let over = null;
+  const showCursor = () => {
+    map.getCanvas().style.cursor = over && (!editable || editable.has(over)) ? "pointer" : "";
+  };
   map.on("mousemove", (e) => {
     const now = hotAt(e.point);
     if (now === over) return;
     over = now;
-    map.getCanvas().style.cursor = now && (!editable || editable.has(now)) ? "pointer" : "";
+    showCursor();
     emit({ kind: "hover", hot: now });
   });
   // Leaving the map puts out only what the map itself lit: a row of the list the pointer is on now has lit its
@@ -331,6 +334,7 @@ export async function createBasemap(container) {
     setEditable(hot) {
       editable = new Set(hot);
       showEditable();
+      showCursor();
     },
     zoomBy(factor) {
       map.easeTo({ zoom: map.getZoom() + Math.log2(factor), duration: ms(200) });

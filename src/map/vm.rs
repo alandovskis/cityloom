@@ -678,9 +678,16 @@ impl MapVm {
                     match place.and_then(href_of) {
                         Some(href) => self.ports.navigator.go(&href),
                         None => {
+                            // A refused press on a place (muted, outside every outline) is not a press on nothing: it
+                            // lets no selected area go.
+                            let refused = hot.is_some() && place.is_none();
+                            if refused && area.is_none() {
+                                return self.say_not_editable();
+                            }
+                            let before = self.areas.selected_id_now();
                             self.areas.select(area.as_deref());
-                            if hot.is_some() && place.is_none() && area.is_none() {
-                                self.ports.announcer.say(&self.i18n.tr_now("map-not-editable", &Args::new()));
+                            if refused && self.areas.selected_id_now() == before {
+                                self.say_not_editable();
                             }
                         }
                     }
@@ -694,6 +701,10 @@ impl MapVm {
                 self.sync_editable();
             }
         }
+    }
+
+    fn say_not_editable(&self) {
+        self.ports.announcer.say(&self.i18n.tr_now("map-not-editable", &Args::new()));
     }
 
     /// There will be no map, unless the page never had one to wait for (which has said why already).
@@ -1398,25 +1409,45 @@ mod tests {
     }
 
     #[test]
-    fn a_press_on_a_muted_place_inside_an_area_outline_selects_the_area_and_says_nothing() {
-        let (vm, mapper, navigator, said) = area_vm_said();
-        mapper.say(COVERING);
+    fn a_press_on_a_muted_place_inside_an_area_outline_selects_the_area_and_says_nothing_until_it_is_selected() {
+        let (vm, mapper, navigator, said, _) = car_free_bendville_said();
         mapper.say(MapEvent::View { bounds: clipping(street_box(&vm)) });
-        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
+        vm.areas().select(None);
+        said.take();
+        let inside = MapEvent::Press { at: [-73.6, 45.5], hot: Some("s-1".into()), area: Some("r1".into()), vertex: None };
+        mapper.say(inside.clone());
+        assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"));
         assert!(navigator.take().is_empty());
-        assert!(said.take().is_empty(), "the press did something: it chose the area");
+        let heard = said.take();
+        assert!(heard.iter().all(|m| !m.contains("Not all of this place")), "the press chose the area: {heard:?}");
+        mapper.say(inside);
+        assert!(navigator.take().is_empty());
+        assert_eq!(said.take(), vec!["Not all of this place is in view. Move the map so all of it shows, then try again.".to_string()]);
     }
 
     #[test]
-    fn places_sent_again_get_the_editable_set_again() {
+    fn a_press_on_a_muted_place_outside_every_outline_says_why_and_keeps_the_selected_area() {
+        let (vm, mapper, _, said, _) = car_free_bendville_said();
+        mapper.say(MapEvent::View { bounds: clipping(street_box(&vm)) });
+        vm.areas().select(Some("r1"));
+        said.take();
+        mapper.say(press("s-1"));
+        assert_eq!(said.take(), vec!["Not all of this place is in view. Move the map so all of it shows, then try again.".to_string()]);
+        assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"), "refused, so the selection stays");
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.areas().selected_id_now(), None, "a press on nothing still lets the area go");
+    }
+
+    #[test]
+    fn sending_the_places_again_does_not_send_an_unchanged_editable_set_again() {
         let (vm, mapper, ..) = area_vm();
         mapper.say(COVERING);
         mapper.say(MapEvent::View { bounds: around(street_box(&vm)) });
         mapper.take();
         vm.sync_places();
         let calls = mapper.take();
+        assert_eq!(calls.len(), 1, "{calls:?}");
         assert!(matches!(calls[0], MapCall::Places { .. }), "{calls:?}");
-        assert!(calls.len() <= 2 && calls.get(1).is_none_or(|c| *c == MapCall::Editable(vec!["s-1".into()])), "{calls:?}");
     }
 
     #[test]
@@ -1627,7 +1658,13 @@ mod tests {
 
     /// Bendville's map, ready, with a car-free area declared round its street's midpoint.
     fn car_free_bendville() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<MemoryStorage>) {
-        let (vm, mapper, navigator, storage) = area_vm();
+        let (vm, mapper, navigator, _, storage) = car_free_bendville_said();
+        (vm, mapper, navigator, storage)
+    }
+
+    /// `car_free_bendville` with the announcer it was built over.
+    fn car_free_bendville_said() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
+        let (vm, mapper, navigator, said, storage) = area_vm_all();
         mapper.say(COVERING);
         mapper.take();
         let (_, mid) = bent_midpoint(&CityStore::current(storage.clone()));
@@ -1639,7 +1676,8 @@ mod tests {
         assert!(a.close());
         a.set_form_name("Car zone");
         assert!(a.save());
-        (vm, mapper, navigator, storage)
+        said.take();
+        (vm, mapper, navigator, said, storage)
     }
 
     #[test]
