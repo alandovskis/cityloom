@@ -948,6 +948,20 @@ mod tests {
     }
 
     #[test]
+    fn a_selection_of_no_piece_draws_no_outline_and_a_one_piece_street_draws_whole() {
+        let mut v = Editor::new(0).view();
+        v.selected = Some(9_999);
+        assert_eq!(count(&iso_svg(&v, &en(), 1050.0).markup, "class=\"iso-sel\""), 0);
+        let mut e = Editor::new(0);
+        while e.view().segments.len() > 1 {
+            assert!(e.remove(e.view().segments[0].uid));
+        }
+        e.select(Some(e.view().segments[0].uid));
+        let m = drawn(&e);
+        assert!(!m.contains("NaN") && !m.contains("inf") && count(&m, "class=\"iso-sel\"") == 1, "{m}");
+    }
+
+    #[test]
     fn the_outline_of_a_selected_bike_lane_takes_in_its_curb_blocks() {
         // A bike lane's slab and its two curb blocks are three groups with one uid: the outline goes round all of them.
         let mut e = Editor::new(0);
