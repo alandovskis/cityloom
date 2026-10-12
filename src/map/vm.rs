@@ -15,6 +15,7 @@ use crate::map::areas::AreasVm;
 use crate::map::camera::{Camera, Insets, World};
 use crate::map::overlay;
 use crate::map::style;
+use crate::restriction::draw::Draw;
 use crate::restriction::model::{Conflict, Restriction, Rule, conflicts, inside};
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n, Locale};
@@ -214,6 +215,9 @@ pub struct MapVm {
     worded: RefCell<Option<Worded>>,
     /// The area restrictions: the Restrictions tab, and what the map shows of them.
     areas: Rc<AreasVm>,
+    /// The area whose corner the map last said was let go, until the map says anything else: the click that a
+    /// corner pressed and let go makes is the corner's, not a press on what lies under it.
+    dropped_on: RefCell<Option<String>>,
 }
 
 impl MapVm {
@@ -252,6 +256,7 @@ impl MapVm {
             active: ArcRwSignal::new(None),
             worded: RefCell::new(None),
             areas,
+            dropped_on: RefCell::new(None),
         })
     }
 
@@ -634,16 +639,30 @@ impl MapVm {
         self.ports.mapper.set_imperial(matches!(self.core.units(), Units::Feet));
     }
 
+    /// What the map says. While an outline is drawn a press is always a corner of it (or closes it, on its first
+    /// corner), whatever lies under it; while one is named a press does nothing. Otherwise a press on a place opens
+    /// it, even inside an area, and a press elsewhere selects the area there, or none. A corner let go is the
+    /// areas'; the click that comes with it, if the map tells of one, is not taken as a press.
     fn on_map_event(&self, event: MapEvent) {
+        let dropped_on = self.dropped_on.take();
         match event {
             MapEvent::Ready { bounds } => self.tiles_ready(bounds),
             MapEvent::Failed => self.give_up(MISSING),
-            MapEvent::Press { hot, .. } => {
-                if let Some(href) = hot.as_deref().and_then(href_of) {
-                    self.ports.navigator.go(&href);
+            MapEvent::Press { area, .. } if area.is_some() && area == dropped_on => {}
+            MapEvent::Press { at, hot, area, vertex } => match self.areas.draw_now() {
+                Draw::Drawing(_) => self.areas.on_press(at, vertex),
+                Draw::Naming(_) => {}
+                Draw::Idle => match hot.as_deref().and_then(href_of) {
+                    Some(href) => self.ports.navigator.go(&href),
+                    None => self.areas.select(area.as_deref()),
+                },
+            },
+            MapEvent::Vertex { area, index, at, done } => {
+                if done {
+                    *self.dropped_on.borrow_mut() = Some(area.clone());
                 }
+                self.areas.drag_vertex(&area, index, at, done);
             }
-            MapEvent::Vertex { .. } => {}
             MapEvent::Hover { hot } => self.set_hot(hot),
             MapEvent::Moved => self.moved.set(true),
         }
@@ -859,6 +878,7 @@ mod tests {
     use super::*;
     use crate::map::camera::Insets;
     use crate::place::area::Area;
+    use crate::restriction::draw::Draw;
     use crate::restriction::fixtures::{bent_midpoint, square};
     use crate::restriction::model::Conflict;
     use crate::restriction::store::RestrictionStore;
@@ -1490,6 +1510,75 @@ mod tests {
         let r = vm.areas().find_now("r1").unwrap();
         assert_eq!(vm.area_row_sub(&r), "Zone sans voitures · 1 rue à l’intérieur; une est en conflit avec la règle.");
         assert_eq!(vm.status_key()[3], ("conflict", "En conflit avec une règle de zone".to_string()));
+    }
+
+    #[test]
+    fn a_press_while_drawing_places_a_corner_instead_of_opening_the_place_and_naming_ignores_presses() {
+        let (vm, mapper, navigator, _) = area_vm();
+        mapper.say(COVERING);
+        assert!(vm.areas().start());
+        let press = |at: [f64; 2], hot: Option<&str>, vertex: Option<usize>| MapEvent::Press { at, hot: hot.map(String::from), area: None, vertex };
+        mapper.say(press([-73.600, 45.500], Some("s-1"), None));
+        mapper.say(press([-73.599, 45.500], None, None));
+        mapper.say(press([-73.599, 45.501], None, None));
+        assert_eq!(vm.areas().draw_now().corners().len(), 3);
+        mapper.say(press([-73.600, 45.500], Some("s-1"), Some(0)));
+        assert!(matches!(vm.areas().draw_now(), Draw::Naming(_)));
+        mapper.say(press([-73.6, 45.5], Some("s-1"), None));
+        assert!(matches!(vm.areas().draw_now(), Draw::Naming(c) if c.len() == 3), "naming: a press adds nothing");
+        assert!(navigator.take().is_empty(), "no place is opened while an area is drawn or named");
+    }
+
+    #[test]
+    fn a_press_on_an_area_selects_it_a_press_on_nothing_lets_it_go_and_a_drag_moves_its_corner() {
+        let (vm, mapper, navigator, _) = car_free_bendville();
+        vm.areas().select(None);
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: Some("r1".into()), vertex: None });
+        assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"));
+        let corner = vm.areas().find_now("r1").unwrap().ring[0];
+        let to = [corner[0] - 0.0001, corner[1]];
+        mapper.say(MapEvent::Vertex { area: "r1".into(), index: 0, at: to, done: false });
+        mapper.say(MapEvent::Vertex { area: "r1".into(), index: 0, at: to, done: true });
+        assert_eq!(vm.areas().find_now("r1").unwrap().ring[0], to);
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.areas().selected_id_now(), None);
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
+        assert_eq!(navigator.take(), ["street.html?street=1"], "a place in an area opens the place");
+    }
+
+    #[test]
+    fn a_click_on_a_corner_of_the_selected_area_moves_nothing_and_does_not_open_the_street_under_it() {
+        let (vm, mapper, navigator, storage) = car_free_bendville();
+        let corner = vm.areas().find_now("r1").unwrap().ring[0];
+        let kept = storage.recall(crate::restriction::store::RESTRICTIONS_KEY);
+        // A corner pressed and let go without a move: the map tells only of the drop, then of the click itself.
+        mapper.say(MapEvent::Vertex { area: "r1".into(), index: 0, at: corner, done: true });
+        mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
+        assert!(navigator.take().is_empty(), "the click was the corner's");
+        assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"), "and the area stays selected");
+        assert_eq!(storage.recall(crate::restriction::store::RESTRICTIONS_KEY), kept, "nothing moved");
+        // The next press is a press again.
+        mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
+        assert_eq!(navigator.take(), ["street.html?street=1"]);
+    }
+
+    #[test]
+    fn a_press_after_a_corner_drop_is_a_press_once_anything_else_was_said_between_them() {
+        let (vm, mapper, navigator, _) = car_free_bendville();
+        let corner = vm.areas().find_now("r1").unwrap().ring[0];
+        let drop = || MapEvent::Vertex { area: "r1".into(), index: 0, at: corner, done: true };
+        let press = || MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None };
+        // The map swallowed the click of the drop itself; the pointer moved on before the next press.
+        mapper.say(drop());
+        mapper.say(MapEvent::Hover { hot: None });
+        mapper.say(press());
+        mapper.say(drop());
+        mapper.say(MapEvent::Moved);
+        mapper.say(press());
+        // A press outside the area that was dropped on is not the drop's click.
+        mapper.say(drop());
+        mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: None, vertex: None });
+        assert_eq!(navigator.take(), ["street.html?street=1"; 3]);
     }
 
     #[test]
