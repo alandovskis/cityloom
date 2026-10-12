@@ -16,7 +16,7 @@ use crate::map::camera::{Camera, Insets, World};
 use crate::map::overlay;
 use crate::map::style;
 use crate::restriction::draw::Draw;
-use crate::restriction::model::{Conflict, Restriction, Rule, conflicts, inside};
+use crate::restriction::model::{Conflict, Restriction, Rule, conflicts};
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::ports::{MapEvent, Ports};
@@ -215,6 +215,9 @@ pub struct MapVm {
     worded: RefCell<Option<Worded>>,
     /// The area restrictions: the Restrictions tab, and what the map shows of them.
     areas: Rc<AreasVm>,
+    /// In the tests: how many streets were read to check them against an area's rule.
+    #[cfg(test)]
+    editors_read: Cell<usize>,
 }
 
 impl MapVm {
@@ -253,6 +256,8 @@ impl MapVm {
             active: ArcRwSignal::new(None),
             worded: RefCell::new(None),
             areas,
+            #[cfg(test)]
+            editors_read: Cell::new(0),
         })
     }
 
@@ -687,8 +692,9 @@ impl MapVm {
             return;
         }
         let view = self.core.view_now();
-        let in_conflict: BTreeSet<u32> =
-            self.findings_in(&view, &self.areas.list_now()).into_iter().filter(|s| !s.conflicts.is_empty()).map(|s| s.uid).collect();
+        // Only a rule a street can break can tint one.
+        let checked: Vec<Restriction> = self.areas.list_now().into_iter().filter(|r| !r.rule.informational()).collect();
+        let in_conflict: BTreeSet<u32> = self.findings_in(&view, &checked).into_iter().filter(|s| !s.conflicts.is_empty()).map(|s| s.uid).collect();
         self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&view, &projection, &in_conflict));
     }
 
@@ -745,16 +751,23 @@ impl MapVm {
     }
 
     /// The streets of `v` inside each of `list`, area by area, with what each has that the area's rule does not
-    /// allow. A street inside several areas is found once for each.
+    /// allow. A street inside several areas is found once for each. A rule that is only for information (a speed
+    /// limit: streets carry no speed) reads no street to check it.
     fn findings_in(&self, v: &CityView, list: &[Restriction]) -> Vec<AreaStreet> {
         let Some(p) = self.projection() else { return Vec::new() };
         let mut found = Vec::new();
         for r in list {
-            for uid in inside(&r.ring, &v.edges, &p) {
-                let Some(street) = self.core.read(|m| m.city.street_editor(uid, m.region).map(|e| e.snapshot())) else { continue };
-                let Some(e) = v.edges.iter().find(|e| e.uid == uid) else { continue };
+            for e in v.edges.iter().filter(|e| r.holds(&e.shape_mm, &p)) {
+                let conflicts = if r.rule.informational() {
+                    Vec::new()
+                } else {
+                    #[cfg(test)]
+                    self.editors_read.set(self.editors_read.get() + 1);
+                    let Some(street) = self.core.read(|m| m.city.street_editor(e.uid, m.region).map(|e| e.snapshot())) else { continue };
+                    conflicts(r.rule, &street)
+                };
                 let name = Said::new("map-note-street").with("street", Arg::Said(Box::new(e.called.clone()))).with("ends", Arg::Said(Box::new(e.ends.clone())));
-                found.push(AreaStreet { area: r.id.clone(), uid, href: street_href(uid), name, rule: r.rule, conflicts: conflicts(r.rule, &street) });
+                found.push(AreaStreet { area: r.id.clone(), uid: e.uid, href: street_href(e.uid), name, rule: r.rule, conflicts });
             }
         }
         found
@@ -767,7 +780,8 @@ impl MapVm {
 
     /// The streets inside the area `id`.
     pub fn area_streets(&self, id: &str) -> Vec<AreaStreet> {
-        self.findings().into_iter().filter(|s| s.area == id).collect()
+        let Some(r) = self.areas.find(id) else { return Vec::new() };
+        self.findings_in(&self.view(), &[r])
     }
 
     /// An area's small print in the tab: its rule, and how many streets are inside and in conflict.
@@ -1598,5 +1612,30 @@ mod tests {
         assert!(roadless.findings().is_empty());
         assert!(!roadless.can_declare());
         assert_eq!(roadless.areas_lead(), "An area is drawn on the map, and there is no map here.");
+    }
+
+    #[test]
+    fn a_speed_limit_area_reads_no_street_and_tints_none() {
+        let (vm, mapper, ..) = car_free_bendville();
+        assert!(vm.areas().set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
+        vm.editors_read.set(0);
+        vm.sync_places();
+        assert!(matches!(&mapper.take()[0], MapCall::Places { data, .. } if data.contains("\"conflict\":false")));
+        assert_eq!(vm.area_row_sub(&vm.areas().find_now("r1").unwrap()), "Speed limit of 30 km/h · One street inside.");
+        assert_eq!(vm.editors_read.get(), 0, "streets carry no speed, so none is read to check one");
+    }
+
+    #[test]
+    fn the_streets_of_one_area_are_found_without_checking_the_others() {
+        let (vm, _, _, storage) = car_free_bendville();
+        let (_, mid) = bent_midpoint(&CityStore::current(storage.clone()));
+        let far = RestrictionStore::new(storage.clone()).add("Far", Rule::CarFree, square([mid[0] + 0.05, mid[1]], 0.001)).unwrap();
+        vm.areas().reload();
+        vm.editors_read.set(0);
+        assert!(vm.area_streets(&far.id).is_empty());
+        assert_eq!(vm.editors_read.get(), 0, "the street inside the other area is not read");
+        assert_eq!(vm.area_streets("r1").len(), 1);
+        assert_eq!(vm.editors_read.get(), 1);
+        assert!(vm.area_streets("r9").is_empty(), "no such area");
     }
 }
