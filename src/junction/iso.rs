@@ -31,8 +31,10 @@ const BOLLARD_MM: f64 = 900.0;
 
 /// How wide a zebra stripe is, and the gap between two, as the plan draws them.
 const ZEBRA_MM: f64 = 600.0;
-/// How thick a stop line is.
+/// How thick a stop line is, and the dashes and gaps of one where traffic gives way.
 const STOP_LINE_MM: f64 = 300.0;
+const YIELD_DASH_MM: f64 = 700.0;
+const YIELD_GAP_MM: f64 = 500.0;
 
 /// The steps a curve is sampled in.
 const CURVE_STEPS: usize = 12;
@@ -159,12 +161,13 @@ fn distance_to_segment(p: P, a: P, b: P) -> f64 {
     (p.0 - a.0 - t * ab.0).hypot(p.1 - a.1 - t * ab.1)
 }
 
-/// Each vertex of `foot` with `h_mm` where it lies on the boundary of `top` and 0 where it does not: the slope of a
-/// ramp rises from the road to the edge it meets.
+/// Whether `p` is within `EDGE_TOLERANCE_MM` of an edge of `poly`.
 fn near_boundary(p: P, poly: &[P]) -> bool {
     (0..poly.len()).any(|i| distance_to_segment(p, poly[i], poly[(i + 1) % poly.len()]) < EDGE_TOLERANCE_MM)
 }
 
+/// Each vertex of `foot` with `h_mm` where it lies on the boundary of `top` and 0 where it does not: the slope of a
+/// ramp rises from the road to the edge it meets.
 fn lift_to(foot: &[P], top: &[P], h_mm: f64) -> Vec<(P, f64)> {
     foot.iter().map(|&p| (p, if near_boundary(p, top) { h_mm } else { 0.0 })).collect()
 }
@@ -228,15 +231,23 @@ impl Draw {
     }
 
     /// A stop line from `a` to `b`.
-    fn stop_line(&mut self, a: P, b: P, h_mm: f64) {
+    /// A stop line from `a` to `b`: a row of dashes where traffic gives way, as the plan draws it.
+    fn stop_line(&mut self, a: P, b: P, h_mm: f64, dashed: bool) {
         let (dx, dy) = (b.0 - a.0, b.1 - a.1);
         let len = dx.hypot(dy);
         if len < 1e-9 {
             return;
         }
         let n = (-dy / len * STOP_LINE_MM / 2.0, dx / len * STOP_LINE_MM / 2.0);
-        let d = self.path(&[(a.0 + n.0, a.1 + n.1), (b.0 + n.0, b.1 + n.1), (b.0 - n.0, b.1 - n.1), (a.0 - n.0, a.1 - n.1)], h_mm);
-        write!(self.flat, "<path class=\"iso-stopline\" d=\"{d}\"/>").unwrap();
+        let at = |t: f64| (a.0 + dx * t / len, a.1 + dy * t / len);
+        let (dash, gap) = if dashed { (YIELD_DASH_MM, YIELD_GAP_MM) } else { (len, 0.0) };
+        let mut t = 0.0;
+        while t < len {
+            let (p, q) = (at(t), at((t + dash).min(len)));
+            let d = self.path(&[(p.0 + n.0, p.1 + n.1), (q.0 + n.0, q.1 + n.1), (q.0 - n.0, q.1 - n.1), (p.0 - n.0, p.1 - n.1)], h_mm);
+            write!(self.flat, "<path class=\"iso-stopline\" d=\"{d}\"/>").unwrap();
+            t += dash + gap;
+        }
     }
 
     /// A surface `h_mm` high with no wall round it, a table's top or a continuous sidewalk, drawn over what lies
@@ -285,7 +296,8 @@ impl Draw {
         self.solids.iter().enumerate().any(|(j, o)| j != i && o.h_mm == h && on(&o.foot)) || self.tables.iter().any(|(t, th)| *th == h && on(t))
     }
 
-    fn render(&self, i: usize, s: &Solid) -> String {
+    fn render(&self, i: usize) -> String {
+        let s = &self.solids[i];
         let id = s.kind_id;
         let mut g = format!("<g class=\"iso-solid\" data-depth=\"{}\">", f1(Self::depth(s)));
         if s.sides {
@@ -350,7 +362,7 @@ impl Draw {
 
     fn finish(mut self) -> String {
         self.solids.sort_by(|a, b| Self::depth(a).total_cmp(&Self::depth(b)));
-        let solids: String = self.solids.iter().enumerate().map(|(i, s)| self.render(i, s)).collect();
+        let solids: String = (0..self.solids.len()).map(|i| self.render(i)).collect();
         format!("{}<g class=\"iso\">{}{solids}{}{}</g>", shades(), self.flat, self.posts, self.sel)
     }
 }
@@ -459,8 +471,9 @@ pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
         }
         // The markings lie on the road, or on the table where it is raised.
         let level = if a.raised.is_some() { wall } else { 0.0 };
-        if let Some([from, to]) = a.stop_line {
-            d.stop_line(from, to, level);
+        // Only where traffic is controlled: the street that has the right of way has no line.
+        if let Some([from, to]) = a.stop_line.filter(|_| a.role != "free") {
+            d.stop_line(from, to, level, a.role == "yield");
         }
         if let Some(c) = a.crossing.as_ref().filter(|c| !c.continuous) {
             d.zebra(&flatten(&c.poly), level);
@@ -600,6 +613,24 @@ mod tests {
         assert!(j.set_continuous(arm, true));
         let after = count(&iso_svg(&j.view(), 1000.0, 1000.0).markup, "class=\"iso-zebra\"");
         assert!(after < bars, "a continuous sidewalk has no stripes: {bars} -> {after}");
+    }
+
+    #[test]
+    fn a_stop_line_is_drawn_only_where_traffic_is_controlled_and_dashed_where_it_yields() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(PRIORITY));
+        let v = j.view();
+        assert!(v.arms.iter().any(|a| a.role == "free" && a.stop_line.is_some()), "the priority street has a stop line to leave bare");
+        let controlled = v.arms.iter().filter(|a| a.role != "free" && a.stop_line.is_some()).count();
+        assert!(controlled > 0);
+        assert_eq!(count(&iso_svg(&v, 1000.0, 1000.0).markup, "class=\"iso-stopline\""), controlled, "no line on the street that has the right of way");
+        // Entering a roundabout gives way: the line is a row of dashes.
+        assert!(j.set_control(ROUNDABOUT));
+        let v = j.view();
+        let yielding = v.arms.iter().filter(|a| a.role == "yield" && a.stop_line.is_some()).count();
+        assert!(yielding > 0);
+        let dashes = count(&iso_svg(&v, 1000.0, 1000.0).markup, "class=\"iso-stopline\"");
+        assert!(dashes >= 2 * yielding, "{dashes} dashes for {yielding} yielding arms");
     }
 
     #[test]
