@@ -706,6 +706,17 @@ fn the_keyboard_help_names_v_for_the_view_in_both_languages() {
     assert_eq!(crate::i18n_for(Locale::FrCa).tr("jn-page-key-view", &Args::new()), "plan, 2,5D");
 }
 
+#[test]
+fn the_view_toggle_keeps_the_touch_target_of_a_coarse_pointer() {
+    // `.view-mode .unit` (min-height 26px) outweighs app.css's `.unit` rule for a coarse pointer, so editor.css
+    // must say 44px again for it inside its own coarse-pointer block.
+    let css = include_str!("../../web/editor.css");
+    let coarse = &css[css.find("@media (any-pointer: coarse)").unwrap()..];
+    let block = &coarse[..coarse.find("\n}\n").unwrap()];
+    let rule = &block[block.find(".view-mode .unit").expect("the coarse block names the toggle's buttons")..];
+    assert!(rule[..rule.find('}').unwrap()].contains("min-height: 44px"), "{rule}");
+}
+
 fn shared_mode(mode: DrawMode, locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
     let vm = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), Junction::new(0), None);
     vm.set_mode(mode);
