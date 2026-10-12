@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use osm_network::Network;
 
-use crate::city::edits::{self, DAMAGED_KEY, Document, EDITS_KEY, Edits};
+use crate::city::edits::{self, DAMAGED_KEY, Document, Draft, EDITS_KEY, Edits};
 use crate::city::migrate::migrate;
 use crate::city::model::{City, Layout};
 use crate::junction::model::State;
@@ -172,11 +172,11 @@ impl CityStore {
         let Some((key, record)) = city.street_record(edge) else { return false };
         // the record the street took, under another key, is replaced: left, it would bring the older edit back
         let took = city.took_street(edge).filter(|&k| k != key).map(str::to_string);
-        self.upsert(|e| {
+        self.upsert(|draft| {
             if let Some(old) = took {
-                e.streets.remove(&old);
+                draft.remove_street(&old);
             }
-            e.streets.insert(key, record);
+            draft.put_street(&key, &record)
         })
     }
 
@@ -188,30 +188,30 @@ impl CityStore {
         }
         let Some((key, record)) = city.junction_record(node) else { return false };
         let took = city.took_junction(node).filter(|&k| k != key).map(str::to_string);
-        self.upsert(|e| {
+        self.upsert(|draft| {
             if let Some(old) = took {
-                e.junctions.remove(&old);
+                draft.remove_junction(&old);
             }
-            e.junctions.insert(key, record);
+            draft.put_junction(&key, &record)
         })
     }
 
-    /// Changes the document as it is kept now and keeps it, every record `change` leaves alone as it was. A
-    /// damaged document is copied aside first; one from a newer version is not written over.
-    fn upsert(&self, change: impl FnOnce(&mut Edits)) -> bool {
-        let mut edits = match self.document() {
-            Document::Future => return false,
-            Document::Damaged(raw) => {
-                if !self.storage.remember(DAMAGED_KEY, &raw) {
+    /// Changes the document as it is kept now and keeps it, every record `change` leaves alone exactly as it was
+    /// kept (one this build cannot read too). A damaged document is copied aside first, unless a copy is already
+    /// kept (the first damage is the one worth keeping); one from a newer version is not written over.
+    fn upsert(&self, change: impl FnOnce(&mut Draft) -> bool) -> bool {
+        let mut draft = match edits::draft(self.storage.recall(EDITS_KEY).as_deref()) {
+            Ok(draft) => draft,
+            Err(Document::Future) => return false,
+            Err(Document::Damaged(raw)) => {
+                if self.storage.recall(DAMAGED_KEY).is_none() && !self.storage.remember(DAMAGED_KEY, &raw) {
                     return false;
                 }
-                Edits::new()
+                Draft::new()
             }
-            Document::Empty => Edits::new(),
-            Document::Current(e) => e,
+            Err(_) => Draft::new(),
         };
-        change(&mut edits);
-        self.storage.remember(EDITS_KEY, &edits.to_json())
+        change(&mut draft) && self.storage.remember(EDITS_KEY, &draft.to_json())
     }
 
     /// The index of the region the person chose, which the pages share; the
@@ -350,6 +350,27 @@ mod tests {
         assert!(store.write_street(1, narrowed(&store, 1)));
         assert_eq!(storage.recall(DAMAGED_KEY).as_deref(), Some("{broken"));
         assert_eq!(document(&storage).streets.len(), 1);
+    }
+
+    #[test]
+    fn a_copy_of_a_damaged_document_already_kept_is_not_written_over() {
+        let (store, storage) = store();
+        storage.remember(DAMAGED_KEY, "{first damage");
+        storage.remember(EDITS_KEY, "{second damage");
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        assert_eq!(storage.recall(DAMAGED_KEY).as_deref(), Some("{first damage"));
+        assert_eq!(document(&storage).streets.len(), 1);
+    }
+
+    #[test]
+    fn a_record_this_build_cannot_read_survives_a_write_of_another_place_unchanged() {
+        let (store, storage) = store();
+        let newer = r#"{"version":3,"streets":{"w9~n1~n2":{"street":{"class":"Hovercraft"}}},"junctions":{}}"#;
+        storage.remember(EDITS_KEY, newer);
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        let kept: serde_json::Value = serde_json::from_str(&storage.recall(EDITS_KEY).unwrap()).unwrap();
+        assert_eq!(kept["streets"]["w9~n1~n2"], serde_json::json!({"street": {"class": "Hovercraft"}}));
+        assert_eq!(document(&storage).streets.len(), 1, "the one record this build reads is the new one");
     }
 
     #[test]

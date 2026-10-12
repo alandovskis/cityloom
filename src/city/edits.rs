@@ -3,7 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
 use crate::junction::model::State;
 use crate::street::model::Street;
@@ -78,15 +80,95 @@ pub enum Document {
     Damaged(String),
 }
 
-pub fn parse(stored: Option<&str>) -> Document {
-    let Some(raw) = stored.filter(|s| !s.trim().is_empty()) else { return Document::Empty };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) else { return Document::Damaged(raw.to_string()) };
-    if value["version"].as_u64().is_some_and(|v| v > u64::from(VERSION)) {
-        return Document::Future;
+/// The kept text as a document of this version (its version, and `streets` and `junctions` objects where they are
+/// there), or what it is instead.
+fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
+    let Some(raw) = stored.filter(|s| !s.trim().is_empty()) else { return Err(Document::Empty) };
+    let damaged = || Document::Damaged(raw.to_string());
+    let Ok(Value::Object(doc)) = serde_json::from_str::<Value>(raw) else { return Err(damaged()) };
+    match doc.get("version").and_then(Value::as_u64) {
+        Some(v) if v > u64::from(VERSION) => return Err(Document::Future),
+        Some(v) if v == u64::from(VERSION) => {}
+        _ => return Err(damaged()),
     }
-    match serde_json::from_value::<Edits>(value) {
-        Ok(edits) if edits.version == VERSION => Document::Current(edits),
-        _ => Document::Damaged(raw.to_string()),
+    if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
+        return Err(damaged());
+    }
+    Ok(doc)
+}
+
+const STREETS: &str = "streets";
+const JUNCTIONS: &str = "junctions";
+
+/// The records of one section that this build can read; one it cannot (written by a build whose streets or
+/// junctions have another shape) is left out, and left as it is in storage (`Draft`).
+fn records<T: DeserializeOwned>(doc: &Map<String, Value>, section: &str) -> BTreeMap<String, T> {
+    let kept = doc.get(section).and_then(Value::as_object).into_iter().flatten();
+    kept.filter_map(|(key, value)| Some((key.clone(), T::deserialize(value).ok()?))).collect()
+}
+
+pub fn parse(stored: Option<&str>) -> Document {
+    match object(stored) {
+        Ok(doc) => Document::Current(Edits { version: VERSION, streets: records(&doc, STREETS), junctions: records(&doc, JUNCTIONS) }),
+        Err(other) => other,
+    }
+}
+
+/// The document as kept, every record as it was written (one this build cannot read, a field it does not know),
+/// for a write that changes some records and leaves the others exactly as they were.
+pub struct Draft {
+    doc: Map<String, Value>,
+}
+
+/// The kept text as a draft to change, or what it is when it is not a document of this version.
+pub fn draft(stored: Option<&str>) -> Result<Draft, Document> {
+    object(stored).map(|doc| Draft { doc })
+}
+
+impl Draft {
+    /// An empty document of this version.
+    pub fn new() -> Draft {
+        let mut doc = Map::new();
+        doc.insert("version".into(), VERSION.into());
+        Draft { doc }
+    }
+
+    fn put(&mut self, section: &str, key: &str, record: Result<Value, serde_json::Error>) -> bool {
+        let Ok(record) = record else { return false };
+        match self.doc.entry(section).or_insert_with(|| Value::Object(Map::new())) {
+            Value::Object(records) => {
+                records.insert(key.to_string(), record);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn remove(&mut self, section: &str, key: &str) {
+        if let Some(Value::Object(records)) = self.doc.get_mut(section) {
+            records.remove(key);
+        }
+    }
+
+    /// Keeps `record` under `key`. Says whether it could be.
+    pub fn put_street(&mut self, key: &str, record: &StreetRecord) -> bool {
+        self.put(STREETS, key, serde_json::to_value(record))
+    }
+
+    pub fn put_junction(&mut self, key: &str, record: &JunctionRecord) -> bool {
+        self.put(JUNCTIONS, key, serde_json::to_value(record))
+    }
+
+    pub fn remove_street(&mut self, key: &str) {
+        self.remove(STREETS, key);
+    }
+
+    pub fn remove_junction(&mut self, key: &str) {
+        self.remove(JUNCTIONS, key);
+    }
+
+    pub fn to_json(&self) -> String {
+        Value::Object(self.doc.clone()).to_string()
     }
 }
 
@@ -213,6 +295,164 @@ mod tests {
         assert!(matches!(parse(Some(r#"{"version":3,"streets":5}"#)), Document::Damaged(_)));
         assert!(matches!(parse(Some(r#"{"version":2,"streets":{},"junctions":{}}"#)), Document::Damaged(_)), "an old shape is not this document");
     }
+
+    fn street_record() -> StreetRecord {
+        StreetRecord {
+            ways: [7].into(),
+            nodes: [1, 2].into(),
+            leaving: [(1, 90)].into(),
+            street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right),
+        }
+    }
+
+    #[test]
+    fn a_record_that_cannot_be_read_is_left_out_and_the_others_are_read() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), street_record());
+        let mut value: serde_json::Value = serde_json::from_str(&e.to_json()).unwrap();
+        // written by a build whose streets have a class this one does not know
+        let mut odd = value["streets"]["w7~n1~n2"].clone();
+        odd["street"]["class"] = "Hovercraft".into();
+        value["streets"]["w9~n1~n2"] = odd;
+        let Document::Current(read) = parse(Some(&value.to_string())) else { panic!("the document is not read") };
+        assert_eq!(read.streets.keys().collect::<Vec<_>>(), ["w7~n1~n2"]);
+    }
+
+    #[test]
+    fn a_change_keeps_every_record_it_does_not_touch_as_it_was_kept_readable_or_not() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), street_record());
+        let mut value: serde_json::Value = serde_json::from_str(&e.to_json()).unwrap();
+        value["streets"]["w9~n1~n2"] = serde_json::json!({ "from": "a newer build", "street": { "class": "Hovercraft" } });
+        value["streets"]["w7~n1~n2"]["note"] = "a field this build does not know".into();
+        let Ok(mut draft) = draft(Some(&value.to_string())) else { panic!("not a document of this version") };
+        assert!(draft.put_street("w8~n1~n2", &street_record()));
+        draft.remove_street("w5~n1~n2");
+        let back: serde_json::Value = serde_json::from_str(&draft.to_json()).unwrap();
+        assert_eq!(back["streets"]["w9~n1~n2"], value["streets"]["w9~n1~n2"], "an unreadable record is written back unchanged");
+        assert_eq!(back["streets"]["w7~n1~n2"], value["streets"]["w7~n1~n2"], "an unknown field of another record too");
+        assert!(back["streets"]["w8~n1~n2"].is_object());
+        assert_eq!(back["version"], VERSION);
+    }
+
+    /// Every field of a value, as `path: type`, arrays as `[]`.
+    fn shape(value: &serde_json::Value, at: &str, out: &mut BTreeSet<String>) {
+        use serde_json::Value::*;
+        match value {
+            Object(map) => {
+                out.insert(format!("{at}: object"));
+                for (k, v) in map {
+                    // map keys that are ids or keys are data, not fields
+                    let id = |k: &str| k.trim_start_matches('n').chars().all(|c| c.is_ascii_digit()) && !k.is_empty();
+                    let field = if id(k) || k.contains('~') { "<key>" } else { k.as_str() };
+                    shape(v, &format!("{at}.{field}"), out);
+                }
+            }
+            Array(items) => {
+                out.insert(format!("{at}: array"));
+                items.iter().for_each(|v| shape(v, &format!("{at}[]"), out));
+            }
+            String(_) => drop(out.insert(format!("{at}: string"))),
+            Number(_) => drop(out.insert(format!("{at}: number"))),
+            Bool(_) => drop(out.insert(format!("{at}: bool"))),
+            Null => drop(out.insert(format!("{at}: null"))),
+        }
+    }
+
+    /// Pins what a record is written as. When this fails, the shape of `Street`, `State` or a record changed:
+    /// decide whether an older build can still read it, and if not raise `VERSION`, before changing this list.
+    #[test]
+    fn what_a_record_is_written_as_is_pinned_so_that_a_change_of_shape_is_a_decision_about_the_version() {
+        let city = crate::city::model::City::new();
+        let junction = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), street_record());
+        let (key, record) = city.junction_record(junction).unwrap();
+        e.junctions.insert(key, record);
+        let mut out = BTreeSet::new();
+        shape(&serde_json::from_str(&e.to_json()).unwrap(), "", &mut out);
+        let got: Vec<&str> = out.iter().map(String::as_str).collect();
+        assert_eq!(got, GOLDEN, "{got:#?}");
+    }
+
+    #[rustfmt::skip]
+    const GOLDEN: &[&str] = &[
+    ".junctions.<key>.arm_streets.<key>.key: string",
+    ".junctions.<key>.arm_streets.<key>.leaving: number",
+    ".junctions.<key>.arm_streets.<key>.ways: array",
+    ".junctions.<key>.arm_streets.<key>.ways[]: number",
+    ".junctions.<key>.arm_streets.<key>: object",
+    ".junctions.<key>.arm_streets: object",
+    ".junctions.<key>.nodes: array",
+    ".junctions.<key>.nodes[]: number",
+    ".junctions.<key>.state.arms: array",
+    ".junctions.<key>.state.arms[].approach: number",
+    ".junctions.<key>.state.arms[].approach_mm: number",
+    ".junctions.<key>.state.arms[].banned: array",
+    ".junctions.<key>.state.arms[].bearing: number",
+    ".junctions.<key>.state.arms[].bike_box: bool",
+    ".junctions.<key>.state.arms[].bulb: array",
+    ".junctions.<key>.state.arms[].bulb[]: bool",
+    ".junctions.<key>.state.arms[].bus_lane: bool",
+    ".junctions.<key>.state.arms[].corner_mm: number",
+    ".junctions.<key>.state.arms[].crossing.continuous: bool",
+    ".junctions.<key>.state.arms[].crossing.island: bool",
+    ".junctions.<key>.state.arms[].crossing.setback_mm: number",
+    ".junctions.<key>.state.arms[].crossing.width_mm: number",
+    ".junctions.<key>.state.arms[].crossing: object",
+    ".junctions.<key>.state.arms[].edge: number",
+    ".junctions.<key>.state.arms[].filter: bool",
+    ".junctions.<key>.state.arms[].lanes: array",
+    ".junctions.<key>.state.arms[].lanes[].to: array",
+    ".junctions.<key>.state.arms[].lanes[].to[]: number",
+    ".junctions.<key>.state.arms[].lanes[]: object",
+    ".junctions.<key>.state.arms[].offset_mm: number",
+    ".junctions.<key>.state.arms[].protected: bool",
+    ".junctions.<key>.state.arms[].rule: number",
+    ".junctions.<key>.state.arms[].stop: number",
+    ".junctions.<key>.state.arms[].uid: number",
+    ".junctions.<key>.state.arms[]: object",
+    ".junctions.<key>.state.bus: null",
+    ".junctions.<key>.state.control: number",
+    ".junctions.<key>.state.cycle: null",
+    ".junctions.<key>.state.raised: bool",
+    ".junctions.<key>.state.ring_extra_mm: number",
+    ".junctions.<key>.state.source: array",
+    ".junctions.<key>.state.source[].id: number",
+    ".junctions.<key>.state.source[].version: null",
+    ".junctions.<key>.state.source[]: object",
+    ".junctions.<key>.state: object",
+    ".junctions.<key>: object",
+    ".junctions: object",
+    ".streets.<key>.leaving.<key>: number",
+    ".streets.<key>.leaving: object",
+    ".streets.<key>.nodes: array",
+    ".streets.<key>.nodes[]: number",
+    ".streets.<key>.street.class: string",
+    ".streets.<key>.street.name: string",
+    ".streets.<key>.street.next_uid: number",
+    ".streets.<key>.street.row_mm: number",
+    ".streets.<key>.street.segments: array",
+    ".streets.<key>.street.segments[].curb: null",
+    ".streets.<key>.street.segments[].curb: number",
+    ".streets.<key>.street.segments[].direction: null",
+    ".streets.<key>.street.segments[].direction: number",
+    ".streets.<key>.street.segments[].kind: number",
+    ".streets.<key>.street.segments[].material: number",
+    ".streets.<key>.street.segments[].tram: bool",
+    ".streets.<key>.street.segments[].uid: number",
+    ".streets.<key>.street.segments[].variants: array",
+    ".streets.<key>.street.segments[].width_mm: number",
+    ".streets.<key>.street.segments[]: object",
+    ".streets.<key>.street.side: string",
+    ".streets.<key>.street: object",
+    ".streets.<key>.ways: array",
+    ".streets.<key>.ways[]: number",
+    ".streets.<key>: object",
+    ".streets: object",
+    ".version: number",
+    ": object",
+    ];
 
     fn ids(key: Option<&str>, ways: &[i64], nodes: &[i64]) -> Ids {
         Ids { key: key.map(str::to_string), ways: ways.iter().copied().collect(), nodes: nodes.iter().copied().collect(), leaving: BTreeMap::new() }
