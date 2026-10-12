@@ -99,8 +99,10 @@ impl CityStore {
     }
 
     /// The same for a network made from a metro tile that had `checksum`, which is kept with it so that a
-    /// later visit can tell whether the tile has changed.
+    /// later visit can tell whether the tile has changed. The saves of older versions are moved first: they are
+    /// by position, so they must be read on the network they were made on, not on the one replacing it.
     pub fn keep_network_from(&self, network: &Network, checksum: Option<&str>) -> bool {
+        self.migrate();
         serde_json::to_string(network).is_ok_and(|json| self.storage.remember(&self.key(NETWORK_KEY), &json))
             && self.storage.remember(&self.key(CHECKSUM_KEY), checksum.unwrap_or_default())
     }
@@ -541,6 +543,33 @@ mod tests {
         assert!(j.set_corner(j.current().arms[0].uid, 6_000));
         assert!(store.write_junction(node, j.snapshot()));
         assert_eq!(document(&storage).junctions.keys().collect::<Vec<_>>(), [&key]);
+    }
+
+    #[test]
+    fn an_old_save_is_moved_against_the_network_it_was_made_on_even_when_a_newer_network_comes_first() {
+        let (ports, _, storage) = test_ports();
+        let area = Area::new("Testville", 1.0, 2.0);
+        let store = CityStore::for_area(ports.storage, area.clone());
+        // two roads; the tile refreshed since reads them in the other order, so the positions change
+        let mut old = tiny_network();
+        let mut second = old.roads[0].clone();
+        (second.id, second.osm_ways, second.name) = (2, vec![8], Some("Other Street".into()));
+        old.roads.push(second);
+        let mut new = old.clone();
+        new.roads.reverse();
+        assert!(store.keep_network_from(&old, Some("old")));
+        let mut city = City::on(Layout::from_network(&old, ""));
+        let mut s = city.street_editor(1, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(city.keep_street(1, s));
+        storage.remember(&format!("{CITY_KEY}:{}", area.key()), &city.legacy_save());
+        storage.forget(EDITS_KEY); // an older version's visit: no edits document yet
+        // the loader keeps the refreshed network before the page opens the city
+        assert!(store.keep_network_from(&new, Some("new")));
+        store.open();
+        let e = document(&storage);
+        assert_eq!(e.streets.values().map(|r| r.ways.clone()).collect::<Vec<_>>(), [[7].into()], "the edit stays with way 7, where it was made");
     }
 
     #[test]
