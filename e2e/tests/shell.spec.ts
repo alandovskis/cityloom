@@ -12,7 +12,7 @@ const PAGES = [
     open: (page: Page) => page.goto("/map.html"),
     firstTab: "t-checks",
     secondTab: "t-changes",
-    details: null, // the map has no left sidebar
+    details: "Area rules hidden.",
   },
   {
     name: "street",

@@ -106,9 +106,10 @@ const drawnAt = (page: Page, layer: string, s: Spot) =>
     { layer, ...s },
   );
 
-const openTab = async (page: Page) => {
-  await page.locator("#t-areas").click();
-  await expect(page.locator("#t-areas")).toHaveAttribute("aria-selected", "true");
+/** The Area rules panel is on the left and open at first; this says so. */
+const openPanel = async (page: Page) => {
+  await expect(page.locator("#areas-panel")).toBeVisible();
+  await expect(page.locator("#inspector-toggle")).toHaveAttribute("aria-expanded", "true");
 };
 
 const kept = (page: Page) => page.evaluate(() => localStorage.getItem("cityloom-restrictions"));
@@ -162,7 +163,7 @@ const navigations = (page: Page) => page.evaluate(() => (window as any).navigati
 
 /** Starts drawing from Declare, with the keyboard, and leaves the focus on the map. */
 async function startByKeyboard(page: Page) {
-  await openTab(page);
+  await openPanel(page);
   await page.locator("#declare-area").focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("#basemap")).toHaveAttribute("data-drawing", "");
@@ -186,8 +187,7 @@ async function threeCornersByKeyboard(page: Page) {
 /** The closed outline's form is shown wherever the person had gone, and asks for its rule first. */
 async function formShown(page: Page) {
   await expect(page.locator("#area-save")).toBeVisible();
-  await expect(page.locator("#notes-toggle")).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator("#t-areas")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#inspector-toggle")).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("#area-rule")).toBeFocused();
   await expect(page.locator("#basemap")).not.toHaveAttribute("data-drawing", "");
 }
@@ -230,7 +230,7 @@ test.describe("area restrictions", () => {
   test("an area clicked out on the map is listed, drawn, flags the street inside, and the street editor says so", async ({
     page,
   }) => {
-    await openTab(page);
+    await openPanel(page);
     await expect(page.locator("#areas-lead")).toHaveText(
       "No area rules yet. Declare one to check the streets inside it.",
     );
@@ -278,7 +278,7 @@ test.describe("area restrictions", () => {
     // kept: the map shows it again
     await page.goto("/map.html");
     await mapReady(page);
-    await openTab(page);
+    await openPanel(page);
     await expect(page.locator("#areas > li")).toHaveCount(1);
     await expect(page.locator("#areas")).toContainText("Test zone");
     await expect.poll(() => polygons(page)).toBe(1);
@@ -286,7 +286,7 @@ test.describe("area restrictions", () => {
   });
 
   test("a speed limit tints no street, and the street editor shows it for information only", async ({ page }) => {
-    await openTab(page);
+    await openPanel(page);
     await page.locator("#declare-area").click();
     const spots = await squareAroundAStreet(page);
     for (const [n, s] of spots.entries()) {
@@ -339,28 +339,32 @@ test.describe("area restrictions", () => {
     await expect.poll(() => polygons(page)).toBe(1);
   });
 
-  test("closing from the keyboard after choosing the Checks tab shows the Area rules form", async ({ page }) => {
+  test("closing from the keyboard with the left panel hidden shows the Area rules form", async ({ page }) => {
     await startByKeyboard(page);
     await threeCornersByKeyboard(page);
-    await page.locator("#t-checks").click();
-    await expect(page.locator("#t-areas")).toHaveAttribute("aria-selected", "false");
+    await page.locator("#inspector-toggle").click();
+    await expect(page.locator("#inspector-toggle")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("#areas-panel")).toBeHidden();
     await page.locator("#basemap").focus();
     await page.keyboard.press("Shift+Enter");
-    await expect(live(page)).toHaveText("The outline is closed. Choose its rule and name, then save it.");
+    // Showing the panel is the shell's own toggle, so the shell says so (after the outline's own message).
+    await expect(live(page)).toHaveText("Area rules shown.");
     await formShown(page);
   });
 
-  test("closing on the first corner with the Notes collapsed opens them on the Area rules form", async ({ page }) => {
-    await openTab(page);
+  test("closing on the first corner with the left panel collapsed opens it on the Area rules form", async ({
+    page,
+  }) => {
+    await openPanel(page);
     await page.locator("#declare-area").click();
     const spots = await squareAroundAStreet(page);
     for (const [n, s] of spots.slice(0, 3).entries()) {
       await page.mouse.click(s.x, s.y);
       await expect(live(page)).toHaveText(`Corner ${n + 1} placed.`);
     }
-    await page.keyboard.press("]");
-    await expect(page.locator("#notes-toggle")).toHaveAttribute("aria-expanded", "false");
-    // the map may have grown into the room the Notes left: the first corner is where the map now draws it
+    await page.keyboard.press("[");
+    await expect(page.locator("#inspector-toggle")).toHaveAttribute("aria-expanded", "false");
+    // the map may have grown into the room the panel left: the first corner is where the map now draws it
     await mapStill(page);
     const first = await firstDraftCorner(page);
     expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.tagName, first)).toBe("CANVAS");
@@ -368,24 +372,41 @@ test.describe("area restrictions", () => {
     await formShown(page);
   });
 
-  test("closing from the keyboard with the Notes collapsed on the Changes tab shows the Area rules form", async ({
-    page,
-  }) => {
-    await startByKeyboard(page);
-    await threeCornersByKeyboard(page);
-    await page.locator("#t-changes").click();
-    await page.locator("#basemap").focus();
-    await page.keyboard.press("]");
-    await expect(page.locator("#notes-toggle")).toHaveAttribute("aria-expanded", "false");
-    await expect(page.locator("#t-changes")).toHaveAttribute("aria-selected", "true");
-    await page.keyboard.press("Shift+Enter");
-    await formShown(page);
+  test("the Notes keep Checks and Changes only, and the area rules are in the panel on the left", async ({ page }) => {
+    await expect(page.locator("#areas-panel")).toBeVisible();
+    await expect(page.locator("#areas-panel #declare-area")).toBeVisible();
+    await expect(page.locator("#t-areas")).toHaveCount(0);
+    await expect(page.locator("#notes .tab")).toHaveCount(2);
+    await expect(page.locator("#notes #declare-area")).toHaveCount(0);
+  });
+
+  test("a hidden panel stays hidden after a reload, and the toggle says so", async ({ page }) => {
+    await page.locator("#inspector-toggle").click();
+    await page.reload();
+    await mapReady(page);
+    await expect(page.locator("html")).toHaveAttribute("data-inspector", "closed");
+    await expect(page.locator("#areas-panel")).toBeHidden();
+    await expect(page.locator("#inspector-toggle")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("the [ key types into the area name field and leaves the panel open", async ({ page }) => {
+    await declareByKeyboard(page, "Zone[1");
+    await expect(page.locator("#areas-panel")).toBeVisible();
+    await expect(page.locator("#areas")).toContainText("Zone[1");
+  });
+
+  test("at phone width the panel stacks below the map", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    const map = (await page.locator("#basemap").boundingBox())!;
+    const panel = (await page.locator("#areas-panel").boundingBox())!;
+    expect(panel.y).toBeGreaterThanOrEqual(map.y + map.height - 1);
+    expect(map.height).toBeGreaterThan(200);
   });
 
   test("on a small outline a press on the first corner closes it, though a later corner is there too", async ({
     page,
   }) => {
-    await openTab(page);
+    await openPanel(page);
     await page.locator("#declare-area").click();
     await expect(page.locator("#basemap")).toBeFocused();
     // The third corner goes at the middle of the map from the keyboard, 9 px from the first, so that a press on
@@ -439,7 +460,7 @@ test.describe("area restrictions", () => {
     await expect.poll(() => polygons(page)).toBe(1);
     await page.reload();
     await mapReady(page);
-    await openTab(page);
+    await openPanel(page);
     await expect(page.locator("#areas")).toContainText("Short-lived");
     await expect.poll(() => polygons(page)).toBe(1);
     await page.locator("#area-row-r1").click();
@@ -448,7 +469,7 @@ test.describe("area restrictions", () => {
     await expect(page.locator("#areas > li")).toHaveCount(0);
     await page.reload();
     await mapReady(page);
-    await openTab(page);
+    await openPanel(page);
     await expect(page.locator("#areas > li")).toHaveCount(0);
     await expect(page.locator("#areas-lead")).toHaveText(
       "No area rules yet. Declare one to check the streets inside it.",
@@ -509,7 +530,7 @@ test.describe("area restrictions", () => {
   test("a click on a corner of the selected area moves nothing and opens nothing under it", async ({ page }) => {
     await recordNavigations(page);
     // an area with a corner on a junction
-    await openTab(page);
+    await openPanel(page);
     await page.locator("#declare-area").click();
     const j = await junctionSpot(page);
     await declareByClicks(
