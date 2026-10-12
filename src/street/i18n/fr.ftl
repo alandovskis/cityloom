@@ -273,6 +273,10 @@ svg-label = Coupe transversale de { $name }. { $count ->
         [one] { $count } élément
        *[other] { $count } éléments
     }, { $total } sur { $row }. { $fit }.
+svg-iso-label = { $name } en 2,5D, sur un tronçon de { $length }. { $count ->
+        [one] { $count } élément
+       *[other] { $count } éléments
+    }.
 
 # Ce que le modèle dit avoir fait, mis en mots par `text::say` (src/street/model.rs) : la liste des modifications et ce qui est annoncé après une modification.
 rev-earlier = Modifications antérieures

@@ -273,6 +273,10 @@ svg-label = Cross-section of { $name }. { $count ->
         [one] { $count } segment
        *[other] { $count } segments
     }, { $total } of { $row }. { $fit }.
+svg-iso-label = { $name } in 2.5D, along a { $length } stretch. { $count ->
+        [one] { $count } segment
+       *[other] { $count } segments
+    }.
 
 # What the model says it did, put into words by `text::say` (src/street/model.rs): the list of changes and what is announced after an edit.
 rev-earlier = Earlier changes

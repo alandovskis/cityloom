@@ -12,6 +12,8 @@ use std::fmt::Write;
 
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::said::say;
+use crate::shared::units::Units;
 use crate::street::model::{SegView, View};
 use crate::street::svg::{curb_edges, curb_width_mm, dir_glyph, esc};
 
@@ -400,6 +402,15 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     }
 
     IsoSvg { markup: out, width: p.width, height: p.height }
+}
+
+/// What a screen reader is told the 2.5D drawing is: the street, the stretch shown, and its pieces.
+pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
+    let args = Args::new()
+        .str("name", say(i18n, units, &v.name))
+        .str("length", units.length_whole_in(STRETCH_MM as i32, i18n.locale()))
+        .num("count", v.segments.len() as i64);
+    i18n.tr("svg-iso-label", &args)
 }
 
 #[cfg(test)]
@@ -995,6 +1006,16 @@ mod tests {
     /// Not a check: writes `target/iso-preview-light.html` and `target/iso-preview-dark.html`, the 2.5D of
     /// every sample street and of `furnished()` at three widths with the page's styles and hatches, to look at
     /// in a browser. `cargo test street::iso::tests::preview -- --ignored`.
+    #[test]
+    fn the_2_5d_is_labelled_with_the_street_the_stretch_and_its_pieces_in_each_language() {
+        use crate::shared::units::Units;
+        let v = Editor::new(0).view();
+        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, along a 40 m stretch. 6 segments.");
+        assert_eq!(iso_label(&v, &en(), Units::Feet), "Sample Street 1 in 2.5D, along a 131 ft stretch. 6 segments.");
+        let fr = crate::i18n_for(Locale::FrCa);
+        assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m. 6 éléments.");
+    }
+
     #[test]
     #[ignore]
     fn preview() {
