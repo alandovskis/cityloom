@@ -678,7 +678,10 @@ impl MapVm {
 
     /// The colours the places are drawn in, and what each says.
     pub fn status_key(&self) -> Vec<(&'static str, String)> {
-        [("ok", "map-state-works"), ("changed", "map-state-changed"), ("bad", "map-state-bad")].into_iter().map(|(id, key)| (id, self.word(key))).collect()
+        [("ok", "map-state-works"), ("changed", "map-state-changed"), ("bad", "map-state-bad"), ("conflict", "restriction-legend-conflict")]
+            .into_iter()
+            .map(|(id, key)| (id, self.word(key)))
+            .collect()
     }
 
     /// What floats over the map, in pixels from each edge: the whole city is fitted in what is left, until
@@ -1299,7 +1302,15 @@ mod tests {
     #[test]
     fn the_key_says_what_the_colours_of_the_places_mean() {
         let (vm, ..) = vm();
-        assert_eq!(vm.status_key(), vec![("ok", "Works".to_string()), ("changed", "Changed".to_string()), ("bad", "Needs attention".to_string())]);
+        assert_eq!(
+            vm.status_key(),
+            vec![
+                ("ok", "Works".to_string()),
+                ("changed", "Changed".to_string()),
+                ("bad", "Needs attention".to_string()),
+                ("conflict", "Conflicts with an area rule".to_string())
+            ]
+        );
     }
 
     #[test]

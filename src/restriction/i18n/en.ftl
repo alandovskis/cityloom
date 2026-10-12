@@ -81,3 +81,25 @@ restriction-lead-some = { $n ->
     [one] One area rule.
    *[other] { $n } area rules.
 } Select one to see the streets inside it.
+# Said in the tab where the page has no map to draw an area on.
+restriction-lead-no-map = An area is drawn on the map, and there is no map here.
+
+## An area in the tab, and the streets inside it
+restriction-summary-none = No loaded street is inside.
+restriction-summary = { $inside ->
+    [one] One street inside
+   *[other] { $inside } streets inside
+}; { $conflicts ->
+    [0] none conflicts with the rule.
+    [one] one conflicts with the rule.
+   *[other] { $conflicts } conflict with the rule.
+}
+restriction-summary-info = { $inside ->
+    [one] One street inside.
+   *[other] { $inside } streets inside.
+}
+# `rule` is a restriction-rule-* message, `summary` one of the three above.
+restriction-row-sub = { $rule } · { $summary }
+restriction-street-keeps = Keeps to the rule.
+restriction-street-inside = Inside the area.
+restriction-legend-conflict = Conflicts with an area rule

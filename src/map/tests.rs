@@ -76,11 +76,11 @@ fn a_map_page_whose_area_s_roads_were_not_had_names_the_area() {
 fn the_key_says_what_the_colours_of_the_places_mean() {
     let (vm, _) = map_vm();
     let h = map_html(|| view! { <map_ui::Legend vm=vm.clone()/> });
-    assert_eq!(count(&h, "<li>"), 3);
-    for words in ["Works", "Changed", "Needs attention"] {
+    assert_eq!(count(&h, "<li>"), 4);
+    for words in ["Works", "Changed", "Needs attention", "Conflicts with an area rule"] {
         assert!(h.contains(words), "{words}");
     }
-    assert!(h.contains("dot-bad") && h.contains("dot-ok") && h.contains("dot-changed"));
+    assert!(h.contains("dot-bad") && h.contains("dot-ok") && h.contains("dot-changed") && h.contains("dot-conflict"));
 }
 
 #[test]

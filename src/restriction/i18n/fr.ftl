@@ -72,3 +72,23 @@ restriction-lead-some = { $n ->
     [one] { $n } règle de zone.
    *[other] { $n } règles de zone.
 } Sélectionnez-en une pour voir les rues qu’elle contient.
+restriction-lead-no-map = Une zone se trace sur la carte, et il n’y a pas de carte ici.
+
+## Une zone dans l’onglet, et les rues qu’elle contient
+restriction-summary-none = Aucune rue chargée à l’intérieur.
+restriction-summary = { $inside ->
+    [one] { $inside } rue à l’intérieur
+   *[other] { $inside } rues à l’intérieur
+}; { $conflicts ->
+    [0] aucune n’est en conflit avec la règle.
+    [one] une est en conflit avec la règle.
+   *[other] { $conflicts } sont en conflit avec la règle.
+}
+restriction-summary-info = { $inside ->
+    [one] { $inside } rue à l’intérieur.
+   *[other] { $inside } rues à l’intérieur.
+}
+restriction-row-sub = { $rule } · { $summary }
+restriction-street-keeps = Respecte la règle.
+restriction-street-inside = À l’intérieur de la zone.
+restriction-legend-conflict = En conflit avec une règle de zone
