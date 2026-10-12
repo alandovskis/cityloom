@@ -126,6 +126,8 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Map page | Sheet tools | Outils de la feuille | To confirm, see below. |
 | Map page | Area rules (the tab) | Règles de zone | To confirm, see below. |
 | Map page | area (of a restriction) | zone |  |
+| Map page | outline (of an area) | contour |  |
+| Map page | Rules over an area (the tab's heading) | Règles sur une zone | To confirm, see below. |
 | Map page | corner (of an outline) | coin | Not `sommet`. |
 | Map page | Declare an area | Déclarer une zone |  |
 | Map page | Redraw | Retracer |  |
@@ -271,6 +273,7 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Bus and bike only (an area rule) | `Autobus et vélos seulement` | `Réservée aux autobus et aux vélos` (suggestion) |
 | No parking or loading (an area rule) | `Stationnement et chargement interdits` | `Interdiction de stationner et de livrer` (suggestion) |
 | Area rules (the map's tab) | `Règles de zone` | `Restrictions de zone` (suggestion) |
+| Rules over an area (the tab's heading) | `Règles sur une zone` | `Règles d’une zone` (suggestion) |
 | Changed (map page: a place's tag `map-changed`, `map-state-changed`; the hero drawing's `map-svg-changed`) | `Modifié` (agrees with `lieu`) | `Modifiée`, agreeing with the `rue` or `jonction` it marks (both feminine) |
 | Find a place, like Kreuzberg, Berlin (home page) | `Chercher un lieu, comme Kreuzberg, Berlin` | `Chercher un lieu, par exemple Kreuzberg, Berlin` (suggestion) |
 | Searching… (home page) | `Recherche en cours…` | `Recherche…` (suggestion) |
