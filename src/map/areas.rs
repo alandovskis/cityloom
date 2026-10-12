@@ -1174,4 +1174,57 @@ mod tests {
         assert!(vm.is_future());
         assert!(vm.lead().starts_with("These area rules were saved by a newer version"));
     }
+
+    #[test]
+    fn the_deleted_note_and_the_lead_follow_a_switch_of_language() {
+        let (ports, ..) = test_ports();
+        let i18n = crate::i18n_for(Locale::En);
+        let vm = AreasVm::new(ports, i18n.clone());
+        declare(&vm, "A");
+        declare(&vm, "B");
+        assert!(vm.delete("r1"));
+        assert_eq!((vm.deleted_note().as_deref(), vm.lead().as_str()), (Some("“A” deleted."), "One area rule. Select one to see the streets inside it."));
+        i18n.set(Locale::FrCa);
+        let n = '\u{a0}';
+        assert_eq!(vm.deleted_note(), Some(format!("Zone supprimée{n}: «{n}A{n}».")));
+        assert_eq!(vm.lead(), "1 règle de zone. Sélectionnez-en une pour voir les rues qu’elle contient.");
+    }
+
+    #[test]
+    fn reading_the_list_again_while_an_outline_waits_for_its_name_keeps_the_outline() {
+        let (vm, _, _, storage) = rig();
+        draw_square(&vm);
+        vm.set_form_name("A");
+        RestrictionStore::new(storage.clone()).add("theirs", Rule::CarFree, SQUARE.to_vec()).unwrap();
+        vm.reload();
+        assert_eq!((vm.draw_now(), vm.form_name()), (Draw::Naming(SQUARE.to_vec()), "A".to_string()));
+        assert!(vm.save());
+        assert_eq!(vm.list_now().iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["r1", "r2"]);
+    }
+
+    #[test]
+    fn a_press_on_the_first_corner_of_fewer_than_three_says_there_are_too_few() {
+        let (vm, _, said, _) = rig();
+        vm.start();
+        vm.on_press(SQUARE[0], None);
+        vm.on_press(SQUARE[1], None);
+        said.take();
+        vm.on_press(SQUARE[0], Some(0));
+        assert_eq!(said.take(), ["An area needs at least three corners, not all in a line."]);
+        assert_eq!(vm.draw_now(), Draw::Drawing(SQUARE[..2].to_vec()));
+    }
+
+    #[test]
+    fn an_area_brought_back_after_another_was_added_keeps_its_id() {
+        let (vm, _, said, _) = rig();
+        declare(&vm, "A");
+        declare(&vm, "B");
+        assert!(vm.delete("r2"));
+        declare(&vm, "C");
+        said.take();
+        assert!(vm.undo_delete());
+        assert_eq!(said.take(), ["“B” restored."]);
+        assert_eq!(vm.list_now().iter().map(|r| (r.id.as_str(), r.name.as_str())).collect::<Vec<_>>(), [("r1", "A"), ("r2", "B"), ("r3", "C")]);
+        assert_eq!(vm.selected_id_now().as_deref(), Some("r2"));
+    }
 }
