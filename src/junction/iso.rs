@@ -807,7 +807,24 @@ mod tests {
                 let name = crate::shared::testing::en(&a.street);
                 assert!(got.iter().any(|g| g.3 == name), "sample {sample}: {name}");
             }
-            assert!(s.markup.rfind("class=\"iso-name").unwrap() > s.markup.rfind("class=\"iso-side ").unwrap_or(0), "sample {sample}");
+            let first_name = s.markup.find("class=\"iso-name").unwrap();
+            for earlier in ["class=\"iso-side ", "class=\"iso-post\"", "sel-box"] {
+                assert!(s.markup.rfind(earlier).is_none_or(|at| at < first_name), "sample {sample}: {earlier}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_name_stands_farther_from_the_middle_of_the_junction_than_the_end_of_its_arm() {
+        let v = Junction::new(0).view();
+        let s = render(&v);
+        let centre = s.frame.at((0.0, 0.0), 0.0);
+        let far = |p: (f64, f64)| ((p.0 - centre.0).powi(2) + (p.1 - centre.1).powi(2)).sqrt();
+        let got = names(&s.markup);
+        for a in &v.arms {
+            let name = crate::shared::testing::en(&a.street);
+            let (x, y, _, _) = got.iter().find(|g| g.3 == name).unwrap();
+            assert!(far((*x, *y)) > far(s.frame.at(a.end, 0.0)), "{name}");
         }
     }
 
