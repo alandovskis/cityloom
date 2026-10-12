@@ -50,7 +50,8 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         dark.as_ref().is_some_and(|m| m.matches()),
         roomy || !notes_give_way,
     );
-    // The pages that have a Share button keep a slot for it; its markup is made here, once.
+    // The pages that have a Share button keep a slot for it; its markup is made here, once. This comes before
+    // `bind_menu` and the Print binding below, which find the button, the menu and Print by id.
     if let Some(slot) = by_id("share-slot") {
         let i18n = vm.i18n();
         leptos::mount::mount_to(slot.unchecked_into(), move || view! { <ShareMenu i18n=i18n/> }).forget();
