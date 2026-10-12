@@ -5,8 +5,16 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::junction::geometry::*;
-use crate::junction::model::*;
+use crate::junction::geometry::{
+    P, add, arc, at, cross, dir, dist, fillet_setback, gap, l, m, meet, on_circle, poly, polylines_cross, quad, ring_arc, sample_quad, scale, strip, sub, z,
+};
+use crate::junction::model::{
+    ALL_WAY_STOP, APPROACHES, ARM_LENGTH_MM, Arm, BUS_LANE_MM, BikeBoxBlocker, CONTROLS, FILTER_CODE, GATE_SIGNAL, GATE_YIELD, ISLAND_MIN_ROAD_MM, ISLAND_MM,
+    Junction, LEFT, MAX_RING_MM, MIN_ARMS, PRIORITY, Profile, ProtectedBlocker, Q_CURB, Q_OFFSET, Q_VIRTUAL, RIGHT, RING_STEP_MM, ROUNDABOUT, RULE_AROUND,
+    RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH, TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker,
+    blocked, classes_of, protected_blocker, protected_island_mm, turn_class,
+};
+
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
@@ -157,7 +165,7 @@ pub fn layout(s: &State, region: usize) -> Option<Layout> {
         }
         for i in 0..n {
             let j = (i + 1) % n;
-            corners.push(CornerLayout { a: i, b: j, delta: gap(s.arms[i].bearing, s.arms[j].bearing) as i32, fillet: None });
+            corners.push(CornerLayout { a: i, b: j, delta: gap(s.arms[i].bearing, s.arms[j].bearing), fillet: None });
         }
         return Some(Layout { arms, corners, ring: Some(RingLayout { radius, floor }) });
     }
@@ -165,7 +173,7 @@ pub fn layout(s: &State, region: usize) -> Option<Layout> {
     let mut mouths = vec![0.0f64; n];
     for i in 0..n {
         let j = (i + 1) % n;
-        let delta = gap(s.arms[i].bearing, s.arms[j].bearing) as i32;
+        let delta = gap(s.arms[i].bearing, s.arms[j].bearing);
         let fillet = if delta == 180 {
             None
         } else {
@@ -526,7 +534,7 @@ fn bus_options(s: &State) -> Vec<BusOption> {
     let mut v: Vec<(i32, BusOption)> = Vec::new();
     for (i, a) in s.arms.iter().enumerate() {
         for b in &s.arms[i + 1..] {
-            let off = (gap(a.bearing, b.bearing) as i32 - 180).abs();
+            let off = (gap(a.bearing, b.bearing) - 180).abs();
             v.push((off, BusOption { a: a.uid, b: b.uid, label: arm_to_arm(arm_name(a), arm_name(b)) }));
         }
     }
@@ -560,7 +568,7 @@ fn priority_pair(arms: &[Arm]) -> [usize; 2] {
     let mut best = ([0, 1], i32::MAX);
     for i in 0..n {
         for j in i + 1..n {
-            let d = (gap(arms[i].bearing, arms[j].bearing) as i32 - 180).abs();
+            let d = (gap(arms[i].bearing, arms[j].bearing) - 180).abs();
             let wide = arms[i].row_mm() + arms[j].row_mm();
             let score = d * 100_000 - wide;
             if score < best.1 {
@@ -1413,6 +1421,7 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::junction::model::{DEFAULT_SETBACK_MM, JUNCTION_SAMPLES, MIN_SETBACK_MM, junction_of};
     use crate::shared::testing::{en, fr};
 
     #[test]

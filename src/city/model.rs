@@ -529,7 +529,10 @@ impl Layout {
     /// Whether a saved junction can stand for this node: the same streets, with
     /// every index and length inside what the editor allows.
     fn junction_fits(&self, s: &State, node: usize) -> bool {
-        use crate::junction::model::*;
+        use crate::junction::model::{
+            APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, MAX_CORNER_MM, MAX_CROSSING_MM, MAX_RING_MM,
+            MAX_SETBACK_MM, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SETBACK_MM, RULES, STOPS,
+        };
         let mut want: Vec<u32> = self.edges_at(node).iter().map(|&e| e as u32 + 1).collect();
         let mut have: Vec<u32> = s.arms.iter().map(|a| a.edge).collect();
         want.sort_unstable();

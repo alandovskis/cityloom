@@ -202,12 +202,15 @@ impl Storage for MemoryStorage {
     }
 }
 
+/// A task a `ManualScheduler` holds: its id, when it falls due, and what it runs.
+type Task = (u32, u32, Box<dyn FnOnce()>);
+
 /// A scheduler that runs what is due only when told that time has passed.
 #[derive(Default)]
 pub struct ManualScheduler {
     now: std::cell::Cell<u32>,
     next: std::cell::Cell<u32>,
-    tasks: RefCell<Vec<(u32, u32, Box<dyn FnOnce()>)>>,
+    tasks: RefCell<Vec<Task>>,
 }
 
 impl ManualScheduler {
@@ -246,10 +249,13 @@ impl Scheduler for ManualScheduler {
     }
 }
 
+/// A request a `FakeFetcher` keeps: the address, the body and what is told the answer.
+type FetchRequest = (String, Option<String>, Box<dyn FnOnce(Fetched)>);
+
 /// A fetcher that keeps its requests until the test answers them.
 #[derive(Default)]
 pub struct FakeFetcher {
-    asked: RefCell<Vec<(String, Option<String>, Box<dyn FnOnce(Fetched)>)>>,
+    asked: RefCell<Vec<FetchRequest>>,
 }
 
 impl FakeFetcher {
@@ -280,10 +286,13 @@ impl Fetcher for FakeFetcher {
     }
 }
 
+/// What a `FakeImporter` keeps of a request: the file, the bounds and what is told the result.
+type ImportRequest = (Vec<u8>, Option<[f64; 4]>, Box<dyn FnOnce(Result<String, String>)>);
+
 /// An importer that keeps what it is asked to read until the test answers.
 #[derive(Default)]
 pub struct FakeImporter {
-    asked: RefCell<Vec<(Vec<u8>, Option<[f64; 4]>, Box<dyn FnOnce(Result<String, String>)>)>>,
+    asked: RefCell<Vec<ImportRequest>>,
 }
 
 impl FakeImporter {
@@ -365,11 +374,14 @@ pub enum MapCall {
     Imperial(bool),
 }
 
+/// What listens to a map's events.
+type MapListener = Box<dyn Fn(MapEvent)>;
+
 /// A map that keeps what it is asked, and passes on what a test has it say.
 #[derive(Default)]
 pub struct FakeMapper {
     calls: RefCell<Vec<MapCall>>,
-    listener: RefCell<Option<Box<dyn Fn(MapEvent)>>>,
+    listener: RefCell<Option<MapListener>>,
 }
 
 impl FakeMapper {

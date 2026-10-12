@@ -28,37 +28,50 @@ CHUNK = 1 << 20
 REPORT = 100 << 20
 
 
+def open_from(url: str, have: int):
+    """The response for `url` from byte `have` on, or None when the file asked from beyond its end: the earlier
+    attempt had it whole."""
+    request = urllib.request.Request(url, headers={"Range": f"bytes={have}-"} if have else {})
+    try:
+        return urllib.request.urlopen(request)
+    except urllib.error.HTTPError as error:
+        if error.code == 416 and have:
+            return None
+        raise
+
+
+def copy_with_progress(response, out, done: int, total: int | None) -> int:
+    """Writes the response to `out`, saying how far it is every REPORT bytes; returns the bytes `out` then has."""
+    reported = done
+    while chunk := response.read(CHUNK):
+        out.write(chunk)
+        done += len(chunk)
+        if done - reported >= REPORT:
+            reported = done
+            of = f" of {total / 1e6:.0f}" if total else ""
+            print(f"  {done / 1e6:.0f}{of} MB", file=sys.stderr)
+    return done
+
+
 def download(url: str, target: Path) -> None:
     """Downloads `url` to `target`, renamed from a `.part` file only once whole. A `.part` file left by an earlier
     attempt is continued when the server allows it, and started again when it does not."""
     target.parent.mkdir(parents=True, exist_ok=True)
     part = target.with_name(target.name + ".part")
     have = part.stat().st_size if part.exists() else 0
-    request = urllib.request.Request(url, headers={"Range": f"bytes={have}-"} if have else {})
-    try:
-        response = urllib.request.urlopen(request)
-    except urllib.error.HTTPError as error:
-        if error.code != 416 or not have:
-            raise
-        # The file asked from beyond its end: the earlier attempt had it whole.
+    response = open_from(url, have)
+    if response is None:
         part.replace(target)
         return
     with response:
         resumed = response.status == 206
-        if have and not resumed:
+        if not resumed:
             have = 0
-        total = response.headers.get("Content-Length")
-        total = int(total) + have if total else None
+        length = response.headers.get("Content-Length")
+        total = int(length) + have if length else None
         print(f"downloading {url}" + (f" (from {have / 1e6:.0f} MB)" if have else ""), file=sys.stderr)
-        done, reported = have, have
         with part.open("ab" if resumed else "wb") as out:
-            while chunk := response.read(CHUNK):
-                out.write(chunk)
-                done += len(chunk)
-                if done - reported >= REPORT:
-                    reported = done
-                    of = f" of {total / 1e6:.0f}" if total else ""
-                    print(f"  {done / 1e6:.0f}{of} MB", file=sys.stderr)
+            done = copy_with_progress(response, out, have, total)
     if total is not None and done != total:
         sys.exit(f"{url}: got {done} bytes of {total}; run again to continue")
     part.replace(target)
@@ -72,6 +85,8 @@ def main():
         "--batch", type=int, help="tiles cut in one osmium run (metro_tiles.py's --batch): fewer take less memory"
     )
     args = ap.parse_args()
+    # An absolute path, so it cannot be read by a script it is handed to as an option.
+    args.extract = args.extract.resolve()
     if args.refresh or not args.extract.exists():
         download(URL, args.extract)
     print(f"extract: {args.extract} ({args.extract.stat().st_size / 1e6:.0f} MB)", file=sys.stderr)

@@ -71,7 +71,10 @@ mod tests {
     use super::*;
     use crate::shared::ports::ManualScheduler;
 
-    fn keeper(ok: bool) -> (Rc<Keeper>, Rc<ManualScheduler>, Rc<Cell<u32>>, Rc<Cell<u32>>) {
+    /// A keeper with the scheduler it runs on and the counts of its writes kept and failed.
+    type Rig = (Rc<Keeper>, Rc<ManualScheduler>, Rc<Cell<u32>>, Rc<Cell<u32>>);
+
+    fn keeper(ok: bool) -> Rig {
         let s = Rc::new(ManualScheduler::default());
         let (kept, failed) = (Rc::new(Cell::new(0)), Rc::new(Cell::new(0)));
         let (k, f) = (kept.clone(), failed.clone());
