@@ -116,7 +116,8 @@ pub fn curb_height_mm(curb: &str) -> i32 {
 /// standing up off its strip, so it reads on a 1.5 m strip at 760 px (about 21 px).
 pub const MIN_SOLID_PX: f64 = 20.0;
 /// How far along the street a one-way arrow is laid, in millimetres: near the near end, because what stands
-/// on the pieces hides only the ground farther along than itself, and a tree's crown nothing nearer than 10 m.
+/// on the pieces hides only the ground farther along than itself: a tree's crown nothing nearer than about 10 m,
+/// and the nearest trunk, from 5.4 m on, only a band of ground within 2.5 m to the left of its strip.
 pub const ARROW_AT_MM: f64 = 6_000.0;
 
 /// The 2.5D drawn, and the size it is drawn at.
@@ -773,20 +774,74 @@ mod tests {
         assert!(m.contains(&format!("<g transform=\"scale({} 1)\">", head / (0.64 * len))), "{m}");
     }
 
+    /// The convex hull of points on the drawing, counter-clockwise (monotone chain).
+    fn hull(mut pts: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+        pts.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+        let cross = |o: (f64, f64), a: (f64, f64), b: (f64, f64)| (a.0 - o.0) * (b.1 - o.1) - (a.1 - o.1) * (b.0 - o.0);
+        let mut out: Vec<(f64, f64)> = Vec::new();
+        for pass in 0..2 {
+            let start = out.len();
+            let iter: Box<dyn Iterator<Item = &(f64, f64)>> = if pass == 0 { Box::new(pts.iter()) } else { Box::new(pts.iter().rev()) };
+            for &q in iter {
+                while out.len() >= start + 2 && cross(out[out.len() - 2], out[out.len() - 1], q) <= 0.0 {
+                    out.pop();
+                }
+                out.push(q);
+            }
+            out.pop();
+        }
+        out
+    }
+
+    /// Two convex shapes on the drawing do not overlap: some edge of one separates them (separating axes).
+    fn apart(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+        [a, b].iter().any(|shape| {
+            (0..shape.len()).any(|k| {
+                let (p, q) = (shape[k], shape[(k + 1) % shape.len()]);
+                let n = (q.1 - p.1, p.0 - q.0);
+                let span = |s: &[(f64, f64)]| s.iter().map(|v| v.0 * n.0 + v.1 * n.1).fold((f64::MAX, f64::MIN), |(lo, hi), d| (lo.min(d), hi.max(d)));
+                let ((a0, a1), (b0, b1)) = (span(a), span(b));
+                a1 < b0 || b1 < a0
+            })
+        })
+    }
+
     #[test]
     fn an_arrow_lies_near_the_near_end_where_no_tree_can_hide_it() {
-        // A solid hides only the ground farther along than itself and higher on the drawing: the lowest point a crown
-        // hides is farther along than the whole arrow reaches.
+        // The arrow is anchored ARROW_AT_MM along its lane.
         let v = Editor::new(1).view();
         let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm));
         let m = iso_svg(&v, &en(), 1050.0).markup;
         let lane = v.segments.iter().find(|s| s.direction.is_some()).unwrap();
         let (e, f) = p.at(lane.x_mm as f64 + lane.width_mm as f64 / 2.0, 0.0, ARROW_AT_MM);
         assert!(m.contains(&format!(" {} {})\"><g transform=\"scale(", r(e), r(f))), "{m}");
-        let (len, _) = arrow_shape(8_000.0);
-        // The nearest tree's crown starts 2.8 m along, 2 m above a strip drawn 450 mm high.
-        let hidden_from = 2_800.0 + (drawn_mm(150) + 2_000.0) / RECEDE_Y;
-        assert!(ARROW_AT_MM + len / 2.0 < hidden_from, "{} vs {hidden_from}", ARROW_AT_MM + len / 2.0);
+        // On every street with trees, at every width that draws them, no trunk or crown covers any part of the ground
+        // an arrow is laid on (its length along by its head across).
+        for e in [Editor::new(1), furnished()] {
+            let v = e.view();
+            for width in [760.0, 1050.0, 1800.0] {
+                let p = Projection::fit(width, v.row_mm.max(v.total_mm));
+                let trees: Vec<Vec<(f64, f64)>> = (0..v.segments.len())
+                    .flat_map(|i| blocks(&v, i, &p))
+                    .filter(|b| matches!(b.solid, Solid::Trunk | Solid::Crown))
+                    .map(|b| {
+                        let corners = [b.x.0, b.x.1]
+                            .into_iter()
+                            .flat_map(|x| [b.y.0, b.y.1].into_iter().flat_map(move |y| [b.z.0, b.z.1].into_iter().map(move |z| (x, y, z))));
+                        hull(corners.map(|(x, y, z)| p.at(x, y, z)).collect())
+                    })
+                    .collect();
+                assert!(!trees.is_empty(), "{width}");
+                for s in v.segments.iter().filter(|s| s.direction.is_some() && s.width_mm as f64 * p.scale >= MIN_SOLID_PX) {
+                    let (len, head) = arrow_shape(s.width_mm as f64);
+                    let (cx, h) = (s.x_mm as f64 + s.width_mm as f64 / 2.0, drawn_mm(height_mm(KINDS[s.kind].id)));
+                    let (z0, z1) = (ARROW_AT_MM - len / 2.0, ARROW_AT_MM + len / 2.0);
+                    let ground =
+                        [(cx - head / 2.0, h, z0), (cx + head / 2.0, h, z0), (cx + head / 2.0, h, z1), (cx - head / 2.0, h, z1)].map(|(x, y, z)| p.at(x, y, z));
+                    assert!(trees.iter().all(|t| apart(t, &ground)), "{width}: the arrow of {} is hidden", s.uid);
+                }
+            }
+        }
     }
 
     /// Sample Street 1 with two one-way bike lanes, each 1.8 m and curbed: one between the driving lanes (a curb on
