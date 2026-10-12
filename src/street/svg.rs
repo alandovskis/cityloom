@@ -850,8 +850,10 @@ mod tests {
         // A bike lane between parking and a driving lane has its curb on both edges, a boarding island on one.
         let u = e.add(kind_index("bike").unwrap(), 2);
         assert_eq!(curb_edges(&e.view(), 2), vec![false, true]);
-        assert!(e.set_curb(u, Some(6)), "curb 6 is the bus boarding island");
-        assert_eq!(curb_edges(&e.view(), 2).len(), 1);
+        let island = crate::shared::catalogue::CURBS.iter().position(|c| c.id == "island").unwrap();
+        assert!(e.set_curb(u, Some(island)));
+        // The island stands on the driving lane's side (the right), not the parking's.
+        assert_eq!(curb_edges(&e.view(), 2), vec![true]);
         assert_eq!((curb_width_mm("granite"), curb_width_mm("planted"), curb_width_mm("island")), (150.0, 600.0, 900.0));
         assert_eq!((curb_width_mm("kassel"), curb_width_mm("bikefriendly")), (250.0, 300.0));
     }
