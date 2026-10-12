@@ -672,6 +672,12 @@ fn map_html_has_the_area_rules_in_a_left_panel_and_not_in_the_notes() {
 }
 
 #[test]
+fn the_keyboard_help_lists_the_key_for_the_area_rules_beside_the_notes() {
+    assert!(MAP_HTML.contains(r#"<kbd>[</kbd> <span data-i18n="map-key-areas">area rules</span>"#));
+    assert!(MAP_HTML.contains(r#"<kbd>]</kbd> <span data-i18n="map-key-panels">notes</span>"#));
+}
+
+#[test]
 fn an_area_with_no_street_inside_shows_no_streets_heading() {
     let vm = ready_areas_vm_off(Locale::En, &[("Far", Rule::CarFree)], 0.05);
     vm.areas().select(Some("r1"));

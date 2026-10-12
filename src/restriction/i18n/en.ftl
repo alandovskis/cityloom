@@ -1,4 +1,4 @@
-# What an area restriction says (src/restriction, and the map's Restrictions tab: src/map/areas.rs, src/map/areas_view.rs).
+# What an area restriction says (src/restriction, and the map's Area rules panel: src/map/areas.rs, src/map/areas_view.rs).
 
 ## Refusals of an outline
 restriction-refused-too-few = An area needs at least three corners, not all in a line.

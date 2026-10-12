@@ -750,7 +750,7 @@ impl MapVm {
         self.basemap.get() == BasemapState::Ready && !self.areas.is_future()
     }
 
-    /// What the tab says first: why nothing can be drawn where there is no map, else the areas' own lead.
+    /// What the panel says first: why nothing can be drawn where there is no map, else the areas' own lead.
     pub fn areas_lead(&self) -> String {
         if !self.areas.is_future() && matches!(self.basemap.get(), BasemapState::Unavailable(_)) {
             return self.word("restriction-lead-no-map");
@@ -799,7 +799,7 @@ impl MapVm {
         self.findings_in(&self.view(), &[r])
     }
 
-    /// An area's small print in the tab: its rule, and how many streets are inside and in conflict.
+    /// An area's small print in the panel: its rule, and how many streets are inside and in conflict.
     pub fn area_row_sub(&self, r: &Restriction) -> String {
         let streets = self.area_streets(&r.id);
         let inside = streets.len() as i64;

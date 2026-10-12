@@ -87,8 +87,7 @@
   }
 }
 
-:root[data-inspector="closed"],
-:root[data-left="none"] {
+:root[data-inspector="closed"] {
   --lw: 0px;
 }
 :root[data-notes="closed"] {
@@ -711,13 +710,7 @@ a.btn {
 .checks li.bad span {
   color: var(--warn);
 }
-/* The map's notes have three tabs: each as wide as its words, so a longer one (« Règles de zone ») takes room from
-   the shorter ones before it wraps. */
-.tabs:has(> #t-areas) > .tab {
-  flex: 1 1 auto;
-  padding: 0 6px;
-}
-/* The Area rules tab. An area's row is a button: it selects the area, and the selected one opens its form under it. */
+/* The Area rules panel. An area's row is a button: it selects the area, and the selected one opens its form under it. */
 .area-list > li + li {
   border-top: 1px solid var(--rule);
 }
@@ -857,7 +850,7 @@ a.btn {
   display: none;
 }
 /* MapLibre's corners are the map's, which runs under the floating panels: the scale goes beside the left
-   panel an editor has (and at the edge when there is none), above the footer, and the status bar leaves room for it (`.statusbar`). The
+   panel, above the footer, and the status bar leaves room for it (`.statusbar`). The
    attribution, which opens leftwards into a line of text, stands on the zoom buttons (`.zoom-dock`: three
    44px buttons and two 1px rules), its right edge in line with theirs, clear of the status bar and the Notes.
    Each control keeps MapLibre's own 10px margin. */
@@ -1031,8 +1024,8 @@ a.btn {
 }
 
 /* The button for a sidebar: a tab down the window's edge, against the sidebar (`--lw` / `--rw` are how far it reaches
-   in, nothing when it is hidden), its text running downwards. The map page has the Notes' on the right; the editors
-   have the details' on the left too. Under 900px the sidebars stack below the page (`--lw` and `--rw` are nothing), so
+   in, nothing when it is hidden), its text running downwards. The map page has the area rules' on the left and the
+   Notes' on the right; the editors have the details' on the left. Under 900px the sidebars stack below the page (`--lw` and `--rw` are nothing), so
    the tabs stay at the window's edge, as on the map. */
 .edge-tab {
   position: fixed;

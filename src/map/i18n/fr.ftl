@@ -18,6 +18,7 @@ map-key-open = ouvrir
 map-key-zoom = zoom
 map-key-move = déplacer la carte
 map-key-whole = toute la ville
+map-key-areas = règles de zone
 map-key-panels = notes
 
 ## L’en-tête, les outils et les panneaux
