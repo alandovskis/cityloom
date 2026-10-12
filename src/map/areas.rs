@@ -12,12 +12,23 @@ use leptos::prelude::*;
 
 use crate::map::{overlay, style};
 use crate::restriction::draw::{Draw, Outcome, Step};
-use crate::restriction::model::{LonLat, Restriction, Rule};
+use crate::restriction::model::{LonLat, Restriction, Rule, valid};
 use crate::restriction::store::RestrictionStore;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::ports::Ports;
 use crate::shared::said::{self, Said};
 use crate::shared::units::Units;
+
+/// How far apart, in degrees either way, a corner let go can be from where it was and still be where it was: the
+/// map reports a corner pressed and let go without a move where its tiles draw it, about a tenth of a metre off
+/// (`same_spot`, to the micro-degree, can tell that apart). This is under half a metre, a pixel or two at the
+/// map's closest zoom.
+const STILL: f64 = 5e-6;
+
+/// Whether two outlines are the same but for what the map's drawing moves a corner by.
+fn same_outline(a: &[LonLat], b: &[LonLat]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(p, q)| (p[0] - q[0]).abs() <= STILL && (p[1] - q[1]).abs() <= STILL)
+}
 
 pub struct AreasVm {
     store: RestrictionStore,
@@ -27,7 +38,11 @@ pub struct AreasVm {
     /// Whether the document is a newer build's: shown as nothing, never written.
     future: ArcRwSignal<bool>,
     draw: ArcRwSignal<Draw>,
+    /// The restriction a new outline replaces, while one is redrawn.
+    redrawing: ArcRwSignal<Option<String>>,
     selected: ArcRwSignal<Option<String>>,
+    /// The selected restriction's outline while a corner of it is dragged.
+    moving: ArcRwSignal<Option<(String, Vec<LonLat>)>>,
     name: ArcRwSignal<String>,
     rule: ArcRwSignal<Rule>,
     /// What was deleted this session, the last on top: Undo brings it back.
@@ -45,7 +60,9 @@ impl AreasVm {
             list: ArcRwSignal::new(list),
             future: ArcRwSignal::new(future),
             draw: ArcRwSignal::new(Draw::Idle),
+            redrawing: ArcRwSignal::new(None),
             selected: ArcRwSignal::new(None),
+            moving: ArcRwSignal::new(None),
             name: ArcRwSignal::new(String::new()),
             rule: ArcRwSignal::new(Rule::CarFree),
             deleted: ArcRwSignal::new(Vec::new()),
@@ -110,6 +127,11 @@ impl AreasVm {
         self.selected.get_untracked()
     }
 
+    /// The selected restriction's outline while a corner is dragged.
+    pub fn moving(&self) -> Option<(String, Vec<LonLat>)> {
+        self.moving.get()
+    }
+
     pub fn is_future(&self) -> bool {
         self.future.get()
     }
@@ -161,11 +183,13 @@ impl AreasVm {
 
     // ---- commands ----
 
-    /// The list is read again from where it is kept: another tab wrote it. A selection whose area is gone goes.
+    /// The list is read again from where it is kept: another tab wrote it. A selection whose area is gone goes, and
+    /// with it a drag of its corner.
     pub fn reload(&self) {
         let all = self.store.all();
         if self.selected.get_untracked().is_some_and(|id| !all.iter().any(|r| r.id == id)) {
             self.selected.set(None);
+            self.moving.set(None);
         }
         self.future.set(self.store.is_future());
         self.list.set(all);
@@ -174,25 +198,46 @@ impl AreasVm {
     /// Applies a step to the outline and says what came of it.
     fn step(&self, step: Step) -> Outcome {
         let mut draw = self.draw.get_untracked();
-        let outcome = draw.step(step);
+        let mut outcome = draw.step(step);
         self.draw.set(draw);
+        if outcome == Outcome::Closed && !self.closed() {
+            outcome = Outcome::Refused(Said::new("restriction-not-kept"));
+        }
         match &outcome {
             Outcome::Added(n) => self.tell("restriction-corner-added", Args::new().num("n", *n as i64)),
             Outcome::Duplicate => self.tell("restriction-refused-duplicate", Args::new()),
             Outcome::Removed(n) => self.tell("restriction-corner-removed", Args::new().num("n", *n as i64)),
-            Outcome::Closed => self.closed(),
-            Outcome::Cancelled => self.tell("restriction-cancelled", Args::new()),
+            Outcome::Cancelled => {
+                self.redrawing.set(None);
+                self.tell("restriction-cancelled", Args::new());
+            }
             Outcome::Refused(why) => self.ports.announcer.say(&self.say_now(why)),
-            Outcome::Started | Outcome::Ignored => {}
+            Outcome::Closed | Outcome::Started | Outcome::Ignored => {}
         }
         outcome
     }
 
-    /// The outline is closed: it waits for its rule and name.
-    fn closed(&self) {
-        self.name.set(String::new());
-        self.rule.set(Rule::CarFree);
-        self.tell("restriction-closed", Args::new());
+    /// The outline is closed: a new one waits for its rule and name; a redrawn one is kept at once, and if it
+    /// cannot be, its corners stay drawn to finish again (false, and nothing said: the caller says it).
+    fn closed(&self) -> bool {
+        let Some(id) = self.redrawing.get_untracked() else {
+            self.name.set(String::new());
+            self.rule.set(Rule::CarFree);
+            self.tell("restriction-closed", Args::new());
+            return true;
+        };
+        let ring = self.draw.get_untracked().corners().to_vec();
+        let kept = self.store.update(&id, |r| r.ring = ring.clone());
+        self.reload();
+        let Some(r) = self.find_now(&id).filter(|_| kept) else {
+            self.draw.set(Draw::Drawing(ring));
+            return false;
+        };
+        self.draw.set(Draw::Idle);
+        self.redrawing.set(None);
+        self.selected.set(Some(id));
+        self.tell_about("restriction-redrawn", &r);
+        true
     }
 
     /// Starts drawing a new area. False, and nothing changes, where the document is a newer build's or an outline
@@ -202,11 +247,25 @@ impl AreasVm {
             return false;
         }
         self.selected.set(None);
+        self.moving.set(None);
         let started = self.step(Step::Start) == Outcome::Started;
         if started {
             self.tell("restriction-started", Args::new());
         }
         started
+    }
+
+    /// Starts drawing a new outline for the area `id`, which keeps its name and rule. False, and nothing changes,
+    /// where there is no such area, the document is a newer build's or an outline is already being drawn.
+    pub fn start_redraw(&self, id: &str) -> bool {
+        let Some(r) = self.find_now(id) else { return false };
+        if self.future.get_untracked() || self.draw.get_untracked() != Draw::Idle || self.step(Step::Start) != Outcome::Started {
+            return false;
+        }
+        self.moving.set(None);
+        self.redrawing.set(Some(id.to_string()));
+        self.tell_about("restriction-redraw-started", &r);
+        true
     }
 
     pub fn add_at(&self, at: LonLat) -> bool {
@@ -284,6 +343,7 @@ impl AreasVm {
         if self.selected.get_untracked() == id {
             return;
         }
+        self.moving.set(None);
         self.selected.set(id);
         if let Some(r) = found {
             self.tell("restriction-selected", Args::new().str("area", self.say_now(&r.title())).str("rule", self.say_now(&r.rule.said())));
@@ -350,6 +410,33 @@ impl AreasVm {
         true
     }
 
+    /// A corner of the selected area dragged on the map: shown as it moves, and when let go kept if the outline is
+    /// still valid, else refused with the reason. Let go where it was (pressed without a move, or brought back), it
+    /// is neither kept again nor said. Only the selected area's corners move, and none while an outline is drawn.
+    pub fn drag_vertex(&self, area: &str, index: usize, at: LonLat, done: bool) {
+        if self.draw.get_untracked() != Draw::Idle || self.selected.get_untracked().as_deref() != Some(area) {
+            return;
+        }
+        let Some(r) = self.find_now(area) else { return };
+        let mut ring = self.moving.get_untracked().filter(|(id, _)| id == area).map_or(r.ring.clone(), |(_, ring)| ring);
+        let Some(corner) = ring.get_mut(index) else { return };
+        *corner = at;
+        if !done {
+            self.moving.set(Some((area.to_string(), ring)));
+            return;
+        }
+        self.moving.set(None);
+        if same_outline(&ring, &r.ring) {
+            return;
+        }
+        if let Err(why) = valid(&ring) {
+            return self.ports.announcer.say(&self.say_now(&why));
+        }
+        let kept = self.store.update(area, |r| r.ring = ring);
+        self.reload();
+        self.tell(if kept { "restriction-corner-moved" } else { "restriction-not-kept" }, Args::new());
+    }
+
     /// What a key pressed on the map does to the outline being drawn, or to the selection; says whether it was one of its keys. Arrow
     /// keys stay the map's, so the map can be moved between corners. A closed outline takes no key from the map:
     /// its rule and name are in the tab's form, where Escape belongs to the field, and only Cancel lets it go.
@@ -375,11 +462,15 @@ impl AreasVm {
     }
 
     /// Sends the areas and the outline being drawn to the map, with their layers.
+    /// While an outline is drawn no area is marked selected, so no corner of one is on the map to take a press.
     pub fn sync(&self) {
-        let selected = self.selected.get_untracked();
+        let draw = self.draw.get_untracked();
+        let selected = self.selected.get_untracked().filter(|_| draw == Draw::Idle);
+        let moving = self.moving.get_untracked().filter(|(id, _)| Some(id) == selected.as_ref());
         let list = self.list.get_untracked();
-        self.ports.mapper.set_restrictions(&style::area_layers(), &overlay::areas(&list, selected.as_deref(), None));
-        self.ports.mapper.set_draft(&style::draft_layers(), &overlay::draft(self.draw.get_untracked().corners()));
+        let areas = overlay::areas(&list, selected.as_deref(), moving.as_ref().map(|(_, ring)| ring.as_slice()));
+        self.ports.mapper.set_restrictions(&style::area_layers(), &areas);
+        self.ports.mapper.set_draft(&style::draft_layers(), &overlay::draft(draw.corners()));
     }
 }
 
@@ -741,5 +832,137 @@ mod tests {
         vm.sync();
         let calls = mapper.take();
         assert!(matches!(&calls[0], MapCall::Restrictions { data, .. } if !data.contains("\"selected\":true") && !data.contains("\"i\":")), "{calls:?}");
+    }
+
+    #[test]
+    fn dragging_a_corner_shows_the_new_outline_and_a_drop_across_an_edge_is_refused() {
+        let (vm, mapper, said, _) = rig();
+        declare(&vm, "A");
+        said.take();
+        let out = [-73.61, 45.52];
+        vm.drag_vertex("r1", 0, out, false);
+        assert_eq!(vm.moving().map(|(id, ring)| (id, ring[0])), Some(("r1".to_string(), out)));
+        vm.sync();
+        assert!(matches!(&mapper.take()[0], MapCall::Restrictions { data, .. } if data.contains("[-73.61,45.52]")));
+        assert_eq!(vm.find_now("r1").unwrap().ring[0], SQUARE[0], "not kept until it is let go");
+        vm.drag_vertex("r1", 0, [-73.58, 45.525], true); // east of the square: the edge back to it would cross the east edge
+        assert_eq!(said.take(), ["The outline crosses itself. Move or remove a corner."]);
+        assert_eq!(vm.find_now("r1").unwrap().ring[0], SQUARE[0]);
+        assert_eq!(vm.moving(), None);
+        vm.drag_vertex("r1", 0, out, true);
+        assert_eq!(said.take(), ["Corner moved."]);
+        assert_eq!(vm.find_now("r1").unwrap().ring[0], out);
+        vm.select(None);
+        vm.drag_vertex("r1", 0, SQUARE[0], true);
+        assert_eq!(vm.find_now("r1").unwrap().ring[0], out, "only the selected area's corners move");
+    }
+
+    #[test]
+    fn a_corner_let_go_where_it_was_is_not_kept_again_nor_said_though_the_map_reports_it_a_little_off() {
+        let (vm, _, said, storage) = rig();
+        declare(&vm, "A");
+        said.take();
+        let kept = storage.recall(RESTRICTIONS_KEY);
+        storage.blocked(true); // a write would be refused, and said
+        // Pressed and let go without a move: the map reports the corner as drawn, about a tenth of a metre off.
+        vm.drag_vertex("r1", 0, [SQUARE[0][0] + 1.3e-6, SQUARE[0][1] - 0.9e-6], true);
+        // Moved, then brought back near where it was.
+        vm.drag_vertex("r1", 1, [-73.585, 45.52], false);
+        vm.drag_vertex("r1", 1, [SQUARE[1][0] - 2e-6, SQUARE[1][1] + 2e-6], true);
+        assert!(said.take().is_empty());
+        assert_eq!((vm.moving(), storage.recall(RESTRICTIONS_KEY)), (None, kept));
+        assert_eq!(vm.find_now("r1").unwrap().ring, SQUARE.to_vec());
+        // A drag shorter than the map's click tolerance is followed by a press on the area: still nothing to say.
+        vm.select(Some("r1"));
+        vm.on_press(SQUARE[0], None);
+        assert!(said.take().is_empty());
+        assert_eq!(vm.selected_id_now().as_deref(), Some("r1"));
+    }
+
+    #[test]
+    fn a_corner_moved_where_storage_refuses_is_said_and_not_kept() {
+        let (vm, _, said, storage) = rig();
+        declare(&vm, "A");
+        said.take();
+        storage.blocked(true);
+        vm.drag_vertex("r1", 0, [-73.61, 45.52], true);
+        assert_eq!(said.take(), ["The area rules could not be saved in this browser."]);
+        assert_eq!(vm.find_now("r1").unwrap().ring[0], SQUARE[0]);
+    }
+
+    #[test]
+    fn no_corner_of_an_area_is_dragged_while_an_outline_is_drawn_nor_one_it_does_not_have() {
+        let (vm, mapper, said, _) = rig();
+        declare(&vm, "A");
+        said.take();
+        vm.drag_vertex("r1", 9, [-73.61, 45.52], true);
+        assert!(vm.start_redraw("r1"));
+        said.take();
+        vm.drag_vertex("r1", 0, [-73.61, 45.52], false);
+        vm.drag_vertex("r1", 0, [-73.61, 45.52], true);
+        assert!(said.take().is_empty() && vm.moving().is_none());
+        assert_eq!(vm.find_now("r1").unwrap().ring, SQUARE.to_vec());
+        vm.sync();
+        let calls = mapper.take();
+        assert!(
+            matches!(&calls[0], MapCall::Restrictions { data, .. } if !data.contains("\"i\":")),
+            "while drawing no area has corners on the map to take the press: {calls:?}"
+        );
+    }
+
+    #[test]
+    fn letting_go_of_the_selection_or_losing_the_area_ends_a_drag() {
+        let (vm, _, _, storage) = rig();
+        declare(&vm, "A");
+        vm.drag_vertex("r1", 0, [-73.61, 45.52], false);
+        vm.select(None);
+        assert_eq!(vm.moving(), None);
+        vm.select(Some("r1"));
+        vm.drag_vertex("r1", 0, [-73.61, 45.52], false);
+        assert!(RestrictionStore::new(storage.clone()).remove("r1"));
+        vm.reload();
+        assert_eq!(vm.moving(), None);
+    }
+
+    #[test]
+    fn a_redrawn_area_keeps_its_name_and_rule_and_takes_the_new_outline() {
+        let (vm, _, said, _) = rig();
+        declare(&vm, "A");
+        said.take();
+        assert!(vm.start_redraw("r1"));
+        assert_eq!(said.take(), ["Redrawing “A”. Place its corners again."]);
+        for p in &SQUARE[..3] {
+            vm.add_at(*p);
+        }
+        said.take();
+        assert!(vm.close());
+        assert_eq!(said.take(), ["“A” redrawn."]);
+        let r = vm.find_now("r1").unwrap();
+        assert_eq!((r.name.as_str(), r.ring.len()), ("A", 3));
+        assert_eq!(vm.draw_now(), Draw::Idle);
+        assert_eq!(vm.list_now().len(), 1, "not a new area");
+        assert_eq!(vm.selected_id_now().as_deref(), Some("r1"));
+    }
+
+    #[test]
+    fn a_redraw_the_storage_refuses_keeps_the_corners_to_finish_again_and_a_cancelled_one_is_forgotten() {
+        let (vm, _, said, storage) = rig();
+        declare(&vm, "A");
+        assert!(!vm.start_redraw("r9"), "no such area");
+        assert!(vm.start_redraw("r1"));
+        for p in &SQUARE[..3] {
+            vm.add_at(*p);
+        }
+        said.take();
+        storage.blocked(true);
+        assert!(!vm.close());
+        assert_eq!(said.take(), ["The area rules could not be saved in this browser."]);
+        assert_eq!(vm.draw_now(), Draw::Drawing(SQUARE[..3].to_vec()), "nothing drawn is lost");
+        assert!(vm.cancel());
+        assert_eq!(vm.find_now("r1").unwrap().ring, SQUARE.to_vec());
+        storage.blocked(false);
+        said.take();
+        draw_square(&vm);
+        assert_eq!(said.take().last().unwrap(), "The outline is closed. Choose its rule and name, then save it.", "a new area, not the redraw");
     }
 }
