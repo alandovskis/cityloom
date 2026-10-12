@@ -30,7 +30,7 @@ fn f1(n: f64) -> String {
     if r == 0.0 { "0".to_string() } else { format!("{r}") }
 }
 
-fn esc(s: &str) -> String {
+pub(crate) fn esc(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 

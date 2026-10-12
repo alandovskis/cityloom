@@ -118,7 +118,7 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
                 w.set_frame(out.frame);
                 out.markup
             }
-            DrawMode::Iso => iso_svg(&v, width, window).markup,
+            DrawMode::Iso => iso_svg(&v, &w.i18n(), width, window, units).markup,
         }
     };
     let label = move || match w.mode() {
