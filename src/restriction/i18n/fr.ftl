@@ -92,3 +92,20 @@ restriction-row-sub = { $rule } · { $summary }
 restriction-street-keeps = Respecte la règle.
 restriction-street-inside = À l’intérieur de la zone.
 restriction-legend-conflict = En conflit avec une règle de zone
+
+## L’onglet
+restriction-tab = Règles de zone
+restriction-heading = Règles sur une zone
+restriction-declare = Déclarer une zone
+restriction-drawing-help = Cliquez sur la carte pour placer chaque coin, puis cliquez sur le premier coin ou appuyez sur Terminer. Au clavier, déplacez la carte avec les flèches, appuyez sur Entrée sur celle-ci pour placer un coin en son centre, et sur Maj+Entrée pour terminer. Retour arrière retire le dernier coin; Échap annule.
+restriction-naming-help = Choisissez la règle qui s’applique dans la zone, et nommez-la si vous le souhaitez.
+restriction-finish = Terminer
+restriction-cancel = Annuler
+restriction-save = Enregistrer
+restriction-name-label = Nom
+restriction-rule-label = Règle
+restriction-speed-label = Limite de vitesse
+restriction-redraw = Retracer
+restriction-delete = Supprimer
+restriction-undo = Annuler la suppression
+restriction-streets-heading = Rues à l’intérieur

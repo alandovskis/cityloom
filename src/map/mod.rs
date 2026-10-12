@@ -4,6 +4,7 @@
 //! the places it hands the map, and the views around the map live here.
 
 pub mod areas;
+pub mod areas_view;
 pub mod camera;
 pub mod home;
 pub mod overlay;
@@ -64,6 +65,7 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     mount("checks", view! { <view::Checks vm=vm.clone()/> }.into_any());
     mount("changes-lead", view! { <view::ChangesLead vm=vm.clone()/> }.into_any());
     mount("changes", view! { <view::Changes vm=vm.clone()/> }.into_any());
+    mount("areas-slot", view! { <areas_view::Areas vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <view::TitleBlock vm=vm.clone()/><view::MapTitle vm=vm.clone()/> }.into_any());
     MapPage(vm, i18n)
 }

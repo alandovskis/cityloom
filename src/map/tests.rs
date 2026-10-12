@@ -492,3 +492,168 @@ fn map_html_has_one_h1_the_city_map() {
     assert_eq!(html.matches("<h1").count(), 1);
     assert!(html.contains(r#"<h1 id="h-drawing" class="sr-only" data-i18n="map-city-map">City map</h1>"#));
 }
+
+// ---- the Restrictions tab ------------------------------------------------------------------
+
+use crate::map::areas_view::Areas;
+use crate::restriction::fixtures::{bent_midpoint, bent_store, square};
+use crate::restriction::model::Rule;
+use crate::restriction::store::RestrictionStore;
+use crate::shared::ports::{FakeMapper, MapEvent, Ports};
+use crate::shared::testing::button_tag;
+
+/// Bendville's map, its tiles answered, with the areas kept in storage first.
+fn ready_areas_vm(locale: Locale, areas: &[(&str, Rule)]) -> Rc<MapVm> {
+    let (ports, _, storage) = test_ports();
+    let store = bent_store(storage.clone());
+    let (_, mid) = bent_midpoint(&store);
+    for (name, rule) in areas {
+        RestrictionStore::new(storage.clone()).add(name, *rule, square(mid, 0.0005)).unwrap();
+    }
+    let mapper = Rc::new(FakeMapper::default());
+    let vm = MapVm::new(Ports { mapper: mapper.clone(), ..ports }, crate::i18n_for(locale));
+    vm.attach();
+    mapper.say(MapEvent::Ready { bounds: [-74.0, 45.0, -73.0, 46.0] });
+    vm
+}
+
+fn areas_html(vm: &Rc<MapVm>) -> String {
+    map_html(|| view! { <Areas vm=vm.clone()/> })
+}
+
+/// Draws a triangle and closes it: the outline then waits for its rule and name.
+fn close_a_triangle(vm: &MapVm) {
+    assert!(vm.areas().start());
+    for p in [[-73.6, 45.5], [-73.59, 45.5], [-73.59, 45.51]] {
+        assert!(vm.areas().add_at(p));
+    }
+    assert!(vm.areas().close());
+}
+
+#[test]
+fn the_tab_with_no_area_says_how_to_begin_and_offers_to_declare_one() {
+    let vm = ready_areas_vm(Locale::En, &[]);
+    let h = areas_html(&vm);
+    assert!(h.contains("No area rules yet. Declare one to check the streets inside it."), "{h}");
+    assert!(h.contains("id=\"declare-area\"") && h.contains("Declare an area"), "{h}");
+    assert!(!button_tag(&h, "declare-area").contains("disabled"));
+    assert_eq!(count(&h, "<li"), 0);
+}
+
+#[test]
+fn declaring_is_disabled_until_there_is_a_map() {
+    let (vm, _) = map_vm(); // the sample city: its tiles never answer here
+    assert!(button_tag(&areas_html(&vm), "declare-area").contains("disabled"));
+}
+
+#[test]
+fn each_area_is_a_row_with_its_rule_and_streets_and_the_selected_one_opens_its_details() {
+    let vm = ready_areas_vm(Locale::En, &[("Car zone", Rule::CarFree)]);
+    let h = areas_html(&vm);
+    assert!(h.contains("Car zone") && h.contains("Car-free · One street inside; one conflicts with the rule."), "{h}");
+    assert!(h.contains("aria-pressed=\"false\"") && !h.contains("id=\"area-delete\""));
+    vm.areas().select(Some("r1"));
+    let h = areas_html(&vm);
+    assert!(h.contains("aria-pressed=\"true\""), "{h}");
+    for id in ["area-name", "area-rule", "area-redraw", "area-delete"] {
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}");
+    }
+    assert!(h.contains("Streets inside") && h.contains("href=\"street.html?street=1\"") && h.contains("It has 2 driving lanes."), "{h}");
+    assert!(!h.contains("id=\"area-speed\""), "no speed for a car-free area");
+    assert!(vm.areas().set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
+    assert!(areas_html(&vm).contains("id=\"area-speed\""));
+}
+
+#[test]
+fn while_drawing_the_tab_says_how_and_counts_the_corners_and_finish_needs_three() {
+    let vm = ready_areas_vm(Locale::En, &[]);
+    vm.areas().start();
+    vm.areas().add_at([-73.6, 45.5]);
+    let h = areas_html(&vm);
+    assert!(h.contains("Click the map to place each corner") && h.contains("1 corner"), "{h}");
+    assert!(button_tag(&h, "area-finish").contains("disabled"));
+    vm.areas().add_at([-73.59, 45.5]);
+    vm.areas().add_at([-73.59, 45.51]);
+    assert!(!button_tag(&areas_html(&vm), "area-finish").contains("disabled"));
+}
+
+#[test]
+fn a_closed_outline_asks_for_its_rule_and_name() {
+    let vm = ready_areas_vm(Locale::En, &[]);
+    close_a_triangle(&vm);
+    let h = areas_html(&vm);
+    assert!(
+        h.contains("id=\"area-rule\"") && h.contains("id=\"area-name\"") && h.contains("id=\"area-save\"") && h.contains("placeholder=\"Car-free\""),
+        "{h}"
+    );
+    assert_eq!(count(&h, "<option"), 4, "the four rules");
+}
+
+#[test]
+fn a_closed_outline_promises_no_key_on_the_map_only_its_cancel_button() {
+    // The map gives a closed outline no key (its rule and name are typed in the form), so Escape cannot cancel it.
+    for locale in [Locale::En, Locale::FrCa] {
+        let vm = ready_areas_vm(locale, &[]);
+        close_a_triangle(&vm);
+        let h = areas_html(&vm);
+        for key in ["Escape", "Échap", "Enter", "Entrée"] {
+            assert!(!h.contains(key), "{key} in {h}");
+        }
+        assert!(h.contains("id=\"area-cancel\""), "{h}");
+    }
+}
+
+#[test]
+fn while_an_area_is_redrawn_it_cannot_be_deleted() {
+    let vm = ready_areas_vm(Locale::En, &[("Car zone", Rule::CarFree)]);
+    vm.areas().select(Some("r1"));
+    assert!(vm.areas().start_redraw("r1"));
+    let h = areas_html(&vm);
+    assert!(!h.contains("id=\"area-delete\"") && !h.contains("id=\"declare-area\""), "{h}");
+    assert!(h.contains("id=\"area-finish\"") && h.contains("id=\"area-cancel\""), "{h}");
+}
+
+#[test]
+fn a_deleted_area_offers_undo() {
+    let vm = ready_areas_vm(Locale::En, &[("Car zone", Rule::CarFree)]);
+    vm.areas().delete("r1");
+    let h = areas_html(&vm);
+    assert!(h.contains("“Car zone” deleted.") && h.contains("id=\"area-undo\""), "{h}");
+}
+
+#[test]
+fn the_tab_speaks_french_with_no_english_left() {
+    let vm = ready_areas_vm(Locale::FrCa, &[("Zone A", Rule::CarFree)]);
+    vm.areas().select(Some("r1"));
+    let h = areas_html(&vm);
+    assert!(
+        h.contains("Zone sans voitures") && h.contains("Supprimer") && h.contains("Rues à l’intérieur") && h.contains("Elle a 2 voies de circulation."),
+        "{h}"
+    );
+    for english in ["Delete", "Redraw", "Streets inside", "Car-free", "driving lanes", "Declare an area"] {
+        assert!(!h.contains(english), "{english} in {h}");
+    }
+}
+
+#[test]
+fn the_drawing_and_the_naming_speak_french_with_no_english_left() {
+    let vm = ready_areas_vm(Locale::FrCa, &[]);
+    vm.areas().start();
+    vm.areas().add_at([-73.6, 45.5]);
+    let h = areas_html(&vm);
+    assert!(h.contains("Cliquez sur la carte") && h.contains("1 coin") && h.contains("Terminer") && h.contains("Annuler"), "{h}");
+    vm.areas().add_at([-73.59, 45.5]);
+    vm.areas().add_at([-73.59, 45.51]);
+    vm.areas().close();
+    let h = areas_html(&vm);
+    assert!(h.contains("Choisissez la règle") && h.contains("Enregistrer") && h.contains("placeholder=\"Zone sans voitures\""), "{h}");
+    for english in ["Click", "Finish", "Cancel", "Save", "Name", "Rule", "Car-free", "Speed limit"] {
+        assert!(!h.contains(&format!(">{english}")) && !h.contains(&format!("\"{english}")), "{english} in {h}");
+    }
+}
+
+#[test]
+fn map_html_has_the_area_rules_tab_and_its_panel() {
+    assert!(MAP_HTML.contains("id=\"t-areas\"") && MAP_HTML.contains("aria-controls=\"p-areas\"") && MAP_HTML.contains("data-i18n=\"restriction-tab\""));
+    assert!(MAP_HTML.contains("id=\"p-areas\"") && MAP_HTML.contains("id=\"areas-slot\""));
+}
