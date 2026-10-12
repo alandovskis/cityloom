@@ -2,13 +2,16 @@ import { expect, mapReady, openStreet, placesOnMap, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 // What a resident edits is kept in one document, `cityloom-edits`, under the OpenStreetMap-derived key of the
-// place (`w<way>~n<end>~n<end>` for a street), so an edit follows its street into any other area of the metro.
+// place (`w<way>~n<end>~n<end>` for a street, `w<way>~n<end>~x~<heading>` where the area's box cuts it, `n<node>`
+// for a junction), so an edit follows its place into another area that holds it.
 
 const DEFAULT_AREA = "45.5261,-73.5978";
 // about 100 m north of the default area: the two overlap almost entirely
 // a street well inside both areas (the streets are numbered from one corner of the first)
 const MIDDLE = 10;
 const NORTH_AREA = "area=45.5270,-73.5978&name=North";
+// 150 m east of the default area: what lies near its east edge is whole there, or cut elsewhere
+const EAST_AREA = "area=45.5261,-73.5959&name=East";
 
 const selectFirstPiece = async (page: Page) => {
   await page.locator("#wrap").focus();
@@ -28,8 +31,10 @@ const edits = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getIte
 
 /** Widens the first piece of a street and leaves the page, which keeps the edit. Says which street it
  *  was, and the width its piece has now. */
-const editStreet = async (page: Page, n = 0) => {
-  const href = await openStreet(page, n);
+const editStreet = async (page: Page, n: number | string = 0) => {
+  let href: string;
+  if (typeof n === "number") href = await openStreet(page, n);
+  else await page.goto("/" + (href = n));
   const title = ((await page.locator("#tb-street").textContent()) ?? "").trim();
   await selectFirstPiece(page);
   await page.keyboard.press("+");
@@ -44,12 +49,52 @@ const editStreet = async (page: Page, n = 0) => {
   return { href, title, after };
 };
 
+/** Every position the map has of each place, by its hot id (`s-<uid>`, `j-<uid>`), as [lon, lat]. */
+const placeShapes = async (page: Page): Promise<Record<string, number[][]>> => {
+  await placesOnMap(page);
+  return page.evaluate(() => {
+    const out: Record<string, number[][]> = {};
+    for (const f of (window as any).cityloomMap.querySourceFeatures("places")) {
+      const g = f.geometry;
+      const points =
+        g.type === "Point" ? [g.coordinates] : g.type === "LineString" ? g.coordinates : g.coordinates.flat();
+      (out[f.properties.hot] ??= []).push(...points);
+    }
+    return out;
+  });
+};
+
+/** How far apart two [lon, lat] positions are, in metres (near enough at this size). */
+const metres = (a: number[], b: number[]) =>
+  Math.hypot((a[0] - b[0]) * 111_320 * Math.cos((a[1] * Math.PI) / 180), (a[1] - b[1]) * 111_320);
+
+const href = (hot: string) =>
+  hot.startsWith("j-") ? `intersection.html?junction=${hot.slice(2)}` : `street.html?street=${hot.slice(2)}`;
+
+/** Of the places of `kind` (`s` or `j`), the one that reaches furthest east. */
+const eastmost = (shapes: Record<string, number[][]>, kind: string) =>
+  Object.entries(shapes)
+    .filter(([hot]) => hot.startsWith(kind + "-"))
+    .map(([hot, points]) => [hot, Math.max(...points.map((p) => p[0]))] as const)
+    .sort((a, b) => b[1] - a[1])[0][0];
+
+const switchTo = async (page: Page, query: string, name: string) => {
+  await page.evaluate((q) => localStorage.setItem("cityloom-area", q), query);
+  await page.goto("/map.html");
+  await expect(page.locator("#title-block")).toContainText(name);
+};
+
+const provenanceState = async (page: Page) => {
+  await page.locator("#t-provenance").click();
+  return (await page.locator("#tb-state").textContent())?.trim();
+};
+
 test("an edit is kept under the street's OSM key", async ({ page }) => {
   await editStreet(page);
   const doc = await edits(page);
   expect(doc.version).toBe(3);
   expect(Object.keys(doc.streets)).toHaveLength(1);
-  expect(Object.keys(doc.streets)[0]).toMatch(/^w\d+~n\d+~n\d+$/);
+  expect(Object.keys(doc.streets)[0]).toMatch(/^w\d+~n\d+~(n\d+|x~[nesw])$/);
   expect(Object.keys(doc.junctions)).toEqual([]);
   const keys = await page.evaluate(() => Object.keys(localStorage));
   expect(keys.filter((k) => k.startsWith("cityloom-city:"))).toEqual([]);
@@ -106,4 +151,62 @@ test("a profile that has only the old per-area save keeps its edits", async ({ p
   const doc = await edits(page);
   expect(Object.values<any>(doc.streets)).toEqual([record]);
   expect(await page.evaluate((k) => localStorage.getItem(k), key), "the old save is left as it was").toBe(legacy);
+});
+
+test("a junction near the edge of the area keeps its edit in an area shifted east", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/map.html");
+  const shapes = await placeShapes(page);
+  const hot = eastmost(shapes, "j");
+  const at = shapes[hot][0];
+  await page.goto("/" + href(hot));
+  expect(await provenanceState(page)).toBe("As imported");
+  await page.locator("#t-space").click();
+  await page.locator("#turns button.turn").first().click();
+  expect(await provenanceState(page)).toBe("Edited");
+  await page.goto("/map.html");
+  await mapReady(page);
+  expect(Object.keys((await edits(page)).junctions)).toHaveLength(1);
+
+  await switchTo(page, EAST_AREA, "East");
+  const there = Object.entries(await placeShapes(page)).filter(
+    ([h, points]) => h.startsWith("j-") && metres(points[0], at) < 3,
+  );
+  expect(there, "the junction is in the other area").toHaveLength(1);
+  await page.goto("/" + href(there[0][0]));
+  expect(await provenanceState(page), "and shows the edit made in the first").toBe("Edited");
+});
+
+test("a street cut by the edge of the area keeps its edit in an area shifted east", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto("/map.html");
+  const shapes = await placeShapes(page);
+  const hot = eastmost(shapes, "s");
+  const { title, after } = await editStreet(page, href(hot));
+  const keys = Object.keys((await edits(page)).streets);
+  expect(keys, "the street runs to the east edge, where the box cuts it").toEqual([
+    expect.stringMatching(/~x~[nesw]$/),
+  ]);
+
+  await switchTo(page, EAST_AREA, "East");
+  // the street here is made from the same way: it shares positions with the one edited
+  const near = Object.entries(await placeShapes(page)).filter(
+    ([h, points]) => h.startsWith("s-") && points.some((p) => shapes[hot].some((q) => metres(p, q) < 3)),
+  );
+  const seen: string[] = [];
+  let found: string | null = null;
+  for (const [h] of near) {
+    await page.goto("/" + href(h));
+    if (((await page.locator("#tb-street").textContent()) ?? "").trim() !== title) continue;
+    const width = await firstPieceWidth(page);
+    seen.push(width);
+    if (width === after && (await provenanceState(page)) === "Edited") {
+      found = h;
+      break;
+    }
+  }
+  expect(
+    found,
+    `the edited street is in the other area with its edit (${title}, edited to ${after}; saw ${seen})`,
+  ).not.toBeNull();
 });
