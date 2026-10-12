@@ -2,9 +2,13 @@
 //! DOM, no signals, no storage. The outline is in longitude and latitude, so it does not depend on which tile or
 //! area is loaded; the geometry is done in whole micro-degrees, where it is exact.
 
+use serde::{Deserialize, Serialize};
+
 use crate::city::model::EdgeView;
 use crate::city::projection::Projection;
-use crate::shared::said::Said;
+use crate::shared::catalogue::KINDS;
+use crate::shared::said::{Arg, Said};
+use crate::street::model::Street;
 
 /// A position on the earth: longitude, then latitude, in degrees (GeoJSON's order).
 pub type LonLat = [f64; 2];
@@ -132,6 +136,179 @@ pub fn inside(ring: &[LonLat], edges: &[EdgeView], projection: &Projection) -> V
     edges.iter().filter(|e| holds(ring, &e.shape_mm, projection)).map(|e| e.uid).collect()
 }
 
+/// The speeds a limit can be set to, in km/h, and the one a new limit starts at.
+pub const SPEEDS: [u8; 7] = [10, 20, 30, 40, 50, 60, 70];
+pub const DEFAULT_SPEED: u8 = 30;
+
+/// The traffic rule over an area.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Rule {
+    CarFree,
+    BusAndBikeOnly,
+    SpeedLimit { kmh: u8 },
+    NoParkingOrLoading,
+}
+
+impl Rule {
+    /// Every rule's id, in the order a choice lists them.
+    pub const IDS: [&'static str; 4] = ["car_free", "bus_and_bike_only", "speed_limit", "no_parking_or_loading"];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Rule::CarFree => Rule::IDS[0],
+            Rule::BusAndBikeOnly => Rule::IDS[1],
+            Rule::SpeedLimit { .. } => Rule::IDS[2],
+            Rule::NoParkingOrLoading => Rule::IDS[3],
+        }
+    }
+
+    /// The rule an id names; a speed limit is at `kmh`.
+    pub fn from_id(id: &str, kmh: u8) -> Option<Rule> {
+        match Rule::IDS.iter().position(|i| *i == id)? {
+            0 => Some(Rule::CarFree),
+            1 => Some(Rule::BusAndBikeOnly),
+            2 => Some(Rule::SpeedLimit { kmh }),
+            _ => Some(Rule::NoParkingOrLoading),
+        }
+    }
+
+    /// The rule's name.
+    pub fn said(self) -> Said {
+        match self {
+            Rule::CarFree => Said::new("restriction-rule-car-free"),
+            Rule::BusAndBikeOnly => Said::new("restriction-rule-bus-and-bike"),
+            Rule::SpeedLimit { kmh } => Said::new("restriction-rule-speed-limit").with("kmh", Arg::Num(kmh.into())),
+            Rule::NoParkingOrLoading => Said::new("restriction-rule-no-parking"),
+        }
+    }
+
+    /// The message that names the rule `id` among the choices, a speed limit without its speed.
+    pub fn choice_key(id: &str) -> &'static str {
+        match Rule::IDS.iter().position(|i| *i == id) {
+            Some(0) => "restriction-rule-car-free",
+            Some(1) => "restriction-rule-bus-and-bike",
+            Some(2) => "restriction-rule-speed-limit-choice",
+            _ => "restriction-rule-no-parking",
+        }
+    }
+
+    /// The catalogue kinds of piece the rule does not allow.
+    fn forbids(self) -> &'static [&'static str] {
+        match self {
+            Rule::CarFree => &["travel", "parking", "loading"],
+            Rule::BusAndBikeOnly => &["travel"],
+            Rule::NoParkingOrLoading => &["parking", "loading"],
+            Rule::SpeedLimit { .. } => &[],
+        }
+    }
+
+    /// Whether a street inside can only be listed under it, not checked: streets carry no speed.
+    pub fn informational(self) -> bool {
+        matches!(self, Rule::SpeedLimit { .. })
+    }
+}
+
+/// Pieces of one kind a street has that a rule does not allow.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Conflict {
+    /// The catalogue id of the kind.
+    pub kind: &'static str,
+    pub pieces: usize,
+}
+
+impl Conflict {
+    /// What the street has, as a sentence.
+    pub fn said(&self) -> Said {
+        let key = match self.kind {
+            "travel" => "restriction-conflict-travel",
+            "parking" => "restriction-conflict-parking",
+            _ => "restriction-conflict-loading",
+        };
+        Said::new(key).with("n", Arg::Num(self.pieces as i64))
+    }
+}
+
+/// What a street has that `rule` does not allow, a kind of piece at a time in the order the rule names them. A
+/// piece counts for a kind when it is that kind at any time of day.
+pub fn conflicts(rule: Rule, street: &Street) -> Vec<Conflict> {
+    rule.forbids()
+        .iter()
+        .filter_map(|&kind| {
+            let pieces =
+                street.segments.iter().filter(|s| std::iter::once(s.kind).chain(s.variants.iter().map(|v| v.kind)).any(|k| KINDS[k].id == kind)).count();
+            (pieces > 0).then_some(Conflict { kind, pieces })
+        })
+        .collect()
+}
+
+/// A rule over an outline, as the resident declared it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Restriction {
+    /// `r<n>`: the key the document keeps the record under, so not written inside it.
+    #[serde(skip)]
+    pub id: String,
+    /// The resident's own words, kept as typed.
+    pub name: String,
+    pub rule: Rule,
+    /// The outline's corners, not closed explicitly.
+    pub ring: Vec<LonLat>,
+}
+
+impl Restriction {
+    /// What it is called: its name, or the rule's name when it has none.
+    pub fn title(&self) -> Said {
+        if self.name.trim().is_empty() { self.rule.said() } else { Said::new("restriction-named").with("name", Arg::Text(self.name.clone())) }
+    }
+
+    /// Whether the street along `shape_mm` is inside it.
+    pub fn holds(&self, shape_mm: &[[i32; 2]], projection: &Projection) -> bool {
+        holds(&self.ring, shape_mm, projection)
+    }
+}
+
+/// The number in a restriction's id, `r12` is 12; None for an id of another shape.
+pub fn number_of(id: &str) -> Option<u32> {
+    id.strip_prefix('r')?.parse().ok()
+}
+
+/// How a street stands against one restriction it is inside.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Finding {
+    /// The restriction's title.
+    pub area: Said,
+    pub rule: Rule,
+    pub conflicts: Vec<Conflict>,
+}
+
+impl Finding {
+    pub fn of(area: &Restriction, street: &Street) -> Finding {
+        Finding { area: area.title(), rule: area.rule, conflicts: conflicts(area.rule, street) }
+    }
+
+    /// Whether the street keeps to the rule (a speed limit is always kept: it is only listed).
+    pub fn ok(&self) -> bool {
+        self.conflicts.is_empty()
+    }
+
+    pub fn label(&self) -> Said {
+        Said::new("restriction-check").with("area", Arg::Said(Box::new(self.area.clone())))
+    }
+
+    /// What it says, sentence by sentence: how the street stands, then each thing it has that the rule does not allow.
+    pub fn detail(&self) -> Vec<Said> {
+        let key = if self.rule.informational() {
+            "restriction-check-info"
+        } else if self.ok() {
+            "restriction-check-keeps"
+        } else {
+            "restriction-check-breaks"
+        };
+        let head = Said::new(key).with("rule", Arg::Said(Box::new(self.rule.said())));
+        std::iter::once(head).chain(self.conflicts.iter().map(Conflict::said)).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,5 +409,112 @@ mod tests {
         let start = p.lon_lat(v.edges[0].shape_mm[0][0], v.edges[0].shape_mm[0][1]);
         assert_eq!(inside(&square(start, 0.0002), &v.edges, &p), Vec::<u32>::new(), "an end inside is not the street inside");
         assert!(holds(&square(mid, 0.0005), &v.edges[0].shape_mm, &p));
+    }
+
+    use crate::shared::catalogue::{KINDS, Side, StreetClass, kind_index};
+    use crate::street::model::{Piece, Street, Window};
+
+    fn piece(id: &str) -> Piece {
+        let kind = kind_index(id).unwrap();
+        Piece { kind, width_mm: KINDS[kind].min_mm, direction: None, variants: Vec::new() }
+    }
+
+    fn street(ids: &[&str]) -> Street {
+        Street::imported(StreetClass::Local, Side::Right, &ids.iter().map(|id| piece(id)).collect::<Vec<_>>())
+    }
+
+    fn c(kind: &'static str, pieces: usize) -> Conflict {
+        Conflict { kind, pieces }
+    }
+
+    #[test]
+    fn car_free_allows_no_driving_parking_or_loading() {
+        let busy = street(&["sidewalk", "travel", "travel", "parking", "loading", "sidewalk"]);
+        assert_eq!(conflicts(Rule::CarFree, &busy), vec![c("travel", 2), c("parking", 1), c("loading", 1)]);
+        let calm = street(&["sidewalk", "bike", "bus", "planting", "sidewalk"]);
+        assert_eq!(conflicts(Rule::CarFree, &calm), vec![]);
+    }
+
+    #[test]
+    fn bus_and_bike_only_allows_no_driving_lane_and_leaves_parking_alone() {
+        let s = street(&["sidewalk", "travel", "bus", "bike", "parking"]);
+        assert_eq!(conflicts(Rule::BusAndBikeOnly, &s), vec![c("travel", 1)]);
+    }
+
+    #[test]
+    fn no_parking_or_loading_allows_neither() {
+        let s = street(&["sidewalk", "travel", "loading", "parking"]);
+        assert_eq!(conflicts(Rule::NoParkingOrLoading, &s), vec![c("parking", 1), c("loading", 1)]);
+    }
+
+    #[test]
+    fn a_speed_limit_checks_nothing_and_is_for_information() {
+        let s = street(&["travel", "travel"]);
+        let limit = Rule::SpeedLimit { kmh: 30 };
+        assert_eq!(conflicts(limit, &s), vec![]);
+        assert!(limit.informational() && !Rule::CarFree.informational());
+    }
+
+    #[test]
+    fn a_piece_counts_for_every_kind_it_takes_during_the_day() {
+        let parking = kind_index("parking").unwrap();
+        let travel = kind_index("travel").unwrap();
+        let rush = Piece { kind: parking, width_mm: 3000, direction: None, variants: vec![Window { kind: travel, from_min: 420, to_min: 540, days: None }] };
+        let s = Street::imported(StreetClass::Local, Side::Right, &[piece("sidewalk"), rush]);
+        assert_eq!(conflicts(Rule::CarFree, &s), vec![c("travel", 1), c("parking", 1)]);
+        assert_eq!(conflicts(Rule::BusAndBikeOnly, &s), vec![c("travel", 1)], "a driving lane at rush hour");
+    }
+
+    #[test]
+    fn the_rules_are_named_and_kept_by_id() {
+        assert_eq!(en(&Rule::CarFree.said()), "Car-free");
+        assert_eq!(en(&Rule::BusAndBikeOnly.said()), "Bus and bike only");
+        assert_eq!(en(&Rule::SpeedLimit { kmh: 30 }.said()), "Speed limit of 30 km/h");
+        assert_eq!(en(&Rule::NoParkingOrLoading.said()), "No parking or loading");
+        assert_eq!(fr(&Rule::CarFree.said()), "Zone sans voitures");
+        assert_eq!(fr(&Rule::SpeedLimit { kmh: 30 }.said()), "Limite de vitesse de 30\u{a0}km/h");
+        for id in Rule::IDS {
+            assert_eq!(Rule::from_id(id, 40).map(Rule::id), Some(id));
+        }
+        assert_eq!(Rule::from_id("speed_limit", 40), Some(Rule::SpeedLimit { kmh: 40 }));
+        assert_eq!(Rule::from_id("nonsense", 40), None);
+        assert_eq!(serde_json::to_string(&Rule::SpeedLimit { kmh: 30 }).unwrap(), r#"{"kind":"speed_limit","kmh":30}"#);
+        assert_eq!(serde_json::to_string(&Rule::CarFree).unwrap(), r#"{"kind":"car_free"}"#);
+    }
+
+    #[test]
+    fn a_conflict_is_a_whole_sentence_with_its_count() {
+        assert_eq!(en(&c("travel", 1).said()), "It has a driving lane.");
+        assert_eq!(en(&c("travel", 2).said()), "It has 2 driving lanes.");
+        assert_eq!(en(&c("loading", 1).said()), "It has a loading zone.");
+        assert_eq!(fr(&c("parking", 2).said()), "Elle a 2 voies de stationnement.");
+    }
+
+    #[test]
+    fn an_area_is_called_by_its_name_or_else_by_its_rule() {
+        let r = |name: &str| Restriction { id: "r1".into(), name: name.into(), rule: Rule::CarFree, ring: SQUARE.to_vec() };
+        assert_eq!(en(&r("Mile End").title()), "Mile End");
+        assert_eq!(en(&r("  ").title()), "Car-free");
+        assert_eq!(number_of("r12"), Some(12));
+        assert_eq!(number_of("x3"), None);
+        assert_eq!(number_of("r"), None);
+        assert!(!serde_json::to_string(&r("A")).unwrap().contains("\"id\""), "the id is the document's key, not in the record");
+    }
+
+    #[test]
+    fn a_street_s_finding_says_whether_it_keeps_to_the_rule_and_what_it_has() {
+        let area = Restriction { id: "r1".into(), name: "Test zone".into(), rule: Rule::CarFree, ring: SQUARE.to_vec() };
+        let f = Finding::of(&area, &street(&["sidewalk", "travel", "travel", "sidewalk"]));
+        assert!(!f.ok());
+        assert_eq!(en(&f.label()), "Area rule: Test zone");
+        assert_eq!(f.detail().iter().map(en).collect::<Vec<_>>(), ["Car-free: the street does not keep to it.", "It has 2 driving lanes."]);
+        assert_eq!(fr(&f.label()), "Règle de zone\u{a0}: Test zone");
+        let calm = Finding::of(&area, &street(&["sidewalk", "bike", "sidewalk"]));
+        assert!(calm.ok());
+        assert_eq!(calm.detail().iter().map(en).collect::<Vec<_>>(), ["Car-free: the street keeps to it."]);
+        let limit = Restriction { rule: Rule::SpeedLimit { kmh: 30 }, ..area };
+        let info = Finding::of(&limit, &street(&["travel"]));
+        assert!(info.ok());
+        assert_eq!(en(&info.detail()[0]), "Speed limit of 30 km/h: streets carry no speed, so this is for information only.");
     }
 }
