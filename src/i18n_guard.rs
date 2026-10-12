@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// The `.rs` files of `map`, `place`, `junction` and `city` that are not in `MIGRATED`, and why. Every other
+/// The `.rs` files of `map`, `place`, `junction`, `city` and `restriction` that are not in `MIGRATED`, and why. Every other
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
@@ -24,6 +24,8 @@ const LEFT_OUT: &[(&str, &str)] = &[
 
 const MIGRATED: &[(&str, &str)] = &[
     // Files are added here as their task completes.
+    ("src/restriction/mod.rs", include_str!("restriction/mod.rs")),
+    ("src/restriction/model.rs", include_str!("restriction/model.rs")),
     ("src/street/text.rs", include_str!("street/text.rs")),
     ("src/street/notes.rs", include_str!("street/notes.rs")),
     ("src/street/page.rs", include_str!("street/page.rs")),
@@ -537,7 +539,7 @@ fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
     let mut files = Vec::new();
-    for slice in ["map", "place", "junction", "city"] {
+    for slice in ["map", "place", "junction", "city", "restriction"] {
         rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
     }
     let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();

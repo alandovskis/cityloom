@@ -9,6 +9,7 @@ pub mod city;
 pub mod junction;
 pub mod map;
 pub mod place;
+pub mod restriction;
 pub mod shared;
 pub mod shell;
 pub mod street;
@@ -54,7 +55,8 @@ pub fn say(text: &str) {
 }
 
 /// Every slice's messages, in one place: a slice's `.ftl` files are registered here.
-const RESOURCES: &[shared::i18n::Resources] = &[shell::RESOURCES, street::RESOURCES, city::RESOURCES, map::RESOURCES, place::RESOURCES, junction::RESOURCES];
+const RESOURCES: &[shared::i18n::Resources] =
+    &[shell::RESOURCES, street::RESOURCES, city::RESOURCES, map::RESOURCES, place::RESOURCES, junction::RESOURCES, restriction::RESOURCES];
 
 /// The words of the app in `locale`.
 pub fn i18n_for(locale: shared::i18n::Locale) -> std::rc::Rc<shared::i18n::I18n> {
