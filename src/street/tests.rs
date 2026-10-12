@@ -142,7 +142,9 @@ fn in_2_5d_the_drawing_is_the_street_in_depth_with_no_handles_and_the_keys_still
     let s = street_in(ViewMode::Iso, Locale::En);
     let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
     // The keyboard still edits the street through the group around the drawing.
-    assert!(h.contains("id=\"wrap\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Street cross-section editor\""), "{h}");
+    // ...named for the view it shows, not as a cross-section.
+    assert!(h.contains("id=\"wrap\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Street editor, 2.5D view\""), "{h}");
+    assert!(!h.to_lowercase().contains("cross-section"), "{h}");
     assert!(h.contains("id=\"drawing\"") && h.contains("role=\"img\""));
     assert!(h.contains("aria-label=\"Sample Street 1 in 2.5D, along a 40 m stretch. 6 segments.\""), "{h}");
     assert_eq!(count(&h, "class=\"iso-top "), 6);
@@ -163,6 +165,23 @@ fn the_group_is_as_tall_as_the_taller_view_in_both_so_switching_does_not_make_th
         assert!(iso > section, "{iso} {section}");
         let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
         assert!(h.contains(&format!("min-height:{iso}px")), "{mode:?} {iso} {h}");
+    }
+}
+
+#[test]
+fn in_french_the_2_5d_group_is_named_for_the_2_5d() {
+    let s = street_in(ViewMode::Iso, Locale::FrCa);
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(h.contains("aria-label=\"Éditeur de la rue, vue 2,5D\"") && !h.contains("coupe"), "{h}");
+}
+
+#[test]
+fn the_drawing_s_heading_names_the_view_shown_in_each_language() {
+    for (locale, section, iso) in [(Locale::En, "Cross-section", "Street in 2.5D"), (Locale::FrCa, "Coupe transversale", "Rue en 2,5D")] {
+        let s = street_in(ViewMode::Section, locale);
+        assert_eq!(street_html(|| view! { <page::DrawingHeading vm=s.clone()/> }), section);
+        s.set_mode(ViewMode::Iso);
+        assert_eq!(street_html(|| view! { <page::DrawingHeading vm=s.clone()/> }), iso);
     }
 }
 

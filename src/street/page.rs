@@ -275,6 +275,19 @@ pub fn History(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
+/// The drawing's heading, for a screen reader: the view it shows.
+#[component]
+pub fn DrawingHeading(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    move || {
+        let key = match w.mode() {
+            ViewMode::Section => "st-cross-section",
+            ViewMode::Iso => "st-street-2-5d",
+        };
+        w.i18n().tr(key, &Args::new())
+    }
+}
+
 /// The two ways the drawing shows the street, the section and the 2.5D: a group of two buttons, the one
 /// shown pressed. `V` does the same anywhere on the page.
 #[component]

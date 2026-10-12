@@ -14,6 +14,7 @@ st-key-details-notes = details, notes
 st-key-undo = undo
 st-key-view = section, 2.5D
 st-cross-section = Cross-section
+st-street-2-5d = Street in 2.5D
 st-focus-hint = Arrows select. Shift+arrows reorder. + and − resize, with Shift for bigger steps. Enter edits the width.
 st-touch-cue = On a touch screen, swipe the street sideways to see all of it.
 st-space-heading = Where the width goes
@@ -145,6 +146,7 @@ welcome-dismiss = Got it
 
 # The drawing of the section (src/street/view.rs).
 view-section-label = Street cross-section editor
+view-iso-label = Street editor, 2.5D view
 # The view of the drawing, the section or the street in 2.5D (src/street/vm.rs, src/street/page.rs).
 view-shown-section = Showing the section
 view-shown-iso = Showing the street in 2.5D

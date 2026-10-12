@@ -306,7 +306,14 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
     };
 
     view! {
-        <div class="wrap views" id="wrap" tabindex="0" role="group" aria-label=move || w.i18n().tr("view-section-label", &Args::new()) aria-describedby="keys" node_ref=wrap on:keydown=keydown
+        <div class="wrap views" id="wrap" tabindex="0" role="group" aria-label=move || {
+                // The keys edit the street in either view; the group is named for the one shown.
+                let key = match w.mode() {
+                    ViewMode::Section => "view-section-label",
+                    ViewMode::Iso => "view-iso-label",
+                };
+                w.i18n().tr(key, &Args::new())
+            } aria-describedby="keys" node_ref=wrap on:keydown=keydown
             // As tall as the taller of the two views in either, so switching does not make the card jump; the
             // shorter is centred in it.
             style:min-height=move || format!("{}px", height().max(iso_height(&w.view(), width.get())))
