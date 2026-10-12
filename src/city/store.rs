@@ -159,7 +159,8 @@ impl CityStore {
         City::load_on(self.layout(), &self.edits())
     }
 
-    /// Takes `street` as street `edge`'s state, as the city as kept now allows, and keeps that one record. Says
+    /// Takes `street` as street `edge`'s state, as the city as kept now allows, and keeps that one record (in place
+    /// of the record the street took its edit from, where that was kept under another key). Says
     /// whether it was taken and kept (not where the street has no key or the document is a newer version's).
     pub fn write_street(&self, edge: u32, street: Street) -> bool {
         let mut city = self.open();
@@ -167,7 +168,12 @@ impl CityStore {
             return false;
         }
         let Some((key, record)) = city.street_record(edge) else { return false };
+        // the record the street took, under another key, is replaced: left, it would bring the older edit back
+        let took = city.took_street(edge).filter(|&k| k != key).map(str::to_string);
         self.upsert(|e| {
+            if let Some(old) = took {
+                e.streets.remove(&old);
+            }
             e.streets.insert(key, record);
         })
     }
@@ -179,7 +185,11 @@ impl CityStore {
             return false;
         }
         let Some((key, record)) = city.junction_record(node) else { return false };
+        let took = city.took_junction(node).filter(|&k| k != key).map(str::to_string);
         self.upsert(|e| {
+            if let Some(old) = took {
+                e.junctions.remove(&old);
+            }
             e.junctions.insert(key, record);
         })
     }
@@ -483,6 +493,54 @@ mod tests {
         assert!(area.write_street(street, s));
         assert_eq!(document(&storage).streets.keys().collect::<Vec<_>>(), ["w7~n1~x~e"], "the street leaves its one real end eastward");
         assert_eq!(area.open().view(0).edited, 1);
+    }
+
+    /// The first street of `store` with `mm` moved from its first piece to its second.
+    fn shifted_street(store: &CityStore, mm: i32) -> (u32, Street) {
+        let street = store.open().view(0).edges[0].uid;
+        let mut s = store.open().street_editor(street, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= mm;
+        s.segments[1].width_mm += mm;
+        (street, s)
+    }
+
+    #[test]
+    fn a_street_that_took_an_edit_kept_under_another_key_replaces_it_when_written_so_the_older_edit_does_not_come_back() {
+        let (ports, _, storage) = test_ports();
+        // area A cuts the road at its box; area B holds the whole road
+        let a = CityStore::for_area(ports.storage.clone(), Area::new("A", 1.0, 2.0));
+        let mut cut = tiny_network();
+        cut.nodes[1].osm_nodes.clear();
+        a.keep_network(&cut);
+        let b = CityStore::for_area(ports.storage, Area::new("B", 1.0, 3.0));
+        b.keep_network(&tiny_network());
+        let (street, first) = shifted_street(&a, 100);
+        assert!(a.write_street(street, first.clone()));
+        assert_eq!(b.open().street_editor(street, 0).unwrap().snapshot(), first, "B's street takes A's edit by the ways and nodes they share");
+        let (street, second) = shifted_street(&b, 300);
+        assert!(b.write_street(street, second.clone()));
+        assert_eq!(document(&storage).streets.keys().collect::<Vec<_>>(), ["w7~n1~n2"], "the record it took is replaced, not left beside it");
+        assert_eq!(a.open().street_editor(street, 0).unwrap().snapshot(), second, "and A shows the later edit");
+    }
+
+    #[test]
+    fn a_junction_that_took_an_edit_kept_under_another_key_replaces_it_when_written() {
+        let (ports, _, storage) = test_ports();
+        let store = CityStore::sample(ports.storage);
+        let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let mut j = store.open().junction_editor(node, 0).unwrap();
+        assert!(j.set_corner(j.current().arms[0].uid, 7_000));
+        assert!(store.write_junction(node, j.snapshot()));
+        // the same junction kept under a key of an older smallest node: it is found by the nodes it shares
+        let mut e = document(&storage);
+        let (key, record) = e.junctions.pop_first().unwrap();
+        e.junctions.insert("n1".into(), record);
+        storage.remember(EDITS_KEY, &e.to_json());
+        let mut j = store.open().junction_editor(node, 0).unwrap();
+        assert_eq!(j.current().arms[0].corner_mm, 7_000, "taken by overlap");
+        assert!(j.set_corner(j.current().arms[0].uid, 6_000));
+        assert!(store.write_junction(node, j.snapshot()));
+        assert_eq!(document(&storage).junctions.keys().collect::<Vec<_>>(), [&key]);
     }
 
     #[test]

@@ -275,6 +275,10 @@ pub struct City {
     street_keys: Vec<Option<String>>,
     /// The same for the junctions, by node index (None for a node that is not a junction).
     junction_keys: Vec<Option<String>>,
+    /// The key of the record each street (by uid) took its edit from, where it took one.
+    took_streets: BTreeMap<u32, String>,
+    /// The same for the junctions.
+    took_junctions: BTreeMap<u32, String>,
 }
 
 /// The keys, each kept only where no other place has it: a key two places share would bring back one place's
@@ -640,7 +644,17 @@ impl City {
         }
         let street_keys = alone(layout.edge_keys());
         let junction_keys = alone((0..layout.nodes.len()).map(|n| layout.nodes[n].junction.then(|| layout.node_key(n)).flatten()).collect());
-        City { layout, streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions, street_keys, junction_keys }
+        City {
+            layout,
+            streets: today_streets.clone(),
+            junctions: today_junctions.clone(),
+            today_streets,
+            today_junctions,
+            street_keys,
+            junction_keys,
+            took_streets: BTreeMap::new(),
+            took_junctions: BTreeMap::new(),
+        }
     }
 
     /// The hand-made city with `edits` applied. It is not part of the app.
@@ -673,6 +687,7 @@ impl City {
                 let today = &self.today_streets[&uid];
                 let (source, name) = (today.source.clone(), today.name.clone());
                 self.streets.insert(uid, Street { source, name, ..street.clone() });
+                self.took_streets.insert(uid, records[ri].0.clone());
             }
         }
     }
@@ -697,6 +712,7 @@ impl City {
                 let uid = node_uid(n);
                 let source = self.today_junctions[&uid].source.clone();
                 self.junctions.insert(uid, State { source, label: junction::earlier(), ..state });
+                self.took_junctions.insert(uid, records[ri].0.clone());
             }
         }
     }
@@ -814,6 +830,18 @@ impl City {
             arm.edge = 0;
         }
         Some((key, JunctionRecord { nodes: self.layout.junction_ids(n, None).nodes, state, arm_streets }))
+    }
+
+    /// The key of the record street `edge` took its edit from when the city was loaded, if it took one. When the
+    /// street is written under a key of its own that differs (the record was found by its ids), that record is
+    /// the one it replaces.
+    pub fn took_street(&self, edge: u32) -> Option<&str> {
+        self.took_streets.get(&edge).map(String::as_str)
+    }
+
+    /// The same for the junction at `node`.
+    pub fn took_junction(&self, node: u32) -> Option<&str> {
+        self.took_junctions.get(&node).map(String::as_str)
     }
 
     fn edge_index(&self, uid: u32) -> Option<usize> {
