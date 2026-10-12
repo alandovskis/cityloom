@@ -35,6 +35,7 @@ ui-language = Language
 ui-how = How this works
 ui-print = Print this sheet
 ui-help = Help
+ui-share = Share
 ui-keyboard = Keyboard
 ui-credits = Credits
 ui-version = Version { $version }

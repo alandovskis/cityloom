@@ -154,3 +154,26 @@ for (const p of PAGES) {
     });
   });
 }
+
+// Print is under Share on the two editors; the map page has neither.
+for (const p of PAGES.filter((p) => p.name !== "map")) {
+  test(`Print is under Share, not in the settings menu, on the ${p.name} page`, async ({ page }) => {
+    await p.open(page);
+    const share = page.locator("#share-menu");
+    const button = page.locator("#share-btn");
+    await expect(share).toBeHidden();
+    await expect(page.locator("#account-menu #print")).toHaveCount(0);
+    await button.click();
+    await expect(share).toBeVisible();
+    await expect(button).toHaveAttribute("aria-expanded", "true");
+    await expect(share.locator("#print")).toBeVisible();
+    // Only one of the menus is open: pressing the settings button closes Share.
+    await page.locator("#account-btn").click();
+    await expect(share).toBeHidden();
+    await expect(page.locator("#account-menu")).toBeVisible();
+    await page.locator("#account-btn").click();
+    await button.click();
+    await page.keyboard.press("Escape");
+    await expect(share).toBeHidden();
+  });
+}

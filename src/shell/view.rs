@@ -61,7 +61,9 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         bind_tabs(&vm);
     });
     if let Some(print) = by_id("print") {
-        listen(&print, "click", |_: MouseEvent| {
+        let v = vm.clone();
+        listen(&print, "click", move |_: MouseEvent| {
+            v.close_share();
             let _ = leptos::prelude::window().print();
         });
     }
@@ -213,12 +215,13 @@ fn bind_theme(vm: &Rc<ShellVm>, dark: Option<MediaQueryList>) {
     });
 }
 
-/// The settings and the help (the keyboard shortcuts) are two popovers that work alike.
+/// The settings, the help (the keyboard shortcuts) and the share menu are popovers that work alike.
 fn bind_menu(vm: &Rc<ShellVm>) {
     let account = bind_popover(&vm.settings(), "account-btn", "account-menu", "account-btn-label", "account-heading");
     let help = bind_popover(&vm.help(), "help-btn", "help-menu", "help-btn-label", "help-heading");
+    let share = bind_popover(&vm.share(), "share-btn", "share-menu", "share-btn-label", "share-heading");
     let popovers: Vec<(Element, Rc<PopoverViewModel>)> =
-        [(account, vm.settings()), (help, vm.help())].into_iter().filter_map(|(b, p)| b.map(|b| (b, p))).collect();
+        [(account, vm.settings()), (help, vm.help()), (share, vm.share())].into_iter().filter_map(|(b, p)| b.map(|b| (b, p))).collect();
     let v = vm.clone();
     listen(&document(), "keydown", move |e: KeyboardEvent| {
         if e.key() != "Escape" {
