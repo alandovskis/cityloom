@@ -415,6 +415,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("clock-slot", "the id of an element of the street page"),
     ("time-note", "the id of an element of the street page"),
     ("welcome-slot", "the id of an element of the street page"),
+    ("view-mode-slot", "the id of an element of the street page"),
     ("account-btn", "the id of an element every page shares"),
     ("account-menu", "the id of an element every page shares"),
     ("account-btn-label", "the id of an element every page shares"),

@@ -201,6 +201,12 @@
 .plan-drawing > .scroll {
   overflow: hidden;
 }
+/* The 2.5D is centred in the section's height (street/view.rs keeps it as the group's min-height). */
+.wrap:has(> #drawing.iso) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
 .wrap:focus-visible {
   outline: 2px solid var(--accent-line);
 }
@@ -903,6 +909,17 @@ svg pattern circle {
   stroke-width: 2.5;
   stroke-linejoin: round;
   pointer-events: none;
+}
+/* The drawing's head: the toggle between the section and the 2.5D, at the right. */
+.drawing-head {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 10px 0;
+}
+.view-mode {
+  margin: 0;
+  border: 0;
+  min-inline-size: 0;
 }
 #drawing .sel-line {
   fill: none;

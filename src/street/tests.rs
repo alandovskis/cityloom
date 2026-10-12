@@ -13,7 +13,7 @@ use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::{Units, group_thousands};
 use crate::street::keys::Action as StreetAction;
 use crate::street::model::Editor;
-use crate::street::vm::StreetVm;
+use crate::street::vm::{StreetVm, ViewMode};
 use crate::street::watch::SheetWatch;
 use crate::street::{inspector, notes, page, view};
 // ---- what the keys do on the street ---------------------------------------------------
@@ -128,6 +128,85 @@ fn the_section_follows_the_units_and_the_selection() {
     s.edit(|e| e.select(Some(u)));
     let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
     assert!(h.contains("Street width 59.1 ft") && count(&h, "class=\"sel-box\"") == 1);
+}
+
+fn street_in(mode: ViewMode, locale: Locale) -> Rc<StreetVm> {
+    let (ports, _, _) = crate::shared::ports::test_ports();
+    let s = StreetVm::new(ports, crate::i18n_for(locale), Editor::new(0), None);
+    s.set_mode(mode);
+    s
+}
+
+#[test]
+fn in_2_5d_the_drawing_is_the_street_in_depth_with_no_handles_and_the_keys_still_reach_it() {
+    let s = street_in(ViewMode::Iso, Locale::En);
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    // The keyboard still edits the street through the group around the drawing.
+    assert!(h.contains("id=\"wrap\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Street cross-section editor\""), "{h}");
+    assert!(h.contains("id=\"drawing\"") && h.contains("role=\"img\""));
+    assert!(h.contains("aria-label=\"Sample Street 1 in 2.5D, along a 40 m stretch. 6 segments.\""), "{h}");
+    assert_eq!(count(&h, "class=\"iso-top "), 6);
+    for none in ["data-role=\"handle\"", "data-role=\"edge\"", "class=\"seg\"", "class=\"sel-box\""] {
+        assert_eq!(count(&h, none), 0, "{none}");
+    }
+}
+
+#[test]
+fn in_2_5d_the_group_keeps_the_section_s_height_so_the_card_does_not_jump() {
+    use crate::street::svg::Geometry;
+    let s = street_in(ViewMode::Iso, Locale::En);
+    let section = Geometry::fit(1050.0, s.view().row_mm).rows.height;
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(h.contains(&format!("min-height:{section}px")), "{section} {h}");
+}
+
+#[test]
+fn in_the_section_the_drawing_is_unchanged() {
+    let s = street_in(ViewMode::Section, Locale::En);
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert_eq!(count(&h, "data-role=\"handle\""), 5);
+    assert_eq!(count(&h, "class=\"iso-top "), 0);
+}
+
+#[test]
+fn the_2_5d_drawing_follows_the_selection() {
+    let s = street_in(ViewMode::Iso, Locale::En);
+    let u = segment(&s, 2);
+    s.edit(|e| e.select(Some(u)));
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert_eq!(count(&h, "class=\"iso-sel\""), 1);
+}
+
+#[test]
+fn the_2_5d_drawing_follows_the_language_the_shell_switches() {
+    let s = street_in(ViewMode::Iso, Locale::En);
+    s.i18n().set(Locale::FrCa);
+    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    assert!(h.contains("<title>Trottoir</title>") && h.contains("en 2,5D, sur un tronçon de"), "{h}");
+    assert!(!h.contains("<title>Sidewalk</title>"), "{h}");
+}
+
+#[test]
+fn the_view_toggle_is_a_group_of_two_buttons_and_the_view_shown_is_pressed() {
+    let s = street_in(ViewMode::Section, Locale::En);
+    let h = street_html(|| view! { <page::ViewToggle vm=s.clone()/> });
+    assert!(h.contains("<fieldset") && h.contains("id=\"view-mode\""), "{h}");
+    assert!(h.contains(">Show the street as</legend>"), "{h}");
+    assert!(button_tag(&h, "view-section").contains("aria-pressed=\"true\""));
+    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"false\""));
+    assert!(button_tag(&h, "view-iso").contains("aria-keyshortcuts=\"V\""));
+    assert!(h.contains(">Section</button>") && h.contains(">2.5D</button>"), "{h}");
+    s.set_mode(ViewMode::Iso);
+    let h = street_html(|| view! { <page::ViewToggle vm=s.clone()/> });
+    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"true\""));
+    assert!(button_tag(&h, "view-section").contains("aria-pressed=\"false\""));
+}
+
+#[test]
+fn the_view_toggle_reads_coupe_and_2_5d_in_french() {
+    let s = street_in(ViewMode::Section, Locale::FrCa);
+    let h = street_html(|| view! { <page::ViewToggle vm=s.clone()/> });
+    assert!(h.contains(">Coupe</button>") && h.contains(">2,5D</button>") && h.contains(">Afficher la rue en</legend>"), "{h}");
 }
 
 #[test]

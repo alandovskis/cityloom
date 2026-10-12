@@ -15,7 +15,7 @@ use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
 use crate::street::model::{SegView, View};
 use crate::street::text::status_text;
-use crate::street::vm::StreetVm;
+use crate::street::vm::{StreetVm, ViewMode};
 use crate::street::watch::SheetWatch;
 
 // ---- what the page is made of --------------------------------------------------------
@@ -272,6 +272,25 @@ pub fn History(vm: Rc<StreetVm>) -> impl IntoView {
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></svg>
             <span class="lbl">{say(w, "history-reset")}</span>
         </button>
+    }
+}
+
+/// The two ways the drawing shows the street, the section and the 2.5D: a group of two buttons, the one
+/// shown pressed. `V` does the same anywhere on the page.
+#[component]
+pub fn ViewToggle(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    let pressed = move |mode: ViewMode| move || (w.mode() == mode).to_string();
+    view! {
+        <fieldset class="units view-mode" id="view-mode">
+            <legend class="sr-only">{say(w, "view-mode-label")}</legend>
+            <button type="button" class="unit" id="view-section" aria-pressed=pressed(ViewMode::Section) aria-keyshortcuts="V" on:click=move |_| w.set_mode(ViewMode::Section)>
+                {say(w, "view-mode-section")}
+            </button>
+            <button type="button" class="unit" id="view-iso" aria-pressed=pressed(ViewMode::Iso) aria-keyshortcuts="V" on:click=move |_| w.set_mode(ViewMode::Iso)>
+                {say(w, "view-mode-iso")}
+            </button>
+        </fieldset>
     }
 }
 
