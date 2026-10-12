@@ -90,6 +90,9 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | The drawing of the section | Change 2 | Variation 2 | As the column in the changes table; to confirm, see below. |
 | The drawing of the section | segment (a piece, in the label) | élément |  |
 | The drawing of the section | Piece marks (SW, TL…) | TO, VC, VR, ST, TP, ZC, AC, PC, PL, SV, VP, PO, AB, SA, BC, TE, LA | Two letters, one per kind (`kind-mark-<id>`), unique among themselves. |
+| The drawing of the section | Section / 2.5D (the view toggle) | Coupe / 2,5D | To confirm, see below. |
+| The drawing of the section | Show the street as (the toggle's legend) | Afficher la rue en |  |
+| The drawing of the section | Showing the street in 2.5D / Showing the section | Rue affichée en 2,5D / Coupe affichée | Announcements. |
 | Changes list and announcements | Add / Remove / Move / Resize | Ajout / Retrait / Déplacement / Redimensionnement | Nouns followed by ` : ` and the lowercase name of the kind, so no article (and no gender) is needed. |
 | Changes list and announcements | Parking surface: permeable paving | Stationnement, surface : revêtement perméable | The kind, then what changed. |
 | Changes list and announcements | Curb: none | Bordure : aucune |  |
@@ -303,3 +306,6 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Continuous sidewalk (junction) | `Trottoir continu` | `Trottoir traversant`, `Trottoir prolongé` (suggestion) |
 | Bike box (junction) | `Sas cyclable` | `Case avancée pour cyclistes`, `Boîte vélo` (suggestion) |
 | Protected corner / corner island (junction) | `Coin protégé`, `Îlot de coin` | `Intersection protégée`, `Îlot d’angle` (suggestion) |
+| Section (the view toggle) | `Coupe` | `Coupe transversale` (longer, as the page's heading) |
+| 2.5D (the view toggle) | `2,5D` | `2,5 D`, `Vue en 2,5D` (suggestion) |
+| Showing the street in 2.5D (announcement) | `Rue affichée en 2,5D` | `Affichage de la rue en 2,5D` (suggestion) |

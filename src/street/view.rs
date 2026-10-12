@@ -1,7 +1,8 @@
-//! The street's section, drawn by `street_svg`, and the pointer and keyboard
-//! input on it: pressing selects a piece, dragging a boundary or the far edge
-//! resizes, dragging a piece moves it, and the arrows, plus and minus, Enter and
-//! Delete do the same by key.
+//! The street's drawing: its section, drawn by `street_svg`, with the pointer and
+//! keyboard input on it, or the street in 2.5D, drawn by `iso_svg`, which is only
+//! looked at (the keys still edit the street). On the section, pressing selects a
+//! piece, dragging a boundary or the far edge resizes, dragging a piece moves it,
+//! and the arrows, plus and minus, Enter and Delete do the same by key.
 
 use std::rc::Rc;
 
@@ -10,9 +11,10 @@ use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
 use crate::shared::bind::current_element;
 use crate::shared::i18n::Args;
+use crate::street::iso::{iso_height, iso_label, iso_svg};
 use crate::street::keys::{self, Action};
 use crate::street::svg::{Geometry, Interaction, Moving, street_label, street_svg};
-use crate::street::vm::StreetVm;
+use crate::street::vm::{StreetVm, ViewMode};
 use crate::street::watch::SheetWatch;
 
 /// How far a pointer must move before a pressed piece is being moved.
@@ -85,7 +87,10 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
             version.track();
             width.track();
             interaction.track();
-            request_animation_frame(move || after_draw(fresh.get_value(), row_right.get_value()));
+            // The 2.5D has no cloud to bring into view: it is as wide as the group, no narrower than 600 px, and
+            // on a narrower screen it scrolls sideways as the section does (the cue says so).
+            let section = w.mode() == ViewMode::Section;
+            request_animation_frame(move || after_draw(section && fresh.get_value(), row_right.get_value()));
         });
         // Control or Command with Z or Y undoes and redoes, wherever the keyboard is.
         window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
@@ -125,6 +130,12 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
     };
     let size = move || Geometry::fit(width.get(), w.view().row_mm);
     let height = move || size().rows.height;
+    // The 2.5D, made only while it is shown, and again when the street, the width or the language changes:
+    // its names are asked with the tracked `tr`, so the memo follows a switch.
+    let iso = Memo::new(move |_| {
+        let (v, _) = w.now();
+        iso_svg(&v, &w.i18n(), width.get())
+    });
 
     let press = move |e: PointerEvent| {
         if e.pointer_type() == "mouse" && e.button() != 0 {
@@ -203,6 +214,29 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
         }
     };
 
+    // V switches the drawing between the section and the 2.5D, anywhere but in a field (`keys::switches_view`).
+    // A drag under way is finished first and kept: the section it is on goes, and with it the pointer's release,
+    // and what the drag has done is already on screen, so it becomes an edit that can be undone.
+    #[cfg(target_arch = "wasm32")]
+    window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
+        let key = e.key();
+        let press = keys::Press {
+            key: &key,
+            ctrl: e.ctrl_key(),
+            meta: e.meta_key(),
+            alt: e.alt_key(),
+            repeat: e.repeat(),
+            composing: e.is_composing(),
+            taken: e.default_prevented() || typing(&e),
+        };
+        if keys::switches_view(&press) {
+            e.prevent_default();
+            tapped.set_value(false);
+            finish(true);
+            w.toggle_mode();
+        }
+    });
+
     let keydown = move |e: KeyboardEvent| {
         if e.meta_key() || e.ctrl_key() || e.alt_key() {
             return;
@@ -219,8 +253,9 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
         }
     };
 
-    view! {
-        <div class="wrap" id="wrap" tabindex="0" role="group" aria-label=move || w.i18n().tr("view-section-label", &Args::new()) aria-describedby="keys" node_ref=wrap on:keydown=keydown>
+    // The section, with what the pointer does on it.
+    let section = move || {
+        view! {
             <svg
                 id="drawing"
                 xmlns="http://www.w3.org/2000/svg"
@@ -247,6 +282,47 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
                 on:pointercancel=move |_| finish(false)
                 inner_html=markup
             ></svg>
+        }
+    };
+    // The 2.5D: no handles and nothing for the pointer to do; the keys still edit the street.
+    let in_depth = move || {
+        view! {
+            <svg
+                id="drawing"
+                class="iso"
+                xmlns="http://www.w3.org/2000/svg"
+                role="img"
+                aria-label=move || {
+                    let (v, units) = w.now();
+                    let i18n = w.i18n();
+                    i18n.locale();
+                    iso_label(&v, &i18n, units)
+                }
+                width=move || iso.with(|s| s.width.to_string())
+                height=move || iso.with(|s| s.height.to_string())
+                viewBox=move || iso.with(|s| format!("0 0 {} {}", s.width, s.height))
+                inner_html=move || iso.with(|s| s.markup.clone())
+            ></svg>
+        }
+    };
+
+    view! {
+        <div class="wrap views" id="wrap" tabindex="0" role="group" aria-label=move || {
+                // The keys edit the street in either view; the group is named for the one shown.
+                let key = match w.mode() {
+                    ViewMode::Section => "view-section-label",
+                    ViewMode::Iso => "view-iso-label",
+                };
+                w.i18n().tr(key, &Args::new())
+            } aria-describedby="keys" node_ref=wrap on:keydown=keydown
+            // As tall as the taller of the two views in either, so switching does not make the card jump; the
+            // shorter is centred in it.
+            style:min-height=move || format!("{}px", height().max(iso_height(&w.view(), width.get())))
+        >
+            {move || match w.mode() {
+                ViewMode::Section => section().into_any(),
+                ViewMode::Iso => in_depth().into_any(),
+            }}
         </div>
     }
 }
@@ -301,11 +377,12 @@ fn show_inspector() {
     }
 }
 
+/// Typing in a field, or in text that can be edited: the page's keys are not for it.
 #[cfg(target_arch = "wasm32")]
 fn typing(e: &KeyboardEvent) -> bool {
-    e.target()
-        .and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok())
-        .is_some_and(|t| t.closest("input, select, textarea").ok().flatten().is_some())
+    let Some(t) = e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()) else { return false };
+    t.closest("input, select, textarea").ok().flatten().is_some()
+        || leptos::wasm_bindgen::JsCast::dyn_ref::<HtmlElement>(&t).is_some_and(|h| h.is_content_editable())
 }
 
 /// After the drawing is redrawn: bring a street that has just run over into

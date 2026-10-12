@@ -467,6 +467,13 @@ a.btn {
   color: var(--accent);
   box-shadow: var(--shadow-soft);
 }
+/* Forced colours drop the pressed button's background and shadow: an outline in the system's highlight marks it. */
+@media (forced-colors: active) {
+  .unit[aria-pressed="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}
 .menu-act {
   margin-top: 10px;
   padding-top: 12px;

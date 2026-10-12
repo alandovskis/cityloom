@@ -2,6 +2,7 @@
 //! model, view-model, words and views live together.
 
 pub mod inspector;
+pub mod iso;
 pub mod keys;
 pub mod measures;
 pub mod model;
@@ -71,6 +72,8 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
     mount("scroll", view! { <view::StreetDrawing vm=vm.clone()/> }.into_any());
+    mount("h-drawing", view! { <page::DrawingHeading vm=vm.clone()/> }.into_any());
+    mount("view-mode-slot", view! { <page::ViewToggle vm=vm.clone()/> }.into_any());
     mount("street", view! { <page::StreetHeader vm=vm.clone() ends=ends.clone()/> }.into_any());
     mount("title-block", view! { <page::TitleBlock vm=vm.clone()/> }.into_any());
     mount("fit-slot", view! { <page::Fit vm=vm.clone()/> }.into_any());

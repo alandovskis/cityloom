@@ -12,7 +12,9 @@ st-key-edit-width = edit width
 st-key-remove = remove
 st-key-details-notes = details, notes
 st-key-undo = undo
+st-key-view = section, 2.5D
 st-cross-section = Cross-section
+st-street-2-5d = Street in 2.5D
 st-focus-hint = Arrows select. Shift+arrows reorder. + and − resize, with Shift for bigger steps. Enter edits the width.
 st-touch-cue = On a touch screen, swipe the street sideways to see all of it.
 st-space-heading = Where the width goes
@@ -144,6 +146,13 @@ welcome-dismiss = Got it
 
 # The drawing of the section (src/street/view.rs).
 view-section-label = Street cross-section editor
+view-iso-label = Street editor, 2.5D view
+# The view of the drawing, the section or the street in 2.5D (src/street/vm.rs, src/street/page.rs).
+view-shown-section = Showing the section
+view-shown-iso = Showing the street in 2.5D
+view-mode-label = Show the street as
+view-mode-section = Section
+view-mode-iso = 2.5D
 
 # The Transit Priority Atlas measures, by lowercase code (src/shared/atlas.rs).
 atlas-a1-name = Transit Streets
@@ -270,6 +279,10 @@ svg-label = Cross-section of { $name }. { $count ->
         [one] { $count } segment
        *[other] { $count } segments
     }, { $total } of { $row }. { $fit }.
+svg-iso-label = { $name } in 2.5D, along a { $length } stretch. { $count ->
+        [one] { $count } segment
+       *[other] { $count } segments
+    }.
 
 # What the model says it did, put into words by `text::say` (src/street/model.rs): the list of changes and what is announced after an edit.
 rev-earlier = Earlier changes
