@@ -27,6 +27,10 @@ pub struct Restrictions {
     pub restrictions: BTreeMap<String, Restriction>,
     /// What could not be read, by id.
     unreadable: BTreeMap<String, Value>,
+    /// The record objects as they were read, so that a field this build does not know survives a change to it.
+    raw: BTreeMap<String, serde_json::Map<String, Value>>,
+    /// The document's own keys other than the three above, as read.
+    others: serde_json::Map<String, Value>,
 }
 
 impl Default for Restrictions {
@@ -38,18 +42,33 @@ impl Default for Restrictions {
 impl Restrictions {
     /// An empty document of the current version.
     pub fn new() -> Self {
-        Restrictions { version: VERSION, next_id: 1, restrictions: BTreeMap::new(), unreadable: BTreeMap::new() }
+        Restrictions {
+            version: VERSION,
+            next_id: 1,
+            restrictions: BTreeMap::new(),
+            unreadable: BTreeMap::new(),
+            raw: BTreeMap::new(),
+            others: serde_json::Map::new(),
+        }
     }
 
     pub fn to_json(&self) -> String {
         let mut records = serde_json::Map::new();
         for (id, r) in &self.restrictions {
-            records.insert(id.clone(), serde_json::to_value(r).expect("a restriction serialises"));
+            // The record's known fields over what it was read as: a field of a newer build stays.
+            let mut record = self.raw.get(id).cloned().unwrap_or_default();
+            let Value::Object(known) = serde_json::to_value(r).expect("a restriction serialises") else { unreachable!("a record is an object") };
+            record.extend(known);
+            records.insert(id.clone(), Value::Object(record));
         }
         for (id, raw) in &self.unreadable {
             records.insert(id.clone(), raw.clone());
         }
-        serde_json::json!({ "version": self.version, "next_id": self.next_id, "restrictions": records }).to_string()
+        let mut doc = self.others.clone();
+        doc.insert("version".into(), self.version.into());
+        doc.insert("next_id".into(), self.next_id.into());
+        doc.insert("restrictions".into(), Value::Object(records));
+        Value::Object(doc).to_string()
     }
 
     /// Every restriction with its id, in the order of their numbers (an id of another shape last).
@@ -66,13 +85,13 @@ impl Restrictions {
     /// The id the next restriction takes: the number after the largest ever issued or kept.
     pub fn next_id(&self) -> String {
         let kept = self.restrictions.keys().chain(self.unreadable.keys()).filter_map(|id| number_of(id)).max().unwrap_or(0);
-        format!("r{}", self.next_id.max(kept + 1))
+        format!("r{}", self.next_id.max(kept.saturating_add(1)))
     }
 
     /// Keeps `r` under its id, and never issues that number or a lower one again.
     fn insert(&mut self, r: Restriction) {
         if let Some(n) = number_of(&r.id) {
-            self.next_id = self.next_id.max(n + 1);
+            self.next_id = self.next_id.max(n.saturating_add(1));
         }
         self.restrictions.insert(r.id.clone(), r);
     }
@@ -94,19 +113,28 @@ pub fn parse(stored: Option<&str>) -> Document {
     let Some(raw) = stored.filter(|s| !s.trim().is_empty()) else { return Document::Empty };
     let damaged = || Document::Damaged(raw.to_string());
     let Ok(value) = serde_json::from_str::<Value>(raw) else { return damaged() };
-    if value["version"].as_u64().is_some_and(|v| v > u64::from(VERSION)) {
-        return Document::Future;
-    }
-    if value["version"].as_u64() != Some(u64::from(VERSION)) {
-        return damaged();
+    // A version that is a number of another kind than an integer, or a string, is some later build's.
+    match &value["version"] {
+        Value::Null => return damaged(),
+        Value::Number(n) if n.as_u64() == Some(u64::from(VERSION)) => {}
+        Value::Number(n) if n.as_u64() == Some(0) => return damaged(),
+        _ => return Document::Future,
     }
     let Some(records) = value["restrictions"].as_object() else { return damaged() };
     let mut doc = Restrictions::new();
     doc.next_id = value["next_id"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or(1);
+    for (key, kept) in value.as_object().into_iter().flatten() {
+        if !matches!(key.as_str(), "version" | "next_id" | "restrictions") {
+            doc.others.insert(key.clone(), kept.clone());
+        }
+    }
     for (id, record) in records {
         match serde_json::from_value::<Restriction>(record.clone()) {
             Ok(r) => {
                 doc.restrictions.insert(id.clone(), Restriction { id: id.clone(), ..r });
+                if let Value::Object(fields) = record {
+                    doc.raw.insert(id.clone(), fields.clone());
+                }
             }
             Err(_) => {
                 doc.unreadable.insert(id.clone(), record.clone());
@@ -174,6 +202,9 @@ impl RestrictionStore {
         }
         self.write(|doc| {
             let r = Restriction { id: doc.next_id(), name: name.to_string(), rule, ring };
+            if doc.holds(&r.id) {
+                return None;
+            }
             doc.insert(r.clone());
             Some(r)
         })
@@ -398,5 +429,68 @@ mod tests {
         storage.blocked(true);
         assert_eq!(s.add("A", Rule::CarFree, RING.to_vec()), None);
         assert!(s.all().is_empty());
+    }
+
+    const MIXED: &str = r#"{"version":1,"next_id":3,"zone":{"a":1},"restrictions":{"r1":{"name":"A","rule":{"kind":"car_free"},"ring":[[-73.6,45.52],[-73.59,45.52],[-73.59,45.53]],"schedule":"weekdays"},"r2":{"name":"B","rule":{"kind":"car_free"},"ring":[[-73.6,45.52],[-73.59,45.52],[-73.59,45.53]],"tag":[1,2]}}}"#;
+
+    fn mixed() -> (RestrictionStore, Rc<MemoryStorage>) {
+        let (s, storage) = store();
+        storage.remember(RESTRICTIONS_KEY, MIXED);
+        (s, storage)
+    }
+
+    fn kept(storage: &MemoryStorage) -> serde_json::Value {
+        serde_json::from_str(&storage.recall(RESTRICTIONS_KEY).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn what_this_build_does_not_know_survives_every_kind_of_write() {
+        let (s, storage) = mixed();
+        let start = kept(&storage);
+        // add: the other records and the top level are untouched
+        let c = s.add("C", Rule::CarFree, RING.to_vec()).unwrap();
+        let v = kept(&storage);
+        assert_eq!(
+            (&v["zone"], &v["restrictions"]["r1"]["schedule"], &v["restrictions"]["r2"]["tag"]),
+            (&start["zone"], &start["restrictions"]["r1"]["schedule"], &start["restrictions"]["r2"]["tag"])
+        );
+        // update: the changed record keeps its own unknown field, takes the new known ones
+        assert!(s.update("r1", |r| r.name = "A2".into()));
+        let v = kept(&storage);
+        assert_eq!((v["restrictions"]["r1"]["schedule"].as_str(), v["restrictions"]["r1"]["name"].as_str()), (Some("weekdays"), Some("A2")));
+        assert_eq!(v["restrictions"]["r2"], start["restrictions"]["r2"]);
+        assert_eq!(v["zone"], start["zone"]);
+        // remove
+        assert!(s.remove(&c.id));
+        assert!(s.remove("r2"));
+        let v = kept(&storage);
+        assert_eq!((v["restrictions"]["r1"]["schedule"].as_str(), &v["zone"]), (Some("weekdays"), &start["zone"]));
+        assert!(v["restrictions"].get("r2").is_none());
+        // restore
+        let back = s.restore(&Restriction { id: "r2".into(), name: "B".into(), rule: Rule::CarFree, ring: RING.to_vec() }).unwrap();
+        assert_eq!(back.id, "r2");
+        let v = kept(&storage);
+        assert_eq!((v["restrictions"]["r1"]["schedule"].as_str(), &v["zone"]), (Some("weekdays"), &start["zone"]));
+    }
+
+    #[test]
+    fn a_version_that_is_not_an_integer_is_a_newer_document_and_left_alone() {
+        for text in [r#"{"version":1.0,"restrictions":{}}"#, r#"{"version":"2","restrictions":{}}"#] {
+            let (s, storage) = store();
+            storage.remember(RESTRICTIONS_KEY, text);
+            assert!(s.is_future(), "{text}");
+            assert_eq!(s.add("A", Rule::CarFree, RING.to_vec()), None);
+            assert_eq!(storage.recall(RESTRICTIONS_KEY).as_deref(), Some(text));
+            assert_eq!(storage.recall(DAMAGED_KEY), None);
+        }
+    }
+
+    #[test]
+    fn the_largest_id_does_not_overflow() {
+        let (s, storage) = store();
+        storage.remember(RESTRICTIONS_KEY, &format!(r#"{{"version":1,"next_id":{max},"restrictions":{{"r{max}":{{"name":"x"}}}}}}"#, max = u32::MAX));
+        let before = storage.recall(RESTRICTIONS_KEY);
+        assert_eq!(s.add("A", Rule::CarFree, RING.to_vec()), None, "no id is left, and the one kept is not written over");
+        assert_eq!(storage.recall(RESTRICTIONS_KEY), before);
     }
 }
