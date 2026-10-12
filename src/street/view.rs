@@ -87,7 +87,8 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
             version.track();
             width.track();
             interaction.track();
-            // The 2.5D has no cloud to bring into view; it fits the width.
+            // The 2.5D has no cloud to bring into view: it is as wide as the group, no narrower than 600 px, and
+            // on a narrower screen it scrolls sideways as the section does (the cue says so).
             let section = w.mode() == ViewMode::Section;
             request_animation_frame(move || after_draw(section && fresh.get_value(), row_right.get_value()));
         });

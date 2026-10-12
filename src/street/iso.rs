@@ -28,7 +28,9 @@ pub const RECEDE_Y: f64 = 0.3;
 pub const MAX_HEIGHT: f64 = 560.0;
 /// Room round the scene, in pixels.
 const PAD: f64 = 30.0;
-/// The narrowest the drawing is laid out for: the section's group is no narrower.
+/// The narrowest the drawing is laid out for: the group around it is no narrower (`.wrap`'s `min-width` in
+/// `web/editor.css`). On a narrower screen, 400 px say, it does not fit: it scrolls sideways, as the section
+/// does (laid out at least 680 px wide, `Geometry::fit`).
 const MIN_WIDTH: f64 = 600.0;
 /// Room above the far end of the ground for what stands on the pieces. The tallest is a tree, 5 m on a
 /// planting strip drawn `RISE` times its height (5.45 m); the farthest crown ends 2.8 m short of the far
@@ -58,8 +60,9 @@ pub struct Projection {
 }
 
 impl Projection {
-    /// The projection for a drawing `width` wide showing a street `span_mm` wide: the scene fills
-    /// the width, unless that would make the drawing taller than `MAX_HEIGHT`; then it is centred.
+    /// The projection for a drawing `width` wide, or `MIN_WIDTH` when that is narrower, showing a street
+    /// `span_mm` wide: the scene fills that width, unless that would make the drawing taller than
+    /// `MAX_HEIGHT`; then it is centred.
     pub fn fit(width: f64, span_mm: i32) -> Projection {
         let width = width.max(MIN_WIDTH);
         let across = span_mm.max(1) as f64 + STRETCH_MM * RECEDE_X;
