@@ -135,25 +135,29 @@ fn points(p: &Projection, corners: &[(f64, f64, f64)]) -> String {
         .join(" ")
 }
 
-/// Which face of a strip a polygon is, with the kind whose tint a piece's face takes.
+/// Which face of a strip, or of a curb, a polygon is.
 #[derive(Clone, Copy)]
-enum Face<'a> {
-    Top(&'a str),
-    Front(&'a str),
-    Side(&'a str),
-    Curb,
+enum Face {
+    Top,
+    Front,
+    Side,
 }
 
-/// One face: a polygon in its tint, then the hatch `hatch` over it.
-fn face(out: &mut String, what: Face, hatch: &str, pts: &str) {
-    let (name, kind) = match what {
-        Face::Top(k) => ("top", Some(k)),
-        Face::Front(k) => ("front", Some(k)),
-        Face::Side(k) => ("side", Some(k)),
-        Face::Curb => ("curb", None),
+/// One face: a polygon in the tint of the piece of kind `kind`, or of a curb when there is none
+/// (marked with the face it is, so that the faces turned from the eye are shaded), then the hatch
+/// `hatch` over it.
+fn face(out: &mut String, what: Face, kind: Option<&str>, hatch: &str, pts: &str) {
+    let name = match what {
+        Face::Top => "top",
+        Face::Front => "front",
+        Face::Side => "side",
     };
-    let tint = kind.map(|k| format!(" k-{k}")).unwrap_or_default();
-    write!(out, "<polygon class=\"iso-{name}{tint}\" points=\"{pts}\"/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#{hatch})\"/>").unwrap();
+    match kind {
+        Some(k) => write!(out, "<polygon class=\"iso-{name} k-{k}\""),
+        None => write!(out, "<polygon class=\"iso-curb\" data-face=\"{name}\""),
+    }
+    .unwrap();
+    write!(out, " points=\"{pts}\"/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#{hatch})\"/>").unwrap();
 }
 
 /// How high the piece after `i` is drawn, or the ground when `i` is the last.
@@ -170,13 +174,13 @@ fn slab(out: &mut String, p: &Projection, v: &View, i: usize) {
     let (x0, x1, h, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, drawn_mm(height_mm(id)), STRETCH_MM);
     let hatch = format!("h-{id}");
     if h > 0.0 {
-        face(out, Face::Front(id), &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, h, 0.0), (x0, h, 0.0)]));
+        face(out, Face::Front, Some(id), &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, h, 0.0), (x0, h, 0.0)]));
         let low = beside(v, i);
         if low < h {
-            face(out, Face::Side(id), &hatch, &points(p, &[(x1, low, 0.0), (x1, low, l), (x1, h, l), (x1, h, 0.0)]));
+            face(out, Face::Side, Some(id), &hatch, &points(p, &[(x1, low, 0.0), (x1, low, l), (x1, h, l), (x1, h, 0.0)]));
         }
     }
-    face(out, Face::Top(id), &hatch, &points(p, &[(x0, h, 0.0), (x1, h, 0.0), (x1, h, l), (x0, h, l)]));
+    face(out, Face::Top, Some(id), &hatch, &points(p, &[(x0, h, 0.0), (x1, h, 0.0), (x1, h, l), (x0, h, l)]));
 }
 
 /// The curb of the piece at `i` along one edge (`right`). As high as the piece, it is a stripe on its
@@ -192,11 +196,11 @@ fn curb(out: &mut String, p: &Projection, v: &View, i: usize, right: bool) {
     let (x0, x1) = if right { (edge - cw, edge) } else { (s.x_mm as f64, s.x_mm as f64 + cw) };
     let hatch = format!("c-{c}");
     if top > h {
-        face(out, Face::Curb, &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, top, 0.0), (x0, top, 0.0)]));
+        face(out, Face::Front, None, &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, top, 0.0), (x0, top, 0.0)]));
         let low = if right { beside(v, i) } else { h };
-        face(out, Face::Curb, &hatch, &points(p, &[(x1, low, 0.0), (x1, low, l), (x1, top, l), (x1, top, 0.0)]));
+        face(out, Face::Side, None, &hatch, &points(p, &[(x1, low, 0.0), (x1, low, l), (x1, top, l), (x1, top, 0.0)]));
     }
-    face(out, Face::Curb, &hatch, &points(p, &[(x0, top, 0.0), (x1, top, 0.0), (x1, top, l), (x0, top, l)]));
+    face(out, Face::Top, None, &hatch, &points(p, &[(x0, top, 0.0), (x1, top, 0.0), (x1, top, l), (x0, top, l)]));
 }
 
 /// The street in 2.5D, drawn `width` wide: a stretch of `STRETCH_MM` seen obliquely, from the same
@@ -436,6 +440,17 @@ mod tests {
         let m = drawn(&e);
         assert_eq!(count(&m, "class=\"iso-curb\""), 2 + 2 * 3);
         assert!(!m.contains("NaN"));
+    }
+
+    #[test]
+    fn a_curb_s_faces_say_which_face_each_is_so_that_the_turned_ones_are_shaded() {
+        let mut e = Editor::new(0);
+        e.add(kind_index("bike").unwrap(), 2);
+        let m = drawn(&e);
+        // The sidewalks' two stripes are tops; the bike lane's two blocks have a top, a front and a side each.
+        assert_eq!(count(&m, "class=\"iso-curb\" data-face=\"top\""), 2 + 2);
+        assert_eq!(count(&m, "class=\"iso-curb\" data-face=\"front\""), 2);
+        assert_eq!(count(&m, "class=\"iso-curb\" data-face=\"side\""), 2);
     }
 
     #[test]

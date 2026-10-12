@@ -17,6 +17,8 @@
   /* The asphalt of a street in section: a little darker than the map's white road. */
   --k-travel: light-dark(#c3cbd3, #333c45);
   --k-parking: light-dark(#b4bdc7, #3d4750);
+  /* A curb in 2.5D: a concrete grey, darker than a sidewalk so that its stripe shows on one. */
+  --iso-curb: light-dark(#a3adb8, #6b7783);
   --panel-w: 300px;
   --notes-w: 340px;
   --rw: calc(var(--pad) + var(--notes-w));
@@ -850,8 +852,16 @@ svg pattern circle {
 .iso-side {
   filter: brightness(0.78);
 }
+/* A curb is a light tone, not ink, so that a curb block on a narrow bike lane does not
+   bury the lane; its turned faces are shaded like a piece's. */
 .iso-curb {
-  fill: var(--ink-3);
+  fill: var(--iso-curb);
+}
+.iso-curb[data-face="front"] {
+  filter: brightness(0.9);
+}
+.iso-curb[data-face="side"] {
+  filter: brightness(0.78);
 }
 .iso-piece:hover .iso-top {
   stroke-width: 2;
