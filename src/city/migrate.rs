@@ -163,7 +163,7 @@ mod tests {
         let record = e.junctions.values().next().expect("the junction is moved");
         assert_eq!(e.junctions.len(), 1);
         assert_eq!(record.arm_streets.len(), 3);
-        assert!(record.arm_streets.values().all(|k| k.starts_with('w')));
+        assert!(record.arm_streets.values().all(|s| s.key.as_ref().is_some_and(|k| k.starts_with('w')) && !s.ways.is_empty()));
     }
 
     #[test]

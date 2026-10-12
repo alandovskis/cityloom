@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::edits::{Edits, Ids, JunctionRecord, StreetRecord, assign};
+use super::edits::{ArmStreet, Edits, Ids, JunctionRecord, SAME_WAY_DEG, StreetRecord, assign, degrees_apart};
 use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
@@ -271,6 +271,20 @@ pub struct City {
     junctions: BTreeMap<u32, State>,
     today_streets: BTreeMap<u32, Street>,
     today_junctions: BTreeMap<u32, State>,
+    /// The key of each street, by edge index; None where it has none or another street has the same one.
+    street_keys: Vec<Option<String>>,
+    /// The same for the junctions, by node index (None for a node that is not a junction).
+    junction_keys: Vec<Option<String>>,
+}
+
+/// The keys, each kept only where no other place has it: a key two places share would bring back one place's
+/// edit on the other, or on neither, so such a place is not keyed (its edits are refused, not lost).
+fn alone(keys: Vec<Option<String>>) -> Vec<Option<String>> {
+    let mut count: BTreeMap<String, usize> = BTreeMap::new();
+    for k in keys.iter().flatten() {
+        *count.entry(k.clone()).or_default() += 1;
+    }
+    keys.into_iter().map(|k| k.filter(|k| count[k] == 1)).collect()
 }
 
 /// How long a line through these points is, in millimetres.
@@ -284,25 +298,56 @@ impl Layout {
         super::keys::junction_key(&self.nodes[node].source)
     }
 
-    /// The key of the street `edge`, from its ways and the nodes at its ends.
-    pub(super) fn edge_key(&self, edge: usize) -> Option<String> {
-        let e = &self.edges[edge];
-        super::keys::street_key(&e.section.source, &self.nodes[e.a].source, &self.nodes[e.b].source)
+    /// The way street `edge` leaves `node`, in degrees clockwise from north: along the first piece of its
+    /// centreline at least a metre long (all of it, where it is shorter). It is where the OpenStreetMap way leaves
+    /// the node, which no area's box changes.
+    pub(super) fn leaving_deg(&self, edge: usize, node: usize) -> f64 {
+        let mut shape = self.shape_of(edge);
+        if self.edges[edge].a != node {
+            shape.reverse();
+        }
+        let from = shape[0];
+        let far = |p: &&(i32, i32)| ((p.0 - from.0) as f64).hypot((p.1 - from.1) as f64) >= 1_000.0;
+        let to = shape.iter().skip(1).find(far).or(shape.last()).copied().unwrap_or(from);
+        // layout millimetres run east and south
+        ((to.0 - from.0) as f64).atan2(-(to.1 - from.1) as f64).to_degrees().rem_euclid(360.0)
     }
 
-    /// What identifies street `edge` when an edit is matched to it: its key, its ways and the nodes of both ends.
-    fn street_ids(&self, edge: usize) -> Ids {
+    /// The key of each street, from its ways, the nodes at its ends and, where an end is cut at the area's box or
+    /// another street of the same way joins the same two ends, the way it leaves its first end (`keys::street_key`).
+    pub(super) fn edge_keys(&self) -> Vec<Option<String>> {
+        let key = |e: usize, twinned: bool| {
+            let d = &self.edges[e];
+            let end = |n: usize| super::keys::End { source: &self.nodes[n].source, leaving_deg: self.leaving_deg(e, n) };
+            super::keys::street_key(&d.section.source, end(d.a), end(d.b), twinned)
+        };
+        let plain: Vec<Option<String>> = (0..self.edges.len()).map(|e| key(e, false)).collect();
+        let mut count: BTreeMap<&str, usize> = BTreeMap::new();
+        for k in plain.iter().flatten() {
+            *count.entry(k).or_default() += 1;
+        }
+        let twinned: Vec<bool> = plain.iter().map(|k| k.as_deref().is_some_and(|k| count[k] > 1)).collect();
+        (0..self.edges.len()).map(|e| if twinned[e] { key(e, true) } else { plain[e].clone() }).collect()
+    }
+
+    /// What identifies street `edge` when an edit is matched to it: its key, its ways, the nodes of both ends and
+    /// the way it leaves each end that is an OpenStreetMap node.
+    fn street_ids(&self, edge: usize, key: Option<String>) -> Ids {
         let e = &self.edges[edge];
         Ids {
-            key: self.edge_key(edge),
+            key,
             ways: super::keys::ids(&e.section.source),
             nodes: &super::keys::ids(&self.nodes[e.a].source) | &super::keys::ids(&self.nodes[e.b].source),
+            leaving: [e.a, e.b]
+                .into_iter()
+                .filter_map(|n| Some((self.nodes[n].source.iter().map(|r| r.id).min()?, self.leaving_deg(edge, n).round() as i32 % 360)))
+                .collect(),
         }
     }
 
     /// What identifies the junction at `node` when an edit is matched to it: its key and its nodes.
-    fn junction_ids(&self, node: usize) -> Ids {
-        Ids { key: self.node_key(node), ways: Default::default(), nodes: super::keys::ids(&self.nodes[node].source) }
+    fn junction_ids(&self, node: usize, key: Option<String>) -> Ids {
+        Ids { key, nodes: super::keys::ids(&self.nodes[node].source), ..Ids::default() }
     }
 
     /// How far, in metres, a place lies from the centre of the area box its network was cut to (a street is
@@ -593,7 +638,9 @@ impl City {
             forget_streets(&mut s);
             today_junctions.insert(node_uid(n), s);
         }
-        City { layout, streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions }
+        let street_keys = alone(layout.edge_keys());
+        let junction_keys = alone((0..layout.nodes.len()).map(|n| layout.nodes[n].junction.then(|| layout.node_key(n)).flatten()).collect());
+        City { layout, streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions, street_keys, junction_keys }
     }
 
     /// The hand-made city with `edits` applied. It is not part of the app.
@@ -613,7 +660,7 @@ impl City {
     }
 
     fn apply_streets(&mut self, edits: &Edits) {
-        let places: Vec<Ids> = (0..self.layout.edges.len()).map(|e| self.layout.street_ids(e)).collect();
+        let places: Vec<Ids> = (0..self.layout.edges.len()).map(|e| self.layout.street_ids(e, self.street_keys[e].clone())).collect();
         let records: Vec<(&String, &StreetRecord)> = edits.streets.iter().collect();
         let ids: Vec<Ids> = records.iter().map(|(k, r)| Ids::from_street_record(k, r)).collect();
         for (e, taken) in assign(&places, &ids).into_iter().enumerate() {
@@ -632,7 +679,7 @@ impl City {
 
     fn apply_junctions(&mut self, edits: &Edits) {
         let nodes: Vec<usize> = (0..self.layout.nodes.len()).filter(|&n| self.layout.nodes[n].junction).collect();
-        let places: Vec<Ids> = nodes.iter().map(|&n| self.layout.junction_ids(n)).collect();
+        let places: Vec<Ids> = nodes.iter().map(|&n| self.layout.junction_ids(n, self.junction_keys[n].clone())).collect();
         let records: Vec<(&String, &JunctionRecord)> = edits.junctions.iter().collect();
         let ids: Vec<Ids> = records.iter().map(|(k, r)| Ids::from_junction_record(k, r)).collect();
         for (i, taken) in assign(&places, &ids).into_iter().enumerate() {
@@ -640,17 +687,11 @@ impl City {
             let n = nodes[i];
             let record = records[ri].1;
             let mut state = record.state.clone();
-            // each arm goes back on the street, now where it stands in the city, that has the key it was kept with
+            // each arm goes back on the street at the junction it was kept with, now where it stands in the city
             let on_streets = state.arms.iter_mut().all(|arm| {
-                let Some(key) = record.arm_streets.get(&arm.uid) else { return false };
-                let mut found = (0..self.layout.edges.len()).filter(|&e| self.layout.edge_key(e).as_ref() == Some(key));
-                match (found.next(), found.next()) {
-                    (Some(e), None) => {
-                        arm.edge = e as u32 + 1;
-                        true
-                    }
-                    _ => false,
-                }
+                let Some(e) = record.arm_streets.get(&arm.uid).and_then(|street| self.arm_street(n, street)) else { return false };
+                arm.edge = e as u32 + 1;
+                true
             });
             if on_streets && self.layout.junction_fits(&state, n) {
                 let uid = node_uid(n);
@@ -724,26 +765,55 @@ impl City {
         serde_json::to_string(&saved).expect("the city serialises")
     }
 
-    /// The key and the record to keep for street `edge` as it now stands; None where the street has no key.
-    pub fn street_record(&self, edge: u32) -> Option<(String, StreetRecord)> {
-        let e = self.edge_index(edge)?;
-        let key = self.layout.edge_key(e)?;
-        let ids = self.layout.street_ids(e);
-        Some((key, StreetRecord { ways: ids.ways, nodes: ids.nodes, street: self.streets.get(&edge)?.clone() }))
+    /// Which of the streets at the junction at `node` is the one a record's arm names: the one with its key, or
+    /// failing that the only one made from one of its ways that leaves the junction the same way. None when no
+    /// street, or more than one, is.
+    fn arm_street(&self, node: usize, street: &ArmStreet) -> Option<usize> {
+        let at = self.layout.edges_at(node);
+        if let Some(key) = &street.key {
+            let mut exact = at.iter().copied().filter(|&e| self.street_keys[e].as_ref() == Some(key));
+            if let (Some(e), None) = (exact.next(), exact.next()) {
+                return Some(e);
+            }
+        }
+        let mut near = at.iter().copied().filter(|&e| {
+            !super::keys::ids(&self.layout.edges[e].section.source).is_disjoint(&street.ways)
+                && degrees_apart(self.layout.leaving_deg(e, node).round() as i32, street.leaving) < SAME_WAY_DEG
+        });
+        match (near.next(), near.next()) {
+            (Some(e), None) => Some(e),
+            _ => None,
+        }
     }
 
-    /// The key and the record to keep for the junction at `node` as it now stands; None where it has no key or
-    /// one of its arms' streets has none.
+    /// The key and the record to keep for street `edge` as it now stands; None where the street has no key, or one
+    /// another place shares, so that what is written is always what comes back.
+    pub fn street_record(&self, edge: u32) -> Option<(String, StreetRecord)> {
+        let e = self.edge_index(edge)?;
+        let key = self.street_keys[e].clone()?;
+        let ids = self.layout.street_ids(e, None);
+        Some((key, StreetRecord { ways: ids.ways, nodes: ids.nodes, leaving: ids.leaving, street: self.streets.get(&edge)?.clone() }))
+    }
+
+    /// The key and the record to keep for the junction at `node` as it now stands; None where it has no key of its
+    /// own, or an arm's street could not be found again from what the record says of it.
     pub fn junction_record(&self, node: u32) -> Option<(String, JunctionRecord)> {
         let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
-        let key = self.layout.node_key(n)?;
+        let key = self.junction_keys[n].clone()?;
         let mut state = self.junctions.get(&node)?.clone();
         let mut arm_streets = BTreeMap::new();
         for arm in &mut state.arms {
-            arm_streets.insert(arm.uid, self.layout.edge_key(self.edge_index(arm.edge)?)?);
+            let e = self.edge_index(arm.edge)?;
+            let ways = super::keys::ids(&self.layout.edges[e].section.source);
+            let street = ArmStreet { key: self.street_keys[e].clone(), ways, leaving: self.layout.leaving_deg(e, n).round() as i32 % 360 };
+            // the arm must find this street again, and no other, when the record is read
+            if self.arm_street(n, &street) != Some(e) {
+                return None;
+            }
+            arm_streets.insert(arm.uid, street);
             arm.edge = 0;
         }
-        Some((key, JunctionRecord { nodes: self.layout.junction_ids(n).nodes, state, arm_streets }))
+        Some((key, JunctionRecord { nodes: self.layout.junction_ids(n, None).nodes, state, arm_streets }))
     }
 
     fn edge_index(&self, uid: u32) -> Option<usize> {
@@ -1019,7 +1089,7 @@ mod tests {
     fn every_place_of_the_sample_city_has_a_key_and_no_two_places_share_one() {
         let layout = Layout::sample();
         let mut keys: Vec<Option<String>> = (0..layout.nodes.len()).filter(|&n| layout.nodes[n].junction).map(|n| layout.node_key(n)).collect();
-        keys.extend((0..layout.edges.len()).map(|e| layout.edge_key(e)));
+        keys.extend(layout.edge_keys());
         assert!(keys.iter().all(Option::is_some));
         let distinct: std::collections::BTreeSet<_> = keys.iter().collect();
         assert_eq!(distinct.len(), keys.len());
@@ -1318,10 +1388,8 @@ mod tests {
         assert!(junction_is_as_first_laid_out(&City::load(&edits)));
     }
 
-    #[test]
-    fn a_junction_arm_whose_street_key_names_two_streets_is_not_applied() {
-        let (edits, _) = edited_junction();
-        // a second street with the key of street 1, somewhere that is not the junction
+    /// The sample layout with a copy of street 1 somewhere that is not junction 1 (the same way and end nodes).
+    fn with_a_twin_of_street_1_elsewhere() -> Layout {
         let mut layout = Layout::sample();
         let (a, b) = (layout.edges[0].a, layout.edges[0].b);
         let copy = |n: &NodeDef| NodeDef { x_mm: n.x_mm, y_mm: n.y_mm, junction: false, control: 0, corner_mm: 0, source: n.source.clone() };
@@ -1333,9 +1401,87 @@ mod tests {
         let twin =
             EdgeDef { a: n - 2, b: n - 1, class: e.class, name: e.name.clone(), section: e.section.clone(), headings: e.headings, shape: e.shape.clone() };
         layout.edges.push(twin);
-        let last = layout.edges.len() - 1;
-        assert_eq!(layout.edge_key(0), layout.edge_key(last), "the twin has the same key");
-        assert!(junction_is_as_first_laid_out(&City::load_on(layout, &edits)));
+        layout
+    }
+
+    fn clone_layout(l: &Layout) -> Layout {
+        let node = |n: &NodeDef| NodeDef { source: n.source.clone(), ..*n };
+        let edge = |e: &EdgeDef| EdgeDef { name: e.name.clone(), section: e.section.clone(), shape: e.shape.clone(), ..*e };
+        Layout {
+            name: l.name.clone(),
+            side: l.side,
+            nodes: l.nodes.iter().map(node).collect(),
+            edges: l.edges.iter().map(edge).collect(),
+            origin_m: l.origin_m,
+        }
+    }
+
+    #[test]
+    fn two_streets_with_the_same_key_have_none_and_are_neither_written_nor_given_an_edit() {
+        let mut city = City::new();
+        assert!(city.keep_street(1, narrowed(&city, 1)));
+        let edits = edits_of(&city);
+        let layout = with_a_twin_of_street_1_elsewhere();
+        let keys = layout.edge_keys();
+        let last = keys.len() - 1;
+        assert_eq!(keys[0], keys[last], "the twin has the same key, the way it leaves its first end too");
+        let mut back = City::load_on(layout, &edits);
+        assert_eq!(back.streets[&1], back.today_streets[&1], "neither takes the edit by its key");
+        assert!(back.street_record(1).is_none() && back.street_record(last as u32 + 1).is_none(), "and neither can be written");
+        assert!(back.keep_street(1, narrowed(&back, 1)));
+        assert!(back.street_record(1).is_none(), "an edit that could not come back is refused, not lost");
+    }
+
+    #[test]
+    fn a_junction_arm_finds_its_street_among_those_at_the_junction_whatever_other_street_has_its_key() {
+        let (edits, _) = edited_junction();
+        assert!(!junction_is_as_first_laid_out(&City::load_on(with_a_twin_of_street_1_elsewhere(), &edits)));
+    }
+
+    #[test]
+    fn a_junction_arm_whose_street_key_changed_finds_its_street_by_its_way_and_the_way_it_leaves() {
+        // kept where the arm's street was `w2000~n1000~n1001`; here the box cuts it, so its key is another
+        let (edits, node) = edited_junction();
+        let mut layout = Layout::sample();
+        let far = layout.edges[0].a;
+        assert_ne!(far, node);
+        layout.nodes[far].source.clear();
+        assert!(layout.edge_keys()[0].as_deref().is_some_and(|k| k.contains("~x~")), "{:?}", layout.edge_keys()[0]);
+        assert!(!junction_is_as_first_laid_out(&City::load_on(layout, &edits)));
+    }
+
+    #[test]
+    fn a_junction_arm_without_a_key_is_found_by_its_way_and_bearing_and_not_on_a_street_that_leaves_another_way() {
+        let (mut edits, _) = edited_junction();
+        for record in edits.junctions.values_mut() {
+            for street in record.arm_streets.values_mut() {
+                street.key = None; // only the way and the bearing say which street it is
+            }
+        }
+        assert!(!junction_is_as_first_laid_out(&City::load(&edits)), "found again by way and bearing");
+        let mut turned = edits.clone();
+        for record in turned.junctions.values_mut() {
+            let street = record.arm_streets.values_mut().next().unwrap();
+            street.leaving = (street.leaving + 90) % 360;
+        }
+        assert!(junction_is_as_first_laid_out(&City::load(&turned)), "the street of the way leaves the junction another way");
+    }
+
+    #[test]
+    fn of_two_streets_of_one_way_at_a_junction_an_arm_takes_the_one_leaving_its_way_and_neither_if_both_do() {
+        let node = 1;
+        let mut layout = Layout::sample();
+        let at = layout.edges_at(node);
+        let way = layout.edges[at[0]].section.source.clone();
+        layout.edges[at[1]].section.source = way.clone(); // the way runs on through the junction
+        let leaving = layout.leaving_deg(at[0], node).round() as i32;
+        let street = ArmStreet { key: None, ways: super::super::keys::ids(&way), leaving };
+        assert_eq!(City::on(clone_layout(&layout)).arm_street(node, &street), Some(at[0]));
+        // the other street of the way now leaves the junction almost as the first does
+        let far = layout.other_end(at[1], node);
+        let near = &layout.nodes[layout.other_end(at[0], node)];
+        (layout.nodes[far].x_mm, layout.nodes[far].y_mm) = (near.x_mm + 1_000, near.y_mm - 5_000);
+        assert_eq!(City::on(layout).arm_street(node, &street), None);
     }
 
     #[test]
@@ -1344,9 +1490,11 @@ mod tests {
         let layout = Layout::sample();
         let at = layout.edges_at(node);
         let away = (0..layout.edges.len()).find(|e| !at.contains(e)).expect("a street that does not meet the junction");
-        let key = layout.edge_key(away).unwrap();
+        let key = layout.edge_keys()[away].clone();
+        let ways = super::super::keys::ids(&layout.edges[away].section.source);
         for record in edits.junctions.values_mut() {
-            *record.arm_streets.values_mut().next().unwrap() = key.clone();
+            let street = record.arm_streets.values_mut().next().unwrap();
+            (street.key, street.ways) = (key.clone(), ways.clone());
         }
         assert!(junction_is_as_first_laid_out(&City::load_on(layout, &edits)));
     }
@@ -1395,9 +1543,10 @@ mod tests {
         want.sort_unstable();
         assert_eq!(arms, want, "every arm is on a street that meets the junction");
         // and each arm is on the street it was on: the same key
-        let was: BTreeMap<u32, String> = edits.junctions.values().next().unwrap().arm_streets.clone();
+        let was: BTreeMap<u32, ArmStreet> = edits.junctions.values().next().unwrap().arm_streets.clone();
+        let keys = back.layout.edge_keys();
         for arm in &back.junctions[&uid].arms {
-            assert_eq!(back.layout.edge_key(arm.edge as usize - 1), was.get(&arm.uid).cloned());
+            assert_eq!(keys[arm.edge as usize - 1], was[&arm.uid].key);
         }
     }
 
@@ -1409,8 +1558,9 @@ mod tests {
         assert!(city.keep_junction(node_uid(1), state));
         let mut edits = edits_of(&city);
         for record in edits.junctions.values_mut() {
-            if let Some(key) = record.arm_streets.values_mut().next() {
-                *key = "w1~n1~n2".to_string(); // a street the city does not have
+            if let Some(street) = record.arm_streets.values_mut().next() {
+                // a street the city does not have
+                (street.key, street.ways) = (Some("w1~n1~n2".to_string()), [1].into());
             }
         }
         let back = City::load(&edits);

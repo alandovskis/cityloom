@@ -22,17 +22,30 @@ pub struct StreetRecord {
     pub ways: BTreeSet<i64>,
     /// The OpenStreetMap nodes of both its end junctions.
     pub nodes: BTreeSet<i64>,
+    /// For each end that is an OpenStreetMap node, by that end's key node (its smallest), the way the street
+    /// leaves it in whole degrees clockwise from north: which piece of a way the edit was made on.
+    pub leaving: BTreeMap<i64, i32>,
     pub street: Street,
 }
 
-/// An edited junction: the nodes it was made from, its state (each arm's `edge` stored as 0) and the key of the
-/// street at each arm.
+/// The street at an arm of a junction, as the record names it: its key where it has one, the ways it was made
+/// from and the way it leaves the junction (whole degrees clockwise from north), so that the arm finds its street
+/// again among those at the junction when the street's key changes (it is cut by another area's box, say).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ArmStreet {
+    pub key: Option<String>,
+    pub ways: BTreeSet<i64>,
+    pub leaving: i32,
+}
+
+/// An edited junction: the nodes it was made from, its state (each arm's `edge` stored as 0) and the street at
+/// each arm.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct JunctionRecord {
     pub nodes: BTreeSet<i64>,
     pub state: State,
-    /// Arm uid to the key of the street it carries.
-    pub arm_streets: BTreeMap<u32, String>,
+    /// Arm uid to the street it carries.
+    pub arm_streets: BTreeMap<u32, ArmStreet>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -77,22 +90,39 @@ pub fn parse(stored: Option<&str>) -> Document {
     }
 }
 
-/// What identifies a place, or a stored record, when they are matched: its key and the OpenStreetMap ids it was
-/// made from (a junction has no `ways`).
+/// What identifies a place, or a stored record, when they are matched: its key, the OpenStreetMap ids it was
+/// made from (a junction has no `ways`) and, for a street, the way it leaves each end that is an OpenStreetMap
+/// node (as `StreetRecord::leaving`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Ids {
     pub key: Option<String>,
     pub ways: BTreeSet<i64>,
     pub nodes: BTreeSet<i64>,
+    pub leaving: BTreeMap<i64, i32>,
 }
+
+/// How far apart two bearings are, in degrees (0 to 180).
+pub fn degrees_apart(a: i32, b: i32) -> i32 {
+    let d = (a - b).rem_euclid(360);
+    d.min(360 - d)
+}
+
+/// Two streets that leave a shared end less than this many degrees apart leave it the same way.
+pub const SAME_WAY_DEG: i32 = 45;
 
 impl Ids {
     pub fn from_street_record(key: &str, r: &StreetRecord) -> Ids {
-        Ids { key: Some(key.to_string()), ways: r.ways.clone(), nodes: r.nodes.clone() }
+        Ids { key: Some(key.to_string()), ways: r.ways.clone(), nodes: r.nodes.clone(), leaving: r.leaving.clone() }
     }
 
     pub fn from_junction_record(key: &str, r: &JunctionRecord) -> Ids {
-        Ids { key: Some(key.to_string()), ways: BTreeSet::new(), nodes: r.nodes.clone() }
+        Ids { key: Some(key.to_string()), ways: BTreeSet::new(), nodes: r.nodes.clone(), leaving: BTreeMap::new() }
+    }
+
+    /// Whether a place and a record leave an end they share the same way: of the pieces of a way that meet at a
+    /// junction, the one the edit was made on.
+    fn same_way(&self, other: &Ids) -> bool {
+        self.leaving.iter().any(|(node, &deg)| other.leaving.get(node).is_some_and(|&o| degrees_apart(deg, o) < SAME_WAY_DEG))
     }
 
     /// How much a place and a record have in common. A street (it has ways) needs a shared way and a shared end.
@@ -107,12 +137,15 @@ impl Ids {
 }
 
 /// For each place, the index of the record it takes. An exact key wins; otherwise the record with the largest
-/// overlap, if that is unique. A record wanted by several places goes to the one with the larger score; a tie
-/// gives it to nobody.
+/// overlap, and of two that overlap as much, the one that leaves a shared end the same way, if that is unique. A
+/// record wanted by several places goes to the one with the larger score; a tie gives it to nobody.
 pub fn assign(places: &[Ids], records: &[Ids]) -> Vec<Option<usize>> {
     // An exact key outranks any overlap; places sharing a key are told apart by their overlap.
-    let score = |p: &Ids, r: &Ids| (p.key.is_some() && p.key == r.key, p.overlap(r));
-    let none = (false, 0);
+    let score = |p: &Ids, r: &Ids| {
+        let overlap = p.overlap(r);
+        (p.key.is_some() && p.key == r.key, overlap, overlap > 0 && p.same_way(r))
+    };
+    let none = (false, 0, false);
     let mut want: Vec<Option<usize>> = places
         .iter()
         .map(|p| {
@@ -157,7 +190,12 @@ mod tests {
         let mut e = Edits::new();
         e.streets.insert(
             "w1~n2~n3".into(),
-            StreetRecord { ways: [1].into(), nodes: [2, 3].into(), street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right) },
+            StreetRecord {
+                ways: [1].into(),
+                nodes: [2, 3].into(),
+                leaving: [(2, 90)].into(),
+                street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right),
+            },
         );
         let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
         assert_eq!(back, e);
@@ -177,7 +215,36 @@ mod tests {
     }
 
     fn ids(key: Option<&str>, ways: &[i64], nodes: &[i64]) -> Ids {
-        Ids { key: key.map(str::to_string), ways: ways.iter().copied().collect(), nodes: nodes.iter().copied().collect() }
+        Ids { key: key.map(str::to_string), ways: ways.iter().copied().collect(), nodes: nodes.iter().copied().collect(), leaving: BTreeMap::new() }
+    }
+
+    fn leaving(mut ids: Ids, node: i64, deg: i32) -> Ids {
+        ids.leaving.insert(node, deg);
+        ids
+    }
+
+    #[test]
+    fn of_two_pieces_of_a_way_that_overlap_a_record_as_much_the_one_leaving_the_shared_end_the_same_way_takes_it() {
+        // kept in an area where the street ran east from n2 to n3; here the box cuts the way on both sides of n2
+        let record = [leaving(ids(Some("w7~n2~n3"), &[7], &[2, 3]), 2, 88)];
+        let east = leaving(ids(Some("w7~n2~x~e"), &[7], &[2]), 2, 91);
+        let west = leaving(ids(Some("w7~n2~x~w"), &[7], &[2]), 2, 271);
+        assert_eq!(assign(&[west.clone(), east.clone()], &record), [None, Some(0)]);
+        let unknown = [ids(Some("w7~n2~n3"), &[7], &[2, 3])];
+        assert_eq!(assign(&[west, east], &unknown), [None, None], "nothing says which way it left: nobody's");
+    }
+
+    #[test]
+    fn the_halves_of_a_way_split_in_the_middle_both_leave_their_ends_the_same_way_and_are_nobodys() {
+        let record = [leaving(leaving(ids(Some("w7~n1~n2"), &[7], &[1, 2]), 1, 90), 2, 270)];
+        let first = leaving(ids(Some("w7~n1~n5"), &[7], &[1, 5]), 1, 90);
+        let second = leaving(ids(Some("w7~n2~n5"), &[7], &[2, 5]), 2, 270);
+        assert_eq!(assign(&[first, second], &record), [None, None]);
+    }
+
+    #[test]
+    fn bearings_are_apart_by_the_shorter_way_round() {
+        assert_eq!((degrees_apart(10, 350), degrees_apart(350, 10), degrees_apart(0, 180), degrees_apart(90, 90)), (20, 20, 180, 0));
     }
 
     #[test]
@@ -235,9 +302,13 @@ mod tests {
 
     #[test]
     fn a_record_read_from_the_store_carries_its_key_and_ids() {
-        let street =
-            StreetRecord { ways: [7].into(), nodes: [1, 2].into(), street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right) };
-        assert_eq!(Ids::from_street_record("w7~n1~n2", &street), ids(Some("w7~n1~n2"), &[7], &[1, 2]));
+        let street = StreetRecord {
+            ways: [7].into(),
+            nodes: [1, 2].into(),
+            leaving: [(1, 90)].into(),
+            street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right),
+        };
+        assert_eq!(Ids::from_street_record("w7~n1~n2", &street), leaving(ids(Some("w7~n1~n2"), &[7], &[1, 2]), 1, 90));
         let junction = JunctionRecord {
             nodes: [4, 5].into(),
             state: State {

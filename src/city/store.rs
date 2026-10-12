@@ -300,7 +300,7 @@ mod tests {
     fn a_record_that_matches_no_place_survives_a_write_of_another_place() {
         let (store, storage) = store();
         let mut stranger = Edits::new();
-        let record = StreetRecord { ways: [77].into(), nodes: [1, 2].into(), street: narrowed(&store, 3) };
+        let record = StreetRecord { ways: [77].into(), nodes: [1, 2].into(), leaving: [(1, 90)].into(), street: narrowed(&store, 3) };
         stranger.streets.insert("w77~n1~n2".into(), record.clone());
         storage.remember(EDITS_KEY, &stranger.to_json());
         assert!(store.write_street(1, narrowed(&store, 1)));
@@ -313,8 +313,12 @@ mod tests {
         let area = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
         area.keep_network(&tiny_network());
         let mut elsewhere = Edits::new();
-        let record =
-            StreetRecord { ways: [500].into(), nodes: [8, 9].into(), street: CityStore::sample(ports.storage).open().street_editor(1, 0).unwrap().snapshot() };
+        let record = StreetRecord {
+            ways: [500].into(),
+            nodes: [8, 9].into(),
+            leaving: [(8, 90)].into(),
+            street: CityStore::sample(ports.storage).open().street_editor(1, 0).unwrap().snapshot(),
+        };
         elsewhere.streets.insert("w500~n8~n9".into(), record.clone());
         storage.remember(EDITS_KEY, &elsewhere.to_json());
         let street = area.open().view(0).edges[0].uid;
@@ -477,8 +481,26 @@ mod tests {
         s.segments[0].width_mm -= 100;
         s.segments[1].width_mm += 100;
         assert!(area.write_street(street, s));
-        assert_eq!(document(&storage).streets.keys().collect::<Vec<_>>(), ["w7~n1~x"]);
+        assert_eq!(document(&storage).streets.keys().collect::<Vec<_>>(), ["w7~n1~x~e"], "the street leaves its one real end eastward");
         assert_eq!(area.open().view(0).edited, 1);
+    }
+
+    #[test]
+    fn a_street_whose_key_another_street_shares_is_not_written_and_the_write_says_so() {
+        let (ports, _, storage) = test_ports();
+        let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
+        let mut network = tiny_network();
+        // a second road of the same way between the same two nodes, along the same line: nothing tells them apart
+        let mut twin = network.roads[0].clone();
+        twin.id = 2;
+        network.roads.push(twin);
+        area.keep_network(&network);
+        let street = area.open().view(0).edges[0].uid;
+        let mut s = area.open().street_editor(street, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(!area.write_street(street, s), "an edit that could not come back is refused");
+        assert!(document(&storage).streets.is_empty());
     }
 
     #[test]
