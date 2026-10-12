@@ -1930,6 +1930,11 @@ dl.prov dd:last-child {
   .drawing > .scroll {
     overflow-x: auto;
   }
+  /* The Notes' edge tab stands at the window's right edge here, fixed half-way down: the toggle keeps clear of it
+     across, as it scrolls past. */
+  .view-mode-tools {
+    margin-inline-end: var(--tab-w);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

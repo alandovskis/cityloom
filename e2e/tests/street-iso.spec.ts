@@ -74,3 +74,16 @@ test.describe("the street in 2.5D", () => {
     await expect(live(page)).toHaveText("Rue affichée en 2,5D");
   });
 });
+
+test("at 400 px the Notes edge tab leaves the toggle clear, wherever the page is scrolled", async ({ page }) => {
+  // A short window puts the tab, half-way down it, level with the toggle when the page is at the top.
+  await page.setViewportSize({ width: 400, height: 700 });
+  await openStreet(page);
+  await expect(iso(page)).toBeVisible();
+  const tab = (await page.locator(".edge-tab.right").boundingBox())!;
+  for (const id of ["#view-section", "#view-iso"]) {
+    const b = (await page.locator(id).boundingBox())!;
+    // The tab is fixed and the toggle scrolls past it, so only across can they meet.
+    expect(b.x + b.width, id).toBeLessThanOrEqual(tab.x);
+  }
+});
