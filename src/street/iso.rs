@@ -169,7 +169,7 @@ enum Face {
 
 /// How much darker the faces turned from the eye are drawn, so that the depth reads: the front a little,
 /// the side more. They are SVG filters the drawing carries, not CSS `filter: brightness()`, which Safari
-/// does not apply to SVG shapes; in sRGB, so they darken as `brightness()` does.
+/// may not apply to SVG shapes (an SVG filter is SVG 1.1); in sRGB, so they darken as `brightness()` does.
 const SHADES: [(&str, &str); 2] = [("iso-shade-front", "0.9"), ("iso-shade-side", "0.78")];
 
 /// The shading filters, for the drawing's `<defs>`.
@@ -1102,7 +1102,7 @@ mod tests {
 
     #[test]
     fn the_faces_turned_from_the_eye_are_shaded_by_the_drawing_s_own_filters_not_by_css() {
-        // Safari does not apply CSS `filter: brightness()` to SVG shapes; an SVG filter it does.
+        // CSS `filter: brightness()` on SVG shapes may not be applied in Safari; an SVG filter is SVG 1.1.
         let m = drawn(&furnished());
         for (id, slope) in [("iso-shade-front", "0.9"), ("iso-shade-side", "0.78")] {
             let at = m.find(&format!("<filter id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {m}"));
