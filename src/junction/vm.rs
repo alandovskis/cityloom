@@ -374,7 +374,7 @@ mod tests {
         r.vm.edit(|j| j.set_corner(n, 7_000));
         r.time.advance(1_000);
         assert_eq!(r.time.pending(), 0);
-        assert_eq!(r.storage.recall(crate::city::store::CITY_KEY), None);
+        assert_eq!(r.storage.recall(crate::city::edits::EDITS_KEY), None);
     }
 
     #[test]

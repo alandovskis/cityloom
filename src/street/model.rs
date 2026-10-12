@@ -333,10 +333,11 @@ impl Street {
         self.row_mm > 0
             && !self.segments.is_empty()
             && self.segments.iter().all(|s| {
+                // the variants are checked before the tram rule reads their kinds
                 seg_ok(s.kind, s.material, s.curb, s.direction)
+                    && s.variants.iter().all(|v| seg_ok(v.kind, v.material, None, v.direction) && valid_window(v.from_min, v.to_min))
                     && (!s.tram || KINDS[s.kind].id == "bus" || s.variants.iter().any(|v| KINDS[v.kind].id == "bus"))
                     && s.width_mm > 0
-                    && s.variants.iter().all(|v| seg_ok(v.kind, v.material, None, v.direction) && valid_window(v.from_min, v.to_min))
             })
             && self.segments.iter().map(|s| s.uid).all(|u| u < self.next_uid)
     }
@@ -2116,6 +2117,15 @@ mod tests {
         assert!(!s.is_sound());
         let mut s = Street::sample(0, Side::Right);
         s.segments[1].material = 99;
+        assert!(!s.is_sound());
+    }
+
+    #[test]
+    fn a_kept_tram_lane_whose_window_names_no_kind_is_not_sound_rather_than_a_panic() {
+        let mut s = Street::sample(0, Side::Right);
+        let travel = s.segments.iter().position(|g| KINDS[g.kind].id != "bus").unwrap();
+        s.segments[travel].tram = true;
+        s.segments[travel].variants = vec![Variant { kind: 9_999, material: 0, direction: None, from_min: 0, to_min: 60, days: None }];
         assert!(!s.is_sound());
     }
 }

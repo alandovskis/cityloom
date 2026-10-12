@@ -786,12 +786,10 @@ mod tests {
     /// Another page writes a street of the city into the shared storage.
     fn nudge_street(storage: &Rc<MemoryStorage>, street: u32, mm: i32) {
         let store = CityStore::sample(storage.clone());
-        assert!(store.write(|c| {
-            let mut e = c.street_editor(street, 0).unwrap();
-            let u = e.view().segments[0].uid;
-            assert!(e.set_width(u, e.view().segments[0].width_mm + mm), "{mm}");
-            c.keep_street(street, e.snapshot())
-        }));
+        let mut e = store.open().street_editor(street, 0).unwrap();
+        let u = e.view().segments[0].uid;
+        assert!(e.set_width(u, e.view().segments[0].width_mm + mm), "{mm}");
+        assert!(store.write_street(street, e.snapshot()));
     }
 
     fn names(vm: &MapVm) -> Vec<String> {
