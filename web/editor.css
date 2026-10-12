@@ -1881,6 +1881,10 @@ dl.prov dd:last-child {
 /* ---- touch, small screens, motion --------------------------------------------- */
 
 @media (any-pointer: coarse) {
+  /* The toggle is 44px tall here, not the 32px the row above is sized for: it gives up 6px each side, not 3. */
+  .view-mode-tools {
+    margin-block: -9px;
+  }
   .view-mode .unit,
   .add-item,
   .check,

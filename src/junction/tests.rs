@@ -715,6 +715,9 @@ fn the_view_toggle_keeps_the_touch_target_of_a_coarse_pointer() {
     let block = &coarse[..coarse.find("\n}\n").unwrap()];
     let rule = &block[block.find(".view-mode .unit").expect("the coarse block names the toggle's buttons")..];
     assert!(rule[..rule.find('}').unwrap()].contains("min-height: 44px"), "{rule}");
+    // The row's negative margin was sized for a 32px toggle (`.view-mode-tools`); 12px more of button needs 6px more.
+    let tools = &block[block.find(".view-mode-tools").expect("the coarse block makes room for the taller toggle")..];
+    assert!(tools[..tools.find('}').unwrap()].contains("margin-block: -9px"), "{tools}");
 }
 
 fn shared_mode(mode: DrawMode, locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
