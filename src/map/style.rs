@@ -15,6 +15,10 @@ const HOT: &str = "#f59e0b";
 /// The edge of the place the pointer or the focus is on: dark where the road's own edge is white, so the highlight
 /// is not carried by its hue alone.
 const HOT_OUTLINE: &str = "#111827";
+/// How opaque a place is drawn when it is not editable (not wholly in the open view): a disabled control is exempt
+/// from the contrast rule, and the cue is not carried by this alone (the pointer is not a hand over it, and a press
+/// says why it opens nothing).
+const MUTED: f64 = 0.35;
 /// A street that has what the rule of an area it is inside does not allow. `web/app.css`'s `.dot-conflict`
 /// repeats it.
 pub const CONFLICT: &str = "#db2777";
@@ -70,6 +74,11 @@ fn edge() -> Value {
     json!(["case", ["boolean", ["feature-state", "hot"], false], HOT_OUTLINE, "#ffffff"])
 }
 
+/// `full` where the place is editable (also before the map has been told which are), else `MUTED`.
+fn opacity(full: f64) -> Value {
+    json!(["case", ["boolean", ["feature-state", "editable"], true], full, MUTED])
+}
+
 /// The layers, as JSON, for a place at this latitude.
 pub fn layers(lat: f64) -> String {
     json!([
@@ -77,24 +86,27 @@ pub fn layers(lat: f64) -> String {
             "id": "places-casing", "type": "line", "source": SOURCE,
             "filter": ["==", ["geometry-type"], "LineString"],
             "layout": { "line-cap": "butt", "line-join": "round" },
-            "paint": { "line-color": edge(), "line-opacity": 0.9, "line-width": metres("width_m", lat, 3.0, 3.0) }
+            "paint": { "line-color": edge(), "line-opacity": opacity(0.9), "line-width": metres("width_m", lat, 3.0, 3.0) }
         },
         {
             "id": "places-street", "type": "line", "source": SOURCE,
             "filter": ["==", ["geometry-type"], "LineString"],
             "layout": { "line-cap": "butt", "line-join": "round" },
-            "paint": { "line-color": colour(), "line-width": metres("width_m", lat, 2.5, 0.0) }
+            "paint": { "line-color": colour(), "line-opacity": opacity(1.0), "line-width": metres("width_m", lat, 2.5, 0.0) }
         },
         {
             "id": "places-conflict", "type": "line", "source": SOURCE,
             "filter": ["all", ["==", ["geometry-type"], "LineString"], ["boolean", ["get", "conflict"], false]],
             "layout": { "line-cap": "butt", "line-join": "round" },
-            "paint": { "line-color": "#ffffff", "line-width": 2, "line-dasharray": [1, 2] }
+            "paint": { "line-color": "#ffffff", "line-opacity": opacity(1.0), "line-width": 2, "line-dasharray": [1, 2] }
         },
         {
             "id": "places-junction", "type": "circle", "source": SOURCE,
             "filter": ["==", ["geometry-type"], "Point"],
-            "paint": { "circle-color": colour(), "circle-radius": metres("radius_m", lat, 5.0, 0.0), "circle-stroke-color": edge(), "circle-stroke-width": 2 }
+            "paint": {
+                "circle-color": colour(), "circle-opacity": opacity(1.0), "circle-radius": metres("radius_m", lat, 5.0, 0.0),
+                "circle-stroke-color": edge(), "circle-stroke-opacity": opacity(1.0), "circle-stroke-width": 2
+            }
         }
     ])
     .to_string()
@@ -236,6 +248,20 @@ mod tests {
         assert!(l[1]["paint"]["line-color"].to_string().contains(CONFLICT));
         assert_eq!(l[2]["filter"].to_string(), r#"["all",["==",["geometry-type"],"LineString"],["boolean",["get","conflict"],false]]"#);
         assert!(l[2]["paint"]["line-dasharray"].is_array());
+    }
+
+    #[test]
+    fn every_layer_of_the_places_is_muted_where_the_place_is_not_editable_and_not_before_it_is_told() {
+        for layer in layers(45.5) {
+            let id = layer["id"].as_str().unwrap();
+            let paint = layer["paint"].as_object().unwrap();
+            let opacities: Vec<String> = paint.iter().filter(|(k, _)| k.ends_with("opacity")).map(|(_, v)| v.to_string()).collect();
+            assert!(!opacities.is_empty(), "{id} has an opacity");
+            for o in opacities {
+                assert!(o.contains("\"editable\"") && o.contains(&MUTED.to_string()), "{id}: {o}");
+                assert!(o.contains("true"), "{id}: a place not told about is editable: {o}");
+            }
+        }
     }
 
     fn area_layers() -> Vec<Value> {

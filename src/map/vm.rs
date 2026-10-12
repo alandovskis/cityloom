@@ -13,6 +13,7 @@ use crate::city::projection::Projection;
 use crate::city::store::CityStore;
 use crate::map::areas::AreasVm;
 use crate::map::camera::{Camera, Insets, World};
+use crate::map::editable;
 use crate::map::overlay;
 use crate::map::style;
 use crate::restriction::draw::Draw;
@@ -207,6 +208,10 @@ pub struct MapVm {
     camera: ArcRwSignal<Camera>,
     basemap: ArcRwSignal<BasemapState>,
     moved: Cell<bool>,
+    /// The part of the map the panels leave open, once the map has said it.
+    viewport: Cell<Option<[f64; 4]>>,
+    /// The places the open view makes editable, as last sent to the map; `None` until there is a view.
+    editable: RefCell<Option<Vec<String>>>,
     hot: ArcRwSignal<Option<String>>,
     search: ArcRwSignal<String>,
     /// The result the arrow keys have moved to, by index into `results`.
@@ -251,6 +256,8 @@ impl MapVm {
             camera: ArcRwSignal::new(Camera::new(world, 800.0, 520.0)),
             basemap: ArcRwSignal::new(basemap),
             moved: Cell::new(false),
+            viewport: Cell::new(None),
+            editable: RefCell::new(None),
             hot: ArcRwSignal::new(None),
             search: ArcRwSignal::new(String::new()),
             active: ArcRwSignal::new(None),
@@ -666,15 +673,38 @@ impl MapVm {
             MapEvent::Press { at, hot, area, vertex } => match self.areas.draw_now() {
                 Draw::Drawing(_) => self.areas.on_press(at, vertex),
                 Draw::Naming(_) => {}
-                Draw::Idle => match hot.as_deref().and_then(href_of) {
-                    Some(href) => self.ports.navigator.go(&href),
-                    None => self.areas.select(area.as_deref()),
-                },
+                Draw::Idle => {
+                    let place = hot.as_deref().filter(|h| self.can_edit(h));
+                    match place.and_then(href_of) {
+                        Some(href) => self.ports.navigator.go(&href),
+                        None => {
+                            // A refused press on a place (muted, outside every outline) is not a press on nothing: it
+                            // lets no selected area go.
+                            let refused = hot.is_some() && place.is_none();
+                            if refused && area.is_none() {
+                                return self.say_not_editable();
+                            }
+                            let before = self.areas.selected_id_now();
+                            self.areas.select(area.as_deref());
+                            if refused && self.areas.selected_id_now() == before {
+                                self.say_not_editable();
+                            }
+                        }
+                    }
+                }
             },
             MapEvent::Vertex { area, index, at, done } => self.areas.drag_vertex(&area, index, at, done),
             MapEvent::Hover { hot } => self.set_hot(hot),
             MapEvent::Moved => self.moved.set(true),
+            MapEvent::View { bounds } => {
+                self.viewport.set(Some(bounds));
+                self.sync_editable();
+            }
         }
+    }
+
+    fn say_not_editable(&self) {
+        self.ports.announcer.say(&self.i18n.tr_now("map-not-editable", &Args::new()));
     }
 
     /// There will be no map, unless the page never had one to wait for (which has said why already).
@@ -711,11 +741,32 @@ impl MapVm {
         let checked: Vec<Restriction> = self.areas.list_now().into_iter().filter(|r| !r.rule.informational()).collect();
         let in_conflict: BTreeSet<u32> = self.findings_in(&view, &checked).into_iter().filter(|s| !s.conflicts.is_empty()).map(|s| s.uid).collect();
         self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&view, &projection, &in_conflict));
+        self.sync_editable();
     }
 
     /// Sends the place the pointer or the focus is on to the map.
     pub fn sync_highlight(&self) {
         self.ports.mapper.highlight(self.hot.get_untracked().as_deref());
+    }
+
+    /// Whether the place `hot` can be opened: always, until the map has said which part of it is open.
+    fn can_edit(&self, hot: &str) -> bool {
+        self.editable.borrow().as_ref().is_none_or(|set| set.iter().any(|h| h == hot))
+    }
+
+    /// Tells the map which places the open view makes editable, when that is not what it was last told.
+    fn sync_editable(&self) {
+        let Some(view) = self.viewport.get() else { return };
+        let Some(projection) = self.projection() else { return };
+        if self.basemap.get_untracked() != BasemapState::Ready {
+            return;
+        }
+        let now = editable::editable(&overlay::place_boxes(&self.core.view_now(), &projection), view);
+        if self.editable.borrow().as_ref() == Some(&now) {
+            return;
+        }
+        self.ports.mapper.set_editable(&now);
+        *self.editable.borrow_mut() = Some(now);
     }
 
     /// Fits the places in what the panels leave of the map, and gives the view back to the page.
@@ -829,6 +880,8 @@ impl MapVm {
     /// the person moves the map themselves.
     pub fn set_insets(&self, insets: Insets) {
         self.update_camera(|c| c.set_insets(insets));
+        let i = self.camera.get_untracked().insets;
+        self.ports.mapper.set_insets([i.top, i.right, i.bottom, i.left]);
         if !self.moved.get() {
             self.fit();
         }
@@ -1247,7 +1300,18 @@ mod tests {
 
     /// A city of one street that bends, kept for an area that the page opens.
     fn area_vm() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<MemoryStorage>) {
-        let (ports, _, storage) = test_ports();
+        let (vm, mapper, navigator, _, storage) = area_vm_all();
+        (vm, mapper, navigator, storage)
+    }
+
+    /// `area_vm` with the announcer it was built over.
+    fn area_vm_said() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>) {
+        let (vm, mapper, navigator, said, _) = area_vm_all();
+        (vm, mapper, navigator, said)
+    }
+
+    fn area_vm_all() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
+        let (ports, said, storage) = test_ports();
         let area = Area::new("Bendville", 45.5, -73.6);
         let node = |id, x_m, y_m| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m, junction: false, control: Control::None };
         let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, hours: None };
@@ -1273,11 +1337,129 @@ mod tests {
         let vm = MapVm::new(ports, crate::i18n_for(Locale::En));
         vm.attach();
         mapper.take(); // the scale's units, said when it attached
-        (vm, mapper, navigator, storage)
+        (vm, mapper, navigator, said, storage)
     }
 
     /// Tiles that cover the area `area_vm` opens.
     const COVERING: MapEvent = MapEvent::Ready { bounds: [-74.0, 45.0, -73.0, 46.0] };
+
+    /// The box of the one street `area_vm` holds (`s-1`).
+    fn street_box(vm: &MapVm) -> [f64; 4] {
+        let boxes = overlay::place_boxes(&vm.core.view_now(), &vm.projection().unwrap());
+        assert_eq!(boxes[0].0, "s-1");
+        boxes[0].1
+    }
+
+    /// A view with the street well inside it, and one that cuts the street in half but is bigger than it.
+    fn around(b: [f64; 4]) -> [f64; 4] {
+        let (w, h) = (b[2] - b[0], b[3] - b[1]);
+        [b[0] - w, b[1] - h, b[2] + w, b[3] + h]
+    }
+    fn clipping(b: [f64; 4]) -> [f64; 4] {
+        let (w, h) = (b[2] - b[0], b[3] - b[1]);
+        [b[0] + w / 2.0, b[1] - h, b[2] + 3.0 * w, b[3] + h]
+    }
+    fn press(hot: &str) -> MapEvent {
+        MapEvent::Press { at: [-73.6, 45.5], hot: Some(hot.into()), area: None, vertex: None }
+    }
+
+    #[test]
+    fn the_open_view_makes_the_street_in_it_editable_and_the_set_is_sent_only_when_it_changes() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(COVERING);
+        mapper.take();
+        let b = street_box(&vm);
+        mapper.say(MapEvent::View { bounds: around(b) });
+        assert_eq!(mapper.take(), vec![MapCall::Editable(vec!["s-1".into()])]);
+        mapper.say(MapEvent::View { bounds: around(b).map(|v| v + 1e-6) });
+        assert!(mapper.take().is_empty(), "the same set is not sent again");
+        mapper.say(MapEvent::View { bounds: clipping(b) });
+        assert_eq!(mapper.take(), vec![MapCall::Editable(vec![])]);
+    }
+
+    #[test]
+    fn a_street_longer_than_the_view_is_editable_while_the_view_crosses_it() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(COVERING);
+        mapper.take();
+        let [w, s, e, n] = street_box(&vm);
+        let mid = (w + e) / 2.0;
+        let thin = (e - w) / 10.0;
+        mapper.say(MapEvent::View { bounds: [mid - thin, s - 1.0, mid + thin, n + 1.0] });
+        assert_eq!(mapper.take(), vec![MapCall::Editable(vec!["s-1".into()])], "the view is narrower than the street and crosses it");
+        mapper.say(MapEvent::View { bounds: [e + thin, s - 1.0, e + 3.0 * thin, n + 1.0] });
+        assert_eq!(mapper.take(), vec![MapCall::Editable(vec![])], "and no longer once it misses it");
+    }
+
+    #[test]
+    fn a_press_on_a_place_outside_the_open_view_opens_nothing_and_says_why() {
+        let (vm, mapper, navigator, said) = area_vm_said();
+        mapper.say(COVERING);
+        mapper.say(press("s-1"));
+        assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()], "no view yet: nothing is held back");
+        let b = street_box(&vm);
+        mapper.say(MapEvent::View { bounds: clipping(b) });
+        mapper.say(press("s-1"));
+        assert!(navigator.take().is_empty());
+        assert_eq!(said.take(), vec!["Not all of this place is in view. Move the map so all of it shows, then try again.".to_string()]);
+        mapper.say(MapEvent::View { bounds: around(b) });
+        mapper.say(press("s-1"));
+        assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()]);
+        assert!(said.take().is_empty());
+    }
+
+    #[test]
+    fn a_press_on_a_muted_place_inside_an_area_outline_selects_the_area_and_says_nothing_until_it_is_selected() {
+        let (vm, mapper, navigator, said, _) = car_free_bendville_said();
+        mapper.say(MapEvent::View { bounds: clipping(street_box(&vm)) });
+        vm.areas().select(None);
+        said.take();
+        let inside = MapEvent::Press { at: [-73.6, 45.5], hot: Some("s-1".into()), area: Some("r1".into()), vertex: None };
+        mapper.say(inside.clone());
+        assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"));
+        assert!(navigator.take().is_empty());
+        let heard = said.take();
+        assert!(heard.iter().all(|m| !m.contains("Not all of this place")), "the press chose the area: {heard:?}");
+        mapper.say(inside);
+        assert!(navigator.take().is_empty());
+        assert_eq!(said.take(), vec!["Not all of this place is in view. Move the map so all of it shows, then try again.".to_string()]);
+    }
+
+    #[test]
+    fn a_press_on_a_muted_place_outside_every_outline_says_why_and_keeps_the_selected_area() {
+        let (vm, mapper, _, said, _) = car_free_bendville_said();
+        mapper.say(MapEvent::View { bounds: clipping(street_box(&vm)) });
+        vm.areas().select(Some("r1"));
+        said.take();
+        mapper.say(press("s-1"));
+        assert_eq!(said.take(), vec!["Not all of this place is in view. Move the map so all of it shows, then try again.".to_string()]);
+        assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"), "refused, so the selection stays");
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.areas().selected_id_now(), None, "a press on nothing still lets the area go");
+    }
+
+    #[test]
+    fn sending_the_places_again_does_not_send_an_unchanged_editable_set_again() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(COVERING);
+        mapper.say(MapEvent::View { bounds: around(street_box(&vm)) });
+        mapper.take();
+        vm.sync_places();
+        let calls = mapper.take();
+        assert_eq!(calls.len(), 1, "{calls:?}");
+        assert!(matches!(calls[0], MapCall::Places { .. }), "{calls:?}");
+    }
+
+    #[test]
+    fn the_insets_are_told_to_the_map_before_the_places_are_fitted_in_what_is_left() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(COVERING);
+        mapper.take();
+        vm.set_insets(Insets { left: 100.0, top: 50.0, right: 20.0, bottom: 10.0 });
+        let calls = mapper.take();
+        assert_eq!(calls[0], MapCall::Insets([50.0, 20.0, 10.0, 100.0]));
+        assert!(matches!(calls[1], MapCall::Fit { .. }), "{calls:?}");
+    }
 
     /// The map page on the area chosen (here the default one), whose roads were never kept.
     fn roadless_map_vm() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<MemoryStorage>) {
@@ -1311,6 +1493,7 @@ mod tests {
         vm.resize(1000.0, 600.0);
         vm.set_insets(Insets { left: 300.0, ..Insets::default() });
         assert!(vm.camera().fit_k.is_finite() && vm.camera().fit_k > 0.0);
+        assert!(matches!(mapper.take()[..], [MapCall::Insets(_)]), "the insets are told, and nothing is fitted");
         mapper.say(COVERING);
         mapper.say(MapEvent::Failed);
         assert_eq!(vm.basemap_state(), BasemapState::Unavailable(NO_ROADS), "the reason stays the roads");
@@ -1424,14 +1607,17 @@ mod tests {
         mapper.say(COVERING);
         mapper.take();
         vm.set_insets(Insets { left: 100.0, top: 50.0, right: 20.0, bottom: 10.0 });
-        assert!(matches!(mapper.take()[..], [MapCall::Fit { insets, .. }] if insets == [50.0, 20.0, 10.0, 100.0]), "top, right, bottom, left");
+        assert!(
+            matches!(mapper.take()[..], [MapCall::Insets(_), MapCall::Fit { insets, .. }] if insets == [50.0, 20.0, 10.0, 100.0]),
+            "top, right, bottom, left"
+        );
         mapper.say(MapEvent::Moved);
         vm.set_insets(Insets { left: 200.0, ..Insets::default() });
-        assert!(mapper.take().is_empty(), "the person's view is kept");
+        assert_eq!(mapper.take(), vec![MapCall::Insets([0.0, 0.0, 0.0, 200.0])], "the person's view is kept: only the insets are told");
         vm.fit_camera();
         assert!(matches!(mapper.take()[..], [MapCall::Fit { insets, .. }] if insets == [0.0, 0.0, 0.0, 200.0]));
         vm.set_insets(Insets::default());
-        assert_eq!(mapper.take().len(), 1, "fitting gave the view back to the page");
+        assert_eq!(mapper.take().len(), 2, "the insets, and fitting gave the view back to the page");
     }
 
     #[test]
@@ -1472,7 +1658,13 @@ mod tests {
 
     /// Bendville's map, ready, with a car-free area declared round its street's midpoint.
     fn car_free_bendville() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<MemoryStorage>) {
-        let (vm, mapper, navigator, storage) = area_vm();
+        let (vm, mapper, navigator, _, storage) = car_free_bendville_said();
+        (vm, mapper, navigator, storage)
+    }
+
+    /// `car_free_bendville` with the announcer it was built over.
+    fn car_free_bendville_said() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
+        let (vm, mapper, navigator, said, storage) = area_vm_all();
         mapper.say(COVERING);
         mapper.take();
         let (_, mid) = bent_midpoint(&CityStore::current(storage.clone()));
@@ -1484,7 +1676,8 @@ mod tests {
         assert!(a.close());
         a.set_form_name("Car zone");
         assert!(a.save());
-        (vm, mapper, navigator, storage)
+        said.take();
+        (vm, mapper, navigator, said, storage)
     }
 
     #[test]

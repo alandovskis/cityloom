@@ -111,6 +111,23 @@ pub fn bounds(v: &CityView, p: &Projection) -> Option<[f64; 4]> {
     })
 }
 
+/// The `hot` id of each place and the box of what the map draws of it (west, south, east, north, in degrees): a
+/// street's drawn shape, a junction's point. The same order as `places`.
+pub fn place_boxes(v: &CityView, p: &Projection) -> Vec<(String, [f64; 4])> {
+    let mut boxes = Vec::with_capacity(v.edges.len() + v.nodes.len());
+    for e in &v.edges {
+        let mut shape = e.shape_mm.iter().map(|q| position(p, q[0], q[1]));
+        let Some([lon, lat]) = shape.next() else { continue };
+        let b = shape.fold([lon, lat, lon, lat], |[w, s, east, n], [lon, lat]| [w.min(lon), s.min(lat), east.max(lon), n.max(lat)]);
+        boxes.push((format!("s-{}", e.uid), b));
+    }
+    for n in v.nodes.iter().filter(|n| n.junction) {
+        let [lon, lat] = position(p, n.x_mm, n.y_mm);
+        boxes.push((format!("j-{}", n.uid), [lon, lat, lon, lat]));
+    }
+    boxes
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
@@ -201,6 +218,27 @@ mod tests {
         assert!(points.iter().all(|f| f["properties"]["hot"].as_str().unwrap().starts_with("j-") && f["properties"]["radius_m"].as_f64().unwrap() > 0.0));
         let streets = fc["features"].as_array().unwrap().iter().filter(|f| f["geometry"]["type"] == "LineString").count();
         assert_eq!(streets, v.edges.len());
+    }
+
+    #[test]
+    fn each_place_has_the_box_of_its_drawn_shape_and_a_junction_a_point() {
+        let v = City::from_network(&bent_road(), "Bendville").view(0);
+        let p = projection(&v);
+        let boxes = place_boxes(&v, &p);
+        assert_eq!(boxes.len(), 1, "one street and no junction");
+        let line = parse(&places(&v, &p, &BTreeSet::new()))["features"][0]["geometry"]["coordinates"].clone();
+        let (lons, lats): (Vec<f64>, Vec<f64>) = line.as_array().unwrap().iter().map(|c| (c[0].as_f64().unwrap(), c[1].as_f64().unwrap())).unzip();
+        let min = |v: &[f64]| v.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = |v: &[f64]| v.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        assert_eq!(boxes[0], ("s-1".to_string(), [min(&lons), min(&lats), max(&lons), max(&lats)]));
+
+        let city = City::new().view(0); // the sample city has junctions
+        let pc = Projection::new(Area::new("Sample", 45.5, -73.6).bounds(), [0.0, 0.0]);
+        let boxes = place_boxes(&city, &pc);
+        let junctions: Vec<_> = boxes.iter().filter(|(h, _)| h.starts_with("j-")).collect();
+        assert_eq!(junctions.len(), city.nodes.iter().filter(|n| n.junction).count());
+        assert!(junctions.iter().all(|(_, b)| b[0] == b[2] && b[1] == b[3]), "a junction is a point");
+        assert_eq!(boxes.len(), city.edges.len() + junctions.len());
     }
 
     #[test]

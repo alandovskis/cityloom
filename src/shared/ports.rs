@@ -77,6 +77,10 @@ pub enum MapEvent {
     Hover { hot: Option<String> },
     /// The person moved the map themselves, with the pointer or the wheel.
     Moved,
+    /// The part of the map the panels leave open, after every move, resize and change of insets: west, south,
+    /// east, north, in degrees. Not said while the map has no size. When the insets together cover the whole
+    /// width or height of the map (panels stacked on a phone), the adapter reports the whole map as open.
+    View { bounds: [f64; 4] },
 }
 
 /// The map the page shows the city on. It answers by telling `listen`'s function what happened.
@@ -94,6 +98,13 @@ pub trait Mapper {
     /// Moves the view to hold `bounds` (west, south, east, north in degrees), clear of `insets`
     /// (top, right, bottom, left, in pixels).
     fn fit(&self, bounds: [f64; 4], insets: [f64; 4]);
+    /// Tells the map what floats over it, in pixels from each edge (top, right, bottom, left), so that it can say
+    /// which part of it is open (`MapEvent::View`). Insets that together cover the whole width or height are
+    /// ignored by the adapter: the whole map counts as open.
+    fn set_insets(&self, insets: [f64; 4]);
+    /// Says which places can be edited: the ones named are drawn as they are, every other place is muted. Called
+    /// again whenever the set changes; the map keeps it for places it is sent later, and for a new style.
+    fn set_editable(&self, hot: &[String]);
     /// Zooms in by `factor` (more than 1), or out (less than 1).
     fn zoom_by(&self, factor: f64);
     /// Moves the view by pixels: a positive `dx` moves it east, a positive `dy` south.
@@ -117,6 +128,8 @@ impl Mapper for NoMapper {
         [0.0, 0.0]
     }
     fn fit(&self, _: [f64; 4], _: [f64; 4]) {}
+    fn set_insets(&self, _: [f64; 4]) {}
+    fn set_editable(&self, _: &[String]) {}
     fn zoom_by(&self, _: f64) {}
     fn pan_by(&self, _: f64, _: f64) {}
     fn highlight(&self, _: Option<&str>) {}
@@ -386,6 +399,8 @@ pub enum MapCall {
     Restrictions { layers: String, data: String },
     Draft { layers: String, data: String },
     Fit { bounds: [f64; 4], insets: [f64; 4] },
+    Insets([f64; 4]),
+    Editable(Vec<String>),
     Zoom(f64),
     Pan(f64, f64),
     Highlight(Option<String>),
@@ -437,6 +452,12 @@ impl Mapper for FakeMapper {
     }
     fn fit(&self, bounds: [f64; 4], insets: [f64; 4]) {
         self.calls.borrow_mut().push(MapCall::Fit { bounds, insets });
+    }
+    fn set_insets(&self, insets: [f64; 4]) {
+        self.calls.borrow_mut().push(MapCall::Insets(insets));
+    }
+    fn set_editable(&self, hot: &[String]) {
+        self.calls.borrow_mut().push(MapCall::Editable(hot.to_vec()));
     }
     fn zoom_by(&self, factor: f64) {
         self.calls.borrow_mut().push(MapCall::Zoom(factor));
@@ -623,6 +644,20 @@ mod map_tests {
         assert_eq!(read(r#"{"kind":"hover","hot":"j-3"}"#), MapEvent::Hover { hot: Some("j-3".into()) });
         assert_eq!(read(r#"{"kind":"hover","hot":null}"#), MapEvent::Hover { hot: None });
         assert_eq!(read(r#"{"kind":"moved"}"#), MapEvent::Moved);
+    }
+
+    #[test]
+    fn the_open_view_of_the_map_is_read_from_its_json() {
+        let read = |s: &str| serde_json::from_str::<MapEvent>(s).unwrap();
+        assert_eq!(read(r#"{"kind":"view","bounds":[1,2,3,4]}"#), MapEvent::View { bounds: [1.0, 2.0, 3.0, 4.0] });
+    }
+
+    #[test]
+    fn the_fake_map_keeps_the_editable_set_and_the_insets_it_is_given() {
+        let fake = FakeMapper::default();
+        fake.set_editable(&["s-1".to_string(), "j-2".to_string()]);
+        fake.set_insets([1.0, 2.0, 3.0, 4.0]);
+        assert_eq!(fake.take(), vec![MapCall::Editable(vec!["s-1".into(), "j-2".into()]), MapCall::Insets([1.0, 2.0, 3.0, 4.0])]);
     }
 
     #[test]
