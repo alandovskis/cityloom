@@ -198,6 +198,13 @@ extern "C" {
     pub type Basemap;
     #[wasm_bindgen(method, js_name = setPlaces)]
     fn set_places(this: &Basemap, layers: &str, data: &str);
+    #[wasm_bindgen(method, js_name = setRestrictions)]
+    fn set_restrictions(this: &Basemap, layers: &str, data: &str);
+    #[wasm_bindgen(method, js_name = setDraft)]
+    fn set_draft(this: &Basemap, layers: &str, data: &str);
+    /// The middle of the view, as a `Float64Array` of longitude and latitude.
+    #[wasm_bindgen(method)]
+    fn centre(this: &Basemap) -> Vec<f64>;
     #[wasm_bindgen(method)]
     fn fit(this: &Basemap, bounds: &[f64], insets: &[f64]);
     #[wasm_bindgen(method, js_name = zoomBy)]
@@ -225,6 +232,16 @@ impl crate::shared::ports::Mapper for BrowserMapper {
     fn set_places(&self, layers: &str, data: &str) {
         self.0.set_places(layers, data);
     }
+    fn set_restrictions(&self, layers: &str, data: &str) {
+        self.0.set_restrictions(layers, data);
+    }
+    fn set_draft(&self, layers: &str, data: &str) {
+        self.0.set_draft(layers, data);
+    }
+    fn centre(&self) -> [f64; 2] {
+        let c = self.0.centre();
+        [c.first().copied().unwrap_or(0.0), c.get(1).copied().unwrap_or(0.0)]
+    }
     fn fit(&self, bounds: [f64; 4], insets: [f64; 4]) {
         self.0.fit(&bounds, &insets);
     }
@@ -242,8 +259,10 @@ impl crate::shared::ports::Mapper for BrowserMapper {
     }
     fn listen(&self, on: Box<dyn Fn(crate::shared::ports::MapEvent)>) {
         let callback = Closure::<dyn Fn(String)>::new(move |json: String| {
-            if let Ok(event) = serde_json::from_str(&json) {
-                on(event);
+            // An event the module cannot read is dropped, but said in the console: the adapter and the module disagree.
+            match serde_json::from_str(&json) {
+                Ok(event) => on(event),
+                Err(error) => web_sys::console::warn_2(&format!("The map said something the page cannot read ({error}):").into(), &json.into()),
             }
         });
         self.0.listen(callback.as_ref().unchecked_ref());

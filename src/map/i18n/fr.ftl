@@ -88,6 +88,13 @@ map-checks-pass = { $n ->
     [one] Toutes les vérifications réussissent dans l’unique lieu.
    *[other] Toutes les vérifications réussissent dans les { $n } lieux.
 }
+map-checks-conflicts = { $streets ->
+    [one] Une rue est
+   *[other] { $streets } rues sont
+} en conflit avec une règle de zone. L’onglet Règles de zone { $streets ->
+    [one] la
+   *[other] les
+} liste.
 map-changes-no-places = Il n’y a aucun lieu à modifier.
 map-changes-some = { $n ->
     [one] { $n } lieu modifié
@@ -105,6 +112,13 @@ map-status-ok = { $n ->
     [one] { $n } lieu. Toutes les vérifications réussissent.
    *[other] { $n } lieux. Toutes les vérifications réussissent.
 }
+map-status-conflicts = { $n ->
+    [one] { $n } lieu.
+   *[other] { $n } lieux.
+} { $streets ->
+    [one] Une rue est
+   *[other] { $streets } rues sont
+} en conflit avec une règle de zone.
 map-status-bad = { $n ->
     [one] { $n } lieu à corriger
    *[other] { $n } lieux à corriger

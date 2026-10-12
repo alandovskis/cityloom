@@ -15,6 +15,24 @@ const HOT: &str = "#f59e0b";
 /// The edge of the place the pointer or the focus is on: dark where the road's own edge is white, so the highlight
 /// is not carried by its hue alone.
 const HOT_OUTLINE: &str = "#111827";
+/// A street that has what the rule of an area it is inside does not allow. `web/app.css`'s `.dot-conflict`
+/// repeats it.
+pub const CONFLICT: &str = "#db2777";
+/// The restrictions' source, and the outline being drawn's.
+pub const AREAS: &str = "restrictions";
+pub const DRAFT: &str = "draft";
+/// The layers `web/basemap.js` asks what the pointer is on: keep these names in step with it.
+pub const AREAS_FILL: &str = "areas-fill";
+pub const AREAS_VERTEX: &str = "areas-vertex";
+pub const DRAFT_VERTEX: &str = "draft-vertex";
+/// Each rule (by `Rule::id`): its colour, and how its outline is dashed (none: solid), so that a rule is not told
+/// by its colour alone.
+const RULES: [(&str, &str, Option<[f64; 4]>); 4] = [
+    ("car_free", "#15803d", None),
+    ("bus_and_bike_only", "#0e7490", Some([4.0, 2.0, 4.0, 2.0])),
+    ("speed_limit", "#b45309", Some([1.0, 2.0, 1.0, 2.0])),
+    ("no_parking_or_loading", "#6d28d9", Some([4.0, 2.0, 1.0, 2.0])),
+];
 
 /// MapLibre's zoom 0 shows the earth on one 512-pixel tile: this many pixels to a metre there, at this
 /// latitude. A width in metres is that times two to the zoom.
@@ -32,9 +50,19 @@ fn metres(property: &str, lat: f64, min_px: f64, extra_px: f64) -> Value {
     json!(["interpolate", ["exponential", 2], ["zoom"], 0, at(1.0), 24, at(2f64.powi(24))])
 }
 
-/// The colour of a place: the highlight where the pointer is, else the one its status says.
+/// The colour of a place: the highlight where the pointer is, else red where it needs attention, else the
+/// conflict tint where it breaks an area's rule, else the one its status says.
 fn colour() -> Value {
-    json!(["case", ["boolean", ["feature-state", "hot"], false], HOT, ["match", ["get", "status"], "bad", BAD, "changed", CHANGED, OK]])
+    json!([
+        "case",
+        ["boolean", ["feature-state", "hot"], false],
+        HOT,
+        ["==", ["get", "status"], "bad"],
+        BAD,
+        ["boolean", ["get", "conflict"], false],
+        CONFLICT,
+        ["match", ["get", "status"], "changed", CHANGED, OK]
+    ])
 }
 
 /// `white`, or the dark outline where the place is the highlighted one.
@@ -58,9 +86,67 @@ pub fn layers(lat: f64) -> String {
             "paint": { "line-color": colour(), "line-width": metres("width_m", lat, 2.5, 0.0) }
         },
         {
+            "id": "places-conflict", "type": "line", "source": SOURCE,
+            "filter": ["all", ["==", ["geometry-type"], "LineString"], ["boolean", ["get", "conflict"], false]],
+            "layout": { "line-cap": "butt", "line-join": "round" },
+            "paint": { "line-color": "#ffffff", "line-width": 2, "line-dasharray": [1, 2] }
+        },
+        {
             "id": "places-junction", "type": "circle", "source": SOURCE,
             "filter": ["==", ["geometry-type"], "Point"],
             "paint": { "circle-color": colour(), "circle-radius": metres("radius_m", lat, 5.0, 0.0), "circle-stroke-color": edge(), "circle-stroke-width": 2 }
+        }
+    ])
+    .to_string()
+}
+
+/// The colour of an area, by its rule.
+fn rule_colour() -> Value {
+    let mut m = vec![json!("match"), json!(["get", "rule"])];
+    for (id, colour, _) in RULES {
+        m.push(json!(id));
+        m.push(json!(colour));
+    }
+    m.push(json!(OK));
+    Value::Array(m)
+}
+
+/// The restrictions' layers: a fill tinted by rule (stronger where selected), an outline a rule with that rule's
+/// dash, and the selected one's corners to drag.
+pub fn area_layers() -> String {
+    let selected = json!(["boolean", ["get", "selected"], false]);
+    let mut layers = vec![json!({
+        "id": AREAS_FILL, "type": "fill", "source": AREAS,
+        "filter": ["==", ["geometry-type"], "Polygon"],
+        "paint": { "fill-color": rule_colour(), "fill-opacity": ["case", selected, 0.3, 0.15] }
+    })];
+    for (id, colour, dash) in RULES {
+        let mut paint = json!({ "line-color": colour, "line-width": ["case", selected, 3.5, 2] });
+        if let Some(d) = dash {
+            paint["line-dasharray"] = json!(d);
+        }
+        layers.push(json!({
+            "id": format!("areas-line-{id}"), "type": "line", "source": AREAS,
+            "filter": ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "rule"], id]],
+            "paint": paint
+        }));
+    }
+    layers.push(json!({
+        "id": AREAS_VERTEX, "type": "circle", "source": AREAS,
+        "filter": ["==", ["geometry-type"], "Point"],
+        "paint": { "circle-radius": 6, "circle-color": "#ffffff", "circle-stroke-color": HOT_OUTLINE, "circle-stroke-width": 2 }
+    }));
+    Value::Array(layers).to_string()
+}
+
+/// The outline being drawn: its area once it can close, its dashed path, and its corners (the first larger).
+pub fn draft_layers() -> String {
+    json!([
+        { "id": "draft-fill", "type": "fill", "source": DRAFT, "filter": ["==", ["get", "part"], "fill"], "paint": { "fill-color": HOT, "fill-opacity": 0.15 } },
+        { "id": "draft-line", "type": "line", "source": DRAFT, "filter": ["==", ["get", "part"], "path"], "paint": { "line-color": HOT_OUTLINE, "line-width": 2, "line-dasharray": [2, 1] } },
+        {
+            "id": DRAFT_VERTEX, "type": "circle", "source": DRAFT, "filter": ["==", ["geometry-type"], "Point"],
+            "paint": { "circle-radius": ["case", ["boolean", ["get", "first"], false], 8, 5], "circle-color": "#ffffff", "circle-stroke-color": HOT_OUTLINE, "circle-stroke-width": 2 }
         }
     ])
     .to_string()
@@ -77,10 +163,10 @@ mod tests {
     }
 
     #[test]
-    fn the_places_are_drawn_in_three_layers_on_one_source() {
+    fn the_places_are_drawn_in_four_layers_on_one_source() {
         let l = layers(45.5);
         let ids: Vec<&str> = l.iter().map(|l| l["id"].as_str().unwrap()).collect();
-        assert_eq!(ids, ["places-casing", "places-street", "places-junction"]);
+        assert_eq!(ids, ["places-casing", "places-street", "places-conflict", "places-junction"]);
         assert!(l.iter().all(|l| l["source"] == SOURCE));
         assert_eq!(SOURCE, "places");
     }
@@ -98,7 +184,7 @@ mod tests {
     #[test]
     fn the_highlighted_place_is_outlined_dark_so_it_is_not_told_by_its_colour_alone() {
         let l = layers(45.5);
-        for (layer, property) in [(&l[0], "line-color"), (&l[2], "circle-stroke-color")] {
+        for (layer, property) in [(&l[0], "line-color"), (&l[3], "circle-stroke-color")] {
             let outline = layer["paint"][property].to_string();
             assert!(outline.contains("feature-state") && outline.contains(HOT_OUTLINE) && outline.contains("#ffffff"), "{outline}");
         }
@@ -138,9 +224,48 @@ mod tests {
 
     #[test]
     fn a_junction_is_a_circle_with_a_radius_in_metres_and_a_minimum() {
-        let junction = &layers(45.5)[2];
+        let junction = &layers(45.5)[3];
         assert_eq!(junction["type"], "circle");
         let r = junction["paint"]["circle-radius"].to_string();
         assert!(r.contains("\"radius_m\"") && r.contains("\"max\""), "{r}");
+    }
+
+    #[test]
+    fn a_street_in_conflict_is_tinted_and_dashed_so_it_is_not_told_by_colour_alone() {
+        let l = layers(45.5);
+        assert!(l[1]["paint"]["line-color"].to_string().contains(CONFLICT));
+        assert_eq!(l[2]["filter"].to_string(), r#"["all",["==",["geometry-type"],"LineString"],["boolean",["get","conflict"],false]]"#);
+        assert!(l[2]["paint"]["line-dasharray"].is_array());
+    }
+
+    fn area_layers() -> Vec<Value> {
+        serde_json::from_str(&super::area_layers()).unwrap()
+    }
+
+    #[test]
+    fn the_areas_are_filled_by_rule_outlined_with_a_dash_of_their_rule_and_the_selected_one_has_corners() {
+        let l = area_layers();
+        let ids: Vec<&str> = l.iter().map(|l| l["id"].as_str().unwrap()).collect();
+        assert_eq!(ids[0], AREAS_FILL);
+        assert_eq!(*ids.last().unwrap(), AREAS_VERTEX);
+        assert_eq!(ids.len(), 1 + 4 + 1, "a fill, an outline a rule, the corners");
+        assert!(l.iter().all(|l| l["source"] == AREAS));
+        let dashed = l[1..5].iter().filter(|l| l["paint"]["line-dasharray"].is_array()).count();
+        assert_eq!(dashed, 3, "car-free is solid; the other three each have a dash of their own");
+        for id in crate::restriction::model::Rule::IDS {
+            assert!(l[0]["paint"]["fill-color"].to_string().contains(id), "{id}");
+        }
+    }
+
+    #[test]
+    fn the_outline_being_drawn_has_its_corners_to_press() {
+        let l: Vec<Value> = serde_json::from_str(&draft_layers()).unwrap();
+        assert!(l.iter().all(|l| l["source"] == DRAFT));
+        assert_eq!(l.last().unwrap()["id"], DRAFT_VERTEX);
+        assert_eq!(
+            (AREAS, DRAFT, AREAS_FILL, AREAS_VERTEX, DRAFT_VERTEX),
+            ("restrictions", "draft", "areas-fill", "areas-vertex", "draft-vertex"),
+            "the adapter's names"
+        );
     }
 }

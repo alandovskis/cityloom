@@ -116,12 +116,33 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
     {
         use leptos::wasm_bindgen::closure::Closure;
         // The places follow the city and whether the map is ready; the highlight follows the pointer.
+        // The places follow the areas too: a street that breaks the rule of an area it is inside is tinted.
         Effect::new(move |_| {
             vm.with(|v| {
                 v.view();
                 v.basemap_state();
+                v.areas().list();
             });
             vm.with(|v| v.sync_places());
+        });
+        // The areas and the outline follow what is kept, the selection, a corner being dragged and the drawing.
+        Effect::new(move |_| {
+            vm.with(|v| {
+                v.basemap_state();
+                let a = v.areas();
+                a.list();
+                a.selected_id();
+                a.moving();
+                a.draw();
+            });
+            vm.with(|v| v.sync_areas());
+        });
+        // While an outline is drawn the map shows a cross at its centre, where Enter places a corner.
+        Effect::new(move |_| {
+            let drawing = vm.with(|v| matches!(v.areas().draw(), crate::restriction::draw::Draw::Drawing(_)));
+            if let Some(el) = leptos::prelude::document().get_element_by_id("basemap") {
+                let _ = if drawing { el.set_attribute("data-drawing", "") } else { el.remove_attribute("data-drawing") };
+            }
         });
         Effect::new(move |_| {
             vm.with(|v| v.hot());
@@ -134,7 +155,8 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
                 if e.meta_key() || e.ctrl_key() || e.alt_key() {
                     return;
                 }
-                if vm.with(|v| v.press_key(&e.key())) {
+                // The outline being drawn has the key first; the arrow keys stay the map's, to move between corners.
+                if vm.with(|v| v.areas().press_key(&e.key(), e.shift_key()) || v.press_key(&e.key())) {
                     e.prevent_default();
                 }
             });
@@ -164,9 +186,18 @@ pub fn MapView(vm: Rc<MapVm>) -> impl IntoView {
                 vm.with(|v| v.reload());
             }
         });
+        // The area rules are a document of their own, read again when another tab writes it.
+        window_event_listener(leptos::ev::storage, move |e: leptos::web_sys::StorageEvent| {
+            if e.key().is_none_or(|k| k == crate::restriction::store::RESTRICTIONS_KEY) {
+                vm.with(|v| v.areas().reload());
+            }
+        });
         window_event_listener(leptos::ev::pageshow, move |e: leptos::web_sys::PageTransitionEvent| {
             if e.persisted() {
-                vm.with(|v| v.reload());
+                vm.with(|v| {
+                    v.reload();
+                    v.areas().reload();
+                });
             }
         });
     }

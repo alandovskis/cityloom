@@ -145,14 +145,15 @@ fn icon(ok: bool) -> impl IntoView {
     view! { <svg viewBox="0 0 16 16" aria-hidden="true"><path d=d/></svg> }
 }
 
-/// Whether the street works, one line to a check.
+/// Whether the street works, one line to a check, then one line to each area it is inside.
 #[component]
 pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     move || {
         let (v, units) = w.now();
         let i18n = w.i18n();
-        v.checks
+        let editor = v
+            .checks
             .iter()
             .map(|c| {
                 view! {
@@ -165,12 +166,36 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
                     </li>
                 }
             })
-            .collect_view()
+            .collect_view();
+        let areas = w
+            .area_checks()
+            .into_iter()
+            .map(|f| {
+                let state = if f.rule.informational() {
+                    "restriction-check-informational"
+                } else if f.ok() {
+                    "check-passes"
+                } else {
+                    "check-fails"
+                };
+                let detail = f.detail().iter().map(|s| say(&i18n, units, s)).collect::<Vec<_>>().join(" ");
+                view! {
+                    <li class=if f.ok() { "ok" } else { "bad" }>
+                        {icon(f.ok())}
+                        <div>
+                            <b>{say(&i18n, units, &f.label())}<span class="sr-only">{plain(&i18n, state)}</span></b>
+                            <span>{detail}</span>
+                        </div>
+                    </li>
+                }
+            })
+            .collect_view();
+        view! { {editor}{areas} }
     }
 }
 
 fn failing(w: &SheetWatch) -> usize {
-    w.view().checks.iter().filter(|c| !c.ok).count()
+    w.view().checks.iter().filter(|c| !c.ok).count() + w.area_checks().iter().filter(|f| !f.ok()).count()
 }
 
 /// The button under the drawing that says how many checks fail and goes to them.

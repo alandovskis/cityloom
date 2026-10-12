@@ -68,6 +68,9 @@ export async function createBasemap(container) {
     const nothing = () => {};
     return {
       setPlaces: nothing,
+      setRestrictions: nothing,
+      setDraft: nothing,
+      centre: () => new Float64Array([0, 0]),
       fit: nothing,
       zoomBy: nothing,
       panBy: nothing,
@@ -108,9 +111,29 @@ export async function createBasemap(container) {
     }
     showHot();
   };
+  // The restrictions and the outline being drawn: kept like the places, so a new style can have them put back.
+  // The restrictions go under the places, the outline over everything.
+  let restrictions = null;
+  let draft = null;
+  const show = (kept, name, before) => {
+    if (!styled || !kept) return;
+    const data = JSON.parse(kept.data);
+    const source = map.getSource(name);
+    if (source) {
+      source.setData(data);
+    } else {
+      map.addSource(name, { type: "geojson", data });
+      for (const layer of JSON.parse(kept.layers)) map.addLayer(layer, before);
+    }
+  };
+  const showRestrictions = () =>
+    show(restrictions, "restrictions", map.getLayer("places-casing") ? "places-casing" : undefined);
+  const showDraft = () => show(draft, "draft", undefined);
   map.on("style.load", () => {
     styled = true;
+    showRestrictions();
     showPlaces();
+    showDraft();
   });
 
   // `theme` is the one asked for last, `shown` the one whose style the map has.
@@ -140,14 +163,14 @@ export async function createBasemap(container) {
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", retheme);
 
   // What is under the pointer: a junction before a street.
+  const near = (point) => [
+    [point.x - 6, point.y - 6],
+    [point.x + 6, point.y + 6],
+  ];
   const hotAt = (point) => {
     const layers = ["places-junction", "places-street"].filter((id) => map.getLayer(id));
     if (!layers.length) return null;
-    const box = [
-      [point.x - 6, point.y - 6],
-      [point.x + 6, point.y + 6],
-    ];
-    const found = map.queryRenderedFeatures(box, { layers });
+    const found = map.queryRenderedFeatures(near(point), { layers });
     const feature = found.find((f) => f.layer.id === "places-junction") ?? found[0];
     return feature ? feature.properties.hot : null;
   };
@@ -166,9 +189,81 @@ export async function createBasemap(container) {
     over = null;
     emit({ kind: "hover", hot: null });
   });
+  // A property of the first feature of `layer` near the point, if the layer is there.
+  const firstIn = (point, layer, property) => {
+    if (!map.getLayer(layer)) return null;
+    const feature = map.queryRenderedFeatures(near(point), { layers: [layer] })[0];
+    return feature ? feature.properties[property] : null;
+  };
+  // The corner of the outline being drawn near the point: the first corner before a later one, so that a small
+  // outline can still be closed on it.
+  const draftCornerAt = (point) => {
+    if (!map.getLayer("draft-vertex")) return null;
+    const found = map.queryRenderedFeatures(near(point), { layers: ["draft-vertex"] });
+    const feature = found.find((f) => f.properties.i === 0) ?? found[0];
+    return feature ? feature.properties.i : null;
+  };
+  // Whether the last press of the left button on the map took a corner: the click that follows it is that drag's,
+  // not a press. Every left press on the map sets it again, so it never holds back a later click.
+  let pressedCorner = false;
+  // A press says where it was and what is there; the module decides what it means.
   map.on("click", (e) => {
-    const now = hotAt(e.point);
-    if (now) emit({ kind: "pick", hot: now });
+    if (pressedCorner) {
+      pressedCorner = false;
+      return;
+    }
+    emit({
+      kind: "press",
+      at: [e.lngLat.lng, e.lngLat.lat],
+      hot: hotAt(e.point),
+      area: firstIn(e.point, "areas-fill", "area"),
+      vertex: draftCornerAt(e.point),
+    });
+  });
+  // A corner of the selected restriction dragged: the map does not pan under it, and the module is told where it
+  // is at each move and when it is let go. The window hears the drag, so a corner let go off the map still ends
+  // it, as does a release the page never heard (the button is up at the next move) or the window losing focus;
+  // those end it where it was last. A corner pressed and let go without a move stays where it is.
+  let dragging = null;
+  let last = null;
+  let moved = false;
+  const lngLatOf = (e) => {
+    const box = map.getCanvas().getBoundingClientRect();
+    const at = map.unproject([e.clientX - box.left, e.clientY - box.top]);
+    return [at.lng, at.lat];
+  };
+  const dragEnd = (at) => {
+    window.removeEventListener("mousemove", dragMove);
+    window.removeEventListener("mouseup", dragUp);
+    window.removeEventListener("blur", dragLost);
+    const corner = dragging;
+    dragging = null;
+    emit({ kind: "vertex", ...corner, at, done: true });
+  };
+  const dragMove = (e) => {
+    if ((e.buttons & 1) === 0) return dragEnd(last);
+    last = lngLatOf(e);
+    moved = true;
+    emit({ kind: "vertex", ...dragging, at: last, done: false });
+  };
+  const dragUp = (e) => {
+    if (e.button === 0) dragEnd(moved ? lngLatOf(e) : last);
+  };
+  const dragLost = () => dragEnd(last);
+  map.on("mousedown", (e) => {
+    if (dragging || e.originalEvent.button !== 0) return;
+    pressedCorner = false;
+    if (!map.getLayer("areas-vertex")) return;
+    const feature = map.queryRenderedFeatures(near(e.point), { layers: ["areas-vertex"] })[0];
+    if (!feature) return;
+    e.preventDefault();
+    pressedCorner = true;
+    dragging = { area: feature.properties.area, index: feature.properties.i };
+    last = feature.geometry.coordinates;
+    moved = false;
+    window.addEventListener("mousemove", dragMove);
+    window.addEventListener("mouseup", dragUp);
+    window.addEventListener("blur", dragLost);
   });
   // A move that came from the person's own pointer or wheel, not from the page.
   map.on("movestart", (e) => {
@@ -179,6 +274,18 @@ export async function createBasemap(container) {
     setPlaces(layers, data) {
       places = { layers, data };
       showPlaces();
+    },
+    setRestrictions(layers, data) {
+      restrictions = { layers, data };
+      showRestrictions();
+    },
+    setDraft(layers, data) {
+      draft = { layers, data };
+      showDraft();
+    },
+    centre() {
+      const c = map.getCenter();
+      return new Float64Array([c.lng, c.lat]);
     },
     // `bounds` is west, south, east, north and `insets` top, right, bottom, left, as numbers.
     fit([west, south, east, north], [top, right, bottom, left]) {

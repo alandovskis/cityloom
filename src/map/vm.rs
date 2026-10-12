@@ -3,16 +3,20 @@
 //! "start over" means. The view binds to its properties and sends it commands.
 
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeSet;
 use std::rc::{Rc, Weak};
 
 use leptos::prelude::*;
 
 use crate::city::model::{City, CityView, EdgeView, NodeView};
+use crate::city::projection::Projection;
 use crate::city::store::CityStore;
+use crate::map::areas::AreasVm;
 use crate::map::camera::{Camera, Insets, World};
 use crate::map::overlay;
-use crate::map::projection::Projection;
 use crate::map::style;
+use crate::restriction::draw::Draw;
+use crate::restriction::model::{Conflict, Restriction, Rule, conflicts};
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::ports::{MapEvent, Ports};
@@ -164,6 +168,19 @@ pub struct NoteItem {
     pub detail: String,
 }
 
+/// A street inside an area, and what it has that the area's rule does not allow.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AreaStreet {
+    /// The area's id.
+    pub area: String,
+    pub uid: u32,
+    pub href: String,
+    /// The street and where it runs, as the notes name it.
+    pub name: Said,
+    pub rule: Rule,
+    pub conflicts: Vec<Conflict>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Status {
     pub text: String,
@@ -196,6 +213,11 @@ pub struct MapVm {
     active: ArcRwSignal<Option<usize>>,
     /// The places worded for the search, until the city, the language or the units change.
     worded: RefCell<Option<Worded>>,
+    /// The area restrictions: the Restrictions tab, and what the map shows of them.
+    areas: Rc<AreasVm>,
+    /// In the tests: how many streets were read to check them against an area's rule.
+    #[cfg(test)]
+    editors_read: Cell<usize>,
 }
 
 impl MapVm {
@@ -219,6 +241,7 @@ impl MapVm {
         let core = Core::new(model);
         let world = World::round(core.view_now().bounds_mm);
         let basemap = if has_roads { BasemapState::Waiting } else { BasemapState::Unavailable(NO_ROADS) };
+        let areas = AreasVm::new(ports.clone(), i18n.clone());
         Rc::new_cyclic(|me| MapVm {
             me: me.clone(),
             core,
@@ -232,6 +255,9 @@ impl MapVm {
             search: ArcRwSignal::new(String::new()),
             active: ArcRwSignal::new(None),
             worded: RefCell::new(None),
+            areas,
+            #[cfg(test)]
+            editors_read: Cell::new(0),
         })
     }
 
@@ -489,6 +515,14 @@ impl MapVm {
             .collect()
     }
 
+    /// How many streets break the rule of an area they are inside (a speed limit never does).
+    fn streets_in_conflict(&self) -> usize {
+        let mut uids: Vec<u32> = self.findings().iter().filter(|f| !f.conflicts.is_empty()).map(|f| f.uid).collect();
+        uids.sort_unstable();
+        uids.dedup();
+        uids.len()
+    }
+
     pub fn checks_lead(&self) -> String {
         if self.has_no_places() {
             return self.word("map-checks-no-places");
@@ -496,7 +530,10 @@ impl MapVm {
         let v = self.view();
         let all = self.places_for_notes(&v);
         let failing = all.iter().filter(|p| !p.2).count();
-        if failing > 0 {
+        let streets = self.streets_in_conflict();
+        if failing == 0 && streets > 0 {
+            self.i18n.tr("map-checks-conflicts", &Args::new().num("streets", streets as i64))
+        } else if failing > 0 {
             self.i18n.tr("map-checks-failing", &Args::new().num("n", failing as i64))
         } else {
             self.i18n.tr("map-checks-pass", &Args::new().num("n", all.len() as i64))
@@ -538,6 +575,10 @@ impl MapVm {
         }
         let v = self.view();
         let bad: Vec<String> = self.places_for_notes(&v).into_iter().filter(|p| !p.2).map(|p| self.say(&p.1)).collect();
+        let streets = self.streets_in_conflict();
+        if bad.is_empty() && streets > 0 {
+            return Status { text: self.i18n.tr("map-status-conflicts", &Args::new().num("n", v.places as i64).num("streets", streets as i64)), bad: true };
+        }
         if bad.is_empty() {
             return Status { text: self.i18n.tr("map-status-ok", &Args::new().num("n", v.places as i64)), bad: false };
         }
@@ -600,12 +641,7 @@ impl MapVm {
 
     /// Where the city lies on the earth: known once its area's roads are.
     pub fn projection(&self) -> Option<Projection> {
-        if !self.store.has_network() {
-            return None;
-        }
-        let area = self.store.area();
-        let origin = self.core.view_now().origin_m?;
-        Some(Projection::new(area.bounds(), origin))
+        crate::city::projection::for_store(&self.store, self.core.view_now().origin_m)
     }
 
     /// Listens to what the map says, and tells it the units. Called once, by the page that has a map.
@@ -619,15 +655,23 @@ impl MapVm {
         self.ports.mapper.set_imperial(matches!(self.core.units(), Units::Feet));
     }
 
+    /// What the map says. While an outline is drawn a press is always a corner of it (or closes it, on its first
+    /// corner), whatever lies under it; while one is named a press does nothing. Otherwise a press on a place opens
+    /// it, even inside an area, and a press elsewhere selects the area there, or none. A corner dragged is the
+    /// areas'; the map tells of no press for the click that ends it.
     fn on_map_event(&self, event: MapEvent) {
         match event {
             MapEvent::Ready { bounds } => self.tiles_ready(bounds),
             MapEvent::Failed => self.give_up(MISSING),
-            MapEvent::Pick { hot } => {
-                if let Some(href) = href_of(&hot) {
-                    self.ports.navigator.go(&href);
-                }
-            }
+            MapEvent::Press { at, hot, area, vertex } => match self.areas.draw_now() {
+                Draw::Drawing(_) => self.areas.on_press(at, vertex),
+                Draw::Naming(_) => {}
+                Draw::Idle => match hot.as_deref().and_then(href_of) {
+                    Some(href) => self.ports.navigator.go(&href),
+                    None => self.areas.select(area.as_deref()),
+                },
+            },
+            MapEvent::Vertex { area, index, at, done } => self.areas.drag_vertex(&area, index, at, done),
             MapEvent::Hover { hot } => self.set_hot(hot),
             MapEvent::Moved => self.moved.set(true),
         }
@@ -651,16 +695,22 @@ impl MapVm {
         self.basemap.set(BasemapState::Ready);
         self.sync_places();
         self.fit();
+        self.sync_areas();
     }
 
-    /// Sends the places to the map, once there is a map to show them on.
+    /// Sends the places to the map, once there is a map to show them on; a street that breaks the rule of an area it
+    /// is inside is marked.
     pub fn sync_places(&self) {
         let Some(projection) = self.projection() else { return };
         let area = self.store.area();
         if self.basemap.get_untracked() != BasemapState::Ready {
             return;
         }
-        self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&self.core.view_now(), &projection));
+        let view = self.core.view_now();
+        // Only a rule a street can break can tint one.
+        let checked: Vec<Restriction> = self.areas.list_now().into_iter().filter(|r| !r.rule.informational()).collect();
+        let in_conflict: BTreeSet<u32> = self.findings_in(&view, &checked).into_iter().filter(|s| !s.conflicts.is_empty()).map(|s| s.uid).collect();
+        self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&view, &projection, &in_conflict));
     }
 
     /// Sends the place the pointer or the focus is on to the map.
@@ -682,7 +732,97 @@ impl MapVm {
 
     /// The colours the places are drawn in, and what each says.
     pub fn status_key(&self) -> Vec<(&'static str, String)> {
-        [("ok", "map-state-works"), ("changed", "map-state-changed"), ("bad", "map-state-bad")].into_iter().map(|(id, key)| (id, self.word(key))).collect()
+        [("ok", "map-state-works"), ("changed", "map-state-changed"), ("bad", "map-state-bad"), ("conflict", "restriction-legend-conflict")]
+            .into_iter()
+            .map(|(id, key)| (id, self.word(key)))
+            .collect()
+    }
+
+    // ---- area restrictions ----
+
+    /// The Restrictions tab's view-model.
+    pub fn areas(&self) -> &Rc<AreasVm> {
+        &self.areas
+    }
+
+    /// Whether an area can be drawn: there is a map to draw it on, and the document is not a newer build's.
+    pub fn can_declare(&self) -> bool {
+        self.basemap.get() == BasemapState::Ready && !self.areas.is_future()
+    }
+
+    /// What the tab says first: why nothing can be drawn where there is no map, else the areas' own lead.
+    pub fn areas_lead(&self) -> String {
+        if !self.areas.is_future() && matches!(self.basemap.get(), BasemapState::Unavailable(_)) {
+            return self.word("restriction-lead-no-map");
+        }
+        self.areas.lead()
+    }
+
+    /// Sends the areas and the outline being drawn to the map, once there is a map to show them on.
+    pub fn sync_areas(&self) {
+        if self.basemap.get_untracked() == BasemapState::Ready {
+            self.areas.sync();
+        }
+    }
+
+    /// The streets of `v` inside each of `list`, area by area, with what each has that the area's rule does not
+    /// allow. A street inside several areas is found once for each. A rule that is only for information (a speed
+    /// limit: streets carry no speed) reads no street to check it.
+    fn findings_in(&self, v: &CityView, list: &[Restriction]) -> Vec<AreaStreet> {
+        let Some(p) = self.projection() else { return Vec::new() };
+        let mut found = Vec::new();
+        for r in list {
+            for e in v.edges.iter().filter(|e| r.holds(&e.shape_mm, &p)) {
+                let conflicts = if r.rule.informational() {
+                    Vec::new()
+                } else {
+                    #[cfg(test)]
+                    self.editors_read.set(self.editors_read.get() + 1);
+                    let Some(street) = self.core.read(|m| m.city.street_editor(e.uid, m.region).map(|e| e.snapshot())) else { continue };
+                    conflicts(r.rule, &street)
+                };
+                let name = Said::new("map-note-street").with("street", Arg::Said(Box::new(e.called.clone()))).with("ends", Arg::Said(Box::new(e.ends.clone())));
+                found.push(AreaStreet { area: r.id.clone(), uid: e.uid, href: street_href(e.uid), name, rule: r.rule, conflicts });
+            }
+        }
+        found
+    }
+
+    /// Every street inside an area, for a view: found again when the city or the areas change.
+    pub fn findings(&self) -> Vec<AreaStreet> {
+        self.findings_in(&self.view(), &self.areas.list())
+    }
+
+    /// The streets inside the area `id`.
+    pub fn area_streets(&self, id: &str) -> Vec<AreaStreet> {
+        let Some(r) = self.areas.find(id) else { return Vec::new() };
+        self.findings_in(&self.view(), &[r])
+    }
+
+    /// An area's small print in the tab: its rule, and how many streets are inside and in conflict.
+    pub fn area_row_sub(&self, r: &Restriction) -> String {
+        let streets = self.area_streets(&r.id);
+        let inside = streets.len() as i64;
+        let in_conflict = streets.iter().filter(|s| !s.conflicts.is_empty()).count() as i64;
+        let summary = if inside == 0 {
+            Said::new("restriction-summary-none")
+        } else if r.rule.informational() {
+            Said::new("restriction-summary-info").with("inside", Arg::Num(inside))
+        } else {
+            Said::new("restriction-summary").with("inside", Arg::Num(inside)).with("conflicts", Arg::Num(in_conflict))
+        };
+        self.say(&Said::new("restriction-row-sub").with("rule", Arg::Said(Box::new(r.rule.said()))).with("summary", Arg::Said(Box::new(summary))))
+    }
+
+    /// How a street inside an area stands, in words.
+    pub fn street_detail(&self, s: &AreaStreet) -> String {
+        if s.rule.informational() {
+            return self.word("restriction-street-inside");
+        }
+        if s.conflicts.is_empty() {
+            return self.word("restriction-street-keeps");
+        }
+        s.conflicts.iter().map(|c| self.say(&c.said())).collect::<Vec<_>>().join(" ")
     }
 
     /// What floats over the map, in pixels from each edge: the whole city is fitted in what is left, until
@@ -756,8 +896,12 @@ mod tests {
     use super::*;
     use crate::map::camera::Insets;
     use crate::place::area::Area;
+    use crate::restriction::draw::Draw;
+    use crate::restriction::fixtures::{bent_midpoint, square};
+    use crate::restriction::model::Conflict;
+    use crate::restriction::store::RestrictionStore;
     use crate::shared::i18n::Locale;
-    use crate::shared::ports::{FakeMapper, MapCall, MapEvent, MemoryStorage, Ports, RecordingAnnouncer, RecordingNavigator, test_ports};
+    use crate::shared::ports::{FakeMapper, MapCall, MapEvent, MemoryStorage, Ports, RecordingAnnouncer, RecordingNavigator, Storage, test_ports};
     use crate::shared::said::say_now;
     use osm_network::{Control, Lane, LaneKind, Network, Node, Road, Way};
 
@@ -1198,6 +1342,7 @@ mod tests {
         let calls = mapper.take();
         assert!(matches!(&calls[0], MapCall::Places { layers, data } if layers.contains("places-street") && data.contains("\"s-1\"")), "{calls:?}");
         assert!(matches!(&calls[1], MapCall::Fit { bounds, insets } if bounds[0] < bounds[2] && bounds[1] < bounds[3] && *insets == [0.0; 4]), "{calls:?}");
+        assert!(matches!(&calls[2], MapCall::Restrictions { .. }) && matches!(&calls[3], MapCall::Draft { .. }), "{calls:?}");
     }
 
     #[test]
@@ -1220,9 +1365,11 @@ mod tests {
     #[test]
     fn pressing_a_place_opens_it_and_the_pointer_over_one_makes_it_hot() {
         let (vm, mapper, navigator, _) = area_vm();
-        mapper.say(MapEvent::Pick { hot: "s-1".into() });
-        mapper.say(MapEvent::Pick { hot: "j-3".into() });
-        mapper.say(MapEvent::Pick { hot: "nonsense".into() });
+        let press = |hot: Option<&str>| MapEvent::Press { at: [-73.6, 45.5], hot: hot.map(String::from), area: None, vertex: None };
+        mapper.say(press(Some("s-1")));
+        mapper.say(press(Some("j-3")));
+        mapper.say(press(Some("nonsense")));
+        mapper.say(press(None));
         assert_eq!(navigator.take(), vec!["street.html?street=1".to_string(), "intersection.html?junction=3".to_string()]);
         mapper.say(MapEvent::Hover { hot: Some("s-1".into()) });
         assert_eq!(vm.hot().as_deref(), Some("s-1"));
@@ -1299,7 +1446,15 @@ mod tests {
     #[test]
     fn the_key_says_what_the_colours_of_the_places_mean() {
         let (vm, ..) = vm();
-        assert_eq!(vm.status_key(), vec![("ok", "Works".to_string()), ("changed", "Changed".to_string()), ("bad", "Needs attention".to_string())]);
+        assert_eq!(
+            vm.status_key(),
+            vec![
+                ("ok", "Works".to_string()),
+                ("changed", "Changed".to_string()),
+                ("bad", "Needs attention".to_string()),
+                ("conflict", "Conflicts with an area rule".to_string())
+            ]
+        );
     }
 
     #[test]
@@ -1313,5 +1468,212 @@ mod tests {
         let before = vm.view_box();
         vm.resize(500.0, 600.0);
         assert_ne!(vm.view_box(), before);
+    }
+
+    /// Bendville's map, ready, with a car-free area declared round its street's midpoint.
+    fn car_free_bendville() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<MemoryStorage>) {
+        let (vm, mapper, navigator, storage) = area_vm();
+        mapper.say(COVERING);
+        mapper.take();
+        let (_, mid) = bent_midpoint(&CityStore::current(storage.clone()));
+        let a = vm.areas();
+        assert!(a.start());
+        for p in square(mid, 0.0005) {
+            assert!(a.add_at(p));
+        }
+        assert!(a.close());
+        a.set_form_name("Car zone");
+        assert!(a.save());
+        (vm, mapper, navigator, storage)
+    }
+
+    #[test]
+    fn a_street_inside_a_car_free_area_with_driving_lanes_is_found_tinted_and_summed_up() {
+        let (vm, mapper, ..) = car_free_bendville();
+        let found = vm.findings();
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].area.as_str(), found[0].uid, found[0].href.as_str()), ("r1", 1, "street.html?street=1"));
+        assert_eq!(found[0].conflicts, vec![Conflict { kind: "travel", pieces: 2 }]);
+        assert_eq!(vm.say(&found[0].name), "Bend Street, through the city");
+        assert_eq!(vm.street_detail(&found[0]), "It has 2 driving lanes.");
+        let r = vm.areas().find_now("r1").unwrap();
+        assert_eq!(vm.area_row_sub(&r), "Car-free · One street inside; one conflicts with the rule.");
+        vm.sync_places();
+        assert!(matches!(&mapper.take()[0], MapCall::Places { data, .. } if data.contains("\"conflict\":true")));
+        assert!(vm.areas().set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
+        assert_eq!(vm.area_row_sub(&vm.areas().find_now("r1").unwrap()), "Speed limit of 30 km/h · One street inside.");
+        assert_eq!(vm.street_detail(&vm.findings()[0]), "Inside the area.");
+        vm.sync_places();
+        assert!(matches!(&mapper.take()[0], MapCall::Places { data, .. } if data.contains("\"conflict\":false")), "a speed limit flags nothing");
+    }
+
+    #[test]
+    fn a_street_that_keeps_to_the_rule_of_its_area_is_said_to_and_is_not_tinted() {
+        let (vm, mapper, ..) = car_free_bendville();
+        assert!(vm.areas().set_rule("r1", Rule::NoParkingOrLoading));
+        let found = vm.findings();
+        assert_eq!((found.len(), found[0].conflicts.is_empty()), (1, true));
+        assert_eq!(vm.street_detail(&found[0]), "Keeps to the rule.");
+        assert_eq!(vm.area_row_sub(&vm.areas().find_now("r1").unwrap()), "No parking or loading · One street inside; none conflicts with the rule.");
+        vm.sync_places();
+        assert!(matches!(&mapper.take()[0], MapCall::Places { data, .. } if data.contains("\"conflict\":false")));
+    }
+
+    #[test]
+    fn an_area_s_small_print_is_said_in_french() {
+        let (vm, ..) = car_free_bendville();
+        vm.i18n().set(Locale::FrCa);
+        let r = vm.areas().find_now("r1").unwrap();
+        assert_eq!(vm.area_row_sub(&r), "Zone sans voitures · 1 rue à l’intérieur; une est en conflit avec la règle.");
+        assert_eq!(vm.status_key()[3], ("conflict", "En conflit avec une règle de zone".to_string()));
+    }
+
+    #[test]
+    fn a_press_while_drawing_places_a_corner_instead_of_opening_the_place_and_naming_ignores_presses() {
+        let (vm, mapper, navigator, _) = area_vm();
+        mapper.say(COVERING);
+        assert!(vm.areas().start());
+        let press = |at: [f64; 2], hot: Option<&str>, vertex: Option<usize>| MapEvent::Press { at, hot: hot.map(String::from), area: None, vertex };
+        mapper.say(press([-73.600, 45.500], Some("s-1"), None));
+        mapper.say(press([-73.599, 45.500], None, None));
+        mapper.say(press([-73.599, 45.501], None, None));
+        assert_eq!(vm.areas().draw_now().corners().len(), 3);
+        mapper.say(press([-73.600, 45.500], Some("s-1"), Some(0)));
+        assert!(matches!(vm.areas().draw_now(), Draw::Naming(_)));
+        mapper.say(press([-73.6, 45.5], Some("s-1"), None));
+        assert!(matches!(vm.areas().draw_now(), Draw::Naming(c) if c.len() == 3), "naming: a press adds nothing");
+        assert!(navigator.take().is_empty(), "no place is opened while an area is drawn or named");
+    }
+
+    #[test]
+    fn a_press_on_an_area_selects_it_a_press_on_nothing_lets_it_go_and_a_drag_moves_its_corner() {
+        let (vm, mapper, navigator, _) = car_free_bendville();
+        vm.areas().select(None);
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: Some("r1".into()), vertex: None });
+        assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"));
+        let corner = vm.areas().find_now("r1").unwrap().ring[0];
+        let to = [corner[0] - 0.0001, corner[1]];
+        mapper.say(MapEvent::Vertex { area: "r1".into(), index: 0, at: to, done: false });
+        mapper.say(MapEvent::Vertex { area: "r1".into(), index: 0, at: to, done: true });
+        assert_eq!(vm.areas().find_now("r1").unwrap().ring[0], to);
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: None, area: None, vertex: None });
+        assert_eq!(vm.areas().selected_id_now(), None);
+        mapper.say(MapEvent::Press { at: [-73.6, 45.5], hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
+        assert_eq!(navigator.take(), ["street.html?street=1"], "a place in an area opens the place");
+    }
+
+    #[test]
+    fn a_corner_pressed_and_let_go_without_a_move_moves_nothing_and_the_next_press_opens_the_street() {
+        let (vm, mapper, navigator, storage) = car_free_bendville();
+        let corner = vm.areas().find_now("r1").unwrap().ring[0];
+        let kept = storage.recall(crate::restriction::store::RESTRICTIONS_KEY);
+        // What the map tells of a corner clicked: the drop alone (it swallows the click that follows).
+        mapper.say(MapEvent::Vertex { area: "r1".into(), index: 0, at: corner, done: true });
+        assert!(navigator.take().is_empty(), "a drop opens nothing");
+        assert_eq!(vm.areas().selected_id_now().as_deref(), Some("r1"), "and the area stays selected");
+        assert_eq!(storage.recall(crate::restriction::store::RESTRICTIONS_KEY), kept, "nothing moved");
+        mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
+        assert_eq!(navigator.take(), ["street.html?street=1"]);
+    }
+
+    #[test]
+    fn a_press_while_drawing_right_after_a_corner_drop_is_a_corner_and_opens_nothing() {
+        let (vm, mapper, navigator, _) = car_free_bendville();
+        let corner = vm.areas().find_now("r1").unwrap().ring[0];
+        let to = [corner[0] - 0.0001, corner[1]];
+        mapper.say(MapEvent::Vertex { area: "r1".into(), index: 0, at: to, done: false });
+        mapper.say(MapEvent::Vertex { area: "r1".into(), index: 0, at: to, done: true });
+        assert!(vm.areas().start());
+        mapper.say(MapEvent::Press { at: corner, hot: Some("s-1".into()), area: Some("r1".into()), vertex: None });
+        assert_eq!(vm.areas().draw_now().corners(), &[corner], "a press while drawing is always a corner");
+        assert!(navigator.take().is_empty());
+    }
+
+    #[test]
+    fn the_areas_are_sent_only_to_a_ready_map_and_declaring_needs_one() {
+        let (vm, mapper, ..) = area_vm();
+        vm.sync_areas();
+        assert!(mapper.take().is_empty() && !vm.can_declare(), "the tiles have not answered");
+        mapper.say(COVERING);
+        mapper.take();
+        assert!(vm.can_declare());
+        vm.sync_areas();
+        assert!(matches!(mapper.take()[..], [MapCall::Restrictions { .. }, MapCall::Draft { .. }]));
+    }
+
+    #[test]
+    fn declaring_needs_a_document_this_build_can_write() {
+        let (vm, mapper, _, storage) = area_vm();
+        storage.remember(crate::restriction::store::RESTRICTIONS_KEY, r#"{"version":2,"restrictions":{}}"#);
+        vm.areas().reload();
+        mapper.say(COVERING);
+        assert!(!vm.can_declare());
+        assert!(vm.areas_lead().starts_with("These area rules were saved by a newer version"));
+    }
+
+    #[test]
+    fn an_area_away_from_the_loaded_streets_holds_none_and_a_roadless_city_finds_nothing() {
+        let (vm, mapper, _, storage) = area_vm();
+        mapper.say(COVERING);
+        let (_, mid) = bent_midpoint(&CityStore::current(storage.clone()));
+        let far = RestrictionStore::new(storage.clone()).add("Far", Rule::CarFree, square([mid[0] + 0.05, mid[1]], 0.001)).unwrap();
+        vm.areas().reload();
+        assert!(vm.area_streets(&far.id).is_empty());
+        assert_eq!(vm.area_row_sub(&far), "Car-free · No loaded street is inside.");
+        assert_eq!(vm.areas_lead(), "One area rule. Select one to see the streets inside it.");
+        let (roadless, ..) = roadless_map_vm();
+        assert!(roadless.findings().is_empty());
+        assert!(!roadless.can_declare());
+        assert_eq!(roadless.areas_lead(), "An area is drawn on the map, and there is no map here.");
+    }
+
+    #[test]
+    fn a_speed_limit_area_reads_no_street_and_tints_none() {
+        let (vm, mapper, ..) = car_free_bendville();
+        assert!(vm.areas().set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
+        vm.editors_read.set(0);
+        vm.sync_places();
+        assert!(matches!(&mapper.take()[0], MapCall::Places { data, .. } if data.contains("\"conflict\":false")));
+        assert_eq!(vm.area_row_sub(&vm.areas().find_now("r1").unwrap()), "Speed limit of 30 km/h · One street inside.");
+        assert_eq!(vm.editors_read.get(), 0, "streets carry no speed, so none is read to check one");
+    }
+
+    #[test]
+    fn the_streets_of_one_area_are_found_without_checking_the_others() {
+        let (vm, _, _, storage) = car_free_bendville();
+        let (_, mid) = bent_midpoint(&CityStore::current(storage.clone()));
+        let far = RestrictionStore::new(storage.clone()).add("Far", Rule::CarFree, square([mid[0] + 0.05, mid[1]], 0.001)).unwrap();
+        vm.areas().reload();
+        vm.editors_read.set(0);
+        assert!(vm.area_streets(&far.id).is_empty());
+        assert_eq!(vm.editors_read.get(), 0, "the street inside the other area is not read");
+        assert_eq!(vm.area_streets("r1").len(), 1);
+        assert_eq!(vm.editors_read.get(), 1);
+        assert!(vm.area_streets("r9").is_empty(), "no such area");
+    }
+
+    #[test]
+    fn a_street_in_conflict_with_an_area_rule_is_not_a_city_where_every_check_passes() {
+        let (vm, ..) = car_free_bendville();
+        let owner = Owner::new();
+        owner.set();
+        let before = vm.status();
+        assert!(!vm.findings().is_empty() && vm.findings().iter().any(|f| !f.conflicts.is_empty()));
+        assert_eq!(before, Status { text: "1 place. One street conflicts with an area rule.".to_string(), bad: true });
+        assert_eq!(vm.checks_lead(), "One street conflicts with an area rule. The Area rules tab lists it.");
+        assert!(vm.failing_items().is_empty(), "the design checks are what that list is of");
+        vm.i18n().set(Locale::FrCa);
+        assert_eq!(vm.status().text, "1 lieu. Une rue est en conflit avec une règle de zone.");
+        assert_eq!(vm.checks_lead(), "Une rue est en conflit avec une règle de zone. L’onglet Règles de zone la liste.");
+    }
+
+    #[test]
+    fn a_speed_limit_area_leaves_the_status_and_the_lead_as_they_were() {
+        let (vm, ..) = car_free_bendville();
+        let owner = Owner::new();
+        owner.set();
+        assert!(vm.areas().set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
+        assert_eq!(vm.status(), Status { text: "1 place. Every check passes.".to_string(), bad: false });
+        assert_eq!(vm.checks_lead(), "Every check passes in the one place.");
     }
 }

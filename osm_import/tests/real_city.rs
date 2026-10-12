@@ -62,9 +62,9 @@ mod kept {
 
     use cityloom_editor::city::edits::{self, Document, EDITS_KEY, Edits};
     use cityloom_editor::city::model::CityView;
+    use cityloom_editor::city::projection::Projection;
     use cityloom_editor::city::store::CityStore;
     use cityloom_editor::junction::model::RING_STEP_MM;
-    use cityloom_editor::map::projection::Projection;
     use cityloom_editor::place::area::{Area, default_area};
     use cityloom_editor::shared::ports::{MemoryStorage, Storage};
 

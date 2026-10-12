@@ -1,7 +1,7 @@
 //! What a view-model asks of the platform it runs on. The page supplies the
 //! browser's; tests supply fakes.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -67,8 +67,12 @@ pub enum MapEvent {
     Ready { bounds: [f64; 4] },
     /// The tiles could not be had.
     Failed,
-    /// A place on the map was pressed: `s-7` for a street, `j-3` for a junction.
-    Pick { hot: String },
+    /// The map was pressed at `at` (longitude, latitude). `hot` is the place there (`s-7`, `j-3`), `area` the
+    /// restriction whose outline holds it, `vertex` the corner of the outline being drawn there: the page decides
+    /// what the press means.
+    Press { at: [f64; 2], hot: Option<String>, area: Option<String>, vertex: Option<usize> },
+    /// A corner (`index`) of the selected restriction `area` is being dragged to `at`; `done` once it is let go.
+    Vertex { area: String, index: usize, at: [f64; 2], done: bool },
     /// The pointer is over a place, or is no longer.
     Hover { hot: Option<String> },
     /// The person moved the map themselves, with the pointer or the wheel.
@@ -80,6 +84,13 @@ pub trait Mapper {
     /// Shows the places: `layers` is a MapLibre layer list over a GeoJSON source named `places`, whose
     /// features `data` holds. Called again whenever the places change.
     fn set_places(&self, layers: &str, data: &str);
+    /// Shows the restrictions: `layers` is a MapLibre layer list over a GeoJSON source named `restrictions`, whose
+    /// features `data` holds, drawn under the places. Called again whenever they change.
+    fn set_restrictions(&self, layers: &str, data: &str);
+    /// Shows the outline being drawn: `layers` over a source named `draft` holding `data`, drawn over everything.
+    fn set_draft(&self, layers: &str, data: &str);
+    /// Where the middle of the view is: longitude, latitude.
+    fn centre(&self) -> [f64; 2];
     /// Moves the view to hold `bounds` (west, south, east, north in degrees), clear of `insets`
     /// (top, right, bottom, left, in pixels).
     fn fit(&self, bounds: [f64; 4], insets: [f64; 4]);
@@ -100,6 +111,11 @@ pub struct NoMapper;
 
 impl Mapper for NoMapper {
     fn set_places(&self, _: &str, _: &str) {}
+    fn set_restrictions(&self, _: &str, _: &str) {}
+    fn set_draft(&self, _: &str, _: &str) {}
+    fn centre(&self) -> [f64; 2] {
+        [0.0, 0.0]
+    }
     fn fit(&self, _: [f64; 4], _: [f64; 4]) {}
     fn zoom_by(&self, _: f64) {}
     fn pan_by(&self, _: f64, _: f64) {}
@@ -367,6 +383,8 @@ impl Page for FakePage {
 #[derive(Clone, Debug, PartialEq)]
 pub enum MapCall {
     Places { layers: String, data: String },
+    Restrictions { layers: String, data: String },
+    Draft { layers: String, data: String },
     Fit { bounds: [f64; 4], insets: [f64; 4] },
     Zoom(f64),
     Pan(f64, f64),
@@ -382,12 +400,18 @@ type MapListener = Box<dyn Fn(MapEvent)>;
 pub struct FakeMapper {
     calls: RefCell<Vec<MapCall>>,
     listener: RefCell<Option<MapListener>>,
+    centre: Cell<[f64; 2]>,
 }
 
 impl FakeMapper {
     /// What it was asked since this was last called.
     pub fn take(&self) -> Vec<MapCall> {
         std::mem::take(&mut *self.calls.borrow_mut())
+    }
+
+    /// Moves the middle of the view, as the person panning would.
+    pub fn set_centre(&self, at: [f64; 2]) {
+        self.centre.set(at);
     }
 
     /// The map tells the page something.
@@ -401,6 +425,15 @@ impl FakeMapper {
 impl Mapper for FakeMapper {
     fn set_places(&self, layers: &str, data: &str) {
         self.calls.borrow_mut().push(MapCall::Places { layers: layers.into(), data: data.into() });
+    }
+    fn set_restrictions(&self, layers: &str, data: &str) {
+        self.calls.borrow_mut().push(MapCall::Restrictions { layers: layers.into(), data: data.into() });
+    }
+    fn set_draft(&self, layers: &str, data: &str) {
+        self.calls.borrow_mut().push(MapCall::Draft { layers: layers.into(), data: data.into() });
+    }
+    fn centre(&self) -> [f64; 2] {
+        self.centre.get()
     }
     fn fit(&self, bounds: [f64; 4], insets: [f64; 4]) {
         self.calls.borrow_mut().push(MapCall::Fit { bounds, insets });
@@ -575,7 +608,18 @@ mod map_tests {
         let read = |s: &str| serde_json::from_str::<MapEvent>(s).unwrap();
         assert_eq!(read(r#"{"kind":"ready","bounds":[1,2,3,4]}"#), MapEvent::Ready { bounds: [1.0, 2.0, 3.0, 4.0] });
         assert_eq!(read(r#"{"kind":"failed"}"#), MapEvent::Failed);
-        assert_eq!(read(r#"{"kind":"pick","hot":"s-7"}"#), MapEvent::Pick { hot: "s-7".into() });
+        assert_eq!(
+            read(r#"{"kind":"press","at":[1,2],"hot":"s-7","area":null,"vertex":null}"#),
+            MapEvent::Press { at: [1.0, 2.0], hot: Some("s-7".into()), area: None, vertex: None }
+        );
+        assert_eq!(
+            read(r#"{"kind":"press","at":[1,2],"area":"r3","vertex":0}"#),
+            MapEvent::Press { at: [1.0, 2.0], hot: None, area: Some("r3".into()), vertex: Some(0) }
+        );
+        assert_eq!(
+            read(r#"{"kind":"vertex","area":"r1","index":2,"at":[3,4],"done":true}"#),
+            MapEvent::Vertex { area: "r1".into(), index: 2, at: [3.0, 4.0], done: true }
+        );
         assert_eq!(read(r#"{"kind":"hover","hot":"j-3"}"#), MapEvent::Hover { hot: Some("j-3".into()) });
         assert_eq!(read(r#"{"kind":"hover","hot":null}"#), MapEvent::Hover { hot: None });
         assert_eq!(read(r#"{"kind":"moved"}"#), MapEvent::Moved);
@@ -601,6 +645,16 @@ mod map_tests {
                 MapCall::Places { layers: "[]".into(), data: "{}".into() },
             ]
         );
+        fake.set_restrictions("[1]", "{1}");
+        fake.set_draft("[2]", "{2}");
+        assert_eq!(
+            fake.take(),
+            vec![MapCall::Restrictions { layers: "[1]".into(), data: "{1}".into() }, MapCall::Draft { layers: "[2]".into(), data: "{2}".into() }]
+        );
+        assert_eq!(fake.centre(), [0.0, 0.0]);
+        fake.set_centre([-73.6, 45.5]);
+        assert_eq!(fake.centre(), [-73.6, 45.5]);
+        assert_eq!(NoMapper.centre(), [0.0, 0.0]);
         assert!(fake.take().is_empty(), "taken once");
 
         let heard = Rc::new(RefCell::new(Vec::new()));

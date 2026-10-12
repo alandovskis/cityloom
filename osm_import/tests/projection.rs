@@ -1,6 +1,6 @@
 //! The editor's projection must agree with the one osm2streets laid the network out with.
 
-use cityloom_editor::map::projection::Projection;
+use cityloom_editor::city::projection::Projection;
 use cityloom_editor::place::area::Area;
 use geom::{GPSBounds, LonLat};
 

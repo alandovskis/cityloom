@@ -993,3 +993,53 @@ fn the_street_ftl_files_have_the_same_messages_and_variables() {
     use crate::shared::i18n::tests::parity_problems;
     assert_eq!(parity_problems(crate::street::RESOURCES.en, crate::street::RESOURCES.fr), Vec::<String>::new());
 }
+
+fn bendville_street(areas: &[(&str, crate::restriction::model::Rule)], locale: Locale) -> Rc<StreetVm> {
+    use crate::restriction::fixtures::{bent_midpoint, bent_store, square};
+    let (ports, _, storage) = crate::shared::ports::test_ports();
+    let store = bent_store(storage.clone());
+    let (_, mid) = bent_midpoint(&store);
+    for (name, rule) in areas {
+        crate::restriction::store::RestrictionStore::new(storage.clone()).add(name, *rule, square(mid, 0.0005)).unwrap();
+    }
+    let street = store.open().street_editor(1, 0).unwrap();
+    let binding = crate::city::binding::CityBinding { store, place: crate::city::binding::Place::Street(1) };
+    StreetVm::new(ports, crate::i18n_for(locale), street, Some(binding))
+}
+
+#[test]
+fn each_area_holding_the_street_is_a_check_and_a_failing_one_is_counted() {
+    use crate::restriction::model::Rule;
+    let vm = bendville_street(&[("Car zone", Rule::CarFree), ("Slow zone", Rule::SpeedLimit { kmh: 30 })], Locale::En);
+    let h = street_html(|| view! { <notes::Checks vm=vm.clone()/> });
+    assert!(h.contains("Area rule: Car zone") && h.contains("Car-free: the street does not keep to it.") && h.contains("It has 2 driving lanes."), "{h}");
+    assert!(h.contains("Area rule: Slow zone") && h.contains("<span class=\"sr-only\">: for information only</span>"), "{h}");
+    let editor_failing = vm.view_now().checks.iter().filter(|c| !c.ok).count();
+    let n = editor_failing + 1;
+    let pill = street_html(|| view! { <notes::FitChecks vm=vm.clone()/> });
+    assert!(pill.contains(&format!("{n} check")), "the car-free row counts, the speed limit does not: {pill}");
+    let badge = street_html(|| view! { <notes::ChecksBadge vm=vm.clone()/> });
+    assert!(badge.contains(&format!("id=\"checks-n\"")) && badge.contains(&format!(">{n}<span class=\"sr-only\">")), "{badge}");
+}
+
+#[test]
+fn the_area_rows_are_said_in_french_too() {
+    use crate::restriction::model::Rule;
+    let vm = bendville_street(&[("Zone piétonne", Rule::CarFree), ("Zone lente", Rule::SpeedLimit { kmh: 30 })], Locale::FrCa);
+    let h = street_html(|| view! { <notes::Checks vm=vm.clone()/> });
+    assert!(h.contains("Règle de zone\u{a0}: Zone piétonne") && h.contains("la rue ne la respecte pas."), "{h}");
+    assert!(h.contains("<span class=\"sr-only\">\u{a0}: échec</span>") && h.contains("<span class=\"sr-only\">\u{a0}: à titre indicatif</span>"), "{h}");
+    assert!(!h.contains("Area rule"), "{h}");
+    let editor_failing = vm.view_now().checks.iter().filter(|c| !c.ok).count();
+    let n = editor_failing + 1;
+    let pill = street_html(|| view! { <notes::FitChecks vm=vm.clone()/> });
+    assert!(pill.contains(&n.to_string()), "{pill}");
+    let badge = street_html(|| view! { <notes::ChecksBadge vm=vm.clone()/> });
+    assert!(badge.contains(&format!(">{n}<span class=\"sr-only\">")), "{badge}");
+}
+
+#[test]
+fn a_street_in_no_area_has_no_area_row() {
+    let vm = bendville_street(&[], Locale::En);
+    assert!(!street_html(|| view! { <notes::Checks vm=vm.clone()/> }).contains("Area rule"));
+}

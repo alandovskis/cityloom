@@ -6,7 +6,9 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::city::binding::CityBinding;
+use crate::city::binding::{CityBinding, Place};
+use crate::restriction::model::{Finding, Restriction};
+use crate::restriction::store::RestrictionStore;
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
@@ -65,7 +67,20 @@ pub struct StreetVm {
     i18n: Rc<I18n>,
     keeper: Option<Rc<Keeper>>,
     binding: Option<CityBinding>,
+    /// The areas whose outline holds the street, read when the page opened.
+    areas: Vec<Restriction>,
     mode: ArcRwSignal<ViewMode>,
+}
+
+/// The areas whose outline holds the midpoint of the street a page edits, read once when the page opens: none for
+/// a street that is not of the city, or a city that does not say where it lies.
+fn areas_holding(ports: &Ports, binding: Option<&CityBinding>) -> Vec<Restriction> {
+    let Some(CityBinding { store, place: Place::Street(edge) }) = binding else { return Vec::new() };
+    let city = store.open();
+    let (Some(shape), Some(projection)) = (city.street_shape(*edge), crate::city::projection::for_store(store, city.origin_m())) else {
+        return Vec::new();
+    };
+    RestrictionStore::new(ports.storage.clone()).all().into_iter().filter(|r| r.holds(&shape, &projection)).collect()
 }
 
 impl StreetVm {
@@ -73,6 +88,7 @@ impl StreetVm {
     /// instance the shell switches). Bound to a place in the city, what is made
     /// is written back to it; otherwise it is a sandbox.
     pub fn new(ports: Ports, i18n: Rc<I18n>, street: Editor, binding: Option<CityBinding>) -> Rc<StreetVm> {
+        let areas = areas_holding(&ports, binding.as_ref());
         Rc::new_cyclic(|me: &std::rc::Weak<StreetVm>| {
             // The view chosen on an earlier visit; the section when there is none, or it is not a view.
             let mode = ports.storage.recall(VIEW_KEY).as_deref().and_then(ViewMode::parse).unwrap_or(ViewMode::Section);
@@ -88,7 +104,7 @@ impl StreetVm {
                     },
                 )
             });
-            StreetVm { core: Core::new(street), ports, i18n, keeper, binding, mode: ArcRwSignal::new(mode) }
+            StreetVm { core: Core::new(street), ports, i18n, keeper, binding, areas, mode: ArcRwSignal::new(mode) }
         })
     }
 
@@ -107,6 +123,16 @@ impl StreetVm {
     /// The same, for a command: nothing is watched.
     pub fn view_now(&self) -> Rc<View> {
         self.core.view_now()
+    }
+
+    /// How the street stands against each area it is inside, as it is now: drawn again when the street is edited.
+    pub fn area_checks(&self) -> Vec<Finding> {
+        if self.areas.is_empty() {
+            return Vec::new();
+        }
+        self.core.version().track();
+        let street = self.core.read(|e| e.snapshot());
+        self.areas.iter().map(|r| Finding::of(r, &street)).collect()
     }
 
     pub fn units(&self) -> Units {
@@ -513,6 +539,55 @@ mod tests {
         r.vm.edit(|e| e.nudge_width(uid, 100));
         r.time.advance(300);
         assert_eq!(r.said.take(), vec!["Ce navigateur ne conserve pas vos modifications, alors les autres pages ne les verront pas."]);
+    }
+
+    use crate::restriction::fixtures::{bent_midpoint, bent_store, square};
+    use crate::restriction::model::Rule;
+    use crate::restriction::store::RestrictionStore;
+
+    /// Bendville's street on its page, with the areas kept first.
+    fn bendville_rig(areas: &[(&str, Rule, f64)]) -> Rig {
+        let (ports, said, storage, time) = test_ports_with_time();
+        let store = bent_store(storage.clone());
+        let (_, mid) = bent_midpoint(&store);
+        for (name, rule, east) in areas {
+            RestrictionStore::new(storage.clone()).add(name, *rule, square([mid[0] + east, mid[1]], 0.0005)).unwrap();
+        }
+        let street = store.open().street_editor(1, 0).unwrap();
+        let binding = CityBinding { store, place: Place::Street(1) };
+        Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), street, Some(binding)), said, time, storage }
+    }
+
+    #[test]
+    fn a_street_inside_an_area_is_checked_against_its_rule_and_follows_the_edits() {
+        let r = bendville_rig(&[("Car zone", Rule::CarFree, 0.0), ("Elsewhere", Rule::CarFree, 0.05)]);
+        let checks = r.vm.area_checks();
+        assert_eq!(checks.len(), 1, "only the area that holds the street's midpoint");
+        assert!(!checks[0].ok());
+        assert_eq!(crate::shared::testing::en(&checks[0].label()), "Area rule: Car zone");
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.remove(uid)));
+        assert_eq!(crate::shared::testing::en(&r.vm.area_checks()[0].detail()[1]), "It has a driving lane.");
+    }
+
+    #[test]
+    fn a_street_outside_every_area_or_not_of_the_city_has_no_area_check() {
+        assert!(bendville_rig(&[]).vm.area_checks().is_empty());
+        assert!(rig(0).vm.area_checks().is_empty(), "a sandbox street lies nowhere");
+        assert!(city_rig().0.vm.area_checks().is_empty(), "the sample city lies nowhere");
+    }
+
+    #[test]
+    fn a_city_with_a_network_but_a_layout_that_lies_nowhere_has_no_area_check_even_under_an_area() {
+        let (ports, _, storage, _) = test_ports_with_time();
+        let everywhere = vec![[-180.0, -85.0], [180.0, -85.0], [180.0, 85.0], [-180.0, 85.0]];
+        RestrictionStore::new(storage.clone()).add("Everywhere", Rule::CarFree, everywhere).unwrap();
+        let store = CityStore::sample(ports.storage.clone());
+        assert!(store.has_network() && store.open().origin_m().is_none());
+        let edge = store.open().view(0).edges[0].uid;
+        let street = store.open().street_editor(edge, 0).unwrap();
+        let binding = CityBinding { store, place: Place::Street(edge) };
+        assert!(StreetVm::new(ports, crate::i18n_for(Locale::En), street, Some(binding)).area_checks().is_empty());
     }
 
     #[test]

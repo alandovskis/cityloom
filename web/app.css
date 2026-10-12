@@ -31,6 +31,7 @@
   --map-ok: #4b6b8a;
   --map-changed: #2563eb;
   --map-bad: #dc2626;
+  --map-conflict: #db2777;
 
   --shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 8px 24px rgb(15 23 42 / 0.12);
   --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.08), 0 2px 8px rgb(15 23 42 / 0.06);
@@ -710,6 +711,94 @@ a.btn {
 .checks li.bad span {
   color: var(--warn);
 }
+/* The map's notes have three tabs: each as wide as its words, so a longer one (« Règles de zone ») takes room from
+   the shorter ones before it wraps. */
+.tabs:has(> #t-areas) > .tab {
+  flex: 1 1 auto;
+  padding: 0 6px;
+}
+/* The Area rules tab. An area's row is a button: it selects the area, and the selected one opens its form under it. */
+.area-list > li + li {
+  border-top: 1px solid var(--rule);
+}
+.area-list > li.on > .place-row {
+  background: var(--accent-wash);
+}
+.area-list > li.on {
+  padding-bottom: 6px;
+}
+#declare-area {
+  margin: 4px 8px 10px;
+}
+.area-undone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.area-form {
+  display: grid;
+  gap: 6px;
+  padding: 8px 8px 10px;
+}
+.area-form label {
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.area-form input,
+.area-form select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--field-line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+}
+.area-form input::placeholder {
+  color: var(--ink-3);
+}
+.area-form .hint {
+  padding: 0;
+}
+.area-form .btns,
+#p-areas .btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+#p-areas > section > div > .btns {
+  padding: 0 8px 10px;
+}
+.area-form .note-h {
+  padding: 10px 0 0;
+  font-size: 14px;
+}
+/* From the keyboard a corner is placed at the centre of the map: a cross marks it while an outline is drawn,
+   in the ink of the page with a halo of its panel colour, so it shows on a light map and a dark one. */
+.basemap[data-drawing]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    linear-gradient(var(--ink), var(--ink)) center / 2px 100% no-repeat,
+    linear-gradient(var(--ink), var(--ink)) center / 100% 2px no-repeat;
+  filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
+}
+/* While drawing a press anywhere places a corner, over a street too: the cross beats the pointer hand
+   `web/basemap.js` sets on the canvas over a place. */
+.basemap[data-drawing] .maplibregl-canvas {
+  cursor: crosshair !important;
+}
 .title-block {
   display: grid;
   grid-template-columns: 1fr auto auto;
@@ -780,7 +869,7 @@ a.btn {
   right: calc(var(--rw) + var(--pad) - 10px);
   bottom: calc(var(--pad) + 3 * 44px + 2px);
 }
-/* The key's dots repeat `style::OK`, `CHANGED` and `BAD`: keep them equal. */
+/* The key's dots repeat `style::OK`, `CHANGED`, `BAD` and `CONFLICT`: keep them equal. */
 .dot {
   display: inline-block;
   width: 12px;
@@ -799,6 +888,9 @@ a.btn {
 }
 .dot-bad {
   background: var(--map-bad);
+}
+.dot-conflict {
+  background: var(--map-conflict);
 }
 
 /* The home page's backdrop: the city drawn as an SVG. */

@@ -51,6 +51,11 @@ impl SheetWatch {
         self.vm.with_value(|v| v.view_now())
     }
 
+    /// How the street stands against each area it is inside, drawing again when the street is edited.
+    pub fn area_checks(&self) -> Vec<crate::restriction::model::Finding> {
+        self.vm.with_value(|v| v.area_checks())
+    }
+
     /// The page's words, for a view: ask with `tr` so it is drawn again on a language switch.
     pub fn i18n(&self) -> Rc<I18n> {
         self.vm.with_value(|v| v.i18n().clone())

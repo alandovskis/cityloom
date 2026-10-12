@@ -7,11 +7,12 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// The `.rs` files of `map`, `place`, `junction` and `city` that are not in `MIGRATED`, and why. Every other
+/// The `.rs` files of `map`, `place`, `junction`, `city` and `restriction` that are not in `MIGRATED`, and why. Every other
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
     ("src/city/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
+    ("src/restriction/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
     ("src/map/tests.rs", "test-only"),
     ("src/junction/tests.rs", "test-only"),
@@ -24,6 +25,9 @@ const LEFT_OUT: &[(&str, &str)] = &[
 
 const MIGRATED: &[(&str, &str)] = &[
     // Files are added here as their task completes.
+    ("src/restriction/draw.rs", include_str!("restriction/draw.rs")),
+    ("src/restriction/mod.rs", include_str!("restriction/mod.rs")),
+    ("src/restriction/model.rs", include_str!("restriction/model.rs")),
     ("src/street/text.rs", include_str!("street/text.rs")),
     ("src/street/notes.rs", include_str!("street/notes.rs")),
     ("src/street/page.rs", include_str!("street/page.rs")),
@@ -43,6 +47,8 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/shell/view.rs", include_str!("shell/view.rs")),
     ("src/shell/mod.rs", include_str!("shell/mod.rs")),
     ("src/map/vm.rs", include_str!("map/vm.rs")),
+    ("src/map/areas.rs", include_str!("map/areas.rs")),
+    ("src/map/areas_view.rs", include_str!("map/areas_view.rs")),
     ("src/map/view.rs", include_str!("map/view.rs")),
     ("src/map/overlay.rs", include_str!("map/overlay.rs")),
     ("src/map/mod.rs", include_str!("map/mod.rs")),
@@ -78,7 +84,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/junction/frame.rs", include_str!("junction/frame.rs")),
     ("src/junction/geometry.rs", include_str!("junction/geometry.rs")),
     ("src/map/camera.rs", include_str!("map/camera.rs")),
-    ("src/map/projection.rs", include_str!("map/projection.rs")),
+    ("src/city/projection.rs", include_str!("city/projection.rs")),
 ];
 
 /// Attributes whose value is text a person reads (also as `attr:<name>`).
@@ -106,6 +112,7 @@ const ALLOWED: &[&str] = &[
 
 /// Literals that look like words and are not, each with the reason. Empty unless needed.
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
+    ("Polygon", "a GeoJSON geometry type, data for MapLibre"),
     (" fresh", "a CSS class appended to a class list"),
     (" lifted", "a CSS class appended to a class list"),
     (" active", "a CSS class appended to a class list"),
@@ -454,6 +461,12 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("plan-key", "the id of an element of the map page"),
     ("checks-lead", "the id of an element of the map page"),
     ("changes-lead", "the id of an element of the map page"),
+    ("areas-slot", "the id of the element of the map page the Area rules tab mounts into"),
+    ("data-drawing", "the name of a data- attribute on the map while an outline is drawn"),
+    ("declare-area", "the id of the Area rules tab's Declare button, which the focus goes back to"),
+    ("area-rule", "the id of the rule's control in the Area rules tab, which the focus goes to when an outline closes"),
+    ("t-areas", "the id of the map's Area rules tab, pressed to show it when an outline is drawn or named"),
+    ("area-undo", "the id of the Area rules tab's Undo button, which the focus goes to when an area is deleted"),
     ("hero-map-slot", "the id of an element of the home page"),
     ("hero-facts-slot", "the id of an element of the home page"),
     ("m-walk", "a CSS class of the hero map's drawing"),
@@ -548,7 +561,7 @@ fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
     let mut files = Vec::new();
-    for slice in ["map", "place", "junction", "city"] {
+    for slice in ["map", "place", "junction", "city", "restriction"] {
         rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
     }
     let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();
