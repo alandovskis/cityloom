@@ -2,10 +2,14 @@
 //! A plan point is rotated by a fixed angle, its depth squashed, and its height lifted up the screen; there is one
 //! viewpoint, so the shapes are painted far to near with no depth buffer.
 
+use std::fmt::Write;
+
 use serde_json::Value;
 
 use crate::junction::frame::Frame;
 use crate::junction::geometry::{sample_arc, sample_quad};
+use crate::junction::read_model::JView;
+use crate::shared::catalogue::KINDS;
 
 type P = (f64, f64);
 
@@ -101,10 +105,241 @@ impl IsoFrame {
     }
 }
 
+/// What the page needs to put the 2.5D picture in its `<svg>`.
+pub struct IsoSvg {
+    pub frame: IsoFrame,
+    pub markup: String,
+}
+
+/// A number to a tenth, with no trailing zero.
+fn f1(n: f64) -> String {
+    let r = (n * 10.0).round() / 10.0;
+    if r == 0.0 { "0".to_string() } else { format!("{r}") }
+}
+
+/// A shape that stands on the ground: its footprint, its height, and whether its sides are drawn.
+struct Solid {
+    kind_id: &'static str,
+    foot: Vec<P>,
+    h_mm: f64,
+    sides: bool,
+}
+
+struct Draw {
+    f: IsoFrame,
+    flat: String,
+    solids: Vec<Solid>,
+}
+
+impl Draw {
+    fn path(&self, pts: &[P], h_mm: f64) -> String {
+        let mut d = String::new();
+        for (i, p) in pts.iter().enumerate() {
+            let (x, y) = self.f.at(*p, h_mm);
+            write!(d, "{}{} {}", if i == 0 { "M" } else { "L" }, f1(x), f1(y)).unwrap();
+        }
+        d.push('Z');
+        d
+    }
+
+    /// A shape lying on the ground.
+    fn lay(&mut self, kind_id: &str, foot: &[P]) {
+        if foot.len() < 3 {
+            return;
+        }
+        let d = self.path(foot, 0.0);
+        write!(self.flat, "<path class=\"iso-flat k-{kind_id}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#h-{kind_id})\" d=\"{d}\"/>").unwrap();
+    }
+
+    fn stand(&mut self, kind_id: &'static str, foot: Vec<P>, h_mm: f64, sides: bool) {
+        if foot.len() >= 3 {
+            self.solids.push(Solid { kind_id, foot, h_mm, sides });
+        }
+    }
+
+    /// The depth of a solid: how near its footprint's centre is to the viewer.
+    fn depth(s: &Solid) -> f64 {
+        let n = s.foot.len() as f64;
+        let c = s.foot.iter().fold((0.0, 0.0), |a, p| (a.0 + p.0 / n, a.1 + p.1 / n));
+        view_point(c).1
+    }
+
+    fn render(&self, s: &Solid) -> String {
+        let id = s.kind_id;
+        let mut g = format!("<g class=\"iso-solid\" data-depth=\"{}\">", f1(Self::depth(s)));
+        if s.sides {
+            let seen: Vec<P> = s.foot.iter().map(|p| view_point(*p)).collect();
+            let n = seen.len();
+            let area: f64 = (0..n).map(|i| seen[i].0 * seen[(i + 1) % n].1 - seen[(i + 1) % n].0 * seen[i].1).sum();
+            for i in 0..n {
+                let (a, b) = (seen[i], seen[(i + 1) % n]);
+                // The edge's outward normal points towards the viewer when its depth component is positive.
+                let e = (b.0 - a.0, b.1 - a.1);
+                let toward_viewer = if area > 0.0 { -e.0 } else { e.0 } > 0.0;
+                if toward_viewer {
+                    let (pa, pb) = (s.foot[i], s.foot[(i + 1) % n]);
+                    let ((x0, y0), (x1, y1)) = (self.f.at(pa, 0.0), self.f.at(pb, 0.0));
+                    let ((x2, y2), (x3, y3)) = (self.f.at(pb, s.h_mm), self.f.at(pa, s.h_mm));
+                    write!(
+                        g,
+                        "<path class=\"iso-side k-{id}\" d=\"M{} {}L{} {}L{} {}L{} {}Z\"/>",
+                        f1(x0),
+                        f1(y0),
+                        f1(x1),
+                        f1(y1),
+                        f1(x2),
+                        f1(y2),
+                        f1(x3),
+                        f1(y3)
+                    )
+                    .unwrap();
+                }
+            }
+        }
+        let d = self.path(&s.foot, s.h_mm);
+        write!(g, "<path class=\"iso-top k-{id}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#h-{id})\" d=\"{d}\"/></g>").unwrap();
+        g
+    }
+
+    fn finish(mut self) -> String {
+        self.solids.sort_by(|a, b| Self::depth(a).total_cmp(&Self::depth(b)));
+        let solids: String = self.solids.iter().map(|s| self.render(s)).collect();
+        format!("<g class=\"iso\">{}{solids}</g>", self.flat)
+    }
+}
+
+/// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high.
+pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
+    let f = IsoFrame::fit(v.bounds, width, window_height);
+    let mut d = Draw { f, flat: String::new(), solids: Vec::new() };
+    let wall = height_of("sidewalk");
+
+    // the carriageway where the streets meet, and a roundabout's ring and island
+    if let Some(ring) = &v.ring {
+        let circle = |r: f64| -> Vec<P> {
+            (0..48)
+                .map(|i| {
+                    let t = i as f64 * std::f64::consts::TAU / 48.0;
+                    (r * t.cos(), r * t.sin())
+                })
+                .collect()
+        };
+        d.lay("travel", &circle(ring.radius_mm as f64));
+        d.stand("median", circle(ring.island_mm as f64), height_of("median"), true);
+    } else {
+        d.lay("travel", &flatten(&v.core));
+    }
+
+    for c in &v.corners {
+        if c.walk {
+            d.stand("sidewalk", flatten(&c.wedge), wall, true);
+        }
+        if let Some(p) = &c.protected {
+            d.lay("bike", &flatten(&p.track));
+            d.stand("sidewalk", flatten(&p.island), wall, true);
+        }
+    }
+
+    for a in &v.arms {
+        for piece in &a.pieces {
+            let id = KINDS[piece.kind].id;
+            let foot = flatten(&piece.poly);
+            match height_of(id) {
+                h if h > 0.0 => d.stand(id, foot, h, true),
+                _ => d.lay(id, &foot),
+            }
+        }
+        for lane in &a.core_bike {
+            d.lay("bike", &flatten(lane));
+        }
+        if let Some(b) = &a.bike_box {
+            d.lay("bike", &flatten(b));
+        }
+        for bulb in a.bulbs.iter().flatten() {
+            d.stand("sidewalk", flatten(bulb), wall, true);
+        }
+        if let Some(i) = a.crossing.as_ref().and_then(|c| c.island_poly.as_ref()) {
+            d.stand("sidewalk", flatten(i), wall, true);
+        }
+    }
+
+    IsoSvg { frame: f, markup: d.finish() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    use crate::junction::model::*;
+
+    fn svg(j: &Junction) -> IsoSvg {
+        iso_svg(&j.view(), 1000.0, 1000.0)
+    }
+
+    fn count(s: &str, needle: &str) -> usize {
+        s.matches(needle).count()
+    }
+
+    fn depths(markup: &str) -> Vec<f64> {
+        markup.split("data-depth=\"").skip(1).map(|rest| rest.split('"').next().unwrap().parse().unwrap()).collect()
+    }
+
+    fn walked() -> Junction {
+        junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)])
+    }
+
+    #[test]
+    fn a_sidewalk_stands_up_with_sides_and_a_road_lies_flat() {
+        let s = svg(&walked());
+        assert!(count(&s.markup, "iso-solid") >= 8, "two sidewalks on each of the arms");
+        assert!(count(&s.markup, "class=\"iso-side k-sidewalk\"") > 0);
+        assert!(count(&s.markup, "iso-top k-sidewalk") > 0);
+        // A travel lane is drawn, but never with a side.
+        assert!(count(&s.markup, "iso-flat k-travel") > 0);
+        assert_eq!(count(&s.markup, "iso-side k-travel"), 0);
+    }
+
+    #[test]
+    fn a_junction_with_no_sidewalk_has_no_solid_sidewalks_or_sides() {
+        let s = svg(&junction_of(&[("travel", 3200), ("travel", 3200)]));
+        assert_eq!(count(&s.markup, "iso-side"), 0);
+        assert_eq!(count(&s.markup, "k-sidewalk"), 0);
+    }
+
+    #[test]
+    fn a_roundabout_draws_its_island_as_a_solid_and_no_number_is_missing() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT));
+        let s = svg(&j);
+        assert!(count(&s.markup, "iso-top k-median") >= 1);
+        assert!(!s.markup.contains("NaN") && !s.markup.contains("inf"));
+    }
+
+    #[test]
+    fn solids_are_painted_far_to_near() {
+        let d = depths(&svg(&walked()).markup);
+        assert!(d.len() >= 8);
+        assert!(d.windows(2).all(|w| w[0] <= w[1]), "{d:?}");
+    }
+
+    #[test]
+    fn the_solid_farthest_from_the_viewer_is_painted_first_and_the_nearest_last() {
+        let s = svg(&walked());
+        let d = depths(&s.markup);
+        let (min, max) = d.iter().fold((f64::MAX, f64::MIN), |(lo, hi), x| (lo.min(*x), hi.max(*x)));
+        assert!(max - min > 1000.0, "the arms are spread in depth: {d:?}");
+        assert_eq!((d[0], d[d.len() - 1]), (min, max));
+    }
+
+    #[test]
+    fn every_sample_junction_draws_without_a_missing_number() {
+        for sample in 0..4 {
+            let s = svg(&Junction::new(sample));
+            assert!(!s.markup.contains("NaN") && !s.markup.contains("inf"), "sample {sample}");
+            assert!(count(&s.markup, "iso-flat") + count(&s.markup, "iso-solid") > 0, "sample {sample}");
+        }
+    }
 
     #[test]
     fn the_origin_stays_put_and_height_lifts_it_by_the_exaggeration() {
