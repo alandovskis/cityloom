@@ -47,6 +47,8 @@ pub struct AreasVm {
     rule: ArcRwSignal<Rule>,
     /// What was deleted this session, the last on top: Undo brings it back.
     deleted: ArcRwSignal<Vec<Restriction>>,
+    /// What is typed into the selected area's name field and not yet kept: the area's id and the text.
+    name_draft: ArcRwSignal<Option<(String, String)>>,
 }
 
 impl AreasVm {
@@ -66,6 +68,7 @@ impl AreasVm {
             name: ArcRwSignal::new(String::new()),
             rule: ArcRwSignal::new(Rule::CarFree),
             deleted: ArcRwSignal::new(Vec::new()),
+            name_draft: ArcRwSignal::new(None),
         })
     }
 
@@ -144,6 +147,20 @@ impl AreasVm {
 
     pub fn is_future(&self) -> bool {
         self.future.get()
+    }
+
+    /// What the name field of the area `id` shows: what is being typed into it and not yet kept, else its name as
+    /// kept, so another tab's write does not wipe the typing.
+    pub fn name_field(&self, id: &str) -> String {
+        match self.name_draft.get() {
+            Some((of, text)) if of == id => text,
+            _ => self.find(id).map(|r| r.name).unwrap_or_default(),
+        }
+    }
+
+    /// What is typed into the name field of the area `id`, kept when the field is committed (`rename`).
+    pub fn edit_name(&self, id: &str, text: &str) {
+        self.name_draft.set(Some((id.to_string(), text.to_string())));
     }
 
     pub fn form_name(&self) -> String {
@@ -366,6 +383,7 @@ impl AreasVm {
             return;
         }
         self.moving.set(None);
+        self.name_draft.set(None);
         self.selected.set(id);
         if let Some(r) = found {
             self.tell_with_rule("restriction-selected", "restriction-selected-unnamed", &r);
@@ -390,6 +408,7 @@ impl AreasVm {
     }
 
     pub fn rename(&self, id: &str, name: &str) -> bool {
+        self.name_draft.set(None);
         let name = name.to_string();
         self.change(id, |r| r.name = name, |r| self.tell_about("restriction-renamed", r))
     }
@@ -412,8 +431,12 @@ impl AreasVm {
         true
     }
 
-    /// Brings back the area deleted last, selected. If storage refuses, it stays there to bring back.
+    /// Brings back the area deleted last, selected. If storage refuses, it stays there to bring back. Not while an
+    /// outline is drawn or named: the list, where it would come back, is not shown then.
     pub fn undo_delete(&self) -> bool {
+        if self.draw.get_untracked() != Draw::Idle {
+            return false;
+        }
         let Some(r) = self.deleted.with_untracked(|d| d.last().cloned()) else { return false };
         let Some(back) = self.store.restore(&r) else {
             self.tell("restriction-not-kept", Args::new());
@@ -857,6 +880,48 @@ mod tests {
         assert!(!vm.rename("r1", "back"));
         assert_eq!(said.take(), ["The area rules could not be saved in this browser."]);
         assert!(vm.list_now().is_empty(), "not brought back by the change");
+    }
+
+    #[test]
+    fn an_area_deleted_is_not_brought_back_while_an_outline_is_drawn_or_named() {
+        let (vm, _, said, _) = rig();
+        declare(&vm, "A");
+        assert!(vm.delete("r1"));
+        assert!(vm.start());
+        said.take();
+        assert!(!vm.undo_delete(), "drawing");
+        assert!(vm.list_now().is_empty() && said.take().is_empty());
+        for p in SQUARE {
+            vm.add_at(p);
+        }
+        assert!(vm.close());
+        said.take();
+        assert!(!vm.undo_delete(), "naming");
+        assert!(vm.list_now().is_empty() && said.take().is_empty());
+        assert!(vm.cancel());
+        assert!(vm.undo_delete(), "back in the list it can be");
+        assert_eq!(vm.list_now().len(), 1);
+    }
+
+    #[test]
+    fn a_name_being_typed_survives_another_tab_s_write_and_goes_when_it_is_kept_or_the_area_let_go() {
+        let (vm, _, _, storage) = rig();
+        declare(&vm, "A");
+        assert_eq!(vm.name_field("r1"), "A");
+        vm.edit_name("r1", "Being typ");
+        assert!(RestrictionStore::new(storage.clone()).update("r1", |r| r.rule = Rule::NoParkingOrLoading));
+        vm.reload();
+        assert_eq!(vm.name_field("r1"), "Being typ", "the typing is kept");
+        assert_eq!(vm.find_now("r1").unwrap().rule, Rule::NoParkingOrLoading, "and the other tab's change read");
+        assert!(vm.rename("r1", "Being typed"));
+        assert_eq!(vm.name_field("r1"), "Being typed");
+        assert!(RestrictionStore::new(storage.clone()).update("r1", |r| r.name = "Theirs".into()));
+        vm.reload();
+        assert_eq!(vm.name_field("r1"), "Theirs", "nothing typed: the field follows what is kept");
+        vm.edit_name("r1", "Half");
+        vm.select(None);
+        vm.select(Some("r1"));
+        assert_eq!(vm.name_field("r1"), "Theirs", "letting the area go drops what was typed and not kept");
     }
 
     #[test]
