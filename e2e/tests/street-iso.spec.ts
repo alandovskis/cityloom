@@ -107,3 +107,15 @@ test("the toggle is not printed", async ({ page }) => {
   await page.emulateMedia({ media: "print" });
   await expect(page.locator("#view-mode")).toBeHidden();
 });
+
+test("the toggle sits on the street name's line, so the page's head is no taller for it", async ({ page }) => {
+  // A row of its own, under the tools, pushed the drawing out of the window wherever the text is wider (CI's fonts).
+  await openStreet(page);
+  await expect(iso(page)).toBeVisible();
+  const toggle = (await page.locator("#view-mode").boundingBox())!;
+  const name = (await page.locator("#street-name").boundingBox())!;
+  const sub = (await page.locator("#street-sub").boundingBox())!;
+  expect(toggle.y + toggle.height).toBeLessThanOrEqual(sub.y + 1);
+  expect(toggle.x).toBeGreaterThanOrEqual(name.x + name.width);
+  expect(toggle.height).toBeLessThanOrEqual(name.height + 6);
+});

@@ -892,15 +892,29 @@ svg pattern circle {
   stroke-linejoin: round;
   pointer-events: none;
 }
-/* The toggle between the section and the 2.5D, a pill like the tools at the right of their row, right above
-   the drawing. It is not a band of its own in the drawing's card, which would push the status line under the
-   card out of view at 1440 by 900. Its buttons are as tall as the tools'. */
+/* The toggle between the section and the 2.5D, at the right of the street's name, on its line: the name's
+   line has room to spare, while a row of its own (or the tools' row, which wraps it where text is wider, as
+   with Linux's fonts) would push the drawing and the status line under it out of view at 1440 by 900. The
+   title card is a grid for that: its name and the toggle share the first row, the line under the name spans
+   both columns, and the toggle, 32 px tall, gives up 3 px above and below so the row stays the name's height. */
+.title-card.with-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+}
+.title-card.with-view > .street {
+  display: contents;
+}
+.title-card.with-view #street-name {
+  grid-area: 1 / 1;
+}
+.title-card.with-view .street-sub {
+  grid-area: 2 / 1 / 3 / 3;
+}
 .view-mode-tools {
-  margin-inline-start: auto;
-  padding: 6px;
-  border-radius: var(--r-card);
-  background: var(--panel);
-  box-shadow: var(--shadow-soft);
+  grid-area: 1 / 2;
+  align-self: center;
+  margin-block: -3px;
 }
 .view-mode {
   margin: 0;
@@ -908,7 +922,7 @@ svg pattern circle {
   min-inline-size: 0;
 }
 .view-mode .unit {
-  min-height: 32px;
+  min-height: 26px;
 }
 #drawing .sel-line {
   fill: none;
