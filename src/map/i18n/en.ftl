@@ -60,6 +60,7 @@ map-needs-attention = Needs attention: { $failing }.
 map-changed = Changed.
 map-opens-junction = Opens the junction plan.
 map-opens-street = Opens the street cross-section.
+map-not-editable = Not all of this place is in view. Move the map so all of it shows, then try again.
 
 ## The search
 map-search-label = Search places

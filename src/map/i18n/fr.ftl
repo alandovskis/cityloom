@@ -60,6 +60,7 @@ map-needs-attention = À corriger : { $failing }.
 map-changed = Modifié.
 map-opens-junction = Ouvre le plan de la jonction.
 map-opens-street = Ouvre la coupe transversale de la rue.
+map-not-editable = Ce lieu n’est pas entièrement visible. Déplacez la carte pour qu’il le soit, puis réessayez.
 
 ## La recherche
 map-search-label = Rechercher des lieux
