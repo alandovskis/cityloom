@@ -12,6 +12,7 @@ st-key-edit-width = modifier la largeur
 st-key-remove = supprimer
 st-key-details-notes = détails, notes
 st-key-undo = annuler
+st-key-view = coupe, 2,5D
 st-cross-section = Coupe transversale
 st-focus-hint = Les flèches sélectionnent. Maj + flèches réordonnent. + et − redimensionnent, avec Maj pour de plus grands pas. Entrée modifie la largeur.
 st-touch-cue = Sur un écran tactile, faites glisser la rue de côté pour la voir en entier.

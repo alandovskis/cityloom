@@ -109,6 +109,23 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
                 None => {}
             }
         });
+        // V switches the drawing between the section and the 2.5D, anywhere but in a field (`keys::switches_view`).
+        window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
+            let key = e.key();
+            let press = keys::Press {
+                key: &key,
+                ctrl: e.ctrl_key(),
+                meta: e.meta_key(),
+                alt: e.alt_key(),
+                repeat: e.repeat(),
+                composing: e.is_composing(),
+                taken: e.default_prevented() || typing(&e),
+            };
+            if keys::switches_view(&press) {
+                e.prevent_default();
+                w.toggle_mode();
+            }
+        });
     }
 
     let markup = move || {
@@ -346,11 +363,12 @@ fn show_inspector() {
     }
 }
 
+/// Typing in a field, or in text that can be edited: the page's keys are not for it.
 #[cfg(target_arch = "wasm32")]
 fn typing(e: &KeyboardEvent) -> bool {
-    e.target()
-        .and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok())
-        .is_some_and(|t| t.closest("input, select, textarea").ok().flatten().is_some())
+    let Some(t) = e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()) else { return false };
+    t.closest("input, select, textarea").ok().flatten().is_some()
+        || leptos::wasm_bindgen::JsCast::dyn_ref::<HtmlElement>(&t).is_some_and(|h| h.is_content_editable())
 }
 
 /// After the drawing is redrawn: bring a street that has just run over into

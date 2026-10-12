@@ -12,6 +12,7 @@ st-key-edit-width = edit width
 st-key-remove = remove
 st-key-details-notes = details, notes
 st-key-undo = undo
+st-key-view = section, 2.5D
 st-cross-section = Cross-section
 st-focus-hint = Arrows select. Shift+arrows reorder. + and − resize, with Shift for bigger steps. Enter edits the width.
 st-touch-cue = On a touch screen, swipe the street sideways to see all of it.
