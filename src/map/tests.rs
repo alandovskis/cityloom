@@ -29,12 +29,11 @@ fn map_html<V: IntoView + 'static>(f: impl FnOnce() -> V) -> String {
 /// Another page changes a street and the map reads the city again.
 fn change_a_street(vm: &MapVm, storage: &Rc<MemoryStorage>, by_mm: i32) {
     let street = vm.view().edges.iter().find(|e| !e.freeway).unwrap().uid;
-    assert!(CityStore::sample(storage.clone()).write(|c| {
-        let mut e = c.street_editor(street, 0).unwrap();
-        let u = e.view().segments[0].uid;
-        e.set_width(u, e.view().segments[0].width_mm + by_mm);
-        c.keep_street(street, e.snapshot())
-    }));
+    let store = CityStore::sample(storage.clone());
+    let mut e = store.open().street_editor(street, 0).unwrap();
+    let u = e.view().segments[0].uid;
+    e.set_width(u, e.view().segments[0].width_mm + by_mm);
+    assert!(store.write_street(street, e.snapshot()));
     vm.reload();
 }
 

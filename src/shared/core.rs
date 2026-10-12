@@ -38,10 +38,10 @@ impl<M: Presents> Core<M> {
     /// The same, for a command: nothing is watched.
     pub fn view_now(&self) -> Rc<M::View> {
         let version = self.version.get_untracked();
-        if let Some((at, view)) = &*self.cached.borrow() {
-            if *at == version {
-                return view.clone();
-            }
+        if let Some((at, view)) = &*self.cached.borrow()
+            && *at == version
+        {
+            return view.clone();
         }
         let view = Rc::new(self.model.borrow().present());
         *self.cached.borrow_mut() = Some((version, view.clone()));

@@ -26,6 +26,16 @@ impl Storage for BrowserStorage {
     fn remember(&self, key: &str, value: &str) -> bool {
         store::remember(key, value)
     }
+
+    fn keys(&self) -> Vec<String> {
+        store::keys()
+    }
+
+    fn first_time(&self, what: &str) -> bool {
+        // one page is one module instance, and every `BrowserStorage` of it is the same local storage
+        thread_local!(static ASKED: std::cell::RefCell<std::collections::HashSet<String>> = Default::default());
+        ASKED.with(|asked| asked.borrow_mut().insert(what.to_string()))
+    }
 }
 
 /// Timers, kept by id so that they can be called off.
@@ -196,7 +206,7 @@ extern "C" {
     #[wasm_bindgen(method)]
     fn centre(this: &Basemap) -> Vec<f64>;
     #[wasm_bindgen(method)]
-    fn fit(this: &Basemap, west: f64, south: f64, east: f64, north: f64, top: f64, right: f64, bottom: f64, left: f64);
+    fn fit(this: &Basemap, bounds: &[f64], insets: &[f64]);
     #[wasm_bindgen(method, js_name = zoomBy)]
     fn zoom_by(this: &Basemap, factor: f64);
     #[wasm_bindgen(method, js_name = panBy)]
@@ -232,8 +242,8 @@ impl crate::shared::ports::Mapper for BrowserMapper {
         let c = self.0.centre();
         [c.first().copied().unwrap_or(0.0), c.get(1).copied().unwrap_or(0.0)]
     }
-    fn fit(&self, [w, s, e, n]: [f64; 4], [top, right, bottom, left]: [f64; 4]) {
-        self.0.fit(w, s, e, n, top, right, bottom, left);
+    fn fit(&self, bounds: [f64; 4], insets: [f64; 4]) {
+        self.0.fit(&bounds, &insets);
     }
     fn zoom_by(&self, factor: f64) {
         self.0.zoom_by(factor);

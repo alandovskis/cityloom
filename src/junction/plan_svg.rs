@@ -633,27 +633,27 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
     }
 
     // the turns of a selected street
-    if v.selected.kind.is_some() {
-        if let Some(sa) = v.arms.iter().find(|a| a.uid == v.selected.uid) {
-            for m in v.movements.iter().filter(|m| m.from == sa.uid) {
-                let d = p.path_d(&m.path);
-                write!(
-                    l.mv,
-                    "<path class=\"mv{}{}{}\" d=\"{d}\"{}><title>{}</title></path>",
-                    if m.allowed { "" } else { " no" },
-                    if m.allowed && !m.lane { " bad" } else { "" },
-                    if m.indirect { " indirect" } else { "" },
-                    if m.allowed { " marker-end=\"url(#mv-head)\"" } else { "" },
-                    esc(&m.blocked.as_ref().map(said).unwrap_or_default())
-                )
-                .unwrap();
-                if !m.allowed {
-                    if let (Some(first), Some(last)) = (m.path.first(), m.path.last()) {
-                        let n = last.as_array().map_or(0, |a| a.len());
-                        let (x, y) = f.at(((num(first, 1) + num(last, n - 2)) / 2.0, (num(first, 2) + num(last, n - 1)) / 2.0));
-                        write!(l.mv, "<path class=\"mv-x\" d=\"M{} {}l10 10m0 -10l-10 10\"/>", f1(x - 5.0), f1(y - 5.0)).unwrap();
-                    }
-                }
+    if v.selected.kind.is_some()
+        && let Some(sa) = v.arms.iter().find(|a| a.uid == v.selected.uid)
+    {
+        for m in v.movements.iter().filter(|m| m.from == sa.uid) {
+            let d = p.path_d(&m.path);
+            write!(
+                l.mv,
+                "<path class=\"mv{}{}{}\" d=\"{d}\"{}><title>{}</title></path>",
+                if m.allowed { "" } else { " no" },
+                if m.allowed && !m.lane { " bad" } else { "" },
+                if m.indirect { " indirect" } else { "" },
+                if m.allowed { " marker-end=\"url(#mv-head)\"" } else { "" },
+                esc(&m.blocked.as_ref().map(said).unwrap_or_default())
+            )
+            .unwrap();
+            if !m.allowed
+                && let (Some(first), Some(last)) = (m.path.first(), m.path.last())
+            {
+                let n = last.as_array().map_or(0, |a| a.len());
+                let (x, y) = f.at(((num(first, 1) + num(last, n - 2)) / 2.0, (num(first, 2) + num(last, n - 1)) / 2.0));
+                write!(l.mv, "<path class=\"mv-x\" d=\"M{} {}l10 10m0 -10l-10 10\"/>", f1(x - 5.0), f1(y - 5.0)).unwrap();
             }
         }
     }

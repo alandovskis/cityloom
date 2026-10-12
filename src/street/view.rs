@@ -263,10 +263,10 @@ fn focus_wrap(wrap: NodeRef<leptos::html::Div>) {
 /// Goes to the width field, opening the details if they are hidden.
 fn edit_width() {
     let doc = document();
-    if doc.document_element().is_some_and(|r| r.get_attribute("data-inspector").as_deref() == Some("closed")) {
-        if let Some(toggle) = doc.get_element_by_id("inspector-toggle") {
-            leptos::wasm_bindgen::JsCast::unchecked_into::<HtmlElement>(toggle).click();
-        }
+    if doc.document_element().is_some_and(|r| r.get_attribute("data-inspector").as_deref() == Some("closed"))
+        && let Some(toggle) = doc.get_element_by_id("inspector-toggle")
+    {
+        leptos::wasm_bindgen::JsCast::unchecked_into::<HtmlElement>(toggle).click();
     }
     if let Some(field) = doc.get_element_by_id("width") {
         let field: HtmlElement = leptos::wasm_bindgen::JsCast::unchecked_into(field);

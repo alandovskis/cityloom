@@ -17,6 +17,21 @@ pub fn recall(key: &str) -> Option<String> {
     leptos::web_sys::window().and_then(|w| w.local_storage().ok().flatten()).and_then(|s| s.get_item(key).ok().flatten())
 }
 
+/// Every key the storage holds; empty when it cannot be reached.
+#[cfg(target_arch = "wasm32")]
+pub fn keys() -> Vec<String> {
+    let Some(s) = leptos::web_sys::window().and_then(|w| w.local_storage().ok().flatten()) else {
+        return Vec::new();
+    };
+    let n = s.length().unwrap_or(0);
+    (0..n).filter_map(|i| s.key(i).ok().flatten()).collect()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn keys() -> Vec<String> {
+    KEPT.with(|k| k.borrow().keys().cloned().collect())
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub fn remember(key: &str, value: &str) -> bool {
     KEPT.with(|k| k.borrow_mut().insert(key.to_string(), value.to_string()));

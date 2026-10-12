@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use super::edits::{ArmStreet, Edits, Ids, JunctionRecord, SAME_WAY_DEG, StreetRecord, assign, degrees_apart};
 use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
 use crate::junction::model::{ALL_WAY_STOP, PRIORITY, SIGNAL};
@@ -149,7 +150,14 @@ fn node_uid(i: usize) -> u32 {
     i as u32 + 1
 }
 
-/// What the city keeps between visits.
+/// A place of the layout, by its index: a node, or an edge.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum At {
+    Node(usize),
+    Edge(usize),
+}
+
+/// What the city kept between visits before the edits document: only the migration reads it.
 #[derive(Serialize, Deserialize)]
 struct Saved {
     version: u32,
@@ -236,17 +244,24 @@ impl Layout {
     pub fn sample() -> Layout {
         let edges = EDGES
             .iter()
-            .map(|e| EdgeDef {
+            .enumerate()
+            .map(|(i, e)| EdgeDef {
                 a: e.a,
                 b: e.b,
                 class: SAMPLES[e.fixture].class,
                 name: None,
-                section: Street::sample(e.fixture, Side::Right),
+                section: Street { source: vec![OsmRef { id: 2000 + i as i64, version: None }], ..Street::sample(e.fixture, Side::Right) },
                 headings: None,
                 shape: None,
             })
             .collect();
-        Layout { name: NAME.to_string(), side: Side::Right, nodes: NODES.into_iter().collect(), edges, origin_m: None }
+        Layout {
+            name: NAME.to_string(),
+            side: Side::Right,
+            nodes: NODES.into_iter().enumerate().map(|(i, n)| NodeDef { source: vec![OsmRef { id: 1000 + i as i64, version: None }], ..n }).collect(),
+            edges,
+            origin_m: None,
+        }
     }
 }
 
@@ -256,6 +271,24 @@ pub struct City {
     junctions: BTreeMap<u32, State>,
     today_streets: BTreeMap<u32, Street>,
     today_junctions: BTreeMap<u32, State>,
+    /// The key of each street, by edge index; None where it has none or another street has the same one.
+    street_keys: Vec<Option<String>>,
+    /// The same for the junctions, by node index (None for a node that is not a junction).
+    junction_keys: Vec<Option<String>>,
+    /// The key of the record each street (by uid) took its edit from, where it took one.
+    took_streets: BTreeMap<u32, String>,
+    /// The same for the junctions.
+    took_junctions: BTreeMap<u32, String>,
+}
+
+/// The keys, each kept only where no other place has it: a key two places share would bring back one place's
+/// edit on the other, or on neither, so such a place is not keyed (its edits are refused, not lost).
+fn alone(keys: Vec<Option<String>>) -> Vec<Option<String>> {
+    let mut count: BTreeMap<String, usize> = BTreeMap::new();
+    for k in keys.iter().flatten() {
+        *count.entry(k.clone()).or_default() += 1;
+    }
+    keys.into_iter().map(|k| k.filter(|k| count[k] == 1)).collect()
 }
 
 /// How long a line through these points is, in millimetres.
@@ -264,6 +297,83 @@ fn path_mm(points: &[(i32, i32)]) -> f64 {
 }
 
 impl Layout {
+    /// The key of the junction at `node`, from the OpenStreetMap nodes it was made from.
+    pub(super) fn node_key(&self, node: usize) -> Option<String> {
+        super::keys::junction_key(&self.nodes[node].source)
+    }
+
+    /// The way street `edge` leaves `node`, in degrees clockwise from north: from the layout node to the first point
+    /// at least a metre along its centreline (the last, where it is shorter). The centreline is osm2streets' trimmed
+    /// one and the node is its junction's point, both of which move when the junction's cluster changes with the
+    /// area's box: the same street measured in two areas has differed by up to 60 degrees (43 the worst among 5442
+    /// pairs with the same key; 90 pairs 20 degrees or more). See `keys::HEADINGS` for what that risks.
+    pub(super) fn leaving_deg(&self, edge: usize, node: usize) -> f64 {
+        let mut shape = self.shape_of(edge);
+        if self.edges[edge].a != node {
+            shape.reverse();
+        }
+        let from = shape[0];
+        let far = |p: &&(i32, i32)| ((p.0 - from.0) as f64).hypot((p.1 - from.1) as f64) >= 1_000.0;
+        let to = shape.iter().skip(1).find(far).or(shape.last()).copied().unwrap_or(from);
+        // layout millimetres run east and south
+        ((to.0 - from.0) as f64).atan2(-(to.1 - from.1) as f64).to_degrees().rem_euclid(360.0)
+    }
+
+    /// The key of each street, from its ways, the nodes at its ends and, where an end is cut at the area's box or
+    /// another street of the same way joins the same two ends, the way it leaves its first end (`keys::street_key`).
+    pub(super) fn edge_keys(&self) -> Vec<Option<String>> {
+        let key = |e: usize, twinned: bool| {
+            let d = &self.edges[e];
+            let end = |n: usize| super::keys::End { source: &self.nodes[n].source, leaving_deg: self.leaving_deg(e, n) };
+            super::keys::street_key(&d.section.source, end(d.a), end(d.b), twinned)
+        };
+        let plain: Vec<Option<String>> = (0..self.edges.len()).map(|e| key(e, false)).collect();
+        let mut count: BTreeMap<&str, usize> = BTreeMap::new();
+        for k in plain.iter().flatten() {
+            *count.entry(k).or_default() += 1;
+        }
+        let twinned: Vec<bool> = plain.iter().map(|k| k.as_deref().is_some_and(|k| count[k] > 1)).collect();
+        (0..self.edges.len()).map(|e| if twinned[e] { key(e, true) } else { plain[e].clone() }).collect()
+    }
+
+    /// What identifies street `edge` when an edit is matched to it: its key, its ways, the nodes of both ends and
+    /// the way it leaves each end that is an OpenStreetMap node.
+    fn street_ids(&self, edge: usize, key: Option<String>) -> Ids {
+        let e = &self.edges[edge];
+        Ids {
+            key,
+            ways: super::keys::ids(&e.section.source),
+            nodes: &super::keys::ids(&self.nodes[e.a].source) | &super::keys::ids(&self.nodes[e.b].source),
+            leaving: [e.a, e.b]
+                .into_iter()
+                .filter_map(|n| Some((self.nodes[n].source.iter().map(|r| r.id).min()?, self.leaving_deg(edge, n).round() as i32 % 360)))
+                .collect(),
+        }
+    }
+
+    /// What identifies the junction at `node` when an edit is matched to it: its key and its nodes.
+    fn junction_ids(&self, node: usize, key: Option<String>) -> Ids {
+        Ids { key, nodes: super::keys::ids(&self.nodes[node].source), ..Ids::default() }
+    }
+
+    /// How far, in metres, a place lies from the centre of the area box its network was cut to (a street is
+    /// taken to be where the middle of its centreline is). Network metres are measured from that box's
+    /// south-west corner, and `origin_m` is where the layout's origin lies in them. A layout on no network has
+    /// no such centre, so its places are infinitely far.
+    pub(super) fn centre_distance_m(&self, at: At) -> f64 {
+        let Some((ox, oy)) = self.origin_m else { return f64::MAX };
+        let (x_mm, y_mm) = match at {
+            At::Node(n) => (self.nodes[n].x_mm as f64, self.nodes[n].y_mm as f64),
+            At::Edge(e) => {
+                let shape = self.shape_of(e);
+                let (a, b) = (shape[(shape.len() - 1) / 2], shape[shape.len() / 2]);
+                ((a.0 as f64 + b.0 as f64) / 2.0, (a.1 as f64 + b.1 as f64) / 2.0)
+            }
+        };
+        let (x, y) = (ox + x_mm / 1000.0, oy - y_mm / 1000.0);
+        (x - crate::place::area::HALF_M).hypot(y - crate::place::area::HALF_M)
+    }
+
     /// The street's centreline from node `a` to node `b`, in millimetres: its own shape, or the straight line.
     fn shape_of(&self, edge: usize) -> Vec<(i32, i32)> {
         let e = &self.edges[edge];
@@ -419,7 +529,10 @@ impl Layout {
     /// Whether a saved junction can stand for this node: the same streets, with
     /// every index and length inside what the editor allows.
     fn junction_fits(&self, s: &State, node: usize) -> bool {
-        use crate::junction::model::*;
+        use crate::junction::model::{
+            APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, MAX_CORNER_MM, MAX_CROSSING_MM, MAX_RING_MM,
+            MAX_SETBACK_MM, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SETBACK_MM, RULES, STOPS,
+        };
         let mut want: Vec<u32> = self.edges_at(node).iter().map(|&e| e as u32 + 1).collect();
         let mut have: Vec<u32> = s.arms.iter().map(|a| a.edge).collect();
         want.sort_unstable();
@@ -534,18 +647,83 @@ impl City {
             forget_streets(&mut s);
             today_junctions.insert(node_uid(n), s);
         }
-        City { layout, streets: today_streets.clone(), junctions: today_junctions.clone(), today_streets, today_junctions }
+        let street_keys = alone(layout.edge_keys());
+        let junction_keys = alone((0..layout.nodes.len()).map(|n| layout.nodes[n].junction.then(|| layout.node_key(n)).flatten()).collect());
+        City {
+            layout,
+            streets: today_streets.clone(),
+            junctions: today_junctions.clone(),
+            today_streets,
+            today_junctions,
+            street_keys,
+            junction_keys,
+            took_streets: BTreeMap::new(),
+            took_junctions: BTreeMap::new(),
+        }
     }
 
-    /// The hand-made city as saved, or as first laid out for any part of the save that
-    /// cannot be used. Not an error: a stale or damaged save just starts over.
+    /// The hand-made city with `edits` applied. It is not part of the app.
     #[cfg(test)]
-    pub fn load(json: &str) -> City {
-        City::load_on(Layout::sample(), json)
+    pub fn load(edits: &Edits) -> City {
+        City::load_on(Layout::sample(), edits)
     }
 
-    /// The same for any network.
-    pub fn load_on(layout: Layout, json: &str) -> City {
+    /// The city of any network with the resident's `edits` applied: each edit goes to the place with its key, or
+    /// failing that the one made from the same OpenStreetMap ids, and what no place takes, or what a place no
+    /// longer fits, is left as first laid out. Not an error: the records stay in the document.
+    pub fn load_on(layout: Layout, edits: &Edits) -> City {
+        let mut city = City::on(layout);
+        city.apply_streets(edits);
+        city.apply_junctions(edits);
+        city
+    }
+
+    fn apply_streets(&mut self, edits: &Edits) {
+        let places: Vec<Ids> = (0..self.layout.edges.len()).map(|e| self.layout.street_ids(e, self.street_keys[e].clone())).collect();
+        let records: Vec<(&String, &StreetRecord)> = edits.streets.iter().collect();
+        let ids: Vec<Ids> = records.iter().map(|(k, r)| Ids::from_street_record(k, r)).collect();
+        for (e, taken) in assign(&places, &ids).into_iter().enumerate() {
+            let Some(ri) = taken else { continue };
+            let uid = e as u32 + 1;
+            let street = &records[ri].1.street;
+            let fits = self.today_streets.get(&uid).is_some_and(|t| t.class == street.class && t.row_mm == street.row_mm);
+            if fits && street.is_sound() {
+                // where a street came from and what it is called are not something an edit changes
+                let today = &self.today_streets[&uid];
+                let (source, name) = (today.source.clone(), today.name.clone());
+                self.streets.insert(uid, Street { source, name, ..street.clone() });
+                self.took_streets.insert(uid, records[ri].0.clone());
+            }
+        }
+    }
+
+    fn apply_junctions(&mut self, edits: &Edits) {
+        let nodes: Vec<usize> = (0..self.layout.nodes.len()).filter(|&n| self.layout.nodes[n].junction).collect();
+        let places: Vec<Ids> = nodes.iter().map(|&n| self.layout.junction_ids(n, self.junction_keys[n].clone())).collect();
+        let records: Vec<(&String, &JunctionRecord)> = edits.junctions.iter().collect();
+        let ids: Vec<Ids> = records.iter().map(|(k, r)| Ids::from_junction_record(k, r)).collect();
+        for (i, taken) in assign(&places, &ids).into_iter().enumerate() {
+            let Some(ri) = taken else { continue };
+            let n = nodes[i];
+            let record = records[ri].1;
+            let mut state = record.state.clone();
+            // each arm goes back on the street at the junction it was kept with, now where it stands in the city
+            let on_streets = state.arms.iter_mut().all(|arm| {
+                let Some(e) = record.arm_streets.get(&arm.uid).and_then(|street| self.arm_street(n, street)) else { return false };
+                arm.edge = e as u32 + 1;
+                true
+            });
+            if on_streets && self.layout.junction_fits(&state, n) {
+                let uid = node_uid(n);
+                let source = self.today_junctions[&uid].source.clone();
+                self.junctions.insert(uid, State { source, label: junction::earlier(), ..state });
+                self.took_junctions.insert(uid, records[ri].0.clone());
+            }
+        }
+    }
+
+    /// The city as an older version kept it, by position: only for moving that save to the edits.
+    pub(super) fn load_old(layout: Layout, json: &str) -> City {
         let mut city = City::on(layout);
         let Ok(saved) = serde_json::from_str::<Saved>(json) else { return city };
         if saved.version != SAVE_VERSION {
@@ -571,9 +749,104 @@ impl City {
         city
     }
 
-    pub fn save(&self) -> String {
+    /// The same, or None unless `json` is a save of the version this reads (a save that is skipped can then be
+    /// told from one that changed nothing).
+    pub(super) fn load_old_checked(layout: Layout, json: &str) -> Option<City> {
+        serde_json::from_str::<Saved>(json).ok().filter(|s| s.version == SAVE_VERSION)?;
+        Some(City::load_old(layout, json))
+    }
+
+    /// Each street changed from how it was first laid out, with its distance from the centre of its area and the
+    /// key and record to keep it by; a street with no key is not here.
+    pub(super) fn edited_streets(&self) -> Vec<(f64, String, StreetRecord)> {
+        let changed = self.streets.iter().filter(|(uid, s)| self.today_streets.get(uid) != Some(s));
+        changed
+            .filter_map(|(&uid, _)| {
+                let (key, record) = self.street_record(uid)?;
+                Some((self.layout.centre_distance_m(At::Edge(self.edge_index(uid)?)), key, record))
+            })
+            .collect()
+    }
+
+    /// The same for junctions (the label is not an edit).
+    pub(super) fn edited_junctions(&self) -> Vec<(f64, String, JunctionRecord)> {
+        let changed = self.junctions.iter().filter(|(uid, s)| self.today_junctions.get(uid).is_none_or(|t| !same_junction(t, s)));
+        changed
+            .filter_map(|(&uid, _)| {
+                let (key, record) = self.junction_record(uid)?;
+                Some((self.layout.centre_distance_m(At::Node(self.node_index(uid)?)), key, record))
+            })
+            .collect()
+    }
+
+    /// What an older version kept the city as, to build old saves in tests.
+    #[cfg(test)]
+    pub(super) fn legacy_save(&self) -> String {
         let saved = Saved { version: SAVE_VERSION, streets: self.streets.clone(), junctions: self.junctions.clone() };
         serde_json::to_string(&saved).expect("the city serialises")
+    }
+
+    /// Which of the streets at the junction at `node` is the one a record's arm names: the one with its key, or
+    /// failing that the only one made from one of its ways that leaves the junction the same way. None when no
+    /// street, or more than one, is.
+    fn arm_street(&self, node: usize, street: &ArmStreet) -> Option<usize> {
+        let at = self.layout.edges_at(node);
+        if let Some(key) = &street.key {
+            let mut exact = at.iter().copied().filter(|&e| self.street_keys[e].as_ref() == Some(key));
+            if let (Some(e), None) = (exact.next(), exact.next()) {
+                return Some(e);
+            }
+        }
+        let mut near = at.iter().copied().filter(|&e| {
+            !super::keys::ids(&self.layout.edges[e].section.source).is_disjoint(&street.ways)
+                && degrees_apart(self.layout.leaving_deg(e, node).round() as i32, street.leaving) < SAME_WAY_DEG
+        });
+        match (near.next(), near.next()) {
+            (Some(e), None) => Some(e),
+            _ => None,
+        }
+    }
+
+    /// The key and the record to keep for street `edge` as it now stands; None where the street has no key, or one
+    /// another place shares, so that what is written is always what comes back.
+    pub fn street_record(&self, edge: u32) -> Option<(String, StreetRecord)> {
+        let e = self.edge_index(edge)?;
+        let key = self.street_keys[e].clone()?;
+        let ids = self.layout.street_ids(e, None);
+        Some((key, StreetRecord { ways: ids.ways, nodes: ids.nodes, leaving: ids.leaving, street: self.streets.get(&edge)?.clone() }))
+    }
+
+    /// The key and the record to keep for the junction at `node` as it now stands; None where it has no key of its
+    /// own, or an arm's street could not be found again from what the record says of it.
+    pub fn junction_record(&self, node: u32) -> Option<(String, JunctionRecord)> {
+        let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
+        let key = self.junction_keys[n].clone()?;
+        let mut state = self.junctions.get(&node)?.clone();
+        let mut arm_streets = BTreeMap::new();
+        for arm in &mut state.arms {
+            let e = self.edge_index(arm.edge)?;
+            let ways = super::keys::ids(&self.layout.edges[e].section.source);
+            let street = ArmStreet { key: self.street_keys[e].clone(), ways, leaving: self.layout.leaving_deg(e, n).round() as i32 % 360 };
+            // the arm must find this street again, and no other, when the record is read
+            if self.arm_street(n, &street) != Some(e) {
+                return None;
+            }
+            arm_streets.insert(arm.uid, street);
+            arm.edge = 0;
+        }
+        Some((key, JunctionRecord { nodes: self.layout.junction_ids(n, None).nodes, state, arm_streets }))
+    }
+
+    /// The key of the record street `edge` took its edit from when the city was loaded, if it took one. When the
+    /// street is written under a key of its own that differs (the record was found by its ids), that record is
+    /// the one it replaces.
+    pub fn took_street(&self, edge: u32) -> Option<&str> {
+        self.took_streets.get(&edge).map(String::as_str)
+    }
+
+    /// The same for the junction at `node`.
+    pub fn took_junction(&self, node: u32) -> Option<&str> {
+        self.took_junctions.get(&node).map(String::as_str)
     }
 
     fn edge_index(&self, uid: u32) -> Option<usize> {
@@ -856,6 +1129,16 @@ mod tests {
     use super::*;
     use crate::shared::said::Arg;
 
+    #[test]
+    fn every_place_of_the_sample_city_has_a_key_and_no_two_places_share_one() {
+        let layout = Layout::sample();
+        let mut keys: Vec<Option<String>> = (0..layout.nodes.len()).filter(|&n| layout.nodes[n].junction).map(|n| layout.node_key(n)).collect();
+        keys.extend(layout.edge_keys());
+        assert!(keys.iter().all(Option::is_some));
+        let distinct: std::collections::BTreeSet<_> = keys.iter().collect();
+        assert_eq!(distinct.len(), keys.len());
+    }
+
     fn junction_number(node: usize) -> usize {
         Layout::sample().junction_number(node)
     }
@@ -1006,6 +1289,372 @@ mod tests {
         assert!(j.current().arms.iter().filter(|a| a.edge != 5).any(|a| a.profile(0).park != [0, 0]));
     }
 
+    /// What an older version kept, read back as the migration reads it.
+    fn old_load(json: &str) -> City {
+        City::load_old(Layout::sample(), json)
+    }
+
+    /// A copy of street `uid` as first laid out with 100 mm moved from its first piece to its second, so that its
+    /// class and total width, which an edit must keep, are unchanged.
+    fn narrowed(city: &City, uid: u32) -> Street {
+        let mut s = city.today_streets[&uid].clone();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        s
+    }
+
+    /// Every place of `city` that differs from first laid out, as the store would keep it.
+    fn edits_of(city: &City) -> Edits {
+        let mut e = Edits::new();
+        for uid in 1..=city.layout.edges.len() as u32 {
+            if city.streets[&uid] != city.today_streets[&uid]
+                && let Some((key, record)) = city.street_record(uid)
+            {
+                e.streets.insert(key, record);
+            }
+        }
+        for (&uid, state) in &city.junctions {
+            if !same_junction(state, &city.today_junctions[&uid])
+                && let Some((key, record)) = city.junction_record(uid)
+            {
+                e.junctions.insert(key, record);
+            }
+        }
+        e
+    }
+
+    /// The sample layout with its streets and its places in the other order, as a refreshed tile or importer may
+    /// give them: the same roads, other positions.
+    fn reordered() -> Layout {
+        let mut layout = Layout::sample();
+        let last = layout.nodes.len() - 1;
+        layout.nodes.reverse();
+        for e in &mut layout.edges {
+            (e.a, e.b) = (last - e.a, last - e.b);
+        }
+        layout.edges.reverse();
+        layout
+    }
+
+    #[test]
+    fn what_the_editors_keep_comes_back_through_the_edits() {
+        let mut city = City::new();
+        let street = narrowed(&city, 1);
+        assert!(city.keep_street(1, street.clone()));
+        let mut state = city.junctions[&node_uid(1)].clone();
+        state.ring_extra_mm = 500;
+        assert!(city.keep_junction(node_uid(1), state));
+        let back = City::load(&edits_of(&city));
+        assert_eq!(back.streets[&1], street);
+        assert_eq!(back.junctions[&node_uid(1)].ring_extra_mm, 500);
+        assert_eq!(back.streets[&2], back.today_streets[&2], "what was not edited is as first laid out");
+        assert_eq!(back.view(0).edited, 2);
+    }
+
+    #[test]
+    fn an_edit_stays_with_its_street_when_the_layout_is_reordered() {
+        // The defect: positions shift when a tile or the importer is refreshed. The old positional load would
+        // give the edit to whatever street now has uid 1.
+        let mut city = City::new();
+        let street = narrowed(&city, 1);
+        assert!(city.keep_street(1, street.clone()));
+        let edits = edits_of(&city);
+        let mut layout = Layout::sample();
+        layout.edges.reverse();
+        let back = City::load_on(layout, &edits);
+        let last = back.layout.edges.len() as u32; // street 1 is now the last
+        assert_eq!(back.streets[&last], street, "the edit followed its street");
+        for other in 1..last {
+            assert_eq!(back.streets[&other], back.today_streets[&other], "no other street took an edit (street {other})");
+        }
+    }
+
+    #[test]
+    fn an_edit_whose_street_is_gone_is_not_applied_and_the_record_is_still_there_to_try_again() {
+        let mut city = City::new();
+        assert!(city.keep_street(1, narrowed(&city, 1)));
+        let edits = edits_of(&city);
+        let mut layout = Layout::sample();
+        layout.edges[0].section.source = vec![OsmRef { id: 9_999_999, version: None }]; // another way now
+        let back = City::load_on(layout, &edits);
+        assert_eq!(back.streets[&1], back.today_streets[&1]);
+        assert_eq!(edits.streets.len(), 1, "loading does not take a record out of the document");
+        // and the street comes back: the record applies again
+        assert_eq!(City::load_on(Layout::sample(), &edits).streets[&1], narrowed(&City::new(), 1));
+    }
+
+    #[test]
+    fn a_street_with_the_same_key_but_another_width_does_not_take_the_edit() {
+        let mut city = City::new();
+        assert!(city.keep_street(1, narrowed(&city, 1)));
+        let mut edits = edits_of(&city);
+        for record in edits.streets.values_mut() {
+            record.street.row_mm += 100; // the way is wider now: the saved section no longer fits it
+        }
+        let back = City::load(&edits);
+        assert_eq!(back.streets[&1], back.today_streets[&1]);
+    }
+
+    #[test]
+    fn a_street_of_another_class_does_not_take_the_edit() {
+        let mut city = City::new();
+        assert!(city.keep_street(1, narrowed(&city, 1)));
+        let mut edits = edits_of(&city);
+        for record in edits.streets.values_mut() {
+            record.street.class = StreetClass::ALL.into_iter().find(|&c| c != record.street.class).unwrap(); // only the class differs
+        }
+        let back = City::load(&edits);
+        assert_eq!(back.streets[&1], back.today_streets[&1]);
+    }
+
+    /// The sample city with an edited junction 1, its edits, and the junction's node index.
+    fn edited_junction() -> (Edits, usize) {
+        let mut city = City::new();
+        let mut state = city.junctions[&node_uid(1)].clone();
+        state.ring_extra_mm = 500;
+        assert!(city.keep_junction(node_uid(1), state));
+        let edits = edits_of(&city);
+        assert_eq!(edits.junctions.len(), 1);
+        (edits, 1)
+    }
+
+    fn junction_is_as_first_laid_out(back: &City) -> bool {
+        back.junctions[&node_uid(1)].ring_extra_mm == back.today_junctions[&node_uid(1)].ring_extra_mm
+    }
+
+    #[test]
+    fn a_junction_record_that_does_not_say_which_street_an_arm_is_on_is_not_applied() {
+        let (mut edits, _) = edited_junction();
+        for record in edits.junctions.values_mut() {
+            let uid = *record.arm_streets.keys().next().unwrap();
+            record.arm_streets.remove(&uid);
+        }
+        assert!(junction_is_as_first_laid_out(&City::load(&edits)));
+    }
+
+    /// The sample layout with a copy of street 1 somewhere that is not junction 1 (the same way and end nodes).
+    fn with_a_twin_of_street_1_elsewhere() -> Layout {
+        let mut layout = Layout::sample();
+        let (a, b) = (layout.edges[0].a, layout.edges[0].b);
+        let copy = |n: &NodeDef| NodeDef { x_mm: n.x_mm, y_mm: n.y_mm, junction: false, control: 0, corner_mm: 0, source: n.source.clone() };
+        let (na, nb) = (copy(&layout.nodes[a]), copy(&layout.nodes[b]));
+        layout.nodes.push(na);
+        layout.nodes.push(nb);
+        let n = layout.nodes.len();
+        let e = &layout.edges[0];
+        let twin =
+            EdgeDef { a: n - 2, b: n - 1, class: e.class, name: e.name.clone(), section: e.section.clone(), headings: e.headings, shape: e.shape.clone() };
+        layout.edges.push(twin);
+        layout
+    }
+
+    fn clone_layout(l: &Layout) -> Layout {
+        let node = |n: &NodeDef| NodeDef { source: n.source.clone(), ..*n };
+        let edge = |e: &EdgeDef| EdgeDef { name: e.name.clone(), section: e.section.clone(), shape: e.shape.clone(), ..*e };
+        Layout {
+            name: l.name.clone(),
+            side: l.side,
+            nodes: l.nodes.iter().map(node).collect(),
+            edges: l.edges.iter().map(edge).collect(),
+            origin_m: l.origin_m,
+        }
+    }
+
+    #[test]
+    fn two_streets_with_the_same_key_have_none_and_are_neither_written_nor_given_an_edit() {
+        let mut city = City::new();
+        assert!(city.keep_street(1, narrowed(&city, 1)));
+        let edits = edits_of(&city);
+        let layout = with_a_twin_of_street_1_elsewhere();
+        let keys = layout.edge_keys();
+        let last = keys.len() - 1;
+        assert_eq!(keys[0], keys[last], "the twin has the same key, the way it leaves its first end too");
+        let mut back = City::load_on(layout, &edits);
+        assert_eq!(back.streets[&1], back.today_streets[&1], "neither takes the edit by its key");
+        assert!(back.street_record(1).is_none() && back.street_record(last as u32 + 1).is_none(), "and neither can be written");
+        assert!(back.keep_street(1, narrowed(&back, 1)));
+        assert!(back.street_record(1).is_none(), "an edit that could not come back is refused, not lost");
+    }
+
+    #[test]
+    fn a_junction_arm_finds_its_street_among_those_at_the_junction_whatever_other_street_has_its_key() {
+        let (edits, _) = edited_junction();
+        assert!(!junction_is_as_first_laid_out(&City::load_on(with_a_twin_of_street_1_elsewhere(), &edits)));
+    }
+
+    #[test]
+    fn a_junction_arm_whose_street_key_changed_finds_its_street_by_its_way_and_the_way_it_leaves() {
+        // kept where the arm's street was `w2000~n1000~n1001`; here the box cuts it, so its key is another
+        let (edits, node) = edited_junction();
+        let mut layout = Layout::sample();
+        let far = layout.edges[0].a;
+        assert_ne!(far, node);
+        layout.nodes[far].source.clear();
+        assert!(layout.edge_keys()[0].as_deref().is_some_and(|k| k.contains("~x~")), "{:?}", layout.edge_keys()[0]);
+        assert!(!junction_is_as_first_laid_out(&City::load_on(layout, &edits)));
+    }
+
+    #[test]
+    fn a_junction_kept_where_an_arm_street_was_cut_at_the_box_comes_back_where_the_street_is_whole() {
+        let mut cut = Layout::sample();
+        let far = cut.edges[0].a;
+        cut.nodes[far].source.clear();
+        let mut city = City::on(cut);
+        let mut state = city.junctions[&node_uid(1)].clone();
+        state.ring_extra_mm = 500;
+        assert!(city.keep_junction(node_uid(1), state));
+        let edits = edits_of(&city);
+        let arms: Vec<&ArmStreet> = edits.junctions.values().flat_map(|r| r.arm_streets.values()).collect();
+        assert!(arms.iter().any(|a| a.key.as_deref().is_some_and(|k| k.contains("~x~"))), "{arms:?}");
+        assert!(!junction_is_as_first_laid_out(&City::load(&edits)));
+    }
+
+    #[test]
+    fn a_junction_arm_without_a_key_is_found_by_its_way_and_bearing_and_not_on_a_street_that_leaves_another_way() {
+        let (mut edits, _) = edited_junction();
+        for record in edits.junctions.values_mut() {
+            for street in record.arm_streets.values_mut() {
+                street.key = None; // only the way and the bearing say which street it is
+            }
+        }
+        assert!(!junction_is_as_first_laid_out(&City::load(&edits)), "found again by way and bearing");
+        let mut turned = edits.clone();
+        for record in turned.junctions.values_mut() {
+            let street = record.arm_streets.values_mut().next().unwrap();
+            street.leaving = (street.leaving + 90) % 360;
+        }
+        assert!(junction_is_as_first_laid_out(&City::load(&turned)), "the street of the way leaves the junction another way");
+    }
+
+    #[test]
+    fn of_two_streets_of_one_way_at_a_junction_an_arm_takes_the_one_leaving_its_way_and_neither_if_both_do() {
+        let node = 1;
+        let mut layout = Layout::sample();
+        let at = layout.edges_at(node);
+        let way = layout.edges[at[0]].section.source.clone();
+        layout.edges[at[1]].section.source = way.clone(); // the way runs on through the junction
+        let leaving = layout.leaving_deg(at[0], node).round() as i32;
+        let street = ArmStreet { key: None, ways: super::super::keys::ids(&way), leaving };
+        assert_eq!(City::on(clone_layout(&layout)).arm_street(node, &street), Some(at[0]));
+        // the other street of the way now leaves the junction almost as the first does
+        let far = layout.other_end(at[1], node);
+        let near = &layout.nodes[layout.other_end(at[0], node)];
+        (layout.nodes[far].x_mm, layout.nodes[far].y_mm) = (near.x_mm + 1_000, near.y_mm - 5_000);
+        assert_eq!(City::on(layout).arm_street(node, &street), None);
+    }
+
+    #[test]
+    fn a_junction_arm_whose_street_key_names_a_street_that_does_not_meet_it_is_not_applied() {
+        let (mut edits, node) = edited_junction();
+        let layout = Layout::sample();
+        let at = layout.edges_at(node);
+        let away = (0..layout.edges.len()).find(|e| !at.contains(e)).expect("a street that does not meet the junction");
+        let key = layout.edge_keys()[away].clone();
+        let ways = super::super::keys::ids(&layout.edges[away].section.source);
+        for record in edits.junctions.values_mut() {
+            let street = record.arm_streets.values_mut().next().unwrap();
+            (street.key, street.ways) = (key.clone(), ways.clone());
+        }
+        assert!(junction_is_as_first_laid_out(&City::load_on(layout, &edits)));
+    }
+
+    #[test]
+    fn a_street_without_a_key_stays_as_first_laid_out_while_the_others_take_their_edits() {
+        let mut city = City::new();
+        assert!(city.keep_street(2, narrowed(&city, 2)));
+        let mut state = city.junctions[&node_uid(1)].clone();
+        state.ring_extra_mm = 500;
+        assert!(city.keep_junction(node_uid(1), state));
+        let edits = edits_of(&city);
+        let mut layout = Layout::sample();
+        layout.edges[0].section.source.clear(); // street 1 has no way
+        let back = City::load_on(layout, &edits);
+        assert_eq!(back.streets[&1], back.today_streets[&1], "the street with no key is left as it was");
+        assert_eq!(back.streets[&2], narrowed(&City::new(), 2), "another street takes its edit");
+        assert!(junction_is_as_first_laid_out(&back), "a junction with an arm on a street that has no key cannot find it again");
+    }
+
+    #[test]
+    fn a_junction_comes_back_from_the_edits_document_with_the_label_a_saved_state_has() {
+        let (edits, _) = edited_junction();
+        // what is kept comes back as the earlier changes: the label is not stored, and loading says the same
+        let text = edits.to_json();
+        let crate::city::edits::Document::Current(read) = crate::city::edits::parse(Some(&text)) else { panic!("not read back") };
+        assert_eq!(read.junctions.values().next().unwrap().state.label, junction::earlier());
+        assert_eq!(City::load(&read).junctions[&node_uid(1)].label, junction::earlier());
+    }
+
+    #[test]
+    fn a_junction_edit_comes_back_with_its_arms_on_the_right_streets() {
+        let mut city = City::new();
+        let mut state = city.junctions[&node_uid(1)].clone();
+        state.ring_extra_mm = 500;
+        assert!(city.keep_junction(node_uid(1), state));
+        let edits = edits_of(&city);
+        let back = City::load_on(reordered(), &edits);
+        // node index 1 is now at the other end of the table
+        let node = back.layout.nodes.len() - 2;
+        let uid = node_uid(node);
+        assert_eq!(back.junctions[&uid].ring_extra_mm, 500);
+        let mut arms: Vec<u32> = back.junctions[&uid].arms.iter().map(|a| a.edge).collect();
+        arms.sort_unstable();
+        let mut want: Vec<u32> = back.layout.edges_at(node).iter().map(|&e| e as u32 + 1).collect();
+        want.sort_unstable();
+        assert_eq!(arms, want, "every arm is on a street that meets the junction");
+        // and each arm is on the street it was on: the same key
+        let was: BTreeMap<u32, ArmStreet> = edits.junctions.values().next().unwrap().arm_streets.clone();
+        let keys = back.layout.edge_keys();
+        for arm in &back.junctions[&uid].arms {
+            assert_eq!(keys[arm.edge as usize - 1], was[&arm.uid].key);
+        }
+    }
+
+    #[test]
+    fn a_junction_whose_arm_street_is_no_longer_there_is_not_applied() {
+        let mut city = City::new();
+        let mut state = city.junctions[&node_uid(1)].clone();
+        state.ring_extra_mm = 500;
+        assert!(city.keep_junction(node_uid(1), state));
+        let mut edits = edits_of(&city);
+        for record in edits.junctions.values_mut() {
+            if let Some(street) = record.arm_streets.values_mut().next() {
+                // a street the city does not have
+                (street.key, street.ways) = (Some("w1~n1~n2".to_string()), [1].into());
+            }
+        }
+        let back = City::load(&edits);
+        assert_eq!(back.junctions[&node_uid(1)].ring_extra_mm, back.today_junctions[&node_uid(1)].ring_extra_mm);
+    }
+
+    #[test]
+    fn a_place_without_a_key_has_no_record() {
+        let mut layout = Layout::sample();
+        layout.edges[0].section.source.clear();
+        let mut city = City::on(layout);
+        assert!(city.keep_street(1, narrowed(&city, 1)));
+        assert!(city.street_record(1).is_none(), "a street with no way has no key");
+        assert!(city.street_record(2).is_some());
+        assert!(city.junction_record(node_uid(0)).is_none(), "an end of a street is not a junction");
+    }
+
+    #[test]
+    fn a_junction_record_stores_arms_without_edges_and_names_their_streets() {
+        let city = City::new();
+        let (key, record) = city.junction_record(node_uid(1)).unwrap();
+        assert_eq!(Some(key), city.layout.node_key(1));
+        assert!(record.state.arms.iter().all(|a| a.edge == 0));
+        assert_eq!(record.arm_streets.len(), record.state.arms.len());
+        assert_eq!(record.nodes, [1001].into());
+    }
+
+    #[test]
+    fn a_street_record_carries_the_ids_of_the_street_and_of_both_its_ends() {
+        let city = City::new();
+        let (key, record) = city.street_record(1).unwrap();
+        assert_eq!(key, "w2000~n1000~n1001");
+        assert_eq!((record.ways, record.nodes), ([2000].into(), [1000, 1001].into()));
+    }
+
     #[test]
     fn what_the_editors_keep_is_saved_and_comes_back() {
         let mut city = City::new();
@@ -1018,7 +1667,7 @@ mod tests {
         assert!(j.set_corner(arm, 4_500));
         assert!(city.keep_junction(node_uid(1), j.snapshot()));
 
-        let back = City::load(&city.save());
+        let back = old_load(&city.legacy_save());
         assert_eq!(back.streets, city.streets);
         // A junction comes back the same but for its history label, which is not kept.
         assert_eq!(back.junctions.keys().collect::<Vec<_>>(), city.junctions.keys().collect::<Vec<_>>());
@@ -1037,19 +1686,19 @@ mod tests {
 
     #[test]
     fn a_damaged_or_foreign_save_starts_the_city_over() {
-        let fresh = City::new().save();
+        let fresh = City::new().legacy_save();
         for bad in ["", "not json", "{}", "[]", r#"{"version":99,"streets":{},"junctions":{}}"#] {
-            assert_eq!(City::load(bad).save(), fresh, "{bad:?}");
+            assert_eq!(old_load(bad).legacy_save(), fresh, "{bad:?}");
         }
         // A street with an index outside the catalogue is dropped; the rest is kept.
         let mut city = City::new();
         let mut s = city.streets[&3].clone();
         s.segments[0].width_mm = 3_000;
         city.keep_street(3, s);
-        let mut saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        let mut saved: serde_json::Value = serde_json::from_str(&city.legacy_save()).unwrap();
         saved["streets"]["1"]["segments"][0]["kind"] = serde_json::json!(99);
         saved["junctions"]["2"]["control"] = serde_json::json!(99);
-        let back = City::load(&saved.to_string());
+        let back = old_load(&saved.to_string());
         assert_eq!(back.streets[&1], back.today_streets[&1]);
         assert_eq!(back.junctions[&2], back.today_junctions[&2]);
         assert_ne!(back.streets[&3], back.today_streets[&3]);
@@ -1102,10 +1751,10 @@ mod tests {
         assert!(city.keep_street(uid, e.snapshot()));
         let edited = city.view(0).edited;
         assert!(edited > 0);
-        let json = city.save();
-        assert_eq!(City::load(&json).view(0).edited, edited, "a save of this version is kept");
+        let json = city.legacy_save();
+        assert_eq!(old_load(&json).view(0).edited, edited, "a save of this version is kept");
         let old = json.replace(&format!("\"version\":{SAVE_VERSION}"), "\"version\":1");
-        assert_eq!(City::load(&old).view(0).edited, 0, "a version 1 save is not opened");
+        assert_eq!(old_load(&old).view(0).edited, 0, "a version 1 save is not opened");
     }
 
     #[test]
@@ -1181,14 +1830,14 @@ mod tests {
         let mut j = city.junction_editor(node_uid(1), 0).unwrap();
         assert!(j.set_raised(true));
         assert!(city.keep_junction(node_uid(1), j.snapshot()));
-        let saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        let saved: serde_json::Value = serde_json::from_str(&city.legacy_save()).unwrap();
         assert_eq!(saved["junctions"]["2"]["raised"], serde_json::json!(true));
-        let back = City::load(&saved.to_string());
+        let back = old_load(&saved.to_string());
         assert!(back.junctions[&node_uid(1)].raised, "a table is kept");
 
         let mut older = saved.clone();
         older["junctions"]["2"].as_object_mut().unwrap().remove("raised");
-        let back = City::load(&older.to_string());
+        let back = old_load(&older.to_string());
         assert!(back.junctions.contains_key(&node_uid(1)), "the save is not discarded");
         assert!(!back.junctions[&node_uid(1)].raised, "a save made before the table has none");
     }
@@ -1200,10 +1849,10 @@ mod tests {
         let arm = j.current().arms.iter().find(|a| a.crossing.is_some()).expect("a street with a crossing").uid;
         assert!(j.set_continuous(arm, true));
         assert!(city.keep_junction(node_uid(1), j.snapshot()));
-        let saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        let saved: serde_json::Value = serde_json::from_str(&city.legacy_save()).unwrap();
         let continuous: Vec<bool> = saved["junctions"]["2"]["arms"].as_array().unwrap().iter().filter_map(|a| a["crossing"]["continuous"].as_bool()).collect();
         assert!(continuous.contains(&true), "it is saved: {continuous:?}");
-        let back = City::load(&saved.to_string());
+        let back = old_load(&saved.to_string());
         assert!(back.junctions[&node_uid(1)].arms.iter().any(|a| a.crossing.is_some_and(|c| c.continuous)));
 
         let mut older = saved.clone();
@@ -1212,7 +1861,7 @@ mod tests {
                 c.remove("continuous");
             }
         }
-        let back = City::load(&older.to_string());
+        let back = old_load(&older.to_string());
         assert!(back.junctions.contains_key(&node_uid(1)), "the save is not discarded");
         assert!(back.junctions[&node_uid(1)].arms.iter().all(|a| !a.crossing.is_some_and(|c| c.continuous)));
     }
@@ -1224,13 +1873,13 @@ mod tests {
         let arm = j.current().arms[0].uid;
         assert!(j.set_corner(arm, 4_500));
         assert!(city.keep_junction(node_uid(1), j.snapshot()));
-        let mut saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        let mut saved: serde_json::Value = serde_json::from_str(&city.legacy_save()).unwrap();
         let arms = saved["junctions"]["2"]["arms"].as_array_mut().unwrap();
         assert!(arms.iter().all(|a| a["bike_box"] == serde_json::json!(false)), "the field is saved");
         for a in arms.iter_mut() {
             a.as_object_mut().unwrap().remove("bike_box");
         }
-        let back = City::load(&saved.to_string());
+        let back = old_load(&saved.to_string());
         assert!(back.view(0).nodes[1].edited, "the junction is kept, the save is not discarded");
         assert!(back.junctions[&node_uid(1)].arms.iter().all(|a| !a.bike_box));
     }
@@ -1242,11 +1891,11 @@ mod tests {
         let arm = j.current().arms[0].uid;
         assert!(j.set_corner(arm, 4_500));
         assert!(city.keep_junction(node_uid(1), j.snapshot()));
-        let mut saved: serde_json::Value = serde_json::from_str(&city.save()).unwrap();
+        let mut saved: serde_json::Value = serde_json::from_str(&city.legacy_save()).unwrap();
         assert!(saved["junctions"]["2"].is_object(), "the edited junction is saved");
         assert_eq!(saved["junctions"]["2"].get("label"), None, "a junction's history label is not kept: {}", saved["junctions"]["2"]);
         saved["junctions"]["2"]["label"] = serde_json::json!("Remove Main (N)");
-        let back = City::load(&saved.to_string());
+        let back = old_load(&saved.to_string());
         assert!(back.view(0).nodes[1].edited, "the edited junction is kept");
         assert!(same_junction(&back.junctions[&node_uid(1)], &city.junctions[&node_uid(1)]));
     }

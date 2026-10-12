@@ -314,10 +314,8 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
     };
     let close = move |refocus: bool| {
         open.set(false);
-        if refocus {
-            if let Some(b) = button.get_untracked() {
-                let _ = HtmlElement::from(b).focus();
-            }
+        if refocus && let Some(b) = button.get_untracked() {
+            let _ = HtmlElement::from(b).focus();
         }
     };
     #[cfg(target_arch = "wasm32")]

@@ -38,7 +38,7 @@ export async function createBasemap(container) {
   };
   const listen = (on) => {
     listener = on;
-    queue.splice(0).forEach(on);
+    queue.splice(0).forEach((json) => on(json));
   };
 
   let theme = themeNow();
@@ -287,7 +287,8 @@ export async function createBasemap(container) {
       const c = map.getCenter();
       return new Float64Array([c.lng, c.lat]);
     },
-    fit(west, south, east, north, top, right, bottom, left) {
+    // `bounds` is west, south, east, north and `insets` top, right, bottom, left, as numbers.
+    fit([west, south, east, north], [top, right, bottom, left]) {
       map.fitBounds(
         [
           [west, south],

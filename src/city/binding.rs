@@ -21,13 +21,13 @@ impl CityBinding {
     /// Writes a junction as it now is back to the city. Says whether it was kept.
     pub fn keep_junction(&self, state: State) -> bool {
         let Place::Junction(node) = self.place else { return false };
-        self.store.write(|c| c.keep_junction(node, state))
+        self.store.write_junction(node, state)
     }
 
     /// Writes a street as it now is back to the city. Says whether it was kept.
     pub fn keep_street(&self, street: Street) -> bool {
         let Place::Street(edge) = self.place else { return false };
-        self.store.write(|c| c.keep_street(edge, street))
+        self.store.write_street(edge, street)
     }
 }
 
@@ -68,5 +68,17 @@ mod tests {
         let u = e.view().segments[0].uid;
         e.nudge_width(u, 100);
         assert!(!b.keep_street(e.snapshot()));
+    }
+
+    #[test]
+    fn a_junction_with_a_street_that_has_no_key_is_not_kept() {
+        let (ports, ..) = test_ports();
+        let store = CityStore::sample_without_osm_ids(ports.storage);
+        let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let mut j = store.open().junction_editor(node, 0).unwrap();
+        let uid = j.current().arms[0].uid;
+        assert!(j.set_corner(uid, 7_000));
+        let b = CityBinding { store, place: Place::Junction(node) };
+        assert!(!b.keep_junction(j.snapshot()));
     }
 }

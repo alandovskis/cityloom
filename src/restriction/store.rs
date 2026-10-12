@@ -353,6 +353,12 @@ mod tests {
         fn remember(&self, key: &str, value: &str) -> bool {
             key != DAMAGED_KEY && self.0.remember(key, value)
         }
+        fn keys(&self) -> Vec<String> {
+            self.0.keys()
+        }
+        fn first_time(&self, what: &str) -> bool {
+            self.0.first_time(what)
+        }
     }
 
     #[test]
