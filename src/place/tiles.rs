@@ -24,8 +24,10 @@ pub const INDEX_URL: &str = "data/metro/index.json";
 /// 2: a bike track or a sidewalk mapped as a way of its own (`cycleway:both=separate`, `sidewalk:both=separate`) is a
 /// lane beside the road.
 ///
+/// 3: a road with no name is left out.
+///
 /// The e2e test `world.spec.ts` names the version in what it expects to be kept: raise it there too.
-pub const IMPORTER_VERSION: u32 = 2;
+pub const IMPORTER_VERSION: u32 = 3;
 
 /// A tile's checksum as an area made from it is kept: with the version of the importer that read it.
 pub fn with_importer(checksum: &str) -> String {

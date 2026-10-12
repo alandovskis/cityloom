@@ -15,7 +15,7 @@ fn a_real_neighbourhood_becomes_a_city_whose_places_can_all_be_opened() {
     assert!(!net.left_hand);
     let city = City::from_network(&net, "Kreuzberg");
     let v = city.view(0);
-    assert!(v.nodes.iter().filter(|n| n.junction).count() > 10);
+    assert!(v.nodes.iter().filter(|n| n.junction).count() > 5, "half of the extract's roads have no name and are left out");
     for n in v.nodes.iter().filter(|n| n.junction) {
         assert!(city.junction_editor(n.uid, 0).is_some(), "{:?} cannot be opened", n.name);
     }
@@ -31,7 +31,7 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
     assert!(!net.left_hand);
     assert!(net.roads.len() > 150, "{} roads", net.roads.len());
     let mut degree = std::collections::HashMap::new();
-    for r in &net.roads {
+    for r in net.roads.iter().filter(|r| r.name.as_deref().is_some_and(|n| !n.trim().is_empty())) {
         *degree.entry(r.from).or_insert(0) += 1;
         *degree.entry(r.to).or_insert(0) += 1;
     }
