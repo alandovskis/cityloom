@@ -87,3 +87,16 @@ test("at 400 px the Notes edge tab leaves the toggle clear, wherever the page is
     expect(b.x + b.width, id).toBeLessThanOrEqual(tab.x);
   }
 });
+
+test("in forced colours the view shown is still marked as pressed", async ({ page }) => {
+  // Forced colours drop the pressed button's background and shadow; an outline in Highlight stays.
+  await page.emulateMedia({ forcedColors: "active" });
+  await openStreet(page);
+  const outline = (id: string) => page.locator(id).evaluate((b) => getComputedStyle(b).outlineStyle);
+  expect(await outline("#view-section")).toBe("solid");
+  expect(await outline("#view-iso")).toBe("none");
+  await iso(page).click();
+  await page.mouse.click(1, 1);
+  expect(await outline("#view-iso")).toBe("solid");
+  expect(await outline("#view-section")).toBe("none");
+});
