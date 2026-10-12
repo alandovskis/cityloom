@@ -54,14 +54,16 @@ restriction-corners = { $n ->
 restriction-kmh = { $kmh }{" "}km/h
 
 ## Garder et modifier une zone
-restriction-saved = Zone « { $area } » enregistrée.
+restriction-saved = Zone enregistrée : « { $area } ».
 restriction-not-kept = Les règles de zone n’ont pas pu être enregistrées dans ce navigateur.
-restriction-selected = Zone « { $area } » sélectionnée : { $rule }.
+restriction-selected = Zone sélectionnée : « { $area } » ({ $rule }).
+restriction-selected-unnamed = Zone sélectionnée : « { $area } ».
 restriction-renamed = Zone renommée « { $area } ».
-restriction-rule-changed = La règle de « { $area } » est maintenant : { $rule }.
-restriction-redrawn = Zone « { $area } » retracée.
-restriction-deleted = Zone « { $area } » supprimée.
-restriction-restored = Zone « { $area } » rétablie.
+restriction-rule-changed = La règle de « { $area } » a changé ({ $rule }).
+restriction-rule-changed-unnamed = La règle de la zone a changé ({ $rule }).
+restriction-redrawn = Zone retracée : « { $area } ».
+restriction-deleted = Zone supprimée : « { $area } ».
+restriction-restored = Zone rétablie : « { $area } ».
 
 ## Le chapeau de l’onglet
 restriction-future = Ces règles de zone ont été enregistrées par une version plus récente de CityLoom; elles ne peuvent pas être affichées ni modifiées ici.

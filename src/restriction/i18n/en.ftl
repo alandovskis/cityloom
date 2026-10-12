@@ -64,8 +64,12 @@ restriction-kmh = { $kmh } km/h
 restriction-saved = “{ $area }” saved.
 restriction-not-kept = The area rules could not be saved in this browser.
 restriction-selected = “{ $area }” selected: { $rule }.
+# An area with no name of its own: `area` is its rule's name, said once.
+restriction-selected-unnamed = “{ $area }” selected.
 restriction-renamed = Renamed “{ $area }”.
 restriction-rule-changed = The rule of “{ $area }” is now: { $rule }.
+# The same for an area with no name of its own, which is called by its rule.
+restriction-rule-changed-unnamed = The area’s rule is now: { $rule }.
 restriction-redrawn = “{ $area }” redrawn.
 restriction-deleted = “{ $area }” deleted.
 restriction-restored = “{ $area }” restored.

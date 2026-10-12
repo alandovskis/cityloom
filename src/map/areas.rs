@@ -93,6 +93,16 @@ impl AreasVm {
         self.tell(key, Args::new().str("area", self.say_now(&r.title())));
     }
 
+    /// Says `key` about an area and its rule; for an area called by its rule, `unnamed`, which says the rule once.
+    fn tell_with_rule(&self, key: &str, unnamed: &str, r: &Restriction) {
+        let rule = self.say_now(&r.rule.said());
+        if r.title() == r.rule.said() {
+            self.tell(unnamed, Args::new().str("area", rule.clone()).str("rule", rule));
+        } else {
+            self.tell(key, Args::new().str("area", self.say_now(&r.title())).str("rule", rule));
+        }
+    }
+
     // ---- properties ----
 
     pub fn list(&self) -> Vec<Restriction> {
@@ -355,7 +365,7 @@ impl AreasVm {
         self.moving.set(None);
         self.selected.set(id);
         if let Some(r) = found {
-            self.tell("restriction-selected", Args::new().str("area", self.say_now(&r.title())).str("rule", self.say_now(&r.rule.said())));
+            self.tell_with_rule("restriction-selected", "restriction-selected-unnamed", &r);
         }
     }
 
@@ -382,11 +392,7 @@ impl AreasVm {
     }
 
     pub fn set_rule(&self, id: &str, rule: Rule) -> bool {
-        self.change(
-            id,
-            |r| r.rule = rule,
-            |r| self.tell("restriction-rule-changed", Args::new().str("area", self.say_now(&r.title())).str("rule", self.say_now(&r.rule.said()))),
-        )
+        self.change(id, |r| r.rule = rule, |r| self.tell_with_rule("restriction-rule-changed", "restriction-rule-changed-unnamed", r))
     }
 
     /// Deletes an area; it can be brought back for the session (`undo_delete`).
@@ -1078,5 +1084,78 @@ mod tests {
         assert_eq!(said.take(), ["The outline was changed in another tab, so the corner was not moved."]);
         assert_eq!(vm.find_now("r1").unwrap().ring, SQUARE[..3].to_vec());
         assert_eq!(vm.moving(), None);
+    }
+
+    #[test]
+    fn an_unnamed_area_is_said_by_its_rule_once() {
+        let (vm, _, said, _) = rig();
+        declare(&vm, "");
+        vm.select(None);
+        said.take();
+        vm.select(Some("r1"));
+        assert_eq!(said.take(), ["“Car-free” selected."]);
+        assert!(vm.set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
+        assert_eq!(said.take(), ["The area’s rule is now: Speed limit of 30 km/h."]);
+    }
+
+    #[test]
+    fn a_redrawn_renamed_and_unnamed_area_is_said_in_french_with_its_typography() {
+        let (ports, said, _) = test_ports();
+        let vm = AreasVm::new(ports, crate::i18n_for(Locale::FrCa));
+        draw_square(&vm);
+        said.take();
+        vm.set_form_name("Mile End");
+        assert!(vm.save());
+        vm.select(None);
+        vm.select(Some("r1"));
+        assert!(vm.set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
+        assert!(vm.delete("r1"));
+        assert!(vm.undo_delete());
+        assert!(vm.start_redraw("r1"));
+        for p in &SQUARE[..3] {
+            vm.add_at(*p);
+        }
+        said.take();
+        assert!(vm.close());
+        assert!(vm.rename("r1", ""));
+        vm.select(None);
+        vm.select(Some("r1"));
+        assert!(vm.set_rule("r1", Rule::CarFree));
+        let n = '\u{a0}';
+        assert_eq!(
+            said.take(),
+            [
+                format!("Zone retracée{n}: «{n}Mile End{n}»."),
+                format!("Zone renommée «{n}Limite de vitesse de 30{n}km/h{n}»."),
+                format!("Zone sélectionnée{n}: «{n}Limite de vitesse de 30{n}km/h{n}»."),
+                "La règle de la zone a changé (Zone sans voitures).".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_first_french_announcements_of_an_area() {
+        let (ports, said, _) = test_ports();
+        let vm = AreasVm::new(ports, crate::i18n_for(Locale::FrCa));
+        draw_square(&vm);
+        said.take();
+        vm.set_form_name("Mile End");
+        assert!(vm.save());
+        vm.select(None);
+        vm.select(Some("r1"));
+        assert!(vm.set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
+        assert!(vm.delete("r1"));
+        assert!(vm.undo_delete());
+        let n = '\u{a0}';
+        assert_eq!(
+            said.take(),
+            [
+                format!("Zone enregistrée{n}: «{n}Mile End{n}»."),
+                format!("Zone sélectionnée{n}: «{n}Mile End{n}» (Zone sans voitures)."),
+                format!("La règle de «{n}Mile End{n}» a changé (Limite de vitesse de 30{n}km/h)."),
+                format!("Zone supprimée{n}: «{n}Mile End{n}»."),
+                format!("Zone rétablie{n}: «{n}Mile End{n}»."),
+            ]
+        );
     }
 }
