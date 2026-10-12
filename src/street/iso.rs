@@ -383,6 +383,23 @@ fn outline(out: &mut String, p: &Projection, v: &View, i: usize) {
     .unwrap();
 }
 
+/// The strips to draw, each as (how high its top is drawn, which piece, which edge's curb if it is one), from the
+/// lowest drawn top to the highest, so that a higher strip stands in front of a lower one beside it.
+fn strips(v: &View) -> Vec<(f64, usize, Option<bool>)> {
+    let mut strips: Vec<(f64, usize, Option<bool>)> = Vec::new();
+    for (i, s) in v.segments.iter().enumerate() {
+        let id = KINDS[s.kind].id;
+        strips.push((drawn_mm(height_mm(id)), i, None));
+        if let Some(c) = s.curb {
+            for right in curb_edges(v, i) {
+                strips.push((curb_top_mm(c, id), i, Some(right)));
+            }
+        }
+    }
+    strips.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.is_some().cmp(&b.2.is_some())));
+    strips
+}
+
 /// How wide the scene is across: the street, or the pieces where they run over it.
 fn span_mm(v: &View) -> i32 {
     v.row_mm.max(v.total_mm)
@@ -407,19 +424,7 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let mut out = format!("<defs>{}</defs>", shades());
     write!(out, "<polygon class=\"iso-ground\" points=\"{}\"/>", points(&p, &[(0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, 0.0, l), (0.0, 0.0, l)])).unwrap();
 
-    // (how high it stands, which piece, which edge's curb if it is one)
-    let mut strips: Vec<(i32, usize, Option<bool>)> = Vec::new();
-    for (i, s) in v.segments.iter().enumerate() {
-        let h = height_mm(KINDS[s.kind].id);
-        strips.push((h, i, None));
-        if let Some(c) = s.curb {
-            for right in curb_edges(v, i) {
-                strips.push((curb_height_mm(c).max(h), i, Some(right)));
-            }
-        }
-    }
-    strips.sort_by_key(|&(top, i, edge)| (top, i, edge.is_some()));
-    for (_, i, edge) in strips {
+    for (_, i, edge) in strips(v) {
         let s = &v.segments[i];
         let name = i18n.tr(&kind_key(KINDS[s.kind].id), &Args::new());
         write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
@@ -1093,6 +1098,28 @@ mod tests {
         assert_eq!(count(&m, "filter=\"url(#iso-shade-side)\""), side);
         let css = include_str!("../../web/editor.css");
         assert!(!css.contains("brightness(0.9)") && !css.contains("brightness(0.78)"));
+    }
+
+    #[test]
+    fn the_strips_are_drawn_from_the_lowest_to_the_highest_as_they_are_drawn() {
+        // A curbed bike lane beside a sidewalk: the curb stands 150 mm and the sidewalk 150 mm, but the sidewalk is
+        // drawn three times as high, so it must come after the curb.
+        let mut e = Editor::new(0);
+        e.add(kind_index("bike").unwrap(), 1);
+        for e in [e, Editor::new(0), Editor::new(1), furnished(), one_way_bikes().0] {
+            let v = e.view();
+            let tops: Vec<f64> = strips(&v)
+                .iter()
+                .map(|&(_, i, edge)| {
+                    let (s, id) = (&v.segments[i], KINDS[v.segments[i].kind].id);
+                    match edge {
+                        None => drawn_mm(height_mm(id)),
+                        Some(_) => curb_top_mm(s.curb.unwrap(), id),
+                    }
+                })
+                .collect();
+            assert!(tops.windows(2).all(|w| w[0] <= w[1]), "{tops:?}");
+        }
     }
 
     #[test]
