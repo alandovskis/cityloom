@@ -204,6 +204,33 @@ test.describe("the street editor on a street of the city", () => {
     await expect(page.locator("#revs tbody tr")).toHaveCount(2);
   });
 
+  test("V pressed in the middle of a drag keeps the width the drag has shown, as an edit that can be undone", async ({
+    page,
+  }) => {
+    // The pieces of the design as the section labels them, after both street edges.
+    const design = async () =>
+      ((await page.locator("#drawing").textContent()) ?? "").split("Street edgeStreet edge")[1];
+    const today = await design();
+    const box = (await page.locator('#drawing [data-role="handle"]').nth(2).boundingBox())!;
+    const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 20, y, { steps: 4 });
+    const dragged = await design();
+    expect(dragged).not.toBe(today);
+    await page.keyboard.press("v");
+    await expect(page.locator("#drawing.iso")).toBeAttached();
+    await page.mouse.up();
+    await page.keyboard.press("v");
+    await expect(page.locator('#drawing [data-role="handle"]').first()).toBeAttached();
+    expect(await design()).toBe(dragged);
+    await expect(page.locator("#undo")).toBeEnabled();
+    await expect(page.locator("#tb-changes")).toHaveText("1");
+    await page.reload();
+    await expect(page.locator('#drawing [data-role="handle"]').first()).toBeAttached();
+    expect(await design()).toBe(dragged);
+  });
+
   test("a piece is dragged along to a new place", async ({ page }) => {
     const first = page.locator('#drawing [data-role="seg"]').first();
     const second = page.locator('#drawing [data-role="seg"]').nth(1);

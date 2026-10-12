@@ -12,7 +12,9 @@ st-key-edit-width = modifier la largeur
 st-key-remove = supprimer
 st-key-details-notes = détails, notes
 st-key-undo = annuler
+st-key-view = coupe, 2,5D
 st-cross-section = Coupe transversale
+st-street-2-5d = Rue en 2,5D
 st-focus-hint = Les flèches sélectionnent. Maj + flèches réordonnent. + et − redimensionnent, avec Maj pour de plus grands pas. Entrée modifie la largeur.
 st-touch-cue = Sur un écran tactile, faites glisser la rue de côté pour la voir en entier.
 st-space-heading = Où va la largeur
@@ -144,6 +146,13 @@ welcome-dismiss = Compris
 
 # Le dessin de la coupe (src/street/view.rs).
 view-section-label = Éditeur de coupe transversale de la rue
+view-iso-label = Éditeur de la rue, vue 2,5D
+# La vue du dessin, la coupe ou la rue en 2,5D (src/street/vm.rs, src/street/page.rs).
+view-shown-section = Coupe affichée
+view-shown-iso = Rue affichée en 2,5D
+view-mode-label = Afficher la rue en
+view-mode-section = Coupe
+view-mode-iso = 2,5D
 
 # The Transit Priority Atlas measures, by lowercase code (src/shared/atlas.rs).
 atlas-a1-name = Rues de transport en commun
@@ -270,6 +279,10 @@ svg-label = Coupe transversale de { $name }. { $count ->
         [one] { $count } élément
        *[other] { $count } éléments
     }, { $total } sur { $row }. { $fit }.
+svg-iso-label = { $name } en 2,5D, sur un tronçon de { $length }. { $count ->
+        [one] { $count } élément
+       *[other] { $count } éléments
+    }.
 
 # Ce que le modèle dit avoir fait, mis en mots par `text::say` (src/street/model.rs) : la liste des modifications et ce qui est annoncé après une modification.
 rev-earlier = Modifications antérieures

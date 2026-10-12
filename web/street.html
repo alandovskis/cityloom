@@ -32,6 +32,7 @@
             <span><kbd data-i18n="ui-key-enter">Enter</kbd> <span data-i18n="st-key-edit-width">edit width</span></span>
             <span><kbd data-i18n="ui-key-delete">Delete</kbd> <span data-i18n="st-key-remove">remove</span></span>
             <span><kbd>[</kbd> <kbd>]</kbd> <span data-i18n="st-key-details-notes">details, notes</span></span>
+            <span><kbd>V</kbd> <span data-i18n="st-key-view">section, 2.5D</span></span>
             <span><kbd data-i18n="ui-key-ctrl">Ctrl</kbd> <kbd>Z</kbd> <span data-i18n="st-key-undo">undo</span></span>
           </p>
         </div>
@@ -97,14 +98,17 @@
   <main class="stage">
     <div class="stage-main">
       <div class="stage-head">
-        <div class="title-card"><div class="street" id="street"></div></div>
+        <div class="title-card with-view">
+          <div class="street" id="street"></div>
+          <div class="view-mode-tools" id="view-mode-slot"></div>
+        </div>
         <div class="tools">
           <div class="add" id="add"></div>
           <div id="history" style="display: contents"></div>
         </div>
       </div>
       <section class="drawing" aria-labelledby="h-drawing">
-        <h2 id="h-drawing" class="sr-only" data-i18n="st-cross-section">Cross-section</h2>
+        <h2 id="h-drawing" class="sr-only"></h2>
         <div id="welcome-slot" style="display: contents"></div>
         <div id="clock-slot" style="display: contents"></div>
         <div class="scroll" id="scroll"></div>
