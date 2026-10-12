@@ -55,10 +55,18 @@ impl Restrictions {
     pub fn to_json(&self) -> String {
         let mut records = serde_json::Map::new();
         for (id, r) in &self.restrictions {
-            // The record's known fields over what it was read as: a field of a newer build stays.
+            // As it was read, but for the fields that changed: what a newer build added, at any depth, stays.
             let mut record = self.raw.get(id).cloned().unwrap_or_default();
-            let Value::Object(known) = serde_json::to_value(r).expect("a restriction serialises") else { unreachable!("a record is an object") };
-            record.extend(known);
+            let was = serde_json::from_value::<Restriction>(Value::Object(record.clone())).ok().map(|w| Restriction { id: id.clone(), ..w });
+            if was.as_ref() != Some(r) {
+                let Value::Object(known) = serde_json::to_value(r).expect("a restriction serialises") else { unreachable!("a record is an object") };
+                let old = was.and_then(|w| serde_json::to_value(w).ok()).unwrap_or_default();
+                for (field, value) in known {
+                    if old.get(&field) != Some(&value) {
+                        record.insert(field, value);
+                    }
+                }
+            }
             records.insert(id.clone(), Value::Object(record));
         }
         for (id, raw) in &self.unreadable {
@@ -492,5 +500,30 @@ mod tests {
         let before = storage.recall(RESTRICTIONS_KEY);
         assert_eq!(s.add("A", Rule::CarFree, RING.to_vec()), None, "no id is left, and the one kept is not written over");
         assert_eq!(storage.recall(RESTRICTIONS_KEY), before);
+    }
+
+    #[test]
+    fn what_a_newer_build_added_inside_a_rule_survives_writes_to_other_records_and_to_its_own() {
+        let (s, storage) = store();
+        let ring = r#"[[-73.6,45.52],[-73.59,45.52],[-73.59,45.53]]"#;
+        let r1 = format!(r#"{{"name":"A","ring":{ring},"rule":{{"hours":"7-9","kind":"car_free"}}}}"#);
+        let r3 = format!(r#"{{"name":"S","ring":{ring},"rule":{{"kind":"speed_limit","kmh":30,"zone":"school"}}}}"#);
+        storage.remember(RESTRICTIONS_KEY, &format!(r#"{{"version":1,"next_id":4,"restrictions":{{"r1":{r1},"r3":{r3}}}}}"#));
+        let rule_of = |id: &str| kept(&storage)["restrictions"][id]["rule"].clone();
+        let (hours, zone) = (serde_json::json!({"hours":"7-9","kind":"car_free"}), serde_json::json!({"kind":"speed_limit","kmh":30,"zone":"school"}));
+        let other = s.add("B", Rule::CarFree, RING.to_vec()).unwrap();
+        assert_eq!((rule_of("r1"), rule_of("r3")), (hours.clone(), zone.clone()), "an add");
+        assert!(s.update(&other.id, |r| r.name = "B2".into()));
+        assert_eq!((rule_of("r1"), rule_of("r3")), (hours.clone(), zone.clone()), "a rename of another record");
+        assert!(s.remove(&other.id));
+        assert_eq!((rule_of("r1"), rule_of("r3")), (hours.clone(), zone.clone()), "a removal");
+        assert!(s.update("r1", |r| r.name = "A2".into()));
+        assert!(s.update("r3", |r| r.name = "S2".into()));
+        assert_eq!((rule_of("r1"), rule_of("r3")), (hours.clone(), zone.clone()), "a rename of its own record");
+        assert_eq!(kept(&storage)["restrictions"]["r1"]["name"], "A2");
+        s.restore(&Restriction { id: other.id.clone(), name: "B".into(), rule: Rule::CarFree, ring: RING.to_vec() }).unwrap();
+        assert_eq!((rule_of("r1"), rule_of("r3")), (hours, zone), "a restore");
+        assert!(s.update("r3", |r| r.rule = Rule::SpeedLimit { kmh: 20 }));
+        assert_eq!(rule_of("r3"), serde_json::json!({"kind":"speed_limit","kmh":20}), "a changed rule replaces the rule whole");
     }
 }
