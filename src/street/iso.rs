@@ -111,8 +111,10 @@ pub fn curb_height_mm(curb: &str) -> i32 {
     }
 }
 
-/// A piece narrower than this on screen draws without what stands on it and without its arrow, as in the section.
-pub const MIN_SOLID_PX: f64 = 26.0;
+/// A piece narrower than this on screen draws without what stands on it and without its arrow. It is below the
+/// section's 26 px: the 2.5D draws a street smaller (it fits the recession across too), and a tree is a box
+/// standing up off its strip, so it reads on a 1.5 m strip at 760 px (about 21 px).
+pub const MIN_SOLID_PX: f64 = 20.0;
 /// How far along the street a one-way arrow is laid, in millimetres: near the near end, because what stands
 /// on the pieces hides only the ground farther along than itself, and a tree's crown nothing nearer than 10 m.
 pub const ARROW_AT_MM: f64 = 6_000.0;
@@ -804,7 +806,7 @@ mod tests {
 
     #[test]
     fn a_piece_too_narrow_on_screen_draws_without_its_solids_but_keeps_its_faces() {
-        // At 600 px Sample Avenue 2's 1.5 m planting strips are under 26 px: no trees, all eleven tops.
+        // At 600 px Sample Avenue 2's 1.5 m planting strips are under 20 px (17.6): no trees, all eleven tops.
         let narrow = iso_svg(&Editor::new(1).view(), &en(), 600.0).markup;
         assert_eq!(count(&narrow, "class=\"iso-solid"), 0);
         assert_eq!(count(&narrow, "class=\"iso-top "), 11);
@@ -812,6 +814,17 @@ mod tests {
         let freeway = iso_svg(&Editor::new(3).view(), &en(), 600.0);
         assert_eq!(count(&freeway.markup, "class=\"iso-top "), 9);
         assert!(!freeway.markup.contains("NaN"));
+    }
+
+    #[test]
+    fn at_760_px_the_planting_strips_keep_their_trees_the_shelter_and_the_bike_lane_s_posts() {
+        // A 1.5 m strip is about 21 px there: narrow, but a tree is a box standing up and reads.
+        let avenue = iso_svg(&Editor::new(1).view(), &en(), 760.0).markup;
+        assert_eq!(count(&avenue, "class=\"iso-solid s-crown\""), 10);
+        let m = iso_svg(&furnished().view(), &en(), 760.0).markup;
+        assert_eq!(count(&m, "class=\"iso-solid s-crown\""), 10);
+        assert_eq!(count(&m, "class=\"iso-solid s-shelter\""), 1);
+        assert_eq!(count(&m, "class=\"iso-solid s-post\""), 20);
     }
 
     #[test]
