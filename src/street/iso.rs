@@ -29,8 +29,8 @@ const PAD: f64 = 30.0;
 const MIN_WIDTH: f64 = 600.0;
 /// Room above the far end of the ground for what stands on the pieces. The tallest is a tree, 5 m on a
 /// planting strip drawn `RISE` times its height (5.45 m); the farthest crown ends 2.8 m short of the far
-/// end, so it needs 4.61 m of this, and the rest is to spare.
-const HEADROOM_MM: f64 = 6_000.0;
+/// end, so it needs 4.61 m of this; the rest (0.39 m) is a margin for its strokes.
+const HEADROOM_MM: f64 = 5_000.0;
 
 /// How many times higher than they stand the slabs and curbs are drawn, so that a rise reads.
 pub const RISE: f64 = 3.0;
@@ -444,17 +444,17 @@ mod tests {
 
     #[test]
     fn the_projection_puts_the_corners_of_a_unit_box_exactly_where_the_oblique_view_has_them() {
-        // 31 m of street and 16 m of depth across 940 px: 0.02 px to the millimetre; 12 m of depth and 6 m of headroom up.
+        // 31 m of street and 16 m of depth across 940 px: 0.02 px to the millimetre; 12 m of depth and 5 m of headroom up.
         let p = Projection::fit(1000.0, 31_000);
         assert!((p.scale - 0.02).abs() < 1e-12, "{}", p.scale);
         assert_eq!((p.left, p.width), (30.0, 1000.0));
-        assert!((p.base - 390.0).abs() < 1e-9 && (p.height - 420.0).abs() < 1e-9, "{p:?}");
+        assert!((p.base - 370.0).abs() < 1e-9 && (p.height - 400.0).abs() < 1e-9, "{p:?}");
         // Width runs right at full scale, height runs up, depth runs up and right at half scale.
-        assert!(close(p.at(0.0, 0.0, 0.0), (30.0, 390.0)));
-        assert!(close(p.at(1_000.0, 0.0, 0.0), (50.0, 390.0)));
-        assert!(close(p.at(0.0, 1_000.0, 0.0), (30.0, 370.0)));
-        assert!(close(p.at(0.0, 0.0, 1_000.0), (38.0, 384.0)));
-        assert!(close(p.at(1_000.0, 1_000.0, 1_000.0), (58.0, 364.0)));
+        assert!(close(p.at(0.0, 0.0, 0.0), (30.0, 370.0)));
+        assert!(close(p.at(1_000.0, 0.0, 0.0), (50.0, 370.0)));
+        assert!(close(p.at(0.0, 1_000.0, 0.0), (30.0, 350.0)));
+        assert!(close(p.at(0.0, 0.0, 1_000.0), (38.0, 364.0)));
+        assert!(close(p.at(1_000.0, 1_000.0, 1_000.0), (58.0, 344.0)));
     }
 
     #[test]
