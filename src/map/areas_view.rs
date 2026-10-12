@@ -67,7 +67,7 @@ pub(crate) fn reveal_clicks(panel_expanded: Option<&str>) -> Vec<&'static str> {
 
 /// Shows the Area rules panel, where an outline is finished, cancelled and named, wherever the person had gone: a
 /// closed outline takes no key from the map, so its form must be reachable.
-fn reveal() {
+fn reveal(vm: Vm) {
     #[cfg(target_arch = "wasm32")]
     {
         use leptos::wasm_bindgen::JsCast;
@@ -77,9 +77,13 @@ fn reveal() {
         for id in reveal_clicks(attr("inspector-toggle", "aria-expanded").as_deref()) {
             if let Some(el) = doc.get_element_by_id(id).and_then(|el| el.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
                 el.click();
+                // The shell said the panel was shown, over what the outline had just said: say that again.
+                vm.with(|v| v.areas().repeat_last());
             }
         }
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = vm;
 }
 
 /// The panel: the list, or the outline being drawn, or the closed outline's rule and name.
@@ -298,7 +302,7 @@ fn rule_picker(vm: Vm, id: Option<String>) -> impl IntoView {
 fn drawing(vm: Vm) -> impl IntoView {
     // Finish and Cancel are in the panel: it is shown. The keyboard places corners on the map: it goes there, where
     // Enter places one at the cross.
-    reveal();
+    reveal(vm);
     focus_later("basemap".to_string(), false);
     let few = move || vm.with(|v| v.areas().draw().corners().len()) < 3;
     view! {
@@ -317,7 +321,7 @@ fn drawing(vm: Vm) -> impl IntoView {
 
 fn naming(vm: Vm) -> impl IntoView {
     // The map takes no key from a closed outline: the form, where its rule is chosen first, does.
-    reveal();
+    reveal(vm);
     focus_later("area-rule".to_string(), false);
     view! {
         <form class="area-form" on:submit=move |e| {

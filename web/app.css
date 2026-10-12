@@ -764,13 +764,13 @@ a.btn {
   padding: 0;
 }
 .area-form .btns,
-#p-areas .btns {
+#areas-panel .btns {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 6px;
 }
-#p-areas > section > div > .btns {
+#areas-slot > .btns {
   padding: 0 8px 10px;
 }
 .area-form .note-h {

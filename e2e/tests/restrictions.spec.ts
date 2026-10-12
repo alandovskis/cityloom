@@ -347,8 +347,8 @@ test.describe("area restrictions", () => {
     await expect(page.locator("#areas-panel")).toBeHidden();
     await page.locator("#basemap").focus();
     await page.keyboard.press("Shift+Enter");
-    // Showing the panel is the shell's own toggle, so the shell says so (after the outline's own message).
-    await expect(live(page)).toHaveText("Area rules shown.");
+    // Showing the panel is the shell's own toggle, which says so over the outline's message; the map says it again.
+    await expect(live(page)).toHaveText("The outline is closed. Choose its rule and name, then save it.");
     await formShown(page);
   });
 
@@ -393,6 +393,23 @@ test.describe("area restrictions", () => {
     await declareByKeyboard(page, "Zone[1");
     await expect(page.locator("#areas-panel")).toBeVisible();
     await expect(page.locator("#areas")).toContainText("Zone[1");
+  });
+
+  test("Finish and Cancel, while drawing, have a gap between them", async ({ page }) => {
+    await page.locator("#declare-area").click();
+    const [finish, cancel] = [
+      await page.locator("#area-finish").boundingBox(),
+      await page.locator("#area-cancel").boundingBox(),
+    ];
+    expect(cancel!.x - (finish!.x + finish!.width)).toBeGreaterThanOrEqual(6);
+  });
+
+  test("on a 1100 px window the status line stays a short pill and the Notes start closed", async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.reload();
+    await mapReady(page);
+    await expect(page.locator("html")).toHaveAttribute("data-notes", "closed");
+    expect((await page.locator("#fit").boundingBox())!.height).toBeLessThan(90);
   });
 
   test("at phone width the panel stacks below the map", async ({ page }) => {
