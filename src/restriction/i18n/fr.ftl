@@ -33,7 +33,7 @@ restriction-check = Règle de zone : { $area }
 restriction-check-keeps = { $rule } : la rue la respecte.
 restriction-check-breaks = { $rule } : la rue ne la respecte pas.
 restriction-check-info = { $rule } : les rues n’ont pas de vitesse, c’est donc à titre indicatif.
-restriction-check-informational = À titre indicatif
+restriction-check-informational = { " " }: à titre indicatif
 
 ## Le tracé d’un contour, dit à mesure
 restriction-started = Tracé d’une zone. Cliquez sur la carte, ou appuyez sur Entrée sur celle-ci, pour placer le premier coin.

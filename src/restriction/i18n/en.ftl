@@ -38,7 +38,7 @@ restriction-check = Area rule: { $area }
 restriction-check-keeps = { $rule }: the street keeps to it.
 restriction-check-breaks = { $rule }: the street does not keep to it.
 restriction-check-info = { $rule }: streets carry no speed, so this is for information only.
-restriction-check-informational = For information only
+restriction-check-informational = : for information only
 
 ## Drawing an outline, said as it happens (`area` is the area's name)
 restriction-started = Drawing an area. Click the map, or press Enter on it, to place the first corner.
