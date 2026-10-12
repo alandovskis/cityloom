@@ -2,6 +2,11 @@
 //! extruded strip with its height, the few things that stand on the pieces as plain solids, and the
 //! one-way arrows on the roadway. It is drawn from the same view the section is and is read-only:
 //! the section is where the street is edited.
+//!
+//! The rises are exaggerated: a curb or a sidewalk stands 150 mm, a few pixels at the scale a whole
+//! street is drawn at, so the slabs and curbs are drawn `RISE` times as high as they stand (the height
+//! tables keep the true heights). The things that stand on the pieces keep their own size and sit on the
+//! exaggerated tops.
 
 use std::fmt::Write;
 
@@ -22,8 +27,17 @@ pub const MAX_HEIGHT: f64 = 560.0;
 const PAD: f64 = 30.0;
 /// The narrowest the drawing is laid out for: the section's group is no narrower.
 const MIN_WIDTH: f64 = 600.0;
-/// Room above the far end of the ground for the tallest solid, a tree's crown at 5 m.
-const HEADROOM_MM: f64 = 5_500.0;
+/// Room above the far end of the ground for the tallest solid, a tree's crown at 5 m, standing on a
+/// planting strip drawn `RISE` times its height.
+const HEADROOM_MM: f64 = 6_000.0;
+
+/// How many times higher than they stand the slabs and curbs are drawn, so that a rise reads.
+pub const RISE: f64 = 3.0;
+
+/// How high a rise of `mm` is drawn, in millimetres of the drawing.
+pub fn drawn_mm(mm: i32) -> f64 {
+    mm as f64 * RISE
+}
 
 /// How a point of the street, in millimetres across it, up from the ground and along it from the
 /// near end, lands in the drawing.
@@ -142,9 +156,9 @@ fn face(out: &mut String, what: Face, hatch: &str, pts: &str) {
     write!(out, "<polygon class=\"iso-{name}{tint}\" points=\"{pts}\"/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#{hatch})\"/>").unwrap();
 }
 
-/// How high the piece after `i` stands, or the ground when `i` is the last.
+/// How high the piece after `i` is drawn, or the ground when `i` is the last.
 fn beside(v: &View, i: usize) -> f64 {
-    v.segments.get(i + 1).map_or(0.0, |n| height_mm(KINDS[n.kind].id) as f64)
+    v.segments.get(i + 1).map_or(0.0, |n| drawn_mm(height_mm(KINDS[n.kind].id)))
 }
 
 /// The piece at `i` as a strip along the stretch: its top, and where it stands above the ground its
@@ -153,7 +167,7 @@ fn beside(v: &View, i: usize) -> f64 {
 fn slab(out: &mut String, p: &Projection, v: &View, i: usize) {
     let s = &v.segments[i];
     let id = KINDS[s.kind].id;
-    let (x0, x1, h, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, height_mm(id) as f64, STRETCH_MM);
+    let (x0, x1, h, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, drawn_mm(height_mm(id)), STRETCH_MM);
     let hatch = format!("h-{id}");
     if h > 0.0 {
         face(out, Face::Front(id), &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, h, 0.0), (x0, h, 0.0)]));
@@ -171,8 +185,8 @@ fn curb(out: &mut String, p: &Projection, v: &View, i: usize, right: bool) {
     let s = &v.segments[i];
     let Some(c) = s.curb else { return };
     let id = KINDS[s.kind].id;
-    let (h, l) = (height_mm(id) as f64, STRETCH_MM);
-    let top = (curb_height_mm(c) as f64).max(h);
+    let (h, l) = (drawn_mm(height_mm(id)), STRETCH_MM);
+    let top = drawn_mm(curb_height_mm(c).max(height_mm(id)));
     let cw = curb_width_mm(c).min(s.width_mm as f64 / 2.0);
     let edge = (s.x_mm + s.width_mm) as f64;
     let (x0, x1) = if right { (edge - cw, edge) } else { (s.x_mm as f64, s.x_mm as f64 + cw) };
@@ -268,17 +282,17 @@ mod tests {
 
     #[test]
     fn the_projection_puts_the_corners_of_a_unit_box_exactly_where_the_oblique_view_has_them() {
-        // 31 m of street and 16 m of depth across 940 px: 0.02 px to the millimetre.
+        // 31 m of street and 16 m of depth across 940 px: 0.02 px to the millimetre; 12 m of depth and 6 m of headroom up.
         let p = Projection::fit(1000.0, 31_000);
         assert!((p.scale - 0.02).abs() < 1e-12, "{}", p.scale);
         assert_eq!((p.left, p.width), (30.0, 1000.0));
-        assert!((p.base - 380.0).abs() < 1e-9 && (p.height - 410.0).abs() < 1e-9, "{p:?}");
+        assert!((p.base - 390.0).abs() < 1e-9 && (p.height - 420.0).abs() < 1e-9, "{p:?}");
         // Width runs right at full scale, height runs up, depth runs up and right at half scale.
-        assert!(close(p.at(0.0, 0.0, 0.0), (30.0, 380.0)));
-        assert!(close(p.at(1_000.0, 0.0, 0.0), (50.0, 380.0)));
-        assert!(close(p.at(0.0, 1_000.0, 0.0), (30.0, 360.0)));
-        assert!(close(p.at(0.0, 0.0, 1_000.0), (38.0, 374.0)));
-        assert!(close(p.at(1_000.0, 1_000.0, 1_000.0), (58.0, 354.0)));
+        assert!(close(p.at(0.0, 0.0, 0.0), (30.0, 390.0)));
+        assert!(close(p.at(1_000.0, 0.0, 0.0), (50.0, 390.0)));
+        assert!(close(p.at(0.0, 1_000.0, 0.0), (30.0, 370.0)));
+        assert!(close(p.at(0.0, 0.0, 1_000.0), (38.0, 384.0)));
+        assert!(close(p.at(1_000.0, 1_000.0, 1_000.0), (58.0, 364.0)));
     }
 
     #[test]
@@ -345,6 +359,32 @@ mod tests {
             let (_, h) = decided.iter().find(|(id, _)| *id == c.id).unwrap_or_else(|| panic!("{} has no decided height", c.id));
             assert_eq!(curb_height_mm(c.id), *h, "{}", c.id);
         }
+    }
+
+    /// How far a face rises on the drawing, in pixels: the first polygon of `class` in the `nth` group drawn for `uid`.
+    fn rise_of(markup: &str, uid: u32, nth: usize, class: &str) -> f64 {
+        let group = markup.split(&format!("<g class=\"iso-piece\" data-uid=\"{uid}\">")).nth(nth).expect("the group is drawn");
+        let face = &group[group.find(&format!("class=\"{class}")).expect("the face is drawn")..];
+        let at = face.find("points=\"").unwrap() + 8;
+        let ys: Vec<f64> = face[at..at + face[at..].find('"').unwrap()].split(' ').map(|pt| pt.split(',').nth(1).unwrap().parse().unwrap()).collect();
+        ys.iter().cloned().fold(f64::MIN, f64::max) - ys.iter().cloned().fold(f64::MAX, f64::min)
+    }
+
+    #[test]
+    fn a_rise_is_drawn_three_times_as_high_as_it_stands_so_that_it_reads() {
+        assert_eq!(drawn_mm(150), 450.0);
+        assert_eq!(drawn_mm(0), 0.0);
+        // The tables keep the true heights; only the drawing exaggerates them.
+        assert_eq!((height_mm("sidewalk"), curb_height_mm("concrete")), (150, 150));
+        let mut e = Editor::new(0);
+        let bike = e.add(kind_index("bike").unwrap(), 2);
+        let v = e.view();
+        let scale = Projection::fit(1050.0, v.row_mm.max(v.total_mm)).scale;
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        // The sidewalk's front face, and the front face of the bike lane's first curb block (its slab is the first group).
+        let sidewalk = v.segments[0].uid;
+        assert!((rise_of(&m, sidewalk, 1, "iso-front ") - 450.0 * scale).abs() < 0.02, "{}", rise_of(&m, sidewalk, 1, "iso-front "));
+        assert!((rise_of(&m, bike, 2, "iso-curb") - 450.0 * scale).abs() < 0.02, "{}", rise_of(&m, bike, 2, "iso-curb"));
     }
 
     #[test]
