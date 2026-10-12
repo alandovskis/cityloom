@@ -302,9 +302,11 @@ impl Layout {
         super::keys::junction_key(&self.nodes[node].source)
     }
 
-    /// The way street `edge` leaves `node`, in degrees clockwise from north: along the first piece of its
-    /// centreline at least a metre long (all of it, where it is shorter). It is where the OpenStreetMap way leaves
-    /// the node, which no area's box changes.
+    /// The way street `edge` leaves `node`, in degrees clockwise from north: from the layout node to the first point
+    /// at least a metre along its centreline (the last, where it is shorter). The centreline is osm2streets' trimmed
+    /// one and the node is its junction's point, both of which move when the junction's cluster changes with the
+    /// area's box: the same street measured in two areas has differed by up to 60 degrees (43 the worst among 5442
+    /// pairs with the same key; 90 pairs 20 degrees or more). See `keys::HEADINGS` for what that risks.
     pub(super) fn leaving_deg(&self, edge: usize, node: usize) -> f64 {
         let mut shape = self.shape_of(edge);
         if self.edges[edge].a != node {

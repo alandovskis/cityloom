@@ -14,9 +14,13 @@ pub fn junction_key(source: &[OsmRef]) -> Option<String> {
 const OPEN_END: &str = "x";
 
 /// The way a street leaves an end, in four words: each a quarter of the compass centred on north, east, south or
-/// west. So coarse that the two pieces of a way through a junction (they leave it more than a quarter apart) differ,
-/// and a street's word changes only where it leaves within a hair of 45 degrees off a compass point; there matching
-/// by the ways and nodes, and the exact way it leaves, finds it again (`edits::assign`).
+/// west, so that the two pieces of a way through a junction (they leave it more than a quarter apart) differ. The
+/// bearing is not fixed by OpenStreetMap alone (`Layout::leaving_deg`): it is measured from the junction's point
+/// and along the trimmed centreline, which osm2streets moves when the junction's cluster changes with the box, by up
+/// to 60 degrees measured on the Plateau. So a street's word can flip far from 45 degrees off a compass point. Where
+/// the key then differs, matching by the ways and nodes and the bearing finds the street again (`edits::assign`);
+/// the residual risk is an exact key, which outranks the bearing check, naming another piece after a flip (none
+/// seen over 11 probed areas). Anchoring the key on the next OSM node along the way is the proper fix, deferred.
 const HEADINGS: [&str; 4] = ["n", "e", "s", "w"];
 
 /// The word for leaving at `deg` degrees clockwise from north.
@@ -35,7 +39,8 @@ pub struct End<'a> {
 /// A street's key: `w` and its smallest way, then the keys of its two ends in sorted order (so the pieces of one way
 /// differ, and which end is `a` does not matter). An end with no OpenStreetMap node, where a road leaves the area's
 /// box, is `x`, and the key then ends with the way the street leaves its other end (`w7~n2~x~e`): the two pieces of
-/// a way through junction n2, both cut at the box, are told apart, whatever the box. `twinned` says that another
+/// a way through junction n2, both cut at the box, are told apart (the word itself can differ between boxes: see
+/// `HEADINGS`). `twinned` says that another
 /// street of the same way joins the same two ends (the halves of a closed way): the key then ends with the way the
 /// street leaves its first end. Any other street with two real ends is keyed by its way and ends alone, as before.
 pub fn street_key(ways: &[OsmRef], a: End, b: End, twinned: bool) -> Option<String> {
