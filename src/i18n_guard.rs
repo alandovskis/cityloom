@@ -454,6 +454,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("data-drawing", "the name of a data- attribute on the map while an outline is drawn"),
     ("declare-area", "the id of the Area rules tab's Declare button, which the focus goes back to"),
     ("area-rule", "the id of the rule's control in the Area rules tab, which the focus goes to when an outline closes"),
+    ("t-areas", "the id of the map's Area rules tab, pressed to show it when an outline is drawn or named"),
     ("area-undo", "the id of the Area rules tab's Undo button, which the focus goes to when an area is deleted"),
     ("hero-map-slot", "the id of an element of the home page"),
     ("hero-facts-slot", "the id of an element of the home page"),

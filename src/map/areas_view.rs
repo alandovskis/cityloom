@@ -58,6 +58,38 @@ fn focus_list(vm: Vm) {
     }
 }
 
+/// The shell's own controls to press so the Area rules tab is shown, given the Notes toggle's `aria-expanded` and
+/// the tab's `aria-selected`: the toggle if the Notes are closed, then the tab if another is chosen. The map slice
+/// does not reach the shell's view-model; it presses what a person would.
+#[cfg(any(target_arch = "wasm32", test))]
+pub(crate) fn reveal_clicks(notes_expanded: Option<&str>, tab_selected: Option<&str>) -> Vec<&'static str> {
+    let mut clicks = Vec::new();
+    if notes_expanded == Some("false") {
+        clicks.push("notes-toggle");
+    }
+    if tab_selected != Some("true") {
+        clicks.push("t-areas");
+    }
+    clicks
+}
+
+/// Shows the Area rules tab, where an outline is finished, cancelled and named, wherever the person had gone: a
+/// closed outline takes no key from the map, so its form must be reachable.
+fn reveal() {
+    #[cfg(target_arch = "wasm32")]
+    {
+        use leptos::wasm_bindgen::JsCast;
+
+        let doc = leptos::prelude::document();
+        let attr = |id: &str, name: &str| doc.get_element_by_id(id).and_then(|el| el.get_attribute(name));
+        for id in reveal_clicks(attr("notes-toggle", "aria-expanded").as_deref(), attr("t-areas", "aria-selected").as_deref()) {
+            if let Some(el) = doc.get_element_by_id(id).and_then(|el| el.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
+                el.click();
+            }
+        }
+    }
+}
+
 /// The tab: the list, or the outline being drawn, or the closed outline's rule and name.
 #[component]
 pub fn Areas(vm: Rc<MapVm>) -> impl IntoView {
@@ -78,6 +110,8 @@ pub fn Areas(vm: Rc<MapVm>) -> impl IntoView {
                 && vm.with(|v| v.areas().undo_delete())
             {
                 e.prevent_default();
+                // The Undo button it stood for is gone: the area brought back takes the focus if it was there.
+                focus_list(vm);
             }
         });
         on_cleanup(move || handle.remove());
@@ -145,9 +179,17 @@ fn row(vm: Vm, id: String) -> impl IntoView {
     };
     let (title_id, sub_id) = (id.clone(), id.clone());
     let row_id = format!("area-row-{id}");
+    let details_id = format!("area-details-{id}");
     view! {
         <li class=move || if on.get() { "area on" } else { "area" }>
-            <button type="button" id=row_id class="place-row" aria-pressed=move || on.get().to_string() on:click=pick>
+            <button
+                type="button"
+                id=row_id
+                class="place-row"
+                aria-expanded=move || on.get().to_string()
+                aria-controls=move || on.get().then(|| details_id.clone())
+                on:click=pick
+            >
                 <b>{move || vm.with(|v| v.areas().find(&title_id).map(|r| v.areas().say(&r.title())).unwrap_or_default())}</b>
                 <small>{move || vm.with(|v| v.areas().find(&sub_id).map(|r| v.area_row_sub(&r)).unwrap_or_default())}</small>
             </button>
@@ -156,21 +198,24 @@ fn row(vm: Vm, id: String) -> impl IntoView {
     }
 }
 
+/// The selected area's form, under its row: its rule and name, Redraw and Delete, and the streets inside.
 fn details(vm: Vm, id: String) -> impl IntoView {
-    let (name_id, rename_id, redraw_id, delete_id, streets_id) = (id.clone(), id.clone(), id.clone(), id.clone(), id.clone());
+    let (name_id, edit_id, rename_id, redraw_id, delete_id, streets_id) = (id.clone(), id.clone(), id.clone(), id.clone(), id.clone(), id.clone());
+    let details_id = format!("area-details-{id}");
     view! {
-        <div class="area-form">
+        <div class="area-form" id=details_id>
+            {rule_picker(vm, Some(id))}
             <label for="area-name">{word(vm, "restriction-name-label")}</label>
             <input
                 type="text"
                 id="area-name"
-                prop:value=move || vm.with(|v| v.areas().find(&name_id).map(|r| r.name).unwrap_or_default())
+                prop:value=move || vm.with(|v| v.areas().name_field(&name_id))
                 placeholder=move || vm.with(|v| v.areas().form_placeholder())
+                on:input=move |e| vm.with(|v| v.areas().edit_name(&edit_id, &event_target_value(&e)))
                 on:change=move |e| {
                     vm.with(|v| v.areas().rename(&rename_id, &event_target_value(&e)));
                 }
             />
-            {rule_picker(vm, Some(id))}
             <div class="btns">
                 <button type="button" id="area-redraw" class="btn quiet" disabled=move || !vm.with(|v| v.can_declare()) on:click=move |_| {
                     vm.with(|v| v.areas().start_redraw(&redraw_id));
@@ -181,10 +226,13 @@ fn details(vm: Vm, id: String) -> impl IntoView {
                     }
                 }>{word(vm, "restriction-delete")}</button>
             </div>
-            <h3 class="note-h">{word(vm, "restriction-streets-heading")}</h3>
-            <ul class="checks places-list">
-                {move || vm.with(|v| v.area_streets(&streets_id)).into_iter().map(|s| street_row(vm, s)).collect_view()}
-            </ul>
+            {move || {
+                let streets = vm.with(|v| v.area_streets(&streets_id));
+                (!streets.is_empty()).then(|| view! {
+                    <h3 class="note-h">{word(vm, "restriction-streets-heading")}</h3>
+                    <ul class="checks places-list">{streets.into_iter().map(|s| street_row(vm, s)).collect_view()}</ul>
+                })
+            }}
         </div>
     }
 }
@@ -256,7 +304,9 @@ fn rule_picker(vm: Vm, id: Option<String>) -> impl IntoView {
 }
 
 fn drawing(vm: Vm) -> impl IntoView {
-    // The keyboard places corners on the map: it goes there, where Enter places one at the cross.
+    // Finish and Cancel are in the tab: it is shown. The keyboard places corners on the map: it goes there, where
+    // Enter places one at the cross.
+    reveal();
     focus_later("basemap".to_string(), false);
     let few = move || vm.with(|v| v.areas().draw().corners().len()) < 3;
     view! {
@@ -275,6 +325,7 @@ fn drawing(vm: Vm) -> impl IntoView {
 
 fn naming(vm: Vm) -> impl IntoView {
     // The map takes no key from a closed outline: the form, where its rule is chosen first, does.
+    reveal();
     focus_later("area-rule".to_string(), false);
     view! {
         <form class="area-form" on:submit=move |e| {

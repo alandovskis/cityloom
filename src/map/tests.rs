@@ -502,13 +502,18 @@ use crate::restriction::store::RestrictionStore;
 use crate::shared::ports::{FakeMapper, MapEvent, Ports};
 use crate::shared::testing::button_tag;
 
-/// Bendville's map, its tiles answered, with the areas kept in storage first.
+/// Bendville's map, its tiles answered, with the areas kept in storage first, round its street's midpoint.
 fn ready_areas_vm(locale: Locale, areas: &[(&str, Rule)]) -> Rc<MapVm> {
+    ready_areas_vm_off(locale, areas, 0.0)
+}
+
+/// The same, the areas `east` degrees east of the street's midpoint.
+fn ready_areas_vm_off(locale: Locale, areas: &[(&str, Rule)], east: f64) -> Rc<MapVm> {
     let (ports, _, storage) = test_ports();
     let store = bent_store(storage.clone());
     let (_, mid) = bent_midpoint(&store);
     for (name, rule) in areas {
-        RestrictionStore::new(storage.clone()).add(name, *rule, square(mid, 0.0005)).unwrap();
+        RestrictionStore::new(storage.clone()).add(name, *rule, square([mid[0] + east, mid[1]], 0.0005)).unwrap();
     }
     let mapper = Rc::new(FakeMapper::default());
     let vm = MapVm::new(Ports { mapper: mapper.clone(), ..ports }, crate::i18n_for(locale));
@@ -551,10 +556,11 @@ fn each_area_is_a_row_with_its_rule_and_streets_and_the_selected_one_opens_its_d
     let vm = ready_areas_vm(Locale::En, &[("Car zone", Rule::CarFree)]);
     let h = areas_html(&vm);
     assert!(h.contains("Car zone") && h.contains("Car-free · One street inside; one conflicts with the rule."), "{h}");
-    assert!(h.contains("aria-pressed=\"false\"") && !h.contains("id=\"area-delete\""));
+    assert!(h.contains("aria-expanded=\"false\"") && !h.contains("aria-controls") && !h.contains("id=\"area-delete\""), "{h}");
     vm.areas().select(Some("r1"));
     let h = areas_html(&vm);
-    assert!(h.contains("aria-pressed=\"true\""), "{h}");
+    assert!(h.contains("aria-expanded=\"true\"") && h.contains("aria-controls=\"area-details-r1\"") && h.contains("id=\"area-details-r1\""), "{h}");
+    assert!(!h.contains("aria-pressed"), "{h}");
     for id in ["area-name", "area-rule", "area-redraw", "area-delete"] {
         assert!(h.contains(&format!("id=\"{id}\"")), "{id}");
     }
@@ -656,4 +662,45 @@ fn the_drawing_and_the_naming_speak_french_with_no_english_left() {
 fn map_html_has_the_area_rules_tab_and_its_panel() {
     assert!(MAP_HTML.contains("id=\"t-areas\"") && MAP_HTML.contains("aria-controls=\"p-areas\"") && MAP_HTML.contains("data-i18n=\"restriction-tab\""));
     assert!(MAP_HTML.contains("id=\"p-areas\"") && MAP_HTML.contains("id=\"areas-slot\""));
+}
+
+#[test]
+fn an_area_with_no_street_inside_shows_no_streets_heading() {
+    let vm = ready_areas_vm_off(Locale::En, &[("Far", Rule::CarFree)], 0.05);
+    vm.areas().select(Some("r1"));
+    let h = areas_html(&vm);
+    assert!(h.contains("No loaded street is inside.") && h.contains("id=\"area-delete\""), "{h}");
+    assert!(!h.contains("Streets inside") && count(&h, "<ul") == 1, "{h}");
+}
+
+#[test]
+fn the_details_and_the_naming_form_ask_for_the_rule_then_the_name() {
+    let vm = ready_areas_vm(Locale::En, &[("Car zone", Rule::CarFree)]);
+    vm.areas().select(Some("r1"));
+    let h = areas_html(&vm);
+    assert!(h.find("id=\"area-rule\"").unwrap() < h.find("id=\"area-name\"").unwrap(), "details: {h}");
+    vm.areas().select(None);
+    close_a_triangle(&vm);
+    let h = areas_html(&vm);
+    assert!(h.find("id=\"area-rule\"").unwrap() < h.find("id=\"area-name\"").unwrap(), "naming: {h}");
+}
+
+#[test]
+fn a_name_that_looks_like_markup_is_shown_as_text() {
+    let name = r#"<img src=x onerror=alert(1)> & "Zone""#;
+    let vm = ready_areas_vm(Locale::En, &[(name, Rule::CarFree)]);
+    vm.areas().select(Some("r1"));
+    let h = areas_html(&vm);
+    assert!(!h.contains("<img"), "{h}");
+    assert!(h.contains("&lt;img src=x onerror=alert(1)&gt; &amp; "), "the row: {h}");
+}
+
+#[test]
+fn the_tab_is_opened_through_the_shell_s_own_controls_only_where_it_is_not_shown() {
+    use crate::map::areas_view::reveal_clicks;
+    assert_eq!(reveal_clicks(Some("true"), Some("true")), Vec::<&str>::new());
+    assert_eq!(reveal_clicks(Some("true"), Some("false")), ["t-areas"]);
+    assert_eq!(reveal_clicks(Some("false"), Some("true")), ["notes-toggle"]);
+    assert_eq!(reveal_clicks(Some("false"), Some("false")), ["notes-toggle", "t-areas"]);
+    assert_eq!(reveal_clicks(None, None), ["t-areas"], "no toggle on the page: only the tab");
 }
