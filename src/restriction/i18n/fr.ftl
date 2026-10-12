@@ -4,6 +4,8 @@
 restriction-refused-too-few = Une zone a besoin d’au moins trois coins, pas tous alignés.
 restriction-refused-crossing = Le contour se croise. Déplacez ou retirez un coin.
 
+restriction-refused-duplicate = Il y a déjà un coin ici. Déplacez la carte, puis ajoutez le suivant.
+
 ## Les règles
 restriction-rule-car-free = Zone sans voitures
 restriction-rule-bus-and-bike = Autobus et vélos seulement

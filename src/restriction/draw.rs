@@ -38,6 +38,8 @@ pub enum Outcome {
     Started,
     /// A corner placed: how many there are now.
     Added(usize),
+    /// A corner already there (the last, or the first): nothing changed, but the person is to be told.
+    Duplicate,
     /// The last corner removed: how many are left.
     Removed(usize),
     Closed,
@@ -61,8 +63,10 @@ impl Draw {
             (Draw::Drawing(mut c), Step::Add(p)) => {
                 // The last corner again is a double-click, and the first again is a closing repeat: neither is a
                 // corner, and `valid` must never see either (it would say the outline crosses itself).
-                if c.last().is_some_and(|&l| same_spot(l, p)) || c.first().is_some_and(|&f| same_spot(f, p)) {
+                if !p.iter().all(|v| v.is_finite()) {
                     (Draw::Drawing(c), Outcome::Ignored)
+                } else if c.last().is_some_and(|&l| same_spot(l, p)) || c.first().is_some_and(|&f| same_spot(f, p)) {
+                    (Draw::Drawing(c), Outcome::Duplicate)
                 } else {
                     c.push(p);
                     let n = c.len();
@@ -124,7 +128,7 @@ mod tests {
         let mut d = drawing(&[]);
         assert_eq!(d.step(Step::Add(A)), Outcome::Added(1));
         assert_eq!(d.step(Step::Add(B)), Outcome::Added(2));
-        assert_eq!(d.step(Step::Add([B[0] + 1e-8, B[1]])), Outcome::Ignored, "the same micro-degree");
+        assert_eq!(d.step(Step::Add([B[0] + 1e-8, B[1]])), Outcome::Duplicate, "the same micro-degree");
         assert_eq!(d.corners(), &[A, B]);
     }
 
@@ -183,7 +187,7 @@ mod tests {
     fn a_double_click_is_one_corner_and_closes_cleanly() {
         let mut d = drawing(&[A, B]);
         assert_eq!(d.step(Step::Add(C)), Outcome::Added(3));
-        assert_eq!(d.step(Step::Add(C)), Outcome::Ignored, "a double-click");
+        assert_eq!(d.step(Step::Add(C)), Outcome::Duplicate, "a double-click");
         assert_eq!(d.corners(), &[A, B, C]);
         assert_eq!(d.step(Step::Close), Outcome::Closed, "not 'crosses itself'");
     }
@@ -191,9 +195,51 @@ mod tests {
     #[test]
     fn placing_the_first_corner_again_is_not_a_corner_and_the_ring_is_never_closed_by_repeating_it() {
         let mut d = drawing(&[A, B, C]);
-        assert_eq!(d.step(Step::Add(A)), Outcome::Ignored);
+        assert_eq!(d.step(Step::Add(A)), Outcome::Duplicate);
         assert_eq!(d.corners(), &[A, B, C]);
         assert_eq!(d.step(Step::Close), Outcome::Closed);
         assert_eq!(d, Draw::Naming(vec![A, B, C]));
+    }
+
+    #[test]
+    fn a_duplicate_is_told_apart_from_a_step_that_does_not_apply() {
+        let mut d = drawing(&[A]);
+        assert_eq!(d.step(Step::Add(A)), Outcome::Duplicate, "the only corner again");
+        assert_eq!(d.corners(), &[A]);
+        let mut n = drawing(&[A, B, C]);
+        n.step(Step::Close);
+        assert_eq!(n.step(Step::Add(C)), Outcome::Ignored, "a closed outline is not drawing");
+        assert_eq!(Draw::Idle.step(Step::Add(A)), Outcome::Ignored);
+    }
+
+    #[test]
+    fn the_first_corner_is_simply_the_first_with_none_placed() {
+        let mut d = drawing(&[]);
+        assert_eq!(d.step(Step::Add(A)), Outcome::Added(1));
+    }
+
+    #[test]
+    fn a_corner_that_is_not_a_finite_position_is_ignored() {
+        let mut d = drawing(&[A]);
+        for p in [[f64::NAN, 45.5], [-73.6, f64::INFINITY], [f64::NEG_INFINITY, f64::NAN]] {
+            assert_eq!(d.step(Step::Add(p)), Outcome::Ignored);
+        }
+        assert_eq!(d.corners(), &[A]);
+        assert_eq!(drawing(&[]).step(Step::Add([f64::NAN, 0.0])), Outcome::Ignored);
+    }
+
+    #[test]
+    fn repeating_a_middle_corner_is_taken_and_closing_then_says_it_crosses() {
+        let mut d = drawing(&[A, B, C]);
+        assert_eq!(d.step(Step::Add(B)), Outcome::Added(4));
+        assert_eq!(d.step(Step::Close), Outcome::Refused(Said::new("restriction-refused-crossing")));
+        assert_eq!(d.corners().len(), 4);
+    }
+
+    #[test]
+    fn pressing_a_corner_other_than_the_first_does_nothing() {
+        let mut d = drawing(&[A, B]);
+        assert_eq!(d.step(Step::PressVertex(1)), Outcome::Ignored);
+        assert_eq!(d, Draw::Drawing(vec![A, B]));
     }
 }

@@ -4,6 +4,9 @@
 restriction-refused-too-few = An area needs at least three corners, not all in a line.
 restriction-refused-crossing = The outline crosses itself. Move or remove a corner.
 
+# Said when a corner is added where one already is (the last, or the first).
+restriction-refused-duplicate = A corner is already there. Move the map, then add the next one.
+
 ## The rules
 restriction-rule-car-free = Car-free
 restriction-rule-bus-and-bike = Bus and bike only
