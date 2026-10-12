@@ -78,7 +78,8 @@ pub enum MapEvent {
     /// The person moved the map themselves, with the pointer or the wheel.
     Moved,
     /// The part of the map the panels leave open, after every move, resize and change of insets: west, south,
-    /// east, north, in degrees. Not said while the map has no size.
+    /// east, north, in degrees. Not said while the map has no size. When the insets together cover the whole
+    /// width or height of the map (panels stacked on a phone), the adapter reports the whole map as open.
     View { bounds: [f64; 4] },
 }
 
@@ -98,7 +99,8 @@ pub trait Mapper {
     /// (top, right, bottom, left, in pixels).
     fn fit(&self, bounds: [f64; 4], insets: [f64; 4]);
     /// Tells the map what floats over it, in pixels from each edge (top, right, bottom, left), so that it can say
-    /// which part of it is open (`MapEvent::View`).
+    /// which part of it is open (`MapEvent::View`). Insets that together cover the whole width or height are
+    /// ignored by the adapter: the whole map counts as open.
     fn set_insets(&self, insets: [f64; 4]);
     /// Says which places can be edited: the ones named are drawn as they are, every other place is muted. Called
     /// again whenever the set changes; the map keeps it for places it is sent later, and for a new style.
