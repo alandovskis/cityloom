@@ -573,6 +573,8 @@ mod tests {
         vm.toggle_mode();
         assert_eq!(vm.mode_now(), ViewMode::Iso, "it holds for this visit");
         assert_eq!(said.take(), vec!["Showing the street in 2.5D"]);
+        // Nothing was kept: the next visit reads what the store held before, and starts on the section.
+        assert_eq!(storage.recall(VIEW_KEY).as_deref(), Some("sideways"));
     }
 
     #[test]

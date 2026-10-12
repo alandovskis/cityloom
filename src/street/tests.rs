@@ -196,10 +196,18 @@ fn in_the_section_the_drawing_is_unchanged() {
 #[test]
 fn the_2_5d_drawing_follows_the_selection() {
     let s = street_in(ViewMode::Iso, Locale::En);
-    let u = segment(&s, 2);
-    s.edit(|e| e.select(Some(u)));
-    let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-    assert_eq!(count(&h, "class=\"iso-sel\""), 1);
+    let draw = || street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
+    let outline = |h: &str| h.find("class=\"iso-sel\"").map(|at| h[at..at + h[at..].find("/>").unwrap()].to_string());
+    // Nothing selected: no outline.
+    assert_eq!(outline(&draw()), None);
+    // A piece selected: its outline; another: the outline moves to it; none: it goes.
+    s.edit(|e| e.select(Some(segment(&s, 2))));
+    let second = outline(&draw()).expect("the selected piece is outlined");
+    s.edit(|e| e.select(Some(segment(&s, 4))));
+    let fourth = outline(&draw()).expect("the newly selected piece is outlined");
+    assert_ne!(second, fourth);
+    s.edit(|e| e.select(None));
+    assert_eq!(count(&draw(), "class=\"iso-sel\""), 0);
 }
 
 #[test]

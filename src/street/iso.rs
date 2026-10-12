@@ -723,7 +723,24 @@ mod tests {
 
     #[test]
     fn two_different_streets_give_different_drawings() {
-        assert_ne!(drawn(&Editor::new(0)), drawn(&Editor::new(1)));
+        // Each drawing has a top face for each of its own pieces, in its kind's tint, so two streets made of
+        // other pieces draw differently, and not only in some number.
+        let tops = |e: &Editor| {
+            let m = drawn(e);
+            let mut kinds: Vec<String> = m.split("class=\"iso-top k-").skip(1).map(|rest| rest.split('"').next().unwrap().to_string()).collect();
+            kinds.sort();
+            kinds
+        };
+        let pieces = |e: &Editor| {
+            let mut kinds: Vec<String> = e.view().segments.iter().map(|s| KINDS[s.kind].id.to_string()).collect();
+            kinds.sort();
+            kinds
+        };
+        let (a, b) = (Editor::new(0), Editor::new(1));
+        assert_eq!(tops(&a), pieces(&a));
+        assert_eq!(tops(&b), pieces(&b));
+        assert_ne!(tops(&a), tops(&b));
+        assert_ne!(drawn(&a), drawn(&b));
     }
 
     #[test]
