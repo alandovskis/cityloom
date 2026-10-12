@@ -8,10 +8,13 @@ use serde_json::Value;
 
 use crate::junction::frame::Frame;
 use crate::junction::geometry::{sample_arc, sample_quad};
+use crate::junction::plan_svg::esc;
 use crate::junction::read_model::JView;
 use crate::junction::text::arms_text;
 use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::said::say;
+use crate::shared::units::Units;
 
 type P = (f64, f64);
 
@@ -181,13 +184,21 @@ struct Draw {
     tables: Vec<(Vec<P>, f64)>,
     /// Posts with their heads, painted over the solids.
     posts: String,
-    /// The outline of the selected arm, painted last.
+    /// The outline of the selected arm.
     sel: String,
+    /// The streets' names, painted last so nothing standing hides one.
+    names: String,
 }
+
+/// What a street's name takes of the drawing, a character at a time, to keep the whole name inside it.
+const NAME_CHAR_PX: f64 = 9.0;
+/// How far a name stands from the end of its arm, and from the edge of the drawing, in pixels.
+const NAME_GAP_PX: f64 = 12.0;
+const NAME_EDGE_PX: f64 = 4.0;
 
 impl Draw {
     fn new(f: IsoFrame) -> Draw {
-        Draw { f, flat: String::new(), solids: Vec::new(), tables: Vec::new(), posts: String::new(), sel: String::new() }
+        Draw { f, flat: String::new(), solids: Vec::new(), tables: Vec::new(), posts: String::new(), sel: String::new(), names: String::new() }
     }
 
     fn path(&self, pts: &[P], h_mm: f64) -> String {
@@ -359,10 +370,48 @@ impl Draw {
         }
     }
 
+    /// A street's name beyond the end of its arm, away from the middle of the junction and kept inside the drawing.
+    fn name(&mut self, end: P, text: &str, selected: bool) {
+        let (ex, ey) = self.f.at(end, 0.0);
+        let (cx, cy) = self.f.at((0.0, 0.0), 0.0);
+        let len = ((ex - cx).powi(2) + (ey - cy).powi(2)).sqrt().max(1.0);
+        let (dx, dy) = ((ex - cx) / len, (ey - cy) / len);
+        let w = text.chars().count() as f64 * NAME_CHAR_PX;
+        let (anchor, shift) = if dx > 0.3 {
+            ("start", 0.0)
+        } else if dx < -0.3 {
+            ("end", w)
+        } else {
+            ("middle", w / 2.0)
+        };
+        // the left edge of the text, kept between the drawing's edges
+        let left = (ex + dx * NAME_GAP_PX - shift).min(self.f.width - NAME_EDGE_PX - w).max(NAME_EDGE_PX);
+        let y = (ey
+            + dy * NAME_GAP_PX
+            + if dy < -0.3 {
+                -4.0
+            } else if dy > 0.3 {
+                14.0
+            } else {
+                5.0
+            })
+        .min(self.f.height - NAME_EDGE_PX)
+        .max(14.0);
+        write!(
+            self.names,
+            "<text class=\"iso-name t-mark t-halo{}\" x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\">{}</text>",
+            if selected { " t-blue" } else { "" },
+            f1(left + shift),
+            f1(y),
+            esc(text)
+        )
+        .unwrap();
+    }
+
     fn finish(mut self) -> String {
         self.solids.sort_by(|a, b| Self::depth(a).total_cmp(&Self::depth(b)));
         let solids: String = (0..self.solids.len()).map(|i| self.render(i)).collect();
-        format!("{}<g class=\"iso\">{}{solids}{}{}</g>", shades(), self.flat, self.posts, self.sel)
+        format!("{}<g class=\"iso\">{}{solids}{}{}{}</g>", shades(), self.flat, self.posts, self.sel, self.names)
     }
 }
 
@@ -383,7 +432,7 @@ pub fn iso_label(v: &JView, i18n: &I18n) -> String {
 }
 
 /// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high.
-pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
+pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> IsoSvg {
     let f = IsoFrame::fit(v.bounds, &content_points(v), width, window_height);
     let mut d = Draw::new(f);
     let wall = height_of("sidewalk");
@@ -487,7 +536,9 @@ pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
         for b in &a.transit.bollards {
             d.post(*b, BOLLARD_MM, "bollard");
         }
-        if v.selected.kind == Some("arm") && v.selected.uid == a.uid {
+        let selected = v.selected.kind == Some("arm") && v.selected.uid == a.uid;
+        d.name(a.end, &say(i18n, units, &a.street), selected);
+        if selected {
             d.outline(&flatten(&a.outline));
         }
         let Some(c) = a.crossing.as_ref().filter(|c| c.continuous) else { continue };
@@ -508,8 +559,12 @@ mod tests {
 
     use crate::junction::model::*;
 
+    fn render(v: &JView) -> IsoSvg {
+        iso_svg(v, &crate::i18n_for(crate::shared::i18n::Locale::En), 1000.0, 1000.0, Units::Metres)
+    }
+
     fn svg(j: &Junction) -> IsoSvg {
-        iso_svg(&j.view(), 1000.0, 1000.0)
+        render(&j.view())
     }
 
     fn count(s: &str, needle: &str) -> usize {
@@ -538,7 +593,7 @@ mod tests {
     #[test]
     fn a_stretch_with_no_parking_beside_the_curb_is_drawn_as_road_over_the_parking() {
         let v = Junction::new(0).view();
-        let s = iso_svg(&v, 1000.0, 1000.0);
+        let s = render(&v);
         let arm = v.arms.iter().find(|a| !a.gaps.is_empty()).expect("the first sample has no-parking stretches beside its crossings");
         let d: String = flatten(&arm.gaps[0])
             .iter()
@@ -592,7 +647,7 @@ mod tests {
         let mut j = Junction::new(0);
         assert!(j.set_raised(true));
         let raised = j.view();
-        let (a, b) = (count(&iso_svg(&flat, 1000.0, 1000.0).markup, "class=\"iso-side "), count(&iso_svg(&raised, 1000.0, 1000.0).markup, "class=\"iso-side "));
+        let (a, b) = (count(&render(&flat).markup, "class=\"iso-side "), count(&render(&raised).markup, "class=\"iso-side "));
         assert!(b < a, "raising the junction to the sidewalk's level takes walls away: {a} -> {b}");
     }
 
@@ -600,7 +655,7 @@ mod tests {
     fn a_zebra_crossing_has_stripes_and_a_stop_line_is_drawn_flat() {
         let mut j = Junction::new(0);
         let v = j.view();
-        let m = iso_svg(&v, 1000.0, 1000.0).markup;
+        let m = render(&v).markup;
         let stops = v.arms.iter().filter(|a| a.stop_line.is_some()).count();
         assert!(stops > 0);
         assert_eq!(count(&m, "class=\"iso-stopline\""), stops);
@@ -610,7 +665,7 @@ mod tests {
         assert!(bars >= 3 * zebras, "{bars} stripes for {zebras} crossings");
         let arm = j.current().arms[0].uid;
         assert!(j.set_continuous(arm, true));
-        let after = count(&iso_svg(&j.view(), 1000.0, 1000.0).markup, "class=\"iso-zebra\"");
+        let after = count(&render(&j.view()).markup, "class=\"iso-zebra\"");
         assert!(after < bars, "a continuous sidewalk has no stripes: {bars} -> {after}");
     }
 
@@ -622,13 +677,13 @@ mod tests {
         assert!(v.arms.iter().any(|a| a.role == "free" && a.stop_line.is_some()), "the priority street has a stop line to leave bare");
         let controlled = v.arms.iter().filter(|a| a.role != "free" && a.stop_line.is_some()).count();
         assert!(controlled > 0);
-        assert_eq!(count(&iso_svg(&v, 1000.0, 1000.0).markup, "class=\"iso-stopline\""), controlled, "no line on the street that has the right of way");
+        assert_eq!(count(&render(&v).markup, "class=\"iso-stopline\""), controlled, "no line on the street that has the right of way");
         // Entering a roundabout gives way: the line is a row of dashes.
         assert!(j.set_control(ROUNDABOUT));
         let v = j.view();
         let yielding = v.arms.iter().filter(|a| a.role == "yield" && a.stop_line.is_some()).count();
         assert!(yielding > 0);
-        let dashes = count(&iso_svg(&v, 1000.0, 1000.0).markup, "class=\"iso-stopline\"");
+        let dashes = count(&render(&v).markup, "class=\"iso-stopline\"");
         assert!(dashes >= 2 * yielding, "{dashes} dashes for {yielding} yielding arms");
     }
 
@@ -721,6 +776,82 @@ mod tests {
         assert!(count(&m, "class=\"iso-side ") > 0 && count(&m, "class=\"iso-ramp ") > 0);
         let css = include_str!("../../web/editor.css");
         assert!(!css.contains("brightness(0.9)") && !css.contains("brightness(0.78)"));
+    }
+
+    /// The `(x, y, anchor, text)` of each street name in the picture.
+    fn names(markup: &str) -> Vec<(f64, f64, String, String)> {
+        let attr = |tag: &str, key: &str| tag.split(&format!(" {key}=\"")).nth(1).unwrap().split('"').next().unwrap().to_string();
+        markup
+            .split("<text ")
+            .skip(1)
+            .filter(|t| t.contains("class=\"iso-name"))
+            .map(|t| {
+                (
+                    attr(t, "x").parse().unwrap(),
+                    attr(t, "y").parse().unwrap(),
+                    attr(t, "text-anchor"),
+                    t.split('>').nth(1).unwrap().split('<').next().unwrap().to_string(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn each_street_is_named_beyond_the_end_of_its_arm_and_the_names_are_painted_last() {
+        for sample in 0..4 {
+            let v = Junction::new(sample).view();
+            let s = render(&v);
+            let got = names(&s.markup);
+            assert_eq!(got.len(), v.arms.len(), "sample {sample}");
+            for a in &v.arms {
+                let name = crate::shared::testing::en(&a.street);
+                assert!(got.iter().any(|g| g.3 == name), "sample {sample}: {name}");
+            }
+            let first_name = s.markup.find("class=\"iso-name").unwrap();
+            for earlier in ["class=\"iso-side ", "class=\"iso-post\"", "sel-box"] {
+                assert!(s.markup.rfind(earlier).is_none_or(|at| at < first_name), "sample {sample}: {earlier}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_name_stands_farther_from_the_middle_of_the_junction_than_the_end_of_its_arm() {
+        let v = Junction::new(0).view();
+        let s = render(&v);
+        let centre = s.frame.at((0.0, 0.0), 0.0);
+        let far = |p: (f64, f64)| ((p.0 - centre.0).powi(2) + (p.1 - centre.1).powi(2)).sqrt();
+        let got = names(&s.markup);
+        for a in &v.arms {
+            let name = crate::shared::testing::en(&a.street);
+            let (x, y, _, _) = got.iter().find(|g| g.3 == name).unwrap();
+            assert!(far((*x, *y)) > far(s.frame.at(a.end, 0.0)), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_name_is_drawn_whole_inside_the_drawing_on_a_wide_and_a_narrow_screen() {
+        for (width, sample) in [(1000.0, 0), (1000.0, 1), (1000.0, 2), (1000.0, 3), (360.0, 0), (360.0, 3)] {
+            let v = Junction::new(sample).view();
+            let s = iso_svg(&v, &crate::i18n_for(crate::shared::i18n::Locale::En), width, 800.0, Units::Metres);
+            for (x, y, anchor, text) in names(&s.markup) {
+                let w = text.chars().count() as f64 * NAME_CHAR_PX;
+                let (lo, hi) = match anchor.as_str() {
+                    "start" => (x, x + w),
+                    "end" => (x - w, x),
+                    _ => (x - w / 2.0, x + w / 2.0),
+                };
+                assert!(lo >= 0.0 && hi <= s.frame.width && y >= 0.0 && y <= s.frame.height, "{text} at {x},{y} ({anchor}) in {width} wide, sample {sample}");
+            }
+        }
+    }
+
+    #[test]
+    fn only_the_selected_arm_s_name_is_blue() {
+        let mut j = Junction::new(0);
+        assert_eq!(count(&svg(&j).markup, "iso-name t-mark t-halo t-blue"), 0);
+        let uid = j.current().arms[0].uid;
+        j.select(Target::Arm(uid));
+        assert_eq!(count(&svg(&j).markup, "iso-name t-mark t-halo t-blue"), 1);
     }
 
     #[test]
@@ -843,7 +974,7 @@ mod tests {
         for sample in 0..4 {
             let j = Junction::new(sample);
             let v = j.view();
-            let s = iso_svg(&v, 1000.0, 1000.0);
+            let s = render(&v);
             let pts: Vec<(f64, f64)> = v.arms.iter().flat_map(|a| flatten(&a.outline)).map(|p| s.frame.at(p, 0.0)).collect();
             let (min_x, max_x) = pts.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.0), hi.max(p.0)));
             let (min_y, max_y) = pts.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.1), hi.max(p.1)));

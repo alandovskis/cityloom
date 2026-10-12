@@ -144,6 +144,7 @@ test.describe("the junction editor on a junction of the city", () => {
     await iso.click();
     await expect(page.locator("#drawing .iso")).toHaveCount(1);
     await expect(page.locator("#drawing .iso-top").first()).toBeVisible();
+    await expect(page.locator("#drawing .iso-name").first()).toBeVisible();
     await expect(page.locator("#drawing [data-role^='grip']")).toHaveCount(0);
     await expect(iso).toHaveAttribute("aria-pressed", "true");
     await expect(live(page)).toHaveText("Showing the junction in 2.5D.");
