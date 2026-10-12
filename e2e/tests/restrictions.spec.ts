@@ -146,7 +146,8 @@ const centre = (page: Page) =>
     return [c.lng, c.lat];
   });
 
-/** Records every navigation the page starts (the Navigation API says so as it starts), and has the editors answer
+/** Records every navigation the page starts (the Navigation API says so as it starts; it is
+ *  Chromium-only, and Chromium is the one browser these specs run in), and has the editors answer
  *  with nothing, so the map page stays and can be asked. */
 async function recordNavigations(page: Page) {
   await page.route(/\/(intersection|street)\.html\?/, (route) => route.fulfill({ status: 204 }));
@@ -523,6 +524,8 @@ test.describe("area restrictions", () => {
     const before = await kept(page);
     await expect.poll(async () => (await areaCorners(page)).some((c) => near(c, j))).toBe(true);
     await page.mouse.click(j.x, j.y);
+    // let the page's frame pass, so a navigation or a write the click caused would have happened before it is looked for
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
     expect(await navigations(page)).toEqual([]);
     await expect(live(page)).toHaveText("“Corner zone” saved.");
     expect(await kept(page)).toEqual(before);
