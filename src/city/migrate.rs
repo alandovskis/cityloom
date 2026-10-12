@@ -44,7 +44,10 @@ pub fn migrate(storage: &dyn Storage) {
             }
         }
     }
-    storage.remember(EDITS_KEY, &edits.to_json());
+    // another tab may have made the document while the old saves were read: its edits are newer than any of them
+    if storage.recall(EDITS_KEY).is_none() {
+        storage.remember(EDITS_KEY, &edits.to_json());
+    }
 }
 
 #[cfg(test)]
@@ -52,7 +55,7 @@ mod tests {
     use super::*;
     use crate::city::edits::{self, Document};
     use crate::city::model::At;
-    use crate::shared::ports::MemoryStorage;
+    use crate::shared::ports::{MemoryStorage, Storage};
     use osm_network::{Control, Lane, LaneKind, Node, Road, Way};
 
     /// A T of three roads meeting at node 1, around the centre of an area box (400 m, 400 m), `dx_m` metres
@@ -221,6 +224,53 @@ mod tests {
         let e = migrated(&storage);
         assert!(e.streets.is_empty() && e.junctions.is_empty());
         assert!(storage.recall(EDITS_KEY).is_some(), "the document marks the migration as done");
+    }
+
+    /// Storage in which another tab keeps an edits document while the migration is reading the old saves.
+    struct Racing {
+        inner: MemoryStorage,
+        theirs: String,
+    }
+
+    impl Storage for Racing {
+        fn recall(&self, key: &str) -> Option<String> {
+            self.inner.recall(key)
+        }
+        fn remember(&self, key: &str, value: &str) -> bool {
+            self.inner.remember(key, value)
+        }
+        fn keys(&self) -> Vec<String> {
+            self.inner.remember(EDITS_KEY, &self.theirs);
+            self.inner.keys()
+        }
+    }
+
+    #[test]
+    fn a_document_another_tab_kept_while_the_old_saves_were_read_is_not_written_over() {
+        let racing = Racing { inner: MemoryStorage::default(), theirs: "theirs".into() };
+        keep_area(&racing.inner, "45.5000,-73.5000", &network_with_ids(), |c| widen_first_street(c, 100));
+        migrate(&racing);
+        assert_eq!(racing.inner.recall(EDITS_KEY).as_deref(), Some("theirs"));
+    }
+
+    fn corner_of_junction(c: &mut City, mm: i32) {
+        let mut j = c.junction_editor(1, 0).unwrap();
+        let arm = j.current().arms[0].uid;
+        assert!(j.set_corner(arm, mm));
+        assert!(c.keep_junction(1, j.snapshot()));
+    }
+
+    #[test]
+    fn the_same_junction_edited_in_two_areas_takes_the_edit_of_the_area_whose_centre_is_nearest() {
+        let storage = MemoryStorage::default();
+        let (near, far) = (network_with_ids_shifted(0.0), network_with_ids_shifted(250.0));
+        let d = |n: &Network| Layout::from_network(n, "").centre_distance_m(At::Node(0));
+        assert!(d(&near) < d(&far));
+        keep_area(&storage, "45.5100,-73.5000", &far, |c| corner_of_junction(c, 8_000));
+        keep_area(&storage, "45.5000,-73.5000", &near, |c| corner_of_junction(c, 6_000));
+        let e = migrated(&storage);
+        assert_eq!(e.junctions.len(), 1);
+        assert_eq!(e.junctions.values().next().unwrap().state.arms[0].corner_mm, 6_000, "the nearer area's edit wins");
     }
 
     #[test]

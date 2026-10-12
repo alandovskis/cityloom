@@ -3,6 +3,7 @@
 //! made, against the city as it is in storage now so that a change made in
 //! another tab is not written over.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use osm_network::Network;
@@ -29,6 +30,9 @@ pub struct CityStore {
     storage: Rc<dyn Storage>,
     /// The part of the world the city is made from.
     area: Area,
+    /// Whether this store (and its clones: the page's) has run the migration: where the document that marks it
+    /// done cannot be kept, it is not run again on every open, which reads every area's network.
+    migrated: Rc<Cell<bool>>,
     /// In the tests: the hand-made city they are written against, kept under the keys of no area.
     #[cfg(test)]
     sample: bool,
@@ -41,7 +45,7 @@ impl CityStore {
     /// The store of the hand-made city the tests use. It is not part of the app.
     #[cfg(test)]
     pub fn sample(storage: Rc<dyn Storage>) -> CityStore {
-        CityStore { storage, area: default_area(), sample: true, keyless: false }
+        CityStore { storage, area: default_area(), migrated: Rc::default(), sample: true, keyless: false }
     }
 
     /// The same, with every place stripped of the OpenStreetMap ids its key is made from, so that none has a key.
@@ -56,6 +60,7 @@ impl CityStore {
         CityStore {
             storage,
             area,
+            migrated: Rc::default(),
             #[cfg(test)]
             sample: false,
             #[cfg(test)]
@@ -142,9 +147,12 @@ impl CityStore {
         edits::parse(self.storage.recall(EDITS_KEY).as_deref())
     }
 
-    /// Moves the per-area saves of an older version into the edits document, once (a no-op where it exists).
+    /// Moves the per-area saves of an older version into the edits document, once (a no-op where it exists), and
+    /// at most once for this page.
     fn migrate(&self) {
-        migrate(&*self.storage);
+        if !self.migrated.replace(true) {
+            migrate(&*self.storage);
+        }
     }
 
     /// The edits as kept: none when there are none, they are damaged or they come from a newer version.
@@ -416,6 +424,17 @@ mod tests {
     }
 
     #[test]
+    fn a_migration_whose_document_could_not_be_kept_is_not_run_again_on_every_open_of_the_page() {
+        let (ports, _, storage) = test_ports();
+        let store = CityStore::for_area(ports.storage, Area::new("A", 45.5, -73.5));
+        storage.blocked(true);
+        store.open(); // the migration runs and cannot keep its document
+        storage.blocked(false);
+        store.clone().open();
+        assert_eq!(storage.recall(EDITS_KEY), None, "not tried again by this page: it read every area's network each time");
+    }
+
+    #[test]
     fn a_change_that_is_not_taken_is_not_kept() {
         let (store, storage) = store();
         let mut wrong = narrowed(&store, 1);
@@ -570,7 +589,6 @@ mod tests {
     fn an_old_save_is_moved_against_the_network_it_was_made_on_even_when_a_newer_network_comes_first() {
         let (ports, _, storage) = test_ports();
         let area = Area::new("Testville", 1.0, 2.0);
-        let store = CityStore::for_area(ports.storage, area.clone());
         // two roads; the tile refreshed since reads them in the other order, so the positions change
         let mut old = tiny_network();
         let mut second = old.roads[0].clone();
@@ -578,14 +596,15 @@ mod tests {
         old.roads.push(second);
         let mut new = old.clone();
         new.roads.reverse();
-        assert!(store.keep_network_from(&old, Some("old")));
+        // an older version's visit kept the network and its save, and no edits document
+        storage.remember(&format!("{NETWORK_KEY}:{}", area.key()), &serde_json::to_string(&old).unwrap());
         let mut city = City::on(Layout::from_network(&old, ""));
         let mut s = city.street_editor(1, 0).unwrap().snapshot();
         s.segments[0].width_mm -= 100;
         s.segments[1].width_mm += 100;
         assert!(city.keep_street(1, s));
         storage.remember(&format!("{CITY_KEY}:{}", area.key()), &city.legacy_save());
-        storage.forget(EDITS_KEY); // an older version's visit: no edits document yet
+        let store = CityStore::for_area(ports.storage, area.clone());
         // the loader keeps the refreshed network before the page opens the city
         assert!(store.keep_network_from(&new, Some("new")));
         store.open();
