@@ -82,6 +82,11 @@ pub fn decode(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// What a load went wrong with, in words; the empty string when it went well.
+pub fn problem_in_words(i18n: &I18n, result: Result<(), Said>) -> String {
+    result.err().map(|why| say_now(i18n, &why)).unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,11 +132,6 @@ mod tests {
         assert_eq!(encode("Rue de l'Église, Paris"), "Rue%20de%20l%27%C3%89glise%2C%20Paris");
         assert_eq!(encode("a-b_c.d~e9"), "a-b_c.d~e9");
     }
-}
-
-/// What a load went wrong with, in words; the empty string when it went well.
-pub fn problem_in_words(i18n: &I18n, result: Result<(), Said>) -> String {
-    result.err().map(|why| say_now(i18n, &why)).unwrap_or_default()
 }
 
 /// Gets the roads of the area the person is working in, from where they come from, unless

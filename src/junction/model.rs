@@ -813,10 +813,10 @@ impl Junction {
         }
         settle_table_and_boxes(&mut next, region);
         // A bus lane needs a roundabout and both its streets.
-        if let Some((a, b)) = next.bus {
-            if next.control != ROUNDABOUT || !next.arms.iter().any(|x| x.uid == a) || !next.arms.iter().any(|x| x.uid == b) {
-                next.bus = None;
-            }
+        if let Some((a, b)) = next.bus
+            && (next.control != ROUNDABOUT || !next.arms.iter().any(|x| x.uid == a) || !next.arms.iter().any(|x| x.uid == b))
+        {
+            next.bus = None;
         }
         if !valid(&next, region) {
             return self.refuse(why);

@@ -8,7 +8,11 @@ use std::rc::Rc;
 use leptos::prelude::*;
 use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 
-use crate::junction::model::*;
+use crate::junction::model::{
+    APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACH_STEP_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, FILTER_CODE, Item, Junction, LEFT,
+    MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
+    RULES, STOPS, THROUGH, Target,
+};
 use crate::junction::read_model::{CrossingView, JView};
 use crate::junction::turns::{compass_key, turn_glyph};
 use crate::junction::vm::JunctionVm;
@@ -1051,6 +1055,7 @@ pub fn Inspector(vm: Rc<JunctionVm>) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::junction::model::RIGHT;
     use crate::shared::i18n::Locale;
 
     fn crossing(j: &Junction, bearing: i32) -> CrossingView {

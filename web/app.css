@@ -443,6 +443,9 @@ a.btn {
 }
 .units {
   display: inline-flex;
+  min-inline-size: 0;
+  margin: 0;
+  border: 0;
   padding: 3px;
   border-radius: 10px;
   background: var(--fill);
@@ -580,8 +583,6 @@ a.btn {
   color: var(--ink);
   text-decoration: none;
   transition: background-color 120ms var(--ease-out);
-}
-.place-row {
   /* a row that is a button, as in a list of places to choose from */
   width: 100%;
   border: 0;
@@ -1203,6 +1204,7 @@ a.btn {
     grid-template-columns: 1fr auto;
     gap: 10px 8px;
     padding: 10px 10px 12px 14px;
+    order: 0;
   }
   .search-slot {
     grid-column: 1 / -1;
@@ -1228,9 +1230,6 @@ a.btn {
     display: flex;
     flex-direction: column;
   }
-  .bar {
-    order: 0;
-  }
   .stage {
     order: 1;
     position: relative;
@@ -1250,8 +1249,6 @@ a.btn {
   }
   .panel.right {
     order: 3;
-  }
-  .panel.right {
     max-height: none;
   }
   .panel-body {

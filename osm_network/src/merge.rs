@@ -103,18 +103,19 @@ pub fn merge_dual_carriageways(net: &mut Network) {
             if length(&a.points) < 1.0 || b.points.len() < 2 || a.points.len() < 2 {
                 continue;
             }
-            if let Some(d) = apart(&a.points, &b.points) {
-                if best.is_none_or(|(bd, _)| d < bd) {
-                    best = Some((d, j));
-                }
+            if let Some(d) = apart(&a.points, &b.points)
+                && best.is_none_or(|(bd, _)| d < bd)
+            {
+                best = Some((d, j));
             }
         }
-        if let Some((_, j)) = best {
-            if !taken[i] && oriented[j].as_ref().is_some() {
-                taken[i] = true;
-                taken[j] = true;
-                pairs.push((i, j));
-            }
+        if let Some((_, j)) = best
+            && !taken[i]
+            && oriented[j].as_ref().is_some()
+        {
+            taken[i] = true;
+            taken[j] = true;
+            pairs.push((i, j));
         }
     }
     if pairs.is_empty() {

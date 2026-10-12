@@ -84,7 +84,7 @@ fn explicit_sidewalks(tags: &mut Tags) {
             tags.insert("sidewalk:both", "separate");
         }
     }
-    if tags.contains_key("sidewalk") || !["sidewalk:left", "sidewalk:right", "sidewalk:both"].iter().any(|k| tags.contains_key(*k)) {
+    if tags.contains_key("sidewalk") || !["sidewalk:left", "sidewalk:right", "sidewalk:both"].iter().any(|k| tags.contains_key(k)) {
         return;
     }
     let has = |side: &str| tags.get(side).or_else(|| tags.get("sidewalk:both")).is_some_and(|v| v != "no" && v != "none");
@@ -177,11 +177,19 @@ fn lane_kind(lt: LaneType) -> LaneKind {
 /// The hours a way's bus lane is one, from `lanes:bus:conditional` or `lanes:psv:conditional`
 /// (`1 @ (Mo-Fr 06:00-10:00,14:30-19:00)`): what follows the `@`, without its parentheses.
 fn bus_hours(tags: &Tags) -> Option<String> {
-    let value = ["lanes:bus:conditional", "lanes:psv:conditional"].iter().find_map(|k| tags.get(*k))?;
+    let value = ["lanes:bus:conditional", "lanes:psv:conditional"].iter().find_map(|k| tags.get(k))?;
     let (_, hours) = value.split_once('@')?;
     let hours = hours.trim();
     let hours = hours.strip_prefix('(').and_then(|h| h.strip_suffix(')')).unwrap_or(hours).trim();
     (!hours.is_empty()).then(|| hours.to_string())
+}
+
+/// For the browser: OSM XML or PBF in, the network as JSON out (or the error text, as a thrown string).
+/// `bounds` is empty, or the box to keep: south, west, north, east.
+#[wasm_bindgen]
+pub fn osm_to_network(osm: &[u8], bounds: &[f64]) -> Result<String, String> {
+    let bounds = <[f64; 4]>::try_from(bounds).ok();
+    serde_json::to_string(&import_in(osm, bounds)?).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -273,12 +281,4 @@ mod tests {
         assert_eq!(hours("lanes:psv:conditional", "1 @ ()"), None);
         assert_eq!(hours("parking:lane:conditional", "no_parking @ (Mo-Fr 07:00-09:00)"), None);
     }
-}
-
-/// For the browser: OSM XML or PBF in, the network as JSON out (or the error text, as a thrown string).
-/// `bounds` is empty, or the box to keep: south, west, north, east.
-#[wasm_bindgen]
-pub fn osm_to_network(osm: &[u8], bounds: &[f64]) -> Result<String, String> {
-    let bounds = <[f64; 4]>::try_from(bounds).ok();
-    serde_json::to_string(&import_in(osm, bounds)?).map_err(|e| e.to_string())
 }
