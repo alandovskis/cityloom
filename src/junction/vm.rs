@@ -25,8 +25,35 @@ impl Presents for Junction {
     }
 }
 
+pub const VIEW_KEY: &str = "cityloom-junction-view";
+
+/// How the junction is drawn: the plan, which is edited, or the 2.5D picture, which is only looked at.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DrawMode {
+    Plan,
+    Iso,
+}
+
+impl DrawMode {
+    pub fn key(self) -> &'static str {
+        match self {
+            DrawMode::Plan => "plan",
+            DrawMode::Iso => "iso",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<DrawMode> {
+        match s {
+            "plan" => Some(DrawMode::Plan),
+            "iso" => Some(DrawMode::Iso),
+            _ => None,
+        }
+    }
+}
+
 pub struct JunctionVm {
     core: Core<Junction>,
+    mode: RwSignal<DrawMode>,
     ports: Ports,
     i18n: Rc<I18n>,
     keeper: Option<Rc<Keeper>>,
@@ -52,7 +79,8 @@ impl JunctionVm {
                     },
                 )
             });
-            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding, frame: Cell::new(None) }
+            let mode = ports.storage.recall(VIEW_KEY).as_deref().and_then(DrawMode::parse).unwrap_or(DrawMode::Plan);
+            JunctionVm { core: Core::new(junction), mode: RwSignal::new(mode), ports, i18n, keeper, binding, frame: Cell::new(None) }
         })
     }
 
@@ -91,6 +119,35 @@ impl JunctionVm {
 
     pub fn frame(&self) -> Option<Frame> {
         self.frame.get()
+    }
+
+    /// How the junction is drawn, which a view that reads it draws again when it changes.
+    pub fn mode(&self) -> DrawMode {
+        self.mode.get()
+    }
+
+    /// The same, for a command: nothing is watched.
+    pub fn mode_now(&self) -> DrawMode {
+        self.mode.get_untracked()
+    }
+
+    /// Draws the junction in `mode`, keeps the choice and says it. Choosing the mode it is already in says nothing,
+    /// whether or not the browser kept the choice.
+    pub fn set_mode(&self, mode: DrawMode) {
+        if self.mode.get_untracked() == mode {
+            return;
+        }
+        self.mode.set(mode);
+        self.ports.storage.remember(VIEW_KEY, mode.key());
+        let key = match mode {
+            DrawMode::Plan => "jn-view-shown-plan",
+            DrawMode::Iso => "jn-view-shown-iso",
+        };
+        self.ports.announcer.say(&self.i18n.tr_now(key, &Args::new()));
+    }
+
+    pub fn toggle_mode(&self) {
+        self.set_mode(if self.mode_now() == DrawMode::Plan { DrawMode::Iso } else { DrawMode::Plan });
     }
 
     // ---- what the views do ----
@@ -274,6 +331,44 @@ mod tests {
         let b = r.vm.view_now();
         assert!(!Rc::ptr_eq(&a, &b));
         assert_eq!(b.arms.iter().find(|x| x.uid == n).unwrap().corner_mm, 7_000);
+    }
+
+    #[test]
+    fn the_mode_starts_as_the_plan_toggles_and_is_announced() {
+        let r = rig(0);
+        assert_eq!(r.vm.mode_now(), DrawMode::Plan);
+        r.vm.toggle_mode();
+        assert_eq!(r.vm.mode_now(), DrawMode::Iso);
+        r.vm.set_mode(DrawMode::Iso);
+        r.vm.toggle_mode();
+        assert_eq!(r.said.take(), vec!["Showing the junction in 2.5D.", "Showing the plan."]);
+    }
+
+    #[test]
+    fn choosing_the_view_already_shown_says_nothing_even_before_anything_is_kept() {
+        let r = rig(0);
+        r.vm.set_mode(DrawMode::Plan);
+        assert_eq!(r.said.take(), Vec::<String>::new());
+        assert_eq!(r.storage.recall(VIEW_KEY), None);
+    }
+
+    #[test]
+    fn the_mode_is_kept_across_a_new_view_model_and_garbage_falls_back_to_the_plan() {
+        let (ports, _, storage) = crate::shared::ports::test_ports();
+        let en = crate::i18n_for(crate::shared::i18n::Locale::En);
+        JunctionVm::new(ports.clone(), en.clone(), Junction::new(0), None).set_mode(DrawMode::Iso);
+        assert_eq!(storage.recall(VIEW_KEY).as_deref(), Some("iso"));
+        assert_eq!(JunctionVm::new(ports.clone(), en.clone(), Junction::new(0), None).mode_now(), DrawMode::Iso);
+        storage.remember(VIEW_KEY, "sideways");
+        assert_eq!(JunctionVm::new(ports, en, Junction::new(0), None).mode_now(), DrawMode::Plan);
+    }
+
+    #[test]
+    fn the_mode_speaks_french() {
+        let (ports, said, _) = crate::shared::ports::test_ports();
+        let vm = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
+        vm.set_mode(DrawMode::Iso);
+        assert_eq!(said.take(), vec!["Jonction affichée en 2,5D."]);
     }
 
     #[test]

@@ -7,7 +7,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::junction::model::*;
-use crate::junction::vm::JunctionVm;
+use crate::junction::vm::{DrawMode, JunctionVm};
 use crate::junction::{inspector, notes, page, plan, turns};
 use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::Units;
@@ -697,6 +697,77 @@ fn the_plan_follows_the_units_and_the_selection() {
     assert_eq!(count(&h, "class=\"arm on\""), 1);
 }
 
+#[test]
+fn the_keyboard_help_names_v_for_the_view_in_both_languages() {
+    use crate::shared::i18n::{Args, Locale};
+    let page = include_str!("../../web/intersection.html");
+    assert!(page.contains("<kbd>V</kbd> <span data-i18n=\"jn-page-key-view\">"), "the page's key help lists V");
+    assert_eq!(crate::i18n_for(Locale::En).tr("jn-page-key-view", &Args::new()), "plan, 2.5D");
+    assert_eq!(crate::i18n_for(Locale::FrCa).tr("jn-page-key-view", &Args::new()), "plan, 2,5D");
+}
+
+#[test]
+fn the_view_toggle_keeps_the_touch_target_of_a_coarse_pointer() {
+    // `.view-mode .unit` (min-height 26px) outweighs app.css's `.unit` rule for a coarse pointer, so editor.css
+    // must say 44px again for it inside its own coarse-pointer block.
+    let css = include_str!("../../web/editor.css");
+    let coarse = &css[css.find("@media (any-pointer: coarse)").unwrap()..];
+    let block = &coarse[..coarse.find("\n}\n").unwrap()];
+    let rule = &block[block.find(".view-mode .unit").expect("the coarse block names the toggle's buttons")..];
+    assert!(rule[..rule.find('}').unwrap()].contains("min-height: 44px"), "{rule}");
+    // The row's negative margin was sized for a 32px toggle (`.view-mode-tools`); 12px more of button needs 6px more.
+    let tools = &block[block.find(".view-mode-tools").expect("the coarse block makes room for the taller toggle")..];
+    assert!(tools[..tools.find('}').unwrap()].contains("margin-block: -9px"), "{tools}");
+}
+
+fn shared_mode(mode: DrawMode, locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
+    let vm = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), Junction::new(0), None);
+    vm.set_mode(mode);
+    vm
+}
+
+#[test]
+fn the_drawing_is_the_2_5d_picture_in_iso_mode_with_no_grips_and_a_label_of_its_own() {
+    use crate::shared::i18n::Locale;
+    let s = shared_mode(DrawMode::Iso, Locale::En);
+    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
+    assert!(h.contains("class=\"iso\"") && !h.contains("class=\"plan\""), "{h}");
+    assert!(!h.contains("data-role=\"grip") && !h.contains("data-role=\"arm\""), "{h}");
+    assert!(h.contains("2.5D view of the junction. 4 streets."), "{h}");
+    let f = shared_mode(DrawMode::Iso, Locale::FrCa);
+    let h = html(|| view! { <plan::PlanDrawing vm=f.clone()/> }.into_any());
+    assert!(h.contains("Vue en 2,5D de la jonction. 4 rues."), "{h}");
+}
+
+#[test]
+fn the_view_toggle_is_a_group_of_two_buttons_and_the_view_shown_is_pressed() {
+    use crate::shared::i18n::Locale;
+    let s = shared_mode(DrawMode::Plan, Locale::En);
+    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
+    assert!(h.contains("<fieldset") && h.contains("id=\"view-mode\""), "{h}");
+    assert!(h.contains(">View</legend>"), "{h}");
+    assert!(button_tag(&h, "view-plan").contains("aria-pressed=\"true\""));
+    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"false\""));
+    // V goes to the view not shown, so only that button carries it.
+    assert!(button_tag(&h, "view-iso").contains("aria-keyshortcuts=\"V\""));
+    assert!(!button_tag(&h, "view-plan").contains("aria-keyshortcuts"));
+    assert!(h.contains(">Plan</button>") && h.contains(">2.5D</button>"), "{h}");
+    s.set_mode(DrawMode::Iso);
+    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
+    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"true\""));
+    assert!(button_tag(&h, "view-plan").contains("aria-pressed=\"false\""));
+    assert!(button_tag(&h, "view-plan").contains("aria-keyshortcuts=\"V\""));
+    assert!(!button_tag(&h, "view-iso").contains("aria-keyshortcuts"));
+}
+
+#[test]
+fn the_view_toggle_reads_plan_and_2_5d_in_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_mode(DrawMode::Plan, Locale::FrCa);
+    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
+    assert!(h.contains(">Plan</button>") && h.contains(">2,5D</button>") && h.contains(">Affichage</legend>"), "{h}");
+}
+
 // ---- the page in French ---------------------------------------------------------------
 
 fn shared_in(sample: usize, locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
@@ -1272,7 +1343,7 @@ fn intersection_html_leaves_no_text_without_its_message() {
     use crate::shell::view::i18n_keys;
     let body = &INTERSECTION_HTML[INTERSECTION_HTML.find("<body>").unwrap()..];
     let translated: Vec<String> = i18n_keys(body).into_iter().map(|(_, text)| text).collect();
-    let own = ["m", "ft", "Z", "English", "Français", "Transit Priority Atlas"];
+    let own = ["m", "ft", "Z", "V", "English", "Français", "Transit Priority Atlas"];
     for piece in body.split('>').filter_map(|p| p.split('<').next()).map(str::trim).filter(|t| !t.is_empty()) {
         if piece.chars().any(char::is_alphabetic) && !own.contains(&piece) {
             assert!(translated.iter().any(|t| t == piece), "{piece:?} has no message");

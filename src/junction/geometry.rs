@@ -141,6 +141,41 @@ pub fn sample_quad(a: P, c: P, b: P, n: usize) -> Vec<P> {
         .collect()
 }
 
+/// Samples the SVG arc of radius `r` from `a` to `b` (the endpoint parameterisation of an arc, for a circle) in
+/// `n` steps, `n + 1` points. A radius too small to reach is raised to half the chord.
+pub fn sample_arc(a: P, r: f64, large: bool, sweep: bool, b: P, n: usize) -> Vec<P> {
+    let chord = dist(a, b);
+    if chord < 1e-9 {
+        return vec![a; n + 1];
+    }
+    let half = chord / 2.0;
+    let r = r.max(half);
+    let mid = ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
+    let height = (r * r - half * half).max(0.0).sqrt();
+    // The centre lies on the chord's perpendicular; the flags choose which side.
+    let side = if large != sweep { 1.0 } else { -1.0 };
+    let (hx, hy) = ((a.0 - b.0) / 2.0, (a.1 - b.1) / 2.0);
+    let k = side * height / half;
+    let centre = (mid.0 + k * hy, mid.1 - k * hx);
+    let a0 = (a.1 - centre.1).atan2(a.0 - centre.0);
+    let mut turn = (b.1 - centre.1).atan2(b.0 - centre.0) - a0;
+    if sweep && turn < 0.0 {
+        turn += std::f64::consts::TAU;
+    }
+    if !sweep && turn > 0.0 {
+        turn -= std::f64::consts::TAU;
+    }
+    (0..=n)
+        .map(|i| {
+            if i == n {
+                return b;
+            }
+            let t = a0 + turn * i as f64 / n as f64;
+            (centre.0 + r * t.cos(), centre.1 + r * t.sin())
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,6 +226,25 @@ mod tests {
         let c = [(20.0, 0.0), (30.0, 10.0)];
         assert!(polylines_cross(&a, &b));
         assert!(!polylines_cross(&a, &c));
+    }
+
+    #[test]
+    fn an_arc_is_sampled_from_its_start_to_its_end_on_the_circle() {
+        // A quarter circle of radius 1000 about the origin, clockwise on screen (sweep): (1000,0) to (0,1000).
+        let pts = sample_arc((1000.0, 0.0), 1000.0, false, true, (0.0, 1000.0), 8);
+        assert_eq!(pts.len(), 9);
+        assert!(dist(pts[0], (1000.0, 0.0)) < 1e-6 && dist(pts[8], (0.0, 1000.0)) < 1e-6);
+        assert!(pts.iter().all(|p| (p.0.hypot(p.1) - 1000.0).abs() < 1e-6));
+        // The short way: the middle point is on the diagonal.
+        assert!((pts[4].0 - pts[4].1).abs() < 1e-6 && pts[4].0 > 0.0);
+    }
+
+    #[test]
+    fn the_large_flag_takes_the_long_way_round() {
+        let pts = sample_arc((1000.0, 0.0), 1000.0, true, true, (0.0, 1000.0), 12);
+        // The other circle through both ends is about (1000, 1000); its long arc passes far beyond the chord.
+        assert!(pts.iter().all(|p| (dist(*p, (1000.0, 1000.0)) - 1000.0).abs() < 1e-6));
+        assert!(dist(pts[6], (0.0, 0.0)) > 2000.0, "{:?}", pts[6]);
     }
 
     #[test]

@@ -8,10 +8,11 @@ use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
 use crate::junction::frame::Frame;
+use crate::junction::iso::{iso_label, iso_svg};
 use crate::junction::keys;
 use crate::junction::model::Target;
 use crate::junction::plan_svg::{plan_label, plan_svg};
-use crate::junction::vm::JunctionVm;
+use crate::junction::vm::{DrawMode, JunctionVm};
 use crate::junction::watch::Watch;
 use crate::shared::bind::current_element;
 use crate::shared::i18n::Args;
@@ -111,9 +112,18 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
     let markup = move || {
         let (v, units) = w.now();
         let (width, window) = viewport.get();
-        let out = plan_svg(&v, &w.i18n(), width, window, units);
-        w.set_frame(out.frame);
-        out.markup
+        match w.mode() {
+            DrawMode::Plan => {
+                let out = plan_svg(&v, &w.i18n(), width, window, units);
+                w.set_frame(out.frame);
+                out.markup
+            }
+            DrawMode::Iso => iso_svg(&v, width, window).markup,
+        }
+    };
+    let label = move || match w.mode() {
+        DrawMode::Plan => plan_label(&w.view(), &w.i18n()),
+        DrawMode::Iso => iso_label(&w.view(), &w.i18n()),
     };
     let size = move || {
         let (v, _) = w.now();
@@ -128,8 +138,9 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
         w.frame().map_or((0.0, 0.0), |f| f.plan_point((e.client_x() as f64 - r.left(), e.client_y() as f64 - r.top())))
     };
 
+    // The 2.5D picture is only looked at: the pointer does nothing on it.
     let press = move |e: PointerEvent| {
-        if e.button() != 0 {
+        if e.button() != 0 || w.mode_now() == DrawMode::Iso {
             return;
         }
         let svg: Element = current_element(&e);
@@ -178,13 +189,34 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
         w.finish_gesture(commit);
     };
 
+    // V switches the drawing between the plan and the 2.5D, anywhere but in a field (`keys::switches_view`). A
+    // drag under way is finished first and kept: the plan it is on goes, and with it the pointer's release.
+    #[cfg(target_arch = "wasm32")]
+    window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
+        let key = e.key();
+        let press = keys::Press {
+            key: &key,
+            ctrl: e.ctrl_key(),
+            meta: e.meta_key(),
+            alt: e.alt_key(),
+            repeat: e.repeat(),
+            composing: e.is_composing(),
+            taken: e.default_prevented() || typing(&e),
+        };
+        if keys::switches_view(&press) {
+            e.prevent_default();
+            finish(true);
+            w.toggle_mode();
+        }
+    });
+
     view! {
       <div class="wrap" id="wrap" tabindex="0" role="group" aria-label=move || w.i18n().tr("jn-plan-editor", &Args::new()) aria-describedby="keys" node_ref=wrap on:keydown=keydown>
         <svg
             id="drawing"
             xmlns="http://www.w3.org/2000/svg"
             role="img"
-            aria-label=move || plan_label(&w.view(), &w.i18n())
+            aria-label=label
             width=move || size().width.to_string()
             height=move || size().height.to_string()
             viewBox=move || {

@@ -734,6 +734,34 @@ svg pattern circle {
   stroke-opacity: 0.55;
   stroke-linejoin: round;
 }
+#drawing .iso-flat,
+#drawing .iso-top,
+#drawing .iso-side {
+  stroke: var(--ink-2);
+  stroke-width: 0.6;
+  stroke-opacity: 0.55;
+  stroke-linejoin: round;
+}
+#drawing .iso-zebra,
+#drawing .iso-stopline {
+  fill: var(--ink-2);
+  stroke: none;
+}
+#drawing .iso-post {
+  stroke: var(--ink-2);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+#drawing .iso-head {
+  fill: var(--ink);
+  stroke: var(--panel);
+  stroke-width: 1;
+}
+#drawing .iso-ramp {
+  stroke: var(--ink-2);
+  stroke-width: 0.6;
+  stroke-opacity: 0.55;
+}
 #drawing .arm,
 #drawing .bus-g,
 #drawing .cycle-g {
@@ -1853,6 +1881,11 @@ dl.prov dd:last-child {
 /* ---- touch, small screens, motion --------------------------------------------- */
 
 @media (any-pointer: coarse) {
+  /* The toggle is 44px tall here, not the 32px the row above is sized for: it gives up 6px each side, not 3. */
+  .view-mode-tools {
+    margin-block: -9px;
+  }
+  .view-mode .unit,
   .add-item,
   .check,
   .fit-checks {
