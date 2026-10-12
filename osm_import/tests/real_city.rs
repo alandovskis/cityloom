@@ -139,7 +139,7 @@ mod kept {
         for (i, n) in view.nodes.iter().filter(|n| n.junction).enumerate() {
             let mut state = city.junction_editor(n.uid, 0).expect("every junction opens").snapshot();
             state.ring_extra_mm = (1 + i as i32) * RING_STEP_MM;
-            assert!(city.keep_junction(n.uid, state), "junction {} takes a ring", n.uid);
+            assert!(city.keep_junction(n.uid, state), "junction number {i} takes a ring");
             match city.junction_record(n.uid) {
                 Some((key, record)) => {
                     placed.junctions.insert(key.clone(), at.lon_lat(n.x_mm, n.y_mm));

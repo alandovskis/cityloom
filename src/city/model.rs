@@ -1353,8 +1353,8 @@ mod tests {
         let back = City::load_on(layout, &edits);
         let last = back.layout.edges.len() as u32; // street 1 is now the last
         assert_eq!(back.streets[&last], street, "the edit followed its street");
-        for uid in 1..last {
-            assert_eq!(back.streets[&uid], back.today_streets[&uid], "no other street took an edit (uid {uid})");
+        for other in 1..last {
+            assert_eq!(back.streets[&other], back.today_streets[&other], "no other street took an edit (street {other})");
         }
     }
 
