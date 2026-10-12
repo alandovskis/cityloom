@@ -93,8 +93,9 @@ restriction-street-keeps = Respecte la règle.
 restriction-street-inside = À l’intérieur de la zone.
 restriction-legend-conflict = En conflit avec une règle de zone
 
-## L’onglet
-restriction-tab = Règles de zone
+## Le panneau
+restriction-panel = Règles de zone
+restriction-toggle-title = Afficher ou masquer les règles de zone ( [ )
 restriction-heading = Règles sur une zone
 restriction-declare = Déclarer une zone
 restriction-drawing-help = Cliquez sur la carte pour placer chaque coin, puis cliquez sur le premier coin ou appuyez sur Terminer. Au clavier, déplacez la carte avec les flèches, appuyez sur Entrée sur celle-ci pour placer un coin en son centre, et sur Maj+Entrée pour terminer. Retour arrière retire le dernier coin; Échap annule lorsque la carte a le focus.

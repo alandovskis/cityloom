@@ -658,9 +658,17 @@ fn the_drawing_and_the_naming_speak_french_with_no_english_left() {
 }
 
 #[test]
-fn map_html_has_the_area_rules_tab_and_its_panel() {
-    assert!(MAP_HTML.contains("id=\"t-areas\"") && MAP_HTML.contains("aria-controls=\"p-areas\"") && MAP_HTML.contains("data-i18n=\"restriction-tab\""));
-    assert!(MAP_HTML.contains("id=\"p-areas\"") && MAP_HTML.contains("id=\"areas-slot\""));
+fn map_html_has_the_area_rules_in_a_left_panel_and_not_in_the_notes() {
+    assert!(!MAP_HTML.contains("id=\"t-areas\"") && !MAP_HTML.contains("id=\"p-areas\"") && !MAP_HTML.contains("data-left=\"none\""));
+    assert!(
+        MAP_HTML.contains(
+            r#"id="inspector-toggle" class="edge-tab left" data-covers="left" aria-controls="areas-panel" aria-expanded="true" aria-keyshortcuts="[""#
+        )
+    );
+    assert!(MAP_HTML.contains(r#"<aside class="panel left" id="areas-panel""#));
+    let panel = &MAP_HTML[MAP_HTML.find("id=\"areas-panel\"").unwrap()..];
+    assert!(panel[..panel.find("</aside>").unwrap()].contains("id=\"areas-slot\""));
+    assert!(MAP_HTML.contains(r#"localStorage.getItem("cityloom-inspector")==="closed""#), "the head script restores a closed panel");
 }
 
 #[test]
