@@ -6,6 +6,7 @@
 pub mod areas;
 pub mod areas_view;
 pub mod camera;
+pub mod editable;
 pub mod home;
 pub mod overlay;
 pub mod style;
