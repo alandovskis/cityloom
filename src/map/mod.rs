@@ -3,6 +3,7 @@
 //! pointer (`web/basemap.js`, reached through the `Mapper` port); the view-model,
 //! the places it hands the map, and the views around the map live here.
 
+pub mod areas;
 pub mod camera;
 pub mod home;
 pub mod overlay;

@@ -34,3 +34,38 @@ restriction-check-keeps = { $rule } : la rue la respecte.
 restriction-check-breaks = { $rule } : la rue ne la respecte pas.
 restriction-check-info = { $rule } : les rues n’ont pas de vitesse, c’est donc à titre indicatif.
 restriction-check-informational = À titre indicatif
+
+## Le tracé d’un contour, dit à mesure
+restriction-started = Tracé d’une zone. Cliquez sur la carte, ou appuyez sur Entrée sur celle-ci, pour placer le premier coin.
+restriction-redraw-started = Nouveau tracé de « { $area } ». Placez ses coins de nouveau.
+restriction-corner-added = Coin { $n } placé.
+restriction-corner-removed = { $n ->
+    [one] Coin retiré. Il reste { $n } coin.
+   *[other] Coin retiré. Il reste { $n } coins.
+}
+restriction-corner-moved = Coin déplacé.
+restriction-closed = Le contour est fermé. Choisissez sa règle et son nom, puis enregistrez-le.
+restriction-cancelled = Tracé annulé.
+restriction-corners = { $n ->
+    [one] { $n } coin
+   *[other] { $n } coins
+}
+restriction-kmh = { $kmh }{" "}km/h
+
+## Garder et modifier une zone
+restriction-saved = Zone « { $area } » enregistrée.
+restriction-not-kept = Les règles de zone n’ont pas pu être enregistrées dans ce navigateur.
+restriction-selected = Zone « { $area } » sélectionnée : { $rule }.
+restriction-renamed = Zone renommée « { $area } ».
+restriction-rule-changed = La règle de « { $area } » est maintenant : { $rule }.
+restriction-redrawn = Zone « { $area } » retracée.
+restriction-deleted = Zone « { $area } » supprimée.
+restriction-restored = Zone « { $area } » rétablie.
+
+## Le chapeau de l’onglet
+restriction-future = Ces règles de zone ont été enregistrées par une version plus récente de CityLoom; elles ne peuvent pas être affichées ni modifiées ici.
+restriction-lead-none = Aucune règle de zone pour l’instant. Déclarez-en une pour vérifier les rues qu’elle contient.
+restriction-lead-some = { $n ->
+    [one] { $n } règle de zone.
+   *[other] { $n } règles de zone.
+} Sélectionnez-en une pour voir les rues qu’elle contient.

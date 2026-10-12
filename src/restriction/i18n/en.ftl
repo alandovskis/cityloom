@@ -39,3 +39,39 @@ restriction-check-keeps = { $rule }: the street keeps to it.
 restriction-check-breaks = { $rule }: the street does not keep to it.
 restriction-check-info = { $rule }: streets carry no speed, so this is for information only.
 restriction-check-informational = For information only
+
+## Drawing an outline, said as it happens (`area` is the area's name)
+restriction-started = Drawing an area. Click the map, or press Enter on it, to place the first corner.
+restriction-redraw-started = Redrawing “{ $area }”. Place its corners again.
+restriction-corner-added = Corner { $n } placed.
+restriction-corner-removed = { $n ->
+    [one] Corner removed. One corner left.
+   *[other] Corner removed. { $n } corners left.
+}
+restriction-corner-moved = Corner moved.
+restriction-closed = The outline is closed. Choose its rule and name, then save it.
+restriction-cancelled = Drawing cancelled.
+restriction-corners = { $n ->
+    [one] { $n } corner
+   *[other] { $n } corners
+}
+# A speed among the choices of a speed limit.
+restriction-kmh = { $kmh } km/h
+
+## Keeping and changing an area (`rule` is a restriction-rule-* message)
+restriction-saved = “{ $area }” saved.
+restriction-not-kept = The area rules could not be saved in this browser.
+restriction-selected = “{ $area }” selected: { $rule }.
+restriction-renamed = Renamed “{ $area }”.
+restriction-rule-changed = The rule of “{ $area }” is now: { $rule }.
+restriction-redrawn = “{ $area }” redrawn.
+restriction-deleted = “{ $area }” deleted.
+restriction-restored = “{ $area }” restored.
+
+## The tab's lead
+restriction-future = These area rules were saved by a newer version of CityLoom, so they cannot be shown or changed here.
+restriction-lead-none = No area rules yet. Declare one to check the streets inside it.
+restriction-lead-some = { $n ->
+    [one] One area rule.
+   *[other] { $n } area rules.
+} Select one to see the streets inside it.
