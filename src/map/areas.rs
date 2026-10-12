@@ -38,8 +38,8 @@ pub struct AreasVm {
     /// Whether the document is a newer build's: shown as nothing, never written.
     future: ArcRwSignal<bool>,
     draw: ArcRwSignal<Draw>,
-    /// The restriction a new outline replaces, while one is redrawn.
-    redrawing: ArcRwSignal<Option<String>>,
+    /// The restriction a new outline replaces, as it was when its redraw started, while one is redrawn.
+    redrawing: ArcRwSignal<Option<Restriction>>,
     selected: ArcRwSignal<Option<String>>,
     /// The selected restriction's outline while a corner of it is dragged.
     moving: ArcRwSignal<Option<(String, Vec<LonLat>)>>,
@@ -217,25 +217,34 @@ impl AreasVm {
         outcome
     }
 
-    /// The outline is closed: a new one waits for its rule and name; a redrawn one is kept at once, and if it
-    /// cannot be, its corners stay drawn to finish again (false, and nothing said: the caller says it).
+    /// The outline is closed: a new one waits for its rule and name; a redrawn one is kept at once. If the area
+    /// redrawn is gone (deleted here, or by another tab), the outline waits as a new area's, the old name and rule
+    /// filled in. If storage refuses, its corners stay drawn to finish again (false, and nothing said: the caller
+    /// says it).
     fn closed(&self) -> bool {
-        let Some(id) = self.redrawing.get_untracked() else {
+        let Some(old) = self.redrawing.get_untracked() else {
             self.name.set(String::new());
             self.rule.set(Rule::CarFree);
             self.tell("restriction-closed", Args::new());
             return true;
         };
         let ring = self.draw.get_untracked().corners().to_vec();
-        let kept = self.store.update(&id, |r| r.ring = ring.clone());
+        let kept = self.store.update(&old.id, |r| r.ring = ring.clone());
         self.reload();
-        let Some(r) = self.find_now(&id).filter(|_| kept) else {
+        let Some(r) = self.find_now(&old.id) else {
+            self.redrawing.set(None);
+            self.name.set(old.name);
+            self.rule.set(old.rule);
+            self.tell("restriction-closed", Args::new());
+            return true;
+        };
+        if !kept {
             self.draw.set(Draw::Drawing(ring));
             return false;
-        };
+        }
         self.draw.set(Draw::Idle);
         self.redrawing.set(None);
-        self.selected.set(Some(id));
+        self.selected.set(Some(old.id));
         self.tell_about("restriction-redrawn", &r);
         true
     }
@@ -263,8 +272,8 @@ impl AreasVm {
             return false;
         }
         self.moving.set(None);
-        self.redrawing.set(Some(id.to_string()));
         self.tell_about("restriction-redraw-started", &r);
+        self.redrawing.set(Some(r));
         true
     }
 
@@ -964,5 +973,47 @@ mod tests {
         said.take();
         draw_square(&vm);
         assert_eq!(said.take().last().unwrap(), "The outline is closed. Choose its rule and name, then save it.", "a new area, not the redraw");
+    }
+
+    /// Redraws r1 (named "A", bus and bike only) with three corners, and leaves it waiting to be finished.
+    fn redraw_three(vm: &AreasVm) {
+        draw_square(vm);
+        vm.set_form_name("A");
+        vm.set_form_rule(Rule::BusAndBikeOnly);
+        assert!(vm.save());
+        assert!(vm.start_redraw("r1"));
+        for p in &SQUARE[..3] {
+            assert!(vm.add_at(*p));
+        }
+    }
+
+    /// The redraw of an area that is gone is closed as a new area, its old name and rule filled in, and saved as one.
+    fn closes_as_a_new_area(vm: &AreasVm, said: &RecordingAnnouncer) {
+        said.take();
+        assert!(vm.close());
+        assert_eq!(said.take(), ["The outline is closed. Choose its rule and name, then save it."]);
+        assert_eq!(vm.draw_now(), Draw::Naming(SQUARE[..3].to_vec()));
+        assert_eq!((vm.form_name(), vm.form_rule()), ("A".to_string(), Rule::BusAndBikeOnly));
+        assert!(vm.save());
+        assert_eq!(said.take(), ["“A” saved."]);
+        let list = vm.list_now();
+        assert_eq!((list.len(), list[0].id.as_str(), list[0].ring.len()), (1, "r2", 3));
+    }
+
+    #[test]
+    fn the_redraw_of_an_area_deleted_meanwhile_is_saved_as_a_new_area() {
+        let (vm, _, said, _) = rig();
+        redraw_three(&vm);
+        assert!(vm.delete("r1"));
+        closes_as_a_new_area(&vm, &said);
+    }
+
+    #[test]
+    fn the_redraw_of_an_area_another_tab_removed_is_saved_as_a_new_area() {
+        let (vm, _, said, storage) = rig();
+        redraw_three(&vm);
+        assert!(RestrictionStore::new(storage.clone()).remove("r1"));
+        vm.reload();
+        closes_as_a_new_area(&vm, &said);
     }
 }
