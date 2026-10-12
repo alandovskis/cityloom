@@ -1,7 +1,7 @@
 //! What a view-model asks of the platform it runs on. The page supplies the
 //! browser's; tests supply fakes.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -65,15 +65,7 @@ pub enum MapEvent {
     /// The map was pressed at `at` (longitude, latitude). `hot` is the place there (`s-7`, `j-3`), `area` the
     /// restriction whose outline holds it, `vertex` the corner of the outline being drawn there: the page decides
     /// what the press means.
-    Press {
-        at: [f64; 2],
-        #[serde(default)]
-        hot: Option<String>,
-        #[serde(default)]
-        area: Option<String>,
-        #[serde(default)]
-        vertex: Option<usize>,
-    },
+    Press { at: [f64; 2], hot: Option<String>, area: Option<String>, vertex: Option<usize> },
     /// A corner (`index`) of the selected restriction `area` is being dragged to `at`; `done` once it is let go.
     Vertex { area: String, index: usize, at: [f64; 2], done: bool },
     /// The pointer is over a place, or is no longer.
@@ -356,7 +348,7 @@ pub enum MapCall {
 pub struct FakeMapper {
     calls: RefCell<Vec<MapCall>>,
     listener: RefCell<Option<Box<dyn Fn(MapEvent)>>>,
-    centre: std::cell::Cell<[f64; 2]>,
+    centre: Cell<[f64; 2]>,
 }
 
 impl FakeMapper {
