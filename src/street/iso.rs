@@ -121,25 +121,25 @@ fn points(p: &Projection, corners: &[(f64, f64, f64)]) -> String {
         .join(" ")
 }
 
-/// Which face of a strip a polygon is.
+/// Which face of a strip a polygon is, with the kind whose tint a piece's face takes.
 #[derive(Clone, Copy)]
-enum Face {
-    Top,
-    Front,
-    Side,
+enum Face<'a> {
+    Top(&'a str),
+    Front(&'a str),
+    Side(&'a str),
     Curb,
 }
 
-/// One face: a polygon in the piece's tint, then the hatch `hatch` over it.
-fn face(out: &mut String, what: Face, kind_id: &str, hatch: &str, pts: &str) {
-    match what {
-        Face::Top => write!(out, "<polygon class=\"iso-top k-{kind_id}\" points=\"{pts}\"/>"),
-        Face::Front => write!(out, "<polygon class=\"iso-front k-{kind_id}\" points=\"{pts}\"/>"),
-        Face::Side => write!(out, "<polygon class=\"iso-side k-{kind_id}\" points=\"{pts}\"/>"),
-        Face::Curb => write!(out, "<polygon class=\"iso-curb\" points=\"{pts}\"/>"),
-    }
-    .unwrap();
-    write!(out, "<polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#{hatch})\"/>").unwrap();
+/// One face: a polygon in its tint, then the hatch `hatch` over it.
+fn face(out: &mut String, what: Face, hatch: &str, pts: &str) {
+    let (name, kind) = match what {
+        Face::Top(k) => ("top", Some(k)),
+        Face::Front(k) => ("front", Some(k)),
+        Face::Side(k) => ("side", Some(k)),
+        Face::Curb => ("curb", None),
+    };
+    let tint = kind.map(|k| format!(" k-{k}")).unwrap_or_default();
+    write!(out, "<polygon class=\"iso-{name}{tint}\" points=\"{pts}\"/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#{hatch})\"/>").unwrap();
 }
 
 /// How high the piece after `i` stands, or the ground when `i` is the last.
@@ -156,13 +156,13 @@ fn slab(out: &mut String, p: &Projection, v: &View, i: usize) {
     let (x0, x1, h, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, height_mm(id) as f64, STRETCH_MM);
     let hatch = format!("h-{id}");
     if h > 0.0 {
-        face(out, Face::Front, id, &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, h, 0.0), (x0, h, 0.0)]));
+        face(out, Face::Front(id), &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, h, 0.0), (x0, h, 0.0)]));
         let low = beside(v, i);
         if low < h {
-            face(out, Face::Side, id, &hatch, &points(p, &[(x1, low, 0.0), (x1, low, l), (x1, h, l), (x1, h, 0.0)]));
+            face(out, Face::Side(id), &hatch, &points(p, &[(x1, low, 0.0), (x1, low, l), (x1, h, l), (x1, h, 0.0)]));
         }
     }
-    face(out, Face::Top, id, &hatch, &points(p, &[(x0, h, 0.0), (x1, h, 0.0), (x1, h, l), (x0, h, l)]));
+    face(out, Face::Top(id), &hatch, &points(p, &[(x0, h, 0.0), (x1, h, 0.0), (x1, h, l), (x0, h, l)]));
 }
 
 /// The curb of the piece at `i` along one edge (`right`). As high as the piece, it is a stripe on its
@@ -178,11 +178,11 @@ fn curb(out: &mut String, p: &Projection, v: &View, i: usize, right: bool) {
     let (x0, x1) = if right { (edge - cw, edge) } else { (s.x_mm as f64, s.x_mm as f64 + cw) };
     let hatch = format!("c-{c}");
     if top > h {
-        face(out, Face::Curb, id, &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, top, 0.0), (x0, top, 0.0)]));
+        face(out, Face::Curb, &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, top, 0.0), (x0, top, 0.0)]));
         let low = if right { beside(v, i) } else { h };
-        face(out, Face::Curb, id, &hatch, &points(p, &[(x1, low, 0.0), (x1, low, l), (x1, top, l), (x1, top, 0.0)]));
+        face(out, Face::Curb, &hatch, &points(p, &[(x1, low, 0.0), (x1, low, l), (x1, top, l), (x1, top, 0.0)]));
     }
-    face(out, Face::Curb, id, &hatch, &points(p, &[(x0, top, 0.0), (x1, top, 0.0), (x1, top, l), (x0, top, l)]));
+    face(out, Face::Curb, &hatch, &points(p, &[(x0, top, 0.0), (x1, top, 0.0), (x1, top, l), (x0, top, l)]));
 }
 
 /// The street in 2.5D, drawn `width` wide: a stretch of `STRETCH_MM` seen obliquely, from the same
