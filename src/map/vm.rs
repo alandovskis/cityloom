@@ -515,6 +515,14 @@ impl MapVm {
             .collect()
     }
 
+    /// How many streets break the rule of an area they are inside (a speed limit never does).
+    fn streets_in_conflict(&self) -> usize {
+        let mut uids: Vec<u32> = self.findings().iter().filter(|f| !f.conflicts.is_empty()).map(|f| f.uid).collect();
+        uids.sort_unstable();
+        uids.dedup();
+        uids.len()
+    }
+
     pub fn checks_lead(&self) -> String {
         if self.has_no_places() {
             return self.word("map-checks-no-places");
@@ -522,7 +530,10 @@ impl MapVm {
         let v = self.view();
         let all = self.places_for_notes(&v);
         let failing = all.iter().filter(|p| !p.2).count();
-        if failing > 0 {
+        let streets = self.streets_in_conflict();
+        if failing == 0 && streets > 0 {
+            self.i18n.tr("map-checks-conflicts", &Args::new().num("streets", streets as i64))
+        } else if failing > 0 {
             self.i18n.tr("map-checks-failing", &Args::new().num("n", failing as i64))
         } else {
             self.i18n.tr("map-checks-pass", &Args::new().num("n", all.len() as i64))
@@ -564,6 +575,10 @@ impl MapVm {
         }
         let v = self.view();
         let bad: Vec<String> = self.places_for_notes(&v).into_iter().filter(|p| !p.2).map(|p| self.say(&p.1)).collect();
+        let streets = self.streets_in_conflict();
+        if bad.is_empty() && streets > 0 {
+            return Status { text: self.i18n.tr("map-status-conflicts", &Args::new().num("n", v.places as i64).num("streets", streets as i64)), bad: true };
+        }
         if bad.is_empty() {
             return Status { text: self.i18n.tr("map-status-ok", &Args::new().num("n", v.places as i64)), bad: false };
         }
@@ -1637,5 +1652,30 @@ mod tests {
         assert_eq!(vm.area_streets("r1").len(), 1);
         assert_eq!(vm.editors_read.get(), 1);
         assert!(vm.area_streets("r9").is_empty(), "no such area");
+    }
+
+    #[test]
+    fn a_street_in_conflict_with_an_area_rule_is_not_a_city_where_every_check_passes() {
+        let (vm, ..) = car_free_bendville();
+        let owner = Owner::new();
+        owner.set();
+        let before = vm.status();
+        assert!(!vm.findings().is_empty() && vm.findings().iter().any(|f| !f.conflicts.is_empty()));
+        assert_eq!(before, Status { text: "1 place. One street conflicts with an area rule.".to_string(), bad: true });
+        assert_eq!(vm.checks_lead(), "One street conflicts with an area rule. The Area rules tab lists it.");
+        assert!(vm.failing_items().is_empty(), "the design checks are what that list is of");
+        vm.i18n().set(Locale::FrCa);
+        assert_eq!(vm.status().text, "1 lieu. Une rue est en conflit avec une règle de zone.");
+        assert_eq!(vm.checks_lead(), "Une rue est en conflit avec une règle de zone. L’onglet Règles de zone la liste.");
+    }
+
+    #[test]
+    fn a_speed_limit_area_leaves_the_status_and_the_lead_as_they_were() {
+        let (vm, ..) = car_free_bendville();
+        let owner = Owner::new();
+        owner.set();
+        assert!(vm.areas().set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
+        assert_eq!(vm.status(), Status { text: "1 place. Every check passes.".to_string(), bad: false });
+        assert_eq!(vm.checks_lead(), "Every check passes in the one place.");
     }
 }

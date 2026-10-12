@@ -88,6 +88,13 @@ map-checks-pass = { $n ->
     [one] Every check passes in the one place.
    *[other] Every check passes in all { $n } places.
 }
+map-checks-conflicts = { $streets ->
+    [one] One street conflicts
+   *[other] { $streets } streets conflict
+} with an area rule. The Area rules tab lists { $streets ->
+    [one] it
+   *[other] them
+}.
 map-changes-no-places = There are no places to change.
 map-changes-some = { $n ->
     [one] { $n } place
@@ -105,6 +112,13 @@ map-status-ok = { $n ->
     [one] { $n } place. Every check passes.
    *[other] { $n } places. Every check passes.
 }
+map-status-conflicts = { $n ->
+    [one] { $n } place.
+   *[other] { $n } places.
+} { $streets ->
+    [one] One street conflicts
+   *[other] { $streets } streets conflict
+} with an area rule.
 map-status-bad = { $n ->
     [one] { $n } place needs
    *[other] { $n } places need
