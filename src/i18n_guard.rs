@@ -25,6 +25,7 @@ const LEFT_OUT: &[(&str, &str)] = &[
 
 const MIGRATED: &[(&str, &str)] = &[
     // Files are added here as their task completes.
+    ("src/restriction/draw.rs", include_str!("restriction/draw.rs")),
     ("src/restriction/mod.rs", include_str!("restriction/mod.rs")),
     ("src/restriction/model.rs", include_str!("restriction/model.rs")),
     ("src/street/text.rs", include_str!("street/text.rs")),
