@@ -774,7 +774,7 @@ mod tests {
         assert!(iso_svg(&e.view(), &i18n, 1050.0).markup.contains("<title>Sidewalk</title>"));
         i18n.set(Locale::FrCa);
         let fr = iso_svg(&e.view(), &i18n, 1050.0).markup;
-        assert!(fr.contains("<title>Trottoir</title>") && !fr.contains(">Sidewalk<"), "{fr}");
+        assert!(fr.contains("<title>Trottoir</title>") && !fr.contains(">Sidewalk<"), "the French drawing names the sidewalk in French");
     }
 
     #[test]
@@ -814,7 +814,7 @@ mod tests {
             points(&p, &[(cx - 125.0, top, 3_875.0), (cx + 125.0, top, 3_875.0), (cx + 125.0, top + 2_000.0, 3_875.0), (cx - 125.0, top + 2_000.0, 3_875.0)]);
         assert!(
             m.contains(&format!("<g class=\"iso-solid s-trunk\"><polygon class=\"o-front\" points=\"{trunk_front}\" filter=\"url(#iso-shade-front)\"/>")),
-            "{m}"
+            "the drawing has not got it"
         );
         let half = strip.width_mm as f64 * 0.9 / 2.0;
         let crown_top = points(
@@ -826,7 +826,7 @@ mod tests {
                 (cx - half, top + 5_000.0, 5_200.0),
             ],
         );
-        assert!(m.contains(&format!("<polygon class=\"o-top\" points=\"{crown_top}\"/>")), "{m}");
+        assert!(m.contains(&format!("<polygon class=\"o-top\" points=\"{crown_top}\"/>")), "the drawing has not got it");
     }
 
     #[test]
@@ -879,7 +879,7 @@ mod tests {
         }
         let m = drawn(&Editor::new(0));
         let (len, head) = arrow_shape(3_300.0);
-        assert!(m.contains(&format!("<g transform=\"scale({} 1)\">", head / (0.64 * len))), "{m}");
+        assert!(m.contains(&format!("<g transform=\"scale({} 1)\">", head / (0.64 * len))), "the drawing has not got it");
     }
 
     /// The convex hull of points on the drawing, counter-clockwise (monotone chain).
@@ -922,7 +922,7 @@ mod tests {
         let m = iso_svg(&v, &en(), 1050.0).markup;
         let lane = v.segments.iter().find(|s| s.direction.is_some()).unwrap();
         let (e, f) = p.at(lane.x_mm as f64 + lane.width_mm as f64 / 2.0, 0.0, ARROW_AT_MM);
-        assert!(m.contains(&format!(" {} {})\"><g transform=\"scale(", r(e), r(f))), "{m}");
+        assert!(m.contains(&format!(" {} {})\"><g transform=\"scale(", r(e), r(f))), "the drawing has not got it");
         // On every street with trees, at every width that draws them, no trunk or crown covers any part of the ground
         // an arrow is laid on (its length along by its head across).
         for e in [Editor::new(1), furnished()] {
@@ -940,13 +940,13 @@ mod tests {
                     })
                     .collect();
                 assert!(!trees.is_empty(), "{width}");
-                for s in v.segments.iter().filter(|s| s.direction.is_some() && s.width_mm as f64 * p.scale >= MIN_SOLID_PX) {
+                for (i, s) in v.segments.iter().enumerate().filter(|(_, s)| s.direction.is_some() && s.width_mm as f64 * p.scale >= MIN_SOLID_PX) {
                     let (len, head) = arrow_shape(s.width_mm as f64);
                     let (cx, h) = (s.x_mm as f64 + s.width_mm as f64 / 2.0, drawn_mm(height_mm(KINDS[s.kind].id)));
                     let (z0, z1) = (ARROW_AT_MM - len / 2.0, ARROW_AT_MM + len / 2.0);
                     let ground =
                         [(cx - head / 2.0, h, z0), (cx + head / 2.0, h, z0), (cx + head / 2.0, h, z1), (cx - head / 2.0, h, z1)].map(|(x, y, z)| p.at(x, y, z));
-                    assert!(trees.iter().all(|t| apart(t, &ground)), "{width}: the arrow of {} is hidden", s.uid);
+                    assert!(trees.iter().all(|t| apart(t, &ground)), "{width}: the arrow of piece {i} is hidden");
                 }
             }
         }
@@ -970,15 +970,15 @@ mod tests {
         let v = e.view();
         let m = iso_svg(&v, &en(), 1050.0).markup;
         assert_eq!(count(&m, "class=\"iso-dir\""), 4);
-        for uid in [middle, kerbside] {
+        for (lane, uid) in [("middle", middle), ("kerbside", kerbside)] {
             let open = format!("<g class=\"iso-piece\" data-uid=\"{uid}\">");
             let slab = m.find(&open).expect("the slab is drawn");
             // The arrow follows the lane's own strip straight away...
             let after = slab + m[slab..].find("</g>").unwrap() + 4;
-            assert!(m[after..].starts_with("<g class=\"iso-dir\""), "{uid}: {}", &m[after..after + 60]);
+            assert!(m[after..].starts_with("<g class=\"iso-dir\""), "the {lane} lane's arrow does not follow its strip");
             // ...and comes before the lane's curb blocks.
             let curbs: Vec<usize> = m.match_indices(&open).skip(1).map(|(at, _)| at).collect();
-            assert!(!curbs.is_empty() && curbs.iter().all(|c| *c > after), "{uid}");
+            assert!(!curbs.is_empty() && curbs.iter().all(|c| *c > after), "the {lane} lane's curbs come before its arrow");
         }
         // The kerbside lane's right neighbour, the raised sidewalk, is drawn over its arrow.
         let pos = v.segments.iter().position(|s| s.uid == kerbside).unwrap();
@@ -1036,7 +1036,7 @@ mod tests {
         assert_eq!(count(&m, "class=\"dir\""), one_way);
         // Laid on the plane: across at full scale, along receding up and to the right.
         let p = Projection::fit(1050.0, 18_000);
-        assert!(m.contains(&format!("transform=\"matrix({} 0 {} {} ", p.scale, -RECEDE_X * p.scale, RECEDE_Y * p.scale)), "{m}");
+        assert!(m.contains(&format!("transform=\"matrix({} 0 {} {} ", p.scale, -RECEDE_X * p.scale, RECEDE_Y * p.scale)), "the drawing has not got it");
     }
 
     #[test]
@@ -1050,7 +1050,7 @@ mod tests {
         // The outline starts at the selected piece's near left corner on the ground.
         let p = Projection::fit(1050.0, 18_000);
         let (x, y) = p.at(x_mm as f64, 0.0, 0.0);
-        assert!(m.contains(&format!("<polygon class=\"iso-sel\" points=\"{},{} ", r(x), r(y))), "{m}");
+        assert!(m.contains(&format!("<polygon class=\"iso-sel\" points=\"{},{} ", r(x), r(y))), "the drawing has not got it");
         // Drawn last, over everything.
         assert!(m.rfind("class=\"iso-sel\"").unwrap() > m.rfind("class=\"iso-piece\"").unwrap());
     }
@@ -1066,7 +1066,7 @@ mod tests {
         }
         e.select(Some(e.view().segments[0].uid));
         let m = drawn(&e);
-        assert!(!m.contains("NaN") && !m.contains("inf") && count(&m, "class=\"iso-sel\"") == 1, "{m}");
+        assert!(!m.contains("NaN") && !m.contains("inf") && count(&m, "class=\"iso-sel\"") == 1, "the drawing has not got it");
     }
 
     #[test]
@@ -1105,10 +1105,10 @@ mod tests {
         // CSS `filter: brightness()` on SVG shapes may not be applied in Safari; an SVG filter is SVG 1.1.
         let m = drawn(&furnished());
         for (id, slope) in [("iso-shade-front", "0.9"), ("iso-shade-side", "0.78")] {
-            let at = m.find(&format!("<filter id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {m}"));
+            let at = m.find(&format!("<filter id=\"{id}\"")).unwrap_or_else(|| panic!("the drawing has no {id} filter"));
             let f = &m[at..at + m[at..].find("</filter>").unwrap()];
-            assert!(f.contains("color-interpolation-filters=\"sRGB\""), "{f}");
-            assert_eq!(count(f, &format!("type=\"linear\" slope=\"{slope}\"")), 3, "{f}");
+            assert!(f.contains("color-interpolation-filters=\"sRGB\""), "the {id} filter");
+            assert_eq!(count(f, &format!("type=\"linear\" slope=\"{slope}\"")), 3, "the {id} filter");
         }
         assert!(m.find("<defs>").unwrap() < m.find("class=\"iso-ground\"").unwrap());
         let front = count(&m, "class=\"iso-front ") + count(&m, "data-face=\"front\"") + count(&m, "class=\"o-front\"");
