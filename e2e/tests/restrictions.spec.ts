@@ -262,7 +262,7 @@ test.describe("area restrictions", () => {
       / places\. (One street conflicts|\d+ streets conflict) with an area rule\.$/,
     );
     await expect(page.locator("#checks-lead")).toHaveText(
-      /^(One street conflicts|\d+ streets conflict) with an area rule\. The Area rules tab lists (it|them)\.$/,
+      /^(One street conflicts|\d+ streets conflict) with an area rule\. The Area rules panel lists (it|them)\.$/,
     );
     await expect(page.locator("#plan-key")).toContainText("Conflicts with an area rule");
     // the saved area is selected: its streets are listed under it, the one that breaks the rule marked

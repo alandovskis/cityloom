@@ -91,7 +91,7 @@ map-checks-pass = { $n ->
 map-checks-conflicts = { $streets ->
     [one] One street conflicts
    *[other] { $streets } streets conflict
-} with an area rule. The Area rules tab lists { $streets ->
+} with an area rule. The Area rules panel lists { $streets ->
     [one] it
    *[other] them
 }.

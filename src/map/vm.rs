@@ -213,7 +213,7 @@ pub struct MapVm {
     active: ArcRwSignal<Option<usize>>,
     /// The places worded for the search, until the city, the language or the units change.
     worded: RefCell<Option<Worded>>,
-    /// The area restrictions: the Restrictions tab, and what the map shows of them.
+    /// The area restrictions: the Area rules panel, and what the map shows of them.
     areas: Rc<AreasVm>,
     /// In the tests: how many streets were read to check them against an area's rule.
     #[cfg(test)]
@@ -740,7 +740,7 @@ impl MapVm {
 
     // ---- area restrictions ----
 
-    /// The Restrictions tab's view-model.
+    /// The Area rules panel's view-model.
     pub fn areas(&self) -> &Rc<AreasVm> {
         &self.areas
     }
@@ -1660,11 +1660,11 @@ mod tests {
         let before = vm.status();
         assert!(!vm.findings().is_empty() && vm.findings().iter().any(|f| !f.conflicts.is_empty()));
         assert_eq!(before, Status { text: "1 place. One street conflicts with an area rule.".to_string(), bad: true });
-        assert_eq!(vm.checks_lead(), "One street conflicts with an area rule. The Area rules tab lists it.");
+        assert_eq!(vm.checks_lead(), "One street conflicts with an area rule. The Area rules panel lists it.");
         assert!(vm.failing_items().is_empty(), "the design checks are what that list is of");
         vm.i18n().set(Locale::FrCa);
         assert_eq!(vm.status().text, "1 lieu. Une rue est en conflit avec une règle de zone.");
-        assert_eq!(vm.checks_lead(), "Une rue est en conflit avec une règle de zone. L’onglet Règles de zone la liste.");
+        assert_eq!(vm.checks_lead(), "Une rue est en conflit avec une règle de zone. Le panneau Règles de zone la liste.");
     }
 
     #[test]

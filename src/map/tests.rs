@@ -492,7 +492,7 @@ fn map_html_has_one_h1_the_city_map() {
     assert!(html.contains(r#"<h1 id="h-drawing" class="sr-only" data-i18n="map-city-map">City map</h1>"#));
 }
 
-// ---- the Restrictions tab ------------------------------------------------------------------
+// ---- the Area rules panel ------------------------------------------------------------------
 
 use crate::map::areas_view::Areas;
 use crate::restriction::fixtures::{bent_midpoint, bent_store, square};
@@ -703,11 +703,9 @@ fn a_name_that_looks_like_markup_is_shown_as_text() {
 }
 
 #[test]
-fn the_tab_is_opened_through_the_shell_s_own_controls_only_where_it_is_not_shown() {
+fn the_panel_is_opened_through_the_shell_s_own_toggle_only_where_it_is_closed() {
     use crate::map::areas_view::reveal_clicks;
-    assert_eq!(reveal_clicks(Some("true"), Some("true")), Vec::<&str>::new());
-    assert_eq!(reveal_clicks(Some("true"), Some("false")), ["t-areas"]);
-    assert_eq!(reveal_clicks(Some("false"), Some("true")), ["notes-toggle"]);
-    assert_eq!(reveal_clicks(Some("false"), Some("false")), ["notes-toggle", "t-areas"]);
-    assert_eq!(reveal_clicks(None, None), ["t-areas"], "no toggle on the page: only the tab");
+    assert_eq!(reveal_clicks(Some("true")), Vec::<&str>::new());
+    assert_eq!(reveal_clicks(Some("false")), ["inspector-toggle"]);
+    assert_eq!(reveal_clicks(None), Vec::<&str>::new(), "no toggle on the page: nothing to press");
 }

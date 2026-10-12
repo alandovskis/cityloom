@@ -91,7 +91,7 @@ map-checks-pass = { $n ->
 map-checks-conflicts = { $streets ->
     [one] Une rue est
    *[other] { $streets } rues sont
-} en conflit avec une règle de zone. L’onglet Règles de zone { $streets ->
+} en conflit avec une règle de zone. Le panneau Règles de zone { $streets ->
     [one] la
    *[other] les
 } liste.
