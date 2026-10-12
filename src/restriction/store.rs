@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::restriction::model::{LonLat, Restriction, Rule, number_of};
 use crate::shared::ports::Storage;
@@ -16,21 +16,40 @@ pub const RESTRICTIONS_KEY: &str = "cityloom-restrictions";
 /// Where a document that could not be read is copied before the first write replaces it.
 pub const DAMAGED_KEY: &str = "cityloom-restrictions-damaged";
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+/// The document. A record this build cannot read (one a newer build wrote under the same version) is held as it
+/// was, written back unchanged and never listed.
+#[derive(Clone, Debug, PartialEq)]
 pub struct Restrictions {
     pub version: u32,
+    /// The number the next restriction takes at least: it only rises, so an id that was deleted is not issued again.
+    pub next_id: u32,
     /// By id, `r<n>`.
     pub restrictions: BTreeMap<String, Restriction>,
+    /// What could not be read, by id.
+    unreadable: BTreeMap<String, Value>,
+}
+
+impl Default for Restrictions {
+    fn default() -> Self {
+        Restrictions::new()
+    }
 }
 
 impl Restrictions {
     /// An empty document of the current version.
     pub fn new() -> Self {
-        Restrictions { version: VERSION, restrictions: BTreeMap::new() }
+        Restrictions { version: VERSION, next_id: 1, restrictions: BTreeMap::new(), unreadable: BTreeMap::new() }
     }
 
     pub fn to_json(&self) -> String {
-        serde_json::to_string(self).expect("the restrictions serialise")
+        let mut records = serde_json::Map::new();
+        for (id, r) in &self.restrictions {
+            records.insert(id.clone(), serde_json::to_value(r).expect("a restriction serialises"));
+        }
+        for (id, raw) in &self.unreadable {
+            records.insert(id.clone(), raw.clone());
+        }
+        serde_json::json!({ "version": self.version, "next_id": self.next_id, "restrictions": records }).to_string()
     }
 
     /// Every restriction with its id, in the order of their numbers (an id of another shape last).
@@ -40,9 +59,22 @@ impl Restrictions {
         all
     }
 
-    /// The id the next restriction takes: one more than the largest number in the document.
+    fn holds(&self, id: &str) -> bool {
+        self.restrictions.contains_key(id) || self.unreadable.contains_key(id)
+    }
+
+    /// The id the next restriction takes: the number after the largest ever issued or kept.
     pub fn next_id(&self) -> String {
-        format!("r{}", self.restrictions.keys().filter_map(|id| number_of(id)).max().unwrap_or(0) + 1)
+        let kept = self.restrictions.keys().chain(self.unreadable.keys()).filter_map(|id| number_of(id)).max().unwrap_or(0);
+        format!("r{}", self.next_id.max(kept + 1))
+    }
+
+    /// Keeps `r` under its id, and never issues that number or a lower one again.
+    fn insert(&mut self, r: Restriction) {
+        if let Some(n) = number_of(&r.id) {
+            self.next_id = self.next_id.max(n + 1);
+        }
+        self.restrictions.insert(r.id.clone(), r);
     }
 }
 
@@ -60,19 +92,32 @@ pub enum Document {
 
 pub fn parse(stored: Option<&str>) -> Document {
     let Some(raw) = stored.filter(|s| !s.trim().is_empty()) else { return Document::Empty };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) else { return Document::Damaged(raw.to_string()) };
+    let damaged = || Document::Damaged(raw.to_string());
+    let Ok(value) = serde_json::from_str::<Value>(raw) else { return damaged() };
     if value["version"].as_u64().is_some_and(|v| v > u64::from(VERSION)) {
         return Document::Future;
     }
-    match serde_json::from_value::<Restrictions>(value) {
-        Ok(mut doc) if doc.version == VERSION => {
-            for (id, r) in &mut doc.restrictions {
-                r.id = id.clone();
-            }
-            Document::Current(doc)
-        }
-        _ => Document::Damaged(raw.to_string()),
+    if value["version"].as_u64() != Some(u64::from(VERSION)) {
+        return damaged();
     }
+    let Some(records) = value["restrictions"].as_object() else { return damaged() };
+    let mut doc = Restrictions::new();
+    doc.next_id = value["next_id"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or(1);
+    for (id, record) in records {
+        match serde_json::from_value::<Restriction>(record.clone()) {
+            Ok(r) => {
+                doc.restrictions.insert(id.clone(), Restriction { id: id.clone(), ..r });
+            }
+            Err(_) => {
+                doc.unreadable.insert(id.clone(), record.clone());
+            }
+        }
+    }
+    Document::Current(doc)
+}
+
+fn finite(ring: &[LonLat]) -> bool {
+    ring.iter().flatten().all(|c| c.is_finite())
 }
 
 /// The restrictions kept in this browser.
@@ -111,7 +156,8 @@ impl RestrictionStore {
             Document::Empty => Restrictions::new(),
             Document::Current(doc) => doc,
             Document::Damaged(raw) => {
-                if !self.storage.remember(DAMAGED_KEY, &raw) {
+                // The first copy may hold what can be recovered: a later one does not replace it.
+                if self.storage.recall(DAMAGED_KEY).is_none() && !self.storage.remember(DAMAGED_KEY, &raw) {
                     return None;
                 }
                 Restrictions::new()
@@ -123,16 +169,24 @@ impl RestrictionStore {
 
     /// Keeps a new restriction under the next id, and gives it back with that id.
     pub fn add(&self, name: &str, rule: Rule, ring: Vec<LonLat>) -> Option<Restriction> {
+        if !finite(&ring) {
+            return None;
+        }
         self.write(|doc| {
             let r = Restriction { id: doc.next_id(), name: name.to_string(), rule, ring };
-            doc.restrictions.insert(r.id.clone(), r.clone());
+            doc.insert(r.clone());
             Some(r)
         })
     }
 
     /// Changes the restriction `id` as it is kept now. False when it is no longer kept, or was not kept again.
     pub fn update(&self, id: &str, change: impl FnOnce(&mut Restriction)) -> bool {
-        self.write(|doc| doc.restrictions.get_mut(id).map(change)).is_some()
+        self.write(|doc| {
+            let r = doc.restrictions.get_mut(id)?;
+            change(r);
+            finite(&r.ring).then_some(())
+        })
+        .is_some()
     }
 
     pub fn remove(&self, id: &str) -> bool {
@@ -142,10 +196,13 @@ impl RestrictionStore {
     /// Keeps a deleted restriction again: under its own id if that is free, else under the next. Gives it back with
     /// the id it has now.
     pub fn restore(&self, r: &Restriction) -> Option<Restriction> {
+        if !finite(&r.ring) {
+            return None;
+        }
         self.write(|doc| {
-            let id = if doc.restrictions.contains_key(&r.id) { doc.next_id() } else { r.id.clone() };
-            let back = Restriction { id: id.clone(), ..r.clone() };
-            doc.restrictions.insert(id, back.clone());
+            let id = if doc.holds(&r.id) { doc.next_id() } else { r.id.clone() };
+            let back = Restriction { id, ..r.clone() };
+            doc.insert(back.clone());
             Some(back)
         })
     }
@@ -236,10 +293,97 @@ mod tests {
         let b = s.add("B", Rule::CarFree, RING.to_vec()).unwrap();
         assert!(s.remove("r2"));
         assert_eq!(s.restore(&b).unwrap().id, "r2", "free again");
-        assert!(s.remove("r2"));
-        s.add("C", Rule::CarFree, RING.to_vec()).unwrap(); // takes r2
-        assert_eq!(s.restore(&b).unwrap().id, "r3");
+        assert_eq!(s.restore(&b).unwrap().id, "r3", "taken now");
         assert_eq!(names(&s).len(), 3);
+    }
+
+    #[test]
+    fn a_removed_id_is_not_issued_again_so_a_stale_tab_cannot_hit_another_record() {
+        let (ports, ..) = test_ports();
+        let (a, b) = (RestrictionStore::new(ports.storage.clone()), RestrictionStore::new(ports.storage));
+        for n in 1..=5 {
+            a.add(&format!("n{n}"), Rule::CarFree, RING.to_vec()).unwrap();
+        }
+        assert!(b.remove("r5"));
+        assert_eq!(b.add("new", Rule::CarFree, RING.to_vec()).unwrap().id, "r6");
+        assert!(!a.update("r5", |r| r.name = "stale".into()));
+        assert!(!a.remove("r5"));
+        assert_eq!(names(&a).last().unwrap(), &("r6".to_string(), "new".to_string()));
+    }
+
+    #[test]
+    fn a_record_that_cannot_be_read_is_left_out_but_kept_unchanged() {
+        let (s, storage) = store();
+        let odd = r#"{"name":"later","ring":[[1.0,2.0]],"rule":{"kind":"school_street"}}"#;
+        storage.remember(
+            RESTRICTIONS_KEY,
+            &format!(r#"{{"version":1,"restrictions":{{"r1":{odd},"r2":{{"name":"G","rule":{{"kind":"car_free"}},"ring":[[-73.6,45.5]]}}}}}}"#),
+        );
+        assert_eq!(names(&s), [("r2".to_string(), "G".to_string())]);
+        assert!(!s.is_future());
+        let kept = |storage: &MemoryStorage| storage.recall(RESTRICTIONS_KEY).unwrap();
+        assert_eq!(s.add("N", Rule::CarFree, RING.to_vec()).unwrap().id, "r3");
+        assert!(kept(&storage).contains(odd));
+        assert!(s.update("r2", |r| r.name = "G2".into()));
+        assert!(kept(&storage).contains(odd));
+        assert!(s.remove("r3"));
+        assert!(kept(&storage).contains(odd));
+        assert_eq!(names(&s), [("r2".to_string(), "G2".to_string())]);
+        assert_eq!(storage.recall(DAMAGED_KEY), None, "nothing was damaged");
+        assert!(s.restore(&Restriction { id: "r1".into(), name: "x".into(), rule: Rule::CarFree, ring: RING.to_vec() }).unwrap().id != "r1");
+        assert!(kept(&storage).contains(odd), "an unreadable record's id is taken");
+    }
+
+    #[test]
+    fn a_second_damage_keeps_the_first_backup() {
+        let (s, storage) = store();
+        storage.remember(RESTRICTIONS_KEY, "{first");
+        s.add("A", Rule::CarFree, RING.to_vec()).unwrap();
+        storage.remember(RESTRICTIONS_KEY, "{second");
+        s.add("B", Rule::CarFree, RING.to_vec()).unwrap();
+        assert_eq!(storage.recall(DAMAGED_KEY).as_deref(), Some("{first"));
+        assert_eq!(names(&s).len(), 1);
+    }
+
+    struct NoBackup(Rc<MemoryStorage>);
+    impl Storage for NoBackup {
+        fn recall(&self, key: &str) -> Option<String> {
+            self.0.recall(key)
+        }
+        fn remember(&self, key: &str, value: &str) -> bool {
+            key != DAMAGED_KEY && self.0.remember(key, value)
+        }
+    }
+
+    #[test]
+    fn a_damaged_document_that_cannot_be_backed_up_is_not_replaced() {
+        let (_, _, storage) = test_ports();
+        let s = RestrictionStore::new(Rc::new(NoBackup(storage.clone())));
+        storage.remember(RESTRICTIONS_KEY, "{not json");
+        assert_eq!(s.add("A", Rule::CarFree, RING.to_vec()), None);
+        assert_eq!(storage.recall(RESTRICTIONS_KEY).as_deref(), Some("{not json"));
+    }
+
+    #[test]
+    fn a_vertex_that_is_not_finite_is_not_kept() {
+        let (s, _) = store();
+        let bad = vec![[f64::NAN, 1.0], [2.0, 3.0], [4.0, f64::INFINITY]];
+        assert_eq!(s.add("A", Rule::CarFree, bad.clone()), None);
+        let a = s.add("A", Rule::CarFree, RING.to_vec()).unwrap();
+        assert!(!s.update("r1", |r| r.ring = bad.clone()));
+        assert_eq!(s.restore(&Restriction { id: "r9".into(), ring: bad, ..a.clone() }), None);
+        assert_eq!(s.all(), [a]);
+    }
+
+    #[test]
+    fn a_newer_document_is_kept_byte_for_byte_after_a_change_that_is_refused() {
+        let (s, storage) = store();
+        let newer = r#"{"version":2,"restrictions":{"r1":{"x":1}}}"#;
+        storage.remember(RESTRICTIONS_KEY, newer);
+        assert!(!s.update("r1", |r| r.name = "x".into()));
+        assert!(!s.remove("r1"));
+        assert_eq!(s.restore(&Restriction { id: "r7".into(), name: String::new(), rule: Rule::CarFree, ring: RING.to_vec() }), None);
+        assert_eq!(storage.recall(RESTRICTIONS_KEY).as_deref(), Some(newer));
     }
 
     #[test]
