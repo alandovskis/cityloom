@@ -1045,12 +1045,8 @@ mod tests {
         e
     }
 
-    /// Not a check: writes `target/iso-preview-light.html` and `target/iso-preview-dark.html`, the 2.5D of
-    /// every sample street and of `furnished()` at three widths with the page's styles and hatches, to look at
-    /// in a browser. `cargo test street::iso::tests::preview -- --ignored`.
     #[test]
     fn the_2_5d_is_labelled_with_the_street_the_stretch_and_its_pieces_in_each_language() {
-        use crate::shared::units::Units;
         let v = Editor::new(0).view();
         assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, along a 40 m stretch. 6 segments.");
         assert_eq!(iso_label(&v, &en(), Units::Feet), "Sample Street 1 in 2.5D, along a 131 ft stretch. 6 segments.");
@@ -1058,6 +1054,9 @@ mod tests {
         assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m. 6 éléments.");
     }
 
+    /// Not a check: writes `target/iso-preview-light.html` and `target/iso-preview-dark.html`, the 2.5D of
+    /// every sample street and of `furnished()` at three widths with the page's styles and hatches, to look at
+    /// in a browser. `cargo test street::iso::tests::preview -- --ignored`.
     #[test]
     #[ignore]
     fn preview() {
