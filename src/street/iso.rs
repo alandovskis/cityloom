@@ -694,32 +694,30 @@ mod tests {
         assert!(m.rfind("class=\"iso-piece\"").unwrap() < m.find("class=\"iso-solid").unwrap());
     }
 
-    /// Every y of every polygon's points in the last `<g class="iso-solid s-{name}">`: the nearest, solids being
-    /// drawn from far to near.
-    fn solid_ys(markup: &str, name: &str) -> Vec<f64> {
-        let group = markup.split(&format!("<g class=\"iso-solid s-{name}\">")).last().expect("the solid is drawn");
-        let group = &group[..group.find("</g>").unwrap()];
-        group
-            .split("points=\"")
-            .skip(1)
-            .flat_map(|rest| rest.split('"').next().unwrap().split(' ').map(|pt| pt.split(',').nth(1).unwrap().parse::<f64>().unwrap()).collect::<Vec<_>>())
-            .collect()
-    }
-
     #[test]
     fn a_tree_stands_on_its_strip_s_drawn_top_at_its_own_true_height() {
-        // The nearest tree of Sample Avenue 2's first planting strip: its trunk's foot is on the strip's top, which
-        // is drawn RISE times as high as it stands; the tree keeps its own 5 m.
+        // The nearest tree of Sample Avenue 2's first (left) planting strip, 4 m along: a 250 mm trunk 2 m tall whose
+        // foot is on the strip's top, drawn RISE times as high as the strip stands, and a crown 3 m tall over it. The
+        // faces are matched whole, across as well as up, so a tree on another piece would not pass.
         let v = Editor::new(1).view();
         let strip = v.segments.iter().find(|s| s.material == "trees").unwrap();
         let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm));
         let m = iso_svg(&v, &en(), 1050.0).markup;
-        let cx = strip.x_mm as f64 + strip.width_mm as f64 / 2.0;
-        let foot = p.at(cx, drawn_mm(150), 4_000.0 - 125.0).1;
-        let trunk = solid_ys(&m, "trunk");
-        assert!((trunk.iter().cloned().fold(f64::MIN, f64::max) - r(foot)).abs() < 0.011, "{trunk:?} vs {foot}");
-        let crown_top = p.at(cx, drawn_mm(150) + 5_000.0, 4_000.0 - 1_200.0).1;
-        assert!(solid_ys(&m, "crown").iter().any(|y| (y - r(crown_top)).abs() < 0.011));
+        let (cx, top) = (strip.x_mm as f64 + strip.width_mm as f64 / 2.0, drawn_mm(150));
+        let trunk_front =
+            points(&p, &[(cx - 125.0, top, 3_875.0), (cx + 125.0, top, 3_875.0), (cx + 125.0, top + 2_000.0, 3_875.0), (cx - 125.0, top + 2_000.0, 3_875.0)]);
+        assert!(m.contains(&format!("<g class=\"iso-solid s-trunk\"><polygon class=\"o-front\" points=\"{trunk_front}\"/>")), "{m}");
+        let half = strip.width_mm as f64 * 0.9 / 2.0;
+        let crown_top = points(
+            &p,
+            &[
+                (cx - half, top + 5_000.0, 2_800.0),
+                (cx + half, top + 5_000.0, 2_800.0),
+                (cx + half, top + 5_000.0, 5_200.0),
+                (cx - half, top + 5_000.0, 5_200.0),
+            ],
+        );
+        assert!(m.contains(&format!("<polygon class=\"o-top\" points=\"{crown_top}\"/>")), "{m}");
     }
 
     #[test]
