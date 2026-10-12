@@ -27,8 +27,9 @@ pub const MAX_HEIGHT: f64 = 560.0;
 const PAD: f64 = 30.0;
 /// The narrowest the drawing is laid out for: the section's group is no narrower.
 const MIN_WIDTH: f64 = 600.0;
-/// Room above the far end of the ground for the tallest solid, a tree's crown at 5 m, standing on a
-/// planting strip drawn `RISE` times its height.
+/// Room above the far end of the ground for what stands on the pieces. The tallest is a tree, 5 m on a
+/// planting strip drawn `RISE` times its height (5.45 m); the farthest crown ends 2.8 m short of the far
+/// end, so it needs 4.61 m of this, and the rest is to spare.
 const HEADROOM_MM: f64 = 6_000.0;
 
 /// How many times higher than they stand the slabs and curbs are drawn, so that a rise reads.
