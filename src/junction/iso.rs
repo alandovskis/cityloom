@@ -230,7 +230,6 @@ impl Draw {
         }
     }
 
-    /// A stop line from `a` to `b`.
     /// A stop line from `a` to `b`: a row of dashes where traffic gives way, as the plan draws it.
     fn stop_line(&mut self, a: P, b: P, h_mm: f64, dashed: bool) {
         let (dx, dy) = (b.0 - a.0, b.1 - a.1);
