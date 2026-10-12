@@ -131,10 +131,10 @@ impl JunctionVm {
         self.mode.get_untracked()
     }
 
-    /// Draws the junction in `mode`, keeps the choice and says it. Choosing the mode it is already in says
-    /// nothing, unless nothing was kept yet.
+    /// Draws the junction in `mode`, keeps the choice and says it. Choosing the mode it is already in says nothing,
+    /// whether or not the browser kept the choice.
     pub fn set_mode(&self, mode: DrawMode) {
-        if self.mode.get_untracked() == mode && self.ports.storage.recall(VIEW_KEY).is_some() {
+        if self.mode.get_untracked() == mode {
             return;
         }
         self.mode.set(mode);
@@ -342,6 +342,14 @@ mod tests {
         r.vm.set_mode(DrawMode::Iso);
         r.vm.toggle_mode();
         assert_eq!(r.said.take(), vec!["Showing the junction in 2.5D.", "Showing the plan."]);
+    }
+
+    #[test]
+    fn choosing_the_view_already_shown_says_nothing_even_before_anything_is_kept() {
+        let r = rig(0);
+        r.vm.set_mode(DrawMode::Plan);
+        assert_eq!(r.said.take(), Vec::<String>::new());
+        assert_eq!(r.storage.recall(VIEW_KEY), None);
     }
 
     #[test]
