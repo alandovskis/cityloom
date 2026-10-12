@@ -1479,6 +1479,21 @@ mod tests {
     }
 
     #[test]
+    fn a_junction_kept_where_an_arm_street_was_cut_at_the_box_comes_back_where_the_street_is_whole() {
+        let mut cut = Layout::sample();
+        let far = cut.edges[0].a;
+        cut.nodes[far].source.clear();
+        let mut city = City::on(cut);
+        let mut state = city.junctions[&node_uid(1)].clone();
+        state.ring_extra_mm = 500;
+        assert!(city.keep_junction(node_uid(1), state));
+        let edits = edits_of(&city);
+        let arms: Vec<&ArmStreet> = edits.junctions.values().flat_map(|r| r.arm_streets.values()).collect();
+        assert!(arms.iter().any(|a| a.key.as_deref().is_some_and(|k| k.contains("~x~"))), "{arms:?}");
+        assert!(!junction_is_as_first_laid_out(&City::load(&edits)));
+    }
+
+    #[test]
     fn a_junction_arm_without_a_key_is_found_by_its_way_and_bearing_and_not_on_a_street_that_leaves_another_way() {
         let (mut edits, _) = edited_junction();
         for record in edits.junctions.values_mut() {
