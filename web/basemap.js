@@ -72,6 +72,8 @@ export async function createBasemap(container) {
       setDraft: nothing,
       centre: () => new Float64Array([0, 0]),
       fit: nothing,
+      setInsets: nothing,
+      setEditable: nothing,
       zoomBy: nothing,
       panBy: nothing,
       highlight: nothing,
@@ -96,12 +98,22 @@ export async function createBasemap(container) {
   let places = null;
   let hot = null;
   let styled = false;
+  // Which places can be edited, as the module last said; `null` until it has said, when every place is editable.
+  // Kept, and put back whenever the places are drawn again: the module says it only when the set changes, and a
+  // new style forgets feature-state.
+  let editable = null;
+  let placeIds = [];
+  const showEditable = () => {
+    if (!styled || !editable || !map.getSource("places")) return;
+    for (const id of placeIds) map.setFeatureState({ source: "places", id }, { editable: editable.has(id) });
+  };
   const showHot = () => {
     if (styled && map.getSource("places") && hot) map.setFeatureState({ source: "places", id: hot }, { hot: true });
   };
   const showPlaces = () => {
     if (!styled || !places) return;
     const data = JSON.parse(places.data);
+    placeIds = data.features.map((f) => f.properties.hot);
     const source = map.getSource("places");
     if (source) {
       source.setData(data);
@@ -110,6 +122,7 @@ export async function createBasemap(container) {
       for (const layer of JSON.parse(places.layers)) map.addLayer(layer);
     }
     showHot();
+    showEditable();
   };
   // The restrictions and the outline being drawn: kept like the places, so a new style can have them put back.
   // The restrictions go under the places, the outline over everything.
@@ -174,12 +187,26 @@ export async function createBasemap(container) {
     const feature = found.find((f) => f.layer.id === "places-junction") ?? found[0];
     return feature ? feature.properties.hot : null;
   };
+  // The part of the map the panels leave open, as the module last said what floats over it: top, right, bottom, left.
+  let insets = [0, 0, 0, 0];
+  const emitView = () => {
+    const box = map.getContainer();
+    const [w, h] = [box.clientWidth, box.clientHeight];
+    if (!w || !h) return; // a map with no size has no view to hold anything
+    let [top, right, bottom, left] = insets;
+    if (left + right >= w || top + bottom >= h) [top, right, bottom, left] = [0, 0, 0, 0]; // the panels cover it all: the whole map is open
+    const nw = map.unproject([left, top]);
+    const se = map.unproject([w - right, h - bottom]);
+    emit({ kind: "view", bounds: [nw.lng, se.lat, se.lng, nw.lat] });
+  };
+  map.on("moveend", emitView);
+  map.on("resize", emitView);
   let over = null;
   map.on("mousemove", (e) => {
     const now = hotAt(e.point);
     if (now === over) return;
     over = now;
-    map.getCanvas().style.cursor = now ? "pointer" : "";
+    map.getCanvas().style.cursor = now && (!editable || editable.has(now)) ? "pointer" : "";
     emit({ kind: "hover", hot: now });
   });
   // Leaving the map puts out only what the map itself lit: a row of the list the pointer is on now has lit its
@@ -296,6 +323,14 @@ export async function createBasemap(container) {
         ],
         { padding: { top, right, bottom, left }, duration: ms(300) },
       );
+    },
+    setInsets(next) {
+      insets = Array.from(next);
+      emitView();
+    },
+    setEditable(hot) {
+      editable = new Set(hot);
+      showEditable();
     },
     zoomBy(factor) {
       map.easeTo({ zoom: map.getZoom() + Math.log2(factor), duration: ms(200) });

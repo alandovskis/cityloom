@@ -52,6 +52,40 @@ const junctionSpot = (page: Page) =>
     throw new Error("no junction on the map the pointer can reach");
   });
 
+/** Rendered streets with a spot the pointer can reach, and whether the map says each is editable. At most one spot
+ *  per street, and only where the street is the one place under the pointer and no panel or button covers it. */
+const streetSpots = (page: Page) =>
+  page.evaluate(() => {
+    const map = (window as any).cityloomMap;
+    const r = map.getCanvas().getBoundingClientRect();
+    const seen = new Map<string, { hot: string; editable: boolean; x: number; y: number }>();
+    for (const f of map.queryRenderedFeatures({ layers: ["places-street"] })) {
+      const hot = f.properties.hot;
+      if (seen.has(hot) || f.geometry.type !== "LineString") continue;
+      for (const c of f.geometry.coordinates) {
+        const p = map.project(c);
+        const x = r.left + p.x;
+        const y = r.top + p.y;
+        if (p.x < 8 || p.y < 8 || p.x > r.width - 8 || p.y > r.height - 8) continue;
+        if (document.elementFromPoint(x, y) !== map.getCanvas()) continue;
+        const box = [
+          [p.x - 8, p.y - 8],
+          [p.x + 8, p.y + 8],
+        ];
+        const there = new Set(
+          map
+            .queryRenderedFeatures(box, { layers: ["places-junction", "places-street"] })
+            .map((g: any) => g.properties.hot),
+        );
+        if (there.size !== 1 || !there.has(hot)) continue;
+        const state = map.getFeatureState({ source: "places", id: hot });
+        seen.set(hot, { hot, editable: state.editable !== false, x, y });
+        break;
+      }
+    }
+    return [...seen.values()];
+  });
+
 test.describe("the city map", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/map.html");
@@ -294,6 +328,49 @@ test.describe("the city map", () => {
     expect(marked).toBe(true);
     await page.locator("#t-changes").click();
     await expect(page.locator("#changes")).not.toBeEmpty();
+  });
+
+  test("a place the open view does not wholly hold is muted and opens nothing, and one that it holds opens", async ({
+    page,
+  }) => {
+    // Zoomed in about the middle of the city, so that the edges of the view cut some streets and hold others.
+    await page.evaluate(() => (window as any).cityloomMap.jumpTo({ zoom: 16.8 }));
+    await mapStill(page);
+    await expect
+      .poll(async () => {
+        const spots = await streetSpots(page);
+        return [spots.some((s) => s.editable), spots.some((s) => !s.editable)];
+      })
+      .toEqual([true, true]);
+    const spots = await streetSpots(page);
+    const muted = spots.find((s) => !s.editable)!;
+    const here = page.url();
+    await page.mouse.click(muted.x, muted.y);
+    await expect(live(page)).toHaveText(
+      "Not all of this place is in view. Move the map so all of it shows, then try again.",
+    );
+    expect(page.url()).toBe(here);
+    const open = spots.find((s) => s.editable)!;
+    await page.mouse.click(open.x, open.y);
+    await expect(page).toHaveURL(/street\.html\?street=\d+/);
+  });
+
+  test("the muted places stay muted when the basemap changes style", async ({ page }) => {
+    await page.evaluate(() => (window as any).cityloomMap.jumpTo({ zoom: 16.8 }));
+    await mapStill(page);
+    await expect.poll(async () => (await streetSpots(page)).some((s) => !s.editable)).toBe(true);
+    const before = await land(page);
+    await page.emulateMedia({ colorScheme: "dark" });
+    await restyled(page, before);
+    await expect.poll(async () => (await streetSpots(page)).some((s) => !s.editable)).toBe(true);
+  });
+
+  test("on a phone, where the panels stack, the places are not all muted", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.goto("/map.html");
+    await mapReady(page);
+    await mapStill(page);
+    await expect.poll(async () => (await streetSpots(page)).some((s) => s.editable)).toBe(true);
   });
 });
 
