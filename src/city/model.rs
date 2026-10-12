@@ -597,6 +597,17 @@ impl City {
             .collect()
     }
 
+    /// The centreline of a street, in layout millimetres: its own shape, or the straight line between its ends.
+    pub fn street_shape(&self, edge: u32) -> Option<Vec<[i32; 2]>> {
+        let e = self.edge_index(edge)?;
+        Some(self.layout.shape_of(e).into_iter().map(|(x, y)| [x, y]).collect())
+    }
+
+    /// Where the layout's origin lies in the network it was made from (`CityView::origin_m`), without drawing the city.
+    pub fn origin_m(&self) -> Option<[f64; 2]> {
+        self.layout.origin_m.map(|(x, y)| [x, y])
+    }
+
     /// The street editor on one street of the city.
     pub fn street_editor(&self, edge: u32, region: usize) -> Option<Editor> {
         self.edge_index(edge)?;
@@ -1238,5 +1249,14 @@ mod tests {
         let back = City::load(&saved.to_string());
         assert!(back.view(0).nodes[1].edited, "the edited junction is kept");
         assert!(same_junction(&back.junctions[&node_uid(1)], &city.junctions[&node_uid(1)]));
+    }
+
+    #[test]
+    fn a_street_s_shape_and_where_the_layout_lies_can_be_read_without_drawing_the_city() {
+        let city = City::from_network(&crate::restriction::fixtures::bent_network(), "Bendville");
+        assert_eq!(city.street_shape(1), Some(city.view(0).edges[0].shape_mm.clone()));
+        assert_eq!(city.street_shape(99), None);
+        assert_eq!(city.origin_m(), city.view(0).origin_m);
+        assert_eq!(City::new().origin_m(), None, "the sample city lies nowhere");
     }
 }
