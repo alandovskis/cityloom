@@ -672,6 +672,16 @@ mod tests {
     }
 
     #[test]
+    fn the_popover_the_view_binds_for_share_is_the_one_the_shell_counts_as_open() {
+        let r = rig();
+        let popover = r.vm.share();
+        popover.toggle();
+        assert!(r.vm.share_open(), "the shell sees what the view's own toggle opened");
+        assert!(r.vm.escape());
+        assert!(!popover.is_open_now());
+    }
+
+    #[test]
     fn the_sidebars_are_open_at_first_and_toggling_remembers_and_says() {
         let r = rig();
         assert!(r.vm.inspector_open() && r.vm.notes_open());
