@@ -38,6 +38,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/city/mod.rs", include_str!("city/mod.rs")),
     ("src/street/watch.rs", include_str!("street/watch.rs")),
     ("src/street/mod.rs", include_str!("street/mod.rs")),
+    ("src/street/iso.rs", include_str!("street/iso.rs")),
     ("src/shell/vm.rs", include_str!("shell/vm.rs")),
     ("src/shell/view.rs", include_str!("shell/view.rs")),
     ("src/shell/mod.rs", include_str!("shell/mod.rs")),

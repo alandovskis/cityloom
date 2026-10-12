@@ -2,6 +2,7 @@
 //! model, view-model, words and views live together.
 
 pub mod inspector;
+pub mod iso;
 pub mod keys;
 pub mod measures;
 pub mod model;
