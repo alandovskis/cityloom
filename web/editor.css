@@ -742,14 +742,10 @@ svg pattern circle {
   stroke-opacity: 0.55;
   stroke-linejoin: round;
 }
-#drawing .iso-side {
-  filter: brightness(0.78);
-}
 #drawing .iso-ramp {
   stroke: var(--ink-2);
   stroke-width: 0.6;
   stroke-opacity: 0.55;
-  filter: brightness(0.9);
 }
 #drawing .arm,
 #drawing .bus-g,

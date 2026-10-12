@@ -222,6 +222,12 @@ jn-col-what-changed = What changed
 
 ## The plan (src/junction/plan.rs, plan_svg.rs)
 jn-plan-editor = Junction plan editor
+# The choice over the drawing between the flat plan, which is edited, and the 2.5D picture, which is looked at.
+jn-view-group = View
+jn-view-plan = Plan
+jn-view-iso = 2.5D
+jn-view-shown-plan = Showing the plan.
+jn-view-shown-iso = Showing the junction in 2.5D.
 jn-plan-label = Plan of the junction, north up. { $arms }.
 jn-plan-label-roundabout = Plan of the junction, north up. { $arms }. Roundabout.
 jn-plan-label-raised = Plan of the junction, north up. { $arms }. Raised table.

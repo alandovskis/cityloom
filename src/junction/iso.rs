@@ -22,6 +22,11 @@ pub const LIFT: f64 = 3.0;
 /// The tallest thing drawn, for the room left above the junction.
 pub const TALLEST_MM: f64 = 3000.0;
 
+/// How tall the things that stand on the ground are.
+const SIGNAL_POST_MM: f64 = 2500.0;
+const SIGN_POST_MM: f64 = 2000.0;
+const BOLLARD_MM: f64 = 900.0;
+
 /// The steps a curve is sampled in.
 const CURVE_STEPS: usize = 12;
 
@@ -125,6 +130,15 @@ struct Solid {
     sides: bool,
 }
 
+/// The filters that darken the faces turned from the eye: a ramp a little, a side more. SVG filters, since CSS
+/// `filter: brightness()` on SVG shapes may not be applied in Safari.
+fn shades() -> String {
+    let (ramp, side) = (0.9, 0.78);
+    format!(
+        "<defs><filter id=\"iso-shade-ramp\" color-interpolation-filters=\"sRGB\"><feComponentTransfer><feFuncR type=\"linear\" slope=\"{ramp}\"/><feFuncG type=\"linear\" slope=\"{ramp}\"/><feFuncB type=\"linear\" slope=\"{ramp}\"/></feComponentTransfer></filter><filter id=\"iso-shade-side\" color-interpolation-filters=\"sRGB\"><feComponentTransfer><feFuncR type=\"linear\" slope=\"{side}\"/><feFuncG type=\"linear\" slope=\"{side}\"/><feFuncB type=\"linear\" slope=\"{side}\"/></feComponentTransfer></filter></defs>"
+    )
+}
+
 /// How far a vertex of a ramp may be from the edge it meets and still be on it.
 const RAMP_TOLERANCE_MM: f64 = 50.0;
 
@@ -146,6 +160,10 @@ struct Draw {
     f: IsoFrame,
     flat: String,
     solids: Vec<Solid>,
+    /// Posts with their heads, painted over the solids.
+    posts: String,
+    /// The outline of the selected arm, painted last.
+    sel: String,
 }
 
 impl Draw {
@@ -189,7 +207,7 @@ impl Draw {
             write!(d, "{}{} {}", if i == 0 { "M" } else { "L" }, f1(x), f1(y)).unwrap();
         }
         d.push('Z');
-        write!(self.flat, "<path class=\"iso-ramp k-{kind_id}\" d=\"{d}\"/>").unwrap();
+        write!(self.flat, "<path class=\"iso-ramp k-{kind_id}\" filter=\"url(#iso-shade-ramp)\" d=\"{d}\"/>").unwrap();
     }
 
     fn stand(&mut self, kind_id: &'static str, foot: Vec<P>, h_mm: f64, sides: bool) {
@@ -223,7 +241,7 @@ impl Draw {
                     let ((x2, y2), (x3, y3)) = (self.f.at(pb, s.h_mm), self.f.at(pa, s.h_mm));
                     write!(
                         g,
-                        "<path class=\"iso-side k-{id}\" d=\"M{} {}L{} {}L{} {}L{} {}Z\"/>",
+                        "<path class=\"iso-side k-{id}\" filter=\"url(#iso-shade-side)\" d=\"M{} {}L{} {}L{} {}L{} {}Z\"/>",
                         f1(x0),
                         f1(y0),
                         f1(x1),
@@ -242,17 +260,43 @@ impl Draw {
         g
     }
 
+    /// A post from the ground up to `h_mm`, with a head on it.
+    fn post(&mut self, at: P, h_mm: f64, head: &str) {
+        let (x0, y0) = self.f.at(at, 0.0);
+        let (x1, y1) = self.f.at(at, h_mm);
+        let r = (250.0 * self.f.scale).clamp(2.5, 7.0);
+        write!(
+            self.posts,
+            "<line class=\"iso-post\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"/><circle class=\"iso-head {head}\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>",
+            f1(x0),
+            f1(y0),
+            f1(x1),
+            f1(y1),
+            f1(x1),
+            f1(y1),
+            f1(r)
+        )
+        .unwrap();
+    }
+
+    /// The outline of a shape lying on the ground, to show what is selected.
+    fn outline(&mut self, foot: &[P]) {
+        if foot.len() >= 3 {
+            write!(self.sel, "<path class=\"sel-box\" d=\"{}\"/>", self.path(foot, 0.0)).unwrap();
+        }
+    }
+
     fn finish(mut self) -> String {
         self.solids.sort_by(|a, b| Self::depth(a).total_cmp(&Self::depth(b)));
         let solids: String = self.solids.iter().map(|s| self.render(s)).collect();
-        format!("<g class=\"iso\">{}{solids}</g>", self.flat)
+        format!("{}<g class=\"iso\">{}{solids}{}{}</g>", shades(), self.flat, self.posts, self.sel)
     }
 }
 
 /// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high.
 pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
     let f = IsoFrame::fit(v.bounds, width, window_height);
-    let mut d = Draw { f, flat: String::new(), solids: Vec::new() };
+    let mut d = Draw { f, flat: String::new(), solids: Vec::new(), posts: String::new(), sel: String::new() };
     let wall = height_of("sidewalk");
 
     // the carriageway where the streets meet, and a roundabout's ring and island
@@ -313,6 +357,19 @@ pub fn iso_svg(v: &JView, width: f64, window_height: f64) -> IsoSvg {
             let top = flatten(&r.top);
             d.table("sidewalk", &top, wall);
             d.ramp("travel", &flatten(&r.ramp), &top, wall);
+        }
+        if let Some([end, _]) = a.stop_line {
+            match a.role {
+                "signal" => d.post(end, SIGNAL_POST_MM, "signal"),
+                "stop" => d.post(end, SIGN_POST_MM, "stop"),
+                _ => {}
+            }
+        }
+        for b in &a.transit.bollards {
+            d.post(*b, BOLLARD_MM, "bollard");
+        }
+        if v.selected.kind == Some("arm") && v.selected.uid == a.uid {
+            d.outline(&flatten(&a.outline));
         }
         let Some(c) = a.crossing.as_ref().filter(|c| c.continuous) else { continue };
         let top = flatten(&c.poly);
@@ -398,6 +455,53 @@ mod tests {
             assert!(!s.markup.contains("NaN") && !s.markup.contains("inf"), "sample {sample}");
             assert!(count(&s.markup, "iso-flat") + count(&s.markup, "iso-solid") > 0, "sample {sample}");
         }
+    }
+
+    #[test]
+    fn the_sides_and_ramps_are_shaded_by_the_drawing_s_own_filters_not_by_css() {
+        // CSS `filter: brightness()` on SVG shapes may not be applied in Safari; an SVG filter is SVG 1.1.
+        let mut j = walked();
+        assert!(j.set_raised(true));
+        let m = svg(&j).markup;
+        for (id, slope) in [("iso-shade-ramp", "0.9"), ("iso-shade-side", "0.78")] {
+            let at = m.find(&format!("<filter id=\"{id}\"")).unwrap_or_else(|| panic!("the drawing has no {id} filter"));
+            let f = &m[at..at + m[at..].find("</filter>").unwrap()];
+            assert!(f.contains("color-interpolation-filters=\"sRGB\""), "the {id} filter");
+            assert_eq!(count(f, &format!("type=\"linear\" slope=\"{slope}\"")), 3, "the {id} filter");
+        }
+        assert!(m.find("<defs>").unwrap() < m.find("class=\"iso-flat").unwrap());
+        assert_eq!(count(&m, "filter=\"url(#iso-shade-side)\""), count(&m, "class=\"iso-side "));
+        assert_eq!(count(&m, "filter=\"url(#iso-shade-ramp)\""), count(&m, "class=\"iso-ramp "));
+        assert!(count(&m, "class=\"iso-side ") > 0 && count(&m, "class=\"iso-ramp ") > 0);
+        let css = include_str!("../../web/editor.css");
+        assert!(!css.contains("brightness(0.9)") && !css.contains("brightness(0.78)"));
+    }
+
+    #[test]
+    fn only_the_selected_arm_is_outlined() {
+        let mut j = Junction::new(0);
+        assert_eq!(count(&svg(&j).markup, "sel-box"), 0);
+        let uid = j.current().arms[0].uid;
+        j.select(Target::Arm(uid));
+        assert_eq!(count(&svg(&j).markup, "sel-box"), 1);
+    }
+
+    #[test]
+    fn a_signal_has_a_head_on_a_post_on_each_entering_arm_and_no_control_has_none() {
+        let mut j = Junction::new(0);
+        assert_eq!(j.current().control, SIGNAL, "the first sample is signalled");
+        let signal = svg(&j);
+        assert!(count(&signal.markup, "iso-post") >= 1);
+        assert!(count(&signal.markup, "iso-head signal") >= 1);
+        assert!(j.set_control(UNCONTROLLED));
+        assert_eq!(count(&svg(&j).markup, "iso-post"), 0);
+    }
+
+    #[test]
+    fn an_all_way_stop_has_a_sign_on_each_entering_arm() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ALL_WAY_STOP));
+        assert!(count(&svg(&j).markup, "iso-head stop") >= 1);
     }
 
     #[test]

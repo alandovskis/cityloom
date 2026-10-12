@@ -93,6 +93,8 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | The drawing of the section | Section / 2.5D (the view toggle) | Coupe / 2,5D | To confirm, see below. |
 | The drawing of the section | Show the street as (the toggle's legend) | Afficher la rue en |  |
 | The drawing of the section | Showing the street in 2.5D / Showing the section | Rue affichée en 2,5D / Coupe affichée | Announcements. |
+| The junction page | Plan / 2.5D (the view toggle), View (its legend) | Plan / 2,5D, Affichage | To confirm, see below. |
+| The junction page | Showing the junction in 2.5D / Showing the plan | Jonction affichée en 2,5D / Plan affiché | Announcements; `jonction` is the editor’s word for the place. |
 | Changes list and announcements | Add / Remove / Move / Resize | Ajout / Retrait / Déplacement / Redimensionnement | Nouns followed by ` : ` and the lowercase name of the kind, so no article (and no gender) is needed. |
 | Changes list and announcements | Parking surface: permeable paving | Stationnement, surface : revêtement perméable | The kind, then what changed. |
 | Changes list and announcements | Curb: none | Bordure : aucune |  |
@@ -309,3 +311,5 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Section (the view toggle) | `Coupe` | `Coupe transversale` (longer, as the page's heading) |
 | 2.5D (the view toggle) | `2,5D` | `2,5 D`, `Vue en 2,5D` (suggestion) |
 | Showing the street in 2.5D (announcement) | `Rue affichée en 2,5D` | `Affichage de la rue en 2,5D` (suggestion) |
+| View (the junction page toggle's legend) | `Affichage` | `Vue` (suggestion) |
+| Showing the junction in 2.5D (announcement) | `Jonction affichée en 2,5D` | `Affichage de la jonction en 2,5D` (suggestion) |

@@ -445,6 +445,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("cityloom-notes", "a storage key"),
     ("cityloom-notes-tab", "a storage key"),
     ("cityloom-street-view", "a storage key"),
+    ("cityloom-junction-view", "a storage key"),
     ("aria-label", "the name of an attribute"),
     ("aria-pressed", "the name of an attribute"),
     ("aria-expanded", "the name of an attribute"),

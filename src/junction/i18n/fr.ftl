@@ -222,6 +222,12 @@ jn-col-what-changed = Ce qui a changé
 
 ## Le plan (src/junction/plan.rs, plan_svg.rs)
 jn-plan-editor = Éditeur du plan de la jonction
+# Le choix, sur le dessin, entre le plan à plat, qu’on modifie, et l’image en 2,5D, qu’on regarde.
+jn-view-group = Affichage
+jn-view-plan = Plan
+jn-view-iso = 2,5D
+jn-view-shown-plan = Plan affiché.
+jn-view-shown-iso = Jonction affichée en 2,5D.
 jn-plan-label = Plan de la jonction, nord en haut. { $arms }.
 jn-plan-label-roundabout = Plan de la jonction, nord en haut. { $arms }. Carrefour giratoire.
 jn-plan-label-raised = Plan de la jonction, nord en haut. { $arms }. Carrefour surélevé.
