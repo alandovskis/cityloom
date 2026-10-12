@@ -31,7 +31,7 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
     assert!(!net.left_hand);
     assert!(net.roads.len() > 150, "{} roads", net.roads.len());
     let mut degree = std::collections::HashMap::new();
-    for r in net.roads.iter().filter(|r| r.name.is_some()) {
+    for r in net.roads.iter().filter(|r| r.name.as_deref().is_some_and(|n| !n.trim().is_empty())) {
         *degree.entry(r.from).or_insert(0) += 1;
         *degree.entry(r.to).or_insert(0) += 1;
     }
