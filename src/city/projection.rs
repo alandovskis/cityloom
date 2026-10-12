@@ -1,6 +1,7 @@
 //! Layout millimetres to longitude and latitude, the way osm2streets lays a box of the earth out in
 //! metres: linearly over the box, scaled to its size on the ground.
 
+use crate::city::store::CityStore;
 use crate::place::Bounds;
 
 /// The earth's radius `geom` uses for distances, in metres.
@@ -55,6 +56,15 @@ impl Projection {
     }
 }
 
+/// Where the city kept in `store` lies: known once its area's roads are kept and its layout says where its
+/// origin is (`CityView::origin_m`).
+pub fn for_store(store: &CityStore, origin_m: Option<[f64; 2]>) -> Option<Projection> {
+    if !store.has_network() {
+        return None;
+    }
+    Some(Projection::new(store.area().bounds(), origin_m?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,5 +95,17 @@ mod tests {
         let p = Projection::new(plateau(), [10.0, 20.0]);
         assert_eq!(p.lon_lat(0, 0), p.network_lon_lat(10.0, 20.0));
         assert_eq!(p.lon_lat(2_000, 5_000), p.network_lon_lat(12.0, 15.0));
+    }
+
+    #[test]
+    fn a_city_lies_on_the_earth_once_its_roads_are_kept_and_its_layout_says_where() {
+        use crate::city::store::CityStore;
+        let (ports, ..) = crate::shared::ports::test_ports();
+        let area = Area::new("Testville", 45.5, -73.6);
+        let store = CityStore::for_area(ports.storage.clone(), area.clone());
+        assert_eq!(for_store(&store, Some([0.0, 0.0])), None, "no roads kept: nowhere");
+        assert!(store.keep_network(&osm_network::Network::default()));
+        assert_eq!(for_store(&store, None), None, "a layout that does not say where its origin is");
+        assert_eq!(for_store(&store, Some([1.0, 2.0])), Some(Projection::new(area.bounds(), [1.0, 2.0])));
     }
 }

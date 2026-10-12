@@ -8,10 +8,10 @@ use std::rc::{Rc, Weak};
 use leptos::prelude::*;
 
 use crate::city::model::{City, CityView, EdgeView, NodeView};
+use crate::city::projection::Projection;
 use crate::city::store::CityStore;
 use crate::map::camera::{Camera, Insets, World};
 use crate::map::overlay;
-use crate::map::projection::Projection;
 use crate::map::style;
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n, Locale};
@@ -600,12 +600,7 @@ impl MapVm {
 
     /// Where the city lies on the earth: known once its area's roads are.
     pub fn projection(&self) -> Option<Projection> {
-        if !self.store.has_network() {
-            return None;
-        }
-        let area = self.store.area();
-        let origin = self.core.view_now().origin_m?;
-        Some(Projection::new(area.bounds(), origin))
+        crate::city::projection::for_store(&self.store, self.core.view_now().origin_m)
     }
 
     /// Listens to what the map says, and tells it the units. Called once, by the page that has a map.

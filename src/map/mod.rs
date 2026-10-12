@@ -6,7 +6,6 @@
 pub mod camera;
 pub mod home;
 pub mod overlay;
-pub mod projection;
 pub mod style;
 pub mod svg;
 #[cfg(test)]

@@ -5,6 +5,7 @@
 pub mod binding;
 pub mod import;
 pub mod model;
+pub mod projection;
 pub mod store;
 
 use crate::shared::i18n::Resources;

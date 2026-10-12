@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 
 use crate::city::model::CityView;
-use crate::map::projection::Projection;
+use crate::city::projection::Projection;
 
 /// How a place stands: needing attention beats having been changed.
 fn status(ok: bool, edited: bool) -> &'static str {
@@ -63,7 +63,7 @@ mod tests {
 
     use super::*;
     use crate::city::model::City;
-    use crate::map::projection::Projection;
+    use crate::city::projection::Projection;
     use crate::place::area::Area;
 
     /// One street that bends: east for 80 m, then north-east to a point 100 m east and 50 m north.
