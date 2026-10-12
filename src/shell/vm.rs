@@ -12,6 +12,7 @@ use crate::shared::i18n::{Args, I18n, LANG_KEY, Locale};
 use crate::shared::ports::Ports;
 use crate::shared::units::Units;
 use crate::shell::popover::PopoverViewModel;
+use crate::shell::share::ShareViewModel;
 
 pub const REGION_KEY: &str = crate::city::store::REGION_KEY;
 pub const THEME_KEY: &str = "cityloom-theme";
@@ -100,6 +101,7 @@ pub struct ShellVm {
     region: ArcRwSignal<String>,
     settings: Rc<PopoverViewModel>,
     help: Rc<PopoverViewModel>,
+    share: Rc<ShareViewModel>,
     inspector_open: ArcRwSignal<bool>,
     notes_open: ArcRwSignal<bool>,
     tab: ArcRwSignal<String>,
@@ -146,9 +148,14 @@ impl ShellVm {
             Some("open") => true,
             _ => notes_default_open,
         };
+        let settings = PopoverViewModel::new(i18n.clone(), "ui-settings", "ui-settings");
+        let help = PopoverViewModel::new(i18n.clone(), "ui-help", "ui-keyboard");
+        let share = ShareViewModel::new(i18n.clone());
+        PopoverViewModel::exclusive(&[&settings, &help, &share.popover()]);
         let vm = ShellVm {
-            settings: PopoverViewModel::new(i18n.clone(), "ui-settings", "ui-settings"),
-            help: PopoverViewModel::new(i18n.clone(), "ui-help", "ui-keyboard"),
+            settings,
+            help,
+            share,
             i18n,
             target,
             details_word,
@@ -273,12 +280,16 @@ impl ShellVm {
         self.help.clone()
     }
 
+    /// The Share popover (a way to print the page); never open together with the settings or the help.
+    pub fn share(&self) -> Rc<PopoverViewModel> {
+        self.share.popover()
+    }
+
     pub fn menu_open(&self) -> bool {
         self.settings.open()
     }
 
     pub fn toggle_menu(&self) {
-        self.help.close();
         self.settings.toggle();
     }
 
@@ -291,7 +302,6 @@ impl ShellVm {
     }
 
     pub fn toggle_help(&self) {
-        self.settings.close();
         self.help.toggle();
     }
 
@@ -299,11 +309,25 @@ impl ShellVm {
         self.help.close();
     }
 
-    /// Escape: closes the settings or the help if one is open, and says whether it did.
+    pub fn share_open(&self) -> bool {
+        self.share.popover().open()
+    }
+
+    pub fn toggle_share(&self) {
+        self.share.popover().toggle();
+    }
+
+    pub fn close_share(&self) {
+        self.share.popover().close();
+    }
+
+    /// Escape: closes the settings, the help or the share menu if one is open, and says whether it did.
     pub fn escape(&self) -> bool {
-        let was = self.settings.is_open_now() || self.help.is_open_now();
+        let share = self.share.popover();
+        let was = self.settings.is_open_now() || self.help.is_open_now() || share.is_open_now();
         self.settings.close();
         self.help.close();
+        share.close();
         was
     }
 
@@ -622,6 +646,37 @@ mod tests {
         r.vm.toggle_help();
         r.vm.close_help();
         assert!(!r.vm.help_open());
+    }
+
+    #[test]
+    fn the_share_menu_never_opens_with_the_menu_or_the_help_and_escape_closes_it() {
+        let r = rig();
+        assert!(!r.vm.share_open());
+        r.vm.toggle_share();
+        assert!(r.vm.share_open());
+        r.vm.toggle_menu();
+        assert!((r.vm.menu_open(), r.vm.help_open(), r.vm.share_open()) == (true, false, false), "opening the menu closes the share menu");
+        r.vm.toggle_share();
+        assert!((r.vm.menu_open(), r.vm.share_open()) == (false, true), "and the other way round");
+        r.vm.toggle_help();
+        assert!((r.vm.help_open(), r.vm.share_open()) == (true, false), "opening the help closes the share menu");
+        r.vm.toggle_share();
+        assert!(r.vm.escape());
+        assert!(!r.vm.share_open());
+        assert!(!r.vm.escape());
+        r.vm.toggle_share();
+        r.vm.close_share();
+        assert!(!r.vm.share_open());
+    }
+
+    #[test]
+    fn the_popover_the_view_binds_for_share_is_the_one_the_shell_counts_as_open() {
+        let r = rig();
+        let popover = r.vm.share();
+        popover.toggle();
+        assert!(r.vm.share_open(), "the shell sees what the view's own toggle opened");
+        assert!(r.vm.escape());
+        assert!(!popover.is_open_now());
     }
 
     #[test]

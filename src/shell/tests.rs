@@ -78,3 +78,21 @@ fn every_app_page_shows_the_version_in_its_footer() {
         assert!(footer.contains("data-version"), "{name}.html: the version is not in the footer");
     }
 }
+
+#[test]
+fn the_share_menu_is_a_button_and_a_hidden_menu_holding_print_in_the_language_of_the_page() {
+    use crate::shared::testing::html;
+    use crate::shell::share_view::ShareMenu;
+    use leptos::prelude::*;
+
+    for (locale, print) in [(Locale::En, "Print this sheet"), (Locale::FrCa, "Imprimer cette fiche")] {
+        let i18n = crate::i18n_for(locale);
+        let page = html(move || view! { <ShareMenu i18n=i18n/> }.into_any());
+        assert!(page.contains(r#"id="share-btn""#) && page.contains(r#"aria-controls="share-menu""#), "{page}");
+        assert!(page.contains(r#"id="share-btn-label""#) && page.contains(r#"id="share-heading""#), "{page}");
+        let menu = &page[page.find(r#"id="share-menu""#).expect("the menu")..];
+        assert!(menu[..menu.find('>').unwrap()].contains("hidden"), "the menu starts hidden: {page}");
+        let print_at = menu.find(r#"id="print""#).expect("Print is in the menu");
+        assert!(menu[print_at..].contains(print), "{locale:?} says {print}: {page}");
+    }
+}

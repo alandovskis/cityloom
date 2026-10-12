@@ -1312,6 +1312,15 @@ a.btn {
   .btn.quiet span {
     display: none;
   }
+  /* The menus hang from the bar, not from their buttons: with three buttons, the left-most one's menu would
+     start left of the window. */
+  .account {
+    position: static;
+  }
+  .menu {
+    right: 10px;
+    width: min(300px, calc(100% - 20px));
+  }
   .top-end {
     grid-column: 2;
     grid-row: 1;

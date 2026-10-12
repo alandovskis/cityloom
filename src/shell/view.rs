@@ -11,6 +11,7 @@ use wasm_bindgen::prelude::*;
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::units::Units;
 use crate::shell::popover::PopoverViewModel;
+use crate::shell::share_view::ShareMenu;
 use crate::shell::vm::{RegionOption, ShellVm, Target, Theme};
 
 fn listen<E: JsCast + 'static>(target: &EventTarget, event: &str, mut f: impl FnMut(E) + 'static) {
@@ -49,6 +50,12 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         dark.as_ref().is_some_and(|m| m.matches()),
         roomy || !notes_give_way,
     );
+    // The pages that have a Share button keep a slot for it; its markup is made here, once. This comes before
+    // `bind_menu` and the Print binding below, which find the button, the menu and Print by id.
+    if let Some(slot) = by_id("share-slot") {
+        let i18n = vm.i18n();
+        leptos::mount::mount_to(slot.unchecked_into(), move || view! { <ShareMenu i18n=i18n/> }).forget();
+    }
     // The effects live as long as the page.
     let owner = Owner::new();
     owner.with(|| {
@@ -61,7 +68,13 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         bind_tabs(&vm);
     });
     if let Some(print) = by_id("print") {
-        listen(&print, "click", |_: MouseEvent| {
+        let v = vm.clone();
+        listen(&print, "click", move |_: MouseEvent| {
+            v.close_share();
+            // The menu is hidden under the focus; the Share button takes it so it is not lost.
+            if let Some(share) = by_id("share-btn").and_then(|b| b.dyn_into::<HtmlElement>().ok()) {
+                let _ = share.focus();
+            }
             let _ = leptos::prelude::window().print();
         });
     }
@@ -213,12 +226,13 @@ fn bind_theme(vm: &Rc<ShellVm>, dark: Option<MediaQueryList>) {
     });
 }
 
-/// The settings and the help (the keyboard shortcuts) are two popovers that work alike.
+/// The settings, the help (the keyboard shortcuts) and the share menu are popovers that work alike.
 fn bind_menu(vm: &Rc<ShellVm>) {
     let account = bind_popover(&vm.settings(), "account-btn", "account-menu", "account-btn-label", "account-heading");
     let help = bind_popover(&vm.help(), "help-btn", "help-menu", "help-btn-label", "help-heading");
+    let share = bind_popover(&vm.share(), "share-btn", "share-menu", "share-btn-label", "share-heading");
     let popovers: Vec<(Element, Rc<PopoverViewModel>)> =
-        [(account, vm.settings()), (help, vm.help())].into_iter().filter_map(|(b, p)| b.map(|b| (b, p))).collect();
+        [(account, vm.settings()), (help, vm.help()), (share, vm.share())].into_iter().filter_map(|(b, p)| b.map(|b| (b, p))).collect();
     let v = vm.clone();
     listen(&document(), "keydown", move |e: KeyboardEvent| {
         if e.key() != "Escape" {
@@ -259,6 +273,11 @@ fn bind_popover(vm: &Rc<PopoverViewModel>, button: &str, popover: &str, label: &
         let open = v.open();
         menu.unchecked_ref::<HtmlElement>().set_hidden(!open);
         let _ = b.set_attribute("aria-expanded", &open.to_string());
+    });
+    // The label is hidden on a narrow screen, so the button is named for assistive technology by attribute too.
+    let (v, b) = (vm.clone(), btn.clone());
+    Effect::new(move |_| {
+        let _ = b.set_attribute("aria-label", &v.label());
     });
     for (id, words) in [(label, PopoverViewModel::label as fn(&PopoverViewModel) -> String), (heading, PopoverViewModel::heading)] {
         if let Some(el) = by_id(id) {
