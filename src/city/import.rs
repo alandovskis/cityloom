@@ -210,7 +210,7 @@ mod tests {
     use crate::junction::model::SIGNAL;
     use crate::shared::catalogue::KINDS;
     use crate::shared::said::{Arg, Said};
-    use crate::shared::testing::{en, fr};
+    use crate::shared::testing::en;
 
     fn lane(kind: LaneKind, way: Way, width_m: f64) -> Lane {
         Lane { kind, way, width_m, hours: None }
