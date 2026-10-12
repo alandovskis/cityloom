@@ -421,6 +421,8 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("time-note", "the id of an element of the street page"),
     ("welcome-slot", "the id of an element of the street page"),
     ("view-mode-slot", "the id of an element of the street page"),
+    ("iso-shade-front", "the id of an SVG filter the 2.5D carries (street/iso.rs)"),
+    ("iso-shade-side", "the id of an SVG filter the 2.5D carries (street/iso.rs)"),
     ("account-btn", "the id of an element every page shares"),
     ("account-menu", "the id of an element every page shares"),
     ("account-btn-label", "the id of an element every page shares"),

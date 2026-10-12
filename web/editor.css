@@ -851,23 +851,11 @@ svg pattern circle {
   stroke-width: 1;
   stroke-linejoin: round;
 }
-/* Each face keeps its piece's tint; the faces turned from the eye are a shade darker so the depth reads. */
-.iso-front {
-  filter: brightness(0.9);
-}
-.iso-side {
-  filter: brightness(0.78);
-}
-/* A curb is a light tone, not ink, so that a curb block on a narrow bike lane does not
-   bury the lane; its turned faces are shaded like a piece's. */
+/* Each face keeps its piece's tint; the faces turned from the eye are shaded darker by the drawing's own
+   SVG filters (street/iso.rs, `SHADES`). A curb is a light tone, not ink, so that a curb block on a narrow
+   bike lane does not bury the lane. */
 .iso-curb {
   fill: var(--iso-curb);
-}
-.iso-curb[data-face="front"] {
-  filter: brightness(0.9);
-}
-.iso-curb[data-face="side"] {
-  filter: brightness(0.78);
 }
 .iso-piece:hover .iso-top {
   stroke-width: 2;
@@ -879,12 +867,6 @@ svg pattern circle {
   stroke: var(--ink-2);
   stroke-width: 0.8;
   stroke-linejoin: round;
-}
-.iso-solid .o-front {
-  filter: brightness(0.9);
-}
-.iso-solid .o-side {
-  filter: brightness(0.78);
 }
 .s-crown {
   fill: var(--s-tree);

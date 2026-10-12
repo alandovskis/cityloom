@@ -164,9 +164,34 @@ enum Face {
     Side,
 }
 
+/// How much darker the faces turned from the eye are drawn, so that the depth reads: the front a little,
+/// the side more. They are SVG filters the drawing carries, not CSS `filter: brightness()`, which Safari
+/// does not apply to SVG shapes; in sRGB, so they darken as `brightness()` does.
+const SHADES: [(&str, &str); 2] = [("iso-shade-front", "0.9"), ("iso-shade-side", "0.78")];
+
+/// The shading filters, for the drawing's `<defs>`.
+fn shades() -> String {
+    SHADES
+        .iter()
+        .map(|(id, k)| {
+            format!(
+                "<filter id=\"{id}\" color-interpolation-filters=\"sRGB\"><feComponentTransfer><feFuncR type=\"linear\" slope=\"{k}\"/><feFuncG type=\"linear\" slope=\"{k}\"/><feFuncB type=\"linear\" slope=\"{k}\"/></feComponentTransfer></filter>"
+            )
+        })
+        .collect()
+}
+
+/// The shading a face of this kind gets, as an attribute: none for a top.
+fn shade(what: Face) -> &'static str {
+    match what {
+        Face::Top => "",
+        Face::Front => " filter=\"url(#iso-shade-front)\"",
+        Face::Side => " filter=\"url(#iso-shade-side)\"",
+    }
+}
+
 /// One face: a polygon in the tint of the piece of kind `kind`, or of a curb when there is none
-/// (marked with the face it is, so that the faces turned from the eye are shaded), then the hatch
-/// `hatch` over it.
+/// (marked with the face it is), shaded when it is turned from the eye, then the hatch `hatch` over it.
 fn face(out: &mut String, what: Face, kind: Option<&str>, hatch: &str, pts: &str) {
     let name = match what {
         Face::Top => "top",
@@ -178,7 +203,7 @@ fn face(out: &mut String, what: Face, kind: Option<&str>, hatch: &str, pts: &str
         None => write!(out, "<polygon class=\"iso-curb\" data-face=\"{name}\""),
     }
     .unwrap();
-    write!(out, " points=\"{pts}\"/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#{hatch})\"/>").unwrap();
+    write!(out, " points=\"{pts}\"{}/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#{hatch})\"/>", shade(what)).unwrap();
 }
 
 /// How high the piece after `i` is drawn, or the ground when `i` is the last.
@@ -295,10 +320,12 @@ fn block(out: &mut String, p: &Projection, b: &Block) {
     let ((x0, x1), (y0, y1), (z0, z1)) = (b.x, b.y, b.z);
     write!(
         out,
-        "<g class=\"iso-solid s-{}\"><polygon class=\"o-front\" points=\"{}\"/><polygon class=\"o-side\" points=\"{}\"/><polygon class=\"o-top\" points=\"{}\"/></g>",
+        "<g class=\"iso-solid s-{}\"><polygon class=\"o-front\" points=\"{}\"{}/><polygon class=\"o-side\" points=\"{}\"{}/><polygon class=\"o-top\" points=\"{}\"/></g>",
         b.solid.name(),
         points(p, &[(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0)]),
+        shade(Face::Front),
         points(p, &[(x1, y0, z0), (x1, y0, z1), (x1, y1, z1), (x1, y1, z0)]),
+        shade(Face::Side),
         points(p, &[(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)])
     )
     .unwrap();
@@ -377,7 +404,7 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let span = span_mm(v);
     let p = Projection::fit(width, span);
     let (w, l) = (span as f64, STRETCH_MM);
-    let mut out = String::new();
+    let mut out = format!("<defs>{}</defs>", shades());
     write!(out, "<polygon class=\"iso-ground\" points=\"{}\"/>", points(&p, &[(0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, 0.0, l), (0.0, 0.0, l)])).unwrap();
 
     // (how high it stands, which piece, which edge's curb if it is one)
@@ -760,7 +787,10 @@ mod tests {
         let (cx, top) = (strip.x_mm as f64 + strip.width_mm as f64 / 2.0, drawn_mm(150));
         let trunk_front =
             points(&p, &[(cx - 125.0, top, 3_875.0), (cx + 125.0, top, 3_875.0), (cx + 125.0, top + 2_000.0, 3_875.0), (cx - 125.0, top + 2_000.0, 3_875.0)]);
-        assert!(m.contains(&format!("<g class=\"iso-solid s-trunk\"><polygon class=\"o-front\" points=\"{trunk_front}\"/>")), "{m}");
+        assert!(
+            m.contains(&format!("<g class=\"iso-solid s-trunk\"><polygon class=\"o-front\" points=\"{trunk_front}\" filter=\"url(#iso-shade-front)\"/>")),
+            "{m}"
+        );
         let half = strip.width_mm as f64 * 0.9 / 2.0;
         let crown_top = points(
             &p,
@@ -1043,6 +1073,26 @@ mod tests {
         let pick = e.view().segments[4].uid;
         e.select(Some(pick));
         e
+    }
+
+    #[test]
+    fn the_faces_turned_from_the_eye_are_shaded_by_the_drawing_s_own_filters_not_by_css() {
+        // Safari does not apply CSS `filter: brightness()` to SVG shapes; an SVG filter it does.
+        let m = drawn(&furnished());
+        for (id, slope) in [("iso-shade-front", "0.9"), ("iso-shade-side", "0.78")] {
+            let at = m.find(&format!("<filter id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {m}"));
+            let f = &m[at..at + m[at..].find("</filter>").unwrap()];
+            assert!(f.contains("color-interpolation-filters=\"sRGB\""), "{f}");
+            assert_eq!(count(f, &format!("type=\"linear\" slope=\"{slope}\"")), 3, "{f}");
+        }
+        assert!(m.find("<defs>").unwrap() < m.find("class=\"iso-ground\"").unwrap());
+        let front = count(&m, "class=\"iso-front ") + count(&m, "data-face=\"front\"") + count(&m, "class=\"o-front\"");
+        let side = count(&m, "class=\"iso-side ") + count(&m, "data-face=\"side\"") + count(&m, "class=\"o-side\"");
+        assert!(front > 0 && side > 0);
+        assert_eq!(count(&m, "filter=\"url(#iso-shade-front)\""), front);
+        assert_eq!(count(&m, "filter=\"url(#iso-shade-side)\""), side);
+        let css = include_str!("../../web/editor.css");
+        assert!(!css.contains("brightness(0.9)") && !css.contains("brightness(0.78)"));
     }
 
     #[test]
