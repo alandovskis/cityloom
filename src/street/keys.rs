@@ -33,6 +33,12 @@ pub fn on_section(key: &str, shift: bool, selected: bool) -> Option<(Action, boo
     }
 }
 
+/// Whether a key pressed on the page (outside a field, which the page checks) switches the drawing between
+/// the section and the 2.5D: `V`, without Ctrl, Cmd or Alt.
+pub fn is_view_toggle(key: &str, ctrl: bool, meta: bool, alt: bool) -> bool {
+    !(ctrl || meta || alt) && key.eq_ignore_ascii_case("v")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,5 +77,16 @@ mod tests {
     fn other_keys_are_not_ours() {
         assert_eq!(on_section("a", false, true), None);
         assert_eq!(on_section("Tab", false, false), None);
+    }
+
+    #[test]
+    fn v_switches_the_view_but_not_with_ctrl_cmd_or_alt_and_is_no_key_of_the_section() {
+        assert!(is_view_toggle("v", false, false, false));
+        assert!(is_view_toggle("V", false, false, false));
+        assert!(!is_view_toggle("v", true, false, false));
+        assert!(!is_view_toggle("v", false, true, false));
+        assert!(!is_view_toggle("v", false, false, true));
+        assert!(!is_view_toggle("b", false, false, false));
+        assert_eq!(on_section("v", false, true), None);
     }
 }

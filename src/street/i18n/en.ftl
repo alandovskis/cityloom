@@ -144,6 +144,9 @@ welcome-dismiss = Got it
 
 # The drawing of the section (src/street/view.rs).
 view-section-label = Street cross-section editor
+# The view of the drawing, the section or the street in 2.5D (src/street/vm.rs, src/street/page.rs).
+view-shown-section = Showing the section
+view-shown-iso = Showing the street in 2.5D
 
 # The Transit Priority Atlas measures, by lowercase code (src/shared/atlas.rs).
 atlas-a1-name = Transit Streets

@@ -144,6 +144,9 @@ welcome-dismiss = Compris
 
 # Le dessin de la coupe (src/street/view.rs).
 view-section-label = Éditeur de coupe transversale de la rue
+# La vue du dessin, la coupe ou la rue en 2,5D (src/street/vm.rs, src/street/page.rs).
+view-shown-section = Coupe affichée
+view-shown-iso = Rue affichée en 2,5D
 
 # The Transit Priority Atlas measures, by lowercase code (src/shared/atlas.rs).
 atlas-a1-name = Rues de transport en commun
