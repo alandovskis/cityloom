@@ -1937,6 +1937,7 @@ dl.prov dd:last-child {
   .bar,
   .panel,
   .tools,
+  .view-mode-tools,
   .welcome,
   .clock,
   .statusbar {

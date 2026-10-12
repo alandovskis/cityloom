@@ -100,3 +100,10 @@ test("in forced colours the view shown is still marked as pressed", async ({ pag
   expect(await outline("#view-iso")).toBe("solid");
   expect(await outline("#view-section")).toBe("none");
 });
+
+test("the toggle is not printed", async ({ page }) => {
+  await openStreet(page);
+  await expect(page.locator("#view-mode")).toBeVisible();
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator("#view-mode")).toBeHidden();
+});
