@@ -249,8 +249,10 @@ impl crate::shared::ports::Mapper for BrowserMapper {
     }
     fn listen(&self, on: Box<dyn Fn(crate::shared::ports::MapEvent)>) {
         let callback = Closure::<dyn Fn(String)>::new(move |json: String| {
-            if let Ok(event) = serde_json::from_str(&json) {
-                on(event);
+            // An event the module cannot read is dropped, but said in the console: the adapter and the module disagree.
+            match serde_json::from_str(&json) {
+                Ok(event) => on(event),
+                Err(error) => web_sys::console::warn_2(&format!("The map said something the page cannot read ({error}):").into(), &json.into()),
             }
         });
         self.0.listen(callback.as_ref().unchecked_ref());
