@@ -219,12 +219,16 @@ fn the_view_toggle_is_a_group_of_two_buttons_and_the_view_shown_is_pressed() {
     assert!(h.contains(">Show the street as</legend>"), "{h}");
     assert!(button_tag(&h, "view-section").contains("aria-pressed=\"true\""));
     assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"false\""));
+    // V goes to the view not shown, so only that button carries it.
     assert!(button_tag(&h, "view-iso").contains("aria-keyshortcuts=\"V\""));
+    assert!(!button_tag(&h, "view-section").contains("aria-keyshortcuts"));
     assert!(h.contains(">Section</button>") && h.contains(">2.5D</button>"), "{h}");
     s.set_mode(ViewMode::Iso);
     let h = street_html(|| view! { <page::ViewToggle vm=s.clone()/> });
     assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"true\""));
     assert!(button_tag(&h, "view-section").contains("aria-pressed=\"false\""));
+    assert!(button_tag(&h, "view-section").contains("aria-keyshortcuts=\"V\""));
+    assert!(!button_tag(&h, "view-iso").contains("aria-keyshortcuts"));
 }
 
 #[test]

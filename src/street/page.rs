@@ -294,13 +294,15 @@ pub fn DrawingHeading(vm: Rc<StreetVm>) -> impl IntoView {
 pub fn ViewToggle(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     let pressed = move |mode: ViewMode| move || (w.mode() == mode).to_string();
+    // V goes to the view not shown: only its button says so.
+    let shortcut = move |mode: ViewMode| move || (w.mode() != mode).then_some("V");
     view! {
         <fieldset class="units view-mode" id="view-mode">
             <legend class="sr-only">{say(w, "view-mode-label")}</legend>
-            <button type="button" class="unit" id="view-section" aria-pressed=pressed(ViewMode::Section) aria-keyshortcuts="V" on:click=move |_| w.set_mode(ViewMode::Section)>
+            <button type="button" class="unit" id="view-section" aria-pressed=pressed(ViewMode::Section) aria-keyshortcuts=shortcut(ViewMode::Section) on:click=move |_| w.set_mode(ViewMode::Section)>
                 {say(w, "view-mode-section")}
             </button>
-            <button type="button" class="unit" id="view-iso" aria-pressed=pressed(ViewMode::Iso) aria-keyshortcuts="V" on:click=move |_| w.set_mode(ViewMode::Iso)>
+            <button type="button" class="unit" id="view-iso" aria-pressed=pressed(ViewMode::Iso) aria-keyshortcuts=shortcut(ViewMode::Iso) on:click=move |_| w.set_mode(ViewMode::Iso)>
                 {say(w, "view-mode-iso")}
             </button>
         </fieldset>
