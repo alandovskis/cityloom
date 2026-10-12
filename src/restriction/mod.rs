@@ -3,6 +3,7 @@
 //! is the map slice's (`map::areas`), and the street page reads the model and the store.
 
 pub mod model;
+pub mod store;
 
 use crate::shared::i18n::Resources;
 

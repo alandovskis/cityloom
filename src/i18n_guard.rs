@@ -12,6 +12,7 @@ use proc_macro2::{Delimiter, TokenStream, TokenTree};
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
     ("src/city/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
+    ("src/restriction/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
     ("src/map/tests.rs", "test-only"),
     ("src/junction/tests.rs", "test-only"),
