@@ -30,6 +30,8 @@ pub struct AreasVm {
     selected: ArcRwSignal<Option<String>>,
     name: ArcRwSignal<String>,
     rule: ArcRwSignal<Rule>,
+    /// What was deleted this session, the last on top: Undo brings it back.
+    deleted: ArcRwSignal<Vec<Restriction>>,
 }
 
 impl AreasVm {
@@ -46,6 +48,7 @@ impl AreasVm {
             selected: ArcRwSignal::new(None),
             name: ArcRwSignal::new(String::new()),
             rule: ArcRwSignal::new(Rule::CarFree),
+            deleted: ArcRwSignal::new(Vec::new()),
         })
     }
 
@@ -138,6 +141,12 @@ impl AreasVm {
     /// How many corners the outline being drawn has.
     pub fn corners_text(&self) -> String {
         self.i18n.tr("restriction-corners", &Args::new().num("n", self.draw.with(|d| d.corners().len()) as i64))
+    }
+
+    /// What was deleted last, while it can be brought back.
+    pub fn deleted_note(&self) -> Option<String> {
+        let last = self.deleted.with(|d| d.last().cloned())?;
+        Some(self.i18n.tr("restriction-deleted", &Args::new().str("area", self.say(&last.title()))))
     }
 
     /// The name of the rule `id` among the choices.
@@ -267,7 +276,81 @@ impl AreasVm {
         true
     }
 
-    /// What a key pressed on the map does to the outline being drawn; says whether it was one of its keys. Arrow
+    /// Selects an area (from the list, or by a press on the map), or none. Says which, and its rule; letting go is
+    /// not said.
+    pub fn select(&self, id: Option<&str>) {
+        let found = id.and_then(|id| self.find_now(id));
+        let id = found.as_ref().map(|r| r.id.clone());
+        if self.selected.get_untracked() == id {
+            return;
+        }
+        self.selected.set(id);
+        if let Some(r) = found {
+            self.tell("restriction-selected", Args::new().str("area", self.say_now(&r.title())).str("rule", self.say_now(&r.rule.said())));
+        }
+    }
+
+    /// Changes an area as it is kept now, then says so with `said` (given the area as it is now); says it was not
+    /// kept when it could not be (gone, or storage refused).
+    fn change(&self, id: &str, change: impl FnOnce(&mut Restriction), said: impl FnOnce(&Restriction)) -> bool {
+        let kept = self.store.update(id, change);
+        self.reload();
+        match self.find_now(id).filter(|_| kept) {
+            Some(r) => {
+                said(&r);
+                true
+            }
+            None => {
+                self.tell("restriction-not-kept", Args::new());
+                false
+            }
+        }
+    }
+
+    pub fn rename(&self, id: &str, name: &str) -> bool {
+        let name = name.to_string();
+        self.change(id, |r| r.name = name, |r| self.tell_about("restriction-renamed", r))
+    }
+
+    pub fn set_rule(&self, id: &str, rule: Rule) -> bool {
+        self.change(
+            id,
+            |r| r.rule = rule,
+            |r| self.tell("restriction-rule-changed", Args::new().str("area", self.say_now(&r.title())).str("rule", self.say_now(&r.rule.said()))),
+        )
+    }
+
+    /// Deletes an area; it can be brought back for the session (`undo_delete`).
+    pub fn delete(&self, id: &str) -> bool {
+        let Some(r) = self.find_now(id) else { return false };
+        if !self.store.remove(id) {
+            self.reload();
+            self.tell("restriction-not-kept", Args::new());
+            return false;
+        }
+        self.deleted.update(|d| d.push(r.clone()));
+        self.reload();
+        self.tell_about("restriction-deleted", &r);
+        true
+    }
+
+    /// Brings back the area deleted last, selected. If storage refuses, it stays there to bring back.
+    pub fn undo_delete(&self) -> bool {
+        let Some(r) = self.deleted.with_untracked(|d| d.last().cloned()) else { return false };
+        let Some(back) = self.store.restore(&r) else {
+            self.tell("restriction-not-kept", Args::new());
+            return false;
+        };
+        self.deleted.update(|d| {
+            d.pop();
+        });
+        self.reload();
+        self.selected.set(Some(back.id.clone()));
+        self.tell_about("restriction-restored", &back);
+        true
+    }
+
+    /// What a key pressed on the map does to the outline being drawn, or to the selection; says whether it was one of its keys. Arrow
     /// keys stay the map's, so the map can be moved between corners. A closed outline takes no key from the map:
     /// its rule and name are in the tab's form, where Escape belongs to the field, and only Cancel lets it go.
     pub fn press_key(&self, key: &str, shift: bool) -> bool {
@@ -285,6 +368,7 @@ impl AreasVm {
             (Draw::Drawing(_), "Escape") => {
                 self.cancel();
             }
+            (Draw::Idle, "Escape") if self.selected.get_untracked().is_some() => self.select(None),
             _ => return false,
         }
         true
@@ -302,7 +386,7 @@ impl AreasVm {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::restriction::store::RESTRICTIONS_KEY;
+    use crate::restriction::store::{RESTRICTIONS_KEY, RestrictionStore};
     use crate::shared::i18n::Locale;
     use crate::shared::ports::{FakeMapper, MapCall, MemoryStorage, RecordingAnnouncer, Storage, test_ports};
 
@@ -542,5 +626,120 @@ mod tests {
         let fr = AreasVm::new(test_ports().0, crate::i18n_for(Locale::FrCa));
         assert_eq!(fr.kmh_text(30), "30\u{a0}km/h");
         assert_eq!(fr.lead(), "Aucune règle de zone pour l’instant. Déclarez-en une pour vérifier les rues qu’elle contient.");
+    }
+
+    fn declare(vm: &AreasVm, name: &str) {
+        draw_square(vm);
+        vm.set_form_name(name);
+        assert!(vm.save());
+    }
+
+    #[test]
+    fn an_area_is_renamed_given_another_rule_and_selected_with_words() {
+        let (vm, _, said, _) = rig();
+        declare(&vm, "A");
+        vm.select(None);
+        said.take();
+        vm.select(Some("r1"));
+        assert_eq!(said.take(), ["“A” selected: Car-free."]);
+        vm.select(Some("r1"));
+        assert!(said.take().is_empty(), "selected already: nothing to say");
+        assert!(vm.rename("r1", "Plateau"));
+        assert_eq!(said.take(), ["Renamed “Plateau”."]);
+        assert!(vm.set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
+        assert_eq!(said.take(), ["The rule of “Plateau” is now: Speed limit of 30 km/h."]);
+        assert_eq!(vm.find_now("r1").unwrap().rule, Rule::SpeedLimit { kmh: 30 });
+        assert!(vm.press_key("Escape", false), "Escape lets go of the selection");
+        assert_eq!(vm.selected_id_now(), None);
+        assert!(!vm.press_key("Escape", false), "with nothing selected Escape is not the areas'");
+        assert!(said.take().is_empty(), "letting go is not said");
+    }
+
+    #[test]
+    fn an_area_named_with_nothing_is_called_by_its_rule() {
+        let (vm, _, said, _) = rig();
+        declare(&vm, "A");
+        said.take();
+        assert!(vm.rename("r1", "  "));
+        assert_eq!(said.take(), ["Renamed “Car-free”."]);
+        assert_eq!(vm.find_now("r1").unwrap().name, "  ", "kept as typed");
+    }
+
+    #[test]
+    fn a_change_the_storage_refuses_is_said_and_not_shown() {
+        let (vm, _, said, storage) = rig();
+        declare(&vm, "A");
+        said.take();
+        storage.blocked(true);
+        assert!(!vm.rename("r1", "B"));
+        assert!(!vm.set_rule("r1", Rule::NoParkingOrLoading));
+        assert!(!vm.delete("r1"));
+        assert_eq!(said.take(), ["The area rules could not be saved in this browser."; 3]);
+        let r = vm.find_now("r1").unwrap();
+        assert_eq!((r.name.as_str(), r.rule), ("A", Rule::CarFree));
+        assert_eq!(vm.deleted_note(), None, "what was not deleted cannot be brought back");
+    }
+
+    #[test]
+    fn a_deleted_area_can_be_brought_back_for_the_session() {
+        let (vm, _, said, _) = rig();
+        declare(&vm, "A");
+        said.take();
+        assert!(vm.delete("r1"));
+        assert_eq!(said.take(), ["“A” deleted."]);
+        assert!(vm.list_now().is_empty() && vm.selected_id_now().is_none());
+        assert_eq!(vm.deleted_note().as_deref(), Some("“A” deleted."));
+        assert!(vm.undo_delete());
+        assert_eq!(said.take(), ["“A” restored."]);
+        assert_eq!(vm.list_now()[0].id, "r1");
+        assert_eq!(vm.selected_id_now().as_deref(), Some("r1"));
+        assert_eq!(vm.deleted_note(), None);
+        assert!(!vm.undo_delete(), "nothing more to bring back");
+        assert!(said.take().is_empty());
+    }
+
+    #[test]
+    fn undo_brings_back_the_area_deleted_last_first_and_a_refused_one_stays_to_bring_back() {
+        let (vm, _, said, storage) = rig();
+        declare(&vm, "A");
+        declare(&vm, "B");
+        assert!(vm.delete("r1") && vm.delete("r2"));
+        assert_eq!(vm.deleted_note().as_deref(), Some("“B” deleted."));
+        said.take();
+        storage.blocked(true);
+        assert!(!vm.undo_delete());
+        assert_eq!(said.take(), ["The area rules could not be saved in this browser."]);
+        assert_eq!(vm.deleted_note().as_deref(), Some("“B” deleted."), "still there to bring back");
+        storage.blocked(false);
+        assert!(vm.undo_delete());
+        assert_eq!(vm.deleted_note().as_deref(), Some("“A” deleted."));
+        assert!(vm.undo_delete());
+        assert_eq!(vm.list_now().iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["r1", "r2"]);
+    }
+
+    #[test]
+    fn another_tab_removing_the_selected_area_clears_the_selection_and_a_change_to_it_is_refused() {
+        let (vm, _, said, storage) = rig();
+        declare(&vm, "A");
+        said.take();
+        assert!(RestrictionStore::new(storage.clone()).remove("r1"));
+        vm.reload();
+        assert!(vm.list_now().is_empty() && vm.selected_id_now().is_none());
+        assert!(!vm.rename("r1", "back"));
+        assert_eq!(said.take(), ["The area rules could not be saved in this browser."]);
+        assert!(vm.list_now().is_empty(), "not brought back by the change");
+    }
+
+    #[test]
+    fn the_selected_area_is_marked_on_the_map_with_its_corners() {
+        let (vm, mapper, ..) = rig();
+        declare(&vm, "A");
+        vm.sync();
+        let calls = mapper.take();
+        assert!(matches!(&calls[0], MapCall::Restrictions { data, .. } if data.contains("\"selected\":true") && data.contains("\"i\":3")), "{calls:?}");
+        vm.select(None);
+        vm.sync();
+        let calls = mapper.take();
+        assert!(matches!(&calls[0], MapCall::Restrictions { data, .. } if !data.contains("\"selected\":true") && !data.contains("\"i\":")), "{calls:?}");
     }
 }
