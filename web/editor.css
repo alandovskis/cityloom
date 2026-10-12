@@ -866,6 +866,44 @@ svg pattern circle {
 .iso-piece:hover .iso-top {
   stroke-width: 2;
 }
+.iso-solid {
+  pointer-events: none;
+}
+.iso-solid polygon {
+  stroke: var(--ink-2);
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+.iso-solid .o-front {
+  filter: brightness(0.9);
+}
+.iso-solid .o-side {
+  filter: brightness(0.78);
+}
+.s-crown {
+  fill: var(--s-tree);
+}
+.s-trunk {
+  fill: var(--k-bench);
+}
+.s-shelter {
+  fill: var(--k-busshelter);
+  fill-opacity: 0.75;
+}
+.s-post {
+  fill: var(--ink-2);
+}
+/* The arrow is drawn in millimetres and mapped onto the street, so its strokes keep their pixel width. */
+.iso-dir path {
+  vector-effect: non-scaling-stroke;
+}
+.iso-sel {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
 #drawing .sel-line {
   fill: none;
   stroke: var(--accent);
