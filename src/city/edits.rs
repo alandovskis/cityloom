@@ -207,6 +207,11 @@ impl Ids {
         self.leaving.iter().any(|(node, &deg)| other.leaving.get(node).is_some_and(|&o| degrees_apart(deg, o) < SAME_WAY_DEG))
     }
 
+    /// Whether a place and a record leave an end they share different ways: another piece of the way.
+    fn other_way(&self, other: &Ids) -> bool {
+        self.leaving.iter().any(|(node, &deg)| other.leaving.get(node).is_some_and(|&o| degrees_apart(deg, o) >= SAME_WAY_DEG))
+    }
+
     /// How much a place and a record have in common. A street (it has ways) needs a shared way and a shared end.
     fn overlap(&self, other: &Ids) -> usize {
         let nodes = self.nodes.intersection(&other.nodes).count();
@@ -220,12 +225,15 @@ impl Ids {
 
 /// For each place, the index of the record it takes. An exact key wins; otherwise the record with the largest
 /// overlap, and of two that overlap as much, the one that leaves a shared end the same way, if that is unique. A
+/// place that leaves a shared end another way than the record (by `SAME_WAY_DEG` or more) does not overlap it. A
 /// record wanted by several places goes to the one with the larger score; a tie gives it to nobody.
 pub fn assign(places: &[Ids], records: &[Ids]) -> Vec<Option<usize>> {
     // An exact key outranks any overlap; places sharing a key are told apart by their overlap.
     let score = |p: &Ids, r: &Ids| {
-        let overlap = p.overlap(r);
-        (p.key.is_some() && p.key == r.key, overlap, overlap > 0 && p.same_way(r))
+        let exact = p.key.is_some() && p.key == r.key;
+        // a piece that leaves a shared end another way than the record's is not the piece the edit was made on
+        let overlap = if !exact && p.other_way(r) { 0 } else { p.overlap(r) };
+        (exact, overlap, overlap > 0 && p.same_way(r))
     };
     let none = (false, 0, false);
     // only a record with the place's key or one of its nodes can score: the others are never looked at, so a load
@@ -492,6 +500,18 @@ mod tests {
         assert_eq!(assign(&[west.clone(), east.clone()], &record), [None, Some(0)]);
         let unknown = [ids(Some("w7~n2~n3"), &[7], &[2, 3])];
         assert_eq!(assign(&[west, east], &unknown), [None, None], "nothing says which way it left: nobody's");
+    }
+
+    #[test]
+    fn a_piece_of_the_way_that_leaves_the_shared_end_another_way_does_not_take_the_record_even_alone() {
+        // kept on the piece running east from n2; here only the piece running west from n2 is in the area
+        let record = [leaving(ids(Some("w7~n2~n3"), &[7], &[2, 3]), 2, 90)];
+        let west = leaving(ids(Some("w7~n1~n2"), &[7], &[1, 2]), 2, 270);
+        assert_eq!(assign(&[west], &record), [None]);
+        let unknown = ids(Some("w7~n1~n2"), &[7], &[1, 2]);
+        assert_eq!(assign(&[unknown], &record), [Some(0)], "nothing says which way the place leaves: the overlap decides");
+        let exact = leaving(ids(Some("w7~n2~n3"), &[7], &[2, 3]), 2, 270);
+        assert_eq!(assign(&[exact], &record), [Some(0)], "the exact key is not second-guessed");
     }
 
     #[test]
