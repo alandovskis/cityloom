@@ -1042,6 +1042,28 @@ mod tests {
         assert_eq!(distinct.len(), keys.len());
     }
 
+    #[test]
+    fn a_street_made_pedestrian_loses_its_crossing_at_the_junction_and_gets_it_back_with_its_traffic() {
+        let mut city = City::new();
+        let edge = 1u32;
+        let end =
+            [city.layout.edges[0].a, city.layout.edges[0].b].into_iter().find(|&n| city.layout.nodes[n].junction).expect("an end of street 1 is a junction");
+        let crossing_of = |city: &City| {
+            let j = city.junction_editor(node_uid(end), 0).expect("the junction can be opened");
+            j.current().arms.iter().find(|a| a.edge == edge).map(|a| (a.crossing.is_some(), a.is_pedestrian())).expect("street 1 is an arm")
+        };
+        assert_eq!(crossing_of(&city), (true, false));
+        let today = city.today_streets[&edge].clone();
+        let walkway = crate::street::model::pedestrianised(&today);
+        assert!(city.keep_street(edge, walkway));
+        assert_eq!(crossing_of(&city), (false, true), "the arm of a pedestrian street has no crossing");
+        let j = city.junction_editor(node_uid(end), 0).unwrap();
+        let walk = j.current().arms.iter().find(|a| a.edge == edge).unwrap().uid;
+        assert!(j.current().arms.iter().flat_map(|a| &a.lanes).all(|l| !l.to.contains(&walk)), "no lane goes into it");
+        assert!(city.keep_street(edge, today));
+        assert_eq!(crossing_of(&city), (true, false), "the junction's own record never lost it");
+    }
+
     fn junction_number(node: usize) -> usize {
         Layout::sample().junction_number(node)
     }

@@ -720,6 +720,17 @@ mod tests {
     }
 
     #[test]
+    fn a_walkway_arm_is_drawn_without_a_crossing_and_the_other_streets_keep_theirs() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+        let v = j.view();
+        let walk = v.arms.iter().find(|a| a.pedestrian).unwrap().uid;
+        let s = svg(&j);
+        assert!(!s.markup.contains(&format!("data-role=\"crossing\" data-uid=\"{walk}\"")));
+        assert_eq!(count(&s.markup, "class=\"crossing\""), 3);
+        assert_eq!(count(&s.markup, "piece k-terrace"), 1, "the walkway's own pieces are drawn");
+    }
+
+    #[test]
     fn a_corner_without_a_sidewalk_is_drawn_bare() {
         let s = svg(&junction_of(&[("travel", 3200), ("travel", 3200)]));
         assert_eq!(count(&s.markup, "class=\"wedge bare\""), 4);
