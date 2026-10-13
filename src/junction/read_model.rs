@@ -618,9 +618,14 @@ pub fn control_role(s: &State, i: usize) -> &'static str {
 /// The two arms nearest to a straight line make the priority street.
 fn priority_pair(arms: &[Arm]) -> [usize; 2] {
     let n = arms.len();
+    let traffic = arms.iter().filter(|a| !a.is_pedestrian()).count();
     let mut best = ([0, 1], i32::MAX);
     for i in 0..n {
         for j in i + 1..n {
+            // A walkway has no traffic to give way; with fewer than two streets of traffic the pair is as it was.
+            if traffic >= 2 && (arms[i].is_pedestrian() || arms[j].is_pedestrian()) {
+                continue;
+            }
             let d = (gap(arms[i].bearing, arms[j].bearing) - 180).abs();
             let wide = arms[i].row_mm() + arms[j].row_mm();
             let score = d * 100_000 - wide;
@@ -1584,6 +1589,16 @@ mod tests {
         for id in ["lanes-cover", "lanes-follow", "crossing", "turning-speed"] {
             assert!(v.checks.iter().find(|c| c.id == id).unwrap().ok, "{id}");
         }
+    }
+
+    #[test]
+    fn a_walkway_wider_than_the_cross_street_does_not_take_the_priority() {
+        use crate::junction::model::{PRIORITY, junction_with_walkways};
+        let mut j = junction_with_walkways(&[90], &[("sidewalk", 12_000), ("terrace", 8_000), ("sidewalk", 12_000)]);
+        assert!(j.set_control(PRIORITY));
+        let s = j.current();
+        let role = |bearing: i32| control_role(s, s.arms.iter().position(|a| a.bearing == bearing).unwrap());
+        assert_eq!((role(0), role(180), role(270)), ("free", "free", "stop"), "the through street keeps the priority");
     }
 
     #[test]
