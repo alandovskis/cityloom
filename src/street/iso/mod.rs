@@ -24,10 +24,14 @@ use crate::street::svg::curb_edges;
 
 #[allow(dead_code)]
 mod markings;
+#[allow(dead_code)]
+mod paint;
 mod projection;
 mod raised;
 mod solids;
 mod surface;
+#[allow(dead_code)]
+mod symbols;
 #[cfg(test)]
 mod testing;
 
