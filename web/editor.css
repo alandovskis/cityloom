@@ -1430,7 +1430,8 @@ svg pattern circle {
 .opt[aria-checked="true"] .tick {
   opacity: 1;
 }
-.opt[role="checkbox"] {
+.opt[role="checkbox"],
+.opt[role="radio"] {
   grid-template-columns: minmax(0, 1fr) 16px;
   padding-left: 8px;
 }

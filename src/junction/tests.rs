@@ -251,6 +251,86 @@ fn a_roundabout_adds_its_size_cycle_track_and_bus_lane() {
 }
 
 #[test]
+fn a_roundabout_offers_its_turbo_layouts_and_a_chosen_one_its_size_and_main_road() {
+    let s = shared(0);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    let h = panel(&s);
+    for want in ["Roundabout layout", "Single lane", ">Basic<", ">Egg<", ">Knee<", ">Spiral<"] {
+        assert!(h.contains(want), "{want}");
+    }
+    assert!(!h.contains(">Rotor<"), "three lanes on Sample Street 1 would pass its property line: not offered");
+    assert_eq!(count(&h, "role=\"radio\""), 5, "the single lane and four layouts");
+    assert_eq!(count(&h, "role=\"none\""), 5, "each radio is in an item that says it is not a list item of its own");
+    assert!(!h.contains("Turbo size") && !h.contains("Main road"));
+    assert!(h.contains("Size of the roundabout") && h.contains("Bus lane through the middle"));
+
+    s.edit(|j| j.set_turbo(Some(0)));
+    let h = panel(&s);
+    for want in ["Turbo size", "Mini", "Next larger size", "Next smaller size", "Main road", "are the main road.", "Use the other streets as the main road"] {
+        assert!(h.contains(want), "{want}");
+    }
+    assert!(!h.contains("Size of the roundabout"), "a turbo has blocks, not a diameter");
+    assert!(!h.contains("Bus lane through the middle"), "and no bus lane across its island");
+    assert!(h.contains("Cycle track"), "but it keeps the cycle track");
+    assert!(!h.contains("Move the two entry lanes"), "a basic turbo's switch is to the other streets");
+
+    s.edit(|j| j.set_turbo(Some(2)));
+    let h = panel(&s);
+    assert!(h.contains("Move the two entry lanes to the other street"), "on a knee the first press moves the lanes");
+    assert!(!h.contains("Use the other streets as the main road"));
+}
+
+#[test]
+fn only_the_layouts_that_suit_the_streets_are_offered() {
+    let s = shared(1); // three streets
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    let h = panel(&s);
+    assert!(h.contains(">Egg<") && h.contains(">Knee<"));
+    assert!(!h.contains(">Basic<") && !h.contains(">Spiral<") && !h.contains(">Rotor<"));
+    assert!(!panel(&shared(0)).contains("Roundabout layout"), "a signal has no layouts");
+}
+
+#[test]
+fn a_lane_of_a_turbo_says_the_layout_sets_where_it_goes() {
+    let s = shared(0);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    s.edit(|j| j.set_turbo(Some(0)));
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Lane(n, 0)));
+    assert!(panel(&s).contains("The turbo layout sets where this lane goes."));
+    let plain = shared(0);
+    let n = arm(&plain, 0);
+    plain.edit(|j| j.select(Target::Lane(n, 0)));
+    assert!(!panel(&plain).contains("The turbo layout sets"));
+}
+
+#[test]
+fn the_panel_of_a_turbo_roundabout_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    panel_speaks_french(&s, &["Disposition du giratoire", "Une seule voie", ">De base<", ">En œuf<", ">En genou<", ">En spirale<"]);
+    s.edit(|j| j.set_turbo(Some(0)));
+    panel_speaks_french(
+        &s,
+        &[
+            "Taille du giratoire turbo",
+            ">Mini<",
+            "aria-label=\"Taille supérieure\"",
+            "aria-label=\"Taille inférieure\"",
+            "Axe principal",
+            "forment l’axe principal.",
+            "Prendre les autres rues comme axe principal",
+        ],
+    );
+    s.edit(|j| j.set_turbo(Some(2)));
+    panel_speaks_french(&s, &["Mettre les deux voies d’entrée sur l’autre rue"]);
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Lane(n, 0)));
+    panel_speaks_french(&s, &["La disposition turbo fixe la destination de cette voie."]);
+}
+
+#[test]
 fn a_junction_offers_a_raised_table_until_it_is_a_roundabout() {
     let s = shared(0);
     let h = panel(&s);
