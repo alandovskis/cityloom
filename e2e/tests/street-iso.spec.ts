@@ -132,7 +132,7 @@ test("a street with opposing lanes shows yellow paint in 2.5D, and symbols in pl
     await iso(page).click();
     await expect(iso(page)).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("#drawing .iso-markings")).toHaveCount(1);
-    await expect(page.locator("#drawing .iso-dir")).toHaveCount(0);
+    expect(await page.locator("#drawing .iso-mark").count(), "symbols take the arrows' place").toBeGreaterThan(0);
     yellow = await page.locator("#drawing .iso-paint.yellow").count();
     if (yellow > 0) break;
   }
@@ -143,10 +143,26 @@ test("a street with opposing lanes shows yellow paint in 2.5D, and symbols in pl
     .first()
     .evaluate((el) => getComputedStyle(el).pointerEvents);
   expect(pointer).toBe("none");
-  // And the paint is not the colour of the road: it follows the theme tokens.
-  const fill = await page
-    .locator("#drawing .iso-paint.yellow")
-    .first()
-    .evaluate((el) => getComputedStyle(el).fill);
-  expect(fill).not.toBe("rgb(0, 0, 0)");
+  // And the paint follows the theme tokens, in both themes: yellow here, with a dark hairline on the light one.
+  const yellowPaint = page.locator("#drawing .iso-paint.yellow").first();
+  const look = () =>
+    yellowPaint.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return [s.fill, s.stroke];
+    });
+  await page.emulateMedia({ colorScheme: "light" });
+  expect(await look()).toEqual(["rgb(227, 166, 0)", "rgb(43, 51, 59)"]);
+  await page.emulateMedia({ colorScheme: "dark" });
+  const [darkFill, darkEdge] = await look();
+  expect(darkFill).toBe("rgb(240, 192, 46)");
+  expect(darkEdge).not.toBe("rgb(43, 51, 59)");
+  // In forced colours the paint is the text colour and the roadway under it is not.
+  await page.emulateMedia({ forcedColors: "active" });
+  const forced = await page.evaluate(() => {
+    const paint = getComputedStyle(document.querySelector("#drawing .iso-paint.yellow")!);
+    const road = getComputedStyle(document.querySelector("#drawing .iso-piece .iso-top")!);
+    return [paint.fill, paint.stroke, road.fill];
+  });
+  expect(forced[0]).not.toBe(forced[2]);
+  expect(forced[1]).toBe("none");
 });

@@ -23,6 +23,9 @@
      in both themes. Estimates, like the symbols' sizes. */
   --iso-paint-white: light-dark(#fbfbf8, #e6e9ee);
   --iso-paint-yellow: light-dark(#e3a600, #f0c02e);
+  /* A hairline round the paint: on the light theme's pale surfaces the paint alone is under 3:1 (WCAG 1.4.11),
+     with this slate it is over 6:1 against every surface tint. The dark theme needs none. */
+  --iso-paint-edge: light-dark(#2b333b, transparent);
   --panel-w: 300px;
   --notes-w: 340px;
   --rw: calc(var(--pad) + var(--notes-w));
@@ -921,7 +924,10 @@ svg pattern circle {
   pointer-events: none;
 }
 .iso-paint {
-  stroke: none;
+  stroke: var(--iso-paint-edge);
+  stroke-width: 0.5px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 .iso-paint.white {
   fill: var(--iso-paint-white);
@@ -933,6 +939,7 @@ svg pattern circle {
   .iso-paint.white,
   .iso-paint.yellow {
     fill: CanvasText;
+    stroke: none;
   }
 }
 .iso-sel {
