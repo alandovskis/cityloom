@@ -3117,4 +3117,52 @@ mod tests {
         assert_eq!(ring.radius, ring.floor as f64);
         assert!(ring.turbo.is_none());
     }
+
+    #[test]
+    fn arms_that_cars_do_not_enter_are_not_widened_and_the_layout_still_draws() {
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::{Piece, Street};
+        let out: Vec<Piece> = [("sidewalk", 2000), ("travel", 3200), ("sidewalk", 2000)]
+            .iter()
+            .map(|&(id, width_mm)| Piece { kind: kind_index(id).unwrap(), width_mm, direction: (id == "travel").then_some(0), variants: Vec::new() })
+            .collect();
+        let mut s = turbo_state(0, 0);
+        for a in &mut s.arms {
+            match a.bearing {
+                90 => a.section = Some(Street::imported(StreetClass::Local, Side::Right, &out)), // goes only one way out
+                270 => a.section = Some(Street::imported(StreetClass::Pedestrian, Side::Right, &[])), // a walkway
+                _ => {}
+            }
+        }
+        let lay = layout(&s, 0).expect("it draws");
+        assert!(lay.ring.unwrap().turbo.is_some());
+        for a in &lay.arms {
+            let entered = a.bearing == 0.0 || a.bearing == 180.0;
+            assert_eq!((a.entry.is_some(), a.lane_mm.is_some()), (entered, entered), "arm {}", a.bearing);
+        }
+        for (arm, laid) in s.arms.iter().zip(&lay.arms).filter(|(a, _)| a.bearing == 90 || a.bearing == 270) {
+            assert_eq!(laid.prof.enter_span, arm.profile(0).enter_span, "the span of arm {} is not widened", arm.bearing);
+        }
+    }
+
+    #[test]
+    fn a_turbo_on_a_junction_with_at_most_one_street_of_traffic_has_no_ring() {
+        use crate::shared::catalogue::{Side, StreetClass};
+        use crate::street::model::Street;
+        let mut s = turbo_state(0, 0);
+        for a in s.arms.iter_mut().skip(1) {
+            a.section = Some(Street::imported(StreetClass::Pedestrian, Side::Right, &[]));
+        }
+        assert_eq!(crate::junction::model::traffic_arms(&s), 1);
+        assert!(layout(&s, 0).is_none_or(|l| l.ring.is_none()), "it runs uncontrolled, so there is no roundabout, turbo or not");
+    }
+
+    #[test]
+    fn left_hand_traffic_widens_an_entry_on_the_mirrored_side() {
+        let (right, left) = (layout(&turbo_state(0, 0), 0).unwrap(), layout(&turbo_state(0, 0), 3).unwrap());
+        let (r, l) = (right.arms[1].entry.expect("the east street is entered"), left.arms[1].entry.expect("and in the left-hand region too"));
+        assert_eq!(r.new, (-7_000.0, 0.0), "right-hand: the entry is left of the road's middle");
+        assert_eq!(l.new, (0.0, 7_000.0), "left-hand: mirrored, right of it");
+        assert_eq!(left.arms[1].lane_mm, Some(3_500));
+    }
 }
