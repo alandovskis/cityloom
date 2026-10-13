@@ -26,6 +26,8 @@ pub(super) fn fit(width_mm: f64) -> f64 {
 
 // ---- the lane arrow (estimate) ----
 // A straight-ahead arrow 4 m long: a 200 mm shaft and a head 1 m wide and 1.2 m long.
+/// The size of the lane arrow. Every size in this group is an estimate pending the official drawings in the Répertoire des
+/// dispositifs (rsr.transports.gouv.qc.ca).
 const AHEAD_HALF_LENGTH_MM: f64 = 2_000.0;
 const AHEAD_SHAFT_HALF_MM: f64 = 100.0;
 const AHEAD_HEAD_HALF_MM: f64 = 500.0;
@@ -33,12 +35,16 @@ const AHEAD_HEAD_LENGTH_MM: f64 = 1_200.0;
 
 // ---- the reserved-lane diamond (estimate) ----
 // A lozenge 900 mm wide and 2.4 m long, from 2.5 m before the origin to 100 mm before it.
+/// The size of the reserved-lane diamond. Every size in this group is an estimate pending the official drawings in the Répertoire des
+/// dispositifs (rsr.transports.gouv.qc.ca).
 const DIAMOND: [(f64, f64); 4] = [(0.0, -2_500.0), (450.0, -1_300.0), (0.0, -100.0), (-450.0, -1_300.0)];
 
 // ---- "BUS" (estimate) ----
 // Block letters 450 mm wide and 1.2 m tall with 150 mm strokes, 150 mm apart, centred across the lane, starting
 // 300 mm beyond the diamond. Each bar is (across from, along from, across to, along to) in the letter's own box.
 type Bar = (f64, f64, f64, f64);
+/// The size of the letters of "BUS". Every size in this group is an estimate pending the official drawings in the Répertoire des
+/// dispositifs (rsr.transports.gouv.qc.ca).
 const LETTER_ADVANCE_MM: f64 = 600.0;
 const LETTERS_FROM_MM: f64 = 300.0;
 const B: [Bar; 6] = [
@@ -58,6 +64,8 @@ const S: [Bar; 5] =
 // a 500 mm handlebar over the front hub, with the front wheel toward +along; then a small arrow 1.6 m long, a
 // 120 mm shaft and a head 500 mm wide and 600 mm long, beyond the front wheel. A two-way lane has two such arrows
 // side by side, opposed.
+/// The size of the bike symbol. Every size in this group is an estimate pending the official drawings in the Répertoire des
+/// dispositifs (rsr.transports.gouv.qc.ca).
 const WHEEL_OUTER_MM: f64 = 300.0;
 const WHEEL_INNER_MM: f64 = 170.0;
 const FRONT_HUB_MM: f64 = -400.0;

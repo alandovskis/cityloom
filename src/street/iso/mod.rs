@@ -1,6 +1,6 @@
 //! The street in 2.5D: a straight stretch of it seen from above and to one side, each piece an
 //! extruded strip with its height, the few things that stand on the pieces as plain solids, and the
-//! one-way arrows on the roadway. It is drawn from the same view the section is and is read-only:
+//! lane markings on the roadway. It is drawn from the same view the section is and is read-only:
 //! the section is where the street is edited.
 //!
 //! The rises are exaggerated: a curb or a sidewalk stands 150 mm, a few pixels at the scale a whole
@@ -10,27 +10,24 @@
 //! pieces keep their own size and sit on the drawn tops.
 //!
 //! The code is split by what it draws: `projection` (where a point lands), `raised` (the strips standing
-//! above the roadway and their order), `solids` (boxes on the pieces) and `surface` (the roadway).
+//! above the roadway and their order), `solids` (boxes on the pieces), `surface` (the roadway), `markings` (which
+//! lines and symbols a street carries), `symbols` (their shapes) and `paint` (the markings layer).
 
 use std::fmt::Write;
 
-use crate::shared::catalogue::{KINDS, kind_key};
+use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n};
-use crate::shared::iso::format::esc;
 use crate::shared::said::say;
 use crate::shared::units::Units;
 use crate::street::model::View;
 use crate::street::svg::curb_edges;
 
-#[allow(dead_code)]
 mod markings;
-#[allow(dead_code)]
 mod paint;
 mod projection;
 mod raised;
 mod solids;
 mod surface;
-#[allow(dead_code)]
 mod symbols;
 #[cfg(test)]
 mod testing;
@@ -39,9 +36,8 @@ pub use projection::{ARROW_AT_MM, MAX_HEIGHT, MIN_SOLID_PX, Projection, RECEDE_X
 pub use raised::{HEIGHTS, curb_height_mm, curb_top_mm, height_mm};
 
 use projection::points;
-use raised::{beside, curb, shades, slab, strips};
+use raised::{beside, shades, strips};
 use solids::{Block, block, blocks};
-use surface::arrow;
 
 /// The 2.5D drawn, and the size it is drawn at.
 #[derive(Clone, Debug, PartialEq)]
@@ -81,10 +77,11 @@ pub fn iso_height(v: &View, width: f64) -> f64 {
 /// The street in 2.5D, drawn `width` wide: a stretch of `STRETCH_MM` seen obliquely, from the same
 /// view the section is drawn from. Hovering a piece names it.
 ///
-/// What is drawn is ordered so that nothing needs sorting by depth: the ground, then the strips from
-/// the lowest to the highest (a raised piece stands in front of the roadway beside it on both sides),
-/// each piece's slab, then its one-way arrow, before its curbs. Then what stands on the pieces from far to
-/// near, and last the selected piece's outline.
+/// It is built in layers, each its own group, in the order the eye needs and with nothing sorted by depth: the
+/// ground; the surface (the top of every roadway piece); the markings (every line and symbol, painted on the
+/// surface); the raised layer (every strip standing above the roadway, with its faces, from the lowest to the
+/// highest, so it covers the paint's edges where they meet); what stands on the pieces from far to near; and last
+/// the selected piece's outline.
 pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let span = span_mm(v);
     let p = Projection::fit(width, span);
@@ -92,20 +89,10 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let mut out = format!("<defs>{}</defs>", shades());
     write!(out, "<polygon class=\"iso-ground\" points=\"{}\"/>", points(&p, &[(0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, 0.0, l), (0.0, 0.0, l)])).unwrap();
 
-    for (_, i, edge) in strips(v) {
-        let s = &v.segments[i];
-        let name = i18n.tr(&kind_key(KINDS[s.kind].id), &Args::new());
-        write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
-        match edge {
-            None => slab(&mut out, &p, v, i),
-            Some(right) => curb(&mut out, &p, v, i, right),
-        }
-        out.push_str("</g>");
-        // A lane's arrow lies on its own strip, so its curbs and any higher piece, drawn later, stand over it.
-        if edge.is_none() {
-            arrow(&mut out, &p, s);
-        }
-    }
+    let (flat, standing) = surface::split(strips(v));
+    out.push_str(&surface::layer(&p, v, i18n, &flat));
+    out.push_str(&paint::layer(&p, v));
+    out.push_str(&raised::layer(&p, v, i18n, &standing));
 
     // What stands on the pieces, so that a nearer box covers the ones behind it: piece by piece from left
     // to right (each box stays inside its piece, and the eye sees the right sides, so a box on a piece
@@ -414,6 +401,112 @@ mod tests {
         assert_eq!(iso_label(&v, &en(), Units::Feet), "Sample Street 1 in 2.5D, along a 131 ft stretch. 6 segments.");
         let fr = crate::i18n_for(Locale::FrCa);
         assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m. 6 éléments.");
+    }
+
+    #[test]
+    fn the_layers_are_drawn_in_order_ground_surface_markings_raised_solids_and_selection() {
+        let mut e = furnished();
+        e.select(Some(e.view().segments[0].uid));
+        let m = drawn(&e);
+        let at = |needle: &str| m.find(needle).unwrap_or_else(|| panic!("no {needle}"));
+        let order = [
+            at("class=\"iso-ground\""),
+            at("<g class=\"iso-surface\">"),
+            at("<g class=\"iso-markings\">"),
+            at("<g class=\"iso-raised\">"),
+            at("class=\"iso-solid"),
+            at("class=\"iso-sel\""),
+        ];
+        assert!(order.windows(2).all(|w| w[0] < w[1]), "{order:?}");
+        assert!(m.find("<defs>").unwrap() < order[0]);
+    }
+
+    #[test]
+    fn the_surface_layer_holds_the_top_of_every_roadway_piece_and_the_raised_layer_the_rest() {
+        let e = furnished();
+        let v = e.view();
+        let m = drawn(&e);
+        let (surface, markings, raised) =
+            (m.find("<g class=\"iso-surface\">").unwrap(), m.find("<g class=\"iso-markings\">").unwrap(), m.find("<g class=\"iso-raised\">").unwrap());
+        let roadway = v.segments.iter().filter(|s| height_mm(KINDS[s.kind].id) == 0).count();
+        assert_eq!(count(&m[surface..markings], "class=\"iso-top "), roadway);
+        assert_eq!(count(&m[raised..], "class=\"iso-top "), v.segments.len() - roadway);
+        assert!(!m[surface..markings].contains("k-sidewalk") && !m[surface..markings].contains("iso-curb"));
+        // Each keeps its group, so a selection and the e2e selectors still find it.
+        for s in &v.segments {
+            assert!(m.contains(&format!("<g class=\"iso-piece\" data-uid=\"{}\">", s.uid)));
+        }
+    }
+
+    #[test]
+    fn the_paint_is_between_the_surface_and_the_raised_pieces_so_a_higher_neighbour_covers_it() {
+        let (e, _, kerbside) = one_way_bikes();
+        let v = e.view();
+        let m = drawn(&e);
+        let (markings, raised) = (m.find("<g class=\"iso-markings\">").unwrap(), m.find("<g class=\"iso-raised\">").unwrap());
+        assert_eq!(count(&m[markings..raised], "iso-paint"), count(&m, "iso-paint"), "every bit of paint is in the markings layer");
+        // The kerbside lane's right neighbour, the raised sidewalk, and its curb blocks are drawn after the paint.
+        let pos = v.segments.iter().position(|s| s.uid == kerbside).unwrap();
+        let sidewalk = v.segments[pos + 1].uid;
+        assert_eq!(KINDS[v.segments[pos + 1].kind].id, "sidewalk");
+        assert!(m.find(&format!("<g class=\"iso-piece\" data-uid=\"{sidewalk}\">")).unwrap() > raised);
+        let curbs: Vec<usize> = m.match_indices(&format!("<g class=\"iso-piece\" data-uid=\"{kerbside}\">")).skip(1).map(|(at, _)| at).collect();
+        assert!(!curbs.is_empty() && curbs.iter().all(|c| *c > raised));
+    }
+
+    #[test]
+    fn a_known_street_has_a_known_number_of_paint_quads() {
+        // Sample Street 1: a solid white line beside each parking lane (1 quad each), a double yellow one between the
+        // lanes (2 quads), and an arrow on each driving lane.
+        let m = drawn(&Editor::new(0));
+        assert_eq!(count(&m, "class=\"iso-paint yellow\""), 2);
+        assert_eq!(count(&m, "class=\"iso-paint white\""), 4);
+        assert_eq!(count(&m, "class=\"iso-mark\""), 2);
+        // The paint never carries the classes the shading and the counting of faces go by.
+        for tag in m.split("<polygon ").filter(|t| t.starts_with("class=\"iso-paint")) {
+            let head = &tag[..tag.find('>').unwrap()];
+            assert!(
+                !head.contains("iso-top")
+                    && !head.contains("iso-front")
+                    && !head.contains("iso-side")
+                    && !head.contains("data-face")
+                    && !head.contains("filter="),
+                "{head}"
+            );
+        }
+    }
+
+    #[test]
+    fn symbols_replace_the_arrows_on_driving_bus_and_bike_lanes() {
+        for e in [Editor::new(0), Editor::new(1), Editor::new(3), furnished(), one_way_bikes().0] {
+            let m = drawn(&e);
+            assert_eq!(count(&m, "class=\"iso-dir\""), 0);
+            assert_eq!(count(&m, "class=\"dir\""), 0);
+            assert_eq!(count(&m, "class=\"dir-halo\""), 0);
+        }
+        // One symbol per lane that has one: furnished() has four driving lanes and a two-way bike lane.
+        assert_eq!(count(&drawn(&furnished()), "class=\"iso-mark\""), 5);
+        assert_eq!(count(&drawn(&one_way_bikes().0), "class=\"iso-mark\""), 4);
+        let mut e = Editor::new(0);
+        let bus = e.add(kind_index("bus").unwrap(), 3);
+        assert!(drawn(&e).contains(&format!("data-mark=\"{bus}\"")));
+    }
+
+    #[test]
+    fn paint_stays_inside_the_drawing_when_the_design_is_wider_than_the_street() {
+        let mut e = Editor::new(0);
+        let u = e.view().segments[0].uid;
+        assert!(e.set_width(u, 8_000));
+        assert!(e.view().delta_mm > 0);
+        for width in [600.0, 1050.0, 1800.0] {
+            let s = iso_svg(&e.view(), &en(), width);
+            assert!(!s.markup.contains("NaN") && !s.markup.contains("inf"), "{width}");
+            let m = &s.markup[s.markup.find("<g class=\"iso-markings\">").unwrap()..s.markup.find("<g class=\"iso-raised\">").unwrap()];
+            assert!(count(m, "iso-paint") > 0);
+            for (x, y) in xs_ys(m) {
+                assert!(x >= 0.0 && x <= s.width && y >= 0.0 && y <= s.height, "{width}: ({x}, {y})");
+            }
+        }
     }
 
     /// Not a check: writes `target/iso-preview-light.html` and `target/iso-preview-dark.html`, the 2.5D of

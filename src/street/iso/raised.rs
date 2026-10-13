@@ -3,7 +3,9 @@
 
 use std::fmt::Write;
 
-use crate::shared::catalogue::KINDS;
+use crate::shared::catalogue::{KINDS, kind_key};
+use crate::shared::i18n::{Args, I18n};
+use crate::shared::iso::format::esc;
 use crate::shared::iso::shading::shade_filters;
 use crate::street::model::View;
 use crate::street::svg::{curb_edges, curb_width_mm};
@@ -142,10 +144,13 @@ pub(super) fn curb(out: &mut String, p: &Projection, v: &View, i: usize, right: 
     face(out, Face::Top, None, &hatch, &points(p, &[(x0, top, 0.0), (x1, top, 0.0), (x1, top, l), (x0, top, l)]));
 }
 
+/// One strip to draw: how high its top is drawn, which piece, and which edge's curb if it is a curb.
+pub(super) type Strip = (f64, usize, Option<bool>);
+
 /// The strips to draw, each as (how high its top is drawn, which piece, which edge's curb if it is one), from the
 /// lowest drawn top to the highest, so that a higher strip stands in front of a lower one beside it.
-pub(super) fn strips(v: &View) -> Vec<(f64, usize, Option<bool>)> {
-    let mut strips: Vec<(f64, usize, Option<bool>)> = Vec::new();
+pub(super) fn strips(v: &View) -> Vec<Strip> {
+    let mut strips: Vec<Strip> = Vec::new();
     for (i, s) in v.segments.iter().enumerate() {
         let id = KINDS[s.kind].id;
         strips.push((drawn_mm(height_mm(id)), i, None));
@@ -157,6 +162,36 @@ pub(super) fn strips(v: &View) -> Vec<(f64, usize, Option<bool>)> {
     }
     strips.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.is_some().cmp(&b.2.is_some())));
     strips
+}
+
+/// A strip as its own group, with the piece's name for hovering: its slab, or one of its curbs.
+pub(super) fn piece(out: &mut String, p: &Projection, v: &View, i18n: &I18n, strip: Strip) {
+    let (_, i, edge) = strip;
+    let s = &v.segments[i];
+    let name = i18n.tr(&kind_key(KINDS[s.kind].id), &Args::new());
+    write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
+    match edge {
+        None => slab(out, p, v, i),
+        Some(right) => curb(out, p, v, i, right),
+    }
+    out.push_str("</g>");
+}
+
+/// The strips in the order given, between the group tag `open` and its end.
+pub(super) fn group(open: &str, p: &Projection, v: &View, i18n: &I18n, strips: &[Strip]) -> String {
+    let mut out = String::from(open);
+    for &strip in strips {
+        piece(&mut out, p, v, i18n, strip);
+    }
+    out.push_str("</g>");
+    out
+}
+
+/// The raised layer: every strip standing above the roadway (sidewalks, planting, medians, furniture, curbs) with its
+/// front and side faces, lowest to highest, so a higher one stands in front of a lower one beside it. It is drawn
+/// after the markings, so it covers the paint where it meets it.
+pub(super) fn layer(p: &Projection, v: &View, i18n: &I18n, strips: &[Strip]) -> String {
+    group("<g class=\"iso-raised\">", p, v, i18n, strips)
 }
 
 #[cfg(test)]

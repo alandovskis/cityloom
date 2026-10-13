@@ -61,12 +61,12 @@ impl Projection {
     }
 }
 
-/// A piece narrower than this on screen draws without what stands on it and without its arrow. It is below the
+/// A piece narrower than this on screen draws without what stands on it and without its symbol. It is below the
 /// section's 26 px: the 2.5D draws a street smaller (it fits the recession across too), and a tree is a box
 /// standing up off its strip, so it reads on a 1.5 m strip at 760 px (about 21 px).
 pub const MIN_SOLID_PX: f64 = 20.0;
-/// How far along the street a one-way arrow is laid, in millimetres: near the near end, because what stands
-/// on the pieces hides only the ground farther along than itself: a tree's crown nothing nearer than about 10 m,
+/// How far along the street a lane's symbol (all within 2.5 m nearer and 2 m farther of it, `symbols.rs`) is laid, in
+/// millimetres: near the near end, because what stands on the pieces hides only the ground farther along than itself: a tree's crown nothing nearer than about 10 m,
 /// and the nearest trunk, from 5.4 m on, only a band of ground within 2.5 m to the left of its strip.
 pub const ARROW_AT_MM: f64 = 6_000.0;
 
