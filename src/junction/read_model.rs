@@ -16,6 +16,8 @@ use crate::junction::model::{
 };
 
 use crate::junction::signal;
+use crate::junction::turbo::{self, Turbo};
+use crate::junction::turbo_ring::{mouth_on, stadium};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
@@ -94,6 +96,18 @@ pub struct ArmLayout {
     /// Where the carriageway's mouth is, and where its strips start.
     pub mouth: f64,
     pub strip0: f64,
+    /// On a turbo: how its entry was widened to the layout's lanes. None for a plain junction, and for an arm cars do not enter.
+    pub entry: Option<EntryWiden>,
+    /// On a turbo: the width of each entering lane.
+    pub lane_mm: Option<i32>,
+}
+
+/// An entry's extent across its section, laterally and with the arm's offset, as the street has it (`old`) and as a
+/// turbo layout wants it (`new`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EntryWiden {
+    pub new: (f64, f64),
+    pub old: (f64, f64),
 }
 
 impl ArmLayout {
@@ -124,6 +138,16 @@ pub struct Fillet {
 pub struct RingLayout {
     pub radius: f64,
     pub floor: i32,
+    pub turbo: Option<TurboRing>,
+}
+
+/// The ring of a turbo roundabout: the axis its edges are shifted along, its block, its lanes, and the outermost edge
+/// (the cycle track included), which the arms meet.
+pub struct TurboRing {
+    pub axis_deg: f64,
+    pub block: usize,
+    pub lanes: usize,
+    pub outline: Vec<P>,
 }
 
 pub struct Layout {
@@ -155,6 +179,8 @@ pub fn layout(s: &State, region: usize) -> Option<Layout> {
                 prof,
                 mouth: 0.0,
                 strip0: 0.0,
+                entry: None,
+                lane_mm: None,
             }
         })
         .collect();
@@ -162,6 +188,9 @@ pub fn layout(s: &State, region: usize) -> Option<Layout> {
     let mut corners = Vec::new();
 
     if s.control == ROUNDABOUT {
+        if let Some(t) = s.turbo.as_ref() {
+            return turbo_layout(s, arms, t, region);
+        }
         let floor = ring_floor(&arms)?;
         let radius = (floor + s.ring_extra_mm).min(MAX_RING_MM) as f64;
         for a in arms.iter_mut() {
@@ -169,11 +198,7 @@ pub fn layout(s: &State, region: usize) -> Option<Layout> {
             a.mouth = tl.max(tr);
             a.strip0 = tl.min(tr);
         }
-        for i in 0..n {
-            let j = (i + 1) % n;
-            corners.push(CornerLayout { a: i, b: j, delta: gap(s.arms[i].bearing, s.arms[j].bearing), fillet: None });
-        }
-        return Some(Layout { arms, corners, ring: Some(RingLayout { radius, floor }) });
+        return Some(Layout { arms, corners: ring_corners(s), ring: Some(RingLayout { radius, floor, turbo: None }) });
     }
 
     let mut mouths = vec![0.0f64; n];
@@ -209,29 +234,76 @@ pub fn layout(s: &State, region: usize) -> Option<Layout> {
     Some(Layout { arms, corners, ring: None })
 }
 
-/// The least outer radius that keeps each arm's curbs on the ring and leaves
-/// room between neighbouring arms.
-fn ring_floor(arms: &[ArmLayout]) -> Option<i32> {
-    let n = arms.len();
-    let mut r = MIN_RING_MM;
-    while r <= MAX_RING_MM {
-        let rf = r as f64;
-        let ok = (0..n).all(|i| {
-            let (a, b) = (&arms[i], &arms[(i + 1) % n]);
-            if a.cr.abs() >= rf || b.cl.abs() >= rf {
-                return false;
-            }
-            let pa = a.bearing + (a.cr / rf).asin().to_degrees();
-            let qb = b.bearing + (b.cl / rf).asin().to_degrees();
-            let arc = (qb - pa).rem_euclid(360.0);
-            arc >= (MIN_RING_ARC_MM / rf).to_degrees() && arc < 360.0 - 1e-6 && arc <= 180.0 + 1e-6 + (b.bearing - a.bearing).rem_euclid(360.0)
-        }) && arms.iter().all(|a| a.cl.abs() < rf && a.cr.abs() < rf);
-        if ok {
-            return Some(r);
-        }
-        r += RING_STEP_MM;
+/// The corners of a ring: one between each arm and the next, with no fillet.
+fn ring_corners(s: &State) -> Vec<CornerLayout> {
+    let n = s.arms.len();
+    (0..n)
+        .map(|i| {
+            let j = (i + 1) % n;
+            CornerLayout { a: i, b: j, delta: gap(s.arms[i].bearing, s.arms[j].bearing), fillet: None }
+        })
+        .collect()
+}
+
+/// A roundabout with a turbo: each entered arm widened to the layout's lanes, the ring built on the block's outer
+/// edge, the arms meeting it where their curbs cross it. None when the turbo does not suit the arms, or the ring is
+/// too small for them.
+fn turbo_layout(s: &State, mut arms: Vec<ArmLayout>, t: &Turbo, region: usize) -> Option<Layout> {
+    let (spec, block) = (t.spec()?, t.block()?);
+    if !t.fits_arms(&s.arms) {
+        return None;
     }
-    None
+    let right_hand = REGIONS[region].drive_side == Side::Right;
+    for (a, arm) in arms.iter_mut().zip(&s.arms) {
+        if a.prof.enter_x.is_empty() {
+            continue; // cars do not enter this street, so it has no entry to widen
+        }
+        let n = t.entry_lanes(arm.uid);
+        let old = a.prof.enter_span;
+        let (xs, span) = turbo::widen_entry(&a.prof, n, turbo::TURBO_ENTRY_LANE_MM);
+        let off = arm.offset_mm as f64;
+        let (new_l, new_r) = (a.lat(off, span.0), a.lat(off, span.1));
+        a.entry = Some(EntryWiden { new: (new_l, new_r), old: (a.lat(off, old.0), a.lat(off, old.1)) });
+        a.lane_mm = Some((span.1 - span.0) / n.max(1) as i32);
+        a.prof.enter_x = xs;
+        a.prof.enter_span = span;
+        a.cl = a.cl.min(new_l);
+        a.cr = a.cr.max(new_r);
+    }
+    let outer = block.road_outer_mm(spec.ring_lanes) + s.cycle.unwrap_or(0);
+    if !ring_fits(&arms, outer) {
+        return None;
+    }
+    let axis = t.axis_deg(&s.arms, right_hand)?;
+    let outline = stadium(outer as f64, block.du_mm as f64, axis);
+    for a in arms.iter_mut() {
+        let (tl, tr) = (mouth_on(&outline, a.bearing, a.cl)?, mouth_on(&outline, a.bearing, a.cr)?);
+        a.mouth = tl.max(tr);
+        a.strip0 = tl.min(tr);
+    }
+    let ring = RingLayout { radius: outer as f64, floor: outer, turbo: Some(TurboRing { axis_deg: axis, block: t.size, lanes: spec.ring_lanes, outline }) };
+    Some(Layout { corners: ring_corners(s), arms, ring: Some(ring) })
+}
+
+/// Whether a ring of outer radius `r` keeps each arm's curbs on it and leaves room between neighbouring arms.
+fn ring_fits(arms: &[ArmLayout], r: i32) -> bool {
+    let n = arms.len();
+    let rf = r as f64;
+    (0..n).all(|i| {
+        let (a, b) = (&arms[i], &arms[(i + 1) % n]);
+        if a.cr.abs() >= rf || b.cl.abs() >= rf {
+            return false;
+        }
+        let pa = a.bearing + (a.cr / rf).asin().to_degrees();
+        let qb = b.bearing + (b.cl / rf).asin().to_degrees();
+        let arc = (qb - pa).rem_euclid(360.0);
+        arc >= (MIN_RING_ARC_MM / rf).to_degrees() && arc < 360.0 - 1e-6 && arc <= 180.0 + 1e-6 + (b.bearing - a.bearing).rem_euclid(360.0)
+    }) && arms.iter().all(|a| a.cl.abs() < rf && a.cr.abs() < rf)
+}
+
+/// The least outer radius that keeps each arm's curbs on the ring and leaves room between neighbouring arms.
+fn ring_floor(arms: &[ArmLayout]) -> Option<i32> {
+    (MIN_RING_MM..=MAX_RING_MM).step_by(RING_STEP_MM as usize).find(|&r| ring_fits(arms, r))
 }
 
 // ---- view -------------------------------------------------------------------
@@ -2884,5 +2956,165 @@ mod tests {
         assert_eq!(s.phases[0].uid, n);
         assert_eq!(s.phases[0].timing.green_s, 30);
         assert!(Junction::new(1).view().signal.is_none(), "no plan off a signal");
+    }
+
+    // ---- turbo ring ----
+
+    use crate::junction::turbo::Turbo;
+
+    /// The Avenue and street (sample 0) as a roundabout with a turbo: uids 1 and 3 are the avenue (north, south), 2 and 4 the street.
+    fn turbo_state(layout: usize, size: usize) -> State {
+        let mut s = Junction::new(0).current().clone();
+        s.control = ROUNDABOUT;
+        s.turbo = Some(Turbo { layout, size, main: vec![1, 3] });
+        s
+    }
+
+    /// How far `p` is from the closed outline.
+    fn off(outline: &[P], p: P) -> f64 {
+        (0..outline.len())
+            .map(|i| {
+                let (a, b) = (outline[i], outline[(i + 1) % outline.len()]);
+                let ab = sub(b, a);
+                let t = (((p.0 - a.0) * ab.0 + (p.1 - a.1) * ab.1) / (ab.0 * ab.0 + ab.1 * ab.1).max(1e-9)).clamp(0.0, 1.0);
+                dist(p, add(a, scale(ab, t)))
+            })
+            .fold(f64::MAX, f64::min)
+    }
+
+    #[test]
+    fn a_turbo_ring_is_the_blocks_outer_edge_and_fits_the_streets_that_meet_it() {
+        // The mini block (R4 = 21 150 mm) is the tightest. After widening, the curbs are the Avenue's +-10 000 and the Street's -7 000 and +5 700;
+        // a curb at lateral `c` meets the ring at asin(c / R4) degrees from its arm's axis. North to east: the Avenue's right curb at asin(10 000 / 21 150) = 28.2 degrees,
+        // the Street's left at 90 - asin(7 000 / 21 150) = 90 - 19.3 = 70.7: an arc of 42.5 degrees. East to south: 90 + asin(5 700 / 21 150) = 105.6 to
+        // 180 - 28.2 = 151.8: 46.2 degrees. `ring_fits` asks for 8 000 mm of arc, 8 000 / 21 150 rad = 21.7 degrees, so mini fits and every larger block does.
+        for (size, outer) in [21_150.0, 22_450.0, 25_200.0, 29_900.0].into_iter().enumerate() {
+            let lay = layout(&turbo_state(0, size), 0).expect("the streets of sample 0 fit every block");
+            let ring = lay.ring.expect("a ring");
+            assert_eq!((ring.radius, ring.floor as f64), (outer, outer), "block {size}");
+            let turbo = ring.turbo.expect("a turbo ring");
+            assert_eq!((turbo.block, turbo.lanes, turbo.axis_deg), (size, 2, 57.5));
+            assert_eq!(turbo.outline.len(), 2 * (crate::junction::turbo_ring::STEPS + 1));
+        }
+    }
+
+    #[test]
+    fn a_turbo_with_a_third_lane_is_laid_on_the_larger_outer_radius() {
+        let lay = layout(&turbo_state(3, 0), 0).expect("a spiral fits the avenue and street");
+        assert_eq!(lay.ring.as_ref().unwrap().radius, 26_450.0, "R4 + 300 + the lane");
+        assert_eq!(lay.ring.unwrap().turbo.unwrap().lanes, 3);
+    }
+
+    #[test]
+    fn a_cycle_track_makes_the_turbo_ring_larger_by_its_width() {
+        let mut s = turbo_state(0, 0);
+        s.cycle = Some(2_000);
+        let ring = layout(&s, 0).unwrap().ring.unwrap();
+        assert_eq!(ring.radius, 23_150.0);
+    }
+
+    #[test]
+    fn the_arms_meet_the_ring_on_its_outline() {
+        let lay = layout(&turbo_state(0, 0), 0).unwrap();
+        let outline = lay.ring.unwrap().turbo.unwrap().outline;
+        for a in &lay.arms {
+            assert!(a.mouth >= a.strip0 && a.strip0 > 0.0, "{} {}", a.mouth, a.strip0);
+            for t in [a.mouth, a.strip0] {
+                assert!([a.cl, a.cr].iter().any(|&lat| off(&outline, at(a.bearing, lat, t)) < 1.0), "the curb meets the ring at {t}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_entry_is_widened_to_the_layouts_lanes_away_from_the_middle_of_the_road() {
+        let lay = layout(&turbo_state(0, 0), 0).unwrap();
+        // Sample Street 1 (east, uid 2) is 18 m across and centred on its arm, so a lateral position is x - 9000. Two lanes of 3.5 m
+        // grow its one 3.3 m lane to the span (2000, 9000) (see `widen_entry` in Task 1): laterally (2000 - 9000, 9000 - 9000) = (-7000, 0),
+        // where the street had (5700 - 9000, 9000 - 9000) = (-3300, 0). Its own curbs are (3300 - 9000, 14700 - 9000) = (-5700, 5700):
+        // the left one moves out to -7000, the right one stays.
+        let street = &lay.arms[1];
+        assert_eq!(street.prof.enter_x, [7_250, 3_750]);
+        assert_eq!(street.prof.enter_span, (2_000, 9_000));
+        assert_eq!((street.cl, street.cr), (-7_000.0, 5_700.0), "the left curb moves out to the wider entry; the right is the street's");
+        assert_eq!(street.lane_mm, Some(3_500), "(9000 - 2000) / 2");
+        assert_eq!(street.entry, Some(EntryWiden { new: (-7_000.0, 0.0), old: (-3_300.0, 0.0) }));
+        // Sample Avenue 2 (north, uid 1) is 30 m across (lateral = x - 15000) and has two entering lanes of 3.3 m at 7400..14000. Two of
+        // 3.5 m make width = max(7000, 6600) = 7000: the span (14000 - 7000, 14000) = (7000, 14000), the lanes centred at 14000 - 1750 = 12250 and
+        // 8750; laterally (7000 - 15000, 14000 - 15000) = (-8000, -1000), where the street had (7400 - 15000, -1000) = (-7600, -1000). Its own
+        // curbs (5000 - 15000, 25000 - 15000) = (-10000, 10000) are farther out, so they stay.
+        let avenue = &lay.arms[0];
+        assert_eq!(avenue.prof.enter_x, [12_250, 8_750]);
+        assert_eq!(avenue.prof.enter_span, (7_000, 14_000));
+        assert_eq!((avenue.cl, avenue.cr), (-10_000.0, 10_000.0));
+        assert_eq!(avenue.lane_mm, Some(3_500));
+        assert_eq!(avenue.entry, Some(EntryWiden { new: (-8_000.0, -1_000.0), old: (-7_600.0, -1_000.0) }));
+        for a in &lay.arms {
+            let e = a.entry.expect("every street of sample 0 is entered");
+            assert!(a.pl <= e.new.0 && e.new.1 <= a.pr, "the widened entry stays inside the street's property lines: {e:?} in {}..{}", a.pl, a.pr);
+        }
+    }
+
+    #[test]
+    fn a_plain_roundabout_widens_nothing() {
+        let mut s = turbo_state(0, 0);
+        s.turbo = None;
+        let lay = layout(&s, 0).unwrap();
+        assert!(lay.ring.as_ref().unwrap().turbo.is_none());
+        assert!(lay.arms.iter().all(|a| a.entry.is_none() && a.lane_mm.is_none()));
+    }
+
+    #[test]
+    fn a_turbo_that_does_not_suit_its_arms_has_no_layout() {
+        let mut s = turbo_state(0, 0);
+        s.turbo = Some(Turbo { layout: 0, size: 0, main: vec![1, 9] });
+        assert!(layout(&s, 0).is_none(), "a main arm the junction does not have");
+        s.turbo = Some(Turbo { layout: 9, size: 0, main: vec![1, 3] });
+        assert!(layout(&s, 0).is_none(), "a layout that does not exist");
+        s.turbo = Some(Turbo { layout: 0, size: 9, main: vec![1, 3] });
+        assert!(layout(&s, 0).is_none(), "a block that does not exist");
+        let mut three = Junction::new(1).current().clone();
+        three.control = ROUNDABOUT;
+        three.turbo = Some(Turbo { layout: 0, size: 0, main: vec![1, 3] });
+        assert!(layout(&three, 0).is_none(), "basic is for four arms");
+    }
+
+    #[test]
+    fn streets_too_wide_for_the_block_leave_no_layout_though_the_plain_roundabout_fits() {
+        let mut j = junction_of(&[("travel", 3_500); 11]);
+        assert!(j.set_control(ROUNDABOUT), "the plain roundabout fits");
+        let mut s = j.current().clone();
+        s.turbo = Some(Turbo { layout: 0, size: 3, main: vec![1, 3] });
+        assert!(layout(&s, 0).is_none(), "even the large block is too small for streets 38.5 m wide");
+    }
+
+    #[test]
+    fn eight_travel_lanes_in_a_row_need_the_medium_block() {
+        let mut j = junction_of(&[("travel", 3_500); 8]);
+        assert!(j.set_control(ROUNDABOUT));
+        let mut s = j.current().clone();
+        for (size, fits) in [false, false, true, true].into_iter().enumerate() {
+            s.turbo = Some(Turbo { layout: 0, size, main: vec![1, 3] });
+            assert_eq!(layout(&s, 0).is_some(), fits, "block {size}");
+        }
+    }
+
+    #[test]
+    fn a_three_arm_egg_turns_its_axis_65_degrees_and_left_hand_traffic_turns_it_the_other_way() {
+        let mut egg = Junction::new(1).current().clone();
+        egg.control = ROUNDABOUT;
+        egg.turbo = Some(Turbo { layout: 1, size: 0, main: vec![1, 3] });
+        let lay = layout(&egg, 0).expect("an egg fits the three streets");
+        assert_eq!(lay.ring.unwrap().turbo.unwrap().axis_deg, 155.0);
+        let lay = layout(&turbo_state(0, 0), 3).expect("and the same junction in a country that drives on the left");
+        assert_eq!(lay.ring.unwrap().turbo.unwrap().axis_deg, 302.5);
+    }
+
+    #[test]
+    fn the_plain_roundabout_is_laid_out_as_before() {
+        let mut s = turbo_state(0, 0);
+        s.turbo = None;
+        let ring = layout(&s, 0).unwrap().ring.unwrap();
+        assert_eq!(ring.radius, ring.floor as f64);
+        assert!(ring.turbo.is_none());
     }
 }
