@@ -1568,6 +1568,9 @@ pub fn normalize(arms: &mut [Arm], region: usize) {
     // The streets a lane can go to: every street but the pedestrian ones, which nothing drives into.
     let dests: Vec<(u32, i32)> = arms.iter().filter(|a| !a.is_pedestrian()).map(|a| (a.uid, a.bearing)).collect();
     let avail: Vec<u8> = (0..arms.len()).map(|i| classes_of(arms, i)).collect();
+    // The arms that have lanes again after having none: the other arms' lanes lead to them by default.
+    let regained: Vec<(u32, i32)> =
+        arms.iter().filter(|a| !a.is_pedestrian() && a.lanes.is_empty() && !a.profile(region).enter_x.is_empty()).map(|a| (a.uid, a.bearing)).collect();
     for (a, avail) in arms.iter_mut().zip(avail) {
         let p = a.profile(region);
         let n = p.enter_x.len();
@@ -1583,6 +1586,8 @@ pub fn normalize(arms: &mut [Arm], region: usize) {
             a.lanes = (0..n).map(|k| Lane { to: default(k) }).collect();
         }
         for (k, l) in a.lanes.iter_mut().enumerate() {
+            let want = default_uses(k, n, avail);
+            l.to.extend(regained.iter().filter(|(u, b)| *u != uid && want & turn_class(bearing, *b) != 0).map(|(u, _)| *u));
             l.to.retain(|u| *u != uid && dests.iter().any(|(d, _)| d == u));
             l.to.sort_unstable();
             l.to.dedup();
@@ -1713,6 +1718,30 @@ mod tests {
         let arm = j.current().arms.iter().find(|a| a.bearing == 0).unwrap();
         assert!(!arm.lanes.is_empty() && arm.lanes.iter().all(|l| l.to.is_empty()));
         let _ = j.view();
+    }
+
+    #[test]
+    fn the_lanes_of_the_other_arms_lead_again_to_an_arm_that_regains_traffic() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let mut arms = j.current().arms.clone();
+        let walk = arms.iter().position(|a| a.bearing == 90).unwrap();
+        let x = arms[walk].uid;
+        assert!(arms.iter().all(|a| a.lanes.iter().all(|l| !l.to.contains(&x))));
+        // The resident took one street out of a lane of the north arm that has two or more.
+        let north = arms.iter().position(|a| a.bearing == 0).unwrap();
+        let lane = arms[north].lanes.iter().position(|l| l.to.len() > 1).expect("a lane with a choice");
+        let removed = arms[north].lanes[lane].to.remove(0);
+        let street = arms[north].section.clone();
+        arms[walk].section = street;
+        normalize(&mut arms, 0);
+        for (i, a) in arms.iter().enumerate().filter(|(i, _)| *i != walk) {
+            let avail = classes_of(&arms, i);
+            for (k, l) in a.lanes.iter().enumerate() {
+                let serves = default_uses(k, a.lanes.len(), avail) & turn_class(a.bearing, 90) != 0;
+                assert_eq!(l.to.contains(&x), serves, "arm {} lane {k}", a.bearing);
+            }
+        }
+        assert!(!arms[north].lanes[lane].to.contains(&removed), "what the resident removed stays removed");
     }
 
     #[test]
