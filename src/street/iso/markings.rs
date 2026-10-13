@@ -5,6 +5,7 @@
 use crate::shared::catalogue::KINDS;
 use crate::shared::iso::paint::{Paint, Pattern, Style};
 use crate::street::model::{SegView, View};
+use crate::street::svg::curb_edges;
 
 const SOLID_WHITE: Style = Style { paint: Paint::White, pattern: Pattern::Solid, double: false };
 const BROKEN_WHITE: Style = Style { paint: Paint::White, pattern: Pattern::Broken, double: false };
@@ -51,8 +52,12 @@ fn runs_opposite(a: &SegView, b: &SegView) -> bool {
 }
 
 /// The line on the boundary between two neighbouring pieces, by the kind each shows at the shown time. Where the
-/// roadway meets a curb, sidewalk, planting or median there is none: the curb marks the edge.
-fn between(a: &SegView, b: &SegView) -> Option<Style> {
+/// roadway meets a curb, sidewalk, planting or median there is none: the curb marks the edge, and so does the curb
+/// of a bike lane or island (`curbed`: either neighbour carries one on this shared edge).
+fn between(a: &SegView, b: &SegView, curbed: bool) -> Option<Style> {
+    if curbed {
+        return None;
+    }
     let opposed = runs_opposite(a, b);
     match (KINDS[a.kind].id, KINDS[b.kind].id) {
         ("travel", "travel") => Some(if opposed { DOUBLE_YELLOW } else { BROKEN_WHITE }),
@@ -75,8 +80,14 @@ fn symbol(s: &SegView) -> Option<Symbol> {
 
 /// The lines and symbols of the street as it is shown now: a pure function of the view.
 pub fn markings(v: &View) -> Markings {
-    let mut lines: Vec<Line> =
-        v.segments.windows(2).filter_map(|w| between(&w[0], &w[1]).map(|style| Line { x_mm: w[0].x_mm + w[0].width_mm, style })).collect();
+    // Whether the edge between piece `i` and the next carries a curb of either: the right edge of `i`, the left of `i + 1`.
+    let curbed = |i: usize| curb_edges(v, i).contains(&true) || curb_edges(v, i + 1).contains(&false);
+    let mut lines: Vec<Line> = v
+        .segments
+        .windows(2)
+        .enumerate()
+        .filter_map(|(i, w)| between(&w[0], &w[1], curbed(i)).map(|style| Line { x_mm: w[0].x_mm + w[0].width_mm, style }))
+        .collect();
     // A two-way bike lane carries a single broken yellow line down its middle.
     lines.extend(
         v.segments.iter().filter(|s| KINDS[s.kind].id == "bike" && s.direction.is_none()).map(|s| Line { x_mm: s.x_mm + s.width_mm / 2, style: BROKEN_YELLOW }),
@@ -195,9 +206,28 @@ mod tests {
     }
 
     #[test]
+    fn a_bike_lane_with_its_own_curb_has_no_line_where_it_meets_the_roadway_and_without_one_has() {
+        let mut e = Editor::new(0);
+        let bike = e.add(kind_index("bike").unwrap(), 3);
+        let curbed = e.view().segments[3].curb.is_some();
+        assert!(curbed, "a bike lane has a curb by default");
+        let m = markings(&e.view());
+        assert!(at(&m, edge(&e, 2)).is_empty() && at(&m, edge(&e, 3)).is_empty(), "the curb marks the edge: {:?}", m.lines);
+        assert!(e.set_curb(bike, None));
+        let m = markings(&e.view());
+        assert_eq!(at(&m, edge(&e, 2)), vec![SOLID_WHITE]);
+        assert_eq!(at(&m, edge(&e, 3)), vec![SOLID_WHITE]);
+        // Uncurbed and running against the lane before it: the double yellow.
+        let against = opposite(dir(&e, 2));
+        assert!(e.set_direction(bike, Some(against)));
+        assert_eq!(at(&markings(&e.view()), edge(&e, 2)), vec![DOUBLE_YELLOW]);
+    }
+
+    #[test]
     fn a_two_way_bike_lane_has_solid_white_edges_and_a_broken_yellow_line_down_its_middle() {
         let mut e = Editor::new(0);
         let bike = e.add(kind_index("bike").unwrap(), 3);
+        assert!(e.set_curb(bike, None));
         let v = e.view();
         let s = v.segments.iter().find(|s| s.uid == bike).unwrap();
         assert!(s.direction.is_none());
@@ -211,6 +241,7 @@ mod tests {
     fn a_one_way_bike_lane_with_the_traffic_has_solid_white_on_both_sides_and_no_middle_line() {
         let mut e = Editor::new(0);
         let bike = e.add(kind_index("bike").unwrap(), 3);
+        assert!(e.set_curb(bike, None));
         let with = dir(&e, 2);
         assert!(e.set_direction(bike, Some(with)));
         let v = e.view();
@@ -226,6 +257,7 @@ mod tests {
     fn a_contraflow_bike_lane_beside_the_lane_it_runs_against_is_double_yellow() {
         let mut e = Editor::new(0);
         let bike = e.add(kind_index("bike").unwrap(), 3);
+        assert!(e.set_curb(bike, None));
         let against = opposite(dir(&e, 2));
         assert!(e.set_direction(bike, Some(against)));
         let m = markings(&e.view());

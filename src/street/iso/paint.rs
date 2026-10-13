@@ -100,6 +100,8 @@ mod tests {
         let mut e = Editor::new(0);
         let bike = e.add(kind_index("bike").unwrap(), 3);
         assert!(e.set_width(bike, 1_200));
+        // Uncurbed, so that its edges are painted (a curbed bike lane's are the curb's).
+        assert!(e.set_curb(bike, None));
         let v = e.view();
         let p = fit(&v, 600.0);
         assert!(1_200.0 * p.scale < MIN_SOLID_PX);
