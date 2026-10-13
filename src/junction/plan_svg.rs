@@ -477,7 +477,12 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
                     let (dx, dy) = dir_of(ang);
                     let (x, y) = f.at((dx * t, dy * t));
                     let heading = ang + if ccw { -90.0 } else { 90.0 };
-                    let h = 30.0_f64;
+                    // never longer than its lane is wide on screen
+                    let lane_px = match (mouth_on(&outer.outer, ang, 0.0), mouth_on(&outer.inner, ang, 0.0)) {
+                        (Some(o), Some(i)) => (o - i).abs() * f.scale,
+                        _ => 30.0,
+                    };
+                    let h = 30.0_f64.min(lane_px * 0.85);
                     let head = h * 0.2;
                     let d = format!("M0 {}V{}M{} {}L0 {}L{} {}", h / 2.0, -h / 2.0, -head, -h / 2.0 + head, -h / 2.0, head, -h / 2.0 + head);
                     write!(
@@ -829,6 +834,25 @@ mod tests {
     fn a_turbo_roundabout_has_an_arrow_on_every_entering_lane_and_one_for_each_gap_of_the_ring() {
         let m = svg(&turbo(0)).markup;
         assert_eq!(count(&m, "class=\"lane-arrow\""), 8 + 4, "two lanes on each of four streets, and the ring's own");
+    }
+
+    #[test]
+    fn a_turbo_s_circulation_arrow_never_outgrows_its_lane() {
+        let v = turbo(0).view();
+        let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
+        let small = plan_svg(&v, &i18n, 60.0, 60.0, Units::Metres);
+        let lane_px = 5000.0 * small.frame.scale; // the mini block's outer lane: R4 - R3
+        let arrows: Vec<f64> = small
+            .markup
+            .split("class=\"lane-arrow\"")
+            .skip(1)
+            .filter_map(|a| a.split("--arrow:").nth(1)?.split(';').next()?.split('"').next()?.parse().ok())
+            .collect();
+        assert!(!arrows.is_empty());
+        // the ring's own arrows are drawn first, the four of them; the entering lanes' keep their own size
+        for h in &arrows[..4] {
+            assert!(*h <= lane_px * 0.9, "arrow {h} px in a lane {lane_px} px wide");
+        }
     }
 
     #[test]
