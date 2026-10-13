@@ -30,12 +30,6 @@ impl Storage for BrowserStorage {
     fn keys(&self) -> Vec<String> {
         store::keys()
     }
-
-    fn first_time(&self, what: &str) -> bool {
-        // one page is one module instance, and every `BrowserStorage` of it is the same local storage
-        thread_local!(static ASKED: std::cell::RefCell<std::collections::HashSet<String>> = Default::default());
-        ASKED.with(|asked| asked.borrow_mut().insert(what.to_string()))
-    }
 }
 
 /// Timers, kept by id so that they can be called off.

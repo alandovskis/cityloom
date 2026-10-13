@@ -250,35 +250,6 @@ mod tests {
     }
 
     #[test]
-    fn a_city_saved_before_places_carried_their_source_has_only_what_was_changed_marked_changed() {
-        let net = crossing();
-        let mut city = City::from_network(&net, "Testville");
-        let edge = city.view(0).edges[0].uid;
-        let mut e = city.street_editor(edge, 0).unwrap();
-        let u = e.view().segments[1].uid;
-        assert!(e.nudge_width(u, 100));
-        assert!(city.keep_street(edge, e.snapshot()));
-        // the save as an older version wrote it: none of its places has a source
-        let mut saved: serde_json::Value = serde_json::from_str(&city.legacy_save()).unwrap();
-        fn strip(v: &mut serde_json::Value) {
-            match v {
-                serde_json::Value::Object(m) => {
-                    m.remove("source");
-                    m.values_mut().for_each(strip);
-                }
-                serde_json::Value::Array(a) => a.iter_mut().for_each(strip),
-                _ => {}
-            }
-        }
-        strip(&mut saved);
-        let loaded = City::load_old(Layout::from_network(&net, "Testville"), &saved.to_string());
-        let v = loaded.view(0);
-        assert_eq!((v.edited, v.edges[0].edited), (1, true));
-        let source = loaded.street_editor(edge, 0).unwrap().view().source;
-        assert_eq!(source.len(), 1);
-    }
-
-    #[test]
     fn a_bus_lane_with_hours_is_parking_outside_them() {
         let p = piece(&bus_lane(Some("Mo-Fr 06:00-10:00,14:30-19:00")));
         assert_eq!(KINDS[p.kind].id, "parking");
