@@ -394,3 +394,16 @@ jn-insp-min-arms = { $n ->
 }
 jn-insp-lanes-in = Voies entrantes
 jn-insp-one-way-out = Sens unique sortant. Aucune voie n’entre.
+
+jn-refusal-not-signal = Le réglage des feux n’existe qu’à un carrefour à feux de circulation.
+jn-refusal-timing-out-of-range = Cette durée est hors de ce qu’un feu peut utiliser.
+jn-refusal-no-transit-lane = Une avance pour le transport en commun exige une voie réservée sur cette rue.
+jn-timing-green = Vert
+jn-timing-yellow = Jaune
+jn-timing-all-red = Rouge intégral
+jn-timing-transit-lead = Avance pour le transport en commun
+jn-rev-timing = { $arm } : { $field } { $seconds } s
+jn-rev-control-timing = Signalisation : { $control }; réglage des feux retiré
+jn-rev-control-boxes-timing = Signalisation : { $control }; sas cyclables et réglage des feux retirés
+jn-rev-control-protected-timing = Signalisation : { $control }; coins protégés et réglage des feux retirés
+jn-rev-control-all = Signalisation : { $control }; sas cyclables, coins protégés et réglage des feux retirés
