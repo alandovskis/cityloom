@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::shared::catalogue::{
-    CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, Side, StreetClass, class_key, is_motor, kind_index,
+    CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, PEDESTRIAN_KINDS, REGIONS, Side, StreetClass, class_key, is_motor, kind_index,
 };
 use crate::shared::provenance::OsmRef;
 use crate::street::measures;
@@ -937,6 +937,24 @@ impl Editor {
         ok
     }
 
+    /// Makes the street pedestrian: every motor piece (travel, parking, loading, bus, shoulder, at any hour: a bike
+    /// lane with a motor hour is one too) becomes a piece of `kind` (one of `PEDESTRIAN_KINDS`) at its own width and
+    /// in its own place, with that kind's surface and curb and without hours or direction; the other pieces, bike
+    /// lanes among them, stay. One undoable edit. Refused when no piece is a motor piece, or `kind` is not one of the three.
+    pub fn make_pedestrian(&mut self, kind: usize) -> bool {
+        if kind >= KINDS.len() || !PEDESTRIAN_KINDS.contains(&KINDS[kind].id) {
+            return false;
+        }
+        self.edit(Said::new("rev-made-pedestrian"), |segs| {
+            let mut changed = false;
+            for s in segs.iter_mut().filter(|s| s.has_motor()) {
+                *s = Segment::new(s.uid, kind, s.width_mm);
+                changed = true;
+            }
+            changed
+        })
+    }
+
     pub fn nudge_width(&mut self, uid: u32, delta_mm: i32) -> bool {
         let Some(s) = self.current().iter().find(|s| s.uid == uid) else {
             return false;
@@ -1093,6 +1111,7 @@ impl Editor {
         View {
             name: title_of(self.street_name.as_deref(), self.class()),
             class: self.class(),
+            has_motor: segs.iter().any(Segment::has_motor),
             region: REGIONS[self.region].id,
             row_mm: self.row_mm,
             total_mm,
@@ -1103,7 +1122,7 @@ impl Editor {
             existing_total_mm: total(existing),
             selected: self.selected,
             outcomes: outcomes(&now, &existing_now),
-            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side, self.class().is_freeway()),
+            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side, self.class().is_freeway(), self.class() == StreetClass::Pedestrian),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
@@ -1192,14 +1211,33 @@ fn outcomes(segs: &[Segment], existing: &[Segment]) -> Outcomes {
     Outcomes { share: shares(segs), existing_share: shares(existing), capacity_pph: capacity(segs), existing_capacity_pph: capacity(existing) }
 }
 
-fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check> {
+/// The widest unbroken run of adjacent sidewalk pieces; any other piece between two sidewalks breaks the run.
+fn widest_walkway_mm(segs: &[Segment]) -> i32 {
+    let (mut best, mut run) = (0, 0);
+    for s in segs {
+        if KINDS[s.kind].id == "sidewalk" {
+            run += s.width_mm;
+            best = best.max(run);
+        } else {
+            run = 0;
+        }
+    }
+    best
+}
+
+fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, pedestrian: bool) -> Vec<Check> {
     let total_mm = total(segs);
     let delta = total_mm - row_mm;
     let fits = delta <= 0;
     let edge_walk = |s: Option<&Segment>| s.is_some_and(|s| KINDS[s.kind].id == "sidewalk");
-    // A freeway has no sidewalks to ask for.
-    let both_edges = freeway || (edge_walk(segs.first()) && edge_walk(segs.last()));
-    let access = segs.iter().any(|s| matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= ACCESS_LANE_MM);
+    // A freeway has no sidewalks to ask for, and a pedestrian street no roadway to edge.
+    let both_edges = freeway || pedestrian || (edge_walk(segs.first()) && edge_walk(segs.last()));
+    // A pedestrian street keeps room for emergency vehicles in an unbroken run of sidewalk; the others in a lane.
+    let access = if pedestrian {
+        widest_walkway_mm(segs) >= ACCESS_LANE_MM
+    } else {
+        segs.iter().any(|s| matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= ACCESS_LANE_MM)
+    };
     // With traffic on the right, lanes coming toward the viewer (1) sit to the
     // left of lanes going away (0); with traffic on the left, the reverse. A
     // one-way street has nothing to conflict.
@@ -1225,6 +1263,8 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check
             label: Said::new("check-label-edges"),
             detail: if freeway {
                 Said::new("check-detail-no-sidewalks")
+            } else if pedestrian {
+                Said::new("check-detail-no-edges-pedestrian")
             } else if both_edges {
                 Said::new("check-detail-both-sides")
             } else {
@@ -1235,10 +1275,14 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool) -> Vec<Check
             id: "access",
             ok: access,
             label: Said::new("check-label-access"),
-            detail: if access {
-                Said::new("check-access-ok").with("amount", Arg::Length(ACCESS_LANE_MM))
-            } else {
-                Said::new("check-access-bad").with("amount", Arg::Length(ACCESS_LANE_MM))
+            detail: {
+                let key = match (pedestrian, access) {
+                    (false, true) => "check-access-ok",
+                    (false, false) => "check-access-bad",
+                    (true, true) => "check-access-ped-ok",
+                    (true, false) => "check-access-ped-bad",
+                };
+                Said::new(key).with("amount", Arg::Length(ACCESS_LANE_MM))
             },
         },
         Check {
@@ -1333,6 +1377,8 @@ pub struct View {
     /// What the street is called: its own name, or else what sort of street it is.
     pub name: Said,
     pub class: StreetClass,
+    /// Some piece is a motor piece at some hour: the street can be made pedestrian.
+    pub has_motor: bool,
     pub region: &'static str,
     /// The time of day shown, in minutes after midnight.
     pub time_min: i32,
@@ -2355,5 +2401,115 @@ mod tests {
         s.segments[travel].tram = true;
         s.segments[travel].variants = vec![Variant { kind: 9_999, material: 0, direction: None, from_min: 0, to_min: 60, days: None }];
         assert!(!s.is_sound());
+    }
+
+    /// A street of these kinds at these widths (kind id, mm), made as an import makes it.
+    fn street_widths(class: StreetClass, pieces: &[(&str, i32)]) -> Street {
+        let mut s = street_of(class, &pieces.iter().map(|p| p.0).collect::<Vec<_>>());
+        for (g, p) in s.segments.iter_mut().zip(pieces) {
+            g.width_mm = p.1;
+        }
+        s
+    }
+
+    #[test]
+    fn making_a_street_pedestrian_turns_every_motor_piece_into_the_chosen_kind_in_one_edit_and_keeps_the_bike_lane() {
+        for id in PEDESTRIAN_KINDS {
+            let want = kind(id);
+            let s = street_of(StreetClass::Arterial, &["sidewalk", "parking", "bus", "travel", "bike", "loading", "shoulder", "sidewalk"]);
+            let mut e = Editor::from_street(&s, &s, 0);
+            let before: Vec<(u32, i32)> = e.view().segments.iter().map(|g| (g.uid, g.width_mm)).collect();
+            assert!(e.make_pedestrian(want), "{id}");
+            let v = e.view();
+            assert_eq!(ids(&e), ["sidewalk", id, id, id, "bike", id, id, "sidewalk"], "the bike lane stays");
+            assert_eq!(v.segments.iter().map(|g| (g.uid, g.width_mm)).collect::<Vec<_>>(), before, "the same pieces at the same widths");
+            assert!(v.segments.iter().all(|g| g.variants.is_empty() && g.direction.is_none()));
+            assert_eq!(v.segments[1].curb.is_some(), KINDS[want].has_curb, "the kind's own curb");
+            assert_eq!(v.segments[1].material, MATERIALS[KINDS[want].materials[0]].id, "the kind's own surface");
+            assert_eq!((v.class, v.has_motor), (StreetClass::Pedestrian, false));
+            assert_eq!(v.revisions.len(), 1);
+            assert_eq!(says(&v.revisions[0].label), "Made pedestrian");
+            assert!(e.undo());
+            assert_eq!((e.view().class, e.view().has_motor), (StreetClass::Arterial, true));
+            assert_eq!(ids(&e), ["sidewalk", "parking", "bus", "travel", "bike", "loading", "shoulder", "sidewalk"]);
+        }
+    }
+
+    #[test]
+    fn a_bike_lane_that_is_motor_at_some_hour_is_made_pedestrian_too() {
+        let timed = Piece {
+            kind: kind("bike"),
+            width_mm: 2400,
+            direction: None,
+            variants: vec![Window { kind: kind("parking"), from_min: 420, to_min: 540, days: None }],
+        };
+        let walk = Piece { kind: kind("sidewalk"), width_mm: 3000, direction: None, variants: Vec::new() };
+        let s = Street::imported(StreetClass::Local, Side::Right, &[walk.clone(), timed, walk]);
+        assert!(s.has_motor());
+        let mut e = Editor::from_street(&s, &s, 0);
+        assert!(e.make_pedestrian(kind("planting")));
+        assert_eq!(ids(&e), ["sidewalk", "planting", "sidewalk"]);
+        assert!(e.view().segments.iter().all(|g| g.variants.is_empty()));
+    }
+
+    #[test]
+    fn making_pedestrian_is_refused_where_no_piece_is_motor_or_the_kind_is_not_one_of_the_three() {
+        let walkway = street_of(StreetClass::Local, &["sidewalk", "planting"]);
+        let mut e = Editor::from_street(&walkway, &walkway, 0);
+        assert!(!e.make_pedestrian(kind("sidewalk")));
+        assert_eq!(e.view().revisions.len(), 0);
+        let busy = street_of(StreetClass::Local, &["sidewalk", "travel", "sidewalk"]);
+        let mut e = Editor::from_street(&busy, &busy, 0);
+        for bad in [kind("bench"), kind("travel"), kind("bike"), KINDS.len(), usize::MAX] {
+            assert!(!e.make_pedestrian(bad), "{bad}");
+        }
+        assert_eq!(e.view().revisions.len(), 0);
+    }
+
+    /// The check of this id on a pedestrian street of these pieces.
+    fn ped_check(pieces: &[(&str, i32)], id: &str) -> Check {
+        let s = street_widths(StreetClass::Pedestrian, pieces);
+        Editor::from_street(&s, &s, 0).view().checks.into_iter().find(|c| c.id == id).unwrap()
+    }
+
+    #[test]
+    fn a_pedestrian_street_has_room_for_emergency_vehicles_on_an_unbroken_run_of_sidewalk_of_three_metres() {
+        for (pieces, ok) in [
+            (&[("sidewalk", 3000)][..], true),
+            (&[("sidewalk", 2000), ("sidewalk", 1500)], true),
+            (&[("sidewalk", 2900)], false),
+            (&[("sidewalk", 2000), ("bench", 700), ("sidewalk", 2000)], false),
+            (&[("sidewalk", 2000), ("planting", 1800), ("sidewalk", 2000)], false),
+            (&[("terrace", 4000), ("pole", 600)], false),
+        ] {
+            let c = ped_check(pieces, "access");
+            assert_eq!(c.ok, ok, "{pieces:?}");
+            assert_eq!(c.detail.key, if ok { "check-access-ped-ok" } else { "check-access-ped-bad" }, "{pieces:?}");
+            assert_eq!(c.detail.args, [("amount", Arg::Length(3000))]);
+        }
+    }
+
+    #[test]
+    fn a_pedestrian_street_asks_for_no_sidewalk_on_both_sides_and_a_street_with_a_motor_piece_is_judged_as_before() {
+        let c = ped_check(&[("planting", 3000), ("terrace", 3000)], "edges");
+        assert!(c.ok);
+        assert_eq!(c.detail.key, "check-detail-no-edges-pedestrian");
+        let busy = street_widths(StreetClass::Local, &[("planting", 3000), ("travel", 3300)]);
+        let checks = Editor::from_street(&busy, &busy, 0).view().checks;
+        let edges = checks.iter().find(|c| c.id == "edges").unwrap();
+        assert!(!edges.ok, "a street of traffic with no sidewalk on both sides still fails");
+        let access = checks.iter().find(|c| c.id == "access").unwrap();
+        assert_eq!(access.detail.key, "check-access-ok", "and keeps its lane test");
+        assert!(ped_check(&[("sidewalk", 3000)], "fits").ok, "fits is judged as ever");
+    }
+
+    #[test]
+    fn the_view_says_whether_the_street_has_a_motor_piece_at_any_hour() {
+        let s = street_of(StreetClass::Local, &["sidewalk", "travel", "sidewalk"]);
+        let mut e = Editor::from_street(&s, &s, 0);
+        assert!(e.view().has_motor);
+        let lane = e.view().segments[1].uid;
+        assert!(e.remove(lane));
+        assert!(!e.view().has_motor);
     }
 }
