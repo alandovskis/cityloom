@@ -178,6 +178,28 @@ pub fn choose_turbo(s: &State, region: usize, which: usize) -> Option<(Turbo, bo
     Some((Turbo { layout: which, size: BLOCKS.len() - 1, main }, false))
 }
 
+/// The main road `switch_turbo_main` moves the turbo on `s` to, and whether the move is accepted (so whether the
+/// inspector offers the button): the next candidate after the turbo's own that stands and that its block holds. A main
+/// road that is not a candidate any more (its arms were turned off a straight line, which the skew limit allows) is left
+/// for the best candidate that stands. When none stands, the next candidate in turn with `false`, for the refusal to
+/// say why. None when there is no turbo or no other main road to go to.
+pub fn next_main(s: &State, region: usize) -> Option<(Vec<u32>, bool)> {
+    let t = s.turbo.as_ref()?;
+    let candidates = main_candidates(&s.arms, region, t.layout);
+    let after = candidates.iter().position(|m| *m == t.main).map_or(0, |i| i + 1);
+    let others: Vec<&Vec<u32>> = candidates.iter().cycle().skip(after).take(candidates.len()).filter(|m| **m != t.main).collect();
+    let mut held = s.clone();
+    let stands = |m: &Vec<u32>, held: &mut State| {
+        let turbo = Turbo { main: m.clone(), ..t.clone() };
+        held.turbo = Some(turbo.clone());
+        turbo.standable(&s.arms, region) && layout(held, region).is_some()
+    };
+    match others.iter().find(|m| stands(m, &mut held)) {
+        Some(m) => Some(((*m).clone(), true)),
+        None => others.first().map(|m| ((*m).clone(), false)),
+    }
+}
+
 /// Puts the junction on the sheet, or says it cannot be drawn: a corner whose
 /// curbs meet behind the junction, a fillet longer than its arm, a roundabout
 /// that will not fit its arms in the largest ring.
@@ -1299,12 +1321,8 @@ impl Junction {
                     label_key: spec.label_key,
                     size_key: block.key,
                     main: t.main.clone(),
-                    can_switch_main: main_candidates(&s.arms, region, t.layout).len() > 1,
-                    main_switch_moves_lanes: {
-                        let c = main_candidates(&s.arms, region, t.layout);
-                        let next = c.iter().position(|m| *m == t.main).map(|i| &c[(i + 1) % c.len()]);
-                        next.is_some_and(|n| n.len() == 2 && n[0] == t.main[1] && n[1] == t.main[0])
-                    },
+                    can_switch_main: next_main(s, region).is_some_and(|(_, accepted)| accepted),
+                    main_switch_moves_lanes: next_main(s, region).is_some_and(|(n, _)| n.len() == 2 && n[0] == t.main[1] && n[1] == t.main[0]),
                     can_smaller: t.size > 0,
                     can_larger: t.size + 1 < BLOCKS.len(),
                 })

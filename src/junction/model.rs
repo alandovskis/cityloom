@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 use crate::junction::geometry::gap;
-use crate::junction::turbo::{self, BLOCKS, LAYOUTS, Turbo, main_candidates};
+use crate::junction::turbo::{self, BLOCKS, LAYOUTS, Turbo};
 use crate::street::model::{Editor, Street, View, named_said};
 
 #[cfg(test)]
@@ -1757,10 +1757,11 @@ impl Junction {
     /// Makes the next opposite pair of streets the main road (a knee also swaps which of the two has two lanes).
     pub fn switch_turbo_main(&mut self) -> bool {
         let region = self.region;
-        let Some(t) = self.current().turbo.clone() else { return self.refuse(Refusal::DoesNotFit) };
-        let candidates = main_candidates(&self.current().arms, region, t.layout);
-        let next = candidates.iter().position(|m| *m == t.main).map(|i| candidates[(i + 1) % candidates.len()].clone()).filter(|m| *m != t.main);
-        let Some(next) = next else { return self.refuse(Refusal::DoesNotFit) };
+        if self.current().turbo.is_none() {
+            return self.refuse(Refusal::DoesNotFit);
+        }
+        // One that stands, else the next in turn, which the edit then refuses by saying why.
+        let Some((next, _)) = crate::junction::read_model::next_main(self.current(), region) else { return self.refuse(Refusal::DoesNotFit) };
         let (Some(a), Some(b)) = (self.arm(next[0]), self.arm(next[1])) else { return self.refuse(Refusal::DoesNotFit) };
         let label = Said::new("jn-rev-turbo-main").with("from", Arg::Said(Box::new(arm_name(a)))).with("to", Arg::Said(Box::new(arm_name(b))));
         self.edit_why(Refusal::RoundaboutTooBig, label, move |s| s.turbo.as_mut().map(|t| t.main = next.clone()).is_some())
@@ -3736,6 +3737,21 @@ mod tests {
         let busy = Junction::from_city(named_said("Test"), &back, &back, 0).expect("it draws");
         assert_eq!(busy.current().control, ROUNDABOUT);
         assert_eq!(busy.current().turbo, turbo, "the same layout, block and main");
+    }
+
+    #[test]
+    fn a_main_road_that_is_no_longer_an_opposite_pair_can_be_moved_to_one_that_is() {
+        let mut j = narrow_roundabout();
+        assert!(j.set_turbo(Some(0)));
+        let (north, south) = (arm_at(&j, 0), arm_at(&j, 180));
+        assert!(j.set_bearing(north, 20) && j.set_bearing(south, 160), "each main arm 20 degrees off, which is allowed: the pair is 140 apart");
+        let t = j.current().turbo.clone().expect("the turbo stands");
+        assert_eq!(t.main, [1, 3], "the north-south road is still the main road");
+        assert!(j.view().turbo.as_ref().unwrap().can_switch_main, "the button is shown");
+        assert!(j.switch_turbo_main(), "and the switch is accepted");
+        assert_eq!(j.current().turbo.as_ref().unwrap().main, [2, 4]);
+        assert!(!j.view().turbo.as_ref().unwrap().can_switch_main, "the only pair that stands is the main road now");
+        assert!(!j.switch_turbo_main());
     }
 
     #[test]
