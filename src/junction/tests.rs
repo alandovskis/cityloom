@@ -1486,3 +1486,82 @@ fn a_length_is_held_with_the_decimal_mark_of_the_language() {
     en.edit(|j| j.set_cycle(Some(2_500)));
     assert!(panel(&en).contains("value=\"2.5\""));
 }
+
+// ---- signal timing in the details ----
+
+/// The panel's words, with the engine's non-breaking spaces as ordinary ones.
+fn plain_panel(s: &Rc<JunctionVm>) -> String {
+    panel(s).replace(['\u{a0}', '\u{202f}'], " ")
+}
+
+#[test]
+fn the_junction_panel_of_a_signal_lists_the_phases_with_the_cycle() {
+    let s = shared(0);
+    let h = plain_panel(&s);
+    assert!(h.contains("Signal timing") && h.contains("Cycle: 120 s"), "{h}");
+    assert_eq!(count(&h, "class=\"signal-list\""), 1);
+    assert_eq!(count(&h, "green 25 s, yellow 3 s, all-red 2 s"), 4, "a row for each street: {h}");
+    assert!(!plain_panel(&shared(1)).contains("Signal timing"), "no signal, no section");
+}
+
+#[test]
+fn the_arm_panel_has_three_steppers_and_a_fourth_for_a_street_with_a_transit_lane() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = plain_panel(&s);
+    for id in ["i-h-green", "i-h-yellow", "i-h-all-red"] {
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    assert!(!h.contains("id=\"i-h-lead\""), "no early green without a transit lane");
+    s.edit(|j| j.set_bus_lane(e, true));
+    assert!(panel(&s).contains("id=\"i-h-lead\""));
+}
+
+#[test]
+fn the_arm_panel_says_what_else_runs_in_the_phase() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = plain_panel(&s);
+    assert!(h.contains("Also walks: crossings on"), "turns into the north and south streets give way: {h}");
+    assert!(!h.contains("Also rides"), "the sample has no bike lanes: {h}");
+
+    use crate::junction::model::junction_of;
+    let biked = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+    let n = biked.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+    let b = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(crate::shared::i18n::Locale::En), biked, None);
+    b.edit(|j| j.select(Target::Arm(n)));
+    assert!(plain_panel(&b).contains("Also rides: bikes from"), "the street across rides with it");
+}
+
+#[test]
+fn the_timing_panels_are_not_there_off_a_signal_and_speak_french() {
+    use crate::shared::i18n::Locale;
+    let plain = shared(1);
+    let a = plain.read(|j| j.current().arms[0].uid);
+    plain.edit(|j| j.select(Target::Arm(a)));
+    assert!(!plain_panel(&plain).contains("Signal timing"));
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::FrCa), Junction::new(0), None);
+    let h = plain_panel(&s);
+    assert!(h.contains("Réglage des feux") && h.contains("Cycle : 120 s"), "{h}");
+    assert_eq!(s.i18n().missing(), Vec::<String>::new());
+}
+
+#[test]
+fn a_typed_time_is_read_with_a_comma_and_a_bad_one_changes_nothing() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    let set = |typed: &str| {
+        inspector::commit_typed(typed, &|v| {
+            s.edit(|j| j.set_timing(e, TimingField::Green, v.round() as i32));
+        })
+    };
+    assert!(set("30,0"));
+    assert_eq!(s.read(|j| j.arm(e).unwrap().timing.unwrap().green_s), 30);
+    for bad in ["abc", "", "-5", "1e9", "121"] {
+        let before = s.read(|j| j.arm(e).unwrap().timing);
+        set(bad);
+        assert_eq!(s.read(|j| j.arm(e).unwrap().timing), before, "{bad:?} changes nothing");
+    }
+}

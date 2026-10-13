@@ -414,3 +414,15 @@ jn-check-signal-walk-bad = Not enough time to cross at { $arms }
 jn-check-signal-cycle = Signal cycle
 jn-check-signal-cycle-ok = The cycle is { $seconds } s
 jn-check-signal-cycle-bad = The cycle is { $seconds } s, over the { $max } s a signal should keep
+
+jn-insp-signal = Signal timing
+jn-sig-cycle = Cycle: { $seconds } s
+jn-sig-row = { $street }: green { $green } s, yellow { $yellow } s, all-red { $all_red } s
+jn-sig-row-lead = { $street }: early green { $lead } s, green { $green } s, yellow { $yellow } s, all-red { $all_red } s
+jn-sig-walks = Also walks: crossings on { $arms }.
+jn-sig-rides = Also rides: bikes from { $arms }.
+jn-sig-alone = Nothing else runs during this phase.
+jn-sig-no-phase = Nothing enters from this street, so it has no green of its own.
+jn-sig-shorter = Shorter by { $seconds } s
+jn-sig-longer = Longer by { $seconds } s
+jn-sig-range = { $min } to { $max } s

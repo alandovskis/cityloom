@@ -414,3 +414,15 @@ jn-check-signal-walk-bad = Pas assez de temps pour traverser à { $arms }
 jn-check-signal-cycle = Cycle des feux
 jn-check-signal-cycle-ok = Le cycle dure { $seconds } s
 jn-check-signal-cycle-bad = Le cycle dure { $seconds } s, au-delà des { $max } s qu’un feu devrait garder
+
+jn-insp-signal = Réglage des feux
+jn-sig-cycle = Cycle : { $seconds } s
+jn-sig-row = { $street } : vert { $green } s, jaune { $yellow } s, rouge intégral { $all_red } s
+jn-sig-row-lead = { $street } : avance { $lead } s, vert { $green } s, jaune { $yellow } s, rouge intégral { $all_red } s
+jn-sig-walks = Les traverses de { $arms } sont aussi ouvertes.
+jn-sig-rides = Les vélos de { $arms } roulent aussi.
+jn-sig-alone = Rien d’autre ne bouge pendant cette phase.
+jn-sig-no-phase = Rien n’entre par cette rue : elle n’a pas de vert à elle.
+jn-sig-shorter = Plus court de { $seconds } s
+jn-sig-longer = Plus long de { $seconds } s
+jn-sig-range = De { $min } à { $max } s
