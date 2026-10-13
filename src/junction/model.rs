@@ -1853,7 +1853,6 @@ fn settle_turbo(s: &mut State, region: usize) {
         return;
     }
     s.bus = None;
-    s.ring_extra_mm = 0;
     for a in &mut s.arms {
         if matches!(a.approach, Q_OFFSET | Q_CURB | Q_VIRTUAL) {
             a.approach = 0;
@@ -3752,6 +3751,21 @@ mod tests {
         assert_eq!(j.current().turbo.as_ref().unwrap().main, [2, 4]);
         assert!(!j.view().turbo.as_ref().unwrap().can_switch_main, "the only pair that stands is the main road now");
         assert!(!j.switch_turbo_main());
+    }
+
+    #[test]
+    fn the_ring_size_chosen_before_a_turbo_is_back_when_the_turbo_goes() {
+        let mut j = roundabout();
+        assert!(j.set_ring(3_000));
+        assert!(j.set_turbo(Some(0)));
+        assert!(!j.set_ring(1_000), "a turbo has blocks, not a length");
+        assert_eq!(j.current().ring_extra_mm, 3_000, "kept, not used");
+        let mut bare = j.current().clone();
+        bare.ring_extra_mm = 0;
+        let radius = |s: &State| crate::junction::read_model::layout(s, 0).and_then(|l| l.ring).map(|r| r.radius);
+        assert_eq!(radius(j.current()), radius(&bare), "the ring of a turbo is its block's, whatever the size kept");
+        assert!(j.set_turbo(None));
+        assert_eq!(j.current().ring_extra_mm, 3_000, "the earlier size is back");
     }
 
     #[test]
