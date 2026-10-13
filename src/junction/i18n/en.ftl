@@ -247,6 +247,7 @@ jn-iso-label = 2.5D view of the junction. { $arms }.
 jn-plan-label = Plan of the junction, north up. { $arms }.
 jn-plan-label-roundabout = Plan of the junction, north up. { $arms }. Roundabout.
 jn-plan-label-raised = Plan of the junction, north up. { $arms }. Raised table.
+jn-plan-label-turbo = Plan of the junction, north up. { $arms }. { $name }.
 jn-svg-scale = Scale
 jn-svg-bus-only = Bus only
 # Under a street's name: the way it leaves and its width, "N · 20.0 m road".

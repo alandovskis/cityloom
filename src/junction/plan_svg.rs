@@ -9,6 +9,7 @@ use crate::junction::frame::Frame;
 use crate::junction::model::{LEFT, RIGHT, THROUGH};
 use crate::junction::read_model::{ArmView, JView, LaneView};
 use crate::junction::text::arms_text;
+use crate::junction::turbo_ring::mouth_on;
 use crate::junction::turns::compass_key;
 use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n, Locale};
@@ -277,8 +278,18 @@ impl Plan<'_> {
     }
 }
 
+/// "Basic turbo roundabout, regular size": what the drawing is, when the junction has a turbo.
+pub(crate) fn turbo_name(v: &JView, i18n: &I18n) -> Option<String> {
+    let t = v.turbo.as_ref()?;
+    Some(i18n.tr(t.label_key, &Args::new().str("size", i18n.tr(t.size_key, &Args::new()).to_lowercase())))
+}
+
 /// What a screen reader is told the drawing is, drawn again when the language changes.
 pub fn plan_label(v: &JView, i18n: &I18n) -> String {
+    let arms = arms_text(v, i18n);
+    if let Some(name) = turbo_name(v, i18n) {
+        return i18n.tr("jn-plan-label-turbo", &Args::new().str("arms", arms).str("name", name));
+    }
     let key = if v.control == "roundabout" {
         "jn-plan-label-roundabout"
     } else if v.raised {
@@ -286,7 +297,7 @@ pub fn plan_label(v: &JView, i18n: &I18n) -> String {
     } else {
         "jn-plan-label"
     };
-    i18n.tr(key, &Args::new().str("arms", arms_text(v, i18n)))
+    i18n.tr(key, &Args::new().str("arms", arms))
 }
 
 /// The plan for a drawing `width` wide in a window `window_height` high. Its words are asked for
@@ -382,6 +393,9 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         )
         .unwrap();
         l.measure += &p.measure_marks(a);
+        if let Some(e) = &a.turbo_entry {
+            write!(l.table, "<path class=\"road turbo-entry\" d=\"{}\"/>", p.path_d(e)).unwrap();
+        }
         let arm = said(&a.label);
         for (i, lane) in a.lanes.iter().enumerate() {
             write!(
@@ -404,86 +418,171 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
 
     // the carriageway where the streets meet
     if let Some(ring) = &v.ring {
-        let r = ring.road_mm as f64 * f.scale;
-        let ro = ring.radius_mm as f64 * f.scale;
-        let (cx, cy) = f.at((0.0, 0.0));
-        let ri = ring.island_mm as f64 * f.scale;
-        write!(l.road, "<circle class=\"road ring\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>", f1(cx), f1(cy), f1(r)).unwrap();
-        if ring.cycle_mm.is_some_and(|c| c != 0) {
-            let circle = |rad: f64| {
-                format!("M{} {}a{} {} 0 1 0 {} 0a{} {} 0 1 0 {} 0Z", f1(cx - rad), f1(cy), f1(rad), f1(rad), f1(2.0 * rad), f1(rad), f1(rad), f1(-2.0 * rad))
+        if !ring.lanes.is_empty() {
+            let loop_d = |pts: &[P]| {
+                let mut d = String::new();
+                for (i, q) in pts.iter().enumerate() {
+                    write!(d, "{}{}", if i == 0 { "M" } else { "L" }, p.pt(*q)).unwrap();
+                }
+                d.push('Z');
+                d
             };
-            let band = circle(ro) + &circle(r);
-            write!(
-                l.road,
-                "<g class=\"cycle-g\" data-role=\"cycle\"><path class=\"piece k-bike cycle-ring\" fill-rule=\"evenodd\" d=\"{band}\"/><path class=\"hatch\" fill-rule=\"evenodd\" fill=\"{}\" d=\"{band}\"/></g>",
-                hatch("bike")
-            )
-            .unwrap();
-            if v.selected.kind == Some("cycle") {
+            if ring.cycle_mm.is_some_and(|c| c != 0) {
+                let band = loop_d(&ring.outer_edge) + &loop_d(&ring.road_edge);
                 write!(
-                    l.sel,
-                    "<circle class=\"sel-line\" cx=\"{}\" cy=\"{}\" r=\"{}\"/><circle class=\"sel-line\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>",
-                    f1(cx),
-                    f1(cy),
-                    f1(ro),
-                    f1(cx),
-                    f1(cy),
-                    f1(r)
+                    l.road,
+                    "<g class=\"cycle-g\" data-role=\"cycle\"><path class=\"piece k-bike cycle-ring\" fill-rule=\"evenodd\" d=\"{band}\"/><path class=\"hatch\" fill-rule=\"evenodd\" fill=\"{}\" d=\"{band}\"/></g>",
+                    hatch("bike")
+                )
+                .unwrap();
+                if v.selected.kind == Some("cycle") {
+                    write!(l.sel, "<path class=\"sel-line\" d=\"{}\"/><path class=\"sel-line\" d=\"{}\"/>", loop_d(&ring.outer_edge), loop_d(&ring.road_edge))
+                        .unwrap();
+                }
+            }
+            // The whole carriageway first, so the 300 mm between two lanes is road too; then the lanes, which carry their edges.
+            write!(l.road, "<path class=\"road ring\" d=\"{}\"/>", loop_d(&ring.road_edge)).unwrap();
+            for lane in &ring.lanes {
+                write!(l.road, "<path class=\"road ring turbo-lane\" fill-rule=\"evenodd\" d=\"{}{}\"/>", loop_d(&lane.outer), loop_d(&lane.inner)).unwrap();
+            }
+            // A painted divider is a double white line: a white stroke 360 mm wide with a 120 mm gap of road down its middle.
+            let (wide, narrow) = ((360.0 * f.scale).max(1.5), (120.0 * f.scale).max(0.5));
+            for divider in &ring.dividers {
+                let d = loop_d(divider);
+                write!(
+                    l.road,
+                    "<path class=\"turbo-divider\" stroke-width=\"{}\" d=\"{d}\"/><path class=\"turbo-divider-gap\" stroke-width=\"{}\" d=\"{d}\"/>",
+                    f1(wide),
+                    f1(narrow)
                 )
                 .unwrap();
             }
-        }
-        write!(
-            l.road,
-            "<circle class=\"island k-median\" cx=\"{}\" cy=\"{}\" r=\"{}\"/><circle class=\"hatch\" fill=\"{}\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>",
-            f1(cx),
-            f1(cy),
-            f1(ri),
-            hatch("median"),
-            f1(cx),
-            f1(cy),
-            f1(ri)
-        )
-        .unwrap();
-        if let Some(bus) = &v.bus {
-            let d = p.path_d(&bus.poly);
-            write!(l.road, "<g class=\"bus-g\" data-role=\"bus\">{}</g>", p.piece("piece k-bus bus-lane", "bus", &d)).unwrap();
-            if v.selected.kind == Some("bus") {
-                write!(l.sel, "<path class=\"sel-box\" d=\"{d}\"/>").unwrap();
+            write!(
+                l.road,
+                "<path class=\"island k-median\" d=\"{0}\"/><path class=\"hatch\" fill=\"{1}\" d=\"{0}\"/>",
+                loop_d(&ring.island_edge),
+                hatch("median")
+            )
+            .unwrap();
+            // circulation arrows in the middle of the outer ring lane, between the streets
+            if let Some(outer) = ring.lanes.last() {
+                let ccw = ring.circulation == "anticlockwise";
+                let bearings: Vec<i32> = v.arms.iter().map(|a| a.bearing).collect();
+                for (i, b) in bearings.iter().enumerate() {
+                    let nb = bearings[(i + 1) % bearings.len()];
+                    let gap = (nb - b + 360) % 360;
+                    let gap = if gap == 0 { 360 } else { gap };
+                    let ang = *b as f64 + gap as f64 / 2.0;
+                    let Some(t) = mouth_on(&outer.centre, ang, 0.0) else { continue };
+                    let (dx, dy) = dir_of(ang);
+                    let (x, y) = f.at((dx * t, dy * t));
+                    let heading = ang + if ccw { -90.0 } else { 90.0 };
+                    let h = 30.0_f64;
+                    let head = h * 0.2;
+                    let d = format!("M0 {}V{}M{} {}L0 {}L{} {}", h / 2.0, -h / 2.0, -head, -h / 2.0 + head, -h / 2.0, head, -h / 2.0 + head);
+                    write!(
+                        l.mark,
+                        "<g class=\"lane-arrow\" transform=\"translate({} {}) rotate({})\" style=\"--arrow:{}\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
+                        f1(x),
+                        f1(y),
+                        f1(heading),
+                        f1(h)
+                    )
+                    .unwrap();
+                }
+            }
+        } else {
+            let r = ring.road_mm as f64 * f.scale;
+            let ro = ring.radius_mm as f64 * f.scale;
+            let (cx, cy) = f.at((0.0, 0.0));
+            let ri = ring.island_mm as f64 * f.scale;
+            write!(l.road, "<circle class=\"road ring\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>", f1(cx), f1(cy), f1(r)).unwrap();
+            if ring.cycle_mm.is_some_and(|c| c != 0) {
+                let circle = |rad: f64| {
+                    format!(
+                        "M{} {}a{} {} 0 1 0 {} 0a{} {} 0 1 0 {} 0Z",
+                        f1(cx - rad),
+                        f1(cy),
+                        f1(rad),
+                        f1(rad),
+                        f1(2.0 * rad),
+                        f1(rad),
+                        f1(rad),
+                        f1(-2.0 * rad)
+                    )
+                };
+                let band = circle(ro) + &circle(r);
+                write!(
+                    l.road,
+                    "<g class=\"cycle-g\" data-role=\"cycle\"><path class=\"piece k-bike cycle-ring\" fill-rule=\"evenodd\" d=\"{band}\"/><path class=\"hatch\" fill-rule=\"evenodd\" fill=\"{}\" d=\"{band}\"/></g>",
+                    hatch("bike")
+                )
+                .unwrap();
+                if v.selected.kind == Some("cycle") {
+                    write!(
+                        l.sel,
+                        "<circle class=\"sel-line\" cx=\"{}\" cy=\"{}\" r=\"{}\"/><circle class=\"sel-line\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>",
+                        f1(cx),
+                        f1(cy),
+                        f1(ro),
+                        f1(cx),
+                        f1(cy),
+                        f1(r)
+                    )
+                    .unwrap();
+                }
             }
             write!(
-                l.label,
-                "<text class=\"t-mark t-halo\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>",
+                l.road,
+                "<circle class=\"island k-median\" cx=\"{}\" cy=\"{}\" r=\"{}\"/><circle class=\"hatch\" fill=\"{}\" cx=\"{}\" cy=\"{}\" r=\"{}\"/>",
                 f1(cx),
-                f1(cy + 5.0),
-                esc(&tr("jn-svg-bus-only", Args::new()))
+                f1(cy),
+                f1(ri),
+                hatch("median"),
+                f1(cx),
+                f1(cy),
+                f1(ri)
             )
             .unwrap();
-        }
-        // circulation arrows on the ring, between the streets
-        let mid = (ring.road_mm as f64 - 3000.0) * f.scale;
-        let ccw = ring.circulation == "anticlockwise";
-        let bearings: Vec<i32> = v.arms.iter().map(|a| a.bearing).collect();
-        for (i, b) in bearings.iter().enumerate() {
-            let nb = bearings[(i + 1) % bearings.len()];
-            let gap = (nb - b + 360) % 360;
-            let gap = if gap == 0 { 360 } else { gap };
-            let ang = *b as f64 + gap as f64 / 2.0;
-            let (dx, dy) = dir_of(ang);
-            let heading = ang + if ccw { -90.0 } else { 90.0 };
-            let h = 34.0_f64.min(mid * 0.85);
-            let head = h * 0.2;
-            let d = format!("M0 {}V{}M{} {}L0 {}L{} {}", h / 2.0, -h / 2.0, -head, -h / 2.0 + head, -h / 2.0, head, -h / 2.0 + head);
-            write!(
-                l.mark,
-                "<g class=\"lane-arrow\" transform=\"translate({} {}) rotate({})\" style=\"--arrow:{}\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
-                f1(cx + dx * mid),
-                f1(cy + dy * mid),
-                f1(heading),
-                f1(h)
-            )
-            .unwrap();
+            if let Some(bus) = &v.bus {
+                let d = p.path_d(&bus.poly);
+                write!(l.road, "<g class=\"bus-g\" data-role=\"bus\">{}</g>", p.piece("piece k-bus bus-lane", "bus", &d)).unwrap();
+                if v.selected.kind == Some("bus") {
+                    write!(l.sel, "<path class=\"sel-box\" d=\"{d}\"/>").unwrap();
+                }
+                write!(
+                    l.label,
+                    "<text class=\"t-mark t-halo\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>",
+                    f1(cx),
+                    f1(cy + 5.0),
+                    esc(&tr("jn-svg-bus-only", Args::new()))
+                )
+                .unwrap();
+            }
+            // circulation arrows on the ring, between the streets
+            let mid = (ring.road_mm as f64 - 3000.0) * f.scale;
+            let ccw = ring.circulation == "anticlockwise";
+            let bearings: Vec<i32> = v.arms.iter().map(|a| a.bearing).collect();
+            for (i, b) in bearings.iter().enumerate() {
+                let nb = bearings[(i + 1) % bearings.len()];
+                let gap = (nb - b + 360) % 360;
+                let gap = if gap == 0 { 360 } else { gap };
+                let ang = *b as f64 + gap as f64 / 2.0;
+                let (dx, dy) = dir_of(ang);
+                let heading = ang + if ccw { -90.0 } else { 90.0 };
+                let h = 34.0_f64.min(mid * 0.85);
+                let head = h * 0.2;
+                let d = format!("M0 {}V{}M{} {}L0 {}L{} {}", h / 2.0, -h / 2.0, -head, -h / 2.0 + head, -h / 2.0, head, -h / 2.0 + head);
+                write!(
+                    l.mark,
+                    "<g class=\"lane-arrow\" transform=\"translate({} {}) rotate({})\" style=\"--arrow:{}\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
+                    f1(cx + dx * mid),
+                    f1(cy + dy * mid),
+                    f1(heading),
+                    f1(h)
+                )
+                .unwrap();
+            }
         }
     } else {
         write!(l.road, "<path class=\"road\" d=\"{}\"/>", p.path_d(&v.core)).unwrap();
@@ -704,6 +803,54 @@ mod tests {
 
     fn count(s: &str, needle: &str) -> usize {
         s.matches(needle).count()
+    }
+
+    fn turbo(layout: usize) -> Junction {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT) && j.set_turbo(Some(layout)));
+        j
+    }
+
+    #[test]
+    fn a_turbo_roundabout_draws_its_lanes_dividers_and_island_and_no_circle() {
+        let m = svg(&turbo(0)).markup;
+        assert_eq!(count(&m, "class=\"road ring turbo-lane\""), 2);
+        assert_eq!(count(&m, "class=\"turbo-divider\""), 1);
+        assert_eq!(count(&m, "class=\"turbo-divider-gap\""), 1);
+        assert!(count(&m, "class=\"island k-median\"") >= 1);
+        assert!(!m.contains("<circle class=\"road ring\""), "the ring is not a circle");
+        assert_eq!(count(&m, "class=\"road turbo-entry\""), 4, "every street of the sample is widened");
+        let spiral = svg(&turbo(3)).markup;
+        assert_eq!(count(&spiral, "class=\"road ring turbo-lane\""), 3);
+        assert_eq!(count(&spiral, "class=\"turbo-divider\""), 2);
+    }
+
+    #[test]
+    fn a_turbo_roundabout_has_an_arrow_on_every_entering_lane_and_one_for_each_gap_of_the_ring() {
+        let m = svg(&turbo(0)).markup;
+        assert_eq!(count(&m, "class=\"lane-arrow\""), 8 + 4, "two lanes on each of four streets, and the ring's own");
+    }
+
+    #[test]
+    fn a_turbo_s_cycle_track_is_a_band_round_its_road_and_can_be_selected() {
+        let mut j = turbo(0);
+        assert!(j.set_cycle_track(true));
+        assert_eq!(count(&svg(&j).markup, "cycle-ring"), 1);
+        j.select(Target::Cycle);
+        assert_eq!(count(&svg(&j).markup, "class=\"sel-line\""), 2);
+    }
+
+    #[test]
+    fn the_plan_names_the_turbo_layout_and_size_to_a_screen_reader() {
+        let mut j = turbo(0);
+        let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+        assert_eq!(plan_label(&j.view(), &en), "Plan of the junction, north up. 4 streets. Basic turbo roundabout, mini size.");
+        assert_eq!(plan_label(&j.view(), &fr), "Plan de la jonction, nord en haut. 4 rues. Giratoire turbo de base, taille mini.");
+        assert!(j.set_turbo_size(1));
+        assert!(plan_label(&j.view(), &en).ends_with("Basic turbo roundabout, regular size."));
+        assert!(j.set_turbo(Some(3)));
+        assert!(plan_label(&j.view(), &en).ends_with("Spiral turbo roundabout, regular size."));
+        assert!(plan_label(&j.view(), &fr).ends_with("Giratoire turbo en spirale, taille normale."));
     }
 
     fn arm_at(j: &Junction, bearing: i32) -> u32 {

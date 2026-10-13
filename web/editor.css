@@ -790,6 +790,34 @@ svg pattern circle {
   stroke-width: 1.6;
   stroke-linejoin: round;
 }
+#drawing .turbo-lane {
+  stroke: var(--ink-2);
+  stroke-width: 0.8;
+  stroke-opacity: 0.5;
+  pointer-events: none;
+}
+#drawing .turbo-divider {
+  fill: none;
+  stroke: var(--plan-paint);
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+#drawing .turbo-divider-gap {
+  fill: none;
+  stroke: var(--road);
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+#drawing .turbo-entry {
+  fill: var(--road);
+  stroke: none;
+  pointer-events: none;
+}
+@media (forced-colors: active) {
+  #drawing .turbo-divider {
+    stroke: CanvasText;
+  }
+}
 #drawing .curb-line {
   fill: none;
   stroke: var(--ink-2);
