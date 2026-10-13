@@ -44,6 +44,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/street/mod.rs", include_str!("street/mod.rs")),
     ("src/shared/iso/format.rs", include_str!("shared/iso/format.rs")),
     ("src/shared/iso/shading.rs", include_str!("shared/iso/shading.rs")),
+    ("src/shared/iso/paint.rs", include_str!("shared/iso/paint.rs")),
     ("src/street/iso/mod.rs", include_str!("street/iso/mod.rs")),
     ("src/street/iso/projection.rs", include_str!("street/iso/projection.rs")),
     ("src/street/iso/raised.rs", include_str!("street/iso/raised.rs")),
@@ -120,6 +121,8 @@ const ALLOWED: &[&str] = &[
 
 /// Literals that look like words and are not, each with the reason. Empty unless needed.
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
+    ("iso-paint white", "CSS classes of the 2.5D's pavement paint"),
+    ("iso-paint yellow", "CSS classes of the 2.5D's pavement paint"),
     ("Polygon", "a GeoJSON geometry type, data for MapLibre"),
     (" fresh", "a CSS class appended to a class list"),
     (" lifted", "a CSS class appended to a class list"),

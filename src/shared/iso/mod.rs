@@ -2,4 +2,5 @@
 //! slice keeps its own projection and its own filter ids.
 
 pub mod format;
+pub mod paint;
 pub mod shading;
