@@ -23,8 +23,9 @@
      in both themes. Estimates, like the symbols' sizes. */
   --iso-paint-white: light-dark(#fbfbf8, #e6e9ee);
   --iso-paint-yellow: light-dark(#e3a600, #f0c02e);
-  /* A hairline round the paint: on the light theme's pale surfaces the paint alone is under 3:1 (WCAG 1.4.11),
-     with this slate it is over 6:1 against every surface tint. The dark theme needs none. */
+  /* A hairline round the paint: on the light theme's pale surfaces the paint alone is under 3:1 (WCAG 1.4.11);
+     the edge colour is over 6:1 against every surface tint (the ratio of the colours; anti-aliasing of a 0.5 px line
+     lowers the figure rendered). The dark theme needs none. */
   --iso-paint-edge: light-dark(#2b333b, transparent);
   --panel-w: 300px;
   --notes-w: 340px;
@@ -916,8 +917,9 @@ svg pattern circle {
 .s-post {
   fill: var(--ink-2);
 }
-/* Pavement paint (street/iso/paint.rs): flat shapes on the roadway, with no outline and no pointer, so the piece
-   under them is the one hovered. In forced colours it is drawn in the text colour. */
+/* Pavement paint (street/iso/paint.rs): flat shapes on the roadway with a 0.5 px edge (--iso-paint-edge) and no
+   pointer events, so the piece under them is the one hovered (its hover outline is hidden where paint covers its
+   edge). In forced colours it is drawn in the text colour. */
 .iso-markings,
 .iso-mark,
 .iso-paint {
@@ -927,7 +929,6 @@ svg pattern circle {
   stroke: var(--iso-paint-edge);
   stroke-width: 0.5px;
   stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
 }
 .iso-paint.white {
   fill: var(--iso-paint-white);
