@@ -3785,6 +3785,25 @@ mod tests {
     }
 
     #[test]
+    fn undo_takes_back_a_size_and_a_main_road_switch_and_a_refused_size_adds_no_step() {
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        let before = j.current().clone();
+        assert!(j.set_turbo_size(2));
+        assert!(j.undo());
+        assert_eq!(j.current().turbo, before.turbo, "the earlier block is back");
+        assert!(j.switch_turbo_main());
+        assert!(j.undo());
+        assert_eq!(j.current().turbo, before.turbo, "and the earlier main road");
+        assert!(j.redo());
+        assert_eq!(j.current().turbo.as_ref().unwrap().main, [2, 4], "and redo does it again");
+        let steps = j.revisions().count();
+        let state = j.current().clone();
+        assert!(!j.set_turbo_size(4) && !j.set_turbo_size(0), "a block that does not exist, and the one it has");
+        assert_eq!((j.current(), j.revisions().count()), (&state, steps), "a refused size adds no step");
+    }
+
+    #[test]
     fn the_main_road_switches_to_the_other_pair_and_back_when_there_is_one() {
         let mut j = roundabout();
         assert!(j.set_turbo(Some(0)));
