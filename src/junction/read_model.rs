@@ -398,6 +398,8 @@ pub struct ArmView {
     pub max_offset_mm: i32,
     pub enters: bool,
     pub leaves: bool,
+    /// The street this arm reads is a pedestrian street.
+    pub pedestrian: bool,
     pub transit: TransitView,
 }
 
@@ -501,6 +503,8 @@ pub struct JView {
     pub drive_side: &'static str,
     pub control: &'static str,
     pub control_index: usize,
+    /// How many of the junction's streets carry traffic.
+    pub traffic_arms: usize,
     pub ring: Option<RingView>,
     pub ring_extra_mm: i32,
     /// The junction is a raised table.
@@ -860,6 +864,7 @@ impl Junction {
                 max_offset_mm: road_mm / 2,
                 enters,
                 leaves,
+                pedestrian: a.is_pedestrian(),
                 transit: transit_view(s, a, l, off, far, crossing_present, side),
             });
         }
@@ -1023,6 +1028,7 @@ impl Junction {
             drive_side: if side == Side::Left { "left" } else { "right" },
             control: CONTROLS[s.control].id,
             control_index: s.control,
+            traffic_arms: crate::junction::model::traffic_arms(s),
             ring: ring.map(|r| RingView {
                 radius_mm: r.radius as i32,
                 floor_mm: r.floor,
@@ -1423,6 +1429,34 @@ mod tests {
     use super::*;
     use crate::junction::model::{DEFAULT_SETBACK_MM, JUNCTION_SAMPLES, MIN_SETBACK_MM, junction_of};
     use crate::shared::testing::{en, fr};
+
+    #[test]
+    fn a_junction_with_one_walkway_arm_lays_out_and_draws() {
+        use crate::junction::model::junction_with_walkways;
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+        assert!(layout(j.current(), 0).is_some(), "the junction can be laid out");
+        let v = j.view();
+        assert_eq!(v.arms.len(), 4);
+        let walk = v.arms.iter().find(|a| a.bearing == 90).unwrap();
+        assert!(walk.pedestrian && !walk.enters && !walk.leaves && walk.lanes.is_empty());
+        assert_eq!(v.arms.iter().filter(|a| a.pedestrian).count(), 1);
+        assert_eq!(v.traffic_arms, 3);
+        let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
+        let plan = crate::junction::plan_svg::plan_svg(&v, &i18n, 640.0, 640.0, crate::shared::units::Units::Metres);
+        assert!(plan.markup.matches("data-role=\"arm\"").count() >= 4);
+        let iso = crate::junction::iso::iso_svg(&v, &i18n, 640.0, 640.0, crate::shared::units::Units::Metres);
+        assert!(iso.markup.contains("iso-"));
+    }
+
+    /// Pinned as it is today so that the task that changes it shows: the walkway arm's pieces start past the
+    /// crossing and a road-coloured gap lies before each. Task D deletes this test.
+    #[test]
+    fn today_a_walkway_arm_is_drawn_with_road_gaps_before_its_pieces() {
+        use crate::junction::model::junction_with_walkways;
+        let v = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]).view();
+        let walk = v.arms.iter().find(|a| a.bearing == 90).unwrap();
+        assert!(!walk.gaps.is_empty());
+    }
 
     #[test]
     fn a_corner_has_a_sidewalk_where_an_arm_has_one_beside_its_curb() {

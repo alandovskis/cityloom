@@ -112,3 +112,20 @@ pub fn junction_of(pieces: &[(&str, i32)]) -> Junction {
     }
     Junction::from_city(named_said("Test"), &state, &state, 0).expect("the street draws")
 }
+
+/// A four-way, in a city, whose arms facing `bearings` (0, 90, 180 or 270) read a pedestrian street of these
+/// pieces, left to right: (kind id, width in mm). The other arms read the first sample street.
+pub fn junction_with_walkways(bearings: &[i32], pieces: &[(&str, i32)]) -> Junction {
+    use crate::shared::catalogue::{Side, StreetClass, kind_index};
+    use crate::street::model::Piece;
+    let pieces: Vec<Piece> =
+        pieces.iter().map(|&(id, width_mm)| Piece { kind: kind_index(id).unwrap(), width_mm, direction: None, variants: Vec::new() }).collect();
+    let walkway = Street::imported(StreetClass::Pedestrian, Side::Right, &pieces);
+    let street = Street::sample(0, Side::Right);
+    let mut state = Junction::new(0).current().clone();
+    for a in &mut state.arms {
+        a.section = Some(if bearings.contains(&a.bearing) { walkway.clone() } else { street.clone() });
+        a.edge = a.uid;
+    }
+    Junction::from_city(named_said("Test"), &state, &state, 0).expect("the junction draws")
+}

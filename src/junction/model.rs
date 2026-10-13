@@ -7,6 +7,7 @@ use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 use crate::junction::geometry::gap;
 use crate::street::model::{Editor, Street, View, named_said};
@@ -14,7 +15,7 @@ use crate::street::model::{Editor, Street, View, named_said};
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::{JUNCTION_SAMPLES, junction_of};
+pub use fixtures::{JUNCTION_SAMPLES, junction_of, junction_with_walkways};
 
 pub const LEFT: u8 = 1;
 pub const THROUGH: u8 = 2;
@@ -313,6 +314,18 @@ pub fn profile_of(street: &Street, region: usize) -> Profile {
     read_profile(&e.view(), street.title())
 }
 
+/// How many of the junction's streets carry traffic: every arm but the pedestrian ones.
+pub fn traffic_arms(s: &State) -> usize {
+    s.arms.iter().filter(|a| !a.is_pedestrian()).count()
+}
+
+/// The state as the junction is run. With at most one street carrying traffic there is nothing to control, so
+/// it runs uncontrolled whatever control was kept; the kept control returns when traffic does. What reads the
+/// control to draw or judge the junction asks for this; an edit changes the kept state.
+pub fn in_force(s: &State) -> Cow<'_, State> {
+    if s.control != UNCONTROLLED && traffic_arms(s) <= 1 { Cow::Owned(State { control: UNCONTROLLED, ..s.clone() }) } else { Cow::Borrowed(s) }
+}
+
 impl Arm {
     /// An arm with the defaults a street starts with at a junction.
     pub fn new(uid: u32, bearing: i32, offset_mm: i32) -> Arm {
@@ -372,6 +385,11 @@ impl Arm {
     /// What sort of street the arm is.
     pub fn class(&self) -> Option<StreetClass> {
         self.section.as_ref().map(|s| s.class)
+    }
+
+    /// Whether the street the arm reads is a pedestrian street: no lanes, no crossing, nothing to cross.
+    pub fn is_pedestrian(&self) -> bool {
+        self.class() == Some(StreetClass::Pedestrian)
     }
 }
 
@@ -1589,6 +1607,46 @@ mod tests {
     use crate::shared::i18n::Locale;
     use crate::shared::testing::{en, fr};
     use crate::street::model::SAMPLES;
+
+    #[test]
+    fn an_arm_is_pedestrian_when_the_street_it_reads_is() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 4000), ("sidewalk", 4000)]);
+        let walking: Vec<i32> = j.current().arms.iter().filter(|a| a.is_pedestrian()).map(|a| a.bearing).collect();
+        assert_eq!(walking, [90]);
+        assert_eq!(traffic_arms(j.current()), 3);
+        assert!(!Junction::new(0).current().arms.iter().any(Arm::is_pedestrian), "a sandbox arm reads a sample street");
+        assert!(!Arm::new(1, 0, 0).is_pedestrian(), "an arm that reads no street is not pedestrian");
+    }
+
+    #[test]
+    fn a_junction_with_at_most_one_street_carrying_traffic_is_run_as_uncontrolled_and_keeps_its_control() {
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::Piece;
+        let mut s = Junction::new(0).current().clone();
+        assert_eq!(s.control, SIGNAL);
+        assert_eq!(in_force(&s).control, SIGNAL, "four streets carry traffic");
+        let piece = Piece { kind: kind_index("sidewalk").unwrap(), width_mm: 4000, direction: None, variants: Vec::new() };
+        let walkway = Street::imported(StreetClass::Pedestrian, Side::Right, &[piece]);
+        for a in s.arms.iter_mut().skip(2) {
+            a.section = Some(walkway.clone());
+        }
+        assert_eq!(traffic_arms(&s), 2);
+        assert_eq!(in_force(&s).control, SIGNAL, "two streets still meet");
+        s.arms[1].section = Some(walkway);
+        assert_eq!(traffic_arms(&s), 1);
+        assert_eq!(in_force(&s).control, UNCONTROLLED);
+        assert_eq!(s.control, SIGNAL, "the control that was kept is not touched");
+    }
+
+    /// Pinned as it is today so that the task that changes it shows: a walkway arm is given a crossing like any arm.
+    /// Task C deletes this test (a pedestrian arm has none).
+    #[test]
+    fn today_a_walkway_arm_still_has_a_default_crossing() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+        let arm = j.current().arms.iter().find(|a| a.bearing == 90).unwrap();
+        assert!(arm.crossing.is_some());
+        assert!(arm.lanes.is_empty(), "its profile has no travel lanes");
+    }
 
     fn named(name: &str) -> Said {
         Said::new("city-name").with("name", Arg::Text(name.into()))
