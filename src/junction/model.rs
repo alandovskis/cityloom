@@ -1742,15 +1742,25 @@ pub fn normalize(arms: &mut [Arm], region: usize) {
     // The streets a lane can go to: every street but the pedestrian ones, which nothing drives into.
     let dests: Vec<(u32, i32)> = arms.iter().filter(|a| !a.is_pedestrian()).map(|a| (a.uid, a.bearing)).collect();
     let avail: Vec<u8> = (0..arms.len()).map(|i| classes_of(arms, i)).collect();
-    // The arms that have lanes again after having none: the other arms' lanes lead to them by default.
-    let regained: Vec<(u32, i32)> =
-        arms.iter().filter(|a| !a.is_pedestrian() && a.lanes.is_empty() && !a.profile(region).enter_x.is_empty()).map(|a| (a.uid, a.bearing)).collect();
+    // The arms that carry traffic again after having none: no lane of the other arms reaches them, so their lanes lead
+    // to them by default. A street that goes only one way out has no lanes of its own, so it is told by that.
+    let regained: Vec<(u32, i32)> = arms
+        .iter()
+        .filter(|a| {
+            let p = a.profile(region);
+            !a.is_pedestrian()
+                && a.lanes.is_empty()
+                && !(p.enter_x.is_empty() && p.leave_x.is_empty())
+                && !arms.iter().any(|o| o.uid != a.uid && o.lanes.iter().any(|l| l.to.contains(&a.uid)))
+        })
+        .map(|a| (a.uid, a.bearing))
+        .collect();
     for (a, avail) in arms.iter_mut().zip(avail) {
         let p = a.profile(region);
         let n = p.enter_x.len();
         let (uid, bearing) = (a.uid, a.bearing);
         // An arm that had no lanes (a pedestrian street) and has some again has the crossing a new arm has.
-        let regains_traffic = n > 0 && a.lanes.is_empty() && !a.is_pedestrian();
+        let regains_traffic = regained.iter().any(|(u, _)| *u == a.uid);
         // Where lane `k` goes by default: every street whose turn it serves.
         let default = |k: usize| -> Vec<u32> {
             let want = default_uses(k, n, avail);
@@ -1945,6 +1955,53 @@ mod tests {
             }
         }
         assert!(!arms[north].lanes[lane].to.contains(&removed), "what the resident removed stays removed");
+    }
+
+    fn one_way_out() -> Street {
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::Piece;
+        let pieces: Vec<Piece> = [("sidewalk", 2000), ("travel", 3200), ("sidewalk", 2000)]
+            .iter()
+            .map(|&(id, width_mm)| Piece { kind: kind_index(id).unwrap(), width_mm, direction: (id == "travel").then_some(0), variants: Vec::new() })
+            .collect();
+        Street::imported(StreetClass::Local, Side::Right, &pieces)
+    }
+
+    #[test]
+    fn an_arm_returning_to_traffic_one_way_out_has_the_default_crossing_and_the_lanes_of_the_others_lead_to_it() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let mut arms = j.current().arms.clone();
+        let walk = arms.iter().position(|a| a.bearing == 90).unwrap();
+        arms[walk].section = Some(one_way_out());
+        assert!(arms[walk].profile(0).enter_x.is_empty() && !arms[walk].profile(0).leave_x.is_empty(), "the street goes only out");
+        normalize(&mut arms, 0);
+        assert!(arms[walk].crossing.is_some(), "the crossing is given back");
+        assert!(arms[walk].lanes.is_empty());
+        let x = arms[walk].uid;
+        assert!(arms.iter().filter(|a| a.uid != x).any(|a| a.lanes.iter().any(|l| l.to.contains(&x))), "lanes lead into it again");
+    }
+
+    #[test]
+    fn an_arm_that_goes_one_way_out_all_along_keeps_a_removed_crossing_and_a_removed_destination() {
+        let mut j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let walk = arm_at(&j, 90);
+        let (north, south) = (arm_at(&j, 0), arm_at(&j, 180));
+        let street = Some(one_way_out());
+        let mut arms = j.current().arms.clone();
+        arms.iter_mut().find(|a| a.uid == walk).unwrap().section = street;
+        normalize(&mut arms, 0);
+        let mut s = j.current().clone();
+        s.arms = arms;
+        j = Junction::from_city(named_said("Test"), &s, &s, 0).expect("draws");
+        assert!(j.set_crossing(walk, false));
+        let lane = j.arm(north).unwrap().lanes.iter().position(|l| l.to.contains(&walk) && l.to.len() > 1).expect("a lane with a choice");
+        assert!(j.set_lane_dest(north, lane, walk, false));
+        let mut arms = j.current().arms.clone();
+        normalize(&mut arms, 0);
+        let (w, n) = (arms.iter().find(|a| a.uid == walk).unwrap(), arms.iter().find(|a| a.uid == north).unwrap());
+        assert!(w.crossing.is_none(), "the resident's choice stands");
+        assert!(!n.lanes[lane].to.contains(&walk));
+        let _ = south;
     }
 
     #[test]
