@@ -428,6 +428,26 @@ mod tests {
     }
 
     #[test]
+    fn a_street_is_pedestrian_exactly_when_it_has_no_motor_piece_and_breaks_the_car_free_rule_only_for_cars() {
+        // (pieces, breaks the Car-free rule, is pedestrian)
+        for (ids, car_free_breaks, pedestrian) in [
+            (&["sidewalk"][..], false, true),
+            (&["sidewalk", "bike"], false, true),
+            (&["sidewalk", "bus", "bike"], false, false),
+            (&["sidewalk", "shoulder"], false, false),
+            (&["sidewalk", "travel"], true, false),
+            (&["parking"], true, false),
+            (&["bike", "loading"], true, false),
+        ] {
+            let s = street(ids);
+            assert_eq!(!conflicts(Rule::CarFree, &s).is_empty(), car_free_breaks, "{ids:?}");
+            assert_eq!(s.class == StreetClass::Pedestrian, pedestrian, "{ids:?}");
+            assert_eq!(s.has_motor(), !pedestrian, "{ids:?}");
+            assert!(!car_free_breaks || s.has_motor(), "a car piece is a motor piece: {ids:?}");
+        }
+    }
+
+    #[test]
     fn car_free_allows_no_driving_parking_or_loading() {
         let busy = street(&["sidewalk", "travel", "travel", "parking", "loading", "sidewalk"]);
         assert_eq!(conflicts(Rule::CarFree, &busy), vec![c("travel", 2), c("parking", 1), c("loading", 1)]);
