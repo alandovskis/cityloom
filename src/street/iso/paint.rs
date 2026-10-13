@@ -1,0 +1,183 @@
+//! The markings layer: the lines and symbols of `markings`, as SVG through the street's projection. It is built
+//! from `markings(v)`, `shared::iso::paint` and the projection only, and knows nothing about slabs, so the
+//! surface and the markings can change independently.
+
+use std::fmt::Write;
+
+use crate::shared::iso::paint::{Paint, class, quads};
+use crate::street::model::View;
+
+use super::markings::{Mark, markings};
+use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection, STRETCH_MM, points};
+use super::symbols::shapes;
+
+/// The lines and symbols of the street as one group, drawn flat on the ground. A line is the shared paint quads of
+/// the path `[(x, 0), (x, STRETCH_MM)]` (across, along); a symbol is its polygons laid on its lane at
+/// `ARROW_AT_MM`, so it foreshortens with the street. A piece narrower on screen than `MIN_SOLID_PX` keeps its lines
+/// but gets no symbol.
+pub(super) fn layer(p: &Projection, v: &View) -> String {
+    let m = markings(v);
+    let mut out = String::from("<g class=\"iso-markings\">");
+    for line in &m.lines {
+        let x = line.x_mm as f64;
+        for (paint, quad) in quads(&[(x, 0.0), (x, STRETCH_MM)], line.style) {
+            let corners: Vec<(f64, f64, f64)> = quad.iter().map(|&(across, along)| (across, 0.0, along)).collect();
+            write!(out, "<polygon class=\"{}\" points=\"{}\"/>", class(paint), points(p, &corners)).unwrap();
+        }
+    }
+    for mark in &m.marks {
+        symbol(&mut out, p, v, mark);
+    }
+    out.push_str("</g>");
+    out
+}
+
+fn symbol(out: &mut String, p: &Projection, v: &View, mark: &Mark) {
+    let Some(s) = v.segments.iter().find(|s| s.uid == mark.uid) else { return };
+    let w = s.width_mm as f64;
+    if w * p.scale < MIN_SOLID_PX {
+        return;
+    }
+    let cx = s.x_mm as f64 + w / 2.0;
+    write!(out, "<g class=\"iso-mark\" data-mark=\"{}\">", mark.uid).unwrap();
+    for shape in shapes(mark.symbol, w) {
+        let corners: Vec<(f64, f64, f64)> = shape.iter().map(|&(across, along)| (cx + across, 0.0, ARROW_AT_MM + along)).collect();
+        write!(out, "<polygon class=\"{}\" points=\"{}\"/>", class(Paint::White), points(p, &corners)).unwrap();
+    }
+    out.push_str("</g>");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shared::catalogue::{KINDS, kind_index};
+    use crate::street::iso::markings::Symbol;
+    use crate::street::iso::projection::drawn_mm;
+    use crate::street::iso::solids::{Solid, blocks};
+    use crate::street::iso::testing::{apart, count, furnished, hull};
+    use crate::street::model::Editor;
+
+    fn fit(v: &View, width: f64) -> Projection {
+        Projection::fit(width, v.row_mm.max(v.total_mm))
+    }
+
+    #[test]
+    fn a_known_street_paints_its_lines_and_one_arrow_per_driving_lane() {
+        // Sample Street 1: a solid white line each side of the roadway, a double yellow one between the lanes.
+        let v = Editor::new(0).view();
+        let p = fit(&v, 1050.0);
+        let m = layer(&p, &v);
+        assert!(m.starts_with("<g class=\"iso-markings\">") && m.ends_with("</g>"));
+        assert_eq!(count(&m, "class=\"iso-paint yellow\""), 2);
+        assert_eq!(count(&m, "class=\"iso-paint white\""), 2 + 2, "two solid lines and two arrows");
+        assert_eq!(count(&m, "class=\"iso-mark\""), 2);
+        assert!(!m.contains("NaN") && !m.contains("inf"));
+        // The yellow line is drawn flat on the ground, 120 mm each side of the boundary, the whole 40 m.
+        let x = (v.segments[2].x_mm + v.segments[2].width_mm) as f64;
+        let left = points(&p, &[(x - 180.0, 0.0, 0.0), (x - 180.0, 0.0, STRETCH_MM), (x - 60.0, 0.0, STRETCH_MM), (x - 60.0, 0.0, 0.0)]);
+        assert!(m.contains(&format!("<polygon class=\"iso-paint yellow\" points=\"{left}\"/>")), "the drawing has not got it");
+    }
+
+    #[test]
+    fn a_symbol_is_centred_on_its_lane_at_the_arrow_distance_and_lies_on_the_ground() {
+        let v = Editor::new(0).view();
+        let p = fit(&v, 1050.0);
+        let m = layer(&p, &v);
+        let lane = &v.segments[2];
+        let cx = lane.x_mm as f64 + lane.width_mm as f64 / 2.0;
+        let toward = lane.direction == Some("toward");
+        let arrow = &shapes(Symbol::Ahead { toward }, lane.width_mm as f64)[0];
+        let pts = points(&p, &arrow.iter().map(|&(u, a)| (cx + u, 0.0, ARROW_AT_MM + a)).collect::<Vec<_>>());
+        assert!(
+            m.contains(&format!("<g class=\"iso-mark\" data-mark=\"{}\"><polygon class=\"iso-paint white\" points=\"{pts}\"/></g>", lane.uid)),
+            "the drawing has not got it"
+        );
+    }
+
+    #[test]
+    fn a_piece_too_narrow_on_screen_keeps_its_lines_but_loses_its_symbol() {
+        // A two-way bike lane at its narrowest, 1.2 m, is about 18 px wide on a 600 px drawing.
+        let mut e = Editor::new(0);
+        let bike = e.add(kind_index("bike").unwrap(), 3);
+        assert!(e.set_width(bike, 1_200));
+        // Uncurbed, so that its edges are painted (a curbed bike lane's are the curb's).
+        assert!(e.set_curb(bike, None));
+        let v = e.view();
+        let p = fit(&v, 600.0);
+        assert!(1_200.0 * p.scale < MIN_SOLID_PX);
+        let m = layer(&p, &v);
+        assert!(!m.contains(&format!("data-mark=\"{bike}\"")));
+        assert_eq!(count(&m, "class=\"iso-mark\""), 2, "the driving lanes keep theirs");
+        // Sample Street 1 with the bike lane between its driving lanes: four solid white lines (parking, driving lane,
+        // bike lane, driving lane, parking), the bike lane's broken yellow middle (5 dashes in 40 m) and the two arrows.
+        assert_eq!(count(&m, "class=\"iso-paint yellow\""), 5);
+        assert_eq!(count(&m, "class=\"iso-paint white\""), 4 + 2);
+        assert!(!m.contains("NaN"));
+        // At 1050 px the same lane is wide enough.
+        let p = fit(&v, 1050.0);
+        assert!(layer(&p, &v).contains(&format!("data-mark=\"{bike}\"")));
+    }
+
+    #[test]
+    fn an_empty_street_gives_an_empty_markings_layer() {
+        let mut e = Editor::new(0);
+        while let Some(uid) = e.view().segments.first().map(|s| s.uid) {
+            assert!(e.remove(uid));
+        }
+        let v = e.view();
+        assert_eq!(layer(&fit(&v, 1050.0), &v), "<g class=\"iso-markings\"></g>");
+    }
+
+    #[test]
+    fn a_bus_lane_paints_the_diamond_and_the_letters() {
+        let mut e = Editor::new(0);
+        let bus = e.add(kind_index("bus").unwrap(), 3);
+        let v = e.view();
+        let m = layer(&fit(&v, 1050.0), &v);
+        let open = format!("<g class=\"iso-mark\" data-mark=\"{bus}\">");
+        let at = m.find(&open).expect("the bus lane has a symbol");
+        let group = &m[at..at + m[at..].find("</g>").unwrap()];
+        assert_eq!(count(group, "<polygon"), 15);
+    }
+
+    #[test]
+    fn a_symbol_lies_near_the_near_end_where_no_tree_can_hide_it() {
+        // Trees and the shelter stand on the pieces; what they hide of the ground is none of the near end. On every
+        // street with trees, at every width that draws them, no trunk or crown covers any part of the ground a
+        // symbol is laid on (its extent along by across). If this fails, shrink or move the symbol in `symbols.rs`;
+        // do not weaken the test.
+        for e in [Editor::new(1), furnished()] {
+            let v = e.view();
+            for width in [760.0, 1050.0, 1800.0] {
+                let p = fit(&v, width);
+                let trees: Vec<Vec<(f64, f64)>> = (0..v.segments.len())
+                    .flat_map(|i| blocks(&v, i, &p))
+                    .filter(|b| matches!(b.solid, Solid::Trunk | Solid::Crown))
+                    .map(|b| {
+                        let corners = [b.x.0, b.x.1]
+                            .into_iter()
+                            .flat_map(move |x| [b.y.0, b.y.1].into_iter().flat_map(move |y| [b.z.0, b.z.1].into_iter().map(move |z| (x, y, z))));
+                        hull(corners.map(|(x, y, z)| p.at(x, y, z)).collect())
+                    })
+                    .collect();
+                assert!(!trees.is_empty(), "{width}");
+                for mark in markings(&v).marks {
+                    let s = v.segments.iter().find(|s| s.uid == mark.uid).unwrap();
+                    if s.width_mm as f64 * p.scale < MIN_SOLID_PX {
+                        continue;
+                    }
+                    let cx = s.x_mm as f64 + s.width_mm as f64 / 2.0;
+                    let shapes = shapes(mark.symbol, s.width_mm as f64);
+                    let pts = || shapes.iter().flatten();
+                    let (u0, u1) = (pts().map(|q| q.0).fold(f64::MAX, f64::min), pts().map(|q| q.0).fold(f64::MIN, f64::max));
+                    let (a0, a1) = (pts().map(|q| q.1).fold(f64::MAX, f64::min), pts().map(|q| q.1).fold(f64::MIN, f64::max));
+                    let h = drawn_mm(crate::street::iso::height_mm(KINDS[s.kind].id));
+                    let ground =
+                        [(cx + u0, h, ARROW_AT_MM + a0), (cx + u1, h, ARROW_AT_MM + a0), (cx + u1, h, ARROW_AT_MM + a1), (cx + u0, h, ARROW_AT_MM + a1)]
+                            .map(|(x, y, z)| p.at(x, y, z));
+                    assert!(trees.iter().all(|t| apart(t, &ground)), "{width}: the symbol of piece {} is hidden", mark.uid);
+                }
+            }
+        }
+    }
+}
