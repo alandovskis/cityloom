@@ -182,6 +182,14 @@ impl JunctionVm {
         r
     }
 
+    /// The person chooses a turbo layout (`None`: the single lane). Choosing the one already chosen changes nothing, so it
+    /// is neither refused nor announced and leaves no history.
+    pub fn choose_turbo(&self, layout: Option<usize>) {
+        if self.read(|j| j.current().turbo.as_ref().map(|t| t.layout)) != layout {
+            self.apply(|j| j.set_turbo(layout));
+        }
+    }
+
     /// A change that is not announced, as each step of a drag is.
     pub fn quiet<R>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
         self.edit(f)
@@ -353,6 +361,24 @@ mod tests {
         assert_eq!(said.len(), 1);
         assert!(said[0].starts_with("This street is too narrow to widen for the entry lanes this layout needs. Sample Street 1 ("), "{said:?}");
         assert!(said[0].ends_with(") is the one that is too narrow."), "{said:?}");
+    }
+
+    #[test]
+    fn choosing_the_turbo_layout_already_chosen_changes_nothing_and_says_nothing() {
+        use crate::junction::model::ROUNDABOUT;
+        let r = rig(0);
+        assert!(r.vm.apply(|j| j.set_control(ROUNDABOUT)));
+        r.said.take();
+        r.vm.choose_turbo(Some(0));
+        let (said, version) = (r.said.take(), r.vm.version().get_untracked());
+        assert_eq!(said.len(), 1, "the real choice is announced: {said:?}");
+        r.vm.choose_turbo(Some(0));
+        assert!(r.said.take().is_empty(), "no refusal and no edit is announced");
+        assert_eq!(r.vm.version().get_untracked(), version, "nothing changed");
+        assert!(r.vm.undo() && r.vm.read(|j| j.current().turbo.is_none()), "one undo takes the real choice back, so the repeat added no entry");
+        r.said.take();
+        r.vm.choose_turbo(None);
+        assert!(r.said.take().is_empty(), "the single lane, chosen again, is the same");
     }
 
     fn arm(vm: &JunctionVm, bearing: i32) -> u32 {

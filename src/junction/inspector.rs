@@ -336,7 +336,7 @@ fn turbo_layout(w: Watch) -> impl IntoView {
                     Signal::derive(move || w.view().turbo.as_ref().is_some_and(|t| t.layout == i)),
                     Signal::derive(move || w.tr(key)),
                     Box::new(move || {
-                        w.edit(|j| j.set_turbo(Some(i)));
+                        w.choose_turbo(Some(i));
                     }),
                 )
             })
@@ -352,7 +352,7 @@ fn turbo_layout(w: Watch) -> impl IntoView {
                     Signal::derive(move || w.view().turbo.is_none()),
                     Signal::derive(move || w.tr("jn-insp-turbo-single")),
                     Box::new(move || {
-                        w.edit(|j| j.set_turbo(None));
+                        w.choose_turbo(None);
                     }),
                 )}
                 {options}
