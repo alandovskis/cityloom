@@ -360,6 +360,10 @@ pub fn ring_lane(k: usize, n: usize, ring_lanes: usize, right_hand: bool) -> usi
 mod tests {
     use super::*;
 
+    use crate::junction::model::Junction;
+    use crate::shared::catalogue::{Side, kind_index};
+    use crate::street::model::{Piece, Street};
+
     #[test]
     fn a_ring_lane_is_always_one_the_ring_has() {
         for ring_lanes in 1..=3 {
@@ -372,9 +376,6 @@ mod tests {
             }
         }
     }
-    use crate::junction::model::Junction;
-    use crate::shared::catalogue::{Side, kind_index};
-    use crate::street::model::{Piece, Street};
 
     fn arm(uid: u32, bearing: i32, street: Street) -> Arm {
         let mut a = Arm::new(uid, bearing, 0);

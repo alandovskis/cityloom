@@ -156,9 +156,6 @@ pub struct Layout {
     pub ring: Option<RingLayout>,
 }
 
-/// Puts the junction on the sheet, or says it cannot be drawn: a corner whose
-/// curbs meet behind the junction, a fillet longer than its arm, a roundabout
-/// that will not fit its arms in the largest ring.
 /// The turbo `Junction::set_turbo` gives `layout` on this roundabout, and whether it stands and some block holds it
 /// (a layout is offered exactly when it does). The main road is the one a turbo already on has if it still stands with
 /// the new layout, else the best that stands, else the best (it then does not stand); the block is the smallest that
@@ -181,6 +178,9 @@ pub fn choose_turbo(s: &State, region: usize, which: usize) -> Option<(Turbo, bo
     Some((Turbo { layout: which, size: BLOCKS.len() - 1, main }, false))
 }
 
+/// Puts the junction on the sheet, or says it cannot be drawn: a corner whose
+/// curbs meet behind the junction, a fillet longer than its arm, a roundabout
+/// that will not fit its arms in the largest ring.
 pub fn layout(s: &State, region: usize) -> Option<Layout> {
     let in_force = in_force(s);
     let s: &State = &in_force;
