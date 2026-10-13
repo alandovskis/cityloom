@@ -158,6 +158,10 @@ jn-check-signal-bad = { $n ->
    *[other] { $n } streets is too many for one signal
 }
 
+jn-check-turbo-square = Arms meet the ring square
+jn-check-turbo-square-ok = Every street meets the ring within 10° of square
+jn-check-turbo-square-bad = { $arm } is { $degrees }° off square.
+
 ## What is said after a change
 jn-undone = Undone.
 jn-started-over = Started over from the junction as it is today.

@@ -158,6 +158,10 @@ jn-check-signal-bad = { $n ->
    *[other] { $n } rues, c’est trop pour un seul jeu de feux
 }
 
+jn-check-turbo-square = Les rues abordent l’anneau d’équerre
+jn-check-turbo-square-ok = Chaque rue aborde l’anneau à moins de 10° de l’équerre
+jn-check-turbo-square-bad = { $arm } s’écarte de { $degrees }° de l’équerre.
+
 ## Ce qui est dit après une modification
 jn-undone = Annulé.
 jn-started-over = Retour à la jonction telle qu’elle est aujourd’hui.

@@ -16,7 +16,7 @@ use crate::junction::model::{
 };
 
 use crate::junction::signal;
-use crate::junction::turbo::{self, BLOCKS, LAYOUTS, Turbo, layouts_for, main_candidates};
+use crate::junction::turbo::{self, BLOCKS, LAYOUTS, Turbo, WARN_SKEW_DEG, layouts_for, main_candidates, ring_lane};
 use crate::junction::turbo_ring::{RingLane, RingShape, follow, mouth_on, ring_shape, stadium};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::shared::provenance::OsmRef;
@@ -1183,13 +1183,16 @@ impl Junction {
         // Movements.
         let mut movements = Vec::new();
         let rad = ring.map(|r| r.radius - s.cycle.unwrap_or(0) as f64);
+        let right_hand = side == Side::Right;
         for (i, a) in s.arms.iter().enumerate() {
             for (j, b) in s.arms.iter().enumerate() {
                 if i == j {
                     continue;
                 }
                 let (la, lb) = (&lay.arms[i], &lay.arms[j]);
-                let (Some(ea), Some(xb)) = (span_mid(la.prof.enter_span), span_mid(lb.prof.leave_span)) else { continue };
+                let lane_k = turbo_shape.as_ref().and_then(|_| serving_lane(a, b.uid, right_hand));
+                let ea = lane_k.and_then(|k| la.prof.enter_x.get(k).copied()).or_else(|| span_mid(la.prof.enter_span));
+                let (Some(ea), Some(xb)) = (ea, span_mid(lb.prof.leave_span)) else { continue };
                 let pe = at(la.bearing, la.lat(a.offset_mm as f64, ea), la.mouth);
                 let px = at(lb.bearing, lb.lat(b.offset_mm as f64, xb), lb.mouth);
                 let blocked = blocked(&s.arms, i, j);
@@ -1201,6 +1204,10 @@ impl Junction {
                     // Straight on past the middle, then back to the street on the left.
                     let w = at(la.bearing, la.lat(a.offset_mm as f64, ea), -0.4 * la.mouth);
                     vec![m(pe), l(w), quad(scale(add(w, px), 0.5), px)]
+                } else if let Some(shape) = turbo_shape.as_ref() {
+                    // The entry lane feeds a ring lane; a movement no lane serves takes the innermost.
+                    let ring_idx = lane_k.map_or(0, |k| ring_lane(k, a.lanes.len(), shape.lanes.len(), right_hand));
+                    turbo_path(la, lb, pe, px, la.lat(a.offset_mm as f64, ea), lb.lat(b.offset_mm as f64, xb), &shape.lanes[ring_idx], right_hand)
                 } else {
                     movement_path(la.bearing, pe, lb.bearing, px, rad, side, a.bearing, b.bearing)
                 };
@@ -1534,6 +1541,29 @@ fn movement_path(bear_a: f64, pe: P, bear_b: f64, px: P, ring: Option<f64>, side
     vec![m(pe), quad(control, px)]
 }
 
+/// The lane of an arm that takes traffic to street `to`: of the lanes that serve it, the one nearest the island (the
+/// left one for right-hand traffic, the right one for left-hand), as that is the one a driver bound there is in.
+fn serving_lane(a: &Arm, to: u32, right_hand: bool) -> Option<usize> {
+    let mut serving = a.lanes.iter().enumerate().filter(|(_, l)| l.to.contains(&to)).map(|(k, _)| k);
+    if right_hand { serving.next() } else { serving.last() }
+}
+
+/// A movement round a turbo's ring: in along the entry lane to where it meets the ring lane, round the lane's centre
+/// line in the direction of circulation, and out along the exit street.
+#[allow(clippy::too_many_arguments)]
+fn turbo_path(la: &ArmLayout, lb: &ArmLayout, pe: P, px: P, enter_lat: f64, exit_lat: f64, lane: &RingLane, anticlockwise: bool) -> Vec<Value> {
+    let (Some(t_in), Some(t_out)) = (mouth_on(&lane.centre, la.bearing, enter_lat), mouth_on(&lane.centre, lb.bearing, exit_lat)) else {
+        return vec![m(pe), l(px)];
+    };
+    let (qa, qb) = (at(la.bearing, enter_lat, t_in), at(lb.bearing, exit_lat, t_out));
+    let mut path = vec![m(pe), l(qa)];
+    // The lane's points run clockwise; right-hand traffic goes the other way round.
+    path.extend(follow(&lane.centre, qa, qb, !anticlockwise).into_iter().map(l));
+    path.push(l(qb));
+    path.push(l(px));
+    path
+}
+
 fn conflicts(s: &State, moves: &[MoveView], lay: &Layout, side: Side) -> Conflicts {
     let live: Vec<&MoveView> = moves.iter().filter(|m| m.allowed).collect();
     let by_phase = s.control == SIGNAL;
@@ -1703,6 +1733,16 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
             (plan.cycle_s > MAX_CYCLE_S)
                 .then(|| Said::new("jn-check-signal-cycle-bad").with("seconds", Arg::Num(seconds)).with("max", Arg::Num(i64::from(MAX_CYCLE_S)))),
         ));
+    }
+    // A turbo wants its streets to meet the ring square.
+    if let Some((uid, deg)) = s.turbo.as_ref().and_then(|t| t.worst_skew(&s.arms)) {
+        let bad = deg >= WARN_SKEW_DEG;
+        let detail = if bad {
+            Said::new("jn-check-turbo-square-bad").with("arm", Arg::Said(Box::new(name(uid)))).with("degrees", Arg::Num(deg.round() as i64))
+        } else {
+            Said::new("jn-check-turbo-square-ok")
+        };
+        out.push(Check { id: "turbo-square", ok: !bad, amount_mm: 0, label: Said::new("jn-check-turbo-square"), detail });
     }
     let _ = lay;
     out
@@ -3454,6 +3494,61 @@ mod tests {
                 assert!(finite(&j.view()), "layout {layout} block {size}");
             }
         }
+    }
+
+    /// Whether every point a movement follows round the ring lies on ring lane `lane`'s centre line.
+    fn on_ring_lane(v: &JView, lane: usize, from: u32, to: u32) -> bool {
+        let ring = v.ring.as_ref().unwrap();
+        let m = v.movements.iter().find(|m| m.from == from && m.to == to).unwrap();
+        let pts = sample_path(&m.path);
+        let middle = &pts[2..pts.len() - 2];
+        !middle.is_empty() && middle.iter().all(|p| ring.lanes[lane].centre.iter().any(|c| (c.0.round() - p.0).abs() < 1.0 && (c.1.round() - p.1).abs() < 1.0))
+    }
+
+    #[test]
+    fn a_movement_on_a_turbo_runs_round_the_ring_lane_its_entry_lane_feeds() {
+        let v = turbo_junction(0).view();
+        assert!(on_ring_lane(&v, 0, 1, 2), "north to east is a left turn: the left lane, the inner ring lane");
+        assert!(on_ring_lane(&v, 1, 1, 4), "north to west is a right turn: the right lane, the outer ring lane");
+        assert!(on_ring_lane(&v, 0, 1, 3), "straight on takes the first lane that serves it, the left one");
+    }
+
+    #[test]
+    fn left_hand_traffic_circulates_the_other_way_and_feeds_the_mirrored_ring_lane() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT) && j.set_region(3) && j.set_turbo(Some(0)));
+        let v = j.view();
+        assert_eq!(v.ring.as_ref().unwrap().circulation, "clockwise");
+        assert!(on_ring_lane(&v, 1, 1, 2), "the driver's left lane is now the outside: a left turn takes the outer ring lane");
+    }
+
+    #[test]
+    fn traffic_on_a_turbo_only_merges_and_diverges_and_the_lane_checks_run_on_the_layouts_lanes() {
+        let v = turbo_junction(0).view();
+        assert_eq!((v.conflicts.crossing, v.conflicts.merging, v.conflicts.diverging), (0, 4, 4));
+        assert!(v.checks.iter().find(|c| c.id == "lanes-cover").unwrap().ok);
+        assert!(v.checks.iter().find(|c| c.id == "lanes-follow").unwrap().ok);
+    }
+
+    #[test]
+    fn the_turbo_square_check_reports_the_worst_arm_from_10_degrees() {
+        let mut j = junction_of(&[("sidewalk", 3_000), ("travel", 3_500), ("travel", 3_500), ("sidewalk", 3_000)]);
+        j.set_control(ROUNDABOUT);
+        assert!(j.view().checks.iter().all(|c| c.id != "turbo-square"), "no turbo, no check");
+        assert!(j.set_turbo(Some(0)));
+        let find = |j: &Junction| j.view().checks.into_iter().find(|c| c.id == "turbo-square").unwrap();
+        let ok = find(&j);
+        assert!(ok.ok);
+        assert_eq!(en(&ok.label), "Arms meet the ring square");
+        assert_eq!(fr(&ok.label), "Les rues abordent l’anneau d’équerre");
+        let east = j.current().arms[1].uid;
+        assert!(j.set_bearing(east, 95));
+        assert!(find(&j).ok, "5 degrees off is square enough");
+        assert!(j.set_bearing(east, 100));
+        let bad = find(&j);
+        assert!(!bad.ok, "10 degrees or more is reported");
+        assert!(en(&bad.detail).ends_with(" is 10° off square."), "{}", en(&bad.detail));
+        assert!(fr(&bad.detail).ends_with(" s’écarte de 10° de l’équerre."), "{}", fr(&bad.detail));
     }
 
     #[test]

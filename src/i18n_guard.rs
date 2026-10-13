@@ -511,6 +511,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("lanes-follow", "the id of a junction check"),
     ("turning-speed", "the id of a junction check"),
     ("corner-room", "the id of a junction check"),
+    ("turbo-square", "the id of a junction check"),
     ("conflict-note", "the id of an element of the junction page"),
     ("grip-arm", "the data-role of a grip on the junction plan"),
     ("grip-corner", "the data-role of a grip on the junction plan"),
