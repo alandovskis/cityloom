@@ -585,8 +585,16 @@ pub fn MakePedestrian(vm: Rc<StreetVm>) -> impl IntoView {
                             type="button"
                             class="add-item ped-item"
                             on:click=move |_| {
-                                close(true);
-                                w.edit(|e| e.make_pedestrian(k));
+                                close(false);
+                                // The button goes away with the traffic, so a made street hands the focus to the
+                                // drawing (whose keys edit the street); a refusal keeps it on the button.
+                                if w.edit(|e| e.make_pedestrian(k)) {
+                                    if let Some(wrap) = document().get_element_by_id("wrap") {
+                                        let _ = leptos::wasm_bindgen::JsCast::unchecked_into::<HtmlElement>(wrap).focus();
+                                    }
+                                } else if let Some(b) = button.get_untracked() {
+                                    let _ = HtmlElement::from(b).focus();
+                                }
                             }
                         >
                             <span class="add-icon" inner_html=icon(kind.id)></span>
