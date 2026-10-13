@@ -444,10 +444,9 @@ impl Layout {
         if self.nodes[node].junction { self.junction_title(node) } else { self.place_name(node, &IN_SENTENCE) }
     }
 
-    /// What a street is called: the name the network gives it, or else its section's title.
-    pub(super) fn edge_title(&self, edge: usize) -> Said {
-        let e = &self.edges[edge];
-        e.name.as_ref().map_or_else(|| e.section.title(), |name| named_said(name))
+    /// What a street is called: the name the network gives it, or else the title of `street`, the street as it stands.
+    pub(super) fn edge_title(&self, edge: usize, street: &Street) -> Said {
+        self.edges[edge].name.as_ref().map_or_else(|| street.title(), |name| named_said(name))
     }
 
     /// Where a street runs: from one place to another, or through the city where neither end is a junction.
@@ -650,7 +649,8 @@ impl City {
             let Some(ri) = taken else { continue };
             let uid = e as u32 + 1;
             let street = &records[ri].1.street;
-            let fits = self.today_streets.get(&uid).is_some_and(|t| t.class == street.class && t.row_mm == street.row_mm);
+            // the class is not compared: an edit changes it (a street made pedestrian); the room it has is not
+            let fits = self.today_streets.get(&uid).is_some_and(|t| t.row_mm == street.row_mm);
             if fits && street.is_sound() {
                 // where a street came from and what it is called are not something an edit changes
                 let today = &self.today_streets[&uid];
@@ -789,7 +789,7 @@ impl City {
 
     /// Keeps what the street editor has made of a street.
     pub fn keep_street(&mut self, edge: u32, street: Street) -> bool {
-        let ok = self.today_streets.get(&edge).is_some_and(|t| t.class == street.class && t.row_mm == street.row_mm);
+        let ok = self.today_streets.get(&edge).is_some_and(|t| t.row_mm == street.row_mm);
         if ok && street.is_sound() {
             self.streets.insert(edge, street);
         }
@@ -864,7 +864,7 @@ impl City {
                 uid,
                 a: node_uid(e.a),
                 b: node_uid(e.b),
-                called: self.layout.edge_title(i),
+                called: self.layout.edge_title(i, now),
                 ends: self.layout.edge_ends(i),
                 row_mm: row,
                 total_mm: v.total_mm,
@@ -873,6 +873,7 @@ impl City {
                 trim_a_mm: trim_at(e.a),
                 trim_b_mm: trim_at(e.b),
                 freeway: e.class.is_freeway(),
+                class: now.class,
                 pieces: v
                     .segments
                     .iter()
@@ -978,6 +979,8 @@ pub struct EdgeView {
     pub trim_a_mm: i32,
     pub trim_b_mm: i32,
     pub freeway: bool,
+    /// The class the street has now (an edit can make it pedestrian).
+    pub class: StreetClass,
     pub pieces: Vec<PieceView>,
     pub edited: bool,
     pub ok: bool,
@@ -1291,15 +1294,26 @@ mod tests {
     }
 
     #[test]
-    fn a_street_of_another_class_does_not_take_the_edit() {
+    fn a_saved_street_whose_class_was_edited_still_finds_its_place_and_its_class_is_what_the_map_says() {
         let mut city = City::new();
-        assert!(city.keep_street(1, narrowed(&city, 1)));
-        let mut edits = edits_of(&city);
-        for record in edits.streets.values_mut() {
-            record.street.class = StreetClass::ALL.into_iter().find(|&c| c != record.street.class).unwrap(); // only the class differs
-        }
-        let back = City::load(&edits);
-        assert_eq!(back.streets[&1], back.today_streets[&1]);
+        let s = crate::street::model::pedestrianised(&narrowed(&city, 1));
+        assert_ne!(s.class, city.today_streets[&1].class);
+        assert!(city.keep_street(1, s.clone()), "the class is not compared: an edit changes it");
+        let back = City::load(&edits_of(&city));
+        assert_eq!((back.streets[&1].class, back.streets[&1].class_before), (StreetClass::Pedestrian, s.class_before));
+        assert_eq!(back.view(0).edges[0].class, StreetClass::Pedestrian);
+        assert!(back.view(0).edges[0].edited);
+    }
+
+    #[test]
+    fn the_map_names_an_unnamed_street_by_the_class_it_has_now() {
+        let mut layout = Layout::sample();
+        layout.edges[0].name = None;
+        layout.edges[0].section.name = None;
+        let mut city = City::on(layout);
+        let s = crate::street::model::pedestrianised(&city.street_editor(1, 0).unwrap().snapshot());
+        assert!(city.keep_street(1, s));
+        assert_eq!(en(&city.view(0).edges[0].called), "Unnamed pedestrian street");
     }
 
     /// The sample city with an edited junction 1, its edits, and the junction's node index.
@@ -1622,7 +1636,7 @@ mod tests {
     #[test]
     fn names_say_where_a_street_goes() {
         let layout = Layout::sample();
-        assert_eq!(en(&layout.edge_title(0)), "Sample Avenue 2");
+        assert_eq!(en(&layout.edge_title(0, &layout.edges[0].section)), "Sample Avenue 2");
         assert_eq!(en(&layout.edge_ends(0)), "the edge of the map to Junction 4");
         assert_eq!(fr(&layout.edge_ends(0)), "entre la limite de la carte et Jonction 4");
         assert_eq!(en(&layout.edge_ends(22)), "through the city");

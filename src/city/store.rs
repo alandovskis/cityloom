@@ -216,8 +216,9 @@ impl CityStore {
 mod tests {
     use super::*;
     use crate::city::edits::{self, Document, Edits, StreetRecord};
+    use crate::shared::catalogue::StreetClass;
     use crate::shared::ports::{MemoryStorage, test_ports};
-    use crate::street::model::Street;
+    use crate::street::model::{Street, pedestrianised};
 
     fn store() -> (CityStore, Rc<crate::shared::ports::MemoryStorage>) {
         let (ports, _, storage) = test_ports();
@@ -355,7 +356,7 @@ mod tests {
     #[test]
     fn a_record_this_build_cannot_read_survives_a_write_of_another_place_unchanged() {
         let (store, storage) = store();
-        let newer = r#"{"version":3,"streets":{"w9~n1~n2":{"street":{"class":"Hovercraft"}}},"junctions":{}}"#;
+        let newer = r#"{"version":4,"streets":{"w9~n1~n2":{"street":{"class":"Hovercraft"}}},"junctions":{}}"#;
         storage.remember(EDITS_KEY, newer);
         assert!(store.write_street(1, narrowed(&store, 1)));
         let kept: serde_json::Value = serde_json::from_str(&storage.recall(EDITS_KEY).unwrap()).unwrap();
@@ -376,12 +377,38 @@ mod tests {
     #[test]
     fn a_document_from_a_newer_version_is_left_alone_and_the_write_says_it_was_not_kept() {
         let (store, storage) = store();
-        let newer = r#"{"version":4,"streets":{},"junctions":{},"future":true}"#;
+        let newer = r#"{"version":5,"streets":{},"junctions":{},"future":true}"#;
         storage.remember(EDITS_KEY, newer);
         assert!(!store.write_street(1, narrowed(&store, 1)));
         assert_eq!(storage.recall(EDITS_KEY).as_deref(), Some(newer));
         assert_eq!(storage.recall(DAMAGED_KEY), None, "a newer document is not a damaged one");
         assert_eq!(store.open().view(0).edited, 0, "and it is not read");
+    }
+
+    #[test]
+    fn a_document_of_the_previous_version_is_not_read_and_is_copied_aside_before_the_first_write_replaces_it() {
+        let (store, storage) = store();
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        let current = storage.recall(EDITS_KEY).unwrap();
+        let previous = current.replacen(&format!("\"version\":{}", edits::VERSION), "\"version\":3", 1);
+        assert_ne!(previous, current);
+        storage.remember(EDITS_KEY, &previous);
+        assert_eq!(store.open().view(0).edited, 0, "an earlier version's document is not read");
+        assert!(store.write_street(2, narrowed(&store, 2)));
+        assert_eq!(storage.recall(DAMAGED_KEY).as_deref(), Some(previous.as_str()));
+        assert_eq!(document(&storage).streets.len(), 1, "the document was replaced by one of this version");
+    }
+
+    #[test]
+    fn a_street_made_pedestrian_comes_back_pedestrian_with_the_class_it_had_after_the_page_is_opened_again() {
+        let (store, _) = store();
+        let before = store.open().street_editor(1, 0).unwrap().snapshot();
+        let s = pedestrianised(&before);
+        assert_eq!((s.class, s.class_before), (StreetClass::Pedestrian, Some(before.class)));
+        assert!(store.write_street(1, s.clone()), "a street of another class than today's is kept");
+        let again = store.open().street_editor(1, 0).unwrap();
+        assert_eq!(again.snapshot(), s);
+        assert_eq!(again.view().class, StreetClass::Pedestrian);
     }
 
     #[test]
