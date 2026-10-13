@@ -17,6 +17,7 @@ pub mod signal;
 mod tests;
 pub mod text;
 pub mod turbo;
+pub mod turbo_ring;
 pub mod turns;
 pub mod vm;
 pub mod watch;
