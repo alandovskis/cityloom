@@ -1001,7 +1001,7 @@ fn choice(
                         w.edit(|j| set(j, i));
                     }
                     // What the list shows is the model's choice, whether it took the edit or refused it.
-                    if let Some(kept) = w.arm(uid, |a| current(&a.transit)) {
+                    if let Some(kept) = w.view_now().arms.iter().find(|a| a.uid == uid).map(|a| current(&a.transit)) {
                         select.set_value(&kept.to_string());
                     }
                 }
