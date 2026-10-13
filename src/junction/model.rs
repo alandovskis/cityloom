@@ -1728,19 +1728,11 @@ impl Junction {
             if in_force(s).control != ROUNDABOUT {
                 return false;
             }
-            // The main road: the one a turbo already on has if it still stands with the new layout, else the best that
-            // stands (square enough, with room for its entries), else the best (the edit is then refused, naming the arm).
-            let candidates = main_candidates(&s.arms, region, layout);
-            let stands = |m: &Vec<u32>| Turbo { layout, size: 0, main: m.clone() }.standable(&s.arms, region);
-            let kept = s.turbo.as_ref().map(|t| t.main.clone()).filter(|m| candidates.contains(m) && stands(m));
-            let Some(main) = kept.or_else(|| candidates.iter().find(|m| stands(m)).cloned()).or_else(|| candidates.first().cloned()) else { return false };
-            for size in s.turbo.as_ref().map_or(0, |t| t.size)..BLOCKS.len() {
-                s.turbo = Some(Turbo { layout, size, main: main.clone() });
-                if crate::junction::read_model::layout(s, region).is_some() {
-                    break;
-                }
-            }
-            true // if no block fits, the largest stays and the edit is refused as too big
+            // The main road and block `choose_turbo` finds; if none fits, the largest stays and the edit is refused as too big
+            // (or, for a main road that does not stand, naming the arm).
+            let Some((turbo, _)) = crate::junction::read_model::choose_turbo(s, region, layout) else { return false };
+            s.turbo = Some(turbo);
+            true
         })
     }
 

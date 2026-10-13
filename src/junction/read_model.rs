@@ -159,6 +159,28 @@ pub struct Layout {
 /// Puts the junction on the sheet, or says it cannot be drawn: a corner whose
 /// curbs meet behind the junction, a fillet longer than its arm, a roundabout
 /// that will not fit its arms in the largest ring.
+/// The turbo `Junction::set_turbo` gives `layout` on this roundabout, and whether it stands and some block holds it
+/// (a layout is offered exactly when it does). The main road is the one a turbo already on has if it still stands with
+/// the new layout, else the best that stands, else the best (it then does not stand); the block is the smallest that
+/// fits, from the one a turbo already on has up, else the largest. `None` when there is no opposite pair.
+pub fn choose_turbo(s: &State, region: usize, which: usize) -> Option<(Turbo, bool)> {
+    let candidates = main_candidates(&s.arms, region, which);
+    let stands = |m: &Vec<u32>| Turbo { layout: which, size: 0, main: m.clone() }.standable(&s.arms, region);
+    let kept = s.turbo.as_ref().map(|t| t.main.clone()).filter(|m| candidates.contains(m) && stands(m));
+    let main = kept.or_else(|| candidates.iter().find(|m| stands(m)).cloned()).or_else(|| candidates.first().cloned())?;
+    let standing = stands(&main);
+    let mut held = s.clone();
+    let from = s.turbo.as_ref().map_or(0, |t| t.size);
+    for size in from..BLOCKS.len() {
+        let turbo = Turbo { layout: which, size, main: main.clone() };
+        held.turbo = Some(turbo.clone());
+        if layout(&held, region).is_some() {
+            return Some((turbo, standing));
+        }
+    }
+    Some((Turbo { layout: which, size: BLOCKS.len() - 1, main }, false))
+}
+
 pub fn layout(s: &State, region: usize) -> Option<Layout> {
     let in_force = in_force(s);
     let s: &State = &in_force;
@@ -1204,10 +1226,12 @@ impl Junction {
                     // Straight on past the middle, then back to the street on the left.
                     let w = at(la.bearing, la.lat(a.offset_mm as f64, ea), -0.4 * la.mouth);
                     vec![m(pe), l(w), quad(scale(add(w, px), 0.5), px)]
-                } else if let Some(shape) = turbo_shape.as_ref() {
+                } else if let Some(on_lane) = turbo_shape.as_ref().and_then(|shape| {
                     // The entry lane feeds a ring lane; a movement no lane serves takes the innermost.
-                    let ring_idx = lane_k.map_or(0, |k| ring_lane(k, a.lanes.len(), shape.lanes.len(), right_hand));
-                    turbo_path(la, lb, pe, px, la.lat(a.offset_mm as f64, ea), lb.lat(b.offset_mm as f64, xb), &shape.lanes[ring_idx], right_hand)
+                    let idx = lane_k.map_or(0, |k| ring_lane(k, a.lanes.len(), shape.lanes.len(), right_hand));
+                    shape.lanes.get(idx).or(shape.lanes.first())
+                }) {
+                    turbo_path(la, lb, pe, px, la.lat(a.offset_mm as f64, ea), lb.lat(b.offset_mm as f64, xb), on_lane, right_hand)
                 } else {
                     movement_path(la.bearing, pe, lb.bearing, px, rad, side, a.bearing, b.bearing)
                 };
@@ -1288,17 +1312,7 @@ impl Junction {
             turbo_options: if s.control == ROUNDABOUT {
                 layouts_for(s.arms.len())
                     .into_iter()
-                    .filter(|&i| {
-                        main_candidates(&s.arms, region, i).into_iter().any(|main| {
-                            Turbo { layout: i, size: 0, main: main.clone() }.standable(&s.arms, region)
-                                && (0..BLOCKS.len()).any(|size| {
-                                    // The test `set_turbo` makes before it refuses the layout as too big.
-                                    let mut held = s.clone();
-                                    held.turbo = Some(Turbo { layout: i, size, main: main.clone() });
-                                    layout(&held, region).is_some()
-                                })
-                        })
-                    })
+                    .filter(|&i| choose_turbo(s, region, i).is_some_and(|(_, fits)| fits))
                     .map(|i| TurboOption { layout: i, id: LAYOUTS[i].id, key: LAYOUTS[i].key, on: s.turbo.as_ref().is_some_and(|t| t.layout == i) })
                     .collect()
             } else {
@@ -3563,5 +3577,33 @@ mod tests {
             assert_eq!(offered.contains(&layout), accepted, "layout {layout}: offered {offered:?}, set_turbo {accepted}");
         }
         assert!(!offered.contains(&0), "the basic turbo is refused as too big here, so it is not offered");
+    }
+
+    #[test]
+    fn what_is_offered_is_what_set_turbo_accepts_whatever_the_turbo_already_on() {
+        let streets: [&[(&str, i32)]; 3] =
+            [&[("travel", 3_500); 11], &[("sidewalk", 3_000), ("travel", 3_500), ("travel", 3_500), ("sidewalk", 3_000)], &[("travel", 3_500); 5]];
+        for street in streets {
+            for start in [None, Some((0, 3)), Some((2, 1)), Some((3, 3))] {
+                let build = || {
+                    let mut j = junction_of(street);
+                    assert!(j.set_control(ROUNDABOUT));
+                    if let Some((layout, size)) = start {
+                        // Whatever the junction takes of it: the turbo may be refused here, and the junction then has none.
+                        let _ = j.set_turbo(Some(layout)) && j.set_turbo_size(size);
+                    }
+                    j
+                };
+                let offered: Vec<usize> = build().view().turbo_options.iter().map(|o| o.layout).collect();
+                for layout in 0..LAYOUTS.len() {
+                    let accepted = build().set_turbo(Some(layout));
+                    let on_already = build().current().turbo.as_ref().is_some_and(|t| t.layout == layout);
+                    assert!(
+                        offered.contains(&layout) == accepted || on_already,
+                        "{street:?} from {start:?}, layout {layout}: offered {offered:?}, accepted {accepted}"
+                    );
+                }
+            }
+        }
     }
 }

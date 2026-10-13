@@ -359,6 +359,19 @@ pub fn ring_lane(k: usize, n: usize, ring_lanes: usize, right_hand: bool) -> usi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_ring_lane_is_always_one_the_ring_has() {
+        for ring_lanes in 1..=3 {
+            for n in 1..=3 {
+                for k in 0..n {
+                    for right_hand in [true, false] {
+                        assert!(ring_lane(k, n, ring_lanes, right_hand) < ring_lanes, "lane {k} of {n} onto {ring_lanes}, right-hand {right_hand}");
+                    }
+                }
+            }
+        }
+    }
     use crate::junction::model::Junction;
     use crate::shared::catalogue::{Side, kind_index};
     use crate::street::model::{Piece, Street};
