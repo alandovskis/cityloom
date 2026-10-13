@@ -456,7 +456,8 @@ test("a turbo roundabout shows its painted dividers and its name in 2.5D", async
   const paint = page.locator("#drawing .iso-paint.white").first();
   await expect(paint).toBeAttached();
   await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /Basic turbo roundabout, \w+ size\.$/);
-  // In the default (light) colour scheme the paint carries its dark edge.
+  // In the light colour scheme the paint carries its dark edge.
+  await page.emulateMedia({ colorScheme: "light" });
   const stroke = await paint.evaluate((el) => getComputedStyle(el).stroke);
   expect(stroke).not.toMatch(/^(none|transparent|rgba\(0, 0, 0, 0\))$/);
 });
@@ -465,17 +466,27 @@ test("the turbo layouts are a radio group: one tab stop, the arrow keys choose, 
   page,
 }) => {
   await basicTurbo(page);
-  const radios = page.getByRole("radio");
   const basic = page.getByRole("radio", { name: "Basic", exact: true });
   await basic.focus();
   await expect(basic).toBeFocused();
   await expect(basic).toHaveAttribute("aria-checked", "true");
 
-  // Choosing the layout already chosen is a no-op: no refusal, and the one Undo still returns to the plain roundabout.
+  // Choosing the layout already chosen changes nothing: the live region is unchanged, and the one Undo that follows
+  // goes back to the plain roundabout, so the choice added no history step.
+  // (The live region fills 40 ms after a change, so wait for the first choice's words and again before comparing.)
+  await expect(live(page)).toContainText("basic turbo");
+  const said = await live(page).innerText();
   await page.keyboard.press("Enter");
+  await page.waitForTimeout(250);
   await expect(basic).toHaveAttribute("aria-checked", "true");
-  await expect(live(page)).not.toContainText(/can.?t|cannot|not possible|refus/i);
-  await expect(page.locator("#drawing .turbo-divider")).toHaveCount(1);
+  expect(await live(page).innerText()).toBe(said);
+  await page.locator("#undo").click();
+  await expect(page.locator("#drawing .turbo-divider")).toHaveCount(0);
+  await expect(basic).toHaveAttribute("aria-checked", "false");
+
+  await basic.click();
+  await expect(basic).toHaveAttribute("aria-checked", "true");
+  await expect(basic).toBeFocused();
 
   await page.keyboard.press("ArrowDown");
   await expect(basic).toHaveAttribute("aria-checked", "false");
