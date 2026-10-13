@@ -719,6 +719,35 @@ mod tests {
         j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid
     }
 
+    /// The markup of one arm's own group.
+    fn arm_group(markup: &str, uid: u32) -> &str {
+        let open = format!("data-role=\"arm\" data-uid=\"{uid}\">");
+        let from = markup.find(&open).expect("the arm is drawn") + open.len();
+        &markup[from..from + markup[from..].find("</g>").unwrap()]
+    }
+
+    #[test]
+    fn a_walkway_arm_is_drawn_as_walking_surface_and_the_other_streets_keep_their_crossing_stop_and_table() {
+        let mut j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+        assert!(j.set_control(ALL_WAY_STOP));
+        assert!(j.set_raised(true));
+        let walk = j.view().arms.iter().find(|a| a.pedestrian).unwrap().uid;
+        let other = j.view().arms.iter().find(|a| !a.pedestrian).unwrap().uid;
+        let s = svg(&j);
+        let own = arm_group(&s.markup, walk);
+        assert_eq!(count(own, "piece k-terrace"), 1, "the walkway's own pieces are drawn");
+        assert_eq!(count(own, "piece k-sidewalk"), 2);
+        for road in ["k-travel", "k-parking", "k-loading", "k-bus", "k-shoulder", "raised-"] {
+            assert_eq!(count(own, road), 0, "{road} in the walkway arm");
+        }
+        assert!(count(arm_group(&s.markup, other), "k-travel") > 0, "a street arm still has its road");
+        assert!(!s.markup.contains(&format!("data-role=\"crossing\" data-uid=\"{walk}\"")));
+        assert_eq!(count(&s.markup, "class=\"crossing\""), 3);
+        assert_eq!(count(&s.markup, "class=\"stop-line\""), 3, "the three street arms are stopped, the walkway is not");
+        assert_eq!(count(&s.markup, "M-3.5 -8.5h7"), 3);
+        assert_eq!(count(&s.markup, "class=\"raised-ramp\""), 3, "no ramp on the walkway");
+    }
+
     #[test]
     fn a_corner_without_a_sidewalk_is_drawn_bare() {
         let s = svg(&junction_of(&[("travel", 3200), ("travel", 3200)]));
