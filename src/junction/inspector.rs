@@ -421,27 +421,35 @@ fn control_section(w: Watch) -> impl IntoView {
     let ring = Memo::new(move |_| w.view().ring.is_some());
     let cycle = Memo::new(move |_| w.view().ring.as_ref().is_some_and(|r| r.cycle_mm.is_some()));
     let raised = Memo::new(move |_| w.view().raised);
-    let control = section(
-        w,
-        "i-h-control",
-        "jn-insp-control",
-        view! {
-            <select
-                aria-labelledby="i-h-control"
-                on:change=move |ev| {
-                    if let Ok(i) = event_target_value(&ev).parse::<usize>() {
-                        w.edit(|j| j.set_control(i));
-                    }
-                }
-            >
-                {CONTROLS
-                    .iter()
-                    .enumerate()
-                    .map(|(i, c)| view! { <option value=i.to_string() prop:selected=move || w.view().control_index == i>{words(w, c.key)}</option> })
-                    .collect_view()}
-            </select>
-        },
-    );
+    let single = Memo::new(move |_| w.view().traffic_arms <= 1);
+    let control = move || {
+        if single.get() {
+            section(w, "i-h-control", "jn-insp-control", view! { <p class="insp-range">{words(w, "jn-insp-control-pedestrian")}</p> }).into_any()
+        } else {
+            section(
+                w,
+                "i-h-control",
+                "jn-insp-control",
+                view! {
+                    <select
+                        aria-labelledby="i-h-control"
+                        on:change=move |ev| {
+                            if let Ok(i) = event_target_value(&ev).parse::<usize>() {
+                                w.edit(|j| j.set_control(i));
+                            }
+                        }
+                    >
+                        {CONTROLS
+                            .iter()
+                            .enumerate()
+                            .map(|(i, c)| view! { <option value=i.to_string() prop:selected=move || w.view().control_index == i>{words(w, c.key)}</option> })
+                            .collect_view()}
+                    </select>
+                },
+            )
+            .into_any()
+        }
+    };
     view! {
         {control}
         {move || (!ring.get()).then(|| raised_table(w, raised))}
@@ -780,8 +788,17 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
 
 fn crossing_section(w: Watch, uid: u32) -> impl IntoView {
     let has = Memo::new(move |_| w.arm(uid, |a| a.crossing.is_some()).unwrap_or(false));
+    let walk = Memo::new(move |_| w.arm(uid, |a| a.pedestrian).unwrap_or(false));
     move || {
-        if has.get() {
+        if walk.get() {
+            view! {
+                <section class="insp-sec">
+                    <h3 class="note-h" id="i-h-cross">{words(w, "jn-insp-crossing")}</h3>
+                    <p class="insp-range">{words(w, "jn-insp-crossing-pedestrian")}</p>
+                </section>
+            }
+            .into_any()
+        } else if has.get() {
             crossing_fields(w, uid).into_any()
         } else {
             view! {
