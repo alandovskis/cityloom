@@ -8,11 +8,12 @@ use serde_json::Value;
 
 use crate::junction::frame::Frame;
 use crate::junction::geometry::{sample_arc, sample_quad};
-use crate::junction::plan_svg::esc;
 use crate::junction::read_model::JView;
 use crate::junction::text::arms_text;
 use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::iso::format::{esc, f1};
+use crate::shared::iso::shading::shade_filters;
 use crate::shared::said::say;
 use crate::shared::units::Units;
 
@@ -130,12 +131,6 @@ pub struct IsoSvg {
     pub markup: String,
 }
 
-/// A number to a tenth, with no trailing zero.
-fn f1(n: f64) -> String {
-    let r = (n * 10.0).round() / 10.0;
-    if r == 0.0 { "0".to_string() } else { format!("{r}") }
-}
-
 /// A shape that stands on the ground: its footprint, its height, and whether its sides are drawn.
 struct Solid {
     kind_id: &'static str,
@@ -147,10 +142,7 @@ struct Solid {
 /// The filters that darken the faces turned from the eye: a ramp a little, a side more. SVG filters, since CSS
 /// `filter: brightness()` on SVG shapes may not be applied in Safari.
 fn shades() -> String {
-    let (ramp, side) = (0.9, 0.78);
-    format!(
-        "<defs><filter id=\"iso-shade-ramp\" color-interpolation-filters=\"sRGB\"><feComponentTransfer><feFuncR type=\"linear\" slope=\"{ramp}\"/><feFuncG type=\"linear\" slope=\"{ramp}\"/><feFuncB type=\"linear\" slope=\"{ramp}\"/></feComponentTransfer></filter><filter id=\"iso-shade-side\" color-interpolation-filters=\"sRGB\"><feComponentTransfer><feFuncR type=\"linear\" slope=\"{side}\"/><feFuncG type=\"linear\" slope=\"{side}\"/><feFuncB type=\"linear\" slope=\"{side}\"/></feComponentTransfer></filter></defs>"
-    )
+    format!("<defs>{}</defs>", shade_filters(&[("iso-shade-ramp", "0.9"), ("iso-shade-side", "0.78")]))
 }
 
 /// How far a vertex may be from an edge and still be on it: where a ramp meets its top, where one surface meets

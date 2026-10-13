@@ -4,6 +4,7 @@
 use std::fmt::Write;
 
 use crate::shared::catalogue::KINDS;
+use crate::shared::iso::shading::shade_filters;
 use crate::street::model::View;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
@@ -70,14 +71,7 @@ const SHADES: [(&str, &str); 2] = [("iso-shade-front", "0.9"), ("iso-shade-side"
 
 /// The shading filters, for the drawing's `<defs>`.
 pub(super) fn shades() -> String {
-    SHADES
-        .iter()
-        .map(|(id, k)| {
-            format!(
-                "<filter id=\"{id}\" color-interpolation-filters=\"sRGB\"><feComponentTransfer><feFuncR type=\"linear\" slope=\"{k}\"/><feFuncG type=\"linear\" slope=\"{k}\"/><feFuncB type=\"linear\" slope=\"{k}\"/></feComponentTransfer></filter>"
-            )
-        })
-        .collect()
+    shade_filters(&SHADES)
 }
 
 /// The shading a face of this kind gets, as an attribute: none for a top.

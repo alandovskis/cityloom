@@ -12,6 +12,7 @@ use crate::junction::text::arms_text;
 use crate::junction::turns::compass_key;
 use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n, Locale};
+use crate::shared::iso::format::{esc, f1};
 use crate::shared::said::{Said, say};
 use crate::shared::units::Units;
 
@@ -22,16 +23,6 @@ pub struct PlanSvg {
     pub frame: Frame,
     pub label: String,
     pub markup: String,
-}
-
-/// A number to a tenth, with no trailing zero.
-fn f1(n: f64) -> String {
-    let r = (n * 10.0).round() / 10.0;
-    if r == 0.0 { "0".to_string() } else { format!("{r}") }
-}
-
-pub(crate) fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 fn dir_of(bearing: f64) -> P {

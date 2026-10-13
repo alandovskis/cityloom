@@ -16,10 +16,11 @@ use std::fmt::Write;
 
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::iso::format::esc;
 use crate::shared::said::say;
 use crate::shared::units::Units;
 use crate::street::model::View;
-use crate::street::svg::{curb_edges, esc};
+use crate::street::svg::curb_edges;
 
 mod projection;
 mod raised;
