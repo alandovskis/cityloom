@@ -4,6 +4,7 @@ class-motorway = autoroutière
 class-arterial = artérielle
 class-collector = collectrice
 class-local = locale
+class-pedestrian = piétonne
 city-unnamed = Rue { $class } sans nom
 city-unnamed-motorway = Autoroute sans nom
 # Une route sans nom, nommée dans une phrase, pour un lieu qu’aucune route nommée n’atteint.

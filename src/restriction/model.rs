@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::city::model::EdgeView;
 use crate::city::projection::Projection;
-use crate::shared::catalogue::KINDS;
+use crate::shared::catalogue::{CAR_KINDS, KINDS};
 use crate::shared::said::{Arg, Said};
 use crate::street::model::Street;
 
@@ -196,7 +196,7 @@ impl Rule {
     /// The catalogue kinds of piece the rule does not allow.
     fn forbids(self) -> &'static [&'static str] {
         match self {
-            Rule::CarFree => &["travel", "parking", "loading"],
+            Rule::CarFree => &CAR_KINDS,
             Rule::BusAndBikeOnly => &["travel"],
             Rule::NoParkingOrLoading => &["parking", "loading"],
             Rule::SpeedLimit { .. } => &[],
@@ -433,6 +433,14 @@ mod tests {
         assert_eq!(conflicts(Rule::CarFree, &busy), vec![c("travel", 2), c("parking", 1), c("loading", 1)]);
         let calm = street(&["sidewalk", "bike", "bus", "planting", "sidewalk"]);
         assert_eq!(conflicts(Rule::CarFree, &calm), vec![]);
+    }
+
+    #[test]
+    fn car_free_forbids_what_the_catalogue_calls_cars_and_still_allows_buses() {
+        use crate::shared::catalogue::CAR_KINDS;
+        assert_eq!(Rule::CarFree.forbids(), &CAR_KINDS[..]);
+        let calm = street(&["sidewalk", "bus", "bike", "shoulder"]);
+        assert_eq!(conflicts(Rule::CarFree, &calm), vec![], "a bus lane, a bike lane and a shoulder are not cars to the rule");
     }
 
     #[test]
