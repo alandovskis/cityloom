@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, openStreet, test } from "./fixtures";
+import { expect, live, openStreet, placesOnMap, test } from "./fixtures";
 
 const iso = (page: Page) => page.locator("#view-iso");
 const section = (page: Page) => page.locator("#view-section");
@@ -118,4 +118,35 @@ test("the toggle sits on the street name's line, so the page's head is no taller
   expect(toggle.y + toggle.height).toBeLessThanOrEqual(sub.y + 1);
   expect(toggle.x).toBeGreaterThanOrEqual(name.x + name.width);
   expect(toggle.height).toBeLessThanOrEqual(name.height + 6);
+});
+
+test("a street with opposing lanes shows yellow paint in 2.5D, and symbols in place of the section's arrows", async ({
+  page,
+}) => {
+  await page.goto("/map.html");
+  const streets = (await placesOnMap(page)).streets;
+  let yellow = 0;
+  // The first streets of the Plateau: stop at the first with a line between lanes that run opposite ways.
+  for (const href of streets.slice(0, 8)) {
+    await page.goto("/" + href);
+    await iso(page).click();
+    await expect(iso(page)).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#drawing .iso-markings")).toHaveCount(1);
+    await expect(page.locator("#drawing .iso-dir")).toHaveCount(0);
+    yellow = await page.locator("#drawing .iso-paint.yellow").count();
+    if (yellow > 0) break;
+  }
+  expect(yellow, "some street of the fixture has opposing lanes").toBeGreaterThan(0);
+  // The paint lies on the road: it takes no pointer, so the piece under it is still the one hovered.
+  const pointer = await page
+    .locator("#drawing .iso-paint")
+    .first()
+    .evaluate((el) => getComputedStyle(el).pointerEvents);
+  expect(pointer).toBe("none");
+  // And the paint is not the colour of the road: it follows the theme tokens.
+  const fill = await page
+    .locator("#drawing .iso-paint.yellow")
+    .first()
+    .evaluate((el) => getComputedStyle(el).fill);
+  expect(fill).not.toBe("rgb(0, 0, 0)");
 });

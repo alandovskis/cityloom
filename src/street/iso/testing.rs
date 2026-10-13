@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::shared::catalogue::kind_index;
+use crate::shared::catalogue::{DIRECTIONS, kind_index};
 use crate::shared::i18n::{I18n, Locale};
 use crate::street::model::Editor;
 
@@ -108,5 +108,18 @@ pub fn furnished() -> Editor {
     e.add(kind_index("busshelter").unwrap(), 1);
     let pick = e.view().segments[4].uid;
     e.select(Some(pick));
+    e
+}
+
+/// Sample Street 1 with a bus lane running with the traffic between its driving lanes and a two-way bike lane
+/// before the right sidewalk: a double white, a double yellow, and a broken yellow middle line; arrows, a bus
+/// symbol and a bike symbol.
+pub fn marked() -> Editor {
+    let mut e = Editor::new(0);
+    let id = e.view().segments[2].direction.expect("a driving lane");
+    let with = DIRECTIONS.iter().position(|d| d.id == id).unwrap();
+    let bus = e.add(kind_index("bus").unwrap(), 3);
+    assert!(e.set_direction(bus, Some(with)));
+    e.add(kind_index("bike").unwrap(), 6);
     e
 }

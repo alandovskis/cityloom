@@ -122,7 +122,7 @@ pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
 #[cfg(test)]
 mod tests {
     use super::projection::{PAD, r};
-    use super::testing::{count, drawn, en, furnished, one_way_bikes, top_of, xs, xs_ys};
+    use super::testing::{count, drawn, en, furnished, marked, one_way_bikes, top_of, xs, xs_ys};
     use super::*;
     use crate::shared::catalogue::kind_index;
     use crate::shared::i18n::Locale;
@@ -509,6 +509,13 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_marked_street_draws_every_kind_of_paint() {
+        let m = drawn(&marked());
+        assert!(count(&m, "class=\"iso-paint yellow\"") > 2 && count(&m, "class=\"iso-paint white\"") > 4);
+        assert!(!m.contains("NaN") && !m.contains("inf"));
+    }
+
     /// Not a check: writes `target/iso-preview-light.html` and `target/iso-preview-dark.html`, the 2.5D of
     /// every sample street and of `furnished()` at three widths with the page's styles and hatches, to look at
     /// in a browser. `cargo test street::iso::tests::preview -- --ignored`.
@@ -520,7 +527,7 @@ mod tests {
         let defs: String = HATCH.iter().chain(MATERIAL_HATCH.iter()).chain(CURB_HATCH.iter()).map(|(_, s)| *s).collect();
         let streets: Vec<(String, Editor)> = (0..4)
             .map(|i| (format!("sample {i}"), Editor::new(i)))
-            .chain([("furnished".to_string(), furnished()), ("one-way bikes".to_string(), one_way_bikes().0)])
+            .chain([("furnished".to_string(), furnished()), ("one-way bikes".to_string(), one_way_bikes().0), ("marked".to_string(), marked())])
             .collect();
         let mut body = String::new();
         for (name, e) in &streets {
