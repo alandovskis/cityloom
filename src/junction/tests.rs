@@ -281,6 +281,16 @@ fn a_roundabout_offers_its_turbo_layouts_and_a_chosen_one_its_size_and_main_road
 }
 
 #[test]
+fn the_turbo_size_stepper_is_a_group_that_the_heading_labels() {
+    let s = shared(0);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    s.edit(|j| j.set_turbo(Some(0)));
+    let h = panel(&s);
+    let tag = h.split("<span").find(|t| t.contains("wfield turbo-size")).unwrap().split('>').next().unwrap();
+    assert!(tag.contains("aria-labelledby=\"i-h-turbo-size\"") && tag.contains("role=\"group\""), "{tag}");
+}
+
+#[test]
 fn only_the_layouts_that_suit_the_streets_are_offered() {
     let s = shared(1); // three streets
     s.edit(|j| j.set_control(ROUNDABOUT));

@@ -375,7 +375,7 @@ fn turbo_size(w: Watch) -> impl IntoView {
                 <button type="button" class="ico" aria-label=words(w, "jn-insp-turbo-smaller") disabled=move || !can_smaller() on:click=move |_| { w.edit(|j| j.step_turbo_size(-1)); }>
                     <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
                 </button>
-                <span class="wfield turbo-size" aria-labelledby="i-h-turbo-size">{size}</span>
+                <span class="wfield turbo-size" role="group" aria-labelledby="i-h-turbo-size">{size}</span>
                 <button type="button" class="ico" aria-label=words(w, "jn-insp-turbo-larger") disabled=move || !can_larger() on:click=move |_| { w.edit(|j| j.step_turbo_size(1)); }>
                     <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
                 </button>
