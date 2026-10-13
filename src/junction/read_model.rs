@@ -1245,7 +1245,7 @@ impl Junction {
                     floor_mm: r.floor,
                     road_mm: r.radius as i32 - cycle,
                     island_mm: match &r.turbo {
-                        Some(t) => BLOCKS[t.block].r1_mm,
+                        Some(t) => BLOCKS.get(t.block).map_or(MIN_ISLAND_MM as i32, |b| b.r1_mm),
                         None => (r.radius - cycle as f64 - RING_WIDTH_MM).max(MIN_ISLAND_MM) as i32,
                     },
                     cycle_mm: s.cycle,
@@ -1281,7 +1281,17 @@ impl Junction {
             turbo_options: if s.control == ROUNDABOUT {
                 layouts_for(s.arms.len())
                     .into_iter()
-                    .filter(|&i| main_candidates(&s.arms, region, i).into_iter().any(|main| Turbo { layout: i, size: 0, main }.standable(&s.arms, region)))
+                    .filter(|&i| {
+                        main_candidates(&s.arms, region, i).into_iter().any(|main| {
+                            Turbo { layout: i, size: 0, main: main.clone() }.standable(&s.arms, region)
+                                && (0..BLOCKS.len()).any(|size| {
+                                    // The test `set_turbo` makes before it refuses the layout as too big.
+                                    let mut held = s.clone();
+                                    held.turbo = Some(Turbo { layout: i, size, main: main.clone() });
+                                    layout(&held, region).is_some()
+                                })
+                        })
+                    })
                     .map(|i| TurboOption { layout: i, id: LAYOUTS[i].id, key: LAYOUTS[i].key, on: s.turbo.as_ref().is_some_and(|t| t.layout == i) })
                     .collect()
             } else {
@@ -3444,5 +3454,19 @@ mod tests {
                 assert!(finite(&j.view()), "layout {layout} block {size}");
             }
         }
+    }
+
+    #[test]
+    fn a_turbo_layout_no_block_can_hold_is_not_offered() {
+        let mut j = junction_of(&[("travel", 3_500); 11]);
+        assert!(j.set_control(ROUNDABOUT), "the plain roundabout fits");
+        let offered: Vec<usize> = j.view().turbo_options.iter().map(|o| o.layout).collect();
+        for layout in 0..LAYOUTS.len() {
+            let mut fresh = junction_of(&[("travel", 3_500); 11]);
+            assert!(fresh.set_control(ROUNDABOUT));
+            let accepted = fresh.set_turbo(Some(layout));
+            assert_eq!(offered.contains(&layout), accepted, "layout {layout}: offered {offered:?}, set_turbo {accepted}");
+        }
+        assert!(!offered.contains(&0), "the basic turbo is refused as too big here, so it is not offered");
     }
 }
