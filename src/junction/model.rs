@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 use crate::junction::geometry::gap;
+use crate::junction::turbo::Turbo;
 use crate::street::model::{Editor, Street, View, named_said};
 
 #[cfg(test)]
@@ -313,6 +314,10 @@ pub struct State {
     /// each arm. Never a roundabout's.
     #[serde(default)]
     pub raised: bool,
+    /// The turbo layout of a roundabout, if it has one (only while `control` is `ROUNDABOUT`; a state that says
+    /// otherwise is settled to none). A record made before turbos has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turbo: Option<Turbo>,
     /// The OSM nodes it was made from. The sample junctions are made from none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source: Vec<OsmRef>,
@@ -2968,6 +2973,20 @@ mod tests {
         }
         let j = Junction::from_city(named("Test"), &state, &state, 0).expect("draws");
         assert!(j.current().arms.iter().all(|a| !a.protected));
+    }
+
+    #[test]
+    fn a_saved_state_without_a_turbo_loads_and_one_with_a_turbo_keeps_it() {
+        let state = Junction::new(0).current().clone();
+        let mut saved = serde_json::to_value(&state).unwrap();
+        assert!(saved.get("turbo").is_none(), "no turbo, nothing written: an older build reads the record as it did");
+        assert_eq!(serde_json::from_value::<State>(saved.clone()).unwrap().turbo, None, "a record made before turbos has none");
+
+        let mut with = state.clone();
+        with.turbo = Some(Turbo { layout: 1, size: 2, main: vec![1, 3] });
+        saved = serde_json::to_value(&with).unwrap();
+        assert_eq!(saved["turbo"], serde_json::json!({"layout": 1, "size": 2, "main": [1, 3]}));
+        assert_eq!(serde_json::from_value::<State>(saved).unwrap().turbo, with.turbo, "the label and the arms' streets are not saved, the turbo is");
     }
 
     #[test]

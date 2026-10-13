@@ -483,8 +483,17 @@ impl Layout {
             .collect();
         junction::normalize(&mut arms, 0);
         tune_corners(&mut arms, def.control, def.corner_mm);
-        let mut s =
-            State { label: junction::today(), arms, control: def.control, ring_extra_mm: 0, bus: None, cycle: None, raised: false, source: def.source.clone() };
+        let mut s = State {
+            label: junction::today(),
+            arms,
+            control: def.control,
+            ring_extra_mm: 0,
+            bus: None,
+            cycle: None,
+            raised: false,
+            turbo: None,
+            source: def.source.clone(),
+        };
         forget_streets(&mut s);
         s
     }
@@ -496,6 +505,7 @@ impl Layout {
             APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, MAX_CORNER_MM, MAX_CROSSING_MM, MAX_RING_MM,
             MAX_SETBACK_MM, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SETBACK_MM, RULES, STOPS,
         };
+        use crate::junction::turbo::{BLOCKS, LAYOUTS};
         let mut want: Vec<u32> = self.edges_at(node).iter().map(|&e| e as u32 + 1).collect();
         let mut have: Vec<u32> = s.arms.iter().map(|a| a.edge).collect();
         want.sort_unstable();
@@ -509,6 +519,9 @@ impl Layout {
             && s.control < CONTROLS.len()
             && (0..=MAX_RING_MM).contains(&s.ring_extra_mm)
             && s.cycle.is_none_or(|c| (CYCLE_MIN_MM..=CYCLE_MAX_MM).contains(&c))
+            && s.turbo.as_ref().is_none_or(|t| {
+                t.layout < LAYOUTS.len() && t.size < BLOCKS.len() && t.main.len() == 2 && t.main[0] != t.main[1] && t.main.iter().all(|u| uids.contains(u))
+            })
             && s.arms.iter().all(|a| {
                 a.bearing % BEARING_STEP == 0
                     && (0..360).contains(&a.bearing)
@@ -538,6 +551,7 @@ fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
         bus: None,
         cycle: None,
         raised: false,
+        turbo: None,
         source: Vec::new(),
     };
     let mut radii: Vec<i32> = (MIN_CORNER_MM..=MAX_CORNER_MM).step_by(RING_STEP_MM as usize).collect();
@@ -1269,6 +1283,26 @@ mod tests {
         }
         layout.edges.reverse();
         layout
+    }
+
+    #[test]
+    fn a_saved_turbo_must_name_a_layout_a_block_and_two_arms_of_the_junction() {
+        use crate::junction::turbo::Turbo;
+        let mut city = City::new();
+        let state = city.junctions[&node_uid(1)].clone();
+        let (a, b) = (state.arms[0].uid, state.arms[1].uid);
+        let with = |t: Turbo| State { turbo: Some(t), ..state.clone() };
+        assert!(city.keep_junction(node_uid(1), with(Turbo { layout: 0, size: 0, main: vec![a, b] })), "indexes in range, two arms of the junction");
+        let bad = [
+            Turbo { layout: 5, size: 0, main: vec![a, b] },
+            Turbo { layout: 0, size: 4, main: vec![a, b] },
+            Turbo { layout: 0, size: 0, main: vec![a] },
+            Turbo { layout: 0, size: 0, main: vec![a, a] },
+            Turbo { layout: 0, size: 0, main: vec![a, 9_999] },
+        ];
+        for t in bad {
+            assert!(!city.keep_junction(node_uid(1), with(t.clone())), "{t:?} is not kept");
+        }
     }
 
     #[test]
