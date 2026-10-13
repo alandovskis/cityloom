@@ -317,3 +317,7 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Showing the street in 2.5D (announcement) | `Rue affichée en 2,5D` | `Affichage de la rue en 2,5D` (suggestion) |
 | View (the junction page toggle's legend) | `Affichage` | `Vue` (suggestion) |
 | Showing the junction in 2.5D (announcement) | `Jonction affichée en 2,5D` | `Affichage de la jonction en 2,5D` (suggestion) |
+| Signal timing (junction) | `Réglage des feux` | `Phasage des feux`, `Programmation des feux` (suggestion) |
+| Green, yellow, all-red (a signal’s intervals) | `Vert`, `Jaune`, `Rouge intégral` | `Tout rouge` for all-red (suggestion) |
+| Transit early green (a head start for buses) | `Avance pour le transport en commun` | `Priorité de départ pour les autobus` (suggestion) |
+| Cycle (a signal’s) | `Cycle` | `Durée du cycle` (suggestion) |

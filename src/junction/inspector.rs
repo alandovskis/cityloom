@@ -11,7 +11,7 @@ use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
 use crate::junction::model::{
     APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACH_STEP_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, FILTER_CODE, Item, Junction, LEFT,
     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
-    RULES, STOPS, THROUGH, Target,
+    RULES, STOPS, THROUGH, Target, TimingField,
 };
 use crate::junction::read_model::{CrossingView, JView};
 use crate::junction::turns::{compass_key, turn_glyph};
@@ -511,6 +511,7 @@ fn junction_panel(w: Watch) -> AnyView {
     view! {
         <p class="insp-empty">{words(w, "jn-insp-empty")}</p>
         {control_section(w)}
+        {signal_overview(w)}
     }
     .into_any()
 }
@@ -958,6 +959,125 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
     }
 }
 
+/// The heading and the id of each of a timing's four numbers.
+fn timing_id(field: TimingField) -> &'static str {
+    match field {
+        TimingField::Green => "i-h-green",
+        TimingField::Yellow => "i-h-yellow",
+        TimingField::AllRed => "i-h-all-red",
+        TimingField::TransitLead => "i-h-lead",
+    }
+}
+
+/// One number of an arm's signal timing, as a stepper in seconds.
+fn timing_field(w: Watch, uid: u32, field: TimingField) -> AnyView {
+    let (lo, hi) = field.range();
+    let value = Signal::derive(move || {
+        w.view().signal.as_ref().and_then(|s| s.phases.iter().find(|p| p.uid == uid)).map(|p| field.get(&p.timing).to_string()).unwrap_or_default()
+    });
+    let step = |key: &'static str| Signal::derive(move || tr(w, key, Args::new().num("seconds", 1)));
+    let spec = Num {
+        id: timing_id(field),
+        label: field.key(),
+        minus: step("jn-sig-shorter"),
+        plus: step("jn-sig-longer"),
+        value,
+        tag: Signal::derive(|| "s".to_string()),
+        hint: Signal::derive(move || tr(w, "jn-sig-range", Args::new().num("min", lo as i64).num("max", hi as i64))),
+    };
+    num_field(
+        w,
+        spec,
+        move |dir| {
+            w.edit(|j| j.step_timing(uid, field, dir));
+        },
+        move |v| {
+            // A typed number is rounded to a second; one that is not finite or is out of range is refused by the model.
+            if v.is_finite() && v.abs() < f64::from(i32::MAX) {
+                w.edit(|j| j.set_timing(uid, field, v.round() as i32));
+            }
+        },
+    )
+}
+
+/// What an arm's signal timing is: its numbers, and what else runs in its phase.
+fn signal_section(w: Watch, uid: u32) -> impl IntoView {
+    // Some(true): the street has a phase; Some(false): a signal, but nothing enters from it; None: no signal.
+    let phase = Memo::new(move |_| w.view().signal.as_ref().map(|s| s.phases.iter().any(|p| p.uid == uid)));
+    move || match phase.get() {
+        None => ().into_any(),
+        Some(false) => view! {
+            <section class="insp-sec">
+                <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
+                <p class="insp-range">{words(w, "jn-sig-no-phase")}</p>
+            </section>
+        }
+        .into_any(),
+        Some(true) => {
+            let runs = move || {
+                w.view()
+                    .signal
+                    .as_ref()
+                    .and_then(|s| s.phases.iter().find(|p| p.uid == uid))
+                    .map(|p| {
+                        let mut parts = Vec::new();
+                        if let Some(a) = &p.walks {
+                            parts.push(tr(w, "jn-sig-walks", Args::new().str("arms", w.say(a))));
+                        }
+                        if let Some(r) = &p.rides {
+                            parts.push(tr(w, "jn-sig-rides", Args::new().str("arms", w.say(r))));
+                        }
+                        if parts.is_empty() { tr(w, "jn-sig-alone", Args::new()) } else { parts.join(" ") }
+                    })
+                    .unwrap_or_default()
+            };
+            let lead = w.arm(uid, |a| a.transit.bus_lane).unwrap_or(false);
+            view! {
+                <section class="insp-sec">
+                    <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
+                    <p class="insp-range">{runs}</p>
+                </section>
+                {timing_field(w, uid, TimingField::Green)}
+                {timing_field(w, uid, TimingField::Yellow)}
+                {timing_field(w, uid, TimingField::AllRed)}
+                {lead.then(|| timing_field(w, uid, TimingField::TransitLead))}
+            }
+            .into_any()
+        }
+    }
+}
+
+/// The signal's cycle and a row for each phase, in the order they run. A press on a row opens that street.
+fn signal_overview(w: Watch) -> impl IntoView {
+    move || {
+        w.view().signal.as_ref().map(|s| {
+            let rows = s
+                .phases
+                .iter()
+                .map(|p| {
+                    let uid = p.uid;
+                    let t = p.timing;
+                    let key = if t.transit_lead_s > 0 { "jn-sig-row-lead" } else { "jn-sig-row" };
+                    let args = Args::new()
+                        .str("street", w.say(&p.street))
+                        .num("lead", i64::from(t.transit_lead_s))
+                        .num("green", i64::from(t.green_s))
+                        .num("yellow", i64::from(t.yellow_s))
+                        .num("all_red", i64::from(t.all_red_s));
+                    view! { <li><button type="button" class="btn quiet" on:click=move |_| w.select(Target::Arm(uid))>{tr(w, key, args)}</button></li> }
+                })
+                .collect_view();
+            view! {
+                <section class="insp-sec">
+                    <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
+                    <p class="insp-range">{tr(w, "jn-sig-cycle", Args::new().num("seconds", i64::from(s.cycle_s)))}</p>
+                    <ul class="signal-list">{rows}</ul>
+                </section>
+            }
+        })
+    }
+}
+
 fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
     let name = move || w.arm(uid, |a| w.say(&a.street)).unwrap_or_default();
     let sub = move || {
@@ -1027,6 +1147,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         </section>
         {crossing_section(w, uid)}
         {transit_section(w, uid)}
+        {signal_section(w, uid)}
         {bike_box_section(w, uid)}
         {num_field(
             w,

@@ -1,6 +1,7 @@
 //! A popover of the header (the settings, the help): whether it is open, and the words of its button and
 //! heading, in the language of the page. The view only shows what this says.
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use leptos::prelude::*;
@@ -12,12 +13,14 @@ pub struct PopoverViewModel {
     label: &'static str,
     heading: &'static str,
     open: ArcRwSignal<bool>,
+    /// The `open` of the popovers that close when this one opens.
+    others: RefCell<Vec<ArcRwSignal<bool>>>,
 }
 
 impl PopoverViewModel {
     /// A popover whose button says the message `label` and whose heading says `heading`.
     pub fn new(i18n: Rc<I18n>, label: &'static str, heading: &'static str) -> Rc<PopoverViewModel> {
-        Rc::new(PopoverViewModel { i18n, label, heading, open: ArcRwSignal::new(false) })
+        Rc::new(PopoverViewModel { i18n, label, heading, open: ArcRwSignal::new(false), others: RefCell::new(Vec::new()) })
     }
 
     pub fn open(&self) -> bool {
@@ -28,8 +31,19 @@ impl PopoverViewModel {
         self.open.get_untracked()
     }
 
+    /// Opens it, closing the popovers it is exclusive with, or closes it.
     pub fn toggle(&self) {
+        if !self.is_open_now() {
+            self.others.borrow().iter().for_each(|o| o.set(false));
+        }
         self.open.update(|o| *o = !*o);
+    }
+
+    /// Makes `popovers` open one at a time: opening any of them closes the others.
+    pub fn exclusive(popovers: &[&Rc<PopoverViewModel>]) {
+        for p in popovers {
+            *p.others.borrow_mut() = popovers.iter().filter(|q| !Rc::ptr_eq(p, q)).map(|q| q.open.clone()).collect();
+        }
     }
 
     pub fn close(&self) {
@@ -75,6 +89,23 @@ mod tests {
         assert_eq!((p.label().as_str(), p.heading().as_str()), ("Help", "Keyboard"));
         let p = help(Locale::FrCa);
         assert_eq!((p.label().as_str(), p.heading().as_str()), ("Aide", "Clavier"));
+    }
+
+    #[test]
+    fn popovers_made_exclusive_are_never_open_together_whichever_is_toggled() {
+        let (a, b, c) = (help(Locale::En), help(Locale::En), help(Locale::En));
+        PopoverViewModel::exclusive(&[&a, &b, &c]);
+        a.toggle();
+        b.toggle();
+        assert!((a.is_open_now(), b.is_open_now(), c.is_open_now()) == (false, true, false), "opening b closed a");
+        c.toggle();
+        assert!((a.is_open_now(), b.is_open_now(), c.is_open_now()) == (false, false, true), "opening c closed b");
+        c.toggle();
+        assert!(!c.is_open_now() && !a.is_open_now() && !b.is_open_now(), "closing one opens none");
+        let alone = help(Locale::En);
+        alone.toggle();
+        b.toggle();
+        assert!(alone.is_open_now() && b.is_open_now(), "a popover outside the group is left alone");
     }
 
     #[test]

@@ -366,3 +366,62 @@ test.describe("a junction of a street made pedestrian", () => {
     await expect(page.locator("#drawing path.crossing")).toHaveCount(crossings - 1);
   });
 });
+
+test.describe("signal timing on a junction of the city", () => {
+  test.beforeEach(async ({ page }) => {
+    await openJunction(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Traffic signal" });
+  });
+
+  test("a street's green is typed, the cycle follows, and a reload keeps it", async ({ page }) => {
+    const cycle = page.locator("#inspector").getByText(/^Cycle: \d+ s$/);
+    await expect(cycle).toBeVisible();
+    const before = Number((await cycle.innerText()).match(/\d+/)![0]);
+    await page.locator("#inspector .signal-list button").first().click();
+    const green = page.locator('#inspector input[aria-labelledby="i-h-green"]');
+    await expect(green).toHaveValue("25");
+    await green.fill("30");
+    await green.press("Enter");
+    await expect(green).toHaveValue("30");
+    // (wait for the edit to be kept the way the neighbouring persistence test does, then:)
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(page.locator("#inspector").getByText(`Cycle: ${before + 5} s`)).toBeVisible();
+  });
+
+  test("a bad typed time changes nothing and a long cycle fails its check", async ({ page }) => {
+    await page.locator("#inspector .signal-list button").first().click();
+    const green = page.locator('#inspector input[aria-labelledby="i-h-green"]');
+    await green.fill("abc");
+    await green.press("Enter");
+    await expect(green).toHaveValue("25");
+    await green.fill("120");
+    await green.press("Enter");
+    await expect(green).toHaveValue("120");
+    await page.locator("#t-checks").click();
+    await expect(page.locator("#p-checks")).toContainText("Signal cycle");
+    await expect(page.locator("#p-checks")).toContainText("over the 120 s");
+  });
+
+  test("stepping a time with the keyboard keeps the focus on the button, so it can be stepped again", async ({
+    page,
+  }) => {
+    await page.locator("#inspector .signal-list button").first().click();
+    const green = page.locator("#inspector section", { has: page.locator("#i-h-green") });
+    const longer = green.getByRole("button", { name: "Longer by 1 s" });
+    await longer.focus();
+    await page.keyboard.press("Enter");
+    await expect(green.locator("input")).toHaveValue("26");
+    await expect(longer).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(green.locator("input")).toHaveValue("27");
+  });
+
+  test("the timing is French in French", async ({ page }) => {
+    await page.locator("#account-btn").click();
+    await page.getByRole("button", { name: "Français" }).click();
+    await expect(page.locator("#inspector")).toContainText("Réglage des feux");
+    await expect(page.locator("#inspector")).toContainText(/Cycle\s*:\s*\d+\s*s/);
+  });
+});

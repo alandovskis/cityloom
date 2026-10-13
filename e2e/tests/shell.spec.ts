@@ -154,3 +154,85 @@ for (const p of PAGES) {
     });
   });
 }
+
+// Print is under Share on the two editors; the map page has neither.
+for (const p of PAGES.filter((p) => p.name !== "map")) {
+  test(`Print is under Share, not in the settings menu, on the ${p.name} page`, async ({ page }) => {
+    await p.open(page);
+    const share = page.locator("#share-menu");
+    const button = page.locator("#share-btn");
+    await expect(share).toBeHidden();
+    await expect(page.locator("#account-menu #print")).toHaveCount(0);
+    await button.click();
+    await expect(share).toBeVisible();
+    await expect(button).toHaveAttribute("aria-expanded", "true");
+    await expect(share.locator("#print")).toBeVisible();
+    // Only one of the menus is open: pressing the settings button closes Share.
+    await page.locator("#account-btn").click();
+    await expect(share).toBeHidden();
+    await expect(page.locator("#account-menu")).toBeVisible();
+    await page.locator("#account-btn").click();
+    await button.click();
+    await page.keyboard.press("Escape");
+    await expect(share).toBeHidden();
+  });
+}
+
+// A keyboard user opens one menu, then another, with no pointer press and no focus leaving a menu.
+for (const p of PAGES.filter((p) => p.name !== "map")) {
+  test(`only one of Settings, Help and Share is open when they are opened by keyboard on the ${p.name} page`, async ({
+    page,
+  }) => {
+    await p.open(page);
+    const menus = { "#account-btn": "#account-menu", "#help-btn": "#help-menu", "#share-btn": "#share-menu" };
+    for (const [from, fromMenu] of Object.entries(menus)) {
+      for (const [to, toMenu] of Object.entries(menus)) {
+        if (from === to) continue;
+        await page.locator(from).focus();
+        await page.keyboard.press("Enter");
+        await expect(page.locator(fromMenu)).toBeVisible();
+        await page.locator(to).focus();
+        await page.keyboard.press("Enter");
+        await expect(page.locator(toMenu)).toBeVisible();
+        await expect(page.locator(fromMenu)).toBeHidden();
+        await page.keyboard.press("Escape");
+        await expect(page.locator(toMenu)).toBeHidden();
+      }
+    }
+  });
+}
+
+// Phone width: the header's buttons show only icons, and a menu must stay inside the window.
+for (const p of PAGES.filter((p) => p.name !== "map")) {
+  test(`at phone width the header menus have names and stay inside the window on the ${p.name} page`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await p.open(page);
+    for (const [name, menu] of [
+      ["Share", "#share-menu"],
+      ["Help", "#help-menu"],
+      ["Settings", "#account-menu"],
+    ]) {
+      const button = page.getByRole("button", { name, exact: true });
+      await button.click();
+      const box = await page.locator(menu).boundingBox();
+      expect(box, `${name} menu is shown`).not.toBeNull();
+      expect(box!.x, `${name} menu starts inside the window`).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width, `${name} menu ends inside the window`).toBeLessThanOrEqual(390);
+      await page.keyboard.press("Escape");
+    }
+  });
+
+  test(`Print keeps focus on the Share button on the ${p.name} page`, async ({ page }) => {
+    await p.open(page);
+    await page.evaluate(() => {
+      window.print = () => {};
+    });
+    await page.locator("#share-btn").click();
+    await page.locator("#print").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#share-menu")).toBeHidden();
+    await expect(page.locator("#share-btn")).toBeFocused();
+  });
+}

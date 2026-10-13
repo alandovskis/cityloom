@@ -149,6 +149,93 @@ pub struct Crossing {
     pub continuous: bool,
 }
 
+/// Limits and defaults of a signal's timing, in whole seconds. Synthetic, like the rest.
+pub const GREEN_MIN_S: i32 = 5;
+pub const GREEN_MAX_S: i32 = 120;
+pub const GREEN_DEFAULT_S: u32 = 25;
+pub const YELLOW_MIN_S: i32 = 3;
+pub const YELLOW_MAX_S: i32 = 6;
+pub const YELLOW_DEFAULT_S: u32 = 3;
+pub const ALL_RED_MIN_S: i32 = 1;
+pub const ALL_RED_MAX_S: i32 = 6;
+pub const ALL_RED_DEFAULT_S: u32 = 2;
+/// The most a transit lane's early green may lead its street's own green by.
+pub const LEAD_MAX_S: i32 = 15;
+
+/// How long a street's signal phase runs: the early green for transit (if any), the green, the yellow and the
+/// all-red before the next street's turn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Timing {
+    pub green_s: u32,
+    pub yellow_s: u32,
+    pub all_red_s: u32,
+    pub transit_lead_s: u32,
+}
+
+impl Default for Timing {
+    fn default() -> Timing {
+        Timing { green_s: GREEN_DEFAULT_S, yellow_s: YELLOW_DEFAULT_S, all_red_s: ALL_RED_DEFAULT_S, transit_lead_s: 0 }
+    }
+}
+
+impl Timing {
+    /// The seconds the whole phase takes.
+    pub fn length_s(&self) -> u32 {
+        self.transit_lead_s + self.green_s + self.yellow_s + self.all_red_s
+    }
+}
+
+/// One of the four numbers of a `Timing`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TimingField {
+    Green,
+    Yellow,
+    AllRed,
+    TransitLead,
+}
+
+impl TimingField {
+    pub const ALL: [TimingField; 4] = [TimingField::Green, TimingField::Yellow, TimingField::AllRed, TimingField::TransitLead];
+
+    /// The least and the most seconds it takes.
+    pub fn range(self) -> (i32, i32) {
+        match self {
+            TimingField::Green => (GREEN_MIN_S, GREEN_MAX_S),
+            TimingField::Yellow => (YELLOW_MIN_S, YELLOW_MAX_S),
+            TimingField::AllRed => (ALL_RED_MIN_S, ALL_RED_MAX_S),
+            TimingField::TransitLead => (0, LEAD_MAX_S),
+        }
+    }
+
+    /// The message that names it.
+    pub fn key(self) -> &'static str {
+        match self {
+            TimingField::Green => "jn-timing-green",
+            TimingField::Yellow => "jn-timing-yellow",
+            TimingField::AllRed => "jn-timing-all-red",
+            TimingField::TransitLead => "jn-timing-transit-lead",
+        }
+    }
+
+    pub fn get(self, t: &Timing) -> u32 {
+        match self {
+            TimingField::Green => t.green_s,
+            TimingField::Yellow => t.yellow_s,
+            TimingField::AllRed => t.all_red_s,
+            TimingField::TransitLead => t.transit_lead_s,
+        }
+    }
+
+    fn put(self, t: &mut Timing, seconds: u32) {
+        match self {
+            TimingField::Green => t.green_s = seconds,
+            TimingField::Yellow => t.yellow_s = seconds,
+            TimingField::AllRed => t.all_red_s = seconds,
+            TimingField::TransitLead => t.transit_lead_s = seconds,
+        }
+    }
+}
+
 /// An entering lane and the streets it can go to, by their uids.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lane {
@@ -197,6 +284,10 @@ pub struct Arm {
     pub rule: usize,
     /// A transit modal filter: only buses pass.
     pub filter: bool,
+    /// The arm's signal timing, once it has been set; it reads as `Timing::default()` until then. It exists only while
+    /// the junction's control is a signal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timing: Option<Timing>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -348,6 +439,7 @@ impl Arm {
             stop: 0,
             rule: 0,
             filter: false,
+            timing: None,
         }
     }
 
@@ -657,10 +749,13 @@ pub enum Refusal {
     BikeBoxNotHere,
     ProtectedNotHere,
     CrossingOnPedestrian,
+    NotSignal,
+    TimingOutOfRange,
+    NoTransitLane,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 13] = [
+    pub const ALL: [Refusal; 16] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -674,6 +769,9 @@ impl Refusal {
         Refusal::BikeBoxNotHere,
         Refusal::ProtectedNotHere,
         Refusal::CrossingOnPedestrian,
+        Refusal::NotSignal,
+        Refusal::TimingOutOfRange,
+        Refusal::NoTransitLane,
     ];
 
     /// The message that says why.
@@ -690,6 +788,9 @@ impl Refusal {
             Refusal::DoesNotFit => "jn-refusal-does-not-fit",
             Refusal::RaisedOnRoundabout => "jn-refusal-raised-roundabout",
             Refusal::BikeBoxNotHere => "jn-refusal-bike-box-not-here",
+            Refusal::NotSignal => "jn-refusal-not-signal",
+            Refusal::TimingOutOfRange => "jn-refusal-timing-out-of-range",
+            Refusal::NoTransitLane => "jn-refusal-no-transit-lane",
             Refusal::ProtectedNotHere => "jn-refusal-protected-not-here",
             Refusal::CrossingOnPedestrian => "jn-refusal-crossing-pedestrian",
         }
@@ -1170,6 +1271,44 @@ impl Junction {
         )
     }
 
+    /// Sets one number of the signal timing of arm `uid`, in whole seconds. The control has to be a signal, an early
+    /// green needs a transit lane on the street, and the value has to be within `field.range()`. A value the arm
+    /// already has is not an edit.
+    pub fn set_timing(&mut self, uid: u32, field: TimingField, seconds: i32) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        let (bus_lane, timing) = (arm.bus_lane, arm.timing);
+        if self.current().control != SIGNAL {
+            return self.refuse(Refusal::NotSignal);
+        }
+        if field == TimingField::TransitLead && !bus_lane {
+            return self.refuse(Refusal::NoTransitLane);
+        }
+        let (lo, hi) = field.range();
+        if !(lo..=hi).contains(&seconds) {
+            return self.refuse(Refusal::TimingOutOfRange);
+        }
+        let mut t = timing.unwrap_or_default();
+        if field.get(&t) == seconds as u32 {
+            return true;
+        }
+        field.put(&mut t, seconds as u32);
+        self.arm_edit(
+            uid,
+            |a| about("jn-rev-timing", a).with("field", Arg::MsgLower(field.key())).with("seconds", Arg::Num(i64::from(seconds))),
+            |a| {
+                a.timing = Some(t);
+                true
+            },
+        )
+    }
+
+    /// Steps one number of the signal timing of arm `uid` by a second, up or down.
+    pub fn step_timing(&mut self, uid: u32, field: TimingField, dir: i32) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        let now = field.get(&arm.timing.unwrap_or_default()) as i32;
+        self.set_timing(uid, field, now.saturating_add(dir.signum()))
+    }
+
     /// Protects the corner clockwise of arm `uid`, or makes it plain again. See `protected_blocker` for where it may stand.
     pub fn set_protected(&mut self, uid: u32, on: bool) -> bool {
         let region = self.region;
@@ -1372,11 +1511,16 @@ impl Junction {
         after.control = control;
         settle_table_and_boxes(&mut after, self.region);
         let lost = |f: fn(&Arm) -> bool| self.current().arms.iter().zip(&after.arms).any(|(a, b)| f(a) && !f(b));
-        let key = match (lost(|a| a.bike_box), lost(|a| a.protected)) {
-            (true, true) => "jn-rev-control-both",
-            (true, false) => "jn-rev-control-boxes",
-            (false, true) => "jn-rev-control-protected",
-            (false, false) => "jn-rev-control",
+        let timing_lost = self.current().arms.iter().zip(&after.arms).any(|(a, b)| a.timing.is_some() && b.timing.is_none());
+        let key = match (lost(|a| a.bike_box), lost(|a| a.protected), timing_lost) {
+            (false, false, false) => "jn-rev-control",
+            (true, false, false) => "jn-rev-control-boxes",
+            (false, true, false) => "jn-rev-control-protected",
+            (true, true, false) => "jn-rev-control-both",
+            (false, false, true) => "jn-rev-control-timing",
+            (true, false, true) => "jn-rev-control-boxes-timing",
+            (false, true, true) => "jn-rev-control-protected-timing",
+            (true, true, true) => "jn-rev-control-all",
         };
         self.edit_why(why, Said::new(key).with("control", Arg::MsgLower(control_key(control))), |s| {
             s.control = control;
@@ -1534,6 +1678,15 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
     let stands: Vec<bool> = (0..n).map(|i| protected_blocker(s, i, &profiles[i], &profiles[(i + 1) % n]).is_none()).collect();
     for (a, stands) in s.arms.iter_mut().zip(stands) {
         a.protected = a.protected && stands;
+    }
+    // Timing belongs to a signal, and an early green to a transit lane.
+    let signal = s.control == SIGNAL;
+    for a in &mut s.arms {
+        if !signal {
+            a.timing = None;
+        } else if let (Some(t), false) = (&mut a.timing, a.bus_lane) {
+            t.transit_lead_s = 0;
+        }
     }
 }
 
@@ -1697,7 +1850,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 13);
+        assert_eq!(Refusal::ALL.len(), 16);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }
@@ -2930,5 +3083,99 @@ mod tests {
             assert!(!op(&mut k), "{name} was meant to be refused");
             assert!(k.refusal().is_some(), "{name} gave no reason");
         }
+    }
+
+    // ---- signal timing ----
+
+    /// What was said, with the engine's non-breaking spaces (before a colon, before a unit) as ordinary ones.
+    fn plain(said: &str) -> String {
+        said.replace(['\u{a0}', '\u{202f}'], " ")
+    }
+
+    #[test]
+    fn an_arm_never_timed_writes_no_timing_and_a_timed_one_round_trips() {
+        let mut j = Junction::new(0);
+        let uid = j.current().arms[0].uid;
+        let plain = serde_json::to_value(&j.current().arms[0]).unwrap();
+        assert!(plain.get("timing").is_none(), "nothing is written for an arm never timed");
+        let back: Arm = serde_json::from_value(plain).unwrap();
+        assert_eq!(back.timing, None);
+        assert!(j.set_timing(uid, TimingField::Green, 30));
+        let timed = serde_json::to_value(j.arm(uid).unwrap()).unwrap();
+        assert_eq!(timed["timing"]["green_s"], 30);
+        let back: Arm = serde_json::from_value(timed).unwrap();
+        assert_eq!(back.timing, Some(Timing { green_s: 30, ..Timing::default() }));
+    }
+
+    #[test]
+    fn the_four_numbers_are_set_and_stepped_within_their_limits() {
+        let mut j = Junction::new(0);
+        let uid = j.current().arms[0].uid;
+        assert!(j.set_bus_lane(uid, true));
+        for field in TimingField::ALL {
+            let (lo, hi) = field.range();
+            assert!(j.set_timing(uid, field, hi), "{field:?} takes its top");
+            assert_eq!(field.get(&j.arm(uid).unwrap().timing.unwrap()) as i32, hi);
+            assert!(!j.step_timing(uid, field, 1), "{field:?} does not go past its top");
+            assert_eq!(j.refusal(), Some(Refusal::TimingOutOfRange));
+            assert!(j.set_timing(uid, field, lo), "{field:?} takes its bottom");
+            assert!(!j.step_timing(uid, field, -1), "{field:?} does not go under its bottom");
+            assert!(j.step_timing(uid, field, 1));
+            assert_eq!(field.get(&j.arm(uid).unwrap().timing.unwrap()) as i32, lo + 1);
+        }
+        assert!(!j.set_timing(uid, TimingField::Green, 4) && !j.set_timing(uid, TimingField::Green, 121));
+        assert!(!j.set_timing(uid, TimingField::Green, -5) && !j.set_timing(uid, TimingField::Green, i32::MAX));
+    }
+
+    #[test]
+    fn timing_needs_a_signal_and_an_early_green_needs_a_transit_lane() {
+        let mut j = Junction::new(1); // street and lane: priority control
+        let uid = j.current().arms[0].uid;
+        assert!(!j.set_timing(uid, TimingField::Green, 30));
+        assert_eq!(j.refusal(), Some(Refusal::NotSignal));
+        assert!(j.set_control(SIGNAL));
+        assert!(!j.set_timing(uid, TimingField::TransitLead, 5));
+        assert_eq!(j.refusal(), Some(Refusal::NoTransitLane));
+        assert!(j.set_bus_lane(uid, true));
+        assert!(j.set_timing(uid, TimingField::TransitLead, 5));
+        assert!(!j.set_timing(9_999, TimingField::Green, 30), "no such street");
+    }
+
+    #[test]
+    fn an_edit_is_one_step_of_history_said_in_both_languages_and_undone() {
+        let mut j = Junction::new(0);
+        let uid = j.current().arms[0].uid;
+        assert!(j.set_timing(uid, TimingField::Green, 30));
+        let said = j.revisions().last().unwrap().clone();
+        assert!(plain(&en(&said)).contains("green 30 s"), "{}", en(&said));
+        assert!(plain(&fr(&said)).contains("vert 30 s"), "{}", fr(&said));
+        assert!(j.undo());
+        assert_eq!(j.arm(uid).unwrap().timing, None);
+        assert!(j.redo());
+        assert_eq!(j.arm(uid).unwrap().timing.unwrap().green_s, 30);
+        assert!(j.set_timing(uid, TimingField::Green, 30), "the same value is not an error");
+    }
+
+    #[test]
+    fn leaving_the_signal_clears_the_timing_says_so_and_undo_brings_it_back() {
+        let mut j = Junction::new(0);
+        let uid = j.current().arms[0].uid;
+        assert!(j.set_timing(uid, TimingField::Green, 30));
+        assert!(j.set_control(PRIORITY));
+        assert_eq!(j.arm(uid).unwrap().timing, None);
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("signal timing removed"));
+        assert!(plain(&fr(j.revisions().last().unwrap())).contains("réglage des feux retiré"));
+        assert!(j.undo());
+        assert_eq!(j.arm(uid).unwrap().timing.unwrap().green_s, 30);
+    }
+
+    #[test]
+    fn losing_the_transit_lane_loses_the_early_green() {
+        let mut j = Junction::new(0);
+        let uid = j.current().arms[0].uid;
+        assert!(j.set_bus_lane(uid, true));
+        assert!(j.set_timing(uid, TimingField::TransitLead, 8));
+        assert!(j.set_bus_lane(uid, false));
+        assert_eq!(j.arm(uid).unwrap().timing.unwrap().transit_lead_s, 0);
     }
 }
