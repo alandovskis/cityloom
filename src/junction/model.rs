@@ -630,6 +630,8 @@ pub fn protected_blocker(s: &State, i: usize, pa: &Profile, pb: &Profile) -> Opt
 /// What stops arm `i` of `s`, whose street reads as `p`, from having a bike box: it needs a bike lane to reach it, a
 /// lane cars enter by, a stop line (a free approach has none), and a junction that is not a roundabout.
 pub fn bike_box_blocker(s: &State, i: usize, p: &Profile) -> Option<BikeBoxBlocker> {
+    // The junction runs uncontrolled with at most one street of traffic, whatever control is kept.
+    let s = &*in_force(s);
     if s.control == ROUNDABOUT {
         Some(BikeBoxBlocker::Roundabout)
     } else if p.outer_bike().is_empty() {
@@ -1283,7 +1285,7 @@ impl Junction {
             return self.refuse(Refusal::MeasureOnPedestrian);
         }
         let (bus_lane, timing) = (arm.bus_lane, arm.timing);
-        if self.current().control != SIGNAL {
+        if in_force(self.current()).control != SIGNAL {
             return self.refuse(Refusal::NotSignal);
         }
         if field == TimingField::TransitLead && !bus_lane {
@@ -1551,7 +1553,7 @@ impl Junction {
 
     /// Raises the whole junction to sidewalk height, or makes it flat again. A roundabout has no table.
     pub fn set_raised(&mut self, on: bool) -> bool {
-        if self.current().control == ROUNDABOUT {
+        if in_force(self.current()).control == ROUNDABOUT {
             return self.refuse(Refusal::RaisedOnRoundabout);
         }
         self.edit(Said::new("jn-rev-raised").with("change", change(on)), |s| {
@@ -1687,7 +1689,7 @@ pub fn widest_gap(arms: &[Arm]) -> i32 {
 /// A roundabout is no raised table, and a bike box stands only where `bike_box_blocker` allows one: whatever put it
 /// elsewhere (an edit, a save), it goes.
 fn settle_table_and_boxes(s: &mut State, region: usize) {
-    if s.control == ROUNDABOUT {
+    if in_force(s).control == ROUNDABOUT {
         s.raised = false;
     }
     let blocked: Vec<bool> = (0..s.arms.len()).map(|i| bike_box_blocker(s, i, &s.arms[i].profile(region)).is_some()).collect();
@@ -1884,6 +1886,16 @@ mod tests {
         assert_eq!(j.refusal(), None);
         assert!(!j.set_lane_dest(other, 0, walk, true));
         assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+    }
+
+    #[test]
+    fn a_kept_roundabout_with_one_street_of_traffic_runs_uncontrolled_and_allows_a_raised_table() {
+        let mut j = junction_with_walkways(&[90, 180, 270], &[("sidewalk", 4000), ("sidewalk", 4000)]);
+        assert_eq!(traffic_arms(j.current()), 1);
+        assert!(j.set_control(ROUNDABOUT), "{:?}", j.refusal());
+        assert!(j.set_raised(true), "{:?}", j.refusal());
+        assert!(j.current().raised && j.current().control == ROUNDABOUT);
+        assert!(j.view().raised);
     }
 
     #[test]
