@@ -1370,10 +1370,11 @@ svg pattern circle {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.ico:hover:not(:disabled) {
+.ico:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--fill);
 }
-.ico:disabled {
+.ico:disabled,
+.ico[aria-disabled="true"] {
   border-color: var(--rule);
   color: var(--ink-3);
   cursor: not-allowed;

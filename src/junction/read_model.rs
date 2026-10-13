@@ -433,6 +433,8 @@ pub struct CrossingView {
 pub struct TransitView {
     pub bus_lane: bool,
     pub approach: usize,
+    /// The approach measures (indexes into `APPROACHES`) this arm cannot be given: the queue jumps, on a turbo.
+    pub approaches_out: Vec<usize>,
     pub approach_mm: i32,
     pub stop: usize,
     pub rule: usize,
@@ -1515,6 +1517,7 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
     TransitView {
         bus_lane: a.bus_lane,
         approach: a.approach,
+        approaches_out: if s.turbo.is_some() { vec![Q_OFFSET, Q_CURB, Q_VIRTUAL] } else { Vec::new() },
         approach_mm: a.approach_mm,
         stop: a.stop,
         rule: a.rule,

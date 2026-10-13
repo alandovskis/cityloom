@@ -303,13 +303,54 @@ fn the_layout_radios_are_one_tab_stop_on_the_chosen_one() {
 }
 
 #[test]
-fn the_turbo_size_stepper_is_a_group_that_the_heading_labels() {
+fn the_turbo_size_stepper_is_a_group_that_holds_its_buttons_and_the_heading_labels_it() {
     let s = shared(0);
     s.edit(|j| j.set_control(ROUNDABOUT));
     s.edit(|j| j.set_turbo(Some(0)));
     let h = panel(&s);
-    let tag = h.split("<span").find(|t| t.contains("wfield turbo-size")).unwrap().split('>').next().unwrap();
+    let stepper = h.split("<div").find(|t| t.contains("class=\"stepper\"") && t.contains("turbo-size")).expect("the stepper");
+    let tag = stepper.split('>').next().unwrap();
     assert!(tag.contains("aria-labelledby=\"i-h-turbo-size\"") && tag.contains("role=\"group\""), "{tag}");
+    assert!(stepper.matches("<button").count() >= 2 && stepper.find("<button") < stepper.find("</div>"), "the buttons are inside the group: {stepper}");
+    let name = h.split("<span").find(|t| t.contains("wfield turbo-size")).unwrap().split('>').next().unwrap();
+    assert!(!name.contains("role="), "the name is not a group of its own: {name}");
+}
+
+/// The attributes of each button of the turbo size stepper, smaller first.
+fn size_buttons(h: &str) -> Vec<String> {
+    let stepper = h.split("<div").find(|t| t.contains("class=\"stepper\"") && t.contains("turbo-size")).unwrap();
+    stepper.split("<button").skip(1).take(2).map(|b| b.split('>').next().unwrap().to_string()).collect()
+}
+
+#[test]
+fn a_size_stepper_at_its_end_is_aria_disabled_so_that_focus_stays_on_it() {
+    let s = shared(0);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    s.edit(|j| j.set_turbo(Some(0)));
+    let [smaller, larger] = size_buttons(&panel(&s)).try_into().unwrap();
+    assert!(smaller.contains("aria-disabled=\"true\"") && !larger.contains("aria-disabled=\"true\""), "mini: {smaller} / {larger}");
+    assert!(!smaller.contains(" disabled") && !larger.contains(" disabled"), "a disabled button would lose the focus: {smaller} / {larger}");
+    s.edit(|j| j.set_turbo_size(3));
+    let [smaller, larger] = size_buttons(&panel(&s)).try_into().unwrap();
+    assert!(!smaller.contains("aria-disabled=\"true\"") && larger.contains("aria-disabled=\"true\""), "large: {smaller} / {larger}");
+}
+
+/// The options of the first select that has options with these values, with their attributes.
+fn approach_options(h: &str) -> Vec<String> {
+    let select = h.split("<select").find(|t| t.starts_with(" aria-labelledby=\"i-h-approach\"")).expect("the approach select");
+    select.split("</select>").next().unwrap().split("<option").skip(1).map(|o| o.split('>').next().unwrap().to_string()).collect()
+}
+
+#[test]
+fn a_turbo_offers_no_queue_jump_in_the_approach_list_and_a_plain_roundabout_does() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    s.edit(|j| j.select(Target::Arm(e)));
+    let off = |h: &str| approach_options(h).iter().map(|o| o.contains("disabled")).collect::<Vec<_>>();
+    assert_eq!(off(&panel(&s)), [false; 6], "no turbo, every measure");
+    s.edit(|j| j.set_turbo(Some(0)));
+    assert_eq!(off(&panel(&s)), [false, true, true, true, false, false], "the three queue jumps are out, the gates stay");
 }
 
 #[test]

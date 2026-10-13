@@ -399,12 +399,32 @@ fn turbo_size(w: Watch) -> impl IntoView {
         "i-h-turbo-size",
         "jn-insp-turbo-size",
         view! {
-            <div class="stepper">
-                <button type="button" class="ico" aria-label=words(w, "jn-insp-turbo-smaller") disabled=move || !can_smaller() on:click=move |_| { w.edit(|j| j.step_turbo_size(-1)); }>
+            <div class="stepper" role="group" aria-labelledby="i-h-turbo-size">
+                <button
+                    type="button"
+                    class="ico"
+                    aria-label=words(w, "jn-insp-turbo-smaller")
+                    aria-disabled=move || (!can_smaller()).then_some("true")
+                    on:click=move |_| {
+                        if can_smaller() {
+                            w.edit(|j| j.step_turbo_size(-1));
+                        }
+                    }
+                >
                     <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
                 </button>
-                <span class="wfield turbo-size" role="group" aria-labelledby="i-h-turbo-size">{size}</span>
-                <button type="button" class="ico" aria-label=words(w, "jn-insp-turbo-larger") disabled=move || !can_larger() on:click=move |_| { w.edit(|j| j.step_turbo_size(1)); }>
+                <span class="wfield turbo-size">{size}</span>
+                <button
+                    type="button"
+                    class="ico"
+                    aria-label=words(w, "jn-insp-turbo-larger")
+                    aria-disabled=move || (!can_larger()).then_some("true")
+                    on:click=move |_| {
+                        if can_larger() {
+                            w.edit(|j| j.step_turbo_size(1));
+                        }
+                    }
+                >
                     <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
                 </button>
             </div>
@@ -964,6 +984,7 @@ fn choice(
     label: &'static str,
     items: &'static [Item],
     current: impl Fn(&crate::junction::read_model::TransitView) -> usize + Send + Sync + Copy + 'static,
+    out: impl Fn(&crate::junction::read_model::TransitView, usize) -> bool + Send + Sync + Copy + 'static,
     set: impl Fn(&mut Junction, usize) -> bool + Copy + 'static,
     uid: u32,
 ) -> impl IntoView {
@@ -975,8 +996,13 @@ fn choice(
             <select
                 aria-labelledby=labelled
                 on:change=move |ev| {
-                    if let Ok(i) = event_target::<HtmlSelectElement>(&ev).value().parse::<usize>() {
+                    let select = event_target::<HtmlSelectElement>(&ev);
+                    if let Ok(i) = select.value().parse::<usize>() {
                         w.edit(|j| set(j, i));
+                    }
+                    // What the list shows is the model's choice, whether it took the edit or refused it.
+                    if let Some(kept) = w.arm(uid, |a| current(&a.transit)) {
+                        select.set_value(&kept.to_string());
                     }
                 }
             >
@@ -984,7 +1010,14 @@ fn choice(
                     .iter()
                     .enumerate()
                     .map(|(i, o)| {
-                        view! { <option value=i.to_string() prop:selected=move || w.arm(uid, |a| current(&a.transit) == i).unwrap_or(false)>{move || coded(w, o.code, o.key)}</option> }
+                        view! {
+                            <option
+                                value=i.to_string()
+                                prop:selected=move || w.arm(uid, |a| current(&a.transit) == i).unwrap_or(false)
+                                disabled=move || w.arm(uid, |a| out(&a.transit, i)).unwrap_or(false)
+                            >{move || coded(w, o.code, o.key)}
+                            </option>
+                        }
                     })
                     .collect_view()}
             </select>
@@ -1080,9 +1113,9 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
                     move || { w.edit(|j| j.set_bus_lane(uid, !bus_lane())); },
                 )}
             </ul>
-            {choice(w, "approach", "jn-insp-approach", &APPROACHES, |t| t.approach, move |j, i| j.set_approach(uid, i), uid)}
-            {choice(w, "stop", "jn-insp-stop", &STOPS, |t| t.stop, move |j, i| j.set_stop(uid, i), uid)}
-            {choice(w, "rule", "jn-insp-rule", &RULES, |t| t.rule, move |j, i| j.set_rule(uid, i), uid)}
+            {choice(w, "approach", "jn-insp-approach", &APPROACHES, |t| t.approach, |t, i| t.approaches_out.contains(&i), move |j, i| j.set_approach(uid, i), uid)}
+            {choice(w, "stop", "jn-insp-stop", &STOPS, |t| t.stop, |_, _| false, move |j, i| j.set_stop(uid, i), uid)}
+            {choice(w, "rule", "jn-insp-rule", &RULES, |t| t.rule, |_, _| false, move |j, i| j.set_rule(uid, i), uid)}
             <ul class="opts">
                 {option_btn(
                     filter,
