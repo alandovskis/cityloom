@@ -394,3 +394,8 @@ jn-insp-min-arms = { $n ->
 }
 jn-insp-lanes-in = Voies entrantes
 jn-insp-one-way-out = Sens unique sortant. Aucune voie n’entre.
+
+# Une rue piétonne à une jonction (src/junction/model.rs, inspector.rs).
+jn-refusal-crossing-pedestrian = Une rue piétonne n’a pas de chaussée à traverser; elle n’a donc pas de passage pour piétons.
+jn-insp-crossing-pedestrian = Une rue piétonne n’a pas de chaussée à traverser.
+jn-insp-control-pedestrian = Une seule rue ici accueille la circulation.

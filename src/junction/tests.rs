@@ -1485,3 +1485,14 @@ fn a_length_is_held_with_the_decimal_mark_of_the_language() {
     en.edit(|j| j.set_cycle(Some(2_500)));
     assert!(panel(&en).contains("value=\"2.5\""));
 }
+
+#[test]
+fn the_pedestrian_arm_messages_exist_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for locale in Locale::ALL {
+        let i18n = crate::i18n_for(locale);
+        for id in ["jn-refusal-crossing-pedestrian", "jn-insp-crossing-pedestrian", "jn-insp-control-pedestrian"] {
+            assert!(i18n.has_message(id, locale), "{id} in {}", locale.tag());
+        }
+    }
+}

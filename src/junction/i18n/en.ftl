@@ -394,3 +394,8 @@ jn-insp-min-arms = { $n ->
 }
 jn-insp-lanes-in = Lanes coming in
 jn-insp-one-way-out = One way out. No lanes come in.
+
+# A pedestrian street at a junction (src/junction/model.rs, inspector.rs).
+jn-refusal-crossing-pedestrian = A pedestrian street has no roadway to cross, so it takes no crossing.
+jn-insp-crossing-pedestrian = A pedestrian street has no roadway to cross.
+jn-insp-control-pedestrian = Only one street here carries traffic.
