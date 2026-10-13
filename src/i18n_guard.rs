@@ -79,6 +79,7 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/junction/signal.rs", include_str!("junction/signal.rs")),
     ("src/junction/text.rs", include_str!("junction/text.rs")),
     ("src/junction/turns.rs", include_str!("junction/turns.rs")),
+    ("src/junction/turbo.rs", include_str!("junction/turbo.rs")),
     ("src/junction/vm.rs", include_str!("junction/vm.rs")),
     ("src/junction/watch.rs", include_str!("junction/watch.rs")),
     ("src/junction/keys.rs", include_str!("junction/keys.rs")),

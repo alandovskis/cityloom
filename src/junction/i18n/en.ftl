@@ -436,3 +436,20 @@ jn-sig-no-phase = Nothing enters from this street, so it has no green of its own
 jn-sig-shorter = Shorter by { $seconds } s
 jn-sig-longer = Longer by { $seconds } s
 jn-sig-range = { $min } to { $max } s
+
+## Turbo roundabouts: the layouts and the sizes (src/junction/turbo.rs)
+jn-turbo-basic = Basic
+jn-turbo-egg = Egg
+jn-turbo-knee = Knee
+jn-turbo-spiral = Spiral
+jn-turbo-rotor = Rotor
+jn-turbo-size-mini = Mini
+jn-turbo-size-regular = Regular
+jn-turbo-size-medium = Medium
+jn-turbo-size-large = Large
+# What a drawing of the junction is, for a screen reader: "Basic turbo roundabout, regular size".
+jn-turbo-label-basic = Basic turbo roundabout, { $size } size
+jn-turbo-label-egg = Egg turbo roundabout, { $size } size
+jn-turbo-label-knee = Knee turbo roundabout, { $size } size
+jn-turbo-label-spiral = Spiral turbo roundabout, { $size } size
+jn-turbo-label-rotor = Rotor turbo roundabout, { $size } size

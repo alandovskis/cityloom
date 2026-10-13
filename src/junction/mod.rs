@@ -16,6 +16,7 @@ pub mod signal;
 #[cfg(test)]
 mod tests;
 pub mod text;
+pub mod turbo;
 pub mod turns;
 pub mod vm;
 pub mod watch;

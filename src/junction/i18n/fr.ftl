@@ -436,3 +436,20 @@ jn-sig-no-phase = Rien n’entre par cette rue : elle n’a pas de vert à elle.
 jn-sig-shorter = Plus court de { $seconds } s
 jn-sig-longer = Plus long de { $seconds } s
 jn-sig-range = De { $min } à { $max } s
+
+## Giratoires turbo : les dispositions et les tailles (src/junction/turbo.rs)
+jn-turbo-basic = De base
+jn-turbo-egg = En œuf
+jn-turbo-knee = En genou
+jn-turbo-spiral = En spirale
+jn-turbo-rotor = Rotor
+jn-turbo-size-mini = Mini
+jn-turbo-size-regular = Normale
+jn-turbo-size-medium = Moyenne
+jn-turbo-size-large = Grande
+# Ce qu’est un dessin de la jonction, pour un lecteur d’écran : « Giratoire turbo de base, taille normale ».
+jn-turbo-label-basic = Giratoire turbo de base, taille { $size }
+jn-turbo-label-egg = Giratoire turbo en œuf, taille { $size }
+jn-turbo-label-knee = Giratoire turbo en genou, taille { $size }
+jn-turbo-label-spiral = Giratoire turbo en spirale, taille { $size }
+jn-turbo-label-rotor = Giratoire turbo rotor, taille { $size }
