@@ -22,6 +22,8 @@ use crate::shared::units::Units;
 use crate::street::model::View;
 use crate::street::svg::curb_edges;
 
+#[allow(dead_code)]
+mod markings;
 mod projection;
 mod raised;
 mod solids;
