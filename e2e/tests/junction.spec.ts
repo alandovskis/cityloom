@@ -384,6 +384,20 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#p-checks")).toContainText("over the 120 s");
   });
 
+  test("stepping a time with the keyboard keeps the focus on the button, so it can be stepped again", async ({
+    page,
+  }) => {
+    await page.locator("#inspector .signal-list button").first().click();
+    const green = page.locator("#inspector section", { has: page.locator("#i-h-green") });
+    const longer = green.getByRole("button", { name: "Longer by 1 s" });
+    await longer.focus();
+    await page.keyboard.press("Enter");
+    await expect(green.locator("input")).toHaveValue("26");
+    await expect(longer).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(green.locator("input")).toHaveValue("27");
+  });
+
   test("the timing is French in French", async ({ page }) => {
     await page.locator("#account-btn").click();
     await page.getByRole("button", { name: "Français" }).click();
