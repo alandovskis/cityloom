@@ -157,10 +157,11 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#drawing .sel-box")).toHaveCount(1);
     const selected = await page.locator("#drawing").innerHTML();
     // A street turns only where it keeps clear of its neighbours: one way or the other. The first turn is
-    // waited for before the second is tried, or the two could cancel.
-    const said = await live(page).innerText();
+    // waited for before the second is tried, or the two could cancel. The status is emptied before it says
+    // anything (so the same words are heard twice), so "changed" is not enough: wait for the answer itself,
+    // the new bearing or the refusal.
     await page.keyboard.press("Shift+ArrowRight");
-    await expect(live(page)).not.toHaveText(said);
+    await expect(live(page)).toHaveText(/bearing:|too close/);
     if (!/bearing/.test(await live(page).innerText())) await page.keyboard.press("Shift+ArrowLeft");
     await expect(live(page)).toContainText("bearing");
     await expect.poll(async () => page.locator("#drawing").innerHTML()).not.toBe(selected);
