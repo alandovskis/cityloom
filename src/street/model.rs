@@ -3,7 +3,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::shared::catalogue::{CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, Side, StreetClass, class_key, kind_index};
+use crate::shared::catalogue::{
+    CURBS, DEFAULT_CURB, DIRECTIONS, DirectionRule, KINDS, MATERIALS, Mode, REGIONS, Side, StreetClass, class_key, is_motor, kind_index,
+};
 use crate::shared::provenance::OsmRef;
 use crate::street::measures;
 
@@ -12,7 +14,7 @@ pub use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::SAMPLES;
+pub use fixtures::{SAMPLES, pedestrianised};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -159,6 +161,11 @@ impl Segment {
 }
 
 impl Segment {
+    /// Whether the piece is a motor piece (`is_motor`), as its own kind or in any of its time windows.
+    pub fn has_motor(&self) -> bool {
+        std::iter::once(self.kind).chain(self.variants.iter().map(|v| v.kind)).any(is_motor)
+    }
+
     /// A piece with its kind's default surface and, where the kind has one,
     /// the default curb.
     pub fn new(uid: u32, kind: usize, width_mm: i32) -> Segment {
@@ -183,6 +190,9 @@ impl Segment {
 pub struct Street {
     /// What sort of street it is.
     pub class: StreetClass,
+    /// The class the street had before it became pedestrian: giving it a lane again restores it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub class_before: Option<StreetClass>,
     /// What the street is called.
     #[serde(default)]
     pub name: Option<String>,
@@ -201,6 +211,15 @@ pub fn named_said(name: &str) -> Said {
 }
 
 /// What a street is called: its own name (data, said as it is), or else what sort of street it is.
+/// The class a street has, and the one it had before it became pedestrian, given whether it has a motor piece.
+fn settled_class(motor: bool, class: StreetClass, before: Option<StreetClass>) -> (StreetClass, Option<StreetClass>) {
+    match (motor, class) {
+        (false, class) if class != StreetClass::Pedestrian => (StreetClass::Pedestrian, Some(class)),
+        (true, StreetClass::Pedestrian) => (before.unwrap_or(StreetClass::Local), None),
+        _ => (class, before),
+    }
+}
+
 fn title_of(name: Option<&str>, class: StreetClass) -> Said {
     match (name, class) {
         (Some(name), _) => named_said(name),
@@ -276,7 +295,27 @@ impl Street {
                 g
             })
             .collect();
-        Street { class, name: None, row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1, source: Vec::new() }
+        let mut street =
+            Street { class, class_before: None, name: None, row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1, source: Vec::new() };
+        street.settle_class();
+        street
+    }
+
+    /// Whether any piece is a motor piece.
+    pub fn has_motor(&self) -> bool {
+        self.segments.iter().any(Segment::has_motor)
+    }
+
+    /// Keeps the class true to the pieces. No motor piece: pedestrian, remembering the class it had. A motor
+    /// piece (travel, parking, loading, bus, shoulder) on a pedestrian street: the class it had, or else local. Run after every edit and when a street is built.
+    pub fn settle_class(&mut self) {
+        (self.class, self.class_before) = settled_class(self.has_motor(), self.class, self.class_before);
+    }
+
+    /// The same street, settled.
+    pub fn settled(mut self) -> Street {
+        self.settle_class();
+        self
     }
 
     /// The same street, called `name`.
@@ -347,10 +386,13 @@ impl Street {
 struct State {
     label: Said,
     segments: Vec<Segment>,
+    /// The street's class as of this state, and the one it had before it became pedestrian: the history holds
+    /// them so that undo restores both.
+    class: StreetClass,
+    class_before: Option<StreetClass>,
 }
 
 pub struct Editor {
-    class: StreetClass,
     /// What the street is called, where it has a name of its own.
     street_name: Option<String>,
     /// The OSM ways it was made from.
@@ -402,10 +444,19 @@ fn total(segments: &[Segment]) -> i32 {
 }
 
 impl Editor {
+    fn class(&self) -> StreetClass {
+        self.states[self.cursor].class
+    }
+
+    fn class_before(&self) -> Option<StreetClass> {
+        self.states[self.cursor].class_before
+    }
+
     /// The street as it is now, for the city to keep.
     pub fn snapshot(&self) -> Street {
         Street {
-            class: self.class,
+            class: self.class(),
+            class_before: self.class_before(),
             name: self.street_name.clone(),
             row_mm: self.row_mm,
             side: REGIONS[self.region].drive_side,
@@ -421,15 +472,14 @@ impl Editor {
     pub fn from_street(today: &Street, now: &Street, region: usize) -> Editor {
         let region = region.min(REGIONS.len() - 1);
         let side = REGIONS[region].drive_side;
-        let (today, now) = (today.for_side(side), now.for_side(side));
+        let (today, now) = (today.for_side(side).settled(), now.for_side(side).settled());
         let mut e = Editor {
-            class: now.class,
             street_name: now.name.clone(),
             source: now.source.clone(),
             region,
             time_min: 12 * 60,
             row_mm: now.row_mm,
-            states: vec![State { label: Said::new("street-today"), segments: today.segments }],
+            states: vec![State { label: Said::new("street-today"), segments: today.segments, class: today.class, class_before: today.class_before }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
             selected: None,
@@ -472,8 +522,14 @@ impl Editor {
     }
 
     fn push(&mut self, label: Said, segments: Vec<Segment>) {
+        let motor = segments.iter().any(Segment::has_motor);
+        let (class, class_before) = settled_class(motor, self.class(), self.class_before());
+        self.push_state(State { label, segments, class, class_before });
+    }
+
+    fn push_state(&mut self, state: State) {
         self.states.truncate(self.cursor + 1);
-        self.states.push(State { label, segments });
+        self.states.push(state);
         self.cursor += 1;
     }
 
@@ -867,7 +923,7 @@ impl Editor {
         };
         let existing = self.current().clone();
         let mut next_uid = self.next_uid;
-        let Some(arranged) = measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, self.class.is_freeway(), &mut next_uid) else {
+        let Some(arranged) = measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, self.class().is_freeway(), &mut next_uid) else {
             return false;
         };
         let ok = self.edit(Said::new("rev-measure").with("code", Arg::Text(def.code.to_string())).with("name", Arg::Measure(def.code)), |segs| {
@@ -971,11 +1027,11 @@ impl Editor {
     /// Returns the proposal to the existing street as a new revision.
     pub fn reset(&mut self) -> bool {
         self.cancel_gesture();
-        let existing = self.states[0].segments.clone();
-        if existing == *self.current() {
+        let first = self.states[0].clone();
+        if first.segments == *self.current() {
             return false;
         }
-        self.push(Said::new("rev-reset"), existing);
+        self.push_state(State { label: Said::new("rev-reset"), ..first });
         self.selected = None;
         true
     }
@@ -1035,8 +1091,8 @@ impl Editor {
         let at = |v: &[Segment]| v.iter().map(|s| s.at(self.time_min)).collect::<Vec<_>>();
         let (now, existing_now) = (at(segs), at(existing));
         View {
-            name: title_of(self.street_name.as_deref(), self.class),
-            class: self.class,
+            name: title_of(self.street_name.as_deref(), self.class()),
+            class: self.class(),
             region: REGIONS[self.region].id,
             row_mm: self.row_mm,
             total_mm,
@@ -1047,7 +1103,7 @@ impl Editor {
             existing_total_mm: total(existing),
             selected: self.selected,
             outcomes: outcomes(&now, &existing_now),
-            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side, self.class.is_freeway()),
+            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side, self.class().is_freeway()),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
@@ -1059,7 +1115,7 @@ impl Editor {
 
     fn measure_views(&self, raw: &[Segment], now: &[Segment]) -> Vec<MeasureView> {
         let side = REGIONS[self.region].drive_side;
-        let freeway = self.class.is_freeway();
+        let freeway = self.class().is_freeway();
         measures::detect(raw, now, side, freeway)
             .into_iter()
             .zip(measures::DEFS.iter())
@@ -1394,6 +1450,178 @@ mod tests {
         kind_index(id).unwrap()
     }
 
+    /// One driving lane, so that a street made of it is not pedestrian.
+    fn travel_lane() -> Piece {
+        Piece { kind: kind("travel"), width_mm: 3300, direction: None, variants: Vec::new() }
+    }
+
+    /// A street of these kinds, each at its kind's default width, made as an import makes it.
+    fn street_of(class: StreetClass, ids: &[&str]) -> Street {
+        let pieces: Vec<Piece> = ids
+            .iter()
+            .map(|id| {
+                let kind = kind_index(id).unwrap();
+                Piece { kind, width_mm: KINDS[kind].default_mm, direction: None, variants: Vec::new() }
+            })
+            .collect();
+        Street::imported(class, Side::Right, &pieces)
+    }
+
+    #[test]
+    fn a_street_with_no_motor_piece_is_pedestrian_and_remembers_the_class_it_had() {
+        let walkway = street_of(StreetClass::Local, &["sidewalk", "planting", "sidewalk"]);
+        assert_eq!((walkway.class, walkway.class_before), (StreetClass::Pedestrian, Some(StreetClass::Local)));
+        let busy = street_of(StreetClass::Arterial, &["sidewalk", "travel", "sidewalk"]);
+        assert_eq!((busy.class, busy.class_before), (StreetClass::Arterial, None));
+        let given = street_of(StreetClass::Pedestrian, &["sidewalk", "sidewalk"]);
+        assert_eq!((given.class, given.class_before), (StreetClass::Pedestrian, None), "an imported pedestrian street has no class before");
+        let bikes = street_of(StreetClass::Collector, &["sidewalk", "bike", "sidewalk"]);
+        assert_eq!((bikes.class, bikes.class_before), (StreetClass::Pedestrian, Some(StreetClass::Collector)), "a bike lane is not a motor piece");
+    }
+
+    #[test]
+    fn a_pedestrian_street_given_a_lane_goes_back_to_the_class_it_had_or_else_local() {
+        let mut s = street_of(StreetClass::Arterial, &["sidewalk", "travel", "sidewalk"]);
+        s.segments.retain(|g| KINDS[g.kind].id != "travel");
+        s.settle_class();
+        assert_eq!((s.class, s.class_before), (StreetClass::Pedestrian, Some(StreetClass::Arterial)));
+        s.segments.push(Segment::new(9, kind("travel"), 3300));
+        s.settle_class();
+        assert_eq!((s.class, s.class_before), (StreetClass::Arterial, None));
+        let mut given = street_of(StreetClass::Pedestrian, &["sidewalk", "sidewalk"]);
+        given.segments.push(Segment::new(9, kind("parking"), 2400));
+        given.settle_class();
+        assert_eq!((given.class, given.class_before), (StreetClass::Local, None));
+        let before = s.clone();
+        s.settle_class();
+        assert_eq!(s, before, "settling a settled street changes nothing");
+    }
+
+    #[test]
+    fn a_piece_that_is_parking_at_some_hour_is_motor_and_a_bike_lane_or_a_median_is_not() {
+        let mut timed = Segment::new(1, kind("bike"), 1800);
+        assert!(!timed.has_motor());
+        timed.variants.push(Variant { kind: kind("parking"), material: 0, direction: None, from_min: 420, to_min: 540, days: None });
+        assert!(timed.has_motor());
+        for id in ["travel", "parking", "loading", "bus", "shoulder"] {
+            assert!(Segment::new(1, kind(id), 3000).has_motor(), "{id}");
+        }
+        for id in ["bike", "sidewalk", "median"] {
+            assert!(!Segment::new(1, kind(id), 2000).has_motor(), "{id}");
+        }
+    }
+
+    #[test]
+    fn a_bike_only_street_is_pedestrian_and_a_bus_only_or_shoulder_only_street_is_not() {
+        // The definition is "no motor piece" (travel, parking, loading, bus, shoulder): this pins it, so that a change is a decision.
+        let bikes = street_of(StreetClass::Local, &["sidewalk", "bike", "sidewalk"]);
+        assert_eq!(bikes.class, StreetClass::Pedestrian);
+        for id in ["bus", "shoulder"] {
+            let s = street_of(StreetClass::Collector, &["sidewalk", "bike", id]);
+            assert_eq!((s.class, s.class_before), (StreetClass::Collector, None), "{id}");
+        }
+        // and a pedestrian street given a bus lane or a shoulder gets its class back
+        let mut e = Editor::from_street(&bikes, &bikes, 0);
+        e.add(kind("bus"), 1);
+        assert_eq!((e.view().class, e.snapshot().class_before), (StreetClass::Local, None));
+        assert!(e.undo());
+        assert_eq!(e.view().class, StreetClass::Pedestrian);
+    }
+
+    #[test]
+    fn class_before_is_written_only_when_there_is_one_and_comes_back() {
+        let plain = street_of(StreetClass::Local, &["sidewalk", "travel", "sidewalk"]);
+        assert!(!serde_json::to_string(&plain).unwrap().contains("class_before"));
+        let walkway = street_of(StreetClass::Local, &["sidewalk", "sidewalk"]);
+        let json = serde_json::to_string(&walkway).unwrap();
+        assert!(json.contains("\"class\":\"pedestrian\"") && json.contains("\"class_before\":\"local\""), "{json}");
+        assert_eq!(serde_json::from_str::<Street>(&json).unwrap(), walkway);
+        let mut value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        value.as_object_mut().unwrap().remove("class_before");
+        assert_eq!(serde_json::from_value::<Street>(value).unwrap().class_before, None, "a record without the field reads");
+    }
+
+    #[test]
+    fn an_unnamed_pedestrian_street_is_titled_by_its_class_in_each_language() {
+        use crate::shared::i18n::Locale;
+        use crate::shared::said::say_now;
+        use crate::shared::units::Units;
+        let s = street_of(StreetClass::Local, &["sidewalk", "sidewalk"]);
+        let say = |locale| say_now(&crate::i18n_for(locale), Units::Metres, &s.title());
+        assert_eq!((say(Locale::En), say(Locale::FrCa)), ("Unnamed pedestrian street".to_string(), "Rue piétonne sans nom".to_string()));
+    }
+
+    #[test]
+    fn the_class_follows_the_pieces_through_edits_undo_redo_and_start_over() {
+        let s = street_of(StreetClass::Arterial, &["sidewalk", "travel", "sidewalk"]);
+        let mut e = Editor::from_street(&s, &s, 0);
+        let lane = e.view().segments[1].uid;
+        assert!(e.remove(lane));
+        assert_eq!((e.view().class, e.snapshot().class_before), (StreetClass::Pedestrian, Some(StreetClass::Arterial)));
+        assert!(e.undo());
+        assert_eq!((e.view().class, e.snapshot().class_before), (StreetClass::Arterial, None));
+        assert!(e.redo());
+        assert_eq!(e.view().class, StreetClass::Pedestrian);
+        e.add(kind("travel"), 1);
+        assert_eq!((e.view().class, e.snapshot().class_before), (StreetClass::Arterial, None), "a lane given back restores the class");
+        assert!(e.undo() && e.undo());
+        assert_eq!(e.view().class, StreetClass::Arterial);
+        // Start over returns to how the street was first laid out, class included
+        let lane = e.view().segments[1].uid;
+        assert!(e.remove(lane));
+        assert!(e.reset());
+        assert_eq!((e.view().class, e.snapshot().class_before), (StreetClass::Arterial, None));
+    }
+
+    #[test]
+    fn undoing_a_lane_given_to_an_imported_pedestrian_street_restores_it_exactly() {
+        let s = street_of(StreetClass::Pedestrian, &["sidewalk", "sidewalk"]);
+        let mut e = Editor::from_street(&s, &s, 0);
+        e.add(kind("travel"), 1);
+        assert_eq!((e.view().class, e.snapshot().class_before), (StreetClass::Local, None));
+        assert!(e.undo());
+        assert_eq!((e.view().class, e.snapshot().class_before), (StreetClass::Pedestrian, None), "not Some(Local): it never had one");
+    }
+
+    #[test]
+    fn an_editor_on_a_street_the_city_holds_with_the_motor_pieces_taken_out_is_pedestrian_from_the_start() {
+        let today = street_of(StreetClass::Collector, &["sidewalk", "travel", "sidewalk"]);
+        let mut now = today.clone();
+        now.segments.retain(|g| KINDS[g.kind].id != "travel");
+        now.settle_class();
+        let e = Editor::from_street(&today, &now, 0);
+        assert_eq!(e.view().class, StreetClass::Pedestrian);
+        assert_eq!(e.snapshot(), now);
+        assert_eq!(e.view().revisions.len(), 1, "the earlier changes show as one revision");
+    }
+
+    #[test]
+    fn a_resize_drag_does_not_change_the_class() {
+        let s = street_of(StreetClass::Local, &["sidewalk", "sidewalk", "planting"]);
+        let mut e = Editor::from_street(&s, &s, 0);
+        e.begin_gesture();
+        assert!(e.resize_boundary(0, 200));
+        assert!(e.end_gesture());
+        assert_eq!((e.view().class, e.snapshot().class_before), (StreetClass::Pedestrian, Some(StreetClass::Local)));
+    }
+
+    #[test]
+    fn pedestrianised_turns_every_motor_piece_into_a_sidewalk_of_its_width_and_settles_the_class() {
+        let s = Street::sample(1, Side::Right);
+        let p = fixtures::pedestrianised(&s);
+        assert_eq!(p.segments.len(), s.segments.len());
+        for (was, now) in s.segments.iter().zip(&p.segments) {
+            assert_eq!(now.width_mm, was.width_mm);
+            if was.has_motor() {
+                assert_eq!((KINDS[now.kind].id, now.variants.len()), ("sidewalk", 0));
+            } else {
+                assert_eq!(now.kind, was.kind);
+            }
+        }
+        assert!(!p.has_motor());
+        assert_eq!((p.class, p.class_before), (StreetClass::Pedestrian, Some(StreetClass::Arterial)));
+    }
+
     #[test]
     fn every_lane_measure_can_be_arranged_and_is_then_recognised() {
         for (sample, region) in [(1, 0), (1, 3), (0, 0)] {
@@ -1503,9 +1731,9 @@ mod tests {
         use crate::shared::said::say_now;
         use crate::shared::units::Units;
         let say = |locale, s: &Street| say_now(&crate::i18n_for(locale), Units::Metres, &s.title());
-        let local = Street::imported(StreetClass::Local, Side::Right, &[]);
+        let local = Street::imported(StreetClass::Local, Side::Right, &[travel_lane()]);
         assert_eq!((say(Locale::En, &local), say(Locale::FrCa, &local)), ("Unnamed local street".into(), "Rue locale sans nom".into()));
-        let motorway = Street::imported(StreetClass::Motorway, Side::Right, &[]);
+        let motorway = Street::imported(StreetClass::Motorway, Side::Right, &[travel_lane()]);
         assert_eq!(motorway.title(), Said::new("city-unnamed-motorway"));
         assert_eq!((say(Locale::En, &motorway), say(Locale::FrCa, &motorway)), ("Unnamed motorway".into(), "Autoroute sans nom".into()));
         let named = local.named("Rue Rachel Est");
@@ -1515,10 +1743,10 @@ mod tests {
 
     #[test]
     fn a_street_is_what_it_is_given_and_has_no_template_to_fall_back_on() {
-        let s = Street::imported(StreetClass::Local, Side::Right, &[]);
+        let s = Street::imported(StreetClass::Local, Side::Right, &[travel_lane()]);
         assert_eq!(s.title(), Said::new("city-unnamed").with("class", Arg::Msg("class-local")));
         assert!(!s.class.is_freeway());
-        assert!(Street::imported(StreetClass::Motorway, Side::Right, &[]).class.is_freeway());
+        assert!(Street::imported(StreetClass::Motorway, Side::Right, &[travel_lane()]).class.is_freeway());
     }
 
     #[test]
