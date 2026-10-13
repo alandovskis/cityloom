@@ -512,7 +512,14 @@ mod tests {
     #[test]
     fn the_marked_street_draws_every_kind_of_paint() {
         let m = drawn(&marked());
-        assert!(count(&m, "class=\"iso-paint yellow\"") > 2 && count(&m, "class=\"iso-paint white\"") > 4);
+        // `marked()` is: sidewalk, parking, driving lane, bus lane (with the traffic), driving lane, parking, two-way bike
+        // lane, sidewalk. By the markings rules the polygons are, yellow: the double yellow between the bus lane and
+        // the lane running the other way (2) and the bike lane's broken middle line (5 dashes in 40 m) = 7; white: a
+        // solid line between each parking lane and its driving lane (2), the double white between the first lane and
+        // the bus lane (2), the two lane arrows (2), the bus diamond and "BUS" (15) and the bike symbol (28: two
+        // 12-piece wheels, frame, handlebar, two small arrows) = 49. The bike lane's own curb leaves its edges unpainted.
+        assert_eq!(count(&m, "class=\"iso-paint yellow\""), 7);
+        assert_eq!(count(&m, "class=\"iso-paint white\""), 49);
         assert!(!m.contains("NaN") && !m.contains("inf"));
     }
 
