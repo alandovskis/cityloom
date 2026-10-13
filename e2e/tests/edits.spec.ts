@@ -92,10 +92,10 @@ const provenanceState = async (page: Page) => {
 test("an edit is kept under the street's OSM key", async ({ page }) => {
   await editStreet(page);
   const doc = await edits(page);
-  expect(doc.version).toBe(3);
+  expect(doc.version).toBe(4);
   expect(Object.keys(doc.streets)).toHaveLength(1);
   expect(Object.keys(doc.streets)[0]).toMatch(/^w\d+~n\d+~(n\d+|x~[nesw])$/);
-  expect(Object.keys(doc.junctions)).toEqual([]);
+  expect(Object.keys(doc.junctions ?? {})).toEqual([]);
   const keys = await page.evaluate(() => Object.keys(localStorage));
   expect(keys.filter((k) => k.startsWith("cityloom-city:"))).toEqual([]);
 });
@@ -131,7 +131,7 @@ test("the edit is there from another area of the same tile", async ({ page }) =>
   ).not.toBeNull();
 });
 
-test("a profile that has only the old per-area save keeps its edits", async ({ page }) => {
+test("an old per-area save is no longer read, and is left as it was", async ({ page }) => {
   // The legacy save is made from what a visit wrote: the edited street's record, re-keyed by its number in the
   // area, as a version that kept edits per area wrote it.
   const { href } = await editStreet(page);
@@ -149,7 +149,7 @@ test("a profile that has only the old per-area save keeps its edits", async ({ p
   await page.goto("/map.html");
   await mapReady(page);
   const doc = await edits(page);
-  expect(Object.values<any>(doc.streets)).toEqual([record]);
+  expect(Object.keys(doc?.streets ?? {}), "its edit is not moved").toEqual([]);
   expect(await page.evaluate((k) => localStorage.getItem(k), key), "the old save is left as it was").toBe(legacy);
 });
 
