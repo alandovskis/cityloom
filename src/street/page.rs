@@ -7,7 +7,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::city::model::EndView;
-use crate::shared::catalogue::{KINDS, group_key, kind_key};
+use crate::shared::catalogue::{KINDS, PEDESTRIAN_KINDS, group_key, kind_index, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
 use crate::shared::said::{self, hhmm};
@@ -330,6 +330,10 @@ pub fn menu_box(button_left: f64, button_bottom: f64, window_w: f64, window_h: f
     MenuBox { left, top, width, max_height: (window_h - top - MARGIN).max(MIN_HEIGHT) }
 }
 
+/// The widest the Make pedestrian list is drawn, in pixels (three rows need no more).
+#[cfg(target_arch = "wasm32")]
+const PED_MENU_WIDTH: f64 = 340.0;
+
 /// The button that opens the list of pieces, and the list: arrows move through
 /// it, Escape closes it, and choosing a piece adds it after the selected one.
 #[component]
@@ -476,6 +480,164 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
             <p class="menu-h">{say(w, "add-button")}</p>
             <p class="hint">{say(w, "add-hint")}</p>
             <ul id="palette" class="add-list">{groups}</ul>
+        </div>
+    }
+}
+
+/// The menu that makes the street pedestrian: offered while the street has a motor piece, with the three things the
+/// space of its motor pieces can become. Choosing one is a single edit (`Editor::make_pedestrian`). Like the Add
+/// menu, the list is fixed to the window (so the stage cannot clip it) and kept inside it by `menu_box`; Escape
+/// closes it, the arrows move through it, and leaving it closes it.
+#[component]
+pub fn MakePedestrian(vm: Rc<StreetVm>) -> impl IntoView {
+    use leptos::wasm_bindgen::JsCast;
+    use leptos::web_sys::{Element, FocusEvent, HtmlElement, KeyboardEvent};
+
+    let w = SheetWatch::new(vm);
+    let open = RwSignal::new(false);
+    let wrap = NodeRef::<leptos::html::Div>::new();
+    let button = NodeRef::<leptos::html::Button>::new();
+    let menu = NodeRef::<leptos::html::Div>::new();
+    let items = move || -> Vec<HtmlElement> {
+        let Some(menu) = menu.get_untracked() else { return Vec::new() };
+        let list = menu.query_selector_all(".ped-item").ok();
+        (0..list.as_ref().map_or(0, |l| l.length())).filter_map(|i| list.as_ref()?.item(i)?.dyn_into::<HtmlElement>().ok()).collect()
+    };
+    let close = move |refocus: bool| {
+        open.set(false);
+        if refocus && let Some(b) = button.get_untracked() {
+            let _ = HtmlElement::from(b).focus();
+        }
+    };
+    #[cfg(target_arch = "wasm32")]
+    {
+        let place = move || {
+            let (Some(b), Some(m), Some(win)) = (button.get_untracked(), menu.get_untracked(), leptos::web_sys::window()) else { return };
+            let size = |v: Result<leptos::wasm_bindgen::JsValue, _>| v.ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let r = b.get_bounding_client_rect();
+            let at = menu_box(r.left(), r.bottom(), size(win.inner_width()), size(win.inner_height()));
+            let _ = m.set_attribute(
+                "style",
+                &format!("left:{}px;top:{}px;width:{}px;max-height:{}px", at.left, at.top, at.width.min(PED_MENU_WIDTH), at.max_height),
+            );
+        };
+        window_event_listener(leptos::ev::resize, move |_| {
+            if open.get_untracked() {
+                place();
+            }
+        });
+        Effect::new(move |_| {
+            if open.get() {
+                place();
+                // Once the list is shown, so that it can take the focus.
+                leptos::task::spawn_local(async move {
+                    leptos::task::tick().await;
+                    if let Some(first) = items().first() {
+                        let _ = first.focus();
+                    }
+                });
+            }
+        });
+        window_event_listener(leptos::ev::pointerdown, move |e: leptos::web_sys::PointerEvent| {
+            let inside = wrap.get_untracked().zip(e.target().and_then(|t| t.dyn_into::<Element>().ok())).is_some_and(|(n, t)| n.contains(Some(&t)));
+            if open.get_untracked() && !inside {
+                open.set(false);
+            }
+        });
+        window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
+            if e.key() == "Escape" && open.get_untracked() {
+                close(true);
+            }
+        });
+    }
+    let menu_keys = move |e: KeyboardEvent| {
+        let list = items();
+        let active = document().active_element();
+        let at = list.iter().position(|i| active.as_ref() == Some(i.unchecked_ref::<Element>())).map_or(-1, |p| p as i32);
+        let to = match e.key().as_str() {
+            "ArrowDown" => at + 1,
+            "ArrowUp" => at - 1,
+            "Home" => 0,
+            "End" => list.len() as i32 - 1,
+            _ => return,
+        };
+        e.prevent_default();
+        if !list.is_empty() {
+            let _ = list[to.rem_euclid(list.len() as i32) as usize].focus();
+        }
+    };
+    // Tabbing out of the widget closes the list; a press elsewhere is the window listener's.
+    let focus_out = move |e: FocusEvent| {
+        let left = e.related_target().and_then(|t| t.dyn_into::<Element>().ok()).is_some_and(|t| !wrap.get_untracked().is_some_and(|m| m.contains(Some(&t))));
+        if left {
+            open.set(false);
+        }
+    };
+    let choices = move || {
+        PEDESTRIAN_KINDS
+            .iter()
+            .filter_map(|id| kind_index(id))
+            .map(|k| {
+                let kind = &KINDS[k];
+                view! {
+                    <li>
+                        <button
+                            type="button"
+                            class="add-item ped-item"
+                            on:click=move |_| {
+                                close(false);
+                                // The button goes away with the traffic, so a made street hands the focus to the
+                                // drawing (whose keys edit the street); a refusal keeps it on the button.
+                                if w.edit(|e| e.make_pedestrian(k)) {
+                                    if let Some(wrap) = document().get_element_by_id("wrap") {
+                                        let _ = leptos::wasm_bindgen::JsCast::unchecked_into::<HtmlElement>(wrap).focus();
+                                    }
+                                } else if let Some(b) = button.get_untracked() {
+                                    let _ = HtmlElement::from(b).focus();
+                                }
+                            }
+                        >
+                            <span class="add-icon" inner_html=icon(kind.id)></span>
+                            <b>{move || w.i18n().tr(&kind_key(kind.id), &Args::new())}</b>
+                        </button>
+                    </li>
+                }
+            })
+            .collect_view()
+    };
+    view! {
+        <div node_ref=wrap on:focusout=focus_out style="display: contents">
+            {move || {
+                w.view()
+                    .has_motor
+                    .then(|| {
+                        view! {
+                            <button
+                                type="button"
+                                id="make-pedestrian-btn"
+                                class="btn"
+                                aria-haspopup="true"
+                                aria-expanded=move || open.get().to_string()
+                                aria-controls="make-pedestrian-menu"
+                                node_ref=button
+                                on:click=move |_| open.update(|o| *o = !*o)
+                                on:keydown=move |e: KeyboardEvent| {
+                                    if e.key() == "ArrowDown" && !open.get_untracked() {
+                                        e.prevent_default();
+                                        open.set(true);
+                                    }
+                                }
+                            >
+                                {say(w, "make-pedestrian-button")}
+                            </button>
+                            <div id="make-pedestrian-menu" class="menu ped-menu" hidden=move || !open.get() node_ref=menu on:keydown=menu_keys>
+                                <p class="menu-h">{say(w, "make-pedestrian-button")}</p>
+                                <p class="hint">{say(w, "make-pedestrian-hint")}</p>
+                                <ul class="ped-list">{choices()}</ul>
+                            </div>
+                        }
+                    })
+            }}
         </div>
     }
 }

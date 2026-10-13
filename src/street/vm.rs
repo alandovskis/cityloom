@@ -9,6 +9,7 @@ use leptos::prelude::*;
 use crate::city::binding::{CityBinding, Place};
 use crate::restriction::model::{Finding, Restriction};
 use crate::restriction::store::RestrictionStore;
+use crate::shared::catalogue::StreetClass;
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
@@ -201,9 +202,10 @@ impl StreetVm {
     /// An edit the person made: announced by what it was and how the pieces
     /// stand. A refused edit says nothing.
     pub fn apply(&self, f: impl FnOnce(&mut Editor) -> bool) -> bool {
+        let before = self.class_now();
         let done = self.edit(f);
         if done {
-            self.say_edit();
+            self.say_edit(before);
         }
         done
     }
@@ -228,8 +230,9 @@ impl StreetVm {
     /// changed anything.
     pub fn end_gesture(&self, commit: bool) {
         if commit {
+            let before = self.class_now();
             if self.edit(|e| e.end_gesture()) {
-                self.say_edit();
+                self.say_edit(before);
             }
         } else {
             self.edit(|e| e.cancel_gesture());
@@ -237,34 +240,40 @@ impl StreetVm {
     }
 
     pub fn undo(&self) -> bool {
+        let before = self.class_now();
         let done = self.edit(|e| e.undo());
         if done {
-            self.ports.announcer.say(&text::undone_text(&self.view_now(), &self.i18n, self.units_now()));
+            let said = text::undone_text(&self.view_now(), &self.i18n, self.units_now());
+            self.ports.announcer.say(&self.with_class_note(said, before));
         }
         done
     }
 
     pub fn redo(&self) -> bool {
+        let before = self.class_now();
         let done = self.edit(|e| e.redo());
         if done {
-            self.ports.announcer.say(&text::redone_text(&self.view_now(), &self.i18n, self.units_now()));
+            let said = text::redone_text(&self.view_now(), &self.i18n, self.units_now());
+            self.ports.announcer.say(&self.with_class_note(said, before));
         }
         done
     }
 
     pub fn reset(&self) -> bool {
+        let before = self.class_now();
         let done = self.edit(|e| e.reset());
         if done {
-            self.ports.announcer.say(&text::started_over(&self.i18n));
+            self.ports.announcer.say(&self.with_class_note(text::started_over(&self.i18n), before));
         }
         done
     }
 
     /// Arranges the roadway as an Atlas measure, or says it does not suit.
     pub fn apply_measure(&self, code: &str) -> bool {
+        let before = self.class_now();
         let done = self.edit(|e| e.apply_measure(code));
         if done {
-            self.say_edit();
+            self.say_edit(before);
         } else {
             self.ports.announcer.say(&text::measure_refused(&self.i18n));
         }
@@ -284,9 +293,22 @@ impl StreetVm {
         binding.keep_street(self.core.read(|e| e.snapshot()))
     }
 
-    fn say_edit(&self) {
+    /// The class the street has now, for telling after an edit whether it changed.
+    fn class_now(&self) -> StreetClass {
+        self.view_now().class
+    }
+
+    /// `said`, and after it what the edit did to the street's class, if it changed.
+    fn with_class_note(&self, said: String, before: StreetClass) -> String {
+        match text::class_change_text(before, &self.view_now(), &self.i18n, self.units_now()) {
+            Some(note) => format!("{said} {note}"),
+            None => said,
+        }
+    }
+
+    fn say_edit(&self, before: StreetClass) {
         if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
-            self.ports.announcer.say(&t);
+            self.ports.announcer.say(&self.with_class_note(t, before));
         }
     }
 
@@ -329,6 +351,56 @@ mod tests {
     fn rig(sample: usize) -> Rig {
         let (ports, said, storage, time) = test_ports_with_time();
         Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(sample), None), said, time, storage }
+    }
+
+    fn rig_on(street: crate::street::model::Street) -> Rig {
+        let (ports, said, storage, time) = test_ports_with_time();
+        Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::from_street(&street, &street, 0), None), said, time, storage }
+    }
+
+    #[test]
+    fn making_the_street_pedestrian_is_announced_with_what_it_became_and_undo_with_what_it_is_again() {
+        use crate::shared::catalogue::kind_index;
+        let r = rig(0);
+        let sidewalk = kind_index("sidewalk").unwrap();
+        assert!(r.vm.apply(|e| e.make_pedestrian(sidewalk)));
+        let said = r.said.take();
+        assert_eq!(said.len(), 1, "one announcement: the live region keeps only the last one said");
+        assert!(said[0].starts_with("Made pedestrian. "), "{said:?}");
+        assert!(said[0].ends_with(" Sample Street 1 is now a pedestrian street."), "{said:?}");
+        assert!(!r.vm.apply(|e| e.make_pedestrian(sidewalk)), "no piece is a motor piece now");
+        assert!(r.said.take().is_empty());
+        assert!(r.vm.undo());
+        assert!(r.said.take()[0].ends_with(" Sample Street 1 carries traffic again."));
+        assert!(r.vm.redo());
+        assert!(r.said.take()[0].ends_with(" Sample Street 1 is now a pedestrian street."));
+        assert!(r.vm.reset());
+        assert!(r.said.take()[0].ends_with(" Sample Street 1 carries traffic again."));
+    }
+
+    #[test]
+    fn an_edit_that_leaves_the_class_alone_says_nothing_of_it() {
+        let r = rig(0);
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 100)));
+        let said = r.said.take();
+        assert!(!said[0].contains("pedestrian") && !said[0].contains("traffic again"), "{said:?}");
+    }
+
+    #[test]
+    fn taking_out_the_last_lane_and_giving_one_back_are_announced_in_the_language_of_the_page() {
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::{Piece, Street};
+        let piece = |id: &str| Piece { kind: kind_index(id).unwrap(), width_mm: 3000, direction: None, variants: Vec::new() };
+        let r = rig_on(Street::imported(StreetClass::Local, Side::Right, &[piece("sidewalk"), piece("travel")]).named("Rue Rachel"));
+        let lane = r.vm.view_now().segments[1].uid;
+        assert!(r.vm.apply(|e| e.remove(lane)));
+        assert!(r.said.take()[0].ends_with(" Rue Rachel is now a pedestrian street."));
+        assert!(r.vm.apply(|e| e.add(kind_index("travel").unwrap(), 1) != 0));
+        assert!(r.said.take()[0].ends_with(" Rue Rachel carries traffic again."));
+        r.vm.i18n().set(Locale::FrCa);
+        assert!(r.vm.undo());
+        assert!(r.said.take()[0].ends_with(" Rue Rachel est maintenant une rue piétonne."));
     }
 
     fn city_rig() -> (Rig, CityBinding) {
