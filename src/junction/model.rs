@@ -337,7 +337,7 @@ impl Arm {
             offset_mm,
             corner_mm: DEFAULT_CORNER_MM,
             lanes: Vec::new(),
-            crossing: Some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false, continuous: false }),
+            crossing: Some(default_crossing()),
             bulb: [false, false],
             bike_box: false,
             protected: false,
@@ -567,9 +567,14 @@ pub fn turn_class(from: i32, to: i32) -> u8 {
     }
 }
 
-/// The classes of turn an arm has, given the other arms' bearings.
+/// The crossing a new arm has, and an arm that regains traffic.
+fn default_crossing() -> Crossing {
+    Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false, continuous: false }
+}
+
+/// The classes of turn an arm has, given the other arms' bearings (a pedestrian arm takes none).
 pub fn classes_of(arms: &[Arm], i: usize) -> u8 {
-    arms.iter().enumerate().filter(|(j, _)| *j != i).fold(0, |m, (_, b)| m | turn_class(arms[i].bearing, b.bearing))
+    arms.iter().enumerate().filter(|(j, b)| *j != i && !b.is_pedestrian()).fold(0, |m, (_, b)| m | turn_class(arms[i].bearing, b.bearing))
 }
 
 /// The classes a lane in place `i` of `n` serves by default, given those the
@@ -651,10 +656,11 @@ pub enum Refusal {
     RaisedOnRoundabout,
     BikeBoxNotHere,
     ProtectedNotHere,
+    CrossingOnPedestrian,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 12] = [
+    pub const ALL: [Refusal; 13] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -667,6 +673,7 @@ impl Refusal {
         Refusal::RaisedOnRoundabout,
         Refusal::BikeBoxNotHere,
         Refusal::ProtectedNotHere,
+        Refusal::CrossingOnPedestrian,
     ];
 
     /// The message that says why.
@@ -684,6 +691,7 @@ impl Refusal {
             Refusal::RaisedOnRoundabout => "jn-refusal-raised-roundabout",
             Refusal::BikeBoxNotHere => "jn-refusal-bike-box-not-here",
             Refusal::ProtectedNotHere => "jn-refusal-protected-not-here",
+            Refusal::CrossingOnPedestrian => "jn-refusal-crossing-pedestrian",
         }
     }
 }
@@ -1072,11 +1080,14 @@ impl Junction {
     }
 
     pub fn set_crossing(&mut self, uid: u32, on: bool) -> bool {
+        if on && self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::CrossingOnPedestrian);
+        }
         self.arm_edit(
             uid,
             |a| about("jn-rev-crossing", a).with("change", change(on)),
             |a| {
-                a.crossing = on.then_some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false, continuous: false });
+                a.crossing = on.then(default_crossing);
                 true
             },
         )
@@ -1204,6 +1215,9 @@ impl Junction {
     pub fn set_lane_dest(&mut self, uid: u32, lane: usize, to: u32, on: bool) -> bool {
         let Some(dest) = self.arm(to).map(arm_name) else { return self.refuse(Refusal::DoesNotFit) };
         if uid == to {
+            return self.refuse(Refusal::DoesNotFit);
+        }
+        if self.arm(to).is_some_and(Arm::is_pedestrian) {
             return self.refuse(Refusal::DoesNotFit);
         }
         if !on && self.arm(uid).and_then(|a| a.lanes.get(lane)).is_some_and(|l| l.to == [to]) {
@@ -1551,33 +1565,43 @@ fn ease(s: &State, region: usize) -> Option<State> {
 /// each street, a lane serves only turns its arm has, bans name arms that
 /// exist, and features that need room or parking stay only where they have it.
 pub fn normalize(arms: &mut [Arm], region: usize) {
-    let uids: Vec<u32> = arms.iter().map(|a| a.uid).collect();
-    let bearings: Vec<i32> = arms.iter().map(|a| a.bearing).collect();
+    // The streets a lane can go to: every street but the pedestrian ones, which nothing drives into.
+    let dests: Vec<(u32, i32)> = arms.iter().filter(|a| !a.is_pedestrian()).map(|a| (a.uid, a.bearing)).collect();
     let avail: Vec<u8> = (0..arms.len()).map(|i| classes_of(arms, i)).collect();
     for (a, avail) in arms.iter_mut().zip(avail) {
         let p = a.profile(region);
         let n = p.enter_x.len();
         let (uid, bearing) = (a.uid, a.bearing);
+        // An arm that had no lanes (a pedestrian street) and has some again has the crossing a new arm has.
+        let regains_traffic = n > 0 && a.lanes.is_empty() && !a.is_pedestrian();
         // Where lane `k` goes by default: every street whose turn it serves.
         let default = |k: usize| -> Vec<u32> {
             let want = default_uses(k, n, avail);
-            uids.iter().zip(&bearings).filter(|(u, b)| **u != uid && want & turn_class(bearing, **b) != 0).map(|(u, _)| *u).collect()
+            dests.iter().filter(|(u, b)| *u != uid && want & turn_class(bearing, *b) != 0).map(|(u, _)| *u).collect()
         };
         if a.lanes.len() != n {
             a.lanes = (0..n).map(|k| Lane { to: default(k) }).collect();
         }
         for (k, l) in a.lanes.iter_mut().enumerate() {
-            l.to.retain(|u| uids.contains(u) && *u != uid);
+            l.to.retain(|u| *u != uid && dests.iter().any(|(d, _)| d == u));
             l.to.sort_unstable();
             l.to.dedup();
             if l.to.is_empty() {
                 l.to = default(k);
             }
         }
-        a.banned.retain(|b| uids.contains(b) && *b != a.uid);
+        a.banned.retain(|b| *b != a.uid && dests.iter().any(|(d, _)| d == b));
         a.bulb = [a.bulb[0] && p.park[0] > 0, a.bulb[1] && p.park[1] > 0];
-        if let Some(c) = a.crossing.as_mut() {
-            c.island = c.island && p.road_mm() >= ISLAND_MIN_ROAD_MM && !c.continuous;
+        if a.is_pedestrian() {
+            // There is no roadway to cross.
+            a.crossing = None;
+        } else {
+            if regains_traffic && a.crossing.is_none() {
+                a.crossing = Some(default_crossing());
+            }
+            if let Some(c) = a.crossing.as_mut() {
+                c.island = c.island && p.road_mm() >= ISLAND_MIN_ROAD_MM && !c.continuous;
+            }
         }
         // Offsets stay within the carriageway of whatever street the arm reads.
         let half = p.road_mm() / 2;
@@ -1638,14 +1662,72 @@ mod tests {
         assert_eq!(s.control, SIGNAL, "the control that was kept is not touched");
     }
 
-    /// Pinned as it is today so that the task that changes it shows: a walkway arm is given a crossing like any arm.
-    /// Task C deletes this test (a pedestrian arm has none).
     #[test]
-    fn today_a_walkway_arm_still_has_a_default_crossing() {
+    fn a_walkway_arm_has_no_crossing_and_no_lane_goes_to_it() {
         let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
-        let arm = j.current().arms.iter().find(|a| a.bearing == 90).unwrap();
-        assert!(arm.crossing.is_some());
-        assert!(arm.lanes.is_empty(), "its profile has no travel lanes");
+        let walk = j.current().arms.iter().find(|a| a.bearing == 90).unwrap();
+        assert!(walk.crossing.is_none() && walk.lanes.is_empty());
+        for a in j.current().arms.iter().filter(|a| a.uid != walk.uid) {
+            assert!(a.crossing.is_some(), "a street of traffic keeps its crossing");
+            assert!(!a.lanes.is_empty());
+            for l in &a.lanes {
+                assert!(!l.to.is_empty(), "a lane keeps a street to go to");
+                assert!(!l.to.contains(&walk.uid), "nothing is driven into a walkway");
+            }
+        }
+    }
+
+    #[test]
+    fn a_crossing_cannot_be_added_to_a_walkway_arm_and_a_lane_cannot_be_sent_into_it() {
+        let mut j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let (walk, other) = (arm_at(&j, 90), arm_at(&j, 0));
+        assert!(!j.set_crossing(walk, true));
+        assert_eq!(j.refusal(), Some(Refusal::CrossingOnPedestrian));
+        assert!(j.current().arms.iter().find(|a| a.uid == walk).unwrap().crossing.is_none());
+        assert!(j.set_crossing(other, false), "a street of traffic can lose its crossing");
+        assert_eq!(j.refusal(), None);
+        assert!(!j.set_lane_dest(other, 0, walk, true));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+    }
+
+    #[test]
+    fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
+        assert_eq!(Refusal::ALL.len(), 13);
+        assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
+        assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
+    }
+
+    #[test]
+    fn the_turns_an_arm_has_leave_out_a_walkway() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let arms = &j.current().arms;
+        let north = arms.iter().position(|a| a.bearing == 0).unwrap();
+        let plain = Junction::new(0).current().arms.clone();
+        assert!(classes_of(arms, north).count_ones() < classes_of(&plain, north).count_ones());
+    }
+
+    #[test]
+    fn a_junction_whose_other_streets_are_all_walkways_keeps_a_lane_with_nowhere_to_go() {
+        let j = junction_with_walkways(&[90, 180, 270], &[("sidewalk", 4000), ("sidewalk", 4000)]);
+        assert_eq!(traffic_arms(j.current()), 1);
+        let arm = j.current().arms.iter().find(|a| a.bearing == 0).unwrap();
+        assert!(!arm.lanes.is_empty() && arm.lanes.iter().all(|l| l.to.is_empty()));
+        let _ = j.view();
+    }
+
+    #[test]
+    fn an_arm_whose_street_regains_traffic_has_the_default_crossing_and_lanes_with_destinations() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let mut arms = j.current().arms.clone();
+        let walk = arms.iter().position(|a| a.bearing == 90).unwrap();
+        assert!(arms[walk].crossing.is_none() && arms[walk].lanes.is_empty());
+        let street = arms.iter().find_map(|a| (a.bearing == 0).then(|| a.section.clone())).unwrap();
+        arms[walk].section = street;
+        normalize(&mut arms, 0);
+        let c = arms[walk].crossing.expect("the arm has a crossing again");
+        assert_eq!((c.setback_mm, c.width_mm, c.island, c.continuous), (DEFAULT_SETBACK_MM, DEFAULT_CROSSING_MM, false, false));
+        assert!(!arms[walk].lanes.is_empty());
+        assert!(arms[walk].lanes.iter().all(|l| !l.to.is_empty()), "its lanes go somewhere");
     }
 
     fn named(name: &str) -> Said {
