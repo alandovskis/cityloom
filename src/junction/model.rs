@@ -752,10 +752,11 @@ pub enum Refusal {
     NotSignal,
     TimingOutOfRange,
     NoTransitLane,
+    MeasureOnPedestrian,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 16] = [
+    pub const ALL: [Refusal; 17] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -772,6 +773,7 @@ impl Refusal {
         Refusal::NotSignal,
         Refusal::TimingOutOfRange,
         Refusal::NoTransitLane,
+        Refusal::MeasureOnPedestrian,
     ];
 
     /// The message that says why.
@@ -793,6 +795,7 @@ impl Refusal {
             Refusal::NoTransitLane => "jn-refusal-no-transit-lane",
             Refusal::ProtectedNotHere => "jn-refusal-protected-not-here",
             Refusal::CrossingOnPedestrian => "jn-refusal-crossing-pedestrian",
+            Refusal::MeasureOnPedestrian => "jn-refusal-measure-pedestrian",
         }
     }
 }
@@ -1276,6 +1279,9 @@ impl Junction {
     /// already has is not an edit.
     pub fn set_timing(&mut self, uid: u32, field: TimingField, seconds: i32) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        if arm.is_pedestrian() {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         let (bus_lane, timing) = (arm.bus_lane, arm.timing);
         if self.current().control != SIGNAL {
             return self.refuse(Refusal::NotSignal);
@@ -1388,6 +1394,9 @@ impl Junction {
     }
 
     pub fn set_bus_lane(&mut self, uid: u32, on: bool) -> bool {
+        if self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         self.arm_edit(
             uid,
             |a| about("jn-rev-bus-lane", a).with("change", change(on)),
@@ -1400,6 +1409,9 @@ impl Junction {
 
     /// Sets the approach measure, by index into `APPROACHES`.
     pub fn set_approach(&mut self, uid: u32, approach: usize) -> bool {
+        if self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         if approach >= APPROACHES.len() {
             return self.refuse(Refusal::DoesNotFit);
         }
@@ -1430,6 +1442,9 @@ impl Junction {
 
     /// Sets the bus stop, by index into `STOPS`.
     pub fn set_stop(&mut self, uid: u32, stop: usize) -> bool {
+        if self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         if stop >= STOPS.len() {
             return self.refuse(Refusal::DoesNotFit);
         }
@@ -1445,6 +1460,9 @@ impl Junction {
 
     /// Sets the turn management, by index into `RULES`.
     pub fn set_rule(&mut self, uid: u32, rule: usize) -> bool {
+        if self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         if rule >= RULES.len() {
             return self.refuse(Refusal::DoesNotFit);
         }
@@ -1459,6 +1477,9 @@ impl Junction {
     }
 
     pub fn set_filter(&mut self, uid: u32, on: bool) -> bool {
+        if self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         self.arm_edit(
             uid,
             |a| about("jn-rev-filter", a).with("change", change(on)),
@@ -1751,8 +1772,15 @@ pub fn normalize(arms: &mut [Arm], region: usize) {
         a.banned.retain(|b| *b != a.uid && dests.iter().any(|(d, _)| d == b));
         a.bulb = [a.bulb[0] && p.park[0] > 0, a.bulb[1] && p.park[1] > 0];
         if a.is_pedestrian() {
-            // There is no roadway to cross.
+            // There is no roadway to cross, and no traffic to give a lane, a stop or a rule to. The timing stays: with
+            // no phase it does nothing, and it returns with traffic.
             a.crossing = None;
+            a.bus_lane = false;
+            a.filter = false;
+            a.approach = 0;
+            a.stop = 0;
+            a.rule = 0;
+            a.bike_box = false;
         } else {
             if regains_traffic && a.crossing.is_none() {
                 a.crossing = Some(default_crossing());
@@ -1849,8 +1877,30 @@ mod tests {
     }
 
     #[test]
+    fn a_street_made_pedestrian_loses_its_traffic_measures_and_a_walkway_takes_none() {
+        let mut j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let mut arms = j.current().arms.clone();
+        let walk = arms.iter_mut().find(|a| a.bearing == 90).unwrap();
+        (walk.bus_lane, walk.filter, walk.approach, walk.stop, walk.rule, walk.bike_box) = (true, true, 1, 1, 1, true);
+        normalize(&mut arms, 0);
+        let walk = arms.iter().find(|a| a.bearing == 90).unwrap();
+        assert!(!walk.bus_lane && !walk.filter && !walk.bike_box);
+        assert_eq!((walk.approach, walk.stop, walk.rule), (0, 0, 0));
+        let w = arm_at(&j, 90);
+        assert!(!j.set_bus_lane(w, true));
+        assert_eq!(j.refusal(), Some(Refusal::MeasureOnPedestrian));
+        assert!(!j.set_filter(w, true) && j.refusal() == Some(Refusal::MeasureOnPedestrian));
+        assert!(!j.set_approach(w, 1) && j.refusal() == Some(Refusal::MeasureOnPedestrian));
+        assert!(!j.set_stop(w, 1) && j.refusal() == Some(Refusal::MeasureOnPedestrian));
+        assert!(!j.set_rule(w, 1) && j.refusal() == Some(Refusal::MeasureOnPedestrian));
+        assert_eq!(j.current().control, SIGNAL);
+        assert!(!j.set_timing(w, TimingField::Green, 25) && j.refusal() == Some(Refusal::MeasureOnPedestrian));
+        assert!(j.set_bus_lane(arm_at(&j, 0), true), "a street of traffic takes its measures");
+    }
+
+    #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 16);
+        assert_eq!(Refusal::ALL.len(), 17);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }

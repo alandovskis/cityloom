@@ -1492,7 +1492,13 @@ fn the_pedestrian_arm_messages_exist_in_both_languages() {
     use crate::shared::i18n::Locale;
     for locale in Locale::ALL {
         let i18n = crate::i18n_for(locale);
-        for id in ["jn-refusal-crossing-pedestrian", "jn-insp-crossing-pedestrian", "jn-insp-control-pedestrian"] {
+        for id in [
+            "jn-refusal-crossing-pedestrian",
+            "jn-refusal-measure-pedestrian",
+            "jn-insp-crossing-pedestrian",
+            "jn-insp-control-pedestrian",
+            "jn-insp-lanes-pedestrian",
+        ] {
             assert!(i18n.has_message(id, locale), "{id} in {}", locale.tag());
         }
     }
@@ -1534,6 +1540,30 @@ fn with_one_street_carrying_traffic_the_control_choice_is_replaced_by_a_note() {
     s.edit(|j| j.select(Target::Arm(e)));
     let h = panel(&s);
     assert!(h.contains("aria-labelledby=\"i-h-control\"") && !h.contains("Only one street here carries traffic."));
+}
+
+#[test]
+fn the_panel_of_a_walkway_arm_has_no_transit_signal_or_lane_sections_and_says_it_has_no_lanes() {
+    let s = walkway_shared(&[90]);
+    s.edit(|j| j.set_control(SIGNAL));
+    let w = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(w)));
+    let h = plain_panel(&s);
+    assert!(!h.contains("aria-labelledby=\"i-h-signal\"") && !h.contains("aria-labelledby=\"i-h-transit\""), "{h}");
+    assert!(h.contains("A pedestrian street has no lanes.") && !h.contains("One way out"), "{h}");
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Arm(n)));
+    let h = plain_panel(&s);
+    assert!(!h.contains("A pedestrian street has no lanes."));
+}
+
+#[test]
+fn the_control_note_counts_the_streets_that_carry_traffic() {
+    let s = walkway_shared(&[0, 90, 180, 270]);
+    let e = arm(&s, 0);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = panel(&s);
+    assert!(h.contains("No street here carries traffic.") && !h.contains("Only one street"), "{h}");
 }
 
 // ---- signal timing in the details ----

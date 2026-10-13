@@ -424,7 +424,13 @@ fn control_section(w: Watch) -> impl IntoView {
     let single = Memo::new(move |_| w.view().traffic_arms <= 1);
     let control = move || {
         if single.get() {
-            section(w, "i-h-control", "jn-insp-control", view! { <p class="insp-range">{words(w, "jn-insp-control-pedestrian")}</p> }).into_any()
+            section(
+                w,
+                "i-h-control",
+                "jn-insp-control",
+                view! { <p class="insp-range">{move || tr(w, "jn-insp-control-pedestrian", Args::new().num("n", w.view().traffic_arms as i64))}</p> },
+            )
+            .into_any()
         } else {
             section(
                 w,
@@ -1091,6 +1097,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         return view! { {head(name, sub)} {crossing_section(w, uid)} {control_section(w)} }.into_any();
     }
     let enters = Memo::new(move |_| w.arm(uid, |a| a.enters).unwrap_or(false));
+    let walk = Memo::new(move |_| w.arm(uid, |a| a.pedestrian).unwrap_or(false));
     let lanes = Memo::new(move |_| w.arm(uid, |a| a.lanes.len()).unwrap_or(0));
     let linked = w.view_now().linked;
     let direction = Num {
@@ -1139,15 +1146,16 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         {head(name, sub)}
         <section class="insp-sec">
             <h3 class="note-h" id="i-h-lanes">{words(w, "jn-insp-lanes-in")}</h3>
-            {move || if enters.get() {
+            {move || if walk.get() {
+                view! { <p class="insp-range">{words(w, "jn-insp-lanes-pedestrian")}</p> }.into_any()
+            } else if enters.get() {
                 view! { <ul class="lanes"><For each=move || 0..lanes.get() key=|i| *i children=move |i| lane_row(w, uid, i)/></ul> }.into_any()
             } else {
                 view! { <p class="insp-range">{words(w, "jn-insp-one-way-out")}</p> }.into_any()
             }}
         </section>
         {crossing_section(w, uid)}
-        {transit_section(w, uid)}
-        {signal_section(w, uid)}
+        {move || (!walk.get()).then(|| view! { {transit_section(w, uid)} {signal_section(w, uid)} })}
         {bike_box_section(w, uid)}
         {num_field(
             w,

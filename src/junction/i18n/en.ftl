@@ -397,8 +397,13 @@ jn-insp-one-way-out = One way out. No lanes come in.
 
 # A pedestrian street at a junction (src/junction/model.rs, inspector.rs).
 jn-refusal-crossing-pedestrian = A pedestrian street has no roadway to cross, so it takes no crossing.
+jn-refusal-measure-pedestrian = A pedestrian street carries no traffic, so it takes no traffic measures.
 jn-insp-crossing-pedestrian = A pedestrian street has no roadway to cross.
-jn-insp-control-pedestrian = Only one street here carries traffic.
+jn-insp-lanes-pedestrian = A pedestrian street has no lanes.
+jn-insp-control-pedestrian = { $n ->
+    [0] No street here carries traffic.
+   *[other] Only one street here carries traffic.
+}
 
 jn-refusal-not-signal = Signal timing is only set at a junction run by a traffic signal.
 jn-refusal-timing-out-of-range = That time is outside what a signal can use.
