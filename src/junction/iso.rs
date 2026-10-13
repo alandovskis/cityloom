@@ -239,7 +239,9 @@ impl Draw {
     /// The quads come from the shared paint and are projected here, like the road they lie on.
     fn divider(&mut self, path: &[P]) {
         let mut line = path.to_vec();
-        if let Some(&first) = path.first() {
+        if let (Some(&first), Some(&last)) = (path.first(), path.last())
+            && first != last
+        {
             line.push(first);
         }
         for (paint, quad) in quads(&line, Style { paint: Paint::White, pattern: Pattern::Solid, double: true }) {
@@ -732,6 +734,22 @@ mod tests {
         table.stand("sidewalk", square(0.0, 1000.0), 150.0, true);
         table.table("sidewalk", &square(1000.0, 2000.0), 150.0);
         assert_eq!(walls(table), alone - 1, "nor is one where a surface level with it begins");
+    }
+
+    #[test]
+    fn a_divider_is_closed_once_whether_or_not_its_path_comes_back_to_its_start() {
+        let ring = |closed: bool| {
+            let mut pts = vec![(-3000.0, 0.0), (0.0, 3000.0), (3000.0, 0.0), (0.0, -3000.0)];
+            if closed {
+                pts.push(pts[0]);
+            }
+            let mut d = Draw::new(frame());
+            d.divider(&pts);
+            d.finish()
+        };
+        let (open, closed) = (ring(false), ring(true));
+        assert!(count(&open, "<path class=\"iso-paint white") > 0, "the line is drawn: {open}");
+        assert_eq!(open, closed, "a path that already ends where it starts is not joined to itself again");
     }
 
     #[test]
