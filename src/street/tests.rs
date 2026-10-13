@@ -1043,3 +1043,33 @@ fn a_street_in_no_area_has_no_area_row() {
     let vm = bendville_street(&[], Locale::En);
     assert!(!street_html(|| view! { <notes::Checks vm=vm.clone()/> }).contains("Area rule"));
 }
+
+#[test]
+fn the_pedestrian_street_messages_exist_in_both_languages() {
+    use crate::shared::i18n::{Args, Locale};
+    for locale in Locale::ALL {
+        let i18n = crate::i18n_for(locale);
+        for id in [
+            "make-pedestrian-button",
+            "make-pedestrian-hint",
+            "rev-made-pedestrian",
+            "street-now-pedestrian",
+            "street-traffic-again",
+            "check-access-ped-ok",
+            "check-access-ped-bad",
+            "check-detail-no-edges-pedestrian",
+        ] {
+            assert!(i18n.has_message(id, locale), "{id} in {}", locale.tag());
+        }
+    }
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let none = Args::new();
+    assert_eq!(
+        (en.tr_now("rev-made-pedestrian", &none), fr.tr_now("rev-made-pedestrian", &none)),
+        ("Made pedestrian".to_string(), "Rendue piétonne".to_string())
+    );
+    assert_eq!(fr.tr_now("make-pedestrian-button", &none), "Rendre piétonne");
+    let street = Args::new().str("street", "Rue Rachel");
+    assert_eq!(en.tr_now("street-now-pedestrian", &street), "Rue Rachel is now a pedestrian street.");
+    assert_eq!(fr.tr_now("street-traffic-again", &street), "Rue Rachel accueille de nouveau la circulation.");
+}

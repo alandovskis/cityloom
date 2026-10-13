@@ -35,6 +35,9 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | Bus station | Station d’autobus |  |
 | Street page | Bench | Banc |  |
 | Street page | Café terrace | Terrasse de café |  |
+| Street page | Pedestrian street | Rue piétonne | The class alone is the adjective `piétonne` (`class-pedestrian`), as in `Rue piétonne sans nom`. |
+| Street page | Make pedestrian / Made pedestrian | Rendre piétonne / Rendue piétonne | The menu's choices are the kinds' own names (`Trottoir`, `Bande plantée`, `Terrasse de café`). |
+| Street page | carries traffic | accueille la circulation | Said of a street: `Rue Rachel accueille de nouveau la circulation.` |
 | Street page | Street lamp | Lampadaire |  |
 | Modes and groups | Walking | Marche |  |
 | Modes and groups | Biking / Cycling | Vélo |  |
@@ -166,6 +169,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction | Traffic signal | Feux de circulation | Plural, as in Québec; lowercase in a sentence. |
 | Junction | Roundabout | Carrefour giratoire |  |
 | Junction | crossing (for people on foot) | passage pour piétons |  |
+| Junction | Only one street here carries traffic | Une seule rue ici accueille la circulation | A pedestrian arm is not a street of traffic. |
 | Junction | refuge island | îlot refuge |  |
 | Junction | bulb-out (curb extension) | avancée de trottoir | As the Atlas's bus bulb (`Avancée de trottoir pour autobus`). |
 | Junction | corner radius / Corner after X | rayon / Coin après X |  |
