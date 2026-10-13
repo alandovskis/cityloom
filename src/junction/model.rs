@@ -767,10 +767,13 @@ pub enum Refusal {
     MeasureOnPedestrian,
     TurboArmSkewed,
     TurboEntryTooNarrow,
+    TurboLanesFixed,
+    BusOnTurbo,
+    QueueJumpOnTurbo,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 19] = [
+    pub const ALL: [Refusal; 22] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -790,6 +793,9 @@ impl Refusal {
         Refusal::MeasureOnPedestrian,
         Refusal::TurboArmSkewed,
         Refusal::TurboEntryTooNarrow,
+        Refusal::TurboLanesFixed,
+        Refusal::BusOnTurbo,
+        Refusal::QueueJumpOnTurbo,
     ];
 
     /// The message that says why.
@@ -814,6 +820,9 @@ impl Refusal {
             Refusal::MeasureOnPedestrian => "jn-refusal-measure-pedestrian",
             Refusal::TurboArmSkewed => "jn-refusal-turbo-skewed",
             Refusal::TurboEntryTooNarrow => "jn-refusal-turbo-entry-too-narrow",
+            Refusal::TurboLanesFixed => "jn-refusal-turbo-lanes-fixed",
+            Refusal::BusOnTurbo => "jn-refusal-bus-on-turbo",
+            Refusal::QueueJumpOnTurbo => "jn-refusal-queue-jump-on-turbo",
         }
     }
 }
@@ -1400,6 +1409,9 @@ impl Junction {
 
     /// Lets a lane go to a street, or not. A lane keeps at least one street.
     pub fn set_lane_dest(&mut self, uid: u32, lane: usize, to: u32, on: bool) -> bool {
+        if self.current().turbo.is_some() {
+            return self.refuse(Refusal::TurboLanesFixed);
+        }
         let Some(dest) = self.arm(to).map(arm_name) else { return self.refuse(Refusal::DoesNotFit) };
         if uid == to {
             return self.refuse(Refusal::DoesNotFit);
@@ -1456,6 +1468,9 @@ impl Junction {
         }
         if approach >= APPROACHES.len() {
             return self.refuse(Refusal::DoesNotFit);
+        }
+        if matches!(approach, Q_OFFSET | Q_CURB | Q_VIRTUAL) && self.current().turbo.is_some() {
+            return self.refuse(Refusal::QueueJumpOnTurbo);
         }
         self.arm_edit(
             uid,
@@ -1606,6 +1621,9 @@ impl Junction {
     /// streets, or takes it away with `None`.
     pub fn set_bus(&mut self, pair: Option<(u32, u32)>) -> bool {
         let pair = pair.map(|(a, b)| (a.min(b), a.max(b)));
+        if pair.is_some() && self.current().turbo.is_some() {
+            return self.refuse(Refusal::BusOnTurbo);
+        }
         let label = match pair {
             Some((a, b)) => match (self.arm(a), self.arm(b)) {
                 (Some(x), Some(y)) => {
@@ -1677,6 +1695,9 @@ impl Junction {
     }
 
     pub fn step_ring(&mut self, dir: i32) -> bool {
+        if self.current().turbo.is_some() {
+            return self.step_turbo_size(dir);
+        }
         self.set_ring(self.current().ring_extra_mm + dir * RING_STEP_MM)
     }
 
@@ -1755,6 +1776,9 @@ impl Junction {
 
     /// Sets how much bigger than its least size a roundabout is.
     pub fn set_ring(&mut self, extra_mm: i32) -> bool {
+        if self.current().turbo.is_some() {
+            return self.refuse(Refusal::DoesNotFit); // a turbo has blocks, not a length
+        }
         let extra = snap(extra_mm, RING_STEP_MM);
         if !(0..=MAX_RING_MM).contains(&extra) {
             return self.refuse(Refusal::DoesNotFit);
@@ -2082,7 +2106,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 19);
+        assert_eq!(Refusal::ALL.len(), 22);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }
@@ -3383,6 +3407,10 @@ mod tests {
             ("raised on a roundabout", Box::new(|j| j.set_control(ROUNDABOUT) && j.set_raised(true))),
             ("cycle width", Box::new(|j| j.set_cycle(Some(99_000)))),
             ("ring", Box::new(|j| j.set_ring(-500))),
+            ("lane on a turbo", Box::new(move |j| j.set_control(ROUNDABOUT) && j.set_turbo(Some(0)) && j.set_lane_dest(n, 0, e, true))),
+            ("bus lane on a turbo", Box::new(move |j| j.set_control(ROUNDABOUT) && j.set_turbo(Some(0)) && j.set_bus(Some((n, e))))),
+            ("queue jump on a turbo", Box::new(move |j| j.set_control(ROUNDABOUT) && j.set_turbo(Some(0)) && j.set_approach(n, Q_OFFSET))),
+            ("turbo entry too narrow", Box::new(|j| j.set_control(ROUNDABOUT) && j.set_turbo(Some(4)))),
             ("unknown arm", Box::new(|j| j.set_offset(9_999, 100))),
             ("step crossing none", Box::new(move |j| j.set_crossing(n, false) && j.step_setback(n, 1))),
             ("step cycle none", Box::new(|j| j.step_cycle(1))),
@@ -3497,6 +3525,48 @@ mod tests {
         let mut j = Junction::new(0);
         assert!(j.set_control(ROUNDABOUT));
         j
+    }
+
+    #[test]
+    fn on_a_turbo_the_layout_sets_where_each_lane_goes_and_no_bus_lane_or_queue_jump_is_taken() {
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        let (n, e, so, w) = (arm_at(&j, 0), arm_at(&j, 90), arm_at(&j, 180), arm_at(&j, 270));
+        let on_lane = j.arm(n).unwrap().lanes[0].to[0];
+        assert!(!j.set_lane_dest(n, 0, w, true), "a lane that does not go there cannot be sent there");
+        assert_eq!(j.refusal(), Some(Refusal::TurboLanesFixed));
+        assert!(!j.set_lane_dest(n, 0, on_lane, false), "nor one that does be kept from it");
+        assert_eq!(j.refusal(), Some(Refusal::TurboLanesFixed));
+        assert!(!j.set_bus(Some((n, so))));
+        assert_eq!(j.refusal(), Some(Refusal::BusOnTurbo));
+        for q in [Q_OFFSET, Q_CURB, Q_VIRTUAL] {
+            assert!(!j.set_approach(e, q));
+            assert_eq!(j.refusal(), Some(Refusal::QueueJumpOnTurbo));
+        }
+        assert!(j.set_approach(e, GATE_YIELD), "a gate set back upstream is allowed");
+        assert!(j.set_approach(e, 0));
+        assert!(j.set_bus_lane(e, true), "a transit lane along the curb is not the bus lane across the island");
+    }
+
+    #[test]
+    fn the_ring_size_of_a_turbo_is_its_block_not_a_length() {
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        assert!(!j.set_ring(500));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+        assert!(!j.set_ring_radius(30_000));
+        assert!(j.step_ring(1), "the step controls of the ring step the block");
+        assert_eq!(j.current().turbo.as_ref().unwrap().size, 1);
+        assert!(j.step_ring(-1));
+        assert_eq!(j.current().turbo.as_ref().unwrap().size, 0);
+    }
+
+    #[test]
+    fn a_turbo_offers_no_bus_lane_across_its_island() {
+        let mut j = roundabout();
+        assert!(!j.view().bus_options.is_empty());
+        assert!(j.set_turbo(Some(0)));
+        assert!(j.view().bus_options.is_empty());
     }
 
     /// Four equal narrow streets of a city, as a roundabout: any block fits them.

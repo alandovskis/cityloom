@@ -653,7 +653,7 @@ pub struct JView {
 /// Every pair of streets a bus lane could join across a roundabout, the one
 /// nearest a straight line first.
 fn bus_options(s: &State) -> Vec<BusOption> {
-    if s.control != ROUNDABOUT {
+    if s.control != ROUNDABOUT || s.turbo.is_some() {
         return Vec::new();
     }
     let mut v: Vec<(i32, BusOption)> = Vec::new();

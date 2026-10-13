@@ -70,6 +70,11 @@ jn-refusal-bike-box-not-here = Un sas cyclable exige une piste cyclable sur une 
 jn-refusal-protected-not-here = Un coin protégé exige une piste cyclable le long de la bordure de chacune des deux rues, un vrai coin, assez de place pour l’îlot et pas de carrefour giratoire.
 jn-refusal-turbo-skewed = Une rue s’écarterait de plus de 20° de l’équerre qu’exige un giratoire turbo.
 jn-refusal-turbo-entry-too-narrow = Cette rue est trop étroite pour l’élargir aux voies d’entrée que demande cette disposition.
+jn-refusal-turbo-skewed-arm = { $arm } est celle qui s’écarterait.
+jn-refusal-turbo-entry-too-narrow-arm = { $arm } est celle qui est trop étroite.
+jn-refusal-turbo-lanes-fixed = Sur un giratoire turbo, la disposition fixe la destination de chaque voie.
+jn-refusal-bus-on-turbo = Un giratoire turbo n’a pas de voie d’autobus à travers son îlot.
+jn-refusal-queue-jump-on-turbo = Un giratoire turbo n’a pas de voie de dépassement de file à ses approches.
 
 ## Ce qu’a été chaque modification, dans l’historique
 jn-word-add = ajout

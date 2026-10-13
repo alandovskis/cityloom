@@ -16,6 +16,7 @@ use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
+use crate::shared::said::say_now;
 use crate::shared::units::Units;
 
 impl Presents for Junction {
@@ -262,8 +263,19 @@ impl JunctionVm {
     }
 
     fn say_refusal(&self) {
-        let why = self.core.read(|j| j.refusal()).unwrap_or(Refusal::DoesNotFit);
-        self.ports.announcer.say(&self.i18n.tr_now(why.key(), &Args::new()));
+        let (why, arm) = self.core.read(|j| (j.refusal().unwrap_or(Refusal::DoesNotFit), j.refusal_arm().cloned()));
+        let mut said = self.i18n.tr_now(why.key(), &Args::new());
+        // A turbo refusal that is about one street (off square, or too narrow to widen) names it in a sentence of its own.
+        let about_the_arm = match why {
+            Refusal::TurboArmSkewed => Some("jn-refusal-turbo-skewed-arm"),
+            Refusal::TurboEntryTooNarrow => Some("jn-refusal-turbo-entry-too-narrow-arm"),
+            _ => None,
+        };
+        if let (Some(key), Some(arm)) = (about_the_arm, arm) {
+            let arm = say_now(&self.i18n, self.units_now(), &arm);
+            said = format!("{said} {}", self.i18n.tr_now(key, &Args::new().str("arm", arm)));
+        }
+        self.ports.announcer.say(&said);
     }
 
     fn say_selection(&self) {
@@ -313,6 +325,34 @@ mod tests {
         let junction = store.open().junction_editor(node, 0).unwrap();
         let binding = CityBinding { store, place: Place::Junction(node) };
         (Rig { vm: JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), junction, Some(binding.clone())), said, time, storage }, binding)
+    }
+
+    #[test]
+    fn a_refusal_for_an_arm_off_square_names_the_arm_in_a_second_sentence() {
+        use crate::junction::model::ROUNDABOUT;
+        let r = rig(0);
+        assert!(r.vm.apply(|j| j.set_control(ROUNDABOUT)));
+        assert!(r.vm.apply(|j| j.set_turbo(Some(0))));
+        r.said.take();
+        let east = arm(&r.vm, 90);
+        assert!(!r.vm.apply(|j| j.set_bearing(east, 115)));
+        let said = r.said.take();
+        assert_eq!(said.len(), 1);
+        assert!(said[0].starts_with("A street would be more than 20° off the square a turbo roundabout needs. Sample Street 1 ("), "{said:?}");
+        assert!(said[0].ends_with(") is the one that would be off."), "{said:?}");
+    }
+
+    #[test]
+    fn a_refusal_for_an_entry_too_narrow_to_widen_names_the_street_in_a_second_sentence() {
+        use crate::junction::model::ROUNDABOUT;
+        let r = rig(0);
+        assert!(r.vm.apply(|j| j.set_control(ROUNDABOUT)));
+        r.said.take();
+        assert!(!r.vm.apply(|j| j.set_turbo(Some(4))), "a rotor wants three entry lanes on Sample Street 1, which has not the room");
+        let said = r.said.take();
+        assert_eq!(said.len(), 1);
+        assert!(said[0].starts_with("This street is too narrow to widen for the entry lanes this layout needs. Sample Street 1 ("), "{said:?}");
+        assert!(said[0].ends_with(") is the one that is too narrow."), "{said:?}");
     }
 
     fn arm(vm: &JunctionVm, bearing: i32) -> u32 {

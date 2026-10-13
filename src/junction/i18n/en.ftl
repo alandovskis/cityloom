@@ -70,6 +70,11 @@ jn-refusal-bike-box-not-here = A bike box needs a bike lane on a street where ca
 jn-refusal-protected-not-here = A protected corner needs a bike lane at the curb of each of the two streets, a real corner, room for the island and no roundabout.
 jn-refusal-turbo-skewed = A street would be more than 20° off the square a turbo roundabout needs.
 jn-refusal-turbo-entry-too-narrow = This street is too narrow to widen for the entry lanes this layout needs.
+jn-refusal-turbo-skewed-arm = { $arm } is the one that would be off.
+jn-refusal-turbo-entry-too-narrow-arm = { $arm } is the one that is too narrow.
+jn-refusal-turbo-lanes-fixed = On a turbo roundabout the layout sets where each lane goes.
+jn-refusal-bus-on-turbo = A turbo roundabout has no bus lane across its island.
+jn-refusal-queue-jump-on-turbo = A turbo roundabout has no queue-jump lane on its approaches.
 
 ## What each change was, in the history
 jn-word-add = add
