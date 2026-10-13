@@ -1,4 +1,6 @@
-import { expect, live, openJunction, openStreet, test } from "./fixtures";
+import { readFileSync } from "node:fs";
+
+import { expect, live, openJunction, openStreet, test, TURBO_PBF } from "./fixtures";
 
 import type { Page } from "@playwright/test";
 
@@ -424,4 +426,66 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#inspector")).toContainText("Réglage des feux");
     await expect(page.locator("#inspector")).toContainText(/Cycle\s*:\s*\d+\s*s/);
   });
+});
+
+// Gives the one crossing of `fixtures/turbo.osm.pbf` (four streets with room for two entry lanes each) the basic turbo
+// layout from its details. The Plateau's own junctions have no room for it, so the tile is served in their place.
+async function basicTurbo(page: Page) {
+  await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(TURBO_PBF) }));
+  await openJunction(page);
+  await expect(page.locator("#arm-count")).toHaveText("4 streets");
+  await page.locator('select[aria-labelledby="i-h-control"]').selectOption({ label: "Roundabout" });
+  await page.getByRole("radio", { name: "Basic", exact: true }).click();
+}
+
+test("a roundabout is given the basic turbo layout from its details and drawn with its painted divider", async ({
+  page,
+}) => {
+  await basicTurbo(page);
+  await expect(page.locator("#drawing .turbo-divider")).toHaveCount(1);
+  await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /Basic turbo roundabout, \w+ size\.$/);
+  await expect(page.getByRole("radio", { name: "Basic", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByText("Turbo size")).toBeVisible();
+  await page.locator("#undo").click();
+  await expect(page.locator("#drawing .turbo-divider")).toHaveCount(0);
+});
+
+test("a turbo roundabout shows its painted dividers and its name in 2.5D", async ({ page }) => {
+  await basicTurbo(page);
+  await page.locator("#view-iso").click();
+  const paint = page.locator("#drawing .iso-paint.white").first();
+  await expect(paint).toBeAttached();
+  await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /Basic turbo roundabout, \w+ size\.$/);
+  // In the default (light) colour scheme the paint carries its dark edge.
+  const stroke = await paint.evaluate((el) => getComputedStyle(el).stroke);
+  expect(stroke).not.toMatch(/^(none|transparent|rgba\(0, 0, 0, 0\))$/);
+});
+
+test("the turbo layouts are a radio group: one tab stop, the arrow keys choose, re-choosing says nothing", async ({
+  page,
+}) => {
+  await basicTurbo(page);
+  const radios = page.getByRole("radio");
+  const basic = page.getByRole("radio", { name: "Basic", exact: true });
+  await basic.focus();
+  await expect(basic).toBeFocused();
+  await expect(basic).toHaveAttribute("aria-checked", "true");
+
+  // Choosing the layout already chosen is a no-op: no refusal, and the one Undo still returns to the plain roundabout.
+  await page.keyboard.press("Enter");
+  await expect(basic).toHaveAttribute("aria-checked", "true");
+  await expect(live(page)).not.toContainText(/can.?t|cannot|not possible|refus/i);
+  await expect(page.locator("#drawing .turbo-divider")).toHaveCount(1);
+
+  await page.keyboard.press("ArrowDown");
+  await expect(basic).toHaveAttribute("aria-checked", "false");
+  const checked = page.locator('[role="radio"][aria-checked="true"]');
+  await expect(checked).toHaveCount(1);
+  await expect(checked).toBeFocused();
+  await expect(page.locator('[role="radio"][tabindex="0"]')).toHaveCount(1);
+
+  await page.keyboard.press("ArrowUp");
+  await expect(basic).toHaveAttribute("aria-checked", "true");
+  await expect(basic).toBeFocused();
+  await expect(page.locator('[role="radio"][tabindex="0"]')).toHaveCount(1);
 });
