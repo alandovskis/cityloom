@@ -1474,12 +1474,12 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
     out.push(check("transit", "jn-check-transit", Said::new("jn-check-transit-ok"), problems));
 
     // Signals.
-    let signal_ok = s.control != SIGNAL || s.arms.len() <= MAX_SIGNAL_ARMS;
+    let signal_ok = s.control != SIGNAL || traffic_arms(s) <= MAX_SIGNAL_ARMS;
     out.push(check(
         "signal",
         "jn-check-signal",
         Said::new("jn-check-signal-ok"),
-        (!signal_ok).then(|| Said::new("jn-check-signal-bad").with("n", Arg::Num(s.arms.len() as i64))),
+        (!signal_ok).then(|| Said::new("jn-check-signal-bad").with("n", Arg::Num(traffic_arms(s) as i64))),
     ));
     // Signal timing: time to cross, and the cycle.
     if let Some(plan) = signal::plan(s, region).filter(|p| !p.phases.is_empty()) {
@@ -1599,6 +1599,26 @@ mod tests {
         let s = j.current();
         let role = |bearing: i32| control_role(s, s.arms.iter().position(|a| a.bearing == bearing).unwrap());
         assert_eq!((role(0), role(180), role(270)), ("free", "free", "stop"), "the through street keeps the priority");
+    }
+
+    #[test]
+    fn a_five_arm_signal_with_one_walkway_passes_the_signal_check() {
+        use crate::junction::model::SIGNAL;
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::{Piece, Street};
+        let pieces: Vec<Piece> =
+            WALKWAY.iter().map(|&(id, width_mm)| Piece { kind: kind_index(id).unwrap(), width_mm, direction: None, variants: Vec::new() }).collect();
+        let walkway = Street::imported(StreetClass::Pedestrian, Side::Right, &pieces);
+        let mut state = Junction::new(3).current().clone(); // the five-way sample
+        let street = Street::sample(0, Side::Right);
+        for (i, a) in state.arms.iter_mut().enumerate() {
+            a.section = Some(if i == 0 { walkway.clone() } else { street.clone() });
+            a.edge = a.uid;
+        }
+        let mut j = Junction::from_city(Said::new("city-name").with("name", Arg::Text("Test".into())), &state, &state, 0).expect("draws");
+        assert_eq!(j.current().arms.len(), 5);
+        assert!(j.set_control(SIGNAL));
+        assert!(j.view().checks.iter().find(|c| c.id == "signal").unwrap().ok, "four streets carry traffic");
     }
 
     #[test]
