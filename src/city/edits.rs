@@ -387,6 +387,33 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_junction_record_with_signal_timing_round_trips_and_one_written_before_it_reads_as_untimed() {
+        use crate::junction::model::{SIGNAL, Timing};
+        let city = crate::city::model::City::new();
+        let junction = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let (key, mut record) = city.junction_record(junction).unwrap();
+        assert!(record.state.arms.iter().all(|a| a.timing.is_none()), "an arm never timed has none to write");
+        record.state.control = SIGNAL;
+        let timing = Timing { green_s: 40, yellow_s: 4, all_red_s: 3, transit_lead_s: 6 };
+        record.state.arms[0].timing = Some(timing);
+        let mut e = Edits::new();
+        e.junctions.insert(key.clone(), record);
+        let text = e.to_json();
+        assert!(text.contains("\"timing\""), "{text}");
+        let Document::Current(back) = parse(Some(&text)) else { panic!("not a document of this version") };
+        assert_eq!(back.junctions[&key].state.arms[0].timing, Some(timing));
+        assert!(back.junctions[&key].state.arms[1..].iter().all(|a| a.timing.is_none()));
+        // A record written before timing existed reads as untimed, and the document is still this version's.
+        let mut value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        for arm in value["junctions"][&key]["state"]["arms"].as_array_mut().unwrap() {
+            arm.as_object_mut().unwrap().remove("timing");
+        }
+        let Document::Current(old) = parse(Some(&value.to_string())) else { panic!("not a document of this version") };
+        assert!(old.junctions[&key].state.arms.iter().all(|a| a.timing.is_none()));
+        assert_eq!(old.version, VERSION);
+    }
+
     /// Pins what a record is written as. When this fails, the shape of `Street`, `State` or a record changed:
     /// decide whether an older build can still read it, and if not raise `VERSION`, before changing this list.
     #[test]

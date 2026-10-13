@@ -2028,3 +2028,16 @@ dl.prov dd:last-child {
 .tools[hidden] {
   display: none;
 }
+
+.signal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.signal-list .btn {
+  width: 100%;
+  text-align: start;
+  white-space: normal;
+}

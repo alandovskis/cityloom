@@ -12,6 +12,7 @@ pub mod page;
 pub mod plan;
 pub mod plan_svg;
 pub mod read_model;
+pub mod signal;
 #[cfg(test)]
 mod tests;
 pub mod text;

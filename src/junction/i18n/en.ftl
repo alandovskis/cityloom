@@ -394,3 +394,35 @@ jn-insp-min-arms = { $n ->
 }
 jn-insp-lanes-in = Lanes coming in
 jn-insp-one-way-out = One way out. No lanes come in.
+
+jn-refusal-not-signal = Signal timing is only set at a junction run by a traffic signal.
+jn-refusal-timing-out-of-range = That time is outside what a signal can use.
+jn-refusal-no-transit-lane = An early green for transit needs a transit lane on this street.
+jn-timing-green = Green
+jn-timing-yellow = Yellow
+jn-timing-all-red = All-red
+jn-timing-transit-lead = Transit early green
+jn-rev-timing = { $arm }: { $field } { $seconds } s
+jn-rev-control-timing = Control: { $control }; signal timing removed
+jn-rev-control-boxes-timing = Control: { $control }; bike boxes and signal timing removed
+jn-rev-control-protected-timing = Control: { $control }; protected corners and signal timing removed
+jn-rev-control-all = Control: { $control }; bike boxes, protected corners and signal timing removed
+
+jn-check-signal-walk = Time to cross
+jn-check-signal-walk-ok = Every crossing is walked long enough
+jn-check-signal-walk-bad = Not enough time to cross at { $arms }
+jn-check-signal-cycle = Signal cycle
+jn-check-signal-cycle-ok = The cycle is { $seconds } s
+jn-check-signal-cycle-bad = The cycle is { $seconds } s, over the { $max } s a signal should keep
+
+jn-insp-signal = Signal timing
+jn-sig-cycle = Cycle: { $seconds } s
+jn-sig-row = { $street }: green { $green } s, yellow { $yellow } s, all-red { $all_red } s
+jn-sig-row-lead = { $street }: early green { $lead } s, green { $green } s, yellow { $yellow } s, all-red { $all_red } s
+jn-sig-walks = Also walks: crossings on { $arms }.
+jn-sig-rides = Also rides: bikes from { $arms }.
+jn-sig-alone = Nothing else runs during this phase.
+jn-sig-no-phase = Nothing enters from this street, so it has no green of its own.
+jn-sig-shorter = Shorter by { $seconds } s
+jn-sig-longer = Longer by { $seconds } s
+jn-sig-range = { $min } to { $max } s
