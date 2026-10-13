@@ -280,6 +280,28 @@ fn a_roundabout_offers_its_turbo_layouts_and_a_chosen_one_its_size_and_main_road
     assert!(!h.contains("Use the other streets as the main road"));
 }
 
+/// The tab index of each radio of the panel, in order, with whether it is checked.
+fn radio_stops(h: &str) -> Vec<(String, bool)> {
+    h.split("<button")
+        .filter(|b| b.contains("role=\"radio\""))
+        .map(|b| {
+            let tag = b.split('>').next().unwrap();
+            let attr = |name: &str| tag.split(&format!("{name}=\"")).nth(1).unwrap().split('"').next().unwrap().to_string();
+            (attr("tabindex"), attr("aria-checked") == "true")
+        })
+        .collect()
+}
+
+#[test]
+fn the_layout_radios_are_one_tab_stop_on_the_chosen_one() {
+    let s = shared(0);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    let stops = |s: &Rc<JunctionVm>| radio_stops(&panel(s)).into_iter().map(|(t, c)| (t == "0", c)).collect::<Vec<_>>();
+    assert_eq!(stops(&s), [(true, true), (false, false), (false, false), (false, false), (false, false)], "the single lane is chosen and the stop");
+    s.edit(|j| j.set_turbo(Some(2)));
+    assert_eq!(stops(&s), [(false, false), (false, false), (false, false), (true, true), (false, false)], "the knee is chosen and the stop");
+}
+
 #[test]
 fn the_turbo_size_stepper_is_a_group_that_the_heading_labels() {
     let s = shared(0);

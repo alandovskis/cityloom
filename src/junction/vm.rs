@@ -184,10 +184,13 @@ impl JunctionVm {
 
     /// The person chooses a turbo layout (`None`: the single lane). Choosing the one already chosen changes nothing, so it
     /// is neither refused nor announced and leaves no history.
-    pub fn choose_turbo(&self, layout: Option<usize>) {
-        if self.read(|j| j.current().turbo.as_ref().map(|t| t.layout)) != layout {
+    /// Whether the layout is the one chosen afterwards (it is not when the choice was refused).
+    pub fn choose_turbo(&self, layout: Option<usize>) -> bool {
+        let chosen = || self.read(|j| j.current().turbo.as_ref().map(|t| t.layout));
+        if chosen() != layout {
             self.apply(|j| j.set_turbo(layout));
         }
+        chosen() == layout
     }
 
     /// A change that is not announced, as each step of a drag is.

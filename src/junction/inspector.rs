@@ -6,8 +6,9 @@
 use std::rc::Rc;
 
 use leptos::prelude::*;
-use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
+use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
+use crate::junction::keys;
 use crate::junction::model::{
     APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACH_STEP_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, FILTER_CODE, Item, Junction, LEFT,
     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
@@ -145,18 +146,6 @@ fn option_view(checked: Signal<bool>, disabled: Signal<bool>, glyph: AnyView, na
                 on:click=move |_| on_click()
             >
                 {glyph}<span>{move || name.get()}</span>{tick()}
-            </button>
-        </li>
-    }
-    .into_any()
-}
-
-/// One of a group of options of which one is chosen, like `option_view` but a radio.
-fn radio_view(checked: Signal<bool>, name: Signal<String>, on_click: Box<dyn Fn()>) -> AnyView {
-    view! {
-        <li role="none">
-            <button type="button" class="opt" role="radio" aria-checked=move || checked.get().to_string() tabindex="0" on:click=move |_| on_click()>
-                <span>{move || name.get()}</span>{tick()}
             </button>
         </li>
     }
@@ -324,23 +313,56 @@ fn ring_size(w: Watch) -> impl IntoView {
     )
 }
 
-/// The layouts the roundabout could take, as a radio group: the single lane (none) first.
+/// The layouts the roundabout could take, as a radio group: the single lane (none) first. The radios are keyed by their
+/// layout, so they stay while the offered set is the same and the one with the focus keeps it across a choice.
 fn turbo_layout(w: Watch) -> impl IntoView {
-    let options = move || {
-        w.view()
-            .turbo_options
-            .iter()
-            .map(|o| {
-                let (i, key) = (o.layout, o.key);
-                radio_view(
-                    Signal::derive(move || w.view().turbo.as_ref().is_some_and(|t| t.layout == i)),
-                    Signal::derive(move || w.tr(key)),
-                    Box::new(move || {
-                        w.choose_turbo(Some(i));
-                    }),
-                )
-            })
-            .collect_view()
+    type Choice = (Option<usize>, &'static str);
+    let choices = Memo::new(move |_| {
+        let mut all: Vec<Choice> = vec![(None, "jn-insp-turbo-single")];
+        all.extend(w.view().turbo_options.iter().map(|o| (Some(o.layout), o.key)));
+        all
+    });
+    let current = Memo::new(move |_| w.view().turbo.as_ref().map(|t| t.layout));
+    // Where the chosen one is among the radios; none when the layout in force is not among those offered.
+    let chosen = Memo::new(move |_| choices.with(|all| all.iter().position(|c| c.0 == current.get())));
+    let radio = move |(layout, key): Choice| {
+        let index = move || choices.with(|all| all.iter().position(|c| c.0 == layout));
+        let tab_stop = move || keys::radio_tab_stop(chosen.get(), index().unwrap_or(usize::MAX));
+        let on_key = move |ev: KeyboardEvent| {
+            let name = ev.key();
+            let press = keys::Press {
+                key: &name,
+                ctrl: ev.ctrl_key(),
+                meta: ev.meta_key(),
+                alt: ev.alt_key(),
+                repeat: ev.repeat(),
+                composing: ev.is_composing(),
+                taken: ev.default_prevented(),
+            };
+            let all = choices.get_untracked();
+            let Some(to) = index().and_then(|at| keys::radio_choice(&press, all.len(), at)) else { return };
+            ev.prevent_default();
+            if w.choose_turbo(all[to].0) {
+                focus_radio(&ev, to);
+            }
+        };
+        view! {
+            <li role="none">
+                <button
+                    type="button"
+                    class="opt"
+                    role="radio"
+                    aria-checked=move || (current.get() == layout).to_string()
+                    tabindex=move || if tab_stop() { "0" } else { "-1" }
+                    on:click=move |_| {
+                        w.choose_turbo(layout);
+                    }
+                    on:keydown=on_key
+                >
+                    <span>{move || w.tr(key)}</span>{tick()}
+                </button>
+            </li>
+        }
     };
     section(
         w,
@@ -348,17 +370,23 @@ fn turbo_layout(w: Watch) -> impl IntoView {
         "jn-insp-turbo",
         view! {
             <ul class="opts" role="radiogroup" aria-labelledby="i-h-turbo">
-                {radio_view(
-                    Signal::derive(move || w.view().turbo.is_none()),
-                    Signal::derive(move || w.tr("jn-insp-turbo-single")),
-                    Box::new(move || {
-                        w.choose_turbo(None);
-                    }),
-                )}
-                {options}
+                <For each=move || choices.get() key=|c| c.0 children=radio/>
             </ul>
         },
     )
+}
+
+/// Puts the focus on the `index`th radio of the group the key was pressed in.
+fn focus_radio(ev: &KeyboardEvent, index: usize) {
+    use leptos::wasm_bindgen::JsCast;
+    let radios = ev
+        .current_target()
+        .and_then(|t| t.dyn_into::<Element>().ok())
+        .and_then(|button| button.closest("[role=radiogroup]").ok().flatten())
+        .and_then(|group| group.query_selector_all("[role=radio]").ok());
+    if let Some(radio) = radios.and_then(|all| all.item(index as u32)).and_then(|n| n.dyn_into::<HtmlElement>().ok()) {
+        let _ = radio.focus();
+    }
 }
 
 /// The turbo's block: stepped one up or down, with its name between the steps.

@@ -70,6 +70,28 @@ pub fn switches_view(p: &Press) -> bool {
     !(p.ctrl || p.meta || p.alt) && p.key.eq_ignore_ascii_case("v") && !p.repeat && !p.composing && !p.taken
 }
 
+/// Which radio of a group of `count` a key pressed on the radio at `current` chooses, by the WAI-ARIA radio group
+/// pattern: Down and Right the next, Up and Left the previous (both wrapping), Home the first, End the last. A key with
+/// Ctrl, Cmd or Alt, a repeat, a composing input method or one another handler has taken is not ours. `None` is no choice,
+/// which the radio chosen already is not: the view chooses whatever this names and moves the focus to it.
+pub fn radio_choice(p: &Press, count: usize, current: usize) -> Option<usize> {
+    if count == 0 || p.ctrl || p.meta || p.alt || p.repeat || p.composing || p.taken {
+        return None;
+    }
+    match p.key {
+        "ArrowDown" | "ArrowRight" => Some((current + 1) % count),
+        "ArrowUp" | "ArrowLeft" => Some((current + count - 1) % count),
+        "Home" => Some(0),
+        "End" => Some(count - 1),
+        _ => None,
+    }
+}
+
+/// Whether the radio at `index` is the one a radio group stops the Tab key on: the one chosen, or the first when none is.
+pub fn radio_tab_stop(chosen: Option<usize>, index: usize) -> bool {
+    chosen.unwrap_or(0) == index
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,5 +159,43 @@ mod tests {
     fn other_keys_are_not_ours() {
         assert_eq!(on_plan("a", false, Some("arm")), None);
         assert_eq!(on_plan("Tab", false, None), None);
+    }
+
+    #[test]
+    fn the_arrows_choose_the_next_and_previous_radio_and_wrap() {
+        assert_eq!(radio_choice(&press("ArrowDown"), 5, 1), Some(2));
+        assert_eq!(radio_choice(&press("ArrowRight"), 5, 1), Some(2));
+        assert_eq!(radio_choice(&press("ArrowUp"), 5, 1), Some(0));
+        assert_eq!(radio_choice(&press("ArrowLeft"), 5, 1), Some(0));
+        assert_eq!(radio_choice(&press("ArrowDown"), 5, 4), Some(0), "past the last is the first");
+        assert_eq!(radio_choice(&press("ArrowUp"), 5, 0), Some(4), "before the first is the last");
+        assert_eq!(radio_choice(&press("Home"), 5, 3), Some(0));
+        assert_eq!(radio_choice(&press("End"), 5, 3), Some(4));
+    }
+
+    #[test]
+    fn other_keys_and_pressed_modifiers_are_not_a_choice_of_a_radio() {
+        assert_eq!(radio_choice(&press("a"), 5, 1), None);
+        assert_eq!(radio_choice(&press("Tab"), 5, 1), None);
+        assert_eq!(radio_choice(&press(" "), 5, 1), None);
+        assert_eq!(radio_choice(&press("ArrowDown"), 0, 0), None, "no radios, no choice");
+        for held in [
+            Press { ctrl: true, ..press("ArrowDown") },
+            Press { meta: true, ..press("ArrowDown") },
+            Press { alt: true, ..press("ArrowDown") },
+            Press { repeat: true, ..press("ArrowDown") },
+            Press { composing: true, ..press("ArrowDown") },
+            Press { taken: true, ..press("ArrowDown") },
+        ] {
+            assert_eq!(radio_choice(&held, 5, 1), None, "{held:?}");
+        }
+    }
+
+    #[test]
+    fn a_radio_group_has_one_tab_stop_the_chosen_radio_or_else_the_first() {
+        let stops = |chosen| (0..4).filter(|i| radio_tab_stop(chosen, *i)).collect::<Vec<_>>();
+        assert_eq!(stops(Some(2)), [2]);
+        assert_eq!(stops(Some(0)), [0]);
+        assert_eq!(stops(None), [0]);
     }
 }
