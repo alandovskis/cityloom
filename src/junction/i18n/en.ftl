@@ -407,3 +407,10 @@ jn-rev-control-timing = Control: { $control }; signal timing removed
 jn-rev-control-boxes-timing = Control: { $control }; bike boxes and signal timing removed
 jn-rev-control-protected-timing = Control: { $control }; protected corners and signal timing removed
 jn-rev-control-all = Control: { $control }; bike boxes, protected corners and signal timing removed
+
+jn-check-signal-walk = Time to cross
+jn-check-signal-walk-ok = Every crossing is walked long enough
+jn-check-signal-walk-bad = Not enough time to cross at { $arms }
+jn-check-signal-cycle = Signal cycle
+jn-check-signal-cycle-ok = The cycle is { $seconds } s
+jn-check-signal-cycle-bad = The cycle is { $seconds } s, over the { $max } s a signal should keep

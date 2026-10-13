@@ -15,6 +15,7 @@ use crate::junction::model::{
     blocked, classes_of, protected_blocker, protected_island_mm, turn_class,
 };
 
+use crate::junction::signal;
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
@@ -72,6 +73,9 @@ const RAISED_TURN_KMH: f64 = 23.0;
 const RAMP_MM: f64 = 2_400.0;
 const MIN_SIDEWALK_AT_CORNER_MM: f64 = 1_800.0;
 const MAX_SIGNAL_ARMS: usize = 4;
+/// How fast a person walks across a street, and the longest cycle a signal should keep. Synthetic, like the rest.
+const WALK_SPEED_MPS: f64 = 1.0;
+const MAX_CYCLE_S: u32 = 120;
 
 pub fn speed_kmh(radius_mm: i32) -> f64 {
     (127.0 * (radius_mm as f64 / 1000.0) * 0.3).sqrt()
@@ -1005,7 +1009,7 @@ impl Junction {
         }
         let conflicts = conflicts(s, &movements, &lay, side);
 
-        let checks = checks(s, &arms, &corners, &movements, &lay);
+        let checks = checks(s, self.region, &arms, &corners, &movements, &lay);
         let selected = match self.selected {
             Target::None => Selection { kind: None, uid: 0, lane: 0 },
             Target::Arm(u) => Selection { kind: Some("arm"), uid: u, lane: 0 },
@@ -1315,7 +1319,7 @@ fn sample_path(path: &[Value]) -> Vec<P> {
     out
 }
 
-fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView], lay: &Layout) -> Vec<Check> {
+fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView], lay: &Layout) -> Vec<Check> {
     let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
     let arms_of = |uids: Vec<u32>| list(uids.into_iter().map(name).collect());
     let check = |id: &'static str, label: &'static str, ok: Said, bad: Option<Said>| Check {
@@ -1414,6 +1418,30 @@ fn checks(s: &State, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView
         Said::new("jn-check-signal-ok"),
         (!signal_ok).then(|| Said::new("jn-check-signal-bad").with("n", Arg::Num(s.arms.len() as i64))),
     ));
+    // Signal timing: time to cross, and the cycle.
+    if let Some(plan) = signal::plan(s, region).filter(|p| !p.phases.is_empty()) {
+        let short: Vec<u32> = arms
+            .iter()
+            .filter_map(|a| {
+                let needed = (a.crossing.as_ref()?.distance_mm as f64 / 1000.0 / WALK_SPEED_MPS).ceil() as u32;
+                (signal::walk_window_s(&plan, a.uid) < needed).then_some(a.uid)
+            })
+            .collect();
+        out.push(check(
+            "signal-walk",
+            "jn-check-signal-walk",
+            Said::new("jn-check-signal-walk-ok"),
+            arms_of(short).map(|l| Said::new("jn-check-signal-walk-bad").with("arms", Arg::Said(Box::new(l)))),
+        ));
+        let seconds = i64::from(plan.cycle_s);
+        out.push(check(
+            "signal-cycle",
+            "jn-check-signal-cycle",
+            Said::new("jn-check-signal-cycle-ok").with("seconds", Arg::Num(seconds)),
+            (plan.cycle_s > MAX_CYCLE_S)
+                .then(|| Said::new("jn-check-signal-cycle-bad").with("seconds", Arg::Num(seconds)).with("max", Arg::Num(i64::from(MAX_CYCLE_S)))),
+        ));
+    }
     let _ = lay;
     out
 }
@@ -2527,5 +2555,119 @@ mod tests {
     #[test]
     fn an_unknown_selection_name_selects_nothing() {
         assert_eq!(Target::named("wedge", 3, 0), Target::None);
+    }
+
+    // ---- signal checks ----
+
+    fn check<'a>(j: &'a JView, id: &str) -> Option<&'a Check> {
+        j.checks.iter().find(|c| c.id == id)
+    }
+
+    fn plain(said: &str) -> String {
+        said.replace(['\u{a0}', '\u{202f}'], " ")
+    }
+
+    /// The four-way on a signal where every street's lanes go straight on only, so each crossing is free in two phases.
+    fn straight_on() -> Junction {
+        let mut j = Junction::new(0);
+        let arms: Vec<(i32, u32, usize)> = j.current().arms.iter().map(|a| (a.bearing, a.uid, a.lanes.len())).collect();
+        let uid = |b: i32| arms.iter().find(|(x, ..)| *x == b).unwrap().1;
+        for &(bearing, from, lanes) in &arms {
+            let straight = uid((bearing + 180) % 360);
+            for lane in 0..lanes {
+                for &(_, other, _) in &arms {
+                    if other != from && other != straight {
+                        let _ = j.set_lane_dest(from, lane, other, false);
+                    }
+                }
+                let _ = j.set_lane_dest(from, lane, straight, true);
+            }
+        }
+        // The invariant the tests lean on: every lane of every street goes straight on and nowhere else.
+        for &(bearing, from, _) in &arms {
+            let straight = uid((bearing + 180) % 360);
+            assert!(j.arm(from).unwrap().lanes.iter().all(|l| l.to == vec![straight]), "street at {bearing} goes straight only");
+        }
+        j
+    }
+
+    /// The most seconds any crossing needs at the walking speed.
+    fn needed_s(v: &JView) -> u32 {
+        v.arms.iter().filter_map(|a| a.crossing.as_ref()).map(|c| (c.distance_mm as f64 / 1000.0 / WALK_SPEED_MPS).ceil() as u32).max().unwrap()
+    }
+
+    #[test]
+    fn there_are_no_signal_timing_checks_off_a_signal() {
+        let v = Junction::new(1).view();
+        assert!(check(&v, "signal-walk").is_none() && check(&v, "signal-cycle").is_none());
+    }
+
+    #[test]
+    fn the_cycle_is_checked_against_its_limit_and_named() {
+        use crate::junction::model::TimingField::Green;
+        let mut j = Junction::new(0);
+        let v = j.view();
+        let c = check(&v, "signal-cycle").unwrap();
+        assert!(c.ok, "four streets at the default 30 s make 120 s, which is the limit and not over it");
+        assert!(plain(&en(&c.detail)).contains("The cycle is 120 s"), "{}", en(&c.detail));
+        for a in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_timing(a, Green, 40));
+        }
+        let v = j.view();
+        let c = check(&v, "signal-cycle").unwrap();
+        assert!(!c.ok);
+        assert!(plain(&en(&c.detail)).contains("The cycle is 180 s, over the 120 s"), "{}", en(&c.detail));
+        assert!(plain(&fr(&c.detail)).contains("Le cycle dure 180 s"), "{}", fr(&c.detail));
+    }
+
+    #[test]
+    fn a_stock_signal_gives_time_to_cross_because_turning_drivers_give_way() {
+        let v = Junction::new(0).view(); // the sample's lanes serve every turn
+        let c = check(&v, "signal-walk").unwrap();
+        assert!(c.ok, "{}", en(&c.detail));
+    }
+
+    #[test]
+    fn a_crossing_too_long_for_its_window_fails_and_names_the_streets() {
+        use crate::junction::model::{TimingField::Green, junction_of};
+        // Six lanes of 3.5 m, a street taking about 21 s to cross: a whole 30 s phase covers it, a 10 s one does not.
+        let lanes = [
+            ("sidewalk", 2000),
+            ("travel", 3500),
+            ("travel", 3500),
+            ("travel", 3500),
+            ("travel", 3500),
+            ("travel", 3500),
+            ("travel", 3500),
+            ("sidewalk", 2000),
+        ];
+        let mut j = junction_of(&lanes);
+        let v = j.view();
+        assert!(needed_s(&v) > 10 && needed_s(&v) <= 30, "the street takes {} s to cross", needed_s(&v));
+        assert!(check(&v, "signal-walk").unwrap().ok, "{}", en(&check(&v, "signal-walk").unwrap().detail));
+        for a in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_timing(a, Green, 5));
+        }
+        let v = j.view();
+        let c = check(&v, "signal-walk").unwrap();
+        assert!(!c.ok);
+        assert!(plain(&en(&c.detail)).starts_with("Not enough time to cross at"), "{}", en(&c.detail));
+    }
+
+    #[test]
+    fn a_crossing_needs_a_window_as_long_as_the_street_takes_to_cross() {
+        use crate::junction::model::TimingField::Green;
+        let mut j = straight_on();
+        let v = j.view();
+        // At the default 30 s a phase, each crossing is free for one whole phase (its two free phases are not next to
+        // each other).
+        assert!(needed_s(&v) <= 30, "a street of the samples is crossed in {} s", needed_s(&v));
+        assert!(check(&v, "signal-walk").unwrap().ok, "{}", en(&check(&v, "signal-walk").unwrap().detail));
+        for a in j.current().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
+            assert!(j.set_timing(a, Green, 5));
+        }
+        let v = j.view();
+        let window = 5 + 3 + 2;
+        assert_eq!(check(&v, "signal-walk").unwrap().ok, needed_s(&v) <= window, "a {window} s window against {} s", needed_s(&v));
     }
 }

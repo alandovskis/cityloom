@@ -2,7 +2,7 @@
 //! its own, taken in turn in the order of the streets' bearings. A pedestrian crossing or a bike movement runs in every
 //! phase where it does not conflict with that phase's vehicle movements. No DOM, no signals, no I/O.
 
-use crate::junction::model::{Arm, SIGNAL, State, Timing};
+use crate::junction::model::{Arm, SIGNAL, State, THROUGH, Timing, turn_class};
 
 /// One street's turn of the signal.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,10 +41,11 @@ fn crosses(a: usize, x: usize, p: usize, y: usize) -> bool {
     inside(p) != inside(y)
 }
 
-/// Whether the crossing of arm `b` is free while arm `i`'s traffic goes: nothing of it enters from `b` or leaves
-/// into `b`. This is the one rule about pedestrians; change it here.
-fn crossing_clear(moves: &[Vec<usize>], i: usize, b: usize) -> bool {
-    i != b && !moves[i].contains(&b)
+/// Whether the crossing of arm `b` is free while arm `i`'s traffic goes: nothing enters from `b`, and nothing goes
+/// straight on into `b`. A turn into `b` gives way to people crossing, as it does at any signal, so it does not block
+/// the crossing. This is the one rule about pedestrians; change it here.
+fn crossing_clear(arms: &[&Arm], moves: &[Vec<usize>], i: usize, b: usize) -> bool {
+    i != b && !(moves[i].contains(&b) && turn_class(arms[i].bearing, arms[b].bearing) == THROUGH)
 }
 
 pub fn plan(s: &State, region: usize) -> Option<Plan> {
@@ -59,7 +60,7 @@ pub fn plan(s: &State, region: usize) -> Option<Plan> {
         .filter(|&i| !arms[i].lanes.is_empty())
         .map(|i| {
             let timing = arms[i].timing.unwrap_or_default();
-            let walks = (0..arms.len()).filter(|&b| arms[b].crossing.is_some() && crossing_clear(&moves, i, b)).map(|b| arms[b].uid).collect();
+            let walks = (0..arms.len()).filter(|&b| arms[b].crossing.is_some() && crossing_clear(&arms, &moves, i, b)).map(|b| arms[b].uid).collect();
             let rides = (0..arms.len())
                 .filter(|&b| bikes[b] && (b == i || moves[b].iter().all(|&x| moves[i].iter().all(|&y| !crosses(b, x, i, y)))))
                 .map(|b| arms[b].uid)
@@ -158,15 +159,21 @@ mod tests {
     }
 
     #[test]
-    fn a_crossing_is_walked_while_the_traffic_beside_it_goes_straight_and_not_when_it_turns_into_it() {
-        let mut s = through_only();
+    fn a_crossing_is_walked_while_the_traffic_beside_it_goes_straight_on_but_not_while_traffic_goes_straight_into_it() {
+        let s = through_only();
         let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
         let p = plan(&s, 0).unwrap();
-        assert_eq!(phase(&p, n).walks, vec![e, w], "north goes to south: east's and west's crossings are free");
-        send(&mut s, n, &[so, e]);
+        assert_eq!(phase(&p, n).walks, vec![e, w], "north goes straight into south: south's crossing is not free, east's and west's are");
+        assert!(!phase(&p, n).walks.contains(&n) && !phase(&p, n).walks.contains(&so));
+    }
+
+    #[test]
+    fn a_turn_into_a_street_gives_way_to_its_crossing() {
+        let mut s = through_only();
+        let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
+        send(&mut s, n, &[so, e, w]); // straight on, and both turns
         let p = plan(&s, 0).unwrap();
-        assert_eq!(phase(&p, n).walks, vec![w], "north now turns into east");
-        assert!(!phase(&p, n).walks.contains(&n), "a street's own crossing is never free in its own phase");
+        assert_eq!(phase(&p, n).walks, vec![e, w], "turning drivers give way: east's and west's crossings are still walked");
     }
 
     #[test]
@@ -191,7 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn a_t_junction_whose_every_street_turns_into_the_others_walks_nowhere_and_has_no_window() {
+    fn at_a_t_junction_a_crossing_is_walked_in_the_phases_that_send_nothing_straight_into_it() {
         let mut j = Junction::new(1);
         assert!(j.set_control(crate::junction::model::SIGNAL));
         let mut s = j.current().clone();
@@ -200,8 +207,14 @@ mod tests {
         send(&mut s, so, &[e, w]);
         send(&mut s, w, &[e, so]);
         let p = plan(&s, 0).unwrap();
-        assert!(p.phases.iter().all(|p| p.walks.is_empty()));
-        assert!([e, so, w].iter().all(|&u| walk_window_s(&p, u) == 0));
+        // East's traffic goes straight into west: west's crossing is not free then; south's is (a turn gives way).
+        assert_eq!(phase(&p, e).walks, vec![so]);
+        assert_eq!(phase(&p, so).walks, vec![e, w], "south's traffic only turns");
+        assert_eq!(phase(&p, w).walks, vec![so]);
+        // The phases run east, south, west: south's crossing is walked in east's and west's, which are next to each
+        // other going round; east's only in south's.
+        assert_eq!(walk_window_s(&p, so), 60);
+        assert_eq!(walk_window_s(&p, e), 30);
     }
 
     #[test]

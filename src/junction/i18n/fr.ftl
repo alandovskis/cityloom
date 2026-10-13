@@ -407,3 +407,10 @@ jn-rev-control-timing = Signalisation : { $control }; réglage des feux retiré
 jn-rev-control-boxes-timing = Signalisation : { $control }; sas cyclables et réglage des feux retirés
 jn-rev-control-protected-timing = Signalisation : { $control }; coins protégés et réglage des feux retirés
 jn-rev-control-all = Signalisation : { $control }; sas cyclables, coins protégés et réglage des feux retirés
+
+jn-check-signal-walk = Temps de traversée
+jn-check-signal-walk-ok = Chaque traverse est ouverte assez longtemps
+jn-check-signal-walk-bad = Pas assez de temps pour traverser à { $arms }
+jn-check-signal-cycle = Cycle des feux
+jn-check-signal-cycle-ok = Le cycle dure { $seconds } s
+jn-check-signal-cycle-bad = Le cycle dure { $seconds } s, au-delà des { $max } s qu’un feu devrait garder
