@@ -9,15 +9,15 @@ use crate::junction::geometry::{
     P, add, arc, at, cross, dir, dist, fillet_setback, gap, l, m, meet, on_circle, poly, polylines_cross, quad, ring_arc, sample_quad, scale, strip, sub, z,
 };
 use crate::junction::model::{
-    ALL_WAY_STOP, APPROACHES, ARM_LENGTH_MM, Arm, BUS_LANE_MM, BikeBoxBlocker, CONTROLS, FILTER_CODE, GATE_SIGNAL, GATE_YIELD, ISLAND_MIN_ROAD_MM, ISLAND_MM,
-    Junction, LEFT, MAX_RING_MM, MIN_ARMS, PRIORITY, Profile, ProtectedBlocker, Q_CURB, Q_OFFSET, Q_VIRTUAL, RIGHT, RING_STEP_MM, ROUNDABOUT, RULE_AROUND,
-    RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH, TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker,
-    blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
+    ALL_WAY_STOP, APPROACH_DEFAULT_MM, APPROACHES, ARM_LENGTH_MM, Arm, BUS_LANE_MM, BikeBoxBlocker, CONTROLS, FILTER_CODE, GATE_SIGNAL, GATE_YIELD,
+    ISLAND_MIN_ROAD_MM, ISLAND_MM, Junction, LEFT, MAX_RING_MM, MIN_ARMS, PRIORITY, Profile, ProtectedBlocker, Q_CURB, Q_OFFSET, Q_VIRTUAL, RIGHT,
+    RING_STEP_MM, ROUNDABOUT, RULE_AROUND, RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH,
+    TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
 };
 
 use crate::junction::signal;
-use crate::junction::turbo::{self, Turbo};
-use crate::junction::turbo_ring::{mouth_on, stadium};
+use crate::junction::turbo::{self, BLOCKS, LAYOUTS, Turbo, layouts_for, main_candidates};
+use crate::junction::turbo_ring::{RingLane, RingShape, follow, mouth_on, ring_shape, stadium};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
@@ -349,6 +349,8 @@ pub struct LaneView {
     /// The lane along the whole arm, for pointing at it.
     pub poly: Vec<Value>,
     pub width_mm: i32,
+    /// The layout of a turbo sets where this lane goes: it cannot be edited.
+    pub fixed: bool,
 }
 
 #[derive(Serialize)]
@@ -460,6 +462,8 @@ pub struct ArmView {
     pub bike_box_why: Option<&'static str>,
     pub lanes: Vec<LaneView>,
     pub leave_arrows: Vec<LaneView>,
+    /// The widened carriageway of a turbo entry, where the layout wants more than the street has.
+    pub turbo_entry: Option<Vec<Value>>,
     /// "free", "stop", "yield" or "signal" for the entering traffic.
     pub role: &'static str,
     /// The arm from its mouth to its end, property line to property line.
@@ -545,6 +549,41 @@ pub struct RingView {
     pub island_mm: i32,
     pub cycle_mm: Option<i32>,
     pub circulation: &'static str,
+    /// A turbo's ring lanes, innermost first; empty for a plain roundabout.
+    pub lanes: Vec<RingLane>,
+    /// The centre line of each painted divider between two ring lanes.
+    pub dividers: Vec<Vec<P>>,
+    /// The edges, as closed paths of points: the island, the carriageway, and the cycle track's outer edge (the carriageway's again when there is none).
+    pub island_edge: Vec<P>,
+    pub road_edge: Vec<P>,
+    pub outer_edge: Vec<P>,
+}
+
+/// A turbo layout the roundabout could take.
+#[derive(Serialize)]
+pub struct TurboOption {
+    pub layout: usize,
+    pub id: &'static str,
+    pub key: &'static str,
+    pub on: bool,
+}
+
+/// The turbo a roundabout has.
+#[derive(Serialize)]
+pub struct TurboView {
+    pub layout: usize,
+    pub size: usize,
+    pub layout_id: &'static str,
+    pub layout_key: &'static str,
+    /// The message that names the layout and size for a screen reader: "Basic turbo roundabout, { $size } size".
+    pub label_key: &'static str,
+    pub size_key: &'static str,
+    pub main: Vec<u32>,
+    pub can_switch_main: bool,
+    /// Pressing the switch only moves the two entry lanes to the other street of the same pair (a knee): the next candidate is this one reversed.
+    pub main_switch_moves_lanes: bool,
+    pub can_smaller: bool,
+    pub can_larger: bool,
 }
 
 #[derive(Serialize)]
@@ -626,6 +665,10 @@ pub struct JView {
     pub traffic_arms: usize,
     pub ring: Option<RingView>,
     pub ring_extra_mm: i32,
+    /// The turbo the roundabout has, if any.
+    pub turbo: Option<TurboView>,
+    /// The turbo layouts that suit the roundabout's streets (a layout whose arm count fits, and some main road makes a turbo that stands); empty off a roundabout.
+    pub turbo_options: Vec<TurboOption>,
     /// The junction is a raised table.
     pub raised: bool,
     /// The bus lane across the middle of a roundabout, if there is one.
@@ -713,8 +756,9 @@ fn priority_pair(arms: &[Arm]) -> [usize; 2] {
 /// crossing and the stop line, so even the bigger arrows (`plan_svg`) clear them.
 pub const ARROW_FROM_EDGE_MM: f64 = 5_500.0;
 
-fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, head: i32, uses: u8) -> LaneView {
-    let w = a.prof.pieces.iter().find(|p| p.x_mm + p.width_mm / 2 == x_mm && KINDS[p.kind].id == "travel").map_or(3_000, |p| p.width_mm);
+fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, head: i32, uses: u8, width: Option<i32>) -> LaneView {
+    let w =
+        width.unwrap_or_else(|| a.prof.pieces.iter().find(|p| p.x_mm + p.width_mm / 2 == x_mm && KINDS[p.kind].id == "travel").map_or(3_000, |p| p.width_mm));
     let c = a.lat(off, x_mm);
     LaneView {
         uses,
@@ -724,6 +768,7 @@ fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, head: i32, uses: u8) ->
         heading: head,
         poly: poly(&strip(a.bearing, c - w as f64 / 2.0, c + w as f64 / 2.0, a.mouth, ARM_LENGTH_MM as f64)),
         width_mm: w,
+        fixed: false,
     }
 }
 
@@ -933,7 +978,8 @@ impl Junction {
                 .zip(&a.lanes)
                 .map(|(&x, lane)| {
                     let uses = lane.to.iter().filter_map(|t| s.arms.iter().find(|b| b.uid == *t)).fold(0, |m, b| m | turn_class(a.bearing, b.bearing));
-                    let mut v = lane_view(l, off, x, arrow_t + box_mm, heading(l.bearing), uses);
+                    let mut v = lane_view(l, off, x, arrow_t + box_mm, heading(l.bearing), uses, l.lane_mm);
+                    v.fixed = s.turbo.is_some();
                     let mut dests: Vec<(i32, DestView)> = s
                         .arms
                         .iter()
@@ -959,8 +1005,24 @@ impl Junction {
                     v
                 })
                 .collect();
-            let leave_arrows = l.prof.leave_x.iter().map(|&x| lane_view(l, off, x, arrow_t, l.bearing.round() as i32, 0)).collect();
+            let leave_arrows = l.prof.leave_x.iter().map(|&x| lane_view(l, off, x, arrow_t, l.bearing.round() as i32, 0, None)).collect();
             let road_mm = l.prof.road_mm();
+            let turbo_entry = l.entry.filter(|e| e.new.0 < e.old.0 - 1.0 || e.new.1 > e.old.1 + 1.0).map(|e| {
+                // The widened lanes run straight out over the approach length, then flare back to the street's width, 1 m sideways in 10 along.
+                let t1 = (l.mouth + APPROACH_DEFAULT_MM as f64).min(len);
+                let flare = (e.old.0 - e.new.0).abs().max((e.new.1 - e.old.1).abs()) * turbo::FLARE as f64;
+                let t2 = (t1 + flare).min(len);
+                let f = (t2 - t1) / flare;
+                let spread = |new: f64, old: f64| new + (old - new) * f;
+                poly(&[
+                    at(l.bearing, e.new.0, l.strip0),
+                    at(l.bearing, e.new.1, l.strip0),
+                    at(l.bearing, e.new.1, t1),
+                    at(l.bearing, spread(e.new.1, e.old.1), t2),
+                    at(l.bearing, spread(e.new.0, e.old.0), t2),
+                    at(l.bearing, e.new.0, t1),
+                ])
+            });
             arms.push(ArmView {
                 uid: a.uid,
                 edge: a.edge,
@@ -981,6 +1043,7 @@ impl Junction {
                 bike_box_why: blocker.map(BikeBoxBlocker::key),
                 lanes,
                 leave_arrows,
+                turbo_entry,
                 role: control_role(s, i),
                 outline: poly(&strip(l.bearing, l.pl, l.pr, l.mouth, len)),
                 end: at(l.bearing, off, len),
@@ -1002,17 +1065,27 @@ impl Junction {
         let mut corners = Vec::new();
         let mut core = Vec::new();
         let ring = lay.ring.as_ref();
+        let turbo_shape: Option<RingShape> =
+            ring.and_then(|r| r.turbo.as_ref()).and_then(|t| BLOCKS.get(t.block).map(|b| ring_shape(b, t.lanes, s.cycle.unwrap_or(0), t.axis_deg)));
         for c in &lay.corners {
             let (la, lb) = (&lay.arms[c.a], &lay.arms[c.b]);
             let (fa, fb) = (clear_far(&s.arms[c.a], la), clear_far(&s.arms[c.b], lb));
             // The curb's two ends, where it leaves each arm's straight edge.
             let (ca_in, cb_in, curb_mid): (P, P, Vec<Value>) = match (&c.fillet, ring) {
                 (Some(f), _) => (f.a, f.b, vec![arc(f.r, false, cross(sub(f.a, f.o), sub(f.b, f.o)) > 0.0, f.b)]),
-                (None, Some(r)) => {
-                    let pa = at(la.bearing, la.cr, on_circle(la.cr, r.radius).unwrap_or(0.0));
-                    let qb = at(lb.bearing, lb.cl, on_circle(lb.cl, r.radius).unwrap_or(0.0));
-                    (pa, qb, vec![ring_arc(r.radius, pa, qb)])
-                }
+                (None, Some(r)) => match &r.turbo {
+                    Some(t) => {
+                        // The curb walks the outline of the ring from the first street's right curb to the next street's left.
+                        let hit = |a: &ArmLayout, lat: f64| at(a.bearing, lat, mouth_on(&t.outline, a.bearing, lat).unwrap_or(0.0));
+                        let (pa, qb) = (hit(la, la.cr), hit(lb, lb.cl));
+                        (pa, qb, follow(&t.outline, pa, qb, true).into_iter().map(l_).collect())
+                    }
+                    None => {
+                        let pa = at(la.bearing, la.cr, on_circle(la.cr, r.radius).unwrap_or(0.0));
+                        let qb = at(lb.bearing, lb.cl, on_circle(lb.cl, r.radius).unwrap_or(0.0));
+                        (pa, qb, vec![ring_arc(r.radius, pa, qb)])
+                    }
+                },
                 (None, None) => (at(la.bearing, la.cr, la.mouth), at(lb.bearing, lb.cl, lb.mouth), Vec::new()),
             };
             let curb_a_far = at(la.bearing, la.cr, fa);
@@ -1161,15 +1234,59 @@ impl Junction {
             control: CONTROLS[s.control].id,
             control_index: s.control,
             traffic_arms: traffic_arms(s),
-            ring: ring.map(|r| RingView {
-                radius_mm: r.radius as i32,
-                floor_mm: r.floor,
-                road_mm: r.radius as i32 - s.cycle.unwrap_or(0),
-                island_mm: (r.radius - s.cycle.unwrap_or(0) as f64 - RING_WIDTH_MM).max(MIN_ISLAND_MM) as i32,
-                cycle_mm: s.cycle,
-                circulation: if side == Side::Right { "anticlockwise" } else { "clockwise" },
+            ring: ring.map(|r| {
+                let cycle = s.cycle.unwrap_or(0);
+                let (lanes, dividers, island_edge, road_edge, outer_edge) = match &turbo_shape {
+                    Some(x) => (x.lanes.clone(), x.dividers.clone(), x.island.clone(), x.road.clone(), x.outer.clone()),
+                    None => Default::default(),
+                };
+                RingView {
+                    radius_mm: r.radius as i32,
+                    floor_mm: r.floor,
+                    road_mm: r.radius as i32 - cycle,
+                    island_mm: match &r.turbo {
+                        Some(t) => BLOCKS[t.block].r1_mm,
+                        None => (r.radius - cycle as f64 - RING_WIDTH_MM).max(MIN_ISLAND_MM) as i32,
+                    },
+                    cycle_mm: s.cycle,
+                    circulation: if side == Side::Right { "anticlockwise" } else { "clockwise" },
+                    lanes,
+                    dividers,
+                    island_edge,
+                    road_edge,
+                    outer_edge,
+                }
             }),
             ring_extra_mm: s.ring_extra_mm,
+            turbo: s.turbo.as_ref().and_then(|t| {
+                let (spec, block) = (t.spec()?, t.block()?);
+                Some(TurboView {
+                    layout: t.layout,
+                    size: t.size,
+                    layout_id: spec.id,
+                    layout_key: spec.key,
+                    label_key: spec.label_key,
+                    size_key: block.key,
+                    main: t.main.clone(),
+                    can_switch_main: main_candidates(&s.arms, region, t.layout).len() > 1,
+                    main_switch_moves_lanes: {
+                        let c = main_candidates(&s.arms, region, t.layout);
+                        let next = c.iter().position(|m| *m == t.main).map(|i| &c[(i + 1) % c.len()]);
+                        next.is_some_and(|n| n.len() == 2 && n[0] == t.main[1] && n[1] == t.main[0])
+                    },
+                    can_smaller: t.size > 0,
+                    can_larger: t.size + 1 < BLOCKS.len(),
+                })
+            }),
+            turbo_options: if s.control == ROUNDABOUT {
+                layouts_for(s.arms.len())
+                    .into_iter()
+                    .filter(|&i| main_candidates(&s.arms, region, i).into_iter().any(|main| Turbo { layout: i, size: 0, main }.standable(&s.arms, region)))
+                    .map(|i| TurboOption { layout: i, id: LAYOUTS[i].id, key: LAYOUTS[i].key, on: s.turbo.as_ref().is_some_and(|t| t.layout == i) })
+                    .collect()
+            } else {
+                Vec::new()
+            },
             raised,
             bus: s.bus.and_then(|(a, b)| {
                 let ends = |u: u32| s.arms.iter().position(|x| x.uid == u).map(|i| at(lay.arms[i].bearing, s.arms[i].offset_mm as f64, lay.arms[i].mouth));
@@ -3164,5 +3281,168 @@ mod tests {
         assert_eq!(r.new, (-7_000.0, 0.0), "right-hand: the entry is left of the road's middle");
         assert_eq!(l.new, (0.0, 7_000.0), "left-hand: mirrored, right of it");
         assert_eq!(left.arms[1].lane_mm, Some(3_500));
+    }
+
+    fn turbo_junction(layout: usize) -> Junction {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(j.set_turbo(Some(layout)));
+        j
+    }
+
+    #[test]
+    fn a_turbo_ring_is_viewed_as_lanes_and_dividers_on_its_block() {
+        let v = turbo_junction(0).view();
+        let ring = v.ring.as_ref().unwrap();
+        assert_eq!((ring.radius_mm, ring.road_mm, ring.island_mm, ring.floor_mm), (21_150, 21_150, 10_500, 21_150));
+        assert_eq!(ring.lanes.len(), 2);
+        assert_eq!(ring.dividers.len(), 1);
+        assert!(!ring.island_edge.is_empty() && !ring.road_edge.is_empty() && !ring.outer_edge.is_empty());
+        let t = v.turbo.as_ref().unwrap();
+        assert_eq!((t.layout, t.size, t.layout_id, t.size_key), (0, 0, "basic", "jn-turbo-size-mini"));
+        assert_eq!(t.main, [1, 3]);
+        assert!(t.can_switch_main && !t.can_smaller && t.can_larger);
+    }
+
+    #[test]
+    fn a_plain_roundabout_has_no_lanes_dividers_or_turbo_and_is_offered_the_layouts_that_suit_it() {
+        let mut j = Junction::new(0);
+        j.set_control(ROUNDABOUT);
+        let v = j.view();
+        let ring = v.ring.as_ref().unwrap();
+        assert!(ring.lanes.is_empty() && ring.dividers.is_empty() && ring.island_edge.is_empty());
+        assert!(v.turbo.is_none());
+        assert_eq!(
+            v.turbo_options.iter().map(|o| o.id).collect::<Vec<_>>(),
+            ["basic", "egg", "knee", "spiral"],
+            "the rotor is not offered: its three lanes on Sample Street 1 would pass the property line"
+        );
+        assert!(v.turbo_options.iter().all(|o| !o.on));
+        assert!(Junction::new(0).view().turbo_options.is_empty(), "a signal offers no turbo");
+    }
+
+    #[test]
+    fn a_layout_is_offered_only_when_a_main_road_makes_a_turbo_that_stands() {
+        let ids = |j: &Junction| j.view().turbo_options.iter().map(|o| o.id).collect::<Vec<_>>();
+        let mut j = junction_of(&[("sidewalk", 3_000), ("travel", 3_500), ("travel", 3_500), ("sidewalk", 3_000)]);
+        j.set_control(ROUNDABOUT);
+        assert_eq!(ids(&j), ["basic", "egg", "knee"], "two lanes of 3.5 m: a spiral's or rotor's three would pass the property line");
+        let east = j.current().arms[1].uid;
+        assert!(j.set_bearing(east, 105));
+        assert_eq!(ids(&j), ["basic", "egg", "knee"], "15 degrees off square is allowed (and reported by a check)");
+        assert!(j.set_bearing(east, 115));
+        assert!(ids(&j).is_empty(), "25 degrees off the north-south road, and east and west (155 degrees apart) are not opposite: no layout fits");
+    }
+
+    #[test]
+    fn the_main_road_switch_says_when_it_only_moves_the_two_entry_lanes() {
+        let mut j = turbo_junction(2);
+        assert!(j.view().turbo.unwrap().main_switch_moves_lanes, "a knee: the next candidate is the same pair reversed");
+        assert!(j.switch_turbo_main());
+        assert!(!j.view().turbo.unwrap().main_switch_moves_lanes, "and then the other pair");
+        assert!(!turbo_junction(0).view().turbo.unwrap().main_switch_moves_lanes, "a basic turbo has no lane to move");
+    }
+
+    #[test]
+    fn three_streets_are_offered_the_egg_and_the_knee_and_a_y_none() {
+        let mut three = Junction::new(1);
+        three.set_control(ROUNDABOUT);
+        assert_eq!(three.view().turbo_options.iter().map(|o| o.id).collect::<Vec<_>>(), ["egg", "knee"]);
+        let (a, b) = (three.current().arms[1].uid, three.current().arms[2].uid);
+        three.set_bearing(a, 210);
+        three.set_bearing(b, 330);
+        assert!(three.view().turbo_options.is_empty(), "no two streets are opposite");
+    }
+
+    #[test]
+    fn the_layout_chosen_is_the_one_on_and_a_third_lane_makes_three_ring_lanes() {
+        let v = turbo_junction(3).view();
+        assert_eq!(v.turbo_options.iter().filter(|o| o.on).map(|o| o.id).collect::<Vec<_>>(), ["spiral"]);
+        assert_eq!(v.ring.unwrap().lanes.len(), 3);
+    }
+
+    #[test]
+    fn a_cycle_track_surrounds_the_turbo_road() {
+        let mut j = turbo_junction(0);
+        assert!(j.set_cycle_track(true));
+        let ring = j.view().ring.unwrap();
+        assert_eq!((ring.radius_mm, ring.road_mm, ring.cycle_mm), (23_150, 21_150, Some(2_000)));
+        assert!(ring.outer_edge != ring.road_edge);
+    }
+
+    #[test]
+    fn the_entering_lanes_of_a_turbo_are_the_layouts_fixed_and_3_5_m_wide() {
+        let v = turbo_junction(0).view();
+        let street = v.arms.iter().find(|a| a.uid == 2).unwrap();
+        assert_eq!(street.lanes.len(), 2);
+        assert!(street.lanes.iter().all(|l| l.width_mm == 3_500 && l.fixed), "two lanes of 3.5 m on Sample Street 1: (9000 - 2000) / 2");
+        assert_eq!(street.leave_arrows.len(), 1, "the way out is the street's own");
+        assert!(street.leave_arrows.iter().all(|l| !l.fixed));
+        let mut plain = Junction::new(0);
+        plain.set_control(ROUNDABOUT);
+        assert!(plain.view().arms.iter().flat_map(|a| &a.lanes).all(|l| !l.fixed));
+    }
+
+    #[test]
+    fn a_widened_entry_is_a_flaring_carriageway_and_a_street_that_needs_no_more_has_none() {
+        let v = turbo_junction(0).view();
+        assert!(v.arms.iter().all(|a| a.turbo_entry.as_ref().is_some_and(|e| e.len() == 7)), "six corners and a close, on every arm of sample 0");
+        let mut plain = Junction::new(0);
+        plain.set_control(ROUNDABOUT);
+        assert!(plain.view().arms.iter().all(|a| a.turbo_entry.is_none()));
+        let mut wide = junction_of(&[("travel", 3_500); 8]);
+        wide.set_control(ROUNDABOUT);
+        assert!(wide.set_turbo(Some(0)));
+        assert!(wide.view().arms.iter().all(|a| a.turbo_entry.is_none()), "the layout wants no more than the street has");
+    }
+
+    #[test]
+    fn an_arm_that_cars_do_not_enter_draws_no_turbo_entry_and_nothing_breaks() {
+        use crate::junction::model::junction_with_walkways;
+        // A turbo needs streets of traffic (a junction with at most one runs uncontrolled), so one walkway among four.
+        let mut j = junction_with_walkways(&[0], &[("sidewalk", 3_000), ("bike", 2_000), ("sidewalk", 3_000)]);
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(j.set_turbo(Some(0)));
+        let v = j.view();
+        let walkway = v.arms.iter().find(|a| a.bearing == 0).unwrap();
+        assert!(walkway.pedestrian && walkway.turbo_entry.is_none() && walkway.lanes.is_empty());
+        assert!(v.arms.iter().filter(|a| a.bearing != 0).all(|a| a.turbo_entry.is_some() && !a.lanes.is_empty()));
+        assert_eq!(v.ring.unwrap().lanes.len(), 2);
+    }
+
+    #[test]
+    fn a_turbo_s_corners_follow_the_ring_so_the_wedges_are_closed_paths() {
+        let v = turbo_junction(0).view();
+        for c in &v.corners {
+            assert!(c.curb.len() > 4, "the curb walks along the ring between the two streets: {}", c.curb.len());
+            assert!(c.wedge.last().is_some_and(|z| z[0] == "Z"));
+        }
+    }
+
+    #[test]
+    fn every_layout_and_block_draws_without_a_missing_number() {
+        // Four streets of three entering lanes of 3.5 m: a spiral's or rotor's three lanes need no more room than the street has.
+        let mut j = junction_of(&[("sidewalk", 3_000), ("travel", 3_500), ("travel", 3_500), ("travel", 3_500), ("sidewalk", 3_000)]);
+        assert!(j.set_control(ROUNDABOUT));
+        let finite = |v: &JView| {
+            let ring = v.ring.as_ref().unwrap();
+            let pts = ring
+                .lanes
+                .iter()
+                .flat_map(|l| l.inner.iter().chain(&l.outer).chain(&l.centre))
+                .chain(&ring.island_edge)
+                .chain(&ring.road_edge)
+                .chain(&ring.outer_edge);
+            let entries = v.arms.iter().filter_map(|a| a.turbo_entry.as_ref()).flatten().flat_map(|c| c.as_array().unwrap().iter().skip(1));
+            pts.into_iter().all(|p| p.0.is_finite() && p.1.is_finite()) && entries.into_iter().all(|n| n.is_number())
+        };
+        for layout in 0..5 {
+            assert!(j.set_turbo(Some(layout)), "layout {layout}");
+            for size in 0..4 {
+                let _ = j.set_turbo_size(size); // the block it already has is no change
+                assert_eq!(j.current().turbo.as_ref().unwrap().size, size, "layout {layout}");
+                assert!(finite(&j.view()), "layout {layout} block {size}");
+            }
+        }
     }
 }
