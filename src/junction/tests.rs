@@ -1496,3 +1496,41 @@ fn the_pedestrian_arm_messages_exist_in_both_languages() {
         }
     }
 }
+
+fn walkway_shared(bearings: &[i32]) -> Rc<JunctionVm> {
+    JunctionVm::new(
+        crate::shared::platform::browser_ports(),
+        crate::i18n_for(crate::shared::i18n::Locale::En),
+        junction_with_walkways(bearings, &[("sidewalk", 4000), ("terrace", 2000), ("sidewalk", 4000)]),
+        None,
+    )
+}
+
+#[test]
+fn the_panel_of_a_walkway_arm_says_there_is_no_roadway_to_cross_and_offers_no_crossing() {
+    let s = walkway_shared(&[90]);
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = panel(&s);
+    assert!(h.contains("A pedestrian street has no roadway to cross."), "{h}");
+    assert!(!h.contains("Mark a crossing") && !h.contains("Remove the crossing"));
+    let e = arm(&s, 0);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = panel(&s);
+    assert!(h.contains("Remove the crossing") && !h.contains("A pedestrian street has no roadway to cross."));
+}
+
+#[test]
+fn with_one_street_carrying_traffic_the_control_choice_is_replaced_by_a_note() {
+    let s = walkway_shared(&[90, 180, 270]);
+    let e = arm(&s, 0);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = panel(&s);
+    assert!(h.contains("Only one street here carries traffic."), "{h}");
+    assert!(!h.contains("aria-labelledby=\"i-h-control\""), "no control to choose");
+    let s = walkway_shared(&[90]);
+    let e = arm(&s, 0);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = panel(&s);
+    assert!(h.contains("aria-labelledby=\"i-h-control\"") && !h.contains("Only one street here carries traffic."));
+}
