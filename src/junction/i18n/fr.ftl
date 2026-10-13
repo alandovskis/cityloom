@@ -394,3 +394,35 @@ jn-insp-min-arms = { $n ->
 }
 jn-insp-lanes-in = Voies entrantes
 jn-insp-one-way-out = Sens unique sortant. Aucune voie n’entre.
+
+jn-refusal-not-signal = Le réglage des feux n’existe qu’à un carrefour à feux de circulation.
+jn-refusal-timing-out-of-range = Cette durée est hors de ce qu’un feu peut utiliser.
+jn-refusal-no-transit-lane = Une avance pour le transport en commun exige une voie réservée sur cette rue.
+jn-timing-green = Vert
+jn-timing-yellow = Jaune
+jn-timing-all-red = Rouge intégral
+jn-timing-transit-lead = Avance pour le transport en commun
+jn-rev-timing = { $arm } : { $field } { $seconds } s
+jn-rev-control-timing = Signalisation : { $control }; réglage des feux retiré
+jn-rev-control-boxes-timing = Signalisation : { $control }; sas cyclables et réglage des feux retirés
+jn-rev-control-protected-timing = Signalisation : { $control }; coins protégés et réglage des feux retirés
+jn-rev-control-all = Signalisation : { $control }; sas cyclables, coins protégés et réglage des feux retirés
+
+jn-check-signal-walk = Temps de traversée
+jn-check-signal-walk-ok = Chaque traverse est ouverte assez longtemps
+jn-check-signal-walk-bad = Pas assez de temps pour traverser à { $arms }
+jn-check-signal-cycle = Cycle des feux
+jn-check-signal-cycle-ok = Le cycle dure { $seconds } s
+jn-check-signal-cycle-bad = Le cycle dure { $seconds } s, au-delà des { $max } s qu’un feu devrait garder
+
+jn-insp-signal = Réglage des feux
+jn-sig-cycle = Cycle : { $seconds } s
+jn-sig-row = { $street } : vert { $green } s, jaune { $yellow } s, rouge intégral { $all_red } s
+jn-sig-row-lead = { $street } : avance { $lead } s, vert { $green } s, jaune { $yellow } s, rouge intégral { $all_red } s
+jn-sig-walks = Les traverses de { $arms } sont aussi ouvertes.
+jn-sig-rides = Les vélos de { $arms } roulent aussi.
+jn-sig-alone = Rien d’autre ne bouge pendant cette phase.
+jn-sig-no-phase = Rien n’entre par cette rue : elle n’a pas de vert à elle.
+jn-sig-shorter = Plus court de { $seconds } s
+jn-sig-longer = Plus long de { $seconds } s
+jn-sig-range = De { $min } à { $max } s
