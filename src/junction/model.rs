@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 use crate::junction::geometry::gap;
-use crate::junction::turbo::Turbo;
+use crate::junction::turbo::{self, BLOCKS, LAYOUTS, Turbo, main_candidates};
 use crate::street::model::{Editor, Street, View, named_said};
 
 #[cfg(test)]
@@ -765,10 +765,12 @@ pub enum Refusal {
     TimingOutOfRange,
     NoTransitLane,
     MeasureOnPedestrian,
+    TurboArmSkewed,
+    TurboEntryTooNarrow,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 17] = [
+    pub const ALL: [Refusal; 19] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -786,6 +788,8 @@ impl Refusal {
         Refusal::TimingOutOfRange,
         Refusal::NoTransitLane,
         Refusal::MeasureOnPedestrian,
+        Refusal::TurboArmSkewed,
+        Refusal::TurboEntryTooNarrow,
     ];
 
     /// The message that says why.
@@ -808,6 +812,8 @@ impl Refusal {
             Refusal::ProtectedNotHere => "jn-refusal-protected-not-here",
             Refusal::CrossingOnPedestrian => "jn-refusal-crossing-pedestrian",
             Refusal::MeasureOnPedestrian => "jn-refusal-measure-pedestrian",
+            Refusal::TurboArmSkewed => "jn-refusal-turbo-skewed",
+            Refusal::TurboEntryTooNarrow => "jn-refusal-turbo-entry-too-narrow",
         }
     }
 }
@@ -826,6 +832,8 @@ pub struct Junction {
     pending_label: Said,
     /// Why the last edit was refused; None once one is taken.
     refusal: Option<Refusal>,
+    /// The arm a `TurboArmSkewed` or `TurboEntryTooNarrow` refusal names; None for any other.
+    refusal_arm: Option<Said>,
 }
 
 fn snap(v: i32, step: i32) -> i32 {
@@ -857,6 +865,7 @@ impl Junction {
             gesture: None,
             pending_label: earlier(),
             refusal: None,
+            refusal_arm: None,
         };
         let same = |a: &State, b: &State| State { label: unlabelled(), ..a.clone() } == State { label: unlabelled(), ..b.clone() };
         if let Some(now) = now.filter(|n| !same(n, &today)) {
@@ -949,6 +958,19 @@ impl Junction {
             return self.refuse(Refusal::DoesNotFit);
         }
         next.arms.sort_by_key(|a| a.bearing);
+        // A turbo wants its arms near its template and room in each street for the lanes it widens the entry to: an edit that
+        // takes an arm past the skew limit, or leaves an entry that would pass its street's property line, is refused, naming the arm.
+        if in_force(&next).control == ROUNDABOUT
+            && let Some(t) = next.turbo.as_ref()
+        {
+            let skewed = t.worst_skew(&next.arms).filter(|(_, deg)| *deg > turbo::MAX_SKEW_DEG).map(|(uid, _)| (Refusal::TurboArmSkewed, uid));
+            let narrow = || t.entry_too_narrow(&next.arms, region).map(|uid| (Refusal::TurboEntryTooNarrow, uid));
+            if let Some((why, uid)) = skewed.or_else(narrow) {
+                self.refusal = Some(why);
+                self.refusal_arm = next.arms.iter().find(|a| a.uid == uid).map(arm_name);
+                return false;
+            }
+        }
         normalize(&mut next.arms, region);
         if next.control != ROUNDABOUT {
             next.cycle = None;
@@ -967,6 +989,7 @@ impl Junction {
             return self.refuse(Refusal::DoesNotFit);
         }
         self.refusal = None;
+        self.refusal_arm = None;
         if self.gesture.is_some() {
             *self.current_mut() = next;
             self.pending_label = label;
@@ -983,12 +1006,19 @@ impl Junction {
 
     fn refuse(&mut self, why: Refusal) -> bool {
         self.refusal = Some(why);
+        self.refusal_arm = None;
         false
     }
 
     /// Why the last edit was refused, if the last one was.
     pub fn refusal(&self) -> Option<Refusal> {
         self.refusal
+    }
+
+    /// The arm a refusal names (a turbo arm that would be too far off square, or whose entry would be widened past its
+    /// property line), if it names one.
+    pub fn refusal_arm(&self) -> Option<&Said> {
+        self.refusal_arm.as_ref()
     }
 
     pub fn begin_gesture(&mut self) {
@@ -1661,6 +1691,68 @@ impl Junction {
         self.set_cycle(on.then_some(CYCLE_DEFAULT_MM))
     }
 
+    /// Gives the roundabout a turbo layout (an index into `LAYOUTS`), or takes it away with `None`. The main road is
+    /// the best opposite pair that stands (a turbo already on keeps its own if the new layout allows it), the block the smallest
+    /// whose ring fits the streets (a turbo already on starts from its own).
+    pub fn set_turbo(&mut self, layout: Option<usize>) -> bool {
+        let region = self.region;
+        let Some(layout) = layout else {
+            return self.edit(Said::new("jn-rev-turbo-off"), |s| s.turbo.take().is_some());
+        };
+        if layout >= LAYOUTS.len() {
+            return self.refuse(Refusal::DoesNotFit);
+        }
+        let label = Said::new("jn-rev-turbo-layout").with("layout", Arg::MsgLower(LAYOUTS[layout].key));
+        self.edit_why(Refusal::RoundaboutTooBig, label, move |s| {
+            if in_force(s).control != ROUNDABOUT {
+                return false;
+            }
+            // The main road: the one a turbo already on has if it still stands with the new layout, else the best that
+            // stands (square enough, with room for its entries), else the best (the edit is then refused, naming the arm).
+            let candidates = main_candidates(&s.arms, region, layout);
+            let stands = |m: &Vec<u32>| Turbo { layout, size: 0, main: m.clone() }.standable(&s.arms, region);
+            let kept = s.turbo.as_ref().map(|t| t.main.clone()).filter(|m| candidates.contains(m) && stands(m));
+            let Some(main) = kept.or_else(|| candidates.iter().find(|m| stands(m)).cloned()).or_else(|| candidates.first().cloned()) else { return false };
+            for size in s.turbo.as_ref().map_or(0, |t| t.size)..BLOCKS.len() {
+                s.turbo = Some(Turbo { layout, size, main: main.clone() });
+                if crate::junction::read_model::layout(s, region).is_some() {
+                    break;
+                }
+            }
+            true // if no block fits, the largest stays and the edit is refused as too big
+        })
+    }
+
+    /// Sets the block (an index into `BLOCKS`) of the turbo.
+    pub fn set_turbo_size(&mut self, size: usize) -> bool {
+        if size >= BLOCKS.len() || self.current().turbo.is_none() {
+            return self.refuse(Refusal::DoesNotFit);
+        }
+        let label = Said::new("jn-rev-turbo-size").with("size", Arg::MsgLower(BLOCKS[size].key));
+        self.edit_why(Refusal::RoundaboutTooBig, label, move |s| s.turbo.as_mut().map(|t| t.size = size).is_some())
+    }
+
+    /// Steps the turbo's block one up (1) or down (-1).
+    pub fn step_turbo_size(&mut self, dir: i32) -> bool {
+        let Some(t) = self.current().turbo.as_ref() else { return self.refuse(Refusal::DoesNotFit) };
+        match usize::try_from(t.size as i32 + dir) {
+            Ok(size) => self.set_turbo_size(size),
+            Err(_) => self.refuse(Refusal::DoesNotFit),
+        }
+    }
+
+    /// Makes the next opposite pair of streets the main road (a knee also swaps which of the two has two lanes).
+    pub fn switch_turbo_main(&mut self) -> bool {
+        let region = self.region;
+        let Some(t) = self.current().turbo.clone() else { return self.refuse(Refusal::DoesNotFit) };
+        let candidates = main_candidates(&self.current().arms, region, t.layout);
+        let next = candidates.iter().position(|m| *m == t.main).map(|i| candidates[(i + 1) % candidates.len()].clone()).filter(|m| *m != t.main);
+        let Some(next) = next else { return self.refuse(Refusal::DoesNotFit) };
+        let (Some(a), Some(b)) = (self.arm(next[0]), self.arm(next[1])) else { return self.refuse(Refusal::DoesNotFit) };
+        let label = Said::new("jn-rev-turbo-main").with("from", Arg::Said(Box::new(arm_name(a)))).with("to", Arg::Said(Box::new(arm_name(b))));
+        self.edit_why(Refusal::RoundaboutTooBig, label, move |s| s.turbo.as_mut().map(|t| t.main = next.clone()).is_some())
+    }
+
     /// Sets how much bigger than its least size a roundabout is.
     pub fn set_ring(&mut self, extra_mm: i32) -> bool {
         let extra = snap(extra_mm, RING_STEP_MM);
@@ -1697,8 +1789,9 @@ pub fn widest_gap(arms: &[Arm]) -> i32 {
 }
 
 /// A roundabout is no raised table, and a bike box stands only where `bike_box_blocker` allows one: whatever put it
-/// elsewhere (an edit, a save), it goes.
+/// elsewhere (an edit, a save), it goes. A turbo is settled first (`settle_turbo`).
 fn settle_table_and_boxes(s: &mut State, region: usize) {
+    settle_turbo(s, region);
     if in_force(s).control == ROUNDABOUT {
         s.raised = false;
     }
@@ -1723,6 +1816,52 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
     }
 }
 
+/// A turbo stands only on a roundabout whose arms suit it, none is more than 20° off its template and every entry it
+/// widens stays inside its street's property line: otherwise it goes. While it stands there is no bus lane across the
+/// island, no queue jump, no ring size of its own, crossings are at least 6 m from the ring, and the entry lanes are
+/// the layout's. Without one the lanes follow the streets.
+fn settle_turbo(s: &mut State, region: usize) {
+    let stands = in_force(s).control == ROUNDABOUT && s.turbo.as_ref().is_some_and(|t| t.standable(&s.arms, region));
+    if !stands {
+        // Only a turbo that goes leaves lanes of its own behind: they follow the streets again.
+        if s.turbo.take().is_some() {
+            normalize(&mut s.arms, region);
+        }
+        return;
+    }
+    s.bus = None;
+    s.ring_extra_mm = 0;
+    for a in &mut s.arms {
+        if matches!(a.approach, Q_OFFSET | Q_CURB | Q_VIRTUAL) {
+            a.approach = 0;
+        }
+        if let Some(c) = a.crossing.as_mut() {
+            c.setback_mm = c.setback_mm.max(turbo::CROSSING_SETBACK_MM);
+        }
+    }
+    turbo_lanes(s, region);
+}
+
+/// The lanes of a turbo's arms: the layout's count where cars enter the street, none where they do not, each serving
+/// the turns `turbo::uses` says among the turns the arm has.
+fn turbo_lanes(s: &mut State, region: usize) {
+    let Some(t) = s.turbo.clone() else { return };
+    let avail: Vec<u8> = (0..s.arms.len()).map(|i| classes_of(&s.arms, i)).collect();
+    let others: Vec<(u32, i32)> = s.arms.iter().filter(|a| !a.is_pedestrian()).map(|a| (a.uid, a.bearing)).collect();
+    for (a, avail) in s.arms.iter_mut().zip(avail) {
+        let (uid, bearing) = (a.uid, a.bearing);
+        let n = if a.profile(region).enter_x.is_empty() { 0 } else { t.entry_lanes(uid) };
+        a.lanes = (0..n)
+            .map(|k| {
+                let want = turbo::uses(k, n, avail);
+                let mut to: Vec<u32> = others.iter().filter(|(u, b)| *u != uid && want & turn_class(bearing, *b) != 0).map(|(u, _)| *u).collect();
+                to.sort_unstable();
+                Lane { to }
+            })
+            .collect();
+    }
+}
+
 /// A state that can be drawn, or the nearest to it that can: first with the
 /// corners as small as they go, then with offsets, a roundabout and its extras
 /// undone. None when neither can be drawn.
@@ -1737,6 +1876,16 @@ fn ease(s: &State, region: usize) -> Option<State> {
     if valid(&t, region) {
         return Some(t);
     }
+    // Keep the roundabout and drop only the turbo, if that is enough.
+    if t.turbo.is_some() {
+        let mut plain = t.clone();
+        plain.turbo = None;
+        normalize(&mut plain.arms, region); // the lanes the turbo set follow the streets again
+        settle_table_and_boxes(&mut plain, region);
+        if valid(&plain, region) {
+            return Some(plain);
+        }
+    }
     for a in &mut t.arms {
         a.offset_mm = 0;
     }
@@ -1744,6 +1893,8 @@ fn ease(s: &State, region: usize) -> Option<State> {
         t.control = PRIORITY;
     }
     (t.bus, t.cycle, t.ring_extra_mm) = (None, None, 0);
+    t.turbo = None;
+    normalize(&mut t.arms, region); // the lanes a turbo set follow the streets again
     valid(&t, region).then_some(t)
 }
 
@@ -1931,7 +2082,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 17);
+        assert_eq!(Refusal::ALL.len(), 19);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }
@@ -3337,5 +3488,362 @@ mod tests {
         assert!(j.set_timing(uid, TimingField::TransitLead, 8));
         assert!(j.set_bus_lane(uid, false));
         assert_eq!(j.arm(uid).unwrap().timing.unwrap().transit_lead_s, 0);
+    }
+
+    // ---- choosing a turbo ----
+
+    /// The Avenue and street (sample 0) as a roundabout: uids 1 and 3 are the avenue (north, south), 2 and 4 the street (east, west).
+    fn roundabout() -> Junction {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT));
+        j
+    }
+
+    /// Four equal narrow streets of a city, as a roundabout: any block fits them.
+    fn narrow_roundabout() -> Junction {
+        let mut j = junction_of(&[("sidewalk", 3_000), ("travel", 3_500), ("travel", 3_500), ("sidewalk", 3_000)]);
+        assert!(j.set_control(ROUNDABOUT));
+        j
+    }
+
+    #[test]
+    fn a_turbo_is_chosen_for_a_roundabout_with_its_main_road_and_the_smallest_block_that_fits() {
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        assert_eq!(j.current().turbo, Some(Turbo { layout: 0, size: 0, main: vec![1, 3] }), "the avenue is the main road; the streets fit the mini block");
+        assert_eq!(j.current().ring_extra_mm, 0);
+        let label = j.revisions().last().unwrap().clone();
+        assert_eq!(en(&label), "Roundabout layout: basic turbo");
+        assert_eq!(fr(&label), "Disposition du giratoire\u{a0}: turbo de base");
+        assert!(j.undo());
+        assert_eq!(j.current().turbo, None);
+        assert!(j.redo());
+        assert!(j.current().turbo.is_some());
+    }
+
+    #[test]
+    fn the_default_block_is_the_smallest_whose_ring_fits_the_streets() {
+        let mut j = junction_of(&[("travel", 3_500); 8]);
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(j.set_turbo(Some(0)));
+        assert_eq!(j.current().turbo.as_ref().unwrap().size, 2, "mini and regular are too small for streets 28 m wide: medium");
+    }
+
+    #[test]
+    fn a_layout_is_offered_by_arm_count_and_only_for_a_roundabout() {
+        let mut three = Junction::new(1);
+        assert!(three.set_control(ROUNDABOUT));
+        assert!(!three.set_turbo(Some(0)), "basic needs four streets");
+        assert_eq!(three.refusal(), Some(Refusal::DoesNotFit));
+        assert!(three.set_turbo(Some(1)), "an egg suits three");
+        assert_eq!(three.current().turbo.as_ref().unwrap().main, [1, 3], "the through road");
+        assert!(three.set_turbo(Some(2)), "and so does a knee, which keeps the main road");
+        assert_eq!(three.current().turbo.as_ref().unwrap().layout, 2);
+        assert!(!three.set_turbo(Some(9)), "there are five layouts");
+        let mut signal = Junction::new(0);
+        assert!(!signal.set_turbo(Some(0)), "a signal is not a roundabout");
+        assert_eq!(signal.refusal(), Some(Refusal::DoesNotFit));
+        assert!(!signal.set_turbo(None), "and has no turbo to take away");
+    }
+
+    #[test]
+    fn a_junction_with_no_two_opposite_streets_is_offered_no_layout() {
+        let mut y = Junction::new(1);
+        let (a, b) = (y.current().arms[1].uid, y.current().arms[2].uid);
+        assert!(y.set_bearing(a, 210) && y.set_bearing(b, 330), "three streets 120 degrees apart");
+        assert!(y.set_control(ROUNDABOUT));
+        for layout in [1, 2] {
+            assert!(!y.set_turbo(Some(layout)));
+        }
+        assert_eq!(y.refusal(), Some(Refusal::DoesNotFit));
+    }
+
+    #[test]
+    fn each_layout_brings_its_entry_lanes_and_sets_where_they_go() {
+        let counts = |j: &Junction| j.current().arms.iter().map(|a| a.lanes.len()).collect::<Vec<_>>();
+        let to = |j: &Junction, uid: u32| j.arm(uid).unwrap().lanes.iter().map(|l| l.to.clone()).collect::<Vec<_>>();
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        assert_eq!(counts(&j), [2, 2, 2, 2], "basic");
+        assert_eq!(to(&j, 1), [vec![2, 3], vec![3, 4]], "north: the left lane goes left and through, the right lane through and right");
+        assert_eq!(to(&j, 2), [vec![3, 4], vec![1, 4]], "east");
+        assert!(j.set_turbo(Some(1)));
+        assert_eq!(counts(&j), [2, 1, 2, 1], "egg: two on the main road, one on the others");
+        assert_eq!(to(&j, 2), [vec![1, 3, 4]], "a single lane serves every turn");
+        assert!(j.set_turbo(Some(2)));
+        assert_eq!(counts(&j), [2, 1, 1, 1], "knee: two on the first main arm only");
+        assert!(j.set_turbo(Some(3)));
+        assert_eq!(counts(&j), [3, 2, 3, 2], "spiral: three on the Avenue, two on the Street");
+        assert_eq!(to(&j, 1), [vec![2, 3], vec![3], vec![3, 4]], "the middle lane goes through only");
+        assert_eq!(j.current().turbo.as_ref().unwrap().size, 0, "all of them fit the mini block here");
+    }
+
+    #[test]
+    fn a_rotor_brings_three_lanes_on_every_street_that_has_the_room_for_them() {
+        // Four freeways (sample 3): each is entered by three lanes of 3.6 m, 10.8 m, more than the 10.5 m a rotor wants, so nothing is widened.
+        let mut state = Junction::new(0).current().clone();
+        for a in &mut state.arms {
+            a.section = Some(Street::sample(3, Side::Right));
+            a.edge = a.uid;
+        }
+        state.control = ROUNDABOUT;
+        let mut j = Junction::from_city(named("Test"), &state, &state, 0).expect("a roundabout of freeways draws");
+        assert_eq!(j.current().control, ROUNDABOUT);
+        assert!(j.set_turbo(Some(4)));
+        assert_eq!(j.current().arms.iter().map(|a| a.lanes.len()).collect::<Vec<_>>(), [3, 3, 3, 3], "rotor");
+        assert_eq!(
+            j.arm(1).unwrap().lanes.iter().map(|l| l.to.clone()).collect::<Vec<_>>(),
+            [vec![2, 3], vec![3], vec![3, 4]],
+            "the middle lane goes through only"
+        );
+    }
+
+    #[test]
+    fn the_single_lane_roundabout_comes_back_with_its_streets_own_lanes() {
+        let mut j = roundabout();
+        let plain = j.current().clone();
+        assert!(j.set_turbo(Some(0)));
+        assert_ne!(j.arm(2).unwrap().lanes.len(), plain.arms[1].lanes.len(), "the street gained a lane");
+        assert!(j.set_turbo(None));
+        assert_eq!(j.current().turbo, None);
+        assert_eq!(j.arm(2).unwrap().lanes, plain.arms[1].lanes, "its own lanes again");
+        assert_eq!(en(j.revisions().last().unwrap()), "Roundabout: single lane");
+        assert_eq!(fr(j.revisions().last().unwrap()), "Giratoire\u{a0}: une seule voie");
+    }
+
+    #[test]
+    fn choosing_a_turbo_drops_the_bus_lane_and_queue_jumps_and_keeps_gates_and_the_cycle_track() {
+        let mut j = roundabout();
+        let (n, e, s, so) = (arm_at(&j, 0), arm_at(&j, 90), arm_at(&j, 270), arm_at(&j, 180));
+        assert!(j.set_bus(Some((n, so))));
+        assert!(j.set_cycle_track(true));
+        assert!(j.set_approach(e, Q_OFFSET));
+        assert!(j.set_approach(s, GATE_YIELD));
+        assert!(j.set_turbo(Some(0)));
+        assert_eq!(j.current().bus, None);
+        assert_eq!(j.arm(e).unwrap().approach, 0, "the queue jump goes");
+        assert_eq!(j.arm(s).unwrap().approach, GATE_YIELD, "a gate set back upstream stays");
+        assert_eq!(j.current().cycle, Some(CYCLE_DEFAULT_MM), "and so does the cycle track");
+        assert!(j.undo());
+        assert!(j.current().bus.is_some() && j.arm(e).unwrap().approach == Q_OFFSET, "undo brings them back");
+    }
+
+    #[test]
+    fn crossings_stand_at_least_6_m_from_a_turbo_ring() {
+        let mut j = roundabout();
+        let n = arm_at(&j, 0);
+        assert_eq!(j.arm(n).unwrap().crossing.unwrap().setback_mm, DEFAULT_SETBACK_MM);
+        assert!(j.set_turbo(Some(0)));
+        assert_eq!(j.arm(n).unwrap().crossing.unwrap().setback_mm, 6_000);
+        assert!(!j.set_setback(n, 3_000), "closer than that is no change on a turbo");
+        assert!(j.set_setback(n, 7_000));
+    }
+
+    #[test]
+    fn the_block_is_stepped_and_set_among_the_four_and_each_change_is_labelled() {
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        assert!(j.step_turbo_size(1));
+        assert_eq!(j.current().turbo.as_ref().unwrap().size, 1);
+        assert_eq!(en(j.revisions().last().unwrap()), "Turbo roundabout size: regular");
+        assert_eq!(fr(j.revisions().last().unwrap()), "Taille du giratoire turbo\u{a0}: normale");
+        assert!(j.set_turbo_size(3));
+        assert!(!j.set_turbo_size(4), "there are four blocks");
+        assert!(!j.step_turbo_size(1), "and none larger than the large");
+        assert!(j.set_turbo_size(0));
+        assert!(!j.step_turbo_size(-1), "or smaller than the mini");
+        assert!(!roundabout().step_turbo_size(1), "a roundabout with no turbo has no block");
+    }
+
+    #[test]
+    fn the_main_road_switches_to_the_other_pair_and_back_when_there_is_one() {
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        assert!(j.switch_turbo_main());
+        assert_eq!(j.current().turbo.as_ref().unwrap().main, [2, 4]);
+        assert!(en(j.revisions().last().unwrap()).starts_with("Main road of the turbo roundabout: "));
+        assert!(fr(j.revisions().last().unwrap()).starts_with("Axe principal du giratoire turbo\u{a0}: "));
+        assert!(j.switch_turbo_main());
+        assert_eq!(j.current().turbo.as_ref().unwrap().main, [1, 3]);
+        let mut egg = Junction::new(1);
+        assert!(egg.set_control(ROUNDABOUT) && egg.set_turbo(Some(1)));
+        assert!(!egg.switch_turbo_main(), "three streets have one through road");
+        assert!(!roundabout().switch_turbo_main(), "no turbo, no main road");
+    }
+
+    #[test]
+    fn an_arm_more_than_20_degrees_off_square_is_refused_by_name_and_one_10_off_is_allowed() {
+        let mut j = narrow_roundabout();
+        let east = arm_at(&j, 90);
+        assert!(j.set_turbo(Some(0)));
+        assert!(!j.set_bearing(east, 115), "25 degrees off the east template");
+        assert_eq!(j.refusal(), Some(Refusal::TurboArmSkewed));
+        assert!(j.refusal_arm().is_some(), "the arm is named");
+        assert!(j.set_bearing(east, 100), "10 degrees off is allowed (and reported by a check)");
+        assert_eq!(j.refusal(), None);
+        assert!(j.refusal_arm().is_none(), "a taken edit clears the arm too");
+
+        let mut k = narrow_roundabout();
+        assert!(k.set_bearing(east, 125));
+        assert!(!k.set_turbo(Some(0)), "choosing the layout is refused for the same reason: 125 degrees has no opposite street to be the main road instead");
+        assert_eq!(k.refusal(), Some(Refusal::TurboArmSkewed));
+        assert_eq!(k.current().turbo, None);
+    }
+
+    #[test]
+    fn a_turbo_is_dropped_when_the_street_count_no_longer_fits_and_undo_brings_it_back() {
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        assert!(j.remove_arm(2));
+        assert_eq!(j.current().control, ROUNDABOUT, "it is a single-lane roundabout again");
+        assert_eq!(j.current().turbo, None, "basic is for four streets");
+        assert!(j.undo());
+        assert!(j.current().turbo.is_some());
+        assert_eq!(j.current().arms.len(), 4);
+    }
+
+    #[test]
+    fn a_turbo_ends_with_the_roundabout() {
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        assert!(j.set_control(PRIORITY));
+        assert_eq!(j.current().turbo, None);
+        assert!(j.undo());
+        assert!(j.current().turbo.is_some());
+    }
+
+    #[test]
+    fn a_turbo_roundabout_made_from_a_timed_signal_has_no_timing_and_a_signal_made_from_it_has_no_turbo() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        assert!(j.set_timing(n, TimingField::Green, 30));
+        assert!(j.set_control(ROUNDABOUT));
+        assert_eq!(j.arm(n).unwrap().timing, None, "a roundabout has no signal to time");
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("signal timing removed"), "the step says so");
+        assert!(j.set_turbo(Some(0)));
+        assert!(j.current().arms.iter().all(|a| a.timing.is_none()));
+        assert!(!j.set_timing(n, TimingField::Green, 30), "a turbo roundabout is no signal either");
+        assert_eq!(j.refusal(), Some(Refusal::NotSignal));
+        assert!(j.set_control(SIGNAL));
+        assert_eq!(j.current().turbo, None, "the turbo goes with the roundabout");
+        assert_eq!(j.arm(n).unwrap().timing, None, "and the signal starts untimed");
+        assert!(
+            !plain(&en(j.revisions().last().unwrap())).contains("removed"),
+            "nothing was lost that the step has to name: {}",
+            en(j.revisions().last().unwrap())
+        );
+        assert!(j.undo());
+        assert!(j.current().turbo.is_some(), "undo brings the turbo back");
+    }
+
+    #[test]
+    fn a_turbo_follows_a_change_of_region() {
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        assert!(j.set_region(3));
+        assert!(j.current().turbo.is_some(), "left-hand traffic mirrors the ring, it does not end it");
+        assert_eq!(j.view().ring.unwrap().circulation, "clockwise");
+    }
+
+    #[test]
+    fn a_turbo_that_fits_no_block_is_refused_as_too_big_and_changes_nothing() {
+        let mut j = junction_of(&[("travel", 3_500); 11]);
+        assert!(j.set_control(ROUNDABOUT), "the plain roundabout fits");
+        let (before, steps) = (j.current().clone(), j.revisions().count());
+        assert!(!j.set_turbo(Some(0)));
+        assert_eq!(j.refusal(), Some(Refusal::RoundaboutTooBig));
+        assert_eq!(*j.current(), before);
+        assert_eq!(j.revisions().count(), steps, "a refused edit adds no step to the history");
+    }
+
+    #[test]
+    fn an_arm_that_cars_do_not_enter_gets_no_turbo_lane() {
+        // The east street goes only one way out of the junction, and the west one is a walkway: neither is entered by cars.
+        let mut state = Junction::new(0).current().clone();
+        state.control = ROUNDABOUT;
+        for a in &mut state.arms {
+            a.edge = a.uid;
+            match a.bearing {
+                90 => a.section = Some(one_way_out()),
+                270 => a.section = Some(Street::imported(StreetClass::Pedestrian, Side::Right, &[])),
+                _ => {}
+            }
+        }
+        let mut j = Junction::from_city(named("Test"), &state, &state, 0).expect("it draws");
+        assert!(j.arm(arm_at(&j, 90)).unwrap().profile(0).enter_x.is_empty(), "nothing enters from the east");
+        assert!(j.set_turbo(Some(0)), "nothing to widen there, nothing in the way: {:?}", j.refusal());
+        let lanes = |bearing: i32| j.arm(arm_at(&j, bearing)).unwrap().lanes.len();
+        assert_eq!((lanes(0), lanes(90), lanes(180), lanes(270)), (2, 0, 2, 0), "the layout's lanes where cars enter, none where they do not");
+        let _ = j.view();
+    }
+
+    #[test]
+    fn a_turbo_is_not_offered_where_the_streets_leave_nothing_to_control() {
+        // Every street a walkway: the junction is run uncontrolled whatever control was kept, and a layout of the roundabout it is not has no meaning.
+        let mut j = junction_of(&[("sidewalk", 3_000), ("bike", 2_000), ("sidewalk", 3_000)]);
+        assert!(j.set_control(ROUNDABOUT));
+        assert!(!j.set_turbo(Some(0)));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+    }
+
+    #[test]
+    fn a_saved_turbo_whose_arm_is_now_far_off_square_loads_as_a_single_lane_roundabout() {
+        let mut state = Junction::new(0).current().clone();
+        state.control = ROUNDABOUT;
+        state.turbo = Some(Turbo { layout: 0, size: 0, main: vec![1, 3] });
+        state.arms[1].bearing = 125; // the east street, now 35 degrees off
+        for a in &mut state.arms {
+            a.edge = a.uid;
+        }
+        let j = Junction::from_city(named("Test"), &state, &state, 0).expect("it still draws, as a plain roundabout");
+        assert_eq!(j.current().control, ROUNDABOUT);
+        assert_eq!(j.current().turbo, None);
+    }
+
+    #[test]
+    fn a_saved_turbo_that_fits_no_block_loads_as_a_single_lane_roundabout() {
+        let mut plain = junction_of(&[("travel", 3_500); 11]);
+        assert!(plain.set_control(ROUNDABOUT));
+        let mut state = plain.current().clone();
+        state.turbo = Some(Turbo { layout: 0, size: 3, main: vec![1, 3] });
+        let j = Junction::from_city(named("Test"), &state, &state, 0).expect("it draws");
+        assert_eq!((j.current().control, j.current().turbo.clone()), (ROUNDABOUT, None));
+        assert_eq!(j.current().arms[0].lanes.len(), 11, "the streets' own lanes again, not the layout's two");
+    }
+
+    #[test]
+    fn a_layout_whose_entry_lanes_would_pass_a_streets_property_line_is_refused_naming_the_street() {
+        // Sample Street 1 is 18 m across and its entry lane lies at 5.7..9 m. A rotor wants three lanes of 3.5 m there: (-1.5 m, 9 m), 1.5 m past the line at 0.
+        let mut j = roundabout();
+        let (before, steps) = (j.current().clone(), j.revisions().count());
+        assert!(!j.set_turbo(Some(4)));
+        assert_eq!(j.refusal(), Some(Refusal::TurboEntryTooNarrow));
+        assert_eq!(
+            en(j.refusal_arm().unwrap()),
+            en(&arm_name(j.arm(2).unwrap())),
+            "the first street in the order of the arms that cannot take it: the east one"
+        );
+        assert_eq!(*j.current(), before, "nothing changed");
+        assert_eq!(j.revisions().count(), steps, "a refused edit adds no step to the history");
+        assert!(j.set_turbo(Some(3)), "a spiral wants three lanes on the Avenue, which has the room, and two on the Street");
+        assert!(!j.switch_turbo_main(), "with the Street as the main road the spiral would give it three");
+        assert_eq!(j.refusal(), Some(Refusal::TurboEntryTooNarrow));
+        assert_eq!(en(j.refusal_arm().unwrap()), en(&arm_name(j.arm(2).unwrap())));
+        assert_eq!(j.current().turbo.as_ref().unwrap().main, [1, 3], "the main road is as it was");
+        assert!(j.set_turbo(Some(0)), "and a refusal leaves the junction as it was, so another layout can still be chosen");
+        assert_eq!(j.refusal(), None);
+        assert!(j.refusal_arm().is_none(), "a taken edit clears the arm too");
+    }
+
+    #[test]
+    fn a_saved_turbo_whose_street_has_not_the_room_for_its_entry_loads_as_a_single_lane_roundabout() {
+        let mut state = Junction::new(0).current().clone();
+        state.control = ROUNDABOUT;
+        state.turbo = Some(Turbo { layout: 4, size: 0, main: vec![1, 3] }); // a rotor: three lanes on every street, too many for Street 1
+        for a in &mut state.arms {
+            a.edge = a.uid;
+        }
+        let j = Junction::from_city(named("Test"), &state, &state, 0).expect("it still draws, as a plain roundabout");
+        assert_eq!((j.current().control, j.current().turbo.clone()), (ROUNDABOUT, None));
     }
 }

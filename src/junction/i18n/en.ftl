@@ -68,6 +68,8 @@ jn-refusal-does-not-fit = That change does not fit.
 jn-refusal-raised-roundabout = A roundabout cannot be a raised table.
 jn-refusal-bike-box-not-here = A bike box needs a bike lane on a street where cars enter and stop, at a junction that is not a roundabout.
 jn-refusal-protected-not-here = A protected corner needs a bike lane at the curb of each of the two streets, a real corner, room for the island and no roundabout.
+jn-refusal-turbo-skewed = A street would be more than 20° off the square a turbo roundabout needs.
+jn-refusal-turbo-entry-too-narrow = This street is too narrow to widen for the entry lanes this layout needs.
 
 ## What each change was, in the history
 jn-word-add = add
@@ -107,6 +109,10 @@ jn-rev-cycle = Cycle track around the roundabout: { $length }
 jn-rev-cycle-remove = Cycle track around the roundabout: remove
 jn-rev-raised = Raised table: { $change }
 jn-rev-ring = Roundabout: { $length } larger
+jn-rev-turbo-layout = Roundabout layout: { $layout } turbo
+jn-rev-turbo-off = Roundabout: single lane
+jn-rev-turbo-size = Turbo roundabout size: { $size }
+jn-rev-turbo-main = Main road of the turbo roundabout: { $from } and { $to }
 
 ## The checks
 jn-check-lanes-cover = Lanes cover every turn

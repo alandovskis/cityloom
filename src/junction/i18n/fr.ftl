@@ -68,6 +68,8 @@ jn-refusal-does-not-fit = Cette modification ne convient pas.
 jn-refusal-raised-roundabout = Un carrefour giratoire ne peut pas être surélevé.
 jn-refusal-bike-box-not-here = Un sas cyclable exige une piste cyclable sur une rue où les voitures entrent et s’arrêtent, à un carrefour qui n’est pas giratoire.
 jn-refusal-protected-not-here = Un coin protégé exige une piste cyclable le long de la bordure de chacune des deux rues, un vrai coin, assez de place pour l’îlot et pas de carrefour giratoire.
+jn-refusal-turbo-skewed = Une rue s’écarterait de plus de 20° de l’équerre qu’exige un giratoire turbo.
+jn-refusal-turbo-entry-too-narrow = Cette rue est trop étroite pour l’élargir aux voies d’entrée que demande cette disposition.
 
 ## Ce qu’a été chaque modification, dans l’historique
 jn-word-add = ajout
@@ -107,6 +109,10 @@ jn-rev-cycle = Piste cyclable autour du carrefour giratoire : { $length }
 jn-rev-cycle-remove = Piste cyclable autour du carrefour giratoire : retrait
 jn-rev-raised = Carrefour surélevé : { $change }
 jn-rev-ring = Carrefour giratoire : { $length } plus grand
+jn-rev-turbo-layout = Disposition du giratoire : turbo { $layout }
+jn-rev-turbo-off = Giratoire : une seule voie
+jn-rev-turbo-size = Taille du giratoire turbo : { $size }
+jn-rev-turbo-main = Axe principal du giratoire turbo : { $from } et { $to }
 
 ## Les vérifications
 jn-check-lanes-cover = Les voies couvrent chaque virage

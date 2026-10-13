@@ -58,6 +58,7 @@ impl Junction {
             gesture: None,
             pending_label: earlier(),
             refusal: None,
+            refusal_arm: None,
         };
         j.load_sample(sample);
         j
