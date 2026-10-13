@@ -636,7 +636,8 @@ mod tests {
         for layout in 0..5 {
             assert!(j.set_turbo(Some(layout)));
             for size in 0..4 {
-                let _ = j.set_turbo_size(size);
+                let _ = j.set_turbo_size(size); // the block it already has is no change
+                assert_eq!(j.current().turbo.as_ref().unwrap().size, size, "layout {layout}");
                 let m = svg(&j).markup;
                 assert!(!m.contains("NaN") && !m.contains("inf"), "layout {layout} block {size}");
             }
