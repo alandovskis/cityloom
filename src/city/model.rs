@@ -1721,6 +1721,8 @@ mod tests {
         // junction that meets it either still draws or says it cannot.
         let mut s = city.streets[&2].clone();
         s.segments.retain(|g| KINDS[g.kind].id == "sidewalk");
+        // Narrow ones: a street of walkway alone is pedestrian now, and wants 3 m of unbroken sidewalk.
+        s.segments.iter_mut().for_each(|g| g.width_mm = 1000);
         assert!(city.keep_street(2, s));
         let v = city.view(0);
         assert!(!v.edges[1].ok);
@@ -1817,6 +1819,8 @@ mod tests {
         let mut city = City::new();
         let mut s = city.streets[&2].clone();
         s.segments.retain(|g| KINDS[g.kind].id == "sidewalk");
+        // Narrow ones: a street of walkway alone is pedestrian now, and wants 3 m of unbroken sidewalk.
+        s.segments.iter_mut().for_each(|g| g.width_mm = 1000);
         assert!(city.keep_street(2, s));
         let v = city.view(0);
         let failing = &v.edges[1].failing;
