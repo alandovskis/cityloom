@@ -494,6 +494,47 @@ pub struct Selection {
     pub lane: usize,
 }
 
+/// A traffic signal's cycle and the phases of it, as the sheet reads them.
+#[derive(Clone, Debug, Serialize)]
+pub struct SignalView {
+    pub cycle_s: u32,
+    pub phases: Vec<PhaseView>,
+}
+
+/// One street's turn: its numbers, and what runs with it besides its own traffic.
+#[derive(Clone, Debug, Serialize)]
+pub struct PhaseView {
+    pub uid: u32,
+    pub label: Said,
+    pub street: Said,
+    pub timing: crate::junction::model::Timing,
+    pub length_s: u32,
+    /// Crossings walked during the phase: the streets' names.
+    pub walks: Option<Said>,
+    /// Bike movements that run during the phase, besides this street's own.
+    pub rides: Option<Said>,
+}
+
+fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView> {
+    let plan = signal::plan(s, region)?;
+    let find = |uid: u32| arms.iter().find(|a| a.uid == uid);
+    let name = |uid: u32| find(uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
+    let phases = plan
+        .phases
+        .iter()
+        .map(|p| PhaseView {
+            uid: p.uid,
+            label: name(p.uid),
+            street: find(p.uid).map_or_else(|| crate::street::model::named_said(""), |a| a.street.clone()),
+            timing: p.timing,
+            length_s: p.length_s,
+            walks: list(p.walks.iter().copied().map(name).collect()),
+            rides: list(p.rides.iter().copied().filter(|&u| u != p.uid).map(name).collect()),
+        })
+        .collect();
+    Some(SignalView { cycle_s: plan.cycle_s, phases })
+}
+
 #[derive(Serialize)]
 pub struct JView {
     pub name: Said,
@@ -519,6 +560,8 @@ pub struct JView {
     pub movements: Vec<MoveView>,
     pub conflicts: Conflicts,
     pub checks: Vec<Check>,
+    /// The signal's cycle and phases, when the junction is run by a signal.
+    pub signal: Option<SignalView>,
     pub revisions: Vec<Revision>,
     pub selected: Selection,
     pub bounds: [f64; 4],
@@ -1010,6 +1053,7 @@ impl Junction {
         let conflicts = conflicts(s, &movements, &lay, side);
 
         let checks = checks(s, self.region, &arms, &corners, &movements, &lay);
+        let signal = signal_view(s, self.region, &arms);
         let selected = match self.selected {
             Target::None => Selection { kind: None, uid: 0, lane: 0 },
             Target::Arm(u) => Selection { kind: Some("arm"), uid: u, lane: 0 },
@@ -1052,6 +1096,7 @@ impl Junction {
             movements,
             conflicts,
             checks,
+            signal,
             revisions: self.revisions().enumerate().map(|(i, l)| Revision { step: i + 1, label: l.clone() }).collect(),
             selected,
             bounds: [mins.0, mins.1, maxs.0, maxs.1],
@@ -2669,5 +2714,19 @@ mod tests {
         let v = j.view();
         let window = 5 + 3 + 2;
         assert_eq!(check(&v, "signal-walk").unwrap().ok, needed_s(&v) <= window, "a {window} s window against {} s", needed_s(&v));
+    }
+
+    #[test]
+    fn the_sheet_reads_the_cycle_and_each_phase_with_what_runs_beside_it() {
+        let mut j = Junction::new(0);
+        let n = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+        assert!(j.set_timing(n, crate::junction::model::TimingField::Green, 30));
+        let v = j.view();
+        let s = v.signal.as_ref().expect("a signal has a plan");
+        assert_eq!(s.cycle_s, 4 * 30 + 5);
+        assert_eq!(s.phases.len(), 4);
+        assert_eq!(s.phases[0].uid, n);
+        assert_eq!(s.phases[0].timing.green_s, 30);
+        assert!(Junction::new(1).view().signal.is_none(), "no plan off a signal");
     }
 }
