@@ -8,11 +8,13 @@ use serde_json::Value;
 
 use crate::junction::frame::Frame;
 use crate::junction::geometry::{sample_arc, sample_quad};
+use crate::junction::plan_svg::turbo_name;
 use crate::junction::read_model::JView;
 use crate::junction::text::arms_text;
 use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::{esc, f1};
+use crate::shared::iso::paint::{Paint, Pattern, Style, class, quads};
 use crate::shared::iso::shading::shade_filters;
 use crate::shared::said::say;
 use crate::shared::units::Units;
@@ -233,6 +235,19 @@ impl Draw {
         }
     }
 
+    /// A solid double white line along `path` (a closed ring of points, which this joins to its start), lying on the road.
+    /// The quads come from the shared paint and are projected here, like the road they lie on.
+    fn divider(&mut self, path: &[P]) {
+        let mut line = path.to_vec();
+        if let Some(&first) = path.first() {
+            line.push(first);
+        }
+        for (paint, quad) in quads(&line, Style { paint: Paint::White, pattern: Pattern::Solid, double: true }) {
+            let d = self.path(&quad, 0.0);
+            write!(self.flat, "<path class=\"{}\" d=\"{d}\"/>", class(paint)).unwrap();
+        }
+    }
+
     /// A stop line from `a` to `b`: a row of dashes where traffic gives way, as the plan draws it.
     fn stop_line(&mut self, a: P, b: P, h_mm: f64, dashed: bool) {
         let (dx, dy) = (b.0 - a.0, b.1 - a.1);
@@ -412,15 +427,22 @@ impl Draw {
 fn content_points(v: &JView) -> Vec<P> {
     let mut pts: Vec<P> = v.arms.iter().flat_map(|a| flatten(&a.outline)).chain(flatten(&v.core)).collect();
     if let Some(ring) = &v.ring {
-        let r = ring.radius_mm as f64;
-        pts.extend([(r, 0.0), (-r, 0.0), (0.0, r), (0.0, -r)]);
+        if ring.outer_edge.is_empty() {
+            let r = ring.radius_mm as f64;
+            pts.extend([(r, 0.0), (-r, 0.0), (0.0, r), (0.0, -r)]);
+        } else {
+            pts.extend(ring.outer_edge.iter().copied());
+        }
     }
     pts
 }
 
 /// What a screen reader is told the picture is, drawn again when the language changes.
 pub fn iso_label(v: &JView, i18n: &I18n) -> String {
-    i18n.tr("jn-iso-label", &Args::new().str("arms", arms_text(v, i18n)))
+    match turbo_name(v, i18n) {
+        Some(name) => i18n.tr("jn-iso-label-turbo", &Args::new().str("arms", arms_text(v, i18n)).str("name", name)),
+        None => i18n.tr("jn-iso-label", &Args::new().str("arms", arms_text(v, i18n))),
+    }
 }
 
 /// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high.
@@ -431,25 +453,37 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
 
     // the carriageway where the streets meet, and a roundabout's ring and island
     if let Some(ring) = &v.ring {
-        let circle = |r: f64| -> Vec<P> {
-            (0..48)
-                .map(|i| {
-                    let t = i as f64 * std::f64::consts::TAU / 48.0;
-                    (r * t.cos(), r * t.sin())
-                })
-                .collect()
-        };
-        if ring.cycle_mm.is_some_and(|c| c != 0) {
-            // The cycle track is the band outside the carriageway: the whole ring in its colour, the carriageway over it.
-            d.lay("bike", &circle(ring.radius_mm as f64));
-            d.lay("travel", &circle(ring.road_mm as f64));
+        if ring.lanes.is_empty() {
+            let circle = |r: f64| -> Vec<P> {
+                (0..48)
+                    .map(|i| {
+                        let t = i as f64 * std::f64::consts::TAU / 48.0;
+                        (r * t.cos(), r * t.sin())
+                    })
+                    .collect()
+            };
+            if ring.cycle_mm.is_some_and(|c| c != 0) {
+                // The cycle track is the band outside the carriageway: the whole ring in its colour, the carriageway over it.
+                d.lay("bike", &circle(ring.radius_mm as f64));
+                d.lay("travel", &circle(ring.road_mm as f64));
+            } else {
+                d.lay("travel", &circle(ring.radius_mm as f64));
+            }
+            if let Some(bus) = &v.bus {
+                d.lay("bus", &flatten(&bus.poly));
+            }
+            d.stand("median", circle(ring.island_mm as f64), height_of("median"), true);
         } else {
-            d.lay("travel", &circle(ring.radius_mm as f64));
+            // A turbo: the carriageway (the lanes and the 300 mm between them) is one travel surface, the dividers are paint on it.
+            if ring.cycle_mm.is_some_and(|c| c != 0) {
+                d.lay("bike", &ring.outer_edge);
+            }
+            d.lay("travel", &ring.road_edge);
+            for divider in &ring.dividers {
+                d.divider(divider);
+            }
+            d.stand("median", ring.island_edge.clone(), height_of("median"), true);
         }
-        if let Some(bus) = &v.bus {
-            d.lay("bus", &flatten(&bus.poly));
-        }
-        d.stand("median", circle(ring.island_mm as f64), height_of("median"), true);
     } else {
         d.lay("travel", &flatten(&v.core));
     }
@@ -563,6 +597,58 @@ mod tests {
 
     fn count(s: &str, needle: &str) -> usize {
         s.matches(needle).count()
+    }
+
+    fn turbo(layout: usize) -> Junction {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT) && j.set_turbo(Some(layout)));
+        j
+    }
+
+    #[test]
+    fn a_turbo_roundabout_lays_its_road_and_paints_its_dividers_white() {
+        let m = svg(&turbo(0)).markup;
+        let paint = count(&m, "class=\"iso-paint white\"");
+        assert!(paint > 0, "the divider is painted");
+        assert_eq!(paint % 2, 0, "a double line is two lines of quads");
+        assert!(m.find("class=\"iso-flat k-travel\"").unwrap() < m.find("class=\"iso-paint white\"").unwrap(), "the paint lies on the road");
+        assert!(!m.contains("iso-paint white\" data-face") && !m.contains("iso-paint white iso-top"), "paint is not a face");
+        assert!(count(&svg(&turbo(3)).markup, "class=\"iso-paint white\"") > paint, "a spiral has two dividers");
+        let mut plain = Junction::new(0);
+        plain.set_control(ROUNDABOUT);
+        assert_eq!(count(&svg(&plain).markup, "iso-paint"), 0);
+    }
+
+    #[test]
+    fn a_turbo_roundabout_keeps_its_island_a_solid_and_its_cycle_track_round_the_road() {
+        let mut j = turbo(0);
+        assert!(j.set_cycle_track(true));
+        let m = svg(&j).markup;
+        assert!(count(&m, "iso-top k-median") >= 1);
+        assert!(m.find("iso-flat k-bike").unwrap() < m.find("iso-flat k-travel").unwrap(), "the track is laid first, the road over it");
+    }
+
+    #[test]
+    fn every_layout_and_block_draws_in_2_5d_without_a_missing_number() {
+        // Four streets of three entering lanes of 3.5 m: a spiral's or rotor's three lanes need no more room than the street has.
+        let mut j = junction_of(&[("sidewalk", 3_000), ("travel", 3_500), ("travel", 3_500), ("travel", 3_500), ("sidewalk", 3_000)]);
+        assert!(j.set_control(ROUNDABOUT));
+        for layout in 0..5 {
+            assert!(j.set_turbo(Some(layout)));
+            for size in 0..4 {
+                let _ = j.set_turbo_size(size);
+                let m = svg(&j).markup;
+                assert!(!m.contains("NaN") && !m.contains("inf"), "layout {layout} block {size}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_2_5d_picture_names_the_turbo_layout_and_size() {
+        let j = turbo(0);
+        let (en, fr) = (crate::i18n_for(crate::shared::i18n::Locale::En), crate::i18n_for(crate::shared::i18n::Locale::FrCa));
+        assert_eq!(iso_label(&j.view(), &en), "2.5D view of the junction. 4 streets. Basic turbo roundabout, mini size.");
+        assert_eq!(iso_label(&j.view(), &fr), "Vue en 2,5D de la jonction. 4 rues. Giratoire turbo de base, taille mini.");
     }
 
     fn depths(markup: &str) -> Vec<f64> {

@@ -244,6 +244,7 @@ jn-view-iso = 2.5D
 jn-view-shown-plan = Showing the plan.
 jn-view-shown-iso = Showing the junction in 2.5D.
 jn-iso-label = 2.5D view of the junction. { $arms }.
+jn-iso-label-turbo = 2.5D view of the junction. { $arms }. { $name }.
 jn-plan-label = Plan of the junction, north up. { $arms }.
 jn-plan-label-roundabout = Plan of the junction, north up. { $arms }. Roundabout.
 jn-plan-label-raised = Plan of the junction, north up. { $arms }. Raised table.

@@ -244,6 +244,7 @@ jn-view-iso = 2,5D
 jn-view-shown-plan = Plan affiché.
 jn-view-shown-iso = Jonction affichée en 2,5D.
 jn-iso-label = Vue en 2,5D de la jonction. { $arms }.
+jn-iso-label-turbo = Vue en 2,5D de la jonction. { $arms }. { $name }.
 jn-plan-label = Plan de la jonction, nord en haut. { $arms }.
 jn-plan-label-roundabout = Plan de la jonction, nord en haut. { $arms }. Carrefour giratoire.
 jn-plan-label-raised = Plan de la jonction, nord en haut. { $arms }. Carrefour surélevé.
