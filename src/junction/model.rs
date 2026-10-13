@@ -16,7 +16,7 @@ use crate::street::model::{Editor, Street, View, named_said};
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::{JUNCTION_SAMPLES, junction_of, junction_with_walkways};
+pub use fixtures::{JUNCTION_SAMPLES, junction_of, junction_with_walkways, suspended_turbo};
 
 pub const LEFT: u8 = 1;
 pub const THROUGH: u8 = 2;
@@ -421,9 +421,14 @@ pub fn traffic_arms(s: &State) -> usize {
 
 /// The state as the junction is run. With at most one street carrying traffic there is nothing to control, so
 /// it runs uncontrolled whatever control was kept; the kept control returns when traffic does. What reads the
-/// control to draw or judge the junction asks for this; an edit changes the kept state.
+/// control (and a turbo) to draw or judge the junction asks for this; an edit changes the kept state.
 pub fn in_force(s: &State) -> Cow<'_, State> {
-    if s.control != UNCONTROLLED && traffic_arms(s) <= 1 { Cow::Owned(State { control: UNCONTROLLED, ..s.clone() }) } else { Cow::Borrowed(s) }
+    if s.control != UNCONTROLLED && traffic_arms(s) <= 1 {
+        // A turbo is part of a roundabout: with the roundabout suspended it is too. The kept state still has it.
+        Cow::Owned(State { control: UNCONTROLLED, turbo: None, ..s.clone() })
+    } else {
+        Cow::Borrowed(s)
+    }
 }
 
 impl Arm {
@@ -1409,7 +1414,7 @@ impl Junction {
 
     /// Lets a lane go to a street, or not. A lane keeps at least one street.
     pub fn set_lane_dest(&mut self, uid: u32, lane: usize, to: u32, on: bool) -> bool {
-        if self.current().turbo.is_some() {
+        if self.turbo_in_force() {
             return self.refuse(Refusal::TurboLanesFixed);
         }
         let Some(dest) = self.arm(to).map(arm_name) else { return self.refuse(Refusal::DoesNotFit) };
@@ -1469,7 +1474,7 @@ impl Junction {
         if approach >= APPROACHES.len() {
             return self.refuse(Refusal::DoesNotFit);
         }
-        if matches!(approach, Q_OFFSET | Q_CURB | Q_VIRTUAL) && self.current().turbo.is_some() {
+        if matches!(approach, Q_OFFSET | Q_CURB | Q_VIRTUAL) && self.turbo_in_force() {
             return self.refuse(Refusal::QueueJumpOnTurbo);
         }
         self.arm_edit(
@@ -1621,7 +1626,7 @@ impl Junction {
     /// streets, or takes it away with `None`.
     pub fn set_bus(&mut self, pair: Option<(u32, u32)>) -> bool {
         let pair = pair.map(|(a, b)| (a.min(b), a.max(b)));
-        if pair.is_some() && self.current().turbo.is_some() {
+        if pair.is_some() && self.turbo_in_force() {
             return self.refuse(Refusal::BusOnTurbo);
         }
         let label = match pair {
@@ -1695,7 +1700,7 @@ impl Junction {
     }
 
     pub fn step_ring(&mut self, dir: i32) -> bool {
-        if self.current().turbo.is_some() {
+        if self.turbo_in_force() {
             return self.step_turbo_size(dir);
         }
         self.set_ring(self.current().ring_extra_mm + dir * RING_STEP_MM)
@@ -1710,6 +1715,11 @@ impl Junction {
     /// Puts the cycle track around a roundabout at its usual width, or takes it away.
     pub fn set_cycle_track(&mut self, on: bool) -> bool {
         self.set_cycle(on.then_some(CYCLE_DEFAULT_MM))
+    }
+
+    /// Whether a turbo is in force: the roundabout is run as one (not suspended for want of traffic).
+    fn turbo_in_force(&self) -> bool {
+        in_force(self.current()).turbo.is_some()
     }
 
     /// Gives the roundabout a turbo layout (an index into `LAYOUTS`), or takes it away with `None`. The main road is
@@ -1738,7 +1748,7 @@ impl Junction {
 
     /// Sets the block (an index into `BLOCKS`) of the turbo.
     pub fn set_turbo_size(&mut self, size: usize) -> bool {
-        if size >= BLOCKS.len() || self.current().turbo.is_none() {
+        if size >= BLOCKS.len() || !self.turbo_in_force() {
             return self.refuse(Refusal::DoesNotFit);
         }
         let label = Said::new("jn-rev-turbo-size").with("size", Arg::MsgLower(BLOCKS[size].key));
@@ -1747,7 +1757,7 @@ impl Junction {
 
     /// Steps the turbo's block one up (1) or down (-1).
     pub fn step_turbo_size(&mut self, dir: i32) -> bool {
-        let Some(t) = self.current().turbo.as_ref() else { return self.refuse(Refusal::DoesNotFit) };
+        let Some(t) = in_force(self.current()).turbo.clone() else { return self.refuse(Refusal::DoesNotFit) };
         match usize::try_from(t.size as i32 + dir) {
             Ok(size) => self.set_turbo_size(size),
             Err(_) => self.refuse(Refusal::DoesNotFit),
@@ -1757,7 +1767,7 @@ impl Junction {
     /// Makes the next opposite pair of streets the main road (a knee also swaps which of the two has two lanes).
     pub fn switch_turbo_main(&mut self) -> bool {
         let region = self.region;
-        if self.current().turbo.is_none() {
+        if !self.turbo_in_force() {
             return self.refuse(Refusal::DoesNotFit);
         }
         // One that stands, else the next in turn, which the edit then refuses by saying why.
@@ -1769,7 +1779,7 @@ impl Junction {
 
     /// Sets how much bigger than its least size a roundabout is.
     pub fn set_ring(&mut self, extra_mm: i32) -> bool {
-        if self.current().turbo.is_some() {
+        if self.turbo_in_force() {
             return self.refuse(Refusal::DoesNotFit); // a turbo has blocks, not a length
         }
         let extra = snap(extra_mm, RING_STEP_MM);
@@ -1842,6 +1852,10 @@ fn settle_turbo(s: &mut State, region: usize) {
     // suspended (`in_force`), and its turbo comes back with the traffic. Suspended, the turbo is left as it is (its
     // conditions apply again when it is in force) and the read side draws no ring.
     if s.control == ROUNDABOUT && traffic_arms(s) <= 1 {
+        // Only a turbo that cannot be one at all goes: no such layout or block, or a main road that is not two arms.
+        if s.turbo.as_ref().is_some_and(|t| !t.fits_arms(&s.arms)) {
+            s.turbo = None;
+        }
         return;
     }
     let stands = s.control == ROUNDABOUT && s.turbo.as_ref().is_some_and(|t| t.standable(&s.arms, region));
@@ -3751,6 +3765,40 @@ mod tests {
         assert_eq!(j.current().turbo.as_ref().unwrap().main, [2, 4]);
         assert!(!j.view().turbo.as_ref().unwrap().can_switch_main, "the only pair that stands is the main road now");
         assert!(!j.switch_turbo_main());
+    }
+
+    #[test]
+    fn a_suspended_turbo_is_kept_but_neither_read_nor_enforced_and_comes_back_with_the_traffic() {
+        let mut j = suspended_turbo();
+        assert!(j.current().turbo.is_some(), "kept for the save");
+        assert!(j.snapshot().turbo.is_some());
+        let v = j.view();
+        assert!(v.turbo.is_none() && v.ring.is_none() && v.turbo_options.is_empty(), "the junction has no roundabout, so no turbo");
+        let n = arm_at(&j, 0);
+        assert!(j.set_approach(n, Q_OFFSET), "a queue jump is not refused for the sake of a turbo that is not in force");
+        assert!(j.view().arms.iter().all(|a| a.transit.approaches_out.is_empty()));
+        assert!(!j.set_turbo_size(1) && !j.step_turbo_size(1) && !j.switch_turbo_main(), "and there is no turbo to size or move");
+        assert!(j.current().turbo.is_some());
+    }
+
+    #[test]
+    fn a_suspended_turbo_that_cannot_be_a_turbo_at_all_is_dropped_but_a_badly_shaped_one_is_not() {
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        let state = j.snapshot();
+        let quiet = |state: &State, turbo: Turbo| {
+            let mut s = on_streets(state, &[90, 180, 270]);
+            s.turbo = Some(turbo);
+            Junction::from_city(named_said("Test"), &s, &s, 0).expect("it draws").current().turbo.clone()
+        };
+        let good = Turbo { layout: 0, size: 1, main: vec![1, 3] };
+        assert_eq!(quiet(&state, good.clone()), Some(good));
+        assert_eq!(quiet(&state, Turbo { layout: 9, size: 0, main: vec![1, 3] }), None, "no such layout");
+        assert_eq!(quiet(&state, Turbo { layout: 0, size: 9, main: vec![1, 3] }), None, "no such block");
+        assert_eq!(quiet(&state, Turbo { layout: 0, size: 0, main: vec![1, 77] }), None, "a main road that is not an arm");
+        let mut three = state.clone();
+        three.arms.truncate(3);
+        assert_eq!(quiet(&three, Turbo { layout: 0, size: 0, main: vec![1, 3] }), None, "basic needs four streets");
     }
 
     #[test]

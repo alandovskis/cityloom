@@ -1797,3 +1797,19 @@ fn a_typed_time_is_read_with_a_comma_and_a_bad_one_changes_nothing() {
         assert_eq!(s.read(|j| j.arm(e).unwrap().timing), before, "{bad:?} changes nothing");
     }
 }
+
+#[test]
+fn a_suspended_turbo_is_not_named_or_offered_and_is_back_with_the_traffic() {
+    use crate::junction::plan_svg::plan_label;
+    use crate::shared::i18n::Locale;
+    let en = crate::i18n_for(Locale::En);
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), en.clone(), suspended_turbo(), None);
+    assert!(!plan_label(&s.read(|j| j.view()), &en).contains("turbo"));
+    let h = panel(&s);
+    for gone in ["i-h-turbo-size", "i-h-turbo-main", "i-h-turbo-layout"] {
+        assert!(!h.contains(gone), "{gone}");
+    }
+    let mut busy = Junction::new(0);
+    assert!(busy.set_control(ROUNDABOUT) && busy.set_turbo(Some(0)));
+    assert!(plan_label(&busy.view(), &en).contains("turbo"));
+}

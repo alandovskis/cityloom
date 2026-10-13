@@ -131,3 +131,18 @@ pub fn junction_with_walkways(bearings: &[i32], pieces: &[(&str, i32)]) -> Junct
     }
     Junction::from_city(named_said("Test"), &state, &state, 0).expect("the junction draws")
 }
+
+/// A basic turbo roundabout, in a city, whose east, south and west streets are walkways: one street carries traffic, so
+/// the control is suspended and the turbo with it.
+pub fn suspended_turbo() -> Junction {
+    use crate::shared::catalogue::{Side, StreetClass};
+    let mut j = Junction::new(0);
+    assert!(j.set_control(ROUNDABOUT) && j.set_turbo(Some(0)));
+    let mut state = j.snapshot();
+    let walkway = Street::imported(StreetClass::Pedestrian, Side::Right, &[]);
+    for a in &mut state.arms {
+        a.section = Some(if a.bearing == 0 { Street::sample(0, Side::Right) } else { walkway.clone() });
+        a.edge = a.uid;
+    }
+    Junction::from_city(named_said("Test"), &state, &state, 0).expect("it draws")
+}
