@@ -288,6 +288,10 @@ pub struct Arm {
     /// the junction's control is a signal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timing: Option<Timing>,
+    /// The street was a pedestrian one the last time the arm was settled: when it carries traffic again the arm gets
+    /// the crossing and the lanes a new arm has, once.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub walked: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -440,6 +444,7 @@ impl Arm {
             rule: 0,
             filter: false,
             timing: None,
+            walked: false,
         }
     }
 
@@ -1744,16 +1749,13 @@ pub fn normalize(arms: &mut [Arm], region: usize) {
     // The streets a lane can go to: every street but the pedestrian ones, which nothing drives into.
     let dests: Vec<(u32, i32)> = arms.iter().filter(|a| !a.is_pedestrian()).map(|a| (a.uid, a.bearing)).collect();
     let avail: Vec<u8> = (0..arms.len()).map(|i| classes_of(arms, i)).collect();
-    // The arms that carry traffic again after having none: no lane of the other arms reaches them, so their lanes lead
-    // to them by default. A street that goes only one way out has no lanes of its own, so it is told by that.
+    // The arms that carry traffic again after having none: the other arms' lanes lead to them by default. A street that
+    // goes only one way out has no lanes of its own, so it is told by having been a pedestrian street.
     let regained: Vec<(u32, i32)> = arms
         .iter()
         .filter(|a| {
             let p = a.profile(region);
-            !a.is_pedestrian()
-                && a.lanes.is_empty()
-                && !(p.enter_x.is_empty() && p.leave_x.is_empty())
-                && !arms.iter().any(|o| o.uid != a.uid && o.lanes.iter().any(|l| l.to.contains(&a.uid)))
+            !a.is_pedestrian() && a.lanes.is_empty() && (!p.enter_x.is_empty() || (a.walked && !p.leave_x.is_empty()))
         })
         .map(|a| (a.uid, a.bearing))
         .collect();
@@ -1793,10 +1795,12 @@ pub fn normalize(arms: &mut [Arm], region: usize) {
             a.stop = 0;
             a.rule = 0;
             a.bike_box = false;
+            a.walked = true;
         } else {
             if regains_traffic && a.crossing.is_none() {
                 a.crossing = Some(default_crossing());
             }
+            a.walked = false;
             if let Some(c) = a.crossing.as_mut() {
                 c.island = c.island && p.road_mm() >= ISLAND_MIN_ROAD_MM && !c.continuous;
             }
@@ -2014,6 +2018,24 @@ mod tests {
         assert!(w.crossing.is_none(), "the resident's choice stands");
         assert!(!n.lanes[lane].to.contains(&walk));
         let _ = south;
+    }
+
+    #[test]
+    fn the_only_street_of_traffic_going_one_way_out_regains_its_crossing_once_and_a_removed_one_stays_removed() {
+        let j = junction_with_walkways(&[0, 90, 180, 270], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let mut s = j.current().clone();
+        let north = s.arms.iter().position(|a| a.bearing == 0).unwrap();
+        assert!(s.arms[north].walked && s.arms[north].crossing.is_none());
+        s.arms[north].section = Some(one_way_out());
+        let mut j = Junction::from_city(named_said("Test"), &s, &s, 0).expect("draws");
+        let uid = arm_at(&j, 0);
+        assert!(j.arm(uid).unwrap().crossing.is_some() && !j.arm(uid).unwrap().walked, "the crossing is given back");
+        assert!(j.set_crossing(uid, false));
+        assert!(j.set_corner(uid, 4_000));
+        let mut arms = j.current().arms.clone();
+        normalize(&mut arms, 0);
+        assert!(j.arm(uid).unwrap().crossing.is_none(), "the resident's choice stands after an edit");
+        assert!(arms.iter().find(|a| a.uid == uid).unwrap().crossing.is_none(), "and after a further normalize");
     }
 
     #[test]
