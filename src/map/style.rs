@@ -95,6 +95,12 @@ pub fn layers(lat: f64) -> String {
             "paint": { "line-color": colour(), "line-opacity": opacity(1.0), "line-width": metres("width_m", lat, 2.5, 0.0) }
         },
         {
+            "id": "places-pedestrian", "type": "line", "source": SOURCE,
+            "filter": ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "class"], "pedestrian"]],
+            "layout": { "line-cap": "round", "line-join": "round" },
+            "paint": { "line-color": "#ffffff", "line-opacity": opacity(1.0), "line-width": 2, "line-dasharray": [0.1, 2.5] }
+        },
+        {
             "id": "places-conflict", "type": "line", "source": SOURCE,
             "filter": ["all", ["==", ["geometry-type"], "LineString"], ["boolean", ["get", "conflict"], false]],
             "layout": { "line-cap": "butt", "line-join": "round" },
@@ -175,10 +181,10 @@ mod tests {
     }
 
     #[test]
-    fn the_places_are_drawn_in_four_layers_on_one_source() {
+    fn the_places_are_drawn_in_five_layers_on_one_source() {
         let l = layers(45.5);
         let ids: Vec<&str> = l.iter().map(|l| l["id"].as_str().unwrap()).collect();
-        assert_eq!(ids, ["places-casing", "places-street", "places-conflict", "places-junction"]);
+        assert_eq!(ids, ["places-casing", "places-street", "places-pedestrian", "places-conflict", "places-junction"]);
         assert!(l.iter().all(|l| l["source"] == SOURCE));
         assert_eq!(SOURCE, "places");
     }
@@ -196,7 +202,7 @@ mod tests {
     #[test]
     fn the_highlighted_place_is_outlined_dark_so_it_is_not_told_by_its_colour_alone() {
         let l = layers(45.5);
-        for (layer, property) in [(&l[0], "line-color"), (&l[3], "circle-stroke-color")] {
+        for (layer, property) in [(&l[0], "line-color"), (&l[4], "circle-stroke-color")] {
             let outline = layer["paint"][property].to_string();
             assert!(outline.contains("feature-state") && outline.contains(HOT_OUTLINE) && outline.contains("#ffffff"), "{outline}");
         }
@@ -236,7 +242,7 @@ mod tests {
 
     #[test]
     fn a_junction_is_a_circle_with_a_radius_in_metres_and_a_minimum() {
-        let junction = &layers(45.5)[3];
+        let junction = &layers(45.5)[4];
         assert_eq!(junction["type"], "circle");
         let r = junction["paint"]["circle-radius"].to_string();
         assert!(r.contains("\"radius_m\"") && r.contains("\"max\""), "{r}");
@@ -246,8 +252,20 @@ mod tests {
     fn a_street_in_conflict_is_tinted_and_dashed_so_it_is_not_told_by_colour_alone() {
         let l = layers(45.5);
         assert!(l[1]["paint"]["line-color"].to_string().contains(CONFLICT));
-        assert_eq!(l[2]["filter"].to_string(), r#"["all",["==",["geometry-type"],"LineString"],["boolean",["get","conflict"],false]]"#);
-        assert!(l[2]["paint"]["line-dasharray"].is_array());
+        assert_eq!(l[3]["filter"].to_string(), r#"["all",["==",["geometry-type"],"LineString"],["boolean",["get","conflict"],false]]"#);
+        assert!(l[3]["paint"]["line-dasharray"].is_array());
+    }
+
+    #[test]
+    fn a_pedestrian_street_has_a_dotted_white_line_over_its_status_colour() {
+        let l = layers(45.5);
+        let ped = &l[2];
+        assert_eq!(ped["id"], "places-pedestrian");
+        assert_eq!(ped["source"], SOURCE);
+        assert_eq!(ped["filter"].to_string(), r#"["all",["==",["geometry-type"],"LineString"],["==",["get","class"],"pedestrian"]]"#);
+        assert_eq!(ped["paint"]["line-color"], "#ffffff");
+        assert!(ped["paint"]["line-dasharray"].is_array());
+        assert_eq!(ped["layout"]["line-cap"], "round", "a dash of almost no length is a dot");
     }
 
     #[test]
