@@ -1837,7 +1837,13 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
 /// island, no queue jump, no ring size of its own, crossings are at least 6 m from the ring, and the entry lanes are
 /// the layout's. Without one the lanes follow the streets.
 fn settle_turbo(s: &mut State, region: usize) {
-    let stands = in_force(s).control == ROUNDABOUT && s.turbo.as_ref().is_some_and(|t| t.standable(&s.arms, region));
+    // The kept control decides, not the one in force: a roundabout whose streets are all walkways but one is only
+    // suspended (`in_force`), and its turbo comes back with the traffic. Suspended, the turbo is left as it is (its
+    // conditions apply again when it is in force) and the read side draws no ring.
+    if s.control == ROUNDABOUT && traffic_arms(s) <= 1 {
+        return;
+    }
+    let stands = s.control == ROUNDABOUT && s.turbo.as_ref().is_some_and(|t| t.standable(&s.arms, region));
     if !stands {
         // Only a turbo that goes leaves lanes of its own behind: they follow the streets again.
         if s.turbo.take().is_some() {
@@ -3699,6 +3705,37 @@ mod tests {
         assert_eq!(j.arm(n).unwrap().crossing.unwrap().setback_mm, 6_000);
         assert!(!j.set_setback(n, 3_000), "closer than that is no change on a turbo");
         assert!(j.set_setback(n, 7_000));
+    }
+
+    /// `s` (a saved state, without streets) on the first sample street, where the arms facing `walk` read a walkway.
+    fn on_streets(s: &State, walk: &[i32]) -> State {
+        use crate::shared::catalogue::{Side, StreetClass};
+        let walkway = Street::imported(StreetClass::Pedestrian, Side::Right, &[]);
+        let mut s = s.clone();
+        for a in &mut s.arms {
+            a.section = Some(if walk.contains(&a.bearing) { walkway.clone() } else { Street::sample(0, Side::Right) });
+            a.edge = a.uid;
+        }
+        s
+    }
+
+    #[test]
+    fn a_turbo_whose_streets_are_made_pedestrian_is_only_suspended_and_comes_back_with_the_traffic() {
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)) && j.step_turbo_size(1));
+        let (saved, turbo) = (j.snapshot(), j.current().turbo.clone());
+        assert!(turbo.is_some());
+        let walk = on_streets(&saved, &[90, 180, 270]);
+        let mut quiet = Junction::from_city(named_said("Test"), &walk, &walk, 0).expect("it draws");
+        assert_eq!(traffic_arms(quiet.current()), 1);
+        assert_eq!(quiet.current().turbo, turbo, "the turbo is kept while the control is in force nowhere");
+        assert!(quiet.set_corner(arm_at(&quiet, 0), 4_000), "an edit made meanwhile");
+        assert_eq!(quiet.current().turbo, turbo, "does not write the record without it");
+        let _ = quiet.view(); // and it can be read
+        let back = on_streets(&quiet.snapshot(), &[]);
+        let busy = Junction::from_city(named_said("Test"), &back, &back, 0).expect("it draws");
+        assert_eq!(busy.current().control, ROUNDABOUT);
+        assert_eq!(busy.current().turbo, turbo, "the same layout, block and main");
     }
 
     #[test]
