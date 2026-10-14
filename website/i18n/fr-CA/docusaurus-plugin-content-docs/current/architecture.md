@@ -57,7 +57,7 @@ français sont dans `docs/glossary-fr-ca.md`.
 
 ## Modules WebAssembly
 
-L’espace de travail compte trois caisses en plus de l’éditeur lui-même :
+L’espace de travail compte trois caisses :
 
 - `cityloom_editor` (la caisse racine) est l’éditeur, construit en WebAssembly et piloté par `wasm-bindgen`.
 - `osm_network` est le type de réseau simple (serde seulement).
@@ -70,14 +70,15 @@ trois à cinq branches que l’éditeur de jonction sait dessiner devient une jo
 
 ## JavaScript
 
-La logique appartient à Rust. Les scripts de page dans `web/` (`app.js`, `junction.js`, `map.js`) se contentent de
-charger le module, d’appeler `mount_*` et de monter le shell. La seule exception est `web/basemap.js`, l’adaptateur qui
-possède la carte MapLibre.
+La logique appartient à Rust. Les scripts de page dans `web/` (`home.js`, `map.js`, `app.js` pour la page de la rue et
+`junction.js`) servent au démarrage : ils chargent le module, appellent `mount_*` et montent le shell. Les scripts de la
+rue et de la jonction préparent aussi les motifs de hachures et enregistrent les modifications de la page à `pagehide`,
+et `map.js` crée le fond de carte. La seule exception est `web/basemap.js`, l’adaptateur qui possède la carte MapLibre.
 
 ## Persistance
 
 Une page ouverte depuis la carte modifie un lieu de la ville. Ses modifications sont réécrites par `CityStore`, avec un
-délai antirebond de 250 ms, et enregistrées quand la page est masquée. Les modifications de toutes les zones tiennent
+délai antirebond de 250 ms, et enregistrées quand on quitte la page. Les modifications de toutes les zones tiennent
 dans un seul document, `cityloom-edits`, dont les enregistrements sont indexés d’après ce dont le lieu a été fait
 (identifiants de nœuds et de voies OpenStreetMap); une modification suit donc son lieu dans une autre zone qui le
 contient.

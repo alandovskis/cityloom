@@ -52,7 +52,7 @@ renders, so a history follows a language switch. Each slice that owns messages h
 
 ## WebAssembly modules
 
-The workspace has three crates besides the editor itself:
+The workspace has three crates:
 
 - `cityloom_editor` (the root crate) is the editor, built to WebAssembly and driven by `wasm-bindgen`.
 - `osm_network` is the plain network type (serde only).
@@ -65,12 +65,14 @@ the junction editor can draw becomes a junction.
 
 ## JavaScript
 
-Logic belongs in Rust. The page scripts in `web/` (`app.js`, `junction.js`, `map.js`) only load the module, call
-`mount_*` and mount the shell. The one exception is `web/basemap.js`, the adapter that owns the MapLibre map.
+Logic belongs in Rust. The page scripts in `web/` (`home.js`, `map.js`, `app.js` for the street page and `junction.js`)
+are start-up glue: they load the module, call `mount_*` and mount the shell. The street and junction scripts also set up
+the hatch patterns and flush the page's edits on `pagehide`, and `map.js` creates the basemap. The one exception is
+`web/basemap.js`, the adapter that owns the MapLibre map.
 
 ## Persistence
 
 A page opened from the map edits one place of the city. Its edits are written back through `CityStore` behind a 250 ms
-debounce and flushed when the page is hidden. The edits of every area live in one document, `cityloom-edits`, whose
+debounce and flushed when the page is left. The edits of every area live in one document, `cityloom-edits`, whose
 records are keyed by what the place was made from (OpenStreetMap node and way ids), so an edit follows its place into
 another area that holds it.

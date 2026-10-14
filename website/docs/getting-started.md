@@ -13,6 +13,7 @@ argument to list them.
 
 - A Rust toolchain with the `wasm32-unknown-unknown` target.
 - Node.js and npm.
+- Python 3 (`just prepare` runs `scripts/prepare.py`).
 - `just`.
 
 `just setup` installs the rest, once:
@@ -22,8 +23,7 @@ just setup
 ```
 
 It runs `npm ci` at the root (the map's runtime libraries, MapLibre and PMTiles) and in `e2e` (Playwright), installs
-`wasm-bindgen-cli` at the version pinned in `Cargo.toml` into `.tools`, installs Playwright's Chromium, and runs
-`npm ci` in `website` (this documentation).
+`wasm-bindgen-cli` at the version pinned in `Cargo.toml` into `.tools`, and installs Playwright's Chromium.
 
 ## Build and serve
 
@@ -64,11 +64,12 @@ just format-check  # the same, without changing anything
 ```
 
 CI runs `just format-check`, `just test` and `just e2e` with `RUSTFLAGS=-D warnings`, so a new compiler warning fails
-it. Every pull request raises the version in the root `Cargo.toml`.
+it, and builds this documentation with `just docs-build`. Every pull request raises the version in the root `Cargo.toml`.
 
 ## This documentation
 
 ```sh
+just setup-docs  # install this documentation's packages (once)
 just docs        # serve the site with live reload
 just docs-build  # build both languages into website/build
 ```

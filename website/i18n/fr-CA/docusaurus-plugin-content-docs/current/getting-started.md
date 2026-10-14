@@ -13,6 +13,7 @@ ses tâches; lancez `just` sans argument pour les lister.
 
 - Une chaîne d’outils Rust avec la cible `wasm32-unknown-unknown`.
 - Node.js et npm.
+- Python 3 (`just prepare` exécute `scripts/prepare.py`).
 - `just`.
 
 `just setup` installe le reste, une seule fois :
@@ -22,8 +23,8 @@ just setup
 ```
 
 La recette exécute `npm ci` à la racine (les bibliothèques d’exécution de la carte, MapLibre et PMTiles) et dans `e2e`
-(Playwright), installe `wasm-bindgen-cli` dans `.tools` à la version fixée dans `Cargo.toml`, installe Chromium pour
-Playwright et exécute `npm ci` dans `website` (cette documentation).
+(Playwright), installe `wasm-bindgen-cli` dans `.tools` à la version fixée dans `Cargo.toml` et installe Chromium pour
+Playwright.
 
 ## Construire et servir
 
@@ -64,12 +65,13 @@ just format-check  # la même vérification, sans rien modifier
 ```
 
 L’intégration continue exécute `just format-check`, `just test` et `just e2e` avec `RUSTFLAGS=-D warnings`; un nouvel
-avertissement du compilateur la fait donc échouer. Chaque demande de fusion augmente la version dans le `Cargo.toml` de
+avertissement du compilateur la fait donc échouer. Elle construit aussi cette documentation avec `just docs-build`. Chaque demande de fusion augmente la version dans le `Cargo.toml` de
 la racine.
 
 ## Cette documentation
 
 ```sh
+just setup-docs  # installer les paquets de cette documentation (une fois)
 just docs        # servir le site avec rechargement automatique
 just docs-build  # construire les deux langues dans website/build
 ```
