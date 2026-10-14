@@ -8,14 +8,12 @@ use std::rc::Rc;
 use osm_network::Network;
 
 use crate::city::edits::{self, DAMAGED_KEY, Document, Draft, EDITS_KEY, Edits};
-use crate::city::migrate::migrate;
 use crate::city::model::{City, Layout};
 use crate::junction::model::State;
 use crate::place::area::{Area, default_area};
 use crate::shared::ports::Storage;
 use crate::street::model::Street;
 
-pub const CITY_KEY: &str = "cityloom-city";
 /// The area the person is working in, which every page opens its city from.
 pub const AREA_KEY: &str = "cityloom-area";
 /// The street network of an area, as `osm_import` made it; the area's key follows.
@@ -23,8 +21,6 @@ pub const NETWORK_KEY: &str = "cityloom-network";
 /// The checksum of the metro tile an area's network was made from, where it was; the area's key follows.
 pub const CHECKSUM_KEY: &str = "cityloom-checksum";
 pub const REGION_KEY: &str = "cityloom-region";
-/// What the migration is asked of the storage as (`Storage::first_time`).
-const MIGRATION: &str = "migration";
 
 #[derive(Clone)]
 pub struct CityStore {
@@ -100,16 +96,9 @@ impl CityStore {
         self.keep_network_from(network, None)
     }
 
-    /// The same for a network made from a metro tile that had `checksum`, which is kept with it so that a
-    /// later visit can tell whether the tile has changed. The saves of older versions are moved first: they are
-    /// by position, so they must be read on the network they were made on, not on the one replacing it. Where the
-    /// area has such a save and the migration could not keep its document (storage near its quota), the network is
-    /// not kept (false): it waits until the save has been moved.
+    /// The same for a network made from a metro tile that had `checksum`, which is kept with it so that a later
+    /// visit can tell whether the tile has changed.
     pub fn keep_network_from(&self, network: &Network, checksum: Option<&str>) -> bool {
-        self.migrate();
-        if self.storage.recall(EDITS_KEY).is_none() && self.storage.recall(&self.key(CITY_KEY)).is_some() {
-            return false;
-        }
         serde_json::to_string(network).is_ok_and(|json| self.storage.remember(&self.key(NETWORK_KEY), &json))
             && self.storage.remember(&self.key(CHECKSUM_KEY), checksum.unwrap_or_default())
     }
@@ -149,16 +138,6 @@ impl CityStore {
         edits::parse(self.storage.recall(EDITS_KEY).as_deref())
     }
 
-    /// Moves the per-area saves of an older version into the edits document, once (a no-op where it exists), and
-    /// at most once per page of a browser storage.
-    fn migrate(&self) {
-        // asked of the storage, so that the loader's store and the page's share it: where the document that marks
-        // the migration done cannot be kept, it is not run again on every open (it reads every area's network)
-        if self.storage.first_time(MIGRATION) {
-            migrate(&*self.storage);
-        }
-    }
-
     /// The edits as kept: none when there are none, they are damaged or they come from a newer version.
     fn edits(&self) -> Edits {
         match self.document() {
@@ -169,7 +148,6 @@ impl CityStore {
 
     /// The city as it is kept, or as first laid out when nothing usable is.
     pub fn open(&self) -> City {
-        self.migrate();
         City::load_on(self.layout(), &self.edits())
     }
 
@@ -238,8 +216,9 @@ impl CityStore {
 mod tests {
     use super::*;
     use crate::city::edits::{self, Document, Edits, StreetRecord};
+    use crate::shared::catalogue::StreetClass;
     use crate::shared::ports::{MemoryStorage, test_ports};
-    use crate::street::model::Street;
+    use crate::street::model::{Street, pedestrianised};
 
     fn store() -> (CityStore, Rc<crate::shared::ports::MemoryStorage>) {
         let (ports, _, storage) = test_ports();
@@ -377,7 +356,7 @@ mod tests {
     #[test]
     fn a_record_this_build_cannot_read_survives_a_write_of_another_place_unchanged() {
         let (store, storage) = store();
-        let newer = r#"{"version":3,"streets":{"w9~n1~n2":{"street":{"class":"Hovercraft"}}},"junctions":{}}"#;
+        let newer = r#"{"version":4,"streets":{"w9~n1~n2":{"street":{"class":"Hovercraft"}}},"junctions":{}}"#;
         storage.remember(EDITS_KEY, newer);
         assert!(store.write_street(1, narrowed(&store, 1)));
         let kept: serde_json::Value = serde_json::from_str(&storage.recall(EDITS_KEY).unwrap()).unwrap();
@@ -398,12 +377,38 @@ mod tests {
     #[test]
     fn a_document_from_a_newer_version_is_left_alone_and_the_write_says_it_was_not_kept() {
         let (store, storage) = store();
-        let newer = r#"{"version":4,"streets":{},"junctions":{},"future":true}"#;
+        let newer = r#"{"version":5,"streets":{},"junctions":{},"future":true}"#;
         storage.remember(EDITS_KEY, newer);
         assert!(!store.write_street(1, narrowed(&store, 1)));
         assert_eq!(storage.recall(EDITS_KEY).as_deref(), Some(newer));
         assert_eq!(storage.recall(DAMAGED_KEY), None, "a newer document is not a damaged one");
         assert_eq!(store.open().view(0).edited, 0, "and it is not read");
+    }
+
+    #[test]
+    fn a_document_of_the_previous_version_is_not_read_and_is_copied_aside_before_the_first_write_replaces_it() {
+        let (store, storage) = store();
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        let current = storage.recall(EDITS_KEY).unwrap();
+        let previous = current.replacen(&format!("\"version\":{}", edits::VERSION), "\"version\":3", 1);
+        assert_ne!(previous, current);
+        storage.remember(EDITS_KEY, &previous);
+        assert_eq!(store.open().view(0).edited, 0, "an earlier version's document is not read");
+        assert!(store.write_street(2, narrowed(&store, 2)));
+        assert_eq!(storage.recall(DAMAGED_KEY).as_deref(), Some(previous.as_str()));
+        assert_eq!(document(&storage).streets.len(), 1, "the document was replaced by one of this version");
+    }
+
+    #[test]
+    fn a_street_made_pedestrian_comes_back_pedestrian_with_the_class_it_had_after_the_page_is_opened_again() {
+        let (store, _) = store();
+        let before = store.open().street_editor(1, 0).unwrap().snapshot();
+        let s = pedestrianised(&before);
+        assert_eq!((s.class, s.class_before), (StreetClass::Pedestrian, Some(before.class)));
+        assert!(store.write_street(1, s.clone()), "a street of another class than today's is kept");
+        let again = store.open().street_editor(1, 0).unwrap();
+        assert_eq!(again.snapshot(), s);
+        assert_eq!(again.view().class, StreetClass::Pedestrian);
     }
 
     #[test]
@@ -416,81 +421,13 @@ mod tests {
     }
 
     #[test]
-    fn opening_the_city_moves_the_old_saves_first_and_only_once() {
-        let (ports, _, storage) = test_ports();
-        let store = CityStore::for_area(ports.storage, Area::new("A", 45.5, -73.5));
-        assert_eq!(storage.recall(EDITS_KEY), None);
-        store.open();
-        assert!(document(&storage).streets.is_empty(), "nothing to move: the document is made empty");
-        storage.remember("cityloom-city:9.0000,9.0000", "{}");
-        store.open();
-        assert_eq!(storage.recall(EDITS_KEY), Some(Edits::new().to_json()), "the document is not made again");
-    }
-
-    #[test]
-    fn a_migration_whose_document_could_not_be_kept_is_not_run_again_on_every_open_of_the_page() {
-        let (ports, _, storage) = test_ports();
-        let store = CityStore::for_area(ports.storage, Area::new("A", 45.5, -73.5));
-        storage.blocked(true);
-        store.open(); // the migration runs and cannot keep its document
-        storage.blocked(false);
-        // the loader's store and the page's are two stores on the same storage
-        CityStore::for_area(storage.clone(), Area::new("A", 45.5, -73.5)).open();
-        assert_eq!(storage.recall(EDITS_KEY), None, "not tried again by this page: it read every area's network each time");
-        storage.next_page();
-        store.open();
-        assert!(storage.recall(EDITS_KEY).is_some(), "the next page tries again");
-    }
-
-    #[test]
-    fn a_refreshed_network_is_not_kept_while_an_old_save_of_the_area_waits_for_a_migration_that_could_not_be_kept() {
-        let (ports, _, storage) = test_ports();
-        let area = Area::new("Testville", 1.0, 2.0);
-        let (old, new) = two_roads_then_reordered();
-        storage.remember(&format!("{NETWORK_KEY}:{}", area.key()), &serde_json::to_string(&old).unwrap());
-        storage.remember(&format!("{CITY_KEY}:{}", area.key()), &edited_first_street(&old));
-        storage.refuse(EDITS_KEY); // storage near its quota: the migration's document cannot be kept
-        let store = CityStore::for_area(ports.storage.clone(), area.clone());
-        assert!(!store.keep_network_from(&new, Some("new")), "the new network is not kept: the old save is by position on the old one");
-        assert_eq!(storage.recall(&format!("{NETWORK_KEY}:{}", area.key())), Some(serde_json::to_string(&old).unwrap()));
-        // a later page, with room again
-        storage.refuse_nothing();
-        storage.next_page();
-        let store = CityStore::for_area(ports.storage, area);
-        store.open();
-        assert_eq!(document(&storage).streets.values().map(|r| r.ways.clone()).collect::<Vec<_>>(), [[7].into()], "moved against the old network");
-        assert!(store.keep_network_from(&new, Some("new")), "and then the new network is kept");
-    }
-
-    /// A network of two roads (ways 7 and 8), and the same read in the other order, as a refreshed tile may give it.
-    fn two_roads_then_reordered() -> (Network, Network) {
-        let mut old = tiny_network();
-        let mut second = old.roads[0].clone();
-        (second.id, second.osm_ways, second.name) = (2, vec![8], Some("Other Street".into()));
-        old.roads.push(second);
-        let mut new = old.clone();
-        new.roads.reverse();
-        (old, new)
-    }
-
-    /// What an older version kept for `network` with its first street edited.
-    fn edited_first_street(network: &Network) -> String {
-        let mut city = City::on(Layout::from_network(network, ""));
-        let mut s = city.street_editor(1, 0).unwrap().snapshot();
-        s.segments[0].width_mm -= 100;
-        s.segments[1].width_mm += 100;
-        assert!(city.keep_street(1, s));
-        city.legacy_save()
-    }
-
-    #[test]
     fn a_change_that_is_not_taken_is_not_kept() {
         let (store, storage) = store();
         let mut wrong = narrowed(&store, 1);
         wrong.row_mm += 100; // the street no longer has the room it had
         assert!(!store.write_street(1, wrong));
         assert!(!store.write_street(999, narrowed(&store, 1)), "no such street");
-        assert!(document(&storage).streets.is_empty(), "only the empty document that marks the migration done");
+        assert_eq!(storage.recall(EDITS_KEY), None, "nothing is written for a change that is not taken");
     }
 
     #[test]
@@ -564,7 +501,6 @@ mod tests {
         assert!(area.write_street(street, s));
         assert_eq!(area.open().view(0).edited, 1);
         assert_eq!(document(&storage).streets.keys().collect::<Vec<_>>(), ["w7~n1~n2"]);
-        assert_eq!(storage.recall(CITY_KEY), None, "the old document is not written");
         assert_eq!(CityStore::sample(ports.storage.clone()).open().view(0).edited, 0, "the record matches no place of another city");
         let other = CityStore::for_area(ports.storage, Area::new("Elsewhere", 5.0, 6.0));
         assert!(!other.has_network());
@@ -635,33 +571,6 @@ mod tests {
     }
 
     #[test]
-    fn an_old_save_is_moved_against_the_network_it_was_made_on_even_when_a_newer_network_comes_first() {
-        let (ports, _, storage) = test_ports();
-        let area = Area::new("Testville", 1.0, 2.0);
-        // two roads; the tile refreshed since reads them in the other order, so the positions change
-        let mut old = tiny_network();
-        let mut second = old.roads[0].clone();
-        (second.id, second.osm_ways, second.name) = (2, vec![8], Some("Other Street".into()));
-        old.roads.push(second);
-        let mut new = old.clone();
-        new.roads.reverse();
-        // an older version's visit kept the network and its save, and no edits document
-        storage.remember(&format!("{NETWORK_KEY}:{}", area.key()), &serde_json::to_string(&old).unwrap());
-        let mut city = City::on(Layout::from_network(&old, ""));
-        let mut s = city.street_editor(1, 0).unwrap().snapshot();
-        s.segments[0].width_mm -= 100;
-        s.segments[1].width_mm += 100;
-        assert!(city.keep_street(1, s));
-        storage.remember(&format!("{CITY_KEY}:{}", area.key()), &city.legacy_save());
-        let store = CityStore::for_area(ports.storage, area.clone());
-        // the loader keeps the refreshed network before the page opens the city
-        assert!(store.keep_network_from(&new, Some("new")));
-        store.open();
-        let e = document(&storage);
-        assert_eq!(e.streets.values().map(|r| r.ways.clone()).collect::<Vec<_>>(), [[7].into()], "the edit stays with way 7, where it was made");
-    }
-
-    #[test]
     fn a_street_whose_key_another_street_shares_is_not_written_and_the_write_says_so() {
         let (ports, _, storage) = test_ports();
         let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
@@ -676,7 +585,7 @@ mod tests {
         s.segments[0].width_mm -= 100;
         s.segments[1].width_mm += 100;
         assert!(!area.write_street(street, s), "an edit that could not come back is refused");
-        assert!(document(&storage).streets.is_empty());
+        assert_eq!(storage.recall(EDITS_KEY), None, "nothing is written");
     }
 
     #[test]

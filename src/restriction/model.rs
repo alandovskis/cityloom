@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::city::model::EdgeView;
 use crate::city::projection::Projection;
-use crate::shared::catalogue::KINDS;
+use crate::shared::catalogue::{CAR_KINDS, KINDS};
 use crate::shared::said::{Arg, Said};
 use crate::street::model::Street;
 
@@ -196,7 +196,7 @@ impl Rule {
     /// The catalogue kinds of piece the rule does not allow.
     fn forbids(self) -> &'static [&'static str] {
         match self {
-            Rule::CarFree => &["travel", "parking", "loading"],
+            Rule::CarFree => &CAR_KINDS,
             Rule::BusAndBikeOnly => &["travel"],
             Rule::NoParkingOrLoading => &["parking", "loading"],
             Rule::SpeedLimit { .. } => &[],
@@ -428,11 +428,39 @@ mod tests {
     }
 
     #[test]
+    fn a_street_is_pedestrian_exactly_when_it_has_no_motor_piece_and_breaks_the_car_free_rule_only_for_cars() {
+        // (pieces, breaks the Car-free rule, is pedestrian)
+        for (ids, car_free_breaks, pedestrian) in [
+            (&["sidewalk"][..], false, true),
+            (&["sidewalk", "bike"], false, true),
+            (&["sidewalk", "bus", "bike"], false, false),
+            (&["sidewalk", "shoulder"], false, false),
+            (&["sidewalk", "travel"], true, false),
+            (&["parking"], true, false),
+            (&["bike", "loading"], true, false),
+        ] {
+            let s = street(ids);
+            assert_eq!(!conflicts(Rule::CarFree, &s).is_empty(), car_free_breaks, "{ids:?}");
+            assert_eq!(s.class == StreetClass::Pedestrian, pedestrian, "{ids:?}");
+            assert_eq!(s.has_motor(), !pedestrian, "{ids:?}");
+            assert!(!car_free_breaks || s.has_motor(), "a car piece is a motor piece: {ids:?}");
+        }
+    }
+
+    #[test]
     fn car_free_allows_no_driving_parking_or_loading() {
         let busy = street(&["sidewalk", "travel", "travel", "parking", "loading", "sidewalk"]);
         assert_eq!(conflicts(Rule::CarFree, &busy), vec![c("travel", 2), c("parking", 1), c("loading", 1)]);
         let calm = street(&["sidewalk", "bike", "bus", "planting", "sidewalk"]);
         assert_eq!(conflicts(Rule::CarFree, &calm), vec![]);
+    }
+
+    #[test]
+    fn car_free_forbids_what_the_catalogue_calls_cars_and_still_allows_buses() {
+        use crate::shared::catalogue::CAR_KINDS;
+        assert_eq!(Rule::CarFree.forbids(), &CAR_KINDS[..]);
+        let calm = street(&["sidewalk", "bus", "bike", "shoulder"]);
+        assert_eq!(conflicts(Rule::CarFree, &calm), vec![], "a bus lane, a bike lane and a shoulder are not cars to the rule");
     }
 
     #[test]

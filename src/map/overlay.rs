@@ -36,7 +36,7 @@ pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String
     for e in &v.edges {
         features.push(json!({
             "type": "Feature",
-            "properties": { "hot": format!("s-{}", e.uid), "status": status(e.ok, e.edited), "width_m": e.row_mm as f64 / 1000.0, "conflict": conflicts.contains(&e.uid) },
+            "properties": { "hot": format!("s-{}", e.uid), "status": status(e.ok, e.edited), "width_m": e.row_mm as f64 / 1000.0, "class": e.class.id(), "conflict": conflicts.contains(&e.uid) },
             "geometry": { "type": "LineString", "coordinates": e.shape_mm.iter().map(|q| position(p, q[0], q[1])).collect::<Vec<_>>() },
         }));
     }
@@ -193,6 +193,17 @@ mod tests {
             + (b[1].as_f64().unwrap() - a[1].as_f64().unwrap()) * (m[0].as_f64().unwrap() - a[0].as_f64().unwrap())
                 / (b[0].as_f64().unwrap() - a[0].as_f64().unwrap());
         assert!((m[1].as_f64().unwrap() - lerp).abs() > 1e-5, "{m} on the chord from {a} to {b}");
+    }
+
+    #[test]
+    fn a_street_says_its_class_so_that_the_map_can_tell_a_pedestrian_street() {
+        let mut v = City::from_network(&bent_road(), "Bendville").view(0);
+        let p = projection(&v);
+        let class =
+            |v: &crate::city::model::CityView| parse(&places(v, &p, &BTreeSet::new()))["features"][0]["properties"]["class"].as_str().unwrap().to_string();
+        assert_eq!(class(&v), "local");
+        v.edges[0].class = crate::shared::catalogue::StreetClass::Pedestrian;
+        assert_eq!(class(&v), "pedestrian");
     }
 
     #[test]

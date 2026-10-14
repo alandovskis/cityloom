@@ -318,3 +318,13 @@ side-word-right = à droite
 side-word-left = à gauche
 unavailable-freeways-only = Autoroutes seulement
 unavailable-not-freeway = Pas pour une autoroute
+
+# Une rue piétonne (src/street/model.rs, page.rs, vm.rs).
+make-pedestrian-button = Rendre piétonne
+make-pedestrian-hint = Chaque voie de circulation, espace de stationnement, zone de chargement, voie réservée ou accotement devient le genre d’élément choisi.
+rev-made-pedestrian = Rendue piétonne
+street-now-pedestrian = { $street } est maintenant une rue piétonne.
+street-traffic-again = { $street } accueille de nouveau la circulation.
+check-access-ped-ok = Les trottoirs offrent un passage continu de { $amount } ou plus
+check-access-ped-bad = Aucun trottoir continu de { $amount } ou plus
+check-detail-no-edges-pedestrian = Pas de chaussée, donc pas de trottoir exigé

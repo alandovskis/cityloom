@@ -395,6 +395,16 @@ jn-insp-min-arms = { $n ->
 jn-insp-lanes-in = Voies entrantes
 jn-insp-one-way-out = Sens unique sortant. Aucune voie n’entre.
 
+# Une rue piétonne à une jonction (src/junction/model.rs, inspector.rs).
+jn-refusal-crossing-pedestrian = Une rue piétonne n’a pas de chaussée à traverser; elle n’a donc pas de passage pour piétons.
+jn-refusal-measure-pedestrian = Une rue piétonne n’accueille pas de circulation; elle ne prend donc aucune mesure de circulation.
+jn-insp-crossing-pedestrian = Une rue piétonne n’a pas de chaussée à traverser.
+jn-insp-lanes-pedestrian = Une rue piétonne n’a pas de voies de circulation.
+jn-insp-control-pedestrian = { $n ->
+    [0] Aucune rue ici n’accueille la circulation.
+   *[other] Une seule rue ici accueille la circulation.
+}
+
 jn-refusal-not-signal = Le réglage des feux n’existe qu’à un carrefour à feux de circulation.
 jn-refusal-timing-out-of-range = Cette durée est hors de ce qu’un feu peut utiliser.
 jn-refusal-no-transit-lane = Une avance pour le transport en commun exige une voie réservée sur cette rue.

@@ -81,6 +81,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("checks-n-slot", view! { <notes::ChecksBadge vm=vm.clone()/> }.into_any());
     mount("history", view! { <page::History vm=vm.clone()/> }.into_any());
     mount("add", view! { <page::AddMenu vm=vm.clone()/> }.into_any());
+    mount("pedestrian-slot", view! { <page::MakePedestrian vm=vm.clone()/> }.into_any());
     mount("clock-slot", view! { <page::Clock vm=vm.clone()/> }.into_any());
     mount("time-note", view! { <page::TimeNote vm=vm.clone()/> }.into_any());
     mount("welcome-slot", view! { <page::Welcome vm=vm.clone()/> }.into_any());

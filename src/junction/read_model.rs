@@ -12,7 +12,7 @@ use crate::junction::model::{
     ALL_WAY_STOP, APPROACHES, ARM_LENGTH_MM, Arm, BUS_LANE_MM, BikeBoxBlocker, CONTROLS, FILTER_CODE, GATE_SIGNAL, GATE_YIELD, ISLAND_MIN_ROAD_MM, ISLAND_MM,
     Junction, LEFT, MAX_RING_MM, MIN_ARMS, PRIORITY, Profile, ProtectedBlocker, Q_CURB, Q_OFFSET, Q_VIRTUAL, RIGHT, RING_STEP_MM, ROUNDABOUT, RULE_AROUND,
     RULE_DEAD_END, RULE_RIRO, RULE_WITHIN, RULES, SIGNAL, STOP_BULB, STOP_PLATFORM, STOPS, State, THROUGH, TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker,
-    blocked, classes_of, protected_blocker, protected_island_mm, turn_class,
+    blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
 };
 
 use crate::junction::signal;
@@ -136,6 +136,8 @@ pub struct Layout {
 /// curbs meet behind the junction, a fillet longer than its arm, a roundabout
 /// that will not fit its arms in the largest ring.
 pub fn layout(s: &State, region: usize) -> Option<Layout> {
+    let in_force = in_force(s);
+    let s: &State = &in_force;
     let n = s.arms.len();
     let mut arms: Vec<ArmLayout> = s
         .arms
@@ -402,6 +404,8 @@ pub struct ArmView {
     pub max_offset_mm: i32,
     pub enters: bool,
     pub leaves: bool,
+    /// The street this arm reads is a pedestrian street.
+    pub pedestrian: bool,
     pub transit: TransitView,
 }
 
@@ -546,6 +550,8 @@ pub struct JView {
     pub drive_side: &'static str,
     pub control: &'static str,
     pub control_index: usize,
+    /// How many of the junction's streets carry traffic.
+    pub traffic_arms: usize,
     pub ring: Option<RingView>,
     pub ring_extra_mm: i32,
     /// The junction is a raised table.
@@ -612,9 +618,14 @@ pub fn control_role(s: &State, i: usize) -> &'static str {
 /// The two arms nearest to a straight line make the priority street.
 fn priority_pair(arms: &[Arm]) -> [usize; 2] {
     let n = arms.len();
+    let traffic = arms.iter().filter(|a| !a.is_pedestrian()).count();
     let mut best = ([0, 1], i32::MAX);
     for i in 0..n {
         for j in i + 1..n {
+            // A walkway has no traffic to give way; with fewer than two streets of traffic the pair is as it was.
+            if traffic >= 2 && (arms[i].is_pedestrian() || arms[j].is_pedestrian()) {
+                continue;
+            }
             let d = (gap(arms[i].bearing, arms[j].bearing) - 180).abs();
             let wide = arms[i].row_mm() + arms[j].row_mm();
             let score = d * 100_000 - wide;
@@ -692,7 +703,8 @@ impl Junction {
     }
 
     pub fn view(&self) -> JView {
-        let s = self.current();
+        let in_force = in_force(self.current());
+        let s: &State = &in_force;
         let region = self.region;
         // The current state is always valid; the layout it was checked with is
         // rebuilt here. A gesture may hold a state the layout rejects only if a
@@ -722,6 +734,7 @@ impl Junction {
             let off = a.offset_mm as f64;
             let len = ARM_LENGTH_MM as f64;
             let cx = a.crossing;
+            let walk = a.is_pedestrian();
             let far = l.mouth + cx.map_or(0.0, |c| (c.setback_mm + c.width_mm) as f64);
             let park_t = far + if cx.is_some() { PARK_CLEAR_MM } else { NO_CROSSING_CLEAR_MM };
             let clear_far = clear_far(a, l);
@@ -746,7 +759,8 @@ impl Junction {
                 } else {
                     clear_far
                 };
-                if inside && !road {
+                let t0 = if walk { l.mouth } else { t0 };
+                if inside && !road && !walk {
                     // The median stops short of the junction; the road runs on beside it.
                     gaps.push(poly(&strip(l.bearing, x0, x1, l.strip0, t0)));
                 }
@@ -787,7 +801,7 @@ impl Junction {
                     core_bike.push(poly(&strip(l.bearing, x0, x1, (l.strip0 - CORE_BIKE_MM).max(0.0), l.strip0)));
                 }
             }
-            let table = raised
+            let table = (raised && !walk)
                 .then(|| RaisedView { top: poly(&strip(l.bearing, l.cl, l.cr, l.mouth, far)), ramp: poly(&strip(l.bearing, l.cl, l.cr, far, far + RAMP_MM)) });
             for c in strip(l.bearing, l.pl, l.pr, len, len) {
                 widen(c);
@@ -853,7 +867,7 @@ impl Junction {
                         .iter()
                         .zip(&lay.arms)
                         .enumerate()
-                        .filter(|(_, (b, _))| b.uid != a.uid)
+                        .filter(|(_, (b, _))| b.uid != a.uid && !b.is_pedestrian())
                         .map(|(j, (b, lb))| {
                             let turn = (b.bearing - a.bearing).rem_euclid(360) - 180;
                             (
@@ -907,6 +921,7 @@ impl Junction {
                 max_offset_mm: road_mm / 2,
                 enters,
                 leaves,
+                pedestrian: a.is_pedestrian(),
                 transit: transit_view(s, a, l, off, far, crossing_present, side),
             });
         }
@@ -988,7 +1003,9 @@ impl Junction {
                         } else {
                             MAX_TURN_KMH
                         }
-                    && (s.arms[c.a].crossing.is_some() || s.arms[c.b].crossing.is_some()),
+                    && (s.arms[c.a].crossing.is_some() || s.arms[c.b].crossing.is_some())
+                    && !s.arms[c.a].is_pedestrian()
+                    && !s.arms[c.b].is_pedestrian(),
                 straight: c.fillet.is_none(),
                 walk: is_walk(la.prof.edge_kind[1]) || is_walk(lb.prof.edge_kind[0]),
                 protected,
@@ -1047,7 +1064,7 @@ impl Junction {
         }
         for (a, arm) in arms.iter_mut().zip(&s.arms) {
             for (lane, l) in a.lanes.iter_mut().zip(&arm.lanes) {
-                lane.bad = !l.to.iter().any(|t| movements.iter().any(|m| m.from == arm.uid && m.to == *t && m.allowed));
+                lane.bad = !l.to.is_empty() && !l.to.iter().any(|t| movements.iter().any(|m| m.from == arm.uid && m.to == *t && m.allowed));
             }
         }
         let conflicts = conflicts(s, &movements, &lay, side);
@@ -1071,6 +1088,7 @@ impl Junction {
             drive_side: if side == Side::Left { "left" } else { "right" },
             control: CONTROLS[s.control].id,
             control_index: s.control,
+            traffic_arms: traffic_arms(s),
             ring: ring.map(|r| RingView {
                 radius_mm: r.radius as i32,
                 floor_mm: r.floor,
@@ -1456,12 +1474,12 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
     out.push(check("transit", "jn-check-transit", Said::new("jn-check-transit-ok"), problems));
 
     // Signals.
-    let signal_ok = s.control != SIGNAL || s.arms.len() <= MAX_SIGNAL_ARMS;
+    let signal_ok = s.control != SIGNAL || traffic_arms(s) <= MAX_SIGNAL_ARMS;
     out.push(check(
         "signal",
         "jn-check-signal",
         Said::new("jn-check-signal-ok"),
-        (!signal_ok).then(|| Said::new("jn-check-signal-bad").with("n", Arg::Num(s.arms.len() as i64))),
+        (!signal_ok).then(|| Said::new("jn-check-signal-bad").with("n", Arg::Num(traffic_arms(s) as i64))),
     ));
     // Signal timing: time to cross, and the cycle.
     if let Some(plan) = signal::plan(s, region).filter(|p| !p.phases.is_empty()) {
@@ -1496,6 +1514,144 @@ mod tests {
     use super::*;
     use crate::junction::model::{DEFAULT_SETBACK_MM, JUNCTION_SAMPLES, MIN_SETBACK_MM, junction_of};
     use crate::shared::testing::{en, fr};
+
+    #[test]
+    fn a_junction_with_one_walkway_arm_lays_out_and_draws() {
+        use crate::junction::model::junction_with_walkways;
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+        assert!(layout(j.current(), 0).is_some(), "the junction can be laid out");
+        let v = j.view();
+        assert_eq!(v.arms.len(), 4);
+        let walk = v.arms.iter().find(|a| a.bearing == 90).unwrap();
+        assert!(walk.pedestrian && !walk.enters && !walk.leaves && walk.lanes.is_empty());
+        assert_eq!(v.arms.iter().filter(|a| a.pedestrian).count(), 1);
+        assert_eq!(v.traffic_arms, 3);
+        let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
+        let plan = crate::junction::plan_svg::plan_svg(&v, &i18n, 640.0, 640.0, crate::shared::units::Units::Metres);
+        assert!(plan.markup.matches("data-role=\"arm\"").count() >= 4);
+        let iso = crate::junction::iso::iso_svg(&v, &i18n, 640.0, 640.0, crate::shared::units::Units::Metres);
+        assert!(iso.markup.contains("iso-"));
+    }
+
+    const WALKWAY: [(&str, i32); 3] = [("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)];
+
+    #[test]
+    fn a_walkway_arm_s_pieces_start_at_its_mouth_with_no_road_before_them_and_no_table_of_its_own() {
+        use crate::junction::iso::flatten;
+        use crate::junction::model::junction_with_walkways;
+        let mut j = junction_with_walkways(&[90], &WALKWAY);
+        assert!(j.set_raised(true));
+        let v = j.view();
+        let walk = v.arms.iter().find(|a| a.pedestrian).unwrap();
+        assert!(walk.gaps.is_empty(), "no road lies between the junction and the walkway");
+        assert!(walk.raised.is_none(), "a walkway is at sidewalk height already");
+        assert!(v.arms.iter().filter(|a| !a.pedestrian).all(|a| a.raised.is_some()), "the other streets are on the table");
+        let h = crate::junction::geometry::dir(90.0);
+        let near = |poly: &[Value]| flatten(poly).iter().map(|p| p.0 * h.0 + p.1 * h.1).fold(f64::MAX, f64::min);
+        let mouth = near(&walk.outline);
+        assert_eq!(walk.pieces.len(), 3);
+        for p in &walk.pieces {
+            assert!((near(&p.poly) - mouth).abs() < 1.0, "a piece starts at the mouth: {} against {mouth}", near(&p.poly));
+        }
+    }
+
+    #[test]
+    fn the_lanes_of_the_other_streets_do_not_offer_a_walkway_as_a_place_to_go() {
+        use crate::junction::model::junction_with_walkways;
+        let v = junction_with_walkways(&[90], &WALKWAY).view();
+        let walk = v.arms.iter().find(|a| a.pedestrian).unwrap().uid;
+        for a in v.arms.iter().filter(|a| !a.pedestrian) {
+            assert!(!a.lanes.is_empty());
+            for lane in &a.lanes {
+                assert!(!lane.dests.is_empty() && lane.dests.iter().all(|d| d.uid != walk));
+            }
+        }
+    }
+
+    #[test]
+    fn no_turn_is_too_fast_at_a_corner_beside_a_walkway_and_the_same_radius_elsewhere_is() {
+        use crate::junction::model::junction_with_walkways;
+        let mut j = junction_with_walkways(&[90], &WALKWAY);
+        let (north, south) = (j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid, j.current().arms.iter().find(|a| a.bearing == 180).unwrap().uid);
+        assert!(j.set_corner(north, 12_000) && j.set_corner(south, 12_000));
+        let v = j.view();
+        let fast = |uid: u32| v.corners.iter().find(|c| c.uid == uid).unwrap().fast;
+        assert!(!fast(north), "the corner between the north street and the walkway has no turn to flag");
+        assert!(fast(south), "the same radius between two streets of traffic is flagged");
+    }
+
+    #[test]
+    fn a_walkway_arm_adds_nothing_to_the_checks() {
+        use crate::junction::model::junction_with_walkways;
+        let v = junction_with_walkways(&[90], &WALKWAY).view();
+        let walk = v.arms.iter().find(|a| a.pedestrian).unwrap();
+        assert!(walk.crossing.is_none() && walk.stop_line.is_none() && walk.lanes.is_empty());
+        for id in ["lanes-cover", "lanes-follow", "crossing", "turning-speed"] {
+            assert!(v.checks.iter().find(|c| c.id == id).unwrap().ok, "{id}");
+        }
+    }
+
+    #[test]
+    fn a_walkway_wider_than_the_cross_street_does_not_take_the_priority() {
+        use crate::junction::model::{PRIORITY, junction_with_walkways};
+        let mut j = junction_with_walkways(&[90], &[("sidewalk", 12_000), ("terrace", 8_000), ("sidewalk", 12_000)]);
+        assert!(j.set_control(PRIORITY));
+        let s = j.current();
+        let role = |bearing: i32| control_role(s, s.arms.iter().position(|a| a.bearing == bearing).unwrap());
+        assert_eq!((role(0), role(180), role(270)), ("free", "free", "stop"), "the through street keeps the priority");
+    }
+
+    #[test]
+    fn a_five_arm_signal_with_one_walkway_passes_the_signal_check() {
+        use crate::junction::model::SIGNAL;
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::{Piece, Street};
+        let pieces: Vec<Piece> =
+            WALKWAY.iter().map(|&(id, width_mm)| Piece { kind: kind_index(id).unwrap(), width_mm, direction: None, variants: Vec::new() }).collect();
+        let walkway = Street::imported(StreetClass::Pedestrian, Side::Right, &pieces);
+        let mut state = Junction::new(3).current().clone(); // the five-way sample
+        let street = Street::sample(0, Side::Right);
+        for (i, a) in state.arms.iter_mut().enumerate() {
+            a.section = Some(if i == 0 { walkway.clone() } else { street.clone() });
+            a.edge = a.uid;
+        }
+        let mut j = Junction::from_city(Said::new("city-name").with("name", Arg::Text("Test".into())), &state, &state, 0).expect("draws");
+        assert_eq!(j.current().arms.len(), 5);
+        assert!(j.set_control(SIGNAL));
+        assert!(j.view().checks.iter().find(|c| c.id == "signal").unwrap().ok, "four streets carry traffic");
+    }
+
+    #[test]
+    fn a_junction_with_one_street_of_traffic_runs_uncontrolled_passes_the_lane_checks_and_draws() {
+        use crate::junction::model::{SIGNAL, UNCONTROLLED, junction_with_walkways};
+        let j = junction_with_walkways(&[90, 180, 270], &[("sidewalk", 4000), ("sidewalk", 4000)]);
+        let v = j.view();
+        assert_eq!(v.traffic_arms, 1);
+        assert_eq!((v.control, v.control_index), ("uncontrolled", UNCONTROLLED));
+        assert_eq!(j.current().control, SIGNAL, "the kept control is not touched");
+        let follow = v.checks.iter().find(|c| c.id == "lanes-follow").unwrap();
+        assert!(follow.ok, "{:?}", follow.detail);
+        assert!(
+            v.arms.iter().find(|a| !a.pedestrian).unwrap().lanes.iter().all(|l| !l.bad),
+            "a lane with nowhere to go is not a lane that points at a banned turn"
+        );
+        let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
+        let units = crate::shared::units::Units::Metres;
+        assert!(!crate::junction::plan_svg::plan_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
+        assert!(!crate::junction::iso::iso_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
+    }
+
+    #[test]
+    fn a_junction_where_every_street_is_a_walkway_still_draws() {
+        use crate::junction::model::junction_with_walkways;
+        let v = junction_with_walkways(&[0, 90, 180, 270], &WALKWAY).view();
+        assert_eq!((v.traffic_arms, v.arms.iter().filter(|a| a.pedestrian).count()), (0, 4));
+        assert_eq!(v.control, "uncontrolled");
+        let i18n = crate::i18n_for(crate::shared::i18n::Locale::En);
+        let units = crate::shared::units::Units::Metres;
+        assert!(!crate::junction::plan_svg::plan_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
+        assert!(!crate::junction::iso::iso_svg(&v, &i18n, 640.0, 640.0, units).markup.is_empty());
+    }
 
     #[test]
     fn a_corner_has_a_sidewalk_where_an_arm_has_one_beside_its_curb() {

@@ -2,7 +2,18 @@ import { readFileSync } from "node:fs";
 
 import type { Page } from "@playwright/test";
 
-import { expect, forgive, live, mapReady, mapStill, PLATEAU_TILES, placesOnMap, serveBasemap, test } from "./fixtures";
+import {
+  expect,
+  forgive,
+  live,
+  mapReady,
+  mapStill,
+  openStreet,
+  PLATEAU_TILES,
+  placesOnMap,
+  serveBasemap,
+  test,
+} from "./fixtures";
 
 // The map page works on a real area: the default one, the Plateau Mont-Royal, from a metro tile.
 
@@ -371,6 +382,36 @@ test.describe("the city map", () => {
     await mapReady(page);
     await mapStill(page);
     await expect.poll(async () => (await streetSpots(page)).some((s) => s.editable)).toBe(true);
+  });
+
+  test("the map draws pedestrian streets with a dotted line and says each street's class", async ({ page }) => {
+    await page.goto("/map.html");
+    await mapReady(page);
+    expect(await page.evaluate(() => !!(window as any).cityloomMap.getLayer("places-pedestrian"))).toBe(true);
+    const classes: unknown[] = await page.evaluate(() =>
+      (window as any).cityloomMap
+        .querySourceFeatures("places")
+        .filter((f: any) => f.geometry.type === "LineString")
+        .map((f: any) => f.properties.class),
+    );
+    expect(classes.length).toBeGreaterThan(0);
+    expect(classes.every((c) => typeof c === "string")).toBe(true);
+  });
+
+  test("a street made pedestrian is a pedestrian street on the map", async ({ page }) => {
+    const href = await openStreet(page);
+    const hot = `s-${href.split("=")[1]}`;
+    await page.locator("#make-pedestrian-btn").click();
+    await page.locator("#make-pedestrian-menu .ped-item").first().click();
+    await page.goto("/map.html"); // leaving the page keeps what was waiting to be kept
+    await mapReady(page);
+    await page.waitForFunction(
+      (id) =>
+        (window as any).cityloomMap
+          .querySourceFeatures("places")
+          .some((f: any) => f.properties.hot === id && f.properties.class === "pedestrian"),
+      hot,
+    );
   });
 });
 

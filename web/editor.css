@@ -1904,6 +1904,28 @@ dl.prov dd:last-child {
   color: var(--ink-2);
   font-size: 14px;
 }
+
+/* ---- the Make pedestrian menu -------------------------------------------------- */
+
+/* Fixed to the window like the Add menu, so the stage cannot clip it; the page sets its place. */
+.ped-menu {
+  position: fixed;
+  right: auto;
+  left: 8px;
+  top: 8px;
+  width: min(340px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+.ped-menu .hint {
+  padding: 0 0 8px;
+}
+.ped-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .keyhelp {
   display: none;
 }

@@ -347,6 +347,26 @@ test.describe("a length typed in a junction number field", () => {
   });
 });
 
+test.describe("a junction of a street made pedestrian", () => {
+  test("loses the crossing of that street's arm", async ({ page }) => {
+    await openStreet(page);
+    const end = page.locator('#street-sub a[href^="intersection.html"]').first();
+    const href = (await end.getAttribute("href")) ?? "";
+    expect(href).not.toBe("");
+    await end.click();
+    await expect(page.locator("#drawing")).toBeVisible();
+    const crossings = await page.locator("#drawing path.crossing").count();
+    expect(crossings).toBeGreaterThan(0);
+    await page.goBack();
+    await page.locator("#make-pedestrian-btn").click();
+    await page.locator("#make-pedestrian-menu .ped-item").first().click();
+    // leaving the page keeps what was waiting to be kept
+    await page.locator('#street-sub a[href^="intersection.html"]').first().click();
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(page.locator("#drawing path.crossing")).toHaveCount(crossings - 1);
+  });
+});
+
 test.describe("signal timing on a junction of the city", () => {
   test.beforeEach(async ({ page }) => {
     await openJunction(page);
