@@ -10,16 +10,16 @@ sidebar_position: 3
 
 The code is organised by feature, one folder per slice, not by layer. New code goes in the slice that owns the feature.
 
-| Slice | What it holds |
-| --- | --- |
-| `street/` | The street editor. |
-| `junction/` | The junction editor. |
-| `map/` | The city map over a MapLibre basemap, and the Area rules panel. |
-| `shell/` | The markup the pages share: menu, language switch, shortcuts. |
-| `city/` | The city: the layout, its storage, its projection onto the earth and the edits document. |
-| `place/` | Where a city comes from: place search, and fetching and importing an area's roads. |
-| `restriction/` | The rules declared over an area of the map. |
-| `shared/` | The kernel: catalogue, units, ports, translations. It must not depend on any slice. |
+| Slice          | What it holds                                                                            |
+| -------------- | ---------------------------------------------------------------------------------------- |
+| `street/`      | The street editor.                                                                       |
+| `junction/`    | The junction editor.                                                                     |
+| `map/`         | The city map over a MapLibre basemap, and the Area rules panel.                          |
+| `shell/`       | The markup the pages share: menu, language switch, shortcuts.                            |
+| `city/`        | The city: the layout, its storage, its projection onto the earth and the edits document. |
+| `place/`       | Where a city comes from: place search, and fetching and importing an area's roads.       |
+| `restriction/` | The rules declared over an area of the map.                                              |
+| `shared/`      | The kernel: catalogue, units, ports, translations. It must not depend on any slice.      |
 
 A slice may use another slice's `model`, `city::store`, `city::binding`, `city::projection`, `restriction::store`,
 `shell::Target` and `shared`. It must never reach into another slice's view-model, views or text.

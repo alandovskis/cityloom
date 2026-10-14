@@ -11,16 +11,16 @@ sidebar_position: 3
 Le code est organisé par fonctionnalité, un dossier par tranche, et non par couche. Le nouveau code va dans la tranche
 qui possède la fonctionnalité.
 
-| Tranche | Contenu |
-| --- | --- |
-| `street/` | L’éditeur de rue. |
-| `junction/` | L’éditeur de jonction. |
-| `map/` | La carte de la ville sur un fond de carte MapLibre, et le panneau Règles de zone. |
-| `shell/` | Le balisage commun aux pages : menu, changement de langue, raccourcis. |
-| `city/` | La ville : sa disposition, son stockage, sa projection sur la Terre et le document des modifications. |
-| `place/` | L’origine d’une ville : la recherche de lieu, ainsi que la récupération et l’importation des routes d’une zone. |
-| `restriction/` | Les règles déclarées sur une zone de la carte. |
-| `shared/` | Le noyau : catalogue, unités, ports, traductions. Il ne doit dépendre d’aucune tranche. |
+| Tranche        | Contenu                                                                                                         |
+| -------------- | --------------------------------------------------------------------------------------------------------------- |
+| `street/`      | L’éditeur de rue.                                                                                               |
+| `junction/`    | L’éditeur de jonction.                                                                                          |
+| `map/`         | La carte de la ville sur un fond de carte MapLibre, et le panneau Règles de zone.                               |
+| `shell/`       | Le balisage commun aux pages : menu, changement de langue, raccourcis.                                          |
+| `city/`        | La ville : sa disposition, son stockage, sa projection sur la Terre et le document des modifications.           |
+| `place/`       | L’origine d’une ville : la recherche de lieu, ainsi que la récupération et l’importation des routes d’une zone. |
+| `restriction/` | Les règles déclarées sur une zone de la carte.                                                                  |
+| `shared/`      | Le noyau : catalogue, unités, ports, traductions. Il ne doit dépendre d’aucune tranche.                         |
 
 Une tranche peut utiliser le `model` d’une autre tranche, `city::store`, `city::binding`, `city::projection`,
 `restriction::store`, `shell::Target` et `shared`. Elle ne doit jamais accéder au modèle de vue, aux vues ni aux textes
