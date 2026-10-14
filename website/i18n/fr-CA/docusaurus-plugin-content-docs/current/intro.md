@@ -23,7 +23,7 @@ L’application est offerte en anglais et en français canadien.
 | Accueil  | `web/index.html`        | Chercher un lieu : trouver une ville ou un quartier et charger ses rues.                                                                                       |
 | Carte    | `web/map.html`          | Les rues et les jonctions de la ville sur un fond de carte. Ouvrir un lieu pour le modifier et déclarer des zones avec des règles (le panneau Règles de zone). |
 | Rue      | `web/street.html`       | Modifier la coupe transversale d’une rue : réorganiser ses éléments, lire les vérifications et la voir en 2,5D.                                                |
-| Jonction | `web/intersection.html` | Modifier une jonction en plan : ses branches, ses coins, ses passages pour piétons et sa signalisation.                                                                   |
+| Jonction | `web/intersection.html` | Modifier une jonction en plan : ses branches, ses coins, ses passages pour piétons et sa signalisation.                                                        |
 
 Les pages de la rue et de la jonction s’ouvrent depuis la carte : la carte donne à chaque lieu une adresse comme
 `?street=7` ou `?junction=3`. Une page ouverte ainsi modifie un lieu de la ville, et ses modifications sont conservées
