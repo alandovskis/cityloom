@@ -19,6 +19,14 @@
   --k-parking: light-dark(#b4bdc7, #3d4750);
   /* A curb in 2.5D: a concrete grey, darker than a sidewalk so that its stripe shows on one. */
   --iso-curb: light-dark(#a3adb8, #6b7783);
+  /* Pavement paint in 2.5D: white and yellow, each a little off the pure colour so that it sits on the asphalt
+     in both themes. Estimates, like the symbols' sizes. */
+  --iso-paint-white: light-dark(#fbfbf8, #e6e9ee);
+  --iso-paint-yellow: light-dark(#e3a600, #f0c02e);
+  /* A hairline round the paint: on the light theme's pale surfaces the paint alone is under 3:1 (WCAG 1.4.11);
+     the edge colour is over 6:1 against every surface tint (the ratio of the colours; anti-aliasing of a 0.5 px line
+     lowers the figure rendered). The dark theme needs none. */
+  --iso-paint-edge: light-dark(#2b333b, transparent);
   --panel-w: 300px;
   --notes-w: 340px;
   --rw: calc(var(--pad) + var(--notes-w));
@@ -866,7 +874,7 @@ svg pattern circle {
   stroke: var(--panel);
   stroke-width: 7;
 }
-/* ---- the street in 2.5D (street/iso.rs) ---- */
+/* ---- the street in 2.5D (street/iso/) ---- */
 .iso-ground {
   fill: var(--fill);
   stroke: none;
@@ -880,7 +888,7 @@ svg pattern circle {
   stroke-linejoin: round;
 }
 /* Each face keeps its piece's tint; the faces turned from the eye are shaded darker by the drawing's own
-   SVG filters (street/iso.rs, `SHADES`). A curb is a light tone, not ink, so that a curb block on a narrow
+   SVG filters (street/iso/raised.rs, `SHADES`). A curb is a light tone, not ink, so that a curb block on a narrow
    bike lane does not bury the lane. */
 .iso-curb {
   fill: var(--iso-curb);
@@ -909,9 +917,31 @@ svg pattern circle {
 .s-post {
   fill: var(--ink-2);
 }
-/* The arrow is drawn in millimetres and mapped onto the street, so its strokes keep their pixel width. */
-.iso-dir path {
-  vector-effect: non-scaling-stroke;
+/* Pavement paint (street/iso/paint.rs): flat shapes on the roadway with a 0.5 px edge (--iso-paint-edge) and no
+   pointer events, so the piece under them is the one hovered (its hover outline is hidden where paint covers its
+   edge). In forced colours it is drawn in the text colour. */
+.iso-markings,
+.iso-mark,
+.iso-paint {
+  pointer-events: none;
+}
+.iso-paint {
+  stroke: var(--iso-paint-edge);
+  stroke-width: 0.5px;
+  stroke-linejoin: round;
+}
+.iso-paint.white {
+  fill: var(--iso-paint-white);
+}
+.iso-paint.yellow {
+  fill: var(--iso-paint-yellow);
+}
+@media (forced-colors: active) {
+  .iso-paint.white,
+  .iso-paint.yellow {
+    fill: CanvasText;
+    stroke: none;
+  }
 }
 .iso-sel {
   fill: none;

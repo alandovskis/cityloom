@@ -6,6 +6,7 @@ use std::fmt::Write;
 
 use crate::shared::catalogue::{KINDS, kind_key, mark_key};
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::iso::format::esc;
 use crate::shared::said::say;
 use crate::shared::symbols::{Placement, SymbolOpts, symbol};
 use crate::shared::units::Units;
@@ -117,10 +118,6 @@ pub struct StreetSvg {
     /// Where the right-of-way line is in pixels, for bringing a cloud into view.
     pub row_right: f64,
     pub over: bool,
-}
-
-pub fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 fn dim_line(x0: f64, x1: f64, y: f64, class: &str) -> String {

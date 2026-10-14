@@ -8,6 +8,7 @@ use std::fmt::Write;
 use crate::city::model::{CityView, EdgeView, NodeView};
 use crate::map::vm::{junction_label, street_label};
 use crate::shared::i18n::{Args, I18n};
+use crate::shared::iso::format::esc;
 use crate::shared::said::say;
 use crate::shared::symbols::HATCH;
 use crate::shared::units::Units;
@@ -19,10 +20,6 @@ const OFF_ROAD: [&str; 10] = ["sidewalk", "planting", "bikerack", "bikeshare", "
 fn r2(n: f64) -> String {
     let r = (n * 100.0).round() / 100.0;
     if r == 0.0 { "0".to_string() } else { format!("{r}") }
-}
-
-fn esc(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 /// Hatch for the map: the same textures as the section, kept to the same size on
