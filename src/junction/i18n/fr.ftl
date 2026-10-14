@@ -68,6 +68,13 @@ jn-refusal-does-not-fit = Cette modification ne convient pas.
 jn-refusal-raised-roundabout = Un carrefour giratoire ne peut pas être surélevé.
 jn-refusal-bike-box-not-here = Un sas cyclable exige une piste cyclable sur une rue où les voitures entrent et s’arrêtent, à un carrefour qui n’est pas giratoire.
 jn-refusal-protected-not-here = Un coin protégé exige une piste cyclable le long de la bordure de chacune des deux rues, un vrai coin, assez de place pour l’îlot et pas de carrefour giratoire.
+jn-refusal-turbo-skewed = Une rue s’écarterait de plus de 20° de l’équerre qu’exige un giratoire turbo.
+jn-refusal-turbo-entry-too-narrow = Cette rue est trop étroite pour l’élargir aux voies d’entrée que demande cette disposition.
+jn-refusal-turbo-skewed-arm = La rue en cause : { $arm }.
+jn-refusal-turbo-entry-too-narrow-arm = La rue trop étroite : { $arm }.
+jn-refusal-turbo-lanes-fixed = Sur un giratoire turbo, la disposition fixe la destination de chaque voie.
+jn-refusal-bus-on-turbo = Un giratoire turbo n’a pas de voie d’autobus à travers son îlot.
+jn-refusal-queue-jump-on-turbo = Un giratoire turbo n’a pas de voie de dépassement de file à ses approches.
 
 ## Ce qu’a été chaque modification, dans l’historique
 jn-word-add = ajout
@@ -107,6 +114,10 @@ jn-rev-cycle = Piste cyclable autour du carrefour giratoire : { $length }
 jn-rev-cycle-remove = Piste cyclable autour du carrefour giratoire : retrait
 jn-rev-raised = Carrefour surélevé : { $change }
 jn-rev-ring = Carrefour giratoire : { $length } plus grand
+jn-rev-turbo-layout = Disposition du giratoire : turbo { $layout }
+jn-rev-turbo-off = Giratoire : une seule voie
+jn-rev-turbo-size = Taille du giratoire turbo : { $size }
+jn-rev-turbo-main = Axe principal du giratoire turbo : { $from } et { $to }
 
 ## Les vérifications
 jn-check-lanes-cover = Les voies couvrent chaque virage
@@ -146,6 +157,10 @@ jn-check-signal-bad = { $n ->
     [one] { $n } rue, c’est trop pour un seul jeu de feux
    *[other] { $n } rues, c’est trop pour un seul jeu de feux
 }
+
+jn-check-turbo-square = Les rues abordent l’anneau d’équerre
+jn-check-turbo-square-ok = Chaque rue aborde l’anneau à moins de 10° de l’équerre
+jn-check-turbo-square-bad = { $arm } s’écarte de { $degrees }° de l’équerre.
 
 ## Ce qui est dit après une modification
 jn-undone = Annulé.
@@ -229,9 +244,11 @@ jn-view-iso = 2,5D
 jn-view-shown-plan = Plan affiché.
 jn-view-shown-iso = Jonction affichée en 2,5D.
 jn-iso-label = Vue en 2,5D de la jonction. { $arms }.
+jn-iso-label-turbo = Vue en 2,5D de la jonction. { $arms }. { $name }.
 jn-plan-label = Plan de la jonction, nord en haut. { $arms }.
 jn-plan-label-roundabout = Plan de la jonction, nord en haut. { $arms }. Carrefour giratoire.
 jn-plan-label-raised = Plan de la jonction, nord en haut. { $arms }. Carrefour surélevé.
+jn-plan-label-turbo = Plan de la jonction, nord en haut. { $arms }. { $name }.
 jn-svg-scale = Échelle
 jn-svg-bus-only = Autobus seulement
 # Sous le nom d’une rue : sa direction et sa largeur, « N · chaussée de 20,0 m ».
@@ -301,6 +318,16 @@ jn-insp-track-hint-crossing = De { $min } à { $max }. Les cyclistes traversent 
 jn-insp-bus-across = Voie d’autobus par le centre
 jn-insp-bus-none = Aucune voie d’autobus
 jn-insp-bus-note = Une voie de { $width } réservée aux autobus, tout droit à travers l’îlot. Elle traverse l’anneau là où elle entre et là où elle sort.
+jn-insp-turbo = Disposition du giratoire
+jn-insp-turbo-single = Une seule voie
+jn-insp-turbo-size = Taille du giratoire turbo
+jn-insp-turbo-smaller = Taille inférieure
+jn-insp-turbo-larger = Taille supérieure
+jn-insp-turbo-main = Axe principal
+jn-insp-turbo-main-is = { $from } et { $to } forment l’axe principal.
+jn-insp-turbo-main-switch = Prendre les autres rues comme axe principal
+jn-insp-turbo-main-swap = Mettre les deux voies d’entrée sur l’autre rue
+jn-insp-lane-fixed = La disposition turbo fixe la destination de cette voie.
 jn-insp-bus-offer = Permet aux autobus de couper à travers l’îlot entre deux rues.
 jn-insp-cycle = Piste cyclable
 jn-insp-cycle-option = Piste tout autour, à l’extérieur
@@ -436,3 +463,20 @@ jn-sig-no-phase = Rien n’entre par cette rue : elle n’a pas de vert à elle.
 jn-sig-shorter = Plus court de { $seconds } s
 jn-sig-longer = Plus long de { $seconds } s
 jn-sig-range = De { $min } à { $max } s
+
+## Giratoires turbo : les dispositions et les tailles (src/junction/turbo.rs)
+jn-turbo-basic = De base
+jn-turbo-egg = En œuf
+jn-turbo-knee = En genou
+jn-turbo-spiral = En spirale
+jn-turbo-rotor = Rotor
+jn-turbo-size-mini = Mini
+jn-turbo-size-regular = Normale
+jn-turbo-size-medium = Moyenne
+jn-turbo-size-large = Grande
+# Ce qu’est un dessin de la jonction, pour un lecteur d’écran : « Giratoire turbo de base, taille normale ».
+jn-turbo-label-basic = Giratoire turbo de base, taille { $size }
+jn-turbo-label-egg = Giratoire turbo en œuf, taille { $size }
+jn-turbo-label-knee = Giratoire turbo en genou, taille { $size }
+jn-turbo-label-spiral = Giratoire turbo en spirale, taille { $size }
+jn-turbo-label-rotor = Giratoire turbo rotor, taille { $size }

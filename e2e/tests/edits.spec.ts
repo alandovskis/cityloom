@@ -92,7 +92,7 @@ const provenanceState = async (page: Page) => {
 test("an edit is kept under the street's OSM key", async ({ page }) => {
   await editStreet(page);
   const doc = await edits(page);
-  expect(doc.version).toBe(4);
+  expect(doc.version).toBe(5);
   expect(Object.keys(doc.streets)).toHaveLength(1);
   expect(Object.keys(doc.streets)[0]).toMatch(/^w\d+~n\d+~(n\d+|x~[nesw])$/);
   expect(Object.keys(doc.junctions ?? {})).toEqual([]);

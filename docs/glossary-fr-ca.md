@@ -168,6 +168,12 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction | All-way stop | Arrêt toutes directions |  |
 | Junction | Traffic signal | Feux de circulation | Plural, as in Québec; lowercase in a sentence. |
 | Junction | Roundabout | Carrefour giratoire |  |
+| Junction | turbo roundabout | giratoire turbo | To confirm. `carrefour giratoire` is the app's word for a roundabout; the literature says `giratoire turbo`. |
+| Junction | basic, egg, knee, spiral, rotor (the turbo layouts) | de base, en œuf, en genou, en spirale, rotor | To confirm. The Dutch names (basis, ei, knie, spiraal, rotor) as French-language sources translate them. |
+| Junction | mini, regular, medium, large (the turbo blocks) | mini, normale, moyenne, grande | To confirm. Said after `taille`: `taille normale`. |
+| Junction | main road (of a turbo roundabout) | axe principal | To confirm. |
+| Junction | single lane (a roundabout) | une seule voie |  |
+| Junction inspector | Move the two entry lanes to the other street (a knee turbo) | Mettre les deux voies d’entrée sur l’autre rue | To confirm. |
 | Junction | crossing (for people on foot) | passage pour piétons |  |
 | Junction | Only one street here carries traffic | Une seule rue ici accueille la circulation | A pedestrian arm is not a street of traffic. |
 | Junction | refuge island | îlot refuge |  |

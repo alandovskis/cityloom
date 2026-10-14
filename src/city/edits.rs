@@ -11,7 +11,7 @@ use crate::junction::model::State;
 use crate::street::model::Street;
 
 /// The shape of the document. Raised when the shape changes.
-pub const VERSION: u32 = 4;
+pub const VERSION: u32 = 5;
 /// Where the document is kept.
 pub const EDITS_KEY: &str = "cityloom-edits";
 /// Where a document that could not be read is copied before the first write replaces it.
@@ -85,12 +85,14 @@ pub enum Document {
 fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
     let Some(raw) = stored.filter(|s| !s.trim().is_empty()) else { return Err(Document::Empty) };
     let damaged = || Document::Damaged(raw.to_string());
-    let Ok(Value::Object(doc)) = serde_json::from_str::<Value>(raw) else { return Err(damaged()) };
+    let Ok(Value::Object(mut doc)) = serde_json::from_str::<Value>(raw) else { return Err(damaged()) };
     match doc.get("version").and_then(Value::as_u64) {
         Some(v) if v > u64::from(VERSION) => return Err(Document::Future),
-        Some(v) if v == u64::from(VERSION) => {}
+        // The previous version is read as this one: the turbo field is additive, so its records mean the same.
+        Some(v) if v + 1 >= u64::from(VERSION) => {}
         _ => return Err(damaged()),
     }
+    doc.insert("version".into(), VERSION.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
         return Err(damaged());
     }
@@ -313,17 +315,44 @@ mod tests {
 
     #[test]
     fn a_newer_version_is_told_apart_and_not_read() {
-        assert!(matches!(parse(Some(r#"{"version":5,"streets":{},"junctions":{}}"#)), Document::Future));
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, VERSION + 1);
+        assert!(matches!(parse(Some(&newer)), Document::Future));
     }
 
     #[test]
     fn what_is_not_a_document_is_damaged_and_keeps_its_text() {
         let Document::Damaged(raw) = parse(Some("{not json")) else { panic!("not damaged") };
         assert_eq!(raw, "{not json");
-        assert!(matches!(parse(Some(r#"{"version":4,"streets":5}"#)), Document::Damaged(_)));
-        let Document::Damaged(raw) = parse(Some(r#"{"version":3,"streets":{},"junctions":{}}"#)) else { panic!("the previous version is read") };
-        assert!(raw.contains("\"version\":3"), "its text is kept so that it can be copied aside");
+        assert!(matches!(parse(Some(&format!(r#"{{"version":{VERSION},"streets":5}}"#))), Document::Damaged(_)));
+        let older = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, VERSION - 2);
+        let Document::Damaged(raw) = parse(Some(&older)) else { panic!("two versions back is not read") };
+        assert!(raw.contains(&format!("\"version\":{}", VERSION - 2)), "its text is kept so that it can be copied aside");
         assert!(matches!(parse(Some(r#"{"version":2,"streets":{},"junctions":{}}"#)), Document::Damaged(_)), "an old shape is not this document");
+    }
+
+    #[test]
+    fn a_version_4_document_is_read_and_the_next_write_says_5() {
+        assert_eq!(VERSION, 5, "this test pins the move from 4 to 5");
+        let city = crate::city::model::City::new();
+        let junction = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let (key, record) = city.junction_record(junction).unwrap();
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), street_record());
+        e.junctions.insert(key.clone(), record);
+        // The document as a version 4 build wrote it: the same records (none has a turbo), its number 4.
+        let mut value: serde_json::Value = serde_json::from_str(&e.to_json()).unwrap();
+        value["version"] = 4.into();
+        let v4 = value.to_string();
+        let Document::Current(read) = parse(Some(&v4)) else { panic!("a version 4 document is read, not discarded") };
+        assert_eq!(read.version, 5);
+        assert_eq!(read.streets, e.streets);
+        assert_eq!(read.junctions[&key].state.turbo, None);
+        // A write changes one record and says 5; the record it did not touch is kept as it was.
+        let Ok(mut draft) = draft(Some(&v4)) else { panic!("a version 4 document is a draft") };
+        assert!(draft.put_street("w8~n3~n4", &street_record()));
+        let back: serde_json::Value = serde_json::from_str(&draft.to_json()).unwrap();
+        assert_eq!(back["version"], 5);
+        assert_eq!(back["junctions"][&key], value["junctions"][&key]);
     }
 
     fn pedestrian_record() -> StreetRecord {
@@ -450,7 +479,8 @@ mod tests {
         let mut e = Edits::new();
         e.streets.insert("w7~n1~n2".into(), street_record());
         e.streets.insert("w8~n1~n2".into(), pedestrian_record());
-        let (key, record) = city.junction_record(junction).unwrap();
+        let (key, mut record) = city.junction_record(junction).unwrap();
+        record.state.turbo = Some(crate::junction::turbo::Turbo { layout: 0, size: 0, main: vec![1, 3] });
         e.junctions.insert(key, record);
         let mut out = BTreeSet::new();
         shape(&serde_json::from_str(&e.to_json()).unwrap(), "", &mut out);
@@ -504,6 +534,11 @@ mod tests {
     ".junctions.<key>.state.source[].id: number",
     ".junctions.<key>.state.source[].version: null",
     ".junctions.<key>.state.source[]: object",
+    ".junctions.<key>.state.turbo.layout: number",
+    ".junctions.<key>.state.turbo.main: array",
+    ".junctions.<key>.state.turbo.main[]: number",
+    ".junctions.<key>.state.turbo.size: number",
+    ".junctions.<key>.state.turbo: object",
     ".junctions.<key>.state: object",
     ".junctions.<key>: object",
     ".junctions: object",
@@ -655,6 +690,7 @@ mod tests {
                 bus: None,
                 cycle: None,
                 raised: false,
+                turbo: None,
                 source: Default::default(),
             },
             arm_streets: BTreeMap::new(),

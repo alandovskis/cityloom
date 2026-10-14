@@ -97,6 +97,12 @@ impl Watch {
         self.vm.with_value(|v| v.apply(f))
     }
 
+    /// Chooses a turbo layout as the person does (`None`: the single lane); the one already chosen is left as it is.
+    /// Whether it is the one chosen afterwards.
+    pub fn choose_turbo(&self, layout: Option<usize>) -> bool {
+        self.vm.with_value(|v| v.choose_turbo(layout))
+    }
+
     pub fn frame(&self) -> Option<crate::junction::frame::Frame> {
         self.vm.with_value(|v| v.frame())
     }

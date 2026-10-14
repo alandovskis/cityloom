@@ -251,6 +251,159 @@ fn a_roundabout_adds_its_size_cycle_track_and_bus_lane() {
 }
 
 #[test]
+fn a_roundabout_offers_its_turbo_layouts_and_a_chosen_one_its_size_and_main_road() {
+    let s = shared(0);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    let h = panel(&s);
+    for want in ["Roundabout layout", "Single lane", ">Basic<", ">Egg<", ">Knee<", ">Spiral<"] {
+        assert!(h.contains(want), "{want}");
+    }
+    assert!(!h.contains(">Rotor<"), "three lanes on Sample Street 1 would pass its property line: not offered");
+    assert_eq!(count(&h, "role=\"radio\""), 5, "the single lane and four layouts");
+    assert_eq!(count(&h, "role=\"none\""), 5, "each radio is in an item that says it is not a list item of its own");
+    assert!(!h.contains("Turbo size") && !h.contains("Main road"));
+    assert!(h.contains("Size of the roundabout") && h.contains("Bus lane through the middle"));
+
+    s.edit(|j| j.set_turbo(Some(0)));
+    let h = panel(&s);
+    for want in ["Turbo size", "Mini", "Next larger size", "Next smaller size", "Main road", "are the main road.", "Use the other streets as the main road"] {
+        assert!(h.contains(want), "{want}");
+    }
+    assert!(!h.contains("Size of the roundabout"), "a turbo has blocks, not a diameter");
+    assert!(!h.contains("Bus lane through the middle"), "and no bus lane across its island");
+    assert!(h.contains("Cycle track"), "but it keeps the cycle track");
+    assert!(!h.contains("Move the two entry lanes"), "a basic turbo's switch is to the other streets");
+
+    s.edit(|j| j.set_turbo(Some(2)));
+    let h = panel(&s);
+    assert!(h.contains("Move the two entry lanes to the other street"), "on a knee the first press moves the lanes");
+    assert!(!h.contains("Use the other streets as the main road"));
+}
+
+/// The tab index of each radio of the panel, in order, with whether it is checked.
+fn radio_stops(h: &str) -> Vec<(String, bool)> {
+    h.split("<button")
+        .filter(|b| b.contains("role=\"radio\""))
+        .map(|b| {
+            let tag = b.split('>').next().unwrap();
+            let attr = |name: &str| tag.split(&format!("{name}=\"")).nth(1).unwrap().split('"').next().unwrap().to_string();
+            (attr("tabindex"), attr("aria-checked") == "true")
+        })
+        .collect()
+}
+
+#[test]
+fn the_layout_radios_are_one_tab_stop_on_the_chosen_one() {
+    let s = shared(0);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    let stops = |s: &Rc<JunctionVm>| radio_stops(&panel(s)).into_iter().map(|(t, c)| (t == "0", c)).collect::<Vec<_>>();
+    assert_eq!(stops(&s), [(true, true), (false, false), (false, false), (false, false), (false, false)], "the single lane is chosen and the stop");
+    s.edit(|j| j.set_turbo(Some(2)));
+    assert_eq!(stops(&s), [(false, false), (false, false), (false, false), (true, true), (false, false)], "the knee is chosen and the stop");
+}
+
+#[test]
+fn the_turbo_size_stepper_is_a_group_that_holds_its_buttons_and_the_heading_labels_it() {
+    let s = shared(0);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    s.edit(|j| j.set_turbo(Some(0)));
+    let h = panel(&s);
+    let stepper = h.split("<div").find(|t| t.contains("class=\"stepper\"") && t.contains("turbo-size")).expect("the stepper");
+    let tag = stepper.split('>').next().unwrap();
+    assert!(tag.contains("aria-labelledby=\"i-h-turbo-size\"") && tag.contains("role=\"group\""), "{tag}");
+    assert!(stepper.matches("<button").count() >= 2 && stepper.find("<button") < stepper.find("</div>"), "the buttons are inside the group: {stepper}");
+    let name = h.split("<span").find(|t| t.contains("wfield turbo-size")).unwrap().split('>').next().unwrap();
+    assert!(!name.contains("role="), "the name is not a group of its own: {name}");
+}
+
+/// The attributes of each button of the turbo size stepper, smaller first.
+fn size_buttons(h: &str) -> Vec<String> {
+    let stepper = h.split("<div").find(|t| t.contains("class=\"stepper\"") && t.contains("turbo-size")).unwrap();
+    stepper.split("<button").skip(1).take(2).map(|b| b.split('>').next().unwrap().to_string()).collect()
+}
+
+#[test]
+fn a_size_stepper_at_its_end_is_aria_disabled_so_that_focus_stays_on_it() {
+    let s = shared(0);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    s.edit(|j| j.set_turbo(Some(0)));
+    let [smaller, larger] = size_buttons(&panel(&s)).try_into().unwrap();
+    assert!(smaller.contains("aria-disabled=\"true\"") && !larger.contains("aria-disabled=\"true\""), "mini: {smaller} / {larger}");
+    assert!(!smaller.contains(" disabled") && !larger.contains(" disabled"), "a disabled button would lose the focus: {smaller} / {larger}");
+    s.edit(|j| j.set_turbo_size(3));
+    let [smaller, larger] = size_buttons(&panel(&s)).try_into().unwrap();
+    assert!(!smaller.contains("aria-disabled=\"true\"") && larger.contains("aria-disabled=\"true\""), "large: {smaller} / {larger}");
+}
+
+/// The options of the first select that has options with these values, with their attributes.
+fn approach_options(h: &str) -> Vec<String> {
+    let select = h.split("<select").find(|t| t.starts_with(" aria-labelledby=\"i-h-approach\"")).expect("the approach select");
+    select.split("</select>").next().unwrap().split("<option").skip(1).map(|o| o.split('>').next().unwrap().to_string()).collect()
+}
+
+#[test]
+fn a_turbo_offers_no_queue_jump_in_the_approach_list_and_a_plain_roundabout_does() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    s.edit(|j| j.select(Target::Arm(e)));
+    let off = |h: &str| approach_options(h).iter().map(|o| o.contains("disabled")).collect::<Vec<_>>();
+    assert_eq!(off(&panel(&s)), [false; 6], "no turbo, every measure");
+    s.edit(|j| j.set_turbo(Some(0)));
+    assert_eq!(off(&panel(&s)), [false, true, true, true, false, false], "the three queue jumps are out, the gates stay");
+}
+
+#[test]
+fn only_the_layouts_that_suit_the_streets_are_offered() {
+    let s = shared(1); // three streets
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    let h = panel(&s);
+    assert!(h.contains(">Egg<") && h.contains(">Knee<"));
+    assert!(!h.contains(">Basic<") && !h.contains(">Spiral<") && !h.contains(">Rotor<"));
+    assert!(!panel(&shared(0)).contains("Roundabout layout"), "a signal has no layouts");
+}
+
+#[test]
+fn a_lane_of_a_turbo_says_the_layout_sets_where_it_goes() {
+    let s = shared(0);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    s.edit(|j| j.set_turbo(Some(0)));
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Lane(n, 0)));
+    assert!(panel(&s).contains("The turbo layout sets where this lane goes."));
+    let plain = shared(0);
+    let n = arm(&plain, 0);
+    plain.edit(|j| j.select(Target::Lane(n, 0)));
+    assert!(!panel(&plain).contains("The turbo layout sets"));
+}
+
+#[test]
+fn the_panel_of_a_turbo_roundabout_speaks_french() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    s.edit(|j| j.set_control(ROUNDABOUT));
+    panel_speaks_french(&s, &["Disposition du giratoire", "Une seule voie", ">De base<", ">En œuf<", ">En genou<", ">En spirale<"]);
+    s.edit(|j| j.set_turbo(Some(0)));
+    panel_speaks_french(
+        &s,
+        &[
+            "Taille du giratoire turbo",
+            ">Mini<",
+            "aria-label=\"Taille supérieure\"",
+            "aria-label=\"Taille inférieure\"",
+            "Axe principal",
+            "forment l’axe principal.",
+            "Prendre les autres rues comme axe principal",
+        ],
+    );
+    s.edit(|j| j.set_turbo(Some(2)));
+    panel_speaks_french(&s, &["Mettre les deux voies d’entrée sur l’autre rue"]);
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Lane(n, 0)));
+    panel_speaks_french(&s, &["La disposition turbo fixe la destination de cette voie."]);
+}
+
+#[test]
 fn a_junction_offers_a_raised_table_until_it_is_a_roundabout() {
     let s = shared(0);
     let h = panel(&s);
@@ -1643,4 +1796,20 @@ fn a_typed_time_is_read_with_a_comma_and_a_bad_one_changes_nothing() {
         set(bad);
         assert_eq!(s.read(|j| j.arm(e).unwrap().timing), before, "{bad:?} changes nothing");
     }
+}
+
+#[test]
+fn a_suspended_turbo_is_not_named_or_offered_and_is_back_with_the_traffic() {
+    use crate::junction::plan_svg::plan_label;
+    use crate::shared::i18n::Locale;
+    let en = crate::i18n_for(Locale::En);
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), en.clone(), suspended_turbo(), None);
+    assert!(!plan_label(&s.read(|j| j.view()), &en).contains("turbo"));
+    let h = panel(&s);
+    for gone in ["i-h-turbo-size", "i-h-turbo-main", "i-h-turbo-layout"] {
+        assert!(!h.contains(gone), "{gone}");
+    }
+    let mut busy = Junction::new(0);
+    assert!(busy.set_control(ROUNDABOUT) && busy.set_turbo(Some(0)));
+    assert!(plan_label(&busy.view(), &en).contains("turbo"));
 }

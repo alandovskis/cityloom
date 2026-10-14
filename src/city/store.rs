@@ -356,8 +356,8 @@ mod tests {
     #[test]
     fn a_record_this_build_cannot_read_survives_a_write_of_another_place_unchanged() {
         let (store, storage) = store();
-        let newer = r#"{"version":4,"streets":{"w9~n1~n2":{"street":{"class":"Hovercraft"}}},"junctions":{}}"#;
-        storage.remember(EDITS_KEY, newer);
+        let newer = format!(r#"{{"version":{},"streets":{{"w9~n1~n2":{{"street":{{"class":"Hovercraft"}}}}}},"junctions":{{}}}}"#, edits::VERSION);
+        storage.remember(EDITS_KEY, &newer);
         assert!(store.write_street(1, narrowed(&store, 1)));
         let kept: serde_json::Value = serde_json::from_str(&storage.recall(EDITS_KEY).unwrap()).unwrap();
         assert_eq!(kept["streets"]["w9~n1~n2"], serde_json::json!({"street": {"class": "Hovercraft"}}));
@@ -377,16 +377,16 @@ mod tests {
     #[test]
     fn a_document_from_a_newer_version_is_left_alone_and_the_write_says_it_was_not_kept() {
         let (store, storage) = store();
-        let newer = r#"{"version":5,"streets":{},"junctions":{},"future":true}"#;
-        storage.remember(EDITS_KEY, newer);
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}},"future":true}}"#, edits::VERSION + 1);
+        storage.remember(EDITS_KEY, &newer);
         assert!(!store.write_street(1, narrowed(&store, 1)));
-        assert_eq!(storage.recall(EDITS_KEY).as_deref(), Some(newer));
+        assert_eq!(storage.recall(EDITS_KEY).as_deref(), Some(newer.as_str()));
         assert_eq!(storage.recall(DAMAGED_KEY), None, "a newer document is not a damaged one");
         assert_eq!(store.open().view(0).edited, 0, "and it is not read");
     }
 
     #[test]
-    fn a_document_of_the_previous_version_is_not_read_and_is_copied_aside_before_the_first_write_replaces_it() {
+    fn a_document_two_versions_back_is_not_read_and_is_copied_aside_before_the_first_write_replaces_it() {
         let (store, storage) = store();
         assert!(store.write_street(1, narrowed(&store, 1)));
         let current = storage.recall(EDITS_KEY).unwrap();

@@ -68,6 +68,13 @@ jn-refusal-does-not-fit = That change does not fit.
 jn-refusal-raised-roundabout = A roundabout cannot be a raised table.
 jn-refusal-bike-box-not-here = A bike box needs a bike lane on a street where cars enter and stop, at a junction that is not a roundabout.
 jn-refusal-protected-not-here = A protected corner needs a bike lane at the curb of each of the two streets, a real corner, room for the island and no roundabout.
+jn-refusal-turbo-skewed = A street would be more than 20° off the square a turbo roundabout needs.
+jn-refusal-turbo-entry-too-narrow = This street is too narrow to widen for the entry lanes this layout needs.
+jn-refusal-turbo-skewed-arm = { $arm } is the one that would be off.
+jn-refusal-turbo-entry-too-narrow-arm = { $arm } is the one that is too narrow.
+jn-refusal-turbo-lanes-fixed = On a turbo roundabout the layout sets where each lane goes.
+jn-refusal-bus-on-turbo = A turbo roundabout has no bus lane across its island.
+jn-refusal-queue-jump-on-turbo = A turbo roundabout has no queue-jump lane on its approaches.
 
 ## What each change was, in the history
 jn-word-add = add
@@ -107,6 +114,10 @@ jn-rev-cycle = Cycle track around the roundabout: { $length }
 jn-rev-cycle-remove = Cycle track around the roundabout: remove
 jn-rev-raised = Raised table: { $change }
 jn-rev-ring = Roundabout: { $length } larger
+jn-rev-turbo-layout = Roundabout layout: { $layout } turbo
+jn-rev-turbo-off = Roundabout: single lane
+jn-rev-turbo-size = Turbo roundabout size: { $size }
+jn-rev-turbo-main = Main road of the turbo roundabout: { $from } and { $to }
 
 ## The checks
 jn-check-lanes-cover = Lanes cover every turn
@@ -146,6 +157,10 @@ jn-check-signal-bad = { $n ->
     [one] { $n } street is too many for one signal
    *[other] { $n } streets is too many for one signal
 }
+
+jn-check-turbo-square = Arms meet the ring square
+jn-check-turbo-square-ok = Every street meets the ring within 10° of square
+jn-check-turbo-square-bad = { $arm } is { $degrees }° off square.
 
 ## What is said after a change
 jn-undone = Undone.
@@ -229,9 +244,11 @@ jn-view-iso = 2.5D
 jn-view-shown-plan = Showing the plan.
 jn-view-shown-iso = Showing the junction in 2.5D.
 jn-iso-label = 2.5D view of the junction. { $arms }.
+jn-iso-label-turbo = 2.5D view of the junction. { $arms }. { $name }.
 jn-plan-label = Plan of the junction, north up. { $arms }.
 jn-plan-label-roundabout = Plan of the junction, north up. { $arms }. Roundabout.
 jn-plan-label-raised = Plan of the junction, north up. { $arms }. Raised table.
+jn-plan-label-turbo = Plan of the junction, north up. { $arms }. { $name }.
 jn-svg-scale = Scale
 jn-svg-bus-only = Bus only
 # Under a street's name: the way it leaves and its width, "N · 20.0 m road".
@@ -301,6 +318,16 @@ jn-insp-track-hint-crossing = { $min } to { $max }. Cyclists cross every street 
 jn-insp-bus-across = Bus lane through the middle
 jn-insp-bus-none = No bus lane
 jn-insp-bus-note = A { $width } bus-only lane straight across the island. It crosses the ring where it enters and leaves.
+jn-insp-turbo = Roundabout layout
+jn-insp-turbo-single = Single lane
+jn-insp-turbo-size = Turbo size
+jn-insp-turbo-smaller = Next smaller size
+jn-insp-turbo-larger = Next larger size
+jn-insp-turbo-main = Main road
+jn-insp-turbo-main-is = { $from } and { $to } are the main road.
+jn-insp-turbo-main-switch = Use the other streets as the main road
+jn-insp-turbo-main-swap = Move the two entry lanes to the other street
+jn-insp-lane-fixed = The turbo layout sets where this lane goes.
 jn-insp-bus-offer = Lets buses cut across the island between two streets.
 jn-insp-cycle = Cycle track
 jn-insp-cycle-option = Track around the outside
@@ -436,3 +463,20 @@ jn-sig-no-phase = Nothing enters from this street, so it has no green of its own
 jn-sig-shorter = Shorter by { $seconds } s
 jn-sig-longer = Longer by { $seconds } s
 jn-sig-range = { $min } to { $max } s
+
+## Turbo roundabouts: the layouts and the sizes (src/junction/turbo.rs)
+jn-turbo-basic = Basic
+jn-turbo-egg = Egg
+jn-turbo-knee = Knee
+jn-turbo-spiral = Spiral
+jn-turbo-rotor = Rotor
+jn-turbo-size-mini = Mini
+jn-turbo-size-regular = Regular
+jn-turbo-size-medium = Medium
+jn-turbo-size-large = Large
+# What a drawing of the junction is, for a screen reader: "Basic turbo roundabout, regular size".
+jn-turbo-label-basic = Basic turbo roundabout, { $size } size
+jn-turbo-label-egg = Egg turbo roundabout, { $size } size
+jn-turbo-label-knee = Knee turbo roundabout, { $size } size
+jn-turbo-label-spiral = Spiral turbo roundabout, { $size } size
+jn-turbo-label-rotor = Rotor turbo roundabout, { $size } size

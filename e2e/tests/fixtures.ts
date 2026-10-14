@@ -51,6 +51,7 @@ export { expect };
 export const live = (page: Page) => page.locator("#live");
 
 export const PLATEAU_PBF = fileURLToPath(new URL("../fixtures/plateau.osm.pbf", import.meta.url));
+export const TURBO_PBF = fileURLToPath(new URL("../fixtures/turbo.osm.pbf", import.meta.url));
 export const PLATEAU_TILES = fileURLToPath(new URL("../fixtures/plateau.pmtiles", import.meta.url));
 
 /** Serves the basemap's tiles as a static host with range support does: PMTiles reads them in pieces.

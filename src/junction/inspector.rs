@@ -6,8 +6,9 @@
 use std::rc::Rc;
 
 use leptos::prelude::*;
-use leptos::web_sys::{HtmlInputElement, HtmlSelectElement};
+use leptos::web_sys::{Element, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent};
 
+use crate::junction::keys;
 use crate::junction::model::{
     APPROACH_MAX_MM, APPROACH_MIN_MM, APPROACH_STEP_MM, APPROACHES, BEARING_STEP, CONTROLS, CYCLE_MAX_MM, CYCLE_MIN_MM, FILTER_CODE, Item, Junction, LEFT,
     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
@@ -312,6 +313,150 @@ fn ring_size(w: Watch) -> impl IntoView {
     )
 }
 
+/// The layouts the roundabout could take, as a radio group: the single lane (none) first. The radios are keyed by their
+/// layout, so they stay while the offered set is the same and the one with the focus keeps it across a choice.
+fn turbo_layout(w: Watch) -> impl IntoView {
+    type Choice = (Option<usize>, &'static str);
+    let choices = Memo::new(move |_| {
+        let mut all: Vec<Choice> = vec![(None, "jn-insp-turbo-single")];
+        all.extend(w.view().turbo_options.iter().map(|o| (Some(o.layout), o.key)));
+        all
+    });
+    let current = Memo::new(move |_| w.view().turbo.as_ref().map(|t| t.layout));
+    // Where the chosen one is among the radios; none when the layout in force is not among those offered.
+    let chosen = Memo::new(move |_| choices.with(|all| all.iter().position(|c| c.0 == current.get())));
+    let radio = move |(layout, key): Choice| {
+        let index = move || choices.with(|all| all.iter().position(|c| c.0 == layout));
+        let tab_stop = move || keys::radio_tab_stop(chosen.get(), index().unwrap_or(usize::MAX));
+        let on_key = move |ev: KeyboardEvent| {
+            let name = ev.key();
+            let press = keys::Press {
+                key: &name,
+                ctrl: ev.ctrl_key(),
+                meta: ev.meta_key(),
+                alt: ev.alt_key(),
+                repeat: ev.repeat(),
+                composing: ev.is_composing(),
+                taken: ev.default_prevented(),
+            };
+            let all = choices.get_untracked();
+            let Some(to) = index().and_then(|at| keys::radio_choice(&press, all.len(), at)) else { return };
+            ev.prevent_default();
+            if w.choose_turbo(all[to].0) {
+                focus_radio(&ev, to);
+            }
+        };
+        view! {
+            <li role="none">
+                <button
+                    type="button"
+                    class="opt"
+                    role="radio"
+                    aria-checked=move || (current.get() == layout).to_string()
+                    tabindex=move || if tab_stop() { "0" } else { "-1" }
+                    on:click=move |_| {
+                        w.choose_turbo(layout);
+                    }
+                    on:keydown=on_key
+                >
+                    <span>{move || w.tr(key)}</span>{tick()}
+                </button>
+            </li>
+        }
+    };
+    section(
+        w,
+        "i-h-turbo",
+        "jn-insp-turbo",
+        view! {
+            <ul class="opts" role="radiogroup" aria-labelledby="i-h-turbo">
+                <For each=move || choices.get() key=|c| c.0 children=radio/>
+            </ul>
+        },
+    )
+}
+
+/// Puts the focus on the `index`th radio of the group the key was pressed in.
+fn focus_radio(ev: &KeyboardEvent, index: usize) {
+    use leptos::wasm_bindgen::JsCast;
+    let radios = ev
+        .current_target()
+        .and_then(|t| t.dyn_into::<Element>().ok())
+        .and_then(|button| button.closest("[role=radiogroup]").ok().flatten())
+        .and_then(|group| group.query_selector_all("[role=radio]").ok());
+    if let Some(radio) = radios.and_then(|all| all.item(index as u32)).and_then(|n| n.dyn_into::<HtmlElement>().ok()) {
+        let _ = radio.focus();
+    }
+}
+
+/// The turbo's block: stepped one up or down, with its name between the steps.
+fn turbo_size(w: Watch) -> impl IntoView {
+    let size = move || w.view().turbo.as_ref().map(|t| w.tr(t.size_key)).unwrap_or_default();
+    let can_smaller = move || w.view().turbo.as_ref().is_some_and(|t| t.can_smaller);
+    let can_larger = move || w.view().turbo.as_ref().is_some_and(|t| t.can_larger);
+    section(
+        w,
+        "i-h-turbo-size",
+        "jn-insp-turbo-size",
+        view! {
+            <div class="stepper" role="group" aria-labelledby="i-h-turbo-size">
+                <button
+                    type="button"
+                    class="ico"
+                    aria-label=words(w, "jn-insp-turbo-smaller")
+                    aria-disabled=move || (!can_smaller()).then_some("true")
+                    on:click=move |_| {
+                        if can_smaller() {
+                            w.edit(|j| j.step_turbo_size(-1));
+                        }
+                    }
+                >
+                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8"/></svg>
+                </button>
+                <span class="wfield turbo-size">{size}</span>
+                <button
+                    type="button"
+                    class="ico"
+                    aria-label=words(w, "jn-insp-turbo-larger")
+                    aria-disabled=move || (!can_larger()).then_some("true")
+                    on:click=move |_| {
+                        if can_larger() {
+                            w.edit(|j| j.step_turbo_size(1));
+                        }
+                    }
+                >
+                    <svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7h8M7 3v8"/></svg>
+                </button>
+            </div>
+        },
+    )
+}
+
+/// Which streets are the main road, and the switch to the other pair; only where there is another.
+fn turbo_main(w: Watch) -> impl IntoView {
+    let can_switch = Memo::new(move |_| w.view().turbo.as_ref().is_some_and(|t| t.can_switch_main));
+    let which = move || {
+        let v = w.view();
+        let name = |uid: u32| v.arms.iter().find(|a| a.uid == uid).map(|a| w.say(&a.label)).unwrap_or_default();
+        v.turbo.as_ref().map(|t| tr(w, "jn-insp-turbo-main-is", Args::new().str("from", name(t.main[0])).str("to", name(t.main[1])))).unwrap_or_default()
+    };
+    let moves_lanes = move || w.view().turbo.as_ref().is_some_and(|t| t.main_switch_moves_lanes);
+    let label = move || w.tr(if moves_lanes() { "jn-insp-turbo-main-swap" } else { "jn-insp-turbo-main-switch" });
+    move || {
+        can_switch.get().then(|| {
+            section(
+                w,
+                "i-h-turbo-main",
+                "jn-insp-turbo-main",
+                view! {
+                    <p class="insp-range">{which}</p>
+                    <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.switch_turbo_main()); }>{label}</button>
+                },
+            )
+        })
+    }
+}
+
 /// The cycle track's width; `note` is the message of its hint, which says what the width costs.
 fn cycle_width(w: Watch, note: &'static str) -> impl IntoView {
     let spec = Num {
@@ -422,6 +567,8 @@ fn control_section(w: Watch) -> impl IntoView {
     let cycle = Memo::new(move |_| w.view().ring.as_ref().is_some_and(|r| r.cycle_mm.is_some()));
     let raised = Memo::new(move |_| w.view().raised);
     let single = Memo::new(move |_| w.view().traffic_arms <= 1);
+    let turbo = Memo::new(move |_| w.view().turbo.is_some());
+    let offers = Memo::new(move |_| !w.view().turbo_options.is_empty());
     let control = move || {
         if single.get() {
             section(
@@ -459,10 +606,13 @@ fn control_section(w: Watch) -> impl IntoView {
     view! {
         {control}
         {move || (!ring.get()).then(|| raised_table(w, raised))}
-        {move || ring.get().then(|| ring_size(w))}
+        {move || (ring.get() && offers.get()).then(|| turbo_layout(w))}
+        {move || (ring.get() && !turbo.get()).then(|| ring_size(w))}
+        {move || turbo.get().then(|| turbo_size(w))}
+        {move || turbo.get().then(|| turbo_main(w))}
         {move || ring.get().then(|| cycle_track(w, cycle))}
         {move || (ring.get() && cycle.get()).then(|| cycle_width(w, "jn-insp-track-hint-inside"))}
-        {move || ring.get().then(|| bus_choice(w))}
+        {move || (ring.get() && !turbo.get()).then(|| bus_choice(w))}
     }
 }
 
@@ -578,6 +728,7 @@ fn dest_button(w: Watch, uid: u32, lane: usize, to: u32) -> impl IntoView {
             .unwrap_or((false, false, false))
     };
     let name = move || tr(w, dest_key(class), Args::new().num("n", lane as i64 + 1).str("street", label()));
+    let fixed = move || w.arm(uid, |a| a.lanes.get(lane).is_some_and(|l| l.fixed)).unwrap_or(false);
     view! {
         <button
             type="button"
@@ -586,7 +737,7 @@ fn dest_button(w: Watch, uid: u32, lane: usize, to: u32) -> impl IntoView {
                 format!("turn dest{}{}", if on { " on" } else { "" }, if on && bad { " bad" } else { "" })
             }
             aria-pressed=move || state().0.to_string()
-            disabled=move || !state().1
+            disabled=move || !state().1 || fixed()
             title=label
             aria-label=name
             on:click=move |_| {
@@ -640,6 +791,7 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
         })
         .unwrap_or_default()
     });
+    let fixed = move || w.arm(uid, |a| a.lanes.get(lane).is_some_and(|l| l.fixed)).unwrap_or(false);
     let option = move |to: u32| {
         let dest = move || {
             w.arm(uid, |a| a.lanes.get(lane).and_then(|l| l.dests.iter().find(|d| d.uid == to)).map(|d| (d.class, w.say(&d.label), d.on, d.open))).flatten()
@@ -655,7 +807,7 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
         let state = move || dest().map_or((false, false), |(_, _, on, open)| (on, open));
         option_btn(
             move || state().0,
-            move || !state().1,
+            move || !state().1 || fixed(),
             turn_glyph(class, 22).into_any(),
             move || {
                 let (class, label, _, open) = dest().unwrap_or((class, String::new(), false, false));
@@ -673,6 +825,7 @@ fn lane_panel(w: Watch, uid: u32, lane: usize) -> AnyView {
             <h3 class="note-h" id="i-h-serves">{words(w, "jn-insp-lane-goes")}</h3>
             <ul class="opts"><For each=move || dests.get() key=|d| *d children=option/></ul>
             {hint(range)}
+            {hint(Signal::derive(move || if fixed() { w.tr("jn-insp-lane-fixed") } else { String::new() }))}
         </section>
         <section class="insp-sec">
             <button type="button" class="btn" on:click=move |_| w.select(Target::Arm(uid))>{words(w, "jn-insp-whole-street")}</button>
@@ -831,6 +984,7 @@ fn choice(
     label: &'static str,
     items: &'static [Item],
     current: impl Fn(&crate::junction::read_model::TransitView) -> usize + Send + Sync + Copy + 'static,
+    out: impl Fn(&crate::junction::read_model::TransitView, usize) -> bool + Send + Sync + Copy + 'static,
     set: impl Fn(&mut Junction, usize) -> bool + Copy + 'static,
     uid: u32,
 ) -> impl IntoView {
@@ -842,8 +996,13 @@ fn choice(
             <select
                 aria-labelledby=labelled
                 on:change=move |ev| {
-                    if let Ok(i) = event_target::<HtmlSelectElement>(&ev).value().parse::<usize>() {
+                    let select = event_target::<HtmlSelectElement>(&ev);
+                    if let Ok(i) = select.value().parse::<usize>() {
                         w.edit(|j| set(j, i));
+                    }
+                    // What the list shows is the model's choice, whether it took the edit or refused it.
+                    if let Some(kept) = w.view_now().arms.iter().find(|a| a.uid == uid).map(|a| current(&a.transit)) {
+                        select.set_value(&kept.to_string());
                     }
                 }
             >
@@ -851,7 +1010,14 @@ fn choice(
                     .iter()
                     .enumerate()
                     .map(|(i, o)| {
-                        view! { <option value=i.to_string() prop:selected=move || w.arm(uid, |a| current(&a.transit) == i).unwrap_or(false)>{move || coded(w, o.code, o.key)}</option> }
+                        view! {
+                            <option
+                                value=i.to_string()
+                                prop:selected=move || w.arm(uid, |a| current(&a.transit) == i).unwrap_or(false)
+                                disabled=move || w.arm(uid, |a| out(&a.transit, i)).unwrap_or(false)
+                            >{move || coded(w, o.code, o.key)}
+                            </option>
+                        }
                     })
                     .collect_view()}
             </select>
@@ -947,9 +1113,9 @@ fn transit_section(w: Watch, uid: u32) -> impl IntoView {
                     move || { w.edit(|j| j.set_bus_lane(uid, !bus_lane())); },
                 )}
             </ul>
-            {choice(w, "approach", "jn-insp-approach", &APPROACHES, |t| t.approach, move |j, i| j.set_approach(uid, i), uid)}
-            {choice(w, "stop", "jn-insp-stop", &STOPS, |t| t.stop, move |j, i| j.set_stop(uid, i), uid)}
-            {choice(w, "rule", "jn-insp-rule", &RULES, |t| t.rule, move |j, i| j.set_rule(uid, i), uid)}
+            {choice(w, "approach", "jn-insp-approach", &APPROACHES, |t| t.approach, |t, i| t.approaches_out.contains(&i), move |j, i| j.set_approach(uid, i), uid)}
+            {choice(w, "stop", "jn-insp-stop", &STOPS, |t| t.stop, |_, _| false, move |j, i| j.set_stop(uid, i), uid)}
+            {choice(w, "rule", "jn-insp-rule", &RULES, |t| t.rule, |_, _| false, move |j, i| j.set_rule(uid, i), uid)}
             <ul class="opts">
                 {option_btn(
                     filter,

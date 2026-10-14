@@ -790,6 +790,33 @@ svg pattern circle {
   stroke-width: 1.6;
   stroke-linejoin: round;
 }
+#drawing .turbo-lane {
+  stroke: none;
+  pointer-events: none;
+}
+#drawing .turbo-divider {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+#drawing .turbo-divider-gap {
+  fill: none;
+  stroke: var(--road);
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+#drawing .turbo-entry {
+  pointer-events: none;
+}
+@media (forced-colors: active) {
+  #drawing .turbo-divider {
+    stroke: CanvasText;
+  }
+  #drawing .turbo-divider-gap {
+    stroke: Canvas;
+  }
+}
 #drawing .curb-line {
   fill: none;
   stroke: var(--ink-2);
@@ -1341,10 +1368,11 @@ svg pattern circle {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.ico:hover:not(:disabled) {
+.ico:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--fill);
 }
-.ico:disabled {
+.ico:disabled,
+.ico[aria-disabled="true"] {
   border-color: var(--rule);
   color: var(--ink-3);
   cursor: not-allowed;
@@ -1401,7 +1429,8 @@ svg pattern circle {
 .opt[aria-checked="true"] .tick {
   opacity: 1;
 }
-.opt[role="checkbox"] {
+.opt[role="checkbox"],
+.opt[role="radio"] {
   grid-template-columns: minmax(0, 1fr) 16px;
   padding-left: 8px;
 }
