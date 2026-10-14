@@ -1,0 +1,30 @@
+{
+  "link.title.Documentation": {
+    "message": "Documentation",
+    "description": "The title of the footer links column with title=Documentation in the footer"
+  },
+  "link.title.Project": {
+    "message": "Projet",
+    "description": "The title of the footer links column with title=Project in the footer"
+  },
+  "link.item.label.Introduction": {
+    "message": "Introduction",
+    "description": "The label of footer link with label=Introduction linking to /"
+  },
+  "link.item.label.Getting started": {
+    "message": "Démarrage",
+    "description": "The label of footer link with label=Getting started linking to /getting-started"
+  },
+  "link.item.label.Architecture": {
+    "message": "Architecture",
+    "description": "The label of footer link with label=Architecture linking to /architecture"
+  },
+  "link.item.label.GitHub": {
+    "message": "GitHub",
+    "description": "The label of footer link with label=GitHub linking to https://github.com/alandovskis/cityloom"
+  },
+  "copyright": {
+    "message": "Rues © les contributeurs d’OpenStreetMap. Réalisé avec Docusaurus.",
+    "description": "The footer copyright"
+  }
+}
