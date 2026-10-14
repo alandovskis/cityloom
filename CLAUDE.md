@@ -22,7 +22,7 @@ just docs            # the documentation site (website/, Docusaurus, English and
 just setup           # once: wasm-bindgen-cli (version from Cargo.toml, into .tools), `npm ci` at the root and in `e2e`, Playwright's Chromium
 ```
 
-CI (`.github/workflows/ci.yml`) runs `just format-check`, `just test`, `just e2e` and `just docs-build` with `RUSTFLAGS=-D warnings`, so a new compiler warning fails it; run `just format` before committing. There is no clippy configuration. `build.sh` strips the name and producers sections (without that the wasm is ~7.6 MB instead of ~2 MB). The `proc-macro-error2` future-incompat warning comes from Leptos dependencies and is harmless.
+CI (`.github/workflows/ci.yml`) runs `just format-check`, `just test` and `just e2e` with `RUSTFLAGS=-D warnings`, so a new compiler warning fails it, and its `docs` job runs `just docs-build`; run `just format` before committing. There is no clippy configuration. `build.sh` strips the name and producers sections (without that the wasm is ~7.6 MB instead of ~2 MB). The `proc-macro-error2` future-incompat warning comes from Leptos dependencies and is harmless.
 
 ## Architecture
 
