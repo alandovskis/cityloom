@@ -4,6 +4,7 @@ class-motorway = motorway
 class-arterial = arterial
 class-collector = collector
 class-local = local
+class-pedestrian = pedestrian
 city-unnamed = Unnamed { $class } street
 city-unnamed-motorway = Unnamed motorway
 # An unnamed road named in a sentence, for a place on it that no named road reaches.

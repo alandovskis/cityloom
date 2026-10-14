@@ -60,6 +60,17 @@ pub const SAMPLES: [Sample; 4] = [
     },
 ];
 
+/// A copy of `street` whose every motor piece (as its kind or in any time window) is a sidewalk of the same
+/// width, settled: the street pedestrianised.
+pub fn pedestrianised(street: &Street) -> Street {
+    let sidewalk = kind_index("sidewalk").expect("the catalogue has sidewalks");
+    let mut s = street.clone();
+    for g in s.segments.iter_mut().filter(|g| g.has_motor()) {
+        *g = Segment { variants: Vec::new(), direction: None, ..Segment::new(g.uid, sidewalk, g.width_mm) };
+    }
+    s.settled()
+}
+
 impl Street {
     /// The sample street laid out for a side of the road.
     pub fn sample(sample: usize, side: Side) -> Street {
@@ -75,7 +86,6 @@ impl Editor {
     /// A street laid out on one of the sample profiles.
     pub fn new(sample: usize) -> Editor {
         let mut e = Editor {
-            class: StreetClass::Local,
             street_name: None,
             source: Vec::new(),
             region: 0,
@@ -95,7 +105,6 @@ impl Editor {
     pub fn load_sample(&mut self, sample: usize) {
         let sample = sample.min(SAMPLES.len() - 1);
         let s = &SAMPLES[sample];
-        self.class = s.class;
         self.street_name = Some(s.name.to_string());
         self.row_mm = s.row_mm;
         self.next_uid = 1;
@@ -111,7 +120,7 @@ impl Editor {
         let mut segments = segments;
         // Driving lanes on the left half of the street run away, the rest toward.
         default_directions(&mut segments, REGIONS[self.region].drive_side);
-        self.states = vec![State { label: Said::new("street-today"), segments }];
+        self.states = vec![State { label: Said::new("street-today"), segments, class: s.class, class_before: None }];
         self.cursor = 0;
         self.selected = None;
         self.gesture = None;

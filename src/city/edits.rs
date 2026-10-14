@@ -11,7 +11,7 @@ use crate::junction::model::State;
 use crate::street::model::Street;
 
 /// The shape of the document. Raised when the shape changes.
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 4;
 /// Where the document is kept.
 pub const EDITS_KEY: &str = "cityloom-edits";
 /// Where a document that could not be read is copied before the first write replaces it.
@@ -313,15 +313,42 @@ mod tests {
 
     #[test]
     fn a_newer_version_is_told_apart_and_not_read() {
-        assert!(matches!(parse(Some(r#"{"version":4,"streets":{},"junctions":{}}"#)), Document::Future));
+        assert!(matches!(parse(Some(r#"{"version":5,"streets":{},"junctions":{}}"#)), Document::Future));
     }
 
     #[test]
     fn what_is_not_a_document_is_damaged_and_keeps_its_text() {
         let Document::Damaged(raw) = parse(Some("{not json")) else { panic!("not damaged") };
         assert_eq!(raw, "{not json");
-        assert!(matches!(parse(Some(r#"{"version":3,"streets":5}"#)), Document::Damaged(_)));
+        assert!(matches!(parse(Some(r#"{"version":4,"streets":5}"#)), Document::Damaged(_)));
+        let Document::Damaged(raw) = parse(Some(r#"{"version":3,"streets":{},"junctions":{}}"#)) else { panic!("the previous version is read") };
+        assert!(raw.contains("\"version\":3"), "its text is kept so that it can be copied aside");
         assert!(matches!(parse(Some(r#"{"version":2,"streets":{},"junctions":{}}"#)), Document::Damaged(_)), "an old shape is not this document");
+    }
+
+    fn pedestrian_record() -> StreetRecord {
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::{Piece, Street};
+        let walk = Piece { kind: kind_index("sidewalk").unwrap(), width_mm: 3000, direction: None, variants: Vec::new() };
+        StreetRecord {
+            ways: [8].into(),
+            nodes: [1, 2].into(),
+            leaving: [(1, 90)].into(),
+            street: Street::imported(StreetClass::Local, Side::Right, &[walk]).named("Rue Piétonne"),
+        }
+    }
+
+    #[test]
+    fn a_pedestrian_street_comes_back_with_the_class_it_had() {
+        let mut e = Edits::new();
+        e.streets.insert("w8~n1~n2".into(), pedestrian_record());
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        let street = &back.streets["w8~n1~n2"].street;
+        assert_eq!(
+            (street.class, street.class_before),
+            (crate::shared::catalogue::StreetClass::Pedestrian, Some(crate::shared::catalogue::StreetClass::Local))
+        );
+        assert_eq!(back, e);
     }
 
     fn street_record() -> StreetRecord {
@@ -422,6 +449,7 @@ mod tests {
         let junction = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
         let mut e = Edits::new();
         e.streets.insert("w7~n1~n2".into(), street_record());
+        e.streets.insert("w8~n1~n2".into(), pedestrian_record());
         let (key, record) = city.junction_record(junction).unwrap();
         e.junctions.insert(key, record);
         let mut out = BTreeSet::new();
@@ -484,6 +512,7 @@ mod tests {
     ".streets.<key>.nodes: array",
     ".streets.<key>.nodes[]: number",
     ".streets.<key>.street.class: string",
+    ".streets.<key>.street.class_before: string",
     ".streets.<key>.street.name: string",
     ".streets.<key>.street.next_uid: number",
     ".streets.<key>.street.row_mm: number",

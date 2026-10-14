@@ -318,3 +318,13 @@ side-word-right = right
 side-word-left = left
 unavailable-freeways-only = Freeways only
 unavailable-not-freeway = Not for a freeway
+
+# A pedestrian street (src/street/model.rs, page.rs, vm.rs).
+make-pedestrian-button = Make pedestrian
+make-pedestrian-hint = Every driving, parking, loading, bus and shoulder piece becomes the kind you pick.
+rev-made-pedestrian = Made pedestrian
+street-now-pedestrian = { $street } is now a pedestrian street.
+street-traffic-again = { $street } carries traffic again.
+check-access-ped-ok = Sidewalks give an unbroken { $amount } or more
+check-access-ped-bad = No unbroken sidewalk of { $amount } or more
+check-detail-no-edges-pedestrian = No roadway, so no sidewalk is asked for

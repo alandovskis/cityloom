@@ -4,11 +4,22 @@
 //! Every sentence is a message (`src/street/i18n`); these functions only choose
 //! which one and hand it the lengths, written in the language of the page.
 
-use crate::shared::catalogue::{KINDS, kind_key};
+use crate::shared::catalogue::{KINDS, StreetClass, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::Said;
 use crate::shared::units::Units;
 use crate::street::model::View;
+
+/// What an edit says of the street becoming pedestrian or carrying traffic again, after what it already said;
+/// nothing when the class is the one it was.
+pub fn class_change_text(before: StreetClass, v: &View, i18n: &I18n, units: Units) -> Option<String> {
+    let street = Args::new().str("street", say_now(i18n, units, &v.name));
+    match (before == StreetClass::Pedestrian, v.class == StreetClass::Pedestrian) {
+        (false, true) => Some(i18n.tr_now("street-now-pedestrian", &street)),
+        (true, false) => Some(i18n.tr_now("street-traffic-again", &street)),
+        _ => None,
+    }
+}
 
 /// What the model said, in words, for a view (see `shared::said`).
 pub fn say(i18n: &I18n, units: Units, said: &Said) -> String {

@@ -388,3 +388,45 @@ test.describe("what the street editor keeps in the city", () => {
     await expect(page).toHaveURL(/map\.html$/);
   });
 });
+
+test.describe("making a street pedestrian", () => {
+  test.beforeEach(async ({ page }) => {
+    await openStreet(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+  });
+
+  test("turns the motor space into the chosen kind, says so, and judges the street as a pedestrian one", async ({
+    page,
+  }) => {
+    const before = await pieces(page);
+    await expect(page.locator("#make-pedestrian-menu")).toBeHidden();
+    await page.locator("#make-pedestrian-btn").click();
+    await expect(page.locator("#make-pedestrian-menu")).toBeVisible();
+    await page.locator("#make-pedestrian-menu .ped-item").first().click();
+    await expect(live(page)).toHaveText(/^Made pedestrian\. .+ is now a pedestrian street\.$/);
+    await expect(page.locator("#make-pedestrian-btn")).toHaveCount(0);
+    // The choice hands the focus to the drawing, whose keys edit the street.
+    await expect(page.locator("#wrap")).toBeFocused();
+    expect(await pieces(page)).toBe(before);
+    await page.locator("#t-checks").click();
+    await expect(page.locator("#checks")).toContainText("No roadway, so no sidewalk is asked for");
+    await expect(page.locator("#checks")).toContainText(/unbroken/);
+  });
+
+  test("is one edit that undo takes back, and the street carries traffic again", async ({ page }) => {
+    await page.locator("#make-pedestrian-btn").click();
+    await page.locator("#make-pedestrian-menu .ped-item").first().click();
+    await expect(page.locator("#make-pedestrian-btn")).toHaveCount(0);
+    await page.locator("#undo").click();
+    await expect(live(page)).toHaveText(/ carries traffic again\.$/);
+    await expect(page.locator("#make-pedestrian-btn")).toBeVisible();
+  });
+
+  test("the menu closes with Escape and gives the focus back to its button", async ({ page }) => {
+    await page.locator("#make-pedestrian-btn").click();
+    await expect(page.locator("#make-pedestrian-menu")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#make-pedestrian-menu")).toBeHidden();
+    await expect(page.locator("#make-pedestrian-btn")).toBeFocused();
+  });
+});

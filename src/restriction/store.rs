@@ -395,9 +395,6 @@ mod tests {
         fn keys(&self) -> Vec<String> {
             self.0.keys()
         }
-        fn first_time(&self, what: &str) -> bool {
-            self.0.first_time(what)
-        }
     }
 
     #[test]

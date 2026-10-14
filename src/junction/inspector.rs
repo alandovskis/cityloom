@@ -421,27 +421,41 @@ fn control_section(w: Watch) -> impl IntoView {
     let ring = Memo::new(move |_| w.view().ring.is_some());
     let cycle = Memo::new(move |_| w.view().ring.as_ref().is_some_and(|r| r.cycle_mm.is_some()));
     let raised = Memo::new(move |_| w.view().raised);
-    let control = section(
-        w,
-        "i-h-control",
-        "jn-insp-control",
-        view! {
-            <select
-                aria-labelledby="i-h-control"
-                on:change=move |ev| {
-                    if let Ok(i) = event_target_value(&ev).parse::<usize>() {
-                        w.edit(|j| j.set_control(i));
-                    }
-                }
-            >
-                {CONTROLS
-                    .iter()
-                    .enumerate()
-                    .map(|(i, c)| view! { <option value=i.to_string() prop:selected=move || w.view().control_index == i>{words(w, c.key)}</option> })
-                    .collect_view()}
-            </select>
-        },
-    );
+    let single = Memo::new(move |_| w.view().traffic_arms <= 1);
+    let control = move || {
+        if single.get() {
+            section(
+                w,
+                "i-h-control",
+                "jn-insp-control",
+                view! { <p class="insp-range">{move || tr(w, "jn-insp-control-pedestrian", Args::new().num("n", w.view().traffic_arms as i64))}</p> },
+            )
+            .into_any()
+        } else {
+            section(
+                w,
+                "i-h-control",
+                "jn-insp-control",
+                view! {
+                    <select
+                        aria-labelledby="i-h-control"
+                        on:change=move |ev| {
+                            if let Ok(i) = event_target_value(&ev).parse::<usize>() {
+                                w.edit(|j| j.set_control(i));
+                            }
+                        }
+                    >
+                        {CONTROLS
+                            .iter()
+                            .enumerate()
+                            .map(|(i, c)| view! { <option value=i.to_string() prop:selected=move || w.view().control_index == i>{words(w, c.key)}</option> })
+                            .collect_view()}
+                    </select>
+                },
+            )
+            .into_any()
+        }
+    };
     view! {
         {control}
         {move || (!ring.get()).then(|| raised_table(w, raised))}
@@ -781,8 +795,17 @@ fn crossing_fields(w: Watch, uid: u32) -> impl IntoView {
 
 fn crossing_section(w: Watch, uid: u32) -> impl IntoView {
     let has = Memo::new(move |_| w.arm(uid, |a| a.crossing.is_some()).unwrap_or(false));
+    let walk = Memo::new(move |_| w.arm(uid, |a| a.pedestrian).unwrap_or(false));
     move || {
-        if has.get() {
+        if walk.get() {
+            view! {
+                <section class="insp-sec">
+                    <h3 class="note-h" id="i-h-cross">{words(w, "jn-insp-crossing")}</h3>
+                    <p class="insp-range">{words(w, "jn-insp-crossing-pedestrian")}</p>
+                </section>
+            }
+            .into_any()
+        } else if has.get() {
             crossing_fields(w, uid).into_any()
         } else {
             view! {
@@ -1074,6 +1097,7 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         return view! { {head(name, sub)} {crossing_section(w, uid)} {control_section(w)} }.into_any();
     }
     let enters = Memo::new(move |_| w.arm(uid, |a| a.enters).unwrap_or(false));
+    let walk = Memo::new(move |_| w.arm(uid, |a| a.pedestrian).unwrap_or(false));
     let lanes = Memo::new(move |_| w.arm(uid, |a| a.lanes.len()).unwrap_or(0));
     let linked = w.view_now().linked;
     let direction = Num {
@@ -1122,15 +1146,16 @@ fn arm_panel(w: Watch, uid: u32, crossing_only: bool) -> AnyView {
         {head(name, sub)}
         <section class="insp-sec">
             <h3 class="note-h" id="i-h-lanes">{words(w, "jn-insp-lanes-in")}</h3>
-            {move || if enters.get() {
+            {move || if walk.get() {
+                view! { <p class="insp-range">{words(w, "jn-insp-lanes-pedestrian")}</p> }.into_any()
+            } else if enters.get() {
                 view! { <ul class="lanes"><For each=move || 0..lanes.get() key=|i| *i children=move |i| lane_row(w, uid, i)/></ul> }.into_any()
             } else {
                 view! { <p class="insp-range">{words(w, "jn-insp-one-way-out")}</p> }.into_any()
             }}
         </section>
         {crossing_section(w, uid)}
-        {transit_section(w, uid)}
-        {signal_section(w, uid)}
+        {move || (!walk.get()).then(|| view! { {transit_section(w, uid)} {signal_section(w, uid)} })}
         {bike_box_section(w, uid)}
         {num_field(
             w,

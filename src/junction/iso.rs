@@ -476,7 +476,9 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
         for piece in &a.pieces {
             let id = KINDS[piece.kind].id;
             let foot = flatten(&piece.poly);
-            match height_of(id) {
+            // A walkway is walking surface wall to wall, whatever stands on it.
+            let h = if a.pedestrian { wall } else { height_of(id) };
+            match h {
                 h if h > 0.0 => d.stand(id, foot, h, true),
                 _ => d.lay(id, &foot),
             }
@@ -573,6 +575,18 @@ mod tests {
 
     fn depths(markup: &str) -> Vec<f64> {
         markup.split("data-depth=\"").skip(1).map(|rest| rest.split('"').next().unwrap().parse().unwrap()).collect()
+    }
+
+    #[test]
+    fn a_walkway_arm_stands_at_sidewalk_height_whatever_its_pieces_are() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+        let s = svg(&j);
+        assert!(count(&s.markup, "iso-top k-terrace") >= 1, "the terraces stand with the sidewalks");
+        assert_eq!(count(&s.markup, "iso-flat k-terrace"), 0);
+        assert!(count(&s.markup, "iso-flat k-travel") > 0, "the streets of traffic still lie flat");
+        // the same terrace on a street of traffic lies flat
+        let street = svg(&junction_of(&[("sidewalk", 2000), ("terrace", 1000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]));
+        assert!(count(&street.markup, "iso-flat k-terrace") > 0);
     }
 
     fn walked() -> Junction {

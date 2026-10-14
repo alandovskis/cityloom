@@ -7,6 +7,7 @@ use crate::shared::catalogue::{KINDS, REGIONS, Side, StreetClass, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 use crate::junction::geometry::gap;
 use crate::street::model::{Editor, Street, View, named_said};
@@ -14,7 +15,7 @@ use crate::street::model::{Editor, Street, View, named_said};
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::{JUNCTION_SAMPLES, junction_of};
+pub use fixtures::{JUNCTION_SAMPLES, junction_of, junction_with_walkways};
 
 pub const LEFT: u8 = 1;
 pub const THROUGH: u8 = 2;
@@ -287,6 +288,10 @@ pub struct Arm {
     /// the junction's control is a signal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timing: Option<Timing>,
+    /// The street was a pedestrian one the last time the arm was settled: when it carries traffic again the arm gets
+    /// the crossing and the lanes a new arm has, once.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub walked: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -404,6 +409,18 @@ pub fn profile_of(street: &Street, region: usize) -> Profile {
     read_profile(&e.view(), street.title())
 }
 
+/// How many of the junction's streets carry traffic: every arm but the pedestrian ones.
+pub fn traffic_arms(s: &State) -> usize {
+    s.arms.iter().filter(|a| !a.is_pedestrian()).count()
+}
+
+/// The state as the junction is run. With at most one street carrying traffic there is nothing to control, so
+/// it runs uncontrolled whatever control was kept; the kept control returns when traffic does. What reads the
+/// control to draw or judge the junction asks for this; an edit changes the kept state.
+pub fn in_force(s: &State) -> Cow<'_, State> {
+    if s.control != UNCONTROLLED && traffic_arms(s) <= 1 { Cow::Owned(State { control: UNCONTROLLED, ..s.clone() }) } else { Cow::Borrowed(s) }
+}
+
 impl Arm {
     /// An arm with the defaults a street starts with at a junction.
     pub fn new(uid: u32, bearing: i32, offset_mm: i32) -> Arm {
@@ -415,7 +432,7 @@ impl Arm {
             offset_mm,
             corner_mm: DEFAULT_CORNER_MM,
             lanes: Vec::new(),
-            crossing: Some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false, continuous: false }),
+            crossing: Some(default_crossing()),
             bulb: [false, false],
             bike_box: false,
             protected: false,
@@ -427,6 +444,7 @@ impl Arm {
             rule: 0,
             filter: false,
             timing: None,
+            walked: false,
         }
     }
 
@@ -464,6 +482,11 @@ impl Arm {
     /// What sort of street the arm is.
     pub fn class(&self) -> Option<StreetClass> {
         self.section.as_ref().map(|s| s.class)
+    }
+
+    /// Whether the street the arm reads is a pedestrian street: no lanes, no crossing, nothing to cross.
+    pub fn is_pedestrian(&self) -> bool {
+        self.class() == Some(StreetClass::Pedestrian)
     }
 }
 
@@ -612,6 +635,8 @@ pub fn protected_blocker(s: &State, i: usize, pa: &Profile, pb: &Profile) -> Opt
 /// What stops arm `i` of `s`, whose street reads as `p`, from having a bike box: it needs a bike lane to reach it, a
 /// lane cars enter by, a stop line (a free approach has none), and a junction that is not a roundabout.
 pub fn bike_box_blocker(s: &State, i: usize, p: &Profile) -> Option<BikeBoxBlocker> {
+    // The junction runs uncontrolled with at most one street of traffic, whatever control is kept.
+    let s = &*in_force(s);
     if s.control == ROUNDABOUT {
         Some(BikeBoxBlocker::Roundabout)
     } else if p.outer_bike().is_empty() {
@@ -641,9 +666,14 @@ pub fn turn_class(from: i32, to: i32) -> u8 {
     }
 }
 
-/// The classes of turn an arm has, given the other arms' bearings.
+/// The crossing a new arm has, and an arm that regains traffic.
+fn default_crossing() -> Crossing {
+    Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false, continuous: false }
+}
+
+/// The classes of turn an arm has, given the other arms' bearings (a pedestrian arm takes none).
 pub fn classes_of(arms: &[Arm], i: usize) -> u8 {
-    arms.iter().enumerate().filter(|(j, _)| *j != i).fold(0, |m, (_, b)| m | turn_class(arms[i].bearing, b.bearing))
+    arms.iter().enumerate().filter(|(j, b)| *j != i && !b.is_pedestrian()).fold(0, |m, (_, b)| m | turn_class(arms[i].bearing, b.bearing))
 }
 
 /// The classes a lane in place `i` of `n` serves by default, given those the
@@ -725,13 +755,15 @@ pub enum Refusal {
     RaisedOnRoundabout,
     BikeBoxNotHere,
     ProtectedNotHere,
+    CrossingOnPedestrian,
     NotSignal,
     TimingOutOfRange,
     NoTransitLane,
+    MeasureOnPedestrian,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 15] = [
+    pub const ALL: [Refusal; 17] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -744,9 +776,11 @@ impl Refusal {
         Refusal::RaisedOnRoundabout,
         Refusal::BikeBoxNotHere,
         Refusal::ProtectedNotHere,
+        Refusal::CrossingOnPedestrian,
         Refusal::NotSignal,
         Refusal::TimingOutOfRange,
         Refusal::NoTransitLane,
+        Refusal::MeasureOnPedestrian,
     ];
 
     /// The message that says why.
@@ -767,6 +801,8 @@ impl Refusal {
             Refusal::TimingOutOfRange => "jn-refusal-timing-out-of-range",
             Refusal::NoTransitLane => "jn-refusal-no-transit-lane",
             Refusal::ProtectedNotHere => "jn-refusal-protected-not-here",
+            Refusal::CrossingOnPedestrian => "jn-refusal-crossing-pedestrian",
+            Refusal::MeasureOnPedestrian => "jn-refusal-measure-pedestrian",
         }
     }
 }
@@ -1155,11 +1191,14 @@ impl Junction {
     }
 
     pub fn set_crossing(&mut self, uid: u32, on: bool) -> bool {
+        if on && self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::CrossingOnPedestrian);
+        }
         self.arm_edit(
             uid,
             |a| about("jn-rev-crossing", a).with("change", change(on)),
             |a| {
-                a.crossing = on.then_some(Crossing { setback_mm: DEFAULT_SETBACK_MM, width_mm: DEFAULT_CROSSING_MM, island: false, continuous: false });
+                a.crossing = on.then(default_crossing);
                 true
             },
         )
@@ -1247,8 +1286,11 @@ impl Junction {
     /// already has is not an edit.
     pub fn set_timing(&mut self, uid: u32, field: TimingField, seconds: i32) -> bool {
         let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        if arm.is_pedestrian() {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         let (bus_lane, timing) = (arm.bus_lane, arm.timing);
-        if self.current().control != SIGNAL {
+        if in_force(self.current()).control != SIGNAL {
             return self.refuse(Refusal::NotSignal);
         }
         if field == TimingField::TransitLead && !bus_lane {
@@ -1327,6 +1369,9 @@ impl Junction {
         if uid == to {
             return self.refuse(Refusal::DoesNotFit);
         }
+        if self.arm(to).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::DoesNotFit);
+        }
         if !on && self.arm(uid).and_then(|a| a.lanes.get(lane)).is_some_and(|l| l.to == [to]) {
             return self.refuse(Refusal::LaneNeedsStreet);
         }
@@ -1356,6 +1401,9 @@ impl Junction {
     }
 
     pub fn set_bus_lane(&mut self, uid: u32, on: bool) -> bool {
+        if self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         self.arm_edit(
             uid,
             |a| about("jn-rev-bus-lane", a).with("change", change(on)),
@@ -1368,6 +1416,9 @@ impl Junction {
 
     /// Sets the approach measure, by index into `APPROACHES`.
     pub fn set_approach(&mut self, uid: u32, approach: usize) -> bool {
+        if self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         if approach >= APPROACHES.len() {
             return self.refuse(Refusal::DoesNotFit);
         }
@@ -1398,6 +1449,9 @@ impl Junction {
 
     /// Sets the bus stop, by index into `STOPS`.
     pub fn set_stop(&mut self, uid: u32, stop: usize) -> bool {
+        if self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         if stop >= STOPS.len() {
             return self.refuse(Refusal::DoesNotFit);
         }
@@ -1413,6 +1467,9 @@ impl Junction {
 
     /// Sets the turn management, by index into `RULES`.
     pub fn set_rule(&mut self, uid: u32, rule: usize) -> bool {
+        if self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         if rule >= RULES.len() {
             return self.refuse(Refusal::DoesNotFit);
         }
@@ -1427,6 +1484,9 @@ impl Junction {
     }
 
     pub fn set_filter(&mut self, uid: u32, on: bool) -> bool {
+        if self.arm(uid).is_some_and(Arm::is_pedestrian) {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
         self.arm_edit(
             uid,
             |a| about("jn-rev-filter", a).with("change", change(on)),
@@ -1498,7 +1558,7 @@ impl Junction {
 
     /// Raises the whole junction to sidewalk height, or makes it flat again. A roundabout has no table.
     pub fn set_raised(&mut self, on: bool) -> bool {
-        if self.current().control == ROUNDABOUT {
+        if in_force(self.current()).control == ROUNDABOUT {
             return self.refuse(Refusal::RaisedOnRoundabout);
         }
         self.edit(Said::new("jn-rev-raised").with("change", change(on)), |s| {
@@ -1634,7 +1694,7 @@ pub fn widest_gap(arms: &[Arm]) -> i32 {
 /// A roundabout is no raised table, and a bike box stands only where `bike_box_blocker` allows one: whatever put it
 /// elsewhere (an edit, a save), it goes.
 fn settle_table_and_boxes(s: &mut State, region: usize) {
-    if s.control == ROUNDABOUT {
+    if in_force(s).control == ROUNDABOUT {
         s.raised = false;
     }
     let blocked: Vec<bool> = (0..s.arms.len()).map(|i| bike_box_blocker(s, i, &s.arms[i].profile(region)).is_some()).collect();
@@ -1686,33 +1746,64 @@ fn ease(s: &State, region: usize) -> Option<State> {
 /// each street, a lane serves only turns its arm has, bans name arms that
 /// exist, and features that need room or parking stay only where they have it.
 pub fn normalize(arms: &mut [Arm], region: usize) {
-    let uids: Vec<u32> = arms.iter().map(|a| a.uid).collect();
-    let bearings: Vec<i32> = arms.iter().map(|a| a.bearing).collect();
+    // The streets a lane can go to: every street but the pedestrian ones, which nothing drives into.
+    let dests: Vec<(u32, i32)> = arms.iter().filter(|a| !a.is_pedestrian()).map(|a| (a.uid, a.bearing)).collect();
     let avail: Vec<u8> = (0..arms.len()).map(|i| classes_of(arms, i)).collect();
+    // The arms that carry traffic again after having none: the other arms' lanes lead to them by default. A street that
+    // goes only one way out has no lanes of its own, so it is told by having been a pedestrian street.
+    let regained: Vec<(u32, i32)> = arms
+        .iter()
+        .filter(|a| {
+            let p = a.profile(region);
+            !a.is_pedestrian() && a.lanes.is_empty() && (!p.enter_x.is_empty() || (a.walked && !p.leave_x.is_empty()))
+        })
+        .map(|a| (a.uid, a.bearing))
+        .collect();
     for (a, avail) in arms.iter_mut().zip(avail) {
         let p = a.profile(region);
         let n = p.enter_x.len();
         let (uid, bearing) = (a.uid, a.bearing);
+        // An arm that had no lanes (a pedestrian street) and has some again has the crossing a new arm has.
+        let regains_traffic = regained.iter().any(|(u, _)| *u == a.uid);
         // Where lane `k` goes by default: every street whose turn it serves.
         let default = |k: usize| -> Vec<u32> {
             let want = default_uses(k, n, avail);
-            uids.iter().zip(&bearings).filter(|(u, b)| **u != uid && want & turn_class(bearing, **b) != 0).map(|(u, _)| *u).collect()
+            dests.iter().filter(|(u, b)| *u != uid && want & turn_class(bearing, *b) != 0).map(|(u, _)| *u).collect()
         };
         if a.lanes.len() != n {
             a.lanes = (0..n).map(|k| Lane { to: default(k) }).collect();
         }
         for (k, l) in a.lanes.iter_mut().enumerate() {
-            l.to.retain(|u| uids.contains(u) && *u != uid);
+            let want = default_uses(k, n, avail);
+            l.to.extend(regained.iter().filter(|(u, b)| *u != uid && want & turn_class(bearing, *b) != 0).map(|(u, _)| *u));
+            l.to.retain(|u| *u != uid && dests.iter().any(|(d, _)| d == u));
             l.to.sort_unstable();
             l.to.dedup();
             if l.to.is_empty() {
                 l.to = default(k);
             }
         }
-        a.banned.retain(|b| uids.contains(b) && *b != a.uid);
+        a.banned.retain(|b| *b != a.uid && dests.iter().any(|(d, _)| d == b));
         a.bulb = [a.bulb[0] && p.park[0] > 0, a.bulb[1] && p.park[1] > 0];
-        if let Some(c) = a.crossing.as_mut() {
-            c.island = c.island && p.road_mm() >= ISLAND_MIN_ROAD_MM && !c.continuous;
+        if a.is_pedestrian() {
+            // There is no roadway to cross, and no traffic to give a lane, a stop or a rule to. The timing stays: with
+            // no phase it does nothing, and it returns with traffic.
+            a.crossing = None;
+            a.bus_lane = false;
+            a.filter = false;
+            a.approach = 0;
+            a.stop = 0;
+            a.rule = 0;
+            a.bike_box = false;
+            a.walked = true;
+        } else {
+            if regains_traffic && a.crossing.is_none() {
+                a.crossing = Some(default_crossing());
+            }
+            a.walked = false;
+            if let Some(c) = a.crossing.as_mut() {
+                c.island = c.island && p.road_mm() >= ISLAND_MIN_ROAD_MM && !c.continuous;
+            }
         }
         // Offsets stay within the carriageway of whatever street the arm reads.
         let half = p.road_mm() / 2;
@@ -1742,6 +1833,225 @@ mod tests {
     use crate::shared::i18n::Locale;
     use crate::shared::testing::{en, fr};
     use crate::street::model::SAMPLES;
+
+    #[test]
+    fn an_arm_is_pedestrian_when_the_street_it_reads_is() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 4000), ("sidewalk", 4000)]);
+        let walking: Vec<i32> = j.current().arms.iter().filter(|a| a.is_pedestrian()).map(|a| a.bearing).collect();
+        assert_eq!(walking, [90]);
+        assert_eq!(traffic_arms(j.current()), 3);
+        assert!(!Junction::new(0).current().arms.iter().any(Arm::is_pedestrian), "a sandbox arm reads a sample street");
+        assert!(!Arm::new(1, 0, 0).is_pedestrian(), "an arm that reads no street is not pedestrian");
+    }
+
+    #[test]
+    fn a_junction_with_at_most_one_street_carrying_traffic_is_run_as_uncontrolled_and_keeps_its_control() {
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::Piece;
+        let mut s = Junction::new(0).current().clone();
+        assert_eq!(s.control, SIGNAL);
+        assert_eq!(in_force(&s).control, SIGNAL, "four streets carry traffic");
+        let piece = Piece { kind: kind_index("sidewalk").unwrap(), width_mm: 4000, direction: None, variants: Vec::new() };
+        let walkway = Street::imported(StreetClass::Pedestrian, Side::Right, &[piece]);
+        for a in s.arms.iter_mut().skip(2) {
+            a.section = Some(walkway.clone());
+        }
+        assert_eq!(traffic_arms(&s), 2);
+        assert_eq!(in_force(&s).control, SIGNAL, "two streets still meet");
+        s.arms[1].section = Some(walkway);
+        assert_eq!(traffic_arms(&s), 1);
+        assert_eq!(in_force(&s).control, UNCONTROLLED);
+        assert_eq!(s.control, SIGNAL, "the control that was kept is not touched");
+    }
+
+    #[test]
+    fn a_walkway_arm_has_no_crossing_and_no_lane_goes_to_it() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+        let walk = j.current().arms.iter().find(|a| a.bearing == 90).unwrap();
+        assert!(walk.crossing.is_none() && walk.lanes.is_empty());
+        for a in j.current().arms.iter().filter(|a| a.uid != walk.uid) {
+            assert!(a.crossing.is_some(), "a street of traffic keeps its crossing");
+            assert!(!a.lanes.is_empty());
+            for l in &a.lanes {
+                assert!(!l.to.is_empty(), "a lane keeps a street to go to");
+                assert!(!l.to.contains(&walk.uid), "nothing is driven into a walkway");
+            }
+        }
+    }
+
+    #[test]
+    fn a_crossing_cannot_be_added_to_a_walkway_arm_and_a_lane_cannot_be_sent_into_it() {
+        let mut j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let (walk, other) = (arm_at(&j, 90), arm_at(&j, 0));
+        assert!(!j.set_crossing(walk, true));
+        assert_eq!(j.refusal(), Some(Refusal::CrossingOnPedestrian));
+        assert!(j.current().arms.iter().find(|a| a.uid == walk).unwrap().crossing.is_none());
+        assert!(j.set_crossing(other, false), "a street of traffic can lose its crossing");
+        assert_eq!(j.refusal(), None);
+        assert!(!j.set_lane_dest(other, 0, walk, true));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+    }
+
+    #[test]
+    fn a_kept_roundabout_with_one_street_of_traffic_runs_uncontrolled_and_allows_a_raised_table() {
+        let mut j = junction_with_walkways(&[90, 180, 270], &[("sidewalk", 4000), ("sidewalk", 4000)]);
+        assert_eq!(traffic_arms(j.current()), 1);
+        assert!(j.set_control(ROUNDABOUT), "{:?}", j.refusal());
+        assert!(j.set_raised(true), "{:?}", j.refusal());
+        assert!(j.current().raised && j.current().control == ROUNDABOUT);
+        assert!(j.view().raised);
+    }
+
+    #[test]
+    fn a_street_made_pedestrian_loses_its_traffic_measures_and_a_walkway_takes_none() {
+        let mut j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let mut arms = j.current().arms.clone();
+        let walk = arms.iter_mut().find(|a| a.bearing == 90).unwrap();
+        (walk.bus_lane, walk.filter, walk.approach, walk.stop, walk.rule, walk.bike_box) = (true, true, 1, 1, 1, true);
+        normalize(&mut arms, 0);
+        let walk = arms.iter().find(|a| a.bearing == 90).unwrap();
+        assert!(!walk.bus_lane && !walk.filter && !walk.bike_box);
+        assert_eq!((walk.approach, walk.stop, walk.rule), (0, 0, 0));
+        let w = arm_at(&j, 90);
+        assert!(!j.set_bus_lane(w, true));
+        assert_eq!(j.refusal(), Some(Refusal::MeasureOnPedestrian));
+        assert!(!j.set_filter(w, true) && j.refusal() == Some(Refusal::MeasureOnPedestrian));
+        assert!(!j.set_approach(w, 1) && j.refusal() == Some(Refusal::MeasureOnPedestrian));
+        assert!(!j.set_stop(w, 1) && j.refusal() == Some(Refusal::MeasureOnPedestrian));
+        assert!(!j.set_rule(w, 1) && j.refusal() == Some(Refusal::MeasureOnPedestrian));
+        assert_eq!(j.current().control, SIGNAL);
+        assert!(!j.set_timing(w, TimingField::Green, 25) && j.refusal() == Some(Refusal::MeasureOnPedestrian));
+        assert!(j.set_bus_lane(arm_at(&j, 0), true), "a street of traffic takes its measures");
+    }
+
+    #[test]
+    fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
+        assert_eq!(Refusal::ALL.len(), 17);
+        assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
+        assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
+    }
+
+    #[test]
+    fn the_turns_an_arm_has_leave_out_a_walkway() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let arms = &j.current().arms;
+        let north = arms.iter().position(|a| a.bearing == 0).unwrap();
+        let plain = Junction::new(0).current().arms.clone();
+        assert!(classes_of(arms, north).count_ones() < classes_of(&plain, north).count_ones());
+    }
+
+    #[test]
+    fn a_junction_whose_other_streets_are_all_walkways_keeps_a_lane_with_nowhere_to_go() {
+        let j = junction_with_walkways(&[90, 180, 270], &[("sidewalk", 4000), ("sidewalk", 4000)]);
+        assert_eq!(traffic_arms(j.current()), 1);
+        let arm = j.current().arms.iter().find(|a| a.bearing == 0).unwrap();
+        assert!(!arm.lanes.is_empty() && arm.lanes.iter().all(|l| l.to.is_empty()));
+        let _ = j.view();
+    }
+
+    #[test]
+    fn the_lanes_of_the_other_arms_lead_again_to_an_arm_that_regains_traffic() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let mut arms = j.current().arms.clone();
+        let walk = arms.iter().position(|a| a.bearing == 90).unwrap();
+        let x = arms[walk].uid;
+        assert!(arms.iter().all(|a| a.lanes.iter().all(|l| !l.to.contains(&x))));
+        // The resident took one street out of a lane of the north arm that has two or more.
+        let north = arms.iter().position(|a| a.bearing == 0).unwrap();
+        let lane = arms[north].lanes.iter().position(|l| l.to.len() > 1).expect("a lane with a choice");
+        let removed = arms[north].lanes[lane].to.remove(0);
+        let street = arms[north].section.clone();
+        arms[walk].section = street;
+        normalize(&mut arms, 0);
+        for (i, a) in arms.iter().enumerate().filter(|(i, _)| *i != walk) {
+            let avail = classes_of(&arms, i);
+            for (k, l) in a.lanes.iter().enumerate() {
+                let serves = default_uses(k, a.lanes.len(), avail) & turn_class(a.bearing, 90) != 0;
+                assert_eq!(l.to.contains(&x), serves, "arm {} lane {k}", a.bearing);
+            }
+        }
+        assert!(!arms[north].lanes[lane].to.contains(&removed), "what the resident removed stays removed");
+    }
+
+    fn one_way_out() -> Street {
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::Piece;
+        let pieces: Vec<Piece> = [("sidewalk", 2000), ("travel", 3200), ("sidewalk", 2000)]
+            .iter()
+            .map(|&(id, width_mm)| Piece { kind: kind_index(id).unwrap(), width_mm, direction: (id == "travel").then_some(0), variants: Vec::new() })
+            .collect();
+        Street::imported(StreetClass::Local, Side::Right, &pieces)
+    }
+
+    #[test]
+    fn an_arm_returning_to_traffic_one_way_out_has_the_default_crossing_and_the_lanes_of_the_others_lead_to_it() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let mut arms = j.current().arms.clone();
+        let walk = arms.iter().position(|a| a.bearing == 90).unwrap();
+        arms[walk].section = Some(one_way_out());
+        assert!(arms[walk].profile(0).enter_x.is_empty() && !arms[walk].profile(0).leave_x.is_empty(), "the street goes only out");
+        normalize(&mut arms, 0);
+        assert!(arms[walk].crossing.is_some(), "the crossing is given back");
+        assert!(arms[walk].lanes.is_empty());
+        let x = arms[walk].uid;
+        assert!(arms.iter().filter(|a| a.uid != x).any(|a| a.lanes.iter().any(|l| l.to.contains(&x))), "lanes lead into it again");
+    }
+
+    #[test]
+    fn an_arm_that_goes_one_way_out_all_along_keeps_a_removed_crossing_and_a_removed_destination() {
+        let mut j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let walk = arm_at(&j, 90);
+        let (north, south) = (arm_at(&j, 0), arm_at(&j, 180));
+        let street = Some(one_way_out());
+        let mut arms = j.current().arms.clone();
+        arms.iter_mut().find(|a| a.uid == walk).unwrap().section = street;
+        normalize(&mut arms, 0);
+        let mut s = j.current().clone();
+        s.arms = arms;
+        j = Junction::from_city(named_said("Test"), &s, &s, 0).expect("draws");
+        assert!(j.set_crossing(walk, false));
+        let lane = j.arm(north).unwrap().lanes.iter().position(|l| l.to.contains(&walk) && l.to.len() > 1).expect("a lane with a choice");
+        assert!(j.set_lane_dest(north, lane, walk, false));
+        let mut arms = j.current().arms.clone();
+        normalize(&mut arms, 0);
+        let (w, n) = (arms.iter().find(|a| a.uid == walk).unwrap(), arms.iter().find(|a| a.uid == north).unwrap());
+        assert!(w.crossing.is_none(), "the resident's choice stands");
+        assert!(!n.lanes[lane].to.contains(&walk));
+        let _ = south;
+    }
+
+    #[test]
+    fn the_only_street_of_traffic_going_one_way_out_regains_its_crossing_once_and_a_removed_one_stays_removed() {
+        let j = junction_with_walkways(&[0, 90, 180, 270], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let mut s = j.current().clone();
+        let north = s.arms.iter().position(|a| a.bearing == 0).unwrap();
+        assert!(s.arms[north].walked && s.arms[north].crossing.is_none());
+        s.arms[north].section = Some(one_way_out());
+        let mut j = Junction::from_city(named_said("Test"), &s, &s, 0).expect("draws");
+        let uid = arm_at(&j, 0);
+        assert!(j.arm(uid).unwrap().crossing.is_some() && !j.arm(uid).unwrap().walked, "the crossing is given back");
+        assert!(j.set_crossing(uid, false));
+        assert!(j.set_corner(uid, 4_000));
+        let mut arms = j.current().arms.clone();
+        normalize(&mut arms, 0);
+        assert!(j.arm(uid).unwrap().crossing.is_none(), "the resident's choice stands after an edit");
+        assert!(arms.iter().find(|a| a.uid == uid).unwrap().crossing.is_none(), "and after a further normalize");
+    }
+
+    #[test]
+    fn an_arm_whose_street_regains_traffic_has_the_default_crossing_and_lanes_with_destinations() {
+        let j = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let mut arms = j.current().arms.clone();
+        let walk = arms.iter().position(|a| a.bearing == 90).unwrap();
+        assert!(arms[walk].crossing.is_none() && arms[walk].lanes.is_empty());
+        let street = arms.iter().find_map(|a| (a.bearing == 0).then(|| a.section.clone())).unwrap();
+        arms[walk].section = street;
+        normalize(&mut arms, 0);
+        let c = arms[walk].crossing.expect("the arm has a crossing again");
+        assert_eq!((c.setback_mm, c.width_mm, c.island, c.continuous), (DEFAULT_SETBACK_MM, DEFAULT_CROSSING_MM, false, false));
+        assert!(!arms[walk].lanes.is_empty());
+        assert!(arms[walk].lanes.iter().all(|l| !l.to.is_empty()), "its lanes go somewhere");
+    }
 
     fn named(name: &str) -> Said {
         Said::new("city-name").with("name", Arg::Text(name.into()))

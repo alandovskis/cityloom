@@ -1043,3 +1043,56 @@ fn a_street_in_no_area_has_no_area_row() {
     let vm = bendville_street(&[], Locale::En);
     assert!(!street_html(|| view! { <notes::Checks vm=vm.clone()/> }).contains("Area rule"));
 }
+
+#[test]
+fn the_pedestrian_street_messages_exist_in_both_languages() {
+    use crate::shared::i18n::{Args, Locale};
+    for locale in Locale::ALL {
+        let i18n = crate::i18n_for(locale);
+        for id in [
+            "make-pedestrian-button",
+            "make-pedestrian-hint",
+            "rev-made-pedestrian",
+            "street-now-pedestrian",
+            "street-traffic-again",
+            "check-access-ped-ok",
+            "check-access-ped-bad",
+            "check-detail-no-edges-pedestrian",
+        ] {
+            assert!(i18n.has_message(id, locale), "{id} in {}", locale.tag());
+        }
+    }
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let none = Args::new();
+    assert_eq!(
+        (en.tr_now("rev-made-pedestrian", &none), fr.tr_now("rev-made-pedestrian", &none)),
+        ("Made pedestrian".to_string(), "Rendue piétonne".to_string())
+    );
+    assert_eq!(fr.tr_now("make-pedestrian-button", &none), "Rendre piétonne");
+    let street = Args::new().str("street", "Rue Rachel");
+    assert_eq!(en.tr_now("street-now-pedestrian", &street), "Rue Rachel is now a pedestrian street.");
+    assert_eq!(fr.tr_now("street-traffic-again", &street), "Rue Rachel accueille de nouveau la circulation.");
+}
+
+#[test]
+fn the_make_pedestrian_menu_is_offered_while_the_street_has_a_motor_piece_and_not_after() {
+    use crate::shared::catalogue::kind_index;
+    let s = street_shared(0);
+    let h = street_html(|| view! { <page::MakePedestrian vm=s.clone()/> });
+    assert!(button_tag(&h, "make-pedestrian-btn").contains("aria-haspopup"));
+    assert!(h.contains("Make pedestrian") && h.contains("id=\"make-pedestrian-menu\"") && h.contains("hidden"));
+    assert_eq!(count(&h, "class=\"add-item ped-item\""), 3);
+    for kind in ["Sidewalk", "Planting strip", "Café terrace"] {
+        assert!(h.contains(kind), "{kind}");
+    }
+    assert!(s.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
+    let h = street_html(|| view! { <page::MakePedestrian vm=s.clone()/> });
+    assert!(!h.contains("make-pedestrian-btn") && !h.contains("ped-item"), "a street without traffic has nothing to make pedestrian");
+}
+
+#[test]
+fn the_make_pedestrian_menu_speaks_french() {
+    let s = street_shared_in(0, Locale::FrCa);
+    let h = street_html(|| view! { <page::MakePedestrian vm=s.clone()/> });
+    assert!(h.contains("Rendre piétonne") && h.contains("Trottoir") && h.contains("Terrasse de café"), "{h}");
+}

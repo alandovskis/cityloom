@@ -92,11 +92,24 @@ pub enum StreetClass {
     Arterial,
     Collector,
     Local,
+    /// A street with no motor piece (`is_motor`; bike lanes are allowed). The street editor derives it from the pieces.
+    Pedestrian,
 }
 
 impl StreetClass {
     /// Every class, from the widest-reaching road to the quietest.
-    pub const ALL: [StreetClass; 4] = [StreetClass::Motorway, StreetClass::Arterial, StreetClass::Collector, StreetClass::Local];
+    pub const ALL: [StreetClass; 5] = [StreetClass::Motorway, StreetClass::Arterial, StreetClass::Collector, StreetClass::Local, StreetClass::Pedestrian];
+
+    /// The word the class is kept and drawn by (the map's `class` property): its serde name.
+    pub fn id(self) -> &'static str {
+        match self {
+            StreetClass::Motorway => "motorway",
+            StreetClass::Arterial => "arterial",
+            StreetClass::Collector => "collector",
+            StreetClass::Local => "local",
+            StreetClass::Pedestrian => "pedestrian",
+        }
+    }
 
     /// A limited-access road: no sidewalks, and a median and shoulders instead.
     pub fn is_freeway(self) -> bool {
@@ -380,6 +393,27 @@ pub fn kind_index(id: &str) -> Option<usize> {
     KINDS.iter().position(|k| k.id == id)
 }
 
+/// The kinds of piece that are cars, at any time of day: what the Car-free rule of an area does not allow. In the
+/// order the rule words them. A bus is not one.
+pub const CAR_KINDS: [&str; 3] = ["travel", "parking", "loading"];
+
+/// The kinds of piece that are motor, at any time of day: a street with none is pedestrian (a bike lane is fine).
+/// The cars and, besides them, the bus lane and the shoulder; `CAR_KINDS` is a subset.
+pub const MOTOR_KINDS: [&str; 5] = ["travel", "parking", "loading", "bus", "shoulder"];
+
+/// Whether a kind of piece (an index into `KINDS`) is a car piece.
+pub fn is_car(kind: usize) -> bool {
+    CAR_KINDS.contains(&KINDS[kind].id)
+}
+
+/// Whether a kind of piece (an index into `KINDS`) is a motor piece.
+pub fn is_motor(kind: usize) -> bool {
+    MOTOR_KINDS.contains(&KINDS[kind].id)
+}
+
+/// What the space of a street's motor pieces can become when the street is made pedestrian, by kind id.
+pub const PEDESTRIAN_KINDS: [&str; 3] = ["sidewalk", "planting", "terrace"];
+
 /// Whether a kind of piece is part of the roadway, as opposed to the footway or the green.
 pub fn is_roadway(kind: usize) -> bool {
     !matches!(KINDS[kind].mode, Mode::Foot | Mode::Green)
@@ -395,6 +429,7 @@ pub fn class_key(class: StreetClass) -> &'static str {
         StreetClass::Arterial => "class-arterial",
         StreetClass::Collector => "class-collector",
         StreetClass::Local => "class-local",
+        StreetClass::Pedestrian => "class-pedestrian",
     }
 }
 
@@ -496,6 +531,37 @@ mod tests {
         assert_eq!(kind_key("bikerack"), "kind-bikerack");
         assert_eq!(mode_key(Mode::Vehicle), "mode-vehicle");
         assert_eq!(group_key("walking"), "group-walking");
+    }
+
+    #[test]
+    fn cars_are_travel_parking_and_loading_and_motor_pieces_add_the_bus_and_the_shoulder() {
+        let ids = |f: fn(usize) -> bool| -> Vec<&str> { KINDS.iter().enumerate().filter(|(i, _)| f(*i)).map(|(_, k)| k.id).collect() };
+        assert_eq!(ids(is_car), ["travel", "parking", "loading"]);
+        assert_eq!(CAR_KINDS, ["travel", "parking", "loading"]);
+        assert_eq!(ids(is_motor), ["travel", "bus", "parking", "loading", "shoulder"], "in the order of KINDS");
+        assert_eq!(MOTOR_KINDS, ["travel", "parking", "loading", "bus", "shoulder"]);
+        assert!(CAR_KINDS.iter().all(|id| MOTOR_KINDS.contains(id)), "what a car-free area forbids is motor too");
+        for id in ["bike", "sidewalk", "median", "bikerack", "busshelter", "busstation"] {
+            assert!(!is_car(kind_index(id).unwrap()) && !is_motor(kind_index(id).unwrap()), "{id}");
+        }
+        for id in ["bus", "shoulder"] {
+            assert!(is_motor(kind_index(id).unwrap()) && !is_car(kind_index(id).unwrap()), "{id}");
+        }
+    }
+
+    #[test]
+    fn a_pedestrian_street_is_a_class_with_a_word_and_motor_space_can_become_three_kinds() {
+        assert_eq!(StreetClass::Pedestrian.id(), "pedestrian");
+        assert_eq!(StreetClass::ALL.map(StreetClass::id), ["motorway", "arterial", "collector", "local", "pedestrian"]);
+        assert!(!StreetClass::Pedestrian.is_freeway());
+        assert_eq!(class_key(StreetClass::Pedestrian), "class-pedestrian");
+        assert_eq!(serde_json::to_string(&StreetClass::Pedestrian).unwrap(), "\"pedestrian\"");
+        // Any width a motor piece can have (1800 mm for a shoulder to 4000 mm for a lane) is one these kinds allow, so a piece keeps its width when it becomes one.
+        for id in PEDESTRIAN_KINDS {
+            let k = &KINDS[kind_index(id).unwrap()];
+            assert!(!is_motor(kind_index(id).unwrap()));
+            assert!(k.min_mm <= 1_800 && k.max_mm >= 4_000, "{id}");
+        }
     }
 
     #[test]

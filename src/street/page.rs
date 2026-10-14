@@ -7,7 +7,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::city::model::EndView;
-use crate::shared::catalogue::{KINDS, group_key, kind_key};
+use crate::shared::catalogue::{KINDS, PEDESTRIAN_KINDS, group_key, kind_index, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
 use crate::shared::said::{self, hhmm};
@@ -330,90 +330,139 @@ pub fn menu_box(button_left: f64, button_bottom: f64, window_w: f64, window_h: f
     MenuBox { left, top, width, max_height: (window_h - top - MARGIN).max(MIN_HEIGHT) }
 }
 
+/// Where the arrow, Home and End keys take the focus in a list of `len` items, given the item that has it (if
+/// any): down and up wrap round, with nothing focused down goes to the first and up to the last. `None` for any
+/// other key and for an empty list.
+pub fn menu_step(key: &str, at: Option<usize>, len: usize) -> Option<usize> {
+    let last = len.checked_sub(1)?;
+    match key {
+        "ArrowDown" => Some(at.map_or(0, |a| (a + 1) % len)),
+        "ArrowUp" => Some(at.map_or(last, |a| (a + last) % len)),
+        "Home" => Some(0),
+        "End" => Some(last),
+        _ => None,
+    }
+}
+
+/// What the two menus (Add and Make pedestrian) share: the open flag, the button, the list and the selector of
+/// the list's items. The behaviour that differs (what counts as inside the widget) is passed to `listen` and
+/// `left_by`.
+#[derive(Clone, Copy)]
+struct MenuParts {
+    open: RwSignal<bool>,
+    button: NodeRef<leptos::html::Button>,
+    menu: NodeRef<leptos::html::Div>,
+    item: &'static str,
+}
+
+impl MenuParts {
+    fn new(item: &'static str) -> Self {
+        Self { open: RwSignal::new(false), button: NodeRef::new(), menu: NodeRef::new(), item }
+    }
+
+    /// The list's items, in order.
+    fn items(self) -> Vec<leptos::web_sys::HtmlElement> {
+        use leptos::wasm_bindgen::JsCast;
+        let Some(menu) = self.menu.get_untracked() else { return Vec::new() };
+        let list = menu.query_selector_all(self.item).ok();
+        (0..list.as_ref().map_or(0, |l| l.length())).filter_map(|i| list.as_ref()?.item(i)?.dyn_into::<leptos::web_sys::HtmlElement>().ok()).collect()
+    }
+
+    /// Closes the list, handing the focus back to the button when asked.
+    fn close(self, refocus: bool) {
+        self.open.set(false);
+        if refocus && let Some(b) = self.button.get_untracked() {
+            let _ = leptos::web_sys::HtmlElement::from(b).focus();
+        }
+    }
+
+    /// The arrows, Home and End move the focus through the items (`menu_step`).
+    fn keys(self, e: leptos::web_sys::KeyboardEvent) {
+        use leptos::wasm_bindgen::JsCast;
+        let list = self.items();
+        let active = document().active_element();
+        let at = list.iter().position(|i| active.as_ref() == Some(i.unchecked_ref::<leptos::web_sys::Element>()));
+        if let Some(to) = menu_step(&e.key(), at, list.len()) {
+            e.prevent_default();
+            let _ = list[to].focus();
+        }
+    }
+
+    /// Whether a focus change moved the focus out of the widget, `inside` saying what is part of it.
+    fn left_by(e: &leptos::web_sys::FocusEvent, inside: impl Fn(&leptos::web_sys::Element) -> bool) -> bool {
+        use leptos::wasm_bindgen::JsCast;
+        e.related_target().and_then(|t| t.dyn_into::<leptos::web_sys::Element>().ok()).is_some_and(|t| !inside(&t))
+    }
+
+    /// The list is fixed to the window, so the stage cannot clip it: it is put under its button (at most
+    /// `max_width` wide), the focus goes to the first item once it is shown, and it closes on a press outside
+    /// (`inside` saying what is part of the widget) and on Escape. Browser only.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
+    fn listen(self, max_width: Option<f64>, inside: impl Fn(&leptos::web_sys::Element) -> bool + 'static) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use leptos::wasm_bindgen::JsCast;
+            let place = move || {
+                let (Some(b), Some(m), Some(win)) = (self.button.get_untracked(), self.menu.get_untracked(), leptos::web_sys::window()) else { return };
+                let size = |v: Result<leptos::wasm_bindgen::JsValue, _>| v.ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let r = b.get_bounding_client_rect();
+                let at = menu_box(r.left(), r.bottom(), size(win.inner_width()), size(win.inner_height()));
+                let width = max_width.map_or(at.width, |m| at.width.min(m));
+                let _ = m.set_attribute("style", &format!("left:{}px;top:{}px;width:{width}px;max-height:{}px", at.left, at.top, at.max_height));
+            };
+            window_event_listener(leptos::ev::resize, move |_| {
+                if self.open.get_untracked() {
+                    place();
+                }
+            });
+            Effect::new(move |_| {
+                if self.open.get() {
+                    place();
+                    // Once the list is shown, so that it can take the focus.
+                    leptos::task::spawn_local(async move {
+                        leptos::task::tick().await;
+                        if let Some(first) = self.items().first() {
+                            let _ = first.focus();
+                        }
+                    });
+                }
+            });
+            window_event_listener(leptos::ev::pointerdown, move |e: leptos::web_sys::PointerEvent| {
+                let pressed_inside = e.target().and_then(|t| t.dyn_into::<leptos::web_sys::Element>().ok()).is_some_and(|t| inside(&t));
+                if self.open.get_untracked() && !pressed_inside {
+                    self.open.set(false);
+                }
+            });
+            window_event_listener(leptos::ev::keydown, move |e: leptos::web_sys::KeyboardEvent| {
+                if e.key() == "Escape" && self.open.get_untracked() {
+                    self.close(true);
+                }
+            });
+        }
+    }
+}
+
+/// The widest the Make pedestrian list is drawn, in pixels (three rows need no more).
+const PED_MENU_WIDTH: f64 = 340.0;
+
 /// The button that opens the list of pieces, and the list: arrows move through
 /// it, Escape closes it, and choosing a piece adds it after the selected one.
 #[component]
 pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
-    use leptos::wasm_bindgen::JsCast;
-    use leptos::web_sys::{Element, FocusEvent, HtmlElement, KeyboardEvent};
+    use leptos::web_sys::{FocusEvent, KeyboardEvent};
 
     let w = SheetWatch::new(vm);
-    let open = RwSignal::new(false);
-    let button = NodeRef::<leptos::html::Button>::new();
-    let menu = NodeRef::<leptos::html::Div>::new();
-    let items = move || -> Vec<HtmlElement> {
-        let Some(menu) = menu.get_untracked() else { return Vec::new() };
-        let list = menu.query_selector_all(".add-item").ok();
-        (0..list.as_ref().map_or(0, |l| l.length())).filter_map(|i| list.as_ref()?.item(i)?.dyn_into::<HtmlElement>().ok()).collect()
+    let parts = MenuParts::new(".add-item");
+    let MenuParts { open, button, menu, .. } = parts;
+    let close = move |refocus: bool| parts.close(refocus);
+    // The widget is the list and its button.
+    let inside = move |t: &leptos::web_sys::Element| {
+        menu.get_untracked().is_some_and(|m| m.contains(Some(t))) || button.get_untracked().is_some_and(|b| b.contains(Some(t)))
     };
-    let close = move |refocus: bool| {
-        open.set(false);
-        if refocus && let Some(b) = button.get_untracked() {
-            let _ = HtmlElement::from(b).focus();
-        }
-    };
-    #[cfg(target_arch = "wasm32")]
-    {
-        // The list is fixed to the window, so the stage cannot clip it: put it under its button.
-        let place = move || {
-            let (Some(b), Some(m), Some(win)) = (button.get_untracked(), menu.get_untracked(), leptos::web_sys::window()) else { return };
-            let size = |v: Result<leptos::wasm_bindgen::JsValue, _>| v.ok().and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let r = b.get_bounding_client_rect();
-            let at = menu_box(r.left(), r.bottom(), size(win.inner_width()), size(win.inner_height()));
-            let _ = m.set_attribute("style", &format!("left:{}px;top:{}px;width:{}px;max-height:{}px", at.left, at.top, at.width, at.max_height));
-        };
-        window_event_listener(leptos::ev::resize, move |_| {
-            if open.get_untracked() {
-                place();
-            }
-        });
-        Effect::new(move |_| {
-            if open.get() {
-                place();
-                // Once the list is shown, so that it can take the focus.
-                leptos::task::spawn_local(async move {
-                    leptos::task::tick().await;
-                    if let Some(first) = items().first() {
-                        let _ = first.focus();
-                    }
-                });
-            }
-        });
-        window_event_listener(leptos::ev::pointerdown, move |e: leptos::web_sys::PointerEvent| {
-            let inside = |n: Option<HtmlElement>| n.zip(e.target().and_then(|t| t.dyn_into::<Element>().ok())).is_some_and(|(n, t)| n.contains(Some(&t)));
-            if open.get_untracked() && !inside(menu.get_untracked().map(HtmlElement::from)) && !inside(button.get_untracked().map(HtmlElement::from)) {
-                open.set(false);
-            }
-        });
-        window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
-            if e.key() == "Escape" && open.get_untracked() {
-                close(true);
-            }
-        });
-    }
-    let menu_keys = move |e: KeyboardEvent| {
-        let list = items();
-        let active = document().active_element();
-        let at = list.iter().position(|i| active.as_ref() == Some(i.unchecked_ref::<Element>())).map_or(-1, |p| p as i32);
-        let to = match e.key().as_str() {
-            "ArrowDown" => at + 1,
-            "ArrowUp" => at - 1,
-            "Home" => 0,
-            "End" => list.len() as i32 - 1,
-            _ => return,
-        };
-        e.prevent_default();
-        if !list.is_empty() {
-            let _ = list[to.rem_euclid(list.len() as i32) as usize].focus();
-        }
-    };
+    parts.listen(None, inside);
+    let menu_keys = move |e: KeyboardEvent| parts.keys(e);
     let focus_out = move |e: FocusEvent| {
-        let outside = e.related_target().and_then(|t| t.dyn_into::<Element>().ok()).is_some_and(|t| {
-            let in_menu = menu.get_untracked().is_some_and(|m| m.contains(Some(&t)));
-            let is_button = button.get_untracked().is_some_and(|b| b.unchecked_ref::<Element>() == &t);
-            !in_menu && !is_button
-        });
-        if outside {
+        if MenuParts::left_by(&e, inside) {
             open.set(false);
         }
     };
@@ -476,6 +525,98 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
             <p class="menu-h">{say(w, "add-button")}</p>
             <p class="hint">{say(w, "add-hint")}</p>
             <ul id="palette" class="add-list">{groups}</ul>
+        </div>
+    }
+}
+
+/// The menu that makes the street pedestrian: offered while the street has a motor piece, with the three things the
+/// space of its motor pieces can become. Choosing one is a single edit (`Editor::make_pedestrian`). Like the Add
+/// menu, the list is fixed to the window (so the stage cannot clip it) and kept inside it by `menu_box`; Escape
+/// closes it, the arrows move through it, and leaving it closes it.
+#[component]
+pub fn MakePedestrian(vm: Rc<StreetVm>) -> impl IntoView {
+    use leptos::web_sys::{FocusEvent, HtmlElement, KeyboardEvent};
+
+    let w = SheetWatch::new(vm);
+    let parts = MenuParts::new(".ped-item");
+    let MenuParts { open, button, menu, .. } = parts;
+    let wrap = NodeRef::<leptos::html::Div>::new();
+    let close = move |refocus: bool| parts.close(refocus);
+    // The widget is the wrapper: the button and the list.
+    let inside = move |t: &leptos::web_sys::Element| wrap.get_untracked().is_some_and(|m| m.contains(Some(t)));
+    parts.listen(Some(PED_MENU_WIDTH), inside);
+    let menu_keys = move |e: KeyboardEvent| parts.keys(e);
+    // Tabbing out of the widget closes the list; a press elsewhere is the window listener's.
+    let focus_out = move |e: FocusEvent| {
+        if MenuParts::left_by(&e, inside) {
+            open.set(false);
+        }
+    };
+    let choices = move || {
+        PEDESTRIAN_KINDS
+            .iter()
+            .filter_map(|id| kind_index(id))
+            .map(|k| {
+                let kind = &KINDS[k];
+                view! {
+                    <li>
+                        <button
+                            type="button"
+                            class="add-item ped-item"
+                            on:click=move |_| {
+                                close(false);
+                                // The button goes away with the traffic, so a made street hands the focus to the
+                                // drawing (whose keys edit the street); a refusal keeps it on the button.
+                                if w.edit(|e| e.make_pedestrian(k)) {
+                                    if let Some(wrap) = document().get_element_by_id("wrap") {
+                                        let _ = leptos::wasm_bindgen::JsCast::unchecked_into::<HtmlElement>(wrap).focus();
+                                    }
+                                } else if let Some(b) = button.get_untracked() {
+                                    let _ = HtmlElement::from(b).focus();
+                                }
+                            }
+                        >
+                            <span class="add-icon" inner_html=icon(kind.id)></span>
+                            <b>{move || w.i18n().tr(&kind_key(kind.id), &Args::new())}</b>
+                        </button>
+                    </li>
+                }
+            })
+            .collect_view()
+    };
+    view! {
+        <div node_ref=wrap on:focusout=focus_out style="display: contents">
+            {move || {
+                w.view()
+                    .has_motor
+                    .then(|| {
+                        view! {
+                            <button
+                                type="button"
+                                id="make-pedestrian-btn"
+                                class="btn"
+                                aria-haspopup="true"
+                                aria-expanded=move || open.get().to_string()
+                                aria-controls="make-pedestrian-menu"
+                                node_ref=button
+                                on:click=move |_| open.update(|o| *o = !*o)
+                                on:keydown=move |e: KeyboardEvent| {
+                                    if e.key() == "ArrowDown" && !open.get_untracked() {
+                                        e.prevent_default();
+                                        open.set(true);
+                                    }
+                                }
+                            >
+                                {say(w, "make-pedestrian-button")}
+                            </button>
+                            <div id="make-pedestrian-menu" class="menu ped-menu" hidden=move || !open.get() node_ref=menu on:keydown=menu_keys>
+                                <p class="menu-h">{say(w, "make-pedestrian-button")}</p>
+                                <p class="hint">{say(w, "make-pedestrian-hint")}</p>
+                                <ul class="ped-list">{choices()}</ul>
+                            </div>
+                        }
+                    })
+            }}
         </div>
     }
 }
@@ -609,6 +750,32 @@ pub fn Welcome(vm: Rc<StreetVm>) -> impl IntoView {
 mod tests {
     use super::*;
     use crate::street::model::Editor;
+
+    #[test]
+    fn the_arrows_home_and_end_move_the_focus_through_a_list_and_wrap_round() {
+        assert_eq!(menu_step("ArrowDown", Some(0), 3), Some(1));
+        assert_eq!(menu_step("ArrowDown", Some(2), 3), Some(0));
+        assert_eq!(menu_step("ArrowUp", Some(2), 3), Some(1));
+        assert_eq!(menu_step("ArrowUp", Some(0), 3), Some(2));
+        assert_eq!(menu_step("Home", Some(2), 3), Some(0));
+        assert_eq!(menu_step("End", Some(0), 3), Some(2));
+        // Nothing focused yet: down enters at the first, up at the last.
+        assert_eq!(menu_step("ArrowDown", None, 3), Some(0));
+        assert_eq!(menu_step("ArrowUp", None, 3), Some(2));
+        assert_eq!(menu_step("Home", None, 3), Some(0));
+        assert_eq!(menu_step("End", None, 3), Some(2));
+        // One item: every key stays on it.
+        assert_eq!(menu_step("ArrowDown", Some(0), 1), Some(0));
+        assert_eq!(menu_step("ArrowUp", Some(0), 1), Some(0));
+        // An empty list has nowhere to go.
+        for k in ["ArrowDown", "ArrowUp", "Home", "End"] {
+            assert_eq!(menu_step(k, None, 0), None, "{k}");
+        }
+        // Other keys are not the menu's.
+        for k in ["Enter", "Tab", "a", "ArrowLeft", "Escape"] {
+            assert_eq!(menu_step(k, Some(1), 3), None, "{k}");
+        }
+    }
 
     #[test]
     fn the_menu_opens_under_its_button_and_never_leaves_the_window() {
