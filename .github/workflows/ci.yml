@@ -137,6 +137,10 @@ jobs:
       - run: npm ci
         working-directory: website
       - run: just docs-build
+      # What `docs-deploy` publishes; uploaded on every run, so a pull request shows the site would build.
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: website/build
 
   # Every pull request raises the version in Cargo.toml (semantic versioning); the pages show it in the menu.
   version:
@@ -240,3 +244,24 @@ jobs:
 
       - run: npm install --global @railway/cli@${{ env.RAILWAY_CLI_VERSION }}
       - run: just deploy
+
+  # The documentation site goes to GitHub Pages (https://alandovskis.github.io/cityloom/) from a green main, like the
+  # Railway deploy. Pages is set to deploy from GitHub Actions in the repository's settings.
+  docs-deploy:
+    name: Deploy the documentation
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [ci, docs]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

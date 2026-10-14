@@ -18,7 +18,7 @@ just deploy          # build, then upload the site to the Railway project citylo
 just check           # everything
 just format          # rustfmt (rustfmt.toml) + Prettier; `just format-check` only checks, as CI does
 just serve           # http://127.0.0.1:8137/ (runs `node e2e/serve.mjs`: the basemap's PMTiles need range requests; E2E_PORT moves the port, for Playwright too)
-just docs            # the documentation site (website/, Docusaurus, English and fr-CA; pages in website/docs and website/i18n/fr-CA): serves it at http://localhost:3000/; `just docs-build` builds both languages and fails on a broken link (CI's `docs` job). Not deployed anywhere yet; docs/superpowers stays local
+just docs            # the documentation site (website/, Docusaurus, English and fr-CA; pages in website/docs and website/i18n/fr-CA): serves it at http://localhost:3000/; `just docs-build` builds both languages and fails on a broken link (CI's `docs` job); CI's `docs-deploy` job publishes it to GitHub Pages, https://alandovskis.github.io/cityloom/, on every push to main once the other jobs pass; docs/superpowers stays local
 just setup           # once: wasm-bindgen-cli (version from Cargo.toml, into .tools), `npm ci` at the root and in `e2e`, Playwright's Chromium
 ```
 

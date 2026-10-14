@@ -14,10 +14,9 @@ const config: Config = {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
   },
 
-  // Placeholders: no deployment is set up. For GitHub Pages they would become url 'https://<user>.github.io' and
-  // baseUrl '/<repository>/', and the deploy job would go in .github/workflows/ci.yml.
-  url: "https://cityloom.example.com",
-  baseUrl: "/",
+  // GitHub Pages, deployed by the `docs-deploy` job of .github/workflows/ci.yml on every push to main.
+  url: "https://alandovskis.github.io",
+  baseUrl: "/cityloom/",
   trailingSlash: false,
   organizationName: "alandovskis",
   projectName: "cityloom",
