@@ -28,15 +28,15 @@ e2e *args: build
 # Everything: unit tests, then the browser tests.
 check: test e2e
 
-# Format the Rust (rustfmt.toml) and the scripts (.prettierrc.json).
+# Format the Rust (rustfmt.toml), the scripts and the documentation site (.prettierrc.json).
 format:
     cargo fmt
-    cd e2e && npx prettier --ignore-path ../.prettierignore --write . ../web/*.js
+    cd e2e && npx prettier --ignore-path ../.prettierignore --write . ../web/*.js ../website
 
 # Fail if anything is not formatted, without changing it.
 format-check:
     cargo fmt --check
-    cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js
+    cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js ../website
 
 # What the SonarCloud analysis reads, in target/sonar: the Rust coverage as LCOV (host tests only: the wasm-only code and the browser tests are not measured) and Clippy's findings as JSON. Sonar judges the findings, so lints are capped at warnings here; a build error still fails. Needs cargo-llvm-cov (`cargo install cargo-llvm-cov --locked`) and the llvm-tools component.
 sonar-reports:
@@ -51,6 +51,18 @@ prepare *args:
 # Serve the pages at http://127.0.0.1:8137/ (build first). The server answers range requests, as the map's tiles need.
 serve:
     node e2e/serve.mjs
+
+# Install the documentation site's packages (once; `just setup` does not).
+setup-docs:
+    cd website && npm ci
+
+# Serve the documentation site (website/, English and fr-CA) with live reload at http://localhost:3000/. Run one language with `just docs --locale fr-CA`.
+docs *args:
+    cd website && npm start -- {{args}}
+
+# Build the documentation site for both languages into website/build; fails on a broken link.
+docs-build:
+    cd website && npm run build
 
 # Build, then upload the site to Railway (the cityloom project; needs the Railway CLI, logged in, and `just prepare`'s tiles).
 deploy:
