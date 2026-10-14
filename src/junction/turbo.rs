@@ -3,8 +3,11 @@
 //! The figures are placeholders taken from secondary sources that reproduce CROW (2008): FHWA-SA-20-019
 //! *Turbo Roundabouts* and Džambas et al., CETRA 2016, Table 1. CROW 126 itself could not be read, so these are
 //! UNVERIFIED: which turns each entry lane serves (the commonly known rule is used), the lane counts of basic,
-//! spiral and rotor, every figure for a third ring lane, the labels Δv / Δu (CETRA's are used) and the skew an arm
-//! may have (no figure is published).
+//! spiral and rotor, every figure for a third ring lane and the skew an arm may have (no figure is published). The
+//! labels Δv and Δu are fixed by the geometry: with CETRA's (the island's edge shifted by Δv, the others by Δu) the
+//! arcs of all four blocks meet across the translation axis to within 5 cm (`turbo_spiral.rs`). Which end of the axis
+//! leads (so which arms are main and which side, and what the lane table gives them), where a divider begins and ends
+//! along the ring, and the egg's and knee's lone entry lanes are UNVERIFIED (spec amendment 2026-10-13).
 
 use serde::{Deserialize, Serialize};
 
@@ -351,7 +354,8 @@ pub fn widen_entry(prof: &Profile, n: usize, lane_mm: i32) -> (Vec<i32>, (i32, i
 }
 
 /// The ring lane entry lane `k` of `n` (driver's left first) feeds, among `ring_lanes` (0 is the innermost): the left
-/// lane the inner ring lane and the right lane the outer one, a middle lane the middle; a lone lane the outer. With
+/// lane the inner ring lane and the right lane the outer one, a middle lane the middle; a lone lane the outer (UNVERIFIED; on an egg or a knee that outer lane cannot reach a side street's left turn or
+/// through, and `turbo_path` then tries the lanes further in). With
 /// left-hand traffic the driver's left is the outside, so the order is reversed.
 pub fn ring_lane(k: usize, n: usize, ring_lanes: usize, right_hand: bool) -> usize {
     let kk = if right_hand { k } else { n.saturating_sub(1 + k) };

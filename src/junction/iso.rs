@@ -235,16 +235,11 @@ impl Draw {
         }
     }
 
-    /// A solid double white line along `path` (a closed ring of points, which this joins to its start), lying on the road.
-    /// The quads come from the shared paint and are projected here, like the road they lie on.
+    /// A solid double white line along `path`, an open polyline of points, lying on the road. The quads come from the
+    /// shared paint and are projected here, like the road they lie on. The line is not joined to its start: a turbo's
+    /// dividers are pieces between two streets.
     fn divider(&mut self, path: &[P]) {
-        let mut line = path.to_vec();
-        if let (Some(&first), Some(&last)) = (path.first(), path.last())
-            && first != last
-        {
-            line.push(first);
-        }
-        for (paint, quad) in quads(&line, Style { paint: Paint::White, pattern: Pattern::Solid, double: true }) {
+        for (paint, quad) in quads(path, Style { paint: Paint::White, pattern: Pattern::Solid, double: true }) {
             let d = self.path(&quad, 0.0);
             write!(self.flat, "<path class=\"{}\" d=\"{d}\"/>", class(paint)).unwrap();
         }
@@ -737,19 +732,10 @@ mod tests {
     }
 
     #[test]
-    fn a_divider_is_closed_once_whether_or_not_its_path_comes_back_to_its_start() {
-        let ring = |closed: bool| {
-            let mut pts = vec![(-3000.0, 0.0), (0.0, 3000.0), (3000.0, 0.0), (0.0, -3000.0)];
-            if closed {
-                pts.push(pts[0]);
-            }
-            let mut d = Draw::new(frame());
-            d.divider(&pts);
-            d.finish()
-        };
-        let (open, closed) = (ring(false), ring(true));
-        assert!(count(&open, "<path class=\"iso-paint white") > 0, "the line is drawn: {open}");
-        assert_eq!(open, closed, "a path that already ends where it starts is not joined to itself again");
+    fn a_divider_is_drawn_as_the_open_line_it_is_and_never_joined_to_its_start() {
+        let mut d = Draw::new(frame());
+        d.divider(&[(-3_000.0, 0.0), (0.0, 3_000.0), (3_000.0, 0.0), (0.0, -3_000.0)]);
+        assert_eq!(count(&d.finish(), "<path class=\"iso-paint white"), 2 * 3, "a double line of three segments: two lines of three quads, not four");
     }
 
     #[test]

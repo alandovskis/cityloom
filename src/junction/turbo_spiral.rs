@@ -25,7 +25,7 @@ pub const MIN_DIVIDER_MM: f64 = 3_000.0;
 /// The translation axis as a unit vector, and the unit vector toward the ahead half. Traffic goes round the ahead half
 /// from the back tip to the front tip and then round the other half from the front tip to the back tip: anticlockwise
 /// for right-hand traffic, where the ahead half is on the clockwise side of the axis, and clockwise for left-hand
-/// traffic, where it is on the other.
+/// traffic, where it is on the other. Which half is ahead is UNVERIFIED (spec amendment 2026-10-13, J1).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Axes {
     pub axis: P,
@@ -175,7 +175,8 @@ pub fn ring_shape(block: &TurboBlock, ring_lanes: usize, cycle_mm: i32, axes: &A
     let (island, road) = (edges[0][0], edges[edges.len() - 1][1]);
     RingShape {
         axes: *axes,
-        mouths: mouths.to_vec(),
+        // Bearings are compared by value in `spiral_walk`, so they are all in [0, 360) here.
+        mouths: mouths.iter().map(|m| Mouth { bearing: m.bearing.rem_euclid(360.0), ..*m }).collect(),
         anticlockwise: right_hand,
         lanes,
         dividers,
@@ -198,7 +199,8 @@ pub struct Walk {
 /// meets ring lane `k`, keeps its lane round the ring and steps out one lane at each tip, and leaves by the street
 /// `leave`. None when `k` is no lane of the ring, when the streets miss it, or when the street cannot be reached from
 /// lane `k`: the outermost lane leaves the ring at a tip, and for the first street after the tip only. Where the street
-/// is on the half the walk is on and ahead of it, the walk ends there; otherwise it goes on to the tip.
+/// is on the half the walk is on and ahead of it, the walk ends there; otherwise it goes on to the tip. Where the tips lie
+/// among the streets (which half is ahead) is UNVERIFIED (J1); bearings are compared in [0, 360).
 pub fn spiral_walk(shape: &RingShape, k: usize, enter: (f64, f64), leave: (f64, f64)) -> Option<Walk> {
     // The lane, among the halves' lane k, that the street meets from outside: the one with the farthest hit.
     let (start, t) = shape
@@ -239,7 +241,7 @@ pub fn spiral_walk(shape: &RingShape, k: usize, enter: (f64, f64), leave: (f64, 
                 let at_tip = tip.0.atan2(-tip.1).to_degrees();
                 let after = |b: f64| if shape.anticlockwise { (at_tip - b).rem_euclid(360.0) } else { (b - at_tip).rem_euclid(360.0) };
                 let first = shape.mouths.iter().map(|m| m.bearing).min_by(|a, b| after(*a).total_cmp(&after(*b)))?;
-                return ((first - leave.0).abs() < 1e-6).then_some(Walk { points, left_at_tip: true });
+                return ((first - leave.0.rem_euclid(360.0)).abs() < 1e-6).then_some(Walk { points, left_at_tip: true });
             }
         }
     }
@@ -519,7 +521,7 @@ mod tests {
                             }
                             for k in 0..ring_lanes {
                                 let (enter, leave) = ((from, -1_750.0 * sign), (to, 1_750.0 * sign));
-                                // A walk that cannot reach its street without crossing the ring is None (see the test after this one).
+                                // A walk that cannot reach its street without crossing the ring is None (see the test before this one).
                                 let Some(w) = spiral_walk(&shape, k, enter, leave) else { continue };
                                 let mut path = vec![at(enter.0, enter.1, 60_000.0)];
                                 path.extend(&w.points);

@@ -791,9 +791,7 @@ svg pattern circle {
   stroke-linejoin: round;
 }
 #drawing .turbo-lane {
-  stroke: var(--ink-2);
-  stroke-width: 0.8;
-  stroke-opacity: 0.5;
+  stroke: none;
   pointer-events: none;
 }
 #drawing .turbo-divider {

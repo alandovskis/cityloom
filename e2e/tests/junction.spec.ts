@@ -443,7 +443,11 @@ test("a roundabout is given the basic turbo layout from its details and drawn wi
   page,
 }) => {
   await basicTurbo(page);
-  await expect(page.locator("#drawing .turbo-divider")).toHaveCount(1);
+  // The divider is cut where each street meets the ring, so it is drawn in several open pieces (four on the basic turbo of sample 0).
+  const dividers = page.locator("#drawing .turbo-divider");
+  await expect(dividers.first()).toBeAttached();
+  expect(await dividers.count()).toBeGreaterThan(1);
+  expect(await dividers.evaluateAll((els) => els.every((e) => !/Z/.test(e.getAttribute("d")!)))).toBe(true);
   await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /Basic turbo roundabout, \w+ size\.$/);
   await expect(page.getByRole("radio", { name: "Basic", exact: true })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByText("Turbo size")).toBeVisible();

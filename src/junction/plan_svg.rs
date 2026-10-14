@@ -7,9 +7,9 @@ use serde_json::Value;
 
 use crate::junction::frame::Frame;
 use crate::junction::model::{LEFT, RIGHT, THROUGH};
-use crate::junction::read_model::{ArmView, JView, LaneView};
+use crate::junction::read_model::{ArmView, JView, LaneView, RingView};
 use crate::junction::text::arms_text;
-use crate::junction::turbo_ring::mouth_on;
+use crate::junction::turbo_ring::mouth_on_open;
 use crate::junction::turns::compass_key;
 use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n, Locale};
@@ -284,6 +284,21 @@ pub(crate) fn turbo_name(v: &JView, i18n: &I18n) -> Option<String> {
     Some(i18n.tr(t.label_key, &Args::new().str("size", i18n.tr(t.size_key, &Args::new()).to_lowercase())))
 }
 
+/// Where the ray from the middle at `bearing` meets the middle of the outermost ring lane, and how wide that lane is
+/// there, both in mm. A turbo's lanes are open, one on each half of the ring, so the half the ray runs into is the one
+/// that answers (the other half's hits are behind the middle, and are dropped).
+fn outer_lane_at(ring: &RingView, bearing: f64) -> Option<(f64, f64)> {
+    let last = ring.lanes.iter().map(|l| l.k).max()?;
+    ring.lanes
+        .iter()
+        .filter(|l| l.k == last)
+        .filter_map(|l| {
+            let (t, o, i) = (mouth_on_open(&l.centre, bearing, 0.0)?, mouth_on_open(&l.outer, bearing, 0.0)?, mouth_on_open(&l.inner, bearing, 0.0)?);
+            (t > 0.0).then_some((t, (o - i).abs()))
+        })
+        .max_by(|a, b| a.0.total_cmp(&b.0))
+}
+
 /// What a screen reader is told the drawing is, drawn again when the language changes.
 pub fn plan_label(v: &JView, i18n: &I18n) -> String {
     let arms = arms_text(v, i18n);
@@ -440,15 +455,24 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
                         .unwrap();
                 }
             }
-            // The whole carriageway first, so the 300 mm between two lanes is road too; then the lanes, which carry their edges.
+            // The whole carriageway first, so the 300 mm between two lanes is road too; then the lane on each half of the ring (they
+            // carry no edge of their own: the dividers do).
             write!(l.road, "<path class=\"road ring\" d=\"{}\"/>", loop_d(&ring.road_edge)).unwrap();
             for lane in &ring.lanes {
-                write!(l.road, "<path class=\"road ring turbo-lane\" fill-rule=\"evenodd\" d=\"{}{}\"/>", loop_d(&lane.outer), loop_d(&lane.inner)).unwrap();
+                write!(l.road, "<path class=\"road ring turbo-lane\" d=\"{}\"/>", loop_d(&lane.polygon())).unwrap();
             }
-            // A painted divider is a double white line: a white stroke 360 mm wide with a 120 mm gap of road down its middle.
+            // A painted divider is a double white line: a white stroke 360 mm wide with a 120 mm gap of road down its middle. It is
+            // open, and drawn in pieces, one between each two streets.
+            let open_d = |pts: &[P]| {
+                let mut d = String::new();
+                for (i, q) in pts.iter().enumerate() {
+                    write!(d, "{}{}", if i == 0 { "M" } else { "L" }, p.pt(*q)).unwrap();
+                }
+                d
+            };
             let (wide, narrow) = ((360.0 * f.scale).max(1.5), (120.0 * f.scale).max(0.5));
             for divider in &ring.dividers {
-                let d = loop_d(divider);
+                let d = open_d(divider);
                 write!(
                     l.road,
                     "<path class=\"turbo-divider\" stroke-width=\"{}\" d=\"{d}\"/><path class=\"turbo-divider-gap\" stroke-width=\"{}\" d=\"{d}\"/>",
@@ -465,36 +489,31 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
             )
             .unwrap();
             // circulation arrows in the middle of the outer ring lane, between the streets
-            if let Some(outer) = ring.lanes.last() {
-                let ccw = ring.circulation == "anticlockwise";
-                let bearings: Vec<i32> = v.arms.iter().map(|a| a.bearing).collect();
-                for (i, b) in bearings.iter().enumerate() {
-                    let nb = bearings[(i + 1) % bearings.len()];
-                    let gap = (nb - b + 360) % 360;
-                    let gap = if gap == 0 { 360 } else { gap };
-                    let ang = *b as f64 + gap as f64 / 2.0;
-                    let Some(t) = mouth_on(&outer.centre, ang, 0.0) else { continue };
-                    let (dx, dy) = dir_of(ang);
-                    let (x, y) = f.at((dx * t, dy * t));
-                    let heading = ang + if ccw { -90.0 } else { 90.0 };
-                    // never longer than its lane is wide on screen
-                    let lane_px = match (mouth_on(&outer.outer, ang, 0.0), mouth_on(&outer.inner, ang, 0.0)) {
-                        (Some(o), Some(i)) => (o - i).abs() * f.scale,
-                        _ => 30.0,
-                    };
-                    let h = 30.0_f64.min(lane_px * 0.85);
-                    let head = h * 0.2;
-                    let d = format!("M0 {}V{}M{} {}L0 {}L{} {}", h / 2.0, -h / 2.0, -head, -h / 2.0 + head, -h / 2.0, head, -h / 2.0 + head);
-                    write!(
-                        l.mark,
-                        "<g class=\"lane-arrow\" transform=\"translate({} {}) rotate({})\" style=\"--arrow:{}\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
-                        f1(x),
-                        f1(y),
-                        f1(heading),
-                        f1(h)
-                    )
-                    .unwrap();
-                }
+            let ccw = ring.circulation == "anticlockwise";
+            let bearings: Vec<i32> = v.arms.iter().map(|a| a.bearing).collect();
+            for (i, b) in bearings.iter().enumerate() {
+                let nb = bearings[(i + 1) % bearings.len()];
+                let gap = (nb - b + 360) % 360;
+                let gap = if gap == 0 { 360 } else { gap };
+                let ang = *b as f64 + gap as f64 / 2.0;
+                let Some((t, lane_mm)) = outer_lane_at(ring, ang) else { continue };
+                let (dx, dy) = dir_of(ang);
+                let (x, y) = f.at((dx * t, dy * t));
+                let heading = ang + if ccw { -90.0 } else { 90.0 };
+                // never longer than its lane is wide on screen
+                let lane_px = lane_mm * f.scale;
+                let h = 30.0_f64.min(lane_px * 0.85);
+                let head = h * 0.2;
+                let d = format!("M0 {}V{}M{} {}L0 {}L{} {}", h / 2.0, -h / 2.0, -head, -h / 2.0 + head, -h / 2.0, head, -h / 2.0 + head);
+                write!(
+                    l.mark,
+                    "<g class=\"lane-arrow\" transform=\"translate({} {}) rotate({})\" style=\"--arrow:{}\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>",
+                    f1(x),
+                    f1(y),
+                    f1(heading),
+                    f1(h)
+                )
+                .unwrap();
             }
         } else {
             let r = ring.road_mm as f64 * f.scale;
@@ -818,16 +837,24 @@ mod tests {
 
     #[test]
     fn a_turbo_roundabout_draws_its_lanes_dividers_and_island_and_no_circle() {
-        let m = svg(&turbo(0)).markup;
-        assert_eq!(count(&m, "class=\"road ring turbo-lane\""), 2);
-        assert_eq!(count(&m, "class=\"turbo-divider\""), 1);
-        assert_eq!(count(&m, "class=\"turbo-divider-gap\""), 1);
+        let j = turbo(0);
+        let (v, m) = (j.view(), svg(&j).markup);
+        let ring = v.ring.as_ref().unwrap();
+        assert_eq!(count(&m, "class=\"road ring turbo-lane\""), 4, "a lane on each half of the ring, for each of its two lanes");
+        assert!(ring.dividers.len() >= 2);
+        assert_eq!(count(&m, "class=\"turbo-divider\""), ring.dividers.len(), "a divider is drawn in pieces, one path each");
+        assert_eq!(count(&m, "class=\"turbo-divider-gap\""), ring.dividers.len());
+        for piece in m.split("class=\"turbo-divider\"").skip(1) {
+            let d = piece.split(" d=\"").nth(1).unwrap().split('"').next().unwrap();
+            assert!(d.starts_with('M') && !d.contains('Z'), "a piece of divider is open: {d}");
+        }
         assert!(count(&m, "class=\"island k-median\"") >= 1);
         assert!(!m.contains("<circle class=\"road ring\""), "the ring is not a circle");
         assert_eq!(count(&m, "class=\"road turbo-entry\""), 4, "every street of the sample is widened");
-        let spiral = svg(&turbo(3)).markup;
-        assert_eq!(count(&spiral, "class=\"road ring turbo-lane\""), 3);
-        assert_eq!(count(&spiral, "class=\"turbo-divider\""), 2);
+        let sv = turbo(3);
+        let (spiral_view, spiral) = (sv.view(), svg(&sv).markup);
+        assert_eq!(count(&spiral, "class=\"road ring turbo-lane\""), 6);
+        assert_eq!(count(&spiral, "class=\"turbo-divider\""), spiral_view.ring.as_ref().unwrap().dividers.len());
     }
 
     #[test]
