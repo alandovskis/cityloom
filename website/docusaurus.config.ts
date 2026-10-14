@@ -22,6 +22,12 @@ const config: Config = {
   projectName: "cityloom",
 
   onBrokenLinks: "throw",
+  onBrokenAnchors: "throw",
+  markdown: {
+    hooks: {
+      onBrokenMarkdownLinks: "throw",
+    },
+  },
 
   // The app speaks English and Canadian French, and so does this site.
   i18n: {
@@ -61,6 +67,7 @@ const config: Config = {
       logo: {
         alt: "CityLoom",
         src: "img/logo.svg",
+        srcDark: "img/logo-dark.svg",
       },
       items: [
         {
@@ -96,7 +103,7 @@ const config: Config = {
           items: [{ label: "GitHub", href: "https://github.com/alandovskis/cityloom" }],
         },
       ],
-      copyright: "The streets come from OpenStreetMap. Built with Docusaurus.",
+      copyright: "Streets © OpenStreetMap contributors. Built with Docusaurus.",
     },
     prism: {
       theme: prismThemes.github,
