@@ -1,4 +1,4 @@
-//! The ring of a turbo roundabout as geometry, in millimetres on the plan: a spiral (replaces the stadium of `turbo_ring.rs`). Each lane edge is two half
+//! The ring of a turbo roundabout as geometry, in millimetres on the plan: a spiral. Each lane edge is two half
 //! circles, one on each side of the translation axis, whose centres are `shift` apart along it (CETRA 2016 Fig. 3 and
 //! 4; the island's edge is shifted by Δv and every other edge by Δu). The *ahead* half has its centre `shift / 2`
 //! toward the axis direction and the *behind* half `shift / 2` away from it, so the two halves meet the axis at

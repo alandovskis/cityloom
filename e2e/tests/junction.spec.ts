@@ -443,7 +443,7 @@ test("a roundabout is given the basic turbo layout from its details and drawn wi
   page,
 }) => {
   await basicTurbo(page);
-  // The divider is cut where each street meets the ring, so it is drawn in several open pieces (four on the basic turbo of sample 0).
+  // The divider is cut where each street meets the ring, so it is drawn in several open pieces (more than one; the count depends on the crossing).
   const dividers = page.locator("#drawing .turbo-divider");
   await expect(dividers.first()).toBeAttached();
   expect(await dividers.count()).toBeGreaterThan(1);
