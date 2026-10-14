@@ -11,7 +11,6 @@ setup:
     npm ci
     cargo install wasm-bindgen-cli --version {{wasm_bindgen}} --root .tools
     cd e2e && npm ci && npx playwright install chromium
-    cd website && npm ci
 
 # Build the WebAssembly module into web/pkg.
 build:
@@ -52,6 +51,10 @@ prepare *args:
 # Serve the pages at http://127.0.0.1:8137/ (build first). The server answers range requests, as the map's tiles need.
 serve:
     node e2e/serve.mjs
+
+# Install the documentation site's packages (once; `just setup` does not).
+setup-docs:
+    cd website && npm ci
 
 # Serve the documentation site (website/, English and fr-CA) with live reload at http://localhost:3000/. Run one language with `just docs --locale fr-CA`.
 docs *args:

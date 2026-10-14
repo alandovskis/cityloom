@@ -18,11 +18,11 @@ just deploy          # build, then upload the site to the Railway project citylo
 just check           # everything
 just format          # rustfmt (rustfmt.toml) + Prettier; `just format-check` only checks, as CI does
 just serve           # http://127.0.0.1:8137/ (runs `node e2e/serve.mjs`: the basemap's PMTiles need range requests; E2E_PORT moves the port, for Playwright too)
-just docs            # the documentation site (website/, Docusaurus, English and fr-CA; pages in website/docs and website/i18n/fr-CA): serves it at http://localhost:3000/; `just docs-build` builds both languages and fails on a broken link (CI's `docs` job); CI's `docs-deploy` job publishes it to GitHub Pages, https://alandovskis.github.io/cityloom/, on every push to main once the other jobs pass; docs/superpowers stays local
+just docs            # the documentation site (website/, Docusaurus, English and fr-CA; pages in website/docs and website/i18n/fr-CA; `just setup-docs` installs its packages once, `just setup` does not): serves it at http://localhost:3000/; `just docs-build` builds both languages and fails on a broken link (CI's `docs` job); CI's `docs-deploy` job publishes it to GitHub Pages, https://alandovskis.github.io/cityloom/, on every push to main once the other jobs pass
 just setup           # once: wasm-bindgen-cli (version from Cargo.toml, into .tools), `npm ci` at the root and in `e2e`, Playwright's Chromium
 ```
 
-CI (`.github/workflows/ci.yml`) runs `just format-check`, `just test` and `just e2e` with `RUSTFLAGS=-D warnings`, so a new compiler warning fails it; run `just format` before committing. There is no clippy configuration. `build.sh` strips the name and producers sections (without that the wasm is ~7.6 MB instead of ~2 MB). The `proc-macro-error2` future-incompat warning comes from Leptos dependencies and is harmless.
+CI (`.github/workflows/ci.yml`) runs `just format-check`, `just test`, `just e2e` and `just docs-build` with `RUSTFLAGS=-D warnings`, so a new compiler warning fails it; run `just format` before committing. There is no clippy configuration. `build.sh` strips the name and producers sections (without that the wasm is ~7.6 MB instead of ~2 MB). The `proc-macro-error2` future-incompat warning comes from Leptos dependencies and is harmless.
 
 ## Architecture
 
