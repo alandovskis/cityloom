@@ -16,7 +16,7 @@ use crate::street::model::{Editor, Street, View, named_said};
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::{JUNCTION_SAMPLES, junction_of, junction_with_walkways, suspended_turbo};
+pub use fixtures::{JUNCTION_SAMPLES, junction_of, junction_two_way, junction_with_walkways, suspended_turbo};
 
 pub const LEFT: u8 = 1;
 pub const THROUGH: u8 = 2;
@@ -1879,17 +1879,19 @@ fn settle_turbo(s: &mut State, region: usize) {
 }
 
 /// The lanes of a turbo's arms: the layout's count where cars enter the street, none where they do not, each serving
-/// the turns `turbo::uses` says among the turns the arm has.
+/// the turns `turbo::uses` says among the turns the arm has (the outermost lane of a side street turns toward the outside only).
 fn turbo_lanes(s: &mut State, region: usize) {
     let Some(t) = s.turbo.clone() else { return };
     let avail: Vec<u8> = (0..s.arms.len()).map(|i| classes_of(&s.arms, i)).collect();
     let others: Vec<(u32, i32)> = s.arms.iter().filter(|a| !a.is_pedestrian()).map(|a| (a.uid, a.bearing)).collect();
+    let right_hand = REGIONS[region].drive_side == Side::Right;
     for (a, avail) in s.arms.iter_mut().zip(avail) {
         let (uid, bearing) = (a.uid, a.bearing);
         let n = if a.profile(region).enter_x.is_empty() { 0 } else { t.entry_lanes(uid) };
         a.lanes = (0..n)
             .map(|k| {
-                let want = turbo::uses(k, n, avail);
+                // An arm that is not on the main road is a side street: see `turbo::uses`.
+                let want = turbo::uses(k, n, avail, !t.main.contains(&uid), right_hand);
                 let mut to: Vec<u32> = others.iter().filter(|(u, b)| *u != uid && want & turn_class(bearing, *b) != 0).map(|(u, _)| *u).collect();
                 to.sort_unstable();
                 Lane { to }
@@ -3648,7 +3650,7 @@ mod tests {
         assert!(j.set_turbo(Some(0)));
         assert_eq!(counts(&j), [2, 2, 2, 2], "basic");
         assert_eq!(to(&j, 1), [vec![2, 3], vec![3, 4]], "north: the left lane goes left and through, the right lane through and right");
-        assert_eq!(to(&j, 2), [vec![3, 4], vec![1, 4]], "east");
+        assert_eq!(to(&j, 2), [vec![3, 4], vec![1]], "east, a side street: its right lane turns right only");
         assert!(j.set_turbo(Some(1)));
         assert_eq!(counts(&j), [2, 1, 2, 1], "egg: two on the main road, one on the others");
         assert_eq!(to(&j, 2), [vec![1, 3, 4]], "a single lane serves every turn");
@@ -3658,6 +3660,30 @@ mod tests {
         assert_eq!(counts(&j), [3, 2, 3, 2], "spiral: three on the Avenue, two on the Street");
         assert_eq!(to(&j, 1), [vec![2, 3], vec![3], vec![3, 4]], "the middle lane goes through only");
         assert_eq!(j.current().turbo.as_ref().unwrap().size, 0, "all of them fit the mini block here");
+    }
+
+    #[test]
+    fn a_side_street_s_outermost_lane_turns_only_toward_the_outside_and_a_main_street_s_lanes_are_unchanged() {
+        let to = |j: &Junction, uid: u32| j.arm(uid).unwrap().lanes.iter().map(|l| l.to.clone()).collect::<Vec<_>>();
+        // Uids 1, 2, 3, 4 are north, east, south, west; the Avenue (north, south) is the main road.
+        let mut j = roundabout();
+        assert!(j.set_turbo(Some(0)));
+        assert_eq!(to(&j, 1), [vec![2, 3], vec![3, 4]], "basic, north (main): as before");
+        assert_eq!(to(&j, 3), [vec![1, 4], vec![1, 2]], "south (main): as before");
+        assert_eq!(to(&j, 2), [vec![3, 4], vec![1]], "east (side): the right lane turns right only");
+        assert_eq!(to(&j, 4), [vec![1, 2], vec![3]], "west (side)");
+        assert!(j.set_turbo(Some(3)));
+        assert_eq!(to(&j, 1), [vec![2, 3], vec![3], vec![3, 4]], "spiral, north (main): as before");
+        assert_eq!(to(&j, 2), [vec![3, 4], vec![1]], "east (side, two lanes)");
+        // Left-hand traffic: the outside is the driver's left, and the first lane is the outermost.
+        let mut left = Junction::new(0);
+        assert!(left.set_control(ROUNDABOUT) && left.set_region(3) && left.set_turbo(Some(0)));
+        assert_eq!(to(&left, 1), [vec![2, 3], vec![3, 4]], "left-hand, north (main): as before");
+        assert_eq!(to(&left, 2), [vec![3], vec![1, 4]], "left-hand, east (side): the left lane turns left only");
+        // A one-lane entry keeps every turn (UNVERIFIED).
+        let mut egg = roundabout();
+        assert!(egg.set_turbo(Some(1)));
+        assert_eq!(to(&egg, 2), [vec![1, 3, 4]]);
     }
 
     #[test]
@@ -3677,6 +3703,11 @@ mod tests {
             j.arm(1).unwrap().lanes.iter().map(|l| l.to.clone()).collect::<Vec<_>>(),
             [vec![2, 3], vec![3], vec![3, 4]],
             "the middle lane goes through only"
+        );
+        assert_eq!(
+            j.arm(2).unwrap().lanes.iter().map(|l| l.to.clone()).collect::<Vec<_>>(),
+            [vec![3, 4], vec![4], vec![1]],
+            "east is a side street: its outermost lane turns right only"
         );
     }
 

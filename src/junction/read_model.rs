@@ -1786,7 +1786,7 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::junction::model::{DEFAULT_SETBACK_MM, JUNCTION_SAMPLES, MIN_SETBACK_MM, junction_of};
+    use crate::junction::model::{DEFAULT_SETBACK_MM, JUNCTION_SAMPLES, MIN_SETBACK_MM, junction_of, junction_two_way};
     use crate::shared::testing::{en, fr};
 
     #[test]
@@ -3501,6 +3501,18 @@ mod tests {
         for c in &v.corners {
             assert!(c.curb.len() > 4, "the curb walks along the ring between the two streets: {}", c.curb.len());
             assert!(c.wedge.last().is_some_and(|z| z[0] == "Z"));
+        }
+    }
+
+    #[test]
+    fn the_two_way_fixture_has_streets_cars_enter_and_leave_by() {
+        for region in [0usize, 3] {
+            let mut j = junction_two_way(3, 1, region);
+            assert!(j.set_control(ROUNDABOUT), "region {region}");
+            assert!(j.set_turbo(Some(0)), "the basic turbo stands on it, region {region}");
+            let v = j.view();
+            assert_eq!(v.movements.len(), 12, "four streets, each to the three others (`junction_of`'s streets are all one-way in: no movement at all)");
+            assert!(v.arms.iter().all(|a| a.lanes.len() == 2 && a.leaves), "region {region}");
         }
     }
 

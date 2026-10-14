@@ -223,13 +223,22 @@ pub fn layouts_for(arm_count: usize) -> Vec<usize> {
 /// left: the first lane left and through, the last right and through, a middle one through only; one lane serves
 /// everything. UNVERIFIED (the figures that say it could not be read). The U-turn the first lane also serves has no
 /// movement in this model, so nothing stands for it. A lane that would serve nothing the arm has serves what it has.
-pub fn uses(k: usize, n: usize, avail: u8) -> u8 {
-    let raw = match (n, k) {
+///
+/// On a side arm (one that is not on the main road; `side_arm`) of two or three lanes the outermost lane (the last in
+/// right-hand traffic, the first in left-hand) turns toward the outside only, right or left, when the arm has that
+/// turn: under the spiral a lane only steps outward, so a street just before a tip reaches nothing but the next exit from
+/// its outer lane (spec amendment 2026-10-13, "Lane table"; UNVERIFIED, it depends on which end of the axis leads, J1).
+pub fn uses(k: usize, n: usize, avail: u8, side_arm: bool, right_hand: bool) -> u8 {
+    let mut raw = match (n, k) {
         (1, _) => LEFT | THROUGH | RIGHT,
         (_, 0) => LEFT | THROUGH,
         (_, k) if k + 1 == n => THROUGH | RIGHT,
         _ => THROUGH,
     };
+    let (outermost, outward) = if right_hand { (n.saturating_sub(1), RIGHT) } else { (0, LEFT) };
+    if side_arm && n >= 2 && k == outermost && avail & outward != 0 {
+        raw = outward;
+    }
     match raw & avail {
         0 => avail,
         m => m,
@@ -477,11 +486,27 @@ mod tests {
     #[test]
     fn a_lane_serves_by_its_place_among_the_arm_s_lanes() {
         let all = LEFT | THROUGH | RIGHT;
-        assert_eq!([uses(0, 1, all)], [all], "one lane serves everything");
-        assert_eq!([uses(0, 2, all), uses(1, 2, all)], [LEFT | THROUGH, THROUGH | RIGHT]);
-        assert_eq!([uses(0, 3, all), uses(1, 3, all), uses(2, 3, all)], [LEFT | THROUGH, THROUGH, THROUGH | RIGHT], "the middle lane is through only");
-        assert_eq!(uses(0, 2, RIGHT), RIGHT, "a lane that would serve nothing the arm has serves what it has");
-        assert_eq!(uses(1, 3, LEFT | RIGHT), LEFT | RIGHT);
+        // A main arm (and any lone lane): the first lane left and through, the last through and right, a middle one through only.
+        assert_eq!([uses(0, 1, all, false, true)], [all], "one lane serves everything");
+        assert_eq!([uses(0, 2, all, false, true), uses(1, 2, all, false, true)], [LEFT | THROUGH, THROUGH | RIGHT]);
+        assert_eq!(
+            [uses(0, 3, all, false, true), uses(1, 3, all, false, true), uses(2, 3, all, false, true)],
+            [LEFT | THROUGH, THROUGH, THROUGH | RIGHT],
+            "the middle lane is through only"
+        );
+        assert_eq!(uses(0, 2, RIGHT, false, true), RIGHT, "a lane that would serve nothing the arm has serves what it has");
+        assert_eq!(uses(1, 3, LEFT | RIGHT, false, true), LEFT | RIGHT);
+        // A side arm of two or three lanes: its outermost lane turns toward the outside only.
+        assert_eq!([uses(0, 2, all, true, true), uses(1, 2, all, true, true)], [LEFT | THROUGH, RIGHT]);
+        assert_eq!([uses(0, 3, all, true, true), uses(1, 3, all, true, true), uses(2, 3, all, true, true)], [LEFT | THROUGH, THROUGH, RIGHT]);
+        assert_eq!(
+            [uses(0, 2, all, true, false), uses(1, 2, all, true, false)],
+            [LEFT, THROUGH | RIGHT],
+            "left-hand traffic: the outside is the driver's left"
+        );
+        assert_eq!([uses(0, 3, all, true, false), uses(1, 3, all, true, false), uses(2, 3, all, true, false)], [LEFT, THROUGH, THROUGH | RIGHT]);
+        assert_eq!(uses(0, 1, all, true, true), all, "a lone lane keeps every turn, side arm or not (UNVERIFIED)");
+        assert_eq!(uses(1, 2, LEFT | THROUGH, true, true), THROUGH, "an arm with no right turn leaves its outer lane as it is");
     }
 
     #[test]

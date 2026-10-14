@@ -115,6 +115,26 @@ pub fn junction_of(pieces: &[(&str, i32)]) -> Junction {
     Junction::from_city(named_said("Test"), &state, &state, 0).expect("the street draws")
 }
 
+/// A four-way, in a city, whose every arm reads a street of a sidewalk, `leave` travel lanes out, `enter` travel lanes in
+/// and a sidewalk, each lane 3.5 m (`junction_of` makes every travel lane come in, so a four-way of it has no movement).
+/// `region` is an index into `REGIONS`; a left-hand one gets left-hand pieces, so a turbo can stand on it.
+pub fn junction_two_way(enter: usize, leave: usize, region: usize) -> Junction {
+    use crate::shared::catalogue::{REGIONS, StreetClass, kind_index};
+    use crate::street::model::Piece;
+    let piece = |id: &str, width_mm, direction| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() };
+    let mut pieces = vec![piece("sidewalk", 3_000, None)];
+    pieces.extend((0..leave).map(|_| piece("travel", 3_500, Some(0))));
+    pieces.extend((0..enter).map(|_| piece("travel", 3_500, Some(1))));
+    pieces.push(piece("sidewalk", 3_000, None));
+    let street = Street::imported(StreetClass::Local, REGIONS[region].drive_side, &pieces);
+    let mut state = Junction::new(0).current().clone();
+    for a in &mut state.arms {
+        a.section = Some(street.clone());
+        a.edge = a.uid;
+    }
+    Junction::from_city(named_said("Test"), &state, &state, region).expect("the street draws")
+}
+
 /// A four-way, in a city, whose arms facing `bearings` (0, 90, 180 or 270) read a pedestrian street of these
 /// pieces, left to right: (kind id, width in mm). The other arms read the first sample street.
 pub fn junction_with_walkways(bearings: &[i32], pieces: &[(&str, i32)]) -> Junction {
