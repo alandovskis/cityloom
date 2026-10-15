@@ -13,6 +13,7 @@ axum = "0.8.9"
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "net", "signal", "time", "fs"] }
 tower-http = { version = "0.7.1", features = ["fs"] }
 percent-encoding = "2.3.2"
+cookie = "0.18.2"
 thiserror = "2.0.21"
 base64 = "0.23.1"
 url = "2.5.8"
@@ -32,5 +33,6 @@ sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio
 
 [dev-dependencies]
 tempfile = "3.27.0"
+tokio = { version = "1.53.3", features = ["test-util"] }
 tower = { version = "0.5.3", features = ["util"] }
 http-body-util = "0.1.5"
