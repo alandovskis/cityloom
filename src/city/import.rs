@@ -49,7 +49,12 @@ fn piece(lane: &Lane) -> Piece {
         let days = days_of(lane.hours.as_deref().unwrap_or_default());
         variants = windows.into_iter().map(|(from_min, to_min)| Window { kind: kind("bus"), from_min, to_min, days: days.clone() }).collect();
     }
-    Piece { kind: base, width_mm: (lane.width_m * 1000.0).round() as i32, direction: Some(usize::from(lane.way == Way::Backward)), variants }
+    Piece {
+        kind: base,
+        width_mm: (lane.width_m * 1000.0).round() as i32,
+        direction: (lane.way != Way::Both || lane.kind != LaneKind::Bike).then_some(usize::from(lane.way == Way::Backward)),
+        variants,
+    }
 }
 
 const SLOT_MIN: i32 = 15;
@@ -233,6 +238,15 @@ mod tests {
 
     fn kind_id(lane: &Lane) -> &'static str {
         KINDS[piece(lane).kind].id
+    }
+
+    #[test]
+    fn a_two_way_bike_lane_has_no_direction_and_a_one_way_one_keeps_it() {
+        assert_eq!(piece(&lane(LaneKind::Bike, Way::Both, 3.0)).direction, None);
+        assert_eq!(piece(&lane(LaneKind::Bike, Way::Forward, 1.5)).direction, Some(0));
+        assert_eq!(piece(&lane(LaneKind::Bike, Way::Backward, 1.5)).direction, Some(1));
+        // only a bike lane can run both ways: a driving lane always has a direction
+        assert_eq!(piece(&lane(LaneKind::Driving, Way::Both, 3.0)).direction, Some(0));
     }
 
     #[test]

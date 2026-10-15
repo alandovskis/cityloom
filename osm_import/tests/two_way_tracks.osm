@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+<node id="1" lat="45.5" lon="-73.6000"></node>
+<node id="2" lat="45.5" lon="-73.5980"></node>
+<way id="100"><nd ref="1"/><nd ref="2"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="name" v="two-way separate left"/></way>
+<node id="3" lat="45.5001" lon="-73.5997"></node>
+<node id="4" lat="45.5001" lon="-73.5983"></node>
+<way id="9001"><nd ref="3"/><nd ref="4"/><tag k="highway" v="cycleway"/><tag k="oneway" v="no"/></way>
+<node id="5" lat="45.503" lon="-73.6000"></node>
+<node id="6" lat="45.503" lon="-73.5980"></node>
+<way id="500"><nd ref="5"/><nd ref="6"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="name" v="one-way separate left"/></way>
+<node id="7" lat="45.5031" lon="-73.5997"></node>
+<node id="8" lat="45.5031" lon="-73.5983"></node>
+<way id="9002"><nd ref="7"/><nd ref="8"/><tag k="highway" v="cycleway"/><tag k="oneway" v="yes"/></way>
+<node id="9" lat="45.506" lon="-73.6000"></node>
+<node id="10" lat="45.506" lon="-73.5980"></node>
+<way id="900"><nd ref="9"/><nd ref="10"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="name" v="separate left default"/></way>
+<node id="11" lat="45.5061" lon="-73.5997"></node>
+<node id="12" lat="45.5061" lon="-73.5983"></node>
+<way id="9003"><nd ref="11"/><nd ref="12"/><tag k="highway" v="cycleway"/></way>
+<node id="13" lat="45.509" lon="-73.6000"></node>
+<node id="14" lat="45.509" lon="-73.5980"></node>
+<way id="1300"><nd ref="13"/><nd ref="14"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="name" v="separate left track on the right"/></way>
+<node id="15" lat="45.5089" lon="-73.5997"></node>
+<node id="16" lat="45.5089" lon="-73.5983"></node>
+<way id="9004"><nd ref="15"/><nd ref="16"/><tag k="highway" v="cycleway"/><tag k="oneway" v="no"/></way>
+<node id="17" lat="45.512" lon="-73.6000"></node>
+<node id="18" lat="45.512" lon="-73.5980"></node>
+<way id="1700"><nd ref="17"/><nd ref="18"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="name" v="separate left crossing"/></way>
+<node id="19" lat="45.5121" lon="-73.5997"></node>
+<node id="20" lat="45.5121" lon="-73.5983"></node>
+<way id="9005"><nd ref="19"/><nd ref="20"/><tag k="highway" v="cycleway"/><tag k="oneway" v="no"/><tag k="cycleway" v="crossing"/></way>
+<node id="21" lat="45.515" lon="-73.6000"></node>
+<node id="22" lat="45.515" lon="-73.5980"></node>
+<way id="2100"><nd ref="21"/><nd ref="22"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="name" v="separate left far away"/></way>
+<node id="23" lat="45.516" lon="-73.5997"></node>
+<node id="24" lat="45.516" lon="-73.5983"></node>
+<way id="9006"><nd ref="23"/><nd ref="24"/><tag k="highway" v="cycleway"/><tag k="oneway" v="no"/></way>
+<node id="25" lat="45.518" lon="-73.6000"></node>
+<node id="26" lat="45.518" lon="-73.5980"></node>
+<way id="2500"><nd ref="25"/><nd ref="26"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:both" v="separate"/><tag k="name" v="separate both sides"/></way>
+<node id="27" lat="45.5181" lon="-73.5997"></node>
+<node id="28" lat="45.5181" lon="-73.5983"></node>
+<way id="9007"><nd ref="27"/><nd ref="28"/><tag k="highway" v="cycleway"/><tag k="oneway" v="no"/></way>
+<node id="29" lat="45.5179" lon="-73.5997"></node>
+<node id="30" lat="45.5179" lon="-73.5983"></node>
+<way id="9008"><nd ref="29"/><nd ref="30"/><tag k="highway" v="cycleway"/><tag k="oneway" v="yes"/></way>
+<node id="31" lat="45.521" lon="-73.6000"></node>
+<node id="32" lat="45.521" lon="-73.5980"></node>
+<way id="3100"><nd ref="31"/><nd ref="32"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="track"/><tag k="cycleway:left:oneway" v="no"/><tag k="cycleway:right" v="no"/><tag k="name" v="tagged two-way left"/></way>
+<node id="33" lat="45.524" lon="-73.6000"></node>
+<node id="34" lat="45.524" lon="-73.5980"></node>
+<way id="3300"><nd ref="33"/><nd ref="34"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:both" v="track"/><tag k="cycleway:both:oneway" v="no"/><tag k="name" v="tagged two-way both"/></way>
+<node id="35" lat="45.527" lon="-73.6000"></node>
+<node id="36" lat="45.527" lon="-73.5980"></node>
+<way id="3500"><nd ref="35"/><nd ref="36"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="track"/><tag k="cycleway:right" v="no"/><tag k="name" v="tagged one-way left"/></way>
+</osm>

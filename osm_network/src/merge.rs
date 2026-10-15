@@ -48,7 +48,11 @@ fn reversed(road: &Road) -> Road {
     r.points.reverse();
     r.lanes.reverse();
     for l in &mut r.lanes {
-        l.way = if l.way == Way::Forward { Way::Backward } else { Way::Forward };
+        l.way = match l.way {
+            Way::Forward => Way::Backward,
+            Way::Backward => Way::Forward,
+            Way::Both => Way::Both,
+        };
     }
     r
 }

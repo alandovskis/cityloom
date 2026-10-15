@@ -185,3 +185,47 @@ fn a_plain_separate_sidewalk_tag_is_a_sidewalk_on_each_side() {
     let net = import(TRACKS).unwrap();
     assert_eq!(sidewalks_of(&net, "sidewalk plain separate"), (true, true));
 }
+
+const TWO_WAY_TRACKS: &[u8] = include_bytes!("two_way_tracks.osm");
+
+/// The ways of the bike lanes of the road of that name, left to right.
+fn bike_ways(net: &osm_import::Network, name: &str) -> Vec<osm_import::Way> {
+    let road = net.roads.iter().find(|r| r.name.as_deref() == Some(name)).unwrap_or_else(|| panic!("no road {name}"));
+    road.lanes.iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.way).collect()
+}
+
+#[test]
+fn a_track_mapped_as_two_way_cycleways_is_a_two_way_bike_lane() {
+    use osm_import::Way::Both;
+    let net = import(TWO_WAY_TRACKS).unwrap();
+    assert_eq!(bike_ways(&net, "two-way separate left"), [Both]);
+    assert_eq!(bike_ways(&net, "separate left default"), [Both], "a cycleway is two-way unless it says otherwise");
+    // only the side whose cycleway is two-way
+    let both_sides = bike_ways(&net, "separate both sides");
+    assert_eq!((both_sides.len(), both_sides[0] == Both, both_sides[1] == Both), (2, true, false));
+}
+
+#[test]
+fn a_track_mapped_as_one_way_cycleways_keeps_its_direction() {
+    let net = import(TWO_WAY_TRACKS).unwrap();
+    assert_eq!(bike_ways(&net, "one-way separate left").len(), 1);
+    assert_ne!(bike_ways(&net, "one-way separate left"), [osm_import::Way::Both]);
+}
+
+#[test]
+fn a_cycleway_that_is_not_beside_the_road_on_that_side_does_not_make_it_two_way() {
+    use osm_import::Way::Both;
+    let net = import(TWO_WAY_TRACKS).unwrap();
+    for name in ["separate left track on the right", "separate left crossing", "separate left far away"] {
+        assert!(!bike_ways(&net, name).contains(&Both), "{name}");
+    }
+}
+
+#[test]
+fn a_bike_lane_tagged_oneway_no_on_its_side_is_two_way() {
+    use osm_import::Way::Both;
+    let net = import(TWO_WAY_TRACKS).unwrap();
+    assert_eq!(bike_ways(&net, "tagged two-way left"), [Both]);
+    assert_eq!(bike_ways(&net, "tagged two-way both"), [Both, Both]);
+    assert!(!bike_ways(&net, "tagged one-way left").contains(&Both));
+}

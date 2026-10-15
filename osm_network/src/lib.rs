@@ -46,12 +46,14 @@ pub enum BufferType {
     Verge,
 }
 
-/// Which way a lane runs along its road, from the road's first point to its last.
+/// Which way a lane runs along its road, from the road's first point to its last. A bike lane can run both ways;
+/// a network kept before `Both` existed has none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Way {
     Forward,
     Backward,
+    Both,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

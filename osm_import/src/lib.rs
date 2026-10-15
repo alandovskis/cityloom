@@ -9,6 +9,10 @@
 use abstutil::{Tags, Timer};
 pub use osm_network::*;
 use osm2streets::{Direction, DrivingSide, IntersectionControl, IntersectionKind, LaneType, MapConfig, StreetNetwork, Transformation};
+use std::collections::BTreeMap;
+
+use osm2streets::osm::WayID;
+use streets_reader::osm_reader::Way as OsmWay;
 use streets_reader::{OsmExtract, osm_reader::Document};
 use wasm_bindgen::prelude::*;
 
@@ -54,7 +58,11 @@ fn read_streets(osm: &[u8], clip: Option<Vec<geom::LonLat>>, config: MapConfig, 
     for (id, node) in &doc.nodes {
         extract.handle_node(*id, node);
     }
-    for way in doc.ways.values_mut().chain(doc.clipped_copied_ways.iter_mut().map(|(_, way)| way)) {
+    let two_way = two_way_tracks(&doc);
+    for (id, way) in doc.ways.iter_mut().map(|(id, way)| (*id, way)).chain(doc.clipped_copied_ways.iter_mut().map(|(id, way)| (*id, way))) {
+        for key in two_way.get(&id).into_iter().flatten() {
+            way.tags.insert(key.clone(), "no");
+        }
         explicit_sidewalks(&mut way.tags);
         explicit_cycleways(&mut way.tags);
     }
@@ -114,6 +122,71 @@ fn explicit_cycleways(tags: &mut Tags) {
     }
 }
 
+/// How near a separately mapped cycleway lies to the road it runs beside, to its middle, in metres.
+const TRACK_NEAR_M: f64 = 30.0;
+
+/// The `cycleway:<side>:oneway` tags (`=no`) to give the roads whose bike track is mapped as ways of its own and runs
+/// both ways. osm2streets does not keep the ways of a track (and its lane has one direction only), so the road's side
+/// is tied to them here, before it runs: a `highway=cycleway` way that runs along the road (within 30 degrees of it,
+/// its middle within 30 m, on the side tagged `separate`), is not a crossing and is not one-way (OSM's default for a
+/// cycleway is both ways; `oneway`, `oneway:bicycle` or `bicycle:oneway` `yes`, `true`, `1` or `-1` say otherwise).
+/// A side where such ways are both one-way and two-way is left as the road's tags say.
+fn two_way_tracks(doc: &Document) -> BTreeMap<WayID, Vec<String>> {
+    let tracks: Vec<_> = doc.ways.values().filter(|w| w.tags.is("highway", "cycleway") && !w.tags.is("cycleway", "crossing")).collect();
+    let mut found = BTreeMap::new();
+    for (id, road) in &doc.ways {
+        if !road.tags.has_any(vec!["cycleway", "cycleway:left", "cycleway:right", "cycleway:both"]) || road.tags.is("highway", "cycleway") {
+            continue;
+        }
+        let separate = |side: &str| {
+            ["cycleway", "cycleway:both", &format!("cycleway:{side}")].iter().rev().find_map(|k| road.tags.get(k)).is_some_and(|v| v == "separate")
+        };
+        for side in ["left", "right"] {
+            if !separate(side) || road.tags.contains_key(&format!("cycleway:{side}:oneway")) || road.tags.contains_key("cycleway:both:oneway") {
+                continue;
+            }
+            let along: Vec<_> = tracks.iter().filter(|t| runs_along(road, t, side)).collect();
+            if !along.is_empty() && along.iter().all(|t| !is_one_way(&t.tags)) {
+                found.entry(*id).or_insert_with(Vec::new).push(format!("cycleway:{side}:oneway"));
+            }
+        }
+    }
+    found
+}
+
+fn is_one_way(tags: &Tags) -> bool {
+    ["oneway", "oneway:bicycle", "bicycle:oneway"].iter().any(|k| tags.get(k).is_some_and(|v| matches!(v.as_str(), "yes" | "true" | "1" | "-1")))
+}
+
+/// Whether `track` runs along `road` on its `side`: its middle lies near the road, on that side, and it points the
+/// way the road does or the opposite.
+fn runs_along(road: &OsmWay, track: &OsmWay, side: &str) -> bool {
+    let (Some(mid), true) = (track.pts.get(track.pts.len() / 2), road.pts.len() > 1) else { return false };
+    let (Some(first), Some(last)) = (track.pts.first(), track.pts.last()) else { return false };
+    let Some((a, b, dist)) = road.pts.windows(2).map(|w| (w[0], w[1], distance_to_segment(*mid, w[0], w[1]))).min_by(|x, y| x.2.total_cmp(&y.2)) else {
+        return false;
+    };
+    if dist > TRACK_NEAR_M {
+        return false;
+    }
+    let (rx, ry) = (b.x() - a.x(), b.y() - a.y());
+    let (tx, ty) = (last.x() - first.x(), last.y() - first.y());
+    let (rl, tl) = (rx.hypot(ry), tx.hypot(ty));
+    if rl == 0.0 || tl == 0.0 || (rx * tx + ry * ty).abs() / (rl * tl) < 30f64.to_radians().cos() {
+        return false;
+    }
+    // Pt2D's y runs south, so a point to the left of the road's direction has a negative cross product
+    let cross = rx * (mid.y() - a.y()) - ry * (mid.x() - a.x());
+    (cross < 0.0) == (side == "left")
+}
+
+fn distance_to_segment(p: geom::Pt2D, a: geom::Pt2D, b: geom::Pt2D) -> f64 {
+    let (dx, dy) = (b.x() - a.x(), b.y() - a.y());
+    let len2 = dx * dx + dy * dy;
+    let t = if len2 == 0.0 { 0.0 } else { (((p.x() - a.x()) * dx + (p.y() - a.y()) * dy) / len2).clamp(0.0, 1.0) };
+    (p.x() - (a.x() + t * dx)).hypot(p.y() - (a.y() + t * dy))
+}
+
 fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
     let bounds = streets.gps_bounds.to_bounds();
     let height = bounds.max_y;
@@ -145,21 +218,42 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
             highway: r.highway_type.clone(),
             from: r.src_i.0 as u32,
             to: r.dst_i.0 as u32,
-            lanes: r
-                .lane_specs_ltr
-                .iter()
-                .map(|l| Lane {
-                    kind: lane_kind(l.lt),
-                    buffer_type: buffer_type(l.lt),
-                    way: if l.dir == Direction::Forward { Way::Forward } else { Way::Backward },
-                    width_m: l.width.inner_meters(),
-                    hours: if l.lt == LaneType::Bus { hours.clone() } else { None },
-                })
-                .collect(),
+            lanes: join_two_way_bike_lanes(
+                r.lane_specs_ltr
+                    .iter()
+                    .map(|l| Lane {
+                        kind: lane_kind(l.lt),
+                        buffer_type: buffer_type(l.lt),
+                        way: if l.dir == Direction::Forward { Way::Forward } else { Way::Backward },
+                        width_m: l.width.inner_meters(),
+                        hours: if l.lt == LaneType::Bus { hours.clone() } else { None },
+                    })
+                    .collect(),
+            ),
             points: r.center_line.points().iter().map(|p| (p.x(), height - p.y())).collect(),
         });
     }
     net
+}
+
+/// A bike track that runs both ways is two lanes to osm2streets, one for each way, side by side (a `oneway=no` on the
+/// side of the road). It is one lane here, as wide as the two, that runs both ways.
+fn join_two_way_bike_lanes(lanes: Vec<Lane>) -> Vec<Lane> {
+    let mut joined: Vec<Lane> = Vec::with_capacity(lanes.len());
+    for lane in lanes {
+        match joined.last_mut() {
+            Some(last)
+                if last.kind == LaneKind::Bike
+                    && lane.kind == LaneKind::Bike
+                    && matches!((last.way, lane.way), (Way::Forward, Way::Backward) | (Way::Backward, Way::Forward)) =>
+            {
+                last.way = Way::Both;
+                last.width_m += lane.width_m;
+            }
+            _ => joined.push(lane),
+        }
+    }
+    joined
 }
 
 /// What a buffer lane is made of, osm2streets' own types. A shoulder has none: see `lane_kind`.
@@ -209,6 +303,27 @@ pub fn osm_to_network(osm: &[u8], bounds: &[f64]) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn bike(way: Way, width_m: f64) -> Lane {
+        Lane { kind: LaneKind::Bike, way, width_m, buffer_type: None, hours: None }
+    }
+
+    #[test]
+    fn two_bike_lanes_side_by_side_that_run_against_each_other_are_one_two_way_lane() {
+        let lanes = join_two_way_bike_lanes(vec![bike(Way::Backward, 1.5), bike(Way::Forward, 1.5)]);
+        assert_eq!(lanes, [bike(Way::Both, 3.0)]);
+        let lanes = join_two_way_bike_lanes(vec![bike(Way::Forward, 1.5), bike(Way::Backward, 1.2)]);
+        assert_eq!(lanes, [bike(Way::Both, 2.7)]);
+    }
+
+    #[test]
+    fn bike_lanes_that_run_the_same_way_or_are_apart_stay_as_they_are() {
+        let same = vec![bike(Way::Forward, 1.5), bike(Way::Forward, 1.5)];
+        assert_eq!(join_two_way_bike_lanes(same.clone()), same);
+        let driving = Lane { kind: LaneKind::Driving, ..bike(Way::Forward, 3.0) };
+        let apart = vec![bike(Way::Backward, 1.5), driving, bike(Way::Forward, 1.5)];
+        assert_eq!(join_two_way_bike_lanes(apart.clone()), apart);
+    }
 
     #[test]
     fn a_buffer_keeps_the_type_osm2streets_gave_it() {
