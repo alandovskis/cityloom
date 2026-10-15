@@ -3,7 +3,7 @@ use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
+use zeroize::{ZeroizeOnDrop, Zeroizing};
 
 pub const SEAL_VERSION: u8 = 1;
 const NONCE_LEN: usize = 12;
@@ -105,10 +105,9 @@ impl MasterKeys {
     }
 
     pub fn unwrap(&self, key_id: u8, user: uuid::Uuid, wrapped: &[u8]) -> Result<Key, CryptoError> {
-        let mut opened = open(self.get(key_id)?, &Self::wrap_aad(user), wrapped)?;
-        let bytes: [u8; 32] = opened.as_slice().try_into().map_err(|_| CryptoError::Format)?;
-        opened.zeroize();
-        Ok(Key(bytes))
+        let opened = open(self.get(key_id)?, &Self::wrap_aad(user), wrapped)?;
+        let bytes: Zeroizing<[u8; 32]> = Zeroizing::new(opened.as_slice().try_into().map_err(|_| CryptoError::Format)?);
+        Ok(Key(*bytes))
     }
 }
 
