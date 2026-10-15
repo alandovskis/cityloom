@@ -51,6 +51,20 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
     assert!(net.roads.iter().any(|r| r.lanes.iter().any(|l| l.kind == osm_import::LaneKind::Other)), "a divided street is merged");
 }
 
+#[test]
+fn no_street_of_the_montreal_extract_has_planting_the_data_does_not_show() {
+    // Every buffer of the extract is a curb that osm2streets inferred; none is a planter or a verge.
+    let net = import(PLATEAU).expect("the extract reads");
+    let buffers = net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.kind == osm_import::LaneKind::Buffer).count();
+    assert!(buffers > 100, "{buffers} buffers");
+    let city = City::from_network(&net, "Plateau");
+    let planting = cityloom_editor::shared::catalogue::kind_index("planting").unwrap();
+    for e in &city.view(0).edges {
+        let view = city.street_editor(e.uid, 0).unwrap().view();
+        assert!(view.segments.iter().all(|s| s.kind != planting), "{:?} has planting", e.name());
+    }
+}
+
 // ---- edits kept on real data -------------------------------------------------------------------------------------
 //
 // The e2e fixture is the Plateau's metro tile: the default area and areas shifted a little from it, as the app cuts

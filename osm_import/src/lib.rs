@@ -150,6 +150,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
                 .iter()
                 .map(|l| Lane {
                     kind: lane_kind(l.lt),
+                    buffer_type: buffer_type(l.lt),
                     way: if l.dir == Direction::Forward { Way::Forward } else { Way::Backward },
                     width_m: l.width.inner_meters(),
                     hours: if l.lt == LaneType::Bus { hours.clone() } else { None },
@@ -159,6 +160,19 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
         });
     }
     net
+}
+
+/// What a buffer lane is made of, osm2streets' own types. A shoulder has none: see `lane_kind`.
+fn buffer_type(lt: LaneType) -> Option<BufferType> {
+    let LaneType::Buffer(t) = lt else { return None };
+    Some(match t {
+        osm2streets::BufferType::Stripes => BufferType::Stripes,
+        osm2streets::BufferType::FlexPosts => BufferType::FlexPosts,
+        osm2streets::BufferType::Planters => BufferType::Planters,
+        osm2streets::BufferType::JerseyBarrier => BufferType::JerseyBarrier,
+        osm2streets::BufferType::Curb => BufferType::Curb,
+        osm2streets::BufferType::Verge => BufferType::Verge,
+    })
 }
 
 /// A shoulder is not somewhere to walk: it is a buffer between the road and what lies beside it.
@@ -195,6 +209,25 @@ pub fn osm_to_network(osm: &[u8], bounds: &[f64]) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_buffer_keeps_the_type_osm2streets_gave_it() {
+        use osm2streets::BufferType as B;
+        let types = [
+            (B::Stripes, BufferType::Stripes),
+            (B::FlexPosts, BufferType::FlexPosts),
+            (B::Planters, BufferType::Planters),
+            (B::JerseyBarrier, BufferType::JerseyBarrier),
+            (B::Curb, BufferType::Curb),
+            (B::Verge, BufferType::Verge),
+        ];
+        for (from, to) in types {
+            assert_eq!(lane_kind(LaneType::Buffer(from)), LaneKind::Buffer);
+            assert_eq!(buffer_type(LaneType::Buffer(from)), Some(to));
+        }
+        assert_eq!(buffer_type(LaneType::Shoulder), None);
+        assert_eq!(buffer_type(LaneType::Driving), None);
+    }
 
     #[test]
     fn a_shoulder_is_a_buffer_and_not_a_sidewalk() {

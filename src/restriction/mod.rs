@@ -28,7 +28,7 @@ pub(crate) mod fixtures {
     /// One street of two driving lanes that bends: east for 80 m, then north-east to 100 m east and 50 m north.
     pub fn bent_network() -> Network {
         let node = |id, x_m, y_m| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m, junction: false, control: Control::None };
-        let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, hours: None };
+        let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, buffer_type: None, hours: None };
         Network {
             left_hand: false,
             nodes: vec![node(1, 0.0, 0.0), node(2, 100.0, 50.0)],
