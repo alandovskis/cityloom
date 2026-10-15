@@ -22,10 +22,22 @@ test:
     cargo test --workspace
     cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server
 
-# A throwaway Postgres for the server's tests: then `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/cityloom`.
-db:
-    docker run --rm -d --name cityloom-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=cityloom -p 5432:5432 postgres:18
-    @echo 'export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/cityloom'
+# A throwaway Postgres for the server's tests, on 127.0.0.1 only (port 55432 unless given). Running it again starts the same container. It prints the DATABASE_URL to export; `just db-stop` removes it.
+db port="55432":
+    #!/usr/bin/env sh
+    set -eu
+    if docker container inspect cityloom-db >/dev/null 2>&1; then
+        docker start cityloom-db >/dev/null
+        port=$(docker port cityloom-db 5432/tcp | head -n 1 | sed 's/.*://')
+    else
+        docker run -d --name cityloom-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=cityloom -p 127.0.0.1:{{port}}:5432 postgres:18 >/dev/null
+        port={{port}}
+    fi
+    echo "export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:$port/cityloom"
+
+# Remove the Postgres that `just db` started.
+db-stop:
+    docker rm -f cityloom-db
 
 # Browser tests, after a fresh build. Arguments go to Playwright: `just e2e tests/street.spec.ts`.
 e2e *args: build
