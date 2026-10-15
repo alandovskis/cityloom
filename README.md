@@ -28,11 +28,11 @@ just check    # test, then e2e
 just format   # rustfmt and Prettier (just format-check only checks)
 ```
 
-Without `just`: `cargo test`, `./scripts/build.sh`, `node e2e/serve.mjs` (the basemap's tiles need range requests, which `python3 -m http.server` does not answer), and `cd e2e && npx playwright test`.
+Without `just`: `cargo test`, `./scripts/build.sh`, `cargo run -p cityloom_server` (the basemap's tiles need range requests, which `python3 -m http.server` does not answer), and `cd e2e && npx playwright test`.
 
 ## End-to-end tests
 
-Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; a small Node server (`e2e/serve.mjs`) serves `web/` for the run (and the basemap's range requests); `E2E_PORT` moves it off port 8137 when something else holds that.
+Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; the Rust server (`cityloom_server`) serves `web/` for the run (and the basemap's range requests); `E2E_PORT` moves it off port 8137 when something else holds that.
 
 ## Continuous integration
 

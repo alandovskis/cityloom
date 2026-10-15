@@ -19,10 +19,11 @@ build:
 # Unit tests on the host, and a type-check of the wasm-only code that they do not compile.
 test:
     cargo test --workspace
-    cargo build --target wasm32-unknown-unknown --workspace
+    cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server
 
 # Browser tests, after a fresh build. Arguments go to Playwright: `just e2e tests/street.spec.ts`.
 e2e *args: build
+    cargo build -p cityloom_server
     cd e2e && npx playwright test {{args}}
 
 # Everything: unit tests, then the browser tests.
@@ -50,7 +51,7 @@ prepare *args:
 
 # Serve the pages at http://127.0.0.1:8137/ (build first). The server answers range requests, as the map's tiles need.
 serve:
-    node e2e/serve.mjs
+    cargo run -p cityloom_server
 
 # Install the documentation site's packages (once; `just setup` does not).
 setup-docs:

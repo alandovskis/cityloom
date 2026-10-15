@@ -1,9 +1,18 @@
 import { defineConfig, devices } from "@playwright/test";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 // The pages are static files; the WebAssembly module they load is built first
 // with `./scripts/build.sh` (it writes web/pkg).
 // E2E_PORT moves the server off 8137 when another one already holds that port.
 const port = process.env.E2E_PORT ?? 8137;
+
+const server = fileURLToPath(new URL("../target/debug/cityloom_server", import.meta.url));
+if (!existsSync(server)) {
+  throw new Error(
+    `${server} is missing: run 'just e2e' (it builds the server first) or 'cargo build -p cityloom_server'`,
+  );
+}
 
 export default defineConfig({
   testDir: "./tests",
@@ -20,7 +29,8 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } }],
   webServer: {
-    command: "node serve.mjs",
+    command: server,
+    env: { WEB_ROOT: "../web", E2E_PORT: String(port) },
     url: `http://127.0.0.1:${port}/map.html`,
     reuseExistingServer: !process.env.CI,
   },
