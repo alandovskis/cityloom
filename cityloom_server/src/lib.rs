@@ -4,6 +4,8 @@ pub mod clock;
 pub mod config;
 pub mod crypto;
 pub mod db;
+#[cfg(feature = "test-provider")]
+pub mod fake_provider;
 pub mod flow;
 pub mod session;
 pub mod static_files;
