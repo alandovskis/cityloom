@@ -18,8 +18,14 @@ build:
 
 # Unit tests on the host, and a type-check of the wasm-only code that they do not compile.
 test:
+    @[ -n "${DATABASE_URL:-}" ] || { echo "DATABASE_URL is not set: the server's tests need a Postgres (run 'just db' and export the URL it prints)" >&2; exit 1; }
     cargo test --workspace
     cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server
+
+# A throwaway Postgres for the server's tests: then `export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/cityloom`.
+db:
+    docker run --rm -d --name cityloom-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=cityloom -p 5432:5432 postgres:18
+    @echo 'export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/cityloom'
 
 # Browser tests, after a fresh build. Arguments go to Playwright: `just e2e tests/street.spec.ts`.
 e2e *args: build
@@ -42,7 +48,7 @@ format-check:
 # What the SonarCloud analysis reads, in target/sonar: the Rust coverage as LCOV (host tests only: the wasm-only code and the browser tests are not measured) and Clippy's findings as JSON. Sonar judges the findings, so lints are capped at warnings here; a build error still fails. Needs cargo-llvm-cov (`cargo install cargo-llvm-cov --locked`) and the llvm-tools component.
 sonar-reports:
     mkdir -p target/sonar
-    cargo llvm-cov --workspace --lcov --output-path target/sonar/lcov.info
+    cargo llvm-cov --workspace --exclude cityloom_server --lcov --output-path target/sonar/lcov.info
     cargo clippy --workspace --message-format=json -- --cap-lints warn > target/sonar/clippy.json
 
 # Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool) and build the basemap in web/data/basemap (needs Java 21+). `just prepare --refresh` downloads a newer extract.
