@@ -14,6 +14,9 @@ tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "net", "s
 tower-http = { version = "0.7.1", features = ["fs"] }
 percent-encoding = "2.3.2"
 thiserror = "2.0.21"
+base64 = "0.23.1"
+url = "2.5.8"
+zeroize = "1.9.1"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
