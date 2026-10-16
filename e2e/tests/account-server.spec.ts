@@ -89,6 +89,7 @@ test.describe("a first sign-in", () => {
     await expect(page.locator("#session-btn-label")).toHaveText("Ada");
     await expect(page.getByRole("radio", { name: /Store my work on the server/ })).toBeChecked();
     await page.getByRole("radio", { name: /Keep my work on this device only/ }).check();
+    await expect(live(page)).toHaveText("Your work will be kept on this device only.");
     await page.reload();
     await expect(page.getByRole("radio", { name: /Keep my work on this device only/ })).toBeChecked();
   });
@@ -115,6 +116,7 @@ test.describe("a returning person", () => {
     const sub = unique();
     await newAccount(page, context, baseURL!, { sub });
     await page.getByRole("radio", { name: /Store my work on the server/ }).check();
+    await expect(live(page)).toHaveText("Your work will be stored on the server.");
     await page.locator("#session-btn").click();
     await page.getByRole("button", { name: "Sign out" }).first().click();
     await expect(page).toHaveURL(/\/index\.html$/);
@@ -150,13 +152,16 @@ test.describe("linked sign-ins", () => {
     await expect(page.locator(".linked li")).toHaveCount(2);
     // Signing in with the second identity, from a fresh browser context, is the same account.
     const { context: other, page: tab } = await anotherBrowser(browser, baseURL!);
-    await loginAs(other, baseURL!, { sub: second, name: "Ada", email: "second@example.org" });
-    await tab.goto("/map.html");
-    await chooseProvider(tab, "fake-apple");
-    await expect(tab.locator("#session-btn-label")).toHaveText("Ada");
-    await tab.goto("/account.html");
-    await expect(tab.locator(".linked li")).toHaveCount(2);
-    await other.close();
+    try {
+      await loginAs(other, baseURL!, { sub: second, name: "Ada", email: "second@example.org" });
+      await tab.goto("/map.html");
+      await chooseProvider(tab, "fake-apple");
+      await expect(tab.locator("#session-btn-label")).toHaveText("Ada");
+      await tab.goto("/account.html");
+      await expect(tab.locator(".linked li")).toHaveCount(2);
+    } finally {
+      await other.close();
+    }
     // Unlink the first: one is left, and the last cannot be unlinked.
     await page
       .getByRole("button", { name: /^Unlink Fake \(/ })
@@ -175,48 +180,45 @@ test.describe("linked sign-ins", () => {
   }) => {
     const theirs = unique();
     const { context: other, page: tab } = await anotherBrowser(browser, baseURL!);
-    await newAccount(tab, other, baseURL!, { sub: theirs, name: "Bob" });
-    await newAccount(page, context, baseURL!);
-    await loginAs(context, baseURL!, { sub: theirs });
-    // Bob signed in with the provider "fake", so a conflict needs the same provider: every enabled provider is
-    // offered for linking, the one already linked included. (`exact`: "Link Fake" is also a prefix of the other.)
-    await page.getByRole("button", { name: "Link Fake", exact: true }).click();
-    await expect(page).toHaveURL(/\/account\.html$/);
-    await expect(live(page)).toContainText("is already linked to another CityLoom account.");
-    await expect(page.locator(".linked li")).toHaveCount(1);
-    await other.close();
+    try {
+      await newAccount(tab, other, baseURL!, { sub: theirs, name: "Bob" });
+      await newAccount(page, context, baseURL!);
+      await loginAs(context, baseURL!, { sub: theirs });
+      // Bob signed in with the provider "fake", so a conflict needs the same provider: every enabled provider is
+      // offered for linking, the one already linked included. (`exact`: "Link Fake" is also a prefix of the other.)
+      await page.getByRole("button", { name: "Link Fake", exact: true }).click();
+      await expect(page).toHaveURL(/\/account\.html$/);
+      await expect(live(page)).toContainText("is already linked to another CityLoom account.");
+      await expect(page.locator(".linked li")).toHaveCount(1);
+    } finally {
+      await other.close();
+    }
   });
 });
 
 test.describe("the header", () => {
   test("shows the person's name in French too", async ({ page, context, baseURL }) => {
     await page.addInitScript(() => localStorage.setItem("cityloom-lang", "fr"));
-    await loginAs(context, baseURL!, { sub: unique(), name: "Ada", email: "ada@example.org" });
+    await loginAs(context, baseURL!, { sub: unique(), name: "Zoë", email: "zoe@example.org" });
     await page.goto("/map.html");
     await chooseProvider(page, "fake");
     await expect(page).toHaveURL(/\/account\.html$/);
     await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
-    await expect(page.locator("#session-btn-label")).toHaveText("Ada");
+    await expect(page.locator("#session-btn-label")).toHaveText("Zoë");
   });
 
-  test("signing out from the menu puts focus back on the menu button or the page", async ({
-    page,
-    context,
-    baseURL,
-  }) => {
+  test("signing out from the menu puts focus back on the menu button", async ({ page, context, baseURL }) => {
     await loginAs(context, baseURL!, { sub: unique(), name: "Ada", email: "ada@example.org" });
     await page.goto("/map.html");
     await chooseProvider(page, "fake");
+    await expect(page).toHaveURL(/\/account\.html$/);
+    await expect(page.locator("#session-btn-label")).toHaveText("Ada");
     await page.goto("/map.html");
     await expect(page.locator("#session-btn-label")).toHaveText("Ada");
     await page.locator("#session-btn").click();
     await page.getByRole("button", { name: "Sign out" }).first().click();
     await expect(page.locator("#session-btn")).toHaveText("Sign in");
-    await expect
-      .poll(() =>
-        page.evaluate(() => document.activeElement?.id === "session-btn" || document.activeElement?.tagName === "MAIN"),
-      )
-      .toBe(true);
+    await expect(page.locator("#session-btn")).toBeFocused();
   });
 });
 

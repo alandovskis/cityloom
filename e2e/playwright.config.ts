@@ -35,8 +35,8 @@ export default defineConfig({
     env: {
       WEB_ROOT: "../web",
       E2E_PORT: String(port),
-      // The account side is on when the caller's environment has a DATABASE_URL (the keys are fixed test values,
-      // not secrets); without one it stays off and only the account specs fail.
+      // The keys are fixed test values, not secrets. DATABASE_URL is not set here: the server takes it from the
+      // caller's environment, and the account side stays off without it (only the account specs fail).
       BASE_URL: `http://127.0.0.1:${port}`,
       COOKIE_KEY: b64(7, 64),
       DATA_KEYS: `1:${b64(1, 32)}`,
