@@ -7,6 +7,7 @@ pub mod db;
 #[cfg(feature = "test-provider")]
 pub mod fake_provider;
 pub mod flow;
+pub mod providers;
 pub mod session;
 pub mod static_files;
 
