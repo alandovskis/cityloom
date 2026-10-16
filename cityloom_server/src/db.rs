@@ -47,7 +47,7 @@ pub fn spawn_migrations_every(pool: PgPool, ready: Arc<AtomicBool>, first: Durat
                 }
                 Err(e) => {
                     // The kind of failure only: the driver's message can carry the connection string.
-                    tracing::warn!(kind = ?std::mem::discriminant(&e), retry_in_secs = wait.as_secs_f32(), "the database is not ready");
+                    tracing::warn!(kind = migrate_error_kind(&e), retry_in_secs = wait.as_secs_f32(), "the database is not ready");
                     tokio::time::sleep(wait).await;
                     wait = (wait * 2).min(longest);
                 }
@@ -64,11 +64,40 @@ pub struct PgRepo {
 
 const NOT_CHOSEN: &[u8] = b"-";
 
+/// A static name for the kind of a database error, for the log: never its message, which can carry a value.
+fn error_kind(e: &sqlx::Error) -> &'static str {
+    match e {
+        sqlx::Error::Configuration(_) => "Configuration",
+        sqlx::Error::Database(_) => "Database",
+        sqlx::Error::Io(_) => "Io",
+        sqlx::Error::Tls(_) => "Tls",
+        sqlx::Error::Protocol(_) => "Protocol",
+        sqlx::Error::RowNotFound => "RowNotFound",
+        sqlx::Error::ColumnDecode { .. } | sqlx::Error::Decode(_) => "Decode",
+        sqlx::Error::Encode(_) => "Encode",
+        sqlx::Error::PoolTimedOut => "PoolTimedOut",
+        sqlx::Error::PoolClosed => "PoolClosed",
+        sqlx::Error::WorkerCrashed => "WorkerCrashed",
+        sqlx::Error::Migrate(_) => "Migrate",
+        _ => "Other",
+    }
+}
+
+fn migrate_error_kind(e: &sqlx::migrate::MigrateError) -> &'static str {
+    use sqlx::migrate::MigrateError as M;
+    match e {
+        M::Execute(e) | M::ExecuteMigration(e, _) => error_kind(e),
+        M::VersionMissing(_) | M::VersionMismatch(_) | M::VersionNotPresent(_) | M::VersionTooOld(..) | M::VersionTooNew(..) => "MigrationVersion",
+        M::Dirty(_) => "MigrationDirty",
+        _ => "Migration",
+    }
+}
+
 /// What the log may say about a database error: never its message, which can carry a value.
 fn unavailable(e: sqlx::Error) -> RepoError {
     let kind = match &e {
         sqlx::Error::Database(d) => d.code().map(|c| c.to_string()).unwrap_or_else(|| "database".into()),
-        other => format!("{:?}", std::mem::discriminant(other)),
+        other => error_kind(other).into(),
     };
     tracing::error!(kind, "database error");
     RepoError::Unavailable
@@ -286,5 +315,19 @@ impl Repo for PgRepo {
 
     async fn delete_expired_sessions(&self, now: OffsetDateTime) -> Result<u64, RepoError> {
         sqlx::query("delete from sessions where expires_at <= $1").bind(now).execute(&self.pool).await.map(|d| d.rows_affected()).map_err(unavailable)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn errors_are_logged_by_a_static_name() {
+        assert_eq!(error_kind(&sqlx::Error::PoolTimedOut), "PoolTimedOut");
+        assert_eq!(error_kind(&sqlx::Error::Io(std::io::Error::other("secret"))), "Io");
+        assert_eq!(error_kind(&sqlx::Error::RowNotFound), "RowNotFound");
+        assert_eq!(migrate_error_kind(&sqlx::migrate::MigrateError::Execute(sqlx::Error::PoolTimedOut)), "PoolTimedOut");
+        assert_eq!(migrate_error_kind(&sqlx::migrate::MigrateError::Dirty(3)), "MigrationDirty");
     }
 }
