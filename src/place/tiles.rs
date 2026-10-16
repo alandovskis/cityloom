@@ -26,8 +26,12 @@ pub const INDEX_URL: &str = "data/metro/index.json";
 ///
 /// 3: a road with no name is left out.
 ///
+/// 4: a buffer between lanes is planting only when its type says planter or grass; any other (a curb, paint, posts,
+/// a barrier, a shoulder) is a median; a bike track that runs both ways (a separate cycleway that is not one-way, or
+/// `cycleway:<side>:oneway=no`) is one two-way bike lane.
+///
 /// The e2e test `world.spec.ts` names the version in what it expects to be kept: raise it there too.
-pub const IMPORTER_VERSION: u32 = 3;
+pub const IMPORTER_VERSION: u32 = 4;
 
 /// A tile's checksum as an area made from it is kept: with the version of the importer that read it.
 pub fn with_importer(checksum: &str) -> String {

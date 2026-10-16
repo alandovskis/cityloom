@@ -51,7 +51,7 @@ test("an area is made again when the checksum of its tile changes, and not other
   });
   const key = "cityloom-checksum:45.5261,-73.5978";
   // what is kept is the tile's checksum and the version of the importer (`IMPORTER_VERSION` in src/place/tiles.rs)
-  const IMPORTER = "+i3";
+  const IMPORTER = "+i4";
   const stored = () => page.evaluate((k) => localStorage.getItem(k), key);
 
   await page.goto("/map.html");

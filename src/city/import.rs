@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use osm_network::{Control, Lane, LaneKind, Network, Way};
+use osm_network::{BufferType, Control, Lane, LaneKind, Network, Way};
 
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
@@ -23,30 +23,38 @@ fn class_of(highway: &str) -> StreetClass {
     }
 }
 
-/// The catalogue kind that stands for a kind of lane. A buffer is planting and anything else (a turn lane, a
-/// rail track) is a median: what is left of the road when no lane uses it.
-fn kind_of(kind: LaneKind) -> &'static str {
-    match kind {
+/// The catalogue kind that stands for a lane. A buffer is planting only when its type says it is planted or grass
+/// (`Planters`, `Verge`); a curb, paint, posts, a barrier, a shoulder or a buffer of no known type is a median, the
+/// neutral separator, and so is anything else (a turn lane, a rail track): what is left of the road when no lane uses
+/// it. A shoulder is not the catalogue's `shoulder`: that kind is a motor kind, and osm2streets gives a lane
+/// anything may use that name, a shared path's included, which would make a footpath a street for cars.
+fn kind_of(lane: &Lane) -> &'static str {
+    match lane.kind {
         LaneKind::Driving => "travel",
         LaneKind::Parking => "parking",
         LaneKind::Sidewalk => "sidewalk",
         LaneKind::Bike => "bike",
         LaneKind::Bus => "bus",
-        LaneKind::Buffer => "planting",
-        LaneKind::Other => "median",
+        LaneKind::Buffer if matches!(lane.buffer_type, Some(BufferType::Planters | BufferType::Verge)) => "planting",
+        LaneKind::Buffer | LaneKind::Other => "median",
     }
 }
 
 fn piece(lane: &Lane) -> Piece {
     let kind = |id| kind_index(id).expect("the catalogue has every kind of lane");
-    let (mut base, mut variants) = (kind(kind_of(lane.kind)), Vec::new());
+    let (mut base, mut variants) = (kind(kind_of(lane)), Vec::new());
     // A bus lane at some hours is parking the rest of the time
     if let Some(windows) = lane.hours.as_deref().filter(|_| lane.kind == LaneKind::Bus).and_then(windows_of) {
         base = kind("parking");
         let days = days_of(lane.hours.as_deref().unwrap_or_default());
         variants = windows.into_iter().map(|(from_min, to_min)| Window { kind: kind("bus"), from_min, to_min, days: days.clone() }).collect();
     }
-    Piece { kind: base, width_mm: (lane.width_m * 1000.0).round() as i32, direction: Some(usize::from(lane.way == Way::Backward)), variants }
+    Piece {
+        kind: base,
+        width_mm: (lane.width_m * 1000.0).round() as i32,
+        direction: (lane.way != Way::Both || lane.kind != LaneKind::Bike).then_some(usize::from(lane.way == Way::Backward)),
+        variants,
+    }
 }
 
 const SLOT_MIN: i32 = 15;
@@ -203,7 +211,7 @@ impl Layout {
 
 #[cfg(test)]
 mod tests {
-    use osm_network::{Control, Lane, LaneKind, Node, Road, Way};
+    use osm_network::{BufferType, Control, Lane, LaneKind, Node, Road, Way};
 
     use super::*;
     use crate::junction::model::CONTROLS;
@@ -213,7 +221,7 @@ mod tests {
     use crate::shared::testing::en;
 
     fn lane(kind: LaneKind, way: Way, width_m: f64) -> Lane {
-        Lane { kind, way, width_m, hours: None }
+        Lane { kind, way, width_m, buffer_type: None, hours: None }
     }
 
     fn bus_lane(hours: Option<&str>) -> Lane {
@@ -222,6 +230,53 @@ mod tests {
 
     fn windows(p: &Piece) -> Vec<(&'static str, i32, i32)> {
         p.variants.iter().map(|w| (KINDS[w.kind].id, w.from_min, w.to_min)).collect()
+    }
+
+    fn buffer(buffer_type: Option<BufferType>) -> Lane {
+        Lane { buffer_type, ..lane(LaneKind::Buffer, Way::Forward, 0.6) }
+    }
+
+    fn kind_id(lane: &Lane) -> &'static str {
+        KINDS[piece(lane).kind].id
+    }
+
+    #[test]
+    fn a_two_way_bike_lane_has_no_direction_and_a_one_way_one_keeps_it() {
+        assert_eq!(piece(&lane(LaneKind::Bike, Way::Both, 3.0)).direction, None);
+        assert_eq!(piece(&lane(LaneKind::Bike, Way::Forward, 1.5)).direction, Some(0));
+        assert_eq!(piece(&lane(LaneKind::Bike, Way::Backward, 1.5)).direction, Some(1));
+        // only a bike lane can run both ways: a driving lane always has a direction
+        assert_eq!(piece(&lane(LaneKind::Driving, Way::Both, 3.0)).direction, Some(0));
+    }
+
+    #[test]
+    fn a_buffer_is_planting_only_when_it_is_planted_or_grass() {
+        for t in [BufferType::Planters, BufferType::Verge] {
+            assert_eq!(kind_id(&buffer(Some(t))), "planting", "{t:?}");
+        }
+    }
+
+    #[test]
+    fn any_other_buffer_and_one_of_no_known_type_is_a_median() {
+        let others = [None, Some(BufferType::Curb), Some(BufferType::Stripes), Some(BufferType::FlexPosts), Some(BufferType::JerseyBarrier)];
+        for t in others {
+            assert_eq!(kind_id(&buffer(t)), "median", "{t:?}");
+        }
+    }
+
+    #[test]
+    fn the_other_lanes_keep_their_kinds() {
+        let kinds = [
+            (LaneKind::Driving, "travel"),
+            (LaneKind::Parking, "parking"),
+            (LaneKind::Sidewalk, "sidewalk"),
+            (LaneKind::Bike, "bike"),
+            (LaneKind::Bus, "bus"),
+            (LaneKind::Other, "median"),
+        ];
+        for (kind, id) in kinds {
+            assert_eq!(kind_id(&lane(kind, Way::Forward, 3.0)), id, "{kind:?}");
+        }
     }
 
     #[test]

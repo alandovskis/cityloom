@@ -47,8 +47,25 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
     for e in &v.edges {
         assert!(city.street_editor(e.uid, 0).is_some(), "{:?} cannot be opened", e.name());
     }
+    // only a bike lane runs both ways. (The extract holds the roads only, no `highway=cycleway` ways and no
+    // `oneway=no` on a side, so it has no two-way track to count; `tests/import.rs` pins them on fixtures.)
+    assert!(net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.way == osm_import::Way::Both).all(|l| l.kind == osm_import::LaneKind::Bike));
     // the streets with a median in them
     assert!(net.roads.iter().any(|r| r.lanes.iter().any(|l| l.kind == osm_import::LaneKind::Other)), "a divided street is merged");
+}
+
+#[test]
+fn no_street_of_the_montreal_extract_has_planting_the_data_does_not_show() {
+    // Every buffer of the extract is a curb that osm2streets inferred; none is a planter or a verge.
+    let net = import(PLATEAU).expect("the extract reads");
+    let buffers = net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.kind == osm_import::LaneKind::Buffer).count();
+    assert!(buffers > 100, "{buffers} buffers");
+    let city = City::from_network(&net, "Plateau");
+    let planting = cityloom_editor::shared::catalogue::kind_index("planting").unwrap();
+    for e in &city.view(0).edges {
+        let view = city.street_editor(e.uid, 0).unwrap().view();
+        assert!(view.segments.iter().all(|s| s.kind != planting), "{:?} has planting", e.name());
+    }
 }
 
 // ---- edits kept on real data -------------------------------------------------------------------------------------

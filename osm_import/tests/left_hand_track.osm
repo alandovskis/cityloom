@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+<node id="1" lat="51.5000" lon="-0.1000"></node>
+<node id="2" lat="51.5000" lon="-0.0980"></node>
+<way id="10"><nd ref="1"/><nd ref="2"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="name" v="left hand"/></way>
+<node id="3" lat="51.50007" lon="-0.0997"></node>
+<node id="4" lat="51.50007" lon="-0.0983"></node>
+<way id="11"><nd ref="3"/><nd ref="4"/><tag k="highway" v="cycleway"/><tag k="oneway" v="no"/></way>
+</osm>
