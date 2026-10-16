@@ -637,6 +637,18 @@ mod tests {
     }
 
     #[test]
+    fn a_buffer_is_drawn_in_the_section_as_a_grey_strip_with_a_low_block_for_a_symbol_and_nothing_green() {
+        let mut e = Editor::new(0);
+        e.add(crate::shared::catalogue::kind_index("buffer").unwrap(), 3);
+        let s = svg(&e);
+        assert_eq!(count(&s.markup, "class=\"seg\""), 7);
+        assert_eq!(count(&s.markup, "obj k-buffer"), 1, "the design has one; today has none");
+        assert_eq!(count(&s.markup, "f-buffer"), 1);
+        assert_eq!(count(&s.markup, "k-median"), 0, "nothing green");
+        assert!(!s.markup.contains("NaN"));
+    }
+
+    #[test]
     fn the_street_as_it_is_today_is_drawn_above_the_design() {
         let s = svg(&Editor::new(0));
         assert!(s.markup.contains(">Today<") && s.markup.contains(">Your design<"));

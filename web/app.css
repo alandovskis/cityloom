@@ -68,6 +68,7 @@
   --k-busstation: light-dark(#eeb8ab, #6d3832);
   --k-bench: light-dark(#d8c8ad, #6e5d48);
   --k-terrace: light-dark(#f1dca0, #7d6a30);
+  --k-buffer: light-dark(#bdb8ae, #4d4a45);
   --k-streetlamp: light-dark(#d9dcc0, #5d6148);
 }
 
@@ -933,6 +934,9 @@ a.btn {
 #map .m-k-median {
   stroke: var(--k-median);
 }
+#map .m-k-buffer {
+  stroke: var(--k-buffer);
+}
 #map .m-k-loading {
   stroke: var(--k-loading);
 }
@@ -1159,6 +1163,9 @@ a.btn {
 }
 .k-loading {
   fill: var(--k-loading);
+}
+.k-buffer {
+  fill: var(--k-buffer);
 }
 .k-shoulder {
   fill: var(--k-shoulder);

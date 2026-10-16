@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, openStreet, test } from "./fixtures";
+import { expect, live, openStreet, PRESSABLE_PX, pressablePiece, test } from "./fixtures";
 
 const selectFirstPiece = async (page: Page) => {
   await page.locator("#wrap").focus();
@@ -61,9 +61,28 @@ test.describe("the street editor on a street of the city", () => {
     await expect(page.locator("#inspector .insp-empty")).toBeVisible();
   });
 
+  test("a buffer too narrow to press is selected with the arrow keys and announced", async ({ page }) => {
+    // a buffer as narrow as an imported curb's 150 mm: added, then narrowed with the keys
+    await page.locator("#add-btn").click();
+    await page.locator(".add-item", { hasText: "Buffer" }).click();
+    await page.locator("#wrap").focus();
+    for (let k = 0; k < 6; k++) await page.keyboard.press("-");
+    const widths = await page
+      .locator('#drawing [data-role="seg"]')
+      .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+    const narrow = widths.length - 1; // a new piece goes at the end
+    expect(widths[narrow], "too narrow to press").toBeLessThan(PRESSABLE_PX);
+    await page.keyboard.press("Escape");
+    await page.locator("#wrap").focus();
+    for (let k = 0; k <= narrow; k++) await page.keyboard.press("ArrowRight");
+    await expect(live(page)).toHaveText(new RegExp(`^Buffer, 0\\.15 m, ${narrow + 1} of ${narrow + 1}$`));
+    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
+  });
+
   test("a piece is pressed to select it", async ({ page }) => {
-    await page.locator('#drawing [data-role="seg"]').nth(1).click();
-    await expect(live(page)).toHaveText(/, 2 of \d+$/);
+    const i = await pressablePiece(page);
+    await page.locator('#drawing [data-role="seg"]').nth(i).click();
+    await expect(live(page)).toHaveText(new RegExp(`, ${i + 1} of \\d+$`));
   });
 
   test("making a piece wider says that the street is too wide, and narrower makes room again", async ({ page }) => {

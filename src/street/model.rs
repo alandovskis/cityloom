@@ -390,6 +390,9 @@ struct State {
     /// them so that undo restores both.
     class: StreetClass,
     class_before: Option<StreetClass>,
+    /// The room the street has as of this state. An edit never changes it; it differs between states only for a street
+    /// taken by the width it had under an earlier importer, which Start over returns to the width it has now.
+    row_mm: i32,
 }
 
 pub struct Editor {
@@ -401,7 +404,6 @@ pub struct Editor {
     region: usize,
     /// The time of day the sheet shows, in minutes. Also a setting, not history.
     time_min: i32,
-    row_mm: i32,
     states: Vec<State>,
     cursor: usize,
     next_uid: u32,
@@ -458,7 +460,7 @@ impl Editor {
             class: self.class(),
             class_before: self.class_before(),
             name: self.street_name.clone(),
-            row_mm: self.row_mm,
+            row_mm: self.row_mm(),
             side: REGIONS[self.region].drive_side,
             segments: self.current().clone(),
             next_uid: self.next_uid,
@@ -478,18 +480,28 @@ impl Editor {
             source: now.source.clone(),
             region,
             time_min: 12 * 60,
-            row_mm: now.row_mm,
-            states: vec![State { label: Said::new("street-today"), segments: today.segments, class: today.class, class_before: today.class_before }],
+            states: vec![State {
+                label: Said::new("street-today"),
+                segments: today.segments,
+                class: today.class,
+                class_before: today.class_before,
+                row_mm: today.row_mm,
+            }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
             selected: None,
             gesture: None,
             pending_label: None,
         };
-        if now.segments != e.states[0].segments {
+        if now.segments != e.states[0].segments || now.row_mm != e.states[0].row_mm {
             e.push(Said::new("rev-earlier"), now.segments);
+            e.states[1].row_mm = now.row_mm;
         }
         e
+    }
+
+    fn row_mm(&self) -> i32 {
+        self.states[self.cursor].row_mm
     }
 
     fn current(&self) -> &Vec<Segment> {
@@ -524,7 +536,8 @@ impl Editor {
     fn push(&mut self, label: Said, segments: Vec<Segment>) {
         let motor = segments.iter().any(Segment::has_motor);
         let (class, class_before) = settled_class(motor, self.class(), self.class_before());
-        self.push_state(State { label, segments, class, class_before });
+        let row_mm = self.row_mm();
+        self.push_state(State { label, segments, class, class_before, row_mm });
     }
 
     fn push_state(&mut self, state: State) {
@@ -582,7 +595,7 @@ impl Editor {
             return 0;
         }
         let k = &KINDS[kind];
-        let remaining = self.row_mm - total(self.current());
+        let remaining = self.row_mm() - total(self.current());
         let width = if remaining >= k.min_mm { (remaining / SNAP_MM * SNAP_MM).clamp(k.min_mm, k.default_mm) } else { k.default_mm };
         let uid = self.new_uid();
         let seg = Segment::new(uid, kind, width);
@@ -923,7 +936,8 @@ impl Editor {
         };
         let existing = self.current().clone();
         let mut next_uid = self.next_uid;
-        let Some(arranged) = measures::arrange(code, &existing, self.row_mm, REGIONS[self.region].drive_side, self.class().is_freeway(), &mut next_uid) else {
+        let Some(arranged) = measures::arrange(code, &existing, self.row_mm(), REGIONS[self.region].drive_side, self.class().is_freeway(), &mut next_uid)
+        else {
             return false;
         };
         let ok = self.edit(Said::new("rev-measure").with("code", Arg::Text(def.code.to_string())).with("name", Arg::Measure(def.code)), |segs| {
@@ -1046,7 +1060,7 @@ impl Editor {
     pub fn reset(&mut self) -> bool {
         self.cancel_gesture();
         let first = self.states[0].clone();
-        if first.segments == *self.current() {
+        if first.segments == *self.current() && first.row_mm == self.row_mm() {
             return false;
         }
         self.push_state(State { label: Said::new("rev-reset"), ..first });
@@ -1113,16 +1127,16 @@ impl Editor {
             class: self.class(),
             has_motor: segs.iter().any(Segment::has_motor),
             region: REGIONS[self.region].id,
-            row_mm: self.row_mm,
+            row_mm: self.row_mm(),
             total_mm,
-            delta_mm: total_mm - self.row_mm,
+            delta_mm: total_mm - self.row_mm(),
             time_min: self.time_min,
             segments: self.seg_views(segs),
             existing: self.seg_views(existing),
             existing_total_mm: total(existing),
             selected: self.selected,
             outcomes: outcomes(&now, &existing_now),
-            checks: checks(&now, self.row_mm, REGIONS[self.region].drive_side, self.class().is_freeway(), self.class() == StreetClass::Pedestrian),
+            checks: checks(&now, self.row_mm(), REGIONS[self.region].drive_side, self.class().is_freeway(), self.class() == StreetClass::Pedestrian),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
@@ -1139,7 +1153,7 @@ impl Editor {
             .into_iter()
             .zip(measures::DEFS.iter())
             .map(|(f, d)| {
-                let can_apply = measures::arrange(d.code, raw, self.row_mm, side, freeway, &mut self.next_uid.clone()).is_some();
+                let can_apply = measures::arrange(d.code, raw, self.row_mm(), side, freeway, &mut self.next_uid.clone()).is_some();
                 let unavailable = (!can_apply).then(|| match d.freeway {
                     Some(true) if !freeway => Said::new("unavailable-freeways-only"),
                     Some(false) if freeway => Said::new("unavailable-not-freeway"),
@@ -1198,8 +1212,10 @@ fn capacity(segs: &[Segment]) -> i32 {
 
 fn shares(segs: &[Segment]) -> Vec<Share> {
     let t = total(segs).max(1);
+    // the modes the width is shared out among, then what no mode owns (the buffers)
     Mode::ALL
         .iter()
+        .chain([&Mode::Neutral])
         .map(|m| {
             let mm: i32 = segs.iter().filter(|s| KINDS[s.kind].mode == *m).map(|s| s.width_mm).sum();
             Share { mode: *m, mm, pct: (mm as f64 * 100.0 / t as f64).round() as i32 }
@@ -1552,9 +1568,52 @@ mod tests {
         for id in ["travel", "parking", "loading", "bus", "shoulder"] {
             assert!(Segment::new(1, kind(id), 3000).has_motor(), "{id}");
         }
-        for id in ["bike", "sidewalk", "median"] {
+        for id in ["bike", "sidewalk", "median", "buffer"] {
             assert!(!Segment::new(1, kind(id), 2000).has_motor(), "{id}");
         }
+    }
+
+    #[test]
+    fn the_neutral_buffer_is_the_last_kind_so_saved_indices_hold_and_is_no_motor_roadway_or_green_piece() {
+        let buffer = kind("buffer");
+        assert_eq!(buffer, KINDS.len() - 1, "appended, so a stored kind index keeps its meaning");
+        assert_eq!(buffer, 17);
+        let k = &KINDS[buffer];
+        assert_eq!((k.mark, k.people_per_hour_per_m, k.direction), ("BF", 0, DirectionRule::None));
+        assert_eq!(k.mode, Mode::Neutral);
+        assert!(k.min_mm <= k.default_mm && k.default_mm <= k.max_mm);
+        assert!(k.materials.iter().all(|&m| ["concrete", "asphalt"].contains(&MATERIALS[m].id)));
+        assert!(!crate::shared::catalogue::is_motor(buffer) && !crate::shared::catalogue::is_roadway(buffer));
+        assert!(!PEDESTRIAN_KINDS.contains(&"buffer"));
+    }
+
+    #[test]
+    fn a_buffer_is_the_space_of_no_travel_mode_so_the_shares_of_the_modes_do_not_change_and_the_buffer_has_its_own() {
+        let share = |s: &Street| {
+            let v = Editor::from_street(s, s, 0).view();
+            v.outcomes.share.iter().map(|x| (x.mode, x.mm)).collect::<Vec<_>>()
+        };
+        let without = street_of(StreetClass::Local, &["sidewalk", "travel", "sidewalk"]);
+        let with = street_of(StreetClass::Local, &["sidewalk", "buffer", "travel", "sidewalk"]);
+        let (a, b) = (share(&without), share(&with));
+        assert_eq!(a[..Mode::ALL.len()], b[..Mode::ALL.len()], "no mode takes the buffer's width");
+        assert_eq!(a.last(), Some(&(Mode::Neutral, 0)));
+        assert_eq!(b.last(), Some(&(Mode::Neutral, KINDS[kind("buffer")].default_mm)), "and the buffer is counted on its own");
+        assert_eq!(KINDS[kind("buffer")].mode, Mode::Neutral);
+        assert!(!Mode::ALL.contains(&Mode::Neutral));
+        let v = Editor::from_street(&with, &with, 0).view();
+        let pct: i32 = v.outcomes.share.iter().map(|s| s.pct).sum();
+        assert!((99..=101).contains(&pct), "the shares sum to the street: {pct}");
+    }
+
+    #[test]
+    fn a_street_of_sidewalks_and_a_buffer_is_pedestrian_and_a_motor_piece_beside_it_is_not() {
+        let walk = street_of(StreetClass::Local, &["sidewalk", "buffer", "sidewalk"]);
+        assert_eq!(walk.class, StreetClass::Pedestrian);
+        let mut e = Editor::from_street(&walk, &walk, 0);
+        assert_eq!(e.view().segments[1].curb, None);
+        e.add(kind("travel"), 2);
+        assert_eq!(e.view().class, StreetClass::Local);
     }
 
     #[test]
@@ -2479,6 +2538,7 @@ mod tests {
             (&[("sidewalk", 2000), ("sidewalk", 1500)], true),
             (&[("sidewalk", 2900)], false),
             (&[("sidewalk", 2000), ("bench", 700), ("sidewalk", 2000)], false),
+            (&[("sidewalk", 2000), ("buffer", 600), ("sidewalk", 2000)], false),
             (&[("sidewalk", 2000), ("planting", 1800), ("sidewalk", 2000)], false),
             (&[("terrace", 4000), ("pole", 600)], false),
         ] {

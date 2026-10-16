@@ -13,9 +13,12 @@ pub enum Mode {
     Transit,
     Vehicle,
     Green,
+    /// Space no travel mode owns, between pieces: the buffer. It is not in `ALL`, so no share counts it.
+    Neutral,
 }
 
 impl Mode {
+    /// The modes the width is shared out among, in the order the table lists them.
     pub const ALL: [Mode; 5] = [Mode::Foot, Mode::Bike, Mode::Transit, Mode::Vehicle, Mode::Green];
 }
 
@@ -148,7 +151,7 @@ pub const CURBS: [Material; 7] = [
 /// A new sidewalk or bike lane gets this curb (concrete).
 pub const DEFAULT_CURB: usize = 1;
 
-pub const KINDS: [Kind; 17] = [
+pub const KINDS: [Kind; 18] = [
     Kind {
         id: "sidewalk",
         mark: "SW",
@@ -387,6 +390,20 @@ pub const KINDS: [Kind; 17] = [
         has_curb: false,
         curbs: &[],
     },
+    Kind {
+        id: "buffer",
+        mark: "BF",
+        mode: Mode::Neutral,
+        default_mm: 600,
+        min_mm: 150,
+        max_mm: 3000,
+        people_per_hour_per_m: 0,
+        materials: &[1, 0],
+        direction: DirectionRule::None,
+        shares_road: false,
+        has_curb: false,
+        curbs: &[],
+    },
 ];
 
 pub fn kind_index(id: &str) -> Option<usize> {
@@ -414,9 +431,9 @@ pub fn is_motor(kind: usize) -> bool {
 /// What the space of a street's motor pieces can become when the street is made pedestrian, by kind id.
 pub const PEDESTRIAN_KINDS: [&str; 3] = ["sidewalk", "planting", "terrace"];
 
-/// Whether a kind of piece is part of the roadway, as opposed to the footway or the green.
+/// Whether a kind of piece is part of the roadway, as opposed to the footway, the green or the buffer between pieces.
 pub fn is_roadway(kind: usize) -> bool {
-    !matches!(KINDS[kind].mode, Mode::Foot | Mode::Green)
+    !matches!(KINDS[kind].mode, Mode::Foot | Mode::Green | Mode::Neutral)
 }
 
 /// The groups the add menu sorts the kinds into, in its order. A group's name is the message `group-<id>`.
@@ -471,6 +488,7 @@ pub fn mode_key(mode: Mode) -> &'static str {
         Mode::Transit => "mode-transit",
         Mode::Vehicle => "mode-vehicle",
         Mode::Green => "mode-green",
+        Mode::Neutral => "mode-neutral",
     }
 }
 
@@ -492,7 +510,7 @@ mod tests {
             for k in KINDS.iter() {
                 i.tr_now(&mark_key(k.id), &Args::new());
             }
-            for m in Mode::ALL {
+            for m in Mode::ALL.into_iter().chain([Mode::Neutral]) {
                 i.tr_now(mode_key(m), &Args::new());
             }
             for g in GROUP_IDS {
@@ -541,7 +559,7 @@ mod tests {
         assert_eq!(ids(is_motor), ["travel", "bus", "parking", "loading", "shoulder"], "in the order of KINDS");
         assert_eq!(MOTOR_KINDS, ["travel", "parking", "loading", "bus", "shoulder"]);
         assert!(CAR_KINDS.iter().all(|id| MOTOR_KINDS.contains(id)), "what a car-free area forbids is motor too");
-        for id in ["bike", "sidewalk", "median", "bikerack", "busshelter", "busstation"] {
+        for id in ["bike", "sidewalk", "median", "buffer", "bikerack", "busshelter", "busstation"] {
             assert!(!is_car(kind_index(id).unwrap()) && !is_motor(kind_index(id).unwrap()), "{id}");
         }
         for id in ["bus", "shoulder"] {

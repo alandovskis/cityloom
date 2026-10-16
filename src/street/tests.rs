@@ -333,8 +333,8 @@ fn the_add_menu_is_closed_and_lists_every_piece_in_seven_groups() {
     let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
     assert!(h.contains("aria-expanded=\"false\"") && h.contains("id=\"add-menu\" hidden class=\"menu add-menu\""));
     assert!(button_tag(&h, "add-btn").contains("aria-haspopup"));
-    assert_eq!(count(&h, "class=\"add-item\""), 17);
-    assert_eq!(count(&h, "class=\"add-icon\""), 17);
+    assert_eq!(count(&h, "class=\"add-item\""), 18);
+    assert_eq!(count(&h, "class=\"add-icon\""), 18);
     assert!(h.contains("viewBox=\"0 0 200 160\"") && !h.contains("class=\"swatch\""));
     for (g, group) in ["Walking", "Greenery", "Cycling", "Transit", "Roadway", "Furniture", "Utilities"].into_iter().enumerate() {
         assert!(h.contains(&format!("id=\"add-g-{g}\" class=\"add-group-h\">{group}<")), "{group}");
@@ -388,6 +388,20 @@ fn the_space_table_compares_each_use_today_and_in_the_design() {
     assert!(h.contains("class=\"down\">\u{2212}3.3<") && h.contains("class=\"zero\">0<"));
     s.set_units(Units::Feet);
     assert!(street_html(|| view! { <notes::Space vm=s.clone()/> }).contains("in feet"));
+}
+
+#[test]
+fn the_space_table_has_a_buffer_row_only_on_a_street_that_has_a_buffer() {
+    let s = street_shared(0);
+    let none = street_html(|| view! { <notes::Space vm=s.clone()/> });
+    assert!(!none.contains("mc-neutral") && !none.contains("Buffer"));
+    s.edit(|e| {
+        e.add(crate::shared::catalogue::kind_index("buffer").unwrap(), 3);
+        true
+    });
+    let h = street_html(|| view! { <notes::Space vm=s.clone()/> });
+    assert!(h.contains("mc-neutral") && h.contains("Buffer"), "{h}");
+    assert!(h.contains("class=\"up\">+0.6<"), "the design has 0.6 m more of it than today");
 }
 
 #[test]

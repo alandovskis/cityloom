@@ -55,6 +55,54 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
 }
 
 #[test]
+fn no_street_of_the_montreal_extract_has_a_median_that_came_from_a_buffer() {
+    // Every buffer of the extract is a curb that osm2streets inferred. One beside a bike lane is that lane's own
+    // curb; any other is the neutral buffer. A median is only what lies between two merged carriageways.
+    let net = import(PLATEAU).expect("the extract reads");
+    let city = City::from_network(&net, "Plateau");
+    let kind = |id| cityloom_editor::shared::catalogue::kind_index(id).unwrap();
+    let (median, buffer) = (kind("median"), kind("buffer"));
+    let (mut medians, mut buffers) = (0, 0);
+    for e in &city.view(0).edges {
+        let view = city.street_editor(e.uid, 0).unwrap().view();
+        medians += view.segments.iter().filter(|s| s.kind == median).count();
+        buffers += view.segments.iter().filter(|s| s.kind == buffer).count();
+    }
+    let others = net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.kind == osm_import::LaneKind::Other).count();
+    let curbs = net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.kind == osm_import::LaneKind::Buffer).count();
+    assert_eq!(medians, others, "a median is a lane of the road that no lane uses, and nothing else");
+    assert!(buffers > 0 && buffers <= curbs, "{buffers} buffers of {curbs} curbs: those beside a bike lane or a sidewalk are its own");
+}
+
+#[test]
+fn every_street_of_the_montreal_extract_that_changed_width_with_the_buffers_is_found_by_the_width_it_had() {
+    // What importer version 4 made of the extract: every buffer that is not planted a lane of its own, a median.
+    use osm_import::{BufferType, LaneKind};
+    let net = import(PLATEAU).expect("the extract reads");
+    let mut old = net.clone();
+    for l in old.roads.iter_mut().flat_map(|r| r.lanes.iter_mut()) {
+        if l.kind == LaneKind::Buffer && !matches!(l.buffer_type, Some(BufferType::Planters | BufferType::Verge)) {
+            (l.kind, l.buffer_type) = (LaneKind::Other, None);
+        }
+    }
+    let (before, mut now) = (City::from_network(&old, "Plateau"), City::from_network(&net, "Plateau"));
+    let edges = before.view(0).edges;
+    assert_eq!(edges.len(), now.view(0).edges.len());
+    let (mut changed, mut found) = (0, 0);
+    for e in &edges {
+        let saved = before.street_editor(e.uid, 0).unwrap().snapshot();
+        if now.street_editor(e.uid, 0).unwrap().snapshot().row_mm == saved.row_mm {
+            continue;
+        }
+        changed += 1;
+        found += usize::from(now.keep_street(e.uid, saved));
+    }
+    println!("{found} of {changed} streets that changed width are found by the width they had");
+    assert!(changed > 100, "{changed}");
+    assert_eq!(found, changed);
+}
+
+#[test]
 fn no_street_of_the_montreal_extract_has_planting_the_data_does_not_show() {
     // Every buffer of the extract is a curb that osm2streets inferred; none is a planter or a verge.
     let net = import(PLATEAU).expect("the extract reads");

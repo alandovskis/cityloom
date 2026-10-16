@@ -90,7 +90,6 @@ impl Editor {
             source: Vec::new(),
             region: 0,
             time_min: 12 * 60,
-            row_mm: 0,
             states: Vec::new(),
             cursor: 0,
             next_uid: 1,
@@ -106,7 +105,6 @@ impl Editor {
         let sample = sample.min(SAMPLES.len() - 1);
         let s = &SAMPLES[sample];
         self.street_name = Some(s.name.to_string());
-        self.row_mm = s.row_mm;
         self.next_uid = 1;
         let segments = s
             .segments
@@ -120,7 +118,7 @@ impl Editor {
         let mut segments = segments;
         // Driving lanes on the left half of the street run away, the rest toward.
         default_directions(&mut segments, REGIONS[self.region].drive_side);
-        self.states = vec![State { label: Said::new("street-today"), segments, class: s.class, class_before: None }];
+        self.states = vec![State { label: Said::new("street-today"), segments, class: s.class, class_before: None, row_mm: s.row_mm }];
         self.cursor = 0;
         self.selected = None;
         self.gesture = None;

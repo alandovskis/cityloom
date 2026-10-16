@@ -431,6 +431,26 @@ mod tests {
     }
 
     #[test]
+    fn an_edit_saved_against_a_street_of_another_width_is_kept_in_the_document_and_does_not_apply() {
+        // The importer's output changes a street's width (a curb that was a 600 mm median is a 150 mm buffer, or joins
+        // its lane): the edit saved against the old width stays in the document as an orphan, and the street is as made.
+        let (store, storage) = store();
+        let as_made = store.open().street_editor(1, 0).unwrap().snapshot();
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        let mut kept = document(&storage);
+        let key = kept.streets.keys().next().unwrap().clone();
+        kept.streets.get_mut(&key).unwrap().street.row_mm += 450;
+        storage.remember(EDITS_KEY, &kept.to_json());
+        assert_eq!(store.open().view(0).edited, 0, "the edit does not apply");
+        assert_eq!(store.open().street_editor(1, 0).unwrap().snapshot(), as_made, "the street is as made");
+        assert_eq!(document(&storage).streets.get(&key), kept.streets.get(&key), "and the record is kept as it was");
+        // another place's write leaves it where it is
+        assert!(store.write_street(2, narrowed(&store, 2)));
+        assert_eq!(document(&storage).streets.get(&key), kept.streets.get(&key));
+        assert_eq!(document(&storage).streets.len(), 2);
+    }
+
+    #[test]
     fn a_blocked_storage_says_the_change_was_not_kept() {
         let (store, storage) = store();
         let edited = narrowed(&store, 1);
@@ -470,6 +490,116 @@ mod tests {
                 points: vec![(0.0, 0.0), (100.0, 0.0)],
             }],
         }
+    }
+
+    /// `tiny_network` with a sidewalk and a 0.1 m curb on each side. `legacy` makes the curb as importer version 4 did:
+    /// a lane of its own that the catalogue makes a 600 mm median.
+    fn curbed_network(legacy: bool) -> Network {
+        use osm_network::{BufferType, Lane, LaneKind, Way};
+        let mut network = tiny_network();
+        let curb = Lane {
+            kind: if legacy { LaneKind::Other } else { LaneKind::Buffer },
+            way: Way::Forward,
+            width_m: 0.1,
+            buffer_type: (!legacy).then_some(BufferType::Curb),
+            hours: None,
+        };
+        let walk = Lane { kind: LaneKind::Sidewalk, way: Way::Forward, width_m: 2.0, buffer_type: None, hours: None };
+        let road = network.roads[0].lanes.clone();
+        network.roads[0].lanes = [vec![walk.clone(), curb.clone()], road, vec![curb, walk]].concat();
+        network
+    }
+
+    /// A store whose street was edited and kept as importer version 4 made it, then made again as it is now.
+    fn edited_before_and_imported_again() -> (CityStore, Rc<MemoryStorage>, u32, Street) {
+        let (ports, _, storage) = test_ports();
+        let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
+        assert!(area.keep_network(&curbed_network(true)));
+        let street = area.open().view(0).edges[0].uid;
+        let mut saved = area.open().street_editor(street, 0).unwrap().snapshot();
+        assert_eq!(saved.row_mm, 11_200, "the curbs were two 600 mm medians");
+        saved.segments[0].width_mm -= 100;
+        saved.segments[2].width_mm += 100;
+        assert!(area.write_street(street, saved.clone()));
+        assert!(area.keep_network(&curbed_network(false)));
+        (area, storage, street, saved)
+    }
+
+    #[test]
+    fn an_edit_saved_before_the_curbs_joined_their_pieces_applies_to_the_same_street_again_as_it_was_saved() {
+        let (area, _, street, saved) = edited_before_and_imported_again();
+        let city = area.open();
+        assert_eq!(city.view(0).edited, 1, "the record matches by the width the street had");
+        let editor = city.street_editor(street, 0).unwrap();
+        assert_eq!(editor.snapshot(), saved, "its pieces, the medians too, are shown as saved");
+        assert_eq!(editor.view().segments.iter().filter(|s| s.kind == crate::shared::catalogue::kind_index("median").unwrap()).count(), 2);
+    }
+
+    #[test]
+    fn a_record_that_matches_neither_the_width_the_street_has_nor_the_one_it_had_stays_an_orphan() {
+        let (area, storage, _, _) = edited_before_and_imported_again();
+        let mut kept = document(&storage);
+        let key = kept.streets.keys().next().unwrap().clone();
+        kept.streets.get_mut(&key).unwrap().street.row_mm += 50;
+        storage.remember(EDITS_KEY, &kept.to_json());
+        assert_eq!(area.open().view(0).edited, 0);
+        assert_eq!(document(&storage).streets.get(&key), kept.streets.get(&key), "and it is kept as it was");
+    }
+
+    #[test]
+    fn a_street_whose_width_did_not_change_takes_its_edit_by_that_width_as_before() {
+        let (ports, _, _) = test_ports();
+        let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
+        assert!(area.keep_network(&tiny_network()));
+        let (street, edited) = shifted_street(&area, 100);
+        assert!(area.write_street(street, edited.clone()));
+        assert!(area.keep_network(&tiny_network()));
+        assert_eq!(area.open().street_editor(street, 0).unwrap().snapshot(), edited);
+        // a width that is neither is no match
+        let mut wrong = edited;
+        wrong.row_mm += 1;
+        assert!(!area.write_street(street, wrong));
+    }
+
+    #[test]
+    fn a_street_taken_by_the_width_it_had_keeps_it_so_its_pieces_and_its_width_agree_and_no_check_fails() {
+        let (area, _, street, _) = edited_before_and_imported_again();
+        let v = area.open().street_editor(street, 0).unwrap().view();
+        assert_eq!(v.row_mm, 11_200);
+        assert!(v.checks.iter().find(|c| c.id == "fits").unwrap().ok, "the street is as wide as its pieces");
+        assert_eq!(v.total_mm, v.row_mm);
+    }
+
+    #[test]
+    fn after_a_write_the_record_still_carries_the_width_it_had_and_matches_the_next_load() {
+        let (area, storage, street, saved) = edited_before_and_imported_again();
+        let mut again = area.open().street_editor(street, 0).unwrap().snapshot();
+        again.segments[0].width_mm += 50;
+        again.segments[2].width_mm -= 50;
+        assert!(area.write_street(street, again.clone()), "a street saved at the width it had is taken");
+        let record = document(&storage).streets.values().next().unwrap().street.clone();
+        assert_eq!(record.row_mm, 11_200, "the width it had");
+        assert_eq!(record.segments, again.segments, "its pieces as the user left them");
+        assert_ne!(record.segments, saved.segments);
+        assert!(area.keep_network(&curbed_network(false)), "imported again");
+        let city = area.open();
+        assert_eq!(city.view(0).edited, 1, "it is found by the legacy width at every import");
+        let editor = city.street_editor(street, 0).unwrap();
+        assert_eq!(editor.snapshot().segments, again.segments);
+        assert!(editor.view().checks.iter().find(|c| c.id == "fits").unwrap().ok);
+    }
+
+    #[test]
+    fn start_over_on_a_street_taken_by_the_width_it_had_gives_the_current_import_and_its_width() {
+        let (area, storage, street, _) = edited_before_and_imported_again();
+        let mut editor = area.open().street_editor(street, 0).unwrap();
+        assert!(editor.reset());
+        let restarted = editor.snapshot();
+        assert_eq!(restarted.row_mm, 10_200, "the street as imported now");
+        assert!(area.write_street(street, restarted.clone()));
+        let record = document(&storage).streets.values().next().unwrap().street.clone();
+        assert_eq!(record.row_mm, 10_200);
+        assert_eq!(area.open().street_editor(street, 0).unwrap().snapshot(), restarted);
     }
 
     #[test]

@@ -588,6 +588,9 @@
 .sym .f-coat-1 {
   fill: var(--s-coat-1);
 }
+.sym .f-buffer {
+  fill: var(--k-buffer);
+}
 .sym .f-kerb {
   fill: var(--k-median);
 }
@@ -633,6 +636,9 @@ svg pattern circle {
 }
 .k-loading {
   fill: var(--k-loading);
+}
+.k-buffer {
+  fill: var(--k-buffer);
 }
 .k-shoulder {
   fill: var(--k-shoulder);
@@ -1131,6 +1137,7 @@ svg pattern circle {
 .swatch .k-parking,
 .swatch .k-median,
 .swatch .k-loading,
+.swatch .k-buffer,
 .swatch .k-shoulder,
 .swatch .k-bikerack,
 .swatch .k-bikeshare,
@@ -1202,6 +1209,10 @@ svg pattern circle {
 }
 .mc-vehicle {
   background: var(--k-travel);
+  box-shadow: inset 0 0 0 1px var(--field-line);
+}
+.mc-neutral {
+  background: var(--k-buffer);
   box-shadow: inset 0 0 0 1px var(--field-line);
 }
 .mc-green {

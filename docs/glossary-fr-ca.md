@@ -39,6 +39,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | Make pedestrian / Made pedestrian | Rendre piétonne / Rendue piétonne | The menu's choices are the kinds' own names (`Trottoir`, `Bande plantée`, `Terrasse de café`). |
 | Street page | carries traffic | accueille la circulation | Said of a street: `Rue Rachel accueille de nouveau la circulation.` |
 | Street page | Street lamp | Lampadaire |  |
+| Street page | Buffer | Zone tampon | The strip of curb, paint, posts or a barrier between pieces; the mark is `ZT` (`BF` in English). |
 | Modes and groups | Walking | Marche |  |
 | Modes and groups | Biking / Cycling | Vélo |  |
 | Modes and groups | Transit | Transport en commun |  |

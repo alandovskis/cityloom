@@ -14,7 +14,7 @@ use super::projection::{Projection, STRETCH_MM, drawn_mm, points};
 
 /// How high each kind of piece stands above the roadway, in millimetres. They are plausible, not
 /// surveyed, like the catalogue's rates. The furniture kinds stand on the sidewalk, so at its height.
-pub const HEIGHTS: [(&str, i32); 17] = [
+pub const HEIGHTS: [(&str, i32); 18] = [
     ("sidewalk", 150),
     ("planting", 150),
     ("bike", 0),
@@ -32,6 +32,7 @@ pub const HEIGHTS: [(&str, i32); 17] = [
     ("bench", 150),
     ("terrace", 150),
     ("streetlamp", 150),
+    ("buffer", 0),
 ];
 
 /// How high a piece of this kind stands, in millimetres.
