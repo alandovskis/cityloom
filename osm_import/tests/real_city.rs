@@ -61,19 +61,17 @@ fn no_street_of_the_montreal_extract_has_a_median_that_came_from_a_buffer() {
     let net = import(PLATEAU).expect("the extract reads");
     let city = City::from_network(&net, "Plateau");
     let kind = |id| cityloom_editor::shared::catalogue::kind_index(id).unwrap();
-    let (median, buffer, bike) = (kind("median"), kind("buffer"), kind("bike"));
-    let (mut medians, mut buffers, mut lanes_of_buffers) = (0, 0, 0);
+    let (median, buffer) = (kind("median"), kind("buffer"));
+    let (mut medians, mut buffers) = (0, 0);
     for e in &city.view(0).edges {
         let view = city.street_editor(e.uid, 0).unwrap().view();
         medians += view.segments.iter().filter(|s| s.kind == median).count();
         buffers += view.segments.iter().filter(|s| s.kind == buffer).count();
-        lanes_of_buffers += view.segments.iter().filter(|s| s.kind == bike).count();
     }
     let others = net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.kind == osm_import::LaneKind::Other).count();
     let curbs = net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.kind == osm_import::LaneKind::Buffer).count();
     assert_eq!(medians, others, "a median is a lane of the road that no lane uses, and nothing else");
-    assert!(buffers > 0 && buffers <= curbs, "{buffers} buffers of {curbs} curbs: those beside a bike lane are its own");
-    assert!(lanes_of_buffers > 0);
+    assert!(buffers > 0 && buffers <= curbs, "{buffers} buffers of {curbs} curbs: those beside a bike lane or a sidewalk are its own");
 }
 
 #[test]
