@@ -30,8 +30,9 @@ pub const INDEX_URL: &str = "data/metro/index.json";
 /// a barrier, a shoulder) is a median; a bike track that runs both ways (a separate cycleway that is not one-way, or
 /// `cycleway:<side>:oneway=no`) is one two-way bike lane.
 ///
-/// 5: a curb buffer between a bike lane or a sidewalk and a road lane is that piece's own curb (its width joins the piece's); any
-/// other buffer that is not planted (a curb, paint, posts, a barrier, a shoulder) is the neutral `buffer`, not a median.
+/// 5: a curb buffer between a bike lane or a sidewalk and a road lane is that piece's own curb (its width joins the
+/// piece's, up to its maximum; what is past it stays a buffer); any other buffer that is not planted (a curb, paint,
+/// posts, a barrier, a shoulder) is the neutral `buffer`, not a median.
 ///
 /// The e2e test `world.spec.ts` names the version in what it expects to be kept: raise it there too.
 pub const IMPORTER_VERSION: u32 = 5;

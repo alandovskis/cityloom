@@ -6,7 +6,7 @@ use osm_network::{BufferType, Control, Lane, LaneKind, Network, Way};
 
 use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
-use crate::shared::catalogue::{Side, StreetClass, kind_index};
+use crate::shared::catalogue::{KINDS, Side, StreetClass, kind_index};
 use crate::shared::provenance::OsmRef;
 use crate::street::model::{Piece, Street, Window};
 
@@ -25,7 +25,8 @@ fn class_of(highway: &str) -> StreetClass {
 
 /// The catalogue kind that stands for a lane. A buffer is planting only when its type says it is planted or grass
 /// (`Planters`, `Verge`); a curb, paint, posts, a barrier, a shoulder or a buffer of no known type is the neutral
-/// `buffer`, a strip of concrete that is not green (a curb between a bike lane or sidewalk and a road lane is that piece's own: see `pieces`).
+/// `buffer`, a strip of concrete that is not green (a curb between a bike lane or sidewalk and a road lane is that
+/// piece's own: see `pieces`).
 /// Anything else (a turn lane, a rail track, the median between two carriageways) is a median: what is left of the
 /// road when no lane uses it. A shoulder is not the catalogue's `shoulder`: that kind is a motor kind, and osm2streets
 /// gives a lane anything may use that name, a shared path's included, which would make a footpath a street for cars.
@@ -67,12 +68,25 @@ fn pieces(lanes: &[Lane]) -> Vec<Piece> {
             _ => None,
         }
     };
+    // what each owner can still take: its kind's maximum less its own width
+    let mut room: Vec<i32> = lanes
+        .iter()
+        .map(|l| has_own_curb(l).then(|| kind_index(kind_of(l)).map_or(0, |k| KINDS[k].max_mm) - (l.width_m * 1000.0).round() as i32).unwrap_or(0).max(0))
+        .collect();
     let mut merged: Vec<Lane> = lanes.to_vec();
     let mut gone = vec![false; lanes.len()];
     for i in (0..lanes.len()).filter(|&i| is_curb(&lanes[i])) {
-        if let Some(bike) = owner(i) {
-            merged[bike].width_m += lanes[i].width_m;
-            gone[i] = true;
+        if let Some(owner) = owner(i) {
+            let width_mm = (lanes[i].width_m * 1000.0).round() as i32;
+            let taken = width_mm.min(room[owner]);
+            room[owner] -= taken;
+            merged[owner].width_m += f64::from(taken) / 1000.0;
+            if taken == width_mm {
+                gone[i] = true;
+            } else {
+                // what is past the maximum stays beside the piece as a buffer, so the street keeps its width
+                merged[i].width_m = f64::from(width_mm - taken) / 1000.0;
+            }
         }
     }
     merged.iter().zip(&gone).filter(|(_, gone)| !**gone).map(|(l, _)| piece(l)).collect()
@@ -375,8 +389,21 @@ mod tests {
         assert_eq!(widths(&parked), [2600, 2400]);
         // the sidewalk's own maximum holds
         let wide = [lane(LaneKind::Sidewalk, Way::Forward, 7.8), curb(), driving()];
-        let street = Street::imported(StreetClass::Local, Side::Right, &pieces(&wide));
-        assert_eq!(street.segments[0].width_mm, 8000);
+        assert_eq!(widths(&wide), [8000, 400, 3300]);
+    }
+
+    #[test]
+    fn what_a_curb_adds_past_the_maximum_of_the_piece_it_joins_stays_as_a_buffer_so_no_width_is_lost() {
+        let wide_bike = [lane(LaneKind::Bike, Way::Forward, 2.8), Lane { width_m: 0.5, ..curb() }, driving()];
+        assert_eq!(ids(&wide_bike), ["bike", "buffer", "travel"]);
+        assert_eq!(widths(&wide_bike), [3000, 300, 3300]);
+        let street = Street::imported(StreetClass::Local, Side::Right, &pieces(&wide_bike));
+        assert_eq!(street.row_mm, 6600, "the street is as wide as its lanes");
+        // a curb on each side of a lane with room for part of one: the lanes' widths are all kept
+        let both = [driving(), curb(), lane(LaneKind::Bike, Way::Forward, 2.5), curb(), driving()];
+        let w = widths(&both);
+        assert_eq!(w.iter().sum::<i32>(), 3300 + 600 + 2500 + 600 + 3300);
+        assert!(w.contains(&3000), "the lane is at its maximum: {w:?}");
     }
 
     #[test]
