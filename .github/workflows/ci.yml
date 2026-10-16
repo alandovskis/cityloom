@@ -77,6 +77,23 @@ jobs:
       # Host tests, and a type-check of the code only the wasm32 target compiles.
       - run: just test
 
+  server-release:
+    name: Release server has no fake provider
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: ${{ env.JUST_VERSION }}
+      - run: just check-no-fake
+
   e2e:
     name: Browser tests
     runs-on: ubuntu-26.04
@@ -186,7 +203,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [format, test, e2e, docs, version]
+    needs: [format, test, e2e, docs, server-release, version]
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
@@ -222,7 +239,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
         with:
           toolchain: stable
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown, x86_64-unknown-linux-musl
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:
@@ -233,16 +251,19 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      # The same wasm-bindgen-cli cache as the browser tests, plus the pinned Railway CLI.
+      # wasm-bindgen-cli and cargo-zigbuild take minutes to compile, so keep them (in a cache of their own, apart from the
+      # browser tests') for as long as the wasm-bindgen version and the suffix below hold; the Railway CLI is pinned.
       - id: wasm-bindgen
         run: echo "version=$(just --evaluate wasm_bindgen)" >> "$GITHUB_OUTPUT"
-      - id: tools
+      - id: deploy-tools
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .tools
-          key: wasm-bindgen-cli-${{ runner.os }}-${{ steps.wasm-bindgen.outputs.version }}
-      - if: steps.tools.outputs.cache-hit != 'true'
-        run: cargo install wasm-bindgen-cli --version ${{ steps.wasm-bindgen.outputs.version }} --root .tools
+          key: deploy-tools-${{ runner.os }}-${{ steps.wasm-bindgen.outputs.version }}-zigbuild-1
+      - if: steps.deploy-tools.outputs.cache-hit != 'true'
+        run: |
+          cargo install wasm-bindgen-cli --version ${{ steps.wasm-bindgen.outputs.version }} --root .tools
+          cargo install cargo-zigbuild --locked --root .tools
       - run: npm ci
 
       # The tiles are made from Geofabrik's Quebec extract (1.2 GB) and take a long time, so keep them until the

@@ -12,6 +12,17 @@ setup:
     cargo install wasm-bindgen-cli --version {{wasm_bindgen}} --root .tools
     cd e2e && npm ci && npx playwright install chromium
 
+# Install what building the server for deployment needs (once): the musl target, cargo-zigbuild and a hint for zig.
+setup-deploy:
+    rustup target add x86_64-unknown-linux-musl
+    cargo install cargo-zigbuild --locked --root .tools
+    @command -v zig >/dev/null || python3 -m ziglang version >/dev/null 2>&1 || echo "zig is needed to cross-build the server for deployment: brew install zig (macOS) or python3 -m pip install ziglang"
+
+# Build the server as it is deployed (without the test provider) and check that the fake provider is not in it.
+check-no-fake:
+    cargo build --release -p cityloom_server
+    ./scripts/check-no-fake.sh target/release/cityloom_server
+
 # Build the WebAssembly module into web/pkg.
 build:
     ./scripts/build.sh

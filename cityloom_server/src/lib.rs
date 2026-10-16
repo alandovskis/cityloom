@@ -74,9 +74,34 @@ pub async fn run(config: Config) -> std::io::Result<()> {
     let app = app::router(&config, account);
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(addr = %config.bind, "listening");
-    axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>())
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await
+    axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).with_graceful_shutdown(shutdown_signal()).await
+}
+
+/// Ctrl-C, and on unix SIGTERM too: Railway (and Docker) stop a container with SIGTERM.
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        if let Ok(mut term) = signal(SignalKind::terminate()) {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = term.recv() => {}
+            }
+            return;
+        }
+    }
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+#[cfg(all(test, unix))]
+mod shutdown_tests {
+    #[tokio::test]
+    async fn sigterm_ends_the_wait() {
+        let waiting = tokio::spawn(super::shutdown_signal());
+        // The handler is installed when the task first runs; without it the signal would end this test process.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        let status = std::process::Command::new("kill").args(["-TERM", &std::process::id().to_string()]).status().unwrap();
+        assert!(status.success());
+        tokio::time::timeout(std::time::Duration::from_secs(5), waiting).await.expect("SIGTERM did not end the wait").unwrap();
+    }
 }
