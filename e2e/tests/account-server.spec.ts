@@ -91,7 +91,9 @@ test.describe("a first sign-in", () => {
     await expect(page.locator("#session-btn-label")).toHaveText("Ada");
     await expect(page.getByRole("radio", { name: /Store my work on the server/ })).toBeChecked();
     await page.getByRole("radio", { name: /Keep my work on this device only/ }).check();
-    await expect(live(page)).toHaveText("Your work will be kept on this device only.");
+    await expect(live(page)).toHaveText(
+      "Your choice is recorded: keep your work on this device only. For now, your work stays on this device either way.",
+    );
     await page.reload();
     await expect(page.getByRole("radio", { name: /Keep my work on this device only/ })).toBeChecked();
   });
