@@ -816,9 +816,9 @@ impl City {
     pub fn keep_street(&mut self, edge: u32, street: Street) -> bool {
         let ok = self.has_room_of(edge, street.row_mm);
         if ok && street.is_sound() {
-            // a street taken by the width it had is kept at the one it has now, so that it is found by it from now on
-            let row_mm = self.today_streets[&edge].row_mm;
-            self.streets.insert(edge, Street { row_mm, ..street });
+            // a street taken by the width it had keeps it, so that its pieces and its width agree; it is found by it
+            // at every import (`legacy_row_mm`), and Start over gives it the width it has now
+            self.streets.insert(edge, street);
         }
         ok
     }

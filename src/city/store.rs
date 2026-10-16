@@ -562,19 +562,44 @@ mod tests {
     }
 
     #[test]
-    fn after_one_write_the_record_carries_the_width_the_street_has_and_later_loads_match_it_as_any_other() {
+    fn a_street_taken_by_the_width_it_had_keeps_it_so_its_pieces_and_its_width_agree_and_no_check_fails() {
+        let (area, _, street, _) = edited_before_and_imported_again();
+        let v = area.open().street_editor(street, 0).unwrap().view();
+        assert_eq!(v.row_mm, 11_200);
+        assert!(v.checks.iter().find(|c| c.id == "fits").unwrap().ok, "the street is as wide as its pieces");
+        assert_eq!(v.total_mm, v.row_mm);
+    }
+
+    #[test]
+    fn after_a_write_the_record_still_carries_the_width_it_had_and_matches_the_next_load() {
         let (area, storage, street, saved) = edited_before_and_imported_again();
         let mut again = area.open().street_editor(street, 0).unwrap().snapshot();
         again.segments[0].width_mm += 50;
         again.segments[2].width_mm -= 50;
         assert!(area.write_street(street, again.clone()), "a street saved at the width it had is taken");
         let record = document(&storage).streets.values().next().unwrap().street.clone();
-        assert_eq!(record.row_mm, 10_200, "the street's width now");
+        assert_eq!(record.row_mm, 11_200, "the width it had");
         assert_eq!(record.segments, again.segments, "its pieces as the user left them");
         assert_ne!(record.segments, saved.segments);
+        assert!(area.keep_network(&curbed_network(false)), "imported again");
         let city = area.open();
-        assert_eq!(city.view(0).edited, 1);
-        assert_eq!(city.street_editor(street, 0).unwrap().snapshot().segments, again.segments);
+        assert_eq!(city.view(0).edited, 1, "it is found by the legacy width at every import");
+        let editor = city.street_editor(street, 0).unwrap();
+        assert_eq!(editor.snapshot().segments, again.segments);
+        assert!(editor.view().checks.iter().find(|c| c.id == "fits").unwrap().ok);
+    }
+
+    #[test]
+    fn start_over_on_a_street_taken_by_the_width_it_had_gives_the_current_import_and_its_width() {
+        let (area, storage, street, _) = edited_before_and_imported_again();
+        let mut editor = area.open().street_editor(street, 0).unwrap();
+        assert!(editor.reset());
+        let restarted = editor.snapshot();
+        assert_eq!(restarted.row_mm, 10_200, "the street as imported now");
+        assert!(area.write_street(street, restarted.clone()));
+        let record = document(&storage).streets.values().next().unwrap().street.clone();
+        assert_eq!(record.row_mm, 10_200);
+        assert_eq!(area.open().street_editor(street, 0).unwrap().snapshot(), restarted);
     }
 
     #[test]
