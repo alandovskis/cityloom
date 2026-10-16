@@ -43,9 +43,15 @@ impl PgRepo {
         Ok(done)
     }
 
-    /// Recomputes every identity's lookup with this repository's lookup key, from the sealed provider and subject,
-    /// and reseals them under the new lookup's AAD, all in one transaction. A wrong `old` key is found (its lookup
-    /// differs from the stored one) and changes nothing. Returns how many rows changed.
+    /// Recomputes every identity's lookup with this repository's lookup key (the new `LOOKUP_KEY`), from the sealed
+    /// provider and subject, and reseals them under the new lookup's AAD, all in one transaction. A row already on
+    /// the new hash is left alone; a row that matches neither the old nor the new key refuses the whole run
+    /// (`Corrupt`) and changes nothing, which is how a wrong `old` key is found. Returns how many rows changed.
+    ///
+    /// Operator's order: stop the server, or at least keep it on the old `LOOKUP_KEY`; run `rehash` (with
+    /// `OLD_LOOKUP_KEY` and the new `LOOKUP_KEY`); then start the server with the new key. Otherwise a sign-in
+    /// during the run, made with a key that does not match the rows, does not find the account and creates a
+    /// duplicate one.
     pub async fn rehash(&self, old: &LookupKey) -> Result<u64, RepoError> {
         let mut tx = self.pool.begin().await.map_err(unavailable)?;
         let rows = sqlx::query("select lookup, user_id, provider, subject, label from identities for update").fetch_all(&mut *tx).await.map_err(unavailable)?;
@@ -65,12 +71,12 @@ impl PgRepo {
             let old_id = hex::encode(&lookup);
             let provider = Self::open_text(&key, "identities", "provider", &old_id, &row.try_get::<Vec<u8>, _>("provider").map_err(unavailable)?)?;
             let sub = Self::open_text(&key, "identities", "subject", &old_id, &row.try_get::<Vec<u8>, _>("subject").map_err(unavailable)?)?;
-            if old.lookup(&provider, &sub)[..] != lookup[..] {
-                return Err(RepoError::Corrupt); // the old key given is not the one these were made with
-            }
             let new = self.lookup.lookup(&provider, &sub);
             if new[..] == lookup[..] {
-                continue;
+                continue; // already on the new key (a mixed table, or a run repeated)
+            }
+            if old.lookup(&provider, &sub)[..] != lookup[..] {
+                return Err(RepoError::Corrupt); // it matches neither key: the old key given is not the one these were made with
             }
             let new_id = hex::encode(new);
             let label = row

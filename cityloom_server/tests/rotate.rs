@@ -70,12 +70,27 @@ async fn rehash_recomputes_every_lookup_and_the_data_stays_readable_and_bound(po
         ids.iter().map(|i| (i.provider.as_str(), i.label.as_deref())).collect::<Vec<_>>(),
         [("google", Some("g1@example.org")), ("apple", Some("a1@example.org"))]
     );
-    assert_eq!(
-        new.rehash(&LookupKey::new(zeroize::Zeroizing::new([3; 32]))).await.unwrap_err(),
-        accounts::RepoError::Corrupt,
-        "running it twice with the stale old key is refused"
-    );
+    assert_eq!(new.rehash(&LookupKey::new(zeroize::Zeroizing::new([3; 32]))).await.unwrap(), 0, "running it twice finds nothing left to do");
     assert_eq!(new.rehash(&LookupKey::new(zeroize::Zeroizing::new([4; 32]))).await.unwrap(), 0);
+}
+
+#[sqlx::test]
+async fn rehash_finishes_a_mixed_table_where_some_rows_are_already_on_the_new_hash(pool: PgPool) {
+    let old = repo(&pool, &[(1, [1; 32])], 1, 3);
+    let new = repo(&pool, &[(1, [1; 32])], 1, 4);
+    let (ada, _) = accounts::sign_in(&old, &claims("google", "g1")).await.unwrap();
+    accounts::link(&old, ada, &claims("apple", "a1")).await.unwrap();
+    let (bob, _) = accounts::sign_in(&new, &claims("google", "g2")).await.unwrap();
+    assert_eq!(
+        new.rehash(&LookupKey::new(zeroize::Zeroizing::new([9; 32]))).await.unwrap_err(),
+        accounts::RepoError::Corrupt,
+        "a wrong old key still matches neither"
+    );
+    assert_eq!(new.rehash(&LookupKey::new(zeroize::Zeroizing::new([3; 32]))).await.unwrap(), 2, "only the rows still on the old hash change");
+    assert_eq!(new.find_identity("google", "g1").await.unwrap(), Some(ada));
+    assert_eq!(new.find_identity("apple", "a1").await.unwrap(), Some(ada));
+    assert_eq!(new.find_identity("google", "g2").await.unwrap(), Some(bob));
+    assert_eq!(new.identities(ada).await.unwrap().len(), 2);
 }
 
 #[sqlx::test]
