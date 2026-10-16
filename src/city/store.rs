@@ -431,6 +431,26 @@ mod tests {
     }
 
     #[test]
+    fn an_edit_saved_against_a_street_of_another_width_is_kept_in_the_document_and_does_not_apply() {
+        // The importer's output changes a street's width (a curb that was a 600 mm median is a 150 mm buffer, or joins
+        // its lane): the edit saved against the old width stays in the document as an orphan, and the street is as made.
+        let (store, storage) = store();
+        let as_made = store.open().street_editor(1, 0).unwrap().snapshot();
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        let mut kept = document(&storage);
+        let key = kept.streets.keys().next().unwrap().clone();
+        kept.streets.get_mut(&key).unwrap().street.row_mm += 450;
+        storage.remember(EDITS_KEY, &kept.to_json());
+        assert_eq!(store.open().view(0).edited, 0, "the edit does not apply");
+        assert_eq!(store.open().street_editor(1, 0).unwrap().snapshot(), as_made, "the street is as made");
+        assert_eq!(document(&storage).streets.get(&key), kept.streets.get(&key), "and the record is kept as it was");
+        // another place's write leaves it where it is
+        assert!(store.write_street(2, narrowed(&store, 2)));
+        assert_eq!(document(&storage).streets.get(&key), kept.streets.get(&key));
+        assert_eq!(document(&storage).streets.len(), 2);
+    }
+
+    #[test]
     fn a_blocked_storage_says_the_change_was_not_kept() {
         let (store, storage) = store();
         let edited = narrowed(&store, 1);
