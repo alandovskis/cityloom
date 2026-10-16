@@ -68,7 +68,9 @@ test("a new account is asked where its work is kept, with nothing chosen for it"
   await expect(page.getByRole("radio")).toHaveCount(2);
   await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
   await page.getByRole("radio", { name: /Store my work on the server/ }).check();
-  await expect(live(page)).toHaveText("Your work will be stored on the server.");
+  await expect(live(page)).toHaveText(
+    "Your choice is recorded: store your work on the server. Storing work on the server arrives in a later release; for now, your work stays on this device.",
+  );
   await expect(page.getByRole("radio", { name: /Store my work on the server/ })).toBeFocused();
   // The choice does not move from under the person.
   expect(

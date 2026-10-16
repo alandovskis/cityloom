@@ -78,7 +78,7 @@ fn a_new_account_sees_the_storage_choice_first_with_two_options_and_nothing_sele
     assert!(out.contains("Keep my work on this device only") && out.contains("Store my work on the server"), "{out}");
     assert_eq!(out.matches(r#"type="radio""#).count(), 2, "{out}");
     assert!(!out.contains("checked"), "nothing is preselected: {out}");
-    assert!(out.contains("cannot share it except by printing") || out.contains("You cannot share it except by printing it."), "{out}");
+    assert!(out.contains("nothing you make is sent to the server"), "{out}");
 }
 
 #[test]
@@ -118,6 +118,18 @@ fn deleting_is_confirmed_in_the_page_with_the_backup_retention_said() {
     assert!(after.contains("Railway") && after.contains("backups"), "the retention is said: {after}");
     assert!(after.contains("Work kept on this device is not affected."), "{after}");
     assert!(after.contains(r#"aria-describedby="delete-warning""#) && after.contains(r#"id="delete-warning""#), "{after}");
+}
+
+#[test]
+fn the_storage_choice_says_it_is_recorded_and_that_server_storage_comes_later() {
+    for (locale, recorded, later, either_way) in [
+        (Locale::En, "This choice is recorded.", "arrive in a later release", "stays on this device either way"),
+        (Locale::FrCa, "Ce choix est enregistré.", "arriveront dans une version ultérieure", "reste sur cet appareil dans les deux cas"),
+    ] {
+        let out = page(locale, signed_in(None, vec![identity("a", "google", None)]), no_op);
+        assert!(out.contains(recorded) && out.contains(later) && out.contains(either_way), "{locale:?}: {out}");
+        assert!(!out.contains("follows you") && !out.contains("vous suivre"), "no promise of storage that does not exist yet");
+    }
 }
 
 #[test]

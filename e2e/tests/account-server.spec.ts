@@ -84,7 +84,9 @@ test.describe("a first sign-in", () => {
   test("keeps the choice, and the person stays signed in after a reload", async ({ page, context, baseURL }) => {
     await newAccount(page, context, baseURL!);
     await page.getByRole("radio", { name: /Store my work on the server/ }).check();
-    await expect(live(page)).toHaveText("Your work will be stored on the server.");
+    await expect(live(page)).toHaveText(
+      "Your choice is recorded: store your work on the server. Storing work on the server arrives in a later release; for now, your work stays on this device.",
+    );
     await page.reload();
     await expect(page.locator("#session-btn-label")).toHaveText("Ada");
     await expect(page.getByRole("radio", { name: /Store my work on the server/ })).toBeChecked();
@@ -116,7 +118,9 @@ test.describe("a returning person", () => {
     const sub = unique();
     await newAccount(page, context, baseURL!, { sub });
     await page.getByRole("radio", { name: /Store my work on the server/ }).check();
-    await expect(live(page)).toHaveText("Your work will be stored on the server.");
+    await expect(live(page)).toHaveText(
+      "Your choice is recorded: store your work on the server. Storing work on the server arrives in a later release; for now, your work stays on this device.",
+    );
     await page.locator("#session-btn").click();
     await page.getByRole("button", { name: "Sign out" }).first().click();
     await expect(page).toHaveURL(/\/index\.html$/);

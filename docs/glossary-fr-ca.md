@@ -258,6 +258,9 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Account page | Delete (an account) | Supprimer |  |
 | Account page | Store on the server | Stocker sur le serveur |  |
 | Account page | Keep on this device | Conserver sur cet appareil |  |
+| Account page | This choice is recorded | Ce choix est enregistré | The choice is only recorded for now. |
+| Account page | a later release | une version ultérieure | Server storage and sharing are not built yet. |
+| Account page | for now | pour le moment |  |
 
 ## Terms to confirm
 

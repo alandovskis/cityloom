@@ -451,11 +451,16 @@ mod tests {
         assert_eq!(vm.storage(), None, "not until the server says so");
         t.account.answer(AccountReply::Done(Ok(())));
         assert_eq!((vm.storage(), vm.needs_choice()), (Some(true), false));
-        assert_eq!(t.announcer.take(), ["Your work will be stored on the server."]);
+        assert_eq!(
+            t.announcer.take(),
+            [
+                "Your choice is recorded: store your work on the server. Storing work on the server arrives in a later release; for now, your work stays on this device."
+            ]
+        );
         vm.choose_storage(false);
         t.account.answer(AccountReply::Done(Ok(())));
         assert_eq!(vm.storage(), Some(false));
-        assert_eq!(t.announcer.take(), ["Your work will be kept on this device only."]);
+        assert_eq!(t.announcer.take(), ["Your choice is recorded: keep your work on this device only. For now, your work stays on this device either way."]);
     }
 
     #[test]
@@ -520,7 +525,12 @@ mod tests {
         let (vm, t) = ready(Locale::FrCa, None, vec![identity("a", "google", None)]);
         vm.choose_storage(false);
         t.account.answer(AccountReply::Done(Ok(())));
-        assert_eq!(t.announcer.take(), ["Votre travail sera conservé sur cet appareil seulement."]);
+        assert_eq!(
+            t.announcer.take(),
+            [
+                "Votre choix est enregistré\u{a0}: conserver votre travail sur cet appareil seulement. Pour le moment, votre travail reste sur cet appareil dans les deux cas."
+            ]
+        );
     }
 
     fn focus(vm: &Rc<AccountVm>) -> Focus {
