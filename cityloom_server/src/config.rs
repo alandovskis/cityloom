@@ -162,9 +162,12 @@ fn account(get: &dyn Fn(&str) -> Option<String>) -> Result<AccountConfig, OffRea
             _ => Err(OffReason::Invalid { variable, problem: "a whole number from 1 to 4294967295".into() }),
         }
     };
-    let rate = RateLimit { period_secs: positive("AUTH_RATE_PERIOD_SECS", DEFAULT_PERIOD_SECS as u32)? as u64, burst: positive("AUTH_RATE_BURST", DEFAULT_BURST)? };
+    let rate =
+        RateLimit { period_secs: positive("AUTH_RATE_PERIOD_SECS", DEFAULT_PERIOD_SECS as u32)? as u64, burst: positive("AUTH_RATE_BURST", DEFAULT_BURST)? };
+    // An empty value (`.env.example` ships them) is not set.
+    let set = |variable: &str| get(variable).filter(|v| !v.trim().is_empty());
     let pair = |slug: &'static str, id: &str, secret: &str| -> Option<ProviderCreds> {
-        Some(ProviderCreds { slug, client_id: get(id)?, secret: ProviderSecret::Static(get(secret)?) })
+        Some(ProviderCreds { slug, client_id: set(id)?, secret: ProviderSecret::Static(set(secret)?) })
     };
     let mut providers: Vec<ProviderCreds> = [
         ("osm", "OSM_CLIENT_ID", "OSM_CLIENT_SECRET"),
@@ -175,7 +178,7 @@ fn account(get: &dyn Fn(&str) -> Option<String>) -> Result<AccountConfig, OffRea
     .filter_map(|(slug, id, secret)| pair(slug, id, secret))
     .collect();
     if let (Some(client_id), Some(team_id), Some(key_id), Some(private_key_pem)) =
-        (get("APPLE_CLIENT_ID"), get("APPLE_TEAM_ID"), get("APPLE_KEY_ID"), get("APPLE_PRIVATE_KEY"))
+        (set("APPLE_CLIENT_ID"), set("APPLE_TEAM_ID"), set("APPLE_KEY_ID"), set("APPLE_PRIVATE_KEY"))
     {
         // A host that wants one line for a variable has the PEM's line breaks written as \n.
         providers.push(ProviderCreds {
@@ -392,6 +395,28 @@ mod tests {
         // The site still starts: the router builds with the accounts off.
         let c = with(&account_vars(), &[], &[("AUTH_RATE_BURST", "0")]);
         let _ = crate::app::router(&c, None);
+    }
+
+    #[test]
+    fn an_empty_or_blank_provider_variable_is_not_set() {
+        let c = with(
+            &account_vars(),
+            &[],
+            &[
+                ("OSM_CLIENT_ID", ""),
+                ("OSM_CLIENT_SECRET", ""),
+                ("GOOGLE_CLIENT_ID", "g"),
+                ("GOOGLE_CLIENT_SECRET", "   "),
+                ("MICROSOFT_CLIENT_ID", "m"),
+                ("MICROSOFT_CLIENT_SECRET", "s"),
+                ("APPLE_CLIENT_ID", "a"),
+                ("APPLE_TEAM_ID", ""),
+                ("APPLE_KEY_ID", "k"),
+                ("APPLE_PRIVATE_KEY", "p"),
+            ],
+        );
+        let AccountSide::On(a) = &c.account else { panic!() };
+        assert_eq!(a.providers.iter().map(|p| p.slug).collect::<Vec<_>>(), ["microsoft"]);
     }
 
     #[test]
