@@ -185,6 +185,17 @@ mod tests {
     }
 
     #[test]
+    fn a_buffer_is_drawn_at_the_roadway_s_level_with_no_face_no_curb_and_no_symbol() {
+        let mut e = Editor::new(0);
+        e.add(kind_index("buffer").unwrap(), 3);
+        let m = drawn(&e);
+        assert_eq!(count(&m, "class=\"iso-top k-buffer\""), 1);
+        assert_eq!(count(&m, "iso-front k-buffer") + count(&m, "iso-side k-buffer"), 0, "it stands no higher than the roadway");
+        assert_eq!(count(&m, "class=\"iso-curb\""), 2, "only the two sidewalks' curbs");
+        assert!(!m.contains("NaN"));
+    }
+
+    #[test]
     fn the_roadway_is_drawn_before_the_raised_pieces_so_they_stand_in_front_of_it() {
         let m = drawn(&Editor::new(0));
         assert!(m.rfind("iso-top k-travel").unwrap() < m.find("iso-top k-sidewalk").unwrap());

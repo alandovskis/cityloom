@@ -41,6 +41,7 @@ colors:
   k-busstation: "#eeb8ab"
   k-bench: "#d8c8ad"
   k-terrace: "#f1dca0"
+  k-buffer: "#bdb8ae"
   k-streetlamp: "#d9dcc0"
   sky: "#e9f3fb"
   s-tree: "#6fb35e"
@@ -83,6 +84,7 @@ colors:
   dark-k-busstation: "#6d3832"
   dark-k-bench: "#6e5d48"
   dark-k-terrace: "#7d6a30"
+  dark-k-buffer: "#4d4a45"
   dark-k-streetlamp: "#5d6148"
   dark-sky: "#17222e"
   dark-s-tree: "#55924a"
@@ -254,7 +256,7 @@ A cool, near-neutral grey-blue ground with white cards, a single saturated blue,
 - **Rule** (`rule` #e5e8ec) hairline dividers; **Fill** (`fill` #f1f3f5) hover and segmented-control wells; **Field Line** (`field-line` #7f8a96; dark #6b7783) borders of buttons and inputs, at least 3:1 against the card they sit on (WCAG 1.4.11); `ink-3` is at least 4.5:1 on `land`.
 
 ### The drawing tints
-Flat, pale, named. Lane and strip kinds: sidewalk #cfd7de, planting #a5d696, bike #7fd3c3, transit lane #f2a99b, parking (map) #b9c2cc, median #93c98a, loading #f6d777, shoulder #cbd3db, bike rack #cdd6e2, bike share #b5c7e8, pole #9aa4b0. The map draws travel lanes and roads white inside a `casing` #7d8996 outline; the street section draws travel and parking a little darker (#c3cbd3, #b4bdc7) so the asphalt reads on a white plate. The editors add sky #e9f3fb, tree #6fb35e, car #dfe5ec, van #f1cd55 and two pedestrian coat colours. In dark, each tint steps to a deep, lower-chroma equivalent (see frontmatter).
+Flat, pale, named. Lane and strip kinds: sidewalk #cfd7de, planting #a5d696, bike #7fd3c3, transit lane #f2a99b, parking (map) #b9c2cc, median #93c98a, loading #f6d777, shoulder #cbd3db, buffer #bdb8ae, bike rack #cdd6e2, bike share #b5c7e8, pole #9aa4b0. The map draws travel lanes and roads white inside a `casing` #7d8996 outline; the street section draws travel and parking a little darker (#c3cbd3, #b4bdc7) so the asphalt reads on a white plate. The editors add sky #e9f3fb, tree #6fb35e, car #dfe5ec, van #f1cd55 and two pedestrian coat colours. In dark, each tint steps to a deep, lower-chroma equivalent (see frontmatter).
 
 ### Named Rules
 **The One Blue Rule.** Blue means chosen or actionable, and nothing else. A screen has at most one filled blue control (Search on home, Add a piece on the street editor); everything else that is blue is a wash, a ring or a text colour.

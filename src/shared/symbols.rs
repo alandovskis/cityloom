@@ -4,7 +4,7 @@
 use crate::shared::catalogue::{KINDS, MATERIALS};
 
 /// One distinct texture per kind of piece.
-pub const HATCH: [(&str, &str); 17] = [
+pub const HATCH: [(&str, &str); 18] = [
     (
         "sidewalk",
         r##"<pattern id="h-sidewalk" width="8" height="8" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="0.9"/><circle cx="6" cy="6" r="0.9"/></pattern>"##,
@@ -33,6 +33,7 @@ pub const HATCH: [(&str, &str); 17] = [
         "streetlamp",
         r##"<pattern id="h-streetlamp" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="5" cy="5" r="1.5"/><path d="M5,0 L5,2 M5,8 L5,10 M0,5 L2,5 M8,5 L10,5"/></pattern>"##,
     ),
+    ("buffer", r##"<pattern id="h-buffer" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0,8 L8,0"/></pattern>"##),
     ("loading", r##"<pattern id="h-loading" width="10" height="8" patternUnits="userSpaceOnUse"><path d="M0,6 L5,1 L10,6"/></pattern>"##),
 ];
 
@@ -337,6 +338,11 @@ fn art(kind_id: &str, wm: f64, o: SymbolOpts) -> String {
             // The planting stands on the kerb.
             kerb + &if wm >= 2.4 { tree(0.0, -10.0, 0.9) } else { shrub(-w * 0.35, -10.0, 0.8) + &shrub(w * 0.35, -10.0, 0.8) }
         }
+        // A low block of concrete: the buffer's curb, paint or posts are told apart by its name.
+        "buffer" => {
+            let w = (wm * 55.0).clamp(14.0, 60.0) / 2.0;
+            format!("<rect class=\"o f-buffer\" x=\"{}\" y=\"-12\" width=\"{}\" height=\"12\"/>", -w, w * 2.0)
+        }
         "loading" => van(0.0, 1.0),
         "shoulder" => cone(0.0, 1.0),
         "bikerack" => bike_rack(0.0, 1.0),
@@ -388,6 +394,7 @@ fn native_width(kind_id: &str, wm: f64, o: SymbolOpts) -> f64 {
                 52.0
             }
         }
+        "buffer" => (wm * 55.0).clamp(14.0, 60.0),
         "loading" => 110.0,
         "shoulder" => 40.0,
         "bikerack" => 80.0,
@@ -429,7 +436,7 @@ pub fn symbol(kind_id: &str, at: Placement, o: SymbolOpts) -> String {
 
 /// Where each symbol's art lies, as its middle, width and height in drawing units, measured
 /// from the art as drawn at its default width. `icon` scales and centres by it.
-const EXTENT: [(&str, f64, f64, f64); 17] = [
+const EXTENT: [(&str, f64, f64, f64); 18] = [
     ("sidewalk", 0.0, 71.0, 64.0),
     ("planting", 1.0, 60.0, 102.0),
     ("bike", 0.0, 54.0, 58.0),
@@ -447,6 +454,7 @@ const EXTENT: [(&str, f64, f64, f64); 17] = [
     ("bench", 0.0, 60.0, 40.0),
     ("terrace", 0.0, 104.0, 95.0),
     ("streetlamp", 27.0, 54.0, 150.0),
+    ("buffer", 0.0, 33.0, 12.0),
 ];
 
 /// A picture of one kind of piece for a menu: its elevation symbol at the width and surface
@@ -502,7 +510,8 @@ mod tests {
                     "busstation",
                     "bench",
                     "terrace",
-                    "streetlamp"
+                    "streetlamp",
+                    "buffer"
                 ]
                 .contains(&k.id),
                 "{} has no width",

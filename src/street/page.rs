@@ -20,14 +20,14 @@ use crate::street::watch::SheetWatch;
 
 // ---- what the page is made of --------------------------------------------------------
 
-/// The pieces by what they are for, so seventeen rows read as seven lists: each group by its id
+/// The pieces by what they are for, so eighteen rows read as seven lists: each group by its id
 /// (its name is the message `group-<id>`) and the kinds in it.
 pub const ADD_GROUPS: [(&str, &[&str]); 7] = [
     ("walking", &["sidewalk"]),
     ("greenery", &["planting", "median"]),
     ("cycling", &["bike", "bikerack", "bikeshare"]),
     ("transit", &["bus", "busshelter", "busstation"]),
-    ("roadway", &["travel", "parking", "loading", "shoulder"]),
+    ("roadway", &["travel", "parking", "loading", "shoulder", "buffer"]),
     ("furniture", &["bench", "terrace"]),
     ("utilities", &["pole", "streetlamp"]),
 ];
@@ -800,12 +800,12 @@ mod tests {
     #[test]
     fn the_kinds_to_add_come_in_four_lists_that_cover_every_kind_but_the_one_with_no_place() {
         let all: Vec<usize> = ADD_GROUPS.iter().flat_map(|(_, ids)| group_kinds(ids)).collect();
-        assert_eq!(all.len(), 17);
+        assert_eq!(all.len(), 18);
         let mut seen = all.clone();
         seen.sort_unstable();
         seen.dedup();
-        assert_eq!(seen.len(), 17, "each kind is in one list");
-        assert_eq!(KINDS.len(), 17);
+        assert_eq!(seen.len(), 18, "each kind is in one list");
+        assert_eq!(KINDS.len(), 18);
         let ids = |group: &str| -> Vec<&str> {
             let (_, ids) = ADD_GROUPS.iter().find(|(name, _)| *name == group).unwrap();
             group_kinds(ids).into_iter().map(|k| KINDS[k].id).collect()
@@ -813,6 +813,7 @@ mod tests {
         assert_eq!(ids("walking"), ["sidewalk"]);
         assert_eq!(ids("greenery"), ["planting", "median"]);
         assert_eq!(ids("transit"), ["bus", "busshelter", "busstation"]);
+        assert_eq!(ids("roadway"), ["travel", "parking", "loading", "shoulder", "buffer"]);
         assert_eq!(ids("furniture"), ["bench", "terrace"]);
         assert_eq!(ids("utilities"), ["pole", "streetlamp"]);
         assert_eq!(group_kinds(&["travel", "nonsense"]).len(), 1);

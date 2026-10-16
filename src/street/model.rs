@@ -1552,9 +1552,33 @@ mod tests {
         for id in ["travel", "parking", "loading", "bus", "shoulder"] {
             assert!(Segment::new(1, kind(id), 3000).has_motor(), "{id}");
         }
-        for id in ["bike", "sidewalk", "median"] {
+        for id in ["bike", "sidewalk", "median", "buffer"] {
             assert!(!Segment::new(1, kind(id), 2000).has_motor(), "{id}");
         }
+    }
+
+    #[test]
+    fn the_neutral_buffer_is_the_last_kind_so_saved_indices_hold_and_is_no_motor_roadway_or_green_piece() {
+        let buffer = kind("buffer");
+        assert_eq!(buffer, KINDS.len() - 1, "appended, so a stored kind index keeps its meaning");
+        assert_eq!(buffer, 17);
+        let k = &KINDS[buffer];
+        assert_eq!((k.mark, k.people_per_hour_per_m, k.direction), ("BF", 0, DirectionRule::None));
+        assert_ne!(k.mode, Mode::Green);
+        assert!(k.min_mm <= k.default_mm && k.default_mm <= k.max_mm);
+        assert!(k.materials.iter().all(|&m| ["concrete", "asphalt"].contains(&MATERIALS[m].id)));
+        assert!(!crate::shared::catalogue::is_motor(buffer) && !crate::shared::catalogue::is_roadway(buffer));
+        assert!(!PEDESTRIAN_KINDS.contains(&"buffer"));
+    }
+
+    #[test]
+    fn a_street_of_sidewalks_and_a_buffer_is_pedestrian_and_a_motor_piece_beside_it_is_not() {
+        let walk = street_of(StreetClass::Local, &["sidewalk", "buffer", "sidewalk"]);
+        assert_eq!(walk.class, StreetClass::Pedestrian);
+        let mut e = Editor::from_street(&walk, &walk, 0);
+        assert_eq!(e.view().segments[1].curb, None);
+        e.add(kind("travel"), 2);
+        assert_eq!(e.view().class, StreetClass::Local);
     }
 
     #[test]
@@ -2479,6 +2503,7 @@ mod tests {
             (&[("sidewalk", 2000), ("sidewalk", 1500)], true),
             (&[("sidewalk", 2900)], false),
             (&[("sidewalk", 2000), ("bench", 700), ("sidewalk", 2000)], false),
+            (&[("sidewalk", 2000), ("buffer", 600), ("sidewalk", 2000)], false),
             (&[("sidewalk", 2000), ("planting", 1800), ("sidewalk", 2000)], false),
             (&[("terrace", 4000), ("pole", 600)], false),
         ] {

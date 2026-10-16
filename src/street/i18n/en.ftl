@@ -49,6 +49,7 @@ kind-busstation = Bus station
 kind-bench = Bench
 kind-terrace = Café terrace
 kind-streetlamp = Street lamp
+kind-buffer = Buffer
 mode-foot = Walking
 mode-bike = Biking
 mode-transit = Transit
@@ -262,6 +263,7 @@ kind-mark-busstation = ST
 kind-mark-bench = BN
 kind-mark-terrace = CT
 kind-mark-streetlamp = SL
+kind-mark-buffer = BF
 
 # The drawing of the section (src/street/svg.rs).
 svg-today = Today

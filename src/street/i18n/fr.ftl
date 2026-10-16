@@ -49,6 +49,7 @@ kind-busstation = Station d’autobus
 kind-bench = Banc
 kind-terrace = Terrasse de café
 kind-streetlamp = Lampadaire
+kind-buffer = Zone tampon
 mode-foot = Marche
 mode-bike = Vélo
 mode-transit = Transport en commun
@@ -262,6 +263,7 @@ kind-mark-busstation = SA
 kind-mark-bench = BC
 kind-mark-terrace = TE
 kind-mark-streetlamp = LA
+kind-mark-buffer = ZT
 
 # Le dessin de la coupe (src/street/svg.rs).
 svg-today = Aujourd’hui

@@ -143,6 +143,16 @@ mod tests {
     }
 
     #[test]
+    fn a_buffer_has_no_line_against_it_on_either_side_and_no_symbol() {
+        // MTQ Tome V has no line for the edge of a buffer: the buffer is its own marking, so none is drawn against it.
+        let mut e = Editor::new(0);
+        let buffer = e.add(kind_index("buffer").unwrap(), 3);
+        let m = markings(&e.view());
+        assert!(at(&m, edge(&e, 2)).is_empty() && at(&m, edge(&e, 3)).is_empty(), "{:?}", m.lines);
+        assert!(m.marks.iter().all(|k| k.uid != buffer));
+    }
+
+    #[test]
     fn a_driving_lane_beside_parking_loading_or_a_shoulder_has_a_single_solid_white_line() {
         let e = Editor::new(0);
         let m = markings(&e.view());
