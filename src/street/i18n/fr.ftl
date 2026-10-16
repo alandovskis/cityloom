@@ -55,6 +55,7 @@ mode-bike = Vélo
 mode-transit = Transport en commun
 mode-vehicle = Autos et camions
 mode-green = Verdure
+mode-neutral = Zone tampon
 group-walking = Marche
 group-greenery = Verdure
 group-cycling = Vélo

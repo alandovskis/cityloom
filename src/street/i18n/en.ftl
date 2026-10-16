@@ -55,6 +55,7 @@ mode-bike = Biking
 mode-transit = Transit
 mode-vehicle = Cars and trucks
 mode-green = Greenery
+mode-neutral = Buffer
 group-walking = Walking
 group-greenery = Greenery
 group-cycling = Cycling

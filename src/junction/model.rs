@@ -2029,6 +2029,18 @@ mod tests {
     use crate::street::model::SAMPLES;
 
     #[test]
+    fn a_buffer_is_not_part_of_the_carriageway_the_profile_reads() {
+        use crate::shared::catalogue::{Side, StreetClass, kind_index};
+        use crate::street::model::Piece;
+        let piece = |id: &str, width_mm| Piece { kind: kind_index(id).unwrap(), width_mm, direction: None, variants: Vec::new() };
+        let street =
+            Street::imported(StreetClass::Local, Side::Right, &[piece("sidewalk", 2000), piece("buffer", 600), piece("travel", 3300), piece("sidewalk", 2000)]);
+        let p = profile_of(&street, 0);
+        assert_eq!((p.road_l, p.road_r), (2600, 5900), "the carriageway begins at the lane, not at the buffer");
+        assert_eq!(p.edge_kind[0], kind_index("buffer"));
+    }
+
+    #[test]
     fn an_arm_is_pedestrian_when_the_street_it_reads_is() {
         let j = junction_with_walkways(&[90], &[("sidewalk", 4000), ("sidewalk", 4000)]);
         let walking: Vec<i32> = j.current().arms.iter().filter(|a| a.is_pedestrian()).map(|a| a.bearing).collect();

@@ -1564,11 +1564,28 @@ mod tests {
         assert_eq!(buffer, 17);
         let k = &KINDS[buffer];
         assert_eq!((k.mark, k.people_per_hour_per_m, k.direction), ("BF", 0, DirectionRule::None));
-        assert_ne!(k.mode, Mode::Green);
+        assert_eq!(k.mode, Mode::Neutral);
         assert!(k.min_mm <= k.default_mm && k.default_mm <= k.max_mm);
         assert!(k.materials.iter().all(|&m| ["concrete", "asphalt"].contains(&MATERIALS[m].id)));
         assert!(!crate::shared::catalogue::is_motor(buffer) && !crate::shared::catalogue::is_roadway(buffer));
         assert!(!PEDESTRIAN_KINDS.contains(&"buffer"));
+    }
+
+    #[test]
+    fn a_buffer_is_the_space_of_no_travel_mode_so_it_adds_nothing_to_the_shares_and_the_table_has_no_row_for_it() {
+        let share = |s: &Street| {
+            let v = Editor::from_street(s, s, 0).view();
+            v.outcomes.share.iter().map(|x| (x.mode, x.mm)).collect::<Vec<_>>()
+        };
+        let without = street_of(StreetClass::Local, &["sidewalk", "travel", "sidewalk"]);
+        let with = street_of(StreetClass::Local, &["sidewalk", "buffer", "travel", "sidewalk"]);
+        assert_eq!(share(&without), share(&with), "no mode takes the buffer's width");
+        assert_eq!(share(&with).len(), Mode::ALL.len(), "and there is no row for it");
+        assert_eq!(KINDS[kind("buffer")].mode, Mode::Neutral);
+        assert!(!Mode::ALL.contains(&Mode::Neutral));
+        let v = Editor::from_street(&with, &with, 0).view();
+        let pct: i32 = v.outcomes.share.iter().map(|s| s.pct).sum();
+        assert!((90..=100).contains(&pct), "the shares sum to what the buffer leaves: {pct}");
     }
 
     #[test]
