@@ -153,13 +153,16 @@ fn account(get: &dyn Fn(&str) -> Option<String>) -> Result<AccountConfig, OffRea
         return Err(OffReason::Invalid { variable: "DATA_KEY_CURRENT", problem: "no key in DATA_KEYS has this id".into() });
     }
     let lookup_key = decode::<32>("LOOKUP_KEY", &required(get, "LOOKUP_KEY")?)?;
-    let number = |variable: &'static str, default: u64| -> Result<u64, OffReason> {
-        match get(variable) {
-            None => Ok(default),
-            Some(v) => v.trim().parse().map_err(|_| OffReason::Invalid { variable, problem: "not a number".into() }),
+    // A period or a burst of 0, or a burst too big for a u32, would make the rate limiter refuse to build, so they
+    // turn the accounts off here instead of stopping the whole server there.
+    let positive = |variable: &'static str, default: u32| -> Result<u32, OffReason> {
+        let Some(v) = get(variable).filter(|v| !v.trim().is_empty()) else { return Ok(default) };
+        match v.trim().parse::<u32>() {
+            Ok(n) if n > 0 => Ok(n),
+            _ => Err(OffReason::Invalid { variable, problem: "a whole number from 1 to 4294967295".into() }),
         }
     };
-    let rate = RateLimit { period_secs: number("AUTH_RATE_PERIOD_SECS", DEFAULT_PERIOD_SECS)?, burst: number("AUTH_RATE_BURST", DEFAULT_BURST as u64)? as u32 };
+    let rate = RateLimit { period_secs: positive("AUTH_RATE_PERIOD_SECS", DEFAULT_PERIOD_SECS as u32)? as u64, burst: positive("AUTH_RATE_BURST", DEFAULT_BURST)? };
     let pair = |slug: &'static str, id: &str, secret: &str| -> Option<ProviderCreds> {
         Some(ProviderCreds { slug, client_id: get(id)?, secret: ProviderSecret::Static(get(secret)?) })
     };
@@ -371,6 +374,24 @@ mod tests {
         let AccountSide::On(b) = &copy.account else { panic!() };
         wipes_on_drop(&b.cookie_key);
         assert_eq!(&b.cookie_key[..], &a.cookie_key[..]);
+    }
+
+    #[test]
+    fn a_rate_limit_that_cannot_be_built_turns_the_accounts_off_naming_the_variable() {
+        for (variable, value) in [
+            ("AUTH_RATE_BURST", "0"),
+            ("AUTH_RATE_BURST", "4294967296"),
+            ("AUTH_RATE_BURST", "-1"),
+            ("AUTH_RATE_BURST", "many"),
+            ("AUTH_RATE_PERIOD_SECS", "0"),
+            ("AUTH_RATE_PERIOD_SECS", "4294967296"),
+        ] {
+            let c = with(&account_vars(), &[], &[(variable, value)]);
+            assert!(matches!(off(&c), OffReason::Invalid { variable: v, .. } if *v == variable), "{variable}={value}: {:?}", c.account);
+        }
+        // The site still starts: the router builds with the accounts off.
+        let c = with(&account_vars(), &[], &[("AUTH_RATE_BURST", "0")]);
+        let _ = crate::app::router(&c, None);
     }
 
     #[test]
