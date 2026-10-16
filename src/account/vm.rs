@@ -126,6 +126,9 @@ impl AccountVm {
                 }
             }
             Err(AccountError::SignedOut) => vm.signed_out(),
+            // A failed re-read after a change leaves what is shown as it is (the change already said it failed) and
+            // focus still goes where the person was; a page that was never read is unavailable.
+            Err(_) if then.is_some() && vm.state.get_untracked() == State::Ready => vm.ask_focus(then.unwrap_or(Focus::Page)),
             Err(_) => vm.state.set(State::Unavailable),
         }));
     }
@@ -286,7 +289,13 @@ impl AccountVm {
         let vm = self.clone();
         self.ports.account.sign_out(Box::new(move |r| {
             // A session already over (another tab signed out) is the outcome asked for.
-            let r = if r == Err(AccountError::SignedOut) { Ok(()) } else { r };
+            // It shows the signed-out page on the way to the home page.
+            if r == Err(AccountError::SignedOut) {
+                vm.busy.set(false);
+                vm.signed_out();
+                vm.ports.navigator.go("/index.html");
+                return;
+            }
             vm.clone().settled(r, Focus::Page, |vm| vm.ports.navigator.go("/index.html"))
         }));
     }
@@ -410,7 +419,7 @@ mod tests {
         vm.unlink("b");
         assert_eq!(t.account.calls(), [AccountCall::Unlink("a".into())], "one at a time");
         t.account.answer(AccountReply::Done(Ok(())));
-        assert_eq!(t.announcer.take(), ["Account unlinked."]);
+        assert_eq!(t.announcer.take(), ["Sign-in unlinked."]);
         assert_eq!(t.account.calls(), [AccountCall::Me], "read again");
         t.account.answer(AccountReply::Me(Ok(me(Some(true), vec![identity("b", "osm", None)]))));
         assert_eq!(vm.identities().len(), 1);
@@ -512,5 +521,88 @@ mod tests {
         vm.choose_storage(false);
         t.account.answer(AccountReply::Done(Ok(())));
         assert_eq!(t.announcer.take(), ["Votre travail sera conservé sur cet appareil seulement."]);
+    }
+
+    fn focus(vm: &Rc<AccountVm>) -> Focus {
+        vm.focus_request().1
+    }
+
+    fn reread(t: &TestPorts, store: Option<bool>, identities: Vec<LinkedIdentity>) {
+        assert!(t.account.answer(AccountReply::Me(Ok(me(store, identities)))), "the page is read again");
+    }
+
+    #[test]
+    fn a_first_load_with_nothing_chosen_asks_for_the_storage_choice_and_one_made_does_not() {
+        let (vm, _) = ready(Locale::En, None, vec![identity("a", "google", None)]);
+        assert_eq!(vm.focus_request(), (1, Focus::Storage));
+        let (vm, _) = ready(Locale::En, Some(true), vec![identity("a", "google", None)]);
+        assert_eq!(vm.focus_request(), (0, Focus::None));
+    }
+
+    #[test]
+    fn a_storage_choice_that_fails_puts_focus_back_on_the_choice_even_when_the_page_cannot_be_read_again() {
+        let (vm, t) = ready(Locale::En, None, vec![identity("a", "google", None)]);
+        vm.choose_storage(true);
+        t.account.answer(AccountReply::Done(Err(AccountError::Unavailable)));
+        reread(&t, None, vec![identity("a", "google", None)]);
+        assert_eq!(vm.focus_request(), (2, Focus::Storage));
+        vm.choose_storage(true);
+        t.account.answer(AccountReply::Done(Err(AccountError::Unavailable)));
+        t.account.answer(AccountReply::Me(Err(AccountError::Unavailable)));
+        assert_eq!((vm.focus_request(), vm.state()), ((3, Focus::Storage), State::Ready), "what is shown stays");
+    }
+
+    #[test]
+    fn unlinking_puts_focus_on_the_list_whether_it_worked_or_not_and_whether_or_not_the_page_is_read_again() {
+        let two = || vec![identity("a", "google", None), identity("b", "osm", None)];
+        let (vm, t) = ready(Locale::En, Some(true), two());
+        vm.unlink("a");
+        t.account.answer(AccountReply::Done(Ok(())));
+        reread(&t, Some(true), vec![identity("b", "osm", None)]);
+        assert_eq!(vm.focus_request().1, Focus::Linked);
+        let (vm, t) = ready(Locale::En, Some(true), two());
+        vm.unlink("a");
+        t.account.answer(AccountReply::Done(Err(AccountError::Unavailable)));
+        reread(&t, Some(true), two());
+        assert_eq!(vm.focus_request().1, Focus::Linked);
+        let (vm, t) = ready(Locale::En, Some(true), two());
+        vm.unlink("a");
+        t.account.answer(AccountReply::Done(Ok(())));
+        t.account.answer(AccountReply::Me(Err(AccountError::Unavailable)));
+        assert_eq!((focus(&vm), vm.state()), (Focus::Linked, State::Ready));
+    }
+
+    #[test]
+    fn the_deletion_confirmation_takes_focus_to_its_safe_button_and_gives_it_back() {
+        let (vm, t) = ready(Locale::En, Some(true), vec![identity("a", "google", None)]);
+        vm.ask_delete();
+        assert_eq!(focus(&vm), Focus::DeleteSafe);
+        vm.cancel_delete();
+        assert_eq!(focus(&vm), Focus::DeleteButton);
+        vm.ask_delete();
+        vm.confirm_delete();
+        t.account.answer(AccountReply::Done(Err(AccountError::Unavailable)));
+        assert!(!vm.confirming_delete());
+        reread(&t, Some(true), vec![identity("a", "google", None)]);
+        assert_eq!(focus(&vm), Focus::DeleteButton);
+    }
+
+    #[test]
+    fn a_sign_in_that_ended_during_a_change_shows_the_signed_out_page_with_focus_on_the_heading() {
+        let one = || vec![identity("a", "google", None)];
+        let (vm, t) = ready(Locale::En, None, one());
+        vm.choose_storage(true);
+        t.account.answer(AccountReply::Done(Err(AccountError::SignedOut)));
+        assert_eq!((vm.state(), focus(&vm)), (State::SignedOut, Focus::Page));
+        let (vm, t) = ready(Locale::En, Some(true), one());
+        vm.ask_delete();
+        vm.confirm_delete();
+        t.account.answer(AccountReply::Done(Err(AccountError::SignedOut)));
+        assert_eq!((vm.state(), focus(&vm), vm.confirming_delete()), (State::SignedOut, Focus::Page, false));
+        let (vm, t) = ready(Locale::En, Some(true), one());
+        vm.sign_out();
+        t.account.answer(AccountReply::Done(Err(AccountError::SignedOut)));
+        assert_eq!((vm.state(), focus(&vm)), (State::SignedOut, Focus::Page));
+        assert_eq!(t.navigator.take(), ["/index.html"]);
     }
 }

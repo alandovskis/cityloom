@@ -84,7 +84,7 @@ test("unlinking a sign-in keeps focus on the page and the last one cannot be unl
   await page.goto("/account.html");
   await expect(page.getByRole("button", { name: "Unlink", exact: false })).toHaveCount(2);
   await page.getByRole("button", { name: "Unlink Google (ada@example.org)" }).click();
-  await expect(live(page)).toHaveText("Account unlinked.");
+  await expect(live(page)).toHaveText("Sign-in unlinked.");
   await expect(page.locator("#h-linked")).toBeFocused();
   await expect(page.getByRole("button", { name: /^Unlink/ })).toHaveCount(0);
   await expect(page.getByText("This is your only sign-in, so it cannot be unlinked.")).toBeVisible();
@@ -105,6 +105,7 @@ test("deleting is confirmed in the page, with focus on the safe button, and leav
 });
 
 test("a session that ended meanwhile shows the signed-out page", async ({ page }) => {
+  test.info().annotations.push({ type: "failing-account-api" });
   const account: Account = {
     store_on_server: true,
     identities: [identity("a", "google", null), identity("b", "osm", null)],
@@ -117,4 +118,26 @@ test("a session that ended meanwhile shows the signed-out page", async ({ page }
   await page.getByRole("button", { name: "Unlink OpenStreetMap" }).click();
   await expect(page.getByText("You are signed out.")).toBeVisible();
   await expect(page.locator("#account-title")).toBeFocused();
+});
+
+test("a storage choice the server refuses leaves nothing chosen and focus on the choice", async ({ page }) => {
+  test.info().annotations.push({ type: "failing-account-api" });
+  await serveAccount(page, { store_on_server: null, identities: [identity("a", "google", null)] });
+  await page.unroute("**/api/me/storage");
+  await page.route("**/api/me/storage", (route) => route.fulfill({ status: 500 }));
+  await page.goto("/account.html");
+  await page.getByRole("radio", { name: /Store my work on the server/ }).check({ force: true });
+  await expect(live(page)).toHaveText("That did not work. Try again.");
+  await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
+  await expect(page.locator("#h-storage")).toBeFocused();
+});
+
+test("Escape closes the deletion's confirmation and focus goes back to Delete account", async ({ page }) => {
+  await serveAccount(page, { store_on_server: true, identities: [identity("a", "google", null)] });
+  await page.goto("/account.html");
+  await page.getByRole("button", { name: "Delete account…" }).click();
+  await expect(page.getByRole("group", { name: "Delete your account?" })).toHaveAccessibleDescription(/Railway/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#delete-confirm")).toHaveCount(0);
+  await expect(page.locator("#delete-btn")).toBeFocused();
 });

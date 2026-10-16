@@ -121,9 +121,21 @@ fn delete(vm: Vm) -> impl IntoView {
             {move || {
                 if vm.with_value(|v| v.confirming_delete()) {
                     view! {
-                        <div role="group" aria-labelledby="h-confirm" id="delete-confirm" class="confirm">
+                        <div
+                            role="group"
+                            aria-labelledby="h-confirm"
+                            aria-describedby="delete-warning"
+                            id="delete-confirm"
+                            class="confirm"
+                            on:keydown=move |e| {
+                                if e.key() == "Escape" {
+                                    e.stop_propagation();
+                                    vm.with_value(|v| v.cancel_delete());
+                                }
+                            }
+                        >
                             <h3 id="h-confirm">{tr(vm, "account-delete-confirm-heading")}</h3>
-                            <p>{tr(vm, "account-delete-warning")}</p>
+                            <p id="delete-warning">{tr(vm, "account-delete-warning")}</p>
                             <button type="button" id="delete-no" class="btn" on:click=move |_| vm.with_value(|v| v.cancel_delete())>
                                 {tr(vm, "account-delete-no")}
                             </button>

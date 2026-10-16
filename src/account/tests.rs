@@ -117,6 +117,7 @@ fn deleting_is_confirmed_in_the_page_with_the_backup_retention_said() {
     assert!(after.contains("Delete my account") && after.contains("Keep my account"), "{after}");
     assert!(after.contains("Railway") && after.contains("backups"), "the retention is said: {after}");
     assert!(after.contains("Work kept on this device is not affected."), "{after}");
+    assert!(after.contains(r#"aria-describedby="delete-warning""#) && after.contains(r#"id="delete-warning""#), "{after}");
 }
 
 #[test]
@@ -129,7 +130,7 @@ fn the_page_speaks_french() {
         "{out}"
     );
     let out = page(Locale::FrCa, vec![AccountReply::Me(Err(AccountError::SignedOut)), providers()], no_op);
-    assert!(out.contains("Vous êtes déconnecté."), "{out}");
+    assert!(out.contains("Aucune session n’est ouverte."), "{out}");
 }
 
 #[test]
