@@ -151,5 +151,5 @@ pub async fn signout(State(a): State<Arc<Account>>, jar: CookieJar) -> Response 
         }
     }
     // A link flow begun before signing out must not finish for the next person on this browser.
-    (jar.add(session::removal()), StatusCode::NO_CONTENT).into_response()
+    (jar.add(session::removal()).add(flow::removal()), StatusCode::NO_CONTENT).into_response()
 }

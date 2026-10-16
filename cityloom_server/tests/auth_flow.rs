@@ -271,6 +271,27 @@ async fn signing_out_ends_the_session_and_needs_this_sites_origin(pool: PgPool) 
 }
 
 #[sqlx::test]
+async fn signing_out_clears_a_link_flow_begun_before(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let mut b = app.browser();
+    sign_in(&mut b, "fake", "/", &ada("s1")).await;
+    b.get("/auth/fake/start?link=1&return=/account.html").await;
+    assert!(b.cookie(FLOW).is_some(), "a link flow is under way");
+    let r = b.request("POST", "/auth/signout", Some("http://127.0.0.1:8137"), None).await;
+    assert_eq!(r.status, StatusCode::NO_CONTENT);
+    assert!(b.cookie(SESSION).is_none() && b.cookie(FLOW).is_none(), "both cookies are gone");
+}
+
+#[tokio::test]
+async fn signing_out_when_the_session_cannot_be_ended_still_clears_the_cookie_and_answers_204() {
+    let mut b = Browser::new(TestApp::with_repo(std::sync::Arc::new(DownRepo)));
+    b.set_cookie(SESSION, &cityloom_server::session::new_token());
+    let r = b.request("POST", "/auth/signout", Some("http://127.0.0.1:8137"), None).await;
+    assert_eq!(r.status, StatusCode::NO_CONTENT);
+    assert!(b.cookie(SESSION).is_none());
+}
+
+#[sqlx::test]
 async fn too_many_requests_to_auth_from_one_address_are_429(pool: PgPool) {
     let app = TestApp::with_rate(pool, RateLimit { period_secs: 60, burst: 3 });
     let mut b = app.browser();
