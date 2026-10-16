@@ -105,7 +105,8 @@ async fn callback(a: Arc<Account>, slug: String, jar: CookieJar, p: CallbackPara
         back(jar, &flow.return_path, "failed")
     };
     if let Some(error) = &p.error {
-        if error == "access_denied" {
+        // Apple reports a cancel as `user_cancelled_authorize`; the others as `access_denied`.
+        if matches!(error.as_str(), "access_denied" | "user_cancelled_authorize") {
             tracing::info!(provider = %slug, outcome = "cancelled", "sign-in");
             return back(jar, &flow.return_path, "cancelled");
         }
@@ -144,8 +145,11 @@ async fn callback(a: Arc<Account>, slug: String, jar: CookieJar, p: CallbackPara
 pub async fn signout(State(a): State<Arc<Account>>, jar: CookieJar) -> Response {
     if let Some(c) = jar.get(session::COOKIE) {
         if let Err(e) = session::end(&*a.repo, c.value()).await {
+            // The cookie goes whatever happens, and the person is told they are out; the row that is left is useful
+            // only to someone who already holds the token. The log has the reason, never the token.
             tracing::warn!(reason = %e, "a session could not be ended");
         }
     }
+    // A link flow begun before signing out must not finish for the next person on this browser.
     (jar.add(session::removal()), StatusCode::NO_CONTENT).into_response()
 }

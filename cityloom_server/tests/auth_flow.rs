@@ -58,6 +58,18 @@ async fn saying_no_at_the_provider_is_cancelled_and_makes_nothing(pool: PgPool) 
 }
 
 #[sqlx::test]
+async fn apples_cancel_code_is_cancelled_too(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let mut b = app.browser();
+    let started = b.get("/auth/fake/start?return=/map.html").await;
+    let location = started.location().unwrap();
+    let state = location.split(['?', '&']).find_map(|pair| pair.strip_prefix("state=")).expect("the start sends a state").to_string();
+    let r = b.get(&format!("/auth/fake/callback?error=user_cancelled_authorize&state={state}")).await;
+    assert_eq!(r.location().as_deref(), Some("/map.html#account=cancelled"));
+    assert!(b.cookie(SESSION).is_none() && b.cookie(FLOW).is_none());
+}
+
+#[sqlx::test]
 async fn a_callback_with_the_wrong_state_fails_and_makes_nothing(pool: PgPool) {
     let app = TestApp::new(pool);
     let mut b = app.browser();
