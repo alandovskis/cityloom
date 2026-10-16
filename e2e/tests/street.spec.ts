@@ -62,19 +62,20 @@ test.describe("the street editor on a street of the city", () => {
   });
 
   test("a buffer too narrow to press is selected with the arrow keys and announced", async ({ page }) => {
-    // an imported curb buffer is 150 mm: look for a street of the area that has one narrower than a press can reach
-    let narrow = -1;
-    for (let n = 0; n < 40 && narrow < 0; n++) {
-      await openStreet(page, n);
-      const widths = await page
-        .locator('#drawing [data-role="seg"]')
-        .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
-      narrow = widths.findIndex((w) => w < PRESSABLE_PX);
-    }
-    expect(narrow, "a street with a piece too narrow to press").toBeGreaterThanOrEqual(0);
+    // a buffer as narrow as an imported curb's 150 mm: added, then narrowed with the keys
+    await page.locator("#add-btn").click();
+    await page.locator(".add-item", { hasText: "Buffer" }).click();
+    await page.locator("#wrap").focus();
+    for (let k = 0; k < 6; k++) await page.keyboard.press("-");
+    const widths = await page
+      .locator('#drawing [data-role="seg"]')
+      .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+    const narrow = widths.length - 1; // a new piece goes at the end
+    expect(widths[narrow], "too narrow to press").toBeLessThan(PRESSABLE_PX);
+    await page.keyboard.press("Escape");
     await page.locator("#wrap").focus();
     for (let k = 0; k <= narrow; k++) await page.keyboard.press("ArrowRight");
-    await expect(live(page)).toHaveText(new RegExp(`^Buffer, 0\\.15 m, ${narrow + 1} of \\d+$`));
+    await expect(live(page)).toHaveText(new RegExp(`^Buffer, 0\\.15 m, ${narrow + 1} of ${narrow + 1}$`));
     await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
   });
 
