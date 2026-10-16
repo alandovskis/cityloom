@@ -279,3 +279,18 @@ fn a_two_way_track_beside_a_road_in_left_hand_traffic_is_a_two_way_lane() {
     assert!(net.left_hand);
     assert_eq!(bike_ways(&net, "left hand"), [osm_import::Way::Both]);
 }
+
+#[test]
+fn a_service_road_nearer_to_the_track_does_not_take_it_from_the_street_it_is_mapped_for() {
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "service nearer"), [osm_import::Way::Both]);
+}
+
+#[test]
+fn a_parking_aisle_beside_the_track_does_not_matter() {
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "aisle beside"), [osm_import::Way::Both]);
+}
+
+#[test]
+fn a_track_beyond_the_middle_of_a_wide_road_is_still_its_track() {
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "wide road"), [osm_import::Way::Both]);
+}

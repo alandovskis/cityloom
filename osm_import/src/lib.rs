@@ -59,8 +59,8 @@ fn read_streets(osm: &[u8], clip: Option<Vec<geom::LonLat>>, config: MapConfig, 
         extract.handle_node(*id, node);
     }
     let two_way = two_way_tracks(&doc);
-    for (id, way) in doc.ways.iter_mut().map(|(id, way)| (*id, way)).chain(doc.clipped_copied_ways.iter_mut().map(|(id, way)| (*id, way))) {
-        for key in two_way.get(&id).into_iter().flatten() {
+    for (piece, way) in doc.ways.values_mut().chain(doc.clipped_copied_ways.iter_mut().map(|(_, way)| way)).enumerate() {
+        for key in two_way.get(&piece).into_iter().flatten() {
             way.tags.insert(key.clone(), "no");
         }
         explicit_sidewalks(&mut way.tags);
@@ -123,8 +123,9 @@ fn explicit_cycleways(tags: &mut Tags) {
 }
 
 /// How far from the road's centre line a separately mapped track lies, in metres: nearer is a lane of the road,
-/// further is another street's.
-const TRACK_OFFSET_M: std::ops::RangeInclusive<f64> = 1.5..=12.0;
+/// further is another street's. 16 m reaches past the track of a wide boulevard (four to six lanes, a buffer and the
+/// track lie 13 m or more from the centre) and stops short of a parallel street's, 20 m and more away.
+const TRACK_OFFSET_M: std::ops::RangeInclusive<f64> = 1.5..=16.0;
 
 /// The most a track may turn from the road beside it, in degrees.
 const TRACK_TURN_DEG: f64 = 30.0;
@@ -137,56 +138,81 @@ const TRACK_SHARE: f64 = 0.6;
 const TRACK_SAMPLES: usize = 5;
 
 /// The `cycleway:<side>:oneway` tags (`=no`) to give the roads whose bike track is mapped as ways of its own and runs
-/// both ways. osm2streets does not keep the ways of a track (and its lane has one direction only), so the road's side
+/// both ways, by the index of the piece of way (the ways of the document in order, then the pieces the clip cut, each
+/// its own). osm2streets does not keep the ways of a track (and its lane has one direction only), so the road's side
 /// is tied to them here, before it runs. A track is a `highway=cycleway` way, or a `path` or `footway` designated for
-/// bicycles (osm2streets reads those as bike lanes as well), that is not a crossing. It belongs to a road when that
-/// road is the nearest carriageway to it (by the mean distance of its sample points), and it runs along the road: at
-/// least 60% of its sample points lie 1.5 to 12 m from the road's centre line on the tagged side, within the road's
-/// extent (the point falls on a segment of it) and within 30 degrees of it (`runs_along`). The side is two-way when
-/// it has such tracks and none of them is one-way (OSM's default for a cycleway is both ways: `is_one_way`). The ways
-/// the clip cut into pieces are looked at as the others are, each piece as a way. A side where the road's own tags say
-/// `oneway` is left as they say.
-fn two_way_tracks(doc: &Document) -> BTreeMap<WayID, Vec<String>> {
+/// bicycles (osm2streets reads those as bike lanes as well), that is not a crossing.
+///
+/// A track belongs to one road, chosen among the carriageways it runs along (`runs_along`: at least 60% of five points
+/// along it lie within the road's extent, 1.5 to 16 m from its centre line on a side, and within 30 degrees of it).
+/// Of those, a road that says `separate` on that side comes first, then the nearest (the mean distance of the points),
+/// then the lower way id, so that a service road or a frontage lane nearer to the track does not take it from the
+/// street it is mapped for. The side is two-way when it has such tracks and none of them is one-way (OSM's default for
+/// a cycleway is both ways: `is_one_way`). A side where the road's own tags say `oneway` is left as they say.
+///
+/// Known limit: a standalone cycleway 5 to 16 m from a street tagged `separate` can be claimed by it when it really
+/// follows a railway or a river, and a road that says `separate` beside a track that is another street's own takes it
+/// when both lie within that band.
+fn two_way_tracks(doc: &Document) -> BTreeMap<usize, Vec<String>> {
     let ways: Vec<(WayID, &OsmWay)> = doc.ways.iter().map(|(id, w)| (*id, w)).chain(doc.clipped_copied_ways.iter().map(|(id, w)| (*id, w))).collect();
+    let separate = |road: &OsmWay, side: &str| {
+        ["cycleway", "cycleway:both", &format!("cycleway:{side}")].iter().rev().find_map(|k| road.tags.get(k)).is_some_and(|v| v == "separate")
+    };
+    let has_oneway = |road: &OsmWay, side: &str| road.tags.contains_key(&format!("cycleway:{side}:oneway")) || road.tags.contains_key("cycleway:both:oneway");
+    let wanted = |road: &OsmWay, side: &str| separate(road, side) && !has_oneway(road, side);
     let roads: Vec<usize> = (0..ways.len()).filter(|&i| is_carriageway(&ways[i].1.tags)).collect();
-    let mut owned: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-    for (t, (_, track)) in ways.iter().enumerate().filter(|(_, (_, w))| is_track(&w.tags)) {
-        let points: Vec<_> = samples(track).into_iter().map(|(p, _)| p).collect();
-        let Some(mid) = points.get(points.len() / 2) else { continue };
-        let nearest = roads
+    if !roads.iter().any(|&r| ["left", "right"].iter().any(|side| wanted(ways[r].1, side))) {
+        return BTreeMap::new();
+    }
+    let boxes: Vec<(f64, f64, f64, f64)> = roads.iter().map(|&r| bounding_box(&ways[r].1.pts)).collect();
+    // each track's road and side
+    let mut owned: Vec<(usize, &str, &OsmWay)> = Vec::new();
+    for (_, track) in ways.iter().filter(|(_, w)| is_track(&w.tags)) {
+        let points = samples(track);
+        let Some(&(mid, _)) = points.get(points.len() / 2) else { continue };
+        let margin = TRACK_OFFSET_M.end() * 2.5;
+        let best = roads
             .iter()
-            .filter(|&&r| near_box(&ways[r].1.pts, *mid, TRACK_OFFSET_M.end() * 2.5))
-            .map(|&r| (r, points.iter().map(|p| distance_to_line(*p, &ways[r].1.pts)).sum::<f64>() / points.len() as f64))
-            .min_by(|a, b| a.1.total_cmp(&b.1));
-        if let Some((r, _)) = nearest {
-            owned.entry(r).or_default().push(t);
+            .zip(&boxes)
+            .filter(|(_, b)| mid.x() >= b.0 - margin && mid.x() <= b.1 + margin && mid.y() >= b.2 - margin && mid.y() <= b.3 + margin)
+            .filter_map(|(&r, _)| {
+                let side = ["left", "right"].into_iter().find(|side| runs_along(ways[r].1, track, side))?;
+                let mean = points.iter().map(|(p, _)| distance_to_line(*p, &ways[r].1.pts)).sum::<f64>() / points.len() as f64;
+                Some((!separate(ways[r].1, side), mean, ways[r].0, r, side))
+            })
+            .min_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)));
+        if let Some((_, _, _, r, side)) = best {
+            owned.push((r, side, track));
         }
     }
-    let mut found = BTreeMap::new();
-    for (r, tracks) in owned {
-        let (id, road) = ways[r];
-        if !road.tags.has_any(vec!["cycleway", "cycleway:left", "cycleway:right", "cycleway:both"]) {
-            continue;
-        }
-        let separate = |side: &str| {
-            ["cycleway", "cycleway:both", &format!("cycleway:{side}")].iter().rev().find_map(|k| road.tags.get(k)).is_some_and(|v| v == "separate")
-        };
+    let mut found: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    for &r in &roads {
         for side in ["left", "right"] {
-            if !separate(side) || road.tags.contains_key(&format!("cycleway:{side}:oneway")) || road.tags.contains_key("cycleway:both:oneway") {
+            if !wanted(ways[r].1, side) {
                 continue;
             }
-            let along: Vec<_> = tracks.iter().map(|&t| ways[t].1).filter(|t| runs_along(road, t, side)).collect();
-            let key = format!("cycleway:{side}:oneway");
-            if !along.is_empty() && along.iter().all(|t| !is_one_way(&t.tags)) && !found.get(&id).is_some_and(|k: &Vec<String>| k.contains(&key)) {
-                found.entry(id).or_insert_with(Vec::new).push(key);
+            let mut mine = owned.iter().filter(|(owner, s, _)| *owner == r && *s == side).peekable();
+            if mine.peek().is_some() && mine.all(|(_, _, t)| !is_one_way(&t.tags)) {
+                found.entry(r).or_default().push(format!("cycleway:{side}:oneway"));
             }
         }
     }
     found
 }
 
-/// A way cars may drive on, the kind a bike track lies beside.
+fn bounding_box(line: &[geom::Pt2D]) -> (f64, f64, f64, f64) {
+    let (x0, x1) = line.iter().fold((f64::MAX, f64::MIN), |(lo, hi), q| (lo.min(q.x()), hi.max(q.x())));
+    let (y0, y1) = line.iter().fold((f64::MAX, f64::MIN), |(lo, hi), q| (lo.min(q.y()), hi.max(q.y())));
+    (x0, x1, y0, y1)
+}
+
+/// A way cars drive on, the kind a bike track lies beside: the classes from motorway to unclassified, residential,
+/// living_street, busway, and a `service` road that is not a driveway, a parking aisle, a drive-through or an alley
+/// (a back lane is not a street a track is mapped for).
 fn is_carriageway(tags: &Tags) -> bool {
+    if tags.is("highway", "service") && tags.is_any("service", vec!["driveway", "parking_aisle", "drive-through", "alley"]) {
+        return false;
+    }
     tags.get("highway").is_some_and(|h| {
         matches!(
             h.as_str(),
@@ -242,12 +268,6 @@ fn samples(way: &OsmWay) -> Vec<(geom::Pt2D, (geom::Pt2D, geom::Pt2D))> {
             (geom::Pt2D::new(a.x() + t * (b.x() - a.x()), a.y() + t * (b.y() - a.y())), (a, b))
         })
         .collect()
-}
-
-fn near_box(line: &[geom::Pt2D], p: geom::Pt2D, margin: f64) -> bool {
-    let (x0, x1) = line.iter().fold((f64::MAX, f64::MIN), |(lo, hi), q| (lo.min(q.x()), hi.max(q.x())));
-    let (y0, y1) = line.iter().fold((f64::MAX, f64::MIN), |(lo, hi), q| (lo.min(q.y()), hi.max(q.y())));
-    p.x() >= x0 - margin && p.x() <= x1 + margin && p.y() >= y0 - margin && p.y() <= y1 + margin
 }
 
 fn distance_to_line(p: geom::Pt2D, line: &[geom::Pt2D]) -> f64 {
@@ -439,7 +459,8 @@ mod tests {
         assert!(!runs_along(&road(), &way(&[(10.0, -0.5), (90.0, -0.5)]), "left"));
         assert!(!runs_along(&road(), &way(&[(10.0, -20.0), (90.0, -20.0)]), "left"));
         assert!(runs_along(&road(), &way(&[(10.0, -1.5), (90.0, -1.5)]), "left"));
-        assert!(runs_along(&road(), &way(&[(10.0, -12.0), (90.0, -12.0)]), "left"));
+        assert!(runs_along(&road(), &way(&[(10.0, -16.0), (90.0, -16.0)]), "left"), "the track of a wide boulevard");
+        assert!(!runs_along(&road(), &way(&[(10.0, -17.0), (90.0, -17.0)]), "left"));
     }
 
     #[test]
@@ -475,6 +496,16 @@ mod tests {
         assert!(!is_one_way(&tags(&[("oneway", "yes"), ("oneway:bicycle", "no")])), "the tag for bicycles wins");
         assert!(is_one_way(&tags(&[("oneway", "no"), ("oneway:bicycle", "yes")])));
         assert!(!is_one_way(&tags(&[("oneway", "yes"), ("bicycle:oneway", "no")])));
+    }
+
+    #[test]
+    fn a_driveway_a_parking_aisle_and_an_alley_are_no_carriageway_and_a_service_road_is() {
+        assert!(is_carriageway(&tags(&[("highway", "service")])));
+        assert!(is_carriageway(&tags(&[("highway", "residential")])));
+        for kind in ["driveway", "parking_aisle", "drive-through", "alley"] {
+            assert!(!is_carriageway(&tags(&[("highway", "service"), ("service", kind)])), "{kind}");
+        }
+        assert!(!is_carriageway(&tags(&[("highway", "cycleway")])));
     }
 
     #[test]

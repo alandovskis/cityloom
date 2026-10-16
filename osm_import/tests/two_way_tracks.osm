@@ -105,4 +105,28 @@
 <node id="1032" lat="45.551" lon="-73.6"></node>
 <node id="1033" lat="45.551" lon="-73.598"></node>
 <way id="103200"><nd ref="1032"/><nd ref="1033"/><tag k="highway" v="tertiary"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="track"/><tag k="cycleway:left:oneway" v="no"/><tag k="cycleway:right" v="no"/><tag k="name" v="two-way road side"/></way>
+<node id="2000" lat="45.56" lon="-73.6"></node>
+<node id="2001" lat="45.56" lon="-73.598"></node>
+<way id="200000"><nd ref="2000"/><nd ref="2001"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="name" v="service nearer"/></way>
+<node id="2002" lat="45.56004" lon="-73.6"></node>
+<node id="2003" lat="45.56004" lon="-73.598"></node>
+<way id="200200"><nd ref="2002"/><nd ref="2003"/><tag k="highway" v="service"/><tag k="name" v="frontage"/></way>
+<node id="2004" lat="45.5601" lon="-73.5997"></node>
+<node id="2005" lat="45.5601" lon="-73.5983"></node>
+<way id="9201"><nd ref="2004"/><nd ref="2005"/><tag k="highway" v="cycleway"/><tag k="oneway" v="no"/></way>
+<node id="2006" lat="45.563" lon="-73.6"></node>
+<node id="2007" lat="45.563" lon="-73.598"></node>
+<way id="200600"><nd ref="2006"/><nd ref="2007"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="name" v="aisle beside"/></way>
+<node id="2008" lat="45.56306" lon="-73.6"></node>
+<node id="2009" lat="45.56306" lon="-73.598"></node>
+<way id="200800"><nd ref="2008"/><nd ref="2009"/><tag k="highway" v="service"/><tag k="service" v="parking_aisle"/><tag k="name" v="lot"/></way>
+<node id="2010" lat="45.5631" lon="-73.5997"></node>
+<node id="2011" lat="45.5631" lon="-73.5983"></node>
+<way id="9202"><nd ref="2010"/><nd ref="2011"/><tag k="highway" v="cycleway"/><tag k="oneway" v="no"/></way>
+<node id="2012" lat="45.566" lon="-73.6"></node>
+<node id="2013" lat="45.566" lon="-73.598"></node>
+<way id="201200"><nd ref="2012"/><nd ref="2013"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="name" v="wide road"/></way>
+<node id="2014" lat="45.56613" lon="-73.5997"></node>
+<node id="2015" lat="45.56613" lon="-73.5983"></node>
+<way id="9203"><nd ref="2014"/><nd ref="2015"/><tag k="highway" v="cycleway"/><tag k="oneway" v="no"/></way>
 </osm>
