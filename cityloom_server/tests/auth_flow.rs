@@ -357,9 +357,12 @@ async fn paths_under_auth_and_api_that_no_route_answers_are_never_the_static_fil
         assert_eq!(r.status, StatusCode::NOT_FOUND, "{path}");
         assert_eq!(r.json()["error"], "not-found", "{path}");
     }
-    for path in ["/api", "/api/", "/api/me", "/api/x/y"] {
-        assert_eq!(b.get(path).await.status, StatusCode::SERVICE_UNAVAILABLE, "{path}");
+    for path in ["/api", "/api/", "/api/x/y"] {
+        let r = b.get(path).await;
+        assert_eq!(r.status, StatusCode::NOT_FOUND, "{path}");
+        assert_eq!(r.json()["error"], "not-found", "{path}");
     }
+    assert_eq!(b.get("/api/me").await.status, StatusCode::UNAUTHORIZED, "a real route");
     // A path that only starts like them is the site's.
     assert_ne!(b.get("/authors.html").await.status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(b.get("/auth/signout").await.status, StatusCode::METHOD_NOT_ALLOWED, "a GET is not a sign-out");

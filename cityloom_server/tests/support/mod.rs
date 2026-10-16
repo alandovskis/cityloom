@@ -11,6 +11,7 @@ use std::sync::Arc;
 use axum::Router;
 use axum::body::Body;
 use axum::http::{HeaderMap, StatusCode, header};
+use cityloom_server::accounts::{IdentityInput, IdentityView, Removal, Repo, RepoError, SessionRow, UserView};
 use cityloom_server::app::{Account, router};
 use cityloom_server::clock::FixedClock;
 use cityloom_server::config::{Config, RateLimit};
@@ -176,6 +177,73 @@ pub async fn sign_in(b: &mut Browser, slug: &str, return_path: &str, login: &Fak
     play_provider(b, &started.location().unwrap(), login).await
 }
 
+/// The whole router over `repo`; `http: None` means the in-process fake provider.
+pub fn account_router(repo: Arc<dyn Repo>, http: Option<Arc<dyn HttpClient>>, clock: Arc<FixedClock>, fake: Arc<FakeState>, rate: RateLimit) -> Router {
+    let mut providers = Providers::from_config_for_test(&[]);
+    for spec in fake_provider::specs(ISSUER) {
+        providers = providers.with(spec);
+    }
+    let account = Arc::new(Account {
+        repo,
+        http: http.unwrap_or_else(|| Arc::new(InProcess::with_state(fake.clone()))),
+        clock,
+        providers,
+        cookie_key: cookie::Key::from(&[7u8; 64]),
+        base_url: "http://127.0.0.1:8137".parse().unwrap(),
+        rate,
+        ready: Arc::new(std::sync::atomic::AtomicBool::new(true)), // `#[sqlx::test]` has migrated the database already
+        fake: Some(fake),
+    });
+    let config = Config::from_lookup(&|_| None).unwrap();
+    router(&config, Some(account))
+}
+
+/// A store that is down: every call fails as `Unavailable`.
+pub struct DownRepo;
+
+#[async_trait::async_trait]
+impl Repo for DownRepo {
+    async fn find_identity(&self, _: &str, _: &str) -> Result<Option<uuid::Uuid>, RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn create_user(&self, _: &str, _: &IdentityInput) -> Result<uuid::Uuid, RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn add_identity(&self, _: uuid::Uuid, _: &IdentityInput) -> Result<(), RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn user(&self, _: uuid::Uuid) -> Result<Option<UserView>, RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn identities(&self, _: uuid::Uuid) -> Result<Vec<IdentityView>, RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn remove_identity(&self, _: uuid::Uuid, _: &str) -> Result<Removal, RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn set_storage(&self, _: uuid::Uuid, _: bool) -> Result<(), RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn delete_user(&self, _: uuid::Uuid) -> Result<(), RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn create_session(&self, _: [u8; 32], _: uuid::Uuid, _: time::OffsetDateTime, _: time::OffsetDateTime) -> Result<(), RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn session(&self, _: &[u8; 32]) -> Result<Option<SessionRow>, RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn touch_session(&self, _: &[u8; 32], _: time::OffsetDateTime, _: time::OffsetDateTime) -> Result<(), RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn delete_session(&self, _: &[u8; 32]) -> Result<(), RepoError> {
+        Err(RepoError::Unavailable)
+    }
+    async fn delete_expired_sessions(&self, _: time::OffsetDateTime) -> Result<u64, RepoError> {
+        Err(RepoError::Unavailable)
+    }
+}
+
 pub struct TestApp {
     pub router: Router,
     pub repo: Arc<PgRepo>,
@@ -191,10 +259,10 @@ impl TestApp {
         TestApp::build(pool, rate, None)
     }
     /// The server's calls out go to `http` instead of the fake provider (a provider that is down, say).
-    pub fn with_http(pool: PgPool, http: Arc<dyn cityloom_server::providers::HttpClient>) -> TestApp {
+    pub fn with_http(pool: PgPool, http: Arc<dyn HttpClient>) -> TestApp {
         TestApp::build(pool, RateLimit { period_secs: 1, burst: 1000 }, Some(http))
     }
-    fn build(pool: PgPool, rate: RateLimit, http: Option<Arc<dyn cityloom_server::providers::HttpClient>>) -> TestApp {
+    fn build(pool: PgPool, rate: RateLimit, http: Option<Arc<dyn HttpClient>>) -> TestApp {
         let clock = Arc::new(FixedClock::new(t0()));
         let fake = FakeState::new(ISSUER.into(), clock.clone());
         let repo = Arc::new(PgRepo::new(
@@ -202,23 +270,14 @@ impl TestApp {
             MasterKeys::new(&[(1, zeroize::Zeroizing::new([1; 32]))], 1).unwrap(),
             LookupKey::new(zeroize::Zeroizing::new([3; 32])),
         ));
-        let mut providers = Providers::from_config_for_test(&[]);
-        for spec in fake_provider::specs(ISSUER) {
-            providers = providers.with(spec);
-        }
-        let account = Arc::new(Account {
-            repo: repo.clone(),
-            http: http.unwrap_or_else(|| Arc::new(InProcess::with_state(fake.clone()))),
-            clock: clock.clone(),
-            providers,
-            cookie_key: cookie::Key::from(&[7u8; 64]),
-            base_url: "http://127.0.0.1:8137".parse().unwrap(),
-            rate,
-            ready: Arc::new(std::sync::atomic::AtomicBool::new(true)), // `#[sqlx::test]` has migrated the database already
-            fake: Some(fake.clone()),
-        });
-        let config = Config::from_lookup(&|_| None).unwrap();
-        TestApp { router: router(&config, Some(account)), repo, clock, fake }
+        let router = account_router(repo.clone(), http, clock.clone(), fake.clone(), rate);
+        TestApp { router, repo, clock, fake }
+    }
+    /// The router over a repository of the test's choosing (one that is down, say).
+    pub fn with_repo(repo: Arc<dyn Repo>) -> Router {
+        let clock = Arc::new(FixedClock::new(t0()));
+        let fake = FakeState::new(ISSUER.into(), clock.clone());
+        account_router(repo, None, clock, fake, RateLimit { period_secs: 1, burst: 1000 })
     }
     pub fn browser(&self) -> Browser {
         Browser::new(self.router.clone())

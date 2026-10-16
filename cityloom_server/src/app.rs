@@ -21,7 +21,7 @@ use crate::config::{Config, RateLimit};
 #[cfg(feature = "test-provider")]
 use crate::fake_provider;
 use crate::providers::{HttpClient, Providers};
-use crate::{auth, session, static_files};
+use crate::{api, auth, session, static_files};
 
 /// How often the rate limiter forgets the addresses that have been quiet long enough to have their full allowance back.
 const LIMITER_CLEANUP: std::time::Duration = std::time::Duration::from_secs(60);
@@ -88,14 +88,9 @@ async fn account_off(req: Request, next: Next) -> Response {
     if under_account_path(req.uri().path()).is_some() { unavailable().await } else { next.run(req).await }
 }
 
-/// What no account route answered under `/auth` or `/api` is not a file of the site either: a path the router does
-/// not know under `/auth` is a 404, and `/api` keeps answering 503 until its routes are mounted.
+/// What no account route answered under `/auth` or `/api` is not a file of the site either: a 404.
 async fn account_on(req: Request, next: Next) -> Response {
-    match under_account_path(req.uri().path()) {
-        Some("/auth") => not_found().await,
-        Some(_) => unavailable().await,
-        None => next.run(req).await,
-    }
+    if under_account_path(req.uri().path()).is_some() { not_found().await } else { next.run(req).await }
 }
 
 /// POST, PUT, PATCH and DELETE need this site's own `Origin`; reads pass.
@@ -186,7 +181,7 @@ pub fn router(config: &Config, account: Option<Arc<Account>>) -> Router {
         // The outermost layer of the account routes: no database, no sign-in, and no request counted against the limit.
         .layer(middleware::from_fn_with_state(account.clone(), require_ready))
         .with_state(account.clone());
-    let app = Router::new().merge(auth).fallback_service(site.layer(middleware::from_fn(account_on)));
+    let app = Router::new().merge(auth).merge(api::routes(account.clone())).fallback_service(site.layer(middleware::from_fn(account_on)));
     #[cfg(feature = "test-provider")]
     let app = match &account.fake {
         Some(fake) => app.nest("/fake", fake_provider::router(fake.clone())),
