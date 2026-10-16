@@ -150,6 +150,11 @@ const TRACK_SAMPLES: usize = 5;
 /// street it is mapped for. The side is two-way when it has such tracks and none of them is one-way (OSM's default for
 /// a cycleway is both ways: `is_one_way`). A side where the road's own tags say `oneway` is left as they say.
 ///
+/// A road that says `separate` on a side but also `cycleway:<side>:oneway` (or `cycleway:both:oneway`) does not use
+/// a track, so it ranks as one that does not say `separate`. A tagged road that is not a carriageway (an alley, a
+/// pedestrian street, a `road` or a `track`) is never a candidate and stays as its tags say: letting any road
+/// eligible would also make the cycleways themselves roads, so the list of carriageways stays.
+///
 /// Known limit: a standalone cycleway 5 to 16 m from a street tagged `separate` can be claimed by it when it really
 /// follows a railway or a river, and a road that says `separate` beside a track that is another street's own takes it
 /// when both lie within that band.
@@ -178,7 +183,7 @@ fn two_way_tracks(doc: &Document) -> BTreeMap<usize, Vec<String>> {
             .filter_map(|(&r, _)| {
                 let side = ["left", "right"].into_iter().find(|side| runs_along(ways[r].1, track, side))?;
                 let mean = points.iter().map(|(p, _)| distance_to_line(*p, &ways[r].1.pts)).sum::<f64>() / points.len() as f64;
-                Some((!separate(ways[r].1, side), mean, ways[r].0, r, side))
+                Some((!wanted(ways[r].1, side), mean, ways[r].0, r, side))
             })
             .min_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)));
         if let Some((_, _, _, r, side)) = best {
@@ -275,7 +280,7 @@ fn distance_to_line(p: geom::Pt2D, line: &[geom::Pt2D]) -> f64 {
 }
 
 /// Whether `track` runs along `road` on its `side`: at least 60% of the points along the track lie, beside a segment
-/// of the road (the point falls on the segment, not past its end), 1.5 to 12 m from it on that side, and the
+/// of the road (the point falls on the segment, not past its end), 1.5 to 16 m from it on that side, and the
 /// track there points the way the segment does or the opposite, within 30 degrees.
 fn runs_along(road: &OsmWay, track: &OsmWay, side: &str) -> bool {
     let points = samples(track);

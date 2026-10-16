@@ -294,3 +294,9 @@ fn a_parking_aisle_beside_the_track_does_not_matter() {
 fn a_track_beyond_the_middle_of_a_wide_road_is_still_its_track() {
     assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "wide road"), [osm_import::Way::Both]);
 }
+
+#[test]
+fn a_road_that_will_not_use_the_track_does_not_take_it_from_the_street_that_will() {
+    assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "competed for"), [osm_import::Way::Both]);
+    assert!(!bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "one-way competitor").contains(&osm_import::Way::Both));
+}

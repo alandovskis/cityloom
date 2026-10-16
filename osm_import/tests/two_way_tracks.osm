@@ -129,4 +129,13 @@
 <node id="2014" lat="45.56613" lon="-73.5997"></node>
 <node id="2015" lat="45.56613" lon="-73.5983"></node>
 <way id="9203"><nd ref="2014"/><nd ref="2015"/><tag k="highway" v="cycleway"/><tag k="oneway" v="no"/></way>
+<node id="3000" lat="45.59" lon="-73.6"></node>
+<node id="3001" lat="45.59" lon="-73.598"></node>
+<way id="300000"><nd ref="3000"/><nd ref="3001"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="name" v="competed for"/></way>
+<node id="3002" lat="45.59004" lon="-73.6"></node>
+<node id="3003" lat="45.59004" lon="-73.598"></node>
+<way id="300200"><nd ref="3002"/><nd ref="3003"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="no"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="cycleway:left:oneway" v="yes"/><tag k="name" v="one-way competitor"/></way>
+<node id="3004" lat="45.5901" lon="-73.5997"></node>
+<node id="3005" lat="45.5901" lon="-73.5983"></node>
+<way id="9301"><nd ref="3004"/><nd ref="3005"/><tag k="highway" v="cycleway"/><tag k="oneway" v="no"/></way>
 </osm>
