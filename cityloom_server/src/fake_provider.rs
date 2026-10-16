@@ -223,6 +223,25 @@ async fn token(State(s): State<Arc<FakeState>>, headers: HeaderMap, Form(f): For
     Json(serde_json::json!({ "access_token": B64.encode(random_bytes::<16>()), "token_type": "Bearer", "expires_in": LIFETIME_SECS, "id_token": s.id_token(&code) })).into_response()
 }
 
+/// The two providers the fake stands for: "fake" (the response comes in the query) and "fake-apple" (an Apple-like
+/// `form_post`, with the client secret in the token request's body).
+pub fn specs(issuer: &str) -> Vec<crate::providers::ProviderSpec> {
+    use crate::providers::{ClientSecret, Kind, ProviderSpec};
+    [("fake", "Fake", false), ("fake-apple", "Fake (form post)", true)]
+        .into_iter()
+        .map(|(slug, name, form_post)| ProviderSpec {
+            slug: slug.into(),
+            name,
+            kind: if form_post { Kind::Apple } else { Kind::Standard },
+            issuer: issuer.into(),
+            scopes: vec!["email", "profile"],
+            client_id: "fake-client".into(),
+            secret: ClientSecret::Static("fake-secret".into()),
+            form_post,
+        })
+        .collect()
+}
+
 pub fn router(state: Arc<FakeState>) -> Router {
     Router::new()
         .route("/.well-known/openid-configuration", get(discovery))

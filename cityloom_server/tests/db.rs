@@ -142,3 +142,21 @@ async fn a_value_moved_to_another_row_or_read_with_other_keys_is_corrupt_not_pla
     let strangers = PgRepo::new(pool, MasterKeys::new(&[(2, zeroize::Zeroizing::new([9; 32]))], 2).unwrap(), LookupKey::new(zeroize::Zeroizing::new([3; 32])));
     assert_eq!(strangers.user(bob).await.unwrap_err(), RepoError::Corrupt);
 }
+
+#[sqlx::test]
+async fn the_background_migration_marks_a_reachable_database_ready(pool: PgPool) {
+    let ready = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let task = cityloom_server::db::spawn_migrations(pool, ready.clone());
+    tokio::time::timeout(std::time::Duration::from_secs(10), task).await.expect("it finishes once the database answers").unwrap();
+    assert!(ready.load(std::sync::atomic::Ordering::Acquire));
+}
+
+#[tokio::test]
+async fn the_background_migration_keeps_trying_while_the_database_is_down() {
+    let pool = cityloom_server::db::connect_lazy("postgres://nobody:nothing@127.0.0.1:1/none").unwrap();
+    let ready = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let task = cityloom_server::db::spawn_migrations_every(pool, ready.clone(), std::time::Duration::from_millis(10), std::time::Duration::from_millis(40));
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    assert!(!ready.load(std::sync::atomic::Ordering::Acquire) && !task.is_finished(), "still retrying, not given up");
+    task.abort();
+}

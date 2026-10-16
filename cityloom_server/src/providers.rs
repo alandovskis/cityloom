@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreIdToken, CoreJsonWebKeySet, CoreProviderMetadata};
 use openidconnect::{
     AuthType, AuthorizationCode, ClaimsVerificationError, ClientId, ClientSecret as OidcSecret, CsrfToken, Nonce, PkceCodeChallenge, PkceCodeVerifier,
-    RedirectUrl, RequestTokenError, Scope, TokenResponse,
+    RedirectUrl, Scope, TokenResponse,
 };
 use time::OffsetDateTime;
 
@@ -54,20 +54,16 @@ impl HttpClient for ReqwestClient {
     }
 }
 
-/// openidconnect's way to call out, over our trait.
-struct Adapter<'a>(&'a dyn HttpClient);
-
-impl<'a, 'c> openidconnect::AsyncHttpClient<'c> for Adapter<'a>
-where
-    'a: 'c,
-{
-    type Error = AdapterError;
-    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<openidconnect::HttpResponse, AdapterError>> + Send + 'c>>;
-    fn call(&'c self, request: openidconnect::HttpRequest) -> Self::Future {
-        Box::pin(async move { self.0.send(request).await.map_err(|_| AdapterError) })
+/// Polls a future that has nothing to wait for, once.
+fn run_to_the_end<F: std::future::Future>(future: F) -> F::Output {
+    let mut future = std::pin::pin!(future);
+    match future.as_mut().poll(&mut std::task::Context::from_waker(std::task::Waker::noop())) {
+        std::task::Poll::Ready(output) => output,
+        std::task::Poll::Pending => unreachable!("the stand-in clients answer at once"),
     }
 }
 
+/// What the stand-in clients answer when they are not to send anything.
 #[derive(Debug, thiserror::Error)]
 #[error("the request failed")]
 struct AdapterError;
@@ -223,7 +219,8 @@ async fn metadata(spec: &ProviderSpec, http: &dyn HttpClient) -> Result<CoreProv
     }
     doc["issuer"] = serde_json::Value::String(spec.issuer.clone());
     let metadata: CoreProviderMetadata = serde_json::from_value(doc).map_err(|_| ProviderError::Discovery)?;
-    let keys = CoreJsonWebKeySet::fetch_async(metadata.jwks_uri(), &Adapter(http)).await.map_err(|_| ProviderError::Discovery)?;
+    let keys = get(http, metadata.jwks_uri().as_str()).await?;
+    let keys: CoreJsonWebKeySet = serde_json::from_slice(&keys).map_err(|_| ProviderError::Discovery)?;
     Ok(metadata.set_jwks(keys))
 }
 
@@ -277,16 +274,27 @@ pub async fn finish(
         // Apple's token endpoint takes `client_secret_post` only; openidconnect's default is HTTP Basic.
         client = client.set_auth_type(AuthType::RequestBody);
     }
-    let token = client
-        .exchange_code(AuthorizationCode::new(code.to_string()))
-        .map_err(|_| ProviderError::Exchange)?
-        .set_pkce_verifier(PkceCodeVerifier::new(flow.pkce_verifier.clone()))
-        .request_async(&Adapter(http))
-        .await
-        .map_err(|e| match e {
-            RequestTokenError::Request(_) => ProviderError::Unreachable,
-            _ => ProviderError::Exchange,
-        })?;
+    // The token endpoint is called by hand, between two runs of openidconnect's request that never wait: the first
+    // only hands over the request it would send, the second reads the answer. (Awaiting `request_async(&client)` with
+    // a client of our own makes rustc fail to prove a handler that awaits `finish` `Send`: "higher-ranked lifetime
+    // error". Nothing else of openidconnect is awaited.)
+    let exchange = || {
+        client
+            .exchange_code(AuthorizationCode::new(code.to_string()))
+            .map(|request| request.set_pkce_verifier(PkceCodeVerifier::new(flow.pkce_verifier.clone())))
+            .map_err(|_| ProviderError::Exchange)
+    };
+    let request = {
+        let asked = std::cell::RefCell::new(None);
+        let _ = run_to_the_end(exchange()?.request_async(&|request| {
+            *asked.borrow_mut() = Some(request);
+            std::future::ready(Err::<openidconnect::HttpResponse, _>(AdapterError))
+        }));
+        asked.into_inner().ok_or(ProviderError::Exchange)?
+    };
+    let response = http.send(request).await.map_err(|_| ProviderError::Unreachable)?;
+    let token =
+        run_to_the_end(exchange()?.request_async(&|_| std::future::ready(Ok::<_, AdapterError>(response.clone())))).map_err(|_| ProviderError::Exchange)?;
     let id_token = token.id_token().ok_or(ProviderError::Token("missing"))?;
     let skew = chrono::Duration::seconds(SKEW_SECS);
     let at = chrono::DateTime::from_timestamp(now.unix_timestamp(), 0).unwrap_or_default();

@@ -1,4 +1,8 @@
 //! The Postgres `Repo`. It stores only what `crypto` sealed; the plaintext lives in memory for the length of a call.
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+
 use async_trait::async_trait;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{PgPool, Row};
@@ -12,8 +16,44 @@ pub mod rotate;
 
 pub async fn connect(database_url: &str) -> Result<PgPool, sqlx::Error> {
     let pool = PgPoolOptions::new().max_connections(10).connect(database_url).await?;
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    migrate(&pool).await?;
     Ok(pool)
+}
+
+/// A pool that opens its first connection when it is first used, so a Postgres that is down at start-up is not fatal.
+pub fn connect_lazy(database_url: &str) -> Result<PgPool, sqlx::Error> {
+    PgPoolOptions::new().max_connections(10).acquire_timeout(Duration::from_secs(5)).connect_lazy(database_url)
+}
+
+pub async fn migrate(pool: &PgPool) -> Result<(), sqlx::migrate::MigrateError> {
+    sqlx::migrate!("./migrations").run(pool).await
+}
+
+/// Runs the migrations until one run succeeds (waiting 1 s, then 2 s, and so on up to 30 s between tries), then
+/// says the database is ready. A task of its own, so the server is listening, and answering 503, meanwhile.
+pub fn spawn_migrations(pool: PgPool, ready: Arc<AtomicBool>) -> tokio::task::JoinHandle<()> {
+    spawn_migrations_every(pool, ready, Duration::from_secs(1), Duration::from_secs(30))
+}
+
+pub fn spawn_migrations_every(pool: PgPool, ready: Arc<AtomicBool>, first: Duration, longest: Duration) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut wait = first;
+        loop {
+            match migrate(&pool).await {
+                Ok(()) => {
+                    ready.store(true, Ordering::Release);
+                    tracing::info!("the database is ready");
+                    return;
+                }
+                Err(e) => {
+                    // The kind of failure only: the driver's message can carry the connection string.
+                    tracing::warn!(kind = ?std::mem::discriminant(&e), retry_in_secs = wait.as_secs_f32(), "the database is not ready");
+                    tokio::time::sleep(wait).await;
+                    wait = (wait * 2).min(longest);
+                }
+            }
+        }
+    })
 }
 
 pub struct PgRepo {
