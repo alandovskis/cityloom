@@ -29,7 +29,7 @@ just check    # test, then e2e
 just format   # rustfmt and Prettier (just format-check only checks)
 ```
 
-Without `just`: `cargo test`, `./scripts/build.sh`, `cargo run -p cityloom_server` (the basemap's tiles need range requests, which `python3 -m http.server` does not answer), and `cd e2e && npx playwright test`.
+Without `just`: `cargo test --workspace --features cityloom_server/test-provider` (the server's tests need a Postgres: `just db` starts one and prints the `DATABASE_URL` to export; `just test` checks both), `./scripts/build.sh`, `cargo run -p cityloom_server` (the basemap's tiles need range requests, which `python3 -m http.server` does not answer), and `cd e2e && npx playwright test`.
 
 The server's tests and the account spec need a Postgres: `just db`, then `export DATABASE_URL=...` as it prints.
 
