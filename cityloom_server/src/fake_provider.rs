@@ -59,6 +59,8 @@ struct Code {
     nonce: String,
     redirect_uri: String,
     challenge: String,
+    /// Apple-like: the credentials must come in the body, as Apple's `client_secret_post` wants.
+    form_post: bool,
 }
 
 pub struct FakeState {
@@ -180,6 +182,7 @@ async fn authorize(State(s): State<Arc<FakeState>>, headers: HeaderMap, Query(q)
                 nonce: q.nonce.clone().unwrap_or_default(),
                 redirect_uri: q.redirect_uri.clone(),
                 challenge: q.code_challenge.clone().unwrap_or_default(),
+                form_post,
             },
         );
     }
@@ -203,15 +206,19 @@ struct TokenForm {
     code: String,
     redirect_uri: String,
     code_verifier: Option<String>,
+    client_secret: Option<String>,
 }
 
-async fn token(State(s): State<Arc<FakeState>>, Form(f): Form<TokenForm>) -> Response {
+async fn token(State(s): State<Arc<FakeState>>, headers: HeaderMap, Form(f): Form<TokenForm>) -> Response {
     let bad = || (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "invalid_grant" }))).into_response();
     // Taken out whatever happens: a guess gets one go.
     let Some(code) = s.codes.lock().unwrap().remove(&f.code) else { return bad() };
     let verifier_ok = f.code_verifier.as_deref().is_some_and(|v| B64.encode(Sha256::digest(v.as_bytes())) == code.challenge);
     if f.redirect_uri != code.redirect_uri || !verifier_ok {
         return bad();
+    }
+    if code.form_post && (headers.contains_key(header::AUTHORIZATION) || f.client_secret.as_deref().is_none_or(str::is_empty)) {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "invalid_client" }))).into_response();
     }
     Json(serde_json::json!({ "access_token": B64.encode(random_bytes::<16>()), "token_type": "Bearer", "expires_in": LIFETIME_SECS, "id_token": s.id_token(&code) })).into_response()
 }

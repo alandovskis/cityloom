@@ -2,8 +2,8 @@
 use async_trait::async_trait;
 use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreIdToken, CoreJsonWebKeySet, CoreProviderMetadata};
 use openidconnect::{
-    AuthorizationCode, ClaimsVerificationError, ClientId, ClientSecret as OidcSecret, CsrfToken, Nonce, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl,
-    RequestTokenError, Scope, TokenResponse,
+    AuthType, AuthorizationCode, ClaimsVerificationError, ClientId, ClientSecret as OidcSecret, CsrfToken, Nonce, PkceCodeChallenge, PkceCodeVerifier,
+    RedirectUrl, RequestTokenError, Scope, TokenResponse,
 };
 use time::OffsetDateTime;
 
@@ -270,9 +270,13 @@ pub async fn finish(
     user_field: Option<&str>,
     now: OffsetDateTime,
 ) -> Result<Claims, ProviderError> {
-    let client =
+    let mut client =
         CoreClient::from_provider_metadata(metadata(spec, http).await?, ClientId::new(spec.client_id.clone()), Some(OidcSecret::new(spec.secret.value(now))))
             .set_redirect_uri(RedirectUrl::from_url(redirect_uri.clone()));
+    if spec.kind == Kind::Apple {
+        // Apple's token endpoint takes `client_secret_post` only; openidconnect's default is HTTP Basic.
+        client = client.set_auth_type(AuthType::RequestBody);
+    }
     let token = client
         .exchange_code(AuthorizationCode::new(code.to_string()))
         .map_err(|_| ProviderError::Exchange)?

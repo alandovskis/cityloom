@@ -17,7 +17,7 @@ fn fake_spec(form_post: bool) -> ProviderSpec {
     ProviderSpec {
         slug: if form_post { "fake-apple" } else { "fake" }.into(),
         name: "Fake",
-        kind: Kind::Standard,
+        kind: if form_post { Kind::Apple } else { Kind::Standard },
         issuer: ISSUER.into(),
         scopes: vec!["email", "profile"],
         client_id: "cid".into(),
@@ -149,4 +149,17 @@ async fn clock_skew_of_a_minute_is_tolerated_and_more_is_not() {
 #[tokio::test]
 async fn a_provider_that_is_down_is_unreachable() {
     assert!(matches!(begin(&fake_spec(false), &redirect(), &Down).await, Err(ProviderError::Unreachable)));
+}
+
+#[tokio::test]
+async fn apple_sends_its_credentials_in_the_body_and_basic_is_refused_by_the_apple_like_fake() {
+    let c = client();
+    // Kind::Apple: the fake (form_post mode) answers invalid_client to HTTP Basic, so this passing proves the body.
+    let spec = fake_spec(true);
+    let (flow, code) = sign_in_as(&c, &spec, &FakeLogin::default()).await;
+    assert!(finish(&spec, &redirect(), &c, &flow, &code, None, t0()).await.is_ok());
+    // The same provider treated as a standard one sends Basic, which the fake refuses.
+    let basic = ProviderSpec { kind: Kind::Standard, ..fake_spec(true) };
+    let (flow, code) = sign_in_as(&c, &basic, &FakeLogin::default()).await;
+    assert!(matches!(finish(&basic, &redirect(), &c, &flow, &code, None, t0()).await, Err(ProviderError::Exchange)));
 }
