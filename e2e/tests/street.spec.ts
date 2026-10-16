@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, openStreet, test } from "./fixtures";
+import { expect, live, openStreet, pressablePiece, test } from "./fixtures";
 
 const selectFirstPiece = async (page: Page) => {
   await page.locator("#wrap").focus();
@@ -62,8 +62,9 @@ test.describe("the street editor on a street of the city", () => {
   });
 
   test("a piece is pressed to select it", async ({ page }) => {
-    await page.locator('#drawing [data-role="seg"]').nth(1).click();
-    await expect(live(page)).toHaveText(/, 2 of \d+$/);
+    const i = await pressablePiece(page);
+    await page.locator('#drawing [data-role="seg"]').nth(i).click();
+    await expect(live(page)).toHaveText(new RegExp(`, ${i + 1} of \\d+$`));
   });
 
   test("making a piece wider says that the street is too wide, and narrower makes room again", async ({ page }) => {
