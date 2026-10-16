@@ -1198,8 +1198,10 @@ fn capacity(segs: &[Segment]) -> i32 {
 
 fn shares(segs: &[Segment]) -> Vec<Share> {
     let t = total(segs).max(1);
+    // the modes the width is shared out among, then what no mode owns (the buffers)
     Mode::ALL
         .iter()
+        .chain([&Mode::Neutral])
         .map(|m| {
             let mm: i32 = segs.iter().filter(|s| KINDS[s.kind].mode == *m).map(|s| s.width_mm).sum();
             Share { mode: *m, mm, pct: (mm as f64 * 100.0 / t as f64).round() as i32 }
@@ -1572,20 +1574,22 @@ mod tests {
     }
 
     #[test]
-    fn a_buffer_is_the_space_of_no_travel_mode_so_it_adds_nothing_to_the_shares_and_the_table_has_no_row_for_it() {
+    fn a_buffer_is_the_space_of_no_travel_mode_so_the_shares_of_the_modes_do_not_change_and_the_buffer_has_its_own() {
         let share = |s: &Street| {
             let v = Editor::from_street(s, s, 0).view();
             v.outcomes.share.iter().map(|x| (x.mode, x.mm)).collect::<Vec<_>>()
         };
         let without = street_of(StreetClass::Local, &["sidewalk", "travel", "sidewalk"]);
         let with = street_of(StreetClass::Local, &["sidewalk", "buffer", "travel", "sidewalk"]);
-        assert_eq!(share(&without), share(&with), "no mode takes the buffer's width");
-        assert_eq!(share(&with).len(), Mode::ALL.len(), "and there is no row for it");
+        let (a, b) = (share(&without), share(&with));
+        assert_eq!(a[..Mode::ALL.len()], b[..Mode::ALL.len()], "no mode takes the buffer's width");
+        assert_eq!(a.last(), Some(&(Mode::Neutral, 0)));
+        assert_eq!(b.last(), Some(&(Mode::Neutral, KINDS[kind("buffer")].default_mm)), "and the buffer is counted on its own");
         assert_eq!(KINDS[kind("buffer")].mode, Mode::Neutral);
         assert!(!Mode::ALL.contains(&Mode::Neutral));
         let v = Editor::from_street(&with, &with, 0).view();
         let pct: i32 = v.outcomes.share.iter().map(|s| s.pct).sum();
-        assert!((90..=100).contains(&pct), "the shares sum to what the buffer leaves: {pct}");
+        assert!((99..=101).contains(&pct), "the shares sum to the street: {pct}");
     }
 
     #[test]

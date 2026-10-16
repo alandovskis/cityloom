@@ -48,7 +48,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::shared::atlas::{MEASURES, Where, name_key};
-use crate::shared::catalogue::mode_key;
+use crate::shared::catalogue::{Mode, mode_key};
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
 
@@ -80,6 +80,8 @@ pub fn Space(vm: Rc<StreetVm>) -> impl IntoView {
             .share
             .iter()
             .zip(&o.existing_share)
+            // the buffers have a row only on a street that has one, today or in the design
+            .filter(|(s, ex)| s.mode != Mode::Neutral || s.mm > 0 || ex.mm > 0)
             .map(|(s, ex)| {
                 view! {
                     <tr>

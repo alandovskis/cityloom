@@ -391,6 +391,20 @@ fn the_space_table_compares_each_use_today_and_in_the_design() {
 }
 
 #[test]
+fn the_space_table_has_a_buffer_row_only_on_a_street_that_has_a_buffer() {
+    let s = street_shared(0);
+    let none = street_html(|| view! { <notes::Space vm=s.clone()/> });
+    assert!(!none.contains("mc-neutral") && !none.contains("Buffer"));
+    s.edit(|e| {
+        e.add(crate::shared::catalogue::kind_index("buffer").unwrap(), 3);
+        true
+    });
+    let h = street_html(|| view! { <notes::Space vm=s.clone()/> });
+    assert!(h.contains("mc-neutral") && h.contains("Buffer"), "{h}");
+    assert!(h.contains("class=\"up\">+0.6<"), "the design has 0.6 m more of it than today");
+}
+
+#[test]
 fn the_capacity_table_says_how_many_people_move_and_how_that_changed() {
     let s = street_shared(0);
     let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
