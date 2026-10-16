@@ -47,6 +47,9 @@ fn a_montreal_neighbourhood_opens_and_most_of_its_meetings_of_streets_are_juncti
     for e in &v.edges {
         assert!(city.street_editor(e.uid, 0).is_some(), "{:?} cannot be opened", e.name());
     }
+    // only a bike lane runs both ways. (The extract holds the roads only, no `highway=cycleway` ways and no
+    // `oneway=no` on a side, so it has no two-way track to count; `tests/import.rs` pins them on fixtures.)
+    assert!(net.roads.iter().flat_map(|r| &r.lanes).filter(|l| l.way == osm_import::Way::Both).all(|l| l.kind == osm_import::LaneKind::Bike));
     // the streets with a median in them
     assert!(net.roads.iter().any(|r| r.lanes.iter().any(|l| l.kind == osm_import::LaneKind::Other)), "a divided street is merged");
 }

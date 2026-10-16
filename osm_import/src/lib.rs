@@ -112,8 +112,8 @@ fn explicit_sidewalks(tags: &mut Tags) {
 /// `cycleway:both=separate` or `cycleway=separate`) has the bike track beside the road that it has, as a sidewalk
 /// mapped separately has its sidewalk: osm2streets leaves a track mapped as `separate` out of the road's lanes, and
 /// the way that is the track itself is not kept (it is not among the highways the data holds). Whether the track
-/// runs one way or both is what the road's own tags say; a track mapped as a way of its own with `oneway=no` on that
-/// way is shown as running with the traffic.
+/// runs one way (with the traffic, as osm2streets reads `cycleway=track`) or both is told by the road's own
+/// `cycleway:<side>:oneway`, or, for a track mapped as ways of its own, by `two_way_tracks`.
 fn explicit_cycleways(tags: &mut Tags) {
     for key in ["cycleway", "cycleway:left", "cycleway:right", "cycleway:both"] {
         if tags.is(key, "separate") {
@@ -122,20 +122,50 @@ fn explicit_cycleways(tags: &mut Tags) {
     }
 }
 
-/// How near a separately mapped cycleway lies to the road it runs beside, to its middle, in metres.
-const TRACK_NEAR_M: f64 = 30.0;
+/// How far from the road's centre line a separately mapped track lies, in metres: nearer is a lane of the road,
+/// further is another street's.
+const TRACK_OFFSET_M: std::ops::RangeInclusive<f64> = 1.5..=12.0;
+
+/// The most a track may turn from the road beside it, in degrees.
+const TRACK_TURN_DEG: f64 = 30.0;
+
+/// The share of a track's sample points that must lie beside the road, so that a track covering only part of a long
+/// road, or crossing it, is judged by where it runs.
+const TRACK_SHARE: f64 = 0.6;
+
+/// How many points are taken along a track, evenly by length.
+const TRACK_SAMPLES: usize = 5;
 
 /// The `cycleway:<side>:oneway` tags (`=no`) to give the roads whose bike track is mapped as ways of its own and runs
 /// both ways. osm2streets does not keep the ways of a track (and its lane has one direction only), so the road's side
-/// is tied to them here, before it runs: a `highway=cycleway` way that runs along the road (within 30 degrees of it,
-/// its middle within 30 m, on the side tagged `separate`), is not a crossing and is not one-way (OSM's default for a
-/// cycleway is both ways; `oneway`, `oneway:bicycle` or `bicycle:oneway` `yes`, `true`, `1` or `-1` say otherwise).
-/// A side where such ways are both one-way and two-way is left as the road's tags say.
+/// is tied to them here, before it runs. A track is a `highway=cycleway` way, or a `path` or `footway` designated for
+/// bicycles (osm2streets reads those as bike lanes as well), that is not a crossing. It belongs to a road when that
+/// road is the nearest carriageway to it (by the mean distance of its sample points), and it runs along the road: at
+/// least 60% of its sample points lie 1.5 to 12 m from the road's centre line on the tagged side, within the road's
+/// extent (the point falls on a segment of it) and within 30 degrees of it (`runs_along`). The side is two-way when
+/// it has such tracks and none of them is one-way (OSM's default for a cycleway is both ways: `is_one_way`). The ways
+/// the clip cut into pieces are looked at as the others are, each piece as a way. A side where the road's own tags say
+/// `oneway` is left as they say.
 fn two_way_tracks(doc: &Document) -> BTreeMap<WayID, Vec<String>> {
-    let tracks: Vec<_> = doc.ways.values().filter(|w| w.tags.is("highway", "cycleway") && !w.tags.is("cycleway", "crossing")).collect();
+    let ways: Vec<(WayID, &OsmWay)> = doc.ways.iter().map(|(id, w)| (*id, w)).chain(doc.clipped_copied_ways.iter().map(|(id, w)| (*id, w))).collect();
+    let roads: Vec<usize> = (0..ways.len()).filter(|&i| is_carriageway(&ways[i].1.tags)).collect();
+    let mut owned: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (t, (_, track)) in ways.iter().enumerate().filter(|(_, (_, w))| is_track(&w.tags)) {
+        let points: Vec<_> = samples(track).into_iter().map(|(p, _)| p).collect();
+        let Some(mid) = points.get(points.len() / 2) else { continue };
+        let nearest = roads
+            .iter()
+            .filter(|&&r| near_box(&ways[r].1.pts, *mid, TRACK_OFFSET_M.end() * 2.5))
+            .map(|&r| (r, points.iter().map(|p| distance_to_line(*p, &ways[r].1.pts)).sum::<f64>() / points.len() as f64))
+            .min_by(|a, b| a.1.total_cmp(&b.1));
+        if let Some((r, _)) = nearest {
+            owned.entry(r).or_default().push(t);
+        }
+    }
     let mut found = BTreeMap::new();
-    for (id, road) in &doc.ways {
-        if !road.tags.has_any(vec!["cycleway", "cycleway:left", "cycleway:right", "cycleway:both"]) || road.tags.is("highway", "cycleway") {
+    for (r, tracks) in owned {
+        let (id, road) = ways[r];
+        if !road.tags.has_any(vec!["cycleway", "cycleway:left", "cycleway:right", "cycleway:both"]) {
             continue;
         }
         let separate = |side: &str| {
@@ -145,39 +175,116 @@ fn two_way_tracks(doc: &Document) -> BTreeMap<WayID, Vec<String>> {
             if !separate(side) || road.tags.contains_key(&format!("cycleway:{side}:oneway")) || road.tags.contains_key("cycleway:both:oneway") {
                 continue;
             }
-            let along: Vec<_> = tracks.iter().filter(|t| runs_along(road, t, side)).collect();
-            if !along.is_empty() && along.iter().all(|t| !is_one_way(&t.tags)) {
-                found.entry(*id).or_insert_with(Vec::new).push(format!("cycleway:{side}:oneway"));
+            let along: Vec<_> = tracks.iter().map(|&t| ways[t].1).filter(|t| runs_along(road, t, side)).collect();
+            let key = format!("cycleway:{side}:oneway");
+            if !along.is_empty() && along.iter().all(|t| !is_one_way(&t.tags)) && !found.get(&id).is_some_and(|k: &Vec<String>| k.contains(&key)) {
+                found.entry(id).or_insert_with(Vec::new).push(key);
             }
         }
     }
     found
 }
 
-fn is_one_way(tags: &Tags) -> bool {
-    ["oneway", "oneway:bicycle", "bicycle:oneway"].iter().any(|k| tags.get(k).is_some_and(|v| matches!(v.as_str(), "yes" | "true" | "1" | "-1")))
+/// A way cars may drive on, the kind a bike track lies beside.
+fn is_carriageway(tags: &Tags) -> bool {
+    tags.get("highway").is_some_and(|h| {
+        matches!(
+            h.as_str(),
+            "motorway"
+                | "motorway_link"
+                | "trunk"
+                | "trunk_link"
+                | "primary"
+                | "primary_link"
+                | "secondary"
+                | "secondary_link"
+                | "tertiary"
+                | "tertiary_link"
+                | "unclassified"
+                | "residential"
+                | "living_street"
+                | "service"
+                | "busway"
+        )
+    })
 }
 
-/// Whether `track` runs along `road` on its `side`: its middle lies near the road, on that side, and it points the
-/// way the road does or the opposite.
+/// A way mapped as a bike track of its own: a cycleway, or a path or footway designated for bicycles, not a crossing.
+fn is_track(tags: &Tags) -> bool {
+    !tags.is("cycleway", "crossing")
+        && !tags.is("footway", "crossing")
+        && (tags.is("highway", "cycleway") || (tags.is_any("highway", vec!["path", "footway"]) && tags.is("bicycle", "designated")))
+}
+
+/// Whether a way is one-way for bicycles: what `oneway:bicycle` or `bicycle:oneway` says, or else `oneway`.
+fn is_one_way(tags: &Tags) -> bool {
+    let value = ["oneway:bicycle", "bicycle:oneway", "oneway"].iter().find_map(|k| tags.get(k));
+    value.is_some_and(|v| matches!(v.as_str(), "yes" | "true" | "1" | "-1"))
+}
+
+/// Points along a way, evenly by length (at a tenth, three tenths ... of it), each with the segment it lies on.
+fn samples(way: &OsmWay) -> Vec<(geom::Pt2D, (geom::Pt2D, geom::Pt2D))> {
+    let lengths: Vec<f64> = way.pts.windows(2).map(|w| (w[1].x() - w[0].x()).hypot(w[1].y() - w[0].y())).collect();
+    let total: f64 = lengths.iter().sum();
+    if way.pts.len() < 2 || total == 0.0 {
+        return Vec::new();
+    }
+    (0..TRACK_SAMPLES)
+        .map(|k| {
+            let mut left = total * (k as f64 + 0.5) / TRACK_SAMPLES as f64;
+            let mut i = 0;
+            while i + 1 < lengths.len() && left > lengths[i] {
+                left -= lengths[i];
+                i += 1;
+            }
+            let (a, b) = (way.pts[i], way.pts[i + 1]);
+            let t = if lengths[i] == 0.0 { 0.0 } else { (left / lengths[i]).min(1.0) };
+            (geom::Pt2D::new(a.x() + t * (b.x() - a.x()), a.y() + t * (b.y() - a.y())), (a, b))
+        })
+        .collect()
+}
+
+fn near_box(line: &[geom::Pt2D], p: geom::Pt2D, margin: f64) -> bool {
+    let (x0, x1) = line.iter().fold((f64::MAX, f64::MIN), |(lo, hi), q| (lo.min(q.x()), hi.max(q.x())));
+    let (y0, y1) = line.iter().fold((f64::MAX, f64::MIN), |(lo, hi), q| (lo.min(q.y()), hi.max(q.y())));
+    p.x() >= x0 - margin && p.x() <= x1 + margin && p.y() >= y0 - margin && p.y() <= y1 + margin
+}
+
+fn distance_to_line(p: geom::Pt2D, line: &[geom::Pt2D]) -> f64 {
+    line.windows(2).map(|w| distance_to_segment(p, w[0], w[1])).fold(f64::MAX, f64::min)
+}
+
+/// Whether `track` runs along `road` on its `side`: at least 60% of the points along the track lie, beside a segment
+/// of the road (the point falls on the segment, not past its end), 1.5 to 12 m from it on that side, and the
+/// track there points the way the segment does or the opposite, within 30 degrees.
 fn runs_along(road: &OsmWay, track: &OsmWay, side: &str) -> bool {
-    let (Some(mid), true) = (track.pts.get(track.pts.len() / 2), road.pts.len() > 1) else { return false };
-    let (Some(first), Some(last)) = (track.pts.first(), track.pts.last()) else { return false };
-    let Some((a, b, dist)) = road.pts.windows(2).map(|w| (w[0], w[1], distance_to_segment(*mid, w[0], w[1]))).min_by(|x, y| x.2.total_cmp(&y.2)) else {
-        return false;
-    };
-    if dist > TRACK_NEAR_M {
+    let points = samples(track);
+    if points.is_empty() || road.pts.len() < 2 {
         return false;
     }
-    let (rx, ry) = (b.x() - a.x(), b.y() - a.y());
-    let (tx, ty) = (last.x() - first.x(), last.y() - first.y());
-    let (rl, tl) = (rx.hypot(ry), tx.hypot(ty));
-    if rl == 0.0 || tl == 0.0 || (rx * tx + ry * ty).abs() / (rl * tl) < 30f64.to_radians().cos() {
-        return false;
-    }
-    // Pt2D's y runs south, so a point to the left of the road's direction has a negative cross product
-    let cross = rx * (mid.y() - a.y()) - ry * (mid.x() - a.x());
-    (cross < 0.0) == (side == "left")
+    let beside = points
+        .iter()
+        .filter(|(p, (a, b))| {
+            // the track's own direction where the point lies
+            let (tx, ty) = (b.x() - a.x(), b.y() - a.y());
+            let nearest = road
+                .pts
+                .windows(2)
+                .filter_map(|w| {
+                    let (rx, ry) = (w[1].x() - w[0].x(), w[1].y() - w[0].y());
+                    let len2 = rx * rx + ry * ry;
+                    let t = ((p.x() - w[0].x()) * rx + (p.y() - w[0].y()) * ry) / len2;
+                    // Pt2D's y runs south, so a point to the left of the road's direction has a negative cross product
+                    let cross = rx * (p.y() - w[0].y()) - ry * (p.x() - w[0].x());
+                    (len2 > 0.0 && (0.0..=1.0).contains(&t)).then(|| (cross.abs() / len2.sqrt(), cross < 0.0, rx, ry))
+                })
+                .min_by(|x, y| x.0.total_cmp(&y.0));
+            let Some((offset, left, rx, ry)) = nearest else { return false };
+            let cos = (rx * tx + ry * ty).abs() / (rx.hypot(ry) * tx.hypot(ty));
+            TRACK_OFFSET_M.contains(&offset) && left == (side == "left") && cos >= TRACK_TURN_DEG.to_radians().cos()
+        })
+        .count();
+    beside as f64 >= TRACK_SHARE * points.len() as f64
 }
 
 fn distance_to_segment(p: geom::Pt2D, a: geom::Pt2D, b: geom::Pt2D) -> f64 {
@@ -303,6 +410,82 @@ pub fn osm_to_network(osm: &[u8], bounds: &[f64]) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn way(pts: &[(f64, f64)]) -> OsmWay {
+        OsmWay { nodes: Vec::new(), pts: pts.iter().map(|&(x, y)| geom::Pt2D::new(x, y)).collect(), tags: Tags::empty(), version: None }
+    }
+
+    fn tags(pairs: &[(&str, &str)]) -> Tags {
+        Tags::new(pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect())
+    }
+
+    /// A road along the x axis, drawn west to east, 100 m long. y runs south, so the road's left is y < 0.
+    fn road() -> OsmWay {
+        way(&[(0.0, 0.0), (100.0, 0.0)])
+    }
+
+    #[test]
+    fn a_track_runs_along_the_road_on_the_side_it_lies() {
+        let north = way(&[(10.0, -5.0), (90.0, -5.0)]);
+        assert!(runs_along(&road(), &north, "left"));
+        assert!(!runs_along(&road(), &north, "right"));
+        let south_back = way(&[(90.0, 5.0), (10.0, 5.0)]);
+        assert!(runs_along(&road(), &south_back, "right"), "the track's own direction does not matter");
+        assert!(!runs_along(&road(), &south_back, "left"));
+    }
+
+    #[test]
+    fn a_track_too_near_or_too_far_to_be_beside_the_road_does_not_run_along_it() {
+        assert!(!runs_along(&road(), &way(&[(10.0, -0.5), (90.0, -0.5)]), "left"));
+        assert!(!runs_along(&road(), &way(&[(10.0, -20.0), (90.0, -20.0)]), "left"));
+        assert!(runs_along(&road(), &way(&[(10.0, -1.5), (90.0, -1.5)]), "left"));
+        assert!(runs_along(&road(), &way(&[(10.0, -12.0), (90.0, -12.0)]), "left"));
+    }
+
+    #[test]
+    fn a_track_that_turns_from_the_road_by_more_than_30_degrees_or_lies_past_its_end_does_not_run_along_it() {
+        assert!(!runs_along(&road(), &way(&[(10.0, -5.0), (50.0, -45.0)]), "left"), "a diagonal");
+        assert!(!runs_along(&road(), &way(&[(50.0, -2.0), (50.0, -10.0)]), "left"), "across");
+        assert!(!runs_along(&road(), &way(&[(110.0, -5.0), (190.0, -5.0)]), "left"), "beyond its end");
+        // a bend of the track that stays beside the road for most of its length does
+        assert!(runs_along(&road(), &way(&[(10.0, -5.0), (80.0, -5.0), (90.0, -9.0)]), "left"));
+    }
+
+    #[test]
+    fn a_track_beside_part_of_a_long_road_runs_along_it_and_one_that_overlaps_a_little_does_not() {
+        let long = way(&[(0.0, 0.0), (500.0, 0.0)]);
+        assert!(runs_along(&long, &way(&[(200.0, -5.0), (260.0, -5.0)]), "left"));
+        assert!(!runs_along(&long, &way(&[(450.0, -5.0), (800.0, -5.0)]), "left"), "most of it lies past the road's end");
+    }
+
+    #[test]
+    fn a_road_of_several_segments_is_judged_by_the_segment_nearest_each_point() {
+        let bent = way(&[(0.0, 0.0), (50.0, 0.0), (50.0, 50.0)]);
+        assert!(runs_along(&bent, &way(&[(55.0, 5.0), (55.0, 45.0)]), "left"), "beside the second segment, which runs south: its left is east");
+    }
+
+    #[test]
+    fn a_way_is_one_way_for_bicycles_by_the_tag_that_names_them_before_oneway() {
+        assert!(is_one_way(&tags(&[("oneway", "yes")])));
+        assert!(is_one_way(&tags(&[("oneway", "-1")])));
+        assert!(is_one_way(&tags(&[("oneway:bicycle", "yes")])));
+        assert!(is_one_way(&tags(&[("bicycle:oneway", "true")])));
+        assert!(!is_one_way(&tags(&[("oneway", "no")])));
+        assert!(!is_one_way(&tags(&[("highway", "cycleway")])));
+        assert!(!is_one_way(&tags(&[("oneway", "yes"), ("oneway:bicycle", "no")])), "the tag for bicycles wins");
+        assert!(is_one_way(&tags(&[("oneway", "no"), ("oneway:bicycle", "yes")])));
+        assert!(!is_one_way(&tags(&[("oneway", "yes"), ("bicycle:oneway", "no")])));
+    }
+
+    #[test]
+    fn a_cycleway_or_a_path_designated_for_bicycles_is_a_track_and_a_crossing_is_not() {
+        assert!(is_track(&tags(&[("highway", "cycleway")])));
+        assert!(is_track(&tags(&[("highway", "path"), ("bicycle", "designated")])));
+        assert!(is_track(&tags(&[("highway", "footway"), ("bicycle", "designated")])));
+        assert!(!is_track(&tags(&[("highway", "footway")])));
+        assert!(!is_track(&tags(&[("highway", "cycleway"), ("cycleway", "crossing")])));
+        assert!(!is_track(&tags(&[("highway", "path"), ("bicycle", "yes")])));
+    }
 
     fn bike(way: Way, width_m: f64) -> Lane {
         Lane { kind: LaneKind::Bike, way, width_m, buffer_type: None, hours: None }
