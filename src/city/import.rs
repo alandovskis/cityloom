@@ -80,6 +80,7 @@ fn pieces(lanes: &[Lane]) -> Vec<Piece> {
         .iter()
         .map(|l| has_own_curb(l).then(|| kind_index(kind_of(l)).map_or(0, |k| KINDS[k].max_mm) - (l.width_m * 1000.0).round() as i32).unwrap_or(0).max(0))
         .collect();
+    let buffer_min_mm = kind_index("buffer").map_or(0, |k| KINDS[k].min_mm);
     let mut merged: Vec<Lane> = lanes.to_vec();
     let mut gone = vec![false; lanes.len()];
     for i in (0..lanes.len()).filter(|&i| is_curb(&lanes[i])) {
@@ -88,11 +89,16 @@ fn pieces(lanes: &[Lane]) -> Vec<Piece> {
             let taken = width_mm.min(room[owner]);
             room[owner] -= taken;
             merged[owner].width_m += f64::from(taken) / 1000.0;
-            if taken == width_mm {
+            let rest = width_mm - taken;
+            if rest == 0 {
+                gone[i] = true;
+            } else if rest < buffer_min_mm {
+                // too little for a buffer: the road lane beside the curb takes it, so the street keeps its width
+                merged[2 * i - owner].width_m += f64::from(rest) / 1000.0;
                 gone[i] = true;
             } else {
-                // what is past the maximum stays beside the piece as a buffer, so the street keeps its width
-                merged[i].width_m = f64::from(width_mm - taken) / 1000.0;
+                // what is past the maximum stays beside the piece as a buffer
+                merged[i].width_m = f64::from(rest) / 1000.0;
             }
         }
     }
@@ -338,6 +344,16 @@ mod tests {
         buffer(Some(BufferType::Curb))
     }
 
+    trait WithWidth {
+        fn with_width(self, width_m: f64) -> Lane;
+    }
+
+    impl WithWidth for Lane {
+        fn with_width(self, width_m: f64) -> Lane {
+            Lane { width_m, ..self }
+        }
+    }
+
     fn bike() -> Lane {
         lane(LaneKind::Bike, Way::Forward, 1.8)
     }
@@ -414,6 +430,22 @@ mod tests {
         let w = widths(&both);
         assert_eq!(w.iter().sum::<i32>(), 3300 + 600 + 2500 + 600 + 3300);
         assert!(w.contains(&3000), "the lane is at its maximum: {w:?}");
+    }
+
+    #[test]
+    fn a_remainder_under_the_buffers_minimum_goes_to_the_road_lane_beside_the_curb_and_the_street_keeps_its_width() {
+        // 2.95 m of bike lane and a 0.1 m curb: 50 mm too much for the lane, too little for a buffer
+        let lanes = [lane(LaneKind::Bike, Way::Forward, 2.95), curb().with_width(0.1), driving()];
+        assert_eq!(ids(&lanes), ["bike", "travel"]);
+        assert_eq!(widths(&lanes), [3000, 3350]);
+        let street = Street::imported(StreetClass::Local, Side::Right, &pieces(&lanes));
+        assert_eq!(street.row_mm, 6350, "exactly the lanes' width");
+        // the other order: the road lane is before the curb
+        let lanes = [driving(), curb().with_width(0.1), lane(LaneKind::Bike, Way::Forward, 2.95)];
+        assert_eq!(widths(&lanes), [3350, 3000]);
+        // 150 mm and more stays a buffer
+        let lanes = [lane(LaneKind::Bike, Way::Forward, 2.95), curb().with_width(0.2), driving()];
+        assert_eq!(widths(&lanes), [3000, 150, 3300]);
     }
 
     #[test]
