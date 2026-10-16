@@ -54,12 +54,13 @@ impl HttpClient for ReqwestClient {
     }
 }
 
-/// Polls a future that has nothing to wait for, once.
-fn run_to_the_end<F: std::future::Future>(future: F) -> F::Output {
+/// Polls a future that has nothing to wait for, once: its output, or `None` if it was not ready (a request handler
+/// must never panic over that).
+fn run_to_the_end<F: std::future::Future>(future: F) -> Option<F::Output> {
     let mut future = std::pin::pin!(future);
     match future.as_mut().poll(&mut std::task::Context::from_waker(std::task::Waker::noop())) {
-        std::task::Poll::Ready(output) => output,
-        std::task::Poll::Pending => unreachable!("the stand-in clients answer at once"),
+        std::task::Poll::Ready(output) => Some(output),
+        std::task::Poll::Pending => None,
     }
 }
 
@@ -286,15 +287,18 @@ pub async fn finish(
     };
     let request = {
         let asked = std::cell::RefCell::new(None);
-        let _ = run_to_the_end(exchange()?.request_async(&|request| {
+        run_to_the_end(exchange()?.request_async(&|request| {
             *asked.borrow_mut() = Some(request);
             std::future::ready(Err::<openidconnect::HttpResponse, _>(AdapterError))
-        }));
+        }))
+        .ok_or(ProviderError::Exchange)?
+        .ok();
         asked.into_inner().ok_or(ProviderError::Exchange)?
     };
     let response = http.send(request).await.map_err(|_| ProviderError::Unreachable)?;
-    let token =
-        run_to_the_end(exchange()?.request_async(&|_| std::future::ready(Ok::<_, AdapterError>(response.clone())))).map_err(|_| ProviderError::Exchange)?;
+    let token = run_to_the_end(exchange()?.request_async(&|_| std::future::ready(Ok::<_, AdapterError>(response.clone()))))
+        .ok_or(ProviderError::Exchange)?
+        .map_err(|_| ProviderError::Exchange)?;
     let id_token = token.id_token().ok_or(ProviderError::Token("missing"))?;
     let skew = chrono::Duration::seconds(SKEW_SECS);
     let at = chrono::DateTime::from_timestamp(now.unix_timestamp(), 0).unwrap_or_default();
@@ -343,6 +347,12 @@ pub fn build_claims(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_future_that_is_not_ready_is_none_not_a_panic() {
+        assert_eq!(run_to_the_end(std::future::ready(3)), Some(3));
+        assert_eq!(run_to_the_end(std::future::pending::<u8>()), None);
+    }
 
     fn spec(slug: &str, kind: Kind) -> ProviderSpec {
         ProviderSpec {
