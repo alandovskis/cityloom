@@ -18,6 +18,17 @@ pub enum Session {
     SignedIn { name: String },
 }
 
+/// Where focus should go after the menu's button was hidden under it. The view-model cannot touch the page, so
+/// the view moves focus when `SessionVm::focus_request` changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Focus {
+    None,
+    /// The session button, which is showing.
+    Button,
+    /// The page's main landmark: the button is not shown.
+    Page,
+}
+
 /// The outcomes the server puts in the address, and the message that says each.
 const OUTCOMES: [(&str, &str); 7] = [
     ("new", "session-outcome-new"),
@@ -29,31 +40,43 @@ const OUTCOMES: [(&str, &str); 7] = [
     ("failed", "session-outcome-failed"),
 ];
 
-/// The message and the provider (as the server's slug) an address fragment such as `account=conflict&provider=google` means.
-fn outcome_of(fragment: &str) -> Option<(&'static str, Option<String>)> {
+/// The message and the provider's name an address fragment such as `account=conflict&provider=google` means.
+fn outcome_of(fragment: &str) -> Option<(&'static str, Option<&'static str>)> {
     let mut parts = fragment.split('&');
     let outcome = parts.next()?.strip_prefix("account=")?;
     let key = OUTCOMES.iter().find(|(o, _)| *o == outcome)?.1;
-    let provider = parts.find_map(|p| p.strip_prefix("provider=")).filter(|p| !p.is_empty()).map(str::to_string);
-    // The sentence names the provider; without one it would read "This  account", so the generic sentence is said.
+    let provider = parts.find_map(|p| p.strip_prefix("provider=")).and_then(provider_name);
+    // The sentence names the provider; without a known one it would read "This  account", so the generic sentence is
+    // said. A slug nobody knows is never read out: a crafted link must not put its own text in the app's voice.
     let key = if key == "session-outcome-conflict" && provider.is_none() { "session-outcome-conflict-any" } else { key };
     Some((key, provider))
 }
 
-/// The brand name of a provider, which is not translated; a slug nobody knows is shown as it is.
-fn provider_name(slug: &str) -> String {
-    match slug {
+/// The brand name of a provider the server offers, which is not translated; None for any other slug.
+fn provider_name(slug: &str) -> Option<&'static str> {
+    Some(match slug {
         "osm" => "OpenStreetMap",
         "google" => "Google",
         "microsoft" => "Microsoft",
         "apple" => "Apple",
-        other => other,
-    }
-    .to_string()
+        // The server's test providers (cityloom_server/src/fake_provider.rs).
+        "fake" => "fake",
+        "fake-apple" => "fake-apple",
+        _ => return None,
+    })
 }
 
 pub fn encode_component(s: &str) -> String {
     s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
+}
+
+/// Whether the button is shown: not while unknown, and signed out only when there is a provider to offer.
+fn shown(state: &Session, has_providers: bool) -> bool {
+    match state {
+        Session::Loading => false,
+        Session::SignedOut => has_providers,
+        Session::Unavailable | Session::SignedIn { .. } => true,
+    }
 }
 
 pub struct SessionVm {
@@ -63,6 +86,8 @@ pub struct SessionVm {
     providers: ArcRwSignal<Vec<ProviderInfo>>,
     popover: Rc<PopoverViewModel>,
     started: Cell<bool>,
+    /// How many times focus was asked for, and where to.
+    focus: ArcRwSignal<(u32, Focus)>,
 }
 
 impl SessionVm {
@@ -75,6 +100,7 @@ impl SessionVm {
             providers: ArcRwSignal::new(Vec::new()),
             popover,
             started: Cell::new(false),
+            focus: ArcRwSignal::new((0, Focus::None)),
         })
     }
 
@@ -87,26 +113,45 @@ impl SessionVm {
             return;
         }
         if let Some((key, provider)) = self.ports.page.take_fragment().as_deref().and_then(outcome_of) {
-            let args = Args::new().str("provider", provider.as_deref().map(provider_name).unwrap_or_default());
+            let args = Args::new().str("provider", provider.unwrap_or_default());
             self.ports.announcer.say(&self.i18n.tr_now(key, &args));
         }
         let vm = self.clone();
         self.ports.account.me(Box::new(move |me| match me {
             Ok(me) => vm.state.set(Session::SignedIn { name: me.display_name }),
-            Err(AccountError::SignedOut) => vm.load_providers(),
+            Err(AccountError::SignedOut) => vm.load_providers(false),
             Err(_) => vm.state.set(Session::Unavailable),
         }));
     }
 
-    fn load_providers(self: &Rc<Self>) {
+    /// Asks for the providers; with `refocus`, focus then goes to where the person's menu was.
+    fn load_providers(self: &Rc<Self>, refocus: bool) {
         let vm = self.clone();
-        self.ports.account.providers(Box::new(move |list| match list {
-            Ok(list) => {
-                vm.providers.set(list);
-                vm.state.set(Session::SignedOut);
+        self.ports.account.providers(Box::new(move |list| {
+            match list {
+                Ok(list) => {
+                    vm.providers.set(list);
+                    vm.state.set(Session::SignedOut);
+                }
+                Err(_) => vm.state.set(Session::Unavailable),
             }
-            Err(_) => vm.state.set(Session::Unavailable),
+            if refocus {
+                vm.ask_focus(if vm.visible_now() { Focus::Button } else { Focus::Page });
+            }
         }));
+    }
+
+    fn ask_focus(&self, to: Focus) {
+        self.focus.update(|f| *f = (f.0 + 1, to));
+    }
+
+    /// Where focus is asked to go, with a count so that asking twice for the same place is seen; tracked.
+    pub fn focus_request(&self) -> (u32, Focus) {
+        self.focus.get()
+    }
+
+    fn visible_now(&self) -> bool {
+        shown(&self.state.get_untracked(), !self.providers.get_untracked().is_empty())
     }
 
     pub fn state(&self) -> Session {
@@ -118,11 +163,7 @@ impl SessionVm {
     }
 
     pub fn visible(&self) -> bool {
-        match self.state.get() {
-            Session::Loading => false,
-            Session::SignedOut => !self.providers.get().is_empty(),
-            Session::Unavailable | Session::SignedIn { .. } => true,
-        }
+        shown(&self.state.get(), !self.providers.get().is_empty())
     }
 
     pub fn label(&self) -> String {
@@ -155,17 +196,21 @@ impl SessionVm {
         self.popover.close();
         let vm = self.clone();
         self.ports.account.sign_out(Box::new(move |done| match done {
-            Ok(()) => {
+            // A session that was already over (another tab signed out) is the outcome the person asked for.
+            Ok(()) | Err(AccountError::SignedOut) => {
                 vm.state.set(Session::SignedOut);
                 vm.say("session-signed-out");
                 // The Account page has nothing to show a signed-out person: leave it for the home page.
                 if vm.ports.page.path().starts_with("/account.html") {
                     vm.ports.navigator.go("/index.html");
                 } else {
-                    vm.load_providers();
+                    vm.load_providers(true);
                 }
             }
-            Err(_) => vm.say("session-sign-out-failed"),
+            Err(_) => {
+                vm.say("session-sign-out-failed");
+                vm.ask_focus(Focus::Button);
+            }
         }));
     }
 }
@@ -283,6 +328,17 @@ mod tests {
                 "This fake account is already linked to another CityLoom account.",
                 "Ce compte fake est déjà associé à un autre compte CityLoom.",
             ),
+            // A slug the app does not know is never read out.
+            (
+                "account=conflict&provider=evil%20text",
+                "This account is already linked to another CityLoom account.",
+                "Ce compte est déjà associé à un autre compte CityLoom.",
+            ),
+            (
+                "account=conflict&provider=Google",
+                "This account is already linked to another CityLoom account.",
+                "Ce compte est déjà associé à un autre compte CityLoom.",
+            ),
             // An address with no provider in it (an older server, a hand-edited link) gets the generic sentence, not "This  account".
             ("account=conflict", "This account is already linked to another CityLoom account.", "Ce compte est déjà associé à un autre compte CityLoom."),
             (
@@ -352,6 +408,45 @@ mod tests {
         t.account.answer(AccountReply::Done(Ok(())));
         assert_eq!(t.navigator.take(), ["/index.html"]);
         assert!(t.account.calls().is_empty(), "no providers are asked for on the way out");
+    }
+
+    #[test]
+    fn a_sign_out_that_finds_the_session_already_over_ends_signed_out() {
+        let (vm, t) = vm(Locale::En);
+        vm.start();
+        t.account.answer(AccountReply::Me(Ok(me("Ada"))));
+        vm.sign_out();
+        t.account.answer(AccountReply::Done(Err(AccountError::SignedOut)));
+        assert_eq!(vm.state(), Session::SignedOut);
+        assert_eq!(t.announcer.take(), ["Signed out."]);
+        assert_eq!(t.account.calls(), [AccountCall::Providers]);
+    }
+
+    #[test]
+    fn focus_goes_back_to_the_button_after_a_failed_sign_out_and_after_a_sign_out_that_leaves_it_showing() {
+        let (vm, t) = vm(Locale::En);
+        vm.start();
+        t.account.answer(AccountReply::Me(Ok(me("Ada"))));
+        assert_eq!(vm.focus_request(), (0, Focus::None));
+        vm.sign_out();
+        t.account.answer(AccountReply::Done(Err(AccountError::Unavailable)));
+        assert_eq!(vm.focus_request(), (1, Focus::Button));
+        vm.sign_out();
+        t.account.answer(AccountReply::Done(Ok(())));
+        assert_eq!(vm.focus_request(), (1, Focus::Button), "not before the providers are known");
+        t.account.answer(AccountReply::Providers(Ok(providers(&["google"]))));
+        assert_eq!(vm.focus_request(), (2, Focus::Button));
+    }
+
+    #[test]
+    fn focus_goes_to_the_page_when_signing_out_leaves_no_button() {
+        let (vm, t) = vm(Locale::En);
+        vm.start();
+        t.account.answer(AccountReply::Me(Ok(me("Ada"))));
+        vm.sign_out();
+        t.account.answer(AccountReply::Done(Ok(())));
+        t.account.answer(AccountReply::Providers(Ok(vec![])));
+        assert_eq!(vm.focus_request(), (1, Focus::Page));
     }
 
     #[test]

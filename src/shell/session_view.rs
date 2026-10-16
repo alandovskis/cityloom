@@ -12,6 +12,25 @@ use crate::shell::session::{Session, SessionVm};
 pub fn SessionMenu(vm: Rc<SessionVm>) -> impl IntoView {
     let vm = StoredValue::new_local(vm);
     let tr = move |key: &'static str| vm.with_value(|v| v.i18n().tr(key, &Args::new()));
+    // The button, or the menu it opens, was hidden under the focus: put focus back where the person can carry on.
+    // The effect runs after the box's `hidden` is updated, so the button can take it.
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| {
+        use crate::shell::session::Focus;
+        use wasm_bindgen::JsCast;
+        let (_, to) = vm.with_value(|v| v.focus_request());
+        let target = match to {
+            Focus::None => return,
+            Focus::Button => "#session-btn",
+            Focus::Page => "main",
+        };
+        if let Some(el) = document().query_selector(target).ok().flatten().and_then(|e| e.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
+            if to == Focus::Page {
+                el.set_tab_index(-1);
+            }
+            let _ = el.focus();
+        }
+    });
     view! {
         <div class="session-box" hidden=move || !vm.with_value(|v| v.visible())>
             <button

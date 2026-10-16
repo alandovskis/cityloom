@@ -466,6 +466,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("iso-shade-ramp", "the id of an SVG filter the junction's 2.5D carries (junction/iso.rs)"),
     ("signed-in", "an outcome the server puts in the address after #account="),
     ("already-linked", "an outcome the server puts in the address after #account="),
+    ("fake-apple", "the slug of the server's test provider"),
     ("session-slot", "the id of an element every page shares"),
     ("session-btn", "the id of an element every page shares"),
     ("session-menu", "the id of an element every page shares"),
