@@ -122,17 +122,6 @@ export async function openStreet(page: Page, n = 0) {
   return href;
 }
 
-/** The index of the first piece of the section that is wide enough to be pressed: a boundary's handle covers a
- *  narrower one (an imported curb buffer is 150 mm), and a press on it would land on the handle. */
-export async function pressablePiece(page: Page) {
-  const boxes = await page
-    .locator('#drawing [data-role="seg"]')
-    .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
-  const i = boxes.findIndex((w) => w >= 40);
-  expect(i, "a piece wide enough to press").toBeGreaterThanOrEqual(0);
-  return i;
-}
-
 /** Waits until the places are on the map and its tiles are drawn. */
 export async function mapReady(page: Page) {
   await page.waitForFunction(() => {

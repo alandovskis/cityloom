@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { expect, mapReady, openJunction, openStreet, pressablePiece, test } from "./fixtures";
+import { expect, mapReady, openJunction, openStreet, test } from "./fixtures";
 
 /** What a keyboard user sees on a focused control: a ring of its own, not only a tint. */
 const ring = (field: Locator) =>
@@ -32,10 +32,7 @@ for (const theme of ["light", "dark"]) {
     test("the street's width field has a 2px ring in the accent", async ({ page }) => {
       await openStreet(page);
       await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
-      await page
-        .locator('#drawing [data-role="seg"]')
-        .nth(await pressablePiece(page))
-        .click();
+      await page.locator('#drawing [data-role="seg"]').nth(1).click();
       const field = page.locator("#inspector .wfield input");
       await field.focus();
       const r = await ring(field);
