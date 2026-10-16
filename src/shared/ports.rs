@@ -130,11 +130,18 @@ pub trait Account {
     fn sign_out(&self, done: Answer<()>);
 }
 
+/// Whether the text after `#` is one the account's sign-in puts there; any other fragment is the page's own (an
+/// anchor) and is neither read nor removed.
+pub fn is_account_fragment(fragment: &str) -> bool {
+    fragment.starts_with("account=")
+}
+
 /// The page itself: the language the browser is set to, and the document's `lang`.
 pub trait Page {
     /// The address within the site, path and query, such as `/street.html?street=7`.
     fn path(&self) -> String;
-    /// The text after `#`, if any; the fragment is removed from the address, so a second call gives None.
+    /// The text after `#` when it is the account's (`account=...`), else None and the address is left as it is; the
+    /// fragment is removed from the address, so a second call gives None.
     fn take_fragment(&self) -> Option<String>;
     /// The browser's preferred language tag, such as `fr-CA`, if it tells.
     fn language(&self) -> Option<String>;
@@ -467,7 +474,8 @@ impl Page for FakePage {
         self.path.borrow().clone()
     }
     fn take_fragment(&self) -> Option<String> {
-        self.fragment.borrow_mut().take()
+        let mut fragment = self.fragment.borrow_mut();
+        if fragment.as_deref().is_some_and(is_account_fragment) { fragment.take() } else { None }
     }
     fn language(&self) -> Option<String> {
         self.language.borrow().clone()
@@ -780,6 +788,16 @@ mod tests {
         *t.page.fragment.borrow_mut() = Some("account=new".into());
         assert_eq!(t.ports.page.take_fragment().as_deref(), Some("account=new"));
         assert_eq!(t.ports.page.take_fragment(), None);
+    }
+
+    #[test]
+    fn the_fake_page_leaves_a_fragment_that_is_not_the_accounts() {
+        let t = test_ports_full();
+        for other in ["street=7", "section-2", "accounts", ""] {
+            *t.page.fragment.borrow_mut() = Some(other.into());
+            assert_eq!(t.ports.page.take_fragment(), None, "{other:?}");
+            assert_eq!(t.page.fragment.borrow().as_deref(), Some(other), "{other:?} is left in the address");
+        }
     }
     use super::*;
 

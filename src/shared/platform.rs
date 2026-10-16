@@ -245,7 +245,7 @@ impl Page for BrowserPage {
         {
             let window = leptos::prelude::window();
             let location = window.location();
-            let hash = location.hash().ok().filter(|h| h.len() > 1)?;
+            let hash = location.hash().ok().filter(|h| h.len() > 1 && super::ports::is_account_fragment(&h[1..]))?;
             let clean = format!("{}{}", location.pathname().unwrap_or_default(), location.search().unwrap_or_default());
             if let Ok(history) = window.history() {
                 let _ = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&clean));
