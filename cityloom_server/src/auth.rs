@@ -147,7 +147,9 @@ pub async fn signout(State(a): State<Arc<Account>>, jar: CookieJar) -> Response 
         if let Err(e) = session::end(&*a.repo, c.value()).await {
             // The cookie goes whatever happens, and the person is told they are out; the row that is left is useful
             // only to someone who already holds the token. The log has the reason, never the token.
-            tracing::warn!(reason = %e, "a session could not be ended");
+            // The cookie goes whatever happens, and the person is told they are out; the row that is left is useful only to
+            // someone who already holds the token. The log has the reason, never the token.
+            tracing::error!(reason = %e, "a session could not be ended");
         }
     }
     // A link flow begun before signing out must not finish for the next person on this browser.
