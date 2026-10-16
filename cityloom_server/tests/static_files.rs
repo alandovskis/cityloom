@@ -62,7 +62,7 @@ async fn refuses_a_range_past_the_end_and_serves_the_whole_file_without_one() {
 }
 
 #[tokio::test]
-async fn a_range_list_is_served_whole_as_serve_mjs_does() {
+async fn a_range_list_is_served_whole() {
     let (_d, router, whole) = site("no-store");
     let (status, _, body) = get(&router, "/map.html", Some("bytes=0-1,5-6")).await;
     assert_eq!((status, body), (StatusCode::OK, whole));
@@ -79,10 +79,10 @@ async fn refuses_a_malformed_escape_and_keeps_serving() {
 async fn refuses_a_path_that_leaves_the_root() {
     let (_d, router, _) = site("no-store");
     assert_eq!(get(&router, "/%2e%2e/%2e%2e/etc/passwd", None).await.0, StatusCode::FORBIDDEN);
-    // A `..` that stays inside the root is collapsed, as `serve.mjs` does, and served: ServeDir must never see it.
+    // A `..` that stays inside the root is collapsed, as a browser would, and served: ServeDir must never see it.
     assert_eq!(get(&router, "/sub/%2E%2E/map.html", None).await.0, StatusCode::OK);
     assert_eq!(get(&router, "/sub/%2e%2e/sub/", None).await.2, b"sub home");
-    // An encoded slash is a separator once decoded, in `serve.mjs` and here.
+    // An encoded slash is a separator once decoded.
     assert_eq!(get(&router, "/sub%2f..%2fmap.html", None).await.0, StatusCode::OK);
     assert_eq!(get(&router, "/sub/%2e%2e/map.html?x=1", None).await.0, StatusCode::OK);
 }

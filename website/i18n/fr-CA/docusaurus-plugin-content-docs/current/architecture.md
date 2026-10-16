@@ -16,7 +16,8 @@ qui possède la fonctionnalité.
 | `street/`      | L’éditeur de rue.                                                                                               |
 | `junction/`    | L’éditeur de jonction.                                                                                          |
 | `map/`         | La carte de la ville sur un fond de carte MapLibre, et le panneau Règles de zone.                               |
-| `shell/`       | Le balisage commun aux pages : menu, changement de langue, raccourcis.                                          |
+| `shell/`       | Le balisage commun aux pages : menu, changement de langue, raccourcis, le menu Se connecter.                    |
+| `account/`     | La page Compte : connexions associées, lieu de conservation du travail, suppression du compte.                  |
 | `city/`        | La ville : sa disposition, son stockage, sa projection sur la Terre et le document des modifications.           |
 | `place/`       | L’origine d’une ville : la recherche de lieu, ainsi que la récupération et l’importation des routes d’une zone. |
 | `restriction/` | Les règles déclarées sur une zone de la carte.                                                                  |
@@ -44,7 +45,7 @@ fond de carte MapLibre, sans SVG.
 ## Ports
 
 Un modèle de vue n’atteint le navigateur que par des ports, définis dans `shared/ports.rs` avec des doublures pour les
-tests : `Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (le lecteur OpenStreetMap) et
+tests : `Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (le lecteur OpenStreetMap), `Account` (l’état de connexion et l’API du compte) et
 `Navigator`. `shared/platform.rs` en est le côté navigateur. C’est ainsi que les modèles de vue sont testés en natif,
 avec `test_ports()`, sans navigateur.
 
@@ -57,16 +58,31 @@ français sont dans `docs/glossary-fr-ca.md`.
 
 ## Modules WebAssembly
 
-L’espace de travail compte trois caisses :
+L’espace de travail compte quatre caisses :
 
 - `cityloom_editor` (la caisse racine) est l’éditeur, construit en WebAssembly et piloté par `wasm-bindgen`.
 - `osm_network` est le type de réseau simple (serde seulement).
 - `osm_import` exécute [osm2streets](https://github.com/a-b-street/osm2streets) et remplit le réseau. Il est construit
   comme son propre module WebAssembly, `web/pkg/osm_import*`, que `web/city.js` charge à la première ouverture d’un
   lieu. Cela garde osm2streets hors du module de l’éditeur.
+- `cityloom_server` est le serveur : il sert `web/`, connecte les gens avec OpenStreetMap, Google, Microsoft ou Apple, et
+  conserve les comptes dans Postgres. Il n’est pas construit en WebAssembly.
 
 `city/import.rs` transforme un réseau en disposition de la ville : les routes deviennent des rues, et la rencontre de
 trois à cinq branches que l’éditeur de jonction sait dessiner devient une jonction.
+
+## Comptes et serveur
+
+On peut se connecter avec OpenStreetMap, Google, Microsoft ou Apple (OpenID Connect, code d’autorisation avec PKCE).
+Une identité est le fournisseur et son sujet; un courriel ne sert jamais à trouver un compte ni à en joindre deux. Les
+fournisseurs s’associent à la main, depuis la page Compte.
+
+Tout ce que le serveur conserve sur une personne est chiffré : chaque champ est scellé avec AES-256-GCM sous une clé
+propre à cette personne, elle-même scellée sous une clé maîtresse que détient l’environnement du serveur, et liée à sa
+table, à sa colonne et à sa ligne. Les identités se retrouvent par un HMAC du fournisseur et du sujet. La suppression
+d’un compte en retire aussitôt les lignes; les copies dans les sauvegardes disparaissent à l’expiration de celles-ci.
+Sans connexion, le site fonctionne exactement comme avant, et il fonctionne encore quand le volet des comptes du
+serveur est indisponible.
 
 ## JavaScript
 

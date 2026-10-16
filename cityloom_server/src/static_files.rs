@@ -1,4 +1,4 @@
-//! The `web/` service: what `e2e/serve.mjs` did, on tower-http's `ServeDir`.
+//! The `web/` service: the site's files with their types, byte ranges and a path kept inside the root, on tower-http's `ServeDir`.
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -12,7 +12,7 @@ use axum::response::{IntoResponse, Response};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use tower_http::services::ServeDir;
 
-/// The types `serve.mjs` knew; anything else is a byte stream.
+/// The types the site's files have; anything else is a byte stream.
 fn content_type(path: &str) -> &'static str {
     let path = if path.ends_with('/') { "index.html" } else { path };
     match Path::new(path).extension().and_then(|e| e.to_str()) {
@@ -51,7 +51,7 @@ fn climbs_out(path: &str) -> bool {
 const SEGMENT: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'.').remove(b'_').remove(b'~');
 
 /// The decoded path with its `.` and `..` segments resolved (call it only after `climbs_out` said no, so no `..`
-/// is left over), encoded again, with the slash that ended it. This is what `normalize(...)` did in `serve.mjs`.
+/// is left over), encoded again, with the slash that ended it. This is the path as a browser would resolve it.
 fn normalised(path: &str) -> String {
     let mut parts: Vec<&str> = Vec::new();
     for part in path.split('/') {
@@ -91,13 +91,13 @@ async fn apply(State(cache_control): State<Arc<HeaderValue>>, mut req: Request, 
         return StatusCode::FORBIDDEN.into_response();
     }
     // From here the path stays in the root, so give ServeDir the collapsed one: it never sees a `..` segment
-    // (it would answer 404 for `/sub/../map.html`, where `serve.mjs` served the file).
+    // (it would answer 404 for `/sub/../map.html`, which is the file `/map.html`).
     let path = normalised(&path);
     match with_path(req.uri(), &path) {
         Some(uri) => *req.uri_mut() = uri,
         None => return (StatusCode::BAD_REQUEST, "bad request").into_response(),
     }
-    // A list of ranges is not one `serve.mjs` understood; it answered the whole file, so do the same.
+    // A list of ranges is not supported: the whole file is answered.
     if req.headers().get(RANGE).and_then(|v| v.to_str().ok()).is_some_and(|v| v.contains(',')) {
         req.headers_mut().remove(RANGE);
     }

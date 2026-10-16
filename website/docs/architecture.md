@@ -15,7 +15,8 @@ The code is organised by feature, one folder per slice, not by layer. New code g
 | `street/`      | The street editor.                                                                       |
 | `junction/`    | The junction editor.                                                                     |
 | `map/`         | The city map over a MapLibre basemap, and the Area rules panel.                          |
-| `shell/`       | The markup the pages share: menu, language switch, shortcuts.                            |
+| `shell/`       | The markup the pages share: menu, language switch, shortcuts, the Sign in menu.          |
+| `account/`     | The Account page: linked sign-ins, where the work is kept, deleting the account.         |
 | `city/`        | The city: the layout, its storage, its projection onto the earth and the edits document. |
 | `place/`       | Where a city comes from: place search, and fetching and importing an area's roads.       |
 | `restriction/` | The rules declared over an area of the map.                                              |
@@ -40,7 +41,7 @@ state machines with tests. The map page is the exception: it draws over a MapLib
 ## Ports
 
 A view-model reaches the browser only through ports, defined in `shared/ports.rs` with fakes for tests:
-`Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (the OpenStreetMap reader) and
+`Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (the OpenStreetMap reader), `Account` (the sign-in state and the account API) and
 `Navigator`. `shared/platform.rs` is their browser side. This is how view-models are tested natively, against
 `test_ports()`, without a browser.
 
@@ -52,16 +53,30 @@ renders, so a history follows a language switch. Each slice that owns messages h
 
 ## WebAssembly modules
 
-The workspace has three crates:
+The workspace has four crates:
 
 - `cityloom_editor` (the root crate) is the editor, built to WebAssembly and driven by `wasm-bindgen`.
 - `osm_network` is the plain network type (serde only).
 - `osm_import` runs [osm2streets](https://github.com/a-b-street/osm2streets) and fills the network. It is built as its
   own WebAssembly module, `web/pkg/osm_import*`, which `web/city.js` loads when a place is first opened. This keeps
   osm2streets out of the editor's module.
+- `cityloom_server` is the server: it serves `web/`, signs people in with OpenStreetMap, Google, Microsoft or Apple, and
+  keeps accounts in Postgres. It is not built to WebAssembly.
 
 `city/import.rs` turns a network into the city's layout: roads become streets, and a meeting of three to five arms that
 the junction editor can draw becomes a junction.
+
+## Accounts and the server
+
+A person can sign in with OpenStreetMap, Google, Microsoft or Apple (OpenID Connect, Authorization Code with PKCE).
+An identity is the provider and its subject; an email is never used to find or join an account. Providers are
+linked by hand on the Account page.
+
+Everything the server stores about a person is encrypted: each field is sealed with AES-256-GCM under a key made for
+that person, which is itself sealed under a master key held in the server's environment, and bound to its table, column
+and row. Identities are found by an HMAC of the provider and subject. Deleting an account removes its rows at once;
+copies in backups disappear when the backups expire. Signed out, the site works exactly as before, and it still
+works when the server's account side is unavailable.
 
 ## JavaScript
 
