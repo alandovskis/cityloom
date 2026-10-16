@@ -60,6 +60,9 @@ pub(super) struct EdgeDef {
     /// The street's centreline in layout millimetres, from node `a` to node `b`, where its real shape is
     /// known. Otherwise it runs along the straight line between them.
     pub(super) shape: Option<Vec<(i32, i32)>>,
+    /// The width the street was laid out at by importer version 4 or older (every buffer a 600 mm median, nothing
+    /// merged), where that is not its own: a saved edit made then still finds it. Never saved.
+    pub(super) legacy_row_mm: Option<i32>,
 }
 
 /// A street of the hand-made test city: between two nodes, laid out like one of the sample streets.
@@ -235,6 +238,7 @@ impl Layout {
                 section: Street { source: vec![OsmRef { id: 2000 + i as i64, version: None }], ..Street::sample(e.fixture, Side::Right) },
                 headings: None,
                 shape: None,
+                legacy_row_mm: None,
             })
             .collect();
         Layout {
@@ -664,7 +668,7 @@ impl City {
             let uid = e as u32 + 1;
             let street = &records[ri].1.street;
             // the class is not compared: an edit changes it (a street made pedestrian); the room it has is not
-            let fits = self.today_streets.get(&uid).is_some_and(|t| t.row_mm == street.row_mm);
+            let fits = self.has_room_of(uid, street.row_mm);
             if fits && street.is_sound() {
                 // where a street came from and what it is called are not something an edit changes
                 let today = &self.today_streets[&uid];
@@ -801,11 +805,20 @@ impl City {
         Some(Editor::from_street(self.today_streets.get(&edge)?, self.streets.get(&edge)?, region))
     }
 
+    /// Whether a street saved with this room is the one at `edge`: it has that room now, or had it when it was
+    /// laid out by an earlier importer. The room it has now is taken first, and an edit is never rewritten for it.
+    fn has_room_of(&self, edge: u32, row_mm: i32) -> bool {
+        let legacy = (edge as usize).checked_sub(1).and_then(|i| self.layout.edges.get(i)).and_then(|e| e.legacy_row_mm);
+        self.today_streets.get(&edge).is_some_and(|t| t.row_mm == row_mm) || legacy == Some(row_mm)
+    }
+
     /// Keeps what the street editor has made of a street.
     pub fn keep_street(&mut self, edge: u32, street: Street) -> bool {
-        let ok = self.today_streets.get(&edge).is_some_and(|t| t.row_mm == street.row_mm);
+        let ok = self.has_room_of(edge, street.row_mm);
         if ok && street.is_sound() {
-            self.streets.insert(edge, street);
+            // a street taken by the width it had is kept at the one it has now, so that it is found by it from now on
+            let row_mm = self.today_streets[&edge].row_mm;
+            self.streets.insert(edge, Street { row_mm, ..street });
         }
         ok
     }
@@ -1422,8 +1435,16 @@ mod tests {
         layout.nodes.push(nb);
         let n = layout.nodes.len();
         let e = &layout.edges[0];
-        let twin =
-            EdgeDef { a: n - 2, b: n - 1, class: e.class, name: e.name.clone(), section: e.section.clone(), headings: e.headings, shape: e.shape.clone() };
+        let twin = EdgeDef {
+            a: n - 2,
+            b: n - 1,
+            class: e.class,
+            name: e.name.clone(),
+            section: e.section.clone(),
+            headings: e.headings,
+            shape: e.shape.clone(),
+            legacy_row_mm: None,
+        };
         layout.edges.push(twin);
         layout
     }

@@ -53,6 +53,13 @@ fn has_own_curb(lane: &Lane) -> bool {
     matches!(lane.kind, LaneKind::Bike | LaneKind::Sidewalk)
 }
 
+/// The pieces importer version 4 made of the lanes: every buffer that is not planted a median of its own (so at least
+/// 600 mm), and nothing merged. Only their width is kept, as `EdgeDef::legacy_row_mm`.
+fn legacy_pieces(lanes: &[Lane]) -> Vec<Piece> {
+    let median = kind_index("median").unwrap_or_default();
+    lanes.iter().map(|l| Piece { kind: if kind_of(l) == "buffer" { median } else { piece(l).kind }, ..piece(l) }).collect()
+}
+
 /// The pieces of a road's lanes, left to right. A curb buffer between a bike lane or a sidewalk and a road lane is
 /// that piece's own curb, as the editor has it (`curb`, which the section and the 2.5D stand against a road piece,
 /// inside the piece's width): the buffer's width goes to the piece, up to its maximum. Any other curb buffer is a
@@ -231,6 +238,8 @@ impl Layout {
                 let class = class_of(&r.highway);
                 let pieces = pieces(&r.lanes);
                 let side = if network.left_hand { Side::Left } else { Side::Right };
+                let section = Street { name: r.name.clone(), source: refs(&r.osm_ways, &r.osm_versions), ..Street::imported(class, side, &pieces) };
+                let legacy = Street::imported(class, side, &legacy_pieces(&r.lanes)).row_mm;
                 EdgeDef {
                     a: index[&r.from],
                     b: index[&r.to],
@@ -238,7 +247,8 @@ impl Layout {
                     name: r.name.clone(),
                     headings: headings(&r.points),
                     shape: shape_mm(&r.points, node_mm(r.from), node_mm(r.to), &mm_of),
-                    section: Street { name: r.name.clone(), source: refs(&r.osm_ways, &r.osm_versions), ..Street::imported(class, side, &pieces) },
+                    legacy_row_mm: (legacy != section.row_mm).then_some(legacy),
+                    section,
                 }
             })
             .collect();
