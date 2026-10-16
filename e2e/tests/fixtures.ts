@@ -39,7 +39,7 @@ export const test = base.extend<{ errors: string[]; world: void }>({
         if (m.type() !== "error") return;
         // Every page asks who is signed in (and for the providers when nobody is). A signed-out visitor, a server
         // with no account side and an older server answer those with 401, 503 or 404, which the browser logs.
-        if (/^\/api\/(me|providers)$/.test(new URL(m.location().url || "http://x/").pathname)) return;
+        if (/^\/api\/(me|providers)(\/|$)/.test(new URL(m.location().url || "http://x/").pathname)) return;
         errors.push(m.text());
       });
       await use(errors);

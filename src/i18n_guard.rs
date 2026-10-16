@@ -7,13 +7,14 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// The `.rs` files of `map`, `place`, `junction`, `city` and `restriction` that are not in `MIGRATED`, and why. Every other
+/// The `.rs` files of `account`, `map`, `place`, `junction`, `city` and `restriction` that are not in `MIGRATED`, and why. Every other
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
     ("src/city/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/restriction/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
+    ("src/account/tests.rs", "test-only"),
     ("src/map/tests.rs", "test-only"),
     ("src/junction/tests.rs", "test-only"),
     ("src/junction/model/fixtures.rs", "test-only"),
@@ -25,6 +26,10 @@ const LEFT_OUT: &[(&str, &str)] = &[
 
 const MIGRATED: &[(&str, &str)] = &[
     // Files are added here as their task completes.
+    ("src/account/mod.rs", include_str!("account/mod.rs")),
+    ("src/account/text.rs", include_str!("account/text.rs")),
+    ("src/account/view.rs", include_str!("account/view.rs")),
+    ("src/account/vm.rs", include_str!("account/vm.rs")),
     ("src/restriction/draw.rs", include_str!("restriction/draw.rs")),
     ("src/restriction/mod.rs", include_str!("restriction/mod.rs")),
     ("src/restriction/model.rs", include_str!("restriction/model.rs")),
@@ -467,6 +472,12 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("signed-in", "an outcome the server puts in the address after #account="),
     ("already-linked", "an outcome the server puts in the address after #account="),
     ("fake-apple", "the slug of the server's test provider"),
+    ("account-slot", "the id of an element of the Account page"),
+    ("account-title", "the id of an element of the Account page"),
+    ("h-storage", "the id of an element of the Account page"),
+    ("h-linked", "the id of an element of the Account page"),
+    ("delete-btn", "the id of an element of the Account page"),
+    ("delete-no", "the id of an element of the Account page"),
     ("session-slot", "the id of an element every page shares"),
     ("session-btn", "the id of an element every page shares"),
     ("session-menu", "the id of an element every page shares"),
@@ -608,7 +619,7 @@ fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
     let mut files = Vec::new();
-    for slice in ["map", "place", "junction", "city", "restriction"] {
+    for slice in ["account", "map", "place", "junction", "city", "restriction"] {
         rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
     }
     let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();

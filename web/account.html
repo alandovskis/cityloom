@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CityLoom account</title>
+  <meta name="color-scheme" content="light dark">
+  <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var l=localStorage.getItem("cityloom-lang");if(l==="en"||l==="fr-CA")document.documentElement.lang=l}catch(e){}</script>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="account.css">
+</head>
+<body>
+  <header class="bar" data-covers>
+    <a class="brand" href="index.html" data-i18n-aria-label="ui-home" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
+    <nav class="surfaces" data-i18n-aria-label="map-editors" aria-label="Editors">
+      <a href="map.html" class="surface" data-i18n="map-nav-map">Map</a>
+    </nav>
+    <div class="top-end">
+      <div class="account">
+        <button type="button" id="account-btn" class="btn quiet" aria-haspopup="true" aria-expanded="false" aria-controls="account-menu"><svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M2.5 5h11M2.5 11h11"/><circle cx="6" cy="5" r="1.6"/><circle cx="10.5" cy="11" r="1.6"/></svg><span id="account-btn-label"></span></button>
+        <div id="account-menu" class="menu" hidden>
+          <p class="menu-h" id="account-heading"></p>
+          <div class="menu-row">
+            <span id="units-label" data-i18n="ui-units">Units</span>
+            <fieldset class="units" aria-labelledby="units-label">
+              <button type="button" class="unit" data-unit="m" aria-pressed="true">m</button>
+              <button type="button" class="unit" data-unit="ft" aria-pressed="false">ft</button>
+            </fieldset>
+          </div>
+          <div class="menu-row">
+            <label for="region" data-i18n="ui-region">Region</label>
+            <select id="region"></select>
+          </div>
+          <div class="menu-row">
+            <span id="theme-label" data-i18n="ui-theme">Theme</span>
+            <fieldset class="units" aria-labelledby="theme-label">
+              <button type="button" class="unit theme" data-theme-set="light" aria-pressed="false" data-i18n="ui-theme-light">Light</button>
+              <button type="button" class="unit theme" data-theme-set="dark" aria-pressed="false" data-i18n="ui-theme-dark">Dark</button>
+            </fieldset>
+          </div>
+          <div class="menu-row">
+            <span id="lang-label" data-i18n="ui-language">Language</span>
+            <fieldset class="units" aria-labelledby="lang-label">
+              <button type="button" class="unit" data-lang="en" lang="en" aria-pressed="true">English</button>
+              <button type="button" class="unit" data-lang="fr-CA" lang="fr" aria-pressed="false">Français</button>
+            </fieldset>
+          </div>
+          <p class="menu-foot"><a href="credits.html" data-i18n="ui-credits">Credits</a></p>
+        </div>
+      </div>
+      <div id="session-slot" class="session"></div>
+    </div>
+  </header>
+
+  <main class="account-page" data-i18n-aria-label="account-page-heading" aria-label="Your account">
+    <div id="account-slot"></div>
+  </main>
+  <footer class="site-foot"><span data-version></span></footer>
+
+  <output id="live" class="sr-only" aria-live="polite"></output>
+  <script type="module" src="account.js"></script>
+</body>
+</html>
