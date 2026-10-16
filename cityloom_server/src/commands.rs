@@ -16,7 +16,7 @@ pub async fn run(name: &str, config: &AccountConfig, old_lookup_key: Option<zero
     let repo = PgRepo::new(pool, masters, LookupKey::new(config.lookup_key.clone()));
     match old {
         None => repo.rewrap().await.map(|n| format!("resealed {n} data keys")).map_err(|e| e.to_string()),
-        Some(old) => repo.rehash(&LookupKey::new(old)).await.map(|n| format!("recomputed {n} identity lookups")).map_err(|e| e.to_string()),
+        Some(old) => repo.rehash(&LookupKey::new(old)).await.map(|counts| counts.to_string()).map_err(|e| e.to_string()),
     }
 }
 
@@ -42,6 +42,12 @@ mod tests {
             crate::config::AccountSide::On(a) => *a,
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn the_rehash_line_says_what_the_run_did() {
+        let counts = crate::db::rotate::Rehashed { checked: 12, rehashed: 0, already_new: 12 };
+        assert_eq!(counts.to_string(), "checked 12 identities: 0 rehashed, 12 already on the new key");
     }
 
     #[tokio::test]

@@ -7,6 +7,7 @@ use cityloom_server::accounts::{self, Claims, Repo};
 use cityloom_server::config::RateLimit;
 use cityloom_server::crypto::{LookupKey, MasterKeys};
 use cityloom_server::db::PgRepo;
+use cityloom_server::db::rotate::Rehashed;
 use cityloom_server::fake_provider::FakeLogin;
 use sqlx::PgPool;
 use support::*;
@@ -60,7 +61,7 @@ async fn rehash_recomputes_every_lookup_and_the_data_stays_readable_and_bound(po
     );
     assert_eq!(new.find_identity("google", "g1").await.unwrap(), None);
     assert_eq!(old.find_identity("google", "g1").await.unwrap(), Some(ada), "still the old hashes");
-    assert_eq!(new.rehash(&LookupKey::new(zeroize::Zeroizing::new([3; 32]))).await.unwrap(), 3);
+    assert_eq!(new.rehash(&LookupKey::new(zeroize::Zeroizing::new([3; 32]))).await.unwrap(), Rehashed { checked: 3, rehashed: 3, already_new: 0 });
     assert_eq!(new.find_identity("google", "g1").await.unwrap(), Some(ada));
     assert_eq!(new.find_identity("apple", "a1").await.unwrap(), Some(ada));
     assert_eq!(new.find_identity("google", "g2").await.unwrap(), Some(bob));
@@ -70,8 +71,12 @@ async fn rehash_recomputes_every_lookup_and_the_data_stays_readable_and_bound(po
         ids.iter().map(|i| (i.provider.as_str(), i.label.as_deref())).collect::<Vec<_>>(),
         [("google", Some("g1@example.org")), ("apple", Some("a1@example.org"))]
     );
-    assert_eq!(new.rehash(&LookupKey::new(zeroize::Zeroizing::new([3; 32]))).await.unwrap(), 0, "running it twice finds nothing left to do");
-    assert_eq!(new.rehash(&LookupKey::new(zeroize::Zeroizing::new([4; 32]))).await.unwrap(), 0);
+    assert_eq!(
+        new.rehash(&LookupKey::new(zeroize::Zeroizing::new([3; 32]))).await.unwrap(),
+        Rehashed { checked: 3, rehashed: 0, already_new: 3 },
+        "running it twice finds nothing left to do"
+    );
+    assert_eq!(new.rehash(&LookupKey::new(zeroize::Zeroizing::new([4; 32]))).await.unwrap(), Rehashed { checked: 3, rehashed: 0, already_new: 3 });
 }
 
 #[sqlx::test]
@@ -86,7 +91,11 @@ async fn rehash_finishes_a_mixed_table_where_some_rows_are_already_on_the_new_ha
         accounts::RepoError::Corrupt,
         "a wrong old key still matches neither"
     );
-    assert_eq!(new.rehash(&LookupKey::new(zeroize::Zeroizing::new([3; 32]))).await.unwrap(), 2, "only the rows still on the old hash change");
+    assert_eq!(
+        new.rehash(&LookupKey::new(zeroize::Zeroizing::new([3; 32]))).await.unwrap(),
+        Rehashed { checked: 3, rehashed: 2, already_new: 1 },
+        "only the rows still on the old hash change"
+    );
     assert_eq!(new.find_identity("google", "g1").await.unwrap(), Some(ada));
     assert_eq!(new.find_identity("apple", "a1").await.unwrap(), Some(ada));
     assert_eq!(new.find_identity("google", "g2").await.unwrap(), Some(bob));

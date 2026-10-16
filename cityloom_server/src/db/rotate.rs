@@ -10,6 +10,20 @@ use super::{PgRepo, corrupt, unavailable};
 use crate::accounts::RepoError;
 use crate::crypto::{Key, LookupKey};
 
+/// What a `rehash` run did to the identities it read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rehashed {
+    pub checked: u64,
+    pub rehashed: u64,
+    pub already_new: u64,
+}
+
+impl std::fmt::Display for Rehashed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "checked {} identities: {} rehashed, {} already on the new key", self.checked, self.rehashed, self.already_new)
+    }
+}
+
 impl PgRepo {
     /// Reseals every data key not wrapped under the current master key, each user in its own transaction, and
     /// returns how many.
@@ -46,22 +60,27 @@ impl PgRepo {
     /// Recomputes every identity's lookup with this repository's lookup key (the new `LOOKUP_KEY`), from the sealed
     /// provider and subject, and reseals them under the new lookup's AAD, all in one transaction. A row already on
     /// the new hash is left alone; a row that matches neither the old nor the new key refuses the whole run
-    /// (`Corrupt`) and changes nothing, which is how a wrong `old` key is found. Returns how many rows changed.
+    /// (`Corrupt`) and changes nothing, which is how a wrong `old` key is found while any row is still on the old
+    /// hash. Returns how many identities it checked, rehashed and found already on the new key.
     ///
-    /// A wrong `old` key against a table that is already migrated changes nothing and returns 0, so the count
-    /// printed by `cityloom_server rehash` is what shows a mistyped `OLD_LOOKUP_KEY`.
+    /// A run that rehashed 0 cannot tell a finished table from an `old` key that matches no row: both find every
+    /// row on the new hash. The printed line shows only whether the run changed anything.
     ///
     /// Operator's order: stop the server, so that no sign-in can happen during the run; run `rehash` (with
     /// `OLD_LOOKUP_KEY` and the new `LOOKUP_KEY`); then start the server with the new key. The run is one
     /// READ COMMITTED transaction that sees only the rows committed before it began, so an account created by a
-    /// sign-in during the run keeps its old hash, is not found by the new key afterwards, and the next sign-in
-    /// creates a duplicate account. Running `rehash` again (the server stopped) repairs such a table.
-    pub async fn rehash(&self, old: &LookupKey) -> Result<u64, RepoError> {
+    /// sign-in during the run keeps its old hash and is not found by the new key afterwards. Running `rehash`
+    /// again with the server stopped repairs that row only if nobody has signed in with that identity since the
+    /// switch. If someone has, a second account holds the new hash, the re-run's update hits the primary key on
+    /// `identities.lookup` and fails as `Unavailable` with nothing changed, and the duplicate (the newer account)
+    /// has to be removed by hand; the accounts are never merged.
+    pub async fn rehash(&self, old: &LookupKey) -> Result<Rehashed, RepoError> {
         let mut tx = self.pool.begin().await.map_err(unavailable)?;
         let rows = sqlx::query("select lookup, user_id, provider, subject, label from identities for update").fetch_all(&mut *tx).await.map_err(unavailable)?;
         let mut keys: HashMap<Uuid, Key> = HashMap::new();
-        let mut done = 0;
+        let mut counts = Rehashed { checked: 0, rehashed: 0, already_new: 0 };
         for row in rows {
+            counts.checked += 1;
             let lookup: Vec<u8> = row.try_get("lookup").map_err(unavailable)?;
             let user: Uuid = row.try_get("user_id").map_err(unavailable)?;
             let key = match keys.get(&user) {
@@ -77,6 +96,7 @@ impl PgRepo {
             let sub = Self::open_text(&key, "identities", "subject", &old_id, &row.try_get::<Vec<u8>, _>("subject").map_err(unavailable)?)?;
             let new = self.lookup.lookup(&provider, &sub);
             if new[..] == lookup[..] {
+                counts.already_new += 1;
                 continue; // already on the new key (a mixed table, or a run repeated)
             }
             if old.lookup(&provider, &sub)[..] != lookup[..] {
@@ -97,9 +117,9 @@ impl PgRepo {
                 .execute(&mut *tx)
                 .await
                 .map_err(unavailable)?;
-            done += 1;
+            counts.rehashed += 1;
         }
         tx.commit().await.map_err(unavailable)?;
-        Ok(done)
+        Ok(counts)
     }
 }
