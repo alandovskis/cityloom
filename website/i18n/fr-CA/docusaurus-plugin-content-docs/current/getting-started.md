@@ -86,8 +86,19 @@ Enregistrez l’URL de redirection `https://cityloom.app/auth/{osm|google|micros
 fournisseur.
 
 Sauvegardez `DATA_KEYS` et `LOOKUP_KEY` dans un gestionnaire de mots de passe : les perdre fait perdre toutes les
-données. Pour renouveler une clé maîtresse, ajoutez-la à `DATA_KEYS`, donnez son identifiant à `DATA_KEY_CURRENT` et
-exécutez `cityloom_server rewrap` (possible pendant que le serveur tourne). Pour renouveler la clé de recherche,
+données. Pour renouveler une clé maîtresse, dans cet ordre :
+
+1. Ajoutez la nouvelle clé à `DATA_KEYS` (gardez l’ancienne) et donnez son identifiant à `DATA_KEY_CURRENT`. Déployez,
+   puis attendez que le serveur tourne avec ces valeurs.
+2. Exécutez `cityloom_server rewrap`. La commande affiche `resealed N data keys`. Exécutez-la de nouveau jusqu’à ce
+   qu’elle affiche `resealed 0 data keys`.
+3. Seulement alors, retirez l’ancienne clé de `DATA_KEYS` et déployez.
+
+L’ordre compte : un serveur qui tourne encore avec l’ancienne clé courante continue d’envelopper les nouveaux comptes
+avec l’ancienne clé, et `rewrap` ne voit pas les comptes créés après son démarrage. Si l’on retire alors l’ancienne
+clé, ces comptes ne peuvent plus être ouverts et leurs données sont perdues. Sur Railway, ouvrez un terminal dans le
+service en cours d’exécution avec `railway ssh`, puis exécutez `/app/cityloom_server rewrap` (le `WORKDIR` de l’image
+est `/app`; les variables du service sont déjà dans l’environnement). Pour renouveler la clé de recherche,
 donnez l’ancienne à `OLD_LOOKUP_KEY` et la nouvelle à `LOOKUP_KEY`, arrêtez le serveur et exécutez
 `cityloom_server rehash` : une connexion pendant l’exécution pourrait créer un compte en double. La commande affiche le
 nombre d’identités vérifiées, le nombre de celles qui ont été recalculées et le nombre de celles qui étaient déjà sur la
@@ -133,8 +144,9 @@ Microsoft : connectez-vous une fois avec un compte personnel et une fois avec u
 identités distinctes.
 Google : tant que l’écran de consentement n’est pas vérifié, Google affiche l’avertissement « application non
 vérifiée »; c’est normal.
-Renouvellement des clés : `rewrap` peut s’exécuter en cours de service; `rehash` exige que le serveur soit arrêté (voir
-plus haut). Vérifiez la ligne affichée.
+Renouvellement des clés : `rewrap` seulement quand le serveur tourne avec la nouvelle clé courante, répété jusqu’à
+`resealed 0 data keys`, l’ancienne clé étant retirée en dernier; `rehash` exige que le serveur soit arrêté (voir plus
+haut). Vérifiez la ligne affichée.
 
 ## Cette documentation
 

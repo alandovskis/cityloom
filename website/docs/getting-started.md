@@ -82,9 +82,20 @@ provider is offered only when all of its variables are set. Without the account 
 
 Register the redirect URL `https://cityloom.app/auth/{osm|google|microsoft|apple}/callback` with each provider.
 
-Back up `DATA_KEYS` and `LOOKUP_KEY` in a password manager: losing them loses all the data. To rotate a master key, add
-it to `DATA_KEYS`, set `DATA_KEY_CURRENT` to its id and run `cityloom_server rewrap` (it can run while the server
-runs). To rotate the lookup key, set `OLD_LOOKUP_KEY` to the old one, `LOOKUP_KEY` to the new one, stop the server and
+Back up `DATA_KEYS` and `LOOKUP_KEY` in a password manager: losing them loses all the data. To rotate a master key, in this
+order:
+
+1. Add the new key to `DATA_KEYS` (keep the old one) and set `DATA_KEY_CURRENT` to the new id. Deploy, and wait until
+   the server runs with these values.
+2. Run `cityloom_server rewrap`. It prints `resealed N data keys`. Run it again until it prints
+   `resealed 0 data keys`.
+3. Only then remove the old key from `DATA_KEYS`, and deploy.
+
+The order matters: a server still running with the old current key keeps wrapping new users under the old key, and
+`rewrap` does not see users created after it started. Removing the old key then leaves those accounts impossible to
+open, and their data is lost. On Railway, open a shell in the running service with `railway ssh` and run
+`/app/cityloom_server rewrap` (the image's `WORKDIR` is `/app`; the service's variables are already in the
+environment). To rotate the lookup key, set `OLD_LOOKUP_KEY` to the old one, `LOOKUP_KEY` to the new one, stop the server and
 run `cityloom_server rehash`: a sign-in during the run could create a duplicate account. It prints how many identities
 it checked, how many it rehashed and how many were already on the new key.
 
@@ -121,7 +132,7 @@ only the first time). Hide-my-email gives a relay address as the label. The toke
 secret in the body (`client_secret_post`), and Apple must accept `openid` in the scope.
 Microsoft: sign in once with a personal account and once with a work or school account: two separate identities.
 Google: until the consent screen is verified, Google shows an "unverified app" warning; that is expected.
-Key rotation: `rewrap` can run live; `rehash` needs the server stopped (see above). Check the printed line.
+Key rotation: `rewrap` only after the server runs on the new current key, repeated until it prints `resealed 0 data keys`, and the old key removed last; `rehash` needs the server stopped (see above). Check the printed line.
 
 ## This documentation
 

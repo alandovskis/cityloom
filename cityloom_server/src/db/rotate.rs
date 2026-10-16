@@ -27,6 +27,10 @@ impl std::fmt::Display for Rehashed {
 impl PgRepo {
     /// Reseals every data key not wrapped under the current master key, each user in its own transaction, and
     /// returns how many.
+    ///
+    /// It picks its users once, at the start, so a server still running with the old `DATA_KEY_CURRENT` goes on
+    /// wrapping new users under the old key, and `rewrap` misses them. Run it only after the deployed server
+    /// already has the new key as current, run it again until it resealed 0, and only then remove the old key.
     pub async fn rewrap(&self) -> Result<u64, RepoError> {
         let current = self.masters.current_id() as i16;
         let ids: Vec<Uuid> =
