@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, live, openStreet, pressablePiece, test } from "./fixtures";
+import { expect, live, openStreet, PRESSABLE_PX, pressablePiece, test } from "./fixtures";
 
 const selectFirstPiece = async (page: Page) => {
   await page.locator("#wrap").focus();
@@ -59,6 +59,23 @@ test.describe("the street editor on a street of the city", () => {
     await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(page.locator("#inspector .insp-empty")).toBeVisible();
+  });
+
+  test("a buffer too narrow to press is selected with the arrow keys and announced", async ({ page }) => {
+    // an imported curb buffer is 150 mm: look for a street of the area that has one narrower than a press can reach
+    let narrow = -1;
+    for (let n = 0; n < 40 && narrow < 0; n++) {
+      await openStreet(page, n);
+      const widths = await page
+        .locator('#drawing [data-role="seg"]')
+        .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+      narrow = widths.findIndex((w) => w < PRESSABLE_PX);
+    }
+    expect(narrow, "a street with a piece too narrow to press").toBeGreaterThanOrEqual(0);
+    await page.locator("#wrap").focus();
+    for (let k = 0; k <= narrow; k++) await page.keyboard.press("ArrowRight");
+    await expect(live(page)).toHaveText(new RegExp(`^Buffer, 0\\.15 m, ${narrow + 1} of \\d+$`));
+    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
   });
 
   test("a piece is pressed to select it", async ({ page }) => {
