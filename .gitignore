@@ -1,5 +1,7 @@
 target/
 .tools/
+# The server's local environment (keys and client secrets): .env.example says what goes in it.
+/.env
 web/pkg/
 .impeccable/critique/
 .impeccable/review/

@@ -93,6 +93,13 @@ jobs:
         with:
           just-version: ${{ env.JUST_VERSION }}
       - run: just check-no-fake
+      # A positive control: the check must fail on a build with the fake provider, or its markers have drifted.
+      - run: |
+          cargo build --release -p cityloom_server --features test-provider
+          if ./scripts/check-no-fake.sh target/release/cityloom_server; then
+            echo "check-no-fake.sh passed a build with the fake provider" >&2
+            exit 1
+          fi
 
   e2e:
     name: Browser tests
@@ -241,6 +248,8 @@ jobs:
           toolchain: stable
           targets: wasm32-unknown-unknown, x86_64-unknown-linux-musl
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.17.0
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
         with:

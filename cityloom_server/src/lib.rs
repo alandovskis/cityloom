@@ -82,12 +82,15 @@ async fn shutdown_signal() {
     #[cfg(unix)]
     {
         use tokio::signal::unix::{SignalKind, signal};
-        if let Ok(mut term) = signal(SignalKind::terminate()) {
-            tokio::select! {
-                _ = tokio::signal::ctrl_c() => {}
-                _ = term.recv() => {}
+        match signal(SignalKind::terminate()) {
+            Ok(mut term) => {
+                tokio::select! {
+                    _ = tokio::signal::ctrl_c() => {}
+                    _ = term.recv() => {}
+                }
+                return;
             }
-            return;
+            Err(error) => tracing::warn!(%error, "SIGTERM cannot be handled; only Ctrl-C stops the server gracefully"),
         }
     }
     let _ = tokio::signal::ctrl_c().await;
