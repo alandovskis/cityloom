@@ -48,10 +48,14 @@ impl PgRepo {
     /// the new hash is left alone; a row that matches neither the old nor the new key refuses the whole run
     /// (`Corrupt`) and changes nothing, which is how a wrong `old` key is found. Returns how many rows changed.
     ///
-    /// Operator's order: stop the server, or at least keep it on the old `LOOKUP_KEY`; run `rehash` (with
-    /// `OLD_LOOKUP_KEY` and the new `LOOKUP_KEY`); then start the server with the new key. Otherwise a sign-in
-    /// during the run, made with a key that does not match the rows, does not find the account and creates a
-    /// duplicate one.
+    /// A wrong `old` key against a table that is already migrated changes nothing and returns 0, so the count
+    /// printed by `cityloom_server rehash` is what shows a mistyped `OLD_LOOKUP_KEY`.
+    ///
+    /// Operator's order: stop the server, so that no sign-in can happen during the run; run `rehash` (with
+    /// `OLD_LOOKUP_KEY` and the new `LOOKUP_KEY`); then start the server with the new key. The run is one
+    /// READ COMMITTED transaction that sees only the rows committed before it began, so an account created by a
+    /// sign-in during the run keeps its old hash, is not found by the new key afterwards, and the next sign-in
+    /// creates a duplicate account. Running `rehash` again (the server stopped) repairs such a table.
     pub async fn rehash(&self, old: &LookupKey) -> Result<u64, RepoError> {
         let mut tx = self.pool.begin().await.map_err(unavailable)?;
         let rows = sqlx::query("select lookup, user_id, provider, subject, label from identities for update").fetch_all(&mut *tx).await.map_err(unavailable)?;
