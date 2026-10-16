@@ -343,5 +343,6 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Transit early green (a head start for buses) | `Avance pour le transport en commun` | `Priorité de départ pour les autobus` (suggestion) |
 | Cycle (a signal’s) | `Cycle` | `Durée du cycle` (suggestion) |
 | Sign in (header) | `Se connecter` | `Ouvrir une session` (suggestion) |
+| Signed in (an announcement) | `Votre session est ouverte.` | Not `Vous êtes connecté.`: it is gendered. Neutral forms pair with `Votre session est fermée.` and `Aucune session n’est ouverte.` |
 | link (an account to another) | `associer` | `lier`, `rattacher` (suggestion) |
 | unlink (a sign-in from an account) | `dissocier` | `délier`, `détacher` (suggestion) |

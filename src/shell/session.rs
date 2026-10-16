@@ -314,8 +314,8 @@ mod tests {
     #[test]
     fn every_outcome_in_the_address_is_announced_once_in_the_language_of_the_page_and_removed() {
         let cases = [
-            ("account=new", "Signed in. Choose where your work is kept.", "Vous êtes connecté. Choisissez où votre travail est conservé."),
-            ("account=signed-in", "Signed in.", "Vous êtes connecté."),
+            ("account=new", "Signed in. Choose where your work is kept.", "Votre session est ouverte. Choisissez où votre travail est conservé."),
+            ("account=signed-in", "Signed in.", "Votre session est ouverte."),
             ("account=linked", "Account linked.", "Compte associé."),
             ("account=already-linked", "That account is already linked to yours.", "Ce compte est déjà associé au vôtre."),
             (
