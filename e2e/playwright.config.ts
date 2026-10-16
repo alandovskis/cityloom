@@ -14,6 +14,8 @@ if (!existsSync(server)) {
   );
 }
 
+const b64 = (byte: number, length: number) => Buffer.alloc(length, byte).toString("base64");
+
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: true,
@@ -30,7 +32,21 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } }],
   webServer: {
     command: server,
-    env: { WEB_ROOT: "../web", E2E_PORT: String(port) },
+    env: {
+      WEB_ROOT: "../web",
+      E2E_PORT: String(port),
+      // The account side is on when the caller's environment has a DATABASE_URL (the keys are fixed test values,
+      // not secrets); without one it stays off and only the account specs fail.
+      BASE_URL: `http://127.0.0.1:${port}`,
+      COOKIE_KEY: b64(7, 64),
+      DATA_KEYS: `1:${b64(1, 32)}`,
+      DATA_KEY_CURRENT: "1",
+      LOOKUP_KEY: b64(3, 32),
+      FAKE_PROVIDER: "1",
+      // Many parallel specs sign in from one address: the production allowance (10 a minute) would answer 429.
+      AUTH_RATE_BURST: "100000",
+      AUTH_RATE_PERIOD_SECS: "1",
+    },
     url: `http://127.0.0.1:${port}/map.html`,
     reuseExistingServer: !process.env.CI,
   },

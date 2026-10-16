@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { expect, test as base, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test as base, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 /** Every test fails if its page throws or logs a console error. Each test gets a
  *  fresh browser context, so the page starts with empty storage.
@@ -12,16 +12,7 @@ import { expect, test as base, type BrowserContext, type Page } from "@playwrigh
  *  something else asks for it with its own `page.route`, which wins over these. */
 export const test = base.extend<{ errors: string[]; world: void }>({
   context: async ({ context }, use) => {
-    // Every spec starts in English whatever the machine's language is; a spec that switches to
-    // French and reloads keeps it, because the choice is only stored when there is none.
-    await context.addInitScript(() => {
-      try {
-        if (localStorage.getItem("cityloom-lang") === null) localStorage.setItem("cityloom-lang", "en");
-      } catch {
-        // storage is blocked: the page falls back to its own default
-      }
-    });
-    await serveBasemap(context);
+    await prepareContext(context);
     await use(context);
   },
   world: [
@@ -87,6 +78,30 @@ export async function serveWorld(page: Page) {
   );
   await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(PLATEAU_PBF) }));
   await page.route("https://overpass-api.de/**", (route) => route.abort());
+}
+
+/** What every test's own context gets: English unless a spec switches (a spec that switches to French and reloads
+ *  keeps it, because the choice is only stored when there is none), and the basemap's tiles, so there is no network. */
+export async function prepareContext(context: BrowserContext) {
+  await context.addInitScript(() => {
+    try {
+      if (localStorage.getItem("cityloom-lang") === null) localStorage.setItem("cityloom-lang", "en");
+    } catch {
+      // storage is blocked: the page falls back to its own default
+    }
+  });
+  await serveBasemap(context);
+}
+
+/** A second browser with its own cookies and storage (another person, or the same one on another device), set up
+ *  as each test's own is: `prepareContext`, the options `playwright.config.ts` gives every test, and a page that
+ *  serves the Plateau's tile. The `errors` fixture watches only the test's own `page`; check this one's if it matters. */
+export async function anotherBrowser(browser: Browser, baseURL: string) {
+  const context = await browser.newContext({ baseURL, locale: "en-CA", viewport: { width: 1440, height: 900 } });
+  await prepareContext(context);
+  const page = await context.newPage();
+  await serveWorld(page);
+  return { context, page };
 }
 
 /** The places of the city on the map, as the addresses of their editors: the junctions, then the streets, each

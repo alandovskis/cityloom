@@ -41,7 +41,7 @@ db-stop:
 
 # Browser tests, after a fresh build. Arguments go to Playwright: `just e2e tests/street.spec.ts`.
 e2e *args: build
-    cargo build -p cityloom_server
+    cargo build -p cityloom_server --features test-provider
     cd e2e && npx playwright test {{args}}
 
 # Everything: unit tests, then the browser tests.
