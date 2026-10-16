@@ -25,7 +25,7 @@ fn class_of(highway: &str) -> StreetClass {
 
 /// The catalogue kind that stands for a lane. A buffer is planting only when its type says it is planted or grass
 /// (`Planters`, `Verge`); a curb, paint, posts, a barrier, a shoulder or a buffer of no known type is the neutral
-/// `buffer`, a strip of concrete that is not green (a curb beside a bike lane is the bike lane's own: see `pieces`).
+/// `buffer`, a strip of concrete that is not green (a curb between a bike lane or sidewalk and a road lane is that piece's own: see `pieces`).
 /// Anything else (a turn lane, a rail track, the median between two carriageways) is a median: what is left of the
 /// road when no lane uses it. A shoulder is not the catalogue's `shoulder`: that kind is a motor kind, and osm2streets
 /// gives a lane anything may use that name, a shared path's included, which would make a footpath a street for cars.
@@ -47,15 +47,21 @@ fn is_road(lane: &Lane) -> bool {
     matches!(lane.kind, LaneKind::Driving | LaneKind::Parking | LaneKind::Bus)
 }
 
-/// The pieces of a road's lanes, left to right. A curb buffer between a bike lane and a road lane is the bike
-/// lane's own curb, as the editor has it (a bike lane's `curb`, which the section and the 2.5D stand against a road
-/// piece, inside the lane's width): the buffer's width goes to the bike lane. Any other curb buffer is a `buffer`.
+/// Whether a lane has a curb of its own the editor draws against a road piece: a bike lane or a sidewalk.
+fn has_own_curb(lane: &Lane) -> bool {
+    matches!(lane.kind, LaneKind::Bike | LaneKind::Sidewalk)
+}
+
+/// The pieces of a road's lanes, left to right. A curb buffer between a bike lane or a sidewalk and a road lane is
+/// that piece's own curb, as the editor has it (`curb`, which the section and the 2.5D stand against a road piece,
+/// inside the piece's width): the buffer's width goes to the piece, up to its maximum. Any other curb buffer is a
+/// `buffer`.
 fn pieces(lanes: &[Lane]) -> Vec<Piece> {
     let is_curb = |l: &Lane| l.kind == LaneKind::Buffer && l.buffer_type == Some(BufferType::Curb);
-    // the curb at `i` belongs to the bike lane on one side when a road lane is on the other
+    // the curb at `i` belongs to the bike lane or sidewalk on one side when a road lane is on the other
     let owner = |i: usize| -> Option<usize> {
         let (before, after) = (i.checked_sub(1).map(|j| &lanes[j])?, lanes.get(i + 1)?);
-        match (before.kind == LaneKind::Bike, after.kind == LaneKind::Bike) {
+        match (has_own_curb(before), has_own_curb(after)) {
             (true, false) if is_road(after) => Some(i - 1),
             (false, true) if is_road(before) => Some(i + 1),
             _ => None,
@@ -354,16 +360,36 @@ mod tests {
     }
 
     #[test]
-    fn a_curb_buffer_with_no_bike_lane_to_belong_to_is_the_neutral_buffer() {
-        // beside a driving lane, between a sidewalk and the road, at the edge, between two bike lanes, between a bike lane and a sidewalk
+    fn a_curb_buffer_between_a_sidewalk_and_a_road_lane_is_the_sidewalks_own_curb() {
+        let sidewalk = || lane(LaneKind::Sidewalk, Way::Forward, 2.0);
+        let left = [sidewalk(), curb(), driving()];
+        assert_eq!(ids(&left), ["sidewalk", "travel"]);
+        assert_eq!(widths(&left), [2600, 3300]);
+        assert_eq!(curb_sides(&left, 0), [true]);
+        let right = [driving(), curb(), sidewalk()];
+        assert_eq!(ids(&right), ["travel", "sidewalk"]);
+        assert_eq!(widths(&right), [3300, 2600]);
+        assert_eq!(curb_sides(&right, 1), [false]);
+        let parked = [sidewalk(), curb(), lane(LaneKind::Parking, Way::Forward, 2.4)];
+        assert_eq!(ids(&parked), ["sidewalk", "parking"]);
+        assert_eq!(widths(&parked), [2600, 2400]);
+        // the sidewalk's own maximum holds
+        let wide = [lane(LaneKind::Sidewalk, Way::Forward, 7.8), curb(), driving()];
+        let street = Street::imported(StreetClass::Local, Side::Right, &pieces(&wide));
+        assert_eq!(street.segments[0].width_mm, 8000);
+    }
+
+    #[test]
+    fn a_curb_buffer_with_no_bike_lane_or_sidewalk_to_belong_to_is_the_neutral_buffer() {
+        // beside a driving lane only, at the edge, between two sidewalks, two bike lanes, or a bike lane and a sidewalk
         let sidewalk = || lane(LaneKind::Sidewalk, Way::Forward, 2.0);
         assert_eq!(ids(&[driving(), curb(), driving()]), ["travel", "buffer", "travel"]);
-        assert_eq!(ids(&[sidewalk(), curb(), driving()]), ["sidewalk", "buffer", "travel"]);
-        assert_eq!(widths(&[sidewalk(), curb(), driving()]), [2000, 600, 3300]);
         assert_eq!(ids(&[curb(), driving()]), ["buffer", "travel"]);
+        assert_eq!(ids(&[sidewalk(), curb(), sidewalk()]), ["sidewalk", "buffer", "sidewalk"]);
         assert_eq!(ids(&[bike(), curb(), bike()]), ["bike", "buffer", "bike"]);
         assert_eq!(ids(&[bike(), curb(), sidewalk()]), ["bike", "buffer", "sidewalk"], "no road for the curb to stand against");
         assert_eq!(widths(&[bike(), curb(), sidewalk()]), [1800, 600, 2000]);
+        assert_eq!(ids(&[sidewalk(), curb(), bike()]), ["sidewalk", "buffer", "bike"]);
     }
 
     #[test]
