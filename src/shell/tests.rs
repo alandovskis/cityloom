@@ -96,3 +96,72 @@ fn the_share_menu_is_a_button_and_a_hidden_menu_holding_print_in_the_language_of
         assert!(menu[print_at..].contains(print), "{locale:?} says {print}: {page}");
     }
 }
+
+#[test]
+fn every_app_page_has_one_slot_for_the_sign_in_menu() {
+    for (name, html) in [
+        ("index", include_str!("../../web/index.html")),
+        ("map", include_str!("../../web/map.html")),
+        ("street", include_str!("../../web/street.html")),
+        ("intersection", include_str!("../../web/intersection.html")),
+    ] {
+        assert_eq!(html.matches(r#"id="session-slot""#).count(), 1, "{name}.html");
+    }
+}
+
+#[test]
+fn the_sign_in_menu_is_drawn_for_each_state_in_each_language() {
+    use crate::shared::ports::{AccountError, AccountReply, LinkedIdentity, Me, ProviderInfo, test_ports_full};
+    use crate::shared::testing::html;
+    use crate::shell::session::SessionVm;
+    use crate::shell::session_view::SessionMenu;
+    use leptos::prelude::*;
+
+    let render = |locale: Locale, reply: Vec<AccountReply>| {
+        let t = test_ports_full();
+        let vm = SessionVm::new(t.ports.clone(), crate::i18n_for(locale));
+        vm.start();
+        for r in reply {
+            t.account.answer(r);
+        }
+        html(move || view! { <SessionMenu vm=vm/> }.into_any())
+    };
+    let providers = AccountReply::Providers(Ok(vec![
+        ProviderInfo { slug: "google".into(), name: "Google".into() },
+        ProviderInfo { slug: "osm".into(), name: "OpenStreetMap".into() },
+    ]));
+    let out = render(Locale::En, vec![AccountReply::Me(Err(AccountError::SignedOut)), providers]);
+    assert!(out.contains(r#"id="session-btn""#) && out.contains(">Sign in<"), "{out}");
+    assert!(
+        out.contains(r#"data-provider="google""#) && out.contains(">Google<") && out.contains(r#"data-provider="osm""#) && out.contains(">OpenStreetMap<"),
+        "{out}"
+    );
+    assert!(out.contains(">Sign in with<"), "{out}");
+    let menu = &out[out.find(r#"id="session-menu""#).unwrap()..];
+    assert!(menu[..menu.find('>').unwrap()].contains("hidden"), "the menu starts closed");
+
+    let me = Me {
+        id: "u".into(),
+        display_name: "Ada <b>".into(),
+        store_on_server: None,
+        identities: vec![LinkedIdentity { id: "a".into(), provider: "google".into(), label: None, created_at: String::new() }],
+    };
+    let out = render(Locale::En, vec![AccountReply::Me(Ok(me))]);
+    assert!(out.contains("Ada &lt;b&gt;") && !out.contains("Ada <b>"), "the name is escaped: {out}");
+    assert!(out.contains(r#"href="account.html""#) && out.contains(">Account<") && out.contains(">Sign out<"), "{out}");
+    assert!(!out.contains("data-provider"), "{out}");
+
+    let out = render(Locale::En, vec![AccountReply::Me(Err(AccountError::Unavailable))]);
+    assert!(out.contains("disabled") && out.contains("Sign-in is not available right now."), "{out}");
+
+    let out = render(Locale::En, vec![]);
+    let at = out.find("session-box").unwrap();
+    let box_tag = &out[out[..at].rfind('<').unwrap()..];
+    assert!(box_tag[..box_tag.find('>').unwrap()].contains("hidden"), "hidden until known: {out}");
+
+    let out = render(
+        Locale::FrCa,
+        vec![AccountReply::Me(Err(AccountError::SignedOut)), AccountReply::Providers(Ok(vec![ProviderInfo { slug: "google".into(), name: "Google".into() }]))],
+    );
+    assert!(out.contains(">Se connecter<") && out.contains(">Se connecter avec<"), "{out}");
+}

@@ -36,7 +36,11 @@ export const test = base.extend<{ errors: string[]; world: void }>({
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));
       page.on("console", (m) => {
-        if (m.type() === "error") errors.push(m.text());
+        if (m.type() !== "error") return;
+        // Every page asks who is signed in (and for the providers when nobody is). A signed-out visitor, a server
+        // with no account side and an older server answer those with 401, 503 or 404, which the browser logs.
+        if (/^\/api\/(me|providers)$/.test(new URL(m.location().url || "http://x/").pathname)) return;
+        errors.push(m.text());
       });
       await use(errors);
       expect(errors).toEqual([]);

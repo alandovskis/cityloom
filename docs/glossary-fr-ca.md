@@ -22,6 +22,10 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | Sidewalk | Trottoir |  |
 | Street page | Planting strip | Bande plantée |  |
 | Street page | Planted median | Terre-plein central planté |  |
+| Header | Sign in | Se connecter | To confirm, see below. |
+| Header | Sign out | Se déconnecter |  |
+| Header | Account | Compte |  |
+| Header | link (an account) | associer | To confirm, see below. |
 | Street page | Bike lane | Piste cyclable | The catalogue's lane may have a curb, so a track, not a painted `bande cyclable`. |
 | Street page | Driving lane | Voie de circulation |  |
 | Street page | Transit lane | Voie réservée au transport en commun | Shorter form for buses only: `voie réservée aux autobus`. |
@@ -328,3 +332,5 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Green, yellow, all-red (a signal’s intervals) | `Vert`, `Jaune`, `Rouge intégral` | `Tout rouge` for all-red (suggestion) |
 | Transit early green (a head start for buses) | `Avance pour le transport en commun` | `Priorité de départ pour les autobus` (suggestion) |
 | Cycle (a signal’s) | `Cycle` | `Durée du cycle` (suggestion) |
+| Sign in (header) | `Se connecter` | `Ouvrir une session` (suggestion) |
+| link (an account to another) | `associer` | `lier`, `rattacher` (suggestion) |

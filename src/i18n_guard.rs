@@ -56,6 +56,8 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/shell/vm.rs", include_str!("shell/vm.rs")),
     ("src/shell/view.rs", include_str!("shell/view.rs")),
     ("src/shell/share_view.rs", include_str!("shell/share_view.rs")),
+    ("src/shell/session.rs", include_str!("shell/session.rs")),
+    ("src/shell/session_view.rs", include_str!("shell/session_view.rs")),
     ("src/shell/mod.rs", include_str!("shell/mod.rs")),
     ("src/map/vm.rs", include_str!("map/vm.rs")),
     ("src/map/areas.rs", include_str!("map/areas.rs")),
@@ -128,6 +130,10 @@ const ALLOWED: &[&str] = &[
 
 /// Literals that look like words and are not, each with the reason. Empty unless needed.
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
+    ("OpenStreetMap", "a provider's brand name, not translated"),
+    ("Google", "a provider's brand name, not translated"),
+    ("Microsoft", "a provider's brand name, not translated"),
+    ("Apple", "a provider's brand name, not translated"),
     ("iso-paint white", "CSS classes of the 2.5D's pavement paint"),
     ("iso-paint yellow", "CSS classes of the 2.5D's pavement paint"),
     ("Polygon", "a GeoJSON geometry type, data for MapLibre"),
@@ -458,6 +464,11 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("iso-shade-front", "the id of an SVG filter the 2.5D carries (street/iso/raised.rs)"),
     ("iso-shade-side", "the id of an SVG filter the 2.5D carries (street/iso/raised.rs)"),
     ("iso-shade-ramp", "the id of an SVG filter the junction's 2.5D carries (junction/iso.rs)"),
+    ("signed-in", "an outcome the server puts in the address after #account="),
+    ("already-linked", "an outcome the server puts in the address after #account="),
+    ("session-slot", "the id of an element every page shares"),
+    ("session-btn", "the id of an element every page shares"),
+    ("session-menu", "the id of an element every page shares"),
     ("account-btn", "the id of an element every page shares"),
     ("account-menu", "the id of an element every page shares"),
     ("account-btn-label", "the id of an element every page shares"),

@@ -294,9 +294,13 @@ a.btn {
   align-items: center;
   gap: 4px;
 }
-.account {
+.account,
+.session {
   position: relative;
   margin-left: 6px;
+}
+.session-box[hidden] {
+  display: none;
 }
 
 /* The search: the first thing in the bar, and the largest. */
@@ -1321,7 +1325,8 @@ a.btn {
   }
   /* The menus hang from the bar, not from their buttons: with three buttons, the left-most one's menu would
      start left of the window. */
-  .account {
+  .account,
+  .session {
     position: static;
   }
   .menu {

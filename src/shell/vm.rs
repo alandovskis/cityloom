@@ -12,6 +12,7 @@ use crate::shared::i18n::{Args, I18n, LANG_KEY, Locale};
 use crate::shared::ports::Ports;
 use crate::shared::units::Units;
 use crate::shell::popover::PopoverViewModel;
+use crate::shell::session::SessionVm;
 use crate::shell::share::ShareViewModel;
 
 pub const REGION_KEY: &str = crate::city::store::REGION_KEY;
@@ -102,6 +103,7 @@ pub struct ShellVm {
     settings: Rc<PopoverViewModel>,
     help: Rc<PopoverViewModel>,
     share: Rc<ShareViewModel>,
+    session: Rc<SessionVm>,
     inspector_open: ArcRwSignal<bool>,
     notes_open: ArcRwSignal<bool>,
     tab: ArcRwSignal<String>,
@@ -151,11 +153,13 @@ impl ShellVm {
         let settings = PopoverViewModel::new(i18n.clone(), "ui-settings", "ui-settings");
         let help = PopoverViewModel::new(i18n.clone(), "ui-help", "ui-keyboard");
         let share = ShareViewModel::new(i18n.clone());
-        PopoverViewModel::exclusive(&[&settings, &help, &share.popover()]);
+        let session = SessionVm::new(ports.clone(), i18n.clone());
+        PopoverViewModel::exclusive(&[&settings, &help, &share.popover(), &session.popover()]);
         let vm = ShellVm {
             settings,
             help,
             share,
+            session,
             i18n,
             target,
             details_word,
@@ -285,6 +289,11 @@ impl ShellVm {
         self.share.popover()
     }
 
+    /// The sign-in state and its menu; never open together with the other header menus.
+    pub fn session(&self) -> Rc<SessionVm> {
+        self.session.clone()
+    }
+
     pub fn menu_open(&self) -> bool {
         self.settings.open()
     }
@@ -324,10 +333,12 @@ impl ShellVm {
     /// Escape: closes the settings, the help or the share menu if one is open, and says whether it did.
     pub fn escape(&self) -> bool {
         let share = self.share.popover();
-        let was = self.settings.is_open_now() || self.help.is_open_now() || share.is_open_now();
+        let session = self.session.popover();
+        let was = self.settings.is_open_now() || self.help.is_open_now() || share.is_open_now() || session.is_open_now();
         self.settings.close();
         self.help.close();
         share.close();
+        session.close();
         was
     }
 
@@ -797,5 +808,17 @@ mod tests {
         vm.choose_region("germany");
         assert_eq!(vm.region(), "germany");
         assert_eq!(storage.recall(REGION_KEY).as_deref(), Some("germany"));
+    }
+
+    #[test]
+    fn the_sign_in_menu_is_one_of_the_header_menus_that_open_one_at_a_time_and_escape_closes() {
+        let ports = ports_for_test().0;
+        let vm = ShellVm::new(ports, en(), Rc::new(Bare::default()), "details-details", tabs(), false);
+        vm.toggle_menu();
+        vm.session().popover().toggle();
+        assert!(!vm.menu_open(), "opening the sign-in menu closes the settings");
+        assert!(vm.escape());
+        assert!(!vm.session().popover().is_open_now());
+        assert!(!vm.escape(), "nothing was open");
     }
 }
