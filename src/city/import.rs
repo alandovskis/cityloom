@@ -24,10 +24,11 @@ fn class_of(highway: &str) -> StreetClass {
 }
 
 /// The catalogue kind that stands for a lane. A buffer is planting only when its type says it is planted or grass
-/// (`Planters`, `Verge`); a curb, paint, posts, a barrier, a shoulder or a buffer of no known type is a median, the
-/// neutral separator, and so is anything else (a turn lane, a rail track): what is left of the road when no lane uses
-/// it. A shoulder is not the catalogue's `shoulder`: that kind is a motor kind, and osm2streets gives a lane
-/// anything may use that name, a shared path's included, which would make a footpath a street for cars.
+/// (`Planters`, `Verge`); a curb, paint, posts, a barrier, a shoulder or a buffer of no known type is the neutral
+/// `buffer`, a strip of concrete that is not green (a curb beside a bike lane is the bike lane's own: see `pieces`).
+/// Anything else (a turn lane, a rail track, the median between two carriageways) is a median: what is left of the
+/// road when no lane uses it. A shoulder is not the catalogue's `shoulder`: that kind is a motor kind, and osm2streets
+/// gives a lane anything may use that name, a shared path's included, which would make a footpath a street for cars.
 fn kind_of(lane: &Lane) -> &'static str {
     match lane.kind {
         LaneKind::Driving => "travel",
@@ -36,8 +37,39 @@ fn kind_of(lane: &Lane) -> &'static str {
         LaneKind::Bike => "bike",
         LaneKind::Bus => "bus",
         LaneKind::Buffer if matches!(lane.buffer_type, Some(BufferType::Planters | BufferType::Verge)) => "planting",
-        LaneKind::Buffer | LaneKind::Other => "median",
+        LaneKind::Buffer => "buffer",
+        LaneKind::Other => "median",
     }
+}
+
+/// Whether a lane is a piece of the roadway a curb stands against.
+fn is_road(lane: &Lane) -> bool {
+    matches!(lane.kind, LaneKind::Driving | LaneKind::Parking | LaneKind::Bus)
+}
+
+/// The pieces of a road's lanes, left to right. A curb buffer between a bike lane and a road lane is the bike
+/// lane's own curb, as the editor has it (a bike lane's `curb`, which the section and the 2.5D stand against a road
+/// piece, inside the lane's width): the buffer's width goes to the bike lane. Any other curb buffer is a `buffer`.
+fn pieces(lanes: &[Lane]) -> Vec<Piece> {
+    let is_curb = |l: &Lane| l.kind == LaneKind::Buffer && l.buffer_type == Some(BufferType::Curb);
+    // the curb at `i` belongs to the bike lane on one side when a road lane is on the other
+    let owner = |i: usize| -> Option<usize> {
+        let (before, after) = (i.checked_sub(1).map(|j| &lanes[j])?, lanes.get(i + 1)?);
+        match (before.kind == LaneKind::Bike, after.kind == LaneKind::Bike) {
+            (true, false) if is_road(after) => Some(i - 1),
+            (false, true) if is_road(before) => Some(i + 1),
+            _ => None,
+        }
+    };
+    let mut merged: Vec<Lane> = lanes.to_vec();
+    let mut gone = vec![false; lanes.len()];
+    for i in (0..lanes.len()).filter(|&i| is_curb(&lanes[i])) {
+        if let Some(bike) = owner(i) {
+            merged[bike].width_m += lanes[i].width_m;
+            gone[i] = true;
+        }
+    }
+    merged.iter().zip(&gone).filter(|(_, gone)| !**gone).map(|(l, _)| piece(l)).collect()
 }
 
 fn piece(lane: &Lane) -> Piece {
@@ -177,7 +209,7 @@ impl Layout {
             .iter()
             .map(|r| {
                 let class = class_of(&r.highway);
-                let pieces: Vec<Piece> = r.lanes.iter().map(piece).collect();
+                let pieces = pieces(&r.lanes);
                 let side = if network.left_hand { Side::Left } else { Side::Right };
                 EdgeDef {
                     a: index[&r.from],
@@ -257,11 +289,92 @@ mod tests {
     }
 
     #[test]
-    fn any_other_buffer_and_one_of_no_known_type_is_a_median() {
+    fn any_other_buffer_and_one_of_no_known_type_is_the_neutral_buffer_and_not_a_median() {
         let others = [None, Some(BufferType::Curb), Some(BufferType::Stripes), Some(BufferType::FlexPosts), Some(BufferType::JerseyBarrier)];
         for t in others {
-            assert_eq!(kind_id(&buffer(t)), "median", "{t:?}");
+            assert_eq!(kind_id(&buffer(t)), "buffer", "{t:?}");
         }
+    }
+
+    fn ids(lanes: &[Lane]) -> Vec<&'static str> {
+        pieces(lanes).iter().map(|p| KINDS[p.kind].id).collect()
+    }
+
+    fn widths(lanes: &[Lane]) -> Vec<i32> {
+        pieces(lanes).iter().map(|p| p.width_mm).collect()
+    }
+
+    fn curb() -> Lane {
+        buffer(Some(BufferType::Curb))
+    }
+
+    fn bike() -> Lane {
+        lane(LaneKind::Bike, Way::Forward, 1.8)
+    }
+
+    fn driving() -> Lane {
+        lane(LaneKind::Driving, Way::Forward, 3.3)
+    }
+
+    /// The edges of the piece `i` that carry a curb in the street the lanes make, each true for its right edge.
+    fn curb_sides(lanes: &[Lane], i: usize) -> Vec<bool> {
+        let street = Street::imported(StreetClass::Local, Side::Right, &pieces(lanes));
+        let editor = crate::street::model::Editor::from_street(&street, &street, 0);
+        crate::street::svg::curb_edges(&editor.view(), i)
+    }
+
+    #[test]
+    fn a_curb_buffer_between_a_bike_lane_and_the_road_is_the_bike_lanes_own_curb_on_that_side() {
+        // the bike lane to the left of the curb, then to its right: its width grows by the curb's and the curb is on the road side
+        let left = [bike(), curb(), driving()];
+        assert_eq!(ids(&left), ["bike", "travel"]);
+        assert_eq!(widths(&left), [2400, 3300]);
+        assert_eq!(curb_sides(&left, 0), [true]);
+        let right = [driving(), curb(), bike()];
+        assert_eq!(ids(&right), ["travel", "bike"]);
+        assert_eq!(widths(&right), [3300, 2400]);
+        assert_eq!(curb_sides(&right, 1), [false]);
+        // beside parking and a transit lane too: they are road pieces
+        for road in [LaneKind::Parking, LaneKind::Bus] {
+            let lanes = [bike(), curb(), lane(road, Way::Forward, 2.4)];
+            assert_eq!(ids(&lanes).len(), 2, "{road:?}");
+            assert_eq!(widths(&lanes)[0], 2400, "{road:?}");
+            assert_eq!(curb_sides(&lanes, 0), [true], "{road:?}");
+        }
+        // a curb on each side of the bike lane
+        let both = [driving(), curb(), bike(), curb(), driving()];
+        assert_eq!(ids(&both), ["travel", "bike", "travel"]);
+        assert_eq!(widths(&both), [3300, 3000, 3300]);
+        assert_eq!(curb_sides(&both, 1), [false, true]);
+        // the bike lane keeps its direction and the curb is the catalogue's default one
+        let p = pieces(&left);
+        assert_eq!(p[0].direction, Some(0));
+        let street = Street::imported(StreetClass::Local, Side::Right, &p);
+        assert_eq!(street.segments[0].curb, Some(crate::shared::catalogue::DEFAULT_CURB));
+    }
+
+    #[test]
+    fn a_curb_buffer_with_no_bike_lane_to_belong_to_is_the_neutral_buffer() {
+        // beside a driving lane, between a sidewalk and the road, at the edge, between two bike lanes, between a bike lane and a sidewalk
+        let sidewalk = || lane(LaneKind::Sidewalk, Way::Forward, 2.0);
+        assert_eq!(ids(&[driving(), curb(), driving()]), ["travel", "buffer", "travel"]);
+        assert_eq!(ids(&[sidewalk(), curb(), driving()]), ["sidewalk", "buffer", "travel"]);
+        assert_eq!(widths(&[sidewalk(), curb(), driving()]), [2000, 600, 3300]);
+        assert_eq!(ids(&[curb(), driving()]), ["buffer", "travel"]);
+        assert_eq!(ids(&[bike(), curb(), bike()]), ["bike", "buffer", "bike"]);
+        assert_eq!(ids(&[bike(), curb(), sidewalk()]), ["bike", "buffer", "sidewalk"], "no road for the curb to stand against");
+        assert_eq!(widths(&[bike(), curb(), sidewalk()]), [1800, 600, 2000]);
+    }
+
+    #[test]
+    fn paint_posts_a_barrier_and_a_shoulder_beside_a_bike_lane_stay_buffers_of_their_own() {
+        for t in [Some(BufferType::Stripes), Some(BufferType::FlexPosts), Some(BufferType::JerseyBarrier), None] {
+            let lanes = [bike(), buffer(t), driving()];
+            assert_eq!(ids(&lanes), ["bike", "buffer", "travel"], "{t:?}");
+            assert_eq!(widths(&lanes), [1800, 600, 3300], "{t:?}");
+        }
+        let shoulder = lane(LaneKind::Buffer, Way::Forward, 1.0);
+        assert_eq!(ids(&[shoulder, driving()]), ["buffer", "travel"]);
     }
 
     #[test]
