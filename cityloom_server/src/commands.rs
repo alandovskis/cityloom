@@ -3,19 +3,31 @@ use crate::config::AccountConfig;
 use crate::crypto::{LookupKey, MasterKeys};
 use crate::db::{self, PgRepo};
 
+/// The old lookup key a command uses: only `rehash` does, and it needs it. A `rewrap` run with `OLD_LOOKUP_KEY` still
+/// in the environment must not rehash.
+fn old_key_for(name: &str, old: Option<zeroize::Zeroizing<[u8; 32]>>) -> Result<Option<zeroize::Zeroizing<[u8; 32]>>, String> {
+    match (name, old) {
+        ("rehash", None) => Err("OLD_LOOKUP_KEY is not set".into()),
+        ("rehash", old) => Ok(old),
+        _ => Ok(None),
+    }
+}
+
+/// The line `rewrap` prints; an operator runs it until it says 0.
+fn rewrapped(n: u64) -> String {
+    format!("resealed {n} data keys")
+}
+
 pub async fn run(name: &str, config: &AccountConfig, old_lookup_key: Option<zeroize::Zeroizing<[u8; 32]>>) -> Result<String, String> {
     if !matches!(name, "rewrap" | "rehash") {
         return Err(format!("unknown command {name}: use rewrap or rehash"));
     }
-    let old = match (name, old_lookup_key) {
-        ("rehash", None) => return Err("OLD_LOOKUP_KEY is not set".into()),
-        (_, old) => old,
-    };
+    let old = old_key_for(name, old_lookup_key)?;
     let pool = db::connect(&config.database_url).await.map_err(|_| "the database could not be reached or migrated".to_string())?;
     let masters = MasterKeys::new(&config.data_keys, config.data_key_current).map_err(|e| e.to_string())?;
     let repo = PgRepo::new(pool, masters, LookupKey::new(config.lookup_key.clone()));
     match old {
-        None => repo.rewrap().await.map(|n| format!("resealed {n} data keys")).map_err(|e| e.to_string()),
+        None => repo.rewrap().await.map(|n| rewrapped(n)).map_err(|e| e.to_string()),
         Some(old) => repo.rehash(&LookupKey::new(old)).await.map(|counts| counts.to_string()).map_err(|e| e.to_string()),
     }
 }
@@ -42,6 +54,19 @@ mod tests {
             crate::config::AccountSide::On(a) => *a,
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn only_rehash_uses_the_old_lookup_key() {
+        let key = || Some(zeroize::Zeroizing::new([1u8; 32]));
+        assert!(old_key_for("rewrap", key()).unwrap().is_none(), "a rewrap with OLD_LOOKUP_KEY left set stays a rewrap");
+        assert!(old_key_for("rehash", key()).unwrap().is_some());
+        assert_eq!(old_key_for("rehash", None).unwrap_err(), "OLD_LOOKUP_KEY is not set");
+    }
+
+    #[test]
+    fn the_rewrap_line_says_how_many_data_keys_it_resealed() {
+        assert_eq!(rewrapped(0), "resealed 0 data keys");
     }
 
     #[test]
