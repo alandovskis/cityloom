@@ -1105,6 +1105,17 @@ fn the_transform_menu_has_a_group_for_making_pedestrian_and_one_for_the_measures
         assert!(h.contains(kind), "{kind}");
     }
     assert_eq!(count(&h, "role=\"menuitem\""), count(&h, "transform-item"));
+    // A menu holds only menu items and groups: each group's heading and hint are hidden from assistive technology and
+    // reach it as the group's name and description.
+    for (group, heading, hint) in [("ped", "transform-ped-h", "transform-ped-hint"), ("transit", "transform-transit-h", "transform-transit-hint")] {
+        let tag = &h[h[..h.find(&format!("aria-labelledby=\"{heading}\"")).unwrap()].rfind('<').unwrap()..];
+        assert!(tag[..tag.find('>').unwrap()].contains(&format!("aria-describedby=\"{hint}\"")), "{group}: {tag}");
+        for id in [heading, hint] {
+            let at = h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {h}"));
+            let el = &h[h[..at].rfind('<').unwrap()..];
+            assert!(el[..el.find('>').unwrap()].contains("aria-hidden=\"true\""), "{id}: {el}");
+        }
+    }
     assert_eq!(count(&h, "ped-item"), 3);
     let fits = s.transform_menu().transit;
     assert!(!fits.is_empty());

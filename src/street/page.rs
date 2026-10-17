@@ -557,6 +557,8 @@ pub fn Transform(vm: Rc<StreetVm>) -> impl IntoView {
             open.set(false);
         }
     };
+    // A menu holds only menu items and groups, so a group's heading and hint are hidden from assistive technology
+    // and reach it as the group's name and description (both still read from hidden elements).
     // After a choice: the drawing takes the focus when the street was changed, the button keeps it on a refusal.
     let chosen = move |done: bool| {
         close(false);
@@ -584,9 +586,9 @@ pub fn Transform(vm: Rc<StreetVm>) -> impl IntoView {
             })
             .collect_view();
         view! {
-            <div role="group" aria-labelledby="transform-ped-h">
-                <p class="menu-h" id="transform-ped-h">{say(w, "make-pedestrian-button")}</p>
-                <p class="hint">{say(w, "make-pedestrian-hint")}</p>
+            <div role="group" aria-labelledby="transform-ped-h" aria-describedby="transform-ped-hint">
+                <p class="menu-h" id="transform-ped-h" aria-hidden="true">{say(w, "make-pedestrian-button")}</p>
+                <p class="hint" id="transform-ped-hint" aria-hidden="true">{say(w, "make-pedestrian-hint")}</p>
                 <ul class="ped-list" role="none">{items}</ul>
             </div>
         }
@@ -614,9 +616,9 @@ pub fn Transform(vm: Rc<StreetVm>) -> impl IntoView {
             })
             .collect_view();
         view! {
-            <div role="group" aria-labelledby="transform-transit-h">
-                <p class="menu-h" id="transform-transit-h">{say(w, "st-transit-heading")}</p>
-                <p class="hint">{say(w, "transform-transit-hint")}</p>
+            <div role="group" aria-labelledby="transform-transit-h" aria-describedby="transform-transit-hint">
+                <p class="menu-h" id="transform-transit-h" aria-hidden="true">{say(w, "st-transit-heading")}</p>
+                <p class="hint" id="transform-transit-hint" aria-hidden="true">{say(w, "transform-transit-hint")}</p>
                 <ul class="ped-list" role="none">{items}</ul>
             </div>
         }
