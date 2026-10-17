@@ -321,3 +321,16 @@ fn the_ways_of_a_bike_track_are_read_but_are_not_roads_nor_split_the_road_they_m
     assert!(tracks.len() > 5);
     assert!(net.roads.iter().all(|r| r.osm_ways.iter().all(|w| !tracks.contains(w))), "{tracks:?}");
 }
+
+#[test]
+fn de_maisonneuve_ouest_has_a_two_way_bike_lane_from_the_cycleways_mapped_beside_it() {
+    // OpenStreetMap near Rue Saint-Marc: one-way road, `cycleway:left=separate`, the track `highway=cycleway oneway=no`
+    let net = import(include_bytes!("de_maisonneuve.osm")).unwrap();
+    let roads: Vec<_> = net.roads.iter().filter(|r| r.name.as_deref() == Some("Boulevard De Maisonneuve Ouest")).collect();
+    assert!(!roads.is_empty());
+    assert_eq!(roads.len(), net.roads.len(), "only the boulevard is a road");
+    for road in roads {
+        let bikes: Vec<_> = road.lanes.iter().filter(|l| l.kind == osm_import::LaneKind::Bike).map(|l| l.way).collect();
+        assert_eq!(bikes, [osm_import::Way::Both], "{:?}", road.osm_ways);
+    }
+}
