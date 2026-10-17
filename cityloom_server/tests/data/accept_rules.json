@@ -1,0 +1,9 @@
+[
+  { "name": "no row", "row": null, "put": { "base_rev": 0, "edited_at": 0 }, "now": 100, "verdict": "accepted", "rev": 1, "at": 0 },
+  { "name": "base is the row's revision, earlier time", "row": { "rev": 7, "edited_at": 50 }, "put": { "base_rev": 7, "edited_at": 10 }, "now": 100, "verdict": "accepted", "rev": 8, "at": 10 },
+  { "name": "stale base, earlier time", "row": { "rev": 7, "edited_at": 50 }, "put": { "base_rev": 3, "edited_at": 10 }, "now": 100, "verdict": "superseded", "rev": 7, "at": 50 },
+  { "name": "stale base, equal time", "row": { "rev": 7, "edited_at": 50 }, "put": { "base_rev": 3, "edited_at": 50 }, "now": 100, "verdict": "superseded", "rev": 7, "at": 50 },
+  { "name": "stale base, later time", "row": { "rev": 7, "edited_at": 50 }, "put": { "base_rev": 3, "edited_at": 51 }, "now": 100, "verdict": "accepted", "rev": 8, "at": 51 },
+  { "name": "a time ahead of the clock counts as the clock", "row": { "rev": 7, "edited_at": 50 }, "put": { "base_rev": 3, "edited_at": 86400 }, "now": 100, "verdict": "accepted", "rev": 8, "at": 100 },
+  { "name": "a time ahead of the clock does not beat a row stored at the clock", "row": { "rev": 7, "edited_at": 100 }, "put": { "base_rev": 3, "edited_at": 86400 }, "now": 100, "verdict": "superseded", "rev": 7, "at": 100 }
+]

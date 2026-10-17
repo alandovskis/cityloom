@@ -13,6 +13,7 @@ pub mod flow;
 pub mod providers;
 pub mod session;
 pub mod static_files;
+pub mod work;
 
 use config::Config;
 
