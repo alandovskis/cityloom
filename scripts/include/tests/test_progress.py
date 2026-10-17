@@ -211,8 +211,8 @@ class Run(unittest.TestCase):
 
     def test_not_a_terminal_prints_a_line_per_change_and_a_summary(self):
         with self.progress(Spec("a", "g", "first"), Spec("b", "g", "second")) as p:
-            with p.step("a"):
-                pass
+            with p.step("a") as step:
+                self.assertEqual(step.state, RUNNING)
             with p.step("b") as step:
                 p.update(step, detail="half", fraction=0.5)
         text = self.out.getvalue()
@@ -227,10 +227,10 @@ class Run(unittest.TestCase):
 
     def test_a_failing_command_logs_its_output_and_shows_the_tail_and_the_log_path(self):
         script = "import sys\nfor i in range(30): print('out', i)\nprint('bad thing')\nsys.exit(3)"
-        with self.assertRaises(SystemExit) as caught:
-            with self.progress(Spec("a", "g", "first"), Spec("b", "g", "second")) as p:
-                with p.step("a") as step:
-                    p.run(step, [sys.executable, "-c", script])
+        with self.assertRaises(SystemExit) as caught, self.progress(
+            Spec("a", "g", "first"), Spec("b", "g", "second")
+        ) as p, p.step("a") as step:
+            p.run(step, [sys.executable, "-c", script])
         self.assertEqual(caught.exception.code, 1)
         lines = self.out.getvalue().splitlines()
         self.assertIn("FAIL g first", lines)
@@ -243,25 +243,29 @@ class Run(unittest.TestCase):
         self.assertIn("out 0", (self.root / "logs" / "a.log").read_text())
 
     def test_a_command_that_is_not_there_fails_the_step(self):
-        with self.assertRaises(SystemExit):
-            with self.progress(Spec("a", "g", "first")) as p:
-                with p.step("a") as step:
-                    p.run(step, ["no-such-program-here"])
+        with self.assertRaises(SystemExit), self.progress(Spec("a", "g", "first")) as p, p.step("a") as step:
+            p.run(step, ["no-such-program-here"])
         self.assertIn(" ‣ no-such-program-here: not found", self.out.getvalue())
 
     def test_an_exception_fails_the_step_and_leaves_with_status_1(self):
-        with self.assertRaises(SystemExit) as caught:
-            with self.progress(Spec("a", "g", "first")) as p:
-                with p.step("a"):
-                    raise ValueError("oops")
+        with self.assertRaises(SystemExit) as caught, self.progress(Spec("a", "g", "first")) as p, p.step("a"):
+            raise ValueError("oops")
         self.assertEqual(caught.exception.code, 1)
         self.assertIn(" ‣ ValueError: oops", self.out.getvalue())
 
+    def test_leaving_the_block_early_still_passes_the_step(self):
+        def leave(p):
+            with p.step("a"):
+                return "left"
+
+        with self.progress(Spec("a", "g", "first")) as p:
+            self.assertEqual(leave(p), "left")
+            self.assertEqual(p.steps["a"].state, PASSED)
+        self.assertIn("PASS g first 0s", self.out.getvalue())
+
     def test_ctrl_c_fails_the_step_and_leaves_with_status_130(self):
-        with self.assertRaises(SystemExit) as caught:
-            with self.progress(Spec("a", "g", "first")) as p:
-                with p.step("a"):
-                    raise KeyboardInterrupt
+        with self.assertRaises(SystemExit) as caught, self.progress(Spec("a", "g", "first")) as p, p.step("a"):
+            raise KeyboardInterrupt
         self.assertEqual(caught.exception.code, 130)
         self.assertIn("FAIL g first", self.out.getvalue())
 

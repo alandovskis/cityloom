@@ -201,7 +201,7 @@ class Plain:
         self.t0 = clock()
 
     def begin(self):
-        pass
+        pass  # nothing to set up: every change is a line of its own
 
     def started(self, step: Step):
         self.throttle = Throttle(self.clock())
@@ -241,10 +241,10 @@ class Terminal:
         while not self.stop.wait(0.1):
             self.draw()
 
-    def started(self, step: Step):
+    def started(self, _step: Step):
         self.draw()
 
-    def updated(self, step: Step):
+    def updated(self, _step: Step):
         pass  # the ticker draws it
 
     def finished(self, step: Step):
@@ -315,25 +315,35 @@ class Progress:
         with self.lock:
             step.state, step.started = RUNNING, self.clock()
         self.view.started(step)
+        failure = None
         try:
             yield step
         except BaseException as error:
-            if isinstance(error, StepError):
-                lines = error.lines
-            elif isinstance(error, KeyboardInterrupt):
+            failure = error
+        finally:
+            # Whatever way the block is left, the step ends in a state and the display is told.
+            self._end(step, failure)
+        if isinstance(failure, KeyboardInterrupt):
+            raise failure
+        if failure is not None:
+            raise SystemExit(1) from None
+
+    def _end(self, step: Step, failure: Optional[BaseException]):
+        """Passes the step, or fails it with the lines to show (a StepError says what; any other error goes to the log)."""
+        if failure is None:
+            with self.lock:
+                step.state, step.took = PASSED, self.clock() - step.started
+        else:
+            if isinstance(failure, StepError):
+                lines = failure.lines
+            elif isinstance(failure, KeyboardInterrupt):
                 lines = ["interrupted"]
             else:
                 with self.log_path(step).open("a") as log:
-                    log.write(traceback.format_exc())
-                lines = [f"{type(error).__name__}: {error}", f"full log: {self.shown(self.log_path(step))}"]
+                    log.write("".join(traceback.format_exception(type(failure), failure, failure.__traceback__)))
+                lines = [f"{type(failure).__name__}: {failure}", f"full log: {self.shown(self.log_path(step))}"]
             with self.lock:
                 step.state, step.lines = FAILED, lines
-            self.view.finished(step)
-            if isinstance(error, KeyboardInterrupt):
-                raise
-            raise SystemExit(1) from None
-        with self.lock:
-            step.state, step.took = PASSED, self.clock() - step.started
         self.view.finished(step)
 
     def update(self, step: Step, subject=None, detail=None, fraction=None):
