@@ -19,8 +19,8 @@ use axum::Router;
 use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::http::header::{
-    ACCEPT_RANGES, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, ETAG, IF_MATCH, IF_MODIFIED_SINCE, IF_NONE_MATCH, IF_RANGE, IF_UNMODIFIED_SINCE,
-    LAST_MODIFIED, RANGE, VARY,
+    ACCEPT_ENCODING, ACCEPT_RANGES, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, ETAG, IF_MATCH, IF_MODIFIED_SINCE, IF_NONE_MATCH, IF_RANGE,
+    IF_UNMODIFIED_SINCE, LAST_MODIFIED, RANGE, VARY,
 };
 use axum::http::uri::PathAndQuery;
 use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
@@ -177,7 +177,41 @@ impl Build {
     }
 }
 
+/// The codings of `accept-encoding` that have no stale copy: a `.br` or `.gz` older than the file beside it was made
+/// from another build of it, and ServeDir would send it all the same. Without the coding, the file is sent whole and
+/// the compression layer compresses it as it goes.
+async fn drop_stale_codings(root: &Path, path: &str, headers: &mut HeaderMap) {
+    let Some(accept) = headers.get(ACCEPT_ENCODING).and_then(|v| v.to_str().ok()).map(str::to_owned) else { return };
+    let file = root.join(path.trim_start_matches('/'));
+    let Ok(source) = tokio::fs::metadata(&file).await else { return };
+    let Ok(source) = source.modified() else { return };
+    let mut kept = Vec::new();
+    for token in accept.split(',') {
+        let suffix = match token.split(';').next().unwrap_or("").trim().to_ascii_lowercase().as_str() {
+            "br" => Some("br"),
+            "gzip" => Some("gz"),
+            _ => None,
+        };
+        let stale = match suffix {
+            Some(suffix) => {
+                let mut copy = file.clone().into_os_string();
+                copy.push(format!(".{suffix}"));
+                tokio::fs::metadata(copy).await.ok().and_then(|m| m.modified().ok()).is_some_and(|copy| copy < source)
+            }
+            None => false,
+        };
+        if !stale {
+            kept.push(token.trim());
+        }
+    }
+    match HeaderValue::from_str(&kept.join(", ")) {
+        Ok(value) if !kept.is_empty() => headers.insert(ACCEPT_ENCODING, value),
+        _ => headers.remove(ACCEPT_ENCODING),
+    };
+}
+
 struct Site {
+    root: PathBuf,
     cache_control: HeaderValue,
     build: Build,
 }
@@ -277,6 +311,7 @@ async fn apply(State(site): State<Arc<Site>>, mut req: Request, next: Next) -> R
             *req.method_mut() = Method::GET;
         }
     }
+    drop_stale_codings(&site.root, &path, req.headers_mut()).await;
     // A list of ranges is not supported: the whole file is answered.
     if req.headers().get(RANGE).and_then(|v| v.to_str().ok()).is_some_and(|v| v.contains(',')) {
         req.headers_mut().remove(RANGE);
@@ -321,7 +356,7 @@ fn compressible(status: StatusCode, headers: &HeaderMap) -> bool {
 
 pub fn router(root: PathBuf, cache_control: String) -> Router {
     let cache_control = HeaderValue::from_str(&cache_control).unwrap_or_else(|_| HeaderValue::from_static("no-store"));
-    let site = Arc::new(Site { cache_control, build: Build::new(root.clone()) });
+    let site = Arc::new(Site { root: root.clone(), cache_control, build: Build::new(root.clone()) });
     let files = ServeDir::new(root).append_index_html_on_directories(true).precompressed_br().precompressed_gzip();
     let compression = CompressionLayer::new()
         .quality(CompressionLevel::Fastest)
