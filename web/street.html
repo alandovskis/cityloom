@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="editor.css">
 </head>
 <body>
+  <a class="skip-link" href="#wrap" data-i18n="ui-skip-drawing">Skip to the drawing</a>
   <svg id="defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"></svg>
 
   <header class="bar" data-covers>
@@ -79,6 +80,7 @@
   <button type="button" id="notes-toggle" class="edge-tab right" aria-controls="notes" aria-expanded="true" aria-keyshortcuts="]" data-i18n-title="ui-notes-toggle-title" title="Show or hide the notes ( ] )" data-i18n="ui-notes">Notes</button>
 
   <aside class="panel left" id="details-panel" data-i18n-aria-label="st-piece-details" aria-label="Piece details" data-covers>
+    <h2 class="sr-only" data-i18n="st-piece-details">Piece details</h2>
     <div class="panel-body">
       <div class="inspector" id="inspector"></div>
     </div>

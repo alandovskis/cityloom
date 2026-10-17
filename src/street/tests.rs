@@ -504,6 +504,15 @@ fn the_arrow_keys_step_the_width_field() {
 }
 
 #[test]
+fn enter_and_escape_end_the_width_field_and_give_the_keys_back_to_the_drawing() {
+    use inspector::FieldEnd;
+    assert_eq!(inspector::width_end("Enter"), Some(FieldEnd::Commit));
+    assert_eq!(inspector::width_end("Escape"), Some(FieldEnd::Revert));
+    assert_eq!(inspector::width_end("ArrowUp"), None);
+    assert_eq!(inspector::width_end("a"), None);
+}
+
+#[test]
 fn the_width_field_is_text_so_a_comma_reaches_it() {
     let s = street_shared(0);
     let u = segment(&s, 2);

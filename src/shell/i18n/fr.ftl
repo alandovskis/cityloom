@@ -24,6 +24,7 @@ region-australia = Australie
 region-japan = Japon
 
 # Le balisage que toutes les pages partagent.
+ui-skip-drawing = Passer au dessin
 ui-home = CityLoom, accueil
 ui-settings = Réglages
 ui-units = Unités

@@ -274,6 +274,28 @@ test.describe("the street editor on a street of the city", () => {
     await expect(page.locator("#fit")).toHaveText(/0\.3 m of the street is still unused\.$/);
   });
 
+  test("Enter in the width field keeps the width and Escape puts it back, each giving the keys to the drawing", async ({
+    page,
+  }) => {
+    await selectFirstPiece(page);
+    await page.keyboard.press("Enter");
+    const width = page.locator("#inspector input").first();
+    await expect(width).toBeFocused();
+    const was = await width.inputValue();
+    await width.fill("0.9");
+    await width.press("Escape");
+    await expect(page.locator("#wrap")).toBeFocused();
+    await expect(page.locator("#inspector input").first()).toHaveValue(was);
+    await page.keyboard.press("Enter");
+    await page
+      .locator("#inspector input")
+      .first()
+      .fill(String(Number(was) - 0.1));
+    await page.locator("#inspector input").first().press("Enter");
+    await expect(page.locator("#wrap")).toBeFocused();
+    await expect(page.locator("#fit")).toHaveText(/0\.1 m of the street is still unused\.$/);
+  });
+
   test("a width typed with a decimal comma is read as a decimal", async ({ page }) => {
     await selectFirstPiece(page);
     await page.keyboard.press("Enter");

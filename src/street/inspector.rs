@@ -188,6 +188,22 @@ pub fn width_key(key: &str) -> Option<i32> {
     }
 }
 
+/// How a key ends the width field: Enter keeps what was typed, Escape puts the width back, and either returns the focus to
+/// the drawing (where Enter had brought it from), as the drawing's own keys expect.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldEnd {
+    Commit,
+    Revert,
+}
+
+pub fn width_end(key: &str) -> Option<FieldEnd> {
+    match key {
+        "Enter" => Some(FieldEnd::Commit),
+        "Escape" => Some(FieldEnd::Revert),
+        _ => None,
+    }
+}
+
 fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
     let value = move || {
         let locale = w.i18n().locale();
@@ -216,6 +232,20 @@ fn width_section(w: SheetWatch, uid: u32) -> impl IntoView {
                             if let Some(dir) = width_key(&e.key()) {
                                 e.prevent_default();
                                 nudge(dir);
+                            } else if let Some(end) = width_end(&e.key()) {
+                                e.prevent_default();
+                                let input = leptos::prelude::event_target::<HtmlInputElement>(&e);
+                                let kept = end == FieldEnd::Commit && commit_width(w, uid, &input.value());
+                                if !kept {
+                                    let locale = w.i18n().locale_now();
+                                    input.set_value(&w.segment(uid, |s| w.units_now().fixed_in(s.width_mm, 2, locale)).unwrap_or_default());
+                                }
+                                // A refused Enter keeps the focus, with the old width back, so the person can type again.
+                                if kept || end == FieldEnd::Revert {
+                                    if let Some(wrap) = document().get_element_by_id("wrap").and_then(|e| e.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
+                                        let _ = wrap.focus();
+                                    }
+                                }
                             }
                         }
                         on:change=move |e| {
