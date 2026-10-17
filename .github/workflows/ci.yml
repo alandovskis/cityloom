@@ -279,6 +279,8 @@ jobs:
 
       # The tiles are made from Geofabrik's Quebec extract (1.2 GB) and take a long time, so keep them until the
       # scripts that make them change. Run the workflow again after clearing the cache to take a newer extract.
+      # scripts/include (the progress display) is left out of the key on purpose: a change to how the scripts report
+      # must not make the tiles again.
       - id: tiles
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
