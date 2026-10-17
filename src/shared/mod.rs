@@ -15,6 +15,7 @@ pub mod live;
 pub mod platform;
 pub mod ports;
 pub mod provenance;
+pub mod random;
 pub mod said;
 pub mod shortcut;
 pub mod store;

@@ -395,6 +395,15 @@ mod tests {
         fn keys(&self) -> Vec<String> {
             self.0.keys()
         }
+        fn now_ms(&self) -> u64 {
+            self.0.now_ms()
+        }
+        fn random_hex(&self) -> Option<String> {
+            self.0.random_hex()
+        }
+        fn identity(&self) -> usize {
+            self.0.identity()
+        }
     }
 
     #[test]
