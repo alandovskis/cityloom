@@ -121,6 +121,15 @@ struct BrowserImporter;
 
 impl Importer for BrowserImporter {
     #[cfg(target_arch = "wasm32")]
+    fn prepare(&self) {
+        use wasm_bindgen::JsCast;
+        let Some(window) = web_sys::window() else { return };
+        if let Some(prepare) = js_sys::Reflect::get(&window, &"cityloomPrepareOsm".into()).ok().and_then(|f| f.dyn_into::<js_sys::Function>().ok()) {
+            let _ = prepare.call0(&window);
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
     fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>) {
         wasm_bindgen_futures::spawn_local(async move { done(read_osm(&osm, bounds).await) });
     }
