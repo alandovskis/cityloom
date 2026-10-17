@@ -1,0 +1,47 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, so a query added to CodeQL finds what the code already holds.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+# A newer push to the same pull request supersedes the run in progress; runs on main always finish.
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+# Advanced setup, in place of the repository's default setup (which must stay off: GitHub refuses an advanced
+# setup's results while it is on), for the one thing default setup cannot do: leave the tests out
+# (.github/codeql/codeql-config.yml).
+# Actions are pinned to a commit; Dependabot proposes the updates.
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript, python, rust]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          config-file: ./.github/codeql/codeql-config.yml
+      - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          category: /language:${{ matrix.language }}

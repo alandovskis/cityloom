@@ -1,0 +1,7 @@
+# Code scanning reads the code the server and the editor run, not their tests: a test's fixed keys and the values
+# it prints raised every alert dismissed as "used in tests". No path can leave out an inline `mod tests { ... }`, so a
+# module whose tests raise alerts keeps them in its own tests.rs (cityloom_server/src/crypto/tests.rs beside crypto.rs).
+# Rust and the interpreted languages are analysed without a build, which is when these paths take effect.
+paths-ignore:
+  - "**/tests.rs"
+  - "**/tests/**"
