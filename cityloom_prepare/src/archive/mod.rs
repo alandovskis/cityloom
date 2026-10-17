@@ -1,8 +1,10 @@
 //! The `.cityloom` area archive: a plain tar whose first member is the binary index.
 
 mod index;
+mod pack;
 
 pub use index::*;
+pub use pack::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
