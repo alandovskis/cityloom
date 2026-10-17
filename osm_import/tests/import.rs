@@ -300,3 +300,24 @@ fn a_road_that_will_not_use_the_track_does_not_take_it_from_the_street_that_will
     assert_eq!(bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "competed for"), [osm_import::Way::Both]);
     assert!(!bike_ways(&import(TWO_WAY_TRACKS).unwrap(), "one-way competitor").contains(&osm_import::Way::Both));
 }
+
+const TRACK_CROSSING: &[u8] = include_bytes!("track_crossing.osm");
+
+#[test]
+fn the_ways_of_a_bike_track_are_read_but_are_not_roads_nor_split_the_road_they_meet() {
+    // a cycleway crossing a road and a designated footway ending on it, both sharing a node with it
+    let net = import(TRACK_CROSSING).unwrap();
+    assert_eq!(net.roads.len(), 1, "{:#?}", net.roads.iter().map(|r| (&r.name, &r.osm_ways)).collect::<Vec<_>>());
+    assert_eq!(net.roads[0].osm_ways, vec![100]);
+    assert_eq!(net.nodes.len(), 2, "no junction where a track meets the road");
+    // nor are those of the tracks beside a road
+    let net = import(TWO_WAY_TRACKS).unwrap();
+    let text = std::str::from_utf8(TWO_WAY_TRACKS).unwrap();
+    let tracks: Vec<i64> = text
+        .lines()
+        .filter(|l| l.contains("v=\"cycleway\"") || l.contains("v=\"footway\"") || l.contains("v=\"path\""))
+        .filter_map(|l| l.split("<way id=\"").nth(1)?.split('"').next()?.parse().ok())
+        .collect();
+    assert!(tracks.len() > 5);
+    assert!(net.roads.iter().all(|r| r.osm_ways.iter().all(|w| !tracks.contains(w))), "{tracks:?}");
+}

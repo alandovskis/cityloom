@@ -67,6 +67,9 @@ fn read_streets(osm: &[u8], clip: Option<Vec<geom::LonLat>>, config: MapConfig, 
         explicit_cycleways(&mut way.tags);
     }
     for (id, way) in doc.ways.iter().chain(doc.clipped_copied_ways.iter().map(|(id, way)| (id, way))) {
+        if is_off_road(&way.tags) {
+            continue;
+        }
         extract.handle_way(*id, way, &streets.config);
     }
     for (id, rel) in &doc.relations {
@@ -245,6 +248,13 @@ fn is_track(tags: &Tags) -> bool {
     !tags.is("cycleway", "crossing")
         && !tags.is("footway", "crossing")
         && (tags.is("highway", "cycleway") || (tags.is_any("highway", vec!["path", "footway"]) && tags.is("bicycle", "designated")))
+}
+
+/// A cycleway, path or footway: the data holds those for `two_way_tracks` (and a person may bring a file that has
+/// them), but they are not streets. osm2streets would make roads of them, with a junction wherever one meets or
+/// crosses a road, so they are not handed to it.
+fn is_off_road(tags: &Tags) -> bool {
+    tags.is_any("highway", vec!["cycleway", "path", "footway"])
 }
 
 /// Whether a way is one-way for bicycles: what `oneway:bicycle` or `bicycle:oneway` says, or else `oneway`.

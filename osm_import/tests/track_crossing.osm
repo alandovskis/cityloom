@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+<node id="1" lat="45.5" lon="-73.6020"></node>
+<node id="2" lat="45.5" lon="-73.5980"></node>
+<node id="3" lat="45.5" lon="-73.6000"></node>
+<node id="4" lat="45.4995" lon="-73.6000"></node>
+<node id="5" lat="45.5005" lon="-73.6000"></node>
+<node id="6" lat="45.4995" lon="-73.6010"></node>
+<node id="7" lat="45.5" lon="-73.6010"></node>
+<way id="100"><nd ref="1"/><nd ref="7"/><nd ref="3"/><nd ref="2"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="name" v="Crossed road"/></way>
+<way id="9001"><nd ref="4"/><nd ref="3"/><nd ref="5"/><tag k="highway" v="cycleway"/><tag k="cycleway" v="crossing"/></way>
+<way id="9002"><nd ref="6"/><nd ref="7"/><tag k="highway" v="footway"/><tag k="bicycle" v="designated"/></way>
+</osm>
