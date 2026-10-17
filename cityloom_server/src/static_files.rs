@@ -12,8 +12,8 @@
 //! beside the wasm, the glue and the vendored libraries) are sent as they are; anything else that is text is
 //! compressed on the fly, quickly.
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
+use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime};
 
 use axum::Router;
 use axum::body::Body;
@@ -145,35 +145,56 @@ fn versioned_files(root: &Path, dir: &Path, out: &mut Vec<(String, u64, Option<S
     }
 }
 
-/// The build's name: the first 16 hex digits of a hash over the names and content of the versioned files. It is
-/// computed again only when one of them changed in size or time, so a page costs a walk of the tree and no hashing.
+type Listing = Vec<(String, u64, Option<SystemTime>)>;
+
+/// The build's name: the first 16 hex digits of a hash over the names and content of the versioned files. A pass
+/// over the tree reads only its metadata and hashes content only when a file changed in size or time; the pass itself
+/// is made at most once per `interval` (in production the tree never changes while the server runs, so a request
+/// costs a lock and a clock reading), on a thread of its own, and the requests that arrive meanwhile wait for it
+/// without holding a worker.
 struct Build {
     root: PathBuf,
-    state: Mutex<(Vec<(String, u64, Option<SystemTime>)>, String)>,
+    interval: Duration,
+    state: tokio::sync::Mutex<(Listing, String, Option<Instant>)>,
 }
 
 impl Build {
-    fn new(root: PathBuf) -> Build {
-        Build { root, state: Mutex::new((Vec::new(), String::new())) }
+    fn new(root: PathBuf, interval: Duration) -> Build {
+        Build { root, interval, state: tokio::sync::Mutex::new((Vec::new(), String::new(), None)) }
     }
 
-    fn id(&self) -> String {
-        let mut files = Vec::new();
-        versioned_files(&self.root, &self.root, &mut files);
-        files.sort();
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if state.1.is_empty() || state.0 != files {
-            let mut hash = Sha256::new();
-            for (path, ..) in &files {
-                let bytes = std::fs::read(self.root.join(path.trim_start_matches('/'))).unwrap_or_default();
-                hash.update((path.len() as u64).to_le_bytes());
-                hash.update(path.as_bytes());
-                hash.update((bytes.len() as u64).to_le_bytes());
-                hash.update(&bytes);
-            }
-            *state = (files, hex::encode(hash.finalize())[..16].to_string());
+    async fn id(&self) -> String {
+        let mut state = self.state.lock().await;
+        if state.2.is_some_and(|at| at.elapsed() < self.interval) && !state.1.is_empty() {
+            return state.1.clone();
         }
+        let root = self.root.clone();
+        let (known, id) = (state.0.clone(), state.1.clone());
+        // On failure of the thread the previous name stays.
+        if let Ok((files, id)) = tokio::task::spawn_blocking(move || Build::compute(&root, known, id)).await {
+            state.0 = files;
+            state.1 = id;
+        }
+        state.2 = Some(Instant::now());
         state.1.clone()
+    }
+
+    fn compute(root: &Path, known: Listing, id: String) -> (Listing, String) {
+        let mut files = Vec::new();
+        versioned_files(root, root, &mut files);
+        files.sort();
+        if !id.is_empty() && known == files {
+            return (known, id);
+        }
+        let mut hash = Sha256::new();
+        for (path, ..) in &files {
+            let bytes = std::fs::read(root.join(path.trim_start_matches('/'))).unwrap_or_default();
+            hash.update((path.len() as u64).to_le_bytes());
+            hash.update(path.as_bytes());
+            hash.update((bytes.len() as u64).to_le_bytes());
+            hash.update(&bytes);
+        }
+        (files, hex::encode(hash.finalize())[..16].to_string())
     }
 }
 
@@ -286,8 +307,9 @@ async fn apply(State(site): State<Arc<Site>>, mut req: Request, next: Next) -> R
         None => return (StatusCode::BAD_REQUEST, "bad request").into_response(),
     }
     let mut versioned = false;
-    let build = site.build.id();
     let mut path = path;
+    // Only a page (which names the build) and a versioned address (which must be it) need to know it.
+    let build = if path.starts_with(VERSIONED) || is_page(&path) { site.build.id().await } else { String::new() };
     if path.starts_with(VERSIONED) {
         let Ok(file) = unversioned(&path, &build) else {
             let mut res = (StatusCode::NOT_FOUND, "this page was made for another build of the site: reload it").into_response();
@@ -354,9 +376,17 @@ fn compressible(status: StatusCode, headers: &HeaderMap) -> bool {
     ["text/", "application/json", "application/wasm", "image/svg+xml"].iter().any(|k| kind.starts_with(k))
 }
 
+/// How often the build's name is looked for again, when the site is served from a directory that may change.
+const BUILD_CHECK: Duration = Duration::from_secs(2);
+
 pub fn router(root: PathBuf, cache_control: String) -> Router {
+    router_checking_every(root, cache_control, BUILD_CHECK)
+}
+
+/// `router`, looking for a change of the build's files at most once per `interval`.
+pub fn router_checking_every(root: PathBuf, cache_control: String, interval: Duration) -> Router {
     let cache_control = HeaderValue::from_str(&cache_control).unwrap_or_else(|_| HeaderValue::from_static("no-store"));
-    let site = Arc::new(Site { root: root.clone(), cache_control, build: Build::new(root.clone()) });
+    let site = Arc::new(Site { root: root.clone(), cache_control, build: Build::new(root.clone(), interval) });
     let files = ServeDir::new(root).append_index_html_on_directories(true).precompressed_br().precompressed_gzip();
     let compression = CompressionLayer::new()
         .quality(CompressionLevel::Fastest)
