@@ -18,8 +18,8 @@
 <body>
   <a class="skip-link" href="#wrap" data-i18n="ui-skip-drawing">Skip to the drawing</a>
   <div id="boot-failed" role="alert" hidden style="position:fixed;inset:0 0 auto 0;z-index:100;padding:12px 16px;background:Canvas;color:CanvasText;border-bottom:2px solid CanvasText;font:15px/1.4 system-ui,sans-serif">
-    <div lang="en" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom could not start. Check your connection, then reload the page.</p> <a href="" data-boot="ui-boot-reload">Reload</a></div>
-    <div lang="fr-CA" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom n’a pas pu démarrer. Vérifiez votre connexion, puis rechargez la page.</p> <a href="" data-boot="ui-boot-reload">Recharger</a></div>
+    <div lang="en" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom could not load. Reload the page; if that does not help, check your connection.</p> <a href="" data-boot="ui-boot-reload">Reload</a></div>
+    <div lang="fr-CA" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom n’a pas pu se charger. Rechargez la page; si cela ne règle rien, vérifiez votre connexion.</p> <a href="" data-boot="ui-boot-reload">Recharger</a></div>
   </div>
   <svg id="defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"></svg>
 
@@ -166,6 +166,7 @@
   </aside>
 
   <output id="live" class="sr-only" aria-live="polite"></output>
-  <script type="module" src="v/{{build}}/junction.js"></script>
+  <script src="boot.js"></script>
+  <script type="module" src="v/{{build}}/junction.js" onerror="window.cityloomBootFailed&&cityloomBootFailed()"></script>
 </body>
 </html>

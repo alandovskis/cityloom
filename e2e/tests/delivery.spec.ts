@@ -1,4 +1,4 @@
-import { expect, forgive, placesOnMap, test } from "./fixtures";
+import { expect, forgive, mapReady, placesOnMap, test } from "./fixtures";
 
 const PAGES = ["/", "/map.html", "street", "junction", "/account.html"];
 const IMMUTABLE = "public, max-age=31536000, immutable";
@@ -11,7 +11,7 @@ test.describe("the delivery of the site's code", () => {
       const code: { url: string; status: number; cache: string | undefined }[] = [];
       page.on("response", (res) => {
         const url = new URL(res.url());
-        if (/\.(js|mjs|css|wasm|svg)$/.test(url.pathname) && !/favicon|logo-/.test(url.pathname))
+        if (/\.(js|mjs|css|wasm|svg)$/.test(url.pathname) && !/favicon|logo-|\/boot\.js$/.test(url.pathname))
           code.push({ url: url.pathname, status: res.status(), cache: res.headers()["cache-control"] });
       });
       if (path === "street" || path === "junction") {
@@ -74,11 +74,11 @@ test.describe("the delivery of the site's code", () => {
   });
 
   test("the glyphs and the tile index are kept for a while, the tiles are always revalidated", async ({ request }) => {
-    const index = await request.get("/data/metro/index.json");
-    // the fixture serves the index by a route in a page; this asks the server, which has the file only after `just prepare`
-    if (index.status() === 200) expect(index.headers()["cache-control"]).toContain("max-age=300");
+    // (the tile index is a file only after `just prepare`, and the fixture serves it by a route: the server's own
+    // tests pin its header; the glyphs are in the repository)
     const glyph = await request.get("/glyphs/Noto%20Sans%20Regular/0-255.pbf");
-    if (glyph.status() === 200) expect(glyph.headers()["cache-control"]).toContain("max-age=86400");
+    expect(glyph.status()).toBe(200);
+    expect(glyph.headers()["cache-control"]).toContain("max-age=86400");
   });
 });
 
@@ -98,7 +98,9 @@ test.describe("a module that does not start", () => {
       const banner = page.locator("#boot-failed");
       await expect(banner).toBeVisible();
       await expect(banner).toHaveAttribute("role", "alert");
-      await expect(banner).toContainText("CityLoom could not start. Check your connection, then reload the page.");
+      await expect(banner).toContainText(
+        "CityLoom could not load. Reload the page; if that does not help, check your connection.",
+      );
       await expect(banner.getByRole("link", { name: "Reload" })).toBeVisible();
       await expect(banner.locator('[lang="fr-CA"]')).toBeHidden();
       forgive(errors, /./);
@@ -113,7 +115,7 @@ test.describe("a module that does not start", () => {
     const banner = page.locator("#boot-failed");
     await expect(banner).toBeVisible();
     await expect(banner).toContainText(
-      "CityLoom n’a pas pu démarrer. Vérifiez votre connexion, puis rechargez la page.",
+      "CityLoom n’a pas pu se charger. Rechargez la page; si cela ne règle rien, vérifiez votre connexion.",
     );
     await expect(banner.getByRole("link", { name: "Recharger" })).toBeVisible();
     await expect(banner.locator('[lang="en"]')).toBeHidden();
@@ -126,13 +128,75 @@ test.describe("a module that does not start", () => {
     const page = await context.newPage();
     await page.route(WASM, (route) => route.fulfill({ status: 404, body: "no" }));
     await page.goto("/");
-    await expect(page.locator("#boot-failed")).toContainText("n’a pas pu démarrer");
+    await expect(page.locator("#boot-failed")).toContainText("n’a pas pu se charger");
     await context.close();
+  });
+
+  // A deploy retires the addresses of the build an open page belongs to. Which request meets the new server first
+  // is a matter of chance, so each file the page's start depends on is failed in turn.
+  for (const [name, glob] of [
+    ["entry script", "**/v/*/map.js"],
+    ["script it imports", "**/v/*/city.js"],
+    ["glue", "**/v/*/pkg/cityloom_editor.js"],
+  ] as const) {
+    test(`says so when the ${name} is not found under its build`, async ({ page, errors }) => {
+      await page.route(glob, (route) => route.fulfill({ status: 404, body: "this page was made for another build" }));
+      await page.goto("/map.html");
+      const banner = page.locator("#boot-failed");
+      await expect(banner).toBeVisible();
+      await expect(banner).toContainText("CityLoom could not load.");
+      await expect(banner.getByRole("link", { name: "Reload" })).toBeVisible();
+      forgive(errors, /./);
+      errors.length = 0;
+    });
+  }
+
+  test("says so in French when the entry script is not found", async ({ page, errors }) => {
+    await page.addInitScript(() => localStorage.setItem("cityloom-lang", "fr-CA"));
+    await page.route("**/v/*/home.js", (route) => route.fulfill({ status: 404, body: "no" }));
+    await page.goto("/");
+    await expect(page.locator("#boot-failed")).toContainText("n’a pas pu se charger");
+    forgive(errors, /./);
+    errors.length = 0;
   });
 
   test("shows nothing when the module starts", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("#search")).toBeVisible();
     await expect(page.locator("#boot-failed")).toBeHidden();
+  });
+});
+
+test.describe("the reader of the roads after a deploy", () => {
+  test("is told as the page is, and is tried again by the next call", async ({ page, errors }) => {
+    // The first visit reads the roads and keeps them; the second does not need the reader, so it is not loaded yet.
+    await page.goto("/map.html");
+    await mapReady(page);
+    await page.reload();
+    await mapReady(page);
+    await expect(page.locator("#boot-failed")).toBeHidden();
+    // A new build went live while the page was open: its reader's address is gone.
+    await page.route("**/v/*/pkg/osm_import.js", (route) => route.fulfill({ status: 404, body: "gone" }));
+    const call = () =>
+      page.evaluate(async () => {
+        try {
+          await (window as any).cityloomImportOsm(new Uint8Array(), "{}");
+          return "read";
+        } catch (error) {
+          return String(error);
+        }
+      });
+    const first = await call();
+    expect(first).toMatch(/osm_import|module|fetch|import/i);
+    await expect(page.locator("#boot-failed")).toBeVisible();
+    await expect(page.locator("#boot-failed")).toContainText("CityLoom could not load.");
+    // The failure is not kept: once the address answers, the reader loads (and then reads nothing from no bytes).
+    await page.unroute("**/v/*/pkg/osm_import.js");
+    const requested = page.waitForRequest(/\/pkg\/osm_import\.js\?retry=2$/);
+    const second = await call();
+    await requested;
+    expect(second).not.toBe(first);
+    forgive(errors, /./);
+    errors.length = 0;
   });
 });

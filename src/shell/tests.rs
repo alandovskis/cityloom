@@ -230,6 +230,15 @@ fn every_page_that_loads_the_module_has_its_start_failure_in_both_languages() {
             }
             assert_eq!(texts.len(), 2, "{name}.html, {lang}: the sentence and the way to reload");
         }
+        // The entry script is itself a versioned address, which a deploy can retire under an open page: its failure to
+        // load is told by the one script that is not versioned, `boot.js`, loaded before it.
+        let boot = html.find(r#"<script src="boot.js"></script>"#).unwrap_or_else(|| panic!("{name}.html loads boot.js"));
+        let entry = html.find(r#"<script type="module" src="v/{{build}}/"#).unwrap_or_else(|| panic!("{name}.html has its entry script"));
+        assert!(boot < entry, "{name}.html: boot.js is loaded before the entry script");
+        assert!(
+            html[entry..].lines().next().unwrap().contains(r#" onerror="window.cityloomBootFailed&&cityloomBootFailed()"></script>"#),
+            "{name}.html: the entry script tells a failed load"
+        );
         assert!(html.contains(r#"<link rel="modulepreload" href="v/{{build}}/pkg/cityloom_editor.js">"#), "{name}.html preloads the glue");
         assert!(
             html.contains(r#"<link rel="preload" as="fetch" crossorigin href="v/{{build}}/pkg/cityloom_editor_bg.wasm">"#),

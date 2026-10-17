@@ -2,25 +2,19 @@
 // WebAssembly module (`mount_street_page`); this opens the street, keeps what
 // it makes in the city, and sets up what every page shares.
 
-import { failed } from "./boot.js";
 import { placeParam } from "./city.js";
 
+let wasm;
 try {
-  await start();
+  wasm = await import("./pkg/cityloom_editor.js");
+  await wasm.default();
 } catch (error) {
-  failed();
+  globalThis.cityloomBootFailed?.();
   throw error;
 }
+await start(wasm);
 
-async function start() {
-  const {
-    default: init,
-    hatches,
-    mount_street_page,
-    open_street,
-    prepare_city,
-  } = await import("./pkg/cityloom_editor.js");
-  await init();
+async function start({ hatches, mount_street_page, open_street, prepare_city }) {
   await prepare_city();
 
   const { HATCH, MATERIAL_HATCH, CURB_HATCH } = JSON.parse(hatches());

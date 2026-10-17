@@ -1,21 +1,18 @@
 // Starts the city map page. The page is drawn and driven by the WebAssembly module (`mount_map`); the map itself
 // is MapLibre, made by basemap.js; this sets up what every page shares, which the module binds (`mount_shell`).
 
-import { failed } from "./boot.js";
 import "./city.js";
 
+let wasm, basemap;
 try {
-  const [{ default: init, mount_map, prepare_city }, { createBasemap }] = await Promise.all([
-    import("./pkg/cityloom_editor.js"),
-    import("./basemap.js"),
-  ]);
-  await init();
-  // The roads of the area being worked in, kept before the city is opened; if they cannot be got, the page says
-  // so and has no map to show.
-  await prepare_city();
-
-  mount_map(await createBasemap("basemap")).mount_shell();
+  [wasm, basemap] = await Promise.all([import("./pkg/cityloom_editor.js"), import("./basemap.js")]);
+  await wasm.default();
 } catch (error) {
-  failed();
+  globalThis.cityloomBootFailed?.();
   throw error;
 }
+// The roads of the area being worked in, kept before the city is opened; if they cannot be got, the page says
+// so and has no map to show.
+await wasm.prepare_city();
+
+wasm.mount_map(await basemap.createBasemap("basemap")).mount_shell();
