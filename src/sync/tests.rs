@@ -26,6 +26,8 @@ struct Row {
     edited_at: String,
     deleted: bool,
     body: Option<Value>,
+    /// The server could not open the body: it comes with `error: "corrupt"` and none.
+    corrupt: bool,
 }
 
 /// The server's rules in memory: one account.
@@ -76,7 +78,7 @@ impl ServerSim {
             edited_at: row.edited_at.clone(),
             deleted: row.deleted,
             body: row.body.clone(),
-            error: None,
+            error: row.corrupt.then(|| "corrupt".to_string()),
         }
     }
 
@@ -95,7 +97,15 @@ impl ServerSim {
 
     fn seed(&self, kind: &str, key: &str, body: Value, at: &str) {
         self.rev.set(self.rev.get() + 1);
-        self.rows.borrow_mut().insert((kind.into(), key.into()), Row { rev: self.rev.get(), edited_at: at.into(), deleted: false, body: Some(body) });
+        self.rows
+            .borrow_mut()
+            .insert((kind.into(), key.into()), Row { rev: self.rev.get(), edited_at: at.into(), deleted: false, body: Some(body), corrupt: false });
+    }
+
+    /// A record whose body the server cannot open (a key that was lost).
+    fn seed_corrupt(&self, kind: &str, key: &str, at: &str) {
+        self.rev.set(self.rev.get() + 1);
+        self.rows.borrow_mut().insert((kind.into(), key.into()), Row { rev: self.rev.get(), edited_at: at.into(), deleted: false, body: None, corrupt: true });
     }
 
     /// A tombstone that was purged: the row is gone and a device from before it must resync.
@@ -146,7 +156,7 @@ impl ServerSim {
             let accept = existing.as_ref().is_none_or(|row| row.rev == put.base_rev || at > row.edited_at);
             if accept {
                 self.rev.set(self.rev.get() + 1);
-                let row = Row { rev: self.rev.get(), edited_at: at, deleted: put.deleted, body: put.body.clone() };
+                let row = Row { rev: self.rev.get(), edited_at: at, deleted: put.deleted, body: put.body.clone(), corrupt: false };
                 self.rows.borrow_mut().insert(key, row.clone());
                 results.push(WorkResult { kind: put.kind, key: put.key, status: WorkStatus::Accepted, rev: row.rev, record: None });
             } else {
@@ -718,10 +728,10 @@ fn the_server_stand_in_decides_as_the_shared_truth_table_says() {
         if let Some(row) = case["row"].as_object() {
             let rev = row["rev"].as_i64().unwrap();
             server.rev.set(rev);
-            server
-                .rows
-                .borrow_mut()
-                .insert(("street".into(), "a".into()), Row { rev, edited_at: secs(&row["edited_at"]), deleted: false, body: Some(json!({"was": true})) });
+            server.rows.borrow_mut().insert(
+                ("street".into(), "a".into()),
+                Row { rev, edited_at: secs(&row["edited_at"]), deleted: false, body: Some(json!({"was": true})), corrupt: false },
+            );
         }
         *server.now.borrow_mut() = Some(secs(&case["now"]));
         let put = WorkPut {
@@ -1028,4 +1038,42 @@ fn a_damaged_sync_document_is_copied_aside_once_and_its_records_are_claimed_so_t
     assert_eq!(width(&phone, 1), theirs, "the server's later copy won over the phone's stale one");
     assert!(server.live().contains(&format!("street/{own}")), "what only the phone had went up");
     assert!(server.row("street", &key).unwrap().edited_at > model::stamp(T0 + 100_000));
+}
+
+#[test]
+fn a_corrupt_record_in_a_pull_does_not_move_the_revision_past_it_and_comes_back_once_the_server_can_open_it() {
+    hub::reset();
+    let server = ServerSim::new();
+    let d = device(&server, T0);
+    server.seed("street", "w1~n1~n2", json!({"fine": true}), "2027-01-15T07:00:00.000Z");
+    server.seed_corrupt("street", "w2~n1~n2", "2027-01-15T07:00:01.000Z");
+    d.vm.known(&ada());
+    assert!(record_of(&d, &street_id("w1~n1~n2")).is_some(), "the readable record is applied");
+    assert!(record_of(&d, &street_id("w2~n1~n2")).is_none());
+    assert_eq!(model::open(&*d.storage).unwrap().rev, 0, "the revision stays before the record that was skipped");
+    assert_eq!(server.calls.borrow().iter().filter(|c| c.starts_with("push")).count(), 0, "nothing is sent over it");
+    // the server can open it now
+    server.rows.borrow_mut().get_mut(&("street".to_string(), "w2~n1~n2".to_string())).map(|r| {
+        r.corrupt = false;
+        r.body = Some(json!({"repaired": true}));
+    });
+    d.vm.refresh();
+    assert_eq!(record_of(&d, &street_id("w2~n1~n2")), Some(json!({"repaired": true})));
+    assert_eq!(model::open(&*d.storage).unwrap().rev, 2);
+}
+
+#[test]
+fn a_superseded_record_that_cannot_be_applied_is_not_sent_again_in_the_same_run() {
+    hub::reset();
+    let server = ServerSim::new();
+    let d = device(&server, T0);
+    let key = edit_street(&d, 1, 100); // marked at T0
+    // the server holds a later edit of the place that it cannot open
+    server.seed_corrupt("street", &key, "2027-01-15T09:00:00.000Z");
+    d.vm.known(&ada());
+    let pushes = server.calls.borrow().iter().filter(|c| c.starts_with("push")).count();
+    assert!(pushes <= 1, "the same record was sent {pushes} times in one run");
+    assert!(server.row("street", &key).unwrap().corrupt, "the server's record was not overwritten");
+    assert_eq!(d.vm.status(), Status::NotSynced, "the place still waits");
+    assert!(model::open(&*d.storage).unwrap().has_pending(&|_| true), "and stays marked");
 }

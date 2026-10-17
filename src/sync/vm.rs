@@ -251,6 +251,7 @@ impl SyncVm {
             paused: Cell::new(false),
             skipped: Cell::new(false),
             failed_apply: Cell::new(false),
+            held: RefCell::new(BTreeSet::new()),
             single: Cell::new(false),
             rounds: Cell::new(0),
         });
@@ -319,6 +320,17 @@ impl SyncVm {
     }
 }
 
+/// What became of a record from the server.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Applied {
+    /// Applied, kept local, or nothing to do.
+    Done,
+    /// Left alone: its kind is paused or the server could not open it. The revision must not move past it.
+    Left,
+    /// A store refused it.
+    Failed,
+}
+
 /// One pass: pull everything above the revision seen, merge it, push what waits.
 struct Run {
     vm: Rc<SyncVm>,
@@ -337,6 +349,8 @@ struct Run {
     /// it was, so the record is pulled again by the next run instead of being missed for good.
     skipped: Cell<bool>,
     failed_apply: Cell<bool>,
+    /// Places (by `Id::name`) the server superseded with a record that could not be applied: not sent again this run.
+    held: RefCell<BTreeSet<String>>,
     /// A batch was refused for its size: the records go one at a time, to find the one that is too big.
     single: Cell<bool>,
     rounds: Cell<u32>,
@@ -399,27 +413,29 @@ impl Run {
         self.pull(WorkAsk::first(0));
     }
 
-    /// Applies a record from the server to the stores and the document. False where a store refused it.
-    fn apply(&self, doc: &mut SyncDoc, remote: &WorkRecord) -> bool {
-        let Some(id) = Id::of_record(remote) else { return true };
+    /// Applies a record from the server to the stores and the document.
+    fn apply(&self, doc: &mut SyncDoc, remote: &WorkRecord) -> Applied {
+        let Some(id) = Id::of_record(remote) else { return Applied::Done };
         let storage = &self.vm.ports.storage;
         if !local::usable(storage, id.kind) {
             self.paused.set(true);
             self.skipped.set(true);
-            return true;
+            return Applied::Left;
         }
-        if !remote.deleted && remote.body.is_none() {
-            return true;
+        // A live record with no body the server did not explain is no record to apply: it is left alone as a corrupt one.
+        if !remote.deleted && remote.body.is_none() && remote.error.is_none() {
+            self.skipped.set(true);
+            return Applied::Left;
         }
         let here = local::read(storage, &id);
         match model::decide(doc.entry(&id), remote, here.as_ref()) {
             Decision::Skip => {
                 self.skipped.set(true);
-                true
+                Applied::Left
             }
             Decision::KeepLocal => {
                 model::kept_local(doc, &id, remote.rev);
-                true
+                Applied::Done
             }
             Decision::Apply { changed, replaced } => {
                 if changed {
@@ -428,13 +444,13 @@ impl Run {
                         _ => local::remove(storage, &id),
                     };
                     if !kept {
-                        return false;
+                        return Applied::Failed;
                     }
                     self.received.set(self.received.get() + 1);
                     self.changes.borrow_mut().push(Change { id: id.clone(), origin: if replaced { Origin::Replaced } else { Origin::Remote } });
                 }
                 model::adopted(doc, &id, remote);
-                true
+                Applied::Done
             }
         }
     }
@@ -452,7 +468,7 @@ impl Run {
             if let Some(id) = Id::of_record(remote) {
                 listed.insert(id.name());
             }
-            if !self.apply(&mut doc, remote) {
+            if self.apply(&mut doc, remote) == Applied::Failed {
                 self.failed_apply.set(true);
             }
         }
@@ -504,7 +520,14 @@ impl Run {
             return self.finish(false);
         };
         let usable = |kind: Kind| local::usable(&storage, kind);
-        let mut batch = model::next_batch(&doc, &|id| local::read(&storage, id), &usable, false);
+        // The places the server superseded with a record that could not be applied are left out of this run.
+        let mut sendable = doc;
+        for name in self.held.borrow().iter() {
+            if let Some(e) = sendable.records.get_mut(name) {
+                e.pending = false;
+            }
+        }
+        let mut batch = model::next_batch(&sendable, &|id| local::read(&storage, id), &usable, false);
         if self.single.get() {
             batch.truncate(1);
         }
@@ -566,6 +589,7 @@ impl Run {
         let before = self.changes.borrow().len();
         for result in pushed.results {
             let Some(put) = sent.iter().find(|p| p.kind == result.kind && p.key == result.key) else { continue };
+            let Some(kind) = Kind::parse(&put.kind) else { continue };
             match result.status {
                 WorkStatus::Accepted => {
                     model::accepted(&mut doc, put, result.rev);
@@ -574,10 +598,17 @@ impl Run {
                     self.single.set(false);
                 }
                 WorkStatus::Superseded => {
-                    if let Some(remote) = result.record
-                        && !self.apply(&mut doc, &remote)
-                    {
-                        self.failed_apply.set(true);
+                    let Some(remote) = result.record else { continue };
+                    match self.apply(&mut doc, &remote) {
+                        Applied::Done => {}
+                        // The server's later record cannot be had here: the place stays marked, but it is not sent
+                        // again in this run (the server would say the same, and the run would never end).
+                        applied => {
+                            self.held.borrow_mut().insert(Id { kind, key: put.key.clone() }.name());
+                            if applied == Applied::Failed {
+                                self.failed_apply.set(true);
+                            }
+                        }
                     }
                 }
             }
