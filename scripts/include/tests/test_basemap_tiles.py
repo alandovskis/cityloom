@@ -146,8 +146,9 @@ class Planetiler(Scratch):
                 self.send_error(500)
 
         with serve(Broken) as url, self.progress(io.StringIO()) as p, p.step("planetiler") as step:
-            with mock.patch.object(basemap_tiles, "JAR_URL", url + "/latest"), self.assertRaises(Exception):
+            with mock.patch.object(basemap_tiles, "JAR_URL", url + "/latest"), self.assertRaises(Exception) as caught:
                 basemap_tiles.planetiler(p, step)
+        caught.exception.close()
         self.assertEqual(list(basemap_tiles.TOOLS.iterdir()), [])
 
 

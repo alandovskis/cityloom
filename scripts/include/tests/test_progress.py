@@ -5,6 +5,7 @@ import re
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -268,6 +269,42 @@ class Run(unittest.TestCase):
             raise KeyboardInterrupt
         self.assertEqual(caught.exception.code, 130)
         self.assertIn("FAIL g first", self.out.getvalue())
+
+
+class Tty(io.StringIO):
+    def isatty(self):
+        return True
+
+
+class Shown(unittest.TestCase):
+    def test_a_log_outside_the_project_is_shown_whole(self):
+        p = progress.Progress([], Path("/logs"), Path("/project"), out=io.StringIO(), env={})
+        self.assertEqual(p.shown(Path("/project/data/logs/a.log")), "data/logs/a.log")
+        self.assertEqual(p.shown(Path("/elsewhere/a.log")), "/elsewhere/a.log")
+
+
+class OnATerminal(unittest.TestCase):
+    def test_a_run_hides_the_cursor_draws_its_steps_and_shows_the_cursor_again(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Tty()
+            with progress.Progress([Spec("a", "g", "first")], Path(directory) / "logs", Path(directory), out=out, env={}) as p:
+                self.assertIsInstance(p.view, progress.Terminal)
+                with p.step("a") as step:
+                    p.update(step, detail="half", fraction=0.5)  # the ticker draws it
+                    time.sleep(0.25)  # long enough for the ticker to draw once
+        text = out.getvalue()
+        self.assertTrue(text.startswith("\x1b[?25l"))
+        self.assertTrue(text.endswith("\x1b[?25h"))
+        plain_text = ANSI.sub("", text)
+        self.assertIn("RUNS  g  first  half", plain_text)
+        self.assertIn("PASS  g  first  half  0s", plain_text)
+        self.assertIn("Steps: 1 passed, 1 total", plain_text)
+
+    def test_no_color_or_a_dumb_terminal_gets_plain_lines(self):
+        for env in ({"NO_COLOR": "1"}, {"TERM": "dumb"}):
+            with self.subTest(env), tempfile.TemporaryDirectory() as directory:
+                p = progress.Progress([], Path(directory), Path(directory), out=Tty(), env=env)
+                self.assertIsInstance(p.view, progress.Plain)
 
 
 class Terminal(unittest.TestCase):

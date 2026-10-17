@@ -77,6 +77,7 @@ class Download(Scratch):
 
         with serve(Gone) as url, self.assertRaises(urllib.error.HTTPError) as caught:
             prepare.open_from(url + "/x", 0)
+        caught.exception.close()
         self.assertEqual(caught.exception.code, 404)
 
     def test_416_without_a_part_file_is_an_error(self):
@@ -84,8 +85,9 @@ class Download(Scratch):
             def do_GET(self):
                 self.send_error(416)
 
-        with serve(Never) as url, self.assertRaises(urllib.error.HTTPError):
+        with serve(Never) as url, self.assertRaises(urllib.error.HTTPError) as caught:
             prepare.open_from(url + "/x", 0)
+        caught.exception.close()
 
     def test_a_short_download_says_to_run_again_and_keeps_the_part(self):
         class Short(file_handler(BODY, False, [])):
