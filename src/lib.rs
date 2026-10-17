@@ -88,7 +88,7 @@ mod tests {
         let (ports, page, _) = test_ports_with_page();
         assert_eq!(i18n_browser(&ports).locale_now(), Locale::En);
         assert_eq!(*page.lang.borrow(), "en");
-        *page.language.borrow_mut() = Some("fr".into());
+        *page.languages.borrow_mut() = vec!["fr".into()];
         assert_eq!(i18n_browser(&ports).locale_now(), Locale::FrCa);
         assert_eq!(*page.lang.borrow(), "fr-CA");
     }

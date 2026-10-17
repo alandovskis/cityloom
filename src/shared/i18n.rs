@@ -165,9 +165,10 @@ fn stored(tag: &str) -> Option<Locale> {
     (primary.eq_ignore_ascii_case("en") || primary.eq_ignore_ascii_case("fr")).then(|| Locale::parse(tag))
 }
 
-/// The language to start in: the one a person chose, else the browser's, else English.
+/// The language to start in: the one a person chose, else the first of the browser's preferred languages
+/// the app speaks (English or any French), else English.
 pub fn detect(ports: &Ports) -> Locale {
-    ports.storage.recall(LANG_KEY).and_then(|tag| stored(&tag)).or_else(|| ports.page.language().map(|tag| Locale::parse(&tag))).unwrap_or_default()
+    ports.storage.recall(LANG_KEY).and_then(|tag| stored(&tag)).or_else(|| ports.page.languages().iter().find_map(|tag| stored(tag))).unwrap_or_default()
 }
 
 const NBSP: char = '\u{a0}';
@@ -405,7 +406,7 @@ pub(crate) mod tests {
     fn the_stored_language_wins_over_the_browser_s() {
         let (ports, page, storage) = test_ports_with_page();
         storage.remember(LANG_KEY, "fr-CA");
-        *page.language.borrow_mut() = Some("en-US".into());
+        *page.languages.borrow_mut() = vec!["en-US".into()];
         assert_eq!(detect(&ports), Locale::FrCa);
     }
 
@@ -413,15 +414,36 @@ pub(crate) mod tests {
     fn without_a_stored_language_the_browser_s_is_used_and_then_english() {
         let (ports, page, _) = test_ports_with_page();
         assert_eq!(detect(&ports), Locale::En);
-        *page.language.borrow_mut() = Some("fr-CA".into());
+        *page.languages.borrow_mut() = vec!["fr-CA".into()];
         assert_eq!(detect(&ports), Locale::FrCa);
+    }
+
+    fn start_with(languages: &[&str]) -> Locale {
+        let (ports, page, _) = test_ports_with_page();
+        *page.languages.borrow_mut() = languages.iter().map(|tag| tag.to_string()).collect();
+        detect(&ports)
+    }
+
+    #[test]
+    fn the_first_browser_language_the_app_speaks_is_used() {
+        assert_eq!(start_with(&["de", "fr-CA"]), Locale::FrCa);
+        assert_eq!(start_with(&["es", "en-GB", "fr"]), Locale::En);
+        assert_eq!(start_with(&["fr-FR", "en"]), Locale::FrCa);
+        assert_eq!(start_with(&["fr-BE"]), Locale::FrCa);
+        assert_eq!(start_with(&["FR-ca"]), Locale::FrCa);
+    }
+
+    #[test]
+    fn english_when_the_browser_prefers_nothing_the_app_speaks() {
+        assert_eq!(start_with(&["de", "ja"]), Locale::En);
+        assert_eq!(start_with(&[]), Locale::En);
     }
 
     #[test]
     fn a_stored_value_that_is_not_a_language_is_ignored() {
         let (ports, page, storage) = test_ports_with_page();
         storage.remember(LANG_KEY, "de");
-        *page.language.borrow_mut() = Some("fr".into());
+        *page.languages.borrow_mut() = vec!["fr".into()];
         assert_eq!(detect(&ports), Locale::FrCa);
         storage.remember(LANG_KEY, "");
         assert_eq!(detect(&ports), Locale::FrCa);

@@ -143,8 +143,8 @@ pub trait Page {
     /// The text after `#` when it is the account's (`account=...`), else None and the address is left as it is; the
     /// fragment is removed from the address, so a second call gives None.
     fn take_fragment(&self) -> Option<String>;
-    /// The browser's preferred language tag, such as `fr-CA`, if it tells.
-    fn language(&self) -> Option<String>;
+    /// The browser's preferred language tags, most preferred first, such as `["de", "fr-CA"]`; empty if it tells none.
+    fn languages(&self) -> Vec<String>;
     /// Sets the `lang` of the document.
     fn set_lang(&self, tag: &str);
 }
@@ -457,7 +457,7 @@ impl Navigator for RecordingNavigator {
 
 /// A page whose language a test sets, and whose `lang` it keeps.
 pub struct FakePage {
-    pub language: RefCell<Option<String>>,
+    pub languages: RefCell<Vec<String>>,
     pub lang: RefCell<String>,
     pub path: RefCell<String>,
     pub fragment: RefCell<Option<String>>,
@@ -465,7 +465,7 @@ pub struct FakePage {
 
 impl Default for FakePage {
     fn default() -> Self {
-        FakePage { language: RefCell::new(None), lang: RefCell::new(String::new()), path: RefCell::new("/".into()), fragment: RefCell::new(None) }
+        FakePage { languages: RefCell::new(Vec::new()), lang: RefCell::new(String::new()), path: RefCell::new("/".into()), fragment: RefCell::new(None) }
     }
 }
 
@@ -477,8 +477,8 @@ impl Page for FakePage {
         let mut fragment = self.fragment.borrow_mut();
         if fragment.as_deref().is_some_and(is_account_fragment) { fragment.take() } else { None }
     }
-    fn language(&self) -> Option<String> {
-        self.language.borrow().clone()
+    fn languages(&self) -> Vec<String> {
+        self.languages.borrow().clone()
     }
     fn set_lang(&self, tag: &str) {
         *self.lang.borrow_mut() = tag.to_string();

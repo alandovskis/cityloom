@@ -118,7 +118,7 @@ mod tests {
         use crate::shared::i18n::{Locale, detect};
         use crate::shared::ports::test_ports_with_page;
         let (ports, page, _) = test_ports_with_page();
-        *page.language.borrow_mut() = Some("fr-CA".into());
+        *page.languages.borrow_mut() = vec!["fr-CA".into()];
         let failure = || Err(Said::new("place-roads-not-kept"));
         let words = |locale| problem_in_words(&crate::i18n_for(locale), failure());
         assert_eq!(detect(&ports), Locale::FrCa);

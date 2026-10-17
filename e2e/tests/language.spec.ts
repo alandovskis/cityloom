@@ -90,6 +90,19 @@ test("a stored French choice is there from the first paint", async ({ page }) =>
   await expectNoEnglish(page, "on a page opened in French");
 });
 
+test("with no stored choice the page starts in the first of the browser's languages it speaks", async ({ page }) => {
+  // Playwright's `locale` is a single language, so the list is set by hand. The fixture's default "en" runs
+  // first in the context, so this script removes it, as for a visitor who never chose.
+  await page.addInitScript(() => {
+    localStorage.removeItem("cityloom-lang");
+    Object.defineProperty(navigator, "languages", { get: () => ["de", "fr-CA", "en"] });
+    Object.defineProperty(navigator, "language", { get: () => "de" });
+  });
+  await openStreet(page);
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+  await expect(page.locator("#add-btn")).toHaveText(/Ajouter un élément/);
+});
+
 test("nothing of the page is left in English once it is French, a piece selected and an edit made", async ({
   page,
 }) => {
