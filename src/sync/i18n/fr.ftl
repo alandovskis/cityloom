@@ -12,7 +12,7 @@ sync-merged = Votre travail a été fusionné avec votre compte : { $sent ->
     [one] { $received } lieu reçu.
    *[other] { $received } lieux reçus.
   }
-sync-too-large-record = Un lieu est trop volumineux pour le serveur (64 Ko); il reste sur cet appareil seulement.
-sync-too-large-records = Le serveur conserve au plus 5 000 enregistrements par compte; le reste demeure sur cet appareil seulement.
-sync-too-large-bytes = Le serveur conserve au plus 2 Mo de travail par compte; le reste demeure sur cet appareil seulement.
+sync-too-large-record = Un lieu est trop volumineux pour le serveur (64 Ko); il reste sur cet appareil seulement.
+sync-too-large-records = Le serveur conserve au plus 5 000 enregistrements par compte; le reste demeure sur cet appareil seulement.
+sync-too-large-bytes = Le serveur conserve au plus 2 Mo de travail par compte; le reste demeure sur cet appareil seulement.
 sync-too-large-other = Une partie de votre travail est trop volumineuse pour le serveur; elle reste sur cet appareil seulement.

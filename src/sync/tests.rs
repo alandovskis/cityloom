@@ -937,3 +937,14 @@ fn enabling_during_a_run_waits_for_the_run_it_triggers() {
     assert!(work.answer(WorkReply::Page(Ok(page(0)))));
     assert_eq!(reports.borrow().len(), 1);
 }
+
+#[test]
+fn the_numbers_and_units_of_the_french_messages_do_not_break_across_lines() {
+    let fr = crate::i18n_for(Locale::FrCa);
+    assert_eq!(
+        fr.tr_now("sync-too-large-bytes", &Args::new()),
+        "Le serveur conserve au plus 2\u{a0}Mo de travail par compte; le reste demeure sur cet appareil seulement."
+    );
+    assert!(fr.tr_now("sync-too-large-records", &Args::new()).contains("5\u{a0}000\u{a0}enregistrements"));
+    assert!(fr.tr_now("sync-too-large-record", &Args::new()).contains("64\u{a0}Ko"));
+}
