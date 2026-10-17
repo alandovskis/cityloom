@@ -13,8 +13,8 @@ use super::symbols::shapes;
 
 /// The lines and symbols of the street as one group, drawn flat on the ground. A line is the shared paint quads of
 /// the path `[(x, 0), (x, STRETCH_MM)]` (across, along); a symbol is its polygons laid on its lane at
-/// `ARROW_AT_MM`, so it foreshortens with the street. A piece narrower on screen than `MIN_SOLID_PX` keeps its lines
-/// but gets no symbol.
+/// `ARROW_AT_MM`, so it foreshortens and shrinks with the distance. A piece narrower on screen than `MIN_SOLID_PX`
+/// where its symbol lies (`wide_enough`) keeps its lines but gets no symbol.
 pub(super) fn layer(p: &Projection, v: &View) -> String {
     let m = markings(v);
     let mut out = String::from("<g class=\"iso-markings\">");
@@ -32,10 +32,15 @@ pub(super) fn layer(p: &Projection, v: &View) -> String {
     out
 }
 
+/// Whether a piece `w` mm wide is wide enough on the screen, where its symbol lies, to carry it.
+pub(super) fn symbol_fits(p: &Projection, w: f64) -> bool {
+    w * p.scale_at(ARROW_AT_MM) >= MIN_SOLID_PX
+}
+
 fn symbol(out: &mut String, p: &Projection, v: &View, mark: &Mark) {
     let Some(s) = v.segments.iter().find(|s| s.uid == mark.uid) else { return };
     let w = s.width_mm as f64;
-    if w * p.scale < MIN_SOLID_PX {
+    if !symbol_fits(p, w) {
         return;
     }
     let cx = s.x_mm as f64 + w / 2.0;
@@ -96,15 +101,18 @@ mod tests {
 
     #[test]
     fn a_piece_too_narrow_on_screen_keeps_its_lines_but_loses_its_symbol() {
-        // A two-way bike lane at its narrowest, 1.2 m, is about 18 px wide on a 600 px drawing.
+        // A two-way bike lane at its narrowest, 1.2 m, is under 20 px wide where its symbol lies on a wide enough street at 600 px.
         let mut e = Editor::new(0);
         let bike = e.add(kind_index("bike").unwrap(), 3);
         assert!(e.set_width(bike, 1_200));
         // Uncurbed, so that its edges are painted (a curbed bike lane's are the curb's).
         assert!(e.set_curb(bike, None));
         let v = e.view();
+        // On this street the lane fits at 600 px; on one 28 m wide the scale is small enough that it does not.
         let p = fit(&v, 600.0);
-        assert!(1_200.0 * p.scale < MIN_SOLID_PX);
+        assert!(symbol_fits(&p, 1_200.0), "on this street at 600 px it fits");
+        let p = Projection::fit(600.0, 28_000);
+        assert!(!symbol_fits(&p, 1_200.0));
         let m = layer(&p, &v);
         assert!(!m.contains(&format!("data-mark=\"{bike}\"")));
         assert_eq!(count(&m, "class=\"iso-mark\""), 2, "the driving lanes keep theirs");
@@ -113,7 +121,7 @@ mod tests {
         assert_eq!(count(&m, "class=\"iso-paint yellow\""), 5);
         assert_eq!(count(&m, "class=\"iso-paint white\""), 4 + 2);
         assert!(!m.contains("NaN"));
-        // At 1050 px the same lane is wide enough.
+        // At 1050 px on the street itself the same lane is wide enough.
         let p = fit(&v, 1050.0);
         assert!(layer(&p, &v).contains(&format!("data-mark=\"{bike}\"")));
     }
@@ -163,7 +171,7 @@ mod tests {
                 assert!(!trees.is_empty(), "{width}");
                 for mark in markings(&v).marks {
                     let s = v.segments.iter().find(|s| s.uid == mark.uid).unwrap();
-                    if s.width_mm as f64 * p.scale < MIN_SOLID_PX {
+                    if !symbol_fits(&p, s.width_mm as f64) {
                         continue;
                     }
                     let cx = s.x_mm as f64 + s.width_mm as f64 / 2.0;

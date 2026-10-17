@@ -6,8 +6,8 @@ use crate::shared::catalogue::KINDS;
 use crate::street::model::View;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
-use super::projection::{MIN_SOLID_PX, Projection, STRETCH_MM, drawn_mm, points};
-use super::raised::{Face, curb_top_mm, height_mm, shade};
+use super::projection::{EYE_BACK_MM, MIN_STANDING_PX, Projection, STRETCH_MM, drawn_mm, points};
+use super::raised::{Face, curb_top_mm, height_mm, inner_face, shade};
 
 /// Something standing on a piece, drawn as a plain box.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -38,28 +38,40 @@ pub(super) struct Block {
     pub(super) z: (f64, f64),
 }
 
+impl Block {
+    /// How far the box is from the eye on the ground, in millimetres, from its nearest point: what orders the boxes
+    /// from far to near (a nearer box covers a farther one).
+    pub(super) fn from_eye(&self, p: &Projection) -> f64 {
+        let across = (self.x.0 - p.centre_mm).max(p.centre_mm - self.x.1).max(0.0);
+        across.hypot(self.z.0 + EYE_BACK_MM)
+    }
+}
+
+/// Whether a piece `w` mm wide is wide enough on the screen, where it is `along` mm from the near end, to carry
+/// something standing on it: a piece shrinks with distance, so each thing is judged where it stands.
+pub(super) fn wide_enough(p: &Projection, w: f64, along: f64) -> bool {
+    w * p.scale_at(along) >= MIN_STANDING_PX
+}
+
 /// What stands on the piece at `i`: a tree every 8 m on street trees, a shelter on a bus shelter's
 /// piece, a post every 4 m along a bike lane's curb (not an island's). Each keeps its own size and
-/// stands on the top as drawn, `RISE` times as high as the piece stands. Nothing on a piece too
-/// narrow on screen to show it.
+/// stands on the top as drawn, `RISE` times as high as the piece stands. A thing stands only where its piece is wide
+/// enough on the screen, at its own distance, to show it (`wide_enough`).
 pub(super) fn blocks(v: &View, i: usize, p: &Projection) -> Vec<Block> {
     let s = &v.segments[i];
     let (x0, w) = (s.x_mm as f64, s.width_mm as f64);
-    if w * p.scale < MIN_SOLID_PX {
-        return Vec::new();
-    }
     let id = KINDS[s.kind].id;
     let (cx, h) = (x0 + w / 2.0, drawn_mm(height_mm(id)));
     let along = |first: f64, every: f64| (0..).map(move |n| first + n as f64 * every).take_while(|z| *z < STRETCH_MM);
     let mut out = Vec::new();
     if s.material == "trees" {
         let crown = (w * 0.9).min(2_400.0);
-        for z in along(4_000.0, 8_000.0) {
+        for z in along(4_000.0, 8_000.0).filter(|&z| wide_enough(p, w, z)) {
             out.push(Block { solid: Solid::Trunk, x: (cx - 125.0, cx + 125.0), y: (h, h + 2_000.0), z: (z - 125.0, z + 125.0) });
             out.push(Block { solid: Solid::Crown, x: (cx - crown / 2.0, cx + crown / 2.0), y: (h + 2_000.0, h + 5_000.0), z: (z - 1_200.0, z + 1_200.0) });
         }
     }
-    if id == "busshelter" {
+    if id == "busshelter" && wide_enough(p, w, 20_000.0) {
         let d = (w * 0.8).min(1_500.0);
         out.push(Block { solid: Solid::Shelter, x: (cx - d / 2.0, cx + d / 2.0), y: (h, h + 2_500.0), z: (18_000.0, 22_000.0) });
     }
@@ -67,7 +79,7 @@ pub(super) fn blocks(v: &View, i: usize, p: &Projection) -> Vec<Block> {
         let (top, cw) = (curb_top_mm(c, id), curb_width_mm(c).min(w / 2.0));
         for right in curb_edges(v, i) {
             let px = if right { x0 + w - cw / 2.0 } else { x0 + cw / 2.0 };
-            for z in along(2_000.0, 4_000.0) {
+            for z in along(2_000.0, 4_000.0).filter(|&z| wide_enough(p, w, z)) {
                 out.push(Block { solid: Solid::Post, x: (px - 60.0, px + 60.0), y: (top, top + 900.0), z: (z - 60.0, z + 60.0) });
             }
         }
@@ -75,20 +87,24 @@ pub(super) fn blocks(v: &View, i: usize, p: &Projection) -> Vec<Block> {
     out
 }
 
-/// A box's three faces the eye sees: its front, its right side and its top.
+/// A box's three faces the eye sees: its front, its side on the middle of the street's side (its right side when it is
+/// left of the eye, its left side when it is right of it, none when it is over the eye) and its top.
 pub(super) fn block(out: &mut String, p: &Projection, b: &Block) {
     let ((x0, x1), (y0, y1), (z0, z1)) = (b.x, b.y, b.z);
     write!(
         out,
-        "<g class=\"iso-solid s-{}\"><polygon class=\"o-front\" points=\"{}\"{}/><polygon class=\"o-side\" points=\"{}\"{}/><polygon class=\"o-top\" points=\"{}\"/></g>",
+        "<g class=\"iso-solid s-{}\"><polygon class=\"o-front\" points=\"{}\"{}/>",
         b.solid.name(),
         points(p, &[(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0)]),
-        shade(Face::Front),
-        points(p, &[(x1, y0, z0), (x1, y0, z1), (x1, y1, z1), (x1, y1, z0)]),
-        shade(Face::Side),
-        points(p, &[(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)])
+        shade(Face::Front)
     )
     .unwrap();
+    if let Some(right) = inner_face(p, x0, x1) {
+        let x = if right { x1 } else { x0 };
+        write!(out, "<polygon class=\"o-side\" points=\"{}\"{}/>", points(p, &[(x, y0, z0), (x, y0, z1), (x, y1, z1), (x, y1, z0)]), shade(Face::Side))
+            .unwrap();
+    }
+    write!(out, "<polygon class=\"o-top\" points=\"{}\"/></g>", points(p, &[(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)])).unwrap();
 }
 
 #[cfg(test)]
@@ -141,14 +157,51 @@ mod tests {
     }
 
     #[test]
-    fn what_stands_on_a_piece_is_drawn_after_what_stands_on_the_pieces_to_its_left() {
-        // The eye sees the right sides, so a solid on a piece further right is nearer and covers the ones to its left
-        // even when it starts farther along: the shelter (18 m to 22 m) comes before the crown of the tree at 20 m
-        // on the planting strip to its right.
-        let mut e = Editor::new(1);
-        e.add(kind_index("busshelter").unwrap(), 1);
-        let m = drawn(&e);
-        assert!(m.find("s-shelter").unwrap() < m.find("s-crown").unwrap());
+    fn what_stands_on_the_pieces_is_drawn_from_the_far_end_to_the_near_so_that_a_nearer_tree_covers_a_farther() {
+        // Sample Avenue 2's trees: each crown's front face is lower on the screen than the one drawn before it.
+        let m = drawn(&Editor::new(1));
+        let bottoms: Vec<f64> = m
+            .split("<g class=\"iso-solid s-crown\"><polygon class=\"o-front\" points=\"")
+            .skip(1)
+            .map(|c| {
+                let pts = &c[..c.find('"').unwrap()];
+                pts.split(' ').map(|pt| pt.split(',').nth(1).unwrap().parse::<f64>().unwrap()).fold(f64::MIN, f64::max)
+            })
+            .collect();
+        assert_eq!(bottoms.len(), 10);
+        // The two strips' trees at one depth are drawn together, and each pair is lower on the screen than the one before.
+        assert!(bottoms.windows(2).all(|w| w[1] >= w[0]) && bottoms.first() < bottoms.last(), "{bottoms:?}");
+    }
+
+    #[test]
+    fn a_nearer_box_is_later_and_a_tree_s_crown_comes_after_its_trunk() {
+        let p = Projection::fit(1050.0, 30_000);
+        let b = |z: f64, y: f64| Block { solid: Solid::Crown, x: (2_000.0, 3_000.0), y: (y, y + 1.0), z: (z, z + 1_000.0) };
+        assert!(b(30_000.0, 0.0).from_eye(&p) > b(10_000.0, 0.0).from_eye(&p));
+        // A box over the eye is as near across as it can be; one beside it is farther at the same depth.
+        let over = Block { x: (14_000.0, 16_000.0), ..b(10_000.0, 0.0) };
+        assert!(b(10_000.0, 0.0).from_eye(&p) > over.from_eye(&p));
+        assert_eq!(over.from_eye(&p), 10_000.0 + EYE_BACK_MM);
+    }
+
+    #[test]
+    fn a_box_shows_the_side_of_it_that_faces_the_middle_of_the_street() {
+        let p = Projection::fit(1050.0, 30_000);
+        let sides = |x: (f64, f64)| {
+            let mut out = String::new();
+            block(&mut out, &p, &Block { solid: Solid::Trunk, x, y: (0.0, 2_000.0), z: (4_000.0, 4_250.0) });
+            (out.contains("o-front"), out.contains("o-side"), out.contains("o-top"), out)
+        };
+        let (front, side, top, left) = sides((3_000.0, 3_250.0));
+        assert!(front && side && top);
+        // Left of the eye: the side is its right face, at x1.
+        let want = points(&p, &[(3_250.0, 0.0, 4_000.0), (3_250.0, 0.0, 4_250.0), (3_250.0, 2_000.0, 4_250.0), (3_250.0, 2_000.0, 4_000.0)]);
+        assert!(left.contains(&format!("<polygon class=\"o-side\" points=\"{want}\"")), "{left}");
+        let (_, side, _, right) = sides((26_000.0, 26_250.0));
+        let want = points(&p, &[(26_000.0, 0.0, 4_000.0), (26_000.0, 0.0, 4_250.0), (26_000.0, 2_000.0, 4_250.0), (26_000.0, 2_000.0, 4_000.0)]);
+        assert!(side && right.contains(&format!("<polygon class=\"o-side\" points=\"{want}\"")), "{right}");
+        // Over the eye: none.
+        assert!(!sides((14_900.0, 15_100.0)).1);
     }
 
     #[test]
@@ -166,25 +219,32 @@ mod tests {
     }
 
     #[test]
-    fn a_piece_too_narrow_on_screen_draws_without_its_solids_but_keeps_its_faces() {
-        // At 600 px Sample Avenue 2's 1.5 m planting strips are under 20 px (17.6): no trees, all eleven tops.
-        let narrow = iso_svg(&Editor::new(1).view(), &en(), 600.0).markup;
-        assert_eq!(count(&narrow, "class=\"iso-solid"), 0);
-        assert_eq!(count(&narrow, "class=\"iso-top "), 11);
+    fn each_thing_is_judged_where_it_stands_far_trees_go_before_near_ones_on_a_narrow_strip() {
+        // At 600 px Sample Avenue 2's 1.5 m planting strips are about 40 px at the near end and under 12 px past 30 m:
+        // the nearest tree stands, the farthest does not, and the ones between go from the far end.
+        let v = Editor::new(1).view();
+        let p = Projection::fit(600.0, 30_000);
+        let strip = v.segments.iter().position(|s| s.material == "trees").unwrap();
+        let zs: Vec<f64> = blocks(&v, strip, &p).iter().filter(|b| b.solid == Solid::Trunk).map(|b| (b.z.0 + b.z.1) / 2.0).collect();
+        assert_eq!(zs.first(), Some(&4_000.0));
+        assert!(zs.len() < 5 && zs.len() >= 2, "{zs:?}");
+        assert!(zs.windows(2).all(|w| w[1] - w[0] == 8_000.0), "no gap: {zs:?}");
         // The freeway at 600 px still draws every piece, with no missing number.
         let freeway = iso_svg(&Editor::new(3).view(), &en(), 600.0);
         assert_eq!(count(&freeway.markup, "class=\"iso-top "), 9);
         assert!(!freeway.markup.contains("NaN"));
+        // A piece too narrow even at the near end draws without any.
+        assert!(blocks(&v, strip, &Projection::fit(600.0, 120_000)).is_empty());
+        assert_eq!(count(&iso_svg(&v, &en(), 600.0).markup, "class=\"iso-top "), 11);
     }
 
     #[test]
-    fn at_760_px_the_planting_strips_keep_their_trees_the_shelter_and_the_bike_lane_s_posts() {
-        // A 1.5 m strip is about 21 px there: narrow, but a tree is a box standing up and reads.
+    fn at_760_px_the_planting_strips_keep_their_nearest_trees_the_shelter_and_the_bike_lane_s_posts() {
         let avenue = iso_svg(&Editor::new(1).view(), &en(), 760.0).markup;
-        assert_eq!(count(&avenue, "class=\"iso-solid s-crown\""), 10);
+        let crowns = count(&avenue, "class=\"iso-solid s-crown\"");
+        assert!((6..=10).contains(&crowns) && crowns % 2 == 0, "{crowns}");
         let m = iso_svg(&furnished().view(), &en(), 760.0).markup;
-        assert_eq!(count(&m, "class=\"iso-solid s-crown\""), 10);
         assert_eq!(count(&m, "class=\"iso-solid s-shelter\""), 1);
-        assert_eq!(count(&m, "class=\"iso-solid s-post\""), 20);
+        assert!(count(&m, "class=\"iso-solid s-post\"") > 0);
     }
 }

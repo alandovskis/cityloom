@@ -11,7 +11,7 @@ use crate::shared::iso::shading::shade_filters;
 use crate::street::model::View;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
-use super::projection::{Projection, RECEDE_X, RECEDE_Y, STRETCH_MM, drawn_mm, points};
+use super::projection::{EYE_BACK_MM, Projection, STRETCH_MM, band_edges, drawn_mm, points};
 
 /// How high each kind of piece stands above the roadway, in millimetres. They are plausible, not
 /// surveyed, like the catalogue's rates. The furniture kinds stand on the sidewalk, so at its height.
@@ -78,10 +78,10 @@ pub(super) fn shades() -> String {
     shade_filters(&SHADES)
 }
 
-/// The surface materials' patterns for the drawing's `<defs>`, laid on the ground in this projection: across the street
-/// along the drawing's x, along it receding up and right.
-pub(super) fn materials(p: &Projection) -> String {
-    patterns("iso-m", [p.scale, 0.0, p.scale * RECEDE_X, -p.scale * RECEDE_Y, p.left, p.base])
+/// The surface materials' patterns for the drawing's `<defs>`. They are drawn in millimetres of ground with no transform
+/// of their own: a textured top is laid by the matrix of the polygon that fills with one (`top`), band by band.
+pub(super) fn materials() -> String {
+    patterns("iso-m", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
 }
 
 /// The shading a face of this kind gets, as an attribute: none for a top.
@@ -109,14 +109,59 @@ fn face(out: &mut String, what: Face, kind: Option<&str>, hatch: &str, pts: &str
     write!(out, " points=\"{pts}\"{}/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#{hatch})\"/>", shade(what)).unwrap();
 }
 
-/// How high the piece after `i` is drawn, or the ground when `i` is the last.
-pub(super) fn beside(v: &View, i: usize) -> f64 {
-    v.segments.get(i + 1).map_or(0.0, |n| drawn_mm(height_mm(KINDS[n.kind].id)))
+/// How high the piece next to `i` on its right (`right`) or its left is drawn, or the ground when there is none.
+pub(super) fn beside(v: &View, i: usize, right: bool) -> f64 {
+    let n = if right { v.segments.get(i + 1) } else { i.checked_sub(1).and_then(|j| v.segments.get(j)) };
+    n.map_or(0.0, |n| drawn_mm(height_mm(KINDS[n.kind].id)))
+}
+
+/// Which side face of something spanning `x0` to `x1` across the street the eye sees: its right face (`Some(true)`)
+/// when it is wholly left of the eye, its left face (`Some(false)`) when it is wholly right of it, and none when it
+/// is over the eye (both faces are turned away) or its face is edge-on, in the eye's own plane.
+pub(super) fn inner_face(p: &Projection, x0: f64, x1: f64) -> Option<bool> {
+    if x1 < p.centre_mm {
+        Some(true)
+    } else if x0 > p.centre_mm {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// The top of a piece at `h` (drawn mm) across `x0` to `x1`: a polygon in the tint of the kind `id` and the material
+/// `m`, and the material's texture over it. The texture is a pattern in millimetres of ground; perspective is not an
+/// affine map, so the top is cut into `BANDS` bands along the street, each carrying the affine map that is the
+/// perspective's slope at its middle (`Projection::ground_at`); the band's polygon is written in the ground's own
+/// millimetres, as the true quadrilateral the band is on the screen taken back through that map, so it fits the
+/// top exactly and its `transform` lays the texture.
+fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h: f64) {
+    let l = STRETCH_MM;
+    let pts = points(p, &[(x0, h, 0.0), (x1, h, 0.0), (x1, h, l), (x0, h, l)]);
+    write!(out, "<polygon class=\"iso-top k-{id} mat-{m}\" points=\"{pts}\"/>").unwrap();
+    let edges = band_edges();
+    for w in edges.windows(2) {
+        let (z0, z1) = (w[0], w[1]);
+        // The middle in depth, as the eye sees it.
+        let mid = ((EYE_BACK_MM + z0) * (EYE_BACK_MM + z1)).sqrt() - EYE_BACK_MM;
+        let g = p.ground_at(h, (x0 + x1) / 2.0, mid);
+        // The numbers as written, so that the polygon is taken back through exactly the map that lays the texture.
+        let [a, _, c, d, e, f] = [g[0], g[1], g[2], g[3], g[4], g[5]].map(|n| (n * 1e6).round() / 1e6);
+        let (e, f) = ((e * 100.0).round() / 100.0, (f * 100.0).round() / 100.0);
+        let local: Vec<String> = [(x0, z0), (x1, z0), (x1, z1), (x0, z1)]
+            .iter()
+            .map(|&(x, z)| {
+                let (sx, sy) = p.at(x, h, z);
+                let v = (sy - f) / d;
+                let u = (sx - e - c * v) / a;
+                format!("{:.0},{:.0}", u, v)
+            })
+            .collect();
+        write!(out, "<polygon class=\"hatch\" transform=\"matrix({a} 0 {c} {d} {e} {f})\" points=\"{}\" fill=\"url(#iso-m-{m})\"/>", local.join(" ")).unwrap();
+    }
 }
 
 /// The piece at `i` as a strip along the stretch: its top, and where it stands above the ground its
-/// front (the cut at the near end) and its right side where the next piece is lower. Its left side
-/// faces away from the eye, so it is never seen.
+/// front (the cut at the near end) and the side face the eye sees, where the piece beside it is lower.
 pub(super) fn slab(out: &mut String, p: &Projection, v: &View, i: usize) {
     let s = &v.segments[i];
     let id = KINDS[s.kind].id;
@@ -124,15 +169,21 @@ pub(super) fn slab(out: &mut String, p: &Projection, v: &View, i: usize) {
     let hatch = format!("h-{id}");
     if h > 0.0 {
         face(out, Face::Front, Some(id), &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, h, 0.0), (x0, h, 0.0)]));
-        let low = beside(v, i);
-        if low < h {
-            face(out, Face::Side, Some(id), &hatch, &points(p, &[(x1, low, 0.0), (x1, low, l), (x1, h, l), (x1, h, 0.0)]));
+        if let Some(right) = inner_face(p, x0, x1) {
+            let (x, low) = (if right { x1 } else { x0 }, beside(v, i, right));
+            if low < h {
+                face(out, Face::Side, Some(id), &hatch, &points(p, &[(x, low, 0.0), (x, low, l), (x, h, l), (x, h, 0.0)]));
+            }
         }
     }
-    // The top is the material's, not the kind's: its tint class and its pattern lie on the ground.
-    let pts = points(p, &[(x0, h, 0.0), (x1, h, 0.0), (x1, h, l), (x0, h, l)]);
-    let m = s.material;
-    write!(out, "<polygon class=\"iso-top k-{id} mat-{m}\" points=\"{pts}\"/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#iso-m-{m})\"/>").unwrap();
+    top(out, p, id, s.material, x0, x1, h);
+}
+
+/// Where the curb of the piece at `i` along one edge (`right`) lies across the street.
+fn curb_span(s: &crate::street::model::SegView, c: &str, right: bool) -> (f64, f64) {
+    let cw = curb_width_mm(c).min(s.width_mm as f64 / 2.0);
+    let edge = (s.x_mm + s.width_mm) as f64;
+    if right { (edge - cw, edge) } else { (s.x_mm as f64, s.x_mm as f64 + cw) }
 }
 
 /// The curb of the piece at `i` along one edge (`right`). As high as the piece, it is a stripe on its
@@ -143,14 +194,15 @@ pub(super) fn curb(out: &mut String, p: &Projection, v: &View, i: usize, right: 
     let id = KINDS[s.kind].id;
     let (h, l) = (drawn_mm(height_mm(id)), STRETCH_MM);
     let top = curb_top_mm(c, id);
-    let cw = curb_width_mm(c).min(s.width_mm as f64 / 2.0);
-    let edge = (s.x_mm + s.width_mm) as f64;
-    let (x0, x1) = if right { (edge - cw, edge) } else { (s.x_mm as f64, s.x_mm as f64 + cw) };
+    let (x0, x1) = curb_span(s, c, right);
     let hatch = format!("c-{c}");
     if top > h {
         face(out, Face::Front, None, &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, top, 0.0), (x0, top, 0.0)]));
-        let low = if right { beside(v, i) } else { h };
-        face(out, Face::Side, None, &hatch, &points(p, &[(x1, low, 0.0), (x1, low, l), (x1, top, l), (x1, top, 0.0)]));
+        if let Some(face_right) = inner_face(p, x0, x1) {
+            // A block's face on the piece's own side stands on the piece; its other face stands on what is beside it.
+            let (x, low) = (if face_right { x1 } else { x0 }, if face_right == right { beside(v, i, right) } else { h });
+            face(out, Face::Side, None, &hatch, &points(p, &[(x, low, 0.0), (x, low, l), (x, top, l), (x, top, 0.0)]));
+        }
     }
     face(out, Face::Top, None, &hatch, &points(p, &[(x0, top, 0.0), (x1, top, 0.0), (x1, top, l), (x0, top, l)]));
 }
@@ -158,9 +210,22 @@ pub(super) fn curb(out: &mut String, p: &Projection, v: &View, i: usize, right: 
 /// One strip to draw: how high its top is drawn, which piece, and which edge's curb if it is a curb.
 pub(super) type Strip = (f64, usize, Option<bool>);
 
+/// How far a strip is from the eye across the street, in millimetres: from its nearest edge, nothing for one the eye is over.
+fn across_eye(v: &View, p: &Projection, strip: Strip) -> f64 {
+    let (_, i, edge) = strip;
+    let s = &v.segments[i];
+    let (x0, x1) = match (edge, s.curb) {
+        (Some(right), Some(c)) => curb_span(s, c, right),
+        _ => (s.x_mm as f64, (s.x_mm + s.width_mm) as f64),
+    };
+    (x0 - p.centre_mm).max(p.centre_mm - x1).max(0.0)
+}
+
 /// The strips to draw, each as (how high its top is drawn, which piece, which edge's curb if it is one), from the
-/// lowest drawn top to the highest, so that a higher strip stands in front of a lower one beside it.
-pub(super) fn strips(v: &View) -> Vec<Strip> {
+/// farthest from the eye across the street to the nearest, and the lowest first among those as far: the eye is over
+/// the middle of the street, so a strip nearer the middle stands in front of the ones beyond it, as a higher one
+/// covers a lower one beyond it, and the sidewalk beside the eye's line covers what is farther out.
+pub(super) fn strips(v: &View, p: &Projection) -> Vec<Strip> {
     let mut strips: Vec<Strip> = Vec::new();
     for (i, s) in v.segments.iter().enumerate() {
         let id = KINDS[s.kind].id;
@@ -171,7 +236,9 @@ pub(super) fn strips(v: &View) -> Vec<Strip> {
             }
         }
     }
-    strips.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.is_some().cmp(&b.2.is_some())));
+    strips.sort_by(|a, b| {
+        across_eye(v, p, *b).total_cmp(&across_eye(v, p, *a)).then(a.0.total_cmp(&b.0)).then(a.1.cmp(&b.1)).then(a.2.is_some().cmp(&b.2.is_some()))
+    });
     strips
 }
 
@@ -209,6 +276,7 @@ pub(super) fn layer(p: &Projection, v: &View, i18n: &I18n, strips: &[Strip]) -> 
 mod tests {
     use super::*;
     use crate::shared::catalogue::{KINDS, kind_index};
+    use crate::street::iso::projection::Projection;
     use crate::street::iso::testing::{furnished, one_way_bikes};
     use crate::street::model::Editor;
 
@@ -273,24 +341,32 @@ mod tests {
     }
 
     #[test]
-    fn the_strips_are_drawn_from_the_lowest_to_the_highest_as_they_are_drawn() {
-        // A curbed bike lane beside a sidewalk: the curb stands 150 mm and the sidewalk 150 mm, but the sidewalk is
-        // drawn three times as high, so it must come after the curb.
+    fn the_strips_are_drawn_from_the_farthest_from_the_middle_of_the_street_to_the_nearest() {
         let mut e = Editor::new(0);
         e.add(kind_index("bike").unwrap(), 1);
-        for e in [e, Editor::new(0), Editor::new(1), furnished(), one_way_bikes().0] {
+        for e in [e, Editor::new(0), Editor::new(1), Editor::new(3), furnished(), one_way_bikes().0] {
             let v = e.view();
-            let tops: Vec<f64> = strips(&v)
-                .iter()
-                .map(|&(_, i, edge)| {
-                    let (s, id) = (&v.segments[i], KINDS[v.segments[i].kind].id);
-                    match edge {
-                        None => drawn_mm(height_mm(id)),
-                        Some(_) => curb_top_mm(s.curb.unwrap(), id),
-                    }
-                })
-                .collect();
-            assert!(tops.windows(2).all(|w| w[0] <= w[1]), "{tops:?}");
+            let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm));
+            let s = strips(&v, &p);
+            let far: Vec<f64> = s.iter().map(|&st| across_eye(&v, &p, st)).collect();
+            assert!(far.windows(2).all(|w| w[0] >= w[1]), "{far:?}");
+            // Among strips as far, the lower is first.
+            for w in s.windows(2) {
+                if across_eye(&v, &p, w[0]) == across_eye(&v, &p, w[1]) {
+                    assert!(w[0].0 <= w[1].0);
+                }
+            }
         }
+    }
+
+    #[test]
+    fn from_over_the_middle_a_piece_left_of_it_shows_its_right_face_and_one_right_of_it_its_left() {
+        let p = Projection::fit(1000.0, 18_000);
+        assert_eq!(inner_face(&p, 0.0, 2_400.0), Some(true));
+        assert_eq!(inner_face(&p, 15_600.0, 18_000.0), Some(false));
+        // Over the eye, or edge-on in its plane: no side is seen.
+        assert_eq!(inner_face(&p, 8_000.0, 10_000.0), None);
+        assert_eq!(inner_face(&p, 0.0, 9_000.0), None);
+        assert_eq!(inner_face(&p, 9_000.0, 12_000.0), None);
     }
 }
