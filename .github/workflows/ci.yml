@@ -225,12 +225,33 @@ jobs:
             *failure*|*cancelled*|*skipped*) exit 1 ;;
           esac
 
-  # Only a green main goes live. Needs the RAILWAY_TOKEN secret (a project token for the cityloom project's
+  # What a push to main has to deploy: a change to documents, tests, tooling or only the version deploys nothing
+  # (scripts/what_to_deploy.py says which files do not count; any other file deploys the site).
+  changes:
+    name: What to deploy
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    outputs:
+      site: ${{ steps.what.outputs.site }}
+      docs: ${{ steps.what.outputs.docs }}
+    steps:
+      # The whole history, so the push's first commit (github.event.before) is there to compare with.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: what
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: scripts/what_to_deploy.py "$BEFORE" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+  # Only a green main goes live, and only when the push changed something it deploys. Needs the RAILWAY_TOKEN secret (a project token for the cityloom project's
   # production environment) in the `production` environment.
   deploy:
     name: Deploy to Railway
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [ci]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.site == 'true'
+    needs: [ci, changes]
     runs-on: ubuntu-26.04
     timeout-minutes: 90
     environment: production
@@ -304,11 +325,12 @@ jobs:
       - run: just deploy
 
   # The documentation site goes to GitHub Pages (https://alandovskis.github.io/cityloom/) from a green main, like the
-  # Railway deploy. Pages is set to deploy from GitHub Actions in the repository's settings.
+  # Railway deploy, when the push changed it (website/, or how it is built). Pages is set to deploy from GitHub Actions
+  # in the repository's settings.
   docs-deploy:
     name: Deploy the documentation
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [ci, docs]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.docs == 'true'
+    needs: [ci, docs, changes]
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:

@@ -55,9 +55,10 @@ Write the value down before you change anything, and check it against `main`'s.
 6. **Merge.** `gh pr merge <N> --squash --delete-branch --repo alandovskis/cityloom`. If it is refused (permissions, branch protection, a review required): STOP and report the message as it was.
 7. **Watch the deploy.** Find the run: `gh run list --repo alandovskis/cityloom --branch main --workflow ci.yml --limit 5 --json databaseId,headSha,status,conclusion`, the one whose `headSha` is the new `main` (`git rev-parse origin/main` after `git fetch`). Then `gh run watch <id> --repo alandovskis/cityloom` and `gh run view <id> --repo alandovskis/cityloom --json jobs --jq '.jobs[] | "\(.name): \(.conclusion)"'`.
    - Every job `success`: go on.
+   - `Deploy to Railway` or `Deploy the documentation` `skipped` while `What to deploy` is `success`: that is normal (the merge changed nothing that one deploys; `gh run view <id> --repo alandovskis/cityloom --log --job <What to deploy's job id>` says which files counted). Note it as "deploy not needed". Every other job must still be `success`.
    - `Deploy to Railway` `cancelled` while a later merge's run is deploying: that is normal (a newer pending deploy replaces an older one). Note it and watch the later run instead.
    - Any job `failure`: STOP. Merge nothing more.
-8. **Check the site** once that deploy has succeeded:
+8. **Check the site** once that deploy has succeeded, or once the run has ended with the deploy not needed:
    - `curl -s -A cityloom-deploy -o /dev/null -w '%{http_code}' https://cityloom.app/` must be `200`.
    - `curl -s -A cityloom-deploy -w ' %{http_code}' https://cityloom.app/api/me` must answer `401` (accounts on, nobody signed in) or `503` with `account-unavailable` (accounts off). Anything else: STOP.
 9. Go to the next PR. It must be rebased on the `main` you just made, from step 1.
@@ -69,7 +70,7 @@ You may start step 1 to 4 of the next PR while a deploy is being watched, but me
 When every PR is merged and deployed, or when you STOP, report in this shape and nothing else:
 
 ```
-Merged: #48 (0.16.1, deploy success), #49 (0.16.2, deploy replaced by #50's)
+Merged: #48 (0.16.1, deploy success), #49 (0.16.2, deploy replaced by #50's), #51 (0.16.3, deploy not needed)
 Stopped at: #50, step 3, rebase
 Why: conflict in src/shared/ports.rs (not a version line)
 State left: rebase aborted; branch unchanged at <sha>; nothing pushed
