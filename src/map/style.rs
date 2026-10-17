@@ -10,6 +10,9 @@ pub const SOURCE: &str = "places";
 pub const OK: &str = "#4b6b8a";
 pub const CHANGED: &str = "#2563eb";
 pub const BAD: &str = "#dc2626";
+/// The mark down a changed street, or in a junction that needs attention: dark, so that it is told from the
+/// status colours by its lightness and its shape, not by a hue (WCAG 1.4.1).
+const MARK: &str = "#111827";
 /// The place the pointer or the focus is on.
 const HOT: &str = "#f59e0b";
 /// The edge of the place the pointer or the focus is on: dark where the road's own edge is white, so the highlight
@@ -113,6 +116,30 @@ pub fn layers(lat: f64) -> String {
                 "circle-color": colour(), "circle-opacity": opacity(1.0), "circle-radius": metres("radius_m", lat, 5.0, 0.0),
                 "circle-stroke-color": edge(), "circle-stroke-opacity": opacity(1.0), "circle-stroke-width": 2
             }
+        },
+        // What is not told by the colour alone: a changed street has a thin dark line down it, one needing attention
+        // dark dashes, a changed junction a light dot and one needing attention a dark one.
+        {
+            "id": "places-changed", "type": "line", "source": SOURCE,
+            "filter": ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "status"], "changed"]],
+            "layout": { "line-cap": "butt", "line-join": "round" },
+            "paint": { "line-color": MARK, "line-opacity": opacity(0.8), "line-width": 1.2 }
+        },
+        {
+            "id": "places-bad", "type": "line", "source": SOURCE,
+            "filter": ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "status"], "bad"]],
+            "layout": { "line-cap": "butt", "line-join": "round" },
+            "paint": { "line-color": MARK, "line-opacity": opacity(0.9), "line-width": 1.6, "line-dasharray": [2, 1.5] }
+        },
+        {
+            "id": "places-changed-dot", "type": "circle", "source": SOURCE,
+            "filter": ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "status"], "changed"]],
+            "paint": { "circle-color": "#ffffff", "circle-opacity": opacity(1.0), "circle-radius": 2.2 }
+        },
+        {
+            "id": "places-bad-dot", "type": "circle", "source": SOURCE,
+            "filter": ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "status"], "bad"]],
+            "paint": { "circle-color": MARK, "circle-opacity": opacity(1.0), "circle-radius": 2.4 }
         }
     ])
     .to_string()
@@ -181,10 +208,10 @@ mod tests {
     }
 
     #[test]
-    fn the_places_are_drawn_in_five_layers_on_one_source() {
+    fn the_places_are_drawn_in_layers_on_one_source() {
         let l = layers(45.5);
         let ids: Vec<&str> = l.iter().map(|l| l["id"].as_str().unwrap()).collect();
-        assert_eq!(ids, ["places-casing", "places-street", "places-pedestrian", "places-conflict", "places-junction"]);
+        assert_eq!(ids[..5], ["places-casing", "places-street", "places-pedestrian", "places-conflict", "places-junction"]);
         assert!(l.iter().all(|l| l["source"] == SOURCE));
         assert_eq!(SOURCE, "places");
     }
@@ -266,6 +293,26 @@ mod tests {
         assert_eq!(ped["paint"]["line-color"], "#ffffff");
         assert!(ped["paint"]["line-dasharray"].is_array());
         assert_eq!(ped["layout"]["line-cap"], "round", "a dash of almost no length is a dot");
+    }
+
+    #[test]
+    fn a_changed_place_and_one_needing_attention_each_carry_a_mark_that_is_not_their_hue() {
+        let l = layers(45.5);
+        let by_id = |id: &str| l.iter().find(|l| l["id"] == id).unwrap_or_else(|| panic!("{id}"));
+        let status = |layer: &Value| layer["filter"].to_string();
+        // A street: a thin dark line down a changed one, dark dashes down one needing attention.
+        let (changed, bad) = (by_id("places-changed"), by_id("places-bad"));
+        assert!(status(changed).contains("\"changed\"") && status(bad).contains("\"bad\""));
+        assert!(changed["paint"]["line-dasharray"].is_null() && bad["paint"]["line-dasharray"].is_array());
+        assert_eq!(changed["paint"]["line-color"], MARK);
+        assert_eq!(bad["paint"]["line-color"], MARK);
+        // A junction: a light dot in a changed one, a dark dot in one needing attention.
+        let (changed, bad) = (by_id("places-changed-dot"), by_id("places-bad-dot"));
+        assert_eq!((changed["type"].as_str(), bad["type"].as_str()), (Some("circle"), Some("circle")));
+        assert_eq!((changed["paint"]["circle-color"].as_str(), bad["paint"]["circle-color"].as_str()), (Some("#ffffff"), Some(MARK)));
+        // The ones the places already had keep their order and come first.
+        let ids: Vec<&str> = l.iter().map(|l| l["id"].as_str().unwrap()).collect();
+        assert_eq!(ids[..5], ["places-casing", "places-street", "places-pedestrian", "places-conflict", "places-junction"]);
     }
 
     #[test]
