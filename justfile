@@ -58,6 +58,10 @@ e2e *args: build
 # Everything: unit tests, then the browser tests.
 check: test e2e
 
+# The tests of the scripts' own modules (scripts/include), with the standard library only.
+test-scripts:
+    python3 -m unittest discover -s scripts/include/tests
+
 # Format the Rust (rustfmt.toml), the scripts and the documentation site (.prettierrc.json).
 format:
     cargo fmt
@@ -68,10 +72,12 @@ format-check:
     cargo fmt --check
     cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js ../website
 
-# What the SonarCloud analysis reads, in target/sonar: the Rust coverage as LCOV (host tests only: the wasm-only code and the browser tests are not measured) and Clippy's findings as JSON. Sonar judges the findings, so lints are capped at warnings here; a build error still fails. Needs cargo-llvm-cov (`cargo install cargo-llvm-cov --locked`) and the llvm-tools component.
+# What the SonarCloud analysis reads, in target/sonar: the Rust coverage as LCOV (host tests only: the wasm-only code and the browser tests are not measured), the scripts' Python coverage as XML (needs coverage.py: `python3 -m pip install coverage`) and Clippy's findings as JSON. Sonar judges the findings, so lints are capped at warnings here; a build error still fails. Needs cargo-llvm-cov (`cargo install cargo-llvm-cov --locked`) and the llvm-tools component.
 sonar-reports:
     mkdir -p target/sonar
     cargo llvm-cov --workspace --exclude cityloom_server --lcov --output-path target/sonar/lcov.info
+    python3 -m coverage run -m unittest discover -s scripts/include/tests
+    python3 -m coverage xml -o target/sonar/python-coverage.xml
     cargo clippy --workspace --message-format=json -- --cap-lints warn > target/sonar/clippy.json
 
 # Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool) and build the basemap in web/data/basemap (needs Java 21+). `just prepare --refresh` downloads a newer extract.

@@ -13,14 +13,17 @@ whole, with the nodes it needs. The margin is wider than half an area (400 m), s
 centre is in a tile's core is read from that one tile.
 """
 
+from __future__ import annotations
+
 import argparse
 import hashlib
 import json
-import os
 import resource
-import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from include.progress import Progress, Spec, StepError  # noqa: E402
 
 # The grid. The south-west corner of tile 0_0, and the size of a core: about 2 km square at this latitude.
 LON0, LAT0 = -74.40, 45.20
@@ -50,10 +53,16 @@ OUT = ROOT / "web" / "data" / "metro"
 # Where the extract is cut in steps: in the project, which only its owner writes to, not in a shared temporary directory.
 WORK = ROOT / "data" / "metro-work"
 TILE_GLOB = "*.osm.pbf"
-
-
-def osmium(*args):
-    subprocess.run(["osmium", *map(str, args)], check=True)
+LOGS = ROOT / "data" / "logs"
+# What the run does, in order, for the progress display (scripts/prepare.py adds these to its own).
+STEPS = [
+    Spec("area", "roads", "metro area"),
+    Spec("highways", "roads", "highways"),
+    Spec("tracks", "roads", "designated tracks"),
+    Spec("merge", "roads", "merge"),
+    Spec("tiles", "tiles", f"cutting {NX * NY:,} tiles"),
+    Spec("index", "tiles", "index"),
+]
 
 
 def write_index(kept):
@@ -76,6 +85,76 @@ def batch_size(text):
     return n
 
 
+def run(p: Progress, source: Path, work: Path, batch: int):
+    """Cuts the tiles from `source`, step by step as STEPS says, with the tools' output in the steps' logs."""
+
+    def osmium(step, *args):
+        p.run(step, ["osmium", *map(str, args)])
+
+    west, south = LON0 - MARGIN_LON, LAT0 - MARGIN_LAT
+    east, north = LON0 + NX * DLON + MARGIN_LON, LAT0 + NY * DLAT + MARGIN_LAT
+
+    metro, roads = work / "metro.osm.pbf", work / "roads.osm.pbf"
+    designated, tracks = work / "designated.osm.pbf", work / "designated-tracks.osm.pbf"
+    streets = work / "streets.osm.pbf"
+    with p.step("area") as step:
+        if not source.is_file():
+            raise StepError(
+                f"{source} does not exist. Download the Quebec extract first (about 1.2 GB):",
+                "curl -L -o quebec-latest.osm.pbf https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf",
+            )
+        work.mkdir(parents=True, exist_ok=True)
+        osmium(step, "extract", "-b", f"{west},{south},{east},{north}", source, "-o", metro, "--overwrite")
+    with p.step("highways") as step:
+        osmium(step, "tags-filter", metro, f"w/highway={HIGHWAYS},{TRACKS}", "-o", streets, "--overwrite")
+    with p.step("tracks") as step:
+        # a path or footway designated for bicycles: every way tagged so, then those of them that are paths or footways
+        # (the sidewalks and crossings, the many footways of a city, are not kept)
+        osmium(step, "tags-filter", metro, "w/bicycle=designated", "-o", designated, "--overwrite")
+        osmium(step, "tags-filter", designated, f"w/highway={OFF_ROAD}", "-o", tracks, "--overwrite")
+    with p.step("merge") as step:
+        # a node or way in both files is written once
+        osmium(step, "merge", streets, tracks, "-o", roads, "--overwrite")
+
+    with p.step("tiles") as step:
+        for old in OUT.glob(TILE_GLOB):
+            old.unlink()
+        OUT.mkdir(parents=True, exist_ok=True)
+
+        # osmium has all of a run's extracts open at once.
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (min(max(soft, batch + 64), hard), hard))
+        extracts = [
+            {
+                "output": f"{x}_{y}.osm.pbf",
+                "output_format": "pbf",
+                "bbox": [
+                    LON0 + x * DLON - MARGIN_LON,
+                    LAT0 + y * DLAT - MARGIN_LAT,
+                    LON0 + (x + 1) * DLON + MARGIN_LON,
+                    LAT0 + (y + 1) * DLAT + MARGIN_LAT,
+                ],
+            }
+            for x in range(NX)
+            for y in range(NY)
+        ]
+        config = work / "tiles.json"
+        batches = range(0, len(extracts), batch)
+        for n, i in enumerate(batches, 1):
+            p.update(step, detail=f"batch {n} of {len(batches)}", fraction=(n - 1) / len(batches))
+            config.write_text(json.dumps({"directory": str(OUT), "extracts": extracts[i : i + batch]}))
+            osmium(step, "extract", "--config", config, roads, "--overwrite")
+
+        kept = sorted(q for q in OUT.glob(TILE_GLOB) if q.stat().st_size > EMPTY_BYTES)
+        for q in OUT.glob(TILE_GLOB):
+            if q not in kept:
+                q.unlink()
+        total = sum(q.stat().st_size for q in kept)
+        p.update(step, subject=f"{len(kept):,} tiles", detail=f"{total / 1e6:.1f} MB")
+    with p.step("index") as step:
+        write_index(kept)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("extract", type=Path)
@@ -86,65 +165,8 @@ def main():
     )
     args = ap.parse_args()
     # Absolute paths, so none can be read by osmium as an option.
-    source, work, batch = args.extract.resolve(), args.workdir.resolve(), args.batch
-    if not source.is_file():
-        sys.exit(
-            f"{source} does not exist. Download the Quebec extract first (about 1.2 GB):\n"
-            "  curl -L -o quebec-latest.osm.pbf https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf"
-        )
-    work.mkdir(parents=True, exist_ok=True)
-
-    west, south = LON0 - MARGIN_LON, LAT0 - MARGIN_LAT
-    east, north = LON0 + NX * DLON + MARGIN_LON, LAT0 + NY * DLAT + MARGIN_LAT
-
-    metro, roads = work / "metro.osm.pbf", work / "roads.osm.pbf"
-    designated, tracks = work / "designated.osm.pbf", work / "designated-tracks.osm.pbf"
-    streets = work / "streets.osm.pbf"
-    print("cutting the metropolitan area out of", source.name, flush=True)
-    osmium("extract", "-b", f"{west},{south},{east},{north}", source, "-o", metro, "--overwrite")
-    print("keeping the roads", flush=True)
-    osmium("tags-filter", metro, f"w/highway={HIGHWAYS},{TRACKS}", "-o", streets, "--overwrite")
-    # a path or footway designated for bicycles: every way tagged so, then those of them that are paths or footways
-    # (the sidewalks and crossings, the many footways of a city, are not kept)
-    osmium("tags-filter", metro, "w/bicycle=designated", "-o", designated, "--overwrite")
-    osmium("tags-filter", designated, f"w/highway={OFF_ROAD}", "-o", tracks, "--overwrite")
-    # a node or way in both files is written once
-    osmium("merge", streets, tracks, "-o", roads, "--overwrite")
-
-    for old in OUT.glob(TILE_GLOB):
-        old.unlink()
-    OUT.mkdir(parents=True, exist_ok=True)
-
-    # osmium has all of a run's extracts open at once.
-    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    resource.setrlimit(resource.RLIMIT_NOFILE, (min(max(soft, batch + 64), hard), hard))
-    extracts = [
-        {
-            "output": f"{x}_{y}.osm.pbf",
-            "output_format": "pbf",
-            "bbox": [
-                LON0 + x * DLON - MARGIN_LON,
-                LAT0 + y * DLAT - MARGIN_LAT,
-                LON0 + (x + 1) * DLON + MARGIN_LON,
-                LAT0 + (y + 1) * DLAT + MARGIN_LAT,
-            ],
-        }
-        for x in range(NX)
-        for y in range(NY)
-    ]
-    config = work / "tiles.json"
-    print(f"cutting {len(extracts)} tiles", flush=True)
-    for i in range(0, len(extracts), batch):
-        config.write_text(json.dumps({"directory": str(OUT), "extracts": extracts[i : i + batch]}))
-        osmium("extract", "--config", config, roads, "--overwrite")
-
-    kept = sorted(p for p in OUT.glob(TILE_GLOB) if p.stat().st_size > EMPTY_BYTES)
-    for p in OUT.glob(TILE_GLOB):
-        if p not in kept:
-            p.unlink()
-    write_index(kept)
-    total = sum(p.stat().st_size for p in kept)
-    print(f"{len(kept)} tiles, {total / 1e6:.1f} MB, in {OUT}")
+    with Progress(STEPS, LOGS, ROOT) as p:
+        run(p, args.extract.resolve(), args.workdir.resolve(), args.batch)
 
 
 if __name__ == "__main__":

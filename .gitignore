@@ -46,3 +46,7 @@ docs/superpowers/plans/2026-10-07-no-catalogue-samples.md
 website/node_modules/
 website/build/
 website/.docusaurus/
+
+# Python: coverage.py's data and the scripts' bytecode.
+.coverage
+__pycache__/

@@ -11,13 +11,16 @@ sources once, into data/sources.
 Writes web/data/basemap/montreal.pmtiles, which the map page reads with range requests.
 """
 
+from __future__ import annotations
+
 import argparse
 import re
-import shutil
-import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from include.progress import Progress, Spec, Step, StepError  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 TOOLS = ROOT / ".tools"
@@ -28,6 +31,11 @@ JAR_URL = "https://github.com/onthegomap/planetiler/releases/latest/download/pla
 # The grid scripts/metro_tiles.py cuts: west, south, east, north.
 METRO_BOUNDS = "-74.40,45.20,-73.09,45.81"
 OUT = ROOT / "web" / "data" / "basemap" / "montreal.pmtiles"
+LOGS = ROOT / "data" / "logs"
+CHUNK = 1 << 20
+MINZOOM, MAXZOOM, MEMORY = 0, 14, "4g"
+# What the run does, in order, for the progress display (scripts/prepare.py adds these to its own).
+STEPS = [Spec("planetiler", "basemap", JAR.name), Spec("basemap", "basemap", OUT.name)]
 
 
 BOUNDS_FORMAT = re.compile(r"-?\d+(\.\d+)?(,-?\d+(\.\d+)?){3}")
@@ -57,24 +65,53 @@ class _Release(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def planetiler() -> Path:
+def planetiler(p: Progress, step: Step) -> Path:
     """The Planetiler jar, downloaded first if it is not kept yet. The download goes to a temporary name and
     is renamed only once whole, so an interrupted one never leaves a broken jar that looks kept."""
-    if not JAR.exists():
-        JAR.parent.mkdir(parents=True, exist_ok=True)
-        partial = JAR.with_name(JAR.name + ".part")
-        release = _Release()
-        print(f"downloading {JAR_URL}", file=sys.stderr)
-        try:
-            with urllib.request.build_opener(release).open(JAR_URL) as response, partial.open("wb") as out:
-                shutil.copyfileobj(response, out)
-            partial.replace(JAR)
-        finally:
-            partial.unlink(missing_ok=True)
-        JAR_SOURCE.write_text((release.release or JAR_URL) + "\n")
-    source = JAR_SOURCE.read_text().strip() if JAR_SOURCE.exists() else "an earlier download"
-    print(f"Planetiler: {JAR}, from {source}", file=sys.stderr)
+    if JAR.exists():
+        p.update(step, detail="kept")
+        return JAR
+    JAR.parent.mkdir(parents=True, exist_ok=True)
+    partial = JAR.with_name(JAR.name + ".part")
+    release = _Release()
+    try:
+        with urllib.request.build_opener(release).open(JAR_URL) as response, partial.open("wb") as out:
+            length = response.headers.get("Content-Length")
+            total, done = int(length) if length else None, 0
+            while chunk := response.read(CHUNK):
+                out.write(chunk)
+                done += len(chunk)
+                of = f" of {total / 1e6:,.0f}" if total else ""
+                p.update(step, detail=f"{done / 1e6:,.0f}{of} MB", fraction=done / total if total else None)
+        partial.replace(JAR)
+    finally:
+        partial.unlink(missing_ok=True)
+    JAR_SOURCE.write_text((release.release or JAR_URL) + "\n")
+    p.update(step, detail=f"{JAR.stat().st_size / 1e6:,.0f} MB")
     return JAR
+
+
+def run(p: Progress, extract: Path, output: Path, bounds: str, minzoom: int, maxzoom: int, memory: str):
+    """Builds the basemap from `extract`, step by step as STEPS says, with Java's output in the steps' logs."""
+    with p.step("planetiler") as step:
+        if not extract.exists():
+            raise StepError(
+                f"{extract} is not there: get it from https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf"
+            )
+        jar = planetiler(p, step)
+    with p.step("basemap") as step:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        p.run(
+            step,
+            [
+                "java", f"-Xmx{memory}", "-jar", str(jar),
+                f"--osm-path={extract}", f"--output={output}",
+                f"--bounds={bounds}", f"--minzoom={minzoom}", f"--maxzoom={maxzoom}",
+                "--download", "--force", "--tmpdir=" + str(TOOLS / "planetiler-tmp"),
+            ],
+            cwd=ROOT,
+        )
+        p.update(step, subject=output.name, detail=f"{output.stat().st_size / 1e6:.1f} MB")
 
 
 def main():
@@ -82,26 +119,14 @@ def main():
     ap.add_argument("extract", type=Path)
     ap.add_argument("output", type=Path, nargs="?", default=OUT)
     ap.add_argument("--bounds", type=matching(BOUNDS_FORMAT, "west,south,east,north in degrees"), default=METRO_BOUNDS, help="west,south,east,north in degrees")
-    ap.add_argument("--minzoom", type=int, default=0)
-    ap.add_argument("--maxzoom", type=int, default=14, help="MapLibre draws deeper zooms from this one")
-    ap.add_argument("--memory", type=matching(MEMORY_FORMAT, "a size such as 4g"), default="4g")
+    ap.add_argument("--minzoom", type=int, default=MINZOOM)
+    ap.add_argument("--maxzoom", type=int, default=MAXZOOM, help="MapLibre draws deeper zooms from this one")
+    ap.add_argument("--memory", type=matching(MEMORY_FORMAT, "a size such as 4g"), default=MEMORY)
     args = ap.parse_args()
     # Absolute paths, so none can be read by Java or Planetiler as an option.
     args.extract, args.output = args.extract.resolve(), args.output.resolve()
-    if not args.extract.exists():
-        sys.exit(f"{args.extract} is not there: get it from https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf")
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [
-            "java", f"-Xmx{args.memory}", "-jar", str(planetiler()),
-            f"--osm-path={args.extract}", f"--output={args.output}",
-            f"--bounds={args.bounds}", f"--minzoom={args.minzoom}", f"--maxzoom={args.maxzoom}",
-            "--download", "--force", "--tmpdir=" + str(TOOLS / "planetiler-tmp"),
-        ],
-        check=True,
-        cwd=ROOT,
-    )
-    print(f"{args.output}: {args.output.stat().st_size / 1e6:.1f} MB")
+    with Progress(STEPS, LOGS, ROOT) as p:
+        run(p, args.extract, args.output, args.bounds, args.minzoom, args.maxzoom, args.memory)
 
 
 if __name__ == "__main__":
