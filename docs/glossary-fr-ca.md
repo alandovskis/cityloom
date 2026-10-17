@@ -41,6 +41,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | Café terrace | Terrasse de café |  |
 | Street page | Pedestrian street | Rue piétonne | The class alone is the adjective `piétonne` (`class-pedestrian`), as in `Rue piétonne sans nom`. |
 | Street page | Make pedestrian / Made pedestrian | Rendre piétonne / Rendue piétonne | The menu's choices are the kinds' own names (`Trottoir`, `Bande plantée`, `Terrasse de café`). |
+| Street page | Transform | Transformer | The menu button for Make pedestrian and the transit measures that fit. |
 | Street page | carries traffic | accueille la circulation | Said of a street: `Rue Rachel accueille de nouveau la circulation.` |
 | Street page | Street lamp | Lampadaire |  |
 | Street page | Buffer | Zone tampon | The strip of curb, paint, posts or a barrier between pieces; the mark is `ZT` (`BF` in English). |
