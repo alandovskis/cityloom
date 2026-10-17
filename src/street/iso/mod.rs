@@ -10,7 +10,7 @@
 //! pieces keep their own size and sit on the drawn tops.
 //!
 //! The code is split by what it draws: `projection` (where a point lands), `raised` (the strips standing
-//! above the roadway and their order), `solids` (boxes on the pieces), `surface` (the roadway), `markings` (which
+//! above the roadway), `order` (what is painted after what), `solids` (boxes on the pieces), `surface` (the roadway), `markings` (which
 //! lines and symbols a street carries), `symbols` (their shapes) and `paint` (the markings layer).
 
 use std::fmt::Write;

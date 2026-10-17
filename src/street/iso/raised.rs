@@ -1,5 +1,5 @@
-//! What stands above the roadway: the heights of the pieces and of their curbs, the slabs and curb blocks drawn
-//! with their front and side faces, and the order they are drawn in.
+//! What stands above the roadway: the heights of the pieces and of their curbs, and the slabs and curb blocks drawn
+//! with their front and side faces.
 
 use std::fmt::Write;
 
@@ -237,10 +237,11 @@ fn across_eye(v: &View, p: &Projection, strip: Strip) -> f64 {
     (x0 - p.centre_mm).max(p.centre_mm - x1).max(0.0)
 }
 
-/// The strips to draw, each as (how high its top is drawn, which piece, which edge's curb if it is one), from the
-/// farthest from the eye across the street to the nearest, and the lowest first among those as far: the eye is over
-/// the middle of the street, so a strip nearer the middle stands in front of the ones beyond it, as a higher one
-/// covers a lower one beyond it, and the sidewalk beside the eye's line covers what is farther out.
+/// The strips to draw, each as (how high its top is drawn, which piece, which edge's curb if it is one), in the order they
+/// are to be painted among themselves: from the farthest from the eye across the street to the nearest, and the lowest
+/// first among those as far. The eye is over the middle of the street and every strip runs the whole stretch, so a strip
+/// nearer the middle stands in front of the ones beyond it. This is the order the roadway's flat pieces are painted in
+/// and the order `order::paint_order` keeps among the raised strips, which it interleaves with the solids.
 pub(super) fn strips(v: &View, p: &Projection) -> Vec<Strip> {
     let mut strips: Vec<Strip> = Vec::new();
     for (i, s) in v.segments.iter().enumerate() {

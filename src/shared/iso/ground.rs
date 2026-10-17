@@ -1,8 +1,10 @@
 //! The surface materials' textures laid on the ground plane of a 2.5D drawing.
 //!
 //! The section's `m-*` patterns are flat hatches in screen units. The 2.5D carries its own: each material's texture
-//! drawn in millimetres of ground (a brick is 200 by 100 mm) with a `patternTransform` that maps the ground onto the
-//! drawing in its oblique projection, so the texture lies on the pavement and recedes with it. Colours are the
+//! drawn in millimetres of ground (a brick is 200 by 100 mm), laid on the ground by an affine map so that the texture
+//! lies on the pavement and recedes with it. The junction's oblique projection is affine, so `patterns` gets that map
+//! as one `patternTransform`; the street's perspective is not, so its patterns carry the identity and each textured
+//! top is cut into bands along the street, each laid by its own matrix (`street/iso/raised.rs`). Colours are the
 //! material's own, from the `--mat-*` tokens, and do not change with the theme.
 //!
 //! At the 2.5D's scale (about 0.03 px to the millimetre for a street) the finest grain of a material cannot be
