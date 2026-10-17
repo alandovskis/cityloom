@@ -109,10 +109,11 @@ pub fn band_edges() -> [f64; BANDS + 1] {
 /// is below the section's 26 px.
 pub const MIN_SOLID_PX: f64 = 20.0;
 /// A piece narrower than this on screen, at the depth where something stands on it, draws without that thing. It is
-/// lower than `MIN_SOLID_PX`: a tree or a post is a box standing up off its piece, so it reads on a narrow strip
-/// where a flat symbol does not, and a tree shrinks with distance as it should, far trees being narrow boxes and
-/// not missing.
-pub const MIN_STANDING_PX: f64 = 10.0;
+/// a few pixels, far below `MIN_SOLID_PX`: a tree or a post is a box standing up off its piece, so it reads on a narrow
+/// strip where a flat symbol does not, and a tree shrinks with distance as it should: a planted strip looks planted to
+/// the far end of the stretch (a 1.5 m strip at 600 px is 7 px wide there), and only a piece that is a sliver on
+/// the screen loses what stands on it.
+pub const MIN_STANDING_PX: f64 = 3.0;
 /// How far along the street a lane's symbol (all within 2.5 m nearer and 2 m farther of it, `symbols.rs`) is laid, in
 /// millimetres: near the near end, where the street is widest on the screen, so that the symbol reads.
 pub const ARROW_AT_MM: f64 = 6_000.0;

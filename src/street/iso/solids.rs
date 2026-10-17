@@ -283,32 +283,38 @@ mod tests {
     }
 
     #[test]
-    fn each_thing_is_judged_where_it_stands_far_trees_go_before_near_ones_on_a_narrow_strip() {
-        // At 600 px Sample Avenue 2's 1.5 m planting strips are about 40 px at the near end and under 12 px past 30 m:
-        // the nearest tree stands, the farthest does not, and the ones between go from the far end.
+    fn each_thing_is_judged_where_it_stands_and_drawn_while_it_is_a_few_pixels_wide() {
+        // Sample Avenue 2's 1.5 m planting strips at 600 px are about 24 px at the near end and 7 px at the far: every tree
+        // stands, to the end of the stretch.
         let v = Editor::new(1).view();
-        let p = Projection::fit(600.0, 30_000);
         let strip = v.segments.iter().position(|s| s.material == "trees").unwrap();
-        let zs: Vec<f64> = blocks(&v, strip, &p).iter().filter(|b| b.solid == Solid::Trunk).map(|b| (b.z.0 + b.z.1) / 2.0).collect();
-        assert_eq!(zs.first(), Some(&4_000.0));
-        assert!(zs.len() < 5 && zs.len() >= 2, "{zs:?}");
-        assert!(zs.windows(2).all(|w| w[1] - w[0] == 8_000.0), "no gap: {zs:?}");
+        let zs = |width: f64, span: i32| -> Vec<f64> {
+            blocks(&v, strip, &Projection::fit(width, span)).iter().filter(|b| b.solid == Solid::Trunk).map(|b| (b.z.0 + b.z.1) / 2.0).collect()
+        };
+        assert_eq!(zs(600.0, v.row_mm.max(v.total_mm)), vec![4_000.0, 12_000.0, 20_000.0, 28_000.0, 36_000.0]);
+        // On a wider scene the strip is narrower: it stops drawing where it is under MIN_STANDING_PX wide, from the far end.
+        // At 600 px and 120 m across the 1.5 m strip is 6.75 px at the near end, 5.2 px at 4 m, 3.6 px at 12 m and 2.8 at 20 m.
+        assert_eq!(zs(600.0, 120_000), vec![4_000.0, 12_000.0]);
+        // A piece too narrow even at the near end draws without any, and the street is still drawn.
+        assert!(zs(600.0, 300_000).is_empty());
+        assert_eq!(count(&iso_svg(&v, &en(), 600.0).markup, "class=\"iso-top "), 11);
         // The freeway at 600 px still draws every piece, with no missing number.
         let freeway = iso_svg(&Editor::new(3).view(), &en(), 600.0);
         assert_eq!(count(&freeway.markup, "class=\"iso-top "), 9);
         assert!(!freeway.markup.contains("NaN"));
-        // A piece too narrow even at the near end draws without any.
-        assert!(blocks(&v, strip, &Projection::fit(600.0, 120_000)).is_empty());
-        assert_eq!(count(&iso_svg(&v, &en(), 600.0).markup, "class=\"iso-top "), 11);
     }
 
     #[test]
-    fn at_760_px_the_planting_strips_keep_their_nearest_trees_the_shelter_and_the_bike_lane_s_posts() {
-        let avenue = iso_svg(&Editor::new(1).view(), &en(), 760.0).markup;
-        let crowns = count(&avenue, "class=\"iso-solid s-crown\"");
-        assert!((6..=10).contains(&crowns) && crowns % 2 == 0, "{crowns}");
-        let m = iso_svg(&furnished().view(), &en(), 760.0).markup;
-        assert_eq!(count(&m, "class=\"iso-solid s-shelter\""), 1);
-        assert!(count(&m, "class=\"iso-solid s-post\"") > 0);
+    fn at_600_and_760_px_the_planting_strips_keep_every_tree_the_shelter_and_the_bike_lane_s_posts() {
+        for width in [600.0, 760.0] {
+            let avenue = iso_svg(&Editor::new(1).view(), &en(), width).markup;
+            assert_eq!(count(&avenue, "class=\"iso-solid s-crown\""), 10, "{width}");
+            assert_eq!(count(&avenue, "class=\"iso-solid s-trunk\""), 10, "{width}");
+            let m = iso_svg(&furnished().view(), &en(), width).markup;
+            assert_eq!(count(&m, "class=\"iso-solid s-shelter\""), 1, "{width}");
+            assert_eq!(count(&m, "class=\"iso-solid s-crown\""), 10, "{width}");
+            // A post every 4 m along 40 m on each of the bike lane's two curbed edges.
+            assert_eq!(count(&m, "class=\"iso-solid s-post\""), 20, "{width}");
+        }
     }
 }
