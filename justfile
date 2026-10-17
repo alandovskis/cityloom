@@ -31,7 +31,7 @@ build:
 test:
     @[ -n "${DATABASE_URL:-}" ] || { echo "DATABASE_URL is not set: the server's tests need a Postgres (run 'just db' and export the URL it prints)" >&2; exit 1; }
     cargo test --workspace --features cityloom_server/test-provider
-    cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server
+    cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude cityloom_prepare
 
 # A throwaway Postgres for the server's tests, on 127.0.0.1 only (port 55432 unless given). Running it again starts the same container. It prints the DATABASE_URL to export; `just db-stop` removes it.
 db port="55432":
