@@ -12,17 +12,47 @@ setup:
     cargo install wasm-bindgen-cli --version {{wasm_bindgen}} --root .tools
     cd e2e && npm ci && npx playwright install chromium
 
+# Install what building the server for deployment needs (once): the musl target, cargo-zigbuild and a hint for zig.
+setup-deploy:
+    rustup target add x86_64-unknown-linux-musl
+    cargo install cargo-zigbuild --locked --root .tools
+    @command -v zig >/dev/null || python3 -m ziglang version >/dev/null 2>&1 || echo "zig is needed to cross-build the server for deployment: brew install zig (macOS) or python3 -m pip install ziglang"
+
+# Build the server as it is deployed (without the test provider) and check that the fake provider is not in it.
+check-no-fake:
+    cargo build --release -p cityloom_server
+    ./scripts/check-no-fake.sh target/release/cityloom_server
+
 # Build the WebAssembly module into web/pkg.
 build:
     ./scripts/build.sh
 
 # Unit tests on the host, and a type-check of the wasm-only code that they do not compile.
 test:
-    cargo test --workspace
-    cargo build --target wasm32-unknown-unknown --workspace
+    @[ -n "${DATABASE_URL:-}" ] || { echo "DATABASE_URL is not set: the server's tests need a Postgres (run 'just db' and export the URL it prints)" >&2; exit 1; }
+    cargo test --workspace --features cityloom_server/test-provider
+    cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server
+
+# A throwaway Postgres for the server's tests, on 127.0.0.1 only (port 55432 unless given). Running it again starts the same container. It prints the DATABASE_URL to export; `just db-stop` removes it.
+db port="55432":
+    #!/usr/bin/env sh
+    set -eu
+    if docker container inspect cityloom-db >/dev/null 2>&1; then
+        docker start cityloom-db >/dev/null
+        port=$(docker port cityloom-db 5432/tcp | head -n 1 | sed 's/.*://')
+    else
+        docker run -d --name cityloom-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=cityloom -p 127.0.0.1:{{port}}:5432 postgres:18 >/dev/null
+        port={{port}}
+    fi
+    echo "export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:$port/cityloom"
+
+# Remove the Postgres that `just db` started.
+db-stop:
+    docker rm -f cityloom-db
 
 # Browser tests, after a fresh build. Arguments go to Playwright: `just e2e tests/street.spec.ts`.
 e2e *args: build
+    cargo build -p cityloom_server --features test-provider
     cd e2e && npx playwright test {{args}}
 
 # Everything: unit tests, then the browser tests.
@@ -41,7 +71,7 @@ format-check:
 # What the SonarCloud analysis reads, in target/sonar: the Rust coverage as LCOV (host tests only: the wasm-only code and the browser tests are not measured) and Clippy's findings as JSON. Sonar judges the findings, so lints are capped at warnings here; a build error still fails. Needs cargo-llvm-cov (`cargo install cargo-llvm-cov --locked`) and the llvm-tools component.
 sonar-reports:
     mkdir -p target/sonar
-    cargo llvm-cov --workspace --lcov --output-path target/sonar/lcov.info
+    cargo llvm-cov --workspace --exclude cityloom_server --lcov --output-path target/sonar/lcov.info
     cargo clippy --workspace --message-format=json -- --cap-lints warn > target/sonar/clippy.json
 
 # Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool) and build the basemap in web/data/basemap (needs Java 21+). `just prepare --refresh` downloads a newer extract.
@@ -50,7 +80,7 @@ prepare *args:
 
 # Serve the pages at http://127.0.0.1:8137/ (build first). The server answers range requests, as the map's tiles need.
 serve:
-    node e2e/serve.mjs
+    cargo run -p cityloom_server
 
 # Install the documentation site's packages (once; `just setup` does not).
 setup-docs:

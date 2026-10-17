@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { expect, test as base, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test as base, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 /** Every test fails if its page throws or logs a console error. Each test gets a
  *  fresh browser context, so the page starts with empty storage.
@@ -12,16 +12,7 @@ import { expect, test as base, type BrowserContext, type Page } from "@playwrigh
  *  something else asks for it with its own `page.route`, which wins over these. */
 export const test = base.extend<{ errors: string[]; world: void }>({
   context: async ({ context }, use) => {
-    // Every spec starts in English whatever the machine's language is; a spec that switches to
-    // French and reloads keeps it, because the choice is only stored when there is none.
-    await context.addInitScript(() => {
-      try {
-        if (localStorage.getItem("cityloom-lang") === null) localStorage.setItem("cityloom-lang", "en");
-      } catch {
-        // storage is blocked: the page falls back to its own default
-      }
-    });
-    await serveBasemap(context);
+    await prepareContext(context);
     await use(context);
   },
   world: [
@@ -36,7 +27,16 @@ export const test = base.extend<{ errors: string[]; world: void }>({
       const errors: string[] = [];
       page.on("pageerror", (e) => errors.push(e.message));
       page.on("console", (m) => {
-        if (m.type() === "error") errors.push(m.text());
+        if (m.type() !== "error") return;
+        // Every page asks who is signed in (and for the providers when nobody is). A signed-out visitor, a server
+        // with no account side and an older server answer those with 401, 503 or 404, which the browser logs.
+        if (/^\/api\/(me|providers)$/.test(new URL(m.location().url || "http://x/").pathname)) return;
+        // A spec that makes the account side fail on purpose (a 401 for an ended session, a 500) says so with an
+        // annotation, and only the changes under /api/me are let through for it.
+        const path = new URL(m.location().url || "http://x/").pathname;
+        if (path.startsWith("/api/me/") && test.info().annotations.some((n) => n.type === "failing-account-api"))
+          return;
+        errors.push(m.text());
       });
       await use(errors);
       expect(errors).toEqual([]);
@@ -78,6 +78,30 @@ export async function serveWorld(page: Page) {
   );
   await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(PLATEAU_PBF) }));
   await page.route("https://overpass-api.de/**", (route) => route.abort());
+}
+
+/** What every test's own context gets: English unless a spec switches (a spec that switches to French and reloads
+ *  keeps it, because the choice is only stored when there is none), and the basemap's tiles, so there is no network. */
+export async function prepareContext(context: BrowserContext) {
+  await context.addInitScript(() => {
+    try {
+      if (localStorage.getItem("cityloom-lang") === null) localStorage.setItem("cityloom-lang", "en");
+    } catch {
+      // storage is blocked: the page falls back to its own default
+    }
+  });
+  await serveBasemap(context);
+}
+
+/** A second browser with its own cookies and storage (another person, or the same one on another device), set up
+ *  as each test's own is: `prepareContext`, the options `playwright.config.ts` gives every test, and a page that
+ *  serves the Plateau's tile. The `errors` fixture watches only the test's own `page`; check this one's if it matters. */
+export async function anotherBrowser(browser: Browser, baseURL: string) {
+  const context = await browser.newContext({ baseURL, locale: "en-CA", viewport: { width: 1440, height: 900 } });
+  await prepareContext(context);
+  const page = await context.newPage();
+  await serveWorld(page);
+  return { context, page };
 }
 
 /** The places of the city on the map, as the addresses of their editors: the junctions, then the streets, each
@@ -129,9 +153,10 @@ export async function openStreet(page: Page, n = 0) {
 export const PRESSABLE_PX = 40;
 
 export async function pressablePiece(page: Page) {
-  const boxes = await page
-    .locator('#drawing [data-role="seg"]')
-    .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+  const segs = page.locator('#drawing [data-role="seg"]');
+  // `openStreet` returns before the drawing is mounted, and `evaluateAll` does not wait for it.
+  await expect(segs.first()).toBeVisible();
+  const boxes = await segs.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
   const i = boxes.findIndex((w) => w >= PRESSABLE_PX);
   expect(i, "a piece wide enough to press").toBeGreaterThanOrEqual(0);
   return i;

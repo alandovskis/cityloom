@@ -11,6 +11,7 @@ use wasm_bindgen::prelude::*;
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::units::Units;
 use crate::shell::popover::PopoverViewModel;
+use crate::shell::session_view::SessionMenu;
 use crate::shell::share_view::ShareMenu;
 use crate::shell::vm::{RegionOption, ShellVm, Target, Theme};
 
@@ -55,6 +56,12 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
     if let Some(slot) = by_id("share-slot") {
         let i18n = vm.i18n();
         leptos::mount::mount_to(slot.unchecked_into(), move || view! { <ShareMenu i18n=i18n/> }).forget();
+    }
+    // Every page keeps a slot for the sign-in menu; what it holds is made here, once.
+    if let Some(slot) = by_id("session-slot") {
+        let session = vm.session();
+        session.start();
+        leptos::mount::mount_to(slot.unchecked_into(), move || view! { <SessionMenu vm=session/> }).forget();
     }
     // The effects live as long as the page.
     let owner = Owner::new();
@@ -226,13 +233,17 @@ fn bind_theme(vm: &Rc<ShellVm>, dark: Option<MediaQueryList>) {
     });
 }
 
-/// The settings, the help (the keyboard shortcuts) and the share menu are popovers that work alike.
+/// The settings, the help (the keyboard shortcuts), the share menu and the sign-in menu are popovers that work alike.
 fn bind_menu(vm: &Rc<ShellVm>) {
-    let account = bind_popover(&vm.settings(), "account-btn", "account-menu", "account-btn-label", "account-heading");
-    let help = bind_popover(&vm.help(), "help-btn", "help-menu", "help-btn-label", "help-heading");
-    let share = bind_popover(&vm.share(), "share-btn", "share-menu", "share-btn-label", "share-heading");
-    let popovers: Vec<(Element, Rc<PopoverViewModel>)> =
-        [(account, vm.settings()), (help, vm.help()), (share, vm.share())].into_iter().filter_map(|(b, p)| b.map(|b| (b, p))).collect();
+    let account = bind_popover(&vm.settings(), "account-btn", "account-menu", "account-btn-label", "account-heading", true);
+    let help = bind_popover(&vm.help(), "help-btn", "help-menu", "help-btn-label", "help-heading", true);
+    let share = bind_popover(&vm.share(), "share-btn", "share-menu", "share-btn-label", "share-heading", true);
+    // The sign-in button says the person's name: its words (and its heading's) are the component's.
+    let session = bind_popover(&vm.session().popover(), "session-btn", "session-menu", "", "", false);
+    let popovers: Vec<(Element, Rc<PopoverViewModel>)> = [(account, vm.settings()), (help, vm.help()), (share, vm.share()), (session, vm.session().popover())]
+        .into_iter()
+        .filter_map(|(b, p)| b.map(|b| (b, p)))
+        .collect();
     let v = vm.clone();
     listen(&document(), "keydown", move |e: KeyboardEvent| {
         if e.key() != "Escape" {
@@ -249,8 +260,9 @@ fn bind_menu(vm: &Rc<ShellVm>) {
 }
 
 /// Binds a button and the popover it opens to `vm`; none of this if the page has not both. The words of the
-/// button and of the heading come from `vm`. Gives back the button.
-fn bind_popover(vm: &Rc<PopoverViewModel>, button: &str, popover: &str, label: &str, heading: &str) -> Option<Element> {
+/// button and of the heading come from `vm`, unless `name_button` is false: then the component that drew the
+/// button words it. Gives back the button.
+fn bind_popover(vm: &Rc<PopoverViewModel>, button: &str, popover: &str, label: &str, heading: &str, name_button: bool) -> Option<Element> {
     let (btn, menu) = (by_id(button)?, by_id(popover)?);
     let v = vm.clone();
     listen(&btn, "click", move |_: MouseEvent| v.toggle());
@@ -275,14 +287,16 @@ fn bind_popover(vm: &Rc<PopoverViewModel>, button: &str, popover: &str, label: &
         let _ = b.set_attribute("aria-expanded", &open.to_string());
     });
     // The label is hidden on a narrow screen, so the button is named for assistive technology by attribute too.
-    let (v, b) = (vm.clone(), btn.clone());
-    Effect::new(move |_| {
-        let _ = b.set_attribute("aria-label", &v.label());
-    });
-    for (id, words) in [(label, PopoverViewModel::label as fn(&PopoverViewModel) -> String), (heading, PopoverViewModel::heading)] {
-        if let Some(el) = by_id(id) {
-            let v = vm.clone();
-            Effect::new(move |_| el.set_text_content(Some(&words(&v))));
+    if name_button {
+        let (v, b) = (vm.clone(), btn.clone());
+        Effect::new(move |_| {
+            let _ = b.set_attribute("aria-label", &v.label());
+        });
+        for (id, words) in [(label, PopoverViewModel::label as fn(&PopoverViewModel) -> String), (heading, PopoverViewModel::heading)] {
+            if let Some(el) = by_id(id) {
+                let v = vm.clone();
+                Effect::new(move |_| el.set_text_content(Some(&words(&v))));
+            }
         }
     }
     Some(btn)

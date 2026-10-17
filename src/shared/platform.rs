@@ -5,7 +5,10 @@ use std::rc::Rc;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 
-use crate::shared::ports::{Announcer, Fetched, Fetcher, Importer, Navigator, Page, Ports, Scheduler, Storage};
+// `account_error` is imported inside `api` below, where only the wasm32 build uses it: a host build would warn about an unused import, and CI builds with `-D warnings`.
+use crate::shared::ports::{
+    Account, AccountError, Announcer, Answer, Fetched, Fetcher, Importer, Me, Navigator, Page, Ports, ProviderInfo, Scheduler, Storage,
+};
 use crate::shared::{live, store};
 
 struct BrowserAnnouncer;
@@ -161,9 +164,98 @@ impl Navigator for BrowserNavigator {
     }
 }
 
+struct BrowserAccount;
+
+#[cfg(target_arch = "wasm32")]
+async fn api(method: &str, path: &str, json: Option<&str>) -> Result<String, AccountError> {
+    use crate::shared::ports::account_error;
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+    let init = web_sys::RequestInit::new();
+    init.set_method(method);
+    if let Some(json) = json {
+        init.set_body(&wasm_bindgen::JsValue::from_str(json));
+        let headers = web_sys::Headers::new().map_err(|_| AccountError::Unavailable)?;
+        headers.set("content-type", "application/json").map_err(|_| AccountError::Unavailable)?;
+        init.set_headers(&headers);
+    }
+    let request = web_sys::Request::new_with_str_and_init(path, &init).map_err(|_| AccountError::Unavailable)?;
+    let window = web_sys::window().ok_or(AccountError::Unavailable)?;
+    // The browser sets `Origin` itself on a same-origin PUT, POST or DELETE; cookies go along (same-origin default).
+    let response: web_sys::Response =
+        JsFuture::from(window.fetch_with_request(&request)).await.map_err(|_| AccountError::Unavailable)?.dyn_into().map_err(|_| AccountError::Unavailable)?;
+    if !response.ok() {
+        return Err(account_error(response.status()));
+    }
+    let text = JsFuture::from(response.text().map_err(|_| AccountError::Unavailable)?).await.map_err(|_| AccountError::Unavailable)?;
+    Ok(text.as_string().unwrap_or_default())
+}
+
+/// Runs the request and tells `done`; natively (no network) the answer is at once `Unavailable`.
+fn ask<T: 'static>(method: &'static str, path: String, json: Option<String>, read: fn(&str) -> Result<T, AccountError>, done: Answer<T>) {
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_futures::spawn_local(async move { done(api(method, &path, json.as_deref()).await.and_then(|body| read(&body))) });
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (method, path, json, read);
+        done(Err(AccountError::Unavailable));
+    }
+}
+
+fn nothing(_: &str) -> Result<(), AccountError> {
+    Ok(())
+}
+
+impl Account for BrowserAccount {
+    fn me(&self, done: Answer<Me>) {
+        ask("GET", "/api/me".into(), None, Me::parse, done);
+    }
+    fn providers(&self, done: Answer<Vec<ProviderInfo>>) {
+        ask("GET", "/api/providers".into(), None, ProviderInfo::parse_list, done);
+    }
+    fn set_storage(&self, store: bool, done: Answer<()>) {
+        ask("PUT", "/api/me/storage".into(), Some(format!("{{\"store_on_server\":{store}}}")), nothing, done);
+    }
+    fn unlink(&self, identity_id: &str, done: Answer<()>) {
+        ask("DELETE", format!("/api/me/identities/{identity_id}"), None, nothing, done);
+    }
+    fn delete(&self, done: Answer<()>) {
+        ask("DELETE", "/api/me".into(), None, nothing, done);
+    }
+    fn sign_out(&self, done: Answer<()>) {
+        ask("POST", "/auth/signout".into(), None, nothing, done);
+    }
+}
+
 struct BrowserPage;
 
 impl Page for BrowserPage {
+    fn path(&self) -> String {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let location = leptos::prelude::window().location();
+            format!("{}{}", location.pathname().unwrap_or_else(|_| "/".into()), location.search().unwrap_or_default())
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        "/".to_string()
+    }
+
+    fn take_fragment(&self) -> Option<String> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let window = leptos::prelude::window();
+            let location = window.location();
+            let hash = location.hash().ok().filter(|h| h.len() > 1 && super::ports::is_account_fragment(&h[1..]))?;
+            let clean = format!("{}{}", location.pathname().unwrap_or_default(), location.search().unwrap_or_default());
+            if let Ok(history) = window.history() {
+                let _ = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&clean));
+            }
+            Some(hash[1..].to_string())
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        None
+    }
+
     fn language(&self) -> Option<String> {
         #[cfg(target_arch = "wasm32")]
         {
@@ -285,5 +377,23 @@ pub fn browser_ports() -> Ports {
         scheduler: Rc::new(BrowserScheduler::default()),
         mapper: Rc::new(crate::shared::ports::NoMapper),
         page: Rc::new(BrowserPage),
+        account: Rc::new(BrowserAccount),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    #[test]
+    fn natively_the_browser_account_says_unavailable_and_the_page_has_a_root_path_and_no_fragment() {
+        let ports = browser_ports();
+        let got = Rc::new(RefCell::new(None));
+        let g = got.clone();
+        ports.account.me(Box::new(move |r| *g.borrow_mut() = Some(r.map(|m| m.id))));
+        assert_eq!(*got.borrow(), Some(Err(AccountError::Unavailable)));
+        assert_eq!(ports.page.path(), "/");
+        assert_eq!(ports.page.take_fragment(), None);
     }
 }

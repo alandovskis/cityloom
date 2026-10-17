@@ -48,8 +48,101 @@ pub trait Navigator {
     fn go(&self, href: &str);
 }
 
+/// What a person's account looks like to the page, as the server's `GET /api/me` says it.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct Me {
+    pub id: String,
+    pub display_name: String,
+    /// None until the person has chosen whether the server keeps their edits.
+    pub store_on_server: Option<bool>,
+    pub identities: Vec<LinkedIdentity>,
+}
+
+/// One sign-in method linked to the account.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct LinkedIdentity {
+    pub id: String,
+    pub provider: String,
+    pub label: Option<String>,
+    pub created_at: String,
+}
+
+/// A provider the person can sign in with.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct ProviderInfo {
+    pub slug: String,
+    pub name: String,
+}
+
+/// Why an account request failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AccountError {
+    /// 401: nobody is signed in.
+    SignedOut,
+    /// 5xx, no network, or an answer that cannot be read.
+    Unavailable,
+    /// 409: the identity is the account's last one.
+    LastIdentity,
+    /// 404.
+    NotFound,
+    /// Any other refusal.
+    Refused,
+}
+
+/// What an HTTP status means for an account request.
+pub fn account_error(status: u16) -> AccountError {
+    match status {
+        401 => AccountError::SignedOut,
+        404 => AccountError::NotFound,
+        409 => AccountError::LastIdentity,
+        0 | 500..=599 => AccountError::Unavailable,
+        _ => AccountError::Refused,
+    }
+}
+
+impl Me {
+    pub fn parse(body: &str) -> Result<Me, AccountError> {
+        serde_json::from_str(body).map_err(|_| AccountError::Unavailable)
+    }
+}
+
+impl ProviderInfo {
+    /// Reads the server's `{"providers":[..]}`.
+    pub fn parse_list(body: &str) -> Result<Vec<ProviderInfo>, AccountError> {
+        #[derive(Deserialize)]
+        struct List {
+            providers: Vec<ProviderInfo>,
+        }
+        serde_json::from_str::<List>(body).map(|l| l.providers).map_err(|_| AccountError::Unavailable)
+    }
+}
+
+/// What an account request answers with, once.
+pub type Answer<T> = Box<dyn FnOnce(Result<T, AccountError>)>;
+
+/// The person's account on the server. Each answer arrives later, once, to `done`.
+pub trait Account {
+    fn me(&self, done: Answer<Me>);
+    fn providers(&self, done: Answer<Vec<ProviderInfo>>);
+    fn set_storage(&self, store: bool, done: Answer<()>);
+    fn unlink(&self, identity_id: &str, done: Answer<()>);
+    fn delete(&self, done: Answer<()>);
+    fn sign_out(&self, done: Answer<()>);
+}
+
+/// Whether the text after `#` is one the account's sign-in puts there; any other fragment is the page's own (an
+/// anchor) and is neither read nor removed.
+pub fn is_account_fragment(fragment: &str) -> bool {
+    fragment.starts_with("account=")
+}
+
 /// The page itself: the language the browser is set to, and the document's `lang`.
 pub trait Page {
+    /// The address within the site, path and query, such as `/street.html?street=7`.
+    fn path(&self) -> String;
+    /// The text after `#` when it is the account's (`account=...`), else None and the address is left as it is; the
+    /// fragment is removed from the address, so a second call gives None.
+    fn take_fragment(&self) -> Option<String>;
     /// The browser's preferred language tag, such as `fr-CA`, if it tells.
     fn language(&self) -> Option<String>;
     /// Sets the `lang` of the document.
@@ -145,6 +238,7 @@ pub struct Ports {
     pub scheduler: Rc<dyn Scheduler>,
     pub mapper: Rc<dyn Mapper>,
     pub page: Rc<dyn Page>,
+    pub account: Rc<dyn Account>,
 }
 
 /// An announcer that keeps what it was told.
@@ -362,18 +456,110 @@ impl Navigator for RecordingNavigator {
 }
 
 /// A page whose language a test sets, and whose `lang` it keeps.
-#[derive(Default)]
 pub struct FakePage {
     pub language: RefCell<Option<String>>,
     pub lang: RefCell<String>,
+    pub path: RefCell<String>,
+    pub fragment: RefCell<Option<String>>,
+}
+
+impl Default for FakePage {
+    fn default() -> Self {
+        FakePage { language: RefCell::new(None), lang: RefCell::new(String::new()), path: RefCell::new("/".into()), fragment: RefCell::new(None) }
+    }
 }
 
 impl Page for FakePage {
+    fn path(&self) -> String {
+        self.path.borrow().clone()
+    }
+    fn take_fragment(&self) -> Option<String> {
+        let mut fragment = self.fragment.borrow_mut();
+        if fragment.as_deref().is_some_and(is_account_fragment) { fragment.take() } else { None }
+    }
     fn language(&self) -> Option<String> {
         self.language.borrow().clone()
     }
     fn set_lang(&self, tag: &str) {
         *self.lang.borrow_mut() = tag.to_string();
+    }
+}
+
+/// What a `FakeAccount` was asked.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AccountCall {
+    Me,
+    Providers,
+    SetStorage(bool),
+    Unlink(String),
+    Delete,
+    SignOut,
+}
+
+/// An answer for `FakeAccount::answer`.
+pub enum AccountReply {
+    Me(Result<Me, AccountError>),
+    Providers(Result<Vec<ProviderInfo>, AccountError>),
+    Done(Result<(), AccountError>),
+}
+
+enum Pending {
+    Me(Answer<Me>),
+    Providers(Answer<Vec<ProviderInfo>>),
+    Done(Answer<()>),
+}
+
+/// An account that keeps what it was asked until a test answers.
+#[derive(Default)]
+pub struct FakeAccount {
+    asked: RefCell<Vec<(AccountCall, Pending)>>,
+}
+
+impl FakeAccount {
+    /// The calls not yet answered, oldest first.
+    pub fn calls(&self) -> Vec<AccountCall> {
+        self.asked.borrow().iter().map(|(c, _)| c.clone()).collect()
+    }
+
+    /// Answers the oldest pending call of that kind (`Me`, `Providers`, or any of the calls that answer with nothing);
+    /// false if there is none.
+    pub fn answer(&self, reply: AccountReply) -> bool {
+        let at = self.asked.borrow().iter().position(|(_, p)| {
+            matches!(
+                (p, &reply),
+                (Pending::Me(_), AccountReply::Me(_)) | (Pending::Providers(_), AccountReply::Providers(_)) | (Pending::Done(_), AccountReply::Done(_))
+            )
+        });
+        let Some(at) = at else { return false };
+        let (_, pending) = self.asked.borrow_mut().remove(at);
+        match (pending, reply) {
+            (Pending::Me(done), AccountReply::Me(r)) => done(r),
+            (Pending::Providers(done), AccountReply::Providers(r)) => done(r),
+            (Pending::Done(done), AccountReply::Done(r)) => done(r),
+            _ => unreachable!("matched above"),
+        }
+        true
+    }
+}
+
+impl Account for FakeAccount {
+    fn me(&self, done: Answer<Me>) {
+        self.asked.borrow_mut().push((AccountCall::Me, Pending::Me(done)));
+    }
+    fn providers(&self, done: Answer<Vec<ProviderInfo>>) {
+        self.asked.borrow_mut().push((AccountCall::Providers, Pending::Providers(done)));
+    }
+    fn set_storage(&self, store: bool, done: Answer<()>) {
+        self.asked.borrow_mut().push((AccountCall::SetStorage(store), Pending::Done(done)));
+    }
+    fn unlink(&self, identity_id: &str, done: Answer<()>) {
+        self.asked.borrow_mut().push((AccountCall::Unlink(identity_id.into()), Pending::Done(done)));
+    }
+    fn delete(&self, done: Answer<()>) {
+        self.asked.borrow_mut().push((AccountCall::Delete, Pending::Done(done)));
+    }
+    fn sign_out(&self, done: Answer<()>) {
+        self.asked.borrow_mut().push((AccountCall::SignOut, Pending::Done(done)));
     }
 }
 
@@ -483,6 +669,7 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
             scheduler: scheduler.clone(),
             mapper: Rc::new(NoMapper),
             page: Rc::new(FakePage::default()),
+            account: Rc::new(FakeAccount::default()),
         },
         announcer,
         storage,
@@ -496,6 +683,26 @@ pub fn test_ports_with_page() -> (Ports, Rc<FakePage>, Rc<MemoryStorage>) {
     let page = Rc::new(FakePage::default());
     ports.page = page.clone();
     (ports, page, storage)
+}
+
+/// The fakes behind `test_ports_full`.
+pub struct TestPorts {
+    pub ports: Ports,
+    pub account: Rc<FakeAccount>,
+    pub navigator: Rc<RecordingNavigator>,
+    pub page: Rc<FakePage>,
+    pub announcer: Rc<RecordingAnnouncer>,
+    pub storage: Rc<MemoryStorage>,
+}
+
+/// The same, with the account, the navigator and the page too.
+pub fn test_ports_full() -> TestPorts {
+    let (mut ports, announcer, storage, _) = test_ports_with_time();
+    let (account, navigator, page) = (Rc::new(FakeAccount::default()), Rc::new(RecordingNavigator::default()), Rc::new(FakePage::default()));
+    ports.account = account.clone();
+    ports.navigator = navigator.clone();
+    ports.page = page.clone();
+    TestPorts { ports, account, navigator, page, announcer, storage }
 }
 
 /// The same, with the fetcher and the importer too.
@@ -518,6 +725,80 @@ pub fn test_ports_with_services() -> (Ports, Rc<FakeFetcher>, Rc<FakeImporter>, 
 
 #[cfg(test)]
 mod tests {
+
+    fn me_json() -> &'static str {
+        r#"{"id":"3f2b","display_name":"Ada","store_on_server":null,"identities":[{"id":"ab12","provider":"google","label":"ada@example.org","created_at":"2026-10-14T12:00:00Z"},{"id":"cd34","provider":"osm","label":null,"created_at":"2026-10-15T12:00:00Z"}]}"#
+    }
+
+    #[test]
+    fn the_status_of_an_answer_says_what_went_wrong() {
+        for (status, error) in [
+            (401, AccountError::SignedOut),
+            (404, AccountError::NotFound),
+            (409, AccountError::LastIdentity),
+            (503, AccountError::Unavailable),
+            (500, AccountError::Unavailable),
+            (502, AccountError::Unavailable),
+            (0, AccountError::Unavailable),
+            (400, AccountError::Refused),
+            (403, AccountError::Refused),
+        ] {
+            assert_eq!(account_error(status), error, "{status}");
+        }
+    }
+
+    #[test]
+    fn me_reads_the_servers_json_and_anything_else_is_unavailable() {
+        let me = Me::parse(me_json()).unwrap();
+        assert_eq!((me.display_name.as_str(), me.store_on_server, me.identities.len()), ("Ada", None, 2));
+        assert_eq!(me.identities[1].label, None);
+        assert_eq!(Me::parse("<html>").unwrap_err(), AccountError::Unavailable);
+        assert_eq!(Me::parse(&me_json().replace("null,\"identities", "true,\"identities")).unwrap().store_on_server, Some(true));
+    }
+
+    #[test]
+    fn the_providers_are_read_from_their_list() {
+        let list = ProviderInfo::parse_list(r#"{"providers":[{"slug":"google","name":"Google"},{"slug":"osm","name":"OpenStreetMap"}]}"#).unwrap();
+        assert_eq!(list.iter().map(|p| p.slug.as_str()).collect::<Vec<_>>(), ["google", "osm"]);
+        assert_eq!(ProviderInfo::parse_list("{}").unwrap_err(), AccountError::Unavailable);
+    }
+
+    #[test]
+    fn the_fake_account_keeps_calls_until_answered_by_kind_oldest_first() {
+        let t = test_ports_full();
+        let got = Rc::new(RefCell::new(Vec::<String>::new()));
+        let g = got.clone();
+        t.ports.account.me(Box::new(move |r| g.borrow_mut().push(format!("me {:?}", r.map(|m| m.display_name)))));
+        let g = got.clone();
+        t.ports.account.set_storage(true, Box::new(move |r| g.borrow_mut().push(format!("storage {r:?}"))));
+        let g = got.clone();
+        t.ports.account.unlink("ab", Box::new(move |r| g.borrow_mut().push(format!("unlink {r:?}"))));
+        assert_eq!(t.account.calls(), [AccountCall::Me, AccountCall::SetStorage(true), AccountCall::Unlink("ab".into())]);
+        assert!(!t.account.answer(AccountReply::Providers(Ok(vec![]))), "no providers call is pending");
+        assert!(t.account.answer(AccountReply::Done(Ok(()))));
+        assert!(t.account.answer(AccountReply::Me(Err(AccountError::SignedOut))));
+        assert_eq!(t.account.calls(), [AccountCall::Unlink("ab".into())]);
+        assert_eq!(*got.borrow(), ["storage Ok(())", "me Err(SignedOut)"]);
+    }
+
+    #[test]
+    fn the_fake_page_gives_its_fragment_once_and_has_a_path() {
+        let t = test_ports_full();
+        assert_eq!(t.ports.page.path(), "/");
+        *t.page.fragment.borrow_mut() = Some("account=new".into());
+        assert_eq!(t.ports.page.take_fragment().as_deref(), Some("account=new"));
+        assert_eq!(t.ports.page.take_fragment(), None);
+    }
+
+    #[test]
+    fn the_fake_page_leaves_a_fragment_that_is_not_the_accounts() {
+        let t = test_ports_full();
+        for other in ["street=7", "section-2", "accounts", ""] {
+            *t.page.fragment.borrow_mut() = Some(other.into());
+            assert_eq!(t.ports.page.take_fragment(), None, "{other:?}");
+            assert_eq!(t.page.fragment.borrow().as_deref(), Some(other), "{other:?} is left in the address");
+        }
+    }
     use super::*;
 
     #[test]

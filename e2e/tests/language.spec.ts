@@ -149,7 +149,12 @@ const expectFits = async (page: Page) => {
 // English is the baseline: French may not overflow where English does not. English fits at all four widths,
 // so none is left out of the French check. Every page is checked, each in both languages.
 const OPENERS: { name: string; open: (page: Page) => Promise<unknown>; ready?: (page: Page) => Promise<void> }[] = [
-  { name: "home", open: (page) => page.goto("/") },
+  {
+    name: "home",
+    open: (page) => page.goto("/"),
+    // The shell binds the menus once the page's module has loaded; a click before that does nothing.
+    ready: (page) => expect(page.locator("#region option")).toHaveCount(6),
+  },
   { name: "map", open: (page) => page.goto("/map.html"), ready: mapReady },
   { name: "street", open: (page) => openStreet(page) },
   { name: "junction", open: (page) => openJunction(page) },

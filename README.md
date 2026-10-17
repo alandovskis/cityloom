@@ -21,18 +21,21 @@ This repository holds three surfaces: a city map (`map.html`), the street cross-
 ```sh
 just setup    # once: wasm-bindgen-cli at the version Cargo.toml pins (into .tools), and the browser tests' dependencies
 just build    # the WebAssembly module, into web/pkg
-just serve    # http://127.0.0.1:8137/
+just serve    # http://127.0.0.1:8137/ (cargo run -p cityloom_server)
+just db       # a throwaway Postgres in Docker, for the server's tests and the account spec
 just test     # cargo test, and a type-check of the wasm-only code
 just e2e      # browser tests after a fresh build; arguments go to Playwright, e.g. `just e2e tests/street.spec.ts`
 just check    # test, then e2e
 just format   # rustfmt and Prettier (just format-check only checks)
 ```
 
-Without `just`: `cargo test`, `./scripts/build.sh`, `node e2e/serve.mjs` (the basemap's tiles need range requests, which `python3 -m http.server` does not answer), and `cd e2e && npx playwright test`.
+Without `just`: `cargo test --workspace --features cityloom_server/test-provider` (the server's tests need a Postgres: `just db` starts one and prints the `DATABASE_URL` to export; `just test` checks both), `./scripts/build.sh`, `cargo run -p cityloom_server` (the basemap's tiles need range requests, which `python3 -m http.server` does not answer), and `cd e2e && npx playwright test`.
+
+The server's tests and the account spec need a Postgres: `just db`, then `export DATABASE_URL=...` as it prints.
 
 ## End-to-end tests
 
-Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; a small Node server (`e2e/serve.mjs`) serves `web/` for the run (and the basemap's range requests); `E2E_PORT` moves it off port 8137 when something else holds that.
+Playwright drives the built pages in Chromium (`e2e/`). `just e2e` builds first; the Rust server (`cityloom_server`) serves `web/` for the run (and the basemap's range requests), with the fake sign-in provider and a Postgres for the account spec; `E2E_PORT` moves it off port 8137 when something else holds that.
 
 ## Continuous integration
 

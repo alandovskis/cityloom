@@ -1,0 +1,129 @@
+/* The account page: one narrow column under the header bar, which floats over the page on a wide screen. */
+
+.account-page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: calc(var(--bar-h) + var(--pad) * 2 + 24px) 16px 48px;
+}
+@media (max-width: 899px) {
+  .account-page {
+    padding-top: 16px;
+  }
+}
+
+.account-view > * + * {
+  margin-top: 12px;
+}
+.account-view h1 {
+  font-size: 24px;
+  line-height: 1.25;
+}
+.account-view h2 {
+  font-size: 17px;
+  line-height: 1.3;
+}
+.account-view h1:focus,
+.account-view h2:focus {
+  outline: none;
+}
+.account-view h1:focus-visible,
+.account-view h2:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.account-view .hint {
+  padding: 0;
+}
+
+.account-section {
+  margin-top: 28px;
+  padding: 18px 20px;
+  background: var(--panel);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-soft);
+}
+.account-section > * + * {
+  margin-top: 10px;
+}
+.account-section .menu-act {
+  margin-top: 10px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.linked li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 8px 0;
+  border-top: 1px solid var(--rule);
+}
+.linked li:first-child {
+  border-top: 0;
+}
+
+/* Two options of equal weight: the same rule for both, and neither is marked until the person chooses. */
+.choices {
+  display: grid;
+  gap: 12px;
+}
+.choice {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--field-line);
+  border-radius: var(--r-ctl);
+  cursor: pointer;
+}
+.choice:has(input:checked) {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+}
+.choice:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.choice input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+.choice-body {
+  display: grid;
+  gap: 2px;
+}
+.choice-label {
+  font-weight: 600;
+}
+.choice-help {
+  display: block;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.confirm {
+  padding: 14px 16px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r-ctl);
+  background: var(--warn-wash);
+}
+.confirm > * + * {
+  margin-top: 10px;
+}
+.confirm .btn + .btn {
+  margin-left: 8px;
+}
+.btn.danger {
+  border-color: var(--map-bad);
+}
+
+@media (forced-colors: active) {
+  .choice:has(input:checked) {
+    outline-color: Highlight;
+  }
+}

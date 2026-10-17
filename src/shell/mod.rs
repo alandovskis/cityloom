@@ -3,6 +3,8 @@
 //! the markup each page keeps for them.
 
 pub mod popover;
+pub mod session;
+pub mod session_view;
 pub mod share;
 pub mod share_view;
 #[cfg(test)]
