@@ -58,6 +58,10 @@ e2e *args: build
 # Everything: unit tests, then the browser tests.
 check: test e2e
 
+# The tests of the scripts' own modules (scripts/include), with the standard library only.
+test-scripts:
+    python3 -m unittest discover -s scripts/include/tests
+
 # Format the Rust (rustfmt.toml), the scripts and the documentation site (.prettierrc.json).
 format:
     cargo fmt

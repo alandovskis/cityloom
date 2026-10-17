@@ -76,6 +76,8 @@ jobs:
           just-version: ${{ env.JUST_VERSION }}
       # Host tests, and a type-check of the code only the wasm32 target compiles.
       - run: just test
+      # The progress display the prepare scripts share (standard library only, no setup).
+      - run: just test-scripts
 
   server-release:
     name: Release server has no fake provider
