@@ -34,6 +34,8 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/restriction/mod.rs", include_str!("restriction/mod.rs")),
     ("src/restriction/model.rs", include_str!("restriction/model.rs")),
     ("src/street/text.rs", include_str!("street/text.rs")),
+    ("src/sync/hub.rs", include_str!("sync/hub.rs")),
+    ("src/sync/model.rs", include_str!("sync/model.rs")),
     ("src/street/notes.rs", include_str!("street/notes.rs")),
     ("src/street/page.rs", include_str!("street/page.rs")),
     ("src/street/view.rs", include_str!("street/view.rs")),
@@ -135,6 +137,7 @@ const ALLOWED: &[&str] = &[
 
 /// Literals that look like words and are not, each with the reason. Empty unless needed.
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
+    ("the sync document serialises", "a panic message about the code, never shown"),
     ("OpenStreetMap", "a provider's brand name, not translated"),
     ("Google", "a provider's brand name, not translated"),
     ("Microsoft", "a provider's brand name, not translated"),
@@ -410,6 +413,8 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("cityloom-sync", "the sync document's storage key, not a message"),
+    ("cityloom-sync-damaged", "the copy of a damaged sync document, a storage key and not a message"),
     ("data-notes", "the name of a data- attribute on the document element"),
     ("data-inspector", "the name of a data- attribute on the document element"),
     ("data-welcome", "the name of a data- attribute on the document element"),
