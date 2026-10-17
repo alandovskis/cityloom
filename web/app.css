@@ -70,6 +70,33 @@
   --k-terrace: light-dark(#f1dca0, #7d6a30);
   --k-buffer: light-dark(#bdb8ae, #4d4a45);
   --k-streetlamp: light-dark(#d9dcc0, #5d6148);
+  /* The surface materials in 2.5D (street/iso/, junction/iso.rs): the typical colour of each material, the same in
+     both themes (a material looks like itself), and the two tones of its texture (`-line`, `-alt`). The pavement paint keeps
+     its 3:1 against each through its edge (a test in street/iso/surface.rs reads these). */
+  --mat-asphalt: #3b3f43; /* weathered asphalt, dark grey */
+  --mat-asphalt-line: #8a9096;
+  --mat-asphalt-alt: #1f2225;
+  --mat-concrete: #bdc0c1; /* broom-finished concrete, light grey */
+  --mat-concrete-line: #7c8082;
+  --mat-concrete-alt: #d9dcdd;
+  --mat-permeable: #9a9a95; /* interlocking permeable pavers, mid warm grey */
+  --mat-permeable-line: #66665f;
+  --mat-permeable-alt: #b6b6ae;
+  --mat-brick: #a4523b; /* clay brick, red-brown */
+  --mat-brick-line: #d6c4ae;
+  --mat-brick-alt: #7f3c2a;
+  --mat-grass: #5f8f3e; /* lawn green */
+  --mat-grass-line: #3b6a25;
+  --mat-grass-alt: #80ae57;
+  --mat-planted: #4e4230; /* a bed: dark soil and mulch, the green is the plants */
+  --mat-planted-line: #7d8c4a;
+  --mat-planted-alt: #2d2318;
+  --mat-gravel: #b3aa98; /* crushed stone, greyish beige */
+  --mat-gravel-line: #7b7363;
+  --mat-gravel-alt: #d3cbba;
+  --mat-trees: #6a6358; /* a tree pit: compacted soil and a grate, brown-grey */
+  --mat-trees-line: #a79f90;
+  --mat-trees-alt: #38332b;
 }
 
 :root[data-theme="light"] {

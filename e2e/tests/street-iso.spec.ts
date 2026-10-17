@@ -46,6 +46,41 @@ test.describe("the street in 2.5D", () => {
     await expect(page.locator('#drawing [data-role="handle"]')).toHaveCount(0);
   });
 
+  test("choosing another surface material in the inspector changes the selected piece's top in 2.5D", async ({
+    page,
+  }) => {
+    const tops = () =>
+      page.locator("#drawing .iso-top").evaluateAll((els) =>
+        els.map((el) => {
+          const s = getComputedStyle(el);
+          const hatch = el.nextElementSibling?.getAttribute("fill") ?? "";
+          return { class: el.getAttribute("class") ?? "", fill: s.fill, hatch };
+        }),
+      );
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("ArrowRight");
+    await iso(page).click();
+    const before = await tops();
+    for (const t of before) {
+      const material = /mat-(\w+)/.exec(t.class)?.[1];
+      expect(material, t.class).toBeTruthy();
+      expect(t.hatch).toBe(`url(#iso-m-${material})`);
+    }
+    await section(page).click();
+    const other = page.locator('#i-h-surface ~ [role="radiogroup"] [role="radio"][aria-checked="false"]').first();
+    await other.click();
+    await iso(page).click();
+    const after = await tops();
+    expect(after).toHaveLength(before.length);
+    const changed = after.filter((t, i) => t.class !== before[i].class);
+    expect(changed).toHaveLength(1);
+    expect(changed[0].fill).not.toBe(before[after.indexOf(changed[0])].fill);
+    expect(changed[0].hatch).toMatch(/^url\(#iso-m-/);
+    // The pattern is laid on the ground: its definition carries a transform.
+    const id = /#(iso-m-\w+)/.exec(changed[0].hatch)![1];
+    await expect(page.locator(`#drawing pattern#${id}`)).toHaveAttribute("patternTransform", /^matrix\(/);
+  });
+
   test("the view chosen is kept across a reload", async ({ page }) => {
     await iso(page).click();
     await page.reload();
@@ -143,7 +178,7 @@ test("a street with opposing lanes shows yellow paint in 2.5D, and symbols in pl
     .first()
     .evaluate((el) => getComputedStyle(el).pointerEvents);
   expect(pointer).toBe("none");
-  // And the paint follows the theme tokens, in both themes: yellow here, with a dark hairline on the light one.
+  // And the paint follows the theme tokens, in both themes: yellow here, with the dark hairline in both.
   const yellowPaint = page.locator("#drawing .iso-paint.yellow").first();
   const look = () =>
     yellowPaint.evaluate((el) => {
@@ -151,11 +186,23 @@ test("a street with opposing lanes shows yellow paint in 2.5D, and symbols in pl
       return [s.fill, s.stroke];
     });
   await page.emulateMedia({ colorScheme: "light" });
-  expect(await look()).toEqual(["rgb(227, 166, 0)", "rgb(43, 51, 59)"]);
+  expect(await look()).toEqual(["rgb(227, 166, 0)", "rgb(16, 21, 26)"]);
   await page.emulateMedia({ colorScheme: "dark" });
   const [darkFill, darkEdge] = await look();
   expect(darkFill).toBe("rgb(240, 192, 46)");
-  expect(darkEdge).not.toBe("rgb(43, 51, 59)");
+  expect(darkEdge, "the hairline is in both themes: the materials are the same colour in either").toBe(
+    "rgb(16, 21, 26)",
+  );
+  // A material is the same colour in both themes, and so is its pattern.
+  const road = () =>
+    page
+      .locator("#drawing .iso-piece .iso-top")
+      .first()
+      .evaluate((el) => getComputedStyle(el).fill);
+  await page.emulateMedia({ colorScheme: "light" });
+  const lightRoad = await road();
+  await page.emulateMedia({ colorScheme: "dark" });
+  expect(await road()).toBe(lightRoad);
   // In forced colours the paint is the text colour and the roadway under it is not.
   await page.emulateMedia({ forcedColors: "active" });
   const forced = await page.evaluate(() => {

@@ -6,11 +6,12 @@ use std::fmt::Write;
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::esc;
+use crate::shared::iso::ground::patterns;
 use crate::shared::iso::shading::shade_filters;
 use crate::street::model::View;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
-use super::projection::{Projection, STRETCH_MM, drawn_mm, points};
+use super::projection::{Projection, RECEDE_X, RECEDE_Y, STRETCH_MM, drawn_mm, points};
 
 /// How high each kind of piece stands above the roadway, in millimetres. They are plausible, not
 /// surveyed, like the catalogue's rates. The furniture kinds stand on the sidewalk, so at its height.
@@ -77,6 +78,12 @@ pub(super) fn shades() -> String {
     shade_filters(&SHADES)
 }
 
+/// The surface materials' patterns for the drawing's `<defs>`, laid on the ground in this projection: across the street
+/// along the drawing's x, along it receding up and right.
+pub(super) fn materials(p: &Projection) -> String {
+    patterns("iso-m", [p.scale, 0.0, p.scale * RECEDE_X, -p.scale * RECEDE_Y, p.left, p.base])
+}
+
 /// The shading a face of this kind gets, as an attribute: none for a top.
 pub(super) fn shade(what: Face) -> &'static str {
     match what {
@@ -122,7 +129,10 @@ pub(super) fn slab(out: &mut String, p: &Projection, v: &View, i: usize) {
             face(out, Face::Side, Some(id), &hatch, &points(p, &[(x1, low, 0.0), (x1, low, l), (x1, h, l), (x1, h, 0.0)]));
         }
     }
-    face(out, Face::Top, Some(id), &hatch, &points(p, &[(x0, h, 0.0), (x1, h, 0.0), (x1, h, l), (x0, h, l)]));
+    // The top is the material's, not the kind's: its tint class and its pattern lie on the ground.
+    let pts = points(p, &[(x0, h, 0.0), (x1, h, 0.0), (x1, h, l), (x0, h, l)]);
+    let m = s.material;
+    write!(out, "<polygon class=\"iso-top k-{id} mat-{m}\" points=\"{pts}\"/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#iso-m-{m})\"/>").unwrap();
 }
 
 /// The curb of the piece at `i` along one edge (`right`). As high as the piece, it is a stripe on its

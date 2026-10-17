@@ -23,10 +23,10 @@
      in both themes. Estimates, like the symbols' sizes. */
   --iso-paint-white: light-dark(#fbfbf8, #e6e9ee);
   --iso-paint-yellow: light-dark(#e3a600, #f0c02e);
-  /* A hairline round the paint: on the light theme's pale surfaces the paint alone is under 3:1 (WCAG 1.4.11);
-     the edge colour is over 6:1 against every surface tint (the ratio of the colours; anti-aliasing of a 0.5 px line
-     lowers the figure rendered). The dark theme needs none. */
-  --iso-paint-edge: light-dark(#2b333b, transparent);
+  /* A hairline round the paint, in both themes: the materials are one colour in either theme, so the paint alone
+     is under 3:1 (WCAG 1.4.11) on a pale one (white on concrete) whatever the theme; the edge is over 6:1 against
+     those (the ratio of the colours; anti-aliasing of a 0.5 px line lowers the figure rendered). */
+  --iso-paint-edge: #10151a;
   --panel-w: 300px;
   --notes-w: 340px;
   --rw: calc(var(--pad) + var(--notes-w));
@@ -926,8 +926,50 @@ svg pattern circle {
 .iso-curb {
   fill: var(--iso-curb);
 }
+/* A top is the colour of its piece's material, over the kind's tint (`k-*`) that its faces keep. */
+.iso-top.mat-asphalt,
+.iso-flat.mat-asphalt {
+  fill: var(--mat-asphalt);
+}
+.iso-top.mat-concrete,
+.iso-flat.mat-concrete {
+  fill: var(--mat-concrete);
+}
+.iso-top.mat-permeable,
+.iso-flat.mat-permeable {
+  fill: var(--mat-permeable);
+}
+.iso-top.mat-brick,
+.iso-flat.mat-brick {
+  fill: var(--mat-brick);
+}
+.iso-top.mat-grass,
+.iso-flat.mat-grass {
+  fill: var(--mat-grass);
+}
+.iso-top.mat-planted,
+.iso-flat.mat-planted {
+  fill: var(--mat-planted);
+}
+.iso-top.mat-gravel,
+.iso-flat.mat-gravel {
+  fill: var(--mat-gravel);
+}
+.iso-top.mat-trees,
+.iso-flat.mat-trees {
+  fill: var(--mat-trees);
+}
+/* The 2.5D's textures (shared/iso/ground.rs) are drawn in the material's own colours (`--mat-*-line`, `-alt`), whatever the
+   theme, and kept faint so that the paint, the symbols and the outlines read over them. */
+.hatch[fill^="url(#iso-m-"] {
+  opacity: 0.8;
+}
+/* A piece's colour is the same in both themes, so an outline needs a halo of the panel's colour to be seen on any
+   of them: the hover outline and the selection outline. */
 .iso-piece:hover .iso-top {
+  stroke: var(--ink);
   stroke-width: 2;
+  filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
 }
 .iso-solid {
   pointer-events: none;
@@ -975,6 +1017,10 @@ svg pattern circle {
     fill: CanvasText;
     stroke: none;
   }
+}
+.iso-sel,
+#drawing .iso .sel-box {
+  filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
 }
 .iso-sel {
   fill: none;
