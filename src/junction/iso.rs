@@ -11,9 +11,10 @@ use crate::junction::geometry::{sample_arc, sample_quad};
 use crate::junction::plan_svg::turbo_name;
 use crate::junction::read_model::JView;
 use crate::junction::text::arms_text;
-use crate::shared::catalogue::KINDS;
+use crate::shared::catalogue::{KINDS, MATERIALS};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::{esc, f1};
+use crate::shared::iso::ground::patterns;
 use crate::shared::iso::paint::{Paint, Pattern, Style, class, quads};
 use crate::shared::iso::shading::shade_filters;
 use crate::shared::said::say;
@@ -136,6 +137,8 @@ pub struct IsoSvg {
 /// A shape that stands on the ground: its footprint, its height, and whether its sides are drawn.
 struct Solid {
     kind_id: &'static str,
+    /// The material of its top.
+    material: &'static str,
     foot: Vec<P>,
     h_mm: f64,
     sides: bool,
@@ -143,8 +146,21 @@ struct Solid {
 
 /// The filters that darken the faces turned from the eye: a ramp a little, a side more. SVG filters, since CSS
 /// `filter: brightness()` on SVG shapes may not be applied in Safari.
-fn shades() -> String {
-    format!("<defs>{}</defs>", shade_filters(&[("iso-shade-ramp", "0.9"), ("iso-shade-side", "0.78")]))
+fn shades(f: &IsoFrame) -> String {
+    format!("<defs>{}{}</defs>", shade_filters(&[("iso-shade-ramp", "0.9"), ("iso-shade-side", "0.78")]), materials(f))
+}
+
+/// The surface materials' patterns laid on the ground as this frame projects it: the plan's x and y (in millimetres)
+/// land where `at` puts them, so the matrix is read off three of its points.
+fn materials(f: &IsoFrame) -> String {
+    let (o, x, y) = (f.at((0.0, 0.0), 0.0), f.at((1.0, 0.0), 0.0), f.at((0.0, 1.0), 0.0));
+    patterns("iso-m", [x.0 - o.0, x.1 - o.1, y.0 - o.0, y.1 - o.1, o.0, o.1])
+}
+
+/// The material a surface of this kind has when nothing says otherwise: the junction's own surfaces (the core, the
+/// ring, a corner) are not a street's pieces.
+fn default_material(kind_id: &str) -> &'static str {
+    KINDS.iter().find(|k| k.id == kind_id).map_or("concrete", |k| MATERIALS[k.materials[0]].id)
 }
 
 /// How far a vertex may be from an edge and still be on it: where a ramp meets its top, where one surface meets
@@ -205,13 +221,19 @@ impl Draw {
         d
     }
 
-    /// A shape lying on the ground.
+    /// A shape lying on the ground, in the default material of its kind.
     fn lay(&mut self, kind_id: &str, foot: &[P]) {
+        self.lay_in(kind_id, default_material(kind_id), foot);
+    }
+
+    /// A shape lying on the ground, in `material`.
+    fn lay_in(&mut self, kind_id: &str, material: &str, foot: &[P]) {
         if foot.len() < 3 {
             return;
         }
         let d = self.path(foot, 0.0);
-        write!(self.flat, "<path class=\"iso-flat k-{kind_id}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#h-{kind_id})\" d=\"{d}\"/>").unwrap();
+        write!(self.flat, "<path class=\"iso-flat k-{kind_id} mat-{material}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#iso-m-{material})\" d=\"{d}\"/>")
+            .unwrap();
     }
 
     /// The stripes of a zebra crossing: `foot` is its four corners, across the street first. They run the length
@@ -272,7 +294,12 @@ impl Draw {
         }
         self.tables.push((foot.to_vec(), h_mm));
         let d = self.path(foot, h_mm);
-        write!(self.flat, "<path class=\"iso-table iso-flat k-{kind_id}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#h-{kind_id})\" d=\"{d}\"/>").unwrap();
+        let material = default_material(kind_id);
+        write!(
+            self.flat,
+            "<path class=\"iso-table iso-flat k-{kind_id} mat-{material}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#iso-m-{material})\" d=\"{d}\"/>"
+        )
+        .unwrap();
     }
 
     /// A ramp from the ground up to `top`: its vertices on the top's edge at `h_mm`, the rest on the ground.
@@ -290,8 +317,12 @@ impl Draw {
     }
 
     fn stand(&mut self, kind_id: &'static str, foot: Vec<P>, h_mm: f64, sides: bool) {
+        self.stand_in(kind_id, default_material(kind_id), foot, h_mm, sides);
+    }
+
+    fn stand_in(&mut self, kind_id: &'static str, material: &'static str, foot: Vec<P>, h_mm: f64, sides: bool) {
         if foot.len() >= 3 {
-            self.solids.push(Solid { kind_id, foot, h_mm, sides });
+            self.solids.push(Solid { kind_id, material, foot, h_mm, sides });
         }
     }
 
@@ -344,7 +375,8 @@ impl Draw {
             }
         }
         let d = self.path(&s.foot, s.h_mm);
-        write!(g, "<path class=\"iso-top k-{id}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#h-{id})\" d=\"{d}\"/></g>").unwrap();
+        let m = s.material;
+        write!(g, "<path class=\"iso-top k-{id} mat-{m}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#iso-m-{m})\" d=\"{d}\"/></g>").unwrap();
         g
     }
 
@@ -415,7 +447,7 @@ impl Draw {
     fn finish(mut self) -> String {
         self.solids.sort_by(|a, b| Self::depth(a).total_cmp(&Self::depth(b)));
         let solids: String = (0..self.solids.len()).map(|i| self.render(i)).collect();
-        format!("{}<g class=\"iso\">{}{solids}{}{}{}</g>", shades(), self.flat, self.posts, self.sel, self.names)
+        format!("{}<g class=\"iso\">{}{solids}{}{}{}</g>", shades(&self.f), self.flat, self.posts, self.sel, self.names)
     }
 }
 
@@ -502,8 +534,8 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
             // A walkway is walking surface wall to wall, whatever stands on it.
             let h = if a.pedestrian { wall } else { height_of(id) };
             match h {
-                h if h > 0.0 => d.stand(id, foot, h, true),
-                _ => d.lay(id, &foot),
+                h if h > 0.0 => d.stand_in(id, piece.material, foot, h, true),
+                _ => d.lay_in(id, piece.material, &foot),
             }
         }
         // Where there is no parking beside the curb the road runs on, over the parking piece.
@@ -608,7 +640,7 @@ mod tests {
         let paint = count(&m, "class=\"iso-paint white\"");
         assert!(paint > 0, "the divider is painted");
         assert_eq!(paint % 2, 0, "a double line is two lines of quads");
-        assert!(m.find("class=\"iso-flat k-travel\"").unwrap() < m.find("class=\"iso-paint white\"").unwrap(), "the paint lies on the road");
+        assert!(m.find("class=\"iso-flat k-travel ").unwrap() < m.find("class=\"iso-paint white\"").unwrap(), "the paint lies on the road");
         assert!(!m.contains("iso-paint white\" data-face") && !m.contains("iso-paint white iso-top"), "paint is not a face");
         assert!(count(&svg(&turbo(3)).markup, "class=\"iso-paint white\"") > paint, "a spiral has two dividers");
         let mut plain = Junction::new(0);
@@ -694,7 +726,7 @@ mod tests {
             })
             .collect::<String>()
             + "Z";
-        let at = s.markup.find(&format!("class=\"iso-flat k-travel\" d=\"{d}\"")).expect("the gap is drawn as road");
+        let at = s.markup.find(&format!("class=\"iso-flat k-travel mat-asphalt\" d=\"{d}\"")).expect("the gap is drawn as road");
         // It is painted after the arm's parking, which it covers.
         assert!(at > s.markup.find("iso-flat k-parking").unwrap());
     }
@@ -852,6 +884,59 @@ mod tests {
             let s = svg(&Junction::new(sample));
             assert!(!s.markup.contains("NaN") && !s.markup.contains("inf"), "sample {sample}");
             assert!(count(&s.markup, "iso-flat") + count(&s.markup, "iso-solid") > 0, "sample {sample}");
+        }
+    }
+
+    /// The class of every surface drawn on the ground or standing, with the fill of the pattern layer that follows it.
+    fn tops(markup: &str) -> Vec<(String, String)> {
+        let paths: Vec<&str> = markup.split("<path class=\"").skip(1).collect();
+        paths
+            .windows(2)
+            .filter(|w| w[0].starts_with("iso-flat ") || w[0].starts_with("iso-table ") || w[0].starts_with("iso-top "))
+            .map(|w| (w[0].split('"').next().unwrap().to_string(), w[1].split("fill=\"").nth(1).unwrap().split('"').next().unwrap().to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn every_top_is_in_a_material_with_its_pattern_over_it_and_the_kinds_own_when_it_has_none() {
+        let m = svg(&walked()).markup;
+        let tops = tops(&m);
+        assert!(tops.len() > 5);
+        for (class, fill) in &tops {
+            let mat = class.split(" mat-").nth(1).unwrap_or_else(|| panic!("{class} has no material"));
+            assert_eq!(fill, &format!("url(#iso-m-{mat})"), "{class}");
+        }
+        // The core is the junction's own surface: the default material of a travel lane.
+        assert!(m.contains("class=\"iso-flat k-travel mat-asphalt\""));
+        assert!(m.contains("class=\"iso-top k-sidewalk mat-"));
+    }
+
+    #[test]
+    fn a_piece_s_material_colours_its_top_in_the_junction_too() {
+        let mut v = Junction::new(0).view();
+        let before = render(&v).markup;
+        let piece = v.arms[0].pieces.iter_mut().find(|p| KINDS[p.kind].id == "sidewalk").expect("an arm has a sidewalk");
+        let was = piece.material;
+        piece.material = if was == "brick" { "concrete" } else { "brick" };
+        let want = piece.material;
+        let after = render(&v).markup;
+        assert_ne!(before, after);
+        assert_eq!(count(&after, &format!("iso-top k-sidewalk mat-{want}")), count(&before, &format!("iso-top k-sidewalk mat-{want}")) + 1);
+        assert!(after.contains(&format!("fill=\"url(#iso-m-{want})\"")));
+    }
+
+    #[test]
+    fn the_patterns_lie_on_the_ground_as_the_frame_projects_it() {
+        let s = svg(&walked());
+        let f = s.frame;
+        let at = s.markup.find("id=\"iso-m-asphalt\"").expect("the drawing carries the patterns");
+        let tag = &s.markup[s.markup[..at].rfind("<pattern").unwrap()..at];
+        let n: Vec<f64> = tag.split("matrix(").nth(1).unwrap().split(')').next().unwrap().split(' ').map(|x| x.parse().unwrap()).collect();
+        // A unit step along the plan's x lands where `at` puts it, from the origin.
+        let (o, x, y) = (f.at((0.0, 0.0), 0.0), f.at((1.0, 0.0), 0.0), f.at((0.0, 1.0), 0.0));
+        let k = crate::shared::iso::ground::MM_PER_UNIT;
+        for (got, want) in [(n[0], (x.0 - o.0) * k), (n[1], (x.1 - o.1) * k), (n[2], (y.0 - o.0) * k), (n[3], (y.1 - o.1) * k), (n[4], o.0), (n[5], o.1)] {
+            assert!((got - want).abs() < 0.01, "{n:?}");
         }
     }
 
