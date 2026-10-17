@@ -15,7 +15,9 @@ use crate::accounts::{self, RepoError, UnlinkError};
 use crate::app::{Account, json_error, require_origin, require_ready};
 use crate::session::{self, Read};
 
-fn store_error(e: RepoError) -> Response {
+mod work;
+
+pub(crate) fn store_error(e: RepoError) -> Response {
     match e {
         RepoError::Unavailable => json_error(StatusCode::SERVICE_UNAVAILABLE, "unavailable"),
         RepoError::Gone => json_error(StatusCode::UNAUTHORIZED, "signed-out"),
@@ -24,7 +26,7 @@ fn store_error(e: RepoError) -> Response {
 }
 
 /// The signed-in user, and the jar to answer with: the session cookie set again when it was refreshed, cleared when it was stale.
-async fn authed(a: &Account, jar: CookieJar) -> Result<(Uuid, CookieJar), Response> {
+pub(crate) async fn authed(a: &Account, jar: CookieJar) -> Result<(Uuid, CookieJar), Response> {
     let Some(token) = jar.get(session::COOKIE).map(|c| c.value().to_string()) else {
         return Err(json_error(StatusCode::UNAUTHORIZED, "signed-out"));
     };
@@ -36,11 +38,11 @@ async fn authed(a: &Account, jar: CookieJar) -> Result<(Uuid, CookieJar), Respon
     }
 }
 
-fn no_content(jar: CookieJar) -> Response {
+pub(crate) fn no_content(jar: CookieJar) -> Response {
     (jar, StatusCode::NO_CONTENT).into_response()
 }
 
-fn json<T: Serialize>(jar: CookieJar, value: &T) -> Response {
+pub(crate) fn json<T: Serialize>(jar: CookieJar, value: &T) -> Response {
     (jar, Json(value)).into_response()
 }
 
@@ -154,6 +156,7 @@ pub fn routes(account: Arc<Account>) -> Router {
         .route("/api/providers", get(providers))
         .route("/api/me", get(me))
         .merge(changing)
+        .merge(work::routes(account.clone()))
         .route("/api/{*rest}", any(not_found))
         .layer(middleware::map_response(|mut res: Response| async move {
             res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));

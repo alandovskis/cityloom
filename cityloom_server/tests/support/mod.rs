@@ -19,6 +19,7 @@ use cityloom_server::crypto::{LookupKey, MasterKeys};
 use cityloom_server::db::PgRepo;
 use cityloom_server::fake_provider::{self, FakeLogin, FakeState, LOGIN_COOKIE, parse_form_post};
 use cityloom_server::providers::{HttpClient, Providers};
+use cityloom_server::work::{Ask, Pulled, Pushed, Put, WorkError, WorkRepo};
 use http_body_util::BodyExt;
 use sqlx::PgPool;
 use tower::ServiceExt;
@@ -177,25 +178,51 @@ pub async fn sign_in(b: &mut Browser, slug: &str, return_path: &str, login: &Fak
     play_provider(b, &started.location().unwrap(), login).await
 }
 
-/// The whole router over `repo`; `http: None` means the in-process fake provider.
-pub fn account_router(repo: Arc<dyn Repo>, http: Option<Arc<dyn HttpClient>>, clock: Arc<FixedClock>, fake: Arc<FakeState>, rate: RateLimit) -> Router {
+/// The whole router over `repo` and `work`; `http: None` means the in-process fake provider.
+pub fn account_router(
+    repo: Arc<dyn Repo>,
+    work: Arc<dyn WorkRepo>,
+    http: Option<Arc<dyn HttpClient>>,
+    clock: Arc<FixedClock>,
+    fake: Arc<FakeState>,
+    rate: RateLimit,
+    work_rate: RateLimit,
+) -> Router {
     let mut providers = Providers::from_config_for_test(&[]);
     for spec in fake_provider::specs(ISSUER) {
         providers = providers.with(spec);
     }
     let account = Arc::new(Account {
         repo,
+        work,
         http: http.unwrap_or_else(|| Arc::new(InProcess::with_state(fake.clone()))),
         clock,
         providers,
         cookie_key: cookie::Key::from(&[7u8; 64]),
         base_url: "http://127.0.0.1:8137".parse().unwrap(),
         rate,
+        work_rate,
         ready: Arc::new(std::sync::atomic::AtomicBool::new(true)), // `#[sqlx::test]` has migrated the database already
         fake: Some(fake),
     });
     let config = Config::from_lookup(&|_| None).unwrap();
     router(&config, Some(account))
+}
+
+/// A work store that is down.
+pub struct NoWork;
+
+#[async_trait::async_trait]
+impl WorkRepo for NoWork {
+    async fn pull(&self, _: uuid::Uuid, _: Ask, _: time::OffsetDateTime) -> Result<Pulled, WorkError> {
+        Err(WorkError::Unavailable)
+    }
+    async fn push(&self, _: uuid::Uuid, _: Vec<Put>, _: time::OffsetDateTime) -> Result<Pushed, WorkError> {
+        Err(WorkError::Unavailable)
+    }
+    async fn clear(&self, _: uuid::Uuid) -> Result<(), WorkError> {
+        Err(WorkError::Unavailable)
+    }
 }
 
 /// A store that is down: every call fails as `Unavailable`.
@@ -253,16 +280,20 @@ pub struct TestApp {
 
 impl TestApp {
     pub fn new(pool: PgPool) -> TestApp {
-        TestApp::with_rate(pool, RateLimit { period_secs: 1, burst: 1000 })
+        TestApp::build(pool, RateLimit { period_secs: 1, burst: 1000 }, RateLimit { period_secs: 1, burst: 1000 }, None)
     }
     pub fn with_rate(pool: PgPool, rate: RateLimit) -> TestApp {
-        TestApp::build(pool, rate, None)
+        TestApp::build(pool, rate, RateLimit { period_secs: 1, burst: 1000 }, None)
+    }
+    /// The work routes' own limit (the sign-in routes keep the generous one).
+    pub fn with_work_rate(pool: PgPool, work_rate: RateLimit) -> TestApp {
+        TestApp::build(pool, RateLimit { period_secs: 1, burst: 1000 }, work_rate, None)
     }
     /// The server's calls out go to `http` instead of the fake provider (a provider that is down, say).
     pub fn with_http(pool: PgPool, http: Arc<dyn HttpClient>) -> TestApp {
-        TestApp::build(pool, RateLimit { period_secs: 1, burst: 1000 }, Some(http))
+        TestApp::build(pool, RateLimit { period_secs: 1, burst: 1000 }, RateLimit { period_secs: 1, burst: 1000 }, Some(http))
     }
-    fn build(pool: PgPool, rate: RateLimit, http: Option<Arc<dyn HttpClient>>) -> TestApp {
+    fn build(pool: PgPool, rate: RateLimit, work_rate: RateLimit, http: Option<Arc<dyn HttpClient>>) -> TestApp {
         let clock = Arc::new(FixedClock::new(t0()));
         let fake = FakeState::new(ISSUER.into(), clock.clone());
         let repo = Arc::new(PgRepo::new(
@@ -270,14 +301,15 @@ impl TestApp {
             MasterKeys::new(&[(1, zeroize::Zeroizing::new([1; 32]))], 1).unwrap(),
             LookupKey::new(zeroize::Zeroizing::new([3; 32])),
         ));
-        let router = account_router(repo.clone(), http, clock.clone(), fake.clone(), rate);
+        let router = account_router(repo.clone(), repo.clone(), http, clock.clone(), fake.clone(), rate, work_rate);
         TestApp { router, repo, clock, fake }
     }
     /// The router over a repository of the test's choosing (one that is down, say).
     pub fn with_repo(repo: Arc<dyn Repo>) -> Router {
         let clock = Arc::new(FixedClock::new(t0()));
         let fake = FakeState::new(ISSUER.into(), clock.clone());
-        account_router(repo, None, clock, fake, RateLimit { period_secs: 1, burst: 1000 })
+        let rate = RateLimit { period_secs: 1, burst: 1000 };
+        account_router(repo, Arc::new(NoWork), None, clock, fake, rate, rate)
     }
     pub fn browser(&self) -> Browser {
         Browser::new(self.router.clone())
