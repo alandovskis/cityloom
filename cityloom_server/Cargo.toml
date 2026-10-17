@@ -41,10 +41,10 @@ http = "1"
 chrono = "0.4"
 axum-extra = { version = "0.12.6", features = ["cookie"] }
 tower_governor = "0.8.0"
+tower = { version = "0.5.3", features = ["util"] }
 
 [dev-dependencies]
 jsonwebtoken = { version = "11.1.0", default-features = false, features = ["use_pem", "rust_crypto"] }
 tempfile = "3.27.0"
 tokio = { version = "1.53.3", features = ["test-util"] }
-tower = { version = "0.5.3", features = ["util"] }
 http-body-util = "0.1.5"

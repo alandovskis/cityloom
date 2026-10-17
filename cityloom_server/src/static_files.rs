@@ -28,6 +28,7 @@ use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
 use sha2::{Digest, Sha256};
+use tower::ServiceExt;
 use tower_http::compression::{CompressionLayer, CompressionLevel};
 use tower_http::services::ServeDir;
 
@@ -379,17 +380,59 @@ fn compressible(status: StatusCode, headers: &HeaderMap) -> bool {
 /// How often the build's name is looked for again, when the site is served from a directory that may change.
 const BUILD_CHECK: Duration = Duration::from_secs(2);
 
+/// The two directories an unpacked area holds (`DATA_ROOT/<area>/metro/` and `.../basemap/`); with an area mounted they
+/// are answered from it and never from `WEB_ROOT/data/`.
+const MOUNTED: [&str; 2] = ["/data/metro/", "/data/basemap/"];
+
+/// The path inside the area for a request path under a mounted directory (`/data/metro/x` is `/metro/x`).
+fn inside_area(path: &str) -> Option<&str> {
+    MOUNTED.iter().any(|prefix| path.starts_with(prefix)).then(|| &path["/data".len()..])
+}
+
+/// The two file services: the site's, and the unpacked area's when there is one.
+#[derive(Clone)]
+struct Files {
+    site: ServeDir,
+    area: Option<ServeDir>,
+}
+
+/// The router's fallback. `apply` has already normalised the path, so a `..` never reaches here.
+async fn serve(State(files): State<Files>, mut req: Request) -> Response {
+    let mut service = files.site;
+    if let Some(area) = files.area {
+        let rest = inside_area(req.uri().path()).map(str::to_owned);
+        if let Some(uri) = rest.and_then(|rest| with_path(req.uri(), &rest)) {
+            *req.uri_mut() = uri;
+            service = area;
+        }
+    }
+    match service.oneshot(req).await {
+        Ok(res) => res.map(Body::new),
+        Err(never) => match never {},
+    }
+}
+
 pub fn router(root: PathBuf, cache_control: String) -> Router {
-    router_checking_every(root, cache_control, BUILD_CHECK)
+    router_with_data(root, None, cache_control)
+}
+
+/// `router`, with `/data/metro/` and `/data/basemap/` served from `data` (an unpacked area) when there is one.
+pub fn router_with_data(root: PathBuf, data: Option<PathBuf>, cache_control: String) -> Router {
+    build_router(root, data, cache_control, BUILD_CHECK)
 }
 
 /// `router`, looking for a change of the build's files at most once per `interval`.
 pub fn router_checking_every(root: PathBuf, cache_control: String, interval: Duration) -> Router {
+    build_router(root, None, cache_control, interval)
+}
+
+fn build_router(root: PathBuf, data: Option<PathBuf>, cache_control: String, interval: Duration) -> Router {
     let cache_control = HeaderValue::from_str(&cache_control).unwrap_or_else(|_| HeaderValue::from_static("no-store"));
     let site = Arc::new(Site { root: root.clone(), cache_control, build: Build::new(root.clone(), interval) });
-    let files = ServeDir::new(root).append_index_html_on_directories(true).precompressed_br().precompressed_gzip();
+    let files =
+        Files { site: ServeDir::new(root).append_index_html_on_directories(true).precompressed_br().precompressed_gzip(), area: data.map(ServeDir::new) };
     let compression = CompressionLayer::new()
         .quality(CompressionLevel::Fastest)
         .compress_when(|status: StatusCode, _, headers: &HeaderMap, _: &axum::http::Extensions| compressible(status, headers));
-    Router::new().fallback_service(files).layer(middleware::from_fn_with_state(site, apply)).layer(compression)
+    Router::new().fallback(serve).with_state(files).layer(middleware::from_fn_with_state(site, apply)).layer(compression)
 }
