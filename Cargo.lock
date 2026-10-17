@@ -538,7 +538,7 @@ dependencies = [
 
 [[package]]
 name = "cityloom_editor"
-version = "0.18.1"
+version = "0.18.2"
 dependencies = [
  "any_spawner",
  "fluent-bundle",

@@ -1,6 +1,5 @@
 //! The notes beside the street's section: how its width is shared out, how many
-//! people it moves, whether it works, what has changed, and the transit
-//! measures it forms or could.
+//! people it moves, whether it works and what has changed.
 //!
 //! Every word is a message (`src/street/i18n`). The views ask with `tr`, which
 //! is watched, so they are drawn again when the language is switched.
@@ -47,7 +46,6 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::shared::atlas::{MEASURES, Where, name_key};
 use crate::shared::catalogue::{Mode, mode_key};
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
@@ -274,51 +272,6 @@ pub fn Revisions(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// The cell of a lane measure this editor models: that it is the street's, the button that arranges
-/// the street as it, or why it cannot be.
-fn street_state(w: SheetWatch, i18n: &I18n, units: Units, code: &'static str, f: &crate::street::model::MeasureView) -> AnyView {
-    if f.present {
-        view! { <b class="m-on">{plain(i18n, "measure-this-street")}</b> }.into_any()
-    } else if f.can_apply {
-        let label = i18n.tr("measure-arrange-label", &Args::new().str("code", code).str("name", plain(i18n, &name_key(code))));
-        view! {
-            <button type="button" class="btn m-apply" aria-label=label on:click=move |_| { w.apply_measure(code); }>
-                {plain(i18n, "measure-arrange")}
-            </button>
-        }
-        .into_any()
-    } else {
-        let why = f.unavailable.as_ref().map_or_else(|| plain(i18n, "measure-will-not-fit"), |why| say(i18n, units, why));
-        view! { <span class="m-not">{why}</span> }.into_any()
-    }
-}
-
-/// The lane measures of the Transit Priority Atlas that can be laid out in this street, with the
-/// button that arranges the street as each (the left sidebar's section).
-#[component]
-pub fn TransitPriority(vm: Rc<StreetVm>) -> impl IntoView {
-    let w = SheetWatch::new(vm);
-    move || {
-        let (v, units) = w.now();
-        let i18n = w.i18n();
-        let rows = MEASURES
-            .iter()
-            .filter(|m| m.place == Where::Street)
-            .filter_map(|m| {
-                let f = v.measures.iter().find(|f| f.code == m.code)?;
-                let problems = f.present.then(|| f.problems.iter().map(|p| view! { <small class="m-problem">{p.say(&i18n)}</small> }).collect_view());
-                Some(view! {
-                    <tr>
-                        <th scope="row"><span class="dirtag">{m.code}</span>{plain(&i18n, &name_key(m.code))}{problems}</th>
-                        <td>{street_state(w, &i18n, units, m.code, f)}</td>
-                    </tr>
-                })
-            })
-            .collect_view();
-        view! { <tbody>{rows}</tbody> }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -414,17 +367,6 @@ mod tests {
         e.set_region(REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap());
         assert_eq!(label(&e.view(), "side", &en()), "Traffic keeps left");
         assert_eq!(detail(&Editor::new(3).view(), "edges", &en()), "A freeway has no sidewalks");
-    }
-
-    #[test]
-    fn a_measure_that_cannot_be_applied_says_why_in_words() {
-        let reason = |sample: usize, code: &str, i18n: &I18n| {
-            Editor::new(sample).view().measures.into_iter().find(|m| m.code == code).unwrap().unavailable.map(|s| say_now(i18n, Units::Metres, &s))
-        };
-        assert_eq!(reason(1, "B2", &en()).as_deref(), Some("Freeways only"));
-        assert_eq!(reason(3, "A1", &en()).as_deref(), Some("Not for a freeway"));
-        assert_eq!(reason(1, "B2", &fr()).as_deref(), Some("Autoroutes seulement"));
-        assert_eq!(reason(3, "A1", &fr()).as_deref(), Some("Pas pour une autoroute"));
     }
 
     #[test]

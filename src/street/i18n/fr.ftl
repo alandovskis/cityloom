@@ -24,9 +24,6 @@ st-does-it-work = Est-ce que ça fonctionne?
 st-sample-limits = limites d’exemple
 st-your-changes = Vos modifications
 st-transit-heading = Priorité au transport en commun
-st-transit-hint = Réorganiser conserve les trottoirs et redessine la chaussée selon cette mesure. Vous pouvez l’annuler.
-st-transit-col-measure = Mesure
-st-transit-col-arrange = Cette rue
 st-about-street = À propos de cette rue
 st-provenance-heading = D’où vient cette rue
 st-no-source = Cette rue ne vient pas d’OpenStreetMap.
@@ -103,10 +100,7 @@ failing =
         [one] { $n } vérification échoue
        *[other] { $n } vérifications échouent
     }
-measure-arrange = Réorganiser
 measure-arrange-label = Réorganiser la rue selon { $code } { $name }
-measure-this-street = Cette rue
-measure-will-not-fit = Ne rentre pas
 
 # Le tour de la coupe : titre, titre de la fenêtre, cartouche, historique, menu d’ajout, horloge et accueil (src/street/page.rs).
 header-city-map = Carte de la ville
@@ -319,8 +313,6 @@ check-detail-side-ok = Les voies vont dans le sens de la circulation de cette r�
 check-detail-side-bad = Une voie circule à contre-sens de la circulation, qui se fait { $side }
 side-word-right = à droite
 side-word-left = à gauche
-unavailable-freeways-only = Autoroutes seulement
-unavailable-not-freeway = Pas pour une autoroute
 
 # Une rue piétonne (src/street/model.rs, page.rs, vm.rs).
 make-pedestrian-button = Rendre piétonne

@@ -1158,12 +1158,7 @@ impl Editor {
             .zip(measures::DEFS.iter())
             .map(|(f, d)| {
                 let can_apply = measures::arrange(d.code, raw, self.row_mm(), side, freeway, &mut self.next_uid.clone()).is_some();
-                let unavailable = (!can_apply).then(|| match d.freeway {
-                    Some(true) if !freeway => Said::new("unavailable-freeways-only"),
-                    Some(false) if freeway => Said::new("unavailable-not-freeway"),
-                    _ => Said::new("measure-will-not-fit"),
-                });
-                MeasureView { code: d.code, present: f.present, problems: f.problems, can_apply, unavailable }
+                MeasureView { code: d.code, present: f.present, problems: f.problems, can_apply }
             })
             .collect()
     }
@@ -1382,8 +1377,6 @@ pub struct MeasureView {
     pub problems: Vec<measures::Problem>,
     /// The street can be arranged as this measure.
     pub can_apply: bool,
-    /// Why not, when it cannot be.
-    pub unavailable: Option<Said>,
 }
 
 #[derive(Serialize)]
@@ -1782,32 +1775,6 @@ mod tests {
         assert!(!e.view().measures.iter().find(|m| m.code == "B3").unwrap().present);
         assert!(!e.set_variant_direction(bus, 0, base), "unchanged");
         assert!(!e.set_variant_direction(bus, 5, Some(0)));
-    }
-
-    #[test]
-    fn a_measure_that_cannot_be_applied_says_why() {
-        let reason =
-            |sample: usize, code: &str| Editor::new(sample).view().measures.into_iter().find(|m| m.code == code).unwrap().unavailable.map(|s| says(&s));
-        assert_eq!(reason(1, "B2").as_deref(), Some("Freeways only"));
-        assert_eq!(reason(1, "E3").as_deref(), Some("Freeways only"));
-        assert_eq!(reason(3, "A1").as_deref(), Some("Not for a freeway"));
-        assert_eq!(reason(1, "A1"), None);
-        assert_eq!(reason(3, "B2"), None);
-    }
-
-    #[test]
-    fn a_measure_has_a_reason_exactly_when_it_cannot_be_applied() {
-        let mut fits_not = 0;
-        for sample in 0..SAMPLES.len() {
-            for m in Editor::new(sample).view().measures {
-                assert_eq!(m.unavailable.is_some(), !m.can_apply, "{} on {}", m.code, SAMPLES[sample].name);
-                if m.unavailable.as_ref().map(says).as_deref() == Some("Will not fit") {
-                    fits_not += 1;
-                }
-            }
-        }
-        // Not every street has room for every arrangement.
-        assert!(fits_not > 0, "no measure was too wide to fit any sample street");
     }
 
     #[test]

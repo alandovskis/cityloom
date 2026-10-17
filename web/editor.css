@@ -1831,37 +1831,6 @@ svg pattern circle {
 .rev tr.base td {
   color: var(--ink-2);
 }
-.measures th[scope="row"] {
-  padding: 6px 8px 6px 0;
-  vertical-align: top;
-  font-weight: 500;
-}
-.measures th[scope="row"] small {
-  display: block;
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 400;
-}
-.measures td {
-  vertical-align: top;
-  text-align: right;
-  font-size: 13px;
-  white-space: nowrap;
-}
-.m-on {
-  color: var(--accent);
-}
-.m-not {
-  color: var(--ink-3);
-}
-.m-apply {
-  min-height: 30px;
-  padding: 0 12px;
-  font-size: 13px;
-}
-.measures small.m-problem {
-  color: var(--warn);
-}
 .fine {
   padding: 8px 0 0;
   color: var(--ink-3);
