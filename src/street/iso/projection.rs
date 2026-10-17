@@ -40,7 +40,7 @@ pub fn drawn_mm(mm: i32) -> f64 {
 }
 
 /// How many bands a textured top is cut into along the street (`band_edges`).
-pub const BANDS: usize = 12;
+pub const BANDS: usize = 8;
 
 /// How a point of the street, in millimetres across it, up from the ground and along it from the
 /// near end, lands in the drawing.
@@ -291,18 +291,17 @@ mod tests {
     }
 
     #[test]
-    fn a_texture_jumps_the_same_few_pixels_at_every_seam_and_no_more_than_the_budget_on_the_widest_sidewalk() {
+    fn a_fine_texture_jumps_the_same_few_pixels_at_every_seam_where_a_step_is_not_seen() {
+        // What is laid in bands now is only the fine grain (the regular joints are geometry, `joints.rs`: no step at all).
         // A 3.3 m sidewalk on Sample Street 1 (18 m across), at 684 px (the usual group at 1440 by 900), 1050 px and
-        // 1440 px: the nearest seam is not the worst, as it was with bands of equal depth ratio (12.5 px at 1050 px
-        // with six). The step cannot be made 1 px by bands: no affine map fits a trapezoid, and it halves only at
-        // twice the bands, each a polygon on every textured top (BANDS = 12 is +29% to +39% of the markup of the
-        // oblique view on the samples).
-        for (width, budget) in [(684.0, 3.5), (1050.0, 5.2), (1440.0, 5.8)] {
+        // 1440 px: the nearest seam is not the worst, as it was with bands of equal depth ratio (12.5 px at 1050 px with
+        // six). No affine map fits a trapezoid, so the step is a few px, in speckle, mulch, grass and the broom grain.
+        for (width, budget) in [(684.0, 5.1), (1050.0, 7.7), (1440.0, 8.6)] {
             let steps = seam_steps(&Projection::fit(width, 18_000), 0.0, 3_300.0, drawn_mm(150));
             let (lo, hi) = steps.iter().fold((f64::MAX, 0.0_f64), |(lo, hi), &s| (lo.min(s), hi.max(s)));
             assert!(hi <= budget, "{width}: {steps:?}");
             assert!(hi < 1.3 * lo, "{width}: every seam is about as big as the others: {steps:?}");
         }
-        assert_eq!(BANDS, 12);
+        assert_eq!(BANDS, 8);
     }
 }
