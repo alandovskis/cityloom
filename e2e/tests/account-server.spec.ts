@@ -41,6 +41,9 @@ async function newAccount(page: Page, context: BrowserContext, baseURL: string, 
   await expect(page.locator("#session-btn-label")).toHaveText(login.name ?? "Ada");
 }
 
+// The merge ends the announcement of the choice: nothing was waiting on a fresh account.
+const MERGED = "Your work was merged with your account: 0 places sent, 0 places received.";
+
 test.describe("signed out", () => {
   test("every page offers Sign in and the server says nobody is signed in", async ({ page, request }) => {
     expect((await request.get("/api/me")).status()).toBe(401);
@@ -84,15 +87,23 @@ test.describe("a first sign-in", () => {
   test("keeps the choice, and the person stays signed in after a reload", async ({ page, context, baseURL }) => {
     await newAccount(page, context, baseURL!);
     await page.getByRole("radio", { name: /Store my work on the server/ }).check();
-    await expect(live(page)).toHaveText(
-      "Your choice is recorded: store your work on the server. Storing work on the server arrives in a later release; for now, your work stays on this device.",
-    );
+    await expect(live(page)).toHaveText(MERGED);
+    await expect(page.locator("#merge-report")).toHaveText(MERGED);
     await page.reload();
     await expect(page.locator("#session-btn-label")).toHaveText("Ada");
     await expect(page.getByRole("radio", { name: /Store my work on the server/ })).toBeChecked();
-    await page.getByRole("radio", { name: /Keep my work on this device only/ }).check();
+    await page.getByRole("radio", { name: /Keep my work on this device only/ }).click();
+    // Stopping deletes the server copy: the press is held back until the person confirms, and "No" changes nothing.
+    await expect(page.locator("#stop-confirm")).toContainText("This deletes your work from the server");
+    await expect(page.locator("#stop-no")).toBeFocused();
+    await expect(page.getByRole("radio", { name: /Store my work on the server/ })).toBeChecked();
+    await page.locator("#stop-no").click();
+    await expect(page.locator("#stop-confirm")).toHaveCount(0);
+    await expect(page.getByRole("radio", { name: /Store my work on the server/ })).toBeChecked();
+    await page.getByRole("radio", { name: /Keep my work on this device only/ }).click();
+    await page.locator("#stop-yes").click();
     await expect(live(page)).toHaveText(
-      "Your choice is recorded: keep your work on this device only. For now, your work stays on this device either way.",
+      "Your choice is recorded: keep your work on this device only. The copy on the server was deleted.",
     );
     await page.reload();
     await expect(page.getByRole("radio", { name: /Keep my work on this device only/ })).toBeChecked();
@@ -120,9 +131,8 @@ test.describe("a returning person", () => {
     const sub = unique();
     await newAccount(page, context, baseURL!, { sub });
     await page.getByRole("radio", { name: /Store my work on the server/ }).check();
-    await expect(live(page)).toHaveText(
-      "Your choice is recorded: store your work on the server. Storing work on the server arrives in a later release; for now, your work stays on this device.",
-    );
+    await expect(live(page)).toHaveText(MERGED);
+    await expect(page.locator("#merge-report")).toHaveText(MERGED);
     await page.locator("#session-btn").click();
     await page.getByRole("button", { name: "Sign out" }).first().click();
     await expect(page).toHaveURL(/\/index\.html$/);

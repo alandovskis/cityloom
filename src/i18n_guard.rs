@@ -491,6 +491,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("h-linked", "the id of an element of the Account page"),
     ("delete-btn", "the id of an element of the Account page"),
     ("delete-no", "the id of an element of the Account page"),
+    ("stop-no", "an element id of the Account page"),
     ("session-slot", "the id of an element every page shares"),
     ("session-btn", "the id of an element every page shares"),
     ("session-menu", "the id of an element every page shares"),

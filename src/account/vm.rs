@@ -8,6 +8,8 @@ use leptos::prelude::*;
 
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::ports::{AccountError, Me, Ports, ProviderInfo};
+use crate::sync::hub;
+use crate::sync::model::Report;
 
 /// Where the page comes back to from a provider.
 const PAGE: &str = "%2Faccount.html";
@@ -49,6 +51,8 @@ pub enum Focus {
     DeleteButton,
     /// "Keep my account", the safe button of the confirmation.
     DeleteSafe,
+    /// "Keep storing my work", the safe button of the confirmation of stopping.
+    StopSafe,
 }
 
 pub struct AccountVm {
@@ -58,6 +62,8 @@ pub struct AccountVm {
     me: ArcRwSignal<Option<Me>>,
     providers: ArcRwSignal<Vec<ProviderInfo>>,
     confirming: ArcRwSignal<bool>,
+    stopping: ArcRwSignal<bool>,
+    merged: ArcRwSignal<Option<Report>>,
     busy: Cell<bool>,
     /// Whether the storage choice was still to be made when the account was first read.
     choice_first: Cell<Option<bool>>,
@@ -74,6 +80,8 @@ impl AccountVm {
             me: ArcRwSignal::new(None),
             providers: ArcRwSignal::new(Vec::new()),
             confirming: ArcRwSignal::new(false),
+            stopping: ArcRwSignal::new(false),
+            merged: ArcRwSignal::new(None),
             busy: Cell::new(false),
             choice_first: Cell::new(None),
             focus: ArcRwSignal::new((0, Focus::None)),
@@ -245,10 +253,65 @@ impl AccountVm {
                             m.store_on_server = Some(store);
                         }
                     });
-                    vm.say(if store { "account-storage-set-server" } else { "account-storage-set-device" });
+                    if store {
+                        vm.say("account-storage-set-server");
+                        // Merge what this browser holds with the account's, then say how many places went each way.
+                        let user = vm.me.get_untracked().map(|m| m.id).unwrap_or_default();
+                        let after = vm.clone();
+                        hub::enable(&user, Box::new(move |report| after.merged_with(report)));
+                    } else {
+                        vm.merged.set(None);
+                        hub::disable();
+                        vm.say("account-storage-set-device");
+                    }
                 })
             }),
         );
+    }
+
+    /// A press on a storage choice: stopping server storage deletes the server copy, so it is asked about first. True
+    /// when the press is held back (the view stops the radio from changing) and the confirmation is shown.
+    pub fn guard_stop(&self, store: bool) -> bool {
+        if store || self.storage() != Some(true) || self.busy.get() {
+            return false;
+        }
+        self.stopping.set(true);
+        self.ask_focus(Focus::StopSafe);
+        true
+    }
+
+    pub fn confirming_stop(&self) -> bool {
+        self.stopping.get()
+    }
+
+    /// Closes the confirmation; focus goes back to the choice.
+    pub fn cancel_stop(&self) {
+        self.stopping.set(false);
+        self.ask_focus(Focus::Storage);
+    }
+
+    pub fn confirm_stop(self: &Rc<Self>) {
+        self.stopping.set(false);
+        self.choose_storage(false);
+    }
+
+    /// What turning storage on did, said in the page's language: how many places went each way.
+    pub fn merge_text(&self) -> Option<String> {
+        self.merged.get().map(|r| self.merge_words(r))
+    }
+
+    fn merge_words(&self, r: Report) -> String {
+        self.i18n.tr("sync-merged", &Args::new().num("sent", r.sent as i64).num("received", r.received as i64))
+    }
+
+    /// The merge ended. If it got to the end the counts are said and kept on the page; if it did not (no network) the
+    /// work goes when the network returns and there is nothing more to say.
+    fn merged_with(&self, report: Report) {
+        if !report.ok {
+            return;
+        }
+        self.merged.set(Some(report));
+        self.ports.announcer.say(&self.i18n.tr_now("sync-merged", &Args::new().num("sent", report.sent as i64).num("received", report.received as i64)));
     }
 
     pub fn confirming_delete(&self) -> bool {
@@ -275,6 +338,7 @@ impl AccountVm {
         let vm = self.clone();
         self.ports.account.delete(Box::new(move |r| {
             vm.clone().settled(r, Focus::DeleteButton, |vm| {
+                hub::disable();
                 vm.say("account-deleted");
                 vm.ports.navigator.go("/index.html");
             })
@@ -293,10 +357,14 @@ impl AccountVm {
             if r == Err(AccountError::SignedOut) {
                 vm.busy.set(false);
                 vm.signed_out();
+                hub::stop();
                 vm.ports.navigator.go("/index.html");
                 return;
             }
-            vm.clone().settled(r, Focus::Page, |vm| vm.ports.navigator.go("/index.html"))
+            vm.clone().settled(r, Focus::Page, |vm| {
+                hub::stop();
+                vm.ports.navigator.go("/index.html");
+            })
         }));
     }
 }
@@ -451,16 +519,11 @@ mod tests {
         assert_eq!(vm.storage(), None, "not until the server says so");
         t.account.answer(AccountReply::Done(Ok(())));
         assert_eq!((vm.storage(), vm.needs_choice()), (Some(true), false));
-        assert_eq!(
-            t.announcer.take(),
-            [
-                "Your choice is recorded: store your work on the server. Storing work on the server arrives in a later release; for now, your work stays on this device."
-            ]
-        );
+        assert_eq!(t.announcer.take(), ["Your choice is recorded: store your work on the server."]);
         vm.choose_storage(false);
         t.account.answer(AccountReply::Done(Ok(())));
         assert_eq!(vm.storage(), Some(false));
-        assert_eq!(t.announcer.take(), ["Your choice is recorded: keep your work on this device only. For now, your work stays on this device either way."]);
+        assert_eq!(t.announcer.take(), ["Your choice is recorded: keep your work on this device only. The copy on the server was deleted."]);
     }
 
     #[test]
@@ -527,9 +590,7 @@ mod tests {
         t.account.answer(AccountReply::Done(Ok(())));
         assert_eq!(
             t.announcer.take(),
-            [
-                "Votre choix est enregistré\u{a0}: conserver votre travail sur cet appareil seulement. Pour le moment, votre travail reste sur cet appareil dans les deux cas."
-            ]
+            ["Votre choix est enregistré\u{a0}: conserver votre travail sur cet appareil seulement. La copie sur le serveur a été supprimée."]
         );
     }
 
@@ -614,5 +675,103 @@ mod tests {
         t.account.answer(AccountReply::Done(Err(AccountError::SignedOut)));
         assert_eq!((vm.state(), focus(&vm)), (State::SignedOut, Focus::Page));
         assert_eq!(t.navigator.take(), ["/index.html"]);
+    }
+
+    fn sync_for(t: &TestPorts) -> Rc<crate::sync::SyncVm> {
+        crate::sync::hub::reset();
+        crate::sync::SyncVm::new(t.ports.clone(), crate::i18n_for(Locale::En))
+    }
+
+    #[test]
+    fn choosing_the_server_merges_the_work_and_says_how_many_places_went_each_way() {
+        use crate::shared::ports::{WorkAsk, WorkCall, WorkPage, WorkPushed, WorkReply, WorkResult, WorkStatus};
+        let (vm, t) = new_vm(Locale::En);
+        let _sync = sync_for(&t);
+        vm.load();
+        t.account.answer(AccountReply::Me(Ok(me(None, vec![identity("a", "google", None)]))));
+        // a street edited here before storage was turned on
+        let store = crate::city::store::CityStore::sample(t.ports.storage.clone());
+        let mut s = store.open().street_editor(1, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(store.write_street(1, s));
+        t.announcer.take();
+        vm.choose_storage(true);
+        t.account.answer(AccountReply::Done(Ok(())));
+        assert_eq!(t.announcer.take(), ["Your choice is recorded: store your work on the server."]);
+        assert_eq!(t.work.calls(), [WorkCall::Pull(WorkAsk::first(0))]);
+        t.work.answer(WorkReply::Page(Ok(WorkPage { epoch: "e1".into(), rev: 0, more: false, records: vec![] })));
+        let Some(WorkCall::Push { batch, .. }) = t.work.calls().into_iter().next() else { panic!("a push was expected") };
+        let result = WorkResult { kind: batch[0].kind.clone(), key: batch[0].key.clone(), status: WorkStatus::Accepted, rev: 1, record: None };
+        t.work.answer(WorkReply::Pushed(Ok(WorkPushed { rev: 1, results: vec![result] })));
+        let merged = "Your work was merged with your account: 1 place sent, 0 places received.";
+        assert_eq!(t.announcer.take(), [merged]);
+        assert_eq!(vm.merge_text().as_deref(), Some(merged));
+    }
+
+    #[test]
+    fn a_merge_that_could_not_finish_says_no_counts() {
+        use crate::shared::ports::{WorkError, WorkReply};
+        let (vm, t) = new_vm(Locale::En);
+        let _sync = sync_for(&t);
+        vm.load();
+        t.account.answer(AccountReply::Me(Ok(me(None, vec![identity("a", "google", None)]))));
+        vm.choose_storage(true);
+        t.account.answer(AccountReply::Done(Ok(())));
+        t.announcer.take();
+        t.work.answer(WorkReply::Page(Err(WorkError::Unavailable))); // offline: it will go when the network returns
+        assert_eq!((t.announcer.take(), vm.merge_text()), (vec![], None));
+        assert_eq!(vm.storage(), Some(true), "the choice itself stands");
+    }
+
+    #[test]
+    fn stopping_server_storage_is_held_back_until_confirmed_then_deletes_the_copy_and_clears_the_sync() {
+        use crate::sync::model::{self, SyncDoc};
+        let (vm, t) = new_vm(Locale::En);
+        let _sync = sync_for(&t);
+        vm.load();
+        t.account.answer(AccountReply::Me(Ok(me(Some(true), vec![identity("a", "google", None)]))));
+        t.account.answer(AccountReply::Providers(Ok(providers())));
+        model::save(&*t.storage, &SyncDoc { user: Some("u".into()), rev: 5, ..SyncDoc::new() });
+        assert!(vm.guard_stop(false) && vm.confirming_stop());
+        assert!(t.account.calls().is_empty(), "nothing is asked of the server until the person confirms");
+        vm.cancel_stop();
+        assert_eq!((vm.confirming_stop(), vm.storage()), (false, Some(true)));
+        assert!(vm.guard_stop(false));
+        vm.confirm_stop();
+        assert_eq!(t.account.calls(), [AccountCall::SetStorage(false)]);
+        t.account.answer(AccountReply::Done(Ok(())));
+        assert_eq!(vm.storage(), Some(false));
+        assert_eq!(model::open(&*t.storage).unwrap(), SyncDoc::new(), "the device clears its sync state");
+        assert_eq!(
+            t.announcer.take().last().map(String::as_str),
+            Some("Your choice is recorded: keep your work on this device only. The copy on the server was deleted.")
+        );
+    }
+
+    #[test]
+    fn only_stopping_a_stored_copy_is_held_back() {
+        let (vm, t) = new_vm(Locale::En);
+        vm.load();
+        t.account.answer(AccountReply::Me(Ok(me(None, vec![identity("a", "google", None)]))));
+        assert!(!vm.guard_stop(false), "nothing chosen yet: there is no server copy");
+        assert!(!vm.guard_stop(true));
+        vm.choose_storage(false);
+        t.account.answer(AccountReply::Done(Ok(())));
+        assert!(!vm.guard_stop(false), "already on this device only");
+    }
+
+    #[test]
+    fn deleting_the_account_clears_the_sync_state_and_signing_out_stops_the_sync() {
+        use crate::sync::model::{self, SyncDoc};
+        let (vm, t) = new_vm(Locale::En);
+        let sync = sync_for(&t);
+        vm.load();
+        t.account.answer(AccountReply::Me(Ok(me(Some(true), vec![identity("a", "google", None)]))));
+        model::save(&*t.storage, &SyncDoc { user: Some("u".into()), rev: 5, ..SyncDoc::new() });
+        vm.confirm_delete();
+        t.account.answer(AccountReply::Done(Ok(())));
+        assert_eq!(model::open(&*t.storage).unwrap(), SyncDoc::new());
+        assert_eq!(sync.status(), crate::sync::Status::Off);
     }
 }

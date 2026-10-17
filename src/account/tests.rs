@@ -121,15 +121,64 @@ fn deleting_is_confirmed_in_the_page_with_the_backup_retention_said() {
 }
 
 #[test]
-fn the_storage_choice_says_it_is_recorded_and_that_server_storage_comes_later() {
-    for (locale, recorded, later, either_way) in [
-        (Locale::En, "This choice is recorded.", "arrive in a later release", "stays on this device either way"),
-        (Locale::FrCa, "Ce choix est enregistré.", "arriveront dans une version ultérieure", "reste sur cet appareil dans les deux cas"),
+fn the_storage_choice_says_what_each_option_does_including_the_shared_computer_and_the_deleted_copy() {
+    for (locale, recorded, device, server, merged_in) in [
+        (Locale::En, "This choice is recorded.", "that copy is deleted", "copied to the server", "merged into your account"),
+        (Locale::FrCa, "Ce choix est enregistré.", "cette copie est supprimée", "copié sur le serveur", "fusionné avec votre compte"),
     ] {
         let out = page(locale, signed_in(None, vec![identity("a", "google", None)]), no_op);
-        assert!(out.contains(recorded) && out.contains(later) && out.contains(either_way), "{locale:?}: {out}");
-        assert!(!out.contains("follows you") && !out.contains("vous suivre"), "no promise of storage that does not exist yet");
+        assert!(out.contains(recorded) && out.contains(device) && out.contains(server) && out.contains(merged_in), "{locale:?}: {out}");
+        assert!(
+            out.contains("someone else who used it") || out.contains("une autre personne qui l’a utilisé"),
+            "the shared-computer consequence is said: {out}"
+        );
+        assert!(!out.contains("later release") && !out.contains("version ultérieure"), "{out}");
     }
+}
+
+#[test]
+fn the_page_lists_what_is_stored_and_what_is_not_encrypted_in_both_languages() {
+    for (locale, heading, sealed, plain, all) in [
+        (
+            Locale::En,
+            "What is stored about you",
+            "Encrypted on the server with a key of your own",
+            "the OpenStreetMap ids of the places you edited",
+            "Deleting your account deletes all of it from the server.",
+        ),
+        (
+            Locale::FrCa,
+            "Ce qui est conservé à votre sujet",
+            "Chiffré sur le serveur avec une clé qui vous est propre",
+            "les identifiants OpenStreetMap des lieux que vous avez modifiés",
+            "La suppression de votre compte supprime tout cela du serveur.",
+        ),
+    ] {
+        let out = page(locale, signed_in(Some(true), vec![identity("a", "google", None)]), no_op);
+        assert!(out.contains(heading) && out.contains(sealed) && out.contains(plain) && out.contains(all), "{locale:?}: {out}");
+        assert!(out.contains(r#"id="h-privacy""#), "{out}");
+    }
+}
+
+#[test]
+fn stopping_server_storage_is_confirmed_in_the_page_with_what_it_does() {
+    let identities = || vec![identity("a", "google", None)];
+    let before = page(Locale::En, signed_in(Some(true), identities()), no_op);
+    assert!(!before.contains(r#"id="stop-confirm""#), "{before}");
+    let after = page(Locale::En, signed_in(Some(true), identities()), |vm, _| {
+        assert!(vm.guard_stop(false));
+    });
+    assert!(after.contains(r#"id="stop-confirm""#) && after.contains("Stop storing your work on the server?"), "{after}");
+    assert!(after.contains("This deletes your work from the server and keeps the copy in this browser."), "{after}");
+    assert!(after.contains("Your other devices keep their own copies but stop syncing."), "{after}");
+    assert!(after.contains(r#"id="stop-no""#) && after.contains("Keep storing my work") && after.contains("Delete the server copy"), "{after}");
+    assert!(after.contains(r#"aria-describedby="stop-warning""#), "{after}");
+}
+
+#[test]
+fn the_delete_warning_says_the_stored_work_goes_too() {
+    let out = page(Locale::En, signed_in(Some(true), vec![identity("a", "google", None)]), |vm, _| vm.ask_delete());
+    assert!(out.contains("including the work you stored there"), "{out}");
 }
 
 #[test]
