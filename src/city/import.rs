@@ -54,10 +54,21 @@ fn has_own_curb(lane: &Lane) -> bool {
 }
 
 /// The pieces importer version 4 made of the lanes: every buffer that is not planted a median of its own (so at least
-/// 600 mm), and nothing merged. Only their width is kept, as `EdgeDef::legacy_row_mm`.
+/// 600 mm), and nothing merged. Only their width is kept, as `EdgeDef::legacy_rows_mm`.
 fn legacy_pieces(lanes: &[Lane]) -> Vec<Piece> {
     let median = kind_index("median").unwrap_or_default();
     lanes.iter().map(|l| Piece { kind: if kind_of(l) == "buffer" { median } else { piece(l).kind }, ..piece(l) }).collect()
+}
+
+/// The lanes as they were read before the ways of a bike track were fetched: a lane that runs both ways, which that
+/// made of a track beside a one-way road, is a one-way lane of half the width (the join made it of two). Known limits:
+/// a side whose two lanes were not equal (a `cycleway:<side>:width`) gives no width that was, so its record stays an
+/// orphan; and a lane that was two-way before (`cycleway:<side>:oneway=no`) is offered a width it never had.
+fn one_way_bike_lanes(lanes: &[Lane]) -> Vec<Lane> {
+    lanes
+        .iter()
+        .map(|l| if l.kind == LaneKind::Bike && l.way == Way::Both { Lane { way: Way::Forward, width_m: l.width_m / 2.0, ..l.clone() } } else { l.clone() })
+        .collect()
 }
 
 /// The pieces of a road's lanes, left to right. A curb buffer between a bike lane or a sidewalk and a road lane is
@@ -245,7 +256,12 @@ impl Layout {
                 let pieces = pieces(&r.lanes);
                 let side = if network.left_hand { Side::Left } else { Side::Right };
                 let section = Street { name: r.name.clone(), source: refs(&r.osm_ways, &r.osm_versions), ..Street::imported(class, side, &pieces) };
-                let legacy = Street::imported(class, side, &legacy_pieces(&r.lanes)).row_mm;
+                let row_of = |pieces: &[Piece]| Street::imported(class, side, pieces).row_mm;
+                let one_way = one_way_bike_lanes(&r.lanes);
+                let mut legacy_rows_mm: Vec<i32> = [row_of(&legacy_pieces(&r.lanes)), row_of(&self::pieces(&one_way)), row_of(&legacy_pieces(&one_way))].into();
+                legacy_rows_mm.sort_unstable();
+                legacy_rows_mm.dedup();
+                legacy_rows_mm.retain(|&row| row != section.row_mm);
                 EdgeDef {
                     a: index[&r.from],
                     b: index[&r.to],
@@ -253,7 +269,7 @@ impl Layout {
                     name: r.name.clone(),
                     headings: headings(&r.points),
                     shape: shape_mm(&r.points, node_mm(r.from), node_mm(r.to), &mm_of),
-                    legacy_row_mm: (legacy != section.row_mm).then_some(legacy),
+                    legacy_rows_mm,
                     section,
                 }
             })

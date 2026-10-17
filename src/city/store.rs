@@ -525,6 +525,86 @@ mod tests {
         (area, storage, street, saved)
     }
 
+    /// `tiny_network` with a bike lane beside the road: one-way, 1.5 m, as a track mapped as ways of its own was
+    /// read before those ways were fetched, or two-way, 3 m, as it is read now.
+    fn network_with_bike_lane(two_way: bool) -> Network {
+        use osm_network::{Lane, LaneKind, Way};
+        let mut network = tiny_network();
+        let bike = Lane {
+            kind: LaneKind::Bike,
+            way: if two_way { Way::Both } else { Way::Forward },
+            width_m: if two_way { 3.0 } else { 1.5 },
+            buffer_type: None,
+            hours: None,
+        };
+        network.roads[0].lanes.insert(0, bike);
+        network
+    }
+
+    /// A street edited and kept with a one-way bike lane, then made again with the two-way lane it has now.
+    fn edited_with_a_one_way_bike_lane_and_imported_again() -> (CityStore, Rc<MemoryStorage>, u32, Street) {
+        let (ports, _, storage) = test_ports();
+        let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
+        assert!(area.keep_network(&network_with_bike_lane(false)));
+        let street = area.open().view(0).edges[0].uid;
+        let mut saved = area.open().street_editor(street, 0).unwrap().snapshot();
+        let was = saved.row_mm;
+        saved.segments[1].width_mm -= 100;
+        saved.segments[2].width_mm += 100;
+        assert_eq!(saved.row_mm, was);
+        assert!(area.write_street(street, saved.clone()));
+        assert!(area.keep_network(&network_with_bike_lane(true)));
+        (area, storage, street, saved)
+    }
+
+    #[test]
+    fn an_edit_saved_with_the_bike_lane_one_way_applies_to_the_street_when_the_lane_is_two_way_as_it_was_saved() {
+        let (area, _, street, saved) = edited_with_a_one_way_bike_lane_and_imported_again();
+        let city = area.open();
+        assert_eq!(city.view(0).edited, 1, "the record matches by the width the street had");
+        let editor = city.street_editor(street, 0).unwrap();
+        assert_eq!(editor.snapshot(), saved);
+        let v = editor.view();
+        assert!(v.checks.iter().find(|c| c.id == "fits").unwrap().ok);
+        assert_eq!(v.total_mm, v.row_mm);
+    }
+
+    #[test]
+    fn a_street_taken_by_its_one_way_width_keeps_it_on_every_write_and_start_over_gives_the_two_way_one() {
+        let (area, storage, street, saved) = edited_with_a_one_way_bike_lane_and_imported_again();
+        let mut again = area.open().street_editor(street, 0).unwrap().snapshot();
+        again.segments[1].width_mm += 50;
+        again.segments[2].width_mm -= 50;
+        assert!(area.write_street(street, again.clone()));
+        assert_eq!(document(&storage).streets.values().next().unwrap().street.row_mm, saved.row_mm);
+        assert!(area.keep_network(&network_with_bike_lane(true)));
+        assert_eq!(area.open().view(0).edited, 1, "found by that width at every import");
+        let mut editor = area.open().street_editor(street, 0).unwrap();
+        assert!(editor.reset());
+        let restarted = editor.snapshot();
+        assert_eq!(restarted.row_mm, saved.row_mm + 1500, "the street as imported now");
+        assert!(area.write_street(street, restarted.clone()));
+        assert_eq!(area.open().street_editor(street, 0).unwrap().snapshot(), restarted);
+    }
+
+    #[test]
+    fn a_street_edited_under_importer_version_4_with_a_one_way_lane_is_found_by_both_changes_together() {
+        let (ports, _, _storage) = test_ports();
+        let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
+        let curbed_one_way = |legacy: bool, two_way: bool| {
+            let mut n = curbed_network(legacy);
+            n.roads[0].lanes.insert(0, network_with_bike_lane(two_way).roads[0].lanes[0].clone());
+            n
+        };
+        assert!(area.keep_network(&curbed_one_way(true, false)));
+        let street = area.open().view(0).edges[0].uid;
+        let saved = area.open().street_editor(street, 0).unwrap().snapshot();
+        assert!(area.write_street(street, saved.clone()));
+        assert!(area.keep_network(&curbed_one_way(false, true)));
+        assert_eq!(area.open().view(0).edited, 1);
+        assert_eq!(area.open().street_editor(street, 0).unwrap().snapshot(), saved);
+    }
+
     #[test]
     fn an_edit_saved_before_the_curbs_joined_their_pieces_applies_to_the_same_street_again_as_it_was_saved() {
         let (area, _, street, saved) = edited_before_and_imported_again();

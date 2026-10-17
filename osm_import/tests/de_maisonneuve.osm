@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6">
+<node id="32124392" lat="45.4945560" lon="-73.5805650"></node>
+<node id="32124393" lat="45.4956806" lon="-73.5793232"></node>
+<node id="237615647" lat="45.4951767" lon="-73.5798327"></node>
+<node id="4012961890" lat="45.4956067" lon="-73.5793441"></node>
+<node id="4024535598" lat="45.4946257" lon="-73.5804796"></node>
+<node id="4170243616" lat="45.4955778" lon="-73.5792769"></node>
+<node id="4729976456" lat="45.4936288" lon="-73.5816501"></node>
+<node id="4729976458" lat="45.4935774" lon="-73.5817092"></node>
+<node id="6439139644" lat="45.4945148" lon="-73.5806118"></node>
+<node id="10982715952" lat="45.4942891" lon="-73.5808730"></node>
+<node id="11678504114" lat="45.4946444" lon="-73.5804581"><tag k="highway" v="traffic_signals"/></node>
+<node id="11682057061" lat="45.4936401" lon="-73.5816378"><tag k="highway" v="traffic_signals"/></node>
+<node id="12251151551" lat="45.4956698" lon="-73.5793244"></node>
+<node id="12251151552" lat="45.4955816" lon="-73.5793642"></node>
+<node id="12251151553" lat="45.4956274" lon="-73.5793343"></node>
+<node id="12251151554" lat="45.4956493" lon="-73.5793275"></node>
+<node id="12251151556" lat="45.4952133" lon="-73.5797919"></node>
+<node id="12251151557" lat="45.4951390" lon="-73.5798756"></node>
+<node id="12741697439" lat="45.4939748" lon="-73.5812403"></node>
+<node id="12741697442" lat="45.4939953" lon="-73.5811264"></node>
+<node id="12741753901" lat="45.4946121" lon="-73.5804043"></node>
+<node id="12741753902" lat="45.4944692" lon="-73.5805699"></node>
+<node id="12741753903" lat="45.4944595" lon="-73.5805813"><tag k="highway" v="traffic_signals"/></node>
+<node id="12741753904" lat="45.4946216" lon="-73.5803930"><tag k="highway" v="traffic_signals"/></node>
+<node id="12741774972" lat="45.4942384" lon="-73.5808402"></node>
+<node id="12741774973" lat="45.4942765" lon="-73.5807954"></node>
+<node id="12741774981" lat="45.4940883" lon="-73.5811064"></node>
+<node id="12741774984" lat="45.4938967" lon="-73.5813315"></node>
+<node id="12745122526" lat="45.4951882" lon="-73.5797273"></node>
+<node id="12745122527" lat="45.4950867" lon="-73.5798473"></node>
+<node id="12745122531" lat="45.4948249" lon="-73.5802440"></node>
+<node id="12745122535" lat="45.4947614" lon="-73.5802297"></node>
+<node id="12745122536" lat="45.4948301" lon="-73.5801489"></node>
+<node id="12745122538" lat="45.4955538" lon="-73.5793010"><tag k="highway" v="traffic_signals"/></node>
+<node id="12745122541" lat="45.4955655" lon="-73.5792875"></node>
+<node id="12745122542" lat="45.4955881" lon="-73.5792685"></node>
+<node id="12745122561" lat="45.4955941" lon="-73.5793529"></node>
+<way id="330150435"><nd ref="32124392"/><nd ref="6439139644"/><nd ref="10982715952"/><nd ref="12741774981"/><nd ref="12741697439"/><nd ref="12741774984"/><nd ref="11682057061"/><nd ref="4729976456"/><nd ref="4729976458"/><tag k="cycleway" v="separate"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="foot" v="use_sidepath"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="name" v="Boulevard De Maisonneuve Ouest"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="separate"/></way>
+<way id="330150736"><nd ref="237615647"/><nd ref="12251151557"/><nd ref="12745122531"/><nd ref="11678504114"/><nd ref="4024535598"/><nd ref="32124392"/><tag k="cycleway" v="separate"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="foot" v="use_sidepath"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="name" v="Boulevard De Maisonneuve Ouest"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="separate"/></way>
+<way id="330153470"><nd ref="32124393"/><nd ref="12251151551"/><nd ref="12251151554"/><nd ref="12251151553"/><nd ref="4012961890"/><nd ref="12745122561"/><nd ref="12251151552"/><nd ref="12251151556"/><nd ref="237615647"/><tag k="cycleway" v="separate"/><tag k="cycleway:left" v="separate"/><tag k="cycleway:right" v="no"/><tag k="foot" v="use_sidepath"/><tag k="highway" v="tertiary"/><tag k="lanes" v="2"/><tag k="name" v="Boulevard De Maisonneuve Ouest"/><tag k="oneway" v="yes"/><tag k="sidewalk:both" v="separate"/></way>
+<way id="1376142903"><nd ref="12741697442"/><nd ref="12741774972"/><tag k="foot" v="no"/><tag k="highway" v="cycleway"/><tag k="lcn" v="yes"/><tag k="name" v="Boulevard De Maisonneuve Ouest"/><tag k="oneway" v="no"/></way>
+<way id="1376142928"><nd ref="12741753901"/><nd ref="12741753904"/><nd ref="12745122535"/><tag k="foot" v="no"/><tag k="highway" v="cycleway"/><tag k="lcn" v="yes"/><tag k="name" v="Boulevard De Maisonneuve Ouest"/><tag k="oneway" v="no"/></way>
+<way id="1376154208"><nd ref="12741774973"/><nd ref="12741753903"/><nd ref="12741753902"/><tag k="foot" v="no"/><tag k="highway" v="cycleway"/><tag k="lcn" v="yes"/><tag k="name" v="Boulevard De Maisonneuve Ouest"/><tag k="oneway" v="no"/></way>
+<way id="1376525430"><nd ref="12745122526"/><nd ref="12745122538"/><nd ref="12745122541"/><nd ref="4170243616"/><nd ref="12745122542"/><tag k="foot" v="no"/><tag k="highway" v="cycleway"/><tag k="lcn" v="yes"/><tag k="name" v="Boulevard De Maisonneuve Ouest"/><tag k="oneway" v="no"/></way>
+<way id="1376525436"><nd ref="12745122536"/><nd ref="12745122527"/><tag k="foot" v="no"/><tag k="highway" v="cycleway"/><tag k="lcn" v="yes"/><tag k="name" v="Boulevard De Maisonneuve Ouest"/><tag k="oneway" v="no"/></way>
+</osm>

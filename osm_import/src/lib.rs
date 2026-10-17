@@ -67,6 +67,9 @@ fn read_streets(osm: &[u8], clip: Option<Vec<geom::LonLat>>, config: MapConfig, 
         explicit_cycleways(&mut way.tags);
     }
     for (id, way) in doc.ways.iter().chain(doc.clipped_copied_ways.iter().map(|(id, way)| (id, way))) {
+        if is_off_road(&way.tags) {
+            continue;
+        }
         extract.handle_way(*id, way, &streets.config);
     }
     for (id, rel) in &doc.relations {
@@ -111,7 +114,7 @@ fn explicit_sidewalks(tags: &mut Tags) {
 /// A side whose bike track is mapped as a way of its own (`cycleway:left=separate`, `cycleway:right=separate`,
 /// `cycleway:both=separate` or `cycleway=separate`) has the bike track beside the road that it has, as a sidewalk
 /// mapped separately has its sidewalk: osm2streets leaves a track mapped as `separate` out of the road's lanes, and
-/// the way that is the track itself is not kept (it is not among the highways the data holds). Whether the track
+/// the way that is the track itself is not a road (`is_off_road` leaves it out of what osm2streets is given). Whether the track
 /// runs one way (with the traffic, as osm2streets reads `cycleway=track`) or both is told by the road's own
 /// `cycleway:<side>:oneway`, or, for a track mapped as ways of its own, by `two_way_tracks`.
 fn explicit_cycleways(tags: &mut Tags) {
@@ -245,6 +248,13 @@ fn is_track(tags: &Tags) -> bool {
     !tags.is("cycleway", "crossing")
         && !tags.is("footway", "crossing")
         && (tags.is("highway", "cycleway") || (tags.is_any("highway", vec!["path", "footway"]) && tags.is("bicycle", "designated")))
+}
+
+/// A cycleway, path or footway: the data holds those for `two_way_tracks` (and a person may bring a file that has
+/// them), but they are not streets. osm2streets would make roads of them, with a junction wherever one meets or
+/// crosses a road, so they are not handed to it.
+fn is_off_road(tags: &Tags) -> bool {
+    tags.is_any("highway", vec!["cycleway", "path", "footway"])
 }
 
 /// Whether a way is one-way for bicycles: what `oneway:bicycle` or `bicycle:oneway` says, or else `oneway`.

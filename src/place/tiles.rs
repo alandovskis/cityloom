@@ -34,8 +34,12 @@ pub const INDEX_URL: &str = "data/metro/index.json";
 /// piece's, up to its maximum; what is past it stays a buffer); any other buffer that is not planted (a curb, paint,
 /// posts, a barrier, a shoulder) is the neutral `buffer`, not a median.
 ///
+/// 6: the bike tracks mapped as ways of their own are in the tile and the Overpass answer (`highway=cycleway`, and
+/// `path` or `footway` designated for bicycles); a track beside a road that is not one-way makes that road's lane
+/// two-way, and the tracks themselves are not streets.
+///
 /// The e2e test `world.spec.ts` names the version in what it expects to be kept: raise it there too.
-pub const IMPORTER_VERSION: u32 = 5;
+pub const IMPORTER_VERSION: u32 = 6;
 
 /// A tile's checksum as an area made from it is kept: with the version of the importer that read it.
 pub fn with_importer(checksum: &str) -> String {
