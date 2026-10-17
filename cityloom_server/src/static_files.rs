@@ -33,8 +33,8 @@ use tower_http::services::ServeDir;
 
 /// What a versioned URL is cached as: its name is its content, so it never changes.
 pub const IMMUTABLE: &str = "public, max-age=31536000, immutable";
-/// The tile index: a stale one only delays an area's refresh, so a few minutes of reuse is safe.
-const INDEX: &str = "public, max-age=300, stale-while-revalidate=86400";
+/// The tile index: a stale copy only delays an area's refresh, so it may be used for minutes (five fresh, ten more while it is revalidated).
+const INDEX: &str = "public, max-age=300, stale-while-revalidate=600";
 /// Glyph ranges and font licences: a stale one is a cosmetic difference at worst.
 const GLYPHS: &str = "public, max-age=86400, stale-while-revalidate=604800";
 /// What a page says where it names the build its assets belong to.
