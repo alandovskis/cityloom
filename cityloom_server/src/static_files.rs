@@ -270,15 +270,17 @@ async fn apply(State(site): State<Arc<Site>>, mut req: Request, next: Next) -> R
     }
     let mut res = next.run(req).await;
     let found = res.status().is_success();
+    // A 304 stands for the 200 it validates, and replaces the headers of the stored one: the same policy.
+    let kept = found || res.status() == StatusCode::NOT_MODIFIED;
     if found {
         res.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static(content_type(&path)));
     }
     if found && page {
         res = fill_in(res, &build, if_none_match).await;
     }
-    let cache = match (found && versioned, cache_for(&path)) {
+    let cache = match (kept && versioned, cache_for(&path)) {
         (true, _) => HeaderValue::from_static(IMMUTABLE),
-        (false, Some(own)) if found => HeaderValue::from_static(own),
+        (false, Some(own)) if kept => HeaderValue::from_static(own),
         _ => site.cache_control.clone(),
     };
     let headers = res.headers_mut();
