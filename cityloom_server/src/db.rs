@@ -266,11 +266,21 @@ impl Repo for PgRepo {
         // One transaction: turning storage off deletes the server copy with the choice, so a device that is offline
         // cannot leave a copy behind (its queued push finds the choice off and is refused).
         let mut tx = self.pool.begin().await.map_err(unavailable)?;
-        let done = sqlx::query("update users set store_on_server = $2 where id = $1").bind(user).bind(sealed).execute(&mut *tx).await.map_err(unavailable)?;
-        if done.rows_affected() == 0 {
+        let Some(before) = sqlx::query_scalar::<_, Vec<u8>>("select store_on_server from users where id = $1 for update")
+            .bind(user)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(unavailable)?
+        else {
             return Err(RepoError::Gone);
-        }
+        };
+        let was_on = crypto::open(&key, &crypto::aad("users", "store_on_server", &user.to_string()), &before).map_err(corrupt)?.as_slice() == b"1";
+        sqlx::query("update users set store_on_server = $2 where id = $1").bind(user).bind(sealed).execute(&mut *tx).await.map_err(unavailable)?;
         if store {
+            if was_on {
+                // Already on: the copy is the same one, and the devices keep their revisions.
+                return tx.commit().await.map_err(unavailable);
+            }
             // A new epoch each time storage is turned on: a device that missed an off and on again holds revisions that
             // mean nothing to the new copy, and is told to reset (merge) instead of being served an empty page.
             sqlx::query("update users set work_epoch = $2 where id = $1").bind(user).bind(Uuid::new_v4()).execute(&mut *tx).await.map_err(unavailable)?;

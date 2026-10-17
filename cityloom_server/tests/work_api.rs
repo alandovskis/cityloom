@@ -183,6 +183,31 @@ async fn delete_clears_the_copy_and_the_revision(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn delete_gives_the_copy_a_new_epoch_so_another_device_resets_and_removes_nothing(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let mut b = storing(&app, "a").await;
+    put(&mut b, vec![record("street", "k", 0, MIDDLE, Some(json!({})))]).await;
+    let epoch = b.get("/api/work?since=0").await.json()["epoch"].as_str().unwrap().to_string();
+    assert_eq!(b.request("DELETE", "/api/work", Some(ORIGIN), None).await.status, StatusCode::NO_CONTENT);
+    let r = b.get(&format!("/api/work?since=1&epoch={epoch}")).await;
+    assert_eq!((r.status, r.json()["error"].as_str()), (StatusCode::GONE, Some("reset")), "a device that read the copy before is told to merge, not to resync");
+    assert_ne!(b.get("/api/work?since=0").await.json()["epoch"].as_str().unwrap(), epoch);
+}
+
+#[sqlx::test]
+async fn choosing_server_storage_again_keeps_the_copy_and_its_epoch(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let mut b = storing(&app, "a").await;
+    put(&mut b, vec![record("street", "k", 0, MIDDLE, Some(json!({})))]).await;
+    let epoch = b.get("/api/work?since=0").await.json()["epoch"].as_str().unwrap().to_string();
+    let r = b.request("PUT", "/api/me/storage", Some(ORIGIN), Some(json!({"store_on_server": true}))).await;
+    assert_eq!(r.status, StatusCode::NO_CONTENT);
+    let pulled = b.get(&format!("/api/work?since=0&epoch={epoch}")).await;
+    assert_eq!(pulled.status, StatusCode::OK, "storage was on already: the devices keep their revisions");
+    assert_eq!(pulled.json()["records"].as_array().unwrap().len(), 1);
+}
+
+#[sqlx::test]
 async fn turning_storage_off_deletes_the_copy_and_a_queued_push_is_refused(pool: PgPool) {
     let app = TestApp::new(pool.clone());
     let mut phone = storing(&app, "p").await;

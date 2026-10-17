@@ -214,7 +214,14 @@ impl WorkRepo for PgRepo {
         let mut tx = self.pool.begin().await.map_err(db)?;
         self.lock_work(&mut tx, user).await?;
         sqlx::query("delete from work where user_id = $1").bind(user).execute(&mut *tx).await.map_err(db)?;
-        sqlx::query("update users set work_rev = 0, work_floor = 0 where id = $1").bind(user).execute(&mut *tx).await.map_err(db)?;
+        // A new epoch with the counter back at 0: the other devices are told to reset (merge, removing nothing), not to
+        // resync (which removes what the server no longer lists).
+        sqlx::query("update users set work_rev = 0, work_floor = 0, work_epoch = $2 where id = $1")
+            .bind(user)
+            .bind(Uuid::new_v4())
+            .execute(&mut *tx)
+            .await
+            .map_err(db)?;
         tx.commit().await.map_err(db)
     }
 }
