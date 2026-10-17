@@ -224,14 +224,14 @@ pub fn stamp(ms: u64) -> String {
     format!("{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:03}Z", rest / 3600, rest % 3600 / 60, rest % 60, ms % 1000)
 }
 
-/// A store wrote a record (or removed it, with `deleted`): it waits to be sent, edited now. Signed in or not. Says
-/// whether the mark was kept (not where the sync document is a newer build's); an edit is never held up by it.
 /// The rule the server applies to a key: 1 to 200 characters of `[A-Za-z0-9~_.:-]`. A record whose key fails it would
 /// make the server refuse the whole batch it travels in, so it is never marked.
 pub fn valid_key(key: &str) -> bool {
     !key.is_empty() && key.len() <= 200 && key.bytes().all(|b| b.is_ascii_alphanumeric() || b"~_.:-".contains(&b))
 }
 
+/// A store wrote a record (or removed it, with `deleted`): it waits to be sent, edited now. Signed in or not. Says
+/// whether the mark was kept (not where the sync document is a newer build's); an edit is never held up by it.
 pub fn mark(storage: &dyn Storage, kind: Kind, key: &str, deleted: bool) -> bool {
     if !valid_key(key) {
         return false;

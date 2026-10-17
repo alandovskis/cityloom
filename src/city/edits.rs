@@ -152,7 +152,6 @@ impl Draft {
         }
     }
 
-    /// Keeps `record` under `key`. Says whether it could be.
     /// The record under `key` as the document holds it.
     pub fn get_raw(&self, section: &str, key: &str) -> Option<&Value> {
         self.doc.get(section)?.as_object()?.get(key)
@@ -172,6 +171,7 @@ impl Draft {
         self.remove(section, key);
     }
 
+    /// Keeps `record` under `key`. Says whether it could be.
     pub fn put_street(&mut self, key: &str, record: &StreetRecord) -> bool {
         self.put(STREETS, key, serde_json::to_value(record))
     }

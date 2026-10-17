@@ -236,14 +236,17 @@ impl RestrictionStore {
 
     /// Changes the restriction `id` as it is kept now. False when it is no longer kept, or was not kept again.
     pub fn update(&self, id: &str, change: impl FnOnce(&mut Restriction)) -> bool {
+        let mut changed = false;
         let done = self
             .write(|doc| {
                 let r = doc.restrictions.get_mut(id)?;
+                let before = r.clone();
                 change(r);
+                changed = *r != before;
                 finite(&r.ring).then_some(())
             })
             .is_some();
-        if done {
+        if done && changed {
             self.mark(id, false);
         }
         done
@@ -294,7 +297,8 @@ impl RestrictionStore {
     }
 
     /// Keeps `record` under `id` as given: a rule this build can read becomes a rule, one it cannot is held as it
-    /// came and written back unchanged. Not an edit: nothing is marked.
+    /// came and written back unchanged. Not an edit: nothing is marked. The caller checks `is_usable()` first: this
+    /// goes through the store's own write, which copies a damaged document aside and replaces it.
     pub fn put_raw(&self, id: &str, record: Value) -> bool {
         self.write(|doc| {
             match serde_json::from_value::<Restriction>(record.clone()) {
@@ -316,7 +320,8 @@ impl RestrictionStore {
         .is_some()
     }
 
-    /// Removes the record `id`, whatever it is. Not an edit: nothing is marked.
+    /// Removes the record `id`, whatever it is. Not an edit: nothing is marked. The caller checks `is_usable()` first,
+    /// as `put_raw` says.
     pub fn remove_raw(&self, id: &str) -> bool {
         self.write(|doc| {
             doc.restrictions.remove(id);
@@ -727,5 +732,16 @@ mod tests {
         assert!(!s.is_usable());
         storage.remember(RESTRICTIONS_KEY, "{broken");
         assert!(!s.is_usable());
+    }
+
+    #[test]
+    fn an_update_that_changes_nothing_is_not_an_edit_and_marks_nothing_again() {
+        let (s, storage) = store();
+        storage.set_now(1_800_000_000_000);
+        let a = s.add("A", Rule::CarFree, RING.to_vec()).unwrap();
+        storage.tick(5_000);
+        assert!(s.update(&a.id, |_| {}));
+        assert!(s.update(&a.id, |r| r.name = "A".into()));
+        assert_eq!(marked(&storage, &format!("rule/{}", a.id)).unwrap().edited_at, "2027-01-15T08:00:00.000Z");
     }
 }
