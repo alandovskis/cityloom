@@ -226,7 +226,16 @@ pub fn stamp(ms: u64) -> String {
 
 /// A store wrote a record (or removed it, with `deleted`): it waits to be sent, edited now. Signed in or not. Says
 /// whether the mark was kept (not where the sync document is a newer build's); an edit is never held up by it.
+/// The rule the server applies to a key: 1 to 200 characters of `[A-Za-z0-9~_.:-]`. A record whose key fails it would
+/// make the server refuse the whole batch it travels in, so it is never marked.
+pub fn valid_key(key: &str) -> bool {
+    !key.is_empty() && key.len() <= 200 && key.bytes().all(|b| b.is_ascii_alphanumeric() || b"~_.:-".contains(&b))
+}
+
 pub fn mark(storage: &dyn Storage, kind: Kind, key: &str, deleted: bool) -> bool {
+    if !valid_key(key) {
+        return false;
+    }
     let Some(mut doc) = open(storage) else { return false };
     let id = Id::new(kind, key);
     let rev = doc.entry(&id).map_or(0, |e| e.rev);
@@ -623,5 +632,16 @@ mod tests {
         assert_eq!(doc.records["street/a"], entry(T1, true, false, 0), "still edited when it was");
         assert_eq!(doc.records["rule/c"], entry(T2, true, true, 0), "a removal competes with what the new copy holds too");
         assert_eq!(doc.records["street/b"], entry(T3, true, false, 0), "and a refusal is forgotten: the new copy has its own limits");
+    }
+
+    #[test]
+    fn a_key_the_server_would_refuse_is_never_marked() {
+        let s = storage();
+        for key in ["", "has space", "a/b", "../x", &"k".repeat(201)] {
+            assert!(!valid_key(key), "{key:?}");
+            assert!(!mark(&*s, Kind::Street, key, false), "{key:?}");
+        }
+        assert!(valid_key("w1~n2~x~e") && valid_key("r-0123456789abcdef0123456789abcdef") && valid_key("current"));
+        assert_eq!(s.recall(SYNC_KEY), None);
     }
 }

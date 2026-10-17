@@ -99,8 +99,8 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
     Ok(doc)
 }
 
-const STREETS: &str = "streets";
-const JUNCTIONS: &str = "junctions";
+pub const STREETS: &str = "streets";
+pub const JUNCTIONS: &str = "junctions";
 
 /// The records of one section that this build can read; one it cannot (written by a build whose streets or
 /// junctions have another shape) is left out, and left as it is in storage (`Draft`).
@@ -153,6 +153,25 @@ impl Draft {
     }
 
     /// Keeps `record` under `key`. Says whether it could be.
+    /// The record under `key` as the document holds it.
+    pub fn get_raw(&self, section: &str, key: &str) -> Option<&Value> {
+        self.doc.get(section)?.as_object()?.get(key)
+    }
+
+    /// Every key of a section.
+    pub fn raw_keys(&self, section: &str) -> Vec<String> {
+        self.doc.get(section).and_then(Value::as_object).map(|m| m.keys().cloned().collect()).unwrap_or_default()
+    }
+
+    /// Keeps `record` under `key` exactly as given (a newer build's fields too). Says whether it could be.
+    pub fn put_raw(&mut self, section: &str, key: &str, record: Value) -> bool {
+        self.put(section, key, Ok(record))
+    }
+
+    pub fn remove_raw(&mut self, section: &str, key: &str) {
+        self.remove(section, key);
+    }
+
     pub fn put_street(&mut self, key: &str, record: &StreetRecord) -> bool {
         self.put(STREETS, key, serde_json::to_value(record))
     }
@@ -726,5 +745,19 @@ mod tests {
         let record = [ids(Some("n1"), &[], &[1, 2, 3])];
         let places = [ids(Some("n9"), &[], &[1, 2, 3]), ids(Some("n1"), &[], &[7])];
         assert_eq!(assign(&places, &record), [None, Some(0)]);
+    }
+
+    #[test]
+    fn a_record_can_be_read_written_and_removed_as_the_document_holds_it() {
+        let mut d = Draft::new();
+        let newer = serde_json::json!({"ways": [1], "from_a_newer_build": {"x": [1, 2]}});
+        assert!(d.put_raw(STREETS, "w1~n2~n3", newer.clone()));
+        assert_eq!(d.get_raw(STREETS, "w1~n2~n3"), Some(&newer));
+        assert_eq!(d.raw_keys(STREETS), ["w1~n2~n3"]);
+        assert_eq!(d.raw_keys(JUNCTIONS), Vec::<String>::new());
+        let again = draft(Some(&d.to_json())).unwrap();
+        assert_eq!(again.get_raw(STREETS, "w1~n2~n3"), Some(&newer), "through the document unchanged");
+        d.remove_raw(STREETS, "w1~n2~n3");
+        assert_eq!(d.get_raw(STREETS, "w1~n2~n3"), None);
     }
 }

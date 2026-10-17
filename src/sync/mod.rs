@@ -3,4 +3,5 @@
 //! comes back.
 
 pub mod hub;
+pub mod local;
 pub mod model;
