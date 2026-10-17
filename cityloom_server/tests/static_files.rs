@@ -315,7 +315,8 @@ async fn every_page_of_the_site_names_existing_versioned_assets() {
             }
             // Icons that are not part of the build are named by their own names; every other file of the build is versioned.
             let source = target.rsplit('/').next().unwrap();
-            if target.starts_with("favicon") || source.starts_with("logo-") {
+            // `boot.js` is the one script that is not versioned: it tells that a versioned address has gone.
+            if target.starts_with("favicon") || source.starts_with("logo-") || target == "boot.js" {
                 continue;
             }
             assert!(target.starts_with("v/") && target.len() > 19, "{name} names {target} without its build");
