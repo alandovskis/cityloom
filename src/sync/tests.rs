@@ -16,7 +16,7 @@ use crate::shared::ports::{
     FakeWorkSync, ManualScheduler, Me, MemoryStorage, Ports, RecordingAnnouncer, Storage, WorkAnswer, WorkAsk, WorkCall, WorkError, WorkPage, WorkPushed,
     WorkPut, WorkRecord, WorkReply, WorkResult, WorkStatus, WorkSync, test_ports_with_time,
 };
-use crate::sync::model::{self, Change, Id, Kind, Origin, Report, SyncDoc};
+use crate::sync::model::{self, Change, Id, Kind, Origin, Report};
 use crate::sync::vm::{Status, SyncVm};
 use crate::sync::{RESOURCES, hub, local, text};
 
@@ -357,7 +357,9 @@ fn storage_off_from_the_server_stops_syncing_and_clears_the_state_but_keeps_the_
     edit_street(&d, 1, 150);
     d.vm.refresh();
     assert_eq!(d.vm.status(), Status::Off);
-    assert_eq!(model::open(&*d.storage).unwrap(), SyncDoc::new(), "the sync state is cleared");
+    let doc = model::open(&*d.storage).unwrap();
+    assert_eq!((doc.user, doc.epoch, doc.rev), (None, None, 0), "the server's numbers are forgotten");
+    assert!(doc.records.values().all(|e| e.rev == 0), "and so are the records'");
     assert!(record_of(&d, &street_id(&key)).is_some(), "the browser's work stays");
     assert_eq!(server.live().len(), 0, "and nothing was resurrected on the server");
     assert_eq!(*server.calls.borrow().last().unwrap(), "pull 0", "no push followed the refusal");
@@ -815,7 +817,8 @@ fn signing_out_stops_syncing_but_keeps_the_marks_and_disabling_clears_them() {
     d.vm.known(&ada()); // signs in again
     assert_eq!(server.live().len(), 1, "the work made signed out goes up");
     d.vm.disable();
-    assert_eq!(model::open(&*d.storage).unwrap(), SyncDoc::new());
+    let doc = model::open(&*d.storage).unwrap();
+    assert_eq!((doc.user.as_deref(), doc.rev, doc.epoch.as_deref()), (None, 0, None), "the server's numbers are forgotten");
     assert_eq!(d.vm.status_text(), None);
 }
 
@@ -965,4 +968,64 @@ fn the_numbers_and_units_of_the_french_messages_do_not_break_across_lines() {
     );
     assert!(fr.tr_now("sync-too-large-records", &Args::new()).contains("5\u{a0}000\u{a0}enregistrements"));
     assert!(fr.tr_now("sync-too-large-record", &Args::new()).contains("64\u{a0}Ko"));
+}
+
+#[test]
+fn a_device_that_saw_storage_go_off_keeps_its_edit_times_so_it_cannot_overwrite_a_later_edit_when_it_returns() {
+    // T1: both devices have S; T2: storage off; T3: the laptop edits S; T4: storage on; T5: the phone returns.
+    hub::reset();
+    let server = ServerSim::new();
+    let laptop = device(&server, T0 + 100_000);
+    let key = edit_street(&laptop, 1, 100);
+    laptop.vm.known(&ada());
+    let phone = device(&server, T0 + 110_000);
+    phone.vm.known(&ada());
+    assert_eq!(width(&phone, 1), width(&laptop, 1));
+    // storage goes off; the phone's open page learns it from a 409
+    server.rows.borrow_mut().clear();
+    server.storing.set(false);
+    phone.vm.refresh();
+    assert_eq!(phone.vm.status(), Status::Off);
+    laptop.vm.disable();
+    // the laptop edits S with storage off
+    laptop.storage.set_now(T0 + 300_000);
+    edit_street(&laptop, 1, 200);
+    let edited = width(&laptop, 1);
+    // storage is turned on again, on the laptop
+    server.storing.set(true);
+    server.cycle();
+    laptop.storage.set_now(T0 + 400_000);
+    laptop.vm.enable("ada", Box::new(|_| {}));
+    assert!(server.row("street", &key).unwrap().body.is_some());
+    // the phone returns, later still
+    phone.storage.set_now(T0 + 500_000);
+    phone.vm.known(&ada());
+    assert_eq!(width(&phone, 1), edited, "the laptop's later edit reached the phone");
+    assert_eq!(width(&laptop, 1), edited, "and the phone's older copy did not overwrite it on the server");
+    assert_eq!(server.row("street", &key).unwrap().edited_at, model::stamp(T0 + 300_000));
+}
+
+#[test]
+fn a_damaged_sync_document_is_copied_aside_once_and_its_records_are_claimed_so_that_the_servers_copy_wins() {
+    hub::reset();
+    let server = ServerSim::new();
+    let laptop = device(&server, T0 + 100_000);
+    let key = edit_street(&laptop, 1, 100);
+    laptop.vm.known(&ada());
+    let phone = device(&server, T0 + 110_000);
+    phone.vm.known(&ada());
+    // the laptop edits again, later; the phone's sync document is damaged
+    laptop.storage.set_now(T0 + 200_000);
+    edit_street(&laptop, 1, 150);
+    laptop.vm.refresh();
+    let theirs = width(&laptop, 1);
+    phone.storage.remember(model::SYNC_KEY, "{damaged");
+    // work the server does not have: it goes up
+    phone.storage.set_now(T0 + 300_000);
+    let own = edit_street(&phone, 2, 100);
+    phone.vm.refresh();
+    assert_eq!(phone.storage.recall(model::DAMAGED_KEY).as_deref(), Some("{damaged"), "copied aside");
+    assert_eq!(width(&phone, 1), theirs, "the server's later copy won over the phone's stale one");
+    assert!(server.live().contains(&format!("street/{own}")), "what only the phone had went up");
+    assert!(server.row("street", &key).unwrap().edited_at > model::stamp(T0 + 100_000));
 }

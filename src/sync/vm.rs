@@ -129,12 +129,16 @@ impl SyncVm {
         }
     }
 
-    /// Storage on the server was turned off (here, or on another device): sync stops and its state is cleared. The
-    /// browser's work stays; it is claimed again, as never marked, if storage is turned on later.
+    /// Storage on the server was turned off (here, or on another device): sync stops and what it knew of the server is
+    /// forgotten (the account, the copy, the revisions). The browser's work stays, and so does each record's edit time,
+    /// as a record waiting to be sent: if storage is turned on later it competes with the new copy by those times, as
+    /// on a device that was away (`SyncDoc::restart`), and an older copy cannot beat a later edit made meanwhile.
     pub fn disable(&self) {
         self.stop();
-        if model::open(&*self.ports.storage).is_some() {
-            model::save(&*self.ports.storage, &SyncDoc::new());
+        if let Some(mut doc) = model::open(&*self.ports.storage) {
+            doc.restart();
+            doc.user = None;
+            model::save(&*self.ports.storage, &doc);
         }
     }
 

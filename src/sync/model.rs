@@ -109,6 +109,11 @@ pub struct SyncDoc {
     pub rev: i64,
     /// By `Id::name`.
     pub records: BTreeMap<String, Entry>,
+    /// Set where this document replaced a damaged one: the records of the stores that have no entry were synced before
+    /// and their times are lost, so they count as edited then (`stamp(0)`) and not now. The server's copy wins over
+    /// them, and they go up only where the server has nothing. Cleared once they are claimed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unmarked_at: Option<String>,
 }
 
 impl Default for SyncDoc {
@@ -119,7 +124,12 @@ impl Default for SyncDoc {
 
 impl SyncDoc {
     pub fn new() -> SyncDoc {
-        SyncDoc { version: VERSION, user: None, epoch: None, rev: 0, records: BTreeMap::new() }
+        SyncDoc { version: VERSION, user: None, epoch: None, rev: 0, records: BTreeMap::new(), unmarked_at: None }
+    }
+
+    /// The document that replaces a damaged one: empty, and its unmarked records count as edited long ago.
+    fn recovered() -> SyncDoc {
+        SyncDoc { unmarked_at: Some(stamp(0)), ..SyncDoc::new() }
     }
 
     pub fn entry(&self, id: &Id) -> Option<&Entry> {
@@ -188,7 +198,8 @@ pub fn load(storage: &dyn Storage) -> Loaded {
 }
 
 /// The document to work on: the one kept, a new one where none is (a damaged one is copied aside first, unless a
-/// copy is already kept), None where it is a newer build's or cannot be copied aside.
+/// copy is already kept, and is replaced by one whose unmarked records count as edited long ago, so that the server's
+/// copy wins), None where it is a newer build's or cannot be copied aside.
 pub fn open(storage: &dyn Storage) -> Option<SyncDoc> {
     match load(storage) {
         Loaded::Absent => Some(SyncDoc::new()),
@@ -198,7 +209,7 @@ pub fn open(storage: &dyn Storage) -> Option<SyncDoc> {
             if storage.recall(DAMAGED_KEY).is_none() && !storage.remember(DAMAGED_KEY, &raw) {
                 return None;
             }
-            Some(SyncDoc::new())
+            Some(SyncDoc::recovered())
         }
     }
 }
@@ -246,12 +257,14 @@ pub fn mark(storage: &dyn Storage, kind: Kind, key: &str, deleted: bool) -> bool
 }
 
 /// Marks every record of the stores that has no entry as edited at `at`: work made before anything was marked (while
-/// signed out, with storage off or on an older build) counts as edited when storage is turned on. Says how many.
+/// signed out, with storage off or on an older build) counts as edited when storage is turned on. Where the document
+/// replaced a damaged one (`unmarked_at`), that time stands instead of `at`. Says how many.
 pub fn claim_unmarked(doc: &mut SyncDoc, local: &[Id], at: &str) -> usize {
+    let at = doc.unmarked_at.take().unwrap_or_else(|| at.to_string());
     let mut claimed = 0;
     for id in local {
         if doc.entry(id).is_none() {
-            doc.records.insert(id.name(), Entry { edited_at: at.to_string(), pending: true, deleted: false, rev: 0, blocked: false });
+            doc.records.insert(id.name(), Entry { edited_at: at.clone(), pending: true, deleted: false, rev: 0, blocked: false });
             claimed += 1;
         }
     }
@@ -468,6 +481,19 @@ mod tests {
         assert_eq!(n, 2);
         assert_eq!(doc.records["street/new"], entry(T3, true, false, 0));
         assert_eq!(doc.records["street/old"], entry(T1, false, false, 3));
+    }
+
+    #[test]
+    fn a_document_that_replaced_a_damaged_one_claims_the_unmarked_records_at_the_epoch_once() {
+        let s = storage();
+        s.remember(SYNC_KEY, "{broken");
+        let mut doc = open(&*s).unwrap();
+        assert_eq!(doc.unmarked_at.as_deref(), Some("1970-01-01T00:00:00.000Z"));
+        claim_unmarked(&mut doc, &[id(Kind::Street, "a")], T3);
+        assert_eq!(doc.records["street/a"], entry("1970-01-01T00:00:00.000Z", true, false, 0));
+        assert_eq!(doc.unmarked_at, None, "once");
+        claim_unmarked(&mut doc, &[id(Kind::Street, "b")], T3);
+        assert_eq!(doc.records["street/b"].edited_at, T3);
     }
 
     #[test]
