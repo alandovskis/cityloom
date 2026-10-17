@@ -16,6 +16,17 @@ pub struct Config {
     pub web_root: PathBuf,
     pub cache_control: String,
     pub account: AccountSide,
+    pub areas: Option<Areas>,
+    /// Where `/data/metro/` and `/data/basemap/` are served from; set by `run` once an area is unpacked.
+    pub data_mount: Option<PathBuf>,
+}
+
+/// Where the area archives are (`CITYLOOM_AREAS`) and where they are unpacked (`DATA_ROOT`: writable; the image's
+/// `/app/web` belongs to root and is not writable by the server's user).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Areas {
+    pub folder: PathBuf,
+    pub data_root: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -94,11 +105,22 @@ impl Config {
             (None, None) => ("E2E_PORT", "8137".into()),
         };
         let port: u16 = port.parse().map_err(|_| ConfigError::Invalid { variable, problem: "not a port number".into() })?;
+        let set = |name: &str| get(name).filter(|v| !v.is_empty());
+        let areas = match set("CITYLOOM_AREAS") {
+            None => None,
+            Some(folder) => {
+                let data_root =
+                    set("DATA_ROOT").ok_or(ConfigError::Invalid { variable: "DATA_ROOT", problem: "is needed when CITYLOOM_AREAS is set".into() })?;
+                Some(Areas { folder: PathBuf::from(folder), data_root: PathBuf::from(data_root) })
+            }
+        };
         Ok(Config {
             bind: SocketAddr::new(ip, port),
             web_root: PathBuf::from(get("WEB_ROOT").unwrap_or_else(|| "web".into())),
             cache_control: get("CACHE_CONTROL").unwrap_or_else(|| "no-store".into()),
             account: account_side(get),
+            areas,
+            data_mount: None,
         })
     }
 }
@@ -217,6 +239,23 @@ mod tests {
     fn config(vars: &[(&str, &str)]) -> Result<Config, ConfigError> {
         let map: HashMap<String, String> = vars.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         Config::from_lookup(&|k| map.get(k).cloned())
+    }
+
+    #[test]
+    fn no_archive_variables_means_no_areas_and_no_mount() {
+        let c = config(&[]).unwrap();
+        assert!(c.areas.is_none() && c.data_mount.is_none());
+        assert!(config(&[("DATA_ROOT", "/var/data")]).unwrap().areas.is_none());
+        assert!(config(&[("CITYLOOM_AREAS", ""), ("DATA_ROOT", "")]).unwrap().areas.is_none());
+    }
+
+    #[test]
+    fn areas_need_a_data_root_and_name_both_folders() {
+        let c = config(&[("CITYLOOM_AREAS", "/mnt/areas"), ("DATA_ROOT", "/var/data")]).unwrap();
+        let areas = c.areas.unwrap();
+        assert_eq!((areas.folder.to_str().unwrap(), areas.data_root.to_str().unwrap()), ("/mnt/areas", "/var/data"));
+        let e = config(&[("CITYLOOM_AREAS", "/mnt/areas")]).unwrap_err();
+        assert_eq!(e, ConfigError::Invalid { variable: "DATA_ROOT", problem: "is needed when CITYLOOM_AREAS is set".into() });
     }
 
     #[test]

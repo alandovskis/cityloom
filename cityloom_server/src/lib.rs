@@ -56,8 +56,27 @@ pub async fn build_account(config: &config::AccountConfig, clock: std::sync::Arc
     }))
 }
 
+/// With `CITYLOOM_AREAS` set: verifies and unpacks the folder's one `.cityloom` file into `DATA_ROOT/<area>` (or
+/// reuses what an earlier start unpacked) and sets `config.data_mount` to that directory, for the router. Without
+/// it nothing happens. An error is meant to stop the server: nothing unverified may be served.
+pub async fn unpack_areas(config: &mut Config) -> std::io::Result<()> {
+    let Some(areas) = config.areas.clone() else { return Ok(()) };
+    let (folder, data_root) = (areas.folder.clone(), areas.data_root.clone());
+    let unpacked = tokio::task::spawn_blocking(move || cityloom_prepare::archive::unpack_folder(&areas.folder, &areas.data_root))
+        .await
+        .map_err(std::io::Error::other)?
+        .map_err(|error| {
+            tracing::error!(%error, "the area archive is refused");
+            std::io::Error::other(format!("CITYLOOM_AREAS {} (DATA_ROOT {}): {error}", folder.display(), data_root.display()))
+        })?;
+    tracing::info!(area = %unpacked.area, reused = unpacked.reused, tiles = unpacked.tiles, "area archive ready");
+    config.data_mount = Some(unpacked.dir);
+    Ok(())
+}
+
 /// Serves until the process is told to stop.
-pub async fn run(config: Config) -> std::io::Result<()> {
+pub async fn run(mut config: Config) -> std::io::Result<()> {
+    unpack_areas(&mut config).await?;
     let account = match &config.account {
         config::AccountSide::On(account_config) => match build_account(account_config, std::sync::Arc::new(clock::SystemClock)).await {
             Ok(account) => Some(account),
