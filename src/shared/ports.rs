@@ -39,6 +39,10 @@ pub trait Fetcher {
 /// Turns OpenStreetMap data into the street network JSON the city is made from. The reader is
 /// a module of its own that the page loads when it is first asked.
 pub trait Importer {
+    /// Starts loading the reader, because it will be asked to read soon (the data it reads is being fetched).
+    /// Nothing waits for this, and asking again does nothing.
+    fn prepare(&self) {}
+
     /// `bounds` is the box to keep, south, west, north, east in degrees, or None to keep all of it.
     fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>);
 }
@@ -401,9 +405,15 @@ type ImportRequest = (Vec<u8>, Option<[f64; 4]>, Box<dyn FnOnce(Result<String, S
 #[derive(Default)]
 pub struct FakeImporter {
     asked: RefCell<Vec<ImportRequest>>,
+    prepared: Cell<u32>,
 }
 
 impl FakeImporter {
+    /// How many times the reader was told to get ready.
+    pub fn prepared(&self) -> u32 {
+        self.prepared.get()
+    }
+
     /// What each request not yet answered asked to read, oldest first.
     pub fn asked(&self) -> Vec<Vec<u8>> {
         self.asked.borrow().iter().map(|(b, ..)| b.clone()).collect()
@@ -431,6 +441,10 @@ impl FakeImporter {
 }
 
 impl Importer for FakeImporter {
+    fn prepare(&self) {
+        self.prepared.set(self.prepared.get() + 1);
+    }
+
     fn import(&self, osm: Vec<u8>, bounds: Option<[f64; 4]>, done: Box<dyn FnOnce(Result<String, String>)>) {
         self.asked.borrow_mut().push((osm, bounds, done));
     }

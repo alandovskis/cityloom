@@ -65,6 +65,7 @@ impl Loader {
                 if kept {
                     let stale = checksum.is_some() && store.checksum() != checksum;
                     let Some(url) = tile.filter(|_| stale) else { return finish(Ok(())) };
+                    this.ports.importer.prepare();
                     // whatever comes of it, there are roads
                     let (importer, kept_anyway) = (this.clone(), Rc::new(move |_: Result<(), Said>| finish(Ok(()))));
                     let (area, store, after) = (area.clone(), store.clone(), kept_anyway.clone());
@@ -78,6 +79,8 @@ impl Loader {
                     );
                     return;
                 }
+                // The reader is a module of its own: load it while the roads come.
+                this.ports.importer.prepare();
                 match tile {
                     Some(url) => {
                         let (importer, after) = (this.clone(), overpass.clone());
@@ -268,6 +271,24 @@ mod tests {
         assert!(fetcher.asked().is_empty(), "the tile is not fetched again");
         assert_eq!(result.borrow_mut().take(), Some(Ok(())));
         assert_eq!(store.checksum().as_deref(), Some(new().as_str()));
+    }
+
+    #[test]
+    fn the_reader_is_got_ready_when_the_roads_are_to_be_fetched_and_not_when_they_are_kept() {
+        // nothing to read: the reader is not loaded for it
+        let (_, fetcher, importer, ..) = kept_from(Some(&new()));
+        fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
+        assert_eq!(importer.prepared(), 0);
+        // a changed tile, and a cold load from a tile or from Overpass: the reader loads while the roads come
+        let (_, fetcher, importer, ..) = kept_from(Some("old"));
+        fetcher.answer(Ok(SUMMED.as_bytes().to_vec()));
+        assert_eq!((fetcher.asked().len(), importer.prepared()), (1, 1), "before the tile has come");
+        let (ports, fetcher, importer) = test_ports_with_fetcher();
+        let store = CityStore::for_area(ports.storage.clone(), Area::new("Testville", 1.0, 2.0));
+        Loader::new(ports).load(&store, |_| {});
+        assert_eq!(importer.prepared(), 0, "the index has not come: it is not known that roads are to be read");
+        without_tiles(&fetcher);
+        assert_eq!((fetcher.asked()[0].0.as_str(), importer.prepared()), (overpass::ENDPOINT, 1));
     }
 
     #[test]
