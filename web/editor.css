@@ -27,6 +27,10 @@
      is under 3:1 (WCAG 1.4.11) on a pale one (white on concrete) whatever the theme; the edge is over 6:1 against
      those (the ratio of the colours; anti-aliasing of a 0.5 px line lowers the figure rendered). */
   --iso-paint-edge: #10151a;
+  /* The selection outline in 2.5D: a light line on a dark casing, the same in both themes like the materials, so
+     that one of the two is 3:1 against any of them (a test in street/iso/surface.rs). */
+  --iso-sel: #8ab4ff;
+  --iso-sel-casing: #0b1220;
   --panel-w: 300px;
   --notes-w: 340px;
   --rw: calc(var(--pad) + var(--notes-w));
@@ -216,7 +220,7 @@
   justify-content: center;
 }
 .wrap:focus-visible {
-  outline: 2px solid var(--accent-line);
+  outline: 2px solid var(--accent);
 }
 #drawing {
   display: block;
@@ -743,17 +747,17 @@ svg pattern circle {
   fill-opacity: 0.4;
 }
 #drawing .piece {
-  stroke: var(--ink-2);
+  stroke: var(--ink);
   stroke-width: 0.8;
-  stroke-opacity: 0.55;
+  stroke-opacity: 1;
   stroke-linejoin: round;
 }
 #drawing .iso-flat,
 #drawing .iso-top,
 #drawing .iso-side {
-  stroke: var(--ink-2);
+  stroke: var(--ink);
   stroke-width: 0.6;
-  stroke-opacity: 0.55;
+  stroke-opacity: 1;
   stroke-linejoin: round;
 }
 #drawing .iso-zebra,
@@ -1018,16 +1022,22 @@ svg pattern circle {
     stroke: none;
   }
 }
-.iso-sel,
 #drawing .iso .sel-box {
   filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
 }
-.iso-sel {
+.iso-sel,
+.iso-sel-casing {
   fill: none;
-  stroke: var(--accent);
-  stroke-width: 2.5;
   stroke-linejoin: round;
   pointer-events: none;
+}
+.iso-sel-casing {
+  stroke: var(--iso-sel-casing);
+  stroke-width: 5.5;
+}
+.iso-sel {
+  stroke: var(--iso-sel);
+  stroke-width: 2.5;
 }
 /* The toggle between the section and the 2.5D, at the right of the street's name, on its line: the name's
    line has room to spare, while a row of its own (or the tools' row, which wraps it where text is wider, as

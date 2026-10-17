@@ -16,10 +16,10 @@
   --fill: light-dark(#f1f3f5, #252d35);
   --field-line: light-dark(#7f8a96, #6b7783);
 
-  --accent: light-dark(#2563eb, #8ab4ff);
+  --accent: light-dark(#1f5ee0, #8ab4ff);
   --accent-ink: light-dark(#ffffff, #0b1220);
   --accent-wash: light-dark(#e8effd, rgb(138 180 255 / 0.16));
-  --accent-line: light-dark(rgb(37 99 235 / 0.4), rgb(138 180 255 / 0.45));
+  --accent-line: light-dark(rgb(31 94 224 / 0.4), rgb(138 180 255 / 0.45));
 
   --warn: light-dark(#92400e, #fcd34d);
   --warn-wash: light-dark(#fef3c7, rgb(245 158 11 / 0.18));

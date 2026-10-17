@@ -56,12 +56,9 @@ fn outline(out: &mut String, p: &Projection, v: &View, i: usize) {
     let top = s.curb.filter(|_| !curb_edges(v, i).is_empty()).map_or(drawn_mm(height_mm(id)), |c| curb_top_mm(c, id));
     let (x0, x1, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, STRETCH_MM);
     let low = beside(v, i).min(top);
-    write!(
-        out,
-        "<polygon class=\"iso-sel\" points=\"{}\"/>",
-        points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, low, 0.0), (x1, low, l), (x1, top, l), (x0, top, l), (x0, top, 0.0)])
-    )
-    .unwrap();
+    let at = points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, low, 0.0), (x1, low, l), (x1, top, l), (x0, top, l), (x0, top, 0.0)]);
+    // A dark casing under the light line: one of the two is seen on any material, in either theme.
+    write!(out, "<polygon class=\"iso-sel-casing\" points=\"{at}\"/><polygon class=\"iso-sel\" points=\"{at}\"/>").unwrap();
 }
 
 /// How wide the scene is across: the street, or the pieces where they run over it.
