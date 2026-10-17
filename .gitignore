@@ -29,9 +29,6 @@ e2e/playwright-report/
 # What scripts/build.sh copies from node_modules, and the basemap's tiles, which scripts/basemap_tiles.py makes.
 /node_modules/
 /web/vendor/
-# The compressed copies of web/pkg and web/vendor that scripts/precompress.mjs makes.
-*.br
-*.gz
 /web/data/basemap/*.pmtiles
 
 # Planetiler's downloaded sources (Natural Earth, water polygons), fetched by scripts/basemap_tiles.py.
