@@ -207,7 +207,8 @@
   outline-offset: -2px;
   border-radius: var(--r-ctl);
 }
-.plan-drawing .wrap {
+.plan-drawing .wrap,
+.wrap.iso-view {
   min-width: 0;
 }
 .plan-drawing > .scroll {

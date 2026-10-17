@@ -33,7 +33,7 @@ mod symbols;
 #[cfg(test)]
 mod testing;
 
-pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MAX_HEIGHT, MIN_SOLID_PX, Projection, RISE, STRETCH_MM, TALLEST_MM, drawn_mm};
+pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MIN_SOLID_PX, Projection, RISE, STRETCH_MM, TALLEST_MM, drawn_mm};
 pub use raised::{HEIGHTS, curb_height_mm, curb_top_mm, height_mm};
 
 use order::Bx;
@@ -495,12 +495,42 @@ mod tests {
     #[test]
     fn every_sample_street_draws_in_2_5d_without_a_missing_number_at_every_width() {
         for sample in 0..4 {
-            for width in [600.0, 760.0, 1050.0, 1800.0] {
+            for width in [300.0, 358.0, 600.0, 760.0, 1050.0, 1800.0] {
                 let s = iso_svg(&Editor::new(sample).view(), &en(), width);
                 assert!(!s.markup.contains("NaN") && !s.markup.contains("inf"), "sample {sample} at {width}");
-                assert!(s.height <= MAX_HEIGHT + 1e-9);
             }
         }
+    }
+
+    #[test]
+    fn the_2_5d_is_never_taller_than_the_section_at_any_width_so_it_never_makes_the_card_taller() {
+        // The group is as tall as the section is (`Geometry::fit`), and the status line under it has to stay in view at
+        // 1440 by 900, where the group is about 680 px wide: the 2.5D is held to that height at every width.
+        let mut e = Editor::new(0);
+        e.add(kind_index("travel").unwrap(), 2);
+        for e in [Editor::new(0), Editor::new(1), Editor::new(2), Editor::new(3), e, furnished()] {
+            let v = e.view();
+            for width in [280.0, 358.0, 600.0, 684.0, 760.0, 945.0, 1050.0, 1155.0, 1440.0, 1800.0] {
+                let section = crate::street::svg::Geometry::fit(width, v.row_mm).rows.height;
+                let iso = iso_height(&v, width);
+                assert!(iso <= section + 1e-9, "{width}: the 2.5D is {iso} px tall, the section {section}");
+            }
+        }
+    }
+
+    #[test]
+    fn on_a_narrow_screen_the_2_5d_is_laid_out_as_wide_as_it_has_room_for() {
+        // The 2.5D is read-only and has no handles: it needs no sideways scroll, and a 390 px phone's group (358 px)
+        // gets a drawing 358 px wide, the whole street in view, scaled down.
+        for sample in 0..4 {
+            let s = iso_svg(&Editor::new(sample).view(), &en(), 358.0);
+            assert_eq!(s.width, 358.0, "sample {sample}");
+        }
+        let v = Editor::new(0).view();
+        let (narrow, wide) = (Projection::fit(358.0, v.row_mm), Projection::fit(1050.0, v.row_mm));
+        assert!(narrow.scale < wide.scale);
+        // The street's right edge is inside the drawing.
+        assert!(narrow.at(v.row_mm as f64, 0.0, 0.0).0 <= 358.0 - 30.0 + 1e-9);
     }
 
     #[test]

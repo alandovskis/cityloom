@@ -6,21 +6,26 @@
 //! middle and `(eye height - up) * f / depth` pixels under the horizon. So the centre line is vertical, parallel lines
 //! along the street meet at one vanishing point on the horizon, and the street narrows with distance.
 
+use crate::street::svg::Geometry;
+
 /// How long a stretch of the street is shown, in millimetres.
 pub const STRETCH_MM: f64 = 40_000.0;
 /// How high the eye is above the ground, in millimetres: above the tallest crown, so that every top is seen from above.
 pub const EYE_HEIGHT_MM: f64 = 9_000.0;
 /// How far behind the near end of the stretch the eye is, in millimetres.
 pub const EYE_BACK_MM: f64 = 14_000.0;
-/// The tallest the drawing grows, so that it stays about as tall as the section: the street page keeps its status
-/// line in view at 1440 by 900.
-pub const MAX_HEIGHT: f64 = 440.0;
+/// The tallest the drawing grows at a `width`: as tall as the section is (`Geometry::fit`), which is as tall as the
+/// group around either view (`street/view.rs` keeps its `min-height` at least that). So the 2.5D never makes the card
+/// taller than the section does, and the status line under it stays in view at 1440 by 900 as it does with the
+/// section; a narrow street is drawn smaller, centred, rather than taller.
+pub fn max_height(width: f64) -> f64 {
+    Geometry::fit(width, 1).rows.height
+}
 /// Room round the scene, in pixels.
 pub(super) const PAD: f64 = 30.0;
-/// The narrowest the drawing is laid out for: the group around it is no narrower (`.wrap`'s `min-width` in
-/// `web/editor.css`). On a narrower screen, 400 px say, it does not fit: it scrolls sideways, as the section
-/// does (laid out at least 680 px wide, `Geometry::fit`).
-const MIN_WIDTH: f64 = 600.0;
+/// The narrowest the drawing is laid out for, in pixels: about the narrowest phone's group. The 2.5D is read-only, has no
+/// handles and needs no sideways scroll, so it is scaled to the width it has down to this.
+pub(super) const MIN_WIDTH: f64 = 280.0;
 /// The highest anything is drawn, in millimetres above the ground. The tallest is a tree: 5 m on a planting strip drawn
 /// `RISE` times its height (5.45 m); the rest is a margin for its strokes. The drawing is as tall as the far end of
 /// the ground and this need, so a street with no trees leaves a little room above it, and no crown is cut off.
@@ -57,13 +62,13 @@ pub struct Projection {
 impl Projection {
     /// The projection for a drawing `width` wide, or `MIN_WIDTH` when that is narrower, showing a street
     /// `span_mm` wide: the near end of the street fills that width, unless that would make the drawing taller
-    /// than `MAX_HEIGHT`; then it is centred. The top of the drawing is the top of the tallest crown at the far end.
+    /// than `max_height`; then it is centred. The top of the drawing is the top of the tallest crown at the far end.
     pub fn fit(width: f64, span_mm: i32) -> Projection {
         let width = width.max(MIN_WIDTH);
         let across = span_mm.max(1) as f64;
         // How far the tallest thing at the far end stands above the horizon, in near-end millimetres.
         let headroom = (EYE_HEIGHT_MM - TALLEST_MM) * EYE_BACK_MM / (EYE_BACK_MM + STRETCH_MM);
-        let scale = ((width - 2.0 * PAD) / across).min((MAX_HEIGHT - 2.0 * PAD) / (EYE_HEIGHT_MM - headroom));
+        let scale = ((width - 2.0 * PAD) / across).min((max_height(width) - 2.0 * PAD) / (EYE_HEIGHT_MM - headroom));
         let horizon = PAD - headroom * scale;
         Projection { scale, centre_mm: across / 2.0, centre_px: width / 2.0, horizon, width, height: horizon + EYE_HEIGHT_MM * scale + PAD }
     }
@@ -188,14 +193,15 @@ mod tests {
         // A wide street: the width decides.
         let wide = Projection::fit(1000.0, 31_000);
         assert!((wide.at(0.0, 0.0, 0.0).0 - PAD).abs() < 1e-9 && (wide.at(31_000.0, 0.0, 0.0).0 - (1000.0 - PAD)).abs() < 1e-9);
-        assert!(wide.height <= MAX_HEIGHT);
-        // A narrow street: the height decides, so the drawing is no taller than MAX_HEIGHT, and the street is centred.
+        assert!(wide.height <= max_height(1000.0));
+        // A narrow street: the height decides, so the drawing is no taller than `max_height`, and the street is centred.
         let narrow = Projection::fit(1000.0, 4_000);
-        assert!((narrow.height - MAX_HEIGHT).abs() < 1e-9, "{narrow:?}");
+        assert!((narrow.height - max_height(1000.0)).abs() < 1e-9, "{narrow:?}");
         assert!(narrow.at(0.0, 0.0, 0.0).0 > PAD);
         assert!((narrow.at(0.0, 0.0, 0.0).0 - (1000.0 - narrow.at(4_000.0, 0.0, 0.0).0)).abs() < 1e-9, "centred: {narrow:?}");
-        // The drawing is laid out no narrower than the section's group.
-        assert_eq!(Projection::fit(100.0, 18_000).width, 600.0);
+        // The drawing is laid out as wide as it has room for, down to the narrowest phone.
+        assert_eq!(Projection::fit(358.0, 18_000).width, 358.0);
+        assert_eq!(Projection::fit(100.0, 18_000).width, MIN_WIDTH);
         // A street of no width still gives a scale.
         assert!(Projection::fit(1000.0, 0).scale.is_finite());
     }

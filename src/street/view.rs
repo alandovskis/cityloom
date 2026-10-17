@@ -87,8 +87,7 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
             version.track();
             width.track();
             interaction.track();
-            // The 2.5D has no cloud to bring into view: it is as wide as the group, no narrower than 600 px, and
-            // on a narrower screen it scrolls sideways as the section does (the cue says so).
+            // The 2.5D has no cloud to bring into view and never scrolls: it is scaled to the group's width.
             let section = w.mode() == ViewMode::Section;
             request_animation_frame(move || after_draw(section && fresh.get_value(), row_right.get_value()));
         });
@@ -315,8 +314,10 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
                 };
                 w.i18n().tr(key, &Args::new())
             } aria-describedby="keys" node_ref=wrap on:keydown=keydown
-            // As tall as the taller of the two views in either, so switching does not make the card jump; the
-            // shorter is centred in it.
+            class:iso-view=move || w.mode() == ViewMode::Iso
+            // As tall as the section in either view (the 2.5D is never taller than it, `iso::max_height`), so switching
+            // does not make the card jump; the 2.5D, which is as wide as the group, is centred in it. Only the section
+            // keeps the group 600 px wide (it scrolls sideways on a phone); the 2.5D scales to what it has.
             style:min-height=move || format!("{}px", height().max(iso_height(&w.view(), width.get())))
         >
             {move || match w.mode() {
@@ -407,9 +408,16 @@ fn after_draw(fresh: bool, row_right: f64) {
 fn watch_size(wrap: Element, width: RwSignal<f64>) {
     use leptos::wasm_bindgen::{JsCast, closure::Closure};
 
+    // The group's own width changes with the view (600 px at least for the section, as wide as there is room for
+    // the 2.5D) with no change to its scroller's, so it is watched as well.
     let update = {
         let wrap = wrap.clone();
-        move || width.set(wrap.client_width() as f64)
+        move || {
+            let now = wrap.client_width() as f64;
+            if (width.get_untracked() - now).abs() >= 0.5 {
+                width.set(now);
+            }
+        }
     };
     update();
     let on_resize = update.clone();
@@ -417,6 +425,7 @@ fn watch_size(wrap: Element, width: RwSignal<f64>) {
     if let Some(scroll) = wrap.parent_element() {
         if let Ok(o) = leptos::web_sys::ResizeObserver::new(observer.as_ref().unchecked_ref()) {
             o.observe(&scroll);
+            o.observe(&wrap);
         }
     }
     observer.forget();
