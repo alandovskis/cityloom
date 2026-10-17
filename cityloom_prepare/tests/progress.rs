@@ -129,18 +129,75 @@ fn leaving_the_block_early_still_passes_the_step() {
 fn ctrl_c_fails_the_running_step_and_closes_the_display() {
     let run = Run::new();
     let p = run.progress(vec![spec("a", "first"), spec("b", "second")], false);
+    // Whatever the closure returns, an interrupted step stays failed.
     p.step("a", |_| {
         p.interrupt();
         Ok(())
     })
     .unwrap();
+    assert_eq!(p.steps()[0].state, State::Failed);
+    assert_eq!(p.steps()[0].lines, ["interrupted"]);
     let text = run.out.text();
     assert!(text.contains("FAIL g first"));
     assert!(text.contains(" \u{2023} interrupted"));
     assert!(text.contains("Steps: 1 failed, 2 total"));
+    assert!(!text.contains("PASS"));
     let before = text.len();
     p.close(); // idempotent: nothing more is drawn
     assert_eq!(run.out.text().len(), before);
+}
+
+#[test]
+fn nothing_is_drawn_after_an_interrupt() {
+    for fancy in [false, true] {
+        let run = Run::new();
+        let p = run.progress(vec![spec("a", "first"), spec("b", "second")], fancy);
+        p.interrupt();
+        let before = run.out.text();
+        assert!(before.contains("Steps: 2 total"));
+        p.step("b", |ctx| {
+            ctx.update(None, Some("late"), Some(0.9));
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(run.out.text(), before, "fancy: {fancy}");
+    }
+}
+
+#[test]
+fn a_panic_in_a_step_fails_it() {
+    let run = Run::new();
+    let p = run.progress(vec![spec("a", "first")], false);
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = p.step::<()>("a", |_| panic!("boom"));
+    }));
+    assert!(caught.is_err());
+    assert_eq!(p.steps()[0].state, State::Failed);
+    p.close();
+    let text = run.out.text();
+    assert!(text.contains("FAIL g first"));
+    assert!(!text.contains("RUNS g first\nSteps"), "{text}");
+}
+
+#[test]
+fn ctrl_c_in_a_real_process_fails_the_step_and_exits_with_status_130() {
+    use std::io::{BufRead, BufReader, Read};
+    use std::process::{Command, Stdio};
+    let exe = std::env::current_exe().unwrap();
+    let example = exe.parent().unwrap().parent().unwrap().join("examples/ctrl_c");
+    let mut child = Command::new(example).stdout(Stdio::piped()).spawn().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    stdout.read_line(&mut line).unwrap();
+    assert_eq!(line, "RUNS g first\n"); // the step is running
+    let sent = Command::new("kill").args(["-INT", &child.id().to_string()]).status().unwrap();
+    assert!(sent.success());
+    let mut rest = String::new();
+    stdout.read_to_string(&mut rest).unwrap();
+    let status = child.wait().unwrap();
+    assert_eq!(status.code(), Some(130));
+    assert!(rest.contains("FAIL g first"), "{rest}");
+    assert!(rest.contains(" \u{2023} interrupted"), "{rest}");
 }
 
 #[test]

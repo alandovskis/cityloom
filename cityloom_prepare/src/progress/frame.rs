@@ -160,8 +160,8 @@ impl Throttle {
     }
 }
 
-/// Python's `str.splitlines()` for the line ends tools write: `\n`, `\r\n` and a bare `\r` (osmium's and Planetiler's
-/// progress updates are separated by `\r`).
+/// Splits like Python's `str.splitlines()` on `\n`, `\r\n` and a bare `\r` only (not on every separator Python knows:
+/// those are what tools write; osmium's and Planetiler's progress updates are separated by `\r`).
 pub fn splitlines(text: &str) -> Vec<&str> {
     let mut lines = Vec::new();
     let mut start = 0;

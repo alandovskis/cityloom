@@ -25,7 +25,6 @@ use std::io::{self, IsTerminal, Read, Seek, SeekFrom, Write};
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -129,15 +128,48 @@ pub fn thousands(value: impl Display) -> String {
     format!("{sign}{grouped}{point}{decimals}")
 }
 
+/// The view and whether it is closed: once it is, nothing is drawn again (a late step from the main thread, racing
+/// the Ctrl-C handler, must print nothing after the closing frame).
+struct Shown {
+    view: Box<dyn View>,
+    closed: bool,
+}
+
+impl Shown {
+    fn started(&mut self, step: &Step) {
+        if !self.closed {
+            self.view.started(step);
+        }
+    }
+
+    fn updated(&mut self, step: &Step) {
+        if !self.closed {
+            self.view.updated(step);
+        }
+    }
+
+    fn finished(&mut self, step: &Step) {
+        if !self.closed {
+            self.view.finished(step);
+        }
+    }
+
+    fn close(&mut self) {
+        if !self.closed {
+            self.closed = true;
+            self.view.close();
+        }
+    }
+}
+
 /// The steps of one run. Each step is done in `step`; the display is closed with `close` (also when it is dropped).
 pub struct Progress {
     steps: Steps,
-    view: Mutex<Box<dyn View>>,
+    view: Mutex<Shown>,
     logs: PathBuf,
     root: PathBuf,
     clock: Clock,
     fancy: bool,
-    closed: AtomicBool,
 }
 
 impl Progress {
@@ -171,7 +203,7 @@ impl Progress {
             Box::new(Plain::new(out, Arc::clone(&steps), Arc::clone(&clock)))
         };
         view.begin();
-        Progress { steps, view: Mutex::new(view), logs, root, clock, fancy, closed: AtomicBool::new(false) }
+        Progress { steps, view: Mutex::new(Shown { view, closed: false }), logs, root, clock, fancy }
     }
 
     /// Whether the display is drawn in place (a terminal) and not one line per change.
@@ -211,19 +243,41 @@ impl Progress {
             s.started = now;
         });
         self.view.lock().unwrap().started(&snapshot);
-        let result = f(&StepCtx { progress: self, key: key.to_string() });
+        let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&StepCtx { progress: self, key: key.to_string() })));
         let now = (self.clock)();
-        let snapshot = self.mutate(key, |s| match &result {
-            Ok(_) => {
-                s.state = State::Passed;
-                s.took = Some(now - s.started);
+        let result = match ran {
+            Ok(result) => result,
+            Err(panic) => {
+                // The step ends failed, not running, whichever way the closure was left.
+                let snapshot = self.mutate(key, |s| {
+                    s.state = State::Failed;
+                    s.lines = vec!["panicked".into()];
+                });
+                self.view.lock().unwrap().finished(&snapshot);
+                std::panic::resume_unwind(panic);
             }
-            Err(error) => {
-                s.state = State::Failed;
-                s.lines = error.lines.clone();
+        };
+        // An interrupted step stays failed, whatever the closure returned.
+        let mut interrupted = false;
+        let snapshot = self.mutate(key, |s| {
+            if s.state == State::Failed {
+                interrupted = true;
+                return;
+            }
+            match &result {
+                Ok(_) => {
+                    s.state = State::Passed;
+                    s.took = Some(now - s.started);
+                }
+                Err(error) => {
+                    s.state = State::Failed;
+                    s.lines = error.lines.clone();
+                }
             }
         });
-        self.view.lock().unwrap().finished(&snapshot);
+        if !interrupted {
+            self.view.lock().unwrap().finished(&snapshot);
+        }
         result
     }
 
@@ -243,9 +297,7 @@ impl Progress {
 
     /// Stops the ticker, draws the final frame and shows the cursor. Idempotent; also done when it is dropped.
     pub fn close(&self) {
-        if !self.closed.swap(true, Ordering::SeqCst) {
-            self.view.lock().unwrap().close();
-        }
+        self.view.lock().unwrap().close();
     }
 }
 
