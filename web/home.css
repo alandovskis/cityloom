@@ -132,6 +132,12 @@ body.home {
   font-size: 16px;
 }
 
+/* The room for the line that says how the city stands, which comes when the city's roads are got; the card is
+   centred, so it would move when the line arrived. One line is its height: margin 28 + rule and padding 19 + text 22. */
+#hero-facts-slot {
+  display: flow-root;
+  min-height: 69px;
+}
 .hero-facts {
   display: flex;
   flex-wrap: wrap;

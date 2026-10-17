@@ -631,6 +631,18 @@ impl MapVm {
         self.core.edit(|m| m.city = city);
     }
 
+    /// The city is opened again because its roads have arrived since this view-model was made (the home page is
+    /// built before the area's roads are read): it is read again and the camera is put on the whole of it.
+    pub fn reopen(&self) {
+        self.reload();
+        let world = World::round(self.core.view_now().bounds_mm);
+        self.update_camera(|c| {
+            c.world = world;
+            c.moved = false;
+            c.fit();
+        });
+    }
+
     fn update_camera(&self, f: impl FnOnce(&mut Camera)) {
         self.camera.update(f);
     }
