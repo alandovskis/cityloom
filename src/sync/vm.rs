@@ -51,6 +51,8 @@ pub struct SyncVm {
     capped: Cell<bool>,
     /// Those waiting for the end of the run (the Account page, to count what it merged).
     waiting: RefCell<Vec<Box<dyn FnOnce(Report)>>>,
+    /// Asked for while a run was going: they wait for the next run, which starts after the one going.
+    queued: RefCell<Vec<Box<dyn FnOnce(Report)>>>,
 }
 
 impl SyncVm {
@@ -69,6 +71,7 @@ impl SyncVm {
             told_large: Cell::new(false),
             capped: Cell::new(false),
             waiting: RefCell::new(Vec::new()),
+            queued: RefCell::new(Vec::new()),
         });
         let weak = Rc::downgrade(&vm);
         hub::on_marked(key, move || {
@@ -201,9 +204,10 @@ impl SyncVm {
 
     fn sync_with(self: &Rc<Self>, done: Option<Box<dyn FnOnce(Report)>>) {
         if let Some(done) = done {
-            self.waiting.borrow_mut().push(done);
+            self.queued.borrow_mut().push(done);
         }
         let Some(user) = self.user.borrow().clone() else {
+            self.waiting.borrow_mut().append(&mut self.queued.borrow_mut());
             self.release(Report::default());
             return;
         };
@@ -211,6 +215,7 @@ impl SyncVm {
             self.again.set(true);
             return;
         }
+        self.waiting.borrow_mut().append(&mut self.queued.borrow_mut());
         self.cancel_timer();
         // The editors write what they hold, so it is marked before the stores are read.
         hub::flush();
@@ -468,6 +473,7 @@ impl Run {
         if self.failed_apply.get() {
             // The revision stays where it was, so the page is pulled again; nothing is sent over what could not be kept.
             model::save(&*storage, &doc);
+            hub::publish(&self.changes.borrow());
             return self.finish(false);
         }
         // A run that skipped a record leaves the revision where it was: the next run pulls the record again.
@@ -549,12 +555,15 @@ impl Run {
     fn absorb(&self, sent: &[WorkPut], pushed: WorkPushed) {
         let storage = self.vm.ports.storage.clone();
         let Some(mut doc) = model::open(&*storage) else { return };
+        let before = self.changes.borrow().len();
         for result in pushed.results {
             let Some(put) = sent.iter().find(|p| p.kind == result.kind && p.key == result.key) else { continue };
             match result.status {
                 WorkStatus::Accepted => {
                     model::accepted(&mut doc, put, result.rev);
                     self.sent.set(self.sent.get() + 1);
+                    // The batch that was too big is behind: the rest goes together again.
+                    self.single.set(false);
                 }
                 WorkStatus::Superseded => {
                     if let Some(remote) = result.record
@@ -566,6 +575,8 @@ impl Run {
             }
         }
         model::save(&*storage, &doc);
+        // What the server's later edits changed here: open editors reload and say the person's change lost.
+        hub::publish(&self.changes.borrow()[before..]);
     }
 
     fn fail(self: &Rc<Self>, error: WorkError) {

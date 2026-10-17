@@ -842,3 +842,98 @@ fn the_status_and_the_announcements_are_said_in_both_languages() {
     assert_eq!(merged(&fr, 0, 1), "Votre travail a été fusionné avec votre compte\u{a0}: 0 lieu envoyé, 1 lieu reçu.");
     assert!(en.missing().is_empty() && fr.missing().is_empty());
 }
+
+#[test]
+fn a_record_the_server_superseded_is_published_so_an_open_editor_reloads_and_is_told_its_change_lost() {
+    let (work, _, _, _, _, _) = two_waiting_places();
+    let told = Rc::new(RefCell::new(Vec::new()));
+    let t = told.clone();
+    hub::register(|| {}, move |changes: &[Change]| t.borrow_mut().extend(changes.iter().map(|c| (c.id.name(), c.origin))));
+    let batch = match work.calls().as_slice() {
+        [WorkCall::Push { batch, .. }] => batch.clone(),
+        other => panic!("{other:?}"),
+    };
+    let theirs = WorkRecord {
+        kind: "street".into(),
+        key: batch[0].key.clone(),
+        rev: 5,
+        edited_at: model::stamp(T0 + 60_000),
+        deleted: false,
+        body: Some(json!({"theirs": true})),
+        error: None,
+    };
+    let results = vec![
+        WorkResult { kind: "street".into(), key: batch[0].key.clone(), status: WorkStatus::Superseded, rev: 5, record: Some(theirs) },
+        WorkResult { kind: "street".into(), key: batch[1].key.clone(), status: WorkStatus::Accepted, rev: 6, record: None },
+    ];
+    assert!(work.answer(WorkReply::Pushed(Ok(WorkPushed { rev: 6, results }))));
+    assert_eq!(*told.borrow(), [(format!("street/{}", batch[0].key), Origin::Replaced)]);
+}
+
+#[test]
+fn what_was_applied_before_a_store_refused_a_record_is_still_published() {
+    hub::reset();
+    let server = ServerSim::new();
+    let ring = vec![[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]];
+    let laptop = device(&server, T0 + 100_000);
+    edit_street(&laptop, 1, 100);
+    RestrictionStore::new(laptop.ports.storage.clone()).add("Zone", Rule::CarFree, ring).unwrap();
+    laptop.vm.known(&ada());
+    let phone = device(&server, T0 + 200_000);
+    phone.storage.refuse(EDITS_KEY); // the street cannot be kept, the rule can
+    let told = Rc::new(RefCell::new(Vec::new()));
+    let t = told.clone();
+    hub::register(|| {}, move |changes: &[Change]| t.borrow_mut().extend(changes.iter().map(|c| c.id.name())));
+    phone.vm.known(&ada());
+    assert_eq!(*told.borrow(), ["rule/r1"]);
+}
+
+#[test]
+fn a_batch_413_does_not_send_the_rest_of_the_backlog_one_record_per_call() {
+    hub::reset();
+    let (mut ports, _, storage, _) = test_ports_with_time();
+    let work = Rc::new(FakeWorkSync::default());
+    ports.work = work.clone();
+    storage.set_now(T0);
+    let store = CityStore::sample(ports.storage.clone());
+    for edge in [1, 2, 3] {
+        let mut s = store.open().street_editor(edge, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(store.write_street(edge, s));
+    }
+    let vm = SyncVm::new(ports.clone(), crate::i18n_for(Locale::En));
+    vm.known(&ada());
+    assert!(work.answer(WorkReply::Page(Ok(page(0)))));
+    assert!(work.answer(WorkReply::Pushed(Err(WorkError::TooLarge("batch".into())))));
+    let one = match work.calls().as_slice() {
+        [WorkCall::Push { batch, .. }] => batch.clone(),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(one.len(), 1);
+    let taken = WorkResult { kind: "street".into(), key: one[0].key.clone(), status: WorkStatus::Accepted, rev: 1, record: None };
+    assert!(work.answer(WorkReply::Pushed(Ok(WorkPushed { rev: 1, results: vec![taken] }))));
+    match work.calls().as_slice() {
+        [WorkCall::Push { batch, .. }] => assert_eq!(batch.len(), 2, "the rest goes together again"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn enabling_during_a_run_waits_for_the_run_it_triggers() {
+    hub::reset();
+    let (mut ports, _, storage, scheduler) = test_ports_with_time();
+    let work = Rc::new(FakeWorkSync::default());
+    ports.work = work.clone();
+    storage.set_now(T0);
+    let vm = SyncVm::new(ports.clone(), crate::i18n_for(Locale::En));
+    vm.known(&ada()); // a run is going: its pull is not answered yet
+    let reports = Rc::new(RefCell::new(Vec::new()));
+    let r = reports.clone();
+    vm.enable("ada", Box::new(move |x| r.borrow_mut().push(x)));
+    assert!(work.answer(WorkReply::Page(Ok(page(0)))));
+    assert!(reports.borrow().is_empty(), "the run that was going is not the merge enable asked for");
+    scheduler.advance(10_000);
+    assert!(work.answer(WorkReply::Page(Ok(page(0)))));
+    assert_eq!(reports.borrow().len(), 1);
+}
