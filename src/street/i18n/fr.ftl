@@ -80,6 +80,7 @@ units-metres = mètres
 units-feet = pieds
 space-caption = Largeur par usage, en { $units }
 col-use = Usage
+col-measure = Mesure
 col-today = Aujourd’hui
 col-design = Votre aménagement
 col-change = Variation

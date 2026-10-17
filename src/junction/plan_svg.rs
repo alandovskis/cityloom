@@ -259,7 +259,7 @@ impl Plan<'_> {
                 format!(
                     "<rect class=\"{}\" x=\"{}\" y=\"{}\" width=\"{}\" height=\"6\"/>",
                     if i % 2 == 1 { "bar-w" } else { "bar-b" },
-                    f1(x + 36.0 + i as f64 * block),
+                    f1(x + i as f64 * block),
                     y - 6.0,
                     f1(block)
                 )
@@ -269,10 +269,11 @@ impl Plan<'_> {
         let end = self.units.length_whole_in(20_000, self.locale);
         let scale = esc(&self.i18n.tr("jn-svg-scale", &Args::new()));
         format!(
-            "<g class=\"scale\"><text class=\"t-label\" x=\"{x}\" y=\"{y}\">{scale}</text>{blocks}<text class=\"t-dim\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">0</text><text class=\"t-dim\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{end}</text></g>",
-            f1(x + 36.0),
+            "<g class=\"scale\"><text class=\"t-label\" x=\"{x}\" y=\"{}\">{scale}</text>{blocks}<text class=\"t-dim\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">0</text><text class=\"t-dim\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{end}</text></g>",
+            y - 14.0,
+            f1(x),
             y + 20.0,
-            f1(x + 36.0 + 5.0 * block),
+            f1(x + 5.0 * block),
             y + 20.0
         )
     }
@@ -1275,6 +1276,17 @@ mod tests {
         assert_eq!(count(&s.markup, "class=\"north\""), 1);
         assert_eq!(count(&s.markup, "class=\"bar-b\"") + count(&s.markup, "class=\"bar-w\""), 5);
         assert!(s.markup.contains(">20 m</text>"));
+    }
+
+    #[test]
+    fn the_scale_label_stands_above_its_bar_so_that_wider_text_spacing_cannot_run_into_it() {
+        let m = svg(&Junction::new(0)).markup;
+        let g = &m[m.find("<g class=\"scale\">").unwrap()..];
+        let num =
+            |tag: &str, at: &str| -> f64 { g[g.find(tag).unwrap()..].split(&format!(" {at}=\"")).nth(1).unwrap().split('"').next().unwrap().parse().unwrap() };
+        let (label_y, bar_y) = (num("class=\"t-label\"", "y"), num("class=\"bar-b\"", "y"));
+        assert!(label_y < bar_y, "label at {label_y}, bar at {bar_y}");
+        assert_eq!(num("class=\"t-label\"", "x"), num("class=\"bar-b\"", "x"));
     }
 
     #[test]

@@ -39,7 +39,7 @@ pub fn SessionMenu(vm: Rc<SessionVm>) -> impl IntoView {
                 type="button"
                 id="session-btn"
                 class="btn quiet"
-                aria-haspopup="true"
+
                 aria-expanded="false"
                 aria-controls="session-menu"
                 aria-label=move || vm.with_value(|v| v.label())

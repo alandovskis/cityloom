@@ -10,7 +10,7 @@ colors:
   rule: "#e5e8ec"
   fill: "#f1f3f5"
   field-line: "#7f8a96"
-  accent: "#2563eb"
+  accent: "#1f5ee0"
   accent-ink: "#ffffff"
   accent-wash: "#e8effd"
   warn: "#92400e"
@@ -240,7 +240,7 @@ The earlier drafting-sheet world (ink on bond paper, condensed type, hard hatch)
 A cool, near-neutral grey-blue ground with white cards, a single saturated blue, and a warm amber for trouble. Hues are used by role, never by section.
 
 ### Primary
-- **Map Blue** (`accent`, #2563eb light; `dark-accent` #8ab4ff dark): selection, links, focus rings, the filled Search and Add buttons, selected rows, junction discs and their numerals, sliders, the logo's left ring. Its wash (`accent-wash`) is the selected or hover background for rows, tabs-in-use, quiet toggles that are open, and lane arrows. Text on filled blue is `accent-ink`.
+- **Map Blue** (`accent`, #1f5ee0 light; `dark-accent` #8ab4ff dark): selection, links, focus rings, the filled Search and Add buttons, selected rows, junction discs and their numerals, sliders, the logo's left ring. Its wash (`accent-wash`) is the selected or hover background for rows, tabs-in-use, quiet toggles that are open, and lane arrows. Text on filled blue is `accent-ink`.
 
 ### Secondary
 - **Attention Amber** (`warn` #92400e text on `warn-wash` #fef3c7; `warn-line` #f59e0b for strokes and fills on the drawing; dark: `dark-warn` #fcd34d on an amber wash at 18%): anything that does not fit or fails. The status chip, failing check rows, the cloud over overflow, over-width dimension lines, amber badges on the map, the invalid-field border. It is also the logo's right ring.

@@ -166,3 +166,35 @@ fn the_sign_in_menu_is_drawn_for_each_state_in_each_language() {
     );
     assert!(out.contains(">Se connecter<") && out.contains(">Se connecter avec<"), "{out}");
 }
+
+#[test]
+fn the_editors_open_with_a_skip_link_to_the_drawing_that_shows_on_focus() {
+    for (page, html) in [("street", include_str!("../../web/street.html")), ("intersection", include_str!("../../web/intersection.html"))] {
+        let body = &html[html.find("<body>").unwrap() + "<body>".len()..];
+        assert!(
+            body.trim_start().starts_with(r##"<a class="skip-link" href="#wrap" data-i18n="ui-skip-drawing">Skip to the drawing</a>"##),
+            "{page}: the first thing in the body"
+        );
+    }
+    let css = include_str!("../../web/app.css");
+    assert!(
+        css.contains(".skip-link {\n  position: fixed;") && css.contains(".skip-link:focus {\n  transform: none;\n}"),
+        "off screen, then on screen when focused"
+    );
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    assert_eq!(en.tr_now("ui-skip-drawing", &Args::new()), "Skip to the drawing");
+    assert_eq!(fr.tr_now("ui-skip-drawing", &Args::new()), "Passer au dessin");
+}
+
+#[test]
+fn the_details_panel_of_each_editor_opens_with_a_heading_its_sections_sit_under() {
+    // The inspector's sections are level 3; without a level 2 above them the outline skips a level.
+    for (page, html, key) in [
+        ("street", include_str!("../../web/street.html"), "st-piece-details"),
+        ("intersection", include_str!("../../web/intersection.html"), "jn-page-details-panel"),
+    ] {
+        let aside = &html[html.find("id=\"details-panel\"").unwrap()..];
+        let first = aside[aside.find('>').unwrap() + 1..].trim_start();
+        assert!(first.starts_with(&format!("<h2 class=\"sr-only\" data-i18n=\"{key}\">")), "{page}: {}", &first[..80]);
+    }
+}

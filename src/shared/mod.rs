@@ -5,6 +5,8 @@
 pub mod atlas;
 pub mod bind;
 pub mod catalogue;
+#[cfg(test)]
+pub mod contrast;
 pub mod core;
 pub mod i18n;
 pub mod iso;

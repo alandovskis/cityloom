@@ -24,6 +24,7 @@ region-australia = Australia
 region-japan = Japan
 
 # The markup every page shares.
+ui-skip-drawing = Skip to the drawing
 ui-home = CityLoom, home
 ui-settings = Settings
 ui-units = Units

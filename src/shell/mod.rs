@@ -2,6 +2,7 @@
 //! and notes sidebars and the notes tabs. The view-model decides; the view binds
 //! the markup each page keeps for them.
 
+mod header;
 pub mod popover;
 pub mod session;
 pub mod session_view;

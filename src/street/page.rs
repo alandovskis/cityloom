@@ -495,10 +495,10 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
                 })
                 .collect_view();
             view! {
-                <li role="presentation" class="add-group">
+                <div class="add-group" role="group" aria-labelledby=format!("add-g-{g}")>
                     <p class="add-group-h" id=format!("add-g-{g}")>{move || w.i18n().tr(&group_key(group), &Args::new())}</p>
-                    <ul class="add-sub" role="group" aria-labelledby=format!("add-g-{g}")>{rows}</ul>
-                </li>
+                    <ul class="add-sub">{rows}</ul>
+                </div>
             }
         })
         .collect_view();
@@ -507,7 +507,6 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
             type="button"
             id="add-btn"
             class="btn"
-            aria-haspopup="true"
             aria-expanded=move || open.get().to_string()
             aria-controls="add-menu"
             node_ref=button
@@ -525,7 +524,7 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
         <div id="add-menu" class="menu add-menu" hidden=move || !open.get() node_ref=menu on:keydown=menu_keys on:focusout=focus_out>
             <p class="menu-h">{say(w, "add-button")}</p>
             <p class="hint">{say(w, "add-hint")}</p>
-            <ul id="palette" class="add-list">{groups}</ul>
+            <div id="palette" class="add-list">{groups}</div>
         </div>
     }
 }
@@ -554,6 +553,7 @@ fn menu_item(
         <li role="none">
             <button type="button" role="menuitem" tabindex="-1" class=format!("add-item transform-item {class}") aria-label=label on:click=move |_| choose()>
                 {mark}
+                " "
                 <b>{name}</b>
             </button>
         </li>

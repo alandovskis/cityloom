@@ -121,7 +121,7 @@ pub fn Capacity(vm: Rc<StreetVm>) -> impl IntoView {
             <caption class="sr-only">{plain(&i18n, "capacity-caption")}</caption>
             <thead>
                 <tr>
-                    <th scope="col"></th>
+                    <th scope="col"><span class="sr-only">{plain(&i18n, "col-measure")}</span></th>
                     <th scope="col">{plain(&i18n, "col-today")}</th>
                     <th scope="col">{plain(&i18n, "col-design")}</th>
                     <th scope="col">{plain(&i18n, "col-change")}</th>

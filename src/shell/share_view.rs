@@ -11,7 +11,7 @@ use crate::shared::i18n::{Args, I18n};
 pub fn ShareMenu(i18n: Rc<I18n>) -> impl IntoView {
     let i18n = StoredValue::new_local(i18n);
     view! {
-        <button type="button" id="share-btn" class="btn quiet" aria-haspopup="true" aria-expanded="false" aria-controls="share-menu">
+        <button type="button" id="share-btn" class="btn quiet" aria-expanded="false" aria-controls="share-menu">
             <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
                 <path d="M8 10V2.5M5 5.5l3-3 3 3M3.5 8.5v5h9v-5"></path>
             </svg>

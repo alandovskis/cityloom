@@ -16,10 +16,10 @@
   --fill: light-dark(#f1f3f5, #252d35);
   --field-line: light-dark(#7f8a96, #6b7783);
 
-  --accent: light-dark(#2563eb, #8ab4ff);
+  --accent: light-dark(#1f5ee0, #8ab4ff);
   --accent-ink: light-dark(#ffffff, #0b1220);
   --accent-wash: light-dark(#e8effd, rgb(138 180 255 / 0.16));
-  --accent-line: light-dark(rgb(37 99 235 / 0.4), rgb(138 180 255 / 0.45));
+  --accent-line: light-dark(rgb(31 94 224 / 0.4), rgb(138 180 255 / 0.45));
 
   --warn: light-dark(#92400e, #fcd34d);
   --warn-wash: light-dark(#fef3c7, rgb(245 158 11 / 0.18));
@@ -99,6 +99,11 @@
   --mat-trees-alt: #38332b;
 }
 
+/* A control the keyboard focuses scrolls clear of the sticky bar (src/shell/header.rs keeps its real height). */
+html {
+  scroll-padding-top: var(--bar-stuck, 0px);
+}
+
 :root[data-theme="light"] {
   color-scheme: light;
 }
@@ -165,6 +170,24 @@ input,
 select {
   font: inherit;
   color: inherit;
+}
+/* The first stop of an editor page: out of sight until the keyboard reaches it, then a card above the bar. */
+.skip-link {
+  position: fixed;
+  z-index: 60;
+  top: 8px;
+  left: 8px;
+  padding: 10px 16px;
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  transform: translateY(calc(-100% - 16px));
+}
+.skip-link:focus {
+  transform: none;
 }
 .sr-only {
   position: absolute;
@@ -519,6 +542,13 @@ a.btn {
   margin-top: 10px;
   font-size: 13px;
 }
+/* A target of at least 24 by 24 px (WCAG 2.5.8): the line alone is 16 px tall. */
+.menu-foot a {
+  display: inline-block;
+  min-height: 24px;
+  padding: 4px 0;
+  box-sizing: border-box;
+}
 .site-foot {
   position: fixed;
   left: var(--pad);
@@ -671,6 +701,7 @@ a.btn {
 /* Notes. */
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   margin: 12px 12px 0;
   padding: 3px;
@@ -678,8 +709,9 @@ a.btn {
   background: var(--fill);
 }
 .tab {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 40px;
+  padding: 0 10px;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -899,6 +931,13 @@ a.btn {
   right: calc(var(--rw) + var(--pad) - 10px);
   bottom: calc(var(--pad) + 3 * 44px + 2px);
 }
+/* MapLibre's attribution is a pale box over the map in both themes, so the page's ring (light blue in dark) is
+   lost on it: a dark ring with a white one outside it is seen on the box and on the map either side. */
+.maplibregl-ctrl-attrib a:focus-visible {
+  outline: 2px solid #0b1220;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px #ffffff;
+}
 /* The key's dots repeat `style::OK`, `CHANGED`, `BAD` and `CONFLICT`: keep them equal. */
 .dot {
   display: inline-block;
@@ -921,6 +960,23 @@ a.btn {
 }
 .dot-conflict {
   background: var(--map-conflict);
+}
+/* The marks the map draws besides the colour (src/map/style.rs): a light dot in a changed junction, a dark one in
+   one that needs attention. */
+.dot-changed,
+.dot-bad {
+  position: relative;
+}
+.dot-changed::after,
+.dot-bad::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+.dot-bad::after {
+  background: #111827;
 }
 
 /* The home page's backdrop: the city drawn as an SVG. */
@@ -1424,6 +1480,29 @@ a.btn {
   .fit {
     font-size: 14px;
     padding: 9px 14px;
+  }
+}
+
+/* Where the logo and the three end buttons no longer fit side by side, the buttons take a row of their own. */
+@media (max-width: 379px) {
+  .brand {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .top-end {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
+  .search-slot {
+    grid-row: 3;
+  }
+  .surfaces {
+    grid-row: 4;
+  }
+  .account:first-child,
+  .top-end > :first-child {
+    margin-left: 0;
   }
 }
 
