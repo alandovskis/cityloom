@@ -146,6 +146,9 @@ test.describe("the junction editor on a junction of the city", () => {
     await iso.click();
     await expect(page.locator("#drawing .iso")).toHaveCount(1);
     await expect(page.locator("#drawing .iso-top").first()).toBeVisible();
+    // Each top is in its material's colour and pattern, the pattern laid on the ground.
+    await expect(page.locator("#drawing .iso-top").first()).toHaveClass(/mat-\w+/);
+    await expect(page.locator("#drawing pattern#iso-m-asphalt")).toHaveAttribute("patternTransform", /^matrix\(/);
     await expect(page.locator("#drawing .iso-name").first()).toBeVisible();
     await expect(page.locator("#drawing [data-role^='grip']")).toHaveCount(0);
     await expect(iso).toHaveAttribute("aria-pressed", "true");

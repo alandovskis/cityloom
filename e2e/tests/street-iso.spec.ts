@@ -46,6 +46,41 @@ test.describe("the street in 2.5D", () => {
     await expect(page.locator('#drawing [data-role="handle"]')).toHaveCount(0);
   });
 
+  test("choosing another surface material in the inspector changes the selected piece's top in 2.5D", async ({
+    page,
+  }) => {
+    const tops = () =>
+      page.locator("#drawing .iso-top").evaluateAll((els) =>
+        els.map((el) => {
+          const s = getComputedStyle(el);
+          const hatch = el.nextElementSibling?.getAttribute("fill") ?? "";
+          return { class: el.getAttribute("class") ?? "", fill: s.fill, hatch };
+        }),
+      );
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("ArrowRight");
+    await iso(page).click();
+    const before = await tops();
+    for (const t of before) {
+      const material = /mat-(\w+)/.exec(t.class)?.[1];
+      expect(material, t.class).toBeTruthy();
+      expect(t.hatch).toBe(`url(#iso-m-${material})`);
+    }
+    await section(page).click();
+    const other = page.locator('#i-h-surface ~ [role="radiogroup"] [role="radio"][aria-checked="false"]').first();
+    await other.click();
+    await iso(page).click();
+    const after = await tops();
+    expect(after).toHaveLength(before.length);
+    const changed = after.filter((t, i) => t.class !== before[i].class);
+    expect(changed).toHaveLength(1);
+    expect(changed[0].fill).not.toBe(before[after.indexOf(changed[0])].fill);
+    expect(changed[0].hatch).toMatch(/^url\(#iso-m-/);
+    // The pattern is laid on the ground: its definition carries a transform.
+    const id = /#(iso-m-\w+)/.exec(changed[0].hatch)![1];
+    await expect(page.locator(`#drawing pattern#${id}`)).toHaveAttribute("patternTransform", /^matrix\(/);
+  });
+
   test("the view chosen is kept across a reload", async ({ page }) => {
     await iso(page).click();
     await page.reload();
