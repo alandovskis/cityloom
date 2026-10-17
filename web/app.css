@@ -99,6 +99,11 @@
   --mat-trees-alt: #38332b;
 }
 
+/* A control the keyboard focuses scrolls clear of the sticky bar (src/shell/header.rs keeps its real height). */
+html {
+  scroll-padding-top: var(--bar-stuck, 0px);
+}
+
 :root[data-theme="light"] {
   color-scheme: light;
 }
@@ -519,6 +524,13 @@ a.btn {
   margin-top: 10px;
   font-size: 13px;
 }
+/* A target of at least 24 by 24 px (WCAG 2.5.8): the line alone is 16 px tall. */
+.menu-foot a {
+  display: inline-block;
+  min-height: 24px;
+  padding: 4px 0;
+  box-sizing: border-box;
+}
 .site-foot {
   position: fixed;
   left: var(--pad);
@@ -671,6 +683,7 @@ a.btn {
 /* Notes. */
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   margin: 12px 12px 0;
   padding: 3px;
@@ -678,8 +691,9 @@ a.btn {
   background: var(--fill);
 }
 .tab {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 40px;
+  padding: 0 10px;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -898,6 +912,13 @@ a.btn {
 .drawing .maplibregl-ctrl-bottom-right {
   right: calc(var(--rw) + var(--pad) - 10px);
   bottom: calc(var(--pad) + 3 * 44px + 2px);
+}
+/* MapLibre's attribution is a pale box over the map in both themes, so the page's ring (light blue in dark) is
+   lost on it: a dark ring with a white one outside it is seen on the box and on the map either side. */
+.maplibregl-ctrl-attrib a:focus-visible {
+  outline: 2px solid #0b1220;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px #ffffff;
 }
 /* The key's dots repeat `style::OK`, `CHANGED`, `BAD` and `CONFLICT`: keep them equal. */
 .dot {
@@ -1424,6 +1445,29 @@ a.btn {
   .fit {
     font-size: 14px;
     padding: 9px 14px;
+  }
+}
+
+/* Where the logo and the three end buttons no longer fit side by side, the buttons take a row of their own. */
+@media (max-width: 379px) {
+  .brand {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .top-end {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
+  .search-slot {
+    grid-row: 3;
+  }
+  .surfaces {
+    grid-row: 4;
+  }
+  .account:first-child,
+  .top-end > :first-child {
+    margin-left: 0;
   }
 }
 

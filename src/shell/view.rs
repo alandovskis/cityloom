@@ -85,6 +85,7 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
             let _ = leptos::prelude::window().print();
         });
     }
+    crate::shell::header::watch();
     std::mem::forget(owner);
 }
 
