@@ -547,7 +547,7 @@ mod tests {
     }
 
     #[test]
-    fn the_transform_menu_offers_the_pedestrian_kinds_and_only_the_measures_the_table_arranges() {
+    fn the_transform_menu_offers_the_pedestrian_kinds_and_only_the_measures_that_fit() {
         use crate::shared::catalogue::{PEDESTRIAN_KINDS, kind_index};
         let r = rig(1);
         let menu = r.vm.transform_menu();
@@ -577,9 +577,9 @@ mod tests {
         assert!(r.vm.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
         let menu = r.vm.transform_menu();
         assert!(menu.pedestrian.is_empty());
-        let table: Vec<&str> = r.vm.view_now().measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect();
-        assert_eq!(menu.transit, table, "the menu follows the table on a pedestrian street too");
-        assert_eq!(menu.is_empty(), table.is_empty());
+        let fits: Vec<&str> = r.vm.view_now().measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect();
+        assert_eq!(menu.transit, fits, "the menu offers the measures that fit on a pedestrian street too");
+        assert_eq!(menu.is_empty(), fits.is_empty());
     }
 
     #[test]

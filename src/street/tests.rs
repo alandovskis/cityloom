@@ -471,32 +471,6 @@ fn the_changes_list_is_drawn_again_in_the_language_the_shell_switches() {
 }
 
 #[test]
-fn the_transit_priority_section_offers_the_lane_measures_and_nothing_else() {
-    let s = street_shared(1);
-    let h = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
-    assert!(count(&h, "class=\"btn m-apply\"") >= 10);
-    assert!(h.contains("Arrange the street as B1 Center-Running Transit Lanes"));
-    assert!(h.contains("Freeways only"));
-    let street_measures = crate::shared::atlas::MEASURES.iter().filter(|m| m.place == crate::shared::atlas::Where::Street).count();
-    assert_eq!(count(&h, "<tr"), street_measures, "one row per street measure: {h}");
-    assert!(!h.contains("Offset Queue-Jump Lanes"), "a junction measure is not here: {h}");
-    assert!(!h.contains("Transit Signal Priority"), "a measure that is not modelled is not here: {h}");
-    assert!(s.edit(|e| e.apply_measure("B3")));
-    let h = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
-    assert!(h.contains("This street") && !h.contains("Arrange the street as B3"));
-}
-
-#[test]
-fn the_transit_priority_section_is_in_french() {
-    let s = street_shared_in(1, Locale::FrCa);
-    let h = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
-    assert!(h.contains("Réorganiser") && !h.contains(">Arrange<"), "{h}");
-    assert!(!h.contains("Set at a junction") && !h.contains("Non modélisé"), "{h}");
-    let i18n = s.i18n().clone();
-    assert_eq!(i18n.tr_now("st-transit-heading", &Default::default()), "Priorité au transport en commun");
-}
-
-#[test]
 fn nothing_selected_the_street_panel_says_how_to_begin() {
     let s = street_shared(0);
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
@@ -753,20 +727,16 @@ fn the_checks_and_their_count_are_said_in_english_with_no_stray_space() {
 }
 
 #[test]
-fn the_checks_and_why_a_measure_is_unavailable_are_said_in_french_and_follow_the_switch() {
+fn the_checks_are_said_in_french_and_follow_the_switch() {
     let owner = Owner::new();
     owner.set();
     let s = street_shared_in(0, Locale::En);
     let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
     assert!(h.contains("Fits the street width") && h.contains("Both sides") && h.contains("Room for emergency vehicles"), "{h}");
-    let m = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
-    assert!(m.contains("Freeways only"), "{m}");
     s.i18n().set(Locale::FrCa);
     let h = street_html(|| view! { <notes::Checks vm=s.clone()/> });
     assert!(h.contains("Respecte la largeur de la rue") && h.contains("Des deux côtés") && h.contains("Place pour les véhicules d’urgence"), "{h}");
     assert!(!h.contains("Fits the street width") && !h.contains("Both sides"), "{h}");
-    let m = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
-    assert!(m.contains("Autoroutes seulement") && !m.contains("Freeways only"), "{m}");
 }
 
 // ---- the page around the section, in French ------------------------------------------------
@@ -851,33 +821,6 @@ fn the_window_title_names_the_street_and_where_it_runs_in_each_language() {
     assert_eq!(page::page_title(&fr, "Main St", &ends), "Main St entre Rue A et Rue B \u{b7} CityLoom");
     assert_eq!(page::page_title(&en, "Main St", &[]), "CityLoom street editor");
     assert_eq!(page::page_title(&fr, "Main St", &[]), "Éditeur de rues CityLoom");
-}
-
-// ---- the measures' words ----------------------------------------------------------------
-
-#[test]
-fn the_measures_are_named_and_explained_in_french() {
-    let s = street_shared_in(1, Locale::FrCa);
-    let h = street_html(|| view! { <notes::TransitPriority vm=s.clone()/> });
-    assert!(h.contains("Voies centrales réservées au transport en commun"), "{h}");
-    assert!(h.contains("Réorganiser la rue selon B1 Voies centrales réservées au transport en commun"));
-    assert!(!h.contains("Center-Running Transit Lanes"), "{h}");
-}
-
-#[test]
-fn a_measure_s_problems_are_said_in_each_language() {
-    let narrow = |locale| {
-        let s = street_shared_in(1, locale);
-        assert!(s.edit(|e| e.apply_measure("B1")));
-        let bus = s.view().segments.iter().find(|g| KINDS[g.kind].id == "bus").unwrap().uid;
-        s.edit(|e| e.set_width(bus, 3_000));
-        street_html(|| view! { <notes::TransitPriority vm=s.clone()/> })
-    };
-    let h = narrow(Locale::En);
-    assert!(h.contains("A bus lane is 3000 mm wide, and a transit lane wants 3300 mm"), "{h}");
-    let h = narrow(Locale::FrCa);
-    assert!(h.contains("Une voie d’autobus mesure 3000\u{a0}mm de large, alors qu’une voie de transport en commun en exige 3300\u{a0}mm"), "{h}");
-    assert!(!h.contains("A bus lane is"));
 }
 
 // ---- the piece panel -------------------------------------------------------------------
@@ -1127,10 +1070,35 @@ fn the_transform_menu_has_a_group_for_making_pedestrian_and_one_for_the_measures
     for m in view.measures.iter().filter(|m| !m.can_apply) {
         assert!(!h.contains(&format!(">{}<", m.code)), "{} will not fit and is not listed", m.code);
     }
+    assert!(h.contains("Arrange the street as B1 Center-Running Transit Lanes"), "{h}");
+    assert!(!h.contains("Offset Queue-Jump Lanes"), "a junction measure is not here: {h}");
+    assert!(!h.contains("Transit Signal Priority"), "a measure that is not modelled is not here: {h}");
+    assert!(!h.contains("B2"), "a freeway measure is not offered on a street: {h}");
+    // A measure the street already is, is no longer offered.
+    assert!(s.edit(|e| e.apply_measure("B3")));
+    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
+    assert!(!h.contains("Arrange the street as B3"), "{h}");
     // Made pedestrian, the street has no motor piece: only the measures are left.
     assert!(s.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
     let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
     assert!(!h.contains("Make pedestrian") && !h.contains("ped-item"), "a street without traffic has nothing to make pedestrian");
+}
+
+#[test]
+fn the_transform_menu_names_the_measures_in_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
+    assert!(h.contains("Voies centrales réservées au transport en commun"), "{h}");
+    assert!(h.contains("Réorganiser la rue selon B1 Voies centrales réservées au transport en commun"), "{h}");
+    assert!(h.contains("Priorité au transport en commun"), "{h}");
+    assert!(!h.contains("Center-Running Transit Lanes"), "{h}");
+}
+
+#[test]
+fn the_left_panel_holds_the_inspector_and_no_transit_table() {
+    let page = include_str!("../../web/street.html");
+    assert!(page.contains("id=\"inspector\""));
+    assert!(!page.contains("transit-priority") && !page.contains("h-transit"), "the Transform menu is where the measures are arranged");
 }
 
 #[test]

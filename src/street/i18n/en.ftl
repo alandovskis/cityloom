@@ -24,9 +24,6 @@ st-does-it-work = Does it work?
 st-sample-limits = sample limits
 st-your-changes = Your changes
 st-transit-heading = Transit priority
-st-transit-hint = Arrange keeps the sidewalks and lays the roadway out again as that measure. You can undo it.
-st-transit-col-measure = Measure
-st-transit-col-arrange = This street
 st-about-street = About this street
 st-provenance-heading = Where this street came from
 st-no-source = This street was not made from OpenStreetMap.
@@ -103,10 +100,7 @@ failing =
         [one] 1 check fails
        *[other] { $n } checks fail
     }
-measure-arrange = Arrange
 measure-arrange-label = Arrange the street as { $code } { $name }
-measure-this-street = This street
-measure-will-not-fit = Will not fit
 
 # The page around the section: heading, window title, title block, history, add menu, clock and welcome (src/street/page.rs).
 header-city-map = City map
@@ -319,8 +313,6 @@ check-detail-side-ok = Lanes run the way this region drives
 check-detail-side-bad = A lane runs against traffic that keeps { $side }
 side-word-right = right
 side-word-left = left
-unavailable-freeways-only = Freeways only
-unavailable-not-freeway = Not for a freeway
 
 # A pedestrian street (src/street/model.rs, page.rs, vm.rs).
 make-pedestrian-button = Make pedestrian

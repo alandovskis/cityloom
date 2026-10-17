@@ -300,7 +300,8 @@ test.describe("the street editor on a street of the city", () => {
   });
 
   test("an Atlas measure is arranged on a street it suits, and the change can be undone", async ({ page }) => {
-    await page.locator("#transit-priority .m-apply").first().click();
+    await page.locator("#transform-btn").click();
+    await page.locator('#transform-menu [role="menuitem"].transit-item').first().click();
     await expect(page.locator("#undo")).toBeEnabled();
     await expect(live(page)).not.toBeEmpty();
     await page.locator("#undo").click();
@@ -313,14 +314,14 @@ test.describe("the street editor on a street of the city", () => {
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /ft of /);
   });
 
-  test("the left panel is one scroller holding the inspector and the transit priority section", async ({ page }) => {
+  test("the left panel is one scroller holding the inspector and nothing else", async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await selectFirstPiece(page);
     const panel = page.locator("#details-panel");
     await expect(panel.locator(":scope > .panel-body")).toHaveCount(1);
     const body = panel.locator(":scope > .panel-body");
     await expect(body.locator("#inspector")).toHaveCount(1);
-    await expect(body.locator("#transit-priority")).toHaveCount(1);
+    await expect(page.locator("#transit-priority, #h-transit")).toHaveCount(0);
     await expect(panel.locator(".panel-body")).toHaveCount(1);
     // The inspector takes the height of its own content, not half of the panel.
     const inspector = await page
@@ -463,8 +464,6 @@ test.describe("the Transform menu", () => {
     const transit = menu.getByRole("group", { name: "Transit priority" });
     const offered = await transit.getByRole("menuitem").count();
     expect(offered).toBeGreaterThan(0);
-    // Exactly the table's Arrange rows: nothing that will not fit, nothing already this street's.
-    await expect(page.locator("#transit-priority .m-apply")).toHaveCount(offered);
     await expect(page.locator("#transform-btn")).toHaveAttribute("aria-expanded", "true");
   });
 
@@ -478,7 +477,9 @@ test.describe("the Transform menu", () => {
     await expect(live(page)).not.toBeEmpty();
     await expect(page.locator("#wrap")).toBeFocused();
     await expect(page.locator("#transform-menu")).toBeHidden();
-    await expect(page.locator("#transit-priority tr", { hasText: code }).locator(".m-on")).toBeVisible();
+    await page.locator("#transform-btn").click();
+    await expect(page.locator("#transform-menu .transit-item", { hasText: code })).toHaveCount(0);
+    await page.keyboard.press("Escape");
     await page.locator("#undo").click();
     await expect(live(page)).toHaveText(/^Undone\./);
     expect(await pieces(page)).toBe(before);
