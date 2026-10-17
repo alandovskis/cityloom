@@ -49,6 +49,9 @@ pub struct SyncVm {
     /// The server refused the account's work for an account-wide limit (records or bytes): nothing is pushed on this
     /// page any more (the next page open tries again, and so does turning storage on), though pulls go on.
     capped: Cell<bool>,
+    /// Told when the server answers for another account than the one this page believes in: the page asks the session
+    /// again who is signed in (the shell wires it).
+    account_changed: RefCell<Option<Box<dyn Fn()>>>,
     /// Those waiting for the end of the run (the Account page, to count what it merged).
     waiting: RefCell<Vec<Box<dyn FnOnce(Report)>>>,
     /// Asked for while a run was going: they wait for the next run, which starts after the one going.
@@ -70,6 +73,7 @@ impl SyncVm {
             told_paused: Cell::new(false),
             told_large: Cell::new(false),
             capped: Cell::new(false),
+            account_changed: RefCell::new(None),
             waiting: RefCell::new(Vec::new()),
             queued: RefCell::new(Vec::new()),
         });
@@ -81,6 +85,11 @@ impl SyncVm {
         });
         hub::install(&vm);
         vm
+    }
+
+    /// What to do when the session cookie turns out to be another account's than the one this page believes in.
+    pub fn on_account_changed(&self, f: Box<dyn Fn()>) {
+        *self.account_changed.borrow_mut() = Some(f);
     }
 
     /// The state, drawn again when it changes.
@@ -233,21 +242,26 @@ impl SyncVm {
             self.end(Report::default(), Status::Paused);
             return;
         };
-        if doc.user.as_deref() != Some(user.as_str()) {
-            doc.switch_user(&user);
+        // Another account than the document's: nothing of the document is touched until the server has said that the
+        // session really is this account's (`Run::pull`), since a tab that still believes in the previous account
+        // would otherwise restamp the store under the new account's cookie.
+        let switching = doc.user.as_deref() != Some(user.as_str());
+        if !switching {
+            self.prepare(&mut doc, &user);
+            model::save(&*storage, &doc);
         }
-        self.rename_rules(&mut doc);
-        model::claim_unmarked(&mut doc, &local::ids(&storage), &model::stamp(storage.now_ms()));
-        model::save(&*storage, &doc);
+        let (rev, epoch) = if switching { (0, None) } else { (doc.rev, doc.epoch.clone()) };
         let run = Rc::new(Run {
             vm: self.clone(),
-            full: Cell::new(doc.rev == 0),
+            user,
+            switching: Cell::new(switching),
+            full: Cell::new(rev == 0),
             pulled: RefCell::new(Vec::new()),
-            rev: Cell::new(doc.rev),
+            rev: Cell::new(rev),
             sent: Cell::new(0),
             received: Cell::new(0),
             changes: RefCell::new(Vec::new()),
-            epoch: RefCell::new(doc.epoch.clone()),
+            epoch: RefCell::new(epoch.clone()),
             paused: Cell::new(false),
             skipped: Cell::new(false),
             failed_apply: Cell::new(false),
@@ -255,7 +269,18 @@ impl SyncVm {
             single: Cell::new(false),
             rounds: Cell::new(0),
         });
-        run.pull(WorkAsk::first(doc.rev).with_epoch(doc.epoch.clone()));
+        run.pull(WorkAsk::first(rev).with_epoch(epoch));
+    }
+
+    /// Readies the document for `user`: another account starts over, the `r<n>` rules get their ids, and the records of
+    /// the stores that were never marked are claimed.
+    fn prepare(&self, doc: &mut SyncDoc, user: &str) {
+        let storage = &self.ports.storage;
+        if doc.user.as_deref() != Some(user) {
+            doc.switch_user(user);
+        }
+        self.rename_rules(doc);
+        model::claim_unmarked(doc, &local::ids(storage), &model::stamp(storage.now_ms()));
     }
 
     /// Gives the `r<n>` rules random ids (once: later there are none). A rule that had been sent under its old id is
@@ -334,6 +359,10 @@ enum Applied {
 /// One pass: pull everything above the revision seen, merge it, push what waits.
 struct Run {
     vm: Rc<SyncVm>,
+    /// The account this run syncs for.
+    user: String,
+    /// The document belongs to another account: it is switched when the first page has shown the session is this one's.
+    switching: Cell<bool>,
     /// The pull is from revision 0: what comes is everything the server has, so what it does not list is gone.
     full: Cell<bool>,
     pulled: RefCell<Vec<WorkRecord>>,
@@ -370,6 +399,15 @@ impl Run {
         self.vm.ports.work.pull(
             ask.clone(),
             Box::new(move |answer| match answer {
+                Ok(page) if page.user.as_ref().is_some_and(|u| *u != run.user) => {
+                    // The cookie is another account's than this page believes in (it was signed in elsewhere): this
+                    // page is out of date, and syncs for no one until the session is read again.
+                    run.vm.stop();
+                    run.finish(false);
+                    if let Some(told) = run.vm.account_changed.borrow().as_ref() {
+                        told();
+                    }
+                }
                 Ok(page) => {
                     run.pulled.borrow_mut().extend(page.records);
                     *run.epoch.borrow_mut() = Some(page.epoch.clone());
@@ -462,6 +500,9 @@ impl Run {
             self.paused.set(true);
             return self.finish(false);
         };
+        if self.switching.replace(false) {
+            self.vm.prepare(&mut doc, &self.user);
+        }
         let pulled = self.pulled.take();
         let mut listed = BTreeSet::new();
         for remote in &pulled {

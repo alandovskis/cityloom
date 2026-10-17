@@ -1077,3 +1077,29 @@ fn a_superseded_record_that_cannot_be_applied_is_not_sent_again_in_the_same_run(
     assert_eq!(d.vm.status(), Status::NotSynced, "the place still waits");
     assert!(model::open(&*d.storage).unwrap().has_pending(&|_| true), "and stays marked");
 }
+
+#[test]
+fn a_tab_that_still_believes_in_the_previous_account_does_not_sync_under_the_new_ones_cookie() {
+    hub::reset();
+    let server = ServerSim::new();
+    *server.user.borrow_mut() = Some("bob".into()); // the browser's cookie is Bob's
+    let tab2 = device(&server, T0 + 100_000);
+    edit_street(&tab2, 1, 100);
+    let bob = Me { id: "bob".into(), display_name: "Bob".into(), store_on_server: Some(true), identities: vec![] };
+    tab2.vm.known(&bob);
+    // tab 1 was open as Ada and is shown again
+    let tab1 = SyncVm::new(tab2.ports.clone(), crate::i18n_for(Locale::En));
+    let asked = Rc::new(Cell::new(0));
+    let a = asked.clone();
+    tab1.on_account_changed(Box::new(move || a.set(a.get() + 1)));
+    let before = model::open(&*tab2.storage).unwrap();
+    let calls = server.calls.borrow().len();
+    tab1.known(&ada());
+    assert_eq!(model::open(&*tab2.storage).unwrap(), before, "Ada's tab leaves the sync document as Bob's tab left it");
+    assert_eq!(*server.calls.borrow().last().unwrap(), "pull 0", "it asked and stopped");
+    assert_eq!(server.calls.borrow().len(), calls + 1, "and sent nothing");
+    assert_eq!((asked.get(), tab1.status()), (1, Status::Off), "the page is told to read the session again");
+    tab2.vm.refresh();
+    assert_eq!(server.calls.borrow().iter().filter(|c| c.starts_with("push")).count(), 1, "the store is not sent again");
+    assert_eq!(model::open(&*tab2.storage).unwrap().user.as_deref(), Some("bob"));
+}

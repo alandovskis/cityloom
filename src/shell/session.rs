@@ -111,7 +111,14 @@ impl SessionVm {
     }
 
     /// The page's sync: told who is signed in and whether their work is stored on the server, and stopped on sign-out.
-    pub fn set_sync(&self, sync: Rc<SyncVm>) {
+    pub fn set_sync(self: &Rc<Self>, sync: Rc<SyncVm>) {
+        // The server answers for the cookie's account: when that is not the one this page believes in, ask again.
+        let weak = Rc::downgrade(self);
+        sync.on_account_changed(Box::new(move || {
+            if let Some(vm) = weak.upgrade() {
+                vm.ask_me();
+            }
+        }));
         *self.sync.borrow_mut() = Some(sync);
     }
 
@@ -311,6 +318,23 @@ mod tests {
         vm.sign_out();
         t.account.answer(AccountReply::Done(Ok(())));
         assert_eq!(vm.sync_status(), None);
+    }
+
+    #[test]
+    fn a_page_that_believes_in_another_account_than_the_cookies_reads_the_session_again_and_syncs_as_the_new_one() {
+        use crate::shared::ports::{WorkAsk, WorkCall, WorkPage, WorkReply};
+        crate::sync::hub::reset();
+        let (vm, t) = vm(Locale::En);
+        vm.set_sync(crate::sync::SyncVm::new(t.ports.clone(), crate::i18n_for(Locale::En)));
+        vm.start();
+        t.account.answer(AccountReply::Me(Ok(Me { id: "ada".into(), store_on_server: Some(true), ..me("Ada") })));
+        // signed in as Bob in another tab meanwhile: the server answers for Bob
+        t.work.answer(WorkReply::Page(Ok(WorkPage { epoch: "e1".into(), rev: 0, more: false, records: vec![], user: Some("bob".into()) })));
+        assert_eq!(t.account.calls(), [AccountCall::Me], "who is signed in is asked again");
+        assert_eq!(vm.sync_status(), None, "and nothing is synced for Ada");
+        t.account.answer(AccountReply::Me(Ok(Me { id: "bob".into(), store_on_server: Some(true), ..me("Bob") })));
+        assert_eq!(vm.state(), Session::SignedIn { name: "Bob".into() });
+        assert_eq!(t.work.calls(), [WorkCall::Pull(WorkAsk::first(0))], "the sync starts again, as Bob");
     }
 
     #[test]

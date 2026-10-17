@@ -68,6 +68,8 @@ struct PullQuery {
 
 #[derive(Serialize)]
 struct PulledOut {
+    /// The account the session belongs to: a tab that believes in another account is out of date.
+    user: Uuid,
     epoch: Uuid,
     rev: i64,
     more: bool,
@@ -90,7 +92,9 @@ async fn pull(State(a): State<Arc<Account>>, jar: CookieJar, Query(q): Query<Pul
         return json_error(StatusCode::BAD_REQUEST, "bad-request");
     }
     match a.work.pull(user, Ask { since, start, epoch }, a.clock.now()).await {
-        Ok(p) => (jar, Json(PulledOut { epoch: p.epoch, rev: p.rev, more: p.more, records: p.records.into_iter().map(record_out).collect() })).into_response(),
+        Ok(p) => {
+            (jar, Json(PulledOut { user, epoch: p.epoch, rev: p.rev, more: p.more, records: p.records.into_iter().map(record_out).collect() })).into_response()
+        }
         Err(e) => work_error(e),
     }
 }

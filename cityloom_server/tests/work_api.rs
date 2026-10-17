@@ -77,6 +77,8 @@ async fn a_record_is_stored_and_comes_back_with_a_newer_builds_fields_untouched(
     let pulled = b.get("/api/work?since=0").await.json();
     assert_eq!((pulled["rev"].clone(), pulled["more"].clone()), (json!(1), json!(false)));
     assert_eq!(pulled["epoch"].as_str().map(str::len), Some(36), "the copy the device read, a uuid");
+    let me = b.get("/api/me").await.json();
+    assert_eq!(pulled["user"], me["id"], "a pull says which account it answers for, so a tab that believes in another can stop");
     let rec = &pulled["records"][0];
     assert_eq!((rec["kind"].as_str(), rec["key"].as_str(), rec["deleted"].clone()), (Some("street"), Some("w1~n2~n3"), json!(false)));
     assert_eq!(rec["edited_at"].as_str(), Some(MIDDLE));
