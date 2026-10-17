@@ -6,6 +6,7 @@ use crate::shared::catalogue::KINDS;
 use crate::street::model::View;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
+use super::order::Bx;
 use super::projection::{EYE_BACK_MM, MIN_STANDING_PX, Projection, STRETCH_MM, drawn_mm, points};
 use super::raised::{Face, curb_top_mm, height_mm, inner_face, shade};
 
@@ -39,8 +40,13 @@ pub(super) struct Block {
 }
 
 impl Block {
-    /// How far the box is from the eye on the ground, in millimetres, from its nearest point: what orders the boxes
-    /// from far to near (a nearer box covers a farther one).
+    /// The box, for ordering.
+    pub(super) fn bounds(&self) -> Bx {
+        Bx { x: self.x, y: self.y, z: self.z }
+    }
+
+    /// How far the box is from the eye on the ground, in millimetres, from its nearest point: the order the boxes are
+    /// offered in, far to near, where none is in front of another (`order::paint_order`).
     pub(super) fn from_eye(&self, p: &Projection) -> f64 {
         let across = (self.x.0 - p.centre_mm).max(p.centre_mm - self.x.1).max(0.0);
         across.hypot(self.z.0 + EYE_BACK_MM)
@@ -123,8 +129,6 @@ mod tests {
         assert_eq!(count(&m, "class=\"iso-solid s-trunk\""), 10);
         // A tree is a trunk with its crown over it: a crown follows its trunk.
         assert!(m.find("s-trunk").unwrap() < m.find("s-crown").unwrap());
-        // Every solid comes after every strip.
-        assert!(m.rfind("class=\"iso-piece\"").unwrap() < m.find("class=\"iso-solid").unwrap());
     }
 
     #[test]
@@ -182,6 +186,66 @@ mod tests {
         let over = Block { x: (14_000.0, 16_000.0), ..b(10_000.0, 0.0) };
         assert!(b(10_000.0, 0.0).from_eye(&p) > over.from_eye(&p));
         assert_eq!(over.from_eye(&p), 10_000.0 + EYE_BACK_MM);
+    }
+
+    /// The index in the markup of the first solid of `class` whose front face is `front`.
+    fn at_front(m: &str, class: &str, front: &str) -> usize {
+        m.find(&format!("<g class=\"iso-solid s-{class}\"><polygon class=\"o-front\" points=\"{front}\""))
+            .unwrap_or_else(|| panic!("no {class} has that front"))
+    }
+
+    /// The front face of a block as `block` writes it.
+    fn front_of(p: &Projection, b: &Block) -> String {
+        let ((x0, x1), (y0, y1), z0) = (b.x, b.y, b.z.0);
+        points(p, &[(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0)])
+    }
+
+    #[test]
+    fn a_crown_in_front_of_a_bus_shelter_is_drawn_after_it_and_covers_it() {
+        // Sample Avenue 2 with a bus shelter (18 to 22 m along) beside its left planting strip, whose tree at 20 m has a
+        // crown from 18.8 to 21.2 m: the crown is nearer the middle of the street than the shelter and overlaps it
+        // in depth, so it stands between the eye and the shelter's top and inner face, though the shelter's nearest
+        // point is nearer the eye on the ground.
+        let v = furnished().view();
+        let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm));
+        let all: Vec<Block> = (0..v.segments.len()).flat_map(|i| blocks(&v, i, &p)).collect();
+        let shelter = all.iter().find(|b| b.solid == Solid::Shelter).unwrap();
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        let covers: Vec<&Block> = all
+            .iter()
+            .filter(|b| {
+                b.solid == Solid::Crown && b.z.0 < shelter.z.1 && shelter.z.0 < b.z.1 && b.x.0 >= shelter.x.1 && b.x.1 <= p.centre_mm && b.y.1 > shelter.y.0
+            })
+            .collect();
+        assert!(!covers.is_empty(), "the case is not in the street");
+        for c in covers {
+            assert!(
+                at_front(&m, "shelter", &front_of(&p, shelter)) < at_front(&m, "crown", &front_of(&p, c)),
+                "the crown {c:?} stands between the eye and the shelter"
+            );
+        }
+    }
+
+    #[test]
+    fn a_post_beyond_a_taller_strip_nearer_the_middle_is_drawn_before_it_so_that_the_strip_covers_its_foot() {
+        // A bike lane (curbed, posts on its curbs) on the left and a median farther in, nearer the middle of the street,
+        // 450 mm as drawn: from over the middle the median stands between the eye and the lane's posts.
+        let mut e = Editor::new(0);
+        let bike = e.add(kind_index("bike").unwrap(), 1);
+        let median = e.add(kind_index("median").unwrap(), 3);
+        let v = e.view();
+        let (bike_x, median_x) = {
+            let at = |uid| v.segments.iter().find(|s| s.uid == uid).unwrap().x_mm;
+            (at(bike), at(median))
+        };
+        assert!(bike_x < median_x && (median_x as f64) < Projection::fit(1050.0, v.row_mm.max(v.total_mm)).centre_mm, "the median is left of the eye");
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        let median_at = m.find(&format!("<g class=\"iso-piece\" data-uid=\"{median}\">")).unwrap();
+        let last_post = m.rfind("class=\"iso-solid s-post\"").unwrap();
+        assert!(last_post < median_at, "a post is painted over the median that stands in front of it");
+        // And a tree stands over its own strip, on top of it.
+        let m = drawn(&Editor::new(1));
+        assert!(m.find("<g class=\"iso-piece\"").unwrap() < m.find("s-trunk").unwrap());
     }
 
     #[test]

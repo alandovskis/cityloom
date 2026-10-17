@@ -23,6 +23,7 @@ use crate::street::model::View;
 use crate::street::svg::curb_edges;
 
 mod markings;
+mod order;
 mod paint;
 mod projection;
 mod raised;
@@ -35,6 +36,7 @@ mod testing;
 pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MAX_HEIGHT, MIN_SOLID_PX, Projection, RISE, STRETCH_MM, TALLEST_MM, drawn_mm};
 pub use raised::{HEIGHTS, curb_height_mm, curb_top_mm, height_mm};
 
+use order::Bx;
 use projection::points;
 use raised::{beside, inner_face, materials, shades, strips};
 use solids::{Block, block, blocks};
@@ -87,9 +89,9 @@ pub fn iso_height(v: &View, width: f64) -> f64 {
 ///
 /// It is built in layers, each its own group, in the order the eye needs: the ground; the surface (the top of every
 /// roadway piece); the markings (every line and symbol, painted on the surface); the raised layer (every strip
-/// standing above the roadway, with its faces, from the farthest from the middle of the street to the nearest, so
-/// it covers the paint's edges where they meet); what stands on the pieces from far to near; and last the selected
-/// piece's outline.
+/// standing above the roadway, with its faces, covering the paint's edges where they meet) together with what stands
+/// on the pieces, in the order the eye needs (`order`: a box is painted after the ones it is in front of, nearer the
+/// middle of the street, nearer the near end or higher); and last the selected piece's outline.
 pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let span = span_mm(v);
     let p = Projection::fit(width, span);
@@ -100,14 +102,32 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let (flat, standing) = surface::split(strips(v, &p));
     out.push_str(&surface::layer(&p, v, i18n, &flat));
     out.push_str(&paint::layer(&p, v));
-    out.push_str(&raised::layer(&p, v, i18n, &standing));
 
-    // What stands on the pieces, from the farthest from the eye to the nearest, so that a nearer box covers the ones
-    // behind it: a tree's crown starts nearer than its trunk, so it covers it.
+    // The raised strips and what stands on the pieces, in the order the eye needs (`order`): a box covers the ones it
+    // is in front of, so a crown nearer the middle of the street covers a shelter beyond it, and a strip nearer the
+    // middle covers the foot of a post beyond it. The strips are in groups of their own between the solids.
     let mut solids: Vec<Block> = (0..v.segments.len()).flat_map(|i| blocks(v, i, &p)).collect();
     solids.sort_by(|a, b| b.from_eye(&p).total_cmp(&a.from_eye(&p)).then(a.y.0.total_cmp(&b.y.0)));
-    for b in &solids {
-        block(&mut out, &p, b);
+    let boxes: Vec<(Bx, bool)> = standing.iter().map(|&s| (raised::strip_box(v, s), true)).chain(solids.iter().map(|b| (b.bounds(), false))).collect();
+    out.push_str("<g class=\"iso-raised\">");
+    let mut open = true;
+    for k in order::paint_order(&boxes, p.centre_mm) {
+        if k < standing.len() {
+            if !open {
+                out.push_str("<g class=\"iso-raised\">");
+                open = true;
+            }
+            raised::piece(&mut out, &p, v, i18n, standing[k]);
+        } else {
+            if open {
+                out.push_str("</g>");
+                open = false;
+            }
+            block(&mut out, &p, &solids[k - standing.len()]);
+        }
+    }
+    if open {
+        out.push_str("</g>");
     }
     if let Some(i) = v.selected.and_then(|u| v.segments.iter().position(|s| s.uid == u)) {
         outline(&mut out, &p, v, i);

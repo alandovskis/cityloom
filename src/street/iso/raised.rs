@@ -11,6 +11,7 @@ use crate::shared::iso::shading::shade_filters;
 use crate::street::model::View;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
+use super::order::Bx;
 use super::projection::{EYE_BACK_MM, Projection, STRETCH_MM, band_edges, drawn_mm, points};
 
 /// How high each kind of piece stands above the roadway, in millimetres. They are plausible, not
@@ -210,6 +211,18 @@ pub(super) fn curb(out: &mut String, p: &Projection, v: &View, i: usize, right: 
 /// One strip to draw: how high its top is drawn, which piece, and which edge's curb if it is a curb.
 pub(super) type Strip = (f64, usize, Option<bool>);
 
+/// The box a strip fills, for ordering: its across range (a curb's, for a curb), from the ground to its top, along the
+/// whole stretch.
+pub(super) fn strip_box(v: &View, strip: Strip) -> Bx {
+    let (top, i, edge) = strip;
+    let s = &v.segments[i];
+    let x = match (edge, s.curb) {
+        (Some(right), Some(c)) => curb_span(s, c, right),
+        _ => (s.x_mm as f64, (s.x_mm + s.width_mm) as f64),
+    };
+    Bx { x, y: (0.0, top), z: (0.0, STRETCH_MM) }
+}
+
 /// How far a strip is from the eye across the street, in millimetres: from its nearest edge, nothing for one the eye is over.
 fn across_eye(v: &View, p: &Projection, strip: Strip) -> f64 {
     let (_, i, edge) = strip;
@@ -263,13 +276,6 @@ pub(super) fn group(open: &str, p: &Projection, v: &View, i18n: &I18n, strips: &
     }
     out.push_str("</g>");
     out
-}
-
-/// The raised layer: every strip standing above the roadway (sidewalks, planting, medians, furniture, curbs) with its
-/// front and side faces, lowest to highest, so a higher one stands in front of a lower one beside it. It is drawn
-/// after the markings, so it covers the paint where it meets it.
-pub(super) fn layer(p: &Projection, v: &View, i18n: &I18n, strips: &[Strip]) -> String {
-    group("<g class=\"iso-raised\">", p, v, i18n, strips)
 }
 
 #[cfg(test)]
