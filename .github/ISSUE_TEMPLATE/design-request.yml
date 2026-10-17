@@ -1,0 +1,55 @@
+name: "I cannot make the design I want / Je n’arrive pas à tracer l’aménagement voulu"
+description: "The editor cannot draw what you want to show. / L’éditeur ne permet pas de tracer ce que vous voulez montrer."
+title: "[Design / Aménagement] "
+labels:
+  - "C-design-request · aménagement impossible"
+  - "needs-triage · à trier"
+body:
+  - type: dropdown
+    id: page
+    attributes:
+      label: "Which page were you on? / Sur quelle page étiez-vous?"
+      description: "The page where you saw it. / La page où vous l’avez vu."
+      options:
+        - "Home (finding a place) / Accueil (chercher un lieu)"
+        - "Map / Carte"
+        - "Area rules (on the map) / Règles de zone (sur la carte)"
+        - "Street editor / Éditeur de rues"
+        - "Street in 2.5D / Rue en 2,5D"
+        - "Junction editor / Éditeur de jonctions"
+        - "Account / Compte"
+        - "Documentation"
+        - "Not sure / Je ne sais pas"
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: "What design do you want to show? / Quel aménagement voulez-vous montrer?"
+      description: "Describe the street or junction you have in mind. / Décrivez la rue ou la jonction que vous avez en tête."
+      placeholder: "A two-way bike track between the sidewalk and parking. / Une piste cyclable bidirectionnelle entre le trottoir et le stationnement."
+    validations:
+      required: true
+  - type: textarea
+    id: stuck
+    attributes:
+      label: "What stops you? / Qu’est-ce qui vous en empêche?"
+      description: "What you tried, and what the editor said. / Ce que vous avez essayé et ce que l’éditeur a répondu."
+      placeholder: "The editor refuses the bike track. / L’éditeur refuse la piste cyclable."
+    validations:
+      required: false
+  - type: dropdown
+    id: browser
+    attributes:
+      label: "Browser / Navigateur"
+      description: "What you were using. / Ce que vous utilisiez."
+      options:
+        - "Chrome"
+        - "Edge"
+        - "Firefox"
+        - "Safari (Mac)"
+        - "Safari (iPhone or iPad) / Safari (iPhone ou iPad)"
+        - "Chrome (Android)"
+        - "Other or not sure / Autre ou incertain"
+    validations:
+      required: true

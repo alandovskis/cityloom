@@ -1,0 +1,34 @@
+# What the reporter picked on an issue form becomes a label (.github/workflows/issue-labeler.yml). Each rule reads
+# one dropdown's answer: the `### <field label>` heading GitHub writes into the issue body, a blank line, then
+# exactly the option's text on a line of its own. The same words typed anywhere else in the issue do not match, and
+# the text is never read for hints. The field labels and options are the forms' in .github/ISSUE_TEMPLATE
+# (scripts/include/tests/test_issue_system.py builds the body for each and fails when a rule disagrees).
+# The action reads `/regex/` as a regular expression; keys are label names; "Not sure" and "Other" have no rule.
+"A-places · lieux":
+  - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nHome \(finding a place\) \/ Accueil \(chercher un lieu\)(?:\r?\n|$)/'
+"A-map · carte":
+  - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nMap \/ Carte(?:\r?\n|$)/'
+"A-area-rules · règles de zone":
+  - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nArea rules \(on the map\) \/ Règles de zone \(sur la carte\)(?:\r?\n|$)/'
+"A-street · rue":
+  - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nStreet editor \/ Éditeur de rues(?:\r?\n|$)/'
+"A-2.5d · 2,5d":
+  - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nStreet in 2\.5D \/ Rue en 2,5D(?:\r?\n|$)/'
+"A-junction · jonction":
+  - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nJunction editor \/ Éditeur de jonctions(?:\r?\n|$)/'
+"A-accounts · comptes":
+  - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nAccount \/ Compte(?:\r?\n|$)/'
+"A-docs · documentation":
+  - '/(?:^|\n)### Which page were you on\? \/ Sur quelle page étiez-vous\?\r?\n\r?\nDocumentation(?:\r?\n|$)/'
+"O-chrome · chrome":
+  - '/(?:^|\n)### Browser \/ Navigateur\r?\n\r?\nChrome(?:\r?\n|$)/'
+"O-edge · edge":
+  - '/(?:^|\n)### Browser \/ Navigateur\r?\n\r?\nEdge(?:\r?\n|$)/'
+"O-firefox · firefox":
+  - '/(?:^|\n)### Browser \/ Navigateur\r?\n\r?\nFirefox(?:\r?\n|$)/'
+"O-safari · safari":
+  - '/(?:^|\n)### Browser \/ Navigateur\r?\n\r?\nSafari \(Mac\)(?:\r?\n|$)/'
+"O-ios · iPhone et iPad":
+  - '/(?:^|\n)### Browser \/ Navigateur\r?\n\r?\nSafari \(iPhone or iPad\) \/ Safari \(iPhone ou iPad\)(?:\r?\n|$)/'
+"O-android · android":
+  - '/(?:^|\n)### Browser \/ Navigateur\r?\n\r?\nChrome \(Android\)(?:\r?\n|$)/'

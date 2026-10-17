@@ -1,0 +1,54 @@
+name: "A street or junction is drawn wrong / Une rue ou une jonction est mal dessinée"
+description: "A street or junction on the map does not look like the real one. / Une rue ou une jonction de la carte ne ressemble pas à la vraie."
+title: "[Drawn wrong / Mal dessiné] "
+labels:
+  - "C-drawn-wrong · mal dessiné"
+  - "needs-triage · à trier"
+body:
+  - type: input
+    id: address
+    attributes:
+      label: "Link to the street or junction / Lien vers la rue ou la jonction"
+      description: "Copy the address of the page where you see it, or of the map. / Copiez l’adresse de la page où vous la voyez, ou celle de la carte."
+    validations:
+      required: true
+  - type: dropdown
+    id: page
+    attributes:
+      label: "Which page were you on? / Sur quelle page étiez-vous?"
+      description: "The page where you saw it. / La page où vous l’avez vu."
+      options:
+        - "Home (finding a place) / Accueil (chercher un lieu)"
+        - "Map / Carte"
+        - "Area rules (on the map) / Règles de zone (sur la carte)"
+        - "Street editor / Éditeur de rues"
+        - "Street in 2.5D / Rue en 2,5D"
+        - "Junction editor / Éditeur de jonctions"
+        - "Account / Compte"
+        - "Documentation"
+        - "Not sure / Je ne sais pas"
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: "What is wrong? / Qu’est-ce qui ne va pas?"
+      description: "For example the number of lanes, a missing bike lane, a wrong shape. / Par exemple le nombre de voies, une piste cyclable manquante, une forme erronée."
+      placeholder: "The bike lane is missing on the north side. / Il manque la piste cyclable du côté nord."
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: "Browser / Navigateur"
+      description: "What you were using. / Ce que vous utilisiez."
+      options:
+        - "Chrome"
+        - "Edge"
+        - "Firefox"
+        - "Safari (Mac)"
+        - "Safari (iPhone or iPad) / Safari (iPhone ou iPad)"
+        - "Chrome (Android)"
+        - "Other or not sure / Autre ou incertain"
+    validations:
+      required: true

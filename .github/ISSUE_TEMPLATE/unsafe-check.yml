@@ -1,0 +1,55 @@
+name: "A check is wrong / Une vérification est erronée"
+description: "A check says a design is safe when it is not, or the reverse. / Une vérification juge un aménagement sûr alors qu’il ne l’est pas, ou l’inverse."
+title: "[Check / Vérification] "
+labels:
+  - "C-unsafe-check · vérification erronée"
+  - "needs-triage · à trier"
+body:
+  - type: dropdown
+    id: page
+    attributes:
+      label: "Which page were you on? / Sur quelle page étiez-vous?"
+      description: "The page where you saw it. / La page où vous l’avez vu."
+      options:
+        - "Home (finding a place) / Accueil (chercher un lieu)"
+        - "Map / Carte"
+        - "Area rules (on the map) / Règles de zone (sur la carte)"
+        - "Street editor / Éditeur de rues"
+        - "Street in 2.5D / Rue en 2,5D"
+        - "Junction editor / Éditeur de jonctions"
+        - "Account / Compte"
+        - "Documentation"
+        - "Not sure / Je ne sais pas"
+    validations:
+      required: true
+  - type: input
+    id: check
+    attributes:
+      label: "Which check? / Quelle vérification?"
+      description: "Its name, as the editor shows it. / Son nom, tel que l’éditeur l’affiche."
+      placeholder: "Fits the street width / Respecte la largeur de la rue"
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: "Why is it wrong? / Pourquoi est-elle erronée?"
+      description: "Say what the check says, and what you think is true. / Dites ce que la vérification affirme et ce que vous croyez vrai."
+      placeholder: "It passes, but the lane is too narrow for a bus. / Elle réussit, mais la voie est trop étroite pour un autobus."
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: "Browser / Navigateur"
+      description: "What you were using. / Ce que vous utilisiez."
+      options:
+        - "Chrome"
+        - "Edge"
+        - "Firefox"
+        - "Safari (Mac)"
+        - "Safari (iPhone or iPad) / Safari (iPhone ou iPad)"
+        - "Chrome (Android)"
+        - "Other or not sure / Autre ou incertain"
+    validations:
+      required: true
