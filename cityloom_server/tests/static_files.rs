@@ -240,7 +240,7 @@ async fn data_is_cached_as_long_as_it_is_safe_to() {
         async move { get(&router, path, None).await.1[header::CACHE_CONTROL].to_str().unwrap().to_string() }
     };
     // The index names the tiles' checksums: a few minutes stale only delays a refresh.
-    assert_eq!(cache("/data/metro/index.json").await, "public, max-age=300, stale-while-revalidate=86400");
+    assert_eq!(cache("/data/metro/index.json").await, "public, max-age=300, stale-while-revalidate=600");
     // A tile is not named by its content, and a cached old one would be kept under a new checksum: always revalidated.
     assert_eq!(cache("/data/metro/0_0.osm.pbf").await, "no-cache");
     assert_eq!(cache("/glyphs/Font/0-255.pbf").await, "public, max-age=86400, stale-while-revalidate=604800");
@@ -340,7 +340,7 @@ async fn a_304_keeps_the_cache_policy_of_its_200() {
     let id = build_id(&get(&router, "/map.html", None).await.2);
     for (path, policy) in [
         (format!("/v/{id}/app.css"), "public, max-age=31536000, immutable"),
-        ("/data/metro/index.json".to_string(), "public, max-age=300, stale-while-revalidate=86400"),
+        ("/data/metro/index.json".to_string(), "public, max-age=300, stale-while-revalidate=600"),
         ("/glyphs/Font/0-255.pbf".to_string(), "public, max-age=86400, stale-while-revalidate=604800"),
     ] {
         let (status, headers, _) = get(&router, &path, None).await;
