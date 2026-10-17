@@ -258,3 +258,58 @@ fn the_pages_that_read_the_city_preload_the_tile_index() {
         assert!(html.contains(r#"<link rel="preload" as="fetch" crossorigin href="data/metro/index.json">"#), "{name}.html");
     }
 }
+
+#[test]
+fn the_account_menu_says_whether_the_work_is_synced_in_both_languages() {
+    use crate::shared::ports::{AccountReply, Me, WorkPage, WorkReply, test_ports_full};
+    use crate::shared::testing::html;
+    use crate::shell::session::SessionVm;
+    use crate::shell::session_view::SessionMenu;
+    use leptos::prelude::*;
+
+    crate::sync::hub::reset();
+    for (locale, pending, synced) in [(Locale::En, "Not synced yet", "Synced"), (Locale::FrCa, "Pas encore synchronisé", "Synchronisé")] {
+        let t = test_ports_full();
+        let vm = SessionVm::new(t.ports.clone(), crate::i18n_for(locale));
+        vm.set_sync(crate::sync::SyncVm::new(t.ports.clone(), crate::i18n_for(locale)));
+        vm.start();
+        let me = Me { id: "u".into(), display_name: "Ada".into(), store_on_server: Some(true), identities: vec![] };
+        t.account.answer(AccountReply::Me(Ok(me)));
+        let draw = |vm: &std::rc::Rc<SessionVm>| {
+            let vm = vm.clone();
+            html(move || view! { <SessionMenu vm=vm/> }.into_any())
+        };
+        let out = draw(&vm);
+        assert!(out.contains(r#"id="sync-status""#) && out.contains(pending), "{locale:?}: {out}");
+        t.work.answer(WorkReply::Page(Ok(WorkPage { epoch: "e1".into(), rev: 0, more: false, records: vec![] })));
+        let out = draw(&vm);
+        assert!(out.contains(&format!(">{synced}<")), "{locale:?}: {out}");
+        let signed_out = {
+            let t = test_ports_full();
+            let vm = SessionVm::new(t.ports.clone(), crate::i18n_for(locale));
+            // a sync is attached, and nothing is synced: the choice was never made
+            vm.set_sync(crate::sync::SyncVm::new(t.ports.clone(), crate::i18n_for(locale)));
+            vm.start();
+            t.account.answer(AccountReply::Me(Ok(Me { store_on_server: None, id: "u".into(), display_name: "Ada".into(), identities: vec![] })));
+            draw(&vm)
+        };
+        assert!(!signed_out.contains("sync-status"), "no status where nothing is synced: {signed_out}");
+    }
+}
+
+#[test]
+fn the_shell_builds_the_sync_and_the_session_reports_to_it() {
+    let (ports, ..) = crate::shared::ports::test_ports_with_time();
+    crate::sync::hub::reset();
+    let vm = crate::shell::vm::ShellVm::new_with(
+        ports,
+        crate::i18n_for(Locale::En),
+        std::rc::Rc::new(crate::shell::Bare::default()),
+        "details-details",
+        vec![],
+        false,
+        true,
+    );
+    assert_eq!(vm.sync().status(), crate::sync::Status::Off);
+    assert!(crate::sync::hub::current().is_some(), "the page's sync is where the other pages reach it");
+}

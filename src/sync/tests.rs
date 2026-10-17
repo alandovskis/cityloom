@@ -817,6 +817,21 @@ fn signing_out_stops_syncing_but_keeps_the_marks_and_disabling_clears_them() {
 }
 
 #[test]
+fn stopping_releases_a_request_queued_behind_a_run_that_is_going() {
+    use crate::shared::ports::test_ports_full;
+    hub::reset();
+    let t = test_ports_full();
+    let vm = SyncVm::new(t.ports.clone(), crate::i18n_for(Locale::En));
+    vm.known(&ada()); // a run starts and waits for the server
+    let told = Rc::new(Cell::new(false));
+    let c = told.clone();
+    vm.enable("ada", Box::new(move |_| c.set(true))); // queued behind that run
+    assert!(!told.get(), "still waiting for the next run");
+    vm.stop();
+    assert!(told.get(), "signing out does not leave the Account page waiting for ever");
+}
+
+#[test]
 fn a_person_who_never_chose_server_storage_is_never_synced() {
     hub::reset();
     let server = ServerSim::new();

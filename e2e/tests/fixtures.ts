@@ -29,8 +29,9 @@ export const test = base.extend<{ errors: string[]; world: void }>({
       page.on("console", (m) => {
         if (m.type() !== "error") return;
         // Every page asks who is signed in (and for the providers when nobody is). A signed-out visitor, a server
-        // with no account side and an older server answer those with 401, 503 or 404, which the browser logs.
-        if (/^\/api\/(me|providers)$/.test(new URL(m.location().url || "http://x/").pathname)) return;
+        // with no account side and an older server answer those with 401, 503 or 404, which the browser logs, and a sync that cannot reach `/api/work` (offline, signed out, storage off) logs the
+        // same; `sync.spec.ts` checks what the sync does about it.
+        if (/^\/api\/(me|providers|work)$/.test(new URL(m.location().url || "http://x/").pathname)) return;
         // A spec that makes the account side fail on purpose (a 401 for an ended session, a 500) says so with an
         // annotation, and only the changes under /api/me are let through for it.
         const path = new URL(m.location().url || "http://x/").pathname;

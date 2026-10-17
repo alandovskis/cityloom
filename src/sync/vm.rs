@@ -123,6 +123,10 @@ impl SyncVm {
         self.user.borrow_mut().take();
         self.cancel_timer();
         self.status.set(Status::Off);
+        // A request queued behind a run that is going would otherwise wait for a run that no longer starts.
+        for done in self.queued.take() {
+            done(Report::default());
+        }
     }
 
     /// Storage on the server was turned off (here, or on another device): sync stops and its state is cleared. The

@@ -1,7 +1,7 @@
 //! The header's sign-in state: who is signed in, what the Sign in button offers, and what the address says happened
 //! on the way back from a provider (`#account=<outcome>`). The view binds to this and decides nothing.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use leptos::prelude::*;
@@ -9,6 +9,7 @@ use leptos::prelude::*;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::ports::{AccountError, Ports, ProviderInfo};
 use crate::shell::popover::PopoverViewModel;
+use crate::sync::SyncVm;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Session {
@@ -88,6 +89,7 @@ pub struct SessionVm {
     started: Cell<bool>,
     /// How many times focus was asked for, and where to.
     focus: ArcRwSignal<(u32, Focus)>,
+    sync: RefCell<Option<Rc<SyncVm>>>,
 }
 
 impl SessionVm {
@@ -101,7 +103,18 @@ impl SessionVm {
             popover,
             started: Cell::new(false),
             focus: ArcRwSignal::new((0, Focus::None)),
+            sync: RefCell::new(None),
         })
+    }
+
+    /// The page's sync: told who is signed in and whether their work is stored on the server, and stopped on sign-out.
+    pub fn set_sync(&self, sync: Rc<SyncVm>) {
+        *self.sync.borrow_mut() = Some(sync);
+    }
+
+    /// What the menu says of the sync ("Synced", "Not synced yet"), None while nothing is synced. Tracked.
+    pub fn sync_status(&self) -> Option<String> {
+        self.sync.borrow().as_ref().and_then(|s| s.status_text())
     }
 
     fn say(&self, key: &str) {
@@ -118,7 +131,13 @@ impl SessionVm {
         }
         let vm = self.clone();
         self.ports.account.me(Box::new(move |me| match me {
-            Ok(me) => vm.state.set(Session::SignedIn { name: me.display_name }),
+            Ok(me) => {
+                vm.state.set(Session::SignedIn { name: me.display_name.clone() });
+                let sync = vm.sync.borrow().clone();
+                if let Some(sync) = sync {
+                    sync.known(&me);
+                }
+            }
             Err(AccountError::SignedOut) => vm.load_providers(false),
             Err(_) => vm.state.set(Session::Unavailable),
         }));
@@ -204,6 +223,9 @@ impl SessionVm {
         self.ports.account.sign_out(Box::new(move |done| match done {
             // A session that was already over (another tab signed out) is the outcome the person asked for.
             Ok(()) | Err(AccountError::SignedOut) => {
+                if let Some(sync) = vm.sync.borrow().clone() {
+                    sync.stop();
+                }
                 vm.state.set(Session::SignedOut);
                 vm.say("session-signed-out");
                 // The Account page has nothing to show a signed-out person: leave it for the home page.
@@ -243,6 +265,36 @@ mod tests {
 
     fn providers(slugs: &[&str]) -> Vec<ProviderInfo> {
         slugs.iter().map(|s| ProviderInfo { slug: s.to_string(), name: s.to_uppercase() }).collect()
+    }
+
+    #[test]
+    fn a_person_who_stores_their_work_on_the_server_starts_the_sync_and_signing_out_stops_it() {
+        use crate::shared::ports::{WorkAsk, WorkCall, WorkPage, WorkReply};
+        crate::sync::hub::reset();
+        let (vm, t) = vm(Locale::En);
+        vm.set_sync(crate::sync::SyncVm::new(t.ports.clone(), crate::i18n_for(Locale::En)));
+        vm.start();
+        assert_eq!(vm.sync_status(), None, "nothing is synced before it is known");
+        t.account.answer(AccountReply::Me(Ok(Me { store_on_server: Some(true), ..me("Ada") })));
+        assert_eq!(t.work.calls(), [WorkCall::Pull(WorkAsk::first(0))]);
+        assert_eq!(vm.sync_status().as_deref(), Some("Not synced yet"));
+        t.work.answer(WorkReply::Page(Ok(WorkPage { epoch: "e1".into(), rev: 0, more: false, records: vec![] })));
+        assert_eq!(vm.sync_status().as_deref(), Some("Synced"));
+        vm.sign_out();
+        t.account.answer(AccountReply::Done(Ok(())));
+        assert_eq!(vm.sync_status(), None);
+    }
+
+    #[test]
+    fn a_person_who_has_not_chosen_server_storage_is_not_synced() {
+        crate::sync::hub::reset();
+        for choice in [None, Some(false)] {
+            let (vm, t) = vm(Locale::En);
+            vm.set_sync(crate::sync::SyncVm::new(t.ports.clone(), crate::i18n_for(Locale::En)));
+            vm.start();
+            t.account.answer(AccountReply::Me(Ok(Me { store_on_server: choice, ..me("Ada") })));
+            assert_eq!((t.work.calls(), vm.sync_status()), (vec![], None), "{choice:?}");
+        }
     }
 
     #[test]
