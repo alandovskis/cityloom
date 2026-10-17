@@ -12,8 +12,9 @@ pub const STRETCH_MM: f64 = 40_000.0;
 pub const EYE_HEIGHT_MM: f64 = 9_000.0;
 /// How far behind the near end of the stretch the eye is, in millimetres.
 pub const EYE_BACK_MM: f64 = 14_000.0;
-/// The tallest the drawing grows, so that it stays about as tall as the section.
-pub const MAX_HEIGHT: f64 = 560.0;
+/// The tallest the drawing grows, so that it stays about as tall as the section: the street page keeps its status
+/// line in view at 1440 by 900.
+pub const MAX_HEIGHT: f64 = 440.0;
 /// Room round the scene, in pixels.
 pub(super) const PAD: f64 = 30.0;
 /// The narrowest the drawing is laid out for: the group around it is no narrower (`.wrap`'s `min-width` in
@@ -170,8 +171,8 @@ mod tests {
 
     #[test]
     fn the_near_end_is_wider_than_the_far_end_by_the_ratio_of_their_depths() {
-        let p = Projection::fit(1000.0, 18_000);
-        let width = |along: f64| p.at(18_000.0, 0.0, along).0 - p.at(0.0, 0.0, along).0;
+        let p = Projection::fit(1000.0, 30_000);
+        let width = |along: f64| p.at(30_000.0, 0.0, along).0 - p.at(0.0, 0.0, along).0;
         assert!(width(0.0) > width(STRETCH_MM));
         assert!((width(STRETCH_MM) / width(0.0) - EYE_BACK_MM / (EYE_BACK_MM + STRETCH_MM)).abs() < 1e-12);
         // The near end fills the drawing less its margins; farther is higher on the screen.

@@ -161,10 +161,9 @@ fn the_group_is_as_tall_as_the_taller_view_in_both_so_switching_does_not_make_th
         let s = street_in(mode, Locale::En);
         let v = s.view();
         let (section, iso) = (Geometry::fit(1050.0, v.row_mm).rows.height, iso_height(&v, 1050.0));
-        // At 1050 px the 2.5D of this street is the taller.
-        assert!(iso > section, "{iso} {section}");
+        // The group keeps the taller of the two, whichever view is shown.
         let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-        assert!(h.contains(&format!("min-height:{iso}px")), "{mode:?} {iso} {h}");
+        assert!(h.contains(&format!("min-height:{}px", iso.max(section))), "{mode:?} {iso} {section} {h}");
     }
 }
 
