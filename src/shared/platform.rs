@@ -256,14 +256,15 @@ impl Page for BrowserPage {
         None
     }
 
-    fn language(&self) -> Option<String> {
+    fn languages(&self) -> Vec<String> {
         #[cfg(target_arch = "wasm32")]
         {
             let navigator: web_sys::Navigator = leptos::prelude::window().navigator();
-            navigator.language()
+            let list: Vec<String> = navigator.languages().iter().filter_map(|tag| tag.as_string()).collect();
+            if list.is_empty() { navigator.language().into_iter().collect() } else { list }
         }
         #[cfg(not(target_arch = "wasm32"))]
-        None
+        Vec::new()
     }
 
     fn set_lang(&self, tag: &str) {
