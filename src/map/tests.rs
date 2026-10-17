@@ -719,3 +719,37 @@ fn the_panel_is_opened_through_the_shell_s_own_toggle_only_where_it_is_closed() 
     assert_eq!(reveal_clicks(Some("false")), ["inspector-toggle"]);
     assert_eq!(reveal_clicks(None), Vec::<&str>::new(), "no toggle on the page: nothing to press");
 }
+
+/// The home page is built before the area's roads are read, so that its search does not wait for them.
+#[test]
+fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reopening() {
+    use osm_network::{Control, Lane, LaneKind, Network, Node, Road, Way};
+    let (ports, _, storage) = crate::shared::ports::test_ports();
+    let vm = MapVm::new(ports, crate::i18n_for(Locale::En));
+    assert!(vm.view().edges.is_empty(), "no roads are kept yet");
+    let node = |id, x_m| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m: 0.0, junction: false, control: Control::None };
+    let lane = |way| Lane { kind: LaneKind::Driving, way, width_m: 3.0, buffer_type: None, hours: None };
+    let network = Network {
+        left_hand: false,
+        nodes: vec![node(1, 0.0), node(2, 100.0)],
+        roads: vec![Road {
+            id: 1,
+            osm_ways: vec![7],
+            osm_versions: Default::default(),
+            name: Some("Only Street".into()),
+            highway: "residential".into(),
+            from: 1,
+            to: 2,
+            lanes: vec![lane(Way::Forward), lane(Way::Backward)],
+            points: vec![(0.0, 0.0), (100.0, 0.0)],
+        }],
+    };
+    assert!(CityStore::current(storage.clone()).keep_network_from(&network, None));
+    vm.zoom_in();
+    vm.reopen();
+    assert_eq!(vm.view().edges.len(), 1);
+    let camera = vm.camera();
+    assert!(!camera.moved, "the page shows the whole city");
+    assert_eq!(camera.k, camera.fit_k);
+    assert!(camera.world.x1 - camera.world.x0 > 100.0, "the world is the city's, not the empty one: {:?}", camera.world);
+}

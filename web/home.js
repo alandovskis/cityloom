@@ -7,8 +7,11 @@ import "./city.js";
 try {
   const { default: init, mount_home, prepare_city } = await import("./pkg/cityloom_editor.js");
   await init();
+  // The search does not need the city: it is there at once, and the city behind it is drawn when its roads are got.
+  const page = mount_home();
+  page.mount_shell();
   await prepare_city();
-  mount_home().mount_shell();
+  page.mount_city();
 } catch (error) {
   failed();
   throw error;
