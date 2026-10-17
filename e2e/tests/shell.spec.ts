@@ -184,6 +184,8 @@ for (const p of PAGES.filter((p) => p.name !== "map")) {
     page,
   }) => {
     await p.open(page);
+    // The shell binds the menus once the page's module has loaded; a key pressed before that does nothing.
+    await expect(page.locator("#region option")).toHaveCount(6);
     const menus = { "#account-btn": "#account-menu", "#help-btn": "#help-menu", "#share-btn": "#share-menu" };
     for (const [from, fromMenu] of Object.entries(menus)) {
       for (const [to, toMenu] of Object.entries(menus)) {
@@ -234,5 +236,35 @@ for (const p of PAGES.filter((p) => p.name !== "map")) {
     await page.keyboard.press("Enter");
     await expect(page.locator("#share-menu")).toBeHidden();
     await expect(page.locator("#share-btn")).toBeFocused();
+  });
+}
+
+// The Sign in button is the last of the header's buttons and the group is anchored to the right: when the answer to
+// /api/me comes, the button must appear in the place it kept, not push Settings, Help and Share to the left.
+for (const p of PAGES) {
+  test(`the header's buttons do not move when the sign-in button appears on the ${p.name} page`, async ({ page }) => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route("**/api/me", async (route) => {
+      await held;
+      await route.fulfill({ status: 503 });
+    });
+    await p.open(page);
+    // The box is mounted with the shell, after the page's own markup: measure once it holds its place.
+    await expect(page.locator(".session-box")).toHaveClass(/pending/);
+    const buttons = ["#account-btn", "#help-btn"].concat(p.name === "map" ? [] : ["#share-btn"]);
+    const xs = async () =>
+      Promise.all(
+        buttons.map(async (b) => {
+          const box = await page.locator(b).boundingBox();
+          return box ? box.x : null;
+        }),
+      );
+    const before = await xs();
+    expect(before[0]).not.toBeNull();
+    release();
+    await expect(page.locator(".session-box")).toBeVisible();
+    await expect(page.locator(".session-box")).not.toHaveClass(/pending/);
+    expect(await xs()).toEqual(before);
   });
 }

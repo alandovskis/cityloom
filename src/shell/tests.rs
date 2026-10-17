@@ -157,7 +157,8 @@ fn the_sign_in_menu_is_drawn_for_each_state_in_each_language() {
     let out = render(Locale::En, vec![]);
     let at = out.find("session-box").unwrap();
     let box_tag = &out[out[..at].rfind('<').unwrap()..];
-    assert!(box_tag[..box_tag.find('>').unwrap()].contains("hidden"), "hidden until known: {out}");
+    assert!(box_tag[..box_tag.find('>').unwrap()].contains("pending"), "keeps its place until known: {out}");
+    assert!(!box_tag[..box_tag.find('>').unwrap()].contains("hidden"), "not display:none: {out}");
 
     let out = render(
         Locale::FrCa,

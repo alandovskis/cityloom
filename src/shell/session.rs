@@ -166,6 +166,12 @@ impl SessionVm {
         shown(&self.state.get(), !self.providers.get().is_empty())
     }
 
+    /// Whether the box keeps its place in the header without being seen: while it is not known whether there is
+    /// anything to sign in to, so that Settings, Help and Share do not move when the answer comes.
+    pub fn pending(&self) -> bool {
+        self.state.get() == Session::Loading
+    }
+
     pub fn label(&self) -> String {
         match self.state.get() {
             Session::SignedIn { name } => name,
@@ -247,6 +253,16 @@ mod tests {
         vm.start();
         assert_eq!(t.account.calls(), [AccountCall::Me], "once, however often it is started");
         assert!(!vm.visible());
+    }
+
+    #[test]
+    fn it_keeps_its_place_in_the_header_only_while_it_is_loading() {
+        let (vm, t) = vm(Locale::En);
+        assert_eq!((vm.pending(), vm.visible(), vm.label()), (true, false, "Sign in".to_string()));
+        vm.start();
+        t.account.answer(AccountReply::Me(Err(AccountError::SignedOut)));
+        t.account.answer(AccountReply::Providers(Ok(vec![])));
+        assert_eq!((vm.state(), vm.pending(), vm.visible()), (Session::SignedOut, false, false), "nothing to offer: no place kept");
     }
 
     #[test]

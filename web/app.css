@@ -302,6 +302,11 @@ a.btn {
 .session-box[hidden] {
   display: none;
 }
+/* While it is not known whether there is anything to sign in to, the box keeps its place, unseen and out of the
+   tab order, so the buttons beside it do not move when it appears. */
+.session-box.pending {
+  visibility: hidden;
+}
 
 /* The search: the first thing in the bar, and the largest. */
 .search {

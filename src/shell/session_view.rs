@@ -32,7 +32,9 @@ pub fn SessionMenu(vm: Rc<SessionVm>) -> impl IntoView {
         }
     });
     view! {
-        <div class="session-box" hidden=move || !vm.with_value(|v| v.visible())>
+        <div class="session-box" class:pending=move || vm.with_value(|v| v.pending())
+            hidden=move || vm.with_value(|v| !v.visible() && !v.pending())
+        >
             <button
                 type="button"
                 id="session-btn"
