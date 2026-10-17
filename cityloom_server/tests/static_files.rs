@@ -355,3 +355,69 @@ async fn a_304_keeps_the_cache_policy_of_its_200() {
         assert_eq!((status, headers[header::CACHE_CONTROL].to_str().unwrap()), (StatusCode::NOT_MODIFIED, policy), "{path}: by date");
     }
 }
+
+#[tokio::test]
+async fn a_page_is_revalidated_by_a_weak_comparison_of_its_tag_whatever_the_list() {
+    let (_d, router) = code_site();
+    let (_, headers, _) = get(&router, "/map.html", None).await;
+    let etag = headers[header::ETAG].to_str().unwrap().to_string();
+    let opaque = etag.trim_start_matches("W/").to_string();
+    // A proxy that re-encodes the body weakens the tag it passes on, and the browser sends that one back.
+    for sent in [format!("W/{opaque}"), opaque.clone(), format!("\"other\", W/{opaque}"), format!("W/\"other\" ,{opaque}"), "*".to_string()] {
+        let (status, _, body) = get_with(&router, "/map.html", &[("if-none-match", &sent)]).await;
+        assert_eq!((status, body.len()), (StatusCode::NOT_MODIFIED, 0), "{sent}");
+    }
+    assert_eq!(get_with(&router, "/map.html", &[("if-none-match", "\"other\", W/\"another\"")]).await.0, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn a_304_for_a_page_is_not_marked_as_compressed_and_says_vary_once() {
+    let (_d, router) = code_site();
+    let etag = get(&router, "/map.html", None).await.1[header::ETAG].to_str().unwrap().to_string();
+    let (status, headers, _) = get_with(&router, "/map.html", &[("if-none-match", &etag), ("accept-encoding", "br")]).await;
+    assert_eq!(status, StatusCode::NOT_MODIFIED);
+    assert!(headers.get(header::CONTENT_ENCODING).is_none(), "an empty body has no encoding");
+    for path in ["/map.html", "/app.css", "/pkg/glue_bg.wasm"] {
+        let (_, headers, _) = get_with(&router, path, &[("accept-encoding", "br")]).await;
+        let varies = headers
+            .get_all(header::VARY)
+            .iter()
+            .flat_map(|v| v.to_str().unwrap().split(','))
+            .filter(|t| t.trim().eq_ignore_ascii_case("accept-encoding"))
+            .count();
+        assert_eq!(varies, 1, "{path}");
+    }
+}
+
+#[tokio::test]
+async fn a_head_on_a_page_says_what_the_get_says() {
+    let (_d, router) = code_site();
+    let (_, get_headers, page) = get(&router, "/map.html", None).await;
+    let res = router.clone().oneshot(Request::builder().method("HEAD").uri("/map.html").body(Body::empty()).unwrap()).await.unwrap();
+    let (parts, body) = res.into_parts();
+    assert_eq!(parts.status, StatusCode::OK);
+    assert!(body.collect().await.unwrap().to_bytes().is_empty());
+    assert_eq!(parts.headers[header::ETAG], get_headers[header::ETAG]);
+    assert_eq!(parts.headers[header::CONTENT_LENGTH], page.len().to_string());
+    assert_eq!(parts.headers[header::CONTENT_TYPE], get_headers[header::CONTENT_TYPE]);
+    assert_eq!(parts.headers[header::CACHE_CONTROL], "no-cache");
+}
+
+#[tokio::test]
+async fn a_path_that_climbs_out_from_under_the_build_is_refused_or_kept_inside() {
+    let (_d, router) = code_site();
+    let id = build_id(&get(&router, "/map.html", None).await.2);
+    // Out of the root: refused, before the prefix is looked at.
+    for path in [format!("/v/{id}/%2e%2e/%2e%2e/%2e%2e/etc/passwd"), format!("/v/{id}/../../../etc/passwd")] {
+        assert_eq!(get(&router, &path, None).await.0, StatusCode::FORBIDDEN, "{path}");
+    }
+    // Inside the root: collapsed first, as a browser would, so the answer is that of the path it comes to (a 404 here)
+    // and never a file under the build's name: nothing is kept for a year on a name it was not asked for.
+    assert_eq!(get(&router, &format!("/v/{id}/../../etc/passwd"), None).await.0, StatusCode::NOT_FOUND);
+    for path in [format!("/v/{id}/%2e%2e/%2e%2e/map.html"), format!("/v/{id}/pkg/../../data/app.js")] {
+        let (_, headers, _) = get(&router, &path, None).await;
+        assert_ne!(headers[header::CACHE_CONTROL], "public, max-age=31536000, immutable", "{path}");
+    }
+    // A collapsed path that stays under the build is the file it names.
+    assert_eq!(get(&router, &format!("/v/{id}/pkg/../app.css"), None).await.0, StatusCode::OK);
+}
