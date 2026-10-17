@@ -22,6 +22,7 @@ use crate::shared::units::Units;
 use crate::street::model::View;
 use crate::street::svg::curb_edges;
 
+mod joints;
 mod markings;
 mod order;
 mod paint;
@@ -240,8 +241,8 @@ mod tests {
     /// The bands of the top of the piece `uid` (its `iso-m-*` polygons): each as its `matrix(..)` and its points.
     fn bands(markup: &str, uid: u32) -> Vec<([f64; 6], Vec<(f64, f64)>)> {
         let group = markup.split(&format!("<g class=\"iso-piece\" data-uid=\"{uid}\">")).nth(1).expect("the piece is drawn");
-        // The piece's group ends with its top's texture group.
-        let group = &group[..group.find("</g></g>").unwrap()];
+        // The first group closed is the top's texture group.
+        let group = &group[..group.find("</g>").unwrap()];
         group
             .split("<polygon transform=\"matrix(")
             .skip(1)
@@ -258,6 +259,45 @@ mod tests {
                 ([m[0], m[1], m[2], m[3], m[4], m[5]], pts)
             })
             .collect()
+    }
+
+    #[test]
+    fn a_material_with_joints_draws_them_as_geometry_over_its_fine_texture_and_a_fine_one_draws_none() {
+        // Sample Street 1: two concrete sidewalks (joints) and four asphalt lanes (grain only).
+        let e = Editor::new(0);
+        let v = e.view();
+        let m = drawn(&e);
+        assert_eq!(count(&m, "<path class=\"joints j-concrete\" d=\"M"), 2);
+        assert_eq!(count(&m, "class=\"joints"), 2);
+        // The joints come after the top's bands, inside the piece's group, and the bands are still there for the grain.
+        for s in v.segments.iter().filter(|s| s.material == "concrete") {
+            let group = m.split(&format!("<g class=\"iso-piece\" data-uid=\"{}\">", s.uid)).nth(1).unwrap();
+            let group = &group[..group.find("<g class=\"iso-piece\"").unwrap_or(group.len())];
+            assert!(group.find("class=\"hatch\"").unwrap() < group.find("class=\"joints").unwrap());
+        }
+        // The material is the piece's own: a brick sidewalk draws brick joints and no concrete ones.
+        let mut e = Editor::new(0);
+        let uid = e.view().segments[0].uid;
+        let brick = KINDS[e.view().segments[0].kind].materials.iter().copied().find(|&i| MATERIALS[i].id == "brick");
+        if let Some(i) = brick {
+            assert!(e.set_material(uid, i));
+            let after = drawn(&e);
+            assert_eq!(count(&after, "class=\"joints j-brick\""), 1);
+            assert_eq!(count(&after, "class=\"joints j-concrete\""), 1);
+        }
+    }
+
+    #[test]
+    fn a_joint_is_drawn_in_its_material_s_own_tone_and_the_width_the_material_says() {
+        let css = include_str!("../../../web/editor.css");
+        for m in MATERIALS.iter().filter(|m| crate::shared::iso::ground::joints(m.id).is_some()) {
+            let j = crate::shared::iso::ground::joints(m.id).unwrap();
+            let rule = &css[css.find(&format!(".joints.j-{} {{", m.id)).unwrap_or_else(|| panic!("no rule for {}", m.id))..];
+            let rule = &rule[..rule.find('}').unwrap()];
+            let tone = if j.alt { "alt" } else { "line" };
+            assert!(rule.contains(&format!("stroke: var(--mat-{}-{tone});", m.id)), "{}: {rule}", m.id);
+            assert!(rule.contains(&format!("stroke-width: {};", j.width_px)), "{}: {rule}", m.id);
+        }
     }
 
     #[test]

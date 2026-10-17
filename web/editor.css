@@ -972,6 +972,28 @@ svg pattern circle {
      partly covered edges would leave a faint line. */
   shape-rendering: crispEdges;
 }
+/* The joints of the 2.5D's textures that have regular ones (street/iso/joints.rs): lines in the material's own tones, as wide
+   as ground.rs says (px), over the grain. */
+.joints {
+  fill: none;
+  opacity: 0.8;
+}
+.joints.j-concrete {
+  stroke: var(--mat-concrete-line);
+  stroke-width: 1;
+}
+.joints.j-permeable {
+  stroke: var(--mat-permeable-line);
+  stroke-width: 0.8;
+}
+.joints.j-brick {
+  stroke: var(--mat-brick-line);
+  stroke-width: 0.8;
+}
+.joints.j-trees {
+  stroke: var(--mat-trees-alt);
+  stroke-width: 1;
+}
 /* A piece's colour is the same in both themes, so an outline needs a halo of the panel's colour to be seen on any
    of them: the hover outline and the selection outline. */
 .iso-piece:hover .iso-top {

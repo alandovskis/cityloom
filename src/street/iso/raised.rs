@@ -6,11 +6,12 @@ use std::fmt::Write;
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::esc;
-use crate::shared::iso::ground::fine_patterns;
+use crate::shared::iso::ground::{fine_patterns, joints};
 use crate::shared::iso::shading::shade_filters;
 use crate::street::model::View;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
+use super::joints::path as joint_path;
 use super::order::Bx;
 use super::projection::{Projection, STRETCH_MM, band_edges, band_mid, drawn_mm, points};
 
@@ -163,6 +164,13 @@ fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h:
         write!(out, "<polygon transform=\"matrix({a} 0 {c} {d} {e} {f})\" points=\"{}\"/>", local.join(" ")).unwrap();
     }
     out.push_str("</g>");
+    // The joints of the materials that have them, as lines over the grain (`joints`).
+    if let Some(j) = joints(m) {
+        let d = joint_path(p, &j, x0, x1, h);
+        if !d.is_empty() {
+            write!(out, "<path class=\"joints j-{m}\" d=\"{d}\"/>").unwrap();
+        }
+    }
 }
 
 /// The piece at `i` as a strip along the stretch: its top, and where it stands above the ground its
