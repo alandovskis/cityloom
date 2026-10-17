@@ -530,6 +530,36 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
+/// One group of the Transform menu: its heading and hint are hidden from assistive technology and reach it as the
+/// group's name and description (a menu holds only menu items and groups). `id` names the group's elements.
+fn menu_group(w: SheetWatch, id: &'static str, heading: &'static str, hint: &'static str, items: impl IntoView + 'static) -> impl IntoView {
+    view! {
+        <div role="group" aria-labelledby=format!("transform-{id}-h") aria-describedby=format!("transform-{id}-hint")>
+            <p class="menu-h" id=format!("transform-{id}-h") aria-hidden="true">{say(w, heading)}</p>
+            <p class="hint" id=format!("transform-{id}-hint") aria-hidden="true">{say(w, hint)}</p>
+            <ul class="ped-list" role="none">{items}</ul>
+        </div>
+    }
+}
+
+/// One item of the Transform menu: a menu item named `label`, showing `mark` and `name`, that runs `choose`.
+fn menu_item(
+    class: &'static str,
+    label: impl Fn() -> String + Send + Sync + 'static,
+    choose: impl Fn() + 'static,
+    mark: impl IntoView + 'static,
+    name: impl Fn() -> String + Send + Sync + 'static,
+) -> impl IntoView {
+    view! {
+        <li role="none">
+            <button type="button" role="menuitem" tabindex="-1" class=format!("add-item transform-item {class}") aria-label=label on:click=move |_| choose()>
+                {mark}
+                <b>{name}</b>
+            </button>
+        </li>
+    }
+}
+
 /// The Transform menu, one button for the things that change the whole street at once. It has up to two groups:
 /// Make pedestrian (while the street has a motor piece: the three things the space of its motor pieces can become,
 /// `Editor::make_pedestrian`) and Transit priority (only the Atlas measures the street can be arranged as and is not
@@ -575,53 +605,28 @@ pub fn Transform(vm: Rc<StreetVm>) -> impl IntoView {
             .into_iter()
             .map(|k| {
                 let kind = &KINDS[k];
-                view! {
-                    <li role="none">
-                        <button type="button" role="menuitem" tabindex="-1" class="add-item transform-item ped-item" on:click=move |_| chosen(w.edit(|e| e.make_pedestrian(k)))>
-                            <span class="add-icon" inner_html=icon(kind.id)></span>
-                            <b>{move || w.i18n().tr(&kind_key(kind.id), &Args::new())}</b>
-                        </button>
-                    </li>
-                }
+                let label = move || w.i18n().tr(&kind_key(kind.id), &Args::new());
+                menu_item(
+                    "ped-item",
+                    label,
+                    move || chosen(w.edit(|e| e.make_pedestrian(k))),
+                    view! { <span class="add-icon" inner_html=icon(kind.id)></span> },
+                    label,
+                )
             })
             .collect_view();
-        view! {
-            <div role="group" aria-labelledby="transform-ped-h" aria-describedby="transform-ped-hint">
-                <p class="menu-h" id="transform-ped-h" aria-hidden="true">{say(w, "make-pedestrian-button")}</p>
-                <p class="hint" id="transform-ped-hint" aria-hidden="true">{say(w, "make-pedestrian-hint")}</p>
-                <ul class="ped-list" role="none">{items}</ul>
-            </div>
-        }
+        menu_group(w, "ped", "make-pedestrian-button", "make-pedestrian-hint", items)
     };
     let transit = move |codes: Vec<&'static str>| {
         let items = codes
             .into_iter()
             .map(|code| {
                 let name = move || w.i18n().tr(&name_key(code), &Args::new());
-                view! {
-                    <li role="none">
-                        <button
-                            type="button"
-                            role="menuitem"
-                            tabindex="-1"
-                            class="add-item transform-item transit-item"
-                            aria-label=move || w.i18n().tr("measure-arrange-label", &Args::new().str("code", code).str("name", name()))
-                            on:click=move |_| chosen(w.apply_measure(code))
-                        >
-                            <span class="dirtag">{code}</span>
-                            <b>{name}</b>
-                        </button>
-                    </li>
-                }
+                let label = move || w.i18n().tr("measure-arrange-label", &Args::new().str("code", code).str("name", name()));
+                menu_item("transit-item", label, move || chosen(w.apply_measure(code)), view! { <span class="dirtag">{code}</span> }, name)
             })
             .collect_view();
-        view! {
-            <div role="group" aria-labelledby="transform-transit-h" aria-describedby="transform-transit-hint">
-                <p class="menu-h" id="transform-transit-h" aria-hidden="true">{say(w, "st-transit-heading")}</p>
-                <p class="hint" id="transform-transit-hint" aria-hidden="true">{say(w, "transform-transit-hint")}</p>
-                <ul class="ped-list" role="none">{items}</ul>
-            </div>
-        }
+        menu_group(w, "transit", "st-transit-heading", "transform-transit-hint", items)
     };
     view! {
         <div node_ref=wrap on:focusout=focus_out style="display: contents">

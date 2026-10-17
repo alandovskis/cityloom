@@ -465,6 +465,8 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("welcome-slot", "the id of an element of the street page"),
     ("view-mode-slot", "the id of an element of the street page"),
     ("transform-slot", "the id of the element of the street page the Transform menu mounts into"),
+    ("ped-item", "the CSS class of a Make pedestrian item of the street page's Transform menu"),
+    ("transit-item", "the CSS class of a transit measure item of the street page's Transform menu"),
     ("h-drawing", "the id of the street drawing's heading"),
     ("iso-shade-front", "the id of an SVG filter the 2.5D carries (street/iso/raised.rs)"),
     ("iso-shade-side", "the id of an SVG filter the 2.5D carries (street/iso/raised.rs)"),
