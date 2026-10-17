@@ -167,9 +167,10 @@ impl CityStore {
         let Some((key, record)) = city.street_record(edge) else { return false };
         // the record the street took, under another key, is replaced: left, it would bring the older edit back
         let took = city.took_street(edge).filter(|&k| k != key).map(str::to_string);
+        let unedited = self.unedited().street_record(edge).filter(|(k, _)| *k == key).and_then(|(_, r)| serde_json::to_value(r).ok());
         let (mut changed, mut replaced) = (false, None);
         let kept = self.upsert(|draft| {
-            let before = draft.get_raw(STREETS, &key).cloned();
+            let before = draft.get_raw(STREETS, &key).cloned().or_else(|| unedited.clone());
             if let Some(old) = &took {
                 if draft.get_raw(STREETS, old).is_some() {
                     replaced = Some(old.clone());
@@ -194,9 +195,10 @@ impl CityStore {
         }
         let Some((key, record)) = city.junction_record(node) else { return false };
         let took = city.took_junction(node).filter(|&k| k != key).map(str::to_string);
+        let unedited = self.unedited().junction_record(node).filter(|(k, _)| *k == key).and_then(|(_, r)| serde_json::to_value(r).ok());
         let (mut changed, mut replaced) = (false, None);
         let kept = self.upsert(|draft| {
-            let before = draft.get_raw(JUNCTIONS, &key).cloned();
+            let before = draft.get_raw(JUNCTIONS, &key).cloned().or_else(|| unedited.clone());
             if let Some(old) = &took {
                 if draft.get_raw(JUNCTIONS, old).is_some() {
                     replaced = Some(old.clone());
@@ -211,6 +213,11 @@ impl CityStore {
             self.mark_written(Kind::Junction, &key, changed, replaced.as_deref());
         }
         kept
+    }
+
+    /// The city as first laid out, with no edit: what a place's record is until the person changes it.
+    fn unedited(&self) -> City {
+        City::load_on(self.layout(), &Edits::new())
     }
 
     /// What both writes tell the sync once the document is kept. The record is marked only when what is stored

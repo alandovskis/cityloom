@@ -796,4 +796,14 @@ mod tests {
         }
         assert_eq!(ViewMode::parse(""), None);
     }
+
+    #[test]
+    fn only_selecting_a_piece_of_a_place_never_edited_marks_nothing_for_the_sync() {
+        let (r, _) = city_rig();
+        let uid = first(&r.vm);
+        r.vm.select(Some(uid));
+        r.vm.flush();
+        r.time.advance(1_000);
+        assert_eq!(crate::shared::ports::Storage::recall(&*r.storage, crate::sync::model::SYNC_KEY), None, "looking is not editing");
+    }
 }

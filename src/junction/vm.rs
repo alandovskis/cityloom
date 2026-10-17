@@ -577,4 +577,14 @@ mod tests {
         assert_eq!(r.said.take(), vec![crate::i18n_for(crate::shared::i18n::Locale::En).tr_now("not-kept", &crate::shared::i18n::Args::new())]);
         assert_eq!(r.vm.read(|j| j.arm(n).unwrap().corner_mm), 7_500);
     }
+
+    #[test]
+    fn only_selecting_on_a_place_never_edited_marks_nothing_for_the_sync() {
+        let (r, _) = city_rig();
+        let arm = r.vm.read(|j| j.current().arms[0].uid);
+        r.vm.select(crate::junction::model::Target::Arm(arm));
+        r.vm.flush();
+        r.time.advance(1_000);
+        assert_eq!(r.storage.recall(crate::sync::model::SYNC_KEY), None, "looking is not editing");
+    }
 }
