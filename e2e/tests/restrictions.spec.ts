@@ -113,9 +113,10 @@ const openPanel = async (page: Page) => {
 };
 
 const kept = (page: Page) => page.evaluate(() => localStorage.getItem("cityloom-restrictions"));
-/** The corners of the area `id` as this browser keeps them. */
-const keptRing = async (page: Page, id = "r1") =>
-  JSON.parse((await kept(page)) ?? "{}").restrictions?.[id]?.ring as [number, number][] | undefined;
+/** The corners of the area this browser keeps (its id is random; the tests declare one). */
+const keptRing = async (page: Page) =>
+  Object.values(JSON.parse((await kept(page)) ?? "{}").restrictions ?? {}).map((r: any) => r.ring)[0] as
+    [number, number][] | undefined;
 /** A spot of the earth, in page pixels as the map is now. */
 const onPage = (page: Page, at: [number, number]) =>
   page.evaluate((at) => {
@@ -266,8 +267,8 @@ test.describe("area restrictions", () => {
     );
     await expect(page.locator("#plan-key")).toContainText("Conflicts with an area rule");
     // the saved area is selected: its streets are listed under it, the one that breaks the rule marked
-    await expect(page.locator("#area-row-r1")).toHaveAttribute("aria-expanded", "true");
-    const flagged = page.locator("#area-details-r1 li.bad a").first();
+    await expect(page.locator("[id^='area-row-']")).toHaveAttribute("aria-expanded", "true");
+    const flagged = page.locator("[id^='area-details-'] li.bad a").first();
     const href = await flagged.getAttribute("href");
     expect(href).toMatch(/^street\.html\?street=\d+$/);
 
@@ -306,8 +307,8 @@ test.describe("area restrictions", () => {
     await expect.poll(() => polygons(page)).toBe(1);
     expect(await anyConflict(page)).toBe(false);
     await expect(page.locator("#fit")).toHaveText(/ places\. Every check passes\.$/);
-    await expect(page.locator("#area-details-r1 li.bad")).toHaveCount(0);
-    const href = await page.locator("#area-details-r1 li.ok a").first().getAttribute("href");
+    await expect(page.locator("[id^='area-details-'] li.bad")).toHaveCount(0);
+    const href = await page.locator("[id^='area-details-'] li.ok a").first().getAttribute("href");
     expect(href).toMatch(/^street\.html\?street=\d+$/);
 
     await page.goto("/" + href);
@@ -473,15 +474,15 @@ test.describe("area restrictions", () => {
     await page.locator("#area-undo").click();
     await expect(live(page)).toHaveText("“Short-lived” restored.");
     await expect(page.locator("#areas > li")).toHaveCount(1);
-    await expect(page.locator("#area-row-r1")).toBeFocused();
+    await expect(page.locator("[id^='area-row-']")).toBeFocused();
     await expect.poll(() => polygons(page)).toBe(1);
     await page.reload();
     await mapReady(page);
     await openPanel(page);
     await expect(page.locator("#areas")).toContainText("Short-lived");
     await expect.poll(() => polygons(page)).toBe(1);
-    await page.locator("#area-row-r1").click();
-    await expect(page.locator("#area-row-r1")).toHaveAttribute("aria-expanded", "true");
+    await page.locator("[id^='area-row-']").click();
+    await expect(page.locator("[id^='area-row-']")).toHaveAttribute("aria-expanded", "true");
     await page.locator("#area-delete").click();
     await expect(page.locator("#areas > li")).toHaveCount(0);
     await page.reload();
@@ -567,11 +568,11 @@ test.describe("area restrictions", () => {
     expect(await navigations(page)).toEqual([]);
     await expect(live(page)).toHaveText("“Corner zone” saved.");
     expect(await kept(page)).toEqual(before);
-    await expect(page.locator("#area-row-r1")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("[id^='area-row-']")).toHaveAttribute("aria-expanded", "true");
     // the same click, with no corner there once the area is let go, opens the junction
     await page.locator("#basemap").focus();
     await page.keyboard.press("Escape");
-    await expect(page.locator("#area-row-r1")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator("[id^='area-row-']")).toHaveAttribute("aria-expanded", "false");
     await expect.poll(() => drawnAt(page, "areas-vertex", j)).toBe(0);
     await page.mouse.click(j.x, j.y);
     await expect.poll(() => navigations(page)).toEqual([`/intersection.html?junction=${j.junction}`]);
