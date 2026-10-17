@@ -364,8 +364,8 @@ test.describe("a junction of a street made pedestrian", () => {
     const crossings = await page.locator("#drawing path.crossing").count();
     expect(crossings).toBeGreaterThan(0);
     await page.goBack();
-    await page.locator("#make-pedestrian-btn").click();
-    await page.locator("#make-pedestrian-menu .ped-item").first().click();
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-menu .ped-item").first().click();
     // leaving the page keeps what was waiting to be kept
     await page.locator('#street-sub a[href^="intersection.html"]').first().click();
     await expect(page.locator("#drawing")).toBeVisible();

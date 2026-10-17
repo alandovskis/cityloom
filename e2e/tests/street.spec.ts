@@ -408,7 +408,7 @@ test.describe("what the street editor keeps in the city", () => {
   });
 });
 
-test.describe("making a street pedestrian", () => {
+test.describe("the Transform menu", () => {
   test.beforeEach(async ({ page }) => {
     await openStreet(page);
     await expect(page.locator("#drawing")).toBeVisible();
@@ -418,12 +418,13 @@ test.describe("making a street pedestrian", () => {
     page,
   }) => {
     const before = await pieces(page);
-    await expect(page.locator("#make-pedestrian-menu")).toBeHidden();
-    await page.locator("#make-pedestrian-btn").click();
-    await expect(page.locator("#make-pedestrian-menu")).toBeVisible();
-    await page.locator("#make-pedestrian-menu .ped-item").first().click();
+    await expect(page.locator("#transform-menu")).toBeHidden();
+    await page.locator("#transform-btn").click();
+    await expect(page.locator("#transform-menu")).toBeVisible();
+    await page.locator("#transform-menu .ped-item").first().click();
     await expect(live(page)).toHaveText(/^Made pedestrian\. .+ is now a pedestrian street\.$/);
-    await expect(page.locator("#make-pedestrian-btn")).toHaveCount(0);
+    // Without traffic the Make pedestrian group is gone; the button stays only while a transit measure fits.
+    await expect(page.locator("#transform-menu .ped-item")).toHaveCount(0);
     // The choice hands the focus to the drawing, whose keys edit the street.
     await expect(page.locator("#wrap")).toBeFocused();
     expect(await pieces(page)).toBe(before);
@@ -433,19 +434,83 @@ test.describe("making a street pedestrian", () => {
   });
 
   test("is one edit that undo takes back, and the street carries traffic again", async ({ page }) => {
-    await page.locator("#make-pedestrian-btn").click();
-    await page.locator("#make-pedestrian-menu .ped-item").first().click();
-    await expect(page.locator("#make-pedestrian-btn")).toHaveCount(0);
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-menu .ped-item").first().click();
+    await expect(page.locator("#transform-menu .ped-item")).toHaveCount(0);
     await page.locator("#undo").click();
     await expect(live(page)).toHaveText(/ carries traffic again\.$/);
-    await expect(page.locator("#make-pedestrian-btn")).toBeVisible();
+    await expect(page.locator("#transform-btn")).toBeVisible();
+    await page.locator("#transform-btn").click();
+    await expect(page.locator("#transform-menu .ped-item")).toHaveCount(3);
   });
 
   test("the menu closes with Escape and gives the focus back to its button", async ({ page }) => {
-    await page.locator("#make-pedestrian-btn").click();
-    await expect(page.locator("#make-pedestrian-menu")).toBeVisible();
+    await page.locator("#transform-btn").click();
+    await expect(page.locator("#transform-menu")).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.locator("#make-pedestrian-menu")).toBeHidden();
-    await expect(page.locator("#make-pedestrian-btn")).toBeFocused();
+    await expect(page.locator("#transform-menu")).toBeHidden();
+    await expect(page.locator("#transform-btn")).toBeFocused();
+  });
+
+  test("has a group for making the street pedestrian and one for the transit measures that fit, and no others", async ({
+    page,
+  }) => {
+    await page.locator("#transform-btn").click();
+    const menu = page.locator("#transform-menu");
+    await expect(menu).toHaveAttribute("role", "menu");
+    await expect(menu.getByRole("group")).toHaveCount(2);
+    await expect(menu.getByRole("group", { name: "Make pedestrian" }).getByRole("menuitem")).toHaveCount(3);
+    const transit = menu.getByRole("group", { name: "Transit priority" });
+    const offered = await transit.getByRole("menuitem").count();
+    expect(offered).toBeGreaterThan(0);
+    // Exactly the table's Arrange rows: nothing that will not fit, nothing already this street's.
+    await expect(page.locator("#transit-priority .m-apply")).toHaveCount(offered);
+    await expect(page.locator("#transform-btn")).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test("a transit measure is arranged as one edit, announced, and Undo takes it back", async ({ page }) => {
+    const before = await pieces(page);
+    await page.locator("#transform-btn").click();
+    const item = page.locator("#transform-menu .transit-item").first();
+    const code = (await item.locator(".dirtag").textContent()) ?? "";
+    await item.click();
+    await expect(page.locator("#undo")).toBeEnabled();
+    await expect(live(page)).not.toBeEmpty();
+    await expect(page.locator("#wrap")).toBeFocused();
+    await expect(page.locator("#transform-menu")).toBeHidden();
+    await expect(page.locator("#transit-priority tr", { hasText: code }).locator(".m-on")).toBeVisible();
+    await page.locator("#undo").click();
+    await expect(live(page)).toHaveText(/^Undone\./);
+    expect(await pieces(page)).toBe(before);
+  });
+
+  test("is operated from the keyboard", async ({ page }) => {
+    const button = page.locator("#transform-btn");
+    await button.focus();
+    await page.keyboard.press("ArrowDown");
+    const items = page.locator("#transform-menu [role=menuitem]");
+    await expect(items.first()).toBeFocused();
+    await page.keyboard.press("End");
+    await expect(items.last()).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(items.first()).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(items.last()).toBeFocused();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toHaveText(/^Made pedestrian\./);
+    await expect(page.locator("#wrap")).toBeFocused();
+  });
+
+  test("fits a phone and shows its items in forced colours", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 780 });
+    await page.emulateMedia({ forcedColors: "active" });
+    await page.locator("#transform-btn").click();
+    const box = await page.locator("#transform-menu").boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(780);
+    await expect(page.locator("#transform-menu .transform-item").first()).toBeVisible();
   });
 });

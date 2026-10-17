@@ -1089,26 +1089,84 @@ fn the_pedestrian_street_messages_exist_in_both_languages() {
 }
 
 #[test]
-fn the_make_pedestrian_menu_is_offered_while_the_street_has_a_motor_piece_and_not_after() {
+fn the_transform_menu_has_a_group_for_making_pedestrian_and_one_for_the_measures_that_fit() {
     use crate::shared::catalogue::kind_index;
-    let s = street_shared(0);
-    let h = street_html(|| view! { <page::MakePedestrian vm=s.clone()/> });
-    assert!(button_tag(&h, "make-pedestrian-btn").contains("aria-haspopup"));
-    assert!(h.contains("Make pedestrian") && h.contains("id=\"make-pedestrian-menu\"") && h.contains("hidden"));
-    assert_eq!(count(&h, "class=\"add-item ped-item\""), 3);
+    let s = street_shared(1);
+    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
+    let button = button_tag(&h, "transform-btn");
+    assert!(
+        button.contains("aria-haspopup=\"menu\"") && button.contains("aria-controls=\"transform-menu\"") && button.contains("aria-expanded=\"false\""),
+        "{button}"
+    );
+    assert!(h.contains(">Transform<") && h.contains("id=\"transform-menu\"") && h.contains("role=\"menu\"") && h.contains("hidden"), "{h}");
+    assert_eq!(count(&h, "role=\"group\""), 2, "{h}");
+    assert!(h.contains("Make pedestrian") && h.contains("Transit priority"), "{h}");
     for kind in ["Sidewalk", "Planting strip", "Café terrace"] {
         assert!(h.contains(kind), "{kind}");
     }
+    assert_eq!(count(&h, "role=\"menuitem\""), count(&h, "transform-item"));
+    // A menu holds only menu items and groups: each group's heading and hint are hidden from assistive technology and
+    // reach it as the group's name and description.
+    for (group, heading, hint) in [("ped", "transform-ped-h", "transform-ped-hint"), ("transit", "transform-transit-h", "transform-transit-hint")] {
+        let tag = &h[h[..h.find(&format!("aria-labelledby=\"{heading}\"")).unwrap()].rfind('<').unwrap()..];
+        assert!(tag[..tag.find('>').unwrap()].contains(&format!("aria-describedby=\"{hint}\"")), "{group}: {tag}");
+        for id in [heading, hint] {
+            let at = h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {h}"));
+            let el = &h[h[..at].rfind('<').unwrap()..];
+            assert!(el[..el.find('>').unwrap()].contains("aria-hidden=\"true\""), "{id}: {el}");
+        }
+    }
+    assert_eq!(count(&h, "ped-item"), 3);
+    let fits = s.transform_menu().transit;
+    assert!(!fits.is_empty());
+    assert_eq!(count(&h, "transit-item"), fits.len());
+    for code in &fits {
+        assert!(h.contains(&format!(">{code}<")), "{code}");
+    }
+    let view = s.view_now();
+    for m in view.measures.iter().filter(|m| !m.can_apply) {
+        assert!(!h.contains(&format!(">{}<", m.code)), "{} will not fit and is not listed", m.code);
+    }
+    // Made pedestrian, the street has no motor piece: only the measures are left.
     assert!(s.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
-    let h = street_html(|| view! { <page::MakePedestrian vm=s.clone()/> });
-    assert!(!h.contains("make-pedestrian-btn") && !h.contains("ped-item"), "a street without traffic has nothing to make pedestrian");
+    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
+    assert!(!h.contains("Make pedestrian") && !h.contains("ped-item"), "a street without traffic has nothing to make pedestrian");
 }
 
 #[test]
-fn the_make_pedestrian_menu_speaks_french() {
-    let s = street_shared_in(0, Locale::FrCa);
-    let h = street_html(|| view! { <page::MakePedestrian vm=s.clone()/> });
-    assert!(h.contains("Rendre piétonne") && h.contains("Trottoir") && h.contains("Terrasse de café"), "{h}");
+fn the_transform_menu_leaves_out_a_group_with_nothing_in_it_and_is_not_shown_empty() {
+    use crate::shared::catalogue::kind_index;
+    let s = street_shared(1);
+    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
+    assert_eq!(count(&h, "role=\"group\""), 2);
+    assert!(s.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
+    let menu = s.transform_menu();
+    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
+    if menu.is_empty() {
+        assert!(!h.contains("transform-btn"), "{h}");
+    } else {
+        assert_eq!(count(&h, "role=\"group\""), 1, "{h}");
+    }
+}
+
+#[test]
+fn the_transform_menu_speaks_french() {
+    let s = street_shared_in(1, Locale::FrCa);
+    let h = street_html(|| view! { <page::Transform vm=s.clone()/> });
+    assert!(h.contains(">Transformer<") && h.contains("Rendre piétonne") && h.contains("Priorité au transport en commun"), "{h}");
+    assert!(h.contains("Trottoir") && h.contains("Terrasse de café"), "{h}");
+    assert!(h.contains("Réorganiser la rue selon"), "{h}");
+}
+
+#[test]
+fn the_transform_messages_exist_in_both_languages() {
+    use crate::shared::i18n::{Args, Locale};
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    assert!(en.has_message("transform-button", Locale::En) && fr.has_message("transform-button", Locale::FrCa));
+    assert_eq!(
+        (en.tr_now("transform-button", &Args::new()), fr.tr_now("transform-button", &Args::new())),
+        ("Transform".to_string(), "Transformer".to_string())
+    );
 }
 
 #[test]

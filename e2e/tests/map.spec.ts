@@ -401,8 +401,8 @@ test.describe("the city map", () => {
   test("a street made pedestrian is a pedestrian street on the map", async ({ page }) => {
     const href = await openStreet(page);
     const hot = `s-${href.split("=")[1]}`;
-    await page.locator("#make-pedestrian-btn").click();
-    await page.locator("#make-pedestrian-menu .ped-item").first().click();
+    await page.locator("#transform-btn").click();
+    await page.locator("#transform-menu .ped-item").first().click();
     await page.goto("/map.html"); // leaving the page keeps what was waiting to be kept
     await mapReady(page);
     await page.waitForFunction(
