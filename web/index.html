@@ -7,14 +7,21 @@
   <meta name="description" data-i18n-content="map-home-description" content="Pick any street or junction of the city, rearrange it, and see at once what still works.">
   <meta name="color-scheme" content="light dark">
   <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var l=localStorage.getItem("cityloom-lang");if(l==="en"||l==="fr-CA")document.documentElement.lang=l}catch(e){}</script>
+  <link rel="modulepreload" href="v/{{build}}/pkg/cityloom_editor.js">
+  <link rel="preload" as="fetch" crossorigin href="v/{{build}}/pkg/cityloom_editor_bg.wasm">
+  <link rel="preload" as="fetch" crossorigin href="data/metro/index.json">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="stylesheet" href="app.css">
-  <link rel="stylesheet" href="home.css">
+  <link rel="stylesheet" href="v/{{build}}/app.css">
+  <link rel="stylesheet" href="v/{{build}}/home.css">
 </head>
 <body class="home">
+  <div id="boot-failed" role="alert" hidden style="position:fixed;inset:0 0 auto 0;z-index:100;padding:12px 16px;background:Canvas;color:CanvasText;border-bottom:2px solid CanvasText;font:15px/1.4 system-ui,sans-serif">
+    <div lang="en" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom could not start. Check your connection, then reload the page.</p> <a href="" data-boot="ui-boot-reload">Reload</a></div>
+    <div lang="fr-CA" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom n’a pas pu démarrer. Vérifiez votre connexion, puis rechargez la page.</p> <a href="" data-boot="ui-boot-reload">Recharger</a></div>
+  </div>
   <header class="bar" data-covers>
-    <a class="brand" href="index.html" data-i18n-aria-label="ui-home" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
+    <a class="brand" href="index.html" data-i18n-aria-label="ui-home" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="v/{{build}}/brand.svg#wordmark"/></svg></a>
     <nav class="surfaces" data-i18n-aria-label="map-editors" aria-label="Editors">
       <a href="map.html" class="surface" data-i18n="map-nav-map">Map</a>
     </nav>
@@ -72,6 +79,6 @@
   <footer class="site-foot"><span data-version></span></footer>
 
   <output id="live" class="sr-only" aria-live="polite"></output>
-  <script type="module" src="home.js"></script>
+  <script type="module" src="v/{{build}}/home.js"></script>
 </body>
 </html>

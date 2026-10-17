@@ -25,3 +25,6 @@ mkdir -p web/vendor
 cp node_modules/maplibre-gl/dist/maplibre-gl.mjs node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs \
   node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl.css \
   node_modules/pmtiles/dist/pmtiles.js web/vendor/
+# Compressed copies of the built files, which the server sends as they are (see the script). Only what this script
+# builds is compressed, so a copy can never be older than the file beside it.
+node scripts/precompress.mjs web/pkg web/vendor

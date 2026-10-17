@@ -39,6 +39,9 @@ ui-help = Help
 ui-share = Share
 ui-keyboard = Keyboard
 ui-credits = Credits
+# Said by the page itself when its WebAssembly module cannot be loaded (web/boot.js shows it; the markup carries a copy).
+ui-boot-failed = CityLoom could not start. Check your connection, then reload the page.
+ui-boot-reload = Reload
 ui-version = Version { $version }
 ui-notes = Notes
 ui-notes-toggle-title = Show or hide the notes ( ] )
