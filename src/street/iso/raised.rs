@@ -6,7 +6,7 @@ use std::fmt::Write;
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::esc;
-use crate::shared::iso::ground::patterns;
+use crate::shared::iso::ground::fine_patterns;
 use crate::shared::iso::shading::shade_filters;
 use crate::street::model::View;
 use crate::street::svg::{curb_edges, curb_width_mm};
@@ -79,10 +79,11 @@ pub(super) fn shades() -> String {
     shade_filters(&SHADES)
 }
 
-/// The surface materials' patterns for the drawing's `<defs>`. They are drawn in millimetres of ground with no transform
+/// The surface materials' fine patterns for the drawing's `<defs>`: the grain, and not the regular joints of the
+/// materials that have them, which are geometry (`joints`). They are drawn in millimetres of ground with no transform
 /// of their own: a textured top is laid by the matrix of the polygon that fills with one (`top`), band by band.
 pub(super) fn materials() -> String {
-    patterns("iso-m", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+    fine_patterns("iso-m", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
 }
 
 /// The shading a face of this kind gets, as an attribute: none for a top.
