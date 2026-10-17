@@ -33,6 +33,11 @@ HIGHWAYS = (
     "motorway,motorway_link,trunk,trunk_link,primary,primary_link,secondary,secondary_link,"
     "tertiary,tertiary_link,unclassified,residential,living_street,service,pedestrian"
 )
+# The bike tracks mapped as ways of their own, which the importer reads to tell a two-way track from a one-way one
+# (osm_import's `is_track`) and leaves out of the network. A cycleway is taken whole; a path or footway only when
+# designated for bicycles, which osmium cannot say in one expression (its expressions are ORed): see main().
+TRACKS = "cycleway"
+OFF_ROAD = "path,footway"
 # Extracts per osmium run, which allows 500 at most. osmium keeps a set of ids for each extract it cuts at once, a
 # gigabyte or more apiece for the dense tiles of the city (5 took 11 GB, 20 took 22 GB, 2 take under 6 GB with the
 # rest of the script), so a machine with less than about 32 GB needs --batch with a smaller number: CI uses 2.
@@ -93,10 +98,18 @@ def main():
     east, north = LON0 + NX * DLON + MARGIN_LON, LAT0 + NY * DLAT + MARGIN_LAT
 
     metro, roads = work / "metro.osm.pbf", work / "roads.osm.pbf"
+    designated, tracks = work / "designated.osm.pbf", work / "designated-tracks.osm.pbf"
+    streets = work / "streets.osm.pbf"
     print("cutting the metropolitan area out of", source.name, flush=True)
     osmium("extract", "-b", f"{west},{south},{east},{north}", source, "-o", metro, "--overwrite")
     print("keeping the roads", flush=True)
-    osmium("tags-filter", metro, f"w/highway={HIGHWAYS}", "-o", roads, "--overwrite")
+    osmium("tags-filter", metro, f"w/highway={HIGHWAYS},{TRACKS}", "-o", streets, "--overwrite")
+    # a path or footway designated for bicycles: every way tagged so, then those of them that are paths or footways
+    # (the sidewalks and crossings, the many footways of a city, are not kept)
+    osmium("tags-filter", metro, "w/bicycle=designated", "-o", designated, "--overwrite")
+    osmium("tags-filter", designated, f"w/highway={OFF_ROAD}", "-o", tracks, "--overwrite")
+    # a node or way in both files is written once
+    osmium("merge", streets, tracks, "-o", roads, "--overwrite")
 
     for old in OUT.glob(TILE_GLOB):
         old.unlink()
