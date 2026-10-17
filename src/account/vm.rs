@@ -700,7 +700,7 @@ mod tests {
         t.account.answer(AccountReply::Done(Ok(())));
         assert_eq!(t.announcer.take(), ["Your choice is recorded: store your work on the server."]);
         assert_eq!(t.work.calls(), [WorkCall::Pull(WorkAsk::first(0))]);
-        t.work.answer(WorkReply::Page(Ok(WorkPage { epoch: "e1".into(), rev: 0, more: false, records: vec![] })));
+        t.work.answer(WorkReply::Page(Ok(WorkPage { epoch: "e1".into(), rev: 0, more: false, records: vec![], user: None })));
         let Some(WorkCall::Push { batch, .. }) = t.work.calls().into_iter().next() else { panic!("a push was expected") };
         let result = WorkResult { kind: batch[0].kind.clone(), key: batch[0].key.clone(), status: WorkStatus::Accepted, rev: 1, record: None };
         t.work.answer(WorkReply::Pushed(Ok(WorkPushed { rev: 1, results: vec![result] })));

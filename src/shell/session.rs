@@ -87,6 +87,8 @@ pub struct SessionVm {
     providers: ArcRwSignal<Vec<ProviderInfo>>,
     popover: Rc<PopoverViewModel>,
     started: Cell<bool>,
+    /// `/api/me` has been asked and not answered.
+    asking: Cell<bool>,
     /// How many times focus was asked for, and where to.
     focus: ArcRwSignal<(u32, Focus)>,
     sync: RefCell<Option<Rc<SyncVm>>>,
@@ -102,6 +104,7 @@ impl SessionVm {
             providers: ArcRwSignal::new(Vec::new()),
             popover,
             started: Cell::new(false),
+            asking: Cell::new(false),
             focus: ArcRwSignal::new((0, Focus::None)),
             sync: RefCell::new(None),
         })
@@ -129,18 +132,43 @@ impl SessionVm {
             let args = Args::new().str("provider", provider.unwrap_or_default());
             self.ports.announcer.say(&self.i18n.tr_now(key, &args));
         }
+        self.ask_me();
+    }
+
+    /// Asks who is signed in, and tells the sync. One question at a time.
+    fn ask_me(self: &Rc<Self>) {
+        if self.asking.replace(true) {
+            return;
+        }
         let vm = self.clone();
-        self.ports.account.me(Box::new(move |me| match me {
-            Ok(me) => {
-                vm.state.set(Session::SignedIn { name: me.display_name.clone() });
-                let sync = vm.sync.borrow().clone();
-                if let Some(sync) = sync {
-                    sync.known(&me);
+        self.ports.account.me(Box::new(move |me| {
+            vm.asking.set(false);
+            match me {
+                Ok(me) => {
+                    vm.state.set(Session::SignedIn { name: me.display_name.clone() });
+                    let sync = vm.sync.borrow().clone();
+                    if let Some(sync) = sync {
+                        sync.known(&me);
+                    }
                 }
+                Err(AccountError::SignedOut) => {
+                    let sync = vm.sync.borrow().clone();
+                    if let Some(sync) = sync {
+                        sync.stop();
+                    }
+                    vm.load_providers(false);
+                }
+                Err(_) => vm.state.set(Session::Unavailable),
             }
-            Err(AccountError::SignedOut) => vm.load_providers(false),
-            Err(_) => vm.state.set(Session::Unavailable),
         }));
+    }
+
+    /// The network returned or the tab shows again: a page that could not learn who is signed in (it was opened
+    /// offline) asks again, and the sync starts when the answer is a person who stores their work on the server.
+    pub fn recheck(self: &Rc<Self>) {
+        if self.state.get_untracked() == Session::Unavailable {
+            self.ask_me();
+        }
     }
 
     /// Asks for the providers; with `refocus`, focus then goes to where the person's menu was.
@@ -278,7 +306,7 @@ mod tests {
         t.account.answer(AccountReply::Me(Ok(Me { store_on_server: Some(true), ..me("Ada") })));
         assert_eq!(t.work.calls(), [WorkCall::Pull(WorkAsk::first(0))]);
         assert_eq!(vm.sync_status().as_deref(), Some("Not synced yet"));
-        t.work.answer(WorkReply::Page(Ok(WorkPage { epoch: "e1".into(), rev: 0, more: false, records: vec![] })));
+        t.work.answer(WorkReply::Page(Ok(WorkPage { epoch: "e1".into(), rev: 0, more: false, records: vec![], user: None })));
         assert_eq!(vm.sync_status().as_deref(), Some("Synced"));
         vm.sign_out();
         t.account.answer(AccountReply::Done(Ok(())));

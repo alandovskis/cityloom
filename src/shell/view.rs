@@ -27,14 +27,14 @@ fn listen<E: JsCast + 'static>(target: &EventTarget, event: &str, mut f: impl Fn
 fn bind_sync(vm: &Rc<ShellVm>) {
     let sync = vm.sync();
     let (window, doc) = (leptos::prelude::window(), document());
-    let (s, d) = (sync.clone(), doc.clone());
+    let (v, d) = (vm.clone(), doc.clone());
     listen(&doc, "visibilitychange", move |_: Event| {
         if !d.hidden() {
-            s.refresh();
+            v.network_back();
         }
     });
-    let s = sync.clone();
-    listen(&window, "online", move |_: Event| s.refresh());
+    let v = vm.clone();
+    listen(&window, "online", move |_: Event| v.network_back());
     listen(&window, "pagehide", move |_: Event| {
         crate::sync::hub::flush();
         sync.leave();

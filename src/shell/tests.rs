@@ -281,7 +281,7 @@ fn the_account_menu_says_whether_the_work_is_synced_in_both_languages() {
         };
         let out = draw(&vm);
         assert!(out.contains(r#"id="sync-status""#) && out.contains(pending), "{locale:?}: {out}");
-        t.work.answer(WorkReply::Page(Ok(WorkPage { epoch: "e1".into(), rev: 0, more: false, records: vec![] })));
+        t.work.answer(WorkReply::Page(Ok(WorkPage { epoch: "e1".into(), rev: 0, more: false, records: vec![], user: None })));
         let out = draw(&vm);
         assert!(out.contains(&format!(">{synced}<")), "{locale:?}: {out}");
         let signed_out = {
@@ -312,4 +312,33 @@ fn the_shell_builds_the_sync_and_the_session_reports_to_it() {
     );
     assert_eq!(vm.sync().status(), crate::sync::Status::Off);
     assert!(crate::sync::hub::current().is_some(), "the page's sync is where the other pages reach it");
+}
+
+#[test]
+fn a_page_opened_offline_learns_it_is_signed_in_when_the_network_returns_and_starts_the_sync_once() {
+    use crate::shared::ports::{AccountCall, AccountError, AccountReply, Me, WorkAsk, WorkCall, WorkPage, WorkReply, test_ports_full};
+    crate::sync::hub::reset();
+    let t = test_ports_full();
+    let vm = crate::shell::vm::ShellVm::new_with(
+        t.ports.clone(),
+        crate::i18n_for(Locale::En),
+        std::rc::Rc::new(crate::shell::Bare::default()),
+        "details-details",
+        vec![],
+        false,
+        true,
+    );
+    vm.session().start();
+    t.account.answer(AccountReply::Me(Err(AccountError::Unavailable)));
+    assert_eq!(vm.session().state(), crate::shell::session::Session::Unavailable);
+    vm.network_back();
+    assert_eq!(t.account.calls(), [AccountCall::Me], "the network is back: who is signed in is asked again");
+    let ada = Me { id: "u".into(), display_name: "Ada".into(), store_on_server: Some(true), identities: vec![] };
+    t.account.answer(AccountReply::Me(Ok(ada)));
+    assert_eq!(vm.session().state(), crate::shell::session::Session::SignedIn { name: "Ada".into() });
+    assert_eq!(t.work.calls(), [WorkCall::Pull(WorkAsk::first(0))], "one sync start");
+    t.work.answer(WorkReply::Page(Ok(WorkPage { epoch: "e1".into(), rev: 0, more: false, records: vec![], user: None })));
+    vm.network_back();
+    assert_eq!(t.account.calls(), [], "a person who is known is not asked again");
+    assert_eq!(t.work.calls(), [WorkCall::Pull(WorkAsk::first(0).with_epoch(Some("e1".into())))], "it syncs as any known page does");
 }

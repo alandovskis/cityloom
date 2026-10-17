@@ -295,14 +295,20 @@ impl ShellVm {
         self.share.popover()
     }
 
-    /// The sign-in state and its menu; never open together with the other header menus.
     /// Syncing the person's work with the server.
     pub fn sync(&self) -> Rc<SyncVm> {
         self.sync.clone()
     }
 
+    /// The sign-in state and its menu; never open together with the other header menus.
     pub fn session(&self) -> Rc<SessionVm> {
         self.session.clone()
+    }
+
+    /// The tab shows again or the network returned: sync runs at once.
+    pub fn network_back(&self) {
+        self.sync.refresh();
+        self.session.recheck();
     }
 
     pub fn menu_open(&self) -> bool {

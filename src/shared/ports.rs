@@ -170,6 +170,10 @@ pub struct WorkPage {
     pub rev: i64,
     pub more: bool,
     pub records: Vec<WorkRecord>,
+    /// The account the server answered for (the session cookie's), if it says. A page that believes in another account
+    /// is out of date: it must not sync under this one.
+    #[serde(default)]
+    pub user: Option<String>,
 }
 
 /// What a pull asks of the server. `since` is the revision to go on from; `start` is the revision the whole pull began

@@ -40,6 +40,8 @@ struct ServerSim {
     /// The server's clock, as a stamp; None means no time is ahead of it.
     now: RefCell<Option<String>>,
     calls: RefCell<Vec<String>>,
+    /// The account the session cookie in this browser belongs to, as a pull says it; None says nothing.
+    user: RefCell<Option<String>>,
 }
 
 impl ServerSim {
@@ -53,6 +55,7 @@ impl ServerSim {
             epoch: RefCell::new("e1".into()),
             now: RefCell::new(None),
             calls: RefCell::new(Vec::new()),
+            user: RefCell::new(None),
         })
     }
 
@@ -121,7 +124,7 @@ impl ServerSim {
         let more = records.len() > 500;
         records.truncate(500);
         let rev = if more { records.last().map_or(self.rev.get(), |r| r.rev) } else { self.rev.get() };
-        Ok(WorkPage { epoch: self.epoch.borrow().clone(), rev, more, records })
+        Ok(WorkPage { epoch: self.epoch.borrow().clone(), rev, more, records, user: self.user.borrow().clone() })
     }
 
     fn pushed(&self, batch: Vec<WorkPut>) -> Result<WorkPushed, WorkError> {
@@ -182,7 +185,7 @@ impl WorkSync for ServerSim {
 
 /// A page of the server's answer with nothing in it.
 fn page(rev: i64) -> WorkPage {
-    WorkPage { epoch: "e1".into(), rev, more: false, records: vec![] }
+    WorkPage { epoch: "e1".into(), rev, more: false, records: vec![], user: None }
 }
 
 /// A browser: its storage, its clock, and a sync view-model talking to `server`.
