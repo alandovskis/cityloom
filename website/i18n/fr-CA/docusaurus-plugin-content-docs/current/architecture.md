@@ -25,7 +25,7 @@ qui possède la fonctionnalité.
 | `shared/`      | Le noyau : catalogue, unités, ports, traductions. Il ne doit dépendre d’aucune tranche.                                 |
 
 Une tranche peut utiliser le `model` d’une autre tranche, `city::store`, `city::binding`, `city::projection`,
-`restriction::store`, `shell::Target` et `shared`; `city/` et `restriction/` utilisent aussi `sync::model::mark`, et tout le reste accède à la synchronisation par `sync::hub`. Elle ne doit jamais accéder au modèle de vue, aux vues ni aux textes
+`restriction::store`, `shell::Target` et `shared`; les magasins et les éditeurs utilisent aussi les types de `sync::model` et `mark`, et tout le reste accède à la synchronisation par `sync::hub`. Elle ne doit jamais accéder au modèle de vue, aux vues ni aux textes
 d’une autre tranche.
 
 ## MVVM dans une tranche

@@ -24,7 +24,7 @@ The code is organised by feature, one folder per slice, not by layer. New code g
 | `shared/`      | The kernel: catalogue, units, ports, translations. It must not depend on any slice.              |
 
 A slice may use another slice's `model`, `city::store`, `city::binding`, `city::projection`, `restriction::store`,
-`shell::Target` and `shared`; `city/` and `restriction/` also use `sync::model::mark`, and everything else reaches the sync through `sync::hub`. It must never reach into another slice's view-model, views or text.
+`shell::Target` and `shared`; the stores and the editors also use the `sync::model` types and `mark`, and everything else reaches the sync through `sync::hub`. It must never reach into another slice's view-model, views or text.
 
 ## MVVM inside a slice
 

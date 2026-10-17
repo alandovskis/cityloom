@@ -144,8 +144,6 @@ pub trait Account {
     fn sign_out(&self, done: Answer<()>);
 }
 
-/// Whether the text after `#` is one the account's sign-in puts there; any other fragment is the page's own (an
-/// anchor) and is neither read nor removed.
 /// One record the server keeps for the person, as `GET /api/work` and `PUT /api/work` carry it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WorkRecord {
@@ -314,6 +312,8 @@ pub trait WorkSync {
     fn clear(&self, done: WorkAnswer<()>);
 }
 
+/// Whether the text after `#` is one the account's sign-in puts there; any other fragment is the page's own (an
+/// anchor) and is neither read nor removed.
 pub fn is_account_fragment(fragment: &str) -> bool {
     fragment.starts_with("account=")
 }

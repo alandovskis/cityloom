@@ -259,7 +259,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Account page | Delete (an account) | Supprimer |  |
 | Account page | Store on the server | Stocker sur le serveur |  |
 | Account page | Keep on this device | Conserver sur cet appareil |  |
-| Account page | This choice is recorded | Ce choix est enregistré | The choice is only recorded for now. |
+| Account page | This choice is recorded | Ce choix est enregistré |  |
 | Account page | for now | pour le moment |  |
 | Account page | the server copy | la copie sur le serveur |  |
 | Account page | Encrypted / Not encrypted | Chiffré / Non chiffré | As the accounts' `chiffré`. |

@@ -533,7 +533,7 @@ mod tests {
     #[test]
     fn a_reload_keeps_the_selected_piece_and_a_drag_under_way_that_the_sync_did_not_touch_goes_on() {
         use crate::sync::hub;
-        use crate::sync::model::{Change, Id, Kind, Origin};
+        use crate::sync::model::{Change, Origin};
         hub::reset();
         let (r, binding) = city_rig();
         r.vm.watch_sync();
@@ -552,7 +552,6 @@ mod tests {
         assert_eq!(r.vm.core.read(|e| e.snapshot()), dragged);
         r.vm.end_gesture(true);
         assert!(r.vm.view_now().can_undo, "the drag is still one undoable edit");
-        let _ = Id::new(Kind::Street, "unused");
     }
 
     #[test]
@@ -595,13 +594,11 @@ mod tests {
         hub::reset();
         let (r, binding) = city_rig();
         r.vm.watch_sync();
-        let uid = first(&r.vm);
         r.vm.edit(|e| e.begin_gesture());
         r.time.advance(1_000); // nothing waits to be written
         assert_eq!(r.time.pending(), 0);
         remote_edit(&binding);
         // the drag has not changed anything yet, so the city's newer street wins
-        let _ = uid;
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert!(!r.vm.quiet(|e| e.resize_boundary(0, 50)), "the drag's next step is refused");
         let reloaded = r.vm.core.read(|e| e.snapshot());
