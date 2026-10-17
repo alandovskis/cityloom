@@ -3,9 +3,10 @@
 //! thread, so a thread-local is enough (tests run each on a thread of their own, and `reset` clears it).
 
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
-use crate::sync::model::Change;
+use crate::sync::model::{Change, Report};
+use crate::sync::vm::SyncVm;
 
 type Flush = Rc<dyn Fn()>;
 type Applied = Rc<dyn Fn(&[Change])>;
@@ -15,6 +16,8 @@ struct Hub {
     listeners: Vec<(Flush, Applied)>,
     /// Who hears of a mark, by the storage the mark was made in.
     marked: Vec<(usize, Rc<dyn Fn()>)>,
+    /// The page's sync view-model.
+    sync: Option<Weak<SyncVm>>,
 }
 
 thread_local! {
@@ -76,6 +79,38 @@ pub fn marked(key: usize) {
     let all: Vec<Rc<dyn Fn()>> = HUB.with(|h| h.borrow().marked.iter().filter(|(k, _)| *k == key).map(|(_, f)| f.clone()).collect());
     for f in all {
         f();
+    }
+}
+
+/// The page's sync view-model.
+pub fn install(vm: &Rc<SyncVm>) {
+    HUB.with(|h| h.borrow_mut().sync = Some(Rc::downgrade(vm)));
+}
+
+pub fn current() -> Option<Rc<SyncVm>> {
+    HUB.with(|h| h.borrow().sync.as_ref().and_then(Weak::upgrade))
+}
+
+/// The person just chose to store their work on the server: merge it with the account's, then tell `done` what
+/// happened. The Account page calls this instead of reaching into the view-model.
+pub fn enable(user: &str, done: Box<dyn FnOnce(Report)>) {
+    match current() {
+        Some(vm) => vm.enable(user, done),
+        None => done(Report::default()),
+    }
+}
+
+/// Storage on the server was turned off: stop, and clear the sync state (the browser's work stays).
+pub fn disable() {
+    if let Some(vm) = current() {
+        vm.disable();
+    }
+}
+
+/// The person signed out or the account is gone: stop; what waits stays marked.
+pub fn stop() {
+    if let Some(vm) = current() {
+        vm.stop();
     }
 }
 

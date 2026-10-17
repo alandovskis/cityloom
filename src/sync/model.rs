@@ -344,6 +344,14 @@ pub fn next_batch(doc: &SyncDoc, body_of: &dyn Fn(&Id) -> Option<Value>, usable:
     out
 }
 
+/// What one sync did: whether it got to the end, and how many places went each way.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Report {
+    pub ok: bool,
+    pub sent: usize,
+    pub received: usize,
+}
+
 /// Where a record changed on this device, for whoever shows the person: the server's record replaced the copy
 /// (`Remote`), or the person's own waiting change lost to a later one (`Replaced`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

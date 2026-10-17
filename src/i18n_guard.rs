@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// The `.rs` files of `account`, `map`, `place`, `junction`, `city` and `restriction` that are not in `MIGRATED`, and why. Every other
+/// The `.rs` files of `account`, `map`, `place`, `junction`, `city`, `restriction` and `sync` that are not in `MIGRATED`, and why. Every other
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
@@ -15,6 +15,7 @@ const LEFT_OUT: &[(&str, &str)] = &[
     ("src/restriction/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
     ("src/account/tests.rs", "test-only"),
+    ("src/sync/tests.rs", "test-only"),
     ("src/map/tests.rs", "test-only"),
     ("src/junction/tests.rs", "test-only"),
     ("src/junction/model/fixtures.rs", "test-only"),
@@ -36,6 +37,9 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/street/text.rs", include_str!("street/text.rs")),
     ("src/sync/local.rs", include_str!("sync/local.rs")),
     ("src/sync/hub.rs", include_str!("sync/hub.rs")),
+    ("src/sync/mod.rs", include_str!("sync/mod.rs")),
+    ("src/sync/text.rs", include_str!("sync/text.rs")),
+    ("src/sync/vm.rs", include_str!("sync/vm.rs")),
     ("src/sync/model.rs", include_str!("sync/model.rs")),
     ("src/street/notes.rs", include_str!("street/notes.rs")),
     ("src/street/page.rs", include_str!("street/page.rs")),
@@ -628,7 +632,7 @@ fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
     let mut files = Vec::new();
-    for slice in ["account", "map", "place", "junction", "city", "restriction"] {
+    for slice in ["account", "map", "place", "junction", "city", "restriction", "sync"] {
         rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
     }
     let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();
