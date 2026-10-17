@@ -1,12 +1,13 @@
 use cityloom_server::accounts::{self, Claims, Repo};
 use cityloom_server::crypto::{LookupKey, MasterKeys};
 use cityloom_server::db::PgRepo;
+use cityloom_server::work::{Id, Kind, Put, WorkRepo};
 use sqlx::{Column, PgPool, Row, TypeInfo, ValueRef};
 
 /// Every column of every row of every table of the schema, as the raw bytes Postgres sends.
 async fn everything(pool: &PgPool) -> Vec<(String, Vec<u8>)> {
     let mut out = Vec::new();
-    for table in ["users", "identities", "sessions"] {
+    for table in ["users", "identities", "sessions", "work"] {
         for row in sqlx::query(sqlx::AssertSqlSafe(format!("select * from {table}"))).fetch_all(pool).await.unwrap() {
             for (i, col) in row.columns().iter().enumerate() {
                 let raw = row.try_get_raw(i).unwrap();
@@ -40,8 +41,23 @@ async fn no_row_holds_anything_the_person_signed_in_with(pool: PgPool) {
     accounts::set_storage(&r, ada, true).await.unwrap();
     let now = time::OffsetDateTime::now_utc();
     r.create_session([42; 32], ada, now, now + time::Duration::days(30)).await.unwrap();
+    r.push(
+        ada,
+        vec![Put {
+            id: Id { kind: Kind::Street, key: "w1~n2~n3".into() },
+            base_rev: 0,
+            edited_at: now,
+            deleted: false,
+            body: Some(br#"{"note":"CITYLOOM-MARKER-WORK-BODY"}"#.to_vec()),
+        }],
+        now,
+    )
+    .await
+    .unwrap();
 
     let needles = [
+        "CITYLOOM-MARKER-WORK-BODY",
+        "note",
         "Ada Quillfeather",
         "adaq_osm_name",
         "ada.quillfeather@example.org",
