@@ -178,7 +178,7 @@ test("a street with opposing lanes shows yellow paint in 2.5D, and symbols in pl
     .first()
     .evaluate((el) => getComputedStyle(el).pointerEvents);
   expect(pointer).toBe("none");
-  // And the paint follows the theme tokens, in both themes: yellow here, with a dark hairline on the light one.
+  // And the paint follows the theme tokens, in both themes: yellow here, with the dark hairline in both.
   const yellowPaint = page.locator("#drawing .iso-paint.yellow").first();
   const look = () =>
     yellowPaint.evaluate((el) => {
@@ -186,11 +186,23 @@ test("a street with opposing lanes shows yellow paint in 2.5D, and symbols in pl
       return [s.fill, s.stroke];
     });
   await page.emulateMedia({ colorScheme: "light" });
-  expect(await look()).toEqual(["rgb(227, 166, 0)", "rgb(43, 51, 59)"]);
+  expect(await look()).toEqual(["rgb(227, 166, 0)", "rgb(16, 21, 26)"]);
   await page.emulateMedia({ colorScheme: "dark" });
   const [darkFill, darkEdge] = await look();
   expect(darkFill).toBe("rgb(240, 192, 46)");
-  expect(darkEdge).not.toBe("rgb(43, 51, 59)");
+  expect(darkEdge, "the hairline is in both themes: the materials are the same colour in either").toBe(
+    "rgb(16, 21, 26)",
+  );
+  // A material is the same colour in both themes, and so is its pattern.
+  const road = () =>
+    page
+      .locator("#drawing .iso-piece .iso-top")
+      .first()
+      .evaluate((el) => getComputedStyle(el).fill);
+  await page.emulateMedia({ colorScheme: "light" });
+  const lightRoad = await road();
+  await page.emulateMedia({ colorScheme: "dark" });
+  expect(await road()).toBe(lightRoad);
   // In forced colours the paint is the text colour and the roadway under it is not.
   await page.emulateMedia({ forcedColors: "active" });
   const forced = await page.evaluate(() => {

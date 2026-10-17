@@ -52,24 +52,56 @@ mod tests {
         (x.max(y) + 0.05) / (x.min(y) + 0.05)
     }
 
-    /// `(light, dark)` of the token `--name: light-dark(#..., #...)` in a stylesheet.
-    fn token(css: &str, name: &str) -> (String, String) {
-        let at = css.find(&format!("--{name}: light-dark(")).unwrap_or_else(|| panic!("--{name}")) + name.len() + 15;
-        let mut parts = css[at..css[at..].find(')').unwrap() + at].split(", ");
-        (parts.next().unwrap().to_string(), parts.next().unwrap().to_string())
+    /// `(light, dark)` of the token `--name` in a stylesheet: `light-dark(#.., #..)`, or one colour for both themes.
+    /// A value that is no `#rrggbb` (`transparent`) is `None`.
+    fn token(css: &str, name: &str) -> (Option<String>, Option<String>) {
+        let at = css.find(&format!("--{name}: ")).unwrap_or_else(|| panic!("--{name}")) + name.len() + 4;
+        let value = &css[at..at + css[at..].find(';').unwrap()];
+        let hex = |v: &str| Some(v.trim().to_string()).filter(|v| v.starts_with('#') && v.len() == 7);
+        match value.strip_prefix("light-dark(") {
+            Some(rest) => {
+                let mut parts = rest.trim_end_matches(')').split(", ");
+                (hex(parts.next().unwrap()), hex(parts.next().unwrap()))
+            }
+            None => (hex(value), hex(value)),
+        }
     }
 
     #[test]
-    fn the_paint_keeps_3_to_1_against_every_materials_base_colour_in_both_themes() {
-        let (app, editor) = (include_str!("../../../web/app.css"), include_str!("../../../web/editor.css"));
-        let edge = token(editor, "iso-paint-edge").0;
+    fn a_material_is_one_colour_in_both_themes() {
+        let app = include_str!("../../../web/app.css");
         for m in crate::shared::catalogue::MATERIALS {
-            let (light, dark) = token(app, &format!("mat-{}", m.id));
+            for name in [format!("mat-{}", m.id), format!("mat-{}-line", m.id), format!("mat-{}-alt", m.id)] {
+                let (light, dark) = token(app, &name);
+                assert!(light.is_some() && light == dark, "--{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_outlines_are_seen_on_every_material() {
+        let css = include_str!("../../../web/editor.css");
+        // A halo of the panel's colour keeps the hover and the selection outlines seen on any material.
+        for rule in [".iso-piece:hover .iso-top {", ".iso-sel,\n#drawing .iso .sel-box {"] {
+            let at = css.find(rule).unwrap_or_else(|| panic!("{rule}"));
+            assert!(css[at..at + css[at..].find('}').unwrap()].contains("drop-shadow(0 0 1px var(--panel))"), "{rule}");
+        }
+    }
+
+    #[test]
+    fn the_paint_keeps_3_to_1_against_every_materials_colour_in_both_themes() {
+        let (app, editor) = (include_str!("../../../web/app.css"), include_str!("../../../web/editor.css"));
+        let (edge_light, edge_dark) = token(editor, "iso-paint-edge");
+        for m in crate::shared::catalogue::MATERIALS {
+            let (mat, _) = token(app, &format!("mat-{}", m.id));
+            let mat = mat.unwrap();
             for paint in ["white", "yellow"] {
                 let (pl, pd) = token(editor, &format!("iso-paint-{paint}"));
-                // Light: the paint's fill or the dark hairline round it; dark: the fill alone, which has no hairline.
-                assert!(contrast(&pl, &light).max(contrast(&edge, &light)) >= 3.0, "{} {paint} light", m.id);
-                assert!(contrast(&pd, &dark) >= 3.0, "{} {paint} dark", m.id);
+                // The paint's fill, or the hairline round it, is 3:1 against the surface.
+                for (theme, fill, edge) in [("light", pl, &edge_light), ("dark", pd, &edge_dark)] {
+                    let best = [fill, edge.clone()].iter().flatten().map(|c| contrast(c, &mat)).fold(1.0, f64::max);
+                    assert!(best >= 3.0, "{} {paint} {theme}: {best:.2}", m.id);
+                }
             }
         }
     }

@@ -930,12 +930,12 @@ mod tests {
         let s = svg(&walked());
         let f = s.frame;
         let at = s.markup.find("id=\"iso-m-asphalt\"").expect("the drawing carries the patterns");
-        let tag = &s.markup[s.markup[..at].rfind("<pattern").unwrap()..at];
+        let start = s.markup[..at].rfind("<pattern").unwrap();
+        let tag = &s.markup[start..start + s.markup[start..].find('>').unwrap()];
         let n: Vec<f64> = tag.split("matrix(").nth(1).unwrap().split(')').next().unwrap().split(' ').map(|x| x.parse().unwrap()).collect();
         // A unit step along the plan's x lands where `at` puts it, from the origin.
         let (o, x, y) = (f.at((0.0, 0.0), 0.0), f.at((1.0, 0.0), 0.0), f.at((0.0, 1.0), 0.0));
-        let k = crate::shared::iso::ground::MM_PER_UNIT;
-        for (got, want) in [(n[0], (x.0 - o.0) * k), (n[1], (x.1 - o.1) * k), (n[2], (y.0 - o.0) * k), (n[3], (y.1 - o.1) * k), (n[4], o.0), (n[5], o.1)] {
+        for (got, want) in [(n[0], x.0 - o.0), (n[1], x.1 - o.1), (n[2], y.0 - o.0), (n[3], y.1 - o.1), (n[4], o.0), (n[5], o.1)] {
             assert!((got - want).abs() < 0.01, "{n:?}");
         }
     }

@@ -218,9 +218,9 @@ mod tests {
         let m = drawn(&e);
         for mat in MATERIALS {
             let at = m.find(&format!("id=\"iso-m-{}\"", mat.id)).expect("every material has a pattern");
-            let tag = &m[m[..at].rfind("<pattern").unwrap()..at];
+            let start = m[..at].rfind("<pattern").unwrap();
+            let tag = &m[start..start + m[start..].find('>').unwrap()];
             assert!(tag.contains("patternTransform=\"matrix("), "{tag}");
-            assert!(m[at..].starts_with(&format!("id=\"iso-m-{}\"", mat.id)));
         }
         // Across the pattern runs along the street's x; along it recedes up and right as the projection does.
         let at = m.find("id=\"iso-m-asphalt\"").unwrap();
