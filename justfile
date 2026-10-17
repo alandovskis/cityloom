@@ -84,6 +84,10 @@ sonar-reports:
 prepare *args:
     ./scripts/prepare.py {{args}}
 
+# Pack web/data/metro and web/data/basemap into data/montreal.cityloom (`just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Arguments go to `cityloom_prepare pack`.
+pack *args:
+    cargo run --release -q -p cityloom_prepare -- pack {{args}}
+
 # Serve the pages at http://127.0.0.1:8137/ (build first). The server answers range requests, as the map's tiles need.
 serve:
     cargo run -p cityloom_server
