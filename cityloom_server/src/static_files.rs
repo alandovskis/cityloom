@@ -23,7 +23,7 @@ use axum::http::header::{
     LAST_MODIFIED, RANGE, VARY,
 };
 use axum::http::uri::PathAndQuery;
-use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri};
+use axum::http::{HeaderMap, HeaderValue, Method, StatusCode, Uri};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, percent_decode_str, utf8_percent_encode};
@@ -207,6 +207,13 @@ fn drop_conditions(headers: &mut HeaderMap) {
     }
 }
 
+/// Whether an `If-None-Match` list names the tag, by weak comparison (RFC 9110 13.1.2): `W/` is ignored, `*` is any.
+fn matches_tag(list: &str, etag: &str) -> bool {
+    let opaque = |t: &str| t.trim().trim_start_matches("W/").to_string();
+    let wanted = opaque(etag);
+    list.split(',').any(|t| t.trim() == "*" || opaque(t) == wanted)
+}
+
 /// A page with its build filled in, as a whole answer with a validator of its own.
 async fn fill_in(res: Response, build: &str, if_none_match: Option<HeaderValue>) -> Response {
     let (mut parts, body) = res.into_parts();
@@ -215,12 +222,13 @@ async fn fill_in(res: Response, build: &str, if_none_match: Option<HeaderValue>)
         Ok(text) => text.replace(BUILD_TOKEN, build).into_bytes(),
         Err(_) => bytes.to_vec(),
     };
-    let etag = format!("\"{}\"", &hex::encode(Sha256::digest(&bytes))[..16]);
+    // Weak: the same page is sent in several encodings, and a proxy may re-encode it.
+    let etag = format!("W/\"{}\"", &hex::encode(Sha256::digest(&bytes))[..16]);
     for name in [CONTENT_LENGTH, LAST_MODIFIED, CONTENT_RANGE] {
         parts.headers.remove(name);
     }
     parts.headers.insert(ETAG, HeaderValue::from_str(&etag).unwrap_or_else(|_| HeaderValue::from_static("\"\"")));
-    if if_none_match.as_ref().and_then(|v| v.to_str().ok()).is_some_and(|v| v.split(',').any(|t| t.trim() == etag)) {
+    if if_none_match.as_ref().and_then(|v| v.to_str().ok()).is_some_and(|v| matches_tag(v, &etag)) {
         parts.status = StatusCode::NOT_MODIFIED;
         return Response::from_parts(parts, Body::empty());
     }
@@ -261,8 +269,13 @@ async fn apply(State(site): State<Arc<Site>>, mut req: Request, next: Next) -> R
     }
     let page = is_page(&path);
     let if_none_match = req.headers().get(IF_NONE_MATCH).cloned();
+    // A HEAD on a page is answered from the page a GET would get, so its length and tag are that page's.
+    let head = page && req.method() == Method::HEAD;
     if page {
         drop_conditions(req.headers_mut());
+        if head {
+            *req.method_mut() = Method::GET;
+        }
     }
     // A list of ranges is not supported: the whole file is answered.
     if req.headers().get(RANGE).and_then(|v| v.to_str().ok()).is_some_and(|v| v.contains(',')) {
@@ -277,6 +290,9 @@ async fn apply(State(site): State<Arc<Site>>, mut req: Request, next: Next) -> R
     }
     if found && page {
         res = fill_in(res, &build, if_none_match).await;
+        if head {
+            *res.body_mut() = Body::empty();
+        }
     }
     let cache = match (kept && versioned, cache_for(&path)) {
         (true, _) => HeaderValue::from_static(IMMUTABLE),
@@ -286,13 +302,19 @@ async fn apply(State(site): State<Arc<Site>>, mut req: Request, next: Next) -> R
     let headers = res.headers_mut();
     headers.insert(CACHE_CONTROL, cache);
     headers.insert(ACCEPT_RANGES, HeaderValue::from_static("bytes"));
-    headers.append(VARY, HeaderValue::from_static("accept-encoding"));
+    // ServeDir already says it when it can choose a precompressed copy.
+    if !headers.get_all(VARY).iter().any(|v| v.to_str().is_ok_and(|v| v.to_ascii_lowercase().contains("accept-encoding"))) {
+        headers.append(VARY, HeaderValue::from_static("accept-encoding"));
+    }
     res
 }
 
 /// What is worth compressing on the fly: text and the WebAssembly modules. The tiles, the glyphs and the basemap are
 /// already compressed, or do not compress, and are read in ranges.
-fn compressible(headers: &HeaderMap) -> bool {
+fn compressible(status: StatusCode, headers: &HeaderMap) -> bool {
+    if status != StatusCode::OK {
+        return false;
+    }
     let kind = headers.get(CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
     ["text/", "application/json", "application/wasm", "image/svg+xml"].iter().any(|k| kind.starts_with(k))
 }
@@ -301,7 +323,8 @@ pub fn router(root: PathBuf, cache_control: String) -> Router {
     let cache_control = HeaderValue::from_str(&cache_control).unwrap_or_else(|_| HeaderValue::from_static("no-store"));
     let site = Arc::new(Site { cache_control, build: Build::new(root.clone()) });
     let files = ServeDir::new(root).append_index_html_on_directories(true).precompressed_br().precompressed_gzip();
-    let compression =
-        CompressionLayer::new().quality(CompressionLevel::Fastest).compress_when(|_, _, headers: &HeaderMap, _: &axum::http::Extensions| compressible(headers));
+    let compression = CompressionLayer::new()
+        .quality(CompressionLevel::Fastest)
+        .compress_when(|status: StatusCode, _, headers: &HeaderMap, _: &axum::http::Extensions| compressible(status, headers));
     Router::new().fallback_service(files).layer(middleware::from_fn_with_state(site, apply)).layer(compression)
 }
