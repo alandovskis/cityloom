@@ -421,3 +421,45 @@ async fn a_path_that_climbs_out_from_under_the_build_is_refused_or_kept_inside()
     // A collapsed path that stays under the build is the file it names.
     assert_eq!(get(&router, &format!("/v/{id}/pkg/../app.css"), None).await.0, StatusCode::OK);
 }
+
+fn age(path: std::path::PathBuf, seconds_ago: u64) {
+    let file = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+    file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(seconds_ago)).unwrap();
+}
+
+/// A compressed copy that is older than its file is from another build of it: sending it under the build's name,
+/// kept for a year, would pair the glue with the wrong module.
+#[tokio::test]
+async fn a_compressed_copy_older_than_its_file_is_not_sent() {
+    let (d, router) = code_site();
+    let wasm = d.path().join("pkg/glue_bg.wasm");
+    std::fs::write(d.path().join("pkg/glue_bg.wasm.br"), b"STALE-BROTLI").unwrap();
+    std::fs::write(d.path().join("pkg/glue_bg.wasm.gz"), b"STALE-GZIP").unwrap();
+    age(d.path().join("pkg/glue_bg.wasm.br"), 100);
+    age(d.path().join("pkg/glue_bg.wasm.gz"), 100);
+    age(wasm.clone(), 10);
+    let id = build_id(&get(&router, "/map.html", None).await.2);
+    for path in ["/pkg/glue_bg.wasm".to_string(), format!("/v/{id}/pkg/glue_bg.wasm")] {
+        for (accept, magic) in [("br, gzip", None), ("gzip", Some([0x1f, 0x8b]))] {
+            let (status, headers, body) = get_with(&router, &path, &[("accept-encoding", accept)]).await;
+            assert_eq!(status, StatusCode::OK, "{path}");
+            assert!(!body.starts_with(b"STALE"), "{path} for {accept}: the old copy was sent");
+            assert!(headers.get(header::CONTENT_ENCODING).is_some(), "{path}: compressed on the fly instead");
+            if let Some(magic) = magic {
+                assert_eq!(body[..2], magic, "{path}");
+            }
+        }
+    }
+    // A copy made after the file is sent as it is.
+    age(d.path().join("pkg/glue_bg.wasm.br"), 1);
+    age(wasm.clone(), 10);
+    // (the stale gzip is still ignored: a client that takes only gzip gets the file compressed on the fly)
+    let (_, _, body) = get_with(&router, "/pkg/glue_bg.wasm", &[("accept-encoding", "gzip")]).await;
+    assert!(!body.starts_with(b"STALE"));
+    age(d.path().join("pkg/glue_bg.wasm.gz"), 1);
+    age(wasm, 10);
+    let (_, headers, body) = get_with(&router, "/pkg/glue_bg.wasm", &[("accept-encoding", "gzip")]).await;
+    assert_eq!((headers[header::CONTENT_ENCODING].to_str().unwrap(), body), ("gzip", b"STALE-GZIP".to_vec()));
+    let (_, headers, body) = get_with(&router, "/pkg/glue_bg.wasm", &[("accept-encoding", "br, gzip")]).await;
+    assert_eq!((headers[header::CONTENT_ENCODING].to_str().unwrap(), body), ("br", b"STALE-BROTLI".to_vec()));
+}
