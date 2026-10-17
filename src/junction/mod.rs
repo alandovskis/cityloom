@@ -144,5 +144,7 @@ pub fn open_junction(node: u32) -> Option<Plan> {
     let junction = store.open().junction_editor(node, store.region())?;
     let place = Place::Junction(node);
     let i18n = page_i18n(&ports);
-    Some(Plan(vm::JunctionVm::new(ports, i18n, junction, Some(CityBinding { store, place }))))
+    let vm = vm::JunctionVm::new(ports, i18n, junction, Some(CityBinding { store, place }));
+    vm.watch_sync();
+    Some(Plan(vm))
 }

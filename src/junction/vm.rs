@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::city::binding::CityBinding;
+use crate::city::binding::{CityBinding, Place};
 use crate::junction::frame::Frame;
 use crate::junction::model::{Junction, Refusal, Target};
 use crate::junction::read_model::JView;
@@ -18,6 +18,7 @@ use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
 use crate::shared::said::say_now;
 use crate::shared::units::Units;
+use crate::sync::model::{Change, Kind, Origin};
 
 impl Presents for Junction {
     type View = JView;
@@ -254,6 +255,30 @@ impl JunctionVm {
         self.ports.announcer.say(&text::sample_text(&self.view_now(), &self.i18n));
     }
 
+    /// As `StreetVm::watch_sync`.
+    pub fn watch_sync(self: &Rc<Self>) {
+        crate::sync::hub::watch(self, Self::flush, Self::on_synced);
+    }
+
+    /// A sync changed junctions or streets: the junction is drawn from both, so it is read again, and shown if it
+    /// differs (the selection stays if it is still there).
+    fn on_synced(&self, changes: &[Change]) {
+        let Some(binding) = &self.binding else { return };
+        let Place::Junction(node) = binding.place else { return };
+        if !changes.iter().any(|c| matches!(c.id.kind, Kind::Junction | Kind::Street)) {
+            return;
+        }
+        let Some(mut fresh) = binding.store.open().junction_editor(node, binding.store.region()) else { return };
+        if fresh.snapshot() == self.core.read(|j| j.snapshot()) {
+            return;
+        }
+        fresh.select(self.core.read(|j| j.selected));
+        let own = binding.record();
+        let replaced = changes.iter().any(|c| Some(&c.id) == own.as_ref() && c.origin == Origin::Replaced);
+        self.core.edit(|j| *j = fresh);
+        self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
+    }
+
     /// The page is being left: what is waiting to be kept is kept now.
     pub fn flush(&self) {
         if let Some(k) = &self.keeper {
@@ -327,6 +352,26 @@ mod tests {
     fn rig(sample: usize) -> Rig {
         let (ports, said, storage, time) = test_ports_with_time();
         Rig { vm: JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), Junction::new(sample), None), said, time, storage }
+    }
+
+    #[test]
+    fn a_junction_changed_by_a_sync_is_reloaded_and_announced() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Junction(node) = binding.place else { unreachable!() };
+        let mut j = binding.store.open().junction_editor(node, 0).unwrap();
+        let arm = j.current().arms[0].uid;
+        assert!(j.set_corner(arm, 7_000));
+        assert!(binding.store.write_junction(node, j.snapshot()));
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.edit(|j| j.current().arms[0].corner_mm), 7_000);
+        assert_eq!(r.said.take(), ["Updated from another device."]);
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert!(r.said.take().is_empty(), "nothing differs now");
     }
 
     fn city_rig() -> (Rig, CityBinding) {

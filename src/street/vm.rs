@@ -17,6 +17,7 @@ use crate::shared::ports::Ports;
 use crate::shared::units::Units;
 use crate::street::model::{Editor, View};
 use crate::street::text;
+use crate::sync::model::{Change, Kind, Origin};
 
 impl Presents for Editor {
     type View = View;
@@ -307,6 +308,34 @@ impl StreetVm {
         done
     }
 
+    /// Hears the sync, once, when the page opens: before a sync reads the stores this page writes what it holds, and
+    /// when a sync changed the city underneath it reloads the street (and says so).
+    pub fn watch_sync(self: &Rc<Self>) {
+        crate::sync::hub::watch(self, Self::flush, Self::on_synced);
+    }
+
+    /// A sync changed streets. If this one now differs from the city, the city's is shown (the selected piece stays
+    /// selected if it is still there); the street's own record losing to a later edit is said as that, anything else
+    /// as an update. The editor is replaced, so what the person could undo in this place is gone, and so is a drag
+    /// under way (a drag was flushed before the sync read the stores, so it is lost only when the city's street
+    /// differs from it).
+    fn on_synced(&self, changes: &[Change]) {
+        let Some(binding) = &self.binding else { return };
+        let Place::Street(edge) = binding.place else { return };
+        if !changes.iter().any(|c| c.id.kind == Kind::Street) {
+            return;
+        }
+        let Some(mut fresh) = binding.store.open().street_editor(edge, binding.store.region()) else { return };
+        if fresh.snapshot() == self.core.read(|e| e.snapshot()) {
+            return;
+        }
+        fresh.select(self.view_now().selected);
+        let own = binding.record();
+        let replaced = changes.iter().any(|c| Some(&c.id) == own.as_ref() && c.origin == Origin::Replaced);
+        self.core.edit(|e| *e = fresh);
+        self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
+    }
+
     /// The page is being left: what is waiting to be kept is kept now.
     pub fn flush(&self) {
         if let Some(k) = &self.keeper {
@@ -437,6 +466,87 @@ mod tests {
         let street = store.open().street_editor(edge, 0).unwrap();
         let binding = CityBinding { store, place: Place::Street(edge) };
         (Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), street, Some(binding.clone())), said, time, storage }, binding)
+    }
+
+    /// Another device's edit of the rig's street, applied to the city.
+    fn remote_edit(binding: &CityBinding) {
+        let Place::Street(edge) = binding.place else { unreachable!() };
+        let mut s = binding.store.open().street_editor(edge, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(binding.store.write_street(edge, s));
+    }
+
+    #[test]
+    fn a_street_changed_by_a_sync_is_reloaded_and_announced_and_one_that_did_not_change_is_left_alone() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Id, Kind, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let before = r.vm.edit(|e| e.snapshot().segments[0].width_mm);
+        remote_edit(&binding);
+        let own = binding.record().unwrap();
+        r.said.take();
+        hub::publish(&[Change { id: own.clone(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.edit(|e| e.snapshot().segments[0].width_mm), before - 100);
+        assert_eq!(r.said.take(), ["Updated from another device."]);
+        // the same news again changes nothing and says nothing
+        hub::publish(&[Change { id: own.clone(), origin: Origin::Remote }]);
+        assert!(r.said.take().is_empty());
+        // a change of another kind is none of this page's business
+        hub::publish(&[Change { id: Id::new(Kind::Rule, "r-1"), origin: Origin::Remote }]);
+        assert!(r.said.take().is_empty());
+    }
+
+    #[test]
+    fn a_street_whose_own_change_lost_says_so_and_in_french_when_the_page_is() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        remote_edit(&binding);
+        r.vm.i18n().set(Locale::FrCa);
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Replaced }]);
+        assert_eq!(r.said.take(), ["Votre modification de ce lieu a été remplacée par une plus récente."]);
+    }
+
+    #[test]
+    fn a_sync_asking_the_editor_to_flush_has_what_is_waiting_written_first() {
+        use crate::sync::hub;
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 100)));
+        assert_eq!(binding.store.open().view(0).edited, 0, "the save waits for its moment");
+        hub::flush();
+        assert_eq!(binding.store.open().view(0).edited, 1, "a sync is about to read the stores");
+    }
+
+    #[test]
+    fn a_reload_keeps_the_selected_piece_and_a_drag_under_way_that_the_sync_did_not_touch_goes_on() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Id, Kind, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let uid = first(&r.vm);
+        r.vm.select(Some(uid));
+        remote_edit(&binding);
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.view_now().selected, Some(uid), "the selection survives the reload");
+        // a drag under way: the sync flushes it first, so the city holds it and nothing differs
+        r.vm.edit(|e| e.begin_gesture());
+        assert!(r.vm.quiet(|e| e.nudge_width(uid, 100)));
+        hub::flush();
+        r.said.take();
+        hub::publish(&[Change { id: Id::new(Kind::Street, "other"), origin: Origin::Remote }]);
+        assert!(r.said.take().is_empty());
+        r.vm.end_gesture(true);
+        assert!(r.vm.view_now().can_undo, "the drag is still one undoable edit");
     }
 
     fn first(vm: &StreetVm) -> u32 {

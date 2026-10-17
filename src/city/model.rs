@@ -769,6 +769,16 @@ impl City {
         self.took_junctions.get(&node).map(String::as_str)
     }
 
+    /// The key street `edge` is kept under; None where it has none of its own.
+    pub fn street_key(&self, edge: u32) -> Option<String> {
+        self.street_keys[self.edge_index(edge)?].clone()
+    }
+
+    /// The same for the junction at `node`.
+    pub fn junction_key(&self, node: u32) -> Option<String> {
+        self.junction_keys[self.node_index(node)?].clone()
+    }
+
     fn edge_index(&self, uid: u32) -> Option<usize> {
         (uid as usize).checked_sub(1).filter(|&e| e < self.layout.edges.len())
     }
