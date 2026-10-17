@@ -468,6 +468,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("h-drawing", "the id of the street drawing's heading"),
     ("iso-shade-front", "the id of an SVG filter the 2.5D carries (street/iso/raised.rs)"),
     ("iso-shade-side", "the id of an SVG filter the 2.5D carries (street/iso/raised.rs)"),
+    ("iso-m", "the prefix of the ids of the 2.5D drawings' ground patterns (street/iso/raised.rs, junction/iso.rs)"),
     ("iso-shade-ramp", "the id of an SVG filter the junction's 2.5D carries (junction/iso.rs)"),
     ("signed-in", "an outcome the server puts in the address after #account="),
     ("already-linked", "an outcome the server puts in the address after #account="),

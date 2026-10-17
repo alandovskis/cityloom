@@ -36,7 +36,7 @@ pub use projection::{ARROW_AT_MM, MAX_HEIGHT, MIN_SOLID_PX, Projection, RECEDE_X
 pub use raised::{HEIGHTS, curb_height_mm, curb_top_mm, height_mm};
 
 use projection::points;
-use raised::{beside, shades, strips};
+use raised::{beside, materials, shades, strips};
 use solids::{Block, block, blocks};
 
 /// The 2.5D drawn, and the size it is drawn at.
@@ -86,7 +86,7 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let span = span_mm(v);
     let p = Projection::fit(width, span);
     let (w, l) = (span as f64, STRETCH_MM);
-    let mut out = format!("<defs>{}</defs>", shades());
+    let mut out = format!("<defs>{}{}</defs>", shades(), materials(&p));
     write!(out, "<polygon class=\"iso-ground\" points=\"{}\"/>", points(&p, &[(0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, 0.0, l), (0.0, 0.0, l)])).unwrap();
 
     let (flat, standing) = surface::split(strips(v));
@@ -122,9 +122,10 @@ pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
 #[cfg(test)]
 mod tests {
     use super::projection::{PAD, r};
+    use super::projection::{RECEDE_X, RECEDE_Y};
     use super::testing::{count, drawn, en, furnished, marked, one_way_bikes, top_of, xs, xs_ys};
     use super::*;
-    use crate::shared::catalogue::kind_index;
+    use crate::shared::catalogue::{KINDS, MATERIALS, kind_index};
     use crate::shared::i18n::Locale;
     use crate::street::model::Editor;
 
@@ -161,10 +162,76 @@ mod tests {
         let m = drawn(&e);
         assert_eq!(count(&m, "class=\"iso-top "), 6);
         assert_eq!(count(&m, "class=\"iso-piece\""), 6 + 2, "a group per piece and per curb");
-        assert_eq!(count(&m, "class=\"iso-top k-sidewalk\""), 2);
-        assert_eq!(count(&m, "fill=\"url(#h-travel)\""), 2);
+        assert_eq!(count(&m, "class=\"iso-top k-sidewalk mat-"), 2);
+        assert_eq!(count(&m, "fill=\"url(#iso-m-asphalt)\""), 4, "a top per travel lane and parking lane, in the material's pattern");
+        assert_eq!(count(&m, "fill=\"url(#h-travel)\""), 0, "the kind's hatch stays on the faces");
         assert_eq!(count(&m, "class=\"iso-ground\""), 1);
         assert!(!m.contains("NaN"));
+    }
+
+    /// The class attribute of the top face of the piece `uid`.
+    fn top_class(markup: &str, uid: u32) -> String {
+        let group = markup.split(&format!("<g class=\"iso-piece\" data-uid=\"{uid}\">")).nth(1).expect("the piece is drawn");
+        let at = group.find("class=\"iso-top ").expect("a top face") + 7;
+        group[at..at + group[at..].find('"').unwrap()].to_string()
+    }
+
+    #[test]
+    fn every_top_is_in_its_pieces_material_with_the_material_s_pattern_over_it() {
+        let e = Editor::new(0);
+        let v = e.view();
+        let m = drawn(&e);
+        for s in &v.segments {
+            let class = top_class(&m, s.uid);
+            assert!(class.contains(&format!("k-{} mat-{}", KINDS[s.kind].id, s.material)), "{class}");
+        }
+        // The pattern is the material's, and the kind's hatch is no longer on a top.
+        let sidewalk = v.segments[0].uid;
+        let group = m.split(&format!("<g class=\"iso-piece\" data-uid=\"{sidewalk}\">")).nth(1).unwrap();
+        let top = &group[group.find("class=\"iso-top ").unwrap()..];
+        assert!(top.contains(&format!("fill=\"url(#iso-m-{})\"", v.segments[0].material)));
+        assert!(!top.split("</g>").next().unwrap().contains("url(#h-sidewalk)") || top.contains("iso-front"), "only the faces keep the kind's hatch");
+    }
+
+    #[test]
+    fn a_piece_whose_material_changes_changes_its_top_and_nothing_else_of_its_class() {
+        let mut e = Editor::new(0);
+        let uid = e.view().segments[0].uid;
+        let kind = e.view().segments[0].kind;
+        let before = drawn(&e);
+        let other =
+            KINDS[kind].materials.iter().copied().find(|&i| MATERIALS[i].id != e.view().segments[0].material).expect("a sidewalk has a second material");
+        assert!(e.set_material(uid, other));
+        let after = drawn(&e);
+        assert_ne!(top_class(&before, uid), top_class(&after, uid));
+        assert!(top_class(&after, uid).ends_with(&format!("mat-{}", MATERIALS[other].id)));
+        assert!(after.contains(&format!("fill=\"url(#iso-m-{})\"", MATERIALS[other].id)));
+        // the faces keep the kind's tint
+        assert_eq!(count(&before, "class=\"iso-front k-sidewalk\""), count(&after, "class=\"iso-front k-sidewalk\""));
+    }
+
+    #[test]
+    fn the_patterns_lie_on_the_ground_in_the_drawings_oblique_projection() {
+        let e = Editor::new(0);
+        let v = e.view();
+        let p = Projection::fit(1050.0, span_mm(&v));
+        let m = drawn(&e);
+        for mat in MATERIALS {
+            let at = m.find(&format!("id=\"iso-m-{}\"", mat.id)).expect("every material has a pattern");
+            let tag = &m[m[..at].rfind("<pattern").unwrap()..at];
+            assert!(tag.contains("patternTransform=\"matrix("), "{tag}");
+            assert!(m[at..].starts_with(&format!("id=\"iso-m-{}\"", mat.id)));
+        }
+        // Across the pattern runs along the street's x; along it recedes up and right as the projection does.
+        let at = m.find("id=\"iso-m-asphalt\"").unwrap();
+        let start = m[..at].rfind("<pattern").unwrap();
+        let tag = &m[start..m[start..].find('>').unwrap() + start];
+        let t = tag.split("matrix(").nth(1).unwrap().split(')').next().unwrap();
+        let n: Vec<f64> = t.split(' ').map(|x| x.parse().unwrap()).collect();
+        assert_eq!(n.len(), 6);
+        assert!(n[0] > 0.0 && n[1] == 0.0, "across stays horizontal");
+        assert!((n[2] / n[0] - RECEDE_X).abs() < 1e-3 && (n[3] / n[0] + RECEDE_Y).abs() < 1e-3, "along recedes up and right: {n:?}");
+        assert!((n[4] - p.left).abs() < 0.01 && (n[5] - p.base).abs() < 0.01, "anchored at the ground's origin");
     }
 
     #[test]
@@ -189,7 +256,7 @@ mod tests {
         let mut e = Editor::new(0);
         e.add(kind_index("buffer").unwrap(), 3);
         let m = drawn(&e);
-        assert_eq!(count(&m, "class=\"iso-top k-buffer\""), 1);
+        assert_eq!(count(&m, "class=\"iso-top k-buffer mat-"), 1);
         assert_eq!(count(&m, "iso-front k-buffer") + count(&m, "iso-side k-buffer"), 0, "it stands no higher than the roadway");
         assert_eq!(count(&m, "class=\"iso-curb\""), 2, "only the two sidewalks' curbs");
         assert!(!m.contains("NaN"));
@@ -265,7 +332,8 @@ mod tests {
         // other pieces draw differently, and not only in some number.
         let tops = |e: &Editor| {
             let m = drawn(e);
-            let mut kinds: Vec<String> = m.split("class=\"iso-top k-").skip(1).map(|rest| rest.split('"').next().unwrap().to_string()).collect();
+            let mut kinds: Vec<String> =
+                m.split("class=\"iso-top k-").skip(1).map(|rest| rest.split('"').next().unwrap().split(' ').next().unwrap().to_string()).collect();
             kinds.sort();
             kinds
         };

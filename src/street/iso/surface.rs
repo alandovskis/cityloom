@@ -37,4 +37,40 @@ mod tests {
             assert!(standing.windows(2).all(|w| w[0].0 <= w[1].0));
         }
     }
+
+    /// A colour's relative luminance, from `#rrggbb` (WCAG 2.x).
+    fn luminance(hex: &str) -> f64 {
+        let c = |i: usize| {
+            let v = u8::from_str_radix(&hex[1 + 2 * i..3 + 2 * i], 16).unwrap() as f64 / 255.0;
+            if v <= 0.03928 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+        };
+        0.2126 * c(0) + 0.7152 * c(1) + 0.0722 * c(2)
+    }
+
+    fn contrast(a: &str, b: &str) -> f64 {
+        let (x, y) = (luminance(a), luminance(b));
+        (x.max(y) + 0.05) / (x.min(y) + 0.05)
+    }
+
+    /// `(light, dark)` of the token `--name: light-dark(#..., #...)` in a stylesheet.
+    fn token(css: &str, name: &str) -> (String, String) {
+        let at = css.find(&format!("--{name}: light-dark(")).unwrap_or_else(|| panic!("--{name}")) + name.len() + 15;
+        let mut parts = css[at..css[at..].find(')').unwrap() + at].split(", ");
+        (parts.next().unwrap().to_string(), parts.next().unwrap().to_string())
+    }
+
+    #[test]
+    fn the_paint_keeps_3_to_1_against_every_materials_base_colour_in_both_themes() {
+        let (app, editor) = (include_str!("../../../web/app.css"), include_str!("../../../web/editor.css"));
+        let edge = token(editor, "iso-paint-edge").0;
+        for m in crate::shared::catalogue::MATERIALS {
+            let (light, dark) = token(app, &format!("mat-{}", m.id));
+            for paint in ["white", "yellow"] {
+                let (pl, pd) = token(editor, &format!("iso-paint-{paint}"));
+                // Light: the paint's fill or the dark hairline round it; dark: the fill alone, which has no hairline.
+                assert!(contrast(&pl, &light).max(contrast(&edge, &light)) >= 3.0, "{} {paint} light", m.id);
+                assert!(contrast(&pd, &dark) >= 3.0, "{} {paint} dark", m.id);
+            }
+        }
+    }
 }

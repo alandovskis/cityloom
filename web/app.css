@@ -70,6 +70,16 @@
   --k-terrace: light-dark(#f1dca0, #7d6a30);
   --k-buffer: light-dark(#bdb8ae, #4d4a45);
   --k-streetlamp: light-dark(#d9dcc0, #5d6148);
+  /* The surface materials in 2.5D (street/iso/, junction/iso.rs): the base colour of a top, light then dark. Each keeps
+     the 3:1 the pavement paint needs against it (a test in street/iso/surface.rs reads these). */
+  --mat-asphalt: light-dark(#9aa2ab, #2c343c);
+  --mat-concrete: light-dark(#cfd4d9, #4a535c);
+  --mat-permeable: light-dark(#b9bfc6, #3b444d);
+  --mat-brick: light-dark(#c9826d, #7a4a3e);
+  --mat-grass: light-dark(#8fc27a, #3a6a35);
+  --mat-planted: light-dark(#88a86a, #3f5530);
+  --mat-gravel: light-dark(#c2b8a3, #5a5346);
+  --mat-trees: light-dark(#6aa58a, #2b5547);
 }
 
 :root[data-theme="light"] {

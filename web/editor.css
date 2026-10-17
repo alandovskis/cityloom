@@ -926,6 +926,39 @@ svg pattern circle {
 .iso-curb {
   fill: var(--iso-curb);
 }
+/* A top is the colour of its piece's material, over the kind's tint (`k-*`) that its faces keep. */
+.iso-top.mat-asphalt,
+.iso-flat.mat-asphalt {
+  fill: var(--mat-asphalt);
+}
+.iso-top.mat-concrete,
+.iso-flat.mat-concrete {
+  fill: var(--mat-concrete);
+}
+.iso-top.mat-permeable,
+.iso-flat.mat-permeable {
+  fill: var(--mat-permeable);
+}
+.iso-top.mat-brick,
+.iso-flat.mat-brick {
+  fill: var(--mat-brick);
+}
+.iso-top.mat-grass,
+.iso-flat.mat-grass {
+  fill: var(--mat-grass);
+}
+.iso-top.mat-planted,
+.iso-flat.mat-planted {
+  fill: var(--mat-planted);
+}
+.iso-top.mat-gravel,
+.iso-flat.mat-gravel {
+  fill: var(--mat-gravel);
+}
+.iso-top.mat-trees,
+.iso-flat.mat-trees {
+  fill: var(--mat-trees);
+}
 .iso-piece:hover .iso-top {
   stroke-width: 2;
 }
