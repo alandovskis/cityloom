@@ -1991,7 +1991,7 @@ dl.prov dd:last-child {
   font-size: 14px;
 }
 
-/* ---- the Make pedestrian menu -------------------------------------------------- */
+/* ---- the Transform menu -------------------------------------------------- */
 
 /* Fixed to the window like the Add menu, so the stage cannot clip it; the page sets its place. */
 .ped-menu {
@@ -2011,6 +2011,16 @@ dl.prov dd:last-child {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+.ped-menu .menu-h:not(:first-child) {
+  margin-top: 10px;
+}
+.transit-item {
+  grid-template-columns: 40px 1fr;
+}
+.transit-item .dirtag {
+  margin: 0;
+  text-align: center;
 }
 .keyhelp {
   display: none;

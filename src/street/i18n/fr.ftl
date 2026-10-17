@@ -325,6 +325,8 @@ unavailable-not-freeway = Pas pour une autoroute
 # Une rue piétonne (src/street/model.rs, page.rs, vm.rs).
 make-pedestrian-button = Rendre piétonne
 make-pedestrian-hint = Chaque voie de circulation, espace de stationnement, zone de chargement, voie réservée ou accotement devient le genre d’élément choisi.
+transform-button = Transformer
+transform-transit-hint = Réorganisez la rue selon l’une de ces mesures pour le transport en commun. Chacune reconstruit la chaussée en une seule modification annulable.
 rev-made-pedestrian = Rendue piétonne
 street-now-pedestrian = { $street } est maintenant une rue piétonne.
 street-traffic-again = { $street } accueille de nouveau la circulation.

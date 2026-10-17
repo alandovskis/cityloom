@@ -7,7 +7,8 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::city::model::EndView;
-use crate::shared::catalogue::{KINDS, PEDESTRIAN_KINDS, group_key, kind_index, kind_key};
+use crate::shared::atlas::name_key;
+use crate::shared::catalogue::{KINDS, group_key, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::provenance::Sources;
 use crate::shared::said::{self, hhmm};
@@ -344,7 +345,7 @@ pub fn menu_step(key: &str, at: Option<usize>, len: usize) -> Option<usize> {
     }
 }
 
-/// What the two menus (Add and Make pedestrian) share: the open flag, the button, the list and the selector of
+/// What the two menus (Add and Transform) share: the open flag, the button, the list and the selector of
 /// the list's items. The behaviour that differs (what counts as inside the widget) is passed to `listen` and
 /// `left_by`.
 #[derive(Clone, Copy)]
@@ -442,8 +443,8 @@ impl MenuParts {
     }
 }
 
-/// The widest the Make pedestrian list is drawn, in pixels (three rows need no more).
-const PED_MENU_WIDTH: f64 = 340.0;
+/// The widest the Transform list is drawn, in pixels (a measure's name wraps in it).
+const TRANSFORM_MENU_WIDTH: f64 = 380.0;
 
 /// The button that opens the list of pieces, and the list: arrows move through
 /// it, Escape closes it, and choosing a piece adds it after the selected one.
@@ -529,22 +530,26 @@ pub fn AddMenu(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// The menu that makes the street pedestrian: offered while the street has a motor piece, with the three things the
-/// space of its motor pieces can become. Choosing one is a single edit (`Editor::make_pedestrian`). Like the Add
-/// menu, the list is fixed to the window (so the stage cannot clip it) and kept inside it by `menu_box`; Escape
-/// closes it, the arrows move through it, and leaving it closes it.
+/// The Transform menu, one button for the things that change the whole street at once. It has up to two groups:
+/// Make pedestrian (while the street has a motor piece: the three things the space of its motor pieces can become,
+/// `Editor::make_pedestrian`) and Transit priority (only the Atlas measures the street can be arranged as and is not
+/// already, the Notes table's Arrange rows, `StreetVm::apply_measure`). A group with nothing in it is left out, and
+/// with neither the button is not shown. Choosing is one undoable edit and hands the focus to the drawing (whose keys
+/// edit the street); a refusal keeps it on the button. It is a WAI-ARIA menu button: the list is fixed to the
+/// window (so the stage cannot clip it) and kept inside it by `menu_box`; the arrows, Home and End move through the
+/// items, Escape closes it and returns to the button, and leaving it closes it.
 #[component]
-pub fn MakePedestrian(vm: Rc<StreetVm>) -> impl IntoView {
+pub fn Transform(vm: Rc<StreetVm>) -> impl IntoView {
     use leptos::web_sys::{FocusEvent, HtmlElement, KeyboardEvent};
 
     let w = SheetWatch::new(vm);
-    let parts = MenuParts::new(".ped-item");
+    let parts = MenuParts::new(".transform-item");
     let MenuParts { open, button, menu, .. } = parts;
     let wrap = NodeRef::<leptos::html::Div>::new();
     let close = move |refocus: bool| parts.close(refocus);
     // The widget is the wrapper: the button and the list.
     let inside = move |t: &leptos::web_sys::Element| wrap.get_untracked().is_some_and(|m| m.contains(Some(t)));
-    parts.listen(Some(PED_MENU_WIDTH), inside);
+    parts.listen(Some(TRANSFORM_MENU_WIDTH), inside);
     let menu_keys = move |e: KeyboardEvent| parts.keys(e);
     // Tabbing out of the widget closes the list; a press elsewhere is the window listener's.
     let focus_out = move |e: FocusEvent| {
@@ -552,52 +557,84 @@ pub fn MakePedestrian(vm: Rc<StreetVm>) -> impl IntoView {
             open.set(false);
         }
     };
-    let choices = move || {
-        PEDESTRIAN_KINDS
-            .iter()
-            .filter_map(|id| kind_index(id))
+    // After a choice: the drawing takes the focus when the street was changed, the button keeps it on a refusal.
+    let chosen = move |done: bool| {
+        close(false);
+        if done {
+            if let Some(wrap) = document().get_element_by_id("wrap") {
+                let _ = leptos::wasm_bindgen::JsCast::unchecked_into::<HtmlElement>(wrap).focus();
+            }
+        } else if let Some(b) = button.get_untracked() {
+            let _ = HtmlElement::from(b).focus();
+        }
+    };
+    let pedestrian = move |kinds: Vec<usize>| {
+        let items = kinds
+            .into_iter()
             .map(|k| {
                 let kind = &KINDS[k];
                 view! {
-                    <li>
-                        <button
-                            type="button"
-                            class="add-item ped-item"
-                            on:click=move |_| {
-                                close(false);
-                                // The button goes away with the traffic, so a made street hands the focus to the
-                                // drawing (whose keys edit the street); a refusal keeps it on the button.
-                                if w.edit(|e| e.make_pedestrian(k)) {
-                                    if let Some(wrap) = document().get_element_by_id("wrap") {
-                                        let _ = leptos::wasm_bindgen::JsCast::unchecked_into::<HtmlElement>(wrap).focus();
-                                    }
-                                } else if let Some(b) = button.get_untracked() {
-                                    let _ = HtmlElement::from(b).focus();
-                                }
-                            }
-                        >
+                    <li role="none">
+                        <button type="button" role="menuitem" tabindex="-1" class="add-item transform-item ped-item" on:click=move |_| chosen(w.edit(|e| e.make_pedestrian(k)))>
                             <span class="add-icon" inner_html=icon(kind.id)></span>
                             <b>{move || w.i18n().tr(&kind_key(kind.id), &Args::new())}</b>
                         </button>
                     </li>
                 }
             })
-            .collect_view()
+            .collect_view();
+        view! {
+            <div role="group" aria-labelledby="transform-ped-h">
+                <p class="menu-h" id="transform-ped-h">{say(w, "make-pedestrian-button")}</p>
+                <p class="hint">{say(w, "make-pedestrian-hint")}</p>
+                <ul class="ped-list" role="none">{items}</ul>
+            </div>
+        }
+    };
+    let transit = move |codes: Vec<&'static str>| {
+        let items = codes
+            .into_iter()
+            .map(|code| {
+                let name = move || w.i18n().tr(&name_key(code), &Args::new());
+                view! {
+                    <li role="none">
+                        <button
+                            type="button"
+                            role="menuitem"
+                            tabindex="-1"
+                            class="add-item transform-item transit-item"
+                            aria-label=move || w.i18n().tr("measure-arrange-label", &Args::new().str("code", code).str("name", name()))
+                            on:click=move |_| chosen(w.apply_measure(code))
+                        >
+                            <span class="dirtag">{code}</span>
+                            <b>{name}</b>
+                        </button>
+                    </li>
+                }
+            })
+            .collect_view();
+        view! {
+            <div role="group" aria-labelledby="transform-transit-h">
+                <p class="menu-h" id="transform-transit-h">{say(w, "st-transit-heading")}</p>
+                <p class="hint">{say(w, "transform-transit-hint")}</p>
+                <ul class="ped-list" role="none">{items}</ul>
+            </div>
+        }
     };
     view! {
         <div node_ref=wrap on:focusout=focus_out style="display: contents">
             {move || {
-                w.view()
-                    .has_motor
+                let choices = w.transform_menu();
+                (!choices.is_empty())
                     .then(|| {
                         view! {
                             <button
                                 type="button"
-                                id="make-pedestrian-btn"
+                                id="transform-btn"
                                 class="btn"
-                                aria-haspopup="true"
+                                aria-haspopup="menu"
                                 aria-expanded=move || open.get().to_string()
-                                aria-controls="make-pedestrian-menu"
+                                aria-controls="transform-menu"
                                 node_ref=button
                                 on:click=move |_| open.update(|o| *o = !*o)
                                 on:keydown=move |e: KeyboardEvent| {
@@ -607,12 +644,11 @@ pub fn MakePedestrian(vm: Rc<StreetVm>) -> impl IntoView {
                                     }
                                 }
                             >
-                                {say(w, "make-pedestrian-button")}
+                                {say(w, "transform-button")}
                             </button>
-                            <div id="make-pedestrian-menu" class="menu ped-menu" hidden=move || !open.get() node_ref=menu on:keydown=menu_keys>
-                                <p class="menu-h">{say(w, "make-pedestrian-button")}</p>
-                                <p class="hint">{say(w, "make-pedestrian-hint")}</p>
-                                <ul class="ped-list">{choices()}</ul>
+                            <div id="transform-menu" class="menu ped-menu" role="menu" aria-labelledby="transform-btn" hidden=move || !open.get() node_ref=menu on:keydown=menu_keys>
+                                {(!choices.pedestrian.is_empty()).then(|| pedestrian(choices.pedestrian.clone()))}
+                                {(!choices.transit.is_empty()).then(|| transit(choices.transit.clone()))}
                             </div>
                         }
                     })

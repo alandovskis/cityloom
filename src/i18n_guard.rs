@@ -464,7 +464,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("time-note", "the id of an element of the street page"),
     ("welcome-slot", "the id of an element of the street page"),
     ("view-mode-slot", "the id of an element of the street page"),
-    ("pedestrian-slot", "the id of the element of the street page the Make pedestrian menu mounts into"),
+    ("transform-slot", "the id of the element of the street page the Transform menu mounts into"),
     ("h-drawing", "the id of the street drawing's heading"),
     ("iso-shade-front", "the id of an SVG filter the 2.5D carries (street/iso/raised.rs)"),
     ("iso-shade-side", "the id of an SVG filter the 2.5D carries (street/iso/raised.rs)"),
