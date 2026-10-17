@@ -1,0 +1,35 @@
+name: Labels
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/labels.yml]
+  workflow_dispatch:
+
+# Two runs never sync at once, and a later one waits for the earlier to finish.
+concurrency:
+  group: labels
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+  contents: read
+
+# Makes the repository's labels what .github/labels.yml says: creates, renames (`from_name`, so the labels already
+# on issues follow) and updates them, and deletes any that is not listed there. Actions are pinned to a commit;
+# Dependabot proposes the updates.
+jobs:
+  sync:
+    name: Sync the labels
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: crazy-max/ghaction-github-labeler@548a7c3603594ec17c819e1239f281a3b801ab4d # v6.0.0
+        with:
+          yaml-file: .github/labels.yml
+          # Every label to keep is listed in the file (Dependabot's four, duplicate, invalid and wontfix), so
+          # whatever is not listed (good first issue, help wanted) is deleted.
+          skip-delete: false
