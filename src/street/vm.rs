@@ -9,7 +9,7 @@ use leptos::prelude::*;
 use crate::city::binding::{CityBinding, Place};
 use crate::restriction::model::{Finding, Restriction};
 use crate::restriction::store::RestrictionStore;
-use crate::shared::catalogue::StreetClass;
+use crate::shared::catalogue::{PEDESTRIAN_KINDS, StreetClass, kind_index};
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
@@ -82,6 +82,22 @@ fn areas_holding(ports: &Ports, binding: Option<&CityBinding>) -> Vec<Restrictio
         return Vec::new();
     };
     RestrictionStore::new(ports.storage.clone()).all().into_iter().filter(|r| r.holds(&shape, &projection)).collect()
+}
+
+/// The choices of the Transform menu (`StreetVm::transform_menu`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransformMenu {
+    /// Catalogue indices of the kinds the motor pieces can become.
+    pub pedestrian: Vec<usize>,
+    /// Atlas codes of the measures the street can be arranged as.
+    pub transit: Vec<&'static str>,
+}
+
+impl TransformMenu {
+    /// Nothing to offer: the button is not shown.
+    pub fn is_empty(&self) -> bool {
+        self.pedestrian.is_empty() && self.transit.is_empty()
+    }
 }
 
 impl StreetVm {
@@ -266,6 +282,17 @@ impl StreetVm {
             self.ports.announcer.say(&self.with_class_note(text::started_over(&self.i18n), before));
         }
         done
+    }
+
+    /// What the Transform menu offers, drawn again when the street is edited: the kinds the motor pieces can become
+    /// (while the street has a motor piece) and the transit measures the street is not already and can be arranged
+    /// as, in the Notes table's order: the table's Arrange rows. A measure that will not fit is not listed.
+    pub fn transform_menu(&self) -> TransformMenu {
+        let v = self.view();
+        TransformMenu {
+            pedestrian: if v.has_motor { PEDESTRIAN_KINDS.iter().filter_map(|id| kind_index(id)).collect() } else { Vec::new() },
+            transit: v.measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect(),
+        }
     }
 
     /// Arranges the roadway as an Atlas measure, or says it does not suit.
@@ -517,6 +544,42 @@ mod tests {
         // Starting over can itself be undone, which brings the changes back.
         assert!(r.vm.undo());
         assert_eq!(r.said.take(), vec!["Undone. 3.3 m left to use."]);
+    }
+
+    #[test]
+    fn the_transform_menu_offers_the_pedestrian_kinds_and_only_the_measures_the_table_arranges() {
+        use crate::shared::catalogue::{PEDESTRIAN_KINDS, kind_index};
+        let r = rig(1);
+        let menu = r.vm.transform_menu();
+        let kinds: Vec<usize> = PEDESTRIAN_KINDS.iter().filter_map(|id| kind_index(id)).collect();
+        assert_eq!(menu.pedestrian, kinds);
+        let arrangeable: Vec<&str> = r.vm.view_now().measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect();
+        assert!(!arrangeable.is_empty());
+        assert_eq!(menu.transit, arrangeable);
+        let view = r.vm.view_now();
+        for m in view.measures.iter().filter(|m| !m.can_apply) {
+            assert!(!menu.transit.contains(&m.code), "{} will not fit", m.code);
+        }
+        // Choosing one arranges it as one undoable edit, and it is then this street's and no longer offered.
+        let code = menu.transit[0];
+        let steps = r.vm.view_now().revisions.len();
+        assert!(r.vm.apply_measure(code));
+        assert_eq!(r.vm.view_now().revisions.len(), steps + 1);
+        assert!(!r.vm.transform_menu().transit.contains(&code));
+        assert!(r.vm.undo());
+        assert!(r.vm.transform_menu().transit.contains(&code));
+    }
+
+    #[test]
+    fn a_street_with_no_motor_piece_has_no_pedestrian_choices_and_the_menu_is_empty_when_nothing_is_offered() {
+        use crate::shared::catalogue::kind_index;
+        let r = rig(0);
+        assert!(r.vm.apply(|e| e.make_pedestrian(kind_index("sidewalk").unwrap())));
+        let menu = r.vm.transform_menu();
+        assert!(menu.pedestrian.is_empty());
+        let table: Vec<&str> = r.vm.view_now().measures.iter().filter(|m| m.can_apply && !m.present).map(|m| m.code).collect();
+        assert_eq!(menu.transit, table, "the menu follows the table on a pedestrian street too");
+        assert_eq!(menu.is_empty(), table.is_empty());
     }
 
     #[test]

@@ -108,6 +108,11 @@ impl SheetWatch {
         self.vm.with_value(|v| v.reset())
     }
 
+    /// What the Transform menu offers, drawing again when the street is edited.
+    pub fn transform_menu(&self) -> crate::street::vm::TransformMenu {
+        self.vm.with_value(|v| v.transform_menu())
+    }
+
     pub fn apply_measure(&self, code: &str) -> bool {
         self.vm.with_value(|v| v.apply_measure(code))
     }
