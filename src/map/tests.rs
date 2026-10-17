@@ -673,6 +673,10 @@ fn map_html_has_the_area_rules_in_a_left_panel_and_not_in_the_notes() {
 
 #[test]
 fn the_keyboard_help_lists_the_key_for_the_area_rules_beside_the_notes() {
+    // The map takes no Tab or Enter for the places (Tab leaves it): they are opened from the search, which is what
+    // the help says.
+    assert!(!MAP_HTML.contains("map-key-next") && !MAP_HTML.contains("next place"));
+    assert!(MAP_HTML.contains(r#"<kbd>↓</kbd> <kbd data-i18n="ui-key-enter">Enter</kbd> <span data-i18n="map-key-open">open a place found</span>"#));
     assert!(MAP_HTML.contains(r#"<kbd>[</kbd> <span data-i18n="map-key-areas">area rules</span>"#));
     assert!(MAP_HTML.contains(r#"<kbd>]</kbd> <span data-i18n="map-key-panels">notes</span>"#));
 }

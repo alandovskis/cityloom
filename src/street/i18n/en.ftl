@@ -80,6 +80,7 @@ units-metres = metres
 units-feet = feet
 space-caption = Width by use, in { $units }
 col-use = Use
+col-measure = Measure
 col-today = Today
 col-design = Your design
 col-change = Change

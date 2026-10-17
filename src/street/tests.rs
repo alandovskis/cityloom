@@ -332,7 +332,11 @@ fn the_add_menu_is_closed_and_lists_every_piece_in_seven_groups() {
     let s = street_shared(0);
     let h = street_html(|| view! { <page::AddMenu vm=s.clone()/> });
     assert!(h.contains("aria-expanded=\"false\"") && h.contains("id=\"add-menu\" hidden class=\"menu add-menu\""));
-    assert!(button_tag(&h, "add-btn").contains("aria-haspopup"));
+    // A disclosure of a panel of buttons, not a menu: no popup role, and the palette is groups of lists (no
+    // list that holds anything but items).
+    assert!(!button_tag(&h, "add-btn").contains("aria-haspopup"));
+    assert!(!h.contains("role=\"presentation\"") && !h.contains("<ul id=\"palette\""));
+    assert_eq!(count(&h, "role=\"group\""), 7);
     assert_eq!(count(&h, "class=\"add-item\""), 18);
     assert_eq!(count(&h, "class=\"add-icon\""), 18);
     assert!(h.contains("viewBox=\"0 0 200 160\"") && !h.contains("class=\"swatch\""));
@@ -409,6 +413,8 @@ fn the_capacity_table_says_how_many_people_move_and_how_that_changed() {
     let s = street_shared(0);
     let h = street_html(|| view! { <notes::Capacity vm=s.clone()/> });
     assert!(h.contains("People per hour") && h.contains("class=\"zero\">0<"));
+    // No header cell is empty: the first column is the measure.
+    assert!(h.contains(">Measure<") && !h.contains("<th scope=\"col\"></th>"), "{h}");
     let v = s.view();
     assert!(h.contains(&group_thousands(v.outcomes.capacity_pph.into(), Locale::En)));
     let u = segment(&s, 2);
@@ -1048,6 +1054,9 @@ fn the_transform_menu_has_a_group_for_making_pedestrian_and_one_for_the_measures
         assert!(h.contains(kind), "{kind}");
     }
     assert_eq!(count(&h, "role=\"menuitem\""), count(&h, "transform-item"));
+    // The mark and the name are apart in the text, so that a visible label read as one word is not what the
+    // item's name has to contain (WCAG 2.5.3).
+    assert_eq!(count(&h, "</span> <b>"), count(&h, "role=\"menuitem\""), "{h}");
     // A menu holds only menu items and groups: each group's heading and hint are hidden from assistive technology and
     // reach it as the group's name and description.
     for (group, heading, hint) in [("ped", "transform-ped-h", "transform-ped-hint"), ("transit", "transform-transit-h", "transform-transit-hint")] {
