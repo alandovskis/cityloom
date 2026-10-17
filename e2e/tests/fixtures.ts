@@ -153,9 +153,10 @@ export async function openStreet(page: Page, n = 0) {
 export const PRESSABLE_PX = 40;
 
 export async function pressablePiece(page: Page) {
-  const boxes = await page
-    .locator('#drawing [data-role="seg"]')
-    .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
+  const segs = page.locator('#drawing [data-role="seg"]');
+  // `openStreet` returns before the drawing is mounted, and `evaluateAll` does not wait for it.
+  await expect(segs.first()).toBeVisible();
+  const boxes = await segs.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
   const i = boxes.findIndex((w) => w >= PRESSABLE_PX);
   expect(i, "a piece wide enough to press").toBeGreaterThanOrEqual(0);
   return i;
