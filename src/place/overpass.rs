@@ -15,10 +15,11 @@ const HIGHWAYS: &str = "motorway|motorway_link|trunk|trunk_link|primary|primary_
 const TRACKS: &str = "[\"highway\"=\"cycleway\"]";
 const DESIGNATED_TRACKS: &str = "[\"highway\"~\"^(path|footway)$\"][\"bicycle\"=\"designated\"]";
 
-/// The Overpass query for every road and bike track in `b`, with the nodes they run through, as OSM XML.
+/// The Overpass query for every road and bike track in `b`, with the nodes they run through, as OSM XML. The nodes are
+/// asked for after the union: inside it, `>;` would recurse only from the statement before it.
 pub fn query(b: Bounds) -> String {
     let area = format!("({:.6},{:.6},{:.6},{:.6})", b.south, b.west, b.north, b.east);
-    format!("[out:xml][timeout:25];(way[\"highway\"~\"^({HIGHWAYS})$\"]{area};way{TRACKS}{area};way{DESIGNATED_TRACKS}{area};>;);out;")
+    format!("[out:xml][timeout:25];(way[\"highway\"~\"^({HIGHWAYS})$\"]{area};way{TRACKS}{area};way{DESIGNATED_TRACKS}{area};);(._;>;);out;")
 }
 
 #[cfg(test)]
@@ -40,7 +41,8 @@ mod tests {
         let area = "(51.499000,-0.129000,51.501000,-0.126000)";
         assert!(q.contains(&format!("way[\"highway\"=\"cycleway\"]{area};")));
         assert!(q.contains(&format!("way[\"highway\"~\"^(path|footway)$\"][\"bicycle\"=\"designated\"]{area};")));
-        // all of them come with their nodes, once
-        assert_eq!(q.matches(">;").count(), 1);
+        // Inside a union, `>;` recurses only from the statement before it: the nodes are asked for after the union,
+        // from all of its ways.
+        assert!(q.contains(&format!("{area};);(._;>;);out;")), "{q}");
     }
 }
