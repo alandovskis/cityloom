@@ -1110,3 +1110,12 @@ fn the_make_pedestrian_menu_speaks_french() {
     let h = street_html(|| view! { <page::MakePedestrian vm=s.clone()/> });
     assert!(h.contains("Rendre piétonne") && h.contains("Trottoir") && h.contains("Terrasse de café"), "{h}");
 }
+
+#[test]
+fn a_bike_lane_is_offered_no_other_times() {
+    let s = street_shared_in(0, Locale::En);
+    let bike = s.edit(|e| e.add(crate::shared::catalogue::kind_index("bike").unwrap(), 1));
+    s.edit(|e| e.select(Some(bike)));
+    let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
+    assert!(h.contains("Bike lane") && !h.contains("Other times") && !h.contains("Add other times"), "{h}");
+}

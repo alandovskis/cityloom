@@ -146,17 +146,21 @@ impl Segment {
 
     /// Kinds this piece may take at other times: other roadway types that
     /// share some width with its own types. Empty for a piece that is not
-    /// roadway. Taking one may move the width into the shared range.
+    /// roadway. Taking one may move the width into the shared range. A bike
+    /// lane is not time limited: it takes no other type, and no piece takes
+    /// the bike lane for some hours.
     fn alt_kinds(&self) -> Vec<usize> {
         self.alt_kinds_except(None)
     }
 
     fn alt_kinds_except(&self, skip: Option<usize>) -> Vec<usize> {
-        if !KINDS[self.kind].shares_road {
+        if !KINDS[self.kind].shares_road || KINDS[self.kind].id == "bike" {
             return Vec::new();
         }
         let (lo, hi) = self.bounds_except(skip);
-        (0..KINDS.len()).filter(|&k| k != self.kind && KINDS[k].shares_road && lo.max(KINDS[k].min_mm) <= hi.min(KINDS[k].max_mm)).collect()
+        (0..KINDS.len())
+            .filter(|&k| k != self.kind && KINDS[k].shares_road && KINDS[k].id != "bike" && lo.max(KINDS[k].min_mm) <= hi.min(KINDS[k].max_mm))
+            .collect()
     }
 }
 
@@ -818,7 +822,7 @@ impl Editor {
         };
         let seg = &self.current()[pos];
         let alts = seg.alt_kinds();
-        let prefer = ["bus", "parking", "loading", "travel", "bike"];
+        let prefer = ["bus", "parking", "loading", "travel"];
         let Some(kind) = prefer.iter().filter_map(|id| kind_index(id)).find(|k| alts.contains(k)) else {
             return false;
         };
@@ -2293,6 +2297,41 @@ mod tests {
         assert!(!e.view().segments[1].alt_kinds.contains(&kind("bike")) || KINDS[kind("bike")].max_mm >= 3000);
         assert!(e.set_variant_kind(parking, 0, kind("loading")));
         assert_eq!(e.view().segments[1].width_mm, 3000);
+    }
+
+    #[test]
+    fn a_bike_lane_is_a_bike_lane_at_every_hour() {
+        let mut e = Editor::from_street(
+            &street_of(StreetClass::Local, &["sidewalk", "travel", "bike", "parking", "sidewalk"]),
+            &street_of(StreetClass::Local, &["sidewalk", "travel", "bike", "parking", "sidewalk"]),
+            0,
+        );
+        let (bike, parking) = (e.current()[2].uid, e.current()[3].uid);
+        // a bike lane takes no window
+        assert!(e.view().segments[2].alt_kinds.is_empty());
+        assert!(!e.add_variant(bike));
+        // no piece is offered, or accepts, bike as another time's type
+        assert!(!e.view().segments[3].alt_kinds.contains(&kind("bike")));
+        assert!(e.add_variant(parking));
+        assert!(!e.set_variant_kind(parking, 0, kind("bike")));
+        assert!(!e.view().segments[3].variants.iter().any(|v| v.kind == kind("bike")));
+    }
+
+    #[test]
+    fn a_saved_street_with_a_timed_bike_lane_still_loads_and_the_windows_can_be_removed() {
+        let mut s = street_of(StreetClass::Local, &["sidewalk", "travel", "bike", "parking", "sidewalk"]);
+        let win = |k: &str| Variant { kind: kind(k), material: KINDS[kind(k)].materials[0], direction: None, from_min: 420, to_min: 540, days: None };
+        s.segments[2].variants.push(win("parking")); // a bike lane that is parking at some hours
+        s.segments[3].variants.push(win("bike")); // parking that is a bike lane at some hours
+        assert!(s.is_sound());
+        let mut e = Editor::from_street(&s, &s, 0);
+        let v = e.view();
+        assert_eq!((v.segments[2].variants.len(), v.segments[3].variants.len()), (1, 1));
+        let (bike, parking) = (e.current()[2].uid, e.current()[3].uid);
+        assert!(!e.add_variant(bike));
+        assert!(e.remove_variant(bike, 0));
+        assert!(e.remove_variant(parking, 0));
+        assert!(e.view().segments.iter().all(|g| g.variants.is_empty()));
     }
 
     #[test]
