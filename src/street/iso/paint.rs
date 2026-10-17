@@ -101,18 +101,18 @@ mod tests {
 
     #[test]
     fn a_piece_too_narrow_on_screen_keeps_its_lines_but_loses_its_symbol() {
-        // A two-way bike lane at its narrowest, 1.2 m, is under 20 px wide where its symbol lies on a wide enough street at 600 px.
+        // A two-way bike lane at its narrowest, 1.2 m, is under 20 px wide where its symbol lies when the drawing is 480 px wide
+        // (a phone held sideways), and wide enough at 600 px.
         let mut e = Editor::new(0);
         let bike = e.add(kind_index("bike").unwrap(), 3);
         assert!(e.set_width(bike, 1_200));
         // Uncurbed, so that its edges are painted (a curbed bike lane's are the curb's).
         assert!(e.set_curb(bike, None));
         let v = e.view();
-        // On this street the lane fits at 600 px; on one 28 m wide the scale is small enough that it does not.
         let p = fit(&v, 600.0);
         assert!(symbol_fits(&p, 1_200.0), "on this street at 600 px it fits");
-        let p = Projection::fit(600.0, 28_000);
-        assert!(!symbol_fits(&p, 1_200.0));
+        let p = fit(&v, 480.0);
+        assert!(!symbol_fits(&p, 1_200.0), "at 480 px it does not");
         let m = layer(&p, &v);
         assert!(!m.contains(&format!("data-mark=\"{bike}\"")));
         assert_eq!(count(&m, "class=\"iso-mark\""), 2, "the driving lanes keep theirs");

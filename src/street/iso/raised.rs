@@ -12,7 +12,7 @@ use crate::street::model::View;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
 use super::order::Bx;
-use super::projection::{EYE_BACK_MM, Projection, STRETCH_MM, band_edges, drawn_mm, points};
+use super::projection::{Projection, STRETCH_MM, band_edges, band_mid, drawn_mm, points};
 
 /// How high each kind of piece stands above the roadway, in millimetres. They are plausible, not
 /// surveyed, like the catalogue's rates. The furniture kinds stand on the sidewalk, so at its height.
@@ -131,20 +131,22 @@ pub(super) fn inner_face(p: &Projection, x0: f64, x1: f64) -> Option<bool> {
 
 /// The top of a piece at `h` (drawn mm) across `x0` to `x1`: a polygon in the tint of the kind `id` and the material
 /// `m`, and the material's texture over it. The texture is a pattern in millimetres of ground; perspective is not an
-/// affine map, so the top is cut into `BANDS` bands along the street, each carrying the affine map that is the
-/// perspective's slope at its middle (`Projection::ground_at`); the band's polygon is written in the ground's own
-/// millimetres, as the true quadrilateral the band is on the screen taken back through that map, so it fits the
-/// top exactly and its `transform` lays the texture.
+/// affine map, so the top is cut into `BANDS` bands along the street (`band_edges`), each carrying the affine map that
+/// is the perspective's slope at its middle (`Projection::ground_at`); the band's polygon is written in the ground's
+/// own millimetres, as the true quadrilateral the band is on the screen taken back through that map, so it fits the
+/// top exactly and its `transform` lays the texture. The texture is not continuous across a seam: each band's map is
+/// right at its middle and drifts from the true perspective to either side, so at a seam the pattern jumps by a few
+/// pixels at the strip's edges (3 to 6 px on a 3.3 m sidewalk, at 684 to 1440 px; none at its middle), which shows as a
+/// small step in a concrete panel's joints. No affine map can fit a trapezoid, so more bands only make the steps smaller.
 fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h: f64) {
     let l = STRETCH_MM;
     let pts = points(p, &[(x0, h, 0.0), (x1, h, 0.0), (x1, h, l), (x0, h, l)]);
     write!(out, "<polygon class=\"iso-top k-{id} mat-{m}\" points=\"{pts}\"/>").unwrap();
-    let edges = band_edges();
-    for w in edges.windows(2) {
+    // The bands share their fill, and so the group carries it: a texture's polygons are bare.
+    write!(out, "<g class=\"hatch\" fill=\"url(#iso-m-{m})\">").unwrap();
+    for w in band_edges().windows(2) {
         let (z0, z1) = (w[0], w[1]);
-        // The middle in depth, as the eye sees it.
-        let mid = ((EYE_BACK_MM + z0) * (EYE_BACK_MM + z1)).sqrt() - EYE_BACK_MM;
-        let g = p.ground_at(h, (x0 + x1) / 2.0, mid);
+        let g = p.ground_at(h, (x0 + x1) / 2.0, band_mid(z0, z1));
         // The numbers as written, so that the polygon is taken back through exactly the map that lays the texture.
         let [a, _, c, d, e, f] = [g[0], g[1], g[2], g[3], g[4], g[5]].map(|n| (n * 1e6).round() / 1e6);
         let (e, f) = ((e * 100.0).round() / 100.0, (f * 100.0).round() / 100.0);
@@ -157,8 +159,9 @@ fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h:
                 format!("{:.0},{:.0}", u, v)
             })
             .collect();
-        write!(out, "<polygon class=\"hatch\" transform=\"matrix({a} 0 {c} {d} {e} {f})\" points=\"{}\" fill=\"url(#iso-m-{m})\"/>", local.join(" ")).unwrap();
+        write!(out, "<polygon transform=\"matrix({a} 0 {c} {d} {e} {f})\" points=\"{}\"/>", local.join(" ")).unwrap();
     }
+    out.push_str("</g>");
 }
 
 /// The piece at `i` as a strip along the stretch: its top, and where it stands above the ground its

@@ -968,6 +968,9 @@ svg pattern circle {
    theme, and kept faint so that the paint, the symbols and the outlines read over them. */
 .hatch[fill^="url(#iso-m-"] {
   opacity: 0.8;
+  /* The texture is cut into bands along the street (street/iso/raised.rs): no anti-aliasing at a seam, where two
+     partly covered edges would leave a faint line. */
+  shape-rendering: crispEdges;
 }
 /* A piece's colour is the same in both themes, so an outline needs a halo of the panel's colour to be seen on any
    of them: the hover outline and the selection outline. */

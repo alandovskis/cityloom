@@ -189,7 +189,8 @@ mod tests {
         assert_eq!(count(&m, "class=\"iso-top "), 6);
         assert_eq!(count(&m, "class=\"iso-piece\""), 6 + 2, "a group per piece and per curb");
         assert_eq!(count(&m, "class=\"iso-top k-sidewalk mat-"), 2);
-        assert_eq!(count(&m, "fill=\"url(#iso-m-asphalt)\""), 4 * BANDS, "BANDS per travel lane and parking lane, in the material's pattern");
+        assert_eq!(count(&m, "fill=\"url(#iso-m-asphalt)\""), 4, "a texture group per travel lane and parking lane, in the material's pattern");
+        assert_eq!(count(&m, "<polygon transform=\"matrix("), 6 * BANDS, "BANDS bands on each of the six tops");
         assert_eq!(count(&m, "fill=\"url(#h-travel)\""), 0, "the kind's hatch stays on the faces");
         assert_eq!(count(&m, "class=\"iso-ground\""), 1);
         assert!(!m.contains("NaN"));
@@ -239,11 +240,11 @@ mod tests {
     /// The bands of the top of the piece `uid` (its `iso-m-*` polygons): each as its `matrix(..)` and its points.
     fn bands(markup: &str, uid: u32) -> Vec<([f64; 6], Vec<(f64, f64)>)> {
         let group = markup.split(&format!("<g class=\"iso-piece\" data-uid=\"{uid}\">")).nth(1).expect("the piece is drawn");
-        let group = &group[..group.find("</g>").unwrap()];
+        // The piece's group ends with its top's texture group.
+        let group = &group[..group.find("</g></g>").unwrap()];
         group
-            .split("<polygon class=\"hatch\" transform=\"matrix(")
+            .split("<polygon transform=\"matrix(")
             .skip(1)
-            .filter(|b| b.contains("url(#iso-m-"))
             .map(|b| {
                 let m: Vec<f64> = b[..b.find(')').unwrap()].split(' ').map(|n| n.parse().unwrap()).collect();
                 let pts = &b[b.find("points=\"").unwrap() + 8..];

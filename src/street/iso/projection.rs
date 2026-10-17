@@ -40,7 +40,7 @@ pub fn drawn_mm(mm: i32) -> f64 {
 }
 
 /// How many bands a textured top is cut into along the street (`band_edges`).
-pub const BANDS: usize = 6;
+pub const BANDS: usize = 12;
 
 /// How a point of the street, in millimetres across it, up from the ground and along it from the
 /// near end, lands in the drawing.
@@ -75,6 +75,7 @@ impl Projection {
 
     /// Pixels to the millimetre at `along_mm` from the near end.
     pub fn scale_at(&self, along_mm: f64) -> f64 {
+        debug_assert!(EYE_BACK_MM + along_mm > 0.0);
         self.scale * EYE_BACK_MM / (EYE_BACK_MM + along_mm)
     }
 
@@ -98,16 +99,25 @@ impl Projection {
 }
 
 /// How far along the street each of the `BANDS` bands of a textured top begins, and the end of the last: equal steps
-/// in depth from the eye's point of view, so that a band is as much farther than the one before as that one is
-/// than the one before it and the texture's scale changes by the same step at every seam.
+/// of `1 / depth`, which is equal steps of the drawing's own scale and so equal steps down the screen. A texture laid
+/// band by band is out of true at a seam by the step in scale there, and the step shows in pixels as the scale at the
+/// seam times it: equal steps of depth, or of its logarithm, leave the nearest seam, where the street is biggest on the
+/// screen, with the biggest step; equal steps of the scale give every seam about the same.
 pub fn band_edges() -> [f64; BANDS + 1] {
-    let ratio = ((EYE_BACK_MM + STRETCH_MM) / EYE_BACK_MM).powf(1.0 / BANDS as f64);
+    let (near, far) = (1.0 / EYE_BACK_MM, 1.0 / (EYE_BACK_MM + STRETCH_MM));
     let mut edges = [0.0; BANDS + 1];
     for (i, e) in edges.iter_mut().enumerate() {
-        *e = (EYE_BACK_MM * ratio.powi(i as i32) - EYE_BACK_MM).min(STRETCH_MM);
+        *e = 1.0 / (near + (far - near) * i as f64 / BANDS as f64) - EYE_BACK_MM;
     }
+    edges[0] = 0.0;
     edges[BANDS] = STRETCH_MM;
     edges
+}
+
+/// How far along the street a band from `z0` to `z1` is laid: the middle in `1 / depth`, where its scale is the mean
+/// of the scales at its two ends.
+pub fn band_mid(z0: f64, z1: f64) -> f64 {
+    2.0 / (1.0 / (EYE_BACK_MM + z0) + 1.0 / (EYE_BACK_MM + z1)) - EYE_BACK_MM
 }
 
 /// A piece narrower than this on screen, at the depth where a symbol is painted on it, draws without that symbol. It
@@ -237,13 +247,62 @@ mod tests {
     }
 
     #[test]
-    fn the_bands_cover_the_stretch_and_grow_with_depth() {
+    fn the_bands_cover_the_stretch_in_equal_steps_of_the_scale_so_the_far_ones_are_deeper() {
         let e = band_edges();
         assert_eq!((e[0], e[BANDS]), (0.0, STRETCH_MM));
         assert!(e.windows(2).all(|w| w[0] < w[1]));
-        // Equal steps of depth: the ratio of each band's far depth to its near depth is the same.
-        let ratios: Vec<f64> = e.windows(2).map(|w| (EYE_BACK_MM + w[1]) / (EYE_BACK_MM + w[0])).collect();
-        assert!(ratios.iter().all(|r| (r - ratios[0]).abs() < 1e-9), "{ratios:?}");
+        // Equal steps of the scale, 1 / depth: every band is as much smaller on the screen than the one before.
+        let steps: Vec<f64> = e.windows(2).map(|w| 1.0 / (EYE_BACK_MM + w[0]) - 1.0 / (EYE_BACK_MM + w[1])).collect();
+        assert!(steps.iter().all(|s| (s - steps[0]).abs() < 1e-12), "{steps:?}");
+        // So a band is deeper than the one before it.
         assert!(e.windows(3).all(|w| w[1] - w[0] < w[2] - w[1]));
+        // A band is laid where its scale is the mean of the two at its ends, which is inside it.
+        for w in e.windows(2) {
+            let mid = band_mid(w[0], w[1]);
+            assert!(mid > w[0] && mid < w[1]);
+            let (k0, k1, km) = (1.0 / (EYE_BACK_MM + w[0]), 1.0 / (EYE_BACK_MM + w[1]), 1.0 / (EYE_BACK_MM + mid));
+            assert!((km - (k0 + k1) / 2.0).abs() < 1e-15);
+        }
+    }
+
+    /// How far the texture of a strip `x0` to `x1` across, at `h`, jumps on the screen at each seam between two bands, in
+    /// pixels: at the seam's three points (the strip's edges and middle), the two bands' matrices put a point of the
+    /// pattern at different places on the ground, and the jump is that difference taken back to the screen.
+    fn seam_steps(p: &Projection, x0: f64, x1: f64, h: f64) -> Vec<f64> {
+        let e = band_edges();
+        let local = |k: usize, x: f64, z: f64| {
+            let g = p.ground_at(h, (x0 + x1) / 2.0, band_mid(e[k], e[k + 1]));
+            let (sx, sy) = p.at(x, h, z);
+            let v = (sy - g[5]) / g[3];
+            ((sx - g[4] - g[2] * v) / g[0], v, g[0], g[3])
+        };
+        (0..BANDS - 1)
+            .map(|k| {
+                [x0, (x0 + x1) / 2.0, x1]
+                    .iter()
+                    .map(|&x| {
+                        let (u1, v1, ..) = local(k, x, e[k + 1]);
+                        let (u2, v2, a, d) = local(k + 1, x, e[k + 1]);
+                        ((u1 - u2) * a).hypot((v1 - v2) * d)
+                    })
+                    .fold(0.0, f64::max)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_texture_jumps_the_same_few_pixels_at_every_seam_and_no_more_than_the_budget_on_the_widest_sidewalk() {
+        // A 3.3 m sidewalk on Sample Street 1 (18 m across), at 684 px (the usual group at 1440 by 900), 1050 px and
+        // 1440 px: the nearest seam is not the worst, as it was with bands of equal depth ratio (12.5 px at 1050 px
+        // with six). The step cannot be made 1 px by bands: no affine map fits a trapezoid, and it halves only at
+        // twice the bands, each a polygon on every textured top (BANDS = 12 is +29% to +39% of the markup of the
+        // oblique view on the samples).
+        for (width, budget) in [(684.0, 3.5), (1050.0, 5.2), (1440.0, 5.8)] {
+            let steps = seam_steps(&Projection::fit(width, 18_000), 0.0, 3_300.0, drawn_mm(150));
+            let (lo, hi) = steps.iter().fold((f64::MAX, 0.0_f64), |(lo, hi), &s| (lo.min(s), hi.max(s)));
+            assert!(hi <= budget, "{width}: {steps:?}");
+            assert!(hi < 1.3 * lo, "{width}: every seam is about as big as the others: {steps:?}");
+        }
+        assert_eq!(BANDS, 12);
     }
 }
