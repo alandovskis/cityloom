@@ -10,20 +10,21 @@ sidebar_position: 3
 
 The code is organised by feature, one folder per slice, not by layer. New code goes in the slice that owns the feature.
 
-| Slice          | What it holds                                                                            |
-| -------------- | ---------------------------------------------------------------------------------------- |
-| `street/`      | The street editor.                                                                       |
-| `junction/`    | The junction editor.                                                                     |
-| `map/`         | The city map over a MapLibre basemap, and the Area rules panel.                          |
-| `shell/`       | The markup the pages share: menu, language switch, shortcuts, the Sign in menu.          |
-| `account/`     | The Account page: linked sign-ins, where the work is kept, deleting the account.         |
-| `city/`        | The city: the layout, its storage, its projection onto the earth and the edits document. |
-| `place/`       | Where a city comes from: place search, and fetching and importing an area's roads.       |
-| `restriction/` | The rules declared over an area of the map.                                              |
-| `shared/`      | The kernel: catalogue, units, ports, translations. It must not depend on any slice.      |
+| Slice          | What it holds                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| `street/`      | The street editor.                                                                               |
+| `junction/`    | The junction editor.                                                                             |
+| `map/`         | The city map over a MapLibre basemap, and the Area rules panel.                                  |
+| `shell/`       | The markup the pages share: menu, language switch, shortcuts, the Sign in menu.                  |
+| `account/`     | The Account page: linked sign-ins, where the work is kept, deleting the account.                 |
+| `city/`        | The city: the layout, its storage, its projection onto the earth and the edits document.         |
+| `place/`       | Where a city comes from: place search, and fetching and importing an area's roads.               |
+| `restriction/` | The rules declared over an area of the map.                                                      |
+| `sync/`        | Keeps a signed-in person's work on the server when they chose it, and merges it between devices. |
+| `shared/`      | The kernel: catalogue, units, ports, translations. It must not depend on any slice.              |
 
 A slice may use another slice's `model`, `city::store`, `city::binding`, `city::projection`, `restriction::store`,
-`shell::Target` and `shared`. It must never reach into another slice's view-model, views or text.
+`shell::Target` and `shared`; `city/` and `restriction/` also use `sync::model::mark`, and everything else reaches the sync through `sync::hub`. It must never reach into another slice's view-model, views or text.
 
 ## MVVM inside a slice
 
@@ -41,7 +42,7 @@ state machines with tests. The map page is the exception: it draws over a MapLib
 ## Ports
 
 A view-model reaches the browser only through ports, defined in `shared/ports.rs` with fakes for tests:
-`Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (the OpenStreetMap reader), `Account` (the sign-in state and the account API) and
+`Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (the OpenStreetMap reader), `Account` (the sign-in state and the account API), `WorkSync` (the work stored on the server) and
 `Navigator`. `shared/platform.rs` is their browser side. This is how view-models are tested natively, against
 `test_ports()`, without a browser.
 
@@ -77,6 +78,18 @@ that person, which is itself sealed under a master key held in the server's envi
 and row. Identities are found by an HMAC of the provider and subject. Deleting an account removes its rows at once;
 copies in backups disappear when the backups expire. Signed out, the site works exactly as before, and it still
 works when the server's account side is unavailable.
+
+## Cloud edits
+
+A person who chose "Store my work on the server" has their street and junction edits, area rules and chosen area kept
+under their account, and every device they sign in on gets them. The browser's storage stays the working copy, so the
+editors work offline and catch up when the network returns. Each place is a record with a revision the account's counter
+gives it; a device asks for what is above the last revision it saw, and sends what it changed. When two devices changed
+the same place, the later edit wins on both, and the device whose change lost says so. The record bodies are sealed like
+everything else the server stores, bound to their kind, key and account; the place keys (OpenStreetMap ids), the rule
+ids and the edit times are not sealed, because the server matches and sorts on them. Turning storage off deletes the
+server copy and keeps the browser's; deleting the account deletes the server copy too. Preferences (theme, language,
+panels) stay on each device.
 
 ## JavaScript
 

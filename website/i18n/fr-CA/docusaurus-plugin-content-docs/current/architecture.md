@@ -11,20 +11,21 @@ sidebar_position: 3
 Le code est organisé par fonctionnalité, un dossier par tranche, et non par couche. Le nouveau code va dans la tranche
 qui possède la fonctionnalité.
 
-| Tranche        | Contenu                                                                                                         |
-| -------------- | --------------------------------------------------------------------------------------------------------------- |
-| `street/`      | L’éditeur de rue.                                                                                               |
-| `junction/`    | L’éditeur de jonction.                                                                                          |
-| `map/`         | La carte de la ville sur un fond de carte MapLibre, et le panneau Règles de zone.                               |
-| `shell/`       | Le balisage commun aux pages : menu, changement de langue, raccourcis, le menu Se connecter.                    |
-| `account/`     | La page Compte : connexions associées, lieu de conservation du travail, suppression du compte.                  |
-| `city/`        | La ville : sa disposition, son stockage, sa projection sur la Terre et le document des modifications.           |
-| `place/`       | L’origine d’une ville : la recherche de lieu, ainsi que la récupération et l’importation des routes d’une zone. |
-| `restriction/` | Les règles déclarées sur une zone de la carte.                                                                  |
-| `shared/`      | Le noyau : catalogue, unités, ports, traductions. Il ne doit dépendre d’aucune tranche.                         |
+| Tranche        | Contenu                                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `street/`      | L’éditeur de rue.                                                                                                       |
+| `junction/`    | L’éditeur de jonction.                                                                                                  |
+| `map/`         | La carte de la ville sur un fond de carte MapLibre, et le panneau Règles de zone.                                       |
+| `shell/`       | Le balisage commun aux pages : menu, changement de langue, raccourcis, le menu Se connecter.                            |
+| `account/`     | La page Compte : connexions associées, lieu de conservation du travail, suppression du compte.                          |
+| `city/`        | La ville : sa disposition, son stockage, sa projection sur la Terre et le document des modifications.                   |
+| `place/`       | L’origine d’une ville : la recherche de lieu, ainsi que la récupération et l’importation des routes d’une zone.         |
+| `restriction/` | Les règles déclarées sur une zone de la carte.                                                                          |
+| `sync/`        | Conserve le travail d’une personne connectée sur le serveur, quand elle l’a choisi, et le fusionne entre ses appareils. |
+| `shared/`      | Le noyau : catalogue, unités, ports, traductions. Il ne doit dépendre d’aucune tranche.                                 |
 
 Une tranche peut utiliser le `model` d’une autre tranche, `city::store`, `city::binding`, `city::projection`,
-`restriction::store`, `shell::Target` et `shared`. Elle ne doit jamais accéder au modèle de vue, aux vues ni aux textes
+`restriction::store`, `shell::Target` et `shared`; `city/` et `restriction/` utilisent aussi `sync::model::mark`, et tout le reste accède à la synchronisation par `sync::hub`. Elle ne doit jamais accéder au modèle de vue, aux vues ni aux textes
 d’une autre tranche.
 
 ## MVVM dans une tranche
@@ -45,7 +46,7 @@ fond de carte MapLibre, sans SVG.
 ## Ports
 
 Un modèle de vue n’atteint le navigateur que par des ports, définis dans `shared/ports.rs` avec des doublures pour les
-tests : `Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (le lecteur OpenStreetMap), `Account` (l’état de connexion et l’API du compte) et
+tests : `Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (le lecteur OpenStreetMap), `Account` (l’état de connexion et l’API du compte), `WorkSync` (le travail stocké sur le serveur) et
 `Navigator`. `shared/platform.rs` en est le côté navigateur. C’est ainsi que les modèles de vue sont testés en natif,
 avec `test_ports()`, sans navigateur.
 
@@ -83,6 +84,20 @@ table, à sa colonne et à sa ligne. Les identités se retrouvent par un HMAC du
 d’un compte en retire aussitôt les lignes; les copies dans les sauvegardes disparaissent à l’expiration de celles-ci.
 Sans connexion, le site fonctionne exactement comme avant, et il fonctionne encore quand le volet des comptes du
 serveur est indisponible.
+
+## Modifications dans le nuage
+
+Une personne qui a choisi « Stocker mon travail sur le serveur » voit ses modifications de rues et de jonctions, ses
+règles de zone et la zone choisie conservées sous son compte, et chaque appareil sur lequel elle se connecte les reçoit.
+Le stockage du navigateur reste la copie de travail : les éditeurs fonctionnent hors ligne et rattrapent leur retard au
+retour du réseau. Chaque lieu est un enregistrement dont la révision vient du compteur du compte; un appareil demande ce
+qui dépasse la dernière révision qu’il a vue et envoie ce qu’il a modifié. Quand deux appareils ont modifié le même
+lieu, la modification la plus récente l’emporte sur les deux, et l’appareil dont la modification a perdu le dit. Le
+contenu des enregistrements est chiffré comme tout ce que le serveur conserve, lié à son genre, à sa clé et à son
+compte; les clés des lieux (identifiants OpenStreetMap), les identifiants de règles et l’heure des modifications ne le
+sont pas, parce que le serveur les compare et les trie. Cesser le stockage supprime la copie sur le serveur et garde
+celle du navigateur; supprimer le compte supprime aussi la copie sur le serveur. Les préférences (thème, langue,
+panneaux) restent propres à chaque appareil.
 
 ## JavaScript
 

@@ -78,7 +78,8 @@ request raises the version in the root `Cargo.toml`.
 The server reads its settings from the environment; `.env.example` lists every variable with how to make a key. The
 account side needs `BASE_URL`, `DATABASE_URL`, `COOKIE_KEY`, `DATA_KEYS`, `DATA_KEY_CURRENT` and `LOOKUP_KEY`; a
 provider is offered only when all of its variables are set. Without the account variables the site is served and
-`/auth/*` and `/api/*` answer 503.
+`/auth/*` and `/api/*` answer 503. `/api/work` has its own rate limit, `WORK_RATE_PERIOD_SECS` (default 1) and
+`WORK_RATE_BURST` (default 60), apart from the sign-in routes' `AUTH_RATE_*`.
 
 Register the redirect URL `https://cityloom.app/auth/{osm|google|microsoft|apple}/callback` with each provider.
 
@@ -126,6 +127,8 @@ Run these after registering a provider (see `.env.example` for its variables), w
    your real address and that is the key. A request from another network (a phone on mobile data) at the same moment
    must still be answered 303. If the 429 never comes, or the other network is limited too, Railway's proxy does not
    append the address the way the server assumes; stop and look at `client_address` in `cityloom_server/src/app.rs`.
+8. Choose “Store my work on the server” on the Account page, edit a street, and open the site on a second device signed
+   in to the same account: the street shows the edit after the tab is shown again.
 
 Apple: sign in, sign out, and sign in again without removing the app from your Apple ID: the name stays (Apple sends it
 only the first time). Hide-my-email gives a relay address as the label. The token exchange must succeed with the client

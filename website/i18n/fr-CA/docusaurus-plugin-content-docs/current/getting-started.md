@@ -80,7 +80,8 @@ supprime le conteneur.
 Le serveur lit ses réglages dans l’environnement; `.env.example` énumère chaque variable et la façon de fabriquer une
 clé. Le volet des comptes exige `BASE_URL`, `DATABASE_URL`, `COOKIE_KEY`, `DATA_KEYS`, `DATA_KEY_CURRENT` et
 `LOOKUP_KEY`; un fournisseur n’est offert que si toutes ses variables sont définies. Sans les variables des comptes, le
-site est servi et `/auth/*` et `/api/*` répondent 503.
+site est servi et `/auth/*` et `/api/*` répondent 503. `/api/work` a sa propre limite de débit, `WORK_RATE_PERIOD_SECS` (1 par défaut) et `WORK_RATE_BURST` (60 par
+défaut), distincte des `AUTH_RATE_*` des routes de connexion.
 
 Enregistrez l’URL de redirection `https://cityloom.app/auth/{osm|google|microsoft|apple}/callback` auprès de chaque
 fournisseur.
@@ -135,6 +136,8 @@ session.
    en données mobiles) au même moment doit toujours recevoir 303. Si le 429 n’arrive jamais, ou si l’autre réseau est
    limité aussi, le mandataire de Railway n’ajoute pas l’adresse comme le serveur le suppose; arrêtez-vous et examinez
    `client_address` dans `cityloom_server/src/app.rs`.
+8. Choisissez « Stocker mon travail sur le serveur » sur la page Compte, modifiez une rue, puis ouvrez le site sur un
+   deuxième appareil connecté au même compte : la rue montre la modification quand l’onglet est affiché de nouveau.
 
 Apple : connectez-vous, déconnectez-vous, puis reconnectez-vous sans retirer l’app de votre identifiant Apple : le nom
 reste (Apple ne l’envoie que la première fois). Masquer mon adresse courriel donne une adresse relais comme libellé.
