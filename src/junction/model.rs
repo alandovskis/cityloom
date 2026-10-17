@@ -889,6 +889,13 @@ impl Junction {
         Some(j)
     }
 
+    /// Whether `other` is drawn as this is: the same state, the arms' street sections included, whatever it is
+    /// labelled.
+    pub fn drawn_as(&self, other: &Junction) -> bool {
+        let bare = |j: &Junction| State { label: unlabelled(), ..j.current().clone() };
+        bare(self) == bare(other)
+    }
+
     /// The junction as it is now, without its streets, for the city to keep.
     pub fn snapshot(&self) -> State {
         let mut s = self.current().clone();
