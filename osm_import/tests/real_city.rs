@@ -433,3 +433,52 @@ mod kept {
         }
     }
 }
+
+mod two_way_track {
+    //! A street edited while its track was read as one-way (before the ways of a track were fetched) is still found
+    //! when the track is read as two-way: De Maisonneuve Ouest near Rue Saint-Marc.
+
+    use std::rc::Rc;
+
+    use cityloom_editor::city::store::CityStore;
+    use cityloom_editor::place::area::Area;
+    use cityloom_editor::shared::ports::{MemoryStorage, Storage};
+
+    const FIXTURE: &str = include_str!("de_maisonneuve.osm");
+
+    /// The fixture without the ways of its cycleways: what production read before they were fetched.
+    fn without_tracks() -> String {
+        FIXTURE.lines().filter(|l| !l.contains("v=\"cycleway\"")).collect::<Vec<_>>().join("\n")
+    }
+
+    #[test]
+    fn a_record_made_with_the_track_one_way_applies_to_the_street_when_it_is_two_way() {
+        let before = osm_import::import(without_tracks().as_bytes()).unwrap();
+        let now = osm_import::import(FIXTURE.as_bytes()).unwrap();
+        let storage = Rc::new(MemoryStorage::default());
+        let store = CityStore::for_area(storage.clone() as Rc<dyn Storage>, Area::new("Saint-Marc", 45.4935, -73.58));
+        assert!(store.keep_network(&before));
+        // way 330153470's street
+        let index = before
+            .roads
+            .iter()
+            .position(|r| r.osm_ways.contains(&330153470))
+            .unwrap_or_else(|| panic!("no street: {:?}", before.roads.iter().map(|r| &r.osm_ways).collect::<Vec<_>>()));
+        let view = store.open().view(0);
+        let (uid, one_way_mm) = (view.edges[index].uid, view.edges[index].row_mm);
+        assert_eq!(one_way_mm, 10_700, "as De Maisonneuve was imported until now");
+        let mut edited = store.open().street_editor(uid, 0).unwrap().snapshot();
+        edited.next_uid += 1;
+        assert!(store.write_street(uid, edited.clone()));
+
+        assert!(store.keep_network(&now));
+        let city = store.open();
+        let view = city.view(0);
+        let index = now.roads.iter().position(|r| r.osm_ways.contains(&330153470)).unwrap();
+        let bike = now.roads[index].lanes.iter().find(|l| l.kind == osm_import::LaneKind::Bike).unwrap();
+        assert_eq!((bike.way, bike.width_m), (osm_import::Way::Both, 3.0), "the street is two-way now");
+        assert_eq!(view.edges[index].row_mm, one_way_mm, "and is shown as it was saved");
+        assert!(view.edges[index].edited, "and the record made at {one_way_mm} mm still applies");
+        assert_eq!(city.street_editor(view.edges[index].uid, 0).unwrap().snapshot(), edited);
+    }
+}
