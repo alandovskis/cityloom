@@ -90,11 +90,19 @@ test("an edit made offline is sent when the network returns, and the menu says s
   await context.setOffline(true);
   await widen(page);
   await expect(page.locator("#sync-status")).toHaveText("Not synced yet");
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-sync") ?? "{}").records)).toBeTruthy();
+  // the marked record is the street that was edited, and it waits to be sent
+  await expect.poll(async () => (await editedStreets(page)).length).toBe(1);
+  const [edited] = await editedStreets(page);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-sync") ?? "{}").records)).toMatchObject({
+    [`street/${edited}`]: { pending: true, deleted: false },
+  });
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect(page.locator("#sync-status")).toHaveText("Synced");
   await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("cityloom-sync") ?? "{}").records)).toMatchObject({
+    [`street/${edited}`]: { pending: false },
+  });
 });
 
 test("the last edit is sent when the page is left, with nothing else to send it", async ({
@@ -103,11 +111,32 @@ test("the last edit is sent when the page is left, with nothing else to send it"
   baseURL,
 }) => {
   await storingAccount(page, context, baseURL!);
+  // Which writes to /api/work asked for `keepalive`, noted in storage because the page is gone when it matters.
+  await page.addInitScript(() => {
+    const real = window.fetch;
+    window.fetch = function (input: any, init?: any) {
+      // the app passes a Request, whose own `keepalive` is what the browser honours
+      const method = String(input?.method ?? init?.method ?? "GET");
+      if (String(input?.url ?? input).includes("/api/work") && method !== "GET") {
+        const noted = JSON.parse(localStorage.getItem("e2e-work-writes") ?? "[]");
+        noted.push(!!(input?.keepalive ?? init?.keepalive));
+        localStorage.setItem("e2e-work-writes", JSON.stringify(noted));
+      }
+      return real.call(this, input, init);
+    } as typeof fetch;
+  });
   await openStreet(page, 0);
   await widen(page);
-  // no other page of the app opens to find it marked: only the keepalive request of the page being left can send it
+  // Nothing else can send it: no other page of the app opens to find it marked. Whether the 250 ms debounce had already
+  // sent it first is told by the recorded fetches: the test needs a keepalive one.
   await page.goto("about:blank");
   await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  const reader = await context.newPage();
+  await reader.goto("/map.html");
+  expect(
+    await reader.evaluate(() => JSON.parse(localStorage.getItem("e2e-work-writes") ?? "[]")),
+    "the writes to /api/work, whether each asked for keepalive",
+  ).toContain(true);
 });
 
 test("when two devices changed the same place the later edit is kept on both and the other device says so", async ({
@@ -162,11 +191,22 @@ test("turning storage off asks first, deletes the server copy, keeps this browse
   expect((await serverWork(context)).status).toBe(409);
   expect(await editedStreets(page)).toHaveLength(1);
   // the other device learns it the next time it syncs, stops syncing and keeps its own copy
+  const phoneEdits = await streetEdits(phone.page);
+  // the phone's own page asks the server who it is, and is told that storage is off: the sign it has been told
+  const told = phone.page.waitForResponse(
+    async (r) => r.url().endsWith("/api/me") && (await r.json()).store_on_server === false,
+  );
   await phone.page.goto("/map.html");
   await phone.page.evaluate(() => window.dispatchEvent(new Event("online")));
-  await phone.page.locator("#session-btn").click();
+  await told;
+  // the positive sign that the phone has learned it: the status goes away and the server says storage is off
   await expect(phone.page.locator("#sync-status")).toHaveCount(0);
-  expect(await editedStreets(phone.page)).toHaveLength(1);
+  expect(await phone.page.evaluate(async () => (await (await fetch("/api/me")).json()).store_on_server)).toBe(false);
+  // and then its work is as it was, and the server has nothing of it
+  await expect.poll(async () => streetEdits(phone.page)).toEqual(phoneEdits);
+  expect(phoneEdits).toBeTruthy();
+  expect(Object.keys(phoneEdits)).toHaveLength(1);
+  expect((await serverWork(context)).status).toBe(409);
   await phone.context.close();
 });
 
@@ -218,4 +258,33 @@ test("deleting the account deletes the server copy and keeps the browser's work"
   await expect(page).toHaveURL(/index\.html$/);
   expect((await serverWork(context)).status).toBe(401);
   expect(await editedStreets(page)).toHaveLength(1);
+});
+
+// A "received" count above zero cannot be reached by opting in: stopping deletes the server copy, so an account that is
+// not storing on the server holds nothing there. The same merge runs, silently, when a device signs in to an account
+// that already stores its work: the device receives what the server holds and sends what only it has.
+test("a device that signs in to a storing account receives its places and sends its own", async ({
+  page,
+  context,
+  browser,
+  baseURL,
+}) => {
+  const sub = await storingAccount(page, context, baseURL!);
+  await openStreet(page, 0);
+  await widen(page);
+  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(1);
+  const [onLaptop] = await editedStreets(page);
+  const phone = await anotherBrowser(browser, baseURL!);
+  await openStreet(phone.page, 1);
+  await widen(phone.page); // signed out: marked, not sent
+  await expect.poll(async () => (await editedStreets(phone.page)).length).toBe(1); // kept after the debounce
+  const [onPhone] = await editedStreets(phone.page);
+  expect(onPhone).not.toBe(onLaptop);
+  await loginAs(phone.context, baseURL!, { sub, name: "Ada", email: "ada@example.org" });
+  await phone.page.goto("/map.html");
+  await chooseProvider(phone.page, "fake");
+  await expect(phone.page.locator("#session-btn-label")).toHaveText("Ada");
+  await expect.poll(async () => (await editedStreets(phone.page)).sort()).toEqual([onLaptop, onPhone].sort()); // received
+  await expect.poll(async () => (await serverWork(context)).body?.records.length).toBe(2); // sent
+  await phone.context.close();
 });
