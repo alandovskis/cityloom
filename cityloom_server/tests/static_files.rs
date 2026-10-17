@@ -332,3 +332,26 @@ async fn every_page_of_the_site_names_existing_versioned_assets() {
     }
     assert!(checked >= 12, "the pages' scripts and styles were found ({checked})");
 }
+
+/// A 304 replaces the headers of the stored response, so it must carry the policy the 200 carried.
+#[tokio::test]
+async fn a_304_keeps_the_cache_policy_of_its_200() {
+    let (_d, router) = code_site();
+    let id = build_id(&get(&router, "/map.html", None).await.2);
+    for (path, policy) in [
+        (format!("/v/{id}/app.css"), "public, max-age=31536000, immutable"),
+        ("/data/metro/index.json".to_string(), "public, max-age=300, stale-while-revalidate=86400"),
+        ("/glyphs/Font/0-255.pbf".to_string(), "public, max-age=86400, stale-while-revalidate=604800"),
+    ] {
+        let (status, headers, _) = get(&router, &path, None).await;
+        assert_eq!((status, headers[header::CACHE_CONTROL].to_str().unwrap()), (StatusCode::OK, policy), "{path}");
+        let etag = headers[header::ETAG].to_str().unwrap().to_string();
+        let (status, headers, body) = get_with(&router, &path, &[("if-none-match", &etag)]).await;
+        assert_eq!((status, body.len()), (StatusCode::NOT_MODIFIED, 0), "{path}");
+        assert_eq!(headers[header::CACHE_CONTROL], policy, "{path}: the 304 says what the 200 said");
+        assert_eq!(headers[header::ETAG].to_str().unwrap(), etag, "{path}");
+        let modified = get(&router, &path, None).await.1[header::LAST_MODIFIED].to_str().unwrap().to_string();
+        let (status, headers, _) = get_with(&router, &path, &[("if-modified-since", &modified)]).await;
+        assert_eq!((status, headers[header::CACHE_CONTROL].to_str().unwrap()), (StatusCode::NOT_MODIFIED, policy), "{path}: by date");
+    }
+}
