@@ -2,9 +2,11 @@
 
 mod index;
 mod pack;
+mod unpack;
 
 pub use index::*;
 pub use pack::*;
+pub use unpack::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveError {
