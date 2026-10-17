@@ -34,8 +34,8 @@ fn attributes(value: String, max_age: i64) -> Cookie<'static> {
 
 pub fn cookie(flow: &FlowState, key: &Key) -> Cookie<'static> {
     let mut jar = CookieJar::new();
-    jar.private_mut(key).add(Cookie::new(COOKIE, serde_json::to_string(flow).expect("a flow serialises")));
-    attributes(jar.get(COOKIE).expect("just added").value().to_string(), MAX_AGE_SECS)
+    jar.private_mut(key).add(attributes(serde_json::to_string(flow).expect("a flow serialises"), MAX_AGE_SECS));
+    jar.get(COOKIE).expect("just added").clone()
 }
 
 pub fn removal() -> Cookie<'static> {
