@@ -147,7 +147,8 @@ fn code_site() -> (tempfile::TempDir, Router) {
     std::fs::write(root.join("data/app.js"), "not code").unwrap();
     std::fs::create_dir_all(root.join("glyphs/Font")).unwrap();
     std::fs::write(root.join("glyphs/Font/0-255.pbf"), vec![9u8; 500]).unwrap();
-    let router = cityloom_server::static_files::router(root.to_path_buf(), "no-cache".to_string());
+    // Looked at on every request: these tests change the files and ask again at once.
+    let router = cityloom_server::static_files::router_checking_every(root.to_path_buf(), "no-cache".to_string(), std::time::Duration::ZERO);
     (dir, router)
 }
 
@@ -462,4 +463,17 @@ async fn a_compressed_copy_older_than_its_file_is_not_sent() {
     assert_eq!((headers[header::CONTENT_ENCODING].to_str().unwrap(), body), ("gzip", b"STALE-GZIP".to_vec()));
     let (_, headers, body) = get_with(&router, "/pkg/glue_bg.wasm", &[("accept-encoding", "br, gzip")]).await;
     assert_eq!((headers[header::CONTENT_ENCODING].to_str().unwrap(), body), ("br", b"STALE-BROTLI".to_vec()));
+}
+
+/// In production the files never change while the server runs: the tree is not walked again on every request.
+#[tokio::test]
+async fn the_build_is_looked_for_again_only_after_the_interval() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("map.html"), "v/{{build}}/app.css").unwrap();
+    std::fs::write(dir.path().join("app.css"), "a").unwrap();
+    let router = cityloom_server::static_files::router_checking_every(dir.path().to_path_buf(), "no-cache".into(), std::time::Duration::from_secs(3600));
+    let before = build_id(&get(&router, "/map.html", None).await.2);
+    std::fs::write(dir.path().join("app.css"), "changed").unwrap();
+    assert_eq!(build_id(&get(&router, "/map.html", None).await.2), before);
+    assert_eq!(get(&router, &format!("/v/{before}/app.css"), None).await.2, b"changed", "the name still holds");
 }
