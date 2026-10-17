@@ -61,7 +61,9 @@ fn legacy_pieces(lanes: &[Lane]) -> Vec<Piece> {
 }
 
 /// The lanes as they were read before the ways of a bike track were fetched: a lane that runs both ways, which that
-/// made of a track beside a one-way road, is a one-way lane of half the width (the join made it of two).
+/// made of a track beside a one-way road, is a one-way lane of half the width (the join made it of two). Known limits:
+/// a side whose two lanes were not equal (a `cycleway:<side>:width`) gives no width that was, so its record stays an
+/// orphan; and a lane that was two-way before (`cycleway:<side>:oneway=no`) is offered a width it never had.
 fn one_way_bike_lanes(lanes: &[Lane]) -> Vec<Lane> {
     lanes
         .iter()

@@ -589,7 +589,7 @@ mod tests {
 
     #[test]
     fn a_street_edited_under_importer_version_4_with_a_one_way_lane_is_found_by_both_changes_together() {
-        let (ports, _, storage) = test_ports();
+        let (ports, _, _storage) = test_ports();
         let area = CityStore::for_area(ports.storage, Area::new("Testville", 1.0, 2.0));
         let curbed_one_way = |legacy: bool, two_way: bool| {
             let mut n = curbed_network(legacy);
@@ -603,7 +603,6 @@ mod tests {
         assert!(area.keep_network(&curbed_one_way(false, true)));
         assert_eq!(area.open().view(0).edited, 1);
         assert_eq!(area.open().street_editor(street, 0).unwrap().snapshot(), saved);
-        drop(storage);
     }
 
     #[test]
