@@ -1,0 +1,29 @@
+name: Issue labels
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+  contents: read
+
+# Labels an issue from what the reporter picked on the form (the page and the browser), by the rules in
+# .github/issue-labeler.yml, and from nothing else. Actions are pinned to a commit; Dependabot proposes the updates.
+jobs:
+  label:
+    name: Label from the form
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/issue-labeler@ccca1e16fcb66762200e616fc29b57b940c1cb67 # v3.5
+        with:
+          configuration-path: .github/issue-labeler.yml
+          enable-versioned-regex: 0
+          # Off, so a label the maintainer added by hand is never taken away. An edited answer adds the new label
+          # and leaves the old one for the maintainer.
+          sync-labels: 0
+          repo-token: ${{ github.token }}

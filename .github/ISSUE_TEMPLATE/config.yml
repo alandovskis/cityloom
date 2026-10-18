@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Documentation (English)"
+    url: https://alandovskis.github.io/cityloom/
+    about: "How CityLoom works, and how to report a problem. / Comment fonctionne CityLoom, et comment signaler un problème."
+  - name: "Documentation (français)"
+    url: https://alandovskis.github.io/cityloom/fr-CA/
+    about: "Comment fonctionne CityLoom, et comment signaler un problème. / How CityLoom works, and how to report a problem."

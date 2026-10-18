@@ -1,0 +1,55 @@
+name: "Something is broken / Quelque chose est brisé"
+description: "Something does not work as it should. / Quelque chose ne fonctionne pas comme il le devrait."
+title: "[Bug / Bogue] "
+labels:
+  - "C-bug · bogue"
+  - "needs-triage · à trier"
+body:
+  - type: dropdown
+    id: page
+    attributes:
+      label: "Which page were you on? / Sur quelle page étiez-vous?"
+      description: "The page where you saw it. / La page où vous l’avez vu."
+      options:
+        - "Home (finding a place) / Accueil (chercher un lieu)"
+        - "Map / Carte"
+        - "Area rules (on the map) / Règles de zone (sur la carte)"
+        - "Street editor / Éditeur de rues"
+        - "Street in 2.5D / Rue en 2,5D"
+        - "Junction editor / Éditeur de jonctions"
+        - "Account / Compte"
+        - "Documentation"
+        - "Not sure / Je ne sais pas"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: "What happened? / Que s’est-il passé?"
+      description: "Tell us in your own words. / Dites-le dans vos mots."
+      placeholder: "I pressed Undo and the street disappeared. / J’ai appuyé sur Annuler et la rue a disparu."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "What did you expect? / Qu’attendiez-vous?"
+      description: "What should have happened instead. / Ce qui aurait dû se passer."
+      placeholder: "The street should have gone back. / La rue aurait dû revenir en arrière."
+    validations:
+      required: false
+  - type: dropdown
+    id: browser
+    attributes:
+      label: "Browser / Navigateur"
+      description: "What you were using. / Ce que vous utilisiez."
+      options:
+        - "Chrome"
+        - "Edge"
+        - "Firefox"
+        - "Safari (Mac)"
+        - "Safari (iPhone or iPad) / Safari (iPhone ou iPad)"
+        - "Chrome (Android)"
+        - "Other or not sure / Autre ou incertain"
+    validations:
+      required: true

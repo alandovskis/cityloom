@@ -1,0 +1,55 @@
+name: "An idea / Une idée"
+description: "Something CityLoom could do that it does not do yet. / Quelque chose que CityLoom pourrait faire et qu’il ne fait pas encore."
+title: "[Idea / Idée] "
+labels:
+  - "C-enhancement · amélioration"
+  - "needs-triage · à trier"
+body:
+  - type: dropdown
+    id: page
+    attributes:
+      label: "Which page were you on? / Sur quelle page étiez-vous?"
+      description: "The page where you saw it. / La page où vous l’avez vu."
+      options:
+        - "Home (finding a place) / Accueil (chercher un lieu)"
+        - "Map / Carte"
+        - "Area rules (on the map) / Règles de zone (sur la carte)"
+        - "Street editor / Éditeur de rues"
+        - "Street in 2.5D / Rue en 2,5D"
+        - "Junction editor / Éditeur de jonctions"
+        - "Account / Compte"
+        - "Documentation"
+        - "Not sure / Je ne sais pas"
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: "Your idea / Votre idée"
+      description: "Describe it in your own words. / Décrivez-la dans vos mots."
+      placeholder: "Show the trees on the junction plan. / Montrer les arbres sur le plan de la jonction."
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: "What problem would it solve? / Quel problème réglerait-elle?"
+      description: "Who needs it, and why. / Qui en a besoin, et pourquoi."
+      placeholder: "I cannot show shade to residents. / Je ne peux pas montrer l’ombre aux résidents."
+    validations:
+      required: false
+  - type: dropdown
+    id: browser
+    attributes:
+      label: "Browser / Navigateur"
+      description: "What you were using. / Ce que vous utilisiez."
+      options:
+        - "Chrome"
+        - "Edge"
+        - "Firefox"
+        - "Safari (Mac)"
+        - "Safari (iPhone or iPad) / Safari (iPhone ou iPad)"
+        - "Chrome (Android)"
+        - "Other or not sure / Autre ou incertain"
+    validations:
+      required: true
