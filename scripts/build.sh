@@ -12,7 +12,7 @@ if [ "$(uname)" = Darwin ]; then
   DYLD_FALLBACK_LIBRARY_PATH="$(rustc --print sysroot)/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
   export DYLD_FALLBACK_LIBRARY_PATH
 fi
-cargo build --release --target wasm32-unknown-unknown --workspace --exclude cityloom_server
+cargo build --release --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude cityloom_prepare
 wasm-bindgen --target web --no-typescript --remove-name-section --remove-producers-section --out-dir web/pkg \
   target/wasm32-unknown-unknown/release/cityloom_editor.wasm
 # The OpenStreetMap reader is its own module, loaded when a place is opened.
@@ -25,3 +25,7 @@ mkdir -p web/vendor
 cp node_modules/maplibre-gl/dist/maplibre-gl.mjs node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs \
   node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl.css \
   node_modules/pmtiles/dist/pmtiles.js web/vendor/
+# Compressed copies of the built files, which the server sends as they are (see the script). If this script stops
+# before here (a missing tool), a copy from an earlier run is left beside a newer file; the server does not send a
+# copy older than its file (static_files.rs), and the next complete run writes them again.
+node scripts/precompress.mjs web/pkg web/vendor

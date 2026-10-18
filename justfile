@@ -31,7 +31,7 @@ build:
 test:
     @[ -n "${DATABASE_URL:-}" ] || { echo "DATABASE_URL is not set: the server's tests need a Postgres (run 'just db' and export the URL it prints)" >&2; exit 1; }
     cargo test --workspace --features cityloom_server/test-provider
-    cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server
+    cargo build --target wasm32-unknown-unknown --workspace --exclude cityloom_server --exclude cityloom_prepare
 
 # A throwaway Postgres for the server's tests, on 127.0.0.1 only (port 55432 unless given). Running it again starts the same container. It prints the DATABASE_URL to export; `just db-stop` removes it.
 db port="55432":
@@ -83,6 +83,10 @@ sonar-reports:
 # Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool) and build the basemap in web/data/basemap (needs Java 21+). `just prepare --refresh` downloads a newer extract.
 prepare *args:
     ./scripts/prepare.py {{args}}
+
+# Pack web/data/metro and web/data/basemap into data/montreal.cityloom (`just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Arguments go to `cityloom_prepare pack`.
+pack *args:
+    cargo run --release -q -p cityloom_prepare -- pack {{args}}
 
 # Serve the pages at http://127.0.0.1:8137/ (build first). The server answers range requests, as the map's tiles need.
 serve:

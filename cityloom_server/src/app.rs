@@ -148,7 +148,7 @@ impl KeyExtractor for ProxyIpKeyExtractor {
 }
 
 pub fn router(config: &Config, account: Option<Arc<Account>>) -> Router {
-    let site = static_files::router(config.web_root.clone(), config.cache_control.clone());
+    let site = static_files::router_with_data(config.web_root.clone(), config.data_mount.clone(), config.cache_control.clone());
     let Some(account) = account else {
         return Router::new().fallback_service(site.layer(middleware::from_fn(account_off))).layer(middleware::from_fn(log_requests));
     };

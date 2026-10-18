@@ -7,17 +7,24 @@
   <meta name="description" data-i18n-content="jn-page-description" content="Change how a junction of streets works: corners, crossings, lanes, turns and control.">
   <meta name="color-scheme" content="light dark">
   <script>try{var t=localStorage.getItem("cityloom-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;var n=localStorage.getItem("cityloom-notes");if(n==="open"||n==="closed")document.documentElement.dataset.notes=n;if(localStorage.getItem("cityloom-inspector")==="closed")document.documentElement.dataset.inspector="closed";var l=localStorage.getItem("cityloom-lang");if(l==="en"||l==="fr-CA")document.documentElement.lang=l}catch(e){}</script>
+  <link rel="modulepreload" href="v/{{build}}/pkg/cityloom_editor.js">
+  <link rel="preload" as="fetch" crossorigin href="v/{{build}}/pkg/cityloom_editor_bg.wasm">
+  <link rel="preload" as="fetch" crossorigin href="data/metro/index.json">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="stylesheet" href="app.css">
-  <link rel="stylesheet" href="editor.css">
+  <link rel="stylesheet" href="v/{{build}}/app.css">
+  <link rel="stylesheet" href="v/{{build}}/editor.css">
 </head>
 <body>
   <a class="skip-link" href="#wrap" data-i18n="ui-skip-drawing">Skip to the drawing</a>
+  <div id="boot-failed" role="alert" hidden style="position:fixed;inset:0 0 auto 0;z-index:100;padding:12px 16px;background:Canvas;color:CanvasText;border-bottom:2px solid CanvasText;font:15px/1.4 system-ui,sans-serif">
+    <div lang="en" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom could not load. Reload the page; if that does not help, check your connection.</p> <a href="" data-boot="ui-boot-reload">Reload</a></div>
+    <div lang="fr-CA" hidden><p data-boot="ui-boot-failed" style="display:inline;margin:0">CityLoom n’a pas pu se charger. Rechargez la page; si cela ne règle rien, vérifiez votre connexion.</p> <a href="" data-boot="ui-boot-reload">Recharger</a></div>
+  </div>
   <svg id="defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"></svg>
 
   <header class="bar" data-covers>
-    <a class="brand" href="index.html" data-i18n-aria-label="ui-home" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="brand.svg#wordmark"/></svg></a>
+    <a class="brand" href="index.html" data-i18n-aria-label="ui-home" aria-label="CityLoom, home"><svg class="logo" viewBox="0 0 236.3 56" aria-hidden="true" focusable="false"><use href="v/{{build}}/brand.svg#wordmark"/></svg></a>
     <nav class="surfaces" data-i18n-aria-label="jn-page-editors" aria-label="Editors">
       <a href="map.html" class="surface" data-i18n="jn-page-map">Map</a>
     </nav>
@@ -159,6 +166,7 @@
   </aside>
 
   <output id="live" class="sr-only" aria-live="polite"></output>
-  <script type="module" src="junction.js"></script>
+  <script src="boot.js"></script>
+  <script type="module" src="v/{{build}}/junction.js" onerror="window.cityloomBootFailed&&cityloomBootFailed()"></script>
 </body>
 </html>

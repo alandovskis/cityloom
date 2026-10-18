@@ -39,6 +39,22 @@ impl MapPage {
     pub fn mount_shell(&self) {
         crate::shell::mount(self.1.clone(), self.0.clone(), "details-areas", true);
     }
+
+    /// The home page's city: its roads have been got (`prepare_city`), so the city behind the hero card and the
+    /// line saying how it stands are drawn. Until then the page shows its search and no city, so the search
+    /// is not kept waiting for the roads.
+    pub fn mount_city(&self) {
+        self.0.reopen();
+        let vm = self.0.clone();
+        let at =
+            |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
+        leptos::mount::mount_to(at("hero-map-slot"), {
+            let vm = vm.clone();
+            move || view! { <home::HeroMap vm=vm.clone()/> }.into_any()
+        })
+        .forget();
+        leptos::mount::mount_to(at("hero-facts-slot"), move || view! { <home::HeroFacts vm=vm.clone()/> }.into_any()).forget();
+    }
 }
 
 /// Draws the city map page into the elements it keeps for it, over the basemap the script made, and hands
@@ -71,9 +87,9 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     MapPage(vm, i18n)
 }
 
-/// Draws the home page into the elements it keeps for it: the city behind the
-/// hero card, the search box, and how the city stands. Hands back what the script
-/// needs to reach it.
+/// Draws the home page's search box into the element it keeps for it, and hands back what the script needs to
+/// reach the page. The city behind the hero card and how it stands come later, from `MapPage::mount_city`, once
+/// the area's roads are got.
 #[wasm_bindgen]
 pub fn mount_home() -> MapPage {
     // Components create effects as they are built, before any is mounted.
@@ -87,8 +103,10 @@ pub fn mount_home() -> MapPage {
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
-    mount("hero-map-slot", view! { <home::HeroMap vm=vm.clone()/> }.into_any());
-    mount("search-slot", view! { <crate::place::view::AreaSearch vm=crate::place::vm::AreaVm::new(browser_ports(), i18n.clone())/> }.into_any());
-    mount("hero-facts-slot", view! { <home::HeroFacts vm=vm.clone()/><home::HomeTitle vm=vm.clone()/> }.into_any());
+    // The window title is the page's own and does not wait for the city; it renders nothing.
+    mount(
+        "search-slot",
+        view! { <crate::place::view::AreaSearch vm=crate::place::vm::AreaVm::new(browser_ports(), i18n.clone())/><home::HomeTitle vm=vm.clone()/> }.into_any(),
+    );
     MapPage(vm, i18n)
 }

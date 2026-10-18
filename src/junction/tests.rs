@@ -1496,6 +1496,10 @@ fn intersection_html_leaves_no_text_without_its_message() {
     // language's own name or the Atlas's name.
     use crate::shell::view::i18n_keys;
     let body = &INTERSECTION_HTML[INTERSECTION_HTML.find("<body>").unwrap()..];
+    // The page's start-failure notice is worded in both languages in its own markup, because the module that holds
+    // the messages is what failed to load: `shell::tests` checks it against them.
+    let notice = body.find(r#"<div id="boot-failed""#).unwrap();
+    let body = &format!("{}{}", &body[..notice], &body[notice + body[notice..].find("\n  </div>\n").unwrap()..]);
     let translated: Vec<String> = i18n_keys(body).into_iter().map(|(_, text)| text).collect();
     let own = ["m", "ft", "Z", "V", "English", "Français", "Transit Priority Atlas"];
     for piece in body.split('>').filter_map(|p| p.split('<').next()).map(str::trim).filter(|t| !t.is_empty()) {

@@ -9,9 +9,10 @@ description = "CityLoom's server: serves web/ and, later, the accounts."
 test-provider = ["dep:jsonwebtoken"]
 
 [dependencies]
+cityloom_prepare = { path = "../cityloom_prepare", default-features = false }
 axum = "0.8.9"
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "net", "signal", "time", "fs"] }
-tower-http = { version = "0.7.1", features = ["fs"] }
+tower-http = { version = "0.7.1", features = ["fs", "compression-br", "compression-gzip"] }
 percent-encoding = "2.3.2"
 cookie = { version = "0.18.2", features = ["private"] }
 serde = { version = "1", features = ["derive"] }
@@ -40,10 +41,10 @@ http = "1"
 chrono = "0.4"
 axum-extra = { version = "0.12.6", features = ["cookie"] }
 tower_governor = "0.8.0"
+tower = { version = "0.5.3", features = ["util"] }
 
 [dev-dependencies]
 jsonwebtoken = { version = "11.1.0", default-features = false, features = ["use_pem", "rust_crypto"] }
 tempfile = "3.27.0"
 tokio = { version = "1.53.3", features = ["test-util"] }
-tower = { version = "0.5.3", features = ["util"] }
 http-body-util = "0.1.5"

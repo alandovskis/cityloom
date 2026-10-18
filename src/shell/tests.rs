@@ -198,3 +198,63 @@ fn the_details_panel_of_each_editor_opens_with_a_heading_its_sections_sit_under(
         assert!(first.starts_with(&format!("<h2 class=\"sr-only\" data-i18n=\"{key}\">")), "{page}: {}", &first[..80]);
     }
 }
+
+/// The pages that run the module say, in their own markup, that it could not start: the module holds every other
+/// message, and it is what did not load. `web/boot.js` shows the block of the page's language.
+#[test]
+fn every_page_that_loads_the_module_has_its_start_failure_in_both_languages() {
+    let pages = [
+        ("index", include_str!("../../web/index.html")),
+        ("map", include_str!("../../web/map.html")),
+        ("street", include_str!("../../web/street.html")),
+        ("intersection", include_str!("../../web/intersection.html")),
+        ("account", include_str!("../../web/account.html")),
+    ];
+    let block_of = |html: &str| {
+        let start = html.find(r#"<div id="boot-failed""#).expect("the page has a boot-failed block");
+        html[start..start + html[start..].find("\n  </div>\n").expect("the block ends") + "\n  </div>\n".len()].to_string()
+    };
+    let first = block_of(pages[0].1);
+    for (name, html) in pages {
+        let block = block_of(html);
+        assert_eq!(block, first, "{name}.html says it differently from the other pages");
+        assert!(block.contains(r#"id="boot-failed" role="alert" hidden"#), "{name}.html: hidden until the script shows it, and then announced");
+        for (lang, locale) in [("en", Locale::En), ("fr-CA", Locale::FrCa)] {
+            let part = &block[block.find(&format!(r#"<div lang="{lang}" hidden>"#)).unwrap_or_else(|| panic!("{name}.html has no {lang} block"))..];
+            let part = &part[..part.find("</div>").unwrap()];
+            let i18n = crate::i18n_for(locale);
+            // `data-boot` is read as `data-i18n` is, but the shell does not fill it in: each block keeps its own language.
+            let texts = i18n_keys(&part.replace("data-boot=", "data-i18n="));
+            for (key, shown) in &texts {
+                assert_eq!(shown, &i18n.tr_now(key, &Args::new()), "{name}.html, {lang}, {key}");
+            }
+            assert_eq!(texts.len(), 2, "{name}.html, {lang}: the sentence and the way to reload");
+        }
+        // The entry script is itself a versioned address, which a deploy can retire under an open page: its failure to
+        // load is told by the one script that is not versioned, `boot.js`, loaded before it.
+        let boot = html.find(r#"<script src="boot.js"></script>"#).unwrap_or_else(|| panic!("{name}.html loads boot.js"));
+        let entry = html.find(r#"<script type="module" src="v/{{build}}/"#).unwrap_or_else(|| panic!("{name}.html has its entry script"));
+        assert!(boot < entry, "{name}.html: boot.js is loaded before the entry script");
+        assert!(
+            html[entry..].lines().next().unwrap().contains(r#" onerror="window.cityloomBootFailed&&cityloomBootFailed()"></script>"#),
+            "{name}.html: the entry script tells a failed load"
+        );
+        assert!(html.contains(r#"<link rel="modulepreload" href="v/{{build}}/pkg/cityloom_editor.js">"#), "{name}.html preloads the glue");
+        assert!(
+            html.contains(r#"<link rel="preload" as="fetch" crossorigin href="v/{{build}}/pkg/cityloom_editor_bg.wasm">"#),
+            "{name}.html preloads the module"
+        );
+    }
+}
+
+#[test]
+fn the_pages_that_read_the_city_preload_the_tile_index() {
+    for (name, html) in [
+        ("index", include_str!("../../web/index.html")),
+        ("map", include_str!("../../web/map.html")),
+        ("street", include_str!("../../web/street.html")),
+        ("intersection", include_str!("../../web/intersection.html")),
+    ] {
+        assert!(html.contains(r#"<link rel="preload" as="fetch" crossorigin href="data/metro/index.json">"#), "{name}.html");
+    }
+}
