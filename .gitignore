@@ -47,6 +47,5 @@ website/node_modules/
 website/build/
 website/.docusaurus/
 
-# Python: coverage.py's data and the scripts' bytecode.
-.coverage
+# Python: the scripts' bytecode.
 __pycache__/
