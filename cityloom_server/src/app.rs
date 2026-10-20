@@ -28,6 +28,7 @@ const LIMITER_CLEANUP: std::time::Duration = std::time::Duration::from_secs(60);
 
 pub struct Account {
     pub repo: Arc<dyn Repo>,
+    pub work: Arc<dyn crate::work::WorkRepo>,
     pub http: Arc<dyn HttpClient>,
     pub clock: Arc<dyn Clock>,
     pub providers: Providers,
@@ -36,6 +37,7 @@ pub struct Account {
     pub cookie_key: cookie::Key,
     pub base_url: url::Url,
     pub rate: RateLimit,
+    pub work_rate: RateLimit,
     /// False until the migrations have run once; `require_ready` answers 503 on `/auth/*` and `/api/*` meanwhile.
     pub ready: Arc<AtomicBool>,
     #[cfg(feature = "test-provider")]
@@ -67,6 +69,11 @@ fn json_body(status: StatusCode, body: String) -> Response {
 /// `{"error": code}`, never cached.
 pub fn json_error(status: StatusCode, code: &str) -> Response {
     json_body(status, serde_json::json!({ "error": code }).to_string())
+}
+
+/// A JSON answer that is never cached.
+pub fn json_response(status: StatusCode, value: serde_json::Value) -> Response {
+    json_body(status, value.to_string())
 }
 
 async fn unavailable() -> Response {

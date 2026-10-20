@@ -103,5 +103,7 @@ pub fn open_street(edge: u32) -> Option<Sheet> {
     let place = Place::Street(edge);
     // One instance for the page: the shell switches it and the street's words follow.
     let i18n = crate::i18n_browser(&ports);
-    Some(Sheet(vm::StreetVm::new(ports, i18n, street, Some(CityBinding { store, place }))))
+    let vm = vm::StreetVm::new(ports, i18n, street, Some(CityBinding { store, place }));
+    vm.watch_sync();
+    Some(Sheet(vm))
 }

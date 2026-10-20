@@ -57,6 +57,7 @@ pub struct AccountConfig {
     pub lookup_key: Zeroizing<[u8; 32]>,
     pub providers: Vec<ProviderCreds>,
     pub rate: RateLimit,
+    pub work_rate: RateLimit,
     pub fake_provider: bool,
 }
 
@@ -186,6 +187,8 @@ fn account(get: &dyn Fn(&str) -> Option<String>) -> Result<AccountConfig, OffRea
     };
     let rate =
         RateLimit { period_secs: positive("AUTH_RATE_PERIOD_SECS", DEFAULT_PERIOD_SECS as u32)? as u64, burst: positive("AUTH_RATE_BURST", DEFAULT_BURST)? };
+    // The work routes (sync) are called after edits, debounced: their own limit, much more generous than a sign-in's.
+    let work_rate = RateLimit { period_secs: positive("WORK_RATE_PERIOD_SECS", 1)? as u64, burst: positive("WORK_RATE_BURST", 60)? };
     // An empty value (`.env.example` ships them) is not set.
     let set = |variable: &str| get(variable).filter(|v| !v.trim().is_empty());
     let pair = |slug: &'static str, id: &str, secret: &str| -> Option<ProviderCreds> {
@@ -218,6 +221,7 @@ fn account(get: &dyn Fn(&str) -> Option<String>) -> Result<AccountConfig, OffRea
         lookup_key,
         providers,
         rate,
+        work_rate,
         fake_provider: get("FAKE_PROVIDER").as_deref() == Some("1"),
     })
 }
@@ -456,6 +460,18 @@ mod tests {
         );
         let AccountSide::On(a) = &c.account else { panic!() };
         assert_eq!(a.providers.iter().map(|p| p.slug).collect::<Vec<_>>(), ["microsoft"]);
+    }
+
+    #[test]
+    fn the_work_routes_have_their_own_rate_limit_with_generous_defaults() {
+        let c = with(&account_vars(), &[], &[]);
+        let AccountSide::On(a) = &c.account else { panic!() };
+        assert_eq!((a.work_rate.period_secs, a.work_rate.burst), (1, 60));
+        let c = with(&account_vars(), &[], &[("WORK_RATE_PERIOD_SECS", "2"), ("WORK_RATE_BURST", "5")]);
+        let AccountSide::On(a) = &c.account else { panic!() };
+        assert_eq!((a.work_rate.period_secs, a.work_rate.burst), (2, 5));
+        let c = with(&account_vars(), &[], &[("WORK_RATE_BURST", "0")]);
+        assert!(matches!(off(&c), OffReason::Invalid { variable: "WORK_RATE_BURST", .. }));
     }
 
     #[test]

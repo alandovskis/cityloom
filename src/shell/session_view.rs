@@ -57,6 +57,7 @@ pub fn SessionMenu(vm: Rc<SessionVm>) -> impl IntoView {
                     Session::SignedIn { name } => {
                         view! {
                             <p class="menu-h" id="session-heading">{name}</p>
+                            {move || vm.with_value(|v| v.sync_status()).map(|text| view! { <p class="menu-note" id="sync-status">{text}</p> })}
                             <p class="menu-act">
                                 <a class="btn" href="account.html">{move || tr("session-account")}</a>
                             </p>

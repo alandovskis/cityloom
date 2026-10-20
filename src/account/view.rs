@@ -23,6 +23,12 @@ fn radio(vm: Vm, value: &'static str, store: bool, label: &'static str, help: &'
                 value=value
                 checked=move || vm.with_value(|v| v.storage()) == Some(store)
                 prop:checked=move || vm.with_value(|v| v.storage()) == Some(store)
+                on:click=move |ev| {
+                    // Stopping server storage deletes the server copy: the radio stays where it is until confirmed.
+                    if vm.with_value(|v| v.guard_stop(store)) {
+                        ev.prevent_default();
+                    }
+                }
                 on:change=move |_| vm.with_value(|v| v.choose_storage(store))
             />
             <span class="choice-body">
@@ -44,6 +50,36 @@ fn storage(vm: Vm) -> impl IntoView {
                 {radio(vm, "device", false, "account-storage-device", "account-storage-device-help")}
                 {radio(vm, "server", true, "account-storage-server", "account-storage-server-help")}
             </div>
+            {move || {
+                vm.with_value(|v| v.confirming_stop())
+                    .then(|| {
+                        view! {
+                            <div
+                                role="group"
+                                aria-labelledby="h-stop"
+                                aria-describedby="stop-warning"
+                                id="stop-confirm"
+                                class="confirm"
+                                on:keydown=move |e| {
+                                    if e.key() == "Escape" {
+                                        e.stop_propagation();
+                                        vm.with_value(|v| v.cancel_stop());
+                                    }
+                                }
+                            >
+                                <h3 id="h-stop">{move || tr(vm, "account-stop-heading")}</h3>
+                                <p id="stop-warning">{move || tr(vm, "account-stop-warning")}</p>
+                                <button type="button" id="stop-no" class="btn" on:click=move |_| vm.with_value(|v| v.cancel_stop())>
+                                    {move || tr(vm, "account-stop-no")}
+                                </button>
+                                <button type="button" id="stop-yes" class="btn danger" on:click=move |_| vm.with_value(|v| v.confirm_stop())>
+                                    {move || tr(vm, "account-stop-yes")}
+                                </button>
+                            </div>
+                        }
+                    })
+            }}
+            {move || vm.with_value(|v| v.merge_text()).map(|text| view! { <p class="hint" id="merge-report">{text}</p> })}
         </section>
     }
 }
@@ -114,6 +150,19 @@ fn links(vm: Vm) -> impl IntoView {
     }
 }
 
+fn privacy(vm: Vm) -> impl IntoView {
+    view! {
+        <section class="account-section" aria-labelledby="h-privacy">
+            <h2 id="h-privacy">{move || tr(vm, "account-privacy-heading")}</h2>
+            <ul>
+                <li>{move || tr(vm, "account-privacy-sealed")}</li>
+                <li>{move || tr(vm, "account-privacy-plain")}</li>
+            </ul>
+            <p class="hint">{move || tr(vm, "account-privacy-delete")}</p>
+        </section>
+    }
+}
+
 fn delete(vm: Vm) -> impl IntoView {
     view! {
         <section class="account-section" aria-labelledby="h-delete">
@@ -167,6 +216,7 @@ fn ready(vm: Vm) -> impl IntoView {
         {linked(vm)}
         {links(vm)}
         {(!choice_first).then(|| storage(vm))}
+        {privacy(vm)}
         {delete(vm)}
         <p class="menu-act">
             <button type="button" class="btn" on:click=move |_| vm.with_value(|v| v.sign_out())>
@@ -217,6 +267,7 @@ pub fn AccountView(vm: Rc<AccountVm>) -> impl IntoView {
             Focus::Linked => "h-linked",
             Focus::DeleteButton => "delete-btn",
             Focus::DeleteSafe => "delete-no",
+            Focus::StopSafe => "stop-no",
         };
         if let Some(el) = document().get_element_by_id(id).and_then(|e| e.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
             let _ = el.focus();

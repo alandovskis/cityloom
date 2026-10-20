@@ -480,6 +480,12 @@ a.btn {
   font-size: 16px;
   font-weight: 700;
 }
+
+.menu-note {
+  margin: 0 0 6px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
 .menu-row {
   display: flex;
   align-items: center;

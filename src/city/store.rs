@@ -7,12 +7,13 @@ use std::rc::Rc;
 
 use osm_network::Network;
 
-use crate::city::edits::{self, DAMAGED_KEY, Document, Draft, EDITS_KEY, Edits};
+use crate::city::edits::{self, DAMAGED_KEY, Document, Draft, EDITS_KEY, Edits, JUNCTIONS, STREETS};
 use crate::city::model::{City, Layout};
 use crate::junction::model::State;
 use crate::place::area::{Area, default_area};
 use crate::shared::ports::Storage;
 use crate::street::model::Street;
+use crate::sync::model::Kind;
 
 /// The area the person is working in, which every page opens its city from.
 pub const AREA_KEY: &str = "cityloom-area";
@@ -76,7 +77,11 @@ impl CityStore {
 
     /// Makes `area` the one every page opens. Says whether that was kept.
     pub fn choose(storage: &dyn Storage, area: &Area) -> bool {
-        storage.remember(AREA_KEY, &area.to_query())
+        let kept = storage.remember(AREA_KEY, &area.to_query());
+        if kept {
+            crate::sync::model::mark(storage, Kind::Area, crate::sync::model::AREA_RECORD, false);
+        }
+        kept
     }
 
     pub fn area(&self) -> &Area {
@@ -162,12 +167,24 @@ impl CityStore {
         let Some((key, record)) = city.street_record(edge) else { return false };
         // the record the street took, under another key, is replaced: left, it would bring the older edit back
         let took = city.took_street(edge).filter(|&k| k != key).map(str::to_string);
-        self.upsert(|draft| {
-            if let Some(old) = took {
-                draft.remove_street(&old);
+        let unedited = self.unedited().street_record(edge).filter(|(k, _)| *k == key).and_then(|(_, r)| serde_json::to_value(r).ok());
+        let (mut changed, mut replaced) = (false, None);
+        let kept = self.upsert(|draft| {
+            let before = draft.get_raw(STREETS, &key).cloned().or_else(|| unedited.clone());
+            if let Some(old) = &took {
+                if draft.get_raw(STREETS, old).is_some() {
+                    replaced = Some(old.clone());
+                }
+                draft.remove_street(old);
             }
-            draft.put_street(&key, &record)
-        })
+            let kept = draft.put_street(&key, &record);
+            changed = draft.get_raw(STREETS, &key) != before.as_ref();
+            kept
+        });
+        if kept {
+            self.mark_written(Kind::Street, &key, changed, replaced.as_deref());
+        }
+        kept
     }
 
     /// The same for the junction at `node`.
@@ -178,12 +195,42 @@ impl CityStore {
         }
         let Some((key, record)) = city.junction_record(node) else { return false };
         let took = city.took_junction(node).filter(|&k| k != key).map(str::to_string);
-        self.upsert(|draft| {
-            if let Some(old) = took {
-                draft.remove_junction(&old);
+        let unedited = self.unedited().junction_record(node).filter(|(k, _)| *k == key).and_then(|(_, r)| serde_json::to_value(r).ok());
+        let (mut changed, mut replaced) = (false, None);
+        let kept = self.upsert(|draft| {
+            let before = draft.get_raw(JUNCTIONS, &key).cloned().or_else(|| unedited.clone());
+            if let Some(old) = &took {
+                if draft.get_raw(JUNCTIONS, old).is_some() {
+                    replaced = Some(old.clone());
+                }
+                draft.remove_junction(old);
             }
-            draft.put_junction(&key, &record)
-        })
+            let kept = draft.put_junction(&key, &record);
+            changed = draft.get_raw(JUNCTIONS, &key) != before.as_ref();
+            kept
+        });
+        if kept {
+            self.mark_written(Kind::Junction, &key, changed, replaced.as_deref());
+        }
+        kept
+    }
+
+    /// The city as first laid out, with no edit: what a place's record is until the person changes it.
+    fn unedited(&self) -> City {
+        City::load_on(self.layout(), &Edits::new())
+    }
+
+    /// What both writes tell the sync once the document is kept. The record is marked only when what is stored
+    /// changed: the keeper also writes when the person only selects a piece, and a selection is not an edit (marked, it
+    /// would let a device that merely looked at a place beat, by its time, a real edit made on another). The record
+    /// the place took over under another key is marked as a removal, which other devices must hear of.
+    fn mark_written(&self, kind: Kind, key: &str, changed: bool, replaced: Option<&str>) {
+        if changed {
+            crate::sync::model::mark(&*self.storage, kind, key, false);
+        }
+        if let Some(old) = replaced {
+            crate::sync::model::mark(&*self.storage, kind, old, true);
+        }
     }
 
     /// Changes the document as it is kept now and keeps it, every record `change` leaves alone exactly as it was
@@ -842,5 +889,78 @@ mod tests {
         assert_eq!(s.region(), 3);
         st.remember(REGION_KEY, "nowhere");
         assert_eq!(s.region(), 0);
+    }
+
+    use crate::sync::model::{self as sync, Entry};
+
+    fn marked(storage: &MemoryStorage, name: &str) -> Option<Entry> {
+        sync::open(storage).unwrap().records.get(name).cloned()
+    }
+
+    #[test]
+    fn a_written_street_waits_to_be_sent_edited_at_the_time_of_the_write_and_again_at_the_next() {
+        let (store, storage) = store();
+        storage.set_now(1_800_000_000_000);
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        let name = format!("street/{}", document(&storage).streets.keys().next().unwrap());
+        assert_eq!(
+            marked(&storage, &name),
+            Some(Entry { edited_at: "2027-01-15T08:00:00.000Z".into(), pending: true, deleted: false, rev: 0, blocked: false })
+        );
+        storage.tick(5_000);
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        assert_eq!(marked(&storage, &name).unwrap().edited_at, "2027-01-15T08:00:05.000Z");
+    }
+
+    #[test]
+    fn writing_what_is_stored_already_is_not_an_edit_so_a_selection_does_not_mark_again() {
+        let (store, storage) = store();
+        storage.set_now(1_800_000_000_000);
+        assert!(store.write_street(1, narrowed(&store, 1)));
+        let name = format!("street/{}", document(&storage).streets.keys().next().unwrap());
+        storage.tick(5_000);
+        // what the keeper writes when the person only selects a piece: the street as it is stored
+        let as_stored = store.open().street_editor(1, 0).unwrap().snapshot();
+        assert!(store.write_street(1, as_stored));
+        assert_eq!(marked(&storage, &name).unwrap().edited_at, "2027-01-15T08:00:00.000Z", "no new edit, no new time");
+    }
+
+    #[test]
+    fn a_write_that_is_refused_marks_nothing() {
+        let (ports, _, storage) = test_ports();
+        let store = CityStore::sample_without_osm_ids(ports.storage);
+        let (street, s) = shifted_street(&store, 100);
+        assert!(!store.write_street(street, s));
+        assert_eq!(storage.recall(sync::SYNC_KEY), None);
+    }
+
+    #[test]
+    fn a_junction_written_marks_it_and_the_record_it_took_over_under_another_key_is_marked_deleted() {
+        let (ports, _, storage) = test_ports();
+        let store = CityStore::sample(ports.storage);
+        let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let mut j = store.open().junction_editor(node, 0).unwrap();
+        assert!(j.set_corner(j.current().arms[0].uid, 7_000));
+        assert!(store.write_junction(node, j.snapshot()));
+        let (key, record) = document(&storage).junctions.clone().pop_first().unwrap();
+        assert!(marked(&storage, &format!("junction/{key}")).unwrap().pending);
+        // the same junction kept under a key of an older smallest node, as the existing replacement test does
+        let mut e = document(&storage);
+        e.junctions.clear();
+        e.junctions.insert("n1".into(), record);
+        storage.remember(EDITS_KEY, &e.to_json());
+        let mut j = store.open().junction_editor(node, 0).unwrap();
+        assert!(j.set_corner(j.current().arms[0].uid, 6_000));
+        assert!(store.write_junction(node, j.snapshot()));
+        let gone = marked(&storage, "junction/n1").unwrap();
+        assert_eq!((gone.pending, gone.deleted), (true, true), "the record it replaced is a removal other devices must learn");
+    }
+
+    #[test]
+    fn choosing_an_area_marks_the_one_record_of_the_area() {
+        let (_, _, storage) = test_ports();
+        storage.set_now(1_800_000_000_000);
+        assert!(CityStore::choose(&*storage, &Area::new("Kreuzberg", 52.5, 13.4)));
+        assert_eq!(marked(&storage, "area/current").map(|e| (e.pending, e.deleted)), Some((true, false)));
     }
 }

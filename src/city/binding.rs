@@ -3,6 +3,7 @@
 use crate::city::store::CityStore;
 use crate::junction::model::State;
 use crate::street::model::Street;
+use crate::sync::model::{Id, Kind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Place {
@@ -29,6 +30,15 @@ impl CityBinding {
         let Place::Street(edge) = self.place else { return false };
         self.store.write_street(edge, street)
     }
+
+    /// The sync's name for this page's place: its kind and key. None where the place has no key of its own.
+    pub fn record(&self) -> Option<Id> {
+        let city = self.store.open();
+        match self.place {
+            Place::Street(edge) => city.street_key(edge).map(|key| Id { kind: Kind::Street, key }),
+            Place::Junction(node) => city.junction_key(node).map(|key| Id { kind: Kind::Junction, key }),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -41,6 +51,19 @@ mod tests {
         let store = CityStore::sample(ports.storage);
         let place = place(&store.open().view(0));
         CityBinding { store, place }
+    }
+
+    #[test]
+    fn a_binding_names_its_place_by_the_key_the_sync_carries() {
+        let b = binding(|v| Place::Street(v.edges[0].uid));
+        let Place::Street(edge) = b.place else { unreachable!() };
+        assert_eq!(b.record(), Some(Id { kind: Kind::Street, key: b.store.open().street_record(edge).unwrap().0 }));
+        let b = binding(|v| Place::Junction(v.nodes.iter().find(|n| n.junction).unwrap().uid));
+        assert!(matches!(b.record(), Some(Id { kind: Kind::Junction, .. })));
+        let (ports, ..) = test_ports();
+        let keyless = CityStore::sample_without_osm_ids(ports.storage);
+        let place = Place::Street(keyless.open().view(0).edges[0].uid);
+        assert_eq!(CityBinding { store: keyless, place }.record(), None, "a place with no key of its own is not synced");
     }
 
     #[test]

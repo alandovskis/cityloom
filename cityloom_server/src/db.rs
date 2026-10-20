@@ -13,6 +13,7 @@ use crate::accounts::{IdentityInput, IdentityView, Removal, Repo, RepoError, Ses
 use crate::crypto::{self, Key, LookupKey, MasterKeys};
 
 pub mod rotate;
+mod work;
 
 pub async fn connect(database_url: &str) -> Result<PgPool, sqlx::Error> {
     let pool = PgPoolOptions::new().max_connections(10).connect(database_url).await?;
@@ -262,8 +263,32 @@ impl Repo for PgRepo {
     async fn set_storage(&self, user: Uuid, store: bool) -> Result<(), RepoError> {
         let key = self.data_key(user).await?.ok_or(RepoError::Gone)?;
         let sealed = crypto::seal(&key, &crypto::aad("users", "store_on_server", &user.to_string()), storage_bytes(Some(store)));
-        let done = sqlx::query("update users set store_on_server = $2 where id = $1").bind(user).bind(sealed).execute(&self.pool).await.map_err(unavailable)?;
-        if done.rows_affected() == 0 { Err(RepoError::Gone) } else { Ok(()) }
+        // One transaction: turning storage off deletes the server copy with the choice, so a device that is offline
+        // cannot leave a copy behind (its queued push finds the choice off and is refused).
+        let mut tx = self.pool.begin().await.map_err(unavailable)?;
+        let Some(before) = sqlx::query_scalar::<_, Vec<u8>>("select store_on_server from users where id = $1 for update")
+            .bind(user)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(unavailable)?
+        else {
+            return Err(RepoError::Gone);
+        };
+        let was_on = crypto::open(&key, &crypto::aad("users", "store_on_server", &user.to_string()), &before).map_err(corrupt)?.as_slice() == b"1";
+        sqlx::query("update users set store_on_server = $2 where id = $1").bind(user).bind(sealed).execute(&mut *tx).await.map_err(unavailable)?;
+        if store {
+            if was_on {
+                // Already on: the copy is the same one, and the devices keep their revisions.
+                return tx.commit().await.map_err(unavailable);
+            }
+            // A new epoch each time storage is turned on: a device that missed an off and on again holds revisions that
+            // mean nothing to the new copy, and is told to reset (merge) instead of being served an empty page.
+            sqlx::query("update users set work_epoch = $2 where id = $1").bind(user).bind(Uuid::new_v4()).execute(&mut *tx).await.map_err(unavailable)?;
+        } else {
+            sqlx::query("delete from work where user_id = $1").bind(user).execute(&mut *tx).await.map_err(unavailable)?;
+            sqlx::query("update users set work_rev = 0, work_floor = 0 where id = $1").bind(user).execute(&mut *tx).await.map_err(unavailable)?;
+        }
+        tx.commit().await.map_err(unavailable)
     }
 
     async fn delete_user(&self, user: Uuid) -> Result<(), RepoError> {

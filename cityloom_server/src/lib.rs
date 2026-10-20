@@ -13,6 +13,7 @@ pub mod flow;
 pub mod providers;
 pub mod session;
 pub mod static_files;
+pub mod work;
 
 use config::Config;
 
@@ -24,7 +25,9 @@ pub async fn build_account(config: &config::AccountConfig, clock: std::sync::Arc
     let masters = crypto::MasterKeys::new(&config.data_keys, config.data_key_current).map_err(|e| e.to_string())?;
     let ready = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     db::spawn_migrations(pool.clone(), ready.clone());
-    let repo: std::sync::Arc<dyn accounts::Repo> = std::sync::Arc::new(db::PgRepo::new(pool, masters, crypto::LookupKey::new(config.lookup_key.clone())));
+    let pg = std::sync::Arc::new(db::PgRepo::new(pool, masters, crypto::LookupKey::new(config.lookup_key.clone())));
+    let repo: std::sync::Arc<dyn accounts::Repo> = pg.clone();
+    let work: std::sync::Arc<dyn work::WorkRepo> = pg;
     // Its first pass runs before the database may be ready and then only logs a warning; the next is a day later,
     // which is acceptable because an expired row is refused on read anyway.
     session::spawn_cleanup(repo.clone(), clock.clone());
@@ -44,12 +47,14 @@ pub async fn build_account(config: &config::AccountConfig, clock: std::sync::Arc
     let providers = providers::Providers::from_config(config);
     Ok(std::sync::Arc::new(app::Account {
         repo,
+        work,
         http: std::sync::Arc::new(providers::ReqwestClient::new()),
         clock,
         providers,
         cookie_key: cookie::Key::from(&config.cookie_key[..]),
         base_url: config.base_url.clone(),
         rate: config.rate,
+        work_rate: config.work_rate,
         ready,
         #[cfg(feature = "test-provider")]
         fake,

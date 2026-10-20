@@ -21,6 +21,26 @@ fn listen<E: JsCast + 'static>(target: &EventTarget, event: &str, mut f: impl Fn
     cb.forget();
 }
 
+/// Syncing runs when the tab shows again, when the network returns and, with `keepalive`, when the page is left. On
+/// `pagehide` the shell asks the editors to write what they hold itself (`hub::flush`) before it sends, so the last
+/// edit is marked and sent whatever order the page's `pagehide` handlers run in.
+fn bind_sync(vm: &Rc<ShellVm>) {
+    let sync = vm.sync();
+    let (window, doc) = (leptos::prelude::window(), document());
+    let (v, d) = (vm.clone(), doc.clone());
+    listen(&doc, "visibilitychange", move |_: Event| {
+        if !d.hidden() {
+            v.network_back();
+        }
+    });
+    let v = vm.clone();
+    listen(&window, "online", move |_: Event| v.network_back());
+    listen(&window, "pagehide", move |_: Event| {
+        crate::sync::hub::flush();
+        sync.leave();
+    });
+}
+
 fn by_id(id: &str) -> Option<Element> {
     document().get_element_by_id(id)
 }
@@ -63,6 +83,7 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
         session.start();
         leptos::mount::mount_to(slot.unchecked_into(), move || view! { <SessionMenu vm=session/> }).forget();
     }
+    bind_sync(&vm);
     // The effects live as long as the page.
     let owner = Owner::new();
     owner.with(|| {

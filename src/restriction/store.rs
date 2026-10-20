@@ -8,6 +8,7 @@ use serde_json::Value;
 
 use crate::restriction::model::{LonLat, Restriction, Rule, number_of};
 use crate::shared::ports::Storage;
+use crate::sync::model::{Kind, mark};
 
 /// The shape of the document. Raised when the shape changes.
 pub const VERSION: u32 = 1;
@@ -203,47 +204,160 @@ impl RestrictionStore {
         self.storage.remember(RESTRICTIONS_KEY, &doc.to_json()).then_some(done)
     }
 
-    /// Keeps a new restriction under the next id, and gives it back with that id.
+    /// The rule waits to be sent (or, with `deleted`, its removal does).
+    fn mark(&self, id: &str, deleted: bool) {
+        mark(&*self.storage, Kind::Rule, id, deleted);
+    }
+
+    /// The id a new rule takes: random where the storage has randomness, else the next number.
+    fn fresh_id(&self, doc: &Restrictions) -> String {
+        match self.storage.random_hex() {
+            Some(hex) => format!("r-{hex}"),
+            None => doc.next_id(),
+        }
+    }
+
+    /// Keeps a new restriction under a new id, and gives it back with that id.
     pub fn add(&self, name: &str, rule: Rule, ring: Vec<LonLat>) -> Option<Restriction> {
         if !finite(&ring) {
             return None;
         }
-        self.write(|doc| {
-            let r = Restriction { id: doc.next_id(), name: name.to_string(), rule, ring };
+        let added = self.write(|doc| {
+            let r = Restriction { id: self.fresh_id(doc), name: name.to_string(), rule, ring };
             if doc.holds(&r.id) {
                 return None;
             }
             doc.insert(r.clone());
             Some(r)
-        })
+        })?;
+        self.mark(&added.id, false);
+        Some(added)
     }
 
     /// Changes the restriction `id` as it is kept now. False when it is no longer kept, or was not kept again.
     pub fn update(&self, id: &str, change: impl FnOnce(&mut Restriction)) -> bool {
-        self.write(|doc| {
-            let r = doc.restrictions.get_mut(id)?;
-            change(r);
-            finite(&r.ring).then_some(())
-        })
-        .is_some()
+        let mut changed = false;
+        let done = self
+            .write(|doc| {
+                let r = doc.restrictions.get_mut(id)?;
+                let before = r.clone();
+                change(r);
+                changed = *r != before;
+                finite(&r.ring).then_some(())
+            })
+            .is_some();
+        if done && changed {
+            self.mark(id, false);
+        }
+        done
     }
 
     pub fn remove(&self, id: &str) -> bool {
-        self.write(|doc| doc.restrictions.remove(id).map(|_| ())).is_some()
+        let done = self.write(|doc| doc.restrictions.remove(id).map(|_| ())).is_some();
+        if done {
+            self.mark(id, true);
+        }
+        done
     }
 
-    /// Keeps a deleted restriction again: under its own id if that is free, else under the next. Gives it back with
+    /// Keeps a deleted restriction again: under its own id if that is free, else under a new one. Gives it back with
     /// the id it has now.
     pub fn restore(&self, r: &Restriction) -> Option<Restriction> {
         if !finite(&r.ring) {
             return None;
         }
-        self.write(|doc| {
-            let id = if doc.holds(&r.id) { doc.next_id() } else { r.id.clone() };
+        let back = self.write(|doc| {
+            let id = if doc.holds(&r.id) { self.fresh_id(doc) } else { r.id.clone() };
             let back = Restriction { id, ..r.clone() };
             doc.insert(back.clone());
             Some(back)
+        })?;
+        self.mark(&back.id, false);
+        Some(back)
+    }
+
+    /// Whether the document can be read and changed: none kept, or one of this version.
+    pub fn is_usable(&self) -> bool {
+        matches!(self.document(), Document::Empty | Document::Current(_))
+    }
+
+    /// Every id kept, the rules this build cannot read too. For the sync, which carries records as they are.
+    pub fn raw_ids(&self) -> Vec<String> {
+        match self.document() {
+            Document::Current(doc) => doc.restrictions.keys().chain(doc.unreadable.keys()).cloned().collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The record `id` as the document keeps it.
+    pub fn raw(&self, id: &str) -> Option<Value> {
+        let Document::Current(doc) = self.document() else { return None };
+        let whole: Value = serde_json::from_str(&doc.to_json()).ok()?;
+        whole["restrictions"].get(id).cloned()
+    }
+
+    /// Keeps `record` under `id` as given: a rule this build can read becomes a rule, one it cannot is held as it
+    /// came and written back unchanged. Not an edit: nothing is marked. The caller checks `is_usable()` first: this
+    /// goes through the store's own write, which copies a damaged document aside and replaces it.
+    pub fn put_raw(&self, id: &str, record: Value) -> bool {
+        self.write(|doc| {
+            match serde_json::from_value::<Restriction>(record.clone()) {
+                Ok(r) if finite(&r.ring) => {
+                    doc.unreadable.remove(id);
+                    if let Value::Object(fields) = &record {
+                        doc.raw.insert(id.to_string(), fields.clone());
+                    }
+                    doc.insert(Restriction { id: id.to_string(), ..r });
+                }
+                _ => {
+                    doc.restrictions.remove(id);
+                    doc.raw.remove(id);
+                    doc.unreadable.insert(id.to_string(), record);
+                }
+            }
+            Some(())
         })
+        .is_some()
+    }
+
+    /// Removes the record `id`, whatever it is. Not an edit: nothing is marked. The caller checks `is_usable()` first,
+    /// as `put_raw` says.
+    pub fn remove_raw(&self, id: &str) -> bool {
+        self.write(|doc| {
+            doc.restrictions.remove(id);
+            doc.raw.remove(id);
+            doc.unreadable.remove(id);
+            Some(())
+        })
+        .is_some()
+    }
+
+    /// Gives every rule whose id is `r<n>` a random one, once, when the device first starts syncing: two devices'
+    /// `r1` must never meet as one rule. `fresh` makes the digits; None stops. Says which ids became which. Not an
+    /// edit: the sync claims the new ids as never marked.
+    pub fn rename_numbered(&self, fresh: &mut dyn FnMut() -> Option<String>) -> Vec<(String, String)> {
+        self.write(|doc| {
+            let old: Vec<String> = doc.restrictions.keys().chain(doc.unreadable.keys()).filter(|id| number_of(id).is_some()).cloned().collect();
+            let mut renamed = Vec::new();
+            for id in old {
+                let Some(hex) = fresh() else { break };
+                let new = format!("r-{hex}");
+                if doc.holds(&new) {
+                    continue;
+                }
+                if let Some(r) = doc.restrictions.remove(&id) {
+                    if let Some(fields) = doc.raw.remove(&id) {
+                        doc.raw.insert(new.clone(), fields);
+                    }
+                    doc.restrictions.insert(new.clone(), Restriction { id: new.clone(), ..r });
+                } else if let Some(record) = doc.unreadable.remove(&id) {
+                    doc.unreadable.insert(new.clone(), record);
+                }
+                renamed.push((id, new));
+            }
+            (!renamed.is_empty()).then_some(renamed)
+        })
+        .unwrap_or_default()
     }
 }
 
@@ -395,6 +509,15 @@ mod tests {
         fn keys(&self) -> Vec<String> {
             self.0.keys()
         }
+        fn now_ms(&self) -> u64 {
+            self.0.now_ms()
+        }
+        fn random_hex(&self) -> Option<String> {
+            self.0.random_hex()
+        }
+        fn identity(&self) -> usize {
+            self.0.identity()
+        }
     }
 
     #[test]
@@ -522,5 +645,103 @@ mod tests {
         assert_eq!((rule_of("r1"), rule_of("r3")), (hours, zone), "a restore");
         assert!(s.update("r3", |r| r.rule = Rule::SpeedLimit { kmh: 20 }));
         assert_eq!(rule_of("r3"), serde_json::json!({"kind":"speed_limit","kmh":20}), "a changed rule replaces the rule whole");
+    }
+
+    use crate::sync::model::{self as sync, Entry};
+
+    fn marked(storage: &MemoryStorage, name: &str) -> Option<Entry> {
+        sync::open(storage).unwrap().records.get(name).cloned()
+    }
+
+    #[test]
+    fn adding_changing_removing_and_restoring_a_rule_each_mark_it() {
+        let (s, storage) = store();
+        storage.set_now(1_800_000_000_000);
+        let a = s.add("A", Rule::CarFree, RING.to_vec()).unwrap();
+        let name = format!("rule/{}", a.id);
+        assert_eq!(marked(&storage, &name).map(|e| (e.pending, e.deleted, e.edited_at)), Some((true, false, "2027-01-15T08:00:00.000Z".to_string())));
+        storage.tick(1_000);
+        assert!(s.update(&a.id, |r| r.name = "B".into()));
+        assert_eq!(marked(&storage, &name).unwrap().edited_at, "2027-01-15T08:00:01.000Z");
+        storage.tick(1_000);
+        assert!(s.remove(&a.id));
+        assert_eq!(marked(&storage, &name).map(|e| (e.deleted, e.edited_at)), Some((true, "2027-01-15T08:00:02.000Z".to_string())));
+        storage.tick(1_000);
+        let back = s.restore(&Restriction { name: "B".into(), ..a.clone() }).unwrap();
+        let after = marked(&storage, &format!("rule/{}", back.id)).unwrap();
+        assert_eq!((after.deleted, after.pending, after.edited_at.as_str()), (false, true, "2027-01-15T08:00:03.000Z"));
+    }
+
+    #[test]
+    fn new_rules_get_random_ids_where_the_storage_has_randomness_and_sequential_ones_where_it_has_none() {
+        let (s, storage) = store();
+        assert_eq!(s.add("A", Rule::CarFree, RING.to_vec()).unwrap().id, "r1", "a fake without randomness keeps the old ids");
+        storage.with_randomness(true);
+        let (b, c) = (s.add("B", Rule::CarFree, RING.to_vec()).unwrap(), s.add("C", Rule::CarFree, RING.to_vec()).unwrap());
+        assert!(b.id.starts_with("r-") && b.id.len() == 34 && b.id != c.id, "{} {}", b.id, c.id);
+        assert!(crate::sync::model::valid_key(&b.id));
+        assert_eq!(s.all().first().map(|r| r.id.clone()).as_deref(), Some("r1"), "the numbered rule is listed first, then the others in id order");
+    }
+
+    #[test]
+    fn numbered_rules_are_renamed_once_keeping_their_fields_and_the_unreadable_ones() {
+        let (s, storage) = store();
+        let a = s.add("A", Rule::CarFree, RING.to_vec()).unwrap();
+        let mut doc: serde_json::Value = serde_json::from_str(&storage.recall(RESTRICTIONS_KEY).unwrap()).unwrap();
+        doc["restrictions"]["r1"]["from_a_newer_build"] = serde_json::json!({"x": 1});
+        doc["restrictions"]["r7"] = serde_json::json!({"shape": "unknown"});
+        storage.remember(RESTRICTIONS_KEY, &doc.to_string());
+        let before_marks = storage.recall(sync::SYNC_KEY);
+        storage.with_randomness(true);
+        let renamed = s.rename_numbered(&mut || storage.random_hex());
+        assert_eq!(renamed.len(), 2);
+        assert!(renamed.iter().all(|(old, new)| (old == "r1" || old == "r7") && new.starts_with("r-")));
+        let kept: serde_json::Value = serde_json::from_str(&storage.recall(RESTRICTIONS_KEY).unwrap()).unwrap();
+        let new_a = &renamed.iter().find(|(old, _)| old == "r1").unwrap().1;
+        let new_odd = &renamed.iter().find(|(old, _)| old == "r7").unwrap().1;
+        assert_eq!(kept["restrictions"][new_a]["from_a_newer_build"]["x"], 1, "what a newer build added goes with the rule");
+        assert_eq!(kept["restrictions"][new_a]["name"], a.name);
+        assert_eq!(kept["restrictions"][new_odd]["shape"], "unknown", "a rule this build cannot read is renamed as it is");
+        assert!(kept["restrictions"].get("r1").is_none() && kept["restrictions"].get("r7").is_none());
+        assert_eq!(s.rename_numbered(&mut || storage.random_hex()), Vec::<(String, String)>::new(), "once");
+        assert_eq!(storage.recall(sync::SYNC_KEY), before_marks, "renaming is not an edit: the sync claims the new ids as never marked");
+    }
+
+    #[test]
+    fn the_raw_operations_keep_a_newer_builds_fields_and_do_not_mark() {
+        let (s, storage) = store();
+        let record =
+            serde_json::json!({"name": "Far", "rule": {"kind": "car_free"}, "ring": [[-73.6, 45.52], [-73.59, 45.52], [-73.59, 45.53]], "future": {"y": [1]}});
+        assert!(s.put_raw("r-abc", record.clone()));
+        assert_eq!(s.raw("r-abc"), Some(record.clone()));
+        assert_eq!(s.raw_ids(), ["r-abc"]);
+        assert_eq!(s.all().len(), 1);
+        assert!(s.put_raw("r-odd", serde_json::json!({"shape": "unknown"})));
+        assert_eq!(s.raw("r-odd"), Some(serde_json::json!({"shape": "unknown"})), "a record this build cannot read is kept as it came");
+        assert_eq!(s.all().len(), 1);
+        assert!(s.remove_raw("r-abc"));
+        assert_eq!(s.raw("r-abc"), None);
+        assert_eq!(storage.recall(sync::SYNC_KEY), None, "the sync's own writes are not edits");
+    }
+
+    #[test]
+    fn a_newer_or_damaged_document_is_not_usable_and_an_empty_or_current_one_is() {
+        let (s, storage) = store();
+        assert!(s.is_usable());
+        storage.remember(RESTRICTIONS_KEY, r#"{"version":9,"restrictions":{}}"#);
+        assert!(!s.is_usable());
+        storage.remember(RESTRICTIONS_KEY, "{broken");
+        assert!(!s.is_usable());
+    }
+
+    #[test]
+    fn an_update_that_changes_nothing_is_not_an_edit_and_marks_nothing_again() {
+        let (s, storage) = store();
+        storage.set_now(1_800_000_000_000);
+        let a = s.add("A", Rule::CarFree, RING.to_vec()).unwrap();
+        storage.tick(5_000);
+        assert!(s.update(&a.id, |_| {}));
+        assert!(s.update(&a.id, |r| r.name = "A".into()));
+        assert_eq!(marked(&storage, &format!("rule/{}", a.id)).unwrap().edited_at, "2027-01-15T08:00:00.000Z");
     }
 }

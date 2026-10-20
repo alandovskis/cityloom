@@ -7,7 +7,8 @@ use wasm_bindgen::prelude::*;
 
 // `account_error` is imported inside `api` below, where only the wasm32 build uses it: a host build would warn about an unused import, and CI builds with `-D warnings`.
 use crate::shared::ports::{
-    Account, AccountError, Announcer, Answer, Fetched, Fetcher, Importer, Me, Navigator, Page, Ports, ProviderInfo, Scheduler, Storage,
+    Account, AccountError, Announcer, Answer, Fetched, Fetcher, Importer, Me, Navigator, Page, Ports, ProviderInfo, Scheduler, Storage, WorkAnswer, WorkAsk,
+    WorkError, WorkPage, WorkPushed, WorkPut, WorkSync,
 };
 use crate::shared::{live, store};
 
@@ -32,6 +33,26 @@ impl Storage for BrowserStorage {
 
     fn keys(&self) -> Vec<String> {
         store::keys()
+    }
+
+    fn now_ms(&self) -> u64 {
+        #[cfg(target_arch = "wasm32")]
+        {
+            js_sys::Date::now() as u64
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
+        }
+    }
+
+    fn random_hex(&self) -> Option<String> {
+        Some(crate::shared::random::hex128())
+    }
+
+    fn identity(&self) -> usize {
+        // The page's one localStorage, whatever handle reached it: browser_ports() makes a new handle at every mount.
+        0
     }
 }
 
@@ -236,6 +257,72 @@ impl Account for BrowserAccount {
     }
 }
 
+struct BrowserWork;
+
+#[cfg(target_arch = "wasm32")]
+async fn work_api(method: &str, path: &str, json: Option<&str>, keepalive: bool) -> Result<String, WorkError> {
+    use crate::shared::ports::work_error;
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+    let init = web_sys::RequestInit::new();
+    init.set_method(method);
+    if keepalive {
+        // Lets the request outlive the page that is being left. Set by name: not every web-sys release types it.
+        let _ = js_sys::Reflect::set(init.as_ref(), &"keepalive".into(), &true.into());
+    }
+    if let Some(json) = json {
+        init.set_body(&wasm_bindgen::JsValue::from_str(json));
+        let headers = web_sys::Headers::new().map_err(|_| WorkError::Unavailable)?;
+        headers.set("content-type", "application/json").map_err(|_| WorkError::Unavailable)?;
+        init.set_headers(&headers);
+    }
+    let request = web_sys::Request::new_with_str_and_init(path, &init).map_err(|_| WorkError::Unavailable)?;
+    let window = web_sys::window().ok_or(WorkError::Unavailable)?;
+    let response: web_sys::Response =
+        JsFuture::from(window.fetch_with_request(&request)).await.map_err(|_| WorkError::Unavailable)?.dyn_into().map_err(|_| WorkError::Unavailable)?;
+    let status = response.status();
+    let text = match response.text() {
+        Ok(promise) => JsFuture::from(promise).await.ok().and_then(|t| t.as_string()).unwrap_or_default(),
+        Err(_) => String::new(),
+    };
+    if response.ok() { Ok(text) } else { Err(work_error(status, &text)) }
+}
+
+/// Runs the request and tells `done`; natively (no network) the answer is at once `Unavailable`.
+fn ask_work<T: 'static>(
+    method: &'static str,
+    path: String,
+    json: Option<String>,
+    keepalive: bool,
+    read: fn(&str) -> Result<T, WorkError>,
+    done: WorkAnswer<T>,
+) {
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_futures::spawn_local(async move { done(work_api(method, &path, json.as_deref(), keepalive).await.and_then(|body| read(&body))) });
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (method, path, json, keepalive, read);
+        done(Err(WorkError::Unavailable));
+    }
+}
+
+fn nothing_work(_: &str) -> Result<(), WorkError> {
+    Ok(())
+}
+
+impl WorkSync for BrowserWork {
+    fn pull(&self, ask: WorkAsk, done: WorkAnswer<WorkPage>) {
+        ask_work("GET", format!("/api/work?{}", ask.query()), None, false, WorkPage::parse, done);
+    }
+    fn push(&self, batch: Vec<WorkPut>, keepalive: bool, done: WorkAnswer<WorkPushed>) {
+        let body = serde_json::json!({ "records": batch }).to_string();
+        ask_work("PUT", "/api/work".into(), Some(body), keepalive, WorkPushed::parse, done);
+    }
+    fn clear(&self, done: WorkAnswer<()>) {
+        ask_work("DELETE", "/api/work".into(), None, false, nothing_work, done);
+    }
+}
+
 struct BrowserPage;
 
 impl Page for BrowserPage {
@@ -388,6 +475,7 @@ pub fn browser_ports() -> Ports {
         mapper: Rc::new(crate::shared::ports::NoMapper),
         page: Rc::new(BrowserPage),
         account: Rc::new(BrowserAccount),
+        work: Rc::new(BrowserWork),
     }
 }
 
@@ -405,5 +493,23 @@ mod tests {
         assert_eq!(*got.borrow(), Some(Err(AccountError::Unavailable)));
         assert_eq!(ports.page.path(), "/");
         assert_eq!(ports.page.take_fragment(), None);
+    }
+
+    #[test]
+    fn natively_the_browser_work_says_unavailable_and_the_clock_and_randomness_work() {
+        let ports = browser_ports();
+        let got = Rc::new(RefCell::new(None));
+        let g = got.clone();
+        ports.work.pull(crate::shared::ports::WorkAsk::first(0), Box::new(move |r| *g.borrow_mut() = Some(r.map(|p| p.rev))));
+        assert_eq!(*got.borrow(), Some(Err(crate::shared::ports::WorkError::Unavailable)));
+        assert!(ports.storage.now_ms() > 1_700_000_000_000);
+        let (a, b) = (ports.storage.random_hex().unwrap(), ports.storage.random_hex().unwrap());
+        assert_eq!((a.len(), a == b), (32, false));
+    }
+
+    #[test]
+    fn every_browser_storage_is_the_same_storage_whatever_handle_reaches_it() {
+        // each mount calls browser_ports() again, and the editor's store and the shell's sync must still meet
+        assert_eq!(browser_ports().storage.identity(), browser_ports().storage.identity());
     }
 }

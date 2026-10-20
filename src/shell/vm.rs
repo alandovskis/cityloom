@@ -14,6 +14,7 @@ use crate::shared::units::Units;
 use crate::shell::popover::PopoverViewModel;
 use crate::shell::session::SessionVm;
 use crate::shell::share::ShareViewModel;
+use crate::sync::SyncVm;
 
 pub const REGION_KEY: &str = crate::city::store::REGION_KEY;
 pub const THEME_KEY: &str = "cityloom-theme";
@@ -104,6 +105,7 @@ pub struct ShellVm {
     help: Rc<PopoverViewModel>,
     share: Rc<ShareViewModel>,
     session: Rc<SessionVm>,
+    sync: Rc<SyncVm>,
     inspector_open: ArcRwSignal<bool>,
     notes_open: ArcRwSignal<bool>,
     tab: ArcRwSignal<String>,
@@ -154,12 +156,16 @@ impl ShellVm {
         let help = PopoverViewModel::new(i18n.clone(), "ui-help", "ui-keyboard");
         let share = ShareViewModel::new(i18n.clone());
         let session = SessionVm::new(ports.clone(), i18n.clone());
+        // The shell builds what every page shares, the sync among it; the other pages reach it through `sync::hub`.
+        let sync = SyncVm::new(ports.clone(), i18n.clone());
+        session.set_sync(sync.clone());
         PopoverViewModel::exclusive(&[&settings, &help, &share.popover(), &session.popover()]);
         let vm = ShellVm {
             settings,
             help,
             share,
             session,
+            sync,
             i18n,
             target,
             details_word,
@@ -289,9 +295,20 @@ impl ShellVm {
         self.share.popover()
     }
 
+    /// Syncing the person's work with the server.
+    pub fn sync(&self) -> Rc<SyncVm> {
+        self.sync.clone()
+    }
+
     /// The sign-in state and its menu; never open together with the other header menus.
     pub fn session(&self) -> Rc<SessionVm> {
         self.session.clone()
+    }
+
+    /// The tab shows again or the network returned: sync runs at once.
+    pub fn network_back(&self) {
+        self.sync.refresh();
+        self.session.recheck();
     }
 
     pub fn menu_open(&self) -> bool {

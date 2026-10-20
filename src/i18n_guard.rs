@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// The `.rs` files of `account`, `map`, `place`, `junction`, `city` and `restriction` that are not in `MIGRATED`, and why. Every other
+/// The `.rs` files of `account`, `map`, `place`, `junction`, `city`, `restriction` and `sync` that are not in `MIGRATED`, and why. Every other
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
@@ -15,6 +15,7 @@ const LEFT_OUT: &[(&str, &str)] = &[
     ("src/restriction/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
     ("src/account/tests.rs", "test-only"),
+    ("src/sync/tests.rs", "test-only"),
     ("src/map/tests.rs", "test-only"),
     ("src/junction/tests.rs", "test-only"),
     ("src/junction/model/fixtures.rs", "test-only"),
@@ -34,6 +35,12 @@ const MIGRATED: &[(&str, &str)] = &[
     ("src/restriction/mod.rs", include_str!("restriction/mod.rs")),
     ("src/restriction/model.rs", include_str!("restriction/model.rs")),
     ("src/street/text.rs", include_str!("street/text.rs")),
+    ("src/sync/local.rs", include_str!("sync/local.rs")),
+    ("src/sync/hub.rs", include_str!("sync/hub.rs")),
+    ("src/sync/mod.rs", include_str!("sync/mod.rs")),
+    ("src/sync/text.rs", include_str!("sync/text.rs")),
+    ("src/sync/vm.rs", include_str!("sync/vm.rs")),
+    ("src/sync/model.rs", include_str!("sync/model.rs")),
     ("src/street/notes.rs", include_str!("street/notes.rs")),
     ("src/street/page.rs", include_str!("street/page.rs")),
     ("src/street/view.rs", include_str!("street/view.rs")),
@@ -135,6 +142,8 @@ const ALLOWED: &[&str] = &[
 
 /// Literals that look like words and are not, each with the reason. Empty unless needed.
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
+    ("the sync document serialises", "a panic message about the code, never shown"),
+    ("a street and a junction have a section", "a panic message about the code, never shown"),
     ("OpenStreetMap", "a provider's brand name, not translated"),
     ("Google", "a provider's brand name, not translated"),
     ("Microsoft", "a provider's brand name, not translated"),
@@ -410,6 +419,8 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("cityloom-sync", "the sync document's storage key, not a message"),
+    ("cityloom-sync-damaged", "the copy of a damaged sync document, a storage key and not a message"),
     ("data-notes", "the name of a data- attribute on the document element"),
     ("data-inspector", "the name of a data- attribute on the document element"),
     ("data-welcome", "the name of a data- attribute on the document element"),
@@ -480,6 +491,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("h-linked", "the id of an element of the Account page"),
     ("delete-btn", "the id of an element of the Account page"),
     ("delete-no", "the id of an element of the Account page"),
+    ("stop-no", "an element id of the Account page"),
     ("session-slot", "the id of an element every page shares"),
     ("session-btn", "the id of an element every page shares"),
     ("session-menu", "the id of an element every page shares"),
@@ -621,7 +633,7 @@ fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
     let mut files = Vec::new();
-    for slice in ["account", "map", "place", "junction", "city", "restriction"] {
+    for slice in ["account", "map", "place", "junction", "city", "restriction", "sync"] {
         rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
     }
     let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();

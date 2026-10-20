@@ -1,45 +1,13 @@
 // The real server, not the stubs of account.spec.ts: sign in, the storage choice, linking, unlinking, signing out and deleting, against the server built with the
 // fake OpenID provider (`--features test-provider`) and a Postgres.
 
-import type { BrowserContext, Page } from "@playwright/test";
-
+import { chooseProvider, loginAs, newAccount, requireServer, unique } from "./account-helpers";
 import { anotherBrowser, expect, live, test } from "./fixtures";
 
-type Login = { sub?: string; name?: string; email?: string; deny?: boolean; first_time_user?: unknown };
+test.beforeEach(async ({ request }) => requireServer(request));
 
-test.beforeEach(async ({ request }) => {
-  if (!process.env.DATABASE_URL) {
-    throw new Error(
-      "DATABASE_URL is not set: the account specs need a Postgres. Run 'just db', then export the URL it prints.",
-    );
-  }
-  const providers = await request.get("/api/providers");
-  expect(
-    providers.status(),
-    "the server's account side is off: is DATABASE_URL reachable by the server, and was it built with --features test-provider?",
-  ).toBe(200);
-});
-
-const unique = () => `e2e-${crypto.randomUUID()}`;
-
-/** Who the fake provider signs in next, in this browser. */
-async function loginAs(context: BrowserContext, baseURL: string, login: Login) {
-  await context.addCookies([{ name: "fake-login", value: encodeURIComponent(JSON.stringify(login)), url: baseURL }]);
-}
-
-async function chooseProvider(page: Page, slug: string) {
-  await page.locator("#session-btn").click();
-  await page.locator(`#session-menu [data-provider="${slug}"]`).click();
-}
-
-/** A new account on the fake provider, signed in on the Account page. */
-async function newAccount(page: Page, context: BrowserContext, baseURL: string, login: Login = {}) {
-  await loginAs(context, baseURL, { sub: unique(), name: "Ada", email: "ada@example.org", ...login });
-  await page.goto("/map.html");
-  await chooseProvider(page, "fake");
-  await expect(page).toHaveURL(/\/account\.html$/);
-  await expect(page.locator("#session-btn-label")).toHaveText(login.name ?? "Ada");
-}
+// The merge ends the announcement of the choice: nothing was waiting on a fresh account.
+const MERGED = "Your work was merged with your account: 0 places sent, 0 places received.";
 
 test.describe("signed out", () => {
   test("every page offers Sign in and the server says nobody is signed in", async ({ page, request }) => {
@@ -84,15 +52,23 @@ test.describe("a first sign-in", () => {
   test("keeps the choice, and the person stays signed in after a reload", async ({ page, context, baseURL }) => {
     await newAccount(page, context, baseURL!);
     await page.getByRole("radio", { name: /Store my work on the server/ }).check();
-    await expect(live(page)).toHaveText(
-      "Your choice is recorded: store your work on the server. Storing work on the server arrives in a later release; for now, your work stays on this device.",
-    );
+    await expect(live(page)).toHaveText(MERGED);
+    await expect(page.locator("#merge-report")).toHaveText(MERGED);
     await page.reload();
     await expect(page.locator("#session-btn-label")).toHaveText("Ada");
     await expect(page.getByRole("radio", { name: /Store my work on the server/ })).toBeChecked();
-    await page.getByRole("radio", { name: /Keep my work on this device only/ }).check();
+    await page.getByRole("radio", { name: /Keep my work on this device only/ }).click();
+    // Stopping deletes the server copy: the press is held back until the person confirms, and "No" changes nothing.
+    await expect(page.locator("#stop-confirm")).toContainText("This deletes your work from the server");
+    await expect(page.locator("#stop-no")).toBeFocused();
+    await expect(page.getByRole("radio", { name: /Store my work on the server/ })).toBeChecked();
+    await page.locator("#stop-no").click();
+    await expect(page.locator("#stop-confirm")).toHaveCount(0);
+    await expect(page.getByRole("radio", { name: /Store my work on the server/ })).toBeChecked();
+    await page.getByRole("radio", { name: /Keep my work on this device only/ }).click();
+    await page.locator("#stop-yes").click();
     await expect(live(page)).toHaveText(
-      "Your choice is recorded: keep your work on this device only. For now, your work stays on this device either way.",
+      "Your choice is recorded: keep your work on this device only. The copy on the server was deleted.",
     );
     await page.reload();
     await expect(page.getByRole("radio", { name: /Keep my work on this device only/ })).toBeChecked();
@@ -120,9 +96,8 @@ test.describe("a returning person", () => {
     const sub = unique();
     await newAccount(page, context, baseURL!, { sub });
     await page.getByRole("radio", { name: /Store my work on the server/ }).check();
-    await expect(live(page)).toHaveText(
-      "Your choice is recorded: store your work on the server. Storing work on the server arrives in a later release; for now, your work stays on this device.",
-    );
+    await expect(live(page)).toHaveText(MERGED);
+    await expect(page.locator("#merge-report")).toHaveText(MERGED);
     await page.locator("#session-btn").click();
     await page.getByRole("button", { name: "Sign out" }).first().click();
     await expect(page).toHaveURL(/\/index\.html$/);

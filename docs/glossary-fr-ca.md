@@ -1,6 +1,6 @@
 # Glossaire anglais / français (Canada)
 
-The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl`, `src/map/i18n/fr.ftl`, `src/place/i18n/fr.ftl`, `src/junction/i18n/fr.ftl` and `src/restriction/i18n/fr.ftl` and `src/account/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled. MapLibre’s own control strings, the basemap’s labels, OSM data and `web/credits.html` stay English.
+The French the app speaks (fr-CA), for translators and reviewers. The messages are in `src/shell/i18n/fr.ftl`, `src/street/i18n/fr.ftl`, `src/city/i18n/fr.ftl`, `src/map/i18n/fr.ftl`, `src/place/i18n/fr.ftl`, `src/junction/i18n/fr.ftl`, `src/restriction/i18n/fr.ftl`, `src/account/i18n/fr.ftl` and `src/sync/i18n/fr.ftl`. One term per English word, used everywhere: add a row when a screen needs a new word, and do not translate the same word two ways. The terms in the last section are not settled. MapLibre’s own control strings, the basemap’s labels, OSM data and `web/credits.html` stay English.
 
 ## Style rules
 
@@ -259,9 +259,15 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Account page | Delete (an account) | Supprimer |  |
 | Account page | Store on the server | Stocker sur le serveur |  |
 | Account page | Keep on this device | Conserver sur cet appareil |  |
-| Account page | This choice is recorded | Ce choix est enregistré | The choice is only recorded for now. |
-| Account page | a later release | une version ultérieure | Server storage and sharing are not built yet. |
+| Account page | This choice is recorded | Ce choix est enregistré |  |
 | Account page | for now | pour le moment |  |
+| Account page | the server copy | la copie sur le serveur |  |
+| Account page | Encrypted / Not encrypted | Chiffré / Non chiffré | As the accounts' `chiffré`. |
+| Account page | area rules | règles de zone | As the map page. |
+| Sync | Synced / Not synced yet / Syncing is paused | Synchronisé / Pas encore synchronisé / La synchronisation est suspendue | `synchroniser`, `synchronisation` (not `sync`). |
+| Sync | Updated from another device | Mis à jour depuis un autre appareil | Announcement. |
+| Sync | Your change to this place was replaced by a later one | Votre modification de ce lieu a été remplacée par une plus récente | `lieu`, as on the map page. |
+| Sync | merged (your work with your account) | fusionné avec votre compte | `0` and `1` are singular: `1 lieu envoyé`, `0 lieu reçu`. |
 
 ## Terms to confirm
 

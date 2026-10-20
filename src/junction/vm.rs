@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use leptos::prelude::*;
 
-use crate::city::binding::CityBinding;
+use crate::city::binding::{CityBinding, Place};
 use crate::junction::frame::Frame;
 use crate::junction::model::{Junction, Refusal, Target};
 use crate::junction::read_model::JView;
@@ -18,6 +18,7 @@ use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
 use crate::shared::said::say_now;
 use crate::shared::units::Units;
+use crate::sync::model::{Change, Kind, Origin};
 
 impl Presents for Junction {
     type View = JView;
@@ -254,6 +255,33 @@ impl JunctionVm {
         self.ports.announcer.say(&text::sample_text(&self.view_now(), &self.i18n));
     }
 
+    /// As `StreetVm::watch_sync`.
+    pub fn watch_sync(self: &Rc<Self>) {
+        crate::sync::hub::watch(self, Self::flush, Self::on_synced);
+    }
+
+    /// A sync changed junctions or streets: the junction is drawn from both, so it is read again, and shown if it
+    /// differs (the selection stays if it is still there).
+    fn on_synced(&self, changes: &[Change]) {
+        let Some(binding) = &self.binding else { return };
+        let Place::Junction(node) = binding.place else { return };
+        if !changes.iter().any(|c| matches!(c.id.kind, Kind::Junction | Kind::Street)) {
+            return;
+        }
+        // As the street's: a later edit still waiting in the keeper is written first and wins.
+        self.flush();
+        let Some(mut fresh) = binding.store.open().junction_editor(node, binding.store.region()) else { return };
+        // The state as drawn, the arms' street sections too (a snapshot leaves them out: they are the streets').
+        if self.core.read(|j| j.drawn_as(&fresh)) {
+            return;
+        }
+        fresh.select(self.core.read(|j| j.selected));
+        let own = binding.record();
+        let replaced = changes.iter().any(|c| Some(&c.id) == own.as_ref() && c.origin == Origin::Replaced);
+        self.core.edit(|j| *j = fresh);
+        self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
+    }
+
     /// The page is being left: what is waiting to be kept is kept now.
     pub fn flush(&self) {
         if let Some(k) = &self.keeper {
@@ -327,6 +355,87 @@ mod tests {
     fn rig(sample: usize) -> Rig {
         let (ports, said, storage, time) = test_ports_with_time();
         Rig { vm: JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), Junction::new(sample), None), said, time, storage }
+    }
+
+    #[test]
+    fn a_junction_changed_by_a_sync_is_reloaded_and_announced() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Junction(node) = binding.place else { unreachable!() };
+        let mut j = binding.store.open().junction_editor(node, 0).unwrap();
+        let arm = j.current().arms[0].uid;
+        assert!(j.set_corner(arm, 7_000));
+        assert!(binding.store.write_junction(node, j.snapshot()));
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.core.read(|j| j.current().arms[0].corner_mm), 7_000);
+        assert_eq!(r.said.take(), ["Updated from another device."]);
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert!(r.said.take().is_empty(), "nothing differs now");
+    }
+
+    #[test]
+    fn a_junction_edit_made_a_moment_before_a_sync_is_not_lost() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let arm = r.vm.edit(|j| j.current().arms[0].uid);
+        assert!(r.vm.edit(|j| j.set_corner(arm, 7_000)));
+        assert_eq!(binding.store.open().view(0).edited, 0, "still waiting in the keeper");
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.core.read(|j| j.current().arms[0].corner_mm), 7_000);
+        assert!(r.said.take().is_empty());
+        assert_eq!(binding.store.open().view(0).edited, 1);
+    }
+
+    #[test]
+    fn a_junction_whose_own_change_lost_says_so_and_keeps_its_selection() {
+        use crate::junction::model::Target;
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Junction(node) = binding.place else { unreachable!() };
+        let arm = r.vm.edit(|j| j.current().arms[0].uid);
+        r.vm.edit(|j| j.select(Target::Arm(arm)));
+        r.time.advance(1_000);
+        let mut j = binding.store.open().junction_editor(node, 0).unwrap();
+        assert!(j.set_corner(arm, 7_000));
+        assert!(binding.store.write_junction(node, j.snapshot()));
+        r.said.take();
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Replaced }]);
+        assert_eq!(r.said.take(), ["Your change to this place was replaced by a later one."]);
+        assert_eq!(r.vm.core.read(|j| j.selected), Target::Arm(arm), "the selection survives the reload");
+    }
+
+    #[test]
+    fn a_change_to_an_arms_street_reloads_the_junction() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Junction(node) = binding.place else { unreachable!() };
+        let city = binding.store.open();
+        let edge = city.view(0).edges.iter().find(|e| e.a == node || e.b == node).expect("an arm's street").uid;
+        let mut s = city.street_editor(edge, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        let sections = |r: &Rig| r.vm.core.read(|j| j.current().arms.iter().map(|a| a.section.clone()).collect::<Vec<_>>());
+        let before = sections(&r);
+        assert!(binding.store.write_street(edge, s));
+        r.said.take();
+        let key = binding.store.open().street_key(edge).unwrap();
+        hub::publish(&[Change { id: crate::sync::model::Id::new(crate::sync::model::Kind::Street, &key), origin: Origin::Remote }]);
+        assert_ne!(sections(&r), before, "the junction read its arm's street again");
+        assert_eq!(r.said.take(), ["Updated from another device."]);
     }
 
     fn city_rig() -> (Rig, CityBinding) {
@@ -576,5 +685,15 @@ mod tests {
         r.time.advance(300);
         assert_eq!(r.said.take(), vec![crate::i18n_for(crate::shared::i18n::Locale::En).tr_now("not-kept", &crate::shared::i18n::Args::new())]);
         assert_eq!(r.vm.read(|j| j.arm(n).unwrap().corner_mm), 7_500);
+    }
+
+    #[test]
+    fn only_selecting_on_a_place_never_edited_marks_nothing_for_the_sync() {
+        let (r, _) = city_rig();
+        let arm = r.vm.read(|j| j.current().arms[0].uid);
+        r.vm.select(crate::junction::model::Target::Arm(arm));
+        r.vm.flush();
+        r.time.advance(1_000);
+        assert_eq!(r.storage.recall(crate::sync::model::SYNC_KEY), None, "looking is not editing");
     }
 }

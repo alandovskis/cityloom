@@ -112,14 +112,30 @@ async fn signing_in_still_works_after_a_rewrap_and_a_rehash(pool: PgPool) {
     let rotated = Arc::new(repo(&pool, &[(1, [1; 32]), (2, [2; 32])], 2, 4));
     rotated.rewrap().await.unwrap();
     rotated.rehash(&LookupKey::new(zeroize::Zeroizing::new([3; 32]))).await.unwrap();
-    let router = account_router(rotated.clone(), None, app.clock.clone(), app.fake.clone(), RateLimit { period_secs: 1, burst: 1000 });
+    let router = account_router(
+        rotated.clone(),
+        rotated.clone(),
+        None,
+        app.clock.clone(),
+        app.fake.clone(),
+        RateLimit { period_secs: 1, burst: 1000 },
+        RateLimit { period_secs: 1, burst: 1000 },
+    );
     let mut again = Browser::new(router);
     let r = sign_in(&mut again, "fake", "/map.html", &login).await;
     assert_eq!(r.location().as_deref(), Some("/map.html#account=signed-in"));
     assert_eq!(rotated.find_identity("fake", "s1").await.unwrap(), Some(user), "the same account");
     // And the session made before the rotation still reads.
     let old_session = b.cookie("__Host-cityloom-session").cloned().unwrap();
-    let mut old_tab = Browser::new(account_router(rotated, None, app.clock.clone(), app.fake.clone(), RateLimit { period_secs: 1, burst: 1000 }));
+    let mut old_tab = Browser::new(account_router(
+        rotated.clone(),
+        rotated,
+        None,
+        app.clock.clone(),
+        app.fake.clone(),
+        RateLimit { period_secs: 1, burst: 1000 },
+        RateLimit { period_secs: 1, burst: 1000 },
+    ));
     old_tab.set_cookie("__Host-cityloom-session", &old_session);
     assert_eq!(old_tab.get("/api/me").await.status, axum::http::StatusCode::OK);
 }
