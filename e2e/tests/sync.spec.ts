@@ -66,6 +66,7 @@ test("an edit on one device appears on another when its tab is shown again", asy
   browser,
   baseURL,
 }) => {
+  test.slow(); // two browser contexts on a shared server: 18-25 s under parallel load, against a 30 s timeout
   const sub = await storingAccount(page, context, baseURL!);
   const phone = await secondDevice(browser, baseURL!, sub);
   const href = await openStreet(page, 0);
@@ -145,6 +146,7 @@ test("when two devices changed the same place the later edit is kept on both and
   browser,
   baseURL,
 }) => {
+  test.slow(); // two browser contexts on a shared server: 18-25 s under parallel load, against a 30 s timeout
   const sub = await storingAccount(page, context, baseURL!);
   const phone = await secondDevice(browser, baseURL!, sub);
   const href = await openStreet(page, 0);
@@ -167,6 +169,7 @@ test("turning storage off asks first, deletes the server copy, keeps this browse
   browser,
   baseURL,
 }) => {
+  test.slow(); // two browser contexts on a shared server: 18-25 s under parallel load, against a 30 s timeout
   const sub = await storingAccount(page, context, baseURL!);
   const phone = await secondDevice(browser, baseURL!, sub);
   await openStreet(page, 0);
@@ -269,6 +272,7 @@ test("a device that signs in to a storing account receives its places and sends 
   browser,
   baseURL,
 }) => {
+  test.slow(); // two browser contexts on a shared server: 18-25 s under parallel load, against a 30 s timeout
   const sub = await storingAccount(page, context, baseURL!);
   await openStreet(page, 0);
   await widen(page);
