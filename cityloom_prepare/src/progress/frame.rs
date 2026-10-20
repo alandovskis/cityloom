@@ -1,4 +1,4 @@
-//! What is drawn, as pure functions of the steps (a translation of the pure part of `scripts/include/progress.py`).
+//! What is drawn, as pure functions of the steps (a translation of the pure part of the former Python progress module).
 
 use super::{State, Step};
 

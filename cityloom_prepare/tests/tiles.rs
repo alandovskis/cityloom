@@ -15,7 +15,7 @@ fn shown(bbox: [f64; 4]) -> String {
 
 #[test]
 fn the_extract_bounds_are_the_doubles_python_computed() {
-    // The values came from scripts/metro_tiles.py's arithmetic (python3, 2026-10-17).
+    // The values came from the former Python metro_tiles' arithmetic (python3, 2026-10-17).
     let all = tiles::extracts();
     assert_eq!(all.len(), 1734);
     assert_eq!(all[0].output, "0_0.osm.pbf");

@@ -1,5 +1,5 @@
 //! The `prepare` command: the Quebec extract (downloaded if it is not kept), the road tiles, the basemap and the
-//! archive, in one display. A port of `scripts/prepare.py` with the pack step added last.
+//! archive, in one display. It replaces the former Python `prepare`, with the pack step added last.
 
 use std::fs;
 use std::path::{Path, PathBuf};

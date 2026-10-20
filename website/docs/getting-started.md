@@ -13,7 +13,6 @@ argument to list them.
 
 - A Rust toolchain with the `wasm32-unknown-unknown` target.
 - Node.js and npm.
-- Python 3 (`just prepare` runs `scripts/prepare.py`).
 - `just`.
 
 `just setup` installs the rest, once:

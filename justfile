@@ -63,7 +63,7 @@ e2e-archive: build
 # Everything: unit tests, then the browser tests.
 check: test e2e
 
-# The tests of the scripts' own modules (scripts/include), with the standard library only.
+# The tests of the scripts (scripts/include/tests: the issue system's labels, forms and labeler rules), with the standard library only.
 test-scripts:
     python3 -m unittest discover -s scripts/include/tests
 
@@ -85,9 +85,9 @@ sonar-reports:
     python3 -m coverage xml -o target/sonar/python-coverage.xml
     cargo clippy --workspace --message-format=json -- --cap-lints warn > target/sonar/clippy.json
 
-# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool) and build the basemap in web/data/basemap (needs Java 21+). `just prepare --refresh` downloads a newer extract.
+# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool), build the basemap in web/data/basemap (needs Java 21+) and pack both into data/montreal.cityloom. `just prepare --refresh` downloads a newer extract. Runs `cityloom_prepare prepare`; arguments go to it.
 prepare *args:
-    ./scripts/prepare.py {{args}}
+    cargo run --release -q -p cityloom_prepare -- prepare {{args}}
 
 # Pack web/data/metro and web/data/basemap into data/montreal.cityloom (`just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Arguments go to `cityloom_prepare pack`.
 pack *args:

@@ -1,5 +1,5 @@
 //! How `cityloom_prepare` shows its progress: the look of a Jest run (as in JakeWharton/mosaic's sample), in the
-//! terminal. A port of `scripts/include/progress.py`.
+//! terminal. A port of the former Python progress module.
 //!
 //! ```text
 //!  PASS  extract  quebec-latest.osm.pbf  1,213 MB  42s

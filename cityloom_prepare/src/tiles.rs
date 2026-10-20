@@ -1,5 +1,5 @@
 //! Cuts the roads of the Montréal metropolitan area out of a Quebec OSM extract into tiles: a port of
-//! `scripts/metro_tiles.py`, which stays in the tree until the Python is removed.
+//! the former Python `metro_tiles`.
 //!
 //! A tile is a rectangle (its core) holding every road that reaches into the core widened by a margin, whole, with
 //! the nodes it needs. The margin is wider than half an area (400 m), so a place whose centre is in a tile's core is

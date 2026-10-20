@@ -1,5 +1,5 @@
-//! A resumable download, the port of `download` and `open_from` in `scripts/prepare.py` and of the jar download in
-//! `scripts/basemap_tiles.py`.
+//! A resumable download, the port of `download` and `open_from` in the former Python `prepare` and of the jar download in
+//! the former Python `basemap_tiles`.
 //!
 //! The file is written to `<target>.part` and renamed only once whole, so an interrupted download never leaves a
 //! file that looks complete. A `.part` left by an earlier attempt is continued (`Range`) when the server answers 206

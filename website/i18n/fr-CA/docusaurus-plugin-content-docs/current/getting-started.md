@@ -13,7 +13,6 @@ ses tâches; lancez `just` sans argument pour les lister.
 
 - Une chaîne d’outils Rust avec la cible `wasm32-unknown-unknown`.
 - Node.js et npm.
-- Python 3 (`just prepare` exécute `scripts/prepare.py`).
 - `just`.
 
 `just setup` installe le reste, une seule fois :

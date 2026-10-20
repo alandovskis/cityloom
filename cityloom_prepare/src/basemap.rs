@@ -1,5 +1,5 @@
 //! The basemap of the Montréal metropolitan area, built from a Quebec OSM extract by Planetiler (OpenMapTiles
-//! schema): a port of `scripts/basemap_tiles.py`, which stays in the tree until the Python is removed.
+//! schema): a port of the former Python `basemap_tiles`.
 //!
 //! Needs Java 21 or later. Planetiler's latest release is downloaded to `<tools>/planetiler.jar` on first use (delete
 //! it to take a newer one), and the first run fetches about 1 GB of Natural Earth and water-polygon sources once,

@@ -76,7 +76,7 @@ jobs:
           just-version: ${{ env.JUST_VERSION }}
       # Host tests, and a type-check of the code only the wasm32 target compiles.
       - run: just test
-      # The progress display the prepare scripts share (standard library only, no setup).
+      # The issue system's labels, forms and labeler rules (standard library only, no setup).
       - run: just test-scripts
 
   server-release:
@@ -279,16 +279,16 @@ jobs:
       - run: npm ci
 
       # The tiles are made from Geofabrik's Quebec extract (1.2 GB) and take a long time, so keep them until the
-      # scripts that make them change. Run the workflow again after clearing the cache to take a newer extract.
-      # scripts/include (the progress display) is left out of the key on purpose: a change to how the scripts report
-      # must not make the tiles again.
+      # code that makes them change. Run the workflow again after clearing the cache to take a newer extract.
+      # The key hashes only the sources that decide the tiles and the basemap (cityloom_prepare's tiles, basemap and
+      # metro_index modules): a change to the progress display, the archive or a dependency must not make them again.
       - id: tiles
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             web/data/metro
             web/data/basemap/montreal.pmtiles
-          key: tiles-${{ hashFiles('scripts/prepare.py', 'scripts/metro_tiles.py', 'scripts/basemap_tiles.py') }}
+          key: tiles-${{ hashFiles('cityloom_prepare/src/tiles.rs', 'cityloom_prepare/src/basemap.rs', 'cityloom_prepare/src/metro_index.rs') }}
       - if: steps.tiles.outputs.cache-hit != 'true'
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
