@@ -51,7 +51,7 @@ sont ceux de la recette). Il télécharge dans `data/` l’extrait du Québec de
 `just prepare --refresh` en prend un plus récent). Elle découpe ensuite les routes de la région métropolitaine en
 tuiles dans `web/data/metro` (nécessite `osmium-tool`) et construit le fond de carte de la page Carte,
 `web/data/basemap/montreal.pmtiles`, avec Planetiler (nécessite Java 21 ou plus récent). Enfin, il réunit les deux dans une
-seule archive, `data/montreal.cityloom`, un fichier tar muni d’un index SHA-256 que le serveur décompresse au démarrage.
+seule archive, `data/montreal.cityloom`, un fichier tar muni d’un index SHA-256 que le serveur extrait au démarrage.
 Git ignore les tuiles, le fond de carte et l’archive.
 
 Rien n’exige les tuiles de routes : sans elles, tous les lieux, y compris celui par défaut, viennent d’Overpass. Sans le
