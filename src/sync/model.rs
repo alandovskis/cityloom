@@ -111,7 +111,7 @@ pub struct SyncDoc {
     pub records: BTreeMap<String, Entry>,
     /// Set where this document replaced a damaged one: the records of the stores that have no entry were synced before
     /// and their times are lost, so they count as edited then (`stamp(0)`) and not now. The server's copy wins over
-    /// them, and they go up only where the server has nothing. Cleared once they are claimed.
+    /// them, and they go up only where the server has nothing. Cleared once every store has been usable and claimed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unmarked_at: Option<String>,
 }
@@ -258,9 +258,11 @@ pub fn mark(storage: &dyn Storage, kind: Kind, key: &str, deleted: bool) -> bool
 
 /// Marks every record of the stores that has no entry as edited at `at`: work made before anything was marked (while
 /// signed out, with storage off or on an older build) counts as edited when storage is turned on. Where the document
-/// replaced a damaged one (`unmarked_at`), that time stands instead of `at`. Says how many.
-pub fn claim_unmarked(doc: &mut SyncDoc, local: &[Id], at: &str) -> usize {
-    let at = doc.unmarked_at.take().unwrap_or_else(|| at.to_string());
+/// replaced a damaged one (`unmarked_at`), that time stands instead of `at`, and it is cleared only once every kind
+/// has been usable (`all_usable`): the records of a kind that was paused at the first claim are listed later and must
+/// not count as new work then. Says how many.
+pub fn claim_unmarked(doc: &mut SyncDoc, local: &[Id], at: &str, all_usable: bool) -> usize {
+    let at = if all_usable { doc.unmarked_at.take() } else { doc.unmarked_at.clone() }.unwrap_or_else(|| at.to_string());
     let mut claimed = 0;
     for id in local {
         if doc.entry(id).is_none() {
@@ -477,7 +479,7 @@ mod tests {
     fn a_local_record_never_marked_is_claimed_at_the_given_time_and_a_marked_one_is_left() {
         let mut doc = SyncDoc::new();
         doc.records.insert("street/old".into(), entry(T1, false, false, 3));
-        let n = claim_unmarked(&mut doc, &[id(Kind::Street, "old"), id(Kind::Street, "new"), id(Kind::Rule, "r-1")], T3);
+        let n = claim_unmarked(&mut doc, &[id(Kind::Street, "old"), id(Kind::Street, "new"), id(Kind::Rule, "r-1")], T3, true);
         assert_eq!(n, 2);
         assert_eq!(doc.records["street/new"], entry(T3, true, false, 0));
         assert_eq!(doc.records["street/old"], entry(T1, false, false, 3));
@@ -489,10 +491,13 @@ mod tests {
         s.remember(SYNC_KEY, "{broken");
         let mut doc = open(&*s).unwrap();
         assert_eq!(doc.unmarked_at.as_deref(), Some("1970-01-01T00:00:00.000Z"));
-        claim_unmarked(&mut doc, &[id(Kind::Street, "a")], T3);
+        claim_unmarked(&mut doc, &[id(Kind::Street, "a")], T3, false);
         assert_eq!(doc.records["street/a"], entry("1970-01-01T00:00:00.000Z", true, false, 0));
+        assert!(doc.unmarked_at.is_some(), "a kind was paused: the epoch stands for what it lists later");
+        claim_unmarked(&mut doc, &[id(Kind::Street, "a"), id(Kind::Rule, "r")], T3, true);
+        assert_eq!(doc.records["rule/r"].edited_at, "1970-01-01T00:00:00.000Z");
         assert_eq!(doc.unmarked_at, None, "once");
-        claim_unmarked(&mut doc, &[id(Kind::Street, "b")], T3);
+        claim_unmarked(&mut doc, &[id(Kind::Street, "b")], T3, true);
         assert_eq!(doc.records["street/b"].edited_at, T3);
     }
 

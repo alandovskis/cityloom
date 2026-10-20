@@ -1041,6 +1041,26 @@ fn a_damaged_sync_document_is_copied_aside_once_and_its_records_are_claimed_so_t
 }
 
 #[test]
+fn a_store_that_was_unusable_at_the_first_claim_still_has_its_records_claimed_as_old_work_when_it_recovers() {
+    hub::reset();
+    let server = ServerSim::new();
+    let d = device(&server, T0);
+    let key = edit_street(&d, 1, 100);
+    let edits = d.storage.recall(EDITS_KEY).unwrap();
+    // the sync document is damaged, and for a while the edits document is a newer build's
+    d.storage.remember(model::SYNC_KEY, "{damaged");
+    d.storage.remember(EDITS_KEY, r#"{"version":99}"#);
+    server.seed("street", &key, json!({"theirs": true}), "2027-01-15T07:00:00.000Z");
+    d.vm.known(&ada());
+    // the build is back (a rule keeps the document busy meanwhile), later
+    d.storage.remember(EDITS_KEY, &edits);
+    d.storage.set_now(T0 + 600_000);
+    d.vm.refresh();
+    assert_eq!(record_of(&d, &street_id(&key)), Some(json!({"theirs": true})), "the server's copy won over the street that came back");
+    assert_eq!(server.row("street", &key).unwrap().body, Some(json!({"theirs": true})));
+}
+
+#[test]
 fn a_corrupt_record_in_a_pull_does_not_move_the_revision_past_it_and_comes_back_once_the_server_can_open_it() {
     hub::reset();
     let server = ServerSim::new();

@@ -280,7 +280,8 @@ impl SyncVm {
             doc.switch_user(user);
         }
         self.rename_rules(doc);
-        model::claim_unmarked(doc, &local::ids(storage), &model::stamp(storage.now_ms()));
+        let all_usable = Kind::ALL.iter().all(|kind| local::usable(storage, *kind));
+        model::claim_unmarked(doc, &local::ids(storage), &model::stamp(storage.now_ms()), all_usable);
     }
 
     /// Gives the `r<n>` rules random ids (once: later there are none). A rule that had been sent under its old id is
