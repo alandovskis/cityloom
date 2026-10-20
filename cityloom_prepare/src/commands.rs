@@ -11,6 +11,7 @@ use clap::{Parser, Subcommand};
 use crate::archive::{self, PackInputs};
 use crate::basemap::{self, BasemapJob};
 use crate::metro_index::Grid;
+use crate::prepare::{self, PrepareArgs};
 use crate::progress::{Progress, Spec, StepError, exit_on_ctrl_c, thousands};
 use crate::tiles::{self, TilesJob};
 
@@ -257,16 +258,16 @@ pub fn run_pack(p: &Progress, job: &PackJob) -> Result<(), StepError> {
     })
 }
 
-fn repo_root() -> PathBuf {
+pub(crate) fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("the crate lies in the repository").to_path_buf()
 }
 
 /// An absolute path: a path handed to a tool must not start with `-`.
-fn absolute(path: &Path) -> PathBuf {
+pub(crate) fn absolute(path: &Path) -> PathBuf {
     std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
 }
 
@@ -324,9 +325,6 @@ pub fn dispatch(cli: Cli) -> Result<(), i32> {
             progress.close();
             result.map_err(|_| 1)
         }
-        Command::Prepare { .. } => {
-            eprintln!("not implemented yet");
-            Err(2)
-        }
+        Command::Prepare { extract, refresh, batch } => prepare::run(PrepareArgs { extract, refresh, batch }),
     }
 }
