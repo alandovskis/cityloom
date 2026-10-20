@@ -12,7 +12,7 @@ use crate::archive::{self, PackInputs};
 use crate::basemap::{self, BasemapJob};
 use crate::metro_index::Grid;
 use crate::prepare::{self, PrepareArgs};
-use crate::progress::{Progress, Spec, StepError, exit_on_ctrl_c, thousands};
+use crate::progress::{Progress, Spec, StepError, exit_on_ctrl_c, megabytes};
 use crate::tiles::{self, TilesJob};
 
 #[derive(Parser, Debug)]
@@ -247,7 +247,7 @@ pub fn run_pack(p: &Progress, job: &PackJob) -> Result<(), StepError> {
             if mb != shown {
                 shown = mb;
                 let fraction = if total == 0 { 1.0 } else { done as f64 / total as f64 };
-                ctx.update(None, Some(&format!("{} of {} MB", thousands(mb), thousands(total / 1_000_000))), Some(fraction));
+                ctx.update(None, Some(&megabytes(done, Some(total))), Some(fraction));
             }
         };
         let members = archive::pack(&inputs, &job.out, &mut report).map_err(|e| fail(e.to_string()))?;

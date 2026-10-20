@@ -8,10 +8,11 @@ use std::sync::Arc;
 use crate::basemap::{self, BasemapJob};
 use crate::commands::{self, PackJob};
 use crate::download::download;
-use crate::progress::{Progress, Spec, StepCtx, StepError, exit_on_ctrl_c, thousands};
+use crate::progress::{Progress, Spec, StepCtx, StepError, exit_on_ctrl_c};
 use crate::tiles::{self, TilesJob};
 
 const ARCHIVE_NAME: &str = "montreal.cityloom";
+pub use crate::progress::megabytes;
 pub const URL: &str = "https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf";
 
 /// What the command was asked, as the command line says it.
@@ -52,16 +53,6 @@ pub fn steps(extract: &Path) -> Vec<Spec> {
     all
 }
 
-/// The progress line of a download: `12 of 60 MB`.
-pub fn megabytes(done: u64, total: Option<u64>) -> String {
-    let of = total.map_or(String::new(), |t| format!(" of {}", megabyte_count(t)));
-    format!("{}{of} MB", megabyte_count(done))
-}
-
-fn megabyte_count(bytes: u64) -> String {
-    thousands(format!("{:.0}", bytes as f64 / 1e6))
-}
-
 /// The extract, downloaded unless it is kept (and not `refresh`); the step says its size, and "kept" if it was.
 pub fn get_extract(ctx: &StepCtx, extract: &Path, refresh: bool, url: &str) -> Result<(), StepError> {
     let downloading = refresh || !extract.exists();
@@ -71,7 +62,7 @@ pub fn get_extract(ctx: &StepCtx, extract: &Path, refresh: bool, url: &str) -> R
         };
         download(url, extract, true, &mut say)?;
     }
-    let size = format!("{} MB", megabyte_count(fs::metadata(extract)?.len()));
+    let size = megabytes(fs::metadata(extract)?.len(), None);
     ctx.update(None, Some(&if downloading { size } else { format!("{size}, kept") }), None);
     Ok(())
 }

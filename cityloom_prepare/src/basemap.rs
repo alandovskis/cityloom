@@ -10,7 +10,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::download::download;
-use crate::progress::{Progress, Spec, StepError, thousands};
+use crate::progress::{Progress, Spec, StepError, megabytes};
 
 pub const JAR_URL: &str = "https://github.com/onthegomap/planetiler/releases/latest/download/planetiler.jar";
 /// The grid `tiles` cuts: west, south, east, north.
@@ -43,16 +43,6 @@ pub struct BasemapJob<'a> {
     pub jar_url: &'a str,
 }
 
-fn megabytes(bytes: u64) -> String {
-    format!("{} MB", thousands(format!("{:.0}", bytes as f64 / 1e6)))
-}
-
-/// The progress line of a download: `12 of 60 MB`.
-fn downloaded(done: u64, total: Option<u64>) -> String {
-    let of = total.map_or(String::new(), |t| format!(" of {}", thousands(format!("{:.0}", t as f64 / 1e6))));
-    format!("{}{of} MB", thousands(format!("{:.0}", done as f64 / 1e6)))
-}
-
 /// Builds the basemap from `job.extract`, step by step as `steps` says, with Java's output in the steps' logs.
 pub fn run(p: &Progress, job: &BasemapJob) -> Result<(), StepError> {
     let jar = job.tools.join("planetiler.jar");
@@ -65,13 +55,13 @@ pub fn run(p: &Progress, job: &BasemapJob) -> Result<(), StepError> {
             return Ok(());
         }
         let mut say = |done: u64, total: Option<u64>| {
-            step.update(None, Some(&downloaded(done, total)), total.map(|t| done as f64 / t as f64));
+            step.update(None, Some(&megabytes(done, total)), total.map(|t| done as f64 / t as f64));
         };
         let release = download(job.jar_url, &jar, false, &mut say)?;
         let mut source = jar.clone().into_os_string();
         source.push(".source");
         fs::write(&source, format!("{}\n", release.as_deref().unwrap_or(job.jar_url)))?;
-        step.update(None, Some(&megabytes(fs::metadata(&jar)?.len())), None);
+        step.update(None, Some(&megabytes(fs::metadata(&jar)?.len(), None)), None);
         Ok(())
     })?;
     p.step("basemap", |step| {

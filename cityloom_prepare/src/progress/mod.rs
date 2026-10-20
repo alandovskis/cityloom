@@ -128,6 +128,14 @@ pub fn thousands(value: impl Display) -> String {
     format!("{sign}{grouped}{point}{decimals}")
 }
 
+/// A byte count in megabytes (1e6 bytes) as Python's `{:,.0f}` writes it, with the total when there is one:
+/// `megabytes(12_000_000, Some(60_000_000))` is `12 of 60 MB`, `megabytes(2_500_000, None)` is `2 MB`.
+pub fn megabytes(done: u64, total: Option<u64>) -> String {
+    let count = |bytes: u64| thousands(format!("{:.0}", bytes as f64 / 1e6));
+    let of = total.map_or(String::new(), |t| format!(" of {}", count(t)));
+    format!("{}{of} MB", count(done))
+}
+
 /// The view and whether it is closed: once it is, nothing is drawn again (a late step from the main thread, racing
 /// the Ctrl-C handler, must print nothing after the closing frame).
 struct Shown {
