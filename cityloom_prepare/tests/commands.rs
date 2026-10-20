@@ -65,6 +65,7 @@ fn job(root: &Path, metro: PathBuf, basemap: PathBuf, grid: Option<Grid>) -> Pac
         area: "montreal".into(),
         metro,
         basemap,
+        basemap_file: None,
         source: "quebec-latest.osm.pbf".into(),
         source_time: 5,
         created: 7,

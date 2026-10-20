@@ -91,6 +91,7 @@ pub fn run_job(p: &Progress, job: &PrepareJob) -> Result<(), StepError> {
         area: "montreal".into(),
         metro: job.metro.clone(),
         basemap: job.basemap.parent().unwrap_or(&job.root).to_path_buf(),
+        basemap_file: Some(job.basemap.clone()),
         source: job.extract.file_name().unwrap_or_default().to_string_lossy().into_owned(),
         source_time: commands::source_time(&job.extract, &job.osmium),
         created: commands::now(),

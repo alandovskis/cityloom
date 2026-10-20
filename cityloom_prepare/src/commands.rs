@@ -150,6 +150,8 @@ pub struct PackJob {
     pub area: String,
     pub metro: PathBuf,
     pub basemap: PathBuf,
+    /// Pack only this file of `basemap` (what `prepare` just built); `None` packs every `.pmtiles` file there.
+    pub basemap_file: Option<PathBuf>,
     pub source: String,
     pub source_time: i64,
     pub created: i64,
@@ -221,7 +223,12 @@ fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>, Vec<Pat
     };
 
     let mut basemaps = Vec::new();
-    if let Ok(dir) = fs::read_dir(&job.basemap) {
+    if let Some(file) = &job.basemap_file {
+        if !file.is_file() {
+            return Err(fail(format!("no basemap: {} is not there (run the basemap step first)", file.display())));
+        }
+        basemaps.push(file.clone());
+    } else if let Ok(dir) = fs::read_dir(&job.basemap) {
         for entry in dir.flatten() {
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "pmtiles") && path.is_file() {
@@ -281,6 +288,7 @@ pub fn dispatch(cli: Cli) -> Result<(), i32> {
                 area,
                 metro: absolute(&metro.unwrap_or_else(|| root.join("web/data/metro"))),
                 basemap: absolute(&basemap.unwrap_or_else(|| root.join("web/data/basemap"))),
+                basemap_file: None,
                 source,
                 source_time,
                 created: created.unwrap_or_else(now),
