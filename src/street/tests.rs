@@ -154,18 +154,26 @@ fn in_2_5d_the_drawing_is_the_street_in_depth_with_no_handles_and_the_keys_still
 }
 
 #[test]
-fn the_group_is_as_tall_as_the_taller_view_in_both_so_switching_does_not_make_the_card_jump() {
+fn the_group_is_as_tall_as_the_section_in_both_views_so_switching_does_not_make_the_card_jump() {
     use crate::street::iso::iso_height;
     use crate::street::svg::Geometry;
     for mode in [ViewMode::Section, ViewMode::Iso] {
         let s = street_in(mode, Locale::En);
         let v = s.view();
-        let (section, iso) = (Geometry::fit(1050.0, v.row_mm).rows.height, iso_height(&v, 1050.0));
-        // At 1050 px the 2.5D of this street is the taller.
-        assert!(iso > section, "{iso} {section}");
+        let section = Geometry::fit(1050.0, v.row_mm).rows.height;
+        // The group keeps the taller of the two, whichever view is shown, and the 2.5D is never the taller.
+        assert!(iso_height(&v, 1050.0) <= section);
         let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
-        assert!(h.contains(&format!("min-height:{iso}px")), "{mode:?} {iso} {h}");
+        assert!(h.contains(&format!("min-height:{section}px")), "{mode:?} {section} {h}");
     }
+}
+
+#[test]
+fn only_the_section_keeps_the_group_600_px_wide_the_2_5d_fits_the_room_it_has() {
+    let section = street_html(|| view! { <view::StreetDrawing vm=street_in(ViewMode::Section, Locale::En)/> });
+    let iso = street_html(|| view! { <view::StreetDrawing vm=street_in(ViewMode::Iso, Locale::En)/> });
+    assert!(!section.contains("iso-view"), "{section}");
+    assert!(iso.contains("iso-view"), "{iso}");
 }
 
 #[test]

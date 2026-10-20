@@ -29,13 +29,18 @@ mod tests {
     fn the_roadway_slabs_are_the_surface_and_everything_else_stands_above_it() {
         for sample in 0..4 {
             let v = Editor::new(sample).view();
-            let (flat, standing) = split(strips(&v));
+            let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm));
+            let (flat, standing) = split(strips(&v, &p));
             assert!(flat.iter().all(|&(top, i, edge)| top == 0.0 && edge.is_none() && height_mm(KINDS[v.segments[i].kind].id) == 0), "sample {sample}");
             assert!(standing.iter().all(|&(top, _, edge)| top > 0.0 || edge.is_some()), "sample {sample}");
-            assert_eq!(flat.len() + standing.len(), strips(&v).len());
+            assert_eq!(flat.len() + standing.len(), strips(&v, &p).len());
             assert_eq!(flat.len(), v.segments.iter().filter(|s| height_mm(KINDS[s.kind].id) == 0).count());
-            // Both keep the lowest-to-highest order.
-            assert!(standing.windows(2).all(|w| w[0].0 <= w[1].0));
+            // Both keep the order of the strips: from the farthest from the middle of the street to the nearest.
+            let order = strips(&v, &p);
+            for part in [&flat, &standing] {
+                let at: Vec<usize> = part.iter().map(|s| order.iter().position(|o| o == s).unwrap()).collect();
+                assert!(at.windows(2).all(|w| w[0] < w[1]), "sample {sample}");
+            }
         }
     }
 

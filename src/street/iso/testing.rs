@@ -28,30 +28,34 @@ pub fn top_of(markup: &str, uid: u32) -> String {
     face[at..at + face[at..].find('"').unwrap()].to_string()
 }
 
+/// The `points` of every polygon drawn in screen pixels, each as the text between the quotes: a texture's polygon has
+/// a `transform` of its own and is in millimetres of ground, so it is left out.
+fn screen_points(markup: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut before = "";
+    for chunk in markup.split("points=\"") {
+        if before.rsplit("<polygon").next().is_some_and(|tag| !tag.contains("transform=")) && !before.is_empty() {
+            out.push(chunk.split('"').next().unwrap());
+        }
+        before = chunk;
+    }
+    out
+}
+
 /// Every x of every polygon's points.
 pub fn xs(markup: &str) -> Vec<f64> {
-    markup
-        .split("points=\"")
-        .skip(1)
-        .flat_map(|rest| rest.split('"').next().unwrap().split(' ').map(|pt| pt.split(',').next().unwrap().parse::<f64>().unwrap()).collect::<Vec<_>>())
-        .collect()
+    xs_ys(markup).into_iter().map(|(x, _)| x).collect()
 }
 
 /// Every point of every polygon.
 pub fn xs_ys(markup: &str) -> Vec<(f64, f64)> {
-    markup
-        .split("points=\"")
-        .skip(1)
-        .flat_map(|rest| {
-            rest.split('"')
-                .next()
-                .unwrap()
-                .split(' ')
-                .map(|pt| {
-                    let mut c = pt.split(',').map(|n| n.parse::<f64>().unwrap());
-                    (c.next().unwrap(), c.next().unwrap())
-                })
-                .collect::<Vec<_>>()
+    screen_points(markup)
+        .into_iter()
+        .flat_map(|pts| {
+            pts.split(' ').map(|pt| {
+                let mut c = pt.split(',').map(|n| n.parse::<f64>().unwrap());
+                (c.next().unwrap(), c.next().unwrap())
+            })
         })
         .collect()
 }

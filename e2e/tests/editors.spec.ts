@@ -116,3 +116,28 @@ for (const p of [
     });
   });
 }
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("the 2.5D is scaled to the room it has: the whole street is in view and nothing scrolls sideways", async ({
+    page,
+  }) => {
+    await openStreet(page);
+    await page.evaluate(() => localStorage.setItem("cityloom-street-view", "iso"));
+    await page.reload();
+    await expect(page.locator("#drawing.iso")).toBeVisible();
+    const drawing = await box(page, "#drawing");
+    expect(drawing.x).toBeGreaterThanOrEqual(0);
+    expect(drawing.x + drawing.width).toBeLessThanOrEqual(390);
+    const scroll = await page.locator("#scroll").evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }));
+    expect(scroll.scroll).toBeLessThanOrEqual(scroll.client + 1);
+    // Back to the section, which is laid out wider than the phone and scrolls, as before.
+    await page.keyboard.press("v");
+    await expect(page.locator("#drawing.iso")).toHaveCount(0);
+    const section = await page
+      .locator("#scroll")
+      .evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }));
+    expect(section.scroll).toBeGreaterThan(section.client);
+  });
+});

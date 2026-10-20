@@ -1,5 +1,5 @@
-//! The street in 2.5D: a straight stretch of it seen from above and to one side, each piece an
-//! extruded strip with its height, the few things that stand on the pieces as plain solids, and the
+//! The street in 2.5D: a straight stretch of it seen in perspective from over its centre line, looking along it, each
+//! piece an extruded strip with its height, the few things that stand on the pieces as plain solids, and the
 //! lane markings on the roadway. It is drawn from the same view the section is and is read-only:
 //! the section is where the street is edited.
 //!
@@ -10,7 +10,7 @@
 //! pieces keep their own size and sit on the drawn tops.
 //!
 //! The code is split by what it draws: `projection` (where a point lands), `raised` (the strips standing
-//! above the roadway and their order), `solids` (boxes on the pieces), `surface` (the roadway), `markings` (which
+//! above the roadway), `order` (what is painted after what), `solids` (boxes on the pieces), `surface` (the roadway), `markings` (which
 //! lines and symbols a street carries), `symbols` (their shapes) and `paint` (the markings layer).
 
 use std::fmt::Write;
@@ -22,7 +22,9 @@ use crate::shared::units::Units;
 use crate::street::model::View;
 use crate::street::svg::curb_edges;
 
+mod joints;
 mod markings;
+mod order;
 mod paint;
 mod projection;
 mod raised;
@@ -32,11 +34,12 @@ mod symbols;
 #[cfg(test)]
 mod testing;
 
-pub use projection::{ARROW_AT_MM, MAX_HEIGHT, MIN_SOLID_PX, Projection, RECEDE_X, RECEDE_Y, RISE, STRETCH_MM, drawn_mm};
+pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MIN_SOLID_PX, Projection, RISE, STRETCH_MM, TALLEST_MM, drawn_mm};
 pub use raised::{HEIGHTS, curb_height_mm, curb_top_mm, height_mm};
 
+use order::Bx;
 use projection::points;
-use raised::{beside, materials, shades, strips};
+use raised::{beside, inner_face, materials, shades, strips};
 use solids::{Block, block, blocks};
 
 /// The 2.5D drawn, and the size it is drawn at.
@@ -48,15 +51,26 @@ pub struct IsoSvg {
 }
 
 /// The outline of the selected piece at `i`, as one shape round everything drawn for it (its strip
-/// and its curbs): its near face, its right side where that is seen, and its top, at the height of
+/// and its curbs): its near face, the side the eye sees where there is one, and its top, at the height of
 /// its highest part.
 fn outline(out: &mut String, p: &Projection, v: &View, i: usize) {
     let s = &v.segments[i];
     let id = KINDS[s.kind].id;
     let top = s.curb.filter(|_| !curb_edges(v, i).is_empty()).map_or(drawn_mm(height_mm(id)), |c| curb_top_mm(c, id));
     let (x0, x1, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, STRETCH_MM);
-    let low = beside(v, i).min(top);
-    let at = points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, low, 0.0), (x1, low, l), (x1, top, l), (x0, top, l), (x0, top, 0.0)]);
+    let corners = match inner_face(p, x0, x1) {
+        // Left of the eye: its right face is seen, so the outline climbs it and comes back along the top.
+        Some(true) => {
+            let low = beside(v, i, true).min(top);
+            vec![(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, low, 0.0), (x1, low, l), (x1, top, l), (x0, top, l), (x0, top, 0.0)]
+        }
+        Some(false) => {
+            let low = beside(v, i, false).min(top);
+            vec![(x1, 0.0, 0.0), (x0, 0.0, 0.0), (x0, low, 0.0), (x0, low, l), (x0, top, l), (x1, top, l), (x1, top, 0.0)]
+        }
+        None => vec![(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, top, 0.0), (x1, top, l), (x0, top, l), (x0, top, 0.0)],
+    };
+    let at = points(p, &corners);
     // A dark casing under the light line: one of the two is seen on any material, in either theme.
     write!(out, "<polygon class=\"iso-sel-casing\" points=\"{at}\"/><polygon class=\"iso-sel\" points=\"{at}\"/>").unwrap();
 }
@@ -71,34 +85,50 @@ pub fn iso_height(v: &View, width: f64) -> f64 {
     Projection::fit(width, span_mm(v)).height
 }
 
-/// The street in 2.5D, drawn `width` wide: a stretch of `STRETCH_MM` seen obliquely, from the same
-/// view the section is drawn from. Hovering a piece names it.
+/// The street in 2.5D, drawn `width` wide: a stretch of `STRETCH_MM` seen in perspective from the centre line,
+/// from the same view the section is drawn from. Hovering a piece names it.
 ///
-/// It is built in layers, each its own group, in the order the eye needs and with nothing sorted by depth: the
-/// ground; the surface (the top of every roadway piece); the markings (every line and symbol, painted on the
-/// surface); the raised layer (every strip standing above the roadway, with its faces, from the lowest to the
-/// highest, so it covers the paint's edges where they meet); what stands on the pieces from far to near; and last
-/// the selected piece's outline.
+/// It is built in layers, each its own group, in the order the eye needs: the ground; the surface (the top of every
+/// roadway piece); the markings (every line and symbol, painted on the surface); the raised layer (every strip
+/// standing above the roadway, with its faces, covering the paint's edges where they meet) together with what stands
+/// on the pieces, in the order the eye needs (`order`: a box is painted after the ones it is in front of, nearer the
+/// middle of the street, nearer the near end or higher); and last the selected piece's outline.
 pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let span = span_mm(v);
     let p = Projection::fit(width, span);
     let (w, l) = (span as f64, STRETCH_MM);
-    let mut out = format!("<defs>{}{}</defs>", shades(), materials(&p));
+    let mut out = format!("<defs>{}{}</defs>", shades(), materials());
     write!(out, "<polygon class=\"iso-ground\" points=\"{}\"/>", points(&p, &[(0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, 0.0, l), (0.0, 0.0, l)])).unwrap();
 
-    let (flat, standing) = surface::split(strips(v));
+    let (flat, standing) = surface::split(strips(v, &p));
     out.push_str(&surface::layer(&p, v, i18n, &flat));
     out.push_str(&paint::layer(&p, v));
-    out.push_str(&raised::layer(&p, v, i18n, &standing));
 
-    // What stands on the pieces, so that a nearer box covers the ones behind it: piece by piece from left
-    // to right (each box stays inside its piece, and the eye sees the right sides, so a box on a piece
-    // further right is the nearer wherever two overlap), and on each piece from the far end to the near and
-    // from left to right. A tree's crown starts nearer than its trunk, so it covers it.
-    let mut solids: Vec<(usize, Block)> = (0..v.segments.len()).flat_map(|i| blocks(v, i, &p).into_iter().map(move |b| (i, b))).collect();
-    solids.sort_by(|(i, a), (j, b)| i.cmp(j).then(b.z.0.total_cmp(&a.z.0)).then(a.x.0.total_cmp(&b.x.0)));
-    for (_, b) in &solids {
-        block(&mut out, &p, b);
+    // The raised strips and what stands on the pieces, in the order the eye needs (`order`): a box covers the ones it
+    // is in front of, so a crown nearer the middle of the street covers a shelter beyond it, and a strip nearer the
+    // middle covers the foot of a post beyond it. The strips are in groups of their own between the solids.
+    let mut solids: Vec<Block> = (0..v.segments.len()).flat_map(|i| blocks(v, i, &p)).collect();
+    solids.sort_by(|a, b| b.from_eye(&p).total_cmp(&a.from_eye(&p)).then(a.y.0.total_cmp(&b.y.0)));
+    let boxes: Vec<(Bx, bool)> = standing.iter().map(|&s| (raised::strip_box(v, s), true)).chain(solids.iter().map(|b| (b.bounds(), false))).collect();
+    out.push_str("<g class=\"iso-raised\">");
+    let mut open = true;
+    for k in order::paint_order(&boxes, p.centre_mm) {
+        if k < standing.len() {
+            if !open {
+                out.push_str("<g class=\"iso-raised\">");
+                open = true;
+            }
+            raised::piece(&mut out, &p, v, i18n, standing[k]);
+        } else {
+            if open {
+                out.push_str("</g>");
+                open = false;
+            }
+            block(&mut out, &p, &solids[k - standing.len()]);
+        }
+    }
+    if open {
+        out.push_str("</g>");
     }
     if let Some(i) = v.selected.and_then(|u| v.segments.iter().position(|s| s.uid == u)) {
         outline(&mut out, &p, v, i);
@@ -118,8 +148,8 @@ pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::projection::{BANDS, EYE_BACK_MM, band_edges};
     use super::projection::{PAD, r};
-    use super::projection::{RECEDE_X, RECEDE_Y};
     use super::testing::{count, drawn, en, furnished, marked, one_way_bikes, top_of, xs, xs_ys};
     use super::*;
     use crate::shared::catalogue::{KINDS, MATERIALS, kind_index};
@@ -160,7 +190,8 @@ mod tests {
         assert_eq!(count(&m, "class=\"iso-top "), 6);
         assert_eq!(count(&m, "class=\"iso-piece\""), 6 + 2, "a group per piece and per curb");
         assert_eq!(count(&m, "class=\"iso-top k-sidewalk mat-"), 2);
-        assert_eq!(count(&m, "fill=\"url(#iso-m-asphalt)\""), 4, "a top per travel lane and parking lane, in the material's pattern");
+        assert_eq!(count(&m, "fill=\"url(#iso-m-asphalt)\""), 4, "a texture group per travel lane and parking lane, in the material's pattern");
+        assert_eq!(count(&m, "<polygon transform=\"matrix("), 6 * BANDS, "BANDS bands on each of the six tops");
         assert_eq!(count(&m, "fill=\"url(#h-travel)\""), 0, "the kind's hatch stays on the faces");
         assert_eq!(count(&m, "class=\"iso-ground\""), 1);
         assert!(!m.contains("NaN"));
@@ -207,28 +238,102 @@ mod tests {
         assert_eq!(count(&before, "class=\"iso-front k-sidewalk\""), count(&after, "class=\"iso-front k-sidewalk\""));
     }
 
+    /// The bands of the top of the piece `uid` (its `iso-m-*` polygons): each as its `matrix(..)` and its points.
+    fn bands(markup: &str, uid: u32) -> Vec<([f64; 6], Vec<(f64, f64)>)> {
+        let group = markup.split(&format!("<g class=\"iso-piece\" data-uid=\"{uid}\">")).nth(1).expect("the piece is drawn");
+        // The first group closed is the top's texture group.
+        let group = &group[..group.find("</g>").unwrap()];
+        group
+            .split("<polygon transform=\"matrix(")
+            .skip(1)
+            .map(|b| {
+                let m: Vec<f64> = b[..b.find(')').unwrap()].split(' ').map(|n| n.parse().unwrap()).collect();
+                let pts = &b[b.find("points=\"").unwrap() + 8..];
+                let pts = pts[..pts.find('"').unwrap()]
+                    .split(' ')
+                    .map(|pt| {
+                        let mut c = pt.split(',').map(|n| n.parse::<f64>().unwrap());
+                        (c.next().unwrap(), c.next().unwrap())
+                    })
+                    .collect();
+                ([m[0], m[1], m[2], m[3], m[4], m[5]], pts)
+            })
+            .collect()
+    }
+
     #[test]
-    fn the_patterns_lie_on_the_ground_in_the_drawings_oblique_projection() {
+    fn a_material_with_joints_draws_them_as_geometry_over_its_fine_texture_and_a_fine_one_draws_none() {
+        // Sample Street 1: two concrete sidewalks (joints) and four asphalt lanes (grain only).
+        let e = Editor::new(0);
+        let v = e.view();
+        let m = drawn(&e);
+        assert_eq!(count(&m, "<path class=\"joints j-concrete\" d=\"M"), 2);
+        assert_eq!(count(&m, "class=\"joints"), 2);
+        // The joints come after the top's bands, inside the piece's group, and the bands are still there for the grain.
+        for s in v.segments.iter().filter(|s| s.material == "concrete") {
+            let group = m.split(&format!("<g class=\"iso-piece\" data-uid=\"{}\">", s.uid)).nth(1).unwrap();
+            let group = &group[..group.find("<g class=\"iso-piece\"").unwrap_or(group.len())];
+            assert!(group.find("class=\"hatch\"").unwrap() < group.find("class=\"joints").unwrap());
+        }
+        // The material is the piece's own: a brick sidewalk draws brick joints and no concrete ones.
+        let mut e = Editor::new(0);
+        let uid = e.view().segments[0].uid;
+        let brick = KINDS[e.view().segments[0].kind].materials.iter().copied().find(|&i| MATERIALS[i].id == "brick");
+        if let Some(i) = brick {
+            assert!(e.set_material(uid, i));
+            let after = drawn(&e);
+            assert_eq!(count(&after, "class=\"joints j-brick\""), 1);
+            assert_eq!(count(&after, "class=\"joints j-concrete\""), 1);
+        }
+    }
+
+    #[test]
+    fn a_joint_is_drawn_in_its_material_s_own_tone_and_the_width_the_material_says() {
+        let css = include_str!("../../../web/editor.css");
+        for m in MATERIALS.iter().filter(|m| crate::shared::iso::ground::joints(m.id).is_some()) {
+            let j = crate::shared::iso::ground::joints(m.id).unwrap();
+            let rule = &css[css.find(&format!(".joints.j-{} {{", m.id)).unwrap_or_else(|| panic!("no rule for {}", m.id))..];
+            let rule = &rule[..rule.find('}').unwrap()];
+            let tone = if j.alt { "alt" } else { "line" };
+            assert!(rule.contains(&format!("stroke: var(--mat-{}-{tone});", m.id)), "{}: {rule}", m.id);
+            assert!(rule.contains(&format!("stroke-width: {};", j.width_px)), "{}: {rule}", m.id);
+        }
+    }
+
+    #[test]
+    fn the_patterns_are_drawn_in_millimetres_of_ground_and_each_band_of_a_top_lays_one_by_its_own_matrix() {
         let e = Editor::new(0);
         let v = e.view();
         let p = Projection::fit(1050.0, span_mm(&v));
         let m = drawn(&e);
+        // The patterns carry no projection: they are in ground millimetres, the identity.
         for mat in MATERIALS {
             let at = m.find(&format!("id=\"iso-m-{}\"", mat.id)).expect("every material has a pattern");
             let start = m[..at].rfind("<pattern").unwrap();
             let tag = &m[start..start + m[start..].find('>').unwrap()];
-            assert!(tag.contains("patternTransform=\"matrix("), "{tag}");
+            assert!(tag.contains("patternTransform=\"matrix(1.000000 0.000000 0.000000 1.000000 0.00 0.00)\""), "{tag}");
         }
-        // Across the pattern runs along the street's x; along it recedes up and right as the projection does.
-        let at = m.find("id=\"iso-m-asphalt\"").unwrap();
-        let start = m[..at].rfind("<pattern").unwrap();
-        let tag = &m[start..m[start..].find('>').unwrap() + start];
-        let t = tag.split("matrix(").nth(1).unwrap().split(')').next().unwrap();
-        let n: Vec<f64> = t.split(' ').map(|x| x.parse().unwrap()).collect();
-        assert_eq!(n.len(), 6);
-        assert!(n[0] > 0.0 && n[1] == 0.0, "across stays horizontal");
-        assert!((n[2] / n[0] - RECEDE_X).abs() < 1e-3 && (n[3] / n[0] + RECEDE_Y).abs() < 1e-3, "along recedes up and right: {n:?}");
-        assert!((n[4] - p.left).abs() < 0.01 && (n[5] - p.base).abs() < 0.01, "anchored at the ground's origin");
+        // Each top is cut into BANDS bands, whose polygons, laid by their matrices, are exactly the perspective's
+        // quadrilaterals of the band (so they fit the top and each other), and whose matrices are the slope at the band's depth.
+        let edges = band_edges();
+        for s in &v.segments {
+            let h = drawn_mm(height_mm(KINDS[s.kind].id));
+            let bands = bands(&m, s.uid);
+            assert_eq!(bands.len(), BANDS, "{}", KINDS[s.kind].id);
+            let (x0, x1) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64);
+            for (k, (t, local)) in bands.iter().enumerate() {
+                let want = [(x0, edges[k]), (x1, edges[k]), (x1, edges[k + 1]), (x0, edges[k + 1])];
+                for ((u, vv), (x, z)) in local.iter().zip(want) {
+                    let got = (t[0] * u + t[2] * vv + t[4], t[1] * u + t[3] * vv + t[5]);
+                    let (sx, sy) = p.at(x, h, z);
+                    assert!((got.0 - sx).abs() < 0.1 && (got.1 - sy).abs() < 0.1, "{k}: {got:?} {sx} {sy}");
+                }
+                // The size across is the projection's scale at the band's middle in depth, which lies in the band.
+                let depth = ((t[0] / p.scale).recip() * EYE_BACK_MM) - EYE_BACK_MM;
+                assert!(depth > edges[k] && depth < edges[k + 1], "{k}: {depth}");
+                assert_eq!((t[1], t[3] < 0.0), (0.0, true), "across stays horizontal, along goes up the screen");
+            }
+        }
     }
 
     #[test]
@@ -241,11 +346,59 @@ mod tests {
         for road in ["travel", "parking"] {
             assert_eq!(count(&m, &format!("iso-front k-{road}")) + count(&m, &format!("iso-side k-{road}")), 0, "{road}");
         }
-        // Sample Avenue 2: a sidewalk beside a planting strip of the same height has no side face; the planting strip,
-        // beside parking, has one; the median has one; the right sidewalk, at the street's edge, has one.
+        // Sample Avenue 2: a sidewalk beside a planting strip of the same height has no side face; each planting strip,
+        // beside parking, shows its inner one; the median is over the eye, so it shows none.
         let avenue = drawn(&Editor::new(1));
         assert_eq!(count(&avenue, "class=\"iso-front "), 5);
-        assert_eq!(count(&avenue, "class=\"iso-side "), 3);
+        assert_eq!(count(&avenue, "class=\"iso-side "), 2);
+    }
+
+    /// The `points` of the first face of `class` in the first group drawn for `uid` that has one.
+    fn face_points(markup: &str, uid: u32, class: &str) -> Option<String> {
+        markup.split(&format!("<g class=\"iso-piece\" data-uid=\"{uid}\">")).skip(1).find_map(|g| {
+            let g = &g[..g.find("</g>")?];
+            let face = &g[g.find(&format!("class=\"{class}"))?..];
+            let at = face.find("points=\"")? + 8;
+            Some(face[at..at + face[at..].find('"')?].to_string())
+        })
+    }
+
+    #[test]
+    fn from_the_middle_the_left_sidewalk_shows_its_right_face_and_the_right_one_its_left_and_both_their_front() {
+        let e = Editor::new(0);
+        let v = e.view();
+        let p = Projection::fit(1050.0, span_mm(&v));
+        let m = drawn(&e);
+        let (left, right) = (&v.segments[0], &v.segments[5]);
+        let h = drawn_mm(150);
+        let (lx, rx) = ((left.x_mm + left.width_mm) as f64, right.x_mm as f64);
+        assert_eq!(face_points(&m, left.uid, "iso-side").unwrap(), points(&p, &[(lx, 0.0, 0.0), (lx, 0.0, STRETCH_MM), (lx, h, STRETCH_MM), (lx, h, 0.0)]));
+        assert_eq!(face_points(&m, right.uid, "iso-side").unwrap(), points(&p, &[(rx, 0.0, 0.0), (rx, 0.0, STRETCH_MM), (rx, h, STRETCH_MM), (rx, h, 0.0)]));
+        // The near face shows for both.
+        for s in [left, right] {
+            let (x0, x1) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64);
+            assert_eq!(face_points(&m, s.uid, "iso-front").unwrap(), points(&p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, h, 0.0), (x0, h, 0.0)]));
+        }
+        // The sidewalks' inner faces are seen from the middle of the street, so the left one is a mirror of the right.
+        let (l, r) = (xs_ys(&face_points(&m, left.uid, "iso-side").unwrap()), xs_ys(&face_points(&m, right.uid, "iso-side").unwrap()));
+        for ((lx, ly), (rx, ry)) in l.iter().zip(&r) {
+            assert!((lx + rx - p.width).abs() < 0.02 && (ly - ry).abs() < 0.02, "{l:?} {r:?}");
+        }
+    }
+
+    #[test]
+    fn a_piece_right_of_the_middle_is_outlined_along_its_left_face() {
+        let mut e = Editor::new(0);
+        let (uid, x0) = (e.view().segments[5].uid, e.view().segments[5].x_mm);
+        e.select(Some(uid));
+        let m = drawn(&e);
+        let v = e.view();
+        let p = Projection::fit(1050.0, span_mm(&v));
+        let (x1, h) = ((x0 + v.segments[5].width_mm) as f64, drawn_mm(150));
+        let (sx, sy) = p.at(x1, 0.0, 0.0);
+        assert!(m.contains(&format!("<polygon class=\"iso-sel\" points=\"{},{} ", r(sx), r(sy))), "starts at the near right corner");
+        let (fx, fy) = p.at(x0 as f64, h, STRETCH_MM);
+        assert!(m.contains(&format!("{},{} ", r(fx), r(fy))), "goes up the left face's far edge");
     }
 
     #[test]
@@ -383,12 +536,42 @@ mod tests {
     #[test]
     fn every_sample_street_draws_in_2_5d_without_a_missing_number_at_every_width() {
         for sample in 0..4 {
-            for width in [600.0, 760.0, 1050.0, 1800.0] {
+            for width in [300.0, 358.0, 600.0, 760.0, 1050.0, 1800.0] {
                 let s = iso_svg(&Editor::new(sample).view(), &en(), width);
                 assert!(!s.markup.contains("NaN") && !s.markup.contains("inf"), "sample {sample} at {width}");
-                assert!(s.height <= MAX_HEIGHT + 1e-9);
             }
         }
+    }
+
+    #[test]
+    fn the_2_5d_is_never_taller_than_the_section_at_any_width_so_it_never_makes_the_card_taller() {
+        // The group is as tall as the section is (`Geometry::fit`), and the status line under it has to stay in view at
+        // 1440 by 900, where the group is about 680 px wide: the 2.5D is held to that height at every width.
+        let mut e = Editor::new(0);
+        e.add(kind_index("travel").unwrap(), 2);
+        for e in [Editor::new(0), Editor::new(1), Editor::new(2), Editor::new(3), e, furnished()] {
+            let v = e.view();
+            for width in [280.0, 358.0, 600.0, 684.0, 760.0, 945.0, 1050.0, 1155.0, 1440.0, 1800.0] {
+                let section = crate::street::svg::Geometry::fit(width, v.row_mm).rows.height;
+                let iso = iso_height(&v, width);
+                assert!(iso <= section + 1e-9, "{width}: the 2.5D is {iso} px tall, the section {section}");
+            }
+        }
+    }
+
+    #[test]
+    fn on_a_narrow_screen_the_2_5d_is_laid_out_as_wide_as_it_has_room_for() {
+        // The 2.5D is read-only and has no handles: it needs no sideways scroll, and a 390 px phone's group (358 px)
+        // gets a drawing 358 px wide, the whole street in view, scaled down.
+        for sample in 0..4 {
+            let s = iso_svg(&Editor::new(sample).view(), &en(), 358.0);
+            assert_eq!(s.width, 358.0, "sample {sample}");
+        }
+        let v = Editor::new(0).view();
+        let (narrow, wide) = (Projection::fit(358.0, v.row_mm), Projection::fit(1050.0, v.row_mm));
+        assert!(narrow.scale < wide.scale);
+        // The street's right edge is inside the drawing.
+        assert!(narrow.at(v.row_mm as f64, 0.0, 0.0).0 <= 358.0 - 30.0 + 1e-9);
     }
 
     #[test]
@@ -414,6 +597,34 @@ mod tests {
         assert!(m.contains(&format!("<polygon class=\"iso-sel\" points=\"{},{} ", r(x), r(y))), "the drawing has not got it");
         // Drawn last, over everything.
         assert!(m.rfind("class=\"iso-sel\"").unwrap() > m.rfind("class=\"iso-piece\"").unwrap());
+    }
+
+    #[test]
+    fn every_outline_has_a_casing_under_it_with_the_same_points() {
+        // Left of the eye, right of it, and the one piece across it: the three shapes of the outline.
+        let check = |e: &Editor| {
+            let m = drawn(e);
+            let at = m.find("<polygon class=\"iso-sel-casing\" points=\"").expect("a casing");
+            let pts = &m[at + 40..];
+            let pts = &pts[..pts.find('"').unwrap()];
+            assert!(m.contains(&format!("<polygon class=\"iso-sel-casing\" points=\"{pts}\"/><polygon class=\"iso-sel\" points=\"{pts}\"/>")));
+            assert_eq!(count(&m, "iso-sel-casing"), 1);
+        };
+        let n = Editor::new(0).view().segments.len();
+        for i in 0..n {
+            let mut e = Editor::new(0);
+            e.select(Some(e.view().segments[i].uid));
+            check(&e);
+        }
+        // A piece across the middle: the one a street of the default's pieces has when the ones left of it are gone.
+        let mut e = Editor::new(0);
+        let p = Projection::fit(1050.0, span_mm(&e.view()));
+        let across = |e: &Editor| e.view().segments.iter().find(|s| inner_face(&p, s.x_mm as f64, (s.x_mm + s.width_mm) as f64).is_none()).map(|s| s.uid);
+        while across(&e).is_none() && e.view().segments.len() > 1 {
+            assert!(e.remove(e.view().segments[0].uid));
+        }
+        e.select(Some(across(&e).expect("some piece lies across the middle")));
+        check(&e);
     }
 
     #[test]
@@ -597,6 +808,20 @@ mod tests {
         assert_eq!(count(&m, "class=\"iso-paint yellow\""), 7);
         assert_eq!(count(&m, "class=\"iso-paint white\""), 49);
         assert!(!m.contains("NaN") && !m.contains("inf"));
+    }
+
+    /// Not a check: prints how long the markup of some streets is, at 1050 and 600 px.
+    /// `cargo test street::iso::tests::markup_size -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn markup_size() {
+        for (name, e) in
+            [("sample 0", Editor::new(0)), ("sample 1", Editor::new(1)), ("sample 3", Editor::new(3)), ("furnished", furnished()), ("marked", marked())]
+        {
+            for width in [1050.0, 600.0] {
+                println!("{name} at {width}: {} bytes", iso_svg(&e.view(), &en(), width).markup.len());
+            }
+        }
     }
 
     /// Not a check: writes `target/iso-preview-light.html` and `target/iso-preview-dark.html`, the 2.5D of
