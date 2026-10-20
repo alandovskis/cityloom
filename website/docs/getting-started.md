@@ -45,10 +45,12 @@ the pages are signed out.
 just prepare
 ```
 
-This downloads Geofabrik's Quebec extract into `data/` if it is not there (about 1.2 GB; `just prepare --refresh` takes
+This runs `cityloom_prepare`, the repository's Rust tool (`cargo run -p cityloom_prepare -- prepare`; its arguments are
+the recipe's). It downloads Geofabrik's Quebec extract into `data/` if it is not there (about 1.2 GB; `just prepare --refresh` takes
 a newer one). It then cuts the metropolitan area's roads into tiles in `web/data/metro` (needs `osmium-tool`) and builds
-the map page's basemap, `web/data/basemap/montreal.pmtiles`, with Planetiler (needs Java 21 or later). Both outputs are
-ignored by git.
+the map page's basemap, `web/data/basemap/montreal.pmtiles`, with Planetiler (needs Java 21 or later). Last, it packs both into
+one archive, `data/montreal.cityloom`, a tar with a SHA-256 index that the server unpacks at start-up. The tiles, the
+basemap and the archive are ignored by git.
 
 Nothing needs the road tiles: without them every place, the default one included, comes from Overpass. Without the
 basemap, the map page says so and shows no map.

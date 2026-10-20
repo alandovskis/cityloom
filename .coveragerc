@@ -1,6 +1,0 @@
-[run]
-# Paths relative to the repository root, which is where Sonar looks for them.
-relative_files = True
-# The scripts' only Python is the tests (scripts/include/tests), so they are what is measured: with them left out
-# coverage.py has no data and `coverage xml` fails.
-include = scripts/*

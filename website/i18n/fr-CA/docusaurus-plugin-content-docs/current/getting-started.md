@@ -46,10 +46,13 @@ routes de compte répondent 503 et les pages n’ont pas de session ouverte.
 just prepare
 ```
 
-La recette télécharge dans `data/` l’extrait du Québec de Geofabrik s’il n’y est pas déjà (environ 1,2 Go;
+La recette exécute `cityloom_prepare`, l’outil Rust du dépôt (`cargo run -p cityloom_prepare -- prepare`; ses arguments
+sont ceux de la recette). Il télécharge dans `data/` l’extrait du Québec de Geofabrik s’il n’y est pas déjà (environ 1,2 Go;
 `just prepare --refresh` en prend un plus récent). Elle découpe ensuite les routes de la région métropolitaine en
 tuiles dans `web/data/metro` (nécessite `osmium-tool`) et construit le fond de carte de la page Carte,
-`web/data/basemap/montreal.pmtiles`, avec Planetiler (nécessite Java 21 ou plus récent). Git ignore ces deux sorties.
+`web/data/basemap/montreal.pmtiles`, avec Planetiler (nécessite Java 21 ou plus récent). Enfin, il réunit les deux dans une
+seule archive, `data/montreal.cityloom`, un fichier tar muni d’un index SHA-256 que le serveur décompresse au démarrage.
+Git ignore les tuiles, le fond de carte et l’archive.
 
 Rien n’exige les tuiles de routes : sans elles, tous les lieux, y compris celui par défaut, viennent d’Overpass. Sans le
 fond de carte, la page Carte l’indique et n’affiche aucune carte.
