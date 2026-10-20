@@ -1,6 +1,10 @@
 pub mod archive;
 #[cfg(feature = "cli")]
+pub mod basemap;
+#[cfg(feature = "cli")]
 pub mod commands;
+#[cfg(feature = "cli")]
+pub mod download;
 pub mod metro_index;
 #[cfg(feature = "cli")]
 pub mod progress;

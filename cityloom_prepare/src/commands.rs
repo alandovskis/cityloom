@@ -9,6 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use clap::{Parser, Subcommand};
 
 use crate::archive::{self, PackInputs};
+use crate::basemap::{self, BasemapJob};
 use crate::metro_index::Grid;
 use crate::progress::{Progress, Spec, StepError, exit_on_ctrl_c, thousands};
 use crate::tiles::{self, TilesJob};
@@ -300,7 +301,30 @@ pub fn dispatch(cli: Cli) -> Result<(), i32> {
             progress.close();
             result.map_err(|_| 1)
         }
-        Command::Prepare { .. } | Command::Basemap { .. } => {
+        Command::Basemap { extract, output, bounds, minzoom, maxzoom, memory } => {
+            let root = repo_root();
+            let (extract, output, tools) =
+                (absolute(&extract), absolute(&output.unwrap_or_else(|| root.join("web/data/basemap/montreal.pmtiles"))), root.join(".tools"));
+            let job = BasemapJob {
+                extract: &extract,
+                output: &output,
+                bounds: bounds.as_deref().unwrap_or(basemap::METRO_BOUNDS),
+                minzoom: minzoom.map_or(basemap::MINZOOM, u32::from),
+                maxzoom: maxzoom.map_or(basemap::MAXZOOM, u32::from),
+                memory: memory.as_deref().unwrap_or(basemap::MEMORY),
+                tools: &tools,
+                root: &root,
+                java: "java",
+                jar_url: basemap::JAR_URL,
+            };
+            let name = |path: &Path| path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let progress = Arc::new(Progress::stderr(basemap::steps("planetiler.jar", &name(&output)), root.join("data/logs"), root.clone()));
+            exit_on_ctrl_c(&progress).expect("the Ctrl-C handler");
+            let result = basemap::run(&progress, &job);
+            progress.close();
+            result.map_err(|_| 1)
+        }
+        Command::Prepare { .. } => {
             eprintln!("not implemented yet");
             Err(2)
         }
