@@ -132,14 +132,13 @@ pub(super) fn inner_face(p: &Projection, x0: f64, x1: f64) -> Option<bool> {
 }
 
 /// The top of a piece at `h` (drawn mm) across `x0` to `x1`: a polygon in the tint of the kind `id` and the material
-/// `m`, and the material's texture over it. The texture is a pattern in millimetres of ground; perspective is not an
-/// affine map, so the top is cut into `BANDS` bands along the street (`band_edges`), each carrying the affine map that
-/// is the perspective's slope at its middle (`Projection::ground_at`); the band's polygon is written in the ground's
-/// own millimetres, as the true quadrilateral the band is on the screen taken back through that map, so it fits the
-/// top exactly and its `transform` lays the texture. The texture is not continuous across a seam: each band's map is
-/// right at its middle and drifts from the true perspective to either side, so at a seam the pattern jumps by a few
-/// pixels at the strip's edges (3 to 6 px on a 3.3 m sidewalk, at 684 to 1440 px; none at its middle), which shows as a
-/// small step in a concrete panel's joints. No affine map can fit a trapezoid, so more bands only make the steps smaller.
+/// `m`, the material's texture over it, and its regular joints (`joints`) over that. The texture is the fine grain, a
+/// pattern in millimetres of ground; perspective is not an affine map, so the top is cut into `BANDS` bands along the
+/// street (`band_edges`), each carrying the affine map that is the perspective's slope at its middle
+/// (`Projection::ground_at`); the band's polygon is written in the ground's own millimetres, as the true quadrilateral
+/// the band is on the screen taken back through that map, so it fits the top exactly and its `transform` lays the
+/// texture. The grain is not continuous across a seam, which does not show in a grain; the joints, which the eye
+/// follows, are not part of the pattern but lines projected point by point, so they have no seam.
 fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h: f64) {
     let l = STRETCH_MM;
     let pts = points(p, &[(x0, h, 0.0), (x1, h, 0.0), (x1, h, l), (x0, h, l)]);
