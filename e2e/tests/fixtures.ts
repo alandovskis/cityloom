@@ -3,13 +3,18 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test as base, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
+/** `just e2e-archive`: the server serves the Plateau's tile and basemap from an unpacked `.cityloom` archive, so the
+ *  fixtures do not route them (a route would answer before the server and the run would prove nothing). */
+const FROM_ARCHIVE = !!process.env.E2E_ARCHIVE;
+
 /** Every test fails if its page throws or logs a console error. Each test gets a
  *  fresh browser context, so the page starts with empty storage.
  *
  *  The pages open the area of the world last chosen, the default one before any is: the Plateau
  *  Mont-Royal. There is no network in the tests, so its roads come from a metro tile served from
  *  `fixtures/plateau.osm.pbf` and its basemap from `fixtures/plateau.pmtiles`. A test that wants
- *  something else asks for it with its own `page.route`, which wins over these. */
+ *  something else asks for it with its own `page.route`, which wins over these. With `E2E_ARCHIVE=1` the default
+ *  tile, its index and the default basemap are not routed: the server answers them from the archive. */
 export const test = base.extend<{ errors: string[]; world: void }>({
   context: async ({ context }, use) => {
     await prepareContext(context);
@@ -58,6 +63,7 @@ export const PLATEAU_TILES = fileURLToPath(new URL("../fixtures/plateau.pmtiles"
 /** Serves the basemap's tiles as a static host with range support does: PMTiles reads them in pieces.
  *  `tiles` is a file to read them from, or the bytes themselves. */
 export async function serveBasemap(context: BrowserContext, tiles: string | Buffer = PLATEAU_TILES) {
+  if (FROM_ARCHIVE && tiles === PLATEAU_TILES) return; // the server serves the default basemap itself
   const body = typeof tiles === "string" ? readFileSync(tiles) : tiles;
   await context.route("**/data/basemap/montreal.pmtiles", async (route) => {
     const range = /bytes=(\d+)-(\d*)/.exec(route.request().headers()["range"] ?? "");
@@ -74,10 +80,12 @@ export async function serveBasemap(context: BrowserContext, tiles: string | Buff
 
 /** What the Plateau needs where there is no network: a metro tile of it, and no Overpass. */
 export async function serveWorld(page: Page) {
-  await page.route("**/data/metro/index.json", (route) =>
-    route.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"] } }),
-  );
-  await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(PLATEAU_PBF) }));
+  if (!FROM_ARCHIVE) {
+    await page.route("**/data/metro/index.json", (route) =>
+      route.fulfill({ json: { lon0: -73.6078, lat0: 45.5161, dlon: 0.0257, dlat: 0.018, tiles: ["0_0"] } }),
+    );
+    await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(PLATEAU_PBF) }));
+  }
   await page.route("https://overpass-api.de/**", (route) => route.abort());
 }
 

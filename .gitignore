@@ -22,16 +22,16 @@ e2e/playwright-report/
 .idea_modules/
 .impeccable/mocks/
 
-# The metropolitan area's OSM tiles are made by scripts/metro_tiles.py (just prepare), not kept in git. The index
-# beside them is a placeholder that names none; the script overwrites it, and that is not committed.
+# The metropolitan area's OSM tiles are made by cityloom_prepare (just prepare), not kept in git. The index
+# beside them is a placeholder that names none; it is overwritten, and that is not committed.
 /web/data/metro/*.osm.pbf
 
-# What scripts/build.sh copies from node_modules, and the basemap's tiles, which scripts/basemap_tiles.py makes.
+# What scripts/build.sh copies from node_modules, and the basemap's tiles, which cityloom_prepare makes.
 /node_modules/
 /web/vendor/
 /web/data/basemap/*.pmtiles
 
-# Planetiler's downloaded sources (Natural Earth, water polygons), fetched by scripts/basemap_tiles.py.
+# Planetiler's downloaded sources (Natural Earth, water polygons), fetched by cityloom_prepare.
 /data/
 
 # Rendered from docs/erd.mmd (mmdc -i docs/erd.mmd -o docs/erd.svg; the .png with -s 2)
@@ -47,6 +47,5 @@ website/node_modules/
 website/build/
 website/.docusaurus/
 
-# Python: coverage.py's data and the scripts' bytecode.
-.coverage
+# Python: the scripts' bytecode.
 __pycache__/

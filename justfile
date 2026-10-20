@@ -55,10 +55,15 @@ e2e *args: build
     cargo build -p cityloom_server --features test-provider
     cd e2e && npx playwright test {{args}}
 
+# The map, street and archive specs with the road tiles and the basemap served from an unpacked .cityloom archive (`cityloom_prepare pack` packs the fixtures) instead of routed by the tests. Builds first, like `e2e`.
+e2e-archive *args: build
+    cargo build -p cityloom_server --features test-provider
+    scripts/e2e-archive.sh {{args}}
+
 # Everything: unit tests, then the browser tests.
 check: test e2e
 
-# The tests of the scripts' own modules (scripts/include), with the standard library only.
+# The tests of the scripts (scripts/include/tests: the issue system's labels, forms and labeler rules), with the standard library only.
 test-scripts:
     python3 -m unittest discover -s scripts/include/tests
 
@@ -72,17 +77,15 @@ format-check:
     cargo fmt --check
     cd e2e && npx prettier --ignore-path ../.prettierignore --check . ../web/*.js ../website
 
-# What the SonarCloud analysis reads, in target/sonar: the Rust coverage as LCOV (host tests only: the wasm-only code and the browser tests are not measured), the scripts' Python coverage as XML (needs coverage.py: `python3 -m pip install coverage`) and Clippy's findings as JSON. Sonar judges the findings, so lints are capped at warnings here; a build error still fails. Needs cargo-llvm-cov (`cargo install cargo-llvm-cov --locked`) and the llvm-tools component.
+# What the SonarCloud analysis reads, in target/sonar: the Rust coverage as LCOV (host tests only: the wasm-only code and the browser tests are not measured), and Clippy's findings as JSON. Sonar judges the findings, so lints are capped at warnings here; a build error still fails. Needs cargo-llvm-cov (`cargo install cargo-llvm-cov --locked`) and the llvm-tools component.
 sonar-reports:
     mkdir -p target/sonar
     cargo llvm-cov --workspace --exclude cityloom_server --lcov --output-path target/sonar/lcov.info
-    python3 -m coverage run -m unittest discover -s scripts/include/tests
-    python3 -m coverage xml -o target/sonar/python-coverage.xml
     cargo clippy --workspace --message-format=json -- --cap-lints warn > target/sonar/clippy.json
 
-# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool) and build the basemap in web/data/basemap (needs Java 21+). `just prepare --refresh` downloads a newer extract.
+# Make the Montréal metropolitan area's data: download Geofabrik's Quebec extract into data/ if it is not there, cut the roads into tiles in web/data/metro (needs osmium-tool), build the basemap in web/data/basemap (needs Java 21+) and pack both into data/montreal.cityloom. `just prepare --refresh` downloads a newer extract. Runs `cityloom_prepare prepare`; arguments go to it.
 prepare *args:
-    ./scripts/prepare.py {{args}}
+    cargo run --release -q -p cityloom_prepare -- prepare {{args}}
 
 # Pack web/data/metro and web/data/basemap into data/montreal.cityloom (`just prepare` does it as its last step): one tar with a SHA-256 index that the server unpacks at start-up (CITYLOOM_AREAS). Arguments go to `cityloom_prepare pack`.
 pack *args:

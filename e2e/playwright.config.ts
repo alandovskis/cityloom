@@ -14,6 +14,10 @@ if (!existsSync(server)) {
   );
 }
 
+// `just e2e-archive` (E2E_ARCHIVE=1): the server unpacks the archive that script packed and serves the road data from it.
+const fromArchive = !!process.env.E2E_ARCHIVE;
+const archiveRoot = fileURLToPath(new URL("../target/e2e-archive/", import.meta.url));
+
 const b64 = (byte: number, length: number) => Buffer.alloc(length, byte).toString("base64");
 
 export default defineConfig({
@@ -43,6 +47,7 @@ export default defineConfig({
       DATA_KEY_CURRENT: "1",
       LOOKUP_KEY: b64(3, 32),
       FAKE_PROVIDER: "1",
+      ...(fromArchive ? { CITYLOOM_AREAS: `${archiveRoot}areas`, DATA_ROOT: `${archiveRoot}data` } : {}),
       // Many parallel specs sign in from one address: the production allowance (10 a minute) would answer 429.
       AUTH_RATE_BURST: "100000",
       AUTH_RATE_PERIOD_SECS: "1",
@@ -51,6 +56,7 @@ export default defineConfig({
       WORK_RATE_PERIOD_SECS: "1",
     },
     url: `http://127.0.0.1:${port}/map.html`,
-    reuseExistingServer: !process.env.CI,
+    // A server already running without the archive would give false results.
+    reuseExistingServer: !process.env.CI && !fromArchive,
   },
 });

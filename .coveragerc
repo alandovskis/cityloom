@@ -1,5 +1,0 @@
-[run]
-# Paths relative to the repository root, which is where Sonar looks for them.
-relative_files = True
-include = scripts/*
-omit = scripts/include/tests/*

@@ -18,7 +18,8 @@ required-features = ["cli"]
 tar = { version = "0.4.46", default-features = false }
 sha2 = "0.11.1"
 thiserror = "2.0.21"
-ureq = { version = "3.4.2", optional = true }
+# No gzip: Range and Content-Length must mean bytes on disk.
+ureq = { version = "3.4.2", optional = true, default-features = false, features = ["rustls"] }
 clap = { version = "4.6.7", optional = true, default-features = false, features = ["std", "derive", "help", "usage", "error-context"] }
 serde_json = { version = "1.0.154", optional = true, features = ["float_roundtrip"] }
 rlimit = { version = "0.11.0", optional = true }
@@ -33,5 +34,25 @@ name = "commands"
 required-features = ["cli"]
 
 [[test]]
+name = "download"
+required-features = ["cli"]
+
+[[test]]
+name = "basemap"
+required-features = ["cli"]
+
+[[test]]
 name = "ctrl_c"
+required-features = ["cli"]
+
+[[test]]
+name = "tiles"
+required-features = ["cli"]
+
+[[test]]
+name = "prepare"
+required-features = ["cli"]
+
+[[test]]
+name = "progress"
 required-features = ["cli"]

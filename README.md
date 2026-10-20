@@ -50,6 +50,8 @@ brew install osmium-tool openjdk   # osmium for the road tiles, Java 21 or later
 just prepare
 ```
 
+It also packs the tiles and the basemap into one archive, `data/montreal.cityloom` (a tar with a SHA-256 index); `just pack` packs them again without running the rest.
+
 ## Montréal metro tiles
 
 The roads of the whole Montréal metropolitan area are cut into tiles that are served with the pages, so that

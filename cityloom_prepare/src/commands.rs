@@ -9,11 +9,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use clap::{Parser, Subcommand};
 
 use crate::archive::{self, PackInputs};
+use crate::basemap::{self, BasemapJob};
 use crate::metro_index::Grid;
-use crate::progress::{Progress, Spec, StepError, exit_on_ctrl_c, thousands};
-
-/// The metropolitan Montréal grid the app's tiles are cut on (Task 10 moves it to `tiles::grid()`).
-const MONTREAL: Grid = Grid { lon0: -74.4, lat0: 45.2, dlon: 0.0257, dlat: 0.018, nx: 51, ny: 34 };
+use crate::prepare::{self, PrepareArgs};
+use crate::progress::{Progress, Spec, StepError, exit_on_ctrl_c, megabytes};
+use crate::tiles::{self, TilesJob};
 
 #[derive(Parser, Debug)]
 #[command(name = "cityloom_prepare", about = "Prepares CityLoom's area data: tiles, basemap and the .cityloom archive")]
@@ -150,6 +150,8 @@ pub struct PackJob {
     pub area: String,
     pub metro: PathBuf,
     pub basemap: PathBuf,
+    /// Pack only this file of `basemap` (what `prepare` just built); `None` packs every `.pmtiles` file there.
+    pub basemap_file: Option<PathBuf>,
     pub source: String,
     pub source_time: i64,
     pub created: i64,
@@ -209,9 +211,10 @@ fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>, Vec<Pat
     }
 
     let (lon0, lat0, dlon, dlat) = (number(&index, "lon0")?, number(&index, "lat0")?, number(&index, "dlon")?, number(&index, "dlat")?);
+    let montreal = tiles::grid();
     let grid = match job.grid {
         Some(grid) => grid,
-        None if same(lon0, MONTREAL.lon0) && same(lat0, MONTREAL.lat0) && same(dlon, MONTREAL.dlon) && same(dlat, MONTREAL.dlat) => MONTREAL,
+        None if same(lon0, montreal.lon0) && same(lat0, montreal.lat0) && same(dlon, montreal.dlon) && same(dlat, montreal.dlat) => montreal,
         None => {
             let nx = roads.iter().map(|r| r.0).max().map_or(1, |m| m + 1);
             let ny = roads.iter().map(|r| r.1).max().map_or(1, |m| m + 1);
@@ -220,7 +223,12 @@ fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>, Vec<Pat
     };
 
     let mut basemaps = Vec::new();
-    if let Ok(dir) = fs::read_dir(&job.basemap) {
+    if let Some(file) = &job.basemap_file {
+        if !file.is_file() {
+            return Err(fail(format!("no basemap: {} is not there (run the basemap step first)", file.display())));
+        }
+        basemaps.push(file.clone());
+    } else if let Ok(dir) = fs::read_dir(&job.basemap) {
         for entry in dir.flatten() {
             let path = entry.path();
             if path.extension().is_some_and(|e| e == "pmtiles") && path.is_file() {
@@ -246,7 +254,7 @@ pub fn run_pack(p: &Progress, job: &PackJob) -> Result<(), StepError> {
             if mb != shown {
                 shown = mb;
                 let fraction = if total == 0 { 1.0 } else { done as f64 / total as f64 };
-                ctx.update(None, Some(&format!("{} of {} MB", thousands(mb), thousands(total / 1_000_000))), Some(fraction));
+                ctx.update(None, Some(&megabytes(done, Some(total))), Some(fraction));
             }
         };
         let members = archive::pack(&inputs, &job.out, &mut report).map_err(|e| fail(e.to_string()))?;
@@ -257,16 +265,16 @@ pub fn run_pack(p: &Progress, job: &PackJob) -> Result<(), StepError> {
     })
 }
 
-fn repo_root() -> PathBuf {
+pub(crate) fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("the crate lies in the repository").to_path_buf()
 }
 
 /// An absolute path: a path handed to a tool must not start with `-`.
-fn absolute(path: &Path) -> PathBuf {
+pub(crate) fn absolute(path: &Path) -> PathBuf {
     std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
 }
 
@@ -280,6 +288,7 @@ pub fn dispatch(cli: Cli) -> Result<(), i32> {
                 area,
                 metro: absolute(&metro.unwrap_or_else(|| root.join("web/data/metro"))),
                 basemap: absolute(&basemap.unwrap_or_else(|| root.join("web/data/basemap"))),
+                basemap_file: None,
                 source,
                 source_time,
                 created: created.unwrap_or_else(now),
@@ -291,9 +300,39 @@ pub fn dispatch(cli: Cli) -> Result<(), i32> {
             progress.close();
             result.map_err(|_| 1)
         }
-        Command::Prepare { .. } | Command::Tiles { .. } | Command::Basemap { .. } => {
-            eprintln!("not implemented yet");
-            Err(2)
+        Command::Tiles { extract, workdir, batch } => {
+            let root = repo_root();
+            let (source, work, out) = (absolute(&extract), absolute(&workdir.unwrap_or_else(|| root.join("data/metro-work"))), root.join("web/data/metro"));
+            let job = TilesJob { source: &source, work: &work, out: &out, batch: batch.unwrap_or(tiles::MAX_EXTRACTS), osmium: "osmium" };
+            let progress = Arc::new(Progress::stderr(tiles::steps(), root.join("data/logs"), root));
+            exit_on_ctrl_c(&progress).expect("the Ctrl-C handler");
+            let result = tiles::run(&progress, &job);
+            progress.close();
+            result.map_err(|_| 1)
         }
+        Command::Basemap { extract, output, bounds, minzoom, maxzoom, memory } => {
+            let root = repo_root();
+            let (extract, output, tools) =
+                (absolute(&extract), absolute(&output.unwrap_or_else(|| root.join("web/data/basemap/montreal.pmtiles"))), root.join(".tools"));
+            let job = BasemapJob {
+                extract: &extract,
+                output: &output,
+                bounds: bounds.as_deref().unwrap_or(basemap::METRO_BOUNDS),
+                minzoom: minzoom.map_or(basemap::MINZOOM, u32::from),
+                maxzoom: maxzoom.map_or(basemap::MAXZOOM, u32::from),
+                memory: memory.as_deref().unwrap_or(basemap::MEMORY),
+                tools: &tools,
+                root: &root,
+                java: "java",
+                jar_url: basemap::JAR_URL,
+            };
+            let name = |path: &Path| path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            let progress = Arc::new(Progress::stderr(basemap::steps("planetiler.jar", &name(&output)), root.join("data/logs"), root.clone()));
+            exit_on_ctrl_c(&progress).expect("the Ctrl-C handler");
+            let result = basemap::run(&progress, &job);
+            progress.close();
+            result.map_err(|_| 1)
+        }
+        Command::Prepare { extract, refresh, batch } => prepare::run(PrepareArgs { extract, refresh, batch }),
     }
 }
