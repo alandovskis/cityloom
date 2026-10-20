@@ -55,6 +55,11 @@ e2e *args: build
     cargo build -p cityloom_server --features test-provider
     cd e2e && npx playwright test {{args}}
 
+# The map, street and archive specs with the road tiles and the basemap served from an unpacked .cityloom archive (`cityloom_prepare pack` packs the fixtures) instead of routed by the tests. Builds first, like `e2e`.
+e2e-archive: build
+    cargo build -p cityloom_server --features test-provider
+    scripts/e2e-archive.sh
+
 # Everything: unit tests, then the browser tests.
 check: test e2e
 
