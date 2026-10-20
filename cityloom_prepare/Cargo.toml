@@ -32,6 +32,6 @@ serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 name = "commands"
 required-features = ["cli"]
 
-[[example]]
+[[test]]
 name = "ctrl_c"
 required-features = ["cli"]

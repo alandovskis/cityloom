@@ -180,27 +180,6 @@ fn a_panic_in_a_step_fails_it() {
 }
 
 #[test]
-fn ctrl_c_in_a_real_process_fails_the_step_and_exits_with_status_130() {
-    use std::io::{BufRead, BufReader, Read};
-    use std::process::{Command, Stdio};
-    let exe = std::env::current_exe().unwrap();
-    let example = exe.parent().unwrap().parent().unwrap().join("examples/ctrl_c");
-    let mut child = Command::new(example).stdout(Stdio::piped()).spawn().unwrap();
-    let mut stdout = BufReader::new(child.stdout.take().unwrap());
-    let mut line = String::new();
-    stdout.read_line(&mut line).unwrap();
-    assert_eq!(line, "RUNS g first\n"); // the step is running
-    let sent = Command::new("kill").args(["-INT", &child.id().to_string()]).status().unwrap();
-    assert!(sent.success());
-    let mut rest = String::new();
-    stdout.read_to_string(&mut rest).unwrap();
-    let status = child.wait().unwrap();
-    assert_eq!(status.code(), Some(130));
-    assert!(rest.contains("FAIL g first"), "{rest}");
-    assert!(rest.contains(" \u{2023} interrupted"), "{rest}");
-}
-
-#[test]
 fn a_log_outside_the_project_is_shown_whole() {
     let out = SharedBuf::default();
     let p = Progress::with(vec![], "/logs".into(), "/project".into(), Box::new(out), false, clock());
