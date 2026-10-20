@@ -11,9 +11,7 @@ use clap::{Parser, Subcommand};
 use crate::archive::{self, PackInputs};
 use crate::metro_index::Grid;
 use crate::progress::{Progress, Spec, StepError, exit_on_ctrl_c, thousands};
-
-/// The metropolitan Montréal grid the app's tiles are cut on (Task 10 moves it to `tiles::grid()`).
-const MONTREAL: Grid = Grid { lon0: -74.4, lat0: 45.2, dlon: 0.0257, dlat: 0.018, nx: 51, ny: 34 };
+use crate::tiles::{self, TilesJob};
 
 #[derive(Parser, Debug)]
 #[command(name = "cityloom_prepare", about = "Prepares CityLoom's area data: tiles, basemap and the .cityloom archive")]
@@ -209,9 +207,10 @@ fn read_inputs(job: &PackJob) -> Result<(Grid, Vec<(u16, u16, PathBuf)>, Vec<Pat
     }
 
     let (lon0, lat0, dlon, dlat) = (number(&index, "lon0")?, number(&index, "lat0")?, number(&index, "dlon")?, number(&index, "dlat")?);
+    let montreal = tiles::grid();
     let grid = match job.grid {
         Some(grid) => grid,
-        None if same(lon0, MONTREAL.lon0) && same(lat0, MONTREAL.lat0) && same(dlon, MONTREAL.dlon) && same(dlat, MONTREAL.dlat) => MONTREAL,
+        None if same(lon0, montreal.lon0) && same(lat0, montreal.lat0) && same(dlon, montreal.dlon) && same(dlat, montreal.dlat) => montreal,
         None => {
             let nx = roads.iter().map(|r| r.0).max().map_or(1, |m| m + 1);
             let ny = roads.iter().map(|r| r.1).max().map_or(1, |m| m + 1);
@@ -291,7 +290,17 @@ pub fn dispatch(cli: Cli) -> Result<(), i32> {
             progress.close();
             result.map_err(|_| 1)
         }
-        Command::Prepare { .. } | Command::Tiles { .. } | Command::Basemap { .. } => {
+        Command::Tiles { extract, workdir, batch } => {
+            let root = repo_root();
+            let (source, work, out) = (absolute(&extract), absolute(&workdir.unwrap_or_else(|| root.join("data/metro-work"))), root.join("web/data/metro"));
+            let job = TilesJob { source: &source, work: &work, out: &out, batch: batch.unwrap_or(tiles::MAX_EXTRACTS), osmium: "osmium" };
+            let progress = Arc::new(Progress::stderr(tiles::steps(), root.join("data/logs"), root));
+            exit_on_ctrl_c(&progress).expect("the Ctrl-C handler");
+            let result = tiles::run(&progress, &job);
+            progress.close();
+            result.map_err(|_| 1)
+        }
+        Command::Prepare { .. } | Command::Basemap { .. } => {
             eprintln!("not implemented yet");
             Err(2)
         }
