@@ -600,6 +600,34 @@ mod tests {
     }
 
     #[test]
+    fn every_outline_has_a_casing_under_it_with_the_same_points() {
+        // Left of the eye, right of it, and the one piece across it: the three shapes of the outline.
+        let check = |e: &Editor| {
+            let m = drawn(e);
+            let at = m.find("<polygon class=\"iso-sel-casing\" points=\"").expect("a casing");
+            let pts = &m[at + 40..];
+            let pts = &pts[..pts.find('"').unwrap()];
+            assert!(m.contains(&format!("<polygon class=\"iso-sel-casing\" points=\"{pts}\"/><polygon class=\"iso-sel\" points=\"{pts}\"/>")));
+            assert_eq!(count(&m, "iso-sel-casing"), 1);
+        };
+        let n = Editor::new(0).view().segments.len();
+        for i in 0..n {
+            let mut e = Editor::new(0);
+            e.select(Some(e.view().segments[i].uid));
+            check(&e);
+        }
+        // A piece across the middle: the one a street of the default's pieces has when the ones left of it are gone.
+        let mut e = Editor::new(0);
+        let p = Projection::fit(1050.0, span_mm(&e.view()));
+        let across = |e: &Editor| e.view().segments.iter().find(|s| inner_face(&p, s.x_mm as f64, (s.x_mm + s.width_mm) as f64).is_none()).map(|s| s.uid);
+        while across(&e).is_none() && e.view().segments.len() > 1 {
+            assert!(e.remove(e.view().segments[0].uid));
+        }
+        e.select(Some(across(&e).expect("some piece lies across the middle")));
+        check(&e);
+    }
+
+    #[test]
     fn a_selection_of_no_piece_draws_no_outline_and_a_one_piece_street_draws_whole() {
         let mut v = Editor::new(0).view();
         v.selected = Some(9_999);
