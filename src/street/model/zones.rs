@@ -169,6 +169,40 @@ impl ZoneRefusal {
     }
 }
 
+/// The zones of a street as the view carries them.
+#[derive(Serialize)]
+pub struct ZonesView {
+    pub zones: Vec<ZoneView>,
+    pub selected: usize,
+    /// The street's length the zones lie along: the length they were drawn on, else the loaded one, else 0.
+    pub length_mm: i32,
+    pub from_end: ZoneEnd,
+    /// Why Split is not available, when it is not.
+    pub split: Option<Said>,
+    /// Set when the zones were drawn on a road of another length or anchored at its other end.
+    pub elsewhere: Option<Elsewhere>,
+}
+
+#[derive(Serialize)]
+pub struct ZoneView {
+    pub index: usize,
+    pub from_mm: i32,
+    pub to_mm: i32,
+    pub label: Said,
+    /// The zone has a section of its own.
+    pub own: bool,
+    /// The zone starts beyond the loaded end of the street.
+    pub cut_off: bool,
+    /// Every check passes in this zone.
+    pub ok: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct Elsewhere {
+    pub drawn_mm: i32,
+    pub loaded_mm: i32,
+}
+
 /// Which zone a merge keeps the section and name of.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Keep {
@@ -202,13 +236,48 @@ impl Editor {
             return Err(ZoneRefusal::Dragging);
         }
         let frame = self.frame.ok_or(ZoneRefusal::NoAnchor)?;
-        let content = &self.states[self.cursor].content;
-        if let Some(drawn) = content.length_mm
-            && ((drawn - frame.length_mm).abs() > LENGTH_TOLERANCE_MM || content.from_end != frame.from_end)
-        {
+        if self.elsewhere().is_some() {
             return Err(ZoneRefusal::Elsewhere);
         }
         Ok(frame)
+    }
+
+    /// Set when the zones were drawn on a road of another length (by more than a metre) or anchored at its other end.
+    pub(super) fn elsewhere(&self) -> Option<Elsewhere> {
+        let frame = self.frame?;
+        let content = &self.states[self.cursor].content;
+        let drawn = content.length_mm?;
+        ((drawn - frame.length_mm).abs() > LENGTH_TOLERANCE_MM || content.from_end != frame.from_end)
+            .then_some(Elsewhere { drawn_mm: drawn, loaded_mm: frame.length_mm })
+    }
+
+    /// Whether zone `z` starts beyond the loaded end of the street. It is kept, but not edited from here.
+    pub(super) fn is_cut_off(&self, z: usize) -> bool {
+        let Some(frame) = self.frame else { return false };
+        self.states[self.cursor].content.zones.get(z).is_some_and(|g| g.from_mm >= frame.length_mm)
+    }
+
+    /// The zones as the strip shows them.
+    pub(super) fn zones_view(&self) -> ZonesView {
+        let content = &self.states[self.cursor].content;
+        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        let from_end = if content.zones.is_empty() { self.frame.map_or(ZoneEnd::First, |f| f.from_end) } else { content.from_end };
+        let one = |z: usize| {
+            let (from_mm, to_mm) = content.span(z, length_mm);
+            let ok = self.section_passes(content.section(z));
+            match content.zones.get(z) {
+                Some(g) => ZoneView { index: z, from_mm, to_mm, label: zone_label(g, z + 1), own: g.segments.is_some(), cut_off: self.is_cut_off(z), ok },
+                None => ZoneView { index: z, from_mm, to_mm, label: Said::new("zone-unnamed").with("n", Arg::Num(1)), own: false, cut_off: false, ok },
+            }
+        };
+        ZonesView {
+            zones: (0..content.zone_count()).map(one).collect(),
+            selected: self.zone,
+            length_mm,
+            from_end,
+            split: self.structure_frame(true).err().map(ZoneRefusal::said),
+            elsewhere: self.elsewhere(),
+        }
     }
 
     /// The label of zone `z` of the current content, numbered from 1.
