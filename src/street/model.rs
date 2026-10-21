@@ -632,6 +632,10 @@ impl Editor {
     /// Says where the street lies as loaded. A setting, outside the history.
     pub fn with_frame(mut self, frame: Option<ZoneFrame>) -> Editor {
         self.frame = frame;
+        if self.is_cut_off(self.zone) {
+            self.zone = 0;
+            self.selected = None;
+        }
         self
     }
 
@@ -3115,6 +3119,19 @@ mod tests {
         // nor does one anchored at the other end, but it still differs
         let other = Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::Last }));
         assert_eq!(other.view().zones.elsewhere, Some(Elsewhere { drawn_mm: 60_000, loaded_mm: 60_000 }));
+    }
+
+    #[test]
+    fn applying_a_frame_that_cuts_off_the_selected_zone_falls_back_to_the_first_zone() {
+        let today = sample_street();
+        let now = zoned(today.clone(), &[0, 20_000, 45_000], 60_000);
+        let mut e = Editor::from_street(&today, &now, 0);
+        assert!(e.select_zone(2));
+        let e = e.with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::First }));
+        assert_eq!(e.zone(), 0, "zone 2 starts beyond the loaded end");
+        let mut e = Editor::from_street(&today, &now, 0);
+        assert!(e.select_zone(1));
+        assert_eq!(e.with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::First })).zone(), 1, "a zone still loaded stays selected");
     }
 
     #[test]

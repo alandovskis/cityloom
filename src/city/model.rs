@@ -21,7 +21,7 @@ use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
-use crate::street::model::{Editor, Street, named_said, unnamed_said};
+use crate::street::model::{Editor, Street, ZoneEnd, ZoneFrame, named_said, unnamed_said};
 
 pub(super) struct NodeDef {
     pub(super) x_mm: i32,
@@ -353,6 +353,21 @@ impl Layout {
         })
     }
 
+    /// Where street `edge` lies as loaded, for its zones: its length along the centreline and the end they are
+    /// measured from, the first end when it is an OpenStreetMap node, else the second, else none (the road is cut by
+    /// the area's box at both ends, so no end is a place to measure from).
+    pub(super) fn zone_frame(&self, edge: usize) -> Option<ZoneFrame> {
+        let e = self.edges.get(edge)?;
+        let from_end = if !self.nodes[e.a].source.is_empty() {
+            ZoneEnd::First
+        } else if !self.nodes[e.b].source.is_empty() {
+            ZoneEnd::Last
+        } else {
+            return None;
+        };
+        Some(ZoneFrame { length_mm: path_mm(&self.shape_of(edge)).round() as i32, from_end })
+    }
+
     /// The bearing at which street `edge` leaves `node`, to the nearest step the junction editor uses.
     fn leaving(&self, edge: usize, node: usize) -> i32 {
         let e = &self.edges[edge];
@@ -586,9 +601,12 @@ fn same_junction(a: &State, b: &State) -> bool {
     State { label: junction::unlabelled(), ..a.clone() } == State { label: junction::unlabelled(), ..b.clone() }
 }
 
-/// The street an arm reads: the city's street as seen looking out from `node`.
+/// The street an arm reads: the city's street as seen looking out from `node`, the zone at that end as its one
+/// section (a street with no zones is read whole).
 fn seen_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Street {
-    if layout.edges[edge].a == node { street.clone() } else { street.reversed() }
+    let at_first = layout.edges[edge].a == node;
+    let end = street.at_end(at_first);
+    if at_first { end } else { end.reversed() }
 }
 
 #[cfg(test)]
@@ -814,7 +832,8 @@ impl City {
     /// The street editor on one street of the city.
     pub fn street_editor(&self, edge: u32, region: usize) -> Option<Editor> {
         self.edge_index(edge)?;
-        Some(Editor::from_street(self.today_streets.get(&edge)?, self.streets.get(&edge)?, region))
+        let frame = self.layout.zone_frame(self.edge_index(edge)?);
+        Some(Editor::from_street(self.today_streets.get(&edge)?, self.streets.get(&edge)?, region).with_frame(frame))
     }
 
     /// Whether a street saved with this room is the one at `edge`: it has that room now, or had it when it was
@@ -1814,5 +1833,197 @@ mod tests {
         assert_eq!(city.street_shape(99), None);
         assert_eq!(city.origin_m(), city.view(0).origin_m);
         assert_eq!(City::new().origin_m(), None, "the sample city lies nowhere");
+    }
+
+    // ---- zones in the city ----------------------------------------------------
+
+    /// Street `uid` with its zones starting at `starts` tenths of its length; zone `own` is given a section of its
+    /// own with the first piece 100 mm wider and the second 100 mm narrower.
+    fn zoned_street(city: &City, uid: u32, starts: &[i32], own: Option<usize>) -> Street {
+        let length = city.layout.zone_frame(uid as usize - 1).unwrap().length_mm;
+        let base = city.streets[&uid].clone();
+        let at: Vec<i32> = starts.iter().map(|t| length / 10 * t).collect();
+        let mut s = crate::street::model::zoned(base.clone(), &at, length);
+        if let Some(z) = own {
+            let mut section = base.segments.clone();
+            section[0].width_mm += 100;
+            section[1].width_mm -= 100;
+            s.zones[z].segments = Some(section);
+        }
+        s
+    }
+
+    /// What the junction at `node` reads of street `edge`.
+    fn arm_section(city: &City, node: usize, edge: u32) -> Street {
+        let state = city.with_streets(node, &city.junctions[&node_uid(node)]);
+        state.arms.iter().find(|a| a.edge == edge).and_then(|a| a.section.clone()).unwrap()
+    }
+
+    #[test]
+    fn a_junction_arm_reads_the_zone_at_its_end_from_both_ends() {
+        let mut city = City::new();
+        // Edge 2 joins node 1 (a) to node 6 (b); both are junctions.
+        let street = zoned_street(&city, 2, &[0, 5], Some(1));
+        let (first, last) = (street.sections()[0].to_vec(), street.sections()[1].to_vec());
+        assert_ne!(first, last);
+        assert!(city.keep_street(2, street.clone()));
+        let plain = |segments: Vec<crate::street::model::Segment>| Street { segments, zones: Vec::new(), length_mm: None, ..street.clone() };
+        assert_eq!(arm_section(&city, 1, 2), plain(first.clone()), "at a, the first zone as it is");
+        assert_eq!(arm_section(&city, 6, 2), plain(last.clone()).reversed(), "at b, the last zone reversed");
+        // anchored at the last end, the zone nearest each end swaps
+        let mut other = street.clone();
+        other.from_end = crate::street::model::ZoneEnd::Last;
+        assert!(city.keep_street(2, other));
+        assert_eq!(arm_section(&city, 1, 2), plain(last), "at a, the last zone");
+        assert_eq!(arm_section(&city, 6, 2), plain(first).reversed(), "at b, the first zone reversed");
+    }
+
+    #[test]
+    fn a_one_zone_street_gives_the_arm_it_always_gave() {
+        let city = City::new();
+        for (edge, e) in city.layout.edges.iter().enumerate() {
+            for node in [e.a, e.b] {
+                let street = &city.streets[&(edge as u32 + 1)];
+                let old = if e.a == node { street.clone() } else { street.reversed() };
+                assert_eq!(seen_from(&city.layout, edge, node, street), old);
+            }
+        }
+    }
+
+    #[test]
+    fn an_edit_to_a_junction_never_changes_a_zone() {
+        let mut city = City::new();
+        let street = zoned_street(&city, 2, &[0, 5], Some(1));
+        assert!(city.keep_street(2, street));
+        let before = city.streets[&2].clone();
+        let mut j = city.junction_editor(node_uid(1), 0).unwrap();
+        let arm = j.current().arms[0].uid;
+        assert!(j.set_corner(arm, 7_000));
+        assert!(city.keep_junction(node_uid(1), j.snapshot()));
+        assert_eq!(city.streets[&2], before);
+    }
+
+    #[test]
+    fn a_zoned_record_whose_zones_are_not_sound_is_not_applied_or_kept() {
+        let mut city = City::new();
+        let mut bad = zoned_street(&city, 2, &[0, 5], Some(1));
+        let length = bad.length_mm.unwrap();
+        bad.zones[1].from_mm = length + 1_000; // beyond the length it was drawn against
+        let today = city.today_streets[&2].clone();
+        assert!(!bad.is_sound());
+        assert!(city.keep_street(2, bad.clone()), "the room still matches");
+        assert_eq!(city.streets[&2], today, "but it is not kept");
+        let mut edits = Edits::new();
+        let (key, mut record) = city.street_record(2).unwrap();
+        record.street = bad;
+        edits.streets.insert(key, record);
+        let back = City::load(&edits);
+        assert_eq!(back.streets[&2], today, "and not applied on load");
+    }
+
+    #[test]
+    fn the_zone_frame_anchors_at_the_first_end_when_it_is_an_osm_node_else_at_the_second_and_none_when_both_are_cut() {
+        use crate::street::model::{ZoneEnd, ZoneFrame};
+        let mut city = City::new();
+        let length = path_mm(&city.layout.shape_of(0)).round() as i32;
+        assert!(length > 0);
+        assert_eq!(city.layout.zone_frame(0), Some(ZoneFrame { length_mm: length, from_end: ZoneEnd::First }));
+        let (a, b) = (city.layout.edges[0].a, city.layout.edges[0].b);
+        city.layout.nodes[a].source.clear();
+        assert_eq!(city.layout.zone_frame(0), Some(ZoneFrame { length_mm: length, from_end: ZoneEnd::Last }));
+        city.layout.nodes[b].source.clear();
+        assert_eq!(city.layout.zone_frame(0), None);
+    }
+
+    #[test]
+    fn the_street_editor_carries_the_frame_and_a_street_cut_at_both_ends_refuses_to_split() {
+        let mut city = City::new();
+        let e = city.street_editor(1, 0).unwrap();
+        assert_eq!(e.frame(), city.layout.zone_frame(0));
+        let (a, b) = (city.layout.edges[0].a, city.layout.edges[0].b);
+        city.layout.nodes[a].source.clear();
+        city.layout.nodes[b].source.clear();
+        let mut e = city.street_editor(1, 0).unwrap();
+        assert_eq!(e.frame(), None);
+        assert_eq!(e.split_zone(None), Err(crate::street::model::ZoneRefusal::NoAnchor));
+    }
+
+    #[test]
+    fn a_street_zoned_in_one_area_and_loaded_shorter_in_another_keeps_its_zones_and_the_record_on_write() {
+        let mut city = City::new();
+        let frame = city.layout.zone_frame(1).unwrap();
+        // drawn on a road 2 m longer than the one loaded
+        let drawn = frame.length_mm + 2_000;
+        let mut street = zoned_street(&city, 2, &[0, 5], Some(1));
+        street.length_mm = Some(drawn);
+        street.zones[1].from_mm = drawn / 2;
+        assert!(street.is_sound());
+        assert!(city.keep_street(2, street.clone()));
+        let mut e = city.street_editor(2, 0).unwrap();
+        let elsewhere = e.view().zones.elsewhere.expect("another length");
+        assert_eq!((elsewhere.drawn_mm, elsewhere.loaded_mm), (drawn, frame.length_mm));
+        let piece = e.snapshot().segments[0].clone();
+        assert!(e.set_width(piece.uid, piece.width_mm - 100));
+        let written = e.snapshot();
+        assert_eq!(written.length_mm, Some(drawn));
+        assert_eq!(written.zones.iter().map(|z| z.from_mm).collect::<Vec<_>>(), street.zones.iter().map(|z| z.from_mm).collect::<Vec<_>>());
+        assert!(city.keep_street(2, written));
+        assert_eq!(city.streets[&2].length_mm, Some(drawn));
+    }
+
+    #[test]
+    fn a_zone_copied_from_a_failing_base_is_not_flagged_but_one_that_breaks_a_check_the_original_passed_is() {
+        let mut city = City::new();
+        // street 1 as first laid out breaks a check: every piece as wide as it goes
+        let mut e = city.street_editor(1, 0).unwrap();
+        for g in e.snapshot().segments {
+            e.set_width(g.uid, 1_000_000);
+        }
+        let bad = e.snapshot();
+        assert!(e.view().checks.iter().any(|c| !c.ok), "the base fails a check");
+        city.today_streets.insert(1, bad.clone());
+        let length = city.layout.zone_frame(0).unwrap().length_mm;
+        city.streets.insert(1, crate::street::model::zoned(bad, &[0, length / 2], length));
+        let v = city.view(0);
+        assert!(v.edges[0].ok && v.edges[0].failing.is_empty(), "copied from a failing base: not flagged");
+        // street 2 passes; its second zone is widened until it does not fit
+        let mut wide = city.street_editor(2, 0).unwrap();
+        for g in wide.snapshot().segments {
+            wide.set_width(g.uid, 1_000_000);
+        }
+        let mut s = zoned_street(&city, 2, &[0, 5], None);
+        s.zones[1].segments = Some(wide.snapshot().segments);
+        assert!(city.keep_street(2, s));
+        let v = city.view(0);
+        assert!(!v.edges[1].ok && !v.edges[1].failing.is_empty(), "a zone that breaks a check the original passed is flagged");
+        assert!(v.edges[1].edited);
+        assert_eq!(v.edges.iter().filter(|e| !e.ok).count(), 1, "only the street itself; the junctions at its ends are counted apart");
+    }
+
+    #[test]
+    fn the_map_shows_the_zone_at_the_anchored_end() {
+        let mut city = City::new();
+        let street = zoned_street(&city, 2, &[0, 5], Some(1));
+        let first: i32 = street.sections()[0].iter().map(|s| s.width_mm).sum();
+        assert!(city.keep_street(2, street));
+        let v = city.view(0);
+        assert_eq!(v.edges[1].total_mm, first);
+        assert!(v.edges[1].edited);
+    }
+
+    #[test]
+    fn an_edit_to_a_zone_keeps_a_street_found_by_its_width() {
+        let mut city = City::new();
+        let mut e = city.street_editor(2, 0).unwrap();
+        let length = city.layout.zone_frame(1).unwrap().length_mm;
+        assert!(e.split_zone(Some(length / 2)).is_ok());
+        let piece = e.snapshot().segments[0].clone();
+        assert!(e.set_width(piece.uid, piece.width_mm + 100));
+        let s = e.snapshot();
+        assert_eq!(s.row_mm, city.today_streets[&2].row_mm);
+        assert!(city.has_room_of(2, s.row_mm));
+        assert!(city.keep_street(2, s.clone()));
+        let back = City::load(&edits_of(&city));
+        assert_eq!(back.streets[&2], s, "found by its width and key");
     }
 }
