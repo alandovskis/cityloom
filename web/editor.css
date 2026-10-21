@@ -1150,9 +1150,13 @@ svg pattern circle {
 }
 .zone-cell.own {
   background: var(--zone-fill-own);
+  /* not by tint alone (WCAG 1.4.1): a zone with a section of its own has a heavier top edge */
+  border-top-width: 5px;
 }
 .zone-cell[aria-disabled="true"] {
   cursor: default;
+  /* a cut-off zone has a dashed outline, which forced colours keep */
+  border-style: dashed;
   background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--zone-edge) 6px 7px);
 }
 .zone-cell[aria-selected="true"] {
@@ -1183,6 +1187,13 @@ svg pattern circle {
 @media (forced-colors: active) {
   .zone-cell {
     border-color: CanvasText;
+  }
+  .zone-cell.own {
+    border-top-width: 5px;
+  }
+  .zone-cell[aria-disabled="true"] {
+    border-style: dashed;
+    background-image: none;
   }
   .zone-cell[aria-selected="true"] {
     outline-color: Highlight;

@@ -1260,4 +1260,11 @@ fn every_cell_has_a_minimum_width_and_the_strip_scrolls_inside_itself() {
     assert!(at(".zone-cell").contains("min-width: 24px;"));
     assert!(at(".zone-strip").contains("overflow-x: auto;"));
     assert!(at(".zone-strip-section").contains("min-width: 0;"));
+    // An own section and a cut-off zone differ by more than tint (WCAG 1.4.1), in forced colours too.
+    assert!(at(".zone-cell.own").contains("border-top-width: 5px;"));
+    assert!(at(".zone-cell[aria-disabled=\"true\"]").contains("border-style: dashed;"));
+    let forced = &editor[editor.find("@media (forced-colors: active) {\n  .zone-cell").unwrap()..];
+    let forced = &forced[..forced.find("\n}\n").unwrap()];
+    assert!(forced.contains(".zone-cell.own {\n    border-top-width: 5px;"), "{forced}");
+    assert!(forced.contains("border-style: dashed;"), "{forced}");
 }

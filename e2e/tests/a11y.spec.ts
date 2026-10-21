@@ -49,3 +49,25 @@ test("under 380 px the end buttons do not run over the logo", async ({ page }) =
     expect(b.y, id).toBeGreaterThanOrEqual(logo.y + logo.height - 1);
   }
 });
+
+test("at 320 px a strip of many zones scrolls inside itself and the page does not scroll sideways", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openStreet(page);
+  await expect(page.locator("#zone-strip")).toBeVisible();
+  // Thirty zones' cells (the same markup the strip draws), each with its 24 px minimum.
+  await page.evaluate(() => {
+    const strip = document.getElementById("zone-strip")!;
+    const cell = strip.querySelector(".zone-cell")!;
+    for (let i = 0; i < 30; i++) strip.append(cell.cloneNode(true));
+  });
+  const m = await page.evaluate(() => ({
+    page: document.documentElement.scrollWidth,
+    inner: innerWidth,
+    strip: document.getElementById("zone-strip")!.scrollWidth,
+    shown: document.getElementById("zone-strip")!.clientWidth,
+  }));
+  expect(m.page).toBeLessThanOrEqual(m.inner);
+  expect(m.strip).toBeGreaterThan(m.shown);
+});
