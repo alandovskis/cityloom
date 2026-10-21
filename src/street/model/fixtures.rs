@@ -100,6 +100,8 @@ impl Editor {
             states: Vec::new(),
             cursor: 0,
             next_uid: 1,
+            zone: 0,
+            frame: None,
             selected: None,
             gesture: None,
             pending_label: None,
@@ -125,7 +127,13 @@ impl Editor {
         let mut segments = segments;
         // Driving lanes on the left half of the street run away, the rest toward.
         default_directions(&mut segments, REGIONS[self.region].drive_side);
-        self.states = vec![State { label: Said::new("street-today"), segments, class: s.class, class_before: None, row_mm: s.row_mm }];
+        self.states = vec![State {
+            label: Said::new("street-today"),
+            content: Content { segments, zones: Vec::new(), from_end: ZoneEnd::First, length_mm: None },
+            class: s.class,
+            class_before: None,
+            row_mm: s.row_mm,
+        }];
         self.cursor = 0;
         self.selected = None;
         self.gesture = None;
