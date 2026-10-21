@@ -365,6 +365,11 @@ impl StreetVm {
     /// waits for the choice of the one to keep (`finish_merge`, or `cancel_merge`). False when it was refused.
     pub fn begin_merge(&self, next: bool) -> bool {
         if self.core.read(|e| e.merge_needs_choice(next)) {
+            // A choice that could not be carried out is not asked for: the refusal comes first.
+            if let Some(refusal) = self.core.read(|e| e.structure_blocked()) {
+                self.ports.announcer.say(&text::zone_refused(&self.i18n, self.units_now(), refusal));
+                return false;
+            }
             self.merge.set(Some(next));
             return true;
         }
@@ -374,6 +379,11 @@ impl StreetVm {
     /// The merge waiting for a choice, if there is one: with the next zone (true) or the previous one.
     pub fn pending_merge(&self) -> Option<bool> {
         self.merge.get()
+    }
+
+    /// The same, for a command: nothing is watched.
+    pub fn pending_merge_now(&self) -> Option<bool> {
+        self.merge.get_untracked()
     }
 
     pub fn finish_merge(&self, keep: Keep) -> bool {
@@ -388,7 +398,8 @@ impl StreetVm {
 
     /// Moves the selected zone's start by `delta_mm`, saying why when it cannot.
     pub fn nudge_boundary(&self, delta_mm: i32) -> bool {
-        let Some(from) = self.view_now().zones.zones.get(self.view_now().zones.selected).map(|z| z.from_mm) else { return false };
+        let view = self.view_now();
+        let Some(from) = view.zones.zones.get(view.zones.selected).map(|z| z.from_mm) else { return false };
         self.move_boundary(from + delta_mm)
     }
 
@@ -1210,14 +1221,14 @@ mod tests {
         r.said.take();
         let before = r.vm.view_now().revisions.len();
         assert!(r.vm.begin_merge(true), "it asks which section to keep");
-        assert_eq!(r.vm.pending_merge(), Some(true));
+        assert_eq!(r.vm.pending_merge_now(), Some(true));
         assert_eq!(r.vm.view_now().revisions.len(), before);
         assert!(r.said.take().is_empty());
         r.vm.cancel_merge();
-        assert_eq!(r.vm.pending_merge(), None);
+        assert_eq!(r.vm.pending_merge_now(), None);
         assert!(r.vm.begin_merge(true));
         assert!(r.vm.finish_merge(Keep::Neighbour));
-        assert_eq!(r.vm.pending_merge(), None);
+        assert_eq!(r.vm.pending_merge_now(), None);
         let said = r.said.take();
         assert!(said[0].starts_with("Merge zones, keeping Zone 1. "), "{said:?}");
         assert_eq!(r.vm.view_now().zones.zones.len(), 1);
@@ -1225,10 +1236,26 @@ mod tests {
     }
 
     #[test]
+    fn a_merge_that_cannot_happen_is_refused_at_once_instead_of_asking_which_section_to_keep() {
+        let street = zoned(Street::sample(0, Side::Right), &[0, 20_000], LENGTH);
+        let mut other = street.clone();
+        other.zones[1].segments = Some(street.segments.iter().map(|g| crate::street::model::Segment { width_mm: g.width_mm + 100, ..g.clone() }).collect());
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&other, &other, 0).with_frame(None);
+        let vm = StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None);
+        assert!(vm.read(|e| e.merge_needs_choice(true)), "the sections differ");
+        assert!(!vm.begin_merge(true));
+        assert_eq!(vm.pending_merge_now(), None);
+        assert_eq!(said.take(), ["Both ends of this street are cut by the edge of the map, so zones cannot be placed along it."]);
+        assert!(vm.view_now().revisions.is_empty());
+        assert_eq!(vm.view_now().zones.zones.len(), 2);
+    }
+
+    #[test]
     fn merging_zones_with_the_same_section_happens_at_once_and_a_missing_neighbour_is_refused_in_words() {
         let r = sample_rig(&[0, 20_000]);
         assert!(r.vm.begin_merge(true));
-        assert_eq!(r.vm.pending_merge(), None);
+        assert_eq!(r.vm.pending_merge_now(), None);
         assert_eq!(r.vm.view_now().zones.zones.len(), 1);
         assert_eq!(r.said.take().len(), 1);
         let r = sample_rig(&[0, 20_000]);

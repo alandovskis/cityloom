@@ -329,6 +329,11 @@ impl Editor {
         self.merge_neighbour(next).is_some_and(|n| !same_pieces(content.section(self.zone), content.section(n)))
     }
 
+    /// Why the zones cannot be rearranged now (no anchor, another road, a drag under way), if they cannot.
+    pub fn structure_blocked(&self) -> Option<ZoneRefusal> {
+        self.structure_frame(false).err()
+    }
+
     /// Merges the selected zone with the next (or previous) one. The merged zone starts where the earlier did, takes
     /// the section and name of the zone `keep` names, and is selected.
     pub fn merge_zone(&mut self, next: bool, keep: Keep) -> Result<(), ZoneRefusal> {
