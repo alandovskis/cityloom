@@ -2793,6 +2793,64 @@ mod tests {
     }
 
     #[test]
+    fn make_pedestrian_acts_on_the_selected_zone_and_the_street_stays_local_until_the_last_zone_with_a_motor_piece_loses_it() {
+        let mut e = zoned_editor();
+        let sidewalk = crate::shared::catalogue::kind_index("sidewalk").unwrap();
+        let base = e.snapshot().segments;
+        assert_eq!(e.view().class, StreetClass::Local);
+        assert!(e.view().has_motor);
+        assert!(e.make_pedestrian(sidewalk));
+        let s = e.snapshot();
+        assert_eq!((s.class, s.class_before), (StreetClass::Local, None), "zones 1 and 2 still carry cars");
+        assert!(!e.view().has_motor, "the selected zone has no motor piece left");
+        assert_eq!(e.view().class, StreetClass::Local);
+        assert!(!e.make_pedestrian(sidewalk), "nothing left to change in zone 0");
+        assert_eq!(s.zones[1].segments, None);
+        assert_eq!(s.zones[2].segments, None);
+        assert_eq!(s.segments, base);
+        assert!(e.select_zone(1));
+        assert!(e.view().has_motor, "has_motor follows the selected zone");
+        assert!(e.make_pedestrian(sidewalk));
+        assert_eq!(e.snapshot().class, StreetClass::Local);
+        assert!(e.select_zone(2));
+        assert!(e.make_pedestrian(sidewalk));
+        let s = e.snapshot();
+        assert_eq!((s.class, s.class_before), (StreetClass::Pedestrian, Some(StreetClass::Local)));
+        assert_eq!(e.view().class, StreetClass::Pedestrian);
+    }
+
+    #[test]
+    fn a_measure_is_arranged_in_the_selected_zone_only() {
+        let mut e = zoned_editor();
+        let base = e.snapshot().segments;
+        assert!(e.select_zone(1));
+        let code = e.view().measures.iter().find(|m| m.can_apply && !m.present).expect("a measure fits").code;
+        assert!(e.apply_measure(code));
+        let s = e.snapshot();
+        assert_ne!(s.zones[1].segments.as_deref(), None, "zone 1 has its own section");
+        assert_eq!(s.zones[0].segments, None);
+        assert_eq!(s.zones[2].segments, None);
+        assert_eq!(s.segments, base, "the base is unchanged");
+        assert!(e.view().measures.iter().find(|m| m.code == code).unwrap().present);
+        assert!(e.select_zone(0));
+        assert!(!e.view().measures.iter().find(|m| m.code == code).unwrap().present, "zone 0 is not arranged");
+        assert!(e.view().measures.iter().find(|m| m.code == code).unwrap().can_apply, "can_apply is the selected zone's");
+    }
+
+    #[test]
+    fn the_class_change_is_reported_only_when_the_street_class_changes() {
+        let mut e = zoned_editor();
+        let sidewalk = crate::shared::catalogue::kind_index("sidewalk").unwrap();
+        for zone in 0..3 {
+            assert!(e.select_zone(zone));
+            let before = e.view().class;
+            assert!(e.make_pedestrian(sidewalk));
+            let after = e.view().class;
+            assert_eq!(before != after, zone == 2, "zone {zone}");
+        }
+    }
+
+    #[test]
     fn an_edit_acts_on_the_selected_zone_only_and_gives_it_a_section_of_its_own() {
         let mut e = zoned_editor();
         let base = e.snapshot().segments;
