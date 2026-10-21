@@ -421,6 +421,11 @@ impl StreetVm {
         self.end_gesture(commit);
     }
 
+    /// Says that a typed length for a zone is not a number.
+    pub fn say_bad_number(&self) {
+        self.ports.announcer.say(&self.i18n.tr_now("zone-bad-number", &Args::new()));
+    }
+
     pub fn name_zone(&self, name: &str) -> bool {
         self.apply(|e| e.name_zone(Some(name)))
     }

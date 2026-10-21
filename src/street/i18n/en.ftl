@@ -358,3 +358,18 @@ st-zones-strip-label = Zones of the street, from start to end
 st-zones-from = Measured from { $end }
 st-zones-end-first = the first end
 st-zones-end-second = the second end
+
+# The commands beside the zone strip (src/street/zone_tools.rs).
+zone-bad-number = That is not a number.
+st-zone-tools = Zone commands
+st-zone-split = Split
+st-zone-split-at = Split at ({ $unit })
+st-zone-start = Start of this zone ({ $unit })
+st-zone-merge-prev = Merge with the previous zone
+st-zone-merge-next = Merge with the next zone
+st-zone-merge-choice = Which section to keep
+st-zone-keep = Keep the section of { $zone }
+st-zone-keep-cancel = Cancel the merge
+st-zone-name = Zone name
+st-zone-reset = Reset to the street's section
+st-zone-use = Use this section for the whole street

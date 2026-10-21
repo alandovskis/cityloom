@@ -1184,6 +1184,52 @@ svg pattern circle {
   color: var(--ink);
   font-size: 13px;
 }
+.zone-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 16px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+  min-width: 0;
+}
+.zone-tool {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 6px;
+}
+.zone-tool label {
+  flex-basis: 100%;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.zone-tool input {
+  min-height: 32px;
+  min-width: 0;
+  width: 9em;
+}
+.zone-tools button {
+  min-height: 32px;
+}
+.zone-tools button[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.zone-why {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+.zone-merge-choice {
+  padding: 4px 8px;
+  border: 1px dashed var(--zone-edge);
+  border-radius: 6px;
+}
 @media (forced-colors: active) {
   .zone-cell {
     border-color: CanvasText;

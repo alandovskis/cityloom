@@ -149,6 +149,10 @@ impl SheetWatch {
         self.vm.with_value(|v| v.end_boundary_drag(commit));
     }
 
+    pub fn say_bad_number(&self) {
+        self.vm.with_value(|v| v.say_bad_number());
+    }
+
     pub fn name_zone(&self, name: &str) -> bool {
         self.vm.with_value(|v| v.name_zone(name))
     }
