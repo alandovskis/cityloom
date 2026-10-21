@@ -91,8 +91,13 @@ pub fn selection_text(v: &View, i18n: &I18n, units: Units) -> Option<String> {
 /// The selected zone: its name, where it lies, how long it is, whether it has a section of its own and its place
 /// among the zones. Said whenever a zone is chosen.
 pub fn zone_selection_text(v: &View, i18n: &I18n, units: Units) -> String {
+    zone_text(v, v.zones.selected, i18n, units)
+}
+
+/// The same for zone `index` (the last when past the end), which is how a cell of the strip is named.
+pub fn zone_text(v: &View, index: usize, i18n: &I18n, units: Units) -> String {
     let locale = i18n.locale_now();
-    let zone = &v.zones.zones[v.zones.selected.min(v.zones.zones.len().saturating_sub(1))];
+    let zone = &v.zones.zones[index.min(v.zones.zones.len().saturating_sub(1))];
     let args = Args::new()
         .str("zone", say_now(i18n, units, &zone.label))
         .str("from", units.length_in(zone.from_mm, locale))

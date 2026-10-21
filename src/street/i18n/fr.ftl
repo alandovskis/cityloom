@@ -351,3 +351,10 @@ zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $sect
        *[base] la section de base
     }, { $n } sur { $total }
 zone-cut-off = Coupée par le bord de la carte
+
+# La bande des zones (src/street/strip.rs).
+st-zones-heading = Zones le long de la rue
+st-zones-strip-label = Zones de la rue, du début à la fin
+st-zones-from = Mesures prises depuis { $end }
+st-zones-end-first = la première extrémité
+st-zones-end-second = la seconde extrémité

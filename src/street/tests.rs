@@ -1171,3 +1171,93 @@ fn a_bike_lane_is_offered_no_other_times() {
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains("Bike lane") && !h.contains("Other times") && !h.contains("Add other times"), "{h}");
 }
+
+// ---- the zone strip ---------------------------------------------------------------
+
+fn zoned_street(starts: &[i32], frame_mm: Option<i32>, locale: Locale) -> Rc<StreetVm> {
+    use crate::shared::catalogue::Side;
+    use crate::street::model::{Street, ZoneEnd, ZoneFrame, zoned};
+    let street = zoned(Street::sample(0, Side::Right), starts, 40_000);
+    let frame = frame_mm.map(|length_mm| ZoneFrame { length_mm, from_end: ZoneEnd::First });
+    let (ports, _, _) = crate::shared::ports::test_ports();
+    StreetVm::new(ports, crate::i18n_for(locale), Editor::from_street(&street, &street, 0).with_frame(frame), None)
+}
+
+fn strip_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::strip::ZoneStrip vm=s.clone() ends=None/> })
+}
+
+#[test]
+fn the_strip_has_one_cell_per_zone_in_a_listbox_with_one_tab_stop_and_the_selected_cell_active() {
+    let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En);
+    s.select_zone(1);
+    let h = strip_html(&s);
+    assert!(h.contains("id=\"zone-strip\"") && h.contains("role=\"listbox\"") && h.contains("aria-orientation=\"horizontal\""), "{h}");
+    assert_eq!(count(&h, "tabindex=\"0\""), 1, "{h}");
+    assert_eq!(count(&h, "role=\"option\""), 3, "{h}");
+    assert!(h.contains("aria-activedescendant=\"zone-1\""), "{h}");
+    assert_eq!(count(&h, "aria-selected=\"true\""), 1, "{h}");
+    assert_eq!(count(&h, "aria-selected=\"false\""), 2, "{h}");
+    assert!(h.contains("id=\"zone-0\"") && h.contains("id=\"zone-1\"") && h.contains("id=\"zone-2\""), "{h}");
+    assert_eq!(count(&h, "aria-hidden=\"true\" class=\"zone-handle\""), 2, "one handle between each two cells: {h}");
+    assert!(h.contains(">Zones along the street</h2>") && h.contains("Measured from the first end"), "{h}");
+    assert!(!h.contains("role=\"status\""), "{h}");
+}
+
+#[test]
+fn each_cell_is_named_with_its_label_range_length_and_section() {
+    let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En);
+    let h = strip_html(&s);
+    assert!(h.contains("aria-label=\"Zone 1, 0.0 m to 10.0 m, 10.0 m long, the base section, 1 of 3\""), "{h}");
+    assert!(h.contains("aria-label=\"Zone 2, 10.0 m to 30.0 m, 20.0 m long, the base section, 2 of 3\""), "{h}");
+    assert!(h.contains("aria-label=\"Zone 3, 30.0 m to 40.0 m, 10.0 m long, the base section, 3 of 3\""), "{h}");
+    // The text on a cell may be cut to fit; the whole name is its title.
+    assert!(h.contains("title=\"Zone 2\""), "{h}");
+}
+
+#[test]
+fn the_caption_names_the_end_the_strip_is_measured_from() {
+    let s = zoned_street(&[0, 20_000], Some(40_000), Locale::En);
+    let h = street_html(|| view! { <crate::street::strip::ZoneStrip vm=s.clone() ends=Some(street_ends())/> });
+    assert!(h.contains("Measured from the edge of the map"), "{h}");
+}
+
+#[test]
+fn the_strip_follows_the_language() {
+    let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::FrCa);
+    // The language puts no-break spaces before units; the words are the same.
+    let h = strip_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains(">Zones le long de la rue</h2>"), "{h}");
+    assert!(h.contains("aria-label=\"Zone 2, de 10,0 m à 30,0 m, 20,0 m de long, la section de base, 2 sur 3\""), "{h}");
+}
+
+#[test]
+fn a_cut_off_zone_is_disabled_and_the_notice_is_shown() {
+    // Drawn on 40 m, loaded 20 m: the last zone starts past the loaded end.
+    let s = zoned_street(&[0, 10_000, 30_000], Some(20_000), Locale::En);
+    let h = strip_html(&s);
+    assert_eq!(count(&h, "aria-disabled=\"true\""), 1, "{h}");
+    assert!(h.contains("Cut off by the edge of the map"), "{h}");
+    assert!(h.contains("role=\"status\"") && h.contains("The zones were drawn on this street when it was 40.0 m long; here it is 20.0 m."), "{h}");
+}
+
+#[test]
+fn a_one_zone_street_shows_one_cell_and_no_notice() {
+    let s = street_shared(0);
+    let h = strip_html(&s);
+    assert_eq!(count(&h, "role=\"option\""), 1, "{h}");
+    assert_eq!(count(&h, "zone-handle"), 0, "{h}");
+    assert!(!h.contains("role=\"status\"") && !h.contains("aria-disabled"), "{h}");
+}
+
+#[test]
+fn every_cell_has_a_minimum_width_and_the_strip_scrolls_inside_itself() {
+    let editor = include_str!("../../web/editor.css");
+    let at = |sel: &str| {
+        let i = editor.find(&format!("{sel} {{")).unwrap_or_else(|| panic!("{sel}"));
+        &editor[i..i + editor[i..].find('}').unwrap()]
+    };
+    assert!(at(".zone-cell").contains("min-width: 24px;"));
+    assert!(at(".zone-strip").contains("overflow-x: auto;"));
+    assert!(at(".zone-strip-section").contains("min-width: 0;"));
+}

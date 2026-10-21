@@ -76,6 +76,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("h-drawing", view! { <page::DrawingHeading vm=vm.clone()/> }.into_any());
     mount("view-mode-slot", view! { <page::ViewToggle vm=vm.clone()/> }.into_any());
     mount("street", view! { <page::StreetHeader vm=vm.clone() ends=ends.clone()/> }.into_any());
+    mount("zones-slot", view! { <strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
     mount("title-block", view! { <page::TitleBlock vm=vm.clone()/> }.into_any());
     mount("fit-slot", view! { <page::Fit vm=vm.clone()/> }.into_any());
     mount("fit-checks-slot", view! { <notes::FitChecks vm=vm.clone()/> }.into_any());

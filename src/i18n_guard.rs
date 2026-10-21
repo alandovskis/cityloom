@@ -432,6 +432,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("cityloom-welcome", "a storage key"),
     ("cityloom-edits", "a storage key: where the edits document is kept"),
     ("cityloom-edits-damaged", "a storage key: where a damaged edits document is copied"),
+    ("zones-slot", "the id of the element the zone strip is mounted in"),
     ("notes-toggle", "the id of an element of the page"),
     ("inspector-toggle", "the id of an element of the page"),
     ("t-checks", "the id of a tab of the page"),

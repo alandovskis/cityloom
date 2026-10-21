@@ -31,6 +31,13 @@
      that one of the two is 3:1 against any of them (a test in street/iso/surface.rs). */
   --iso-sel: #8ab4ff;
   --iso-sel-casing: #0b1220;
+  /* The zone strip: two fills (the base section and a zone's own), the text on them, the edges between cells and
+     the chosen cell's outline; each is measured against the fills and the panel by a test in shared/contrast.rs. */
+  --zone-fill: light-dark(#eef2f6, #262e36);
+  --zone-fill-own: light-dark(#dbe7fb, #2b3a52);
+  --zone-ink: light-dark(#111827, #e8edf2);
+  --zone-edge: light-dark(#536070, #9aa6b2);
+  --zone-sel: light-dark(#1f5ee0, #8ab4ff);
   --panel-w: 300px;
   --notes-w: 340px;
   --rw: calc(var(--pad) + var(--notes-w));
@@ -1096,6 +1103,90 @@ svg pattern circle {
 }
 .view-mode .unit {
   min-height: 26px;
+}
+/* ---- the zone strip: a bar for the street's length, a cell per zone ----------------- */
+
+.zone-strip-section {
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px 12px 10px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+.zone-caption {
+  margin: 0 0 6px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.zone-strip {
+  display: flex;
+  align-items: stretch;
+  /* the cells keep 24 px each; when they do not fit the strip scrolls, never the page */
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 3px;
+  border-radius: 6px;
+}
+.zone-strip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.zone-cell {
+  flex: 1 1 0;
+  /* the target size (WCAG 2.5.8): a short zone is still 24 px wide */
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 8px;
+  background: var(--zone-fill);
+  color: var(--zone-ink);
+  border: 1px solid var(--zone-edge);
+  cursor: pointer;
+  overflow: hidden;
+}
+.zone-cell.own {
+  background: var(--zone-fill-own);
+}
+.zone-cell[aria-disabled="true"] {
+  cursor: default;
+  background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--zone-edge) 6px 7px);
+}
+.zone-cell[aria-selected="true"] {
+  outline: 3px solid var(--zone-sel);
+  outline-offset: -3px;
+  font-weight: 600;
+}
+.zone-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.zone-handle {
+  flex: none;
+  width: 10px;
+  margin-inline: -5px;
+  z-index: 1;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.zone-notice {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+@media (forced-colors: active) {
+  .zone-cell {
+    border-color: CanvasText;
+  }
+  .zone-cell[aria-selected="true"] {
+    outline-color: Highlight;
+  }
 }
 #drawing .sel-line {
   fill: none;
