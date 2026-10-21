@@ -424,7 +424,7 @@ mod tests {
     #[test]
     fn a_document_from_a_newer_version_is_left_alone_and_the_write_says_it_was_not_kept() {
         let (store, storage) = store();
-        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}},"future":true}}"#, edits::VERSION + 1);
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}},"future":true}}"#, edits::NEWEST + 1);
         storage.remember(EDITS_KEY, &newer);
         assert!(!store.write_street(1, narrowed(&store, 1)));
         assert_eq!(storage.recall(EDITS_KEY).as_deref(), Some(newer.as_str()));

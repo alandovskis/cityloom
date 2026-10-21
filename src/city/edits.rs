@@ -10,8 +10,13 @@ use serde_json::{Map, Value};
 use crate::junction::model::State;
 use crate::street::model::Street;
 
-/// The shape of the document. Raised when the shape changes.
+/// The shape of the document. Raised when the shape changes. What a document with no zone is written as.
 pub const VERSION: u32 = 5;
+/// What a document is written as while a street record holds zones: a build that does not know zones treats it as
+/// a newer document and neither reads nor writes it, rather than dropping the zones on its next write.
+pub const ZONES_VERSION: u32 = 6;
+/// The newest version this build reads.
+pub const NEWEST: u32 = 6;
 /// Where the document is kept.
 pub const EDITS_KEY: &str = "cityloom-edits";
 /// Where a document that could not be read is copied before the first write replaces it.
@@ -63,9 +68,21 @@ impl Edits {
         Edits { version: VERSION, ..Edits::default() }
     }
 
-    pub fn to_json(&self) -> String {
-        serde_json::to_string(self).expect("the edits serialise")
+    /// The version the document is written as: `ZONES_VERSION` while a street record holds zones, else `VERSION`.
+    pub fn written_version(&self) -> u32 {
+        if self.streets.values().any(|r| !r.street.zones.is_empty()) { ZONES_VERSION } else { VERSION }
     }
+
+    pub fn to_json(&self) -> String {
+        let written = Edits { version: self.written_version(), streets: self.streets.clone(), junctions: self.junctions.clone() };
+        serde_json::to_string(&written).expect("the edits serialise")
+    }
+}
+
+/// Whether any record of the streets section holds a non-empty list of zones (decided on the raw JSON).
+fn holds_zones(doc: &Map<String, Value>) -> bool {
+    let mut streets = doc.get(STREETS).and_then(Value::as_object).into_iter().flatten();
+    streets.any(|(_, r)| r.pointer("/street/zones").and_then(Value::as_array).is_some_and(|z| !z.is_empty()))
 }
 
 /// What the store held.
@@ -87,12 +104,14 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
     let damaged = || Document::Damaged(raw.to_string());
     let Ok(Value::Object(mut doc)) = serde_json::from_str::<Value>(raw) else { return Err(damaged()) };
     match doc.get("version").and_then(Value::as_u64) {
-        Some(v) if v > u64::from(VERSION) => return Err(Document::Future),
-        // The previous version is read as this one: the turbo field is additive, so its records mean the same.
-        Some(v) if v + 1 >= u64::from(VERSION) => {}
+        Some(v) if v > u64::from(NEWEST) => return Err(Document::Future),
+        // 4 and 5 are read as they are (the turbo field is additive) and 6 is the same document with zones.
+        Some(v) if v >= u64::from(VERSION) - 1 => {}
         _ => return Err(damaged()),
     }
-    doc.insert("version".into(), VERSION.into());
+    // The version the document would be written as, whichever it was read as.
+    let written = if holds_zones(&doc) { ZONES_VERSION } else { VERSION };
+    doc.insert("version".into(), written.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
         return Err(damaged());
     }
@@ -111,7 +130,11 @@ fn records<T: DeserializeOwned>(doc: &Map<String, Value>, section: &str) -> BTre
 
 pub fn parse(stored: Option<&str>) -> Document {
     match object(stored) {
-        Ok(doc) => Document::Current(Edits { version: VERSION, streets: records(&doc, STREETS), junctions: records(&doc, JUNCTIONS) }),
+        Ok(doc) => Document::Current(Edits {
+            version: doc["version"].as_u64().map_or(VERSION, |v| v as u32),
+            streets: records(&doc, STREETS),
+            junctions: records(&doc, JUNCTIONS),
+        }),
         Err(other) => other,
     }
 }
@@ -188,8 +211,13 @@ impl Draft {
         self.remove(JUNCTIONS, key);
     }
 
+    /// The document as text, its version `ZONES_VERSION` while any street record holds zones (a record this build
+    /// cannot read included), else `VERSION`.
     pub fn to_json(&self) -> String {
-        Value::Object(self.doc.clone()).to_string()
+        let mut doc = self.doc.clone();
+        let written = if holds_zones(&doc) { ZONES_VERSION } else { VERSION };
+        doc.insert("version".into(), written.into());
+        Value::Object(doc).to_string()
     }
 }
 
@@ -334,7 +362,7 @@ mod tests {
 
     #[test]
     fn a_newer_version_is_told_apart_and_not_read() {
-        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, VERSION + 1);
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, NEWEST + 1);
         assert!(matches!(parse(Some(&newer)), Document::Future));
     }
 
@@ -406,6 +434,142 @@ mod tests {
             leaving: [(1, 90)].into(),
             street: crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right),
         }
+    }
+
+    /// A street of two zones, the second with a section of its own and a name, anchored at its last end.
+    fn zoned_record() -> StreetRecord {
+        let mut street = crate::street::model::zoned(crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right), &[0, 20_000], 60_000);
+        let mut own = street.segments.clone();
+        own[0].width_mm += 100;
+        street.zones[1].segments = Some(own);
+        street.zones[1].name = Some("Market block".into());
+        street.from_end = crate::street::model::ZoneEnd::Last;
+        StreetRecord { street, ..street_record() }
+    }
+
+    #[test]
+    fn a_document_with_no_zone_is_still_written_as_version_5_and_a_one_zone_street_record_is_byte_identical() {
+        assert_eq!(VERSION, 5, "a document with no zone stays 5");
+        assert_eq!(ZONES_VERSION, 6);
+        assert_eq!(NEWEST, 6);
+        let record = street_record();
+        let text = serde_json::to_string(&record).unwrap();
+        for absent in ["zones", "from_end", "length_mm"] {
+            assert!(!text.contains(absent), "{absent} is written only for a zoned street: {text}");
+        }
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), record.clone());
+        assert!(e.to_json().starts_with(r#"{"version":5,"#), "{}", e.to_json());
+        assert!(e.to_json().contains(&text), "the record is written byte for byte as before");
+        let mut d = Draft::new();
+        assert!(d.put_street("w7~n1~n2", &record));
+        assert!(d.to_json().contains(r#""version":5"#));
+        assert!(d.to_json().contains(&serde_json::to_value(&record).unwrap().to_string()), "the draft keeps it as a value, in the same bytes");
+    }
+
+    #[test]
+    fn a_document_holding_a_zoned_street_is_written_as_version_6_and_back_to_5_when_the_last_zoned_record_goes() {
+        let version = |text: &str| serde_json::from_str::<serde_json::Value>(text).unwrap()["version"].clone();
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), street_record());
+        assert_eq!(version(&e.to_json()), 5);
+        e.streets.insert("w8~n1~n2".into(), zoned_record());
+        assert_eq!(version(&e.to_json()), 6);
+        e.streets.remove("w8~n1~n2");
+        assert_eq!(version(&e.to_json()), 5);
+
+        let mut d = Draft::new();
+        assert!(d.put_street("w7~n1~n2", &street_record()));
+        assert_eq!(version(&d.to_json()), 5);
+        assert!(d.put_street("w8~n1~n2", &zoned_record()));
+        assert_eq!(version(&d.to_json()), 6);
+        assert!(d.put_street("w9~n1~n2", &zoned_record()));
+        d.remove_street("w8~n1~n2");
+        assert_eq!(version(&d.to_json()), 6, "another zoned record is still held");
+        d.remove_street("w9~n1~n2");
+        assert_eq!(version(&d.to_json()), 5);
+        // the draft decides on the raw JSON, a record this build cannot read included
+        assert!(d.put_raw(STREETS, "w5~n1~n2", serde_json::json!({"street": {"class": "Hovercraft", "zones": [{"from_mm": 0}]}})));
+        assert_eq!(version(&d.to_json()), 6);
+        d.remove_raw(STREETS, "w5~n1~n2");
+        assert_eq!(version(&d.to_json()), 5);
+        assert!(d.put_raw(STREETS, "w5~n1~n2", serde_json::json!({"street": {"zones": []}})));
+        assert_eq!(version(&d.to_json()), 5, "an empty list of zones is no zone");
+    }
+
+    #[test]
+    fn versions_4_5_and_6_are_read_and_7_is_a_newer_document_left_alone() {
+        for v in [4, 5, 6] {
+            let text = format!(r#"{{"version":{v},"streets":{{}},"junctions":{{}}}}"#);
+            assert!(matches!(parse(Some(&text)), Document::Current(_)), "{v}");
+            assert!(draft(Some(&text)).is_ok(), "{v}");
+        }
+        let seven = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, NEWEST + 1);
+        assert!(matches!(parse(Some(&seven)), Document::Future));
+        assert!(matches!(draft(Some(&seven)), Err(Document::Future)));
+        let three = r#"{"version":3,"streets":{},"junctions":{}}"#;
+        assert!(matches!(parse(Some(three)), Document::Damaged(_)));
+        assert!(matches!(draft(Some(three)), Err(Document::Damaged(_))));
+    }
+
+    #[test]
+    fn a_zoned_record_round_trips_through_the_document() {
+        let record = zoned_record();
+        let mut e = Edits::new();
+        e.streets.insert("w8~n1~n2".into(), record.clone());
+        let text = e.to_json();
+        let Document::Current(back) = parse(Some(&text)) else { panic!("not read") };
+        assert_eq!(back.streets["w8~n1~n2"], record);
+        assert_eq!(back.version, 6, "the document read is the one it would be written as");
+        let Ok(mut d) = draft(Some(&text)) else { panic!("not a draft") };
+        assert!(d.put_street("w7~n1~n2", &street_record()));
+        let again: serde_json::Value = serde_json::from_str(&d.to_json()).unwrap();
+        assert_eq!(again["version"], 6);
+        assert_eq!(again["streets"]["w8~n1~n2"], serde_json::from_str::<serde_json::Value>(&text).unwrap()["streets"]["w8~n1~n2"]);
+    }
+
+    #[test]
+    fn the_pinned_shape_of_a_zoned_record_adds_exactly_these_paths() {
+        let mut one = Edits::new();
+        one.streets.insert("w7~n1~n2".into(), street_record());
+        let mut zoned = Edits::new();
+        zoned.streets.insert("w7~n1~n2".into(), zoned_record());
+        let paths = |e: &Edits| {
+            let mut out = BTreeSet::new();
+            shape(&serde_json::from_str(&e.to_json()).unwrap(), "", &mut out);
+            out
+        };
+        let (before, after) = (paths(&one), paths(&zoned));
+        let added: Vec<&str> = after.difference(&before).map(String::as_str).collect();
+        let want = [
+            ".streets.<key>.street.from_end: string",
+            ".streets.<key>.street.length_mm: number",
+            ".streets.<key>.street.zones: array",
+            ".streets.<key>.street.zones[].from_mm: number",
+            ".streets.<key>.street.zones[].name: string",
+            ".streets.<key>.street.zones[].segments: array",
+            ".streets.<key>.street.zones[].segments[].curb: null",
+            ".streets.<key>.street.zones[].segments[].curb: number",
+            ".streets.<key>.street.zones[].segments[].direction: null",
+            ".streets.<key>.street.zones[].segments[].direction: number",
+            ".streets.<key>.street.zones[].segments[].kind: number",
+            ".streets.<key>.street.zones[].segments[].material: number",
+            ".streets.<key>.street.zones[].segments[].tram: bool",
+            ".streets.<key>.street.zones[].segments[].uid: number",
+            ".streets.<key>.street.zones[].segments[].variants: array",
+            ".streets.<key>.street.zones[].segments[].width_mm: number",
+            ".streets.<key>.street.zones[].segments[]: object",
+            ".streets.<key>.street.zones[]: object",
+        ];
+        // the zoned street's own sample may lack some piece types: only the listed paths may be added, and the core ones must be
+        for a in &added {
+            assert!(want.contains(a), "unexpected path {a}");
+        }
+        for core in want[..6].iter().chain(&want[15..]) {
+            assert!(added.contains(core), "missing path {core}: {added:#?}");
+        }
+        assert!(before.is_subset(&after), "a zoned record drops no path of the one-zone record");
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&zoned.to_json()).unwrap()["version"], ZONES_VERSION);
     }
 
     #[test]

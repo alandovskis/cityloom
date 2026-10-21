@@ -147,6 +147,52 @@ mod tests {
         assert_eq!(memory.recall("cityloom-sync"), None, "reading and writing for the sync is not an edit");
     }
 
+    fn many_zone_record(zones: usize) -> Value {
+        use crate::city::edits::StreetRecord;
+        use crate::shared::catalogue::Side;
+        use crate::street::model::{Street, zoned};
+        let starts: Vec<i32> = (0..zones as i32).map(|i| i * 5_000).collect();
+        let mut street = zoned(Street::sample(0, Side::Right), &starts, zones as i32 * 5_000);
+        for (i, zone) in street.zones.iter_mut().enumerate() {
+            let mut own = street.segments.clone();
+            own[0].width_mm += 10 * i as i32;
+            zone.segments = Some(own);
+            zone.name = Some(format!("Zone {i}"));
+        }
+        let record = StreetRecord { ways: [7].into(), nodes: [1, 2].into(), leaving: [(1, 90)].into(), street };
+        serde_json::to_value(record).unwrap()
+    }
+
+    #[test]
+    fn writing_a_zoned_street_through_the_sync_makes_the_document_version_6_so_an_older_build_will_not_touch_it() {
+        let (s, memory) = storage();
+        let version = || serde_json::from_str::<Value>(&memory.recall(EDITS_KEY).unwrap()).unwrap()["version"].clone();
+        let plain = Id::new(Kind::Street, "w1~n2~n3");
+        assert!(write(&s, &plain, &json!({"ways": [1], "street": {"x": 1}})));
+        assert_eq!(version(), 5);
+        let zoned = Id::new(Kind::Street, "w7~n1~n2");
+        let body = many_zone_record(2);
+        assert!(write(&s, &zoned, &body));
+        assert_eq!(version(), 6);
+        assert_eq!(read(&s, &zoned), Some(body), "and the record is read back whole");
+        assert!(remove(&s, &zoned));
+        assert_eq!(version(), 5, "the last zoned record is gone");
+    }
+
+    #[test]
+    fn a_many_zone_street_record_fits_a_keepalive_batch() {
+        use crate::sync::model::{Entry, KEEPALIVE_BYTES, SyncDoc, next_batch};
+        let body = many_zone_record(20);
+        let mut doc = SyncDoc::new();
+        doc.records
+            .insert("street/w7~n1~n2".into(), Entry { edited_at: "2027-01-15T08:00:00.000Z".into(), pending: true, deleted: false, rev: 0, blocked: false });
+        let batch = next_batch(&doc, &|_| Some(body.clone()), &|_| true, true);
+        assert_eq!(batch.len(), 1, "a 20-zone record is sent in a keepalive batch");
+        let size = serde_json::to_string(&batch[0]).unwrap().len();
+        assert!(size < KEEPALIVE_BYTES, "{size} bytes");
+        eprintln!("20-zone record batch entry: {size} bytes");
+    }
+
     #[test]
     fn an_area_that_is_not_an_area_is_refused() {
         let (s, _) = storage();
