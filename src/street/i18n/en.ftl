@@ -346,4 +346,8 @@ zone-refused-cut-off = Part of this street is cut off by the edge of the map.
 zone-refused-dragging = Finish the drag before changing the zones.
 zones-elsewhere = The zones were drawn on this street when it was { $drawn } long; here it is { $loaded }.
 check-zone-in = { $check } in { $zone }
+zone-selected = { $zone }, { $from } to { $to }, { $length } long, { $section ->
+        [own] its own section
+       *[base] the base section
+    }, { $n } of { $total }
 zone-cut-off = Cut off by the edge of the map

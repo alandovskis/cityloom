@@ -346,4 +346,8 @@ zone-refused-cut-off = Une partie de cette rue est coupée par le bord de la car
 zone-refused-dragging = Terminez le glissement avant de modifier les zones.
 zones-elsewhere = Les zones ont été tracées sur cette rue lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-zone-in = { $check } : { $zone }
+zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $section ->
+        [own] sa propre section
+       *[base] la section de base
+    }, { $n } sur { $total }
 zone-cut-off = Coupée par le bord de la carte

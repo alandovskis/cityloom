@@ -15,7 +15,7 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
 use crate::shared::units::Units;
-use crate::street::model::{Editor, View};
+use crate::street::model::{Editor, Keep, View, ZoneRefusal};
 use crate::street::text;
 use crate::sync::model::{Change, Origin};
 
@@ -72,6 +72,8 @@ pub struct StreetVm {
     /// The areas whose outline holds the street, read when the page opened.
     areas: Vec<Restriction>,
     mode: ArcRwSignal<ViewMode>,
+    /// A merge waiting for the choice of the section to keep: with the next zone (true) or the previous one.
+    merge: ArcRwSignal<Option<bool>>,
 }
 
 /// The areas whose outline holds the midpoint of the street a page edits, read once when the page opens: none for
@@ -122,7 +124,7 @@ impl StreetVm {
                     },
                 )
             });
-            StreetVm { core: Core::new(street), ports, i18n, keeper, binding, areas, mode: ArcRwSignal::new(mode) }
+            StreetVm { core: Core::new(street), ports, i18n, keeper, binding, areas, mode: ArcRwSignal::new(mode), merge: ArcRwSignal::new(None) }
         })
     }
 
@@ -308,6 +310,122 @@ impl StreetVm {
         done
     }
 
+    // ---- zones ----
+
+    /// A zone edit the person made: announced like any edit, and a refusal is said in the page's words and
+    /// changes nothing (not even what is kept).
+    fn zone_edit(&self, f: impl FnOnce(&mut Editor) -> Result<(), ZoneRefusal>) -> bool {
+        let before = self.class_now();
+        match self.core.edit(f) {
+            Ok(()) => {
+                if let Some(k) = &self.keeper {
+                    k.touch();
+                }
+                self.merge.set(None);
+                self.say_edit(before);
+                true
+            }
+            Err(refusal) => {
+                self.ports.announcer.say(&text::zone_refused(&self.i18n, self.units_now(), refusal));
+                false
+            }
+        }
+    }
+
+    /// Chooses a zone, announcing it. A zone that is not there, or is cut off, is left alone and nothing is said.
+    pub fn select_zone(&self, zone: usize) {
+        if self.edit(|e| e.select_zone(zone)) {
+            self.merge.set(None);
+            self.say_zone();
+        }
+    }
+
+    /// The zone `delta` places along from the selected one, if there is one.
+    pub fn select_zone_relative(&self, delta: i32) {
+        let target = self.view_now().zones.selected as i64 + delta as i64;
+        if let Ok(zone) = usize::try_from(target) {
+            self.select_zone(zone);
+        }
+    }
+
+    /// The first zone, or the last one that is not cut off (Home and End).
+    pub fn select_zone_edge(&self, last: bool) {
+        let zones = &self.view_now().zones.zones;
+        let target = if last { zones.iter().rev().find(|z| !z.cut_off).map(|z| z.index) } else { Some(0) };
+        if let Some(zone) = target {
+            self.select_zone(zone);
+        }
+    }
+
+    pub fn split_zone(&self, at_mm: Option<i32>) -> bool {
+        self.zone_edit(|e| e.split_zone(at_mm))
+    }
+
+    /// Merges the selected zone with the next (or previous) one at once when the two have the same section; else
+    /// waits for the choice of the one to keep (`finish_merge`, or `cancel_merge`). False when it was refused.
+    pub fn begin_merge(&self, next: bool) -> bool {
+        if self.core.read(|e| e.merge_needs_choice(next)) {
+            self.merge.set(Some(next));
+            return true;
+        }
+        self.zone_edit(|e| e.merge_zone(next, Keep::Selected))
+    }
+
+    /// The merge waiting for a choice, if there is one: with the next zone (true) or the previous one.
+    pub fn pending_merge(&self) -> Option<bool> {
+        self.merge.get()
+    }
+
+    pub fn finish_merge(&self, keep: Keep) -> bool {
+        let Some(next) = self.merge.get_untracked() else { return false };
+        self.merge.set(None);
+        self.zone_edit(|e| e.merge_zone(next, keep))
+    }
+
+    pub fn cancel_merge(&self) {
+        self.merge.set(None);
+    }
+
+    /// Moves the selected zone's start by `delta_mm`, saying why when it cannot.
+    pub fn nudge_boundary(&self, delta_mm: i32) -> bool {
+        let Some(from) = self.view_now().zones.zones.get(self.view_now().zones.selected).map(|z| z.from_mm) else { return false };
+        self.move_boundary(from + delta_mm)
+    }
+
+    pub fn move_boundary(&self, to_mm: i32) -> bool {
+        self.zone_edit(|e| e.move_boundary(to_mm))
+    }
+
+    pub fn begin_boundary_drag(&self) {
+        self.edit(|e| e.begin_gesture());
+    }
+
+    /// One step of a drag of the boundary: shown, not announced.
+    pub fn drag_boundary_to(&self, to_mm: i32) {
+        self.quiet(|e| e.move_boundary(to_mm).is_ok());
+    }
+
+    /// The end of a boundary drag: kept as one edit, and announced, when `commit`.
+    pub fn end_boundary_drag(&self, commit: bool) {
+        self.end_gesture(commit);
+    }
+
+    pub fn name_zone(&self, name: &str) -> bool {
+        self.apply(|e| e.name_zone(Some(name)))
+    }
+
+    pub fn reset_zone(&self) -> bool {
+        self.apply(|e| e.reset_zone())
+    }
+
+    pub fn use_for_street(&self) -> bool {
+        self.apply(|e| e.use_for_street())
+    }
+
+    fn say_zone(&self) {
+        self.ports.announcer.say(&text::zone_selection_text(&self.view_now(), &self.i18n, self.units_now()));
+    }
+
     /// Hears the sync, once, when the page opens: before a sync reads the stores this page writes what it holds, and
     /// when a sync changed the city underneath it reloads the street (and says so).
     pub fn watch_sync(self: &Rc<Self>) {
@@ -335,6 +453,10 @@ impl StreetVm {
             return;
         }
         fresh.select(self.view_now().selected);
+        // The zone stays selected if it is still there; the frame came with the editor.
+        let zone = self.core.read(|e| e.zone());
+        fresh.select_zone(zone);
+        self.merge.set(None);
         let replaced = changes.iter().any(|c| c.id == own && c.origin == Origin::Replaced);
         self.core.edit(|e| *e = fresh);
         self.ports.announcer.say(&self.i18n.tr_now(if replaced { "sync-replaced" } else { "sync-updated" }, &Args::new()));
@@ -974,5 +1096,235 @@ mod tests {
         r.vm.flush();
         r.time.advance(1_000);
         assert_eq!(crate::shared::ports::Storage::recall(&*r.storage, crate::sync::model::SYNC_KEY), None, "looking is not editing");
+    }
+
+    // ---- zones ----
+
+    use crate::shared::catalogue::{Side, StreetClass, kind_index};
+    use crate::street::model::{Keep, Piece, Street, ZoneEnd, ZoneFrame, zoned};
+
+    const LENGTH: i32 = 40_000;
+
+    fn frame() -> Option<ZoneFrame> {
+        Some(ZoneFrame { length_mm: LENGTH, from_end: ZoneEnd::First })
+    }
+
+    /// The sample street divided at `starts` (a 40 m street anchored at its first end), on a page of its own.
+    fn zoned_rig(street: Street, starts: &[i32]) -> Rig {
+        let street = zoned(street, starts, LENGTH);
+        let (ports, said, storage, time) = test_ports_with_time();
+        let editor = Editor::from_street(&street, &street, 0).with_frame(frame());
+        Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None), said, time, storage }
+    }
+
+    fn sample_rig(starts: &[i32]) -> Rig {
+        zoned_rig(Street::sample(0, Side::Right), starts)
+    }
+
+    #[test]
+    fn splitting_announces_what_was_done_and_how_the_pieces_stand_and_selects_the_new_zone() {
+        let (ports, said, _, _) = test_ports_with_time();
+        let vm = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0).with_frame(frame()), None);
+        assert!(vm.split_zone(None));
+        assert_eq!(said.take(), ["Split the street at 20.0 m. Every metre of the street is used."]);
+        let v = vm.view_now();
+        assert_eq!((v.zones.zones.len(), v.zones.selected), (2, 1));
+        vm.i18n().set(Locale::FrCa);
+        assert!(vm.split_zone(Some(30_000)));
+        assert_eq!(said.take(), ["Division de la rue à 30,0\u{a0}m. Chaque mètre de la rue est utilisé."]);
+        assert_eq!(vm.view_now().zones.selected, 2);
+    }
+
+    #[test]
+    fn a_refused_split_says_why_in_the_page_language_and_changes_nothing() {
+        let (ports, said, storage, time) = test_ports_with_time();
+        let store = CityStore::sample(ports.storage.clone());
+        let edge = store.open().view(0).edges[0].uid;
+        let street = store.open().street_editor(edge, 0).unwrap().with_frame(None);
+        let binding = CityBinding { store, place: Place::Street(edge) };
+        let vm = StreetVm::new(ports, crate::i18n_for(Locale::En), street, Some(binding.clone()));
+        assert!(!vm.split_zone(None));
+        assert_eq!(said.take(), ["Both ends of this street are cut by the edge of the map, so zones cannot be placed along it."]);
+        assert!(vm.view_now().revisions.is_empty());
+        vm.i18n().set(Locale::FrCa);
+        assert!(!vm.split_zone(None));
+        assert_eq!(said.take(), ["Les deux extrémités de cette rue sont coupées par le bord de la carte\u{a0}: on ne peut pas y placer de zones."]);
+        time.advance(1_000);
+        assert_eq!(binding.store.open().view(0).edited, 0, "nothing was kept");
+        assert_eq!(crate::shared::ports::Storage::recall(&*storage, crate::sync::model::SYNC_KEY), None);
+        // a zone too short carries the minimum in the page's units
+        let r = sample_rig(&[]);
+        assert!(!r.vm.split_zone(Some(2_000)));
+        assert_eq!(r.said.take(), ["A zone must be at least 5.0 m long."]);
+    }
+
+    #[test]
+    fn selecting_a_zone_announces_its_name_range_length_and_whether_it_has_its_own_section() {
+        let r = sample_rig(&[0, 10_000, 30_000]);
+        let uid = first(&r.vm);
+        r.vm.select(Some(uid));
+        r.said.take();
+        r.vm.select_zone(1);
+        assert_eq!(r.said.take(), ["Zone 2, 10.0 m to 30.0 m, 20.0 m long, the base section, 2 of 3"]);
+        assert_eq!(r.vm.view_now().selected, None, "the selected piece is let go");
+        assert!(r.vm.apply(|e| e.nudge_width(first(&r.vm), 100)));
+        r.said.take();
+        r.vm.select_zone_relative(1);
+        assert_eq!(r.said.take(), ["Zone 3, 30.0 m to 40.0 m, 10.0 m long, the base section, 3 of 3"]);
+        r.vm.select_zone_edge(false);
+        assert_eq!(r.said.take(), ["Zone 1, 0.0 m to 10.0 m, 10.0 m long, the base section, 1 of 3"]);
+        r.vm.select_zone(1);
+        r.said.take();
+        assert!(r.vm.name_zone("Market"));
+        r.said.take();
+        r.vm.select_zone_edge(true);
+        r.vm.select_zone_relative(-1);
+        assert_eq!(r.said.take().last().unwrap(), "Market, 10.0 m to 30.0 m, 20.0 m long, its own section, 2 of 3");
+        r.vm.i18n().set(Locale::FrCa);
+        r.vm.select_zone(2);
+        assert_eq!(r.said.take(), ["Zone 3, de 30,0\u{a0}m à 40,0\u{a0}m, 10,0\u{a0}m de long, la section de base, 3 sur 3"]);
+    }
+
+    #[test]
+    fn choosing_a_zone_beyond_the_ends_does_nothing_and_says_nothing() {
+        let r = sample_rig(&[0, 10_000]);
+        r.vm.select_zone(5);
+        r.vm.select_zone_relative(-1);
+        assert!(r.said.take().is_empty());
+        assert_eq!(r.vm.view_now().zones.selected, 0);
+        r.vm.select_zone_relative(1);
+        r.said.take();
+        r.vm.select_zone_relative(1);
+        assert!(r.said.take().is_empty());
+        assert_eq!(r.vm.view_now().zones.selected, 1);
+    }
+
+    #[test]
+    fn merging_zones_with_different_sections_asks_first_and_the_choice_is_said() {
+        let r = sample_rig(&[0, 20_000]);
+        // zone 2 gets a section of its own
+        r.vm.select_zone(1);
+        let uid = first(&r.vm);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 100)));
+        r.vm.select_zone(0);
+        r.said.take();
+        let before = r.vm.view_now().revisions.len();
+        assert!(r.vm.begin_merge(true), "it asks which section to keep");
+        assert_eq!(r.vm.pending_merge(), Some(true));
+        assert_eq!(r.vm.view_now().revisions.len(), before);
+        assert!(r.said.take().is_empty());
+        r.vm.cancel_merge();
+        assert_eq!(r.vm.pending_merge(), None);
+        assert!(r.vm.begin_merge(true));
+        assert!(r.vm.finish_merge(Keep::Neighbour));
+        assert_eq!(r.vm.pending_merge(), None);
+        let said = r.said.take();
+        assert!(said[0].starts_with("Merge zones, keeping Zone 1. "), "{said:?}");
+        assert_eq!(r.vm.view_now().zones.zones.len(), 1);
+        assert!(!r.vm.finish_merge(Keep::Selected), "nothing is pending");
+    }
+
+    #[test]
+    fn merging_zones_with_the_same_section_happens_at_once_and_a_missing_neighbour_is_refused_in_words() {
+        let r = sample_rig(&[0, 20_000]);
+        assert!(r.vm.begin_merge(true));
+        assert_eq!(r.vm.pending_merge(), None);
+        assert_eq!(r.vm.view_now().zones.zones.len(), 1);
+        assert_eq!(r.said.take().len(), 1);
+        let r = sample_rig(&[0, 20_000]);
+        assert!(!r.vm.begin_merge(false));
+        assert_eq!(r.said.take(), ["There is no zone on that side to merge with."]);
+    }
+
+    #[test]
+    fn a_boundary_drag_is_quiet_while_it_goes_and_one_announced_edit_when_it_ends() {
+        let r = sample_rig(&[0, 20_000]);
+        r.vm.select_zone(1);
+        r.said.take();
+        r.vm.begin_boundary_drag();
+        r.vm.drag_boundary_to(22_000);
+        r.vm.drag_boundary_to(25_000);
+        assert!(r.said.take().is_empty());
+        assert!(r.vm.view_now().revisions.is_empty());
+        r.vm.end_boundary_drag(true);
+        assert_eq!(r.said.take(), ["Move the start of Zone 2 to 25.0 m. Every metre of the street is used."]);
+        assert_eq!(r.vm.view_now().revisions.len(), 1);
+        assert_eq!(r.vm.view_now().zones.zones[1].from_mm, 25_000);
+        // cancelled: back as it was, nothing said
+        r.vm.begin_boundary_drag();
+        r.vm.drag_boundary_to(30_000);
+        r.vm.end_boundary_drag(false);
+        assert_eq!(r.vm.view_now().zones.zones[1].from_mm, 25_000);
+        assert!(r.said.take().is_empty());
+        // a nudge says why it stopped
+        assert!(!r.vm.nudge_boundary(-25_000));
+        assert_eq!(r.said.take(), ["A zone must be at least 5.0 m long."]);
+        assert!(r.vm.nudge_boundary(1_000));
+        assert_eq!(r.said.take().len(), 1);
+        r.said.take();
+        assert!(r.vm.move_boundary(27_000));
+        assert_eq!(r.said.take().len(), 1);
+    }
+
+    #[test]
+    fn making_the_last_motor_zone_pedestrian_announces_the_class_change_and_a_zone_of_several_does_not() {
+        let piece = |id: &str| Piece { kind: kind_index(id).unwrap(), width_mm: 3000, direction: None, variants: Vec::new() };
+        let street = Street::imported(StreetClass::Local, Side::Right, &[piece("sidewalk"), piece("travel")]).named("Rue Rachel");
+        let r = zoned_rig(street, &[0, 20_000]);
+        let sidewalk = kind_index("sidewalk").unwrap();
+        r.vm.select_zone(1);
+        r.said.take();
+        assert!(r.vm.apply(|e| e.make_pedestrian(sidewalk)));
+        let said = r.said.take();
+        assert!(!said[0].contains("pedestrian street"), "zone 1 still carries traffic: {said:?}");
+        r.vm.select_zone(0);
+        r.said.take();
+        assert!(r.vm.apply(|e| e.make_pedestrian(sidewalk)));
+        assert!(r.said.take()[0].ends_with(" Rue Rachel is now a pedestrian street."));
+    }
+
+    #[test]
+    fn a_zone_edit_is_kept_in_the_city_after_the_debounce() {
+        let (r, binding) = city_rig();
+        let Place::Street(edge) = binding.place else { unreachable!() };
+        assert!(r.vm.split_zone(None));
+        r.said.take();
+        assert_eq!(binding.store.open().view(0).edited, 0, "not yet");
+        r.time.advance(300);
+        assert_eq!(binding.store.open().view(0).edited, 1);
+        let kept = binding.store.open().street_editor(edge, 0).unwrap();
+        assert_eq!(kept.view().zones.zones.len(), 2);
+    }
+
+    #[test]
+    fn a_sync_reload_keeps_the_selected_zone_and_the_frame() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Street(edge) = binding.place else { unreachable!() };
+        assert!(r.vm.split_zone(None));
+        assert!(r.vm.split_zone(None));
+        r.vm.select_zone(1);
+        r.vm.flush();
+        // another device changed a width, keeping the zones
+        let mut s = binding.store.open().street_editor(edge, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(binding.store.write_street(edge, s));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.read(|e| e.zone()), 1);
+        assert_eq!(r.vm.read(|e| e.frame()), binding.store.open().street_editor(edge, 0).unwrap().frame());
+        assert!(r.vm.read(|e| e.frame()).is_some());
+        // the zones are gone from the city: the selection falls back to the first
+        let mut s = binding.store.open().street_editor(edge, 0).unwrap().snapshot();
+        s.zones.clear();
+        s.length_mm = None;
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(binding.store.write_street(edge, s));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.read(|e| e.zone()), 0);
     }
 }
