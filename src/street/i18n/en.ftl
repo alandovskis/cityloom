@@ -326,3 +326,19 @@ street-traffic-again = { $street } carries traffic again.
 check-access-ped-ok = Sidewalks give an unbroken { $amount } or more
 check-access-ped-bad = No unbroken sidewalk of { $amount } or more
 check-detail-no-edges-pedestrian = No roadway, so no sidewalk is asked for
+
+# Zones (src/street/model/zones.rs): what the model says it did to a street's zones, and why it refused.
+zone-unnamed = Zone { $n }
+rev-zone-split = Split the street at { $at }
+rev-zone-merge = Merge zones, keeping { $kept }
+rev-zone-move = Move the start of { $zone } to { $to }
+rev-zone-name = Zone name: { $zone }
+rev-zone-reset = Reset { $zone } to the street's section
+rev-zone-use = Use { $zone } for the whole street
+zone-refused-no-anchor = Both ends of this street are cut by the edge of the map, so zones cannot be placed along it.
+zone-refused-elsewhere = The zones of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
+zone-refused-too-short = A zone must be at least 5 m long.
+zone-refused-outside = That position is outside the street.
+zone-refused-no-neighbour = There is no zone on that side to merge with.
+zone-refused-no-boundary = The first zone starts at the end of the street, so it has no boundary to move.
+zone-refused-cut-off = Part of this street is cut off by the edge of the map.

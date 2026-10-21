@@ -326,3 +326,19 @@ street-traffic-again = { $street } accueille de nouveau la circulation.
 check-access-ped-ok = Les trottoirs offrent un passage continu de { $amount } ou plus
 check-access-ped-bad = Aucun trottoir continu de { $amount } ou plus
 check-detail-no-edges-pedestrian = Pas de chaussée, donc pas de trottoir exigé
+
+# Zones (src/street/model/zones.rs) : ce que le modèle dit avoir fait aux zones d’une rue, et pourquoi il refuse.
+zone-unnamed = Zone { $n }
+rev-zone-split = Division de la rue à { $at }
+rev-zone-merge = Fusion des zones, en gardant { $kept }
+rev-zone-move = Déplacement du début de { $zone } à { $to }
+rev-zone-name = Nom de la zone : { $zone }
+rev-zone-reset = Retour de { $zone } à la coupe de la rue
+rev-zone-use = { $zone } devient la coupe de toute la rue
+zone-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer de zones.
+zone-refused-elsewhere = Les zones de cette rue ont été tracées sur une route d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
+zone-refused-too-short = Une zone doit mesurer au moins 5 m.
+zone-refused-outside = Cette position est hors de la rue.
+zone-refused-no-neighbour = Il n’y a pas de zone de ce côté avec laquelle fusionner.
+zone-refused-no-boundary = La première zone commence à l’extrémité de la rue : elle n’a pas de limite à déplacer.
+zone-refused-cut-off = Une partie de cette rue est coupée par le bord de la carte.

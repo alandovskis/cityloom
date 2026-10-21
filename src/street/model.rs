@@ -16,7 +16,7 @@ mod fixtures;
 #[cfg(test)]
 pub use fixtures::{SAMPLES, pedestrianised, zoned};
 mod zones;
-pub use zones::{MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame};
+pub use zones::{Keep, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, zone_label};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
