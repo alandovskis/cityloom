@@ -148,11 +148,13 @@ pub enum ZoneRefusal {
     NoBoundary,
     /// Part of the street is cut off at the map's box.
     CutOff,
+    /// A drag is under way: nothing but the drag may change the zones.
+    Dragging,
 }
 
 impl ZoneRefusal {
     pub fn said(self) -> Said {
-        Said::new(match self {
+        let key = match self {
             ZoneRefusal::NoAnchor => "zone-refused-no-anchor",
             ZoneRefusal::Elsewhere => "zone-refused-elsewhere",
             ZoneRefusal::TooShort => "zone-refused-too-short",
@@ -160,7 +162,10 @@ impl ZoneRefusal {
             ZoneRefusal::NoNeighbour => "zone-refused-no-neighbour",
             ZoneRefusal::NoBoundary => "zone-refused-no-boundary",
             ZoneRefusal::CutOff => "zone-refused-cut-off",
-        })
+            ZoneRefusal::Dragging => "zone-refused-dragging",
+        };
+        let said = Said::new(key);
+        if self == ZoneRefusal::TooShort { said.with("min", Arg::Length(MIN_ZONE_MM)) } else { said }
     }
 }
 
@@ -192,7 +197,10 @@ impl super::Content {
 impl Editor {
     /// Whether the zones can be rearranged: the street has an end to measure from, and a zoning it already has
     /// was drawn on this road.
-    fn structure_frame(&self) -> Result<ZoneFrame, ZoneRefusal> {
+    fn structure_frame(&self, allow_drag: bool) -> Result<ZoneFrame, ZoneRefusal> {
+        if self.gesture.is_some() && !allow_drag {
+            return Err(ZoneRefusal::Dragging);
+        }
         let frame = self.frame.ok_or(ZoneRefusal::NoAnchor)?;
         let content = &self.states[self.cursor].content;
         if let Some(drawn) = content.length_mm
@@ -214,7 +222,7 @@ impl Editor {
     /// Splits the selected zone at `at_mm` (default its middle, snapped to `SNAP_MM`). Both halves keep the section;
     /// the first keeps the name; the new zone is selected.
     pub fn split_zone(&mut self, at_mm: Option<i32>) -> Result<(), ZoneRefusal> {
-        let frame = self.structure_frame()?;
+        let frame = self.structure_frame(false)?;
         let z = self.zone;
         let (start, end) = self.states[self.cursor].content.span(z, frame.length_mm);
         let at = snap(at_mm.unwrap_or(start + (end - start) / 2));
@@ -255,7 +263,7 @@ impl Editor {
     /// Merges the selected zone with the next (or previous) one. The merged zone starts where the earlier did, takes
     /// the section and name of the zone `keep` names, and is selected.
     pub fn merge_zone(&mut self, next: bool, keep: Keep) -> Result<(), ZoneRefusal> {
-        let frame = self.structure_frame()?;
+        let frame = self.structure_frame(false)?;
         let n = self.merge_neighbour(next).ok_or(ZoneRefusal::NoNeighbour)?;
         let (lo, hi) = (self.zone.min(n), self.zone.max(n));
         let kept = if keep == Keep::Selected { self.zone } else { n };
@@ -277,12 +285,13 @@ impl Editor {
     /// Moves the start of the selected zone to `to_mm`, keeping both neighbours at least `MIN_ZONE_MM` long. Inside a
     /// gesture it is shown as it goes and recorded as one revision at the end.
     pub fn move_boundary(&mut self, to_mm: i32) -> Result<(), ZoneRefusal> {
-        let frame = self.structure_frame()?;
+        let frame = self.structure_frame(true)?;
         let z = self.zone;
         let content = &self.states[self.cursor].content;
         if z == 0 || z >= content.zones.len() {
             return Err(ZoneRefusal::NoBoundary);
         }
+        let to_mm = snap(to_mm);
         if to_mm < 0 || to_mm > frame.length_mm {
             return Err(ZoneRefusal::OutsideStreet);
         }
@@ -320,12 +329,16 @@ impl Editor {
 
     /// Names the selected zone; blank clears the name. False when the street has no zones or nothing changed.
     pub fn name_zone(&mut self, name: Option<&str>) -> bool {
+        if self.gesture.is_some() {
+            return false;
+        }
         let name = name.map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
         let z = self.zone;
         if z >= self.states[self.cursor].content.zones.len() {
             return false;
         }
-        let label = Said::new("rev-zone-name").with("zone", Arg::Said(Box::new(zone_label(&Zone { from_mm: 0, segments: None, name: name.clone() }, z + 1))));
+        let label = Said::new(if name.is_some() { "rev-zone-name" } else { "rev-zone-unname" })
+            .with("zone", Arg::Said(Box::new(zone_label(&Zone { from_mm: 0, segments: None, name: name.clone() }, z + 1))));
         self.edit_content(label, |c| {
             c.zones[z].name = name;
             true
@@ -334,6 +347,9 @@ impl Editor {
 
     /// Puts the selected zone back on the street's base section.
     pub fn reset_zone(&mut self) -> bool {
+        if self.gesture.is_some() {
+            return false;
+        }
         let z = self.zone;
         if self.states[self.cursor].content.zones.get(z).is_none_or(|g| g.segments.is_none()) {
             return false;
@@ -348,6 +364,9 @@ impl Editor {
     /// Makes the selected zone's section the street's base. Zones with none of their own follow it; zones with one
     /// keep it.
     pub fn use_for_street(&mut self) -> bool {
+        if self.gesture.is_some() {
+            return false;
+        }
         let z = self.zone;
         if z >= self.states[self.cursor].content.zones.len() {
             return false;
@@ -675,9 +694,11 @@ mod tests {
     #[test]
     fn every_refusal_has_its_own_message_key() {
         use ZoneRefusal::*;
-        let keys: Vec<_> = [NoAnchor, Elsewhere, TooShort, OutsideStreet, NoNeighbour, NoBoundary, CutOff].map(|r| r.said().key).to_vec();
-        let expected = ["no-anchor", "elsewhere", "too-short", "outside", "no-neighbour", "no-boundary", "cut-off"].map(|k| format!("zone-refused-{k}"));
+        let keys: Vec<_> = [NoAnchor, Elsewhere, TooShort, OutsideStreet, NoNeighbour, NoBoundary, CutOff, Dragging].map(|r| r.said().key).to_vec();
+        let expected =
+            ["no-anchor", "elsewhere", "too-short", "outside", "no-neighbour", "no-boundary", "cut-off", "dragging"].map(|k| format!("zone-refused-{k}"));
         assert_eq!(keys, expected);
+        assert_eq!(TooShort.said(), Said::new("zone-refused-too-short").with("min", Arg::Length(MIN_ZONE_MM)));
     }
 
     #[test]
@@ -788,9 +809,12 @@ mod tests {
         assert_eq!(starts(&e), [0, 11_000, 40_000]);
         assert_eq!(revisions(&e), before + 2);
         assert_eq!(e.view().revisions.last().unwrap().label.key, "rev-zone-move");
-        assert_eq!(e.move_boundary(4_999), Err(ZoneRefusal::TooShort));
+        assert_eq!(e.move_boundary(4_940), Err(ZoneRefusal::TooShort));
         assert_eq!(e.move_boundary(35_100), Err(ZoneRefusal::TooShort));
-        assert_eq!(e.move_boundary(35_001), Err(ZoneRefusal::TooShort), "4 999 mm from the next boundary");
+        assert_eq!(e.move_boundary(35_050), Err(ZoneRefusal::TooShort), "snaps to 35 100, 4 900 mm from the next boundary");
+        assert_eq!(e.move_boundary(30_040), Ok(()));
+        assert_eq!(starts(&e), [0, 30_000, 40_000], "a typed position is stored on the 100 mm grid");
+        assert_eq!(e.move_boundary(11_000), Ok(()));
         assert_eq!(e.move_boundary(35_000), Ok(()));
         assert_eq!(e.move_boundary(61_000), Err(ZoneRefusal::OutsideStreet));
         assert_eq!(e.move_boundary(5_000), Ok(()));
@@ -802,6 +826,28 @@ mod tests {
         let n = revisions(&e);
         assert_eq!(e.move_boundary(40_000), Ok(()));
         assert_eq!(revisions(&e), n);
+    }
+
+    #[test]
+    fn structure_and_name_edits_are_refused_while_a_drag_is_under_way_and_leave_the_history_intact() {
+        let mut e = editor(&[0, 20_000, 40_000]);
+        assert!(e.select_zone(1));
+        make_own(&mut e);
+        let before = (revisions(&e), e.snapshot());
+        e.begin_gesture();
+        assert_eq!(e.move_boundary(25_000), Ok(()));
+        assert_eq!(e.split_zone(Some(30_000)), Err(ZoneRefusal::Dragging));
+        assert_eq!(e.merge_zone(true, Keep::Selected), Err(ZoneRefusal::Dragging));
+        assert!(!e.name_zone(Some("x")));
+        assert!(!e.reset_zone());
+        assert!(!e.use_for_street());
+        assert!(e.end_gesture());
+        assert_eq!(revisions(&e), before.0 + 1);
+        let s = e.snapshot();
+        assert_eq!(starts(&e), [0, 25_000, 40_000]);
+        assert_eq!((s.zones[1].name.clone(), s.zones.len()), (None, 3));
+        assert!(e.undo());
+        assert_eq!(e.snapshot(), before.1);
     }
 
     #[test]
@@ -838,6 +884,7 @@ mod tests {
         assert!(!e.name_zone(Some("Market")), "no change, no step");
         assert!(e.name_zone(Some("   ")));
         assert_eq!(e.snapshot().zones[1].name, None);
+        assert_eq!(e.view().revisions.last().unwrap().label.key, "rev-zone-unname");
         assert!(e.undo());
         assert_eq!(e.snapshot().zones[1].name.as_deref(), Some("Market"));
 
