@@ -155,6 +155,12 @@ mod tests {
     }
 
     #[test]
+    fn alt_home_and_alt_end_are_not_the_strips() {
+        assert_eq!(on_strip("Home", false, true, false, false), None);
+        assert_eq!(on_strip("End", true, true, false, false), None);
+    }
+
+    #[test]
     fn v_is_still_no_key_of_the_strip() {
         assert_eq!(on_strip("v", false, false, false, false), None);
         assert_eq!(on_strip("V", true, false, false, false), None);

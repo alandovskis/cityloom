@@ -16,11 +16,34 @@ pub fn boundary_mm(x_px: f64, strip_px: f64, length_mm: i32) -> i32 {
     snap(mm).min(length_mm)
 }
 
-/// The flex-grow of each zone's cell: its length, but never under `MIN_SHARE` of the whole.
+/// The flex-grow of each zone's cell, as shares that add up to 1: in proportion to its length, but never under
+/// `MIN_SHARE` (the cells that would be are pinned at it and the rest share what is left by length). When the
+/// zones are too many for the floor to hold, every cell gets an equal share. The target size in pixels is not
+/// decided here: it is the view's CSS `min-width` on each cell (the strip scrolls when they do not fit).
 pub fn cell_basis(zones: &[ZoneView]) -> Vec<f64> {
-    let total: f64 = zones.iter().map(|z| f64::from((z.to_mm - z.from_mm).max(0))).sum();
-    let floor = total * MIN_SHARE;
-    zones.iter().map(|z| f64::from((z.to_mm - z.from_mm).max(0)).max(floor)).collect()
+    let n = zones.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let equal = 1.0 / n as f64;
+    if n as f64 * MIN_SHARE >= 1.0 {
+        return vec![equal; n];
+    }
+    let len: Vec<f64> = zones.iter().map(|z| f64::from((z.to_mm - z.from_mm).max(0))).collect();
+    let mut pinned = vec![false; n];
+    loop {
+        let free: Vec<usize> = (0..n).filter(|&i| !pinned[i]).collect();
+        let left = 1.0 - (n - free.len()) as f64 * MIN_SHARE;
+        let sum: f64 = free.iter().map(|&i| len[i]).sum();
+        let share = |i: usize| if sum > 0.0 { left * len[i] / sum } else { left / free.len() as f64 };
+        let short: Vec<usize> = free.iter().copied().filter(|&i| share(i) < MIN_SHARE).collect();
+        if short.is_empty() {
+            return (0..n).map(|i| if pinned[i] { MIN_SHARE } else { share(i) }).collect();
+        }
+        for i in short {
+            pinned[i] = true;
+        }
+    }
 }
 
 /// Whether a press on a boundary has moved far enough to be a drag.
@@ -47,19 +70,47 @@ mod tests {
         assert_eq!(boundary_mm(10.0, 0.0, 60_000), 0, "a strip with no width");
     }
 
-    #[test]
-    fn a_short_zone_of_a_long_street_keeps_a_target_wide_enough() {
-        let zones = [zone(0, 0, 5_000), zone(1, 5_000, 2_000_000)];
+    fn shares(lengths: &[i32]) -> Vec<f64> {
+        let mut at = 0;
+        let zones: Vec<ZoneView> = lengths
+            .iter()
+            .enumerate()
+            .map(|(i, l)| {
+                at += l;
+                zone(i, at - l, at)
+            })
+            .collect();
         let b = cell_basis(&zones);
-        assert_eq!(b.len(), 2);
-        // Of a 600 px strip the short zone gets at least 24 px, and the long one stays the longer.
-        let share = b[0] / (b[0] + b[1]);
-        assert!(share * 600.0 >= 24.0, "share {share}");
-        assert!(b[1] > b[0]);
-        // Zones in proportion where none is short.
-        let even = cell_basis(&[zone(0, 0, 30_000), zone(1, 30_000, 60_000)]);
-        assert_eq!(even[0], even[1]);
+        let sum: f64 = b.iter().sum();
+        b.iter().map(|x| x / sum).collect()
+    }
+
+    #[test]
+    fn a_short_zone_beside_a_long_one_keeps_at_least_the_floor_share() {
+        let s = shares(&[5_000, 2_000_000]);
+        assert!(s[0] >= MIN_SHARE - 1e-9, "{s:?}");
+        assert!(s[1] > s[0]);
+        let even = shares(&[30_000, 30_000]);
+        assert!((even[0] - even[1]).abs() < 1e-12);
         assert!(cell_basis(&[]).is_empty());
+    }
+
+    #[test]
+    fn ten_short_zones_and_a_long_one_each_keep_the_floor_share() {
+        let mut l = vec![5_000; 10];
+        l.push(2_000_000);
+        let s = shares(&l);
+        assert!(s.iter().all(|x| *x >= MIN_SHARE - 1e-9), "{s:?}");
+        assert!((s.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+        assert!(s[10] > s[0]);
+    }
+
+    #[test]
+    fn zones_too_many_for_the_floor_get_equal_shares() {
+        let s = shares(&[5_000; 40]);
+        assert!(s.iter().all(|x| (x - 1.0 / 40.0).abs() < 1e-12), "{s:?}");
+        let s = shares(&[5_000, 2_000_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000]);
+        assert!(s.iter().all(|x| (x - 1.0 / 17.0).abs() < 1e-12), "{s:?}");
     }
 
     #[test]
