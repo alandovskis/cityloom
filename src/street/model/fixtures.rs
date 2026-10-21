@@ -71,6 +71,13 @@ pub fn pedestrianised(street: &Street) -> Street {
     s.settled()
 }
 
+/// `street` divided into zones starting at `starts_mm` (millimetres from its first end), every zone on the base
+/// section, for a street `length_mm` long, settled.
+pub fn zoned(street: Street, starts_mm: &[i32], length_mm: i32) -> Street {
+    let zones = starts_mm.iter().map(|&from_mm| Zone { from_mm, segments: None, name: None }).collect();
+    Street { zones, from_end: ZoneEnd::First, length_mm: Some(length_mm), ..street }.settled()
+}
+
 impl Street {
     /// The sample street laid out for a side of the road.
     pub fn sample(sample: usize, side: Side) -> Street {

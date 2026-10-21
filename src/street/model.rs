@@ -14,7 +14,9 @@ pub use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::{SAMPLES, pedestrianised};
+pub use fixtures::{SAMPLES, pedestrianised, zoned};
+mod zones;
+pub use zones::{MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -207,6 +209,15 @@ pub struct Street {
     /// The OSM ways it was made from. The sample streets are made from none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source: Vec<OsmRef>,
+    /// The street's zones along its length, in order of `from_mm`. Empty for a street of one section, the base.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zones: Vec<Zone>,
+    /// The end the zones' positions are measured from: the end that is a real OSM node. Written only with zones.
+    #[serde(default, skip_serializing_if = "ZoneEnd::is_first")]
+    pub from_end: ZoneEnd,
+    /// The length along the centreline the zones were drawn against. Written only with zones.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub length_mm: Option<i32>,
 }
 
 /// A name that is data, said as it is: a street's, a place's, a junction's.
@@ -299,15 +310,26 @@ impl Street {
                 g
             })
             .collect();
-        let mut street =
-            Street { class, class_before: None, name: None, row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1, source: Vec::new() };
+        let mut street = Street {
+            class,
+            class_before: None,
+            name: None,
+            row_mm: total(&segments),
+            side,
+            segments,
+            next_uid: pieces.len() as u32 + 1,
+            source: Vec::new(),
+            zones: Vec::new(),
+            from_end: ZoneEnd::First,
+            length_mm: None,
+        };
         street.settle_class();
         street
     }
 
-    /// Whether any piece is a motor piece.
+    /// Whether any piece of any section is a motor piece.
     pub fn has_motor(&self) -> bool {
-        self.segments.iter().any(Segment::has_motor)
+        self.sections().iter().any(|s| s.iter().any(Segment::has_motor))
     }
 
     /// Keeps the class true to the pieces. No motor piece: pedestrian, remembering the class it had. A motor
@@ -318,6 +340,7 @@ impl Street {
 
     /// The same street, settled.
     pub fn settled(mut self) -> Street {
+        self.settle_zones();
         self.settle_class();
         self
     }
@@ -345,6 +368,7 @@ impl Street {
                     flip(&mut v.direction);
                 }
             }
+            s.flip_zone_lanes();
         }
         s
     }
@@ -360,12 +384,18 @@ impl Street {
                 flip(&mut v.direction);
             }
         }
+        s.reverse_zones();
         s
     }
 
     /// Whether every index in it points into the catalogue, so that it can be
     /// drawn. A street that came from storage is checked before it is used.
     pub fn is_sound(&self) -> bool {
+        self.row_mm > 0 && self.section_is_sound(&self.segments) && self.zones_are_sound()
+    }
+
+    /// Whether every piece of a section points into the catalogue and has a uid the street has issued.
+    fn section_is_sound(&self, section: &[Segment]) -> bool {
         let seg_ok = |kind: usize, material: usize, curb: Option<usize>, direction: Option<usize>| {
             kind < KINDS.len()
                 && KINDS[kind].materials.contains(&material)
@@ -373,16 +403,25 @@ impl Street {
                 && curb.is_none_or(|c| c < CURBS.len() && KINDS[kind].has_curb)
                 && direction.is_none_or(|d| d < DIRECTIONS.len())
         };
-        self.row_mm > 0
-            && !self.segments.is_empty()
-            && self.segments.iter().all(|s| {
+        !section.is_empty()
+            && section.iter().all(|s| {
                 // the variants are checked before the tram rule reads their kinds
                 seg_ok(s.kind, s.material, s.curb, s.direction)
                     && s.variants.iter().all(|v| seg_ok(v.kind, v.material, None, v.direction) && valid_window(v.from_min, v.to_min))
                     && (!s.tram || KINDS[s.kind].id == "bus" || s.variants.iter().any(|v| KINDS[v.kind].id == "bus"))
                     && s.width_mm > 0
             })
-            && self.segments.iter().map(|s| s.uid).all(|u| u < self.next_uid)
+            && section.iter().map(|s| s.uid).all(|u| u < self.next_uid)
+    }
+
+    /// The zones start at 0, rise strictly and end inside the length they were drawn against; each own section is sound.
+    fn zones_are_sound(&self) -> bool {
+        let Some(first) = self.zones.first() else { return true };
+        let Some(length) = self.length_mm else { return false };
+        first.from_mm == 0
+            && self.zones.windows(2).all(|w| w[0].from_mm < w[1].from_mm)
+            && self.zones.last().is_some_and(|z| z.from_mm < length)
+            && self.zones.iter().filter_map(|z| z.segments.as_deref()).all(|s| self.section_is_sound(s))
     }
 }
 
@@ -469,6 +508,9 @@ impl Editor {
             segments: self.current().clone(),
             next_uid: self.next_uid,
             source: self.source.clone(),
+            zones: Vec::new(),
+            from_end: ZoneEnd::First,
+            length_mm: None,
         }
     }
 
