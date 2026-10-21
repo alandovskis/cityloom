@@ -533,7 +533,7 @@ fn default_directions(segs: &mut [Segment], side: Side) {
     }
 }
 
-fn snap(v: i32) -> i32 {
+pub(crate) fn snap(v: i32) -> i32 {
     ((v as f64 / SNAP_MM as f64).round() as i32) * SNAP_MM
 }
 

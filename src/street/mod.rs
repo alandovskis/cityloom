@@ -8,6 +8,7 @@ pub mod measures;
 pub mod model;
 pub mod notes;
 pub mod page;
+pub mod strip;
 pub mod svg;
 #[cfg(test)]
 mod tests;

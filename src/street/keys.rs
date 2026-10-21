@@ -33,6 +33,33 @@ pub fn on_section(key: &str, shift: bool, selected: bool) -> Option<(Action, boo
     }
 }
 
+/// What a key does on the zone strip.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ZoneAction {
+    /// Select the next (1) or previous (-1) zone.
+    Select(i32),
+    /// Select the first (`last` false) or the last zone.
+    SelectEdge { last: bool },
+    /// Move the selected zone's start boundary by this many millimetres.
+    Nudge(i32),
+}
+
+/// What a key does on the zone strip, with whether the browser's own use of it is to be stopped. Alt with an
+/// arrow is the browser's Back and Forward, so it is always stopped; Ctrl or Meta is never ours.
+pub fn on_strip(key: &str, shift: bool, alt: bool, ctrl: bool, meta: bool) -> Option<(ZoneAction, bool)> {
+    if ctrl || meta {
+        return None;
+    }
+    let d = match key {
+        "ArrowLeft" => -1,
+        "ArrowRight" => 1,
+        "Home" if !alt => return Some((ZoneAction::SelectEdge { last: false }, true)),
+        "End" if !alt => return Some((ZoneAction::SelectEdge { last: true }, true)),
+        _ => return None,
+    };
+    Some(if alt { (ZoneAction::Nudge(d * if shift { 10_000 } else { 1_000 }), true) } else { (ZoneAction::Select(d), true) })
+}
+
 /// Whether a key pressed on the page (outside a field, which the page checks) switches the drawing between
 /// the section and the 2.5D: `V`, without Ctrl, Cmd or Alt.
 pub fn is_view_toggle(key: &str, ctrl: bool, meta: bool, alt: bool) -> bool {
@@ -93,6 +120,44 @@ mod tests {
         assert_eq!(on_section("Delete", false, true), Some((Action::Remove, true)));
         assert_eq!(on_section("Backspace", false, false), Some((Action::Remove, true)));
         assert_eq!(on_section("Escape", false, true), Some((Action::Escape, false)));
+    }
+
+    #[test]
+    fn arrows_select_zones_home_and_end_go_to_the_ends() {
+        assert_eq!(on_strip("ArrowRight", false, false, false, false), Some((ZoneAction::Select(1), true)));
+        assert_eq!(on_strip("ArrowLeft", false, false, false, false), Some((ZoneAction::Select(-1), true)));
+        assert_eq!(on_strip("Home", false, false, false, false), Some((ZoneAction::SelectEdge { last: false }, true)));
+        assert_eq!(on_strip("End", false, false, false, false), Some((ZoneAction::SelectEdge { last: true }, true)));
+    }
+
+    #[test]
+    fn alt_arrows_nudge_the_start_boundary_by_a_metre_and_with_shift_by_ten_and_stop_the_browsers_back_and_forward() {
+        assert_eq!(on_strip("ArrowLeft", false, true, false, false), Some((ZoneAction::Nudge(-1_000), true)));
+        assert_eq!(on_strip("ArrowRight", false, true, false, false), Some((ZoneAction::Nudge(1_000), true)));
+        assert_eq!(on_strip("ArrowLeft", true, true, false, false), Some((ZoneAction::Nudge(-10_000), true)));
+        assert_eq!(on_strip("ArrowRight", true, true, false, false), Some((ZoneAction::Nudge(10_000), true)));
+    }
+
+    #[test]
+    fn ctrl_or_meta_with_an_arrow_is_not_ours() {
+        for key in ["ArrowLeft", "ArrowRight", "Home", "End"] {
+            assert_eq!(on_strip(key, false, false, true, false), None);
+            assert_eq!(on_strip(key, false, false, false, true), None);
+            assert_eq!(on_strip(key, false, true, true, false), None);
+        }
+    }
+
+    #[test]
+    fn other_keys_are_not_ours_on_the_strip() {
+        for key in ["+", "v", "Tab", "Delete", "Enter", "Escape"] {
+            assert_eq!(on_strip(key, false, false, false, false), None);
+        }
+    }
+
+    #[test]
+    fn v_is_still_no_key_of_the_strip() {
+        assert_eq!(on_strip("v", false, false, false, false), None);
+        assert_eq!(on_strip("V", true, false, false, false), None);
     }
 
     #[test]
