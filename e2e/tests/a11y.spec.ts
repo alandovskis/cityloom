@@ -97,6 +97,26 @@ test("at 320 px twelve real zones keep 24 px cells and handles, and the page doe
   for (const w of [...m.cells, ...m.handles]) expect(w).toBeGreaterThanOrEqual(24);
 });
 
+test("at 320 px the zone chosen by the keys is scrolled into view inside the strip", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openLongStreet(page, 12 * 5);
+  await splitInto(page, 12);
+  const inside = (id: string) =>
+    page.evaluate((id) => {
+      const strip = document.getElementById("zone-strip")!.getBoundingClientRect();
+      const cell = document.getElementById(id)!.getBoundingClientRect();
+      return cell.left >= strip.left - 1 && cell.right <= strip.right + 1;
+    }, id);
+  await page.locator("#zone-strip").focus();
+  await page.keyboard.press("Home");
+  await expect.poll(() => inside("zone-0")).toBe(true);
+  await page.keyboard.press("End");
+  await expect.poll(() => inside("zone-11")).toBe(true);
+  expect(await inside("zone-0"), "the strip scrolled; the first cell left its box").toBe(false);
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(() => inside("zone-10")).toBe(true);
+});
+
 test("at 320 px a boundary dragged between a floored cell and the rest is dropped where the pointer was released", async ({
   page,
 }) => {
@@ -121,7 +141,7 @@ test("at 320 px a boundary dragged between a floored cell and the rest is droppe
   expect(Math.abs(centre - (x + 60)), `the handle ends at ${centre}, the pointer at ${x + 60}`).toBeLessThanOrEqual(3);
 });
 
-test("the_zone_strip_is_one_tab_stop_under_the_drawing_and_is_named", async ({ page }) => {
+test("the zone strip is one tab stop under the drawing and is named", async ({ page }) => {
   await openStreet(page);
   await expect(page.locator("#zone-strip")).toBeVisible();
   await expect(page.locator("#zone-strip")).not.toHaveAttribute("aria-label", "");
@@ -156,7 +176,7 @@ test("the_zone_strip_is_one_tab_stop_under_the_drawing_and_is_named", async ({ p
   expect(seen.indexOf("zone-strip")).toBeGreaterThanOrEqual(0);
 });
 
-test("alt_arrows_on_the_strip_do_not_leave_the_page", async ({ page }) => {
+test("Alt and the arrows on the strip do not leave the page", async ({ page }) => {
   await openStreet(page);
   await page.locator("#zone-split").click();
   await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
@@ -170,7 +190,7 @@ test("alt_arrows_on_the_strip_do_not_leave_the_page", async ({ page }) => {
   await expect(page.locator("#zone-strip")).toBeVisible();
 });
 
-test("v_and_the_sections_keys_still_work_after_the_strip_had_focus", async ({ page }) => {
+test("V and the arrow keys still work after the strip had focus", async ({ page }) => {
   await openStreet(page);
   await page.locator("#zone-split").click();
   await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);

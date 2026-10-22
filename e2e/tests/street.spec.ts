@@ -665,7 +665,7 @@ test.describe("the zones of a street", () => {
     expect(await page.locator("#drawing").getAttribute("aria-label")).toBe(edited);
   });
 
-  test("shows_the_selected_zone_in_2_5d", async ({ page }) => {
+  test("shows the selected zone in 2.5D", async ({ page }) => {
     await page.locator("#zone-split").click();
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
     await selectFirstPiece(page);

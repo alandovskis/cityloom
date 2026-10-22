@@ -190,7 +190,6 @@ mod tests {
         assert_eq!(batch.len(), 1, "a 20-zone record is sent in a keepalive batch");
         let size = serde_json::to_string(&batch[0]).unwrap().len();
         assert!(size < KEEPALIVE_BYTES, "{size} bytes");
-        eprintln!("20-zone record batch entry: {size} bytes");
     }
 
     #[test]
