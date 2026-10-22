@@ -1,4 +1,4 @@
-import { expect, openJunction, openStreet, test } from "./fixtures";
+import { expect, openJunction, openLongStreet, openStreet, splitInto, test } from "./fixtures";
 
 // Keyboard and small-window behaviour that the audit (WCAG 2.2 AA) found wanting.
 
@@ -70,4 +70,29 @@ test("at 320 px a strip of many zones scrolls inside itself and the page does no
   }));
   expect(m.page).toBeLessThanOrEqual(m.inner);
   expect(m.strip).toBeGreaterThan(m.shown);
+});
+
+test("at 320 px twelve real zones keep 24 px cells and handles, and the page does not scroll sideways", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openLongStreet(page, 12 * 5);
+  await splitInto(page, 12);
+  const m = await page.evaluate(() => {
+    const strip = document.getElementById("zone-strip")!;
+    const w = (sel: string) => [...strip.querySelectorAll(sel)].map((e) => e.getBoundingClientRect().width);
+    return {
+      page: document.documentElement.scrollWidth,
+      inner: innerWidth,
+      strip: strip.scrollWidth,
+      shown: strip.clientWidth,
+      cells: w(".zone-cell"),
+      handles: w(".zone-handle"),
+    };
+  });
+  expect(m.page).toBeLessThanOrEqual(m.inner);
+  expect(m.strip).toBeGreaterThan(m.shown);
+  expect(m.cells).toHaveLength(12);
+  expect(m.handles).toHaveLength(11);
+  for (const w of [...m.cells, ...m.handles]) expect(w).toBeGreaterThanOrEqual(24);
 });

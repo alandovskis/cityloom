@@ -1173,9 +1173,9 @@ svg pattern circle {
 }
 .zone-handle {
   flex: none;
-  width: 10px;
-  margin-inline: -5px;
-  z-index: 1;
+  /* the target size (WCAG 2.5.8): 24 px wide between the cells, with the boundary drawn as a line down its middle */
+  width: 24px;
+  background: linear-gradient(var(--zone-edge), var(--zone-edge)) center / 3px 70% no-repeat;
   cursor: ew-resize;
   touch-action: none;
 }
@@ -1243,6 +1243,9 @@ svg pattern circle {
   }
   .zone-cell[aria-selected="true"] {
     outline-color: Highlight;
+  }
+  .zone-handle {
+    background-image: linear-gradient(CanvasText, CanvasText);
   }
 }
 #drawing .sel-line {
