@@ -1141,7 +1141,8 @@ svg pattern circle {
   display: flex;
   align-items: center;
   min-height: 34px;
-  padding: 0 8px;
+  /* no padding on the cell: a flex item's base size is never under its padding and border, which would make the
+     cells' widths not proportional to their lengths (the drag places a boundary by that proportion) */
   background: var(--zone-fill);
   color: var(--zone-ink);
   border: 1px solid var(--zone-edge);
@@ -1166,6 +1167,7 @@ svg pattern circle {
 }
 .zone-name {
   min-width: 0;
+  padding: 0 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

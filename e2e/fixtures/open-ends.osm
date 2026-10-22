@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Source of open-ends.osm.pbf: osmium cat open-ends.osm -o open-ends.osm.pbf --overwrite -->
+<osm version="0.6" generator="hand">
+  <node id="1" version="1" timestamp="1970-01-01T00:00:01Z" lat="45.5261" lon="-73.6078"/>
+  <node id="2" version="1" timestamp="1970-01-01T00:00:01Z" lat="45.5261" lon="-73.5978"/>
+  <node id="3" version="1" timestamp="1970-01-01T00:00:01Z" lat="45.5261" lon="-73.5878"/>
+  <way id="10" version="1" timestamp="1970-01-01T00:00:01Z">
+    <nd ref="1"/><nd ref="2"/><nd ref="3"/>
+    <tag k="highway" v="residential"/><tag k="name" v="Open Road"/>
+  </way>
+</osm>

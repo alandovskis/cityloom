@@ -7,7 +7,7 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{Element, HtmlElement};
 
 use super::keys::{ZoneAction, on_strip};
-use super::model::{ZoneEnd, ZoneView, snap};
+use super::model::{MIN_ZONE_MM, ZoneEnd, ZoneView, snap};
 use super::text::zone_text;
 use super::vm::StreetVm;
 use super::watch::SheetWatch;
@@ -18,8 +18,6 @@ use crate::shared::said::say;
 /// A press moves a boundary only after it has moved this far.
 const DRAG_START_PX: f64 = 4.0;
 /// No zone's cell is narrower than this share of the strip, so a short zone of a long street is still a target.
-/// A handle's width on the strip: the pointer target size (WCAG 2.5.8), as `.zone-handle` in `editor.css`.
-const HANDLE_PX: f64 = 24.0;
 const MIN_SHARE: f64 = 0.06;
 
 /// A position along the street from a pointer position on the strip, snapped to `SNAP_MM` and kept within the street.
@@ -29,6 +27,36 @@ pub fn boundary_mm(x_px: f64, strip_px: f64, length_mm: i32) -> i32 {
     }
     let mm = (x_px / strip_px * length_mm as f64).round().clamp(0.0, length_mm as f64) as i32;
     snap(mm).min(length_mm)
+}
+
+/// The two cells a handle separates, as measured on the screen when a press began.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PairSpan {
+    /// Where the left cell begins.
+    pub left_px: f64,
+    /// The two cells' widths together, without the handle between them.
+    pub cells_px: f64,
+    /// The handle's width.
+    pub handle_px: f64,
+    /// Where the left cell begins and the right cell ends along the street.
+    pub from_mm: i32,
+    pub to_mm: i32,
+}
+
+/// Where the boundary between the two cells goes when the handle's centre is at `centre_px`: the handle's left edge
+/// divides the cells' pixels in the proportion of their mm, whatever other cells or minimum widths do to the rest of
+/// the strip. Snapped, and kept so that both zones stay at least `MIN_ZONE_MM`.
+pub fn pair_boundary_mm(centre_px: f64, s: &PairSpan) -> i32 {
+    if s.cells_px <= 0.0 || s.to_mm <= s.from_mm {
+        return s.from_mm;
+    }
+    let left_cell = centre_px - s.handle_px / 2.0 - s.left_px;
+    let mm = s.from_mm as f64 + left_cell / s.cells_px * f64::from(s.to_mm - s.from_mm);
+    let (low, high) = (s.from_mm + MIN_ZONE_MM, s.to_mm - MIN_ZONE_MM);
+    if low > high {
+        return s.from_mm;
+    }
+    snap(mm.round().clamp(f64::from(low), f64::from(high)) as i32).clamp(low, high)
 }
 
 /// The flex-grow of each zone's cell, as shares that add up to 1: in proportion to its length, but never under
@@ -75,10 +103,27 @@ fn cell_id(index: usize) -> String {
 #[derive(Clone, Copy)]
 struct Press {
     start_x: f64,
-    /// The zone to the right of the handle.
-    zone: usize,
+    /// The pointer's distance from the handle's centre at the press: the boundary follows the handle, not the pointer.
+    grab_px: f64,
+    /// The two cells the handle separates.
+    span: PairSpan,
     /// Moved far enough to be a drag (`begin_boundary_drag` has been called).
     active: bool,
+}
+
+/// Measures the handle before zone `i` and the two cells it separates.
+fn measure(w: SheetWatch, handle: &Element, i: usize) -> Option<PairSpan> {
+    let doc = document();
+    let rect = |index: usize| doc.get_element_by_id(&cell_id(index)).map(|e| e.get_bounding_client_rect());
+    let (a, b) = (rect(i.checked_sub(1)?)?, rect(i)?);
+    let v = w.view_now();
+    Some(PairSpan {
+        left_px: a.left(),
+        cells_px: a.width() + b.width(),
+        handle_px: handle.get_bounding_client_rect().width(),
+        from_mm: v.zones.zones.get(i - 1)?.from_mm,
+        to_mm: v.zones.zones.get(i)?.to_mm,
+    })
 }
 
 /// The handle before zone `i` (none for the first) and the cell of zone `i`. Every attribute follows the view, so
@@ -158,16 +203,6 @@ pub fn ZoneStrip(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoView 
     // The pointer is captured by the handle, so the handles and cells are keyed by index and updated in place: a
     // view change during a drag must not replace the element that holds the capture.
     let press = StoredValue::new_local(None::<Press>);
-    let boundary_at = move |x: f64, zone: usize| -> Option<i32> {
-        let doc = document();
-        let left = doc.get_element_by_id(&cell_id(0))?.get_bounding_client_rect().left();
-        let last = doc.get_element_by_id(&cell_id(w.view_now().zones.zones.len().checked_sub(1)?))?;
-        // The handles between the cells are not street: leave out the ones before the pointer (and, at its own, half).
-        let handles = (w.view_now().zones.zones.len() - 1) as f64 * HANDLE_PX;
-        let width = last.get_bounding_client_rect().right() - left - handles;
-        let length = w.view_now().zones.zones.last()?.to_mm;
-        Some(boundary_mm(x - left - (zone as f64 - 0.5) * HANDLE_PX, width, length))
-    };
     let finish = move |commit: bool| {
         if let Some(p) = press.get_value() {
             press.set_value(None);
@@ -182,8 +217,13 @@ pub fn ZoneStrip(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoView 
         }
         finish(false);
         w.select_zone(i);
-        press.set_value(Some(Press { start_x: f64::from(ev.client_x()), zone: i, active: false }));
-        if let Some(handle) = ev.current_target().and_then(|t| t.dyn_into::<Element>().ok()) {
+        let handle = ev.current_target().and_then(|t| t.dyn_into::<Element>().ok());
+        let Some(span) = handle.as_ref().and_then(|h| measure(w, h, i)) else { return };
+        let handle_rect = handle.as_ref().map(|h| h.get_bounding_client_rect());
+        let centre = handle_rect.map_or(0.0, |r| r.left() + r.width() / 2.0);
+        let x = f64::from(ev.client_x());
+        press.set_value(Some(Press { start_x: x, grab_px: x - centre, span, active: false }));
+        if let Some(handle) = handle {
             let _ = handle.set_pointer_capture(ev.pointer_id());
         }
         ev.prevent_default();
@@ -202,9 +242,7 @@ pub fn ZoneStrip(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoView 
             p.active = true;
             press.set_value(Some(p));
         }
-        if let Some(mm) = boundary_at(x, p.zone) {
-            w.drag_boundary_to(mm);
-        }
+        w.drag_boundary_to(pair_boundary_mm(x - p.grab_px, &p.span));
     };
     // Reads nothing itself (the list is read inside `each`), so it runs once and the cells are kept.
     let cells = move || {
@@ -318,6 +356,30 @@ mod tests {
         assert!(s.iter().all(|x| (x - 1.0 / 40.0).abs() < 1e-12), "{s:?}");
         let s = shares(&[5_000, 2_000_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000, 5_000]);
         assert!(s.iter().all(|x| (x - 1.0 / 17.0).abs() < 1e-12), "{s:?}");
+    }
+
+    fn span() -> PairSpan {
+        // two cells of 100 px each, a 24 px handle, over 40 m
+        PairSpan { left_px: 10.0, cells_px: 200.0, handle_px: 24.0, from_mm: 20_000, to_mm: 60_000 }
+    }
+
+    #[test]
+    fn the_handle_divides_the_pair_in_the_proportion_of_their_pixels_and_mm() {
+        // the handle's left edge at 110 px: half of the pair, 40 m
+        assert_eq!(pair_boundary_mm(110.0 + 12.0, &span()), 40_000);
+        // a quarter of the way
+        assert_eq!(pair_boundary_mm(60.0 + 12.0, &span()), 30_000);
+    }
+
+    #[test]
+    fn the_boundary_keeps_both_zones_at_least_the_minimum_and_snaps() {
+        assert_eq!(pair_boundary_mm(-500.0, &span()), 20_000 + MIN_ZONE_MM);
+        assert_eq!(pair_boundary_mm(900.0, &span()), 60_000 - MIN_ZONE_MM);
+        assert_eq!(pair_boundary_mm(61.2 + 12.0, &span()) % 100, 0);
+        let tight = PairSpan { to_mm: 20_000 + 2 * MIN_ZONE_MM - 1, ..span() };
+        assert_eq!(pair_boundary_mm(100.0, &tight), 20_000, "no room: the boundary stays");
+        let none = PairSpan { cells_px: 0.0, ..span() };
+        assert_eq!(pair_boundary_mm(100.0, &none), 20_000);
     }
 
     #[test]

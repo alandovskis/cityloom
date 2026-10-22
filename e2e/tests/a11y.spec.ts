@@ -96,3 +96,25 @@ test("at 320 px twelve real zones keep 24 px cells and handles, and the page doe
   expect(m.handles).toHaveLength(11);
   for (const w of [...m.cells, ...m.handles]) expect(w).toBeGreaterThanOrEqual(24);
 });
+
+test("at 320 px a boundary dragged between a floored cell and the rest is dropped where the pointer was released", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await openLongStreet(page, 60);
+  // a 5 m first zone: its share of the strip is under the cell's 24 px minimum, so the cell is floored
+  await page.locator("#zone-split-at").fill("5");
+  await page.locator("#zone-split").click();
+  await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+  const handle = page.locator(".zone-handle");
+  const before = (await handle.boundingBox())!;
+  const x = before.x + before.width / 2;
+  const y = before.y + before.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 60, y, { steps: 6 });
+  await page.mouse.up();
+  const after = (await handle.boundingBox())!;
+  const centre = after.x + after.width / 2;
+  expect(Math.abs(centre - (x + 60)), `the handle ends at ${centre}, the pointer at ${x + 60}`).toBeLessThanOrEqual(3);
+});
