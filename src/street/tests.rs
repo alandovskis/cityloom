@@ -1201,7 +1201,7 @@ fn the_strip_has_one_cell_per_zone_in_a_listbox_with_one_tab_stop_and_the_select
     assert!(h.contains("id=\"zone-0\"") && h.contains("id=\"zone-1\"") && h.contains("id=\"zone-2\""), "{h}");
     assert_eq!(count(&h, "aria-hidden=\"true\" class=\"zone-handle\""), 2, "one handle between each two cells: {h}");
     assert!(h.contains(">Zones along the street</h2>") && h.contains("Measured from the first end"), "{h}");
-    assert!(!h.contains("role=\"status\""), "{h}");
+    assert!(!h.contains("were drawn"), "no notice while the zones were drawn on this road: {h}");
 }
 
 #[test]
@@ -1242,12 +1242,14 @@ fn a_cut_off_zone_is_disabled_and_the_notice_is_shown() {
 }
 
 #[test]
-fn a_one_zone_street_shows_one_cell_and_no_notice() {
+fn a_one_zone_street_shows_one_cell_and_an_empty_status_that_a_notice_can_fill() {
     let s = street_shared(0);
     let h = strip_html(&s);
     assert_eq!(count(&h, "role=\"option\""), 1, "{h}");
     assert_eq!(count(&h, "zone-handle"), 0, "{h}");
-    assert!(!h.contains("role=\"status\"") && !h.contains("aria-disabled"), "{h}");
+    assert!(!h.contains("aria-disabled") && !h.contains("were drawn"), "{h}");
+    // The live region is always in the page, so what is put in it later is announced.
+    assert!(h.contains("role=\"status\" class=\"zone-notice\"><!></p>"), "{h}");
 }
 
 #[test]

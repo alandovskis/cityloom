@@ -102,6 +102,18 @@ struct Press {
     active: bool,
 }
 
+/// How far the strip must scroll to bring a cell wholly into view: negative to the left, positive to the right, zero
+/// when it already shows. A cell wider than the strip is lined up on its left edge.
+pub fn scroll_into_view_px(cell_left: f64, cell_right: f64, strip_left: f64, strip_right: f64) -> f64 {
+    if cell_left < strip_left || cell_right - cell_left > strip_right - strip_left {
+        cell_left - strip_left
+    } else if cell_right > strip_right {
+        cell_right - strip_right
+    } else {
+        0.0
+    }
+}
+
 /// Measures the handle before zone `i` and the two cells it separates.
 fn measure(w: SheetWatch, handle: &Element, i: usize) -> Option<PairSpan> {
     let doc = document();
@@ -235,6 +247,19 @@ pub fn ZoneStrip(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoView 
         }
         w.drag_boundary_to(pair_boundary_mm(x - p.grab_px, &p.span));
     };
+    // The chosen cell is brought into view inside the strip (its own scroll, never the page's).
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| {
+        let id = active();
+        let doc = document();
+        if let (Some(cell), Some(strip)) = (doc.get_element_by_id(&id), doc.get_element_by_id("zone-strip")) {
+            let (c, s) = (cell.get_bounding_client_rect(), strip.get_bounding_client_rect());
+            let by = scroll_into_view_px(c.left(), c.right(), s.left(), s.right());
+            if by != 0.0 {
+                strip.set_scroll_left(strip.scroll_left() + by.round() as i32);
+            }
+        }
+    });
     // Reads nothing itself (the list is read inside `each`), so it runs once and the cells are kept.
     let cells = move || {
         view! {
@@ -282,7 +307,7 @@ pub fn ZoneStrip(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoView 
             >
                 {cells}
             </div>
-            {move || notice().map(|n| view! { <p class="zone-notice" role="status">{n}</p> })}
+            <p class="zone-notice" role="status">{notice}</p>
         </section>
     }
 }
@@ -304,6 +329,15 @@ mod tests {
             cut_off: false,
             ok: true,
         }
+    }
+
+    #[test]
+    fn a_cell_out_of_view_scrolls_the_strip_just_enough_to_show_it() {
+        assert_eq!(scroll_into_view_px(10.0, 40.0, 0.0, 100.0), 0.0, "already in view");
+        assert_eq!(scroll_into_view_px(-30.0, 0.0, 0.0, 100.0), -30.0, "off the left");
+        assert_eq!(scroll_into_view_px(90.0, 130.0, 0.0, 100.0), 30.0, "off the right");
+        assert_eq!(scroll_into_view_px(-10.0, 20.0, 0.0, 100.0), -10.0, "part off the left");
+        assert_eq!(scroll_into_view_px(-10.0, 200.0, 0.0, 100.0), -10.0, "wider than the strip: its left edge");
     }
 
     fn shares(lengths: &[i32]) -> Vec<f64> {
