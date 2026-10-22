@@ -699,6 +699,22 @@ test.describe("the zones of a street", () => {
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
   });
 
+  test("a merge of zones with the same section, made by keyboard, leaves the focus on the strip", async ({ page }) => {
+    const length = await streetLengthM(page);
+    test.skip(length < 15, "the street is too short for three zones");
+    await splitInto(page, 3);
+    await page.locator("#zone-1").click();
+    await page.locator("#zone-merge-prev").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await expect(page.locator("#zone-strip")).toBeFocused();
+    // the last merge takes the commands that need two zones away: the focus is still on the strip
+    await page.locator("#zone-merge-next").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(1);
+    await expect(page.locator("#zone-strip")).toBeFocused();
+  });
+
   test("the zones are in French when the page is", async ({ page }) => {
     await page.locator("#account-btn").click();
     await page.locator('[data-lang="fr-CA"]').click();

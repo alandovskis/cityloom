@@ -54,6 +54,9 @@ fn focus_later(id: &'static str) {
     );
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn focus_later(_id: &'static str) {}
+
 #[component]
 pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
@@ -117,8 +120,9 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
                 aria-disabled=move || no_neighbour(next).then_some("true")
                 aria-describedby=move || no_neighbour(next).then_some(why_id)
                 on:click=move |_| {
-                    if !no_neighbour(next) {
-                        w.begin_merge(next);
+                    if !no_neighbour(next) && w.begin_merge(next) && w.pending_merge().is_none() {
+                        // Merged at once: the button may be gone (one zone left), so the strip keeps the focus.
+                        focus_later("zone-strip");
                     }
                 }
             >

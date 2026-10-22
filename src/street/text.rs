@@ -365,7 +365,7 @@ mod tests {
         assert!(!fits.ok);
         let plain = say_now(&en(), Units::Metres, &fits.label);
         assert_eq!(say_now(&en(), Units::Metres, &check_label(fits)), format!("{plain} in Zone 2"));
-        assert_eq!(say_now(&fr(), Units::Metres, &check_label(fits)), format!("{} dans zone 2", say_now(&fr(), Units::Metres, &fits.label)));
+        assert_eq!(say_now(&fr(), Units::Metres, &check_label(fits)), format!("{}\u{a0}: Zone 2", say_now(&fr(), Units::Metres, &fits.label)));
         let passing = v.checks.iter().find(|c| c.ok).unwrap();
         assert_eq!(check_label(passing), passing.label);
         let single = Editor::new(0).view();
