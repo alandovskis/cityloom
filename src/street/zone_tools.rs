@@ -12,19 +12,8 @@ use super::model::Keep;
 use super::vm::StreetVm;
 use super::watch::SheetWatch;
 use crate::shared::i18n::Args;
-use crate::shared::said::say;
-use crate::shared::units::{Units, parse_number};
-
-/// A length typed in the page's units, as `45`, `4,5` or `4,5 m` (the unit word may follow); None when it is not a number.
-pub fn parse_length_mm(typed: &str, units: Units) -> Option<i32> {
-    let typed = typed.trim();
-    let word = units.word();
-    let number = match typed.len().checked_sub(word.len()) {
-        Some(at) if typed.is_char_boundary(at) && typed[at..].eq_ignore_ascii_case(word) => &typed[..at],
-        _ => typed,
-    };
-    parse_number(number).map(|v| units.mm(v))
-}
+use crate::shared::said::{say, say_now};
+use crate::shared::units::parse_length_mm;
 
 /// Splits at what was typed, or in the middle of the selected zone when the field is empty. False when it is not a
 /// number (said) or the split was refused (said by the view-model).
@@ -71,10 +60,13 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
     let text = move |key: &'static str| w.i18n().tr(key, &Args::new());
     let unit_text = move |key: &'static str| w.i18n().tr(key, &Args::new().str("unit", w.units().word()));
     let selected = move || w.view().zones.selected;
-    let count = move || w.view().zones.zones.len();
+    let several = move || w.view().zones.several;
     let own = move || w.view().zones.zones.get(selected()).is_some_and(|z| z.own);
     let split_why = move || w.view().zones.split.as_ref().map(|s| say(&w.i18n(), w.units(), s));
-    let no_neighbour = move |next: bool| if next { selected() + 1 >= count() } else { selected() == 0 };
+    let no_neighbour = move |next: bool| {
+        let v = w.view();
+        !if next { v.zones.can_merge_next } else { v.zones.can_merge_prev }
+    };
     let no_neighbour_why = move || text("zone-refused-no-neighbour");
 
     let start_value = move || {
@@ -84,20 +76,20 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
     // What the selected zone is called when a person named it; empty for the number it is given otherwise.
     let name_value = move || {
         let v = w.view();
-        v.zones.zones.get(v.zones.selected).filter(|z| z.label.key != "zone-unnamed").map(|z| say(&w.i18n(), w.units(), &z.label)).unwrap_or_default()
+        v.zones.zones.get(v.zones.selected).filter(|z| z.named).map(|z| say(&w.i18n(), w.units(), &z.label)).unwrap_or_default()
     };
+    let name_now = move || {
+        let v = w.view_now();
+        v.zones.zones.get(v.zones.selected).filter(|z| z.named).map(|z| say_now(&w.i18n(), w.units_now(), &z.label)).unwrap_or_default()
+    };
+    // Applies what was typed; the field then shows the name the zone has, so text that was not taken (a refusal, which
+    // is said) is not left looking as if it had been.
     let apply_name = move |input: HtmlInputElement| {
         let typed = input.value();
-        let shown = w
-            .view_now()
-            .zones
-            .zones
-            .get(w.view_now().zones.selected)
-            .filter(|z| z.label.key != "zone-unnamed")
-            .map(|z| say(&w.i18n(), w.units_now(), &z.label));
-        if typed.trim() != shown.unwrap_or_default() {
+        if typed.trim() != name_now() {
             w.name_zone(&typed);
         }
+        input.set_value(&name_now());
     };
 
     // The choice takes the focus when it opens and gives it back to the strip when it closes.
@@ -143,7 +135,7 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
                 (Keep::Neighbour, Some(true)) => Some(v.zones.selected + 1),
                 (Keep::Neighbour, _) => v.zones.selected.checked_sub(1),
             };
-            let zone = at.and_then(|i| v.zones.zones.get(i)).map(|z| say(&w.i18n(), w.units(), &z.label)).unwrap_or_default();
+            let zone = at.and_then(|i| v.zones.zones.get(i)).map(|z| say(&w.i18n(), w.units(), &z.label_mid)).unwrap_or_default();
             w.i18n().tr("st-zone-keep", &Args::new().str("zone", zone))
         };
         view! { <button type="button" id=id on:click=move |_| { w.finish_merge(keep); }>{name}</button> }
@@ -189,7 +181,7 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
                 {move || split_why().map(|why| view! { <p id="zone-split-why" class="zone-why">{why}</p> })}
             </div>
             {move || {
-                (selected() > 0)
+                (several() && selected() > 0)
                     .then(|| {
                         view! {
                             <div class="zone-tool">
@@ -214,7 +206,7 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
                         }
                     })
             }}
-            <div class="zone-tool">{merge_button(false)} {merge_button(true)}</div>
+            {move || several().then(|| view! { <div class="zone-tool">{merge_button(false)} {merge_button(true)}</div> })}
             {move || {
                 w.pending_merge()
                     .map(|_| {
@@ -229,22 +221,29 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
                         }
                     })
             }}
-            <div class="zone-tool">
-                <label for="zone-name">{move || text("st-zone-name")}</label>
-                <input
-                    id="zone-name"
-                    type="text"
-                    autocomplete="off"
-                    prop:value=name_value
-                    on:keydown=move |e| {
-                        if e.key() == "Enter" {
-                            e.prevent_default();
-                            apply_name(event_target::<HtmlInputElement>(&e));
+            {move || {
+                several()
+                    .then(|| {
+                        view! {
+                            <div class="zone-tool">
+                                <label for="zone-name">{move || text("st-zone-name")}</label>
+                                <input
+                                    id="zone-name"
+                                    type="text"
+                                    autocomplete="off"
+                                    prop:value=name_value
+                                    on:keydown=move |e| {
+                                        if e.key() == "Enter" {
+                                            e.prevent_default();
+                                            apply_name(event_target::<HtmlInputElement>(&e));
+                                        }
+                                    }
+                                    on:blur=move |e| apply_name(event_target::<HtmlInputElement>(&e))
+                                />
+                            </div>
                         }
-                    }
-                    on:blur=move |e| apply_name(event_target::<HtmlInputElement>(&e))
-                />
-            </div>
+                    })
+            }}
             {move || {
                 own()
                     .then(|| {

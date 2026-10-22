@@ -1305,6 +1305,32 @@ fn the_commands_are_a_named_group_with_a_labelled_field_for_each_input() {
 }
 
 #[test]
+fn a_street_of_one_zone_offers_split_and_nothing_else() {
+    let s = zoned_street(&[], Some(40_000), Locale::En);
+    let h = tools_html(&s);
+    for id in ["zone-split-at", "zone-split"] {
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    for id in ["zone-name", "zone-start", "zone-merge-prev", "zone-merge-next", "zone-reset", "zone-use"] {
+        assert!(!h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    // Splitting it brings the rest.
+    assert!(s.split_zone(None));
+    let h = tools_html(&s);
+    for id in ["zone-name", "zone-merge-prev", "zone-merge-next"] {
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+}
+
+#[test]
+fn the_choice_names_each_zone_in_the_middle_of_a_french_sentence_in_lower_case() {
+    let s = street_with_own_second_zone(Locale::FrCa);
+    assert!(s.begin_merge(true));
+    let h = tools_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains("Garder la coupe : zone 1") && h.contains("Garder la coupe : zone 2"), "{h}");
+}
+
+#[test]
 fn split_says_why_it_is_unavailable_for_a_street_cut_at_both_ends() {
     let s = zoned_street(&[0, 20_000], None, Locale::En);
     let h = tools_html(&s);
@@ -1363,16 +1389,7 @@ fn reset_and_use_for_the_street_are_offered_only_for_a_zone_with_its_own_section
 
 #[test]
 fn the_fields_take_metres_in_the_pages_units_and_say_a_bad_number() {
-    use crate::shared::units::Units;
-    use crate::street::zone_tools::{commit_split, commit_start, parse_length_mm};
-    assert_eq!(parse_length_mm("45", Units::Metres), Some(45_000));
-    assert_eq!(parse_length_mm("4,5 m", Units::Metres), Some(4_500));
-    assert_eq!(parse_length_mm(" 4.5m ", Units::Metres), Some(4_500));
-    assert_eq!(parse_length_mm("10 ft", Units::Feet), Some(3_048));
-    assert_eq!(parse_length_mm("abc", Units::Metres), None);
-    assert_eq!(parse_length_mm("m", Units::Metres), None);
-    assert_eq!(parse_length_mm("", Units::Metres), None);
-
+    use crate::street::zone_tools::{commit_split, commit_start};
     // In French: the comma and the unit word are both read.
     let (ports, said, _) = crate::shared::ports::test_ports();
     let street = crate::street::model::zoned(crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right), &[0, 20_000], 40_000);

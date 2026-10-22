@@ -155,9 +155,33 @@ pub fn parse_number(text: &str) -> Option<f64> {
     cleaned.replace(',', ".").parse::<f64>().ok().filter(|v| v.is_finite())
 }
 
+/// A length typed in the page's units, as `45`, `4,5` or `4,5 m` (the unit word may follow), in millimetres; None
+/// when it is not a number.
+pub fn parse_length_mm(typed: &str, units: Units) -> Option<i32> {
+    let typed = typed.trim();
+    let word = units.word();
+    let number = match typed.len().checked_sub(word.len()) {
+        Some(at) if typed.is_char_boundary(at) && typed[at..].eq_ignore_ascii_case(word) => &typed[..at],
+        _ => typed,
+    };
+    parse_number(number).map(|v| units.mm(v))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_typed_length_is_read_in_the_pages_units_with_or_without_the_unit_word() {
+        assert_eq!(parse_length_mm("45", Units::Metres), Some(45_000));
+        assert_eq!(parse_length_mm("4,5 m", Units::Metres), Some(4_500));
+        assert_eq!(parse_length_mm(" 4.5M ", Units::Metres), Some(4_500));
+        assert_eq!(parse_length_mm("10 ft", Units::Feet), Some(3_048));
+        assert_eq!(parse_length_mm("abc", Units::Metres), None);
+        assert_eq!(parse_length_mm("m", Units::Metres), None);
+        assert_eq!(parse_length_mm("", Units::Metres), None);
+        assert_eq!(parse_length_mm("é", Units::Feet), None, "a multi-byte character cannot split the word");
+    }
 
     #[test]
     fn french_writes_a_decimal_comma_and_a_space_before_the_unit() {
