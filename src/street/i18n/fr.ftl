@@ -333,33 +333,33 @@ check-detail-no-edges-pedestrian = Pas de chaussée, donc pas de trottoir exigé
 
 # Zones (src/street/model/zones.rs) : ce que le modèle dit avoir fait aux zones d’une rue, et pourquoi il refuse.
 zone-unnamed = Zone { $n }
+zone-unnamed-mid = zone { $n }
 rev-zone-split = Division de la rue à { $at }
-rev-zone-merge = Fusion des zones, en gardant { $kept }
-rev-zone-move = Déplacement du début de { $zone } à { $to }
+rev-zone-merge = Fusion des zones; coupe gardée : { $kept }
+rev-zone-move = Début de zone déplacé à { $to } : { $zone }
 rev-zone-name = Nom de la zone : { $zone }
-rev-zone-unname = Effacement du nom de { $zone }
-rev-zone-reset = Retour de { $zone } à la coupe de la rue
-rev-zone-use = { $zone } devient la coupe de toute la rue
+rev-zone-unname = Nom effacé : { $zone }
+rev-zone-reset = Retour à la coupe de la rue : { $zone }
+rev-zone-use = Coupe appliquée à toute la rue : { $zone }
 zone-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer de zones.
 zone-refused-elsewhere = Les zones de cette rue ont été tracées sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
 zone-refused-too-short = Une zone doit mesurer au moins { $min }.
 zone-refused-outside = Cette position est hors de la rue.
 zone-refused-no-neighbour = Il n’y a pas de zone de ce côté avec laquelle fusionner.
 zone-refused-no-boundary = La première zone commence à l’extrémité de la rue : elle n’a pas de limite à déplacer.
-zone-refused-cut-off = Une partie de cette rue est coupée par le bord de la carte.
 zone-refused-dragging = Terminez le glissement avant de modifier les zones.
 zones-elsewhere = Les zones ont été tracées sur cette rue lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
-check-zone-in = { $check } : { $zone }
+check-zone-in = { $check } dans { $zone }
 zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $section ->
-        [own] sa propre section
-       *[base] la section de base
+        [own] sa propre coupe
+       *[base] la coupe de base
     }, { $n } sur { $total }
 zone-cut-off = Coupée par le bord de la carte
 
 # La bande des zones (src/street/strip.rs).
 st-zones-heading = Zones le long de la rue
 st-zones-strip-label = Zones de la rue, du début à la fin
-st-zones-from = Mesures prises depuis { $end }
+st-zones-from = Origine des mesures : { $end }
 st-zones-end-first = la première extrémité
 st-zones-end-second = la seconde extrémité
 
@@ -371,9 +371,9 @@ st-zone-split-at = Diviser à ({ $unit })
 st-zone-start = Début de cette zone ({ $unit })
 st-zone-merge-prev = Fusionner avec la zone précédente
 st-zone-merge-next = Fusionner avec la zone suivante
-st-zone-merge-choice = Quelle section garder
-st-zone-keep = Garder la section de { $zone }
+st-zone-merge-choice = Quelle coupe garder
+st-zone-keep = Garder la coupe : { $zone }
 st-zone-keep-cancel = Annuler la fusion
 st-zone-name = Nom de la zone
-st-zone-reset = Revenir à la section de la rue
-st-zone-use = Utiliser cette section pour toute la rue
+st-zone-reset = Revenir à la coupe de la rue
+st-zone-use = Utiliser cette coupe pour toute la rue

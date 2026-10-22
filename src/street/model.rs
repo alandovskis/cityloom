@@ -16,7 +16,7 @@ mod fixtures;
 #[cfg(test)]
 pub use fixtures::{SAMPLES, pedestrianised, zoned};
 mod zones;
-pub use zones::{Elsewhere, Keep, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label};
+pub use zones::{Elsewhere, Keep, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -1337,7 +1337,7 @@ impl Editor {
             for (check, in_zone) in street.iter_mut().zip(self.section_checks(content.section(z))) {
                 if !in_zone.ok && check.zone.is_none() {
                     check.ok = false;
-                    check.zone = Some(zone_label(zone, z + 1));
+                    check.zone = Some(zone_label_mid(zone, z + 1));
                     check.detail = in_zone.detail;
                 }
             }
@@ -3009,7 +3009,7 @@ mod tests {
         let fits = |e: &Editor| e.view().checks.into_iter().find(|c| c.id == "fits").unwrap();
         let (street, zone0) = (fits(&e), e.view().delta_mm);
         assert!(!street.ok, "zone 1 does not fit, so the street does not");
-        assert_eq!(street.zone, Some(Said::new("zone-unnamed").with("n", Arg::Num(2))));
+        assert_eq!(street.zone, Some(Said::new("zone-unnamed-mid").with("n", Arg::Num(2))));
         assert!(zone0 <= 0, "the status line is the selected zone's, and zone 0 fits");
         assert!(e.select_zone(1));
         assert!(e.view().delta_mm > 0);
@@ -3039,7 +3039,7 @@ mod tests {
             e.set_width(g.uid, g.bounds().1);
         }
         let fits = e.view().checks.into_iter().find(|c| c.id == "fits").unwrap();
-        assert_eq!(fits.zone, Some(Said::new("zone-unnamed").with("n", Arg::Num(2))));
+        assert_eq!(fits.zone, Some(Said::new("zone-unnamed-mid").with("n", Arg::Num(2))));
     }
 
     #[test]

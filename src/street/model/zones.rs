@@ -146,8 +146,6 @@ pub enum ZoneRefusal {
     NoNeighbour,
     /// The first zone has no start boundary.
     NoBoundary,
-    /// Part of the street is cut off at the map's box.
-    CutOff,
     /// A drag is under way: nothing but the drag may change the zones.
     Dragging,
 }
@@ -161,7 +159,6 @@ impl ZoneRefusal {
             ZoneRefusal::OutsideStreet => "zone-refused-outside",
             ZoneRefusal::NoNeighbour => "zone-refused-no-neighbour",
             ZoneRefusal::NoBoundary => "zone-refused-no-boundary",
-            ZoneRefusal::CutOff => "zone-refused-cut-off",
             ZoneRefusal::Dragging => "zone-refused-dragging",
         };
         let said = Said::new(key);
@@ -179,6 +176,11 @@ pub struct ZonesView {
     pub from_end: ZoneEnd,
     /// Why Split is not available, when it is not.
     pub split: Option<Said>,
+    /// The street has more than one zone: only then are there zones to merge, name or give a section of their own.
+    pub several: bool,
+    /// The selected zone has a zone before it / after it to merge with.
+    pub can_merge_prev: bool,
+    pub can_merge_next: bool,
     /// Set when the zones were drawn on a road of another length or anchored at its other end.
     pub elsewhere: Option<Elsewhere>,
 }
@@ -189,6 +191,10 @@ pub struct ZoneView {
     pub from_mm: i32,
     pub to_mm: i32,
     pub label: Said,
+    /// The same as it reads in the middle of a sentence.
+    pub label_mid: Said,
+    /// The zone has a name a person gave it (else `label` is "Zone n").
+    pub named: bool,
     /// The zone has a section of its own.
     pub own: bool,
     /// The zone starts beyond the loaded end of the street.
@@ -215,6 +221,14 @@ pub fn zone_label(zone: &Zone, n: usize) -> Said {
     match &zone.name {
         Some(name) => named_said(name),
         None => Said::new("zone-unnamed").with("n", Arg::Num(n as i64)),
+    }
+}
+
+/// The same where it stands in the middle of a sentence ("Zone 2" is "zone 2" in French); a name stays as it was typed.
+pub fn zone_label_mid(zone: &Zone, n: usize) -> Said {
+    match &zone.name {
+        Some(name) => named_said(name),
+        None => Said::new("zone-unnamed-mid").with("n", Arg::Num(n as i64)),
     }
 }
 
@@ -266,8 +280,28 @@ impl Editor {
             let (from_mm, to_mm) = content.span(z, length_mm);
             let ok = self.section_passes(content.section(z));
             match content.zones.get(z) {
-                Some(g) => ZoneView { index: z, from_mm, to_mm, label: zone_label(g, z + 1), own: g.segments.is_some(), cut_off: self.is_cut_off(z), ok },
-                None => ZoneView { index: z, from_mm, to_mm, label: Said::new("zone-unnamed").with("n", Arg::Num(1)), own: false, cut_off: false, ok },
+                Some(g) => ZoneView {
+                    index: z,
+                    from_mm,
+                    to_mm,
+                    label: zone_label(g, z + 1),
+                    label_mid: zone_label_mid(g, z + 1),
+                    named: g.name.is_some(),
+                    own: g.segments.is_some(),
+                    cut_off: self.is_cut_off(z),
+                    ok,
+                },
+                None => ZoneView {
+                    index: z,
+                    from_mm,
+                    to_mm,
+                    label: Said::new("zone-unnamed").with("n", Arg::Num(1)),
+                    label_mid: Said::new("zone-unnamed-mid").with("n", Arg::Num(1)),
+                    named: false,
+                    own: false,
+                    cut_off: false,
+                    ok,
+                },
             }
         };
         ZonesView {
@@ -276,15 +310,18 @@ impl Editor {
             length_mm,
             from_end,
             split: self.structure_frame(true).err().map(ZoneRefusal::said),
+            several: content.zones.len() > 1,
+            can_merge_prev: self.merge_neighbour(false).is_some(),
+            can_merge_next: self.merge_neighbour(true).is_some(),
             elsewhere: self.elsewhere(),
         }
     }
 
-    /// The label of zone `z` of the current content, numbered from 1.
+    /// The label of zone `z` of the current content, numbered from 1, as it reads in the middle of a sentence.
     fn label_of(&self, z: usize) -> Said {
         match self.states[self.cursor].content.zones.get(z) {
-            Some(zone) => zone_label(zone, z + 1),
-            None => Said::new("zone-unnamed").with("n", Arg::Num(1)),
+            Some(zone) => zone_label_mid(zone, z + 1),
+            None => Said::new("zone-unnamed-mid").with("n", Arg::Num(1)),
         }
     }
 
@@ -341,8 +378,8 @@ impl Editor {
         let n = self.merge_neighbour(next).ok_or(ZoneRefusal::NoNeighbour)?;
         let (lo, hi) = (self.zone.min(n), self.zone.max(n));
         let kept = if keep == Keep::Selected { self.zone } else { n };
-        // The merged zone is numbered as the earlier of the two was.
-        let label = Said::new("rev-zone-merge").with("kept", Arg::Said(Box::new(zone_label(&self.states[self.cursor].content.zones[kept], lo + 1))));
+        // The choice is said by the number the kept zone had before the merge, which is the one the person pressed.
+        let label = Said::new("rev-zone-merge").with("kept", Arg::Said(Box::new(zone_label_mid(&self.states[self.cursor].content.zones[kept], kept + 1))));
         self.edit_content(label, |c| {
             let survivor = c.zones[kept].clone();
             c.zones[lo] = Zone { from_mm: c.zones[lo].from_mm, ..survivor };
@@ -412,7 +449,7 @@ impl Editor {
             return false;
         }
         let label = Said::new(if name.is_some() { "rev-zone-name" } else { "rev-zone-unname" })
-            .with("zone", Arg::Said(Box::new(zone_label(&Zone { from_mm: 0, segments: None, name: name.clone() }, z + 1))));
+            .with("zone", Arg::Said(Box::new(zone_label_mid(&Zone { from_mm: 0, segments: None, name: name.clone() }, z + 1))));
         self.edit_content(label, |c| {
             c.zones[z].name = name;
             true
@@ -768,9 +805,8 @@ mod tests {
     #[test]
     fn every_refusal_has_its_own_message_key() {
         use ZoneRefusal::*;
-        let keys: Vec<_> = [NoAnchor, Elsewhere, TooShort, OutsideStreet, NoNeighbour, NoBoundary, CutOff, Dragging].map(|r| r.said().key).to_vec();
-        let expected =
-            ["no-anchor", "elsewhere", "too-short", "outside", "no-neighbour", "no-boundary", "cut-off", "dragging"].map(|k| format!("zone-refused-{k}"));
+        let keys: Vec<_> = [NoAnchor, Elsewhere, TooShort, OutsideStreet, NoNeighbour, NoBoundary, Dragging].map(|r| r.said().key).to_vec();
+        let expected = ["no-anchor", "elsewhere", "too-short", "outside", "no-neighbour", "no-boundary", "dragging"].map(|k| format!("zone-refused-{k}"));
         assert_eq!(keys, expected);
         assert_eq!(TooShort.said(), Said::new("zone-refused-too-short").with("min", Arg::Length(MIN_ZONE_MM)));
     }
@@ -1043,5 +1079,70 @@ mod tests {
         while e.redo() {
             check(&e, "redo");
         }
+    }
+
+    #[test]
+    fn a_merge_names_the_zone_it_keeps_by_the_number_it_had_before_the_merge() {
+        let mut e = editor(&[0, 20_000]);
+        assert!(e.select_zone(1));
+        make_own(&mut e);
+        assert!(e.select_zone(0));
+        e.merge_zone(true, Keep::Neighbour).unwrap();
+        let kept = Said::new("zone-unnamed-mid").with("n", Arg::Num(2));
+        assert_eq!(e.view().revisions.last().unwrap().label, Said::new("rev-zone-merge").with("kept", Arg::Said(Box::new(kept))));
+
+        let mut e = editor(&[0, 20_000]);
+        e.merge_zone(true, Keep::Selected).unwrap();
+        let kept = Said::new("zone-unnamed-mid").with("n", Arg::Num(1));
+        assert_eq!(e.view().revisions.last().unwrap().label, Said::new("rev-zone-merge").with("kept", Arg::Said(Box::new(kept))));
+    }
+
+    #[test]
+    fn the_view_says_which_neighbours_the_selected_zone_has_and_which_zones_are_named() {
+        let mut e = editor(&[]);
+        let z = e.view().zones;
+        assert!(!z.several && !z.can_merge_prev && !z.can_merge_next && !z.zones[0].named);
+        e.split_zone(None).unwrap();
+        e.split_zone(None).unwrap();
+        assert!(e.select_zone(0));
+        let z = e.view().zones;
+        assert!(z.several && !z.can_merge_prev && z.can_merge_next);
+        assert!(e.select_zone(1));
+        assert!(e.name_zone(Some("Market")));
+        let z = e.view().zones;
+        assert!(z.can_merge_prev && z.can_merge_next);
+        assert_eq!(z.zones.iter().map(|g| g.named).collect::<Vec<_>>(), [false, true, false]);
+        assert!(e.select_zone(2));
+        let z = e.view().zones;
+        assert!(z.can_merge_prev && !z.can_merge_next);
+    }
+
+    #[test]
+    fn a_change_of_side_mirrors_every_zones_own_section_as_well_as_the_base_in_one_revision() {
+        let dirs = |segs: &[Segment]| segs.iter().map(|s| s.direction).collect::<Vec<_>>();
+        let mut e = editor(&[0, 20_000, 40_000]);
+        assert!(e.select_zone(1));
+        make_own(&mut e);
+        assert!(e.select_zone(2));
+        make_own(&mut e);
+        let before = e.snapshot();
+        assert!(before.segments.iter().any(|s| s.direction.is_some()));
+        let revs = revisions(&e);
+        let uk = crate::shared::catalogue::REGIONS.iter().position(|r| r.id == "united-kingdom").unwrap();
+        assert!(e.set_region(uk));
+        assert_eq!(revisions(&e), revs + 1);
+        let after = e.snapshot();
+        let flip = |d: &Option<usize>| d.map(|d| 1 - d);
+        let mirrored = |a: &[Segment], b: &[Segment]| {
+            assert_eq!(dirs(b), dirs(a).iter().map(flip).collect::<Vec<_>>());
+        };
+        mirrored(&before.segments, &after.segments);
+        for z in [1, 2] {
+            mirrored(before.zones[z].segments.as_ref().unwrap(), after.zones[z].segments.as_ref().unwrap());
+        }
+        assert!(after.zones[0].segments.is_none());
+        assert!(e.undo());
+        let undone = e.snapshot();
+        assert_eq!((undone.segments, undone.zones), (before.segments, before.zones), "one undo puts every section back");
     }
 }

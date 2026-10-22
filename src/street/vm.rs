@@ -1198,7 +1198,7 @@ mod tests {
         assert_eq!(r.said.take().last().unwrap(), "Market, 10.0 m to 30.0 m, 20.0 m long, its own section, 2 of 3");
         r.vm.i18n().set(Locale::FrCa);
         r.vm.select_zone(2);
-        assert_eq!(r.said.take(), ["Zone 3, de 30,0\u{a0}m à 40,0\u{a0}m, 10,0\u{a0}m de long, la section de base, 3 sur 3"]);
+        assert_eq!(r.said.take(), ["Zone 3, de 30,0\u{a0}m à 40,0\u{a0}m, 10,0\u{a0}m de long, la coupe de base, 3 sur 3"]);
     }
 
     #[test]
@@ -1235,7 +1235,7 @@ mod tests {
         assert!(r.vm.finish_merge(Keep::Neighbour));
         assert_eq!(r.vm.pending_merge_now(), None);
         let said = r.said.take();
-        assert!(said[0].starts_with("Merge zones, keeping Zone 1. "), "{said:?}");
+        assert!(said[0].starts_with("Merge zones, keeping Zone 2. "), "{said:?}");
         assert_eq!(r.vm.view_now().zones.zones.len(), 1);
         assert!(!r.vm.finish_merge(Keep::Selected), "nothing is pending");
     }

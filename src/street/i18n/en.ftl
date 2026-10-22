@@ -333,6 +333,7 @@ check-detail-no-edges-pedestrian = No roadway, so no sidewalk is asked for
 
 # Zones (src/street/model/zones.rs): what the model says it did to a street's zones, and why it refused.
 zone-unnamed = Zone { $n }
+zone-unnamed-mid = Zone { $n }
 rev-zone-split = Split the street at { $at }
 rev-zone-merge = Merge zones, keeping { $kept }
 rev-zone-move = Move the start of { $zone } to { $to }
@@ -346,7 +347,6 @@ zone-refused-too-short = A zone must be at least { $min } long.
 zone-refused-outside = That position is outside the street.
 zone-refused-no-neighbour = There is no zone on that side to merge with.
 zone-refused-no-boundary = The first zone starts at the end of the street, so it has no boundary to move.
-zone-refused-cut-off = Part of this street is cut off by the edge of the map.
 zone-refused-dragging = Finish the drag before changing the zones.
 zones-elsewhere = The zones were drawn on this street when it was { $drawn } long; here it is { $loaded }.
 check-zone-in = { $check } in { $zone }

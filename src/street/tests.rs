@@ -1228,7 +1228,7 @@ fn the_strip_follows_the_language() {
     // The language puts no-break spaces before units; the words are the same.
     let h = strip_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
     assert!(h.contains(">Zones le long de la rue</h2>"), "{h}");
-    assert!(h.contains("aria-label=\"Zone 2, de 10,0 m à 30,0 m, 20,0 m de long, la section de base, 2 sur 3\""), "{h}");
+    assert!(h.contains("aria-label=\"Zone 2, de 10,0 m à 30,0 m, 20,0 m de long, la coupe de base, 2 sur 3\""), "{h}");
 }
 
 #[test]

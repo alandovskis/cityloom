@@ -20,15 +20,6 @@ const DRAG_START_PX: f64 = 4.0;
 /// No zone's cell is narrower than this share of the strip, so a short zone of a long street is still a target.
 const MIN_SHARE: f64 = 0.06;
 
-/// A position along the street from a pointer position on the strip, snapped to `SNAP_MM` and kept within the street.
-pub fn boundary_mm(x_px: f64, strip_px: f64, length_mm: i32) -> i32 {
-    if strip_px <= 0.0 || length_mm <= 0 {
-        return 0;
-    }
-    let mm = (x_px / strip_px * length_mm as f64).round().clamp(0.0, length_mm as f64) as i32;
-    snap(mm).min(length_mm)
-}
-
 /// The two cells a handle separates, as measured on the screen when a press began.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PairSpan {
@@ -178,7 +169,7 @@ fn zone_cell(
     }
 }
 
-/// The zones of the street along a bar, between the title card and the drawing: one WAI-ARIA listbox and one tab
+/// The zones of the street along a bar, under the drawing: one WAI-ARIA listbox and one tab
 /// stop, the arrow keys choosing a zone and Alt with them moving its start. Each cell is at least 24 px wide
 /// (WCAG 2.5.8); when they do not fit the strip scrolls inside itself, never the page. The handles between the
 /// cells are for the pointer alone (`aria-hidden`); the keys do the same.
@@ -302,17 +293,17 @@ mod tests {
     use crate::shared::said::Said;
 
     fn zone(index: usize, from_mm: i32, to_mm: i32) -> ZoneView {
-        ZoneView { index, from_mm, to_mm, label: Said::new("zone-unnamed"), own: false, cut_off: false, ok: true }
-    }
-
-    #[test]
-    fn a_pointer_position_is_a_position_along_the_street_snapped_and_clamped() {
-        assert_eq!(boundary_mm(0.0, 600.0, 60_000), 0);
-        assert_eq!(boundary_mm(300.0, 600.0, 60_000), 30_000);
-        assert_eq!(boundary_mm(640.0, 600.0, 60_000), 60_000);
-        assert_eq!(boundary_mm(-20.0, 600.0, 60_000), 0);
-        assert_eq!(boundary_mm(301.2, 600.0, 60_000), 30_100);
-        assert_eq!(boundary_mm(10.0, 0.0, 60_000), 0, "a strip with no width");
+        ZoneView {
+            index,
+            from_mm,
+            to_mm,
+            label: Said::new("zone-unnamed"),
+            label_mid: Said::new("zone-unnamed-mid"),
+            named: false,
+            own: false,
+            cut_off: false,
+            ok: true,
+        }
     }
 
     fn shares(lengths: &[i32]) -> Vec<f64> {

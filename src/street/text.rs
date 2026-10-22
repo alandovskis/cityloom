@@ -331,13 +331,27 @@ mod tests {
         assert!(e.select_zone(1));
         let v = e.view();
         assert_eq!(zone_selection_text(&v, &en(), Units::Metres), "Zone 2, 10.0 m to 30.0 m, 20.0 m long, the base section, 2 of 3");
-        assert_eq!(zone_selection_text(&v, &fr(), Units::Metres), "Zone 2, de 10,0\u{a0}m à 30,0\u{a0}m, 20,0\u{a0}m de long, la section de base, 2 sur 3");
+        assert_eq!(zone_selection_text(&v, &fr(), Units::Metres), "Zone 2, de 10,0\u{a0}m à 30,0\u{a0}m, 20,0\u{a0}m de long, la coupe de base, 2 sur 3");
         assert_eq!(zone_refused(&en(), Units::Metres, ZoneRefusal::TooShort), "A zone must be at least 5.0 m long.");
         assert_eq!(zone_refused(&fr(), Units::Metres, ZoneRefusal::TooShort), "Une zone doit mesurer au moins 5,0\u{a0}m.");
         assert_eq!(zone_refused(&fr(), Units::Feet, ZoneRefusal::NoNeighbour), "Il n’y a pas de zone de ce côté avec laquelle fusionner.");
         assert!(e.name_zone(Some("Market")));
         let v = e.view();
         assert_eq!(zone_selection_text(&v, &en(), Units::Metres), "Market, 10.0 m to 30.0 m, 20.0 m long, the base section, 2 of 3");
+    }
+
+    #[test]
+    fn a_merge_is_said_in_both_languages_by_the_zone_whose_section_it_kept() {
+        use crate::street::model::Keep;
+        let mut e = zoned_editor();
+        let uid = e.view().segments[0].uid;
+        assert!(e.select_zone(1));
+        assert!(e.set_width(uid, e.view().segments[0].width_mm + 100));
+        assert!(e.select_zone(0));
+        assert!(e.merge_zone(true, Keep::Neighbour).is_ok());
+        let label = e.view().revisions.last().unwrap().label.clone();
+        assert_eq!(say_now(&en(), Units::Metres, &label), "Merge zones, keeping Zone 2");
+        assert_eq!(say_now(&fr(), Units::Metres, &label), "Fusion des zones; coupe gardée\u{a0}: zone 2");
     }
 
     #[test]
@@ -351,7 +365,7 @@ mod tests {
         assert!(!fits.ok);
         let plain = say_now(&en(), Units::Metres, &fits.label);
         assert_eq!(say_now(&en(), Units::Metres, &check_label(fits)), format!("{plain} in Zone 2"));
-        assert_eq!(say_now(&fr(), Units::Metres, &check_label(fits)), format!("{}\u{a0}: Zone 2", say_now(&fr(), Units::Metres, &fits.label)));
+        assert_eq!(say_now(&fr(), Units::Metres, &check_label(fits)), format!("{} dans zone 2", say_now(&fr(), Units::Metres, &fits.label)));
         let passing = v.checks.iter().find(|c| c.ok).unwrap();
         assert_eq!(check_label(passing), passing.label);
         let single = Editor::new(0).view();
