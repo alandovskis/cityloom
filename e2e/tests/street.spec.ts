@@ -654,6 +654,26 @@ test.describe("the zones of a street", () => {
     expect(await page.locator("#drawing").getAttribute("aria-label")).toBe(edited);
   });
 
+  test("shows_the_selected_zone_in_2_5d", async ({ page }) => {
+    await page.locator("#zone-split").click();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await selectFirstPiece(page);
+    await page.keyboard.press("-"); // the second zone gets a section of its own
+    await page.locator("#view-iso").click();
+    await expect(page.locator("#drawing.iso")).toBeAttached();
+    const label = () => page.locator("#drawing").getAttribute("aria-label");
+    const markup = () => page.locator("#drawing").innerHTML();
+    expect(await label()).toMatch(/in 2\.5D, Zone 2, /);
+    const second = await markup();
+    await page.locator("#zone-0").click();
+    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /in 2\.5D, Zone 1, /);
+    const first = await markup();
+    expect(first, "the other zone's pieces are drawn").not.toBe(second);
+    await page.locator("#zone-1").click();
+    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /in 2\.5D, Zone 2, /);
+    expect(await markup(), "zone 2's own pieces again").not.toBe(first);
+  });
+
   test("the merge choice takes the focus and gives it back to the strip", async ({ page }) => {
     const length = await streetLengthM(page);
     test.skip(length < 15, "the street is too short for three zones");

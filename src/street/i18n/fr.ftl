@@ -281,6 +281,10 @@ svg-iso-label = { $name } en 2,5D, sur un tronçon de { $length }. { $count ->
         [one] { $count } élément
        *[other] { $count } éléments
     }.
+svg-iso-label-zone = { $name } en 2,5D, { $zone }, de { $from } à { $to }, sur un tronçon de { $length }. { $count ->
+        [one] { $count } élément
+       *[other] { $count } éléments
+    }.
 
 # Ce que le modèle dit avoir fait, mis en mots par `text::say` (src/street/model.rs) : la liste des modifications et ce qui est annoncé après une modification.
 rev-earlier = Modifications antérieures
