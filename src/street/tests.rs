@@ -1286,11 +1286,11 @@ fn street_with_own_second_zone(locale: Locale) -> Rc<StreetVm> {
 }
 
 #[test]
-fn the_commands_are_a_named_toolbar_with_a_labelled_field_for_each_input() {
+fn the_commands_are_a_named_group_with_a_labelled_field_for_each_input() {
     let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En);
     s.select_zone(1);
     let h = tools_html(&s);
-    assert!(h.contains("role=\"toolbar\"") && h.contains("aria-label=\"Zone commands\""), "{h}");
+    assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Zone commands\"") && !h.contains("toolbar"), "{h}");
     for (id, label) in [("zone-split-at", "Split at (m)"), ("zone-start", "Start of this zone (m)"), ("zone-name", "Zone name")] {
         assert!(h.contains(&format!("<label for=\"{id}\"")) && h.contains(&format!(">{label}</label>")), "{id}: {h}");
         assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");

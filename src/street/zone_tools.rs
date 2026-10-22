@@ -1,6 +1,6 @@
 //! The commands beside the zone strip: split (at a typed distance, else the middle), the selected zone's start,
 //! merge with a neighbour (asking which section to keep when they differ), its name, and the two that act on a zone
-//! with a section of its own. One WAI-ARIA toolbar; every control is a tab stop (the fields take the arrow keys).
+//! with a section of its own. One named group (not a toolbar: it holds text fields, which take the arrow keys); every control is a tab stop.
 
 use std::rc::Rc;
 
@@ -150,7 +150,7 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
     };
 
     view! {
-        <div class="zone-tools" role="toolbar" aria-label=move || text("st-zone-tools")>
+        <div class="zone-tools" role="group" aria-label=move || text("st-zone-tools")>
             <div class="zone-tool">
                 <label for="zone-split-at">{move || unit_text("st-zone-split-at")}</label>
                 <input
