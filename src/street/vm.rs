@@ -212,6 +212,10 @@ impl StreetVm {
     /// Changes the street, tells whatever watches it, and sees that it is kept.
     pub fn edit<R>(&self, f: impl FnOnce(&mut Editor) -> R) -> R {
         let r = self.core.edit(f);
+        // A choice of the section to keep was asked about the zones as they stood: any other change withdraws it.
+        if self.merge.get_untracked().is_some() {
+            self.merge.set(None);
+        }
         if let Some(k) = &self.keeper {
             k.touch();
         }
@@ -426,16 +430,26 @@ impl StreetVm {
         self.ports.announcer.say(&self.i18n.tr_now("zone-bad-number", &Args::new()));
     }
 
+    /// Says so, and is true, when a drag is under way: nothing but the drag may change the zones.
+    fn refuse_while_dragging(&self) -> bool {
+        let refusal = self.core.read(|e| e.structure_blocked()).filter(|r| *r == ZoneRefusal::Dragging);
+        if let Some(refusal) = refusal {
+            self.ports.announcer.say(&text::zone_refused(&self.i18n, self.units_now(), refusal));
+        }
+        refusal.is_some()
+    }
+
+    /// Names the selected zone (blank clears it). False when nothing changed; a refusal is said.
     pub fn name_zone(&self, name: &str) -> bool {
-        self.apply(|e| e.name_zone(Some(name)))
+        !self.refuse_while_dragging() && self.apply(|e| e.name_zone(Some(name)))
     }
 
     pub fn reset_zone(&self) -> bool {
-        self.apply(|e| e.reset_zone())
+        !self.refuse_while_dragging() && self.apply(|e| e.reset_zone())
     }
 
     pub fn use_for_street(&self) -> bool {
-        self.apply(|e| e.use_for_street())
+        !self.refuse_while_dragging() && self.apply(|e| e.use_for_street())
     }
 
     fn say_zone(&self) {
@@ -468,10 +482,11 @@ impl StreetVm {
         if fresh.snapshot() == self.core.read(|e| e.snapshot()) {
             return;
         }
-        fresh.select(self.view_now().selected);
-        // The zone stays selected if it is still there; the frame came with the editor.
+        // The zone stays selected if it is still there (the frame came with the editor); the piece is chosen after
+        // it, since choosing another zone clears the piece.
         let zone = self.core.read(|e| e.zone());
         fresh.select_zone(zone);
+        fresh.select(self.view_now().selected);
         self.merge.set(None);
         let replaced = changes.iter().any(|c| c.id == own && c.origin == Origin::Replaced);
         self.core.edit(|e| *e = fresh);
@@ -1241,6 +1256,54 @@ mod tests {
     }
 
     #[test]
+    fn naming_a_zone_during_a_drag_is_refused_in_words_and_changes_nothing() {
+        let r = sample_rig(&[0, 20_000]);
+        r.vm.select_zone(1);
+        r.said.take();
+        r.vm.begin_boundary_drag();
+        assert!(!r.vm.name_zone("Market"));
+        assert!(!r.vm.reset_zone());
+        assert!(!r.vm.use_for_street());
+        assert_eq!(r.said.take(), ["Finish the drag before changing the zones."; 3]);
+        r.vm.end_boundary_drag(false);
+        assert!(r.vm.name_zone("Market"));
+        // naming it the same again changes nothing and says nothing of refusal
+        r.said.take();
+        assert!(!r.vm.name_zone("Market"));
+        assert!(r.said.take().is_empty());
+    }
+
+    #[test]
+    fn a_pending_merge_choice_does_not_outlive_an_undo_a_redo_a_start_over_or_any_other_edit() {
+        let r = sample_rig(&[0, 20_000]);
+        r.vm.select_zone(1);
+        let uid = first(&r.vm);
+        // two edits, so that after an undo the two zones' sections still differ
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 100)));
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 100)));
+        r.vm.select_zone(0);
+        let ask = |vm: &StreetVm| {
+            assert!(vm.begin_merge(true), "it asks which section to keep");
+            assert_eq!(vm.pending_merge_now(), Some(true));
+        };
+        ask(&r.vm);
+        assert!(r.vm.undo());
+        assert_eq!(r.vm.pending_merge_now(), None, "undo");
+        ask(&r.vm);
+        assert!(r.vm.redo());
+        assert_eq!(r.vm.pending_merge_now(), None, "redo");
+        ask(&r.vm);
+        assert!(r.vm.apply(|e| e.nudge_width(uid, 100)));
+        assert_eq!(r.vm.pending_merge_now(), None, "an edit");
+        ask(&r.vm);
+        r.vm.select(Some(uid));
+        assert_eq!(r.vm.pending_merge_now(), None, "choosing a piece");
+        ask(&r.vm);
+        assert!(r.vm.reset());
+        assert_eq!(r.vm.pending_merge_now(), None, "start over");
+    }
+
+    #[test]
     fn a_merge_that_cannot_happen_is_refused_at_once_instead_of_asking_which_section_to_keep() {
         let street = zoned(Street::sample(0, Side::Right), &[0, 20_000], LENGTH);
         let mut other = street.clone();
@@ -1358,5 +1421,27 @@ mod tests {
         assert!(binding.store.write_street(edge, s));
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert_eq!(r.vm.read(|e| e.zone()), 0);
+    }
+
+    #[test]
+    fn a_sync_reload_keeps_the_selected_piece_of_a_zone_that_is_not_the_first() {
+        use crate::sync::hub;
+        use crate::sync::model::{Change, Origin};
+        hub::reset();
+        let (r, binding) = city_rig();
+        r.vm.watch_sync();
+        let Place::Street(edge) = binding.place else { unreachable!() };
+        assert!(r.vm.split_zone(None));
+        r.vm.select_zone(1);
+        let uid = first(&r.vm);
+        r.vm.select(Some(uid));
+        r.vm.flush();
+        let mut s = binding.store.open().street_editor(edge, 0).unwrap().snapshot();
+        s.segments[0].width_mm -= 100;
+        s.segments[1].width_mm += 100;
+        assert!(binding.store.write_street(edge, s));
+        hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
+        assert_eq!(r.vm.read(|e| e.zone()), 1);
+        assert_eq!(r.vm.view_now().selected, Some(uid));
     }
 }
