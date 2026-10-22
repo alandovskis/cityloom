@@ -1109,17 +1109,36 @@ svg pattern circle {
 .zone-strip-section {
   min-width: 0;
   max-width: 100%;
-  padding: 8px 12px 10px;
+  /* one line on a desktop width: the caption beside the strip (it wraps above it on a narrow window) */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 12px;
+  padding: 4px 12px;
   border-radius: var(--r-card);
   background: var(--panel);
   box-shadow: var(--shadow-soft);
 }
+@media (min-width: 900px) {
+  .zone-caption {
+    /* beside the strip, never taking more than its share: a long street name is cut with an ellipsis (the whole
+       text is the caption's title); on a narrow window the caption sits above the strip and wraps */
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
 .zone-caption {
-  margin: 0 0 6px;
+  margin: 0;
   color: var(--ink-2);
   font-size: 13px;
 }
 .zone-strip {
+  flex: 1 1 14em;
+  min-width: 0;
   display: flex;
   align-items: stretch;
   /* the cells keep 24 px each; when they do not fit the strip scrolls, never the page */
@@ -1182,20 +1201,16 @@ svg pattern circle {
   touch-action: none;
 }
 .zone-notice {
+  flex-basis: 100%;
   margin: 6px 0 0;
   color: var(--ink);
   font-size: 13px;
 }
 .zone-tools {
   display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 8px 16px;
-  margin-top: 8px;
-  padding: 8px 12px;
-  border-radius: var(--r-card);
-  background: var(--panel);
-  box-shadow: var(--shadow-soft);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   min-width: 0;
 }
 .zone-tool {
@@ -1212,7 +1227,7 @@ svg pattern circle {
 .zone-tool input {
   min-height: 32px;
   min-width: 0;
-  width: 9em;
+  flex: 1 1 6em;
 }
 .zone-tools button {
   min-height: 32px;

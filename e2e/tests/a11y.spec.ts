@@ -107,6 +107,8 @@ test("at 320 px a boundary dragged between a floored cell and the rest is droppe
   await page.locator("#zone-split").click();
   await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
   const handle = page.locator(".zone-handle");
+  // the commands are in the left panel, below the strip on a phone: bring the strip back into the window
+  await page.locator("#zone-strip").scrollIntoViewIfNeeded();
   const before = (await handle.boundingBox())!;
   const x = before.x + before.width / 2;
   const y = before.y + before.height / 2;
@@ -119,22 +121,22 @@ test("at 320 px a boundary dragged between a floored cell and the rest is droppe
   expect(Math.abs(centre - (x + 60)), `the handle ends at ${centre}, the pointer at ${x + 60}`).toBeLessThanOrEqual(3);
 });
 
-test("the_zone_strip_is_one_tab_stop_between_the_title_card_and_the_drawing_and_is_named", async ({ page }) => {
+test("the_zone_strip_is_one_tab_stop_under_the_drawing_and_is_named", async ({ page }) => {
   await openStreet(page);
   await expect(page.locator("#zone-strip")).toBeVisible();
   await expect(page.locator("#zone-strip")).not.toHaveAttribute("aria-label", "");
   expect(((await page.locator("#zone-strip").getAttribute("aria-label")) ?? "").trim().length).toBeGreaterThan(0);
-  // In the page's order: the title card, then the strip, then the drawing.
+  // In the page's order: the title card, then the drawing, then the strip under it.
   const order = await page.evaluate(() => {
     const before = (a: Element | null, b: Element | null) =>
       !!a && !!b && !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     const card = document.querySelector(".title-card");
     const strip = document.getElementById("zone-strip");
     const wrap = document.getElementById("wrap");
-    return { cardFirst: before(card, strip), stripFirst: before(strip, wrap) };
+    return { cardFirst: before(card, strip), stripFirst: before(wrap, strip) };
   });
   expect(order).toEqual({ cardFirst: true, stripFirst: true });
-  // Tabbing from the skip link reaches the strip once, and no cell of it, before the drawing.
+  // Tabbing from the skip link reaches the drawing, then the strip once, and no cell of it.
   const seen: string[] = [];
   await page.keyboard.press("Tab");
   await expect(page.locator(".skip-link")).toBeFocused();
@@ -145,9 +147,10 @@ test("the_zone_strip_is_one_tab_stop_between_the_title_card_and_the_drawing_and_
       return a.id || a.className || a.tagName;
     });
     seen.push(String(at));
-    if (at === "wrap") break;
+    if (at === "zone-strip") break;
   }
-  expect(seen.at(-1), "the drawing is reached").toBe("wrap");
+  expect(seen.at(-1), "the strip is reached").toBe("zone-strip");
+  expect(seen.indexOf("wrap"), "the drawing comes first").toBeGreaterThanOrEqual(0);
   expect(seen.filter((id) => id === "zone-strip")).toHaveLength(1);
   expect(seen.filter((id) => /^zone-\d+$/.test(id))).toHaveLength(0);
   expect(seen.indexOf("zone-strip")).toBeGreaterThanOrEqual(0);

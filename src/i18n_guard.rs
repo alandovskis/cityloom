@@ -434,6 +434,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("cityloom-edits", "a storage key: where the edits document is kept"),
     ("cityloom-edits-damaged", "a storage key: where a damaged edits document is copied"),
     ("zones-slot", "the id of the element the zone strip is mounted in"),
+    ("zone-tools-slot", "the id of the element the zone commands are mounted in"),
     ("zone-strip", "the id of an element of the zone commands"),
     ("zone-keep-this", "the id of an element of the zone commands"),
     ("zone-keep-other", "the id of an element of the zone commands"),

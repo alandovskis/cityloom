@@ -150,6 +150,8 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
     };
 
     view! {
+        <section class="insp-sec" aria-labelledby="h-zone-tools">
+        <h3 class="note-h" id="h-zone-tools">{move || text("st-zone-tools")}</h3>
         <div class="zone-tools" role="group" aria-label=move || text("st-zone-tools")>
             <div class="zone-tool">
                 <label for="zone-split-at">{move || unit_text("st-zone-split-at")}</label>
@@ -255,5 +257,6 @@ pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
                     })
             }}
         </div>
+        </section>
     }
 }

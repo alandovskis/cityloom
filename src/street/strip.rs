@@ -278,7 +278,7 @@ pub fn ZoneStrip(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoView 
     view! {
         <section class="zone-strip-section" aria-labelledby="h-zones">
             <h2 id="h-zones" class="sr-only">{heading}</h2>
-            <p class="zone-caption">{from}</p>
+            <p class="zone-caption" title=from>{from}</p>
             <div
                 id="zone-strip"
                 class="zone-strip"

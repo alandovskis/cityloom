@@ -561,10 +561,21 @@ test.describe("the zones of a street", () => {
     await expect(page.locator("#zone-strip")).toBeVisible();
   });
 
+  test("the zone strip is one line, at most 48 px, and the commands sit in the left panel", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const slot = await page.locator("#zones-slot").evaluate((e) => {
+      const kids = [...e.children].map((c) => c.getBoundingClientRect());
+      return Math.max(...kids.map((r) => r.bottom)) - Math.min(...kids.map((r) => r.top));
+    });
+    expect(slot).toBeLessThanOrEqual(48);
+    await expect(page.locator("#zone-split")).toBeVisible();
+    expect(await page.locator("#zone-split").evaluate((e) => !!e.closest("#details-panel"))).toBe(true);
+    expect(await page.locator("#zones-slot #zone-split").count()).toBe(0);
+  });
+
   test("splits a street by keyboard and moves the boundary with Alt and the arrows", async ({ page }) => {
     const url = page.url();
-    await page.locator("#zone-strip").focus();
-    await page.keyboard.press("Tab"); // the split distance
+    await page.locator("#zone-split-at").focus(); // the commands are in the left panel
     await page.keyboard.press("Tab"); // Split
     await expect(page.locator("#zone-split")).toBeFocused();
     await page.keyboard.press("Enter");
