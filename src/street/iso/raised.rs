@@ -8,7 +8,7 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::esc;
 use crate::shared::iso::ground::{fine_patterns, joints};
 use crate::shared::iso::shading::shade_filters;
-use crate::street::model::View;
+use crate::street::model::SegView;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
 use super::joints::path as joint_path;
@@ -113,8 +113,8 @@ fn face(out: &mut String, what: Face, kind: Option<&str>, hatch: &str, pts: &str
 }
 
 /// How high the piece next to `i` on its right (`right`) or its left is drawn, or the ground when there is none.
-pub(super) fn beside(v: &View, i: usize, right: bool) -> f64 {
-    let n = if right { v.segments.get(i + 1) } else { i.checked_sub(1).and_then(|j| v.segments.get(j)) };
+pub(super) fn beside(segs: &[SegView], i: usize, right: bool) -> f64 {
+    let n = if right { segs.get(i + 1) } else { i.checked_sub(1).and_then(|j| segs.get(j)) };
     n.map_or(0.0, |n| drawn_mm(height_mm(KINDS[n.kind].id)))
 }
 
@@ -174,15 +174,15 @@ fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h:
 
 /// The piece at `i` as a strip along the stretch: its top, and where it stands above the ground its
 /// front (the cut at the near end) and the side face the eye sees, where the piece beside it is lower.
-pub(super) fn slab(out: &mut String, p: &Projection, v: &View, i: usize) {
-    let s = &v.segments[i];
+pub(super) fn slab(out: &mut String, p: &Projection, segs: &[SegView], i: usize) {
+    let s = &segs[i];
     let id = KINDS[s.kind].id;
     let (x0, x1, h, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, drawn_mm(height_mm(id)), STRETCH_MM);
     let hatch = format!("h-{id}");
     if h > 0.0 {
         face(out, Face::Front, Some(id), &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, h, 0.0), (x0, h, 0.0)]));
         if let Some(right) = inner_face(p, x0, x1) {
-            let (x, low) = (if right { x1 } else { x0 }, beside(v, i, right));
+            let (x, low) = (if right { x1 } else { x0 }, beside(segs, i, right));
             if low < h {
                 face(out, Face::Side, Some(id), &hatch, &points(p, &[(x, low, 0.0), (x, low, l), (x, h, l), (x, h, 0.0)]));
             }
@@ -200,8 +200,8 @@ fn curb_span(s: &crate::street::model::SegView, c: &str, right: bool) -> (f64, f
 
 /// The curb of the piece at `i` along one edge (`right`). As high as the piece, it is a stripe on its
 /// top; higher (a bike lane's, a boarding island), it is a block with its own front, side and top.
-pub(super) fn curb(out: &mut String, p: &Projection, v: &View, i: usize, right: bool) {
-    let s = &v.segments[i];
+pub(super) fn curb(out: &mut String, p: &Projection, segs: &[SegView], i: usize, right: bool) {
+    let s = &segs[i];
     let Some(c) = s.curb else { return };
     let id = KINDS[s.kind].id;
     let (h, l) = (drawn_mm(height_mm(id)), STRETCH_MM);
@@ -212,7 +212,7 @@ pub(super) fn curb(out: &mut String, p: &Projection, v: &View, i: usize, right: 
         face(out, Face::Front, None, &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, top, 0.0), (x0, top, 0.0)]));
         if let Some(face_right) = inner_face(p, x0, x1) {
             // A block's face on the piece's own side stands on the piece; its other face stands on what is beside it.
-            let (x, low) = (if face_right { x1 } else { x0 }, if face_right == right { beside(v, i, right) } else { h });
+            let (x, low) = (if face_right { x1 } else { x0 }, if face_right == right { beside(segs, i, right) } else { h });
             face(out, Face::Side, None, &hatch, &points(p, &[(x, low, 0.0), (x, low, l), (x, top, l), (x, top, 0.0)]));
         }
     }
@@ -224,9 +224,9 @@ pub(super) type Strip = (f64, usize, Option<bool>);
 
 /// The box a strip fills, for ordering: its across range (a curb's, for a curb), from the ground to its top, along the
 /// whole stretch.
-pub(super) fn strip_box(v: &View, strip: Strip) -> Bx {
+pub(super) fn strip_box(segs: &[SegView], strip: Strip) -> Bx {
     let (top, i, edge) = strip;
-    let s = &v.segments[i];
+    let s = &segs[i];
     let x = match (edge, s.curb) {
         (Some(right), Some(c)) => curb_span(s, c, right),
         _ => (s.x_mm as f64, (s.x_mm + s.width_mm) as f64),
@@ -235,9 +235,9 @@ pub(super) fn strip_box(v: &View, strip: Strip) -> Bx {
 }
 
 /// How far a strip is from the eye across the street, in millimetres: from its nearest edge, nothing for one the eye is over.
-fn across_eye(v: &View, p: &Projection, strip: Strip) -> f64 {
+fn across_eye(segs: &[SegView], p: &Projection, strip: Strip) -> f64 {
     let (_, i, edge) = strip;
-    let s = &v.segments[i];
+    let s = &segs[i];
     let (x0, x1) = match (edge, s.curb) {
         (Some(right), Some(c)) => curb_span(s, c, right),
         _ => (s.x_mm as f64, (s.x_mm + s.width_mm) as f64),
@@ -250,41 +250,41 @@ fn across_eye(v: &View, p: &Projection, strip: Strip) -> f64 {
 /// first among those as far. The eye is over the middle of the street and every strip runs the whole stretch, so a strip
 /// nearer the middle stands in front of the ones beyond it. This is the order the roadway's flat pieces are painted in
 /// and the order `order::paint_order` keeps among the raised strips, which it interleaves with the solids.
-pub(super) fn strips(v: &View, p: &Projection) -> Vec<Strip> {
+pub(super) fn strips(segs: &[SegView], p: &Projection) -> Vec<Strip> {
     let mut strips: Vec<Strip> = Vec::new();
-    for (i, s) in v.segments.iter().enumerate() {
+    for (i, s) in segs.iter().enumerate() {
         let id = KINDS[s.kind].id;
         strips.push((drawn_mm(height_mm(id)), i, None));
         if let Some(c) = s.curb {
-            for right in curb_edges(v, i) {
+            for right in curb_edges(segs, i) {
                 strips.push((curb_top_mm(c, id), i, Some(right)));
             }
         }
     }
     strips.sort_by(|a, b| {
-        across_eye(v, p, *b).total_cmp(&across_eye(v, p, *a)).then(a.0.total_cmp(&b.0)).then(a.1.cmp(&b.1)).then(a.2.is_some().cmp(&b.2.is_some()))
+        across_eye(segs, p, *b).total_cmp(&across_eye(segs, p, *a)).then(a.0.total_cmp(&b.0)).then(a.1.cmp(&b.1)).then(a.2.is_some().cmp(&b.2.is_some()))
     });
     strips
 }
 
 /// A strip as its own group, with the piece's name for hovering: its slab, or one of its curbs.
-pub(super) fn piece(out: &mut String, p: &Projection, v: &View, i18n: &I18n, strip: Strip) {
+pub(super) fn piece(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I18n, strip: Strip) {
     let (_, i, edge) = strip;
-    let s = &v.segments[i];
+    let s = &segs[i];
     let name = i18n.tr(&kind_key(KINDS[s.kind].id), &Args::new());
     write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
     match edge {
-        None => slab(out, p, v, i),
-        Some(right) => curb(out, p, v, i, right),
+        None => slab(out, p, segs, i),
+        Some(right) => curb(out, p, segs, i, right),
     }
     out.push_str("</g>");
 }
 
 /// The strips in the order given, between the group tag `open` and its end.
-pub(super) fn group(open: &str, p: &Projection, v: &View, i18n: &I18n, strips: &[Strip]) -> String {
+pub(super) fn group(open: &str, p: &Projection, segs: &[SegView], i18n: &I18n, strips: &[Strip]) -> String {
     let mut out = String::from(open);
     for &strip in strips {
-        piece(&mut out, p, v, i18n, strip);
+        piece(&mut out, p, segs, i18n, strip);
     }
     out.push_str("</g>");
     out
@@ -365,12 +365,12 @@ mod tests {
         for e in [e, Editor::new(0), Editor::new(1), Editor::new(3), furnished(), one_way_bikes().0] {
             let v = e.view();
             let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm));
-            let s = strips(&v, &p);
-            let far: Vec<f64> = s.iter().map(|&st| across_eye(&v, &p, st)).collect();
+            let s = strips(&v.segments, &p);
+            let far: Vec<f64> = s.iter().map(|&st| across_eye(&v.segments, &p, st)).collect();
             assert!(far.windows(2).all(|w| w[0] >= w[1]), "{far:?}");
             // Among strips as far, the lower is first.
             for w in s.windows(2) {
-                if across_eye(&v, &p, w[0]) == across_eye(&v, &p, w[1]) {
+                if across_eye(&v.segments, &p, w[0]) == across_eye(&v.segments, &p, w[1]) {
                     assert!(w[0].0 <= w[1].0);
                 }
             }

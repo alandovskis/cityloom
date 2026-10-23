@@ -19,7 +19,7 @@ use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::say;
 use crate::shared::units::Units;
-use crate::street::model::View;
+use crate::street::model::{SegView, View};
 use crate::street::svg::curb_edges;
 
 mod joints;
@@ -53,19 +53,19 @@ pub struct IsoSvg {
 /// The outline of the selected piece at `i`, as one shape round everything drawn for it (its strip
 /// and its curbs): its near face, the side the eye sees where there is one, and its top, at the height of
 /// its highest part.
-fn outline(out: &mut String, p: &Projection, v: &View, i: usize) {
-    let s = &v.segments[i];
+fn outline(out: &mut String, p: &Projection, segs: &[SegView], i: usize) {
+    let s = &segs[i];
     let id = KINDS[s.kind].id;
-    let top = s.curb.filter(|_| !curb_edges(v, i).is_empty()).map_or(drawn_mm(height_mm(id)), |c| curb_top_mm(c, id));
+    let top = s.curb.filter(|_| !curb_edges(segs, i).is_empty()).map_or(drawn_mm(height_mm(id)), |c| curb_top_mm(c, id));
     let (x0, x1, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, STRETCH_MM);
     let corners = match inner_face(p, x0, x1) {
         // Left of the eye: its right face is seen, so the outline climbs it and comes back along the top.
         Some(true) => {
-            let low = beside(v, i, true).min(top);
+            let low = beside(segs, i, true).min(top);
             vec![(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, low, 0.0), (x1, low, l), (x1, top, l), (x0, top, l), (x0, top, 0.0)]
         }
         Some(false) => {
-            let low = beside(v, i, false).min(top);
+            let low = beside(segs, i, false).min(top);
             vec![(x1, 0.0, 0.0), (x0, 0.0, 0.0), (x0, low, 0.0), (x0, low, l), (x0, top, l), (x1, top, l), (x1, top, 0.0)]
         }
         None => vec![(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, top, 0.0), (x1, top, l), (x0, top, l), (x0, top, 0.0)],
@@ -100,16 +100,17 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let mut out = format!("<defs>{}{}</defs>", shades(), materials());
     write!(out, "<polygon class=\"iso-ground\" points=\"{}\"/>", points(&p, &[(0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, 0.0, l), (0.0, 0.0, l)])).unwrap();
 
-    let (flat, standing) = surface::split(strips(v, &p));
-    out.push_str(&surface::layer(&p, v, i18n, &flat));
-    out.push_str(&paint::layer(&p, v));
+    let (flat, standing) = surface::split(strips(&v.segments, &p));
+    out.push_str(&surface::layer(&p, &v.segments, i18n, &flat));
+    out.push_str(&paint::layer(&p, &v.segments));
 
     // The raised strips and what stands on the pieces, in the order the eye needs (`order`): a box covers the ones it
     // is in front of, so a crown nearer the middle of the street covers a shelter beyond it, and a strip nearer the
     // middle covers the foot of a post beyond it. The strips are in groups of their own between the solids.
-    let mut solids: Vec<Block> = (0..v.segments.len()).flat_map(|i| blocks(v, i, &p)).collect();
+    let mut solids: Vec<Block> = (0..v.segments.len()).flat_map(|i| blocks(&v.segments, i, &p)).collect();
     solids.sort_by(|a, b| b.from_eye(&p).total_cmp(&a.from_eye(&p)).then(a.y.0.total_cmp(&b.y.0)));
-    let boxes: Vec<(Bx, bool)> = standing.iter().map(|&s| (raised::strip_box(v, s), true)).chain(solids.iter().map(|b| (b.bounds(), false))).collect();
+    let boxes: Vec<(Bx, bool)> =
+        standing.iter().map(|&s| (raised::strip_box(&v.segments, s), true)).chain(solids.iter().map(|b| (b.bounds(), false))).collect();
     out.push_str("<g class=\"iso-raised\">");
     let mut open = true;
     for k in order::paint_order(&boxes, p.centre_mm) {
@@ -118,7 +119,7 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
                 out.push_str("<g class=\"iso-raised\">");
                 open = true;
             }
-            raised::piece(&mut out, &p, v, i18n, standing[k]);
+            raised::piece(&mut out, &p, &v.segments, i18n, standing[k]);
         } else {
             if open {
                 out.push_str("</g>");
@@ -131,7 +132,7 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
         out.push_str("</g>");
     }
     if let Some(i) = v.selected.and_then(|u| v.segments.iter().position(|s| s.uid == u)) {
-        outline(&mut out, &p, v, i);
+        outline(&mut out, &p, &v.segments, i);
     }
 
     IsoSvg { markup: out, width: p.width, height: p.height }

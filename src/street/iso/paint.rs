@@ -5,7 +5,7 @@
 use std::fmt::Write;
 
 use crate::shared::iso::paint::{Paint, class, quads};
-use crate::street::model::View;
+use crate::street::model::SegView;
 
 use super::markings::{Mark, markings};
 use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection, STRETCH_MM, points};
@@ -15,8 +15,8 @@ use super::symbols::shapes;
 /// the path `[(x, 0), (x, STRETCH_MM)]` (across, along); a symbol is its polygons laid on its lane at
 /// `ARROW_AT_MM`, so it foreshortens and shrinks with the distance. A piece narrower on screen than `MIN_SOLID_PX`
 /// where its symbol lies (`wide_enough`) keeps its lines but gets no symbol.
-pub(super) fn layer(p: &Projection, v: &View) -> String {
-    let m = markings(v);
+pub(super) fn layer(p: &Projection, segs: &[SegView]) -> String {
+    let m = markings(segs);
     let mut out = String::from("<g class=\"iso-markings\">");
     for line in &m.lines {
         let x = line.x_mm as f64;
@@ -26,7 +26,7 @@ pub(super) fn layer(p: &Projection, v: &View) -> String {
         }
     }
     for mark in &m.marks {
-        symbol(&mut out, p, v, mark);
+        symbol(&mut out, p, segs, mark);
     }
     out.push_str("</g>");
     out
@@ -37,8 +37,8 @@ pub(super) fn symbol_fits(p: &Projection, w: f64) -> bool {
     w * p.scale_at(ARROW_AT_MM) >= MIN_SOLID_PX
 }
 
-fn symbol(out: &mut String, p: &Projection, v: &View, mark: &Mark) {
-    let Some(s) = v.segments.iter().find(|s| s.uid == mark.uid) else { return };
+fn symbol(out: &mut String, p: &Projection, segs: &[SegView], mark: &Mark) {
+    let Some(s) = segs.iter().find(|s| s.uid == mark.uid) else { return };
     let w = s.width_mm as f64;
     if !symbol_fits(p, w) {
         return;
@@ -61,6 +61,7 @@ mod tests {
     use crate::street::iso::solids::{Solid, blocks};
     use crate::street::iso::testing::{apart, count, furnished, hull};
     use crate::street::model::Editor;
+    use crate::street::model::View;
 
     fn fit(v: &View, width: f64) -> Projection {
         Projection::fit(width, v.row_mm.max(v.total_mm))
@@ -71,7 +72,7 @@ mod tests {
         // Sample Street 1: a solid white line each side of the roadway, a double yellow one between the lanes.
         let v = Editor::new(0).view();
         let p = fit(&v, 1050.0);
-        let m = layer(&p, &v);
+        let m = layer(&p, &v.segments);
         assert!(m.starts_with("<g class=\"iso-markings\">") && m.ends_with("</g>"));
         assert_eq!(count(&m, "class=\"iso-paint yellow\""), 2);
         assert_eq!(count(&m, "class=\"iso-paint white\""), 2 + 2, "two solid lines and two arrows");
@@ -87,7 +88,7 @@ mod tests {
     fn a_symbol_is_centred_on_its_lane_at_the_arrow_distance_and_lies_on_the_ground() {
         let v = Editor::new(0).view();
         let p = fit(&v, 1050.0);
-        let m = layer(&p, &v);
+        let m = layer(&p, &v.segments);
         let lane = &v.segments[2];
         let cx = lane.x_mm as f64 + lane.width_mm as f64 / 2.0;
         let toward = lane.direction == Some("toward");
@@ -113,7 +114,7 @@ mod tests {
         assert!(symbol_fits(&p, 1_200.0), "on this street at 600 px it fits");
         let p = fit(&v, 480.0);
         assert!(!symbol_fits(&p, 1_200.0), "at 480 px it does not");
-        let m = layer(&p, &v);
+        let m = layer(&p, &v.segments);
         assert!(!m.contains(&format!("data-mark=\"{bike}\"")));
         assert_eq!(count(&m, "class=\"iso-mark\""), 2, "the driving lanes keep theirs");
         // Sample Street 1 with the bike lane between its driving lanes: four solid white lines (parking, driving lane,
@@ -123,7 +124,7 @@ mod tests {
         assert!(!m.contains("NaN"));
         // At 1050 px on the street itself the same lane is wide enough.
         let p = fit(&v, 1050.0);
-        assert!(layer(&p, &v).contains(&format!("data-mark=\"{bike}\"")));
+        assert!(layer(&p, &v.segments).contains(&format!("data-mark=\"{bike}\"")));
     }
 
     #[test]
@@ -133,7 +134,7 @@ mod tests {
             assert!(e.remove(uid));
         }
         let v = e.view();
-        assert_eq!(layer(&fit(&v, 1050.0), &v), "<g class=\"iso-markings\"></g>");
+        assert_eq!(layer(&fit(&v, 1050.0), &v.segments), "<g class=\"iso-markings\"></g>");
     }
 
     #[test]
@@ -141,7 +142,7 @@ mod tests {
         let mut e = Editor::new(0);
         let bus = e.add(kind_index("bus").unwrap(), 3);
         let v = e.view();
-        let m = layer(&fit(&v, 1050.0), &v);
+        let m = layer(&fit(&v, 1050.0), &v.segments);
         let open = format!("<g class=\"iso-mark\" data-mark=\"{bus}\">");
         let at = m.find(&open).expect("the bus lane has a symbol");
         let group = &m[at..at + m[at..].find("</g>").unwrap()];
@@ -159,7 +160,7 @@ mod tests {
             for width in [760.0, 1050.0, 1800.0] {
                 let p = fit(&v, width);
                 let trees: Vec<Vec<(f64, f64)>> = (0..v.segments.len())
-                    .flat_map(|i| blocks(&v, i, &p))
+                    .flat_map(|i| blocks(&v.segments, i, &p))
                     .filter(|b| matches!(b.solid, Solid::Trunk | Solid::Crown))
                     .map(|b| {
                         let corners = [b.x.0, b.x.1]
@@ -169,7 +170,7 @@ mod tests {
                     })
                     .collect();
                 assert!(!trees.is_empty(), "{width}");
-                for mark in markings(&v).marks {
+                for mark in markings(&v.segments).marks {
                     let s = v.segments.iter().find(|s| s.uid == mark.uid).unwrap();
                     if !symbol_fits(&p, s.width_mm as f64) {
                         continue;

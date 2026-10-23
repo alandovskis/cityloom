@@ -3,7 +3,7 @@
 use std::fmt::Write;
 
 use crate::shared::catalogue::KINDS;
-use crate::street::model::View;
+use crate::street::model::SegView;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
 use super::order::Bx;
@@ -63,8 +63,8 @@ pub(super) fn wide_enough(p: &Projection, w: f64, along: f64) -> bool {
 /// piece, a post every 4 m along a bike lane's curb (not an island's). Each keeps its own size and
 /// stands on the top as drawn, `RISE` times as high as the piece stands. A thing stands only where its piece is wide
 /// enough on the screen, at its own distance, to show it (`wide_enough`).
-pub(super) fn blocks(v: &View, i: usize, p: &Projection) -> Vec<Block> {
-    let s = &v.segments[i];
+pub(super) fn blocks(segs: &[SegView], i: usize, p: &Projection) -> Vec<Block> {
+    let s = &segs[i];
     let (x0, w) = (s.x_mm as f64, s.width_mm as f64);
     let id = KINDS[s.kind].id;
     let (cx, h) = (x0 + w / 2.0, drawn_mm(height_mm(id)));
@@ -83,7 +83,7 @@ pub(super) fn blocks(v: &View, i: usize, p: &Projection) -> Vec<Block> {
     }
     if let Some(c) = s.curb.filter(|c| id == "bike" && *c != "island") {
         let (top, cw) = (curb_top_mm(c, id), curb_width_mm(c).min(w / 2.0));
-        for right in curb_edges(v, i) {
+        for right in curb_edges(segs, i) {
             let px = if right { x0 + w - cw / 2.0 } else { x0 + cw / 2.0 };
             for z in along(2_000.0, 4_000.0).filter(|&z| wide_enough(p, w, z)) {
                 out.push(Block { solid: Solid::Post, x: (px - 60.0, px + 60.0), y: (top, top + 900.0), z: (z - 60.0, z + 60.0) });
@@ -208,7 +208,7 @@ mod tests {
         // point is nearer the eye on the ground.
         let v = furnished().view();
         let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm));
-        let all: Vec<Block> = (0..v.segments.len()).flat_map(|i| blocks(&v, i, &p)).collect();
+        let all: Vec<Block> = (0..v.segments.len()).flat_map(|i| blocks(&v.segments, i, &p)).collect();
         let shelter = all.iter().find(|b| b.solid == Solid::Shelter).unwrap();
         let m = iso_svg(&v, &en(), 1050.0).markup;
         let covers: Vec<&Block> = all
@@ -289,7 +289,7 @@ mod tests {
         let v = Editor::new(1).view();
         let strip = v.segments.iter().position(|s| s.material == "trees").unwrap();
         let zs = |width: f64, span: i32| -> Vec<f64> {
-            blocks(&v, strip, &Projection::fit(width, span)).iter().filter(|b| b.solid == Solid::Trunk).map(|b| (b.z.0 + b.z.1) / 2.0).collect()
+            blocks(&v.segments, strip, &Projection::fit(width, span)).iter().filter(|b| b.solid == Solid::Trunk).map(|b| (b.z.0 + b.z.1) / 2.0).collect()
         };
         assert_eq!(zs(600.0, v.row_mm.max(v.total_mm)), vec![4_000.0, 12_000.0, 20_000.0, 28_000.0, 36_000.0]);
         // On a wider scene the strip is narrower: it stops drawing where it is under MIN_STANDING_PX wide, from the far end.

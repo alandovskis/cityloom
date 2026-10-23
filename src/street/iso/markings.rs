@@ -4,7 +4,7 @@
 
 use crate::shared::catalogue::KINDS;
 use crate::shared::iso::paint::{Paint, Pattern, Style};
-use crate::street::model::{SegView, View};
+use crate::street::model::SegView;
 use crate::street::svg::curb_edges;
 
 const SOLID_WHITE: Style = Style { paint: Paint::White, pattern: Pattern::Solid, double: false };
@@ -78,21 +78,20 @@ fn symbol(s: &SegView) -> Option<Symbol> {
     }
 }
 
-/// The lines and symbols of the street as it is shown now: a pure function of the view.
-pub fn markings(v: &View) -> Markings {
+/// The lines and symbols of the street as it is shown now: a pure function of the pieces shown.
+pub fn markings(segs: &[SegView]) -> Markings {
     // Whether the edge between piece `i` and the next carries a curb of either: the right edge of `i`, the left of `i + 1`.
-    let curbed = |i: usize| curb_edges(v, i).contains(&true) || curb_edges(v, i + 1).contains(&false);
-    let mut lines: Vec<Line> = v
-        .segments
+    let curbed = |i: usize| curb_edges(segs, i).contains(&true) || curb_edges(segs, i + 1).contains(&false);
+    let mut lines: Vec<Line> = segs
         .windows(2)
         .enumerate()
         .filter_map(|(i, w)| between(&w[0], &w[1], curbed(i)).map(|style| Line { x_mm: w[0].x_mm + w[0].width_mm, style }))
         .collect();
     // A two-way bike lane carries a single broken yellow line down its middle.
     lines.extend(
-        v.segments.iter().filter(|s| KINDS[s.kind].id == "bike" && s.direction.is_none()).map(|s| Line { x_mm: s.x_mm + s.width_mm / 2, style: BROKEN_YELLOW }),
+        segs.iter().filter(|s| KINDS[s.kind].id == "bike" && s.direction.is_none()).map(|s| Line { x_mm: s.x_mm + s.width_mm / 2, style: BROKEN_YELLOW }),
     );
-    let marks = v.segments.iter().filter_map(|s| symbol(s).map(|symbol| Mark { uid: s.uid, symbol })).collect();
+    let marks = segs.iter().filter_map(|s| symbol(s).map(|symbol| Mark { uid: s.uid, symbol })).collect();
     Markings { lines, marks }
 }
 
@@ -125,7 +124,7 @@ mod tests {
     #[test]
     fn two_driving_lanes_running_opposite_ways_have_a_double_solid_yellow_line() {
         let e = Editor::new(0);
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert_ne!(dir(&e, 2), dir(&e, 3));
         assert_eq!(at(&m, edge(&e, 2)), vec![DOUBLE_YELLOW]);
     }
@@ -134,7 +133,7 @@ mod tests {
     fn two_driving_lanes_running_the_same_way_have_a_single_broken_white_line_and_a_median_has_none() {
         // Sample Avenue 2: sidewalk, planting, parking, travel, travel, median, travel, travel, parking, planting, sidewalk.
         let e = Editor::new(1);
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert_eq!(dir(&e, 3), dir(&e, 4));
         assert_eq!(at(&m, edge(&e, 3)), vec![BROKEN_WHITE]);
         assert_eq!(at(&m, edge(&e, 6)), vec![BROKEN_WHITE]);
@@ -147,7 +146,7 @@ mod tests {
         // MTQ Tome V has no line for the edge of a buffer: the buffer is its own marking, so none is drawn against it.
         let mut e = Editor::new(0);
         let buffer = e.add(kind_index("buffer").unwrap(), 3);
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert!(at(&m, edge(&e, 2)).is_empty() && at(&m, edge(&e, 3)).is_empty(), "{:?}", m.lines);
         assert!(m.marks.iter().all(|k| k.uid != buffer));
     }
@@ -155,18 +154,18 @@ mod tests {
     #[test]
     fn a_driving_lane_beside_parking_loading_or_a_shoulder_has_a_single_solid_white_line() {
         let e = Editor::new(0);
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert_eq!(at(&m, edge(&e, 1)), vec![SOLID_WHITE]);
         assert_eq!(at(&m, edge(&e, 3)), vec![SOLID_WHITE]);
         // A loading lane between the parking and the driving lane.
         let mut e = Editor::new(0);
         e.add(kind_index("loading").unwrap(), 2);
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert!(at(&m, edge(&e, 1)).is_empty(), "parking beside loading: no line");
         assert_eq!(at(&m, edge(&e, 2)), vec![SOLID_WHITE]);
         // The freeway: shoulder, three lanes, median, three lanes, shoulder.
         let e = Editor::new(3);
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert_eq!(at(&m, edge(&e, 0)), vec![SOLID_WHITE]);
         assert_eq!(at(&m, edge(&e, 7)), vec![SOLID_WHITE]);
         assert_eq!(at(&m, edge(&e, 1)), vec![BROKEN_WHITE]);
@@ -178,7 +177,7 @@ mod tests {
         let bus = e.add(kind_index("bus").unwrap(), 3);
         let with = dir(&e, 2);
         assert!(e.set_direction(bus, Some(with)));
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         // travel, then the bus lane with it: double white; the bus lane, then the lane running the other way: double yellow.
         assert_eq!(at(&m, edge(&e, 2)), vec![DOUBLE_WHITE]);
         assert_eq!(at(&m, edge(&e, 3)), vec![DOUBLE_YELLOW]);
@@ -190,7 +189,7 @@ mod tests {
         let bus = e.add(kind_index("bus").unwrap(), 3);
         let against = opposite(dir(&e, 2));
         assert!(e.set_direction(bus, Some(against)));
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert_eq!(at(&m, edge(&e, 2)), vec![DOUBLE_YELLOW]);
         assert_eq!(at(&m, edge(&e, 3)), vec![DOUBLE_WHITE]);
     }
@@ -199,7 +198,7 @@ mod tests {
     fn a_two_way_bus_lane_is_opposed_to_neither_neighbour() {
         let mut e = Editor::new(0);
         e.add(kind_index("bus").unwrap(), 3);
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert_eq!(at(&m, edge(&e, 2)), vec![DOUBLE_WHITE]);
         assert_eq!(at(&m, edge(&e, 3)), vec![DOUBLE_WHITE]);
     }
@@ -210,9 +209,9 @@ mod tests {
         let first = e.add(kind_index("bus").unwrap(), 3);
         let second = e.add(kind_index("bus").unwrap(), 4);
         assert!(e.set_direction(first, Some(0)) && e.set_direction(second, Some(1)));
-        assert_eq!(at(&markings(&e.view()), edge(&e, 3)), vec![DOUBLE_YELLOW]);
+        assert_eq!(at(&markings(&e.view().segments), edge(&e, 3)), vec![DOUBLE_YELLOW]);
         assert!(e.set_direction(second, Some(0)));
-        assert!(at(&markings(&e.view()), edge(&e, 3)).is_empty());
+        assert!(at(&markings(&e.view().segments), edge(&e, 3)).is_empty());
     }
 
     #[test]
@@ -221,16 +220,16 @@ mod tests {
         let bike = e.add(kind_index("bike").unwrap(), 3);
         let curbed = e.view().segments[3].curb.is_some();
         assert!(curbed, "a bike lane has a curb by default");
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert!(at(&m, edge(&e, 2)).is_empty() && at(&m, edge(&e, 3)).is_empty(), "the curb marks the edge: {:?}", m.lines);
         assert!(e.set_curb(bike, None));
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert_eq!(at(&m, edge(&e, 2)), vec![SOLID_WHITE]);
         assert_eq!(at(&m, edge(&e, 3)), vec![SOLID_WHITE]);
         // Uncurbed and running against the lane before it: the double yellow.
         let against = opposite(dir(&e, 2));
         assert!(e.set_direction(bike, Some(against)));
-        assert_eq!(at(&markings(&e.view()), edge(&e, 2)), vec![DOUBLE_YELLOW]);
+        assert_eq!(at(&markings(&e.view().segments), edge(&e, 2)), vec![DOUBLE_YELLOW]);
     }
 
     #[test]
@@ -241,7 +240,7 @@ mod tests {
         let v = e.view();
         let s = v.segments.iter().find(|s| s.uid == bike).unwrap();
         assert!(s.direction.is_none());
-        let m = markings(&v);
+        let m = markings(&v.segments);
         assert_eq!(at(&m, edge(&e, 2)), vec![SOLID_WHITE]);
         assert_eq!(at(&m, edge(&e, 3)), vec![SOLID_WHITE]);
         assert_eq!(at(&m, s.x_mm + s.width_mm / 2), vec![BROKEN_YELLOW]);
@@ -256,7 +255,7 @@ mod tests {
         assert!(e.set_direction(bike, Some(with)));
         let v = e.view();
         let s = v.segments.iter().find(|s| s.uid == bike).unwrap();
-        let m = markings(&v);
+        let m = markings(&v.segments);
         assert_eq!(at(&m, edge(&e, 2)), vec![SOLID_WHITE]);
         // The lane after it runs the other way: the bike lane is opposed to it.
         assert_eq!(at(&m, edge(&e, 3)), vec![DOUBLE_YELLOW]);
@@ -270,7 +269,7 @@ mod tests {
         assert!(e.set_curb(bike, None));
         let against = opposite(dir(&e, 2));
         assert!(e.set_direction(bike, Some(against)));
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert_eq!(at(&m, edge(&e, 2)), vec![DOUBLE_YELLOW]);
         assert_eq!(at(&m, edge(&e, 3)), vec![SOLID_WHITE]);
     }
@@ -279,16 +278,16 @@ mod tests {
     fn any_other_pair_has_no_line_and_a_lane_beside_a_curb_has_no_edge_line() {
         // Sample Lane 3: sidewalk, travel, travel, parking, sidewalk. The sidewalk (a curb) marks the edge itself.
         let e = Editor::new(2);
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert!(at(&m, edge(&e, 0)).is_empty(), "sidewalk beside a driving lane");
         assert!(at(&m, edge(&e, 3)).is_empty(), "parking beside a sidewalk");
         // A bike lane beside parking is not in the table either.
         let mut e = Editor::new(0);
         e.add(kind_index("bike").unwrap(), 2);
-        assert!(at(&markings(&e.view()), edge(&e, 1)).is_empty());
+        assert!(at(&markings(&e.view().segments), edge(&e, 1)).is_empty());
         // And the first sample's sidewalk edges carry nothing.
         let e = Editor::new(0);
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert!(at(&m, edge(&e, 0)).is_empty() && at(&m, edge(&e, 4)).is_empty());
     }
 
@@ -298,14 +297,14 @@ mod tests {
         let lane = e.view().segments[2].uid;
         assert!(e.add_variant(lane));
         // At noon it is a driving lane: solid white beside the parking, an arrow.
-        let noon = markings(&e.view());
+        let noon = markings(&e.view().segments);
         assert_eq!(at(&noon, edge(&e, 1)), vec![SOLID_WHITE]);
         assert!(matches!(noon.marks[0].symbol, Symbol::Ahead { .. }), "the first symbol is the lane's: the parking has none");
         // At 08:00 the variant (a bus lane) is shown: parking beside a bus lane has no line, and the symbol is the bus's.
         assert!(e.set_time(8 * 60));
         let v = e.view();
         assert_eq!(crate::shared::catalogue::KINDS[v.segments[2].kind].id, "bus");
-        let rush = markings(&v);
+        let rush = markings(&v.segments);
         assert!(at(&rush, edge(&e, 1)).is_empty());
         assert_eq!(rush.marks[0], Mark { uid: lane, symbol: Symbol::Bus });
     }
@@ -316,25 +315,25 @@ mod tests {
         for uid in e.view().segments.iter().filter(|s| crate::shared::catalogue::KINDS[s.kind].id != "sidewalk").map(|s| s.uid).collect::<Vec<_>>() {
             assert!(e.remove(uid));
         }
-        assert_eq!(markings(&e.view()), Markings { lines: Vec::new(), marks: Vec::new() });
+        assert_eq!(markings(&e.view().segments), Markings { lines: Vec::new(), marks: Vec::new() });
         // Not a piece at all.
         while let Some(uid) = e.view().segments.first().map(|s| s.uid) {
             assert!(e.remove(uid));
         }
-        assert_eq!(markings(&e.view()), Markings { lines: Vec::new(), marks: Vec::new() });
+        assert_eq!(markings(&e.view().segments), Markings { lines: Vec::new(), marks: Vec::new() });
         // One piece alone: no pair, so no line.
         let mut e = Editor::new(0);
         while e.view().segments.len() > 1 {
             assert!(e.remove(e.view().segments[0].uid));
         }
-        assert!(markings(&e.view()).lines.is_empty());
+        assert!(markings(&e.view().segments).lines.is_empty());
     }
 
     #[test]
     fn each_kind_of_lane_carries_its_own_symbol_and_the_other_pieces_none() {
         let e = Editor::new(0);
         let v = e.view();
-        let m = markings(&v);
+        let m = markings(&v.segments);
         // Two driving lanes, each with an arrow pointing the way it runs; the sidewalks and parking carry none.
         assert_eq!(m.marks.len(), 2);
         let toward = |i: usize| e.view().segments[i].direction == Some("toward");
@@ -344,10 +343,10 @@ mod tests {
         // A bus lane: the diamond, whatever its direction.
         let mut e = Editor::new(0);
         let bus = e.add(kind_index("bus").unwrap(), 3);
-        assert!(markings(&e.view()).marks.contains(&Mark { uid: bus, symbol: Symbol::Bus }));
+        assert!(markings(&e.view().segments).marks.contains(&Mark { uid: bus, symbol: Symbol::Bus }));
         // A bike lane: two-way, then one way each way.
         let bike = e.add(kind_index("bike").unwrap(), 1);
-        let find = |e: &Editor| markings(&e.view()).marks.into_iter().find(|m| m.uid == bike).unwrap().symbol;
+        let find = |e: &Editor| markings(&e.view().segments).marks.into_iter().find(|m| m.uid == bike).unwrap().symbol;
         assert_eq!(find(&e), Symbol::Bike { two_way: true, toward: false });
         assert!(e.set_direction(bike, Some(0)));
         assert_eq!(find(&e), Symbol::Bike { two_way: false, toward: false });
@@ -360,7 +359,7 @@ mod tests {
         let mut e = Editor::new(0);
         let uk = REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap();
         assert!(e.set_region(uk));
-        let m = markings(&e.view());
+        let m = markings(&e.view().segments);
         assert_ne!(dir(&e, 2), dir(&e, 3));
         assert_eq!(at(&m, edge(&e, 2)), vec![DOUBLE_YELLOW]);
         assert_eq!(m.marks.len(), 2);
