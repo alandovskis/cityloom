@@ -26,7 +26,8 @@ use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use frame::{TAIL_LINES, tail};
 use view::{Plain, Terminal, View};
@@ -356,7 +357,19 @@ impl StepCtx<'_> {
         writeln!(log, "$ {}", line.join(" "))?;
         log.flush()?;
         command.stdout(Stdio::from(log.try_clone()?)).stderr(Stdio::from(log));
-        let status = match command.status() {
+        let mut attempt = 0;
+        let status = match loop {
+            match command.status() {
+                Err(e) => match retry_delay(&e, attempt) {
+                    Some(pause) => {
+                        thread::sleep(pause);
+                        attempt += 1;
+                    }
+                    None => break Err(e),
+                },
+                result => break result,
+            }
+        } {
             Ok(status) => status,
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
                 return Err(StepError::new([format!("{name}: not found on PATH")]));
@@ -374,6 +387,19 @@ impl StepCtx<'_> {
     }
 }
 
+/// How long to wait before starting a tool again after `error` on its `attempt`th try (0 for the first), or `None` to give up.
+///
+/// Starting a program fails with ETXTBSY ("text file busy") while any process still holds the file open for writing.
+/// When a thread writes a script and another forks at that moment, the child inherits the write descriptor until its
+/// own exec closes it, so exec of the script fails for that brief window and works a moment later (Go's os/exec retries
+/// for the same reason). Only that error is retried, up to `START_RETRIES` times, with a growing pause.
+fn retry_delay(error: &io::Error, attempt: u32) -> Option<Duration> {
+    (error.kind() == io::ErrorKind::ExecutableFileBusy && attempt < START_RETRIES).then(|| Duration::from_millis(10 * (u64::from(attempt) + 1)))
+}
+
+/// Retries of a start that fails with ETXTBSY; 10 + 20 + 30 + 40 + 50 ms at most.
+const START_RETRIES: u32 = 5;
+
 fn read_tail(path: &Path) -> String {
     let read = || -> io::Result<Vec<u8>> {
         let mut log = File::open(path)?;
@@ -388,7 +414,27 @@ fn read_tail(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::thousands;
+    use super::{START_RETRIES, retry_delay, thousands};
+    use std::io;
+    use std::time::Duration;
+
+    #[test]
+    fn a_busy_file_is_retried_a_few_times_with_a_growing_pause_and_then_given_up() {
+        let busy = io::Error::from(io::ErrorKind::ExecutableFileBusy);
+        let delays: Vec<_> = (0..START_RETRIES).map(|n| retry_delay(&busy, n)).collect();
+        let ms: Vec<_> = delays.iter().map(|d| d.map(|d| d.as_millis())).collect();
+        assert_eq!(ms, [Some(10), Some(20), Some(30), Some(40), Some(50)]);
+        assert_eq!(retry_delay(&busy, START_RETRIES), None);
+        assert!(delays.iter().flatten().sum::<Duration>() < Duration::from_millis(200));
+    }
+
+    #[test]
+    fn no_other_failure_to_start_is_retried() {
+        for kind in [io::ErrorKind::NotFound, io::ErrorKind::PermissionDenied, io::ErrorKind::Other] {
+            assert_eq!(retry_delay(&io::Error::from(kind), 0), None);
+        }
+        assert!(retry_delay(&io::Error::from_raw_os_error(26), 0).is_some() || cfg!(not(target_os = "linux")));
+    }
 
     #[test]
     fn numbers_are_grouped_by_thousands_as_python_writes_them() {
