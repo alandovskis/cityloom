@@ -13,7 +13,7 @@ use crate::street::svg::{curb_edges, curb_width_mm};
 
 use super::joints::path as joint_path;
 use super::order::Bx;
-use super::projection::{Projection, STRETCH_MM, band_edges, band_mid, drawn_mm, points};
+use super::projection::{Projection, Reach, band_edges, band_mid, drawn_mm, points};
 
 /// How high each kind of piece stands above the roadway, in millimetres. They are plausible, not
 /// surveyed, like the catalogue's rates. The furniture kinds stand on the sidewalk, so at its height.
@@ -140,12 +140,12 @@ pub(super) fn inner_face(p: &Projection, x0: f64, x1: f64) -> Option<bool> {
 /// texture. The grain is not continuous across a seam, which does not show in a grain; the joints, which the eye
 /// follows, are not part of the pattern but lines projected point by point, so they have no seam.
 fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h: f64) {
-    let l = STRETCH_MM;
-    let pts = points(p, &[(x0, h, 0.0), (x1, h, 0.0), (x1, h, l), (x0, h, l)]);
+    let (n, l) = (p.reach.near, p.reach.far);
+    let pts = points(p, &[(x0, h, n), (x1, h, n), (x1, h, l), (x0, h, l)]);
     write!(out, "<polygon class=\"iso-top k-{id} mat-{m}\" points=\"{pts}\"/>").unwrap();
     // The bands share their fill, and so the group carries it: a texture's polygons are bare.
     write!(out, "<g class=\"hatch\" fill=\"url(#iso-m-{m})\">").unwrap();
-    for w in band_edges().windows(2) {
+    for w in band_edges(p.reach).windows(2) {
         let (z0, z1) = (w[0], w[1]);
         let g = p.ground_at(h, (x0 + x1) / 2.0, band_mid(z0, z1));
         // The numbers as written, so that the polygon is taken back through exactly the map that lays the texture.
@@ -177,14 +177,15 @@ fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h:
 pub(super) fn slab(out: &mut String, p: &Projection, segs: &[SegView], i: usize) {
     let s = &segs[i];
     let id = KINDS[s.kind].id;
-    let (x0, x1, h, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, drawn_mm(height_mm(id)), STRETCH_MM);
+    let (x0, x1, h, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, drawn_mm(height_mm(id)), p.reach.far);
+    let n = p.reach.near;
     let hatch = format!("h-{id}");
     if h > 0.0 {
-        face(out, Face::Front, Some(id), &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, h, 0.0), (x0, h, 0.0)]));
+        face(out, Face::Front, Some(id), &hatch, &points(p, &[(x0, 0.0, n), (x1, 0.0, n), (x1, h, n), (x0, h, n)]));
         if let Some(right) = inner_face(p, x0, x1) {
             let (x, low) = (if right { x1 } else { x0 }, beside(segs, i, right));
             if low < h {
-                face(out, Face::Side, Some(id), &hatch, &points(p, &[(x, low, 0.0), (x, low, l), (x, h, l), (x, h, 0.0)]));
+                face(out, Face::Side, Some(id), &hatch, &points(p, &[(x, low, n), (x, low, l), (x, h, l), (x, h, n)]));
             }
         }
     }
@@ -204,19 +205,19 @@ pub(super) fn curb(out: &mut String, p: &Projection, segs: &[SegView], i: usize,
     let s = &segs[i];
     let Some(c) = s.curb else { return };
     let id = KINDS[s.kind].id;
-    let (h, l) = (drawn_mm(height_mm(id)), STRETCH_MM);
+    let (h, n, l) = (drawn_mm(height_mm(id)), p.reach.near, p.reach.far);
     let top = curb_top_mm(c, id);
     let (x0, x1) = curb_span(s, c, right);
     let hatch = format!("c-{c}");
     if top > h {
-        face(out, Face::Front, None, &hatch, &points(p, &[(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, top, 0.0), (x0, top, 0.0)]));
+        face(out, Face::Front, None, &hatch, &points(p, &[(x0, 0.0, n), (x1, 0.0, n), (x1, top, n), (x0, top, n)]));
         if let Some(face_right) = inner_face(p, x0, x1) {
             // A block's face on the piece's own side stands on the piece; its other face stands on what is beside it.
             let (x, low) = (if face_right { x1 } else { x0 }, if face_right == right { beside(segs, i, right) } else { h });
-            face(out, Face::Side, None, &hatch, &points(p, &[(x, low, 0.0), (x, low, l), (x, top, l), (x, top, 0.0)]));
+            face(out, Face::Side, None, &hatch, &points(p, &[(x, low, n), (x, low, l), (x, top, l), (x, top, n)]));
         }
     }
-    face(out, Face::Top, None, &hatch, &points(p, &[(x0, top, 0.0), (x1, top, 0.0), (x1, top, l), (x0, top, l)]));
+    face(out, Face::Top, None, &hatch, &points(p, &[(x0, top, n), (x1, top, n), (x1, top, l), (x0, top, l)]));
 }
 
 /// One strip to draw: how high its top is drawn, which piece, and which edge's curb if it is a curb.
@@ -224,14 +225,14 @@ pub(super) type Strip = (f64, usize, Option<bool>);
 
 /// The box a strip fills, for ordering: its across range (a curb's, for a curb), from the ground to its top, along the
 /// whole stretch.
-pub(super) fn strip_box(segs: &[SegView], strip: Strip) -> Bx {
+pub(super) fn strip_box(segs: &[SegView], strip: Strip, reach: Reach) -> Bx {
     let (top, i, edge) = strip;
     let s = &segs[i];
     let x = match (edge, s.curb) {
         (Some(right), Some(c)) => curb_span(s, c, right),
         _ => (s.x_mm as f64, (s.x_mm + s.width_mm) as f64),
     };
-    Bx { x, y: (0.0, top), z: (0.0, STRETCH_MM) }
+    Bx { x, y: (0.0, top), z: (reach.near, reach.far) }
 }
 
 /// How far a strip is from the eye across the street, in millimetres: from its nearest edge, nothing for one the eye is over.
@@ -294,9 +295,30 @@ pub(super) fn group(open: &str, p: &Projection, segs: &[SegView], i18n: &I18n, s
 mod tests {
     use super::*;
     use crate::shared::catalogue::{KINDS, kind_index};
-    use crate::street::iso::projection::Projection;
+    use crate::street::iso::projection::{Projection, Reach, r};
     use crate::street::iso::testing::{furnished, one_way_bikes};
     use crate::street::model::Editor;
+
+    #[test]
+    fn a_slab_over_a_reach_has_its_cut_at_the_near_end_of_the_reach() {
+        use crate::street::iso::testing::xs_ys;
+        let v = Editor::new(0).view();
+        let i = v.segments.iter().position(|s| KINDS[s.kind].id == "sidewalk").unwrap();
+        let s = &v.segments[i];
+        let (x0, h) = (s.x_mm as f64, drawn_mm(height_mm("sidewalk")));
+        let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm)).over(Reach { near: 20_000.0, far: 40_000.0 });
+        let mut out = String::new();
+        slab(&mut out, &p, &v.segments, i);
+        let cut = r(p.at(x0, 0.0, 20_000.0).1);
+        let ys: Vec<f64> = xs_ys(&out).into_iter().map(|(_, y)| y).collect();
+        let front =
+            points(&p, &[(x0, 0.0, 20_000.0), ((s.x_mm + s.width_mm) as f64, 0.0, 20_000.0), ((s.x_mm + s.width_mm) as f64, h, 20_000.0), (x0, h, 20_000.0)]);
+        assert!(out.contains(&format!("points=\"{front}\"")), "the front is the cut at the reach's near end");
+        assert!(ys.iter().all(|&y| y <= cut + 1e-9), "nothing nearer than the cut");
+        assert!((ys.iter().cloned().fold(f64::MIN, f64::max) - cut).abs() < 1e-9);
+        let far = r(p.at(x0, h, 40_000.0).1);
+        assert!(ys.iter().all(|&y| y >= far - 1e-9));
+    }
 
     #[test]
     fn every_kind_has_one_height_and_the_table_names_no_other() {

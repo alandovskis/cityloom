@@ -34,7 +34,7 @@ mod symbols;
 #[cfg(test)]
 mod testing;
 
-pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MIN_SOLID_PX, Projection, RISE, STRETCH_MM, TALLEST_MM, drawn_mm};
+pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MIN_SOLID_PX, Projection, RISE, Reach, STRETCH_MM, TALLEST_MM, drawn_mm};
 pub use raised::{HEIGHTS, curb_height_mm, curb_top_mm, height_mm};
 
 use order::Bx;
@@ -57,18 +57,19 @@ fn outline(out: &mut String, p: &Projection, segs: &[SegView], i: usize) {
     let s = &segs[i];
     let id = KINDS[s.kind].id;
     let top = s.curb.filter(|_| !curb_edges(segs, i).is_empty()).map_or(drawn_mm(height_mm(id)), |c| curb_top_mm(c, id));
-    let (x0, x1, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, STRETCH_MM);
+    let (x0, x1, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, p.reach.far);
+    let n = p.reach.near;
     let corners = match inner_face(p, x0, x1) {
         // Left of the eye: its right face is seen, so the outline climbs it and comes back along the top.
         Some(true) => {
             let low = beside(segs, i, true).min(top);
-            vec![(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, low, 0.0), (x1, low, l), (x1, top, l), (x0, top, l), (x0, top, 0.0)]
+            vec![(x0, 0.0, n), (x1, 0.0, n), (x1, low, n), (x1, low, l), (x1, top, l), (x0, top, l), (x0, top, n)]
         }
         Some(false) => {
             let low = beside(segs, i, false).min(top);
-            vec![(x1, 0.0, 0.0), (x0, 0.0, 0.0), (x0, low, 0.0), (x0, low, l), (x0, top, l), (x1, top, l), (x1, top, 0.0)]
+            vec![(x1, 0.0, n), (x0, 0.0, n), (x0, low, n), (x0, low, l), (x0, top, l), (x1, top, l), (x1, top, n)]
         }
-        None => vec![(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, top, 0.0), (x1, top, l), (x0, top, l), (x0, top, 0.0)],
+        None => vec![(x0, 0.0, n), (x1, 0.0, n), (x1, top, n), (x1, top, l), (x0, top, l), (x0, top, n)],
     };
     let at = points(p, &corners);
     // A dark casing under the light line: one of the two is seen on any material, in either theme.
@@ -110,7 +111,7 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let mut solids: Vec<Block> = (0..v.segments.len()).flat_map(|i| blocks(&v.segments, i, &p)).collect();
     solids.sort_by(|a, b| b.from_eye(&p).total_cmp(&a.from_eye(&p)).then(a.y.0.total_cmp(&b.y.0)));
     let boxes: Vec<(Bx, bool)> =
-        standing.iter().map(|&s| (raised::strip_box(&v.segments, s), true)).chain(solids.iter().map(|b| (b.bounds(), false))).collect();
+        standing.iter().map(|&s| (raised::strip_box(&v.segments, s, p.reach), true)).chain(solids.iter().map(|b| (b.bounds(), false))).collect();
     out.push_str("<g class=\"iso-raised\">");
     let mut open = true;
     for k in order::paint_order(&boxes, p.centre_mm) {
@@ -158,7 +159,7 @@ pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::projection::{BANDS, EYE_BACK_MM, band_edges};
+    use super::projection::{BANDS, EYE_BACK_MM, Reach, band_edges};
     use super::projection::{PAD, r};
     use super::testing::{count, drawn, en, furnished, marked, one_way_bikes, top_of, xs, xs_ys};
     use super::*;
@@ -325,7 +326,7 @@ mod tests {
         }
         // Each top is cut into BANDS bands, whose polygons, laid by their matrices, are exactly the perspective's
         // quadrilaterals of the band (so they fit the top and each other), and whose matrices are the slope at the band's depth.
-        let edges = band_edges();
+        let edges = band_edges(Reach::STRETCH);
         for s in &v.segments {
             let h = drawn_mm(height_mm(KINDS[s.kind].id));
             let bands = bands(&m, s.uid);

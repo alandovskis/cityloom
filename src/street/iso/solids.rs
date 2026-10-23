@@ -7,7 +7,7 @@ use crate::street::model::SegView;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
 use super::order::Bx;
-use super::projection::{EYE_BACK_MM, MIN_STANDING_PX, Projection, STRETCH_MM, drawn_mm, points};
+use super::projection::{EYE_BACK_MM, MIN_STANDING_PX, Projection, drawn_mm, points};
 use super::raised::{Face, curb_top_mm, height_mm, inner_face, shade};
 
 /// Something standing on a piece, drawn as a plain box.
@@ -68,7 +68,8 @@ pub(super) fn blocks(segs: &[SegView], i: usize, p: &Projection) -> Vec<Block> {
     let (x0, w) = (s.x_mm as f64, s.width_mm as f64);
     let id = KINDS[s.kind].id;
     let (cx, h) = (x0 + w / 2.0, drawn_mm(height_mm(id)));
-    let along = |first: f64, every: f64| (0..).map(move |n| first + n as f64 * every).take_while(|z| *z < STRETCH_MM);
+    let (near, far) = (p.reach.near, p.reach.far);
+    let along = |first: f64, every: f64| (0..).map(move |n| near + first + n as f64 * every).take_while(|z| *z < far);
     let mut out = Vec::new();
     if s.material == "trees" {
         let crown = (w * 0.9).min(2_400.0);
@@ -77,9 +78,10 @@ pub(super) fn blocks(segs: &[SegView], i: usize, p: &Projection) -> Vec<Block> {
             out.push(Block { solid: Solid::Crown, x: (cx - crown / 2.0, cx + crown / 2.0), y: (h + 2_000.0, h + 5_000.0), z: (z - 1_200.0, z + 1_200.0) });
         }
     }
-    if id == "busshelter" && wide_enough(p, w, 20_000.0) {
+    let middle = near + p.reach.len() / 2.0;
+    if id == "busshelter" && wide_enough(p, w, middle) {
         let d = (w * 0.8).min(1_500.0);
-        out.push(Block { solid: Solid::Shelter, x: (cx - d / 2.0, cx + d / 2.0), y: (h, h + 2_500.0), z: (18_000.0, 22_000.0) });
+        out.push(Block { solid: Solid::Shelter, x: (cx - d / 2.0, cx + d / 2.0), y: (h, h + 2_500.0), z: (middle - 2_000.0, middle + 2_000.0) });
     }
     if let Some(c) = s.curb.filter(|c| id == "bike" && *c != "island") {
         let (top, cw) = (curb_top_mm(c, id), curb_width_mm(c).min(w / 2.0));
@@ -90,6 +92,8 @@ pub(super) fn blocks(segs: &[SegView], i: usize, p: &Projection) -> Vec<Block> {
             }
         }
     }
+    // A box stands only where it lies wholly in the reach.
+    out.retain(|b| b.z.0 >= near && b.z.1 <= far);
     out
 }
 
@@ -120,6 +124,28 @@ mod tests {
     use crate::street::iso::iso_svg;
     use crate::street::iso::testing::{count, drawn, en, furnished};
     use crate::street::model::Editor;
+
+    #[test]
+    fn trees_posts_and_the_shelter_stay_wholly_inside_the_reach() {
+        use crate::street::iso::projection::Reach;
+        let mut e = furnished();
+        e.add(kind_index("bike").unwrap(), 2);
+        let v = e.view();
+        let base = Projection::fit(1050.0, v.row_mm.max(v.total_mm));
+        for (near, far) in [(0.0, 20_000.0), (20_000.0, 40_000.0), (0.0, 40_000.0)] {
+            let p = base.over(Reach { near, far });
+            let all: Vec<Block> = (0..v.segments.len()).flat_map(|i| blocks(&v.segments, i, &p)).collect();
+            assert!(all.iter().any(|b| b.solid == Solid::Crown) && all.iter().any(|b| b.solid == Solid::Post) && all.iter().any(|b| b.solid == Solid::Shelter));
+            assert!(all.iter().all(|b| b.z.0 >= near && b.z.1 <= far), "{near}..{far}");
+        }
+        let p = base.over(Reach { near: 0.0, far: 20_000.0 });
+        let shelter = (0..v.segments.len()).flat_map(|i| blocks(&v.segments, i, &p)).find(|b| b.solid == Solid::Shelter).unwrap();
+        assert_eq!(shelter.z, (8_000.0, 12_000.0));
+        // Trees count from the near end of the reach: the first is 4 m in.
+        let p = base.over(Reach { near: 20_000.0, far: 40_000.0 });
+        let first = (0..v.segments.len()).flat_map(|i| blocks(&v.segments, i, &p)).filter(|b| b.solid == Solid::Trunk).map(|b| b.z.0).fold(f64::MAX, f64::min);
+        assert_eq!(first, 24_000.0 - 125.0);
+    }
 
     #[test]
     fn a_planting_strip_of_trees_has_a_tree_every_8_m_each_a_trunk_and_a_crown() {

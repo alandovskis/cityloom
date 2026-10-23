@@ -49,16 +49,21 @@ fn pt(p: &Projection, x: f64, h: f64, z: f64) -> String {
     format!("{},{}", f1(sx), f1(sy))
 }
 
-/// The path data of a top's joints, `x0` to `x1` across and the whole stretch along, `h` (drawn mm) high. Every point is
-/// inside the top: the joints are cut to its edges here, and a joint on an edge is left to the edge.
+/// The path data of a top's joints, `x0` to `x1` across and the projection's reach along, `h` (drawn mm) high. Every
+/// point is inside the top: the joints are cut to its edges here, and a joint on an edge is left to the edge. The
+/// courses stay at multiples of their size from the near end of the stretch, so a reach continues the texture.
 pub(super) fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> String {
     const EDGE: f64 = 0.5;
+    let (near, far) = (p.reach.near, p.reach.far);
     let mut d = String::new();
     // Across the street, one every course, at their own depth.
     for k in 1.. {
         let z = k as f64 * j.course_mm;
-        if z >= STRETCH_MM - EDGE {
+        if z >= far - EDGE {
             break;
+        }
+        if z <= near + EDGE {
+            continue;
         }
         if (k as u64).trailing_zeros() >= course_level(p, h, j.course_mm, z) {
             d.push_str(&format!("M{}H{}", pt(p, x0, h, z), f1(p.at(x1, h, z).0)));
@@ -69,7 +74,7 @@ pub(super) fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> Stri
         // A running bond: the short joints between the units of each course, a half unit out in every other one.
         for k in 0.. {
             let z = k as f64 * j.course_mm;
-            if z >= STRETCH_MM - EDGE || course_level(p, h, j.course_mm, z) > 0 || j.unit_mm * p.scale_at(z) < MIN_JOINT_GAP_PX {
+            if z >= far - EDGE || course_level(p, h, j.course_mm, z) > 0 || j.unit_mm * p.scale_at(z) < MIN_JOINT_GAP_PX {
                 break;
             }
             let out = if k % 2 == 1 { 0.5 } else { 0.0 };
@@ -79,7 +84,11 @@ pub(super) fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> Stri
                     break;
                 }
                 if u > x0 + EDGE {
-                    d.push_str(&format!("M{}L{}", pt(p, u, h, z), pt(p, u, h, (z + j.course_mm).min(STRETCH_MM))));
+                    // A course that ends before the reach begins is not drawn; one that crosses its edge is cut there.
+                    let (from, to) = (z.max(near), (z + j.course_mm).min(far));
+                    if to > from {
+                        d.push_str(&format!("M{}L{}", pt(p, u, h, from), pt(p, u, h, to)));
+                    }
                 }
             }
         }
@@ -91,8 +100,9 @@ pub(super) fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> Stri
                 break;
             }
             let reach = along_reach(p, j.unit_mm, i);
-            if u > x0 + EDGE && reach >= 1.0 {
-                d.push_str(&format!("M{}L{}", pt(p, u, h, 0.0), pt(p, u, h, reach)));
+            let to = reach.min(far);
+            if u > x0 + EDGE && to - near >= 1.0 {
+                d.push_str(&format!("M{}L{}", pt(p, u, h, near), pt(p, u, h, to)));
             }
         }
     }
@@ -103,7 +113,7 @@ pub(super) fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> Stri
 mod tests {
     use super::*;
     use crate::shared::iso::ground::joints;
-    use crate::street::iso::projection::band_edges;
+    use crate::street::iso::projection::{Reach, band_edges};
 
     /// One drawn joint, as its two ends on the screen.
     type Seg = ((f64, f64), (f64, f64));
@@ -158,7 +168,7 @@ mod tests {
         let (p, h) = sidewalk();
         let segs = segments(&path(&p, &joints("concrete").unwrap(), 0.0, 3_300.0, h));
         let along = segs.iter().find(|s| s.0.1 != s.1.1).unwrap();
-        for z in band_edges() {
+        for z in band_edges(Reach::STRETCH) {
             let (x, y) = p.at(1_800.0, h, z);
             // The distance from the point to the line through the joint's ends.
             let (dx, dy) = (along.1.0 - along.0.0, along.1.1 - along.0.1);
@@ -166,10 +176,29 @@ mod tests {
             assert!(dist < 0.1, "{z}: {dist}");
         }
         // And the across joints near a seam are at their own depth, a seam or none.
-        let seam = band_edges()[3];
+        let seam = band_edges(Reach::STRETCH)[3];
         let k = (seam / 1_800.0).floor();
         let want = p.at(0.0, h, 1_800.0 * k).1;
         assert!(segs.iter().any(|s| s.0.1 == s.1.1 && (s.0.1 - want).abs() < 0.06));
+    }
+
+    #[test]
+    fn joint_lines_stay_inside_the_reach() {
+        for reach in [Reach { near: 0.0, far: 20_000.0 }, Reach { near: 20_000.0, far: 40_000.0 }] {
+            let (p, h) = sidewalk();
+            let p = p.over(reach);
+            let (top, bottom) = (p.at(0.0, h, reach.far).1, p.at(0.0, h, reach.near).1);
+            for m in ["concrete", "permeable", "brick"] {
+                let segs = segments(&path(&p, &joints(m).unwrap(), 0.0, 3_300.0, h));
+                // Fine bond joints are dropped as they close up with distance, so only the grid and the near half need some.
+                assert!(m != "concrete" && reach.near > 0.0 || !segs.is_empty(), "{m}");
+                for (a, b) in segs {
+                    for y in [a.1, b.1] {
+                        assert!(y >= top - 0.06 && y <= bottom + 0.06, "{m} {reach:?}: {y} not in {top}..{bottom}");
+                    }
+                }
+            }
+        }
     }
 
     /// Whether `pt` is inside the convex polygon `poly` (counter-clockwise or clockwise), within `tol` px.

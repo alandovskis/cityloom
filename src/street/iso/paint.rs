@@ -8,7 +8,7 @@ use crate::shared::iso::paint::{Paint, class, quads};
 use crate::street::model::SegView;
 
 use super::markings::{Mark, markings};
-use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection, STRETCH_MM, points};
+use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection, points};
 use super::symbols::shapes;
 
 /// The lines and symbols of the street as one group, drawn flat on the ground. A line is the shared paint quads of
@@ -20,7 +20,7 @@ pub(super) fn layer(p: &Projection, segs: &[SegView]) -> String {
     let mut out = String::from("<g class=\"iso-markings\">");
     for line in &m.lines {
         let x = line.x_mm as f64;
-        for (paint, quad) in quads(&[(x, 0.0), (x, STRETCH_MM)], line.style) {
+        for (paint, quad) in quads(&[(x, p.reach.near), (x, p.reach.far)], line.style) {
             let corners: Vec<(f64, f64, f64)> = quad.iter().map(|&(across, along)| (across, 0.0, along)).collect();
             write!(out, "<polygon class=\"{}\" points=\"{}\"/>", class(paint), points(p, &corners)).unwrap();
         }
@@ -34,7 +34,7 @@ pub(super) fn layer(p: &Projection, segs: &[SegView]) -> String {
 
 /// Whether a piece `w` mm wide is wide enough on the screen, where its symbol lies, to carry it.
 pub(super) fn symbol_fits(p: &Projection, w: f64) -> bool {
-    w * p.scale_at(ARROW_AT_MM) >= MIN_SOLID_PX
+    w * p.scale_at(p.reach.near + ARROW_AT_MM) >= MIN_SOLID_PX
 }
 
 fn symbol(out: &mut String, p: &Projection, segs: &[SegView], mark: &Mark) {
@@ -46,7 +46,7 @@ fn symbol(out: &mut String, p: &Projection, segs: &[SegView], mark: &Mark) {
     let cx = s.x_mm as f64 + w / 2.0;
     write!(out, "<g class=\"iso-mark\" data-mark=\"{}\">", mark.uid).unwrap();
     for shape in shapes(mark.symbol, w) {
-        let corners: Vec<(f64, f64, f64)> = shape.iter().map(|&(across, along)| (cx + across, 0.0, ARROW_AT_MM + along)).collect();
+        let corners: Vec<(f64, f64, f64)> = shape.iter().map(|&(across, along)| (cx + across, 0.0, p.reach.near + ARROW_AT_MM + along)).collect();
         write!(out, "<polygon class=\"{}\" points=\"{}\"/>", class(Paint::White), points(p, &corners)).unwrap();
     }
     out.push_str("</g>");
@@ -57,7 +57,7 @@ mod tests {
     use super::*;
     use crate::shared::catalogue::{KINDS, kind_index};
     use crate::street::iso::markings::Symbol;
-    use crate::street::iso::projection::drawn_mm;
+    use crate::street::iso::projection::{STRETCH_MM, drawn_mm};
     use crate::street::iso::solids::{Solid, blocks};
     use crate::street::iso::testing::{apart, count, furnished, hull};
     use crate::street::model::Editor;
@@ -82,6 +82,29 @@ mod tests {
         let x = (v.segments[2].x_mm + v.segments[2].width_mm) as f64;
         let left = points(&p, &[(x - 180.0, 0.0, 0.0), (x - 180.0, 0.0, STRETCH_MM), (x - 60.0, 0.0, STRETCH_MM), (x - 60.0, 0.0, 0.0)]);
         assert!(m.contains(&format!("<polygon class=\"iso-paint yellow\" points=\"{left}\"/>")), "the drawing has not got it");
+    }
+
+    #[test]
+    fn a_half_paints_its_lines_and_symbols_inside_its_reach() {
+        use crate::street::iso::projection::Reach;
+        let v = Editor::new(0).view();
+        let base = fit(&v, 1050.0);
+        let y = |z: f64| base.at(0.0, 0.0, z).1;
+        let ys = |m: &str| crate::street::iso::testing::xs_ys(m).into_iter().map(|(_, y)| y).collect::<Vec<_>>();
+        let (near_half, far_half) = (Reach { near: 0.0, far: 20_000.0 }, Reach { near: 20_000.0, far: 40_000.0 });
+        let m = layer(&base.over(near_half), &v.segments);
+        assert!(ys(&m).iter().all(|&v| v >= y(20_000.0) - 0.01), "no paint beyond the reach");
+        assert_eq!(count(&m, "class=\"iso-mark\""), 2);
+        let m = layer(&base.over(far_half), &v.segments);
+        assert!(ys(&m).iter().all(|&v| v <= y(20_000.0) + 0.01), "no paint nearer than the reach");
+        // A symbol is laid ARROW_AT_MM from the reach's near end: 2.5 m nearer to 2 m farther.
+        let marks = m.split("<g class=\"iso-mark\"").skip(1).collect::<Vec<_>>();
+        assert_eq!(marks.len(), 2);
+        for g in marks {
+            let g = &g[..g.find("</g>").unwrap()];
+            let ys = ys(g);
+            assert!(ys.iter().all(|&v| v <= y(23_500.0) + 0.01 && v >= y(28_000.0) - 0.01), "{ys:?}");
+        }
     }
 
     #[test]
