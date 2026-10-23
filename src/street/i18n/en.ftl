@@ -285,6 +285,10 @@ svg-iso-label-zone = { $name } in 2.5D, { $zone }, { $from } to { $to }, along a
         [one] { $count } segment
        *[other] { $count } segments
     }.
+svg-iso-label-joint = { $name } in 2.5D, along a { $length } stretch centred on the boundary between { $near } in front and { $far } beyond. The section changes abruptly there. { $zone } has { $count ->
+        [one] { $count } segment
+       *[other] { $count } segments
+    }.
 
 # What the model says it did, put into words by `text::say` (src/street/model.rs): the list of changes and what is announced after an edit.
 rev-earlier = Earlier changes

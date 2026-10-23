@@ -175,7 +175,7 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
 }
 
 /// What a screen reader is told the 2.5D drawing is: the street, the zone shown when it has several, the stretch
-/// shown, and its pieces.
+/// shown, and its pieces; across a near boundary, the two zones that meet there.
 pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
     let args = Args::new()
         .str("name", say(i18n, units, &v.name))
@@ -185,6 +185,12 @@ pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
         return i18n.tr("svg-iso-label", &args);
     }
     let zone = &v.zones.zones[v.zones.selected.min(v.zones.zones.len() - 1)];
+    if let Some(joint) = &v.zones.joint {
+        // The selected zone is the near run when the neighbour lies far; otherwise the neighbour is in front.
+        let (near, far) = if joint.far { (&zone.label_mid, &joint.label_mid) } else { (&joint.label_mid, &zone.label_mid) };
+        let args = args.str("zone", say(i18n, units, &zone.label)).str("near", say(i18n, units, near)).str("far", say(i18n, units, far));
+        return i18n.tr("svg-iso-label-joint", &args);
+    }
     let args = args
         .str("zone", say(i18n, units, &zone.label))
         .str("from", units.length_whole_in(zone.from_mm, i18n.locale()))
@@ -745,6 +751,15 @@ mod tests {
         Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }))
     }
 
+    /// The sample street divided at 100 m of 160 m: no boundary lies near the 40 m shown of zone 1.
+    fn zones_far_apart() -> Editor {
+        use crate::shared::catalogue::Side;
+        use crate::street::model::{Street, ZoneEnd, ZoneFrame, zoned};
+        let today = Street::sample(0, Side::Right);
+        let now = zoned(today.clone(), &[0, 100_000], 160_000);
+        Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 160_000, from_end: ZoneEnd::First }))
+    }
+
     #[test]
     fn a_street_of_one_zone_has_the_same_2_5d_label_as_before() {
         let v = Editor::new(0).view();
@@ -755,12 +770,48 @@ mod tests {
 
     #[test]
     fn the_2_5d_label_names_the_selected_zone_and_its_range_in_both_languages() {
-        let mut e = three_zones();
-        assert!(e.select_zone(1));
+        let mut e = zones_far_apart();
+        assert!(e.select_zone(0));
         let v = e.view();
-        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, Zone 2, 20 m to 40 m, along a 40 m stretch. 6 segments.");
+        assert!(v.zones.joint.is_none());
+        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, Zone 1, 0 m to 100 m, along a 40 m stretch. 6 segments.");
         let fr = crate::i18n_for(Locale::FrCa);
-        assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, Zone 2, de 20\u{a0}m à 40\u{a0}m, sur un tronçon de 40\u{a0}m. 6 éléments.");
+        assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, Zone 1, de 0\u{a0}m à 100\u{a0}m, sur un tronçon de 40\u{a0}m. 6 éléments.");
+    }
+
+    #[test]
+    fn the_label_names_the_two_zones_where_they_meet_in_both_languages() {
+        let v = joined(true, 1);
+        assert_eq!(
+            iso_label(&v, &en(), Units::Metres),
+            "Sample Street 1 in 2.5D, along a 40 m stretch centred on the boundary between Zone 1 in front and Zone 2 beyond. The section changes abruptly there. Zone 2 has 5 segments."
+        );
+        let fr = crate::i18n_for(Locale::FrCa);
+        assert!(
+            iso_label(&v, &fr, Units::Metres)
+                .contains("sur un tronçon de 40\u{a0}m centré sur la limite entre zone 1 au premier plan et zone 2 au-delà. La coupe change brusquement")
+        );
+    }
+
+    #[test]
+    fn the_zone_in_front_is_the_one_nearer_the_eye() {
+        let v = joined_from_last(true, 1);
+        let far = v.zones.joint.as_ref().expect("a joint").far;
+        let label = iso_label(&v, &en(), Units::Metres);
+        let (near, beyond) = if far { ("Zone 2", "Zone 1") } else { ("Zone 1", "Zone 2") };
+        assert!(label.contains(&format!("between {near} in front and {beyond} beyond")), "{label}");
+    }
+
+    #[test]
+    fn a_street_without_a_near_boundary_keeps_its_label() {
+        let v = Editor::new(0).view();
+        assert!(v.zones.joint.is_none());
+        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, along a 40 m stretch. 6 segments.");
+        let mut e = zones_far_apart();
+        assert!(e.select_zone(0));
+        let v = e.view();
+        assert!(v.zones.joint.is_none());
+        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, Zone 1, 0 m to 100 m, along a 40 m stretch. 6 segments.");
     }
 
     #[test]
