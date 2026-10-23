@@ -70,6 +70,7 @@ export async function createBasemap(container) {
       setPlaces: nothing,
       setRestrictions: nothing,
       setDraft: nothing,
+      setZoneTicks: nothing,
       centre: () => new Float64Array([0, 0]),
       fit: nothing,
       setInsets: nothing,
@@ -128,6 +129,7 @@ export async function createBasemap(container) {
   // The restrictions go under the places, the outline over everything.
   let restrictions = null;
   let draft = null;
+  let zoneTicks = null;
   const show = (kept, name, before) => {
     if (!styled || !kept) return;
     const data = JSON.parse(kept.data);
@@ -141,11 +143,13 @@ export async function createBasemap(container) {
   };
   const showRestrictions = () =>
     show(restrictions, "restrictions", map.getLayer("places-casing") ? "places-casing" : undefined);
+  const showZoneTicks = () => show(zoneTicks, "zone-ticks", map.getLayer("draft-fill") ? "draft-fill" : undefined);
   const showDraft = () => show(draft, "draft", undefined);
   map.on("style.load", () => {
     styled = true;
     showRestrictions();
     showPlaces();
+    showZoneTicks();
     showDraft();
   });
 
@@ -308,6 +312,10 @@ export async function createBasemap(container) {
     setRestrictions(layers, data) {
       restrictions = { layers, data };
       showRestrictions();
+    },
+    setZoneTicks(layers, data) {
+      zoneTicks = { layers, data };
+      showZoneTicks();
     },
     setDraft(layers, data) {
       draft = { layers, data };

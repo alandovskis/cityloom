@@ -212,12 +212,12 @@ pub fn curb_width_mm(curb: &str) -> f64 {
 
 /// The edges of the piece at `i` that carry its curb, each `true` for its right edge: those that
 /// face a road piece. An island stands on one side only, the one facing the buses.
-pub fn curb_edges(v: &View, i: usize) -> Vec<bool> {
-    let Some(s) = v.segments.get(i) else { return Vec::new() };
+pub fn curb_edges(segs: &[SegView], i: usize) -> Vec<bool> {
+    let Some(s) = segs.get(i) else { return Vec::new() };
     let Some(curb) = s.curb else { return Vec::new() };
     let kind_of = |n: Option<&SegView>| n.map(|n| KINDS[n.kind].id);
-    let left = if i > 0 { v.segments.get(i - 1) } else { None };
-    let mut sides = vec![(left, false), (v.segments.get(i + 1), true)];
+    let left = if i > 0 { segs.get(i - 1) } else { None };
+    let mut sides = vec![(left, false), (segs.get(i + 1), true)];
     sides.retain(|(nb, _)| kind_of(*nb).is_some_and(|id| ROAD.contains(&id)));
     if curb == "island" {
         let rank = |id: &str| ["bus", "travel"].iter().position(|k| *k == id).map_or(-1, |p| p as i32);
@@ -248,7 +248,7 @@ fn curbs(v: &View, g: &Geometry) -> String {
         let cw = (curb_width_mm(curb) * g.scale).max(least).min(w / 2.0);
         let ch = if island { 16.0 } else { 12.0 };
         let fill = if planted { "m-planted".to_string() } else { format!("c-{curb}") };
-        for road_right in curb_edges(v, i) {
+        for road_right in curb_edges(&v.segments, i) {
             let bx = if road_right { x + w - cw } else { x };
             if kassel || ramp {
                 // a: the road-side foot, b: the back
@@ -852,17 +852,17 @@ mod tests {
         let mut e = Editor::new(0);
         let v = e.view();
         // The left sidewalk faces parking on its right, the right one on its left; a driving lane has no curb.
-        assert_eq!(curb_edges(&v, 0), vec![true]);
-        assert_eq!(curb_edges(&v, 5), vec![false]);
-        assert_eq!(curb_edges(&v, 2), Vec::<bool>::new());
-        assert_eq!(curb_edges(&v, 99), Vec::<bool>::new());
+        assert_eq!(curb_edges(&v.segments, 0), vec![true]);
+        assert_eq!(curb_edges(&v.segments, 5), vec![false]);
+        assert_eq!(curb_edges(&v.segments, 2), Vec::<bool>::new());
+        assert_eq!(curb_edges(&v.segments, 99), Vec::<bool>::new());
         // A bike lane between parking and a driving lane has its curb on both edges, a boarding island on one.
         let u = e.add(kind_index("bike").unwrap(), 2);
-        assert_eq!(curb_edges(&e.view(), 2), vec![false, true]);
+        assert_eq!(curb_edges(&e.view().segments, 2), vec![false, true]);
         let island = crate::shared::catalogue::CURBS.iter().position(|c| c.id == "island").unwrap();
         assert!(e.set_curb(u, Some(island)));
         // The island stands on the driving lane's side (the right), not the parking's.
-        assert_eq!(curb_edges(&e.view(), 2), vec![true]);
+        assert_eq!(curb_edges(&e.view().segments, 2), vec![true]);
         assert_eq!((curb_width_mm("granite"), curb_width_mm("planted"), curb_width_mm("island")), (150.0, 600.0, 900.0));
         assert_eq!((curb_width_mm("kassel"), curb_width_mm("bikefriendly")), (250.0, 300.0));
     }

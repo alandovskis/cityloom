@@ -183,6 +183,8 @@ pub struct ZonesView {
     pub can_merge_next: bool,
     /// Set when the zones were drawn on a road of another length or anchored at its other end.
     pub elsewhere: Option<Elsewhere>,
+    /// The zone across the nearest boundary, for the 2.5D; `None` when no boundary is near.
+    pub joint: Option<super::Joint>,
 }
 
 #[derive(Serialize)]
@@ -237,7 +239,7 @@ const LENGTH_TOLERANCE_MM: i32 = 1_000;
 
 impl super::Content {
     /// Where zone `z` starts and ends, the last ending at the street's `length_mm`.
-    fn span(&self, z: usize, length_mm: i32) -> (i32, i32) {
+    pub(super) fn span(&self, z: usize, length_mm: i32) -> (i32, i32) {
         (self.zones.get(z).map_or(0, |g| g.from_mm), self.zones.get(z + 1).map_or(length_mm, |g| g.from_mm))
     }
 }
@@ -314,6 +316,7 @@ impl Editor {
             can_merge_prev: self.merge_neighbour(false).is_some(),
             can_merge_next: self.merge_neighbour(true).is_some(),
             elsewhere: self.elsewhere(),
+            joint: self.joint(),
         }
     }
 

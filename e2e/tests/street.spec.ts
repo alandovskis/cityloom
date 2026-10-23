@@ -674,15 +674,72 @@ test.describe("the zones of a street", () => {
     await expect(page.locator("#drawing.iso")).toBeAttached();
     const label = () => page.locator("#drawing").getAttribute("aria-label");
     const markup = () => page.locator("#drawing").innerHTML();
-    expect(await label()).toMatch(/in 2\.5D, Zone 2, /);
+    expect(await label()).toMatch(
+      /in 2\.5D, along a .* stretch centred on the boundary between Zone 1 in front and Zone 2 beyond\..* Zone 2 has /,
+    );
+    await expect(page.locator("#drawing .iso-across").first()).toBeAttached();
     const second = await markup();
     await page.locator("#zone-0").click();
-    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /in 2\.5D, Zone 1, /);
+    await expect(page.locator("#drawing")).toHaveAttribute(
+      "aria-label",
+      /on the boundary between Zone 1 in front and Zone 2 beyond\..* Zone 1 has /,
+    );
     const first = await markup();
     expect(first, "the other zone's pieces are drawn").not.toBe(second);
     await page.locator("#zone-1").click();
-    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /in 2\.5D, Zone 2, /);
+    await expect(page.locator("#drawing")).toHaveAttribute(
+      "aria-label",
+      /on the boundary between Zone 1 in front and Zone 2 beyond\..* Zone 2 has /,
+    );
     expect(await markup(), "zone 2's own pieces again").not.toBe(first);
+  });
+
+  /** Splits the street in two, gives zone 2 its own section, shows it in 2.5D. Zone 2 is selected. */
+  const isoAcrossBoundary = async (page: Page) => {
+    await page.locator("#zone-split").click();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await selectFirstPiece(page);
+    await page.keyboard.press("-"); // the second zone gets a section of its own
+    await page.locator("#view-iso").click();
+    await expect(page.locator("#drawing.iso")).toBeAttached();
+  };
+
+  test("the 2.5D draws the neighbouring zone across a boundary", async ({ page }) => {
+    await isoAcrossBoundary(page);
+    const drawing = page.locator("#drawing");
+    await expect(drawing.locator(".iso-section")).toHaveCount(2);
+    await expect(drawing.locator(".iso-across").first()).toBeAttached();
+    expect(await drawing.locator(".iso-across [data-uid]").count(), "the neighbour's pieces are not pressable").toBe(0);
+    await expect(drawing).toHaveAttribute(
+      "aria-label",
+      /centred on the boundary between Zone 1 in front and Zone 2 beyond.* Zone 2 has /,
+    );
+    const second = await drawing.innerHTML();
+    await page.locator("#zone-0").click();
+    await expect(drawing).toHaveAttribute(
+      "aria-label",
+      /centred on the boundary between Zone 1 in front and Zone 2 beyond.* Zone 1 has /,
+    );
+    await expect(drawing.locator(".iso-section")).toHaveCount(2);
+    expect(await drawing.innerHTML(), "the across run swaps with the selected zone").not.toBe(second);
+  });
+
+  test("a 2.5D with no boundary near is not split in two", async ({ page }) => {
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(1);
+    await page.locator("#view-iso").click();
+    await expect(page.locator("#drawing.iso")).toBeAttached();
+    await expect(page.locator("#drawing .iso-section")).toHaveCount(0);
+    await expect(page.locator("#drawing .iso-across")).toHaveCount(0);
+  });
+
+  test("the 2.5D label at a boundary is in French when the page is", async ({ page }) => {
+    await isoAcrossBoundary(page);
+    await page.locator("#account-btn").click();
+    await page.locator('[data-lang="fr-CA"]').click();
+    await expect(page.locator("#drawing")).toHaveAttribute(
+      "aria-label",
+      /centré sur la limite entre zone 1 au premier plan et zone 2 au-delà/,
+    );
   });
 
   test("the merge choice takes the focus and gives it back to the strip", async ({ page }) => {

@@ -19,7 +19,7 @@ use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::say;
 use crate::shared::units::Units;
-use crate::street::model::View;
+use crate::street::model::{SegView, View};
 use crate::street::svg::curb_edges;
 
 mod joints;
@@ -34,7 +34,7 @@ mod symbols;
 #[cfg(test)]
 mod testing;
 
-pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MIN_SOLID_PX, Projection, RISE, STRETCH_MM, TALLEST_MM, drawn_mm};
+pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MIN_SOLID_PX, Projection, RISE, Reach, STRETCH_MM, TALLEST_MM, drawn_mm};
 pub use raised::{HEIGHTS, curb_height_mm, curb_top_mm, height_mm};
 
 use order::Bx;
@@ -53,31 +53,32 @@ pub struct IsoSvg {
 /// The outline of the selected piece at `i`, as one shape round everything drawn for it (its strip
 /// and its curbs): its near face, the side the eye sees where there is one, and its top, at the height of
 /// its highest part.
-fn outline(out: &mut String, p: &Projection, v: &View, i: usize) {
-    let s = &v.segments[i];
+fn outline(out: &mut String, p: &Projection, segs: &[SegView], i: usize) {
+    let s = &segs[i];
     let id = KINDS[s.kind].id;
-    let top = s.curb.filter(|_| !curb_edges(v, i).is_empty()).map_or(drawn_mm(height_mm(id)), |c| curb_top_mm(c, id));
-    let (x0, x1, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, STRETCH_MM);
+    let top = s.curb.filter(|_| !curb_edges(segs, i).is_empty()).map_or(drawn_mm(height_mm(id)), |c| curb_top_mm(c, id));
+    let (x0, x1, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, p.reach.far);
+    let n = p.reach.near;
     let corners = match inner_face(p, x0, x1) {
         // Left of the eye: its right face is seen, so the outline climbs it and comes back along the top.
         Some(true) => {
-            let low = beside(v, i, true).min(top);
-            vec![(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, low, 0.0), (x1, low, l), (x1, top, l), (x0, top, l), (x0, top, 0.0)]
+            let low = beside(segs, i, true).min(top);
+            vec![(x0, 0.0, n), (x1, 0.0, n), (x1, low, n), (x1, low, l), (x1, top, l), (x0, top, l), (x0, top, n)]
         }
         Some(false) => {
-            let low = beside(v, i, false).min(top);
-            vec![(x1, 0.0, 0.0), (x0, 0.0, 0.0), (x0, low, 0.0), (x0, low, l), (x0, top, l), (x1, top, l), (x1, top, 0.0)]
+            let low = beside(segs, i, false).min(top);
+            vec![(x1, 0.0, n), (x0, 0.0, n), (x0, low, n), (x0, low, l), (x0, top, l), (x1, top, l), (x1, top, n)]
         }
-        None => vec![(x0, 0.0, 0.0), (x1, 0.0, 0.0), (x1, top, 0.0), (x1, top, l), (x0, top, l), (x0, top, 0.0)],
+        None => vec![(x0, 0.0, n), (x1, 0.0, n), (x1, top, n), (x1, top, l), (x0, top, l), (x0, top, n)],
     };
     let at = points(p, &corners);
     // A dark casing under the light line: one of the two is seen on any material, in either theme.
     write!(out, "<polygon class=\"iso-sel-casing\" points=\"{at}\"/><polygon class=\"iso-sel\" points=\"{at}\"/>").unwrap();
 }
 
-/// How wide the scene is across: the street, or the pieces where they run over it.
+/// How wide the scene is across: the street, or the pieces where they run over it, or the section across the boundary.
 fn span_mm(v: &View) -> i32 {
-    v.row_mm.max(v.total_mm)
+    v.row_mm.max(v.total_mm).max(v.zones.joint.as_ref().map_or(0, |j| j.total_mm))
 }
 
 /// How tall the 2.5D of this street is drawn `width` wide, without drawing it.
@@ -85,31 +86,33 @@ pub fn iso_height(v: &View, width: f64) -> f64 {
     Projection::fit(width, span_mm(v)).height
 }
 
-/// The street in 2.5D, drawn `width` wide: a stretch of `STRETCH_MM` seen in perspective from the centre line,
-/// from the same view the section is drawn from. Hovering a piece names it.
-///
-/// It is built in layers, each its own group, in the order the eye needs: the ground; the surface (the top of every
-/// roadway piece); the markings (every line and symbol, painted on the surface); the raised layer (every strip
-/// standing above the roadway, with its faces, covering the paint's edges where they meet) together with what stands
-/// on the pieces, in the order the eye needs (`order`: a box is painted after the ones it is in front of, nearer the
-/// middle of the street, nearer the near end or higher); and last the selected piece's outline.
-pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
-    let span = span_mm(v);
-    let p = Projection::fit(width, span);
-    let (w, l) = (span as f64, STRETCH_MM);
-    let mut out = format!("<defs>{}{}</defs>", shades(), materials());
-    write!(out, "<polygon class=\"iso-ground\" points=\"{}\"/>", points(&p, &[(0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, 0.0, l), (0.0, 0.0, l)])).unwrap();
+/// One section drawn over its half of the stretch.
+struct Run<'a> {
+    segs: &'a [SegView],
+    reach: Reach,
+    /// It is the neighbour's section, across the boundary.
+    across: bool,
+}
 
-    let (flat, standing) = surface::split(strips(v, &p));
-    out.push_str(&surface::layer(&p, v, i18n, &flat));
-    out.push_str(&paint::layer(&p, v));
+/// A run's layers, in the order the eye needs: the surface (the top of every roadway piece), the markings (every line
+/// and symbol, painted on the surface), and the raised layer (every strip standing above the roadway, with its faces,
+/// covering the paint's edges where they meet) together with what stands on the pieces, in the order the eye needs
+/// (`order`: a box is painted after the ones it is in front of, nearer the middle of the street, nearer the near end or
+/// higher).
+fn run_layers(out: &mut String, base: &Projection, i18n: &I18n, run: &Run) {
+    let p = base.over(run.reach);
+    let segs = run.segs;
+    let (flat, standing) = surface::split(strips(segs, &p));
+    out.push_str(&surface::layer(&p, segs, i18n, &flat, run.across));
+    out.push_str(&paint::layer(&p, segs));
 
     // The raised strips and what stands on the pieces, in the order the eye needs (`order`): a box covers the ones it
     // is in front of, so a crown nearer the middle of the street covers a shelter beyond it, and a strip nearer the
     // middle covers the foot of a post beyond it. The strips are in groups of their own between the solids.
-    let mut solids: Vec<Block> = (0..v.segments.len()).flat_map(|i| blocks(v, i, &p)).collect();
+    let mut solids: Vec<Block> = (0..segs.len()).flat_map(|i| blocks(segs, i, &p)).collect();
     solids.sort_by(|a, b| b.from_eye(&p).total_cmp(&a.from_eye(&p)).then(a.y.0.total_cmp(&b.y.0)));
-    let boxes: Vec<(Bx, bool)> = standing.iter().map(|&s| (raised::strip_box(v, s), true)).chain(solids.iter().map(|b| (b.bounds(), false))).collect();
+    let boxes: Vec<(Bx, bool)> =
+        standing.iter().map(|&s| (raised::strip_box(segs, s, p.reach), true)).chain(solids.iter().map(|b| (b.bounds(), false))).collect();
     out.push_str("<g class=\"iso-raised\">");
     let mut open = true;
     for k in order::paint_order(&boxes, p.centre_mm) {
@@ -118,27 +121,61 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
                 out.push_str("<g class=\"iso-raised\">");
                 open = true;
             }
-            raised::piece(&mut out, &p, v, i18n, standing[k]);
+            raised::piece(out, &p, segs, i18n, standing[k], run.across);
         } else {
             if open {
                 out.push_str("</g>");
                 open = false;
             }
-            block(&mut out, &p, &solids[k - standing.len()]);
+            block(out, &p, &solids[k - standing.len()]);
         }
     }
     if open {
         out.push_str("</g>");
     }
+}
+
+/// The street in 2.5D, drawn `width` wide: a stretch of `STRETCH_MM` seen in perspective from the centre line,
+/// from the same view the section is drawn from. Hovering a piece names it.
+///
+/// It is built in layers, each its own group: the ground; then the section (`run_layers`: its surface, its markings,
+/// its raised layer and solids); and last the selected piece's outline. Across a boundary (`View.zones.joint`) there
+/// are two sections, each over its half of the stretch (`STRETCH_MM / 2`, a `Reach`), the far one first so that the
+/// near one covers it, each in a group of its own (`iso-section`, and `iso-across` for the neighbour's); the outline
+/// is drawn over both, in the selected zone's half. The neighbour is drawn over its whole half whatever its own length.
+pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
+    let span = span_mm(v);
+    let p = Projection::fit(width, span);
+    let (w, l) = (span as f64, STRETCH_MM);
+    let mut out = format!("<defs>{}{}</defs>", shades(), materials());
+    write!(out, "<polygon class=\"iso-ground\" points=\"{}\"/>", points(&p, &[(0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, 0.0, l), (0.0, 0.0, l)])).unwrap();
+
+    let mut selected = Reach::STRETCH;
+    match &v.zones.joint {
+        None => run_layers(&mut out, &p, i18n, &Run { segs: &v.segments, reach: selected, across: false }),
+        Some(j) => {
+            let (near, far) = (Reach { near: 0.0, far: l / 2.0 }, Reach { near: l / 2.0, far: l });
+            // The neighbour lies beyond the selected zone (`far`), or before it.
+            let (own, across) = if j.far { (near, far) } else { (far, near) };
+            selected = own;
+            let (own_run, across_run) = (Run { segs: &v.segments, reach: own, across: false }, Run { segs: &j.segments, reach: across, across: true });
+            let runs = if j.far { [&across_run, &own_run] } else { [&own_run, &across_run] };
+            for run in runs {
+                out.push_str(if run.across { "<g class=\"iso-section iso-across\">" } else { "<g class=\"iso-section\">" });
+                run_layers(&mut out, &p, i18n, run);
+                out.push_str("</g>");
+            }
+        }
+    }
     if let Some(i) = v.selected.and_then(|u| v.segments.iter().position(|s| s.uid == u)) {
-        outline(&mut out, &p, v, i);
+        outline(&mut out, &p.over(selected), &v.segments, i);
     }
 
     IsoSvg { markup: out, width: p.width, height: p.height }
 }
 
 /// What a screen reader is told the 2.5D drawing is: the street, the zone shown when it has several, the stretch
-/// shown, and its pieces.
+/// shown, and its pieces; across a near boundary, the two zones that meet there.
 pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
     let args = Args::new()
         .str("name", say(i18n, units, &v.name))
@@ -148,6 +185,12 @@ pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
         return i18n.tr("svg-iso-label", &args);
     }
     let zone = &v.zones.zones[v.zones.selected.min(v.zones.zones.len() - 1)];
+    if let Some(joint) = &v.zones.joint {
+        // The selected zone is the near run when the neighbour lies far; otherwise the neighbour is in front.
+        let (near, far) = if joint.far { (&zone.label_mid, &joint.label_mid) } else { (&joint.label_mid, &zone.label_mid) };
+        let args = args.str("zone", say(i18n, units, &zone.label)).str("near", say(i18n, units, near)).str("far", say(i18n, units, far));
+        return i18n.tr("svg-iso-label-joint", &args);
+    }
     let args = args
         .str("zone", say(i18n, units, &zone.label))
         .str("from", units.length_whole_in(zone.from_mm, i18n.locale()))
@@ -157,9 +200,9 @@ pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::projection::{BANDS, EYE_BACK_MM, band_edges};
+    use super::projection::{BANDS, EYE_BACK_MM, Reach, band_edges};
     use super::projection::{PAD, r};
-    use super::testing::{count, drawn, en, furnished, marked, one_way_bikes, top_of, xs, xs_ys};
+    use super::testing::{count, drawn, en, furnished, joined, joined_from_last, marked, one_way_bikes, top_of, xs, xs_ys};
     use super::*;
     use crate::shared::catalogue::{KINDS, MATERIALS, kind_index};
     use crate::shared::i18n::Locale;
@@ -324,7 +367,7 @@ mod tests {
         }
         // Each top is cut into BANDS bands, whose polygons, laid by their matrices, are exactly the perspective's
         // quadrilaterals of the band (so they fit the top and each other), and whose matrices are the slope at the band's depth.
-        let edges = band_edges();
+        let edges = band_edges(Reach::STRETCH);
         for s in &v.segments {
             let h = drawn_mm(height_mm(KINDS[s.kind].id));
             let bands = bands(&m, s.uid);
@@ -708,6 +751,15 @@ mod tests {
         Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }))
     }
 
+    /// The sample street divided at 100 m of 160 m: no boundary lies near the 40 m shown of zone 1.
+    fn zones_far_apart() -> Editor {
+        use crate::shared::catalogue::Side;
+        use crate::street::model::{Street, ZoneEnd, ZoneFrame, zoned};
+        let today = Street::sample(0, Side::Right);
+        let now = zoned(today.clone(), &[0, 100_000], 160_000);
+        Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 160_000, from_end: ZoneEnd::First }))
+    }
+
     #[test]
     fn a_street_of_one_zone_has_the_same_2_5d_label_as_before() {
         let v = Editor::new(0).view();
@@ -718,12 +770,47 @@ mod tests {
 
     #[test]
     fn the_2_5d_label_names_the_selected_zone_and_its_range_in_both_languages() {
-        let mut e = three_zones();
-        assert!(e.select_zone(1));
+        let mut e = zones_far_apart();
+        assert!(e.select_zone(0));
         let v = e.view();
-        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, Zone 2, 20 m to 40 m, along a 40 m stretch. 6 segments.");
+        assert!(v.zones.joint.is_none());
+        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, Zone 1, 0 m to 100 m, along a 40 m stretch. 6 segments.");
         let fr = crate::i18n_for(Locale::FrCa);
-        assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, Zone 2, de 20\u{a0}m à 40\u{a0}m, sur un tronçon de 40\u{a0}m. 6 éléments.");
+        assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, Zone 1, de 0\u{a0}m à 100\u{a0}m, sur un tronçon de 40\u{a0}m. 6 éléments.");
+    }
+
+    #[test]
+    fn the_label_names_the_two_zones_where_they_meet_in_both_languages() {
+        let v = joined(true, 1);
+        assert_eq!(
+            iso_label(&v, &en(), Units::Metres),
+            "Sample Street 1 in 2.5D, along a 40 m stretch centred on the boundary between Zone 1 in front and Zone 2 beyond. The section changes abruptly there. Zone 2 has 5 segments."
+        );
+        let fr = crate::i18n_for(Locale::FrCa);
+        assert_eq!(
+            iso_label(&v, &fr, Units::Metres),
+            "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m centré sur la limite entre zone 1 au premier plan et zone 2 au-delà. La coupe change brusquement à cet endroit. Zone 2 compte 5 éléments."
+        );
+    }
+
+    #[test]
+    fn the_zone_in_front_is_the_one_nearer_the_eye() {
+        let v = joined_from_last(true, 1);
+        assert!(v.zones.joint.as_ref().expect("a joint").far, "the neighbour of the last zone lies beyond");
+        let label = iso_label(&v, &en(), Units::Metres);
+        assert!(label.contains("between Zone 2 in front and Zone 1 beyond"), "{label}");
+    }
+
+    #[test]
+    fn a_street_without_a_near_boundary_keeps_its_label() {
+        let v = Editor::new(0).view();
+        assert!(v.zones.joint.is_none());
+        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, along a 40 m stretch. 6 segments.");
+        let mut e = zones_far_apart();
+        assert!(e.select_zone(0));
+        let v = e.view();
+        assert!(v.zones.joint.is_none());
+        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, Zone 1, 0 m to 100 m, along a 40 m stretch. 6 segments.");
     }
 
     #[test]
@@ -738,8 +825,25 @@ mod tests {
         assert_ne!(one, zero);
         let top = top_of(&one, uid);
         assert_ne!(top, top_of(&zero, uid), "the widened piece's top face");
-        assert!(e.select_zone(0));
+        // The widened top is in the selected zone's own section, and in no other.
+        let own = |m: &str| {
+            let at = m.find("<g class=\"iso-section\">").expect("the selected zone's section");
+            let rest = &m[at..];
+            rest[..rest[1..].find("<g class=\"iso-section").map_or(rest.len(), |i| i + 1)].to_string()
+        };
+        assert!(own(&one).contains(&top), "the widened top lies in the selected zone's section");
+        assert!(!own(&zero).contains(&top));
+        assert!(one[one.find("iso-across").unwrap()..].split("<g class=\"iso-section\">").next().is_some_and(|across| !across.contains(&top)));
+        // Putting the width back puts the drawing back.
+        assert!(e.set_width(uid, w));
         assert_eq!(drawn(&e), zero);
+        assert!(e.set_width(uid, w + 300));
+        assert!(e.select_zone(0));
+        // Zone 1 is zone 0's neighbour across its end boundary, so the edit shows beyond it (in the half across, with no
+        // uid), and the scene is as wide as the widest section; the selected zone's own pieces are the same.
+        let back = drawn(&e);
+        assert_ne!(back, zero);
+        assert_eq!(count(&back, "data-uid"), count(&zero, "data-uid"));
     }
 
     #[test]
@@ -907,5 +1011,153 @@ mod tests {
             );
             std::fs::write(format!("{root}/target/iso-preview-{theme}.html"), html).unwrap();
         }
+    }
+
+    // --- both sections across a boundary ---
+
+    /// A view of a street of Sample Avenue 2 (trees, a median) in two zones, zone `selected` shown.
+    fn avenue_joined(selected: usize) -> View {
+        use crate::shared::catalogue::Side;
+        use crate::street::model::zoned;
+        let s = zoned(crate::street::model::Street::sample(1, Side::Right), &[0, 50_000], 100_000);
+        let mut e = Editor::from_street(&s, &s, 0);
+        assert!(e.select_zone(selected));
+        e.view()
+    }
+
+    fn halves() -> (Reach, Reach) {
+        (Reach { near: 0.0, far: 20_000.0 }, Reach { near: 20_000.0, far: 40_000.0 })
+    }
+
+    #[test]
+    fn a_street_without_a_near_boundary_draws_as_before() {
+        for n in 0..4 {
+            let m = drawn(&Editor::new(n));
+            assert_eq!(count(&m, "iso-section"), 0);
+            assert_eq!(count(&m, "iso-across"), 0);
+        }
+    }
+
+    #[test]
+    fn a_boundary_draws_both_sections_each_in_its_half() {
+        let v = joined(true, 1);
+        let j = v.zones.joint.as_ref().unwrap();
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        assert_eq!(count(&m, "<g class=\"iso-section"), 2);
+        assert_eq!(count(&m, "<g class=\"iso-section iso-across"), 1);
+        assert_eq!(count(&m, "class=\"iso-ground\""), 1);
+        assert_eq!(count(&m, "class=\"iso-top "), v.segments.len() + j.segments.len());
+        let p = Projection::fit(1050.0, span_mm(&v));
+        assert_eq!(count(&m, "class=\"iso-piece iso-across\""), raised::strips(&j.segments, &p).len());
+        assert!(!m.contains("NaN"));
+        // Each section stays in its own half: the near one (here the neighbour) is nearer than the seam, the far one beyond it.
+        let seam = p.at(0.0, 0.0, 20_000.0).1;
+        let sections: Vec<&str> =
+            m.split("<g class=\"iso-section").skip(1).map(|t| &t[..t.find("<polygon class=\"iso-sel-casing\"").unwrap_or(t.len())]).collect();
+        assert_eq!(sections.len(), 2);
+        let (own, across) = (sections[0], sections[1]);
+        // (a thing that stands up rises above its foot on the drawing, so the bound is the tallest thing's top)
+        let tallest = p.at(0.0, TALLEST_MM, 20_000.0).1;
+        assert!(xs_ys(across).iter().all(|&(_, y)| y >= tallest - 0.05), "the near half is nearer than the seam");
+        assert!(xs_ys(own).iter().all(|&(_, y)| y <= seam + 0.05), "the far half is beyond the seam");
+    }
+
+    #[test]
+    fn the_far_section_is_painted_first() {
+        let m = iso_svg(&joined(true, 0), &en(), 1050.0).markup;
+        assert!(m.find("iso-across").unwrap() < m.rfind("<g class=\"iso-section\"").unwrap(), "zone 2 lies beyond zone 1");
+        let m = iso_svg(&joined(true, 1), &en(), 1050.0).markup;
+        assert!(m.find("<g class=\"iso-section\"").unwrap() < m.find("iso-across").unwrap(), "zone 1 lies before zone 2");
+    }
+
+    #[test]
+    fn a_street_anchored_at_the_last_end_swaps_the_halves() {
+        let m = iso_svg(&joined_from_last(true, 0), &en(), 1050.0).markup;
+        assert!(m.find("<g class=\"iso-section\"").unwrap() < m.find("iso-across").unwrap(), "the across section is now the near run");
+        let m = iso_svg(&joined_from_last(true, 1), &en(), 1050.0).markup;
+        assert!(m.find("iso-across").unwrap() < m.rfind("<g class=\"iso-section\"").unwrap());
+    }
+
+    #[test]
+    fn the_neighbours_pieces_carry_no_uid_and_the_selected_ones_do() {
+        let v = joined(true, 1);
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        assert_eq!(count(&m, "iso-piece iso-across\" data-uid"), 0);
+        // A uid of the selected section is also one of the neighbour's (uids repeat across sections): only the selected one carries it.
+        let uid = v.segments[0].uid;
+        assert!(v.zones.joint.as_ref().unwrap().segments.iter().any(|s| s.uid == uid));
+        let p = Projection::fit(1050.0, span_mm(&v));
+        let want = raised::strips(&v.segments, &p).iter().filter(|s| s.1 == 0).count();
+        assert_eq!(count(&m, &format!("data-uid=\"{uid}\"")), want);
+        assert!(count(&m, "<g class=\"iso-piece iso-across\"><title>") > 0, "the neighbour's pieces still name themselves");
+    }
+
+    #[test]
+    fn the_selected_pieces_outline_is_drawn_once_over_both_halves() {
+        for (selected, far) in [(1, true), (0, false)] {
+            let mut e = crate::street::model::two_zones(true);
+            assert!(e.select_zone(selected));
+            let uid = e.view().segments[1].uid;
+            e.select(Some(uid));
+            let v = e.view();
+            let m = iso_svg(&v, &en(), 1050.0).markup;
+            assert_eq!(count(&m, "class=\"iso-sel\""), 1);
+            let at = m.find("<polygon class=\"iso-sel-casing\"").unwrap();
+            assert!(!m[at..].contains("<g"), "after the last section");
+            // The outline stands over the selected zone's half.
+            let (near, farr) = halves();
+            let p = Projection::fit(1050.0, span_mm(&v)).over(if far { farr } else { near });
+            let mut want = String::new();
+            outline(&mut want, &p, &v.segments, 1);
+            assert!(m.ends_with(&want), "zone {selected}");
+        }
+    }
+
+    #[test]
+    fn a_raised_piece_that_starts_at_the_boundary_has_its_end_face_there() {
+        // Zone 1 selected, zone 2 beyond: its sidewalks stand from 20 m on, with a front face cut there.
+        let v = joined(true, 0);
+        let j = v.zones.joint.as_ref().unwrap();
+        let p = Projection::fit(1050.0, span_mm(&v)).over(halves().1);
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        let across = &m[m.find("iso-across").unwrap()..];
+        let s = j.segments.iter().find(|s| KINDS[s.kind].id == "sidewalk").unwrap();
+        let (x0, x1, h) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, drawn_mm(height_mm("sidewalk")));
+        let front = points(&p, &[(x0, 0.0, 20_000.0), (x1, 0.0, 20_000.0), (x1, h, 20_000.0), (x0, h, 20_000.0)]);
+        assert!(across.contains(&format!("class=\"iso-front k-sidewalk\" points=\"{front}\"")), "{front}");
+    }
+
+    #[test]
+    fn a_neighbour_wider_than_the_selected_section_widens_the_drawing_and_nothing_panics() {
+        let mut v = joined(true, 0);
+        let j = v.zones.joint.as_mut().unwrap();
+        let more = v.row_mm.max(v.total_mm);
+        j.segments.last_mut().unwrap().width_mm += more;
+        j.total_mm += more;
+        let total = j.total_mm;
+        assert_eq!(span_mm(&v), total);
+        assert!(total > v.row_mm.max(v.total_mm));
+        assert_eq!(iso_height(&v, 1050.0), Projection::fit(1050.0, total).height);
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        assert!(!m.contains("NaN") && !m.contains("inf"));
+    }
+
+    #[test]
+    fn each_half_has_its_markings_symbols_and_solids() {
+        use super::solids::Solid;
+        let v = avenue_joined(0);
+        let j = v.zones.joint.as_ref().unwrap();
+        let base = Projection::fit(1050.0, span_mm(&v));
+        let (near, far) = halves();
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        // The selected zone is the near half, the neighbour the far one.
+        let crowns = |segs: &[SegView], p: &Projection| (0..segs.len()).flat_map(|i| blocks(segs, i, p)).filter(|b| b.solid == Solid::Crown).count();
+        let (a, b) = (crowns(&v.segments, &base.over(near)), crowns(&j.segments, &base.over(far)));
+        assert!(a > 0 && b > 0);
+        assert_eq!(count(&m, "s-crown"), a + b);
+        let marks = |segs: &[SegView], p: &Projection| count(&paint::layer(p, segs), "class=\"iso-mark\"");
+        let (a, b) = (marks(&v.segments, &base.over(near)), marks(&j.segments, &base.over(far)));
+        assert!(a > 0 && b > 0);
+        assert_eq!(count(&m, "class=\"iso-mark\""), a + b);
     }
 }

@@ -5,28 +5,34 @@
 use std::fmt::Write;
 
 use crate::shared::iso::paint::{Paint, class, quads};
-use crate::street::model::View;
+use crate::street::model::SegView;
 
 use super::markings::{Mark, markings};
 use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection, STRETCH_MM, points};
 use super::symbols::shapes;
 
 /// The lines and symbols of the street as one group, drawn flat on the ground. A line is the shared paint quads of
-/// the path `[(x, 0), (x, STRETCH_MM)]` (across, along); a symbol is its polygons laid on its lane at
-/// `ARROW_AT_MM`, so it foreshortens and shrinks with the distance. A piece narrower on screen than `MIN_SOLID_PX`
+/// the path `[(x, reach.near), (x, reach.far)]` (across, along), the reach being the part of the stretch this section
+/// covers; a symbol is its polygons laid on its lane at `ARROW_AT_MM` from the reach's near end, so it foreshortens and shrinks with the distance. A piece narrower on screen than `MIN_SOLID_PX`
 /// where its symbol lies (`wide_enough`) keeps its lines but gets no symbol.
-pub(super) fn layer(p: &Projection, v: &View) -> String {
-    let m = markings(v);
+pub(super) fn layer(p: &Projection, segs: &[SegView]) -> String {
+    let m = markings(segs);
     let mut out = String::from("<g class=\"iso-markings\">");
     for line in &m.lines {
         let x = line.x_mm as f64;
+        // The dashes are laid from the start of the stretch and cut to the reach, so that a line that goes on across a
+        // boundary keeps its rhythm there.
         for (paint, quad) in quads(&[(x, 0.0), (x, STRETCH_MM)], line.style) {
-            let corners: Vec<(f64, f64, f64)> = quad.iter().map(|&(across, along)| (across, 0.0, along)).collect();
+            let (lo, hi) = quad.iter().fold((f64::MAX, f64::MIN), |(lo, hi), c| (lo.min(c.1), hi.max(c.1)));
+            if hi.min(p.reach.far) - lo.max(p.reach.near) < 1e-9 {
+                continue;
+            }
+            let corners: Vec<(f64, f64, f64)> = quad.iter().map(|&(across, along)| (across, 0.0, along.clamp(p.reach.near, p.reach.far))).collect();
             write!(out, "<polygon class=\"{}\" points=\"{}\"/>", class(paint), points(p, &corners)).unwrap();
         }
     }
     for mark in &m.marks {
-        symbol(&mut out, p, v, mark);
+        symbol(&mut out, p, segs, mark);
     }
     out.push_str("</g>");
     out
@@ -34,11 +40,11 @@ pub(super) fn layer(p: &Projection, v: &View) -> String {
 
 /// Whether a piece `w` mm wide is wide enough on the screen, where its symbol lies, to carry it.
 pub(super) fn symbol_fits(p: &Projection, w: f64) -> bool {
-    w * p.scale_at(ARROW_AT_MM) >= MIN_SOLID_PX
+    w * p.scale_at(p.reach.near + ARROW_AT_MM) >= MIN_SOLID_PX
 }
 
-fn symbol(out: &mut String, p: &Projection, v: &View, mark: &Mark) {
-    let Some(s) = v.segments.iter().find(|s| s.uid == mark.uid) else { return };
+fn symbol(out: &mut String, p: &Projection, segs: &[SegView], mark: &Mark) {
+    let Some(s) = segs.iter().find(|s| s.uid == mark.uid) else { return };
     let w = s.width_mm as f64;
     if !symbol_fits(p, w) {
         return;
@@ -46,7 +52,7 @@ fn symbol(out: &mut String, p: &Projection, v: &View, mark: &Mark) {
     let cx = s.x_mm as f64 + w / 2.0;
     write!(out, "<g class=\"iso-mark\" data-mark=\"{}\">", mark.uid).unwrap();
     for shape in shapes(mark.symbol, w) {
-        let corners: Vec<(f64, f64, f64)> = shape.iter().map(|&(across, along)| (cx + across, 0.0, ARROW_AT_MM + along)).collect();
+        let corners: Vec<(f64, f64, f64)> = shape.iter().map(|&(across, along)| (cx + across, 0.0, p.reach.near + ARROW_AT_MM + along)).collect();
         write!(out, "<polygon class=\"{}\" points=\"{}\"/>", class(Paint::White), points(p, &corners)).unwrap();
     }
     out.push_str("</g>");
@@ -61,6 +67,7 @@ mod tests {
     use crate::street::iso::solids::{Solid, blocks};
     use crate::street::iso::testing::{apart, count, furnished, hull};
     use crate::street::model::Editor;
+    use crate::street::model::View;
 
     fn fit(v: &View, width: f64) -> Projection {
         Projection::fit(width, v.row_mm.max(v.total_mm))
@@ -71,7 +78,7 @@ mod tests {
         // Sample Street 1: a solid white line each side of the roadway, a double yellow one between the lanes.
         let v = Editor::new(0).view();
         let p = fit(&v, 1050.0);
-        let m = layer(&p, &v);
+        let m = layer(&p, &v.segments);
         assert!(m.starts_with("<g class=\"iso-markings\">") && m.ends_with("</g>"));
         assert_eq!(count(&m, "class=\"iso-paint yellow\""), 2);
         assert_eq!(count(&m, "class=\"iso-paint white\""), 2 + 2, "two solid lines and two arrows");
@@ -84,10 +91,33 @@ mod tests {
     }
 
     #[test]
+    fn a_half_paints_its_lines_and_symbols_inside_its_reach() {
+        use crate::street::iso::projection::Reach;
+        let v = Editor::new(0).view();
+        let base = fit(&v, 1050.0);
+        let y = |z: f64| base.at(0.0, 0.0, z).1;
+        let ys = |m: &str| crate::street::iso::testing::xs_ys(m).into_iter().map(|(_, y)| y).collect::<Vec<_>>();
+        let (near_half, far_half) = (Reach { near: 0.0, far: 20_000.0 }, Reach { near: 20_000.0, far: 40_000.0 });
+        let m = layer(&base.over(near_half), &v.segments);
+        assert!(ys(&m).iter().all(|&v| v >= y(20_000.0) - 0.01), "no paint beyond the reach");
+        assert_eq!(count(&m, "class=\"iso-mark\""), 2);
+        let m = layer(&base.over(far_half), &v.segments);
+        assert!(ys(&m).iter().all(|&v| v <= y(20_000.0) + 0.01), "no paint nearer than the reach");
+        // A symbol is laid ARROW_AT_MM from the reach's near end: 2.5 m nearer to 2 m farther.
+        let marks = m.split("<g class=\"iso-mark\"").skip(1).collect::<Vec<_>>();
+        assert_eq!(marks.len(), 2);
+        for g in marks {
+            let g = &g[..g.find("</g>").unwrap()];
+            let ys = ys(g);
+            assert!(ys.iter().all(|&v| v <= y(23_500.0) + 0.01 && v >= y(28_000.0) - 0.01), "{ys:?}");
+        }
+    }
+
+    #[test]
     fn a_symbol_is_centred_on_its_lane_at_the_arrow_distance_and_lies_on_the_ground() {
         let v = Editor::new(0).view();
         let p = fit(&v, 1050.0);
-        let m = layer(&p, &v);
+        let m = layer(&p, &v.segments);
         let lane = &v.segments[2];
         let cx = lane.x_mm as f64 + lane.width_mm as f64 / 2.0;
         let toward = lane.direction == Some("toward");
@@ -113,7 +143,7 @@ mod tests {
         assert!(symbol_fits(&p, 1_200.0), "on this street at 600 px it fits");
         let p = fit(&v, 480.0);
         assert!(!symbol_fits(&p, 1_200.0), "at 480 px it does not");
-        let m = layer(&p, &v);
+        let m = layer(&p, &v.segments);
         assert!(!m.contains(&format!("data-mark=\"{bike}\"")));
         assert_eq!(count(&m, "class=\"iso-mark\""), 2, "the driving lanes keep theirs");
         // Sample Street 1 with the bike lane between its driving lanes: four solid white lines (parking, driving lane,
@@ -123,7 +153,7 @@ mod tests {
         assert!(!m.contains("NaN"));
         // At 1050 px on the street itself the same lane is wide enough.
         let p = fit(&v, 1050.0);
-        assert!(layer(&p, &v).contains(&format!("data-mark=\"{bike}\"")));
+        assert!(layer(&p, &v.segments).contains(&format!("data-mark=\"{bike}\"")));
     }
 
     #[test]
@@ -133,7 +163,7 @@ mod tests {
             assert!(e.remove(uid));
         }
         let v = e.view();
-        assert_eq!(layer(&fit(&v, 1050.0), &v), "<g class=\"iso-markings\"></g>");
+        assert_eq!(layer(&fit(&v, 1050.0), &v.segments), "<g class=\"iso-markings\"></g>");
     }
 
     #[test]
@@ -141,7 +171,7 @@ mod tests {
         let mut e = Editor::new(0);
         let bus = e.add(kind_index("bus").unwrap(), 3);
         let v = e.view();
-        let m = layer(&fit(&v, 1050.0), &v);
+        let m = layer(&fit(&v, 1050.0), &v.segments);
         let open = format!("<g class=\"iso-mark\" data-mark=\"{bus}\">");
         let at = m.find(&open).expect("the bus lane has a symbol");
         let group = &m[at..at + m[at..].find("</g>").unwrap()];
@@ -159,7 +189,7 @@ mod tests {
             for width in [760.0, 1050.0, 1800.0] {
                 let p = fit(&v, width);
                 let trees: Vec<Vec<(f64, f64)>> = (0..v.segments.len())
-                    .flat_map(|i| blocks(&v, i, &p))
+                    .flat_map(|i| blocks(&v.segments, i, &p))
                     .filter(|b| matches!(b.solid, Solid::Trunk | Solid::Crown))
                     .map(|b| {
                         let corners = [b.x.0, b.x.1]
@@ -169,7 +199,7 @@ mod tests {
                     })
                     .collect();
                 assert!(!trees.is_empty(), "{width}");
-                for mark in markings(&v).marks {
+                for mark in markings(&v.segments).marks {
                     let s = v.segments.iter().find(|s| s.uid == mark.uid).unwrap();
                     if !symbol_fits(&p, s.width_mm as f64) {
                         continue;
@@ -185,6 +215,37 @@ mod tests {
                             .map(|(x, y, z)| p.at(x, y, z));
                     assert!(trees.iter().all(|t| apart(t, &ground)), "{width}: the symbol of piece {} is hidden", mark.uid);
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn a_broken_line_keeps_its_rhythm_across_the_boundary() {
+        use crate::street::iso::projection::Reach;
+        use crate::street::iso::testing::{marked, xs_ys};
+        // Sample Street 1 with a two-way bike lane: a broken yellow middle line.
+        let v = marked().view();
+        let base = fit(&v, 1050.0);
+        let y = |z: f64| base.at(0.0, 0.0, z).1;
+        let lines = |m: &str| m.split("<g class=\"iso-mark\"").next().unwrap().to_string();
+        let ranges = |m: &str| -> Vec<(f64, f64)> {
+            lines(m)
+                .split("<polygon")
+                .skip(1)
+                .map(|poly| {
+                    let ys: Vec<f64> = xs_ys(&format!("<polygon{}", &poly[..poly.find("/>").unwrap()])).into_iter().map(|(_, y)| y).collect();
+                    (ys.iter().cloned().fold(f64::MAX, f64::min), ys.iter().cloned().fold(f64::MIN, f64::max))
+                })
+                .collect()
+        };
+        let whole = ranges(&layer(&base, &v.segments));
+        for (near, far) in [(20_000.0, 40_000.0), (0.0, 20_000.0)] {
+            let (yn, yf) = (y(near), y(far));
+            let want: Vec<(f64, f64)> = whole.iter().map(|&(lo, hi)| (lo.max(yf), hi.min(yn))).filter(|(lo, hi)| hi - lo > 1e-6).collect();
+            let got = ranges(&layer(&base.over(Reach { near, far }), &v.segments));
+            assert_eq!(got.len(), want.len(), "{near}: {got:?} {want:?}");
+            for (g, w) in got.iter().zip(&want) {
+                assert!((g.0 - w.0).abs() < 0.02 && (g.1 - w.1).abs() < 0.02, "{near}: {g:?} {w:?}");
             }
         }
     }

@@ -14,7 +14,9 @@ pub use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::{SAMPLES, pedestrianised, zoned};
+pub use fixtures::{SAMPLES, pedestrianised, two_zones, zoned};
+pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM};
+mod joint;
 mod zones;
 pub use zones::{Elsewhere, Keep, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
 

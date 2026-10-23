@@ -78,6 +78,20 @@ pub fn zoned(street: Street, starts_mm: &[i32], length_mm: i32) -> Street {
     Street { zones, from_end: ZoneEnd::First, length_mm: Some(length_mm), ..street }.settled()
 }
 
+/// A 100 000 mm street of `Street::sample(0, Side::Right)` with zones at 0 and 50 000. Zone 2 has a section of its
+/// own, one travel lane fewer, when `second_own`.
+pub fn two_zones(second_own: bool) -> Editor {
+    let mut s = zoned(Street::sample(0, Side::Right), &[0, 50_000], 100_000);
+    if second_own {
+        let mut own = s.segments.clone();
+        let lane = own.iter().position(|g| KINDS[g.kind].id == "travel").expect("the sample has a travel lane");
+        own.remove(lane);
+        s.zones[1].segments = Some(own);
+    }
+    let region = REGIONS.iter().position(|r| r.drive_side == Side::Right).unwrap_or(0);
+    Editor::from_street(&s, &s, region)
+}
+
 impl Street {
     /// The sample street laid out for a side of the road.
     pub fn sample(sample: usize, side: Side) -> Street {

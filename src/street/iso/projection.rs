@@ -39,6 +39,23 @@ pub fn drawn_mm(mm: i32) -> f64 {
     mm as f64 * RISE
 }
 
+/// The part of the stretch a drawing covers along the street, in millimetres from its near end.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Reach {
+    pub near: f64,
+    pub far: f64,
+}
+
+impl Reach {
+    /// The whole stretch.
+    pub const STRETCH: Reach = Reach { near: 0.0, far: STRETCH_MM };
+
+    /// How long it is, in millimetres.
+    pub fn len(self) -> f64 {
+        self.far - self.near
+    }
+}
+
 /// How many bands a textured top is cut into along the street (`band_edges`).
 pub const BANDS: usize = 8;
 
@@ -57,6 +74,9 @@ pub struct Projection {
     pub horizon: f64,
     pub width: f64,
     pub height: f64,
+    /// The part of the stretch the layers draw: the whole of it, unless `over` says otherwise. The scene's own fit (the
+    /// headroom, the ground) stays on the whole stretch.
+    pub reach: Reach,
 }
 
 impl Projection {
@@ -70,7 +90,20 @@ impl Projection {
         let headroom = (EYE_HEIGHT_MM - TALLEST_MM) * EYE_BACK_MM / (EYE_BACK_MM + STRETCH_MM);
         let scale = ((width - 2.0 * PAD) / across).min((max_height(width) - 2.0 * PAD) / (EYE_HEIGHT_MM - headroom));
         let horizon = PAD - headroom * scale;
-        Projection { scale, centre_mm: across / 2.0, centre_px: width / 2.0, horizon, width, height: horizon + EYE_HEIGHT_MM * scale + PAD }
+        Projection {
+            scale,
+            centre_mm: across / 2.0,
+            centre_px: width / 2.0,
+            horizon,
+            width,
+            height: horizon + EYE_HEIGHT_MM * scale + PAD,
+            reach: Reach::STRETCH,
+        }
+    }
+
+    /// The same projection, drawing only `reach`.
+    pub fn over(self, reach: Reach) -> Projection {
+        Projection { reach, ..self }
     }
 
     /// Pixels to the millimetre at `along_mm` from the near end.
@@ -103,14 +136,14 @@ impl Projection {
 /// band by band is out of true at a seam by the step in scale there, and the step shows in pixels as the scale at the
 /// seam times it: equal steps of depth, or of its logarithm, leave the nearest seam, where the street is biggest on the
 /// screen, with the biggest step; equal steps of the scale give every seam about the same.
-pub fn band_edges() -> [f64; BANDS + 1] {
-    let (near, far) = (1.0 / EYE_BACK_MM, 1.0 / (EYE_BACK_MM + STRETCH_MM));
+pub fn band_edges(reach: Reach) -> [f64; BANDS + 1] {
+    let (near, far) = (1.0 / (EYE_BACK_MM + reach.near), 1.0 / (EYE_BACK_MM + reach.far));
     let mut edges = [0.0; BANDS + 1];
     for (i, e) in edges.iter_mut().enumerate() {
         *e = 1.0 / (near + (far - near) * i as f64 / BANDS as f64) - EYE_BACK_MM;
     }
-    edges[0] = 0.0;
-    edges[BANDS] = STRETCH_MM;
+    edges[0] = reach.near;
+    edges[BANDS] = reach.far;
     edges
 }
 
@@ -247,8 +280,30 @@ mod tests {
     }
 
     #[test]
+    fn fit_reaches_the_whole_stretch() {
+        assert_eq!(Projection::fit(1050.0, 12_000).reach, Reach { near: 0.0, far: STRETCH_MM });
+        assert_eq!(Reach::STRETCH.len(), STRETCH_MM);
+        // The model's stretch is the one the 2.5D draws.
+        assert_eq!(crate::street::model::SHOWN_MM as f64, STRETCH_MM);
+        let p = Projection::fit(1050.0, 12_000);
+        let part = Reach { near: 20_000.0, far: 40_000.0 };
+        assert_eq!(p.over(part).reach, part);
+        assert_eq!((p.over(part).scale, p.over(part).horizon), (p.scale, p.horizon));
+        let e = band_edges(Reach::STRETCH);
+        assert_eq!((e[0], e[BANDS]), (0.0, STRETCH_MM));
+    }
+
+    #[test]
+    fn the_bands_of_a_reach_begin_and_end_on_it_in_equal_steps_of_one_over_depth() {
+        let e = band_edges(Reach { near: 20_000.0, far: 40_000.0 });
+        assert_eq!((e[0], e[BANDS]), (20_000.0, 40_000.0));
+        let step = |i: usize| 1.0 / (EYE_BACK_MM + e[i]) - 1.0 / (EYE_BACK_MM + e[i + 1]);
+        assert!((1..BANDS).all(|i| (step(i) - step(0)).abs() < 1e-12));
+    }
+
+    #[test]
     fn the_bands_cover_the_stretch_in_equal_steps_of_the_scale_so_the_far_ones_are_deeper() {
-        let e = band_edges();
+        let e = band_edges(Reach::STRETCH);
         assert_eq!((e[0], e[BANDS]), (0.0, STRETCH_MM));
         assert!(e.windows(2).all(|w| w[0] < w[1]));
         // Equal steps of the scale, 1 / depth: every band is as much smaller on the screen than the one before.
@@ -269,7 +324,7 @@ mod tests {
     /// pixels: at the seam's three points (the strip's edges and middle), the two bands' matrices put a point of the
     /// pattern at different places on the ground, and the jump is that difference taken back to the screen.
     fn seam_steps(p: &Projection, x0: f64, x1: f64, h: f64) -> Vec<f64> {
-        let e = band_edges();
+        let e = band_edges(Reach::STRETCH);
         let local = |k: usize, x: f64, z: f64| {
             let g = p.ground_at(h, (x0 + x1) / 2.0, band_mid(e[k], e[k + 1]));
             let (sx, sy) = p.at(x, h, z);

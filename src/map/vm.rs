@@ -83,6 +83,16 @@ fn streets(n: usize) -> Arg {
     Arg::Said(Box::new(Said::new("map-streets").with("n", Arg::Num(n as i64))))
 }
 
+/// A street's sentence with its zone count added when it has several (the `-zones` messages).
+fn with_zones(said: Said, n: usize) -> Said {
+    if n > 1 { said.with("zones", zones(n)) } else { said }
+}
+
+/// `1 zone`, `3 zones`, as data to be worded.
+fn zones(n: usize) -> Arg {
+    Arg::Said(Box::new(Said::new("map-zones").with("n", Arg::Num(n as i64))))
+}
+
 /// What a city's place says, in the language of the page.
 fn all_said(i18n: &I18n, units: Units, said: &[Said]) -> Vec<String> {
     said.iter().map(|s| said::say(i18n, units, s)).collect()
@@ -121,14 +131,15 @@ pub fn junction_label(n: &NodeView, i18n: &I18n, units: Units) -> String {
 
 /// How a street on the map is told to a screen reader.
 pub fn street_label(e: &EdgeView, i18n: &I18n, units: Units) -> String {
-    let what = said::say(
-        i18n,
-        units,
-        &Said::new("map-label-street")
-            .with("street", Arg::Said(Box::new(e.called.clone())))
-            .with("ends", Arg::Said(Box::new(e.ends.clone())))
-            .with("width", Arg::Text(units.length_in(e.row_mm, i18n.locale()))),
-    );
+    let what = said::say(i18n, units, &{
+        with_zones(
+            Said::new(if e.zones > 1 { "map-label-street-zones" } else { "map-label-street" })
+                .with("street", Arg::Said(Box::new(e.called.clone())))
+                .with("ends", Arg::Said(Box::new(e.ends.clone())))
+                .with("width", Arg::Text(units.length_in(e.row_mm, i18n.locale()))),
+            e.zones,
+        )
+    });
     label(i18n, units, what, (e.ok, &e.failing, e.edited), "map-opens-street")
 }
 
@@ -352,7 +363,14 @@ impl MapVm {
                 href: street_href(e.uid),
                 hot: format!("s-{}", e.uid),
                 name: e.called.clone(),
-                sub: Said::new("map-street-sub").with("ends", Arg::Said(Box::new(e.ends.clone()))).with("width", Arg::Text(units.length_in(e.row_mm, locale))),
+                sub: {
+                    with_zones(
+                        Said::new(if e.zones > 1 { "map-street-sub-zones" } else { "map-street-sub" })
+                            .with("ends", Arg::Said(Box::new(e.ends.clone())))
+                            .with("width", Arg::Text(units.length_in(e.row_mm, locale))),
+                        e.zones,
+                    )
+                },
                 tag: Self::tag(e.ok, e.edited),
             })
             .collect()
@@ -753,6 +771,7 @@ impl MapVm {
         let checked: Vec<Restriction> = self.areas.list_now().into_iter().filter(|r| !r.rule.informational()).collect();
         let in_conflict: BTreeSet<u32> = self.findings_in(&view, &checked).into_iter().filter(|s| !s.conflicts.is_empty()).map(|s| s.uid).collect();
         self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&view, &projection, &in_conflict));
+        self.ports.mapper.set_zone_ticks(&style::zone_tick_layers(), &overlay::zone_ticks(&view, &projection));
         self.sync_editable();
     }
 
@@ -1323,6 +1342,11 @@ mod tests {
     }
 
     fn area_vm_all() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
+        area_vm_over(|_| {})
+    }
+
+    /// `area_vm_all`, after `before` has changed the stored city.
+    fn area_vm_over(before: impl FnOnce(&CityStore)) -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         let (ports, said, storage) = test_ports();
         let area = Area::new("Bendville", 45.5, -73.6);
         let node = |id, x_m, y_m| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m, junction: false, control: Control::None };
@@ -1342,7 +1366,9 @@ mod tests {
                 points: vec![(0.0, 0.0), (80.0, 0.0), (100.0, 50.0)],
             }],
         };
-        assert!(CityStore::for_area(storage.clone(), area.clone()).keep_network(&network));
+        let stored = CityStore::for_area(storage.clone(), area.clone());
+        assert!(stored.keep_network(&network));
+        before(&stored);
         assert!(CityStore::choose(&*storage, &area));
         let (mapper, navigator) = (Rc::new(FakeMapper::default()), Rc::new(RecordingNavigator::default()));
         let ports = Ports { mapper: mapper.clone(), navigator: navigator.clone(), ..ports };
@@ -1880,5 +1906,69 @@ mod tests {
         assert!(vm.areas().set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
         assert_eq!(vm.status(), Status { text: "1 place. Every check passes.".to_string(), bad: false });
         assert_eq!(vm.checks_lead(), "Every check passes in the one place.");
+    }
+
+    #[test]
+    fn the_map_sends_the_ticks_with_the_places() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(COVERING);
+        let (layers, data) = mapper.zone_ticks();
+        assert_eq!(layers, style::zone_tick_layers());
+        assert!(serde_json::from_str::<serde_json::Value>(&data).unwrap()["features"].as_array().unwrap().is_empty(), "no zones, no ticks");
+        drop(vm);
+
+        let (vm, mapper, ..) = area_vm_over(|store| {
+            let city = store.open();
+            let shape = city.street_shape(1).unwrap();
+            let length = shape.windows(2).map(|w| ((w[1][0] - w[0][0]) as f64).hypot((w[1][1] - w[0][1]) as f64)).sum::<f64>().round() as i32;
+            let street = crate::street::model::zoned(city.street_editor(1, 0).unwrap().snapshot(), &[0, length / 2], length);
+            assert!(store.write_street(1, street));
+        });
+        mapper.say(COVERING);
+        let (layers, data) = mapper.zone_ticks();
+        assert_eq!(layers, style::zone_tick_layers());
+        let fc: serde_json::Value = serde_json::from_str(&data).unwrap();
+        assert_eq!(fc["features"].as_array().unwrap().len(), 1, "{data}");
+        assert_eq!(fc["features"][0]["properties"]["street"], "s-1");
+        drop(vm);
+    }
+
+    fn zoned_street_vm() -> Rc<MapVm> {
+        let (vm, ..) = area_vm_over(|store| {
+            let city = store.open();
+            let shape = city.street_shape(1).unwrap();
+            let length = shape.windows(2).map(|w| ((w[1][0] - w[0][0]) as f64).hypot((w[1][1] - w[0][1]) as f64)).sum::<f64>().round() as i32;
+            let street = crate::street::model::zoned(city.street_editor(1, 0).unwrap().snapshot(), &[0, length / 2], length);
+            assert!(store.write_street(1, street));
+        });
+        vm
+    }
+
+    #[test]
+    fn a_street_with_several_zones_says_how_many_in_its_label_and_row() {
+        let vm = zoned_street_vm();
+        let uid = vm.view().edges[0].uid;
+        assert_eq!(vm.view().edges[0].zones, 2);
+        let label = vm.street_label(uid);
+        assert!(label.contains(", 2 zones.") && label.ends_with(" Opens the street cross-section."), "{label}");
+        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} 2 zones"));
+        vm.i18n().set(Locale::FrCa);
+        let label = vm.street_label(uid);
+        assert!(label.contains(" de large, en 2 zones."), "{label}");
+        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} en 2 zones"));
+    }
+
+    #[test]
+    fn a_street_with_one_zone_is_worded_as_before() {
+        let (vm, ..) = area_vm_all();
+        // The 0.26.0 wording, word for word.
+        assert_eq!(vm.street_label(vm.view().edges[0].uid), "Bend Street, through the city, 6.0 m wide. Opens the street cross-section.");
+        assert_eq!(sub_of(&vm, &vm.street_rows()[0]), "through the city \u{b7} 6.0 m");
+        for (i, e) in vm.view().edges.iter().enumerate() {
+            assert_eq!(e.zones, 1);
+            let width = Units::Metres.length(e.row_mm);
+            assert_eq!(vm.street_label(e.uid), format!("{}, {}, {width} wide. Opens the street cross-section.", shown(&vm, &e.called), shown(&vm, &e.ends)));
+            assert_eq!(sub_of(&vm, &vm.street_rows()[i]), format!("{} \u{b7} {width}", shown(&vm, &e.ends)));
+        }
     }
 }
