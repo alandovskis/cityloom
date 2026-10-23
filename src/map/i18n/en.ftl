@@ -37,6 +37,10 @@ map-streets = { $n ->
     [one] { $n } street
    *[other] { $n } streets
 }
+map-zones = { $n ->
+    [one] { $n } zone
+   *[other] { $n } zones
+}
 map-junction-count = { $n ->
     [one] { $n } junction
    *[other] { $n } junctions
@@ -48,6 +52,7 @@ map-counts = { $junctions }, { $streets }
 # `control` is the junction's control (a jn-control-* message), `streets` is map-streets.
 map-junction-sub = { $control }, { $streets }
 map-street-sub = { $ends } · { $width }
+map-street-sub-zones = { $ends } · { $width } · { $zones }
 map-state-works = Works
 map-state-changed = Changed
 map-state-bad = Needs attention
@@ -55,6 +60,7 @@ map-state-bad = Needs attention
 ## How a place is told to a screen reader, sentence by sentence
 map-label-junction = { $name }, { $control }, { $streets }.
 map-label-street = { $street }, { $ends }, { $width } wide.
+map-label-street-zones = { $street }, { $ends }, { $width } wide, { $zones }.
 map-needs-attention = Needs attention: { $failing }.
 map-changed = Changed.
 map-opens-junction = Opens the junction plan.

@@ -37,6 +37,10 @@ map-streets = { $n ->
     [one] { $n } rue
    *[other] { $n } rues
 }
+map-zones = { $n ->
+    [one] { $n } zone
+   *[other] { $n } zones
+}
 map-junction-count = { $n ->
     [one] { $n } jonction
    *[other] { $n } jonctions
@@ -48,6 +52,7 @@ map-counts = { $junctions }, { $streets }
 # `control` est la signalisation de la jonction (un message jn-control-*), `streets` est map-streets.
 map-junction-sub = { $control }, { $streets }
 map-street-sub = { $ends } · { $width }
+map-street-sub-zones = { $ends } · { $width } · { $zones }
 map-state-works = Fonctionne
 map-state-changed = Modifié
 map-state-bad = À corriger
@@ -55,6 +60,7 @@ map-state-bad = À corriger
 ## Comment un lieu est dit à un lecteur d’écran, phrase par phrase
 map-label-junction = { $name }, { $control }, { $streets }.
 map-label-street = { $street }, { $ends }, { $width } de large.
+map-label-street-zones = { $street }, { $ends }, { $width } de large, { $zones }.
 map-needs-attention = À corriger : { $failing }.
 map-changed = Modifié.
 map-opens-junction = Ouvre le plan de la jonction.
