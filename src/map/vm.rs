@@ -83,6 +83,11 @@ fn streets(n: usize) -> Arg {
     Arg::Said(Box::new(Said::new("map-streets").with("n", Arg::Num(n as i64))))
 }
 
+/// A street's sentence with its zone count added when it has several (the `-zones` messages).
+fn with_zones(said: Said, n: usize) -> Said {
+    if n > 1 { said.with("zones", zones(n)) } else { said }
+}
+
 /// `1 zone`, `3 zones`, as data to be worded.
 fn zones(n: usize) -> Arg {
     Arg::Said(Box::new(Said::new("map-zones").with("n", Arg::Num(n as i64))))
@@ -127,11 +132,13 @@ pub fn junction_label(n: &NodeView, i18n: &I18n, units: Units) -> String {
 /// How a street on the map is told to a screen reader.
 pub fn street_label(e: &EdgeView, i18n: &I18n, units: Units) -> String {
     let what = said::say(i18n, units, &{
-        let said = Said::new(if e.zones > 1 { "map-label-street-zones" } else { "map-label-street" })
-            .with("street", Arg::Said(Box::new(e.called.clone())))
-            .with("ends", Arg::Said(Box::new(e.ends.clone())))
-            .with("width", Arg::Text(units.length_in(e.row_mm, i18n.locale())));
-        if e.zones > 1 { said.with("zones", zones(e.zones)) } else { said }
+        with_zones(
+            Said::new(if e.zones > 1 { "map-label-street-zones" } else { "map-label-street" })
+                .with("street", Arg::Said(Box::new(e.called.clone())))
+                .with("ends", Arg::Said(Box::new(e.ends.clone())))
+                .with("width", Arg::Text(units.length_in(e.row_mm, i18n.locale()))),
+            e.zones,
+        )
     });
     label(i18n, units, what, (e.ok, &e.failing, e.edited), "map-opens-street")
 }
@@ -357,10 +364,12 @@ impl MapVm {
                 hot: format!("s-{}", e.uid),
                 name: e.called.clone(),
                 sub: {
-                    let sub = Said::new(if e.zones > 1 { "map-street-sub-zones" } else { "map-street-sub" })
-                        .with("ends", Arg::Said(Box::new(e.ends.clone())))
-                        .with("width", Arg::Text(units.length_in(e.row_mm, locale)));
-                    if e.zones > 1 { sub.with("zones", zones(e.zones)) } else { sub }
+                    with_zones(
+                        Said::new(if e.zones > 1 { "map-street-sub-zones" } else { "map-street-sub" })
+                            .with("ends", Arg::Said(Box::new(e.ends.clone())))
+                            .with("width", Arg::Text(units.length_in(e.row_mm, locale))),
+                        e.zones,
+                    )
                 },
                 tag: Self::tag(e.ok, e.edited),
             })
@@ -1945,18 +1954,21 @@ mod tests {
         assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} 2 zones"));
         vm.i18n().set(Locale::FrCa);
         let label = vm.street_label(uid);
-        assert!(label.contains(", 2 zones."), "{label}");
-        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} 2 zones"));
+        assert!(label.contains(" de large, découpée en 2 zones."), "{label}");
+        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} découpée en 2 zones"));
     }
 
     #[test]
     fn a_street_with_one_zone_is_worded_as_before() {
         let (vm, ..) = area_vm_all();
-        let uid = vm.view().edges[0].uid;
-        assert_eq!(vm.view().edges[0].zones, 1);
-        let e = &vm.view().edges[0];
-        let width = Units::Metres.length(e.row_mm);
-        assert_eq!(vm.street_label(uid), format!("{}, {}, {width} wide. Opens the street cross-section.", shown(&vm, &e.called), shown(&vm, &e.ends)));
-        assert_eq!(sub_of(&vm, &vm.street_rows()[0]), format!("{} \u{b7} {width}", shown(&vm, &e.ends)));
+        // The 0.26.0 wording, word for word.
+        assert_eq!(vm.street_label(vm.view().edges[0].uid), "Bend Street, through the city, 6.0 m wide. Opens the street cross-section.");
+        assert_eq!(sub_of(&vm, &vm.street_rows()[0]), "through the city \u{b7} 6.0 m");
+        for (i, e) in vm.view().edges.iter().enumerate() {
+            assert_eq!(e.zones, 1);
+            let width = Units::Metres.length(e.row_mm);
+            assert_eq!(vm.street_label(e.uid), format!("{}, {}, {width} wide. Opens the street cross-section.", shown(&vm, &e.called), shown(&vm, &e.ends)));
+            assert_eq!(sub_of(&vm, &vm.street_rows()[i]), format!("{} \u{b7} {width}", shown(&vm, &e.ends)));
+        }
     }
 }
