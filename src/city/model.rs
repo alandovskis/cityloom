@@ -940,6 +940,8 @@ impl City {
                 edited: now != today,
                 ok: failing.is_empty(),
                 failing,
+                zones: now.zones.len().max(1),
+                zone_breaks_mm: zone_breaks(now, self.layout.zone_frame(i)),
             });
         }
         for (i, def) in self.layout.nodes.iter().enumerate() {
@@ -1043,6 +1045,27 @@ pub struct EdgeView {
     pub edited: bool,
     pub ok: bool,
     pub failing: Vec<Said>,
+    /// How many zones the street has: 1 for a street with none.
+    pub zones: usize,
+    /// Where its zone boundaries lie, in millimetres from node `a` along `shape_mm`, ascending: only those that sit
+    /// on this road as they were drawn (see `zone_breaks`).
+    pub zone_breaks_mm: Vec<i32>,
+}
+
+/// The distances from the street's first node (`a`) of its zone boundaries that can be drawn. A boundary is drawn
+/// only when the zones are measured from the same real node the road is anchored at now and the boundary lies inside
+/// the road as loaded; a length that differs does not matter, positions being measured from that node.
+fn zone_breaks(street: &Street, frame: Option<ZoneFrame>) -> Vec<i32> {
+    let Some(frame) = frame.filter(|f| f.from_end == street.from_end) else { return Vec::new() };
+    let mut breaks: Vec<i32> = street
+        .zones
+        .iter()
+        .skip(1)
+        .filter(|z| z.from_mm < frame.length_mm)
+        .map(|z| if frame.from_end == ZoneEnd::First { z.from_mm } else { frame.length_mm - z.from_mm })
+        .collect();
+    breaks.sort_unstable();
+    breaks
 }
 
 impl EdgeView {
@@ -1851,6 +1874,70 @@ mod tests {
             s.zones[z].segments = Some(section);
         }
         s
+    }
+
+    #[test]
+    fn a_zoned_street_reports_its_boundaries_from_node_a_and_its_zone_count() {
+        let mut city = City::new();
+        let length = city.layout.zone_frame(1).unwrap().length_mm;
+        assert!(city.keep_street(2, zoned_street(&city, 2, &[0, 5], None)));
+        let edge = &city.view(0).edges[1];
+        assert_eq!(edge.zones, 2);
+        assert_eq!(edge.zone_breaks_mm, vec![length / 10 * 5]);
+    }
+
+    #[test]
+    fn anchored_at_the_last_end_the_distance_is_measured_back_from_it() {
+        let mut city = City::new();
+        let (a, b) = (city.layout.edges[1].a, city.layout.edges[1].b);
+        city.layout.nodes[a].source.clear();
+        assert!(!city.layout.nodes[b].source.is_empty(), "street 2 can be anchored at b");
+        let frame = city.layout.zone_frame(1).unwrap();
+        assert_eq!(frame.from_end, ZoneEnd::Last);
+        let mut street = zoned_street(&city, 2, &[0, 3], None);
+        street.from_end = ZoneEnd::Last;
+        assert!(city.keep_street(2, street));
+        let p = frame.length_mm / 10 * 3;
+        assert_eq!(city.view(0).edges[1].zone_breaks_mm, vec![frame.length_mm - p]);
+    }
+
+    #[test]
+    fn a_street_loaded_at_another_length_keeps_ticks_measured_from_its_anchor() {
+        let mut city = City::new();
+        let frame = city.layout.zone_frame(1).unwrap();
+        let mut street = zoned_street(&city, 2, &[0, 5], None);
+        street.length_mm = Some(frame.length_mm + 5_000);
+        let p = frame.length_mm / 10 * 5;
+        street.zones[1].from_mm = p;
+        assert!(city.keep_street(2, street));
+        assert_eq!(city.view(0).edges[1].zone_breaks_mm, vec![p]);
+    }
+
+    #[test]
+    fn a_flipped_anchor_or_a_zone_beyond_the_loaded_end_has_no_tick_but_is_counted() {
+        let mut city = City::new();
+        let frame = city.layout.zone_frame(1).unwrap();
+        let mut flipped = zoned_street(&city, 2, &[0, 5], None);
+        flipped.from_end = ZoneEnd::Last;
+        assert!(city.keep_street(2, flipped));
+        let edge = &city.view(0).edges[1];
+        assert_eq!((edge.zones, edge.zone_breaks_mm.clone()), (2, Vec::new()));
+        let mut beyond = zoned_street(&city, 2, &[0, 5, 8], None);
+        beyond.from_end = ZoneEnd::First;
+        beyond.length_mm = Some(frame.length_mm + 2_000);
+        beyond.zones[2].from_mm = frame.length_mm + 1_000;
+        assert!(beyond.is_sound());
+        assert!(city.keep_street(2, beyond));
+        let edge = &city.view(0).edges[1];
+        assert_eq!((edge.zones, edge.zone_breaks_mm.clone()), (3, vec![frame.length_mm / 10 * 5]));
+    }
+
+    #[test]
+    fn a_street_without_zones_has_one_zone_and_no_break() {
+        let city = City::new();
+        for e in &city.view(0).edges {
+            assert_eq!((e.zones, e.zone_breaks_mm.clone()), (1, Vec::new()));
+        }
     }
 
     /// What the junction at `node` reads of street `edge`.
