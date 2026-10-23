@@ -575,6 +575,7 @@ mod tests {
                 lane(LaneKind::Driving, Way::Forward, 3.0),
                 lane(LaneKind::Sidewalk, Way::Forward, 2.0),
             ],
+            speed_kmh: None,
             points,
         };
         Network {

@@ -741,6 +741,7 @@ fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reop
             from: 1,
             to: 2,
             lanes: vec![lane(Way::Forward), lane(Way::Backward)],
+            speed_kmh: None,
             points: vec![(0.0, 0.0), (100.0, 0.0)],
         }],
     };

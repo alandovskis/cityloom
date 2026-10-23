@@ -100,6 +100,9 @@ pub struct Road {
     pub to: u32,
     /// Left to right when facing from `from` to `to`.
     pub lanes: Vec<Lane>,
+    /// OSM's `maxspeed` in km/h; none when the way gives none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed_kmh: Option<u16>,
     /// The road's centre line.
     pub points: Vec<(f64, f64)>,
 }

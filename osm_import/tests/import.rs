@@ -334,3 +334,18 @@ fn de_maisonneuve_ouest_has_a_two_way_bike_lane_from_the_cycleways_mapped_beside
         assert_eq!(bikes, [osm_import::Way::Both], "{:?}", road.osm_ways);
     }
 }
+
+#[test]
+fn a_road_carries_its_maxspeed_in_kmh() {
+    // Avenue Laurier Ouest, tagged maxspeed=30
+    let net = import(PLATEAU).unwrap();
+    let road = net.roads.iter().find(|r| r.osm_ways.contains(&4889437)).expect("the way is a road");
+    assert_eq!(road.speed_kmh, Some(30));
+}
+
+#[test]
+fn a_road_without_maxspeed_has_none() {
+    let net = import(PLATEAU).unwrap();
+    let road = net.roads.iter().find(|r| r.osm_ways.contains(&17587428)).expect("the way is a road");
+    assert_eq!(road.speed_kmh, None);
+}
