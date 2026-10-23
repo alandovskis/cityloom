@@ -753,6 +753,7 @@ impl MapVm {
         let checked: Vec<Restriction> = self.areas.list_now().into_iter().filter(|r| !r.rule.informational()).collect();
         let in_conflict: BTreeSet<u32> = self.findings_in(&view, &checked).into_iter().filter(|s| !s.conflicts.is_empty()).map(|s| s.uid).collect();
         self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&view, &projection, &in_conflict));
+        self.ports.mapper.set_zone_ticks(&style::zone_tick_layers(), &overlay::zone_ticks(&view, &projection));
         self.sync_editable();
     }
 
@@ -1323,6 +1324,11 @@ mod tests {
     }
 
     fn area_vm_all() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
+        area_vm_over(|_| {})
+    }
+
+    /// `area_vm_all`, after `before` has changed the stored city.
+    fn area_vm_over(before: impl FnOnce(&CityStore)) -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>, Rc<MemoryStorage>) {
         let (ports, said, storage) = test_ports();
         let area = Area::new("Bendville", 45.5, -73.6);
         let node = |id, x_m, y_m| Node { id, osm_nodes: vec![id as i64], osm_versions: Default::default(), x_m, y_m, junction: false, control: Control::None };
@@ -1342,7 +1348,9 @@ mod tests {
                 points: vec![(0.0, 0.0), (80.0, 0.0), (100.0, 50.0)],
             }],
         };
-        assert!(CityStore::for_area(storage.clone(), area.clone()).keep_network(&network));
+        let stored = CityStore::for_area(storage.clone(), area.clone());
+        assert!(stored.keep_network(&network));
+        before(&stored);
         assert!(CityStore::choose(&*storage, &area));
         let (mapper, navigator) = (Rc::new(FakeMapper::default()), Rc::new(RecordingNavigator::default()));
         let ports = Ports { mapper: mapper.clone(), navigator: navigator.clone(), ..ports };
@@ -1880,5 +1888,30 @@ mod tests {
         assert!(vm.areas().set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
         assert_eq!(vm.status(), Status { text: "1 place. Every check passes.".to_string(), bad: false });
         assert_eq!(vm.checks_lead(), "Every check passes in the one place.");
+    }
+
+    #[test]
+    fn the_map_sends_the_ticks_with_the_places() {
+        let (vm, mapper, ..) = area_vm();
+        mapper.say(COVERING);
+        let (layers, data) = mapper.zone_ticks();
+        assert_eq!(layers, style::zone_tick_layers());
+        assert!(serde_json::from_str::<serde_json::Value>(&data).unwrap()["features"].as_array().unwrap().is_empty(), "no zones, no ticks");
+        drop(vm);
+
+        let (vm, mapper, ..) = area_vm_over(|store| {
+            let city = store.open();
+            let shape = city.street_shape(1).unwrap();
+            let length = shape.windows(2).map(|w| ((w[1][0] - w[0][0]) as f64).hypot((w[1][1] - w[0][1]) as f64)).sum::<f64>().round() as i32;
+            let street = crate::street::model::zoned(city.street_editor(1, 0).unwrap().snapshot(), &[0, length / 2], length);
+            assert!(store.write_street(1, street));
+        });
+        mapper.say(COVERING);
+        let (layers, data) = mapper.zone_ticks();
+        assert_eq!(layers, style::zone_tick_layers());
+        let fc: serde_json::Value = serde_json::from_str(&data).unwrap();
+        assert_eq!(fc["features"].as_array().unwrap().len(), 1, "{data}");
+        assert_eq!(fc["features"][0]["properties"]["street"], "s-1");
+        drop(vm);
     }
 }

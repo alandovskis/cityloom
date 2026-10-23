@@ -28,6 +28,8 @@ pub const CONFLICT: &str = "#db2777";
 /// The restrictions' source, and the outline being drawn's.
 pub const AREAS: &str = "restrictions";
 pub const DRAFT: &str = "draft";
+/// The zone boundaries' source.
+pub const ZONE_TICKS: &str = "zone-ticks";
 /// The layers `web/basemap.js` asks what the pointer is on: keep these names in step with it.
 pub const AREAS_FILL: &str = "areas-fill";
 pub const AREAS_VERTEX: &str = "areas-vertex";
@@ -182,6 +184,19 @@ pub fn area_layers() -> String {
         "paint": { "circle-radius": 6, "circle-color": "#ffffff", "circle-stroke-color": HOT_OUTLINE, "circle-stroke-width": 2 }
     }));
     Value::Array(layers).to_string()
+}
+
+/// The zone boundaries: a short dark bar across the street on a white casing, so that it reads on any ground (3:1
+/// without hue; the canvas does not follow forced colours, so the zone count is also said in text).
+pub fn zone_tick_layers() -> String {
+    let line = |id: &str, colour: &str, width: f64, opacity: f64| {
+        json!({
+            "id": id, "type": "line", "source": ZONE_TICKS,
+            "layout": { "line-cap": "butt" },
+            "paint": { "line-color": colour, "line-width": width, "line-opacity": opacity }
+        })
+    };
+    Value::Array(vec![line("zone-ticks-casing", "#ffffff", 5.0, 0.9), line(ZONE_TICKS, MARK, 2.5, 1.0)]).to_string()
 }
 
 /// The outline being drawn: its area once it can close, its dashed path, and its corners (the first larger).
@@ -358,5 +373,17 @@ mod tests {
             ("restrictions", "draft", "areas-fill", "areas-vertex", "draft-vertex"),
             "the adapter's names"
         );
+    }
+
+    #[test]
+    fn the_ticks_are_a_dark_line_on_a_white_casing_that_keep_3_to_1_without_hue() {
+        let l: Vec<Value> = serde_json::from_str(&zone_tick_layers()).unwrap();
+        let ids: Vec<&str> = l.iter().map(|l| l["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["zone-ticks-casing", "zone-ticks"]);
+        assert!(l.iter().all(|l| l["source"] == ZONE_TICKS && l["type"] == "line" && l["layout"]["line-cap"] == "butt"));
+        assert_eq!(ZONE_TICKS, "zone-ticks");
+        assert_eq!(l[0]["paint"]["line-color"], "#ffffff");
+        assert_eq!(l[1]["paint"]["line-color"], MARK);
+        assert!(crate::shared::contrast::contrast(MARK, "#ffffff") >= 3.0);
     }
 }

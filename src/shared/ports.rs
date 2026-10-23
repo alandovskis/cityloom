@@ -365,6 +365,9 @@ pub trait Mapper {
     fn set_restrictions(&self, layers: &str, data: &str);
     /// Shows the outline being drawn: `layers` over a source named `draft` holding `data`, drawn over everything.
     fn set_draft(&self, layers: &str, data: &str);
+    /// Shows the zone boundaries: `layers` over a source named `zone-ticks` holding `data`, drawn over the places and
+    /// under the outline being drawn.
+    fn set_zone_ticks(&self, layers: &str, data: &str);
     /// Where the middle of the view is: longitude, latitude.
     fn centre(&self) -> [f64; 2];
     /// Moves the view to hold `bounds` (west, south, east, north in degrees), clear of `insets`
@@ -396,6 +399,7 @@ impl Mapper for NoMapper {
     fn set_places(&self, _: &str, _: &str) {}
     fn set_restrictions(&self, _: &str, _: &str) {}
     fn set_draft(&self, _: &str, _: &str) {}
+    fn set_zone_ticks(&self, _: &str, _: &str) {}
     fn centre(&self) -> [f64; 2] {
         [0.0, 0.0]
     }
@@ -884,6 +888,7 @@ type MapListener = Box<dyn Fn(MapEvent)>;
 #[derive(Default)]
 pub struct FakeMapper {
     calls: RefCell<Vec<MapCall>>,
+    zone_ticks: RefCell<(String, String)>,
     listener: RefCell<Option<MapListener>>,
     centre: Cell<[f64; 2]>,
 }
@@ -892,6 +897,11 @@ impl FakeMapper {
     /// What it was asked since this was last called.
     pub fn take(&self) -> Vec<MapCall> {
         std::mem::take(&mut *self.calls.borrow_mut())
+    }
+
+    /// The last zone ticks it was asked to show (layers, data); not among `take`'s calls.
+    pub fn zone_ticks(&self) -> (String, String) {
+        self.zone_ticks.borrow().clone()
     }
 
     /// Moves the middle of the view, as the person panning would.
@@ -916,6 +926,9 @@ impl Mapper for FakeMapper {
     }
     fn set_draft(&self, layers: &str, data: &str) {
         self.calls.borrow_mut().push(MapCall::Draft { layers: layers.into(), data: data.into() });
+    }
+    fn set_zone_ticks(&self, layers: &str, data: &str) {
+        *self.zone_ticks.borrow_mut() = (layers.into(), data.into());
     }
     fn centre(&self) -> [f64; 2] {
         self.centre.get()
@@ -1366,5 +1379,14 @@ mod map_tests {
         assert_eq!(one.identity(), same.identity());
         assert_ne!(one.identity(), other.identity());
         assert!(one.identity() > 0 && other.identity() > 0, "0 is the browser's");
+    }
+
+    #[test]
+    fn the_fake_mapper_records_the_zone_ticks() {
+        let fake = FakeMapper::default();
+        assert_eq!(fake.zone_ticks(), (String::new(), String::new()));
+        fake.set_zone_ticks("[3]", "{3}");
+        assert_eq!(fake.zone_ticks(), ("[3]".into(), "{3}".into()));
+        assert!(fake.take().is_empty(), "the ticks are not among the calls the other tests list");
     }
 }

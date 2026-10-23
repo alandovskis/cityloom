@@ -50,6 +50,47 @@ pub fn places(v: &CityView, p: &Projection, conflicts: &BTreeSet<u32>) -> String
     json!({ "type": "FeatureCollection", "features": features }).to_string()
 }
 
+/// How far a zone tick reaches past each edge of the street, in millimetres.
+pub const TICK_OVERHANG_MM: i32 = 2_000;
+
+/// The point `d_mm` along a polyline, in layout millimetres, and the unit tangent of the segment it lies on. `None`
+/// at the start or at or past the end, or on a segment of no length.
+fn point_at(shape: &[[i32; 2]], d_mm: f64) -> Option<([f64; 2], [f64; 2])> {
+    if d_mm <= 0.0 {
+        return None;
+    }
+    let mut left = d_mm;
+    for w in shape.windows(2) {
+        let (dx, dy) = ((w[1][0] - w[0][0]) as f64, (w[1][1] - w[0][1]) as f64);
+        let len = dx.hypot(dy);
+        if left < len {
+            let t = [dx / len, dy / len];
+            return Some(([w[0][0] as f64 + t[0] * left, w[0][1] as f64 + t[1] * left], t));
+        }
+        left -= len;
+    }
+    None
+}
+
+/// A short bar across each street at each of its zone boundaries, as GeoJSON: centred on the centreline, along the
+/// normal, `TICK_OVERHANG_MM` past each edge. Each says its street (`s-<uid>`) and which boundary it is (`n`, from 1).
+pub fn zone_ticks(v: &CityView, p: &Projection) -> String {
+    let mut features: Vec<Value> = Vec::new();
+    for e in &v.edges {
+        let half = e.row_mm as f64 / 2.0 + TICK_OVERHANG_MM as f64;
+        for (i, &d) in e.zone_breaks_mm.iter().enumerate() {
+            let Some(([x, y], [tx, ty])) = point_at(&e.shape_mm, d as f64) else { continue };
+            let end = |side: f64| position(p, (x - ty * half * side).round() as i32, (y + tx * half * side).round() as i32);
+            features.push(json!({
+                "type": "Feature",
+                "properties": { "street": format!("s-{}", e.uid), "n": i + 1 },
+                "geometry": { "type": "LineString", "coordinates": [end(1.0), end(-1.0)] },
+            }));
+        }
+    }
+    json!({ "type": "FeatureCollection", "features": features }).to_string()
+}
+
 /// A ring of corners as GeoJSON wants a polygon's: closed, the first corner again at the end.
 fn closed(ring: &[LonLat]) -> Vec<[f64; 2]> {
     let mut c: Vec<[f64; 2]> = ring.iter().map(|p| [r6(p[0]), r6(p[1])]).collect();
@@ -318,5 +359,61 @@ mod tests {
         assert_eq!(three["features"][0]["properties"]["part"], "fill");
         assert_eq!(three["features"][1]["properties"]["part"], "path");
         assert_eq!(three["features"][4]["properties"]["i"], 2);
+    }
+
+    /// One straight street, east for 100 m, 8 m wide.
+    fn straight_road() -> Network {
+        let mut n = bent_road();
+        n.nodes[1].x_m = 100.0;
+        n.nodes[1].y_m = 0.0;
+        n.roads[0].points = vec![(0.0, 0.0), (100.0, 0.0)];
+        n.roads[0].lanes.iter_mut().for_each(|l| l.width_m = 4.0);
+        n
+    }
+
+    #[test]
+    fn a_point_along_a_polyline_has_the_tangent_of_its_segment() {
+        let shape = [[0, 0], [10_000, 0], [10_000, 10_000]];
+        assert_eq!(point_at(&shape, 15_000.0), Some(([10_000.0, 5_000.0], [0.0, 1.0])));
+        assert_eq!(point_at(&shape, 4_000.0), Some(([4_000.0, 0.0], [1.0, 0.0])));
+        assert_eq!(point_at(&shape, 0.0), None);
+        assert_eq!(point_at(&shape, 20_000.0), None);
+        assert_eq!(point_at(&shape, 25_000.0), None);
+        assert_eq!(point_at(&[[0, 0], [0, 0]], 1.0), None);
+    }
+
+    #[test]
+    fn a_boundary_is_a_tick_across_the_street_two_metres_past_each_edge() {
+        let mut v = City::from_network(&straight_road(), "Bendville").view(0);
+        let p = projection(&v);
+        v.edges[0].zone_breaks_mm = vec![30_000];
+        let fc = parse(&zone_ticks(&v, &p));
+        let features = fc["features"].as_array().unwrap();
+        assert_eq!(features.len(), 1);
+        let f = &features[0];
+        assert_eq!(f["geometry"]["type"], "LineString");
+        assert_eq!(f["properties"]["street"], format!("s-{}", v.edges[0].uid));
+        assert_eq!(f["properties"]["n"], 1);
+        let line = f["geometry"]["coordinates"].as_array().unwrap();
+        assert_eq!(line.len(), 2);
+        let c = |i: usize, j: usize| line[i][j].as_f64().unwrap();
+        assert_eq!(c(0, 0), c(1, 0), "the tick runs north-south across an east-west street");
+        let across_mm = v.edges[0].row_mm + 2 * TICK_OVERHANG_MM;
+        let metres = (c(0, 1) - c(1, 1)).abs() * 111_195.0;
+        assert!((metres - across_mm as f64 / 1000.0).abs() < 0.2, "{metres} m for {across_mm} mm");
+        // centred on the centreline at 30 m
+        let [x0, y0] = v.edges[0].shape_mm[0];
+        let mid = position(&p, x0 + 30_000, y0);
+        assert!((c(0, 0) - mid[0]).abs() < 2e-6 && ((c(0, 1) + c(1, 1)) / 2.0 - mid[1]).abs() < 2e-6);
+    }
+
+    #[test]
+    fn a_street_without_boundaries_adds_nothing_and_places_is_unchanged() {
+        let v = City::from_network(&bent_road(), "Bendville").view(0);
+        let p = projection(&v);
+        let fc = parse(&zone_ticks(&v, &p));
+        assert_eq!(fc["type"], "FeatureCollection");
+        assert!(fc["features"].as_array().unwrap().is_empty());
+        assert!(!places(&v, &p, &BTreeSet::new()).contains("zone"));
     }
 }
