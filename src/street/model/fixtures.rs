@@ -109,6 +109,7 @@ impl Editor {
         let mut e = Editor {
             street_name: None,
             source: Vec::new(),
+            speed: Speed::Undecided,
             region: 0,
             time_min: 12 * 60,
             states: Vec::new(),

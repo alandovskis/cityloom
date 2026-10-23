@@ -17,6 +17,8 @@ mod fixtures;
 pub use fixtures::{SAMPLES, pedestrianised, two_zones, zoned};
 pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM};
 mod joint;
+mod speed;
+pub use speed::Speed;
 mod zones;
 pub use zones::{Elsewhere, Keep, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
 
@@ -220,6 +222,9 @@ pub struct Street {
     /// The length along the centreline the zones were drawn against. Written only with zones.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub length_mm: Option<i32>,
+    /// The speed limit, kept as `speed_kmh`: absent when not yet decided, `null` when the road has none.
+    #[serde(default, rename = "speed_kmh", skip_serializing_if = "Speed::is_undecided")]
+    pub speed: Speed,
 }
 
 /// A name that is data, said as it is: a street's, a place's, a junction's.
@@ -324,6 +329,7 @@ impl Street {
             zones: Vec::new(),
             from_end: ZoneEnd::First,
             length_mm: None,
+            speed: Speed::Undecided,
         };
         street.settle_class();
         street
@@ -494,6 +500,8 @@ pub struct Editor {
     street_name: Option<String>,
     /// The OSM ways it was made from.
     source: Vec<OsmRef>,
+    /// The speed limit the street was made with; editing the section does not change it.
+    speed: Speed,
     /// Index into `REGIONS`. A setting of the sheet, not part of the history.
     region: usize,
     /// The time of day the sheet shows, in minutes. Also a setting, not history.
@@ -567,6 +575,7 @@ impl Editor {
             zones: content.zones.clone(),
             from_end: content.from_end,
             length_mm: content.length_mm,
+            speed: self.speed,
         }
     }
 
@@ -580,6 +589,7 @@ impl Editor {
         let mut e = Editor {
             street_name: now.name.clone(),
             source: now.source.clone(),
+            speed: now.speed,
             region,
             time_min: 12 * 60,
             states: vec![State {

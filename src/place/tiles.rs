@@ -38,8 +38,10 @@ pub const INDEX_URL: &str = "data/metro/index.json";
 /// `path` or `footway` designated for bicycles); a track beside a road that is not one-way makes that road's lane
 /// two-way, and the tracks themselves are not streets.
 ///
+/// 7: a street carries the speed limit of its road (`maxspeed`).
+///
 /// The e2e test `world.spec.ts` names the version in what it expects to be kept: raise it there too.
-pub const IMPORTER_VERSION: u32 = 6;
+pub const IMPORTER_VERSION: u32 = 7;
 
 /// A tile's checksum as an area made from it is kept: with the version of the importer that read it.
 pub fn with_importer(checksum: &str) -> String {
