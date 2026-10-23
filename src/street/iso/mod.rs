@@ -787,19 +787,18 @@ mod tests {
             "Sample Street 1 in 2.5D, along a 40 m stretch centred on the boundary between Zone 1 in front and Zone 2 beyond. The section changes abruptly there. Zone 2 has 5 segments."
         );
         let fr = crate::i18n_for(Locale::FrCa);
-        assert!(
-            iso_label(&v, &fr, Units::Metres)
-                .contains("sur un tronçon de 40\u{a0}m centré sur la limite entre zone 1 au premier plan et zone 2 au-delà. La coupe change brusquement")
+        assert_eq!(
+            iso_label(&v, &fr, Units::Metres),
+            "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m centré sur la limite entre zone 1 au premier plan et zone 2 au-delà. La coupe change brusquement à cet endroit. Zone 2 compte 5 éléments."
         );
     }
 
     #[test]
     fn the_zone_in_front_is_the_one_nearer_the_eye() {
         let v = joined_from_last(true, 1);
-        let far = v.zones.joint.as_ref().expect("a joint").far;
+        assert!(v.zones.joint.as_ref().expect("a joint").far, "the neighbour of the last zone lies beyond");
         let label = iso_label(&v, &en(), Units::Metres);
-        let (near, beyond) = if far { ("Zone 2", "Zone 1") } else { ("Zone 1", "Zone 2") };
-        assert!(label.contains(&format!("between {near} in front and {beyond} beyond")), "{label}");
+        assert!(label.contains("between Zone 2 in front and Zone 1 beyond"), "{label}");
     }
 
     #[test]
@@ -826,6 +825,19 @@ mod tests {
         assert_ne!(one, zero);
         let top = top_of(&one, uid);
         assert_ne!(top, top_of(&zero, uid), "the widened piece's top face");
+        // The widened top is in the selected zone's own section, and in no other.
+        let own = |m: &str| {
+            let at = m.find("<g class=\"iso-section\">").expect("the selected zone's section");
+            let rest = &m[at..];
+            rest[..rest[1..].find("<g class=\"iso-section").map_or(rest.len(), |i| i + 1)].to_string()
+        };
+        assert!(own(&one).contains(&top), "the widened top lies in the selected zone's section");
+        assert!(!own(&zero).contains(&top));
+        assert!(one[one.find("iso-across").unwrap()..].split("<g class=\"iso-section\">").next().is_some_and(|across| !across.contains(&top)));
+        // Putting the width back puts the drawing back.
+        assert!(e.set_width(uid, w));
+        assert_eq!(drawn(&e), zero);
+        assert!(e.set_width(uid, w + 300));
         assert!(e.select_zone(0));
         // Zone 1 is zone 0's neighbour across its end boundary, so the edit shows beyond it (in the half across, with no
         // uid), and the scene is as wide as the widest section; the selected zone's own pieces are the same.
