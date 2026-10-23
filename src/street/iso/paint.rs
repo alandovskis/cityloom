@@ -12,8 +12,8 @@ use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection, STRETCH_MM, point
 use super::symbols::shapes;
 
 /// The lines and symbols of the street as one group, drawn flat on the ground. A line is the shared paint quads of
-/// the path `[(x, 0), (x, STRETCH_MM)]` (across, along); a symbol is its polygons laid on its lane at
-/// `ARROW_AT_MM`, so it foreshortens and shrinks with the distance. A piece narrower on screen than `MIN_SOLID_PX`
+/// the path `[(x, reach.near), (x, reach.far)]` (across, along), the reach being the part of the stretch this section
+/// covers; a symbol is its polygons laid on its lane at `ARROW_AT_MM` from the reach's near end, so it foreshortens and shrinks with the distance. A piece narrower on screen than `MIN_SOLID_PX`
 /// where its symbol lies (`wide_enough`) keeps its lines but gets no symbol.
 pub(super) fn layer(p: &Projection, segs: &[SegView]) -> String {
     let m = markings(segs);

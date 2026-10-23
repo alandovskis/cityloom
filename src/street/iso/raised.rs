@@ -224,7 +224,7 @@ pub(super) fn curb(out: &mut String, p: &Projection, segs: &[SegView], i: usize,
 pub(super) type Strip = (f64, usize, Option<bool>);
 
 /// The box a strip fills, for ordering: its across range (a curb's, for a curb), from the ground to its top, along the
-/// whole stretch.
+/// reach (the part of the stretch its section covers).
 pub(super) fn strip_box(segs: &[SegView], strip: Strip, reach: Reach) -> Bx {
     let (top, i, edge) = strip;
     let s = &segs[i];
