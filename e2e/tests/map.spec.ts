@@ -8,6 +8,7 @@ import {
   live,
   mapReady,
   mapStill,
+  openLongStreet,
   openStreet,
   PLATEAU_TILES,
   placesOnMap,
@@ -472,5 +473,126 @@ test.describe("when there is no basemap", () => {
     expect(Number(await page.locator("#tb-places").innerText())).toBeGreaterThan(50);
     // nothing of the city is drawn on a map of somewhere else
     expect(await page.evaluate(() => !(window as any).cityloomMap.getSource("places"))).toBe(true);
+  });
+});
+
+// ---- the boundaries of a street's zones ---------------------------------------------------------------------
+
+/** The street's zone boundaries as ticks, as the map holds them. `querySourceFeatures` may give a feature once for
+ *  each tile it is cut into, so equal ticks are counted once. */
+const ticks = (page: Page) =>
+  page.evaluate(() => {
+    const seen = new Set<string>();
+    return (window as any).cityloomMap
+      .querySourceFeatures("zone-ticks")
+      .map((f: any) => ({ type: f.geometry.type, coordinates: f.geometry.coordinates }))
+      .filter((t: any) => {
+        const key = JSON.stringify(t.coordinates.map((c: number[]) => c.map((v) => Math.round(v * 1e6))));
+        return !seen.has(key) && !!seen.add(key);
+      });
+  });
+
+/** Splits a long street of the city in two on its page and goes back to the map. Says the street's name. */
+async function splitOneStreet(page: Page) {
+  await openLongStreet(page, 20);
+  const name = ((await page.locator("#street-name").textContent()) ?? "").trim();
+  await page.locator("#zone-split").click();
+  await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+  await page.goto("/map.html");
+  await mapReady(page);
+  return name;
+}
+
+test.describe("the zone boundaries on the map", () => {
+  test("a street without zones adds no ticks", async ({ page }) => {
+    await page.goto("/map.html");
+    await mapReady(page);
+    await expect.poll(() => page.evaluate(() => !!(window as any).cityloomMap.getLayer("zone-ticks"))).toBe(true);
+    expect(await ticks(page)).toHaveLength(0);
+  });
+
+  test("a zone boundary is a tick across its street", async ({ page }) => {
+    await splitOneStreet(page);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const m = (window as any).cityloomMap;
+          return !!m.getLayer("zone-ticks") && !!m.getLayer("zone-ticks-casing");
+        }),
+      )
+      .toBe(true);
+    await expect.poll(async () => (await ticks(page)).length).toBe(1);
+    const [tick] = await ticks(page);
+    expect(tick.type).toBe("LineString");
+    expect(tick.coordinates).toHaveLength(2);
+    // the two points lie on opposite sides of the street's centreline
+    const side = await page.evaluate(
+      ([a, b]) => {
+        const hot = (window as any).cityloomMap
+          .querySourceFeatures("places")
+          .filter((f: any) => String(f.properties.hot).startsWith("s-") && f.geometry.type === "LineString");
+        const sideOf = (line: number[][], p: number[]) => {
+          let best = Infinity;
+          let sign = 0;
+          for (let i = 0; i + 1 < line.length; i++) {
+            const [x1, y1] = line[i];
+            const [x2, y2] = line[i + 1];
+            const t = Math.max(
+              0,
+              Math.min(1, ((p[0] - x1) * (x2 - x1) + (p[1] - y1) * (y2 - y1)) / ((x2 - x1) ** 2 + (y2 - y1) ** 2)),
+            );
+            const d = Math.hypot(p[0] - (x1 + t * (x2 - x1)), p[1] - (y1 + t * (y2 - y1)));
+            if (d < best) {
+              best = d;
+              sign = Math.sign((x2 - x1) * (p[1] - y1) - (y2 - y1) * (p[0] - x1));
+            }
+          }
+          return { best, sign };
+        };
+        let found: number[] | null = null;
+        let min = Infinity;
+        for (const f of hot) {
+          const line = f.geometry.coordinates;
+          const d = sideOf(line, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]).best;
+          if (d < min) {
+            min = d;
+            found = line;
+          }
+        }
+        return [sideOf(found!, a).sign, sideOf(found!, b).sign];
+      },
+      tick.coordinates as [number[], number[]],
+    );
+    expect(side[0] * side[1], "opposite sides of the centreline").toBe(-1);
+  });
+
+  test("the street's label gives its zone count", async ({ page }) => {
+    const name = await splitOneStreet(page);
+    await page.locator("#search").fill(name);
+    const row = page.locator("#search-results .place-row", { hasText: "2 zones" });
+    await expect(row.first()).toBeVisible();
+    await expect(row.first().locator("small")).toHaveText(/ \u00b7 2 zones$/);
+  });
+
+  test("a theme change keeps the ticks", async ({ page }) => {
+    await splitOneStreet(page);
+    await expect.poll(async () => (await ticks(page)).length).toBe(1);
+    const light = await land(page);
+    await page.locator("#account-btn").click();
+    await page.locator('[data-theme-set="dark"]').click();
+    await restyled(page, light);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const m = (window as any).cityloomMap;
+          return (
+            !!m.getLayer("zone-ticks") &&
+            !!m.getLayer("zone-ticks-casing") &&
+            m.querySourceFeatures("zone-ticks").length > 0
+          );
+        }),
+      )
+      .toBe(true);
+    expect(await ticks(page)).toHaveLength(1);
   });
 });
