@@ -14,7 +14,9 @@ pub use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub use fixtures::{SAMPLES, pedestrianised};
+pub use fixtures::{SAMPLES, pedestrianised, zoned};
+mod zones;
+pub use zones::{Elsewhere, Keep, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
 
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
@@ -207,6 +209,15 @@ pub struct Street {
     /// The OSM ways it was made from. The sample streets are made from none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source: Vec<OsmRef>,
+    /// The street's zones along its length, in order of `from_mm`. Empty for a street of one section, the base.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zones: Vec<Zone>,
+    /// The end the zones' positions are measured from: the end that is a real OSM node. Written only with zones.
+    #[serde(default, skip_serializing_if = "ZoneEnd::is_first")]
+    pub from_end: ZoneEnd,
+    /// The length along the centreline the zones were drawn against. Written only with zones.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub length_mm: Option<i32>,
 }
 
 /// A name that is data, said as it is: a street's, a place's, a junction's.
@@ -299,15 +310,26 @@ impl Street {
                 g
             })
             .collect();
-        let mut street =
-            Street { class, class_before: None, name: None, row_mm: total(&segments), side, segments, next_uid: pieces.len() as u32 + 1, source: Vec::new() };
+        let mut street = Street {
+            class,
+            class_before: None,
+            name: None,
+            row_mm: total(&segments),
+            side,
+            segments,
+            next_uid: pieces.len() as u32 + 1,
+            source: Vec::new(),
+            zones: Vec::new(),
+            from_end: ZoneEnd::First,
+            length_mm: None,
+        };
         street.settle_class();
         street
     }
 
-    /// Whether any piece is a motor piece.
+    /// Whether any piece of any section is a motor piece.
     pub fn has_motor(&self) -> bool {
-        self.segments.iter().any(Segment::has_motor)
+        self.sections().iter().any(|s| s.iter().any(Segment::has_motor))
     }
 
     /// Keeps the class true to the pieces. No motor piece: pedestrian, remembering the class it had. A motor
@@ -318,6 +340,7 @@ impl Street {
 
     /// The same street, settled.
     pub fn settled(mut self) -> Street {
+        self.settle_zones();
         self.settle_class();
         self
     }
@@ -345,6 +368,7 @@ impl Street {
                     flip(&mut v.direction);
                 }
             }
+            s.flip_zone_lanes();
         }
         s
     }
@@ -360,12 +384,18 @@ impl Street {
                 flip(&mut v.direction);
             }
         }
+        s.reverse_zones();
         s
     }
 
     /// Whether every index in it points into the catalogue, so that it can be
     /// drawn. A street that came from storage is checked before it is used.
     pub fn is_sound(&self) -> bool {
+        self.row_mm > 0 && self.section_is_sound(&self.segments) && self.zones_are_sound()
+    }
+
+    /// Whether every piece of a section points into the catalogue and has a uid the street has issued.
+    fn section_is_sound(&self, section: &[Segment]) -> bool {
         let seg_ok = |kind: usize, material: usize, curb: Option<usize>, direction: Option<usize>| {
             kind < KINDS.len()
                 && KINDS[kind].materials.contains(&material)
@@ -373,23 +403,81 @@ impl Street {
                 && curb.is_none_or(|c| c < CURBS.len() && KINDS[kind].has_curb)
                 && direction.is_none_or(|d| d < DIRECTIONS.len())
         };
-        self.row_mm > 0
-            && !self.segments.is_empty()
-            && self.segments.iter().all(|s| {
+        !section.is_empty()
+            && section.iter().all(|s| {
                 // the variants are checked before the tram rule reads their kinds
                 seg_ok(s.kind, s.material, s.curb, s.direction)
                     && s.variants.iter().all(|v| seg_ok(v.kind, v.material, None, v.direction) && valid_window(v.from_min, v.to_min))
                     && (!s.tram || KINDS[s.kind].id == "bus" || s.variants.iter().any(|v| KINDS[v.kind].id == "bus"))
                     && s.width_mm > 0
             })
-            && self.segments.iter().map(|s| s.uid).all(|u| u < self.next_uid)
+            && section.iter().map(|s| s.uid).all(|u| u < self.next_uid)
+    }
+
+    /// The zones start at 0, rise strictly and end inside the length they were drawn against; each own section is sound.
+    fn zones_are_sound(&self) -> bool {
+        let Some(first) = self.zones.first() else { return true };
+        let Some(length) = self.length_mm else { return false };
+        first.from_mm == 0
+            && self.zones.windows(2).all(|w| w[0].from_mm < w[1].from_mm)
+            && self.zones.last().is_some_and(|z| z.from_mm < length)
+            && self.zones.iter().filter_map(|z| z.segments.as_deref()).all(|s| self.section_is_sound(s))
+    }
+}
+
+/// What the history keeps of the street's layout: the base section and the zoning.
+///
+/// Uids are unique within a section, not across zones: a zone given a section of its own gets a copy that keeps
+/// its pieces' uids, because renumbering on that copy would invalidate the uids a pointer drag holds mid-gesture.
+/// `Editor::next_uid` is still the street's one counter, so a new piece's uid is unique everywhere.
+#[derive(Clone, Debug, PartialEq)]
+struct Content {
+    segments: Vec<Segment>,
+    zones: Vec<Zone>,
+    from_end: ZoneEnd,
+    length_mm: Option<i32>,
+}
+
+impl Content {
+    fn of(street: &Street) -> Content {
+        Content { segments: street.segments.clone(), zones: street.zones.clone(), from_end: street.from_end, length_mm: street.length_mm }
+    }
+
+    /// How many zones there are to choose from: a street with none is one section.
+    fn zone_count(&self) -> usize {
+        self.zones.len().max(1)
+    }
+
+    /// The section of a zone: its own, or else the base.
+    fn section(&self, zone: usize) -> &[Segment] {
+        match self.zones.get(zone) {
+            Some(z) => z.segments.as_deref().unwrap_or(&self.segments),
+            None => &self.segments,
+        }
+    }
+
+    /// The section of a zone, to change. A zone on the base is given a copy of its own, with the same uids.
+    fn section_mut(&mut self, zone: usize) -> &mut Vec<Segment> {
+        match self.zones.get_mut(zone) {
+            Some(z) => z.segments.get_or_insert_with(|| self.segments.clone()),
+            None => &mut self.segments,
+        }
+    }
+
+    /// Whether any section in use (a zone's own, or the base where a zone has none) has a motor piece.
+    fn has_motor(&self) -> bool {
+        (0..self.zone_count()).any(|z| self.section(z).iter().any(Segment::has_motor))
+    }
+
+    fn settle(&mut self) {
+        zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm);
     }
 }
 
 #[derive(Clone, Debug)]
 struct State {
     label: Said,
-    segments: Vec<Segment>,
+    content: Content,
     /// The street's class as of this state, and the one it had before it became pedestrian: the history holds
     /// them so that undo restores both.
     class: StreetClass,
@@ -411,8 +499,12 @@ pub struct Editor {
     states: Vec<State>,
     cursor: usize,
     next_uid: u32,
+    /// The zone the edits act on. A setting, not part of the history; 0 for a street with no zones.
+    zone: usize,
+    /// Where the street lies as loaded (its length and its real end), once the page knows it.
+    frame: Option<ZoneFrame>,
     selected: Option<u32>,
-    gesture: Option<Vec<Segment>>,
+    gesture: Option<Content>,
     pending_label: Option<Said>,
 }
 
@@ -441,7 +533,7 @@ fn default_directions(segs: &mut [Segment], side: Side) {
     }
 }
 
-fn snap(v: i32) -> i32 {
+pub(crate) fn snap(v: i32) -> i32 {
     ((v as f64 / SNAP_MM as f64).round() as i32) * SNAP_MM
 }
 
@@ -460,15 +552,19 @@ impl Editor {
 
     /// The street as it is now, for the city to keep.
     pub fn snapshot(&self) -> Street {
+        let content = &self.states[self.cursor].content;
         Street {
             class: self.class(),
             class_before: self.class_before(),
             name: self.street_name.clone(),
             row_mm: self.row_mm(),
             side: REGIONS[self.region].drive_side,
-            segments: self.current().clone(),
+            segments: content.segments.clone(),
             next_uid: self.next_uid,
             source: self.source.clone(),
+            zones: content.zones.clone(),
+            from_end: content.from_end,
+            length_mm: content.length_mm,
         }
     }
 
@@ -486,19 +582,21 @@ impl Editor {
             time_min: 12 * 60,
             states: vec![State {
                 label: Said::new("street-today"),
-                segments: today.segments,
+                content: Content::of(&today),
                 class: today.class,
                 class_before: today.class_before,
                 row_mm: today.row_mm,
             }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
+            zone: 0,
+            frame: None,
             selected: None,
             gesture: None,
             pending_label: None,
         };
-        if now.segments != e.states[0].segments || now.row_mm != e.states[0].row_mm {
-            e.push(Said::new("rev-earlier"), now.segments);
+        if Content::of(&now) != e.states[0].content || now.row_mm != e.states[0].row_mm {
+            e.push(Said::new("rev-earlier"), Content::of(&now));
             e.states[1].row_mm = now.row_mm;
         }
         e
@@ -508,40 +606,93 @@ impl Editor {
         self.states[self.cursor].row_mm
     }
 
-    fn current(&self) -> &Vec<Segment> {
-        &self.states[self.cursor].segments
+    /// The selected zone's section.
+    fn current(&self) -> &[Segment] {
+        self.states[self.cursor].content.section(self.zone)
     }
 
-    fn current_mut(&mut self) -> &mut Vec<Segment> {
-        &mut self.states[self.cursor].segments
+    /// The zone the edits act on.
+    pub fn zone(&self) -> usize {
+        self.zone
     }
 
-    /// Runs an edit against a copy, then either records it as a revision,
-    /// or, inside a gesture, applies it without recording.
+    /// Chooses the zone the edits act on. Refused when there is no such zone, or it lies beyond the loaded end. The selected piece is cleared when
+    /// the zone changes.
+    pub fn select_zone(&mut self, zone: usize) -> bool {
+        if zone >= self.states[self.cursor].content.zone_count() || self.is_cut_off(zone) {
+            return false;
+        }
+        if zone != self.zone {
+            self.zone = zone;
+            self.selected = None;
+        }
+        true
+    }
+
+    /// Says where the street lies as loaded. A setting, outside the history.
+    pub fn with_frame(mut self, frame: Option<ZoneFrame>) -> Editor {
+        self.frame = frame;
+        if self.is_cut_off(self.zone) {
+            self.zone = 0;
+            self.selected = None;
+        }
+        self
+    }
+
+    pub fn frame(&self) -> Option<ZoneFrame> {
+        self.frame
+    }
+
+    /// Runs an edit on a copy of the selected zone's section, then either records it as a revision (the zoning
+    /// settled), or, inside a gesture, applies it without recording.
     fn edit<F>(&mut self, label: Said, f: F) -> bool
     where
         F: FnOnce(&mut Vec<Segment>) -> bool,
     {
-        if self.gesture.is_some() {
-            let changed = f(self.current_mut());
-            if changed {
-                self.pending_label = Some(label);
-            }
-            return changed;
+        let mut section = self.current().to_vec();
+        if !f(&mut section) {
+            return false;
         }
-        let mut next = self.current().clone();
-        if !f(&mut next) || next == *self.current() {
+        let zone = self.zone;
+        if self.gesture.is_some() {
+            *self.states[self.cursor].content.section_mut(zone) = section;
+            self.pending_label = Some(label);
+            return true;
+        }
+        self.edit_content(label, |content| {
+            *content.section_mut(zone) = section;
+            true
+        })
+    }
+
+    /// Runs an edit on a copy of the whole content and records it as a revision when it changed anything.
+    fn edit_content<F>(&mut self, label: Said, f: F) -> bool
+    where
+        F: FnOnce(&mut Content) -> bool,
+    {
+        let mut next = self.states[self.cursor].content.clone();
+        if !f(&mut next) {
+            return false;
+        }
+        next.settle();
+        if next == self.states[self.cursor].content {
             return false;
         }
         self.push(label, next);
         true
     }
 
-    fn push(&mut self, label: Said, segments: Vec<Segment>) {
-        let motor = segments.iter().any(Segment::has_motor);
-        let (class, class_before) = settled_class(motor, self.class(), self.class_before());
+    fn push(&mut self, label: Said, mut content: Content) {
+        content.settle();
+        let (class, class_before) = settled_class(content.has_motor(), self.class(), self.class_before());
         let row_mm = self.row_mm();
-        self.push_state(State { label, segments, class, class_before, row_mm });
+        self.push_state(State { label, content, class, class_before, row_mm });
+        self.clamp_zone();
+    }
+
+    /// Settling can leave fewer zones than there were: the selected one falls back to the last.
+    fn clamp_zone(&mut self) {
+        self.zone = self.zone.min(self.states[self.cursor].content.zone_count() - 1);
     }
 
     fn push_state(&mut self, state: State) {
@@ -555,7 +706,7 @@ impl Editor {
     /// Starts a drag. Edits until `end_gesture` collapse into one revision.
     pub fn begin_gesture(&mut self) {
         if self.gesture.is_none() {
-            self.gesture = Some(self.current().clone());
+            self.gesture = Some(self.states[self.cursor].content.clone());
             self.pending_label = None;
         }
     }
@@ -564,12 +715,13 @@ impl Editor {
         let Some(baseline) = self.gesture.take() else {
             return false;
         };
-        let now = self.current().clone();
+        let mut now = self.states[self.cursor].content.clone();
+        now.settle();
+        // The live state was mutated in place; restore it, then record it.
+        self.states[self.cursor].content = baseline.clone();
         if now == baseline {
             return false;
         }
-        // The live state was mutated in place; restore it, then record it.
-        *self.current_mut() = baseline;
         // An edit that changed anything left its label; without one there is nothing to record.
         let Some(label) = self.pending_label.take() else {
             return false;
@@ -580,7 +732,7 @@ impl Editor {
 
     pub fn cancel_gesture(&mut self) {
         if let Some(baseline) = self.gesture.take() {
-            *self.current_mut() = baseline;
+            self.states[self.cursor].content = baseline;
         }
     }
 
@@ -776,20 +928,28 @@ impl Editor {
             return true;
         }
         if self.states.len() == 1 {
-            default_directions(&mut self.states[0].segments, side);
+            let content = &mut self.states[0].content;
+            default_directions(&mut content.segments, side);
+            for own in content.zones.iter_mut().filter_map(|z| z.segments.as_mut()) {
+                default_directions(own, side);
+            }
         } else {
+            // The side of the road is the street's, so every section is mirrored, not just the selected zone's.
             let label = side_said(side);
-            self.edit(label, |segs| {
+            self.edit_content(label, |content| {
                 let mut changed = false;
-                for s in segs.iter_mut() {
-                    if let Some(d) = s.direction {
-                        s.direction = Some(1 - d);
-                        changed = true;
-                    }
-                    for v in &mut s.variants {
-                        if let Some(d) = v.direction {
-                            v.direction = Some(1 - d);
+                let sections = std::iter::once(&mut content.segments).chain(content.zones.iter_mut().filter_map(|z| z.segments.as_mut()));
+                for segs in sections {
+                    for s in segs.iter_mut() {
+                        if let Some(d) = s.direction {
+                            s.direction = Some(1 - d);
                             changed = true;
+                        }
+                        for v in &mut s.variants {
+                            if let Some(d) = v.direction {
+                                v.direction = Some(1 - d);
+                                changed = true;
+                            }
                         }
                     }
                 }
@@ -938,7 +1098,7 @@ impl Editor {
         let Some(def) = measures::DEFS.iter().find(|d| d.code == code) else {
             return false;
         };
-        let existing = self.current().clone();
+        let existing = self.current().to_vec();
         let mut next_uid = self.next_uid;
         let Some(arranged) = measures::arrange(code, &existing, self.row_mm(), REGIONS[self.region].drive_side, self.class().is_freeway(), &mut next_uid)
         else {
@@ -985,7 +1145,7 @@ impl Editor {
     /// the sum of the pair fixed. `delta_mm` is measured from the gesture
     /// start, so a drag is idempotent per pointer position.
     pub fn resize_boundary(&mut self, left_index: usize, delta_mm: i32) -> bool {
-        let Some(base) = self.gesture.clone() else {
+        let Some(base) = self.gesture.as_ref().map(|g| g.section(self.zone).to_vec()) else {
             return false;
         };
         if left_index + 1 >= base.len() {
@@ -1010,7 +1170,7 @@ impl Editor {
     /// Resizes one segment from its gesture-start width, taking the space
     /// from, or giving it to, the unassigned width of the street.
     pub fn resize_edge(&mut self, uid: u32, delta_mm: i32) -> bool {
-        let Some(base) = self.gesture.clone() else {
+        let Some(base) = self.gesture.as_ref().map(|g| g.section(self.zone).to_vec()) else {
             return false;
         };
         let Some(s) = base.iter().find(|s| s.uid == uid) else {
@@ -1064,15 +1224,18 @@ impl Editor {
     pub fn reset(&mut self) -> bool {
         self.cancel_gesture();
         let first = self.states[0].clone();
-        if first.segments == *self.current() && first.row_mm == self.row_mm() {
+        if first.content == self.states[self.cursor].content && first.row_mm == self.row_mm() {
             return false;
         }
         self.push_state(State { label: Said::new("rev-reset"), ..first });
+        self.clamp_zone();
         self.selected = None;
         true
     }
 
+    /// After the history moved: the selected zone and piece fall back when they no longer exist.
     fn reselect(&mut self) {
+        self.clamp_zone();
         if let Some(uid) = self.selected
             && !self.current().iter().any(|s| s.uid == uid)
         {
@@ -1122,7 +1285,7 @@ impl Editor {
     pub fn view(&self) -> View {
         let segs = self.current();
         let total_mm = total(segs);
-        let existing = &self.states[0].segments;
+        let existing = self.states[0].content.section(self.zone.min(self.states[0].content.zone_count() - 1));
         // Everything that measures the street does so as it is at the shown time.
         let at = |v: &[Segment]| v.iter().map(|s| s.at(self.time_min)).collect::<Vec<_>>();
         let (now, existing_now) = (at(segs), at(existing));
@@ -1140,14 +1303,46 @@ impl Editor {
             existing_total_mm: total(existing),
             selected: self.selected,
             outcomes: outcomes(&now, &existing_now),
-            checks: checks(&now, self.row_mm(), REGIONS[self.region].drive_side, self.class().is_freeway(), self.class() == StreetClass::Pedestrian),
+            checks: self.street_checks(),
+            zones: self.zones_view(),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
             can_redo: self.cursor + 1 < self.states.len(),
-            changed: segs != existing,
+            changed: self.states[self.cursor].content != self.states[0].content,
             source: self.source.clone(),
         }
+    }
+
+    /// The checks of one section, as the street is at the shown time.
+    fn section_checks(&self, segs: &[Segment]) -> Vec<Check> {
+        let now: Vec<Segment> = segs.iter().map(|s| s.at(self.time_min)).collect();
+        checks(&now, self.row_mm(), REGIONS[self.region].drive_side, self.class().is_freeway(), self.class() == StreetClass::Pedestrian)
+    }
+
+    /// Whether every check passes in a section.
+    fn section_passes(&self, segs: &[Segment]) -> bool {
+        self.section_checks(segs).iter().all(|c| c.ok)
+    }
+
+    /// The street's checks: a check passes only when it passes in every zone. Where it does not, its detail and the
+    /// zone it names are the first failing zone's; else they are the selected zone's.
+    fn street_checks(&self) -> Vec<Check> {
+        let content = &self.states[self.cursor].content;
+        let mut street = self.section_checks(self.current());
+        if content.zones.len() < 2 {
+            return street;
+        }
+        for (z, zone) in content.zones.iter().enumerate() {
+            for (check, in_zone) in street.iter_mut().zip(self.section_checks(content.section(z))) {
+                if !in_zone.ok && check.zone.is_none() {
+                    check.ok = false;
+                    check.zone = Some(zone_label(zone, z + 1));
+                    check.detail = in_zone.detail;
+                }
+            }
+        }
+        street
     }
 
     fn measure_views(&self, raw: &[Segment], now: &[Segment]) -> Vec<MeasureView> {
@@ -1261,6 +1456,7 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, pedestrian: 
     let keeps = lanes.iter().position(|&d| d == wrong_first).is_none_or(|i| !lanes[i..].contains(&wrong_then));
     vec![
         Check {
+            zone: None,
             id: "fits",
             ok: fits,
             label: Said::new("check-label-fits"),
@@ -1273,6 +1469,7 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, pedestrian: 
             },
         },
         Check {
+            zone: None,
             id: "edges",
             ok: both_edges,
             label: Said::new("check-label-edges"),
@@ -1287,6 +1484,7 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, pedestrian: 
             },
         },
         Check {
+            zone: None,
             id: "access",
             ok: access,
             label: Said::new("check-label-access"),
@@ -1301,6 +1499,7 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, pedestrian: 
             },
         },
         Check {
+            zone: None,
             id: "side",
             ok: keeps,
             label: side_said(side),
@@ -1368,6 +1567,8 @@ pub struct Check {
     pub ok: bool,
     pub label: Said,
     pub detail: Said,
+    /// The first zone that fails this check, when the street has several zones and the check fails; else `None`.
+    pub zone: Option<Said>,
 }
 
 #[derive(Serialize)]
@@ -1403,7 +1604,10 @@ pub struct View {
     pub existing_total_mm: i32,
     pub selected: Option<u32>,
     pub outcomes: Outcomes,
+    /// The street's checks: each passes only when it passes in every zone.
     pub checks: Vec<Check>,
+    /// The street's zones, for the strip.
+    pub zones: ZonesView,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
     pub revisions: Vec<Revision>,
@@ -2577,5 +2781,372 @@ mod tests {
         let lane = e.view().segments[1].uid;
         assert!(e.remove(lane));
         assert!(!e.view().has_motor);
+    }
+    // ---- zones in the history ------------------------------------------
+
+    fn sample_street() -> Street {
+        Street::sample(0, Side::Right)
+    }
+
+    /// An editor on the sample street divided into three zones, all on the base section; the zoning is one
+    /// earlier revision.
+    fn zoned_editor() -> Editor {
+        let today = sample_street();
+        let now = zoned(today.clone(), &[0, 20_000, 40_000], 60_000);
+        Editor::from_street(&today, &now, 0)
+    }
+
+    #[test]
+    fn make_pedestrian_acts_on_the_selected_zone_and_the_street_stays_local_until_the_last_zone_with_a_motor_piece_loses_it() {
+        let mut e = zoned_editor();
+        let sidewalk = crate::shared::catalogue::kind_index("sidewalk").unwrap();
+        let base = e.snapshot().segments;
+        assert_eq!(e.view().class, StreetClass::Local);
+        assert!(e.view().has_motor);
+        assert!(e.make_pedestrian(sidewalk));
+        let s = e.snapshot();
+        assert_eq!((s.class, s.class_before), (StreetClass::Local, None), "zones 1 and 2 still carry cars");
+        assert!(!e.view().has_motor, "the selected zone has no motor piece left");
+        assert_eq!(e.view().class, StreetClass::Local);
+        assert!(!e.make_pedestrian(sidewalk), "nothing left to change in zone 0");
+        assert_eq!(s.zones[1].segments, None);
+        assert_eq!(s.zones[2].segments, None);
+        assert_eq!(s.segments, base);
+        assert!(e.select_zone(1));
+        assert!(e.view().has_motor, "has_motor follows the selected zone");
+        assert!(e.make_pedestrian(sidewalk));
+        assert_eq!(e.snapshot().class, StreetClass::Local);
+        assert!(e.select_zone(2));
+        assert!(e.make_pedestrian(sidewalk));
+        let s = e.snapshot();
+        assert_eq!((s.class, s.class_before), (StreetClass::Pedestrian, Some(StreetClass::Local)));
+        assert_eq!(e.view().class, StreetClass::Pedestrian);
+    }
+
+    #[test]
+    fn a_measure_is_arranged_in_the_selected_zone_only() {
+        let mut e = zoned_editor();
+        let base = e.snapshot().segments;
+        assert!(e.select_zone(1));
+        let code = e.view().measures.iter().find(|m| m.can_apply && !m.present).expect("a measure fits").code;
+        assert!(e.apply_measure(code));
+        let s = e.snapshot();
+        assert_ne!(s.zones[1].segments.as_deref(), None, "zone 1 has its own section");
+        assert_eq!(s.zones[0].segments, None);
+        assert_eq!(s.zones[2].segments, None);
+        assert_eq!(s.segments, base, "the base is unchanged");
+        assert!(e.view().measures.iter().find(|m| m.code == code).unwrap().present);
+        assert!(e.select_zone(0));
+        assert!(!e.view().measures.iter().find(|m| m.code == code).unwrap().present, "zone 0 is not arranged");
+        assert!(e.view().measures.iter().find(|m| m.code == code).unwrap().can_apply, "can_apply is the selected zone's");
+    }
+
+    #[test]
+    fn the_class_change_is_reported_only_when_the_street_class_changes() {
+        let mut e = zoned_editor();
+        let sidewalk = crate::shared::catalogue::kind_index("sidewalk").unwrap();
+        for zone in 0..3 {
+            assert!(e.select_zone(zone));
+            let before = e.view().class;
+            assert!(e.make_pedestrian(sidewalk));
+            let after = e.view().class;
+            assert_eq!(before != after, zone == 2, "zone {zone}");
+        }
+    }
+
+    #[test]
+    fn an_edit_acts_on_the_selected_zone_only_and_gives_it_a_section_of_its_own() {
+        let mut e = zoned_editor();
+        let base = e.snapshot().segments;
+        assert!(e.select_zone(1));
+        let (uid, w) = (base[0].uid, base[0].width_mm);
+        assert!(e.set_width(uid, w + 100));
+        let s = e.snapshot();
+        let own = s.zones[1].segments.as_ref().expect("zone 1 has a section of its own");
+        assert_eq!(own[0].width_mm, w + 100);
+        assert_eq!(own.iter().map(|g| g.uid).collect::<Vec<_>>(), base.iter().map(|g| g.uid).collect::<Vec<_>>());
+        assert_eq!(s.zones[0].segments, None);
+        assert_eq!(s.zones[2].segments, None);
+        assert_eq!(s.segments, base, "the base is unchanged");
+    }
+
+    #[test]
+    fn a_zone_edited_back_to_the_base_is_stored_as_the_base_again() {
+        let mut e = zoned_editor();
+        let g = e.snapshot().segments[0].clone();
+        assert!(e.select_zone(1));
+        assert!(e.set_width(g.uid, g.width_mm + 100));
+        assert!(e.snapshot().zones[1].segments.is_some());
+        assert!(e.set_width(g.uid, g.width_mm));
+        assert_eq!(e.snapshot().zones[1].segments, None);
+    }
+
+    #[test]
+    fn a_piece_selected_in_one_zone_is_cleared_by_choosing_another_zone_and_selecting_a_piece_works_in_the_new_one() {
+        let mut e = zoned_editor();
+        let uids: Vec<u32> = e.snapshot().segments.iter().map(|g| g.uid).collect();
+        e.select(Some(uids[1]));
+        assert_eq!(e.view().selected, Some(uids[1]));
+        assert!(e.select_zone(2));
+        assert_eq!(e.view().selected, None);
+        e.select(Some(uids[2]));
+        assert_eq!(e.view().selected, Some(uids[2]));
+        assert!(e.select_zone(2));
+        assert_eq!(e.view().selected, Some(uids[2]), "choosing the zone already chosen keeps the piece");
+        assert!(!e.select_zone(3), "no such zone");
+        assert_eq!(e.zone(), 2);
+    }
+
+    #[test]
+    fn undo_redo_and_start_over_restore_the_zones_exactly_and_the_selected_zone_falls_back_when_it_no_longer_exists() {
+        let today = sample_street();
+        let mut e = zoned_editor();
+        let three = e.snapshot();
+        let g = three.segments[0].clone();
+        assert!(e.select_zone(2));
+        assert!(e.set_width(g.uid, g.width_mm + 100));
+        let edited = e.snapshot();
+        assert_eq!(edited.zones.len(), 3);
+        assert!(e.undo());
+        assert_eq!(e.snapshot(), three);
+        assert_eq!(e.zone(), 2, "three zones still exist");
+        assert!(e.undo());
+        assert_eq!(e.snapshot(), today);
+        assert!(e.zone() <= 1);
+        assert_eq!(e.zone(), 0);
+        assert!(e.redo() && e.redo());
+        assert_eq!(e.snapshot(), edited);
+        assert!(e.select_zone(2));
+        assert!(e.reset());
+        assert_eq!(e.snapshot(), today, "the street as first laid out: one zone");
+        assert_eq!(e.zone(), 0);
+    }
+
+    #[test]
+    fn a_drag_in_a_zone_is_one_revision_and_leaves_the_other_zones_alone() {
+        let mut e = zoned_editor();
+        let before = e.view().revisions.len();
+        let zones_before = e.snapshot().zones;
+        assert!(e.select_zone(0));
+        e.begin_gesture();
+        assert!(e.resize_boundary(1, 100));
+        assert!(e.resize_boundary(1, 200));
+        assert!(e.resize_boundary(1, 300));
+        assert!(e.end_gesture());
+        assert_eq!(e.view().revisions.len(), before + 1);
+        let s = e.snapshot();
+        assert!(s.zones[0].segments.is_some());
+        assert_eq!(s.zones[1], zones_before[1]);
+        assert_eq!(s.zones[2], zones_before[2]);
+        assert_eq!(s.segments, sample_street().segments, "the base is unchanged");
+    }
+
+    #[test]
+    fn a_drag_that_changes_nothing_records_nothing_and_leaves_no_own_section() {
+        let mut e = zoned_editor();
+        let before = e.snapshot();
+        assert!(e.select_zone(1));
+        e.begin_gesture();
+        e.resize_boundary(1, 0);
+        assert!(!e.end_gesture());
+        assert_eq!(e.snapshot(), before);
+    }
+
+    #[test]
+    fn a_snapshot_of_a_zoned_editor_builds_the_same_editor_again() {
+        let today = sample_street();
+        let mut e = zoned_editor();
+        let g = e.snapshot().segments[0].clone();
+        assert!(e.select_zone(1));
+        assert!(e.set_width(g.uid, g.width_mm + 100));
+        let snap = e.snapshot();
+        assert_eq!((snap.length_mm, snap.zones.len()), (Some(60_000), 3));
+        let again = Editor::from_street(&today, &snap, 0);
+        assert_eq!(again.snapshot(), snap);
+        assert_eq!(again.view().revisions.len(), 1, "the earlier changes are one revision");
+        assert_eq!(again.view().revisions[0].label, Said::new("rev-earlier"));
+    }
+
+    #[test]
+    fn the_class_follows_all_zones_through_the_history() {
+        let mut base = street_of(StreetClass::Local, &["sidewalk", "sidewalk"]);
+        let mut with_lane = base.segments.clone();
+        with_lane.insert(1, Segment::new(50, kind("travel"), 3300));
+        base.next_uid = 51;
+        base.zones = vec![Zone { from_mm: 0, segments: None, name: None }, Zone { from_mm: 20_000, segments: Some(with_lane), name: None }];
+        base.length_mm = Some(40_000);
+        base.class = StreetClass::Local;
+        let s = base.settled();
+        assert_eq!(s.class, StreetClass::Local, "zone 0 has no motor piece, zone 1 has");
+        let mut e = Editor::from_street(&s, &s, 0);
+        assert_eq!(e.view().class, StreetClass::Local);
+        assert!(e.select_zone(1));
+        assert!(e.remove(50));
+        assert_eq!(e.view().class, StreetClass::Pedestrian);
+        assert_eq!(e.snapshot().class_before, Some(StreetClass::Local));
+        assert!(e.undo());
+        assert_eq!((e.view().class, e.snapshot().class_before), (s.class, s.class_before));
+        assert_eq!(e.snapshot(), s);
+    }
+
+    // ---- checks, status and the view read every zone --------------------
+
+    /// `zoned_editor()` with zone 1 widened until the street no longer fits.
+    fn zoned_editor_with_zone_1_too_wide() -> Editor {
+        let mut e = zoned_editor();
+        let pieces = e.snapshot().segments;
+        assert!(e.select_zone(1));
+        for g in &pieces {
+            e.set_width(g.uid, g.bounds().1);
+        }
+        assert!(e.select_zone(0));
+        e
+    }
+
+    #[test]
+    fn a_street_of_several_zones_fails_a_check_when_any_zone_fails_it_and_names_the_zone() {
+        let mut e = zoned_editor_with_zone_1_too_wide();
+        let fits = |e: &Editor| e.view().checks.into_iter().find(|c| c.id == "fits").unwrap();
+        let (street, zone0) = (fits(&e), e.view().delta_mm);
+        assert!(!street.ok, "zone 1 does not fit, so the street does not");
+        assert_eq!(street.zone, Some(Said::new("zone-unnamed").with("n", Arg::Num(2))));
+        assert!(zone0 <= 0, "the status line is the selected zone's, and zone 0 fits");
+        assert!(e.select_zone(1));
+        assert!(e.view().delta_mm > 0);
+        // the others pass in every zone and name no zone
+        let v = e.view();
+        let edges = v.checks.iter().find(|c| c.id == "edges").unwrap();
+        assert!(edges.ok && edges.zone.is_none());
+    }
+
+    #[test]
+    fn a_one_zone_street_has_the_checks_and_the_status_it_had_and_names_no_zone() {
+        let e = Editor::new(0);
+        let v = e.view();
+        assert!(v.checks.iter().all(|c| c.zone.is_none()));
+        let segs: Vec<Segment> = e.snapshot().segments.iter().map(|s| s.at(v.time_min)).collect();
+        let want = checks(&segs, v.row_mm, REGIONS[0].drive_side, false, false);
+        let key = |cs: &[Check]| cs.iter().map(|c| (c.id, c.ok, c.label.clone(), c.detail.clone())).collect::<Vec<_>>();
+        assert_eq!(key(&v.checks), key(&want));
+        assert_eq!(v.zones.zones.len(), 1);
+    }
+
+    #[test]
+    fn a_failing_check_of_a_street_with_every_zone_failing_names_the_first() {
+        let mut e = zoned_editor_with_zone_1_too_wide();
+        assert!(e.select_zone(2));
+        for g in e.snapshot().segments {
+            e.set_width(g.uid, g.bounds().1);
+        }
+        let fits = e.view().checks.into_iter().find(|c| c.id == "fits").unwrap();
+        assert_eq!(fits.zone, Some(Said::new("zone-unnamed").with("n", Arg::Num(2))));
+    }
+
+    #[test]
+    fn shares_and_capacity_are_those_of_the_selected_zone() {
+        let mut e = zoned_editor();
+        let plain = e.view().outcomes;
+        let g = e.snapshot().segments;
+        assert!(e.select_zone(1));
+        for p in &g {
+            e.set_width(p.uid, p.bounds().1);
+        }
+        let v1 = e.view().outcomes;
+        assert_ne!(v1.capacity_pph, plain.capacity_pph);
+        assert_eq!(v1.existing_capacity_pph, plain.existing_capacity_pph);
+        assert!(e.select_zone(0));
+        let v0 = e.view().outcomes;
+        assert_eq!(
+            (v0.capacity_pph, v0.share.iter().map(|s| s.mm).collect::<Vec<_>>()),
+            (plain.capacity_pph, plain.share.iter().map(|s| s.mm).collect::<Vec<_>>())
+        );
+    }
+
+    #[test]
+    fn the_view_lists_zones_with_label_range_and_whether_each_has_its_own_section() {
+        let today = sample_street();
+        let now = zoned(today.clone(), &[0, 20_000, 45_000], 60_000);
+        let mut e = Editor::from_street(&today, &now, 0);
+        let z = e.view().zones;
+        assert_eq!((z.length_mm, z.from_end, z.selected), (60_000, ZoneEnd::First, 0));
+        assert_eq!(
+            z.zones.iter().map(|g| (g.index, g.from_mm, g.to_mm, g.own, g.cut_off)).collect::<Vec<_>>(),
+            vec![(0, 0, 20_000, false, false), (1, 20_000, 45_000, false, false), (2, 45_000, 60_000, false, false)]
+        );
+        assert_eq!(z.zones[1].label, Said::new("zone-unnamed").with("n", Arg::Num(2)));
+        assert!(e.select_zone(1));
+        let g = e.snapshot().segments[0].clone();
+        assert!(e.set_width(g.uid, g.width_mm + 100));
+        assert!(e.name_zone(Some("Market")));
+        let z = e.view().zones;
+        assert_eq!(z.selected, 1);
+        assert_eq!(z.zones.iter().map(|g| g.own).collect::<Vec<_>>(), vec![false, true, false]);
+        assert_eq!(z.zones[1].label, named_said("Market"));
+    }
+
+    #[test]
+    fn a_street_with_no_zones_lists_one_zone_as_long_as_the_street_loaded() {
+        let e = Editor::new(0).with_frame(Some(ZoneFrame { length_mm: 33_000, from_end: ZoneEnd::Last }));
+        let z = e.view().zones;
+        assert_eq!((z.length_mm, z.from_end, z.zones.len()), (33_000, ZoneEnd::Last, 1));
+        assert_eq!((z.zones[0].from_mm, z.zones[0].to_mm), (0, 33_000));
+        assert_eq!(Editor::new(0).view().zones.length_mm, 0);
+    }
+
+    #[test]
+    fn changed_is_true_for_a_street_with_zones_even_when_no_section_differs_from_the_base() {
+        let mut e = zoned_editor();
+        assert!(e.view().changed);
+        assert!(e.reset());
+        assert!(!e.view().changed);
+    }
+
+    #[test]
+    fn a_zone_beyond_the_loaded_end_is_cut_off_cannot_be_selected_and_is_kept() {
+        let today = sample_street();
+        let now = zoned(today.clone(), &[0, 20_000, 45_000], 60_000);
+        let mut e = Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::First }));
+        let z = e.view().zones;
+        assert_eq!(z.elsewhere, Some(Elsewhere { drawn_mm: 60_000, loaded_mm: 40_000 }));
+        assert_eq!(z.zones.iter().map(|g| g.cut_off).collect::<Vec<_>>(), vec![false, false, true]);
+        assert!(!e.select_zone(2));
+        assert_eq!(e.zone(), 0);
+        let s = e.snapshot();
+        assert_eq!((s.zones.len(), s.length_mm), (3, Some(60_000)));
+        // a street drawn on this very length says nothing
+        let same = Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_500, from_end: ZoneEnd::First }));
+        assert_eq!(same.view().zones.elsewhere, None);
+        // nor does one anchored at the other end, but it still differs
+        let other = Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::Last }));
+        assert_eq!(other.view().zones.elsewhere, Some(Elsewhere { drawn_mm: 60_000, loaded_mm: 60_000 }));
+    }
+
+    #[test]
+    fn applying_a_frame_that_cuts_off_the_selected_zone_falls_back_to_the_first_zone() {
+        let today = sample_street();
+        let now = zoned(today.clone(), &[0, 20_000, 45_000], 60_000);
+        let mut e = Editor::from_street(&today, &now, 0);
+        assert!(e.select_zone(2));
+        let e = e.with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::First }));
+        assert_eq!(e.zone(), 0, "zone 2 starts beyond the loaded end");
+        let mut e = Editor::from_street(&today, &now, 0);
+        assert!(e.select_zone(1));
+        assert_eq!(e.with_frame(Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::First })).zone(), 1, "a zone still loaded stays selected");
+    }
+
+    #[test]
+    fn a_street_cut_at_both_ends_says_split_is_unavailable() {
+        let e = zoned_editor();
+        assert_eq!(e.view().zones.split, Some(Said::new("zone-refused-no-anchor")));
+        let framed = zoned_editor().with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        assert_eq!(framed.view().zones.split, None);
+    }
+
+    #[test]
+    fn the_frame_is_kept_outside_the_history() {
+        let frame = ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::Last };
+        let e = zoned_editor().with_frame(Some(frame));
+        assert_eq!(e.frame(), Some(frame));
+        assert_eq!(zoned_editor().frame(), None);
     }
 }

@@ -322,6 +322,22 @@ mod tests {
     }
 
     #[test]
+    fn a_zoned_street_is_kept_and_comes_back_through_the_store_with_its_zones() {
+        let (store, storage) = store();
+        let mut e = store.open().street_editor(2, 0).unwrap();
+        let length = e.frame().unwrap().length_mm;
+        assert!(e.split_zone(Some(length / 2)).is_ok());
+        let piece = e.snapshot().segments[0].clone();
+        assert!(e.set_width(piece.uid, piece.width_mm + 100));
+        let zoned = e.snapshot();
+        assert_eq!(zoned.zones.len(), 2);
+        assert!(store.write_street(2, zoned.clone()));
+        assert!(storage.recall(EDITS_KEY).unwrap().contains("\"version\":6"), "a document holding zones is version 6");
+        assert_eq!(store.open().street_editor(2, 0).unwrap().snapshot(), zoned);
+        assert_eq!(store.open().view(0).edited, 1);
+    }
+
+    #[test]
     fn a_junction_is_kept_in_the_edits_document_under_its_key() {
         let (store, storage) = store();
         let node = store.open().view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
@@ -424,7 +440,7 @@ mod tests {
     #[test]
     fn a_document_from_a_newer_version_is_left_alone_and_the_write_says_it_was_not_kept() {
         let (store, storage) = store();
-        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}},"future":true}}"#, edits::VERSION + 1);
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}},"future":true}}"#, edits::NEWEST + 1);
         storage.remember(EDITS_KEY, &newer);
         assert!(!store.write_street(1, narrowed(&store, 1)));
         assert_eq!(storage.recall(EDITS_KEY).as_deref(), Some(newer.as_str()));

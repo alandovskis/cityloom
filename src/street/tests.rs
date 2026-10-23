@@ -1171,3 +1171,258 @@ fn a_bike_lane_is_offered_no_other_times() {
     let h = street_html(|| view! { <inspector::StreetInspector vm=s.clone()/> });
     assert!(h.contains("Bike lane") && !h.contains("Other times") && !h.contains("Add other times"), "{h}");
 }
+
+// ---- the zone strip ---------------------------------------------------------------
+
+fn zoned_street(starts: &[i32], frame_mm: Option<i32>, locale: Locale) -> Rc<StreetVm> {
+    use crate::shared::catalogue::Side;
+    use crate::street::model::{Street, ZoneEnd, ZoneFrame, zoned};
+    let street = zoned(Street::sample(0, Side::Right), starts, 40_000);
+    let frame = frame_mm.map(|length_mm| ZoneFrame { length_mm, from_end: ZoneEnd::First });
+    let (ports, _, _) = crate::shared::ports::test_ports();
+    StreetVm::new(ports, crate::i18n_for(locale), Editor::from_street(&street, &street, 0).with_frame(frame), None)
+}
+
+fn strip_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::strip::ZoneStrip vm=s.clone() ends=None/> })
+}
+
+#[test]
+fn the_strip_has_one_cell_per_zone_in_a_listbox_with_one_tab_stop_and_the_selected_cell_active() {
+    let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En);
+    s.select_zone(1);
+    let h = strip_html(&s);
+    assert!(h.contains("id=\"zone-strip\"") && h.contains("role=\"listbox\"") && h.contains("aria-orientation=\"horizontal\""), "{h}");
+    assert_eq!(count(&h, "tabindex=\"0\""), 1, "{h}");
+    assert_eq!(count(&h, "role=\"option\""), 3, "{h}");
+    assert!(h.contains("aria-activedescendant=\"zone-1\""), "{h}");
+    assert_eq!(count(&h, "aria-selected=\"true\""), 1, "{h}");
+    assert_eq!(count(&h, "aria-selected=\"false\""), 2, "{h}");
+    assert!(h.contains("id=\"zone-0\"") && h.contains("id=\"zone-1\"") && h.contains("id=\"zone-2\""), "{h}");
+    assert_eq!(count(&h, "aria-hidden=\"true\" class=\"zone-handle\""), 2, "one handle between each two cells: {h}");
+    assert!(h.contains(">Zones along the street</h2>") && h.contains("Measured from the first end"), "{h}");
+    assert!(!h.contains("were drawn"), "no notice while the zones were drawn on this road: {h}");
+}
+
+#[test]
+fn each_cell_is_named_with_its_label_range_length_and_section() {
+    let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En);
+    let h = strip_html(&s);
+    assert!(h.contains("aria-label=\"Zone 1, 0.0 m to 10.0 m, 10.0 m long, the base section, 1 of 3\""), "{h}");
+    assert!(h.contains("aria-label=\"Zone 2, 10.0 m to 30.0 m, 20.0 m long, the base section, 2 of 3\""), "{h}");
+    assert!(h.contains("aria-label=\"Zone 3, 30.0 m to 40.0 m, 10.0 m long, the base section, 3 of 3\""), "{h}");
+    // The text on a cell may be cut to fit; the whole name is its title.
+    assert!(h.contains("title=\"Zone 2\""), "{h}");
+}
+
+#[test]
+fn the_caption_names_the_end_the_strip_is_measured_from() {
+    let s = zoned_street(&[0, 20_000], Some(40_000), Locale::En);
+    let h = street_html(|| view! { <crate::street::strip::ZoneStrip vm=s.clone() ends=Some(street_ends())/> });
+    assert!(h.contains("Measured from the edge of the map"), "{h}");
+}
+
+#[test]
+fn the_strip_follows_the_language() {
+    let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::FrCa);
+    // The language puts no-break spaces before units; the words are the same.
+    let h = strip_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains(">Zones le long de la rue</h2>"), "{h}");
+    assert!(h.contains("aria-label=\"Zone 2, de 10,0 m à 30,0 m, 20,0 m de long, la coupe de base, 2 sur 3\""), "{h}");
+}
+
+#[test]
+fn a_cut_off_zone_is_disabled_and_the_notice_is_shown() {
+    // Drawn on 40 m, loaded 20 m: the last zone starts past the loaded end.
+    let s = zoned_street(&[0, 10_000, 30_000], Some(20_000), Locale::En);
+    let h = strip_html(&s);
+    assert_eq!(count(&h, "aria-disabled=\"true\""), 1, "{h}");
+    assert!(h.contains("Cut off by the edge of the map"), "{h}");
+    assert!(h.contains("role=\"status\"") && h.contains("The zones were drawn on this street when it was 40.0 m long; here it is 20.0 m."), "{h}");
+}
+
+#[test]
+fn a_one_zone_street_shows_one_cell_and_an_empty_status_that_a_notice_can_fill() {
+    let s = street_shared(0);
+    let h = strip_html(&s);
+    assert_eq!(count(&h, "role=\"option\""), 1, "{h}");
+    assert_eq!(count(&h, "zone-handle"), 0, "{h}");
+    assert!(!h.contains("aria-disabled") && !h.contains("were drawn"), "{h}");
+    // The live region is always in the page, so what is put in it later is announced.
+    assert!(h.contains("role=\"status\" class=\"zone-notice\"><!></p>"), "{h}");
+}
+
+#[test]
+fn every_cell_has_a_minimum_width_and_the_strip_scrolls_inside_itself() {
+    let editor = include_str!("../../web/editor.css");
+    let at = |sel: &str| {
+        let i = editor.find(&format!("{sel} {{")).unwrap_or_else(|| panic!("{sel}"));
+        &editor[i..i + editor[i..].find('}').unwrap()]
+    };
+    assert!(at(".zone-cell").contains("min-width: 24px;"));
+    assert!(at(".zone-strip").contains("overflow-x: auto;"));
+    assert!(at(".zone-strip-section").contains("min-width: 0;"));
+    // An own section and a cut-off zone differ by more than tint (WCAG 1.4.1), in forced colours too.
+    assert!(at(".zone-cell.own").contains("border-top-width: 5px;"));
+    assert!(at(".zone-cell[aria-disabled=\"true\"]").contains("border-style: dashed;"));
+    let forced = &editor[editor.find("@media (forced-colors: active) {\n  .zone-cell").unwrap()..];
+    let forced = &forced[..forced.find("\n}\n").unwrap()];
+    assert!(forced.contains(".zone-cell.own {\n    border-top-width: 5px;"), "{forced}");
+    assert!(forced.contains("border-style: dashed;"), "{forced}");
+}
+
+// ---- the zone commands -------------------------------------------------------------
+
+fn tools_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::zone_tools::ZoneTools vm=s.clone()/> })
+}
+
+/// The street with its second zone given a section of its own, the first zone selected.
+fn street_with_own_second_zone(locale: Locale) -> Rc<StreetVm> {
+    let s = zoned_street(&[0, 20_000], Some(40_000), locale);
+    s.select_zone(1);
+    let uid = s.view().segments[0].uid;
+    assert!(s.edit(|e| e.nudge_width(uid, 100)));
+    s.select_zone(0);
+    s
+}
+
+#[test]
+fn the_commands_are_a_named_group_with_a_labelled_field_for_each_input() {
+    let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En);
+    s.select_zone(1);
+    let h = tools_html(&s);
+    assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Zone commands\"") && !h.contains("toolbar"), "{h}");
+    for (id, label) in [("zone-split-at", "Split at (m)"), ("zone-start", "Start of this zone (m)"), ("zone-name", "Zone name")] {
+        assert!(h.contains(&format!("<label for=\"{id}\"")) && h.contains(&format!(">{label}</label>")), "{id}: {h}");
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    for id in ["zone-split", "zone-merge-prev", "zone-merge-next"] {
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    // The first zone has no start to move.
+    s.select_zone(0);
+    let h = tools_html(&s);
+    assert!(!h.contains("id=\"zone-start\""), "{h}");
+}
+
+#[test]
+fn a_street_of_one_zone_offers_split_and_nothing_else() {
+    let s = zoned_street(&[], Some(40_000), Locale::En);
+    let h = tools_html(&s);
+    for id in ["zone-split-at", "zone-split"] {
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    for id in ["zone-name", "zone-start", "zone-merge-prev", "zone-merge-next", "zone-reset", "zone-use"] {
+        assert!(!h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    // Splitting it brings the rest.
+    assert!(s.split_zone(None));
+    let h = tools_html(&s);
+    for id in ["zone-name", "zone-merge-prev", "zone-merge-next"] {
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+}
+
+#[test]
+fn the_choice_names_each_zone_in_the_middle_of_a_french_sentence_in_lower_case() {
+    let s = street_with_own_second_zone(Locale::FrCa);
+    assert!(s.begin_merge(true));
+    let h = tools_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains("Garder la coupe : zone 1") && h.contains("Garder la coupe : zone 2"), "{h}");
+}
+
+#[test]
+fn split_says_why_it_is_unavailable_for_a_street_cut_at_both_ends() {
+    let s = zoned_street(&[0, 20_000], None, Locale::En);
+    let h = tools_html(&s);
+    let b = button_tag(&h, "zone-split");
+    assert!(b.contains("aria-disabled=\"true\"") && b.contains("aria-describedby=\"zone-split-why\""), "{b}");
+    assert!(h.contains("id=\"zone-split-why\""), "{h}");
+    assert!(h.contains("Both ends of this street are cut by the edge of the map, so zones cannot be placed along it."), "{h}");
+    let ok = tools_html(&zoned_street(&[0, 20_000], Some(40_000), Locale::En));
+    assert!(!button_tag(&ok, "zone-split").contains("aria-disabled"), "{ok}");
+    assert!(!ok.contains("zone-split-why"), "{ok}");
+}
+
+#[test]
+fn merge_buttons_are_unavailable_at_the_ends_with_a_reason() {
+    let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::En);
+    let h = tools_html(&s);
+    assert!(button_tag(&h, "zone-merge-prev").contains("aria-disabled=\"true\""), "{h}");
+    assert!(button_tag(&h, "zone-merge-prev").contains("aria-describedby=\"zone-merge-prev-why\""), "{h}");
+    assert!(h.contains("There is no zone on that side to merge with."), "{h}");
+    assert!(!button_tag(&h, "zone-merge-next").contains("aria-disabled"), "{h}");
+    s.select_zone(1);
+    let h = tools_html(&s);
+    assert!(!h.contains("aria-disabled") && !h.contains("There is no zone"), "{h}");
+    s.select_zone(2);
+    let h = tools_html(&s);
+    assert!(button_tag(&h, "zone-merge-next").contains("aria-disabled=\"true\""), "{h}");
+    assert!(!button_tag(&h, "zone-merge-prev").contains("aria-disabled"), "{h}");
+}
+
+#[test]
+fn the_merge_choice_group_appears_only_while_a_merge_is_pending() {
+    let s = street_with_own_second_zone(Locale::En);
+    let h = tools_html(&s);
+    assert!(!h.contains("zone-merge-choice") && !h.contains("zone-keep-this"), "{h}");
+    assert!(s.begin_merge(true));
+    let h = tools_html(&s);
+    assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Which section to keep\""), "{h}");
+    for id in ["zone-keep-this", "zone-keep-other", "zone-keep-cancel"] {
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    assert!(h.contains("Keep the section of Zone 1") && h.contains("Keep the section of Zone 2"), "{h}");
+    s.cancel_merge();
+    assert!(!tools_html(&s).contains("zone-keep-this"));
+}
+
+#[test]
+fn reset_and_use_for_the_street_are_offered_only_for_a_zone_with_its_own_section() {
+    let s = street_with_own_second_zone(Locale::En);
+    let h = tools_html(&s);
+    assert!(!h.contains("id=\"zone-reset\"") && !h.contains("id=\"zone-use\""), "{h}");
+    s.select_zone(1);
+    let h = tools_html(&s);
+    assert!(h.contains("id=\"zone-reset\"") && h.contains(">Reset to the street&#x27;s section<") || h.contains(">Reset to the street's section<"), "{h}");
+    assert!(h.contains("id=\"zone-use\"") && h.contains("Use this section for the whole street"), "{h}");
+}
+
+#[test]
+fn the_fields_take_metres_in_the_pages_units_and_say_a_bad_number() {
+    use crate::street::zone_tools::{commit_split, commit_start};
+    // In French: the comma and the unit word are both read.
+    let (ports, said, _) = crate::shared::ports::test_ports();
+    let street = crate::street::model::zoned(crate::street::model::Street::sample(0, crate::shared::catalogue::Side::Right), &[0, 20_000], 40_000);
+    let frame = Some(crate::street::model::ZoneFrame { length_mm: 40_000, from_end: crate::street::model::ZoneEnd::First });
+    let s = StreetVm::new(ports, crate::i18n_for(Locale::FrCa), Editor::from_street(&street, &street, 0).with_frame(frame), None);
+    let w = SheetWatch::new(s.clone());
+    s.select_zone(1);
+    said.take();
+    assert!(!commit_start(w, "vingt"));
+    assert_eq!(said.take(), ["Ce n\u{2019}est pas un nombre."]);
+    assert!(commit_start(w, "25,5 m"));
+    assert_eq!(s.view_now().zones.zones[1].from_mm, 25_500);
+    said.take();
+    assert!(commit_split(w, "32"));
+    assert_eq!(s.view_now().zones.zones.len(), 3);
+    assert_eq!(s.view_now().zones.zones[2].from_mm, 32_000);
+    // An empty field splits in the middle of the selected zone.
+    s.select_zone(0);
+    assert!(commit_split(w, ""));
+    assert_eq!(s.view_now().zones.zones.len(), 4);
+    said.take();
+    assert!(!commit_split(w, "x"));
+    assert_eq!(said.take().len(), 1);
+}
+
+#[test]
+fn the_zone_commands_are_worded_in_both_languages() {
+    let s = zoned_street(&[0, 10_000, 30_000], Some(40_000), Locale::FrCa);
+    s.select_zone(1);
+    let h = tools_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains("aria-label=\"Commandes des zones\""), "{h}");
+    assert!(h.contains(">Diviser à (m)</label>") && h.contains(">Début de cette zone (m)</label>") && h.contains(">Nom de la zone</label>"), "{h}");
+    assert!(!h.contains("Zone commands") && !h.contains("Split"), "{h}");
+}

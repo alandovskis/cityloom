@@ -122,4 +122,27 @@ mod tests {
             assert!(contrast(a.as_ref().unwrap(), ground.as_ref().unwrap()) >= 3.0);
         }
     }
+
+    #[test]
+    fn the_zone_strip_text_selection_and_boundaries_are_measured_in_both_themes() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let (ink, sel, edge) = (pick(&token(editor, "zone-ink"), i), pick(&token(editor, "zone-sel"), i), pick(&token(editor, "zone-edge"), i));
+            let (fill, own, panel) = (pick(&token(editor, "zone-fill"), i), pick(&token(editor, "zone-fill-own"), i), pick(&token(app, "panel"), i));
+            for (name, ground) in [("zone-fill", &fill), ("zone-fill-own", &own)] {
+                assert!(contrast(&ink, ground) >= 4.5, "zone-ink on {name} {theme}: {:.2}", contrast(&ink, ground));
+            }
+            for (what, c) in [("zone-sel", &sel), ("zone-edge", &edge)] {
+                for (name, ground) in [("zone-fill", &fill), ("zone-fill-own", &own), ("panel", &panel)] {
+                    assert!(contrast(c, ground) >= 3.0, "{what} against {name} {theme}: {:.2}", contrast(c, ground));
+                }
+            }
+        }
+        // Forced colours: the system's own colours, the chosen cell in Highlight and the edges in CanvasText.
+        let at = editor.find("@media (forced-colors: active) {\n  .zone-cell").expect("forced-colours rules for the zone strip");
+        let block = &editor[at..at + editor[at..].find("\n}\n").unwrap()];
+        assert!(block.contains("outline-color: Highlight;") && block.contains("CanvasText"), "{block}");
+        assert!(editor.contains("outline: 3px solid var(--zone-sel);"));
+    }
 }

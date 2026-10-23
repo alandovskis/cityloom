@@ -8,6 +8,7 @@ pub mod measures;
 pub mod model;
 pub mod notes;
 pub mod page;
+pub mod strip;
 pub mod svg;
 #[cfg(test)]
 mod tests;
@@ -15,6 +16,7 @@ pub mod text;
 pub mod view;
 pub mod vm;
 pub mod watch;
+pub mod zone_tools;
 
 use std::rc::Rc;
 
@@ -75,6 +77,8 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("h-drawing", view! { <page::DrawingHeading vm=vm.clone()/> }.into_any());
     mount("view-mode-slot", view! { <page::ViewToggle vm=vm.clone()/> }.into_any());
     mount("street", view! { <page::StreetHeader vm=vm.clone() ends=ends.clone()/> }.into_any());
+    mount("zones-slot", view! { <strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
+    mount("zone-tools-slot", view! { <zone_tools::ZoneTools vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <page::TitleBlock vm=vm.clone()/> }.into_any());
     mount("fit-slot", view! { <page::Fit vm=vm.clone()/> }.into_any());
     mount("fit-checks-slot", view! { <notes::FitChecks vm=vm.clone()/> }.into_any());

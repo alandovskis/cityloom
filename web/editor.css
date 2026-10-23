@@ -31,6 +31,13 @@
      that one of the two is 3:1 against any of them (a test in street/iso/surface.rs). */
   --iso-sel: #8ab4ff;
   --iso-sel-casing: #0b1220;
+  /* The zone strip: two fills (the base section and a zone's own), the text on them, the edges between cells and
+     the chosen cell's outline; each is measured against the fills and the panel by a test in shared/contrast.rs. */
+  --zone-fill: light-dark(#eef2f6, #262e36);
+  --zone-fill-own: light-dark(#dbe7fb, #2b3a52);
+  --zone-ink: light-dark(#111827, #e8edf2);
+  --zone-edge: light-dark(#536070, #9aa6b2);
+  --zone-sel: light-dark(#1f5ee0, #8ab4ff);
   --panel-w: 300px;
   --notes-w: 340px;
   --rw: calc(var(--pad) + var(--notes-w));
@@ -1096,6 +1103,170 @@ svg pattern circle {
 }
 .view-mode .unit {
   min-height: 26px;
+}
+/* ---- the zone strip: a bar for the street's length, a cell per zone ----------------- */
+
+.zone-strip-section {
+  min-width: 0;
+  max-width: 100%;
+  /* one line on a desktop width: the caption beside the strip (it wraps above it on a narrow window) */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 12px;
+  padding: 4px 12px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+@media (min-width: 900px) {
+  .zone-caption {
+    /* beside the strip, never taking more than its share: a long street name is cut with an ellipsis (the whole
+       text is the caption's title); on a narrow window the caption sits above the strip and wraps */
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+.zone-caption {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.zone-strip {
+  flex: 1 1 14em;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  /* the cells keep 24 px each; when they do not fit the strip scrolls, never the page */
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 3px;
+  border-radius: 6px;
+}
+.zone-strip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.zone-cell {
+  flex: 1 1 0;
+  /* the target size (WCAG 2.5.8): a short zone is still 24 px wide */
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  /* no padding on the cell: a flex item's base size is never under its padding and border, which would make the
+     cells' widths not proportional to their lengths (the drag places a boundary by that proportion) */
+  background: var(--zone-fill);
+  color: var(--zone-ink);
+  border: 1px solid var(--zone-edge);
+  cursor: pointer;
+  overflow: hidden;
+}
+.zone-cell.own {
+  background: var(--zone-fill-own);
+  /* not by tint alone (WCAG 1.4.1): a zone with a section of its own has a heavier top edge */
+  border-top-width: 5px;
+}
+.zone-cell[aria-disabled="true"] {
+  cursor: default;
+  /* a cut-off zone has a dashed outline, which forced colours keep */
+  border-style: dashed;
+  background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--zone-edge) 6px 7px);
+}
+.zone-cell[aria-selected="true"] {
+  outline: 3px solid var(--zone-sel);
+  outline-offset: -3px;
+  font-weight: 600;
+}
+.zone-name {
+  min-width: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.zone-handle {
+  flex: none;
+  /* the target size (WCAG 2.5.8): 24 px wide between the cells, with the boundary drawn as a line down its middle */
+  width: 24px;
+  background: linear-gradient(var(--zone-edge), var(--zone-edge)) center / 3px 70% no-repeat;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.zone-notice:empty {
+  margin: 0;
+}
+.zone-notice {
+  flex-basis: 100%;
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+.zone-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+.zone-tool {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 6px;
+}
+.zone-tool label {
+  flex-basis: 100%;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.zone-tool input {
+  min-height: 32px;
+  min-width: 0;
+  flex: 1 1 6em;
+}
+.zone-tools button {
+  min-height: 32px;
+}
+.zone-tools button[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.zone-why {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+}
+.zone-merge-choice {
+  padding: 4px 8px;
+  border: 1px dashed var(--zone-edge);
+  border-radius: 6px;
+}
+@media (forced-colors: active) {
+  .zone-cell {
+    border-color: CanvasText;
+  }
+  .zone-cell.own {
+    border-top-width: 5px;
+  }
+  .zone-cell[aria-disabled="true"] {
+    border-style: dashed;
+    background-image: none;
+  }
+  .zone-cell[aria-selected="true"] {
+    outline-color: Highlight;
+  }
+  .zone-handle {
+    background-image: linear-gradient(CanvasText, CanvasText);
+  }
 }
 #drawing .sel-line {
   fill: none;

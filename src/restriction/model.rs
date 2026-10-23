@@ -230,13 +230,18 @@ impl Conflict {
 }
 
 /// What a street has that `rule` does not allow, a kind of piece at a time in the order the rule names them. A
-/// piece counts for a kind when it is that kind at any time of day.
+/// piece counts for a kind when it is that kind at any time of day. Every zone is read; a kind counts as the
+/// most pieces of it in any one section (never a sum), so a conflict in any zone is the street's.
 pub fn conflicts(rule: Rule, street: &Street) -> Vec<Conflict> {
+    let sections = street.sections();
     rule.forbids()
         .iter()
         .filter_map(|&kind| {
-            let pieces =
-                street.segments.iter().filter(|s| std::iter::once(s.kind).chain(s.variants.iter().map(|v| v.kind)).any(|k| KINDS[k].id == kind)).count();
+            let pieces = sections
+                .iter()
+                .map(|section| section.iter().filter(|s| std::iter::once(s.kind).chain(s.variants.iter().map(|v| v.kind)).any(|k| KINDS[k].id == kind)).count())
+                .max()
+                .unwrap_or(0);
             (pieces > 0).then_some(Conflict { kind, pieces })
         })
         .collect()
@@ -425,6 +430,33 @@ mod tests {
 
     fn c(kind: &'static str, pieces: usize) -> Conflict {
         Conflict { kind, pieces }
+    }
+
+    #[test]
+    fn an_area_rule_reads_every_zone_and_counts_the_most_pieces_of_one_kind_in_a_zone() {
+        use crate::street::model::{Segment, Zone, zoned};
+        let kind = |id: &str| kind_index(id).unwrap();
+        let piece = |uid: u32, id: &str| Segment::new(uid, kind(id), 3_000);
+        let base = vec![piece(1, "sidewalk"), piece(2, "travel"), piece(3, "sidewalk")];
+        let mut street = Street::sample(0, Side::Right);
+        street.segments = base;
+        let mut street = zoned(street, &[0, 20_000], 40_000);
+        street.zones[0].segments = Some(vec![piece(1, "sidewalk"), piece(2, "travel"), piece(4, "travel"), piece(3, "sidewalk")]);
+        street.zones[1] = Zone { from_mm: 20_000, segments: None, name: None };
+        assert_eq!(conflicts(Rule::CarFree, &street), vec![c("travel", 2)], "the most in one zone, not the sum (3)");
+        let finding = Finding::of(&Restriction { id: "r1".into(), name: String::new(), rule: Rule::CarFree, ring: SQUARE.to_vec() }, &street);
+        assert!(!finding.ok());
+        assert_eq!(finding.conflicts, vec![c("travel", 2)]);
+
+        let mut mixed = street.clone();
+        mixed.zones[0].segments = Some(vec![piece(1, "sidewalk"), piece(5, "planting"), piece(3, "sidewalk")]);
+        assert_eq!(conflicts(Rule::CarFree, &mixed), vec![c("travel", 1)], "a pedestrian zone beside a car zone conflicts");
+
+        let mut calm = mixed.clone();
+        calm.segments = vec![piece(1, "sidewalk"), piece(5, "planting"), piece(3, "sidewalk")];
+        calm.zones[1].segments = None;
+        assert_eq!(conflicts(Rule::CarFree, &calm), vec![]);
+        assert!(Finding::of(&Restriction { id: "r1".into(), name: String::new(), rule: Rule::CarFree, ring: SQUARE.to_vec() }, &calm).ok());
     }
 
     #[test]

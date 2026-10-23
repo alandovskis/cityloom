@@ -137,13 +137,22 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     IsoSvg { markup: out, width: p.width, height: p.height }
 }
 
-/// What a screen reader is told the 2.5D drawing is: the street, the stretch shown, and its pieces.
+/// What a screen reader is told the 2.5D drawing is: the street, the zone shown when it has several, the stretch
+/// shown, and its pieces.
 pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
     let args = Args::new()
         .str("name", say(i18n, units, &v.name))
         .str("length", units.length_whole_in(STRETCH_MM as i32, i18n.locale()))
         .num("count", v.segments.len() as i64);
-    i18n.tr("svg-iso-label", &args)
+    if v.zones.zones.len() < 2 {
+        return i18n.tr("svg-iso-label", &args);
+    }
+    let zone = &v.zones.zones[v.zones.selected.min(v.zones.zones.len() - 1)];
+    let args = args
+        .str("zone", say(i18n, units, &zone.label))
+        .str("from", units.length_whole_in(zone.from_mm, i18n.locale()))
+        .str("to", units.length_whole_in(zone.to_mm, i18n.locale()));
+    i18n.tr("svg-iso-label-zone", &args)
 }
 
 #[cfg(test)]
@@ -688,6 +697,49 @@ mod tests {
         assert_eq!(iso_label(&v, &en(), Units::Feet), "Sample Street 1 in 2.5D, along a 131 ft stretch. 6 segments.");
         let fr = crate::i18n_for(Locale::FrCa);
         assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m. 6 éléments.");
+    }
+
+    /// The sample street divided at 20 m and 40 m of 60 m, with the frame the zone operations need.
+    fn three_zones() -> Editor {
+        use crate::shared::catalogue::Side;
+        use crate::street::model::{Street, ZoneEnd, ZoneFrame, zoned};
+        let today = Street::sample(0, Side::Right);
+        let now = zoned(today.clone(), &[0, 20_000, 40_000], 60_000);
+        Editor::from_street(&today, &now, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }))
+    }
+
+    #[test]
+    fn a_street_of_one_zone_has_the_same_2_5d_label_as_before() {
+        let v = Editor::new(0).view();
+        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, along a 40 m stretch. 6 segments.");
+        let fr = crate::i18n_for(Locale::FrCa);
+        assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m. 6 éléments.");
+    }
+
+    #[test]
+    fn the_2_5d_label_names_the_selected_zone_and_its_range_in_both_languages() {
+        let mut e = three_zones();
+        assert!(e.select_zone(1));
+        let v = e.view();
+        assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, Zone 2, 20 m to 40 m, along a 40 m stretch. 6 segments.");
+        let fr = crate::i18n_for(Locale::FrCa);
+        assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, Zone 2, de 20\u{a0}m à 40\u{a0}m, sur un tronçon de 40\u{a0}m. 6 éléments.");
+    }
+
+    #[test]
+    fn the_2_5d_draws_the_selected_zones_pieces() {
+        let mut e = three_zones();
+        let zero = drawn(&e);
+        assert!(e.select_zone(1));
+        let uid = e.view().segments[0].uid;
+        let w = e.view().segments[0].width_mm;
+        assert!(e.set_width(uid, w + 300));
+        let one = drawn(&e);
+        assert_ne!(one, zero);
+        let top = top_of(&one, uid);
+        assert_ne!(top, top_of(&zero, uid), "the widened piece's top face");
+        assert!(e.select_zone(0));
+        assert_eq!(drawn(&e), zero);
     }
 
     #[test]

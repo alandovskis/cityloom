@@ -160,7 +160,7 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
                     <li class=if c.ok { "ok" } else { "bad" }>
                         {icon(c.ok)}
                         <div>
-                            <b>{say(&i18n, units, &c.label)}<span class="sr-only">{plain(&i18n, if c.ok { "check-passes" } else { "check-fails" })}</span></b>
+                            <b>{say(&i18n, units, &crate::street::text::check_label(c))}<span class="sr-only">{plain(&i18n, if c.ok { "check-passes" } else { "check-fails" })}</span></b>
                             <span>{say(&i18n, units, &c.detail)}</span>
                         </div>
                     </li>

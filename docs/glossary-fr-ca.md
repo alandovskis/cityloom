@@ -45,6 +45,8 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | carries traffic | accueille la circulation | Said of a street: `Rue Rachel accueille de nouveau la circulation.` |
 | Street page | Street lamp | Lampadaire |  |
 | Street page | Buffer | Zone tampon | The strip of curb, paint, posts or a barrier between pieces; the mark is `ZT` (`BF` in English). |
+| Street page | Zone (a lengthways part of a street with its own section) | zone | `Zone 2`, `la zone sélectionnée`. `Tronçon` is kept for the 2.5D’s stretch of street (`svg-iso-label-zone`: `sur un tronçon de 40 m`), so the two are not confused. To confirm, see below. |
+| Street page | Zone boundary | limite | `Limite entre deux zones`; the start of a zone is its `début`. To confirm, see below. |
 | Modes and groups | Walking | Marche |  |
 | Modes and groups | Biking / Cycling | Vélo |  |
 | Modes and groups | Transit | Transport en commun |  |
@@ -298,6 +300,8 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Junction N (city names) | `Jonction N` | `Intersection` is also used in Québec; `jonction` follows the app's junction editor. |
 | Main Street junction (one street) (city names) | `Jonction Rue Principale` |  |
 | End of X (city names) | `Bout de X` | In a sentence: `le bout de X`. Alternatives: `extrémité de X`, `fin de X`. |
+| Zone (of a street) | `zone` | `section` (taken by the cross-section, `coupe`), `segment` (the model’s word for a piece), `secteur`; `tronçon` stays the 2.5D’s stretch |
+| Zone boundary | `limite` | `frontière`, `séparation` |
 | Connection on X (city names) | `Raccordement sur X` | In a sentence: `un raccordement sur X`. |
 | An unnamed {class} street, in a sentence (city names) | `une rue { $class } sans nom` | For a place on an unnamed road: `Raccordement sur une rue locale sans nom`. A motorway: `une autoroute sans nom`. |
 | End of an unnamed street (city names) | `Bout d’une rue locale sans nom` | Its own message because `de` elides before `une`; in a sentence: `le bout d’une rue locale sans nom`. |

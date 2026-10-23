@@ -58,6 +58,7 @@ export const live = (page: Page) => page.locator("#live");
 
 export const PLATEAU_PBF = fileURLToPath(new URL("../fixtures/plateau.osm.pbf", import.meta.url));
 export const TURBO_PBF = fileURLToPath(new URL("../fixtures/turbo.osm.pbf", import.meta.url));
+export const OPEN_ENDS_PBF = fileURLToPath(new URL("../fixtures/open-ends.osm.pbf", import.meta.url));
 export const PLATEAU_TILES = fileURLToPath(new URL("../fixtures/plateau.pmtiles", import.meta.url));
 
 /** Serves the basemap's tiles as a static host with range support does: PMTiles reads them in pieces.
@@ -195,4 +196,36 @@ export function forgive(errors: string[], ...expected: RegExp[]) {
 /** Waits until the map has stopped moving: a fit, a zoom and a pan each ease for a moment. */
 export async function mapStill(page: Page) {
   await page.waitForFunction(() => !(window as any).cityloomMap.isMoving());
+}
+
+/** The length of the street in metres, from the label of its only zone. */
+export async function streetLengthM(page: Page) {
+  const label = (await page.locator("#zone-0").getAttribute("aria-label")) ?? "";
+  return Number(/([\d.]+) m long/.exec(label)?.[1]);
+}
+
+/** Cuts the street into `count` zones with the Split command, at whole metres, evenly. The street needs room for
+ *  them (5 m a zone): the test names the shortest it can use. */
+export async function splitInto(page: Page, count: number) {
+  const length = await streetLengthM(page);
+  const step = Math.floor(length / count);
+  expect(step, `a street of ${length} m is too short for ${count} zones`).toBeGreaterThanOrEqual(5);
+  for (let k = 1; k < count; k++) {
+    await page.locator("#zone-split-at").fill(String(k * step));
+    await page.locator("#zone-split").click();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(k + 1);
+  }
+}
+
+/** Opens the first street of the city that is at least `minM` metres long (the first is about 40 m, too short for
+ *  many zones of 5 m). */
+export async function openLongStreet(page: Page, minM: number) {
+  await page.goto("/map.html");
+  const streets = (await placesOnMap(page)).streets;
+  for (const href of streets) {
+    await page.goto("/" + href);
+    await expect(page.locator("#zone-0")).toBeVisible();
+    if ((await streetLengthM(page)) >= minM) return href;
+  }
+  throw new Error(`no street of ${minM} m or more`);
 }

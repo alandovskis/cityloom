@@ -281,6 +281,10 @@ svg-iso-label = { $name } in 2.5D, along a { $length } stretch. { $count ->
         [one] { $count } segment
        *[other] { $count } segments
     }.
+svg-iso-label-zone = { $name } in 2.5D, { $zone }, { $from } to { $to }, along a { $length } stretch. { $count ->
+        [one] { $count } segment
+       *[other] { $count } segments
+    }.
 
 # What the model says it did, put into words by `text::say` (src/street/model.rs): the list of changes and what is announced after an edit.
 rev-earlier = Earlier changes
@@ -326,3 +330,50 @@ street-traffic-again = { $street } carries traffic again.
 check-access-ped-ok = Sidewalks give an unbroken { $amount } or more
 check-access-ped-bad = No unbroken sidewalk of { $amount } or more
 check-detail-no-edges-pedestrian = No roadway, so no sidewalk is asked for
+
+# Zones (src/street/model/zones.rs): what the model says it did to a street's zones, and why it refused.
+zone-unnamed = Zone { $n }
+zone-unnamed-mid = Zone { $n }
+rev-zone-split = Split the street at { $at }
+rev-zone-merge = Merge zones, keeping { $kept }
+rev-zone-move = Move the start of { $zone } to { $to }
+rev-zone-name = Zone name: { $zone }
+rev-zone-unname = Clear the name of { $zone }
+rev-zone-reset = Reset { $zone } to the street's section
+rev-zone-use = Use { $zone } for the whole street
+zone-refused-no-anchor = Both ends of this street are cut by the edge of the map, so zones cannot be placed along it.
+zone-refused-elsewhere = The zones of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
+zone-refused-too-short = A zone must be at least { $min } long.
+zone-refused-outside = That position is outside the street.
+zone-refused-no-neighbour = There is no zone on that side to merge with.
+zone-refused-no-boundary = The first zone starts at the end of the street, so it has no boundary to move.
+zone-refused-dragging = Finish the drag before changing the zones.
+zones-elsewhere = The zones were drawn on this street when it was { $drawn } long; here it is { $loaded }.
+check-zone-in = { $check } in { $zone }
+zone-selected = { $zone }, { $from } to { $to }, { $length } long, { $section ->
+        [own] its own section
+       *[base] the base section
+    }, { $n } of { $total }
+zone-cut-off = Cut off by the edge of the map
+
+# The zone strip (src/street/strip.rs).
+st-zones-heading = Zones along the street
+st-zones-strip-label = Zones of the street, from start to end
+st-zones-from = Measured from { $end }
+st-zones-end-first = the first end
+st-zones-end-second = the second end
+
+# The commands beside the zone strip (src/street/zone_tools.rs).
+zone-bad-number = That is not a number.
+st-zone-tools = Zone commands
+st-zone-split = Split
+st-zone-split-at = Split at ({ $unit })
+st-zone-start = Start of this zone ({ $unit })
+st-zone-merge-prev = Merge with the previous zone
+st-zone-merge-next = Merge with the next zone
+st-zone-merge-choice = Which section to keep
+st-zone-keep = Keep the section of { $zone }
+st-zone-keep-cancel = Cancel the merge
+st-zone-name = Zone name
+st-zone-reset = Reset to the street's section
+st-zone-use = Use this section for the whole street

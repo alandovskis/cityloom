@@ -71,6 +71,13 @@ pub fn pedestrianised(street: &Street) -> Street {
     s.settled()
 }
 
+/// `street` divided into zones starting at `starts_mm` (millimetres from its first end), every zone on the base
+/// section, for a street `length_mm` long, settled.
+pub fn zoned(street: Street, starts_mm: &[i32], length_mm: i32) -> Street {
+    let zones = starts_mm.iter().map(|&from_mm| Zone { from_mm, segments: None, name: None }).collect();
+    Street { zones, from_end: ZoneEnd::First, length_mm: Some(length_mm), ..street }.settled()
+}
+
 impl Street {
     /// The sample street laid out for a side of the road.
     pub fn sample(sample: usize, side: Side) -> Street {
@@ -93,6 +100,8 @@ impl Editor {
             states: Vec::new(),
             cursor: 0,
             next_uid: 1,
+            zone: 0,
+            frame: None,
             selected: None,
             gesture: None,
             pending_label: None,
@@ -118,7 +127,13 @@ impl Editor {
         let mut segments = segments;
         // Driving lanes on the left half of the street run away, the rest toward.
         default_directions(&mut segments, REGIONS[self.region].drive_side);
-        self.states = vec![State { label: Said::new("street-today"), segments, class: s.class, class_before: None, row_mm: s.row_mm }];
+        self.states = vec![State {
+            label: Said::new("street-today"),
+            content: Content { segments, zones: Vec::new(), from_end: ZoneEnd::First, length_mm: None },
+            class: s.class,
+            class_before: None,
+            row_mm: s.row_mm,
+        }];
         self.cursor = 0;
         self.selected = None;
         self.gesture = None;

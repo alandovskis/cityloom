@@ -96,6 +96,75 @@ impl SheetWatch {
         self.vm.with_value(|v| v.end_gesture(commit));
     }
 
+    pub fn select_zone(&self, zone: usize) {
+        self.vm.with_value(|v| v.select_zone(zone));
+    }
+
+    pub fn select_zone_relative(&self, delta: i32) {
+        self.vm.with_value(|v| v.select_zone_relative(delta));
+    }
+
+    pub fn select_zone_edge(&self, last: bool) {
+        self.vm.with_value(|v| v.select_zone_edge(last));
+    }
+
+    pub fn split_zone(&self, at_mm: Option<i32>) -> bool {
+        self.vm.with_value(|v| v.split_zone(at_mm))
+    }
+
+    pub fn begin_merge(&self, next: bool) -> bool {
+        self.vm.with_value(|v| v.begin_merge(next))
+    }
+
+    /// The merge waiting for the choice of the section to keep, drawing again when it changes.
+    pub fn pending_merge(&self) -> Option<bool> {
+        self.vm.with_value(|v| v.pending_merge())
+    }
+
+    pub fn finish_merge(&self, keep: crate::street::model::Keep) -> bool {
+        self.vm.with_value(|v| v.finish_merge(keep))
+    }
+
+    pub fn cancel_merge(&self) {
+        self.vm.with_value(|v| v.cancel_merge());
+    }
+
+    pub fn nudge_boundary(&self, delta_mm: i32) -> bool {
+        self.vm.with_value(|v| v.nudge_boundary(delta_mm))
+    }
+
+    pub fn move_boundary(&self, to_mm: i32) -> bool {
+        self.vm.with_value(|v| v.move_boundary(to_mm))
+    }
+
+    pub fn begin_boundary_drag(&self) {
+        self.vm.with_value(|v| v.begin_boundary_drag());
+    }
+
+    pub fn drag_boundary_to(&self, to_mm: i32) {
+        self.vm.with_value(|v| v.drag_boundary_to(to_mm));
+    }
+
+    pub fn end_boundary_drag(&self, commit: bool) {
+        self.vm.with_value(|v| v.end_boundary_drag(commit));
+    }
+
+    pub fn say_bad_number(&self) {
+        self.vm.with_value(|v| v.say_bad_number());
+    }
+
+    pub fn name_zone(&self, name: &str) -> bool {
+        self.vm.with_value(|v| v.name_zone(name))
+    }
+
+    pub fn reset_zone(&self) -> bool {
+        self.vm.with_value(|v| v.reset_zone())
+    }
+
+    pub fn use_for_street(&self) -> bool {
+        self.vm.with_value(|v| v.use_for_street())
+    }
+
     pub fn undo(&self) -> bool {
         self.vm.with_value(|v| v.undo())
     }

@@ -1,6 +1,19 @@
+import { readFileSync } from "node:fs";
+
 import type { Page } from "@playwright/test";
 
-import { expect, live, openStreet, PRESSABLE_PX, pressablePiece, test } from "./fixtures";
+import {
+  expect,
+  live,
+  mapReady,
+  OPEN_ENDS_PBF,
+  openStreet,
+  PRESSABLE_PX,
+  pressablePiece,
+  splitInto,
+  streetLengthM,
+  test,
+} from "./fixtures";
 
 const selectFirstPiece = async (page: Page) => {
   await page.locator("#wrap").focus();
@@ -536,4 +549,191 @@ test.describe("the Transform menu", () => {
     expect(box!.y + box!.height).toBeLessThanOrEqual(780);
     await expect(page.locator("#transform-menu .transform-item").first()).toBeVisible();
   });
+});
+
+// ---- zones: a street divided along its length --------------------------------------------------------------
+
+const cellLabel = (page: Page, i: number) => page.locator(`#zone-${i}`).getAttribute("aria-label");
+
+test.describe("the zones of a street", () => {
+  test.beforeEach(async ({ page }) => {
+    await openStreet(page);
+    await expect(page.locator("#zone-strip")).toBeVisible();
+  });
+
+  test("the zone strip is one line, at most 48 px, and the commands sit in the left panel", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const slot = await page.locator("#zones-slot").evaluate((e) => {
+      const kids = [...e.children].map((c) => c.getBoundingClientRect());
+      return Math.max(...kids.map((r) => r.bottom)) - Math.min(...kids.map((r) => r.top));
+    });
+    expect(slot).toBeLessThanOrEqual(48);
+    await expect(page.locator("#zone-split")).toBeVisible();
+    expect(await page.locator("#zone-split").evaluate((e) => !!e.closest("#details-panel"))).toBe(true);
+    expect(await page.locator("#zones-slot #zone-split").count()).toBe(0);
+  });
+
+  test("splits a street by keyboard and moves the boundary with Alt and the arrows", async ({ page }) => {
+    const url = page.url();
+    await page.locator("#zone-split-at").focus(); // the commands are in the left panel
+    await page.keyboard.press("Tab"); // Split
+    await expect(page.locator("#zone-split")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await expect(live(page)).toHaveText(/Split/);
+
+    await page.locator("#zone-strip").focus();
+    await page.keyboard.press("ArrowRight"); // zone 2
+    const before = await cellLabel(page, 1);
+    await page.keyboard.press("Alt+ArrowRight");
+    const after1 = await cellLabel(page, 1);
+    expect(after1).not.toBe(before);
+    await page.keyboard.press("Shift+Alt+ArrowLeft");
+    const after2 = await cellLabel(page, 1);
+    expect(after2).not.toBe(after1);
+    expect(page.url(), "Alt+Arrow is not the browser's Back").toBe(url);
+
+    await page.locator("#undo").click();
+    await page.locator("#undo").click();
+    expect(await cellLabel(page, 1)).toBe(before);
+  });
+
+  test("drags a boundary with the pointer as one undoable step, keeping the pointer captured", async ({ page }) => {
+    await page.locator("#zone-split").click();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    const before = await cellLabel(page, 1);
+    const handle = page.locator(".zone-handle");
+    const box = (await handle.boundingBox())!;
+    expect(box.width, "a handle is a 24 px target").toBeGreaterThanOrEqual(24);
+    // the handle node itself must survive the view changes of a drag
+    await handle.evaluate((el) => ((window as any).__handle = el));
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 40, y, { steps: 4 });
+    await page.mouse.move(x + 80, y, { steps: 4 });
+    const state = await page.evaluate(() => {
+      const el = (window as any).__handle as HTMLElement;
+      return { connected: el.isConnected, captured: el.hasPointerCapture(1) };
+    });
+    expect(state, "the handle is kept and holds the pointer").toEqual({ connected: true, captured: true });
+    await expect(page.locator("#zone-1")).not.toHaveAttribute("aria-label", before!);
+    await page.mouse.up();
+    const dragged = await cellLabel(page, 1);
+    expect(dragged).not.toBe(before);
+    await page.locator("#undo").click();
+    expect(await cellLabel(page, 1)).toBe(before);
+    await expect(page.locator("#undo")).toBeEnabled(); // the split is still there to undo
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+  });
+
+  test("Escape cancels a drag", async ({ page }) => {
+    await page.locator("#zone-split").click();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    const before = await cellLabel(page, 1);
+    const box = (await page.locator(".zone-handle").boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 60, y, { steps: 6 });
+    await expect(page.locator("#zone-1")).not.toHaveAttribute("aria-label", before!);
+    await page.keyboard.press("Escape");
+    await page.mouse.up();
+    expect(await cellLabel(page, 1)).toBe(before);
+  });
+
+  test("changes one zone's section and reloads to the same zones", async ({ page }) => {
+    await page.locator("#zone-split").click();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await page.locator("#zone-0").click();
+    const zone1 = await page.locator("#drawing").getAttribute("aria-label");
+    await page.locator("#zone-1").click();
+    expect(await page.locator("#drawing").getAttribute("aria-label")).toBe(zone1);
+    await selectFirstPiece(page);
+    await page.keyboard.press("-");
+    const edited = await page.locator("#drawing").getAttribute("aria-label");
+    expect(edited).not.toBe(zone1);
+    await page.locator("#zone-0").click();
+    expect(await page.locator("#drawing").getAttribute("aria-label"), "zone 1 is unchanged").toBe(zone1);
+    await page.waitForTimeout(500); // the debounced write
+    await page.reload();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await expect(page.locator("#zone-1")).toHaveAttribute("aria-label", /its own section/);
+    await page.locator("#zone-1").click();
+    expect(await page.locator("#drawing").getAttribute("aria-label")).toBe(edited);
+  });
+
+  test("shows the selected zone in 2.5D", async ({ page }) => {
+    await page.locator("#zone-split").click();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await selectFirstPiece(page);
+    await page.keyboard.press("-"); // the second zone gets a section of its own
+    await page.locator("#view-iso").click();
+    await expect(page.locator("#drawing.iso")).toBeAttached();
+    const label = () => page.locator("#drawing").getAttribute("aria-label");
+    const markup = () => page.locator("#drawing").innerHTML();
+    expect(await label()).toMatch(/in 2\.5D, Zone 2, /);
+    const second = await markup();
+    await page.locator("#zone-0").click();
+    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /in 2\.5D, Zone 1, /);
+    const first = await markup();
+    expect(first, "the other zone's pieces are drawn").not.toBe(second);
+    await page.locator("#zone-1").click();
+    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /in 2\.5D, Zone 2, /);
+    expect(await markup(), "zone 2's own pieces again").not.toBe(first);
+  });
+
+  test("the merge choice takes the focus and gives it back to the strip", async ({ page }) => {
+    const length = await streetLengthM(page);
+    test.skip(length < 15, "the street is too short for three zones");
+    await splitInto(page, 3);
+    await page.locator("#zone-1").click();
+    await selectFirstPiece(page);
+    await page.keyboard.press("-");
+    await page.locator("#zone-merge-prev").click();
+    await expect(page.locator("#zone-keep-this")).toBeFocused();
+    await page.locator("#zone-keep-this").click();
+    await expect(page.locator("#zone-strip")).toBeFocused();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+  });
+
+  test("a merge of zones with the same section, made by keyboard, leaves the focus on the strip", async ({ page }) => {
+    const length = await streetLengthM(page);
+    test.skip(length < 15, "the street is too short for three zones");
+    await splitInto(page, 3);
+    await page.locator("#zone-1").click();
+    await page.locator("#zone-merge-prev").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await expect(page.locator("#zone-strip")).toBeFocused();
+    // the last merge takes the commands that need two zones away: the focus is still on the strip
+    await page.locator("#zone-merge-next").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(1);
+    await expect(page.locator("#zone-strip")).toBeFocused();
+  });
+
+  test("the zones are in French when the page is", async ({ page }) => {
+    await page.locator("#account-btn").click();
+    await page.locator('[data-lang="fr-CA"]').click();
+    await expect(page.locator("#zone-strip")).toHaveAttribute("aria-label", /Zones de la rue/);
+    await expect(page.locator("#zone-0")).toHaveAttribute("aria-label", /de long/);
+  });
+});
+
+test("a street cut at both ends says it cannot be split", async ({ page }) => {
+  await page.route("**/data/metro/0_0.osm.pbf", (route) => route.fulfill({ body: readFileSync(OPEN_ENDS_PBF) }));
+  // the tile holds one road and no junction, so the map's places are its one street
+  await page.goto("/map.html");
+  await mapReady(page);
+  const hot = await page.evaluate(
+    () => (window as any).cityloomMap.querySourceFeatures("places").map((f: any) => String(f.properties.hot))[0],
+  );
+  expect(hot).toMatch(/^s-\d+$/);
+  await page.goto(`/street.html?street=${hot.slice(2)}`);
+  await expect(page.locator("#zone-strip")).toBeVisible();
+  await expect(page.locator("#zone-split")).toHaveAttribute("aria-disabled", "true");
+  await expect(page.locator("#zone-split-why")).toContainText("cut by the edge of the map");
 });
