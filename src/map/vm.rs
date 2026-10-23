@@ -1954,8 +1954,8 @@ mod tests {
         assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} 2 zones"));
         vm.i18n().set(Locale::FrCa);
         let label = vm.street_label(uid);
-        assert!(label.contains(" de large, découpée en 2 zones."), "{label}");
-        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} découpée en 2 zones"));
+        assert!(label.contains(" de large, en 2 zones."), "{label}");
+        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} en 2 zones"));
     }
 
     #[test]
