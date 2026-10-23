@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::shared::catalogue::{DIRECTIONS, kind_index};
 use crate::shared::i18n::{I18n, Locale};
-use crate::street::model::Editor;
+use crate::street::model::{Editor, View, ZoneEnd, two_zones};
 
 use super::iso_svg;
 
@@ -126,4 +126,21 @@ pub fn marked() -> Editor {
     assert!(e.set_direction(bus, Some(with)));
     e.add(kind_index("bike").unwrap(), 6);
     e
+}
+
+/// The street of `two_zones` with zone `selected` (0 or 1) shown: a view that carries the neighbouring zone.
+pub fn joined(second_own: bool, selected: usize) -> View {
+    let mut e = two_zones(second_own);
+    assert!(e.select_zone(selected));
+    e.view()
+}
+
+/// The same, anchored at the street's last end, so that the sides swap.
+pub fn joined_from_last(second_own: bool, selected: usize) -> View {
+    let e = two_zones(second_own);
+    let mut s = e.snapshot();
+    s.from_end = ZoneEnd::Last;
+    let mut e = Editor::from_street(&s, &s, 0);
+    assert!(e.select_zone(selected));
+    e.view()
 }

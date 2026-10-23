@@ -8,7 +8,7 @@ use crate::shared::iso::paint::{Paint, class, quads};
 use crate::street::model::SegView;
 
 use super::markings::{Mark, markings};
-use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection, points};
+use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection, STRETCH_MM, points};
 use super::symbols::shapes;
 
 /// The lines and symbols of the street as one group, drawn flat on the ground. A line is the shared paint quads of
@@ -20,8 +20,14 @@ pub(super) fn layer(p: &Projection, segs: &[SegView]) -> String {
     let mut out = String::from("<g class=\"iso-markings\">");
     for line in &m.lines {
         let x = line.x_mm as f64;
-        for (paint, quad) in quads(&[(x, p.reach.near), (x, p.reach.far)], line.style) {
-            let corners: Vec<(f64, f64, f64)> = quad.iter().map(|&(across, along)| (across, 0.0, along)).collect();
+        // The dashes are laid from the start of the stretch and cut to the reach, so that a line that goes on across a
+        // boundary keeps its rhythm there.
+        for (paint, quad) in quads(&[(x, 0.0), (x, STRETCH_MM)], line.style) {
+            let (lo, hi) = quad.iter().fold((f64::MAX, f64::MIN), |(lo, hi), c| (lo.min(c.1), hi.max(c.1)));
+            if hi.min(p.reach.far) - lo.max(p.reach.near) < 1e-9 {
+                continue;
+            }
+            let corners: Vec<(f64, f64, f64)> = quad.iter().map(|&(across, along)| (across, 0.0, along.clamp(p.reach.near, p.reach.far))).collect();
             write!(out, "<polygon class=\"{}\" points=\"{}\"/>", class(paint), points(p, &corners)).unwrap();
         }
     }
@@ -57,7 +63,7 @@ mod tests {
     use super::*;
     use crate::shared::catalogue::{KINDS, kind_index};
     use crate::street::iso::markings::Symbol;
-    use crate::street::iso::projection::{STRETCH_MM, drawn_mm};
+    use crate::street::iso::projection::drawn_mm;
     use crate::street::iso::solids::{Solid, blocks};
     use crate::street::iso::testing::{apart, count, furnished, hull};
     use crate::street::model::Editor;
@@ -209,6 +215,37 @@ mod tests {
                             .map(|(x, y, z)| p.at(x, y, z));
                     assert!(trees.iter().all(|t| apart(t, &ground)), "{width}: the symbol of piece {} is hidden", mark.uid);
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn a_broken_line_keeps_its_rhythm_across_the_boundary() {
+        use crate::street::iso::projection::Reach;
+        use crate::street::iso::testing::{marked, xs_ys};
+        // Sample Street 1 with a two-way bike lane: a broken yellow middle line.
+        let v = marked().view();
+        let base = fit(&v, 1050.0);
+        let y = |z: f64| base.at(0.0, 0.0, z).1;
+        let lines = |m: &str| m.split("<g class=\"iso-mark\"").next().unwrap().to_string();
+        let ranges = |m: &str| -> Vec<(f64, f64)> {
+            lines(m)
+                .split("<polygon")
+                .skip(1)
+                .map(|poly| {
+                    let ys: Vec<f64> = xs_ys(&format!("<polygon{}", &poly[..poly.find("/>").unwrap()])).into_iter().map(|(_, y)| y).collect();
+                    (ys.iter().cloned().fold(f64::MAX, f64::min), ys.iter().cloned().fold(f64::MIN, f64::max))
+                })
+                .collect()
+        };
+        let whole = ranges(&layer(&base, &v.segments));
+        for (near, far) in [(20_000.0, 40_000.0), (0.0, 20_000.0)] {
+            let (yn, yf) = (y(near), y(far));
+            let want: Vec<(f64, f64)> = whole.iter().map(|&(lo, hi)| (lo.max(yf), hi.min(yn))).filter(|(lo, hi)| hi - lo > 1e-6).collect();
+            let got = ranges(&layer(&base.over(Reach { near, far }), &v.segments));
+            assert_eq!(got.len(), want.len(), "{near}: {got:?} {want:?}");
+            for (g, w) in got.iter().zip(&want) {
+                assert!((g.0 - w.0).abs() < 0.02 && (g.1 - w.1).abs() < 0.02, "{near}: {g:?} {w:?}");
             }
         }
     }

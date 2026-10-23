@@ -268,12 +268,18 @@ pub(super) fn strips(segs: &[SegView], p: &Projection) -> Vec<Strip> {
     strips
 }
 
-/// A strip as its own group, with the piece's name for hovering: its slab, or one of its curbs.
-pub(super) fn piece(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I18n, strip: Strip) {
+/// A strip as its own group, with the piece's name for hovering: its slab, or one of its curbs. A piece of the
+/// section across the boundary (`across`) carries no uid: uids repeat from one section to the other, and what finds
+/// a piece by its uid is the selected zone's.
+pub(super) fn piece(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I18n, strip: Strip, across: bool) {
     let (_, i, edge) = strip;
     let s = &segs[i];
     let name = i18n.tr(&kind_key(KINDS[s.kind].id), &Args::new());
-    write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
+    if across {
+        write!(out, "<g class=\"iso-piece iso-across\"><title>{}</title>", esc(&name)).unwrap();
+    } else {
+        write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
+    }
     match edge {
         None => slab(out, p, segs, i),
         Some(right) => curb(out, p, segs, i, right),
@@ -282,10 +288,10 @@ pub(super) fn piece(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I
 }
 
 /// The strips in the order given, between the group tag `open` and its end.
-pub(super) fn group(open: &str, p: &Projection, segs: &[SegView], i18n: &I18n, strips: &[Strip]) -> String {
+pub(super) fn group(open: &str, p: &Projection, segs: &[SegView], i18n: &I18n, strips: &[Strip], across: bool) -> String {
     let mut out = String::from(open);
     for &strip in strips {
-        piece(&mut out, p, segs, i18n, strip);
+        piece(&mut out, p, segs, i18n, strip, across);
     }
     out.push_str("</g>");
     out

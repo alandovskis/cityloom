@@ -13,8 +13,8 @@ pub(super) fn split(strips: Vec<Strip>) -> (Vec<Strip>, Vec<Strip>) {
 }
 
 /// The roadway pieces as one group. Each keeps its `<g class="iso-piece" data-uid>`.
-pub(super) fn layer(p: &Projection, segs: &[SegView], i18n: &I18n, flat: &[Strip]) -> String {
-    group("<g class=\"iso-surface\">", p, segs, i18n, flat)
+pub(super) fn layer(p: &Projection, segs: &[SegView], i18n: &I18n, flat: &[Strip], across: bool) -> String {
+    group("<g class=\"iso-surface\">", p, segs, i18n, flat, across)
 }
 
 #[cfg(test)]
