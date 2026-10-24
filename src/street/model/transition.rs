@@ -177,7 +177,7 @@ pub fn transition(near: &[Segment], far: &[Segment], speed_kmh: Option<u16>) -> 
 
 /// Pair the pieces of two sections: by uid first, then the rest by kind in left-to-right order. A uid that
 /// names another kind on the other side does not match. Pairs whose order differs between the sides (the strips
-/// would cross) are split into a dropped and an added entry. The entries run in section order.
+/// would cross) are split into a dropped and an added entry, as few of them as it takes. The entries run in section order.
 pub(crate) fn match_pieces(near: &[Segment], far: &[Segment]) -> Vec<(Option<usize>, Option<usize>)> {
     let mut to_far: Vec<Option<usize>> = vec![None; near.len()];
     let mut taken = vec![false; far.len()];
@@ -195,9 +195,28 @@ pub(crate) fn match_pieces(near: &[Segment], far: &[Segment]) -> Vec<(Option<usi
             taken[j] = true;
         }
     }
+    // The strips of matched pieces must not cross: keep the longest run whose far places rise with the near ones (the
+    // longest increasing subsequence), so a piece moved across several others is the only one split. The first of
+    // equal runs is kept.
     let matched: Vec<(usize, usize)> = to_far.iter().enumerate().filter_map(|(i, j)| j.map(|j| (i, j))).collect();
-    for &(i, j) in &matched {
-        if matched.iter().any(|&(i2, j2)| (i < i2) != (j < j2)) {
+    let mut run = vec![1usize; matched.len()];
+    let mut back: Vec<Option<usize>> = vec![None; matched.len()];
+    for k in 0..matched.len() {
+        for p in 0..k {
+            if matched[p].1 < matched[k].1 && run[p] + 1 > run[k] {
+                run[k] = run[p] + 1;
+                back[k] = Some(p);
+            }
+        }
+    }
+    let mut keep = vec![false; matched.len()];
+    let mut at = (0..matched.len()).rev().max_by_key(|&k| run[k]);
+    while let Some(k) = at {
+        keep[k] = true;
+        at = back[k];
+    }
+    for (&(i, j), &kept) in matched.iter().zip(&keep) {
+        if !kept {
             to_far[i] = None;
             taken[j] = false;
         }
@@ -370,10 +389,10 @@ mod tests {
         let near = vec![dir(seg(1, "travel", 3500), 0), seg(2, "bike", 1500)];
         let far = vec![seg(2, "bike", 1500), dir(seg(1, "travel", 3500), 0)];
         let m = match_pieces(&near, &far);
-        assert_eq!(m.len(), 4);
-        assert!(m.iter().all(|(a, b)| a.is_some() != b.is_some()));
+        assert_eq!(m.len(), 3, "one of the two stays matched, the other is split: {m:?}");
+        assert_eq!(m.iter().filter(|(a, b)| a.is_some() != b.is_some()).count(), 2);
         let t = transition(&near, &far, Some(50)).unwrap();
-        assert_eq!(t.changes.len(), 4);
+        assert_eq!(t.changes.len(), 3);
     }
 
     #[test]
@@ -385,5 +404,34 @@ mod tests {
         let far2 = vec![seg(1, "sidewalk", 2500), dir(seg(2, "bike", 1500), 0), dir(seg(9, "travel", 3500), 0), seg(3, "sidewalk", 1000)];
         // bike moved 500 -> 2 500; lane added 52 500 still larger
         assert_eq!(transition(&near, &far2, Some(50)).unwrap().length_mm, 52_500);
+    }
+
+    /// Near `[sidewalk, bike, travel, travel, sidewalk]`, far with the bike lane moved across both travel lanes.
+    fn bike_moved_across_two_lanes() -> (Vec<Segment>, Vec<Segment>) {
+        let near =
+            vec![seg(1, "sidewalk", 2000), seg(2, "bike", 1500), dir(seg(3, "travel", 3500), 0), dir(seg(4, "travel", 3500), 1), seg(5, "sidewalk", 2000)];
+        let far =
+            vec![seg(1, "sidewalk", 2000), dir(seg(3, "travel", 3500), 0), dir(seg(4, "travel", 3500), 1), seg(2, "bike", 1500), seg(5, "sidewalk", 2000)];
+        (near, far)
+    }
+
+    #[test]
+    fn a_piece_moved_across_two_others_is_the_only_one_unmatched() {
+        let (near, far) = bike_moved_across_two_lanes();
+        let m = match_pieces(&near, &far);
+        let unmatched: Vec<_> = m.iter().filter(|p| p.0.is_none() || p.1.is_none()).collect();
+        assert_eq!(unmatched.len(), 2, "the bike lane dropped on one side and added on the other: {m:?}");
+        assert!(unmatched.iter().all(|p| p.0 == Some(1) || p.1 == Some(3)), "{m:?}");
+        for lane in [2, 3] {
+            assert!(m.iter().any(|p| p.0 == Some(lane) && p.1 == Some(lane - 1)), "travel lane {lane} stays matched: {m:?}");
+        }
+    }
+
+    #[test]
+    fn a_piece_moved_across_two_travel_lanes_does_not_drop_a_lane() {
+        let (near, far) = bike_moved_across_two_lanes();
+        let t = transition(&near, &far, Some(50)).unwrap();
+        assert!(t.merges, "no travel lane ends");
+        assert_eq!(t.length_mm, 24_200, "the lanes shift by the bike lane's 1.5 m, not the 56.5 m of a dropped lane");
     }
 }
