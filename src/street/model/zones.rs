@@ -245,7 +245,7 @@ pub fn zone_label_mid(zone: &Zone, n: usize) -> Said {
 }
 
 /// How far the length a zoning was drawn against may differ from the loaded one before it is another road.
-const LENGTH_TOLERANCE_MM: i32 = 1_000;
+pub const LENGTH_TOLERANCE_MM: i32 = 1_000;
 
 impl super::Content {
     /// Where zone `z` starts and ends, the last ending at the street's `length_mm`.

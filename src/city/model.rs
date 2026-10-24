@@ -21,7 +21,7 @@ use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
-use crate::street::model::{Editor, Host, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said};
+use crate::street::model::{Editor, Host, LENGTH_TOLERANCE_MM, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said};
 
 pub(super) struct NodeDef {
     pub(super) x_mm: i32,
@@ -919,7 +919,7 @@ impl City {
             let uid = i as u32 + 1;
             let today = &self.today_streets[&uid];
             let now = &self.streets[&uid];
-            let editor = Editor::from_street(today, now, region);
+            let editor = Editor::from_street(today, now, region).with_frame(self.layout.zone_frame(i));
             let v = editor.view();
             let at_first: Vec<&str> = Editor::from_street(today, today, region).view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect();
             let failing: Vec<Said> = v.checks.iter().filter(|c| !c.ok && !at_first.contains(&c.id)).map(|c| c.label.clone()).collect();
@@ -1085,7 +1085,13 @@ fn zone_breaks(street: &Street, frame: Option<ZoneFrame>) -> Vec<i32> {
 /// transition of each boundary drawn in `zone_breaks`, as long as `street::model::transition` says, on its host
 /// zone's side of the boundary and cut at the host zone's other end (or the road's end). Ordered by boundary.
 fn zone_bands(street: &Street, frame: Option<ZoneFrame>) -> Vec<(usize, i32, i32)> {
-    let Some(frame) = frame.filter(|f| f.from_end == street.from_end) else { return Vec::new() };
+    // As the street page decides "elsewhere" (`Editor::elsewhere`): a zoning drawn on a road of another length, by
+    // more than a metre, or anchored at the other end has no transition, so no band.
+    let Some(frame) =
+        frame.filter(|f| f.from_end == street.from_end && street.length_mm.is_none_or(|drawn| (drawn - f.length_mm).abs() <= LENGTH_TOLERANCE_MM))
+    else {
+        return Vec::new();
+    };
     let sections = street.sections();
     let speed = street.speed.kmh();
     let mut bands: Vec<(usize, i32, i32)> = Vec::new();
@@ -2104,6 +2110,47 @@ mod tests {
             assert_eq!(taper.length_mm, 52_500, "at {time}");
             assert!(taper.changes.iter().all(|c| c.kind != crate::shared::catalogue::kind_index("bus").unwrap()), "own kinds at {time}");
         }
+    }
+
+    #[test]
+    fn a_zoning_drawn_on_a_road_of_another_length_has_no_band() {
+        let s = lane_added(200_000, 100_000, ZoneEnd::First);
+        assert!(zone_bands(&s, frame(205_000, ZoneEnd::First)).is_empty(), "the street page shows no taper there either");
+        assert_eq!(zone_bands(&s, frame(200_900, ZoneEnd::First)).len(), 1, "within the metre the page allows");
+        let mut loaded = s.clone();
+        loaded.length_mm = None;
+        assert_eq!(zone_bands(&loaded, frame(205_000, ZoneEnd::First)).len(), 1, "a length not recorded is not elsewhere");
+    }
+
+    /// Street 2 with a short first zone and a second zone with a travel lane more, so the boundary lacks the room.
+    fn short_zone_before_a_lane(city: &City, drawn_for_mm: Option<i32>) -> Street {
+        let mut s = zoned_street(city, 2, &[0, 1], None);
+        let mut own = s.segments.clone();
+        let mut lane = crate::street::model::Segment::new(s.next_uid, crate::shared::catalogue::kind_index("travel").unwrap(), 3_500);
+        s.next_uid += 1;
+        lane.direction = Some(0);
+        own.push(lane);
+        s.zones[1].segments = Some(own);
+        if let Some(mm) = drawn_for_mm {
+            s.length_mm = Some(mm);
+        }
+        s
+    }
+
+    #[test]
+    fn the_map_counts_a_boundary_failure_only_where_the_street_page_does() {
+        let mut city = City::new();
+        let frame = city.layout.zone_frame(1).unwrap();
+        assert!(city.keep_street(2, short_zone_before_a_lane(&city, None)));
+        let edge = &city.view(0).edges[1];
+        assert!(edge.failing.contains(&Said::new("check-label-transition-room")), "the short zone cannot hold the transition");
+        assert_eq!(edge.zone_bands_mm.len(), 1);
+        // the same zoning drawn on a road 5 m longer: no check, no band
+        assert!(city.keep_street(2, short_zone_before_a_lane(&city, Some(frame.length_mm + 5_000))));
+        let edge = &city.view(0).edges[1];
+        let boundary = |s: &Said| *s == Said::new("check-label-transition-room") || *s == Said::new("check-label-lane-drop");
+        assert!(!edge.failing.iter().any(boundary), "{:?}", edge.failing);
+        assert!(edge.zone_bands_mm.is_empty());
     }
 
     #[test]
