@@ -19,6 +19,8 @@ pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM};
 mod joint;
 mod speed;
 pub use speed::Speed;
+mod transition;
+pub use transition::{Change, Host, Transition, transition};
 mod zones;
 pub use zones::{Elsewhere, Keep, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
 

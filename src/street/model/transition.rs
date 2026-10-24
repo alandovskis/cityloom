@@ -1,0 +1,389 @@
+//! The transition between two adjacent zones' sections: how long the stretch is over which the pieces that differ
+//! taper from one section to the other, and which zone carries it. Pure, no browser types.
+//!
+//! Every taper constant below is unverified (TAC GDG ch. 8–9, MTQ Tome I ch. 8 not checked).
+
+use super::Segment;
+use crate::shared::catalogue::{KINDS, is_roadway};
+
+/// The zone that holds the taper: the one without the added or dropped piece.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Host {
+    /// The zone nearer the anchored end (`Street::from_end`).
+    Near,
+    /// The zone farther from it.
+    Far,
+}
+
+/// One piece across the boundary: its `[x0, x1)` in millimetres from the street's left edge on each side.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Change {
+    pub kind: usize,
+    /// On the near zone's side; `None` where the piece is absent there.
+    pub before: Option<(i32, i32)>,
+    /// On the far zone's side; `None` where the piece is absent there.
+    pub after: Option<(i32, i32)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Transition {
+    pub length_mm: i32,
+    pub host: Host,
+    /// Every piece of both sides, in left-to-right order of the host's section, unmatched pieces included.
+    pub changes: Vec<Change>,
+    /// False when a dropped travel or bus lane has no lane to merge into.
+    pub merges: bool,
+}
+
+/// The speed taken when the street has none, in km/h.
+const DEFAULT_SPEED_KMH: i64 = 50;
+
+/// How a kind tapers.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Taper {
+    /// Travel and bus lanes: a lane added opens at `R·W`; a shift or drop is a merge taper.
+    Lane,
+    /// Parking, loading, shoulder: a merge taper whichever way.
+    Merge,
+    /// Bike lane: at least 1:5.
+    Bike,
+    None,
+}
+
+fn taper(kind: usize) -> Taper {
+    match KINDS[kind].id {
+        "travel" | "bus" => Taper::Lane,
+        "parking" | "loading" | "shoulder" => Taper::Merge,
+        "bike" => Taper::Bike,
+        _ => Taper::None,
+    }
+}
+
+/// Rounds a length in millimetres up to the next 100 mm.
+fn up_100(mm: i64) -> i64 {
+    (mm + 99) / 100 * 100
+}
+
+/// Shift, width change or dropped lane (travel, bus, parking, loading, shoulder): `L = W·S²/155` below 70 km/h,
+/// `L = 0.62·W·S` from 70 (US MUTCD 2003, Part 3, Fig. 3B-12, metric; work-zone merge taper). L and W in metres,
+/// S in km/h. Unverified (TAC GDG ch. 8–9, MTQ Tome I ch. 8 not checked). Here in millimetres, rounded up.
+fn merge_taper_mm(w_mm: i64, s: i64) -> i64 {
+    if s < 70 { (w_mm * s * s + 154) / 155 } else { (w_mm * 62 * s + 99) / 100 }
+}
+
+/// A travel or bus lane added: `L = R·W`, R = 15 at up to 50 km/h, 18 up to 60, 24 above; a speed between listed
+/// ones takes the next higher's ratio (York Region DS-100, 2023, "based on TAC"). Unverified (TAC GDG ch. 8–9, MTQ
+/// Tome I ch. 8 not checked).
+fn lane_added_mm(w_mm: i64, s: i64) -> i64 {
+    let r = if s <= 50 {
+        15
+    } else if s <= 60 {
+        18
+    } else {
+        24
+    };
+    r * w_mm
+}
+
+/// A bike lane shifted, added or dropped: `L = 5·W` (NACTO, at least 1:5). Unverified (TAC GDG ch. 8–9, MTQ Tome I
+/// ch. 8 not checked).
+fn bike_mm(w_mm: i64) -> i64 {
+    5 * w_mm
+}
+
+fn spans(section: &[Segment]) -> Vec<(i32, i32)> {
+    let mut x = 0;
+    section
+        .iter()
+        .map(|s| {
+            let r = (x, x + s.width_mm);
+            x = r.1;
+            r
+        })
+        .collect()
+}
+
+/// The length this one change needs, in millimetres (not rounded).
+fn needed_mm(c: &Change, s: i64) -> i64 {
+    match (c.before, c.after) {
+        (Some(b), Some(a)) => {
+            let w = i64::from((b.0 - a.0).abs().max((b.1 - a.1).abs()));
+            if w == 0 {
+                return 0;
+            }
+            match taper(c.kind) {
+                Taper::Lane | Taper::Merge => merge_taper_mm(w, s),
+                Taper::Bike => bike_mm(w),
+                Taper::None => 0,
+            }
+        }
+        (None, Some(a)) => {
+            let w = i64::from(a.1 - a.0);
+            match taper(c.kind) {
+                Taper::Lane => lane_added_mm(w, s),
+                Taper::Merge => merge_taper_mm(w, s),
+                Taper::Bike => bike_mm(w),
+                Taper::None => 0,
+            }
+        }
+        (Some(b), None) => {
+            let w = i64::from(b.1 - b.0);
+            match taper(c.kind) {
+                Taper::Lane | Taper::Merge => merge_taper_mm(w, s),
+                Taper::Bike => bike_mm(w),
+                Taper::None => 0,
+            }
+        }
+        (None, None) => 0,
+    }
+}
+
+/// The transition from the near zone's section to the far one's, or `None` when nothing needs a taper.
+pub fn transition(near: &[Segment], far: &[Segment], speed_kmh: Option<u16>) -> Option<Transition> {
+    let s = speed_kmh.map_or(DEFAULT_SPEED_KMH, i64::from);
+    let pairs = match_pieces(near, far);
+    let (nx, fx) = (spans(near), spans(far));
+    let at = |i: Option<usize>, x: &[(i32, i32)]| i.map(|i| x[i]);
+    let changes: Vec<Change> =
+        pairs.iter().map(|&(n, f)| Change { kind: n.map_or_else(|| far[f.unwrap()].kind, |n| near[n].kind), before: at(n, &nx), after: at(f, &fx) }).collect();
+    let length = up_100(changes.iter().map(|c| needed_mm(c, s)).max().unwrap_or(0));
+    if length == 0 {
+        return None;
+    }
+
+    let dropped = pairs.iter().any(|p| p.1.is_none());
+    let added = pairs.iter().any(|p| p.0.is_none());
+    let roadway = |section: &[Segment]| section.iter().filter(|p| is_roadway(p.kind)).count();
+    let host = match (dropped, added) {
+        (false, true) => Host::Near,
+        (true, false) => Host::Far,
+        (true, true) if roadway(near) < roadway(far) => Host::Near,
+        _ => Host::Far,
+    };
+
+    let lane = |section: &[Segment], i: usize| taper(section[i].kind) == Taper::Lane;
+    let merges = pairs.iter().all(|&(n, f)| {
+        let Some(i) = n.filter(|_| f.is_none() && lane(near, n.unwrap())) else { return true };
+        let matched = |j: usize| pairs.iter().any(|p| p.0 == Some(j) && p.1.is_some());
+        [i.checked_sub(1), Some(i + 1)]
+            .into_iter()
+            .flatten()
+            .filter(|&j| j < near.len())
+            .any(|j| lane(near, j) && near[j].direction == near[i].direction && matched(j))
+    });
+
+    Some(Transition { length_mm: length as i32, host, changes, merges })
+}
+
+/// Pair the pieces of two sections: by uid first, then the rest by kind in left-to-right order. A uid that
+/// names another kind on the other side does not match. Pairs whose order differs between the sides (the strips
+/// would cross) are split into a dropped and an added entry. The entries run in section order.
+pub(crate) fn match_pieces(near: &[Segment], far: &[Segment]) -> Vec<(Option<usize>, Option<usize>)> {
+    let mut to_far: Vec<Option<usize>> = vec![None; near.len()];
+    let mut taken = vec![false; far.len()];
+    for (i, n) in near.iter().enumerate() {
+        if let Some(j) = far.iter().position(|f| f.uid == n.uid && f.kind == n.kind) {
+            to_far[i] = Some(j);
+            taken[j] = true;
+        }
+    }
+    for (i, n) in near.iter().enumerate() {
+        if to_far[i].is_none()
+            && let Some(j) = (0..far.len()).find(|&j| !taken[j] && far[j].kind == n.kind)
+        {
+            to_far[i] = Some(j);
+            taken[j] = true;
+        }
+    }
+    let matched: Vec<(usize, usize)> = to_far.iter().enumerate().filter_map(|(i, j)| j.map(|j| (i, j))).collect();
+    for &(i, j) in &matched {
+        if matched.iter().any(|&(i2, j2)| (i < i2) != (j < j2)) {
+            to_far[i] = None;
+            taken[j] = false;
+        }
+    }
+    let mut out = Vec::new();
+    let mut j = 0;
+    for (i, m) in to_far.iter().enumerate() {
+        match m {
+            Some(m) => {
+                while j < *m {
+                    if !taken[j] {
+                        out.push((None, Some(j)));
+                    }
+                    j += 1;
+                }
+                out.push((Some(i), Some(*m)));
+                j = m + 1;
+            }
+            None => out.push((Some(i), None)),
+        }
+    }
+    out.extend((j..far.len()).filter(|&j| !taken[j]).map(|j| (None, Some(j))));
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shared::catalogue::kind_index;
+
+    fn k(id: &str) -> usize {
+        kind_index(id).unwrap()
+    }
+
+    fn seg(uid: u32, id: &str, w: i32) -> Segment {
+        Segment::new(uid, k(id), w)
+    }
+
+    fn dir(mut s: Segment, d: usize) -> Segment {
+        s.direction = Some(d);
+        s
+    }
+
+    fn base() -> Vec<Segment> {
+        vec![seg(1, "sidewalk", 2000), dir(seg(2, "travel", 3500), 0), dir(seg(3, "travel", 3500), 1), seg(4, "sidewalk", 2000)]
+    }
+
+    #[test]
+    fn identical_sections_have_no_transition() {
+        let far: Vec<Segment> = base()
+            .into_iter()
+            .map(|mut s| {
+                s.uid += 10;
+                s
+            })
+            .collect();
+        assert_eq!(transition(&base(), &far, Some(50)), None);
+    }
+
+    fn with_extra() -> Vec<Segment> {
+        let mut v = base();
+        // at the right end, so no other piece shifts
+        v.push(dir(seg(9, "travel", 3500), 0));
+        v
+    }
+
+    #[test]
+    fn a_lane_added_at_50_tapers_15_to_1() {
+        let t = transition(&base(), &with_extra(), Some(50)).unwrap();
+        assert_eq!(t.length_mm, 52_500);
+        assert_eq!(t.host, Host::Near);
+    }
+
+    #[test]
+    fn ratios_step_up_with_speed() {
+        let l = |s| transition(&base(), &with_extra(), Some(s)).unwrap().length_mm;
+        assert_eq!(l(60), 63_000);
+        assert_eq!(l(70), 84_000);
+        assert_eq!(l(55), 63_000);
+    }
+
+    fn shifted(by: i32) -> Vec<Segment> {
+        let mut v = base();
+        v[0].width_mm += by;
+        v[1].width_mm -= by;
+        v
+    }
+
+    #[test]
+    fn a_lane_shift_below_70_uses_ws2_over_155() {
+        // sidewalk grows 1 000, first lane's edges: x0 moves 0, x1 moves 0 ... build a pure shift instead
+        let near = vec![seg(1, "sidewalk", 2000), dir(seg(2, "travel", 3500), 0), seg(3, "sidewalk", 2000)];
+        let far = vec![seg(1, "sidewalk", 3000), dir(seg(2, "travel", 3500), 0), seg(3, "sidewalk", 1000)];
+        let t = transition(&near, &far, Some(50)).unwrap();
+        assert_eq!(t.length_mm, 16_200);
+        assert_eq!(t.host, Host::Far);
+        let _ = shifted(0);
+    }
+
+    #[test]
+    fn a_lane_shift_at_70_uses_0_62_ws() {
+        let near = vec![seg(1, "sidewalk", 2000), dir(seg(2, "travel", 3500), 0), seg(3, "sidewalk", 2000)];
+        let far = vec![seg(1, "sidewalk", 3000), dir(seg(2, "travel", 3500), 0), seg(3, "sidewalk", 1000)];
+        assert_eq!(transition(&near, &far, Some(70)).unwrap().length_mm, 43_400);
+    }
+
+    #[test]
+    fn a_dropped_lane_merges_into_its_neighbour() {
+        let near = vec![dir(seg(1, "travel", 3500), 0), dir(seg(2, "travel", 3500), 0), seg(3, "sidewalk", 2000)];
+        let far = vec![dir(seg(1, "travel", 3500), 0), seg(3, "sidewalk", 2000)];
+        let t = transition(&near, &far, Some(50)).unwrap();
+        assert!(t.merges);
+        assert_eq!(t.host, Host::Far);
+        assert_eq!(t.length_mm, 56_500);
+    }
+
+    #[test]
+    fn a_dropped_lane_beside_parking_cannot_merge() {
+        let near = vec![seg(1, "parking", 2500), dir(seg(2, "travel", 3500), 0), seg(3, "sidewalk", 2000)];
+        let far = vec![seg(1, "parking", 2500), seg(3, "sidewalk", 2000)];
+        let t = transition(&near, &far, Some(50)).unwrap();
+        assert!(!t.merges);
+    }
+
+    #[test]
+    fn a_bike_lane_shift_is_one_to_five() {
+        let near = vec![seg(1, "sidewalk", 2000), dir(seg(2, "bike", 1500), 0), seg(3, "sidewalk", 2000)];
+        let far = vec![seg(1, "sidewalk", 3500), dir(seg(2, "bike", 1500), 0), seg(3, "sidewalk", 500)];
+        assert_eq!(transition(&near, &far, Some(50)).unwrap().length_mm, 7_500);
+    }
+
+    #[test]
+    fn sidewalks_and_medians_do_not_taper() {
+        let near = vec![seg(1, "sidewalk", 2000), dir(seg(2, "travel", 3500), 0)];
+        let far = vec![seg(1, "sidewalk", 2500), dir(seg(2, "travel", 3500), 0)];
+        // the lane shifts with the sidewalk, so make only the outer edge change
+        let near2 = vec![dir(seg(2, "travel", 3500), 0), seg(1, "sidewalk", 2000)];
+        let far2 = vec![dir(seg(2, "travel", 3500), 0), seg(1, "sidewalk", 2500)];
+        assert_eq!(transition(&near2, &far2, Some(50)), None);
+        let _ = (near, far);
+    }
+
+    #[test]
+    fn no_speed_uses_fifty() {
+        assert_eq!(transition(&base(), &with_extra(), None), transition(&base(), &with_extra(), Some(50)));
+    }
+
+    #[test]
+    fn fresh_uids_match_by_kind_in_order() {
+        let near = base();
+        let mut far: Vec<Segment> = base()
+            .into_iter()
+            .map(|mut s| {
+                s.uid += 100;
+                s
+            })
+            .collect();
+        far[3].width_mm = 2000;
+        far[2].width_mm = 4000;
+        far[3].width_mm = 1500;
+        let m = match_pieces(&near, &far);
+        assert_eq!(m, vec![(Some(0), Some(0)), (Some(1), Some(1)), (Some(2), Some(2)), (Some(3), Some(3))]);
+        let t = transition(&near, &far, Some(50)).unwrap();
+        assert!(t.changes.iter().all(|c| c.before.is_some() && c.after.is_some()));
+        assert_eq!(t.host, Host::Far);
+    }
+
+    #[test]
+    fn crossing_pieces_are_unmatched() {
+        let near = vec![dir(seg(1, "travel", 3500), 0), seg(2, "bike", 1500)];
+        let far = vec![seg(2, "bike", 1500), dir(seg(1, "travel", 3500), 0)];
+        let m = match_pieces(&near, &far);
+        assert_eq!(m.len(), 4);
+        assert!(m.iter().all(|(a, b)| a.is_some() != b.is_some()));
+        let t = transition(&near, &far, Some(50)).unwrap();
+        assert_eq!(t.changes.len(), 4);
+    }
+
+    #[test]
+    fn the_longest_piece_sets_the_length() {
+        let near = vec![seg(1, "sidewalk", 2000), dir(seg(2, "bike", 1500), 0), seg(3, "sidewalk", 1000)];
+        let far = vec![seg(1, "sidewalk", 2000), dir(seg(2, "bike", 1500), 0), dir(seg(9, "travel", 3500), 0), seg(3, "sidewalk", 1000)];
+        // bike unmoved; added lane 52 500
+        assert_eq!(transition(&near, &far, Some(50)).unwrap().length_mm, 52_500);
+        let far2 = vec![seg(1, "sidewalk", 2500), dir(seg(2, "bike", 1500), 0), dir(seg(9, "travel", 3500), 0), seg(3, "sidewalk", 1000)];
+        // bike moved 500 -> 2 500; lane added 52 500 still larger
+        assert_eq!(transition(&near, &far2, Some(50)).unwrap().length_mm, 52_500);
+    }
+}
