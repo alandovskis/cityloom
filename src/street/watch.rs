@@ -157,6 +157,14 @@ impl SheetWatch {
         self.vm.with_value(|v| v.name_zone(name))
     }
 
+    pub fn speed_options(&self) -> Vec<crate::street::vm::SpeedOption> {
+        self.vm.with_value(|v| v.speed_options())
+    }
+
+    pub fn set_speed(&self, kmh: Option<u16>) -> bool {
+        self.vm.with_value(|v| v.set_speed(kmh))
+    }
+
     pub fn reset_zone(&self) -> bool {
         self.vm.with_value(|v| v.reset_zone())
     }

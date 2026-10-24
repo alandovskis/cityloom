@@ -32,8 +32,8 @@ restriction-conflict-loading = { $n ->
 restriction-check = Règle de zone : { $area }
 restriction-check-keeps = { $rule } : la rue la respecte.
 restriction-check-breaks = { $rule } : la rue ne la respecte pas.
-restriction-check-info = { $rule } : les rues n’ont pas de vitesse, c’est donc à titre indicatif.
-restriction-check-informational = { " " }: à titre indicatif
+restriction-check-speed-over = Limite de vitesse de { $street }{" "}km/h, au-dessus des { $limit }{" "}km/h de la zone.
+restriction-check-speed-unknown = Vitesse inconnue : OpenStreetMap n’en donne pas et aucune n’est indiquée.
 
 ## Le tracé d’un contour, dit à mesure
 restriction-started = Tracé d’une zone. Cliquez sur la carte, ou appuyez sur Entrée sur celle-ci, pour placer le premier coin.
@@ -84,13 +84,8 @@ restriction-summary = { $inside ->
     [one] une est en conflit avec la règle.
    *[other] { $conflicts } sont en conflit avec la règle.
 }
-restriction-summary-info = { $inside ->
-    [one] { $inside } rue à l’intérieur.
-   *[other] { $inside } rues à l’intérieur.
-}
 restriction-row-sub = { $rule } · { $summary }
 restriction-street-keeps = Respecte la règle.
-restriction-street-inside = À l’intérieur de la zone.
 restriction-legend-conflict = En conflit avec une règle de zone
 
 ## Le panneau

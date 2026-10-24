@@ -286,7 +286,9 @@ test.describe("area restrictions", () => {
     await expect.poll(() => anyConflict(page)).toBe(true);
   });
 
-  test("a speed limit tints no street, and the street editor shows it for information only", async ({ page }) => {
+  test("a speed limit tints the streets above it, and the street page lists each street's speed against it", async ({
+    page,
+  }) => {
     await openPanel(page);
     await page.locator("#declare-area").click();
     const spots = await squareAroundAStreet(page);
@@ -297,26 +299,26 @@ test.describe("area restrictions", () => {
     await page.mouse.click(spots[0].x, spots[0].y);
     await formShown(page);
     await page.locator("#area-rule").selectOption("speed_limit");
-    await page.locator("#area-speed").selectOption("30");
+    await page.locator("#area-speed").selectOption("10");
     await page.locator("#area-name").fill("Slow zone");
     await page.locator("#area-save").click();
     await expect(live(page)).toHaveText("“Slow zone” saved.");
     await expect(page.locator("#areas > li")).toContainText(
-      /Speed limit of 30 km\/h · (One street|\d+ streets) inside\./,
+      /Speed limit of 10 km\/h · (One street|\d+ streets) inside; /,
     );
     await expect.poll(() => polygons(page)).toBe(1);
-    expect(await anyConflict(page)).toBe(false);
-    await expect(page.locator("#fit")).toHaveText(/ places\. Every check passes\.$/);
-    await expect(page.locator("[id^='area-details-'] li.bad")).toHaveCount(0);
-    const href = await page.locator("[id^='area-details-'] li.ok a").first().getAttribute("href");
+    // the street inside has a speed of 30 or more, so it is above the limit
+    await expect.poll(() => anyConflict(page)).toBe(true);
+    await expect(page.locator("#fit")).toHaveText(
+      / places\. (One street conflicts|\d+ streets conflict) with an area rule\.$/,
+    );
+    const href = await page.locator("[id^='area-details-'] li.bad a").first().getAttribute("href");
     expect(href).toMatch(/^street\.html\?street=\d+$/);
 
     await page.goto("/" + href);
-    const row = page.locator("#checks li", { hasText: "Area rule: Slow zone" });
+    const row = page.locator("#checks li.bad", { hasText: "Area rule: Slow zone" });
     await expect(row).toHaveCount(1);
-    await expect(row).toHaveClass("ok");
-    await expect(row).toContainText("Speed limit of 30 km/h: streets carry no speed, so this is for information only.");
-    await expect(row.locator(".sr-only")).toHaveText(": for information only");
+    await expect(row).toContainText(/Speed limit \d+ km\/h, over the area’s 10 km\/h\./);
   });
 
   test("an area is declared from the keyboard alone; Backspace takes a corner back and Escape cancels", async ({

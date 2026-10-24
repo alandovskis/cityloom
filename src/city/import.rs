@@ -8,7 +8,7 @@ use super::model::{City, EdgeDef, Layout, NodeDef};
 use crate::junction::model::{ALL_WAY_STOP, MAX_ARMS, MIN_ARMS, PRIORITY, SIGNAL};
 use crate::shared::catalogue::{KINDS, Side, StreetClass, kind_index};
 use crate::shared::provenance::OsmRef;
-use crate::street::model::{Piece, Street, Window};
+use crate::street::model::{Piece, Speed, Street, Window};
 
 /// How wide a corner is rounded where nothing in the data says.
 const CORNER_MM: i32 = 4_000;
@@ -255,7 +255,12 @@ impl Layout {
                 let class = class_of(&r.highway);
                 let pieces = pieces(&r.lanes);
                 let side = if network.left_hand { Side::Left } else { Side::Right };
-                let section = Street { name: r.name.clone(), source: refs(&r.osm_ways, &r.osm_versions), ..Street::imported(class, side, &pieces) };
+                let section = Street {
+                    name: r.name.clone(),
+                    source: refs(&r.osm_ways, &r.osm_versions),
+                    speed: Speed::from_kmh(r.speed_kmh),
+                    ..Street::imported(class, side, &pieces)
+                };
                 let row_of = |pieces: &[Piece]| Street::imported(class, side, pieces).row_mm;
                 let one_way = one_way_bike_lanes(&r.lanes);
                 let mut legacy_rows_mm: Vec<i32> = [row_of(&legacy_pieces(&r.lanes)), row_of(&self::pieces(&one_way)), row_of(&legacy_pieces(&one_way))].into();
@@ -575,6 +580,7 @@ mod tests {
                 lane(LaneKind::Driving, Way::Forward, 3.0),
                 lane(LaneKind::Sidewalk, Way::Forward, 2.0),
             ],
+            speed_kmh: None,
             points,
         };
         Network {
@@ -592,6 +598,18 @@ mod tests {
                 road(3, "Side Road", 4, vec![(0.0, 0.0), (0.0, -200.0)]),
                 road(4, "Main Street", 5, vec![(0.0, 0.0), (-200.0, 0.0)]),
             ],
+        }
+    }
+
+    #[test]
+    fn a_street_takes_the_speed_of_its_road() {
+        use crate::street::model::Speed;
+        for (road_speed, speed, kmh) in [(Some(40), Speed::Kmh(40), Some(40)), (None, Speed::NotSet, None)] {
+            let mut network = crossing();
+            network.roads[0].speed_kmh = road_speed;
+            let layout = Layout::from_network(&network, "x");
+            let street = &layout.edges.iter().find(|e| e.section.source == refs(&network.roads[0].osm_ways, &network.roads[0].osm_versions)).unwrap().section;
+            assert_eq!((street.speed, street.speed_kmh()), (speed, kmh));
         }
     }
 

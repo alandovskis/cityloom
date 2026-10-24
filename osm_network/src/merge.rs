@@ -156,7 +156,18 @@ pub fn merge_dual_carriageways(net: &mut Network) {
         let mut osm_ways = a.osm_ways.clone();
         osm_ways.extend(b.osm_ways.iter().copied());
         let osm_versions = a.osm_versions.iter().chain(&b.osm_versions).map(|(w, v)| (*w, *v)).collect();
-        merged.push(Road { id: a.id, osm_ways, osm_versions, name: a.name.clone(), highway: a.highway.clone(), from: a.from, to: a.to, lanes, points });
+        merged.push(Road {
+            id: a.id,
+            osm_ways,
+            osm_versions,
+            name: a.name.clone(),
+            highway: a.highway.clone(),
+            from: a.from,
+            to: a.to,
+            lanes,
+            speed_kmh: lower(a.speed_kmh, b.speed_kmh),
+            points,
+        });
         gone[i] = true;
         gone[j] = true;
     }
@@ -209,6 +220,14 @@ pub fn merge_dual_carriageways(net: &mut Network) {
     net.roads = roads;
 }
 
+/// The lower of two known speeds, else the one known, else none.
+fn lower(a: Option<u16>, b: Option<u16>) -> Option<u16> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -216,6 +235,14 @@ mod tests {
 
     fn node(id: u32, x_m: f64, y_m: f64) -> Node {
         Node { id, osm_nodes: vec![id as i64], osm_versions: [(id as i64, id as i32 + 100)].into(), x_m, y_m, junction: false, control: Control::None }
+    }
+
+    #[test]
+    fn merged_carriageways_keep_the_lower_known_speed() {
+        assert_eq!(lower(Some(50), Some(40)), Some(40));
+        assert_eq!(lower(None, Some(40)), Some(40));
+        assert_eq!(lower(Some(50), None), Some(50));
+        assert_eq!(lower(None, None), None);
     }
 
     fn lane(kind: LaneKind, way: Way, width_m: f64) -> Lane {
@@ -233,6 +260,7 @@ mod tests {
             from,
             to,
             lanes: vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Sidewalk, Way::Forward, 2.0)],
+            speed_kmh: None,
             points,
         }
     }
@@ -252,6 +280,7 @@ mod tests {
             from,
             to,
             lanes: vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)],
+            speed_kmh: None,
             points: vec![(0.0, 0.0), (0.0, y)],
         };
         Network {
@@ -338,6 +367,7 @@ mod tests {
             from: 1,
             to: 5,
             lanes: vec![lane(LaneKind::Driving, Way::Forward, 3.0), lane(LaneKind::Driving, Way::Backward, 3.0)],
+            speed_kmh: None,
             points: vec![(0.0, 0.0), (0.0, 20.0)],
         });
         merge_dual_carriageways(&mut net);

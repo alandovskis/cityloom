@@ -202,37 +202,53 @@ impl Rule {
             Rule::SpeedLimit { .. } => &[],
         }
     }
-
-    /// Whether a street inside can only be listed under it, not checked: streets carry no speed.
-    pub fn informational(self) -> bool {
-        matches!(self, Rule::SpeedLimit { .. })
-    }
 }
 
-/// Pieces of one kind a street has that a rule does not allow.
+/// What a street has that a rule does not allow.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Conflict {
-    /// The catalogue id of the kind.
-    pub kind: &'static str,
-    pub pieces: usize,
+pub enum Conflict {
+    /// Pieces of one kind.
+    Pieces {
+        /// The catalogue id of the kind.
+        kind: &'static str,
+        pieces: usize,
+    },
+    /// A speed limit over the area's, in kilometres an hour.
+    Speed { kmh: u16 },
 }
 
 impl Conflict {
-    /// What the street has, as a sentence.
-    pub fn said(&self) -> Said {
-        let key = match self.kind {
-            "travel" => "restriction-conflict-travel",
-            "parking" => "restriction-conflict-parking",
-            _ => "restriction-conflict-loading",
-        };
-        Said::new(key).with("n", Arg::Num(self.pieces as i64))
+    /// What the street has, as a sentence; `rule` is the one it breaks.
+    pub fn said(&self, rule: Rule) -> Said {
+        match *self {
+            Conflict::Pieces { kind, pieces } => {
+                let key = match kind {
+                    "travel" => "restriction-conflict-travel",
+                    "parking" => "restriction-conflict-parking",
+                    _ => "restriction-conflict-loading",
+                };
+                Said::new(key).with("n", Arg::Num(pieces as i64))
+            }
+            Conflict::Speed { kmh } => {
+                let limit = if let Rule::SpeedLimit { kmh } = rule { i64::from(kmh) } else { 0 };
+                Said::new("restriction-check-speed-over").with("street", Arg::Num(i64::from(kmh))).with("limit", Arg::Num(limit))
+            }
+        }
     }
+}
+
+/// Whether `rule` is a speed limit and the street has no speed to check it by.
+pub fn speed_unknown(rule: Rule, street: &Street) -> bool {
+    matches!(rule, Rule::SpeedLimit { .. }) && street.speed_kmh().is_none()
 }
 
 /// What a street has that `rule` does not allow, a kind of piece at a time in the order the rule names them. A
 /// piece counts for a kind when it is that kind at any time of day. Every zone is read; a kind counts as the
 /// most pieces of it in any one section (never a sum), so a conflict in any zone is the street's.
 pub fn conflicts(rule: Rule, street: &Street) -> Vec<Conflict> {
+    if let Rule::SpeedLimit { kmh } = rule {
+        return street.speed_kmh().filter(|&s| s > u16::from(kmh)).map(|kmh| Conflict::Speed { kmh }).into_iter().collect();
+    }
     let sections = street.sections();
     rule.forbids()
         .iter()
@@ -242,7 +258,7 @@ pub fn conflicts(rule: Rule, street: &Street) -> Vec<Conflict> {
                 .map(|section| section.iter().filter(|s| std::iter::once(s.kind).chain(s.variants.iter().map(|v| v.kind)).any(|k| KINDS[k].id == kind)).count())
                 .max()
                 .unwrap_or(0);
-            (pieces > 0).then_some(Conflict { kind, pieces })
+            (pieces > 0).then_some(Conflict::Pieces { kind, pieces })
         })
         .collect()
 }
@@ -284,14 +300,16 @@ pub struct Finding {
     pub area: Said,
     pub rule: Rule,
     pub conflicts: Vec<Conflict>,
+    /// A speed limit the street has no speed to check by: listed, never broken.
+    pub speed_unknown: bool,
 }
 
 impl Finding {
     pub fn of(area: &Restriction, street: &Street) -> Finding {
-        Finding { area: area.title(), rule: area.rule, conflicts: conflicts(area.rule, street) }
+        Finding { area: area.title(), rule: area.rule, conflicts: conflicts(area.rule, street), speed_unknown: speed_unknown(area.rule, street) }
     }
 
-    /// Whether the street keeps to the rule (a speed limit is always kept: it is only listed).
+    /// Whether the street keeps to the rule (a street with no speed does not break a speed limit).
     pub fn ok(&self) -> bool {
         self.conflicts.is_empty()
     }
@@ -302,15 +320,12 @@ impl Finding {
 
     /// What it says, sentence by sentence: how the street stands, then each thing it has that the rule does not allow.
     pub fn detail(&self) -> Vec<Said> {
-        let key = if self.rule.informational() {
-            "restriction-check-info"
-        } else if self.ok() {
-            "restriction-check-keeps"
-        } else {
-            "restriction-check-breaks"
-        };
+        if self.speed_unknown {
+            return vec![Said::new("restriction-check-speed-unknown")];
+        }
+        let key = if self.ok() { "restriction-check-keeps" } else { "restriction-check-breaks" };
         let head = Said::new(key).with("rule", Arg::Said(Box::new(self.rule.said())));
-        std::iter::once(head).chain(self.conflicts.iter().map(Conflict::said)).collect()
+        std::iter::once(head).chain(self.conflicts.iter().map(|c| c.said(self.rule))).collect()
     }
 }
 
@@ -429,7 +444,7 @@ mod tests {
     }
 
     fn c(kind: &'static str, pieces: usize) -> Conflict {
-        Conflict { kind, pieces }
+        Conflict::Pieces { kind, pieces }
     }
 
     #[test]
@@ -507,12 +522,51 @@ mod tests {
         assert_eq!(conflicts(Rule::NoParkingOrLoading, &s), vec![c("parking", 1), c("loading", 1)]);
     }
 
+    fn at(kmh: Option<u16>) -> Street {
+        let mut s = street(&["travel", "travel"]);
+        s.speed = crate::street::model::Speed::from_kmh(kmh);
+        s
+    }
+
+    fn zone(rule: Rule) -> Restriction {
+        Restriction { id: "r1".into(), name: "Slow zone".into(), rule, ring: SQUARE.to_vec() }
+    }
+
     #[test]
-    fn a_speed_limit_checks_nothing_and_is_for_information() {
-        let s = street(&["travel", "travel"]);
+    fn a_street_over_the_limit_breaks_it() {
         let limit = Rule::SpeedLimit { kmh: 30 };
-        assert_eq!(conflicts(limit, &s), vec![]);
-        assert!(limit.informational() && !Rule::CarFree.informational());
+        assert_eq!(conflicts(limit, &at(Some(50))), vec![Conflict::Speed { kmh: 50 }]);
+        let f = Finding::of(&zone(limit), &at(Some(50)));
+        assert!(!f.ok());
+        assert_eq!(
+            f.detail().iter().map(en).collect::<Vec<_>>(),
+            ["Speed limit of 30 km/h: the street does not keep to it.", "Speed limit 50 km/h, over the area\u{2019}s 30 km/h."]
+        );
+        assert_eq!(fr(&f.detail()[1]), "Limite de vitesse de 50\u{a0}km/h, au-dessus des 30\u{a0}km/h de la zone.");
+    }
+
+    #[test]
+    fn a_street_at_the_limit_keeps_it() {
+        let limit = Rule::SpeedLimit { kmh: 30 };
+        assert_eq!(conflicts(limit, &at(Some(30))), vec![]);
+        let f = Finding::of(&zone(limit), &at(Some(30)));
+        assert!(f.ok());
+        assert_eq!(f.detail().iter().map(en).collect::<Vec<_>>(), ["Speed limit of 30 km/h: the street keeps to it."]);
+    }
+
+    #[test]
+    fn a_street_without_a_speed_is_listed_as_not_known_and_never_breaks() {
+        let limit = Rule::SpeedLimit { kmh: 30 };
+        assert_eq!(conflicts(limit, &at(None)), vec![]);
+        let f = Finding::of(&zone(limit), &at(None));
+        assert!(f.ok());
+        let detail = f.detail();
+        assert_eq!(detail.iter().map(en).collect::<Vec<_>>(), ["Speed not known: OpenStreetMap gives none and none is set."]);
+        assert_eq!(fr(&detail[0]), "Vitesse inconnue\u{a0}: OpenStreetMap n\u{2019}en donne pas et aucune n\u{2019}est indiqu\u{e9}e.");
+        assert!(
+            Finding::of(&zone(Rule::CarFree), &at(None)).detail().iter().all(|s| !en(s).contains("Speed not known")),
+            "only a speed limit asks for a speed"
+        );
     }
 
     #[test]
@@ -544,10 +598,10 @@ mod tests {
 
     #[test]
     fn a_conflict_is_a_whole_sentence_with_its_count() {
-        assert_eq!(en(&c("travel", 1).said()), "It has a driving lane.");
-        assert_eq!(en(&c("travel", 2).said()), "It has 2 driving lanes.");
-        assert_eq!(en(&c("loading", 1).said()), "It has a loading zone.");
-        assert_eq!(fr(&c("parking", 2).said()), "Elle a 2 voies de stationnement.");
+        assert_eq!(en(&c("travel", 1).said(Rule::CarFree)), "It has a driving lane.");
+        assert_eq!(en(&c("travel", 2).said(Rule::CarFree)), "It has 2 driving lanes.");
+        assert_eq!(en(&c("loading", 1).said(Rule::CarFree)), "It has a loading zone.");
+        assert_eq!(fr(&c("parking", 2).said(Rule::CarFree)), "Elle a 2 voies de stationnement.");
     }
 
     #[test]
@@ -572,9 +626,5 @@ mod tests {
         let calm = Finding::of(&area, &street(&["sidewalk", "bike", "sidewalk"]));
         assert!(calm.ok());
         assert_eq!(calm.detail().iter().map(en).collect::<Vec<_>>(), ["Car-free: the street keeps to it."]);
-        let limit = Restriction { rule: Rule::SpeedLimit { kmh: 30 }, ..area };
-        let info = Finding::of(&limit, &street(&["travel"]));
-        assert!(info.ok());
-        assert_eq!(en(&info.detail()[0]), "Speed limit of 30 km/h: streets carry no speed, so this is for information only.");
     }
 }

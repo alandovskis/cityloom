@@ -27,6 +27,10 @@
      is under 3:1 (WCAG 1.4.11) on a pale one (white on concrete) whatever the theme; the edge is over 6:1 against
      those (the ratio of the colours; anti-aliasing of a 0.5 px line lowers the figure rendered). */
   --iso-paint-edge: #10151a;
+  /* The speed limit sign in 2.5D: a white panel with black text, the same in both themes like the materials (a test
+     in street/iso/sign.rs measures the text on the panel). */
+  --iso-sign-panel: #fbfbf8;
+  --iso-sign-ink: #10151a;
   /* The selection outline in 2.5D: a light line on a dark casing, the same in both themes like the materials, so
      that one of the two is 3:1 against any of them (a test in street/iso/surface.rs). */
   --iso-sel: #8ab4ff;
@@ -1055,6 +1059,30 @@ svg pattern circle {
     stroke: none;
   }
 }
+/* The speed limit sign (street/iso/sign.rs): a white panel with its text, and no pointer events. */
+.iso-sign {
+  pointer-events: none;
+}
+.iso-sign-panel {
+  fill: var(--iso-sign-panel);
+  stroke: var(--iso-sign-ink);
+  stroke-width: 1px;
+  stroke-linejoin: round;
+}
+.iso-sign-text {
+  fill: var(--iso-sign-ink);
+  font-weight: 700;
+  text-anchor: middle;
+}
+@media (forced-colors: active) {
+  .iso-sign-panel {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+  .iso-sign-text {
+    fill: CanvasText;
+  }
+}
 #drawing .iso .sel-box {
   filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
 }
@@ -1208,6 +1236,21 @@ svg pattern circle {
   margin: 6px 0 0;
   color: var(--ink);
   font-size: 13px;
+}
+.speed-limit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 10px;
+}
+.speed-limit label {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.speed-limit select {
+  min-height: 32px;
+  min-width: 0;
 }
 .zone-tools {
   display: flex;

@@ -21,7 +21,7 @@ use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
-use crate::street::model::{Editor, Street, ZoneEnd, ZoneFrame, named_said, unnamed_said};
+use crate::street::model::{Editor, Speed, Street, ZoneEnd, ZoneFrame, named_said, unnamed_said};
 
 pub(super) struct NodeDef {
     pub(super) x_mm: i32,
@@ -690,10 +690,12 @@ impl City {
             // the class is not compared: an edit changes it (a street made pedestrian); the room it has is not
             let fits = self.has_room_of(uid, street.row_mm);
             if fits && street.is_sound() {
-                // where a street came from and what it is called are not something an edit changes
+                // where a street came from and what it is called are not something an edit changes; a record
+                // that has not decided its speed takes the road's
                 let today = &self.today_streets[&uid];
                 let (source, name) = (today.source.clone(), today.name.clone());
-                self.streets.insert(uid, Street { source, name, ..street.clone() });
+                let speed = if street.speed.is_undecided() { today.speed } else { street.speed };
+                self.streets.insert(uid, Street { source, name, speed, ..street.clone() });
                 self.took_streets.insert(uid, records[ri].0.clone());
             }
         }
@@ -751,7 +753,12 @@ impl City {
         let e = self.edge_index(edge)?;
         let key = self.street_keys[e].clone()?;
         let ids = self.layout.street_ids(e, None);
-        Some((key, StreetRecord { ways: ids.ways, nodes: ids.nodes, leaving: ids.leaving, street: self.streets.get(&edge)?.clone() }))
+        let mut street = self.streets.get(&edge)?.clone();
+        // the speed is kept only when the designer changed it from the road's; otherwise the record follows the import
+        if self.today_streets.get(&edge).is_some_and(|today| today.speed == street.speed) {
+            street.speed = Speed::Undecided;
+        }
+        Some((key, StreetRecord { ways: ids.ways, nodes: ids.nodes, leaving: ids.leaving, street }))
     }
 
     /// The key and the record to keep for the junction at `node` as it now stands; None where it has no key of its
@@ -1417,6 +1424,93 @@ mod tests {
         assert_eq!(edits.streets.len(), 1, "loading does not take a record out of the document");
         // and the street comes back: the record applies again
         assert_eq!(City::load_on(Layout::sample(), &edits).streets[&1], narrowed(&City::new(), 1));
+    }
+
+    /// The sample city with street 1 narrowed and given `kept` as its speed, saved, then loaded on a layout
+    /// whose street 1 says `imported`: the speed the street has.
+    fn speed_after_load(kept: crate::street::model::Speed, imported: crate::street::model::Speed) -> Option<u16> {
+        let mut city = City::new();
+        let mut street = narrowed(&city, 1);
+        street.speed = kept;
+        assert!(city.keep_street(1, street));
+        let edits = edits_of(&city);
+        let mut layout = Layout::sample();
+        layout.edges[0].section.speed = imported;
+        let back = City::load_on(layout, &edits);
+        assert!(back.took_streets.contains_key(&1), "the record applied");
+        back.streets[&1].speed_kmh()
+    }
+
+    /// The sample city on a layout whose street 1 is imported at `imported`, with its width edited and its speed
+    /// set to `chosen`: the street's record as it would be written.
+    fn speed_record(imported: crate::street::model::Speed, chosen: crate::street::model::Speed) -> StreetRecord {
+        let mut layout = Layout::sample();
+        layout.edges[0].section.speed = imported;
+        let mut city = City::load_on(layout, &Edits::new());
+        let mut street = narrowed(&city, 1);
+        street.speed = chosen;
+        assert!(city.keep_street(1, street));
+        city.street_record(1).expect("a record").1
+    }
+
+    #[test]
+    fn an_unchanged_speed_is_not_written() {
+        use crate::street::model::Speed;
+        let record = speed_record(Speed::Kmh(30), Speed::Kmh(30));
+        assert!(record.street.speed.is_undecided());
+        assert!(!serde_json::to_string(&record).unwrap().contains("speed_kmh"));
+        let record = speed_record(Speed::NotSet, Speed::NotSet);
+        assert!(record.street.speed.is_undecided());
+    }
+
+    #[test]
+    fn a_changed_speed_is_written() {
+        use crate::street::model::Speed;
+        let record = speed_record(Speed::Kmh(30), Speed::Kmh(50));
+        assert_eq!(record.street.speed, Speed::Kmh(50));
+        assert!(serde_json::to_string(&record).unwrap().contains("\"speed_kmh\":50"));
+    }
+
+    #[test]
+    fn not_set_against_an_imported_speed_is_written_as_null() {
+        use crate::street::model::Speed;
+        let record = speed_record(Speed::Kmh(30), Speed::NotSet);
+        assert_eq!(record.street.speed, Speed::NotSet);
+        assert!(serde_json::to_string(&record).unwrap().contains("\"speed_kmh\":null"));
+    }
+
+    #[test]
+    fn an_unchanged_speed_follows_a_later_import() {
+        use crate::street::model::Speed;
+        let mut layout = Layout::sample();
+        layout.edges[0].section.speed = Speed::Kmh(30);
+        let mut city = City::load_on(layout, &Edits::new());
+        let street = narrowed(&city, 1);
+        assert!(city.keep_street(1, street));
+        let edits = edits_of(&city);
+        let mut layout = Layout::sample();
+        layout.edges[0].section.speed = Speed::Kmh(40);
+        let back = City::load_on(layout, &edits);
+        assert!(back.took_streets.contains_key(&1), "the record applied");
+        assert_eq!(back.streets[&1].speed_kmh(), Some(40));
+    }
+
+    #[test]
+    fn a_record_without_a_speed_takes_the_imported_one() {
+        use crate::street::model::Speed;
+        assert_eq!(speed_after_load(Speed::Undecided, Speed::Kmh(50)), Some(50));
+    }
+
+    #[test]
+    fn a_record_that_says_no_speed_keeps_none_against_the_import() {
+        use crate::street::model::Speed;
+        assert_eq!(speed_after_load(Speed::NotSet, Speed::Kmh(50)), None);
+    }
+
+    #[test]
+    fn a_record_speed_wins_over_the_import() {
+        use crate::street::model::Speed;
+        assert_eq!(speed_after_load(Speed::Kmh(30), Speed::Kmh(50)), Some(30));
     }
 
     #[test]

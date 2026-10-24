@@ -17,6 +17,8 @@ mod fixtures;
 pub use fixtures::{SAMPLES, pedestrianised, two_zones, zoned};
 pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM};
 mod joint;
+mod speed;
+pub use speed::Speed;
 mod zones;
 pub use zones::{Elsewhere, Keep, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
 
@@ -220,6 +222,9 @@ pub struct Street {
     /// The length along the centreline the zones were drawn against. Written only with zones.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub length_mm: Option<i32>,
+    /// The speed limit, kept as `speed_kmh`: absent when not yet decided, `null` when the road has none.
+    #[serde(default, rename = "speed_kmh", skip_serializing_if = "Speed::is_undecided")]
+    pub speed: Speed,
 }
 
 /// A name that is data, said as it is: a street's, a place's, a junction's.
@@ -324,6 +329,7 @@ impl Street {
             zones: Vec::new(),
             from_end: ZoneEnd::First,
             length_mm: None,
+            speed: Speed::Undecided,
         };
         street.settle_class();
         street
@@ -438,11 +444,13 @@ struct Content {
     zones: Vec<Zone>,
     from_end: ZoneEnd,
     length_mm: Option<i32>,
+    /// The speed limit; a street's section edits do not change it, but undo and Start over restore it.
+    speed: Speed,
 }
 
 impl Content {
     fn of(street: &Street) -> Content {
-        Content { segments: street.segments.clone(), zones: street.zones.clone(), from_end: street.from_end, length_mm: street.length_mm }
+        Content { segments: street.segments.clone(), zones: street.zones.clone(), from_end: street.from_end, length_mm: street.length_mm, speed: street.speed }
     }
 
     /// How many zones there are to choose from: a street with none is one section.
@@ -488,6 +496,9 @@ struct State {
     /// taken by the width it had under an earlier importer, which Start over returns to the width it has now.
     row_mm: i32,
 }
+
+/// The speed limits an editor sets, in kilometres an hour.
+pub const SPEED_CHOICES: [u16; 12] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
 pub struct Editor {
     /// What the street is called, where it has a name of its own.
@@ -567,6 +578,7 @@ impl Editor {
             zones: content.zones.clone(),
             from_end: content.from_end,
             length_mm: content.length_mm,
+            speed: content.speed,
         }
     }
 
@@ -1222,6 +1234,23 @@ impl Editor {
         true
     }
 
+    /// Sets the speed limit to one of `SPEED_CHOICES`, or to none (`None`). False, with no revision, for any other
+    /// value (an imported one outside the choices is kept, never set) or when it is the speed already.
+    pub fn set_speed(&mut self, kmh: Option<u16>) -> bool {
+        let current = self.states[self.cursor].content.speed;
+        if kmh.is_some_and(|n| !SPEED_CHOICES.contains(&n)) || current.kmh() == kmh {
+            return false;
+        }
+        let label = match kmh {
+            Some(n) => Said::new("rev-speed").with("kmh", Arg::Num(i64::from(n))),
+            None => Said::new("rev-speed-not-set"),
+        };
+        self.edit_content(label, |c| {
+            c.speed = Speed::from_kmh(kmh);
+            true
+        })
+    }
+
     /// Returns the proposal to the existing street as a new revision.
     pub fn reset(&mut self) -> bool {
         self.cancel_gesture();
@@ -1296,6 +1325,8 @@ impl Editor {
             class: self.class(),
             has_motor: segs.iter().any(Segment::has_motor),
             region: REGIONS[self.region].id,
+            speed_kmh: self.states[self.cursor].content.speed.kmh(),
+            side: REGIONS[self.region].drive_side,
             row_mm: self.row_mm(),
             total_mm,
             delta_mm: total_mm - self.row_mm(),
@@ -1596,6 +1627,10 @@ pub struct View {
     /// Some piece is a motor piece at some hour: the street can be made pedestrian.
     pub has_motor: bool,
     pub region: &'static str,
+    /// The speed limit, when the street has one.
+    pub speed_kmh: Option<u16>,
+    /// The side of the road traffic keeps, for the 2.5D sign.
+    pub side: Side,
     /// The time of day shown, in minutes after midnight.
     pub time_min: i32,
     pub row_mm: i32,
@@ -3150,5 +3185,78 @@ mod tests {
         let e = zoned_editor().with_frame(Some(frame));
         assert_eq!(e.frame(), Some(frame));
         assert_eq!(zoned_editor().frame(), None);
+    }
+
+    fn with_speed(speed: Speed) -> Editor {
+        let mut s = Street::sample(0, Side::Right);
+        s.speed = speed;
+        Editor::from_street(&s, &s, 0)
+    }
+
+    #[test]
+    fn set_speed_changes_the_view_and_is_undoable() {
+        let mut e = with_speed(Speed::Kmh(50));
+        assert!(e.set_speed(Some(30)));
+        assert_eq!(e.view().speed_kmh, Some(30));
+        assert_eq!(e.view().revisions.last().unwrap().label, Said::new("rev-speed").with("kmh", Arg::Num(30)));
+        assert!(e.undo());
+        assert_eq!(e.view().speed_kmh, Some(50));
+        assert!(e.redo());
+        assert_eq!(e.view().speed_kmh, Some(30));
+    }
+
+    #[test]
+    fn set_speed_refuses_a_value_outside_the_choices() {
+        let mut e = with_speed(Speed::Kmh(50));
+        assert!(!e.set_speed(Some(35)));
+        assert!(e.view().revisions.is_empty());
+    }
+
+    #[test]
+    fn set_speed_to_the_same_value_is_no_edit() {
+        let mut e = with_speed(Speed::Kmh(50));
+        assert!(!e.set_speed(Some(50)));
+        assert!(e.view().revisions.is_empty());
+    }
+
+    #[test]
+    fn set_speed_none_makes_it_not_set() {
+        let mut e = with_speed(Speed::Kmh(50));
+        assert!(e.set_speed(None));
+        assert_eq!(e.view().speed_kmh, None);
+        assert_eq!(e.snapshot().speed, Speed::NotSet);
+        assert_eq!(e.view().revisions.last().unwrap().label, Said::new("rev-speed-not-set"));
+        assert!(!e.set_speed(None));
+    }
+
+    #[test]
+    fn undo_and_start_over_restore_the_speed() {
+        let s = zoned(with_speed(Speed::Kmh(50)).snapshot(), &[0], 100_000);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 100_000, from_end: ZoneEnd::First }));
+        assert!(e.set_speed(Some(30)));
+        assert!(e.split_zone(Some(50_000)).is_ok());
+        assert!(e.undo());
+        assert!(e.undo());
+        assert_eq!(e.view().speed_kmh, Some(50));
+        assert!(e.set_speed(Some(30)));
+        assert!(e.reset());
+        assert_eq!(e.view().speed_kmh, Some(50));
+    }
+
+    #[test]
+    fn an_imported_speed_outside_the_choices_is_kept_through_other_edits() {
+        let mut e = with_speed(Speed::Kmh(25));
+        let g = e.view().segments[0].uid;
+        let w = e.view().segments[0].width_mm;
+        assert!(e.set_width(g, w + 100));
+        assert_eq!(e.view().speed_kmh, Some(25));
+        assert_eq!(e.snapshot().speed, Speed::Kmh(25));
+    }
+
+    #[test]
+    fn the_view_carries_the_street_side() {
+        let uk = REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap();
+        let s = Street::sample(0, Side::Left);
+        assert_eq!(Editor::from_street(&s, &s, uk).view().side, Side::Left);
     }
 }

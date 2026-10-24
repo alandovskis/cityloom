@@ -550,6 +550,7 @@ mod tests {
                 from: 1,
                 to: 2,
                 lanes: vec![lane(LaneKind::Driving, Way::Forward), lane(LaneKind::Driving, Way::Backward)],
+                speed_kmh: None,
                 points: vec![(0.0, 0.0), (100.0, 0.0)],
             }],
         }

@@ -24,7 +24,7 @@ test.describe("the street in 2.5D", () => {
     await expect(page.locator('#drawing [data-role="handle"]')).toHaveCount(0);
     await expect(page.locator("#drawing")).toHaveAttribute(
       "aria-label",
-      /in 2\.5D, along a 40 m stretch\. \d+ segments?\.$/,
+      /in 2\.5D, along a 40 m stretch\. \d+ segments?\.( Speed limit \d+ km\/h\.)?$/,
     );
     await page.keyboard.press("v");
     await expect(section(page)).toHaveAttribute("aria-pressed", "true");

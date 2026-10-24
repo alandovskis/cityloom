@@ -360,6 +360,7 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
             highway: r.highway_type.clone(),
             from: r.src_i.0 as u32,
             to: r.dst_i.0 as u32,
+            speed_kmh: speed_kmh(r.speed_limit),
             lanes: join_two_way_bike_lanes(
                 r.lane_specs_ltr
                     .iter()
@@ -376,6 +377,12 @@ fn convert(streets: &StreetNetwork, doc: &Document) -> Network {
         });
     }
     net
+}
+
+/// A speed limit in whole kilometres per hour; none when OSM gave none (or zero).
+fn speed_kmh(s: Option<geom::Speed>) -> Option<u16> {
+    let kmh = (s?.inner_meters_per_second() * 3.6).round();
+    (kmh >= 1.0).then_some(kmh.min(f64::from(u16::MAX)) as u16)
 }
 
 /// A bike track that runs both ways is two lanes to osm2streets, one for each way, side by side (a `oneway=no` on the
@@ -445,6 +452,15 @@ pub fn osm_to_network(osm: &[u8], bounds: &[f64]) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use geom::Speed;
+
+    #[test]
+    fn a_speed_is_whole_kilometres_per_hour_and_zero_is_none() {
+        assert_eq!(speed_kmh(Some(Speed::km_per_hour(50.0))), Some(50));
+        assert_eq!(speed_kmh(Some(Speed::miles_per_hour(30.0))), Some(48));
+        assert_eq!(speed_kmh(Some(Speed::ZERO)), None);
+        assert_eq!(speed_kmh(None), None);
+    }
 
     fn way(pts: &[(f64, f64)]) -> OsmWay {
         OsmWay { nodes: Vec::new(), pts: pts.iter().map(|&(x, y)| geom::Pt2D::new(x, y)).collect(), tags: Tags::empty(), version: None }
