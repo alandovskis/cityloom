@@ -43,6 +43,22 @@ test.describe("a street's speed limit", () => {
     await expect(sign(page)).toContainText("40");
   });
 
+  test("the control follows the street through Undo, Redo and Start over", async ({ page }) => {
+    await openStreetWithSpeed(page, "40");
+    await speed(page).selectOption("30");
+    await expect(speed(page)).toHaveValue("30");
+    await page.locator("#undo").click();
+    await expect(speed(page)).toHaveValue("40");
+    await page.locator("#redo").click();
+    await expect(speed(page)).toHaveValue("30");
+    await page.locator("#undo").click();
+    await expect(speed(page)).toHaveValue("40");
+    await page.locator("#redo").click();
+    await expect(speed(page)).toHaveValue("30");
+    await page.locator("#reset").click();
+    await expect(speed(page)).toHaveValue("40");
+  });
+
   test("a chosen speed is kept across a reload", async ({ page }) => {
     await openStreetWithSpeed(page, "40");
     await speed(page).selectOption("30");
