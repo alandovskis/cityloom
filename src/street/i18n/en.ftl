@@ -386,3 +386,6 @@ st-zone-use = Use this section for the whole street
 st-speed-label = Speed limit
 st-speed-not-set = Not set
 st-speed-kmh = { $kmh } km/h
+# The speed limit sign in the 2.5D: its heading, the same word on a Canadian sign in both languages.
+iso-sign-maximum = MAXIMUM
+svg-iso-speed = Speed limit { $kmh } km/h.

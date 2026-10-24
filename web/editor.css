@@ -29,6 +29,10 @@
   --iso-paint-edge: #10151a;
   /* The selection outline in 2.5D: a light line on a dark casing, the same in both themes like the materials, so
      that one of the two is 3:1 against any of them (a test in street/iso/surface.rs). */
+  /* The speed limit sign in 2.5D: a white panel with black text, the same in both themes like the materials (a test
+     in shared/contrast.rs measures the text on the panel). */
+  --iso-sign-panel: #fbfbf8;
+  --iso-sign-ink: #10151a;
   --iso-sel: #8ab4ff;
   --iso-sel-casing: #0b1220;
   /* The zone strip: two fills (the base section and a zone's own), the text on them, the edges between cells and
@@ -1053,6 +1057,30 @@ svg pattern circle {
   .iso-paint.yellow {
     fill: CanvasText;
     stroke: none;
+  }
+}
+/* The speed limit sign (street/iso/sign.rs): a white panel with its text, and no pointer events. */
+.iso-sign {
+  pointer-events: none;
+}
+.iso-sign-panel {
+  fill: var(--iso-sign-panel);
+  stroke: var(--iso-sign-ink);
+  stroke-width: 1px;
+  stroke-linejoin: round;
+}
+.iso-sign-text {
+  fill: var(--iso-sign-ink);
+  font-weight: 700;
+  text-anchor: middle;
+}
+@media (forced-colors: active) {
+  .iso-sign-panel {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+  .iso-sign-text {
+    fill: CanvasText;
   }
 }
 #drawing .iso .sel-box {

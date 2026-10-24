@@ -28,6 +28,7 @@ mod order;
 mod paint;
 mod projection;
 mod raised;
+mod sign;
 mod solids;
 mod surface;
 mod symbols;
@@ -99,7 +100,7 @@ struct Run<'a> {
 /// covering the paint's edges where they meet) together with what stands on the pieces, in the order the eye needs
 /// (`order`: a box is painted after the ones it is in front of, nearer the middle of the street, nearer the near end or
 /// higher).
-fn run_layers(out: &mut String, base: &Projection, i18n: &I18n, run: &Run) {
+fn run_layers(out: &mut String, base: &Projection, v: &View, i18n: &I18n, run: &Run) {
     let p = base.over(run.reach);
     let segs = run.segs;
     let (flat, standing) = surface::split(strips(segs, &p));
@@ -133,6 +134,10 @@ fn run_layers(out: &mut String, base: &Projection, i18n: &I18n, run: &Run) {
     if open {
         out.push_str("</g>");
     }
+    // The speed limit sign stands in the selected zone's run only, over everything else but the outline.
+    if !run.across {
+        out.push_str(&sign::sign(v, segs, &p, i18n).unwrap_or_default());
+    }
 }
 
 /// The street in 2.5D, drawn `width` wide: a stretch of `STRETCH_MM` seen in perspective from the centre line,
@@ -152,7 +157,7 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
 
     let mut selected = Reach::STRETCH;
     match &v.zones.joint {
-        None => run_layers(&mut out, &p, i18n, &Run { segs: &v.segments, reach: selected, across: false }),
+        None => run_layers(&mut out, &p, v, i18n, &Run { segs: &v.segments, reach: selected, across: false }),
         Some(j) => {
             let (near, far) = (Reach { near: 0.0, far: l / 2.0 }, Reach { near: l / 2.0, far: l });
             // The neighbour lies beyond the selected zone (`far`), or before it.
@@ -162,7 +167,7 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
             let runs = if j.far { [&across_run, &own_run] } else { [&own_run, &across_run] };
             for run in runs {
                 out.push_str(if run.across { "<g class=\"iso-section iso-across\">" } else { "<g class=\"iso-section\">" });
-                run_layers(&mut out, &p, i18n, run);
+                run_layers(&mut out, &p, v, i18n, run);
                 out.push_str("</g>");
             }
         }
@@ -177,6 +182,14 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
 /// What a screen reader is told the 2.5D drawing is: the street, the zone shown when it has several, the stretch
 /// shown, and its pieces; across a near boundary, the two zones that meet there.
 pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
+    let label = iso_label_of(v, i18n, units);
+    match v.speed_kmh {
+        Some(kmh) => format!("{label} {}", i18n.tr("svg-iso-speed", &Args::new().num("kmh", i64::from(kmh)))),
+        None => label,
+    }
+}
+
+fn iso_label_of(v: &View, i18n: &I18n, units: Units) -> String {
     let args = Args::new()
         .str("name", say(i18n, units, &v.name))
         .str("length", units.length_whole_in(STRETCH_MM as i32, i18n.locale()))
