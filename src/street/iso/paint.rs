@@ -10,12 +10,20 @@ use crate::street::model::SegView;
 use super::markings::{Mark, markings};
 use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection, STRETCH_MM, points};
 use super::symbols::shapes;
+use super::taper::Draw;
 
 /// The lines and symbols of the street as one group, drawn flat on the ground. A line is the shared paint quads of
 /// the path `[(x, reach.near), (x, reach.far)]` (across, along), the reach being the part of the stretch this section
 /// covers; a symbol is its polygons laid on its lane at `ARROW_AT_MM` from the reach's near end, so it foreshortens and shrinks with the distance. A piece narrower on screen than `MIN_SOLID_PX`
 /// where its symbol lies (`wide_enough`) keeps its lines but gets no symbol.
+#[cfg(test)]
 pub(super) fn layer(p: &Projection, segs: &[SegView]) -> String {
+    layer_over(p, segs, None)
+}
+
+/// `layer`, its lines following the transition (`draw`): a line on the edge of a tapering piece goes from where the
+/// host has it to where the other zone's section has that edge.
+pub(super) fn layer_over(p: &Projection, segs: &[SegView], draw: Option<&Draw>) -> String {
     let m = markings(segs);
     let mut out = String::from("<g class=\"iso-markings\">");
     for line in &m.lines {
@@ -27,7 +35,14 @@ pub(super) fn layer(p: &Projection, segs: &[SegView]) -> String {
             if hi.min(p.reach.far) - lo.max(p.reach.near) < 1e-9 {
                 continue;
             }
-            let corners: Vec<(f64, f64, f64)> = quad.iter().map(|&(across, along)| (across, 0.0, along.clamp(p.reach.near, p.reach.far))).collect();
+            let corners: Vec<(f64, f64, f64)> = quad
+                .iter()
+                .map(|&(across, along)| {
+                    let along = along.clamp(p.reach.near, p.reach.far);
+                    let moved = draw.map_or(0.0, |d| d.line_at(line.x_mm, p.reach, along) - x);
+                    (across + moved, 0.0, along)
+                })
+                .collect();
             write!(out, "<polygon class=\"{}\" points=\"{}\"/>", class(paint), points(p, &corners)).unwrap();
         }
     }

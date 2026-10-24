@@ -15,7 +15,7 @@ pub use crate::shared::said::{Arg, Said};
 mod fixtures;
 #[cfg(test)]
 pub use fixtures::{SAMPLES, pedestrianised, two_zones, zoned};
-pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM};
+pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM, Taper};
 mod joint;
 mod speed;
 pub use speed::Speed;

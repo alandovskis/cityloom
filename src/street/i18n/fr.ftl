@@ -388,6 +388,7 @@ st-speed-not-set = Non indiquée
 st-speed-kmh = { $kmh }{" "}km/h
 # The speed limit sign in the 2.5D: its heading, the same word on a Canadian sign in both languages.
 iso-sign-maximum = MAXIMUM
+svg-iso-transition = Une transition de { $length } mène à { $zone }.
 svg-iso-speed = Limite de vitesse : { $kmh }{" "}km/h.
 check-boundary = entre { $a } et { $b }
 check-label-transition-room = Place pour la transition

@@ -3,7 +3,7 @@
 use serde::Serialize;
 
 use super::zones::{ZoneEnd, zone_label, zone_label_mid};
-use super::{Editor, Said, SegView};
+use super::{Change, Editor, Host, Said, SegView};
 
 /// The stretch the 2.5D shows, in millimetres (a test pins it to `iso::STRETCH_MM`).
 pub const SHOWN_MM: i32 = 40_000;
@@ -24,6 +24,20 @@ pub struct Joint {
     pub zone: usize,
     pub label: Said,
     pub label_mid: Said,
+    /// The transition at this boundary, when the two sections need one; the 2.5D draws it.
+    #[serde(skip)]
+    pub taper: Option<Taper>,
+}
+
+/// The transition at a joint's boundary, seen from the zone that holds it (the host).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Taper {
+    /// The host is the selected zone (otherwise it is the neighbour across the boundary).
+    pub host_is_selected: bool,
+    pub length_mm: i32,
+    /// Every piece of both sides, as `Transition::changes`, but `before` is always the host's side and `after` the
+    /// other zone's.
+    pub changes: Vec<Change>,
 }
 
 /// The neighbour of the `selected` zone across the nearest boundary, and whether it lies `far` (beyond the zone in
@@ -53,6 +67,13 @@ impl Editor {
         let (zone, far) = near_boundary(&spans, self.zone, content.from_end)?;
         let at_mm = if zone > self.zone { spans[self.zone].1 } else { spans[self.zone].0 };
         let segments = self.seg_views(content.section(zone));
+        let boundary = zone.min(self.zone);
+        let taper = self.transitions().into_iter().find(|(b, _)| *b == boundary).map(|(_, t)| {
+            let host = if t.host == Host::Near { boundary } else { boundary + 1 };
+            let changes =
+                if host == boundary { t.changes } else { t.changes.into_iter().map(|c| Change { kind: c.kind, before: c.after, after: c.before }).collect() };
+            Taper { host_is_selected: host == self.zone, length_mm: t.length_mm, changes }
+        });
         Some(Joint {
             total_mm: segments.iter().map(|s| s.width_mm).sum(),
             segments,
@@ -61,6 +82,7 @@ impl Editor {
             zone,
             label: zone_label(&content.zones[zone], zone + 1),
             label_mid: zone_label_mid(&content.zones[zone], zone + 1),
+            taper,
         })
     }
 }
@@ -70,6 +92,27 @@ mod tests {
     use super::super::fixtures::two_zones;
     use super::*;
     use crate::shared::said::Arg;
+
+    #[test]
+    fn a_joint_carries_the_transition_from_the_hosts_side() {
+        // Zone 2 has one travel lane fewer: the far zone hosts the transition.
+        let t = joined_taper(1).expect("the sections differ");
+        assert!(t.host_is_selected);
+        assert_eq!(t.length_mm, 53_300);
+        assert!(t.changes.iter().any(|c| c.before.is_none() && c.after.is_some()), "the lane the host lacks");
+        let t = joined_taper(0).expect("the same boundary seen from zone 1");
+        assert!(!t.host_is_selected, "zone 2 hosts it, and zone 1 is the neighbour");
+        assert!(t.changes.iter().any(|c| c.before.is_none() && c.after.is_some()), "before is the host's side from either zone");
+        let mut same = two_zones(false);
+        assert!(same.select_zone(1));
+        assert!(same.view().zones.joint.expect("a joint").taper.is_none());
+    }
+
+    fn joined_taper(selected: usize) -> Option<Taper> {
+        let mut e = two_zones(true);
+        assert!(e.select_zone(selected));
+        e.view().zones.joint.expect("a joint").taper
+    }
 
     #[test]
     fn a_one_zone_street_has_no_joint() {
