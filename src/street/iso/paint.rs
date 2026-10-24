@@ -47,7 +47,7 @@ pub(super) fn layer_over(p: &Projection, segs: &[SegView], draw: Option<&Draw>) 
         }
     }
     for mark in &m.marks {
-        symbol(&mut out, p, segs, mark);
+        symbol(&mut out, p, segs, mark, draw);
     }
     out.push_str("</g>");
     out
@@ -58,13 +58,19 @@ pub(super) fn symbol_fits(p: &Projection, w: f64) -> bool {
     w * p.scale_at(p.reach.near + ARROW_AT_MM) >= MIN_SOLID_PX
 }
 
-fn symbol(out: &mut String, p: &Projection, segs: &[SegView], mark: &Mark) {
+/// A symbol lies on its lane where the lane is at `ARROW_AT_MM`: where the transition (`draw`) has moved the piece
+/// there, not where the host has it.
+fn symbol(out: &mut String, p: &Projection, segs: &[SegView], mark: &Mark, draw: Option<&Draw>) {
     let Some(s) = segs.iter().find(|s| s.uid == mark.uid) else { return };
-    let w = s.width_mm as f64;
+    let (x0, x1) = match draw.and_then(|d| d.shape_of(s).map(|shape| d.edges(shape, p.reach, p.reach.near + ARROW_AT_MM))) {
+        Some(edges) => edges,
+        None => (s.x_mm as f64, (s.x_mm + s.width_mm) as f64),
+    };
+    let w = x1 - x0;
     if !symbol_fits(p, w) {
         return;
     }
-    let cx = s.x_mm as f64 + w / 2.0;
+    let cx = x0 + w / 2.0;
     write!(out, "<g class=\"iso-mark\" data-mark=\"{}\">", mark.uid).unwrap();
     for shape in shapes(mark.symbol, w) {
         let corners: Vec<(f64, f64, f64)> = shape.iter().map(|&(across, along)| (cx + across, 0.0, p.reach.near + ARROW_AT_MM + along)).collect();
@@ -263,5 +269,32 @@ mod tests {
                 assert!((g.0 - w.0).abs() < 0.02 && (g.1 - w.1).abs() < 0.02, "{near}: {g:?} {w:?}");
             }
         }
+    }
+
+    #[test]
+    fn a_symbol_follows_its_lane_along_the_taper() {
+        use crate::street::iso::projection::Reach;
+        use crate::street::model::{Change, Taper};
+        let v = Editor::new(0).view();
+        let lane = &v.segments[2];
+        let (x0, x1) = (lane.x_mm, lane.x_mm + lane.width_mm);
+        // the lane lies 3.5 m farther across at the seam (the far end of the run)
+        let t = Taper {
+            host_is_selected: true,
+            length_mm: 50_000,
+            changes: vec![Change { kind: lane.base_kind, before: Some((x0, x1)), after: Some((x0 + 3_500, x1 + 3_500)) }],
+        };
+        let draw = Draw::new(&t, true);
+        let p = fit(&v, 1050.0).over(Reach { near: 0.0, far: 20_000.0 });
+        let m = layer_over(&p, &v.segments, Some(&draw));
+        let (e0, e1) = draw.edges(draw.shape_of(lane).unwrap(), p.reach, ARROW_AT_MM);
+        assert!(e0 > f64::from(x0) + 1_000.0, "the lane has moved by the arrow's distance");
+        let toward = lane.direction == Some("toward");
+        let arrow = &shapes(Symbol::Ahead { toward }, e1 - e0)[0];
+        let pts = points(&p, &arrow.iter().map(|&(u, a)| ((e0 + e1) / 2.0 + u, 0.0, ARROW_AT_MM + a)).collect::<Vec<_>>());
+        assert!(
+            m.contains(&format!("<g class=\"iso-mark\" data-mark=\"{}\"><polygon class=\"iso-paint white\" points=\"{pts}\"/></g>", lane.uid)),
+            "the arrow lies within the shifted lane"
+        );
     }
 }
