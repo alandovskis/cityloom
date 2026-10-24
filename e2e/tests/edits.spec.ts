@@ -92,7 +92,9 @@ const provenanceState = async (page: Page) => {
 test("an edit is kept under the street's OSM key", async ({ page }) => {
   await editStreet(page);
   const doc = await edits(page);
-  expect(doc.version).toBe(5);
+  // The street carries the speed OpenStreetMap gives it, which an edit keeps with the record: version 7.
+  expect(doc.version).toBe(7);
+  expect(Object.values<any>(doc.streets)[0].street.speed_kmh).toBe(30);
   expect(Object.keys(doc.streets)).toHaveLength(1);
   expect(Object.keys(doc.streets)[0]).toMatch(/^w\d+~n\d+~(n\d+|x~[nesw])$/);
   expect(Object.keys(doc.junctions ?? {})).toEqual([]);
