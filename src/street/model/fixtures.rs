@@ -109,7 +109,6 @@ impl Editor {
         let mut e = Editor {
             street_name: None,
             source: Vec::new(),
-            speed: Speed::Undecided,
             region: 0,
             time_min: 12 * 60,
             states: Vec::new(),
@@ -144,7 +143,7 @@ impl Editor {
         default_directions(&mut segments, REGIONS[self.region].drive_side);
         self.states = vec![State {
             label: Said::new("street-today"),
-            content: Content { segments, zones: Vec::new(), from_end: ZoneEnd::First, length_mm: None },
+            content: Content { segments, zones: Vec::new(), from_end: ZoneEnd::First, length_mm: None, speed: Speed::Undecided },
             class: s.class,
             class_before: None,
             row_mm: s.row_mm,

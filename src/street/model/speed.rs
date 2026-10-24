@@ -26,15 +26,20 @@ impl Speed {
     pub fn is_undecided(&self) -> bool {
         *self == Speed::Undecided
     }
+
+    /// The limit in kilometres an hour, when there is one.
+    pub fn kmh(&self) -> Option<u16> {
+        match self {
+            Speed::Kmh(n) => Some(*n),
+            Speed::Undecided | Speed::NotSet => None,
+        }
+    }
 }
 
 impl Street {
     /// The speed limit in kilometres an hour, when the street has one.
     pub fn speed_kmh(&self) -> Option<u16> {
-        match self.speed {
-            Speed::Kmh(n) => Some(n),
-            Speed::Undecided | Speed::NotSet => None,
-        }
+        self.speed.kmh()
     }
 }
 
