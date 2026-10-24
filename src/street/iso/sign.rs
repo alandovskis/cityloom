@@ -7,7 +7,7 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::esc;
 use crate::street::model::{SegView, View};
 
-use super::projection::{MIN_SOLID_PX, Projection, drawn_mm, points};
+use super::projection::{Projection, drawn_mm, points};
 use super::raised::height_mm;
 use super::solids::{Block, Solid, block};
 
@@ -18,6 +18,11 @@ const PANEL_H_MM: f64 = 750.0;
 const PANEL_FROM_TOP_MM: f64 = 2_000.0;
 /// The post's side, in millimetres (an estimate).
 const POST_MM: f64 = 75.0;
+/// The narrowest the panel is drawn on the screen, in pixels: the sign is a symbol that has to read, not a thing at
+/// scale, so when its true size is smaller the whole sign (panel, post and text) is drawn larger by one factor.
+pub(super) const MIN_PANEL_PX: f64 = 32.0;
+/// How far along the run's near end the sign stands, in millimetres: near, so that it is in front.
+const AT_MM: f64 = 2_000.0;
 
 /// The piece the sign stands on: the outermost raised piece (a sidewalk, a median, planting) counting from the edge of
 /// the street on the `side` of the road traffic keeps, or, when nothing is raised, the piece at that edge.
@@ -30,28 +35,28 @@ fn site(segs: &[SegView], side: Side) -> Option<&SegView> {
     from_edge.iter().copied().find(|s| height_mm(KINDS[s.kind].id) > 0).or(from_edge.first().copied())
 }
 
-/// The speed limit sign: a post on the piece at the edge on the side traffic keeps, in the nearest third of the reach so
-/// that it is in front, and on it a white panel facing the eye (a flat rectangle on the screen), "MAXIMUM" over the
-/// number. `None` without a speed, or when the panel would be under `MIN_SOLID_PX` wide on the screen.
+/// The speed limit sign: a post on the piece at the edge on the side traffic keeps, `AT_MM` into the run so that it is
+/// in front, and on it a white panel facing the eye (a flat rectangle on the screen), "MAXIMUM" over the number. It is
+/// drawn at its estimated size (`PANEL_W_MM` and the rest) but never under `MIN_PANEL_PX` wide: where that is smaller, the
+/// whole sign is scaled up from its foot by one factor, so it stays legible at any width. `None` only without a speed.
 pub(super) fn sign(v: &View, segs: &[SegView], p: &Projection, i18n: &I18n) -> Option<String> {
     let kmh = v.speed_kmh?;
     let piece = site(segs, v.side)?;
     let cx = piece.x_mm as f64 + piece.width_mm as f64 / 2.0;
     let top = drawn_mm(height_mm(KINDS[piece.kind].id));
-    let z = p.reach.near + p.reach.len() / 6.0;
-    let z0 = z - POST_MM / 2.0;
+    let z = p.reach.near + AT_MM;
+    let f = (MIN_PANEL_PX / (PANEL_W_MM * p.scale_at(z))).max(1.0);
+    let (panel_w, panel_h, post_w) = (PANEL_W_MM * f, PANEL_H_MM * f, POST_MM * f);
+    let z0 = z - post_w / 2.0;
     let scale = p.scale_at(z0);
-    if PANEL_W_MM * scale < MIN_SOLID_PX {
-        return None;
-    }
-    let (bottom, upper) = (top + PANEL_FROM_TOP_MM, top + PANEL_FROM_TOP_MM + PANEL_H_MM);
-    let (half, post) = (PANEL_W_MM / 2.0, POST_MM / 2.0);
+    let (bottom, upper) = (top + PANEL_FROM_TOP_MM * f, top + (PANEL_FROM_TOP_MM + PANEL_H_MM) * f);
+    let (half, post) = (panel_w / 2.0, post_w / 2.0);
     let mut out = String::from("<g class=\"iso-sign\" aria-hidden=\"true\">");
-    block(&mut out, p, &Block { solid: Solid::Post, x: (cx - post, cx + post), y: (top, upper), z: (z0, z + post) });
+    block(&mut out, p, &Block { solid: Solid::Post, x: (cx - post, cx + post), y: (top, upper), z: (z0, z0 + post_w) });
     let panel = points(p, &[(cx - half, bottom, z0), (cx + half, bottom, z0), (cx + half, upper, z0), (cx - half, upper, z0)]);
     write!(out, "<polygon class=\"iso-sign-panel\" points=\"{panel}\"/>").unwrap();
     // The words on the panel, centred on it: the first over the second, sized by the panel's width on the screen.
-    let wide = PANEL_W_MM * scale;
+    let wide = panel_w * scale;
     let word = |from_bottom: f64, size: f64, text: &str, out: &mut String| {
         let (x, y) = p.at(cx, bottom + from_bottom, z0);
         write!(
@@ -64,8 +69,8 @@ pub(super) fn sign(v: &View, segs: &[SegView], p: &Projection, i18n: &I18n) -> O
         )
         .unwrap();
     };
-    word(PANEL_H_MM * 0.74, 0.17, &i18n.tr("iso-sign-maximum", &Args::new()), &mut out);
-    word(PANEL_H_MM * 0.14, 0.46, &kmh.to_string(), &mut out);
+    word(panel_h * 0.74, 0.17, &i18n.tr("iso-sign-maximum", &Args::new()), &mut out);
+    word(panel_h * 0.14, 0.46, &kmh.to_string(), &mut out);
     out.push_str("</g>");
     Some(out)
 }
@@ -122,11 +127,31 @@ mod tests {
         assert!(right > centre && left < centre, "{left} {right}");
     }
 
+    /// The width of the panel on the screen, in pixels.
+    fn panel_width(sign: &str) -> f64 {
+        let at = sign.find("class=\"iso-sign-panel\" points=\"").unwrap() + 31;
+        let xs: Vec<f64> = sign[at..at + sign[at..].find('"').unwrap()].split(' ').map(|p| p.split(',').next().unwrap().parse().unwrap()).collect();
+        xs.iter().cloned().fold(f64::MIN, f64::max) - xs.iter().cloned().fold(f64::MAX, f64::min)
+    }
+
     #[test]
-    fn the_sign_is_dropped_when_too_small() {
-        let v = with_speed(Side::Right, Some(50));
-        assert_eq!(count(&iso_svg(&v, &en(), 1050.0).markup, "class=\"iso-sign\""), 1);
-        assert_eq!(count(&iso_svg(&v, &en(), 280.0).markup, "iso-sign"), 0);
+    fn the_sign_shows_at_ordinary_widths() {
+        for row_mm in [18_000, 30_000] {
+            for width in [700.0, 1050.0] {
+                let mut v = with_speed(Side::Right, Some(50));
+                v.row_mm = row_mm;
+                let m = iso_svg(&v, &en(), width).markup;
+                assert_eq!(count(&m, "class=\"iso-sign\""), 1, "{row_mm} {width}");
+                assert!(panel_width(sign_of(&m)) >= MIN_PANEL_PX - 0.05, "{row_mm} {width}: {}", panel_width(sign_of(&m)));
+            }
+        }
+    }
+
+    #[test]
+    fn the_panel_is_floored_at_32_px_on_the_screen() {
+        // Small drawing: floored at 32 px.
+        let small = iso_svg(&with_speed(Side::Right, Some(50)), &en(), 280.0).markup;
+        assert!((MIN_PANEL_PX..MIN_PANEL_PX + 1.0).contains(&panel_width(sign_of(&small))), "{}", panel_width(sign_of(&small)));
     }
 
     #[test]
@@ -138,17 +163,10 @@ mod tests {
             let far = v.zones.joint.as_ref().unwrap().far;
             let m = iso_svg(&v, &en(), 1050.0).markup;
             let (own, across) = (m.find("<g class=\"iso-section\">").unwrap(), m.find("<g class=\"iso-section iso-across\">").unwrap());
-            // The neighbour is drawn first when it lies far.
-            if far {
-                // The selected zone is the near half: the sign is in it, and not in the neighbour's group before it.
-                assert_eq!(count(&m, "class=\"iso-sign\""), 1, "{selected}");
-                let at = m.find("class=\"iso-sign\"").unwrap();
-                assert!(at > own && own > across, "{selected}: {own} {across} {at}");
-            } else {
-                // The selected zone is the far half, where the panel is under MIN_SOLID_PX wide at any size the
-                // drawing is laid out at (the height caps its scale): no sign, and never one in the neighbour's run.
-                assert_eq!(count(&m, "class=\"iso-sign\""), 0, "{selected}");
-            }
+            assert_eq!(count(&m, "class=\"iso-sign\""), 1, "{selected}");
+            let at = m.find("class=\"iso-sign\"").unwrap();
+            // The neighbour's group is drawn first when it lies far, and after the selected one otherwise.
+            assert!(if far { at > own && own > across } else { at > own && at < across }, "{selected}: {own} {across} {at}");
             seen[usize::from(far)] = true;
         }
         assert_eq!(seen, [true, true], "both halves were tried");
