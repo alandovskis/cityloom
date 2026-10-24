@@ -171,13 +171,7 @@ pub fn Checks(vm: Rc<StreetVm>) -> impl IntoView {
             .area_checks()
             .into_iter()
             .map(|f| {
-                let state = if f.rule.informational() {
-                    "restriction-check-informational"
-                } else if f.ok() {
-                    "check-passes"
-                } else {
-                    "check-fails"
-                };
+                let state = if f.ok() { "check-passes" } else { "check-fails" };
                 let detail = f.detail().iter().map(|s| say(&i18n, units, s)).collect::<Vec<_>>().join(" ");
                 view! {
                     <li class=if f.ok() { "ok" } else { "bad" }>

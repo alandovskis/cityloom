@@ -17,7 +17,7 @@ use crate::map::editable;
 use crate::map::overlay;
 use crate::map::style;
 use crate::restriction::draw::Draw;
-use crate::restriction::model::{Conflict, Restriction, Rule, conflicts};
+use crate::restriction::model::{Conflict, Restriction, Rule, conflicts, speed_unknown};
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::ports::{MapEvent, Ports};
@@ -191,6 +191,8 @@ pub struct AreaStreet {
     pub name: Said,
     pub rule: Rule,
     pub conflicts: Vec<Conflict>,
+    /// A speed limit the street has no speed to check by.
+    pub speed_unknown: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -767,9 +769,8 @@ impl MapVm {
             return;
         }
         let view = self.core.view_now();
-        // Only a rule a street can break can tint one.
-        let checked: Vec<Restriction> = self.areas.list_now().into_iter().filter(|r| !r.rule.informational()).collect();
-        let in_conflict: BTreeSet<u32> = self.findings_in(&view, &checked).into_iter().filter(|s| !s.conflicts.is_empty()).map(|s| s.uid).collect();
+        let in_conflict: BTreeSet<u32> =
+            self.findings_in(&view, &self.areas.list_now()).into_iter().filter(|s| !s.conflicts.is_empty()).map(|s| s.uid).collect();
         self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&view, &projection, &in_conflict));
         self.ports.mapper.set_zone_ticks(&style::zone_tick_layers(), &overlay::zone_ticks(&view, &projection));
         self.sync_editable();
@@ -848,23 +849,19 @@ impl MapVm {
     }
 
     /// The streets of `v` inside each of `list`, area by area, with what each has that the area's rule does not
-    /// allow. A street inside several areas is found once for each. A rule that is only for information (a speed
-    /// limit: streets carry no speed) reads no street to check it.
+    /// allow. A street inside several areas is found once for each.
     fn findings_in(&self, v: &CityView, list: &[Restriction]) -> Vec<AreaStreet> {
         let Some(p) = self.projection() else { return Vec::new() };
         let mut found = Vec::new();
         for r in list {
             for e in v.edges.iter().filter(|e| r.holds(&e.shape_mm, &p)) {
-                let conflicts = if r.rule.informational() {
-                    Vec::new()
-                } else {
-                    #[cfg(test)]
-                    self.editors_read.set(self.editors_read.get() + 1);
-                    let Some(street) = self.core.read(|m| m.city.street_editor(e.uid, m.region).map(|e| e.snapshot())) else { continue };
-                    conflicts(r.rule, &street)
-                };
+                #[cfg(test)]
+                self.editors_read.set(self.editors_read.get() + 1);
+                let Some(street) = self.core.read(|m| m.city.street_editor(e.uid, m.region).map(|e| e.snapshot())) else { continue };
+                let conflicts = conflicts(r.rule, &street);
+                let speed_unknown = speed_unknown(r.rule, &street);
                 let name = Said::new("map-note-street").with("street", Arg::Said(Box::new(e.called.clone()))).with("ends", Arg::Said(Box::new(e.ends.clone())));
-                found.push(AreaStreet { area: r.id.clone(), uid: e.uid, href: street_href(e.uid), name, rule: r.rule, conflicts });
+                found.push(AreaStreet { area: r.id.clone(), uid: e.uid, href: street_href(e.uid), name, rule: r.rule, conflicts, speed_unknown });
             }
         }
         found
@@ -888,8 +885,6 @@ impl MapVm {
         let in_conflict = streets.iter().filter(|s| !s.conflicts.is_empty()).count() as i64;
         let summary = if inside == 0 {
             Said::new("restriction-summary-none")
-        } else if r.rule.informational() {
-            Said::new("restriction-summary-info").with("inside", Arg::Num(inside))
         } else {
             Said::new("restriction-summary").with("inside", Arg::Num(inside)).with("conflicts", Arg::Num(in_conflict))
         };
@@ -898,13 +893,13 @@ impl MapVm {
 
     /// How a street inside an area stands, in words.
     pub fn street_detail(&self, s: &AreaStreet) -> String {
-        if s.rule.informational() {
-            return self.word("restriction-street-inside");
+        if s.speed_unknown {
+            return self.word("restriction-check-speed-unknown");
         }
         if s.conflicts.is_empty() {
             return self.word("restriction-street-keeps");
         }
-        s.conflicts.iter().map(|c| self.say(&c.said())).collect::<Vec<_>>().join(" ")
+        s.conflicts.iter().map(|c| self.say(&c.said(s.rule))).collect::<Vec<_>>().join(" ")
     }
 
     /// What floats over the map, in pixels from each edge: the whole city is fitted in what is left, until
@@ -1725,7 +1720,7 @@ mod tests {
         let found = vm.findings();
         assert_eq!(found.len(), 1);
         assert_eq!((found[0].area.as_str(), found[0].uid, found[0].href.as_str()), ("r1", 1, "street.html?street=1"));
-        assert_eq!(found[0].conflicts, vec![Conflict { kind: "travel", pieces: 2 }]);
+        assert_eq!(found[0].conflicts, vec![Conflict::Pieces { kind: "travel", pieces: 2 }]);
         assert_eq!(vm.say(&found[0].name), "Bend Street, through the city");
         assert_eq!(vm.street_detail(&found[0]), "It has 2 driving lanes.");
         let r = vm.areas().find_now("r1").unwrap();
@@ -1733,8 +1728,8 @@ mod tests {
         vm.sync_places();
         assert!(matches!(&mapper.take()[0], MapCall::Places { data, .. } if data.contains("\"conflict\":true")));
         assert!(vm.areas().set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
-        assert_eq!(vm.area_row_sub(&vm.areas().find_now("r1").unwrap()), "Speed limit of 30 km/h · One street inside.");
-        assert_eq!(vm.street_detail(&vm.findings()[0]), "Inside the area.");
+        assert_eq!(vm.area_row_sub(&vm.areas().find_now("r1").unwrap()), "Speed limit of 30 km/h · One street inside; none conflicts with the rule.");
+        assert_eq!(vm.street_detail(&vm.findings()[0]), "Speed not known: OpenStreetMap gives none and none is set.");
         vm.sync_places();
         assert!(matches!(&mapper.take()[0], MapCall::Places { data, .. } if data.contains("\"conflict\":false")), "a speed limit flags nothing");
     }
@@ -1859,15 +1854,52 @@ mod tests {
         assert_eq!(roadless.areas_lead(), "An area is drawn on the map, and there is no map here.");
     }
 
-    #[test]
-    fn a_speed_limit_area_reads_no_street_and_tints_none() {
-        let (vm, mapper, ..) = car_free_bendville();
+    /// Bendville with its street's speed set to `kmh` and a 30 km/h area over it.
+    fn slow_bendville(kmh: Option<u16>) -> (Rc<MapVm>, Rc<FakeMapper>) {
+        let (vm, mapper, _, _, storage) = area_vm_over(|store| {
+            let mut street = store.open().street_editor(1, 0).unwrap().snapshot();
+            street.speed = crate::street::model::Speed::from_kmh(kmh);
+            assert!(store.write_street(1, street));
+        });
+        mapper.say(COVERING);
+        mapper.take();
+        let (_, mid) = bent_midpoint(&CityStore::current(storage));
+        assert!(vm.areas().start());
+        for p in square(mid, 0.0005) {
+            assert!(vm.areas().add_at(p));
+        }
+        assert!(vm.areas().close());
+        assert!(vm.areas().save());
         assert!(vm.areas().set_rule("r1", Rule::SpeedLimit { kmh: 30 }));
-        vm.editors_read.set(0);
+        mapper.take();
+        (vm, mapper)
+    }
+
+    #[test]
+    fn a_speed_limit_area_tints_the_streets_over_its_limit() {
+        let (vm, mapper) = slow_bendville(Some(50));
+        vm.sync_places();
+        assert!(matches!(&mapper.take()[0], MapCall::Places { data, .. } if data.contains("\"conflict\":true")));
+        assert_eq!(vm.findings()[0].conflicts, vec![Conflict::Speed { kmh: 50 }]);
+        assert_eq!(vm.street_detail(&vm.findings()[0]), "Speed limit 50 km/h, over the area\u{2019}s 30 km/h.");
+
+        let (vm, mapper) = slow_bendville(None);
         vm.sync_places();
         assert!(matches!(&mapper.take()[0], MapCall::Places { data, .. } if data.contains("\"conflict\":false")));
-        assert_eq!(vm.area_row_sub(&vm.areas().find_now("r1").unwrap()), "Speed limit of 30 km/h · One street inside.");
-        assert_eq!(vm.editors_read.get(), 0, "streets carry no speed, so none is read to check one");
+        assert_eq!(vm.street_detail(&vm.findings()[0]), "Speed not known: OpenStreetMap gives none and none is set.");
+    }
+
+    #[test]
+    fn a_speed_limit_area_counts_its_breaking_streets_in_the_status_and_the_lead() {
+        let (vm, _) = slow_bendville(Some(50));
+        let owner = Owner::new();
+        owner.set();
+        assert_eq!(vm.status(), Status { text: "1 place. One street conflicts with an area rule.".to_string(), bad: true });
+        assert_eq!(vm.area_row_sub(&vm.areas().find_now("r1").unwrap()), "Speed limit of 30 km/h · One street inside; one conflicts with the rule.");
+
+        let (vm, _) = slow_bendville(None);
+        assert_eq!(vm.status(), Status { text: "1 place. Every check passes.".to_string(), bad: false });
+        assert_eq!(vm.checks_lead(), "Every check passes in the one place.");
     }
 
     #[test]

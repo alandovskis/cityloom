@@ -37,8 +37,8 @@ restriction-check = Area rule: { $area }
 # `rule` is a restriction-rule-* message.
 restriction-check-keeps = { $rule }: the street keeps to it.
 restriction-check-breaks = { $rule }: the street does not keep to it.
-restriction-check-info = { $rule }: streets carry no speed, so this is for information only.
-restriction-check-informational = : for information only
+restriction-check-speed-over = Speed limit { $street } km/h, over the area’s { $limit } km/h.
+restriction-check-speed-unknown = Speed not known: OpenStreetMap gives none and none is set.
 
 ## Drawing an outline, said as it happens (`area` is the area's name)
 restriction-started = Drawing an area. Click the map, or press Enter on it, to place the first corner.
@@ -94,14 +94,9 @@ restriction-summary = { $inside ->
     [one] one conflicts with the rule.
    *[other] { $conflicts } conflict with the rule.
 }
-restriction-summary-info = { $inside ->
-    [one] One street inside.
-   *[other] { $inside } streets inside.
-}
 # `rule` is a restriction-rule-* message, `summary` one of the three above.
 restriction-row-sub = { $rule } · { $summary }
 restriction-street-keeps = Keeps to the rule.
-restriction-street-inside = Inside the area.
 restriction-legend-conflict = Conflicts with an area rule
 
 ## The panel (web/map.html and src/map/areas_view.rs)
