@@ -92,14 +92,30 @@ const provenanceState = async (page: Page) => {
 test("an edit is kept under the street's OSM key", async ({ page }) => {
   await editStreet(page);
   const doc = await edits(page);
-  // The street carries the speed OpenStreetMap gives it, which an edit keeps with the record: version 7.
-  expect(doc.version).toBe(7);
-  expect(Object.values<any>(doc.streets)[0].street.speed_kmh).toBe(30);
+  // The speed is unchanged from OpenStreetMap's, so the record holds none (it follows the import): version 5.
+  expect(doc.version).toBe(5);
+  expect(Object.values<any>(doc.streets)[0].street).not.toHaveProperty("speed_kmh");
   expect(Object.keys(doc.streets)).toHaveLength(1);
   expect(Object.keys(doc.streets)[0]).toMatch(/^w\d+~n\d+~(n\d+|x~[nesw])$/);
   expect(Object.keys(doc.junctions ?? {})).toEqual([]);
   const keys = await page.evaluate(() => Object.keys(localStorage));
   expect(keys.filter((k) => k.startsWith("cityloom-city:"))).toEqual([]);
+});
+
+test("a speed the designer changed is kept with the record: version 7", async ({ page }) => {
+  const href = await openStreet(page, 0);
+  const speed = page.locator("#speed-limit");
+  const chosen = (await speed.inputValue()) === "10" ? "20" : "10";
+  await speed.selectOption(chosen);
+  await expect(speed).toHaveValue(chosen);
+  // The edit is kept after a debounce; leaving the page flushes it.
+  await page.goto("/map.html");
+  await mapReady(page);
+  const doc = await edits(page);
+  expect(doc.version).toBe(7);
+  expect(Object.values<any>(doc.streets)[0].street.speed_kmh).toBe(Number(chosen));
+  await page.goto("/" + href);
+  await expect(speed).toHaveValue(chosen);
 });
 
 test("the edit is there from another area of the same tile", async ({ page }) => {
