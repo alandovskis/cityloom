@@ -15,7 +15,7 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
 use crate::shared::units::Units;
-use crate::street::model::{Editor, Keep, View, ZoneRefusal};
+use crate::street::model::{Editor, Keep, SPEED_CHOICES, View, ZoneRefusal};
 use crate::street::text;
 use crate::sync::model::{Change, Origin};
 
@@ -24,6 +24,14 @@ impl Presents for Editor {
     fn present(&self) -> View {
         self.view()
     }
+}
+
+/// One choice of the Speed limit control.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SpeedOption {
+    pub kmh: Option<u16>,
+    pub label: String,
+    pub selected: bool,
 }
 
 /// The storage key under which the view chosen for the street's drawing is kept, per browser.
@@ -442,6 +450,30 @@ impl StreetVm {
     /// Names the selected zone (blank clears it). False when nothing changed; a refusal is said.
     pub fn name_zone(&self, name: &str) -> bool {
         !self.refuse_while_dragging() && self.apply(|e| e.name_zone(Some(name)))
+    }
+
+    /// The speed limits the Speed limit control offers: Not set, then the choices, with the street's own value
+    /// among them in order when it is none of them. Worded in the page language, drawing again on a switch.
+    pub fn speed_options(&self) -> Vec<SpeedOption> {
+        let current = self.view().speed_kmh;
+        let mut values: Vec<u16> = SPEED_CHOICES.to_vec();
+        if let Some(n) = current.filter(|n| !values.contains(n)) {
+            values.push(n);
+            values.sort_unstable();
+        }
+        let not_set = SpeedOption { kmh: None, label: self.i18n.tr("st-speed-not-set", &Args::new()), selected: current.is_none() };
+        std::iter::once(not_set)
+            .chain(values.into_iter().map(|n| SpeedOption {
+                kmh: Some(n),
+                label: self.i18n.tr("st-speed-kmh", &Args::new().num("kmh", i64::from(n))),
+                selected: current == Some(n),
+            }))
+            .collect()
+    }
+
+    /// Sets the speed limit (`None`: not set). False when refused or unchanged; the edit is announced by its label.
+    pub fn set_speed(&self, kmh: Option<u16>) -> bool {
+        !self.refuse_while_dragging() && self.apply(|e| e.set_speed(kmh))
     }
 
     pub fn reset_zone(&self) -> bool {
@@ -1271,6 +1303,56 @@ mod tests {
         r.said.take();
         assert!(!r.vm.name_zone("Market"));
         assert!(r.said.take().is_empty());
+    }
+
+    fn speed_rig(speed: crate::street::model::Speed) -> Rig {
+        let mut street = Street::sample(0, Side::Right);
+        street.speed = speed;
+        zoned_rig(street, &[0])
+    }
+
+    #[test]
+    fn the_speed_options_start_with_not_set_and_select_the_current() {
+        let r = speed_rig(crate::street::model::Speed::Kmh(50));
+        let o = r.vm.speed_options();
+        assert_eq!(o.len(), 13);
+        assert_eq!((o[0].kmh, o[0].label.as_str()), (None, "Not set"));
+        assert_eq!(o[5].label, "50 km/h");
+        assert_eq!(o.iter().filter(|x| x.selected).map(|x| x.kmh).collect::<Vec<_>>(), [Some(50)]);
+        let none = speed_rig(crate::street::model::Speed::NotSet);
+        assert_eq!(none.vm.speed_options().iter().filter(|x| x.selected).map(|x| x.kmh).collect::<Vec<_>>(), [None]);
+    }
+
+    #[test]
+    fn the_speed_control_offers_an_imported_value_outside_the_choices() {
+        let r = speed_rig(crate::street::model::Speed::Kmh(25));
+        let o = r.vm.speed_options();
+        assert_eq!(o.len(), 14);
+        let kmh: Vec<_> = o.iter().filter_map(|x| x.kmh).collect();
+        assert_eq!(&kmh[1..4], [20, 25, 30]);
+        assert_eq!(o.iter().filter(|x| x.selected).map(|x| x.kmh).collect::<Vec<_>>(), [Some(25)]);
+    }
+
+    #[test]
+    fn setting_the_speed_announces_it() {
+        let r = speed_rig(crate::street::model::Speed::Kmh(50));
+        r.said.take();
+        assert!(r.vm.set_speed(Some(30)));
+        assert!(r.said.take()[0].starts_with("Speed limit 30 km/h"));
+        assert_eq!(r.vm.view_now().speed_kmh, Some(30));
+        assert!(!r.vm.set_speed(Some(30)));
+    }
+
+    #[test]
+    fn the_speed_is_not_changed_during_a_drag() {
+        let r = speed_rig(crate::street::model::Speed::Kmh(50));
+        r.vm.select_zone(0);
+        r.vm.begin_boundary_drag();
+        r.said.take();
+        assert!(!r.vm.set_speed(Some(30)));
+        assert_eq!(r.vm.view_now().speed_kmh, Some(50));
+        r.vm.end_boundary_drag(false);
+        assert!(r.vm.set_speed(Some(30)));
     }
 
     #[test]

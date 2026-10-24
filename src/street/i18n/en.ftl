@@ -383,3 +383,6 @@ st-zone-keep-cancel = Cancel the merge
 st-zone-name = Zone name
 st-zone-reset = Reset to the street's section
 st-zone-use = Use this section for the whole street
+st-speed-label = Speed limit
+st-speed-not-set = Not set
+st-speed-kmh = { $kmh } km/h

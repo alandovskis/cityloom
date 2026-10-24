@@ -1426,3 +1426,33 @@ fn the_zone_commands_are_worded_in_both_languages() {
     assert!(h.contains(">Diviser à (m)</label>") && h.contains(">Début de cette zone (m)</label>") && h.contains(">Nom de la zone</label>"), "{h}");
     assert!(!h.contains("Zone commands") && !h.contains("Split"), "{h}");
 }
+
+// ---- the speed limit control -------------------------------------------------------
+
+fn speed_html(locale: Locale) -> String {
+    use crate::shared::catalogue::Side;
+    use crate::street::model::{Speed, Street};
+    let mut street = Street::sample(0, Side::Right);
+    street.speed = Speed::Kmh(50);
+    let (ports, _, _) = crate::shared::ports::test_ports();
+    let s = StreetVm::new(ports, crate::i18n_for(locale), Editor::from_street(&street, &street, 0), None);
+    street_html(|| view! { <crate::street::speed_view::SpeedLimit vm=s.clone()/> })
+}
+
+#[test]
+fn the_speed_control_renders_a_labelled_select() {
+    let h = speed_html(Locale::En);
+    assert!(h.contains("<label for=\"speed-limit\"") && h.contains(">Speed limit</label>"), "{h}");
+    assert!(h.contains("<select") && h.contains("id=\"speed-limit\""), "{h}");
+    assert_eq!(count(&h, "<option"), 13, "{h}");
+    assert!(h.contains(">Not set</option>") && h.contains(">50 km/h</option>"), "{h}");
+    assert_eq!(count(&h, "selected"), 1, "{h}");
+    let at = h.find(">50 km/h</option>").unwrap();
+    assert!(h[..at].rsplit("<option").next().unwrap().contains("selected"), "{h}");
+}
+
+#[test]
+fn the_speed_control_is_in_french_too() {
+    let h = speed_html(Locale::FrCa);
+    assert!(h.contains(">Limite de vitesse</label>") && h.contains(">Non indiquée</option>"), "{h}");
+}

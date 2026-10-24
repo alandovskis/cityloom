@@ -1209,6 +1209,21 @@ svg pattern circle {
   color: var(--ink);
   font-size: 13px;
 }
+.speed-limit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 10px;
+}
+.speed-limit label {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.speed-limit select {
+  min-height: 32px;
+  min-width: 0;
+}
 .zone-tools {
   display: flex;
   flex-direction: column;

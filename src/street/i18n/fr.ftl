@@ -383,3 +383,6 @@ st-zone-keep-cancel = Annuler la fusion
 st-zone-name = Nom de la zone
 st-zone-reset = Revenir à la coupe de la rue
 st-zone-use = Utiliser cette coupe pour toute la rue
+st-speed-label = Limite de vitesse
+st-speed-not-set = Non indiquée
+st-speed-kmh = { $kmh } km/h
