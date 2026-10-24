@@ -177,7 +177,10 @@ mod tests {
         let v = with_speed(Side::Right, Some(50));
         assert_eq!(iso_label(&v, &en(), Units::Metres), "Sample Street 1 in 2.5D, along a 40 m stretch. 6 segments. Speed limit 50 km/h.");
         let fr = crate::i18n_for(crate::shared::i18n::Locale::FrCa);
-        assert_eq!(iso_label(&v, &fr, Units::Metres), "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m. 6 éléments. Limite de vitesse\u{a0}: 50 km/h.");
+        assert_eq!(
+            iso_label(&v, &fr, Units::Metres),
+            "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m. 6 éléments. Limite de vitesse\u{a0}: 50\u{a0}km/h."
+        );
         assert!(!iso_label(&with_speed(Side::Right, None), &en(), Units::Metres).contains("Speed"));
     }
 

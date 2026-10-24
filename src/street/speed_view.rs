@@ -47,6 +47,7 @@ pub fn SpeedLimit(vm: Rc<StreetVm>) -> impl IntoView {
     };
     // The browser ignores `selected` on an option once the person has picked one, so after Undo, Redo or Start
     // over the select is told its value. Made after the view so that it runs after the options are rebuilt.
+    #[cfg(target_arch = "wasm32")]
     Effect::new(move |_| {
         let current = w.speed_options().into_iter().find(|o| o.selected).and_then(|o| o.kmh).map(|n| n.to_string());
         if let Some(select) = select_ref.get() {
