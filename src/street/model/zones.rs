@@ -1202,8 +1202,15 @@ mod tests {
     fn lane_added_after(first_zone_mm: i32) -> Editor {
         let mut e = editor(&[0, first_zone_mm]);
         assert!(e.select_zone(1));
-        let end = e.snapshot().segments.len();
-        assert_ne!(e.add(kind_index("travel").unwrap(), end), 0);
+        // beside the last driving lane, so there is a lane of its direction to open from
+        let travel = kind_index("travel").unwrap();
+        let section = e.snapshot().segments;
+        let beside = section.iter().rposition(|s| s.kind == travel).unwrap() + 1;
+        let lane_dir = section[beside - 1].direction;
+        let uid = e.add(travel, beside);
+        assert_ne!(uid, 0);
+        e.set_direction(uid, lane_dir);
+        assert_eq!(e.snapshot().zones[1].segments.as_ref().unwrap()[beside].direction, lane_dir);
         e
     }
 
@@ -1218,7 +1225,7 @@ mod tests {
             .with("b", Arg::Said(Box::new(Said::new("zone-unnamed-mid").with("n", Arg::Num(2)))));
         assert_eq!(room[0].zone, Some(between));
         let detail = say_in(crate::shared::i18n::Locale::En, &room[0].detail);
-        assert!(detail.contains("49.5"), "{detail}");
+        assert!(detail.contains("53.3"), "{detail}");
         assert!(!e.view().zones.zones[0].ok, "the host zone");
     }
 
@@ -1239,15 +1246,34 @@ mod tests {
     }
 
     #[test]
+    fn the_same_layout_gives_the_same_lane_drop_whichever_end_it_is_anchored_at() {
+        // A travel lane beside a sidewalk, in one of two zones: anchored at the first end the other zone has the lane
+        // "dropped", at the last end "added". Both fail, and both name the same lane-drop check.
+        let lane_drop = |lane_in_first: bool| {
+            let today = sample();
+            let mut now = zoned(today.clone(), &[0, 5_000], LEN);
+            let mut own = today.segments.clone();
+            let mut lane = Segment::new(900, kind_index("travel").unwrap(), 3_500);
+            lane.direction = Some(0);
+            own.push(lane);
+            now.zones[usize::from(!lane_in_first)].segments = Some(own);
+            let e = Editor::from_street(&today, &now, 0).with_frame(Some(frame()));
+            check(&e, "lane-drop").iter().map(|c| c.ok).collect::<Vec<_>>()
+        };
+        assert_eq!(lane_drop(true), lane_drop(false));
+        assert_eq!(lane_drop(true), [false]);
+    }
+
+    #[test]
     fn the_french_detail_keeps_its_units_after_a_no_break_space() {
         let e = lane_added_after(20_000);
         let detail = say_in(crate::shared::i18n::Locale::FrCa, &check(&e, "transition-room")[0].detail);
-        assert!(detail.contains("49,5\u{a0}m"), "{detail}");
+        assert!(detail.contains("53,3\u{a0}m"), "{detail}");
     }
 
     #[test]
     fn a_long_enough_zone_passes() {
-        let e = lane_added_after(50_000);
+        let e = lane_added_after(55_000);
         let room = check(&e, "transition-room");
         assert_eq!((room.len(), room[0].ok, room[0].zone.clone()), (1, true, None));
         assert!(e.view().zones.zones[0].ok);

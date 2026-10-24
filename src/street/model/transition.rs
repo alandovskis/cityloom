@@ -31,7 +31,8 @@ pub struct Transition {
     pub host: Host,
     /// Every piece of both sides, in left-to-right order of the host's section, unmatched pieces included.
     pub changes: Vec<Change>,
-    /// False when a dropped travel or bus lane has no lane to merge into.
+    /// False when a travel or bus lane that only one side has has no lane of its direction beside it, on its own
+    /// side, to open from or merge into.
     pub merges: bool,
 }
 
@@ -161,15 +162,21 @@ pub fn transition(near: &[Segment], far: &[Segment], speed_kmh: Option<u16>) -> 
         _ => Host::Far,
     };
 
+    // A travel or bus lane that only one side has must have, beside it in its own section, a lane of the same
+    // direction that the other side has too: it opens from, or closes into, that lane. The same on both sides, so the
+    // answer does not depend on which end the zoning is anchored at.
     let lane = |section: &[Segment], i: usize| taper(section[i].kind) == Taper::Lane;
-    let merges = pairs.iter().all(|&(n, f)| {
-        let Some(i) = n.filter(|_| f.is_none() && lane(near, n.unwrap())) else { return true };
-        let matched = |j: usize| pairs.iter().any(|p| p.0 == Some(j) && p.1.is_some());
+    let beside_matched = |section: &[Segment], i: usize, matched: &dyn Fn(usize) -> bool| {
         [i.checked_sub(1), Some(i + 1)]
             .into_iter()
             .flatten()
-            .filter(|&j| j < near.len())
-            .any(|j| lane(near, j) && near[j].direction == near[i].direction && matched(j))
+            .filter(|&j| j < section.len())
+            .any(|j| lane(section, j) && section[j].direction == section[i].direction && matched(j))
+    };
+    let merges = pairs.iter().all(|&(n, f)| match (n, f) {
+        (Some(i), None) if lane(near, i) => beside_matched(near, i, &|j| pairs.iter().any(|p| p.0 == Some(j) && p.1.is_some())),
+        (None, Some(i)) if lane(far, i) => beside_matched(far, i, &|j| pairs.iter().any(|p| p.1 == Some(j) && p.0.is_some())),
+        _ => true,
     });
 
     Some(Transition { length_mm: length as i32, host, changes, merges })
@@ -433,5 +440,32 @@ mod tests {
         let t = transition(&near, &far, Some(50)).unwrap();
         assert!(t.merges, "no travel lane ends");
         assert_eq!(t.length_mm, 24_200, "the lanes shift by the bike lane's 1.5 m, not the 56.5 m of a dropped lane");
+    }
+
+    #[test]
+    fn lane_drop_does_not_depend_on_which_end_the_zoning_is_anchored_at() {
+        // Anchoring at the other end swaps near and far; the same design must pass or fail either way.
+        let beside_parking_dropped =
+            (vec![seg(1, "parking", 2500), dir(seg(2, "travel", 3500), 0), seg(3, "sidewalk", 2000)], vec![seg(1, "parking", 2500), seg(3, "sidewalk", 2000)]);
+        let merging = (
+            vec![dir(seg(1, "travel", 3500), 0), dir(seg(2, "travel", 3500), 0), seg(3, "sidewalk", 2000)],
+            vec![dir(seg(1, "travel", 3500), 0), seg(3, "sidewalk", 2000)],
+        );
+        let (a, b) = (base(), with_extra());
+        for (name, (x, y), merges) in
+            [("beside parking", beside_parking_dropped, false), ("merging", merging, true), ("added beside a sidewalk", (a, b), false)]
+        {
+            let (first, last) = (transition(&x, &y, Some(50)).unwrap().merges, transition(&y, &x, Some(50)).unwrap().merges);
+            assert_eq!((first, last), (merges, merges), "{name}");
+        }
+    }
+
+    #[test]
+    fn an_added_lane_needs_a_matched_lane_of_its_direction_beside_it() {
+        let near = vec![dir(seg(1, "travel", 3500), 0), seg(3, "sidewalk", 2000)];
+        let beside = vec![dir(seg(1, "travel", 3500), 0), dir(seg(2, "travel", 3500), 0), seg(3, "sidewalk", 2000)];
+        let opposite = vec![dir(seg(1, "travel", 3500), 0), dir(seg(2, "travel", 3500), 1), seg(3, "sidewalk", 2000)];
+        assert!(transition(&near, &beside, Some(50)).unwrap().merges);
+        assert!(!transition(&near, &opposite, Some(50)).unwrap().merges, "a lane that opens beside traffic of the other direction");
     }
 }
