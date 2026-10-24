@@ -96,32 +96,25 @@ fn stretch(shape: &[[i32; 2]], from_mm: f64, to_mm: f64) -> Vec<[f64; 2]> {
     points
 }
 
-/// What marks each of a street's zone boundaries, as GeoJSON. A boundary with a transition (`zone_bands_mm`) is a
-/// band: a line along the centreline over the transition, `band: true` (a band that touches two boundaries is the
-/// first one's and the second has none). Any other boundary is a short bar across the street, centred on the
-/// centreline, along the normal, `TICK_OVERHANG_MM` past each edge. Each says its street (`s-<uid>`) and which
-/// boundary it is (`n`, from 1).
+/// What marks each of a street's zone boundaries, as GeoJSON. A boundary with a transition (its number in
+/// `zone_bands_mm`) is a band: a line along the centreline over the transition, `band: true`. Any other boundary is a
+/// short bar across the street, centred on the centreline, along the normal, `TICK_OVERHANG_MM` past each edge. Each
+/// says its street (`s-<uid>`) and which boundary it is (`n`, from 1).
 pub fn zone_ticks(v: &CityView, p: &Projection) -> String {
     let mut features: Vec<Value> = Vec::new();
     for e in &v.edges {
         let half = e.row_mm as f64 / 2.0 + TICK_OVERHANG_MM as f64;
-        let touches = |band: &(i32, i32), d: i32| band.0 == d || band.1 == d;
-        let mut drawn: Vec<(i32, i32)> = Vec::new();
+        let street = format!("s-{}", e.uid);
         for (i, &d) in e.zone_breaks_mm.iter().enumerate() {
-            let street = format!("s-{}", e.uid);
-            if let Some(band) = e.zone_bands_mm.iter().find(|b| touches(b, d)) {
-                let line = stretch(&e.shape_mm, band.0 as f64, band.1 as f64);
-                if !drawn.contains(band) && line.len() >= 2 {
-                    drawn.push(*band);
+            if let Some(&(_, from, to)) = e.zone_bands_mm.iter().find(|b| b.0 == i + 1) {
+                let line = stretch(&e.shape_mm, from as f64, to as f64);
+                if line.len() >= 2 {
                     let coordinates: Vec<[f64; 2]> = line.iter().map(|q| position(p, q[0].round() as i32, q[1].round() as i32)).collect();
                     features.push(json!({
                         "type": "Feature",
                         "properties": { "street": street, "n": i + 1, "band": true },
                         "geometry": { "type": "LineString", "coordinates": coordinates },
                     }));
-                    continue;
-                }
-                if drawn.contains(band) {
                     continue;
                 }
             }
@@ -461,7 +454,7 @@ mod tests {
         let shape = v.edges[0].shape_mm.clone();
         assert_eq!(shape.len(), 3);
         v.edges[0].zone_breaks_mm = vec![90_000];
-        v.edges[0].zone_bands_mm = vec![(70_000, 90_000)];
+        v.edges[0].zone_bands_mm = vec![(1, 70_000, 90_000)];
         let fc = parse(&zone_ticks(&v, &p));
         let features = fc["features"].as_array().unwrap();
         assert_eq!(features.len(), 1, "the band replaces the tick");
@@ -488,13 +481,26 @@ mod tests {
         let mut v = City::from_network(&bent_road(), "Bendville").view(0);
         let p = projection(&v);
         v.edges[0].zone_breaks_mm = vec![20_000, 60_000];
-        v.edges[0].zone_bands_mm = vec![(40_000, 60_000)];
+        v.edges[0].zone_bands_mm = vec![(2, 40_000, 60_000)];
         let fc = parse(&zone_ticks(&v, &p));
         let features = fc["features"].as_array().unwrap();
         assert_eq!(features.len(), 2);
         assert!(features[0]["properties"].get("band").is_none());
         assert_eq!(features[0]["properties"]["n"], 1);
         assert_eq!(features[0]["geometry"]["coordinates"].as_array().unwrap().len(), 2);
+        assert_eq!((features[1]["properties"]["n"].clone(), features[1]["properties"]["band"].clone()), (2.into(), true.into()));
+    }
+
+    #[test]
+    fn a_clipped_band_does_not_take_the_previous_boundary() {
+        let mut v = City::from_network(&bent_road(), "Bendville").view(0);
+        let p = projection(&v);
+        v.edges[0].zone_breaks_mm = vec![40_000, 60_000];
+        v.edges[0].zone_bands_mm = vec![(2, 40_000, 60_000)];
+        let fc = parse(&zone_ticks(&v, &p));
+        let features = fc["features"].as_array().unwrap();
+        assert_eq!(features.len(), 2);
+        assert_eq!((features[0]["properties"]["n"].clone(), features[0]["properties"].get("band").is_none()), (1.into(), true));
         assert_eq!((features[1]["properties"]["n"].clone(), features[1]["properties"]["band"].clone()), (2.into(), true.into()));
     }
 
