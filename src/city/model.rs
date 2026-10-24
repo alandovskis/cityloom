@@ -21,7 +21,7 @@ use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
-use crate::street::model::{Editor, Speed, Street, ZoneEnd, ZoneFrame, named_said, unnamed_said};
+use crate::street::model::{Editor, Host, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said};
 
 pub(super) struct NodeDef {
     pub(super) x_mm: i32,
@@ -949,6 +949,7 @@ impl City {
                 failing,
                 zones: now.zones.len().max(1),
                 zone_breaks_mm: zone_breaks(now, self.layout.zone_frame(i)),
+                zone_bands_mm: zone_bands(now, self.layout.zone_frame(i)),
             });
         }
         for (i, def) in self.layout.nodes.iter().enumerate() {
@@ -1057,6 +1058,10 @@ pub struct EdgeView {
     /// Where its zone boundaries lie, in millimetres from node `a` along `shape_mm`, ascending: only those that sit
     /// on this road as they were drawn (see `zone_breaks`).
     pub zone_breaks_mm: Vec<i32>,
+    /// Where the transitions lie, as `(start, end)` in millimetres from node `a` along `shape_mm`, start before end: a
+    /// band per boundary that has one, on its host side of the boundary and within the host zone (see `zone_bands`).
+    /// Empty wherever `zone_breaks_mm` is.
+    pub zone_bands_mm: Vec<(i32, i32)>,
 }
 
 /// The distances from the street's first node (`a`) of its zone boundaries that can be drawn. A boundary is drawn
@@ -1073,6 +1078,31 @@ fn zone_breaks(street: &Street, frame: Option<ZoneFrame>) -> Vec<i32> {
         .collect();
     breaks.sort_unstable();
     breaks
+}
+
+/// The bands of the transitions at the street's zone boundaries, from node `a` (see `EdgeView::zone_bands_mm`): the
+/// transition of each boundary drawn in `zone_breaks`, as long as `street::model::transition` says, on its host
+/// zone's side of the boundary and cut at the host zone's other end (or the road's end). Ordered by boundary.
+fn zone_bands(street: &Street, frame: Option<ZoneFrame>) -> Vec<(i32, i32)> {
+    let Some(frame) = frame.filter(|f| f.from_end == street.from_end) else { return Vec::new() };
+    let sections = street.sections();
+    let speed = street.speed.kmh();
+    let mut bands: Vec<(i32, i32)> = Vec::new();
+    for (b, pair) in sections.windows(2).enumerate() {
+        let at = street.zones[b + 1].from_mm;
+        if at >= frame.length_mm {
+            break;
+        }
+        let Some(t) = transition(pair[0], pair[1], speed) else { continue };
+        // measured from the anchored end, then turned round when that is the last one
+        let (from, to) = match t.host {
+            Host::Near => ((at - t.length_mm).max(street.zones[b].from_mm), at),
+            Host::Far => (at, (at + t.length_mm).min(street.zones.get(b + 2).map_or(frame.length_mm, |z| z.from_mm).min(frame.length_mm))),
+        };
+        bands.push(if frame.from_end == ZoneEnd::First { (from, to) } else { (frame.length_mm - to, frame.length_mm - from) });
+    }
+    bands.sort_unstable();
+    bands
 }
 
 impl EdgeView {
@@ -2024,6 +2054,56 @@ mod tests {
         assert!(city.keep_street(2, beyond));
         let edge = &city.view(0).edges[1];
         assert_eq!((edge.zones, edge.zone_breaks_mm.clone()), (3, vec![frame.length_mm / 10 * 5]));
+    }
+
+    /// A street of `len` mm with zones at 0 and `at`, the second with one travel lane more (a taper of 52 500 mm at the
+    /// default 50 km/h, on the first zone's side), anchored at `end`.
+    fn lane_added(len: i32, at: i32, end: ZoneEnd) -> Street {
+        let mut s = crate::street::model::zoned(Street::sample(0, Side::Right), &[0, at], len);
+        let mut own = s.segments.clone();
+        let mut lane = crate::street::model::Segment::new(900, crate::shared::catalogue::kind_index("travel").unwrap(), 3_500);
+        lane.direction = Some(0);
+        own.push(lane);
+        s.zones[1].segments = Some(own);
+        s.from_end = end;
+        s
+    }
+
+    fn frame(len: i32, end: ZoneEnd) -> Option<ZoneFrame> {
+        Some(ZoneFrame { length_mm: len, from_end: end })
+    }
+
+    #[test]
+    fn a_transition_gives_a_band_on_its_host_side() {
+        let s = lane_added(200_000, 100_000, ZoneEnd::First);
+        assert_eq!(zone_bands(&s, frame(200_000, ZoneEnd::First)), vec![(100_000 - 52_500, 100_000)]);
+    }
+
+    #[test]
+    fn a_band_is_measured_from_node_a_when_zones_run_from_last() {
+        let s = lane_added(200_000, 80_000, ZoneEnd::Last);
+        // the host zone is the one at the anchored (last) end: its band lies 80 000 - 52 500 .. 80 000 from it
+        assert_eq!(zone_bands(&s, frame(200_000, ZoneEnd::Last)), vec![(120_000, 120_000 + 52_500)]);
+        assert_eq!(zone_breaks(&s, frame(200_000, ZoneEnd::Last)), vec![120_000]);
+    }
+
+    #[test]
+    fn no_band_where_the_frame_does_not_match() {
+        let s = lane_added(200_000, 100_000, ZoneEnd::First);
+        assert!(zone_bands(&s, frame(200_000, ZoneEnd::Last)).is_empty());
+        assert!(zone_bands(&s, None).is_empty());
+    }
+
+    #[test]
+    fn a_band_is_clipped_to_its_zone() {
+        let s = lane_added(200_000, 30_000, ZoneEnd::First);
+        assert_eq!(zone_bands(&s, frame(200_000, ZoneEnd::First)), vec![(0, 30_000)]);
+    }
+
+    #[test]
+    fn a_street_without_a_transition_has_no_band() {
+        let s = crate::street::model::zoned(Street::sample(0, Side::Right), &[0, 100_000], 200_000);
+        assert!(zone_bands(&s, frame(200_000, ZoneEnd::First)).is_empty());
     }
 
     #[test]

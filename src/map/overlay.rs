@@ -72,18 +72,64 @@ fn point_at(shape: &[[i32; 2]], d_mm: f64) -> Option<([f64; 2], [f64; 2])> {
     None
 }
 
-/// A short bar across each street at each of its zone boundaries, as GeoJSON: centred on the centreline, along the
-/// normal, `TICK_OVERHANG_MM` past each edge. Each says its street (`s-<uid>`) and which boundary it is (`n`, from 1).
+/// The part of a polyline between `from_mm` and `to_mm` along it, in layout millimetres: the point at each end and the
+/// polyline's own vertices between. Empty when it has no length or the span is empty.
+fn stretch(shape: &[[i32; 2]], from_mm: f64, to_mm: f64) -> Vec<[f64; 2]> {
+    let mut points: Vec<[f64; 2]> = Vec::new();
+    let mut start = 0.0;
+    for w in shape.windows(2) {
+        let (dx, dy) = ((w[1][0] - w[0][0]) as f64, (w[1][1] - w[0][1]) as f64);
+        let len = dx.hypot(dy);
+        let end = start + len;
+        if len > 0.0 && end > from_mm && start < to_mm {
+            let at = |d: f64| {
+                let k = (d - start) / len;
+                [w[0][0] as f64 + dx * k, w[0][1] as f64 + dy * k]
+            };
+            if points.is_empty() {
+                points.push(at(from_mm.max(start)));
+            }
+            points.push(at(to_mm.min(end)));
+        }
+        start = end;
+    }
+    points
+}
+
+/// What marks each of a street's zone boundaries, as GeoJSON. A boundary with a transition (`zone_bands_mm`) is a
+/// band: a line along the centreline over the transition, `band: true` (a band that touches two boundaries is the
+/// first one's and the second has none). Any other boundary is a short bar across the street, centred on the
+/// centreline, along the normal, `TICK_OVERHANG_MM` past each edge. Each says its street (`s-<uid>`) and which
+/// boundary it is (`n`, from 1).
 pub fn zone_ticks(v: &CityView, p: &Projection) -> String {
     let mut features: Vec<Value> = Vec::new();
     for e in &v.edges {
         let half = e.row_mm as f64 / 2.0 + TICK_OVERHANG_MM as f64;
+        let touches = |band: &(i32, i32), d: i32| band.0 == d || band.1 == d;
+        let mut drawn: Vec<(i32, i32)> = Vec::new();
         for (i, &d) in e.zone_breaks_mm.iter().enumerate() {
+            let street = format!("s-{}", e.uid);
+            if let Some(band) = e.zone_bands_mm.iter().find(|b| touches(b, d)) {
+                let line = stretch(&e.shape_mm, band.0 as f64, band.1 as f64);
+                if !drawn.contains(band) && line.len() >= 2 {
+                    drawn.push(*band);
+                    let coordinates: Vec<[f64; 2]> = line.iter().map(|q| position(p, q[0].round() as i32, q[1].round() as i32)).collect();
+                    features.push(json!({
+                        "type": "Feature",
+                        "properties": { "street": street, "n": i + 1, "band": true },
+                        "geometry": { "type": "LineString", "coordinates": coordinates },
+                    }));
+                    continue;
+                }
+                if drawn.contains(band) {
+                    continue;
+                }
+            }
             let Some(([x, y], [tx, ty])) = point_at(&e.shape_mm, d as f64) else { continue };
             let end = |side: f64| position(p, (x - ty * half * side).round() as i32, (y + tx * half * side).round() as i32);
             features.push(json!({
                 "type": "Feature",
-                "properties": { "street": format!("s-{}", e.uid), "n": i + 1 },
+                "properties": { "street": street, "n": i + 1 },
                 "geometry": { "type": "LineString", "coordinates": [end(1.0), end(-1.0)] },
             }));
         }
@@ -406,6 +452,50 @@ mod tests {
         let [x0, y0] = v.edges[0].shape_mm[0];
         let mid = position(&p, x0 + 30_000, y0);
         assert!((c(0, 0) - mid[0]).abs() < 2e-6 && ((c(0, 1) + c(1, 1)) / 2.0 - mid[1]).abs() < 2e-6);
+    }
+
+    #[test]
+    fn a_band_runs_along_the_street_instead_of_across() {
+        let mut v = City::from_network(&bent_road(), "Bendville").view(0);
+        let p = projection(&v);
+        let shape = v.edges[0].shape_mm.clone();
+        assert_eq!(shape.len(), 3);
+        v.edges[0].zone_breaks_mm = vec![90_000];
+        v.edges[0].zone_bands_mm = vec![(70_000, 90_000)];
+        let fc = parse(&zone_ticks(&v, &p));
+        let features = fc["features"].as_array().unwrap();
+        assert_eq!(features.len(), 1, "the band replaces the tick");
+        let f = &features[0];
+        assert_eq!(f["geometry"]["type"], "LineString");
+        assert_eq!(f["properties"]["band"], true);
+        assert_eq!(f["properties"]["n"], 1);
+        assert_eq!(f["properties"]["street"], format!("s-{}", v.edges[0].uid));
+        let line = f["geometry"]["coordinates"].as_array().unwrap();
+        let at = |x: i32, y: i32| position(&p, x, y);
+        let (x0, y0) = (shape[0][0], shape[0][1]);
+        assert_eq!(line.len(), 3, "its two ends and the bend between");
+        assert_eq!(line[0], serde_json::json!(at(x0 + 70_000, y0)));
+        assert_eq!(line[1], serde_json::json!(at(shape[1][0], shape[1][1])));
+        let (dx, dy) = ((shape[2][0] - shape[1][0]) as f64, (shape[2][1] - shape[1][1]) as f64);
+        let k = 10_000.0 / dx.hypot(dy);
+        let end = at((shape[1][0] as f64 + dx * k).round() as i32, (shape[1][1] as f64 + dy * k).round() as i32);
+        let got = &line[2];
+        assert!((got[0].as_f64().unwrap() - end[0]).abs() < 2e-6 && (got[1].as_f64().unwrap() - end[1]).abs() < 2e-6);
+    }
+
+    #[test]
+    fn a_boundary_without_a_transition_keeps_its_tick() {
+        let mut v = City::from_network(&bent_road(), "Bendville").view(0);
+        let p = projection(&v);
+        v.edges[0].zone_breaks_mm = vec![20_000, 60_000];
+        v.edges[0].zone_bands_mm = vec![(40_000, 60_000)];
+        let fc = parse(&zone_ticks(&v, &p));
+        let features = fc["features"].as_array().unwrap();
+        assert_eq!(features.len(), 2);
+        assert!(features[0]["properties"].get("band").is_none());
+        assert_eq!(features[0]["properties"]["n"], 1);
+        assert_eq!(features[0]["geometry"]["coordinates"].as_array().unwrap().len(), 2);
+        assert_eq!((features[1]["properties"]["n"].clone(), features[1]["properties"]["band"].clone()), (2.into(), true.into()));
     }
 
     #[test]
