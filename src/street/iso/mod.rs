@@ -1249,6 +1249,24 @@ mod tests {
     }
 
     #[test]
+    fn a_joint_anchored_at_the_last_end_tapers_toward_the_other_run() {
+        for selected in [0, 1] {
+            let v = joined_from_last(true, selected);
+            assert!(v.zones.joint.as_ref().unwrap().taper.is_some(), "selected {selected}");
+            let m = iso_svg(&v, &en(), 1050.0).markup;
+            assert_eq!(count(&m, "<g class=\"iso-piece iso-taper\">"), 1, "selected {selected}");
+            let top = &polygons(group_of(&m, "<g class=\"iso-piece iso-taper\">"))[0];
+            // the seam is where the two runs meet, 20 m along the stretch; the lane opens from a point at the other end
+            let seam_y = Projection::fit(1050.0, span_mm(&v)).at(0.0, 0.0, 20_000.0).1;
+            let (near_seam, away): (Vec<_>, Vec<_>) = [(top[0], top[1]), (top[3], top[2])].into_iter().partition(|(a, _)| (a.1 - seam_y).abs() < 1.0);
+            assert_eq!((near_seam.len(), away.len()), (1, 1), "selected {selected}");
+            let width = |(a, b): &((f64, f64), (f64, f64))| (b.0 - a.0).abs();
+            assert!(width(&near_seam[0]) > 5.0, "selected {selected}: the full lane at the seam");
+            assert!(width(&away[0]) < 0.01, "selected {selected}: no width at the end away from the seam");
+        }
+    }
+
+    #[test]
     fn the_lines_follow_the_taper() {
         let v = joined(true, 1);
         let tapered = iso_svg(&v, &en(), 1050.0).markup;

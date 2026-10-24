@@ -1363,6 +1363,7 @@ impl Editor {
 
     /// The street's checks: a check passes only when it passes in every zone. Where it does not, its detail and the
     /// zone it names are the first failing zone's; else they are the selected zone's.
+    /// With two zones or more and a transition at some boundary, the boundary checks follow them (`transition_checks`).
     fn street_checks(&self) -> Vec<Check> {
         let content = &self.states[self.cursor].content;
         let mut street = self.section_checks(self.current());

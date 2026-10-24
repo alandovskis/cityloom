@@ -29,7 +29,8 @@ pub struct Change {
 pub struct Transition {
     pub length_mm: i32,
     pub host: Host,
-    /// Every piece of both sides, in left-to-right order of the host's section, unmatched pieces included.
+    /// Every piece of both sides, in left-to-right order of the near section (`before`), a piece only the far section
+    /// has among the matched pieces where the far section has it; unmatched pieces included.
     pub changes: Vec<Change>,
     /// False when a travel or bus lane that only one side has has no lane of its direction beside it, on its own
     /// side, to open from or merge into.
@@ -305,22 +306,14 @@ mod tests {
         assert_eq!(l(55), 63_000);
     }
 
-    fn shifted(by: i32) -> Vec<Segment> {
-        let mut v = base();
-        v[0].width_mm += by;
-        v[1].width_mm -= by;
-        v
-    }
-
     #[test]
     fn a_lane_shift_below_70_uses_ws2_over_155() {
-        // sidewalk grows 1 000, first lane's edges: x0 moves 0, x1 moves 0 ... build a pure shift instead
+        // the sidewalk grows 1 m, so the lane shifts 1 m
         let near = vec![seg(1, "sidewalk", 2000), dir(seg(2, "travel", 3500), 0), seg(3, "sidewalk", 2000)];
         let far = vec![seg(1, "sidewalk", 3000), dir(seg(2, "travel", 3500), 0), seg(3, "sidewalk", 1000)];
         let t = transition(&near, &far, Some(50)).unwrap();
         assert_eq!(t.length_mm, 16_200);
         assert_eq!(t.host, Host::Far);
-        let _ = shifted(0);
     }
 
     #[test]
@@ -357,13 +350,13 @@ mod tests {
 
     #[test]
     fn sidewalks_and_medians_do_not_taper() {
-        let near = vec![seg(1, "sidewalk", 2000), dir(seg(2, "travel", 3500), 0)];
-        let far = vec![seg(1, "sidewalk", 2500), dir(seg(2, "travel", 3500), 0)];
-        // the lane shifts with the sidewalk, so make only the outer edge change
-        let near2 = vec![dir(seg(2, "travel", 3500), 0), seg(1, "sidewalk", 2000)];
-        let far2 = vec![dir(seg(2, "travel", 3500), 0), seg(1, "sidewalk", 2500)];
-        assert_eq!(transition(&near2, &far2, Some(50)), None);
-        let _ = (near, far);
+        // only the outer edge moves, so the lane does not shift
+        let near = vec![dir(seg(2, "travel", 3500), 0), seg(1, "sidewalk", 2000)];
+        let far = vec![dir(seg(2, "travel", 3500), 0), seg(1, "sidewalk", 2500)];
+        assert_eq!(transition(&near, &far, Some(50)), None);
+        let near = vec![dir(seg(2, "travel", 3500), 0), seg(1, "median", 2000)];
+        let far = vec![dir(seg(2, "travel", 3500), 0), seg(1, "median", 2500)];
+        assert_eq!(transition(&near, &far, Some(50)), None);
     }
 
     #[test]
@@ -381,7 +374,6 @@ mod tests {
                 s
             })
             .collect();
-        far[3].width_mm = 2000;
         far[2].width_mm = 4000;
         far[3].width_mm = 1500;
         let m = match_pieces(&near, &far);
@@ -404,13 +396,15 @@ mod tests {
 
     #[test]
     fn the_longest_piece_sets_the_length() {
-        let near = vec![seg(1, "sidewalk", 2000), dir(seg(2, "bike", 1500), 0), seg(3, "sidewalk", 1000)];
-        let far = vec![seg(1, "sidewalk", 2000), dir(seg(2, "bike", 1500), 0), dir(seg(9, "travel", 3500), 0), seg(3, "sidewalk", 1000)];
-        // bike unmoved; added lane 52 500
-        assert_eq!(transition(&near, &far, Some(50)).unwrap().length_mm, 52_500);
-        let far2 = vec![seg(1, "sidewalk", 2500), dir(seg(2, "bike", 1500), 0), dir(seg(9, "travel", 3500), 0), seg(3, "sidewalk", 1000)];
-        // bike moved 500 -> 2 500; lane added 52 500 still larger
-        assert_eq!(transition(&near, &far2, Some(50)).unwrap().length_mm, 52_500);
+        let buffer = |w| seg(1, "buffer", w);
+        // The buffer widens 1.5 m and pushes the bike lane (1:5, 7 500) but not the driving lane before it.
+        let near = vec![dir(seg(2, "travel", 3500), 0), buffer(500), seg(3, "bike", 1500), seg(4, "sidewalk", 2000)];
+        let far = vec![dir(seg(2, "travel", 3500), 0), buffer(2000), seg(3, "bike", 1500), seg(4, "sidewalk", 500)];
+        assert_eq!(transition(&near, &far, Some(50)).unwrap().length_mm, 7_500);
+        // Put the driving lane behind the buffer too: it shifts 1.5 m (24 200) and the longer rule sets the length.
+        let near = vec![buffer(500), dir(seg(2, "travel", 3500), 0), seg(3, "bike", 1500), seg(4, "sidewalk", 2000)];
+        let far = vec![buffer(2000), dir(seg(2, "travel", 3500), 0), seg(3, "bike", 1500), seg(4, "sidewalk", 500)];
+        assert_eq!(transition(&near, &far, Some(50)).unwrap().length_mm, 24_200);
     }
 
     /// Near `[sidewalk, bike, travel, travel, sidewalk]`, far with the bike lane moved across both travel lanes.
