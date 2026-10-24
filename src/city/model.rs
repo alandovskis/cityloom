@@ -2082,6 +2082,31 @@ mod tests {
     }
 
     #[test]
+    fn the_page_and_the_map_agree_on_a_transition_whatever_the_clock_shows() {
+        // zone 1's parking lane has a bus window the second zone's does not, and the second zone has a lane more
+        let mut s = lane_added(200_000, 50_000, ZoneEnd::First);
+        let parking = crate::shared::catalogue::kind_index("parking").unwrap();
+        let uid = s.segments.iter().find(|p| p.kind == parking).unwrap().uid;
+        s.segments.iter_mut().find(|p| p.uid == uid).unwrap().variants.push(crate::street::model::Variant {
+            kind: crate::shared::catalogue::kind_index("bus").unwrap(),
+            material: 0,
+            direction: Some(0),
+            from_min: 7 * 60,
+            to_min: 10 * 60,
+            days: None,
+        });
+        let bands = zone_bands(&s, frame(200_000, ZoneEnd::First));
+        assert_eq!(bands, vec![(1, 0, 50_000)]);
+        for time in [3 * 60, 8 * 60] {
+            let mut e = Editor::from_street(&s, &s, 0).with_frame(frame(200_000, ZoneEnd::First));
+            e.set_time(time);
+            let taper = e.view().zones.joint.expect("the boundary is near").taper.expect("the page draws the taper");
+            assert_eq!(taper.length_mm, 52_500, "at {time}");
+            assert!(taper.changes.iter().all(|c| c.kind != crate::shared::catalogue::kind_index("bus").unwrap()), "own kinds at {time}");
+        }
+    }
+
+    #[test]
     fn a_band_is_measured_from_node_a_when_zones_run_from_last() {
         let s = lane_added(200_000, 80_000, ZoneEnd::Last);
         // the host zone is the one at the anchored (last) end: its band lies 80 000 - 52 500 .. 80 000 from it

@@ -68,7 +68,7 @@ impl Draw {
     /// The shape of a piece of the host's run, when it tapers.
     pub fn shape_of(&self, s: &SegView) -> Option<Shape> {
         let range = (s.x_mm, s.x_mm + s.width_mm);
-        self.entries.iter().find(|e| e.host == Some(range) && e.kind == s.kind).map(|e| e.shape)
+        self.entries.iter().find(|e| e.host == Some(range) && e.kind == s.base_kind).map(|e| e.shape)
     }
 
     /// The pieces the host does not have, which open in its run: their kind and shape.
@@ -145,7 +145,7 @@ mod tests {
         ]);
         let d = Draw::new(&t, false);
         let mut s = crate::street::model::Editor::new(0).view().segments.into_iter().next().unwrap();
-        (s.kind, s.x_mm, s.width_mm) = (kind_index("bike").unwrap(), 3500, 1500);
+        (s.kind, s.base_kind, s.x_mm, s.width_mm) = (kind_index("bike").unwrap(), kind_index("bike").unwrap(), 3500, 1500);
         let shape = d.shape_of(&s).expect("the host's bike lane tapers");
         assert_eq!(shape, Shape { away: (3500.0, 5000.0), seam: (3500.0, 3500.0) });
         // Seam at the near end: full at the far end, a point at the near end.
@@ -155,5 +155,15 @@ mod tests {
         assert_eq!(d.line_at(5000, REACH, 0.0), 3500.0);
         assert_eq!(d.line_at(5000, REACH, 20_000.0), 5000.0);
         assert_eq!(d.line_at(1234, REACH, 0.0), 1234.0);
+    }
+
+    #[test]
+    fn a_piece_is_found_by_its_own_kind_whatever_the_clock_shows() {
+        let t = taper(vec![change("parking", Some((0, 2400)), Some((0, 3000))), change("travel", Some((2400, 5700)), Some((3000, 6300)))]);
+        let d = Draw::new(&t, true);
+        let mut s = crate::street::model::Editor::new(0).view().segments.into_iter().next().unwrap();
+        // a parking lane shown as a bus lane in its morning window
+        (s.kind, s.base_kind, s.x_mm, s.width_mm) = (kind_index("bus").unwrap(), kind_index("parking").unwrap(), 0, 2400);
+        assert!(d.shape_of(&s).is_some(), "the taper follows the own kind, not the shown one");
     }
 }

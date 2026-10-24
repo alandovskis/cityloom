@@ -339,8 +339,8 @@ impl Editor {
             return Vec::new();
         }
         let speed = content.speed.kmh();
-        let now = |z: usize| -> Vec<Segment> { content.section(z).iter().map(|s| s.at(self.time_min)).collect() };
-        (0..content.zones.len() - 1).filter_map(|b| transition(&now(b), &now(b + 1), speed).map(|t| (b, t))).collect()
+        // The pieces' own kinds, never a time-of-day variant's: a transition does not change with the clock.
+        (0..content.zones.len() - 1).filter_map(|b| transition(content.section(b), content.section(b + 1), speed).map(|t| (b, t))).collect()
     }
 
     /// The transitions that fail a check: `(boundary, host zone, which)`.
@@ -1220,6 +1220,22 @@ mod tests {
         let detail = say_in(crate::shared::i18n::Locale::En, &room[0].detail);
         assert!(detail.contains("49.5"), "{detail}");
         assert!(!e.view().zones.zones[0].ok, "the host zone");
+    }
+
+    #[test]
+    fn a_transition_does_not_change_with_the_clock() {
+        let mut e = editor(&[0, 30_000]);
+        assert!(e.select_zone(1));
+        let parking = kind_index("parking").unwrap();
+        let uid = e.snapshot().segments.iter().find(|s| s.kind == parking).unwrap().uid;
+        assert!(e.add_variant(uid), "a bus window on zone 2's parking lane");
+        e.set_time(3 * 60);
+        let night = (e.transitions(), check(&e, "lane-drop").len());
+        e.set_time(8 * 60);
+        let rush = (e.transitions(), check(&e, "lane-drop").len());
+        assert!(!night.0.is_empty(), "the window widened the lane, so the boundary has a taper");
+        assert!(night.0[0].1.changes.iter().all(|c| c.kind != kind_index("bus").unwrap()), "own kinds, never the window's");
+        assert_eq!(night, rush);
     }
 
     #[test]
