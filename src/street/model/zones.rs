@@ -3,7 +3,17 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::transition::{Host, Transition, transition};
 use super::{Arg, Editor, Said, Segment, Street, flip, named_said, snap};
+
+/// Why a transition fails its check.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Failing {
+    /// The host zone is shorter than the taper.
+    Room { need_mm: i32, room_mm: i32 },
+    /// A lane ends with no lane beside it to merge into.
+    LaneDrop,
+}
 
 /// The shortest a zone may be, in millimetres.
 pub const MIN_ZONE_MM: i32 = 5_000;
@@ -278,9 +288,10 @@ impl Editor {
         let content = &self.states[self.cursor].content;
         let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
         let from_end = if content.zones.is_empty() { self.frame.map_or(ZoneEnd::First, |f| f.from_end) } else { content.from_end };
+        let failing = self.failing_transitions();
         let one = |z: usize| {
             let (from_mm, to_mm) = content.span(z, length_mm);
-            let ok = self.section_passes(content.section(z));
+            let ok = self.section_passes(content.section(z)) && !failing.iter().any(|(_, host, _)| *host == z);
             match content.zones.get(z) {
                 Some(g) => ZoneView {
                     index: z,
@@ -318,6 +329,36 @@ impl Editor {
             elsewhere: self.elsewhere(),
             joint: self.joint(),
         }
+    }
+
+    /// One entry per boundary `b` (between zones `b` and `b + 1`, in anchored order) whose two sections differ enough
+    /// to need a taper. None with fewer than two zones or when the zoning was drawn against another length.
+    pub(super) fn transitions(&self) -> Vec<(usize, Transition)> {
+        let content = &self.states[self.cursor].content;
+        if content.zones.len() < 2 || self.elsewhere().is_some() {
+            return Vec::new();
+        }
+        let speed = content.speed.kmh();
+        let now = |z: usize| -> Vec<Segment> { content.section(z).iter().map(|s| s.at(self.time_min)).collect() };
+        (0..content.zones.len() - 1).filter_map(|b| transition(&now(b), &now(b + 1), speed).map(|t| (b, t))).collect()
+    }
+
+    /// The transitions that fail a check: `(boundary, host zone, which)`.
+    pub(super) fn failing_transitions(&self) -> Vec<(usize, usize, Failing)> {
+        let content = &self.states[self.cursor].content;
+        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        let mut out = Vec::new();
+        for (b, t) in self.transitions() {
+            let host = if t.host == Host::Near { b } else { b + 1 };
+            let (from, to) = content.span(host, length_mm);
+            if to - from < t.length_mm {
+                out.push((b, host, Failing::Room { need_mm: t.length_mm, room_mm: to - from }));
+            }
+            if !t.merges {
+                out.push((b, host, Failing::LaneDrop));
+            }
+        }
+        out
     }
 
     /// The label of zone `z` of the current content, numbered from 1, as it reads in the middle of a sentence.
@@ -1147,5 +1188,90 @@ mod tests {
         assert!(e.undo());
         let undone = e.snapshot();
         assert_eq!((undone.segments, undone.zones), (before.segments, before.zones), "one undo puts every section back");
+    }
+
+    fn check(e: &Editor, id: &str) -> Vec<super::super::Check> {
+        e.view().checks.into_iter().filter(|c| c.id == id).collect()
+    }
+
+    fn say_in(locale: crate::shared::i18n::Locale, said: &Said) -> String {
+        crate::street::text::say_now(&crate::i18n_for(locale), crate::shared::units::Units::Metres, said)
+    }
+
+    /// Two zones split at `first_zone_mm`, the far one given a travel lane at the street's edge.
+    fn lane_added_after(first_zone_mm: i32) -> Editor {
+        let mut e = editor(&[0, first_zone_mm]);
+        assert!(e.select_zone(1));
+        let end = e.snapshot().segments.len();
+        assert_ne!(e.add(kind_index("travel").unwrap(), end), 0);
+        e
+    }
+
+    #[test]
+    fn a_short_zone_before_an_added_lane_fails_transition_room() {
+        let e = lane_added_after(20_000);
+        let room = check(&e, "transition-room");
+        assert_eq!(room.len(), 1);
+        assert!(!room[0].ok);
+        let between = Said::new("check-boundary")
+            .with("a", Arg::Said(Box::new(Said::new("zone-unnamed-mid").with("n", Arg::Num(1)))))
+            .with("b", Arg::Said(Box::new(Said::new("zone-unnamed-mid").with("n", Arg::Num(2)))));
+        assert_eq!(room[0].zone, Some(between));
+        let detail = say_in(crate::shared::i18n::Locale::En, &room[0].detail);
+        assert!(detail.contains("49.5"), "{detail}");
+        assert!(!e.view().zones.zones[0].ok, "the host zone");
+    }
+
+    #[test]
+    fn the_french_detail_keeps_its_units_after_a_no_break_space() {
+        let e = lane_added_after(20_000);
+        let detail = say_in(crate::shared::i18n::Locale::FrCa, &check(&e, "transition-room")[0].detail);
+        assert!(detail.contains("49,5\u{a0}m"), "{detail}");
+    }
+
+    #[test]
+    fn a_long_enough_zone_passes() {
+        let e = lane_added_after(50_000);
+        let room = check(&e, "transition-room");
+        assert_eq!((room.len(), room[0].ok, room[0].zone.clone()), (1, true, None));
+        assert!(e.view().zones.zones[0].ok);
+        assert!(check(&e, "lane-drop")[0].ok);
+    }
+
+    #[test]
+    fn a_dropped_lane_beside_parking_fails_lane_drop() {
+        let mut e = editor(&[0, 30_000]);
+        assert!(e.select_zone(1));
+        assert!(e.remove(3));
+        let drop = check(&e, "lane-drop");
+        assert_eq!(drop.len(), 1);
+        assert!(!drop[0].ok);
+        assert!(drop[0].zone.is_some());
+        assert_eq!(drop[0].detail, Said::new("check-detail-lane-drop"));
+    }
+
+    #[test]
+    fn no_boundary_checks_for_one_zone_or_elsewhere() {
+        let e = editor(&[]);
+        assert!(check(&e, "transition-room").is_empty() && check(&e, "lane-drop").is_empty());
+        let today = sample();
+        let drawn = lane_added_after(20_000);
+        let elsewhere = Editor::from_street(&today, &drawn.snapshot(), 0).with_frame(Some(ZoneFrame { length_mm: 58_000, from_end: ZoneEnd::First }));
+        assert!(elsewhere.view().zones.elsewhere.is_some());
+        assert!(check(&elsewhere, "transition-room").is_empty() && check(&elsewhere, "lane-drop").is_empty());
+    }
+
+    #[test]
+    fn undoing_the_split_removes_the_boundary_check() {
+        let mut e = editor(&[]);
+        e.split_zone(Some(20_000)).unwrap();
+        assert!(e.select_zone(1));
+        let end = e.snapshot().segments.len();
+        e.add(kind_index("travel").unwrap(), end);
+        assert_eq!(check(&e, "transition-room").len(), 1);
+        assert!(e.undo()); // the lane
+        assert!(check(&e, "transition-room").is_empty(), "same sections, no transition");
+        assert!(e.undo()); // the split
+        assert!(check(&e, "transition-room").is_empty());
     }
 }

@@ -22,6 +22,7 @@ pub use speed::Speed;
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
 mod zones;
+use zones::Failing;
 pub use zones::{Elsewhere, Keep, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
 
 /// Widths snap to this step when dragged.
@@ -1368,6 +1369,7 @@ impl Editor {
         if content.zones.len() < 2 {
             return street;
         }
+        let transitions = !self.transitions().is_empty();
         for (z, zone) in content.zones.iter().enumerate() {
             for (check, in_zone) in street.iter_mut().zip(self.section_checks(content.section(z))) {
                 if !in_zone.ok && check.zone.is_none() {
@@ -1377,7 +1379,47 @@ impl Editor {
                 }
             }
         }
+        if transitions {
+            street.extend(self.transition_checks(content));
+        }
         street
+    }
+
+    /// The checks of the boundaries: one per failing boundary, else one passing check of each kind.
+    fn transition_checks(&self, content: &Content) -> Vec<Check> {
+        let label = |z: usize| zone_label_mid(&content.zones[z], z + 1);
+        let failing = self.failing_transitions();
+        let units = |mm| Arg::Length(mm);
+        let make = |id: &'static str, ok: bool, detail: Said, zone: Option<Said>| Check {
+            id,
+            ok,
+            label: if id == "lane-drop" { Said::new("check-label-lane-drop") } else { Said::new("check-label-transition-room") },
+            detail,
+            zone,
+        };
+        let mut out = Vec::new();
+        for id in ["transition-room", "lane-drop"] {
+            let before = out.len();
+            for (b, host, why) in &failing {
+                let boundary = || Said::new("check-boundary").with("a", Arg::Said(Box::new(label(*b)))).with("b", Arg::Said(Box::new(label(*b + 1))));
+                match (id, why) {
+                    ("transition-room", Failing::Room { need_mm, room_mm }) => {
+                        let detail = Said::new("check-detail-transition-room")
+                            .with("need", units(*need_mm))
+                            .with("zone", Arg::Said(Box::new(label(*host))))
+                            .with("room", units(*room_mm));
+                        out.push(make(id, false, detail, Some(boundary())));
+                    }
+                    ("lane-drop", Failing::LaneDrop) => out.push(make(id, false, Said::new("check-detail-lane-drop"), Some(boundary()))),
+                    _ => {}
+                }
+            }
+            if out.len() == before {
+                let ok = if id == "lane-drop" { Said::new("check-detail-lane-drop-ok") } else { Said::new("check-detail-transition-room-ok") };
+                out.push(make(id, true, ok, None));
+            }
+        }
+        out
     }
 
     fn measure_views(&self, raw: &[Segment], now: &[Segment]) -> Vec<MeasureView> {

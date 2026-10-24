@@ -389,3 +389,10 @@ st-speed-kmh = { $kmh } km/h
 # The speed limit sign in the 2.5D: its heading, the same word on a Canadian sign in both languages.
 iso-sign-maximum = MAXIMUM
 svg-iso-speed = Speed limit { $kmh } km/h.
+check-boundary = between { $a } and { $b }
+check-label-transition-room = Room for the transition
+check-label-lane-drop = Lane drops
+check-detail-transition-room = The transition needs { $need } but { $zone } is { $room } long.
+check-detail-transition-room-ok = Every transition fits in its zone.
+check-detail-lane-drop = A lane ends with no lane beside it to merge into.
+check-detail-lane-drop-ok = Every lane that ends can merge.
