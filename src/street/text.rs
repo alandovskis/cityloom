@@ -398,13 +398,12 @@ mod tests {
             ok: false,
             label: Said::new("check-label-curb-length"),
             detail: Said::new("check-detail-curb-length-ok"),
-            zone: Some(Said::new("curb-instance").with("use", Arg::Msg("curb-use-loading")).with("at", Arg::Length(42_000)).with("side", Arg::Msg("side-word-right"))),
+            zone: Some(
+                Said::new("curb-instance").with("use", Arg::Msg("curb-use-loading")).with("at", Arg::Length(42_000)).with("side", Arg::Msg("side-word-right")),
+            ),
         };
         assert_eq!(say_now(&en(), Units::Metres, &check_label(&row)), "Curbside uses are long enough: Loading at 42.0 m, right");
-        assert_eq!(
-            say_now(&fr(), Units::Metres, &check_label(&row)),
-            "Usages du bord de rue assez longs\u{a0}: Zone de chargement à 42,0\u{a0}m, à droite"
-        );
+        assert_eq!(say_now(&fr(), Units::Metres, &check_label(&row)), "Usages du bord de rue assez longs\u{a0}: Zone de chargement à 42,0\u{a0}m, à droite");
     }
 
     /// Every key the model can say is a message in both languages. A new constructor in the model must use these literal forms, or this test does not see its key. The model builds a `Said` only with `Said::new("…")`, and puts a word in another's place only with `Arg::Msg("…")`, so its source lists them all.

@@ -78,7 +78,12 @@ pub(super) fn blocks(segs: &[SegView], i: usize, p: &Projection) -> Vec<Block> {
         let crown = (w * 0.9).min(2_400.0);
         for z in along(4_000.0, 8_000.0).filter(|&z| wide_enough(p, w, z)) {
             out.push(Block { solid: Solid::Trunk, x: (cx - 125.0, cx + 125.0), y: (h, h + 2_000.0), z: (z - 125.0, z + 125.0) });
-            out.push(Block { solid: Solid::Crown, x: (cx - crown / 2.0, cx + crown / 2.0), y: (h + 2_000.0, h + 5_000.0), z: (z - CROWN_HALF_DEPTH_MM, z + CROWN_HALF_DEPTH_MM) });
+            out.push(Block {
+                solid: Solid::Crown,
+                x: (cx - crown / 2.0, cx + crown / 2.0),
+                y: (h + 2_000.0, h + 5_000.0),
+                z: (z - CROWN_HALF_DEPTH_MM, z + CROWN_HALF_DEPTH_MM),
+            });
         }
     }
     let middle = near + p.reach.len() / 2.0;
