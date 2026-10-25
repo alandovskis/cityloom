@@ -390,6 +390,10 @@ st-speed-kmh = { $kmh } km/h
 iso-sign-maximum = MAXIMUM
 svg-iso-transition = A transition of { $length } leads into { $zone }.
 svg-iso-speed = Speed limit { $kmh } km/h.
+svg-curb-uses = Curbside, { $side }: { $count ->
+        [one] one use
+       *[other] { $count } uses
+    } along the street.
 svg-iso-curb = { $count ->
         [one] One curbside use is shown.
        *[other] { $count } curbside uses are shown.
