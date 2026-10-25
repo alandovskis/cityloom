@@ -390,6 +390,10 @@ st-speed-kmh = { $kmh }{" "}km/h
 iso-sign-maximum = MAXIMUM
 svg-iso-transition = Une transition de { $length } mène à { $zone }.
 svg-iso-speed = Limite de vitesse : { $kmh }{" "}km/h.
+svg-iso-curb = { $count ->
+        [one] Un usage du bord de rue est montré.
+       *[other] { $count } usages du bord de rue sont montrés.
+    }
 check-boundary = entre { $a } et { $b }
 check-label-transition-room = Place pour la transition
 check-label-lane-drop = Fins de voie

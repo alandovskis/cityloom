@@ -8,9 +8,10 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::esc;
 use crate::shared::iso::ground::{fine_patterns, joints};
 use crate::shared::iso::shading::shade_filters;
-use crate::street::model::SegView;
+use crate::street::model::{SegView, ShownInstance};
 use crate::street::svg::{curb_edges, curb_width_mm};
 
+use super::curbside;
 use super::joints::path as joint_path;
 use super::order::Bx;
 use super::projection::{Projection, Reach, band_edges, band_mid, drawn_mm, points};
@@ -187,9 +188,15 @@ pub(super) fn top_over(out: &mut String, p: &Projection, id: &str, m: &str, h: f
 /// front (the cut at the near end) and the side face the eye sees, where the piece beside it is lower.
 pub(super) fn slab(out: &mut String, p: &Projection, segs: &[SegView], i: usize) {
     let s = &segs[i];
-    let id = KINDS[s.kind].id;
-    let (x0, x1, h, l) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, drawn_mm(height_mm(id)), p.reach.far);
-    let n = p.reach.near;
+    slab_of(out, p, segs, i, KINDS[s.kind].id, s.material, (p.reach.near, p.reach.far));
+}
+
+/// A strip across the piece at `i` as a thing of kind `id` and material `m` over `along` of the reach: the piece's
+/// own (`slab`), or a curbside use standing where the piece lies.
+pub(super) fn slab_of(out: &mut String, p: &Projection, segs: &[SegView], i: usize, id: &str, m: &str, along: (f64, f64)) {
+    let s = &segs[i];
+    let (x0, x1, h) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, drawn_mm(height_mm(id)));
+    let (n, l) = along;
     let hatch = format!("h-{id}");
     if h > 0.0 {
         face(out, Face::Front, Some(id), &hatch, &points(p, &[(x0, 0.0, n), (x1, 0.0, n), (x1, h, n), (x0, h, n)]));
@@ -200,7 +207,11 @@ pub(super) fn slab(out: &mut String, p: &Projection, segs: &[SegView], i: usize)
             }
         }
     }
-    top(out, p, id, s.material, x0, x1, h);
+    if (n, l) == (p.reach.near, p.reach.far) {
+        top(out, p, id, m, x0, x1, h);
+    } else {
+        top(out, &p.over(Reach { near: n, far: l }), id, m, x0, x1, h);
+    }
 }
 
 /// Where the curb of the piece at `i` along one edge (`right`) lies across the street.
@@ -283,7 +294,7 @@ pub(super) fn strips(segs: &[SegView], p: &Projection) -> Vec<Strip> {
 /// section across the boundary (`across`) carries no uid: uids repeat from one section to the other, and what finds
 /// a piece by its uid is the selected zone's.
 pub(super) fn piece(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I18n, strip: Strip, across: bool) {
-    piece_with(out, p, segs, i18n, strip, across, None);
+    piece_with(out, p, segs, i18n, strip, across, None, &[]);
 }
 
 /// `piece`, its top (a roadway slab at the ground) tapering when `taper` gives its edges along the street.
@@ -295,6 +306,7 @@ pub(super) fn piece_with(
     strip: Strip,
     across: bool,
     taper: Option<&dyn Fn(f64) -> (f64, f64)>,
+    shown: &[ShownInstance],
 ) {
     let (_, i, edge) = strip;
     let s = &segs[i];
@@ -305,9 +317,10 @@ pub(super) fn piece_with(
         write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
     }
     match edge {
-        None => match taper {
-            Some(edge) => top_over(out, p, KINDS[s.kind].id, s.material, drawn_mm(height_mm(KINDS[s.kind].id)), edge, false),
-            None => slab(out, p, segs, i),
+        None => match (taper, curbside::flat_parts(segs, i, p.reach, shown)) {
+            (taper, Some(parts)) => curbside::flat(out, p, segs, i, &parts, taper),
+            (Some(edge), None) => top_over(out, p, KINDS[s.kind].id, s.material, drawn_mm(height_mm(KINDS[s.kind].id)), edge, false),
+            (None, None) => slab(out, p, segs, i),
         },
         Some(right) => curb(out, p, segs, i, right),
     }
@@ -325,10 +338,10 @@ pub(super) fn sliver(out: &mut String, p: &Projection, i18n: &I18n, kind: usize,
 }
 
 /// The strips in the order given, between the group tag `open` and its end.
-pub(super) fn group(open: &str, p: &Projection, segs: &[SegView], i18n: &I18n, strips: &[Strip], across: bool) -> String {
+pub(super) fn group(open: &str, p: &Projection, segs: &[SegView], i18n: &I18n, strips: &[Strip], across: bool, shown: &[ShownInstance]) -> String {
     let mut out = String::from(open);
     for &strip in strips {
-        piece(&mut out, p, segs, i18n, strip, across);
+        piece_with(&mut out, p, segs, i18n, strip, across, None, shown);
     }
     out.push_str("</g>");
     out

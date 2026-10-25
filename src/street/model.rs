@@ -22,7 +22,9 @@ pub use speed::Speed;
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
 mod curb;
+mod curb_shown;
 pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, Use, curbside};
+pub use curb_shown::ShownInstance;
 mod zones;
 use zones::Failing;
 pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
@@ -1373,6 +1375,7 @@ impl Editor {
             checks: self.street_checks(),
             zones: self.zones_view(),
             curb: self.curb_view(),
+            curb_shown: self.curb_shown(),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
@@ -1733,6 +1736,8 @@ pub struct View {
     pub zones: ZonesView,
     /// The curbside strips.
     pub curb: CurbView,
+    /// The curbside uses the 2.5D shows, on the selected zone's pieces.
+    pub curb_shown: Vec<ShownInstance>,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
     pub revisions: Vec<Revision>,
