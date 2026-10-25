@@ -69,7 +69,10 @@ test.describe("the Stops row", () => {
     // The 2.5D says how many stops it shows, and draws the sign and the shelter.
     await page.locator('#view-mode-slot button[aria-pressed="false"]').click();
     await expect(page.locator("#drawing.iso")).toBeAttached();
-    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /One transit stop is shown\./);
+    await expect(page.locator("#drawing")).toHaveAttribute(
+      "aria-label",
+      /One transit stop is shown \(curb extension\)\./,
+    );
     await expect(page.locator("#drawing .iso-stop-sign").first()).toBeAttached();
     await expect(page.locator("#drawing .iso-solid.s-shelter")).toHaveCount(1);
 
