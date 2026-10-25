@@ -460,3 +460,17 @@ st-curb-use = Usage
 st-curb-length = Longueur ({ $unit })
 st-curb-add = Ajouter un usage
 st-curb-remove = Retirer un usage
+
+# Arrêts de transport en commun (src/street/model/stop.rs).
+stop-kind-curb = Arrêt d’autobus au trottoir
+stop-kind-bulb = Arrêt d’autobus sur avancée de trottoir
+stop-kind-island = Arrêt d’autobus sur îlot d’embarquement
+stop-word-sheltered = avec abribus
+stop-word-unsheltered = sans abribus
+rev-stop-add = Arrêt ajouté à { $at } : { $kind }
+rev-stop-kind = Type d’arrêt changé à { $at } : { $kind }
+rev-stop-shelter = Arrêt à { $at } : { $state }
+rev-stop-name = Arrêt nommé à { $at } : { $kind }
+rev-stop-resize = Longueur modifiée à { $at } : { $kind }
+rev-stop-move = Arrêt déplacé à { $at } : { $kind }
+rev-stop-remove = Arrêt retiré à { $at } : { $kind }

@@ -316,7 +316,7 @@ impl Editor {
 }
 
 impl Editor {
-    fn curb_frame(&self, allow_drag: bool) -> Result<ZoneFrame, CurbRefusal> {
+    pub(super) fn curb_frame(&self, allow_drag: bool) -> Result<ZoneFrame, CurbRefusal> {
         if self.gesture.is_some() && !allow_drag {
             return Err(CurbRefusal::Dragging);
         }

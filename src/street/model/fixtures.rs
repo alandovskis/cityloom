@@ -146,7 +146,15 @@ impl Editor {
         default_directions(&mut segments, REGIONS[self.region].drive_side);
         self.states = vec![State {
             label: Said::new("street-today"),
-            content: Content { segments, zones: Vec::new(), from_end: ZoneEnd::First, length_mm: None, speed: Speed::Undecided, curb: Vec::new() },
+            content: Content {
+                segments,
+                zones: Vec::new(),
+                from_end: ZoneEnd::First,
+                length_mm: None,
+                speed: Speed::Undecided,
+                curb: Vec::new(),
+                stops: Vec::new(),
+            },
             class: s.class,
             class_before: None,
             row_mm: s.row_mm,

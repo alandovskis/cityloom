@@ -460,3 +460,17 @@ st-curb-use = Use
 st-curb-length = Length ({ $unit })
 st-curb-add = Add use
 st-curb-remove = Remove use
+
+# Transit stops (src/street/model/stop.rs).
+stop-kind-curb = Curb stop
+stop-kind-bulb = Bulb stop
+stop-kind-island = Island stop
+stop-word-sheltered = with a shelter
+stop-word-unsheltered = without a shelter
+rev-stop-add = Add { $kind } at { $at }
+rev-stop-kind = Change the stop at { $at } to { $kind }
+rev-stop-shelter = Stop at { $at }: { $state }
+rev-stop-name = Name the { $kind } at { $at }
+rev-stop-resize = Resize the { $kind } at { $at }
+rev-stop-move = Move the { $kind } to { $at }
+rev-stop-remove = Remove the { $kind } at { $at }

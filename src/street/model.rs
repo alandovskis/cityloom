@@ -23,8 +23,10 @@ mod transition;
 pub use transition::{Change, Host, Transition, transition};
 mod curb;
 mod curb_shown;
+mod stop;
 pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, Use, curbside};
 pub use curb_shown::ShownInstance;
+pub use stop::{Stop, StopKind};
 mod zones;
 use zones::Failing;
 pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
@@ -236,6 +238,10 @@ pub struct Street {
     /// is whatever its sections hold; with any, `from_end` and `length_mm` are written as they are with zones.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub curb: Vec<Instance>,
+    /// The transit stops along the street, left side first, then by `from_mm`. Empty for a street with none; with
+    /// any, `from_end` and `length_mm` are written as they are with zones.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stops: Vec<Stop>,
 }
 
 /// A name that is data, said as it is: a street's, a place's, a junction's.
@@ -342,6 +348,7 @@ impl Street {
             length_mm: None,
             speed: Speed::Undecided,
             curb: Vec::new(),
+            stops: Vec::new(),
         };
         street.settle_class();
         street
@@ -406,13 +413,14 @@ impl Street {
         }
         s.reverse_zones();
         s.reverse_curb();
+        s.reverse_stops();
         s
     }
 
     /// Whether every index in it points into the catalogue, so that it can be
     /// drawn. A street that came from storage is checked before it is used.
     pub fn is_sound(&self) -> bool {
-        self.row_mm > 0 && self.section_is_sound(&self.segments) && self.zones_are_sound() && self.curb_is_sound()
+        self.row_mm > 0 && self.section_is_sound(&self.segments) && self.zones_are_sound() && self.curb_is_sound() && self.stops_are_sound()
     }
 
     /// Whether every piece of a section points into the catalogue and has a uid the street has issued.
@@ -461,6 +469,8 @@ struct Content {
     speed: Speed,
     /// The uses of the curbside, which lie along the street whatever its zones.
     curb: Vec<Instance>,
+    /// The transit stops, which lie along the street whatever its zones.
+    stops: Vec<Stop>,
 }
 
 impl Content {
@@ -472,6 +482,7 @@ impl Content {
             length_mm: street.length_mm,
             speed: street.speed,
             curb: street.curb.clone(),
+            stops: street.stops.clone(),
         }
     }
 
@@ -503,7 +514,9 @@ impl Content {
 
     fn settle(&mut self) {
         self.sort_curb();
-        zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm, !self.curb.is_empty());
+        self.sort_stops();
+        let keep_anchor = !self.curb.is_empty() || !self.stops.is_empty();
+        zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm, keep_anchor);
     }
 }
 
@@ -612,6 +625,7 @@ impl Editor {
             length_mm: content.length_mm,
             speed: content.speed,
             curb: content.curb.clone(),
+            stops: content.stops.clone(),
         }
     }
 
