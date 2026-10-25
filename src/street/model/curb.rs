@@ -1015,7 +1015,7 @@ mod tests {
         assert_eq!(say(&en, c.zone.as_ref().unwrap()), "Loading at 42.0 m, right");
         assert_eq!(say(&fr, c.zone.as_ref().unwrap()), "Zone de chargement à 42,0\u{a0}m, à droite");
         assert_eq!(say(&en, &c.detail), "Loading is 4.0 m long, under the 9.0 m it needs.");
-        assert_eq!(say(&fr, &c.detail), "Zone de chargement mesure 4,0\u{a0}m, moins que les 9,0\u{a0}m demandés.");
+        assert_eq!(say(&fr, &c.detail), "Zone de chargement\u{a0}: 4,0\u{a0}m de long, moins que les 9,0\u{a0}m demandés.");
     }
 
     #[test]

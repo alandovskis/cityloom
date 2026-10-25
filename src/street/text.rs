@@ -132,6 +132,10 @@ pub fn zone_refused(i18n: &I18n, units: Units, refusal: ZoneRefusal) -> String {
 /// it fails in.
 pub fn check_label(check: &Check) -> Said {
     match (&check.zone, check.ok) {
+        // A curbside row names the use that fails, not a zone.
+        (Some(instance), false) if check.id.starts_with("curb-") => {
+            Said::new("check-curb-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("instance", Arg::Said(Box::new(instance.clone())))
+        }
         (Some(zone), false) => {
             Said::new("check-zone-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("zone", Arg::Said(Box::new(zone.clone())))
         }
@@ -384,6 +388,23 @@ mod tests {
         assert_eq!(check_label(passing), passing.label);
         let single = Editor::new(0).view();
         assert!(single.checks.iter().all(|c| check_label(c) == c.label));
+    }
+
+    #[test]
+    fn a_failing_curbside_row_names_its_use_not_a_zone() {
+        use crate::street::model::Check;
+        let row = Check {
+            id: "curb-length",
+            ok: false,
+            label: Said::new("check-label-curb-length"),
+            detail: Said::new("check-detail-curb-length-ok"),
+            zone: Some(Said::new("curb-instance").with("use", Arg::Msg("curb-use-loading")).with("at", Arg::Length(42_000)).with("side", Arg::Msg("side-word-right"))),
+        };
+        assert_eq!(say_now(&en(), Units::Metres, &check_label(&row)), "Curbside uses are long enough: Loading at 42.0 m, right");
+        assert_eq!(
+            say_now(&fr(), Units::Metres, &check_label(&row)),
+            "Usages du bord de rue assez longs\u{a0}: Zone de chargement à 42,0\u{a0}m, à droite"
+        );
     }
 
     /// Every key the model can say is a message in both languages. A new constructor in the model must use these literal forms, or this test does not see its key. The model builds a `Said` only with `Said::new("…")`, and puts a word in another's place only with `Arg::Msg("…")`, so its source lists them all.

@@ -1530,7 +1530,7 @@ fn no_strip_is_drawn_while_the_streets_length_is_unknown() {
 fn the_curb_strip_follows_the_language() {
     let s = curb_street(Locale::FrCa);
     let h = curb_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
-    assert!(h.contains(">Usages du bord de rue le long de la rue</h2>"), "{h}");
+    assert!(h.contains(">Usages du bord de rue</h2>"), "{h}");
     assert!(h.contains("aria-label=\"Stationnement, de 0,0 m à 6,0 m, 6,0 m de long, 1 sur 2\""), "{h}");
     assert!(h.contains("aria-label=\"Usages du bord de rue, à droite\"") && h.contains("Bord de rue, à gauche"), "{h}");
 }

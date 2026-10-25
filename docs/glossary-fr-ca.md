@@ -48,6 +48,15 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | Zone (a lengthways part of a street with its own section) | zone | `Zone 2`, `la zone sélectionnée`. `Tronçon` is kept for the 2.5D’s stretch of street (`svg-iso-label-zone`: `sur un tronçon de 40 m`), so the two are not confused. To confirm, see below. |
 | Street page | Zone boundary | limite | `Limite entre deux zones`; the start of a zone is its `début`. To confirm, see below. |
 | Street page | 2.5D boundary label (the two zones that meet in the drawing) | limite … au premier plan … au-delà | `sur un tronçon de 40 m centré sur la limite entre zone 1 au premier plan et zone 2 au-delà` (`svg-iso-label-joint`). To confirm, see below. |
+| Street page | Curbside (the lane at the edge of the street and what stands along it) | bord de rue | `Usages du bord de rue`, `Bord de rue, à droite`. |
+| Street page | Use (of the curbside) | usage | `Ajouter un usage`; `Usage`. Not `utilisation` or `affectation`. |
+| Street page | Free (a stretch of the curbside with no use) | Libre | `curb-gap`. |
+| Street page | Tree pit | Fosse d’arbre | Shown as `Street tree` in English: `curb-use-tree`. |
+| Street page | Rain garden | Jardin de pluie |  |
+| Street page | Bike parking (a use) | Supports à vélos | Plural, as the use is a row of racks; the catalogue's single `Bike rack` is `Support à vélos`. |
+| Street page | Transit platform | Quai de transport en commun | `Transit` is `transport en commun` everywhere; not `transport collectif`. |
+| Street page | Patio (a use) | Terrasse | The catalogue's `Café terrace` is `Terrasse de café`. |
+| Street page | Planting (a use) | Plantation | As the piece panel's `Planting`. |
 | Modes and groups | Walking | Marche |  |
 | Modes and groups | Biking / Cycling | Vélo |  |
 | Modes and groups | Transit | Transport en commun |  |

@@ -355,6 +355,7 @@ zone-refused-no-neighbour = There is no zone on that side to merge with.
 zone-refused-no-boundary = The first zone starts at the end of the street, so it has no boundary to move.
 zone-refused-dragging = Finish the drag before changing the zones.
 zones-elsewhere = The zones were drawn on this street when it was { $drawn } long; here it is { $loaded }.
+check-curb-in = { $check }: { $instance }
 check-zone-in = { $check } in { $zone }
 zone-selected = { $zone }, { $from } to { $to }, { $length } long, { $section ->
         [own] its own section
