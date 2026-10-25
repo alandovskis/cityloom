@@ -724,7 +724,7 @@ test.describe("the zones of a street", () => {
     expect(await drawing.innerHTML(), "the across run swaps with the selected zone").not.toBe(second);
   });
 
-  /** Splits the street in two and gives zone 2 a travel lane zone 1 lacks: a transition leads into zone 1. */
+  /** Splits the street in two and gives zone 2 (`#zone-1`, the ids start at 0) a travel lane zone 1 lacks: zone 1 hosts the transition and it leads into zone 2. */
   const addLaneInZone2 = async (page: Page) => {
     await page.locator("#zone-split").click();
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
@@ -739,7 +739,7 @@ test.describe("the zones of a street", () => {
     await expect(page.locator("#drawing.iso")).toBeAttached();
     await expect(page.locator("#drawing")).toHaveAttribute(
       "aria-label",
-      /A transition of [\d.]+ m leads into Zone [12]\./,
+      /A transition of [\d.]+ m leads into Zone 2\./,
     );
     await expect(page.locator("#drawing .iso-taper").first()).toBeAttached();
   });

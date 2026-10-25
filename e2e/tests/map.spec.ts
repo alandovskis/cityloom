@@ -577,8 +577,7 @@ test.describe("the zone boundaries on the map", () => {
     await page.locator("#zone-1").click();
     await page.locator("#add-btn").click();
     await page.locator(".add-item", { hasText: "Driving lane" }).click();
-    await page.waitForTimeout(500); // the debounced write
-    await page.goto("/map.html");
+    await page.goto("/map.html"); // leaving the page flushes the debounced write
     await mapReady(page);
     await expect.poll(async () => (await ticks(page)).filter((t: any) => t.band).length).toBe(1);
     expect(await ticks(page), "the band replaces the tick").toHaveLength(1);
