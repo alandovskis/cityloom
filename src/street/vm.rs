@@ -1820,6 +1820,35 @@ mod curb_tests {
     }
 
     #[test]
+    fn the_moved_use_stays_chosen_through_cancel_undo_and_redo() {
+        let chosen = |r: &Rig| {
+            let v = r.vm.view_now();
+            let s = v.curb.sides.iter().find(|s| s.side == Side::Right).unwrap();
+            s.selected.and_then(|n| s.cells[n].instance)
+        };
+        let r = with_one_use();
+        assert!(r.vm.begin_curb_drag());
+        r.vm.drag_curb_to(30_000);
+        r.vm.end_curb_drag(false);
+        assert_eq!(side(&r, Side::Right)[0], (Some(0), 0, 6_000));
+        assert_eq!(chosen(&r), Some(0), "still chosen after a cancelled drag");
+        assert!(r.vm.nudge_curb(1_000));
+        assert!(r.vm.undo());
+        assert_eq!(chosen(&r), Some(0), "still chosen after undoing a nudge");
+        assert!(r.vm.redo());
+        assert_eq!(chosen(&r), Some(0), "and after redoing it");
+        assert!(r.vm.begin_curb_drag());
+        r.vm.drag_curb_to(20_000);
+        r.vm.drag_curb_to(25_000);
+        r.vm.end_curb_drag(true);
+        assert!(r.vm.undo());
+        assert_eq!(chosen(&r), Some(0), "and after undoing a drag");
+        assert!(r.vm.redo());
+        assert_eq!(chosen(&r), Some(0), "and after redoing it");
+        assert!(r.vm.nudge_curb(-1_000), "so it can be moved again");
+    }
+
+    #[test]
     fn commands_are_refused_during_a_zone_drag() {
         let r = with_one_use();
         r.vm.begin_boundary_drag();

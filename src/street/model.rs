@@ -518,6 +518,9 @@ struct State {
     /// The room the street has as of this state. An edit never changes it; it differs between states only for a street
     /// taken by the width it had under an earlier importer, which Start over returns to the width it has now.
     row_mm: i32,
+    /// The move of a use that made this state (its side, where it started and where it ended up), so that undo and
+    /// redo carry the chosen use with it.
+    curb_move: Option<(Side, i32, i32)>,
 }
 
 /// The speed limits an editor sets, in kilometres an hour.
@@ -545,6 +548,8 @@ pub struct Editor {
     gesture: Option<Content>,
     /// The cell of a curbside strip the person chose: its side and a place along the street it holds. A setting, not history.
     curb_sel: Option<(Side, i32)>,
+    /// The move of a use under way in a gesture, or just made, that the next revision records (see `State.curb_move`).
+    curb_moved: Option<(Side, i32, i32)>,
     pending_label: Option<Said>,
 }
 
@@ -628,6 +633,7 @@ impl Editor {
                 class: today.class,
                 class_before: today.class_before,
                 row_mm: today.row_mm,
+                curb_move: None,
             }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
@@ -637,6 +643,7 @@ impl Editor {
             selected: None,
             gesture: None,
             curb_sel: None,
+            curb_moved: None,
             pending_label: None,
         };
         if Content::of(&now) != e.states[0].content || now.row_mm != e.states[0].row_mm {
@@ -736,7 +743,8 @@ impl Editor {
         content.settle();
         let (class, class_before) = settled_class(content.has_motor(), self.class(), self.class_before());
         let row_mm = self.row_mm();
-        self.push_state(State { label, content, class, class_before, row_mm });
+        let curb_move = self.curb_moved.take();
+        self.push_state(State { label, content, class, class_before, row_mm, curb_move });
         self.clamp_zone();
     }
 
@@ -758,6 +766,7 @@ impl Editor {
         if self.gesture.is_none() {
             self.gesture = Some(self.states[self.cursor].content.clone());
             self.pending_label = None;
+            self.curb_moved = None;
         }
     }
 
@@ -770,10 +779,12 @@ impl Editor {
         // The live state was mutated in place; restore it, then record it.
         self.states[self.cursor].content = baseline.clone();
         if now == baseline {
+            self.curb_moved = None;
             return false;
         }
         // An edit that changed anything left its label; without one there is nothing to record.
         let Some(label) = self.pending_label.take() else {
+            self.curb_moved = None;
             return false;
         };
         self.push(label, now);
@@ -783,6 +794,12 @@ impl Editor {
     pub fn cancel_gesture(&mut self) {
         if let Some(baseline) = self.gesture.take() {
             self.states[self.cursor].content = baseline;
+            // The use is back where it started: so is the choice.
+            if let Some((side, from, to)) = self.curb_moved.take()
+                && self.curb_sel == Some((side, to))
+            {
+                self.curb_sel = Some((side, from));
+            }
         }
     }
 
@@ -1255,6 +1272,11 @@ impl Editor {
         if self.cursor == 0 {
             return false;
         }
+        if let Some((side, from, to)) = self.states[self.cursor].curb_move
+            && self.curb_sel == Some((side, to))
+        {
+            self.curb_sel = Some((side, from));
+        }
         self.cursor -= 1;
         self.reselect();
         true
@@ -1266,6 +1288,11 @@ impl Editor {
             return false;
         }
         self.cursor += 1;
+        if let Some((side, from, to)) = self.states[self.cursor].curb_move
+            && self.curb_sel == Some((side, from))
+        {
+            self.curb_sel = Some((side, to));
+        }
         self.reselect();
         true
     }

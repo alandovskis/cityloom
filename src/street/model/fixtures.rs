@@ -120,6 +120,7 @@ impl Editor {
             selected: None,
             gesture: None,
             curb_sel: None,
+            curb_moved: None,
             pending_label: None,
         };
         e.load_sample(sample);
@@ -149,6 +150,7 @@ impl Editor {
             class: s.class,
             class_before: None,
             row_mm: s.row_mm,
+            curb_move: None,
         }];
         self.cursor = 0;
         self.selected = None;

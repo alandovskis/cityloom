@@ -416,6 +416,9 @@ impl Editor {
         if self.curb_sel == Some((old.side, old.from_mm)) {
             self.curb_sel = Some((new.side, new.from_mm));
         }
+        // A drag records one move, from where it began to where it is.
+        let began = self.curb_moved.filter(|&(side, _, to)| side == old.side && to == old.from_mm).map_or(old.from_mm, |(_, from, _)| from);
+        self.curb_moved = Some((new.side, began, new.from_mm));
         if self.gesture.is_some() {
             let c = &mut self.states[self.cursor].content;
             c.curb[i] = new;
