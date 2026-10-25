@@ -96,9 +96,10 @@ pub(super) fn lifted(shown: &[ShownInstance]) -> Vec<Lift> {
 
 /// The edges across of a lifted use's piece along the stretch: the transition's where the piece tapers, else none.
 fn edges<'a>(segs: &[SegView], l: &Lift, p: &'a Projection, taper: Option<&'a Draw>) -> Option<impl Fn(f64) -> (f64, f64) + 'a> {
-    let shape = taper?.shape_of(&segs[l.piece])?;
+    let d = taper?;
+    let shape = d.shape_of(&segs[l.piece])?;
     let reach = p.reach;
-    taper.map(move |d| move |z: f64| d.edges(shape, reach, z))
+    Some(move |z: f64| d.edges(shape, reach, z))
 }
 
 /// The box a lifted use fills, for ordering.
@@ -139,7 +140,8 @@ pub(super) fn blocks(segs: &[SegView], shown: &[ShownInstance], p: &Projection) 
             Use::Tree => {
                 // At the middle of the whole use, drawn only if that lies in the reach (the retain below).
                 let z = (m.full.0 + m.full.1) / 2.0;
-                if wide_enough(p, w, z) {
+                // Whole or not at all: the crown is the widest part along the street, so it decides.
+                if wide_enough(p, w, z) && z - 1_200.0 >= p.reach.near && z + 1_200.0 <= p.reach.far {
                     let crown = (w * 0.9).min(2_400.0);
                     out.push(Block { solid: Solid::Trunk, x: (cx - 125.0, cx + 125.0), y: (h, h + 2_000.0), z: (z - 125.0, z + 125.0) });
                     out.push(Block {
@@ -388,5 +390,20 @@ mod tests {
         let p = projection(&e);
         let untapered = (p.at(x0, 0.0, 24_000.0).0, p.at(x1, 0.0, 24_000.0).0);
         assert_ne!((raised[0].0, raised[1].0), untapered, "the lane has moved by then");
+    }
+
+    #[test]
+    fn a_tree_is_drawn_whole_or_not_at_all() {
+        // A 2 m tree use at the very start: its crown (2.4 m across the street) would reach before the stretch.
+        let mut e = street();
+        let (trunks, crowns) = ("class=\"iso-solid s-trunk\"", "class=\"iso-solid s-crown\"");
+        let base = (count(&drawn(&e), trunks), count(&drawn(&e), crowns));
+        e.add_curb(Side::Left, 0, 2_000, Use::Tree).unwrap();
+        let m = drawn(&e);
+        assert_eq!((count(&m, trunks) - base.0, count(&m, crowns) - base.1), (0, 0), "neither a trunk nor a crown alone");
+        // One whole in the stretch has both.
+        e.add_curb(Side::Left, 10_000, 2_000, Use::Tree).unwrap();
+        let m = drawn(&e);
+        assert_eq!((count(&m, trunks) - base.0, count(&m, crowns) - base.1), (1, 1));
     }
 }
