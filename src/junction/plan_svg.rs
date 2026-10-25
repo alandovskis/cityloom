@@ -871,7 +871,11 @@ mod tests {
         let m = svg(&Junction::new(0)).markup;
         assert_eq!(count(&m, "approach-mark"), 0);
         assert_eq!(count(&m, "beyond"), 0);
-        assert_eq!(plans_fingerprint(), 16_125_793_362_560_287_401, "captured on fb5aa66 (this test run on the unchanged code), before the beyond was drawn");
+        let (got, pinned) = (plans_fingerprint(), 16_125_793_362_560_287_401);
+        assert_eq!(
+            got, pinned,
+            "the plan markup of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
+        );
     }
 
     #[test]

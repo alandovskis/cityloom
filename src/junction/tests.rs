@@ -1843,7 +1843,11 @@ fn arms_fingerprint() -> u64 {
 
 #[test]
 fn an_arm_without_a_beyond_draws_as_before() {
-    assert_eq!(arms_fingerprint(), 15_083_500_958_540_711_930, "captured on 6382e13, before the beyond was drawn");
+    let (got, pinned) = (arms_fingerprint(), 15_083_500_958_540_711_930);
+    assert_eq!(
+        got, pinned,
+        "the pieces, lane hit areas and leaving arrows of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
+    );
 }
 
 /// A sample junction whose north arm has a beyond: the end zone's first entering lane is a pocket that is planting
