@@ -364,6 +364,25 @@ mod tests {
     }
 
     #[test]
+    fn a_failing_stop_row_reads_with_one_colon_in_french() {
+        use crate::street::model::StopKind;
+        let mut e = zoned_editor();
+        e.add_stop(crate::shared::catalogue::Side::Right, 10_000, 12_000, StopKind::Island).unwrap();
+        let checks = e.view().checks;
+        let failing: Vec<_> = checks.iter().filter(|c| c.id.starts_with("stop-") && !c.ok).collect();
+        assert!(!failing.is_empty());
+        for c in &failing {
+            let row = say_now(&fr(), Units::Metres, &check_label(c));
+            assert_eq!(row.matches(':').count(), 1, "{row}");
+        }
+        let kind = failing.iter().find(|c| c.id == "stop-kind").unwrap();
+        assert_eq!(
+            say_now(&fr(), Units::Metres, &check_label(kind)),
+            "Arrêts aménagés comme leur type l’exige\u{a0}: îlot d’embarquement à 10,0\u{a0}m, à droite"
+        );
+    }
+
+    #[test]
     fn a_merge_is_said_in_both_languages_by_the_zone_whose_section_it_kept() {
         use crate::street::model::Keep;
         let mut e = zoned_editor();
@@ -427,7 +446,7 @@ mod tests {
         let row = v.checks.iter().find(|c| c.id == "stop-lane").unwrap();
         assert!(!row.ok);
         assert_eq!(say_now(&en(), Units::Metres, &check_label(row)), "Stops have a lane for the bus: curb stop at 42.0 m, right");
-        assert_eq!(say_now(&fr(), Units::Metres, &check_label(row)), "Arrêts\u{a0}: une voie pour l’autobus\u{a0}: arrêt au trottoir à 42,0\u{a0}m, à droite");
+        assert_eq!(say_now(&fr(), Units::Metres, &check_label(row)), "Voie pour l’autobus aux arrêts\u{a0}: arrêt au trottoir à 42,0\u{a0}m, à droite");
         e.name_stop(0, Some("Mont-Royal")).unwrap();
         let v = e.view();
         let row = v.checks.iter().find(|c| c.id == "stop-lane").unwrap();
