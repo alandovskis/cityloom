@@ -78,8 +78,8 @@ impl Row for StopRow {
     }
 }
 
-/// The word a side is spoken and named by, and the part of a strip's and a cell's id.
-pub fn side_word(side: Side) -> &'static str {
+/// The part of a strip's and a cell's id that names a side (not the word a screen reader is told: that is `curb::side_word`).
+pub fn side_slug(side: Side) -> &'static str {
     match side {
         Side::Left => "left",
         Side::Right => "right",
@@ -87,9 +87,9 @@ pub fn side_word(side: Side) -> &'static str {
 }
 
 pub fn strip_id<R: Row>(side: Side) -> String {
-    format!("{}-strip-{}", R::ID, side_word(side))
+    format!("{}-strip-{}", R::ID, side_slug(side))
 }
 
 pub fn cell_id<R: Row>(side: Side, index: usize) -> String {
-    format!("{}-{}-{index}", R::ID, side_word(side))
+    format!("{}-{}-{index}", R::ID, side_slug(side))
 }
