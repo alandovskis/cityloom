@@ -89,6 +89,11 @@ impl Street {
     }
 }
 
+/// A stop's name as it is kept: trimmed, cut at `MAX_NAME_CHARS`, `None` when nothing is left.
+fn clean_name(name: Option<&str>) -> Option<String> {
+    name.map(str::trim).filter(|n| !n.is_empty()).map(|n| n.chars().take(MAX_NAME_CHARS).collect())
+}
+
 impl Editor {
     /// Whether `candidate` may stand where it is, ignoring the stop `own` (the one being changed).
     fn stop_fits(&self, candidate: &Stop, own: Option<usize>, frame: ZoneFrame) -> Result<(), CurbRefusal> {
@@ -141,8 +146,15 @@ impl Editor {
 
     /// Adds a stop as `add_stop` does, with or without a shelter: one revision.
     pub fn add_stop_with(&mut self, side: Side, from_mm: i32, length_mm: i32, kind: StopKind, shelter: bool) -> Result<(), CurbRefusal> {
+        self.add_stop_named(side, from_mm, length_mm, kind, shelter, None)
+    }
+
+    /// Adds a stop as `add_stop_with` does, with a name (trimmed, cut and dropped when blank as `name_stop` does): one
+    /// revision.
+    pub fn add_stop_named(&mut self, side: Side, from_mm: i32, length_mm: i32, kind: StopKind, shelter: bool, name: Option<&str>) -> Result<(), CurbRefusal> {
         let frame = self.curb_frame(false)?;
-        let s = Stop { side, from_mm: snap(from_mm), length_mm: snap(length_mm).max(SNAP_MM), kind, shelter, name: None };
+        let name = clean_name(name);
+        let s = Stop { side, from_mm: snap(from_mm), length_mm: snap(length_mm).max(SNAP_MM), kind, shelter, name };
         self.stop_fits(&s, None, frame)?;
         self.stop_choice.pick(s.side, s.from_mm);
         self.stop_change(Self::stop_label("rev-stop-add", &s), frame, |stops| stops.push(s));
@@ -166,7 +178,7 @@ impl Editor {
 
     /// Names stop `i`; `None`, or a name with nothing in it, takes the name away. A long name is cut.
     pub fn name_stop(&mut self, i: usize, name: Option<&str>) -> Result<(), CurbRefusal> {
-        let name = name.map(str::trim).filter(|n| !n.is_empty()).map(|n| n.chars().take(MAX_NAME_CHARS).collect::<String>());
+        let name = clean_name(name);
         self.stop_replace(i, "rev-stop-name", |old| Stop { name, ..old.clone() })
     }
 
@@ -599,6 +611,17 @@ mod tests {
         assert_eq!((s.from_end, s.length_mm), (ZoneEnd::First, Some(LEN)), "the street's length is written with the stops");
         assert_eq!(e.view().revisions.len(), 3);
         assert_eq!(e.view().revisions.last().unwrap().label.key, "rev-stop-add");
+    }
+
+    #[test]
+    fn a_stop_is_added_with_its_name_cleaned_as_naming_does() {
+        let mut e = editor();
+        e.add_stop_named(Side::Right, 10_000, 9_000, StopKind::Curb, true, Some("  Mont-Royal  ")).unwrap();
+        e.add_stop_named(Side::Right, 20_000, 9_000, StopKind::Curb, false, Some("   ")).unwrap();
+        let s = e.snapshot();
+        assert_eq!((s.stops[0].name.as_deref(), s.stops[0].shelter), (Some("Mont-Royal"), true));
+        assert_eq!(s.stops[1].name, None);
+        assert_eq!(e.view().revisions.len(), 2, "one revision each");
     }
 
     #[test]

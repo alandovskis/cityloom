@@ -203,6 +203,10 @@ impl SheetWatch {
         self.vm.with_value(|v| v.stop_shelter_shown())
     }
 
+    pub fn stop_name_shown(&self) -> String {
+        self.vm.with_value(|v| v.stop_name_shown())
+    }
+
     pub fn pick_stop_kind(&self, kind: StopKind) {
         self.vm.with_value(|v| v.pick_stop_kind(kind));
     }

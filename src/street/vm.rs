@@ -90,6 +90,8 @@ pub struct StreetVm {
     stop_pick: ArcRwSignal<Option<(Side, i32, StopKind)>>,
     /// The shelter ticked for the chosen free stretch, which the stop added there starts with.
     stop_shelter_pick: ArcRwSignal<Option<(Side, i32, bool)>>,
+    /// The name typed for the chosen free stretch, which the stop added there starts with.
+    stop_name_pick: ArcRwSignal<Option<(Side, i32, String)>>,
 }
 
 /// The areas whose outline holds the midpoint of the street a page edits, read once when the page opens: none for
@@ -151,6 +153,7 @@ impl StreetVm {
                 merge: ArcRwSignal::new(None),
                 stop_pick: ArcRwSignal::new(None),
                 stop_shelter_pick: ArcRwSignal::new(None),
+                stop_name_pick: ArcRwSignal::new(None),
             }
         })
     }
@@ -708,9 +711,11 @@ impl StreetVm {
         match self.chosen::<StopRow>() {
             Some((side, None, from_mm)) => {
                 let shelter = self.stop_shelter_pick.get_untracked().is_some_and(|p| (p.0, p.1) == (side, from_mm) && p.2);
-                let added = self.row_edit(Subject::Stop, |e| e.add_stop_with(side, from_mm, length_mm, kind, shelter));
+                let name = self.stop_name_pick.get_untracked().filter(|p| (p.0, p.1) == (side, from_mm)).map(|p| p.2);
+                let added = self.row_edit(Subject::Stop, |e| e.add_stop_named(side, from_mm, length_mm, kind, shelter, name.as_deref()));
                 if added {
                     self.stop_shelter_pick.set(None);
+                    self.stop_name_pick.set(None);
                 }
                 added
             }
@@ -736,10 +741,28 @@ impl StreetVm {
         }
     }
 
+    /// The name the stops tools show: the chosen stop's, else the one typed for the chosen free stretch. Watched.
+    pub fn stop_name_shown(&self) -> String {
+        let chosen = {
+            let v = self.view();
+            v.stops.sides.iter().find_map(|s| s.cells.get(s.selected?).map(|c| (s.side, c.from_mm, c.kind.is_some().then(|| c.name.clone()))))
+        };
+        match chosen {
+            Some((_, _, Some(name))) => name.unwrap_or_default(),
+            Some((side, from, None)) => self.stop_name_pick.get().filter(|p| (p.0, p.1) == (side, from)).map(|p| p.2).unwrap_or_default(),
+            None => String::new(),
+        }
+    }
+
     /// Names the chosen stop: the name is trimmed and a blank one takes the name away. Nothing is said when the stop
-    /// has that name already.
+    /// has that name already. On a free stretch the name is kept for the stop to be added there, as the kind and the
+    /// shelter are (no edit is made).
     pub fn name_stop(&self, name: &str) -> bool {
         let wanted = Some(name.trim()).filter(|n| !n.is_empty());
+        if let Some((side, None, from)) = self.chosen::<StopRow>() {
+            self.stop_name_pick.set(wanted.map(|n| (side, from, n.to_string())));
+            return true;
+        }
         let v = self.view_now();
         let chosen = v.stops.sides.iter().find_map(|s| s.cells.get(s.selected?)).filter(|c| c.instance.is_some());
         if chosen.is_some_and(|c| c.name.as_deref() == wanted) {
@@ -2317,10 +2340,41 @@ mod stop_tests {
         assert_eq!(r.vm.view_now().stops.sides[1].cells[0].label.key, "stop-label");
         assert!(r.vm.undo());
         assert_eq!(r.vm.view_now().stops.sides[1].cells[0].name.as_deref(), Some("Mont-Royal"));
+        // A free stretch keeps the name for the stop added there; nothing is said and no edit is made.
         r.vm.select_stop(Side::Right, 1);
         r.said.take();
-        assert!(!r.vm.name_stop("x"));
-        assert_eq!(r.said.take(), ["Choose a stop first."]);
+        let before = r.vm.view_now().revisions.len();
+        assert!(r.vm.name_stop("x"));
+        assert!(r.said.take().is_empty());
+        assert_eq!(r.vm.view_now().revisions.len(), before);
+    }
+
+    #[test]
+    fn a_name_typed_for_a_gap_starts_the_stop_added_there() {
+        let r = rig(&PARKED);
+        r.vm.select_stop(Side::Right, 0);
+        assert_eq!(r.vm.stop_name_shown(), "");
+        let before = r.vm.view_now().revisions.len();
+        assert!(r.vm.name_stop("  Mont-Royal "));
+        assert_eq!(r.vm.view_now().revisions.len(), before, "no edit is made");
+        assert_eq!(r.vm.stop_name_shown(), "Mont-Royal");
+        // It belongs to its own gap.
+        r.vm.select_stop(Side::Left, 0);
+        assert_eq!(r.vm.stop_name_shown(), "");
+        r.vm.select_stop(Side::Right, 0);
+        assert_eq!(r.vm.stop_name_shown(), "Mont-Royal");
+        // The stop added there has the name, in the one revision of the add, and the next stop starts without one.
+        assert!(r.vm.add_stop(r.vm.stop_kind_shown(), 12_000));
+        let v = r.vm.view_now();
+        assert_eq!(v.stops.sides[1].cells[0].name.as_deref(), Some("Mont-Royal"));
+        assert_eq!(v.revisions.len(), before + 1);
+        assert_eq!(r.vm.stop_name_shown(), "Mont-Royal", "a chosen stop shows its own");
+        r.vm.select_stop(Side::Right, 1);
+        assert_eq!(r.vm.stop_name_shown(), "");
+        // A blank name takes back what was typed.
+        assert!(r.vm.name_stop("Later"));
+        assert!(r.vm.name_stop("  "));
+        assert_eq!(r.vm.stop_name_shown(), "");
     }
 
     #[test]

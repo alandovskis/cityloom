@@ -65,7 +65,7 @@ pub fn StopTools(vm: Rc<StreetVm>) -> impl IntoView {
     let shown_kind = move || w.stop_kind_shown();
     let is_stop = move || chosen(w).is_some_and(|c| c.stop.is_some());
     let shelter_value = move || w.stop_shelter_shown();
-    let name_value = move || chosen(w).and_then(|c| c.stop).and_then(|s| s.2).unwrap_or_default();
+    let name_value = move || w.stop_name_shown();
     let length_value = move || chosen(w).filter(|c| c.stop.is_some()).map(|c| w.units().number_in(c.to_mm - c.from_mm, w.i18n().locale())).unwrap_or_default();
     let any = move || !w.view().stops.sides.is_empty();
     let options = move || {
