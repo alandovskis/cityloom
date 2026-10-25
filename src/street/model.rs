@@ -22,7 +22,7 @@ pub use speed::Speed;
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
 mod curb;
-pub use curb::{CurbRefusal, EndInfo, Instance, Use, curbside};
+pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, Use, curbside};
 mod zones;
 use zones::Failing;
 pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
@@ -541,6 +541,8 @@ pub struct Editor {
     ends: [EndInfo; 2],
     selected: Option<u32>,
     gesture: Option<Content>,
+    /// The cell of a curbside strip the person chose: its side and a place along the street it holds. A setting, not history.
+    curb_sel: Option<(Side, i32)>,
     pending_label: Option<Said>,
 }
 
@@ -632,6 +634,7 @@ impl Editor {
             ends: [EndInfo::default(); 2],
             selected: None,
             gesture: None,
+            curb_sel: None,
             pending_label: None,
         };
         if Content::of(&now) != e.states[0].content || now.row_mm != e.states[0].row_mm {
@@ -1369,6 +1372,7 @@ impl Editor {
             outcomes: outcomes(&now, &existing_now),
             checks: self.street_checks(),
             zones: self.zones_view(),
+            curb: self.curb_view(),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
@@ -1727,6 +1731,8 @@ pub struct View {
     pub checks: Vec<Check>,
     /// The street's zones, for the strip.
     pub zones: ZonesView,
+    /// The curbside strips.
+    pub curb: CurbView,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
     pub revisions: Vec<Revision>,

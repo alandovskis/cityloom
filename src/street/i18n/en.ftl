@@ -436,3 +436,18 @@ check-detail-curb-bike-platform = Passengers cross the bike lane to board. The c
 check-detail-curb-bike-ok = No use opens onto a bike lane.
 check-detail-curb-sidewalk = The patio leaves { $have } of sidewalk; { $need } or more is needed.
 check-detail-curb-sidewalk-ok = Every patio leaves room on the sidewalk.
+
+# The curbside strips and their commands (src/street/curb_strip.rs, src/street/curb_tools.rs).
+curb-gap = Free
+curb-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
+curb-cell-failing = Fails a check. See the checks.
+curb-choose-gap = Choose a free stretch of the curbside first.
+curb-choose-use = Choose a use on the curbside first.
+st-curb-heading = Curbside uses along the street
+st-curb-caption = Curbside, { $side }
+st-curb-strip-label = Curbside uses, { $side }
+st-curb-tools = Curbside commands
+st-curb-use = Use
+st-curb-length = Length ({ $unit })
+st-curb-add = Add use
+st-curb-remove = Remove use

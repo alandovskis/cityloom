@@ -40,6 +40,9 @@ pub enum Use {
 }
 
 impl Use {
+    /// Every use, in the order a choice lists them.
+    pub const ALL: [Use; 8] = [Use::Parking, Use::Loading, Use::Tree, Use::Planting, Use::RainGarden, Use::Patio, Use::BikeParking, Use::Platform];
+
     /// The catalogue kind it is drawn as.
     pub fn kind_id(self) -> &'static str {
         match self {
@@ -144,6 +147,36 @@ impl CurbRefusal {
     }
 }
 
+/// The curbside strips of a street as the view carries them: one per side that has a curbside lane somewhere along
+/// the street, or has uses.
+#[derive(Serialize)]
+pub struct CurbView {
+    pub sides: Vec<CurbSideView>,
+}
+
+#[derive(Serialize)]
+pub struct CurbSideView {
+    pub side: Side,
+    /// The uses and the gaps between them along the whole street, in order.
+    pub cells: Vec<CurbCell>,
+    /// The chosen cell, on the side the person chose it.
+    pub selected: Option<usize>,
+}
+
+#[derive(Serialize)]
+pub struct CurbCell {
+    /// An index into the street's `curb` for a use, `None` for a gap.
+    pub instance: Option<usize>,
+    pub from_mm: i32,
+    pub to_mm: i32,
+    /// The use, for a use; `None` for a gap.
+    pub use_: Option<Use>,
+    /// What the cell says: the use's name, or "Free" for a gap.
+    pub label: Said,
+    /// The use breaks no curbside check (a gap always passes).
+    pub ok: bool,
+}
+
 /// Where the curbside piece of a side is.
 enum Lane {
     Piece(usize),
@@ -230,6 +263,65 @@ impl Street {
 }
 
 impl Editor {
+    /// The curbside strips: a side has one when some zone's section has a curbside lane there, or it has uses
+    /// (which can then still be taken away).
+    pub(super) fn curb_view(&self) -> CurbView {
+        let content = &self.states[self.cursor].content;
+        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        let failing: Vec<usize> = self.curb_failures().iter().map(|f| f.instance).collect();
+        let sides = [Side::Left, Side::Right]
+            .into_iter()
+            .filter(|&side| content.curb.iter().any(|i| i.side == side) || (0..content.zone_count()).any(|z| curbside(content.section(z), side).is_some()))
+            .map(|side| {
+                let gap = |from_mm: i32, to_mm: i32| CurbCell { instance: None, from_mm, to_mm, use_: None, label: Said::new("curb-gap"), ok: true };
+                let mut cells = Vec::new();
+                let mut at = 0;
+                for (k, i) in content.curb.iter().enumerate().filter(|(_, i)| i.side == side) {
+                    if i.from_mm > at {
+                        cells.push(gap(at, i.from_mm));
+                    }
+                    cells.push(CurbCell {
+                        instance: Some(k),
+                        from_mm: i.from_mm,
+                        to_mm: i.to_mm(),
+                        use_: Some(i.use_),
+                        label: Said::new(i.use_.name_key()),
+                        ok: !failing.contains(&k),
+                    });
+                    at = at.max(i.to_mm());
+                }
+                if at < length_mm {
+                    cells.push(gap(at, length_mm));
+                }
+                let selected = self.curb_sel.filter(|(s, _)| *s == side).and_then(|(_, mm)| cells.iter().position(|c| c.from_mm <= mm && mm < c.to_mm));
+                CurbSideView { side, cells, selected }
+            })
+            .collect();
+        CurbView { sides }
+    }
+
+    /// Chooses the cell of `side`'s strip that holds `at_mm`. A setting, not history; a cell is found again by its
+    /// place, so it stays chosen as the uses around it change.
+    pub fn select_curb(&mut self, side: Side, at_mm: i32) {
+        self.curb_sel = Some((side, at_mm));
+    }
+
+    /// Whether a drag (of a zone boundary or a use) is under way.
+    pub fn dragging(&self) -> bool {
+        self.gesture.is_some()
+    }
+
+    /// Starts a drag of a use: the steps are shown and the end is one revision. False when a drag is under way.
+    pub fn begin_curb_drag(&mut self) -> bool {
+        if self.gesture.is_some() {
+            return false;
+        }
+        self.begin_gesture();
+        true
+    }
+}
+
+impl Editor {
     fn curb_frame(&self, allow_drag: bool) -> Result<ZoneFrame, CurbRefusal> {
         if self.gesture.is_some() && !allow_drag {
             return Err(CurbRefusal::Dragging);
@@ -282,6 +374,7 @@ impl Editor {
         let i = Instance { side, from_mm: snap(from_mm), length_mm: snap(length_mm).max(SNAP_MM), use_ };
         self.curb_fits(&i, None, frame)?;
         self.curb_change(Self::curb_label("rev-curb-add", &i), frame, |curb| curb.push(i));
+        self.curb_sel = Some((side, i.from_mm));
         Ok(())
     }
 
@@ -316,6 +409,9 @@ impl Editor {
             return Ok(());
         }
         let label = Self::curb_label("rev-curb-move", &new);
+        if self.curb_sel == Some((old.side, old.from_mm)) {
+            self.curb_sel = Some((new.side, new.from_mm));
+        }
         if self.gesture.is_some() {
             let c = &mut self.states[self.cursor].content;
             c.curb[i] = new;
@@ -373,6 +469,14 @@ impl Instance {
     }
 }
 
+/// One rule one instance breaks.
+struct Failure {
+    /// An index into the snapshot's `curb`.
+    instance: usize,
+    rule: usize,
+    detail: Said,
+}
+
 impl Editor {
     /// The rows of the curbside programme, after the zones' own (only when the street has instances): one per rule,
     /// failing with the first instance that breaks it, which it names in `zone`.
@@ -382,16 +486,37 @@ impl Editor {
     /// and `ends` (node `a`, node `b`) is read from the anchored end the positions are measured from.
     pub(super) fn curb_checks(&self) -> Vec<Check> {
         let content = &self.states[self.cursor].content;
+        let failures = self.curb_failures();
+        let rows = [
+            ("curb-length", "check-label-curb-length", "check-detail-curb-length-ok"),
+            ("curb-lane", "check-label-curb-lane", "check-detail-curb-lane-ok"),
+            ("curb-crossing", "check-label-curb-crossing", "check-detail-curb-crossing-ok"),
+            ("curb-bike", "check-label-curb-bike", "check-detail-curb-bike-ok"),
+            ("curb-sidewalk", "check-label-curb-sidewalk", "check-detail-curb-sidewalk-ok"),
+        ];
+        rows.into_iter()
+            .enumerate()
+            .map(|(rule, (id, label, ok_detail))| match failures.iter().find(|f| f.rule == rule) {
+                None => Check { id, ok: true, label: Said::new(label), detail: Said::new(ok_detail), zone: None },
+                Some(f) => Check { id, ok: false, label: Said::new(label), detail: f.detail.clone(), zone: Some(content.curb[f.instance].named()) },
+            })
+            .collect()
+    }
+
+    /// Every rule each instance breaks, instance by instance in order: `rule` indexes the five rows of `curb_checks`.
+    fn curb_failures(&self) -> Vec<Failure> {
+        let content = &self.states[self.cursor].content;
         let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
         let (near, far) = match content.from_end {
             ZoneEnd::First => (self.ends[0], self.ends[1]),
             ZoneEnd::Last => (self.ends[1], self.ends[0]),
         };
-        // The first instance that breaks each rule, with what to say of it.
-        let mut broken: [Option<(&Instance, Said)>; 5] = [None, None, None, None, None];
-        for i in &content.curb {
+        let mut out: Vec<Failure> = Vec::new();
+        for (k, i) in content.curb.iter().enumerate() {
             let mut fail = |rule: usize, detail: Said| {
-                broken[rule].get_or_insert((i, detail));
+                if !out.iter().any(|f| f.instance == k && f.rule == rule) {
+                    out.push(Failure { instance: k, rule, detail });
+                }
             };
             if i.length_mm < i.use_.min_mm() {
                 fail(
@@ -453,20 +578,7 @@ impl Editor {
                 }
             }
         }
-        let rows = [
-            ("curb-length", "check-label-curb-length", "check-detail-curb-length-ok"),
-            ("curb-lane", "check-label-curb-lane", "check-detail-curb-lane-ok"),
-            ("curb-crossing", "check-label-curb-crossing", "check-detail-curb-crossing-ok"),
-            ("curb-bike", "check-label-curb-bike", "check-detail-curb-bike-ok"),
-            ("curb-sidewalk", "check-label-curb-sidewalk", "check-detail-curb-sidewalk-ok"),
-        ];
-        rows.into_iter()
-            .zip(broken)
-            .map(|((id, label, ok_detail), failure)| match failure {
-                None => Check { id, ok: true, label: Said::new(label), detail: Said::new(ok_detail), zone: None },
-                Some((i, detail)) => Check { id, ok: false, label: Said::new(label), detail, zone: Some(i.named()) },
-            })
-            .collect()
+        out
     }
 }
 

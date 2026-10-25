@@ -436,3 +436,18 @@ check-detail-curb-bike-platform = Les passagers traversent la piste cyclable pou
 check-detail-curb-bike-ok = Aucun usage ne donne sur une piste cyclable.
 check-detail-curb-sidewalk = La terrasse laisse { $have } de trottoir; il en faut { $need } ou plus.
 check-detail-curb-sidewalk-ok = Chaque terrasse laisse de la place sur le trottoir.
+
+# Les bandes du bord de rue et leurs commandes (src/street/curb_strip.rs, src/street/curb_tools.rs).
+curb-gap = Libre
+curb-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
+curb-cell-failing = Ne passe pas une vérification. Voir les vérifications.
+curb-choose-gap = Choisissez d’abord un tronçon libre du bord de rue.
+curb-choose-use = Choisissez d’abord un usage du bord de rue.
+st-curb-heading = Usages du bord de rue le long de la rue
+st-curb-caption = Bord de rue, { $side }
+st-curb-strip-label = Usages du bord de rue, { $side }
+st-curb-tools = Commandes du bord de rue
+st-curb-use = Usage
+st-curb-length = Longueur ({ $unit })
+st-curb-add = Ajouter un usage
+st-curb-remove = Retirer un usage

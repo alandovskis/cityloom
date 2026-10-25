@@ -9,13 +9,15 @@ use leptos::prelude::*;
 use crate::city::binding::{CityBinding, Place};
 use crate::restriction::model::{Finding, Restriction};
 use crate::restriction::store::RestrictionStore;
+use crate::shared::catalogue::Side;
 use crate::shared::catalogue::{PEDESTRIAN_KINDS, StreetClass, kind_index};
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
+use crate::shared::said::say_now;
 use crate::shared::units::Units;
-use crate::street::model::{Editor, Keep, SPEED_CHOICES, View, ZoneRefusal};
+use crate::street::model::{CurbRefusal, Editor, Keep, SPEED_CHOICES, Use, View, ZoneRefusal};
 use crate::street::text;
 use crate::sync::model::{Change, Origin};
 
@@ -431,6 +433,148 @@ impl StreetVm {
     /// The end of a boundary drag: kept as one edit, and announced, when `commit`.
     pub fn end_boundary_drag(&self, commit: bool) {
         self.end_gesture(commit);
+    }
+
+    // ---- curbside uses ----
+
+    /// A curbside edit the person made: announced like any edit; a refusal is said in the page's words and changes
+    /// nothing.
+    fn curb_edit(&self, f: impl FnOnce(&mut Editor) -> Result<(), CurbRefusal>) -> bool {
+        let before = self.class_now();
+        match self.core.edit(f) {
+            Ok(()) => {
+                if let Some(k) = &self.keeper {
+                    k.touch();
+                }
+                self.say_edit(before);
+                true
+            }
+            Err(refusal) => {
+                self.say_curb_refusal(refusal);
+                false
+            }
+        }
+    }
+
+    fn say_curb_refusal(&self, refusal: CurbRefusal) {
+        self.ports.announcer.say(&say_now(&self.i18n, self.units_now(), &refusal.said()));
+    }
+
+    fn say_now_key(&self, key: &str) {
+        self.ports.announcer.say(&self.i18n.tr_now(key, &Args::new()));
+    }
+
+    /// The chosen cell of the strips: its side, its place on the strip, its extent and the use there (an index into
+    /// the street's `curb`), if any.
+    fn chosen_curb(&self) -> Option<(Side, Option<usize>, i32)> {
+        let v = self.view_now();
+        v.curb.sides.iter().find_map(|s| {
+            let c = s.cells.get(s.selected?)?;
+            Some((s.side, c.instance, c.from_mm))
+        })
+    }
+
+    /// Chooses cell `cell` of `side`'s strip, announcing it. A cell that is not there is left alone.
+    pub fn select_curb(&self, side: Side, cell: usize) {
+        let v = self.view_now();
+        let Some(s) = v.curb.sides.iter().find(|s| s.side == side) else { return };
+        let Some(c) = s.cells.get(cell) else { return };
+        let at = c.from_mm;
+        self.edit(|e| e.select_curb(side, at));
+        self.ports.announcer.say(&text::curb_cell_text(s, cell, &self.i18n, self.units_now()));
+    }
+
+    /// The cell `delta` places along from the chosen one on `side` (the first, or the last going back, when none is).
+    pub fn select_curb_relative(&self, side: Side, delta: i32) {
+        let v = self.view_now();
+        let Some(s) = v.curb.sides.iter().find(|s| s.side == side) else { return };
+        let target = match s.selected {
+            Some(n) => n as i64 + delta as i64,
+            None if delta < 0 => s.cells.len() as i64 - 1,
+            None => 0,
+        };
+        if let Ok(cell) = usize::try_from(target) {
+            self.select_curb(side, cell);
+        }
+    }
+
+    /// The first cell of `side`'s strip, or the last (Home and End).
+    pub fn select_curb_edge(&self, side: Side, last: bool) {
+        let n = self.view_now().curb.sides.iter().find(|s| s.side == side).map_or(0, |s| s.cells.len());
+        if n > 0 {
+            self.select_curb(side, if last { n - 1 } else { 0 });
+        }
+    }
+
+    /// Adds a use of `length_mm` at the start of the chosen gap. False, with the reason said, when no gap is chosen or
+    /// it was refused.
+    pub fn add_curb(&self, use_: Use, length_mm: i32) -> bool {
+        match self.chosen_curb() {
+            Some((side, None, from_mm)) => self.curb_edit(|e| e.add_curb(side, from_mm, length_mm, use_)),
+            _ => {
+                self.say_now_key("curb-choose-gap");
+                false
+            }
+        }
+    }
+
+    /// Runs `f` on the chosen use (its index and where it starts); says so when none is chosen.
+    fn on_chosen_use(&self, f: impl FnOnce(&mut Editor, usize, i32) -> Result<(), CurbRefusal>) -> bool {
+        match self.chosen_curb() {
+            Some((_, Some(i), from)) => self.curb_edit(|e| f(e, i, from)),
+            _ => {
+                self.say_now_key("curb-choose-use");
+                false
+            }
+        }
+    }
+
+    pub fn set_curb_use(&self, use_: Use) -> bool {
+        self.on_chosen_use(|e, i, _| e.set_curb_use(i, use_))
+    }
+
+    pub fn resize_curb(&self, length_mm: i32) -> bool {
+        self.on_chosen_use(|e, i, _| e.resize_curb(i, length_mm))
+    }
+
+    /// Moves the chosen use along the street by `delta_mm`.
+    pub fn nudge_curb(&self, delta_mm: i32) -> bool {
+        // The model lets a move through inside a gesture (that is how a drag moves); a command is not a drag.
+        if self.core.read(|e| e.dragging()) {
+            self.say_curb_refusal(CurbRefusal::Dragging);
+            return false;
+        }
+        self.on_chosen_use(|e, i, from| e.move_curb(i, from + delta_mm))
+    }
+
+    pub fn remove_curb(&self) -> bool {
+        self.on_chosen_use(|e, i, _| e.remove_curb(i))
+    }
+
+    /// Starts a drag of the chosen use. False, with the reason said, while another drag is under way or when no use
+    /// is chosen: then nothing is dragged and `end_curb_drag` is not to be called.
+    pub fn begin_curb_drag(&self) -> bool {
+        if !matches!(self.chosen_curb(), Some((_, Some(_), _))) {
+            self.say_now_key("curb-choose-use");
+            return false;
+        }
+        let begun = self.edit(|e| e.begin_curb_drag());
+        if !begun {
+            self.say_curb_refusal(CurbRefusal::Dragging);
+        }
+        begun
+    }
+
+    /// One step of a drag of the chosen use: shown, not announced.
+    pub fn drag_curb_to(&self, from_mm: i32) {
+        if let Some((_, Some(i), _)) = self.chosen_curb() {
+            self.quiet(|e| e.move_curb(i, from_mm).is_ok());
+        }
+    }
+
+    /// The end of a drag of a use: kept as one edit, and announced, when `keep`.
+    pub fn end_curb_drag(&self, keep: bool) {
+        self.end_gesture(keep);
     }
 
     /// Says that a typed length for a zone is not a number.
@@ -1525,5 +1669,188 @@ mod tests {
         hub::publish(&[Change { id: binding.record().unwrap(), origin: Origin::Remote }]);
         assert_eq!(r.vm.read(|e| e.zone()), 1);
         assert_eq!(r.vm.view_now().selected, Some(uid));
+    }
+}
+
+#[cfg(test)]
+mod curb_tests {
+    use super::*;
+    use crate::shared::catalogue::Side;
+    use crate::shared::i18n::Locale;
+    use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
+    use crate::street::model::{Street, Use, ZoneEnd, ZoneFrame};
+
+    const LENGTH: i32 = 60_000;
+
+    struct Rig {
+        vm: Rc<StreetVm>,
+        said: Rc<RecordingAnnouncer>,
+    }
+
+    /// The sample street (parking on both sides), 60 m long, anchored at its first end.
+    fn rig() -> Rig {
+        let street = Street::sample(0, Side::Right);
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: LENGTH, from_end: ZoneEnd::First }));
+        Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None), said }
+    }
+
+    fn side(r: &Rig, s: Side) -> Vec<(Option<usize>, i32, i32)> {
+        let v = r.vm.view_now();
+        v.curb.sides.iter().find(|x| x.side == s).unwrap().cells.iter().map(|c| (c.instance, c.from_mm, c.to_mm)).collect()
+    }
+
+    /// A parking space of 6 m at the start of the right side, chosen.
+    fn with_one_use() -> Rig {
+        let r = rig();
+        r.vm.select_curb(Side::Right, 0);
+        assert!(r.vm.add_curb(Use::Parking, 6_000));
+        r.said.take();
+        r
+    }
+
+    #[test]
+    fn a_street_with_curbside_lanes_has_a_strip_per_side_and_one_without_has_none() {
+        let r = rig();
+        let v = r.vm.view_now();
+        assert_eq!(v.curb.sides.iter().map(|s| s.side).collect::<Vec<_>>(), [Side::Left, Side::Right]);
+        assert_eq!(side(&r, Side::Left), [(None, 0, LENGTH)], "one gap along the whole street");
+        assert!(v.curb.sides.iter().all(|s| s.selected.is_none()));
+        let street = Street::sample(3, Side::Right);
+        let (ports, _, _, _) = test_ports_with_time();
+        let vm = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::from_street(&street, &street, 0).with_frame(None), None);
+        assert!(vm.view_now().curb.sides.is_empty(), "no parking or loading lane: no strip");
+    }
+
+    #[test]
+    fn adding_a_use_into_a_gap() {
+        let r = rig();
+        r.vm.select_curb(Side::Right, 0);
+        assert_eq!(r.said.take(), ["Free, 0.0 m to 60.0 m, 60.0 m long, 1 of 1"]);
+        assert!(r.vm.add_curb(Use::Parking, 6_000));
+        assert_eq!(side(&r, Side::Right), [(Some(0), 0, 6_000), (None, 6_000, LENGTH)]);
+        assert_eq!(r.said.take().len(), 1);
+        let v = r.vm.view_now();
+        assert_eq!(v.curb.sides[1].selected, Some(0), "the new use is the chosen cell");
+        assert_eq!(v.revisions.last().unwrap().label.key, "rev-curb-add");
+        // a use is not a gap
+        assert!(!r.vm.add_curb(Use::Loading, 9_000));
+        assert_eq!(r.said.take(), ["Choose a free stretch of the curbside first."]);
+        // into the second gap, at its start
+        r.vm.select_curb(Side::Right, 1);
+        assert!(r.vm.add_curb(Use::Tree, 2_000));
+        assert_eq!(side(&r, Side::Right), [(Some(0), 0, 6_000), (Some(1), 6_000, 8_000), (None, 8_000, LENGTH)]);
+        assert!(r.vm.undo() && r.vm.undo());
+        assert_eq!(side(&r, Side::Right), [(None, 0, LENGTH)]);
+    }
+
+    #[test]
+    fn changing_the_use() {
+        let r = with_one_use();
+        assert!(r.vm.set_curb_use(Use::Loading));
+        assert_eq!(r.vm.view_now().curb.sides[1].cells[0].label.key, "curb-use-loading");
+        assert_eq!(r.said.take().len(), 1);
+        r.vm.select_curb(Side::Right, 1);
+        assert!(!r.vm.set_curb_use(Use::Tree), "a gap has no use to change");
+        assert_eq!(r.said.take().last().unwrap(), "Choose a use on the curbside first.");
+    }
+
+    #[test]
+    fn resizing_refuses_an_overlap_and_says_why() {
+        let r = with_one_use();
+        r.vm.select_curb(Side::Right, 1);
+        assert!(r.vm.add_curb(Use::Tree, 2_000));
+        r.vm.select_curb(Side::Right, 0);
+        r.said.take();
+        assert!(!r.vm.resize_curb(8_000));
+        assert_eq!(r.said.take(), ["That would overlap another use on the same side."]);
+        assert!(r.vm.resize_curb(5_500));
+        assert_eq!(side(&r, Side::Right)[0], (Some(0), 0, 5_500));
+        assert!(!r.vm.resize_curb(LENGTH + 1_000));
+        assert_eq!(r.said.take().last().unwrap(), "That would run past the end of the street.");
+    }
+
+    #[test]
+    fn nudging_moves_by_a_metre() {
+        let r = with_one_use();
+        assert!(r.vm.nudge_curb(1_000));
+        assert_eq!(side(&r, Side::Right)[..2], [(None, 0, 1_000), (Some(0), 1_000, 7_000)]);
+        assert_eq!(r.vm.view_now().curb.sides[1].selected, Some(1), "the moved use stays chosen");
+        assert!(r.vm.nudge_curb(-1_000));
+        r.said.take();
+        assert!(!r.vm.nudge_curb(-1_000), "before the start of the street");
+        assert_eq!(r.said.take(), ["That would run past the end of the street."]);
+        assert!(r.vm.remove_curb());
+        assert_eq!(side(&r, Side::Right), [(None, 0, LENGTH)]);
+        assert!(!r.vm.remove_curb(), "a gap is chosen now");
+    }
+
+    #[test]
+    fn drag_keeps_or_cancels() {
+        let r = with_one_use();
+        assert!(r.vm.begin_curb_drag());
+        r.vm.drag_curb_to(10_000);
+        r.vm.drag_curb_to(12_300);
+        assert!(r.said.take().is_empty(), "quiet while it goes");
+        assert_eq!(side(&r, Side::Right)[1], (Some(0), 12_300, 18_300));
+        assert_eq!(r.vm.view_now().revisions.len(), 1, "only the add so far");
+        r.vm.end_curb_drag(true);
+        assert_eq!(r.vm.view_now().revisions.len(), 2, "one edit for the whole drag");
+        assert_eq!(r.said.take().len(), 1);
+        assert!(r.vm.undo());
+        assert_eq!(side(&r, Side::Right)[0], (Some(0), 0, 6_000));
+        assert!(r.vm.redo());
+        // cancelled: back as it was
+        r.vm.select_curb(Side::Right, 1);
+        assert!(r.vm.begin_curb_drag());
+        r.vm.drag_curb_to(30_000);
+        r.vm.end_curb_drag(false);
+        assert_eq!(side(&r, Side::Right)[1], (Some(0), 12_300, 18_300));
+        assert_eq!(r.vm.view_now().revisions.len(), 2);
+    }
+
+    #[test]
+    fn commands_are_refused_during_a_zone_drag() {
+        let r = with_one_use();
+        r.vm.begin_boundary_drag();
+        assert!(!r.vm.begin_curb_drag(), "a zone drag is under way");
+        assert!(!r.vm.nudge_curb(1_000));
+        assert!(!r.vm.set_curb_use(Use::Loading));
+        assert!(!r.vm.resize_curb(7_000));
+        assert!(!r.vm.remove_curb());
+        let said = r.said.take();
+        assert_eq!(said.len(), 5, "{said:?}");
+        assert!(said.iter().all(|s| s == "Finish the drag before changing the curbside."), "{said:?}");
+        r.vm.end_boundary_drag(false);
+        assert!(r.vm.nudge_curb(1_000));
+    }
+
+    #[test]
+    fn zone_commands_are_refused_during_a_curb_drag_and_a_second_curb_drag_is_refused() {
+        let r = with_one_use();
+        assert!(r.vm.begin_curb_drag());
+        assert!(!r.vm.begin_curb_drag());
+        assert!(!r.vm.resize_curb(7_000));
+        assert!(!r.vm.split_zone(None));
+        assert_eq!(r.said.take().len(), 3);
+        r.vm.end_curb_drag(false);
+        assert!(r.vm.resize_curb(7_000));
+    }
+
+    #[test]
+    fn the_arrows_choose_cells_along_a_strip() {
+        let r = with_one_use();
+        r.vm.select_curb_edge(Side::Right, false);
+        assert_eq!(r.vm.view_now().curb.sides[1].selected, Some(0));
+        r.vm.select_curb_relative(Side::Right, 1);
+        assert_eq!(r.vm.view_now().curb.sides[1].selected, Some(1));
+        r.vm.select_curb_relative(Side::Right, 1);
+        assert_eq!(r.vm.view_now().curb.sides[1].selected, Some(1), "no wrap");
+        r.vm.select_curb_edge(Side::Right, true);
+        r.vm.select_curb_relative(Side::Right, -1);
+        assert_eq!(r.vm.view_now().curb.sides[1].selected, Some(0));
+        r.vm.select_curb_relative(Side::Left, -1);
+        let v = r.vm.view_now();
+        assert_eq!((v.curb.sides[0].selected, v.curb.sides[1].selected), (Some(0), None), "only one side holds the choice");
     }
 }

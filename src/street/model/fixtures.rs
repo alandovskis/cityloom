@@ -119,6 +119,7 @@ impl Editor {
             ends: [EndInfo::default(); 2],
             selected: None,
             gesture: None,
+            curb_sel: None,
             pending_label: None,
         };
         e.load_sample(sample);
