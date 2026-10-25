@@ -931,8 +931,9 @@ mod tests {
         let planting = a.beyond.iter().filter(|p| KINDS[p.kind].id == "planting").count();
         assert!(planting > 0);
         assert_eq!(count(&with, "iso-top k-planting"), count(&without, "iso-top k-planting") + planting);
-        // a strip's end at the boundary is not walled against the strip that continues it
-        assert!(count(&with, "iso-side k-sidewalk") <= count(&without, "iso-side k-sidewalk") + 2 * more);
+        // Splitting at the boundary gives the wall facing the viewer along the arm one more piece, and the boundary's own
+        // ends, which face the viewer on one of the two, are not walled against the strip that continues them.
+        assert_eq!(count(&with, "iso-side k-sidewalk"), count(&without, "iso-side k-sidewalk") + 1, "a wall drawn at the boundary would add more");
     }
 
     #[test]
