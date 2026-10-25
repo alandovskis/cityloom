@@ -491,16 +491,22 @@ check-label-stop-bike = Arrêts : loin des pistes cyclables
 check-label-stop-shelter = Abribus : place suffisante
 check-detail-stop-lane = Il n’y a pas ici de voie d’autobus ou de circulation dans le sens de la circulation de ce côté.
 check-detail-stop-lane-ok = Chaque arrêt a une voie pour l’autobus.
-check-detail-stop-kind = La rue n’est pas aménagée ici pour un arrêt de ce type : { $kind }.
+check-detail-stop-kind-curb = Un arrêt au trottoir demande que la voie de l’autobus longe le trottoir, sans voie de stationnement ni de chargement entre les deux.
+check-detail-stop-kind-bulb = Une avancée de trottoir demande une voie de stationnement ou de chargement à côté de la voie de l’autobus.
+check-detail-stop-kind-island = Un îlot d’embarquement demande, à côté de la voie de l’autobus, une voie de stationnement, de chargement ou une zone tampon, avec une piste cyclable derrière.
 check-detail-stop-kind-ok = Chaque arrêt est aménagé comme son type l’exige.
 check-detail-stop-length = L’arrêt fait { $length } de long, moins que les { $min } nécessaires à un autobus.
 check-detail-stop-length-ok = Chaque arrêt est assez long pour un autobus.
-check-detail-stop-width = Le quai fait { $have } de large; il en faut { $need } ou plus.
+check-detail-stop-width-curb = Le trottoir à côté de l’arrêt fait { $have } de large; il en faut { $need } ou plus.
+check-detail-stop-width-bulb = L’avancée et le trottoir donnent { $have }; il en faut { $need } ou plus.
+check-detail-stop-width-island = L’îlot fait { $have } de large; il en faut { $need } ou plus.
 check-detail-stop-width-ok = Chaque arrêt laisse la place d’embarquer.
 check-detail-stop-bike-cross = Les cyclistes traverseraient le quai. Le passage n’est pas dessiné : à vérifier.
 check-detail-stop-bike-narrow = La piste cyclable derrière l’îlot fait { $have } de large; il en faut { $need } ou plus.
 check-detail-stop-bike-ok = Aucun arrêt n’envoie les cyclistes à travers le quai.
-check-detail-stop-shelter = Le quai fait { $have } de large; un abribus demande { $need } ou plus.
+check-detail-stop-shelter-curb = Le trottoir à côté de l’arrêt fait { $have } de large; un abribus demande { $need } ou plus.
+check-detail-stop-shelter-bulb = L’avancée et le trottoir donnent { $have }; un abribus demande { $need } ou plus.
+check-detail-stop-shelter-island = L’îlot fait { $have } de large; un abribus demande { $need } ou plus.
 check-detail-stop-shelter-ok = Chaque abribus a la place voulue.
 
 # Les rangées d’arrêts et leurs commandes (src/street/row.rs, src/street/stop_tools.rs, src/street/model/stop.rs).

@@ -54,15 +54,15 @@ test.describe("the Stops row", () => {
     await expect(cells.nth(0)).toHaveAttribute("aria-label", /with a shelter/);
     await expect(page.locator("#undo")).toBeEnabled();
 
-    // The Checks list the six stop rows. A curbside parking lane is narrower than the 3.9 m a shelter needs, so on
-    // this street the shelter row fails and names it; the other five pass.
+    // The Checks list the six stop rows. The curb extension (the parking lane) joins the sidewalk beyond it, which
+    // together give the 3.9 m a shelter needs on the Plateau, so all six pass.
     await page.locator("#t-checks").click();
     for (const label of ROWS) {
       const row = page.locator("#checks li").filter({ hasText: label });
       await expect(row).toHaveCount(1);
-      await expect(row).toHaveClass(label === "Shelters have room" ? "bad" : "ok");
+      await expect(row).toHaveClass("ok");
     }
-    await expect(page.locator("#checks li").filter({ hasText: "Shelters have room" })).toContainText("a shelter needs");
+    await expect(page.locator("#checks li").filter({ hasText: "Shelters have room" })).toContainText("Every shelter has room.");
 
     // The 2.5D says how many stops it shows, and draws the sign and the shelter.
     await page.locator('#view-mode-slot button[aria-pressed="false"]').click();
@@ -178,6 +178,6 @@ test.describe("the Stops row", () => {
     await page.locator("#t-checks").click();
     const row = page.locator("#checks li").filter({ hasText: "Stops have room to board" });
     await expect(row).toHaveClass("bad");
-    await expect(row).toContainText("or more is needed");
+    await expect(row).toContainText("The sidewalk beside the stop is 1.5 m wide; 2.4 m or more is needed.");
   });
 });

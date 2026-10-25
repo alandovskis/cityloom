@@ -491,16 +491,22 @@ check-label-stop-bike = Stops clear of bike lanes
 check-label-stop-shelter = Shelters have room
 check-detail-stop-lane = There is no bus or driving lane here for buses going the way traffic goes on this side.
 check-detail-stop-lane-ok = Every stop has a lane for the bus.
-check-detail-stop-kind = The street here is not built for a { $kind }.
+check-detail-stop-kind-curb = A curb stop needs the bus's lane to run along the curb, with no parking or loading lane beside it.
+check-detail-stop-kind-bulb = A curb extension needs a parking or loading lane beside the bus's lane.
+check-detail-stop-kind-island = A boarding island needs a parking, loading or buffer piece beside the bus's lane, with a bike lane behind it.
 check-detail-stop-kind-ok = Every stop is built as its kind needs.
 check-detail-stop-length = The stop is { $length } long, under the { $min } a bus needs.
 check-detail-stop-length-ok = Every stop is long enough for a bus.
-check-detail-stop-width = The boarding area is { $have } wide; { $need } or more is needed.
+check-detail-stop-width-curb = The sidewalk beside the stop is { $have } wide; { $need } or more is needed.
+check-detail-stop-width-bulb = The curb extension and the sidewalk give { $have }; { $need } or more is needed.
+check-detail-stop-width-island = The island is { $have } wide; { $need } or more is needed.
 check-detail-stop-width-ok = Every stop has room to board.
 check-detail-stop-bike-cross = Riders would cross the boarding area. The crossing is not drawn, so check it.
 check-detail-stop-bike-narrow = The bike lane behind the island is { $have } wide; { $need } or more is needed.
 check-detail-stop-bike-ok = No stop sends riders across the boarding area.
-check-detail-stop-shelter = The boarding area is { $have } wide; a shelter needs { $need } or more.
+check-detail-stop-shelter-curb = The sidewalk beside the stop is { $have } wide; a shelter needs { $need } or more.
+check-detail-stop-shelter-bulb = The curb extension and the sidewalk give { $have }; a shelter needs { $need } or more.
+check-detail-stop-shelter-island = The island is { $have } wide; a shelter needs { $need } or more.
 check-detail-stop-shelter-ok = Every shelter has room.
 
 # The stops rows and their commands (src/street/row.rs, src/street/stop_tools.rs, src/street/model/stop.rs).

@@ -242,15 +242,15 @@ pub(crate) fn bus_lane(segs: &[Segment], side: Side, driving: Side) -> Option<us
 
 /// What a stop of some kind stands on, beside the bus's lane.
 struct Platform {
-    /// The boarding area: the sidewalk run (curb stop), the parking or loading piece (bulb), the pieces between the
-    /// lane and the bike lane (island).
+    /// The boarding area: the sidewalk run (curb stop), the parking or loading piece and the sidewalk run directly
+    /// beyond it (bulb: the extension joins that sidewalk), the pieces between the lane and the bike lane (island).
     width_mm: i32,
     /// A bike lane between the bus's lane and the platform, which riders would cross.
     bike_crosses: bool,
     /// The width of the bike lane that passes behind an island.
     bike_behind_mm: Option<i32>,
-    /// The pieces (indices into the section) it stands on: the sidewalk beside the lane for a curb stop, the parking
-    /// or loading piece for a bulb, the pieces between the lane and the bike lane for an island.
+    /// The pieces (indices into the section) it is raised or stands on: the sidewalk beside the lane for a curb stop,
+    /// the parking or loading piece for a bulb (the sidewalk beyond it is already at height), the pieces between the lane and the bike lane for an island.
     pieces: Vec<usize>,
 }
 
@@ -268,20 +268,26 @@ fn platform(segs: &[Segment], lane: usize, side: Side, kind: StopKind) -> Option
     let id = |s: &&Segment| KINDS[s.kind].id;
     let at = |k: usize| outward_index(lane, side, k);
     match kind {
-        // Nothing with a motor on it between the lane and the edge: the bus stops at the curb.
+        // Nothing with a motor on it between the lane and the edge: the bus stops at the curb. The widest walkway
+        // outward counts, and a bike lane anywhere outward is crossed: both are looser than the platform the bus
+        // really meets (a known looseness, kept simple).
         StopKind::Curb => (!outward.iter().any(|s| is_motor(s.kind))).then(|| Platform {
             width_mm: widest_walkway_mm(outward.iter().copied()),
             bike_crosses: outward.iter().any(|s| id(s) == "bike"),
             bike_behind_mm: None,
             pieces: outward.iter().position(|s| id(s) == "sidewalk").map(at).into_iter().collect(),
         }),
-        // A parking or loading piece before any other motor piece.
+        // A parking or loading piece before any other motor piece. The extension joins the sidewalk directly beyond
+        // it, so that run (as `widest_walkway_mm` measures one, from the piece outward) is part of the boarding area.
         StopKind::Bulb => {
             let mut bike_crosses = false;
             for (k, s) in outward.iter().enumerate() {
                 match id(s) {
                     "bike" => bike_crosses = true,
-                    "parking" | "loading" => return Some(Platform { width_mm: s.width_mm, bike_crosses, bike_behind_mm: None, pieces: vec![at(k)] }),
+                    "parking" | "loading" => {
+                        let walkway_mm: i32 = outward[k + 1..].iter().take_while(|n| id(n) == "sidewalk").map(|n| n.width_mm).sum();
+                        return Some(Platform { width_mm: s.width_mm + walkway_mm, bike_crosses, bike_behind_mm: None, pieces: vec![at(k)] });
+                    }
                     _ if is_motor(s.kind) => return None,
                     _ => {}
                 }
@@ -509,11 +515,21 @@ impl Editor {
                     continue;
                 };
                 let Some(p) = platform(segs, lane, s.side, s.kind) else {
-                    fail(1, Said::new("check-detail-stop-kind").with("kind", Arg::MsgLower(s.kind.name_key())));
+                    let key = match s.kind {
+                        StopKind::Curb => "check-detail-stop-kind-curb",
+                        StopKind::Bulb => "check-detail-stop-kind-bulb",
+                        StopKind::Island => "check-detail-stop-kind-island",
+                    };
+                    fail(1, Said::new(key));
                     continue;
                 };
                 if p.width_mm < BOARDING_MM {
-                    fail(3, Said::new("check-detail-stop-width").with("have", Arg::Length(p.width_mm)).with("need", Arg::Length(BOARDING_MM)));
+                    let key = match s.kind {
+                        StopKind::Curb => "check-detail-stop-width-curb",
+                        StopKind::Bulb => "check-detail-stop-width-bulb",
+                        StopKind::Island => "check-detail-stop-width-island",
+                    };
+                    fail(3, Said::new(key).with("have", Arg::Length(p.width_mm)).with("need", Arg::Length(BOARDING_MM)));
                 }
                 if p.bike_crosses {
                     fail(4, Said::new("check-detail-stop-bike-cross"));
@@ -522,10 +538,12 @@ impl Editor {
                     fail(4, Said::new("check-detail-stop-bike-narrow").with("have", Arg::Length(have)).with("need", Arg::Length(ISLAND_BIKE_MM)));
                 }
                 if s.shelter && p.width_mm < BOARDING_MM + SHELTER_DEPTH_MM {
-                    fail(
-                        5,
-                        Said::new("check-detail-stop-shelter").with("have", Arg::Length(p.width_mm)).with("need", Arg::Length(BOARDING_MM + SHELTER_DEPTH_MM)),
-                    );
+                    let key = match s.kind {
+                        StopKind::Curb => "check-detail-stop-shelter-curb",
+                        StopKind::Bulb => "check-detail-stop-shelter-bulb",
+                        StopKind::Island => "check-detail-stop-shelter-island",
+                    };
+                    fail(5, Said::new(key).with("have", Arg::Length(p.width_mm)).with("need", Arg::Length(BOARDING_MM + SHELTER_DEPTH_MM)));
                 }
             }
         }
@@ -549,6 +567,14 @@ mod tests {
     fn editor() -> Editor {
         let s = Street::sample(0, Side::Right);
         Editor::from_street(&s, &s, 0).with_frame(frame())
+    }
+
+    /// The length argument `name` of a message.
+    fn mm(said: &Said, name: &str) -> Option<i32> {
+        said.args.iter().find_map(|(n, a)| match a {
+            Arg::Length(v) if *n == name => Some(*v),
+            _ => None,
+        })
     }
 
     fn stop(side: Side, from_mm: i32, length_mm: i32, kind: StopKind) -> Stop {
@@ -914,8 +940,10 @@ mod tests {
         ];
         let c = check(&with_stop(&CURB, StopKind::Bulb), "stop-kind");
         assert!(!c.ok);
-        assert_eq!(c.detail.key, "check-detail-stop-kind");
+        assert_eq!(c.detail.key, "check-detail-stop-kind-bulb");
         assert!(ok(&with_stop(&parked, StopKind::Bulb), "stop-kind"));
+        assert_eq!(check(&with_stop(&parked, StopKind::Curb), "stop-kind").detail.key, "check-detail-stop-kind-curb");
+        assert_eq!(check(&with_stop(&CURB, StopKind::Island), "stop-kind").detail.key, "check-detail-stop-kind-island");
         assert!(!ok(&with_stop(&parked, StopKind::Curb), "stop-kind"));
         assert!(!ok(&with_stop(&parked, StopKind::Island), "stop-kind"));
         assert!(ok(&with_stop(&CURB, StopKind::Curb), "stop-kind"));
@@ -942,22 +970,53 @@ mod tests {
         let narrow = [("sidewalk", 2300, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("sidewalk", 2300, None)];
         let c = check(&with_stop(&narrow, StopKind::Curb), "stop-width");
         assert!(!c.ok);
-        assert_eq!(c.detail.key, "check-detail-stop-width");
+        assert_eq!(c.detail.key, "check-detail-stop-width-curb");
+        assert_eq!((mm(&c.detail, "have"), mm(&c.detail, "need")), (Some(2300), Some(2400)));
         let exact = [("sidewalk", 2400, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("sidewalk", 2400, None)];
         assert!(ok(&with_stop(&exact, StopKind::Curb), "stop-width"));
         // A planting strip breaks the sidewalk run.
         let broken = [("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("planting", 1800, None), ("sidewalk", 2000, None)];
         assert!(!ok(&with_stop(&broken, StopKind::Curb), "stop-width"));
-        // Bulb: the parking piece it stands over.
-        let bulb = |w: i32| [("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("parking", w, None), ("sidewalk", 3000, None)];
-        assert!(!ok(&with_stop(&bulb(2100), StopKind::Bulb), "stop-width"));
-        assert!(ok(&with_stop(&bulb(2400), StopKind::Bulb), "stop-width"));
+        // Bulb: the parking piece it stands over and the sidewalk run directly beyond it (parking is at least 2.1 m,
+        // so a sidewalk joined to it always gives the 2.4 m).
+        let joined = [("sidewalk", 1200, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("parking", 2100, None), ("sidewalk", 1200, None)];
+        assert!(ok(&with_stop(&joined, StopKind::Bulb), "stop-width"));
+        // Something other than a sidewalk between them breaks the run: only the parking piece counts.
+        let planted = [
+            ("sidewalk", 3000, None),
+            ("travel", 3300, Some(1)),
+            ("bus", 3300, Some(0)),
+            ("parking", 2100, None),
+            ("planting", 500, None),
+            ("sidewalk", 3000, None),
+        ];
+        let c = check(&with_stop(&planted, StopKind::Bulb), "stop-width");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-width-bulb");
+        assert_eq!((mm(&c.detail, "have"), mm(&c.detail, "need")), (Some(2100), Some(2400)));
         // Island: the pieces between the lane and the bike lane.
         let island = |w: i32| {
             [("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("parking", w, None), ("bike", 1800, None), ("sidewalk", 3000, None)]
         };
-        assert!(!ok(&with_stop(&island(2100), StopKind::Island), "stop-width"));
+        let c = check(&with_stop(&island(2100), StopKind::Island), "stop-width");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-width-island");
         assert!(ok(&with_stop(&island(2400), StopKind::Island), "stop-width"));
+    }
+
+    #[test]
+    fn a_bulbs_shelter_counts_the_sidewalk_it_joins() {
+        let bulb =
+            |w: i32, walk: i32| [("sidewalk", walk, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("parking", w, None), ("sidewalk", walk, None)];
+        let mut e = with_stop(&bulb(2400, 1400), StopKind::Bulb);
+        e.set_stop_shelter(0, true).unwrap();
+        let c = check(&e, "stop-shelter");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-shelter-bulb");
+        assert_eq!((mm(&c.detail, "have"), mm(&c.detail, "need")), (Some(3800), Some(3900)));
+        let mut e = with_stop(&bulb(2400, 1500), StopKind::Bulb);
+        e.set_stop_shelter(0, true).unwrap();
+        assert!(ok(&e, "stop-shelter"));
     }
 
     #[test]
@@ -995,7 +1054,7 @@ mod tests {
         e.set_stop_shelter(0, true).unwrap();
         let c = check(&e, "stop-shelter");
         assert!(!c.ok);
-        assert_eq!(c.detail.key, "check-detail-stop-shelter");
+        assert_eq!(c.detail.key, "check-detail-stop-shelter-curb");
         let mut e = with_stop(&walk(3900), StopKind::Curb);
         e.set_stop_shelter(0, true).unwrap();
         assert!(ok(&e, "stop-shelter"));
