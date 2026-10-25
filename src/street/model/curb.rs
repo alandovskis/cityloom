@@ -190,6 +190,20 @@ impl Content {
             .map_or(&self.segments, |z| self.section(z))
     }
 
+    /// The sections of the zones whose span overlaps `from_mm..to_mm`, or the base section when there are no zones.
+    fn sections_over(&self, from_mm: i32, to_mm: i32, length_mm: i32) -> Vec<&[Segment]> {
+        if self.zone_count() < 2 {
+            return vec![&self.segments];
+        }
+        (0..self.zone_count())
+            .filter(|&z| {
+                let (from, to) = self.span(z, length_mm);
+                from < to_mm && from_mm < to
+            })
+            .map(|z| self.section(z))
+            .collect()
+    }
+
     /// The instances in their canonical order: left side first, then by position.
     pub(super) fn sort_curb(&mut self) {
         self.curb.sort_by_key(|i| (i.side == Side::Right, i.from_mm));
@@ -363,7 +377,8 @@ impl Editor {
     /// The rows of the curbside programme, after the zones' own (only when the street has instances): one per rule,
     /// failing with the first instance that breaks it, which it names in `zone`.
     ///
-    /// An instance is judged against the section of the zone it starts in. Its side is the section's (see `Instance`),
+    /// An instance is judged against the section of every zone its extent overlaps: the lane, bike and patio rules
+    /// fail when they fail in any of them. The length and crossing rules depend on position only. Its side is the section's (see `Instance`),
     /// and `ends` (node `a`, node `b`) is read from the anchored end the positions are measured from.
     pub(super) fn curb_checks(&self) -> Vec<Check> {
         let content = &self.states[self.cursor].content;
@@ -375,8 +390,6 @@ impl Editor {
         // The first instance that breaks each rule, with what to say of it.
         let mut broken: [Option<(&Instance, Said)>; 5] = [None, None, None, None, None];
         for i in &content.curb {
-            let segs = content.section_at(i.from_mm, length_mm);
-            let lane = curbside(segs, i.side);
             let mut fail = |rule: usize, detail: Said| {
                 broken[rule].get_or_insert((i, detail));
             };
@@ -389,53 +402,55 @@ impl Editor {
                         .with("min", Arg::Length(i.use_.min_mm())),
                 );
             }
-            let Some(c) = lane else {
-                fail(1, Said::new("check-detail-curb-lane"));
-                continue;
-            };
             let stops = matches!(i.use_, Use::Parking | Use::Loading);
             let clear = |from_end: i32| from_end >= CROSSING_CLEARANCE_MM;
             if stops && ((near.crossing && !clear(i.from_mm)) || (far.crossing && !clear(length_mm.saturating_sub(i.to_mm())))) {
                 fail(2, Said::new("check-detail-curb-crossing").with("amount", Arg::Length(CROSSING_CLEARANCE_MM)));
             }
-            match i.use_ {
-                Use::Parking => {
-                    // The bike lane on the curb side, and the buffer pieces between it and the lane.
-                    let mut buffer_mm = 0;
-                    for s in toward_edge(segs, c, i.side) {
-                        match KINDS[s.kind].id {
-                            "buffer" => buffer_mm += s.width_mm,
-                            "bike" if buffer_mm < DOOR_BUFFER_MM => {
-                                fail(3, Said::new("check-detail-curb-bike-door").with("amount", Arg::Length(DOOR_BUFFER_MM)));
-                                break;
+            for segs in content.sections_over(i.from_mm, i.to_mm(), length_mm) {
+                let Some(c) = curbside(segs, i.side) else {
+                    fail(1, Said::new("check-detail-curb-lane"));
+                    continue;
+                };
+                match i.use_ {
+                    Use::Parking => {
+                        // The bike lane on the curb side, and the buffer pieces between it and the lane.
+                        let mut buffer_mm = 0;
+                        for s in toward_edge(segs, c, i.side) {
+                            match KINDS[s.kind].id {
+                                "buffer" => buffer_mm += s.width_mm,
+                                "bike" if buffer_mm < DOOR_BUFFER_MM => {
+                                    fail(3, Said::new("check-detail-curb-bike-door").with("amount", Arg::Length(DOOR_BUFFER_MM)));
+                                    break;
+                                }
+                                _ => break,
                             }
-                            _ => break,
                         }
                     }
-                }
-                Use::Platform => {
-                    for s in toward_road(segs, c, i.side) {
-                        match KINDS[s.kind].id {
-                            "bike" => {
-                                fail(3, Said::new("check-detail-curb-bike-platform"));
-                                break;
+                    Use::Platform => {
+                        for s in toward_road(segs, c, i.side) {
+                            match KINDS[s.kind].id {
+                                "bike" => {
+                                    fail(3, Said::new("check-detail-curb-bike-platform"));
+                                    break;
+                                }
+                                "travel" | "bus" => break,
+                                _ => {}
                             }
-                            "travel" | "bus" => break,
-                            _ => {}
                         }
                     }
-                }
-                Use::Patio => {
-                    let between = match i.side {
-                        Side::Left => &segs[..c],
-                        Side::Right => &segs[c + 1..],
-                    };
-                    let have = widest_walkway_mm(between);
-                    if have < ACCESS_LANE_MM {
-                        fail(4, Said::new("check-detail-curb-sidewalk").with("have", Arg::Length(have)).with("need", Arg::Length(ACCESS_LANE_MM)));
+                    Use::Patio => {
+                        let between = match i.side {
+                            Side::Left => &segs[..c],
+                            Side::Right => &segs[c + 1..],
+                        };
+                        let have = widest_walkway_mm(between);
+                        if have < ACCESS_LANE_MM {
+                            fail(4, Said::new("check-detail-curb-sidewalk").with("have", Arg::Length(have)).with("need", Arg::Length(ACCESS_LANE_MM)));
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
             }
         }
         let rows = [
@@ -709,10 +724,8 @@ mod tests {
 
     // ---- checks ----
 
-    fn check<'a>(e: &'a Editor, id: &str) -> &'a crate::street::model::Check {
-        // the view is built per call; keep it alive by leaking into the editor's lifetime-free form
-        let v = Box::leak(Box::new(e.view()));
-        v.checks.iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no check {id}"))
+    fn check(e: &Editor, id: &str) -> crate::street::model::Check {
+        e.view().checks.into_iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no check {id}"))
     }
 
     fn ok(e: &Editor, id: &str) -> bool {
@@ -759,7 +772,7 @@ mod tests {
         e.add_curb(Side::Right, 50_000, 5_500, Use::Parking).unwrap();
         e.split_zone(Some(40_000)).unwrap();
         e.select_zone(1);
-        let parking = e.snapshot().zones[1].segments.as_ref().map_or(e.snapshot().segments[4].uid, |s| s[4].uid);
+        let parking = right_parking(&e);
         assert!(e.remove(parking));
         assert!(!ok(&e, "curb-lane"), "zone 2 has no parking on the right any more");
         assert_eq!(e.snapshot().curb.len(), 1, "the instance is kept");
@@ -770,9 +783,15 @@ mod tests {
         e.add_curb(Side::Right, 10_000, 5_500, Use::Parking).unwrap();
         e.split_zone(Some(40_000)).unwrap();
         e.select_zone(1);
-        let uid = e.snapshot().zones[1].segments.as_ref().map_or(e.snapshot().segments[4].uid, |s| s[4].uid);
+        let uid = right_parking(&e);
         assert!(e.remove(uid));
         assert!(ok(&e, "curb-lane"));
+    }
+
+    /// The uid of the parking piece nearest the right edge in the selected zone.
+    fn right_parking(e: &Editor) -> u32 {
+        let parking = kind_index("parking").unwrap();
+        e.view().segments.iter().rev().find(|s| s.base_kind == parking).expect("a parking piece").uid
     }
 
     fn crossing_at_first() -> [EndInfo; 2] {
@@ -878,5 +897,48 @@ mod tests {
         assert_eq!(say(&fr, c.zone.as_ref().unwrap()), "Zone de chargement à 42,0\u{a0}m, à droite");
         assert_eq!(say(&en, &c.detail), "Loading is 4.0 m long, under the 9.0 m it needs.");
         assert_eq!(say(&fr, &c.detail), "Zone de chargement mesure 4,0\u{a0}m, moins que les 9,0\u{a0}m demandés.");
+    }
+
+    #[test]
+    fn an_instance_is_judged_in_every_zone_it_crosses() {
+        // Parking from 30 m to 36 m across a boundary at 33 m; zone 2 has no parking on the right.
+        let build = |at: i32| {
+            let mut e = editor();
+            e.add_curb(Side::Right, at, 6_000, Use::Parking).unwrap();
+            e.split_zone(Some(33_000)).unwrap();
+            e.select_zone(1);
+            let uid = right_parking(&e);
+            assert!(e.remove(uid));
+            e
+        };
+        assert!(!ok(&build(30_000), "curb-lane"), "it reaches into zone 2");
+        assert!(ok(&build(26_000), "curb-lane"), "it ends before the boundary");
+        assert!(!ok(&build(33_000), "curb-lane"), "it lies wholly in zone 2");
+    }
+
+    #[test]
+    fn a_bike_lane_in_the_second_zone_fails_the_door_rule() {
+        let base = street_of(&[("sidewalk", 2500), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("sidewalk", 2500)]);
+        let protected = street_of(&[("sidewalk", 2500), ("bike", 1800), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("sidewalk", 2500)]);
+        let mut s = crate::street::model::zoned(base, &[0, 33_000], LEN);
+        s.zones[1].segments = Some(protected.segments.clone());
+        let mut e = editor_on(&s);
+        e.add_curb(Side::Left, 26_000, 6_000, Use::Parking).unwrap();
+        assert!(ok(&e, "curb-bike"), "wholly in zone 1");
+        e.move_curb(0, 30_000).unwrap();
+        assert!(!ok(&e, "curb-bike"), "reaches zone 2, where a bike lane is beside the parking");
+    }
+
+    #[test]
+    fn a_narrow_sidewalk_in_the_second_zone_fails_the_patio_rule() {
+        let wide = street_of(&[("sidewalk", 3000), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 3000)]);
+        let narrow = street_of(&[("sidewalk", 2500), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 2500)]);
+        let mut s = crate::street::model::zoned(wide, &[0, 33_000], LEN);
+        s.zones[1].segments = Some(narrow.segments.clone());
+        let mut e = editor_on(&s);
+        e.add_curb(Side::Right, 26_000, 4_000, Use::Patio).unwrap();
+        assert!(ok(&e, "curb-sidewalk"));
+        e.move_curb(0, 30_000).unwrap();
+        assert!(!ok(&e, "curb-sidewalk"));
     }
 }
