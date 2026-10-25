@@ -35,28 +35,74 @@ fn site(segs: &[SegView], side: Side) -> Option<&SegView> {
     from_edge.iter().copied().find(|s| height_mm(KINDS[s.kind].id) > 0).or(from_edge.first().copied())
 }
 
+/// A sign's post and the panel on it, placed: the geometry the speed limit sign and the stop sign share.
+pub(super) struct Panel {
+    /// The middle of the post across the street, and the foot of the post.
+    cx: f64,
+    top: f64,
+    z0: f64,
+    post_w: f64,
+    pub(super) bottom: f64,
+    pub(super) upper: f64,
+    pub(super) half: f64,
+    pub(super) height: f64,
+    /// The panel's width on the screen, in pixels.
+    pub(super) wide: f64,
+}
+
+impl Panel {
+    /// A sign whose post stands on the drawn height `top`, `cx` across the street and `z` along it. It is drawn at its
+    /// estimated size (`PANEL_W_MM` and the rest) but never under `MIN_PANEL_PX` wide: where that is smaller, the
+    /// whole sign is scaled up from its foot by one factor, so it stays legible at any width.
+    pub(super) fn at(p: &Projection, cx: f64, top: f64, z: f64) -> Panel {
+        let f = (MIN_PANEL_PX / (PANEL_W_MM * p.scale_at(z))).max(1.0);
+        let (panel_w, panel_h, post_w) = (PANEL_W_MM * f, PANEL_H_MM * f, POST_MM * f);
+        let z0 = z - post_w / 2.0;
+        let scale = p.scale_at(z0);
+        let (bottom, upper) = (top + PANEL_FROM_TOP_MM * f, top + (PANEL_FROM_TOP_MM + PANEL_H_MM) * f);
+        Panel { cx, top, z0, post_w, bottom, upper, half: panel_w / 2.0, height: panel_h, wide: panel_w * scale }
+    }
+
+    /// Whether the whole post stands in the reach.
+    pub(super) fn in_reach(&self, p: &Projection) -> bool {
+        self.z0 >= p.reach.near && self.z0 + self.post_w <= p.reach.far
+    }
+
+    /// The post, from its foot to the top of the panel.
+    pub(super) fn post(&self, out: &mut String, p: &Projection) {
+        let post = self.post_w / 2.0;
+        block(out, p, &Block { solid: Solid::Post, x: (self.cx - post, self.cx + post), y: (self.top, self.upper), z: (self.z0, self.z0 + self.post_w) });
+    }
+
+    /// The white panel facing the eye (a flat rectangle on the screen).
+    pub(super) fn panel(&self, out: &mut String, p: &Projection) {
+        let (cx, half, z0) = (self.cx, self.half, self.z0);
+        let panel = points(p, &[(cx - half, self.bottom, z0), (cx + half, self.bottom, z0), (cx + half, self.upper, z0), (cx - half, self.upper, z0)]);
+        write!(out, "<polygon class=\"iso-sign-panel\" points=\"{panel}\"/>").unwrap();
+    }
+
+    /// A rectangle on the panel, `u` across it and `v` up it, each from 0 to 1.
+    pub(super) fn rect(&self, out: &mut String, p: &Projection, class: &str, u: (f64, f64), v: (f64, f64)) {
+        let x = |u: f64| self.cx + (u - 0.5) * 2.0 * self.half;
+        let y = |v: f64| self.bottom + v * self.height;
+        let pts = points(p, &[(x(u.0), y(v.0), self.z0), (x(u.1), y(v.0), self.z0), (x(u.1), y(v.1), self.z0), (x(u.0), y(v.1), self.z0)]);
+        write!(out, "<polygon class=\"{class}\" points=\"{pts}\"/>").unwrap();
+    }
+}
+
 /// The speed limit sign: a post on the piece at the edge on the side traffic keeps, `AT_MM` into the run so that it is
-/// in front, and on it a white panel facing the eye (a flat rectangle on the screen), "MAXIMUM" over the number. It is
-/// drawn at its estimated size (`PANEL_W_MM` and the rest) but never under `MIN_PANEL_PX` wide: where that is smaller, the
-/// whole sign is scaled up from its foot by one factor, so it stays legible at any width. `None` only without a speed.
+/// in front, and on it a white panel facing the eye, "MAXIMUM" over the number. `None` only without a speed.
 pub(super) fn sign(v: &View, segs: &[SegView], p: &Projection, i18n: &I18n) -> Option<String> {
     let kmh = v.speed_kmh?;
     let piece = site(segs, v.side)?;
     let cx = piece.x_mm as f64 + piece.width_mm as f64 / 2.0;
     let top = drawn_mm(height_mm(KINDS[piece.kind].id));
-    let z = p.reach.near + AT_MM;
-    let f = (MIN_PANEL_PX / (PANEL_W_MM * p.scale_at(z))).max(1.0);
-    let (panel_w, panel_h, post_w) = (PANEL_W_MM * f, PANEL_H_MM * f, POST_MM * f);
-    let z0 = z - post_w / 2.0;
-    let scale = p.scale_at(z0);
-    let (bottom, upper) = (top + PANEL_FROM_TOP_MM * f, top + (PANEL_FROM_TOP_MM + PANEL_H_MM) * f);
-    let (half, post) = (panel_w / 2.0, post_w / 2.0);
+    let sign = Panel::at(p, cx, top, p.reach.near + AT_MM);
     let mut out = String::from("<g class=\"iso-sign\" aria-hidden=\"true\">");
-    block(&mut out, p, &Block { solid: Solid::Post, x: (cx - post, cx + post), y: (top, upper), z: (z0, z0 + post_w) });
-    let panel = points(p, &[(cx - half, bottom, z0), (cx + half, bottom, z0), (cx + half, upper, z0), (cx - half, upper, z0)]);
-    write!(out, "<polygon class=\"iso-sign-panel\" points=\"{panel}\"/>").unwrap();
+    sign.post(&mut out, p);
+    sign.panel(&mut out, p);
     // The words on the panel, centred on it: the first over the second, sized by the panel's width on the screen.
-    let wide = panel_w * scale;
+    let (bottom, panel_h, wide, z0) = (sign.bottom, sign.height, sign.wide, sign.z0);
     let word = |from_bottom: f64, size: f64, text: &str, out: &mut String| {
         let (x, y) = p.at(cx, bottom + from_bottom, z0);
         write!(
@@ -112,6 +158,24 @@ mod tests {
         assert!(sign.contains("aria-hidden=\"true\"") && sign.contains(">MAXIMUM<") && sign.contains(">50<"), "{sign}");
         assert!(!sign.contains("data-uid"));
         assert!(!m.contains("NaN"));
+    }
+
+    fn fnv(s: &str) -> u64 {
+        s.bytes().fold(0xcbf29ce484222325, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3))
+    }
+
+    #[test]
+    fn the_speed_sign_is_drawn_as_before_the_stop_sign_shared_its_post() {
+        // Hashes of the sign's markup before its post and panel were factored out.
+        for (name, side, width, len, hash) in [
+            ("right", Side::Right, 1050.0, 659u64, 0x73a2064882660bf6u64),
+            ("left", Side::Left, 1050.0, 659, 0x664a47b85c745732),
+            ("small", Side::Right, 280.0, 654, 0xd8325459d13641f1),
+        ] {
+            let m = iso_svg(&with_speed(side, Some(50)), &en(), width).markup;
+            let sign = sign_of(&m);
+            assert_eq!((sign.len() as u64, fnv(sign)), (len, hash), "{name}");
+        }
     }
 
     #[test]

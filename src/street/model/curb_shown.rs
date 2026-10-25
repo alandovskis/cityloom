@@ -11,7 +11,28 @@ use serde::Serialize;
 
 use super::curb::curbside;
 use super::joint::SHOWN_MM;
-use super::{Editor, Use, ZoneEnd};
+use super::stop::{Stand, StopKind, bus_lane, stand};
+use super::{Editor, REGIONS, Use, ZoneEnd};
+
+/// One transit stop as the 2.5D shows it, on the selected zone's section.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ShownStop {
+    /// The pieces the platform raises to sidewalk height, indices into `View.segments`: a bulb's parking piece, an
+    /// island's pieces. Empty for a curb stop: its sidewalk is the platform.
+    pub raised: Vec<usize>,
+    /// The piece the stop's sign and shelter stand on, an index into `View.segments`: the sidewalk beside the bus's
+    /// lane (curb stop), the platform (bulb, island). None when there is nothing to stand on.
+    pub stand: Option<usize>,
+    /// Where it lies along the stretch, in millimetres from the stretch's near end: only the part inside the stretch
+    /// and the zone.
+    pub along: (f64, f64),
+    /// The whole stop in the same coordinates; it may lie partly outside the stretch. The shelter and the sign are
+    /// placed from it, so they stay where they are as the stretch moves.
+    pub full: (f64, f64),
+    pub kind: StopKind,
+    pub shelter: bool,
+}
+
 /// One use of the curbside as the 2.5D shows it.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub struct ShownInstance {
@@ -27,17 +48,50 @@ pub struct ShownInstance {
     pub use_: Use,
 }
 
+/// The stretch the 2.5D shows of the selected zone: where it lies along the street, and how a position along the
+/// street (from the anchored end) maps into it.
+struct Stretch {
+    /// The reach of the selected zone's run along the stretch, in millimetres from the near end.
+    near: f64,
+    far: f64,
+    /// The anchored position of the run's low end, and the part of the zone it covers.
+    start: i32,
+    lo: i32,
+    hi: i32,
+    from_end: ZoneEnd,
+}
+
+impl Stretch {
+    /// The anchored position `pos` in stretch coordinates.
+    fn place(&self, pos: i32) -> f64 {
+        match self.from_end {
+            ZoneEnd::First => self.near + f64::from(pos - self.start),
+            ZoneEnd::Last => self.far - f64::from(pos - self.start),
+        }
+    }
+
+    /// Where the span `from..to` lies along the stretch: the part inside the stretch and the zone, and the whole.
+    /// None when no part of it is.
+    fn map(&self, from: i32, to: i32) -> Option<((f64, f64), (f64, f64))> {
+        let (s, e) = (from.max(self.lo), to.min(self.hi));
+        if s >= e {
+            return None;
+        }
+        let (a, b) = (self.place(s), self.place(e));
+        let (c, d) = (self.place(from), self.place(to));
+        Some(((a.min(b), a.max(b)), (c.min(d), c.max(d))))
+    }
+}
+
 impl Editor {
-    /// The instances that overlap the stretch the 2.5D shows, on the selected zone's curbside pieces. None across a
-    /// boundary: the neighbour's half shows no uses.
-    pub(super) fn curb_shown(&self) -> Vec<ShownInstance> {
+    /// The stretch shown for the selected zone, and the length of the street it lies in. None without a length.
+    fn stretch(&self) -> Option<Stretch> {
         let content = &self.states[self.cursor].content;
         let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
-        if content.curb.is_empty() || length_mm <= 0 {
-            return Vec::new();
+        if length_mm <= 0 {
+            return None;
         }
         let (from, to) = content.span(self.zone.min(content.zone_count().saturating_sub(1)), length_mm);
-        // The reach of the selected zone's run along the stretch, and the anchored position of its low end.
         let half = f64::from(SHOWN_MM) / 2.0;
         let (near, far, start) = match self.joint() {
             None => (0.0, f64::from(SHOWN_MM), from),
@@ -47,23 +101,46 @@ impl Editor {
             }
         };
         let (lo, hi) = (start.max(from), (start + (far - near) as i32).min(to));
+        Some(Stretch { near, far, start, lo, hi, from_end: content.from_end })
+    }
+
+    /// The transit stops that overlap the stretch the 2.5D shows, on the selected zone's section. A stop the section
+    /// has no bus lane or platform for is not drawn: there is nothing to draw it on (its check fails).
+    pub(super) fn stops_shown(&self) -> Vec<ShownStop> {
+        let content = &self.states[self.cursor].content;
+        if content.stops.is_empty() {
+            return Vec::new();
+        }
+        let Some(stretch) = self.stretch() else { return Vec::new() };
+        let (segs, driving) = (self.current(), REGIONS[self.region].drive_side);
+        content
+            .stops
+            .iter()
+            .filter_map(|s| {
+                let (along, full) = stretch.map(s.from_mm, s.to_mm())?;
+                let lane = bus_lane(segs, s.side, driving)?;
+                let Stand { raised, stand } = stand(segs, lane, s.side, s.kind)?;
+                Some(ShownStop { raised, stand, along, full, kind: s.kind, shelter: s.shelter })
+            })
+            .collect()
+    }
+
+    /// The instances that overlap the stretch the 2.5D shows, on the selected zone's curbside pieces. None across a
+    /// boundary: the neighbour's half shows no uses.
+    pub(super) fn curb_shown(&self) -> Vec<ShownInstance> {
+        let content = &self.states[self.cursor].content;
+        if content.curb.is_empty() {
+            return Vec::new();
+        }
+        let Some(stretch) = self.stretch() else { return Vec::new() };
         let segs = self.current();
-        let place = |pos: i32| match content.from_end {
-            ZoneEnd::First => near + f64::from(pos - start),
-            ZoneEnd::Last => far - f64::from(pos - start),
-        };
         content
             .curb
             .iter()
             .filter_map(|i| {
-                let (s, e) = (i.from_mm.max(lo), (i.from_mm + i.length_mm).min(hi));
-                if s >= e {
-                    return None;
-                }
+                let (along, full) = stretch.map(i.from_mm, i.from_mm + i.length_mm)?;
                 let piece = curbside(segs, i.side)?;
-                let (a, b) = (place(s), place(e));
-                let (c, d) = (place(i.from_mm), place(i.from_mm + i.length_mm));
-                Some(ShownInstance { piece, along: (a.min(b), a.max(b)), full: (c.min(d), c.max(d)), use_: i.use_ })
+                Some(ShownInstance { piece, along, full, use_: i.use_ })
             })
             .collect()
     }
@@ -138,5 +215,60 @@ mod tests {
         assert_eq!(shown(&e), vec![(4, (22_000.0, 28_000.0), Use::Parking)]);
         assert!(e.select_zone(1));
         assert_eq!(shown(&e), vec![(4, (10_000.0, 16_000.0), Use::Tree)]);
+    }
+
+    // ---- the stops, mapped by the same stretch ----
+
+    use crate::shared::catalogue::kind_index;
+    use crate::street::model::{Piece, StopKind};
+
+    /// Right-hand traffic, the bus in the last lane; a parking lane between it and the right sidewalk.
+    fn bus_street(extra: &[(&str, i32, Option<usize>)]) -> Street {
+        let mut ids = vec![("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0))];
+        ids.extend_from_slice(extra);
+        ids.push(("sidewalk", 3000, None));
+        let pieces: Vec<Piece> =
+            ids.iter().map(|&(id, width_mm, direction)| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() }).collect();
+        Street::imported(crate::shared::catalogue::StreetClass::Local, Side::Right, &pieces)
+    }
+
+    fn stop_editor(s: &Street, from_end: ZoneEnd) -> Editor {
+        let region = crate::shared::catalogue::REGIONS.iter().position(|r| r.drive_side == Side::Right).unwrap();
+        Editor::from_street(s, s, region).with_frame(Some(ZoneFrame { length_mm: LEN, from_end }))
+    }
+
+    #[test]
+    fn a_street_with_no_stops_shows_none() {
+        assert!(Editor::new(0).view().stops_shown.is_empty());
+        assert!(stop_editor(&bus_street(&[]), ZoneEnd::First).view().stops_shown.is_empty());
+    }
+
+    #[test]
+    fn a_stop_is_mapped_like_a_curb_use_from_either_end_with_the_platform_found() {
+        let street = bus_street(&[("parking", 2400, None)]);
+        let mut e = stop_editor(&street, ZoneEnd::First);
+        e.add_stop(Side::Right, 36_000, 12_000, StopKind::Bulb).unwrap();
+        let s = &e.view().stops_shown;
+        assert_eq!(s.len(), 1);
+        // The part inside the 40 m stretch and the whole stop, which runs past its end; the parking lane is raised.
+        assert_eq!(
+            (s[0].along, s[0].full, s[0].raised.clone(), s[0].stand, s[0].kind),
+            ((36_000.0, 40_000.0), (36_000.0, 48_000.0), vec![3], Some(3), StopKind::Bulb)
+        );
+        // From the last end, the stretch is mirrored: 10 m to 22 m is 30 m to 18 m from the near end.
+        let mut e = stop_editor(&street, ZoneEnd::Last);
+        e.add_stop(Side::Right, 10_000, 12_000, StopKind::Bulb).unwrap();
+        let s = &e.view().stops_shown;
+        assert_eq!((s[0].along, s[0].full), ((18_000.0, 30_000.0), (18_000.0, 30_000.0)));
+        // A curb stop raises nothing and stands on the sidewalk beside the lane; the part inside is clipped.
+        let street = bus_street(&[]);
+        let mut e = stop_editor(&street, ZoneEnd::Last);
+        e.add_stop(Side::Right, 34_000, 12_000, StopKind::Curb).unwrap();
+        let s = &e.view().stops_shown;
+        assert_eq!((s[0].along, s[0].full, s[0].raised.clone(), s[0].stand), ((0.0, 6_000.0), (-6_000.0, 6_000.0), Vec::<usize>::new(), Some(3)));
+        // One wholly past the stretch is not shown.
+        let mut e = stop_editor(&street, ZoneEnd::First);
+        e.add_stop(Side::Right, 41_000, 12_000, StopKind::Curb).unwrap();
+        assert!(e.view().stops_shown.is_empty());
     }
 }

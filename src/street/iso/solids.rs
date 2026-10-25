@@ -62,6 +62,21 @@ pub(super) fn wide_enough(p: &Projection, w: f64, along: f64) -> bool {
     w * p.scale_at(along) >= MIN_STANDING_PX
 }
 
+/// How long a shelter box is along the street, in millimetres. Unverified (TAC / STM to check).
+const SHELTER_LONG_MM: f64 = 4_000.0;
+
+/// A bus shelter on a piece spanning `x` across, standing on `base_mm`, at the middle of `along`: a box 4 m long, as
+/// deep as the piece allows (up to 1.5 m). Whole or not at all: it stands only where the piece is wide enough on the
+/// screen to show it at that distance (`wide_enough`) and the box lies wholly in the reach.
+pub(super) fn shelter(p: &Projection, x: (f64, f64), along: (f64, f64), base_mm: f64) -> Vec<Block> {
+    let w = x.1 - x.0;
+    let (cx, middle) = (x.0 + w / 2.0, along.0 + (along.1 - along.0) / 2.0);
+    let d = (w * 0.8).min(1_500.0);
+    let z = (middle - SHELTER_LONG_MM / 2.0, middle + SHELTER_LONG_MM / 2.0);
+    let fits = wide_enough(p, w, middle) && z.0 >= p.reach.near && z.1 <= p.reach.far;
+    fits.then(|| Block { solid: Solid::Shelter, x: (cx - d / 2.0, cx + d / 2.0), y: (base_mm, base_mm + 2_500.0), z }).into_iter().collect()
+}
+
 /// What stands on the piece at `i`: a tree every 8 m on street trees, a shelter on a bus shelter's
 /// piece, a post every 4 m along a bike lane's curb (not an island's). Each keeps its own size and
 /// stands on the top as drawn, `RISE` times as high as the piece stands. A thing stands only where its piece is wide
@@ -86,10 +101,8 @@ pub(super) fn blocks(segs: &[SegView], i: usize, p: &Projection) -> Vec<Block> {
             });
         }
     }
-    let middle = near + p.reach.len() / 2.0;
-    if id == "busshelter" && wide_enough(p, w, middle) {
-        let d = (w * 0.8).min(1_500.0);
-        out.push(Block { solid: Solid::Shelter, x: (cx - d / 2.0, cx + d / 2.0), y: (h, h + 2_500.0), z: (middle - 2_000.0, middle + 2_000.0) });
+    if id == "busshelter" {
+        out.extend(shelter(p, (x0, x0 + w), (near, near + p.reach.len()), h));
     }
     if let Some(c) = s.curb.filter(|c| id == "bike" && *c != "island") {
         let (top, cw) = (curb_top_mm(c, id), curb_width_mm(c).min(w / 2.0));

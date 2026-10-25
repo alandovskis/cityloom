@@ -400,6 +400,10 @@ svg-iso-curb = { $count ->
         [one] One curbside use is shown.
        *[other] { $count } curbside uses are shown.
     }
+svg-iso-stops = { $count ->
+        [one] One transit stop is shown.
+       *[other] { $count } transit stops are shown.
+    }
 check-boundary = between { $a } and { $b }
 check-label-transition-room = Room for the transition
 check-label-lane-drop = Lane drops

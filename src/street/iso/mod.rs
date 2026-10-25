@@ -19,7 +19,7 @@ use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::say;
 use crate::shared::units::Units;
-use crate::street::model::{SegView, ShownInstance, View};
+use crate::street::model::{SegView, ShownInstance, ShownStop, View};
 use crate::street::svg::curb_edges;
 
 mod curbside;
@@ -31,6 +31,7 @@ mod projection;
 mod raised;
 mod sign;
 mod solids;
+mod stops;
 mod surface;
 mod symbols;
 mod taper;
@@ -109,16 +110,18 @@ fn run_layers(out: &mut String, base: &Projection, v: &View, i18n: &I18n, run: &
     let segs = run.segs;
     let (flat, standing) = surface::split(strips(segs, &p));
     // The selected zone's run shows the curbside uses; the neighbour's, across the boundary, none.
-    let shown: &[ShownInstance] = if run.across { &[] } else { &v.curb_shown };
-    out.push_str(&surface::layer(&p, segs, i18n, &flat, run.across, run.taper.as_ref(), shown));
+    let (uses, stops): (&[ShownInstance], &[ShownStop]) = if run.across { (&[], &[]) } else { (&v.curb_shown, &v.stops_shown) };
+    let laid = curbside::overs(segs, uses, stops);
+    out.push_str(&surface::layer(&p, segs, i18n, &flat, run.across, run.taper.as_ref(), &laid));
     out.push_str(&paint::layer_over(&p, segs, run.taper.as_ref()));
 
     // The raised strips and what stands on the pieces, in the order the eye needs (`order`): a box covers the ones it
     // is in front of, so a crown nearer the middle of the street covers a shelter beyond it, and a strip nearer the
     // middle covers the foot of a post beyond it. The strips are in groups of their own between the solids.
-    let mut solids: Vec<Block> = (0..segs.len()).flat_map(|i| blocks(segs, i, &p)).chain(curbside::blocks(segs, shown, &p)).collect();
+    let mut solids: Vec<Block> =
+        (0..segs.len()).flat_map(|i| blocks(segs, i, &p)).chain(curbside::blocks(segs, uses, &p)).chain(stops::blocks(segs, stops, &p)).collect();
     solids.sort_by(|a, b| b.from_eye(&p).total_cmp(&a.from_eye(&p)).then(a.y.0.total_cmp(&b.y.0)));
-    let lifted = curbside::lifted(shown);
+    let lifted = curbside::lifted(&laid);
     let boxes: Vec<(Bx, bool)> = standing
         .iter()
         .map(|&s| (raised::strip_box(segs, s, p.reach), true))
@@ -151,6 +154,7 @@ fn run_layers(out: &mut String, base: &Projection, v: &View, i18n: &I18n, run: &
     // The speed limit sign stands in the selected zone's run only, over everything else but the outline.
     if !run.across {
         out.push_str(&sign::sign(v, segs, &p, i18n).unwrap_or_default());
+        out.push_str(&stops::signs(segs, &v.stops_shown, &p));
     }
 }
 
@@ -215,6 +219,9 @@ pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
     let mut label = iso_label_of(v, i18n, units);
     if !v.curb_shown.is_empty() {
         label = format!("{label} {}", i18n.tr("svg-iso-curb", &Args::new().num("count", v.curb_shown.len() as i64)));
+    }
+    if !v.stops_shown.is_empty() {
+        label = format!("{label} {}", i18n.tr("svg-iso-stops", &Args::new().num("count", v.stops_shown.len() as i64)));
     }
     match v.speed_kmh {
         Some(kmh) => format!("{label} {}", i18n.tr("svg-iso-speed", &Args::new().num("kmh", i64::from(kmh)))),

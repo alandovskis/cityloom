@@ -244,26 +244,39 @@ struct Platform {
     bike_crosses: bool,
     /// The width of the bike lane that passes behind an island.
     bike_behind_mm: Option<i32>,
+    /// The pieces (indices into the section) it stands on: the sidewalk beside the lane for a curb stop, the parking
+    /// or loading piece for a bulb, the pieces between the lane and the bike lane for an island.
+    pieces: Vec<usize>,
+}
+
+/// The index in the section of the `k`th piece from the bus's `lane` toward the edge of `side` (`toward_edge`).
+fn outward_index(lane: usize, side: Side, k: usize) -> usize {
+    match side {
+        Side::Left => lane - 1 - k,
+        Side::Right => lane + 1 + k,
+    }
 }
 
 /// What `kind` stands on beside `lane` on `side`, or `None` when the section lacks what the kind needs (spec §2).
 fn platform(segs: &[Segment], lane: usize, side: Side, kind: StopKind) -> Option<Platform> {
     let outward = toward_edge(segs, lane, side);
     let id = |s: &&Segment| KINDS[s.kind].id;
+    let at = |k: usize| outward_index(lane, side, k);
     match kind {
         // Nothing with a motor on it between the lane and the edge: the bus stops at the curb.
         StopKind::Curb => (!outward.iter().any(|s| is_motor(s.kind))).then(|| Platform {
             width_mm: widest_walkway_mm(outward.iter().copied()),
             bike_crosses: outward.iter().any(|s| id(s) == "bike"),
             bike_behind_mm: None,
+            pieces: outward.iter().position(|s| id(s) == "sidewalk").map(at).into_iter().collect(),
         }),
         // A parking or loading piece before any other motor piece.
         StopKind::Bulb => {
             let mut bike_crosses = false;
-            for s in &outward {
+            for (k, s) in outward.iter().enumerate() {
                 match id(s) {
                     "bike" => bike_crosses = true,
-                    "parking" | "loading" => return Some(Platform { width_mm: s.width_mm, bike_crosses, bike_behind_mm: None }),
+                    "parking" | "loading" => return Some(Platform { width_mm: s.width_mm, bike_crosses, bike_behind_mm: None, pieces: vec![at(k)] }),
                     _ if is_motor(s.kind) => return None,
                     _ => {}
                 }
@@ -272,17 +285,39 @@ fn platform(segs: &[Segment], lane: usize, side: Side, kind: StopKind) -> Option
         }
         // Parking, loading or buffer pieces, then a bike lane.
         StopKind::Island => {
-            let mut width_mm = 0;
-            for s in &outward {
+            let (mut width_mm, mut pieces) = (0, Vec::new());
+            for (k, s) in outward.iter().enumerate() {
                 match id(s) {
-                    "parking" | "loading" | "buffer" => width_mm += s.width_mm,
-                    "bike" => return (width_mm > 0).then_some(Platform { width_mm, bike_crosses: false, bike_behind_mm: Some(s.width_mm) }),
+                    "parking" | "loading" | "buffer" => {
+                        width_mm += s.width_mm;
+                        pieces.push(at(k));
+                    }
+                    "bike" => return (width_mm > 0).then_some(Platform { width_mm, bike_crosses: false, bike_behind_mm: Some(s.width_mm), pieces }),
                     _ => return None,
                 }
             }
             None
         }
     }
+}
+
+/// Where a stop of `kind` is drawn in the 2.5D beside `lane` on `side`.
+pub(super) struct Stand {
+    /// The pieces raised to sidewalk height: a bulb's parking piece, an island's pieces. None for a curb stop, whose
+    /// sidewalk is the platform already.
+    pub raised: Vec<usize>,
+    /// The piece the sign and the shelter stand on: the sidewalk beside the lane (curb stop), the platform (the
+    /// widest of an island's pieces). None when a curb stop has no sidewalk to stand on.
+    pub stand: Option<usize>,
+}
+
+/// The pieces a stop of `kind` stands on beside `lane` on `side`, or `None` when the section lacks what the kind
+/// needs. The same scan the checks use.
+pub(super) fn stand(segs: &[Segment], lane: usize, side: Side, kind: StopKind) -> Option<Stand> {
+    let p = platform(segs, lane, side, kind)?;
+    // The widest, the first of equals: the shelter needs the room.
+    let stand = p.pieces.iter().copied().fold(None, |best: Option<usize>, i| best.filter(|&b| segs[b].width_mm >= segs[i].width_mm).or(Some(i)));
+    Some(Stand { raised: if kind == StopKind::Curb { Vec::new() } else { p.pieces }, stand })
 }
 
 /// Whether the section has what `kind` needs beside `lane` on `side`. A new stop starts as the first kind that fits

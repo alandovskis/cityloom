@@ -400,6 +400,10 @@ svg-iso-curb = { $count ->
         [one] Un usage du bord de rue est montré.
        *[other] { $count } usages du bord de rue sont montrés.
     }
+svg-iso-stops = { $count ->
+        [one] Un arrêt d’autobus est montré.
+       *[other] { $count } arrêts d’autobus sont montrés.
+    }
 check-boundary = entre { $a } et { $b }
 check-label-transition-room = Place pour la transition
 check-label-lane-drop = Fins de voie

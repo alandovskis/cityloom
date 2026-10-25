@@ -26,7 +26,7 @@ mod curb_shown;
 mod stop;
 use curb::Choice;
 pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside};
-pub use curb_shown::ShownInstance;
+pub use curb_shown::{ShownInstance, ShownStop};
 pub use stop::{MIN_STOP_MM, Stop, StopCell, StopKind, StopSideView, StopsView};
 mod zones;
 use zones::Failing;
@@ -1416,6 +1416,7 @@ impl Editor {
             curb: self.curb_view(),
             stops: self.stops_view(),
             curb_shown: self.curb_shown(),
+            stops_shown: self.stops_shown(),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
@@ -1783,6 +1784,8 @@ pub struct View {
     pub stops: StopsView,
     /// The curbside uses the 2.5D shows, on the selected zone's pieces.
     pub curb_shown: Vec<ShownInstance>,
+    /// The transit stops the 2.5D shows, on the selected zone's pieces.
+    pub stops_shown: Vec<ShownStop>,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
     pub revisions: Vec<Revision>,
