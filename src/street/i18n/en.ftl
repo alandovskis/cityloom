@@ -521,6 +521,7 @@ stop-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $tota
 stop-choose-gap = Choose a free stretch of the street's edge first.
 stop-choose-stop = Choose a stop first.
 st-stop-heading = Stops along the street
+st-curb-stop-heading = Curbside uses and stops along the street
 st-stop-caption = Stops, { $side }
 st-stop-strip-label = Stops, { $side }
 st-stop-tools = Stop commands

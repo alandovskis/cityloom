@@ -1500,7 +1500,7 @@ fn the_curb_strip_is_a_listbox_with_one_tab_stop() {
     assert!(h.contains("aria-activedescendant=\"curb-right-0\""), "{h}");
     assert_eq!(count(&h, "aria-selected=\"true\""), 1, "{h}");
     assert!(h.contains("id=\"curb-left-0\"") && h.contains("id=\"curb-right-0\"") && h.contains("id=\"curb-right-1\""), "{h}");
-    assert!(h.contains(">Curbside uses along the street</h2>") && h.contains("Curbside, left") && h.contains("Curbside, right"), "{h}");
+    assert!(h.contains(">Curbside uses and stops along the street</h2>") && h.contains("Curbside, left") && h.contains("Curbside, right"), "{h}");
     assert!(h.contains("aria-label=\"Curbside uses, right\"") && h.contains("aria-label=\"Curbside uses, left\""), "{h}");
     assert!(h.contains("aria-label=\"Parking, 0.0 m to 6.0 m, 6.0 m long, 1 of 2\""), "{h}");
     assert!(h.contains("aria-label=\"Free, 0.0 m to 40.0 m, 40.0 m long, 1 of 1\""), "{h}");
@@ -1532,7 +1532,7 @@ fn no_strip_is_drawn_while_the_streets_length_is_unknown() {
 fn the_curb_strip_follows_the_language() {
     let s = curb_street(Locale::FrCa);
     let h = curb_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
-    assert!(h.contains(">Usages du bord de rue</h2>"), "{h}");
+    assert!(h.contains(">Usages du bord de rue et arrêts le long de la rue</h2>"), "{h}");
     assert!(h.contains("aria-label=\"Stationnement, de 0,0 m à 6,0 m, 6,0 m de long, 1 sur 2\""), "{h}");
     assert!(h.contains("aria-label=\"Usages du bord de rue, à droite\"") && h.contains("Bord de rue, à gauche"), "{h}");
 }
@@ -1621,6 +1621,7 @@ fn the_stops_row_is_a_listbox_with_one_tab_stop() {
         assert!(h.contains(&format!("id=\"stop-strip-{side}\"")), "{side}: {h}");
     }
     assert_eq!(count(&h, "role=\"listbox\""), 4, "a curbside strip and a stops row on each side: {h}");
+    assert!(h.contains(">Curbside uses and stops along the street</h2>"), "both are under one heading: {h}");
     assert_eq!(count(&h, "tabindex=\"0\""), 4, "one tab stop on each row: {h}");
     assert_eq!(count(&h, "role=\"option\""), 2 + 1 + 2, "the curbside gaps, a stops gap on the left, a stop and a gap on the right: {h}");
     assert!(h.contains("aria-activedescendant=\"stop-right-0\""), "{h}");
@@ -1658,6 +1659,8 @@ fn a_street_with_a_lane_for_the_bus_and_no_curbside_has_only_the_stops_rows() {
     let h = curb_html(&s);
     assert_eq!((count(&h, "id=\"stop-strip-"), count(&h, "id=\"curb-strip-")), (2, 0), "{h}");
     assert!(h.contains(">Stops along the street</h2>"), "{h}");
+    let f = curb_html(&stop_street(&AT_THE_CURB, Locale::FrCa));
+    assert!(f.contains(">Arrêts le long de la rue</h2>"), "{f}");
     // a street with neither has no row
     let none = stop_street(&[("sidewalk", 3000, None), ("bike", 1800, None), ("sidewalk", 3000, None)], Locale::En);
     assert_eq!(count(&curb_html(&none), "role=\"listbox\""), 0);

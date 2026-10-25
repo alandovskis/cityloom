@@ -521,6 +521,7 @@ stop-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur 
 stop-choose-gap = Choisissez d’abord un tronçon libre du bord de la rue.
 stop-choose-stop = Choisissez d’abord un arrêt.
 st-stop-heading = Arrêts le long de la rue
+st-curb-stop-heading = Usages du bord de rue et arrêts le long de la rue
 st-stop-caption = Arrêts, { $side }
 st-stop-strip-label = Arrêts, { $side }
 st-stop-tools = Commandes des arrêts

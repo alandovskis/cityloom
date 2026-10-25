@@ -248,8 +248,16 @@ fn strip<R: Row>(w: SheetWatch, side: Side) -> impl IntoView {
 #[component]
 pub fn CurbStrips(vm: Rc<super::vm::StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
-    // The heading names the curbside strips; a street with only stops rows is headed by them.
-    let heading = move || w.i18n().tr(if w.view().curb.sides.is_empty() { "st-stop-heading" } else { "st-curb-heading" }, &Args::new());
+    // The heading names what the section holds: the curbside strips, the stops rows, or both.
+    let heading = move || {
+        let v = w.view();
+        let key = match (v.curb.sides.is_empty(), v.stops.sides.is_empty()) {
+            (false, false) => "st-curb-stop-heading",
+            (true, _) => "st-stop-heading",
+            (false, true) => "st-curb-heading",
+        };
+        w.i18n().tr(key, &Args::new())
+    };
     let has = |side: Side, sides: Vec<Side>| sides.contains(&side);
     let curb_sides = move || w.view().curb.sides.iter().map(|s| s.side).collect::<Vec<_>>();
     let stop_sides = move || w.view().stops.sides.iter().map(|s| s.side).collect::<Vec<_>>();
