@@ -3856,4 +3856,14 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn a_steady_part_exactly_as_long_as_the_arrows_need_passes() {
+        let arrows = 23_000.0;
+        let beyond = |steady: i32| Beyond { boundary_mm: steady, next: Vec::new(), zone: Said::new("zone-unnamed-mid"), taper: None };
+        let arm = Said::new("city-name");
+        let need = (arrows + ARROW_CLEAR_MM) as i32;
+        assert!(approach_problems(&arm, &beyond(need), arrows).is_empty(), "equal passes");
+        assert_eq!(approach_problems(&arm, &beyond(need - 1), arrows).len(), 1, "a millimetre short fails");
+    }
 }
