@@ -7,6 +7,9 @@ use crate::street::model::SegView;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
 use super::order::Bx;
+
+/// Half the depth, along the street, of a tree's crown, in millimetres.
+pub const CROWN_HALF_DEPTH_MM: f64 = 1_200.0;
 use super::projection::{EYE_BACK_MM, MIN_STANDING_PX, Projection, drawn_mm, points};
 use super::raised::{Face, curb_top_mm, height_mm, inner_face, shade};
 
@@ -75,7 +78,7 @@ pub(super) fn blocks(segs: &[SegView], i: usize, p: &Projection) -> Vec<Block> {
         let crown = (w * 0.9).min(2_400.0);
         for z in along(4_000.0, 8_000.0).filter(|&z| wide_enough(p, w, z)) {
             out.push(Block { solid: Solid::Trunk, x: (cx - 125.0, cx + 125.0), y: (h, h + 2_000.0), z: (z - 125.0, z + 125.0) });
-            out.push(Block { solid: Solid::Crown, x: (cx - crown / 2.0, cx + crown / 2.0), y: (h + 2_000.0, h + 5_000.0), z: (z - 1_200.0, z + 1_200.0) });
+            out.push(Block { solid: Solid::Crown, x: (cx - crown / 2.0, cx + crown / 2.0), y: (h + 2_000.0, h + 5_000.0), z: (z - CROWN_HALF_DEPTH_MM, z + CROWN_HALF_DEPTH_MM) });
         }
     }
     let middle = near + p.reach.len() / 2.0;

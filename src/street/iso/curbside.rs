@@ -14,7 +14,7 @@ use crate::street::model::{SegView, ShownInstance};
 use super::order::Bx;
 use super::projection::{Projection, Reach};
 use super::raised::{slab_of, top_over};
-use super::solids::{Block, Solid, wide_enough};
+use super::solids::{Block, CROWN_HALF_DEPTH_MM, Solid, wide_enough};
 use super::taper::Draw;
 
 /// One stretch of a curbside piece, drawn flat.
@@ -141,14 +141,14 @@ pub(super) fn blocks(segs: &[SegView], shown: &[ShownInstance], p: &Projection) 
                 // At the middle of the whole use, drawn only if that lies in the reach (the retain below).
                 let z = (m.full.0 + m.full.1) / 2.0;
                 // Whole or not at all: the crown is the widest part along the street, so it decides.
-                if wide_enough(p, w, z) && z - 1_200.0 >= p.reach.near && z + 1_200.0 <= p.reach.far {
+                if wide_enough(p, w, z) && z - CROWN_HALF_DEPTH_MM >= p.reach.near && z + CROWN_HALF_DEPTH_MM <= p.reach.far {
                     let crown = (w * 0.9).min(2_400.0);
                     out.push(Block { solid: Solid::Trunk, x: (cx - 125.0, cx + 125.0), y: (h, h + 2_000.0), z: (z - 125.0, z + 125.0) });
                     out.push(Block {
                         solid: Solid::Crown,
                         x: (cx - crown / 2.0, cx + crown / 2.0),
                         y: (h + 2_000.0, h + 5_000.0),
-                        z: (z - 1_200.0, z + 1_200.0),
+                        z: (z - CROWN_HALF_DEPTH_MM, z + CROWN_HALF_DEPTH_MM),
                     });
                 }
             }
