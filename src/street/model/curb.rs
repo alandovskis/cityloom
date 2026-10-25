@@ -213,16 +213,6 @@ pub fn curbside(segs: &[Segment], side: Side) -> Option<usize> {
 }
 
 impl Content {
-    /// The section in force at a position along the street: the zone whose span holds it, else the base.
-    fn section_at(&self, at_mm: i32, length_mm: i32) -> &[Segment] {
-        (0..self.zone_count())
-            .find(|&z| {
-                let (from, to) = self.span(z, length_mm);
-                from <= at_mm && at_mm < to
-            })
-            .map_or(&self.segments, |z| self.section(z))
-    }
-
     /// The sections of the zones whose span overlaps `from_mm..to_mm`, or the base section when there are no zones.
     fn sections_over(&self, from_mm: i32, to_mm: i32, length_mm: i32) -> Vec<&[Segment]> {
         if self.zone_count() < 2 {
@@ -351,7 +341,12 @@ impl Editor {
         if overlaps {
             return Err(CurbRefusal::Overlap);
         }
-        if matches!(locate(content.section_at(candidate.from_mm, frame.length_mm), candidate.side), Lane::Timed) {
+        // The whole run, not only where it starts: a use may not reach into a lane that changes with the time of day.
+        if content
+            .sections_over(candidate.from_mm, candidate.to_mm(), frame.length_mm)
+            .into_iter()
+            .any(|section| matches!(locate(section, candidate.side), Lane::Timed))
+        {
             return Err(CurbRefusal::TimeWindows);
         }
         Ok(())
@@ -641,17 +636,29 @@ mod tests {
     #[test]
     fn no_curbside_when_the_lane_has_time_windows() {
         let mut s = Street::sample(0, Side::Right);
-        let bus = kind_index("bus").unwrap();
         let mut e = Editor::from_street(&s, &s, 0);
         let uid = s.segments[1].uid;
         assert!(e.add_variant(uid), "a parking lane can take a bus window");
-        let _ = bus;
         s = e.snapshot();
         assert_eq!(curbside(&s.segments, Side::Left), None);
         assert_eq!(curbside(&s.segments, Side::Right), Some(4));
         let mut e = editor_on(&s);
         assert_eq!(e.add_curb(Side::Left, 10_000, 6_000, Use::Parking), Err(CurbRefusal::TimeWindows));
         assert!(e.add_curb(Side::Right, 10_000, 6_000, Use::Parking).is_ok());
+    }
+
+    #[test]
+    fn a_use_may_not_reach_into_a_timed_lane() {
+        let mut e = editor();
+        e.split_zone(Some(33_000)).unwrap();
+        e.select_zone(1);
+        let uid = right_parking(&e);
+        assert!(e.add_variant(uid), "zone 2's parking can take a bus window");
+        assert_eq!(e.add_curb(Side::Right, 30_000, 6_000, Use::Parking), Err(CurbRefusal::TimeWindows), "it ends in zone 2");
+        assert_eq!(e.add_curb(Side::Right, 36_000, 2_000, Use::Parking), Err(CurbRefusal::TimeWindows), "it lies in zone 2");
+        assert!(e.add_curb(Side::Right, 27_000, 6_000, Use::Parking).is_ok(), "it ends where zone 2 begins");
+        assert_eq!(e.resize_curb(0, 9_000), Err(CurbRefusal::TimeWindows), "growing into zone 2");
+        assert_eq!(e.move_curb(0, 30_000), Err(CurbRefusal::TimeWindows), "moving into zone 2");
     }
 
     #[test]
