@@ -137,18 +137,19 @@ mod tests {
         Some(ZoneFrame { length_mm: LEN, from_end: end })
     }
 
-    fn lane(uid: u32) -> Segment {
+    fn lane(uid: u32, direction: usize) -> Segment {
         let mut l = Segment::new(uid, kind_index("travel").unwrap(), 3_500);
-        l.direction = Some(0);
+        l.direction = Some(direction);
         l
     }
 
-    /// The sample street at 50 km/h with zones at 0 and `at`; zone `own` (0 or 1) has a travel lane more than the base.
-    fn with_extra_lane(at: i32, own: usize) -> Street {
+    /// The sample street at 50 km/h with zones at 0 and `at`; zone `own` (0 or 1) has a travel lane more than the base,
+    /// running `direction` (0 from the first end to the last).
+    fn with_extra_lane(at: i32, own: usize, direction: usize) -> Street {
         let mut s = zoned(Street::sample(0, Side::Right), &[0, at], LEN);
         s.speed = Speed::Kmh(50);
         let mut section = s.segments.clone();
-        section.push(lane(900));
+        section.push(lane(900, direction));
         s.zones[own].segments = Some(section);
         s.row_mm += 3_500;
         s
@@ -174,15 +175,15 @@ mod tests {
 
     #[test]
     fn a_pocket_zone_gives_a_boundary_and_a_taper_in_the_next_zone() {
-        let s = with_extra_lane(20_000, 0);
+        let s = with_extra_lane(20_000, 0, 1);
         let b = s.beyond(true, frame(First)).expect("the end zone differs from the next");
         assert_eq!(b.boundary_mm, 20_000, "the distance from the street's end, which is the junction's centre");
         assert_eq!(b.next, s.segments);
         let t = b.taper.expect("a lane ends");
-        // a dropped lane is a merge taper: W·S²/155 = 3 500 · 2 500 / 155 = 56 452, up to 56 500
-        assert_eq!((t.from_mm, t.to_mm, t.need_mm), (20_000, 76_500, 56_500));
+        // the lane runs toward the junction, so it opens as it leaves the end zone: R·W = 15 · 3 500
+        assert_eq!((t.from_mm, t.to_mm, t.need_mm), (20_000, 72_500, 52_500));
         assert_eq!(t.room_mm, 80_000, "the host is the zone across, 80 m long");
-        assert!(!t.merges, "the lane ends beside a sidewalk, with no lane of its direction to merge into");
+        assert!(t.merges, "a lane that opens needs no merge");
         let [p] = &t.pieces[..] else { panic!("one piece differs: {:?}", t.pieces) };
         let was = (18_000, 21_500);
         assert_eq!(p.was, Some(was));
@@ -194,14 +195,14 @@ mod tests {
 
     #[test]
     fn a_lane_added_in_the_end_zone_by_the_next_zone_tapers_inside_the_end_zone() {
-        let s = with_extra_lane(60_000, 1);
+        let s = with_extra_lane(60_000, 1, 0);
         let t = s.beyond(true, frame(First)).unwrap().taper.unwrap();
         // L = R·W = 15 · 3 500 on the end zone, ending at the boundary
         assert_eq!((t.from_mm, t.to_mm, t.need_mm, t.room_mm), (7_500, 60_000, 52_500, 60_000));
         let [p] = &t.pieces[..] else { panic!("one piece: {:?}", t.pieces) };
         assert_eq!((p.was, p.becomes), (None, Some((18_000, 21_500))));
         assert_eq!((p.from, p.to), ((18_000, 18_000), (18_000, 21_500)));
-        let cut = with_extra_lane(30_000, 1).beyond(true, frame(First)).unwrap().taper.unwrap();
+        let cut = with_extra_lane(30_000, 1, 0).beyond(true, frame(First)).unwrap().taper.unwrap();
         assert_eq!((cut.from_mm, cut.to_mm, cut.room_mm), (0, 30_000, 30_000), "cut at the end of the street");
     }
 
@@ -217,7 +218,7 @@ mod tests {
 
     #[test]
     fn a_street_anchored_at_its_last_end_measures_from_the_other_end() {
-        let mut s = with_extra_lane(20_000, 0);
+        let mut s = with_extra_lane(20_000, 0, 0);
         s.from_end = Last;
         // zones are measured from the last end: zone 0 is the last end's. The first end's arm sees zone 1.
         let first = s.beyond(true, frame(Last)).unwrap();
@@ -230,7 +231,7 @@ mod tests {
     #[test]
     fn an_arm_at_the_last_end_is_mirrored() {
         // zone 1 is the last zone, so the last end's; it has the extra lane the base does not
-        let s = with_extra_lane(80_000, 1);
+        let s = with_extra_lane(80_000, 1, 0);
         let b = s.beyond(false, frame(First)).unwrap();
         assert_eq!(b.boundary_mm, 20_000);
         assert_eq!(b.next, s.reversed().segments, "the base, reversed and its lanes flipped");
@@ -248,14 +249,14 @@ mod tests {
 
     #[test]
     fn a_taper_without_room_says_so() {
-        let s = with_extra_lane(20_000, 0);
+        let s = with_extra_lane(20_000, 0, 1);
         let mut short = zoned(Street::sample(0, Side::Right), &[0, 20_000, 30_000], LEN);
         short.speed = Speed::Kmh(50);
         short.zones[0].segments = s.zones[0].segments.clone();
         short.zones[2].segments = Some(short.segments.clone());
         short.row_mm = s.row_mm;
         let t = short.beyond(true, frame(First)).unwrap().taper.unwrap();
-        assert_eq!((t.room_mm, t.need_mm, t.to_mm), (10_000, 56_500, 30_000), "drawn over the room there is");
+        assert_eq!((t.room_mm, t.need_mm, t.to_mm), (10_000, 52_500, 30_000), "drawn over the room there is");
         assert!(t.room_mm < t.need_mm);
     }
 
@@ -274,7 +275,7 @@ mod tests {
 
     #[test]
     fn no_beyond_where_the_frame_does_not_match() {
-        let s = with_extra_lane(20_000, 0);
+        let s = with_extra_lane(20_000, 0, 1);
         assert!(s.beyond(true, frame(First)).is_some());
         let longer = Some(ZoneFrame { length_mm: LEN + 2_000, from_end: First });
         assert_eq!(s.beyond(true, longer), None, "another length by more than a metre");

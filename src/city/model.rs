@@ -2189,8 +2189,9 @@ mod tests {
     #[test]
     fn a_band_is_measured_from_node_a_when_zones_run_from_last() {
         let s = lane_added(200_000, 80_000, ZoneEnd::Last);
-        // the host zone is the one at the anchored (last) end: its band lies 80 000 - 52 500 .. 80 000 from it
-        assert_eq!(zone_bands(&s, frame(200_000, ZoneEnd::Last)), vec![(1, 120_000, 120_000 + 52_500)]);
+        // the host zone is the one at the anchored (last) end: its band lies 80 000 - 56 500 .. 80 000 from it. The lane
+        // runs first to last, out of the far zone (the one toward the first end), so it ends there: a merge taper
+        assert_eq!(zone_bands(&s, frame(200_000, ZoneEnd::Last)), vec![(1, 120_000, 120_000 + 56_500)]);
         assert_eq!(zone_breaks(&s, frame(200_000, ZoneEnd::Last)), vec![120_000]);
     }
 
