@@ -62,7 +62,9 @@ test.describe("the Stops row", () => {
       await expect(row).toHaveCount(1);
       await expect(row).toHaveClass("ok");
     }
-    await expect(page.locator("#checks li").filter({ hasText: "Shelters have room" })).toContainText("Every shelter has room.");
+    await expect(page.locator("#checks li").filter({ hasText: "Shelters have room" })).toContainText(
+      "Every shelter has room.",
+    );
 
     // The 2.5D says how many stops it shows, and draws the sign and the shelter.
     await page.locator('#view-mode-slot button[aria-pressed="false"]').click();
