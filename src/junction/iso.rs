@@ -452,9 +452,10 @@ impl Draw {
 }
 
 /// The points the picture reaches on the ground: each arm from its mouth to its end, the core, and a
-/// roundabout's ring. Everything drawn is inside them.
+/// roundabout's ring, and what lies beyond an end zone. Everything drawn is inside them.
 fn content_points(v: &JView) -> Vec<P> {
-    let mut pts: Vec<P> = v.arms.iter().flat_map(|a| flatten(&a.outline)).chain(flatten(&v.core)).collect();
+    let mut pts: Vec<P> =
+        v.arms.iter().flat_map(|a| flatten(&a.outline).into_iter().chain(a.beyond.iter().flat_map(|p| flatten(&p.poly)))).chain(flatten(&v.core)).collect();
     if let Some(ring) = &v.ring {
         if ring.outer_edge.is_empty() {
             let r = ring.radius_mm as f64;
@@ -932,6 +933,17 @@ mod tests {
         assert_eq!(count(&with, "iso-top k-planting"), count(&without, "iso-top k-planting") + planting);
         // a strip's end at the boundary is not walled against the strip that continues it
         assert!(count(&with, "iso-side k-sidewalk") <= count(&without, "iso-side k-sidewalk") + 2 * more);
+    }
+
+    #[test]
+    fn the_frame_holds_what_lies_beyond() {
+        let (j, _) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let v = j.view();
+        let pts = content_points(&v);
+        let a = v.arms.iter().find(|a| !a.beyond.is_empty()).unwrap();
+        for p in a.beyond.iter().flat_map(|p| flatten(&p.poly)) {
+            assert!(pts.contains(&p), "{p:?} is not among the points the frame fits");
+        }
     }
 
     #[test]
