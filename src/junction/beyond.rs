@@ -146,6 +146,7 @@ mod tests {
     use super::*;
     use crate::junction::model::unlabelled;
     use crate::shared::catalogue::kind_index;
+    use crate::shared::said::Said;
     use crate::street::model::BeyondTaper;
     use serde_json::Value;
 
@@ -212,6 +213,7 @@ mod tests {
         Beyond {
             boundary_mm: 20_000,
             next: Vec::new(),
+            zone: Said::new("zone-unnamed-mid"),
             taper: Some(BeyondTaper {
                 from_mm,
                 to_mm,
@@ -277,6 +279,7 @@ mod tests {
         let b = Beyond {
             boundary_mm: 20_000,
             next: Vec::new(),
+            zone: Said::new("zone-unnamed-mid"),
             taper: Some(BeyondTaper { from_mm: 12_000, to_mm: 20_000, need_mm: 8_000, room_mm: 20_000, merges: true, pieces: vec![opens] }),
         };
         (base, next, b)
@@ -333,6 +336,7 @@ mod tests {
         let b = Beyond {
             boundary_mm: 20_000,
             next: Vec::new(),
+            zone: Said::new("zone-unnamed-mid"),
             taper: Some(BeyondTaper {
                 from_mm: 20_000,
                 to_mm: 30_000,
@@ -435,6 +439,7 @@ mod tests {
         let moving = |pieces: Vec<TaperPiece>, from_mm, to_mm| Beyond {
             boundary_mm: 20_000,
             next: Vec::new(),
+            zone: Said::new("zone-unnamed-mid"),
             taper: Some(BeyondTaper { from_mm, to_mm, need_mm: to_mm - from_mm, room_mm: 80_000, merges: true, pieces }),
         };
         let (opens_base, opens_next, opens) = lane_opens();

@@ -88,7 +88,21 @@ pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
         "bus" => i18n.tr_now("jn-sel-bus", &Args::new()),
         "cycle" => i18n.tr_now("jn-sel-cycle", &Args::new().str("width", units.length_in(v.ring.as_ref().and_then(|r| r.cycle_mm).unwrap_or(0), locale))),
         "lane" => i18n.tr_now("jn-sel-lane", &args.num("n", s.lane as i64 + 1).num("count", arm.map_or(0, |a| a.lanes.len()) as i64)),
-        "arm" => i18n.tr_now("jn-sel-arm", &args.num("degrees", arm.map_or(0, |a| a.bearing).into())),
+        "arm" => {
+            let args = args.num("degrees", arm.map_or(0, |a| a.bearing).into());
+            match arm.filter(|a| a.beyond_zone.is_some()) {
+                Some(a) => {
+                    let zone = a.beyond_zone.as_ref().map_or_else(String::new, |z| say_now(i18n, units, z));
+                    let args = args.str("reach", units.length_in(a.beyond_reach_mm, locale)).str("zone", zone);
+                    if a.beyond_taper_mm > 0 {
+                        i18n.tr_now("jn-sel-arm-approach", &args.str("length", units.length_in(a.beyond_taper_mm, locale)))
+                    } else {
+                        i18n.tr_now("jn-sel-arm-jog", &args)
+                    }
+                }
+                None => i18n.tr_now("jn-sel-arm", &args),
+            }
+        }
         "corner" => {
             let corner = v.corners.iter().find(|c| c.uid == s.uid);
             let radius = corner.map_or(0, |c| c.radius_mm);
@@ -259,5 +273,35 @@ mod tests {
         j.select(Target::Cycle);
         assert_eq!(selection_text(&j.view(), &en(), Units::Metres).unwrap(), "Cycle track, 2.0 m wide");
         assert_eq!(selection_text(&j.view(), &fr(), Units::Metres).unwrap(), "Piste cyclable, 2,0\u{a0}m de large");
+    }
+
+    #[test]
+    fn an_arm_with_a_beyond_says_where_its_end_zone_ends_in_both_languages() {
+        let (j, uid) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let mut j = j;
+        j.select(Target::Arm(uid));
+        assert_eq!(
+            selection_text(&j.view(), &en(), Units::Metres).unwrap(),
+            "Sample Avenue 2 (north), 0 degrees. Its end zone reaches 20.0 m from the centre, then a transition of 10.0 m into Zone 2."
+        );
+        assert_eq!(
+            selection_text(&j.view(), &fr(), Units::Metres).unwrap(),
+            "Sample Avenue 2 (nord), 0 degré. Sa zone d’extrémité va jusqu’à 20,0\u{a0}m du centre, puis une transition de 10,0\u{a0}m. Zone suivante\u{a0}: zone 2."
+        );
+        // with no taper the zone across simply follows
+        let (mut j, uid) = crate::junction::tests::junction_with_a_beyond(|_| {}, |b| b.taper = None);
+        j.select(Target::Arm(uid));
+        assert_eq!(
+            selection_text(&j.view(), &en(), Units::Metres).unwrap(),
+            "Sample Avenue 2 (north), 0 degrees. Its end zone reaches 20.0 m from the centre, then Zone 2."
+        );
+    }
+
+    #[test]
+    fn an_arm_without_one_says_what_it_said_before() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        j.select(Target::Arm(n));
+        assert_eq!(selection_text(&j.view(), &en(), Units::Metres).unwrap(), "Sample Avenue 2 (north), 0 degrees");
     }
 }

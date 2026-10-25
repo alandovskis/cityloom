@@ -23,6 +23,7 @@ use crate::junction::turbo_spiral::{Axes, Mouth, RingLane, RingShape, ring_outli
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
+use crate::street::model::Beyond;
 
 /// One rule of the junction and whether it holds, said as data.
 #[derive(Serialize)]
@@ -501,8 +502,14 @@ pub struct ArmView {
     pub beyond: Vec<PieceView>,
     /// The lines across the arm at the taper's ends (at the boundary alone for a jog).
     pub beyond_marks: Vec<[P; 2]>,
-    /// Why the end zone's boundary is not safe, said (filled by the junction's checks).
+    /// Why the end zone's boundary is not safe, said; empty for an arm that draws no beyond.
     pub beyond_problems: Vec<Said>,
+    /// How far from the centre the end zone's steady part reaches (the taper's start, else the boundary), and how long
+    /// the taper is (0 for a jog); both 0 without a beyond.
+    pub beyond_reach_mm: i32,
+    pub beyond_taper_mm: i32,
+    /// What the zone across is called; `None` without a beyond.
+    pub beyond_zone: Option<Said>,
     /// The arm's outer bike lanes, carried into the core from its mouth: the lane arrives, and where.
     pub core_bike: Vec<Vec<Value>>,
     /// The flat top and the ramp of a raised table on this arm.
@@ -1031,6 +1038,8 @@ impl Junction {
                     too_far: (if c.island { (distance - ISLAND_MM) / 2 } else { distance }) > MAX_STAGE_MM,
                 }
             });
+            // The beyond the approach check judges: the one that is drawn.
+            let judged = beyond.as_ref().and_then(|_| a.beyond.as_ref());
             let enters = !l.prof.enter_x.is_empty();
             let leaves = !l.prof.leave_x.is_empty();
             let blocker = bike_box_blocker(s, i, &l.prof);
@@ -1112,7 +1121,10 @@ impl Junction {
                 pieces,
                 beyond: beyond.as_mut().map_or_else(Vec::new, |d| d.taper.drain(..).chain(d.extra.drain(..)).collect()),
                 beyond_marks: beyond.as_mut().map_or_else(Vec::new, |d| std::mem::take(&mut d.marks)),
-                beyond_problems: Vec::new(),
+                beyond_problems: judged.map_or_else(Vec::new, |b| approach_problems(&arm_name(a), b, arrow_t + box_mm)),
+                beyond_reach_mm: judged.map_or(0, |b| steady_mm(b)),
+                beyond_taper_mm: judged.and_then(|b| b.taper.as_ref()).map_or(0, |t| t.to_mm - t.from_mm),
+                beyond_zone: judged.map(|b| b.zone.clone()),
                 core_bike,
                 raised: table,
                 gaps,
@@ -1689,6 +1701,35 @@ fn sample_path(path: &[Value]) -> Vec<P> {
     out
 }
 
+/// How far past the biggest arrow's centre the steady part of the end zone has to reach, so the stop line and the
+/// arrows stand in it (half the longest arrow).
+const ARROW_CLEAR_MM: f64 = 3_000.0;
+
+/// Where the end zone's steady part ends, from the centre: where the taper starts, else the boundary.
+fn steady_mm(b: &Beyond) -> i32 {
+    b.taper.as_ref().map_or(b.boundary_mm, |t| t.from_mm)
+}
+
+/// Why an arm's end zone cannot hold its stop line and arrows, or its transition cannot be built. `arrows_mm` is where
+/// the arm's arrows stand, with a bike box's depth, from the centre.
+fn approach_problems(arm: &Said, b: &Beyond, arrows_mm: f64) -> Vec<Said> {
+    let about = |key: &'static str| Said::new(key).with("arm", Arg::Said(Box::new(arm.clone())));
+    let mut out = Vec::new();
+    let need = (arrows_mm + ARROW_CLEAR_MM).round() as i32;
+    if f64::from(steady_mm(b)) < arrows_mm + ARROW_CLEAR_MM {
+        out.push(about("jn-approach-short").with("reach", Arg::Length(steady_mm(b))).with("need", Arg::Length(need)));
+    }
+    if let Some(t) = &b.taper {
+        if t.room_mm < t.need_mm {
+            out.push(about("jn-approach-room").with("need", Arg::Length(t.need_mm)).with("room", Arg::Length(t.room_mm)));
+        }
+        if !t.merges {
+            out.push(about("jn-approach-drop"));
+        }
+    }
+    out
+}
+
 fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], moves: &[MoveView], lay: &Layout) -> Vec<Check> {
     let name = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
     let arms_of = |uids: Vec<u32>| list(uids.into_iter().map(name).collect());
@@ -1779,6 +1820,15 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
     // Transit priority measures have what they need.
     let problems = list(arms.iter().flat_map(|a| a.transit.problems.iter().cloned()).collect());
     out.push(check("transit", "jn-check-transit", Said::new("jn-check-transit-ok"), problems));
+
+    // The end zone reaches past its stop line and arrows, and its transition fits.
+    let problems = list(arms.iter().flat_map(|a| a.beyond_problems.iter().cloned()).collect());
+    out.push(check(
+        "approach",
+        "jn-check-approach",
+        Said::new("jn-check-approach-ok"),
+        problems.map(|p| Said::new("jn-check-approach-bad").with("problems", Arg::Said(Box::new(p)))),
+    ));
 
     // Signals.
     let signal_ok = s.control != SIGNAL || traffic_arms(s) <= MAX_SIGNAL_ARMS;

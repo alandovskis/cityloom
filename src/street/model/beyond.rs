@@ -4,9 +4,10 @@
 //! Distances are along the arm from the junction's centre, which is the street's end (the mouth is not subtracted:
 //! `junction::read_model` draws an arm from its mouth to `ARM_LENGTH_MM`, both measured from the centre).
 
-use super::zones::same_pieces;
+use super::zones::{same_pieces, zone_label_mid};
 use super::{Host, LENGTH_TOLERANCE_MM, Segment, Street, ZoneEnd, ZoneFrame, total, transition};
 use crate::shared::catalogue::is_roadway;
+use crate::shared::said::Said;
 
 /// The first boundary met going out from an arm's end, and what is across it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -15,6 +16,8 @@ pub struct Beyond {
     pub boundary_mm: i32,
     /// The zone across the boundary as the arm sees it: looking out from the junction.
     pub next: Vec<Segment>,
+    /// What the zone across is called, as it stands in the middle of a sentence.
+    pub zone: Said,
     /// The taper the boundary needs, when the two sections need one (otherwise the boundary is a jog).
     pub taper: Option<BeyondTaper>,
 }
@@ -109,7 +112,7 @@ impl Street {
         if !first_end {
             across = across.reversed();
         }
-        Some(Beyond { boundary_mm, next: across.segments, taper })
+        Some(Beyond { boundary_mm, next: across.segments, zone: zone_label_mid(&self.zones[neighbour], neighbour + 1), taper })
     }
 }
 
@@ -133,7 +136,8 @@ fn anchor(changes: &[Row], at: usize, side: fn(&Row) -> Option<(i32, i32)>) -> O
 mod tests {
     use super::*;
     use crate::shared::catalogue::{Side, kind_index};
-    use crate::street::model::{Speed, zoned};
+    use crate::shared::said::Arg;
+    use crate::street::model::{Speed, named_said, zoned};
     use ZoneEnd::{First, Last};
 
     const LEN: i32 = 100_000;
@@ -180,6 +184,16 @@ mod tests {
             assert_eq!(s.beyond(true, frame(First)), None, "zone {own} is wider than the street");
             assert_eq!(s.beyond(false, frame(First)), None, "from the other end too");
         }
+    }
+
+    #[test]
+    fn the_beyond_names_the_zone_across() {
+        let mut s = with_extra_lane(20_000, 0, 1);
+        let zone = |s: &Street, first_end| s.beyond(first_end, frame(First)).unwrap().zone;
+        assert_eq!(zone(&s, true), Said::new("zone-unnamed-mid").with("n", Arg::Num(2)));
+        assert_eq!(zone(&s, false), Said::new("zone-unnamed-mid").with("n", Arg::Num(1)));
+        s.zones[1].name = Some("Market".into());
+        assert_eq!(zone(&s, true), named_said("Market"));
     }
 
     #[test]

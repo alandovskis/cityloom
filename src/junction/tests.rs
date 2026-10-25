@@ -170,7 +170,7 @@ fn conflicts_are_counted_and_the_note_follows_the_control() {
 fn the_checks_each_say_whether_they_pass() {
     let s = shared(0);
     let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
-    assert_eq!(count(&h, "<li class=\"ok\">"), 9, "the seven of any junction, and a signal's time to cross and cycle");
+    assert_eq!(count(&h, "<li class=\"ok\">"), 10, "the eight of any junction, and a signal's time to cross and cycle");
     assert!(h.contains("Time to cross") && h.contains("Signal cycle"));
     assert!(h.contains(": passes"));
     assert!(h.contains("Longest crossing in one go: 11.4 m"));
@@ -1849,6 +1849,11 @@ fn an_arm_without_a_beyond_draws_as_before() {
 /// A sample junction whose north arm has a beyond: the end zone's first entering lane is a pocket that is planting
 /// across the boundary, 20 m out, tapering out by 30 m. Returns the junction and the arm's uid.
 pub(crate) fn junction_with_a_pocket(configure: impl Fn(&mut State)) -> (Junction, u32) {
+    junction_with_a_beyond(configure, |_| {})
+}
+
+/// The same, with the beyond changed by `tweak` before the junction is built.
+pub(crate) fn junction_with_a_beyond(configure: impl Fn(&mut State), tweak: impl Fn(&mut crate::street::model::Beyond)) -> (Junction, u32) {
     use crate::street::model::{Beyond, BeyondTaper, TaperPiece};
     let mut state = Junction::new(0).current().clone();
     configure(&mut state);
@@ -1862,9 +1867,10 @@ pub(crate) fn junction_with_a_pocket(configure: impl Fn(&mut State)) -> (Junctio
     let at = prof.pieces.iter().position(|p| p.x_mm == lane.x_mm).unwrap();
     let planting = crate::shared::catalogue::kind_index("planting").unwrap();
     next[at].kind = planting;
-    arm.beyond = Some(Beyond {
+    let mut beyond = Beyond {
         boundary_mm: 20_000,
         next,
+        zone: crate::shared::said::Said::new("zone-unnamed-mid").with("n", crate::shared::said::Arg::Num(2)),
         taper: Some(BeyondTaper {
             from_mm: 20_000,
             to_mm: 30_000,
@@ -1873,7 +1879,9 @@ pub(crate) fn junction_with_a_pocket(configure: impl Fn(&mut State)) -> (Junctio
             merges: true,
             pieces: vec![TaperPiece { kind: lane.kind, from: was, to: (was.0, was.0), was: Some(was), becomes: None }],
         }),
-    });
+    };
+    tweak(&mut beyond);
+    arm.beyond = Some(beyond);
     let uid = arm.uid;
     let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
     (Junction::from_city(named, &state, &state, 0).expect("draws"), uid)
@@ -1893,7 +1901,7 @@ fn an_arm_with_a_beyond_draws_its_end_zone_to_the_boundary_and_what_follows() {
     assert!(!a.beyond.is_empty() && a.beyond.iter().any(|p| p.taper), "{} pieces beyond", a.beyond.len());
     assert_eq!(a.beyond.iter().filter(|p| p.taper).count(), 2, "the pocket narrows and the planting in its place widens");
     assert!(!a.beyond_marks.is_empty());
-    assert!(a.beyond_problems.is_empty(), "the checks fill these in later");
+    assert_eq!(a.beyond_problems.len(), 1, "20 m is short of the arrows, which stand about 23 m out");
     let reaches: Vec<f64> = a.pieces.iter().map(|p| reach(a.bearing, &p.poly).round()).collect();
     assert!(reaches.iter().all(|&r| r == 20_000.0), "every end-zone piece ends at the boundary: {reaches:?}");
     for p in a.beyond.iter().filter(|p| !p.taper) {
@@ -1930,7 +1938,12 @@ fn a_pedestrian_arm_and_a_turbo_arm_draw_as_before() {
     assert!(turbo.set_control(ROUNDABOUT) && turbo.set_turbo(Some(0)));
     let mut with = turbo.current().clone();
     for a in &mut with.arms {
-        a.beyond = Some(Beyond { boundary_mm: 20_000, next: a.section.clone().unwrap().segments, taper: None });
+        a.beyond = Some(Beyond {
+            boundary_mm: 20_000,
+            next: a.section.clone().unwrap().segments,
+            zone: crate::shared::said::Said::new("zone-unnamed-mid"),
+            taper: None,
+        });
     }
     assert!(with.turbo.is_some());
     let plain = serde_json::to_string(&turbo.view().arms.iter().map(|a| &a.pieces).collect::<Vec<_>>()).unwrap();
@@ -1941,7 +1954,12 @@ fn a_pedestrian_arm_and_a_turbo_arm_draw_as_before() {
     let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
     let mut state = walk.current().clone();
     for a in &mut state.arms {
-        a.beyond = Some(Beyond { boundary_mm: 20_000, next: a.section.clone().unwrap().segments, taper: None });
+        a.beyond = Some(Beyond {
+            boundary_mm: 20_000,
+            next: a.section.clone().unwrap().segments,
+            zone: crate::shared::said::Said::new("zone-unnamed-mid"),
+            taper: None,
+        });
     }
     let v = Junction::from_city(named, &state, &state, 0).expect("draws").view();
     let walker = v.arms.iter().find(|a| a.pedestrian).unwrap();
@@ -1950,4 +1968,120 @@ fn a_pedestrian_arm_and_a_turbo_arm_draw_as_before() {
         serde_json::to_string(&v.arms.iter().find(|a| a.pedestrian).map(|a| &a.pieces)).unwrap(),
         serde_json::to_string(&walk.view().arms.iter().find(|a| a.pedestrian).map(|a| &a.pieces)).unwrap()
     );
+}
+
+// ---- the approach check ------------------------------------------------------------
+
+/// A pocket whose end zone reaches 30 m, past the stop line and the arrows, with its taper from there.
+fn clear_of_the_arrows(b: &mut crate::street::model::Beyond) {
+    b.boundary_mm = 30_000;
+    let t = b.taper.as_mut().unwrap();
+    (t.from_mm, t.to_mm) = (30_000, 40_000);
+}
+
+fn approach(j: &Junction) -> crate::junction::read_model::Check {
+    j.view().checks.into_iter().find(|c| c.id == "approach").expect("the approach check")
+}
+
+fn said_en(s: &crate::shared::said::Said) -> String {
+    crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::En), Units::Metres, s)
+}
+
+#[test]
+fn a_pocket_that_ends_before_the_stop_line_fails_the_approach_check() {
+    let (j, uid) = junction_with_a_beyond(
+        |_| {},
+        |b| {
+            b.boundary_mm = 8_000;
+            b.taper = None;
+        },
+    );
+    let c = approach(&j);
+    assert!(!c.ok);
+    let arm = said_en(&j.view().arms.iter().find(|a| a.uid == uid).unwrap().label);
+    let detail = said_en(&c.detail);
+    assert!(detail.contains(&arm) && detail.contains("8.0 m"), "{detail}");
+    assert_eq!(j.view().arms.iter().find(|a| a.uid == uid).unwrap().beyond_problems.len(), 1);
+    // a taper that starts there is as short
+    let (j, _) = junction_with_a_beyond(
+        |_| {},
+        |b| {
+            b.boundary_mm = 20_000;
+            let t = b.taper.as_mut().unwrap();
+            (t.from_mm, t.to_mm) = (8_000, 18_000);
+        },
+    );
+    assert!(!approach(&j).ok);
+}
+
+#[test]
+fn a_pocket_past_the_arrows_passes() {
+    let (j, uid) = junction_with_a_beyond(|_| {}, clear_of_the_arrows);
+    let c = approach(&j);
+    assert!(c.ok, "{}", said_en(&c.detail));
+    assert!(j.view().arms.iter().find(|a| a.uid == uid).unwrap().beyond_problems.is_empty());
+}
+
+#[test]
+fn a_taper_without_room_fails_the_approach_check() {
+    let (j, _) = junction_with_a_beyond(
+        |_| {},
+        |b| {
+            clear_of_the_arrows(b);
+            let t = b.taper.as_mut().unwrap();
+            (t.need_mm, t.room_mm) = (40_000, 25_000);
+        },
+    );
+    let c = approach(&j);
+    assert!(!c.ok);
+    let detail = said_en(&c.detail);
+    assert!(detail.contains("40.0 m") && detail.contains("25.0 m"), "{detail}");
+}
+
+#[test]
+fn a_dropped_lane_with_nowhere_to_merge_fails_it() {
+    let (j, uid) = junction_with_a_beyond(
+        |_| {},
+        |b| {
+            clear_of_the_arrows(b);
+            b.taper.as_mut().unwrap().merges = false;
+        },
+    );
+    let c = approach(&j);
+    assert!(!c.ok);
+    assert!(said_en(&c.detail).contains("ends with no lane beside it"), "{}", said_en(&c.detail));
+    assert_eq!(j.view().arms.iter().find(|a| a.uid == uid).unwrap().beyond_problems.len(), 1);
+}
+
+#[test]
+fn no_beyond_no_failure_and_one_passing_check() {
+    for sample in 0..JUNCTION_SAMPLES.len() {
+        let v = Junction::new(sample).view();
+        assert_eq!(v.checks.iter().filter(|c| c.id == "approach").count(), 1);
+        assert!(v.checks.iter().find(|c| c.id == "approach").unwrap().ok);
+        assert!(v.arms.iter().all(|a| a.beyond_problems.is_empty()));
+    }
+}
+
+#[test]
+fn a_beyond_ignored_for_a_turbo_or_a_pedestrian_arm_cannot_fail() {
+    use crate::street::model::Beyond;
+    let short = |a: &mut Arm| {
+        a.beyond = Some(Beyond {
+            boundary_mm: 2_000,
+            next: a.section.clone().unwrap().segments,
+            zone: crate::shared::said::Said::new("zone-unnamed-mid"),
+            taper: None,
+        });
+    };
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    let mut turbo = Junction::new(0);
+    assert!(turbo.set_control(ROUNDABOUT) && turbo.set_turbo(Some(0)));
+    let mut state = turbo.current().clone();
+    state.arms.iter_mut().for_each(short);
+    assert!(approach(&Junction::from_city(named.clone(), &state, &state, 0).expect("draws")).ok);
+    let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+    let mut state = walk.current().clone();
+    state.arms.iter_mut().filter(|a| a.is_pedestrian()).for_each(short);
+    assert!(approach(&Junction::from_city(named, &state, &state, 0).expect("draws")).ok);
 }
