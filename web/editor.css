@@ -276,8 +276,11 @@
 .fit-checks[hidden] {
   display: none;
 }
+/* Always in flow, shown by visibility: focusing the drawing or leaving it never changes the stage's height, so a
+   press on a strip below the fold is not moved from under the pointer. */
 .focus-hint {
-  display: none;
+  display: block;
+  visibility: hidden;
   margin: 0;
   max-width: 70ch;
   color: var(--ink-2);
@@ -286,7 +289,7 @@
 }
 .drawing:has(.wrap:focus-visible) ~ .statusbar .focus-hint,
 .stage-main:has(.wrap:focus-visible) .focus-hint {
-  display: block;
+  visibility: visible;
 }
 .cue {
   display: none;
