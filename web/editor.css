@@ -1375,11 +1375,11 @@ svg pattern circle {
     border-color: CanvasText;
   }
   .curb-cell.gap,
-.stop-cell.gap {
+  .stop-cell.gap {
     border-style: dotted;
   }
   .curb-cell.failing,
-.stop-cell.failing {
+  .stop-cell.failing {
     border-bottom-width: 5px;
   }
   .zone-cell.own {
