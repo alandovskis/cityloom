@@ -116,6 +116,7 @@ impl Editor {
             next_uid: 1,
             zone: 0,
             frame: None,
+            ends: [EndInfo::default(); 2],
             selected: None,
             gesture: None,
             pending_label: None,

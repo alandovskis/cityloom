@@ -417,3 +417,22 @@ curb-refused-overlap = That would overlap another use on the same side.
 curb-refused-too-long = That would run past the end of the street.
 curb-refused-time-windows = This lane changes with the time of day, so it cannot be divided into uses.
 curb-refused-dragging = Finish the drag before changing the curbside.
+
+# The checks of the curbside uses (src/street/model/curb.rs).
+curb-instance = { $use } at { $at }, { $side }
+check-label-curb-length = Curbside uses are long enough
+check-label-curb-lane = Curbside uses have a lane
+check-label-curb-crossing = Parking clear of crossings
+check-label-curb-bike = Curbside uses clear of bike lanes
+check-label-curb-sidewalk = Patios leave room on the sidewalk
+check-detail-curb-length = { $use } is { $length } long, under the { $min } it needs.
+check-detail-curb-length-ok = Every use is as long as it needs.
+check-detail-curb-lane = There is no parking or loading lane here.
+check-detail-curb-lane-ok = Every use lies on a parking or loading lane.
+check-detail-curb-crossing = Parking and loading must stay { $amount } from a pedestrian crossing.
+check-detail-curb-crossing-ok = Parking and loading keep clear of pedestrian crossings.
+check-detail-curb-bike-door = Doors would open into the bike lane beside the parking. A buffer of { $amount } or more is needed.
+check-detail-curb-bike-platform = Passengers cross the bike lane to board. The crossing is not drawn, so check it.
+check-detail-curb-bike-ok = No use opens onto a bike lane.
+check-detail-curb-sidewalk = The patio leaves { $have } of sidewalk; { $need } or more is needed.
+check-detail-curb-sidewalk-ok = Every patio leaves room on the sidewalk.

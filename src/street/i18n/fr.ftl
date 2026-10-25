@@ -417,3 +417,22 @@ curb-refused-overlap = Cet usage chevaucherait un autre usage du même côté.
 curb-refused-too-long = Cet usage dépasserait l’extrémité de la rue.
 curb-refused-time-windows = Cette voie change selon l’heure de la journée : on ne peut pas la diviser en usages.
 curb-refused-dragging = Terminez le glissement avant de modifier le bord de rue.
+
+# Les vérifications des usages du bord de rue (src/street/model/curb.rs).
+curb-instance = { $use } à { $at }, { $side }
+check-label-curb-length = Usages du bord de rue assez longs
+check-label-curb-lane = Usages du bord de rue sur une voie
+check-label-curb-crossing = Stationnement loin des traverses
+check-label-curb-bike = Usages du bord de rue loin des pistes cyclables
+check-label-curb-sidewalk = Terrasses : place sur le trottoir
+check-detail-curb-length = { $use } mesure { $length }, moins que les { $min } demandés.
+check-detail-curb-length-ok = Chaque usage a la longueur demandée.
+check-detail-curb-lane = Il n’y a pas de voie de stationnement ou de chargement ici.
+check-detail-curb-lane-ok = Chaque usage est sur une voie de stationnement ou de chargement.
+check-detail-curb-crossing = Le stationnement et le chargement doivent rester à { $amount } d’une traverse piétonne.
+check-detail-curb-crossing-ok = Le stationnement et le chargement restent loin des traverses piétonnes.
+check-detail-curb-bike-door = Les portières s’ouvriraient dans la piste cyclable voisine du stationnement. Une zone tampon de { $amount } ou plus est nécessaire.
+check-detail-curb-bike-platform = Les passagers traversent la piste cyclable pour monter à bord. La traverse n’est pas dessinée : à vérifier.
+check-detail-curb-bike-ok = Aucun usage ne donne sur une piste cyclable.
+check-detail-curb-sidewalk = La terrasse laisse { $have } de trottoir; il en faut { $need } ou plus.
+check-detail-curb-sidewalk-ok = Chaque terrasse laisse de la place sur le trottoir.

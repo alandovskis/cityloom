@@ -7,8 +7,23 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{Arg, Content, Editor, SNAP_MM, Said, Segment, Street, ZoneFrame, snap};
+use super::{ACCESS_LANE_MM, Arg, Check, Content, Editor, SNAP_MM, Said, Segment, Street, ZoneEnd, ZoneFrame, snap, widest_walkway_mm};
 use crate::shared::catalogue::{KINDS, Side};
+
+/// How near a pedestrian crossing parking or loading may stand, in millimetres. The Code de la sécurité routière of
+/// Québec forbids stopping within 5 m of a crosswalk; the article is UNVERIFIED.
+pub const CROSSING_CLEARANCE_MM: i32 = 5_000;
+
+/// The buffer a bike lane needs between it and the parking beside it, so that opening a door does not open it into
+/// the lane, in millimetres. UNVERIFIED.
+pub const DOOR_BUFFER_MM: i32 = 600;
+
+/// What the city says of one end of a street.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EndInfo {
+    /// The end is a junction with a pedestrian crossing on this street's arm.
+    pub crossing: bool,
+}
 
 /// What a stretch of curbside is used for. Each is drawn as an existing catalogue kind.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -311,9 +326,138 @@ impl Editor {
     }
 }
 
+/// The pieces of `segs` between the curbside piece `c` of `side` and that side's edge, nearest the lane first.
+fn toward_edge(segs: &[Segment], c: usize, side: Side) -> Vec<&Segment> {
+    match side {
+        Side::Left => segs[..c].iter().rev().collect(),
+        Side::Right => segs[c + 1..].iter().collect(),
+    }
+}
+
+/// The pieces of `segs` between the curbside piece `c` of `side` and the middle of the street, nearest the lane first.
+fn toward_road(segs: &[Segment], c: usize, side: Side) -> Vec<&Segment> {
+    match side {
+        Side::Left => segs[c + 1..].iter().collect(),
+        Side::Right => segs[..c].iter().rev().collect(),
+    }
+}
+
+fn side_word(side: Side) -> &'static str {
+    match side {
+        Side::Left => "side-word-left",
+        Side::Right => "side-word-right",
+    }
+}
+
+impl Instance {
+    /// How the checks name it: "Patio at 42 m, right".
+    fn named(&self) -> Said {
+        Said::new("curb-instance")
+            .with("use", Arg::Msg(self.use_.name_key()))
+            .with("at", Arg::Length(self.from_mm))
+            .with("side", Arg::Msg(side_word(self.side)))
+    }
+}
+
+impl Editor {
+    /// The rows of the curbside programme, after the zones' own (only when the street has instances): one per rule,
+    /// failing with the first instance that breaks it, which it names in `zone`.
+    ///
+    /// An instance is judged against the section of the zone it starts in. Its side is the section's (see `Instance`),
+    /// and `ends` (node `a`, node `b`) is read from the anchored end the positions are measured from.
+    pub(super) fn curb_checks(&self) -> Vec<Check> {
+        let content = &self.states[self.cursor].content;
+        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        let (near, far) = match content.from_end {
+            ZoneEnd::First => (self.ends[0], self.ends[1]),
+            ZoneEnd::Last => (self.ends[1], self.ends[0]),
+        };
+        // The first instance that breaks each rule, with what to say of it.
+        let mut broken: [Option<(&Instance, Said)>; 5] = [None, None, None, None, None];
+        for i in &content.curb {
+            let segs = content.section_at(i.from_mm, length_mm);
+            let lane = curbside(segs, i.side);
+            let mut fail = |rule: usize, detail: Said| {
+                broken[rule].get_or_insert((i, detail));
+            };
+            if i.length_mm < i.use_.min_mm() {
+                fail(
+                    0,
+                    Said::new("check-detail-curb-length")
+                        .with("use", Arg::Msg(i.use_.name_key()))
+                        .with("length", Arg::Length(i.length_mm))
+                        .with("min", Arg::Length(i.use_.min_mm())),
+                );
+            }
+            let Some(c) = lane else {
+                fail(1, Said::new("check-detail-curb-lane"));
+                continue;
+            };
+            let stops = matches!(i.use_, Use::Parking | Use::Loading);
+            let clear = |from_end: i32| from_end >= CROSSING_CLEARANCE_MM;
+            if stops && ((near.crossing && !clear(i.from_mm)) || (far.crossing && !clear(length_mm.saturating_sub(i.to_mm())))) {
+                fail(2, Said::new("check-detail-curb-crossing").with("amount", Arg::Length(CROSSING_CLEARANCE_MM)));
+            }
+            match i.use_ {
+                Use::Parking => {
+                    // The bike lane on the curb side, and the buffer pieces between it and the lane.
+                    let mut buffer_mm = 0;
+                    for s in toward_edge(segs, c, i.side) {
+                        match KINDS[s.kind].id {
+                            "buffer" => buffer_mm += s.width_mm,
+                            "bike" if buffer_mm < DOOR_BUFFER_MM => {
+                                fail(3, Said::new("check-detail-curb-bike-door").with("amount", Arg::Length(DOOR_BUFFER_MM)));
+                                break;
+                            }
+                            _ => break,
+                        }
+                    }
+                }
+                Use::Platform => {
+                    for s in toward_road(segs, c, i.side) {
+                        match KINDS[s.kind].id {
+                            "bike" => {
+                                fail(3, Said::new("check-detail-curb-bike-platform"));
+                                break;
+                            }
+                            "travel" | "bus" => break,
+                            _ => {}
+                        }
+                    }
+                }
+                Use::Patio => {
+                    let between = match i.side {
+                        Side::Left => &segs[..c],
+                        Side::Right => &segs[c + 1..],
+                    };
+                    let have = widest_walkway_mm(between);
+                    if have < ACCESS_LANE_MM {
+                        fail(4, Said::new("check-detail-curb-sidewalk").with("have", Arg::Length(have)).with("need", Arg::Length(ACCESS_LANE_MM)));
+                    }
+                }
+                _ => {}
+            }
+        }
+        let rows = [
+            ("curb-length", "check-label-curb-length", "check-detail-curb-length-ok"),
+            ("curb-lane", "check-label-curb-lane", "check-detail-curb-lane-ok"),
+            ("curb-crossing", "check-label-curb-crossing", "check-detail-curb-crossing-ok"),
+            ("curb-bike", "check-label-curb-bike", "check-detail-curb-bike-ok"),
+            ("curb-sidewalk", "check-label-curb-sidewalk", "check-detail-curb-sidewalk-ok"),
+        ];
+        rows.into_iter()
+            .zip(broken)
+            .map(|((id, label, ok_detail), failure)| match failure {
+                None => Check { id, ok: true, label: Said::new(label), detail: Said::new(ok_detail), zone: None },
+                Some((i, detail)) => Check { id, ok: false, label: Said::new(label), detail, zone: Some(i.named()) },
+            })
+            .collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::super::{Keep, Piece, ZoneEnd};
+    use super::super::{Keep, Piece};
     use super::*;
     use crate::shared::catalogue::kind_index;
 
@@ -561,5 +705,178 @@ mod tests {
         assert!(!Use::Parking.raised() && !Use::Loading.raised() && Use::Tree.raised() && Use::Platform.raised());
         assert_eq!([Use::Parking.min_mm(), Use::Loading.min_mm(), Use::Tree.min_mm(), Use::Planting.min_mm()], [5_500, 9_000, 2_000, 2_000]);
         assert_eq!([Use::RainGarden.min_mm(), Use::Patio.min_mm(), Use::BikeParking.min_mm(), Use::Platform.min_mm()], [4_000, 4_000, 2_000, 9_000]);
+    }
+
+    // ---- checks ----
+
+    fn check<'a>(e: &'a Editor, id: &str) -> &'a crate::street::model::Check {
+        // the view is built per call; keep it alive by leaking into the editor's lifetime-free form
+        let v = Box::leak(Box::new(e.view()));
+        v.checks.iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no check {id}"))
+    }
+
+    fn ok(e: &Editor, id: &str) -> bool {
+        check(e, id).ok
+    }
+
+    #[test]
+    fn no_curb_rows_without_instances() {
+        let e = editor();
+        assert!(e.view().checks.iter().all(|c| !c.id.starts_with("curb-")));
+        let mut e = editor();
+        e.add_curb(Side::Right, 10_000, 6_000, Use::Parking).unwrap();
+        let ids: Vec<&str> = e.view().checks.iter().map(|c| c.id).filter(|i| i.starts_with("curb-")).collect();
+        assert_eq!(ids, ["curb-length", "curb-lane", "curb-crossing", "curb-bike", "curb-sidewalk"]);
+        assert!(e.view().checks.iter().all(|c| c.ok), "a parking space in a parking lane passes every row");
+    }
+
+    #[test]
+    fn curb_length_checks_the_minimum() {
+        let mut e = editor();
+        e.add_curb(Side::Right, 10_000, 4_000, Use::Loading).unwrap();
+        let c = check(&e, "curb-length");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-curb-length");
+        assert_eq!(c.zone.as_ref().unwrap().key, "curb-instance");
+        e.resize_curb(0, 9_000).unwrap();
+        assert!(ok(&e, "curb-length"));
+        assert_eq!(check(&e, "curb-length").detail.key, "check-detail-curb-length-ok");
+    }
+
+    #[test]
+    fn curb_lane_needs_a_curbside_piece_at_the_position() {
+        let mut e = editor_on(&Street::sample(3, Side::Right));
+        e.add_curb(Side::Left, 10_000, 6_000, Use::Parking).unwrap();
+        assert!(!ok(&e, "curb-lane"));
+        let mut e = editor();
+        e.add_curb(Side::Left, 10_000, 6_000, Use::Parking).unwrap();
+        assert!(ok(&e, "curb-lane"));
+    }
+
+    #[test]
+    fn an_instance_without_a_lane_fails_and_comes_back() {
+        let mut e = editor();
+        e.add_curb(Side::Right, 50_000, 5_500, Use::Parking).unwrap();
+        e.split_zone(Some(40_000)).unwrap();
+        e.select_zone(1);
+        let parking = e.snapshot().zones[1].segments.as_ref().map_or(e.snapshot().segments[4].uid, |s| s[4].uid);
+        assert!(e.remove(parking));
+        assert!(!ok(&e, "curb-lane"), "zone 2 has no parking on the right any more");
+        assert_eq!(e.snapshot().curb.len(), 1, "the instance is kept");
+        assert!(e.undo());
+        assert!(ok(&e, "curb-lane"));
+        // The same instance in zone 1 was never affected.
+        let mut e = editor();
+        e.add_curb(Side::Right, 10_000, 5_500, Use::Parking).unwrap();
+        e.split_zone(Some(40_000)).unwrap();
+        e.select_zone(1);
+        let uid = e.snapshot().zones[1].segments.as_ref().map_or(e.snapshot().segments[4].uid, |s| s[4].uid);
+        assert!(e.remove(uid));
+        assert!(ok(&e, "curb-lane"));
+    }
+
+    fn crossing_at_first() -> [EndInfo; 2] {
+        [EndInfo { crossing: true }, EndInfo { crossing: false }]
+    }
+
+    #[test]
+    fn curb_crossing_needs_a_crossing_at_that_end() {
+        // A crossing at the anchored end: parking 3 m from it fails, 5 m or more clear passes, the far end is free.
+        let s = Street::sample(0, Side::Right);
+        let mut e = editor_on(&s).with_ends(crossing_at_first());
+        e.add_curb(Side::Right, 3_000, 5_500, Use::Parking).unwrap();
+        assert!(!ok(&e, "curb-crossing"));
+        assert_eq!(check(&e, "curb-crossing").detail.key, "check-detail-curb-crossing");
+        e.move_curb(0, 5_000).unwrap();
+        assert!(ok(&e, "curb-crossing"), "exactly 5 m clear is enough");
+        e.move_curb(0, LEN - 3_000 - 5_500).unwrap();
+        assert!(ok(&e, "curb-crossing"), "3 m from the end with no crossing");
+        // Without a crossing at the near end, nothing fails there.
+        let mut e = editor_on(&s).with_ends([EndInfo::default(); 2]);
+        e.add_curb(Side::Right, 3_000, 5_500, Use::Parking).unwrap();
+        assert!(ok(&e, "curb-crossing"));
+        // A tree is not parking or loading.
+        let mut e = editor_on(&s).with_ends(crossing_at_first());
+        e.add_curb(Side::Right, 1_000, 2_000, Use::Tree).unwrap();
+        assert!(ok(&e, "curb-crossing"));
+    }
+
+    #[test]
+    fn the_ends_follow_the_anchored_end() {
+        // Anchored at the last end the first node's crossing is at the far end of the measured positions.
+        let s = Street::sample(0, Side::Right);
+        let last = Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::Last });
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(last).with_ends(crossing_at_first());
+        e.add_curb(Side::Right, 3_000, 5_500, Use::Parking).unwrap();
+        assert!(ok(&e, "curb-crossing"), "3 m from the last end, where there is no crossing");
+        e.move_curb(0, LEN - 3_000 - 5_500).unwrap();
+        assert!(!ok(&e, "curb-crossing"), "3 m from the first end, where the crossing is");
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(last).with_ends([EndInfo { crossing: false }, EndInfo { crossing: true }]);
+        e.add_curb(Side::Right, 3_000, 5_500, Use::Loading).unwrap();
+        assert!(!ok(&e, "curb-crossing"));
+    }
+
+    #[test]
+    fn curb_bike_door_zone_and_platform() {
+        // Parking beside a bike lane on its curb side: doors open into it.
+        let protected = street_of(&[("sidewalk", 2500), ("bike", 1800), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("sidewalk", 2500)]);
+        let mut e = editor_on(&protected);
+        e.add_curb(Side::Left, 10_000, 6_000, Use::Parking).unwrap();
+        assert!(!ok(&e, "curb-bike"));
+        assert_eq!(check(&e, "curb-bike").detail.key, "check-detail-curb-bike-door");
+        // A buffer of 600 mm between them clears it; a narrower one does not.
+        for (w, clear) in [(600, true), (500, false)] {
+            let s = street_of(&[("sidewalk", 2500), ("bike", 1800), ("buffer", w), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("sidewalk", 2500)]);
+            let mut e = editor_on(&s);
+            e.add_curb(Side::Left, 10_000, 6_000, Use::Parking).unwrap();
+            assert_eq!(ok(&e, "curb-bike"), clear, "buffer {w}");
+        }
+        // Loading does not open doors into the bike lane.
+        let mut e = editor_on(&protected);
+        e.add_curb(Side::Left, 10_000, 9_000, Use::Loading).unwrap();
+        assert!(ok(&e, "curb-bike"));
+        // A platform with a bike lane between it and the travel lane always fails, as a reminder.
+        let boarding = street_of(&[("sidewalk", 2500), ("parking", 2400), ("bike", 1800), ("travel", 3300), ("travel", 3300), ("sidewalk", 2500)]);
+        let mut e = editor_on(&boarding);
+        e.add_curb(Side::Left, 10_000, 9_000, Use::Platform).unwrap();
+        assert!(!ok(&e, "curb-bike"));
+        assert_eq!(check(&e, "curb-bike").detail.key, "check-detail-curb-bike-platform");
+        let mut e = editor();
+        e.add_curb(Side::Left, 10_000, 9_000, Use::Platform).unwrap();
+        assert!(ok(&e, "curb-bike"));
+    }
+
+    #[test]
+    fn curb_sidewalk_keeps_room_beside_a_patio() {
+        let narrow = street_of(&[("sidewalk", 2500), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 2500)]);
+        let mut e = editor_on(&narrow);
+        e.add_curb(Side::Right, 10_000, 4_000, Use::Patio).unwrap();
+        assert!(!ok(&e, "curb-sidewalk"));
+        assert_eq!(check(&e, "curb-sidewalk").detail.key, "check-detail-curb-sidewalk");
+        let wide = street_of(&[("sidewalk", 3000), ("parking", 2400), ("travel", 3300), ("travel", 3300), ("parking", 2400), ("sidewalk", 3000)]);
+        let mut e = editor_on(&wide);
+        e.add_curb(Side::Right, 10_000, 4_000, Use::Patio).unwrap();
+        assert!(ok(&e, "curb-sidewalk"), "exactly 3 m is enough");
+        // Only the patio's own side counts; a parking space there asks nothing of the sidewalk.
+        let mut e = editor_on(&narrow);
+        e.add_curb(Side::Right, 10_000, 5_500, Use::Parking).unwrap();
+        assert!(ok(&e, "curb-sidewalk"));
+    }
+
+    #[test]
+    fn the_failing_row_names_the_first_instance_in_both_languages() {
+        use crate::shared::i18n::Locale;
+        use crate::shared::units::Units;
+        let mut e = editor();
+        e.add_curb(Side::Left, 5_000, 5_500, Use::Parking).unwrap();
+        e.add_curb(Side::Right, 42_000, 4_000, Use::Loading).unwrap();
+        let c = check(&e, "curb-length");
+        assert!(!c.ok);
+        let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+        let say = |i18n, said: &Said| crate::street::text::say_now(i18n, Units::Metres, said);
+        assert_eq!(say(&en, c.zone.as_ref().unwrap()), "Loading at 42.0 m, right");
+        assert_eq!(say(&fr, c.zone.as_ref().unwrap()), "Zone de chargement à 42,0\u{a0}m, à droite");
+        assert_eq!(say(&en, &c.detail), "Loading is 4.0 m long, under the 9.0 m it needs.");
+        assert_eq!(say(&fr, &c.detail), "Zone de chargement mesure 4,0\u{a0}m, moins que les 9,0\u{a0}m demandés.");
     }
 }

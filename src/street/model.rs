@@ -22,7 +22,7 @@ pub use speed::Speed;
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
 mod curb;
-pub use curb::{CurbRefusal, Instance, Use, curbside};
+pub use curb::{CurbRefusal, EndInfo, Instance, Use, curbside};
 mod zones;
 use zones::Failing;
 pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
@@ -537,6 +537,8 @@ pub struct Editor {
     zone: usize,
     /// Where the street lies as loaded (its length and its real end), once the page knows it.
     frame: Option<ZoneFrame>,
+    /// What the city says of the street's two ends, node `a` then node `b`. A setting, not part of the history.
+    ends: [EndInfo; 2],
     selected: Option<u32>,
     gesture: Option<Content>,
     pending_label: Option<Said>,
@@ -627,6 +629,7 @@ impl Editor {
             next_uid: now.next_uid.max(1),
             zone: 0,
             frame: None,
+            ends: [EndInfo::default(); 2],
             selected: None,
             gesture: None,
             pending_label: None,
@@ -672,6 +675,12 @@ impl Editor {
             self.zone = 0;
             self.selected = None;
         }
+        self
+    }
+
+    /// Says what the city knows of the street's two ends, node `a` first. A setting, outside the history.
+    pub fn with_ends(mut self, ends: [EndInfo; 2]) -> Editor {
+        self.ends = ends;
         self
     }
 
@@ -1384,6 +1393,15 @@ impl Editor {
     /// zone it names are the first failing zone's; else they are the selected zone's.
     /// With two zones or more and a transition at some boundary, the boundary checks follow them (`transition_checks`).
     fn street_checks(&self) -> Vec<Check> {
+        let mut street = self.zone_checks();
+        if !self.states[self.cursor].content.curb.is_empty() {
+            street.extend(self.curb_checks());
+        }
+        street
+    }
+
+    /// The section checks of every zone, and the boundary checks (see `street_checks`).
+    fn zone_checks(&self) -> Vec<Check> {
         let content = &self.states[self.cursor].content;
         let mut street = self.section_checks(self.current());
         if content.zones.len() < 2 {
