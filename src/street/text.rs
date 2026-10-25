@@ -136,6 +136,10 @@ pub fn check_label(check: &Check) -> Said {
         (Some(instance), false) if check.id.starts_with("curb-") => {
             Said::new("check-curb-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("instance", Arg::Said(Box::new(instance.clone())))
         }
+        // A stop row names the stop that fails.
+        (Some(instance), false) if check.id.starts_with("stop-") => {
+            Said::new("check-stop-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("instance", Arg::Said(Box::new(instance.clone())))
+        }
         (Some(zone), false) => {
             Said::new("check-zone-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("zone", Arg::Said(Box::new(zone.clone())))
         }
@@ -404,6 +408,32 @@ mod tests {
         };
         assert_eq!(say_now(&en(), Units::Metres, &check_label(&row)), "Curbside uses are long enough: Loading at 42.0 m, right");
         assert_eq!(say_now(&fr(), Units::Metres, &check_label(&row)), "Usages du bord de rue assez longs\u{a0}: Zone de chargement à 42,0\u{a0}m, à droite");
+    }
+
+    #[test]
+    fn a_failing_stop_row_names_its_stop_in_both_languages() {
+        use crate::shared::catalogue::Side;
+        use crate::street::model::{Piece, StopKind, Street, ZoneEnd, ZoneFrame};
+        let piece = |id: &str, direction| Piece { kind: crate::shared::catalogue::kind_index(id).unwrap(), width_mm: 3000, direction, variants: Vec::new() };
+        let s = Street::imported(
+            crate::shared::catalogue::StreetClass::Local,
+            Side::Right,
+            &[piece("sidewalk", None), piece("travel", Some(1)), piece("travel", Some(1)), piece("sidewalk", None)],
+        );
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        e.add_stop(Side::Right, 42_000, 12_000, StopKind::Curb).unwrap();
+        let v = e.view();
+        let row = v.checks.iter().find(|c| c.id == "stop-lane").unwrap();
+        assert!(!row.ok);
+        assert_eq!(say_now(&en(), Units::Metres, &check_label(row)), "Stops have a lane for the bus: curb stop at 42.0 m, right");
+        assert_eq!(
+            say_now(&fr(), Units::Metres, &check_label(row)),
+            "Arrêts\u{a0}: une voie pour l’autobus\u{a0}: arrêt d’autobus au trottoir à 42,0\u{a0}m, à droite"
+        );
+        e.name_stop(0, Some("Mont-Royal")).unwrap();
+        let v = e.view();
+        let row = v.checks.iter().find(|c| c.id == "stop-lane").unwrap();
+        assert_eq!(say_now(&en(), Units::Metres, &check_label(row)), "Stops have a lane for the bus: Mont-Royal (curb stop, 42.0 m)");
     }
 
     /// Every key the model can say is a message in both languages. A new constructor in the model must use these literal forms, or this test does not see its key. The model builds a `Said` only with `Said::new("…")`, and puts a word in another's place only with `Arg::Msg("…")`, so its source lists them all.

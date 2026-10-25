@@ -214,7 +214,7 @@ pub fn curbside(segs: &[Segment], side: Side) -> Option<usize> {
 
 impl Content {
     /// The sections of the zones whose span overlaps `from_mm..to_mm`, or the base section when there are no zones.
-    fn sections_over(&self, from_mm: i32, to_mm: i32, length_mm: i32) -> Vec<&[Segment]> {
+    pub(super) fn sections_over(&self, from_mm: i32, to_mm: i32, length_mm: i32) -> Vec<&[Segment]> {
         if self.zone_count() < 2 {
             return vec![&self.segments];
         }
@@ -439,7 +439,7 @@ impl Editor {
 }
 
 /// The pieces of `segs` between the curbside piece `c` of `side` and that side's edge, nearest the lane first.
-fn toward_edge(segs: &[Segment], c: usize, side: Side) -> Vec<&Segment> {
+pub(super) fn toward_edge(segs: &[Segment], c: usize, side: Side) -> Vec<&Segment> {
     match side {
         Side::Left => segs[..c].iter().rev().collect(),
         Side::Right => segs[c + 1..].iter().collect(),
@@ -454,7 +454,7 @@ fn toward_road(segs: &[Segment], c: usize, side: Side) -> Vec<&Segment> {
     }
 }
 
-fn side_word(side: Side) -> &'static str {
+pub(super) fn side_word(side: Side) -> &'static str {
     match side {
         Side::Left => "side-word-left",
         Side::Right => "side-word-right",
@@ -471,12 +471,34 @@ impl Instance {
     }
 }
 
-/// One rule one instance breaks.
-struct Failure {
-    /// An index into the snapshot's `curb`.
-    instance: usize,
-    rule: usize,
-    detail: Said,
+/// One rule one instance (a curbside use, a stop) breaks.
+pub(super) struct Failure {
+    /// An index into the snapshot's list of instances.
+    pub(super) instance: usize,
+    /// An index into the rows the rules make.
+    pub(super) rule: usize,
+    pub(super) detail: Said,
+}
+
+impl Failure {
+    /// Records a failure of `rule` by instance `instance`, unless that pair is recorded already.
+    pub(super) fn record(out: &mut Vec<Failure>, instance: usize, rule: usize, detail: Said) {
+        if !out.iter().any(|f| f.instance == instance && f.rule == rule) {
+            out.push(Failure { instance, rule, detail });
+        }
+    }
+}
+
+/// The rows of a programme: one per rule (`id`, label, detail when it passes), failing with the first instance that
+/// breaks it, which `named` says in `zone`.
+pub(super) fn check_rows(rows: &[(&'static str, &'static str, &'static str)], failures: &[Failure], named: impl Fn(usize) -> Said) -> Vec<Check> {
+    rows.iter()
+        .enumerate()
+        .map(|(rule, &(id, label, ok_detail))| match failures.iter().find(|f| f.rule == rule) {
+            None => Check { id, ok: true, label: Said::new(label), detail: Said::new(ok_detail), zone: None },
+            Some(f) => Check { id, ok: false, label: Said::new(label), detail: f.detail.clone(), zone: Some(named(f.instance)) },
+        })
+        .collect()
 }
 
 impl Editor {
@@ -496,13 +518,7 @@ impl Editor {
             ("curb-bike", "check-label-curb-bike", "check-detail-curb-bike-ok"),
             ("curb-sidewalk", "check-label-curb-sidewalk", "check-detail-curb-sidewalk-ok"),
         ];
-        rows.into_iter()
-            .enumerate()
-            .map(|(rule, (id, label, ok_detail))| match failures.iter().find(|f| f.rule == rule) {
-                None => Check { id, ok: true, label: Said::new(label), detail: Said::new(ok_detail), zone: None },
-                Some(f) => Check { id, ok: false, label: Said::new(label), detail: f.detail.clone(), zone: Some(content.curb[f.instance].named()) },
-            })
-            .collect()
+        check_rows(&rows, &failures, |k| content.curb[k].named())
     }
 
     /// Every rule each instance breaks, instance by instance in order: `rule` indexes the five rows of `curb_checks`.
@@ -515,11 +531,7 @@ impl Editor {
         };
         let mut out: Vec<Failure> = Vec::new();
         for (k, i) in content.curb.iter().enumerate() {
-            let mut fail = |rule: usize, detail: Said| {
-                if !out.iter().any(|f| f.instance == k && f.rule == rule) {
-                    out.push(Failure { instance: k, rule, detail });
-                }
-            };
+            let mut fail = |rule: usize, detail: Said| Failure::record(&mut out, k, rule, detail);
             if i.length_mm < i.use_.min_mm() {
                 fail(
                     0,

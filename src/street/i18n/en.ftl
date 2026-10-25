@@ -356,6 +356,7 @@ zone-refused-no-boundary = The first zone starts at the end of the street, so it
 zone-refused-dragging = Finish the drag before changing the zones.
 zones-elsewhere = The zones were drawn on this street when it was { $drawn } long; here it is { $loaded }.
 check-curb-in = { $check }: { $instance }
+check-stop-in = { $check }: { $instance }
 check-zone-in = { $check } in { $zone }
 zone-selected = { $zone }, { $from } to { $to }, { $length } long, { $section ->
         [own] its own section
@@ -474,3 +475,26 @@ rev-stop-name = Name the { $kind } at { $at }
 rev-stop-resize = Resize the { $kind } at { $at }
 rev-stop-move = Move the { $kind } to { $at }
 rev-stop-remove = Remove the { $kind } at { $at }
+
+# The checks of the transit stops (src/street/model/stop.rs).
+stop-instance = { $kind } at { $at }, { $side }
+stop-instance-named = { $name } ({ $kind }, { $at })
+check-label-stop-lane = Stops have a lane for the bus
+check-label-stop-kind = Stops are built as their kind needs
+check-label-stop-length = Stops are long enough for a bus
+check-label-stop-width = Stops have room to board
+check-label-stop-bike = Stops clear of bike lanes
+check-label-stop-shelter = Shelters have room
+check-detail-stop-lane = There is no bus or driving lane here for buses going the way traffic goes on this side.
+check-detail-stop-lane-ok = Every stop has a lane for the bus.
+check-detail-stop-kind = The street here is not built for a { $kind }.
+check-detail-stop-kind-ok = Every stop is built as its kind needs.
+check-detail-stop-length = The stop is { $length } long, under the { $min } a bus needs.
+check-detail-stop-length-ok = Every stop is long enough for a bus.
+check-detail-stop-width = The boarding area is { $have } wide; { $need } or more is needed.
+check-detail-stop-width-ok = Every stop has room to board.
+check-detail-stop-bike-cross = Riders would cross the boarding area. The crossing is not drawn, so check it.
+check-detail-stop-bike-narrow = The bike lane behind the island is { $have } wide; { $need } or more is needed.
+check-detail-stop-bike-ok = No stop sends riders across the boarding area.
+check-detail-stop-shelter = The boarding area is { $have } wide; a shelter needs { $need } or more.
+check-detail-stop-shelter-ok = Every shelter has room.

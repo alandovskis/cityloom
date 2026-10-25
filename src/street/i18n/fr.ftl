@@ -356,6 +356,7 @@ zone-refused-no-boundary = La première zone commence à l’extrémité de la r
 zone-refused-dragging = Terminez le glissement avant de modifier les zones.
 zones-elsewhere = Les zones ont été tracées sur cette rue lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-curb-in = { $check } : { $instance }
+check-stop-in = { $check } : { $instance }
 check-zone-in = { $check } : { $zone }
 zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $section ->
         [own] sa propre coupe
@@ -474,3 +475,26 @@ rev-stop-name = Arrêt nommé à { $at } : { $kind }
 rev-stop-resize = Longueur modifiée à { $at } : { $kind }
 rev-stop-move = Arrêt déplacé à { $at } : { $kind }
 rev-stop-remove = Arrêt retiré à { $at } : { $kind }
+
+# Les vérifications des arrêts de transport en commun (src/street/model/stop.rs).
+stop-instance = { $kind } à { $at }, { $side }
+stop-instance-named = { $name } ({ $kind }, { $at })
+check-label-stop-lane = Arrêts : une voie pour l’autobus
+check-label-stop-kind = Arrêts : aménagement conforme à leur type
+check-label-stop-length = Arrêts : assez longs pour un autobus
+check-label-stop-width = Arrêts : place pour embarquer
+check-label-stop-bike = Arrêts : loin des pistes cyclables
+check-label-stop-shelter = Abribus : place suffisante
+check-detail-stop-lane = Il n’y a pas ici de voie d’autobus ou de circulation dans le sens de la circulation de ce côté.
+check-detail-stop-lane-ok = Chaque arrêt a une voie pour l’autobus.
+check-detail-stop-kind = La rue n’est pas aménagée ici pour un arrêt de ce type : { $kind }.
+check-detail-stop-kind-ok = Chaque arrêt est aménagé comme son type l’exige.
+check-detail-stop-length = L’arrêt fait { $length } de long, moins que les { $min } nécessaires à un autobus.
+check-detail-stop-length-ok = Chaque arrêt est assez long pour un autobus.
+check-detail-stop-width = Le quai fait { $have } de large; il en faut { $need } ou plus.
+check-detail-stop-width-ok = Chaque arrêt laisse la place d’embarquer.
+check-detail-stop-bike-cross = Les cyclistes traverseraient le quai. Le passage n’est pas dessiné : à vérifier.
+check-detail-stop-bike-narrow = La piste cyclable derrière l’îlot fait { $have } de large; il en faut { $need } ou plus.
+check-detail-stop-bike-ok = Aucun arrêt n’envoie les cyclistes à travers le quai.
+check-detail-stop-shelter = Le quai fait { $have } de large; un abribus demande { $need } ou plus.
+check-detail-stop-shelter-ok = Chaque abribus a la place voulue.

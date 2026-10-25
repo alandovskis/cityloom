@@ -1445,6 +1445,9 @@ impl Editor {
         if !self.states[self.cursor].content.curb.is_empty() {
             street.extend(self.curb_checks());
         }
+        if !self.states[self.cursor].content.stops.is_empty() {
+            street.extend(self.stop_checks());
+        }
         street
     }
 
@@ -1585,7 +1588,7 @@ fn outcomes(segs: &[Segment], existing: &[Segment]) -> Outcomes {
 }
 
 /// The widest unbroken run of adjacent sidewalk pieces; any other piece between two sidewalks breaks the run.
-fn widest_walkway_mm(segs: &[Segment]) -> i32 {
+fn widest_walkway_mm<'a>(segs: impl IntoIterator<Item = &'a Segment>) -> i32 {
     let (mut best, mut run) = (0, 0);
     for s in segs {
         if KINDS[s.kind].id == "sidewalk" {

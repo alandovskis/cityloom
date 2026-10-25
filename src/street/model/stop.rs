@@ -7,9 +7,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::curb::CurbRefusal;
-use super::{Arg, Content, Editor, SNAP_MM, Said, Street, ZoneFrame, snap};
-use crate::shared::catalogue::Side;
+use super::curb::{CurbRefusal, Failure, check_rows, side_word, toward_edge};
+use super::{Arg, Check, Content, Editor, SNAP_MM, Said, Segment, Street, ZoneFrame, snap, widest_walkway_mm};
+use crate::shared::catalogue::{KINDS, REGIONS, Side, is_motor};
 
 /// The most characters a stop's name keeps.
 const MAX_NAME_CHARS: usize = 80;
@@ -201,6 +201,163 @@ impl Editor {
             stops.remove(i);
         });
         Ok(())
+    }
+}
+
+/// The shortest stop: one standard bus. Unverified (TAC / STM to check).
+const MIN_STOP_MM: i32 = 9_000;
+
+/// The boarding area a wheelchair ramp needs. Unverified (TAC / STM to check).
+const BOARDING_MM: i32 = 2_400;
+
+/// How deep a shelter stands on the boarding area. Unverified (TAC / STM to check).
+const SHELTER_DEPTH_MM: i32 = 1_500;
+
+/// The least a bike lane behind an island may be. Unverified (TAC / STM to check).
+const ISLAND_BIKE_MM: i32 = 1_500;
+
+/// The piece the bus uses at a stop on `side` of a section: the `bus` or `travel` piece nearest that edge whose
+/// traffic goes the way traffic goes on that half (a piece with no direction counts), or `None`.
+///
+/// A section is seen from the street's first end, and a piece's direction 0 ("away") runs from the first end to the
+/// last, whichever end positions are measured from (`default_directions`: with traffic on the right the last
+/// pieces run away and the first ones toward, with traffic on the left the first run away). So the half that
+/// `driving` names carries direction 0, the other half direction 1, and the anchor plays no part.
+pub(crate) fn bus_lane(segs: &[Segment], side: Side, driving: Side) -> Option<usize> {
+    let flow = usize::from(side != driving);
+    let nearest_first: Vec<usize> = match side {
+        Side::Left => (0..segs.len()).collect(),
+        Side::Right => (0..segs.len()).rev().collect(),
+    };
+    nearest_first.into_iter().find(|&i| matches!(KINDS[segs[i].kind].id, "bus" | "travel") && segs[i].direction.is_none_or(|d| d == flow))
+}
+
+/// What a stop of some kind stands on, beside the bus's lane.
+struct Platform {
+    /// The boarding area: the sidewalk run (curb stop), the parking or loading piece (bulb), the pieces between the
+    /// lane and the bike lane (island).
+    width_mm: i32,
+    /// A bike lane between the bus's lane and the platform, which riders would cross.
+    bike_crosses: bool,
+    /// The width of the bike lane that passes behind an island.
+    bike_behind_mm: Option<i32>,
+}
+
+/// What `kind` stands on beside `lane` on `side`, or `None` when the section lacks what the kind needs (spec §2).
+fn platform(segs: &[Segment], lane: usize, side: Side, kind: StopKind) -> Option<Platform> {
+    let outward = toward_edge(segs, lane, side);
+    let id = |s: &&Segment| KINDS[s.kind].id;
+    match kind {
+        // Nothing with a motor on it between the lane and the edge: the bus stops at the curb.
+        StopKind::Curb => (!outward.iter().any(|s| is_motor(s.kind))).then(|| Platform {
+            width_mm: widest_walkway_mm(outward.iter().copied()),
+            bike_crosses: outward.iter().any(|s| id(s) == "bike"),
+            bike_behind_mm: None,
+        }),
+        // A parking or loading piece before any other motor piece.
+        StopKind::Bulb => {
+            let mut bike_crosses = false;
+            for s in &outward {
+                match id(s) {
+                    "bike" => bike_crosses = true,
+                    "parking" | "loading" => return Some(Platform { width_mm: s.width_mm, bike_crosses, bike_behind_mm: None }),
+                    _ if is_motor(s.kind) => return None,
+                    _ => {}
+                }
+            }
+            None
+        }
+        // Parking, loading or buffer pieces, then a bike lane.
+        StopKind::Island => {
+            let mut width_mm = 0;
+            for s in &outward {
+                match id(s) {
+                    "parking" | "loading" | "buffer" => width_mm += s.width_mm,
+                    "bike" => return (width_mm > 0).then_some(Platform { width_mm, bike_crosses: false, bike_behind_mm: Some(s.width_mm) }),
+                    _ => return None,
+                }
+            }
+            None
+        }
+    }
+}
+
+/// Whether the section has what `kind` needs beside `lane` on `side`. The editor's kind choice will offer only
+/// the kinds that fit; until it does, only the tests ask.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn kind_fits(segs: &[Segment], lane: usize, side: Side, kind: StopKind) -> bool {
+    platform(segs, lane, side, kind).is_some()
+}
+
+impl Stop {
+    /// How the checks name it: "curb stop at 12 m, right", or "Mont-Royal (curb stop, 12 m)".
+    fn named(&self) -> Said {
+        let kind = Arg::MsgLower(self.kind.name_key());
+        match &self.name {
+            Some(name) => Said::new("stop-instance-named").with("name", Arg::Text(name.clone())).with("kind", kind).with("at", Arg::Length(self.from_mm)),
+            None => Said::new("stop-instance").with("kind", kind).with("at", Arg::Length(self.from_mm)).with("side", Arg::Msg(side_word(self.side))),
+        }
+    }
+}
+
+impl Editor {
+    /// The rows of the stops, after the curbside ones (only when the street has stops): one per rule, failing with
+    /// the first stop that breaks it, which it names in `zone`.
+    ///
+    /// A stop is judged against the section of every zone it overlaps: all the rules but the length fail when they
+    /// fail in any of them. Its side is the section's (see `Stop`), and the lane is the one traffic uses on that half
+    /// under the region's driving side (`bus_lane`).
+    pub(super) fn stop_checks(&self) -> Vec<Check> {
+        let content = &self.states[self.cursor].content;
+        let rows = [
+            ("stop-lane", "check-label-stop-lane", "check-detail-stop-lane-ok"),
+            ("stop-kind", "check-label-stop-kind", "check-detail-stop-kind-ok"),
+            ("stop-length", "check-label-stop-length", "check-detail-stop-length-ok"),
+            ("stop-width", "check-label-stop-width", "check-detail-stop-width-ok"),
+            ("stop-bike", "check-label-stop-bike", "check-detail-stop-bike-ok"),
+            ("stop-shelter", "check-label-stop-shelter", "check-detail-stop-shelter-ok"),
+        ];
+        check_rows(&rows, &self.stop_failures(), |k| content.stops[k].named())
+    }
+
+    /// Every rule each stop breaks, stop by stop in order: `rule` indexes the rows of `stop_checks`.
+    fn stop_failures(&self) -> Vec<Failure> {
+        let content = &self.states[self.cursor].content;
+        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        let driving = REGIONS[self.region].drive_side;
+        let mut out: Vec<Failure> = Vec::new();
+        for (k, s) in content.stops.iter().enumerate() {
+            let mut fail = |rule: usize, detail: Said| Failure::record(&mut out, k, rule, detail);
+            if s.length_mm < MIN_STOP_MM {
+                fail(2, Said::new("check-detail-stop-length").with("length", Arg::Length(s.length_mm)).with("min", Arg::Length(MIN_STOP_MM)));
+            }
+            for segs in content.sections_over(s.from_mm, s.to_mm(), length_mm) {
+                let Some(lane) = bus_lane(segs, s.side, driving) else {
+                    fail(0, Said::new("check-detail-stop-lane"));
+                    continue;
+                };
+                let Some(p) = platform(segs, lane, s.side, s.kind) else {
+                    fail(1, Said::new("check-detail-stop-kind").with("kind", Arg::MsgLower(s.kind.name_key())));
+                    continue;
+                };
+                if p.width_mm < BOARDING_MM {
+                    fail(3, Said::new("check-detail-stop-width").with("have", Arg::Length(p.width_mm)).with("need", Arg::Length(BOARDING_MM)));
+                }
+                if p.bike_crosses {
+                    fail(4, Said::new("check-detail-stop-bike-cross"));
+                }
+                if let Some(have) = p.bike_behind_mm.filter(|&w| w < ISLAND_BIKE_MM) {
+                    fail(4, Said::new("check-detail-stop-bike-narrow").with("have", Arg::Length(have)).with("need", Arg::Length(ISLAND_BIKE_MM)));
+                }
+                if s.shelter && p.width_mm < BOARDING_MM + SHELTER_DEPTH_MM {
+                    fail(
+                        5,
+                        Said::new("check-detail-stop-shelter").with("have", Arg::Length(p.width_mm)).with("need", Arg::Length(BOARDING_MM + SHELTER_DEPTH_MM)),
+                    );
+                }
+            }
+        }
+        out
     }
 }
 
@@ -467,5 +624,255 @@ mod tests {
         assert_eq!((s.kind, s.name.clone()), (StopKind::Island, None));
         assert_eq!(serde_json::to_string(&s).unwrap(), bare, "no name, no key");
         assert_eq!(serde_json::to_string(&StopKind::Curb).unwrap(), "\"curb\"");
+    }
+
+    // ---- the bus's lane and the checks ----
+
+    use crate::shared::catalogue::kind_index;
+    use crate::street::model::{Check, Piece};
+
+    /// A street from `(kind, width, direction)` pieces, first piece first.
+    fn layout(pieces: &[(&str, i32, Option<usize>)]) -> Street {
+        let pieces: Vec<Piece> =
+            pieces.iter().map(|&(id, width_mm, direction)| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() }).collect();
+        Street::imported(crate::shared::catalogue::StreetClass::Local, Side::Right, &pieces)
+    }
+
+    fn region(side: Side) -> usize {
+        REGIONS.iter().position(|r| r.drive_side == side).unwrap()
+    }
+
+    fn editor_with(s: &Street, driving: Side, from_end: ZoneEnd) -> Editor {
+        Editor::from_street(s, s, region(driving)).with_frame(Some(ZoneFrame { length_mm: LEN, from_end }))
+    }
+
+    /// Right-hand traffic: the bus runs away (direction 0) in the last lane; the curb is the right one.
+    const CURB: [(&str, i32, Option<usize>); 4] = [("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("sidewalk", 3000, None)];
+
+    fn check(e: &Editor, id: &str) -> Check {
+        e.view().checks.into_iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no check {id}"))
+    }
+
+    fn ok(e: &Editor, id: &str) -> bool {
+        check(e, id).ok
+    }
+
+    fn with_stop(pieces: &[(&str, i32, Option<usize>)], kind: StopKind) -> Editor {
+        let mut e = editor_with(&layout(pieces), Side::Right, ZoneEnd::First);
+        e.add_stop(Side::Right, 10_000, 12_000, kind).unwrap();
+        e
+    }
+
+    #[test]
+    fn the_bus_lane_is_found_on_the_stop_side_under_both_anchors_and_driving_sides() {
+        // The section is seen from the first end: with traffic on the right the last lanes run away (0), with
+        // traffic on the left the first lanes do (the importer's forward lane, `default_directions`).
+        for driving in [Side::Right, Side::Left] {
+            // The sample's own directions: the lane on the driving side runs away.
+            let sample = Street::sample(0, driving);
+            let travel: Vec<usize> = (0..sample.segments.len()).filter(|&i| sample.segments[i].kind == kind_index("travel").unwrap()).collect();
+            let (d_first, d_last) = (sample.segments[travel[0]].direction, sample.segments[travel[1]].direction);
+            assert_eq!(d_last == Some(0), driving == Side::Right, "the sample puts the away lane on the driving side");
+            let s = layout(&[("sidewalk", 3000, None), ("bus", 3300, d_first), ("bus", 3300, d_last), ("sidewalk", 3000, None)]);
+            for from_end in [ZoneEnd::First, ZoneEnd::Last] {
+                assert_eq!(bus_lane(&s.segments, Side::Left, driving), Some(1), "{driving:?} {from_end:?} left");
+                assert_eq!(bus_lane(&s.segments, Side::Right, driving), Some(2), "{driving:?} {from_end:?} right");
+                for side in [Side::Left, Side::Right] {
+                    let mut e = editor_with(&s, driving, from_end);
+                    e.add_stop(side, 10_000, 12_000, StopKind::Curb).unwrap();
+                    assert!(ok(&e, "stop-lane"), "{driving:?} {from_end:?} {side:?}: the anchor does not matter");
+                }
+            }
+        }
+        // A one-way street running away: only the half that carries direction 0 has a lane for the bus.
+        let s = layout(&[("sidewalk", 3000, None), ("bus", 3300, Some(0)), ("bus", 3300, Some(0)), ("sidewalk", 3000, None)]);
+        assert_eq!(bus_lane(&s.segments, Side::Right, Side::Right), Some(2));
+        assert_eq!(bus_lane(&s.segments, Side::Left, Side::Right), None, "the left half carries traffic toward");
+        assert_eq!(bus_lane(&s.segments, Side::Left, Side::Left), Some(1));
+        assert_eq!(bus_lane(&s.segments, Side::Right, Side::Left), None);
+        // A two-way lane counts; a travel lane does too; a wrong-way lane at the edge is passed over.
+        let s = layout(&[("sidewalk", 3000, None), ("travel", 3300, Some(0)), ("bus", 3300, Some(1)), ("sidewalk", 3000, None)]);
+        assert_eq!(bus_lane(&s.segments, Side::Right, Side::Right), Some(1));
+        let s = layout(&[("sidewalk", 3000, None), ("bus", 3300, None), ("sidewalk", 3000, None)]);
+        assert_eq!(bus_lane(&s.segments, Side::Right, Side::Right), Some(1));
+        assert_eq!(bus_lane(&s.segments, Side::Left, Side::Right), Some(1));
+    }
+
+    #[test]
+    fn a_curb_stop_on_a_curbside_bus_lane_passes() {
+        let e = with_stop(&CURB, StopKind::Curb);
+        let ids: Vec<&str> = e.view().checks.iter().map(|c| c.id).filter(|i| i.starts_with("stop-")).collect();
+        assert_eq!(ids, ["stop-lane", "stop-kind", "stop-length", "stop-width", "stop-bike", "stop-shelter"]);
+        for c in e.view().checks.iter().filter(|c| c.id.starts_with("stop-")) {
+            assert!(c.ok, "{} fails: {:?}", c.id, c.detail);
+        }
+    }
+
+    #[test]
+    fn no_stop_rows_without_stops() {
+        let e = editor_with(&layout(&CURB), Side::Right, ZoneEnd::First);
+        assert!(e.view().checks.iter().all(|c| !c.id.starts_with("stop-")));
+    }
+
+    #[test]
+    fn stop_lane_needs_a_bus_lane_going_the_stop_side_s_way() {
+        let none = [("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(1)), ("sidewalk", 3000, None)];
+        let e = with_stop(&none, StopKind::Curb);
+        let c = check(&e, "stop-lane");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-lane");
+        assert_eq!(c.zone.as_ref().unwrap().key, "stop-instance");
+        assert!(ok(&with_stop(&CURB, StopKind::Curb), "stop-lane"));
+        // The other checks do not pile on a stop with no lane.
+        assert!(ok(&e, "stop-kind") && ok(&e, "stop-width") && ok(&e, "stop-bike"));
+    }
+
+    #[test]
+    fn stop_kind_needs_what_the_kind_asks_of_the_section() {
+        // A bulb needs parking or loading beside the lane; a curb stop must not have it; an island needs a bike lane
+        // behind a parking, loading or buffer piece.
+        let parked = [("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("parking", 2400, None), ("sidewalk", 3000, None)];
+        let island = [
+            ("sidewalk", 3000, None),
+            ("travel", 3300, Some(1)),
+            ("bus", 3300, Some(0)),
+            ("parking", 2400, None),
+            ("bike", 1800, None),
+            ("sidewalk", 3000, None),
+        ];
+        let c = check(&with_stop(&CURB, StopKind::Bulb), "stop-kind");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-kind");
+        assert!(ok(&with_stop(&parked, StopKind::Bulb), "stop-kind"));
+        assert!(!ok(&with_stop(&parked, StopKind::Curb), "stop-kind"));
+        assert!(!ok(&with_stop(&parked, StopKind::Island), "stop-kind"));
+        assert!(ok(&with_stop(&CURB, StopKind::Curb), "stop-kind"));
+        assert!(ok(&with_stop(&island, StopKind::Island), "stop-kind"));
+        let segs = layout(&island).segments;
+        assert!(kind_fits(&segs, 2, Side::Right, StopKind::Island) && !kind_fits(&segs, 2, Side::Right, StopKind::Curb));
+        assert!(!ok(&with_stop(&CURB, StopKind::Island), "stop-kind"));
+    }
+
+    #[test]
+    fn stop_length_wants_nine_metres() {
+        let mut e = editor_with(&layout(&CURB), Side::Right, ZoneEnd::First);
+        e.add_stop(Side::Right, 10_000, 8_900, StopKind::Curb).unwrap();
+        let c = check(&e, "stop-length");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-length");
+        e.resize_stop(0, 9_000).unwrap();
+        assert!(ok(&e, "stop-length"));
+    }
+
+    #[test]
+    fn stop_width_measures_the_boarding_area_of_each_kind() {
+        // Curb: the sidewalk run beside the lane.
+        let narrow = [("sidewalk", 2300, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("sidewalk", 2300, None)];
+        let c = check(&with_stop(&narrow, StopKind::Curb), "stop-width");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-width");
+        let exact = [("sidewalk", 2400, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("sidewalk", 2400, None)];
+        assert!(ok(&with_stop(&exact, StopKind::Curb), "stop-width"));
+        // A planting strip breaks the sidewalk run.
+        let broken = [("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("planting", 1800, None), ("sidewalk", 2000, None)];
+        assert!(!ok(&with_stop(&broken, StopKind::Curb), "stop-width"));
+        // Bulb: the parking piece it stands over.
+        let bulb = |w: i32| [("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("parking", w, None), ("sidewalk", 3000, None)];
+        assert!(!ok(&with_stop(&bulb(2100), StopKind::Bulb), "stop-width"));
+        assert!(ok(&with_stop(&bulb(2400), StopKind::Bulb), "stop-width"));
+        // Island: the pieces between the lane and the bike lane.
+        let island = |w: i32| {
+            [("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("parking", w, None), ("bike", 1800, None), ("sidewalk", 3000, None)]
+        };
+        assert!(!ok(&with_stop(&island(2100), StopKind::Island), "stop-width"));
+        assert!(ok(&with_stop(&island(2400), StopKind::Island), "stop-width"));
+    }
+
+    #[test]
+    fn stop_bike_fails_for_riders_crossing_the_boarding_area() {
+        let bike = |w: i32| [("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("bike", w, None), ("sidewalk", 3000, None)];
+        let c = check(&with_stop(&bike(1800), StopKind::Curb), "stop-bike");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-bike-cross");
+        assert!(ok(&with_stop(&CURB, StopKind::Curb), "stop-bike"));
+        // A bulb over the parking with the bike lane between the bus and the parking.
+        let inside = [
+            ("sidewalk", 3000, None),
+            ("travel", 3300, Some(1)),
+            ("bus", 3300, Some(0)),
+            ("bike", 1800, None),
+            ("parking", 2400, None),
+            ("sidewalk", 3000, None),
+        ];
+        assert!(!ok(&with_stop(&inside, StopKind::Bulb), "stop-bike"));
+        // An island's bike lane passes behind it, if it is wide enough.
+        let island = |w: i32| {
+            [("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("parking", 2400, None), ("bike", w, None), ("sidewalk", 3000, None)]
+        };
+        let c = check(&with_stop(&island(1400), StopKind::Island), "stop-bike");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-bike-narrow");
+        assert!(ok(&with_stop(&island(1500), StopKind::Island), "stop-bike"));
+    }
+
+    #[test]
+    fn stop_shelter_adds_its_depth_to_the_boarding_area() {
+        let walk = |w: i32| [("sidewalk", w, None), ("travel", 3300, Some(1)), ("bus", 3300, Some(0)), ("sidewalk", w, None)];
+        let mut e = with_stop(&walk(3800), StopKind::Curb);
+        assert!(ok(&e, "stop-shelter"), "no shelter, nothing to fit");
+        e.set_stop_shelter(0, true).unwrap();
+        let c = check(&e, "stop-shelter");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-shelter");
+        let mut e = with_stop(&walk(3900), StopKind::Curb);
+        e.set_stop_shelter(0, true).unwrap();
+        assert!(ok(&e, "stop-shelter"));
+    }
+
+    #[test]
+    fn a_stop_without_its_lane_fails_and_comes_back() {
+        let mut e = editor_with(&layout(&CURB), Side::Right, ZoneEnd::First);
+        e.add_stop(Side::Right, 45_000, 12_000, StopKind::Curb).unwrap();
+        e.split_zone(Some(40_000)).unwrap();
+        e.select_zone(1);
+        let bus = e.view().segments.iter().find(|s| s.kind == kind_index("bus").unwrap()).unwrap().uid;
+        assert!(e.remove(bus));
+        assert!(!ok(&e, "stop-lane"));
+        assert_eq!(e.snapshot().stops.len(), 1, "the stop is kept");
+        assert!(e.undo());
+        assert!(ok(&e, "stop-lane"));
+    }
+
+    #[test]
+    fn a_stop_is_judged_in_every_zone_it_overlaps() {
+        // Zone 1 (from 30 m) has a narrower sidewalk; a stop from 25 m to 37 m fails there only.
+        let mut e = editor_with(&layout(&CURB), Side::Right, ZoneEnd::First);
+        e.add_stop(Side::Right, 25_000, 12_000, StopKind::Curb).unwrap();
+        e.split_zone(Some(30_000)).unwrap();
+        assert!(ok(&e, "stop-width"));
+        e.select_zone(1);
+        let walk = e.view().segments.iter().rev().find(|s| s.kind == kind_index("sidewalk").unwrap()).unwrap().uid;
+        assert!(e.set_width(walk, 2000));
+        assert!(!ok(&e, "stop-width"), "the second zone breaks it");
+        // The same stop wholly inside the first zone is not affected.
+        let mut e = editor_with(&layout(&CURB), Side::Right, ZoneEnd::First);
+        e.add_stop(Side::Right, 10_000, 12_000, StopKind::Curb).unwrap();
+        e.split_zone(Some(30_000)).unwrap();
+        e.select_zone(1);
+        let walk = e.view().segments.iter().rev().find(|s| s.kind == kind_index("sidewalk").unwrap()).unwrap().uid;
+        assert!(e.set_width(walk, 2000));
+        assert!(ok(&e, "stop-width"));
+    }
+
+    #[test]
+    fn a_stop_is_named_by_its_kind_and_place_or_by_its_name() {
+        let mut e = with_stop(&[("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(1)), ("sidewalk", 3000, None)], StopKind::Curb);
+        let named = check(&e, "stop-lane").zone.unwrap();
+        assert_eq!(named.key, "stop-instance");
+        assert_eq!(named.args.len(), 3);
+        e.name_stop(0, Some("Mont-Royal <b>")).unwrap();
+        let named = check(&e, "stop-lane").zone.unwrap();
+        assert_eq!(named.key, "stop-instance-named");
+        assert!(named.args.contains(&("name", Arg::Text("Mont-Royal <b>".into()))));
     }
 }
