@@ -204,6 +204,8 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("corner-island k-sidewalk", "CSS classes of the junction plan"),
     ("bulb k-sidewalk", "CSS classes of the junction plan"),
     ("piece k-", "CSS classes of the junction plan, the kind's id appended"),
+    ("piece k- beyond", "CSS classes of the junction plan, the kind's id inside"),
+    (" taper", "a CSS class of the junction plan's transition pieces"),
     ("piece k-bus", "CSS classes of the junction plan"),
     ("piece k-bus queue", "CSS classes of the junction plan"),
     ("piece k-bus bus-lane", "CSS classes of the junction plan"),

@@ -145,4 +145,19 @@ mod tests {
         assert!(block.contains("outline-color: Highlight;") && block.contains("CanvasText"), "{block}");
         assert!(editor.contains("outline: 3px solid var(--zone-sel);"));
     }
+
+    #[test]
+    fn the_approach_mark_clears_three_to_one_on_the_road_in_both_themes() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        let rule = editor.find("#drawing .approach-mark {").expect("the mark has a rule");
+        let block = &editor[rule..rule + editor[rule..].find('}').unwrap()];
+        assert!(block.contains("stroke: var(--ink-2);") && block.contains("pointer-events: none;"), "{block}");
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let (ink, road) = (pick(&token(app, "ink-2"), i), pick(&token(app, "road"), i));
+            assert!(contrast(&ink, &road) >= 3.0, "ink-2 on the road {theme}: {:.2}", contrast(&ink, &road));
+        }
+        let forced = editor.find("  #drawing .approach-mark {\n    stroke: CanvasText;").expect("forced-colours rule");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some());
+    }
 }

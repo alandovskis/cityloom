@@ -1848,7 +1848,7 @@ fn an_arm_without_a_beyond_draws_as_before() {
 
 /// A sample junction whose north arm has a beyond: the end zone's first entering lane is a pocket that is planting
 /// across the boundary, 20 m out, tapering out by 30 m. Returns the junction and the arm's uid.
-fn junction_with_a_pocket(configure: impl Fn(&mut State)) -> (Junction, u32) {
+pub(crate) fn junction_with_a_pocket(configure: impl Fn(&mut State)) -> (Junction, u32) {
     use crate::street::model::{Beyond, BeyondTaper, TaperPiece};
     let mut state = Junction::new(0).current().clone();
     configure(&mut state);
