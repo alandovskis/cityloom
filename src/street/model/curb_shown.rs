@@ -20,6 +20,9 @@ pub struct ShownInstance {
     /// Where it lies along the stretch, in millimetres from the stretch's near end: only the part inside the stretch
     /// and the zone.
     pub along: (f64, f64),
+    /// The whole use in the same coordinates; it may lie partly outside the stretch. Trees and racks are placed from
+    /// it, so they stay where they are as the stretch moves.
+    pub full: (f64, f64),
     #[serde(rename = "use")]
     pub use_: Use,
 }
@@ -59,7 +62,8 @@ impl Editor {
                 }
                 let piece = curbside(segs, i.side)?;
                 let (a, b) = (place(s), place(e));
-                Some(ShownInstance { piece, along: (a.min(b), a.max(b)), use_: i.use_ })
+                let (c, d) = (place(i.from_mm), place(i.from_mm + i.length_mm));
+                Some(ShownInstance { piece, along: (a.min(b), a.max(b)), full: (c.min(d), c.max(d)), use_: i.use_ })
             })
             .collect()
     }

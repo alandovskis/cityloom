@@ -122,7 +122,7 @@ fn run_layers(out: &mut String, base: &Projection, v: &View, i18n: &I18n, run: &
     let boxes: Vec<(Bx, bool)> = standing
         .iter()
         .map(|&s| (raised::strip_box(segs, s, p.reach), true))
-        .chain(lifted.iter().map(|l| (curbside::lift_box(segs, l), false)))
+        .chain(lifted.iter().map(|l| (curbside::lift_box(segs, l, &p, run.taper.as_ref()), false)))
         .chain(solids.iter().map(|b| (b.bounds(), false)))
         .collect();
     out.push_str("<g class=\"iso-raised\">");
@@ -135,7 +135,7 @@ fn run_layers(out: &mut String, base: &Projection, v: &View, i18n: &I18n, run: &
             }
             match standing.get(k) {
                 Some(&strip) => raised::piece(out, &p, segs, i18n, strip, run.across),
-                None => curbside::lift(out, &p, segs, i18n, &lifted[k - standing.len()]),
+                None => curbside::lift(out, &p, segs, i18n, &lifted[k - standing.len()], run.taper.as_ref()),
             }
         } else {
             if open {

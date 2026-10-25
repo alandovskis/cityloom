@@ -15,6 +15,7 @@ use super::order::Bx;
 use super::projection::{Projection, Reach};
 use super::raised::{slab_of, top_over};
 use super::solids::{Block, Solid, wide_enough};
+use super::taper::Draw;
 
 /// One stretch of a curbside piece, drawn flat.
 pub(super) struct Part {
@@ -93,20 +94,35 @@ pub(super) fn lifted(shown: &[ShownInstance]) -> Vec<Lift> {
     shown.iter().filter(|s| s.use_.raised()).map(|s| Lift { piece: s.piece, along: s.along, use_: s.use_ }).collect()
 }
 
-/// The box a lifted use fills, for ordering.
-pub(super) fn lift_box(segs: &[SegView], l: &Lift) -> Bx {
-    let s = &segs[l.piece];
-    let h = super::projection::drawn_mm(super::raised::height_mm(l.use_.kind_id()));
-    Bx { x: (s.x_mm as f64, (s.x_mm + s.width_mm) as f64), y: (0.0, h), z: l.along }
+/// The edges across of a lifted use's piece along the stretch: the transition's where the piece tapers, else none.
+fn edges<'a>(segs: &[SegView], l: &Lift, p: &'a Projection, taper: Option<&'a Draw>) -> Option<impl Fn(f64) -> (f64, f64) + 'a> {
+    let shape = taper?.shape_of(&segs[l.piece])?;
+    let reach = p.reach;
+    taper.map(move |d| move |z: f64| d.edges(shape, reach, z))
 }
 
-/// A lifted use as a raised strip of its own, hovered as the use.
-pub(super) fn lift(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I18n, l: &Lift) {
+/// The box a lifted use fills, for ordering.
+pub(super) fn lift_box(segs: &[SegView], l: &Lift, p: &Projection, taper: Option<&Draw>) -> Bx {
+    let s = &segs[l.piece];
+    let h = super::projection::drawn_mm(super::raised::height_mm(l.use_.kind_id()));
+    let x = match edges(segs, l, p, taper) {
+        Some(e) => {
+            let (a, b) = (e(l.along.0), e(l.along.1));
+            (a.0.min(b.0), a.1.max(b.1))
+        }
+        None => (s.x_mm as f64, (s.x_mm + s.width_mm) as f64),
+    };
+    Bx { x, y: (0.0, h), z: l.along }
+}
+
+/// A lifted use as a raised strip of its own, hovered as the use; on a tapering piece it follows the piece's edges.
+pub(super) fn lift(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I18n, l: &Lift, taper: Option<&Draw>) {
     let s = &segs[l.piece];
     let (kind, material) = look(s, l.use_);
     let name = i18n.tr(l.use_.name_key(), &crate::shared::i18n::Args::new());
     write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
-    slab_of(out, p, segs, l.piece, KINDS[kind].id, material, l.along);
+    let edge = edges(segs, l, p, taper);
+    slab_of(out, p, segs, l.piece, KINDS[kind].id, material, l.along, edge.as_ref().map(|e| e as &dyn Fn(f64) -> (f64, f64)));
     out.push_str("</g>");
 }
 
@@ -121,7 +137,8 @@ pub(super) fn blocks(segs: &[SegView], shown: &[ShownInstance], p: &Projection) 
         let h = super::projection::drawn_mm(super::raised::height_mm(m.use_.kind_id()));
         match m.use_ {
             Use::Tree => {
-                let z = (m.along.0 + m.along.1) / 2.0;
+                // At the middle of the whole use, drawn only if that lies in the reach (the retain below).
+                let z = (m.full.0 + m.full.1) / 2.0;
                 if wide_enough(p, w, z) {
                     let crown = (w * 0.9).min(2_400.0);
                     out.push(Block { solid: Solid::Trunk, x: (cx - 125.0, cx + 125.0), y: (h, h + 2_000.0), z: (z - 125.0, z + 125.0) });
@@ -134,8 +151,9 @@ pub(super) fn blocks(segs: &[SegView], shown: &[ShownInstance], p: &Projection) 
                 }
             }
             Use::BikeParking => {
-                let racks = (0..).map(|n| m.along.0 + 500.0 + f64::from(n) * 1_000.0).take_while(|z| *z < m.along.1);
-                for z in racks.filter(|&z| wide_enough(p, w, z)) {
+                // No bikerack solid exists, so a rack is a post. Phased from the whole use's start, a metre apart.
+                let racks = (0..).map(|n| m.full.0 + 500.0 + f64::from(n) * 1_000.0).take_while(|z| *z < m.full.1);
+                for z in racks.filter(|&z| z >= m.along.0 && z <= m.along.1 && wide_enough(p, w, z)) {
                     out.push(Block { solid: Solid::Post, x: (cx - 60.0, cx + 60.0), y: (h, h + 900.0), z: (z - 60.0, z + 60.0) });
                 }
             }
@@ -309,5 +327,66 @@ mod tests {
         assert!(e.view().zones.joint.is_some());
         // The patio of zone 1 is drawn; the one beyond the boundary, in zone 2's half, is not.
         assert_eq!(count(&drawn(&e), "class=\"iso-top k-terrace"), 1);
+    }
+
+    #[test]
+    fn a_tree_is_placed_from_the_whole_use_so_a_partly_shown_one_has_none_when_its_middle_is_outside() {
+        let mut e = street();
+        let none = count(&drawn(&e), "class=\"iso-solid s-trunk\"");
+        // 38 m to 46 m: the middle, 42 m, is past the stretch, so the part shown gets no tree of its own.
+        e.add_curb(Side::Left, 38_000, 8_000, Use::Tree).unwrap();
+        assert_eq!(count(&drawn(&e), "class=\"iso-solid s-trunk\""), none);
+        assert_eq!(count(&drawn(&e), "class=\"iso-top k-planting mat-trees\""), 1, "the pit is still shown");
+    }
+
+    #[test]
+    fn racks_keep_their_places_along_the_street_when_the_use_is_cut_by_the_stretch() {
+        // Anchored at the last end the use 38.3 m to 43.7 m lies at -3.7 m to 1.7 m of the stretch: racks are 0.5 m
+        // in from its start, so one stands at 0.8 m (from the shown part's start they would stand at 0.5 m and 1.5 m).
+        let s = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::Last }));
+        e.add_curb(Side::Right, 38_300, 5_400, Use::BikeParking).unwrap();
+        let (v, p) = (e.view(), projection(&e));
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        assert_eq!(count(&m, "class=\"iso-solid s-post\""), 1);
+        let piece = &v.segments[4];
+        let (cx, h) = (piece.x_mm as f64 + piece.width_mm as f64 / 2.0, drawn_mm(150));
+        let front = points(&p, &[(cx - 60.0, h, 740.0), (cx + 60.0, h, 740.0), (cx + 60.0, h + 900.0, 740.0), (cx - 60.0, h + 900.0, 740.0)]);
+        assert!(m.contains(&format!("<g class=\"iso-solid s-post\"><polygon class=\"o-front\" points=\"{front}\"")));
+    }
+
+    /// The corners of the first polygon of `class` in `markup`, as (x, y) in pixels.
+    fn corners(markup: &str, class: &str) -> Vec<(f64, f64)> {
+        let at = markup.find(class).unwrap_or_else(|| panic!("{class} is drawn"));
+        let pts = &markup[at + markup[at..].find("points=\"").unwrap() + 8..];
+        pts[..pts.find('"').unwrap()]
+            .split(' ')
+            .map(|pt| {
+                let mut c = pt.split(',').map(|n| n.parse::<f64>().unwrap());
+                (c.next().unwrap(), c.next().unwrap())
+            })
+            .collect()
+    }
+
+    #[test]
+    fn on_a_tapering_piece_a_raised_use_follows_the_pieces_edges() {
+        let mut e = street();
+        e.add_curb(Side::Right, 24_000, 6_000, Use::Patio).unwrap();
+        e.split_zone(Some(20_000)).unwrap();
+        // The second zone has a wider parking lane than the first, and it hosts the transition into it.
+        assert!(e.select_zone(1));
+        let uid = e.view().segments[4].uid;
+        assert!(e.set_width(uid, 3_000));
+        let v = e.view();
+        assert!(v.zones.joint.as_ref().and_then(|j| j.taper.as_ref()).is_some_and(|t| t.host_is_selected), "the selected zone hosts a taper");
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        let lane = group(&m, v.segments[4].uid, 0);
+        let (gap, raised) = (corners(&lane, "class=\"iso-top k-parking "), corners(&m, "class=\"iso-top k-terrace"));
+        // The raised top starts where the gap before it ends: across, at 24 m, the corners are the lane's tapered ones.
+        assert_eq!((raised[0].0, raised[1].0), (gap[3].0, gap[2].0));
+        let (x0, x1) = (v.segments[4].x_mm as f64, (v.segments[4].x_mm + v.segments[4].width_mm) as f64);
+        let p = projection(&e);
+        let untapered = (p.at(x0, 0.0, 24_000.0).0, p.at(x1, 0.0, 24_000.0).0);
+        assert_ne!((raised[0].0, raised[1].0), untapered, "the lane has moved by then");
     }
 }

@@ -188,29 +188,42 @@ pub(super) fn top_over(out: &mut String, p: &Projection, id: &str, m: &str, h: f
 /// front (the cut at the near end) and the side face the eye sees, where the piece beside it is lower.
 pub(super) fn slab(out: &mut String, p: &Projection, segs: &[SegView], i: usize) {
     let s = &segs[i];
-    slab_of(out, p, segs, i, KINDS[s.kind].id, s.material, (p.reach.near, p.reach.far));
+    slab_of(out, p, segs, i, KINDS[s.kind].id, s.material, (p.reach.near, p.reach.far), None);
 }
 
 /// A strip across the piece at `i` as a thing of kind `id` and material `m` over `along` of the reach: the piece's
 /// own (`slab`), or a curbside use standing where the piece lies.
-pub(super) fn slab_of(out: &mut String, p: &Projection, segs: &[SegView], i: usize, id: &str, m: &str, along: (f64, f64)) {
+/// `edge` gives the piece's edges across at an `along_mm` where a transition moves them (a use standing on a tapering
+/// piece follows it).
+pub(super) fn slab_of(
+    out: &mut String,
+    p: &Projection,
+    segs: &[SegView],
+    i: usize,
+    id: &str,
+    m: &str,
+    along: (f64, f64),
+    edge: Option<&dyn Fn(f64) -> (f64, f64)>,
+) {
     let s = &segs[i];
-    let (x0, x1, h) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64, drawn_mm(height_mm(id)));
     let (n, l) = along;
+    let (x0, x1) = edge.map_or((s.x_mm as f64, (s.x_mm + s.width_mm) as f64), |e| e(n));
+    let h = drawn_mm(height_mm(id));
     let hatch = format!("h-{id}");
     if h > 0.0 {
         face(out, Face::Front, Some(id), &hatch, &points(p, &[(x0, 0.0, n), (x1, 0.0, n), (x1, h, n), (x0, h, n)]));
         if let Some(right) = inner_face(p, x0, x1) {
-            let (x, low) = (if right { x1 } else { x0 }, beside(segs, i, right));
+            let (far_x0, far_x1) = edge.map_or((x0, x1), |e| e(l));
+            let (x, xl, low) = if right { (x1, far_x1, beside(segs, i, right)) } else { (x0, far_x0, beside(segs, i, right)) };
             if low < h {
-                face(out, Face::Side, Some(id), &hatch, &points(p, &[(x, low, n), (x, low, l), (x, h, l), (x, h, n)]));
+                face(out, Face::Side, Some(id), &hatch, &points(p, &[(x, low, n), (xl, low, l), (xl, h, l), (x, h, n)]));
             }
         }
     }
-    if (n, l) == (p.reach.near, p.reach.far) {
-        top(out, p, id, m, x0, x1, h);
-    } else {
-        top(out, &p.over(Reach { near: n, far: l }), id, m, x0, x1, h);
+    let sub = p.over(Reach { near: n, far: l });
+    match edge {
+        Some(edge) => top_over(out, &sub, id, m, h, edge, false),
+        None => top(out, &sub, id, m, x0, x1, h),
     }
 }
 
