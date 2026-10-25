@@ -3,9 +3,9 @@
 //! where it is as the stretch moves, and is drawn whole or not at all within the reach.
 
 use crate::shared::catalogue::KINDS;
-use crate::street::model::{SegView, ShownStop};
+use crate::street::model::{SegView, ShownStop, View};
 
-use super::projection::{Projection, drawn_mm};
+use super::projection::{Projection, STRETCH_MM, drawn_mm};
 use super::raised::height_mm;
 use super::sign::Panel;
 use super::solids::{Block, shelter};
@@ -30,6 +30,29 @@ pub(super) fn blocks(segs: &[SegView], stops: &[ShownStop], p: &Projection) -> V
             shelter(p, (piece.x_mm as f64, (piece.x_mm + piece.width_mm) as f64), s.full, top_mm(segs, s, i))
         })
         .collect()
+}
+
+/// How many of the stops are drawn at all: a raised platform, or a sign or a shelter that lies in the reach of the
+/// selected zone's run. The label counts these, not the stops that merely overlap the stretch. It has no drawing
+/// width, so it judges the geometry only (a shelter on a piece too narrow on the screen still counts).
+pub(super) fn drawn_count(v: &View) -> usize {
+    let half = STRETCH_MM / 2.0;
+    let (near, far) = match &v.zones.joint {
+        None => (0.0, STRETCH_MM),
+        Some(j) if j.far => (0.0, half),
+        Some(_) => (half, STRETCH_MM),
+    };
+    v.stops_shown
+        .iter()
+        .filter(|s| {
+            let sign = s.full.0 + SIGN_AT_MM;
+            let (sign_in, shelter_in) = (sign - 40.0 >= near && sign + 40.0 <= far, {
+                let mid = s.full.0 + (s.full.1 - s.full.0) / 2.0;
+                mid - 2_000.0 >= near && mid + 2_000.0 <= far
+            });
+            !s.raised.is_empty() || (s.stand.is_some() && (sign_in || (s.shelter && shelter_in)))
+        })
+        .count()
 }
 
 /// A bus on a stop sign's panel, in panel units (across and up, each 0 to 1): the body, its windows and its wheels.
@@ -256,6 +279,45 @@ mod tests {
         let (x0, x1) = (piece.x_mm as f64, (piece.x_mm + piece.width_mm) as f64);
         let covered = points(&p, &[(x0, 0.0, 10_000.0), (x1, 0.0, 10_000.0), (x1, 0.0, 15_000.0), (x0, 0.0, 15_000.0)]);
         assert!(!lane.contains(&format!("points=\"{covered}\"")));
+    }
+
+    #[test]
+    fn a_stop_with_nothing_drawn_is_not_counted() {
+        // A curb stop from 39.7 m: shown by the model (0.3 m of it is in the stretch), but its sign would stand at 40.2 m.
+        let mut e = editor(&CURB, ZoneEnd::First);
+        e.add_stop(Side::Right, 39_700, 12_000, StopKind::Curb).unwrap();
+        assert_eq!(count(&drawn(&e), "iso-stop-sign"), 0, "its near end is 40.2 m: no sign");
+        assert!(!iso_label(&e.view(), &en(), Units::Metres).contains("transit"), "shown by the model, drawn by nothing");
+        assert_eq!(e.view().stops_shown.len(), 1);
+        // A platform counts though its sign is out.
+        let mut e = editor(&BULB, ZoneEnd::First);
+        e.add_stop(Side::Right, 39_700, 12_000, StopKind::Bulb).unwrap();
+        assert!(iso_label(&e.view(), &en(), Units::Metres).ends_with("One transit stop is shown."));
+    }
+
+    #[test]
+    fn a_stop_across_a_zone_boundary_is_drawn_in_the_zone_that_holds_it() {
+        let mut e = editor(&BULB, ZoneEnd::First);
+        e.add_stop(Side::Right, 10_000, 20_000, StopKind::Bulb).unwrap();
+        e.set_stop_shelter(0, true).unwrap();
+        e.split_zone(Some(20_000)).unwrap();
+        // Zone 1 (0 to 20 m) holds the first half: the platform to its end; the sign stands, the shelter (middle at
+        // 20 m, 18 m to 22 m) crosses the zone and is not drawn.
+        assert!(e.select_zone(0));
+        let v = e.view();
+        assert_eq!(v.stops_shown.len(), 1);
+        assert_eq!((v.stops_shown[0].along, v.stops_shown[0].full), ((10_000.0, 20_000.0), (10_000.0, 30_000.0)));
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        assert_eq!(count(&m, "iso-stop-sign"), 1);
+        assert_eq!(count(&m, "class=\"iso-solid s-shelter\""), 0);
+        assert!(!m.contains("NaN"));
+        // Zone 2 holds the rest: the platform from 20 m, no sign (its near end is in the other zone).
+        assert!(e.select_zone(1));
+        let v = e.view();
+        assert_eq!(v.stops_shown[0].along.0, 20_000.0);
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        assert_eq!(count(&m, "iso-stop-sign"), 0);
+        assert!(m.contains("<title>Curb extension</title>"));
     }
 
     #[test]

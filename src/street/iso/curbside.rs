@@ -316,6 +316,28 @@ mod tests {
         assert!(!m.contains("<title>Loading</title>"));
     }
 
+    /// Sample Avenue 2 with a bus shelter piece and a patio use.
+    fn sheltered() -> Editor {
+        let mut e = Editor::new(1).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        e.add(kind_index("busshelter").unwrap(), 1);
+        e.add_curb(Side::Left, 4_000, 6_000, Use::Patio).unwrap();
+        e
+    }
+
+    #[test]
+    fn plain_curb_uses_draw_as_before_the_stops_existed() {
+        let mut uses = street();
+        uses.add_curb(Side::Right, 4_000, 6_000, Use::Parking).unwrap();
+        uses.add_curb(Side::Right, 12_000, 6_000, Use::Patio).unwrap();
+        uses.add_curb(Side::Left, 8_000, 6_000, Use::Tree).unwrap();
+        // Hashes of what these drew at 57c13c7, before the stops.
+        for (name, markup, len, hash) in
+            [("uses", drawn(&uses), 45368usize, 0x55124233d7894df8u64), ("sheltered", drawn(&sheltered()), 58481, 0x2202208758103a04)]
+        {
+            assert_eq!((markup.len(), fnv(&markup)), (len, hash), "{name}");
+        }
+    }
+
     #[test]
     fn instances_outside_the_stretch_are_not_drawn() {
         let mut e = street();

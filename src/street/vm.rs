@@ -88,6 +88,8 @@ pub struct StreetVm {
     /// The kind picked for the free stretch (side, start) chosen on a stops row; another stretch starts from the kind
     /// that fits there.
     stop_pick: ArcRwSignal<Option<(Side, i32, StopKind)>>,
+    /// The shelter ticked for the chosen free stretch, which the stop added there starts with.
+    stop_shelter_pick: ArcRwSignal<Option<(Side, i32, bool)>>,
 }
 
 /// The areas whose outline holds the midpoint of the street a page edits, read once when the page opens: none for
@@ -148,6 +150,7 @@ impl StreetVm {
                 mode: ArcRwSignal::new(mode),
                 merge: ArcRwSignal::new(None),
                 stop_pick: ArcRwSignal::new(None),
+                stop_shelter_pick: ArcRwSignal::new(None),
             }
         })
     }
@@ -685,11 +688,32 @@ impl StreetVm {
         }
     }
 
-    /// Adds a stop of `kind` and `length_mm` at the start of the chosen gap. False, with the reason said, when no gap
-    /// is chosen or it was refused.
+    /// Whether the shelter box shows ticked: the chosen stop's, else the one ticked for the chosen free stretch.
+    /// Watched.
+    pub fn stop_shelter_shown(&self) -> bool {
+        let chosen = {
+            let v = self.view();
+            v.stops.sides.iter().find_map(|s| s.cells.get(s.selected?).map(|c| (s.side, c.from_mm, c.kind.is_some().then_some(c.shelter))))
+        };
+        match chosen {
+            Some((_, _, Some(shelter))) => shelter,
+            Some((side, from, None)) => self.stop_shelter_pick.get().filter(|p| (p.0, p.1) == (side, from)).is_some_and(|p| p.2),
+            None => false,
+        }
+    }
+
+    /// Adds a stop of `kind` and `length_mm` at the start of the chosen gap, with the shelter ticked for that gap.
+    /// False, with the reason said, when no gap is chosen or it was refused.
     pub fn add_stop(&self, kind: StopKind, length_mm: i32) -> bool {
         match self.chosen::<StopRow>() {
-            Some((side, None, from_mm)) => self.row_edit(Subject::Stop, |e| e.add_stop(side, from_mm, length_mm, kind)),
+            Some((side, None, from_mm)) => {
+                let shelter = self.stop_shelter_pick.get_untracked().is_some_and(|p| (p.0, p.1) == (side, from_mm) && p.2);
+                let added = self.row_edit(Subject::Stop, |e| e.add_stop_with(side, from_mm, length_mm, kind, shelter));
+                if added {
+                    self.stop_shelter_pick.set(None);
+                }
+                added
+            }
             _ => {
                 self.say_now_key(StopRow::CHOOSE_GAP_KEY);
                 false
@@ -701,8 +725,15 @@ impl StreetVm {
         self.on_chosen::<StopRow>(|e, i, _| e.set_stop_kind(i, kind))
     }
 
+    /// Sets the shelter of the chosen stop, or keeps it for the stop to be added in the chosen free stretch.
     pub fn set_stop_shelter(&self, on: bool) -> bool {
-        self.on_chosen::<StopRow>(|e, i, _| e.set_stop_shelter(i, on))
+        match self.chosen::<StopRow>() {
+            Some((side, None, from)) => {
+                self.stop_shelter_pick.set(Some((side, from, on)));
+                true
+            }
+            _ => self.on_chosen::<StopRow>(|e, i, _| e.set_stop_shelter(i, on)),
+        }
     }
 
     /// Names the chosen stop: the name is trimmed and a blank one takes the name away. Nothing is said when the stop
@@ -2227,6 +2258,31 @@ mod stop_tests {
     }
 
     #[test]
+    fn a_shelter_ticked_for_a_gap_starts_the_stop_added_there() {
+        let r = rig(&PARKED);
+        r.vm.select_stop(Side::Right, 0);
+        assert!(!r.vm.stop_shelter_shown());
+        let before = r.vm.view_now().revisions.len();
+        assert!(r.vm.set_stop_shelter(true), "a free stretch keeps it");
+        assert_eq!(r.vm.view_now().revisions.len(), before, "no edit is made");
+        assert!(r.vm.stop_shelter_shown());
+        // It belongs to its own gap.
+        r.vm.select_stop(Side::Left, 0);
+        assert!(!r.vm.stop_shelter_shown());
+        r.vm.select_stop(Side::Right, 0);
+        assert!(r.vm.stop_shelter_shown());
+        // The stop added there has the shelter, in the one revision of the add.
+        assert!(r.vm.add_stop(r.vm.stop_kind_shown(), 12_000));
+        let v = r.vm.view_now();
+        assert!(v.stops.sides[1].cells[0].shelter);
+        assert_eq!(v.revisions.len(), before + 1);
+        assert!(r.vm.stop_shelter_shown(), "a chosen stop shows its own");
+        // The next stop starts without one.
+        r.vm.select_stop(Side::Right, 1);
+        assert!(!r.vm.stop_shelter_shown());
+    }
+
+    #[test]
     fn changing_its_kind_and_shelter() {
         let r = with_one_stop();
         assert!(r.vm.set_stop_kind(StopKind::Bulb));
@@ -2242,8 +2298,8 @@ mod stop_tests {
         // a gap has nothing to change
         r.vm.select_stop(Side::Right, 1);
         r.said.take();
-        assert!(!r.vm.set_stop_kind(StopKind::Island) && !r.vm.set_stop_shelter(true));
-        assert_eq!(r.said.take(), ["Choose a stop first.", "Choose a stop first."]);
+        assert!(!r.vm.set_stop_kind(StopKind::Island));
+        assert_eq!(r.said.take(), ["Choose a stop first."]);
     }
 
     #[test]

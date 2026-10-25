@@ -220,8 +220,9 @@ pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
     if !v.curb_shown.is_empty() {
         label = format!("{label} {}", i18n.tr("svg-iso-curb", &Args::new().num("count", v.curb_shown.len() as i64)));
     }
-    if !v.stops_shown.is_empty() {
-        label = format!("{label} {}", i18n.tr("svg-iso-stops", &Args::new().num("count", v.stops_shown.len() as i64)));
+    let stops = stops::drawn_count(v);
+    if stops > 0 {
+        label = format!("{label} {}", i18n.tr("svg-iso-stops", &Args::new().num("count", stops as i64)));
     }
     match v.speed_kmh {
         Some(kmh) => format!("{label} {}", i18n.tr("svg-iso-speed", &Args::new().num("kmh", i64::from(kmh)))),

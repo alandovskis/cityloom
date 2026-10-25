@@ -136,8 +136,13 @@ impl Editor {
     /// Adds a stop on `side` from `from_mm` (snapped to `SNAP_MM`) for `length_mm` (snapped, at least `SNAP_MM`),
     /// without a shelter or a name.
     pub fn add_stop(&mut self, side: Side, from_mm: i32, length_mm: i32, kind: StopKind) -> Result<(), CurbRefusal> {
+        self.add_stop_with(side, from_mm, length_mm, kind, false)
+    }
+
+    /// Adds a stop as `add_stop` does, with or without a shelter: one revision.
+    pub fn add_stop_with(&mut self, side: Side, from_mm: i32, length_mm: i32, kind: StopKind, shelter: bool) -> Result<(), CurbRefusal> {
         let frame = self.curb_frame(false)?;
-        let s = Stop { side, from_mm: snap(from_mm), length_mm: snap(length_mm).max(SNAP_MM), kind, shelter: false, name: None };
+        let s = Stop { side, from_mm: snap(from_mm), length_mm: snap(length_mm).max(SNAP_MM), kind, shelter, name: None };
         self.stop_fits(&s, None, frame)?;
         self.stop_choice.pick(s.side, s.from_mm);
         self.stop_change(Self::stop_label("rev-stop-add", &s), frame, |stops| stops.push(s));
