@@ -2292,6 +2292,22 @@ mod tests {
     }
 
     #[test]
+    fn a_zone_wider_than_the_street_gives_no_arm_a_beyond() {
+        let mut city = City::new();
+        let mut street = zoned_street(&city, 2, &[0, 5], None);
+        let mut section = street.segments.clone();
+        let mut lane = section.iter().find(|g| g.kind == crate::shared::catalogue::kind_index("travel").unwrap()).unwrap().clone();
+        lane.uid = street.next_uid - 1;
+        lane.width_mm = 3_300;
+        section.push(lane);
+        street.zones[1].segments = Some(section);
+        assert!(city.keep_street(2, street), "the street is kept with its zones");
+        assert_eq!(city.streets[&2].zones.len(), 2);
+        assert_eq!(arm_beyond(&city, 1, 2), None);
+        assert_eq!(arm_beyond(&city, 6, 2), None);
+    }
+
+    #[test]
     fn a_zone_edit_reaches_an_open_junction() {
         let mut city = City::new();
         let street = zoned_street(&city, 2, &[0, 5], Some(1));

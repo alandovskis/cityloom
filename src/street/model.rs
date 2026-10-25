@@ -600,7 +600,7 @@ pub(crate) fn snap(v: i32) -> i32 {
     ((v as f64 / SNAP_MM as f64).round() as i32) * SNAP_MM
 }
 
-fn total(segments: &[Segment]) -> i32 {
+pub(super) fn total(segments: &[Segment]) -> i32 {
     segments.iter().map(|s| s.width_mm).sum()
 }
 
