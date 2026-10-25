@@ -485,7 +485,11 @@ const ticks = (page: Page) =>
     const seen = new Set<string>();
     return (window as any).cityloomMap
       .querySourceFeatures("zone-ticks")
-      .map((f: any) => ({ type: f.geometry.type, coordinates: f.geometry.coordinates }))
+      .map((f: any) => ({
+        type: f.geometry.type,
+        coordinates: f.geometry.coordinates,
+        band: f.properties.band === true || f.properties.band === "true",
+      }))
       .filter((t: any) => {
         const key = JSON.stringify(t.coordinates.map((c: number[]) => c.map((v) => Math.round(v * 1e6))));
         return !seen.has(key) && !!seen.add(key);
@@ -564,6 +568,19 @@ test.describe("the zone boundaries on the map", () => {
       tick.coordinates as [number[], number[]],
     );
     expect(side[0] * side[1], "opposite sides of the centreline").toBe(-1);
+  });
+
+  test("a boundary with a transition is a band along the street", async ({ page }) => {
+    await openLongStreet(page, 20);
+    await page.locator("#zone-split").click();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await page.locator("#zone-1").click();
+    await page.locator("#add-btn").click();
+    await page.locator(".add-item", { hasText: "Driving lane" }).click();
+    await page.goto("/map.html"); // leaving the page flushes the debounced write
+    await mapReady(page);
+    await expect.poll(async () => (await ticks(page)).filter((t: any) => t.band).length).toBe(1);
+    expect(await ticks(page), "the band replaces the tick").toHaveLength(1);
   });
 
   test("the street's label gives its zone count", async ({ page }) => {

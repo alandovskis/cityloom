@@ -32,6 +32,7 @@ mod sign;
 mod solids;
 mod surface;
 mod symbols;
+mod taper;
 #[cfg(test)]
 mod testing;
 
@@ -93,6 +94,8 @@ struct Run<'a> {
     reach: Reach,
     /// It is the neighbour's section, across the boundary.
     across: bool,
+    /// The transition the run holds, when it is the host's.
+    taper: Option<taper::Draw>,
 }
 
 /// A run's layers, in the order the eye needs: the surface (the top of every roadway piece), the markings (every line
@@ -104,8 +107,8 @@ fn run_layers(out: &mut String, base: &Projection, v: &View, i18n: &I18n, run: &
     let p = base.over(run.reach);
     let segs = run.segs;
     let (flat, standing) = surface::split(strips(segs, &p));
-    out.push_str(&surface::layer(&p, segs, i18n, &flat, run.across));
-    out.push_str(&paint::layer(&p, segs));
+    out.push_str(&surface::layer(&p, segs, i18n, &flat, run.across, run.taper.as_ref()));
+    out.push_str(&paint::layer_over(&p, segs, run.taper.as_ref()));
 
     // The raised strips and what stands on the pieces, in the order the eye needs (`order`): a box covers the ones it
     // is in front of, so a crown nearer the middle of the street covers a shelter beyond it, and a strip nearer the
@@ -157,13 +160,29 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
 
     let mut selected = Reach::STRETCH;
     match &v.zones.joint {
-        None => run_layers(&mut out, &p, v, i18n, &Run { segs: &v.segments, reach: selected, across: false }),
+        None => run_layers(&mut out, &p, v, i18n, &Run { segs: &v.segments, reach: selected, across: false, taper: None }),
         Some(j) => {
             let (near, far) = (Reach { near: 0.0, far: l / 2.0 }, Reach { near: l / 2.0, far: l });
             // The neighbour lies beyond the selected zone (`far`), or before it.
             let (own, across) = if j.far { (near, far) } else { (far, near) };
             selected = own;
-            let (own_run, across_run) = (Run { segs: &v.segments, reach: own, across: false }, Run { segs: &j.segments, reach: across, across: true });
+            // The host's run holds the transition, its seam at the end that meets the other run.
+            let own_seam_far = j.far;
+            let across_seam_far = !j.far;
+            let (own_run, across_run) = (
+                Run {
+                    segs: &v.segments,
+                    reach: own,
+                    across: false,
+                    taper: j.taper.as_ref().filter(|t| t.host_is_selected).map(|t| taper::Draw::new(t, own_seam_far)),
+                },
+                Run {
+                    segs: &j.segments,
+                    reach: across,
+                    across: true,
+                    taper: j.taper.as_ref().filter(|t| !t.host_is_selected).map(|t| taper::Draw::new(t, across_seam_far)),
+                },
+            );
             let runs = if j.far { [&across_run, &own_run] } else { [&own_run, &across_run] };
             for run in runs {
                 out.push_str(if run.across { "<g class=\"iso-section iso-across\">" } else { "<g class=\"iso-section\">" });
@@ -202,7 +221,14 @@ fn iso_label_of(v: &View, i18n: &I18n, units: Units) -> String {
         // The selected zone is the near run when the neighbour lies far; otherwise the neighbour is in front.
         let (near, far) = if joint.far { (&zone.label_mid, &joint.label_mid) } else { (&joint.label_mid, &zone.label_mid) };
         let args = args.str("zone", say(i18n, units, &zone.label)).str("near", say(i18n, units, near)).str("far", say(i18n, units, far));
-        return i18n.tr("svg-iso-label-joint", &args);
+        let mut label = i18n.tr("svg-iso-label-joint", &args);
+        if let Some(t) = &joint.taper {
+            // The transition leads from the host into the other zone.
+            let other = if t.host_is_selected { &joint.label_mid } else { &zone.label_mid };
+            let args = Args::new().str("length", units.length_whole_in(t.length_mm, i18n.locale())).str("zone", say(i18n, units, other));
+            label = format!("{label} {}", i18n.tr("svg-iso-transition", &args));
+        }
+        return label;
     }
     let args = args
         .str("zone", say(i18n, units, &zone.label))
@@ -797,12 +823,12 @@ mod tests {
         let v = joined(true, 1);
         assert_eq!(
             iso_label(&v, &en(), Units::Metres),
-            "Sample Street 1 in 2.5D, along a 40 m stretch centred on the boundary between Zone 1 in front and Zone 2 beyond. The section changes abruptly there. Zone 2 has 5 segments."
+            "Sample Street 1 in 2.5D, along a 40 m stretch centred on the boundary between Zone 1 in front and Zone 2 beyond. The section changes abruptly there. Zone 2 has 5 segments. A transition of 53 m leads into Zone 1."
         );
         let fr = crate::i18n_for(Locale::FrCa);
         assert_eq!(
             iso_label(&v, &fr, Units::Metres),
-            "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m centré sur la limite entre zone 1 au premier plan et zone 2 au-delà. La coupe change brusquement à cet endroit. Zone 2 compte 5 éléments."
+            "Sample Street 1 en 2,5D, sur un tronçon de 40\u{a0}m centré sur la limite entre zone 1 au premier plan et zone 2 au-delà. La coupe change brusquement à cet endroit. Zone 2 compte 5 éléments. Une transition de 53\u{a0}m mène à zone 1."
         );
     }
 
@@ -1059,7 +1085,7 @@ mod tests {
         assert_eq!(count(&m, "<g class=\"iso-section"), 2);
         assert_eq!(count(&m, "<g class=\"iso-section iso-across"), 1);
         assert_eq!(count(&m, "class=\"iso-ground\""), 1);
-        assert_eq!(count(&m, "class=\"iso-top "), v.segments.len() + j.segments.len());
+        assert_eq!(count(&m, "class=\"iso-top "), v.segments.len() + j.segments.len() + 1, "and the lane the host lacks opening in its run");
         let p = Projection::fit(1050.0, span_mm(&v));
         assert_eq!(count(&m, "class=\"iso-piece iso-across\""), raised::strips(&j.segments, &p).len());
         assert!(!m.contains("NaN"));
@@ -1172,5 +1198,127 @@ mod tests {
         let (a, b) = (marks(&v.segments, &base.over(near)), marks(&j.segments, &base.over(far)));
         assert!(a > 0 && b > 0);
         assert_eq!(count(&m, "class=\"iso-mark\""), a + b);
+    }
+
+    /// The polygons of a group of the markup, each as its points.
+    fn polygons(markup: &str) -> Vec<Vec<(f64, f64)>> {
+        markup
+            .split("<polygon ")
+            .skip(1)
+            .filter(|tag| !tag[..tag.find('>').unwrap()].contains("transform="))
+            .map(|tag| {
+                let at = tag.find("points=\"").unwrap() + 8;
+                tag[at..at + tag[at..].find('"').unwrap()]
+                    .split(' ')
+                    .map(|pt| {
+                        let mut c = pt.split(',').map(|n| n.parse::<f64>().unwrap());
+                        (c.next().unwrap(), c.next().unwrap())
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// The part of the markup between `open` and the end of that group (groups here do not nest the same tag).
+    fn group_of<'a>(markup: &'a str, open: &str) -> &'a str {
+        let at = markup.find(open).unwrap_or_else(|| panic!("{open} is drawn"));
+        &markup[at..at + markup[at..].find("</g>").unwrap()]
+    }
+
+    /// The same drawing with the transition taken off the joint: the abrupt seam.
+    fn untapered(mut v: View) -> String {
+        v.zones.joint.as_mut().unwrap().taper = None;
+        iso_svg(&v, &en(), 1050.0).markup
+    }
+
+    #[test]
+    fn a_joint_with_an_added_lane_draws_a_tapered_top() {
+        for selected in [0, 1] {
+            let v = joined(true, selected);
+            assert!(v.zones.joint.as_ref().unwrap().taper.is_some());
+            let m = iso_svg(&v, &en(), 1050.0).markup;
+            assert_eq!(count(&m, "<g class=\"iso-piece iso-taper\">"), 1, "selected {selected}: the lane the host lacks grows in its run");
+            let top = &polygons(group_of(&m, "<g class=\"iso-piece iso-taper\">"))[0];
+            // Zone 2 hosts: its run is the far half and the seam is at its near end (the corners are near-left, near-right,
+            // far-right, far-left).
+            assert_eq!(top.len(), 4);
+            let (seam, away) = ((top[1].0 - top[0].0).abs(), (top[2].0 - top[3].0).abs());
+            assert!(away < 0.01, "selected {selected}: no width at the end away from the seam ({away})");
+            assert!(seam > 5.0, "selected {selected}: the full lane at the seam ({seam})");
+        }
+    }
+
+    #[test]
+    fn a_joint_anchored_at_the_last_end_tapers_toward_the_other_run() {
+        for selected in [0, 1] {
+            let v = joined_from_last(true, selected);
+            assert!(v.zones.joint.as_ref().unwrap().taper.is_some(), "selected {selected}");
+            let m = iso_svg(&v, &en(), 1050.0).markup;
+            assert_eq!(count(&m, "<g class=\"iso-piece iso-taper\">"), 1, "selected {selected}");
+            let top = &polygons(group_of(&m, "<g class=\"iso-piece iso-taper\">"))[0];
+            // the seam is where the two runs meet, 20 m along the stretch; the lane opens from a point at the other end
+            let seam_y = Projection::fit(1050.0, span_mm(&v)).at(0.0, 0.0, 20_000.0).1;
+            let (near_seam, away): (Vec<_>, Vec<_>) = [(top[0], top[1]), (top[3], top[2])].into_iter().partition(|(a, _)| (a.1 - seam_y).abs() < 1.0);
+            assert_eq!((near_seam.len(), away.len()), (1, 1), "selected {selected}");
+            let width = |(a, b): &((f64, f64), (f64, f64))| (b.0 - a.0).abs();
+            assert!(width(&near_seam[0]) > 5.0, "selected {selected}: the full lane at the seam");
+            assert!(width(&away[0]) < 0.01, "selected {selected}: no width at the end away from the seam");
+        }
+    }
+
+    #[test]
+    fn the_lines_follow_the_taper() {
+        let v = joined(true, 1);
+        let tapered = iso_svg(&v, &en(), 1050.0).markup;
+        let plain = untapered(v);
+        let (a, b) = (polygons(group_of(&plain, "<g class=\"iso-markings\">")), polygons(group_of(&tapered, "<g class=\"iso-markings\">")));
+        assert_eq!(a.len(), b.len());
+        let span = |p: &Vec<(f64, f64)>| p.iter().map(|c| c.1).fold(f64::MIN, f64::max) - p.iter().map(|c| c.1).fold(f64::MAX, f64::min);
+        // The longest line runs the whole run. The seam is at the near end (the larger y) of this run.
+        let k = (0..a.len()).max_by(|&i, &j| span(&a[i]).total_cmp(&span(&a[j]))).unwrap();
+        let x_at = |p: &Vec<(f64, f64)>, near: bool| {
+            let y = if near { p.iter().map(|c| c.1).fold(f64::MIN, f64::max) } else { p.iter().map(|c| c.1).fold(f64::MAX, f64::min) };
+            p.iter().filter(|c| (c.1 - y).abs() < 1e-6).map(|c| c.0).sum::<f64>() / p.iter().filter(|c| (c.1 - y).abs() < 1e-6).count() as f64
+        };
+        assert!((x_at(&a[k], false) - x_at(&b[k], false)).abs() < 0.01, "a line starts where the host's section has it");
+        assert!((x_at(&a[k], true) - x_at(&b[k], true)).abs() > 0.5, "and ends where the other section has it");
+    }
+
+    #[test]
+    fn raised_pieces_stay_abrupt() {
+        let v = joined(true, 1);
+        let sidewalk = v.segments.iter().find(|s| KINDS[s.kind].id == "sidewalk").unwrap().uid;
+        let tapered = iso_svg(&v, &en(), 1050.0).markup;
+        assert_eq!(top_of(&tapered, sidewalk), top_of(&untapered(v), sidewalk));
+    }
+
+    #[test]
+    fn no_taper_without_a_transition() {
+        // The markup of joints between identical sections, as it was before transitions (FNV-1a of the drawing).
+        let h = |s: &str| s.bytes().fold(0xcbf29ce484222325u64, |a, b| (a ^ u64::from(b)).wrapping_mul(0x100000001b3));
+        for (name, v, hash) in [
+            ("first, zone 1", joined(false, 0), 0x6e0989a69b519fe7u64),
+            ("first, zone 2", joined(false, 1), 0x3253ebfea4e98c7f),
+            ("last, zone 1", joined_from_last(false, 0), 0x3253ebfea4e98c7f),
+            ("last, zone 2", joined_from_last(false, 1), 0x6e0989a69b519fe7),
+        ] {
+            assert!(v.zones.joint.as_ref().unwrap().taper.is_none(), "{name}");
+            let m = iso_svg(&v, &en(), 1050.0).markup;
+            assert_eq!(count(&m, "iso-taper"), 0, "{name}");
+            assert_eq!(h(&m), hash, "{name}");
+        }
+    }
+
+    #[test]
+    fn the_label_says_the_transition() {
+        let v = joined(true, 1);
+        let en_label = iso_label(&v, &en(), Units::Metres);
+        assert!(en_label.contains("The section changes abruptly there. Zone 2 has 5 segments. A transition of 53 m leads into Zone 1."), "{en_label}");
+        let fr = crate::i18n_for(Locale::FrCa);
+        let fr_label = iso_label(&v, &fr, Units::Metres);
+        assert!(fr_label.contains("Zone 2 compte 5 éléments. Une transition de 53\u{a0}m mène à zone 1."), "{fr_label}");
+        // Seen from zone 1, zone 2 (across the boundary) hosts it and it leads into zone 1.
+        let v = joined(true, 0);
+        assert!(iso_label(&v, &en(), Units::Metres).ends_with("A transition of 53 m leads into Zone 1."), "{}", iso_label(&v, &en(), Units::Metres));
     }
 }

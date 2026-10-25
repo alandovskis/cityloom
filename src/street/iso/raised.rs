@@ -140,18 +140,29 @@ pub(super) fn inner_face(p: &Projection, x0: f64, x1: f64) -> Option<bool> {
 /// texture. The grain is not continuous across a seam, which does not show in a grain; the joints, which the eye
 /// follows, are not part of the pattern but lines projected point by point, so they have no seam.
 fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h: f64) {
+    top_over(out, p, id, m, h, &|_| (x0, x1), true);
+}
+
+/// The same top with its edges across given along the street (`edge`: across `(left, right)` at an `along_mm`), as a
+/// transition makes them. The edges are straight in between, so each band is a quadrilateral of its own. The joints
+/// of a material are laid only on a top with straight edges (`joints`).
+pub(super) fn top_over(out: &mut String, p: &Projection, id: &str, m: &str, h: f64, edge: &dyn Fn(f64) -> (f64, f64), joints_too: bool) {
     let (n, l) = (p.reach.near, p.reach.far);
-    let pts = points(p, &[(x0, h, n), (x1, h, n), (x1, h, l), (x0, h, l)]);
+    let ((a0, a1), (b0, b1)) = (edge(n), edge(l));
+    let (x0, x1) = (a0, a1);
+    let pts = points(p, &[(a0, h, n), (a1, h, n), (b1, h, l), (b0, h, l)]);
     write!(out, "<polygon class=\"iso-top k-{id} mat-{m}\" points=\"{pts}\"/>").unwrap();
     // The bands share their fill, and so the group carries it: a texture's polygons are bare.
     write!(out, "<g class=\"hatch\" fill=\"url(#iso-m-{m})\">").unwrap();
     for w in band_edges(p.reach).windows(2) {
         let (z0, z1) = (w[0], w[1]);
-        let g = p.ground_at(h, (x0 + x1) / 2.0, band_mid(z0, z1));
+        let (m0, m1) = edge(band_mid(z0, z1));
+        let g = p.ground_at(h, (m0 + m1) / 2.0, band_mid(z0, z1));
         // The numbers as written, so that the polygon is taken back through exactly the map that lays the texture.
         let [a, _, c, d, e, f] = [g[0], g[1], g[2], g[3], g[4], g[5]].map(|n| (n * 1e6).round() / 1e6);
         let (e, f) = ((e * 100.0).round() / 100.0, (f * 100.0).round() / 100.0);
-        let local: Vec<String> = [(x0, z0), (x1, z0), (x1, z1), (x0, z1)]
+        let (e0, e1) = (edge(z0), edge(z1));
+        let local: Vec<String> = [(e0.0, z0), (e0.1, z0), (e1.1, z1), (e1.0, z1)]
             .iter()
             .map(|&(x, z)| {
                 let (sx, sy) = p.at(x, h, z);
@@ -164,7 +175,7 @@ fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h:
     }
     out.push_str("</g>");
     // The joints of the materials that have them, as lines over the grain (`joints`).
-    if let Some(j) = joints(m) {
+    if let Some(j) = joints(m).filter(|_| joints_too) {
         let d = joint_path(p, &j, x0, x1, h);
         if !d.is_empty() {
             write!(out, "<path class=\"joints j-{m}\" d=\"{d}\"/>").unwrap();
@@ -272,6 +283,19 @@ pub(super) fn strips(segs: &[SegView], p: &Projection) -> Vec<Strip> {
 /// section across the boundary (`across`) carries no uid: uids repeat from one section to the other, and what finds
 /// a piece by its uid is the selected zone's.
 pub(super) fn piece(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I18n, strip: Strip, across: bool) {
+    piece_with(out, p, segs, i18n, strip, across, None);
+}
+
+/// `piece`, its top (a roadway slab at the ground) tapering when `taper` gives its edges along the street.
+pub(super) fn piece_with(
+    out: &mut String,
+    p: &Projection,
+    segs: &[SegView],
+    i18n: &I18n,
+    strip: Strip,
+    across: bool,
+    taper: Option<&dyn Fn(f64) -> (f64, f64)>,
+) {
     let (_, i, edge) = strip;
     let s = &segs[i];
     let name = i18n.tr(&kind_key(KINDS[s.kind].id), &Args::new());
@@ -281,9 +305,22 @@ pub(super) fn piece(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I
         write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
     }
     match edge {
-        None => slab(out, p, segs, i),
+        None => match taper {
+            Some(edge) => top_over(out, p, KINDS[s.kind].id, s.material, drawn_mm(height_mm(KINDS[s.kind].id)), edge, false),
+            None => slab(out, p, segs, i),
+        },
         Some(right) => curb(out, p, segs, i, right),
     }
+    out.push_str("</g>");
+}
+
+/// A roadway piece the host's section lacks, opening in its run: its top in the kind's default material, in a group
+/// of its own (`iso-taper`; it carries no uid, no piece of the street is it).
+pub(super) fn sliver(out: &mut String, p: &Projection, i18n: &I18n, kind: usize, edge: &dyn Fn(f64) -> (f64, f64)) {
+    let k = &KINDS[kind];
+    let name = i18n.tr(&kind_key(k.id), &Args::new());
+    write!(out, "<g class=\"iso-piece iso-taper\"><title>{}</title>", esc(&name)).unwrap();
+    top_over(out, p, k.id, crate::shared::catalogue::MATERIALS[k.materials[0]].id, drawn_mm(height_mm(k.id)), edge, false);
     out.push_str("</g>");
 }
 

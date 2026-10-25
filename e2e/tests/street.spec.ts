@@ -724,6 +724,34 @@ test.describe("the zones of a street", () => {
     expect(await drawing.innerHTML(), "the across run swaps with the selected zone").not.toBe(second);
   });
 
+  /** Splits the street in two and gives zone 2 (`#zone-1`, the ids start at 0) a travel lane zone 1 lacks: zone 1 hosts the transition and it leads into zone 2. */
+  const addLaneInZone2 = async (page: Page) => {
+    await page.locator("#zone-split").click();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await page.locator("#zone-1").click();
+    await page.locator("#add-btn").click();
+    await page.locator(".add-item", { hasText: "Driving lane" }).click();
+  };
+
+  test("the 2.5D says how long the transition is that leads into the zone beyond", async ({ page }) => {
+    await addLaneInZone2(page);
+    await page.locator("#view-iso").click();
+    await expect(page.locator("#drawing.iso")).toBeAttached();
+    await expect(page.locator("#drawing")).toHaveAttribute(
+      "aria-label",
+      /A transition of [\d.]+ m leads into Zone 2\./,
+    );
+    await expect(page.locator("#drawing .iso-taper").first()).toBeAttached();
+  });
+
+  test("the checks say a zone is too short for its transition", async ({ page }) => {
+    await addLaneInZone2(page);
+    await page.locator("#t-checks").click();
+    const row = page.locator("#checks li", { hasText: "Room for the transition" });
+    await expect(row).toBeVisible();
+    await expect(row).toContainText(/needs .* but Zone 1 is/);
+  });
+
   test("a 2.5D with no boundary near is not split in two", async ({ page }) => {
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(1);
     await page.locator("#view-iso").click();

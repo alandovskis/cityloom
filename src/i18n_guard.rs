@@ -424,6 +424,8 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("transition-room", "the id of a check, not a message"),
+    ("lane-drop", "the id of a check, not a message"),
     ("cityloom-sync", "the sync document's storage key, not a message"),
     ("cityloom-sync-damaged", "the copy of a damaged sync document, a storage key and not a message"),
     ("data-notes", "the name of a data- attribute on the document element"),
