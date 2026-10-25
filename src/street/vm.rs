@@ -421,8 +421,14 @@ impl StreetVm {
         self.zone_edit(|e| e.move_boundary(to_mm))
     }
 
-    pub fn begin_boundary_drag(&self) {
+    /// Starts a drag of a boundary. False, with the reason said, while another drag (of a boundary or a curbside use)
+    /// is under way: then nothing is dragged and `end_boundary_drag` is not to be called.
+    pub fn begin_boundary_drag(&self) -> bool {
+        if self.refuse_while_dragging() {
+            return false;
+        }
         self.edit(|e| e.begin_gesture());
+        true
     }
 
     /// One step of a drag of the boundary: shown, not announced.
@@ -476,6 +482,10 @@ impl StreetVm {
 
     /// Chooses cell `cell` of `side`'s strip, announcing it. A cell that is not there is left alone.
     pub fn select_curb(&self, side: Side, cell: usize) {
+        // The drag moves the chosen use: choosing another would move that one instead.
+        if self.core.read(|e| e.dragging()) {
+            return;
+        }
         let v = self.view_now();
         let Some(s) = v.curb.sides.iter().find(|s| s.side == side) else { return };
         let Some(c) = s.cells.get(cell) else { return };
@@ -1835,6 +1845,38 @@ mod curb_tests {
         assert_eq!(r.said.take().len(), 3);
         r.vm.end_curb_drag(false);
         assert!(r.vm.resize_curb(7_000));
+    }
+
+    #[test]
+    fn a_zone_drag_is_refused_during_a_curb_drag_and_the_curb_drags_undo_step_holds_no_boundary_move() {
+        let r = with_one_use();
+        assert!(r.vm.begin_curb_drag());
+        assert!(!r.vm.begin_boundary_drag());
+        assert_eq!(r.said.take(), ["Finish the drag before changing the zones."]);
+        r.vm.drag_curb_to(5_000);
+        r.vm.end_curb_drag(true);
+        assert!(r.vm.undo());
+        assert_eq!(side(&r, Side::Right)[0], (Some(0), 0, 6_000), "the move is undone");
+        assert_eq!(r.vm.view_now().zones.zones.len(), 1);
+        assert_eq!(r.vm.view_now().revisions.len(), 1, "only the add remains");
+    }
+
+    #[test]
+    fn choosing_a_cell_is_ignored_during_a_curb_drag() {
+        let r = with_one_use();
+        assert!(r.vm.begin_curb_drag());
+        r.vm.select_curb(Side::Right, 1);
+        r.vm.select_curb_relative(Side::Right, 1);
+        r.vm.select_curb_edge(Side::Right, true);
+        r.vm.select_curb(Side::Left, 0);
+        r.vm.drag_curb_to(4_000);
+        assert!(r.said.take().is_empty());
+        let v = r.vm.view_now();
+        assert_eq!((v.curb.sides[0].selected, v.curb.sides[1].selected), (None, Some(1)), "the dragged use stays chosen");
+        assert_eq!(side(&r, Side::Right)[1], (Some(0), 4_000, 10_000));
+        r.vm.end_curb_drag(false);
+        r.vm.select_curb(Side::Left, 0);
+        assert_eq!(r.vm.view_now().curb.sides[0].selected, Some(0), "choosing works again");
     }
 
     #[test]

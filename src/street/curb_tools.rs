@@ -78,7 +78,7 @@ pub fn CurbTools(vm: Rc<StreetVm>) -> impl IntoView {
             .map(|u| {
                 let u = *u;
                 view! {
-                    <option value=use_value(u) selected=move || shown_use() == u>
+                    <option value=use_value(u)>
                         {move || w.i18n().tr(u.name_key(), &Args::new())}
                     </option>
                 }
@@ -95,6 +95,7 @@ pub fn CurbTools(vm: Rc<StreetVm>) -> impl IntoView {
                         <label for="curb-use">{move || text("st-curb-use")}</label>
                         <select
                             id="curb-use"
+                            prop:value=move || use_value(shown_use())
                             on:change=move |e| {
                                 let u = use_of(&event_target::<HtmlSelectElement>(&e).value());
                                 pick.set(u);

@@ -268,6 +268,10 @@ impl Editor {
     pub(super) fn curb_view(&self) -> CurbView {
         let content = &self.states[self.cursor].content;
         let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        if length_mm <= 0 {
+            // Without a length there is nothing to lay the uses along.
+            return CurbView { sides: Vec::new() };
+        }
         let failing: Vec<usize> = self.curb_failures().iter().map(|f| f.instance).collect();
         let sides = [Side::Left, Side::Right]
             .into_iter()

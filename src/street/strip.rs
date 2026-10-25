@@ -246,7 +246,10 @@ pub fn ZoneStrip(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoView 
             if !is_boundary_drag(x - p.start_x) {
                 return;
             }
-            w.begin_boundary_drag();
+            if !w.begin_boundary_drag() {
+                press.set_value(None);
+                return;
+            }
             p.active = true;
             press.set_value(Some(p));
         }

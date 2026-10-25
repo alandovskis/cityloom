@@ -1518,6 +1518,15 @@ fn a_use_that_fails_a_check_says_so_and_a_street_without_a_curbside_lane_has_no_
 }
 
 #[test]
+fn no_strip_is_drawn_while_the_streets_length_is_unknown() {
+    // The sample street has parking on both sides but no length and no frame: there is nothing to lay uses along.
+    let s = street_shared(0);
+    assert!(s.view_now().curb.sides.is_empty());
+    let h = curb_html(&s);
+    assert_eq!((count(&h, "role=\"listbox\""), count(&h, "tabindex")), (0, 0), "{h}");
+}
+
+#[test]
 fn the_curb_strip_follows_the_language() {
     let s = curb_street(Locale::FrCa);
     let h = curb_html(&s).replace(['\u{a0}', '\u{202f}'], " ");

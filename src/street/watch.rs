@@ -138,8 +138,8 @@ impl SheetWatch {
         self.vm.with_value(|v| v.move_boundary(to_mm))
     }
 
-    pub fn begin_boundary_drag(&self) {
-        self.vm.with_value(|v| v.begin_boundary_drag());
+    pub fn begin_boundary_drag(&self) -> bool {
+        self.vm.with_value(|v| v.begin_boundary_drag())
     }
 
     pub fn drag_boundary_to(&self, to_mm: i32) {
