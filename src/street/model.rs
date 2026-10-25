@@ -19,6 +19,8 @@ pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM, Taper};
 mod joint;
 mod speed;
 pub use speed::Speed;
+mod beyond;
+pub use beyond::{Beyond, BeyondTaper, TaperPiece};
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
 mod curb;
