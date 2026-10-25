@@ -397,3 +397,23 @@ check-detail-transition-room = The transition needs { $need } but { $zone } is {
 check-detail-transition-room-ok = Every transition fits in its zone.
 check-detail-lane-drop = A lane ends with no lane beside it to merge into.
 check-detail-lane-drop-ok = Every lane that ends can merge.
+
+# Curbside programmes (src/street/model/curb.rs): the uses along a street's curbside lane, what the model says it did to them, and why it refused.
+curb-use-parking = Parking
+curb-use-loading = Loading
+curb-use-tree = Street tree
+curb-use-planting = Planting
+curb-use-rain-garden = Rain garden
+curb-use-patio = Patio
+curb-use-bike-parking = Bike parking
+curb-use-platform = Transit platform
+rev-curb-add = Add { $use } at { $at }
+rev-curb-use = Change the use at { $at } to { $use }
+rev-curb-resize = Resize the { $use } at { $at }
+rev-curb-move = Move the { $use } to { $at }
+rev-curb-remove = Remove the { $use } at { $at }
+curb-refused-elsewhere = The uses of this curbside were drawn on a road of another length or from its other end, so they cannot be rearranged here.
+curb-refused-overlap = That would overlap another use on the same side.
+curb-refused-too-long = That would run past the end of the street.
+curb-refused-time-windows = This lane changes with the time of day, so it cannot be divided into uses.
+curb-refused-dragging = Finish the drag before changing the curbside.

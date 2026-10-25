@@ -397,3 +397,23 @@ check-detail-transition-room = La transition demande { $need }, mais { $zone } m
 check-detail-transition-room-ok = Chaque transition tient dans sa zone.
 check-detail-lane-drop = Une voie se termine sans voie voisine où s’insérer.
 check-detail-lane-drop-ok = Chaque voie qui se termine peut s’insérer.
+
+# Usages du bord de rue (src/street/model/curb.rs) : les usages le long de la voie de bordure d’une rue, ce que le modèle dit avoir fait, et pourquoi il refuse.
+curb-use-parking = Stationnement
+curb-use-loading = Zone de chargement
+curb-use-tree = Fosse d’arbre
+curb-use-planting = Plantation
+curb-use-rain-garden = Jardin de pluie
+curb-use-patio = Terrasse
+curb-use-bike-parking = Supports à vélos
+curb-use-platform = Quai de transport collectif
+rev-curb-add = Usage ajouté à { $at } : { $use }
+rev-curb-use = Usage changé à { $at } : { $use }
+rev-curb-resize = Longueur modifiée à { $at } : { $use }
+rev-curb-move = Usage déplacé à { $at } : { $use }
+rev-curb-remove = Usage retiré à { $at } : { $use }
+curb-refused-elsewhere = Les usages de ce bord de rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
+curb-refused-overlap = Cet usage chevaucherait un autre usage du même côté.
+curb-refused-too-long = Cet usage dépasserait l’extrémité de la rue.
+curb-refused-time-windows = Cette voie change selon l’heure de la journée : on ne peut pas la diviser en usages.
+curb-refused-dragging = Terminez le glissement avant de modifier le bord de rue.

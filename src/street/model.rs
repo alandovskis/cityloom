@@ -21,6 +21,8 @@ mod speed;
 pub use speed::Speed;
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
+mod curb;
+pub use curb::{CurbRefusal, Instance, Use, curbside};
 mod zones;
 use zones::Failing;
 pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
@@ -228,6 +230,10 @@ pub struct Street {
     /// The speed limit, kept as `speed_kmh`: absent when not yet decided, `null` when the road has none.
     #[serde(default, rename = "speed_kmh", skip_serializing_if = "Speed::is_undecided")]
     pub speed: Speed,
+    /// The uses of the curbside along the street, left side first, then by `from_mm`. Empty for a street whose curbside
+    /// is whatever its sections hold; with any, `from_end` and `length_mm` are written as they are with zones.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub curb: Vec<Instance>,
 }
 
 /// A name that is data, said as it is: a street's, a place's, a junction's.
@@ -333,6 +339,7 @@ impl Street {
             from_end: ZoneEnd::First,
             length_mm: None,
             speed: Speed::Undecided,
+            curb: Vec::new(),
         };
         street.settle_class();
         street
@@ -396,13 +403,14 @@ impl Street {
             }
         }
         s.reverse_zones();
+        s.reverse_curb();
         s
     }
 
     /// Whether every index in it points into the catalogue, so that it can be
     /// drawn. A street that came from storage is checked before it is used.
     pub fn is_sound(&self) -> bool {
-        self.row_mm > 0 && self.section_is_sound(&self.segments) && self.zones_are_sound()
+        self.row_mm > 0 && self.section_is_sound(&self.segments) && self.zones_are_sound() && self.curb_is_sound()
     }
 
     /// Whether every piece of a section points into the catalogue and has a uid the street has issued.
@@ -449,11 +457,20 @@ struct Content {
     length_mm: Option<i32>,
     /// The speed limit; a street's section edits do not change it, but undo and Start over restore it.
     speed: Speed,
+    /// The uses of the curbside, which lie along the street whatever its zones.
+    curb: Vec<Instance>,
 }
 
 impl Content {
     fn of(street: &Street) -> Content {
-        Content { segments: street.segments.clone(), zones: street.zones.clone(), from_end: street.from_end, length_mm: street.length_mm, speed: street.speed }
+        Content {
+            segments: street.segments.clone(),
+            zones: street.zones.clone(),
+            from_end: street.from_end,
+            length_mm: street.length_mm,
+            speed: street.speed,
+            curb: street.curb.clone(),
+        }
     }
 
     /// How many zones there are to choose from: a street with none is one section.
@@ -483,7 +500,8 @@ impl Content {
     }
 
     fn settle(&mut self) {
-        zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm);
+        self.sort_curb();
+        zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm, !self.curb.is_empty());
     }
 }
 
@@ -582,6 +600,7 @@ impl Editor {
             from_end: content.from_end,
             length_mm: content.length_mm,
             speed: content.speed,
+            curb: content.curb.clone(),
         }
     }
 

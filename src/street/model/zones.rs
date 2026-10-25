@@ -65,8 +65,8 @@ pub(super) fn same_pieces(a: &[Segment], b: &[Segment]) -> bool {
 
 /// Brings the zoning to its canonical form: zones sorted by start with the first at 0; a section equal to the
 /// base (ignoring uids) kept as `None`; one zone left is no zoning (its own section becomes the base); no zones
-/// left leaves no end and no length.
-pub(super) fn settle_zones(segments: &mut Vec<Segment>, zones: &mut Vec<Zone>, from_end: &mut ZoneEnd, length_mm: &mut Option<i32>) {
+/// left, and no curbside use to measure, leaves no end and no length.
+pub(super) fn settle_zones(segments: &mut Vec<Segment>, zones: &mut Vec<Zone>, from_end: &mut ZoneEnd, length_mm: &mut Option<i32>, keep_anchor: bool) {
     zones.sort_by_key(|z| z.from_mm);
     if let Some(first) = zones.first_mut() {
         first.from_mm = 0;
@@ -81,7 +81,7 @@ pub(super) fn settle_zones(segments: &mut Vec<Segment>, zones: &mut Vec<Zone>, f
             *segments = own;
         }
     }
-    if zones.is_empty() {
+    if zones.is_empty() && !keep_anchor {
         *from_end = ZoneEnd::First;
         *length_mm = None;
     }
@@ -98,7 +98,7 @@ impl Street {
 
     /// Brings the zoning to its canonical form (see `settle_zones`).
     pub fn settle_zones(&mut self) {
-        settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm);
+        settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm, !self.curb.is_empty());
     }
 
     /// The zone nearest an end of the street, as a street of one zone: its section as `segments`.
@@ -114,6 +114,7 @@ impl Street {
             s.segments = own;
         }
         s.zones = Vec::new();
+        s.curb = Vec::new();
         s.from_end = ZoneEnd::First;
         s.length_mm = None;
         s
@@ -136,7 +137,7 @@ impl Street {
             own.reverse();
         }
         self.flip_zone_lanes();
-        if !self.zones.is_empty() {
+        if !self.zones.is_empty() || !self.curb.is_empty() {
             self.from_end = self.from_end.other();
         }
     }
