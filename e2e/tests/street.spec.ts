@@ -10,7 +10,6 @@ import {
   openStreet,
   PRESSABLE_PX,
   pressablePiece,
-  placesOnMap,
   splitInto,
   streetLengthM,
   test,
