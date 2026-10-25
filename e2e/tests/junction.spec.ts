@@ -1,6 +1,16 @@
 import { readFileSync } from "node:fs";
 
-import { expect, live, openJunction, openStreet, test, TURBO_PBF } from "./fixtures";
+import {
+  expect,
+  live,
+  openJunction,
+  openStreet,
+  placesOnMap,
+  splitInto,
+  streetLengthM,
+  test,
+  TURBO_PBF,
+} from "./fixtures";
 
 import type { Page } from "@playwright/test";
 
@@ -507,4 +517,115 @@ test("the turbo layouts are a radio group: one tab stop, the arrow keys choose, 
   await expect(basic).toHaveAttribute("aria-checked", "true");
   await expect(basic).toBeFocused();
   await expect(page.locator('[role="radio"][tabindex="0"]')).toHaveCount(1);
+});
+
+// ---- approaches: what lies beyond an arm's end zone ---------------------------------------------------------
+
+test.describe("the approach of an arm whose street is divided", () => {
+  const options = (page: Page) => page.locator('#zone-strip [role="option"]');
+
+  /** Finds a junction with a street of `minM` to `maxM` metres leaving it, by the first arm's "Open the cross-section"
+   *  link (and at most `maxM`, so that half of it is inside the 36 m an arm is drawn). Leaves the page on that street, and says the junction's address and the street's. */
+  const junctionWithStreet = async (page: Page, minM: number, maxM: number) => {
+    await page.goto("/map.html");
+    for (const junction of (await placesOnMap(page)).junctions) {
+      await page.goto("/" + junction);
+      await expect(page.locator("#drawing")).toBeVisible();
+      await page.locator("#wrap").focus();
+      await page.keyboard.press("ArrowRight"); // the first street
+      const link = page.locator('#inspector a.btn[href^="street.html?street="]');
+      await expect(link).toBeVisible();
+      const street = await link.getAttribute("href");
+      await link.click();
+      await expect(page.locator("#zone-0")).toBeVisible();
+      const length = await streetLengthM(page);
+      if (length >= minM && length <= maxM) return { junction, street: street! };
+    }
+    throw new Error(`no junction has a street of ${minM} to ${maxM} m`);
+  };
+
+  /** The added lane makes the zone too wide, and a junction draws nothing beyond a zone that does not fill the street:
+   *  remove the first piece (a sidewalk) while it is too wide, then widen pieces until every metre is used. */
+  const refillZone = async (page: Page) => {
+    const fit = page.locator("#fit");
+    const first = async () => {
+      await page.locator("#wrap").focus();
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("ArrowRight");
+    };
+    await expect(fit).toContainText(/too wide/);
+    for (let i = 0; i < 4 && /too wide/.test(await fit.innerText()); i++) {
+      await first();
+      await page.keyboard.press("Delete");
+      await page.waitForTimeout(100);
+    }
+    await expect(fit).not.toContainText(/too wide/);
+    await first();
+    for (let i = 0; i < 200 && !/Every metre/.test(await fit.innerText()); i++) {
+      const before = await fit.innerText();
+      await page.keyboard.press("+");
+      await page.waitForTimeout(30);
+      // A piece at its widest takes no more: go on to the next.
+      if ((await fit.innerText()) === before) await page.keyboard.press("ArrowRight");
+    }
+    await expect(fit).toContainText("Every metre");
+  };
+
+  const checkRow = (page: Page) => page.locator("#checks li", { hasText: "Approaches" });
+
+  test("draws the transition and its marks, passes the check, then fails it when the end zone is short", async ({
+    page,
+  }) => {
+    // Halved, the street has an end zone of 25 to 33 m: the boundary lies inside the 36 m an arm is drawn to.
+    const { junction, street } = await junctionWithStreet(page, 50, 66);
+    await splitInto(page, 2);
+    // Zone 2 gets a travel lane zone 1 lacks (the add keeps the street's width, so each zone still fills it).
+    await page.locator("#zone-1").click();
+    await page.locator("#add-btn").click();
+    await page.locator(".add-item", { hasText: "Driving lane" }).click();
+    await refillZone(page);
+    await page.waitForTimeout(500); // the debounced write
+
+    await page.goto("/" + junction);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(page.locator("#drawing .piece.taper").first()).toBeAttached();
+    await expect(page.locator("#drawing .approach-mark")).toHaveCount(2);
+    await page.locator("#t-checks").click();
+    await expect(checkRow(page)).toBeVisible();
+    await expect(checkRow(page)).not.toHaveClass(/bad/);
+    await expect(checkRow(page)).toContainText("Every end zone reaches past its stop line");
+
+    // The first press selects the street we divided: the arm says where its end zone reaches.
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(live(page)).toContainText(
+      /Its end zone reaches .* from the centre, then a transition of .* into Zone/,
+    );
+    const arm = (await live(page).innerText()).split(" (")[0];
+
+    // Cut the end zone short from the street page: push the boundary one way, then the other, until the zone at the
+    // junction is under what its stop line and arrows need.
+    let failed = false;
+    for (const [key, presses] of [
+      ["Shift+Alt+ArrowRight", 12],
+      ["Shift+Alt+ArrowLeft", 24],
+    ] as const) {
+      await page.goto("/" + street);
+      await expect(options(page)).toHaveCount(2);
+      await page.locator("#zone-strip").focus();
+      await page.keyboard.press("ArrowRight"); // zone 2
+      for (let i = 0; i < presses; i++) await page.keyboard.press(key);
+      await page.waitForTimeout(500);
+      await page.goto("/" + junction);
+      await expect(page.locator("#drawing")).toBeVisible();
+      await page.locator("#t-checks").click();
+      if (await checkRow(page).evaluate((e) => e.classList.contains("bad"))) {
+        failed = true;
+        await expect(checkRow(page)).toContainText(arm);
+        await expect(checkRow(page)).toContainText(/ends .* from the centre, short of the/);
+        break;
+      }
+    }
+    expect(failed, "a short end zone fails the Approaches check").toBe(true);
+  });
 });
