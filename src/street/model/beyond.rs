@@ -288,4 +288,43 @@ mod tests {
         cut.length_mm = None;
         assert_eq!(cut.beyond(true, short), None, "the boundary is at the road's end or past it");
     }
+
+    /// The spans of a section laid out left to right from 0.
+    fn span_of(section: &[Segment], uid: u32) -> (i32, i32) {
+        let mut x = 0;
+        for p in section {
+            if p.uid == uid {
+                return (x, x + p.width_mm);
+            }
+            x += p.width_mm;
+        }
+        panic!("no piece {uid}");
+    }
+
+    #[test]
+    fn mirrored_spans_are_those_of_the_street_seen_from_its_last_end() {
+        // the last zone swaps its right-hand parking for a travel lane of the same width: both sections fill the street
+        let mut s = zoned(Street::sample(0, Side::Right), &[0, 80_000], LEN);
+        s.speed = Speed::Kmh(50);
+        let parking = s.segments.iter().rev().find(|p| p.kind == kind_index("parking").unwrap()).unwrap().clone();
+        let mut own = s.segments.clone();
+        let at = own.iter().position(|p| p.uid == parking.uid).unwrap();
+        own[at] = Segment { width_mm: parking.width_mm, ..lane(900, 0) };
+        assert_eq!(own.iter().map(|p| p.width_mm).sum::<i32>(), s.row_mm);
+        s.zones[1].segments = Some(own);
+        let seen = s.reversed();
+        let own_seen = seen.zones[1].segments.clone().unwrap();
+        let b = s.beyond(false, frame(First)).unwrap();
+        assert_eq!(b.next, seen.zones[0].segments.clone().unwrap_or_else(|| seen.segments.clone()));
+        let t = b.taper.unwrap();
+        let [added, dropped] = &t.pieces[..] else { panic!("a lane and a parking lane differ: {:?}", t.pieces) };
+        let (added, dropped) = if added.kind == kind_index("travel").unwrap() { (added, dropped) } else { (dropped, added) };
+        assert_eq!(added.was, Some(span_of(&own_seen, 900)), "the lane where the last end sees it");
+        assert_eq!(added.becomes, None);
+        assert_eq!(dropped.was, None);
+        assert_eq!(dropped.becomes, Some(span_of(&b.next, parking.uid)), "the parking where the arm sees it, in the next zone");
+        // the list runs left to right as the arm sees it
+        let xs: Vec<i32> = t.pieces.iter().map(|p| p.was.or(p.becomes).unwrap().0).collect();
+        assert!(xs.windows(2).all(|w| w[0] <= w[1]), "{xs:?}");
+    }
 }
