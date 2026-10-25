@@ -53,7 +53,7 @@ impl Street {
     /// What lies beyond the end of the street at its first end (`first_end`) or its last: the first zone boundary met
     /// going out from the end, with the zone across it and the taper it needs. `None` for a street of one zone, with
     /// no frame, with a zoning drawn on another road (the page's "elsewhere", as `Editor::elsewhere` decides it), when
-    /// the boundary is at or past the road's end, when the two sections have the same pieces, or when either does not fill the street's width (`row_mm`).
+    /// the boundary is at or past the road's end, when the two sections have the same pieces, or when either is wider than the street (`row_mm`; a narrower one fits and is drawn).
     pub fn beyond(&self, first_end: bool, frame: Option<ZoneFrame>) -> Option<Beyond> {
         let frame = frame?;
         let n = self.zones.len();
@@ -72,9 +72,10 @@ impl Street {
         if same_pieces(sections[end], sections[neighbour]) {
             return None;
         }
-        // Both sections have to fill the street: a zone's section is only checked to fit, and the arm's mirrored spans
-        // (`row_mm - x`) and the marks across the property width are right only when both are `row_mm` wide.
-        if [sections[end], sections[neighbour]].iter().any(|s| total(s) != self.row_mm) {
+        // A section wider than the street does not fit and is not drawn. One narrower does fit ("left to use"): its
+        // pieces are laid out from the left edge, and the mirrored spans below flip by the section's own total.
+        let (end_total, across_total) = (total(sections[end]), total(sections[neighbour]));
+        if end_total > self.row_mm || across_total > self.row_mm {
             return None;
         }
         // Measured from the anchored end; the arm measures from its own, the junction's centre.
@@ -93,8 +94,9 @@ impl Street {
             let mut changes: Vec<(usize, Option<(i32, i32)>, Option<(i32, i32)>)> =
                 t.changes.iter().map(|c| if end_is_near { (c.kind, c.before, c.after) } else { (c.kind, c.after, c.before) }).collect();
             if mirrored {
-                let flip = |r: Option<(i32, i32)>| r.map(|(x0, x1)| (self.row_mm - x1, self.row_mm - x0));
-                changes = changes.into_iter().rev().map(|(k, was, becomes)| (k, flip(was), flip(becomes))).collect();
+                // Each side flips by its own section's total: the view lays a section's pieces out from 0.
+                let flip = |r: Option<(i32, i32)>, total: i32| r.map(|(x0, x1)| (total - x1, total - x0));
+                changes = changes.into_iter().rev().map(|(k, was, becomes)| (k, flip(was, end_total), flip(becomes, across_total))).collect();
             }
             let pieces = changes
                 .iter()
@@ -166,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn a_zone_that_does_not_fill_the_street_gives_no_beyond() {
+    fn a_zone_wider_than_the_street_gives_no_beyond() {
         // both sections fill the street: a beyond
         let filling = zoned(Street::sample(0, Side::Right), &[0, 20_000], LEN);
         let mut both = filling.clone();
@@ -371,5 +373,79 @@ mod tests {
         // the list runs left to right as the arm sees it
         let xs: Vec<i32> = t.pieces.iter().map(|p| p.was.or(p.becomes).unwrap().0).collect();
         assert!(xs.windows(2).all(|w| w[0] <= w[1]), "{xs:?}");
+    }
+
+    /// The sample street with zones at 0 and `at`, where zone `own` is the base with its last sidewalk replaced by a
+    /// travel lane (uid 900) of `lane_mm`: narrower than the sidewalk, so that the section is under-filled but fits.
+    fn under_filled(at: i32, own: usize, lane_mm: i32) -> Street {
+        let mut s = zoned(Street::sample(0, Side::Right), &[0, at], LEN);
+        s.speed = Speed::Kmh(50);
+        let mut section = s.segments.clone();
+        section.pop();
+        section.push(Segment { width_mm: lane_mm, ..lane(900, 0) });
+        assert!(total(&section) < s.row_mm);
+        s.zones[own].segments = Some(section);
+        s
+    }
+
+    #[test]
+    fn an_under_filled_zone_at_the_first_end_still_has_a_beyond() {
+        let s = under_filled(60_000, 0, 2_800);
+        let own = s.zones[0].segments.clone().unwrap();
+        let b = s.beyond(true, frame(First)).expect("the section fits, with width left to use");
+        let [p] = &b.taper.expect("a lane is dropped across the boundary").pieces[..] else { panic!("one piece") };
+        assert_eq!(p.was, Some(span_of(&own, 900)), "laid out from the left edge, as the view does");
+        assert_eq!(p.becomes, None);
+    }
+
+    #[test]
+    fn an_under_filled_zone_at_the_last_end_is_mirrored_by_its_own_total() {
+        let s = under_filled(40_000, 1, 2_800);
+        let seen = s.reversed();
+        let own_seen = seen.zones[1].segments.clone().unwrap();
+        let b = s.beyond(false, frame(First)).expect("the section fits, with width left to use");
+        assert_eq!(b.next, seen.segments, "the zone across fills the street");
+        let t = b.taper.expect("a lane opens across the boundary");
+        // the pieces after the lane shift by the 500 mm the end zone leaves unused, so more than the lane moves
+        let p = t.pieces.iter().find(|p| p.becomes.is_none()).expect("the lane");
+        assert_eq!(p.was, Some(span_of(&own_seen, 900)), "flipped by the end zone's total, not by the street's width");
+        assert_eq!(p.was.map(|w| w.0), Some(0), "the lane lies at the left edge, where the arm lays its pieces from");
+        for q in t.pieces.iter().filter(|q| q.becomes.is_some()) {
+            let (was, becomes) = (q.was.unwrap(), q.becomes.unwrap());
+            assert_eq!((becomes.0 - was.0, becomes.1 - was.1), (500, 500), "{q:?}");
+        }
+    }
+
+    #[test]
+    fn a_left_hand_street_has_its_beyond_on_the_other_sides() {
+        for first_end in [true, false] {
+            let mut s = zoned(Street::sample(0, Side::Left), &[0, 20_000], LEN);
+            s.speed = Speed::Kmh(50);
+            let mut section = s.segments.clone();
+            section.pop();
+            section.push(lane(900, 1));
+            assert_eq!(total(&section), s.row_mm);
+            let own = usize::from(!first_end);
+            s.zones[own].segments = Some(section);
+            let arm = if first_end { s.clone() } else { s.reversed() };
+            let seen = arm.zones[own].segments.clone().unwrap();
+            let b = s.beyond(first_end, frame(First)).expect("the end zone differs from the next");
+            let [p] = &b.taper.expect("the lane ends").pieces[..] else { panic!("one piece") };
+            assert_eq!(p.was, Some(span_of(&seen, 900)), "first end: {first_end}");
+            assert_eq!(p.becomes, None);
+        }
+    }
+
+    #[test]
+    fn a_steady_part_that_just_holds_the_transition_is_room_enough() {
+        // host zone exactly as long as the transition needs: no shortage
+        let s = with_extra_lane(20_000, 0, 1);
+        let need = s.beyond(true, frame(First)).unwrap().taper.unwrap().need_mm;
+        let mut exact = zoned(Street::sample(0, Side::Right), &[0, 20_000, 20_000 + need], LEN);
+        exact.speed = Speed::Kmh(50);
+        exact.zones[0].segments = s.zones[0].segments.clone();
+        exact.zones[2].segments = Some(exact.segments.clone());
+        let t = exact.beyond(true, frame(First)).unwrap().taper.unwrap();
+        assert_eq!((t.room_mm, t.need_mm), (need, need));
     }
 }

@@ -2308,6 +2308,26 @@ mod tests {
     }
 
     #[test]
+    fn an_under_filled_zone_gives_the_arm_a_beyond_that_the_junction_draws_and_checks() {
+        let mut city = City::new();
+        let length = city.layout.zone_frame(1).unwrap().length_mm;
+        let mut street = zoned_street(&city, 2, &[0, 1], None);
+        // the end zone drops a driving lane and leaves its width unused: "left to use", which still fits
+        let mut section = street.segments.clone();
+        let lane = section.iter().position(|g| g.kind == crate::shared::catalogue::kind_index("travel").unwrap()).unwrap();
+        section.remove(lane);
+        assert!(section.iter().map(|g| g.width_mm).sum::<i32>() < street.row_mm);
+        street.zones[0].segments = Some(section);
+        assert!(city.keep_street(2, street));
+        let b = arm_beyond(&city, 1, 2).expect("a street with width left to use still has a beyond");
+        assert_eq!(b.boundary_mm, length / 10);
+        let view = city.junction_editor(node_uid(1), 0).unwrap().view();
+        let arm = view.arms.iter().find(|a| !a.beyond.is_empty()).expect("the junction draws the beyond");
+        assert!(!arm.beyond_marks.is_empty());
+        assert!(view.checks.iter().any(|c| c.id == "approach"), "the approach check runs");
+    }
+
+    #[test]
     fn a_zone_edit_reaches_an_open_junction() {
         let mut city = City::new();
         let street = zoned_street(&city, 2, &[0, 5], Some(1));
