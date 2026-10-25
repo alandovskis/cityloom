@@ -544,8 +544,9 @@ test.describe("the approach of an arm whose street is divided", () => {
     throw new Error(`no junction has a street of ${minM} to ${maxM} m`);
   };
 
-  /** The added lane makes the zone too wide, and a junction draws nothing beyond a zone that does not fill the street:
-   *  remove the first piece (a sidewalk) while it is too wide, then widen pieces until every metre is used. */
+  /** The added lane makes the zone too wide (a zone wider than the street is not drawn beyond): remove the first piece
+   *  (a sidewalk) while it is too wide, then widen pieces until every metre is used (a zone with width left to use would
+   *  be drawn too; this puts the street back to the plain shape the test then checks). */
   const refillZone = async (page: Page) => {
     const fit = page.locator("#fit");
     const first = async () => {
@@ -554,20 +555,27 @@ test.describe("the approach of an arm whose street is divided", () => {
       await page.keyboard.press("ArrowRight");
     };
     await expect(fit).toContainText(/too wide/);
-    for (let i = 0; i < 4 && /too wide/.test(await fit.innerText()); i++) {
-      await first();
-      await page.keyboard.press("Delete");
-      await page.waitForTimeout(100);
-    }
-    await expect(fit).not.toContainText(/too wide/);
+    // Each attempt removes the first piece if the zone is still too wide, then waits for the fit text to say so.
+    await expect(async () => {
+      if (/too wide/.test(await fit.innerText())) {
+        await first();
+        await page.keyboard.press("Delete");
+      }
+      await expect(fit).not.toContainText(/too wide/, { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
     await first();
-    for (let i = 0; i < 200 && !/Every metre/.test(await fit.innerText()); i++) {
+    // Each attempt widens the piece in hand by a step; a piece at its widest leaves the text unchanged: go on to the next.
+    await expect(async () => {
       const before = await fit.innerText();
+      if (/Every metre/.test(before)) return;
       await page.keyboard.press("+");
-      await page.waitForTimeout(30);
-      // A piece at its widest takes no more: go on to the next.
-      if ((await fit.innerText()) === before) await page.keyboard.press("ArrowRight");
-    }
+      try {
+        await expect(fit).not.toHaveText(before, { timeout: 300 });
+      } catch {
+        await page.keyboard.press("ArrowRight");
+      }
+      await expect(fit).toContainText("Every metre", { timeout: 300 });
+    }).toPass({ timeout: 60_000, intervals: [0] });
     await expect(fit).toContainText("Every metre");
   };
 
@@ -579,7 +587,7 @@ test.describe("the approach of an arm whose street is divided", () => {
     // Halved, the street has an end zone of 25 to 33 m: the boundary lies inside the 36 m an arm is drawn to.
     const { junction, street } = await junctionWithStreet(page, 50, 66);
     await splitInto(page, 2);
-    // Zone 2 gets a travel lane zone 1 lacks (the add keeps the street's width, so each zone still fills it).
+    // Zone 2 gets a travel lane zone 1 lacks (the added lane makes zone 2 too wide for the street; `refillZone` makes it fit again).
     await page.locator("#zone-1").click();
     await page.locator("#add-btn").click();
     await page.locator(".add-item", { hasText: "Driving lane" }).click();

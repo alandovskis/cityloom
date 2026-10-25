@@ -1123,7 +1123,7 @@ impl Junction {
                 beyond: beyond.as_mut().map_or_else(Vec::new, |d| d.taper.drain(..).chain(d.extra.drain(..)).collect()),
                 beyond_marks: beyond.as_mut().map_or_else(Vec::new, |d| std::mem::take(&mut d.marks)),
                 beyond_problems: judged.map_or_else(Vec::new, |b| approach_problems(&arm_name(a), b, arrow_t + box_mm)),
-                beyond_reach_mm: judged.map_or(0, |b| steady_mm(b)),
+                beyond_reach_mm: judged.map_or(0, steady_mm),
                 beyond_taper_mm: judged.and_then(|b| b.taper.as_ref()).map_or(0, |t| t.to_mm - t.from_mm),
                 beyond_zone: judged.map(|b| b.zone.clone()),
                 core_bike,

@@ -147,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn the_approach_mark_clears_three_to_one_on_the_road_in_both_themes() {
+    fn the_approach_mark_clears_three_to_one_on_the_road_and_the_ground_it_crosses_in_both_themes() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
         let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
         let rule = editor.find("#drawing .approach-mark {").expect("the mark has a rule");
@@ -156,6 +156,11 @@ mod tests {
         for (theme, i) in [("light", 0), ("dark", 1)] {
             let (ink, road) = (pick(&token(app, "ink-2"), i), pick(&token(app, "road"), i));
             assert!(contrast(&ink, &road) >= 3.0, "ink-2 on the road {theme}: {:.2}", contrast(&ink, &road));
+            // the marks run across the whole property width, so over the sidewalk and planting fills as well
+            for ground in ["k-sidewalk", "k-planting"] {
+                let fill = pick(&token(app, ground), i);
+                assert!(contrast(&ink, &fill) >= 3.0, "ink-2 on {ground} {theme}: {:.2}", contrast(&ink, &fill));
+            }
         }
         let forced = editor.find("  #drawing .approach-mark {\n    stroke: CanvasText;").expect("forced-colours rule");
         assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some());
