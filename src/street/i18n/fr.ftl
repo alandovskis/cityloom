@@ -463,9 +463,9 @@ st-curb-add = Ajouter un usage
 st-curb-remove = Retirer un usage
 
 # Arrêts de transport en commun (src/street/model/stop.rs).
-stop-kind-curb = Arrêt d’autobus au trottoir
-stop-kind-bulb = Arrêt d’autobus sur avancée de trottoir
-stop-kind-island = Arrêt d’autobus sur îlot d’embarquement
+stop-kind-curb = Arrêt au trottoir
+stop-kind-bulb = Avancée de trottoir
+stop-kind-island = Îlot d’embarquement
 stop-word-sheltered = avec abribus
 stop-word-unsheltered = sans abribus
 rev-stop-add = Arrêt ajouté à { $at } : { $kind }
@@ -498,3 +498,27 @@ check-detail-stop-bike-narrow = La piste cyclable derrière l’îlot fait { $ha
 check-detail-stop-bike-ok = Aucun arrêt n’envoie les cyclistes à travers le quai.
 check-detail-stop-shelter = Le quai fait { $have } de large; un abribus demande { $need } ou plus.
 check-detail-stop-shelter-ok = Chaque abribus a la place voulue.
+
+# Les rangées d’arrêts et leurs commandes (src/street/row.rs, src/street/stop_tools.rs, src/street/model/stop.rs).
+stop-label = { $kind }
+stop-label-named = { $name } ({ $kind })
+stop-label-sheltered = { $label }, avec abribus
+stop-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
+stop-choose-gap = Choisissez d’abord un tronçon libre du bord de la rue.
+stop-choose-stop = Choisissez d’abord un arrêt.
+st-stop-heading = Arrêts le long de la rue
+st-stop-caption = Arrêts, { $side }
+st-stop-strip-label = Arrêts, { $side }
+st-stop-tools = Commandes des arrêts
+st-stop-kind = Type
+st-stop-name = Nom
+st-stop-length = Longueur ({ $unit })
+st-stop-shelter = Abribus
+st-stop-add = Ajouter un arrêt
+st-stop-remove = Retirer un arrêt
+stop-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’arrêts.
+stop-refused-elsewhere = Les arrêts de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
+stop-refused-overlap = Cet arrêt chevaucherait un autre arrêt du même côté.
+stop-refused-too-long = Cet arrêt dépasserait l’extrémité de la rue.
+stop-refused-time-windows = On ne peut pas placer un arrêt sur une voie qui change selon l’heure de la journée.
+stop-refused-dragging = Terminez le glissement avant de modifier les arrêts.

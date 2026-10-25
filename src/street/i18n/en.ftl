@@ -464,8 +464,8 @@ st-curb-remove = Remove use
 
 # Transit stops (src/street/model/stop.rs).
 stop-kind-curb = Curb stop
-stop-kind-bulb = Bulb stop
-stop-kind-island = Island stop
+stop-kind-bulb = Curb extension
+stop-kind-island = Boarding island
 stop-word-sheltered = with a shelter
 stop-word-unsheltered = without a shelter
 rev-stop-add = Add { $kind } at { $at }
@@ -498,3 +498,27 @@ check-detail-stop-bike-narrow = The bike lane behind the island is { $have } wid
 check-detail-stop-bike-ok = No stop sends riders across the boarding area.
 check-detail-stop-shelter = The boarding area is { $have } wide; a shelter needs { $need } or more.
 check-detail-stop-shelter-ok = Every shelter has room.
+
+# The stops rows and their commands (src/street/row.rs, src/street/stop_tools.rs, src/street/model/stop.rs).
+stop-label = { $kind }
+stop-label-named = { $name } ({ $kind })
+stop-label-sheltered = { $label }, with a shelter
+stop-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
+stop-choose-gap = Choose a free stretch of the street's edge first.
+stop-choose-stop = Choose a stop first.
+st-stop-heading = Stops along the street
+st-stop-caption = Stops, { $side }
+st-stop-strip-label = Stops, { $side }
+st-stop-tools = Stop commands
+st-stop-kind = Kind
+st-stop-name = Name
+st-stop-length = Length ({ $unit })
+st-stop-shelter = Shelter
+st-stop-add = Add stop
+st-stop-remove = Remove stop
+stop-refused-no-anchor = Both ends of this street are cut by the edge of the map, so stops cannot be placed along it.
+stop-refused-elsewhere = The stops of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
+stop-refused-overlap = That would overlap another stop on the same side.
+stop-refused-too-long = That would run past the end of the street.
+stop-refused-time-windows = A stop cannot be placed on a lane that changes with the time of day.
+stop-refused-dragging = Finish the drag before changing the stops.

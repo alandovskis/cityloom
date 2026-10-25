@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::curb::{CurbRefusal, Failure, check_rows, side_word, toward_edge};
+use super::curb::{CurbRefusal, Failure, SideView, StripCell, StripView, check_rows, curbside, selected_cell, side_word, strip_cells, toward_edge};
 use super::{Arg, Check, Content, Editor, SNAP_MM, Said, Segment, Street, ZoneFrame, snap, widest_walkway_mm};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_motor};
 
@@ -139,6 +139,7 @@ impl Editor {
         let frame = self.curb_frame(false)?;
         let s = Stop { side, from_mm: snap(from_mm), length_mm: snap(length_mm).max(SNAP_MM), kind, shelter: false, name: None };
         self.stop_fits(&s, None, frame)?;
+        self.stop_choice.pick(s.side, s.from_mm);
         self.stop_change(Self::stop_label("rev-stop-add", &s), frame, |stops| stops.push(s));
         Ok(())
     }
@@ -180,6 +181,8 @@ impl Editor {
             return Ok(());
         }
         let label = Self::stop_label("rev-stop-move", &new);
+        // The choice follows the stop, and a drag records one move, from where it began to where it is.
+        self.stop_choice.follow(old.side, old.from_mm, new.from_mm);
         if self.gesture.is_some() {
             let c = &mut self.states[self.cursor].content;
             c.stops[i] = new;
@@ -205,7 +208,7 @@ impl Editor {
 }
 
 /// The shortest stop: one standard bus. Unverified (TAC / STM to check).
-const MIN_STOP_MM: i32 = 9_000;
+pub const MIN_STOP_MM: i32 = 9_000;
 
 /// The boarding area a wheelchair ramp needs. Unverified (TAC / STM to check).
 const BOARDING_MM: i32 = 2_400;
@@ -282,9 +285,8 @@ fn platform(segs: &[Segment], lane: usize, side: Side, kind: StopKind) -> Option
     }
 }
 
-/// Whether the section has what `kind` needs beside `lane` on `side`. The editor's kind choice will offer only
-/// the kinds that fit; until it does, only the tests ask.
-#[cfg_attr(not(test), allow(dead_code))]
+/// Whether the section has what `kind` needs beside `lane` on `side`. A new stop starts as the first kind that fits
+/// (`Editor::default_stop_kind`).
 pub(crate) fn kind_fits(segs: &[Segment], lane: usize, side: Side, kind: StopKind) -> bool {
     platform(segs, lane, side, kind).is_some()
 }
@@ -297,6 +299,136 @@ impl Stop {
             Some(name) => Said::new("stop-instance-named").with("name", Arg::Text(name.clone())).with("kind", kind).with("at", Arg::Length(self.from_mm)),
             None => Said::new("stop-instance").with("kind", kind).with("at", Arg::Length(self.from_mm)).with("side", Arg::Msg(side_word(self.side))),
         }
+    }
+}
+
+/// A cell of a stops row: a stop or the gap between two.
+#[derive(Serialize)]
+pub struct StopCell {
+    /// An index into the street's `stops` for a stop, `None` for a gap.
+    pub instance: Option<usize>,
+    pub from_mm: i32,
+    pub to_mm: i32,
+    /// How the stop is built; `None` for a gap.
+    pub kind: Option<StopKind>,
+    pub shelter: bool,
+    pub name: Option<String>,
+    /// What the cell says: the stop's name or kind, with its shelter; "Free" for a gap.
+    pub label: Said,
+    /// The stop breaks no stop check (a gap always passes).
+    pub ok: bool,
+}
+
+impl StripCell for StopCell {
+    fn instance(&self) -> Option<usize> {
+        self.instance
+    }
+    fn from_mm(&self) -> i32 {
+        self.from_mm
+    }
+    fn to_mm(&self) -> i32 {
+        self.to_mm
+    }
+    fn label(&self) -> &Said {
+        &self.label
+    }
+    fn ok(&self) -> bool {
+        self.ok
+    }
+}
+
+/// The stops rows: one per side that has a stop, a curbside lane or a transit lane for the bus in some zone (a plain
+/// driving lane could carry a stop too, but offering a row on every street would crowd the page).
+pub type StopsView = StripView<StopCell>;
+pub type StopSideView = SideView<StopCell>;
+
+impl Stop {
+    /// What its cell says: "Mont-Royal (curb stop)" or "Curb stop", and ", with a shelter" when it has one.
+    fn cell_label(&self) -> Said {
+        let kind = Arg::Msg(self.kind.name_key());
+        let base = match &self.name {
+            Some(name) => Said::new("stop-label-named").with("name", Arg::Text(name.clone())).with("kind", Arg::MsgLower(self.kind.name_key())),
+            None => Said::new("stop-label").with("kind", kind),
+        };
+        if self.shelter { Said::new("stop-label-sheltered").with("label", Arg::Said(Box::new(base))) } else { base }
+    }
+}
+
+impl Editor {
+    /// The stops rows: a cell per stop and per gap along the whole street, for each side that can have a stop.
+    pub(super) fn stops_view(&self) -> StopsView {
+        let content = &self.states[self.cursor].content;
+        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0);
+        if length_mm <= 0 {
+            // Without a length there is nothing to lay the stops along.
+            return StripView { sides: Vec::new() };
+        }
+        let driving = REGIONS[self.region].drive_side;
+        let failing: Vec<usize> = self.stop_failures().iter().map(|f| f.instance).collect();
+        let sides = [Side::Left, Side::Right]
+            .into_iter()
+            .filter(|&side| {
+                content.stops.iter().any(|s| s.side == side)
+                    || (0..content.zone_count()).any(|z| {
+                        let segs = content.section(z);
+                        curbside(segs, side).is_some() || bus_lane(segs, side, driving).is_some_and(|lane| KINDS[segs[lane].kind].id == "bus")
+                    })
+            })
+            .map(|side| {
+                let gap = |from_mm: i32, to_mm: i32| StopCell {
+                    instance: None,
+                    from_mm,
+                    to_mm,
+                    kind: None,
+                    shelter: false,
+                    name: None,
+                    label: Said::new("curb-gap"),
+                    ok: true,
+                };
+                let items = content.stops.iter().enumerate().filter(|(_, s)| s.side == side).map(|(k, s)| (k, s.from_mm, s.to_mm()));
+                let cells = strip_cells(length_mm, items, gap, |k| {
+                    let s = &content.stops[k];
+                    StopCell {
+                        instance: Some(k),
+                        from_mm: s.from_mm,
+                        to_mm: s.to_mm(),
+                        kind: Some(s.kind),
+                        shelter: s.shelter,
+                        name: s.name.clone(),
+                        label: s.cell_label(),
+                        ok: !failing.contains(&k),
+                    }
+                });
+                let selected = selected_cell(&cells, self.stop_choice.at, side);
+                SideView { side, cells, selected }
+            })
+            .collect();
+        StripView { sides }
+    }
+
+    /// Chooses the cell of `side`'s stops row that holds `at_mm`. A setting, not history.
+    pub fn select_stop(&mut self, side: Side, at_mm: i32) {
+        self.stop_choice.pick(side, at_mm);
+    }
+
+    /// Starts a drag of a stop: the steps are shown and the end is one revision. False when a drag is under way.
+    pub fn begin_stop_drag(&mut self) -> bool {
+        self.begin_curb_drag()
+    }
+
+    /// The kind a new stop on `side` starting at `from_mm` begins as: the first of the kinds (curb stop, curb
+    /// extension, boarding island) that every zone it would overlap can take, else the curb stop.
+    pub fn default_stop_kind(&self, side: Side, from_mm: i32) -> StopKind {
+        let content = &self.states[self.cursor].content;
+        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        let driving = REGIONS[self.region].drive_side;
+        let sections = content.sections_over(from_mm, from_mm.saturating_add(MIN_STOP_MM), length_mm);
+        StopKind::ALL
+            .into_iter()
+            .find(|&kind| {
+                !sections.is_empty() && sections.iter().all(|segs| bus_lane(segs, side, driving).is_some_and(|lane| kind_fits(segs, lane, side, kind)))
+            })
+            .unwrap_or(StopKind::Curb)
     }
 }
 

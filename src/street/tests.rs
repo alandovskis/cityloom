@@ -1491,10 +1491,12 @@ fn the_curb_strip_is_a_listbox_with_one_tab_stop() {
     for side in ["left", "right"] {
         assert!(h.contains(&format!("id=\"curb-strip-{side}\"")), "{side}: {h}");
     }
-    assert_eq!(count(&h, "role=\"listbox\""), 2, "{h}");
-    assert_eq!(count(&h, "aria-orientation=\"horizontal\""), 2, "{h}");
-    assert_eq!(count(&h, "tabindex=\"0\""), 2, "one tab stop on each strip: {h}");
-    assert_eq!(count(&h, "role=\"option\""), 3, "a gap on the left, a use and a gap on the right: {h}");
+    // the sample has a stops row under each curbside strip, which have their own test
+    assert_eq!(count(&h, "id=\"curb-strip-"), 2, "{h}");
+    assert_eq!(count(&h, "role=\"listbox\""), 4, "{h}");
+    assert_eq!(count(&h, "aria-orientation=\"horizontal\""), 4, "{h}");
+    assert_eq!(count(&h, "tabindex=\"0\""), 4, "one tab stop on each strip: {h}");
+    assert_eq!(count(&h, "role=\"option\""), 3 + 2, "a gap on the left, a use and a gap on the right, and a gap in each stops row: {h}");
     assert!(h.contains("aria-activedescendant=\"curb-right-0\""), "{h}");
     assert_eq!(count(&h, "aria-selected=\"true\""), 1, "{h}");
     assert!(h.contains("id=\"curb-left-0\"") && h.contains("id=\"curb-right-0\"") && h.contains("id=\"curb-right-1\""), "{h}");
@@ -1578,7 +1580,137 @@ fn the_curb_cells_share_the_zone_cells_minimum_width_and_scrolling() {
         let i = editor.find(head).unwrap_or_else(|| panic!("{head}"));
         &editor[i..i + editor[i..].find('}').unwrap()]
     };
-    assert!(rule(".curb-cell,\n.zone-cell {").contains("min-width: 24px;"));
-    assert!(rule(".curb-strip,\n.zone-strip {").contains("overflow-x: auto;"));
-    assert!(rule(".curb-cell.failing {").contains("border-bottom-width: 5px;"), "a failing use differs by more than colour");
+    assert!(rule(".curb-cell,\n.stop-cell,\n.zone-cell {").contains("min-width: 24px;"));
+    assert!(rule(".curb-strip,\n.stop-strip,\n.zone-strip {").contains("overflow-x: auto;"));
+    assert!(rule(".curb-cell.failing,\n.stop-cell.failing {").contains("border-bottom-width: 5px;"), "a failing use differs by more than colour");
+}
+
+// ---- the stops rows and their commands ----------------------------------------------
+
+/// A street of (kind, width, direction) pieces, 40 m long, anchored at its first end, with traffic on the right.
+fn stop_street(pieces: &[(&str, i32, Option<usize>)], locale: Locale) -> Rc<StreetVm> {
+    use crate::shared::catalogue::{REGIONS, Side, StreetClass, kind_index};
+    use crate::street::model::{Piece, Street, ZoneEnd, ZoneFrame};
+    let pieces: Vec<Piece> =
+        pieces.iter().map(|&(id, width_mm, direction)| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() }).collect();
+    let street = Street::imported(StreetClass::Local, Side::Right, &pieces);
+    let region = REGIONS.iter().position(|r| r.drive_side == Side::Right).unwrap();
+    let frame = Some(ZoneFrame { length_mm: 40_000, from_end: ZoneEnd::First });
+    let (ports, _, _) = crate::shared::ports::test_ports();
+    StreetVm::new(ports, crate::i18n_for(locale), Editor::from_street(&street, &street, region).with_frame(frame), None)
+}
+
+const PARKED: [(&str, i32, Option<usize>); 6] =
+    [("sidewalk", 3000, None), ("parking", 2400, None), ("bus", 3300, Some(1)), ("bus", 3300, Some(0)), ("parking", 2400, None), ("sidewalk", 3000, None)];
+const AT_THE_CURB: [(&str, i32, Option<usize>); 4] = [("sidewalk", 3000, None), ("bus", 3300, Some(1)), ("bus", 3300, Some(0)), ("sidewalk", 3000, None)];
+
+/// Bus lane beside parking, with a 12 m curb extension at the start of the right side, chosen.
+fn parked_with_a_stop(locale: Locale) -> Rc<StreetVm> {
+    use crate::shared::catalogue::Side;
+    let s = stop_street(&PARKED, locale);
+    s.select_stop(Side::Right, 0);
+    assert!(s.add_stop(crate::street::model::StopKind::Bulb, 12_000));
+    s
+}
+
+#[test]
+fn the_stops_row_is_a_listbox_with_one_tab_stop() {
+    let s = parked_with_a_stop(Locale::En);
+    let h = curb_html(&s);
+    for side in ["left", "right"] {
+        assert!(h.contains(&format!("id=\"stop-strip-{side}\"")), "{side}: {h}");
+    }
+    assert_eq!(count(&h, "role=\"listbox\""), 4, "a curbside strip and a stops row on each side: {h}");
+    assert_eq!(count(&h, "tabindex=\"0\""), 4, "one tab stop on each row: {h}");
+    assert_eq!(count(&h, "role=\"option\""), 2 + 1 + 2, "the curbside gaps, a stops gap on the left, a stop and a gap on the right: {h}");
+    assert!(h.contains("aria-activedescendant=\"stop-right-0\""), "{h}");
+    assert!(h.contains("id=\"stop-left-0\"") && h.contains("id=\"stop-right-0\"") && h.contains("id=\"stop-right-1\""), "{h}");
+    assert!(h.contains("aria-label=\"Stops, right\"") && h.contains("aria-label=\"Stops, left\"") && h.contains(">Stops, right</p>"), "{h}");
+    assert!(h.contains("aria-label=\"Curb extension, 0.0 m to 12.0 m, 12.0 m long, 1 of 2\""), "{h}");
+    assert!(h.contains("aria-label=\"Free, 0.0 m to 40.0 m, 40.0 m long, 1 of 1\""), "{h}");
+    // the same classes as the curbside rows, each stops row directly under its side's curbside row
+    let at = |id: &str| h.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {h}"));
+    assert!(
+        at("curb-strip-left") < at("stop-strip-left") && at("stop-strip-left") < at("curb-strip-right") && at("curb-strip-right") < at("stop-strip-right"),
+        "{h}"
+    );
+    assert_eq!((count(&h, "class=\"curb-strip\""), count(&h, "class=\"stop-strip\"")), (2, 2), "{h}");
+    // with parking on both sides each stops row is directly under its side's curbside row
+    let both = curb_html(&curb_street(Locale::En));
+    let at = |id: &str| both.find(&format!("id=\"{id}\"")).unwrap_or_else(|| panic!("{id}: {both}"));
+    assert!(
+        at("curb-strip-left") < at("stop-strip-left") && at("stop-strip-left") < at("curb-strip-right") && at("curb-strip-right") < at("stop-strip-right"),
+        "{both}"
+    );
+    // a curb extension beside the bus lane here fails nothing it is checked for; a curb stop beside parking fails its kind
+    assert!(!h.contains("Fails a check"), "{h}");
+    assert!(s.set_stop_kind(crate::street::model::StopKind::Curb));
+    let h = curb_html(&s);
+    assert!(h.contains("Fails a check. See the checks.") && h.contains("failing"), "{h}");
+    // a sheltered stop says so
+    assert!(s.set_stop_shelter(true));
+    assert!(curb_html(&s).contains("aria-label=\"Curb stop, with a shelter, 0.0 m to 12.0 m, 12.0 m long, 1 of 2\""));
+}
+
+#[test]
+fn a_street_with_a_bus_lane_and_no_curbside_has_only_the_stops_rows() {
+    let s = stop_street(&AT_THE_CURB, Locale::En);
+    let h = curb_html(&s);
+    assert_eq!((count(&h, "id=\"stop-strip-"), count(&h, "id=\"curb-strip-")), (2, 0), "{h}");
+    assert!(h.contains(">Stops along the street</h2>"), "{h}");
+    // a street with neither has no row, nor one with only plain driving lanes
+    let plain = stop_street(&[("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 3000, None)], Locale::En);
+    assert_eq!(count(&curb_html(&plain), "role=\"listbox\""), 0);
+    let none = stop_street(&[("sidewalk", 3000, None), ("bike", 1800, None), ("sidewalk", 3000, None)], Locale::En);
+    assert_eq!(count(&curb_html(&none), "role=\"listbox\""), 0);
+}
+
+#[test]
+fn the_stops_row_follows_the_language() {
+    let s = parked_with_a_stop(Locale::FrCa);
+    let h = curb_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains("aria-label=\"Avancée de trottoir, de 0,0 m à 12,0 m, 12,0 m de long, 1 sur 2\""), "{h}");
+    assert!(h.contains("aria-label=\"Arrêts, à droite\"") && h.contains(">Arrêts, à gauche</p>"), "{h}");
+}
+
+fn stop_tools_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::stop_tools::StopTools vm=s.clone()/> })
+}
+
+#[test]
+fn the_stop_tools_render_labelled_controls() {
+    let s = parked_with_a_stop(Locale::En);
+    let h = stop_tools_html(&s);
+    assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Stop commands\"") && !h.contains("toolbar"), "{h}");
+    for (id, label) in [("stop-kind", "Kind"), ("stop-name", "Name"), ("stop-length", "Length (m)"), ("stop-shelter", "Shelter")] {
+        assert!(h.contains(&format!("<label for=\"{id}\"")) && h.contains(&format!(">{label}</label>")), "{id}: {h}");
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    assert!(h.contains("<select id=\"stop-kind\"") && h.contains("id=\"stop-shelter\" type=\"checkbox\""), "{h}");
+    assert_eq!(count(&h, "<option"), 3, "{h}");
+    for name in ["Curb stop", "Curb extension", "Boarding island"] {
+        assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
+    }
+    for (id, label) in [("stop-add", "Add stop"), ("stop-remove", "Remove stop")] {
+        assert!(h.contains(&format!("id=\"{id}\"")) && h.contains(&format!(">{label}</button>")), "{id}: {h}");
+    }
+    // a stop is chosen: it can be removed, and a stop cannot be added into it
+    assert!(h.contains("id=\"stop-add\" aria-disabled=\"true\"") && !h.contains("id=\"stop-remove\" aria-disabled"), "{h}");
+    // a street without a lane for the bus or a curbside has no commands
+    let none = stop_street(&[("sidewalk", 3000, None), ("bike", 1800, None), ("sidewalk", 3000, None)], Locale::En);
+    assert_eq!(count(&stop_tools_html(&none), "stop-kind"), 0);
+}
+
+#[test]
+fn the_stop_tools_follow_the_language() {
+    let s = parked_with_a_stop(Locale::FrCa);
+    let h = stop_tools_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(
+        h.contains("aria-label=\"Commandes des arrêts\"") && h.contains(">Type</label>") && h.contains(">Nom</label>") && h.contains(">Longueur (m)</label>"),
+        "{h}"
+    );
+    assert!(h.contains(">Abribus</label>") && h.contains(">Ajouter un arrêt</button>") && h.contains(">Retirer un arrêt</button>"), "{h}");
+    for name in ["Arrêt au trottoir", "Avancée de trottoir", "Îlot d’embarquement"] {
+        assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
+    }
 }

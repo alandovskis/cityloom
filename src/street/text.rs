@@ -8,7 +8,7 @@ use crate::shared::catalogue::{KINDS, StreetClass, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
-use crate::street::model::{Check, CurbSideView, View, ZoneRefusal};
+use crate::street::model::{Check, SideView, StripCell, View, ZoneRefusal};
 
 /// What an edit says of the street becoming pedestrian or carrying traffic again, after what it already said;
 /// nothing when the class is the one it was.
@@ -109,18 +109,19 @@ pub fn zone_text(v: &View, index: usize, i18n: &I18n, units: Units) -> String {
     i18n.tr_now("zone-selected", &args)
 }
 
-/// How a cell of a curbside strip is named: what it is, where it lies and how long, and its place on the strip.
-pub fn curb_cell_text(side: &CurbSideView, cell: usize, i18n: &I18n, units: Units) -> String {
+/// How a cell of a strip is named (by the message `key`): what it is, where it lies and how long, and its place on
+/// the strip.
+pub fn cell_text<C: StripCell>(key: &str, side: &SideView<C>, cell: usize, i18n: &I18n, units: Units) -> String {
     let locale = i18n.locale_now();
     let Some(c) = side.cells.get(cell) else { return String::new() };
     let args = Args::new()
-        .str("name", say_now(i18n, units, &c.label))
-        .str("from", units.length_in(c.from_mm, locale))
-        .str("to", units.length_in(c.to_mm, locale))
-        .str("length", units.length_in(c.to_mm - c.from_mm, locale))
+        .str("name", say_now(i18n, units, c.label()))
+        .str("from", units.length_in(c.from_mm(), locale))
+        .str("to", units.length_in(c.to_mm(), locale))
+        .str("length", units.length_in(c.to_mm() - c.from_mm(), locale))
         .num("n", cell as i64 + 1)
         .num("total", side.cells.len() as i64);
-    i18n.tr_now("curb-cell", &args)
+    i18n.tr_now(key, &args)
 }
 
 /// Why a zone operation was refused, in the page's language.
@@ -426,10 +427,7 @@ mod tests {
         let row = v.checks.iter().find(|c| c.id == "stop-lane").unwrap();
         assert!(!row.ok);
         assert_eq!(say_now(&en(), Units::Metres, &check_label(row)), "Stops have a lane for the bus: curb stop at 42.0 m, right");
-        assert_eq!(
-            say_now(&fr(), Units::Metres, &check_label(row)),
-            "Arrêts\u{a0}: une voie pour l’autobus\u{a0}: arrêt d’autobus au trottoir à 42,0\u{a0}m, à droite"
-        );
+        assert_eq!(say_now(&fr(), Units::Metres, &check_label(row)), "Arrêts\u{a0}: une voie pour l’autobus\u{a0}: arrêt au trottoir à 42,0\u{a0}m, à droite");
         e.name_stop(0, Some("Mont-Royal")).unwrap();
         let v = e.view();
         let row = v.checks.iter().find(|c| c.id == "stop-lane").unwrap();

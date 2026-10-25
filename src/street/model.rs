@@ -24,9 +24,10 @@ pub use transition::{Change, Host, Transition, transition};
 mod curb;
 mod curb_shown;
 mod stop;
-pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, Use, curbside};
+use curb::Choice;
+pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside};
 pub use curb_shown::ShownInstance;
-pub use stop::{Stop, StopKind};
+pub use stop::{MIN_STOP_MM, Stop, StopCell, StopKind, StopSideView, StopsView};
 mod zones;
 use zones::Failing;
 pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
@@ -531,9 +532,10 @@ struct State {
     /// The room the street has as of this state. An edit never changes it; it differs between states only for a street
     /// taken by the width it had under an earlier importer, which Start over returns to the width it has now.
     row_mm: i32,
-    /// The move of a use that made this state (its side, where it started and where it ended up), so that undo and
-    /// redo carry the chosen use with it.
+    /// The move of a use or of a stop that made this state (its side, where it started and where it ended up), so
+    /// that undo and redo carry the chosen one with it.
     curb_move: Option<(Side, i32, i32)>,
+    stop_move: Option<(Side, i32, i32)>,
 }
 
 /// The speed limits an editor sets, in kilometres an hour.
@@ -559,10 +561,11 @@ pub struct Editor {
     ends: [EndInfo; 2],
     selected: Option<u32>,
     gesture: Option<Content>,
-    /// The cell of a curbside strip the person chose: its side and a place along the street it holds. A setting, not history.
-    curb_sel: Option<(Side, i32)>,
-    /// The move of a use under way in a gesture, or just made, that the next revision records (see `State.curb_move`).
-    curb_moved: Option<(Side, i32, i32)>,
+    /// The cell of a curbside strip the person chose, and the move of a use that the next revision records (see
+    /// `State.curb_move`). The choice is a setting, not history.
+    curb_choice: Choice,
+    /// The same for the stops' strips (see `State.stop_move`).
+    stop_choice: Choice,
     pending_label: Option<Said>,
 }
 
@@ -648,6 +651,7 @@ impl Editor {
                 class_before: today.class_before,
                 row_mm: today.row_mm,
                 curb_move: None,
+                stop_move: None,
             }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
@@ -656,8 +660,8 @@ impl Editor {
             ends: [EndInfo::default(); 2],
             selected: None,
             gesture: None,
-            curb_sel: None,
-            curb_moved: None,
+            curb_choice: Choice::default(),
+            stop_choice: Choice::default(),
             pending_label: None,
         };
         if Content::of(&now) != e.states[0].content || now.row_mm != e.states[0].row_mm {
@@ -757,8 +761,8 @@ impl Editor {
         content.settle();
         let (class, class_before) = settled_class(content.has_motor(), self.class(), self.class_before());
         let row_mm = self.row_mm();
-        let curb_move = self.curb_moved.take();
-        self.push_state(State { label, content, class, class_before, row_mm, curb_move });
+        let (curb_move, stop_move) = (self.curb_choice.take_moved(), self.stop_choice.take_moved());
+        self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move });
         self.clamp_zone();
     }
 
@@ -780,7 +784,8 @@ impl Editor {
         if self.gesture.is_none() {
             self.gesture = Some(self.states[self.cursor].content.clone());
             self.pending_label = None;
-            self.curb_moved = None;
+            self.curb_choice.forget_moved();
+            self.stop_choice.forget_moved();
         }
     }
 
@@ -793,12 +798,14 @@ impl Editor {
         // The live state was mutated in place; restore it, then record it.
         self.states[self.cursor].content = baseline.clone();
         if now == baseline {
-            self.curb_moved = None;
+            self.curb_choice.forget_moved();
+            self.stop_choice.forget_moved();
             return false;
         }
         // An edit that changed anything left its label; without one there is nothing to record.
         let Some(label) = self.pending_label.take() else {
-            self.curb_moved = None;
+            self.curb_choice.forget_moved();
+            self.stop_choice.forget_moved();
             return false;
         };
         self.push(label, now);
@@ -808,12 +815,9 @@ impl Editor {
     pub fn cancel_gesture(&mut self) {
         if let Some(baseline) = self.gesture.take() {
             self.states[self.cursor].content = baseline;
-            // The use is back where it started: so is the choice.
-            if let Some((side, from, to)) = self.curb_moved.take()
-                && self.curb_sel == Some((side, to))
-            {
-                self.curb_sel = Some((side, from));
-            }
+            // The use or stop is back where it started: so is the choice.
+            self.curb_choice.cancel();
+            self.stop_choice.cancel();
         }
     }
 
@@ -1286,11 +1290,8 @@ impl Editor {
         if self.cursor == 0 {
             return false;
         }
-        if let Some((side, from, to)) = self.states[self.cursor].curb_move
-            && self.curb_sel == Some((side, to))
-        {
-            self.curb_sel = Some((side, from));
-        }
+        self.curb_choice.undo(self.states[self.cursor].curb_move);
+        self.stop_choice.undo(self.states[self.cursor].stop_move);
         self.cursor -= 1;
         self.reselect();
         true
@@ -1302,11 +1303,8 @@ impl Editor {
             return false;
         }
         self.cursor += 1;
-        if let Some((side, from, to)) = self.states[self.cursor].curb_move
-            && self.curb_sel == Some((side, from))
-        {
-            self.curb_sel = Some((side, to));
-        }
+        self.curb_choice.redo(self.states[self.cursor].curb_move);
+        self.stop_choice.redo(self.states[self.cursor].stop_move);
         self.reselect();
         true
     }
@@ -1416,6 +1414,7 @@ impl Editor {
             checks: self.street_checks(),
             zones: self.zones_view(),
             curb: self.curb_view(),
+            stops: self.stops_view(),
             curb_shown: self.curb_shown(),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
@@ -1780,6 +1779,8 @@ pub struct View {
     pub zones: ZonesView,
     /// The curbside strips.
     pub curb: CurbView,
+    /// The strips of the transit stops, a row under each side's curbside strip.
+    pub stops: StopsView,
     /// The curbside uses the 2.5D shows, on the selected zone's pieces.
     pub curb_shown: Vec<ShownInstance>,
     /// The Atlas lane measures: which this section forms, and what each lacks.

@@ -134,34 +134,65 @@ pub enum CurbRefusal {
     Dragging,
 }
 
+/// What an edit works on, which words its refusal.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Subject {
+    /// A use of the curbside lane.
+    Use,
+    /// A transit stop.
+    Stop,
+}
+
 impl CurbRefusal {
+    /// The refusal of a curbside edit, in the curbside's words.
     pub fn said(self) -> Said {
-        Said::new(match self {
-            CurbRefusal::NoAnchor => "zone-refused-no-anchor",
-            CurbRefusal::Elsewhere => "curb-refused-elsewhere",
-            CurbRefusal::Overlap => "curb-refused-overlap",
-            CurbRefusal::TooLong => "curb-refused-too-long",
-            CurbRefusal::TimeWindows => "curb-refused-time-windows",
-            CurbRefusal::Dragging => "curb-refused-dragging",
-        })
+        self.said_for(Subject::Use)
+    }
+
+    /// The refusal of an edit of `subject`, in the words that fit it.
+    pub fn said_for(self, subject: Subject) -> Said {
+        let (curb, stop) = match self {
+            CurbRefusal::NoAnchor => ("zone-refused-no-anchor", "stop-refused-no-anchor"),
+            CurbRefusal::Elsewhere => ("curb-refused-elsewhere", "stop-refused-elsewhere"),
+            CurbRefusal::Overlap => ("curb-refused-overlap", "stop-refused-overlap"),
+            CurbRefusal::TooLong => ("curb-refused-too-long", "stop-refused-too-long"),
+            CurbRefusal::TimeWindows => ("curb-refused-time-windows", "stop-refused-time-windows"),
+            CurbRefusal::Dragging => ("curb-refused-dragging", "stop-refused-dragging"),
+        };
+        Said::new(if subject == Subject::Stop { stop } else { curb })
     }
 }
 
-/// The curbside strips of a street as the view carries them: one per side that has a curbside lane somewhere along
-/// the street, or has uses.
+/// One cell of a strip: a use or a stop, or the gap between two.
+pub trait StripCell {
+    /// An index into the street's list (`curb`, `stops`) for a cell that is one, `None` for a gap.
+    fn instance(&self) -> Option<usize>;
+    fn from_mm(&self) -> i32;
+    fn to_mm(&self) -> i32;
+    /// What the cell says: its name, or "Free" for a gap.
+    fn label(&self) -> &Said;
+    /// It breaks no check (a gap always passes).
+    fn ok(&self) -> bool;
+}
+
+/// The strips of a street as the view carries them: one per side that has something to put along it.
 #[derive(Serialize)]
-pub struct CurbView {
-    pub sides: Vec<CurbSideView>,
+pub struct StripView<C> {
+    pub sides: Vec<SideView<C>>,
 }
 
 #[derive(Serialize)]
-pub struct CurbSideView {
+pub struct SideView<C> {
     pub side: Side,
-    /// The uses and the gaps between them along the whole street, in order.
-    pub cells: Vec<CurbCell>,
+    /// The things and the gaps between them along the whole street, in order.
+    pub cells: Vec<C>,
     /// The chosen cell, on the side the person chose it.
     pub selected: Option<usize>,
 }
+
+/// The curbside strips: one per side that has a curbside lane somewhere along the street, or has uses.
+pub type CurbView = StripView<CurbCell>;
+pub type CurbSideView = SideView<CurbCell>;
 
 #[derive(Serialize)]
 pub struct CurbCell {
@@ -175,6 +206,107 @@ pub struct CurbCell {
     pub label: Said,
     /// The use breaks no curbside check (a gap always passes).
     pub ok: bool,
+}
+
+impl StripCell for CurbCell {
+    fn instance(&self) -> Option<usize> {
+        self.instance
+    }
+    fn from_mm(&self) -> i32 {
+        self.from_mm
+    }
+    fn to_mm(&self) -> i32 {
+        self.to_mm
+    }
+    fn label(&self) -> &Said {
+        &self.label
+    }
+    fn ok(&self) -> bool {
+        self.ok
+    }
+}
+
+/// The cells of one side along `length_mm`: `items` (an index into the list and where it starts and ends, in
+/// order, not overlapping) with a gap before each, between them and after the last.
+pub(super) fn strip_cells<C>(length_mm: i32, items: impl Iterator<Item = (usize, i32, i32)>, gap: impl Fn(i32, i32) -> C, item: impl Fn(usize) -> C) -> Vec<C> {
+    let mut cells = Vec::new();
+    let mut at = 0;
+    for (k, from, to) in items {
+        if from > at {
+            cells.push(gap(at, from));
+        }
+        cells.push(item(k));
+        at = at.max(to);
+    }
+    if at < length_mm {
+        cells.push(gap(at, length_mm));
+    }
+    cells
+}
+
+/// The cell of `side` that holds the place the person chose, if they chose on this side.
+pub(super) fn selected_cell<C: StripCell>(cells: &[C], chosen: Option<(Side, i32)>, side: Side) -> Option<usize> {
+    let (_, mm) = chosen.filter(|(s, _)| *s == side)?;
+    cells.iter().position(|c| c.from_mm() <= mm && mm < c.to_mm())
+}
+
+/// What the person chose on a strip, and the move that carries the choice through the history. The choice is a side
+/// and a place along the street, found again in each view, so it stays on the thing as the cells around it change.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct Choice {
+    pub(super) at: Option<(Side, i32)>,
+    /// The move under way in a gesture, or just made, that the next revision records: side, start and end.
+    moved: Option<(Side, i32, i32)>,
+}
+
+impl Choice {
+    pub(super) fn pick(&mut self, side: Side, at_mm: i32) {
+        self.at = Some((side, at_mm));
+    }
+
+    /// The thing at (`side`, `from`) moves to `to`: the choice follows it, and the move is kept for the history. A
+    /// drag records one move, from where it began to where it is.
+    pub(super) fn follow(&mut self, side: Side, from: i32, to: i32) {
+        if self.at == Some((side, from)) {
+            self.at = Some((side, to));
+        }
+        let began = self.moved.filter(|&(s, _, end)| s == side && end == from).map_or(from, |(_, began, _)| began);
+        self.moved = Some((side, began, to));
+    }
+
+    /// The move the revision being made records.
+    pub(super) fn take_moved(&mut self) -> Option<(Side, i32, i32)> {
+        self.moved.take()
+    }
+
+    pub(super) fn forget_moved(&mut self) {
+        self.moved = None;
+    }
+
+    /// A drag was cancelled: the thing is back where it started, so is the choice.
+    pub(super) fn cancel(&mut self) {
+        if let Some((side, from, to)) = self.moved.take() {
+            self.undo(Some((side, from, to)));
+        }
+    }
+
+    /// The revision that made `moved` is undone.
+    pub(super) fn undo(&mut self, moved: Option<(Side, i32, i32)>) {
+        if let Some((side, from, to)) = moved
+            && self.at == Some((side, to))
+        {
+            self.at = Some((side, from));
+        }
+    }
+
+    /// The revision that made `moved` is redone.
+    pub(super) fn redo(&mut self, moved: Option<(Side, i32, i32)>) {
+        if let Some((side, from, to)) = moved
+            && self.at == Some((side, from))
+        {
+            self.at = Some((side, to));
+        }
+    }
 }
 
 /// Where the curbside piece of a side is.
@@ -268,27 +400,20 @@ impl Editor {
             .filter(|&side| content.curb.iter().any(|i| i.side == side) || (0..content.zone_count()).any(|z| curbside(content.section(z), side).is_some()))
             .map(|side| {
                 let gap = |from_mm: i32, to_mm: i32| CurbCell { instance: None, from_mm, to_mm, use_: None, label: Said::new("curb-gap"), ok: true };
-                let mut cells = Vec::new();
-                let mut at = 0;
-                for (k, i) in content.curb.iter().enumerate().filter(|(_, i)| i.side == side) {
-                    if i.from_mm > at {
-                        cells.push(gap(at, i.from_mm));
-                    }
-                    cells.push(CurbCell {
+                let items = content.curb.iter().enumerate().filter(|(_, i)| i.side == side).map(|(k, i)| (k, i.from_mm, i.to_mm()));
+                let cells = strip_cells(length_mm, items, gap, |k| {
+                    let i = &content.curb[k];
+                    CurbCell {
                         instance: Some(k),
                         from_mm: i.from_mm,
                         to_mm: i.to_mm(),
                         use_: Some(i.use_),
                         label: Said::new(i.use_.name_key()),
                         ok: !failing.contains(&k),
-                    });
-                    at = at.max(i.to_mm());
-                }
-                if at < length_mm {
-                    cells.push(gap(at, length_mm));
-                }
-                let selected = self.curb_sel.filter(|(s, _)| *s == side).and_then(|(_, mm)| cells.iter().position(|c| c.from_mm <= mm && mm < c.to_mm));
-                CurbSideView { side, cells, selected }
+                    }
+                });
+                let selected = selected_cell(&cells, self.curb_choice.at, side);
+                SideView { side, cells, selected }
             })
             .collect();
         CurbView { sides }
@@ -297,7 +422,7 @@ impl Editor {
     /// Chooses the cell of `side`'s strip that holds `at_mm`. A setting, not history; a cell is found again by its
     /// place, so it stays chosen as the uses around it change.
     pub fn select_curb(&mut self, side: Side, at_mm: i32) {
-        self.curb_sel = Some((side, at_mm));
+        self.curb_choice.pick(side, at_mm);
     }
 
     /// Whether a drag (of a zone boundary or a use) is under way.
@@ -373,7 +498,7 @@ impl Editor {
         let i = Instance { side, from_mm: snap(from_mm), length_mm: snap(length_mm).max(SNAP_MM), use_ };
         self.curb_fits(&i, None, frame)?;
         self.curb_change(Self::curb_label("rev-curb-add", &i), frame, |curb| curb.push(i));
-        self.curb_sel = Some((side, i.from_mm));
+        self.curb_choice.pick(side, i.from_mm);
         Ok(())
     }
 
@@ -408,12 +533,8 @@ impl Editor {
             return Ok(());
         }
         let label = Self::curb_label("rev-curb-move", &new);
-        if self.curb_sel == Some((old.side, old.from_mm)) {
-            self.curb_sel = Some((new.side, new.from_mm));
-        }
-        // A drag records one move, from where it began to where it is.
-        let began = self.curb_moved.filter(|&(side, _, to)| side == old.side && to == old.from_mm).map_or(old.from_mm, |(_, from, _)| from);
-        self.curb_moved = Some((new.side, began, new.from_mm));
+        // The choice follows the use, and a drag records one move, from where it began to where it is.
+        self.curb_choice.follow(old.side, old.from_mm, new.from_mm);
         if self.gesture.is_some() {
             let c = &mut self.states[self.cursor].content;
             c.curb[i] = new;

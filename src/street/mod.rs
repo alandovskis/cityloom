@@ -10,7 +10,9 @@ pub mod measures;
 pub mod model;
 pub mod notes;
 pub mod page;
+pub mod row;
 pub mod speed_view;
+pub mod stop_tools;
 pub mod strip;
 pub mod svg;
 #[cfg(test)]
@@ -85,6 +87,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("speed-slot", view! { <speed_view::SpeedLimit vm=vm.clone()/> }.into_any());
     mount("zone-tools-slot", view! { <zone_tools::ZoneTools vm=vm.clone()/> }.into_any());
     mount("curb-tools-slot", view! { <curb_tools::CurbTools vm=vm.clone()/> }.into_any());
+    mount("stop-tools-slot", view! { <stop_tools::StopTools vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <page::TitleBlock vm=vm.clone()/> }.into_any());
     mount("fit-slot", view! { <page::Fit vm=vm.clone()/> }.into_any());
     mount("fit-checks-slot", view! { <notes::FitChecks vm=vm.clone()/> }.into_any());
