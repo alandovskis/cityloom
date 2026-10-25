@@ -11,7 +11,7 @@ use std::borrow::Cow;
 
 use crate::junction::geometry::gap;
 use crate::junction::turbo::{self, BLOCKS, LAYOUTS, Turbo};
-use crate::street::model::{Editor, Street, View, named_said};
+use crate::street::model::{Beyond, Editor, Street, View, named_said};
 
 #[cfg(test)]
 mod fixtures;
@@ -254,6 +254,10 @@ pub struct Arm {
     /// kept with the junction.
     #[serde(skip)]
     pub section: Option<Street>,
+    /// The neighbour of the end zone across its first boundary, as the street has it now; set with `section`, never
+    /// kept.
+    #[serde(skip)]
+    pub beyond: Option<Beyond>,
     /// Clockwise from north, a multiple of `BEARING_STEP`.
     pub bearing: i32,
     /// Sideways shift of the arm's axis, to the arm's right.
@@ -438,6 +442,7 @@ impl Arm {
             uid,
             edge: 0,
             section: None,
+            beyond: None,
             bearing,
             offset_mm,
             corner_mm: DEFAULT_CORNER_MM,
@@ -901,6 +906,7 @@ impl Junction {
         let mut s = self.current().clone();
         for a in &mut s.arms {
             a.section = None;
+            a.beyond = None;
         }
         s
     }
@@ -2647,6 +2653,7 @@ mod tests {
         let attach = |s: &mut State| {
             for a in &mut s.arms {
                 a.section = base.arm(a.uid).and_then(|b| b.section.clone());
+                a.beyond = base.arm(a.uid).and_then(|b| b.beyond.clone());
             }
         };
         let mut today = base.snapshot();

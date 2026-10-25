@@ -94,6 +94,7 @@ fn codes_after(saved: &State, streets: &State) -> serde_json::Value {
     let mut state = saved.clone();
     for (arm, street) in state.arms.iter_mut().zip(&streets.arms) {
         arm.section = street.section.clone();
+        arm.beyond = street.beyond.clone();
         arm.edge = street.edge;
     }
     let j = Junction::from_city(crate::shared::said::Said::new("city-earlier"), &state, &state, 0).expect("draws");
