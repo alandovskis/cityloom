@@ -1101,7 +1101,7 @@ fn zone_bands(street: &Street, frame: Option<ZoneFrame>) -> Vec<(usize, i32, i32
         if at >= frame.length_mm {
             break;
         }
-        let Some(t) = transition(pair[0], pair[1], speed) else { continue };
+        let Some(t) = transition(pair[0], pair[1], speed, street.from_end) else { continue };
         // measured from the anchored end, then turned round when that is the last one
         let (from, to) = match t.host {
             Host::Near => ((at - t.length_mm).max(street.zones[b].from_mm), at),
