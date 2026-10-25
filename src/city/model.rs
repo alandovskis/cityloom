@@ -21,7 +21,7 @@ use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
-use crate::street::model::{Editor, Host, LENGTH_TOLERANCE_MM, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said};
+use crate::street::model::{Editor, EndInfo, Host, LENGTH_TOLERANCE_MM, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said};
 
 pub(super) struct NodeDef {
     pub(super) x_mm: i32,
@@ -836,11 +836,23 @@ impl City {
         self.layout.origin_m.map(|(x, y)| [x, y])
     }
 
+    /// What the junctions say of the two ends of a street, node `a` first: whether the end has a pedestrian crossing
+    /// on this street's arm. A plain connection, a map edge and a street not in the city have none.
+    pub fn street_end_crossings(&self, edge: u32) -> [EndInfo; 2] {
+        let Some(e) = self.edge_index(edge) else { return [EndInfo::default(); 2] };
+        let at = |n: usize| EndInfo {
+            crossing: self.layout.nodes[n].junction
+                && self.junctions.get(&node_uid(n)).is_some_and(|j| j.arms.iter().any(|a| a.edge == edge && a.crossing.is_some())),
+        };
+        [at(self.layout.edges[e].a), at(self.layout.edges[e].b)]
+    }
+
     /// The street editor on one street of the city.
     pub fn street_editor(&self, edge: u32, region: usize) -> Option<Editor> {
         self.edge_index(edge)?;
         let frame = self.layout.zone_frame(self.edge_index(edge)?);
-        Some(Editor::from_street(self.today_streets.get(&edge)?, self.streets.get(&edge)?, region).with_frame(frame))
+        let editor = Editor::from_street(self.today_streets.get(&edge)?, self.streets.get(&edge)?, region);
+        Some(editor.with_frame(frame).with_ends(self.street_end_crossings(edge)))
     }
 
     /// Whether a street saved with this room is the one at `edge`: it has that room now, or had it when it was
@@ -919,7 +931,7 @@ impl City {
             let uid = i as u32 + 1;
             let today = &self.today_streets[&uid];
             let now = &self.streets[&uid];
-            let editor = Editor::from_street(today, now, region).with_frame(self.layout.zone_frame(i));
+            let editor = Editor::from_street(today, now, region).with_frame(self.layout.zone_frame(i)).with_ends(self.street_end_crossings(uid));
             let v = editor.view();
             let at_first: Vec<&str> = Editor::from_street(today, today, region).view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect();
             let failing: Vec<Said> = v.checks.iter().filter(|c| !c.ok && !at_first.contains(&c.id)).map(|c| c.label.clone()).collect();
@@ -1203,6 +1215,27 @@ mod tests {
         assert!(city.keep_street(edge, today));
         assert_eq!(crossing_of(&city), (true, false), "the junction's own record never lost it");
         assert_eq!(into(&city), before, "the lanes leading into it come back with its traffic");
+    }
+
+    #[test]
+    fn street_ends_know_their_crossings() {
+        let mut city = City::new();
+        let edge = 1u32;
+        let e = &city.layout.edges[0];
+        let (a, b) = (e.a, e.b);
+        let ends = city.street_end_crossings(edge);
+        for (n, info) in [a, b].into_iter().zip(ends) {
+            let has = city.layout.nodes[n].junction && city.junctions[&node_uid(n)].arms.iter().any(|arm| arm.edge == edge && arm.crossing.is_some());
+            assert_eq!(info.crossing, has);
+        }
+        assert!(ends.iter().any(|x| x.crossing), "an end of street 1 is a junction with a crossing");
+        // Taking the crossing off that arm clears the end; a street the city does not have has none.
+        let n = [a, b][ends.iter().position(|x| x.crossing).unwrap()];
+        let state = city.junctions.get_mut(&node_uid(n)).unwrap();
+        state.arms.iter_mut().filter(|arm| arm.edge == edge).for_each(|arm| arm.crossing = None);
+        assert!(city.street_end_crossings(edge).iter().all(|x| !x.crossing));
+        assert_eq!(city.street_end_crossings(999), [EndInfo::default(); 2]);
+        assert_eq!(city.street_editor(edge, 0).unwrap().frame(), city.layout.zone_frame(0));
     }
 
     fn junction_number(node: usize) -> usize {

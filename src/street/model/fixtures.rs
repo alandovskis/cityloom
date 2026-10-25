@@ -116,8 +116,11 @@ impl Editor {
             next_uid: 1,
             zone: 0,
             frame: None,
+            ends: [EndInfo::default(); 2],
             selected: None,
             gesture: None,
+            curb_sel: None,
+            curb_moved: None,
             pending_label: None,
         };
         e.load_sample(sample);
@@ -143,10 +146,11 @@ impl Editor {
         default_directions(&mut segments, REGIONS[self.region].drive_side);
         self.states = vec![State {
             label: Said::new("street-today"),
-            content: Content { segments, zones: Vec::new(), from_end: ZoneEnd::First, length_mm: None, speed: Speed::Undecided },
+            content: Content { segments, zones: Vec::new(), from_end: ZoneEnd::First, length_mm: None, speed: Speed::Undecided, curb: Vec::new() },
             class: s.class,
             class_before: None,
             row_mm: s.row_mm,
+            curb_move: None,
         }];
         self.cursor = 0;
         self.selected = None;

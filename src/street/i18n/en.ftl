@@ -355,6 +355,7 @@ zone-refused-no-neighbour = There is no zone on that side to merge with.
 zone-refused-no-boundary = The first zone starts at the end of the street, so it has no boundary to move.
 zone-refused-dragging = Finish the drag before changing the zones.
 zones-elsewhere = The zones were drawn on this street when it was { $drawn } long; here it is { $loaded }.
+check-curb-in = { $check }: { $instance }
 check-zone-in = { $check } in { $zone }
 zone-selected = { $zone }, { $from } to { $to }, { $length } long, { $section ->
         [own] its own section
@@ -390,6 +391,14 @@ st-speed-kmh = { $kmh } km/h
 iso-sign-maximum = MAXIMUM
 svg-iso-transition = A transition of { $length } leads into { $zone }.
 svg-iso-speed = Speed limit { $kmh } km/h.
+svg-curb-uses = Curbside, { $side }: { $count ->
+        [one] one use
+       *[other] { $count } uses
+    } along the street.
+svg-iso-curb = { $count ->
+        [one] One curbside use is shown.
+       *[other] { $count } curbside uses are shown.
+    }
 check-boundary = between { $a } and { $b }
 check-label-transition-room = Room for the transition
 check-label-lane-drop = Lane drops
@@ -397,3 +406,57 @@ check-detail-transition-room = The transition needs { $need } but { $zone } is {
 check-detail-transition-room-ok = Every transition fits in its zone.
 check-detail-lane-drop = A lane ends with no lane beside it to merge into.
 check-detail-lane-drop-ok = Every lane that ends can merge.
+
+# Curbside programmes (src/street/model/curb.rs): the uses along a street's curbside lane, what the model says it did to them, and why it refused.
+curb-use-parking = Parking
+curb-use-loading = Loading
+curb-use-tree = Street tree
+curb-use-planting = Planting
+curb-use-rain-garden = Rain garden
+curb-use-patio = Patio
+curb-use-bike-parking = Bike parking
+curb-use-platform = Transit platform
+rev-curb-add = Add { $use } at { $at }
+rev-curb-use = Change the use at { $at } to { $use }
+rev-curb-resize = Resize the { $use } at { $at }
+rev-curb-move = Move the { $use } to { $at }
+rev-curb-remove = Remove the { $use } at { $at }
+curb-refused-elsewhere = The uses of this curbside were drawn on a road of another length or from its other end, so they cannot be rearranged here.
+curb-refused-overlap = That would overlap another use on the same side.
+curb-refused-too-long = That would run past the end of the street.
+curb-refused-time-windows = This lane changes with the time of day, so it cannot be divided into uses.
+curb-refused-dragging = Finish the drag before changing the curbside.
+
+# The checks of the curbside uses (src/street/model/curb.rs).
+curb-instance = { $use } at { $at }, { $side }
+check-label-curb-length = Curbside uses are long enough
+check-label-curb-lane = Curbside uses have a lane
+check-label-curb-crossing = Parking clear of crossings
+check-label-curb-bike = Curbside uses clear of bike lanes
+check-label-curb-sidewalk = Patios leave room on the sidewalk
+check-detail-curb-length = { $use } is { $length } long, under the { $min } it needs.
+check-detail-curb-length-ok = Every use is as long as it needs.
+check-detail-curb-lane = There is no parking or loading lane here.
+check-detail-curb-lane-ok = Every use lies on a parking or loading lane.
+check-detail-curb-crossing = Parking and loading must stay { $amount } from a pedestrian crossing.
+check-detail-curb-crossing-ok = Parking and loading keep clear of pedestrian crossings.
+check-detail-curb-bike-door = Doors would open into the bike lane beside the parking. A buffer of { $amount } or more is needed.
+check-detail-curb-bike-platform = Passengers cross the bike lane to board. The crossing is not drawn, so check it.
+check-detail-curb-bike-ok = No use opens onto a bike lane.
+check-detail-curb-sidewalk = The patio leaves { $have } of sidewalk; { $need } or more is needed.
+check-detail-curb-sidewalk-ok = Every patio leaves room on the sidewalk.
+
+# The curbside strips and their commands (src/street/curb_strip.rs, src/street/curb_tools.rs).
+curb-gap = Free
+curb-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
+curb-cell-failing = Fails a check. See the checks.
+curb-choose-gap = Choose a free stretch of the curbside first.
+curb-choose-use = Choose a use on the curbside first.
+st-curb-heading = Curbside uses along the street
+st-curb-caption = Curbside, { $side }
+st-curb-strip-label = Curbside uses, { $side }
+st-curb-tools = Curbside commands
+st-curb-use = Use
+st-curb-length = Length ({ $unit })
+st-curb-add = Add use
+st-curb-remove = Remove use

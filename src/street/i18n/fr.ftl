@@ -355,6 +355,7 @@ zone-refused-no-neighbour = Il n’y a pas de zone de ce côté avec laquelle fu
 zone-refused-no-boundary = La première zone commence à l’extrémité de la rue : elle n’a pas de limite à déplacer.
 zone-refused-dragging = Terminez le glissement avant de modifier les zones.
 zones-elsewhere = Les zones ont été tracées sur cette rue lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
+check-curb-in = { $check } : { $instance }
 check-zone-in = { $check } : { $zone }
 zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $section ->
         [own] sa propre coupe
@@ -390,6 +391,14 @@ st-speed-kmh = { $kmh }{" "}km/h
 iso-sign-maximum = MAXIMUM
 svg-iso-transition = Une transition de { $length } mène à { $zone }.
 svg-iso-speed = Limite de vitesse : { $kmh }{" "}km/h.
+svg-curb-uses = Bord de rue, { $side } : { $count ->
+        [one] un usage
+       *[other] { $count } usages
+    } le long de la rue.
+svg-iso-curb = { $count ->
+        [one] Un usage du bord de rue est montré.
+       *[other] { $count } usages du bord de rue sont montrés.
+    }
 check-boundary = entre { $a } et { $b }
 check-label-transition-room = Place pour la transition
 check-label-lane-drop = Fins de voie
@@ -397,3 +406,57 @@ check-detail-transition-room = La transition demande { $need }, mais { $zone } m
 check-detail-transition-room-ok = Chaque transition tient dans sa zone.
 check-detail-lane-drop = Une voie se termine sans voie voisine où s’insérer.
 check-detail-lane-drop-ok = Chaque voie qui se termine peut s’insérer.
+
+# Usages du bord de rue (src/street/model/curb.rs) : les usages le long de la voie de bordure d’une rue, ce que le modèle dit avoir fait, et pourquoi il refuse.
+curb-use-parking = Stationnement
+curb-use-loading = Zone de chargement
+curb-use-tree = Fosse d’arbre
+curb-use-planting = Plantation
+curb-use-rain-garden = Jardin de pluie
+curb-use-patio = Terrasse
+curb-use-bike-parking = Supports à vélos
+curb-use-platform = Quai de transport en commun
+rev-curb-add = Usage ajouté à { $at } : { $use }
+rev-curb-use = Usage changé à { $at } : { $use }
+rev-curb-resize = Longueur modifiée à { $at } : { $use }
+rev-curb-move = Usage déplacé à { $at } : { $use }
+rev-curb-remove = Usage retiré à { $at } : { $use }
+curb-refused-elsewhere = Les usages de ce bord de rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
+curb-refused-overlap = Cet usage chevaucherait un autre usage du même côté.
+curb-refused-too-long = Cet usage dépasserait l’extrémité de la rue.
+curb-refused-time-windows = Cette voie change selon l’heure de la journée : on ne peut pas la diviser en usages.
+curb-refused-dragging = Terminez le glissement avant de modifier le bord de rue.
+
+# Les vérifications des usages du bord de rue (src/street/model/curb.rs).
+curb-instance = { $use } à { $at }, { $side }
+check-label-curb-length = Usages du bord de rue assez longs
+check-label-curb-lane = Usages du bord de rue sur une voie
+check-label-curb-crossing = Stationnement loin des passages pour piétons
+check-label-curb-bike = Usages du bord de rue loin des pistes cyclables
+check-label-curb-sidewalk = Terrasses : place sur le trottoir
+check-detail-curb-length = { $use } : { $length } de long, moins que les { $min } demandés.
+check-detail-curb-length-ok = Chaque usage a la longueur demandée.
+check-detail-curb-lane = Il n’y a pas de voie de stationnement ou de chargement ici.
+check-detail-curb-lane-ok = Chaque usage est sur une voie de stationnement ou de chargement.
+check-detail-curb-crossing = Le stationnement et le chargement doivent rester à { $amount } d’un passage pour piétons.
+check-detail-curb-crossing-ok = Le stationnement et le chargement restent loin des passages pour piétons.
+check-detail-curb-bike-door = Les portières s’ouvriraient dans la piste cyclable voisine du stationnement. Une zone tampon de { $amount } ou plus est nécessaire.
+check-detail-curb-bike-platform = Les passagers traversent la piste cyclable pour monter à bord. Le passage n’est pas dessiné : à vérifier.
+check-detail-curb-bike-ok = Aucun usage ne donne sur une piste cyclable.
+check-detail-curb-sidewalk = La terrasse laisse { $have } de trottoir; il en faut { $need } ou plus.
+check-detail-curb-sidewalk-ok = Chaque terrasse laisse de la place sur le trottoir.
+
+# Les bandes du bord de rue et leurs commandes (src/street/curb_strip.rs, src/street/curb_tools.rs).
+curb-gap = Libre
+curb-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
+curb-cell-failing = Ne passe pas une vérification. Voir les vérifications.
+curb-choose-gap = Choisissez d’abord un tronçon libre du bord de rue.
+curb-choose-use = Choisissez d’abord un usage du bord de rue.
+st-curb-heading = Usages du bord de rue
+st-curb-caption = Bord de rue, { $side }
+st-curb-strip-label = Usages du bord de rue, { $side }
+st-curb-tools = Commandes du bord de rue
+st-curb-use = Usage
+st-curb-length = Longueur ({ $unit })
+st-curb-add = Ajouter un usage
+st-curb-remove = Retirer un usage

@@ -4,7 +4,7 @@
 
 use std::fmt::Write;
 
-use crate::shared::catalogue::{KINDS, kind_key, mark_key};
+use crate::shared::catalogue::{KINDS, Side, kind_key, mark_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::esc;
 use crate::shared::said::say;
@@ -286,7 +286,16 @@ pub fn street_label(v: &View, i18n: &I18n, units: Units) -> String {
         .str("total", units.length_fine_in(v.total_mm, locale))
         .str("row", units.length_fine_in(v.row_mm, locale))
         .str("fit", fit_phrase(v, i18n, units));
-    i18n.tr("svg-label", &args)
+    let mut label = i18n.tr("svg-label", &args);
+    // The strips show the uses along the whole street; the drawing, one section of it, says how many there are.
+    for side in &v.curb.sides {
+        let count = side.cells.iter().filter(|c| c.instance.is_some()).count();
+        if count > 0 {
+            let word = i18n.tr(if side.side == Side::Left { "side-word-left" } else { "side-word-right" }, &Args::new());
+            label = format!("{label} {}", i18n.tr("svg-curb-uses", &Args::new().str("side", word).num("count", count as i64)));
+        }
+    }
+    label
 }
 
 /// The street drawn `width` wide: `ui` is what the pointer is doing to it.
@@ -905,6 +914,25 @@ mod tests {
     fn the_label_describes_the_street_and_how_the_pieces_fit() {
         let s = svg(&Editor::new(0));
         assert_eq!(s.label, "Cross-section of Sample Street 1. 6 segments, 18.0 m of 18.0 m. Every metre of the street is used.");
+    }
+
+    #[test]
+    fn the_label_counts_the_curbside_uses_of_each_side() {
+        use crate::street::model::{Street, Use, ZoneEnd, ZoneFrame};
+        let fr = crate::i18n_for(Locale::FrCa);
+        let street = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        let plain = svg(&e).label;
+        assert!(!plain.contains("along the street"), "no uses, no sentence: {plain}");
+        e.add_curb(Side::Right, 0, 6_000, Use::Parking).unwrap();
+        let one = svg(&e).label;
+        assert_eq!(one, format!("{plain} Curbside, right: one use along the street."));
+        e.add_curb(Side::Right, 10_000, 6_000, Use::Tree).unwrap();
+        e.add_curb(Side::Left, 0, 6_000, Use::Parking).unwrap();
+        let two = svg(&e).label;
+        assert!(two.ends_with("Curbside, left: one use along the street. Curbside, right: 2 uses along the street."), "{two}");
+        let f = street_svg(&e.view(), &fr, 1050.0, Units::Metres, &Interaction::default()).label;
+        assert!(f.ends_with("Bord de rue, à gauche\u{a0}: un usage le long de la rue. Bord de rue, à droite\u{a0}: 2 usages le long de la rue."), "{f}");
     }
 
     #[test]

@@ -8,7 +8,7 @@ use crate::shared::catalogue::{KINDS, StreetClass, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
-use crate::street::model::{Check, View, ZoneRefusal};
+use crate::street::model::{Check, CurbSideView, View, ZoneRefusal};
 
 /// What an edit says of the street becoming pedestrian or carrying traffic again, after what it already said;
 /// nothing when the class is the one it was.
@@ -109,6 +109,20 @@ pub fn zone_text(v: &View, index: usize, i18n: &I18n, units: Units) -> String {
     i18n.tr_now("zone-selected", &args)
 }
 
+/// How a cell of a curbside strip is named: what it is, where it lies and how long, and its place on the strip.
+pub fn curb_cell_text(side: &CurbSideView, cell: usize, i18n: &I18n, units: Units) -> String {
+    let locale = i18n.locale_now();
+    let Some(c) = side.cells.get(cell) else { return String::new() };
+    let args = Args::new()
+        .str("name", say_now(i18n, units, &c.label))
+        .str("from", units.length_in(c.from_mm, locale))
+        .str("to", units.length_in(c.to_mm, locale))
+        .str("length", units.length_in(c.to_mm - c.from_mm, locale))
+        .num("n", cell as i64 + 1)
+        .num("total", side.cells.len() as i64);
+    i18n.tr_now("curb-cell", &args)
+}
+
 /// Why a zone operation was refused, in the page's language.
 pub fn zone_refused(i18n: &I18n, units: Units, refusal: ZoneRefusal) -> String {
     say_now(i18n, units, &refusal.said())
@@ -118,6 +132,10 @@ pub fn zone_refused(i18n: &I18n, units: Units, refusal: ZoneRefusal) -> String {
 /// it fails in.
 pub fn check_label(check: &Check) -> Said {
     match (&check.zone, check.ok) {
+        // A curbside row names the use that fails, not a zone.
+        (Some(instance), false) if check.id.starts_with("curb-") => {
+            Said::new("check-curb-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("instance", Arg::Said(Box::new(instance.clone())))
+        }
         (Some(zone), false) => {
             Said::new("check-zone-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("zone", Arg::Said(Box::new(zone.clone())))
         }
@@ -370,6 +388,22 @@ mod tests {
         assert_eq!(check_label(passing), passing.label);
         let single = Editor::new(0).view();
         assert!(single.checks.iter().all(|c| check_label(c) == c.label));
+    }
+
+    #[test]
+    fn a_failing_curbside_row_names_its_use_not_a_zone() {
+        use crate::street::model::Check;
+        let row = Check {
+            id: "curb-length",
+            ok: false,
+            label: Said::new("check-label-curb-length"),
+            detail: Said::new("check-detail-curb-length-ok"),
+            zone: Some(
+                Said::new("curb-instance").with("use", Arg::Msg("curb-use-loading")).with("at", Arg::Length(42_000)).with("side", Arg::Msg("side-word-right")),
+            ),
+        };
+        assert_eq!(say_now(&en(), Units::Metres, &check_label(&row)), "Curbside uses are long enough: Loading at 42.0 m, right");
+        assert_eq!(say_now(&fr(), Units::Metres, &check_label(&row)), "Usages du bord de rue assez longs\u{a0}: Zone de chargement à 42,0\u{a0}m, à droite");
     }
 
     /// Every key the model can say is a message in both languages. A new constructor in the model must use these literal forms, or this test does not see its key. The model builds a `Said` only with `Said::new("…")`, and puts a word in another's place only with `Arg::Msg("…")`, so its source lists them all.

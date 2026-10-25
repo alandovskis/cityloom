@@ -55,7 +55,12 @@ pub fn pair_boundary_mm(centre_px: f64, s: &PairSpan) -> i32 {
 /// zones are too many for the floor to hold, every cell gets an equal share. The target size in pixels is not
 /// decided here: it is the view's CSS `min-width` on each cell (the strip scrolls when they do not fit).
 pub fn cell_basis(zones: &[ZoneView]) -> Vec<f64> {
-    let n = zones.len();
+    basis_by_length(&zones.iter().map(|z| z.to_mm - z.from_mm).collect::<Vec<_>>())
+}
+
+/// The same for any strip of cells, from their lengths (the curbside strips use it).
+pub fn basis_by_length(lengths: &[i32]) -> Vec<f64> {
+    let n = lengths.len();
     if n == 0 {
         return Vec::new();
     }
@@ -63,7 +68,7 @@ pub fn cell_basis(zones: &[ZoneView]) -> Vec<f64> {
     if n as f64 * MIN_SHARE >= 1.0 {
         return vec![equal; n];
     }
-    let len: Vec<f64> = zones.iter().map(|z| f64::from((z.to_mm - z.from_mm).max(0))).collect();
+    let len: Vec<f64> = lengths.iter().map(|l| f64::from((*l).max(0))).collect();
     let mut pinned = vec![false; n];
     loop {
         let free: Vec<usize> = (0..n).filter(|&i| !pinned[i]).collect();
@@ -241,7 +246,10 @@ pub fn ZoneStrip(vm: Rc<StreetVm>, ends: Option<Vec<EndView>>) -> impl IntoView 
             if !is_boundary_drag(x - p.start_x) {
                 return;
             }
-            w.begin_boundary_drag();
+            if !w.begin_boundary_drag() {
+                press.set_value(None);
+                return;
+            }
             p.active = true;
             press.set_value(Some(p));
         }

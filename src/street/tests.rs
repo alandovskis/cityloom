@@ -1468,3 +1468,117 @@ fn a_street_over_the_limit_of_an_area_fails_its_row() {
     let pill = street_html(|| view! { <notes::FitChecks vm=vm.clone()/> });
     assert!(pill.contains(&format!("{n} check")), "{pill}");
 }
+
+// ---- the curbside strips and their commands ----------------------------------------
+
+fn curb_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::curb_strip::CurbStrips vm=s.clone()/> })
+}
+
+/// The sample street (parking on both sides) with a 6 m parking space at the start of the right side, chosen.
+fn curb_street(locale: Locale) -> Rc<StreetVm> {
+    use crate::shared::catalogue::Side;
+    let s = zoned_street(&[0], Some(40_000), locale);
+    s.select_curb(Side::Right, 0);
+    assert!(s.add_curb(crate::street::model::Use::Parking, 6_000));
+    s
+}
+
+#[test]
+fn the_curb_strip_is_a_listbox_with_one_tab_stop() {
+    let s = curb_street(Locale::En);
+    let h = curb_html(&s);
+    for side in ["left", "right"] {
+        assert!(h.contains(&format!("id=\"curb-strip-{side}\"")), "{side}: {h}");
+    }
+    assert_eq!(count(&h, "role=\"listbox\""), 2, "{h}");
+    assert_eq!(count(&h, "aria-orientation=\"horizontal\""), 2, "{h}");
+    assert_eq!(count(&h, "tabindex=\"0\""), 2, "one tab stop on each strip: {h}");
+    assert_eq!(count(&h, "role=\"option\""), 3, "a gap on the left, a use and a gap on the right: {h}");
+    assert!(h.contains("aria-activedescendant=\"curb-right-0\""), "{h}");
+    assert_eq!(count(&h, "aria-selected=\"true\""), 1, "{h}");
+    assert!(h.contains("id=\"curb-left-0\"") && h.contains("id=\"curb-right-0\"") && h.contains("id=\"curb-right-1\""), "{h}");
+    assert!(h.contains(">Curbside uses along the street</h2>") && h.contains("Curbside, left") && h.contains("Curbside, right"), "{h}");
+    assert!(h.contains("aria-label=\"Curbside uses, right\"") && h.contains("aria-label=\"Curbside uses, left\""), "{h}");
+    assert!(h.contains("aria-label=\"Parking, 0.0 m to 6.0 m, 6.0 m long, 1 of 2\""), "{h}");
+    assert!(h.contains("aria-label=\"Free, 0.0 m to 40.0 m, 40.0 m long, 1 of 1\""), "{h}");
+    // 6 m is long enough for parking (5.5 m): no cell says it fails
+    assert!(!h.contains("Fails a check"), "{h}");
+}
+
+#[test]
+fn a_use_that_fails_a_check_says_so_and_a_street_without_a_curbside_lane_has_no_strip() {
+    let s = curb_street(Locale::En);
+    s.select_curb(crate::shared::catalogue::Side::Right, 0);
+    assert!(s.resize_curb(3_000), "shorter than a parking space is allowed and fails its check");
+    let h = curb_html(&s);
+    assert!(h.contains("Fails a check. See the checks.") && h.contains("failing"), "{h}");
+    let none = street_shared(3);
+    assert_eq!(count(&curb_html(&none), "role=\"listbox\""), 0);
+}
+
+#[test]
+fn no_strip_is_drawn_while_the_streets_length_is_unknown() {
+    // The sample street has parking on both sides but no length and no frame: there is nothing to lay uses along.
+    let s = street_shared(0);
+    assert!(s.view_now().curb.sides.is_empty());
+    let h = curb_html(&s);
+    assert_eq!((count(&h, "role=\"listbox\""), count(&h, "tabindex")), (0, 0), "{h}");
+}
+
+#[test]
+fn the_curb_strip_follows_the_language() {
+    let s = curb_street(Locale::FrCa);
+    let h = curb_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains(">Usages du bord de rue</h2>"), "{h}");
+    assert!(h.contains("aria-label=\"Stationnement, de 0,0 m à 6,0 m, 6,0 m de long, 1 sur 2\""), "{h}");
+    assert!(h.contains("aria-label=\"Usages du bord de rue, à droite\"") && h.contains("Bord de rue, à gauche"), "{h}");
+}
+
+fn curb_tools_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::curb_tools::CurbTools vm=s.clone()/> })
+}
+
+#[test]
+fn the_curb_tools_render_labelled_controls() {
+    let s = curb_street(Locale::En);
+    let h = curb_tools_html(&s);
+    assert!(h.contains("role=\"group\"") && h.contains("aria-label=\"Curbside commands\"") && !h.contains("toolbar"), "{h}");
+    for (id, label) in [("curb-use", "Use"), ("curb-length", "Length (m)")] {
+        assert!(h.contains(&format!("<label for=\"{id}\"")) && h.contains(&format!(">{label}</label>")), "{id}: {h}");
+        assert!(h.contains(&format!("id=\"{id}\"")), "{id}: {h}");
+    }
+    assert!(h.contains("<select id=\"curb-use\""), "{h}");
+    assert_eq!(count(&h, "<option"), 8, "{h}");
+    for name in ["Parking", "Loading", "Street tree", "Planting", "Rain garden", "Patio", "Bike parking", "Transit platform"] {
+        assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
+    }
+    for (id, label) in [("curb-add", "Add use"), ("curb-remove", "Remove use")] {
+        assert!(h.contains(&format!("id=\"{id}\"")) && h.contains(&format!(">{label}</button>")), "{id}: {h}");
+    }
+    // a use is chosen: it can be removed, and a use cannot be added into it
+    assert!(h.contains("id=\"curb-add\" aria-disabled=\"true\"") && !h.contains("id=\"curb-remove\" aria-disabled"), "{h}");
+    // a street without a curbside lane has no commands
+    assert_eq!(count(&curb_tools_html(&street_shared(3)), "curb-use"), 0);
+}
+
+#[test]
+fn the_curb_tools_follow_the_language() {
+    let s = curb_street(Locale::FrCa);
+    let h = curb_tools_html(&s).replace(['\u{a0}', '\u{202f}'], " ");
+    assert!(h.contains("aria-label=\"Commandes du bord de rue\"") && h.contains(">Usage</label>") && h.contains(">Longueur (m)</label>"), "{h}");
+    assert!(h.contains(">Ajouter un usage</button>") && h.contains(">Retirer un usage</button>"), "{h}");
+    assert!(h.contains(">Fosse d’arbre</option>") && h.contains(">Supports à vélos</option>") && h.contains(">Terrasse</option>"), "{h}");
+}
+
+#[test]
+fn the_curb_cells_share_the_zone_cells_minimum_width_and_scrolling() {
+    let editor = include_str!("../../web/editor.css");
+    let rule = |head: &str| {
+        let i = editor.find(head).unwrap_or_else(|| panic!("{head}"));
+        &editor[i..i + editor[i..].find('}').unwrap()]
+    };
+    assert!(rule(".curb-cell,\n.zone-cell {").contains("min-width: 24px;"));
+    assert!(rule(".curb-strip,\n.zone-strip {").contains("overflow-x: auto;"));
+    assert!(rule(".curb-cell.failing {").contains("border-bottom-width: 5px;"), "a failing use differs by more than colour");
+}

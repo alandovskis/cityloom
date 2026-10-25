@@ -19,9 +19,10 @@ use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::say;
 use crate::shared::units::Units;
-use crate::street::model::{SegView, View};
+use crate::street::model::{SegView, ShownInstance, View};
 use crate::street::svg::curb_edges;
 
+mod curbside;
 mod joints;
 mod markings;
 mod order;
@@ -107,31 +108,41 @@ fn run_layers(out: &mut String, base: &Projection, v: &View, i18n: &I18n, run: &
     let p = base.over(run.reach);
     let segs = run.segs;
     let (flat, standing) = surface::split(strips(segs, &p));
-    out.push_str(&surface::layer(&p, segs, i18n, &flat, run.across, run.taper.as_ref()));
+    // The selected zone's run shows the curbside uses; the neighbour's, across the boundary, none.
+    let shown: &[ShownInstance] = if run.across { &[] } else { &v.curb_shown };
+    out.push_str(&surface::layer(&p, segs, i18n, &flat, run.across, run.taper.as_ref(), shown));
     out.push_str(&paint::layer_over(&p, segs, run.taper.as_ref()));
 
     // The raised strips and what stands on the pieces, in the order the eye needs (`order`): a box covers the ones it
     // is in front of, so a crown nearer the middle of the street covers a shelter beyond it, and a strip nearer the
     // middle covers the foot of a post beyond it. The strips are in groups of their own between the solids.
-    let mut solids: Vec<Block> = (0..segs.len()).flat_map(|i| blocks(segs, i, &p)).collect();
+    let mut solids: Vec<Block> = (0..segs.len()).flat_map(|i| blocks(segs, i, &p)).chain(curbside::blocks(segs, shown, &p)).collect();
     solids.sort_by(|a, b| b.from_eye(&p).total_cmp(&a.from_eye(&p)).then(a.y.0.total_cmp(&b.y.0)));
-    let boxes: Vec<(Bx, bool)> =
-        standing.iter().map(|&s| (raised::strip_box(segs, s, p.reach), true)).chain(solids.iter().map(|b| (b.bounds(), false))).collect();
+    let lifted = curbside::lifted(shown);
+    let boxes: Vec<(Bx, bool)> = standing
+        .iter()
+        .map(|&s| (raised::strip_box(segs, s, p.reach), true))
+        .chain(lifted.iter().map(|l| (curbside::lift_box(segs, l, &p, run.taper.as_ref()), false)))
+        .chain(solids.iter().map(|b| (b.bounds(), false)))
+        .collect();
     out.push_str("<g class=\"iso-raised\">");
     let mut open = true;
     for k in order::paint_order(&boxes, p.centre_mm) {
-        if k < standing.len() {
+        if k < standing.len() + lifted.len() {
             if !open {
                 out.push_str("<g class=\"iso-raised\">");
                 open = true;
             }
-            raised::piece(out, &p, segs, i18n, standing[k], run.across);
+            match standing.get(k) {
+                Some(&strip) => raised::piece(out, &p, segs, i18n, strip, run.across),
+                None => curbside::lift(out, &p, segs, i18n, &lifted[k - standing.len()], run.taper.as_ref()),
+            }
         } else {
             if open {
                 out.push_str("</g>");
                 open = false;
             }
-            block(out, &p, &solids[k - standing.len()]);
+            block(out, &p, &solids[k - standing.len() - lifted.len()]);
         }
     }
     if open {
@@ -201,7 +212,10 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
 /// What a screen reader is told the 2.5D drawing is: the street, the zone shown when it has several, the stretch
 /// shown, and its pieces; across a near boundary, the two zones that meet there.
 pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
-    let label = iso_label_of(v, i18n, units);
+    let mut label = iso_label_of(v, i18n, units);
+    if !v.curb_shown.is_empty() {
+        label = format!("{label} {}", i18n.tr("svg-iso-curb", &Args::new().num("count", v.curb_shown.len() as i64)));
+    }
     match v.speed_kmh {
         Some(kmh) => format!("{label} {}", i18n.tr("svg-iso-speed", &Args::new().num("kmh", i64::from(kmh)))),
         None => label,

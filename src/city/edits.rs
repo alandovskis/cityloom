@@ -18,8 +18,11 @@ pub const ZONES_VERSION: u32 = 6;
 /// What a document is written as while a street record holds a speed limit (a number, or `null` for a road with
 /// none): a build that does not know speeds treats it as a newer document and leaves it alone.
 pub const SPEED_VERSION: u32 = 7;
+/// What a document is written as while a street record holds curbside uses: a build that does not know them treats
+/// it as a newer document and leaves it alone.
+pub const CURB_VERSION: u32 = 8;
 /// The newest version this build reads.
-pub const NEWEST: u32 = 7;
+pub const NEWEST: u32 = 8;
 /// Where the document is kept.
 pub const EDITS_KEY: &str = "cityloom-edits";
 /// Where a document that could not be read is copied before the first write replaces it.
@@ -71,12 +74,14 @@ impl Edits {
         Edits { version: VERSION, ..Edits::default() }
     }
 
-    /// The version the document is written as: `SPEED_VERSION` while a street record holds a speed (set or
+    /// The version the document is written as: `CURB_VERSION` while a street record holds curbside uses, else
+    /// `SPEED_VERSION` while a street record holds a speed (set or
     /// decided to have none), else `ZONES_VERSION` while one holds zones, else `VERSION`.
     pub fn written_version(&self) -> u32 {
         let zones = self.streets.values().any(|r| !r.street.zones.is_empty());
         let speed = self.streets.values().any(|r| !r.street.speed.is_undecided());
-        version_for(zones, speed)
+        let curb = self.streets.values().any(|r| !r.street.curb.is_empty());
+        version_for(zones, speed, curb)
     }
 
     pub fn to_json(&self) -> String {
@@ -86,8 +91,10 @@ impl Edits {
 }
 
 /// The version a document is written as, from what its street records hold.
-fn version_for(zones: bool, speed: bool) -> u32 {
-    if speed {
+fn version_for(zones: bool, speed: bool, curb: bool) -> u32 {
+    if curb {
+        CURB_VERSION
+    } else if speed {
         SPEED_VERSION
     } else if zones {
         ZONES_VERSION
@@ -101,6 +108,12 @@ fn version_for(zones: bool, speed: bool) -> u32 {
 fn holds_speed(doc: &Map<String, Value>) -> bool {
     let mut streets = doc.get(STREETS).and_then(Value::as_object).into_iter().flatten();
     streets.any(|(_, r)| r.pointer("/street/speed_kmh").is_some())
+}
+
+/// Whether any record of the streets section holds a non-empty list of curbside uses (decided on the raw JSON).
+fn holds_curb(doc: &Map<String, Value>) -> bool {
+    let mut streets = doc.get(STREETS).and_then(Value::as_object).into_iter().flatten();
+    streets.any(|(_, r)| r.pointer("/street/curb").and_then(Value::as_array).is_some_and(|c| !c.is_empty()))
 }
 
 /// Whether any record of the streets section holds a non-empty list of zones (decided on the raw JSON).
@@ -130,12 +143,12 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
     match doc.get("version").and_then(Value::as_u64) {
         Some(v) if v > u64::from(NEWEST) => return Err(Document::Future),
         // 4 and 5 are read as they are (the turbo field is additive), 6 is the same document with zones and 7 with
-        // speeds.
+        // speeds and 8 with curbside uses.
         Some(v) if v >= u64::from(VERSION) - 1 => {}
         _ => return Err(damaged()),
     }
     // The version the document would be written as, whichever it was read as.
-    let written = version_for(holds_zones(&doc), holds_speed(&doc));
+    let written = version_for(holds_zones(&doc), holds_speed(&doc), holds_curb(&doc));
     doc.insert("version".into(), written.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
         return Err(damaged());
@@ -236,11 +249,12 @@ impl Draft {
         self.remove(JUNCTIONS, key);
     }
 
-    /// The document as text, its version `SPEED_VERSION` while any street record holds a speed, else
+    /// The document as text, its version `CURB_VERSION` while any street record holds curbside uses, else
+    /// `SPEED_VERSION` while any holds a speed, else
     /// `ZONES_VERSION` while one holds zones (a record this build cannot read included), else `VERSION`.
     pub fn to_json(&self) -> String {
         let mut doc = self.doc.clone();
-        let written = version_for(holds_zones(&doc), holds_speed(&doc));
+        let written = version_for(holds_zones(&doc), holds_speed(&doc), holds_curb(&doc));
         doc.insert("version".into(), written.into());
         Value::Object(doc).to_string()
     }
@@ -477,7 +491,8 @@ mod tests {
         assert_eq!(VERSION, 5, "a document with no zone stays 5");
         assert_eq!(ZONES_VERSION, 6);
         assert_eq!(SPEED_VERSION, 7);
-        assert_eq!(NEWEST, 7);
+        assert_eq!(CURB_VERSION, 8);
+        assert_eq!(NEWEST, 8);
         let record = street_record();
         let text = serde_json::to_string(&record).unwrap();
         for absent in ["zones", "from_end", "length_mm", "speed_kmh"] {
@@ -497,6 +512,56 @@ mod tests {
         let mut r = street_record();
         r.street.speed = speed;
         r
+    }
+
+    fn curb_record() -> StreetRecord {
+        let mut r = street_record();
+        r.street.curb.push(crate::street::model::Instance {
+            side: crate::shared::catalogue::Side::Right,
+            from_mm: 0,
+            length_mm: 6_000,
+            use_: crate::street::model::Use::Parking,
+        });
+        r
+    }
+
+    #[test]
+    fn a_record_with_curb_uses_is_written_as_version_8() {
+        let mut e = Edits::new();
+        e.streets.insert("w7~n1~n2".into(), curb_record());
+        assert_eq!(e.written_version(), 8);
+        assert!(e.to_json().starts_with(r#"{"version":8,"#), "{}", e.to_json());
+        assert!(e.to_json().contains(r#""use":"parking""#), "{}", e.to_json());
+        // with a speed and zones too, the curbside's version is the newest
+        e.streets.insert("w8~n1~n2".into(), speed_record(crate::street::model::Speed::Kmh(30)));
+        e.streets.insert("w9~n1~n2".into(), zoned_record());
+        assert_eq!(e.written_version(), 8);
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        assert_eq!(back.streets["w7~n1~n2"].street.curb, curb_record().street.curb);
+        // the draft decides on the raw JSON
+        let mut d = Draft::new();
+        assert!(d.put_street("w7~n1~n2", &curb_record()));
+        assert!(d.to_json().contains(r#""version":8"#), "{}", d.to_json());
+        d.remove_street("w7~n1~n2");
+        assert!(d.to_json().contains(r#""version":5"#));
+        // an empty list is not curbside uses
+        let mut empty = Edits::new();
+        empty.streets.insert("w7~n1~n2".into(), street_record());
+        assert_eq!(empty.written_version(), 5);
+    }
+
+    #[test]
+    fn a_version_8_document_is_read() {
+        let text = r#"{"version":8,"streets":{},"junctions":{}}"#;
+        assert!(matches!(parse(Some(text)), Document::Current(_)));
+        assert!(draft(Some(text)).is_ok());
+    }
+
+    #[test]
+    fn a_version_9_document_is_left_alone() {
+        let text = r#"{"version":9,"streets":{},"junctions":{}}"#;
+        assert!(matches!(parse(Some(text)), Document::Future));
+        assert!(matches!(draft(Some(text)), Err(Document::Future)));
     }
 
     #[test]
@@ -543,11 +608,6 @@ mod tests {
     }
 
     #[test]
-    fn a_version_8_document_is_left_alone() {
-        assert!(matches!(parse(Some(r#"{"version":8,"streets":{},"junctions":{}}"#)), Document::Future));
-    }
-
-    #[test]
     fn a_document_holding_a_zoned_street_is_written_as_version_6_and_back_to_5_when_the_last_zoned_record_goes() {
         let version = |text: &str| serde_json::from_str::<serde_json::Value>(text).unwrap()["version"].clone();
         let mut e = Edits::new();
@@ -578,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    fn versions_4_5_and_6_are_read_and_7_is_a_newer_document_left_alone() {
+    fn versions_4_5_and_6_are_read_and_one_past_the_newest_is_a_newer_document_left_alone() {
         for v in [4, 5, 6] {
             let text = format!(r#"{{"version":{v},"streets":{{}},"junctions":{{}}}}"#);
             assert!(matches!(parse(Some(&text)), Document::Current(_)), "{v}");
@@ -743,6 +803,12 @@ mod tests {
         e.streets.insert("w7~n1~n2".into(), street_record());
         let mut pedestrian = pedestrian_record();
         pedestrian.street.speed = crate::street::model::Speed::Kmh(30);
+        pedestrian.street.curb.push(crate::street::model::Instance {
+            side: crate::shared::catalogue::Side::Right,
+            from_mm: 0,
+            length_mm: 6_000,
+            use_: crate::street::model::Use::Parking,
+        });
         e.streets.insert("w8~n1~n2".into(), pedestrian);
         e.streets.insert("w9~n1~n2".into(), speed_record(crate::street::model::Speed::NotSet));
         let (key, mut record) = city.junction_record(junction).unwrap();
@@ -814,6 +880,12 @@ mod tests {
     ".streets.<key>.nodes[]: number",
     ".streets.<key>.street.class: string",
     ".streets.<key>.street.class_before: string",
+    ".streets.<key>.street.curb: array",
+    ".streets.<key>.street.curb[].from_mm: number",
+    ".streets.<key>.street.curb[].length_mm: number",
+    ".streets.<key>.street.curb[].side: string",
+    ".streets.<key>.street.curb[].use: string",
+    ".streets.<key>.street.curb[]: object",
     ".streets.<key>.street.name: string",
     ".streets.<key>.street.next_uid: number",
     ".streets.<key>.street.row_mm: number",

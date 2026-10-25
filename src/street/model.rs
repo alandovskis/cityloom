@@ -21,6 +21,10 @@ mod speed;
 pub use speed::Speed;
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
+mod curb;
+mod curb_shown;
+pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, Use, curbside};
+pub use curb_shown::ShownInstance;
 mod zones;
 use zones::Failing;
 pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, Zone, ZoneEnd, ZoneFrame, ZoneRefusal, ZoneView, ZonesView, zone_label, zone_label_mid};
@@ -228,6 +232,10 @@ pub struct Street {
     /// The speed limit, kept as `speed_kmh`: absent when not yet decided, `null` when the road has none.
     #[serde(default, rename = "speed_kmh", skip_serializing_if = "Speed::is_undecided")]
     pub speed: Speed,
+    /// The uses of the curbside along the street, left side first, then by `from_mm`. Empty for a street whose curbside
+    /// is whatever its sections hold; with any, `from_end` and `length_mm` are written as they are with zones.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub curb: Vec<Instance>,
 }
 
 /// A name that is data, said as it is: a street's, a place's, a junction's.
@@ -333,6 +341,7 @@ impl Street {
             from_end: ZoneEnd::First,
             length_mm: None,
             speed: Speed::Undecided,
+            curb: Vec::new(),
         };
         street.settle_class();
         street
@@ -396,13 +405,14 @@ impl Street {
             }
         }
         s.reverse_zones();
+        s.reverse_curb();
         s
     }
 
     /// Whether every index in it points into the catalogue, so that it can be
     /// drawn. A street that came from storage is checked before it is used.
     pub fn is_sound(&self) -> bool {
-        self.row_mm > 0 && self.section_is_sound(&self.segments) && self.zones_are_sound()
+        self.row_mm > 0 && self.section_is_sound(&self.segments) && self.zones_are_sound() && self.curb_is_sound()
     }
 
     /// Whether every piece of a section points into the catalogue and has a uid the street has issued.
@@ -449,11 +459,20 @@ struct Content {
     length_mm: Option<i32>,
     /// The speed limit; a street's section edits do not change it, but undo and Start over restore it.
     speed: Speed,
+    /// The uses of the curbside, which lie along the street whatever its zones.
+    curb: Vec<Instance>,
 }
 
 impl Content {
     fn of(street: &Street) -> Content {
-        Content { segments: street.segments.clone(), zones: street.zones.clone(), from_end: street.from_end, length_mm: street.length_mm, speed: street.speed }
+        Content {
+            segments: street.segments.clone(),
+            zones: street.zones.clone(),
+            from_end: street.from_end,
+            length_mm: street.length_mm,
+            speed: street.speed,
+            curb: street.curb.clone(),
+        }
     }
 
     /// How many zones there are to choose from: a street with none is one section.
@@ -483,7 +502,8 @@ impl Content {
     }
 
     fn settle(&mut self) {
-        zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm);
+        self.sort_curb();
+        zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm, !self.curb.is_empty());
     }
 }
 
@@ -498,6 +518,9 @@ struct State {
     /// The room the street has as of this state. An edit never changes it; it differs between states only for a street
     /// taken by the width it had under an earlier importer, which Start over returns to the width it has now.
     row_mm: i32,
+    /// The move of a use that made this state (its side, where it started and where it ended up), so that undo and
+    /// redo carry the chosen use with it.
+    curb_move: Option<(Side, i32, i32)>,
 }
 
 /// The speed limits an editor sets, in kilometres an hour.
@@ -519,8 +542,14 @@ pub struct Editor {
     zone: usize,
     /// Where the street lies as loaded (its length and its real end), once the page knows it.
     frame: Option<ZoneFrame>,
+    /// What the city says of the street's two ends, node `a` then node `b`. A setting, not part of the history.
+    ends: [EndInfo; 2],
     selected: Option<u32>,
     gesture: Option<Content>,
+    /// The cell of a curbside strip the person chose: its side and a place along the street it holds. A setting, not history.
+    curb_sel: Option<(Side, i32)>,
+    /// The move of a use under way in a gesture, or just made, that the next revision records (see `State.curb_move`).
+    curb_moved: Option<(Side, i32, i32)>,
     pending_label: Option<Said>,
 }
 
@@ -582,6 +611,7 @@ impl Editor {
             from_end: content.from_end,
             length_mm: content.length_mm,
             speed: content.speed,
+            curb: content.curb.clone(),
         }
     }
 
@@ -603,13 +633,17 @@ impl Editor {
                 class: today.class,
                 class_before: today.class_before,
                 row_mm: today.row_mm,
+                curb_move: None,
             }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
             zone: 0,
             frame: None,
+            ends: [EndInfo::default(); 2],
             selected: None,
             gesture: None,
+            curb_sel: None,
+            curb_moved: None,
             pending_label: None,
         };
         if Content::of(&now) != e.states[0].content || now.row_mm != e.states[0].row_mm {
@@ -653,6 +687,12 @@ impl Editor {
             self.zone = 0;
             self.selected = None;
         }
+        self
+    }
+
+    /// Says what the city knows of the street's two ends, node `a` first. A setting, outside the history.
+    pub fn with_ends(mut self, ends: [EndInfo; 2]) -> Editor {
+        self.ends = ends;
         self
     }
 
@@ -703,7 +743,8 @@ impl Editor {
         content.settle();
         let (class, class_before) = settled_class(content.has_motor(), self.class(), self.class_before());
         let row_mm = self.row_mm();
-        self.push_state(State { label, content, class, class_before, row_mm });
+        let curb_move = self.curb_moved.take();
+        self.push_state(State { label, content, class, class_before, row_mm, curb_move });
         self.clamp_zone();
     }
 
@@ -725,6 +766,7 @@ impl Editor {
         if self.gesture.is_none() {
             self.gesture = Some(self.states[self.cursor].content.clone());
             self.pending_label = None;
+            self.curb_moved = None;
         }
     }
 
@@ -737,10 +779,12 @@ impl Editor {
         // The live state was mutated in place; restore it, then record it.
         self.states[self.cursor].content = baseline.clone();
         if now == baseline {
+            self.curb_moved = None;
             return false;
         }
         // An edit that changed anything left its label; without one there is nothing to record.
         let Some(label) = self.pending_label.take() else {
+            self.curb_moved = None;
             return false;
         };
         self.push(label, now);
@@ -750,6 +794,12 @@ impl Editor {
     pub fn cancel_gesture(&mut self) {
         if let Some(baseline) = self.gesture.take() {
             self.states[self.cursor].content = baseline;
+            // The use is back where it started: so is the choice.
+            if let Some((side, from, to)) = self.curb_moved.take()
+                && self.curb_sel == Some((side, to))
+            {
+                self.curb_sel = Some((side, from));
+            }
         }
     }
 
@@ -1222,6 +1272,11 @@ impl Editor {
         if self.cursor == 0 {
             return false;
         }
+        if let Some((side, from, to)) = self.states[self.cursor].curb_move
+            && self.curb_sel == Some((side, to))
+        {
+            self.curb_sel = Some((side, from));
+        }
         self.cursor -= 1;
         self.reselect();
         true
@@ -1233,6 +1288,11 @@ impl Editor {
             return false;
         }
         self.cursor += 1;
+        if let Some((side, from, to)) = self.states[self.cursor].curb_move
+            && self.curb_sel == Some((side, from))
+        {
+            self.curb_sel = Some((side, to));
+        }
         self.reselect();
         true
     }
@@ -1341,6 +1401,8 @@ impl Editor {
             outcomes: outcomes(&now, &existing_now),
             checks: self.street_checks(),
             zones: self.zones_view(),
+            curb: self.curb_view(),
+            curb_shown: self.curb_shown(),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
@@ -1365,6 +1427,15 @@ impl Editor {
     /// zone it names are the first failing zone's; else they are the selected zone's.
     /// With two zones or more and a transition at some boundary, the boundary checks follow them (`transition_checks`).
     fn street_checks(&self) -> Vec<Check> {
+        let mut street = self.zone_checks();
+        if !self.states[self.cursor].content.curb.is_empty() {
+            street.extend(self.curb_checks());
+        }
+        street
+    }
+
+    /// The section checks of every zone, and the boundary checks (see `street_checks`).
+    fn zone_checks(&self) -> Vec<Check> {
         let content = &self.states[self.cursor].content;
         let mut street = self.section_checks(self.current());
         if content.zones.len() < 2 {
@@ -1690,6 +1761,10 @@ pub struct View {
     pub checks: Vec<Check>,
     /// The street's zones, for the strip.
     pub zones: ZonesView,
+    /// The curbside strips.
+    pub curb: CurbView,
+    /// The curbside uses the 2.5D shows, on the selected zone's pieces.
+    pub curb_shown: Vec<ShownInstance>,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
     pub revisions: Vec<Revision>,

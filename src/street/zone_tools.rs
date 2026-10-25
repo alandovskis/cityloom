@@ -43,7 +43,7 @@ pub fn commit_start(w: SheetWatch, typed: &str) -> bool {
 
 /// Puts the focus on the element, once the page has drawn what was just changed.
 #[cfg(target_arch = "wasm32")]
-fn focus_later(id: &'static str) {
+pub(super) fn focus_later(id: &'static str) {
     set_timeout(
         move || {
             if let Some(e) = document().get_element_by_id(id).and_then(|e| e.dyn_into::<leptos::web_sys::HtmlElement>().ok()) {
@@ -55,7 +55,7 @@ fn focus_later(id: &'static str) {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn focus_later(_id: &'static str) {}
+pub(super) fn focus_later(_id: &'static str) {}
 
 #[component]
 pub fn ZoneTools(vm: Rc<StreetVm>) -> impl IntoView {
