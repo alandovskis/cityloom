@@ -915,11 +915,11 @@ impl Junction {
             let park_t = far + if cx.is_some() { PARK_CLEAR_MM } else { NO_CROSSING_CLEAR_MM };
             let clear_far = clear_far(a, l);
             // Where the end zone ends and what follows it, for an arm that has a beyond and draws it (a walkway and a
-            // turbo's arms draw as they always did).
+            // turbo's arms draw as they always did). Nothing of it is drawn nearer than where the roadway strips begin.
             let mut beyond = (!walk && s.turbo.is_none())
                 .then(|| a.beyond.as_ref().zip(a.beyond_profile(region)))
                 .flatten()
-                .map(|(b, next)| beyond::draw(l.bearing, &|x| l.lat(off, x), &l.prof, &next, b, len));
+                .map(|(b, next)| beyond::draw(l.bearing, &|x| l.lat(off, x), &l.prof, &next, b, l.strip0, len));
             // The end of the strip of piece `pi`, which starts at `t0`.
             let cut = |pi: usize, t0: f64| beyond.as_ref().map_or(len, |d| d.cuts[pi].max(t0));
             let mut pieces = Vec::new();

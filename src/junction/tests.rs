@@ -1891,7 +1891,7 @@ fn an_arm_with_a_beyond_draws_its_end_zone_to_the_boundary_and_what_follows() {
     let v = j.view();
     let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
     assert!(!a.beyond.is_empty() && a.beyond.iter().any(|p| p.taper), "{} pieces beyond", a.beyond.len());
-    assert_eq!(a.beyond.iter().filter(|p| p.taper).count(), 1);
+    assert_eq!(a.beyond.iter().filter(|p| p.taper).count(), 2, "the pocket narrows and the planting in its place widens");
     assert!(!a.beyond_marks.is_empty());
     assert!(a.beyond_problems.is_empty(), "the checks fill these in later");
     let reaches: Vec<f64> = a.pieces.iter().map(|p| reach(a.bearing, &p.poly).round()).collect();
@@ -1940,7 +1940,6 @@ fn a_pedestrian_arm_and_a_turbo_arm_draw_as_before() {
     // and so does a walkway
     let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
     let mut state = walk.current().clone();
-    let before = serde_json::to_string(&walk.view().arms.iter().map(|a| &a.pieces).collect::<Vec<_>>()).unwrap();
     for a in &mut state.arms {
         a.beyond = Some(Beyond { boundary_mm: 20_000, next: a.section.clone().unwrap().segments, taper: None });
     }
@@ -1951,5 +1950,4 @@ fn a_pedestrian_arm_and_a_turbo_arm_draw_as_before() {
         serde_json::to_string(&v.arms.iter().find(|a| a.pedestrian).map(|a| &a.pieces)).unwrap(),
         serde_json::to_string(&walk.view().arms.iter().find(|a| a.pedestrian).map(|a| &a.pieces)).unwrap()
     );
-    let _ = before;
 }
