@@ -2015,6 +2015,27 @@ fn a_pocket_that_ends_before_the_stop_line_fails_the_approach_check() {
 }
 
 #[test]
+fn a_beyond_past_the_drawn_arm_is_neither_judged_nor_described() {
+    // the boundary lies past the 36 m the arm is drawn to; the host zone is too short and the end zone short of the arrows
+    for (boundary, from) in [(40_000, 40_000), (20_000, 40_000)] {
+        let (j, uid) = junction_with_a_beyond(
+            |_| {},
+            |b| {
+                b.boundary_mm = boundary;
+                let t = b.taper.as_mut().unwrap();
+                (t.from_mm, t.to_mm, t.need_mm, t.room_mm) = (from, from + 10_000, 40_000, 5_000);
+                t.merges = false;
+            },
+        );
+        let a = j.view().arms.into_iter().find(|a| a.uid == uid).unwrap();
+        assert!(a.beyond.is_empty() && a.beyond_marks.is_empty(), "nothing is drawn");
+        assert!(a.beyond_problems.is_empty(), "boundary {boundary}, taper from {from}");
+        assert!(approach(&j).ok);
+        assert_eq!((a.beyond_zone, a.beyond_reach_mm, a.beyond_taper_mm), (None, 0, 0), "the arm sentence has nothing to say");
+    }
+}
+
+#[test]
 fn a_pocket_past_the_arrows_passes() {
     let (j, uid) = junction_with_a_beyond(|_| {}, clear_of_the_arrows);
     let c = approach(&j);

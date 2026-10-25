@@ -1038,8 +1038,9 @@ impl Junction {
                     too_far: (if c.island { (distance - ISLAND_MM) / 2 } else { distance }) > MAX_STAGE_MM,
                 }
             });
-            // The beyond the approach check judges: the one that is drawn.
-            let judged = beyond.as_ref().and_then(|_| a.beyond.as_ref());
+            // The beyond the approach check judges and the arm sentence describes: the one that is drawn, not one that
+            // lies past the end of the drawn arm.
+            let judged = beyond.as_ref().filter(|d| d.shown).and_then(|_| a.beyond.as_ref());
             let enters = !l.prof.enter_x.is_empty();
             let leaves = !l.prof.leave_x.is_empty();
             let blocker = bike_box_blocker(s, i, &l.prof);

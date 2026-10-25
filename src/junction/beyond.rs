@@ -11,6 +11,9 @@ use crate::street::model::{Beyond, TaperPiece};
 /// What an arm draws for its boundary.
 #[derive(Debug, Default)]
 pub struct Drawn {
+    /// Whether anything is drawn beyond the end zone: false where the boundary, or the taper's start, lies at or past
+    /// the drawn arm. Such a beyond is neither judged by the approach check nor described.
+    pub shown: bool,
     /// Where each end-zone piece's strip ends, by index into the profile's pieces: the whole arm (`len`) where
     /// nothing is drawn beyond, else the start of the taper for a piece that moves and the boundary for the rest.
     pub cuts: Vec<f64>,
@@ -138,7 +141,7 @@ pub fn draw(bearing: f64, lat: &dyn Fn(i32) -> f64, base: &Profile, next: &Profi
     // The marks run across the property width, which the end zone and the zone across share (one `row_mm`; either section may be narrower, its pieces then end short of the right edge).
     let across = |t: f64| [at(bearing, lat(0), t), at(bearing, lat(base.row_mm), t)];
     let marks = if tb > ta { vec![ta, tb] } else { vec![boundary] }.into_iter().filter(|&t| t > floor && t < len).map(across).collect();
-    Drawn { cuts, extra, taper, marks }
+    Drawn { shown: true, cuts, extra, taper, marks }
 }
 
 #[cfg(test)]
