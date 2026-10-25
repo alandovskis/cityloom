@@ -1817,3 +1817,139 @@ fn a_suspended_turbo_is_not_named_or_offered_and_is_back_with_the_traffic() {
     assert!(busy.set_control(ROUNDABOUT) && busy.set_turbo(Some(0)));
     assert!(plan_label(&busy.view(), &en).contains("turbo"));
 }
+
+// ---- an arm's end zone and what lies beyond it -------------------------------------
+
+/// FNV-1a over the pieces, the lanes' hit areas and the leaving arrows of every arm of every sample junction, as the
+/// page gets them. Captured before the beyond was drawn: an arm without one draws byte for byte as it did.
+fn arms_fingerprint() -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for sample in 0..JUNCTION_SAMPLES.len() {
+        let v = Junction::new(sample).view();
+        for a in &v.arms {
+            let s = serde_json::to_string(&(
+                &a.pieces,
+                a.lanes.iter().map(|l| &l.poly).collect::<Vec<_>>(),
+                a.leave_arrows.iter().map(|l| &l.poly).collect::<Vec<_>>(),
+            ))
+            .unwrap();
+            for b in s.bytes() {
+                h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+            }
+        }
+    }
+    h
+}
+
+#[test]
+fn an_arm_without_a_beyond_draws_as_before() {
+    assert_eq!(arms_fingerprint(), 15_083_500_958_540_711_930, "captured on 6382e13, before the beyond was drawn");
+}
+
+/// A sample junction whose north arm has a beyond: the end zone's first entering lane is a pocket that is planting
+/// across the boundary, 20 m out, tapering out by 30 m. Returns the junction and the arm's uid.
+fn junction_with_a_pocket(configure: impl Fn(&mut State)) -> (Junction, u32) {
+    use crate::street::model::{Beyond, BeyondTaper, TaperPiece};
+    let mut state = Junction::new(0).current().clone();
+    configure(&mut state);
+    let arm = state.arms.iter_mut().find(|a| a.bearing == 0).unwrap();
+    let prof = arm.profile(0);
+    let x = prof.enter_x[0];
+    let lane = prof.pieces.iter().find(|p| p.x_mm <= x && x < p.x_mm + p.width_mm).unwrap();
+    let was = (lane.x_mm, lane.x_mm + lane.width_mm);
+    let mut next = arm.section.clone().unwrap().segments;
+    // the piece the lane was: the same place in the zone across is planting
+    let at = prof.pieces.iter().position(|p| p.x_mm == lane.x_mm).unwrap();
+    let planting = crate::shared::catalogue::kind_index("planting").unwrap();
+    next[at].kind = planting;
+    arm.beyond = Some(Beyond {
+        boundary_mm: 20_000,
+        next,
+        taper: Some(BeyondTaper {
+            from_mm: 20_000,
+            to_mm: 30_000,
+            need_mm: 10_000,
+            room_mm: 80_000,
+            merges: true,
+            pieces: vec![TaperPiece { kind: lane.kind, from: was, to: (was.0, was.0), was: Some(was), becomes: None }],
+        }),
+    });
+    let uid = arm.uid;
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    (Junction::from_city(named, &state, &state, 0).expect("draws"), uid)
+}
+
+/// How far out along an arm a polygon of the view reaches, from the junction's centre.
+fn reach(bearing: i32, poly: &[serde_json::Value]) -> f64 {
+    let d = crate::junction::geometry::dir(f64::from(bearing));
+    poly.iter().filter(|c| c[0] != "Z").map(|c| c[1].as_f64().unwrap() * d.0 + c[2].as_f64().unwrap() * d.1).fold(f64::MIN, f64::max)
+}
+
+#[test]
+fn an_arm_with_a_beyond_draws_its_end_zone_to_the_boundary_and_what_follows() {
+    let (j, uid) = junction_with_a_pocket(|_| {});
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    assert!(!a.beyond.is_empty() && a.beyond.iter().any(|p| p.taper), "{} pieces beyond", a.beyond.len());
+    assert_eq!(a.beyond.iter().filter(|p| p.taper).count(), 1);
+    assert!(!a.beyond_marks.is_empty());
+    assert!(a.beyond_problems.is_empty(), "the checks fill these in later");
+    let reaches: Vec<f64> = a.pieces.iter().map(|p| reach(a.bearing, &p.poly).round()).collect();
+    assert!(reaches.iter().all(|&r| r == 20_000.0), "every end-zone piece ends at the boundary: {reaches:?}");
+    for p in a.beyond.iter().filter(|p| !p.taper) {
+        assert_eq!(reach(a.bearing, &p.poly).round(), 36_000.0);
+    }
+    // the other arms are untouched
+    let before = Junction::new(0).view();
+    for (x, y) in v.arms.iter().zip(&before.arms).filter(|(x, _)| x.uid != uid) {
+        assert_eq!(serde_json::to_string(&x.pieces).unwrap(), serde_json::to_string(&y.pieces).unwrap());
+        assert!(x.beyond.is_empty() && x.beyond_marks.is_empty());
+    }
+}
+
+#[test]
+fn a_lane_hit_area_ends_where_its_lane_ends() {
+    let (j, uid) = junction_with_a_pocket(|_| {});
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    assert!(!a.lanes.is_empty());
+    // the pocket is the first entering lane's piece, which runs to the boundary and tapers out beyond it
+    assert_eq!(reach(a.bearing, &a.lanes[0].poly).round(), 20_000.0);
+    let plain = Junction::new(0).view();
+    let b = plain.arms.iter().find(|b| b.uid == uid).unwrap();
+    assert_eq!(reach(b.bearing, &b.lanes[0].poly).round(), 36_000.0, "without a beyond a lane runs the arm");
+    assert_eq!(reach(b.bearing, &b.lanes[1].poly).round(), 36_000.0);
+}
+
+#[test]
+fn a_pedestrian_arm_and_a_turbo_arm_draw_as_before() {
+    use crate::street::model::Beyond;
+    // a turbo ignores every beyond
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    let mut turbo = Junction::new(0);
+    assert!(turbo.set_control(ROUNDABOUT) && turbo.set_turbo(Some(0)));
+    let mut with = turbo.current().clone();
+    for a in &mut with.arms {
+        a.beyond = Some(Beyond { boundary_mm: 20_000, next: a.section.clone().unwrap().segments, taper: None });
+    }
+    assert!(with.turbo.is_some());
+    let plain = serde_json::to_string(&turbo.view().arms.iter().map(|a| &a.pieces).collect::<Vec<_>>()).unwrap();
+    let v = Junction::from_city(named.clone(), &with, &with, 0).expect("draws").view();
+    assert!(v.arms.iter().all(|a| a.beyond.is_empty() && a.beyond_marks.is_empty()));
+    assert_eq!(serde_json::to_string(&v.arms.iter().map(|a| &a.pieces).collect::<Vec<_>>()).unwrap(), plain);
+    // and so does a walkway
+    let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+    let mut state = walk.current().clone();
+    let before = serde_json::to_string(&walk.view().arms.iter().map(|a| &a.pieces).collect::<Vec<_>>()).unwrap();
+    for a in &mut state.arms {
+        a.beyond = Some(Beyond { boundary_mm: 20_000, next: a.section.clone().unwrap().segments, taper: None });
+    }
+    let v = Junction::from_city(named, &state, &state, 0).expect("draws").view();
+    let walker = v.arms.iter().find(|a| a.pedestrian).unwrap();
+    assert!(walker.beyond.is_empty() && walker.beyond_marks.is_empty());
+    assert_eq!(
+        serde_json::to_string(&v.arms.iter().find(|a| a.pedestrian).map(|a| &a.pieces)).unwrap(),
+        serde_json::to_string(&walk.view().arms.iter().find(|a| a.pedestrian).map(|a| &a.pieces)).unwrap()
+    );
+    let _ = before;
+}

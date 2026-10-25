@@ -435,6 +435,27 @@ pub fn in_force(s: &State) -> Cow<'_, State> {
     }
 }
 
+/// The profile of a street, kept. Reading a street's profile builds an editor on it, and a junction asks for it of
+/// every arm many times over, so what has been read is kept.
+fn read_cached(street: &Street, region: usize) -> Profile {
+    thread_local! {
+        static READ: std::cell::RefCell<std::collections::HashMap<(Street, usize), Profile>> = Default::default();
+    }
+    let key = (street.clone(), region);
+    if let Some(p) = READ.with(|r| r.borrow().get(&key).cloned()) {
+        return p;
+    }
+    let p = profile_of(street, region);
+    READ.with(|r| {
+        let mut r = r.borrow_mut();
+        if r.len() > 4096 {
+            r.clear();
+        }
+        r.insert(key, p.clone());
+    });
+    p
+}
+
 impl Arm {
     /// An arm with the defaults a street starts with at a junction.
     pub fn new(uid: u32, bearing: i32, offset_mm: i32) -> Arm {
@@ -464,25 +485,13 @@ impl Arm {
     }
 
     pub fn profile(&self, region: usize) -> Profile {
-        // Reading a street's profile builds an editor on it, and a junction asks for it of every arm
-        // many times over, so what has been read is kept.
-        thread_local! {
-            static READ: std::cell::RefCell<std::collections::HashMap<(Street, usize), Profile>> = Default::default();
-        }
-        let street = self.section.as_ref().expect("an arm carries the street it reads");
-        let key = (street.clone(), region);
-        if let Some(p) = READ.with(|r| r.borrow().get(&key).cloned()) {
-            return p;
-        }
-        let p = profile_of(street, region);
-        READ.with(|r| {
-            let mut r = r.borrow_mut();
-            if r.len() > 4096 {
-                r.clear();
-            }
-            r.insert(key, p.clone());
-        });
-        p
+        read_cached(self.section.as_ref().expect("an arm carries the street it reads"), region)
+    }
+
+    /// The profile of the zone across the end zone's boundary, read as the end zone is; `None` without a beyond.
+    pub fn beyond_profile(&self, region: usize) -> Option<Profile> {
+        let (street, beyond) = (self.section.as_ref()?, self.beyond.as_ref()?);
+        Some(read_cached(&Street { segments: beyond.next.clone(), ..street.clone() }, region))
     }
 
     /// The name of the street the arm reads; a junction outside a city reads one always.

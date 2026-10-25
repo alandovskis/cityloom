@@ -5,6 +5,7 @@
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::junction::beyond;
 use crate::junction::geometry::{
     P, add, arc, at, cross, dir, dist, fillet_setback, gap, l, m, meet, on_circle, poly, polylines_cross, quad, ring_arc, sample_quad, scale, strip, sub, z,
 };
@@ -353,12 +354,15 @@ fn ring_floor(arms: &[ArmLayout]) -> Option<i32> {
 
 // ---- view -------------------------------------------------------------------
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct PieceView {
     pub kind: usize,
     pub material: &'static str,
     pub direction: Option<&'static str>,
     pub poly: Vec<Value>,
+    /// A taper's quadrilateral, drawn beyond the end of an arm's end zone; not sent when false.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub taper: bool,
 }
 
 /// The name of one class of turn, as the page and the checks say it.
@@ -492,6 +496,13 @@ pub struct ArmView {
     pub offset_mm: i32,
     pub corner_mm: i32,
     pub pieces: Vec<PieceView>,
+    /// What lies beyond the end zone's boundary, for the plan and the 2.5D: the taper's quadrilaterals, then the zone
+    /// across's strips. Empty for an arm with no beyond, a pedestrian arm and a turbo's.
+    pub beyond: Vec<PieceView>,
+    /// The lines across the arm at the taper's ends (at the boundary alone for a jog).
+    pub beyond_marks: Vec<[P; 2]>,
+    /// Why the end zone's boundary is not safe, said (filled by the junction's checks).
+    pub beyond_problems: Vec<Said>,
     /// The arm's outer bike lanes, carried into the core from its mouth: the lane arrives, and where.
     pub core_bike: Vec<Vec<Value>>,
     /// The flat top and the ramp of a raised table on this arm.
@@ -803,7 +814,8 @@ fn priority_pair(arms: &[Arm]) -> [usize; 2] {
 /// crossing and the stop line, so even the bigger arrows (`plan_svg`) clear them.
 pub const ARROW_FROM_EDGE_MM: f64 = 5_500.0;
 
-fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, head: i32, uses: u8, width: Option<i32>) -> LaneView {
+/// A lane along its arm from the mouth to `end`, where its piece ends. `t` is where its arrow stands.
+fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, end: f64, head: i32, uses: u8, width: Option<i32>) -> LaneView {
     let w =
         width.unwrap_or_else(|| a.prof.pieces.iter().find(|p| p.x_mm + p.width_mm / 2 == x_mm && KINDS[p.kind].id == "travel").map_or(3_000, |p| p.width_mm));
     let c = a.lat(off, x_mm);
@@ -813,7 +825,7 @@ fn lane_view(a: &ArmLayout, off: f64, x_mm: i32, t: f64, head: i32, uses: u8, wi
         bad: false,
         at: at(a.bearing, c, t),
         heading: head,
-        poly: poly(&strip(a.bearing, c - w as f64 / 2.0, c + w as f64 / 2.0, a.mouth, ARM_LENGTH_MM as f64)),
+        poly: poly(&strip(a.bearing, c - w as f64 / 2.0, c + w as f64 / 2.0, a.mouth, end)),
         width_mm: w,
         fixed: false,
     }
@@ -902,6 +914,14 @@ impl Junction {
             let far = l.mouth + cx.map_or(0.0, |c| (c.setback_mm + c.width_mm) as f64);
             let park_t = far + if cx.is_some() { PARK_CLEAR_MM } else { NO_CROSSING_CLEAR_MM };
             let clear_far = clear_far(a, l);
+            // Where the end zone ends and what follows it, for an arm that has a beyond and draws it (a walkway and a
+            // turbo's arms draw as they always did).
+            let mut beyond = (!walk && s.turbo.is_none())
+                .then(|| a.beyond.as_ref().zip(a.beyond_profile(region)))
+                .flatten()
+                .map(|(b, next)| beyond::draw(l.bearing, &|x| l.lat(off, x), &l.prof, &next, b, len));
+            // The end of the strip of piece `pi`, which starts at `t0`.
+            let cut = |pi: usize, t0: f64| beyond.as_ref().map_or(len, |d| d.cuts[pi].max(t0));
             let mut pieces = Vec::new();
             let mut gaps = Vec::new();
             let mut bulbs: [Option<Vec<Value>>; 2] = [None, None];
@@ -939,7 +959,13 @@ impl Junction {
                         }
                     }
                 }
-                pieces.push(PieceView { kind: p.kind, material: p.material, direction: p.direction, poly: poly(&strip(l.bearing, x0, x1, t0, len)) });
+                pieces.push(PieceView {
+                    kind: p.kind,
+                    material: p.material,
+                    direction: p.direction,
+                    poly: poly(&strip(l.bearing, x0, x1, t0, cut(pi, t0))),
+                    taper: false,
+                });
             }
             let mut core_bike = Vec::new();
             if lay.ring.is_none() {
@@ -1018,6 +1044,11 @@ impl Junction {
             let bike_box = boxed.then(|| poly(&strip(l.bearing, lat(l.prof.enter_span.0), lat(l.prof.enter_span.1), far + 600.0, far + 600.0 + BIKE_BOX_MM)));
             let can_bike_box = blocker.is_none();
             let arrow_t = if cx.is_some() { far + ARROW_FROM_EDGE_MM } else { l.mouth + ARROW_FROM_EDGE_MM + 1_000.0 };
+            // Where the lane at `x` ends: where its piece does.
+            let lane_end = |x: i32| {
+                let piece = l.prof.pieces.iter().position(|p| p.x_mm <= x && x < p.x_mm + p.width_mm);
+                piece.map_or(len, |pi| cut(pi, l.mouth))
+            };
             let lanes = l
                 .prof
                 .enter_x
@@ -1025,7 +1056,7 @@ impl Junction {
                 .zip(&a.lanes)
                 .map(|(&x, lane)| {
                     let uses = lane.to.iter().filter_map(|t| s.arms.iter().find(|b| b.uid == *t)).fold(0, |m, b| m | turn_class(a.bearing, b.bearing));
-                    let mut v = lane_view(l, off, x, arrow_t + box_mm, heading(l.bearing), uses, l.lane_mm);
+                    let mut v = lane_view(l, off, x, arrow_t + box_mm, lane_end(x), heading(l.bearing), uses, l.lane_mm);
                     v.fixed = s.turbo.is_some();
                     let mut dests: Vec<(i32, DestView)> = s
                         .arms
@@ -1052,7 +1083,7 @@ impl Junction {
                     v
                 })
                 .collect();
-            let leave_arrows = l.prof.leave_x.iter().map(|&x| lane_view(l, off, x, arrow_t, l.bearing.round() as i32, 0, None)).collect();
+            let leave_arrows = l.prof.leave_x.iter().map(|&x| lane_view(l, off, x, arrow_t, lane_end(x), l.bearing.round() as i32, 0, None)).collect();
             let road_mm = l.prof.road_mm();
             let turbo_entry = l.entry.filter(|e| e.new.0 < e.old.0 - 1.0 || e.new.1 > e.old.1 + 1.0).map(|e| {
                 // The widened lanes run straight out over the approach length, then flare back to the street's width, 1 m sideways in 10 along.
@@ -1079,6 +1110,9 @@ impl Junction {
                 offset_mm: a.offset_mm,
                 corner_mm: a.corner_mm,
                 pieces,
+                beyond: beyond.as_mut().map_or_else(Vec::new, |d| d.taper.drain(..).chain(d.extra.drain(..)).collect()),
+                beyond_marks: beyond.as_mut().map_or_else(Vec::new, |d| std::mem::take(&mut d.marks)),
+                beyond_problems: Vec::new(),
                 core_bike,
                 raised: table,
                 gaps,
