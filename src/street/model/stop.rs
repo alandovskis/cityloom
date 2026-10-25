@@ -337,8 +337,8 @@ impl StripCell for StopCell {
     }
 }
 
-/// The stops rows: one per side that has a stop, a curbside lane or a transit lane for the bus in some zone (a plain
-/// driving lane could carry a stop too, but offering a row on every street would crowd the page).
+/// The stops rows: one per side that has a stop, a curbside lane or a lane a bus can use in its direction (a transit lane
+/// or a plain driving lane) in some zone.
 pub type StopsView = StripView<StopCell>;
 pub type StopSideView = SideView<StopCell>;
 
@@ -371,7 +371,7 @@ impl Editor {
                 content.stops.iter().any(|s| s.side == side)
                     || (0..content.zone_count()).any(|z| {
                         let segs = content.section(z);
-                        curbside(segs, side).is_some() || bus_lane(segs, side, driving).is_some_and(|lane| KINDS[segs[lane].kind].id == "bus")
+                        curbside(segs, side).is_some() || bus_lane(segs, side, driving).is_some()
                     })
             })
             .map(|side| {

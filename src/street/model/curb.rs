@@ -156,6 +156,7 @@ impl CurbRefusal {
             CurbRefusal::Elsewhere => ("curb-refused-elsewhere", "stop-refused-elsewhere"),
             CurbRefusal::Overlap => ("curb-refused-overlap", "stop-refused-overlap"),
             CurbRefusal::TooLong => ("curb-refused-too-long", "stop-refused-too-long"),
+            // A stop does not depend on the time of day, so stop edits never raise this; the arm keeps `said_for` total.
             CurbRefusal::TimeWindows => ("curb-refused-time-windows", "stop-refused-time-windows"),
             CurbRefusal::Dragging => ("curb-refused-dragging", "stop-refused-dragging"),
         };

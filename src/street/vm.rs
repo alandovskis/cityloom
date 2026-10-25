@@ -85,6 +85,9 @@ pub struct StreetVm {
     mode: ArcRwSignal<ViewMode>,
     /// A merge waiting for the choice of the section to keep: with the next zone (true) or the previous one.
     merge: ArcRwSignal<Option<bool>>,
+    /// The kind picked for the free stretch (side, start) chosen on a stops row; another stretch starts from the kind
+    /// that fits there.
+    stop_pick: ArcRwSignal<Option<(Side, i32, StopKind)>>,
 }
 
 /// The areas whose outline holds the midpoint of the street a page edits, read once when the page opens: none for
@@ -135,7 +138,17 @@ impl StreetVm {
                     },
                 )
             });
-            StreetVm { core: Core::new(street), ports, i18n, keeper, binding, areas, mode: ArcRwSignal::new(mode), merge: ArcRwSignal::new(None) }
+            StreetVm {
+                core: Core::new(street),
+                ports,
+                i18n,
+                keeper,
+                binding,
+                areas,
+                mode: ArcRwSignal::new(mode),
+                merge: ArcRwSignal::new(None),
+                stop_pick: ArcRwSignal::new(None),
+            }
         })
     }
 
@@ -636,8 +649,39 @@ impl StreetVm {
     /// boarding island), else the curb stop. The curb stop when no gap is chosen.
     pub fn default_stop_kind(&self) -> StopKind {
         match self.chosen::<StopRow>() {
-            Some((side, None, from_mm)) => self.core.read(|e| e.default_stop_kind(side, from_mm)),
+            Some((side, None, from_mm)) => self.default_stop_kind_of(side, from_mm),
             _ => StopKind::Curb,
+        }
+    }
+
+    fn default_stop_kind_of(&self, side: Side, from_mm: i32) -> StopKind {
+        self.core.read(|e| e.default_stop_kind(side, from_mm))
+    }
+
+    /// The kind the stops tools show: the chosen stop's, else the one picked for the chosen free stretch, else the kind
+    /// that fits there. Watched.
+    pub fn stop_kind_shown(&self) -> StopKind {
+        let chosen = {
+            let v = self.view();
+            v.stops.sides.iter().find_map(|s| s.cells.get(s.selected?).map(|c| (s.side, c.from_mm, c.kind)))
+        };
+        match chosen {
+            Some((_, _, Some(kind))) => kind,
+            Some((side, from, None)) => {
+                self.stop_pick.get().filter(|p| (p.0, p.1) == (side, from)).map(|p| p.2).unwrap_or_else(|| self.default_stop_kind_of(side, from))
+            }
+            None => StopKind::Curb,
+        }
+    }
+
+    /// The person picks `kind` on the kinds control: it changes the chosen stop, or is kept for the chosen free stretch.
+    pub fn pick_stop_kind(&self, kind: StopKind) {
+        match self.chosen::<StopRow>() {
+            Some((_, Some(_), _)) => {
+                self.set_stop_kind(kind);
+            }
+            Some((side, None, from)) => self.stop_pick.set(Some((side, from, kind))),
+            None => {}
         }
     }
 
@@ -2097,7 +2141,7 @@ mod stop_tests {
     }
 
     #[test]
-    fn a_street_with_a_transit_lane_or_a_curbside_has_a_row_per_side_and_one_without_has_none() {
+    fn a_street_with_a_lane_for_the_bus_or_a_curbside_has_a_row_per_side_and_one_without_has_none() {
         let r = rig(&CURB);
         let v = r.vm.view_now();
         assert_eq!(v.stops.sides.iter().map(|s| s.side).collect::<Vec<_>>(), [Side::Left, Side::Right]);
@@ -2105,10 +2149,25 @@ mod stop_tests {
         assert!(v.stops.sides.iter().all(|s| s.selected.is_none()));
         let none = rig_of(&street(&[("sidewalk", 3000, None), ("bike", 1800, None), ("sidewalk", 3000, None)]), Some(LENGTH), Locale::En);
         assert!(none.vm.view_now().stops.sides.is_empty(), "no lane for a bus, no curbside: no row");
-        let plain = rig(&[("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 3000, None)]);
-        assert!(plain.vm.view_now().stops.sides.is_empty(), "plain driving lanes and no curbside: no row");
         let unknown = rig_of(&street(&CURB), None, Locale::En);
         assert!(unknown.vm.view_now().stops.sides.is_empty(), "no row while the street's length is unknown");
+    }
+
+    #[test]
+    fn a_street_of_plain_travel_lanes_has_a_row_where_a_bus_has_its_lane_and_a_curb_stop_passes() {
+        let r = rig(&[("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 3000, None)]);
+        let v = r.vm.view_now();
+        assert_eq!(v.stops.sides.iter().map(|s| s.side).collect::<Vec<_>>(), [Side::Left, Side::Right], "a lane in each direction, one on each half");
+        r.vm.select_stop(Side::Right, 0);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Curb);
+        assert!(r.vm.add_stop(StopKind::Curb, 12_000));
+        let v = r.vm.view_now();
+        assert!(v.stops.sides[1].cells[0].ok, "the stop beside the travel lane fails nothing");
+        assert!(
+            v.checks.iter().filter(|c| c.id.starts_with("stop-")).all(|c| c.ok),
+            "{:?}",
+            v.checks.iter().filter(|c| !c.ok).map(|c| c.id).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -2144,6 +2203,27 @@ mod stop_tests {
         assert_eq!(none.vm.default_stop_kind(), StopKind::Curb);
         // With no cell chosen it is the curb stop too.
         assert_eq!(rig(&CURB).vm.default_stop_kind(), StopKind::Curb);
+    }
+
+    #[test]
+    fn the_kind_shown_is_the_chosen_stops_else_the_one_picked_for_the_gap_else_the_default() {
+        let r = rig(&PARKED);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Curb, "nothing chosen");
+        r.vm.select_stop(Side::Right, 0);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Bulb, "the default beside parking");
+        r.vm.pick_stop_kind(StopKind::Island);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Island, "the pick for this gap");
+        assert!(r.vm.add_stop(r.vm.stop_kind_shown(), 12_000));
+        assert_eq!(r.vm.view_now().stops.sides[1].cells[0].kind, Some(StopKind::Island));
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Island, "a chosen stop shows its own");
+        r.vm.pick_stop_kind(StopKind::Curb);
+        assert_eq!(r.vm.view_now().stops.sides[1].cells[0].kind, Some(StopKind::Curb), "with a stop chosen the pick changes it");
+        r.vm.select_stop(Side::Right, 1);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Bulb, "another gap starts from the default again");
+        r.vm.select_stop(Side::Left, 0);
+        r.vm.pick_stop_kind(StopKind::Curb);
+        r.vm.select_stop(Side::Right, 1);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Bulb, "a pick belongs to its own gap");
     }
 
     #[test]

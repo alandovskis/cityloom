@@ -195,6 +195,14 @@ impl SheetWatch {
         self.vm.with_value(|v| v.remove_curb())
     }
 
+    pub fn stop_kind_shown(&self) -> StopKind {
+        self.vm.with_value(|v| v.stop_kind_shown())
+    }
+
+    pub fn pick_stop_kind(&self, kind: StopKind) {
+        self.vm.with_value(|v| v.pick_stop_kind(kind));
+    }
+
     pub fn default_stop_kind(&self) -> StopKind {
         self.vm.with_value(|v| v.default_stop_kind())
     }

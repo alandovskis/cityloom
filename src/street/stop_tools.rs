@@ -62,13 +62,7 @@ pub fn StopTools(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     let text = move |key: &'static str| w.i18n().tr(key, &Args::new());
     let unit_text = move |key: &'static str| w.i18n().tr(key, &Args::new().str("unit", w.units().word()));
-    // The kind the person picked for the stretch they chose; another stretch starts from the kind that fits there.
-    let pick = RwSignal::new(None::<(Side, i32, StopKind)>);
-    let shown_kind = move || match chosen(w) {
-        Some(Chosen { stop: Some((kind, _, _)), .. }) => kind,
-        Some(c) => pick.get().filter(|p| (p.0, p.1) == (c.side, c.from_mm)).map(|p| p.2).unwrap_or_else(|| w.default_stop_kind()),
-        None => StopKind::Curb,
-    };
+    let shown_kind = move || w.stop_kind_shown();
     let is_stop = move || chosen(w).is_some_and(|c| c.stop.is_some());
     let shelter_value = move || chosen(w).and_then(|c| c.stop).is_some_and(|s| s.1);
     let name_value = move || chosen(w).and_then(|c| c.stop).and_then(|s| s.2).unwrap_or_default();
@@ -99,14 +93,7 @@ pub fn StopTools(vm: Rc<StreetVm>) -> impl IntoView {
                             id="stop-kind"
                             prop:value=move || kind_value(shown_kind())
                             on:change=move |e| {
-                                let kind = kind_of(&event_target::<HtmlSelectElement>(&e).value());
-                                match chosen(w) {
-                                    Some(Chosen { stop: Some(_), .. }) => {
-                                        w.set_stop_kind(kind);
-                                    }
-                                    Some(c) => pick.set(Some((c.side, c.from_mm, kind))),
-                                    None => {}
-                                }
+                                w.pick_stop_kind(kind_of(&event_target::<HtmlSelectElement>(&e).value()));
                             }
                         >
                             {options}

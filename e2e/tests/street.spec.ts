@@ -655,6 +655,9 @@ test.describe("the zones of a street", () => {
     await page.keyboard.press("-");
     const edited = await page.locator("#drawing").getAttribute("aria-label");
     expect(edited).not.toBe(zone1);
+    // The strip lies at the foot of the scrolling stage, where focusing it on the press scrolls the stage by a few
+    // lines and the release lands on another element: centre it first so the press does not scroll anything.
+    await page.locator("#zone-0").evaluate((e) => e.scrollIntoView({ block: "center" }));
     await page.locator("#zone-0").click();
     expect(await page.locator("#drawing").getAttribute("aria-label"), "zone 1 is unchanged").toBe(zone1);
     await page.waitForTimeout(500); // the debounced write

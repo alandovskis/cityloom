@@ -1653,16 +1653,21 @@ fn the_stops_row_is_a_listbox_with_one_tab_stop() {
 }
 
 #[test]
-fn a_street_with_a_bus_lane_and_no_curbside_has_only_the_stops_rows() {
+fn a_street_with_a_lane_for_the_bus_and_no_curbside_has_only_the_stops_rows() {
     let s = stop_street(&AT_THE_CURB, Locale::En);
     let h = curb_html(&s);
     assert_eq!((count(&h, "id=\"stop-strip-"), count(&h, "id=\"curb-strip-")), (2, 0), "{h}");
     assert!(h.contains(">Stops along the street</h2>"), "{h}");
-    // a street with neither has no row, nor one with only plain driving lanes
-    let plain = stop_street(&[("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 3000, None)], Locale::En);
-    assert_eq!(count(&curb_html(&plain), "role=\"listbox\""), 0);
+    // a street with neither has no row
     let none = stop_street(&[("sidewalk", 3000, None), ("bike", 1800, None), ("sidewalk", 3000, None)], Locale::En);
     assert_eq!(count(&curb_html(&none), "role=\"listbox\""), 0);
+}
+
+#[test]
+fn a_street_of_plain_travel_lanes_has_the_stops_rows() {
+    let s = stop_street(&[("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 3000, None)], Locale::En);
+    let h = curb_html(&s);
+    assert_eq!((count(&h, "id=\"stop-strip-"), count(&h, "id=\"curb-strip-")), (2, 0), "{h}");
 }
 
 #[test]
