@@ -1,6 +1,7 @@
-//! The curbside strips: for each side of the street that has a curbside lane, a bar for the street's length with one
-//! cell per use and one per gap between them, and the pure decisions a drag of a use carries out. It follows the zone
-//! strip (`strip.rs`): one listbox and one tab stop, the arrow keys choosing a cell and Alt with them moving the use.
+//! The strips along the street under the zone strip: for each side that can have one, a bar for the street's length
+//! with one cell per curbside use and one per gap between them, and under it the same for the transit stops. Both are
+//! a `Row`; the pure decisions a drag carries out are written once. It follows the zone strip (`strip.rs`): one
+//! listbox and one tab stop, the arrow keys choosing a cell and Alt with them moving the thing in it.
 
 use std::rc::Rc;
 
@@ -9,140 +10,139 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::HtmlElement;
 
 use super::keys::{ZoneAction, on_strip};
-use super::model::{CurbCell, SNAP_MM, snap};
+use super::model::{SNAP_MM, StripCell, snap};
+use super::row::{CurbRow, Row, StopRow, cell_id, strip_id};
 use super::strip::{basis_by_length, is_boundary_drag};
-use super::text::curb_cell_text;
+use super::text::cell_text;
 use super::watch::SheetWatch;
 use crate::shared::catalogue::Side;
 use crate::shared::i18n::Args;
 
-/// The word a side is spoken and named by, and the part of the strip's and cells' ids.
-fn side_word(side: Side) -> &'static str {
-    match side {
-        Side::Left => "left",
-        Side::Right => "right",
-    }
-}
-
-fn strip_id(side: Side) -> String {
-    format!("curb-strip-{}", side_word(side))
-}
-
-fn cell_id(side: Side, index: usize) -> String {
-    format!("curb-{}-{index}", side_word(side))
-}
-
-/// What a drag of one use works from, as measured when the press began.
+/// What a drag of one thing works from, as measured when the press began.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DragSpan {
-    /// Where the use starts.
+    /// Where the thing starts.
     pub from_mm: i32,
     /// How many millimetres of street a pixel of the whole strip stands for.
     pub mm_per_px: f64,
-    /// The lowest and the highest start it may take without meeting another use or an end of the street.
+    /// The lowest and the highest start it may take without meeting another thing or an end of the street.
     pub low_mm: i32,
     pub high_mm: i32,
 }
 
-/// The span of the use in cell `cell` when the whole strip is `strip_px` wide. The scale is the strip's (the street's
-/// length over its width), not the use's own cell's, which the minimum width of a short cell would skew. `None` for a
-/// gap, a cell that is not there or a strip with no width. It may move into the gap before it and the gap after it, never over a neighbouring use.
-pub fn drag_span(cells: &[CurbCell], cell: usize, strip_px: f64) -> Option<DragSpan> {
-    let c = cells.get(cell).filter(|c| c.instance.is_some())?;
-    let length = c.to_mm - c.from_mm;
-    let street_mm = cells.last().map_or(0, |l| l.to_mm) - cells.first().map_or(0, |f| f.from_mm);
+/// The span of the thing in cell `cell` when the whole strip is `strip_px` wide. The scale is the strip's (the street's
+/// length over its width), not its own cell's, which the minimum width of a short cell would skew. `None` for a
+/// gap, a cell that is not there or a strip with no width. It may move into the gap before it and the gap after it, never over a neighbouring thing.
+pub fn drag_span<C: StripCell>(cells: &[C], cell: usize, strip_px: f64) -> Option<DragSpan> {
+    let c = cells.get(cell).filter(|c| c.instance().is_some())?;
+    let length = c.to_mm() - c.from_mm();
+    let street_mm = cells.last().map_or(0, |l| l.to_mm()) - cells.first().map_or(0, |f| f.from_mm());
     if strip_px <= 0.0 || length <= 0 || street_mm <= 0 {
         return None;
     }
     let low_mm = match cell.checked_sub(1).and_then(|p| cells.get(p)) {
-        Some(p) if p.instance.is_none() => p.from_mm,
-        _ => c.from_mm,
+        Some(p) if p.instance().is_none() => p.from_mm(),
+        _ => c.from_mm(),
     };
     let reach = match cells.get(cell + 1) {
-        Some(n) if n.instance.is_none() => n.to_mm,
-        _ => c.to_mm,
+        Some(n) if n.instance().is_none() => n.to_mm(),
+        _ => c.to_mm(),
     };
     // The highest start is the last multiple of the grid at which it still fits.
     let high_mm = (reach - length).div_euclid(SNAP_MM) * SNAP_MM;
-    Some(DragSpan { from_mm: c.from_mm, mm_per_px: f64::from(street_mm) / strip_px, low_mm, high_mm: high_mm.max(c.from_mm) })
+    Some(DragSpan { from_mm: c.from_mm(), mm_per_px: f64::from(street_mm) / strip_px, low_mm, high_mm: high_mm.max(c.from_mm()) })
 }
 
-/// Where the use starts when the pointer is `dx_px` from where it was pressed: snapped, and kept within the span.
+/// Where the thing starts when the pointer is `dx_px` from where it was pressed: snapped, and kept within the span.
 pub fn dragged_from_mm(dx_px: f64, s: &DragSpan) -> i32 {
     let mm = f64::from(s.from_mm) + dx_px * s.mm_per_px;
     let (low, high) = (s.low_mm.min(s.high_mm), s.high_mm);
     snap(mm.round().clamp(f64::from(low), f64::from(high)) as i32).clamp(low, high)
 }
 
-/// A press on a use, held until it ends.
+/// A press on a thing, held until it ends.
 #[derive(Clone, Copy)]
 struct Press {
     start_x: f64,
     span: DragSpan,
-    /// Moved far enough to be a drag (`begin_curb_drag` has been called and was taken).
+    /// Moved far enough to be a drag (`begin_cell_drag` has been called and was taken).
     active: bool,
 }
 
+/// The chosen cell of `side`'s strip in the row, if the row has the side and one is chosen.
+fn selected_of<R: Row>(w: SheetWatch, side: Side) -> Option<usize> {
+    let v = w.view();
+    R::strips(&v).sides.iter().find(|s| s.side == side)?.selected
+}
+
 /// The cell `i` of `side`'s strip. Every attribute follows the view, so the elements stay while the cells change.
-fn curb_cell(w: SheetWatch, side: Side, i: usize, on_down: impl Fn(leptos::ev::PointerEvent, usize) + Copy + 'static) -> impl IntoView {
-    let cell = move || w.view().curb.sides.iter().find(|s| s.side == side).and_then(|s| s.cells.get(i).map(|c| (c.instance.is_some(), c.ok)));
+fn strip_cell<R: Row>(w: SheetWatch, side: Side, i: usize, on_down: impl Fn(leptos::ev::PointerEvent, usize) + Copy + 'static) -> impl IntoView {
+    let cell = move || {
+        let v = w.view();
+        R::strips(&v).sides.iter().find(|s| s.side == side).and_then(|s| s.cells.get(i).map(|c| (c.instance().is_some(), c.ok())))
+    };
     let name = move || {
         let (i18n, units) = (w.i18n(), w.units());
-        w.view()
-            .curb
+        let v = w.view();
+        R::strips(&v)
             .sides
             .iter()
             .find(|s| s.side == side)
             .and_then(|s| s.cells.get(i))
-            .map(|c| crate::shared::said::say(&i18n, units, &c.label))
+            .map(|c| crate::shared::said::say(&i18n, units, c.label()))
             .unwrap_or_default()
     };
+    let id = cell_id::<R>(side, i);
+    let choose = move |_| w.select_cell::<R>(side, i);
     view! {
         <div
-            class="curb-cell"
+            class=format!("{}-cell", R::ID)
             class:gap=move || cell().is_some_and(|c| !c.0)
             class:failing=move || cell().is_some_and(|c| !c.1)
-            id=cell_id(side, i)
+            id=id
             role="option"
-            aria-selected=move || w.view().curb.sides.iter().find(|s| s.side == side).is_some_and(|s| s.selected == Some(i)).to_string()
+            aria-selected=move || R::strips(&w.view()).sides.iter().find(|s| s.side == side).is_some_and(|s| s.selected == Some(i)).to_string()
             aria-label=move || {
                 let _ = w.i18n().locale();
-                w.view().curb.sides.iter().find(|s| s.side == side).map(|s| curb_cell_text(s, i, &w.i18n(), w.units())).unwrap_or_default()
+                let v = w.view();
+                R::strips(&v).sides.iter().find(|s| s.side == side).map(|s| cell_text(R::CELL_KEY, s, i, &w.i18n(), w.units())).unwrap_or_default()
             }
             aria-description=move || cell().is_some_and(|c| !c.1).then(|| w.i18n().tr("curb-cell-failing", &Args::new()))
             title=name
             style=move || {
+                let v = w.view();
                 let lengths: Vec<i32> =
-                    w.view().curb.sides.iter().find(|s| s.side == side).map(|s| s.cells.iter().map(|c| c.to_mm - c.from_mm).collect()).unwrap_or_default();
+                    R::strips(&v).sides.iter().find(|s| s.side == side).map(|s| s.cells.iter().map(|c| c.to_mm() - c.from_mm()).collect()).unwrap_or_default();
                 format!("flex-grow: {:.4}", basis_by_length(&lengths).get(i).copied().unwrap_or(0.0))
             }
             on:pointerdown=move |e| on_down(e, i)
-            on:click=move |_| w.select_curb(side, i)
+            on:click=choose
         >
-            <span class="curb-name">{name}</span>
+            <span class=format!("{}-name", R::ID)>{name}</span>
         </div>
     }
 }
 
-/// One side's strip, under the zone strip.
-#[component]
-fn CurbStrip(w: SheetWatch, side: Side) -> impl IntoView {
-    let id = strip_id(side);
+/// One side's strip of the row, under the zone strip (or the curbside strip of the same side).
+fn strip<R: Row>(w: SheetWatch, side: Side) -> impl IntoView {
+    let id = strip_id::<R>(side);
     let side_text = move || w.i18n().tr(if side == Side::Left { "side-word-left" } else { "side-word-right" }, &Args::new());
-    let caption = move || w.i18n().tr("st-curb-caption", &Args::new().str("side", side_text()));
-    let strip_label = move || w.i18n().tr("st-curb-strip-label", &Args::new().str("side", side_text()));
-    let selected = move || w.view().curb.sides.iter().find(|s| s.side == side).and_then(|s| s.selected);
-    let active = move || selected().map(|i| cell_id(side, i));
-    let count = move || w.view().curb.sides.iter().find(|s| s.side == side).map_or(0, |s| s.cells.len());
+    let caption = move || w.i18n().tr(R::CAPTION_KEY, &Args::new().str("side", side_text()));
+    let strip_label = move || w.i18n().tr(R::STRIP_LABEL_KEY, &Args::new().str("side", side_text()));
+    let active = move || selected_of::<R>(w, side).map(|i| cell_id::<R>(side, i));
+    let count = move || {
+        let v = w.view();
+        R::strips(&v).sides.iter().find(|s| s.side == side).map_or(0, |s| s.cells.len())
+    };
 
-    // A press on a use selects it; once it has moved a few pixels it drags the use. The strip holds the pointer, not
-    // the cell, because the cells come and go as the gaps around the use change during the drag.
+    // A press on a thing selects it; once it has moved a few pixels it drags the thing. The strip holds the pointer,
+    // not the cell, because the cells come and go as the gaps around the thing change during the drag.
     let press = StoredValue::new_local(None::<Press>);
     let finish = move |keep: bool| {
         if let Some(p) = press.get_value() {
             press.set_value(None);
             if p.active {
-                w.end_curb_drag(keep);
+                w.end_cell_drag(keep);
             }
         }
     };
@@ -151,10 +151,14 @@ fn CurbStrip(w: SheetWatch, side: Side) -> impl IntoView {
             return;
         }
         finish(false);
-        w.select_curb(side, i);
-        let Some(strip) = document().get_element_by_id(&strip_id(side)) else { return };
+        w.select_cell::<R>(side, i);
+        let Some(strip) = document().get_element_by_id(&strip_id::<R>(side)) else { return };
         let width = f64::from(strip.scroll_width());
-        let Some(span) = w.view_now().curb.sides.iter().find(|s| s.side == side).and_then(|s| drag_span(&s.cells, i, width)) else { return };
+        let span = {
+            let v = w.view_now();
+            R::strips(&v).sides.iter().find(|s| s.side == side).and_then(|s| drag_span(&s.cells, i, width))
+        };
+        let Some(span) = span else { return };
         press.set_value(Some(Press { start_x: f64::from(ev.client_x()), span, active: false }));
         let _ = strip.set_pointer_capture(ev.pointer_id());
         ev.prevent_default();
@@ -169,21 +173,21 @@ fn CurbStrip(w: SheetWatch, side: Side) -> impl IntoView {
             if !is_boundary_drag(dx) {
                 return;
             }
-            if !w.begin_curb_drag() {
+            if !w.begin_cell_drag::<R>() {
                 press.set_value(None);
                 return;
             }
             p.active = true;
             press.set_value(Some(p));
         }
-        w.drag_curb_to(dragged_from_mm(dx, &p.span));
+        w.drag_cell_to::<R>(dragged_from_mm(dx, &p.span));
     };
     // The chosen cell is brought into view inside the strip (its own scroll, never the page's).
     #[cfg(target_arch = "wasm32")]
     Effect::new(move |_| {
         let Some(cell_id) = active() else { return };
         let doc = document();
-        if let (Some(cell), Some(strip)) = (doc.get_element_by_id(&cell_id), doc.get_element_by_id(&strip_id(side))) {
+        if let (Some(cell), Some(strip)) = (doc.get_element_by_id(&cell_id), doc.get_element_by_id(&strip_id::<R>(side))) {
             let (c, s) = (cell.get_bounding_client_rect(), strip.get_bounding_client_rect());
             let by = super::strip::scroll_into_view_px(c.left(), c.right(), s.left(), s.right());
             if by != 0.0 {
@@ -201,10 +205,10 @@ fn CurbStrip(w: SheetWatch, side: Side) -> impl IntoView {
             ev.prevent_default();
         }
         match action {
-            ZoneAction::Select(d) => w.select_curb_relative(side, d),
-            ZoneAction::SelectEdge { last } => w.select_curb_edge(side, last),
+            ZoneAction::Select(d) => w.select_cell_relative::<R>(side, d),
+            ZoneAction::SelectEdge { last } => w.select_cell_edge::<R>(side, last),
             ZoneAction::Nudge(mm) => {
-                w.nudge_curb(mm);
+                w.nudge_cell::<R>(mm);
             }
         }
     };
@@ -212,7 +216,7 @@ fn CurbStrip(w: SheetWatch, side: Side) -> impl IntoView {
     let cells = move || {
         view! {
             <For each=move || 0..count() key=|i| *i let:i>
-                {curb_cell(w, side, i, on_down)}
+                {strip_cell::<R>(w, side, i, on_down)}
             </For>
         }
     };
@@ -221,7 +225,7 @@ fn CurbStrip(w: SheetWatch, side: Side) -> impl IntoView {
             <p class="zone-caption" title=caption>{caption}</p>
             <div
                 id=id
-                class="curb-strip"
+                class=format!("{}-strip", R::ID)
                 role="listbox"
                 aria-orientation="horizontal"
                 tabindex="0"
@@ -239,18 +243,32 @@ fn CurbStrip(w: SheetWatch, side: Side) -> impl IntoView {
     }
 }
 
-/// The curbside strips, one for each side that has a curbside lane: nothing for a street with none.
+/// The strips, for each side that has one: the curbside strip, then the stops' strip under it. Nothing for a street
+/// with none.
 #[component]
 pub fn CurbStrips(vm: Rc<super::vm::StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
-    let heading = move || w.i18n().tr("st-curb-heading", &Args::new());
-    let sides = move || w.view().curb.sides.iter().map(|s| s.side).collect::<Vec<_>>();
+    // The heading names what the section holds: the curbside strips, the stops rows, or both.
+    let heading = move || {
+        let v = w.view();
+        let key = match (v.curb.sides.is_empty(), v.stops.sides.is_empty()) {
+            (false, false) => "st-curb-stop-heading",
+            (true, _) => "st-stop-heading",
+            (false, true) => "st-curb-heading",
+        };
+        w.i18n().tr(key, &Args::new())
+    };
+    let has = |side: Side, sides: Vec<Side>| sides.contains(&side);
+    let curb_sides = move || w.view().curb.sides.iter().map(|s| s.side).collect::<Vec<_>>();
+    let stop_sides = move || w.view().stops.sides.iter().map(|s| s.side).collect::<Vec<_>>();
+    let sides = move || [Side::Left, Side::Right].into_iter().filter(|s| has(*s, curb_sides()) || has(*s, stop_sides())).collect::<Vec<_>>();
     view! {
         <Show when=move || !sides().is_empty()>
             <section class="curb-strip-section" aria-labelledby="h-curb">
                 <h2 id="h-curb" class="sr-only">{heading}</h2>
                 <For each=sides key=|s| *s let:side>
-                    <CurbStrip w=w side=side/>
+                    <Show when=move || has(side, curb_sides())>{strip::<CurbRow>(w, side)}</Show>
+                    <Show when=move || has(side, stop_sides())>{strip::<StopRow>(w, side)}</Show>
                 </For>
             </section>
         </Show>
@@ -261,6 +279,7 @@ pub fn CurbStrips(vm: Rc<super::vm::StreetVm>) -> impl IntoView {
 mod tests {
     use super::*;
     use crate::shared::said::Said;
+    use crate::street::model::CurbCell;
 
     fn cell(instance: Option<usize>, from_mm: i32, to_mm: i32) -> CurbCell {
         CurbCell { instance, from_mm, to_mm, use_: None, label: Said::new("curb-gap"), ok: true }
@@ -315,6 +334,41 @@ mod tests {
         assert_eq!(dragged_from_mm(500.0, &s), 44_000);
         let fixed = DragSpan { low_mm: 10_000, high_mm: 10_000, ..s };
         assert_eq!(dragged_from_mm(30.0, &fixed), 10_000, "no room: it stays");
+    }
+
+    fn stop_cell(instance: Option<usize>, from_mm: i32, to_mm: i32) -> crate::street::model::StopCell {
+        crate::street::model::StopCell {
+            instance,
+            from_mm,
+            to_mm,
+            kind: instance.map(|_| crate::street::model::StopKind::Curb),
+            shelter: false,
+            name: None,
+            label: Said::new("curb-gap"),
+            ok: true,
+        }
+    }
+
+    #[test]
+    fn a_stop_is_dragged_within_the_free_stretch_between_its_neighbours() {
+        // Stops of 9 m at 10 m and at 40 m, with a gap on each side and between them, over 60 m.
+        let cells = vec![
+            stop_cell(None, 0, 10_000),
+            stop_cell(Some(0), 10_000, 19_000),
+            stop_cell(None, 19_000, 40_000),
+            stop_cell(Some(1), 40_000, 49_000),
+            stop_cell(None, 49_000, 60_000),
+        ];
+        let first = drag_span(&cells, 1, 600.0).unwrap();
+        assert_eq!((first.low_mm, first.high_mm), (0, 31_000), "from the start of the street to where it still fits before the next stop");
+        let second = drag_span(&cells, 3, 600.0).unwrap();
+        assert_eq!((second.low_mm, second.high_mm), (19_000, 51_000));
+        assert_eq!(dragged_from_mm(10_000.0, &first), 31_000, "the pointer far past the next stop stops at it");
+        assert_eq!(dragged_from_mm(-10_000.0, &second), 19_000);
+        assert_eq!(drag_span(&cells, 2, 600.0), None, "a gap is not dragged");
+        let touching = vec![stop_cell(Some(0), 0, 9_000), stop_cell(Some(1), 9_000, 18_000), stop_cell(None, 18_000, 30_000)];
+        let s = drag_span(&touching, 1, 300.0).unwrap();
+        assert_eq!((s.low_mm, s.high_mm), (9_000, 21_000), "it cannot move toward a stop it touches");
     }
 
     #[test]

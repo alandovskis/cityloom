@@ -1,8 +1,9 @@
 //! The surface layer: the top of every roadway piece, at the height of the ground, with its tint and hatch. The
 //! markings are painted over it and a raised piece stands over both.
 
+use super::curbside::Over;
 use crate::shared::i18n::I18n;
-use crate::street::model::{SegView, ShownInstance};
+use crate::street::model::SegView;
 
 use super::projection::Projection;
 use super::raised::{Strip, group, piece_with, sliver};
@@ -15,7 +16,7 @@ pub(super) fn split(strips: Vec<Strip>) -> (Vec<Strip>, Vec<Strip>) {
 
 /// The roadway pieces as one group. Each keeps its `<g class="iso-piece" data-uid>`.
 /// Where the run holds a transition (`draw`), the pieces that change taper, and the ones the host lacks open in it.
-pub(super) fn layer(p: &Projection, segs: &[SegView], i18n: &I18n, flat: &[Strip], across: bool, draw: Option<&Draw>, shown: &[ShownInstance]) -> String {
+pub(super) fn layer(p: &Projection, segs: &[SegView], i18n: &I18n, flat: &[Strip], across: bool, draw: Option<&Draw>, shown: &[Over]) -> String {
     let Some(draw) = draw else { return group("<g class=\"iso-surface\">", p, segs, i18n, flat, across, shown) };
     let mut out = String::from("<g class=\"iso-surface\">");
     for &strip in flat {

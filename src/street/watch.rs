@@ -9,7 +9,8 @@ use crate::shared::catalogue::Side;
 use crate::shared::i18n::I18n;
 use crate::shared::units::Units;
 use crate::street::keys::Action;
-use crate::street::model::{Editor, SegView, Use, View};
+use crate::street::model::{Editor, SegView, StopKind, Use, View};
+use crate::street::row::Row;
 use crate::street::vm::{StreetVm, ViewMode};
 
 /// What a component reads of the street view-model and tells it. The view-model
@@ -150,16 +151,32 @@ impl SheetWatch {
         self.vm.with_value(|v| v.end_boundary_drag(commit));
     }
 
-    pub fn select_curb(&self, side: Side, cell: usize) {
-        self.vm.with_value(|v| v.select_curb(side, cell));
+    pub fn select_cell<R: Row>(&self, side: Side, cell: usize) {
+        self.vm.with_value(|v| v.select_cell::<R>(side, cell));
     }
 
-    pub fn select_curb_relative(&self, side: Side, delta: i32) {
-        self.vm.with_value(|v| v.select_curb_relative(side, delta));
+    pub fn select_cell_relative<R: Row>(&self, side: Side, delta: i32) {
+        self.vm.with_value(|v| v.select_cell_relative::<R>(side, delta));
     }
 
-    pub fn select_curb_edge(&self, side: Side, last: bool) {
-        self.vm.with_value(|v| v.select_curb_edge(side, last));
+    pub fn select_cell_edge<R: Row>(&self, side: Side, last: bool) {
+        self.vm.with_value(|v| v.select_cell_edge::<R>(side, last));
+    }
+
+    pub fn nudge_cell<R: Row>(&self, delta_mm: i32) -> bool {
+        self.vm.with_value(|v| v.nudge_cell::<R>(delta_mm))
+    }
+
+    pub fn begin_cell_drag<R: Row>(&self) -> bool {
+        self.vm.with_value(|v| v.begin_cell_drag::<R>())
+    }
+
+    pub fn drag_cell_to<R: Row>(&self, from_mm: i32) {
+        self.vm.with_value(|v| v.drag_cell_to::<R>(from_mm));
+    }
+
+    pub fn end_cell_drag(&self, keep: bool) {
+        self.vm.with_value(|v| v.end_cell_drag(keep));
     }
 
     pub fn add_curb(&self, use_: Use, length_mm: i32) -> bool {
@@ -174,24 +191,52 @@ impl SheetWatch {
         self.vm.with_value(|v| v.resize_curb(length_mm))
     }
 
-    pub fn nudge_curb(&self, delta_mm: i32) -> bool {
-        self.vm.with_value(|v| v.nudge_curb(delta_mm))
-    }
-
     pub fn remove_curb(&self) -> bool {
         self.vm.with_value(|v| v.remove_curb())
     }
 
-    pub fn begin_curb_drag(&self) -> bool {
-        self.vm.with_value(|v| v.begin_curb_drag())
+    pub fn stop_kind_shown(&self) -> StopKind {
+        self.vm.with_value(|v| v.stop_kind_shown())
     }
 
-    pub fn drag_curb_to(&self, from_mm: i32) {
-        self.vm.with_value(|v| v.drag_curb_to(from_mm));
+    pub fn stop_shelter_shown(&self) -> bool {
+        self.vm.with_value(|v| v.stop_shelter_shown())
     }
 
-    pub fn end_curb_drag(&self, keep: bool) {
-        self.vm.with_value(|v| v.end_curb_drag(keep));
+    pub fn stop_name_shown(&self) -> String {
+        self.vm.with_value(|v| v.stop_name_shown())
+    }
+
+    pub fn pick_stop_kind(&self, kind: StopKind) {
+        self.vm.with_value(|v| v.pick_stop_kind(kind));
+    }
+
+    pub fn default_stop_kind(&self) -> StopKind {
+        self.vm.with_value(|v| v.default_stop_kind())
+    }
+
+    pub fn add_stop(&self, kind: StopKind, length_mm: i32) -> bool {
+        self.vm.with_value(|v| v.add_stop(kind, length_mm))
+    }
+
+    pub fn set_stop_kind(&self, kind: StopKind) -> bool {
+        self.vm.with_value(|v| v.set_stop_kind(kind))
+    }
+
+    pub fn set_stop_shelter(&self, on: bool) -> bool {
+        self.vm.with_value(|v| v.set_stop_shelter(on))
+    }
+
+    pub fn name_stop(&self, name: &str) -> bool {
+        self.vm.with_value(|v| v.name_stop(name))
+    }
+
+    pub fn resize_stop(&self, length_mm: i32) -> bool {
+        self.vm.with_value(|v| v.resize_stop(length_mm))
+    }
+
+    pub fn remove_stop(&self) -> bool {
+        self.vm.with_value(|v| v.remove_stop())
     }
 
     pub fn say_bad_number(&self) {

@@ -356,6 +356,7 @@ zone-refused-no-boundary = La première zone commence à l’extrémité de la r
 zone-refused-dragging = Terminez le glissement avant de modifier les zones.
 zones-elsewhere = Les zones ont été tracées sur cette rue lorsqu’elle mesurait { $drawn }; ici, elle mesure { $loaded }.
 check-curb-in = { $check } : { $instance }
+check-stop-in = { $check } : { $instance }
 check-zone-in = { $check } : { $zone }
 zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $section ->
         [own] sa propre coupe
@@ -395,9 +396,17 @@ svg-curb-uses = Bord de rue, { $side } : { $count ->
         [one] un usage
        *[other] { $count } usages
     } le long de la rue.
+svg-stops = Arrêts, { $side } : { $count ->
+        [one] un arrêt
+       *[other] { $count } arrêts
+    } le long de la rue ({ $kinds }).
 svg-iso-curb = { $count ->
         [one] Un usage du bord de rue est montré.
        *[other] { $count } usages du bord de rue sont montrés.
+    }
+svg-iso-stops = { $count ->
+        [one] Un arrêt d’autobus est montré ({ $kinds }).
+       *[other] { $count } arrêts d’autobus sont montrés ({ $kinds }).
     }
 check-boundary = entre { $a } et { $b }
 check-label-transition-room = Place pour la transition
@@ -460,3 +469,71 @@ st-curb-use = Usage
 st-curb-length = Longueur ({ $unit })
 st-curb-add = Ajouter un usage
 st-curb-remove = Retirer un usage
+
+# Arrêts de transport en commun (src/street/model/stop.rs).
+stop-kind-curb = Arrêt au trottoir
+stop-kind-bulb = Avancée de trottoir
+stop-kind-island = Îlot d’embarquement
+stop-word-sheltered = avec abribus
+stop-word-unsheltered = sans abribus
+rev-stop-add = Arrêt ajouté à { $at } : { $kind }
+rev-stop-kind = Type d’arrêt changé à { $at } : { $kind }
+rev-stop-shelter = Arrêt à { $at } : { $state }
+rev-stop-name = Arrêt nommé à { $at } : { $kind }
+rev-stop-resize = Longueur modifiée à { $at } : { $kind }
+rev-stop-move = Arrêt déplacé à { $at } : { $kind }
+rev-stop-remove = Arrêt retiré à { $at } : { $kind }
+
+# Les vérifications des arrêts de transport en commun (src/street/model/stop.rs).
+stop-instance = { $kind } à { $at }, { $side }
+stop-instance-named = { $name } ({ $kind }, { $at })
+check-label-stop-lane = Voie pour l’autobus aux arrêts
+check-label-stop-kind = Arrêts aménagés comme leur type l’exige
+check-label-stop-length = Arrêts assez longs pour un autobus
+check-label-stop-width = Arrêts avec place pour embarquer
+check-label-stop-bike = Arrêts loin des pistes cyclables
+check-label-stop-shelter = Abribus avec place suffisante
+check-detail-stop-lane = Il n’y a pas ici de voie d’autobus ou de circulation dans le sens de la circulation de ce côté.
+check-detail-stop-lane-ok = Chaque arrêt a une voie pour l’autobus.
+check-detail-stop-kind-curb = Un arrêt au trottoir demande que la voie de l’autobus longe le trottoir, sans voie de stationnement ni de chargement entre les deux.
+check-detail-stop-kind-bulb = Une avancée de trottoir demande une voie de stationnement ou de chargement à côté de la voie de l’autobus.
+check-detail-stop-kind-island = Un îlot d’embarquement demande, à côté de la voie de l’autobus, une voie de stationnement, de chargement ou une zone tampon, avec une piste cyclable derrière.
+check-detail-stop-kind-ok = Chaque arrêt est aménagé comme son type l’exige.
+check-detail-stop-length = L’arrêt fait { $length } de long, moins que les { $min } nécessaires à un autobus.
+check-detail-stop-length-ok = Chaque arrêt est assez long pour un autobus.
+check-detail-stop-width-curb = Le trottoir à côté de l’arrêt fait { $have } de large; il en faut { $need } ou plus.
+check-detail-stop-width-bulb = L’avancée et le trottoir donnent { $have }; il en faut { $need } ou plus.
+check-detail-stop-width-island = L’îlot fait { $have } de large; il en faut { $need } ou plus.
+check-detail-stop-width-ok = Chaque arrêt laisse la place d’embarquer.
+check-detail-stop-bike-cross = Les cyclistes traverseraient le quai. Le passage n’est pas dessiné : à vérifier.
+check-detail-stop-bike-narrow = La piste cyclable derrière l’îlot fait { $have } de large; il en faut { $need } ou plus.
+check-detail-stop-bike-ok = Aucun arrêt n’envoie les cyclistes à travers le quai.
+check-detail-stop-shelter-curb = Le trottoir à côté de l’arrêt fait { $have } de large; un abribus demande { $need } ou plus.
+check-detail-stop-shelter-bulb = L’avancée et le trottoir donnent { $have }; un abribus demande { $need } ou plus.
+check-detail-stop-shelter-island = L’îlot fait { $have } de large; un abribus demande { $need } ou plus.
+check-detail-stop-shelter-ok = Chaque abribus a la place voulue.
+
+# Les rangées d’arrêts et leurs commandes (src/street/row.rs, src/street/stop_tools.rs, src/street/model/stop.rs).
+stop-label = { $kind }
+stop-label-named = { $name } ({ $kind })
+stop-label-sheltered = { $label }, avec abribus
+stop-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
+stop-choose-gap = Choisissez d’abord un tronçon libre du bord de la rue.
+stop-choose-stop = Choisissez d’abord un arrêt.
+st-stop-heading = Arrêts le long de la rue
+st-curb-stop-heading = Usages du bord de rue et arrêts le long de la rue
+st-stop-caption = Arrêts, { $side }
+st-stop-strip-label = Arrêts, { $side }
+st-stop-tools = Commandes des arrêts
+st-stop-kind = Type
+st-stop-name = Nom
+st-stop-length = Longueur ({ $unit })
+st-stop-shelter = Abribus
+st-stop-add = Ajouter un arrêt
+st-stop-remove = Retirer un arrêt
+stop-refused-no-anchor = Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’arrêts.
+stop-refused-elsewhere = Les arrêts de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.
+stop-refused-overlap = Cet arrêt chevaucherait un autre arrêt du même côté.
+stop-refused-too-long = Cet arrêt dépasserait l’extrémité de la rue.
+stop-refused-time-windows = On ne peut pas placer un arrêt sur une voie qui change selon l’heure de la journée.
+stop-refused-dragging = Terminez le glissement avant de modifier les arrêts.

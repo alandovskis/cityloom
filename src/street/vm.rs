@@ -17,7 +17,8 @@ use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
 use crate::shared::said::say_now;
 use crate::shared::units::Units;
-use crate::street::model::{CurbRefusal, Editor, Keep, SPEED_CHOICES, Use, View, ZoneRefusal};
+use crate::street::model::{CurbRefusal, Editor, Keep, SPEED_CHOICES, StopKind, StripCell, Subject, Use, View, ZoneRefusal};
+use crate::street::row::{CurbRow, Row, StopRow};
 use crate::street::text;
 use crate::sync::model::{Change, Origin};
 
@@ -84,6 +85,13 @@ pub struct StreetVm {
     mode: ArcRwSignal<ViewMode>,
     /// A merge waiting for the choice of the section to keep: with the next zone (true) or the previous one.
     merge: ArcRwSignal<Option<bool>>,
+    /// The kind picked for the free stretch (side, start) chosen on a stops row; another stretch starts from the kind
+    /// that fits there.
+    stop_pick: ArcRwSignal<Option<(Side, i32, StopKind)>>,
+    /// The shelter ticked for the chosen free stretch, which the stop added there starts with.
+    stop_shelter_pick: ArcRwSignal<Option<(Side, i32, bool)>>,
+    /// The name typed for the chosen free stretch, which the stop added there starts with.
+    stop_name_pick: ArcRwSignal<Option<(Side, i32, String)>>,
 }
 
 /// The areas whose outline holds the midpoint of the street a page edits, read once when the page opens: none for
@@ -134,7 +142,19 @@ impl StreetVm {
                     },
                 )
             });
-            StreetVm { core: Core::new(street), ports, i18n, keeper, binding, areas, mode: ArcRwSignal::new(mode), merge: ArcRwSignal::new(None) }
+            StreetVm {
+                core: Core::new(street),
+                ports,
+                i18n,
+                keeper,
+                binding,
+                areas,
+                mode: ArcRwSignal::new(mode),
+                merge: ArcRwSignal::new(None),
+                stop_pick: ArcRwSignal::new(None),
+                stop_shelter_pick: ArcRwSignal::new(None),
+                stop_name_pick: ArcRwSignal::new(None),
+            }
         })
     }
 
@@ -441,11 +461,11 @@ impl StreetVm {
         self.end_gesture(commit);
     }
 
-    // ---- curbside uses ----
+    // ---- the rows along the street: curbside uses and transit stops ----
 
-    /// A curbside edit the person made: announced like any edit; a refusal is said in the page's words and changes
-    /// nothing.
-    fn curb_edit(&self, f: impl FnOnce(&mut Editor) -> Result<(), CurbRefusal>) -> bool {
+    /// An edit of a row the person made: announced like any edit; a refusal is said in the words of what was edited
+    /// and changes nothing.
+    fn row_edit(&self, subject: Subject, f: impl FnOnce(&mut Editor) -> Result<(), CurbRefusal>) -> bool {
         let before = self.class_now();
         match self.core.edit(f) {
             Ok(()) => {
@@ -456,135 +476,323 @@ impl StreetVm {
                 true
             }
             Err(refusal) => {
-                self.say_curb_refusal(refusal);
+                self.say_refusal(subject, refusal);
                 false
             }
         }
     }
 
-    fn say_curb_refusal(&self, refusal: CurbRefusal) {
-        self.ports.announcer.say(&say_now(&self.i18n, self.units_now(), &refusal.said()));
+    fn say_refusal(&self, subject: Subject, refusal: CurbRefusal) {
+        self.ports.announcer.say(&say_now(&self.i18n, self.units_now(), &refusal.said_for(subject)));
     }
 
     fn say_now_key(&self, key: &str) {
         self.ports.announcer.say(&self.i18n.tr_now(key, &Args::new()));
     }
 
-    /// The chosen cell of the strips: its side, its place on the strip, its extent and the use there (an index into
-    /// the street's `curb`), if any.
-    fn chosen_curb(&self) -> Option<(Side, Option<usize>, i32)> {
+    /// The chosen cell of the row's strips: its side, the thing in it (an index into the street's list), if any, and
+    /// where it starts.
+    fn chosen<R: Row>(&self) -> Option<(Side, Option<usize>, i32)> {
         let v = self.view_now();
-        v.curb.sides.iter().find_map(|s| {
+        R::strips(&v).sides.iter().find_map(|s| {
             let c = s.cells.get(s.selected?)?;
-            Some((s.side, c.instance, c.from_mm))
+            Some((s.side, c.instance(), c.from_mm()))
         })
     }
 
     /// Chooses cell `cell` of `side`'s strip, announcing it. A cell that is not there is left alone.
-    pub fn select_curb(&self, side: Side, cell: usize) {
-        // The drag moves the chosen use: choosing another would move that one instead.
+    pub fn select_cell<R: Row>(&self, side: Side, cell: usize) {
+        // The drag moves the chosen thing: choosing another would move that one instead.
         if self.core.read(|e| e.dragging()) {
             return;
         }
         let v = self.view_now();
-        let Some(s) = v.curb.sides.iter().find(|s| s.side == side) else { return };
+        let Some(s) = R::strips(&v).sides.iter().find(|s| s.side == side) else { return };
         let Some(c) = s.cells.get(cell) else { return };
-        let at = c.from_mm;
-        self.edit(|e| e.select_curb(side, at));
-        self.ports.announcer.say(&text::curb_cell_text(s, cell, &self.i18n, self.units_now()));
+        let at = c.from_mm();
+        self.edit(|e| R::select(e, side, at));
+        self.ports.announcer.say(&text::cell_text(R::CELL_KEY, s, cell, &self.i18n, self.units_now()));
     }
 
     /// The cell `delta` places along from the chosen one on `side` (the first, or the last going back, when none is).
-    pub fn select_curb_relative(&self, side: Side, delta: i32) {
+    pub fn select_cell_relative<R: Row>(&self, side: Side, delta: i32) {
         let v = self.view_now();
-        let Some(s) = v.curb.sides.iter().find(|s| s.side == side) else { return };
+        let Some(s) = R::strips(&v).sides.iter().find(|s| s.side == side) else { return };
         let target = match s.selected {
             Some(n) => n as i64 + delta as i64,
             None if delta < 0 => s.cells.len() as i64 - 1,
             None => 0,
         };
         if let Ok(cell) = usize::try_from(target) {
-            self.select_curb(side, cell);
+            self.select_cell::<R>(side, cell);
         }
     }
 
     /// The first cell of `side`'s strip, or the last (Home and End).
-    pub fn select_curb_edge(&self, side: Side, last: bool) {
-        let n = self.view_now().curb.sides.iter().find(|s| s.side == side).map_or(0, |s| s.cells.len());
+    pub fn select_cell_edge<R: Row>(&self, side: Side, last: bool) {
+        let n = R::strips(&self.view_now()).sides.iter().find(|s| s.side == side).map_or(0, |s| s.cells.len());
         if n > 0 {
-            self.select_curb(side, if last { n - 1 } else { 0 });
+            self.select_cell::<R>(side, if last { n - 1 } else { 0 });
         }
     }
 
-    /// Adds a use of `length_mm` at the start of the chosen gap. False, with the reason said, when no gap is chosen or
-    /// it was refused.
-    pub fn add_curb(&self, use_: Use, length_mm: i32) -> bool {
-        match self.chosen_curb() {
-            Some((side, None, from_mm)) => self.curb_edit(|e| e.add_curb(side, from_mm, length_mm, use_)),
+    /// Runs `f` on the chosen thing (its index and where it starts); says so when none is chosen.
+    fn on_chosen<R: Row>(&self, f: impl FnOnce(&mut Editor, usize, i32) -> Result<(), CurbRefusal>) -> bool {
+        match self.chosen::<R>() {
+            Some((_, Some(i), from)) => self.row_edit(R::SUBJECT, |e| f(e, i, from)),
             _ => {
-                self.say_now_key("curb-choose-gap");
+                self.say_now_key(R::CHOOSE_THING_KEY);
                 false
             }
         }
     }
 
-    /// Runs `f` on the chosen use (its index and where it starts); says so when none is chosen.
-    fn on_chosen_use(&self, f: impl FnOnce(&mut Editor, usize, i32) -> Result<(), CurbRefusal>) -> bool {
-        match self.chosen_curb() {
-            Some((_, Some(i), from)) => self.curb_edit(|e| f(e, i, from)),
+    /// Moves the chosen thing along the street by `delta_mm`.
+    pub fn nudge_cell<R: Row>(&self, delta_mm: i32) -> bool {
+        // The model lets a move through inside a gesture (that is how a drag moves); a command is not a drag.
+        if self.core.read(|e| e.dragging()) {
+            self.say_refusal(R::SUBJECT, CurbRefusal::Dragging);
+            return false;
+        }
+        self.on_chosen::<R>(|e, i, from| R::move_to(e, i, from + delta_mm))
+    }
+
+    /// Starts a drag of the chosen thing. False, with the reason said, while another drag is under way or when none
+    /// is chosen: then nothing is dragged and `end_cell_drag` is not to be called.
+    pub fn begin_cell_drag<R: Row>(&self) -> bool {
+        if !matches!(self.chosen::<R>(), Some((_, Some(_), _))) {
+            self.say_now_key(R::CHOOSE_THING_KEY);
+            return false;
+        }
+        let begun = self.edit(|e| R::begin_drag(e));
+        if !begun {
+            self.say_refusal(R::SUBJECT, CurbRefusal::Dragging);
+        }
+        begun
+    }
+
+    /// One step of a drag of the chosen thing: shown, not announced.
+    pub fn drag_cell_to<R: Row>(&self, from_mm: i32) {
+        if let Some((_, Some(i), _)) = self.chosen::<R>() {
+            self.quiet(|e| R::move_to(e, i, from_mm).is_ok());
+        }
+    }
+
+    /// The end of a drag: kept as one edit, and announced, when `keep`.
+    pub fn end_cell_drag(&self, keep: bool) {
+        self.end_gesture(keep);
+    }
+
+    // ---- curbside uses ----
+
+    pub fn select_curb(&self, side: Side, cell: usize) {
+        self.select_cell::<CurbRow>(side, cell);
+    }
+
+    pub fn select_curb_relative(&self, side: Side, delta: i32) {
+        self.select_cell_relative::<CurbRow>(side, delta);
+    }
+
+    pub fn select_curb_edge(&self, side: Side, last: bool) {
+        self.select_cell_edge::<CurbRow>(side, last);
+    }
+
+    /// Adds a use of `length_mm` at the start of the chosen gap. False, with the reason said, when no gap is chosen or
+    /// it was refused.
+    pub fn add_curb(&self, use_: Use, length_mm: i32) -> bool {
+        match self.chosen::<CurbRow>() {
+            Some((side, None, from_mm)) => self.row_edit(Subject::Use, |e| e.add_curb(side, from_mm, length_mm, use_)),
             _ => {
-                self.say_now_key("curb-choose-use");
+                self.say_now_key(CurbRow::CHOOSE_GAP_KEY);
                 false
             }
         }
     }
 
     pub fn set_curb_use(&self, use_: Use) -> bool {
-        self.on_chosen_use(|e, i, _| e.set_curb_use(i, use_))
+        self.on_chosen::<CurbRow>(|e, i, _| e.set_curb_use(i, use_))
     }
 
     pub fn resize_curb(&self, length_mm: i32) -> bool {
-        self.on_chosen_use(|e, i, _| e.resize_curb(i, length_mm))
+        self.on_chosen::<CurbRow>(|e, i, _| e.resize_curb(i, length_mm))
     }
 
-    /// Moves the chosen use along the street by `delta_mm`.
     pub fn nudge_curb(&self, delta_mm: i32) -> bool {
-        // The model lets a move through inside a gesture (that is how a drag moves); a command is not a drag.
-        if self.core.read(|e| e.dragging()) {
-            self.say_curb_refusal(CurbRefusal::Dragging);
-            return false;
-        }
-        self.on_chosen_use(|e, i, from| e.move_curb(i, from + delta_mm))
+        self.nudge_cell::<CurbRow>(delta_mm)
     }
 
     pub fn remove_curb(&self) -> bool {
-        self.on_chosen_use(|e, i, _| e.remove_curb(i))
+        self.on_chosen::<CurbRow>(|e, i, _| e.remove_curb(i))
     }
 
-    /// Starts a drag of the chosen use. False, with the reason said, while another drag is under way or when no use
-    /// is chosen: then nothing is dragged and `end_curb_drag` is not to be called.
     pub fn begin_curb_drag(&self) -> bool {
-        if !matches!(self.chosen_curb(), Some((_, Some(_), _))) {
-            self.say_now_key("curb-choose-use");
+        self.begin_cell_drag::<CurbRow>()
+    }
+
+    pub fn drag_curb_to(&self, from_mm: i32) {
+        self.drag_cell_to::<CurbRow>(from_mm);
+    }
+
+    pub fn end_curb_drag(&self, keep: bool) {
+        self.end_cell_drag(keep);
+    }
+
+    // ---- transit stops ----
+
+    pub fn select_stop(&self, side: Side, cell: usize) {
+        self.select_cell::<StopRow>(side, cell);
+    }
+
+    pub fn select_stop_relative(&self, side: Side, delta: i32) {
+        self.select_cell_relative::<StopRow>(side, delta);
+    }
+
+    pub fn select_stop_edge(&self, side: Side, last: bool) {
+        self.select_cell_edge::<StopRow>(side, last);
+    }
+
+    /// The kind a new stop begins as at the chosen gap: the first that fits there (curb stop, curb extension,
+    /// boarding island), else the curb stop. The curb stop when no gap is chosen.
+    pub fn default_stop_kind(&self) -> StopKind {
+        match self.chosen::<StopRow>() {
+            Some((side, None, from_mm)) => self.default_stop_kind_of(side, from_mm),
+            _ => StopKind::Curb,
+        }
+    }
+
+    fn default_stop_kind_of(&self, side: Side, from_mm: i32) -> StopKind {
+        self.core.read(|e| e.default_stop_kind(side, from_mm))
+    }
+
+    /// The kind the stops tools show: the chosen stop's, else the one picked for the chosen free stretch, else the kind
+    /// that fits there. Watched.
+    pub fn stop_kind_shown(&self) -> StopKind {
+        let chosen = {
+            let v = self.view();
+            v.stops.sides.iter().find_map(|s| s.cells.get(s.selected?).map(|c| (s.side, c.from_mm, c.kind)))
+        };
+        match chosen {
+            Some((_, _, Some(kind))) => kind,
+            Some((side, from, None)) => {
+                self.stop_pick.get().filter(|p| (p.0, p.1) == (side, from)).map(|p| p.2).unwrap_or_else(|| self.default_stop_kind_of(side, from))
+            }
+            None => StopKind::Curb,
+        }
+    }
+
+    /// The person picks `kind` on the kinds control: it changes the chosen stop, or is kept for the chosen free stretch.
+    pub fn pick_stop_kind(&self, kind: StopKind) {
+        match self.chosen::<StopRow>() {
+            Some((_, Some(_), _)) => {
+                self.set_stop_kind(kind);
+            }
+            Some((side, None, from)) => self.stop_pick.set(Some((side, from, kind))),
+            None => {}
+        }
+    }
+
+    /// Whether the shelter box shows ticked: the chosen stop's, else the one ticked for the chosen free stretch.
+    /// Watched.
+    pub fn stop_shelter_shown(&self) -> bool {
+        let chosen = {
+            let v = self.view();
+            v.stops.sides.iter().find_map(|s| s.cells.get(s.selected?).map(|c| (s.side, c.from_mm, c.kind.is_some().then_some(c.shelter))))
+        };
+        match chosen {
+            Some((_, _, Some(shelter))) => shelter,
+            Some((side, from, None)) => self.stop_shelter_pick.get().filter(|p| (p.0, p.1) == (side, from)).is_some_and(|p| p.2),
+            None => false,
+        }
+    }
+
+    /// Adds a stop of `kind` and `length_mm` at the start of the chosen gap, with the shelter ticked for that gap.
+    /// False, with the reason said, when no gap is chosen or it was refused.
+    pub fn add_stop(&self, kind: StopKind, length_mm: i32) -> bool {
+        match self.chosen::<StopRow>() {
+            Some((side, None, from_mm)) => {
+                let shelter = self.stop_shelter_pick.get_untracked().is_some_and(|p| (p.0, p.1) == (side, from_mm) && p.2);
+                let name = self.stop_name_pick.get_untracked().filter(|p| (p.0, p.1) == (side, from_mm)).map(|p| p.2);
+                let added = self.row_edit(Subject::Stop, |e| e.add_stop_named(side, from_mm, length_mm, kind, shelter, name.as_deref()));
+                if added {
+                    self.stop_shelter_pick.set(None);
+                    self.stop_name_pick.set(None);
+                }
+                added
+            }
+            _ => {
+                self.say_now_key(StopRow::CHOOSE_GAP_KEY);
+                false
+            }
+        }
+    }
+
+    pub fn set_stop_kind(&self, kind: StopKind) -> bool {
+        self.on_chosen::<StopRow>(|e, i, _| e.set_stop_kind(i, kind))
+    }
+
+    /// Sets the shelter of the chosen stop, or keeps it for the stop to be added in the chosen free stretch.
+    pub fn set_stop_shelter(&self, on: bool) -> bool {
+        match self.chosen::<StopRow>() {
+            Some((side, None, from)) => {
+                self.stop_shelter_pick.set(Some((side, from, on)));
+                true
+            }
+            _ => self.on_chosen::<StopRow>(|e, i, _| e.set_stop_shelter(i, on)),
+        }
+    }
+
+    /// The name the stops tools show: the chosen stop's, else the one typed for the chosen free stretch. Watched.
+    pub fn stop_name_shown(&self) -> String {
+        let chosen = {
+            let v = self.view();
+            v.stops.sides.iter().find_map(|s| s.cells.get(s.selected?).map(|c| (s.side, c.from_mm, c.kind.is_some().then(|| c.name.clone()))))
+        };
+        match chosen {
+            Some((_, _, Some(name))) => name.unwrap_or_default(),
+            Some((side, from, None)) => self.stop_name_pick.get().filter(|p| (p.0, p.1) == (side, from)).map(|p| p.2).unwrap_or_default(),
+            None => String::new(),
+        }
+    }
+
+    /// Names the chosen stop: the name is trimmed and a blank one takes the name away. Nothing is said when the stop
+    /// has that name already. On a free stretch the name is kept for the stop to be added there, as the kind and the
+    /// shelter are (no edit is made).
+    pub fn name_stop(&self, name: &str) -> bool {
+        let wanted = Some(name.trim()).filter(|n| !n.is_empty());
+        if let Some((side, None, from)) = self.chosen::<StopRow>() {
+            self.stop_name_pick.set(wanted.map(|n| (side, from, n.to_string())));
+            return true;
+        }
+        let v = self.view_now();
+        let chosen = v.stops.sides.iter().find_map(|s| s.cells.get(s.selected?)).filter(|c| c.instance.is_some());
+        if chosen.is_some_and(|c| c.name.as_deref() == wanted) {
             return false;
         }
-        let begun = self.edit(|e| e.begin_curb_drag());
-        if !begun {
-            self.say_curb_refusal(CurbRefusal::Dragging);
-        }
-        begun
+        self.on_chosen::<StopRow>(|e, i, _| e.name_stop(i, wanted))
     }
 
-    /// One step of a drag of the chosen use: shown, not announced.
-    pub fn drag_curb_to(&self, from_mm: i32) {
-        if let Some((_, Some(i), _)) = self.chosen_curb() {
-            self.quiet(|e| e.move_curb(i, from_mm).is_ok());
-        }
+    pub fn resize_stop(&self, length_mm: i32) -> bool {
+        self.on_chosen::<StopRow>(|e, i, _| e.resize_stop(i, length_mm))
     }
 
-    /// The end of a drag of a use: kept as one edit, and announced, when `keep`.
-    pub fn end_curb_drag(&self, keep: bool) {
-        self.end_gesture(keep);
+    pub fn nudge_stop(&self, delta_mm: i32) -> bool {
+        self.nudge_cell::<StopRow>(delta_mm)
+    }
+
+    pub fn remove_stop(&self) -> bool {
+        self.on_chosen::<StopRow>(|e, i, _| e.remove_stop(i))
+    }
+
+    pub fn begin_stop_drag(&self) -> bool {
+        self.begin_cell_drag::<StopRow>()
+    }
+
+    pub fn drag_stop_to(&self, from_mm: i32) {
+        self.drag_cell_to::<StopRow>(from_mm);
+    }
+
+    pub fn end_stop_drag(&self, keep: bool) {
+        self.end_cell_drag(keep);
     }
 
     /// Says that a typed length for a zone is not a number.
@@ -1923,5 +2131,462 @@ mod curb_tests {
         r.vm.select_curb_relative(Side::Left, -1);
         let v = r.vm.view_now();
         assert_eq!((v.curb.sides[0].selected, v.curb.sides[1].selected), (Some(0), None), "only one side holds the choice");
+    }
+}
+
+#[cfg(test)]
+mod stop_tests {
+    use super::*;
+    use crate::shared::catalogue::{REGIONS, StreetClass, kind_index};
+    use crate::shared::i18n::Locale;
+    use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
+    use crate::street::model::{Piece, Street, Use, ZoneEnd, ZoneFrame};
+
+    const LENGTH: i32 = 60_000;
+
+    struct Rig {
+        vm: Rc<StreetVm>,
+        said: Rc<RecordingAnnouncer>,
+    }
+
+    /// Right-hand traffic: sidewalk, a travel lane, a bus lane at the curb, parking and a sidewalk (a bulb fits).
+    const PARKED: [(&str, i32, Option<usize>); 6] =
+        [("sidewalk", 3000, None), ("parking", 2400, None), ("bus", 3300, Some(1)), ("bus", 3300, Some(0)), ("parking", 2400, None), ("sidewalk", 3000, None)];
+    /// The same with the bus lane against the curb: a curb stop fits.
+    const CURB: [(&str, i32, Option<usize>); 4] = [("sidewalk", 3000, None), ("bus", 3300, Some(1)), ("bus", 3300, Some(0)), ("sidewalk", 3000, None)];
+
+    fn street(pieces: &[(&str, i32, Option<usize>)]) -> Street {
+        let pieces: Vec<Piece> =
+            pieces.iter().map(|&(id, width_mm, direction)| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() }).collect();
+        Street::imported(StreetClass::Local, Side::Right, &pieces)
+    }
+
+    fn rig_of(street: &Street, frame_mm: Option<i32>, locale: Locale) -> Rig {
+        let region = REGIONS.iter().position(|r| r.drive_side == Side::Right).unwrap();
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(street, street, region).with_frame(frame_mm.map(|length_mm| ZoneFrame { length_mm, from_end: ZoneEnd::First }));
+        Rig { vm: StreetVm::new(ports, crate::i18n_for(locale), editor, None), said }
+    }
+
+    fn rig(pieces: &[(&str, i32, Option<usize>)]) -> Rig {
+        rig_of(&street(pieces), Some(LENGTH), Locale::En)
+    }
+
+    /// The cells of one side's stops row: the stop's index (a gap has none), where it starts and ends.
+    fn cells(r: &Rig, s: Side) -> Vec<(Option<usize>, i32, i32)> {
+        let v = r.vm.view_now();
+        v.stops.sides.iter().find(|x| x.side == s).unwrap().cells.iter().map(|c| (c.instance, c.from_mm, c.to_mm)).collect()
+    }
+
+    /// The chosen cell of the right side: where it starts and ends.
+    fn chosen(r: &Rig) -> Option<(i32, i32)> {
+        let v = r.vm.view_now();
+        let s = v.stops.sides.iter().find(|x| x.side == Side::Right)?;
+        s.cells.get(s.selected?).map(|c| (c.from_mm, c.to_mm))
+    }
+
+    /// A stop of 12 m at the start of the right side, chosen.
+    fn with_one_stop() -> Rig {
+        let r = rig(&CURB);
+        r.vm.select_stop(Side::Right, 0);
+        assert!(r.vm.add_stop(StopKind::Curb, 12_000));
+        r.said.take();
+        r
+    }
+
+    #[test]
+    fn a_street_with_a_lane_for_the_bus_or_a_curbside_has_a_row_per_side_and_one_without_has_none() {
+        let r = rig(&CURB);
+        let v = r.vm.view_now();
+        assert_eq!(v.stops.sides.iter().map(|s| s.side).collect::<Vec<_>>(), [Side::Left, Side::Right]);
+        assert_eq!(cells(&r, Side::Right), [(None, 0, LENGTH)], "one gap along the whole street");
+        assert!(v.stops.sides.iter().all(|s| s.selected.is_none()));
+        let none = rig_of(&street(&[("sidewalk", 3000, None), ("bike", 1800, None), ("sidewalk", 3000, None)]), Some(LENGTH), Locale::En);
+        assert!(none.vm.view_now().stops.sides.is_empty(), "no lane for a bus, no curbside: no row");
+        let unknown = rig_of(&street(&CURB), None, Locale::En);
+        assert!(unknown.vm.view_now().stops.sides.is_empty(), "no row while the street's length is unknown");
+    }
+
+    #[test]
+    fn a_street_of_plain_travel_lanes_has_a_row_where_a_bus_has_its_lane_and_a_curb_stop_passes() {
+        let r = rig(&[("sidewalk", 3000, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 3000, None)]);
+        let v = r.vm.view_now();
+        assert_eq!(v.stops.sides.iter().map(|s| s.side).collect::<Vec<_>>(), [Side::Left, Side::Right], "a lane in each direction, one on each half");
+        r.vm.select_stop(Side::Right, 0);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Curb);
+        assert!(r.vm.add_stop(StopKind::Curb, 12_000));
+        let v = r.vm.view_now();
+        assert!(v.stops.sides[1].cells[0].ok, "the stop beside the travel lane fails nothing");
+        assert!(
+            v.checks.iter().filter(|c| c.id.starts_with("stop-")).all(|c| c.ok),
+            "{:?}",
+            v.checks.iter().filter(|c| !c.ok).map(|c| c.id).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn adding_a_stop() {
+        let r = rig(&CURB);
+        r.vm.select_stop(Side::Right, 0);
+        assert_eq!(r.said.take(), ["Free, 0.0 m to 60.0 m, 60.0 m long, 1 of 1"]);
+        assert!(r.vm.add_stop(StopKind::Curb, 12_000));
+        assert_eq!(cells(&r, Side::Right), [(Some(0), 0, 12_000), (None, 12_000, LENGTH)]);
+        assert_eq!(r.said.take().len(), 1, "announced");
+        let v = r.vm.view_now();
+        assert_eq!(v.stops.sides[1].selected, Some(0), "the new stop is the chosen cell");
+        assert_eq!(v.revisions.last().unwrap().label.key, "rev-stop-add");
+        assert!(v.curb.sides.iter().all(|s| s.cells.len() == 1), "the curbside strips are untouched");
+        // a stop is not a gap
+        assert!(!r.vm.add_stop(StopKind::Curb, 9_000));
+        assert_eq!(r.said.take(), ["Choose a free stretch of the street's edge first."]);
+        assert!(r.vm.undo());
+        assert_eq!(cells(&r, Side::Right), [(None, 0, LENGTH)]);
+    }
+
+    #[test]
+    fn a_new_stop_begins_as_the_first_kind_that_fits_where_it_goes() {
+        let parked = rig(&PARKED);
+        parked.vm.select_stop(Side::Right, 0);
+        assert_eq!(parked.vm.default_stop_kind(), StopKind::Bulb, "a curb stop does not fit beside parking, a curb extension does");
+        let curb = rig(&CURB);
+        curb.vm.select_stop(Side::Right, 0);
+        assert_eq!(curb.vm.default_stop_kind(), StopKind::Curb);
+        // On a side with no lane for the bus nothing fits: the curb stop, which then fails its check.
+        let none = rig(&[("sidewalk", 3000, None), ("parking", 2400, None), ("sidewalk", 3000, None)]);
+        none.vm.select_stop(Side::Right, 0);
+        assert_eq!(none.vm.default_stop_kind(), StopKind::Curb);
+        // With no cell chosen it is the curb stop too.
+        assert_eq!(rig(&CURB).vm.default_stop_kind(), StopKind::Curb);
+    }
+
+    #[test]
+    fn the_kind_shown_is_the_chosen_stops_else_the_one_picked_for_the_gap_else_the_default() {
+        let r = rig(&PARKED);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Curb, "nothing chosen");
+        r.vm.select_stop(Side::Right, 0);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Bulb, "the default beside parking");
+        r.vm.pick_stop_kind(StopKind::Island);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Island, "the pick for this gap");
+        assert!(r.vm.add_stop(r.vm.stop_kind_shown(), 12_000));
+        assert_eq!(r.vm.view_now().stops.sides[1].cells[0].kind, Some(StopKind::Island));
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Island, "a chosen stop shows its own");
+        r.vm.pick_stop_kind(StopKind::Curb);
+        assert_eq!(r.vm.view_now().stops.sides[1].cells[0].kind, Some(StopKind::Curb), "with a stop chosen the pick changes it");
+        r.vm.select_stop(Side::Right, 1);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Bulb, "another gap starts from the default again");
+        r.vm.select_stop(Side::Left, 0);
+        r.vm.pick_stop_kind(StopKind::Curb);
+        r.vm.select_stop(Side::Right, 1);
+        assert_eq!(r.vm.stop_kind_shown(), StopKind::Bulb, "a pick belongs to its own gap");
+    }
+
+    #[test]
+    fn a_shelter_ticked_for_a_gap_starts_the_stop_added_there() {
+        let r = rig(&PARKED);
+        r.vm.select_stop(Side::Right, 0);
+        assert!(!r.vm.stop_shelter_shown());
+        let before = r.vm.view_now().revisions.len();
+        assert!(r.vm.set_stop_shelter(true), "a free stretch keeps it");
+        assert_eq!(r.vm.view_now().revisions.len(), before, "no edit is made");
+        assert!(r.vm.stop_shelter_shown());
+        // It belongs to its own gap.
+        r.vm.select_stop(Side::Left, 0);
+        assert!(!r.vm.stop_shelter_shown());
+        r.vm.select_stop(Side::Right, 0);
+        assert!(r.vm.stop_shelter_shown());
+        // The stop added there has the shelter, in the one revision of the add.
+        assert!(r.vm.add_stop(r.vm.stop_kind_shown(), 12_000));
+        let v = r.vm.view_now();
+        assert!(v.stops.sides[1].cells[0].shelter);
+        assert_eq!(v.revisions.len(), before + 1);
+        assert!(r.vm.stop_shelter_shown(), "a chosen stop shows its own");
+        // The next stop starts without one.
+        r.vm.select_stop(Side::Right, 1);
+        assert!(!r.vm.stop_shelter_shown());
+    }
+
+    #[test]
+    fn changing_its_kind_and_shelter() {
+        let r = with_one_stop();
+        assert!(r.vm.set_stop_kind(StopKind::Bulb));
+        assert_eq!(r.vm.view_now().stops.sides[1].cells[0].kind, Some(StopKind::Bulb));
+        assert_eq!(r.said.take().len(), 1);
+        assert!(r.vm.set_stop_shelter(true));
+        let v = r.vm.view_now();
+        assert!(v.stops.sides[1].cells[0].shelter);
+        assert_eq!(v.stops.sides[1].cells[0].label.key, "stop-label-sheltered");
+        assert_eq!(v.revisions.last().unwrap().label.key, "rev-stop-shelter");
+        assert!(r.vm.undo() && r.vm.undo());
+        assert_eq!(r.vm.view_now().stops.sides[1].cells[0].kind, Some(StopKind::Curb));
+        // a gap has nothing to change
+        r.vm.select_stop(Side::Right, 1);
+        r.said.take();
+        assert!(!r.vm.set_stop_kind(StopKind::Island));
+        assert_eq!(r.said.take(), ["Choose a stop first."]);
+    }
+
+    #[test]
+    fn naming_it() {
+        let r = with_one_stop();
+        assert!(r.vm.name_stop("  Mont-Royal  "));
+        let v = r.vm.view_now();
+        assert_eq!(v.stops.sides[1].cells[0].name.as_deref(), Some("Mont-Royal"), "trimmed");
+        assert_eq!(v.stops.sides[1].cells[0].label.key, "stop-label-named");
+        assert_eq!(r.said.take().len(), 1, "announced");
+        assert!(!r.vm.name_stop("Mont-Royal"), "the same name is no edit");
+        assert!(r.said.take().is_empty());
+        assert!(r.vm.name_stop("   "), "blank takes the name away");
+        assert_eq!(r.vm.view_now().stops.sides[1].cells[0].name, None);
+        assert_eq!(r.vm.view_now().stops.sides[1].cells[0].label.key, "stop-label");
+        assert!(r.vm.undo());
+        assert_eq!(r.vm.view_now().stops.sides[1].cells[0].name.as_deref(), Some("Mont-Royal"));
+        // A free stretch keeps the name for the stop added there; nothing is said and no edit is made.
+        r.vm.select_stop(Side::Right, 1);
+        r.said.take();
+        let before = r.vm.view_now().revisions.len();
+        assert!(r.vm.name_stop("x"));
+        assert!(r.said.take().is_empty());
+        assert_eq!(r.vm.view_now().revisions.len(), before);
+    }
+
+    #[test]
+    fn a_name_typed_for_a_gap_starts_the_stop_added_there() {
+        let r = rig(&PARKED);
+        r.vm.select_stop(Side::Right, 0);
+        assert_eq!(r.vm.stop_name_shown(), "");
+        let before = r.vm.view_now().revisions.len();
+        assert!(r.vm.name_stop("  Mont-Royal "));
+        assert_eq!(r.vm.view_now().revisions.len(), before, "no edit is made");
+        assert_eq!(r.vm.stop_name_shown(), "Mont-Royal");
+        // It belongs to its own gap.
+        r.vm.select_stop(Side::Left, 0);
+        assert_eq!(r.vm.stop_name_shown(), "");
+        r.vm.select_stop(Side::Right, 0);
+        assert_eq!(r.vm.stop_name_shown(), "Mont-Royal");
+        // The stop added there has the name, in the one revision of the add, and the next stop starts without one.
+        assert!(r.vm.add_stop(r.vm.stop_kind_shown(), 12_000));
+        let v = r.vm.view_now();
+        assert_eq!(v.stops.sides[1].cells[0].name.as_deref(), Some("Mont-Royal"));
+        assert_eq!(v.revisions.len(), before + 1);
+        assert_eq!(r.vm.stop_name_shown(), "Mont-Royal", "a chosen stop shows its own");
+        r.vm.select_stop(Side::Right, 1);
+        assert_eq!(r.vm.stop_name_shown(), "");
+        // A blank name takes back what was typed.
+        assert!(r.vm.name_stop("Later"));
+        assert!(r.vm.name_stop("  "));
+        assert_eq!(r.vm.stop_name_shown(), "");
+    }
+
+    #[test]
+    fn resizing_and_removing() {
+        let r = with_one_stop();
+        assert!(r.vm.resize_stop(15_000));
+        assert_eq!(cells(&r, Side::Right)[0], (Some(0), 0, 15_000));
+        assert!(!r.vm.resize_stop(LENGTH + 1_000));
+        assert_eq!(r.said.take().last().unwrap(), "That would run past the end of the street.");
+        assert!(r.vm.remove_stop());
+        assert_eq!(cells(&r, Side::Right), [(None, 0, LENGTH)]);
+        assert!(!r.vm.remove_stop(), "a gap is chosen now");
+    }
+
+    #[test]
+    fn nudging_and_dragging() {
+        let r = with_one_stop();
+        assert!(r.vm.nudge_stop(1_000));
+        assert_eq!(cells(&r, Side::Right)[1], (Some(0), 1_000, 13_000));
+        assert_eq!(chosen(&r), Some((1_000, 13_000)), "the moved stop stays chosen");
+        assert!(!r.vm.nudge_stop(-2_000), "before the start of the street");
+        assert_eq!(r.said.take().last().unwrap(), "That would run past the end of the street.");
+        // a drag is one revision from where it began to where it ended
+        let before = r.vm.view_now().revisions.len();
+        assert!(r.vm.begin_stop_drag());
+        r.vm.drag_stop_to(10_000);
+        r.vm.drag_stop_to(12_300);
+        assert_eq!(r.vm.view_now().revisions.len(), before, "nothing is recorded while it goes");
+        r.vm.end_stop_drag(true);
+        let v = r.vm.view_now();
+        assert_eq!((v.revisions.len(), v.revisions.last().unwrap().label.key), (before + 1, "rev-stop-move"));
+        assert_eq!(chosen(&r), Some((12_300, 24_300)));
+        // cancelled, it goes back where it began, still chosen
+        assert!(r.vm.begin_stop_drag());
+        r.vm.drag_stop_to(30_000);
+        assert_eq!(chosen(&r), Some((30_000, 42_000)));
+        r.vm.end_stop_drag(false);
+        assert_eq!(chosen(&r), Some((12_300, 24_300)));
+        // undo and redo keep it chosen
+        assert!(r.vm.undo());
+        assert_eq!(chosen(&r), Some((1_000, 13_000)));
+        assert!(r.vm.redo());
+        assert_eq!(chosen(&r), Some((12_300, 24_300)));
+    }
+
+    /// A at 10 m for 9 m, then B at 19.5 m for 100 mm: A can be moved over B by a long nudge.
+    fn two_stops() -> Rig {
+        let r = rig(&CURB);
+        r.vm.edit(|e| {
+            e.add_stop(Side::Right, 10_000, 9_000, StopKind::Curb).unwrap();
+            e.add_stop(Side::Right, 19_500, 100, StopKind::Curb).unwrap();
+        });
+        r.vm.select_stop(Side::Right, 1);
+        assert_eq!(chosen(&r), Some((10_000, 19_000)));
+        r
+    }
+
+    #[test]
+    fn a_stop_nudged_over_another_stays_chosen() {
+        let r = two_stops();
+        assert!(r.vm.nudge_stop(12_000));
+        let order: Vec<i32> = r.vm.core.read(|e| e.snapshot().stops.iter().map(|s| s.from_mm).collect());
+        assert_eq!(order, [19_500, 22_000], "the stops swapped places in the list");
+        assert_eq!(chosen(&r), Some((22_000, 31_000)), "the one that moved is still the chosen cell");
+        assert!(r.vm.undo());
+        assert_eq!(chosen(&r), Some((10_000, 19_000)));
+        assert!(r.vm.redo());
+        assert_eq!(chosen(&r), Some((22_000, 31_000)));
+    }
+
+    #[test]
+    fn a_stop_cannot_be_dragged_over_a_neighbour() {
+        let r = two_stops();
+        assert!(r.vm.begin_stop_drag());
+        r.vm.drag_stop_to(15_000);
+        assert_eq!(chosen(&r), Some((10_000, 19_000)), "it would overlap the next stop: it stays");
+        r.vm.end_stop_drag(false);
+    }
+
+    /// Parking on the right (a curbside use of 6 m, chosen) beside a stop of 12 m, chosen, at the start of that side.
+    fn with_a_use_and_a_stop() -> Rig {
+        let r = rig(&PARKED);
+        r.vm.select_curb(Side::Right, 0);
+        assert!(r.vm.add_curb(Use::Parking, 6_000));
+        r.vm.select_stop(Side::Right, 0);
+        assert!(r.vm.add_stop(StopKind::Bulb, 12_000));
+        r.said.take();
+        r
+    }
+
+    #[test]
+    fn stop_commands_are_refused_during_any_drag_and_each_drag_refuses_the_others() {
+        let r = with_a_use_and_a_stop();
+        assert!(r.vm.begin_stop_drag());
+        assert!(!r.vm.begin_stop_drag());
+        assert!(!r.vm.begin_boundary_drag());
+        assert!(!r.vm.begin_curb_drag());
+        assert!(!r.vm.nudge_stop(1_000) && !r.vm.set_stop_kind(StopKind::Curb) && !r.vm.resize_stop(9_000) && !r.vm.remove_stop());
+        assert!(!r.vm.resize_curb(7_000), "the curbside is refused during a stop drag too");
+        assert_eq!(
+            r.said.take(),
+            [
+                "Finish the drag before changing the stops.",
+                "Finish the drag before changing the zones.",
+                "Finish the drag before changing the curbside.",
+                "Finish the drag before changing the stops.",
+                "Finish the drag before changing the stops.",
+                "Finish the drag before changing the stops.",
+                "Finish the drag before changing the stops.",
+                "Finish the drag before changing the curbside.",
+            ]
+        );
+        r.vm.end_stop_drag(false);
+        // a zone drag refuses a stop drag
+        assert!(r.vm.begin_boundary_drag());
+        assert!(!r.vm.begin_stop_drag());
+        assert_eq!(r.said.take(), ["Finish the drag before changing the stops."]);
+        r.vm.end_boundary_drag(false);
+        // and so does a curbside drag
+        assert!(r.vm.begin_curb_drag());
+        assert!(!r.vm.begin_stop_drag());
+        assert!(!r.vm.set_stop_shelter(true));
+        assert_eq!(r.said.take(), ["Finish the drag before changing the stops.", "Finish the drag before changing the stops."]);
+        r.vm.end_curb_drag(false);
+        assert!(r.vm.set_stop_shelter(true), "commands work again");
+    }
+
+    #[test]
+    fn choosing_a_cell_is_ignored_during_a_stop_drag() {
+        let r = with_one_stop();
+        assert!(r.vm.begin_stop_drag());
+        r.vm.select_stop(Side::Right, 1);
+        r.vm.select_stop_relative(Side::Right, 1);
+        r.vm.select_stop_edge(Side::Right, true);
+        r.vm.select_stop(Side::Left, 0);
+        r.vm.drag_stop_to(4_000);
+        assert_eq!(chosen(&r), Some((4_000, 16_000)), "the dragged stop stays chosen");
+        assert!(r.vm.view_now().stops.sides[0].selected.is_none());
+        r.vm.end_stop_drag(false);
+        r.vm.select_stop(Side::Left, 0);
+        assert_eq!(r.vm.view_now().stops.sides[0].selected, Some(0), "choosing works again");
+    }
+
+    #[test]
+    fn choosing_walks_the_cells_and_stops_at_the_ends() {
+        let r = with_one_stop();
+        r.vm.select_stop_edge(Side::Right, false);
+        assert_eq!(r.vm.view_now().stops.sides[1].selected, Some(0));
+        r.vm.select_stop_relative(Side::Right, 1);
+        assert_eq!(r.vm.view_now().stops.sides[1].selected, Some(1));
+        r.vm.select_stop_relative(Side::Right, 1);
+        assert_eq!(r.vm.view_now().stops.sides[1].selected, Some(1), "no wrap");
+        r.vm.select_stop_edge(Side::Right, true);
+        r.vm.select_stop_relative(Side::Right, -1);
+        assert_eq!(r.vm.view_now().stops.sides[1].selected, Some(0));
+    }
+
+    #[test]
+    fn the_stops_refusals_use_the_stops_words_in_both_languages() {
+        use crate::street::model::Subject;
+        let words = |locale: Locale, subject: Subject| {
+            let i18n = crate::i18n_for(locale);
+            [CurbRefusal::NoAnchor, CurbRefusal::Elsewhere, CurbRefusal::Overlap, CurbRefusal::TooLong, CurbRefusal::TimeWindows, CurbRefusal::Dragging]
+                .map(|r| say_now(&i18n, Units::Metres, &r.said_for(subject)).replace('\u{a0}', " "))
+        };
+        assert_eq!(
+            words(Locale::En, Subject::Stop),
+            [
+                "Both ends of this street are cut by the edge of the map, so stops cannot be placed along it.",
+                "The stops of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.",
+                "That would overlap another stop on the same side.",
+                "That would run past the end of the street.",
+                "A stop cannot be placed on a lane that changes with the time of day.",
+                "Finish the drag before changing the stops.",
+            ]
+        );
+        assert_eq!(
+            words(Locale::FrCa, Subject::Stop),
+            [
+                "Les deux extrémités de cette rue sont coupées par le bord de la carte : on ne peut pas y placer d’arrêts.",
+                "Les arrêts de cette rue ont été tracés sur une rue d’une autre longueur ou depuis son autre extrémité : on ne peut pas les réorganiser ici.",
+                "Cet arrêt chevaucherait un autre arrêt du même côté.",
+                "Cet arrêt dépasserait l’extrémité de la rue.",
+                "On ne peut pas placer un arrêt sur une voie qui change selon l’heure de la journée.",
+                "Terminez le glissement avant de modifier les arrêts.",
+            ]
+        );
+        assert_ne!(words(Locale::En, Subject::Use), words(Locale::En, Subject::Stop), "the curbside keeps its own words");
+        assert!(words(Locale::En, Subject::Stop).iter().all(|w| !w.contains("use") && !w.contains("curbside")), "no curbside wording in a stop's refusal");
+    }
+
+    #[test]
+    fn a_refusal_of_a_stop_edit_is_said_in_the_stops_words() {
+        // Overlap: lengthening A into B.
+        let r = rig(&CURB);
+        r.vm.edit(|e| {
+            e.add_stop(Side::Right, 10_000, 9_000, StopKind::Curb).unwrap();
+            e.add_stop(Side::Right, 19_000, 9_000, StopKind::Curb).unwrap();
+        });
+        r.vm.select_stop(Side::Right, 1);
+        r.said.take();
+        assert!(!r.vm.resize_stop(12_000));
+        assert_eq!(r.said.take(), ["That would overlap another stop on the same side."]);
+        // Elsewhere: the stops were drawn on a road of another length.
+        let drawn = r.vm.core.read(|e| e.snapshot());
+        let elsewhere = rig_of(&drawn, Some(80_000), Locale::En);
+        elsewhere.vm.select_stop(Side::Right, 0);
+        elsewhere.said.take();
+        assert!(!elsewhere.vm.add_stop(StopKind::Curb, 9_000));
+        assert_eq!(
+            elsewhere.said.take(),
+            ["The stops of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here."]
+        );
     }
 }

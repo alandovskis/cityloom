@@ -3,12 +3,13 @@
 
 use std::fmt::Write;
 
+use super::curbside::Over;
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::esc;
 use crate::shared::iso::ground::{fine_patterns, joints};
 use crate::shared::iso::shading::shade_filters;
-use crate::street::model::{SegView, ShownInstance};
+use crate::street::model::SegView;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
 use super::curbside;
@@ -319,7 +320,7 @@ pub(super) fn piece_with(
     strip: Strip,
     across: bool,
     taper: Option<&dyn Fn(f64) -> (f64, f64)>,
-    shown: &[ShownInstance],
+    shown: &[Over],
 ) {
     let (_, i, edge) = strip;
     let s = &segs[i];
@@ -351,7 +352,7 @@ pub(super) fn sliver(out: &mut String, p: &Projection, i18n: &I18n, kind: usize,
 }
 
 /// The strips in the order given, between the group tag `open` and its end.
-pub(super) fn group(open: &str, p: &Projection, segs: &[SegView], i18n: &I18n, strips: &[Strip], across: bool, shown: &[ShownInstance]) -> String {
+pub(super) fn group(open: &str, p: &Projection, segs: &[SegView], i18n: &I18n, strips: &[Strip], across: bool, shown: &[Over]) -> String {
     let mut out = String::from(open);
     for &strip in strips {
         piece_with(&mut out, p, segs, i18n, strip, across, None, shown);

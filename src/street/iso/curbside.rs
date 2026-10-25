@@ -9,7 +9,7 @@ use std::fmt::Write;
 use crate::shared::catalogue::{KINDS, MATERIALS, kind_index};
 use crate::shared::i18n::I18n;
 use crate::shared::iso::format::esc;
-use crate::street::model::{SegView, ShownInstance};
+use crate::street::model::{SegView, ShownInstance, ShownStop};
 
 use super::order::Bx;
 use super::projection::{Projection, Reach};
@@ -24,45 +24,77 @@ pub(super) struct Part {
     pub material: &'static str,
 }
 
-/// The kind and material a use is drawn as on the piece at `i`: its own, where the use is the piece's kind.
-fn look(piece: &SegView, use_: crate::street::model::Use) -> (usize, &'static str) {
-    let kind = kind_index(use_.kind_id()).expect("a use is drawn as a catalogue kind");
-    let material = use_.material().unwrap_or(if kind == piece.kind { piece.material } else { MATERIALS[KINDS[kind].materials[0]].id });
+/// The kind and material something is drawn as on `piece`: its own material, where it is the piece's kind.
+fn look_of(piece: &SegView, kind_id: &str, material: Option<&'static str>) -> (usize, &'static str) {
+    let kind = kind_index(kind_id).expect("a use is drawn as a catalogue kind");
+    let material = material.unwrap_or(if kind == piece.kind { piece.material } else { MATERIALS[KINDS[kind].materials[0]].id });
     (kind, material)
 }
 
-/// The shown instances of the piece at `i`, nearest first.
-fn of_piece(i: usize, shown: &[ShownInstance]) -> Vec<&ShownInstance> {
-    let mut mine: Vec<&ShownInstance> = shown.iter().filter(|s| s.piece == i).collect();
-    mine.sort_by(|a, b| a.along.0.total_cmp(&b.along.0));
-    mine
+/// Something laid over a piece for part of the stretch, drawn as a kind and material of its own: a curbside use
+/// or the platform of a transit stop.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Over {
+    pub piece: usize,
+    pub along: (f64, f64),
+    /// It stands at sidewalk height (a strip of its own in the raised layer) rather than lying on the roadway.
+    pub raised: bool,
+    pub kind: usize,
+    pub material: &'static str,
+    /// The message that names it when hovered.
+    pub name_key: &'static str,
+}
+
+/// What is laid over the pieces: the shown curbside uses, then the platforms of the shown stops.
+pub(super) fn overs(segs: &[SegView], curb: &[ShownInstance], stops: &[ShownStop]) -> Vec<Over> {
+    let uses = curb.iter().map(|m| {
+        let (kind, material) = look_of(&segs[m.piece], m.use_.kind_id(), m.use_.material());
+        Over { piece: m.piece, along: m.along, raised: m.use_.raised(), kind, material, name_key: m.use_.name_key() }
+    });
+    // A bulb's or an island's platform is the sidewalk reaching over its pieces.
+    let platforms = stops.iter().flat_map(|s| {
+        s.raised.iter().map(move |&piece| {
+            let (kind, material) = look_of(&segs[piece], "sidewalk", None);
+            Over { piece, along: s.along, raised: true, kind, material, name_key: s.kind.name_key() }
+        })
+    });
+    uses.chain(platforms).collect()
+}
+
+/// The part of `parts` outside `range`, in order.
+fn cut(parts: Vec<Part>, range: (f64, f64)) -> Vec<Part> {
+    let mut out = Vec::new();
+    for p in parts {
+        let (before, after) = ((p.along.0, p.along.1.min(range.0)), (p.along.0.max(range.1), p.along.1));
+        if before.1 > before.0 {
+            out.push(Part { along: before, kind: p.kind, material: p.material });
+        }
+        if after.1 > after.0 {
+            out.push(Part { along: after, kind: p.kind, material: p.material });
+        }
+    }
+    out
 }
 
 /// The flat parts of the piece at `i` over `reach`: its gaps in its own look and the roadway uses (parking, loading)
-/// in theirs, in order along the stretch; what stands up is left out (`lifted`). None when no use is shown there, so
-/// the piece is drawn as it always was.
-pub(super) fn flat_parts(segs: &[SegView], i: usize, reach: Reach, shown: &[ShownInstance]) -> Option<Vec<Part>> {
-    let mine = of_piece(i, shown);
+/// in theirs, in order along the stretch; what stands up is left out (`lifted`). A raised platform over a roadway
+/// use hides it. None when nothing is laid on the piece there, so the piece is drawn as it always was.
+pub(super) fn flat_parts(segs: &[SegView], i: usize, reach: Reach, shown: &[Over]) -> Option<Vec<Part>> {
+    let mine: Vec<&Over> = shown.iter().filter(|o| o.piece == i).collect();
     if mine.is_empty() {
         return None;
     }
     let s = &segs[i];
-    let mut parts = Vec::new();
-    let mut at = reach.near;
-    let gap = |parts: &mut Vec<Part>, from: f64, to: f64| {
-        if to > from {
-            parts.push(Part { along: (from, to), kind: s.kind, material: s.material });
-        }
-    };
-    for m in mine {
-        gap(&mut parts, at, m.along.0);
-        if !m.use_.raised() {
-            let (kind, material) = look(s, m.use_);
-            parts.push(Part { along: m.along, kind, material });
-        }
-        at = m.along.1;
+    let mut parts = vec![Part { along: (reach.near, reach.far), kind: s.kind, material: s.material }];
+    // The roadway uses lie over the piece's own look, then the raised ones cover them both.
+    for m in mine.iter().filter(|m| !m.raised) {
+        parts = cut(parts, m.along);
+        parts.push(Part { along: m.along, kind: m.kind, material: m.material });
     }
-    gap(&mut parts, at, reach.far);
+    for m in mine.iter().filter(|m| m.raised) {
+        parts = cut(parts, m.along);
+    }
+    parts.sort_by(|a, b| a.along.0.total_cmp(&b.along.0));
     Some(parts)
 }
 
@@ -81,20 +113,22 @@ pub(super) fn flat(out: &mut String, p: &Projection, segs: &[SegView], i: usize,
     }
 }
 
-/// A use that stands at sidewalk height on the piece at `piece`.
+/// Something that stands at sidewalk height on the piece at `piece`.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Lift {
     pub piece: usize,
     pub along: (f64, f64),
-    pub use_: crate::street::model::Use,
+    pub kind: usize,
+    pub material: &'static str,
+    pub name_key: &'static str,
 }
 
-/// The raised uses shown, for the raised layer.
-pub(super) fn lifted(shown: &[ShownInstance]) -> Vec<Lift> {
-    shown.iter().filter(|s| s.use_.raised()).map(|s| Lift { piece: s.piece, along: s.along, use_: s.use_ }).collect()
+/// The raised things shown, for the raised layer.
+pub(super) fn lifted(shown: &[Over]) -> Vec<Lift> {
+    shown.iter().filter(|o| o.raised).map(|o| Lift { piece: o.piece, along: o.along, kind: o.kind, material: o.material, name_key: o.name_key }).collect()
 }
 
-/// The edges across of a lifted use's piece along the stretch: the transition's where the piece tapers, else none.
+/// The edges across of a lifted strip's piece along the stretch: the transition's where the piece tapers, else none.
 fn edges<'a>(segs: &[SegView], l: &Lift, p: &'a Projection, taper: Option<&'a Draw>) -> Option<impl Fn(f64) -> (f64, f64) + 'a> {
     let d = taper?;
     let shape = d.shape_of(&segs[l.piece])?;
@@ -102,10 +136,10 @@ fn edges<'a>(segs: &[SegView], l: &Lift, p: &'a Projection, taper: Option<&'a Dr
     Some(move |z: f64| d.edges(shape, reach, z))
 }
 
-/// The box a lifted use fills, for ordering.
+/// The box a lifted strip fills, for ordering.
 pub(super) fn lift_box(segs: &[SegView], l: &Lift, p: &Projection, taper: Option<&Draw>) -> Bx {
     let s = &segs[l.piece];
-    let h = super::projection::drawn_mm(super::raised::height_mm(l.use_.kind_id()));
+    let h = super::projection::drawn_mm(super::raised::height_mm(KINDS[l.kind].id));
     let x = match edges(segs, l, p, taper) {
         Some(e) => {
             let (a, b) = (e(l.along.0), e(l.along.1));
@@ -116,14 +150,13 @@ pub(super) fn lift_box(segs: &[SegView], l: &Lift, p: &Projection, taper: Option
     Bx { x, y: (0.0, h), z: l.along }
 }
 
-/// A lifted use as a raised strip of its own, hovered as the use; on a tapering piece it follows the piece's edges.
+/// A lifted strip of its own, hovered by its name; on a tapering piece it follows the piece's edges.
 pub(super) fn lift(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I18n, l: &Lift, taper: Option<&Draw>) {
     let s = &segs[l.piece];
-    let (kind, material) = look(s, l.use_);
-    let name = i18n.tr(l.use_.name_key(), &crate::shared::i18n::Args::new());
+    let name = i18n.tr(l.name_key, &crate::shared::i18n::Args::new());
     write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
     let edge = edges(segs, l, p, taper);
-    slab_of(out, p, segs, l.piece, KINDS[kind].id, material, l.along, edge.as_ref().map(|e| e as &dyn Fn(f64) -> (f64, f64)));
+    slab_of(out, p, segs, l.piece, KINDS[l.kind].id, l.material, l.along, edge.as_ref().map(|e| e as &dyn Fn(f64) -> (f64, f64)));
     out.push_str("</g>");
 }
 
@@ -281,6 +314,28 @@ mod tests {
         assert!(lane.contains(&format!("class=\"iso-top k-loading mat-asphalt\" points=\"{loading}\"")), "{lane}");
         // A loading bay is flat: nothing is raised for it.
         assert!(!m.contains("<title>Loading</title>"));
+    }
+
+    /// Sample Avenue 2 with a bus shelter piece and a patio use.
+    fn sheltered() -> Editor {
+        let mut e = Editor::new(1).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        e.add(kind_index("busshelter").unwrap(), 1);
+        e.add_curb(Side::Left, 4_000, 6_000, Use::Patio).unwrap();
+        e
+    }
+
+    #[test]
+    fn plain_curb_uses_draw_as_before_the_stops_existed() {
+        let mut uses = street();
+        uses.add_curb(Side::Right, 4_000, 6_000, Use::Parking).unwrap();
+        uses.add_curb(Side::Right, 12_000, 6_000, Use::Patio).unwrap();
+        uses.add_curb(Side::Left, 8_000, 6_000, Use::Tree).unwrap();
+        // Hashes of what these drew at 57c13c7, before the stops.
+        for (name, markup, len, hash) in
+            [("uses", drawn(&uses), 45368usize, 0x55124233d7894df8u64), ("sheltered", drawn(&sheltered()), 58481, 0x2202208758103a04)]
+        {
+            assert_eq!((markup.len(), fnv(&markup)), (len, hash), "{name}");
+        }
     }
 
     #[test]

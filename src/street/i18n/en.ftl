@@ -356,6 +356,7 @@ zone-refused-no-boundary = The first zone starts at the end of the street, so it
 zone-refused-dragging = Finish the drag before changing the zones.
 zones-elsewhere = The zones were drawn on this street when it was { $drawn } long; here it is { $loaded }.
 check-curb-in = { $check }: { $instance }
+check-stop-in = { $check }: { $instance }
 check-zone-in = { $check } in { $zone }
 zone-selected = { $zone }, { $from } to { $to }, { $length } long, { $section ->
         [own] its own section
@@ -395,9 +396,17 @@ svg-curb-uses = Curbside, { $side }: { $count ->
         [one] one use
        *[other] { $count } uses
     } along the street.
+svg-stops = Stops, { $side }: { $count ->
+        [one] one stop
+       *[other] { $count } stops
+    } along the street ({ $kinds }).
 svg-iso-curb = { $count ->
         [one] One curbside use is shown.
        *[other] { $count } curbside uses are shown.
+    }
+svg-iso-stops = { $count ->
+        [one] One transit stop is shown ({ $kinds }).
+       *[other] { $count } transit stops are shown ({ $kinds }).
     }
 check-boundary = between { $a } and { $b }
 check-label-transition-room = Room for the transition
@@ -460,3 +469,71 @@ st-curb-use = Use
 st-curb-length = Length ({ $unit })
 st-curb-add = Add use
 st-curb-remove = Remove use
+
+# Transit stops (src/street/model/stop.rs).
+stop-kind-curb = Curb stop
+stop-kind-bulb = Curb extension
+stop-kind-island = Boarding island
+stop-word-sheltered = with a shelter
+stop-word-unsheltered = without a shelter
+rev-stop-add = Add { $kind } at { $at }
+rev-stop-kind = Change the stop at { $at } to { $kind }
+rev-stop-shelter = Stop at { $at }: { $state }
+rev-stop-name = Name the { $kind } at { $at }
+rev-stop-resize = Resize the { $kind } at { $at }
+rev-stop-move = Move the { $kind } to { $at }
+rev-stop-remove = Remove the { $kind } at { $at }
+
+# The checks of the transit stops (src/street/model/stop.rs).
+stop-instance = { $kind } at { $at }, { $side }
+stop-instance-named = { $name } ({ $kind }, { $at })
+check-label-stop-lane = Stops have a lane for the bus
+check-label-stop-kind = Stops are built as their kind needs
+check-label-stop-length = Stops are long enough for a bus
+check-label-stop-width = Stops have room to board
+check-label-stop-bike = Stops clear of bike lanes
+check-label-stop-shelter = Shelters have room
+check-detail-stop-lane = There is no bus or driving lane here for buses going the way traffic goes on this side.
+check-detail-stop-lane-ok = Every stop has a lane for the bus.
+check-detail-stop-kind-curb = A curb stop needs the bus's lane to run along the curb, with no parking or loading lane beside it.
+check-detail-stop-kind-bulb = A curb extension needs a parking or loading lane beside the bus's lane.
+check-detail-stop-kind-island = A boarding island needs a parking, loading or buffer piece beside the bus's lane, with a bike lane behind it.
+check-detail-stop-kind-ok = Every stop is built as its kind needs.
+check-detail-stop-length = The stop is { $length } long, under the { $min } a bus needs.
+check-detail-stop-length-ok = Every stop is long enough for a bus.
+check-detail-stop-width-curb = The sidewalk beside the stop is { $have } wide; { $need } or more is needed.
+check-detail-stop-width-bulb = The curb extension and the sidewalk give { $have }; { $need } or more is needed.
+check-detail-stop-width-island = The island is { $have } wide; { $need } or more is needed.
+check-detail-stop-width-ok = Every stop has room to board.
+check-detail-stop-bike-cross = Riders would cross the boarding area. The crossing is not drawn, so check it.
+check-detail-stop-bike-narrow = The bike lane behind the island is { $have } wide; { $need } or more is needed.
+check-detail-stop-bike-ok = No stop sends riders across the boarding area.
+check-detail-stop-shelter-curb = The sidewalk beside the stop is { $have } wide; a shelter needs { $need } or more.
+check-detail-stop-shelter-bulb = The curb extension and the sidewalk give { $have }; a shelter needs { $need } or more.
+check-detail-stop-shelter-island = The island is { $have } wide; a shelter needs { $need } or more.
+check-detail-stop-shelter-ok = Every shelter has room.
+
+# The stops rows and their commands (src/street/row.rs, src/street/stop_tools.rs, src/street/model/stop.rs).
+stop-label = { $kind }
+stop-label-named = { $name } ({ $kind })
+stop-label-sheltered = { $label }, with a shelter
+stop-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
+stop-choose-gap = Choose a free stretch of the street's edge first.
+stop-choose-stop = Choose a stop first.
+st-stop-heading = Stops along the street
+st-curb-stop-heading = Curbside uses and stops along the street
+st-stop-caption = Stops, { $side }
+st-stop-strip-label = Stops, { $side }
+st-stop-tools = Stop commands
+st-stop-kind = Kind
+st-stop-name = Name
+st-stop-length = Length ({ $unit })
+st-stop-shelter = Shelter
+st-stop-add = Add stop
+st-stop-remove = Remove stop
+stop-refused-no-anchor = Both ends of this street are cut by the edge of the map, so stops cannot be placed along it.
+stop-refused-elsewhere = The stops of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here.
+stop-refused-overlap = That would overlap another stop on the same side.
+stop-refused-too-long = That would run past the end of the street.
+stop-refused-time-windows = A stop cannot be placed on a lane that changes with the time of day.
+stop-refused-dragging = Finish the drag before changing the stops.

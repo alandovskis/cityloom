@@ -29,32 +29,30 @@ fn strip_to_focus(w: SheetWatch) -> Option<&'static str> {
     w.view_now().curb.sides.iter().find(|s| s.selected.is_some()).map(|s| if s.side == Side::Left { "curb-strip-left" } else { "curb-strip-right" })
 }
 
+/// The length typed: `blank_mm` when nothing is typed and there is a default. `None`, with it said, when what is typed
+/// is not a number.
+pub fn typed_length(w: SheetWatch, typed: &str, blank_mm: Option<i32>) -> Option<i32> {
+    if typed.trim().is_empty()
+        && let Some(mm) = blank_mm
+    {
+        return Some(mm);
+    }
+    let mm = parse_length_mm(typed, w.units_now());
+    if mm.is_none() {
+        w.say_bad_number();
+    }
+    mm
+}
+
 /// Adds what the controls say, at the start of the chosen free stretch: the length typed, else the use's minimum.
 /// False when the length is not a number (said) or the add was refused (said by the view-model).
 pub fn commit_add(w: SheetWatch, use_: Use, typed: &str) -> bool {
-    let length = if typed.trim().is_empty() {
-        use_.min_mm()
-    } else {
-        match parse_length_mm(typed, w.units_now()) {
-            Some(mm) => mm,
-            None => {
-                w.say_bad_number();
-                return false;
-            }
-        }
-    };
-    w.add_curb(use_, length)
+    typed_length(w, typed, Some(use_.min_mm())).is_some_and(|mm| w.add_curb(use_, mm))
 }
 
 /// Gives the chosen use the length that was typed.
 pub fn commit_length(w: SheetWatch, typed: &str) -> bool {
-    match parse_length_mm(typed, w.units_now()) {
-        Some(mm) => w.resize_curb(mm),
-        None => {
-            w.say_bad_number();
-            false
-        }
-    }
+    typed_length(w, typed, None).is_some_and(|mm| w.resize_curb(mm))
 }
 
 #[component]

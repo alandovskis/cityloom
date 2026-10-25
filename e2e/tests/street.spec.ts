@@ -603,6 +603,7 @@ test.describe("the zones of a street", () => {
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
     const before = await cellLabel(page, 1);
     const handle = page.locator(".zone-handle");
+    await handle.scrollIntoViewIfNeeded(); // the strip lies below the fold of a street with rows under the drawing
     const box = (await handle.boundingBox())!;
     expect(box.width, "a handle is a 24 px target").toBeGreaterThanOrEqual(24);
     // the handle node itself must survive the view changes of a drag
@@ -632,6 +633,7 @@ test.describe("the zones of a street", () => {
     await page.locator("#zone-split").click();
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
     const before = await cellLabel(page, 1);
+    await page.locator(".zone-handle").scrollIntoViewIfNeeded(); // below the fold of a street with rows under the drawing
     const box = (await page.locator(".zone-handle").boundingBox())!;
     const x = box.x + box.width / 2;
     const y = box.y + box.height / 2;
@@ -663,6 +665,28 @@ test.describe("the zones of a street", () => {
     await expect(page.locator("#zone-1")).toHaveAttribute("aria-label", /its own section/);
     await page.locator("#zone-1").click();
     expect(await page.locator("#drawing").getAttribute("aria-label")).toBe(edited);
+  });
+
+  test("pressing a zone cell below the fold after editing by keyboard does not move it from under the pointer", async ({
+    page,
+  }) => {
+    await page.locator("#zone-split").click();
+    await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
+    await page.locator("#zone-1").click();
+    await selectFirstPiece(page);
+    await page.keyboard.press("-");
+    const stage = page.locator(".stage-main");
+    await stage.evaluate((e) => (e.scrollTop = e.scrollHeight));
+    const before = await stage.evaluate((e) => [e.scrollTop, e.scrollHeight]);
+    const box = (await page.locator("#zone-0").boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    expect(
+      await stage.evaluate((e) => [e.scrollTop, e.scrollHeight]),
+      "the press neither scrolls nor resizes the stage",
+    ).toEqual(before);
+    await page.mouse.up();
+    await expect(page.locator("#zone-0")).toHaveAttribute("aria-selected", "true");
   });
 
   test("shows the selected zone in 2.5D", async ({ page }) => {

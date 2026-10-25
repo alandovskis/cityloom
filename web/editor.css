@@ -276,8 +276,11 @@
 .fit-checks[hidden] {
   display: none;
 }
+/* Always in flow, shown by visibility: focusing the drawing or leaving it never changes the stage's height, so a
+   press on a strip below the fold is not moved from under the pointer. */
 .focus-hint {
-  display: none;
+  display: block;
+  visibility: hidden;
   margin: 0;
   max-width: 70ch;
   color: var(--ink-2);
@@ -286,7 +289,7 @@
 }
 .drawing:has(.wrap:focus-visible) ~ .statusbar .focus-hint,
 .stage-main:has(.wrap:focus-visible) .focus-hint {
-  display: block;
+  visibility: visible;
 }
 .cue {
   display: none;
@@ -1060,7 +1063,8 @@ svg pattern circle {
   }
 }
 /* The speed limit sign (street/iso/sign.rs): a white panel with its text, and no pointer events. */
-.iso-sign {
+.iso-sign,
+.iso-stop-sign {
   pointer-events: none;
 }
 .iso-sign-panel {
@@ -1074,7 +1078,20 @@ svg pattern circle {
   font-weight: 700;
   text-anchor: middle;
 }
+/* The stop sign's bus (street/iso/stops.rs): the ink on the panel, its windows the panel's colour. */
+.iso-sign-glyph {
+  fill: var(--iso-sign-ink);
+}
+.iso-sign-glyph-cut {
+  fill: var(--iso-sign-panel);
+}
 @media (forced-colors: active) {
+  .iso-sign-glyph {
+    fill: CanvasText;
+  }
+  .iso-sign-glyph-cut {
+    fill: Canvas;
+  }
   .iso-sign-panel {
     fill: Canvas;
     stroke: CanvasText;
@@ -1165,6 +1182,7 @@ svg pattern circle {
   font-size: 13px;
 }
 .curb-strip,
+.stop-strip,
 .zone-strip {
   flex: 1 1 14em;
   min-width: 0;
@@ -1179,11 +1197,13 @@ svg pattern circle {
   border-radius: 6px;
 }
 .zone-strip:focus-visible,
-.curb-strip:focus-visible {
+.curb-strip:focus-visible,
+.stop-strip:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 .curb-cell,
+.stop-cell,
 .zone-cell {
   flex: 1 1 0;
   /* the target size (WCAG 2.5.8): a short zone is still 24 px wide */
@@ -1211,12 +1231,14 @@ svg pattern circle {
   background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--zone-edge) 6px 7px);
 }
 .zone-cell[aria-selected="true"],
-.curb-cell[aria-selected="true"] {
+.curb-cell[aria-selected="true"],
+.stop-cell[aria-selected="true"] {
   outline: 3px solid var(--zone-sel);
   outline-offset: -3px;
   font-weight: 600;
 }
 .curb-name,
+.stop-name,
 .zone-name {
   min-width: 0;
   padding: 0 8px;
@@ -1264,12 +1286,14 @@ svg pattern circle {
 }
 /* a gap is a free stretch: it has no fill, a dotted edge; a use that fails a check has a heavier bottom edge (not
    by colour alone, WCAG 1.4.1) */
-.curb-cell.gap {
+.curb-cell.gap,
+.stop-cell.gap {
   background: transparent;
   color: var(--ink);
   border-style: dotted;
 }
-.curb-cell.failing {
+.curb-cell.failing,
+.stop-cell.failing {
   border-bottom-width: 5px;
 }
 .speed-limit {
@@ -1310,6 +1334,22 @@ svg pattern circle {
   min-width: 0;
   flex: 1 1 6em;
 }
+/* a checkbox with its label beside it, the box a 24 px target (WCAG 2.5.8) */
+.zone-tool.zone-check {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.zone-tool.zone-check input {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+}
+.zone-tool.zone-check label {
+  flex: 1 1 auto;
+  color: var(--ink);
+  font-size: 14px;
+}
 .zone-tools button {
   min-height: 32px;
 }
@@ -1330,13 +1370,16 @@ svg pattern circle {
 }
 @media (forced-colors: active) {
   .zone-cell,
-  .curb-cell {
+  .curb-cell,
+  .stop-cell {
     border-color: CanvasText;
   }
-  .curb-cell.gap {
+  .curb-cell.gap,
+  .stop-cell.gap {
     border-style: dotted;
   }
-  .curb-cell.failing {
+  .curb-cell.failing,
+  .stop-cell.failing {
     border-bottom-width: 5px;
   }
   .zone-cell.own {
@@ -1347,7 +1390,8 @@ svg pattern circle {
     background-image: none;
   }
   .zone-cell[aria-selected="true"],
-  .curb-cell[aria-selected="true"] {
+  .curb-cell[aria-selected="true"],
+  .stop-cell[aria-selected="true"] {
     outline-color: Highlight;
   }
   .zone-handle {
