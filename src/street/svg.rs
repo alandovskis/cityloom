@@ -10,7 +10,7 @@ use crate::shared::iso::format::esc;
 use crate::shared::said::say;
 use crate::shared::symbols::{Placement, SymbolOpts, symbol};
 use crate::shared::units::Units;
-use crate::street::model::{SegView, View};
+use crate::street::model::{SegView, StopKind, View};
 use crate::street::text::fit_phrase;
 
 /// The heights of the drawing's bands, scaled with its width.
@@ -294,6 +294,23 @@ pub fn street_label(v: &View, i18n: &I18n, units: Units) -> String {
             let word = i18n.tr(if side.side == Side::Left { "side-word-left" } else { "side-word-right" }, &Args::new());
             label = format!("{label} {}", i18n.tr("svg-curb-uses", &Args::new().str("side", word).num("count", count as i64)));
         }
+    }
+    // The stops come after, a sentence per side naming how many and of what kinds (the catalogue's words only).
+    for side in &v.stops.sides {
+        let kinds: Vec<StopKind> = side.cells.iter().filter_map(|c| c.kind).collect();
+        if kinds.is_empty() {
+            continue;
+        }
+        let mut named: Vec<String> = Vec::new();
+        for kind in &kinds {
+            let name = i18n.tr(kind.name_key(), &Args::new()).to_lowercase();
+            if !named.contains(&name) {
+                named.push(name);
+            }
+        }
+        let word = i18n.tr(if side.side == Side::Left { "side-word-left" } else { "side-word-right" }, &Args::new());
+        let args = Args::new().str("side", word).num("count", kinds.len() as i64).str("kinds", named.join(", "));
+        label = format!("{label} {}", i18n.tr("svg-stops", &args));
     }
     label
 }
@@ -933,6 +950,37 @@ mod tests {
         assert!(two.ends_with("Curbside, left: one use along the street. Curbside, right: 2 uses along the street."), "{two}");
         let f = street_svg(&e.view(), &fr, 1050.0, Units::Metres, &Interaction::default()).label;
         assert!(f.ends_with("Bord de rue, à gauche\u{a0}: un usage le long de la rue. Bord de rue, à droite\u{a0}: 2 usages le long de la rue."), "{f}");
+    }
+
+    #[test]
+    fn the_label_names_the_stops_of_each_side_after_the_curbside_uses() {
+        use crate::street::model::{StopKind, Street, Use, ZoneEnd, ZoneFrame};
+        let fr = crate::i18n_for(Locale::FrCa);
+        let street = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        let plain = svg(&e).label;
+        assert!(!plain.contains("Stops"), "no stops, no sentence: {plain}");
+        e.add_stop(Side::Right, 0, 10_000, StopKind::Curb).unwrap();
+        let one = svg(&e).label;
+        assert_eq!(one, format!("{plain} Stops, right: one stop along the street (curb stop)."));
+        e.add_stop(Side::Right, 20_000, 10_000, StopKind::Bulb).unwrap();
+        e.add_stop(Side::Right, 40_000, 10_000, StopKind::Curb).unwrap();
+        e.add_stop(Side::Left, 0, 10_000, StopKind::Island).unwrap();
+        e.add_curb(Side::Right, 0, 6_000, Use::Parking).unwrap();
+        let many = svg(&e).label;
+        assert!(
+            many.ends_with(
+                "Curbside, right: one use along the street. Stops, left: one stop along the street (boarding island). Stops, right: 3 stops along the street (curb stop, curb extension)."
+            ),
+            "{many}"
+        );
+        let f = street_svg(&e.view(), &fr, 1050.0, Units::Metres, &Interaction::default()).label;
+        assert!(
+            f.ends_with(
+                "Arrêts, à gauche\u{a0}: un arrêt le long de la rue (îlot d’embarquement). Arrêts, à droite\u{a0}: 3 arrêts le long de la rue (arrêt au trottoir, avancée de trottoir)."
+            ),
+            "{f}"
+        );
     }
 
     #[test]

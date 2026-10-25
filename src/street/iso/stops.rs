@@ -5,7 +5,7 @@
 use crate::shared::catalogue::KINDS;
 use crate::street::model::{SegView, ShownStop, View};
 
-use super::projection::{Projection, STRETCH_MM, drawn_mm};
+use super::projection::{Projection, Reach, STRETCH_MM, drawn_mm};
 use super::raised::height_mm;
 use super::sign::Panel;
 use super::solids::{Block, shelter};
@@ -32,27 +32,25 @@ pub(super) fn blocks(segs: &[SegView], stops: &[ShownStop], p: &Projection) -> V
         .collect()
 }
 
-/// How many of the stops are drawn at all: a raised platform, or a sign or a shelter that lies in the reach of the
-/// selected zone's run. The label counts these, not the stops that merely overlap the stretch. It has no drawing
-/// width, so it judges the geometry only (a shelter on a piece too narrow on the screen still counts).
-pub(super) fn drawn_count(v: &View) -> usize {
+/// The stops that are drawn at all in a drawing `width` wide: a raised platform, or a sign or a shelter that lies in
+/// the reach of the selected zone's run. The label lists these, not the stops that merely overlap the stretch. It asks
+/// the very functions that draw (`sign_panel`, `blocks`), so a sign scaled up to its minimum size, or a shelter on a
+/// piece too narrow on the screen, is judged as it is drawn.
+pub(super) fn drawn(v: &View, width: f64) -> Vec<&ShownStop> {
     let half = STRETCH_MM / 2.0;
-    let (near, far) = match &v.zones.joint {
-        None => (0.0, STRETCH_MM),
-        Some(j) if j.far => (0.0, half),
-        Some(_) => (half, STRETCH_MM),
+    let reach = match &v.zones.joint {
+        None => Reach::STRETCH,
+        Some(j) if j.far => Reach { near: 0.0, far: half },
+        Some(_) => Reach { near: half, far: STRETCH_MM },
     };
+    let p = Projection::fit(width, super::span_mm(v)).over(reach);
     v.stops_shown
         .iter()
         .filter(|s| {
-            let sign = s.full.0 + SIGN_AT_MM;
-            let (sign_in, shelter_in) = (sign - 40.0 >= near && sign + 40.0 <= far, {
-                let mid = s.full.0 + (s.full.1 - s.full.0) / 2.0;
-                mid - 2_000.0 >= near && mid + 2_000.0 <= far
-            });
-            !s.raised.is_empty() || (s.stand.is_some() && (sign_in || (s.shelter && shelter_in)))
+            let one = std::slice::from_ref(*s);
+            !s.raised.is_empty() || sign_panel(&v.segments, s, &p).is_some() || !blocks(&v.segments, one, &p).is_empty()
         })
-        .count()
+        .collect()
 }
 
 /// A bus on a stop sign's panel, in panel units (across and up, each 0 to 1): the body, its windows and its wheels.
@@ -60,18 +58,21 @@ const BODY: ((f64, f64), (f64, f64)) = ((0.16, 0.84), (0.30, 0.80));
 const WINDOWS: [(f64, f64); 3] = [(0.22, 0.38), (0.42, 0.58), (0.62, 0.78)];
 const WHEELS: [(f64, f64); 2] = [(0.26, 0.38), (0.62, 0.74)];
 
+/// The panel of `s`'s sign, when it has a piece to stand on and the whole post stands in the reach.
+fn sign_panel(segs: &[SegView], s: &ShownStop, p: &Projection) -> Option<Panel> {
+    let i = s.stand?;
+    let piece = &segs[i];
+    let cx = piece.x_mm as f64 + piece.width_mm as f64 / 2.0;
+    let sign = Panel::at(p, cx, top_mm(segs, s, i), s.full.0 + SIGN_AT_MM);
+    sign.in_reach(p).then_some(sign)
+}
+
 /// The signs of the stops: a post at the stop's near end on the piece the stop stands on, and on it a white panel
 /// with a bus. Drawn only where the whole post stands in the reach.
 pub(super) fn signs(segs: &[SegView], stops: &[ShownStop], p: &Projection) -> String {
     let mut out = String::new();
     for s in stops {
-        let Some(i) = s.stand else { continue };
-        let piece = &segs[i];
-        let cx = piece.x_mm as f64 + piece.width_mm as f64 / 2.0;
-        let sign = Panel::at(p, cx, top_mm(segs, s, i), s.full.0 + SIGN_AT_MM);
-        if !sign.in_reach(p) {
-            continue;
-        }
+        let Some(sign) = sign_panel(segs, s, p) else { continue };
         out.push_str("<g class=\"iso-stop-sign\" aria-hidden=\"true\">");
         sign.post(&mut out, p);
         sign.panel(&mut out, p);
@@ -292,7 +293,7 @@ mod tests {
         // A platform counts though its sign is out.
         let mut e = editor(&BULB, ZoneEnd::First);
         e.add_stop(Side::Right, 39_700, 12_000, StopKind::Bulb).unwrap();
-        assert!(iso_label(&e.view(), &en(), Units::Metres).ends_with("One transit stop is shown."));
+        assert!(iso_label(&e.view(), &en(), Units::Metres).ends_with("One transit stop is shown (curb extension)."));
     }
 
     #[test]
@@ -321,18 +322,38 @@ mod tests {
     }
 
     #[test]
+    fn the_label_counts_what_is_drawn_at_the_reach_edge_at_any_width() {
+        use crate::street::iso::iso_label_at;
+        // A sign scaled up to its least size on a narrow drawing has a thicker post, which leaves the reach sooner.
+        // The label counts the stops with a sign (a curb stop draws nothing else) exactly as the drawing shows them.
+        let mut disagreements = 0;
+        for width in [320.0, 480.0, 700.0, 1050.0, 1500.0] {
+            for from_mm in (37_000..=39_900).step_by(100) {
+                let mut e = editor(&CURB, ZoneEnd::First);
+                e.add_stop(Side::Right, from_mm, 12_000, StopKind::Curb).unwrap();
+                let v = e.view();
+                let signs = count(&iso_svg(&v, &en(), width).markup, "iso-stop-sign");
+                let label = iso_label_at(&v, &en(), Units::Metres, width);
+                assert_eq!(label.contains("transit stop"), signs == 1, "{width} {from_mm}: {label}");
+                disagreements += usize::from(signs == 0);
+            }
+        }
+        assert!(disagreements > 0, "the sweep reaches the edge");
+    }
+
+    #[test]
     fn the_label_counts_the_stops() {
         let mut e = editor(&BULB, ZoneEnd::First);
         let none = iso_label(&e.view(), &en(), Units::Metres);
         assert!(!none.contains("transit"));
         e.add_stop(Side::Right, 10_000, 12_000, StopKind::Bulb).unwrap();
-        assert!(iso_label(&e.view(), &en(), Units::Metres).ends_with(" One transit stop is shown."));
+        assert!(iso_label(&e.view(), &en(), Units::Metres).ends_with(" One transit stop is shown (curb extension)."));
         e.add_stop(Side::Right, 24_000, 12_000, StopKind::Bulb).unwrap();
-        assert!(iso_label(&e.view(), &en(), Units::Metres).ends_with(" 2 transit stops are shown."));
+        assert!(iso_label(&e.view(), &en(), Units::Metres).ends_with(" 2 transit stops are shown (curb extension)."));
         let fr = crate::i18n_for(crate::shared::i18n::Locale::FrCa);
-        assert!(iso_label(&e.view(), &fr, Units::Metres).ends_with(" 2 arrêts d’autobus sont montrés."));
+        assert!(iso_label(&e.view(), &fr, Units::Metres).ends_with(" 2 arrêts d’autobus sont montrés (avancée de trottoir)."));
         e.remove_stop(1).unwrap();
-        assert!(iso_label(&e.view(), &fr, Units::Metres).ends_with(" Un arrêt d’autobus est montré."));
+        assert!(iso_label(&e.view(), &fr, Units::Metres).ends_with(" Un arrêt d’autobus est montré (avancée de trottoir)."));
         // After the curbside sentence.
         e.add_curb(Side::Right, 2_000, 2_000, crate::street::model::Use::Patio).unwrap();
         let label = iso_label(&e.view(), &en(), Units::Metres);

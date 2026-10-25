@@ -11,7 +11,7 @@ use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
 use crate::shared::bind::current_element;
 use crate::shared::i18n::Args;
-use crate::street::iso::{iso_height, iso_label, iso_svg};
+use crate::street::iso::{iso_height, iso_label_at, iso_svg};
 use crate::street::keys::{self, Action};
 use crate::street::svg::{Geometry, Interaction, Moving, street_label, street_svg};
 use crate::street::vm::{StreetVm, ViewMode};
@@ -295,7 +295,7 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
                     let (v, units) = w.now();
                     let i18n = w.i18n();
                     i18n.locale();
-                    iso_label(&v, &i18n, units)
+                    iso_label_at(&v, &i18n, units, width.get())
                 }
                 width=move || iso.with(|s| s.width.to_string())
                 height=move || iso.with(|s| s.height.to_string())

@@ -396,13 +396,17 @@ svg-curb-uses = Bord de rue, { $side } : { $count ->
         [one] un usage
        *[other] { $count } usages
     } le long de la rue.
+svg-stops = Arrêts, { $side } : { $count ->
+        [one] un arrêt
+       *[other] { $count } arrêts
+    } le long de la rue ({ $kinds }).
 svg-iso-curb = { $count ->
         [one] Un usage du bord de rue est montré.
        *[other] { $count } usages du bord de rue sont montrés.
     }
 svg-iso-stops = { $count ->
-        [one] Un arrêt d’autobus est montré.
-       *[other] { $count } arrêts d’autobus sont montrés.
+        [one] Un arrêt d’autobus est montré ({ $kinds }).
+       *[other] { $count } arrêts d’autobus sont montrés ({ $kinds }).
     }
 check-boundary = entre { $a } et { $b }
 check-label-transition-room = Place pour la transition

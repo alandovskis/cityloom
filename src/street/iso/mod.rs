@@ -216,13 +216,29 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
 /// What a screen reader is told the 2.5D drawing is: the street, the zone shown when it has several, the stretch
 /// shown, and its pieces; across a near boundary, the two zones that meet there.
 pub fn iso_label(v: &View, i18n: &I18n, units: Units) -> String {
+    iso_label_at(v, i18n, units, LABEL_WIDTH)
+}
+
+/// The width the label judges the stops by when the drawing's own is not known.
+const LABEL_WIDTH: f64 = 1050.0;
+
+/// `iso_label` for a drawing `width` wide: what the drawing shows of the stops depends on it, as a sign has a least
+/// size on the screen.
+pub fn iso_label_at(v: &View, i18n: &I18n, units: Units, width: f64) -> String {
     let mut label = iso_label_of(v, i18n, units);
     if !v.curb_shown.is_empty() {
         label = format!("{label} {}", i18n.tr("svg-iso-curb", &Args::new().num("count", v.curb_shown.len() as i64)));
     }
-    let stops = stops::drawn_count(v);
-    if stops > 0 {
-        label = format!("{label} {}", i18n.tr("svg-iso-stops", &Args::new().num("count", stops as i64)));
+    let shown = stops::drawn(v, width);
+    if !shown.is_empty() {
+        let mut kinds: Vec<String> = Vec::new();
+        for s in &shown {
+            let name = i18n.tr(s.kind.name_key(), &Args::new()).to_lowercase();
+            if !kinds.contains(&name) {
+                kinds.push(name);
+            }
+        }
+        label = format!("{label} {}", i18n.tr("svg-iso-stops", &Args::new().num("count", shown.len() as i64).str("kinds", kinds.join(", "))));
     }
     match v.speed_kmh {
         Some(kmh) => format!("{label} {}", i18n.tr("svg-iso-speed", &Args::new().num("kmh", i64::from(kmh)))),

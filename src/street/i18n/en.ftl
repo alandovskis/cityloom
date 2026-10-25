@@ -396,13 +396,17 @@ svg-curb-uses = Curbside, { $side }: { $count ->
         [one] one use
        *[other] { $count } uses
     } along the street.
+svg-stops = Stops, { $side }: { $count ->
+        [one] one stop
+       *[other] { $count } stops
+    } along the street ({ $kinds }).
 svg-iso-curb = { $count ->
         [one] One curbside use is shown.
        *[other] { $count } curbside uses are shown.
     }
 svg-iso-stops = { $count ->
-        [one] One transit stop is shown.
-       *[other] { $count } transit stops are shown.
+        [one] One transit stop is shown ({ $kinds }).
+       *[other] { $count } transit stops are shown ({ $kinds }).
     }
 check-boundary = between { $a } and { $b }
 check-label-transition-room = Room for the transition
