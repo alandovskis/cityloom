@@ -6,12 +6,14 @@
 //! `Side::Left` (the section's first piece) is negative and a point is `offset * (-ty, tx)` from the axis in layout
 //! millimetres. A programme crossing a zone boundary is cut there, because each zone has its own section.
 
+use serde::Serialize;
+
 use super::curb::{Use, curbside};
 use super::stop::{StopKind, bus_lane, stand};
 use super::{Segment, Side, Street, ZoneEnd, ZoneFrame};
 
 /// One part of a curbside use: where it stands along the street and across it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct MapUse {
     pub side: Side,
     pub use_: Use,
@@ -22,7 +24,7 @@ pub struct MapUse {
 }
 
 /// One part of a transit stop: where its platform stands along the street and across it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct MapStop {
     pub side: Side,
     pub kind: StopKind,
