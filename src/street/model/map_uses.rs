@@ -40,10 +40,10 @@ pub struct MapUses {
     pub stops: Vec<MapStop>,
 }
 
-/// The lateral edges of every piece of a section, centred on the section's own width.
-fn edges(segs: &[Segment]) -> Vec<(i32, i32)> {
-    let row: i32 = segs.iter().map(|s| s.width_mm).sum();
-    let mut at = -row / 2;
+/// The lateral edges of every piece of a section, as `PieceView.offset_mm` places them: laid from the edge of the
+/// street's row (`row_mm`, one value for all its zones), so a section narrower than the row sits left-aligned.
+fn edges(segs: &[Segment], row_mm: i32) -> Vec<(i32, i32)> {
+    let mut at = -row_mm / 2;
     segs.iter()
         .map(|s| {
             let e = (at, at + s.width_mm);
@@ -63,7 +63,9 @@ impl Street {
             .sections()
             .into_iter()
             .enumerate()
-            .map(|(z, segs)| ((self.zones.get(z).map_or(0, |g| g.from_mm), self.zones.get(z + 1).map_or(length, |g| g.from_mm)), segs, edges(segs)))
+            .map(|(z, segs)| {
+                ((self.zones.get(z).map_or(0, |g| g.from_mm), self.zones.get(z + 1).map_or(length, |g| g.from_mm)), segs, edges(segs, self.row_mm))
+            })
             .collect();
         // The parts of the anchored span `from..to` inside the street, one per zone, as positions from node a.
         let parts = |from: i32, to: i32| {
@@ -204,8 +206,8 @@ mod tests {
         let m = zoned_by_30(&wider).map_uses(first());
         assert_eq!(m.uses.len(), 2);
         assert_eq!((m.uses[0].from_mm, m.uses[0].to_mm, m.uses[0].lo_mm, m.uses[0].hi_mm), (24_000, 30_000, -6_000, -3_500));
-        // The second section is 19 000 wide: its parking piece lies -9 500 + 3 000 .. + 3 500.
-        assert_eq!((m.uses[1].from_mm, m.uses[1].to_mm, m.uses[1].lo_mm, m.uses[1].hi_mm), (30_000, 36_000, -6_500, -3_000));
+        // Every section is laid from the row's edge (the street's 18 000): the parking piece lies -9 000 + 3 000 .. + 3 500.
+        assert_eq!((m.uses[1].from_mm, m.uses[1].to_mm, m.uses[1].lo_mm, m.uses[1].hi_mm), (30_000, 36_000, -6_000, -2_500));
     }
 
     #[test]
@@ -258,15 +260,37 @@ mod tests {
     }
 
     #[test]
-    fn uses_in_a_row_of_another_width_stay_centred() {
+    fn a_narrower_section_stays_where_its_pieces_are_drawn() {
+        // 16 000 wide on the street's 18 000 row: laid from the row's edge, so left-aligned, not centred.
         let narrower = [("sidewalk", 2_000), ("parking", 2_500), ("travel", 3_500), ("travel", 3_500), ("parking", 2_500), ("sidewalk", 2_000)];
-        let m = zoned_by_30(&narrower).map_uses(first());
-        // 16 000 wide: the parking piece lies -8 000 + 2 000 .. -3 500 in the second part, as in the first (-6 000).
-        assert_eq!((m.uses[1].lo_mm, m.uses[1].hi_mm), (-6_000, -3_500));
         let mut s = zoned_by_30(&narrower);
-        s.curb = vec![use_of(Side::Right, 24_000, 12_000)];
+        s.curb = vec![use_of(Side::Left, 24_000, 12_000), use_of(Side::Right, 24_000, 12_000)];
         let m = s.map_uses(first());
-        assert_eq!((m.uses[0].lo_mm, m.uses[0].hi_mm), (3_500, 6_000));
-        assert_eq!((m.uses[1].lo_mm, m.uses[1].hi_mm), (3_500, 6_000));
+        let at = |side, from| m.uses.iter().find(|u| u.side == side && u.from_mm == from).map(|u| (u.lo_mm, u.hi_mm)).unwrap();
+        assert_eq!(at(Side::Left, 24_000), (-6_000, -3_500));
+        assert_eq!(at(Side::Left, 30_000), (-7_000, -4_500));
+        assert_eq!(at(Side::Right, 24_000), (3_500, 6_000));
+        assert_eq!(at(Side::Right, 30_000), (2_500, 5_000));
+    }
+
+    #[test]
+    fn a_single_zone_under_filled_street_is_left_aligned() {
+        let mut s = street(&[("sidewalk", 2_000), ("parking", 2_500), ("travel", 3_500), ("travel", 3_500), ("parking", 2_500), ("sidewalk", 2_000)]);
+        s.row_mm = 18_000;
+        s.curb = vec![use_of(Side::Left, 0, 6_000)];
+        s.length_mm = Some(LEN);
+        let m = s.map_uses(first());
+        assert_eq!((m.uses[0].lo_mm, m.uses[0].hi_mm), (-7_000, -4_500));
+    }
+
+    #[test]
+    fn anchored_at_the_last_end_a_zone_cut_is_turned_round_too() {
+        let wider = [("sidewalk", 3_000), ("parking", 3_500), ("travel", 3_500), ("travel", 3_500), ("parking", 2_500), ("sidewalk", 3_000)];
+        let mut s = zoned_by_30(&wider);
+        s.from_end = ZoneEnd::Last;
+        let m = s.map_uses(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::Last });
+        // Anchored 24 000..30 000 (zone 1) is 30 000..36 000 from node a; 30 000..36 000 (zone 2) is 24 000..30 000.
+        let parts: Vec<_> = m.uses.iter().map(|u| (u.from_mm, u.to_mm, u.lo_mm, u.hi_mm)).collect();
+        assert_eq!(parts, vec![(24_000, 30_000, -6_000, -2_500), (30_000, 36_000, -6_000, -3_500)]);
     }
 }
