@@ -481,23 +481,31 @@ mod tests {
         assert!(l.iter().all(|l| l["source"] == CURBSIDE && l["minzoom"] == 16));
         assert_eq!((CURBSIDE, STOPS), ("curbside", "stops"), "the adapter's names");
         let colour = l[1]["paint"]["fill-color"].to_string();
-        for c in [
-            "parking",
-            "loading",
-            "tree",
-            "planting",
-            "rain_garden",
-            "patio",
-            "bike_parking",
-            "platform",
-            "#64748b",
-            "#d97706",
-            "#15803d",
-            "#7c3aed",
-            "#0e7490",
-        ] {
+        for c in ["platform", "#64748b", "#d97706", "#15803d", "#7c3aed", "#0e7490"] {
             assert!(colour.contains(c), "{c} in {colour}");
         }
+    }
+
+    #[test]
+    fn every_use_has_its_own_colour_in_the_match() {
+        use crate::street::model::Use;
+        let expr = use_colour();
+        let arms = expr.as_array().unwrap();
+        // ["match", input, label, colour, label, colour, ..., fallback]
+        let pairs = &arms[2..arms.len() - 1];
+        let colour_of = |id: &str| {
+            pairs.chunks(2).find_map(|p| {
+                let hit = p[0] == json!(id) || p[0].as_array().is_some_and(|a| a.contains(&json!(id)));
+                hit.then(|| p[1].as_str().unwrap().to_string())
+            })
+        };
+        let mut colours = std::collections::BTreeSet::new();
+        for u in Use::ALL {
+            let id = serde_json::to_value(u).unwrap();
+            let id = id.as_str().unwrap();
+            colours.insert(colour_of(id).unwrap_or_else(|| panic!("{id} has no colour in the match, so it would fall back")));
+        }
+        assert_eq!(colours.len(), 6, "{colours:?}: the three planted uses share one, every other use has its own");
     }
 
     #[test]
