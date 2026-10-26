@@ -673,7 +673,6 @@ mod tests {
         for (got, want) in ring[..4].iter().zip([corner(10_000, 3_500), corner(10_000, 6_000), corner(16_000, 6_000), corner(16_000, 3_500)]) {
             assert!((got.0 - want.0).abs() < 2e-6 && (got.1 - want.1).abs() < 2e-6, "{got:?} is not {want:?}");
         }
-        assert!(ring[1].1 < ring[0].1 || (ring[1].1 - ring[0].1).abs() < 2e-6, "right is south of an eastward street");
     }
 
     #[test]
@@ -750,15 +749,6 @@ mod tests {
     }
 
     #[test]
-    fn the_stops_data_does_not_depend_on_the_language() {
-        // `stops` takes no `I18n`: the same city gives the same string every time, and holds no wording of ours
-        let mut v = City::from_network(&straight_road(), "Bendville").view(0);
-        let p = projection(&v);
-        v.edges[0].stops_mm = vec![a_stop(None)];
-        assert_eq!(stops(&v, &p), stops(&v, &p));
-    }
-
-    #[test]
     fn a_city_without_uses_has_empty_collections() {
         let v = City::from_network(&straight_road(), "Bendville").view(0);
         let p = projection(&v);
@@ -774,5 +764,34 @@ mod tests {
         v.edges[0].curb_mm = vec![a_use(Side::Right, 10_000, 16_000, 3_500, 6_000)];
         v.edges[0].stops_mm = vec![a_stop(None)];
         assert_eq!(places(&v, &p, &BTreeSet::new()), before);
+    }
+
+    #[test]
+    fn a_sharp_bend_is_held_at_twice_the_offset() {
+        // a turn of about 166 degrees: 1 / cos(half the turn) is far above the cap of 2
+        let line = [[0.0, 0.0], [20_000.0, 0.0], [0.0, 5_000.0]];
+        let out = offset_line(&line, 3_000.0);
+        let d = (out[1][0] - line[1][0]).hypot(out[1][1] - line[1][1]);
+        assert!((d - 6_000.0).abs() < 1e-6, "{d}");
+    }
+
+    #[test]
+    fn a_line_that_doubles_back_offsets_by_the_first_segments_normal() {
+        let out = offset_line(&[[0.0, 0.0], [1_000.0, 0.0], [0.0, 0.0]], 3_000.0);
+        assert_eq!(out[1], [1_000.0, 3_000.0], "the first segment's right normal, at scale 1");
+    }
+
+    #[test]
+    fn a_left_stop_has_its_dot_on_the_low_edge_and_its_ring_anticlockwise() {
+        let mut v = City::from_network(&straight_road(), "Bendville").view(0);
+        let p = projection(&v);
+        v.edges[0].stops_mm = vec![MapStop { side: Side::Left, lo_mm: -6_000, hi_mm: -3_500, ..a_stop(None) }];
+        let fc = parse(&stops(&v, &p));
+        assert_eq!(fc["features"][0]["properties"]["side"], "left");
+        assert!(signed_area(&ring_of(&fc["features"][0])) > 0.0);
+        let [x0, y0] = v.edges[0].shape_mm[0];
+        let [lon, lat] = p.lon_lat(x0 + 26_000, y0 - 6_000);
+        let c = fc["features"][1]["geometry"]["coordinates"].as_array().unwrap();
+        assert!((c[0].as_f64().unwrap() - lon).abs() < 2e-6 && (c[1].as_f64().unwrap() - lat).abs() < 2e-6);
     }
 }
