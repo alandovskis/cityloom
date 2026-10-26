@@ -162,7 +162,7 @@ export async function createBasemap(container) {
     const above = ["places-junction", "zone-ticks-casing", "draft-fill"].find((id) => map.getLayer(id));
     show(kept, name, above, "hot");
     if (!styled || !kept) return;
-    idsOf[name] = JSON.parse(kept.data).features.map((f) => f.properties.hot);
+    idsOf[name] = [...new Set(JSON.parse(kept.data).features.map((f) => f.properties.hot))];
     showHot();
     showEditable();
   };
