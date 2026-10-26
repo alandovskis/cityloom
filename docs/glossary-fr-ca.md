@@ -136,6 +136,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Map page | place (a street or a junction to open) | lieu | `0` and `1` are singular: `1 lieu`, `2 lieux`. |
 | Map page | Junctions / Streets (headings) | Jonctions / Rues |  |
 | Map page | 3 streets (at a junction) | 3 rues |  |
+| Map page | 2 curbside uses, 1 stop (a street's small print and label) | 2 usages du bord de rue, 1 arrêt d’autobus | Terms as on the street page (`usage`, `bord de rue`) and `Arrêt d’autobus` of the junction inspector; the stop is a bus stop in the data (`StopKind`), to confirm that `arrêt d’autobus` is wanted over `arrêt` alone on the map. |
 | Map page | Works / Still works | Fonctionne / Fonctionne toujours |  |
 | Map page | Changed (a place's tag) | Modifié | The title block's count is `Modifiés`. |
 | Map page | Needs attention | À corriger | To confirm, see below. |
