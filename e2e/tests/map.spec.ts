@@ -13,6 +13,7 @@ import {
   PLATEAU_TILES,
   placesOnMap,
   serveBasemap,
+  streetLengthM,
   test,
 } from "./fixtures";
 
@@ -613,3 +614,327 @@ test.describe("the zone boundaries on the map", () => {
     expect(await ticks(page)).toHaveLength(1);
   });
 });
+
+// ---- the curbside uses and the transit stops --------------------------------------------------------------------
+
+/** The features of a source (`curbside` or `stops`) as the map was given them. The source's own data, not
+ *  `querySourceFeatures`: that one reads the tiles in view, and the layers show nothing under their `minzoom`. */
+const features = (page: Page, source: string) =>
+  page.evaluate(
+    (name) =>
+      (window as any).cityloomMap
+        .getSource(name)
+        .serialize()
+        .data.features.map((f: any) => ({
+          type: f.geometry.type,
+          coordinates: f.geometry.coordinates,
+          properties: f.properties,
+        })),
+    source,
+  );
+
+/** Opens the first street of the city with a curbside strip and a Stops row on its right that is at least `minM`
+ *  metres long. Says the street's number. */
+async function openProgrammeStreet(page: Page, minM: number) {
+  await page.goto("/map.html");
+  const streets = (await placesOnMap(page)).streets;
+  for (const href of streets) {
+    await page.goto("/" + href);
+    await expect(page.locator("#zone-0")).toBeVisible();
+    if ((await page.locator("#stop-strip-right").count()) === 0) continue;
+    if ((await page.locator("#curb-strip-right").count()) === 0) continue;
+    if ((await streetLengthM(page)) >= minM) return href.split("=")[1];
+  }
+  throw new Error(`no street of ${minM} m or more with a curbside strip and a Stops row`);
+}
+
+/** Adds a 6 m parking-lane use (a patio) to the right curbside strip. With `spacerM`, a tree of that length goes
+ *  first, so the patio starts away from the street's end: a use there lies under the junction's disc (the layers
+ *  are below `places-junction`, as the street's own line is), so a press on it opens the junction, not the street. */
+async function addPatio(page: Page, spacerM = 0) {
+  const cells = page.locator("#curb-strip-right").locator('[role="option"]');
+  let count = 1;
+  const add = async (cell: number, use: string, metres: number) => {
+    await cells.nth(cell).click();
+    await page.locator("#curb-use").selectOption(use);
+    await page.locator("#curb-length").fill(String(metres));
+    await page.locator("#curb-add").click();
+    await expect(cells).toHaveCount(++count);
+  };
+  if (spacerM) await add(0, "2", spacerM);
+  await add(spacerM ? 1 : 0, "5", 6);
+}
+
+/** Adds a named stop of 12 m at the start of the right Stops row. */
+async function addNamedStop(page: Page, name: string) {
+  const cells = page.locator("#stop-strip-right").locator('[role="option"]');
+  await page.locator("#stop-right-0").click();
+  await page.locator("#stop-length").fill("12");
+  await page.locator("#stop-add").click();
+  await expect(cells).toHaveCount(2);
+  await page.locator("#stop-right-0").click();
+  await page.locator("#stop-name").fill(name);
+  await page.locator("#stop-name").press("Enter");
+  await expect(cells.nth(0)).toHaveAttribute("aria-label", new RegExp(`^${name} `));
+}
+
+/** Goes to the map, which flushes the street page's debounced write, and waits for the places. */
+async function backToMap(page: Page) {
+  await page.goto("/map.html");
+  await mapReady(page);
+}
+
+/** The metres from `p` to the street `hot` and which side of it `p` lies on (-1 right, +1 left, looking from its
+ *  first end to its second; the sign of the cross product in longitude and latitude, y north). */
+const placeBy = (page: Page, hot: string, p: number[]) =>
+  page.evaluate(
+    ([id, point]) => {
+      const k = [111_320 * Math.cos(((point as number[])[1] * Math.PI) / 180), 111_320];
+      const lines = (window as any).cityloomMap
+        .querySourceFeatures("places")
+        .filter((f: any) => f.properties.hot === id && f.geometry.type === "LineString");
+      let best = Infinity;
+      let sign = 0;
+      for (const f of lines) {
+        const line = f.geometry.coordinates;
+        for (let i = 0; i + 1 < line.length; i++) {
+          const [x1, y1] = [line[i][0] * k[0], line[i][1] * k[1]];
+          const [x2, y2] = [line[i + 1][0] * k[0], line[i + 1][1] * k[1]];
+          const [px, py] = [(point as number[])[0] * k[0], (point as number[])[1] * k[1]];
+          const t = Math.max(
+            0,
+            Math.min(1, ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / ((x2 - x1) ** 2 + (y2 - y1) ** 2)),
+          );
+          const d = Math.hypot(px - (x1 + t * (x2 - x1)), py - (y1 + t * (y2 - y1)));
+          if (d < best) {
+            best = d;
+            sign = Math.sign((x2 - x1) * (py - y1) - (y2 - y1) * (px - x1));
+          }
+        }
+      }
+      return { metres: best, sign };
+    },
+    [hot, p] as [string, number[]],
+  );
+
+/** The mean of the corners of a polygon's outer ring (the last, which closes it, left out). */
+const centroidOf = (polygon: { coordinates: number[][][] }) => {
+  const ring = polygon.coordinates[0].slice(0, -1);
+  return [ring.reduce((s, c) => s + c[0], 0) / ring.length, ring.reduce((s, c) => s + c[1], 0) / ring.length];
+};
+
+test.describe("the curbside uses and stops on the map", () => {
+  // Finding a street with both rows walks the city page by page, and the map draws in software.
+  test.describe.configure({ timeout: 120_000 });
+
+  test("a city without a programme adds no curbside or stop features", async ({ page }) => {
+    await page.goto("/map.html");
+    await mapReady(page);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const m = (window as any).cityloomMap;
+          return !!m.getLayer("curbside-fill") && !!m.getLayer("stops-dot");
+        }),
+      )
+      .toBe(true);
+    expect(await features(page, "curbside")).toHaveLength(0);
+    expect(await features(page, "stops")).toHaveLength(0);
+  });
+
+  test("the uses and stops lie over the streets and under the junction marks, the ticks and the draft", async ({
+    page,
+  }) => {
+    await page.goto("/map.html");
+    await mapReady(page);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const m = (window as any).cityloomMap;
+          return !!m.getLayer("curbside-fill") && !!m.getLayer("stops-dot") && !!m.getLayer("zone-ticks");
+        }),
+      )
+      .toBe(true);
+    const ids: string[] = await page.evaluate(() =>
+      (window as any).cityloomMap.getStyle().layers.map((l: any) => l.id),
+    );
+    const at = (id: string) => {
+      const i = ids.indexOf(id);
+      expect(i, id).toBeGreaterThanOrEqual(0);
+      return i;
+    };
+    expect(at("places-conflict")).toBeLessThan(at("curbside-casing"));
+    expect(at("curbside-line")).toBeLessThan(at("stops-platform"));
+    expect(at("stops-dot")).toBeLessThan(at("places-junction"));
+    expect(at("places-junction")).toBeLessThan(at("zone-ticks-casing"));
+  });
+
+  test("a use added on the street page is a polygon beside its street on the map", async ({ page }) => {
+    const uid = await openProgrammeStreet(page, 30);
+    await addPatio(page);
+    await backToMap(page);
+    await expect.poll(async () => (await features(page, "curbside")).length, { timeout: 30_000 }).toBe(1);
+    const [use] = await features(page, "curbside");
+    expect(use.type).toBe("Polygon");
+    expect(use.properties).toMatchObject({ hot: `s-${uid}`, use: "patio", side: "right" });
+    const { metres, sign } = await placeBy(page, `s-${uid}`, centroidOf(use));
+    expect(metres, "beside the street's line").toBeLessThan(12);
+    expect(metres, "not on it").toBeGreaterThan(0.5);
+    expect(sign, "on the street's right").toBe(-1);
+  });
+
+  test("a stop is a dot and a platform, and its name is a property", async ({ page }) => {
+    const uid = await openProgrammeStreet(page, 30);
+    await addNamedStop(page, "Mont-Royal");
+    await backToMap(page);
+    await expect.poll(async () => (await features(page, "stops")).length, { timeout: 30_000 }).toBe(2);
+    const stops = await features(page, "stops");
+    const dots = stops.filter((f: any) => f.type === "Point");
+    expect(dots).toHaveLength(1);
+    expect(dots[0].properties).toMatchObject({ part: "dot", name: "Mont-Royal", hot: `s-${uid}`, side: "right" });
+    const platforms = stops.filter((f: any) => f.type === "Polygon");
+    expect(platforms).toHaveLength(1);
+    expect(platforms[0].properties).toMatchObject({ part: "platform", hot: `s-${uid}` });
+  });
+
+  test("pressing a use opens its street", async ({ page }) => {
+    const uid = await openProgrammeStreet(page, 30);
+    await addPatio(page, 10);
+    await backToMap(page);
+    const use = await patioOnMap(page);
+    const [lng, lat] = centroidOf(use);
+    await page.evaluate(([x, y]) => (window as any).cityloomMap.jumpTo({ center: [x, y], zoom: 19 }), [lng, lat]);
+    await mapStill(page);
+    // the use, drawn under the pointer, with nothing of the page over it
+    await expect.poll(() => curbsideSpot(page), { timeout: 30_000 }).not.toBeNull();
+    const spot = await curbsideSpot(page);
+    await page.mouse.move(spot!.x, spot!.y);
+    await page.mouse.click(spot!.x, spot!.y);
+    await expect(page).toHaveURL(new RegExp(`street\\.html\\?street=${uid}$`));
+  });
+
+  test("a use of a street not wholly in view is muted and a press says so", async ({ page }) => {
+    const uid = await openProgrammeStreet(page, 40);
+    await addPatio(page, 10);
+    await backToMap(page);
+    await patioOnMap(page);
+    // Put the use at the edge of the open view, on the side its street goes on to, so that the street leaves the view.
+    await page.evaluate((id) => {
+      const map = (window as any).cityloomMap;
+      const use = map
+        .getSource("curbside")
+        .serialize()
+        .data.features.find((f: any) => f.properties.hot === id && f.properties.use === "patio")
+        .geometry.coordinates[0].slice(0, -1);
+      const [cx, cy] = [
+        use.reduce((s: number, c: number[]) => s + c[0], 0) / use.length,
+        use.reduce((s: number, c: number[]) => s + c[1], 0) / use.length,
+      ];
+      const lines = map
+        .querySourceFeatures("places")
+        .filter((f: any) => f.properties.hot === id && f.geometry.type === "LineString")
+        .flatMap((f: any) => f.geometry.coordinates);
+      map.jumpTo({ center: [cx, cy], zoom: 18 });
+      const here = map.project([cx, cy]);
+      // the street's end that is farther from the use
+      const far = lines
+        .map((c: number[]) => map.project(c))
+        .reduce((a: any, b: any) =>
+          Math.hypot(b.x - here.x, b.y - here.y) > Math.hypot(a.x - here.x, a.y - here.y) ? b : a,
+        );
+      const [dx, dy] = [far.x - here.x, far.y - here.y];
+      const norm = Math.hypot(dx, dy);
+      // The open view: where the canvas shows through the panels, found along its middle row and column.
+      const canvas = map.getCanvas();
+      const box = canvas.getBoundingClientRect();
+      const open = (x: number, y: number) => document.elementFromPoint(box.left + x, box.top + y) === canvas;
+      const row = [...Array(Math.floor(box.width / 4)).keys()].map((i) => i * 4).filter((x) => open(x, box.height / 2));
+      const col = [...Array(Math.floor(box.height / 4)).keys()].map((i) => i * 4).filter((y) => open(box.width / 2, y));
+      const [left, right, top, bottom] = [row[0], row[row.length - 1], col[0], col[col.length - 1]];
+      const [mx, my] = [(left + right) / 2, (top + bottom) / 2];
+      // the farthest point of the open view along the street's direction, less a margin
+      const t = Math.min(
+        dx > 0 ? (right - 10 - mx) / (dx / norm) : dx < 0 ? (left + 10 - mx) / (dx / norm) : Infinity,
+        dy > 0 ? (bottom - 10 - my) / (dy / norm) : dy < 0 ? (top + 10 - my) / (dy / norm) : Infinity,
+      );
+      const q = { x: mx + (dx / norm) * t, y: my + (dy / norm) * t };
+      map.jumpTo({ center: map.unproject([2 * mx - q.x, 2 * my - q.y]), zoom: 18 });
+    }, `s-${uid}`);
+    await mapStill(page);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (id) => (window as any).cityloomMap.getFeatureState({ source: "curbside", id }).editable,
+          `s-${uid}`,
+        ),
+      )
+      .toBe(false);
+    await expect.poll(() => curbsideSpot(page), { timeout: 30_000 }).not.toBeNull();
+    const spot = await curbsideSpot(page);
+    const here = page.url();
+    await page.mouse.move(spot!.x, spot!.y);
+    await page.mouse.click(spot!.x, spot!.y);
+    await expect(live(page)).toHaveText(
+      "Not all of this place is in view. Move the map so all of it shows, then try again.",
+    );
+    expect(page.url()).toBe(here);
+  });
+
+  test("a street with a use says so in its row, in English and in French", async ({ page }) => {
+    await openProgrammeStreet(page, 30);
+    const name = ((await page.locator("#street-name").textContent()) ?? "").trim();
+    await addPatio(page);
+    await backToMap(page);
+    await page.locator("#search").fill(name);
+    const row = page.locator("#search-results .place-row", { hasText: "1 curbside use" });
+    await expect(row.first().locator("small")).toHaveText(/ · 1 curbside use$/);
+    await page.locator("#account-btn").click();
+    await page.locator('[data-lang="fr-CA"]').click();
+    await expect(page.locator("html")).toHaveAttribute("lang", "fr-CA");
+    await page.locator("#search").fill("");
+    await page.locator("#search").fill(name);
+    await expect(
+      page.locator("#search-results .place-row", { hasText: "1 usage du bord de rue" }).first().locator("small"),
+    ).toHaveText(/ · 1 usage du bord de rue$/);
+  });
+});
+
+/** The patio the map was given, once it is the only one. */
+async function patioOnMap(page: Page) {
+  await expect
+    .poll(async () => (await features(page, "curbside")).filter((f: any) => f.properties.use === "patio").length, {
+      timeout: 30_000,
+    })
+    .toBe(1);
+  return (await features(page, "curbside")).find((f: any) => f.properties.use === "patio");
+}
+
+/** A spot in page pixels on the canvas where a patio is drawn and nothing of the page covers the canvas. */
+const curbsideSpot = (page: Page) =>
+  page.evaluate(() => {
+    const map = (window as any).cityloomMap;
+    const r = map.getCanvas().getBoundingClientRect();
+    for (const f of map.queryRenderedFeatures({ layers: ["curbside-fill"] })) {
+      if (f.properties.use !== "patio") continue;
+      const ring: number[][] = f.geometry.coordinates[0];
+      const px = ring.map((c) => map.project(c));
+      const spots = [...px, ...px.slice(1).map((p, i) => ({ x: (p.x + px[i].x) / 2, y: (p.y + px[i].y) / 2 }))];
+      for (const p of spots) {
+        if (p.x < 8 || p.y < 8 || p.x > r.width - 8 || p.y > r.height - 8) continue;
+        if (document.elementFromPoint(r.left + p.x, r.top + p.y) !== map.getCanvas()) continue;
+        const there = map.queryRenderedFeatures(
+          [
+            [p.x - 6, p.y - 6],
+            [p.x + 6, p.y + 6],
+          ],
+          { layers: ["places-junction", "places-street", "stops-dot", "stops-platform", "curbside-fill"] },
+        );
+        if (
+          there.every((g: any) => g.properties.hot === f.properties.hot) &&
+          there.some((g: any) => g.layer.id === "curbside-fill")
+        )
+          return { x: r.left + p.x, y: r.top + p.y };
+      }
+    }
+    return null;
+  });

@@ -368,6 +368,12 @@ pub trait Mapper {
     /// Shows the zone boundaries: `layers` over a source named `zone-ticks` holding `data`, drawn over the places and
     /// under the outline being drawn.
     fn set_zone_ticks(&self, layers: &str, data: &str);
+    /// Shows the curbside uses: `layers` over a source named `curbside` holding `data`, drawn over the streets and
+    /// under the junction marks and the zone boundaries. Called again whenever they change.
+    fn set_curbside(&self, layers: &str, data: &str);
+    /// Shows the transit stops: `layers` over a source named `stops` holding `data`, drawn over the curbside uses and
+    /// under the junction marks and the zone boundaries. Called again whenever they change.
+    fn set_stops(&self, layers: &str, data: &str);
     /// Where the middle of the view is: longitude, latitude.
     fn centre(&self) -> [f64; 2];
     /// Moves the view to hold `bounds` (west, south, east, north in degrees), clear of `insets`
@@ -400,6 +406,8 @@ impl Mapper for NoMapper {
     fn set_restrictions(&self, _: &str, _: &str) {}
     fn set_draft(&self, _: &str, _: &str) {}
     fn set_zone_ticks(&self, _: &str, _: &str) {}
+    fn set_curbside(&self, _: &str, _: &str) {}
+    fn set_stops(&self, _: &str, _: &str) {}
     fn centre(&self) -> [f64; 2] {
         [0.0, 0.0]
     }
@@ -889,6 +897,10 @@ type MapListener = Box<dyn Fn(MapEvent)>;
 pub struct FakeMapper {
     calls: RefCell<Vec<MapCall>>,
     zone_ticks: RefCell<(String, String)>,
+    curbside: RefCell<(String, String)>,
+    stops: RefCell<(String, String)>,
+    /// How many times each was set.
+    sent: Cell<(usize, usize)>,
     listener: RefCell<Option<MapListener>>,
     centre: Cell<[f64; 2]>,
 }
@@ -902,6 +914,24 @@ impl FakeMapper {
     /// The last zone ticks it was asked to show (layers, data); not among `take`'s calls.
     pub fn zone_ticks(&self) -> (String, String) {
         self.zone_ticks.borrow().clone()
+    }
+
+    /// The last curbside uses and the last stops it was asked to show (layers, data); not among `take`'s calls.
+    pub fn curbside(&self) -> (String, String) {
+        self.curbside.borrow().clone()
+    }
+
+    pub fn stops(&self) -> (String, String) {
+        self.stops.borrow().clone()
+    }
+
+    /// How many times it was asked to show the curbside uses, and the stops.
+    pub fn curbside_sent(&self) -> usize {
+        self.sent.get().0
+    }
+
+    pub fn stops_sent(&self) -> usize {
+        self.sent.get().1
     }
 
     /// Moves the middle of the view, as the person panning would.
@@ -929,6 +959,14 @@ impl Mapper for FakeMapper {
     }
     fn set_zone_ticks(&self, layers: &str, data: &str) {
         *self.zone_ticks.borrow_mut() = (layers.into(), data.into());
+    }
+    fn set_curbside(&self, layers: &str, data: &str) {
+        *self.curbside.borrow_mut() = (layers.into(), data.into());
+        self.sent.set((self.sent.get().0 + 1, self.sent.get().1));
+    }
+    fn set_stops(&self, layers: &str, data: &str) {
+        *self.stops.borrow_mut() = (layers.into(), data.into());
+        self.sent.set((self.sent.get().0, self.sent.get().1 + 1));
     }
     fn centre(&self) -> [f64; 2] {
         self.centre.get()
@@ -1379,6 +1417,19 @@ mod map_tests {
         assert_eq!(one.identity(), same.identity());
         assert_ne!(one.identity(), other.identity());
         assert!(one.identity() > 0 && other.identity() > 0, "0 is the browser's");
+    }
+
+    #[test]
+    fn the_fake_mapper_records_the_curbside_and_the_stops() {
+        let fake = FakeMapper::default();
+        assert_eq!((fake.curbside(), fake.stops()), ((String::new(), String::new()), (String::new(), String::new())));
+        fake.set_curbside("[1]", "{1}");
+        fake.set_stops("[2]", "{2}");
+        fake.set_curbside("[1]", "{1}");
+        assert_eq!(fake.curbside(), ("[1]".into(), "{1}".into()));
+        assert_eq!(fake.stops(), ("[2]".into(), "{2}".into()));
+        assert_eq!((fake.curbside_sent(), fake.stops_sent()), (2, 1), "every call counted, so a test can tell a repeat");
+        assert!(fake.take().is_empty(), "not among take's calls");
     }
 
     #[test]

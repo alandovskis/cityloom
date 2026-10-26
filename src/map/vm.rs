@@ -88,6 +88,34 @@ fn with_zones(said: Said, n: usize) -> Said {
     if n > 1 { said.with("zones", zones(n)) } else { said }
 }
 
+/// `2 curbside uses`, `1 stop`, as data to be worded.
+fn counted(key: &'static str, n: usize) -> Arg {
+    Arg::Said(Box::new(Said::new(key).with("n", Arg::Num(n as i64))))
+}
+
+/// What a street's curbside and stops hold, as data (`2 curbside uses, 1 stop`), or `None` when it holds
+/// neither: the street is then worded as it always was.
+fn programme(e: &EdgeView) -> Option<Arg> {
+    match (e.curb_count, e.stop_count) {
+        (0, 0) => None,
+        (n, 0) => Some(counted("map-curb", n)),
+        (0, m) => Some(counted("map-stops", m)),
+        (n, m) => Some(Arg::Said(Box::new(Said::new("map-programme").with("curb", counted("map-curb", n)).with("stops", counted("map-stops", m))))),
+    }
+}
+
+/// A street's sentence: the first of `keys` or the second (several zones), and the third or fourth (the
+/// `-programme` variants) when the street has curbside uses or stops.
+fn street_said(keys: [&'static str; 4], e: &EdgeView) -> Said {
+    let programme = programme(e);
+    let key = keys[usize::from(e.zones > 1) + 2 * usize::from(programme.is_some())];
+    let said = with_zones(Said::new(key), e.zones);
+    match programme {
+        Some(p) => said.with("programme", p),
+        None => said,
+    }
+}
+
 /// `1 zone`, `3 zones`, as data to be worded.
 fn zones(n: usize) -> Arg {
     Arg::Said(Box::new(Said::new("map-zones").with("n", Arg::Num(n as i64))))
@@ -132,13 +160,10 @@ pub fn junction_label(n: &NodeView, i18n: &I18n, units: Units) -> String {
 /// How a street on the map is told to a screen reader.
 pub fn street_label(e: &EdgeView, i18n: &I18n, units: Units) -> String {
     let what = said::say(i18n, units, &{
-        with_zones(
-            Said::new(if e.zones > 1 { "map-label-street-zones" } else { "map-label-street" })
-                .with("street", Arg::Said(Box::new(e.called.clone())))
-                .with("ends", Arg::Said(Box::new(e.ends.clone())))
-                .with("width", Arg::Text(units.length_in(e.row_mm, i18n.locale()))),
-            e.zones,
-        )
+        street_said(["map-label-street", "map-label-street-zones", "map-label-street-programme", "map-label-street-zones-programme"], e)
+            .with("street", Arg::Said(Box::new(e.called.clone())))
+            .with("ends", Arg::Said(Box::new(e.ends.clone())))
+            .with("width", Arg::Text(units.length_in(e.row_mm, i18n.locale())))
     });
     label(i18n, units, what, (e.ok, &e.failing, e.edited), "map-opens-street")
 }
@@ -225,6 +250,9 @@ pub struct MapVm {
     viewport: Cell<Option<[f64; 4]>>,
     /// The places the open view makes editable, as last sent to the map; `None` until there is a view.
     editable: RefCell<Option<Vec<String>>>,
+    /// The curbside uses and the stops as last sent to the map, as (layers, data): they are sent only when they change.
+    sent_curbside: RefCell<(String, String)>,
+    sent_stops: RefCell<(String, String)>,
     hot: ArcRwSignal<Option<String>>,
     search: ArcRwSignal<String>,
     /// The result the arrow keys have moved to, by index into `results`.
@@ -271,6 +299,8 @@ impl MapVm {
             moved: Cell::new(false),
             viewport: Cell::new(None),
             editable: RefCell::new(None),
+            sent_curbside: RefCell::new((String::new(), String::new())),
+            sent_stops: RefCell::new((String::new(), String::new())),
             hot: ArcRwSignal::new(None),
             search: ArcRwSignal::new(String::new()),
             active: ArcRwSignal::new(None),
@@ -365,14 +395,9 @@ impl MapVm {
                 href: street_href(e.uid),
                 hot: format!("s-{}", e.uid),
                 name: e.called.clone(),
-                sub: {
-                    with_zones(
-                        Said::new(if e.zones > 1 { "map-street-sub-zones" } else { "map-street-sub" })
-                            .with("ends", Arg::Said(Box::new(e.ends.clone())))
-                            .with("width", Arg::Text(units.length_in(e.row_mm, locale))),
-                        e.zones,
-                    )
-                },
+                sub: street_said(["map-street-sub", "map-street-sub-zones", "map-street-sub-programme", "map-street-sub-zones-programme"], e)
+                    .with("ends", Arg::Said(Box::new(e.ends.clone())))
+                    .with("width", Arg::Text(units.length_in(e.row_mm, locale))),
                 tag: Self::tag(e.ok, e.edited),
             })
             .collect()
@@ -772,6 +797,16 @@ impl MapVm {
         let in_conflict: BTreeSet<u32> =
             self.findings_in(&view, &self.areas.list_now()).into_iter().filter(|s| !s.conflicts.is_empty()).map(|s| s.uid).collect();
         self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&view, &projection, &in_conflict));
+        let curbside = (style::curbside_layers(), overlay::curbside(&view, &projection));
+        if *self.sent_curbside.borrow() != curbside {
+            self.ports.mapper.set_curbside(&curbside.0, &curbside.1);
+            *self.sent_curbside.borrow_mut() = curbside;
+        }
+        let stops = (style::stop_layers(), overlay::stops(&view, &projection));
+        if *self.sent_stops.borrow() != stops {
+            self.ports.mapper.set_stops(&stops.0, &stops.1);
+            *self.sent_stops.borrow_mut() = stops;
+        }
         self.ports.mapper.set_zone_ticks(&style::zone_tick_layers(), &overlay::zone_ticks(&view, &projection));
         self.sync_editable();
     }
@@ -1966,6 +2001,100 @@ mod tests {
         drop(vm);
     }
 
+    /// `area_vm` whose one street has a parking lane and a use on it, and a bulb stop.
+    fn programme_vm() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>) {
+        let (vm, mapper, navigator, said, _) = area_vm_over(|store| {
+            let city = store.open();
+            let mut street = city.street_editor(1, 0).unwrap().snapshot();
+            let parking = crate::shared::catalogue::kind_index("parking").unwrap();
+            street.segments.last_mut().unwrap().kind = parking;
+            let shape = city.street_shape(1).unwrap();
+            street.length_mm = Some(shape.windows(2).map(|w| ((w[1][0] - w[0][0]) as f64).hypot((w[1][1] - w[0][1]) as f64)).sum::<f64>().round() as i32);
+            street.curb = vec![crate::street::model::Instance {
+                side: crate::shared::catalogue::Side::Right,
+                from_mm: 10_000,
+                length_mm: 6_000,
+                use_: crate::street::model::Use::Parking,
+            }];
+            street.stops = vec![crate::street::model::Stop {
+                side: crate::shared::catalogue::Side::Right,
+                from_mm: 30_000,
+                length_mm: 12_000,
+                kind: crate::street::model::StopKind::Bulb,
+                shelter: false,
+                name: Some("Rue Bend".into()),
+            }];
+            assert!(store.write_street(1, street));
+        });
+        (vm, mapper, navigator, said)
+    }
+
+    #[test]
+    fn places_sync_sends_the_curbside_and_the_stops() {
+        let (vm, mapper, ..) = programme_vm();
+        mapper.say(COVERING);
+        let view = vm.core.view_now();
+        let projection = vm.projection().unwrap();
+        let (layers, data) = mapper.curbside();
+        assert_eq!(layers, style::curbside_layers());
+        assert_eq!(data, overlay::curbside(&view, &projection));
+        let fc: serde_json::Value = serde_json::from_str(&data).unwrap();
+        assert_eq!(fc["features"].as_array().unwrap().len(), 1, "{data}");
+        assert_eq!(fc["features"][0]["properties"]["use"], "parking");
+        let (layers, data) = mapper.stops();
+        assert_eq!((layers, data.as_str()), (style::stop_layers(), overlay::stops(&view, &projection).as_str()));
+        let fc: serde_json::Value = serde_json::from_str(&data).unwrap();
+        let parts: Vec<&str> = fc["features"].as_array().unwrap().iter().map(|f| f["properties"]["part"].as_str().unwrap()).collect();
+        assert_eq!(parts, ["platform", "dot"], "{data}");
+        assert_eq!(fc["features"][1]["properties"]["name"], "Rue Bend");
+    }
+
+    #[test]
+    fn the_same_data_is_not_sent_twice() {
+        let (vm, mapper, ..) = programme_vm();
+        mapper.say(COVERING);
+        assert_eq!((mapper.curbside_sent(), mapper.stops_sent()), (1, 1));
+        vm.sync_places();
+        vm.sync_places();
+        assert_eq!((mapper.curbside_sent(), mapper.stops_sent()), (1, 1), "nothing changed");
+    }
+
+    #[test]
+    fn a_changed_curbside_is_sent_again() {
+        let (vm, mapper, ..) = programme_vm();
+        mapper.say(COVERING);
+        assert_eq!((mapper.curbside_sent(), mapper.stops_sent()), (1, 1));
+        let before = mapper.curbside().1;
+        let mut street = vm.store.open().street_editor(1, 0).unwrap().snapshot();
+        street.curb.clear();
+        assert!(vm.store.write_street(1, street));
+        vm.reload();
+        vm.sync_places();
+        assert_eq!((mapper.curbside_sent(), mapper.stops_sent()), (2, 1), "only the curbside changed");
+        let after = mapper.curbside().1;
+        assert_ne!(after, before);
+        assert!(serde_json::from_str::<serde_json::Value>(&after).unwrap()["features"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_press_on_a_muted_streets_use_says_not_editable() {
+        let (vm, mapper, navigator, said) = programme_vm();
+        mapper.say(COVERING);
+        mapper.say(MapEvent::View { bounds: clipping(street_box(&vm)) });
+        said.take();
+        mapper.say(press("s-1"));
+        assert!(navigator.take().is_empty());
+        assert_eq!(said.take(), vec!["Not all of this place is in view. Move the map so all of it shows, then try again.".to_string()]);
+    }
+
+    #[test]
+    fn a_press_on_a_use_opens_its_street() {
+        let (_vm, mapper, navigator, _) = programme_vm();
+        mapper.say(COVERING);
+        mapper.say(press("s-1"));
+        assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()]);
+    }
+
     fn zoned_street_vm() -> Rc<MapVm> {
         let (vm, ..) = area_vm_over(|store| {
             let city = store.open();
@@ -2003,5 +2132,90 @@ mod tests {
             assert_eq!(vm.street_label(e.uid), format!("{}, {}, {width} wide. Opens the street cross-section.", shown(&vm, &e.called), shown(&vm, &e.ends)));
             assert_eq!(sub_of(&vm, &vm.street_rows()[i]), format!("{} \u{b7} {width}", shown(&vm, &e.ends)));
         }
+    }
+
+    /// `area_vm` whose one street has a parking lane, `uses` uses on it and `stops` bulb stops, in `zones`
+    /// zones.
+    fn counted_vm(uses: usize, stops: usize, zones: usize) -> Rc<MapVm> {
+        let (vm, ..) = area_vm_over(|store| {
+            let city = store.open();
+            let mut street = city.street_editor(1, 0).unwrap().snapshot();
+            let parking = crate::shared::catalogue::kind_index("parking").unwrap();
+            street.segments.last_mut().unwrap().kind = parking;
+            let shape = city.street_shape(1).unwrap();
+            let length = shape.windows(2).map(|w| ((w[1][0] - w[0][0]) as f64).hypot((w[1][1] - w[0][1]) as f64)).sum::<f64>().round() as i32;
+            street.length_mm = Some(length);
+            street.curb = (0..uses as i32)
+                .map(|i| crate::street::model::Instance {
+                    side: crate::shared::catalogue::Side::Right,
+                    from_mm: 10_000 + i * 8_000,
+                    length_mm: 6_000,
+                    use_: crate::street::model::Use::Parking,
+                })
+                .collect();
+            street.stops = (0..stops as i32)
+                .map(|i| crate::street::model::Stop {
+                    side: crate::shared::catalogue::Side::Right,
+                    from_mm: 30_000 + i * 15_000,
+                    length_mm: 12_000,
+                    kind: crate::street::model::StopKind::Bulb,
+                    shelter: false,
+                    name: None,
+                })
+                .collect();
+            if zones > 1 {
+                street = crate::street::model::zoned(street, &[0, length / 2], length);
+            }
+            assert!(store.write_street(1, street));
+        });
+        vm
+    }
+
+    #[test]
+    fn a_street_with_uses_and_a_stop_says_so_in_its_row_and_label() {
+        let vm = counted_vm(2, 1, 1);
+        let e = &vm.view().edges[0];
+        assert_eq!((e.curb_count, e.stop_count), (2, 1));
+        let label = vm.street_label(e.uid);
+        assert!(label.contains(" wide, 2 curbside uses, 1 stop.") && label.ends_with(" Opens the street cross-section."), "{label}");
+        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} 2 curbside uses, 1 stop"));
+        let (vm_uses, vm_stops) = (counted_vm(1, 0, 1), counted_vm(0, 3, 1));
+        assert!(sub_of(&vm_uses, &vm_uses.street_rows()[0]).ends_with(" \u{b7} 1 curbside use"));
+        assert!(sub_of(&vm_stops, &vm_stops.street_rows()[0]).ends_with(" \u{b7} 3 stops"));
+    }
+
+    #[test]
+    fn the_same_in_french() {
+        let vm = counted_vm(2, 1, 1);
+        vm.i18n().set(Locale::FrCa);
+        let uid = vm.view().edges[0].uid;
+        let label = vm.street_label(uid);
+        assert!(label.contains(" de large, 2 usages du bord de rue, 1 arrêt d\u{2019}autobus."), "{label}");
+        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} 2 usages du bord de rue, 1 arrêt d\u{2019}autobus"));
+    }
+
+    #[test]
+    fn a_street_without_any_says_what_it_said() {
+        let (vm, ..) = area_vm_all();
+        for (i, e) in vm.view().edges.iter().enumerate() {
+            assert_eq!((e.curb_count, e.stop_count), (0, 0));
+            let width = Units::Metres.length(e.row_mm);
+            assert_eq!(vm.street_label(e.uid), format!("{}, {}, {width} wide. Opens the street cross-section.", shown(&vm, &e.called), shown(&vm, &e.ends)));
+            assert_eq!(sub_of(&vm, &vm.street_rows()[i]), format!("{} \u{b7} {width}", shown(&vm, &e.ends)));
+        }
+    }
+
+    #[test]
+    fn zones_and_programme_compose() {
+        let vm = counted_vm(1, 0, 2);
+        let e = &vm.view().edges[0];
+        assert_eq!((e.zones, e.curb_count), (2, 1));
+        let label = vm.street_label(e.uid);
+        assert!(label.contains(" wide, 2 zones, 1 curbside use."), "{label}");
+        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} 2 zones \u{b7} 1 curbside use"));
+        vm.i18n().set(Locale::FrCa);
+        let label = vm.street_label(e.uid);
+        assert!(label.contains(" de large, en 2 zones, 1 usage du bord de rue."), "{label}");
+        assert!(sub_of(&vm, &vm.street_rows()[0]).ends_with(" \u{b7} en 2 zones \u{b7} 1 usage du bord de rue"));
     }
 }

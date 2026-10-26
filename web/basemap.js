@@ -103,18 +103,26 @@ export async function createBasemap(container) {
   // Kept, and put back whenever the places are drawn again: the module says it only when the set changes, and a
   // new style forgets feature-state.
   let editable = null;
-  let placeIds = [];
+  // The sources whose features carry a place's `hot` id (the places, and what is drawn beside them): each takes the
+  // place's feature state.
+  const idSources = ["places", "curbside", "stops"];
+  const idsOf = { places: [], curbside: [], stops: [] };
   const showEditable = () => {
-    if (!styled || !editable || !map.getSource("places")) return;
-    for (const id of placeIds) map.setFeatureState({ source: "places", id }, { editable: editable.has(id) });
+    if (!styled || !editable) return;
+    for (const name of idSources) {
+      if (!map.getSource(name)) continue;
+      for (const id of idsOf[name]) map.setFeatureState({ source: name, id }, { editable: editable.has(id) });
+    }
   };
   const showHot = () => {
-    if (styled && map.getSource("places") && hot) map.setFeatureState({ source: "places", id: hot }, { hot: true });
+    if (!styled || !hot) return;
+    for (const name of idSources)
+      if (map.getSource(name)) map.setFeatureState({ source: name, id: hot }, { hot: true });
   };
   const showPlaces = () => {
     if (!styled || !places) return;
     const data = JSON.parse(places.data);
-    placeIds = data.features.map((f) => f.properties.hot);
+    idsOf.places = data.features.map((f) => f.properties.hot);
     const source = map.getSource("places");
     if (source) {
       source.setData(data);
@@ -122,6 +130,13 @@ export async function createBasemap(container) {
       map.addSource("places", { type: "geojson", data, promoteId: "hot" });
       for (const layer of JSON.parse(places.layers)) map.addLayer(layer);
     }
+    // what was shown before the places goes under their junction marks
+    for (const [kept, name] of [
+      [curbside, "curbside"],
+      [stops, "stops"],
+    ])
+      if (kept && map.getSource(name))
+        for (const layer of JSON.parse(kept.layers)) map.moveLayer(layer.id, "places-junction");
     showHot();
     showEditable();
   };
@@ -130,17 +145,32 @@ export async function createBasemap(container) {
   let restrictions = null;
   let draft = null;
   let zoneTicks = null;
-  const show = (kept, name, before) => {
+  let curbside = null;
+  let stops = null;
+  const show = (kept, name, before, promoteId) => {
     if (!styled || !kept) return;
     const data = JSON.parse(kept.data);
     const source = map.getSource(name);
     if (source) {
       source.setData(data);
     } else {
-      map.addSource(name, { type: "geojson", data });
+      map.addSource(name, promoteId ? { type: "geojson", data, promoteId } : { type: "geojson", data });
       for (const layer of JSON.parse(kept.layers)) map.addLayer(layer, before);
     }
   };
+  // The curbside uses and the stops are the street's: their features say its `hot` id, and take its feature state.
+  const showBesides = (kept, name) => {
+    // over the streets, under the junction marks (the disc covers a use's first metres as it covers the street's
+    // line, so what is pressed is what is seen), the zone boundaries and the outline being drawn
+    const above = ["places-junction", "zone-ticks-casing", "draft-fill"].find((id) => map.getLayer(id));
+    show(kept, name, above, "hot");
+    if (!styled || !kept) return;
+    idsOf[name] = [...new Set(JSON.parse(kept.data).features.map((f) => f.properties.hot))];
+    showHot();
+    showEditable();
+  };
+  const showCurbside = () => showBesides(curbside, "curbside");
+  const showStops = () => showBesides(stops, "stops");
   const showRestrictions = () =>
     show(restrictions, "restrictions", map.getLayer("places-casing") ? "places-casing" : undefined);
   const showZoneTicks = () => show(zoneTicks, "zone-ticks", map.getLayer("draft-fill") ? "draft-fill" : undefined);
@@ -149,6 +179,8 @@ export async function createBasemap(container) {
     styled = true;
     showRestrictions();
     showPlaces();
+    showCurbside();
+    showStops();
     showZoneTicks();
     showDraft();
   });
@@ -185,11 +217,16 @@ export async function createBasemap(container) {
     [point.x + 6, point.y + 6],
   ];
   const hotAt = (point) => {
-    const layers = ["places-junction", "places-street"].filter((id) => map.getLayer(id));
+    // A junction before a street, a street before what lies beside it.
+    const order = ["places-junction", "places-street", "stops-dot", "stops-platform", "curbside-fill"];
+    const layers = order.filter((id) => map.getLayer(id));
     if (!layers.length) return null;
     const found = map.queryRenderedFeatures(near(point), { layers });
-    const feature = found.find((f) => f.layer.id === "places-junction") ?? found[0];
-    return feature ? feature.properties.hot : null;
+    for (const id of order) {
+      const feature = found.find((f) => f.layer.id === id);
+      if (feature) return feature.properties.hot;
+    }
+    return null;
   };
   // The part of the map the panels leave open, as the module last said what floats over it: top, right, bottom, left.
   let insets = [0, 0, 0, 0];
@@ -317,6 +354,14 @@ export async function createBasemap(container) {
       zoneTicks = { layers, data };
       showZoneTicks();
     },
+    setCurbside(layers, data) {
+      curbside = { layers, data };
+      showCurbside();
+    },
+    setStops(layers, data) {
+      stops = { layers, data };
+      showStops();
+    },
     setDraft(layers, data) {
       draft = { layers, data };
       showDraft();
@@ -352,7 +397,9 @@ export async function createBasemap(container) {
       map.panBy([dx, dy], { duration: ms(150) });
     },
     highlight(next) {
-      if (styled && map.getSource("places") && hot) map.setFeatureState({ source: "places", id: hot }, { hot: false });
+      if (styled && hot)
+        for (const name of idSources)
+          if (map.getSource(name)) map.setFeatureState({ source: name, id: hot }, { hot: false });
       hot = next;
       showHot();
     },

@@ -21,7 +21,9 @@ use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
-use crate::street::model::{Beyond, Editor, EndInfo, Host, LENGTH_TOLERANCE_MM, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said};
+use crate::street::model::{
+    Beyond, Editor, EndInfo, Host, LENGTH_TOLERANCE_MM, MapStop, MapUse, MapUses, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said,
+};
 
 pub(super) struct NodeDef {
     pub(super) x_mm: i32,
@@ -947,6 +949,7 @@ impl City {
             let failing: Vec<Said> = v.checks.iter().filter(|c| !c.ok && !at_first.contains(&c.id)).map(|c| c.label.clone()).collect();
             let row = v.row_mm;
             let shape = self.layout.shape_of(i);
+            let drawn = map_uses(now, self.layout.zone_frame(i));
             edges.push(EdgeView {
                 uid,
                 a: node_uid(e.a),
@@ -972,6 +975,10 @@ impl City {
                 zones: now.zones.len().max(1),
                 zone_breaks_mm: zone_breaks(now, self.layout.zone_frame(i)),
                 zone_bands_mm: zone_bands(now, self.layout.zone_frame(i)),
+                curb_count: drawn.as_ref().map_or(0, |m| m.drawn_uses),
+                stop_count: drawn.as_ref().map_or(0, |m| m.drawn_stops),
+                curb_mm: drawn.as_ref().map(|m| m.uses.clone()).unwrap_or_default(),
+                stops_mm: drawn.map(|m| m.stops).unwrap_or_default(),
             });
         }
         for (i, def) in self.layout.nodes.iter().enumerate() {
@@ -1085,6 +1092,15 @@ pub struct EdgeView {
     /// band per boundary that has one, on its host side of the boundary and within the host zone (see `zone_bands`).
     /// Empty wherever `zone_breaks_mm` is.
     pub zone_bands_mm: Vec<(usize, i32, i32)>,
+    /// The curbside uses to draw, part by part (a use crossing a zone boundary is two parts): along from node `a`,
+    /// across right of the axis, in millimetres (see `Street::map_uses`). Empty where `zone_bands_mm` is.
+    pub curb_mm: Vec<MapUse>,
+    /// The transit stops to draw, in the same terms as `curb_mm`.
+    pub stops_mm: Vec<MapStop>,
+    /// How many uses and stops the street has, the instances that draw at least one part, whatever the parts they are cut
+    /// into; 0 where the programme cannot be placed on this road.
+    pub curb_count: usize,
+    pub stop_count: usize,
 }
 
 /// The distances from the street's first node (`a`) of its zone boundaries that can be drawn. A boundary is drawn
@@ -1101,6 +1117,14 @@ fn zone_breaks(street: &Street, frame: Option<ZoneFrame>) -> Vec<i32> {
         .collect();
     breaks.sort_unstable();
     breaks
+}
+
+/// The curbside uses and stops of the street laid on the road, or `None` where the programme cannot be placed: gated
+/// as `zone_bands` is (and as the street page decides "elsewhere"), by a frame at the same end and a drawn length
+/// within `LENGTH_TOLERANCE_MM` of the road's.
+fn map_uses(street: &Street, frame: Option<ZoneFrame>) -> Option<MapUses> {
+    let frame = frame.filter(|f| f.from_end == street.from_end && street.length_mm.is_none_or(|drawn| (drawn - f.length_mm).abs() <= LENGTH_TOLERANCE_MM))?;
+    Some(street.map_uses(frame))
 }
 
 /// The bands of the transitions at the street's zone boundaries, from node `a` (see `EdgeView::zone_bands_mm`): the
@@ -2194,6 +2218,68 @@ mod tests {
         let boundary = |s: &Said| *s == Said::new("check-label-transition-room") || *s == Said::new("check-label-lane-drop");
         assert!(!edge.failing.iter().any(boundary), "{:?}", edge.failing);
         assert!(edge.zone_bands_mm.is_empty());
+    }
+
+    fn with_one_use(city: &City, drawn_mm: Option<i32>, from_end: ZoneEnd) -> Street {
+        let mut s = city.streets[&1].clone();
+        let parking = crate::shared::catalogue::kind_index("parking").unwrap();
+        if !s.segments.iter().any(|g| g.kind == parking) {
+            let uid = s.next_uid;
+            s.next_uid += 1;
+            s.segments.push(crate::street::model::Segment::new(uid, parking, 2_500));
+            s.row_mm += 2_500;
+        }
+        s.curb = vec![crate::street::model::Instance { side: Side::Right, from_mm: 10_000, length_mm: 6_000, use_: crate::street::model::Use::Parking }];
+        s.length_mm = drawn_mm;
+        s.from_end = from_end;
+        s
+    }
+
+    #[test]
+    fn edge_view_carries_the_uses_of_a_street_with_a_programme() {
+        let mut city = City::new();
+        let frame = city.layout.zone_frame(0).unwrap();
+        assert!(city.keep_street(1, with_one_use(&city, Some(frame.length_mm), frame.from_end)));
+        let edge = &city.view(0).edges[0];
+        assert_eq!(edge.curb_mm.len(), 1);
+        assert_eq!(edge.curb_mm[0].to_mm - edge.curb_mm[0].from_mm, 6_000);
+        assert_eq!((edge.curb_count, edge.stop_count), (1, 0));
+    }
+
+    #[test]
+    fn no_map_uses_without_a_programme_or_for_another_length() {
+        let mut city = City::new();
+        let edge = &city.view(0).edges[0];
+        assert!(edge.curb_mm.is_empty() && edge.stops_mm.is_empty());
+        assert_eq!((edge.curb_count, edge.stop_count), (0, 0));
+        let frame = city.layout.zone_frame(0).unwrap();
+        assert!(city.keep_street(1, with_one_use(&city, Some(frame.length_mm + 2_000), frame.from_end)));
+        let edge = &city.view(0).edges[0];
+        assert!(edge.curb_mm.is_empty(), "drawn on a length 2 m different");
+        assert_eq!(edge.curb_count, 0);
+        let other = if frame.from_end == ZoneEnd::First { ZoneEnd::Last } else { ZoneEnd::First };
+        assert!(city.keep_street(1, with_one_use(&city, Some(frame.length_mm), other)));
+        assert!(city.view(0).edges[0].curb_mm.is_empty(), "anchored at the other end");
+    }
+
+    #[test]
+    fn edge_view_counts_a_stop_it_draws() {
+        let mut city = City::new();
+        let frame = city.layout.zone_frame(0).unwrap();
+        let mut s = with_one_use(&city, Some(frame.length_mm), frame.from_end);
+        s.curb.clear();
+        s.stops = vec![crate::street::model::Stop {
+            side: Side::Right,
+            from_mm: 10_000,
+            length_mm: 12_000,
+            kind: crate::street::model::StopKind::Bulb,
+            shelter: false,
+            name: None,
+        }];
+        assert!(city.keep_street(1, s));
+        let edge = &city.view(0).edges[0];
+        assert!(!edge.stops_mm.is_empty());
+        assert_eq!((edge.stop_count, edge.curb_count), (1, 0));
     }
 
     #[test]

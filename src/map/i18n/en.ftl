@@ -37,6 +37,15 @@ map-streets = { $n ->
     [one] { $n } street
    *[other] { $n } streets
 }
+map-curb = { $n ->
+    [one] { $n } curbside use
+   *[other] { $n } curbside uses
+}
+map-stops = { $n ->
+    [one] { $n } stop
+   *[other] { $n } stops
+}
+map-programme = { $curb }, { $stops }
 map-zones = { $n ->
     [one] { $n } zone
    *[other] { $n } zones
@@ -53,6 +62,8 @@ map-counts = { $junctions }, { $streets }
 map-junction-sub = { $control }, { $streets }
 map-street-sub = { $ends } · { $width }
 map-street-sub-zones = { $ends } · { $width } · { $zones }
+map-street-sub-programme = { $ends } · { $width } · { $programme }
+map-street-sub-zones-programme = { $ends } · { $width } · { $zones } · { $programme }
 map-state-works = Works
 map-state-changed = Changed
 map-state-bad = Needs attention
@@ -61,6 +72,8 @@ map-state-bad = Needs attention
 map-label-junction = { $name }, { $control }, { $streets }.
 map-label-street = { $street }, { $ends }, { $width } wide.
 map-label-street-zones = { $street }, { $ends }, { $width } wide, { $zones }.
+map-label-street-programme = { $street }, { $ends }, { $width } wide, { $programme }.
+map-label-street-zones-programme = { $street }, { $ends }, { $width } wide, { $zones }, { $programme }.
 map-needs-attention = Needs attention: { $failing }.
 map-changed = Changed.
 map-opens-junction = Opens the junction plan.

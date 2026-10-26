@@ -37,6 +37,15 @@ map-streets = { $n ->
     [one] { $n } rue
    *[other] { $n } rues
 }
+map-curb = { $n ->
+    [one] { $n } usage du bord de rue
+   *[other] { $n } usages du bord de rue
+}
+map-stops = { $n ->
+    [one] { $n } arrêt d’autobus
+   *[other] { $n } arrêts d’autobus
+}
+map-programme = { $curb }, { $stops }
 map-zones = { $n ->
     [one] { $n } zone
    *[other] { $n } zones
@@ -53,6 +62,8 @@ map-counts = { $junctions }, { $streets }
 map-junction-sub = { $control }, { $streets }
 map-street-sub = { $ends } · { $width }
 map-street-sub-zones = { $ends } · { $width } · en { $zones }
+map-street-sub-programme = { $ends } · { $width } · { $programme }
+map-street-sub-zones-programme = { $ends } · { $width } · en { $zones } · { $programme }
 map-state-works = Fonctionne
 map-state-changed = Modifié
 map-state-bad = À corriger
@@ -61,6 +72,8 @@ map-state-bad = À corriger
 map-label-junction = { $name }, { $control }, { $streets }.
 map-label-street = { $street }, { $ends }, { $width } de large.
 map-label-street-zones = { $street }, { $ends }, { $width } de large, en { $zones }.
+map-label-street-programme = { $street }, { $ends }, { $width } de large, { $programme }.
+map-label-street-zones-programme = { $street }, { $ends }, { $width } de large, en { $zones }, { $programme }.
 map-needs-attention = À corriger : { $failing }.
 map-changed = Modifié.
 map-opens-junction = Ouvre le plan de la jonction.

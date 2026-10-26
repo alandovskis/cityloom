@@ -30,6 +30,9 @@ pub const AREAS: &str = "restrictions";
 pub const DRAFT: &str = "draft";
 /// The zone boundaries' source.
 pub const ZONE_TICKS: &str = "zone-ticks";
+/// The curbside uses' source, and the transit stops'.
+pub const CURBSIDE: &str = "curbside";
+pub const STOPS: &str = "stops";
 /// The layers `web/basemap.js` asks what the pointer is on: keep these names in step with it.
 pub const AREAS_FILL: &str = "areas-fill";
 pub const AREAS_VERTEX: &str = "areas-vertex";
@@ -197,6 +200,81 @@ pub fn zone_tick_layers() -> String {
         })
     };
     Value::Array(vec![line("zone-ticks-casing", "#ffffff", 5.0, 0.9), line(ZONE_TICKS, MARK, 2.5, 1.0)]).to_string()
+}
+
+/// The colour of a curbside use, by its id (`street::model::Use`): parking slate, loading amber, trees and planting
+/// green, a patio violet, bike parking teal, a platform the ink.
+fn use_colour() -> Value {
+    json!([
+        "match",
+        ["get", "use"],
+        "parking",
+        "#64748b",
+        "loading",
+        "#d97706",
+        ["tree", "planting", "rain_garden"],
+        "#15803d",
+        "patio",
+        "#7c3aed",
+        "bike_parking",
+        "#0e7490",
+        "platform",
+        MARK,
+        "#64748b"
+    ])
+}
+
+/// The curbside uses: a fill by use on a white casing and a dark ring, so that it reads on any ground (3:1 without
+/// hue; the canvas does not follow forced colours, so the count is also said in text). From zoom 16, muted where
+/// the street is not editable.
+pub fn curbside_layers() -> String {
+    json!([
+        {
+            "id": "curbside-casing", "type": "line", "source": CURBSIDE, "minzoom": 16,
+            "layout": { "line-join": "round" },
+            "paint": { "line-color": "#ffffff", "line-width": 2.5, "line-opacity": opacity(0.9) }
+        },
+        {
+            "id": "curbside-fill", "type": "fill", "source": CURBSIDE, "minzoom": 16,
+            "paint": { "fill-color": use_colour(), "fill-opacity": opacity(0.8) }
+        },
+        {
+            "id": "curbside-line", "type": "line", "source": CURBSIDE, "minzoom": 16,
+            "layout": { "line-join": "round" },
+            "paint": { "line-color": MARK, "line-width": 1, "line-opacity": opacity(1.0) }
+        }
+    ])
+    .to_string()
+}
+
+/// The transit stops: the platform in the ink, a white dot with a dark ring in the middle of it from zoom 15, and
+/// the stop's name (when it has one) from zoom 17.
+pub fn stop_layers() -> String {
+    json!([
+        {
+            "id": "stops-platform", "type": "fill", "source": STOPS, "minzoom": 15,
+            "filter": ["==", ["get", "part"], "platform"],
+            "paint": { "fill-color": MARK, "fill-opacity": opacity(0.9) }
+        },
+        {
+            "id": "stops-dot", "type": "circle", "source": STOPS, "minzoom": 15,
+            "filter": ["==", ["get", "part"], "dot"],
+            "paint": {
+                "circle-radius": 6, "circle-color": "#ffffff", "circle-opacity": opacity(1.0),
+                "circle-stroke-color": MARK, "circle-stroke-width": 2, "circle-stroke-opacity": opacity(1.0)
+            }
+        },
+        {
+            "id": "stops-name", "type": "symbol", "source": STOPS, "minzoom": 17,
+            "filter": ["all", ["==", ["get", "part"], "dot"], ["has", "name"]],
+            "layout": {
+                "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 11,
+                "text-anchor": "top", "text-offset": [0, 0.9]
+            },
+            "paint": { "text-color": MARK, "text-halo-color": "#ffffff", "text-halo-width": 1.5, "text-opacity": opacity(1.0) }
+        }
+    ])
+    .to_string()
 }
 
 /// The outline being drawn: its area once it can close, its dashed path, and its corners (the first larger).
@@ -385,5 +463,94 @@ mod tests {
         assert_eq!(l[0]["paint"]["line-color"], "#ffffff");
         assert_eq!(l[1]["paint"]["line-color"], MARK);
         assert!(crate::shared::contrast::contrast(MARK, "#ffffff") >= 3.0);
+    }
+
+    fn curbside() -> Vec<Value> {
+        serde_json::from_str(&curbside_layers()).unwrap()
+    }
+
+    fn stops() -> Vec<Value> {
+        serde_json::from_str(&stop_layers()).unwrap()
+    }
+
+    #[test]
+    fn the_curbside_layers_are_over_the_curbside_source_and_zoomed() {
+        let l = curbside();
+        let ids: Vec<&str> = l.iter().map(|l| l["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["curbside-casing", "curbside-fill", "curbside-line"]);
+        assert!(l.iter().all(|l| l["source"] == CURBSIDE && l["minzoom"] == 16));
+        assert_eq!((CURBSIDE, STOPS), ("curbside", "stops"), "the adapter's names");
+        let colour = l[1]["paint"]["fill-color"].to_string();
+        for c in ["platform", "#64748b", "#d97706", "#15803d", "#7c3aed", "#0e7490"] {
+            assert!(colour.contains(c), "{c} in {colour}");
+        }
+    }
+
+    #[test]
+    fn every_use_has_its_own_colour_in_the_match() {
+        use crate::street::model::Use;
+        let expr = use_colour();
+        let arms = expr.as_array().unwrap();
+        // ["match", input, label, colour, label, colour, ..., fallback]
+        let pairs = &arms[2..arms.len() - 1];
+        let colour_of = |id: &str| {
+            pairs.chunks(2).find_map(|p| {
+                let hit = p[0] == json!(id) || p[0].as_array().is_some_and(|a| a.contains(&json!(id)));
+                hit.then(|| p[1].as_str().unwrap().to_string())
+            })
+        };
+        let mut colours = std::collections::BTreeSet::new();
+        for u in Use::ALL {
+            let id = serde_json::to_value(u).unwrap();
+            let id = id.as_str().unwrap();
+            colours.insert(colour_of(id).unwrap_or_else(|| panic!("{id} has no colour in the match, so it would fall back")));
+        }
+        assert_eq!(colours.len(), 6, "{colours:?}: the three planted uses share one, every other use has its own");
+    }
+
+    #[test]
+    fn the_stop_layers_zoom_dot_before_name() {
+        let l = stops();
+        let by_id = |id: &str| l.iter().find(|l| l["id"] == id).unwrap_or_else(|| panic!("{id}"));
+        assert!(l.iter().all(|l| l["source"] == STOPS));
+        assert_eq!((by_id("stops-platform")["minzoom"].as_i64(), by_id("stops-dot")["minzoom"].as_i64()), (Some(15), Some(15)));
+        let name = by_id("stops-name");
+        assert_eq!((name["type"].as_str(), name["minzoom"].as_i64()), (Some("symbol"), Some(17)));
+        assert_eq!(name["layout"]["text-field"].to_string(), r#"["get","name"]"#);
+        assert_eq!(name["layout"]["text-font"].to_string(), r#"["Noto Sans Regular"]"#);
+        assert!(name["paint"]["text-halo-width"].as_f64().unwrap() > 0.0);
+        assert_eq!(by_id("stops-platform")["filter"].to_string(), r#"["==",["get","part"],"platform"]"#);
+        assert!(by_id("stops-dot")["filter"].to_string().contains(r#"["==",["get","part"],"dot"]"#));
+    }
+
+    #[test]
+    fn every_new_layer_is_muted_where_not_editable() {
+        for layer in curbside().into_iter().chain(stops()) {
+            let id = layer["id"].as_str().unwrap();
+            let paint = layer["paint"].as_object().unwrap();
+            let opacities: Vec<String> = paint.iter().filter(|(k, _)| k.ends_with("opacity")).map(|(_, v)| v.to_string()).collect();
+            assert!(!opacities.is_empty(), "{id} has an opacity");
+            for o in opacities {
+                assert!(o.contains("\"editable\"") && o.contains(&MUTED.to_string()) && o.contains("true"), "{id}: {o}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_ring_and_casing_pass_three_to_one() {
+        // the ring is the ink, the casing white; a local sRGB luminance, as the map is exempt from `shared/contrast.rs`
+        let luminance = |hex: &str| {
+            let channel = |i: usize| {
+                let c = f64::from(u8::from_str_radix(&hex[1 + 2 * i..3 + 2 * i], 16).unwrap()) / 255.0;
+                if c <= 0.03928 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+            };
+            0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2)
+        };
+        let (casing, ring) =
+            (curbside()[0]["paint"]["line-color"].as_str().unwrap().to_string(), curbside()[2]["paint"]["line-color"].as_str().unwrap().to_string());
+        assert_eq!((casing.as_str(), ring.as_str()), ("#ffffff", MARK));
+        assert!((luminance(&casing) + 0.05) / (luminance(&ring) + 0.05) >= 3.0);
+        let dot = &stops()[1]["paint"];
+        assert_eq!((dot["circle-color"].as_str(), dot["circle-stroke-color"].as_str()), (Some("#ffffff"), Some(MARK)));
     }
 }
