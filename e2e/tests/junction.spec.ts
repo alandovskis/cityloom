@@ -562,6 +562,9 @@ test.describe("the approach of an arm whose street is divided", () => {
   test("draws the transition and its marks, passes the check, then fails it when the end zone is short", async ({
     page,
   }) => {
+    // It looks for a junction with a street of the right length, then goes between the street and the junction pages
+    // up to six times: about 30 s on CI's runner, the default timeout.
+    test.setTimeout(120_000);
     // Halved, the street has an end zone of 25 to 33 m: the boundary lies inside the 36 m an arm is drawn to.
     const { junction, street } = await junctionWithStreet(page, 50, 66);
     await splitInto(page, 2);
