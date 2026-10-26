@@ -17,12 +17,12 @@ The app is available in English and Canadian French.
 
 ## The four pages
 
-| Page     | File                    | What it is for                                                                                                                                                                                                                                       |
-| -------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | `web/index.html`        | Find a place: search for a city or a neighbourhood and load its streets.                                                                                                                                                                             |
+| Page     | File                    | What it is for                                                                                                                                                                                                                                                       |
+| -------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home     | `web/index.html`        | Find a place: search for a city or a neighbourhood and load its streets.                                                                                                                                                                                             |
 | Map      | `web/map.html`          | The city's streets and junctions over a basemap. Open a place to edit it, and declare areas with rules (the Area rules panel). The curbside uses of a street are drawn beside it from zoom 16 and its transit stops from zoom 15, and pressing one opens the street. |
-| Street   | `web/street.html`       | Edit one street's cross-section: arrange its pieces, read the checks, and view it in 2.5D.                                                                                                                                                           |
-| Junction | `web/intersection.html` | Edit one junction in plan: its arms, corners, crossings and how it is controlled.                                                                                                                                                                    |
+| Street   | `web/street.html`       | Edit one street's cross-section: arrange its pieces, read the checks, and view it in 2.5D.                                                                                                                                                                           |
+| Junction | `web/intersection.html` | Edit one junction in plan: its arms, corners, crossings and how it is controlled.                                                                                                                                                                                    |
 
 The street and junction pages are opened from the map: the map gives each place an address such as `?street=7` or
 `?junction=3`. A page opened that way edits one place of the city, and its edits are kept in the browser's storage.

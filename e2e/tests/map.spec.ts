@@ -742,7 +742,9 @@ test.describe("the curbside uses and stops on the map", () => {
     expect(await features(page, "stops")).toHaveLength(0);
   });
 
-  test("the uses and stops lie over the streets and under the junction marks, the ticks and the draft", async ({ page }) => {
+  test("the uses and stops lie over the streets and under the junction marks, the ticks and the draft", async ({
+    page,
+  }) => {
     await page.goto("/map.html");
     await mapReady(page);
     await expect

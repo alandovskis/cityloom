@@ -131,7 +131,10 @@ export async function createBasemap(container) {
       for (const layer of JSON.parse(places.layers)) map.addLayer(layer);
     }
     // what was shown before the places goes under their junction marks
-    for (const [kept, name] of [[curbside, "curbside"], [stops, "stops"]])
+    for (const [kept, name] of [
+      [curbside, "curbside"],
+      [stops, "stops"],
+    ])
       if (kept && map.getSource(name))
         for (const layer of JSON.parse(kept.layers)) map.moveLayer(layer.id, "places-junction");
     showHot();
