@@ -450,6 +450,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("stop-width", "the id of a check, not a message"),
     ("stop-bike", "the id of a check, not a message"),
     ("stop-shelter", "the id of a check, not a message"),
+    ("stop-junction", "the id of a check, not a message"),
     ("cityloom-sync", "the sync document's storage key, not a message"),
     ("cityloom-sync-damaged", "the copy of a damaged sync document, a storage key and not a message"),
     ("data-notes", "the name of a data- attribute on the document element"),

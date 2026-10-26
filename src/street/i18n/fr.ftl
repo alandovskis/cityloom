@@ -512,6 +512,11 @@ check-detail-stop-shelter-curb = Le trottoir à côté de l’arrêt fait { $hav
 check-detail-stop-shelter-bulb = L’avancée et le trottoir donnent { $have }; un abribus demande { $need } ou plus.
 check-detail-stop-shelter-island = L’îlot fait { $have } de large; un abribus demande { $need } ou plus.
 check-detail-stop-shelter-ok = Chaque abribus a la place voulue.
+check-label-stop-junction = Arrêts dégagés de l’intersection
+check-detail-stop-junction-crossing = Un autobus à l’arrêt se trouverait à { $gap } du passage pour piétons; il faut { $need } ou plus.
+check-detail-stop-junction-mouth = Un autobus à l’arrêt se trouverait à { $gap } du début de l’intersection; il faut { $need } ou plus.
+check-detail-stop-junction-inside = L’arrêt empiète sur l’intersection.
+check-detail-stop-junction-ok = Chaque arrêt est dégagé de l’intersection.
 
 # Les rangées d’arrêts et leurs commandes (src/street/row.rs, src/street/stop_tools.rs, src/street/model/stop.rs).
 stop-label = { $kind }

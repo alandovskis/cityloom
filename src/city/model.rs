@@ -855,6 +855,7 @@ impl City {
         let at = |n: usize| EndInfo {
             crossing: self.layout.nodes[n].junction
                 && self.junctions.get(&node_uid(n)).is_some_and(|j| j.arms.iter().any(|a| a.edge == edge && a.crossing.is_some())),
+            ..Default::default()
         };
         [at(self.layout.edges[e].a), at(self.layout.edges[e].b)]
     }
