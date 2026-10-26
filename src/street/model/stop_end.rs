@@ -6,10 +6,6 @@ use super::stop::{StopKind, bus_lane, stand};
 use super::{LENGTH_TOLERANCE_MM, Street, ZoneEnd, ZoneFrame};
 use crate::shared::catalogue::Side;
 
-/// How far from the junction's centre an arm is drawn. The junction's `ARM_LENGTH_MM` (36 000), repeated: the street
-/// slice must not depend on the junction's.
-const END_REACH_MM: i32 = 36_000;
-
 /// How far past the end of a stop's reach the junction wants it, so a queue or a turn does not block it.
 /// UNVERIFIED: the same value as the crossing clearance (`CROSSING_CLEARANCE_MM`), not taken from a standard.
 pub const STOP_CLEAR_MM: i32 = 5_000;
@@ -42,11 +38,12 @@ pub struct EndStop {
 }
 
 impl Street {
-    /// The stops wholly inside the end zone at the street's first end (`first_end`) or its last, within the arm's
-    /// reach, nearest first. Empty with no frame, a frame of another road (another length or anchored at the other
+    /// The stops wholly inside the end zone at the street's first end (`first_end`) or its last, nearest first. How
+    /// far the arm is drawn is the junction's to decide: a stop past it is returned all the same. Empty with no frame, a frame of another road (another length or anchored at the other
     /// end) or no stops.
     pub fn end_stops(&self, first_end: bool, frame: Option<ZoneFrame>) -> Vec<EndStop> {
         let Some(frame) = frame else { return Vec::new() };
+        // A street with stops has a recorded length (`stops_are_sound`), so `None` cannot match.
         let same_length = self.length_mm.is_some_and(|drawn| (drawn - frame.length_mm).abs() <= LENGTH_TOLERANCE_MM);
         if self.stops.is_empty() || frame.from_end != self.from_end || !same_length {
             return Vec::new();
@@ -95,7 +92,6 @@ impl Street {
                     pad,
                 }
             })
-            .filter(|s| s.near_mm < END_REACH_MM)
             .collect();
         found.sort_by_key(|s| s.near_mm);
         found
@@ -197,14 +193,36 @@ mod tests {
         let far: Vec<usize> = zoned_street.end_stops(false, frame(ZoneEnd::First)).iter().map(|e| e.index).collect();
         assert_eq!(far, vec![2], "at the last end the end zone is the last one");
         let unzoned: Vec<usize> = one(stops).end_stops(true, frame(ZoneEnd::First)).iter().map(|e| e.index).collect();
-        assert_eq!(unzoned, vec![0, 1], "no zones: the whole road, within the arm's reach");
+        assert_eq!(unzoned, vec![0, 1, 2], "no zones: the whole road");
     }
 
     #[test]
-    fn a_stop_past_the_drawn_arm_is_left_off() {
-        let far = |from_mm| one(vec![stop(Side::Right, from_mm, 9_000, StopKind::Curb)]).end_stops(true, frame(ZoneEnd::First)).len();
-        assert_eq!(far(36_000), 0);
-        assert_eq!(far(35_900), 1);
+    fn a_stop_past_36_m_in_the_end_zone_is_still_returned() {
+        // The junction owns its arm's length and filters on it; the street answers for the whole end zone.
+        let s = one(vec![stop(Side::Right, 40_000, 9_000, StopKind::Curb)]);
+        let e = s.end_stops(true, frame(ZoneEnd::First));
+        assert_eq!((e.len(), e[0].near_mm, e[0].far_mm), (1, 40_000, 49_000));
+    }
+
+    #[test]
+    fn with_traffic_on_the_left_the_right_side_enters() {
+        let mut s = zoned(Street::sample(0, Side::Left), &[], LEN);
+        s.length_mm = Some(LEN);
+        s.stops = vec![stop(Side::Right, 12_000, 10_000, StopKind::Curb), stop(Side::Left, 30_000, 10_000, StopKind::Curb)];
+        let e = s.end_stops(true, frame(ZoneEnd::First));
+        let by = |side| e.iter().find(|x| x.side == side).unwrap();
+        assert!(by(Side::Right).enters);
+        assert!(!by(Side::Left).enters);
+        assert_eq!(s.segments[by(Side::Right).lane.unwrap()].direction, Some(1), "toward the junction");
+        assert_eq!(s.segments[by(Side::Left).lane.unwrap()].direction, Some(0));
+    }
+
+    #[test]
+    fn a_stop_whose_kind_does_not_fit_has_a_lane_and_no_pad() {
+        // The sample has parking on the left, so a curb stop has no platform there; the bus still has its lane.
+        let s = one(vec![stop(Side::Left, 12_000, 10_000, StopKind::Curb)]);
+        let e = s.end_stops(true, frame(ZoneEnd::First));
+        assert_eq!((e[0].lane, e[0].pad.is_empty()), (Some(2), true));
     }
 
     #[test]
