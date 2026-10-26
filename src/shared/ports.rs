@@ -368,11 +368,11 @@ pub trait Mapper {
     /// Shows the zone boundaries: `layers` over a source named `zone-ticks` holding `data`, drawn over the places and
     /// under the outline being drawn.
     fn set_zone_ticks(&self, layers: &str, data: &str);
-    /// Shows the curbside uses: `layers` over a source named `curbside` holding `data`, drawn over the places and
-    /// under the zone boundaries. Called again whenever they change.
+    /// Shows the curbside uses: `layers` over a source named `curbside` holding `data`, drawn over the streets and
+    /// under the junction marks and the zone boundaries. Called again whenever they change.
     fn set_curbside(&self, layers: &str, data: &str);
     /// Shows the transit stops: `layers` over a source named `stops` holding `data`, drawn over the curbside uses and
-    /// under the zone boundaries. Called again whenever they change.
+    /// under the junction marks and the zone boundaries. Called again whenever they change.
     fn set_stops(&self, layers: &str, data: &str);
     /// Where the middle of the view is: longitude, latitude.
     fn centre(&self) -> [f64; 2];

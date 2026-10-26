@@ -649,7 +649,8 @@ async function openProgrammeStreet(page: Page, minM: number) {
 }
 
 /** Adds a 6 m parking-lane use (a patio) to the right curbside strip. With `spacerM`, a tree of that length goes
- *  first, so the patio starts away from the street's end, where a junction's mark would cover it. */
+ *  first, so the patio starts away from the street's end: a use there lies under the junction's disc (the layers
+ *  are below `places-junction`, as the street's own line is), so a press on it opens the junction, not the street. */
 async function addPatio(page: Page, spacerM = 0) {
   const cells = page.locator("#curb-strip-right").locator('[role="option"]');
   let count = 1;
@@ -739,6 +740,31 @@ test.describe("the curbside uses and stops on the map", () => {
       .toBe(true);
     expect(await features(page, "curbside")).toHaveLength(0);
     expect(await features(page, "stops")).toHaveLength(0);
+  });
+
+  test("the uses and stops lie over the streets and under the junction marks, the ticks and the draft", async ({ page }) => {
+    await page.goto("/map.html");
+    await mapReady(page);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const m = (window as any).cityloomMap;
+          return !!m.getLayer("curbside-fill") && !!m.getLayer("stops-dot") && !!m.getLayer("zone-ticks");
+        }),
+      )
+      .toBe(true);
+    const ids: string[] = await page.evaluate(() =>
+      (window as any).cityloomMap.getStyle().layers.map((l: any) => l.id),
+    );
+    const at = (id: string) => {
+      const i = ids.indexOf(id);
+      expect(i, id).toBeGreaterThanOrEqual(0);
+      return i;
+    };
+    expect(at("places-conflict")).toBeLessThan(at("curbside-casing"));
+    expect(at("curbside-line")).toBeLessThan(at("stops-platform"));
+    expect(at("stops-dot")).toBeLessThan(at("places-junction"));
+    expect(at("places-junction")).toBeLessThan(at("zone-ticks-casing"));
   });
 
   test("a use added on the street page is a polygon beside its street on the map", async ({ page }) => {
