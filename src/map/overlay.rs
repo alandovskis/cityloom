@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use crate::city::model::CityView;
 use crate::city::projection::Projection;
 use crate::restriction::model::{LonLat, Restriction};
+use crate::shared::catalogue::Side;
 
 /// How a place stands: needing attention beats having been changed.
 fn status(ok: bool, edited: bool) -> &'static str {
@@ -124,6 +125,122 @@ pub fn zone_ticks(v: &CityView, p: &Projection) -> String {
                 "type": "Feature",
                 "properties": { "street": street, "n": i + 1 },
                 "geometry": { "type": "LineString", "coordinates": [end(1.0), end(-1.0)] },
+            }));
+        }
+    }
+    json!({ "type": "FeatureCollection", "features": features }).to_string()
+}
+
+/// The offset of each vertex of `line` from itself, `across_mm` to the right of the direction of travel, in layout
+/// millimetres. A vertex between two segments moves along the normalised sum of their right normals, scaled by
+/// `1 / cos(half the turn)` to keep the offset line `across_mm` from both, but by no more than 2, so a sharp turn
+/// does not throw a spike.
+fn offset_line(line: &[[f64; 2]], across_mm: f64) -> Vec<[f64; 2]> {
+    let normal = |a: [f64; 2], b: [f64; 2]| {
+        let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+        let len = dx.hypot(dy);
+        [-dy / len, dx / len]
+    };
+    line.iter()
+        .enumerate()
+        .map(|(i, &q)| {
+            let before = (i > 0).then(|| normal(line[i - 1], q));
+            let after = line.get(i + 1).map(|&next| normal(q, next));
+            let (n, scale) = match (before, after) {
+                (Some(a), Some(b)) => {
+                    let sum = [a[0] + b[0], a[1] + b[1]];
+                    let len = sum[0].hypot(sum[1]);
+                    if len < 1e-9 {
+                        (a, 1.0)
+                    } else {
+                        let m = [sum[0] / len, sum[1] / len];
+                        (m, (1.0 / (m[0] * a[0] + m[1] * a[1])).min(2.0))
+                    }
+                }
+                (Some(n), None) | (None, Some(n)) => (n, 1.0),
+                (None, None) => ([0.0, 0.0], 1.0),
+            };
+            [q[0] + n[0] * across_mm * scale, q[1] + n[1] * across_mm * scale]
+        })
+        .collect()
+}
+
+/// The ring of the strip beside a polyline, between `from_mm` and `to_mm` along it (as `stretch` measures) and
+/// `lo_mm` to `hi_mm` across it (positive to the right looking along the shape), in layout millimetres. Closed, and
+/// wound anticlockwise on the map (clockwise in layout millimetres, where y runs south). Empty when the span has no
+/// length.
+fn offset_ring(shape: &[[i32; 2]], from_mm: f64, to_mm: f64, lo_mm: f64, hi_mm: f64) -> Vec<[f64; 2]> {
+    let line = stretch(shape, from_mm, to_mm);
+    if line.len() < 2 {
+        return Vec::new();
+    }
+    let (lo, hi) = (offset_line(&line, lo_mm), offset_line(&line, hi_mm));
+    let mut ring: Vec<[f64; 2]> = vec![lo[0]];
+    ring.extend(hi.iter().copied());
+    ring.extend(lo.iter().rev().take(lo.len() - 1).copied());
+    ring.push(lo[0]);
+    ring
+}
+
+fn ring_coordinates(p: &Projection, ring: &[[f64; 2]]) -> Vec<[f64; 2]> {
+    ring.iter().map(|q| position(p, q[0].round() as i32, q[1].round() as i32)).collect()
+}
+
+fn side_id(side: Side) -> &'static str {
+    match side {
+        Side::Left => "left",
+        Side::Right => "right",
+    }
+}
+
+/// The curbside uses of every street as a FeatureCollection of polygons beside the street, each saying its street
+/// (`hot`, `s-<uid>`), the use (`use`, its snake-case id) and the `side`.
+pub fn curbside(v: &CityView, p: &Projection) -> String {
+    let mut features: Vec<Value> = Vec::new();
+    for e in &v.edges {
+        for u in &e.curb_mm {
+            let ring = offset_ring(&e.shape_mm, u.from_mm as f64, u.to_mm as f64, u.lo_mm as f64, u.hi_mm as f64);
+            if ring.is_empty() {
+                continue;
+            }
+            features.push(json!({
+                "type": "Feature",
+                "properties": { "hot": format!("s-{}", e.uid), "use": u.use_, "side": side_id(u.side) },
+                "geometry": { "type": "Polygon", "coordinates": [ring_coordinates(p, &ring)] },
+            }));
+        }
+    }
+    json!({ "type": "FeatureCollection", "features": features }).to_string()
+}
+
+/// The transit stops of every street: for each, its platform as a polygon (`part: "platform"`) and a point (`part:
+/// "dot"`) in the middle of its length on the platform's outer edge, with its street (`hot`), `kind` and `side`, and
+/// its `name` when it has one. Nothing here depends on the language.
+pub fn stops(v: &CityView, p: &Projection) -> String {
+    let mut features: Vec<Value> = Vec::new();
+    for e in &v.edges {
+        for s in &e.stops_mm {
+            let ring = offset_ring(&e.shape_mm, s.from_mm as f64, s.to_mm as f64, s.lo_mm as f64, s.hi_mm as f64);
+            let outer = if s.side == Side::Right { s.hi_mm } else { s.lo_mm } as f64;
+            let Some(([x, y], [tx, ty])) = point_at(&e.shape_mm, (s.from_mm as f64 + s.to_mm as f64) / 2.0) else { continue };
+            if ring.is_empty() {
+                continue;
+            }
+            let mut platform = json!({ "part": "platform", "hot": format!("s-{}", e.uid), "kind": s.kind, "side": side_id(s.side) });
+            features.push(json!({
+                "type": "Feature",
+                "properties": platform.clone(),
+                "geometry": { "type": "Polygon", "coordinates": [ring_coordinates(p, &ring)] },
+            }));
+            platform["part"] = json!("dot");
+            let mut properties = platform;
+            if let Some(name) = &s.name {
+                properties["name"] = json!(name);
+            }
+            features.push(json!({
+                "type": "Feature",
+                "properties": properties,
+                "geometry": { "type": "Point", "coordinates": position(p, (x - ty * outer).round() as i32, (y + tx * outer).round() as i32) },
             }));
         }
     }
@@ -512,5 +629,150 @@ mod tests {
         assert_eq!(fc["type"], "FeatureCollection");
         assert!(fc["features"].as_array().unwrap().is_empty());
         assert!(!places(&v, &p, &BTreeSet::new()).contains("zone"));
+    }
+
+    use crate::street::model::{MapStop, MapUse, StopKind, Use};
+
+    fn a_use(side: Side, from_mm: i32, to_mm: i32, lo_mm: i32, hi_mm: i32) -> MapUse {
+        MapUse { side, use_: Use::Parking, from_mm, to_mm, lo_mm, hi_mm }
+    }
+
+    fn a_stop(name: Option<&str>) -> MapStop {
+        MapStop { side: Side::Right, kind: StopKind::Bulb, name: name.map(String::from), from_mm: 20_000, to_mm: 32_000, lo_mm: 3_500, hi_mm: 6_000 }
+    }
+
+    fn ring_of(f: &Value) -> Vec<(f64, f64)> {
+        f["geometry"]["coordinates"][0].as_array().unwrap().iter().map(|c| (c[0].as_f64().unwrap(), c[1].as_f64().unwrap())).collect()
+    }
+
+    fn signed_area(ring: &[(f64, f64)]) -> f64 {
+        ring.windows(2).map(|w| w[0].0 * w[1].1 - w[1].0 * w[0].1).sum::<f64>() / 2.0
+    }
+
+    #[test]
+    fn a_use_is_a_polygon_beside_the_street() {
+        let mut v = City::from_network(&straight_road(), "Bendville").view(0);
+        let p = projection(&v);
+        v.edges[0].curb_mm = vec![a_use(Side::Right, 10_000, 16_000, 3_500, 6_000)];
+        let fc = parse(&curbside(&v, &p));
+        let features = fc["features"].as_array().unwrap();
+        assert_eq!(features.len(), 1);
+        let f = &features[0];
+        assert_eq!(f["geometry"]["type"], "Polygon");
+        assert_eq!(f["properties"]["hot"], format!("s-{}", v.edges[0].uid));
+        assert_eq!(f["properties"]["use"], "parking");
+        assert_eq!(f["properties"]["side"], "right");
+        let ring = ring_of(f);
+        assert_eq!(ring.len(), 5, "four corners, closed");
+        assert_eq!(ring[0], ring[4]);
+        let [x0, y0] = v.edges[0].shape_mm[0];
+        let corner = |along: i32, across: i32| {
+            let [lon, lat] = p.lon_lat(x0 + along, y0 + across);
+            (lon, lat)
+        };
+        for (got, want) in ring[..4].iter().zip([corner(10_000, 3_500), corner(10_000, 6_000), corner(16_000, 6_000), corner(16_000, 3_500)]) {
+            assert!((got.0 - want.0).abs() < 2e-6 && (got.1 - want.1).abs() < 2e-6, "{got:?} is not {want:?}");
+        }
+        assert!(ring[1].1 < ring[0].1 || (ring[1].1 - ring[0].1).abs() < 2e-6, "right is south of an eastward street");
+    }
+
+    #[test]
+    fn left_is_north_of_an_eastward_street() {
+        let mut v = City::from_network(&straight_road(), "Bendville").view(0);
+        let p = projection(&v);
+        v.edges[0].curb_mm = vec![a_use(Side::Left, 10_000, 16_000, -6_000, -3_500)];
+        let ring = ring_of(&parse(&curbside(&v, &p))["features"][0]);
+        let [x0, y0] = v.edges[0].shape_mm[0];
+        let line_lat = p.lon_lat(x0, y0)[1];
+        assert!(ring.iter().all(|c| c.1 > line_lat), "every corner north of the line");
+    }
+
+    #[test]
+    fn a_bend_does_not_spike() {
+        let shape = [[0, 0], [20_000, 0], [20_000, 20_000]];
+        let ring = offset_ring(&shape, 10_000.0, 30_000.0, 3_500.0, 6_000.0);
+        let near = |q: [f64; 2]| {
+            shape
+                .windows(2)
+                .map(|w| {
+                    let (ax, ay, bx, by) = (w[0][0] as f64, w[0][1] as f64, w[1][0] as f64, w[1][1] as f64);
+                    let t = (((q[0] - ax) * (bx - ax) + (q[1] - ay) * (by - ay)) / ((bx - ax).powi(2) + (by - ay).powi(2))).clamp(0.0, 1.0);
+                    (q[0] - (ax + t * (bx - ax))).hypot(q[1] - (ay + t * (by - ay)))
+                })
+                .fold(f64::INFINITY, f64::min)
+        };
+        assert!(ring.iter().all(|&q| near(q) <= 2.0 * 6_000.0 + 1e-6), "a vertex spikes: {ring:?}");
+        assert_eq!(ring.first(), ring.last(), "closed");
+        // layout y is south; the ring is wound anticlockwise on the map (y north), so clockwise in layout millimetres
+        let layout_area: f64 = ring.windows(2).map(|w| w[0][0] * w[1][1] - w[1][0] * w[0][1]).sum::<f64>() / 2.0;
+        assert!(layout_area < 0.0, "{layout_area}");
+    }
+
+    #[test]
+    fn a_use_ring_is_wound_anticlockwise_on_the_map() {
+        let mut v = City::from_network(&bent_road(), "Bendville").view(0);
+        let p = projection(&v);
+        v.edges[0].curb_mm = vec![a_use(Side::Right, 10_000, 100_000, 3_500, 6_000)];
+        assert!(signed_area(&ring_of(&parse(&curbside(&v, &p))["features"][0])) > 0.0);
+    }
+
+    #[test]
+    fn a_stop_is_a_platform_and_a_dot_with_its_street() {
+        let mut v = City::from_network(&straight_road(), "Bendville").view(0);
+        let p = projection(&v);
+        v.edges[0].stops_mm = vec![a_stop(Some("Hôtel-de-Ville"))];
+        let fc = parse(&stops(&v, &p));
+        let features = fc["features"].as_array().unwrap();
+        assert_eq!(features.len(), 2);
+        let hot = format!("s-{}", v.edges[0].uid);
+        let (platform, dot) = (&features[0], &features[1]);
+        assert_eq!((platform["geometry"]["type"].as_str(), platform["properties"]["part"].as_str()), (Some("Polygon"), Some("platform")));
+        assert_eq!((dot["geometry"]["type"].as_str(), dot["properties"]["part"].as_str()), (Some("Point"), Some("dot")));
+        for f in features {
+            assert_eq!(f["properties"]["hot"], hot);
+            assert_eq!(f["properties"]["kind"], "bulb");
+            assert_eq!(f["properties"]["side"], "right");
+        }
+        assert_eq!(dot["properties"]["name"], "Hôtel-de-Ville");
+        let [x0, y0] = v.edges[0].shape_mm[0];
+        let [lon, lat] = p.lon_lat(x0 + 26_000, y0 + 6_000);
+        let c = dot["geometry"]["coordinates"].as_array().unwrap();
+        assert!((c[0].as_f64().unwrap() - lon).abs() < 2e-6 && (c[1].as_f64().unwrap() - lat).abs() < 2e-6, "the middle, on the outer edge");
+    }
+
+    #[test]
+    fn an_unnamed_stop_has_no_name_property() {
+        let mut v = City::from_network(&straight_road(), "Bendville").view(0);
+        let p = projection(&v);
+        v.edges[0].stops_mm = vec![a_stop(None)];
+        let fc = parse(&stops(&v, &p));
+        assert!(fc["features"][1]["properties"].get("name").is_none());
+    }
+
+    #[test]
+    fn the_stops_data_does_not_depend_on_the_language() {
+        // `stops` takes no `I18n`: the same city gives the same string every time, and holds no wording of ours
+        let mut v = City::from_network(&straight_road(), "Bendville").view(0);
+        let p = projection(&v);
+        v.edges[0].stops_mm = vec![a_stop(None)];
+        assert_eq!(stops(&v, &p), stops(&v, &p));
+    }
+
+    #[test]
+    fn a_city_without_uses_has_empty_collections() {
+        let v = City::from_network(&straight_road(), "Bendville").view(0);
+        let p = projection(&v);
+        assert!(parse(&curbside(&v, &p))["features"].as_array().unwrap().is_empty());
+        assert!(parse(&stops(&v, &p))["features"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn places_are_unchanged_by_uses() {
+        let mut v = City::from_network(&straight_road(), "Bendville").view(0);
+        let p = projection(&v);
+        let before = places(&v, &p, &BTreeSet::new());
+        v.edges[0].curb_mm = vec![a_use(Side::Right, 10_000, 16_000, 3_500, 6_000)];
+        v.edges[0].stops_mm = vec![a_stop(None)];
+        assert_eq!(places(&v, &p, &BTreeSet::new()), before);
     }
 }
