@@ -225,6 +225,9 @@ pub struct MapVm {
     viewport: Cell<Option<[f64; 4]>>,
     /// The places the open view makes editable, as last sent to the map; `None` until there is a view.
     editable: RefCell<Option<Vec<String>>>,
+    /// The curbside uses and the stops as last sent to the map, as (layers, data): they are sent only when they change.
+    sent_curbside: RefCell<(String, String)>,
+    sent_stops: RefCell<(String, String)>,
     hot: ArcRwSignal<Option<String>>,
     search: ArcRwSignal<String>,
     /// The result the arrow keys have moved to, by index into `results`.
@@ -271,6 +274,8 @@ impl MapVm {
             moved: Cell::new(false),
             viewport: Cell::new(None),
             editable: RefCell::new(None),
+            sent_curbside: RefCell::new((String::new(), String::new())),
+            sent_stops: RefCell::new((String::new(), String::new())),
             hot: ArcRwSignal::new(None),
             search: ArcRwSignal::new(String::new()),
             active: ArcRwSignal::new(None),
@@ -772,6 +777,16 @@ impl MapVm {
         let in_conflict: BTreeSet<u32> =
             self.findings_in(&view, &self.areas.list_now()).into_iter().filter(|s| !s.conflicts.is_empty()).map(|s| s.uid).collect();
         self.ports.mapper.set_places(&style::layers(area.lat), &overlay::places(&view, &projection, &in_conflict));
+        let curbside = (style::curbside_layers(), overlay::curbside(&view, &projection));
+        if *self.sent_curbside.borrow() != curbside {
+            self.ports.mapper.set_curbside(&curbside.0, &curbside.1);
+            *self.sent_curbside.borrow_mut() = curbside;
+        }
+        let stops = (style::stop_layers(), overlay::stops(&view, &projection));
+        if *self.sent_stops.borrow() != stops {
+            self.ports.mapper.set_stops(&stops.0, &stops.1);
+            *self.sent_stops.borrow_mut() = stops;
+        }
         self.ports.mapper.set_zone_ticks(&style::zone_tick_layers(), &overlay::zone_ticks(&view, &projection));
         self.sync_editable();
     }
@@ -1964,6 +1979,70 @@ mod tests {
         assert_eq!(fc["features"].as_array().unwrap().len(), 1, "{data}");
         assert_eq!(fc["features"][0]["properties"]["street"], "s-1");
         drop(vm);
+    }
+
+    /// `area_vm` whose one street has a parking lane and a use on it, and a bulb stop.
+    fn programme_vm() -> (Rc<MapVm>, Rc<FakeMapper>, Rc<RecordingNavigator>, Rc<RecordingAnnouncer>) {
+        let (vm, mapper, navigator, said, _) = area_vm_over(|store| {
+            let city = store.open();
+            let mut street = city.street_editor(1, 0).unwrap().snapshot();
+            let parking = crate::shared::catalogue::kind_index("parking").unwrap();
+            street.segments.last_mut().unwrap().kind = parking;
+            let shape = city.street_shape(1).unwrap();
+            street.length_mm = Some(shape.windows(2).map(|w| ((w[1][0] - w[0][0]) as f64).hypot((w[1][1] - w[0][1]) as f64)).sum::<f64>().round() as i32);
+            street.curb = vec![crate::street::model::Instance {
+                side: crate::shared::catalogue::Side::Right,
+                from_mm: 10_000,
+                length_mm: 6_000,
+                use_: crate::street::model::Use::Parking,
+            }];
+            assert!(store.write_street(1, street));
+        });
+        (vm, mapper, navigator, said)
+    }
+
+    #[test]
+    fn places_sync_sends_the_curbside_and_the_stops() {
+        let (vm, mapper, ..) = programme_vm();
+        mapper.say(COVERING);
+        let view = vm.core.view_now();
+        let projection = vm.projection().unwrap();
+        let (layers, data) = mapper.curbside();
+        assert_eq!(layers, style::curbside_layers());
+        assert_eq!(data, overlay::curbside(&view, &projection));
+        let fc: serde_json::Value = serde_json::from_str(&data).unwrap();
+        assert_eq!(fc["features"].as_array().unwrap().len(), 1, "{data}");
+        assert_eq!(fc["features"][0]["properties"]["use"], "parking");
+        assert_eq!(mapper.stops(), (style::stop_layers(), overlay::stops(&view, &projection)));
+    }
+
+    #[test]
+    fn the_same_data_is_not_sent_twice() {
+        let (vm, mapper, ..) = programme_vm();
+        mapper.say(COVERING);
+        assert_eq!((mapper.curbside_sent(), mapper.stops_sent()), (1, 1));
+        vm.sync_places();
+        vm.sync_places();
+        assert_eq!((mapper.curbside_sent(), mapper.stops_sent()), (1, 1), "nothing changed");
+    }
+
+    #[test]
+    fn a_press_on_a_muted_streets_use_says_not_editable() {
+        let (vm, mapper, navigator, said) = programme_vm();
+        mapper.say(COVERING);
+        mapper.say(MapEvent::View { bounds: clipping(street_box(&vm)) });
+        said.take();
+        mapper.say(press("s-1"));
+        assert!(navigator.take().is_empty());
+        assert_eq!(said.take(), vec!["Not all of this place is in view. Move the map so all of it shows, then try again.".to_string()]);
+    }
+
+    #[test]
+    fn a_press_on_a_use_opens_its_street() {
+        let (_vm, mapper, navigator, _) = programme_vm();
+        mapper.say(COVERING);
+        mapper.say(press("s-1"));
+        assert_eq!(navigator.take(), vec!["street.html?street=1".to_string()]);
     }
 
     fn zoned_street_vm() -> Rc<MapVm> {

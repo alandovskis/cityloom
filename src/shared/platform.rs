@@ -387,6 +387,10 @@ extern "C" {
     fn set_draft(this: &Basemap, layers: &str, data: &str);
     #[wasm_bindgen(method, js_name = setZoneTicks)]
     fn set_zone_ticks(this: &Basemap, layers: &str, data: &str);
+    #[wasm_bindgen(method, js_name = setCurbside)]
+    fn set_curbside(this: &Basemap, layers: &str, data: &str);
+    #[wasm_bindgen(method, js_name = setStops)]
+    fn set_stops(this: &Basemap, layers: &str, data: &str);
     /// The middle of the view, as a `Float64Array` of longitude and latitude.
     #[wasm_bindgen(method)]
     fn centre(this: &Basemap) -> Vec<f64>;
@@ -429,6 +433,12 @@ impl crate::shared::ports::Mapper for BrowserMapper {
     }
     fn set_zone_ticks(&self, layers: &str, data: &str) {
         self.0.set_zone_ticks(layers, data);
+    }
+    fn set_curbside(&self, layers: &str, data: &str) {
+        self.0.set_curbside(layers, data);
+    }
+    fn set_stops(&self, layers: &str, data: &str) {
+        self.0.set_stops(layers, data);
     }
     fn centre(&self) -> [f64; 2] {
         let c = self.0.centre();
