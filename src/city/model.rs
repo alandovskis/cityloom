@@ -975,8 +975,8 @@ impl City {
                 zones: now.zones.len().max(1),
                 zone_breaks_mm: zone_breaks(now, self.layout.zone_frame(i)),
                 zone_bands_mm: zone_bands(now, self.layout.zone_frame(i)),
-                curb_count: if drawn.is_some() { now.curb.len() } else { 0 },
-                stop_count: if drawn.is_some() { now.stops.len() } else { 0 },
+                curb_count: drawn.as_ref().map_or(0, |m| m.drawn_uses),
+                stop_count: drawn.as_ref().map_or(0, |m| m.drawn_stops),
                 curb_mm: drawn.as_ref().map(|m| m.uses.clone()).unwrap_or_default(),
                 stops_mm: drawn.map(|m| m.stops).unwrap_or_default(),
             });
@@ -1097,8 +1097,8 @@ pub struct EdgeView {
     pub curb_mm: Vec<MapUse>,
     /// The transit stops to draw, in the same terms as `curb_mm`.
     pub stops_mm: Vec<MapStop>,
-    /// How many uses and stops the street has, one per instance whatever the parts they are cut into; 0 where
-    /// `curb_mm` is empty because the programme cannot be placed on this road.
+    /// How many uses and stops the street has, the instances that draw at least one part, whatever the parts they are cut
+    /// into; 0 where the programme cannot be placed on this road.
     pub curb_count: usize,
     pub stop_count: usize,
 }
@@ -2260,6 +2260,26 @@ mod tests {
         let other = if frame.from_end == ZoneEnd::First { ZoneEnd::Last } else { ZoneEnd::First };
         assert!(city.keep_street(1, with_one_use(&city, Some(frame.length_mm), other)));
         assert!(city.view(0).edges[0].curb_mm.is_empty(), "anchored at the other end");
+    }
+
+    #[test]
+    fn edge_view_counts_a_stop_it_draws() {
+        let mut city = City::new();
+        let frame = city.layout.zone_frame(0).unwrap();
+        let mut s = with_one_use(&city, Some(frame.length_mm), frame.from_end);
+        s.curb.clear();
+        s.stops = vec![crate::street::model::Stop {
+            side: Side::Right,
+            from_mm: 10_000,
+            length_mm: 12_000,
+            kind: crate::street::model::StopKind::Bulb,
+            shelter: false,
+            name: None,
+        }];
+        assert!(city.keep_street(1, s));
+        let edge = &city.view(0).edges[0];
+        assert!(!edge.stops_mm.is_empty());
+        assert_eq!((edge.stop_count, edge.curb_count), (1, 0));
     }
 
     #[test]

@@ -40,6 +40,9 @@ pub struct MapStop {
 pub struct MapUses {
     pub uses: Vec<MapUse>,
     pub stops: Vec<MapStop>,
+    /// How many uses and stops of the programme draw at least one part (a use cut into zone parts counts once).
+    pub drawn_uses: usize,
+    pub drawn_stops: usize,
 }
 
 /// The lateral edges of every piece of a section, as `PieceView.offset_mm` places them: laid from the edge of the
@@ -83,23 +86,29 @@ impl Street {
         };
 
         let mut uses = Vec::new();
+        let mut drawn_uses = 0;
         for i in &self.curb {
+            let before = uses.len();
             for ((from_mm, to_mm), segs, edges) in parts(i.from_mm, i.from_mm + i.length_mm) {
                 if let Some(p) = curbside(segs, i.side) {
                     uses.push(MapUse { side: i.side, use_: i.use_, from_mm, to_mm, lo_mm: edges[p].0, hi_mm: edges[p].1 });
                 }
             }
+            drawn_uses += usize::from(uses.len() > before);
         }
         let mut stops = Vec::new();
+        let mut drawn_stops = 0;
         for st in &self.stops {
+            let before = stops.len();
             for ((from_mm, to_mm), segs, edges) in parts(st.from_mm, st.to_mm()) {
                 let Some(extent) = stop_extent(segs, edges, st.side, self.side, st.kind) else { continue };
                 stops.push(MapStop { side: st.side, kind: st.kind, name: st.name.clone(), from_mm, to_mm, lo_mm: extent.0, hi_mm: extent.1 });
             }
+            drawn_stops += usize::from(stops.len() > before);
         }
         uses.sort_by_key(|u| (u.from_mm, u.side == Side::Right));
         stops.sort_by_key(|s| (s.from_mm, s.side == Side::Right));
-        MapUses { uses, stops }
+        MapUses { uses, stops, drawn_uses, drawn_stops }
     }
 }
 
@@ -294,5 +303,23 @@ mod tests {
         // Anchored 24 000..30 000 (zone 1) is 30 000..36 000 from node a; 30 000..36 000 (zone 2) is 24 000..30 000.
         let parts: Vec<_> = m.uses.iter().map(|u| (u.from_mm, u.to_mm, u.lo_mm, u.hi_mm)).collect();
         assert_eq!(parts, vec![(24_000, 30_000, -6_000, -2_500), (30_000, 36_000, -6_000, -3_500)]);
+    }
+
+    #[test]
+    fn an_instance_counts_once_if_it_draws_and_not_if_it_draws_nothing() {
+        let wider = [("sidewalk", 3_000), ("parking", 3_500), ("travel", 3_500), ("travel", 3_500), ("parking", 2_500), ("sidewalk", 3_000)];
+        // Cut into two parts by the zone boundary, it counts once.
+        let m = zoned_by_30(&wider).map_uses(first());
+        assert_eq!((m.uses.len(), m.drawn_uses), (2, 1));
+        // The second zone has no parking: the use draws one part.
+        let none = [("sidewalk", 3_000), ("travel", 3_500), ("travel", 3_500), ("sidewalk", 3_000)];
+        let mut s = zoned_by_30(&none);
+        s.curb.push(use_of(Side::Left, 40_000, 6_000));
+        let m = s.map_uses(first());
+        assert_eq!((m.uses.len(), m.drawn_uses), (1, 1));
+        // A stop whose kind does not fit counts for nothing.
+        let mut s = street(&[("sidewalk", 3_000), ("travel", 3_500), ("travel", 3_500), ("sidewalk", 3_000)]);
+        s.stops = vec![stop(Side::Right, 10_000, 12_000, StopKind::Bulb)];
+        assert_eq!(s.map_uses(first()).drawn_stops, 0);
     }
 }
