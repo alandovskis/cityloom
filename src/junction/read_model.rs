@@ -203,6 +203,13 @@ pub fn next_main(s: &State, region: usize) -> Option<(Vec<u32>, bool)> {
     }
 }
 
+/// How far each arm's own works reach along it from the junction's centre, by the arm's uid: to the far side of its
+/// crossing, or to its mouth where it has none. Empty when the junction cannot be laid out.
+pub fn arm_reaches(s: &State, region: usize) -> Vec<(u32, i32)> {
+    let Some(lay) = layout(s, region) else { return Vec::new() };
+    s.arms.iter().zip(&lay.arms).map(|(a, l)| (a.uid, l.mouth.round() as i32 + a.crossing.map_or(0, |c| c.setback_mm + c.width_mm))).collect()
+}
+
 /// Puts the junction on the sheet, or says it cannot be drawn: a corner whose
 /// curbs meet behind the junction, a fillet longer than its arm, a roundabout
 /// that will not fit its arms in the largest ring.
@@ -2000,6 +2007,30 @@ mod tests {
         let said = phase_summary(&p, &v.arms);
         let Some((_, Arg::Said(cars))) = said.args.iter().find(|(k, _)| *k == "arms") else { panic!("{said:?}") };
         assert_eq!((items(streets), items(cars)), (2, 2), "the two streets traffic goes from, once each: {named:?} {said:?}");
+    }
+
+    #[test]
+    fn arm_reaches_match_the_drawn_crossing() {
+        for i in 0..JUNCTION_SAMPLES.len() {
+            let j = Junction::new(i);
+            let reaches = arm_reaches(j.current(), 0);
+            let view = j.view();
+            assert_eq!(reaches.len(), view.arms.len(), "sample {i}");
+            let mut crossings = 0;
+            for (arm, drawn) in j.current().arms.iter().zip(&view.arms) {
+                let reach = reaches.iter().find(|r| r.0 == arm.uid).unwrap().1;
+                if let Some(c) = &drawn.crossing {
+                    // the handle stands on the crossing's far edge: its distance along the arm from the centre
+                    let d = crate::junction::geometry::dir(drawn.bearing as f64);
+                    let far = c.handle.0 * d.0 + c.handle.1 * d.1;
+                    assert!((far - reach as f64).abs() <= 1.0, "sample {i}: reach {reach}, far edge {far}");
+                    crossings += 1;
+                } else {
+                    assert!(reach > 0, "sample {i}: without a crossing the reach is the mouth");
+                }
+            }
+            assert!(crossings > 0, "sample {i} has a crossing to compare");
+        }
     }
 
     #[test]

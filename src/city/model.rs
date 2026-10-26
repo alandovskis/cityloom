@@ -22,7 +22,7 @@ use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
 use crate::street::model::{
-    Beyond, Editor, EndInfo, Host, LENGTH_TOLERANCE_MM, MapStop, MapUse, MapUses, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said,
+    Beyond, Editor, EndInfo, EndStop, Host, LENGTH_TOLERANCE_MM, MapStop, MapUse, MapUses, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said,
 };
 
 pub(super) struct NodeDef {
@@ -502,6 +502,7 @@ impl Layout {
                 arm.corner_mm = def.corner_mm;
                 arm.section = streets.get(&arm.edge).map(|s| seen_from(self, e, node, s));
                 arm.beyond = streets.get(&arm.edge).and_then(|s| beyond_from(self, e, node, s));
+                arm.stops = streets.get(&arm.edge).map_or_else(Vec::new, |s| stops_from(self, e, node, s));
                 arm
             })
             .collect();
@@ -600,6 +601,7 @@ fn forget_streets(s: &mut State) {
     for a in &mut s.arms {
         a.section = None;
         a.beyond = None;
+        a.stops.clear();
     }
 }
 
@@ -618,6 +620,11 @@ fn seen_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Stre
 /// What lies across the first boundary of the zone at the end of `edge` that meets `node`, for the arm that reads it.
 fn beyond_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Option<Beyond> {
     street.beyond(layout.edges[edge].a == node, layout.zone_frame(edge))
+}
+
+/// The transit stops in the end zone of `edge` that meets `node`, for the arm that reads them.
+fn stops_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Vec<EndStop> {
+    street.end_stops(layout.edges[edge].a == node, layout.zone_frame(edge))
 }
 
 #[cfg(test)]
@@ -649,6 +656,7 @@ impl City {
                 let e = (a.edge as usize).saturating_sub(1);
                 a.section = today_streets.get(&a.edge).map(|st| seen_from(&layout, e, n, st));
                 a.beyond = today_streets.get(&a.edge).and_then(|st| beyond_from(&layout, e, n, st));
+                a.stops = today_streets.get(&a.edge).map_or_else(Vec::new, |st| stops_from(&layout, e, n, st));
             }
             // A meeting the junction editor cannot draw (every road leaving to one side, say) is left as
             // a plain connection of streets.
@@ -849,13 +857,23 @@ impl City {
     }
 
     /// What the junctions say of the two ends of a street, node `a` first: whether the end has a pedestrian crossing
-    /// on this street's arm. A plain connection, a map edge and a street not in the city have none.
-    pub fn street_end_crossings(&self, edge: u32) -> [EndInfo; 2] {
+    /// on this street's arm, and, for a street with transit stops, how far the junction reaches along it. A plain
+    /// connection, a map edge and a street not in the city have neither.
+    pub fn street_end_infos(&self, edge: u32, region: usize) -> [EndInfo; 2] {
         let Some(e) = self.edge_index(edge) else { return [EndInfo::default(); 2] };
-        let at = |n: usize| EndInfo {
-            crossing: self.layout.nodes[n].junction
-                && self.junctions.get(&node_uid(n)).is_some_and(|j| j.arms.iter().any(|a| a.edge == edge && a.crossing.is_some())),
-            ..Default::default()
+        let has_stops = self.streets.get(&edge).is_some_and(|s| !s.stops.is_empty());
+        let at = |n: usize| {
+            let arm_state =
+                self.layout.nodes[n].junction.then(|| self.junctions.get(&node_uid(n))).flatten().map(|j| (j, j.arms.iter().find(|a| a.edge == edge)));
+            let crossing = arm_state.is_some_and(|(_, a)| a.is_some_and(|a| a.crossing.is_some()));
+            let reach_mm = match arm_state {
+                Some((j, Some(arm))) if has_stops => {
+                    let open = self.with_streets(n, j);
+                    crate::junction::read_model::arm_reaches(&open, region).into_iter().find(|&(uid, _)| uid == arm.uid).map_or(0, |(_, r)| r)
+                }
+                _ => 0,
+            };
+            EndInfo { crossing, reach_mm }
         };
         [at(self.layout.edges[e].a), at(self.layout.edges[e].b)]
     }
@@ -865,7 +883,7 @@ impl City {
         self.edge_index(edge)?;
         let frame = self.layout.zone_frame(self.edge_index(edge)?);
         let editor = Editor::from_street(self.today_streets.get(&edge)?, self.streets.get(&edge)?, region);
-        Some(editor.with_frame(frame).with_ends(self.street_end_crossings(edge)))
+        Some(editor.with_frame(frame).with_ends(self.street_end_infos(edge, region)))
     }
 
     /// Whether a street saved with this room is the one at `edge`: it has that room now, or had it when it was
@@ -897,6 +915,7 @@ impl City {
             let street = self.edge_index(edge).and_then(|e| streets.get(&edge).map(|st| (e, st)));
             a.section = street.map(|(e, st)| seen_from(&self.layout, e, node, st));
             a.beyond = street.and_then(|(e, st)| beyond_from(&self.layout, e, node, st));
+            a.stops = street.map_or_else(Vec::new, |(e, st)| stops_from(&self.layout, e, node, st));
         }
         s
     }
@@ -946,7 +965,7 @@ impl City {
             let uid = i as u32 + 1;
             let today = &self.today_streets[&uid];
             let now = &self.streets[&uid];
-            let editor = Editor::from_street(today, now, region).with_frame(self.layout.zone_frame(i)).with_ends(self.street_end_crossings(uid));
+            let editor = Editor::from_street(today, now, region).with_frame(self.layout.zone_frame(i)).with_ends(self.street_end_infos(uid, region));
             let v = editor.view();
             let at_first: Vec<&str> = Editor::from_street(today, today, region).view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect();
             let failing: Vec<Said> = v.checks.iter().filter(|c| !c.ok && !at_first.contains(&c.id)).map(|c| c.label.clone()).collect();
@@ -1260,7 +1279,7 @@ mod tests {
         let edge = 1u32;
         let e = &city.layout.edges[0];
         let (a, b) = (e.a, e.b);
-        let ends = city.street_end_crossings(edge);
+        let ends = city.street_end_infos(edge, 0);
         for (n, info) in [a, b].into_iter().zip(ends) {
             let has = city.layout.nodes[n].junction && city.junctions[&node_uid(n)].arms.iter().any(|arm| arm.edge == edge && arm.crossing.is_some());
             assert_eq!(info.crossing, has);
@@ -1270,8 +1289,8 @@ mod tests {
         let n = [a, b][ends.iter().position(|x| x.crossing).unwrap()];
         let state = city.junctions.get_mut(&node_uid(n)).unwrap();
         state.arms.iter_mut().filter(|arm| arm.edge == edge).for_each(|arm| arm.crossing = None);
-        assert!(city.street_end_crossings(edge).iter().all(|x| !x.crossing));
-        assert_eq!(city.street_end_crossings(999), [EndInfo::default(); 2]);
+        assert!(city.street_end_infos(edge, 0).iter().all(|x| !x.crossing));
+        assert_eq!(city.street_end_infos(999, 0), [EndInfo::default(); 2]);
         assert_eq!(city.street_editor(edge, 0).unwrap().frame(), city.layout.zone_frame(0));
     }
 
@@ -2442,6 +2461,99 @@ mod tests {
         assert!(kept.arms.iter().all(|a| a.beyond.is_none() && a.section.is_none()));
         assert!(!serde_json::to_string(&j.current()).unwrap().contains("beyond"));
         assert!(city.junctions.values().all(|s| s.arms.iter().all(|a| a.beyond.is_none())));
+    }
+
+    /// Street `uid` as the city has it, with a stop of 10 m from `from_mm` on its right (the city's length for it).
+    fn with_stop(city: &City, uid: u32, from_mm: i32) -> Street {
+        let length = city.layout.zone_frame(uid as usize - 1).unwrap().length_mm;
+        let mut s = city.streets[&uid].clone();
+        s.length_mm = Some(length);
+        s.stops = vec![crate::street::model::Stop {
+            side: Side::Right,
+            from_mm,
+            length_mm: 10_000,
+            kind: crate::street::model::StopKind::Curb,
+            shelter: false,
+            name: None,
+        }];
+        s
+    }
+
+    fn arm_stops(city: &City, node: usize, edge: u32) -> Vec<EndStop> {
+        let state = city.with_streets(node, &city.junctions[&node_uid(node)]);
+        state.arms.iter().find(|a| a.edge == edge).unwrap().stops.clone()
+    }
+
+    #[test]
+    fn an_arm_carries_the_stops_of_its_street() {
+        let mut city = City::new();
+        let street = with_stop(&city, 2, 12_000);
+        assert!(city.keep_street(2, street));
+        let at_a = arm_stops(&city, 1, 2);
+        assert_eq!(at_a.len(), 1);
+        assert_eq!((at_a[0].near_mm, at_a[0].far_mm, at_a[0].index), (12_000, 22_000, 0));
+        // seen from b, the same stop is measured from the last end, on the other side
+        let length = city.layout.zone_frame(1).unwrap().length_mm;
+        let at_b = arm_stops(&city, 6, 2);
+        assert_eq!(at_b.len(), 1);
+        assert_eq!((at_b[0].near_mm, at_b[0].far_mm, at_b[0].side), (length - 22_000, length - 12_000, Side::Left));
+        assert!(arm_stops(&city, 1, 1).is_empty(), "a street with no stops gives its arm none");
+    }
+
+    #[test]
+    fn a_stop_edit_reaches_an_open_junction() {
+        let mut city = City::new();
+        let before = city.junction_editor(node_uid(1), 0).unwrap();
+        assert!(before.current().arms.iter().all(|a| a.stops.is_empty()));
+        assert!(city.keep_street(2, with_stop(&city, 2, 12_000)));
+        let after = city.junction_editor(node_uid(1), 0).unwrap();
+        assert!(!after.drawn_as(&before), "the junction open is not drawn as the city now has it");
+        let open = &after.current().arms.iter().find(|a| a.edge == 2).unwrap().stops;
+        assert_eq!(open.len(), 1, "the stop is on the arm of the junction that was opened after the edit");
+        assert_eq!(open, &arm_stops(&city, 1, 2));
+    }
+
+    #[test]
+    fn the_stops_are_not_kept() {
+        let mut city = City::new();
+        assert!(city.keep_street(2, with_stop(&city, 2, 12_000)));
+        let j = city.junction_editor(node_uid(1), 0).unwrap();
+        assert!(j.current().arms.iter().any(|a| !a.stops.is_empty()), "the open junction has them");
+        assert!(j.snapshot().arms.iter().all(|a| a.stops.is_empty()));
+        assert!(!serde_json::to_string(&j.current()).unwrap().contains("stops"));
+        assert!(city.junctions.values().all(|s| s.arms.iter().all(|a| a.stops.is_empty())));
+    }
+
+    #[test]
+    fn end_infos_carry_the_reach_of_a_street_with_stops() {
+        let mut city = City::new();
+        assert!(city.keep_street(2, with_stop(&city, 2, 12_000)));
+        let e = city.edge_index(2).unwrap();
+        let n = city.layout.edges[e].a;
+        let reach = |city: &City| city.street_end_infos(2, 0)[0].reach_mm;
+        let arm_of = |city: &City| {
+            let state = city.with_streets(n, &city.junctions[&node_uid(n)]);
+            let arm = state.arms.iter().find(|a| a.edge == 2).unwrap().clone();
+            let mouth =
+                crate::junction::read_model::layout(&state, 0).unwrap().arms[state.arms.iter().position(|a| a.uid == arm.uid).unwrap()].mouth.round() as i32;
+            (arm, mouth)
+        };
+        let (arm, mouth) = arm_of(&city);
+        let c = arm.crossing.expect("the sample junction's arm has a crossing");
+        assert_eq!(reach(&city), mouth + c.setback_mm + c.width_mm);
+        let uid = node_uid(n);
+        city.junctions.get_mut(&uid).unwrap().arms.iter_mut().filter(|a| a.edge == 2).for_each(|a| a.crossing = None);
+        let (_, mouth) = arm_of(&city);
+        assert_eq!(reach(&city), mouth);
+        assert!(mouth > 0);
+    }
+
+    #[test]
+    fn a_street_without_stops_does_not_compute_the_reach() {
+        let city = City::new();
+        let infos = city.street_end_infos(2, 0);
+        assert!(infos.iter().any(|i| i.crossing), "the ends are junctions with crossings");
+        assert!(infos.iter().all(|i| i.reach_mm == 0));
     }
 
     #[test]
