@@ -544,39 +544,17 @@ test.describe("the approach of an arm whose street is divided", () => {
     throw new Error(`no junction has a street of ${minM} to ${maxM} m`);
   };
 
-  /** The added lane makes the zone too wide (a zone wider than the street is not drawn beyond): remove the first piece
-   *  (a sidewalk) while it is too wide, then widen pieces until every metre is used (a zone with width left to use would
-   *  be drawn too; this puts the street back to the plain shape the test then checks). */
-  const refillZone = async (page: Page) => {
+  /** Zone 2 must differ from zone 1 in its section. Removing the first piece (a sidewalk) does that in one exact step:
+   *  the zone is left with width to use, which `Street::beyond` draws (only a zone wider than the street draws none).
+   *  The fit text is awaited, not the key presses counted. */
+  const changeZone = async (page: Page) => {
     const fit = page.locator("#fit");
-    const first = async () => {
-      await page.locator("#wrap").focus();
-      await page.keyboard.press("Escape");
-      await page.keyboard.press("ArrowRight");
-    };
-    await expect(fit).toContainText(/too wide/);
-    // Each attempt removes the first piece if the zone is still too wide, then waits for the fit text to say so.
-    await expect(async () => {
-      if (/too wide/.test(await fit.innerText())) {
-        await first();
-        await page.keyboard.press("Delete");
-      }
-      await expect(fit).not.toContainText(/too wide/, { timeout: 1_000 });
-    }).toPass({ timeout: 15_000 });
-    await first();
-    // Each attempt widens the piece in hand by a step; a piece at its widest leaves the text unchanged: go on to the next.
-    await expect(async () => {
-      const before = await fit.innerText();
-      if (/Every metre/.test(before)) return;
-      await page.keyboard.press("+");
-      try {
-        await expect(fit).not.toHaveText(before, { timeout: 300 });
-      } catch {
-        await page.keyboard.press("ArrowRight");
-      }
-      await expect(fit).toContainText("Every metre", { timeout: 300 });
-    }).toPass({ timeout: 60_000, intervals: [0] });
-    await expect(fit).toContainText("Every metre");
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("ArrowRight"); // the first piece
+    await page.keyboard.press("Delete");
+    await expect(fit).toContainText(/m of the street is still unused\./);
+    await expect(fit).not.toContainText(/too wide/);
   };
 
   const checkRow = (page: Page) => page.locator("#checks li", { hasText: "Approaches" });
@@ -587,12 +565,10 @@ test.describe("the approach of an arm whose street is divided", () => {
     // Halved, the street has an end zone of 25 to 33 m: the boundary lies inside the 36 m an arm is drawn to.
     const { junction, street } = await junctionWithStreet(page, 50, 66);
     await splitInto(page, 2);
-    // Zone 2 gets a travel lane zone 1 lacks (the added lane makes zone 2 too wide for the street; `refillZone` makes it fit again).
+    // Zone 2 loses its first piece, so its section differs from zone 1's.
     await page.locator("#zone-1").click();
-    await page.locator("#add-btn").click();
-    await page.locator(".add-item", { hasText: "Driving lane" }).click();
-    await refillZone(page);
-    await page.waitForTimeout(500); // the debounced write
+    await changeZone(page);
+    await page.waitForTimeout(500); // the debounced write (250 ms) has nothing observable to await
 
     await page.goto("/" + junction);
     await expect(page.locator("#drawing")).toBeVisible();
@@ -622,8 +598,11 @@ test.describe("the approach of an arm whose street is divided", () => {
       await expect(options(page)).toHaveCount(2);
       await page.locator("#zone-strip").focus();
       await page.keyboard.press("ArrowRight"); // zone 2
+      const before = await options(page).first().getAttribute("aria-label");
       for (let i = 0; i < presses; i++) await page.keyboard.press(key);
-      await page.waitForTimeout(500);
+      // The presses are handled synchronously; the zone's label (its length) shows they took effect.
+      await expect(options(page).first()).not.toHaveAttribute("aria-label", before!);
+      await page.waitForTimeout(500); // the debounced write (250 ms) has nothing observable to await
       await page.goto("/" + junction);
       await expect(page.locator("#drawing")).toBeVisible();
       await page.locator("#t-checks").click();
