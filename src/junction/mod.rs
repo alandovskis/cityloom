@@ -1,6 +1,7 @@
 //! The junction page: a junction of streets edited on a plan. Its model, view-model,
 //! words and views live together.
 
+pub mod beyond;
 pub mod frame;
 pub mod geometry;
 pub mod inspector;

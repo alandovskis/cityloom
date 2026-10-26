@@ -21,7 +21,7 @@ use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
-use crate::street::model::{Editor, EndInfo, Host, LENGTH_TOLERANCE_MM, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said};
+use crate::street::model::{Beyond, Editor, EndInfo, Host, LENGTH_TOLERANCE_MM, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said};
 
 pub(super) struct NodeDef {
     pub(super) x_mm: i32,
@@ -499,6 +499,7 @@ impl Layout {
                 arm.edge = e as u32 + 1;
                 arm.corner_mm = def.corner_mm;
                 arm.section = streets.get(&arm.edge).map(|s| seen_from(self, e, node, s));
+                arm.beyond = streets.get(&arm.edge).and_then(|s| beyond_from(self, e, node, s));
                 arm
             })
             .collect();
@@ -594,6 +595,7 @@ fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
 fn forget_streets(s: &mut State) {
     for a in &mut s.arms {
         a.section = None;
+        a.beyond = None;
     }
 }
 
@@ -607,6 +609,11 @@ fn seen_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Stre
     let at_first = layout.edges[edge].a == node;
     let end = street.at_end(at_first);
     if at_first { end } else { end.reversed() }
+}
+
+/// What lies across the first boundary of the zone at the end of `edge` that meets `node`, for the arm that reads it.
+fn beyond_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Option<Beyond> {
+    street.beyond(layout.edges[edge].a == node, layout.zone_frame(edge))
 }
 
 #[cfg(test)]
@@ -637,6 +644,7 @@ impl City {
             for a in &mut s.arms {
                 let e = (a.edge as usize).saturating_sub(1);
                 a.section = today_streets.get(&a.edge).map(|st| seen_from(&layout, e, n, st));
+                a.beyond = today_streets.get(&a.edge).and_then(|st| beyond_from(&layout, e, n, st));
             }
             // A meeting the junction editor cannot draw (every road leaving to one side, say) is left as
             // a plain connection of streets.
@@ -881,7 +889,9 @@ impl City {
         let mut s = s.clone();
         for a in &mut s.arms {
             let edge = a.edge;
-            a.section = self.edge_index(edge).and_then(|e| streets.get(&edge).map(|st| seen_from(&self.layout, e, node, st)));
+            let street = self.edge_index(edge).and_then(|e| streets.get(&edge).map(|st| (e, st)));
+            a.section = street.map(|(e, st)| seen_from(&self.layout, e, node, st));
+            a.beyond = street.and_then(|(e, st)| beyond_from(&self.layout, e, node, st));
         }
         s
     }
@@ -2189,8 +2199,9 @@ mod tests {
     #[test]
     fn a_band_is_measured_from_node_a_when_zones_run_from_last() {
         let s = lane_added(200_000, 80_000, ZoneEnd::Last);
-        // the host zone is the one at the anchored (last) end: its band lies 80 000 - 52 500 .. 80 000 from it
-        assert_eq!(zone_bands(&s, frame(200_000, ZoneEnd::Last)), vec![(1, 120_000, 120_000 + 52_500)]);
+        // the host zone is the one at the anchored (last) end: its band lies 80 000 - 56 500 .. 80 000 from it. The lane
+        // runs first to last, out of the far zone (the one toward the first end), so it ends there: a merge taper
+        assert_eq!(zone_bands(&s, frame(200_000, ZoneEnd::Last)), vec![(1, 120_000, 120_000 + 56_500)]);
         assert_eq!(zone_breaks(&s, frame(200_000, ZoneEnd::Last)), vec![120_000]);
     }
 
@@ -2258,6 +2269,90 @@ mod tests {
         assert!(city.keep_street(2, other));
         assert_eq!(arm_section(&city, 1, 2), plain(last), "at a, the last zone");
         assert_eq!(arm_section(&city, 6, 2), plain(first).reversed(), "at b, the first zone reversed");
+    }
+
+    fn arm_beyond(city: &City, node: usize, edge: u32) -> Option<crate::street::model::Beyond> {
+        let state = city.with_streets(node, &city.junctions[&node_uid(node)]);
+        state.arms.iter().find(|a| a.edge == edge).unwrap().beyond.clone()
+    }
+
+    #[test]
+    fn an_arm_carries_the_beyond_of_its_street() {
+        let mut city = City::new();
+        // Edge 2 joins node 1 (a) to node 6 (b); zone 1 is the pocket at a, zone 2 has its own section.
+        let street = zoned_street(&city, 2, &[0, 5], Some(1));
+        assert!(city.keep_street(2, street));
+        let length = city.layout.zone_frame(1).unwrap().length_mm;
+        let at_a = arm_beyond(&city, 1, 2).expect("a boundary beyond the end at a");
+        assert_eq!(at_a.boundary_mm, length / 10 * 5);
+        let at_b = arm_beyond(&city, 6, 2).expect("the street has a boundary seen from b too");
+        assert_eq!(at_b.boundary_mm, length - length / 10 * 5);
+        // a street of one zone has none
+        assert_eq!(arm_beyond(&city, 1, 1), None);
+    }
+
+    #[test]
+    fn a_zone_wider_than_the_street_gives_no_arm_a_beyond() {
+        let mut city = City::new();
+        let mut street = zoned_street(&city, 2, &[0, 5], None);
+        let mut section = street.segments.clone();
+        let mut lane = section.iter().find(|g| g.kind == crate::shared::catalogue::kind_index("travel").unwrap()).unwrap().clone();
+        lane.uid = street.next_uid - 1;
+        lane.width_mm = 3_300;
+        section.push(lane);
+        street.zones[1].segments = Some(section);
+        assert!(city.keep_street(2, street), "the street is kept with its zones");
+        assert_eq!(city.streets[&2].zones.len(), 2);
+        assert_eq!(arm_beyond(&city, 1, 2), None);
+        assert_eq!(arm_beyond(&city, 6, 2), None);
+    }
+
+    #[test]
+    fn an_under_filled_zone_gives_the_arm_a_beyond_that_the_junction_draws_and_checks() {
+        let mut city = City::new();
+        let length = city.layout.zone_frame(1).unwrap().length_mm;
+        let mut street = zoned_street(&city, 2, &[0, 1], None);
+        // the end zone drops a driving lane and leaves its width unused: "left to use", which still fits
+        let mut section = street.segments.clone();
+        let lane = section.iter().position(|g| g.kind == crate::shared::catalogue::kind_index("travel").unwrap()).unwrap();
+        section.remove(lane);
+        assert!(section.iter().map(|g| g.width_mm).sum::<i32>() < street.row_mm);
+        street.zones[0].segments = Some(section);
+        assert!(city.keep_street(2, street));
+        let b = arm_beyond(&city, 1, 2).expect("a street with width left to use still has a beyond");
+        assert_eq!(b.boundary_mm, length / 10);
+        let view = city.junction_editor(node_uid(1), 0).unwrap().view();
+        let arm = view.arms.iter().find(|a| !a.beyond.is_empty()).expect("the junction draws the beyond");
+        assert!(!arm.beyond_marks.is_empty());
+        assert!(view.checks.iter().any(|c| c.id == "approach"), "the approach check runs");
+    }
+
+    #[test]
+    fn a_zone_edit_reaches_an_open_junction() {
+        let mut city = City::new();
+        let street = zoned_street(&city, 2, &[0, 5], Some(1));
+        assert!(city.keep_street(2, street));
+        let before = city.junction_editor(node_uid(1), 0).unwrap();
+        let first = arm_beyond(&city, 1, 2).unwrap();
+        let moved = zoned_street(&city, 2, &[0, 3], Some(1));
+        assert!(city.keep_street(2, moved));
+        let after = city.junction_editor(node_uid(1), 0).unwrap();
+        assert!(!after.drawn_as(&before), "the junction open is not drawn as the city now has it");
+        assert_ne!(arm_beyond(&city, 1, 2).unwrap(), first);
+        assert_eq!(after.current().arms.iter().find(|a| a.edge == 2).unwrap().beyond, arm_beyond(&city, 1, 2));
+    }
+
+    #[test]
+    fn the_beyond_is_not_kept() {
+        let mut city = City::new();
+        let street = zoned_street(&city, 2, &[0, 5], Some(1));
+        assert!(city.keep_street(2, street));
+        let j = city.junction_editor(node_uid(1), 0).unwrap();
+        assert!(j.current().arms.iter().any(|a| a.beyond.is_some()), "the open junction has one");
+        let kept = j.snapshot();
+        assert!(kept.arms.iter().all(|a| a.beyond.is_none() && a.section.is_none()));
+        assert!(!serde_json::to_string(&j.current()).unwrap().contains("beyond"));
+        assert!(city.junctions.values().all(|s| s.arms.iter().all(|a| a.beyond.is_none())));
     }
 
     #[test]

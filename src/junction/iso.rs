@@ -452,9 +452,10 @@ impl Draw {
 }
 
 /// The points the picture reaches on the ground: each arm from its mouth to its end, the core, and a
-/// roundabout's ring. Everything drawn is inside them.
+/// roundabout's ring, and what lies beyond an end zone. Everything drawn is inside them.
 fn content_points(v: &JView) -> Vec<P> {
-    let mut pts: Vec<P> = v.arms.iter().flat_map(|a| flatten(&a.outline)).chain(flatten(&v.core)).collect();
+    let mut pts: Vec<P> =
+        v.arms.iter().flat_map(|a| flatten(&a.outline).into_iter().chain(a.beyond.iter().flat_map(|p| flatten(&p.poly)))).chain(flatten(&v.core)).collect();
     if let Some(ring) = &v.ring {
         if ring.outer_edge.is_empty() {
             let r = ring.radius_mm as f64;
@@ -528,7 +529,8 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
     }
 
     for a in &v.arms {
-        for piece in &a.pieces {
+        // The arm's end zone, then the taper and the zone across: a taper's quad stands or lies like any piece.
+        for piece in a.pieces.iter().chain(&a.beyond) {
             let id = KINDS[piece.kind].id;
             let foot = flatten(&piece.poly);
             // A walkway is walking surface wall to wall, whatever stands on it.
@@ -876,6 +878,90 @@ mod tests {
         let (min, max) = d.iter().fold((f64::MAX, f64::MIN), |(lo, hi), x| (lo.min(*x), hi.max(*x)));
         assert!(max - min > 1000.0, "the arms are spread in depth: {d:?}");
         assert_eq!((d[0], d[d.len() - 1]), (min, max));
+    }
+
+    /// FNV-1a over the whole 2.5D markup of every sample junction.
+    fn iso_fingerprint() -> u64 {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for sample in 0..JUNCTION_SAMPLES.len() {
+            for b in svg(&Junction::new(sample)).markup.bytes() {
+                h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+            }
+        }
+        h
+    }
+
+    #[test]
+    fn an_arm_without_a_beyond_draws_as_before() {
+        let (got, pinned) = (iso_fingerprint(), 13_505_848_485_995_189_453);
+        assert_eq!(
+            got, pinned,
+            "the 2.5D markup of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
+        );
+    }
+
+    fn without_beyond(j: &Junction) -> JView {
+        let mut bare = j.view();
+        bare.arms.iter_mut().for_each(|a| a.beyond.clear());
+        bare
+    }
+
+    #[test]
+    fn a_pocket_arm_draws_the_taper_flat_in_the_iso() {
+        let (j, _) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let v = j.view();
+        let a = v.arms.iter().find(|a| !a.beyond.is_empty()).unwrap();
+        let lane = a.beyond.iter().find(|p| p.taper && KINDS[p.kind].id == "travel").expect("the pocket's quad");
+        let (with, without) = (render(&v), render(&without_beyond(&j)));
+        let flat = a.beyond.iter().filter(|p| height_of(KINDS[p.kind].id) == 0.0).count();
+        assert_eq!(count(&with.markup, "iso-flat k-"), count(&without.markup, "iso-flat k-") + flat);
+        let pts = flatten(&lane.poly);
+        let d = |p: P, q: P| ((p.0 - q.0).powi(2) + (p.1 - q.1).powi(2)).sqrt();
+        assert_eq!(pts.len(), 4);
+        assert!(((d(pts[0], pts[3]) - d(pts[1], pts[2])).abs() > 1.0) || ((d(pts[0], pts[1]) - d(pts[2], pts[3])).abs() > 1.0), "not a rectangle: {pts:?}");
+        let path = Draw::new(with.frame).path(&pts, 0.0);
+        assert!(with.markup.contains(&format!("<path class=\"iso-flat k-travel mat-asphalt\" d=\"{path}\"/>")), "{path}");
+    }
+
+    #[test]
+    fn a_sidewalk_stands_on_both_sides_of_the_boundary() {
+        let (j, _) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let v = j.view();
+        let a = v.arms.iter().find(|a| !a.beyond.is_empty()).unwrap();
+        let more = a.beyond.iter().filter(|p| !p.taper && KINDS[p.kind].id == "sidewalk").count();
+        assert_eq!(more, 2, "a sidewalk each side beyond the boundary");
+        let (with, without) = (render(&v).markup, render(&without_beyond(&j)).markup);
+        assert_eq!(count(&with, "iso-top k-sidewalk"), count(&without, "iso-top k-sidewalk") + more);
+        let planting = a.beyond.iter().filter(|p| KINDS[p.kind].id == "planting").count();
+        assert!(planting > 0);
+        assert_eq!(count(&with, "iso-top k-planting"), count(&without, "iso-top k-planting") + planting);
+        // Splitting at the boundary gives the wall facing the viewer along the arm one more piece, and the boundary's own
+        // ends, which face the viewer on one of the two, are not walled against the strip that continues them.
+        assert_eq!(count(&with, "iso-side k-sidewalk"), count(&without, "iso-side k-sidewalk") + 1, "a wall drawn at the boundary would add more");
+    }
+
+    #[test]
+    fn the_frame_holds_what_lies_beyond() {
+        let (j, _) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let v = j.view();
+        let pts = content_points(&v);
+        let a = v.arms.iter().find(|a| !a.beyond.is_empty()).unwrap();
+        for p in a.beyond.iter().flat_map(|p| flatten(&p.poly)) {
+            assert!(pts.contains(&p), "{p:?} is not among the points the frame fits");
+        }
+    }
+
+    #[test]
+    fn what_lies_beyond_stays_inside_the_drawing() {
+        let (j, _) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let (v, s) = (j.view(), svg(&j));
+        let a = v.arms.iter().find(|a| !a.beyond.is_empty()).unwrap();
+        for p in a.beyond.iter().flat_map(|p| flatten(&p.poly)) {
+            for h in [0.0, height_of("sidewalk")] {
+                let (x, y) = s.frame.at(p, h);
+                assert!((0.0..=1000.0).contains(&x) && (0.0..=1000.0).contains(&y), "({x}, {y})");
+            }
+        }
     }
 
     #[test]

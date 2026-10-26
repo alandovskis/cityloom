@@ -831,6 +831,13 @@ svg pattern circle {
   stroke-linejoin: round;
   pointer-events: none;
 }
+#drawing .approach-mark {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
 #drawing .turbo-entry {
   pointer-events: none;
 }
@@ -840,6 +847,9 @@ svg pattern circle {
   }
   #drawing .turbo-divider-gap {
     stroke: Canvas;
+  }
+  #drawing .approach-mark {
+    stroke: CanvasText;
   }
 }
 #drawing .curb-line {

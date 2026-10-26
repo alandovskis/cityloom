@@ -354,6 +354,7 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         corebike: String,
         cross: String,
         mark: String,
+        approach: String,
         sel: String,
         grip: String,
         mv: String,
@@ -389,6 +390,13 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         for piece in &a.pieces {
             let id = KINDS[piece.kind].id;
             g += &p.piece(&format!("piece k-{id}"), id, &p.path_d(&piece.poly));
+        }
+        for piece in &a.beyond {
+            let id = KINDS[piece.kind].id;
+            g += &p.piece(&format!("piece k-{id} beyond{}", if piece.taper { " taper" } else { "" }), id, &p.path_d(&piece.poly));
+        }
+        for [from, to] in &a.beyond_marks {
+            write!(l.approach, "<path class=\"approach-mark\" d=\"M{}L{}\"/>", p.pt(*from), p.pt(*to)).unwrap();
         }
         if let Some(b) = &a.bike_box {
             g += &p.piece("bike-box k-bike", "bike", &p.path_d(b));
@@ -788,8 +796,25 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
     }
 
     let markup = format!(
-        "<defs>{defs}</defs><g class=\"plan\">{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}</g>{furniture}",
-        l.wedge, l.arm, l.lane, l.table, l.measure, l.road, l.raised, l.corner, l.corebike, l.bulb, l.curb, l.cross, l.mark, l.sel, l.mv, l.label, l.grip
+        "<defs>{defs}</defs><g class=\"plan\">{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}</g>{furniture}",
+        l.wedge,
+        l.arm,
+        l.lane,
+        l.table,
+        l.measure,
+        l.road,
+        l.raised,
+        l.corner,
+        l.corebike,
+        l.bulb,
+        l.curb,
+        l.cross,
+        l.mark,
+        l.approach,
+        l.sel,
+        l.mv,
+        l.label,
+        l.grip
     );
     PlanSvg { frame: f, label: plan_label(v, i18n), markup }
 }
@@ -828,6 +853,54 @@ mod tests {
 
     fn count(s: &str, needle: &str) -> usize {
         s.matches(needle).count()
+    }
+
+    /// FNV-1a over the whole plan markup of every sample junction.
+    fn plans_fingerprint() -> u64 {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for sample in 0..JUNCTION_SAMPLES.len() {
+            for b in svg(&Junction::new(sample)).markup.bytes() {
+                h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+            }
+        }
+        h
+    }
+
+    #[test]
+    fn an_arm_without_a_beyond_has_no_marks() {
+        let m = svg(&Junction::new(0)).markup;
+        assert_eq!(count(&m, "approach-mark"), 0);
+        assert_eq!(count(&m, "beyond"), 0);
+        let (got, pinned) = (plans_fingerprint(), 16_125_793_362_560_287_401);
+        assert_eq!(
+            got, pinned,
+            "the plan markup of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
+        );
+    }
+
+    #[test]
+    fn a_pocket_arm_draws_taper_pieces_and_two_marks() {
+        let (j, _) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let v = j.view();
+        let a = v.arms.iter().find(|a| !a.beyond.is_empty()).unwrap();
+        let m = svg(&j).markup;
+        assert_eq!(count(&m, " beyond taper\""), a.beyond.iter().filter(|p| p.taper).count());
+        assert_eq!(count(&m, " beyond\""), a.beyond.iter().filter(|p| !p.taper).count());
+        assert_eq!(a.beyond_marks.len(), 2);
+        assert_eq!(count(&m, "class=\"approach-mark\""), 2);
+    }
+
+    #[test]
+    fn the_beyond_belongs_to_its_arm() {
+        let (j, uid) = crate::junction::tests::junction_with_a_pocket(|_| {});
+        let m = svg(&j).markup;
+        let open = format!("data-role=\"arm\" data-uid=\"{uid}\">");
+        let from = m.find(&open).unwrap() + open.len();
+        let own = &m[from..from + m[from..].find("</g>").unwrap()];
+        assert!(count(own, " beyond taper\"") > 0 && count(own, " beyond\"") > 0, "{own}");
+        assert_eq!(count(own, "approach-mark"), 0, "the marks take no press");
+        let at = |n: &str| own.find(n).unwrap();
+        assert!(own.rfind("class=\"piece k-").unwrap() >= at(" beyond"), "after the arm's pieces");
     }
 
     fn turbo(layout: usize) -> Junction {

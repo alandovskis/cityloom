@@ -143,6 +143,12 @@ jn-check-corner-room-ok = Chaque coin laisse de la place pour attendre
 jn-check-corner-room-bad = Le coin après { $arms } gruge le trottoir
 jn-check-transit = Les mesures pour le transport en commun fonctionnent
 jn-check-transit-ok = Chaque mesure a ce qu’il lui faut
+jn-check-approach = Approches
+jn-check-approach-ok = Chaque zone d’extrémité dépasse sa ligne d’arrêt et sa transition tient
+jn-check-approach-bad = { $problems }
+jn-approach-short = La zone d’extrémité de { $arm } finit à { $reach } du centre, avant les { $need } que demandent sa ligne d’arrêt et ses flèches.
+jn-approach-room = La transition sur { $arm } demande { $need }, mais n’en a que { $room }.
+jn-approach-drop = Une voie sur { $arm } se termine sans voie voisine où s’insérer.
 jn-problem-offset-parking = { $arm } : une voie décalée de dépassement de file a besoin d’un stationnement le long de la bordure
 jn-problem-virtual-signal = { $arm } : une voie virtuelle de dépassement de file a besoin de feux de circulation
 jn-problem-gate-bus-lane = { $arm } : une porte d’autobus laisse passer une voie réservée, il lui faut donc une voie réservée aux autobus
@@ -182,6 +188,14 @@ jn-sel-arm = { $arm }, { $degrees ->
     [one] { $degrees } degré
    *[other] { $degrees } degrés
 }
+jn-sel-arm-approach = { $arm }, { $degrees ->
+    [one] { $degrees } degré
+   *[other] { $degrees } degrés
+}. Sa zone d’extrémité va jusqu’à { $reach } du centre, puis une transition de { $length }. Zone suivante : { $zone }.
+jn-sel-arm-jog = { $arm }, { $degrees ->
+    [one] { $degrees } degré
+   *[other] { $degrees } degrés
+}. Sa zone d’extrémité va jusqu’à { $reach } du centre. Zone suivante : { $zone }.
 jn-sel-corner = Coin après { $arm }, rayon de { $radius }
 jn-sel-corner-protected = Coin protégé après { $arm }, rayon de { $radius }
 jn-sel-crossing = Passage pour piétons sur { $arm }

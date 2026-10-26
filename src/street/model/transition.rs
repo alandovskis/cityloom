@@ -105,8 +105,9 @@ fn spans(section: &[Segment]) -> Vec<(i32, i32)> {
         .collect()
 }
 
-/// The length this one change needs, in millimetres (not rounded).
-fn needed_mm(c: &Change, s: i64) -> i64 {
+/// The length this one change needs, in millimetres (not rounded). `lane_added` says whether a travel or bus lane that
+/// only one side has opens (`R·W`) rather than ends (merge taper); it is decided by the lane's direction of travel.
+fn needed_mm(c: &Change, s: i64, lane_added: bool) -> i64 {
     match (c.before, c.after) {
         (Some(b), Some(a)) => {
             let w = i64::from((b.0 - a.0).abs().max((b.1 - a.1).abs()));
@@ -122,7 +123,8 @@ fn needed_mm(c: &Change, s: i64) -> i64 {
         (None, Some(a)) => {
             let w = i64::from(a.1 - a.0);
             match taper(c.kind) {
-                Taper::Lane => lane_added_mm(w, s),
+                Taper::Lane if lane_added => lane_added_mm(w, s),
+                Taper::Lane => merge_taper_mm(w, s),
                 Taper::Merge => merge_taper_mm(w, s),
                 Taper::Bike => bike_mm(w),
                 Taper::None => 0,
@@ -131,6 +133,7 @@ fn needed_mm(c: &Change, s: i64) -> i64 {
         (Some(b), None) => {
             let w = i64::from(b.1 - b.0);
             match taper(c.kind) {
+                Taper::Lane if lane_added => lane_added_mm(w, s),
                 Taper::Lane | Taper::Merge => merge_taper_mm(w, s),
                 Taper::Bike => bike_mm(w),
                 Taper::None => 0,
@@ -163,7 +166,17 @@ pub fn transition(near: &[Segment], far: &[Segment], speed_kmh: Option<u16>, fro
     let at = |i: Option<usize>, x: &[(i32, i32)]| i.map(|i| x[i]);
     let changes: Vec<Change> =
         pairs.iter().map(|&(n, f)| Change { kind: n.map_or_else(|| far[f.unwrap()].kind, |n| near[n].kind), before: at(n, &nx), after: at(f, &fx) }).collect();
-    let length = up_100(changes.iter().map(|c| needed_mm(c, s)).max().unwrap_or(0));
+    // Index into `DIRECTIONS` of the lanes that run from the near zone toward the far one.
+    let toward_far = usize::from(from_end == ZoneEnd::Last);
+    // A lane is added or dropped in its own direction of travel, not by which zone has it: one present only in the
+    // zone it travels into opens (`R·W`); one present only in the zone it travels out of ends (merge taper). A piece
+    // with no direction (two-way) takes the merge taper, the longer and so the conservative of the two.
+    let added = |&(n, f): &(Option<usize>, Option<usize>)| match (n, f) {
+        (Some(i), None) => near[i].direction == Some(1 - toward_far),
+        (None, Some(i)) => far[i].direction == Some(toward_far),
+        _ => false,
+    };
+    let length = up_100(changes.iter().zip(&pairs).map(|(c, p)| needed_mm(c, s, added(p))).max().unwrap_or(0));
     if length == 0 {
         return None;
     }
@@ -178,8 +191,6 @@ pub fn transition(near: &[Segment], far: &[Segment], speed_kmh: Option<u16>, fro
         _ => Host::Far,
     };
 
-    // Index into `DIRECTIONS` of the lanes that run from the near zone toward the far one.
-    let toward_far = usize::from(from_end == ZoneEnd::Last);
     let lane = |section: &[Segment], i: usize| taper(section[i].kind) == Taper::Lane;
     let beside_matched = |section: &[Segment], i: usize, matched: &dyn Fn(usize) -> bool| {
         [i.checked_sub(1), Some(i + 1)]
@@ -315,6 +326,32 @@ mod tests {
         let t = transition(&base(), &with_extra(), Some(50), First).unwrap();
         assert_eq!(t.length_mm, 52_500);
         assert_eq!(t.host, Host::Near);
+    }
+
+    #[test]
+    fn a_pocket_gets_the_same_length_at_either_end_of_a_street() {
+        // Physically one street: a pocket lane running toward the junction at the first end, which is zone 0 when
+        // anchored at the first end and the last zone when anchored at the last. Directions are physical.
+        let pocket = vec![seg(1, "sidewalk", 2000), dir(seg(3, "travel", 3500), 0), dir(seg(2, "travel", 3500), 1), seg(4, "sidewalk", 2000)];
+        let plain = vec![seg(1, "sidewalk", 2000), dir(seg(3, "travel", 3500), 0), seg(4, "sidewalk", 2000)];
+        // a lane running toward the first end (direction 1) is present only at the first end: it opens there
+        let first = transition(&pocket, &plain, Some(50), First).unwrap();
+        let last = transition(&plain, &pocket, Some(50), Last).unwrap();
+        assert_eq!((first.length_mm, last.length_mm), (52_500, 52_500));
+        // and the lane that runs away from it ends there, in its direction of travel
+        let away = vec![seg(1, "sidewalk", 2000), dir(seg(3, "travel", 3500), 1), dir(seg(2, "travel", 3500), 0), seg(4, "sidewalk", 2000)];
+        let plain = vec![seg(1, "sidewalk", 2000), dir(seg(3, "travel", 3500), 1), seg(4, "sidewalk", 2000)];
+        let first = transition(&away, &plain, Some(50), First).unwrap();
+        let last = transition(&plain, &away, Some(50), Last).unwrap();
+        assert_eq!((first.length_mm, last.length_mm), (56_500, 56_500));
+    }
+
+    #[test]
+    fn a_two_way_piece_takes_the_longer_merge_length() {
+        let two_way = vec![seg(1, "sidewalk", 2000), seg(2, "bus", 3500), seg(4, "sidewalk", 2000)];
+        let plain = vec![seg(1, "sidewalk", 2000), seg(4, "sidewalk", 2000)];
+        assert_eq!(transition(&plain, &two_way, Some(50), First).unwrap().length_mm, 56_500);
+        assert_eq!(transition(&two_way, &plain, Some(50), First).unwrap().length_mm, 56_500);
     }
 
     #[test]

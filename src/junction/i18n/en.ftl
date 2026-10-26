@@ -143,6 +143,12 @@ jn-check-corner-room-ok = Every corner leaves room to stand
 jn-check-corner-room-bad = Corner after { $arms } eats the sidewalk
 jn-check-transit = Transit measures work
 jn-check-transit-ok = Each measure has what it needs
+jn-check-approach = Approaches
+jn-check-approach-ok = Every end zone reaches past its stop line and its transition fits
+jn-check-approach-bad = { $problems }
+jn-approach-short = The end zone of { $arm } ends { $reach } from the centre, short of the { $need } its stop line and arrows need.
+jn-approach-room = The transition on { $arm } needs { $need } but has { $room }.
+jn-approach-drop = A lane on { $arm } ends with no lane beside it to merge into.
 jn-problem-offset-parking = { $arm }: an offset queue jump needs parking beside the curb to sit beside
 jn-problem-virtual-signal = { $arm }: a virtual queue jump needs a traffic signal
 jn-problem-gate-bus-lane = { $arm }: a bus gate lets a bus lane through, so it needs a bus lane
@@ -182,6 +188,14 @@ jn-sel-arm = { $arm }, { $degrees ->
     [one] { $degrees } degree
    *[other] { $degrees } degrees
 }
+jn-sel-arm-approach = { $arm }, { $degrees ->
+    [one] { $degrees } degree
+   *[other] { $degrees } degrees
+}. Its end zone reaches { $reach } from the centre, then a transition of { $length } into { $zone }.
+jn-sel-arm-jog = { $arm }, { $degrees ->
+    [one] { $degrees } degree
+   *[other] { $degrees } degrees
+}. Its end zone reaches { $reach } from the centre, then { $zone }.
 jn-sel-corner = Corner after { $arm }, { $radius } radius
 jn-sel-corner-protected = Protected corner after { $arm }, { $radius } radius
 jn-sel-crossing = Crossing on { $arm }

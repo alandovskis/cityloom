@@ -19,6 +19,8 @@ pub use joint::{JOINT_REACH_MM, Joint, SHOWN_MM, Taper};
 mod joint;
 mod speed;
 pub use speed::Speed;
+mod beyond;
+pub use beyond::{Beyond, BeyondTaper, TaperPiece};
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
 mod curb;
@@ -598,7 +600,7 @@ pub(crate) fn snap(v: i32) -> i32 {
     ((v as f64 / SNAP_MM as f64).round() as i32) * SNAP_MM
 }
 
-fn total(segments: &[Segment]) -> i32 {
+pub(super) fn total(segments: &[Segment]) -> i32 {
     segments.iter().map(|s| s.width_mm).sum()
 }
 
