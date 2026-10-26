@@ -1996,6 +1996,14 @@ mod tests {
                 length_mm: 6_000,
                 use_: crate::street::model::Use::Parking,
             }];
+            street.stops = vec![crate::street::model::Stop {
+                side: crate::shared::catalogue::Side::Right,
+                from_mm: 30_000,
+                length_mm: 12_000,
+                kind: crate::street::model::StopKind::Bulb,
+                shelter: false,
+                name: Some("Rue Bend".into()),
+            }];
             assert!(store.write_street(1, street));
         });
         (vm, mapper, navigator, said)
@@ -2013,7 +2021,12 @@ mod tests {
         let fc: serde_json::Value = serde_json::from_str(&data).unwrap();
         assert_eq!(fc["features"].as_array().unwrap().len(), 1, "{data}");
         assert_eq!(fc["features"][0]["properties"]["use"], "parking");
-        assert_eq!(mapper.stops(), (style::stop_layers(), overlay::stops(&view, &projection)));
+        let (layers, data) = mapper.stops();
+        assert_eq!((layers, data.as_str()), (style::stop_layers(), overlay::stops(&view, &projection).as_str()));
+        let fc: serde_json::Value = serde_json::from_str(&data).unwrap();
+        let parts: Vec<&str> = fc["features"].as_array().unwrap().iter().map(|f| f["properties"]["part"].as_str().unwrap()).collect();
+        assert_eq!(parts, ["platform", "dot"], "{data}");
+        assert_eq!(fc["features"][1]["properties"]["name"], "Rue Bend");
     }
 
     #[test]
@@ -2024,6 +2037,23 @@ mod tests {
         vm.sync_places();
         vm.sync_places();
         assert_eq!((mapper.curbside_sent(), mapper.stops_sent()), (1, 1), "nothing changed");
+    }
+
+    #[test]
+    fn a_changed_curbside_is_sent_again() {
+        let (vm, mapper, ..) = programme_vm();
+        mapper.say(COVERING);
+        assert_eq!((mapper.curbside_sent(), mapper.stops_sent()), (1, 1));
+        let before = mapper.curbside().1;
+        let mut street = vm.store.open().street_editor(1, 0).unwrap().snapshot();
+        street.curb.clear();
+        assert!(vm.store.write_street(1, street));
+        vm.reload();
+        vm.sync_places();
+        assert_eq!((mapper.curbside_sent(), mapper.stops_sent()), (2, 1), "only the curbside changed");
+        let after = mapper.curbside().1;
+        assert_ne!(after, before);
+        assert!(serde_json::from_str::<serde_json::Value>(&after).unwrap()["features"].as_array().unwrap().is_empty());
     }
 
     #[test]
