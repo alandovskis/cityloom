@@ -628,11 +628,10 @@ fn stops_from(layout: &Layout, edge: usize, node: usize, street: &Street, drivin
     street.end_stops(layout.edges[edge].a == node, layout.zone_frame(edge), driving)
 }
 
-/// The arm of `street`'s end among a junction's `arms`. A street that leaves and returns to the same junction has two
-/// arms there, its first end's before its last end's (the order the arms are made in); otherwise there is one.
+/// The arm of `street`'s end among a junction's `arms`. A street that leaves and returns to the same junction has one
+/// arm there (`edges_at` lists it once), read at its first end: its last end has no arm, so no reach.
 fn arm_at_end(arms: &[Arm], edge: u32, first_end: bool, loops: bool) -> Option<&Arm> {
-    let mut of_edge = arms.iter().filter(|a| a.edge == edge);
-    if loops && !first_end { of_edge.next_back() } else { of_edge.next() }
+    if loops && !first_end { None } else { arms.iter().find(|a| a.edge == edge) }
 }
 
 #[cfg(test)]
@@ -2601,15 +2600,15 @@ mod tests {
     }
 
     #[test]
-    fn the_arm_of_each_end_of_a_street_that_returns_to_its_junction() {
+    fn a_street_that_returns_to_its_junction_has_one_arm_at_its_first_end() {
         let arm = |uid, edge| {
             let mut a = Arm::new(uid, 0, 0);
             a.edge = edge;
             a
         };
-        let arms = [arm(1, 5), arm(2, 7), arm(3, 7), arm(4, 9)];
+        let arms = [arm(1, 5), arm(2, 7), arm(4, 9)];
         let uid = |first, loops| arm_at_end(&arms, 7, first, loops).map(|a| a.uid);
-        assert_eq!((uid(true, true), uid(false, true)), (Some(2), Some(3)), "a loop: its two arms, one for each end");
+        assert_eq!((uid(true, true), uid(false, true)), (Some(2), None), "a loop: the one arm is its first end's");
         assert_eq!((uid(true, false), uid(false, false)), (Some(2), Some(2)), "otherwise the one arm");
         assert_eq!(arm_at_end(&arms, 8, true, false).map(|a| a.uid), None);
     }
