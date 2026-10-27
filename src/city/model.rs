@@ -628,6 +628,13 @@ fn stops_from(layout: &Layout, edge: usize, node: usize, street: &Street, drivin
     street.end_stops(layout.edges[edge].a == node, layout.zone_frame(edge), driving)
 }
 
+/// The arm of `street`'s end among a junction's `arms`. A street that leaves and returns to the same junction has two
+/// arms there, its first end's before its last end's (the order the arms are made in); otherwise there is one.
+fn arm_at_end(arms: &[Arm], edge: u32, first_end: bool, loops: bool) -> Option<&Arm> {
+    let mut of_edge = arms.iter().filter(|a| a.edge == edge);
+    if loops && !first_end { of_edge.next_back() } else { of_edge.next() }
+}
+
 #[cfg(test)]
 impl Default for City {
     fn default() -> Self {
@@ -863,9 +870,10 @@ impl City {
     pub fn street_end_infos(&self, edge: u32, region: usize) -> [EndInfo; 2] {
         let Some(e) = self.edge_index(edge) else { return [EndInfo::default(); 2] };
         let has_stops = self.streets.get(&edge).is_some_and(|s| !s.stops.is_empty());
-        let at = |n: usize| {
+        let (a, b) = (self.layout.edges[e].a, self.layout.edges[e].b);
+        let at = |n: usize, first_end: bool| {
             let arm_state =
-                self.layout.nodes[n].junction.then(|| self.junctions.get(&node_uid(n))).flatten().map(|j| (j, j.arms.iter().find(|a| a.edge == edge)));
+                self.layout.nodes[n].junction.then(|| self.junctions.get(&node_uid(n))).flatten().map(|j| (j, arm_at_end(&j.arms, edge, first_end, a == b)));
             let crossing = arm_state.is_some_and(|(_, a)| a.is_some_and(|a| a.crossing.is_some()));
             let reach_mm = match arm_state {
                 Some((j, Some(arm))) if has_stops => {
@@ -876,7 +884,7 @@ impl City {
             };
             EndInfo { crossing, reach_mm }
         };
-        [at(self.layout.edges[e].a), at(self.layout.edges[e].b)]
+        [at(a, true), at(b, false)]
     }
 
     /// The street editor on one street of the city.
@@ -2590,6 +2598,20 @@ mod tests {
         let (_, mouth) = arm_of(&city);
         assert_eq!(reach(&city), mouth);
         assert!(mouth > 0);
+    }
+
+    #[test]
+    fn the_arm_of_each_end_of_a_street_that_returns_to_its_junction() {
+        let arm = |uid, edge| {
+            let mut a = Arm::new(uid, 0, 0);
+            a.edge = edge;
+            a
+        };
+        let arms = [arm(1, 5), arm(2, 7), arm(3, 7), arm(4, 9)];
+        let uid = |first, loops| arm_at_end(&arms, 7, first, loops).map(|a| a.uid);
+        assert_eq!((uid(true, true), uid(false, true)), (Some(2), Some(3)), "a loop: its two arms, one for each end");
+        assert_eq!((uid(true, false), uid(false, false)), (Some(2), Some(2)), "otherwise the one arm");
+        assert_eq!(arm_at_end(&arms, 8, true, false).map(|a| a.uid), None);
     }
 
     #[test]
