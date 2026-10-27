@@ -22,7 +22,8 @@ use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
 use crate::street::model::{
-    Beyond, Editor, EndInfo, EndStop, Host, LENGTH_TOLERANCE_MM, MapStop, MapUse, MapUses, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition, unnamed_said,
+    Beyond, Editor, EndInfo, EndStop, Host, LENGTH_TOLERANCE_MM, MapStop, MapUse, MapUses, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition,
+    unnamed_said,
 };
 
 pub(super) struct NodeDef {
