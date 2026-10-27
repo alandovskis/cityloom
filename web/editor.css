@@ -2490,7 +2490,7 @@ dl.prov dd:last-child {
   min-width: 0;
 }
 .signal-phases > li {
-  flex: 1 1 140px;
+  flex: 1 1 120px;
   min-width: 0;
 }
 .phase-card {
@@ -2530,7 +2530,9 @@ dl.prov dd:last-child {
 .phase-svg {
   display: block;
   width: 100%;
+  max-width: 160px;
   height: auto;
+  margin-inline: auto;
 }
 .phase-name {
   font-weight: 600;

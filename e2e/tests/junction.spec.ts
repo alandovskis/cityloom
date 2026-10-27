@@ -447,6 +447,18 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#inspector .signal-phases .phase-card")).toHaveCount(2);
   });
 
+  test("a phase drawing is small, and two cards share a row where the inspector is wide enough", async ({ page }) => {
+    const cards = page.locator("#inspector .signal-phases .phase-card");
+    await expect(cards).toHaveCount(2);
+    const svg = await cards.first().locator("svg.phase-svg").boundingBox();
+    expect(svg!.height).toBeLessThanOrEqual(160);
+    expect(svg!.width).toBeLessThanOrEqual(160);
+    const [a, b] = [await cards.nth(0).boundingBox(), await cards.nth(1).boundingBox()];
+    const room = (await page.locator("#inspector .signal-phases").boundingBox())!.width;
+    expect(room).toBeGreaterThanOrEqual(2 * 120 + 8); // the e2e window is wide enough for two
+    expect(Math.abs(a!.y - b!.y)).toBeLessThan(2);
+  });
+
   test("the row of drawings fits a 900 px window and works in forced colours", async ({ page }) => {
     await page.setViewportSize({ width: 900, height: 800 });
     await page.emulateMedia({ forcedColors: "active" });
