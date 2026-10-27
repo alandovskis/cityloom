@@ -1,0 +1,7 @@
+test city::edits::tests::versions_4_5_and_6_are_read_and_one_past_the_newest_is_a_newer_document_left_alone ... ok
+test junction::model::tests::the_last_phase_stays ... ok
+test junction::vm::tests::the_phase_commands_are_announced_and_refused_in_english_and_in_french ... ok
+test city::edits::tests::a_junction_record_with_signal_timing_round_trips_and_one_written_before_it_reads_as_untimed ... ok
+test city::edits::tests::what_a_record_is_written_as_is_pinned_so_that_a_change_of_shape_is_a_decision_about_the_version ... ok
+test city::edits::tests::a_junction_record_with_an_edited_signal_plan_is_written_as_the_signal_version_and_older_records_read_as_suggested ... ok
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 2267 filtered out; finished in 0.08s

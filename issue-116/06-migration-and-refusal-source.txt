@@ -1,0 +1,110 @@
+# Migration: a record saved before this change reads as suggested, Arm.timing kept (source of the tests, then their run)
+    fn a_junction_record_with_signal_timing_round_trips_and_one_written_before_it_reads_as_untimed() {
+        use crate::junction::model::{SIGNAL, Timing};
+        let city = crate::city::model::City::new();
+        let junction = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let (key, mut record) = city.junction_record(junction).unwrap();
+        assert!(record.state.arms.iter().all(|a| a.timing.is_none()), "an arm never timed has none to write");
+        record.state.control = SIGNAL;
+        let timing = Timing { green_s: 40, yellow_s: 4, all_red_s: 3, transit_lead_s: 6 };
+        record.state.arms[0].timing = Some(timing);
+        let mut e = Edits::new();
+        e.junctions.insert(key.clone(), record);
+        let text = e.to_json();
+        assert!(text.contains("\"timing\""), "{text}");
+        let Document::Current(back) = parse(Some(&text)) else { panic!("not a document of this version") };
+        assert_eq!(back.junctions[&key].state.arms[0].timing, Some(timing));
+        assert!(back.junctions[&key].state.arms[1..].iter().all(|a| a.timing.is_none()));
+        // A record written before timing existed reads as untimed, and the document is still this version's.
+        let mut value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        for arm in value["junctions"][&key]["state"]["arms"].as_array_mut().unwrap() {
+            arm.as_object_mut().unwrap().remove("timing");
+        }
+        let Document::Current(old) = parse(Some(&value.to_string())) else { panic!("not a document of this version") };
+        assert!(old.junctions[&key].state.arms.iter().all(|a| a.timing.is_none()));
+        assert_eq!(old.version, VERSION);
+    }
+
+    #[test]
+    fn a_junction_record_with_an_edited_signal_plan_is_written_as_the_signal_version_and_older_records_read_as_suggested() {
+        use crate::junction::model::{SIGNAL, Timing};
+        let city = crate::city::model::City::new();
+        let junction = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let (key, mut record) = city.junction_record(junction).unwrap();
+        record.state.control = SIGNAL;
+        let timing = Timing { green_s: 40, yellow_s: 4, all_red_s: 3, transit_lead_s: 6 };
+        record.state.arms[0].timing = Some(timing);
+        // Not edited: the document stays at the version it had, and nothing about a plan is written.
+        let mut e = Edits::new();
+        e.junctions.insert(key.clone(), record.clone());
+        assert_eq!(e.written_version(), VERSION);
+        assert!(!e.to_json().contains("signal_plan"));
+        let before = e.to_json();
+        // Edited: the version is raised so that an older build leaves the document alone.
+        let uid = record.state.arms[0].uid;
+        record.state.signal_plan = Some(crate::junction::signal::SignalPlan {
+            phases: vec![crate::junction::signal::StoredPhase {
+                moves: vec![crate::junction::signal::Move { from: uid, lane: 0, to: record.state.arms[1].uid }],
+                walks: vec![uid],
+                rides: vec![],
+            }],
+        });
+        e.junctions.insert(key.clone(), record);
+        assert_eq!(e.written_version(), SIGNAL_VERSION);
+        assert!(e.to_json().starts_with(r#"{"version":10,"#), "{}", e.to_json());
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        assert_eq!(back.junctions[&key].state.signal_plan, e.junctions[&key].state.signal_plan);
+        assert_eq!(back.junctions[&key].arm_streets, e.junctions[&key].arm_streets);
+        assert_eq!(back.junctions[&key].state.arms[0].timing, Some(timing), "the timing is kept beside the plan");
+        // The draft decides on the raw JSON, and goes back to 5 when the record goes.
+        let mut d = Draft::new();
+        assert!(d.put_junction(&key, &e.junctions[&key]));
+        assert!(d.to_json().contains(r#""version":10"#), "{}", d.to_json());
+        d.remove_junction(&key);
+        assert!(d.to_json().contains(r#""version":5"#));
+        // A document written before the plan existed loads as suggested, timing included, and stays as it was.
+        let Document::Current(old) = parse(Some(&before)) else { panic!("not read") };
+        assert_eq!(old.junctions[&key].state.signal_plan, None);
+        assert_eq!(old.junctions[&key].state.arms[0].timing, Some(timing));
+        assert_eq!(old.written_version(), VERSION);
+        // A build of this version reads the versions before it unchanged.
+        for v in [VERSION - 1, VERSION, ZONES_VERSION, SPEED_VERSION, CURB_VERSION, STOP_VERSION] {
+            let text = format!(r#"{{"version":{v},"streets":{{}},"junctions":{{}}}}"#);
+            assert!(matches!(parse(Some(&text)), Document::Current(_)), "{v}");
+        }
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, NEWEST + 1);
+        assert!(matches!(parse(Some(&newer)), Document::Future));
+    }
+
+    /// Pins what a record is written as. When this fails, the shape of `Street`, `State` or a record changed:
+    /// decide whether an older build can still read it, and if not raise `VERSION`, before changing this list.
+    #[test]
+
+# Refusals (source)
+    fn the_last_phase_stays() {
+        let mut j = Junction::new(0);
+        assert!(j.remove_phase(0) && j.remove_phase(0) && j.remove_phase(0));
+        assert!(!j.remove_phase(0));
+        assert_eq!(j.refusal(), Some(Refusal::LastPhase));
+        assert_eq!(phase_uids(&j).len(), 1);
+        assert!(!j.remove_phase(9));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+    }
+
+    #[test]
+    fn a_phase_moves_earlier_or_later_and_not_past_the_ends() {
+        let mut j = Junction::new(0);
+        let [a, b, c, d] = phase_uids(&j)[..] else { panic!("four phases") };
+        assert!(j.move_phase(2, -1));
+        assert_eq!(phase_uids(&j), [a, c, b, d]);
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("moved earlier, now 2 of 4"));
+        assert!(j.move_phase(0, 1));
+        assert_eq!(phase_uids(&j), [c, a, b, d]);
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("moved later, now 2 of 4"));
+        assert!(!j.move_phase(0, -1));
+        assert_eq!(j.refusal(), Some(Refusal::PhaseAtEnd));
+        assert!(!j.move_phase(3, 1));
+        assert_eq!(j.refusal(), Some(Refusal::PhaseAtEnd));
+        assert!(!j.move_phase(7, 1));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+        assert!(j.undo() && j.undo());

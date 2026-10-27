@@ -1,0 +1,60 @@
+01. Traffic signal chosen on a junction of the city
+   plan marker: Suggested plan
+   phases: ["Boulevard Saint-Laurent: green 25 s, yellow 3 s, all-red 2 s","Avenue Laurier Ouest: green 25 s, yellow 3 s, all-red 2 s"]
+   announced: ""
+
+02. Keyboard: focus Later on phase 1, press Enter
+   plan marker: Edited plan
+   phases: ["Avenue Laurier Ouest: green 25 s, yellow 3 s, all-red 2 s","Boulevard Saint-Laurent: green 25 s, yellow 3 s, all-red 2 s"]
+   announced: "Phase for Boulevard Saint-Laurent (south-east) moved later, now 2 of 2. 4 streets, traffic signal. Every check passes."
+
+03. Undo
+   plan marker: Suggested plan
+   phases: ["Boulevard Saint-Laurent: green 25 s, yellow 3 s, all-red 2 s","Avenue Laurier Ouest: green 25 s, yellow 3 s, all-red 2 s"]
+   announced: "Undone."
+
+04. Redo
+   plan marker: Edited plan
+   phases: ["Avenue Laurier Ouest: green 25 s, yellow 3 s, all-red 2 s","Boulevard Saint-Laurent: green 25 s, yellow 3 s, all-red 2 s"]
+   announced: "Phase for Boulevard Saint-Laurent (south-east) moved later, now 2 of 2. 4 streets, traffic signal. Every check passes."
+
+05. Keyboard: focus Remove on phase 2, press Enter
+   plan marker: Edited plan
+   phases: ["Avenue Laurier Ouest: green 25 s, yellow 3 s, all-red 2 s"]
+   announced: "Phase 2 for Boulevard Saint-Laurent (south-east) removed. 2 checks need attention: time to cross, every street has a phase."
+
+06. Keyboard: Remove on the only phase left (refused)
+   plan marker: Edited plan
+   phases: ["Avenue Laurier Ouest: green 25 s, yellow 3 s, all-red 2 s"]
+   announced: "A signal keeps at least one phase."
+
+07. Keyboard: focus Add a phase for Boulevard Saint-Laurent, press Enter
+   plan marker: Edited plan
+   phases: ["Avenue Laurier Ouest: green 25 s, yellow 3 s, all-red 2 s","Boulevard Saint-Laurent: green 25 s, yellow 3 s, all-red 2 s"]
+   announced: "Phase 2 added for Boulevard Saint-Laurent (south-east). 4 streets, traffic signal. Every check passes."
+
+08. Page reloaded
+   plan marker: Edited plan
+   phases: ["Avenue Laurier Ouest: green 25 s, yellow 3 s, all-red 2 s","Boulevard Saint-Laurent: green 25 s, yellow 3 s, all-red 2 s"]
+   announced: ""
+
+09. Keyboard: focus Restore the suggested plan, press Enter
+   plan marker: Suggested plan
+   phases: ["Boulevard Saint-Laurent: green 25 s, yellow 3 s, all-red 2 s","Avenue Laurier Ouest: green 25 s, yellow 3 s, all-red 2 s"]
+   announced: "Signal plan restored to the suggestion. 4 streets, traffic signal. Every check passes."
+
+10. Language switched to Français
+   plan marker: Plan suggéré
+   phases: ["Boulevard Saint-Laurent : vert 25 s, jaune 3 s, rouge intégral 2 s","Avenue Laurier Ouest : vert 25 s, jaune 3 s, rouge intégral 2 s"]
+   announced: "Langue : français."
+
+11. Français, keyboard: Later on phase 1
+   plan marker: Plan modifié
+   phases: ["Avenue Laurier Ouest : vert 25 s, jaune 3 s, rouge intégral 2 s","Boulevard Saint-Laurent : vert 25 s, jaune 3 s, rouge intégral 2 s"]
+   announced: "Phase de Boulevard Saint-Laurent (sud-est) reculée, maintenant 2 sur 2. 4 rues, feux de circulation. Toutes les vérifications réussissent."
+
+12. Français, keyboard: Remove twice (the last phase stays)
+   plan marker: Plan modifié
+   phases: ["Boulevard Saint-Laurent : vert 25 s, jaune 3 s, rouge intégral 2 s"]
+   announced: "Un feu garde au moins une phase."
+
