@@ -14,7 +14,7 @@ use crate::junction::model::{
     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
     RULES, STOPS, THROUGH, Target, TimingField,
 };
-use crate::junction::phase_svg::phase_svg;
+use crate::junction::phase_svg::phase_drawings;
 use crate::junction::read_model::{CrossingView, JView};
 use crate::junction::turns::{compass_key, turn_glyph};
 use crate::junction::vm::JunctionVm;
@@ -1229,15 +1229,18 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
 fn signal_phases(w: Watch, label: bool) -> impl IntoView {
     let count = Memo::new(move |_| w.view().signal.as_ref().map_or(0, |s| s.phases.len()));
     let suggested = Memo::new(move |_| w.view().signal.as_ref().is_none_or(|s| s.suggested));
-    let phase = move |i: usize| w.view().signal.as_ref().and_then(|s| s.phases.get(i).cloned());
+    // One pass draws every phase; a drawing is a memo, so the page swaps it only when its markup is not the same as
+    // it was (a change of the selection, or of a timing, leaves it alone).
+    let drawings = Memo::new(move |_| phase_drawings(&w.view(), |s| w.say(s)));
     let card = move |i: usize| {
-        let pressed = move || phase(i).is_some_and(|p| w.view().selected.kind == Some("arm") && w.view().selected.uid == p.uid).to_string();
-        let art = move || phase(i).map(|p| phase_svg(&w.view(), &p, &w.say(&p.name), &w.say(&p.summary))).unwrap_or_default();
-        let name = move || phase(i).map(|p| w.say(&p.name)).unwrap_or_default();
-        let summary = move || phase(i).map(|p| w.say(&p.summary)).unwrap_or_default();
-        let timing = move || {
-            let Some(p) = phase(i) else { return String::new() };
-            let t = p.timing;
+        // Each closure reads the field it needs and no more: no phase is cloned.
+        let uid = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| p.uid));
+        let pressed = move || (w.view().selected.kind == Some("arm") && uid.get().is_some_and(|u| w.view().selected.uid == u)).to_string();
+        let art = Memo::new(move |_| drawings.with(|d| d.get(i).cloned().unwrap_or_default()));
+        let name = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| w.say(&p.name)).unwrap_or_default());
+        let summary = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| w.say(&p.summary)).unwrap_or_default());
+        let timing = Memo::new(move |_| {
+            let Some(t) = w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| p.timing) else { return String::new() };
             let key = if t.transit_lead_s > 0 { "jn-ph-timing-lead" } else { "jn-ph-timing" };
             let args = Args::new()
                 .num("lead", i64::from(t.transit_lead_s))
@@ -1245,10 +1248,10 @@ fn signal_phases(w: Watch, label: bool) -> impl IntoView {
                 .num("yellow", i64::from(t.yellow_s))
                 .num("all_red", i64::from(t.all_red_s));
             tr(w, key, args)
-        };
+        });
         view! {
             <li>
-                <button type="button" class="phase-card" aria-pressed=pressed on:click=move |_| { if let Some(p) = phase(i) { w.select(Target::Arm(p.uid)) } }>
+                <button type="button" class="phase-card" aria-pressed=pressed on:click=move |_| { if let Some(u) = uid.get_untracked() { w.select(Target::Arm(u)) } }>
                     <span class="phase-art" inner_html=art></span>
                     <span class="phase-name">{name}</span>
                     <span class="phase-timing">{timing}</span>
