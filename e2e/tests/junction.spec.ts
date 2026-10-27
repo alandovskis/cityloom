@@ -414,7 +414,8 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#signal-plan-state")).toHaveText("Suggested plan");
     await expect(cards.first()).toContainText("Phase 1:");
     await expect(cards.first()).toContainText(/Cars go: /);
-    await expect(cards.first().locator("svg[role=img]")).toHaveAttribute("aria-label", /^Cars go: /);
+    await expect(cards.first().locator("svg.phase-svg")).toHaveAttribute("aria-hidden", "true");
+    await expect(cards.first()).toHaveAccessibleName(/^Phase 1: .*Cars go: /);
     await expect(cards.first()).not.toHaveAttribute("aria-current");
 
     // Pressing a drawing selects its street in the inspector, and the drawing is pressed there.

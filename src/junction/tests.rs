@@ -1822,7 +1822,15 @@ fn the_junction_panel_has_a_drawing_for_each_phase_in_the_order_they_run() {
         assert!(c.contains(&format!("Phase {}: ", i + 1)), "{c}");
         assert!(c.contains("Cars go: ") && c.contains("People cross: "), "the summary is on the card: {c}");
         assert!(c.contains("Green 25 s, yellow 3 s, all-red 2 s"), "{c}");
-        assert!(c.contains("role=\"img\"") && c.contains("aria-label=\"Cars go: "), "{c}");
+        assert!(
+            c.contains("<svg class=\"phase-svg\" aria-hidden=\"true\"") && !c.contains("role=\"img\"") && !c.contains("<title"),
+            "the drawing is decorative: {c}"
+        );
+        let (name, summary) = (c.find(&format!("Phase {}: ", i + 1)).unwrap(), c.find("Cars go: ").unwrap());
+        assert!(name < summary, "the name leads the button's text: {c}");
+        let at = c.find("phase-summary").unwrap();
+        let tag = &c[c[..at].rfind('<').unwrap()..at + c[at..].find('>').unwrap()];
+        assert!(!tag.contains("aria-hidden"), "the sentence is read: {tag}");
         assert!(c.contains("ph-move lit") && c.contains("ph-walk lit") && c.contains("ph-walk muted"), "lit and muted: {c}");
     }
     assert!(h.contains("The phases of the signal, in the order they run"));

@@ -1,7 +1,7 @@
 //! One phase of a traffic signal as a small drawing of the junction: the vehicle movements the phase serves as arrows,
 //! the crossings that are walked as bars and the bike movements that ride as bike symbols, all lit; what does not run
 //! is muted (a dashed outline, a faint bike). Pure: the model's view in, markup out, no frame and no wording (the
-//! caller says the title and the summary, in the language it is in).
+//! card around it says what it shows, in words: the drawing is decorative).
 
 use std::fmt::Write;
 
@@ -10,8 +10,7 @@ use serde_json::Value;
 use crate::junction::model::THROUGH;
 use crate::junction::read_model::{ArmView, JView, PhaseView};
 use crate::shared::catalogue::KINDS;
-use crate::shared::iso::format::{esc, f1};
-use crate::shared::said::Said;
+use crate::shared::iso::format::f1;
 use crate::shared::symbols;
 
 type P = (f64, f64);
@@ -104,19 +103,19 @@ fn bike(a: &ArmView, lit: bool, unit: f64, symbol: &str) -> String {
 
 /// The drawings of every phase of the plan, in the order they run, one pass over the view: what a bike symbol is is
 /// worked out once, not once a phase. Nothing in them depends on the selection, so the drawings are equal across a
-/// change of it. `say` words a name or a sentence in the language the page is in.
-pub fn phase_drawings(v: &JView, say: impl Fn(&Said) -> String) -> Vec<String> {
+/// change of it, or of the language.
+pub fn phase_drawings(v: &JView) -> Vec<String> {
     let Some(signal) = &v.signal else { return Vec::new() };
     let symbol = symbols::icon("bike");
-    signal.phases.iter().map(|p| draw(v, p, &say(&p.name), &say(&p.summary), &symbol)).collect()
+    signal.phases.iter().map(|p| draw(v, p, &symbol)).collect()
 }
 
-/// The drawing of one phase. `title` names it, `summary` says what it allows; both are read by a screen reader.
-pub fn phase_svg(v: &JView, phase: &PhaseView, title: &str, summary: &str) -> String {
-    draw(v, phase, title, summary, &symbols::icon("bike"))
+/// The drawing of one phase. It is for the eye alone (`aria-hidden`): the card's text says the same in words.
+pub fn phase_svg(v: &JView, phase: &PhaseView) -> String {
+    draw(v, phase, &symbols::icon("bike"))
 }
 
-fn draw(v: &JView, phase: &PhaseView, title: &str, summary: &str, bike_symbol: &str) -> String {
+fn draw(v: &JView, phase: &PhaseView, bike_symbol: &str) -> String {
     let [x0, y0, x1, y1] = v.bounds;
     // A square, with room for the bike symbols past the arms' ends.
     let size = (x1 - x0).max(y1 - y0) * 1.08;
@@ -126,13 +125,11 @@ fn draw(v: &JView, phase: &PhaseView, title: &str, summary: &str, bike_symbol: &
     let core = v.arms.iter().map(|a| a.mouth_at.0.hypot(a.mouth_at.1)).fold(0.0, f64::max);
 
     let mut out = format!(
-        "<svg class=\"phase-svg\" role=\"img\" aria-label=\"{}\" viewBox=\"{} {} {} {}\" preserveAspectRatio=\"xMidYMid meet\"><title>{}</title>",
-        esc(summary),
+        "<svg class=\"phase-svg\" aria-hidden=\"true\" focusable=\"false\" viewBox=\"{} {} {} {}\" preserveAspectRatio=\"xMidYMid meet\">",
         f1(cx - size / 2.0),
         f1(cy - size / 2.0),
         f1(size),
         f1(size),
-        esc(title)
     );
     write!(out, "<circle class=\"ph-road\" cx=\"0\" cy=\"0\" r=\"{}\"/>", f1(core)).unwrap();
     for a in &v.arms {
@@ -164,14 +161,15 @@ mod tests {
         let v = j.view();
         let p = v.signal.as_ref().unwrap().phases[phase].clone();
         let moves = p.moves.len();
-        (phase_svg(&v, &p, "Phase 1", "Cars go: north."), moves)
+        (phase_svg(&v, &p), moves)
     }
 
     #[test]
-    fn a_drawing_is_an_image_with_the_summary_as_its_label_and_the_name_as_its_title() {
+    fn a_drawing_is_decorative_the_card_says_what_it_shows_in_words() {
         let (s, _) = draw(&Junction::new(0), 0);
-        assert!(s.starts_with("<svg class=\"phase-svg\" role=\"img\" aria-label=\"Cars go: north.\""), "{s}");
-        assert!(s.contains("<title>Phase 1</title>") && s.ends_with("</svg>"));
+        assert!(s.starts_with("<svg class=\"phase-svg\" aria-hidden=\"true\" focusable=\"false\" viewBox="), "{s}");
+        assert!(!s.contains("role=") && !s.contains("<title") && !s.contains("aria-label"), "no name of its own: {s}");
+        assert!(s.ends_with("</svg>"));
         assert!(!s.contains(" id="), "the same junction is drawn once a phase: no id may repeat");
     }
 
@@ -215,26 +213,12 @@ mod tests {
     fn the_drawings_of_the_plan_do_not_change_with_the_selection() {
         use crate::junction::model::Target;
         let mut j = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
-        let said = |s: &crate::shared::said::Said| s.key.to_string();
-        let before = phase_drawings(&j.view(), said);
+        let before = phase_drawings(&j.view());
         assert_eq!(before.len(), j.view().signal.as_ref().unwrap().phases.len());
         for arm in j.view().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
             j.select(Target::Arm(arm));
-            assert_eq!(phase_drawings(&j.view(), said), before, "a selection is no reason to draw the phases again");
+            assert_eq!(phase_drawings(&j.view()), before, "a selection is no reason to draw the phases again");
         }
-        assert_eq!(before[0], phase_svg(&j.view(), &j.view().signal.as_ref().unwrap().phases[0], "jn-ph-name", &before_summary(&j)));
-    }
-
-    fn before_summary(j: &Junction) -> String {
-        j.view().signal.as_ref().unwrap().phases[0].summary.key.to_string()
-    }
-
-    #[test]
-    fn the_title_and_summary_are_escaped() {
-        let j = Junction::new(0);
-        let v = j.view();
-        let p = v.signal.as_ref().unwrap().phases[0].clone();
-        let s = phase_svg(&v, &p, "A & B <C>", "\"x\"");
-        assert!(s.contains("A &amp; B &lt;C&gt;") && s.contains("aria-label=\"&quot;x&quot;\""), "{s}");
+        assert_eq!(before[0], phase_svg(&j.view(), &j.view().signal.as_ref().unwrap().phases[0]));
     }
 }

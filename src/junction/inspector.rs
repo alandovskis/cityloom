@@ -1231,7 +1231,7 @@ fn signal_phases(w: Watch, label: bool) -> impl IntoView {
     let suggested = Memo::new(move |_| w.view().signal.as_ref().is_none_or(|s| s.suggested));
     // One pass draws every phase; a drawing is a memo, so the page swaps it only when its markup is not the same as
     // it was (a change of the selection, or of a timing, leaves it alone).
-    let drawings = Memo::new(move |_| phase_drawings(&w.view(), |s| w.say(s)));
+    let drawings = Memo::new(move |_| phase_drawings(&w.view()));
     let card = move |i: usize| {
         // Each closure reads the field it needs and no more: no phase is cloned.
         let uid = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| p.uid));
@@ -1253,10 +1253,10 @@ fn signal_phases(w: Watch, label: bool) -> impl IntoView {
             <li>
                 <button type="button" class="phase-card" id=format!("phase-card-{i}") aria-current=current
                     on:click=move |_| { if let Some(u) = uid.get_untracked() { w.select(Target::Arm(u)); focus_card_after_swap(i) } }>
-                    <span class="phase-art" inner_html=art></span>
+                    <span class="phase-art" aria-hidden="true" inner_html=art></span>
                     <span class="phase-name">{name}</span>
                     <span class="phase-timing">{timing}</span>
-                    <span class="phase-summary" aria-hidden="true">{summary}</span>
+                    <span class="phase-summary">{summary}</span>
                 </button>
             </li>
         }
