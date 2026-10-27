@@ -1677,7 +1677,7 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
     // A measure on the kerb side and a stop of the street on that side are two stops where there should be one.
     let kerb = if kerb_side == 0 { Side::Left } else { Side::Right };
     if a.stop != 0 && s.turbo.is_none() && !a.is_pedestrian() && a.stops.iter().any(|e| e.side == kerb && f64::from(e.near_mm) < len) {
-        problems.push(problem("jn-problem-stop-twice").with("measure", Arg::Measure(STOPS[a.stop].code)));
+        problems.push(problem("jn-problem-stop-twice").with("measure", Arg::MsgLower(STOPS[a.stop].key)));
     }
 
     let mid = (l.cl + l.cr) / 2.0;

@@ -333,11 +333,11 @@ mod tests {
         j.select(Target::Arm(uid));
         assert_eq!(
             selection_text(&j.view(), &en(), Units::Metres).unwrap(),
-            "Sample Avenue 2 (north), 0 degrees. Curb stop on the left, 25.0 m from the centre, in lane 2 of 2, which goes straight on or right."
+            "Sample Avenue 2 (north), 0 degrees. Curb stop on the left as seen from the centre, 25.0 m from the centre, in lane 2 of 2, which goes straight on or right."
         );
         assert_eq!(
             selection_text(&j.view(), &fr(), Units::Metres).unwrap(),
-            "Sample Avenue 2 (nord), 0 degré. Arrêt au trottoir à gauche, à 25,0\u{a0}m du centre, dans la voie 2 sur 2, qui permet d’aller tout droit ou de tourner à droite."
+            "Sample Avenue 2 (nord), 0 degré. Arrêt au trottoir à gauche vu du centre, à 25,0\u{a0}m du centre, dans la voie 2 sur 2, qui permet d’aller tout droit ou de tourner à droite."
         );
     }
 

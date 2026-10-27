@@ -165,7 +165,7 @@ jn-stop-too-near = L’arrêt ({ $kind }) sur { $arm } se trouve à { $gap } { $
 jn-stop-inside = L’arrêt ({ $kind }) sur { $arm } empiète sur l’intersection.
 jn-stop-turn-only = L’arrêt ({ $kind }) sur { $arm } est dans la voie { $n }, qui ne permet que de tourner { $turn } : un autobus qui poursuit sa route doit changer de voie devant la circulation.
 jn-stop-shared-turn = L’arrêt ({ $kind }) sur { $arm } est dans la voie { $n }, partagée avec les virages { $turn } : les voitures qui tournent font la file derrière l’autobus à l’arrêt.
-jn-problem-stop-twice = { $arm } : la rue a déjà un arrêt ici; gardez soit { $measure }, soit l’arrêt de la rue, pas les deux.
+jn-problem-stop-twice = { $arm } : la rue a déjà un arrêt ici; gardez soit la mesure ({ $measure }), soit l’arrêt de la rue, pas les deux.
 jn-approach-short = La zone d’extrémité de { $arm } finit à { $reach } du centre, avant les { $need } que demandent sa ligne d’arrêt et ses flèches.
 jn-approach-room = La transition sur { $arm } demande { $need }, mais n’en a que { $room }.
 jn-approach-drop = Une voie sur { $arm } se termine sans voie voisine où s’insérer.
@@ -216,8 +216,8 @@ jn-sel-arm-jog = { $arm }, { $degrees ->
     [one] { $degrees } degré
    *[other] { $degrees } degrés
 }. Sa zone d’extrémité va jusqu’à { $reach } du centre. Zone suivante : { $zone }.
-jn-side-left = à gauche
-jn-side-right = à droite
+jn-side-left = à gauche vu du centre
+jn-side-right = à droite vu du centre
 jn-sel-arm-stop = { $kind } { $side }, à { $at } du centre, dans la voie { $n } sur { $of }, qui permet { $uses }.
 jn-sel-arm-stop-bus = { $kind } { $side }, à { $at } du centre, dans la voie réservée aux autobus.
 jn-sel-arm-stop-bare = { $kind } { $side }, à { $at } du centre.

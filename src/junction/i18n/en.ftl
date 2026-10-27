@@ -216,8 +216,8 @@ jn-sel-arm-jog = { $arm }, { $degrees ->
     [one] { $degrees } degree
    *[other] { $degrees } degrees
 }. Its end zone reaches { $reach } from the centre, then { $zone }.
-jn-side-left = on the left
-jn-side-right = on the right
+jn-side-left = on the left as seen from the centre
+jn-side-right = on the right as seen from the centre
 jn-sel-arm-stop = { $kind } { $side }, { $at } from the centre, in lane { $n } of { $of }, which goes { $uses }.
 jn-sel-arm-stop-bus = { $kind } { $side }, { $at } from the centre, in the bus lane.
 jn-sel-arm-stop-bare = { $kind } { $side }, { $at } from the centre.

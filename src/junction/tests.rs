@@ -2835,6 +2835,7 @@ fn a_stop_measure_and_a_street_stop_on_one_side_are_said_in_transit() {
     };
     let both = twice(crate::shared::catalogue::Side::Left);
     assert!(both.contains("already has a stop here"), "{both}");
+    assert!(both.contains("keep the signal-protected on-street platform or the street\u{2019}s stop"), "the measure mid-sentence, in lower case: {both}");
     assert!(!twice(crate::shared::catalogue::Side::Right).contains("already has a stop here"), "the other kerb");
 }
 
@@ -2869,4 +2870,19 @@ fn a_turn_only_lane_on_an_arm_with_no_through_movement_does_not_fail() {
     assert_eq!(a.lanes[2].uses & THROUGH, 0);
     assert_eq!(a.lanes[2].uses, RIGHT, "a lane that only turns right");
     assert!(check_of(&j, "stop-lane").ok, "there is no through movement for the bus to go on to");
+}
+
+#[test]
+fn a_stops_side_is_said_as_seen_from_the_centre_and_the_double_stop_problem_reads_in_french() {
+    use crate::shared::i18n::{Args, Locale};
+    let say = |locale, key| crate::i18n_for(locale).tr_now(key, &Args::new());
+    assert_eq!(say(Locale::En, "jn-side-left"), "on the left as seen from the centre");
+    assert_eq!(say(Locale::En, "jn-side-right"), "on the right as seen from the centre");
+    assert_eq!(say(Locale::FrCa, "jn-side-left"), "à gauche vu du centre");
+    assert_eq!(say(Locale::FrCa, "jn-side-right"), "à droite vu du centre");
+    let (mut j, _) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(25_000, 33_000, lane, walk)]);
+    let uid = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+    assert!(j.set_stop(uid, STOP_PLATFORM));
+    let text = crate::shared::testing::fr(&check_of(&j, "transit").detail);
+    assert!(text.contains("gardez soit la mesure (quai sur rue protégé par des feux), soit l\u{2019}arrêt de la rue"), "{text}");
 }
