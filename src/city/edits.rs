@@ -21,11 +21,15 @@ pub const SPEED_VERSION: u32 = 7;
 /// What a document is written as while a street record holds curbside uses: a build that does not know them treats
 /// it as a newer document and leaves it alone.
 pub const CURB_VERSION: u32 = 8;
-/// The newest version this build reads.
 /// What a document is written as while a street record holds transit stops: a build that does not know them treats
 /// it as a newer document and leaves it alone.
 pub const STOP_VERSION: u32 = CURB_VERSION + 1;
-pub const NEWEST: u32 = STOP_VERSION;
+/// What a document is written as while a junction record holds a signal plan the person edited (`State.signal_plan`):
+/// a build that does not know it treats the document as a newer one and leaves it alone, rather than dropping the plan
+/// on its next write. A junction record with no such plan reads as the suggested plan, with every `Arm.timing` kept.
+pub const SIGNAL_VERSION: u32 = STOP_VERSION + 1;
+/// The newest version this build reads.
+pub const NEWEST: u32 = SIGNAL_VERSION;
 /// Where the document is kept.
 pub const EDITS_KEY: &str = "cityloom-edits";
 /// Where a document that could not be read is copied before the first write replaces it.
@@ -77,7 +81,7 @@ impl Edits {
         Edits { version: VERSION, ..Edits::default() }
     }
 
-    /// The version the document is written as: `STOP_VERSION` while a street record holds transit stops, else
+    /// The version the document is written as: `SIGNAL_VERSION` while a junction record holds an edited signal plan, else `STOP_VERSION` while a street record holds transit stops, else
     /// `CURB_VERSION` while one holds curbside uses, else
     /// `SPEED_VERSION` while a street record holds a speed (set or
     /// decided to have none), else `ZONES_VERSION` while one holds zones, else `VERSION`.
@@ -86,7 +90,8 @@ impl Edits {
         let speed = self.streets.values().any(|r| !r.street.speed.is_undecided());
         let curb = self.streets.values().any(|r| !r.street.curb.is_empty());
         let stops = self.streets.values().any(|r| !r.street.stops.is_empty());
-        version_for(zones, speed, curb, stops)
+        let signal = self.junctions.values().any(|r| r.state.signal_plan.is_some());
+        version_for(zones, speed, curb, stops, signal)
     }
 
     pub fn to_json(&self) -> String {
@@ -96,8 +101,10 @@ impl Edits {
 }
 
 /// The version a document is written as, from what its street records hold.
-fn version_for(zones: bool, speed: bool, curb: bool, stops: bool) -> u32 {
-    if stops {
+fn version_for(zones: bool, speed: bool, curb: bool, stops: bool, signal: bool) -> u32 {
+    if signal {
+        SIGNAL_VERSION
+    } else if stops {
         STOP_VERSION
     } else if curb {
         CURB_VERSION
@@ -121,6 +128,12 @@ fn holds_speed(doc: &Map<String, Value>) -> bool {
 fn holds_curb(doc: &Map<String, Value>) -> bool {
     let mut streets = doc.get(STREETS).and_then(Value::as_object).into_iter().flatten();
     streets.any(|(_, r)| r.pointer("/street/curb").and_then(Value::as_array).is_some_and(|c| !c.is_empty()))
+}
+
+/// Whether any record of the junctions section holds a signal plan (decided on the raw JSON).
+fn holds_signal(doc: &Map<String, Value>) -> bool {
+    let mut junctions = doc.get(JUNCTIONS).and_then(Value::as_object).into_iter().flatten();
+    junctions.any(|(_, r)| r.pointer("/state/signal_plan").is_some_and(|p| !p.is_null()))
 }
 
 /// Whether any record of the streets section holds a non-empty list of transit stops (decided on the raw JSON).
@@ -156,12 +169,12 @@ fn object(stored: Option<&str>) -> Result<Map<String, Value>, Document> {
     match doc.get("version").and_then(Value::as_u64) {
         Some(v) if v > u64::from(NEWEST) => return Err(Document::Future),
         // 4 and 5 are read as they are (the turbo field is additive), 6 is the same document with zones and 7 with
-        // speeds, 8 with curbside uses and 9 with transit stops.
+        // speeds, 8 with curbside uses and 9 with transit stops and 10 with a signal plan.
         Some(v) if v >= u64::from(VERSION) - 1 => {}
         _ => return Err(damaged()),
     }
     // The version the document would be written as, whichever it was read as.
-    let written = version_for(holds_zones(&doc), holds_speed(&doc), holds_curb(&doc), holds_stops(&doc));
+    let written = version_for(holds_zones(&doc), holds_speed(&doc), holds_curb(&doc), holds_stops(&doc), holds_signal(&doc));
     doc.insert("version".into(), written.into());
     if [STREETS, JUNCTIONS].iter().any(|section| doc.get(*section).is_some_and(|v| !v.is_object())) {
         return Err(damaged());
@@ -268,7 +281,7 @@ impl Draft {
     /// `ZONES_VERSION` while one holds zones (a record this build cannot read included), else `VERSION`.
     pub fn to_json(&self) -> String {
         let mut doc = self.doc.clone();
-        let written = version_for(holds_zones(&doc), holds_speed(&doc), holds_curb(&doc), holds_stops(&doc));
+        let written = version_for(holds_zones(&doc), holds_speed(&doc), holds_curb(&doc), holds_stops(&doc), holds_signal(&doc));
         doc.insert("version".into(), written.into());
         Value::Object(doc).to_string()
     }
@@ -507,7 +520,8 @@ mod tests {
         assert_eq!(SPEED_VERSION, 7);
         assert_eq!(CURB_VERSION, 8);
         assert_eq!(STOP_VERSION, 9);
-        assert_eq!(NEWEST, 9);
+        assert_eq!(SIGNAL_VERSION, 10);
+        assert_eq!(NEWEST, 10);
         let record = street_record();
         let text = serde_json::to_string(&record).unwrap();
         for absent in ["zones", "from_end", "length_mm", "speed_kmh"] {
@@ -856,6 +870,57 @@ mod tests {
         assert_eq!(old.version, VERSION);
     }
 
+    #[test]
+    fn a_junction_record_with_an_edited_signal_plan_is_written_as_the_signal_version_and_older_records_read_as_suggested() {
+        use crate::junction::model::{SIGNAL, Timing};
+        let city = crate::city::model::City::new();
+        let junction = city.view(0).nodes.iter().find(|n| n.junction).unwrap().uid;
+        let (key, mut record) = city.junction_record(junction).unwrap();
+        record.state.control = SIGNAL;
+        let timing = Timing { green_s: 40, yellow_s: 4, all_red_s: 3, transit_lead_s: 6 };
+        record.state.arms[0].timing = Some(timing);
+        // Not edited: the document stays at the version it had, and nothing about a plan is written.
+        let mut e = Edits::new();
+        e.junctions.insert(key.clone(), record.clone());
+        assert_eq!(e.written_version(), VERSION);
+        assert!(!e.to_json().contains("signal_plan"));
+        let before = e.to_json();
+        // Edited: the version is raised so that an older build leaves the document alone.
+        let uid = record.state.arms[0].uid;
+        record.state.signal_plan = Some(crate::junction::signal::SignalPlan {
+            phases: vec![crate::junction::signal::StoredPhase {
+                moves: vec![crate::junction::signal::Move { from: uid, lane: 0, to: record.state.arms[1].uid }],
+                walks: vec![uid],
+                rides: vec![],
+            }],
+        });
+        e.junctions.insert(key.clone(), record);
+        assert_eq!(e.written_version(), SIGNAL_VERSION);
+        assert!(e.to_json().starts_with(r#"{"version":10,"#), "{}", e.to_json());
+        let Document::Current(back) = parse(Some(&e.to_json())) else { panic!("not read back") };
+        assert_eq!(back.junctions[&key].state.signal_plan, e.junctions[&key].state.signal_plan);
+        assert_eq!(back.junctions[&key].arm_streets, e.junctions[&key].arm_streets);
+        assert_eq!(back.junctions[&key].state.arms[0].timing, Some(timing), "the timing is kept beside the plan");
+        // The draft decides on the raw JSON, and goes back to 5 when the record goes.
+        let mut d = Draft::new();
+        assert!(d.put_junction(&key, &e.junctions[&key]));
+        assert!(d.to_json().contains(r#""version":10"#), "{}", d.to_json());
+        d.remove_junction(&key);
+        assert!(d.to_json().contains(r#""version":5"#));
+        // A document written before the plan existed loads as suggested, timing included, and stays as it was.
+        let Document::Current(old) = parse(Some(&before)) else { panic!("not read") };
+        assert_eq!(old.junctions[&key].state.signal_plan, None);
+        assert_eq!(old.junctions[&key].state.arms[0].timing, Some(timing));
+        assert_eq!(old.written_version(), VERSION);
+        // A build of this version reads the versions before it unchanged.
+        for v in [VERSION - 1, VERSION, ZONES_VERSION, SPEED_VERSION, CURB_VERSION, STOP_VERSION] {
+            let text = format!(r#"{{"version":{v},"streets":{{}},"junctions":{{}}}}"#);
+            assert!(matches!(parse(Some(&text)), Document::Current(_)), "{v}");
+        }
+        let newer = format!(r#"{{"version":{},"streets":{{}},"junctions":{{}}}}"#, NEWEST + 1);
+        assert!(matches!(parse(Some(&newer)), Document::Future));
+    }
+
     /// Pins what a record is written as. When this fails, the shape of `Street`, `State` or a record changed:
     /// decide whether an older build can still read it, and if not raise `VERSION`, before changing this list.
     #[test]
@@ -884,6 +949,13 @@ mod tests {
         e.streets.insert("w9~n1~n2".into(), speed_record(crate::street::model::Speed::NotSet));
         let (key, mut record) = city.junction_record(junction).unwrap();
         record.state.turbo = Some(crate::junction::turbo::Turbo { layout: 0, size: 0, main: vec![1, 3] });
+        record.state.signal_plan = Some(crate::junction::signal::SignalPlan {
+            phases: vec![crate::junction::signal::StoredPhase {
+                moves: vec![crate::junction::signal::Move { from: 1, lane: 0, to: 2 }],
+                walks: vec![2],
+                rides: vec![1],
+            }],
+        });
         e.junctions.insert(key, record);
         let mut out = BTreeSet::new();
         shape(&serde_json::from_str(&e.to_json()).unwrap(), "", &mut out);
@@ -933,6 +1005,18 @@ mod tests {
     ".junctions.<key>.state.cycle: null",
     ".junctions.<key>.state.raised: bool",
     ".junctions.<key>.state.ring_extra_mm: number",
+    ".junctions.<key>.state.signal_plan.phases: array",
+    ".junctions.<key>.state.signal_plan.phases[].moves: array",
+    ".junctions.<key>.state.signal_plan.phases[].moves[].from: number",
+    ".junctions.<key>.state.signal_plan.phases[].moves[].lane: number",
+    ".junctions.<key>.state.signal_plan.phases[].moves[].to: number",
+    ".junctions.<key>.state.signal_plan.phases[].moves[]: object",
+    ".junctions.<key>.state.signal_plan.phases[].rides: array",
+    ".junctions.<key>.state.signal_plan.phases[].rides[]: number",
+    ".junctions.<key>.state.signal_plan.phases[].walks: array",
+    ".junctions.<key>.state.signal_plan.phases[].walks[]: number",
+    ".junctions.<key>.state.signal_plan.phases[]: object",
+    ".junctions.<key>.state.signal_plan: object",
     ".junctions.<key>.state.source: array",
     ".junctions.<key>.state.source[].id: number",
     ".junctions.<key>.state.source[].version: null",
