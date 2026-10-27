@@ -750,12 +750,7 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
 
 /// "Phase 2: Main Street": the number, and the streets whose traffic goes in it.
 fn phase_name<'a>(n: usize, p: &signal::Phase, find: &impl Fn(u32) -> Option<&'a ArmView>, name: &impl Fn(u32) -> Said) -> Said {
-    let mut from: Vec<u32> = Vec::new();
-    for m in &p.moves {
-        if !from.contains(&m.from) {
-            from.push(m.from);
-        }
-    }
+    let from = p.sources();
     let streets = and_list(from.into_iter().map(|u| find(u).map_or_else(|| name(u), |a| a.street.clone())).collect()).unwrap_or_else(|| name(p.uid));
     Said::new("jn-ph-name").with("n", Arg::Num(n as i64 + 1)).with("streets", Arg::Said(Box::new(streets)))
 }
@@ -772,12 +767,7 @@ fn phase_summary(p: &signal::Phase, arms: &[ArmView]) -> Said {
         }
         and_list(points)
     };
-    let mut from: Vec<u32> = Vec::new();
-    for m in &p.moves {
-        if !from.contains(&m.from) {
-            from.push(m.from);
-        }
-    }
+    let from = p.sources();
     let part = |key: &'static str, uids: &[u32]| compass(uids).map(|a| Said::new(key).with("arms", Arg::Said(Box::new(a))));
     let parts = [part("jn-ph-cars", &from), part("jn-ph-walks", &p.walks), part("jn-ph-rides", &p.rides)];
     parts
@@ -1968,6 +1958,32 @@ mod tests {
     use super::*;
     use crate::junction::model::{DEFAULT_SETBACK_MM, JUNCTION_SAMPLES, MIN_SETBACK_MM, junction_of, junction_two_way};
     use crate::shared::testing::{en, fr};
+
+    /// How many things an `and_list` says.
+    fn items(s: &Said) -> usize {
+        match (s.key, s.args.as_slice()) {
+            ("jn-ph-and" | "jn-list-comma", [(_, Arg::Said(head)), (_, Arg::Said(tail))]) => items(head) + items(tail),
+            _ => 1,
+        }
+    }
+
+    #[test]
+    fn a_phases_name_and_summary_name_the_same_streets() {
+        let j = Junction::new(0);
+        let v = j.view();
+        let (a, b, c) = (v.arms[0].uid, v.arms[1].uid, v.arms[2].uid);
+        let mut p = signal::plan(j.current(), 0).unwrap().phases[0].clone();
+        p.moves = vec![signal::Move { from: a, to: b }, signal::Move { from: c, to: b }, signal::Move { from: a, to: c }];
+        p.walks.clear();
+        p.rides.clear();
+        let find = |uid: u32| v.arms.iter().find(|x| x.uid == uid);
+        let name = |uid: u32| find(uid).unwrap().label.clone();
+        let named = phase_name(0, &p, &find, &name);
+        let Some((_, Arg::Said(streets))) = named.args.iter().find(|(k, _)| *k == "streets") else { panic!("{named:?}") };
+        let said = phase_summary(&p, &v.arms);
+        let Some((_, Arg::Said(cars))) = said.args.iter().find(|(k, _)| *k == "arms") else { panic!("{said:?}") };
+        assert_eq!((items(streets), items(cars)), (2, 2), "the two streets traffic goes from, once each: {named:?} {said:?}");
+    }
 
     #[test]
     fn a_junction_with_one_walkway_arm_lays_out_and_draws() {
