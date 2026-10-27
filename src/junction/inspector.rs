@@ -1219,31 +1219,96 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
     }
 }
 
-/// The signal's cycle and a row for each phase, in the order they run. A press on a row opens that street.
+/// Puts the focus on the element with this id, if it is there.
+fn focus_id(id: &str) {
+    use leptos::wasm_bindgen::JsCast;
+    if let Some(el) = document().get_element_by_id(id).and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
+        let _ = el.focus();
+    }
+}
+
+/// The id of the button to focus once a phase button was pressed, so the focus follows the phase. `index` is where the
+/// phase is now in a cycle of `count`; `dir` is -1 for Earlier, 1 for Later and 0 for Remove (then `index` is where the
+/// phase stood, and the focus goes to the Remove button of whatever stands there now, or of the last phase). A moved
+/// phase keeps the button that was pressed, unless it reached an end, where that button is disabled: then the other.
+fn phase_focus_id(index: usize, count: usize, dir: i32) -> String {
+    match dir {
+        d if d < 0 && index == 0 => "sig-later-0".to_string(),
+        d if d < 0 => format!("sig-earlier-{index}"),
+        0 => format!("sig-remove-{}", index.min(count.saturating_sub(1))),
+        _ if index + 1 >= count => format!("sig-earlier-{index}"),
+        _ => format!("sig-later-{index}"),
+    }
+}
+
+/// The signal's cycle and a row for each phase, in the order they run, with the buttons that move, remove and add
+/// phases and give the suggested plan back. A press on a row opens that street. The rows are kept by their place in
+/// the cycle, so the button that was pressed keeps its element and the focus follows a phase that moves.
 fn signal_overview(w: Watch) -> impl IntoView {
+    let shown = Memo::new(move |_| w.view().signal.is_some());
+    let count = Memo::new(move |_| w.view().signal.as_ref().map_or(0, |s| s.phases.len()));
+    let suggested = Memo::new(move |_| w.view().signal.as_ref().is_none_or(|s| s.suggested));
+    let streets = Memo::new(move |_| w.view().arms.iter().filter(|a| a.enters && !a.pedestrian).map(|a| a.uid).collect::<Vec<u32>>());
+    let phase = move |i: usize| w.view().signal.as_ref().and_then(|s| s.phases.get(i).cloned());
+    let row = move |i: usize| {
+        let select = move || {
+            let Some(p) = phase(i) else { return String::new() };
+            let t = p.timing;
+            let key = if t.transit_lead_s > 0 { "jn-sig-row-lead" } else { "jn-sig-row" };
+            let args = Args::new()
+                .str("street", w.say(&p.street))
+                .num("lead", i64::from(t.transit_lead_s))
+                .num("green", i64::from(t.green_s))
+                .num("yellow", i64::from(t.yellow_s))
+                .num("all_red", i64::from(t.all_red_s));
+            tr(w, key, args)
+        };
+        let named = move |key: &'static str| move || phase(i).map(|p| tr(w, key, Args::new().str("street", w.say(&p.street)))).unwrap_or_default();
+        let is_first = move || i == 0;
+        let is_last = move || i + 1 >= count.get();
+        let (earlier, later) = (format!("sig-earlier-{i}"), format!("sig-later-{i}"));
+        view! {
+            <li>
+                <button type="button" class="btn quiet" on:click=move |_| { if let Some(p) = phase(i) { w.select(Target::Arm(p.uid)) } }>{select}</button>
+                <div class="signal-tools">
+                    <button type="button" class="btn" id=earlier.clone() disabled=is_first aria-label=named("jn-sig-earlier")
+                        on:click=move |_| { if w.edit(|j| j.move_phase(i, -1)) { focus_id(&phase_focus_id(i - 1, count.get_untracked(), -1)) } }>
+                        {words(w, "jn-sig-earlier-short")}
+                    </button>
+                    <button type="button" class="btn" id=later.clone() disabled=is_last aria-label=named("jn-sig-later")
+                        on:click=move |_| { if w.edit(|j| j.move_phase(i, 1)) { focus_id(&phase_focus_id(i + 1, count.get_untracked(), 1)) } }>
+                        {words(w, "jn-sig-later-short")}
+                    </button>
+                    <button type="button" class="btn danger" id=format!("sig-remove-{i}") aria-label=named("jn-sig-remove")
+                        on:click=move |_| { let left = count.get_untracked().saturating_sub(1); if w.edit(|j| j.remove_phase(i)) { focus_id(&phase_focus_id(i, left, 0)) } }>
+                        {words(w, "jn-sig-remove-short")}
+                    </button>
+                </div>
+            </li>
+        }
+    };
     move || {
-        w.view().signal.as_ref().map(|s| {
-            let rows = s
-                .phases
-                .iter()
-                .map(|p| {
-                    let uid = p.uid;
-                    let t = p.timing;
-                    let key = if t.transit_lead_s > 0 { "jn-sig-row-lead" } else { "jn-sig-row" };
-                    let args = Args::new()
-                        .str("street", w.say(&p.street))
-                        .num("lead", i64::from(t.transit_lead_s))
-                        .num("green", i64::from(t.green_s))
-                        .num("yellow", i64::from(t.yellow_s))
-                        .num("all_red", i64::from(t.all_red_s));
-                    view! { <li><button type="button" class="btn quiet" on:click=move |_| w.select(Target::Arm(uid))>{tr(w, key, args)}</button></li> }
-                })
-                .collect_view();
+        shown.get().then(|| {
             view! {
                 <section class="insp-sec">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
-                    <p class="insp-range">{tr(w, "jn-sig-cycle", Args::new().num("seconds", i64::from(s.cycle_s)))}</p>
-                    <ul class="signal-list">{rows}</ul>
+                    <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
+                    <p class="insp-range" id="signal-plan-state" tabindex="-1">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
+                    <ul class="signal-list"><For each=move || 0..count.get() key=|i| *i children=row/></ul>
+                    <div class="signal-tools">
+                        <For
+                            each=move || streets.get()
+                            key=|uid| *uid
+                            children=move |uid| {
+                                let label = move || tr(w, "jn-sig-add", Args::new().str("street", w.view().arms.iter().find(|a| a.uid == uid).map(|a| w.say(&a.street)).unwrap_or_default()));
+                                view! { <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.add_phase(uid)); }>{label}</button> }
+                            }
+                        />
+                        <button type="button" class="btn" id="signal-restore" disabled=move || suggested.get()
+                            on:click=move |_| { if w.edit(|j| j.restore_suggestion()) { focus_id("signal-plan-state") } }>
+                            {words(w, "jn-sig-restore")}
+                        </button>
+                    </div>
                 </section>
             }
         })
@@ -1372,6 +1437,20 @@ mod tests {
 
     fn crossing(j: &Junction, bearing: i32) -> CrossingView {
         j.view().arms.into_iter().find(|a| a.bearing == bearing).unwrap().crossing.unwrap()
+    }
+
+    #[test]
+    fn the_focus_follows_a_phase_to_the_button_that_is_not_disabled() {
+        // Earlier from place 1 reaches the first place, where Earlier is disabled.
+        assert_eq!(phase_focus_id(0, 3, -1), "sig-later-0");
+        assert_eq!(phase_focus_id(1, 3, -1), "sig-earlier-1");
+        // Later into the last place leaves Later disabled.
+        assert_eq!(phase_focus_id(2, 3, 1), "sig-earlier-2");
+        assert_eq!(phase_focus_id(1, 3, 1), "sig-later-1");
+        // Remove: the same place, or the last one when the last was removed.
+        assert_eq!(phase_focus_id(1, 2, 0), "sig-remove-1");
+        assert_eq!(phase_focus_id(2, 2, 0), "sig-remove-1");
+        assert_eq!(phase_focus_id(0, 1, 0), "sig-remove-0");
     }
 
     #[test]

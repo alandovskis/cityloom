@@ -170,7 +170,7 @@ fn conflicts_are_counted_and_the_note_follows_the_control() {
 fn the_checks_each_say_whether_they_pass() {
     let s = shared(0);
     let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
-    assert_eq!(count(&h, "<li class=\"ok\">"), 10, "the eight of any junction, and a signal's time to cross and cycle");
+    assert_eq!(count(&h, "<li class=\"ok\">"), 11, "the eight of any junction, and a signal's time to cross, phases and cycle");
     assert!(h.contains("Time to cross") && h.contains("Signal cycle"));
     assert!(h.contains(": passes"));
     assert!(h.contains("Longest crossing in one go: 11.4 m"));
@@ -1738,6 +1738,22 @@ fn the_junction_panel_of_a_signal_lists_the_phases_with_the_cycle() {
     assert_eq!(count(&h, "class=\"signal-list\""), 1);
     assert_eq!(count(&h, "green 25 s, yellow 3 s, all-red 2 s"), 4, "a row for each street: {h}");
     assert!(!plain_panel(&shared(1)).contains("Signal timing"), "no signal, no section");
+}
+
+#[test]
+fn the_signal_section_has_the_phase_buttons_and_says_whether_the_plan_is_suggested() {
+    let s = shared(0);
+    let h = plain_panel(&s);
+    assert!(h.contains("Suggested plan"), "{h}");
+    for label in ["Move the phase for", "Remove the phase for", "Add a phase for", "Restore the suggested plan"] {
+        assert!(h.contains(label), "{label}: {h}");
+    }
+    assert_eq!(count(&h, "id=\"sig-remove-"), 4);
+    assert!(h.contains("id=\"sig-earlier-0\"") && h.contains("id=\"sig-later-3\""));
+    s.edit(|j| j.remove_phase(0));
+    let h = plain_panel(&s);
+    assert!(h.contains("Edited plan") && !h.contains("Suggested plan"), "{h}");
+    assert_eq!(count(&h, "id=\"sig-remove-"), 3);
 }
 
 #[test]

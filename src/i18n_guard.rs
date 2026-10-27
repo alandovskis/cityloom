@@ -433,6 +433,8 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("sig-later-0", "the id of the first phase's Later button, not a message"),
+    ("signal-plan-state", "the id of the plan's state paragraph, not a message"),
     ("transition-room", "the id of a check, not a message"),
     ("lane-drop", "the id of a check, not a message"),
     ("curb-length", "the id of a check, not a message"),
@@ -555,6 +557,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("share-menu", "the id of an element the editors share"),
     ("signal-walk", "the id of a check of the junction sheet"),
     ("signal-cycle", "the id of a check of the junction sheet"),
+    ("signal-phases", "the id of a check of the junction sheet"),
     ("cityloom-theme", "a storage key"),
     ("cityloom-inspector", "a storage key"),
     ("cityloom-notes", "a storage key"),

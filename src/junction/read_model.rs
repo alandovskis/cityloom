@@ -679,6 +679,8 @@ pub struct Selection {
 pub struct SignalView {
     pub cycle_s: u32,
     pub phases: Vec<PhaseView>,
+    /// The plan is the suggestion: the person has not edited it.
+    pub suggested: bool,
 }
 
 /// One street's turn: its numbers, and what runs with it besides its own traffic.
@@ -712,7 +714,7 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
             rides: list(p.rides.iter().copied().filter(|&u| u != p.uid).map(name).collect()),
         })
         .collect();
-    Some(SignalView { cycle_s: plan.cycle_s, phases })
+    Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested })
 }
 
 #[derive(Serialize)]
@@ -1854,6 +1856,20 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
             Said::new("jn-check-signal-walk-ok"),
             arms_of(short).map(|l| Said::new("jn-check-signal-walk-bad").with("arms", Arg::Said(Box::new(l)))),
         ));
+        // Every street with a movement wants a phase that serves it: an edited plan can leave one out.
+        let unserved: Vec<u32> = s
+            .arms
+            .iter()
+            .filter(|a| a.lanes.iter().any(|l| l.to.iter().any(|&t| t != a.uid)))
+            .filter(|a| !plan.phases.iter().any(|p| p.moves.iter().any(|m| m.from == a.uid)))
+            .map(|a| a.uid)
+            .collect();
+        out.push(check(
+            "signal-phases",
+            "jn-check-signal-phases",
+            Said::new("jn-check-signal-phases-ok"),
+            arms_of(unserved).map(|l| Said::new("jn-check-signal-phases-bad").with("arms", Arg::Said(Box::new(l)))),
+        ));
         let seconds = i64::from(plan.cycle_s);
         out.push(check(
             "signal-cycle",
@@ -1987,6 +2003,24 @@ mod tests {
         assert_eq!(j.current().arms.len(), 5);
         assert!(j.set_control(SIGNAL));
         assert!(j.view().checks.iter().find(|c| c.id == "signal").unwrap().ok, "four streets carry traffic");
+    }
+
+    #[test]
+    fn the_sheet_says_whether_the_plan_is_suggested_and_flags_a_street_left_without_a_phase() {
+        let mut j = Junction::new(0);
+        let v = j.view();
+        assert!(v.signal.as_ref().unwrap().suggested);
+        assert!(v.checks.iter().find(|c| c.id == "signal-phases").unwrap().ok);
+        // Four phases, one per street: taking one out leaves that street's lanes with none.
+        assert!(j.remove_phase(0));
+        let v = j.view();
+        assert!(!v.signal.as_ref().unwrap().suggested);
+        assert_eq!(v.signal.as_ref().unwrap().phases.len(), 3);
+        let check = v.checks.iter().find(|c| c.id == "signal-phases").unwrap();
+        assert!(!check.ok, "a street with no phase is flagged");
+        assert!(en(&check.detail).contains("No phase serves the traffic entering from"), "{}", en(&check.detail));
+        assert!(j.restore_suggestion());
+        assert!(j.view().checks.iter().find(|c| c.id == "signal-phases").unwrap().ok);
     }
 
     #[test]
