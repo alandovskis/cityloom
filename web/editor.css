@@ -853,6 +853,14 @@ svg pattern circle {
   stroke-width: 1.5;
   pointer-events: none;
 }
+#drawing .stop-pad.stop-bulb {
+  stroke-width: 2.5;
+}
+#drawing .stop-pad.stop-island {
+  fill: none;
+  stroke-dasharray: 1 3;
+  stroke-linecap: round;
+}
 #drawing .stop-pad.stop-bad,
 #drawing .stop-dwell.stop-bad {
   stroke-width: 3;
@@ -889,6 +897,9 @@ svg pattern circle {
   #drawing .stop-dwell {
     fill: none;
     stroke: Highlight;
+  }
+  #drawing .stop-pad.stop-bulb {
+    stroke-width: 3;
   }
   #drawing .stop-run,
   #drawing .stop-shelter {

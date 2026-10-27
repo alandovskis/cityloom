@@ -218,6 +218,11 @@ mod tests {
         for (theme, i) in [("light", 0), ("dark", 1)] {
             let (accent, road) = (pick(&token(app, "accent"), i), pick(&token(app, "road"), i));
             assert!(contrast(&accent, &road) >= 3.0, "accent on the road {theme}: {:.2}", contrast(&accent, &road));
+            // the wash under the outline (the dark one is translucent over the road, which is measured above)
+            let wash = token(app, "accent-wash");
+            if let Some(wash) = if i == 0 { wash.0 } else { wash.1 } {
+                assert!(contrast(&accent, &wash) >= 3.0, "accent on its wash {theme}: {:.2}", contrast(&accent, &wash));
+            }
             for ground in ["k-sidewalk", "k-planting"] {
                 let fill = pick(&token(app, ground), i);
                 assert!(contrast(&accent, &fill) >= 3.0, "accent on {ground} {theme}: {:.2}", contrast(&accent, &fill));

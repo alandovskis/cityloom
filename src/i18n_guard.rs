@@ -170,6 +170,8 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     (" lifted", "a CSS class appended to a class list"),
     (" active", "a CSS class appended to a class list"),
     (" stop-bad", "a CSS class appended to a class list"),
+    (" stop-bulb", "a CSS class appended to a class list"),
+    (" stop-island", "a CSS class appended to a class list"),
     (" t-blue", "a CSS class appended to a class list"),
     ("(pointer: coarse)", "a media query"),
     ("(max-width: 1100px)", "a media query"),

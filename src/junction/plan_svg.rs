@@ -16,6 +16,7 @@ use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::iso::format::{esc, f1};
 use crate::shared::said::{Said, say};
 use crate::shared::units::Units;
+use crate::street::model::StopKind;
 
 type P = (f64, f64);
 
@@ -411,7 +412,12 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         for st in &a.stops {
             let bad = if st.bad { " stop-bad" } else { "" };
             if let Some(pad) = &st.pad {
-                write!(g, "<path class=\"stop-pad{bad}\" d=\"{}\"/>", p.path_d(pad)).unwrap();
+                let kind = match st.kind {
+                    StopKind::Curb => "",
+                    StopKind::Bulb => " stop-bulb",
+                    StopKind::Island => " stop-island",
+                };
+                write!(g, "<path class=\"stop-pad{kind}{bad}\" d=\"{}\"/>", p.path_d(pad)).unwrap();
             }
             if let Some(dwell) = &st.dwell {
                 write!(g, "<path class=\"stop-dwell{bad}\" d=\"{}\"/>", p.path_d(dwell)).unwrap();
@@ -977,6 +983,31 @@ mod tests {
         let m = svg(&j).markup;
         assert_eq!((count(&m, "class=\"stop-pad stop-bad\""), count(&m, "class=\"stop-dwell stop-bad\"")), (1, 1));
         assert_eq!(count(&m, "stop-run stop-bad"), 0, "the run is a line, not an outline");
+    }
+
+    #[test]
+    fn a_bulb_and_an_island_name_their_kind_on_the_pad_and_a_curb_stop_does_not() {
+        use crate::street::model::StopKind;
+        for (kind, class) in
+            [(StopKind::Curb, "class=\"stop-pad\""), (StopKind::Bulb, "class=\"stop-pad stop-bulb\""), (StopKind::Island, "class=\"stop-pad stop-island\"")]
+        {
+            let (j, _) = crate::junction::tests::junction_with_stops(
+                |_| {},
+                |lane, walk| {
+                    let mut s = crate::junction::tests::end_stop(25_000, 33_000, lane, walk);
+                    s.kind = kind;
+                    vec![s]
+                },
+            );
+            let m = svg(&j).markup;
+            assert_eq!(count(&m, "class=\"stop-pad"), 1, "{kind:?}");
+            // a failing stop adds stop-bad after the kind (the lane check marks this one)
+            let bad = j.view().arms.iter().any(|a| a.stops.iter().any(|s| s.bad));
+            let want = if bad { class.replace('"', "").replace("class=", "") } else { String::new() };
+            assert!(m.contains(class) || (bad && m.contains(&format!("class=\"{want} stop-bad\""))), "{kind:?}: {class}");
+            let other = if kind == StopKind::Bulb { "stop-island" } else { "stop-bulb" };
+            assert_eq!(count(&m, other), 0);
+        }
     }
 
     #[test]
