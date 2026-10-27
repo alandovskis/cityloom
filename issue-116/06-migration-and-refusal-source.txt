@@ -1,4 +1,4 @@
-# Migration: a record saved before this change reads as suggested, Arm.timing kept (source of the tests, then their run)
+# Migration and record shape (src/city/edits.rs)
     fn a_junction_record_with_signal_timing_round_trips_and_one_written_before_it_reads_as_untimed() {
         use crate::junction::model::{SIGNAL, Timing};
         let city = crate::city::model::City::new();
@@ -44,7 +44,7 @@
         let uid = record.state.arms[0].uid;
         record.state.signal_plan = Some(crate::junction::signal::SignalPlan {
             phases: vec![crate::junction::signal::StoredPhase {
-                moves: vec![crate::junction::signal::Move { from: uid, lane: 0, to: record.state.arms[1].uid }],
+                moves: vec![crate::junction::signal::Move { from: uid, to: record.state.arms[1].uid }],
                 walks: vec![uid],
                 rides: vec![],
             }],
@@ -80,7 +80,7 @@
     /// decide whether an older build can still read it, and if not raise `VERSION`, before changing this list.
     #[test]
 
-# Refusals (source)
+# Refusals, plan lost, movement identity (src/junction/model.rs)
     fn the_last_phase_stays() {
         let mut j = Junction::new(0);
         assert!(j.remove_phase(0) && j.remove_phase(0) && j.remove_phase(0));
@@ -106,5 +106,124 @@
         assert!(!j.move_phase(3, 1));
         assert_eq!(j.refusal(), Some(Refusal::PhaseAtEnd));
         assert!(!j.move_phase(7, 1));
-        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
-        assert!(j.undo() && j.undo());
+        let all = phase_uids(&j);
+        assert!(j.move_phase(0, 1));
+        assert!(j.restore_suggestion());
+        assert!(signal::plan(j.current(), 0).unwrap().suggested);
+        assert_eq!(phase_uids(&j), all);
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("restored to the suggestion"));
+        assert!(j.undo());
+        assert!(!signal::plan(j.current(), 0).unwrap().suggested, "undo brings the edited plan back");
+    }
+
+    #[test]
+    fn the_plan_is_edited_only_at_a_signal() {
+        let mut j = Junction::new(1);
+        j.set_control(2);
+        for ok in [j.remove_phase(0), j.move_phase(0, 1), j.restore_suggestion(), j.add_phase(arm_at(&j, 90))] {
+            assert!(!ok);
+            assert_eq!(j.refusal(), Some(Refusal::NotSignal));
+        }
+    }
+
+    #[test]
+    fn a_plan_holds_at_most_two_phases_for_each_possible_street() {
+        let mut j = Junction::new(0);
+        let uid = j.current().arms[0].uid;
+        while j.add_phase(uid) {}
+        assert_eq!(j.refusal(), Some(Refusal::TooManyPhases));
+        assert_eq!(signal::plan(j.current(), 0).unwrap().phases.len(), MAX_ARMS * 2);
+    }
+
+    #[test]
+    fn a_movement_that_still_exists_stays_in_the_plan_whatever_its_lane_is_numbered() {
+        let mut j = Junction::new(0);
+        assert!(j.remove_phase(3));
+        let pairs = |j: &Junction| -> Vec<(u32, u32)> {
+            let mut v: Vec<(u32, u32)> = signal::plan(j.current(), 0).unwrap().phases.iter().flat_map(|p| &p.moves).map(|m| (m.from, m.to)).collect();
+            v.sort_unstable();
+            v.dedup();
+            v
+        };
+        let lanes_of = |j: &Junction| -> Vec<(u32, u32)> {
+            j.current().arms.iter().flat_map(|a| a.lanes.iter().flat_map(move |l| l.to.iter().map(move |t| (a.uid, *t)))).collect()
+        };
+        let before = pairs(&j);
+        // The lanes of the first arm are renumbered: its lane order is reversed, each still going where it went.
+        let uid = arm_at(&j, 0);
+        let mut s = j.current().clone();
+        let arm = s.arms.iter_mut().find(|a| a.uid == uid).unwrap();
+        assert!(arm.lanes.len() > 1, "the sample's first arm has more than one lane");
+        arm.lanes.reverse();
+        signal::settle(&mut s);
+        let mut j2 = Junction::new(0);
+        assert!(j2.remove_phase(3));
+        *j2.current_mut() = s;
+        let after = pairs(&j2);
+        let still: Vec<(u32, u32)> = before.iter().copied().filter(|p| lanes_of(&j2).contains(p)).collect();
+        assert_eq!(after, still, "every movement a lane still serves stays in the plan");
+    }
+
+    #[test]
+    fn leaving_the_signal_drops_the_edited_plan_and_undo_brings_it_back() {
+        let mut j = Junction::new(0);
+        assert!(j.remove_phase(0));
+        assert!(j.set_control(PRIORITY));
+        assert!(j.current().signal_plan.is_none());
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("edited signal plan removed"), "the step says so");
+        assert!(j.undo());
+        assert!(j.current().signal_plan.is_some());
+    }
+
+    #[test]
+    fn restoring_the_suggestion_does_not_say_the_plan_was_removed() {
+        let mut j = Junction::new(0);
+        assert!(j.remove_phase(0));
+        assert!(j.restore_suggestion());
+        assert!(!plain(&en(j.revisions().last().unwrap())).contains("removed"));
+    }
+
+    #[test]
+    fn a_lane_that_no_longer_goes_where_a_phase_served_it_is_dropped_from_the_plan() {
+        let mut j = Junction::new(0);
+        assert!(j.remove_phase(3));
+        let n = arm_at(&j, 0);
+        let to = j.arm(n).unwrap().lanes[0].to.clone();
+        assert!(to.len() > 1);
+        assert!(j.set_lane_dest(n, 0, to[0], false));
+        let p = signal::plan(j.current(), 0).unwrap();
+
+# Focus helper (src/junction/inspector.rs)
+    fn the_focus_follows_a_phase_to_the_button_that_is_not_disabled() {
+        // Earlier from place 1 reaches the first place, where Earlier is disabled.
+        assert_eq!(phase_focus_id(0, 3, -1), "sig-later-0");
+        assert_eq!(phase_focus_id(1, 3, -1), "sig-earlier-1");
+        // Later into the last place leaves Later disabled.
+        assert_eq!(phase_focus_id(2, 3, 1), "sig-earlier-2");
+        assert_eq!(phase_focus_id(1, 3, 1), "sig-later-1");
+        // Remove: the same place, or the last one when the last was removed.
+        assert_eq!(phase_focus_id(1, 2, 0), "sig-remove-1");
+        assert_eq!(phase_focus_id(2, 2, 0), "sig-remove-1");
+        assert_eq!(phase_focus_id(0, 1, 0), "sig-remove-0");
+    }
+
+    #[test]
+    fn a_number_field_with_an_empty_hint_is_not_described_by_one() {
+        let vm = crate::junction::vm::JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Junction::new(0), None);
+        let w = Watch::new(vm);
+        let field = |hint: &'static str| Num {
+            id: "f",
+            label: "jn-insp-ring-hint",
+            minus: Signal::derive(String::new),
+            plus: Signal::derive(String::new),
+            value: Signal::derive(|| "1".to_string()),
+            tag: Signal::derive(String::new),
+            hint: Signal::derive(move || hint.to_string()),
+        };
+        let html = |hint| crate::shared::testing::html(move || num_view(w, field(hint), Rc::new(|_| {}), Box::new(|_| {})));
+        assert!(!html("").contains("aria-describedby"));
+        assert!(html("1 m to 2 m").contains("aria-describedby=\"f-hint\""));
+    }
+
+    #[test]
+    fn a_lane_is_placed_among_its_street_s_lanes() {
