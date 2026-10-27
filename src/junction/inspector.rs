@@ -14,6 +14,7 @@ use crate::junction::model::{
     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
     RULES, STOPS, THROUGH, Target, TimingField,
 };
+use crate::junction::phase_svg::phase_svg;
 use crate::junction::read_model::{CrossingView, JView};
 use crate::junction::turns::{compass_key, turn_glyph};
 use crate::junction::vm::JunctionVm;
@@ -1208,6 +1209,7 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
                 <section class="insp-sec">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{runs}</p>
+                    {signal_phases(w, true)}
                 </section>
                 {timing_field(w, uid, TimingField::Green)}
                 {timing_field(w, uid, TimingField::Yellow)}
@@ -1216,6 +1218,44 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
             }
             .into_any()
         }
+    }
+}
+
+/// The plan as a row of small drawings of the junction, one per phase in the order they run: what each phase lets
+/// cars, people and bikes do, lit against what is muted, with its name, its timing and a sentence. A drawing is a
+/// button that selects its street, and is pressed while its street is selected. It decides nothing: the drawing, the
+/// name and the sentence all come from the view. `label` adds whether the plan is the suggestion, for a panel that has
+/// no other word of it.
+fn signal_phases(w: Watch, label: bool) -> impl IntoView {
+    let count = Memo::new(move |_| w.view().signal.as_ref().map_or(0, |s| s.phases.len()));
+    let suggested = Memo::new(move |_| w.view().signal.as_ref().is_none_or(|s| s.suggested));
+    let phase = move |i: usize| w.view().signal.as_ref().and_then(|s| s.phases.get(i).cloned());
+    let card = move |i: usize| {
+        let pressed = move || phase(i).is_some_and(|p| w.view().selected.kind == Some("arm") && w.view().selected.uid == p.uid).to_string();
+        let art = move || phase(i).map(|p| phase_svg(&w.view(), &p, &w.say(&p.name), &w.say(&p.summary))).unwrap_or_default();
+        let name = move || phase(i).map(|p| w.say(&p.name)).unwrap_or_default();
+        let summary = move || phase(i).map(|p| w.say(&p.summary)).unwrap_or_default();
+        let timing = move || {
+            let Some(p) = phase(i) else { return String::new() };
+            let t = p.timing;
+            let key = if t.transit_lead_s > 0 { "jn-ph-timing-lead" } else { "jn-ph-timing" };
+            let args = Args::new().num("lead", i64::from(t.transit_lead_s)).num("green", i64::from(t.green_s)).num("yellow", i64::from(t.yellow_s)).num("all_red", i64::from(t.all_red_s));
+            tr(w, key, args)
+        };
+        view! {
+            <li>
+                <button type="button" class="phase-card" aria-pressed=pressed on:click=move |_| { if let Some(p) = phase(i) { w.select(Target::Arm(p.uid)) } }>
+                    <span class="phase-art" inner_html=art></span>
+                    <span class="phase-name">{name}</span>
+                    <span class="phase-timing">{timing}</span>
+                    <span class="phase-summary" aria-hidden="true">{summary}</span>
+                </button>
+            </li>
+        }
+    };
+    view! {
+        {label.then(|| view! { <p class="insp-range">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p> })}
+        <ul class="signal-phases" aria-label=words(w, "jn-ph-row")><For each=move || 0..count.get() key=|i| *i children=card/></ul>
     }
 }
 
@@ -1294,6 +1334,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
                     <p class="insp-range" id="signal-plan-state" tabindex="-1">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
+                    {signal_phases(w, false)}
                     <ul class="signal-list"><For each=move || 0..count.get() key=|i| *i children=row/></ul>
                     <div class="signal-tools">
                         <For

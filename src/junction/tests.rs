@@ -1800,6 +1800,61 @@ fn the_timing_panels_are_not_there_off_a_signal_and_speak_french() {
     assert_eq!(s.i18n().missing(), Vec::<String>::new());
 }
 
+// ---- the signal plan as drawings ----------------------------------------------------
+
+/// The cards of the drawings row, one `<li>` each.
+fn phase_cards(h: &str) -> Vec<String> {
+    let at = h.find("class=\"signal-phases\"").expect("the row is there");
+    let row = &h[at..at + h[at..].find("</ul>").unwrap()];
+    row.split("<li").skip(1).map(str::to_string).collect()
+}
+
+#[test]
+fn the_junction_panel_has_a_drawing_for_each_phase_in_the_order_they_run() {
+    let h = plain_panel(&shared(0));
+    let cards = phase_cards(&h);
+    assert_eq!(cards.len(), 4, "{h}");
+    for (i, c) in cards.iter().enumerate() {
+        assert!(c.contains("<button") && c.contains("aria-pressed=\"false\""), "a button, pressed when its street is selected: {c}");
+        assert!(c.contains(&format!("Phase {}: ", i + 1)), "{c}");
+        assert!(c.contains("Cars go: ") && c.contains("People cross: "), "the summary is on the card: {c}");
+        assert!(c.contains("Green 25 s, yellow 3 s, all-red 2 s"), "{c}");
+        assert!(c.contains("role=\"img\"") && c.contains("aria-label=\"Cars go: "), "{c}");
+        assert!(c.contains("ph-move lit") && c.contains("ph-walk lit") && c.contains("ph-walk muted"), "lit and muted: {c}");
+    }
+    assert!(h.contains("The phases of the signal, in the order they run"));
+    assert!(!plain_panel(&shared(1)).contains("signal-phases"), "no signal, no drawings");
+}
+
+#[test]
+fn the_drawing_of_the_selected_street_is_pressed_and_the_row_follows_an_edit() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    s.edit(|j| j.select(Target::Arm(e)));
+    let h = plain_panel(&s);
+    let cards = phase_cards(&h);
+    assert_eq!(cards.len(), 4, "the row stays beside the street's timing: {h}");
+    assert_eq!(cards.iter().filter(|c| c.contains("aria-pressed=\"true\"")).count(), 1);
+    assert!(cards[1].contains("aria-pressed=\"true\""), "the east phase is the second");
+    assert!(h.contains("Suggested plan"));
+    s.edit(|j| j.remove_phase(0));
+    let h = plain_panel(&s);
+    assert_eq!(phase_cards(&h).len(), 3);
+    assert!(h.contains("Edited plan") && !h.contains("Suggested plan"), "{h}");
+}
+
+#[test]
+fn the_drawings_speak_french_with_no_english_left() {
+    use crate::shared::i18n::Locale;
+    let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::FrCa), Junction::new(0), None);
+    let h = plain_panel(&s);
+    let cards = phase_cards(&h);
+    assert_eq!(cards.len(), 4);
+    assert!(cards[0].contains("Phase 1 : ") && cards[0].contains("Voitures qui passent : ") && cards[0].contains("Piétons qui traversent : "), "{}", cards[0]);
+    assert!(!cards[0].contains("Cars go"));
+    assert_eq!(s.i18n().missing(), Vec::<String>::new());
+}
+
 #[test]
 fn a_typed_time_is_read_with_a_comma_and_a_bad_one_changes_nothing() {
     let s = shared(0);

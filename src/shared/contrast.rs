@@ -165,4 +165,20 @@ mod tests {
         let forced = editor.find("  #drawing .approach-mark {\n    stroke: CanvasText;").expect("forced-colours rule");
         assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some());
     }
+
+    #[test]
+    fn the_signal_phase_drawings_are_3_to_1_against_their_road_in_both_themes_and_have_forced_colours() {
+        let editor = include_str!("../../web/editor.css");
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let road = pick(&token(editor, "ph-road"), i);
+            for name in ["ph-lit", "ph-muted"] {
+                let ink = pick(&token(editor, name), i);
+                assert!(contrast(&ink, &road) >= 3.0, "{name} on the road {theme}: {:.2}", contrast(&ink, &road));
+            }
+        }
+        let forced = editor.find("  .phase-svg .ph-move .ph-line {\n    stroke: Highlight;").expect("forced-colours rule");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some());
+        assert!(editor[..forced].contains(".phase-card[aria-pressed=\"true\"] {\n    outline: 2px solid Highlight;"));
+    }
 }
