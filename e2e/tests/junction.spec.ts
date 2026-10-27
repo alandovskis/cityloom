@@ -151,7 +151,7 @@ test.describe("the junction editor on a junction of the city", () => {
     const plan = page.locator("#view-plan");
     const iso = page.locator("#view-iso");
     await expect(page.locator("#drawing .iso")).toHaveCount(0);
-    await expect(plan).toHaveAttribute("aria-current", "true");
+    await expect(plan).toHaveAttribute("aria-pressed", "true");
 
     await iso.click();
     await expect(page.locator("#drawing .iso")).toHaveCount(1);
@@ -161,7 +161,7 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#drawing pattern#iso-m-asphalt")).toHaveAttribute("patternTransform", /^matrix\(/);
     await expect(page.locator("#drawing .iso-name").first()).toBeVisible();
     await expect(page.locator("#drawing [data-role^='grip']")).toHaveCount(0);
-    await expect(iso).toHaveAttribute("aria-current", "true");
+    await expect(iso).toHaveAttribute("aria-pressed", "true");
     await expect(live(page)).toHaveText("Showing the junction in 2.5D.");
 
     // The keyboard still edits the junction, and the picture follows.
@@ -183,13 +183,13 @@ test.describe("the junction editor on a junction of the city", () => {
     // The choice is kept.
     await page.reload();
     await expect(page.locator("#drawing .iso")).toHaveCount(1);
-    await expect(page.locator("#view-iso")).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#view-iso")).toHaveAttribute("aria-pressed", "true");
 
     // V goes back to the plan from anywhere on the page.
     await page.keyboard.press("v");
     await expect(page.locator("#drawing .iso")).toHaveCount(0);
     await expect(page.locator("#drawing g.arm").first()).toBeVisible();
-    await expect(page.locator("#view-plan")).toHaveAttribute("aria-current", "true");
+    await expect(page.locator("#view-plan")).toHaveAttribute("aria-pressed", "true");
     await expect(live(page)).toHaveText("Showing the plan.");
   });
 
