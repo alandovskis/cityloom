@@ -1561,7 +1561,13 @@ fn judge_stops(stops: &mut [StopView], arm: &Said, edge: &'static str, lanes: &[
     for st in stops {
         let said = |key: &'static str| Said::new(key).with("kind", Arg::MsgLower(st.kind.name_key())).with("arm", Arg::Said(Box::new(arm.clone())));
         if st.gap_mm < STOP_CLEAR_MM {
-            clear.push(said("jn-stop-too-near").with("gap", Arg::Length(st.gap_mm)).with("need", Arg::Length(STOP_CLEAR_MM)).with("edge", Arg::Msg(edge)));
+            // A stop that begins inside what reaches out from the centre is said to reach into the junction, not to stand a
+            // negative distance from it.
+            clear.push(if st.gap_mm < 0 {
+                said("jn-stop-inside")
+            } else {
+                said("jn-stop-too-near").with("gap", Arg::Length(st.gap_mm)).with("need", Arg::Length(STOP_CLEAR_MM)).with("edge", Arg::Msg(edge))
+            });
             st.bad = true;
         }
         // A bus piece has no lane here, and a one-lane approach has no other lane to be in.

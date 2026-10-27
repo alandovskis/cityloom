@@ -162,6 +162,7 @@ jn-use-left = left
 jn-use-through = straight on
 jn-use-right = right
 jn-stop-too-near = The { $kind } on { $arm } stands { $gap } from { $edge }; { $need } or more is needed.
+jn-stop-inside = The { $kind } on { $arm } reaches into the junction.
 jn-stop-turn-only = The { $kind } on { $arm } is in lane { $n }, which only turns { $turn }: a bus going on has to change lanes in front of traffic.
 jn-stop-shared-turn = The { $kind } on { $arm } is in lane { $n }, shared with { $turn } turns: turning cars queue behind the stopped bus.
 jn-problem-stop-twice = { $arm }: the street already has a stop here; keep the { $measure } or the street’s stop, not both.

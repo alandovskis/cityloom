@@ -40,8 +40,8 @@ pub struct StopView {
     pub dwell: Option<Vec<Value>>,
     pub run: Option<Vec<Value>>,
     pub post: Option<P>,
-    /// The stop stands too near the junction: its near edge is less than `STOP_CLEAR_MM` past what reaches out from
-    /// the centre.
+    /// A check names the stop: it stands less than `STOP_CLEAR_MM` past what reaches out from the centre, or its bus
+    /// would be held in a turning lane.
     pub bad: bool,
 }
 

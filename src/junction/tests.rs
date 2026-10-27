@@ -2650,10 +2650,13 @@ fn a_stop_five_metres_clear_passes() {
 }
 
 #[test]
-fn a_stop_inside_the_mouth_fails() {
+fn a_stop_inside_the_mouth_fails_and_says_it_reaches_into_the_junction() {
     let (_, c) = clear_check(500);
     assert!(!c.ok);
-    assert!(said_en(&c.detail).contains("crossing"), "{}", said_en(&c.detail));
+    let text = said_en(&c.detail);
+    assert!(text.contains("reaches into the junction") && !text.contains('-') && !text.contains('\u{2212}'), "{text}");
+    let french = crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::FrCa), Units::Metres, &c.detail);
+    assert!(french.contains("empiète sur l’intersection") && !french.contains('-'), "{french}");
 }
 
 #[test]
@@ -2668,6 +2671,15 @@ fn with_no_crossing_the_stop_is_measured_from_the_mouth() {
 fn a_far_side_stop_is_checked_for_clearance_too() {
     let (j, _) = stopped(0, &lanes(2), |p| at_lane(p, 0, 2_000, false));
     assert!(!check_of(&j, "stop-clear").ok);
+    assert!(check_of(&j, "stop-lane").ok);
+    assert!(j.view().arms.iter().find(|a| a.bearing == 0).unwrap().stops[0].bad, "the clearance finding alone marks the stop");
+}
+
+#[test]
+fn a_stop_in_a_through_lane_too_near_the_junction_is_bad() {
+    let (j, _) = stopped(0, &lanes(3), |p| at_lane(p, 1, 3_000, true));
+    assert!(check_of(&j, "stop-lane").ok && !check_of(&j, "stop-clear").ok);
+    assert!(j.view().arms.iter().find(|a| a.bearing == 0).unwrap().stops[0].bad);
 }
 
 #[test]
@@ -2723,7 +2735,15 @@ fn a_stop_in_a_through_lane_passes() {
 
 #[test]
 fn a_stop_on_a_bus_piece_is_only_checked_for_clearance() {
-    let pieces = [("sidewalk", 3_000, None), ("travel", 3_500, Some(0)), ("travel", 3_500, Some(1)), ("bus", 3_500, Some(1)), ("sidewalk", 3_000, None)];
+    // two entering lanes beside the bus piece, so only the bus-piece exclusion keeps the lane check from judging it
+    let pieces = [
+        ("sidewalk", 3_000, None),
+        ("travel", 3_500, Some(0)),
+        ("travel", 3_500, Some(1)),
+        ("travel", 3_500, Some(1)),
+        ("bus", 3_500, Some(1)),
+        ("sidewalk", 3_000, None),
+    ];
     let bus = |near| {
         move |p: &Profile| {
             let mut s = at_lane(p, 0, near, true);
@@ -2797,10 +2817,32 @@ fn a_stop_measure_and_a_street_stop_on_one_side_are_said_in_transit() {
 #[test]
 fn the_stop_findings_are_said_in_french_with_the_oqlf_spacing() {
     let fr = |s: &crate::shared::said::Said| crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::FrCa), Units::Metres, s);
-    let (j, _) = stopped(0, &lanes(3), |p| at_lane(p, 2, 3_000, true));
+    let (probe, _) = stopped(0, &lanes(3), |p| at_lane(p, 2, 30_000, true));
+    let reach = north_reach(&probe);
+    let (j, _) = stopped(0, &lanes(3), |p| at_lane(p, 2, reach + 3_000, true));
     let (clear, lane) = (check_of(&j, "stop-clear"), check_of(&j, "stop-lane"));
     assert!(!clear.ok && !lane.ok);
     let (clear, lane) = (fr(&clear.detail), fr(&lane.detail));
     assert!(clear.contains("du passage pour piétons; il faut 5,0\u{a0}m ou plus."), "{clear}");
     assert!(lane.contains("qui ne permet que de tourner à droite\u{a0}: un autobus"), "{lane}");
+}
+
+#[test]
+fn a_turn_only_lane_on_an_arm_with_no_through_movement_does_not_fail() {
+    use crate::shared::catalogue::{REGIONS, StreetClass, kind_index};
+    use crate::street::model::Piece;
+    let mut state = Junction::new(1).current().clone();
+    let i = (0..state.arms.len()).find(|&i| classes_of(&state.arms, i) & THROUGH == 0).expect("the stem of a T has no through movement");
+    let pieces: Vec<Piece> =
+        lanes(3).iter().map(|&(id, width_mm, direction)| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() }).collect();
+    let arm = &mut state.arms[i];
+    arm.section = Some(crate::street::model::Street::imported(StreetClass::Local, REGIONS[0].drive_side, &pieces));
+    arm.stops = vec![at_lane(&arm.profile(0), 2, 25_000, true)];
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    let j = Junction::from_city(named, &state, &state, 0).expect("draws");
+    let v = j.view();
+    let a = &v.arms[i];
+    assert_eq!(a.lanes[2].uses & THROUGH, 0);
+    assert_eq!(a.lanes[2].uses, RIGHT, "a lane that only turns right");
+    assert!(check_of(&j, "stop-lane").ok, "there is no through movement for the bus to go on to");
 }

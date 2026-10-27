@@ -162,6 +162,7 @@ jn-use-left = de tourner à gauche
 jn-use-through = d’aller tout droit
 jn-use-right = de tourner à droite
 jn-stop-too-near = L’arrêt ({ $kind }) sur { $arm } se trouve à { $gap } { $edge }; il faut { $need } ou plus.
+jn-stop-inside = L’arrêt ({ $kind }) sur { $arm } empiète sur l’intersection.
 jn-stop-turn-only = L’arrêt ({ $kind }) sur { $arm } est dans la voie { $n }, qui ne permet que de tourner { $turn } : un autobus qui poursuit sa route doit changer de voie devant la circulation.
 jn-stop-shared-turn = L’arrêt ({ $kind }) sur { $arm } est dans la voie { $n }, partagée avec les virages { $turn } : les voitures qui tournent font la file derrière l’autobus à l’arrêt.
 jn-problem-stop-twice = { $arm } : la rue a déjà un arrêt ici; gardez soit { $measure }, soit l’arrêt de la rue, pas les deux.
