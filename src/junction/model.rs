@@ -1029,6 +1029,12 @@ impl Junction {
             next.cycle = None;
         }
         settle_table_and_boxes(&mut next, region);
+        // An edit that takes the person's whole signal plan away says so (restoring the suggestion does it on purpose).
+        let label = if self.current().signal_plan.is_some() && next.signal_plan.is_none() && label.key != "jn-rev-phase-restore" {
+            Said::new("jn-rev-plan-lost").with("change", Arg::Said(Box::new(label)))
+        } else {
+            label
+        };
         // A bus lane needs a roundabout and both its streets.
         if let Some((a, b)) = next.bus
             && (next.control != ROUNDABOUT || !next.arms.iter().any(|x| x.uid == a) || !next.arms.iter().any(|x| x.uid == b))
@@ -3696,8 +3702,17 @@ mod tests {
         assert!(j.remove_phase(0));
         assert!(j.set_control(PRIORITY));
         assert!(j.current().signal_plan.is_none());
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("edited signal plan removed"), "the step says so");
         assert!(j.undo());
         assert!(j.current().signal_plan.is_some());
+    }
+
+    #[test]
+    fn restoring_the_suggestion_does_not_say_the_plan_was_removed() {
+        let mut j = Junction::new(0);
+        assert!(j.remove_phase(0));
+        assert!(j.restore_suggestion());
+        assert!(!plain(&en(j.revisions().last().unwrap())).contains("removed"));
     }
 
     #[test]

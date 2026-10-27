@@ -517,3 +517,4 @@ jn-sig-restore = Restore the suggested plan
 jn-sig-earlier-short = Earlier
 jn-sig-later-short = Later
 jn-sig-remove-short = Remove
+jn-rev-plan-lost = { $change }; edited signal plan removed
