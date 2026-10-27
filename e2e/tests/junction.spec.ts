@@ -406,6 +406,57 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#inspector").getByText(`Cycle: ${before + 5} s`)).toBeVisible();
   });
 
+  test("each phase is drawn, the Suggested label goes with an edit and returns with Restore, and a drawing and its street select each other", async ({
+    page,
+  }) => {
+    const cards = page.locator("#inspector .signal-phases .phase-card");
+    await expect(cards).toHaveCount(2);
+    await expect(page.locator("#signal-plan-state")).toHaveText("Suggested plan");
+    await expect(cards.first()).toContainText("Phase 1:");
+    await expect(cards.first()).toContainText(/Cars go: /);
+    await expect(cards.first().locator("svg[role=img]")).toHaveAttribute("aria-label", /^Cars go: /);
+    await expect(cards.first()).toHaveAttribute("aria-pressed", "false");
+
+    // Pressing a drawing selects its street in the inspector, and the drawing is pressed there.
+    await cards.nth(1).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator('#inspector input[aria-labelledby="i-h-green"]')).toBeVisible();
+    await expect(cards.nth(1)).toHaveAttribute("aria-pressed", "true");
+    await expect(cards.first()).toHaveAttribute("aria-pressed", "false");
+    // The other drawing selects the other street.
+    await cards.first().click();
+    await expect(cards.first()).toHaveAttribute("aria-pressed", "true");
+    await expect(cards.nth(1)).toHaveAttribute("aria-pressed", "false");
+
+    // Editing the plan drops the label; Restore brings it back.
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#signal-plan-state")).toBeVisible();
+    await page.locator("#sig-remove-1").click();
+    await expect(page.locator("#signal-plan-state")).toHaveText("Edited plan");
+    await expect(page.locator("#inspector .signal-phases .phase-card")).toHaveCount(1);
+    await page.locator("#signal-restore").click();
+    await expect(page.locator("#signal-plan-state")).toHaveText("Suggested plan");
+    await expect(page.locator("#inspector .signal-phases .phase-card")).toHaveCount(2);
+  });
+
+  test("the row of drawings fits a 900 px window and works in forced colours", async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 800 });
+    await page.emulateMedia({ forcedColors: "active" });
+    const cards = page.locator("#inspector .signal-phases .phase-card");
+    await expect(cards).toHaveCount(2);
+    await cards.first().click();
+    await expect(cards.first()).toHaveAttribute("aria-pressed", "true");
+    await expect(cards.first()).toHaveCSS("outline-style", "solid");
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    ).toBe(true);
+    await page.setViewportSize({ width: 360, height: 800 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    ).toBe(true);
+  });
+
   test("a bad typed time changes nothing and a long cycle fails its check", async ({ page }) => {
     await page.locator("#inspector .signal-list button").first().click();
     const green = page.locator('#inspector input[aria-labelledby="i-h-green"]');
