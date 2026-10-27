@@ -1251,7 +1251,8 @@ fn signal_phases(w: Watch, label: bool) -> impl IntoView {
         });
         view! {
             <li>
-                <button type="button" class="phase-card" aria-pressed=pressed on:click=move |_| { if let Some(u) = uid.get_untracked() { w.select(Target::Arm(u)) } }>
+                <button type="button" class="phase-card" id=format!("phase-card-{i}") aria-pressed=pressed
+                    on:click=move |_| { if let Some(u) = uid.get_untracked() { w.select(Target::Arm(u)); focus_card_after_swap(i) } }>
                     <span class="phase-art" inner_html=art></span>
                     <span class="phase-name">{name}</span>
                     <span class="phase-timing">{timing}</span>
@@ -1272,6 +1273,14 @@ fn focus_id(id: &str) {
     if let Some(el) = document().get_element_by_id(id).and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
         let _ = el.focus();
     }
+}
+
+/// Puts the focus back on phase card `i` once the panel has been swapped for the pressed street's: a press on a card
+/// selects its street, which replaces the junction's panel (or another street's) and with it the button that was
+/// pressed. The swap runs in a microtask, so the focus waits for it.
+fn focus_card_after_swap(i: usize) {
+    let id = format!("phase-card-{i}");
+    leptos::task::spawn_local(async move { focus_id(&id) });
 }
 
 /// The id of the button to focus once a phase button was pressed, so the focus follows the phase. `index` is where the

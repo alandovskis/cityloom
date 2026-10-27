@@ -423,7 +423,13 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator('#inspector input[aria-labelledby="i-h-green"]')).toBeVisible();
     await expect(cards.nth(1)).toHaveAttribute("aria-pressed", "true");
     await expect(cards.first()).toHaveAttribute("aria-pressed", "false");
-    // The other drawing selects the other street.
+    // The panel swapped to the street's, and the focus is on the same card in it, not lost to the page.
+    await expect(cards.nth(1)).toBeFocused();
+    // The other drawing selects the other street, and keeps the focus too.
+    await page.keyboard.press("Shift+Tab");
+    await expect(cards.first()).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(cards.first()).toBeFocused();
     await cards.first().click();
     await expect(cards.first()).toHaveAttribute("aria-pressed", "true");
     await expect(cards.nth(1)).toHaveAttribute("aria-pressed", "false");
