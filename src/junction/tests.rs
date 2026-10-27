@@ -1856,6 +1856,18 @@ fn the_drawing_of_the_selected_street_is_pressed_and_the_row_follows_an_edit() {
 }
 
 #[test]
+fn with_two_phases_for_one_street_only_the_first_is_current() {
+    let s = shared(0);
+    let e = arm(&s, 90);
+    assert!(s.edit(|j| j.add_phase(e)), "a street may have a second phase");
+    s.edit(|j| j.select(Target::Arm(e)));
+    let cards = phase_cards(&plain_panel(&s));
+    assert_eq!(cards.len(), 5);
+    let current: Vec<usize> = (0..cards.len()).filter(|&i| cards[i].contains("aria-current=\"true\"")).collect();
+    assert_eq!(current, vec![1], "the east street's first phase, not its second at the end");
+}
+
+#[test]
 fn the_drawings_speak_french_with_no_english_left() {
     use crate::shared::i18n::Locale;
     let s = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::FrCa), Junction::new(0), None);

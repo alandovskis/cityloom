@@ -1231,11 +1231,14 @@ fn signal_phases(w: Watch, label: bool) -> impl IntoView {
     let suggested = Memo::new(move |_| w.view().signal.as_ref().is_none_or(|s| s.suggested));
     // One pass draws every phase; a drawing is a memo, so the page swaps it only when its markup is not the same as
     // it was (a change of the selection, or of a timing, leaves it alone).
+    // The street that is selected has one card marked, the first phase that is its own: a street may have several
+    // phases (a second one for it can be added), and marking each would say the selection is in two places.
+    let current_phase = Memo::new(move |_| first_phase_of(&w.view()));
     let drawings = Memo::new(move |_| phase_drawings(&w.view()));
     let card = move |i: usize| {
         // Each closure reads the field it needs and no more: no phase is cloned.
         let uid = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| p.uid));
-        let current = move || (w.view().selected.kind == Some("arm") && uid.get().is_some_and(|u| w.view().selected.uid == u)).then_some("true");
+        let current = move || (current_phase.get() == Some(i)).then_some("true");
         let art = Memo::new(move |_| drawings.with(|d| d.get(i).cloned().unwrap_or_default()));
         let name = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| w.say(&p.name)).unwrap_or_default());
         let summary = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| w.say(&p.summary)).unwrap_or_default());
@@ -1252,7 +1255,7 @@ fn signal_phases(w: Watch, label: bool) -> impl IntoView {
         view! {
             <li>
                 <button type="button" class="phase-card" id=format!("phase-card-{i}") aria-current=current
-                    on:click=move |_| { if let Some(u) = uid.get_untracked() { w.select(Target::Arm(u)); focus_card_after_swap(i) } }>
+                    on:click=move |_| { if let Some(u) = uid.get_untracked() { w.select(Target::Arm(u)); focus_card_after_swap(first_phase_of(&w.view_now()).unwrap_or(i)) } }>
                     <span class="phase-art" aria-hidden="true" inner_html=art></span>
                     <span class="phase-name">{name}</span>
                     <span class="phase-timing">{timing}</span>
@@ -1273,6 +1276,14 @@ fn focus_id(id: &str) {
     if let Some(el) = document().get_element_by_id(id).and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
         let _ = el.focus();
     }
+}
+
+/// The place in the plan of the first phase that is the selected street's, if a street is selected.
+fn first_phase_of(v: &JView) -> Option<usize> {
+    if v.selected.kind != Some("arm") {
+        return None;
+    }
+    v.signal.as_ref()?.phases.iter().position(|p| p.uid == v.selected.uid)
 }
 
 /// Puts the focus back on phase card `i` once the panel has been swapped for the pressed street's: a press on a card
