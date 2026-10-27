@@ -1279,7 +1279,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                 <section class="insp-sec">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
-                    <p class="insp-range" id="signal-plan-state">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
+                    <p class="insp-range" id="signal-plan-state" tabindex="-1">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
                     <ul class="signal-list"><For each=move || 0..count.get() key=|i| *i children=row/></ul>
                     <div class="signal-tools">
                         <For
@@ -1291,7 +1291,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                             }
                         />
                         <button type="button" class="btn" id="signal-restore" disabled=move || suggested.get()
-                            on:click=move |_| { w.edit(|j| j.restore_suggestion()); }>
+                            on:click=move |_| { if w.edit(|j| j.restore_suggestion()) { focus_id("signal-plan-state") } }>
                             {words(w, "jn-sig-restore")}
                         </button>
                     </div>

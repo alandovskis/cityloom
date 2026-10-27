@@ -494,6 +494,8 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(live(page)).toContainText("restored to the suggestion");
     await expect(page.locator("#signal-plan-state")).toHaveText("Suggested plan");
     await expect(page.locator("#signal-restore")).toBeDisabled();
+    // The button that held the focus is disabled now, so the focus moves to the plan's state, not to the body.
+    await expect(state).toBeFocused();
   });
 
   test("the last phase stays, and the phase buttons speak French", async ({ page }) => {
