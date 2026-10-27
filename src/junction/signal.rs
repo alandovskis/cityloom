@@ -6,11 +6,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::junction::model::{Arm, SIGNAL, State, THROUGH, Timing, turn_class};
 
-/// One vehicle movement a phase serves: the entering lane `lane` of arm `from`, going to arm `to`.
+/// One vehicle movement a phase serves: the traffic entering from arm `from`, going to arm `to`. It is the movement,
+/// not a lane, that a phase serves: a lane's number changes when the street's lanes are made again.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Move {
     pub from: u32,
-    pub lane: usize,
     pub to: u32,
 }
 
@@ -115,7 +115,7 @@ fn settled(s: &State, plan: &SignalPlan) -> Option<SignalPlan> {
                 .moves
                 .iter()
                 .copied()
-                .filter(|m| has(m.to) && s.arms.iter().any(|a| a.uid == m.from && a.lanes.get(m.lane).is_some_and(|l| l.to.contains(&m.to))))
+                .filter(|m| has(m.to) && s.arms.iter().any(|a| a.uid == m.from && a.lanes.iter().any(|l| l.to.contains(&m.to))))
                 .collect(),
             walks: p.walks.iter().copied().filter(|&u| has(u)).collect(),
             rides: p.rides.iter().copied().filter(|&u| has(u)).collect(),
@@ -157,13 +157,12 @@ fn suggestion(s: &State, region: usize) -> Option<Plan> {
                 .map(|b| arms[b].uid)
                 .collect();
             let from = arms[i].uid;
-            let moves = arms[i]
-                .lanes
-                .iter()
-                .enumerate()
-                .flat_map(|(lane, l)| l.to.iter().map(move |&to| Move { from, lane, to }))
-                .filter(|m| m.to != m.from && arms.iter().any(|a| a.uid == m.to))
-                .collect();
+            let mut moves: Vec<Move> = Vec::new();
+            for m in arms[i].lanes.iter().flat_map(|l| l.to.iter().map(move |&to| Move { from, to })) {
+                if m.to != m.from && arms.iter().any(|a| a.uid == m.to) && !moves.contains(&m) {
+                    moves.push(m);
+                }
+            }
             Phase { uid: arms[i].uid, timing, length_s: timing.length_s(), walks, rides, moves }
         })
         .collect();

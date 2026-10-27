@@ -889,7 +889,7 @@ mod tests {
         let uid = record.state.arms[0].uid;
         record.state.signal_plan = Some(crate::junction::signal::SignalPlan {
             phases: vec![crate::junction::signal::StoredPhase {
-                moves: vec![crate::junction::signal::Move { from: uid, lane: 0, to: record.state.arms[1].uid }],
+                moves: vec![crate::junction::signal::Move { from: uid, to: record.state.arms[1].uid }],
                 walks: vec![uid],
                 rides: vec![],
             }],
@@ -951,7 +951,7 @@ mod tests {
         record.state.turbo = Some(crate::junction::turbo::Turbo { layout: 0, size: 0, main: vec![1, 3] });
         record.state.signal_plan = Some(crate::junction::signal::SignalPlan {
             phases: vec![crate::junction::signal::StoredPhase {
-                moves: vec![crate::junction::signal::Move { from: 1, lane: 0, to: 2 }],
+                moves: vec![crate::junction::signal::Move { from: 1, to: 2 }],
                 walks: vec![2],
                 rides: vec![1],
             }],
@@ -1008,7 +1008,6 @@ mod tests {
     ".junctions.<key>.state.signal_plan.phases: array",
     ".junctions.<key>.state.signal_plan.phases[].moves: array",
     ".junctions.<key>.state.signal_plan.phases[].moves[].from: number",
-    ".junctions.<key>.state.signal_plan.phases[].moves[].lane: number",
     ".junctions.<key>.state.signal_plan.phases[].moves[].to: number",
     ".junctions.<key>.state.signal_plan.phases[].moves[]: object",
     ".junctions.<key>.state.signal_plan.phases[].rides: array",

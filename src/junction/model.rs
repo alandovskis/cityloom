@@ -3712,6 +3712,35 @@ mod tests {
     }
 
     #[test]
+    fn a_movement_that_still_exists_stays_in_the_plan_whatever_its_lane_is_numbered() {
+        let mut j = Junction::new(0);
+        assert!(j.remove_phase(3));
+        let pairs = |j: &Junction| -> Vec<(u32, u32)> {
+            let mut v: Vec<(u32, u32)> = signal::plan(j.current(), 0).unwrap().phases.iter().flat_map(|p| &p.moves).map(|m| (m.from, m.to)).collect();
+            v.sort_unstable();
+            v.dedup();
+            v
+        };
+        let lanes_of = |j: &Junction| -> Vec<(u32, u32)> {
+            j.current().arms.iter().flat_map(|a| a.lanes.iter().flat_map(move |l| l.to.iter().map(move |t| (a.uid, *t)))).collect()
+        };
+        let before = pairs(&j);
+        // The lanes of the first arm are renumbered: its lane order is reversed, each still going where it went.
+        let uid = arm_at(&j, 0);
+        let mut s = j.current().clone();
+        let arm = s.arms.iter_mut().find(|a| a.uid == uid).unwrap();
+        assert!(arm.lanes.len() > 1, "the sample's first arm has more than one lane");
+        arm.lanes.reverse();
+        signal::settle(&mut s);
+        let mut j2 = Junction::new(0);
+        assert!(j2.remove_phase(3));
+        *j2.current_mut() = s;
+        let after = pairs(&j2);
+        let still: Vec<(u32, u32)> = before.iter().copied().filter(|p| lanes_of(&j2).contains(p)).collect();
+        assert_eq!(after, still, "every movement a lane still serves stays in the plan");
+    }
+
+    #[test]
     fn leaving_the_signal_drops_the_edited_plan_and_undo_brings_it_back() {
         let mut j = Junction::new(0);
         assert!(j.remove_phase(0));
