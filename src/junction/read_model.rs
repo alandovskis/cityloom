@@ -17,13 +17,14 @@ use crate::junction::model::{
 };
 
 use crate::junction::signal::{self, Pattern};
+use crate::junction::stops::{self, StopView};
 use crate::junction::turbo::{self, BLOCKS, Edge, LAYOUTS, Turbo, WARN_SKEW_DEG, layouts_for, main_candidates, ring_lane};
 use crate::junction::turbo_ring::{follow, mouth_on};
 use crate::junction::turbo_spiral::{Axes, Mouth, RingLane, RingShape, ring_outline, ring_shape, spiral_walk};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_roadway};
 use crate::shared::provenance::OsmRef;
 use crate::shared::said::{Arg, Said};
-use crate::street::model::Beyond;
+use crate::street::model::{Beyond, STOP_CLEAR_MM, stop_gap_mm};
 
 /// One rule of the junction and whether it holds, said as data.
 #[derive(Serialize)]
@@ -555,6 +556,10 @@ pub struct ArmView {
     /// The street this arm reads is a pedestrian street.
     pub pedestrian: bool,
     pub transit: TransitView,
+    /// The street's transit stops on the arm, nearest first: those with a part on the drawn arm. Empty (and not sent)
+    /// for an arm with none, a pedestrian arm and a turbo's.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub stops: Vec<StopView>,
 }
 
 #[derive(Serialize)]
@@ -1139,6 +1144,23 @@ impl Junction {
             });
             let bike_box = boxed.then(|| poly(&strip(l.bearing, lat(l.prof.enter_span.0), lat(l.prof.enter_span.1), far + 600.0, far + 600.0 + BIKE_BOX_MM)));
             let can_bike_box = blocker.is_none();
+            // The street's stops that have a part on the drawn arm, each judged against what reaches out from the
+            // centre (the crossing's far edge, the mouth with no crossing). A stop's pieces are the end zone's, which
+            // `l.prof` is.
+            let stops: Vec<StopView> = if walk || s.turbo.is_some() {
+                Vec::new()
+            } else {
+                a.stops
+                    .iter()
+                    .filter(|e| f64::from(e.near_mm) < len)
+                    .map(|e| {
+                        let mut v = stops::draw(l, off, e, far + 600.0 + box_mm, len);
+                        v.gap_mm = stop_gap_mm(e.near_mm, far.round() as i32);
+                        v.bad = v.gap_mm < STOP_CLEAR_MM;
+                        v
+                    })
+                    .collect()
+            };
             let arrow_t = if cx.is_some() { far + ARROW_FROM_EDGE_MM } else { l.mouth + ARROW_FROM_EDGE_MM + 1_000.0 };
             // Where the lane at `x` ends: where its piece does.
             let lane_end = |x: i32| {
@@ -1238,6 +1260,7 @@ impl Junction {
                 leaves,
                 pedestrian: a.is_pedestrian(),
                 transit: transit_view(s, a, l, off, far, crossing_present, side),
+                stops,
             });
         }
 

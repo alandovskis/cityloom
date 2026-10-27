@@ -2419,3 +2419,120 @@ fn a_change_of_region_that_changes_what_a_phase_is_says_so() {
     assert!(s.apply_region(right));
     assert!(live::take_said().is_empty());
 }
+
+// ---- the street's transit stops on an arm ---------------------------------------------
+
+/// FNV-1a over everything the page gets of every arm of every sample junction. Captured before the stops were drawn:
+/// an arm without stops draws byte for byte as it did.
+fn whole_arms_fingerprint() -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for sample in 0..JUNCTION_SAMPLES.len() {
+        for a in &Junction::new(sample).view().arms {
+            for b in serde_json::to_string(a).unwrap().bytes() {
+                h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+            }
+        }
+    }
+    h
+}
+
+#[test]
+fn an_arm_without_stops_draws_as_before() {
+    let (got, pinned) = (whole_arms_fingerprint(), 8_823_566_077_873_241_793);
+    assert_eq!(
+        got, pinned,
+        "an arm with no stops no longer serialises as it did before the stops were drawn; if that is on purpose, replace the pinned number with {got}"
+    );
+    for sample in 0..JUNCTION_SAMPLES.len() {
+        assert!(Junction::new(sample).view().arms.iter().all(|a| a.stops.is_empty()));
+    }
+}
+
+/// A sample junction whose north arm has the stops `make` builds from the arm's section, and that arm's uid. `make`
+/// is given the index of the first entering lane's piece and of the left sidewalk.
+fn junction_with_stops(configure: impl Fn(&mut State), make: impl Fn(usize, usize) -> Vec<crate::street::model::EndStop>) -> (Junction, u32) {
+    let mut state = Junction::new(0).current().clone();
+    configure(&mut state);
+    let arm = state.arms.iter_mut().find(|a| a.bearing == 0).unwrap();
+    let prof = arm.profile(0);
+    let lane = prof.pieces.iter().position(|p| p.direction == Some("toward") && crate::shared::catalogue::KINDS[p.kind].id == "travel").unwrap();
+    let walk = prof.pieces.iter().position(|p| crate::shared::catalogue::KINDS[p.kind].id == "sidewalk").unwrap();
+    arm.stops = make(lane, walk);
+    let uid = arm.uid;
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    (Junction::from_city(named, &state, &state, 0).expect("draws"), uid)
+}
+
+fn end_stop(near_mm: i32, far_mm: i32, lane: usize, pad: usize) -> crate::street::model::EndStop {
+    use crate::shared::catalogue::Side;
+    use crate::street::model::{EndStop, StopKind};
+    EndStop {
+        index: 0,
+        side: Side::Left,
+        near_mm,
+        far_mm,
+        kind: StopKind::Curb,
+        shelter: true,
+        name: Some("Main".into()),
+        enters: true,
+        lane: Some(lane),
+        pad: vec![pad],
+    }
+}
+
+#[test]
+fn an_arm_draws_the_stops_its_street_has() {
+    let (j, uid) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(25_000, 33_000, lane, walk)]);
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    assert_eq!(a.stops.len(), 1);
+    let s = &a.stops[0];
+    assert!(s.pad.is_some() && s.dwell.is_some() && s.run.is_some() && s.post.is_some());
+    assert_eq!((s.enters, s.shelter, s.near_mm, s.name.as_deref()), (true, true, 25_000, Some("Main")));
+    assert!(s.lane.is_some() && !s.in_bus_lane);
+    assert!(!s.bad, "25 m out is well clear of the crossing (which ends about 17.7 m out): gap {}", s.gap_mm);
+    assert!(s.gap_mm > 5_000);
+    // the other arms have none
+    assert!(v.arms.iter().filter(|x| x.uid != uid).all(|x| x.stops.is_empty()));
+    // the whole arm still draws as it did
+    let before = Junction::new(0).view();
+    for (x, y) in v.arms.iter().zip(&before.arms) {
+        assert_eq!(serde_json::to_string(&x.pieces).unwrap(), serde_json::to_string(&y.pieces).unwrap());
+    }
+}
+
+#[test]
+fn a_stop_too_near_the_crossing_is_bad_and_one_inside_the_mouth_is_cut() {
+    let (j, uid) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(500, 9_000, lane, walk)]);
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    let s = &a.stops[0];
+    assert!(s.bad && s.gap_mm < 0, "inside the junction: gap {}", s.gap_mm);
+    assert!(s.post.is_none() && s.run.is_none(), "what would lie inside the mouth is left off");
+}
+
+#[test]
+fn a_stop_past_the_drawn_arm_is_left_off() {
+    let (j, uid) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(36_000, 48_000, lane, walk), end_stop(30_000, 42_000, lane, walk)]);
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    assert_eq!(a.stops.len(), 1, "one that begins at the end of the drawn arm has no part on it");
+    let s = &a.stops[0];
+    assert_eq!(s.near_mm, 30_000);
+    assert_eq!(reach(a.bearing, s.pad.as_ref().unwrap()).round(), 36_000.0, "the one that straddles it is cut at the end");
+}
+
+#[test]
+fn a_turbo_and_a_pedestrian_arm_draw_no_stops() {
+    let stops = |lane, walk| vec![end_stop(20_000, 32_000, lane, walk)];
+    let (mut turbo, _) = junction_with_stops(|_| {}, stops);
+    assert!(turbo.set_control(ROUNDABOUT) && turbo.set_turbo(Some(0)));
+    assert!(turbo.view().arms.iter().all(|a| a.stops.is_empty()), "a turbo sets its own lanes");
+    let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+    let mut state = walk.current().clone();
+    state.arms.iter_mut().filter(|a| a.is_pedestrian()).for_each(|a| a.stops = vec![end_stop(20_000, 32_000, 0, 0)]);
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    let v = Junction::from_city(named, &state, &state, 0).expect("draws").view();
+    assert!(v.arms.iter().any(|a| a.pedestrian));
+    assert!(v.arms.iter().all(|a| a.stops.is_empty()), "nothing enters a pedestrian arm");
+}
