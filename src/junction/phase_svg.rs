@@ -111,10 +111,6 @@ pub fn phase_drawings(v: &JView) -> Vec<String> {
 }
 
 /// The drawing of one phase. It is for the eye alone (`aria-hidden`): the card's text says the same in words.
-pub fn phase_svg(v: &JView, phase: &PhaseView) -> String {
-    draw(v, phase, &symbols::icon("bike"))
-}
-
 fn draw(v: &JView, phase: &PhaseView, bike_symbol: &str) -> String {
     let [x0, y0, x1, y1] = v.bounds;
     // A square, with room for the bike symbols past the arms' ends.
@@ -166,7 +162,7 @@ mod tests {
         let v = j.view();
         let p = v.signal.as_ref().unwrap().phases[phase].clone();
         let moves = p.moves.len();
-        (phase_svg(&v, &p), moves)
+        (phase_drawings(&v).swap_remove(phase), moves)
     }
 
     #[test]
@@ -237,7 +233,7 @@ mod tests {
             let p = v.signal.as_ref().unwrap().phases[0].clone();
             let m = &p.moves[0];
             let from = v.arms.iter().find(|a| a.uid == m.from).unwrap();
-            let d = &lines(&phase_svg(&v, &p))[0];
+            let d = &lines(&phase_drawings(&v)[0])[0];
             let start = numbers(d);
             // The traffic heads toward the junction: to its right is a quarter turn clockwise in a y-down drawing.
             let heading = (-dir_of(from.bearing as f64).0, -dir_of(from.bearing as f64).1);
@@ -252,8 +248,8 @@ mod tests {
         let j = Junction::new(0);
         let v = j.view();
         let mut curves = 0;
-        for p in &v.signal.as_ref().unwrap().phases {
-            let s = phase_svg(&v, p);
+        for (pi, p) in v.signal.as_ref().unwrap().phases.iter().enumerate() {
+            let s = phase_drawings(&v)[pi].clone();
             for (d, m) in lines(&s).iter().zip(&p.moves) {
                 let class = v.movements.iter().find(|x| x.from == m.from && x.to == m.to).unwrap().class;
                 assert!(numbers(d).iter().all(|n| n.is_finite()), "{d}");
@@ -292,6 +288,5 @@ mod tests {
             j.select(Target::Arm(arm));
             assert_eq!(phase_drawings(&j.view()), before, "a selection is no reason to draw the phases again");
         }
-        assert_eq!(before[0], phase_svg(&j.view(), &j.view().signal.as_ref().unwrap().phases[0]));
     }
 }
