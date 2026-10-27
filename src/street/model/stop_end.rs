@@ -40,22 +40,25 @@ pub struct EndStop {
 impl Street {
     /// The stops wholly inside the end zone at the street's first end (`first_end`) or its last, nearest first. How
     /// far the arm is drawn is the junction's to decide: a stop past it is returned all the same. Empty with no frame, a frame of another road (another length or anchored at the other
-    /// end) or no stops.
-    pub fn end_stops(&self, first_end: bool, frame: Option<ZoneFrame>) -> Vec<EndStop> {
+    /// end) or no stops. The street is read as the junction reads it, under the side of the road `driving` names (an
+    /// imported street keeps traffic on the right whatever the region), so a stop enters or not as the arm's lanes do.
+    pub fn end_stops(&self, first_end: bool, frame: Option<ZoneFrame>, driving: Side) -> Vec<EndStop> {
         let Some(frame) = frame else { return Vec::new() };
+        let street = self.for_side(driving);
+        let this = &street;
         // A street with stops has a recorded length (`stops_are_sound`), so `None` cannot match.
-        let same_length = self.length_mm.is_some_and(|drawn| (drawn - frame.length_mm).abs() <= LENGTH_TOLERANCE_MM);
-        if self.stops.is_empty() || frame.from_end != self.from_end || !same_length {
+        let same_length = this.length_mm.is_some_and(|drawn| (drawn - frame.length_mm).abs() <= LENGTH_TOLERANCE_MM);
+        if this.stops.is_empty() || frame.from_end != this.from_end || !same_length {
             return Vec::new();
         }
         // The end zone in millimetres from the anchored end, as `at_end` picks it.
-        let anchored = (self.from_end == ZoneEnd::First) == first_end;
-        let range = match self.zones.last() {
-            Some(_) if anchored => (0, self.zones.get(1).map_or(frame.length_mm, |z| z.from_mm)),
+        let anchored = (this.from_end == ZoneEnd::First) == first_end;
+        let range = match this.zones.last() {
+            Some(_) if anchored => (0, this.zones.get(1).map_or(frame.length_mm, |z| z.from_mm)),
             Some(last) => (last.from_mm, frame.length_mm),
             None => (0, frame.length_mm),
         };
-        let mut section = self.at_end(first_end);
+        let mut section = this.at_end(first_end);
         if !first_end {
             section = section.reversed();
         }
@@ -136,13 +139,24 @@ mod tests {
 
     #[test]
     fn a_street_without_stops_has_none() {
-        assert!(one(Vec::new()).end_stops(true, frame(ZoneEnd::First)).is_empty());
+        assert!(one(Vec::new()).end_stops(true, frame(ZoneEnd::First), Side::Right).is_empty());
+    }
+
+    #[test]
+    fn a_right_hand_street_read_for_left_hand_traffic_swaps_which_stop_enters() {
+        let s = one(vec![stop(Side::Left, 12_000, 10_000, StopKind::Curb), stop(Side::Right, 30_000, 10_000, StopKind::Curb)]);
+        let right = s.end_stops(true, frame(ZoneEnd::First), Side::Right);
+        let left = s.end_stops(true, frame(ZoneEnd::First), Side::Left);
+        assert_eq!(right.iter().map(|e| e.enters).collect::<Vec<_>>(), vec![true, false]);
+        assert_eq!(left.iter().map(|e| e.enters).collect::<Vec<_>>(), vec![false, true]);
+        let read = s.for_side(Side::Left);
+        assert_eq!(left[0].lane.map(|l| read.segments[l].direction), Some(Some(0)), "the piece going away, as the junction reads it");
     }
 
     #[test]
     fn a_stop_at_the_first_end_is_on_the_arm() {
         let s = one(vec![stop(Side::Right, 12_000, 10_000, StopKind::Curb)]);
-        let e = s.end_stops(true, frame(ZoneEnd::First));
+        let e = s.end_stops(true, frame(ZoneEnd::First), Side::Right);
         assert_eq!(e.len(), 1);
         assert_eq!((e[0].side, e[0].near_mm, e[0].far_mm, e[0].enters, e[0].index), (Side::Right, 12_000, 22_000, false, 0));
         assert_eq!(e[0].lane, Some(3));
@@ -152,7 +166,7 @@ mod tests {
     #[test]
     fn the_left_side_enters_with_traffic_on_the_right() {
         let s = one(vec![stop(Side::Left, 12_000, 10_000, StopKind::Curb)]);
-        let e = s.end_stops(true, frame(ZoneEnd::First));
+        let e = s.end_stops(true, frame(ZoneEnd::First), Side::Right);
         assert!(e[0].enters);
         assert_eq!(e[0].lane, Some(2));
         assert_eq!(s.segments[2].direction, Some(1), "the piece toward the junction");
@@ -161,7 +175,7 @@ mod tests {
     #[test]
     fn an_arm_at_the_last_end_swaps_the_side_and_measures_from_it() {
         let s = one(vec![stop(Side::Right, 30_000, 10_000, StopKind::Curb)]);
-        let e = s.end_stops(false, frame(ZoneEnd::First));
+        let e = s.end_stops(false, frame(ZoneEnd::First), Side::Right);
         assert_eq!((e[0].side, e[0].near_mm, e[0].far_mm), (Side::Left, 20_000, 30_000));
         assert!(e[0].enters, "the lane that runs away from the first end runs toward the last");
         // The section the arm reads is reversed: its left travel piece is the sample's right one.
@@ -174,9 +188,9 @@ mod tests {
     #[test]
     fn a_street_anchored_at_its_last_end_measures_from_the_other_end() {
         let s = street(vec![stop(Side::Right, 30_000, 10_000, StopKind::Curb)], &[], ZoneEnd::Last);
-        let at_first = s.end_stops(true, frame(ZoneEnd::Last));
+        let at_first = s.end_stops(true, frame(ZoneEnd::Last), Side::Right);
         assert_eq!((at_first[0].near_mm, at_first[0].far_mm), (LEN - 40_000, LEN - 30_000));
-        let at_last = s.end_stops(false, frame(ZoneEnd::Last));
+        let at_last = s.end_stops(false, frame(ZoneEnd::Last), Side::Right);
         assert_eq!((at_last[0].near_mm, at_last[0].side), (30_000, Side::Left));
     }
 
@@ -188,11 +202,11 @@ mod tests {
             stop(Side::Right, 40_000, 10_000, StopKind::Curb),
         ];
         let zoned_street = street(stops.clone(), &[0, 20_000], ZoneEnd::First);
-        let near: Vec<usize> = zoned_street.end_stops(true, frame(ZoneEnd::First)).iter().map(|e| e.index).collect();
+        let near: Vec<usize> = zoned_street.end_stops(true, frame(ZoneEnd::First), Side::Right).iter().map(|e| e.index).collect();
         assert_eq!(near, vec![0], "the stop across the boundary and the one past it are not on the arm");
-        let far: Vec<usize> = zoned_street.end_stops(false, frame(ZoneEnd::First)).iter().map(|e| e.index).collect();
+        let far: Vec<usize> = zoned_street.end_stops(false, frame(ZoneEnd::First), Side::Right).iter().map(|e| e.index).collect();
         assert_eq!(far, vec![2], "at the last end the end zone is the last one");
-        let unzoned: Vec<usize> = one(stops).end_stops(true, frame(ZoneEnd::First)).iter().map(|e| e.index).collect();
+        let unzoned: Vec<usize> = one(stops).end_stops(true, frame(ZoneEnd::First), Side::Right).iter().map(|e| e.index).collect();
         assert_eq!(unzoned, vec![0, 1, 2], "no zones: the whole road");
     }
 
@@ -200,7 +214,7 @@ mod tests {
     fn a_stop_past_36_m_in_the_end_zone_is_still_returned() {
         // The junction owns its arm's length and filters on it; the street answers for the whole end zone.
         let s = one(vec![stop(Side::Right, 40_000, 9_000, StopKind::Curb)]);
-        let e = s.end_stops(true, frame(ZoneEnd::First));
+        let e = s.end_stops(true, frame(ZoneEnd::First), Side::Right);
         assert_eq!((e.len(), e[0].near_mm, e[0].far_mm), (1, 40_000, 49_000));
     }
 
@@ -209,7 +223,7 @@ mod tests {
         let mut s = zoned(Street::sample(0, Side::Left), &[], LEN);
         s.length_mm = Some(LEN);
         s.stops = vec![stop(Side::Right, 12_000, 10_000, StopKind::Curb), stop(Side::Left, 30_000, 10_000, StopKind::Curb)];
-        let e = s.end_stops(true, frame(ZoneEnd::First));
+        let e = s.end_stops(true, frame(ZoneEnd::First), Side::Left);
         let by = |side| e.iter().find(|x| x.side == side).unwrap();
         assert!(by(Side::Right).enters);
         assert!(!by(Side::Left).enters);
@@ -221,18 +235,18 @@ mod tests {
     fn a_stop_whose_kind_does_not_fit_has_a_lane_and_no_pad() {
         // The sample has parking on the left, so a curb stop has no platform there; the bus still has its lane.
         let s = one(vec![stop(Side::Left, 12_000, 10_000, StopKind::Curb)]);
-        let e = s.end_stops(true, frame(ZoneEnd::First));
+        let e = s.end_stops(true, frame(ZoneEnd::First), Side::Right);
         assert_eq!((e[0].lane, e[0].pad.is_empty()), (Some(2), true));
     }
 
     #[test]
     fn a_frame_that_does_not_match_gives_no_stops() {
         let s = one(vec![stop(Side::Right, 12_000, 10_000, StopKind::Curb)]);
-        assert_eq!(s.end_stops(true, frame(ZoneEnd::First)).len(), 1);
+        assert_eq!(s.end_stops(true, frame(ZoneEnd::First), Side::Right).len(), 1);
         let other_length = Some(ZoneFrame { length_mm: LEN + 2_000, from_end: ZoneEnd::First });
-        assert!(s.end_stops(true, other_length).is_empty());
-        assert!(s.end_stops(true, frame(ZoneEnd::Last)).is_empty(), "anchored at the other end");
-        assert!(s.end_stops(true, None).is_empty());
+        assert!(s.end_stops(true, other_length, Side::Right).is_empty());
+        assert!(s.end_stops(true, frame(ZoneEnd::Last), Side::Right).is_empty(), "anchored at the other end");
+        assert!(s.end_stops(true, None, Side::Right).is_empty());
     }
 
     /// The sample with the sample's right travel piece a bus lane.
@@ -245,7 +259,7 @@ mod tests {
     #[test]
     fn a_bus_lane_stop_names_the_bus_piece() {
         let s = bus_street(vec![stop(Side::Right, 12_000, 10_000, StopKind::Curb)]);
-        let e = s.end_stops(true, frame(ZoneEnd::First));
+        let e = s.end_stops(true, frame(ZoneEnd::First), Side::Right);
         assert_eq!(kind_of(&s, e[0].lane), "bus");
     }
 
@@ -256,7 +270,7 @@ mod tests {
             g.kind = kind_index("sidewalk").unwrap();
             g.direction = None;
         }
-        let e = s.end_stops(true, frame(ZoneEnd::First));
+        let e = s.end_stops(true, frame(ZoneEnd::First), Side::Right);
         assert_eq!(e.len(), 1, "still listed");
         assert_eq!((e[0].lane, e[0].pad.is_empty()), (None, true));
     }
@@ -266,7 +280,7 @@ mod tests {
         let mut s = one(vec![stop(Side::Right, 12_000, 10_000, StopKind::Bulb), stop(Side::Left, 12_000, 10_000, StopKind::Curb)]);
         // No parking on the left, so the bus meets the curb there.
         s.segments[1].kind = kind_index("sidewalk").unwrap();
-        let e = s.end_stops(true, frame(ZoneEnd::First));
+        let e = s.end_stops(true, frame(ZoneEnd::First), Side::Right);
         let by = |side| e.iter().find(|x| x.side == side).unwrap();
         assert_eq!(by(Side::Right).pad, vec![4], "a bulb stands on the parking piece");
         assert_eq!(kind_of(&s, Some(4)), "parking");

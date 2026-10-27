@@ -502,7 +502,7 @@ impl Layout {
                 arm.corner_mm = def.corner_mm;
                 arm.section = streets.get(&arm.edge).map(|s| seen_from(self, e, node, s));
                 arm.beyond = streets.get(&arm.edge).and_then(|s| beyond_from(self, e, node, s));
-                arm.stops = streets.get(&arm.edge).map_or_else(Vec::new, |s| stops_from(self, e, node, s));
+                arm.stops = streets.get(&arm.edge).map_or_else(Vec::new, |s| stops_from(self, e, node, s, self.side));
                 arm
             })
             .collect();
@@ -623,8 +623,9 @@ fn beyond_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Op
 }
 
 /// The transit stops in the end zone of `edge` that meets `node`, for the arm that reads them.
-fn stops_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Vec<EndStop> {
-    street.end_stops(layout.edges[edge].a == node, layout.zone_frame(edge))
+/// The street is read under the side of the road of `driving`, as the junction reads it.
+fn stops_from(layout: &Layout, edge: usize, node: usize, street: &Street, driving: Side) -> Vec<EndStop> {
+    street.end_stops(layout.edges[edge].a == node, layout.zone_frame(edge), driving)
 }
 
 #[cfg(test)]
@@ -656,7 +657,7 @@ impl City {
                 let e = (a.edge as usize).saturating_sub(1);
                 a.section = today_streets.get(&a.edge).map(|st| seen_from(&layout, e, n, st));
                 a.beyond = today_streets.get(&a.edge).and_then(|st| beyond_from(&layout, e, n, st));
-                a.stops = today_streets.get(&a.edge).map_or_else(Vec::new, |st| stops_from(&layout, e, n, st));
+                a.stops = today_streets.get(&a.edge).map_or_else(Vec::new, |st| stops_from(&layout, e, n, st, layout.side));
             }
             // A meeting the junction editor cannot draw (every road leaving to one side, say) is left as
             // a plain connection of streets.
@@ -868,7 +869,7 @@ impl City {
             let crossing = arm_state.is_some_and(|(_, a)| a.is_some_and(|a| a.crossing.is_some()));
             let reach_mm = match arm_state {
                 Some((j, Some(arm))) if has_stops => {
-                    let open = self.with_streets(n, j);
+                    let open = self.with_streets(n, j, region);
                     crate::junction::read_model::arm_reaches(&open, region).into_iter().find(|&(uid, _)| uid == arm.uid).map_or(0, |(_, r)| r)
                 }
                 _ => 0,
@@ -904,18 +905,20 @@ impl City {
         ok
     }
 
-    fn with_streets(&self, node: usize, s: &State) -> State {
-        self.with_streets_of(&self.streets, node, s)
+    fn with_streets(&self, node: usize, s: &State, region: usize) -> State {
+        self.with_streets_of(&self.streets, node, s, region)
     }
 
-    fn with_streets_of(&self, streets: &BTreeMap<u32, Street>, node: usize, s: &State) -> State {
+    /// The junction `s` with the streets it reads, their stops under the side of the road `region` drives on.
+    fn with_streets_of(&self, streets: &BTreeMap<u32, Street>, node: usize, s: &State, region: usize) -> State {
+        let driving = REGIONS[region.min(REGIONS.len() - 1)].drive_side;
         let mut s = s.clone();
         for a in &mut s.arms {
             let edge = a.edge;
             let street = self.edge_index(edge).and_then(|e| streets.get(&edge).map(|st| (e, st)));
             a.section = street.map(|(e, st)| seen_from(&self.layout, e, node, st));
             a.beyond = street.and_then(|(e, st)| beyond_from(&self.layout, e, node, st));
-            a.stops = street.map_or_else(Vec::new, |(e, st)| stops_from(&self.layout, e, node, st));
+            a.stops = street.map_or_else(Vec::new, |(e, st)| stops_from(&self.layout, e, node, st, driving));
         }
         s
     }
@@ -925,7 +928,7 @@ impl City {
     fn failing_today(&self, node: u32, region: usize) -> Vec<&'static str> {
         let Some(n) = self.node_index(node) else { return Vec::new() };
         let Some(state) = self.today_junctions.get(&node) else { return Vec::new() };
-        let today = self.with_streets_of(&self.today_streets, n, state);
+        let today = self.with_streets_of(&self.today_streets, n, state, region);
         Junction::from_city(junction::unlabelled(), &today, &today, region)
             .map_or_else(Vec::new, |j| j.view().checks.iter().filter(|c| !c.ok).map(|c| c.id).collect())
     }
@@ -934,8 +937,8 @@ impl City {
     /// they now stand. None when it cannot be drawn with them.
     pub fn junction_editor(&self, node: u32, region: usize) -> Option<Junction> {
         let n = self.node_index(node).filter(|&n| self.layout.nodes[n].junction)?;
-        let today = self.with_streets(n, self.today_junctions.get(&node)?);
-        let now = self.with_streets(n, self.junctions.get(&node)?);
+        let today = self.with_streets(n, self.today_junctions.get(&node)?, region);
+        let now = self.with_streets(n, self.junctions.get(&node)?, region);
         Junction::from_city(self.layout.node_name(n), &today, &now, region)
     }
 
@@ -2356,7 +2359,7 @@ mod tests {
 
     /// What the junction at `node` reads of street `edge`.
     fn arm_section(city: &City, node: usize, edge: u32) -> Street {
-        let state = city.with_streets(node, &city.junctions[&node_uid(node)]);
+        let state = city.with_streets(node, &city.junctions[&node_uid(node)], 0);
         state.arms.iter().find(|a| a.edge == edge).and_then(|a| a.section.clone()).unwrap()
     }
 
@@ -2380,7 +2383,7 @@ mod tests {
     }
 
     fn arm_beyond(city: &City, node: usize, edge: u32) -> Option<crate::street::model::Beyond> {
-        let state = city.with_streets(node, &city.junctions[&node_uid(node)]);
+        let state = city.with_streets(node, &city.junctions[&node_uid(node)], 0);
         state.arms.iter().find(|a| a.edge == edge).unwrap().beyond.clone()
     }
 
@@ -2480,8 +2483,49 @@ mod tests {
     }
 
     fn arm_stops(city: &City, node: usize, edge: u32) -> Vec<EndStop> {
-        let state = city.with_streets(node, &city.junctions[&node_uid(node)]);
+        let state = city.with_streets(node, &city.junctions[&node_uid(node)], 0);
         state.arms.iter().find(|a| a.edge == edge).unwrap().stops.clone()
+    }
+
+    /// What both pages say of the stops of street 2 at node `n`'s end, in `region`: for each stop, whether the
+    /// junction has the bus entering and whether the lane it names runs toward the centre in the arm's profile, and
+    /// whether the junction and the street page both find the stop clear of the junction.
+    fn both_pages(side: Side, from_mm: i32, region: usize) -> (Vec<(bool, bool)>, bool, bool) {
+        let mut city = City::new();
+        let mut street = with_stop(&city, 2, from_mm);
+        street.stops[0].side = side;
+        assert!(city.keep_street(2, street));
+        let j = city.junction_editor(node_uid(1), region).unwrap();
+        let arm = j.current().arms.iter().find(|a| a.edge == 2).unwrap().clone();
+        let prof = arm.profile(region);
+        let lanes = arm.stops.iter().map(|e| (e.enters, e.lane.is_some_and(|l| prof.pieces[l].direction == Some("toward")))).collect();
+        let junction_ok = j.view().checks.iter().find(|c| c.id == "stop-clear").unwrap().ok;
+        let street_ok = city.street_editor(2, region).unwrap().view().checks.iter().find(|c| c.id == "stop-junction").is_none_or(|c| c.ok);
+        (lanes, junction_ok, street_ok)
+    }
+
+    #[test]
+    fn both_pages_judge_a_stop_alike_whichever_side_the_region_drives_on() {
+        // City::new() is right-hand traffic; region 3 (the United Kingdom) drives on the left.
+        for region in [0, 3] {
+            for side in [Side::Left, Side::Right] {
+                for from_mm in [1_000, 12_000, 30_000] {
+                    let (lanes, junction_ok, street_ok) = both_pages(side, from_mm, region);
+                    assert_eq!(lanes.len(), 1);
+                    assert_eq!(lanes[0].0, lanes[0].1, "enters agrees with the lane's direction: region {region} {side:?} {from_mm}");
+                    assert_eq!(junction_ok, street_ok, "the pages agree: region {region} {side:?} {from_mm}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn in_a_left_hand_region_a_right_hand_streets_right_stop_is_near_side() {
+        // Opened in the United Kingdom the street's right-hand side is the far side of the arm's approach.
+        assert!(both_pages(Side::Left, 12_000, 0).0[0].0, "right-hand traffic: the left stop enters");
+        assert!(!both_pages(Side::Right, 12_000, 0).0[0].0);
+        assert!(!both_pages(Side::Left, 12_000, 3).0[0].0, "left-hand traffic: the left stop is far-side");
+        assert!(both_pages(Side::Right, 12_000, 3).0[0].0);
     }
 
     #[test]
@@ -2532,7 +2576,7 @@ mod tests {
         let n = city.layout.edges[e].a;
         let reach = |city: &City| city.street_end_infos(2, 0)[0].reach_mm;
         let arm_of = |city: &City| {
-            let state = city.with_streets(n, &city.junctions[&node_uid(n)]);
+            let state = city.with_streets(n, &city.junctions[&node_uid(n)], 0);
             let arm = state.arms.iter().find(|a| a.edge == 2).unwrap().clone();
             let mouth =
                 crate::junction::read_model::layout(&state, 0).unwrap().arms[state.arms.iter().position(|a| a.uid == arm.uid).unwrap()].mouth.round() as i32;

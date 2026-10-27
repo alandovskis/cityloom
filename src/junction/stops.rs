@@ -337,7 +337,7 @@ mod tests {
                 st.from_end = ZoneEnd::First;
                 for side in [Side::Left, Side::Right] {
                     st.stops = vec![Stop { side, from_mm: 25_000, length_mm: 12_000, kind: StopKind::Curb, shelter: false, name: None }];
-                    let found = st.end_stops(first_end, Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+                    let found = st.end_stops(first_end, Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }), traffic);
                     let e = &found[0];
                     let section = if first_end { st.at_end(true) } else { st.at_end(false).reversed() };
                     let mut l = layout();
