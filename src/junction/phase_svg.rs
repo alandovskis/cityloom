@@ -127,14 +127,7 @@ pub fn phase_svg(v: &JView, phase: &PhaseView, title: &str, summary: &str) -> St
     for a in &v.arms {
         let Some(c) = &a.crossing else { continue };
         let lit = phase.walk_arms.contains(&a.uid);
-        write!(
-            out,
-            "<path class=\"ph-walk {}\" stroke-width=\"{}\" d=\"{}\"/>",
-            if lit { "lit" } else { "muted" },
-            f1(unit * 0.6),
-            path_d(&c.poly)
-        )
-        .unwrap();
+        write!(out, "<path class=\"ph-walk {}\" stroke-width=\"{}\" d=\"{}\"/>", if lit { "lit" } else { "muted" }, f1(unit * 0.6), path_d(&c.poly)).unwrap();
     }
     for a in v.arms.iter().filter(|a| a.pieces.iter().any(|p| KINDS[p.kind].id == "bike")) {
         out += &bike(a, phase.ride_arms.contains(&a.uid), unit);

@@ -1239,7 +1239,11 @@ fn signal_phases(w: Watch, label: bool) -> impl IntoView {
             let Some(p) = phase(i) else { return String::new() };
             let t = p.timing;
             let key = if t.transit_lead_s > 0 { "jn-ph-timing-lead" } else { "jn-ph-timing" };
-            let args = Args::new().num("lead", i64::from(t.transit_lead_s)).num("green", i64::from(t.green_s)).num("yellow", i64::from(t.yellow_s)).num("all_red", i64::from(t.all_red_s));
+            let args = Args::new()
+                .num("lead", i64::from(t.transit_lead_s))
+                .num("green", i64::from(t.green_s))
+                .num("yellow", i64::from(t.yellow_s))
+                .num("all_red", i64::from(t.all_red_s));
             tr(w, key, args)
         };
         view! {

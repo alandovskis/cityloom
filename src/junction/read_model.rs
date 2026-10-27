@@ -714,7 +714,8 @@ fn compass_said(bearing: i32) -> Said {
 /// "a", "a and b", "a, b and c", each item a `Said`.
 fn and_list(mut items: Vec<Said>) -> Option<Said> {
     let last = items.pop()?;
-    let head = items.into_iter().reduce(|head, tail| Said::new("jn-list-comma").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail))));
+    let head =
+        items.into_iter().reduce(|head, tail| Said::new("jn-list-comma").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail))));
     Some(match head {
         None => last,
         Some(head) => Said::new("jn-ph-and").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(last))),

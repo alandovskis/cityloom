@@ -22,7 +22,8 @@ const COMPASS_KEYS: [&str; 8] = [
     "jn-compass-short-nw",
 ];
 
-const COMPASS_NAMES: [&str; 8] = ["jn-compass-n", "jn-compass-ne", "jn-compass-e", "jn-compass-se", "jn-compass-s", "jn-compass-sw", "jn-compass-w", "jn-compass-nw"];
+const COMPASS_NAMES: [&str; 8] =
+    ["jn-compass-n", "jn-compass-ne", "jn-compass-e", "jn-compass-se", "jn-compass-s", "jn-compass-sw", "jn-compass-w", "jn-compass-nw"];
 
 fn point(bearing: i32) -> usize {
     ((bearing.rem_euclid(360) as f64 / 45.0).round() as usize) % 8
