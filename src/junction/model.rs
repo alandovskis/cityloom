@@ -796,12 +796,13 @@ pub enum Refusal {
     QueueJumpOnTurbo,
     PhaseServesNothing,
     LastPhase,
+    TooManyPhases,
     PhaseAtEnd,
     PlanSuggested,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 26] = [
+    pub const ALL: [Refusal; 27] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -826,6 +827,7 @@ impl Refusal {
         Refusal::QueueJumpOnTurbo,
         Refusal::PhaseServesNothing,
         Refusal::LastPhase,
+        Refusal::TooManyPhases,
         Refusal::PhaseAtEnd,
         Refusal::PlanSuggested,
     ];
@@ -857,6 +859,7 @@ impl Refusal {
             Refusal::QueueJumpOnTurbo => "jn-refusal-queue-jump-on-turbo",
             Refusal::PhaseServesNothing => "jn-refusal-phase-serves-nothing",
             Refusal::LastPhase => "jn-refusal-last-phase",
+            Refusal::TooManyPhases => "jn-refusal-too-many-phases",
             Refusal::PhaseAtEnd => "jn-refusal-phase-at-end",
             Refusal::PlanSuggested => "jn-refusal-plan-suggested",
         }
@@ -1440,6 +1443,9 @@ impl Junction {
         }
         let Some(plan) = self.signal_plan_to_edit() else { return false };
         let Some(phase) = signal::phase_for(self.current(), self.region, uid) else { return self.refuse(Refusal::PhaseServesNothing) };
+        if plan.phases.len() >= MAX_ARMS * 2 {
+            return self.refuse(Refusal::TooManyPhases);
+        }
         let mut kept = plan.to_stored();
         kept.phases.push(phase);
         let label = self.phase_label("jn-rev-phase-add", uid, kept.phases.len() - 1);
@@ -2263,7 +2269,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 26);
+        assert_eq!(Refusal::ALL.len(), 27);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }
@@ -3694,6 +3700,15 @@ mod tests {
             assert!(!ok);
             assert_eq!(j.refusal(), Some(Refusal::NotSignal));
         }
+    }
+
+    #[test]
+    fn a_plan_holds_at_most_two_phases_for_each_possible_street() {
+        let mut j = Junction::new(0);
+        let uid = j.current().arms[0].uid;
+        while j.add_phase(uid) {}
+        assert_eq!(j.refusal(), Some(Refusal::TooManyPhases));
+        assert_eq!(signal::plan(j.current(), 0).unwrap().phases.len(), MAX_ARMS * 2);
     }
 
     #[test]

@@ -518,3 +518,4 @@ jn-sig-earlier-short = Avancer
 jn-sig-later-short = Reculer
 jn-sig-remove-short = Retirer
 jn-rev-plan-lost = { $change }; plan de feux modifié retiré
+jn-refusal-too-many-phases = Le plan a déjà le nombre maximal de phases.

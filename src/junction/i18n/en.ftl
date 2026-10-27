@@ -518,3 +518,4 @@ jn-sig-earlier-short = Earlier
 jn-sig-later-short = Later
 jn-sig-remove-short = Remove
 jn-rev-plan-lost = { $change }; edited signal plan removed
+jn-refusal-too-many-phases = The plan has as many phases as it can hold.
