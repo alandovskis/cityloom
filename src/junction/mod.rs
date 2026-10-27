@@ -10,6 +10,7 @@ pub mod keys;
 pub mod model;
 pub mod notes;
 pub mod page;
+pub mod phase_svg;
 pub mod plan;
 pub mod plan_svg;
 pub mod read_model;
