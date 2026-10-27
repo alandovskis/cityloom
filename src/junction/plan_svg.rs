@@ -1011,11 +1011,23 @@ mod tests {
     }
 
     #[test]
-    fn an_arm_without_stops_has_identical_markup() {
+    fn an_arm_without_stops_draws_no_stop_class() {
         let m = svg(&Junction::new(0)).markup;
         for class in ["stop-pad", "stop-dwell", "stop-run", "stop-post", "stop-bad"] {
             assert_eq!(count(&m, class), 0, "{class}");
         }
+    }
+
+    #[test]
+    fn a_failing_island_keeps_its_dotted_outline() {
+        // `stop-bad` makes a stop's outline heavier and dashed; an island is outlined with dots, so its own rule comes after.
+        let css = include_str!("../../web/editor.css");
+        let bad = css.find("#drawing .stop-pad.stop-bad").expect("the failing rule");
+        let island = css.find("#drawing .stop-pad.stop-island.stop-bad").expect("a failing island has a rule of its own");
+        assert!(island > bad, "after the rule it overrides");
+        let rule = &css[island..];
+        let rule = &rule[..rule.find('}').unwrap()];
+        assert!(rule.contains("stroke-dasharray: 1 3"), "{rule}");
     }
 
     #[test]
