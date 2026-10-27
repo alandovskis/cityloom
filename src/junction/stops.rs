@@ -7,9 +7,11 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::junction::geometry::{P, at, l as line, m, poly, strip};
+use crate::junction::model::{LEFT, RIGHT, THROUGH};
 use crate::junction::model::{Piece, Profile};
 use crate::junction::read_model::ArmLayout;
-use crate::shared::catalogue::{KINDS, is_roadway};
+use crate::shared::catalogue::{KINDS, Side, is_roadway};
+use crate::shared::said::{Arg, Said};
 use crate::street::model::{EndStop, StopKind};
 
 /// One stop on an arm, as the plan draws and the checks read it.
@@ -18,6 +20,8 @@ pub struct StopView {
     /// The stop's index in its street's `stops`.
     pub index: usize,
     pub kind: StopKind,
+    /// The side of the arm it stands on, looking out from the centre.
+    pub side: Side,
     pub shelter: bool,
     pub name: Option<String>,
     /// Whether the bus's half runs toward the junction (a near-side stop).
@@ -39,6 +43,33 @@ pub struct StopView {
     /// The stop stands too near the junction: its near edge is less than `STOP_CLEAR_MM` past what reaches out from
     /// the centre.
     pub bad: bool,
+}
+
+/// Words for some of the three classes of turn, joined as "a, b or c": `key` names each one. `None` for none.
+fn or_list(mask: u8, key: fn(u8) -> &'static str) -> Option<Said> {
+    let items: Vec<Said> = [LEFT, THROUGH, RIGHT].into_iter().filter(|c| mask & c != 0).map(|c| Said::new(key(c))).collect();
+    items.into_iter().rev().reduce(|tail, head| {
+        let joined = if tail.key == "jn-or" { "jn-list-comma" } else { "jn-or" };
+        Said::new(joined).with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail)))
+    })
+}
+
+/// The turns of a set of classes, as "left or right".
+pub fn turns_said(mask: u8) -> Option<Said> {
+    or_list(mask, |c| match c {
+        LEFT => "jn-turn-left",
+        THROUGH => "jn-turn-through",
+        _ => "jn-turn-right",
+    })
+}
+
+/// What a lane with these classes lets a driver do, as "straight on or right".
+pub fn uses_said(mask: u8) -> Option<Said> {
+    or_list(mask, |c| match c {
+        LEFT => "jn-use-left",
+        THROUGH => "jn-use-through",
+        _ => "jn-use-right",
+    })
 }
 
 /// The entering lane (driver's left to right) that the section's piece `piece` is: the number of entering `travel`
@@ -82,6 +113,7 @@ pub fn draw(l: &ArmLayout, off: f64, stop: &EndStop, stop_line: Option<f64>, cut
     StopView {
         index: stop.index,
         kind: stop.kind,
+        side: stop.side,
         shelter: stop.shelter,
         name: stop.name.clone(),
         enters: stop.enters,

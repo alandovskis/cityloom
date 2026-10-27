@@ -560,6 +560,12 @@ pub struct ArmView {
     /// for an arm with none, a pedestrian arm and a turbo's.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub stops: Vec<StopView>,
+    /// The stops that stand too near the junction, as the check says them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub stop_clear: Vec<Said>,
+    /// The stops whose bus is trapped in a turning lane.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub stop_lane: Vec<Said>,
 }
 
 #[derive(Serialize)]
@@ -1147,7 +1153,7 @@ impl Junction {
             // The street's stops that have a part on the drawn arm, each judged against what reaches out from the
             // centre (the crossing's far edge, the mouth with no crossing). A stop's pieces are the end zone's, which
             // `l.prof` is.
-            let stops: Vec<StopView> = if walk || s.turbo.is_some() {
+            let mut stops: Vec<StopView> = if walk || s.turbo.is_some() {
                 Vec::new()
             } else {
                 a.stops
@@ -1156,7 +1162,6 @@ impl Junction {
                     .map(|e| {
                         let mut v = stops::draw(l, off, e, (cx.is_some() || boxed).then_some(far + 600.0 + box_mm), &|pi| cut(pi, l.mouth), len);
                         v.gap_mm = stop_gap_mm(e.near_mm, far.round() as i32);
-                        v.bad = v.gap_mm < STOP_CLEAR_MM;
                         v
                     })
                     .collect()
@@ -1167,7 +1172,7 @@ impl Junction {
                 let piece = l.prof.pieces.iter().position(|p| p.x_mm <= x && x < p.x_mm + p.width_mm);
                 piece.map_or(len, |pi| cut(pi, l.mouth))
             };
-            let lanes = l
+            let lanes: Vec<LaneView> = l
                 .prof
                 .enter_x
                 .iter()
@@ -1201,6 +1206,8 @@ impl Junction {
                     v
                 })
                 .collect();
+            let (stop_clear, stop_lane) =
+                judge_stops(&mut stops, &arm_name(a), if cx.is_some() { "jn-edge-crossing" } else { "jn-edge-mouth" }, &lanes, classes[i], side);
             let leave_arrows = l.prof.leave_x.iter().map(|&x| lane_view(l, off, x, arrow_t, lane_end(x), l.bearing.round() as i32, 0, None)).collect();
             let road_mm = l.prof.road_mm();
             let turbo_entry = l.entry.filter(|e| e.new.0 < e.old.0 - 1.0 || e.new.1 > e.old.1 + 1.0).map(|e| {
@@ -1261,6 +1268,8 @@ impl Junction {
                 pedestrian: a.is_pedestrian(),
                 transit: transit_view(s, a, l, off, far, crossing_present, side),
                 stops,
+                stop_clear,
+                stop_lane,
             });
         }
 
@@ -1543,6 +1552,35 @@ fn clear_far(a: &Arm, l: &ArmLayout) -> f64 {
     (l.mouth + crossing + 1_500.0).max(l.mouth + WEDGE_MM)
 }
 
+/// Judges the street's stops on an arm: those too near what reaches out from the centre (`edge` names it), and the
+/// near-side stops whose lane would hold the buses behind a turn (`lanes` are the arm's entering lanes, `classes` the
+/// turns it has, `side` the side of the road traffic keeps to). Sets `bad` on each stop a finding names.
+fn judge_stops(stops: &mut [StopView], arm: &Said, edge: &'static str, lanes: &[LaneView], classes: u8, side: Side) -> (Vec<Said>, Vec<Said>) {
+    let (mut clear, mut lane) = (Vec::new(), Vec::new());
+    let curb_turn = if side == Side::Right { RIGHT } else { LEFT };
+    for st in stops {
+        let said = |key: &'static str| Said::new(key).with("kind", Arg::MsgLower(st.kind.name_key())).with("arm", Arg::Said(Box::new(arm.clone())));
+        if st.gap_mm < STOP_CLEAR_MM {
+            clear.push(said("jn-stop-too-near").with("gap", Arg::Length(st.gap_mm)).with("need", Arg::Length(STOP_CLEAR_MM)).with("edge", Arg::Msg(edge)));
+            st.bad = true;
+        }
+        // A bus piece has no lane here, and a one-lane approach has no other lane to be in.
+        let Some((n, uses)) = st.lane.filter(|_| st.enters && lanes.len() >= 2).and_then(|n| lanes.get(n).map(|l| (n, l.uses))) else { continue };
+        let finding = if uses != 0 && uses & THROUGH == 0 && classes & THROUGH != 0 {
+            stops::turns_said(uses).map(|t| said("jn-stop-turn-only").with("turn", Arg::Said(Box::new(t))))
+        } else if uses & THROUGH != 0 && uses & curb_turn != 0 {
+            stops::turns_said(curb_turn).map(|t| said("jn-stop-shared-turn").with("turn", Arg::Said(Box::new(t))))
+        } else {
+            None
+        };
+        if let Some(f) = finding {
+            lane.push(f.with("n", Arg::Num(n as i64 + 1)));
+            st.bad = true;
+        }
+    }
+    (clear, lane)
+}
+
 /// Places the transit measures on an arm and lists what each one is missing.
 fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_crossing: bool, side: Side) -> TransitView {
     let len = ARM_LENGTH_MM as f64;
@@ -1620,6 +1658,12 @@ fn transit_view(s: &State, a: &Arm, l: &ArmLayout, off: f64, far: f64, has_cross
         }
         _ => (None, None),
     };
+
+    // A measure on the kerb side and a stop of the street on that side are two stops where there should be one.
+    let kerb = if kerb_side == 0 { Side::Left } else { Side::Right };
+    if a.stop != 0 && s.turbo.is_none() && !a.is_pedestrian() && a.stops.iter().any(|e| e.side == kerb && f64::from(e.near_mm) < len) {
+        problems.push(problem("jn-problem-stop-twice").with("measure", Arg::Measure(STOPS[a.stop].code)));
+    }
 
     let mid = (l.cl + l.cr) / 2.0;
     let bollards = if a.filter {
@@ -1930,6 +1974,22 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
     // Transit priority measures have what they need.
     let problems = list(arms.iter().flat_map(|a| a.transit.problems.iter().cloned()).collect());
     out.push(check("transit", "jn-check-transit", Said::new("jn-check-transit-ok"), problems));
+
+    // The street's bus stops stand clear of the junction and do not hold the buses behind a turn.
+    let problems = list(arms.iter().flat_map(|a| a.stop_clear.iter().cloned()).collect());
+    out.push(check(
+        "stop-clear",
+        "jn-check-stop-clear",
+        Said::new("jn-check-stop-clear-ok"),
+        problems.map(|p| Said::new("jn-check-stop-clear-bad").with("stops", Arg::Said(Box::new(p)))),
+    ));
+    let problems = list(arms.iter().flat_map(|a| a.stop_lane.iter().cloned()).collect());
+    out.push(check(
+        "stop-lane",
+        "jn-check-stop-lane",
+        Said::new("jn-check-stop-lane-ok"),
+        problems.map(|p| Said::new("jn-check-stop-lane-bad").with("stops", Arg::Said(Box::new(p)))),
+    ));
 
     // The end zone reaches past its stop line and arrows, and its transition fits.
     let problems = list(arms.iter().flat_map(|a| a.beyond_problems.iter().cloned()).collect());
