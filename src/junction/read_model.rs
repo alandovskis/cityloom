@@ -1154,7 +1154,7 @@ impl Junction {
                     .iter()
                     .filter(|e| f64::from(e.near_mm) < len)
                     .map(|e| {
-                        let mut v = stops::draw(l, off, e, far + 600.0 + box_mm, len);
+                        let mut v = stops::draw(l, off, e, (cx.is_some() || boxed).then_some(far + 600.0 + box_mm), &|pi| cut(pi, l.mouth), len);
                         v.gap_mm = stop_gap_mm(e.near_mm, far.round() as i32);
                         v.bad = v.gap_mm < STOP_CLEAR_MM;
                         v

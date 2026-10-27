@@ -2536,3 +2536,23 @@ fn a_turbo_and_a_pedestrian_arm_draw_no_stops() {
     assert!(v.arms.iter().any(|a| a.pedestrian));
     assert!(v.arms.iter().all(|a| a.stops.is_empty()), "nothing enters a pedestrian arm");
 }
+
+#[test]
+fn a_stop_on_a_lane_that_moves_across_the_boundary_ends_with_the_lane() {
+    // the pocket lane's strip ends at the taper's start, 20 m out; the stop spans it
+    let (j, uid) = junction_with_a_beyond(
+        |state| {
+            let arm = state.arms.iter_mut().find(|a| a.bearing == 0).unwrap();
+            let prof = arm.profile(0);
+            let x = prof.enter_x[0];
+            let lane = prof.pieces.iter().position(|p| p.x_mm <= x && x < p.x_mm + p.width_mm).unwrap();
+            arm.stops = vec![end_stop(15_000, 25_000, lane, lane)];
+        },
+        |_| {},
+    );
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    let s = &a.stops[0];
+    assert_eq!(reach(a.bearing, s.dwell.as_ref().unwrap()).round(), 20_000.0);
+    assert_eq!(reach(a.bearing, s.pad.as_ref().unwrap()).round(), 20_000.0, "the pad is the lane's piece");
+}

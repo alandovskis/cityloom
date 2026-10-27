@@ -9,7 +9,7 @@ use serde_json::Value;
 use crate::junction::geometry::{P, at, l as line, m, poly, strip};
 use crate::junction::model::{Piece, Profile};
 use crate::junction::read_model::ArmLayout;
-use crate::shared::catalogue::KINDS;
+use crate::shared::catalogue::{KINDS, is_roadway};
 use crate::street::model::{EndStop, StopKind};
 
 /// One stop on an arm, as the plan draws and the checks read it.
@@ -49,30 +49,36 @@ pub fn lane_of(profile: &Profile, piece: usize) -> Option<usize> {
     entering(p).then(|| profile.pieces[piece + 1..].iter().filter(|q| entering(q)).count())
 }
 
-/// The stop `stop` on the arm `l` (shifted `off` sideways), whose bus stops at `stop_line_t` when it goes on, drawn
-/// as far as `len` from the centre. A part inside the mouth or past `len` is cut. `gap_mm` and `bad` are the
+/// The stop `stop` on the arm `l` (shifted `off` sideways), whose bus stops at `stop_line` when it goes on (none
+/// where no line is drawn: the run then ends at the mouth), drawn as far as `len` from the centre; `cut(i)` is where
+/// the strip of the section's piece `i` ends. A part inside the mouth or past where its piece ends is cut. `gap_mm` and `bad` are the
 /// caller's to fill: they need the crossing.
-pub fn draw(l: &ArmLayout, off: f64, stop: &EndStop, stop_line_t: f64, len: f64) -> StopView {
+pub fn draw(l: &ArmLayout, off: f64, stop: &EndStop, stop_line: Option<f64>, cut: &dyn Fn(usize) -> f64, len: f64) -> StopView {
     let lat = |x: i32| off + f64::from(x) - f64::from(l.prof.row_mm) / 2.0;
-    let (t0, t1) = (f64::from(stop.near_mm).max(l.mouth), f64::from(stop.far_mm).min(len));
-    let drawn = t0 < t1;
+    let (near, far) = (f64::from(stop.near_mm), f64::from(stop.far_mm));
     let span = |ix: &[usize]| {
         let ps: Vec<&Piece> = ix.iter().filter_map(|&i| l.prof.pieces.get(i)).collect();
         let lo = ps.iter().map(|p| p.x_mm).min()?;
         let hi = ps.iter().map(|p| p.x_mm + p.width_mm).max()?;
         Some((lat(lo), lat(hi)))
     };
+    // Where the pieces' strips end: the whole arm, or sooner for a roadway piece that moves across the boundary.
+    let ends = |ix: &[usize]| ix.iter().filter(|&&i| l.prof.pieces.get(i).is_some_and(|p| is_roadway(p.kind))).fold(len, |e, &i| e.min(cut(i)));
     let pad_span = span(&stop.pad);
     let lane_span = stop.lane.and_then(|i| span(&[i]));
-    let rect = |s: Option<(f64, f64)>| s.filter(|_| drawn).map(|(a, b)| poly(&strip(l.bearing, a, b, t0, t1)));
-    // A near-side bus goes on from the stop to the stop line, down the middle of its lane.
+    // The platform begins at the mouth; the lane, like every roadway strip, where the strips begin.
+    let rect = |s: Option<(f64, f64)>, from: f64, to: f64| {
+        s.filter(|_| from.max(near) < to.min(far)).map(|(a, b)| poly(&strip(l.bearing, a, b, from.max(near), to.min(far))))
+    };
+    // A near-side bus goes on from the stop to the stop line, down the middle of its lane; with no stop line, to the mouth.
     let run = lane_span.filter(|_| stop.enters).and_then(|(a, b)| {
-        let (from, to) = (stop_line_t.max(l.mouth), f64::from(stop.near_mm));
+        let from = stop_line.unwrap_or(l.mouth).max(l.mouth);
         let c = (a + b) / 2.0;
-        (to > from && to <= len).then(|| vec![m(at(l.bearing, c, to)), line(at(l.bearing, c, from))])
+        (near > from && near <= len).then(|| vec![m(at(l.bearing, c, near)), line(at(l.bearing, c, from))])
     });
-    let near_drawn = f64::from(stop.near_mm) >= l.mouth && f64::from(stop.near_mm) <= len;
-    let post = pad_span.or(lane_span).filter(|_| near_drawn).map(|(a, b)| at(l.bearing, (a + b) / 2.0, f64::from(stop.near_mm)));
+    let near_drawn = near >= l.mouth && near <= len;
+    let post = pad_span.or(lane_span).filter(|_| near_drawn).map(|(a, b)| at(l.bearing, (a + b) / 2.0, near));
+    let lane_end = stop.lane.map_or(len, |i| ends(&[i]));
     StopView {
         index: stop.index,
         kind: stop.kind,
@@ -83,8 +89,8 @@ pub fn draw(l: &ArmLayout, off: f64, stop: &EndStop, stop_line_t: f64, len: f64)
         in_bus_lane: stop.lane.and_then(|i| l.prof.pieces.get(i)).is_some_and(|p| KINDS[p.kind].id == "bus"),
         near_mm: stop.near_mm,
         gap_mm: 0,
-        pad: rect(pad_span),
-        dwell: rect(lane_span),
+        pad: rect(pad_span, l.mouth, ends(&stop.pad)),
+        dwell: rect(lane_span, l.strip0, lane_end),
         run,
         post,
         bad: false,
@@ -194,7 +200,7 @@ mod tests {
     fn a_near_side_stop_draws_pad_dwell_post_and_a_run_to_the_stop_line() {
         let l = layout();
         // on the first entering piece (index 1), standing on the sidewalk (index 0), 14 m to 26 m out
-        let v = draw(&l, 0.0, &stop(14_000, 26_000, true, Some(1), vec![0]), 7_000.0, LEN);
+        let v = draw(&l, 0.0, &stop(14_000, 26_000, true, Some(1), vec![0]), Some(7_000.0), &|_| LEN, LEN);
         let pad = v.pad.as_ref().expect("a pad");
         assert_eq!(along(pad), (14_000.0, 26_000.0));
         assert_eq!(across(pad), (-9_000.0, -6_000.0), "the sidewalk's span");
@@ -212,7 +218,7 @@ mod tests {
     #[test]
     fn a_far_side_stop_has_no_run() {
         let l = layout();
-        let v = draw(&l, 0.0, &stop(14_000, 26_000, false, Some(3), vec![5]), 7_000.0, LEN);
+        let v = draw(&l, 0.0, &stop(14_000, 26_000, false, Some(3), vec![5]), Some(7_000.0), &|_| LEN, LEN);
         assert!(v.run.is_none());
         assert!(v.pad.is_some() && v.dwell.is_some() && v.post.is_some());
     }
@@ -220,7 +226,7 @@ mod tests {
     #[test]
     fn a_bus_lane_stop_is_in_the_bus_lane_and_has_no_entering_lane() {
         let l = layout();
-        let v = draw(&l, 0.0, &stop(14_000, 26_000, true, Some(4), vec![5]), 7_000.0, LEN);
+        let v = draw(&l, 0.0, &stop(14_000, 26_000, true, Some(4), vec![5]), Some(7_000.0), &|_| LEN, LEN);
         assert_eq!((v.lane, v.in_bus_lane), (None, true));
         assert!(v.run.is_some(), "the bus still runs on to the stop line");
     }
@@ -228,7 +234,7 @@ mod tests {
     #[test]
     fn a_stop_with_no_lane_draws_a_pad_only() {
         let l = layout();
-        let v = draw(&l, 0.0, &stop(14_000, 26_000, true, None, vec![0]), 7_000.0, LEN);
+        let v = draw(&l, 0.0, &stop(14_000, 26_000, true, None, vec![0]), Some(7_000.0), &|_| LEN, LEN);
         assert!(v.pad.is_some() && v.dwell.is_none() && v.run.is_none());
     }
 
@@ -236,7 +242,7 @@ mod tests {
     fn a_stop_is_clipped_to_the_arm() {
         let l = layout();
         // from inside the mouth to past the end of the arm
-        let v = draw(&l, 0.0, &stop(1_000, 40_000, true, Some(1), vec![0]), 3_000.0, LEN);
+        let v = draw(&l, 0.0, &stop(1_000, 40_000, true, Some(1), vec![0]), Some(3_000.0), &|_| LEN, LEN);
         for poly in [v.pad.as_ref().unwrap(), v.dwell.as_ref().unwrap()] {
             assert_eq!(along(poly), (MOUTH, LEN));
         }
@@ -244,7 +250,7 @@ mod tests {
         assert!(v.post.is_none(), "the post would stand inside the mouth");
         // wholly inside the mouth, or wholly past the end: nothing is drawn
         for (near, far) in [(500, 3_500), (37_000, 45_000)] {
-            let v = draw(&l, 0.0, &stop(near, far, true, Some(1), vec![0]), 7_000.0, LEN);
+            let v = draw(&l, 0.0, &stop(near, far, true, Some(1), vec![0]), Some(7_000.0), &|_| LEN, LEN);
             assert!(v.pad.is_none() && v.dwell.is_none() && v.run.is_none() && v.post.is_none(), "{near}..{far}");
         }
     }
@@ -252,7 +258,69 @@ mod tests {
     #[test]
     fn the_arm_s_offset_moves_the_stop_sideways() {
         let l = layout();
-        let v = draw(&l, 1_000.0, &stop(14_000, 26_000, false, Some(1), vec![0]), 7_000.0, LEN);
+        let v = draw(&l, 1_000.0, &stop(14_000, 26_000, false, Some(1), vec![0]), Some(7_000.0), &|_| LEN, LEN);
         assert_eq!(across(v.dwell.as_ref().unwrap()), (-5_000.0, -2_000.0));
+    }
+
+    #[test]
+    fn the_dwell_and_a_roadway_pad_stop_where_their_piece_is_cut() {
+        let l = layout();
+        // the entering piece 1 moves across the boundary: its strip ends at the taper's start, 12 m out
+        let cut = |pi: usize| if pi == 1 { 12_000.0 } else { LEN };
+        let v = draw(&l, 0.0, &stop(10_000, 20_000, true, Some(1), vec![0]), Some(7_000.0), &cut, LEN);
+        assert_eq!(along(v.dwell.as_ref().unwrap()), (10_000.0, 12_000.0));
+        assert_eq!(along(v.pad.as_ref().unwrap()), (10_000.0, 20_000.0), "a sidewalk goes on");
+        let v = draw(&l, 0.0, &stop(10_000, 20_000, true, Some(1), vec![1]), Some(7_000.0), &cut, LEN);
+        assert_eq!(along(v.pad.as_ref().unwrap()), (10_000.0, 12_000.0), "a pad that is roadway ends with it");
+        let v = draw(&l, 0.0, &stop(13_000, 20_000, true, Some(1), vec![0]), Some(7_000.0), &cut, LEN);
+        assert!(v.dwell.is_none(), "wholly past where its piece ends");
+    }
+
+    #[test]
+    fn the_dwell_begins_where_the_roadway_strips_do() {
+        let mut l = layout();
+        l.strip0 = 5_000.0;
+        let v = draw(&l, 0.0, &stop(4_500, 20_000, true, Some(1), vec![0]), Some(7_000.0), &|_| LEN, LEN);
+        assert_eq!(along(v.dwell.as_ref().unwrap()), (5_000.0, 20_000.0));
+        assert_eq!(along(v.pad.as_ref().unwrap()), (4_500.0, 20_000.0), "a platform begins at the stop or the mouth, whichever is further out");
+    }
+
+    #[test]
+    fn without_a_stop_line_the_run_ends_at_the_mouth() {
+        let l = layout();
+        let v = draw(&l, 0.0, &stop(14_000, 26_000, true, Some(1), vec![0]), None, &|_| LEN, LEN);
+        assert_eq!(along(v.run.as_ref().unwrap()), (MOUTH, 14_000.0));
+    }
+
+    /// The stops of a street at one end, drawn on the arm that ends there: the dwell is on its lane's piece and a bus
+    /// that enters stands on a piece that enters, whichever end and whichever side of the road traffic keeps.
+    #[test]
+    fn a_stop_stands_on_its_lane_at_either_end_and_in_either_hand() {
+        use crate::junction::model::profile_of;
+        use crate::street::model::{Stop, Street, ZoneEnd, ZoneFrame};
+        for traffic in [Side::Right, Side::Left] {
+            for first_end in [true, false] {
+                let mut st = Street::sample(0, traffic);
+                st.length_mm = Some(60_000);
+                st.from_end = ZoneEnd::First;
+                for side in [Side::Left, Side::Right] {
+                    st.stops = vec![Stop { side, from_mm: 25_000, length_mm: 12_000, kind: StopKind::Curb, shelter: false, name: None }];
+                    let found = st.end_stops(first_end, Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+                    let e = &found[0];
+                    let section = if first_end { st.at_end(true) } else { st.at_end(false).reversed() };
+                    let mut l = layout();
+                    l.prof = profile_of(&section, if traffic == Side::Right { 0 } else { 3 });
+                    let lane = e.lane.expect("a lane");
+                    let piece = &l.prof.pieces[lane];
+                    assert_eq!(piece.direction == Some("toward"), e.enters, "{traffic:?} first_end {first_end} {side:?}");
+                    let v = draw(&l, 0.0, e, Some(7_000.0), &|_| LEN, LEN);
+                    let half = f64::from(l.prof.row_mm) / 2.0;
+                    let want = (f64::from(piece.x_mm) - half, f64::from(piece.x_mm + piece.width_mm) - half);
+                    assert!(v.dwell.is_some(), "no dwell: {e:?} {:?}", l.prof.pieces);
+                    assert_eq!(across(v.dwell.as_ref().unwrap()), want, "{traffic:?} first_end {first_end} {side:?}");
+                    assert_eq!(v.enters, e.enters);
+                }
+            }
+        }
     }
 }
