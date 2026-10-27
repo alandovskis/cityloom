@@ -1227,6 +1227,20 @@ fn focus_id(id: &str) {
     }
 }
 
+/// The id of the button to focus once a phase button was pressed, so the focus follows the phase. `index` is where the
+/// phase is now in a cycle of `count`; `dir` is -1 for Earlier, 1 for Later and 0 for Remove (then `index` is where the
+/// phase stood, and the focus goes to the Remove button of whatever stands there now, or of the last phase). A moved
+/// phase keeps the button that was pressed, unless it reached an end, where that button is disabled: then the other.
+fn phase_focus_id(index: usize, count: usize, dir: i32) -> String {
+    match dir {
+        d if d < 0 && index == 0 => "sig-later-0".to_string(),
+        d if d < 0 => format!("sig-earlier-{index}"),
+        0 => format!("sig-remove-{}", index.min(count.saturating_sub(1))),
+        _ if index + 1 >= count => format!("sig-earlier-{index}"),
+        _ => format!("sig-later-{index}"),
+    }
+}
+
 /// The signal's cycle and a row for each phase, in the order they run, with the buttons that move, remove and add
 /// phases and give the suggested plan back. A press on a row opens that street. The rows are kept by their place in
 /// the cycle, so the button that was pressed keeps its element and the focus follows a phase that moves.
@@ -1258,15 +1272,15 @@ fn signal_overview(w: Watch) -> impl IntoView {
                 <button type="button" class="btn quiet" on:click=move |_| { if let Some(p) = phase(i) { w.select(Target::Arm(p.uid)) } }>{select}</button>
                 <div class="signal-tools">
                     <button type="button" class="btn" id=earlier.clone() disabled=is_first aria-label=named("jn-sig-earlier")
-                        on:click=move |_| { if w.edit(|j| j.move_phase(i, -1)) { focus_id(&if i == 1 { format!("sig-later-{}", i - 1) } else { format!("sig-earlier-{}", i - 1) }) } }>
+                        on:click=move |_| { if w.edit(|j| j.move_phase(i, -1)) { focus_id(&phase_focus_id(i - 1, count.get_untracked(), -1)) } }>
                         {words(w, "jn-sig-earlier-short")}
                     </button>
                     <button type="button" class="btn" id=later.clone() disabled=is_last aria-label=named("jn-sig-later")
-                        on:click=move |_| { if w.edit(|j| j.move_phase(i, 1)) { focus_id(&if i + 2 >= count.get() { format!("sig-earlier-{}", i + 1) } else { format!("sig-later-{}", i + 1) }) } }>
+                        on:click=move |_| { if w.edit(|j| j.move_phase(i, 1)) { focus_id(&phase_focus_id(i + 1, count.get_untracked(), 1)) } }>
                         {words(w, "jn-sig-later-short")}
                     </button>
                     <button type="button" class="btn danger" id=format!("sig-remove-{i}") aria-label=named("jn-sig-remove")
-                        on:click=move |_| { let left = count.get_untracked().saturating_sub(1); if w.edit(|j| j.remove_phase(i)) { focus_id(&format!("sig-remove-{}", i.min(left.saturating_sub(1)))) } }>
+                        on:click=move |_| { let left = count.get_untracked().saturating_sub(1); if w.edit(|j| j.remove_phase(i)) { focus_id(&phase_focus_id(i, left, 0)) } }>
                         {words(w, "jn-sig-remove-short")}
                     </button>
                 </div>
@@ -1423,6 +1437,20 @@ mod tests {
 
     fn crossing(j: &Junction, bearing: i32) -> CrossingView {
         j.view().arms.into_iter().find(|a| a.bearing == bearing).unwrap().crossing.unwrap()
+    }
+
+    #[test]
+    fn the_focus_follows_a_phase_to_the_button_that_is_not_disabled() {
+        // Earlier from place 1 reaches the first place, where Earlier is disabled.
+        assert_eq!(phase_focus_id(0, 3, -1), "sig-later-0");
+        assert_eq!(phase_focus_id(1, 3, -1), "sig-earlier-1");
+        // Later into the last place leaves Later disabled.
+        assert_eq!(phase_focus_id(2, 3, 1), "sig-earlier-2");
+        assert_eq!(phase_focus_id(1, 3, 1), "sig-later-1");
+        // Remove: the same place, or the last one when the last was removed.
+        assert_eq!(phase_focus_id(1, 2, 0), "sig-remove-1");
+        assert_eq!(phase_focus_id(2, 2, 0), "sig-remove-1");
+        assert_eq!(phase_focus_id(0, 1, 0), "sig-remove-0");
     }
 
     #[test]
