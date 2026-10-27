@@ -846,6 +846,35 @@ svg pattern circle {
 #drawing .turbo-entry {
   pointer-events: none;
 }
+#drawing .stop-pad,
+#drawing .stop-dwell {
+  fill: var(--accent-wash);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+#drawing .stop-pad.stop-bad,
+#drawing .stop-dwell.stop-bad {
+  stroke-width: 3;
+  stroke-dasharray: 5 3;
+}
+#drawing .stop-run {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+#drawing .stop-post {
+  fill: var(--accent);
+  pointer-events: none;
+}
+#drawing .stop-shelter {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
 @media (forced-colors: active) {
   #drawing .turbo-divider {
     stroke: CanvasText;
@@ -855,6 +884,18 @@ svg pattern circle {
   }
   #drawing .approach-mark {
     stroke: CanvasText;
+  }
+  #drawing .stop-pad,
+  #drawing .stop-dwell {
+    fill: none;
+    stroke: Highlight;
+  }
+  #drawing .stop-run,
+  #drawing .stop-shelter {
+    stroke: Highlight;
+  }
+  #drawing .stop-post {
+    fill: Highlight;
   }
 }
 #drawing .curb-line {
