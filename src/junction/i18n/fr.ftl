@@ -517,5 +517,16 @@ jn-sig-restore = Rétablir le plan suggéré
 jn-sig-earlier-short = Avancer
 jn-sig-later-short = Reculer
 jn-sig-remove-short = Retirer
+
+## Le plan des feux en dessins, un par phase
+jn-ph-name = Phase { $n } : { $streets }
+jn-ph-and = { $head } et { $tail }
+jn-ph-cars = Voitures qui passent : { $arms }.
+jn-ph-walks = Piétons qui traversent : { $arms }.
+jn-ph-rides = Vélos qui passent : { $arms }.
+jn-ph-join = { $head } { $tail }
+jn-ph-row = Les phases des feux, dans l’ordre où elles se suivent
+jn-ph-timing = Vert { $green } s, jaune { $yellow } s, rouge intégral { $all_red } s
+jn-ph-timing-lead = Avance { $lead } s, vert { $green } s, jaune { $yellow } s, rouge intégral { $all_red } s
 jn-rev-plan-lost = { $change }; plan de feux modifié retiré
 jn-refusal-too-many-phases = Le plan a déjà le nombre maximal de phases.
