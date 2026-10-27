@@ -2779,6 +2779,30 @@ fn a_turbo_or_pedestrian_arm_cannot_fail() {
     assert!(check_of(&j, "stop-clear").ok && check_of(&j, "stop-lane").ok);
 }
 
+/// How far each arm of `j` reaches, by uid, as the street page is told.
+fn reaches_of(j: &Junction) -> Vec<(u32, i32)> {
+    crate::junction::read_model::arm_reaches(j.current(), 0)
+}
+
+#[test]
+fn the_street_page_is_told_no_reach_for_an_arm_the_junction_does_not_judge() {
+    // A turbo and a pedestrian arm draw no stops and pass the stop checks, so no arm of a turbo has a reach to be judged against.
+    let (mut turbo, _) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(500, 9_000, lane, walk)]);
+    assert!(reaches_of(&turbo).iter().all(|r| r.1 > 0));
+    assert!(turbo.set_control(ROUNDABOUT) && turbo.set_turbo(Some(0)));
+    assert!(reaches_of(&turbo).iter().all(|r| r.1 == 0), "a turbo: {:?}", reaches_of(&turbo));
+    let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+    let reaches = reaches_of(&walk);
+    let (walking, driving): (Vec<_>, Vec<_>) = walk.current().arms.iter().partition(|a| a.is_pedestrian());
+    assert!(!walking.is_empty() && !driving.is_empty());
+    for a in walking {
+        assert_eq!(reaches.iter().find(|r| r.0 == a.uid).unwrap().1, 0, "a pedestrian arm");
+    }
+    for a in driving {
+        assert!(reaches.iter().find(|r| r.0 == a.uid).unwrap().1 > 0, "a street with traffic keeps its reach");
+    }
+}
+
 #[test]
 fn no_stops_two_passing_checks() {
     for sample in 0..JUNCTION_SAMPLES.len() {

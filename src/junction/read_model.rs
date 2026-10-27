@@ -205,10 +205,19 @@ pub fn next_main(s: &State, region: usize) -> Option<(Vec<u32>, bool)> {
 }
 
 /// How far each arm's own works reach along it from the junction's centre, by the arm's uid: to the far side of its
-/// crossing, or to its mouth where it has none. Empty when the junction cannot be laid out.
+/// crossing, or to its mouth where it has none. The junction is taken as it is run (`in_force`), and an arm whose stops
+/// the junction neither draws nor judges (a pedestrian arm, any arm of a turbo) reaches 0, so no street page judges its
+/// stops against it. Empty when the junction cannot be laid out.
 pub fn arm_reaches(s: &State, region: usize) -> Vec<(u32, i32)> {
+    let in_force = in_force(s);
+    let s: &State = &in_force;
     let Some(lay) = layout(s, region) else { return Vec::new() };
-    s.arms.iter().zip(&lay.arms).map(|(a, l)| (a.uid, l.mouth.round() as i32 + a.crossing.map_or(0, |c| c.setback_mm + c.width_mm))).collect()
+    let judged = s.turbo.is_none();
+    s.arms
+        .iter()
+        .zip(&lay.arms)
+        .map(|(a, l)| (a.uid, if judged && !a.is_pedestrian() { l.mouth.round() as i32 + a.crossing.map_or(0, |c| c.setback_mm + c.width_mm) } else { 0 }))
+        .collect()
 }
 
 /// Puts the junction on the sheet, or says it cannot be drawn: a corner whose
