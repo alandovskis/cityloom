@@ -1,0 +1,20 @@
+{
+  "priority": ["P-critical · critique", "P-high · élevée", "P-medium · moyenne", "P-low · faible"],
+  "labels": {
+    "feasible": "S-feasible · faisable",
+    "needsReview": "S-needs-review · révision requise",
+    "needsSetup": "S-needs-setup · configuration requise",
+    "deployFailed": "S-deploy-failed · déploiement échoué"
+  },
+  "app": {
+    "id": 5488652,
+    "installationId": 175657359,
+    "privateKeyPath": "/Users/alex/Downloads/landovskis-forge-bor.2026-10-26.private-key.pem"
+  },
+  "run": "just e2e builds the wasm and the server, then runs the Playwright tests in e2e/ (just e2e tests/<name>.spec.ts for one spec); to look at the app by hand, run just build then just serve and open http://127.0.0.1:8137/ (E2E_PORT moves the port).",
+  "evidence": "Run the spec that covers the change with just e2e tests/<name>.spec.ts and attach its screenshots and traces (the failing-then-passing run); for a server or logic change attach the cargo test output for the new tests.",
+  "deploy": {
+    "workflow": "ci.yml",
+    "timeoutMinutes": 120
+  }
+}
