@@ -138,7 +138,11 @@ fn draw(v: &JView, phase: &PhaseView, bike_symbol: &str) -> String {
     for a in &v.arms {
         let Some(c) = &a.crossing else { continue };
         let lit = phase.walk_arms.contains(&a.uid);
-        write!(out, "<path class=\"ph-walk {}\" stroke-width=\"{}\" d=\"{}\"/>", if lit { "lit" } else { "muted" }, f1(unit * 0.6), path_d(&c.poly)).unwrap();
+        // A walk that does not run is a dashed outline; the dashes are a multiple of the unit, like the stroke, so they
+        // keep their proportion to the drawing whatever the junction's size.
+        let dashes = if lit { String::new() } else { format!(" stroke-dasharray=\"{0} {0}\"", f1(unit * 1.5)) };
+        write!(out, "<path class=\"ph-walk {}\" stroke-width=\"{}\"{dashes} d=\"{}\"/>", if lit { "lit" } else { "muted" }, f1(unit * 0.6), path_d(&c.poly))
+            .unwrap();
     }
     for a in v.arms.iter().filter(|a| a.pieces.iter().any(|p| KINDS[p.kind].id == "bike")) {
         out += &bike(a, phase.ride_arms.contains(&a.uid), unit, bike_symbol);
@@ -155,6 +159,7 @@ fn draw(v: &JView, phase: &PhaseView, bike_symbol: &str) -> String {
 mod tests {
     use super::*;
     use crate::junction::model::{Junction, junction_of};
+    use crate::shared::catalogue::{REGIONS, Side};
     use crate::shared::testing::count;
 
     fn draw(j: &Junction, phase: usize) -> (String, usize) {
@@ -207,6 +212,74 @@ mod tests {
         assert_eq!(count(&s, "ph-bike lit"), ride);
         assert_eq!(count(&s, "ph-bike muted"), biked - ride);
         assert!(!draw(&Junction::new(0), 0).0.contains("ph-bike"), "no bike lane, no bike");
+    }
+
+    /// The `d` of every movement's line in the drawing.
+    fn lines(s: &str) -> Vec<String> {
+        s.split("<path class=\"ph-line\"").skip(1).map(|t| t.split(" d=\"").nth(1).unwrap().split('"').next().unwrap().to_string()).collect()
+    }
+
+    /// The numbers in a path's `d`.
+    fn numbers(d: &str) -> Vec<f64> {
+        d.split(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-')).filter(|t| !t.is_empty() && *t != "-").map(|t| t.parse().unwrap()).collect()
+    }
+
+    #[test]
+    fn a_movement_starts_on_the_drivers_side_of_its_street_and_the_side_follows_the_side_of_the_road() {
+        let left = REGIONS.iter().position(|r| r.drive_side == Side::Left).expect("a region that drives on the left");
+        let mut side = Vec::new();
+        for region in [None, Some(left)] {
+            let mut j = Junction::new(0);
+            if let Some(r) = region {
+                assert!(j.set_region(r));
+            }
+            let v = j.view();
+            let p = v.signal.as_ref().unwrap().phases[0].clone();
+            let m = &p.moves[0];
+            let from = v.arms.iter().find(|a| a.uid == m.from).unwrap();
+            let d = &lines(&phase_svg(&v, &p))[0];
+            let start = numbers(d);
+            // The traffic heads toward the junction: to its right is a quarter turn clockwise in a y-down drawing.
+            let heading = (-dir_of(from.bearing as f64).0, -dir_of(from.bearing as f64).1);
+            let right = (-heading.1, heading.0);
+            side.push(((start[0] - from.mouth_at.0) * right.0 + (start[1] - from.mouth_at.1) * right.1).signum());
+        }
+        assert_eq!(side, vec![1.0, -1.0], "right of the street's axis when driving on the right, left when on the left");
+    }
+
+    #[test]
+    fn a_turn_is_a_curve_with_finite_numbers_and_a_straight_movement_is_a_line() {
+        let j = Junction::new(0);
+        let v = j.view();
+        let mut curves = 0;
+        for p in &v.signal.as_ref().unwrap().phases {
+            let s = phase_svg(&v, p);
+            for (d, m) in lines(&s).iter().zip(&p.moves) {
+                let class = v.movements.iter().find(|x| x.from == m.from && x.to == m.to).unwrap().class;
+                assert!(numbers(d).iter().all(|n| n.is_finite()), "{d}");
+                if class == THROUGH {
+                    assert!(d.contains('L') && !d.contains('Q'), "{d}");
+                } else {
+                    assert!(d.contains('Q'), "a turn bends: {d}");
+                    assert_eq!(numbers(d).len(), 6, "start, control and end: {d}");
+                    curves += 1;
+                }
+            }
+        }
+        assert!(curves > 0, "the four-way has turns");
+    }
+
+    #[test]
+    fn a_walk_that_does_not_run_is_dashed_in_the_drawings_own_unit() {
+        let (s, _) = draw(&Junction::new(0), 0);
+        let muted: Vec<&str> = s.split("<path class=\"ph-walk muted\"").skip(1).collect();
+        assert!(!muted.is_empty());
+        for m in muted {
+            assert!(m.starts_with(" stroke-width=\"") && m.contains("stroke-dasharray=\""), "{m}");
+        }
+        for lit in s.split("<path class=\"ph-walk lit\"").skip(1) {
+            assert!(!lit[..lit.find("/>").unwrap()].contains("dasharray"), "a walk that runs is solid");
+        }
     }
 
     #[test]

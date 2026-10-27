@@ -1209,7 +1209,8 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
                 <section class="insp-sec">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{runs}</p>
-                    {signal_phases(w, true)}
+                    <p class="insp-range">{move || w.tr(if w.view().signal.as_ref().is_none_or(|s| s.suggested) { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
+                    {signal_phases(w)}
                 </section>
                 {timing_field(w, uid, TimingField::Green)}
                 {timing_field(w, uid, TimingField::Yellow)}
@@ -1224,11 +1225,9 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
 /// The plan as a row of small drawings of the junction, one per phase in the order they run: what each phase lets
 /// cars, people and bikes do, lit against what is muted, with its name, its timing and a sentence. A drawing is a
 /// button that selects its street (it is no toggle: it says `aria-current`, not `aria-pressed`, while its street is selected). It decides nothing: the drawing, the
-/// name and the sentence all come from the view. `label` adds whether the plan is the suggestion, for a panel that has
-/// no other word of it.
-fn signal_phases(w: Watch, label: bool) -> impl IntoView {
+/// name and the sentence all come from the view.
+fn signal_phases(w: Watch) -> impl IntoView {
     let count = Memo::new(move |_| w.view().signal.as_ref().map_or(0, |s| s.phases.len()));
-    let suggested = Memo::new(move |_| w.view().signal.as_ref().is_none_or(|s| s.suggested));
     // One pass draws every phase; a drawing is a memo, so the page swaps it only when its markup is not the same as
     // it was (a change of the selection, or of a timing, leaves it alone).
     // The street that is selected has one card marked, the first phase that is its own: a street may have several
@@ -1265,7 +1264,6 @@ fn signal_phases(w: Watch, label: bool) -> impl IntoView {
         }
     };
     view! {
-        {label.then(|| view! { <p class="insp-range">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p> })}
         <ul class="signal-phases" aria-label=words(w, "jn-ph-row")><For each=move || 0..count.get() key=|i| *i children=card/></ul>
     }
 }
@@ -1361,7 +1359,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
                     <p class="insp-range" id="signal-plan-state" tabindex="-1">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
-                    {signal_phases(w, false)}
+                    {signal_phases(w)}
                     <ul class="signal-list"><For each=move || 0..count.get() key=|i| *i children=row/></ul>
                     <div class="signal-tools">
                         <For

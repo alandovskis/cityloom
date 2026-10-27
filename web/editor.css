@@ -2560,7 +2560,6 @@ dl.prov dd:last-child {
 .phase-svg .ph-walk.muted {
   fill: none;
   stroke: var(--ph-muted);
-  stroke-dasharray: 60 60;
 }
 .phase-svg .ph-bike .sym * {
   vector-effect: none;
