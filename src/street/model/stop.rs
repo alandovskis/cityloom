@@ -523,6 +523,8 @@ impl Editor {
     fn stop_failures(&self) -> Vec<Failure> {
         let content = &self.states[self.cursor].content;
         let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        // The far end is measured from the frame's length, as the junction measures it (the two differ by up to the tolerance).
+        let end_length_mm = self.frame.map_or(length_mm, |f| f.length_mm);
         let driving = REGIONS[self.region].drive_side;
         let (near, far) = match content.from_end {
             ZoneEnd::First => (self.ends[0], self.ends[1]),
@@ -532,7 +534,7 @@ impl Editor {
         for (k, s) in content.stops.iter().enumerate() {
             let mut fail = |rule: usize, detail: Said| Failure::record(&mut out, k, rule, detail);
             // The stop's distance from each end, judged against how far that end's junction reaches.
-            for (end, from_end_mm) in [(near, s.from_mm), (far, length_mm.saturating_sub(s.to_mm()))] {
+            for (end, from_end_mm) in [(near, s.from_mm), (far, end_length_mm.saturating_sub(s.to_mm()))] {
                 if end.reach_mm <= 0 {
                     continue;
                 }
@@ -1208,6 +1210,15 @@ mod tests {
         assert_eq!(c.detail.key, "check-detail-stop-junction-crossing");
         assert_eq!(mm(&c.detail, "gap"), Some(3_000));
         assert!(ok(&far(7_000), "stop-junction"));
+    }
+
+    #[test]
+    fn the_far_end_is_measured_from_the_frames_length_as_the_junction_does() {
+        // The street drawn at 60 000 and the frame at 60 500 (within the tolerance): the junction measures the stop
+        // (36 000 to 48 000) from the frame's end, 12 500 away, and so does this page.
+        let mut e = near_junction(ZoneEnd::First, [EndInfo::default(), reach(true, 7_500)], 36_000);
+        e = e.with_frame(Some(ZoneFrame { length_mm: LEN + 500, from_end: ZoneEnd::First }));
+        assert!(ok(&e, "stop-junction"), "12 500 - 7 500 is the 5 000 asked for");
     }
 
     #[test]
