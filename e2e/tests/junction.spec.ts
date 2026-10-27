@@ -434,6 +434,87 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(green.locator("input")).toHaveValue("27");
   });
 
+  test("phases are added, moved, removed and restored from the keyboard, with undo, redo, announcements and a reload", async ({
+    page,
+  }) => {
+    const rows = page.locator("#inspector .signal-list > li");
+    const state = page.locator("#signal-plan-state");
+    // The city's junction has two streets that traffic enters from, so two phases.
+    await expect(rows).toHaveCount(2);
+    await expect(state).toHaveText("Suggested plan");
+    await expect(page.locator("#signal-restore")).toBeDisabled();
+    const firstStreet = (await rows.first().locator("button").first().innerText()).split(":")[0];
+    const lastStreet = (await rows.last().locator("button").first().innerText()).split(":")[0];
+
+    // Move the first phase later with the keyboard alone; the focus follows it.
+    await page.locator("#sig-later-0").focus();
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toContainText("moved later, now 2 of 2");
+    await expect(page.locator("#sig-earlier-1")).toBeFocused();
+    await expect(state).toHaveText("Edited plan");
+    await expect(rows.nth(1).locator("button").first()).toContainText(firstStreet);
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toContainText("moved earlier, now 1 of 2");
+    await expect(page.locator("#sig-later-0")).toBeFocused();
+    await expect(rows.first().locator("button").first()).toContainText(firstStreet);
+    // The first phase cannot go earlier, nor the last later: those buttons are off.
+    await expect(page.locator("#sig-earlier-0")).toBeDisabled();
+    await expect(page.locator("#sig-later-1")).toBeDisabled();
+
+    // Remove the last one: the street it served is flagged, and a phase for it can be added back.
+    await page.locator("#sig-remove-1").focus();
+    await page.keyboard.press("Enter");
+    await expect(rows).toHaveCount(1);
+    await expect(live(page)).toContainText("removed");
+    await expect(page.locator("#sig-remove-0")).toBeFocused();
+    await page.locator("#t-checks").click();
+    await expect(page.locator("#p-checks")).toContainText("No phase serves the traffic entering from");
+    await page
+      .getByRole("button", { name: new RegExp(`^Add a phase for ${lastStreet.replace(/[()]/g, "\\$&")}`) })
+      .focus();
+    await page.keyboard.press("Enter");
+    await expect(rows).toHaveCount(2);
+    await expect(live(page)).toContainText("added for");
+
+    // Undo and redo take the steps back and forward.
+    await page.locator("#undo").click();
+    await expect(rows).toHaveCount(1);
+    await page.locator("#redo").click();
+    await expect(rows).toHaveCount(2);
+
+    // A reload keeps the edited plan.
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(page.locator("#signal-plan-state")).toHaveText("Edited plan");
+    await expect(page.locator("#inspector .signal-list > li")).toHaveCount(2);
+
+    // Restore the suggestion.
+    await page.locator("#signal-restore").focus();
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toContainText("restored to the suggestion");
+    await expect(page.locator("#signal-plan-state")).toHaveText("Suggested plan");
+    await expect(page.locator("#signal-restore")).toBeDisabled();
+  });
+
+  test("the last phase stays, and the phase buttons speak French", async ({ page }) => {
+    await page.locator("#account-btn").click();
+    await page.getByRole("button", { name: "Français" }).click();
+    await expect(page.locator("#signal-plan-state")).toHaveText("Plan suggéré");
+    await page.locator("#sig-later-0").focus();
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toContainText("reculée, maintenant 2 sur 2");
+    await expect(page.locator("#signal-plan-state")).toHaveText("Plan modifié");
+    await page.locator("#sig-remove-0").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#inspector .signal-list > li")).toHaveCount(1);
+    await page.locator("#sig-remove-0").focus();
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toContainText("garde au moins une phase");
+    await page.locator("#signal-restore").focus();
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toContainText("rétabli à la suggestion");
+  });
+
   test("the timing is French in French", async ({ page }) => {
     await page.locator("#account-btn").click();
     await page.getByRole("button", { name: "Français" }).click();

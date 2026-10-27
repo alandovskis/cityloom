@@ -1250,16 +1250,18 @@ fn signal_overview(w: Watch) -> impl IntoView {
             tr(w, key, args)
         };
         let named = move |key: &'static str| move || phase(i).map(|p| tr(w, key, Args::new().str("street", w.say(&p.street)))).unwrap_or_default();
+        let is_first = move || i == 0;
+        let is_last = move || i + 1 >= count.get();
         let (earlier, later) = (format!("sig-earlier-{i}"), format!("sig-later-{i}"));
         view! {
             <li>
                 <button type="button" class="btn quiet" on:click=move |_| { if let Some(p) = phase(i) { w.select(Target::Arm(p.uid)) } }>{select}</button>
                 <div class="signal-tools">
-                    <button type="button" class="btn" id=earlier.clone() disabled=move || (i == 0) aria-label=named("jn-sig-earlier")
+                    <button type="button" class="btn" id=earlier.clone() disabled=is_first aria-label=named("jn-sig-earlier")
                         on:click=move |_| { if w.edit(|j| j.move_phase(i, -1)) { focus_id(&if i == 1 { format!("sig-later-{}", i - 1) } else { format!("sig-earlier-{}", i - 1) }) } }>
                         {words(w, "jn-sig-earlier-short")}
                     </button>
-                    <button type="button" class="btn" id=later.clone() disabled=move || (i + 1 >= count.get()) aria-label=named("jn-sig-later")
+                    <button type="button" class="btn" id=later.clone() disabled=is_last aria-label=named("jn-sig-later")
                         on:click=move |_| { if w.edit(|j| j.move_phase(i, 1)) { focus_id(&if i + 2 >= count.get() { format!("sig-earlier-{}", i + 1) } else { format!("sig-later-{}", i + 1) }) } }>
                         {words(w, "jn-sig-later-short")}
                     </button>
