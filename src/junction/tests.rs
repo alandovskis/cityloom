@@ -1815,7 +1815,10 @@ fn the_junction_panel_has_a_drawing_for_each_phase_in_the_order_they_run() {
     let cards = phase_cards(&h);
     assert_eq!(cards.len(), 4, "{h}");
     for (i, c) in cards.iter().enumerate() {
-        assert!(c.contains("<button") && c.contains("aria-pressed=\"false\""), "a button, pressed when its street is selected: {c}");
+        assert!(
+            c.contains("<button") && !c.contains("aria-pressed") && !c.contains("aria-current"),
+            "a button that only selects, current when its street is selected: {c}"
+        );
         assert!(c.contains(&format!("Phase {}: ", i + 1)), "{c}");
         assert!(c.contains("Cars go: ") && c.contains("People cross: "), "the summary is on the card: {c}");
         assert!(c.contains("Green 25 s, yellow 3 s, all-red 2 s"), "{c}");
@@ -1834,8 +1837,9 @@ fn the_drawing_of_the_selected_street_is_pressed_and_the_row_follows_an_edit() {
     let h = plain_panel(&s);
     let cards = phase_cards(&h);
     assert_eq!(cards.len(), 4, "the row stays beside the street's timing: {h}");
-    assert_eq!(cards.iter().filter(|c| c.contains("aria-pressed=\"true\"")).count(), 1);
-    assert!(cards[1].contains("aria-pressed=\"true\""), "the east phase is the second");
+    assert_eq!(cards.iter().filter(|c| c.contains("aria-current=\"true\"")).count(), 1);
+    assert!(cards[1].contains("aria-current=\"true\""), "the east phase is the second");
+    assert!(cards.iter().all(|c| !c.contains("aria-pressed")), "a card selects and is no toggle");
     assert!(h.contains("Suggested plan"));
     s.edit(|j| j.remove_phase(0));
     let h = plain_panel(&s);

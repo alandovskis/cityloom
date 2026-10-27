@@ -1223,7 +1223,7 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
 
 /// The plan as a row of small drawings of the junction, one per phase in the order they run: what each phase lets
 /// cars, people and bikes do, lit against what is muted, with its name, its timing and a sentence. A drawing is a
-/// button that selects its street, and is pressed while its street is selected. It decides nothing: the drawing, the
+/// button that selects its street (it is no toggle: it says `aria-current`, not `aria-pressed`, while its street is selected). It decides nothing: the drawing, the
 /// name and the sentence all come from the view. `label` adds whether the plan is the suggestion, for a panel that has
 /// no other word of it.
 fn signal_phases(w: Watch, label: bool) -> impl IntoView {
@@ -1235,7 +1235,7 @@ fn signal_phases(w: Watch, label: bool) -> impl IntoView {
     let card = move |i: usize| {
         // Each closure reads the field it needs and no more: no phase is cloned.
         let uid = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| p.uid));
-        let pressed = move || (w.view().selected.kind == Some("arm") && uid.get().is_some_and(|u| w.view().selected.uid == u)).to_string();
+        let current = move || (w.view().selected.kind == Some("arm") && uid.get().is_some_and(|u| w.view().selected.uid == u)).then_some("true");
         let art = Memo::new(move |_| drawings.with(|d| d.get(i).cloned().unwrap_or_default()));
         let name = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| w.say(&p.name)).unwrap_or_default());
         let summary = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| w.say(&p.summary)).unwrap_or_default());
@@ -1251,7 +1251,7 @@ fn signal_phases(w: Watch, label: bool) -> impl IntoView {
         });
         view! {
             <li>
-                <button type="button" class="phase-card" id=format!("phase-card-{i}") aria-pressed=pressed
+                <button type="button" class="phase-card" id=format!("phase-card-{i}") aria-current=current
                     on:click=move |_| { if let Some(u) = uid.get_untracked() { w.select(Target::Arm(u)); focus_card_after_swap(i) } }>
                     <span class="phase-art" inner_html=art></span>
                     <span class="phase-name">{name}</span>

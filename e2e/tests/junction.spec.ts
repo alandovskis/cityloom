@@ -151,7 +151,7 @@ test.describe("the junction editor on a junction of the city", () => {
     const plan = page.locator("#view-plan");
     const iso = page.locator("#view-iso");
     await expect(page.locator("#drawing .iso")).toHaveCount(0);
-    await expect(plan).toHaveAttribute("aria-pressed", "true");
+    await expect(plan).toHaveAttribute("aria-current", "true");
 
     await iso.click();
     await expect(page.locator("#drawing .iso")).toHaveCount(1);
@@ -161,7 +161,7 @@ test.describe("the junction editor on a junction of the city", () => {
     await expect(page.locator("#drawing pattern#iso-m-asphalt")).toHaveAttribute("patternTransform", /^matrix\(/);
     await expect(page.locator("#drawing .iso-name").first()).toBeVisible();
     await expect(page.locator("#drawing [data-role^='grip']")).toHaveCount(0);
-    await expect(iso).toHaveAttribute("aria-pressed", "true");
+    await expect(iso).toHaveAttribute("aria-current", "true");
     await expect(live(page)).toHaveText("Showing the junction in 2.5D.");
 
     // The keyboard still edits the junction, and the picture follows.
@@ -183,13 +183,13 @@ test.describe("the junction editor on a junction of the city", () => {
     // The choice is kept.
     await page.reload();
     await expect(page.locator("#drawing .iso")).toHaveCount(1);
-    await expect(page.locator("#view-iso")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#view-iso")).toHaveAttribute("aria-current", "true");
 
     // V goes back to the plan from anywhere on the page.
     await page.keyboard.press("v");
     await expect(page.locator("#drawing .iso")).toHaveCount(0);
     await expect(page.locator("#drawing g.arm").first()).toBeVisible();
-    await expect(page.locator("#view-plan")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#view-plan")).toHaveAttribute("aria-current", "true");
     await expect(live(page)).toHaveText("Showing the plan.");
   });
 
@@ -415,14 +415,14 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(cards.first()).toContainText("Phase 1:");
     await expect(cards.first()).toContainText(/Cars go: /);
     await expect(cards.first().locator("svg[role=img]")).toHaveAttribute("aria-label", /^Cars go: /);
-    await expect(cards.first()).toHaveAttribute("aria-pressed", "false");
+    await expect(cards.first()).not.toHaveAttribute("aria-current");
 
     // Pressing a drawing selects its street in the inspector, and the drawing is pressed there.
     await cards.nth(1).focus();
     await page.keyboard.press("Enter");
     await expect(page.locator('#inspector input[aria-labelledby="i-h-green"]')).toBeVisible();
-    await expect(cards.nth(1)).toHaveAttribute("aria-pressed", "true");
-    await expect(cards.first()).toHaveAttribute("aria-pressed", "false");
+    await expect(cards.nth(1)).toHaveAttribute("aria-current", "true");
+    await expect(cards.first()).not.toHaveAttribute("aria-current");
     // The panel swapped to the street's, and the focus is on the same card in it, not lost to the page.
     await expect(cards.nth(1)).toBeFocused();
     // The other drawing selects the other street, and keeps the focus too.
@@ -431,8 +431,8 @@ test.describe("signal timing on a junction of the city", () => {
     await page.keyboard.press("Enter");
     await expect(cards.first()).toBeFocused();
     await cards.first().click();
-    await expect(cards.first()).toHaveAttribute("aria-pressed", "true");
-    await expect(cards.nth(1)).toHaveAttribute("aria-pressed", "false");
+    await expect(cards.first()).toHaveAttribute("aria-current", "true");
+    await expect(cards.nth(1)).not.toHaveAttribute("aria-current");
 
     // Editing the plan drops the label; Restore brings it back.
     await page.locator("#wrap").focus();
@@ -452,7 +452,7 @@ test.describe("signal timing on a junction of the city", () => {
     const cards = page.locator("#inspector .signal-phases .phase-card");
     await expect(cards).toHaveCount(2);
     await cards.first().click();
-    await expect(cards.first()).toHaveAttribute("aria-pressed", "true");
+    await expect(cards.first()).toHaveAttribute("aria-current", "true");
     await expect(cards.first()).toHaveCSS("outline-style", "solid");
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),

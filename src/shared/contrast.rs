@@ -179,6 +179,12 @@ mod tests {
         }
         let forced = editor.find("  .phase-svg .ph-move .ph-line {\n    stroke: Highlight;").expect("forced-colours rule");
         assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some());
-        assert!(editor[..forced].contains(".phase-card[aria-pressed=\"true\"] {\n    outline: 2px solid Highlight;"));
+        assert!(editor[..forced].contains(".phase-card[aria-current=\"true\"] {\n    outline: 2px solid Highlight;"));
+        // The selected card is told apart by more than its colour: a thicker border and a check mark, both in the
+        // accent, which is 3:1 against the panel and the wash (measured above).
+        let card = rule(editor, ".phase-card[aria-current=\"true\"]");
+        assert!(card.contains("border-color: var(--accent);") && card.contains("inset 0 0 0 2px var(--accent)"), "{card}");
+        let tick = rule(editor, ".phase-card[aria-current=\"true\"]::after");
+        assert!(tick.contains("content: \"\\2713\" / \"\";") && tick.contains("color: var(--accent);"), "{tick}");
     }
 }
