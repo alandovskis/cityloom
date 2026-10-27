@@ -2500,6 +2500,8 @@ dl.prov dd:last-child {
   width: 100%;
   min-width: 0;
   padding: 6px;
+  /* Room at the top for the selected card's check mark, so it never lies over the drawing. */
+  padding-block-start: 22px;
   text-align: start;
   font: inherit;
   color: var(--ink);

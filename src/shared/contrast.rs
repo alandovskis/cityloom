@@ -186,5 +186,10 @@ mod tests {
         assert!(card.contains("border-color: var(--accent);") && card.contains("inset 0 0 0 2px var(--accent)"), "{card}");
         let tick = rule(editor, ".phase-card[aria-current=\"true\"]::after");
         assert!(tick.contains("content: \"\\2713\" / \"\";") && tick.contains("color: var(--accent);"), "{tick}");
+        // The mark stands in room every card keeps at its top (so choosing a card moves nothing), clear of the drawing
+        // and of its lit strokes: it sits 4px down and a line of the card's font is under 18px, so 22px is enough.
+        assert!(tick.contains("inset-block-start: 4px;"), "{tick}");
+        let base = rule(editor, ".phase-card");
+        assert!(base.contains("padding-block-start: 22px;"), "{base}");
     }
 }
