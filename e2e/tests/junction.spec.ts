@@ -447,6 +447,26 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#inspector .signal-phases .phase-card")).toHaveCount(2);
   });
 
+  test("pressing the later card of a street that has two phases keeps the focus on that card", async ({ page }) => {
+    const cards = page.locator("#inspector .signal-phases .phase-card");
+    const before = await cards.count();
+    await page
+      .getByRole("button", { name: /^Add a phase for / })
+      .first()
+      .focus();
+    await page.keyboard.press("Enter");
+    await expect(live(page)).toContainText("added for");
+    await expect(cards).toHaveCount(before + 1);
+    const last = cards.nth(before);
+    await last.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator('#inspector input[aria-labelledby="i-h-green"]')).toBeVisible();
+    // The street has two cards; only its first is marked, and the focus stays on the one that was pressed.
+    await expect(last).toBeFocused();
+    await expect(last).not.toHaveAttribute("aria-current");
+    await expect(page.locator("#inspector .signal-phases .phase-card[aria-current='true']")).toHaveCount(1);
+  });
+
   test("a phase drawing is small, and two cards share a row where the inspector is wide enough", async ({ page }) => {
     const cards = page.locator("#inspector .signal-phases .phase-card");
     await expect(cards).toHaveCount(2);

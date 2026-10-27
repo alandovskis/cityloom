@@ -1865,6 +1865,8 @@ fn with_two_phases_for_one_street_only_the_first_is_current() {
     assert_eq!(cards.len(), 5);
     let current: Vec<usize> = (0..cards.len()).filter(|&i| cards[i].contains("aria-current=\"true\"")).collect();
     assert_eq!(current, vec![1], "the east street's first phase, not its second at the end");
+    // The later card is a button of its own with the id the focus returns to when it is pressed.
+    assert!(cards[4].contains("id=\"phase-card-4\""), "{}", cards[4]);
 }
 
 #[test]

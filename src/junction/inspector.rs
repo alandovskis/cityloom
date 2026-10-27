@@ -1254,7 +1254,7 @@ fn signal_phases(w: Watch) -> impl IntoView {
         view! {
             <li>
                 <button type="button" class="phase-card" id=format!("phase-card-{i}") aria-current=current
-                    on:click=move |_| { if let Some(u) = uid.get_untracked() { w.select(Target::Arm(u)); focus_card_after_swap(first_phase_of(&w.view_now()).unwrap_or(i)) } }>
+                    on:click=move |_| { if let Some(u) = uid.get_untracked() { w.select(Target::Arm(u)); focus_card_after_swap(i) } }>
                     <span class="phase-art" aria-hidden="true" inner_html=art></span>
                     <span class="phase-name">{name}</span>
                     <span class="phase-timing">{timing}</span>
@@ -1284,7 +1284,8 @@ fn first_phase_of(v: &JView) -> Option<usize> {
     v.signal.as_ref()?.phases.iter().position(|p| p.uid == v.selected.uid)
 }
 
-/// Puts the focus back on phase card `i` once the panel has been swapped for the pressed street's: a press on a card
+/// Puts the focus back on phase card `i`, the card that was pressed (a street with two phases has two cards, and the
+/// person's place is the one they pressed, not the street's first), once the panel has been swapped for the pressed street's: a press on a card
 /// selects its street, which replaces the junction's panel (or another street's) and with it the button that was
 /// pressed. The swap runs in a microtask, so the focus waits for it.
 fn focus_card_after_swap(i: usize) {
