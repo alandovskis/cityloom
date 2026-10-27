@@ -81,10 +81,10 @@ impl Edits {
         Edits { version: VERSION, ..Edits::default() }
     }
 
-    /// The version the document is written as: `SIGNAL_VERSION` while a junction record holds an edited signal plan, else `STOP_VERSION` while a street record holds transit stops, else
-    /// `CURB_VERSION` while one holds curbside uses, else
-    /// `SPEED_VERSION` while a street record holds a speed (set or
-    /// decided to have none), else `ZONES_VERSION` while one holds zones, else `VERSION`.
+    /// The version the document is written as, the first that applies: `SIGNAL_VERSION` while a junction record holds
+    /// an edited signal plan, `STOP_VERSION` while a street record holds transit stops, `CURB_VERSION` while one holds
+    /// curbside uses, `SPEED_VERSION` while one holds a speed (set, or decided to have none), `ZONES_VERSION` while one
+    /// holds zones, else `VERSION`.
     pub fn written_version(&self) -> u32 {
         let zones = self.streets.values().any(|r| !r.street.zones.is_empty());
         let speed = self.streets.values().any(|r| !r.street.speed.is_undecided());
