@@ -1,0 +1,101 @@
+diff --git a/e2e/tests/junction.spec.ts b/e2e/tests/junction.spec.ts
+index fb4c84d..c98d23e 100644
+--- a/e2e/tests/junction.spec.ts
++++ b/e2e/tests/junction.spec.ts
+@@ -406,6 +406,96 @@ test.describe("signal timing on a junction of the city", () => {
+     await expect(page.locator("#inspector").getByText(`Cycle: ${before + 5} s`)).toBeVisible();
+   });
+ 
++  test("each phase is drawn, the Suggested label goes with an edit and returns with Restore, and a drawing and its street select each other", async ({
++    page,
++  }) => {
++    const cards = page.locator("#inspector .signal-phases .phase-card");
++    await expect(cards).toHaveCount(2);
++    await expect(page.locator("#signal-plan-state")).toHaveText("Suggested plan");
++    await expect(cards.first()).toContainText("Phase 1:");
++    await expect(cards.first()).toContainText(/Cars go: /);
++    await expect(cards.first().locator("svg.phase-svg")).toHaveAttribute("aria-hidden", "true");
++    await expect(cards.first()).toHaveAccessibleName(/^Phase 1: .*Cars go: /);
++    await expect(cards.first()).not.toHaveAttribute("aria-current");
++
++    // Pressing a drawing selects its street in the inspector, and the drawing is pressed there.
++    await cards.nth(1).focus();
++    await page.keyboard.press("Enter");
++    await expect(page.locator('#inspector input[aria-labelledby="i-h-green"]')).toBeVisible();
++    await expect(cards.nth(1)).toHaveAttribute("aria-current", "true");
++    await expect(cards.first()).not.toHaveAttribute("aria-current");
++    // The panel swapped to the street's, and the focus is on the same card in it, not lost to the page.
++    await expect(cards.nth(1)).toBeFocused();
++    // The other drawing selects the other street, and keeps the focus too.
++    await page.keyboard.press("Shift+Tab");
++    await expect(cards.first()).toBeFocused();
++    await page.keyboard.press("Enter");
++    await expect(cards.first()).toBeFocused();
++    await cards.first().click();
++    await expect(cards.first()).toHaveAttribute("aria-current", "true");
++    await expect(cards.nth(1)).not.toHaveAttribute("aria-current");
++
++    // Editing the plan drops the label; Restore brings it back.
++    await page.locator("#wrap").focus();
++    await page.keyboard.press("Escape");
++    await expect(page.locator("#signal-plan-state")).toBeVisible();
++    await page.locator("#sig-remove-1").click();
++    await expect(page.locator("#signal-plan-state")).toHaveText("Edited plan");
++    await expect(page.locator("#inspector .signal-phases .phase-card")).toHaveCount(1);
++    await page.locator("#signal-restore").click();
++    await expect(page.locator("#signal-plan-state")).toHaveText("Suggested plan");
++    await expect(page.locator("#inspector .signal-phases .phase-card")).toHaveCount(2);
++  });
++
++  test("pressing the later card of a street that has two phases keeps the focus on that card", async ({ page }) => {
++    const cards = page.locator("#inspector .signal-phases .phase-card");
++    const before = await cards.count();
++    await page
++      .getByRole("button", { name: /^Add a phase for / })
++      .first()
++      .focus();
++    await page.keyboard.press("Enter");
++    await expect(live(page)).toContainText("added for");
++    await expect(cards).toHaveCount(before + 1);
++    const last = cards.nth(before);
++    await last.focus();
++    await page.keyboard.press("Enter");
++    await expect(page.locator('#inspector input[aria-labelledby="i-h-green"]')).toBeVisible();
++    // The street has two cards; only its first is marked, and the focus stays on the one that was pressed.
++    await expect(last).toBeFocused();
++    await expect(last).not.toHaveAttribute("aria-current");
++    await expect(page.locator("#inspector .signal-phases .phase-card[aria-current='true']")).toHaveCount(1);
++  });
++
++  test("a phase drawing is small, and two cards share a row where the inspector is wide enough", async ({ page }) => {
++    const cards = page.locator("#inspector .signal-phases .phase-card");
++    await expect(cards).toHaveCount(2);
++    const svg = await cards.first().locator("svg.phase-svg").boundingBox();
++    expect(svg!.height).toBeLessThanOrEqual(160);
++    expect(svg!.width).toBeLessThanOrEqual(160);
++    const [a, b] = [await cards.nth(0).boundingBox(), await cards.nth(1).boundingBox()];
++    const room = (await page.locator("#inspector .signal-phases").boundingBox())!.width;
++    expect(room).toBeGreaterThanOrEqual(2 * 120 + 8); // the e2e window is wide enough for two
++    expect(Math.abs(a!.y - b!.y)).toBeLessThan(2);
++  });
++
++  test("the row of drawings fits a 900 px window and works in forced colours", async ({ page }) => {
++    await page.setViewportSize({ width: 900, height: 800 });
++    await page.emulateMedia({ forcedColors: "active" });
++    const cards = page.locator("#inspector .signal-phases .phase-card");
++    await expect(cards).toHaveCount(2);
++    await cards.first().click();
++    await expect(cards.first()).toHaveAttribute("aria-current", "true");
++    await expect(cards.first()).toHaveCSS("outline-style", "solid");
++    expect(
++      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
++    ).toBe(true);
++    await page.setViewportSize({ width: 360, height: 800 });
++    expect(
++      await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
++    ).toBe(true);
++  });
++
+   test("a bad typed time changes nothing and a long cycle fails its check", async ({ page }) => {
+     await page.locator("#inspector .signal-list button").first().click();
+     const green = page.locator('#inspector input[aria-labelledby="i-h-green"]');

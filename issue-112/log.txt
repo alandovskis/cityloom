@@ -1,0 +1,167 @@
+1. Traffic signal chosen: one drawing per phase, plan Suggested
+   plan marker: Suggested plan
+   inspector heading: Junction control
+   focused element: BODY
+   cards (current = aria-current, lit/muted = drawn elements): [
+ {
+  "current": null,
+  "id": "phase-card-0",
+  "text": "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east.",
+  "lit": 6,
+  "muted": 3
+ },
+ {
+  "current": null,
+  "id": "phase-card-1",
+  "text": "Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west.",
+  "lit": 7,
+  "muted": 2
+ }
+]
+
+   (drawing-phase1.png and drawing-phase2.png are the two drawings alone: what runs is blue and filled, what does not is dashed or faint)
+
+2. Direction 1: keyboard Enter on the first card selects its street; focus stays on that card in the new panel; it carries aria-current
+   plan marker: (not shown in this panel)
+   inspector heading: Boulevard Saint-Laurent
+   focused element: phase-card-0
+   cards (current = aria-current, lit/muted = drawn elements): [
+ {
+  "current": "true",
+  "id": "phase-card-0",
+  "text": "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east.",
+  "lit": 6,
+  "muted": 3
+ },
+ {
+  "current": null,
+  "id": "phase-card-1",
+  "text": "Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west.",
+  "lit": 7,
+  "muted": 2
+ }
+]
+
+3. Direction 2: press the second street in the inspector's phase list; its card becomes current
+   plan marker: (not shown in this panel)
+   inspector heading: Avenue Laurier Ouest
+   focused element: BODY
+   cards (current = aria-current, lit/muted = drawn elements): [
+ {
+  "current": null,
+  "id": "phase-card-0",
+  "text": "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east.",
+  "lit": 6,
+  "muted": 3
+ },
+ {
+  "current": "true",
+  "id": "phase-card-1",
+  "text": "Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west.",
+  "lit": 7,
+  "muted": 2
+ }
+]
+
+4. Keyboard: add a second phase for Avenue Laurier Ouest (three cards)
+   plan marker: Edited plan
+   inspector heading: Junction control
+   focused element: BUTTON
+   cards (current = aria-current, lit/muted = drawn elements): [
+ {
+  "current": null,
+  "id": "phase-card-0",
+  "text": "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east.",
+  "lit": 6,
+  "muted": 3
+ },
+ {
+  "current": null,
+  "id": "phase-card-1",
+  "text": "Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west.",
+  "lit": 7,
+  "muted": 2
+ },
+ {
+  "current": null,
+  "id": "phase-card-2",
+  "text": "Phase 3: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west.",
+  "lit": 7,
+  "muted": 2
+ }
+]
+
+5. Keyboard: press the later card of that street; focus stays on the pressed card, aria-current stays on the street's first phase
+   plan marker: (not shown in this panel)
+   inspector heading: Avenue Laurier Ouest
+   focused element: phase-card-2
+   cards (current = aria-current, lit/muted = drawn elements): [
+ {
+  "current": null,
+  "id": "phase-card-0",
+  "text": "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east.",
+  "lit": 6,
+  "muted": 3
+ },
+ {
+  "current": "true",
+  "id": "phase-card-1",
+  "text": "Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west.",
+  "lit": 7,
+  "muted": 2
+ },
+ {
+  "current": null,
+  "id": "phase-card-2",
+  "text": "Phase 3: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west.",
+  "lit": 7,
+  "muted": 2
+ }
+]
+
+6. Restore the suggested plan: Suggested plan, two cards
+   plan marker: Suggested plan
+   inspector heading: Junction control
+   focused element: signal-plan-state
+   cards (current = aria-current, lit/muted = drawn elements): [
+ {
+  "current": null,
+  "id": "phase-card-0",
+  "text": "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east.",
+  "lit": 6,
+  "muted": 3
+ },
+ {
+  "current": null,
+  "id": "phase-card-1",
+  "text": "Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west.",
+  "lit": 7,
+  "muted": 2
+ }
+]
+
+Window 900 px wide: page scrollWidth minus clientWidth = 0 (0 means no horizontal page scroll); screenshot s-900px.png
+
+Forced colours active: screenshot s-forced-colors.png
+
+7. Switched to Français: names and summaries are French
+   plan marker: Plan suggéré
+   inspector heading: Signalisation de la jonction
+   focused element: BUTTON
+   cards (current = aria-current, lit/muted = drawn elements): [
+ {
+  "current": null,
+  "id": "phase-card-0",
+  "text": "Phase 1 : Boulevard Saint-LaurentVert 25 s, jaune 3 s, rouge intégral 2 sVoitures qui passent : sud-est. Piétons qui traversent : nord-est et sud-ouest. Vélos qui passent : nord-est.",
+  "lit": 6,
+  "muted": 3
+ },
+ {
+  "current": null,
+  "id": "phase-card-1",
+  "text": "Phase 2 : Avenue Laurier OuestVert 25 s, jaune 3 s, rouge intégral 2 sVoitures qui passent : sud-ouest. Piétons qui traversent : sud-est et nord-ouest. Vélos qui passent : nord-est et sud-ouest.",
+  "lit": 7,
+  "muted": 2
+ }
+]
+

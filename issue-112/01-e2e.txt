@@ -1,0 +1,8 @@
+
+Running 3 tests using 3 workers
+
+  ✓  3 [chromium] › tests/junction.spec.ts:482:3 › signal timing on a junction of the city › the row of drawings fits a 900 px window and works in forced colours (3.8s)
+  ✓  1 [chromium] › tests/junction.spec.ts:450:3 › signal timing on a junction of the city › pressing the later card of a street that has two phases keeps the focus on that card (3.8s)
+  ✓  2 [chromium] › tests/junction.spec.ts:409:3 › signal timing on a junction of the city › each phase is drawn, the Suggested label goes with an edit and returns with Restore, and a drawing and its street select each other (3.9s)
+
+  3 passed (4.9s)
