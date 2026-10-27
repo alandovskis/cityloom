@@ -1741,6 +1741,22 @@ fn the_junction_panel_of_a_signal_lists_the_phases_with_the_cycle() {
 }
 
 #[test]
+fn the_signal_section_has_the_phase_buttons_and_says_whether_the_plan_is_suggested() {
+    let s = shared(0);
+    let h = plain_panel(&s);
+    assert!(h.contains("Suggested plan"), "{h}");
+    for label in ["Move the phase for", "Remove the phase for", "Add a phase for", "Restore the suggested plan"] {
+        assert!(h.contains(label), "{label}: {h}");
+    }
+    assert_eq!(count(&h, "id=\"sig-remove-"), 4);
+    assert!(h.contains("id=\"sig-earlier-0\"") && h.contains("id=\"sig-later-3\""));
+    s.edit(|j| j.remove_phase(0));
+    let h = plain_panel(&s);
+    assert!(h.contains("Edited plan") && !h.contains("Suggested plan"), "{h}");
+    assert_eq!(count(&h, "id=\"sig-remove-"), 3);
+}
+
+#[test]
 fn the_arm_panel_has_three_steppers_and_a_fourth_for_a_street_with_a_transit_lane() {
     let s = shared(0);
     let e = arm(&s, 90);

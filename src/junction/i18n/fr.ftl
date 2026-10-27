@@ -514,3 +514,6 @@ jn-sig-earlier = Avancer la phase de { $street }
 jn-sig-later = Reculer la phase de { $street }
 jn-sig-remove = Retirer la phase de { $street }
 jn-sig-restore = Rétablir le plan suggéré
+jn-sig-earlier-short = Avancer
+jn-sig-later-short = Reculer
+jn-sig-remove-short = Retirer

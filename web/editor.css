@@ -2470,8 +2470,14 @@ dl.prov dd:last-child {
   display: grid;
   gap: 4px;
 }
-.signal-list .btn {
+.signal-list > li > .btn {
   width: 100%;
   text-align: start;
   white-space: normal;
+}
+.signal-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-block: 4px;
 }

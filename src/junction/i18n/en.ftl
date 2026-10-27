@@ -514,3 +514,6 @@ jn-sig-earlier = Move the phase for { $street } earlier
 jn-sig-later = Move the phase for { $street } later
 jn-sig-remove = Remove the phase for { $street }
 jn-sig-restore = Restore the suggested plan
+jn-sig-earlier-short = Earlier
+jn-sig-later-short = Later
+jn-sig-remove-short = Remove

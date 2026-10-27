@@ -1219,31 +1219,80 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
     }
 }
 
-/// The signal's cycle and a row for each phase, in the order they run. A press on a row opens that street.
+/// Puts the focus on the element with this id, if it is there.
+fn focus_id(id: &str) {
+    use leptos::wasm_bindgen::JsCast;
+    if let Some(el) = document().get_element_by_id(id).and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
+        let _ = el.focus();
+    }
+}
+
+/// The signal's cycle and a row for each phase, in the order they run, with the buttons that move, remove and add
+/// phases and give the suggested plan back. A press on a row opens that street. The rows are kept by their place in
+/// the cycle, so the button that was pressed keeps its element and the focus follows a phase that moves.
 fn signal_overview(w: Watch) -> impl IntoView {
+    let shown = Memo::new(move |_| w.view().signal.is_some());
+    let count = Memo::new(move |_| w.view().signal.as_ref().map_or(0, |s| s.phases.len()));
+    let suggested = Memo::new(move |_| w.view().signal.as_ref().is_none_or(|s| s.suggested));
+    let streets = Memo::new(move |_| w.view().arms.iter().filter(|a| a.enters && !a.pedestrian).map(|a| a.uid).collect::<Vec<u32>>());
+    let phase = move |i: usize| w.view().signal.as_ref().and_then(|s| s.phases.get(i).cloned());
+    let row = move |i: usize| {
+        let select = move || {
+            let Some(p) = phase(i) else { return String::new() };
+            let t = p.timing;
+            let key = if t.transit_lead_s > 0 { "jn-sig-row-lead" } else { "jn-sig-row" };
+            let args = Args::new()
+                .str("street", w.say(&p.street))
+                .num("lead", i64::from(t.transit_lead_s))
+                .num("green", i64::from(t.green_s))
+                .num("yellow", i64::from(t.yellow_s))
+                .num("all_red", i64::from(t.all_red_s));
+            tr(w, key, args)
+        };
+        let named = move |key: &'static str| move || phase(i).map(|p| tr(w, key, Args::new().str("street", w.say(&p.street)))).unwrap_or_default();
+        let (earlier, later) = (format!("sig-earlier-{i}"), format!("sig-later-{i}"));
+        view! {
+            <li>
+                <button type="button" class="btn quiet" on:click=move |_| { if let Some(p) = phase(i) { w.select(Target::Arm(p.uid)) } }>{select}</button>
+                <div class="signal-tools">
+                    <button type="button" class="btn" id=earlier.clone() disabled=move || (i == 0) aria-label=named("jn-sig-earlier")
+                        on:click=move |_| { if w.edit(|j| j.move_phase(i, -1)) { focus_id(&if i == 1 { format!("sig-later-{}", i - 1) } else { format!("sig-earlier-{}", i - 1) }) } }>
+                        {words(w, "jn-sig-earlier-short")}
+                    </button>
+                    <button type="button" class="btn" id=later.clone() disabled=move || (i + 1 >= count.get()) aria-label=named("jn-sig-later")
+                        on:click=move |_| { if w.edit(|j| j.move_phase(i, 1)) { focus_id(&if i + 2 >= count.get() { format!("sig-earlier-{}", i + 1) } else { format!("sig-later-{}", i + 1) }) } }>
+                        {words(w, "jn-sig-later-short")}
+                    </button>
+                    <button type="button" class="btn danger" id=format!("sig-remove-{i}") aria-label=named("jn-sig-remove")
+                        on:click=move |_| { let left = count.get_untracked().saturating_sub(1); if w.edit(|j| j.remove_phase(i)) { focus_id(&format!("sig-remove-{}", i.min(left.saturating_sub(1)))) } }>
+                        {words(w, "jn-sig-remove-short")}
+                    </button>
+                </div>
+            </li>
+        }
+    };
     move || {
-        w.view().signal.as_ref().map(|s| {
-            let rows = s
-                .phases
-                .iter()
-                .map(|p| {
-                    let uid = p.uid;
-                    let t = p.timing;
-                    let key = if t.transit_lead_s > 0 { "jn-sig-row-lead" } else { "jn-sig-row" };
-                    let args = Args::new()
-                        .str("street", w.say(&p.street))
-                        .num("lead", i64::from(t.transit_lead_s))
-                        .num("green", i64::from(t.green_s))
-                        .num("yellow", i64::from(t.yellow_s))
-                        .num("all_red", i64::from(t.all_red_s));
-                    view! { <li><button type="button" class="btn quiet" on:click=move |_| w.select(Target::Arm(uid))>{tr(w, key, args)}</button></li> }
-                })
-                .collect_view();
+        shown.get().then(|| {
             view! {
                 <section class="insp-sec">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
-                    <p class="insp-range">{tr(w, "jn-sig-cycle", Args::new().num("seconds", i64::from(s.cycle_s)))}</p>
-                    <ul class="signal-list">{rows}</ul>
+                    <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
+                    <p class="insp-range" id="signal-plan-state">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
+                    <ul class="signal-list"><For each=move || 0..count.get() key=|i| *i children=row/></ul>
+                    <div class="signal-tools">
+                        <For
+                            each=move || streets.get()
+                            key=|uid| *uid
+                            children=move |uid| {
+                                let label = move || tr(w, "jn-sig-add", Args::new().str("street", w.view().arms.iter().find(|a| a.uid == uid).map(|a| w.say(&a.street)).unwrap_or_default()));
+                                view! { <button type="button" class="btn" on:click=move |_| { w.edit(|j| j.add_phase(uid)); }>{label}</button> }
+                            }
+                        />
+                        <button type="button" class="btn" id="signal-restore" disabled=move || suggested.get()
+                            on:click=move |_| { w.edit(|j| j.restore_suggestion()); }>
+                            {words(w, "jn-sig-restore")}
+                        </button>
+                    </div>
                 </section>
             }
         })
