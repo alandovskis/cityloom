@@ -581,6 +581,29 @@ mod tests {
     }
 
     #[test]
+    fn the_phase_commands_are_announced_and_refused_in_english_and_in_french() {
+        let r = rig(0);
+        assert!(r.vm.apply(|j| j.remove_phase(0)));
+        assert!(r.said.take()[0].starts_with("Phase 1 for Sample Avenue 2 (north) removed."), "english");
+        assert!(r.vm.apply(|j| j.restore_suggestion()));
+        assert!(r.said.take()[0].starts_with("Signal plan restored to the suggestion."));
+        assert!(!r.vm.apply(|j| j.restore_suggestion()));
+        assert_eq!(r.said.take(), vec!["The signal plan is already the suggested one."]);
+        assert!(!r.vm.apply(|j| j.move_phase(0, -1)));
+        assert_eq!(r.said.take(), vec!["That phase cannot move any further that way."]);
+
+        let (ports, said, _, _) = test_ports_with_time();
+        let fr = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
+        assert!(fr.apply(|j| j.move_phase(0, 1)));
+        let t = said.take();
+        assert!(t[0].contains("reculée, maintenant 2 sur 4"), "{t:?}");
+        assert!(fr.apply(|j| j.restore_suggestion()));
+        assert!(said.take()[0].starts_with("Plan des feux rétabli à la suggestion."));
+        assert!(!fr.apply(|j| j.move_phase(0, -1)));
+        assert_eq!(said.take(), vec!["Cette phase ne peut pas aller plus loin dans ce sens."]);
+    }
+
+    #[test]
     fn a_selection_is_announced_and_clearing_it_says_nothing() {
         let r = rig(0);
         let n = arm(&r.vm, 0);

@@ -170,7 +170,7 @@ fn conflicts_are_counted_and_the_note_follows_the_control() {
 fn the_checks_each_say_whether_they_pass() {
     let s = shared(0);
     let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
-    assert_eq!(count(&h, "<li class=\"ok\">"), 10, "the eight of any junction, and a signal's time to cross and cycle");
+    assert_eq!(count(&h, "<li class=\"ok\">"), 11, "the eight of any junction, and a signal's time to cross, phases and cycle");
     assert!(h.contains("Time to cross") && h.contains("Signal cycle"));
     assert!(h.contains(": passes"));
     assert!(h.contains("Longest crossing in one go: 11.4 m"));

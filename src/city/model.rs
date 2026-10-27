@@ -516,6 +516,7 @@ impl Layout {
             cycle: None,
             raised: false,
             turbo: None,
+            signal_plan: None,
             source: def.source.clone(),
         };
         forget_streets(&mut s);
@@ -576,6 +577,7 @@ fn tune_corners(arms: &mut [Arm], control: usize, preferred: i32) {
         cycle: None,
         raised: false,
         turbo: None,
+        signal_plan: None,
         source: Vec::new(),
     };
     let mut radii: Vec<i32> = (MIN_CORNER_MM..=MAX_CORNER_MM).step_by(RING_STEP_MM as usize).collect();

@@ -83,8 +83,18 @@ impl Junction {
             .collect();
         arms.sort_by_key(|a| a.bearing);
         normalize(&mut arms, self.region);
-        self.states =
-            vec![State { label: today(), arms, control: s.control, ring_extra_mm: 0, bus: None, cycle: None, raised: false, turbo: None, source: Vec::new() }];
+        self.states = vec![State {
+            label: today(),
+            arms,
+            control: s.control,
+            ring_extra_mm: 0,
+            bus: None,
+            cycle: None,
+            raised: false,
+            turbo: None,
+            signal_plan: None,
+            source: Vec::new(),
+        }];
         self.cursor = 0;
         self.selected = Target::None;
         self.gesture = None;

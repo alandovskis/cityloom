@@ -555,6 +555,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("share-menu", "the id of an element the editors share"),
     ("signal-walk", "the id of a check of the junction sheet"),
     ("signal-cycle", "the id of a check of the junction sheet"),
+    ("signal-phases", "the id of a check of the junction sheet"),
     ("cityloom-theme", "a storage key"),
     ("cityloom-inspector", "a storage key"),
     ("cityloom-notes", "a storage key"),

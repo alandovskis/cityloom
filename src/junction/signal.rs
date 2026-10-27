@@ -2,7 +2,34 @@
 //! its own, taken in turn in the order of the streets' bearings. A pedestrian crossing or a bike movement runs in every
 //! phase where it does not conflict with that phase's vehicle movements. No DOM, no signals, no I/O.
 
+use serde::{Deserialize, Serialize};
+
 use crate::junction::model::{Arm, SIGNAL, State, THROUGH, Timing, turn_class};
+
+/// One vehicle movement a phase serves: the entering lane `lane` of arm `from`, going to arm `to`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Move {
+    pub from: u32,
+    pub lane: usize,
+    pub to: u32,
+}
+
+/// A phase as it is kept: the movements it serves and the crossings (`walks`) and bike movements (`rides`) that run
+/// with it, all by street uid. Its timing is not kept here: it is the timing of its primary arm, the arm of its first
+/// movement (`Arm.timing`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredPhase {
+    pub moves: Vec<Move>,
+    pub walks: Vec<u32>,
+    pub rides: Vec<u32>,
+}
+
+/// A signal plan the person has edited: its phases in the order they run. A junction that has none shows the
+/// suggestion (`plan`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignalPlan {
+    pub phases: Vec<StoredPhase>,
+}
 
 /// One street's turn of the signal.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -14,12 +41,23 @@ pub struct Phase {
     pub walks: Vec<u32>,
     /// The streets whose bike movements run during this phase (this street's own among them).
     pub rides: Vec<u32>,
+    /// The movements the phase serves.
+    pub moves: Vec<Move>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Plan {
     pub phases: Vec<Phase>,
     pub cycle_s: u32,
+    /// The plan is the suggestion: the person has not edited it.
+    pub suggested: bool,
+}
+
+impl Plan {
+    /// The plan as it is kept.
+    pub fn to_stored(&self) -> SignalPlan {
+        SignalPlan { phases: self.phases.iter().map(|p| StoredPhase { moves: p.moves.clone(), walks: p.walks.clone(), rides: p.rides.clone() }).collect() }
+    }
 }
 
 /// Where the traffic entering arm `i` goes, as places in `arms`.
@@ -48,7 +86,60 @@ fn crossing_clear(arms: &[&Arm], moves: &[Vec<usize>], i: usize, b: usize) -> bo
     i != b && !(moves[i].contains(&b) && turn_class(arms[i].bearing, arms[b].bearing) == THROUGH)
 }
 
+/// The plan the person sees: the one they edited, else the suggestion. None unless the control is a signal.
 pub fn plan(s: &State, region: usize) -> Option<Plan> {
+    let suggestion = suggestion(s, region)?;
+    let Some(stored) = s.signal_plan.as_ref().and_then(|p| settled(s, p)) else { return Some(suggestion) };
+    let phases: Vec<Phase> = stored
+        .phases
+        .into_iter()
+        .filter_map(|p| {
+            let uid = p.moves.first()?.from;
+            let timing = s.arms.iter().find(|a| a.uid == uid)?.timing.unwrap_or_default();
+            Some(Phase { uid, timing, length_s: timing.length_s(), walks: p.walks, rides: p.rides, moves: p.moves })
+        })
+        .collect();
+    let cycle_s = phases.iter().map(|p| p.length_s).sum();
+    Some(Plan { phases, cycle_s, suggested: false })
+}
+
+/// The stored plan with whatever no longer exists taken out (a street, a lane, a destination), and a phase that serves
+/// nothing any more dropped. None when nothing is left.
+fn settled(s: &State, plan: &SignalPlan) -> Option<SignalPlan> {
+    let has = |uid: u32| s.arms.iter().any(|a| a.uid == uid);
+    let phases: Vec<StoredPhase> = plan
+        .phases
+        .iter()
+        .map(|p| StoredPhase {
+            moves: p
+                .moves
+                .iter()
+                .copied()
+                .filter(|m| has(m.to) && s.arms.iter().any(|a| a.uid == m.from && a.lanes.get(m.lane).is_some_and(|l| l.to.contains(&m.to))))
+                .collect(),
+            walks: p.walks.iter().copied().filter(|&u| has(u)).collect(),
+            rides: p.rides.iter().copied().filter(|&u| has(u)).collect(),
+        })
+        .filter(|p| !p.moves.is_empty())
+        .collect();
+    (!phases.is_empty()).then_some(SignalPlan { phases })
+}
+
+/// Keeps the stored plan true to the junction after an edit: gone unless the control is a signal, and without what no
+/// longer exists.
+pub fn settle(s: &mut State) {
+    s.signal_plan = if s.control == SIGNAL { s.signal_plan.as_ref().and_then(|p| settled(s, p)) } else { None };
+}
+
+/// A phase for arm `uid` as the suggestion would make it, to add to a stored plan. None when nothing enters from it.
+pub fn phase_for(s: &State, region: usize, uid: u32) -> Option<StoredPhase> {
+    let suggestion = suggestion(s, region)?;
+    let p = suggestion.phases.into_iter().find(|p| p.uid == uid)?;
+    (!p.moves.is_empty()).then_some(StoredPhase { moves: p.moves, walks: p.walks, rides: p.rides })
+}
+
+/// The suggestion: one phase per street that has entering lanes, in the order of the bearings.
+fn suggestion(s: &State, region: usize) -> Option<Plan> {
     if s.control != SIGNAL {
         return None;
     }
@@ -65,11 +156,19 @@ pub fn plan(s: &State, region: usize) -> Option<Plan> {
                 .filter(|&b| bikes[b] && (b == i || moves[b].iter().all(|&x| moves[i].iter().all(|&y| !crosses(b, x, i, y)))))
                 .map(|b| arms[b].uid)
                 .collect();
-            Phase { uid: arms[i].uid, timing, length_s: timing.length_s(), walks, rides }
+            let from = arms[i].uid;
+            let moves = arms[i]
+                .lanes
+                .iter()
+                .enumerate()
+                .flat_map(|(lane, l)| l.to.iter().map(move |&to| Move { from, lane, to }))
+                .filter(|m| m.to != m.from && arms.iter().any(|a| a.uid == m.to))
+                .collect();
+            Phase { uid: arms[i].uid, timing, length_s: timing.length_s(), walks, rides, moves }
         })
         .collect();
     let cycle_s = phases.iter().map(|p| p.length_s).sum();
-    Some(Plan { phases, cycle_s })
+    Some(Plan { phases, cycle_s, suggested: true })
 }
 
 /// The longest time in a row, round the cycle, that the crossing of arm `uid` is walked.

@@ -1110,6 +1110,7 @@ mod tests {
                 cycle: None,
                 raised: false,
                 turbo: None,
+                signal_plan: None,
                 source: Default::default(),
             },
             arm_streets: BTreeMap::new(),

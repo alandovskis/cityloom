@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 use crate::junction::geometry::gap;
+use crate::junction::signal;
 use crate::junction::turbo::{self, BLOCKS, LAYOUTS, Turbo};
 use crate::street::model::{Beyond, Editor, Street, View, named_said};
 
@@ -322,6 +323,10 @@ pub struct State {
     /// otherwise is settled to none). A record made before turbos has none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turbo: Option<Turbo>,
+    /// The signal plan the person has edited; none means the suggestion (`signal::plan`). Only while `control` is a
+    /// signal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signal_plan: Option<crate::junction::signal::SignalPlan>,
     /// The OSM nodes it was made from. The sample junctions are made from none.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source: Vec<OsmRef>,
@@ -789,10 +794,14 @@ pub enum Refusal {
     TurboLanesFixed,
     BusOnTurbo,
     QueueJumpOnTurbo,
+    PhaseServesNothing,
+    LastPhase,
+    PhaseAtEnd,
+    PlanSuggested,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 22] = [
+    pub const ALL: [Refusal; 26] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -815,6 +824,10 @@ impl Refusal {
         Refusal::TurboLanesFixed,
         Refusal::BusOnTurbo,
         Refusal::QueueJumpOnTurbo,
+        Refusal::PhaseServesNothing,
+        Refusal::LastPhase,
+        Refusal::PhaseAtEnd,
+        Refusal::PlanSuggested,
     ];
 
     /// The message that says why.
@@ -842,6 +855,10 @@ impl Refusal {
             Refusal::TurboLanesFixed => "jn-refusal-turbo-lanes-fixed",
             Refusal::BusOnTurbo => "jn-refusal-bus-on-turbo",
             Refusal::QueueJumpOnTurbo => "jn-refusal-queue-jump-on-turbo",
+            Refusal::PhaseServesNothing => "jn-refusal-phase-serves-nothing",
+            Refusal::LastPhase => "jn-refusal-last-phase",
+            Refusal::PhaseAtEnd => "jn-refusal-phase-at-end",
+            Refusal::PlanSuggested => "jn-refusal-plan-suggested",
         }
     }
 }
@@ -1393,6 +1410,91 @@ impl Junction {
         self.set_timing(uid, field, now.saturating_add(dir.signum()))
     }
 
+    /// The signal plan as the person sees it, if the control in force is a signal, and the control has to be one for
+    /// an edit of it.
+    fn signal_plan_to_edit(&mut self) -> Option<signal::Plan> {
+        if in_force(self.current()).control != SIGNAL {
+            self.refuse(Refusal::NotSignal);
+            return None;
+        }
+        let plan = signal::plan(self.current(), self.region);
+        if plan.is_none() {
+            self.refuse(Refusal::NotSignal);
+        }
+        plan
+    }
+
+    /// Adds a phase for the traffic entering from arm `uid`, last in the cycle: all its movements, with the crossings
+    /// and bike movements the suggestion runs with it. The first edit of a plan keeps the suggestion as the person's
+    /// own plan, then changes it.
+    pub fn add_phase(&mut self, uid: u32) -> bool {
+        let Some(arm) = self.arm(uid) else { return self.refuse(Refusal::DoesNotFit) };
+        if arm.is_pedestrian() {
+            return self.refuse(Refusal::MeasureOnPedestrian);
+        }
+        let Some(plan) = self.signal_plan_to_edit() else { return false };
+        let Some(phase) = signal::phase_for(self.current(), self.region, uid) else { return self.refuse(Refusal::PhaseServesNothing) };
+        let mut kept = plan.to_stored();
+        kept.phases.push(phase);
+        let label = self.phase_label("jn-rev-phase-add", uid, kept.phases.len() - 1);
+        self.edit(label, |s| {
+            s.signal_plan = Some(kept);
+            true
+        })
+    }
+
+    /// Takes out the phase at `index` (from 0, in the order they run). The last phase stays.
+    pub fn remove_phase(&mut self, index: usize) -> bool {
+        let Some(plan) = self.signal_plan_to_edit() else { return false };
+        let Some(phase) = plan.phases.get(index) else { return self.refuse(Refusal::DoesNotFit) };
+        if plan.phases.len() <= 1 {
+            return self.refuse(Refusal::LastPhase);
+        }
+        let label = self.phase_label("jn-rev-phase-remove", phase.uid, index);
+        let mut kept = plan.to_stored();
+        kept.phases.remove(index);
+        self.edit(label, |s| {
+            s.signal_plan = Some(kept);
+            true
+        })
+    }
+
+    /// Moves the phase at `index` one place earlier (`dir` < 0) or later in the cycle.
+    pub fn move_phase(&mut self, index: usize, dir: i32) -> bool {
+        let Some(plan) = self.signal_plan_to_edit() else { return false };
+        let Some(phase) = plan.phases.get(index) else { return self.refuse(Refusal::DoesNotFit) };
+        let to = if dir < 0 { index.checked_sub(1) } else { Some(index + 1).filter(|&t| t < plan.phases.len()) };
+        let Some(to) = to else { return self.refuse(Refusal::PhaseAtEnd) };
+        let key = if dir < 0 { "jn-rev-phase-earlier" } else { "jn-rev-phase-later" };
+        let label = self.phase_label(key, phase.uid, to).with("total", Arg::Num(plan.phases.len() as i64));
+        let mut kept = plan.to_stored();
+        kept.phases.swap(index, to);
+        self.edit(label, |s| {
+            s.signal_plan = Some(kept);
+            true
+        })
+    }
+
+    /// Gives the junction the suggested plan again, in place of the one the person edited.
+    pub fn restore_suggestion(&mut self) -> bool {
+        if self.signal_plan_to_edit().is_none() {
+            return false;
+        }
+        if self.current().signal_plan.is_none() {
+            return self.refuse(Refusal::PlanSuggested);
+        }
+        self.edit(Said::new("jn-rev-phase-restore"), |s| {
+            s.signal_plan = None;
+            true
+        })
+    }
+
+    /// A label about the phase of arm `uid` that is now place `index` (from 0) in the cycle.
+    fn phase_label(&self, key: &'static str, uid: u32, index: usize) -> Said {
+        let arm = self.arm(uid).map_or_else(|| named_said(""), arm_name);
+        Said::new(key).with("arm", Arg::Said(Box::new(arm))).with("n", Arg::Num(index as i64 + 1))
+    }
+
     /// Protects the corner clockwise of arm `uid`, or makes it plain again. See `protected_blocker` for where it may stand.
     pub fn set_protected(&mut self, uid: u32, on: bool) -> bool {
         let region = self.region;
@@ -1863,6 +1965,7 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
             t.transit_lead_s = 0;
         }
     }
+    signal::settle(s);
 }
 
 /// A turbo stands only on a roundabout whose arms suit it, none is more than 20° off its template and every entry it
@@ -2154,7 +2257,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 22);
+        assert_eq!(Refusal::ALL.len(), 26);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }
@@ -3471,6 +3574,155 @@ mod tests {
             assert!(!op(&mut k), "{name} was meant to be refused");
             assert!(k.refusal().is_some(), "{name} gave no reason");
         }
+    }
+
+    // ---- the signal plan as a list of phases ----
+
+    fn phase_uids(j: &Junction) -> Vec<u32> {
+        signal::plan(j.current(), 0).unwrap().phases.iter().map(|p| p.uid).collect()
+    }
+
+    #[test]
+    fn a_junction_nobody_edited_shows_the_suggestion_and_stores_no_plan() {
+        let j = Junction::new(0);
+        let p = signal::plan(j.current(), 0).unwrap();
+        assert!(p.suggested);
+        assert_eq!(p.phases.len(), 4);
+        assert!(p.phases.iter().all(|ph| !ph.moves.is_empty()), "each phase says the movements it serves");
+        assert!(j.current().signal_plan.is_none());
+        assert!(serde_json::to_value(j.current()).unwrap().get("signal_plan").is_none(), "nothing is written for it");
+    }
+
+    #[test]
+    fn removing_a_phase_keeps_the_edited_plan_in_the_junction_and_undo_brings_the_suggestion_back() {
+        let mut j = Junction::new(0);
+        let before = phase_uids(&j);
+        assert!(j.remove_phase(1));
+        let p = signal::plan(j.current(), 0).unwrap();
+        assert!(!p.suggested);
+        assert_eq!(p.phases.iter().map(|p| p.uid).collect::<Vec<_>>(), [before[0], before[2], before[3]]);
+        assert!(j.current().signal_plan.is_some());
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("Phase 2 for"), "{}", en(j.revisions().last().unwrap()));
+        assert!(j.undo());
+        assert!(signal::plan(j.current(), 0).unwrap().suggested);
+        assert_eq!(phase_uids(&j), before);
+        assert!(j.redo());
+        assert_eq!(phase_uids(&j).len(), 3);
+    }
+
+    #[test]
+    fn the_last_phase_stays() {
+        let mut j = Junction::new(0);
+        assert!(j.remove_phase(0) && j.remove_phase(0) && j.remove_phase(0));
+        assert!(!j.remove_phase(0));
+        assert_eq!(j.refusal(), Some(Refusal::LastPhase));
+        assert_eq!(phase_uids(&j).len(), 1);
+        assert!(!j.remove_phase(9));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+    }
+
+    #[test]
+    fn a_phase_moves_earlier_or_later_and_not_past_the_ends() {
+        let mut j = Junction::new(0);
+        let [a, b, c, d] = phase_uids(&j)[..] else { panic!("four phases") };
+        assert!(j.move_phase(2, -1));
+        assert_eq!(phase_uids(&j), [a, c, b, d]);
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("moved earlier, now 2 of 4"));
+        assert!(j.move_phase(0, 1));
+        assert_eq!(phase_uids(&j), [c, a, b, d]);
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("moved later, now 2 of 4"));
+        assert!(!j.move_phase(0, -1));
+        assert_eq!(j.refusal(), Some(Refusal::PhaseAtEnd));
+        assert!(!j.move_phase(3, 1));
+        assert_eq!(j.refusal(), Some(Refusal::PhaseAtEnd));
+        assert!(!j.move_phase(7, 1));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+        assert!(j.undo() && j.undo());
+        assert_eq!(phase_uids(&j), [a, b, c, d]);
+    }
+
+    #[test]
+    fn a_removed_street_can_be_given_a_phase_again_last() {
+        let mut j = Junction::new(0);
+        let first = phase_uids(&j)[0];
+        assert!(j.remove_phase(0));
+        assert!(j.add_phase(first));
+        assert_eq!(*phase_uids(&j).last().unwrap(), first);
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("Phase 4 added for"));
+        assert!(j.add_phase(first), "a street may have a second phase");
+        assert_eq!(phase_uids(&j).len(), 5);
+        assert!(!j.add_phase(9_999));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+    }
+
+    #[test]
+    fn a_street_nothing_enters_from_has_no_phase_to_add() {
+        let j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        let mut s = j.current().clone();
+        assert!(signal::phase_for(&s, 0, n).is_some());
+        s.arms.iter_mut().find(|a| a.uid == n).unwrap().lanes.clear();
+        assert!(signal::phase_for(&s, 0, n).is_none());
+    }
+
+    #[test]
+    fn the_plan_can_be_restored_to_the_suggestion_but_not_when_it_is_one() {
+        let mut j = Junction::new(0);
+        assert!(!j.restore_suggestion());
+        assert_eq!(j.refusal(), Some(Refusal::PlanSuggested));
+        let all = phase_uids(&j);
+        assert!(j.move_phase(0, 1));
+        assert!(j.restore_suggestion());
+        assert!(signal::plan(j.current(), 0).unwrap().suggested);
+        assert_eq!(phase_uids(&j), all);
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("restored to the suggestion"));
+        assert!(j.undo());
+        assert!(!signal::plan(j.current(), 0).unwrap().suggested, "undo brings the edited plan back");
+    }
+
+    #[test]
+    fn the_plan_is_edited_only_at_a_signal() {
+        let mut j = Junction::new(1);
+        j.set_control(2);
+        for ok in [j.remove_phase(0), j.move_phase(0, 1), j.restore_suggestion(), j.add_phase(arm_at(&j, 90))] {
+            assert!(!ok);
+            assert_eq!(j.refusal(), Some(Refusal::NotSignal));
+        }
+    }
+
+    #[test]
+    fn leaving_the_signal_drops_the_edited_plan_and_undo_brings_it_back() {
+        let mut j = Junction::new(0);
+        assert!(j.remove_phase(0));
+        assert!(j.set_control(PRIORITY));
+        assert!(j.current().signal_plan.is_none());
+        assert!(j.undo());
+        assert!(j.current().signal_plan.is_some());
+    }
+
+    #[test]
+    fn a_lane_that_no_longer_goes_where_a_phase_served_it_is_dropped_from_the_plan() {
+        let mut j = Junction::new(0);
+        assert!(j.remove_phase(3));
+        let n = arm_at(&j, 0);
+        let to = j.arm(n).unwrap().lanes[0].to.clone();
+        assert!(to.len() > 1);
+        assert!(j.set_lane_dest(n, 0, to[0], false));
+        let p = signal::plan(j.current(), 0).unwrap();
+        assert!(p.phases.iter().flat_map(|p| &p.moves).all(|m| !(m.from == n && m.to == to[0])), "the served movement is gone");
+    }
+
+    #[test]
+    fn the_plan_round_trips_and_an_old_record_loads_as_suggested() {
+        let mut j = Junction::new(0);
+        let old: serde_json::Value = serde_json::to_value(j.current()).unwrap();
+        let back: State = serde_json::from_value(old).unwrap();
+        assert_eq!(back.signal_plan, None, "a record from before the plan reads as suggested");
+        assert!(j.move_phase(0, 1));
+        let v = serde_json::to_value(j.current()).unwrap();
+        assert!(v["signal_plan"]["phases"].as_array().unwrap().len() == 4);
+        let back: State = serde_json::from_value(v).unwrap();
+        assert_eq!(back.signal_plan, j.current().signal_plan);
     }
 
     // ---- signal timing ----
