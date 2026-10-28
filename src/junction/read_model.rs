@@ -16,7 +16,7 @@ use crate::junction::model::{
     TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
 };
 
-use crate::junction::signal;
+use crate::junction::signal::{self, Pattern};
 use crate::junction::turbo::{self, BLOCKS, Edge, LAYOUTS, Turbo, WARN_SKEW_DEG, layouts_for, main_candidates, ring_lane};
 use crate::junction::turbo_ring::{follow, mouth_on};
 use crate::junction::turbo_spiral::{Axes, Mouth, RingLane, RingShape, ring_outline, ring_shape, spiral_walk};
@@ -704,6 +704,18 @@ pub struct PhaseView {
     pub ride_arms: Vec<u32>,
     /// What the phase allows, in a sentence by compass point: "Cars go: north. People cross: east and west."
     pub summary: Said,
+    /// The ready-made pattern the phase is, Custom when it matches none.
+    pub pattern: Pattern,
+    /// The patterns that fit this junction's lanes, in the order they are offered (never Custom).
+    pub patterns: Vec<PatternView>,
+}
+
+/// One ready-made pattern a phase can be given: the message keys of its name and its one-sentence description.
+#[derive(Clone, Debug, Serialize)]
+pub struct PatternView {
+    pub pattern: Pattern,
+    pub name: &'static str,
+    pub description: &'static str,
 }
 
 /// The compass point an arm leaves by, said in full ("north-east").
@@ -733,6 +745,11 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
         .map(|(n, p)| PhaseView {
             name: phase_name(n, p, &find, &name),
             summary: phase_summary(p, arms),
+            pattern: signal::pattern_of(s, region, p),
+            patterns: signal::patterns_for(s, region, p)
+                .into_iter()
+                .map(|pattern| PatternView { pattern, name: pattern.name_key(), description: pattern.description_key() })
+                .collect(),
             moves: p.moves.clone(),
             walk_arms: p.walks.clone(),
             ride_arms: p.rides.clone(),
@@ -3390,6 +3407,39 @@ mod tests {
         assert_eq!(en(&p.summary), "Cars go: north. People cross: east and west.");
         assert!(s.phases.iter().all(|p| en(&p.summary).starts_with("Cars go: ")));
         assert!(en(&s.phases[3].name).starts_with("Phase 4: "));
+    }
+
+    #[test]
+    fn each_phase_says_its_pattern_and_the_patterns_that_fit_and_the_summary_and_drawing_follow_a_choice() {
+        use crate::shared::testing::en;
+        let mut j = Junction::new(0);
+        let v = j.view();
+        let p = &v.signal.as_ref().unwrap().phases[0];
+        assert_eq!(p.pattern, Pattern::All, "the suggestion serves every movement");
+        let offered: Vec<Pattern> = p.patterns.iter().map(|o| o.pattern).collect();
+        assert_eq!(offered, vec![Pattern::ThroughOnly, Pattern::All, Pattern::ProtectedLeftThenThrough, Pattern::Scramble]);
+        assert_eq!((p.patterns[0].name, p.patterns[0].description), ("jn-pattern-through", "jn-pattern-through-desc"));
+        let drawings = crate::junction::phase_svg::phase_drawings(&v);
+        assert!(j.set_phase_pattern(0, Pattern::Scramble));
+        let v2 = j.view();
+        let p2 = &v2.signal.as_ref().unwrap().phases[0];
+        assert_eq!(p2.pattern, Pattern::Scramble);
+        assert!(p2.moves.is_empty());
+        assert_eq!(en(&p2.summary), "People cross: north, east, south and west.");
+        assert_ne!(crate::junction::phase_svg::phase_drawings(&v2)[0], drawings[0], "the drawing follows the choice");
+        assert_eq!(crate::junction::phase_svg::phase_drawings(&v2)[1], drawings[1], "the other phases are drawn as they were");
+        // Taking a street's straight-on movement away leaves a stored phase that matches no pattern: Custom, never offered.
+        let mut k = Junction::new(0);
+        assert!(k.set_phase_pattern(0, Pattern::ProtectedLeftThenThrough));
+        let n = k.view().signal.as_ref().unwrap().phases[0].uid;
+        let south = k.view().arms.iter().find(|a| a.bearing == 180).unwrap().uid;
+        for lane in 0..k.arm(n).unwrap().lanes.len() {
+            k.set_lane_dest(n, lane, south, false);
+        }
+        let v3 = k.view();
+        let p3 = &v3.signal.as_ref().unwrap().phases[0];
+        assert_eq!(p3.pattern, Pattern::Custom);
+        assert!(!p3.patterns.is_empty() && p3.patterns.iter().all(|o| o.pattern != Pattern::Custom));
     }
 
     #[test]
