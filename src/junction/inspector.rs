@@ -1394,6 +1394,54 @@ fn pattern_group(w: Watch, i: usize) -> impl IntoView {
     }
 }
 
+/// What a phase lets people walk across or bikes go on, as a checklist of native checkboxes (Tab and Space), one per
+/// street that has a crossing or a bike lane: a street without is not listed. A box is named by the phase and the
+/// street. A scramble's crossings are shown and cannot be changed. A choice is kept whatever the cars do. The boxes are
+/// keyed by street, so the one with the focus keeps it across a change; a refused change puts the box back.
+fn movement_group(w: Watch, i: usize, ride: bool) -> impl IntoView {
+    let options = Memo::new(move |_| {
+        w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| if ride { p.ride_options.clone() } else { p.walk_options.clone() }).unwrap_or_default()
+    });
+    let fixed = Memo::new(move |_| !ride && w.view().signal.as_ref().and_then(|s| s.phases.get(i)).is_some_and(|p| p.walks_fixed));
+    let street = move || w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| w.say(&p.street)).unwrap_or_default();
+    let part = if ride { "rides" } else { "walks" };
+    let group = move || tr(w, if ride { "jn-ph-rides-group" } else { "jn-ph-walks-group" }, Args::new().num("n", i as i64 + 1).str("street", street()));
+    let on = move |uid: u32| options.with(|all| all.iter().any(|o| o.uid == uid && o.on));
+    let item = move |uid: u32| {
+        let id = format!("sig-{part}-{i}-{uid}");
+        let other = move || options.with(|all| all.iter().find(|o| o.uid == uid).map(|o| w.say(&o.label)).unwrap_or_default());
+        let name = move || {
+            tr(w, if ride { "jn-ph-ride-box" } else { "jn-ph-walk-box" }, Args::new().num("n", i as i64 + 1).str("street", street()).str("other", other()))
+        };
+        let focus = id.clone();
+        view! {
+            <label class="phase-move">
+                <input type="checkbox" id=id aria-label=name checked=move || on(uid) prop:checked=move || on(uid) disabled=move || fixed.get()
+                    on:change=move |ev| {
+                        let input = event_target::<web_sys::HtmlInputElement>(&ev);
+                        let done = if ride { w.toggle_phase_ride(i, uid) } else { w.toggle_phase_walk(i, uid) };
+                        if !done {
+                            input.set_checked(on(uid));
+                        }
+                        focus_after_swap(focus.clone());
+                    } />
+                <span>{other}</span>
+            </label>
+        }
+    };
+    let uids = move || options.get().into_iter().map(|o| o.uid).collect::<Vec<u32>>();
+    move || {
+        (!options.with(Vec::is_empty)).then(|| {
+            view! {
+                <div class="phase-moves" role="group" id=format!("sig-{part}-{i}") aria-label=group>
+                    <span class="phase-moves-h" aria-hidden="true">{words(w, if ride { "jn-ph-rides-legend" } else { "jn-ph-walks-legend" })}</span>
+                    <For each=uids key=|u| *u children=item/>
+                </div>
+            }
+        })
+    }
+}
+
 /// Puts the focus on element `id` once the panel has been redrawn for the choice (a microtask later).
 fn focus_after_swap(id: String) {
     leptos::task::spawn_local(async move { focus_id(&id) });
@@ -1424,12 +1472,15 @@ fn signal_overview(w: Watch) -> impl IntoView {
         let named = move |key: &'static str| move || phase(i).map(|p| tr(w, key, Args::new().str("street", w.say(&p.street)))).unwrap_or_default();
         let is_first = move || i == 0;
         let patterns = pattern_group(w, i);
+        let (walks, rides) = (movement_group(w, i, false), movement_group(w, i, true));
         let is_last = move || i + 1 >= count.get();
         let (earlier, later) = (format!("sig-earlier-{i}"), format!("sig-later-{i}"));
         view! {
             <li>
                 <button type="button" class="btn quiet" on:click=move |_| { if let Some(p) = phase(i) { w.select(Target::Arm(p.uid)) } }>{select}</button>
                 {patterns}
+                {walks}
+                {rides}
                 <div class="signal-tools">
                     <button type="button" class="btn" id=earlier.clone() disabled=is_first aria-label=named("jn-sig-earlier")
                         on:click=move |_| { if w.edit(|j| j.move_phase(i, -1)) { focus_id(&phase_focus_id(i - 1, count.get_untracked(), -1)) } }>

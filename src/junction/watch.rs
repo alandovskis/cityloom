@@ -109,6 +109,16 @@ impl Watch {
         self.vm.with_value(|v| v.choose_pattern(index, pattern))
     }
 
+    /// Switches the crossing of street `uid` in phase `index` as the person does. Whether it was done.
+    pub fn toggle_phase_walk(&self, index: usize, uid: u32) -> bool {
+        self.vm.with_value(|v| v.toggle_phase_walk(index, uid))
+    }
+
+    /// Switches the bike movements of street `uid` in phase `index` as the person does. Whether it was done.
+    pub fn toggle_phase_ride(&self, index: usize, uid: u32) -> bool {
+        self.vm.with_value(|v| v.toggle_phase_ride(index, uid))
+    }
+
     pub fn frame(&self) -> Option<crate::junction::frame::Frame> {
         self.vm.with_value(|v| v.frame())
     }

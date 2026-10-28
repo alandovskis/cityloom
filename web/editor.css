@@ -2538,6 +2538,22 @@ dl.prov dd:last-child {
   text-align: start;
   white-space: normal;
 }
+.phase-moves {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 6px;
+}
+.phase-moves-h {
+  font-weight: 600;
+}
+.phase-move {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
 .signal-phases {
   list-style: none;
   margin: 0 0 8px;

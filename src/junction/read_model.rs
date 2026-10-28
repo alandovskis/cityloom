@@ -3625,7 +3625,10 @@ mod tests {
         let n = arm(0).uid;
         assert!(j.set_crossing(n, false));
         let v = j.view();
-        assert!(v.signal.as_ref().unwrap().phases.iter().all(|p| p.walk_options.len() == 3 && p.walk_options.iter().all(|o| o.uid != n)), "no crossing, not listed");
+        assert!(
+            v.signal.as_ref().unwrap().phases.iter().all(|p| p.walk_options.len() == 3 && p.walk_options.iter().all(|o| o.uid != n)),
+            "no crossing, not listed"
+        );
         let b = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
         let v = b.view();
         let p = &v.signal.as_ref().unwrap().phases[0];

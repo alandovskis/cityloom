@@ -1818,6 +1818,53 @@ fn pattern_group(h: &str, i: usize) -> String {
     h[at..at + h[at..].find("</ul>").unwrap()].to_string()
 }
 
+/// The group `id_part` ("walks" or "rides") of phase `i` in the panel's markup.
+fn movement_group(h: &str, i: usize, id_part: &str) -> String {
+    let at = h.find(&format!("id=\"sig-{id_part}-{i}\"")).unwrap_or_else(|| panic!("no {id_part} group for phase {i}"));
+    let start = h[..at].rfind("<div").unwrap();
+    h[start..at + h[at..].find("</div>").unwrap()].to_string()
+}
+
+#[test]
+fn each_phase_has_a_people_walking_checklist_of_native_checkboxes_named_by_street_and_phase() {
+    let s = shared(0);
+    let h = plain_panel(&s);
+    let g = movement_group(&h, 0, "walks");
+    assert!(g.contains("role=\"group\"") && g.contains("People walking"), "{g}");
+    assert_eq!(count(&g, "type=\"checkbox\""), 4, "every street has a crossing: {g}");
+    assert_eq!(count(&g, "checked"), 2, "east and west walk while the north goes: {g}");
+    assert!(g.contains("aria-label=\"Phase 1, ") && g.contains("people walk across"), "{g}");
+    assert!(!h.contains("id=\"sig-rides-0\""), "the sample has no bike lanes, so no Bikes group: {h}");
+    // A crossing the junction does not have is not listed.
+    let n = arm(&s, 0);
+    s.edit(|j| j.set_crossing(n, false));
+    assert_eq!(count(&movement_group(&plain_panel(&s), 0, "walks"), "type=\"checkbox\""), 3);
+    // A scramble walks every crossing there is: the boxes are shown, checked and not changeable.
+    s.edit(|j| j.set_phase_pattern(0, Pattern::Scramble));
+    let g = movement_group(&plain_panel(&s), 0, "walks");
+    assert_eq!(count(&g, "disabled"), 3, "{g}");
+}
+
+#[test]
+fn the_bikes_checklist_is_there_where_a_street_has_a_bike_lane_and_the_drawing_follows_a_switch() {
+    use crate::junction::model::junction_of;
+    let s = JunctionVm::new(
+        crate::shared::platform::browser_ports(),
+        crate::i18n_for(crate::shared::i18n::Locale::En),
+        junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]),
+        None,
+    );
+    let g = movement_group(&plain_panel(&s), 0, "rides");
+    assert!(g.contains("Bikes") && g.contains("type=\"checkbox\""), "{g}");
+    // The drawing of the phase changes when a crossing is switched.
+    let before = crate::junction::phase_svg::phase_drawings(&s.view_now());
+    let target = s.view_now().signal.as_ref().unwrap().phases[0].walk_options.iter().find(|o| !o.on).map(|o| o.uid).expect("a crossing is off");
+    assert!(s.toggle_phase_walk(0, target));
+    let after = crate::junction::phase_svg::phase_drawings(&s.view_now());
+    assert_ne!(before[0], after[0], "the lit crossing appears");
+    assert_eq!(before[1], after[1]);
+}
+
 #[test]
 fn each_phase_has_a_pattern_radio_group_with_one_tab_stop_and_the_patterns_that_fit() {
     let s = shared(0);
