@@ -4001,6 +4001,7 @@ mod tests {
         assert_ne!(before, Pattern::Custom);
         assert!(j.set_phase_walk(0, n, true));
         assert!(j.set_crossing(n, false));
+        let with_crossing_off = j.current().clone();
         let stored = j.current().signal_plan.as_ref().unwrap();
         assert!(stored.phases.iter().all(|p| !p.walks.contains(&n)), "no stale walk is kept");
         let p = phase_of(&j, 0);
@@ -4010,6 +4011,28 @@ mod tests {
         assert!(j.set_crossing(n, true));
         assert!(!phase_of(&j, 0).walks.contains(&n), "adding the crossing back does not resurrect the walk");
         assert!(j.current().signal_plan.as_ref().unwrap().phases.iter().all(|p| !p.walks.contains(&n)));
+        // KNOWN, ACCEPTED LIMIT (do not "fix" by accident): a phase stores explicit lists, not a pattern id. With the crossing
+        // back, a pattern's phase walks it again but the stored walks do not, so a phase whose pattern walked it (here only phase 2, east's) is Custom now. A phase
+        // that does not walk the crossing, or whose pattern leaves it out, is unchanged.
+        let kinds: Vec<Pattern> = (0..4).map(|i| signal::pattern_of(j.current(), 0, &phase_of(&j, i))).collect();
+        assert_eq!(kinds, vec![Pattern::All, Pattern::Custom, Pattern::All, Pattern::ProtectedLeftThenThrough]);
+        assert_eq!(signal::patterns_lost(&with_crossing_off, j.current(), 0), vec![1], "and it is said to have left its pattern");
+    }
+
+    #[test]
+    fn a_scramble_is_not_offered_where_no_street_has_a_crossing() {
+        let mut j = Junction::new(0);
+        let uids: Vec<u32> = j.current().arms.iter().map(|a| a.uid).collect();
+        assert!(signal::patterns_for(j.current(), 0, &phase_of(&j, 0)).contains(&Pattern::Scramble));
+        for uid in uids {
+            assert!(j.set_crossing(uid, false));
+        }
+        assert!(signal::pattern_phase(j.current(), 0, j.current().arms[0].uid, Pattern::Scramble).is_none());
+        let offered = signal::patterns_for(j.current(), 0, &phase_of(&j, 0));
+        assert!(!offered.contains(&Pattern::Scramble), "{offered:?}");
+        assert!(!j.set_phase_pattern(0, Pattern::Scramble));
+        assert_eq!(j.refusal(), Some(Refusal::PatternNotFit));
+        assert!(j.view().signal.unwrap().phases[0].patterns.iter().all(|p| p.pattern != Pattern::Scramble));
     }
 
     #[test]
