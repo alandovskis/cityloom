@@ -2007,7 +2007,10 @@ fn switching_a_bike_movement_or_a_crossing_that_cannot_be_is_refused_aloud_and_c
 #[test]
 fn an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languages() {
     use crate::shared::i18n::Locale;
-    for (locale, tail) in [(Locale::En, "no longer follow"), (Locale::FrCa, "ne suivent plus")] {
+    for (locale, sentence, tail) in [
+        (Locale::En, "Phases 2 and 4 no longer follow a ready-made pattern.", "no longer follow"),
+        (Locale::FrCa, "Les phases 2 et 4 ne suivent plus un modèle prêt à l’emploi.", "ne suivent plus"),
+    ] {
         let s = shared_in(0, locale);
         let phases = s.read(|j| crate::junction::signal::plan(j.current(), j.region).unwrap().phases.len());
         for i in 0..phases {
@@ -2019,7 +2022,7 @@ fn an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languag
         assert!(s.apply(|j| j.set_bearing(north, 340)));
         let said = live::take_said();
         assert_eq!(said.len(), 1, "{said:?}");
-        assert!(said[0].contains(tail), "{said:?}");
+        assert!(said[0].ends_with(sentence), "turning north to 340 degrees takes phases 2 and 4 off the pattern: {said:?}");
         // An edit that leaves every phase as it was adds nothing.
         live::take_said();
         let west = arm(&s, 270);
@@ -2496,7 +2499,7 @@ fn a_drag_that_changes_what_a_phase_is_says_so_like_a_button_does() {
     s.end_gesture(true);
     let said = live::take_said();
     assert_eq!(said.len(), 1, "{said:?}");
-    assert!(said[0].contains("no longer follow"), "{said:?}");
+    assert!(said[0].ends_with("Phases 2 and 4 no longer follow a ready-made pattern."), "{said:?}");
     // A drag that leaves every phase as it was adds nothing.
     let s = all_phases_as(Pattern::ThroughOnly);
     let east = arm(&s, 90);
