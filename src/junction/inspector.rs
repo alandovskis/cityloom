@@ -1410,9 +1410,8 @@ fn movement_group(w: Watch, i: usize, ride: bool) -> impl IntoView {
     let item = move |uid: u32| {
         let id = format!("sig-{part}-{i}-{uid}");
         let other = move || options.with(|all| all.iter().find(|o| o.uid == uid).map(|o| w.say(&o.label)).unwrap_or_default());
-        let name = move || {
-            tr(w, if ride { "jn-ph-ride-box" } else { "jn-ph-walk-box" }, Args::new().num("n", i as i64 + 1).str("street", street()).str("other", other()))
-        };
+        // The group already says the phase and the street; a box says only what differs.
+        let name = move || tr(w, if ride { "jn-ph-ride-box" } else { "jn-ph-walk-box" }, Args::new().str("other", other()));
         let focus = id.clone();
         view! {
             <label class="phase-move">
@@ -1430,12 +1429,16 @@ fn movement_group(w: Watch, i: usize, ride: bool) -> impl IntoView {
         }
     };
     let uids = move || options.get().into_iter().map(|o| o.uid).collect::<Vec<u32>>();
+    // A scramble's boxes are checked and disabled (a disabled box fires no change), so the group says why.
+    let (note, note_id) = (format!("sig-{part}-{i}-note"), format!("sig-{part}-{i}-note"));
     move || {
+        let (note, note_id) = (note.clone(), note_id.clone());
         (!options.with(Vec::is_empty)).then(|| {
             view! {
-                <div class="phase-moves" role="group" id=format!("sig-{part}-{i}") aria-label=group>
+                <div class="phase-moves" role="group" id=format!("sig-{part}-{i}") aria-label=group aria-describedby=move || fixed.get().then(|| note.clone())>
                     <span class="phase-moves-h" aria-hidden="true">{words(w, if ride { "jn-ph-rides-legend" } else { "jn-ph-walks-legend" })}</span>
                     <For each=uids key=|u| *u children=item/>
+                    {move || fixed.get().then(|| view! { <span class="insp-range" id=note_id.clone()>{words(w, "jn-ph-walks-fixed")}</span> })}
                 </div>
             }
         })

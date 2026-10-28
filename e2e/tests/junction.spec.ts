@@ -532,6 +532,11 @@ test.describe("signal timing on a junction of the city", () => {
     const group = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
     await group.getByRole("radio", { name: /Pedestrian scramble/ }).click();
     await expect(page.locator("#signal-plan-state")).toHaveText("Edited plan");
+    // The crossings are checked and cannot be changed; the group says why, and is described by it.
+    const walks = page.getByRole("group", { name: /^People walking in phase 1, / });
+    await expect(walks.getByRole("checkbox").first()).toBeDisabled();
+    await expect(walks).toContainText("Everyone crosses every street in a scramble.");
+    await expect(walks).toHaveAccessibleDescription("Everyone crosses every street in a scramble.");
     await page.reload();
     await expect(page.locator("#drawing")).toBeVisible();
     const again = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
@@ -593,7 +598,7 @@ test.describe("signal timing on a junction of the city", () => {
     const off = walks(1).locator("input:not(:checked)").first();
     await expect(off).toBeVisible();
     const id = await off.getAttribute("id");
-    await expect(off).toHaveAccessibleName(/^Phase 1, .*: people walk across /);
+    await expect(off).toHaveAccessibleName(/^People walk across /);
     const drawn = await card.innerHTML();
     await off.focus();
     await page.keyboard.press("Space");

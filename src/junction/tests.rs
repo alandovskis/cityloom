@@ -1833,7 +1833,12 @@ fn each_phase_has_a_people_walking_checklist_of_native_checkboxes_named_by_stree
     assert!(g.contains("role=\"group\"") && g.contains("People walking"), "{g}");
     assert_eq!(count(&g, "type=\"checkbox\""), 4, "every street has a crossing: {g}");
     assert_eq!(count(&g, "checked"), 2, "east and west walk while the north goes: {g}");
-    assert!(g.contains("aria-label=\"Phase 1, ") && g.contains("people walk across"), "{g}");
+    assert!(
+        g.contains("aria-label=\"People walk across ") && !g.contains("aria-label=\"Phase 1, "),
+        "a box is named by what differs, the group has the phase: {g}"
+    );
+    assert!(g.contains("aria-label=\"People walking in phase 1, "), "{g}");
+    assert!(!g.contains("in a scramble") && !g.contains("aria-describedby"), "no note unless the walks are fixed: {g}");
     assert!(!h.contains("id=\"sig-rides-0\""), "the sample has no bike lanes, so no Bikes group: {h}");
     // A crossing the junction does not have is not listed.
     let n = arm(&s, 0);
@@ -1843,6 +1848,19 @@ fn each_phase_has_a_people_walking_checklist_of_native_checkboxes_named_by_stree
     s.edit(|j| j.set_phase_pattern(0, Pattern::Scramble));
     let g = movement_group(&plain_panel(&s), 0, "walks");
     assert_eq!(count(&g, "disabled"), 3, "{g}");
+    assert!(g.contains("Everyone crosses every street in a scramble."), "the boxes say why they cannot change: {g}");
+    assert!(g.contains("aria-describedby=\"sig-walks-0-note\"") && g.contains("id=\"sig-walks-0-note\""), "{g}");
+}
+
+#[test]
+fn the_names_of_the_boxes_and_the_scramble_note_are_in_french_too() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let g = movement_group(&plain_panel(&s), 0, "walks");
+    assert!(g.contains("aria-label=\"Les piétons traversent ") && !g.contains("aria-label=\"Phase 1"), "{g}");
+    s.edit(|j| j.set_phase_pattern(0, Pattern::Scramble));
+    let g = movement_group(&plain_panel(&s), 0, "walks");
+    assert!(g.contains("tout le monde traverse") && g.contains("aria-describedby=\"sig-walks-0-note\""), "{g}");
 }
 
 #[test]
