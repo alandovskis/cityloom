@@ -698,6 +698,35 @@ mod tests {
     }
 
     #[test]
+    fn green_edits_and_other_drags_exclude_each_other() {
+        use crate::street::model::curb::{CurbRefusal, Use};
+        let mut e = editor();
+        e.begin_gesture();
+        assert_eq!(e.add_green(pit(10_000, 1_700)), Err(GreenRefusal::Dragging), "a zone drag is under way");
+        e.cancel_gesture();
+        assert!(e.begin_curb_drag());
+        assert_eq!(e.add_green(pit(10_000, 1_700)), Err(GreenRefusal::Dragging), "a curb drag is under way");
+        e.cancel_gesture();
+        assert!(e.begin_stop_drag());
+        assert_eq!(e.add_green(pit(10_000, 1_700)), Err(GreenRefusal::Dragging), "a stop drag is under way");
+        e.cancel_gesture();
+        assert!(e.snapshot().green.is_empty());
+        assert!(e.begin_green_drag());
+        assert_eq!(e.add_curb(Side::Right, 10_000, 6_000, Use::Parking), Err(CurbRefusal::Dragging), "a green drag is under way");
+        e.cancel_gesture();
+    }
+
+    #[test]
+    fn a_tree_without_a_size_is_medium_and_a_bed_has_none() {
+        let mut e = editor();
+        e.add_green(Green { size: None, ..pit(10_000, 1_700) }).unwrap();
+        e.add_green(Green { size: Some(TreeSize::L), ..bed(20_000, 1_700) }).unwrap();
+        let green = e.snapshot().green;
+        assert_eq!(green[0].size, Some(TreeSize::M));
+        assert_eq!(green[1].size, None, "a bed's size is dropped");
+    }
+
+    #[test]
     fn a_street_drawn_elsewhere_is_refused() {
         let s = Street::sample(0, Side::Right);
         let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
