@@ -4077,6 +4077,28 @@ mod tests {
         assert_eq!(phase_of(&j, 0).rides, p.rides);
     }
 
+    #[test]
+    fn settling_drops_a_ride_whose_street_lost_its_bike_lane_from_the_plan_the_sentence_and_the_options() {
+        let bike = [("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)];
+        let mut j = junction_of(&bike);
+        let own = phase_of(&j, 0).uid;
+        assert!(j.set_phase_ride(0, own, false));
+        assert!(j.set_phase_ride(0, own, true));
+        let mut state = j.current().clone();
+        assert!(state.signal_plan.as_ref().unwrap().phases.iter().any(|p| p.rides.contains(&own)), "a ride is stored");
+        // Every street loses its bike lane (the crossings stay), and the state is settled again.
+        let plain = junction_of(&[("sidewalk", 2000), ("travel", 3200), ("travel", 3200), ("sidewalk", 2000)]);
+        for (a, b) in state.arms.iter_mut().zip(&plain.current().arms) {
+            a.section = b.section.clone();
+        }
+        signal::settle(&mut state, 0);
+        assert!(signal::ride_arms(&state, 0).is_empty());
+        let stored = state.signal_plan.as_ref().unwrap();
+        assert!(stored.phases.iter().all(|p| p.rides.is_empty()), "the stored list drops the ride: {stored:?}");
+        let shown = Junction::from_city(named_said("Test"), &state, &state, 0).unwrap().view().signal.unwrap();
+        assert!(shown.phases.iter().all(|p| p.ride_arms.is_empty() && p.ride_options.is_empty()), "the sentence and the options drop it");
+    }
+
     // ---- signal timing ----
 
     /// What was said, with the engine's non-breaking spaces (before a colon, before a unit) as ordinary ones.
