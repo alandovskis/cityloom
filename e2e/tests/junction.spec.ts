@@ -513,7 +513,9 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(scramble).toBeFocused();
     await page.keyboard.press("ArrowRight");
     await expect(radios.first()).toHaveAttribute("aria-checked", "true");
-    // Pressing a key that chooses the pattern already chosen says nothing more (Home on the first).
+    // Pressing a key that chooses the pattern already chosen says nothing more (Home on the first). The last
+    // choice's announcement is waited for before the live region is emptied, or it could land after the emptying.
+    await expect(live(page)).toContainText("set to through only");
     await live(page).evaluate((el) => (el.textContent = ""));
     await page.keyboard.press("Home");
     await expect(live(page)).toHaveText("");
