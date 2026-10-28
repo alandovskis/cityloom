@@ -2372,3 +2372,50 @@ fn phases_that_stop_following_their_pattern_are_said_once_in_both_languages() {
         assert_eq!(s.lost_note(&[]), None);
     }
 }
+
+/// The vm with every phase of sample 0 chosen as `pattern`.
+fn all_phases_as(pattern: Pattern) -> Rc<JunctionVm> {
+    let s = shared(0);
+    let phases = s.read(|j| crate::junction::signal::plan(j.current(), j.region).unwrap().phases.len());
+    for i in 0..phases {
+        s.choose_pattern(i, pattern);
+    }
+    live::take_said();
+    s
+}
+
+#[test]
+fn a_drag_that_changes_what_a_phase_is_says_so_like_a_button_does() {
+    let s = all_phases_as(Pattern::ThroughOnly);
+    let north = arm(&s, 0);
+    s.quiet(|j| j.begin_gesture());
+    assert!(s.quiet(|j| j.set_bearing(north, 340)));
+    s.end_gesture(true);
+    let said = live::take_said();
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].contains("no longer follow"), "{said:?}");
+    // A drag that leaves every phase as it was adds nothing.
+    let s = all_phases_as(Pattern::ThroughOnly);
+    let east = arm(&s, 90);
+    s.quiet(|j| j.begin_gesture());
+    s.quiet(|j| j.set_setback(east, 4000));
+    s.end_gesture(true);
+    assert!(!live::take_said().iter().any(|t| t.contains("no longer follow")));
+}
+
+#[test]
+fn a_change_of_region_that_changes_what_a_phase_is_says_so() {
+    use crate::shared::catalogue::{REGIONS, Side};
+    use crate::shell::Target;
+    let left = REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap();
+    let s = all_phases_as(Pattern::ProtectedLeftThenThrough);
+    assert!(s.apply_region(left));
+    let said = live::take_said();
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].contains("no longer follow"), "{said:?}");
+    // A region that drives the same side changes nothing.
+    let s = all_phases_as(Pattern::ProtectedLeftThenThrough);
+    let right = REGIONS.iter().position(|r| r.drive_side == Side::Right && r.id != "canada").unwrap();
+    assert!(s.apply_region(right));
+    assert!(live::take_said().is_empty());
+}

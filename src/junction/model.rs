@@ -1096,6 +1096,11 @@ impl Junction {
         }
     }
 
+    /// The state the gesture under way began from, if one is.
+    pub fn gesture_baseline(&self) -> Option<&State> {
+        self.gesture.as_ref()
+    }
+
     pub fn end_gesture(&mut self) -> bool {
         let Some(baseline) = self.gesture.take() else { return false };
         let mut now = self.current().clone();

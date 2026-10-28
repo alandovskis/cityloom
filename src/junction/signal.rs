@@ -231,7 +231,8 @@ pub enum Pattern {
     /// Every movement of the street, turns giving way to the people crossing.
     All,
     /// The turns across oncoming traffic first (left where traffic keeps right, right where it keeps left), with no one
-    /// crossing where they turn, then the other movements.
+    /// crossing where they turn, then the other movements. "Left" in this name and in the `jn-pattern-protected-left`
+    /// keys means the turn across oncoming traffic (a right turn where traffic keeps left); the names are kept for stability.
     ProtectedLeftThenThrough,
     /// No vehicle moves; every crossing is walked.
     Scramble,
@@ -294,11 +295,11 @@ pub fn pattern_phase(s: &State, region: usize, uid: u32, pattern: Pattern) -> Op
         Pattern::ThroughOnly => all.iter().filter(|m| class_of(m) == THROUGH).copied().collect(),
         Pattern::All => all,
         Pattern::ProtectedLeftThenThrough => {
-            let (left, rest): (Vec<Move>, Vec<Move>) = all.into_iter().partition(|m| class_of(m) == across);
-            if left.is_empty() {
+            let (across_moves, rest): (Vec<Move>, Vec<Move>) = all.into_iter().partition(|m| class_of(m) == across);
+            if across_moves.is_empty() {
                 return None;
             }
-            left.into_iter().chain(rest).collect()
+            across_moves.into_iter().chain(rest).collect()
         }
         Pattern::Scramble | Pattern::Custom => return None,
     };
@@ -309,8 +310,8 @@ pub fn pattern_phase(s: &State, region: usize, uid: u32, pattern: Pattern) -> Op
     let (mut walks, rides) = walks_and_rides(&arms, &moves, &bikes, i, &going);
     if pattern == Pattern::ProtectedLeftThenThrough {
         // Protected: the crossing of a street the turn across oncoming traffic goes into is not walked, whoever gives way elsewhere.
-        let lefts: Vec<u32> = chosen.iter().filter(|m| class_of(m) == across).map(|m| m.to).collect();
-        walks.retain(|u| !lefts.contains(u));
+        let across_to: Vec<u32> = chosen.iter().filter(|m| class_of(m) == across).map(|m| m.to).collect();
+        walks.retain(|u| !across_to.contains(u));
     }
     Some(StoredPhase { moves: chosen, walks, rides, arm: None })
 }
@@ -347,21 +348,27 @@ pub fn pattern_of(s: &State, region: usize, phase: &Phase) -> Pattern {
 }
 
 /// The places (from 0, in the order the phases run in `after`) of the phases that had a ready-made pattern in `before`
-/// and follow none in `after` (one that moved to another ready-made pattern is not lost). Nothing when either state has no plan of the person's own: a suggestion
-/// follows the lanes by definition.
+/// and follow none in `after` (one that moved to another ready-made pattern is not lost). Nothing when either state has
+/// no plan of the person's own: a suggestion follows the lanes by definition.
 pub fn patterns_lost(before: &State, after: &State, region: usize) -> Vec<usize> {
+    patterns_lost_across(before, region, after, region)
+}
+
+/// `patterns_lost` for an edit that may have changed the region as well (which turn crosses oncoming traffic depends
+/// on it): `before` is read in `before_region`, `after` in `after_region`.
+pub fn patterns_lost_across(before: &State, before_region: usize, after: &State, after_region: usize) -> Vec<usize> {
     if before.signal_plan.is_none() || after.signal_plan.is_none() {
         return Vec::new();
     }
-    let (Some(was), Some(now)) = (plan(before, region), plan(after, region)) else { return Vec::new() };
+    let (Some(was), Some(now)) = (plan(before, before_region), plan(after, after_region)) else { return Vec::new() };
     now.phases
         .iter()
         .enumerate()
         .filter(|(_, ph)| {
-            was.phases.iter().find(|w| w.uid == ph.uid).is_some_and(|w| {
-                let before = pattern_of(before, region, w);
-                before != Pattern::Custom && pattern_of(after, region, ph) == Pattern::Custom
-            })
+            was.phases
+                .iter()
+                .find(|w| w.uid == ph.uid)
+                .is_some_and(|w| pattern_of(before, before_region, w) != Pattern::Custom && pattern_of(after, after_region, ph) == Pattern::Custom)
         })
         .map(|(i, _)| i)
         .collect()

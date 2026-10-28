@@ -536,6 +536,7 @@ jn-pattern-through = Tout droit seulement
 jn-pattern-through-desc = Seule la circulation qui va tout droit passe; les traverses à côté sont franchies à pied.
 jn-pattern-all = Tous les mouvements
 jn-pattern-all-desc = Tous les mouvements de la rue passent; les véhicules qui tournent cèdent le passage aux piétons.
+# "protected-left" : le virage qui croise la circulation en sens inverse (à droite là où l’on conduit à gauche); la clé est gardée pour sa stabilité.
 jn-pattern-protected-left = Virage protégé en croisant la circulation, puis tout droit
 jn-pattern-protected-left-desc = Le virage qui croise la circulation en sens inverse (à gauche en conduisant à droite, à droite en conduisant à gauche) passe d’abord, sans piéton là où il tourne, puis les autres mouvements de la rue.
 jn-pattern-scramble = Phase piétonne exclusive

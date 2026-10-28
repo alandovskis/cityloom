@@ -536,6 +536,7 @@ jn-pattern-through = Through only
 jn-pattern-through-desc = Only the traffic going straight on moves; the crossings beside it are walked.
 jn-pattern-all = All movements
 jn-pattern-all-desc = Every movement of the street goes; turning drivers give way to the people crossing.
+# "Protected-left" is the turn across oncoming traffic (a right turn where traffic keeps left); the key is kept for stability.
 jn-pattern-protected-left = Protected turn across traffic, then through
 jn-pattern-protected-left-desc = The turn across oncoming traffic (left when driving on the right, right when driving on the left) goes first with no one crossing where it turns, then the other movements of the street.
 jn-pattern-scramble = Pedestrian scramble

@@ -9,7 +9,7 @@ use leptos::prelude::*;
 
 use crate::city::binding::{CityBinding, Place};
 use crate::junction::frame::Frame;
-use crate::junction::model::{Junction, Refusal, Target};
+use crate::junction::model::{Junction, Refusal, State, Target};
 use crate::junction::read_model::JView;
 use crate::junction::text;
 use crate::shared::core::{Core, Presents};
@@ -62,6 +62,13 @@ pub struct JunctionVm {
     binding: Option<CityBinding>,
     /// How the plan was last drawn, for turning a pointer position into a point on it.
     frame: Cell<Option<Frame>>,
+}
+
+/// Whether an edit says which phases it took off their ready-made pattern.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PatternNote {
+    Report,
+    Skip,
 }
 
 impl JunctionVm {
@@ -172,23 +179,38 @@ impl JunctionVm {
     }
 
     /// An edit the person made: it is announced by what it was, and a refusal by
-    /// its reason.
+    /// its reason. A phase it takes off its ready-made pattern is said too.
     pub fn apply<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
-        self.apply_noting(f, true)
+        self.apply_with(f, PatternNote::Report)
     }
 
-    /// `apply`; `note_patterns` adds a sentence for each phase the edit took off its ready-made pattern (a choice of
-    /// pattern does not: that is what it is for).
-    fn apply_noting<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R, note_patterns: bool) -> R {
-        let before = (note_patterns).then(|| self.read(|j| j.current().signal_plan.is_some().then(|| j.current().clone()))).flatten();
+    /// `apply` for a choice of pattern, which says nothing of the phases' patterns: changing one is what it is for.
+    fn apply_choosing_pattern<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+        self.apply_with(f, PatternNote::Skip)
+    }
+
+    fn apply_with<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R, note: PatternNote) -> R {
+        let before = (note == PatternNote::Report).then(|| self.pattern_state()).flatten();
         let r = self.edit(f);
         if r.into() {
-            let lost = before.map(|b| self.read(|j| crate::junction::signal::patterns_lost(&b, j.current(), j.region))).unwrap_or_default();
+            let lost = self.lost_since(before);
             self.say_edit_with(&lost);
         } else {
             self.say_refusal();
         }
         r
+    }
+
+    /// The state and region, to compare patterns against later; None when the junction has no plan of the person's own
+    /// (nothing there can be lost).
+    fn pattern_state(&self) -> Option<(State, usize)> {
+        self.read(|j| j.current().signal_plan.is_some().then(|| (j.current().clone(), j.region)))
+    }
+
+    /// The phases (from 0) that were on a ready-made pattern in `before` and are on none now.
+    fn lost_since(&self, before: Option<(State, usize)>) -> Vec<usize> {
+        let Some((state, region)) = before else { return Vec::new() };
+        self.read(|j| crate::junction::signal::patterns_lost_across(&state, region, j.current(), j.region))
     }
 
     /// The person chooses a turbo layout (`None`: the single lane). Choosing the one already chosen changes nothing, so it
@@ -212,7 +234,7 @@ impl JunctionVm {
             })
         };
         if !chosen() {
-            self.apply_noting(|j| j.set_phase_pattern(index, pattern), false);
+            self.apply_choosing_pattern(|j| j.set_phase_pattern(index, pattern));
         }
         chosen()
     }
@@ -238,8 +260,10 @@ impl JunctionVm {
     /// changed anything, or else by what is selected.
     pub fn end_gesture(&self, commit: bool) {
         if commit {
+            let before = self.read(|j| j.gesture_baseline().filter(|b| b.signal_plan.is_some()).map(|b| (b.clone(), j.region)));
             if self.edit(|j| j.end_gesture()) {
-                self.say_edit();
+                let lost = self.lost_since(before);
+                self.say_edit_with(&lost);
             } else {
                 self.say_selection();
             }
@@ -375,7 +399,14 @@ impl crate::shell::Target for JunctionVm {
     }
 
     fn apply_region(&self, region: usize) -> bool {
-        self.edit(|j| j.set_region(region))
+        let before = self.pattern_state();
+        let changed = self.edit(|j| j.set_region(region));
+        if changed {
+            if let Some(note) = self.lost_note(&self.lost_since(before)) {
+                self.ports.announcer.say(&note);
+            }
+        }
+        changed
     }
 
     fn region_id(&self) -> String {
