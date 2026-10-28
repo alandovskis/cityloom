@@ -171,7 +171,7 @@ fn conflicts_are_counted_and_the_note_follows_the_control() {
 fn the_checks_each_say_whether_they_pass() {
     let s = shared(0);
     let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
-    assert_eq!(count(&h, "<li class=\"ok\">"), 11, "the eight of any junction, and a signal's time to cross, phases and cycle");
+    assert_eq!(count(&h, "<li class=\"ok\">"), 13, "the ten of any junction, and a signal's time to cross, phases and cycle");
     assert!(h.contains("Time to cross") && h.contains("Signal cycle"));
     assert!(h.contains(": passes"));
     assert!(h.contains("Longest crossing in one go: 11.4 m"));
@@ -2418,4 +2418,471 @@ fn a_change_of_region_that_changes_what_a_phase_is_says_so() {
     let right = REGIONS.iter().position(|r| r.drive_side == Side::Right && r.id != "canada").unwrap();
     assert!(s.apply_region(right));
     assert!(live::take_said().is_empty());
+}
+
+// ---- the street's transit stops on an arm ---------------------------------------------
+
+/// FNV-1a over everything the page gets of every arm of every sample junction. Captured before the stops were drawn:
+/// an arm without stops draws byte for byte as it did.
+fn whole_arms_fingerprint() -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for sample in 0..JUNCTION_SAMPLES.len() {
+        for a in &Junction::new(sample).view().arms {
+            for b in serde_json::to_string(a).unwrap().bytes() {
+                h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+            }
+        }
+    }
+    h
+}
+
+#[test]
+fn an_arm_without_stops_draws_as_before() {
+    let (got, pinned) = (whole_arms_fingerprint(), 8_823_566_077_873_241_793);
+    assert_eq!(
+        got, pinned,
+        "an arm with no stops no longer serialises as it did before the stops were drawn; if that is on purpose, replace the pinned number with {got}"
+    );
+    for sample in 0..JUNCTION_SAMPLES.len() {
+        assert!(Junction::new(sample).view().arms.iter().all(|a| a.stops.is_empty()));
+    }
+}
+
+/// A sample junction whose north arm has the stops `make` builds from the arm's section, and that arm's uid. `make`
+/// is given the index of the first entering lane's piece and of the left sidewalk.
+pub(crate) fn junction_with_stops(configure: impl Fn(&mut State), make: impl Fn(usize, usize) -> Vec<crate::street::model::EndStop>) -> (Junction, u32) {
+    let mut state = Junction::new(0).current().clone();
+    configure(&mut state);
+    let arm = state.arms.iter_mut().find(|a| a.bearing == 0).unwrap();
+    let prof = arm.profile(0);
+    let lane = prof.pieces.iter().position(|p| p.direction == Some("toward") && crate::shared::catalogue::KINDS[p.kind].id == "travel").unwrap();
+    let walk = prof.pieces.iter().position(|p| crate::shared::catalogue::KINDS[p.kind].id == "sidewalk").unwrap();
+    arm.stops = make(lane, walk);
+    let uid = arm.uid;
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    (Junction::from_city(named, &state, &state, 0).expect("draws"), uid)
+}
+
+pub(crate) fn end_stop(near_mm: i32, far_mm: i32, lane: usize, pad: usize) -> crate::street::model::EndStop {
+    use crate::shared::catalogue::Side;
+    use crate::street::model::{EndStop, StopKind};
+    EndStop {
+        index: 0,
+        side: Side::Left,
+        near_mm,
+        far_mm,
+        kind: StopKind::Curb,
+        shelter: true,
+        name: Some("Main".into()),
+        enters: true,
+        lane: Some(lane),
+        pad: vec![pad],
+    }
+}
+
+#[test]
+fn an_arm_draws_the_stops_its_street_has() {
+    let (j, uid) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(25_000, 33_000, lane, walk)]);
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    assert_eq!(a.stops.len(), 1);
+    let s = &a.stops[0];
+    assert!(s.pad.is_some() && s.dwell.is_some() && s.run.is_some() && s.post.is_some());
+    assert_eq!((s.enters, s.shelter, s.near_mm, s.name.as_deref()), (true, true, 25_000, Some("Main")));
+    assert!(s.lane.is_some() && !s.in_bus_lane);
+    // 25 m out is well clear of the crossing (which ends about 17.7 m out); its lane is shared with the curb-side turn,
+    // which is the lane check's finding and marks it bad all the same
+    assert!(s.gap_mm > 5_000 && check_of(&j, "stop-clear").ok, "gap {}", s.gap_mm);
+    assert!(s.bad && !check_of(&j, "stop-lane").ok);
+    // the other arms have none
+    assert!(v.arms.iter().filter(|x| x.uid != uid).all(|x| x.stops.is_empty()));
+    // the whole arm still draws as it did
+    let before = Junction::new(0).view();
+    for (x, y) in v.arms.iter().zip(&before.arms) {
+        assert_eq!(serde_json::to_string(&x.pieces).unwrap(), serde_json::to_string(&y.pieces).unwrap());
+    }
+}
+
+#[test]
+fn a_stop_too_near_the_crossing_is_bad_and_one_inside_the_mouth_is_cut() {
+    let (j, uid) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(500, 9_000, lane, walk)]);
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    let s = &a.stops[0];
+    assert!(s.bad && s.gap_mm < 0, "inside the junction: gap {}", s.gap_mm);
+    assert!(s.post.is_none() && s.run.is_none(), "what would lie inside the mouth is left off");
+}
+
+#[test]
+fn a_stop_past_the_drawn_arm_is_left_off() {
+    let (j, uid) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(36_000, 48_000, lane, walk), end_stop(30_000, 42_000, lane, walk)]);
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    assert_eq!(a.stops.len(), 1, "one that begins at the end of the drawn arm has no part on it");
+    let s = &a.stops[0];
+    assert_eq!(s.near_mm, 30_000);
+    assert_eq!(reach(a.bearing, s.pad.as_ref().unwrap()).round(), 36_000.0, "the one that straddles it is cut at the end");
+}
+
+#[test]
+fn a_turbo_and_a_pedestrian_arm_draw_no_stops() {
+    let stops = |lane, walk| vec![end_stop(20_000, 32_000, lane, walk)];
+    let (mut turbo, _) = junction_with_stops(|_| {}, stops);
+    assert!(turbo.set_control(ROUNDABOUT) && turbo.set_turbo(Some(0)));
+    assert!(turbo.view().arms.iter().all(|a| a.stops.is_empty()), "a turbo sets its own lanes");
+    let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+    let mut state = walk.current().clone();
+    state.arms.iter_mut().filter(|a| a.is_pedestrian()).for_each(|a| a.stops = vec![end_stop(20_000, 32_000, 0, 0)]);
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    let v = Junction::from_city(named, &state, &state, 0).expect("draws").view();
+    assert!(v.arms.iter().any(|a| a.pedestrian));
+    assert!(v.arms.iter().all(|a| a.stops.is_empty()), "nothing enters a pedestrian arm");
+}
+
+#[test]
+fn a_stop_on_a_lane_that_moves_across_the_boundary_ends_with_the_lane() {
+    // the pocket lane's strip ends at the taper's start, 20 m out; the stop spans it
+    let (j, uid) = junction_with_a_beyond(
+        |state| {
+            let arm = state.arms.iter_mut().find(|a| a.bearing == 0).unwrap();
+            let prof = arm.profile(0);
+            let x = prof.enter_x[0];
+            let lane = prof.pieces.iter().position(|p| p.x_mm <= x && x < p.x_mm + p.width_mm).unwrap();
+            arm.stops = vec![end_stop(15_000, 25_000, lane, lane)];
+        },
+        |_| {},
+    );
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    let s = &a.stops[0];
+    assert_eq!(reach(a.bearing, s.dwell.as_ref().unwrap()).round(), 20_000.0);
+    assert_eq!(reach(a.bearing, s.pad.as_ref().unwrap()).round(), 20_000.0, "the pad is the lane's piece");
+}
+
+// ---- the stop checks ---------------------------------------------------------------------
+
+fn check_of(j: &Junction, id: &str) -> crate::junction::read_model::Check {
+    j.view().checks.into_iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no check {id}"))
+}
+
+/// What a check says now, in English.
+fn said_of(j: &Junction, id: &str) -> String {
+    said_en(&check_of(j, id).detail)
+}
+
+/// A four-way whose every arm reads a street of `pieces` (kind id, width, direction: 1 in, 0 out), in `region`, with
+/// one stop on the north arm: `make` is given that arm's profile and returns it.
+fn stopped(region: usize, pieces: &[(&str, i32, Option<usize>)], make: impl Fn(&Profile) -> crate::street::model::EndStop) -> (Junction, u32) {
+    use crate::shared::catalogue::{REGIONS, StreetClass, kind_index};
+    use crate::street::model::Piece;
+    let pieces: Vec<Piece> =
+        pieces.iter().map(|&(id, width_mm, direction)| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() }).collect();
+    let street = crate::street::model::Street::imported(StreetClass::Local, REGIONS[region].drive_side, &pieces);
+    let mut state = Junction::new(0).current().clone();
+    for a in &mut state.arms {
+        a.section = Some(street.clone());
+        a.edge = a.uid;
+    }
+    let arm = state.arms.iter_mut().find(|a| a.bearing == 0).unwrap();
+    arm.stops = vec![make(&arm.profile(region))];
+    let uid = arm.uid;
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    (Junction::from_city(named, &state, &state, region).expect("draws"), uid)
+}
+
+/// A sidewalk, one leaving lane, `enter` entering lanes and a sidewalk.
+fn lanes(enter: usize) -> Vec<(&'static str, i32, Option<usize>)> {
+    let mut v = vec![("sidewalk", 3_000, None), ("travel", 3_500, Some(0))];
+    v.extend((0..enter).map(|_| ("travel", 3_500, Some(1))));
+    v.push(("sidewalk", 3_000, None));
+    v
+}
+
+fn at_lane(prof: &Profile, lane: usize, near_mm: i32, enters: bool) -> crate::street::model::EndStop {
+    use crate::shared::catalogue::Side;
+    use crate::street::model::{EndStop, StopKind};
+    let piece = (0..prof.pieces.len()).find(|&i| crate::junction::stops::lane_of(prof, i) == Some(lane)).expect("a lane");
+    EndStop {
+        index: 0,
+        side: Side::Left,
+        near_mm,
+        far_mm: near_mm + 12_000,
+        kind: StopKind::Curb,
+        shelter: false,
+        name: None,
+        enters,
+        lane: Some(piece),
+        pad: Vec::new(),
+    }
+}
+
+/// How far the north arm's works reach: the crossing's far edge.
+fn north_reach(j: &Junction) -> i32 {
+    let uid = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+    crate::junction::read_model::arm_reaches(j.current(), 0).into_iter().find(|r| r.0 == uid).unwrap().1
+}
+
+fn clear_check(near: i32) -> (Junction, crate::junction::read_model::Check) {
+    let (j, _) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(near, near + 8_000, lane, walk)]);
+    let c = check_of(&j, "stop-clear");
+    (j, c)
+}
+
+#[test]
+fn a_stop_three_metres_from_the_crossing_fails_stop_clear_and_names_the_arm() {
+    let (probe, _) = clear_check(30_000);
+    let near = north_reach(&probe) + 3_000;
+    let (j, c) = clear_check(near);
+    assert!(!c.ok);
+    let text = said_en(&c.detail);
+    assert!(text.contains("Sample Avenue 2 (north)") && text.contains("3.0 m") && text.contains("5.0 m or more") && text.contains("crossing"), "{text}");
+    assert!(j.view().arms.iter().find(|a| a.bearing == 0).unwrap().stops[0].bad);
+}
+
+#[test]
+fn a_stop_five_metres_clear_passes() {
+    let (probe, _) = clear_check(30_000);
+    let reach = north_reach(&probe);
+    let (j, c) = clear_check(reach + 5_000);
+    assert!(c.ok, "{}", said_en(&c.detail));
+    assert_eq!(j.view().arms.iter().find(|a| a.bearing == 0).unwrap().stops[0].gap_mm, 5_000);
+    assert!(!clear_check(reach + 4_999).1.ok, "a millimetre short");
+}
+
+#[test]
+fn a_stop_inside_the_mouth_fails_and_says_it_reaches_into_the_junction() {
+    let (_, c) = clear_check(500);
+    assert!(!c.ok);
+    let text = said_en(&c.detail);
+    assert!(text.contains("reaches into the junction") && !text.contains('-') && !text.contains('\u{2212}'), "{text}");
+    let french = crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::FrCa), Units::Metres, &c.detail);
+    assert!(french.contains("empiète sur l’intersection") && !french.contains('-'), "{french}");
+}
+
+#[test]
+fn with_no_crossing_the_stop_is_measured_from_the_mouth() {
+    let (j, _) = junction_with_stops(|s| s.arms.iter_mut().for_each(|a| a.crossing = None), |lane, walk| vec![end_stop(6_000, 14_000, lane, walk)]);
+    let c = check_of(&j, "stop-clear");
+    assert!(!c.ok);
+    assert!(said_en(&c.detail).contains("the junction"), "{}", said_en(&c.detail));
+}
+
+#[test]
+fn a_far_side_stop_is_checked_for_clearance_too() {
+    let (j, _) = stopped(0, &lanes(2), |p| at_lane(p, 0, 2_000, false));
+    assert!(!check_of(&j, "stop-clear").ok);
+    assert!(check_of(&j, "stop-lane").ok);
+    assert!(j.view().arms.iter().find(|a| a.bearing == 0).unwrap().stops[0].bad, "the clearance finding alone marks the stop");
+}
+
+#[test]
+fn a_stop_in_a_through_lane_too_near_the_junction_is_bad() {
+    let (j, _) = stopped(0, &lanes(3), |p| at_lane(p, 1, 3_000, true));
+    assert!(check_of(&j, "stop-lane").ok && !check_of(&j, "stop-clear").ok);
+    assert!(j.view().arms.iter().find(|a| a.bearing == 0).unwrap().stops[0].bad);
+}
+
+#[test]
+fn a_far_side_stop_is_not_judged_for_lanes() {
+    let (j, _) = stopped(0, &lanes(3), |p| at_lane(p, 2, 25_000, false));
+    assert!(check_of(&j, "stop-lane").ok);
+}
+
+#[test]
+fn a_near_side_stop_in_a_right_turn_only_lane_fails_stop_lane() {
+    let (j, _) = stopped(0, &lanes(3), |p| at_lane(p, 2, 25_000, true));
+    let c = check_of(&j, "stop-lane");
+    assert!(!c.ok);
+    let text = said_en(&c.detail);
+    assert!(text.contains("lane 3") && text.contains("only turns right") && text.contains("(north)"), "{text}");
+    assert!(check_of(&j, "stop-clear").ok);
+}
+
+#[test]
+fn a_near_side_stop_in_a_through_and_right_lane_fails_stop_lane() {
+    let (j, _) = stopped(0, &lanes(2), |p| at_lane(p, 1, 25_000, true));
+    let c = check_of(&j, "stop-lane");
+    assert!(!c.ok);
+    let text = said_en(&c.detail);
+    assert!(text.contains("lane 2") && text.contains("shared with right turns"), "{text}");
+}
+
+#[test]
+fn with_traffic_on_the_left_the_curb_side_turn_is_left() {
+    use crate::shared::catalogue::{REGIONS, Side};
+    let left = REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap();
+    let (j, _) = stopped(left, &lanes(2), |p| {
+        let mut s = at_lane(p, 0, 25_000, true);
+        s.side = Side::Right;
+        s
+    });
+    let text = said_of(&j, "stop-lane");
+    assert!(!check_of(&j, "stop-lane").ok && text.contains("shared with left turns"), "{text}");
+    // the lane away from the curb serves through and right, not the curb-side turn
+    let (j, _) = stopped(left, &lanes(2), |p| {
+        let mut s = at_lane(p, 1, 25_000, true);
+        s.side = Side::Right;
+        s
+    });
+    assert!(check_of(&j, "stop-lane").ok);
+}
+
+#[test]
+fn a_stop_in_a_through_lane_passes() {
+    let (j, _) = stopped(0, &lanes(3), |p| at_lane(p, 1, 25_000, true));
+    assert!(check_of(&j, "stop-lane").ok);
+}
+
+#[test]
+fn a_stop_on_a_bus_piece_is_only_checked_for_clearance() {
+    // two entering lanes beside the bus piece, so only the bus-piece exclusion keeps the lane check from judging it
+    let pieces = [
+        ("sidewalk", 3_000, None),
+        ("travel", 3_500, Some(0)),
+        ("travel", 3_500, Some(1)),
+        ("travel", 3_500, Some(1)),
+        ("bus", 3_500, Some(1)),
+        ("sidewalk", 3_000, None),
+    ];
+    let bus = |near| {
+        move |p: &Profile| {
+            let mut s = at_lane(p, 0, near, true);
+            s.lane = p.pieces.iter().position(|x| crate::shared::catalogue::KINDS[x.kind].id == "bus");
+            s
+        }
+    };
+    let (j, _) = stopped(0, &pieces, bus(25_000));
+    let v = j.view();
+    let s = &v.arms.iter().find(|a| a.bearing == 0).unwrap().stops[0];
+    assert!(s.in_bus_lane && s.lane.is_none());
+    assert!(check_of(&j, "stop-lane").ok && check_of(&j, "stop-clear").ok);
+    let (j, _) = stopped(0, &pieces, bus(2_000));
+    assert!(!check_of(&j, "stop-clear").ok && check_of(&j, "stop-lane").ok);
+}
+
+#[test]
+fn a_one_lane_approach_cannot_fail_the_lane_check() {
+    let (j, _) = stopped(0, &lanes(1), |p| at_lane(p, 0, 25_000, true));
+    assert!(check_of(&j, "stop-lane").ok);
+}
+
+#[test]
+fn a_turbo_or_pedestrian_arm_cannot_fail() {
+    let (mut turbo, _) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(500, 9_000, lane, walk)]);
+    assert!(turbo.set_control(ROUNDABOUT) && turbo.set_turbo(Some(0)));
+    assert!(check_of(&turbo, "stop-clear").ok && check_of(&turbo, "stop-lane").ok);
+    let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+    let mut state = walk.current().clone();
+    state.arms.iter_mut().filter(|a| a.is_pedestrian()).for_each(|a| a.stops = vec![end_stop(500, 9_000, 0, 0)]);
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    let j = Junction::from_city(named, &state, &state, 0).expect("draws");
+    assert!(check_of(&j, "stop-clear").ok && check_of(&j, "stop-lane").ok);
+}
+
+/// How far each arm of `j` reaches, by uid, as the street page is told.
+fn reaches_of(j: &Junction) -> Vec<(u32, i32)> {
+    crate::junction::read_model::arm_reaches(j.current(), 0)
+}
+
+#[test]
+fn the_street_page_is_told_no_reach_for_an_arm_the_junction_does_not_judge() {
+    // A turbo and a pedestrian arm draw no stops and pass the stop checks, so no arm of a turbo has a reach to be judged against.
+    let (mut turbo, _) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(500, 9_000, lane, walk)]);
+    assert!(reaches_of(&turbo).iter().all(|r| r.1 > 0));
+    assert!(turbo.set_control(ROUNDABOUT) && turbo.set_turbo(Some(0)));
+    assert!(reaches_of(&turbo).iter().all(|r| r.1 == 0), "a turbo: {:?}", reaches_of(&turbo));
+    let walk = junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)]);
+    let reaches = reaches_of(&walk);
+    let (walking, driving): (Vec<_>, Vec<_>) = walk.current().arms.iter().partition(|a| a.is_pedestrian());
+    assert!(!walking.is_empty() && !driving.is_empty());
+    for a in walking {
+        assert_eq!(reaches.iter().find(|r| r.0 == a.uid).unwrap().1, 0, "a pedestrian arm");
+    }
+    for a in driving {
+        assert!(reaches.iter().find(|r| r.0 == a.uid).unwrap().1 > 0, "a street with traffic keeps its reach");
+    }
+}
+
+#[test]
+fn no_stops_two_passing_checks() {
+    for sample in 0..JUNCTION_SAMPLES.len() {
+        let v = Junction::new(sample).view();
+        let ids: Vec<&str> = v.checks.iter().map(|c| c.id).collect();
+        let at = ids.iter().position(|&i| i == "transit").unwrap();
+        assert_eq!(ids[at + 1..at + 3], ["stop-clear", "stop-lane"], "sample {sample}");
+        for (id, said) in [("stop-clear", "Every bus stop stands clear of the junction."), ("stop-lane", "No bus stop traps a bus in a turning lane.")] {
+            let c = v.checks.iter().find(|c| c.id == id).unwrap();
+            assert!(c.ok && c.amount_mm == 0, "{id}");
+            assert_eq!(said_en(&c.detail), said, "sample {sample}");
+        }
+    }
+}
+
+#[test]
+fn a_stop_measure_and_a_street_stop_on_one_side_are_said_in_transit() {
+    let twice = |side: crate::shared::catalogue::Side| {
+        let (mut j, _) = junction_with_stops(
+            |_| {},
+            |lane, walk| {
+                let mut s = end_stop(25_000, 33_000, lane, walk);
+                s.side = side;
+                vec![s]
+            },
+        );
+        let uid = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+        assert!(j.set_stop(uid, STOP_PLATFORM));
+        said_of(&j, "transit")
+    };
+    let both = twice(crate::shared::catalogue::Side::Left);
+    assert!(both.contains("already has a stop here"), "{both}");
+    assert!(both.contains("keep the signal-protected on-street platform or the street\u{2019}s stop"), "the measure mid-sentence, in lower case: {both}");
+    assert!(!twice(crate::shared::catalogue::Side::Right).contains("already has a stop here"), "the other kerb");
+}
+
+#[test]
+fn the_stop_findings_are_said_in_french_with_the_oqlf_spacing() {
+    let fr = |s: &crate::shared::said::Said| crate::shared::said::say_now(&crate::i18n_for(crate::shared::i18n::Locale::FrCa), Units::Metres, s);
+    let (probe, _) = stopped(0, &lanes(3), |p| at_lane(p, 2, 30_000, true));
+    let reach = north_reach(&probe);
+    let (j, _) = stopped(0, &lanes(3), |p| at_lane(p, 2, reach + 3_000, true));
+    let (clear, lane) = (check_of(&j, "stop-clear"), check_of(&j, "stop-lane"));
+    assert!(!clear.ok && !lane.ok);
+    let (clear, lane) = (fr(&clear.detail), fr(&lane.detail));
+    assert!(clear.contains("du passage pour piétons; il faut 5,0\u{a0}m ou plus."), "{clear}");
+    assert!(lane.contains("qui ne permet que de tourner à droite\u{a0}: un autobus"), "{lane}");
+}
+
+#[test]
+fn a_turn_only_lane_on_an_arm_with_no_through_movement_does_not_fail() {
+    use crate::shared::catalogue::{REGIONS, StreetClass, kind_index};
+    use crate::street::model::Piece;
+    let mut state = Junction::new(1).current().clone();
+    let i = (0..state.arms.len()).find(|&i| classes_of(&state.arms, i) & THROUGH == 0).expect("the stem of a T has no through movement");
+    let pieces: Vec<Piece> =
+        lanes(3).iter().map(|&(id, width_mm, direction)| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() }).collect();
+    let arm = &mut state.arms[i];
+    arm.section = Some(crate::street::model::Street::imported(StreetClass::Local, REGIONS[0].drive_side, &pieces));
+    arm.stops = vec![at_lane(&arm.profile(0), 2, 25_000, true)];
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    let j = Junction::from_city(named, &state, &state, 0).expect("draws");
+    let v = j.view();
+    let a = &v.arms[i];
+    assert_eq!(a.lanes[2].uses & THROUGH, 0);
+    assert_eq!(a.lanes[2].uses, RIGHT, "a lane that only turns right");
+    assert!(check_of(&j, "stop-lane").ok, "there is no through movement for the bus to go on to");
+}
+
+#[test]
+fn a_stops_side_is_said_as_seen_from_the_centre_and_the_double_stop_problem_reads_in_french() {
+    use crate::shared::i18n::{Args, Locale};
+    let say = |locale, key| crate::i18n_for(locale).tr_now(key, &Args::new());
+    assert_eq!(say(Locale::En, "jn-side-left"), "on the left as seen from the centre");
+    assert_eq!(say(Locale::En, "jn-side-right"), "on the right as seen from the centre");
+    assert_eq!(say(Locale::FrCa, "jn-side-left"), "à gauche vu du centre");
+    assert_eq!(say(Locale::FrCa, "jn-side-right"), "à droite vu du centre");
+    let (mut j, _) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(25_000, 33_000, lane, walk)]);
+    let uid = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+    assert!(j.set_stop(uid, STOP_PLATFORM));
+    let text = crate::shared::testing::fr(&check_of(&j, "transit").detail);
+    assert!(text.contains("gardez soit la mesure (quai sur rue protégé par des feux), soit l\u{2019}arrêt de la rue"), "{text}");
 }

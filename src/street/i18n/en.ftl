@@ -512,6 +512,11 @@ check-detail-stop-shelter-curb = The sidewalk beside the stop is { $have } wide;
 check-detail-stop-shelter-bulb = The curb extension and the sidewalk give { $have }; a shelter needs { $need } or more.
 check-detail-stop-shelter-island = The island is { $have } wide; a shelter needs { $need } or more.
 check-detail-stop-shelter-ok = Every shelter has room.
+check-label-stop-junction = Stops clear of the junction
+check-detail-stop-junction-crossing = A stopped bus would stand { $gap } from the pedestrian crossing; { $need } or more is needed.
+check-detail-stop-junction-mouth = A stopped bus would stand { $gap } from where the junction begins; { $need } or more is needed.
+check-detail-stop-junction-inside = The stop reaches into the junction.
+check-detail-stop-junction-ok = Every stop stands clear of the junction.
 
 # The stops rows and their commands (src/street/row.rs, src/street/stop_tools.rs, src/street/model/stop.rs).
 stop-label = { $kind }

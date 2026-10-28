@@ -15,6 +15,7 @@ pub mod plan;
 pub mod plan_svg;
 pub mod read_model;
 pub mod signal;
+pub mod stops;
 #[cfg(test)]
 mod tests;
 pub mod text;

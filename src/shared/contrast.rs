@@ -202,4 +202,31 @@ mod tests {
         let base = rule(editor, ".phase-card");
         assert!(base.contains("padding-block-start: 22px;"), "{base}");
     }
+
+    #[test]
+    fn the_stop_marks_clear_three_to_one_on_the_road_in_both_themes() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        for class in ["stop-pad", "stop-dwell", "stop-run", "stop-post", "stop-shelter"] {
+            // the rule that names the class (alone or in a list) up to its closing brace
+            let rule = editor.find(&format!("\n#drawing .{class}")).unwrap_or_else(|| panic!("{class} has a rule")) + 1;
+            let block = &editor[rule..rule + editor[rule..].find('}').unwrap()];
+            assert!(block.contains("pointer-events: none;") && block.contains("var(--accent"), "{class}: {block}");
+            let forced = editor.find(&format!("\n  #drawing .{class}")).unwrap_or_else(|| panic!("{class} has a forced-colours rule"));
+            assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some_and(|m| !editor[m..forced].contains("\n}\n")), "{class}");
+        }
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let (accent, road) = (pick(&token(app, "accent"), i), pick(&token(app, "road"), i));
+            assert!(contrast(&accent, &road) >= 3.0, "accent on the road {theme}: {:.2}", contrast(&accent, &road));
+            // the wash under the outline (the dark one is translucent over the road, which is measured above)
+            let wash = token(app, "accent-wash");
+            if let Some(wash) = if i == 0 { wash.0 } else { wash.1 } {
+                assert!(contrast(&accent, &wash) >= 3.0, "accent on its wash {theme}: {:.2}", contrast(&accent, &wash));
+            }
+            for ground in ["k-sidewalk", "k-planting"] {
+                let fill = pick(&token(app, ground), i);
+                assert!(contrast(&accent, &fill) >= 3.0, "accent on {ground} {theme}: {:.2}", contrast(&accent, &fill));
+            }
+        }
+    }
 }

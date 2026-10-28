@@ -11,11 +11,12 @@ use crate::junction::read_model::{ArmView, JView, LaneView, RingView};
 use crate::junction::text::arms_text;
 use crate::junction::turbo_ring::mouth_on_open;
 use crate::junction::turns::compass_key;
-use crate::shared::catalogue::KINDS;
+use crate::shared::catalogue::{KINDS, Side};
 use crate::shared::i18n::{Args, I18n, Locale};
 use crate::shared::iso::format::{esc, f1};
 use crate::shared::said::{Said, say};
 use crate::shared::units::Units;
+use crate::street::model::StopKind;
 
 type P = (f64, f64);
 
@@ -407,6 +408,39 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         }
         if let Some(q) = &t.queue {
             g += &p.piece("piece k-bus queue", "bus", &p.path_d(q));
+        }
+        for st in &a.stops {
+            let bad = if st.bad { " stop-bad" } else { "" };
+            if let Some(pad) = &st.pad {
+                let kind = match st.kind {
+                    StopKind::Curb => "",
+                    StopKind::Bulb => " stop-bulb",
+                    StopKind::Island => " stop-island",
+                };
+                write!(g, "<path class=\"stop-pad{kind}{bad}\" d=\"{}\"/>", p.path_d(pad)).unwrap();
+            }
+            if let Some(dwell) = &st.dwell {
+                write!(g, "<path class=\"stop-dwell{bad}\" d=\"{}\"/>", p.path_d(dwell)).unwrap();
+            }
+            if let Some(run) = &st.run {
+                write!(g, "<path class=\"stop-run\" d=\"{}\"/>", p.path_d(run)).unwrap();
+            }
+            if let Some(post) = st.post {
+                let (x, y) = p.f.at(post);
+                let at = tr(
+                    "jn-sel-arm-stop-bare",
+                    Args::new()
+                        .str("kind", tr(st.kind.name_key(), Args::new()))
+                        .str("side", tr(if st.side == Side::Left { "jn-side-left" } else { "jn-side-right" }, Args::new()))
+                        .str("at", units.length_in(st.near_mm, locale)),
+                );
+                let shelter = if st.shelter {
+                    format!("<rect class=\"stop-shelter\" x=\"{}\" y=\"{}\" width=\"10\" height=\"10\"/>", f1(x - 5.0), f1(y - 5.0))
+                } else {
+                    String::new()
+                };
+                write!(g, "<g class=\"stop-post\"><title>{}</title>{shelter}<circle cx=\"{}\" cy=\"{}\" r=\"3.5\"/></g>", esc(&at), f1(x), f1(y)).unwrap();
+            }
         }
         write!(
             l.arm,
@@ -901,6 +935,111 @@ mod tests {
         assert_eq!(count(own, "approach-mark"), 0, "the marks take no press");
         let at = |n: &str| own.find(n).unwrap();
         assert!(own.rfind("class=\"piece k-").unwrap() >= at(" beyond"), "after the arm's pieces");
+    }
+
+    /// What follows the opening tag of the arm `uid` up to the next element that takes a press of its own.
+    fn arm_markup(m: &str, uid: u32) -> &str {
+        let open = format!("data-role=\"arm\" data-uid=\"{uid}\">");
+        let rest = &m[m.find(&open).unwrap() + open.len()..];
+        &rest[..rest.find("data-role=").unwrap_or(rest.len())]
+    }
+
+    #[test]
+    fn a_near_side_stop_draws_pad_dwell_run_and_post() {
+        let (j, uid) = crate::junction::tests::junction_with_stops(|_| {}, |lane, walk| vec![crate::junction::tests::end_stop(25_000, 33_000, lane, walk)]);
+        let m = svg(&j).markup;
+        assert_eq!(
+            (count(&m, "class=\"stop-pad"), count(&m, "class=\"stop-dwell"), count(&m, "class=\"stop-run"), count(&m, "class=\"stop-post")),
+            (1, 1, 1, 1)
+        );
+        assert!(m.contains("class=\"stop-post\"><title>"), "the stop is named");
+        let own = arm_markup(&m, uid);
+        assert!(own.contains("class=\"stop-pad") && own.contains("class=\"stop-post"), "inside its arm, so a press selects the arm");
+        assert_eq!(count(&m, "stop-post\"><title>"), 1);
+        assert_eq!(count(&m, "<rect class=\"stop-shelter"), 1, "a stop with a shelter draws a box");
+    }
+
+    #[test]
+    fn a_far_side_stop_draws_no_run() {
+        let (j, _) = crate::junction::tests::junction_with_stops(
+            |_| {},
+            |lane, walk| {
+                let mut s = crate::junction::tests::end_stop(25_000, 33_000, lane, walk);
+                s.enters = false;
+                s.shelter = false;
+                vec![s]
+            },
+        );
+        let m = svg(&j).markup;
+        assert_eq!((count(&m, "class=\"stop-pad"), count(&m, "class=\"stop-dwell"), count(&m, "class=\"stop-post")), (1, 1, 1));
+        assert_eq!(count(&m, "class=\"stop-run"), 0);
+        assert_eq!(count(&m, "stop-shelter"), 0, "no shelter, no box");
+    }
+
+    #[test]
+    fn a_failing_stop_carries_stop_bad() {
+        let (j, _) = crate::junction::tests::junction_with_stops(|_| {}, |lane, walk| vec![crate::junction::tests::end_stop(20_000, 28_000, lane, walk)]);
+        assert!(j.view().arms.iter().any(|a| a.stops.iter().any(|s| s.bad)));
+        let m = svg(&j).markup;
+        assert_eq!((count(&m, "class=\"stop-pad stop-bad\""), count(&m, "class=\"stop-dwell stop-bad\"")), (1, 1));
+        assert_eq!(count(&m, "stop-run stop-bad"), 0, "the run is a line, not an outline");
+    }
+
+    #[test]
+    fn a_bulb_and_an_island_name_their_kind_on_the_pad_and_a_curb_stop_does_not() {
+        use crate::street::model::StopKind;
+        for (kind, class) in
+            [(StopKind::Curb, "class=\"stop-pad\""), (StopKind::Bulb, "class=\"stop-pad stop-bulb\""), (StopKind::Island, "class=\"stop-pad stop-island\"")]
+        {
+            let (j, _) = crate::junction::tests::junction_with_stops(
+                |_| {},
+                |lane, walk| {
+                    let mut s = crate::junction::tests::end_stop(25_000, 33_000, lane, walk);
+                    s.kind = kind;
+                    vec![s]
+                },
+            );
+            let m = svg(&j).markup;
+            assert_eq!(count(&m, "class=\"stop-pad"), 1, "{kind:?}");
+            // a failing stop adds stop-bad after the kind (the lane check marks this one)
+            let bad = j.view().arms.iter().any(|a| a.stops.iter().any(|s| s.bad));
+            let want = if bad { class.replace('"', "").replace("class=", "") } else { String::new() };
+            assert!(m.contains(class) || (bad && m.contains(&format!("class=\"{want} stop-bad\""))), "{kind:?}: {class}");
+            let other = if kind == StopKind::Bulb { "stop-island" } else { "stop-bulb" };
+            assert_eq!(count(&m, other), 0);
+        }
+    }
+
+    #[test]
+    fn an_arm_without_stops_draws_no_stop_class() {
+        let m = svg(&Junction::new(0)).markup;
+        for class in ["stop-pad", "stop-dwell", "stop-run", "stop-post", "stop-bad"] {
+            assert_eq!(count(&m, class), 0, "{class}");
+        }
+    }
+
+    #[test]
+    fn a_failing_island_keeps_its_dotted_outline() {
+        // `stop-bad` makes a stop's outline heavier and dashed; an island is outlined with dots, so its own rule comes after.
+        let css = include_str!("../../web/editor.css");
+        let bad = css.find("#drawing .stop-pad.stop-bad").expect("the failing rule");
+        let island = css.find("#drawing .stop-pad.stop-island.stop-bad").expect("a failing island has a rule of its own");
+        assert!(island > bad, "after the rule it overrides");
+        let rule = &css[island..];
+        let rule = &rule[..rule.find('}').unwrap()];
+        assert!(rule.contains("stroke-dasharray: 1 3"), "{rule}");
+    }
+
+    #[test]
+    fn the_stop_takes_no_press_of_its_own() {
+        let (j, _) = crate::junction::tests::junction_with_stops(|_| {}, |lane, walk| vec![crate::junction::tests::end_stop(25_000, 33_000, lane, walk)]);
+        let m = svg(&j).markup;
+        for class in ["stop-pad", "stop-dwell", "stop-run", "stop-post"] {
+            let at = m.find(&format!("class=\"{class}")).unwrap();
+            let tag_open = m[..at].rfind('<').unwrap();
+            assert!(!m[tag_open..at].contains("data-role"), "{class}");
+        }
+        assert_eq!(count(&m, "data-role=\"stop"), 0);
     }
 
     fn turbo(layout: usize) -> Junction {

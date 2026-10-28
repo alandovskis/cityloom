@@ -12,7 +12,7 @@ import {
   TURBO_PBF,
 } from "./fixtures";
 
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 const turns = (page: Page) => page.locator("#turns button.turn");
 
@@ -914,5 +914,170 @@ test.describe("the approach of an arm whose street is divided", () => {
       }
     }
     expect(failed, "a short end zone fails the Approaches check").toBe(true);
+  });
+});
+
+// ---- transit stops on an arm ---------------------------------------------------------------------------------
+
+test.describe("a street's transit stop on the arm that meets it", () => {
+  const STOP_M = 12;
+  const clear = "Bus stops clear of the junction";
+  const lanes = "Buses at a stop are not trapped in a turning lane";
+
+  /** Finds a junction whose first arm has two entering lanes (a stop's lane can then be trapped in a turning lane)
+   *  and a street of 50 m or more with a Stops row on the side where traffic enters the junction. Traffic keeps
+   *  right, so a bus enters on the street's left half where the junction is at the end the stops are measured from,
+   *  and on its right half at the other end. The end is read from the street page: it says it measures from the
+   *  junction's own name when the junction lies at that end. Says where the stop goes. Leaves the page on the street. */
+  const nearSideArm = async (page: Page) => {
+    await page.goto("/map.html");
+    for (const junction of (await placesOnMap(page)).junctions) {
+      await page.goto("/" + junction);
+      await expect(page.locator("#drawing")).toBeVisible();
+      const name = (await page.locator("#street-name").innerText()).trim();
+      await page.locator("#wrap").focus();
+      await page.keyboard.press("ArrowRight"); // the first street
+      const link = page.locator('#inspector a.btn[href^="street.html?street="]');
+      await expect(link).toBeVisible();
+      if ((await page.locator("#inspector .lane-row").count()) < 2) continue;
+      await link.click();
+      await expect(page.locator("#zone-0")).toBeVisible();
+      const length = await streetLengthM(page);
+      const from = (
+        await page
+          .getByText(/^Measured from /)
+          .first()
+          .innerText()
+      ).trim();
+      const origin = from === `Measured from ${name}`;
+      const side = origin ? "left" : "right";
+      if (length >= 50 && (await page.locator(`#stop-strip-${side}`).count()) === 1) {
+        return { junction, length, origin, side };
+      }
+    }
+    throw new Error("no junction has an arm with two entering lanes and a street with a stop row on its entering side");
+  };
+
+  /** Adds a stop of `STOP_M` metres on the street page's `side` row, `near` metres from the junction's centre to its
+   *  near edge. The stop is added at the street's origin, then moved a step at a time, awaiting the label each time. */
+  const placeStop = async (page: Page, arm: { length: number; origin: boolean; side: string }, near: number) => {
+    const strip = page.locator(`#stop-strip-${arm.side}`);
+    const used = strip.locator('[role="option"].stop-cell:not(.gap)');
+    await page.locator(`#stop-${arm.side}-0`).click();
+    await page.locator("#stop-length").fill(String(STOP_M));
+    await page.locator("#stop-add").click();
+    await expect(used).toHaveCount(1);
+    await expect(used).toHaveAttribute("aria-label", new RegExp(`, 0\\.0 m to ${STOP_M}\\.0 m,`));
+    await used.click();
+    await strip.focus();
+    await moveStop(page, strip, 0, arm.origin ? near : Math.floor(arm.length - STOP_M - near));
+  };
+
+  /** Moves the stop in `strip` from `at` to `target` metres along the street, by 10 m (Shift+Alt) and 1 m (Alt). */
+  const moveStop = async (page: Page, strip: Locator, at: number, target: number) => {
+    const used = strip.locator('[role="option"].stop-cell:not(.gap)');
+    while (at !== target) {
+      const d = target - at;
+      const big = Math.abs(d) >= 10;
+      const step = Math.sign(d) * (big ? 10 : 1);
+      await page.keyboard.press(`${big ? "Shift+" : ""}Alt+Arrow${step > 0 ? "Right" : "Left"}`);
+      at += step;
+      await expect(used).toHaveAttribute("aria-label", new RegExp(`, ${at}\\.0 m to ${at + STOP_M}\\.0 m,`));
+    }
+  };
+
+  /** Waits until the document in storage holds a stop that starts at `fromM` metres (the write is debounced). */
+  const kept = (page: Page, fromM: number) =>
+    expect
+      .poll(() =>
+        page.evaluate((m) => (localStorage.getItem("cityloom-edits") ?? "").includes(`"from_mm":${m * 1000}`), fromM),
+      )
+      .toBe(true);
+
+  const checkRow = (page: Page, label: string) => page.locator("#checks li").filter({ hasText: label });
+
+  test("a stop too near the junction is drawn and fails the checks, and passes 20 m out", async ({ page }) => {
+    // It looks through the junctions for an arm, then goes between the street and the junction pages four times.
+    test.setTimeout(120_000);
+    const arm = await nearSideArm(page);
+    const street = page.url();
+
+    // No stop on the street: nothing drawn on the arm.
+    await page.goto("/" + arm.junction);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(page.locator("#drawing .stop-pad")).toHaveCount(0);
+
+    // A stop 6 m from the centre.
+    await page.goto(street);
+    await expect(page.locator("#zone-0")).toBeVisible();
+    await placeStop(page, arm, 6);
+    const near = arm.origin ? 6 : Math.floor(arm.length - STOP_M - 6);
+    await kept(page, near);
+
+    await page.goto("/" + arm.junction);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(page.locator('#drawing g[data-role="arm"] .stop-pad')).toHaveCount(1);
+    await expect(page.locator('#drawing g[data-role="arm"] .stop-dwell')).toHaveCount(1);
+    await page.locator("#t-checks").click();
+    await expect(checkRow(page, clear)).toHaveClass("bad");
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("ArrowRight"); // the street
+    await expect(live(page)).toContainText(/from the centre/);
+    const name = (await live(page).innerText()).split(" (")[0];
+    await expect(checkRow(page, clear)).toContainText(name);
+
+    // The street page reads the junctions when it opens: with the stop kept, it now judges it, and the same stop
+    // 20 m out is clear on both pages.
+    await page.goto(street);
+    await expect(page.locator("#zone-0")).toBeVisible();
+    await page.locator("#t-checks").click();
+    await expect(checkRow(page, "Stops clear of the junction")).toHaveClass("bad");
+    const strip = page.locator(`#stop-strip-${arm.side}`);
+    await strip.locator('[role="option"].stop-cell:not(.gap)').click();
+    await strip.focus();
+    const to = arm.origin ? 20 : Math.floor(arm.length - STOP_M - 20);
+    await moveStop(page, strip, near, to);
+    await kept(page, to);
+    await expect(checkRow(page, "Stops clear of the junction")).toHaveClass("ok");
+
+    await page.goto("/" + arm.junction);
+    await expect(page.locator('#drawing g[data-role="arm"] .stop-pad')).toHaveCount(1);
+    await page.locator("#t-checks").click();
+    await expect(checkRow(page, clear)).not.toHaveClass(/bad/);
+    await expect(checkRow(page, lanes)).not.toHaveClass(/bad/);
+  });
+
+  test("a bus stopped in a lane that only turns fails, and passes when the lane goes straight on", async ({ page }) => {
+    test.setTimeout(120_000);
+    const arm = await nearSideArm(page);
+    await placeStop(page, arm, 20);
+    await kept(page, arm.origin ? 20 : Math.floor(arm.length - STOP_M - 20));
+
+    await page.goto("/" + arm.junction);
+    await expect(page.locator('#drawing g[data-role="arm"] .stop-pad')).toHaveCount(1);
+    await page.locator("#t-checks").click();
+    await expect(checkRow(page, lanes)).not.toHaveClass(/bad/);
+
+    // The curb lane is the last: it turns left only, then goes straight on again.
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("ArrowRight");
+    const curb = page.locator("#inspector .lane-row").last();
+    await expect(curb.locator("button.dest")).toHaveCount(2);
+    const [turn, ahead] = [
+      curb.getByRole("button", { name: /, left$/ }),
+      curb.getByRole("button", { name: /, straight on$/ }),
+    ];
+    await turn.click();
+    await expect(turn).toHaveAttribute("aria-pressed", "true");
+    await ahead.click();
+    await expect(ahead).toHaveAttribute("aria-pressed", "false");
+    await expect(checkRow(page, lanes)).toHaveClass(/bad/);
+    await expect(checkRow(page, lanes)).toContainText("only turns left");
+
+    await ahead.click();
+    await expect(ahead).toHaveAttribute("aria-pressed", "true");
+    await turn.click();
+    await expect(turn).toHaveAttribute("aria-pressed", "false");
+    await expect(checkRow(page, lanes)).not.toHaveClass(/bad/);
   });
 });

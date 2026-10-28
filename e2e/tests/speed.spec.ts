@@ -20,6 +20,10 @@ async function openStreetWithSpeed(page: Page, value: string) {
 // A street's speed limit: imported from OpenStreetMap's maxspeed, changed in the left panel, shown as a sign in the 2.5D.
 
 test.describe("a street's speed limit", () => {
+  // `openStreetWithSpeed` opens the city's streets one by one until one has the speed it wants: about 29 s on CI's
+  // runner, against the default 30 s.
+  test.describe.configure({ timeout: 120_000 });
+
   test("the imported speed is shown; choosing another changes it, shows the sign in 2.5D and Undo restores it", async ({
     page,
   }) => {

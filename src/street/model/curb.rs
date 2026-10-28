@@ -23,6 +23,9 @@ pub const DOOR_BUFFER_MM: i32 = 600;
 pub struct EndInfo {
     /// The end is a junction with a pedestrian crossing on this street's arm.
     pub crossing: bool,
+    /// How far from the end the junction reaches along this street: to the crossing's far edge, or to the mouth
+    /// where there is no crossing. 0 when unknown.
+    pub reach_mm: i32,
 }
 
 /// What a stretch of curbside is used for. Each is drawn as an existing catalogue kind.
@@ -1055,7 +1058,7 @@ mod tests {
     }
 
     fn crossing_at_first() -> [EndInfo; 2] {
-        [EndInfo { crossing: true }, EndInfo { crossing: false }]
+        [EndInfo { crossing: true, ..Default::default() }, EndInfo { crossing: false, ..Default::default() }]
     }
 
     #[test]
@@ -1090,7 +1093,9 @@ mod tests {
         assert!(ok(&e, "curb-crossing"), "3 m from the last end, where there is no crossing");
         e.move_curb(0, LEN - 3_000 - 5_500).unwrap();
         assert!(!ok(&e, "curb-crossing"), "3 m from the first end, where the crossing is");
-        let mut e = Editor::from_street(&s, &s, 0).with_frame(last).with_ends([EndInfo { crossing: false }, EndInfo { crossing: true }]);
+        let mut e = Editor::from_street(&s, &s, 0)
+            .with_frame(last)
+            .with_ends([EndInfo { crossing: false, ..Default::default() }, EndInfo { crossing: true, ..Default::default() }]);
         e.add_curb(Side::Right, 3_000, 5_500, Use::Loading).unwrap();
         assert!(!ok(&e, "curb-crossing"));
     }

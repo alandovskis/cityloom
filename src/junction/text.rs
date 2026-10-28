@@ -5,7 +5,9 @@
 //! `say`, so it is drawn again when the language is switched; a command uses the `_now` forms.
 
 use crate::junction::model::control_key;
-use crate::junction::read_model::JView;
+use crate::junction::read_model::{ArmView, JView};
+use crate::junction::stops::{self, StopView};
+use crate::shared::catalogue::Side;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said, say, say_now};
 use crate::shared::units::Units;
@@ -76,6 +78,22 @@ pub fn sample_text(v: &JView, i18n: &I18n) -> String {
     format!("{}. {}", say_now(i18n, Units::Metres, &v.name), fit_text_now(v, i18n))
 }
 
+/// One stop of an arm, said for a screen reader: where it stands and the lane its bus is in.
+fn stop_text(a: &ArmView, st: &StopView, i18n: &I18n, units: Units) -> String {
+    let locale = i18n.locale_now();
+    let side = i18n.tr_now(if st.side == Side::Left { "jn-side-left" } else { "jn-side-right" }, &Args::new());
+    let args = Args::new().str("kind", i18n.tr_now(st.kind.name_key(), &Args::new())).str("side", side).str("at", units.length_in(st.near_mm, locale));
+    // A bus piece has no entering lane: the stop is in the bus lane. A stop on no entering lane says only where it is.
+    let lane = st.lane.and_then(|n| Some((n, stops::uses_said(a.lanes.get(n)?.uses)?)));
+    match (lane, st.in_bus_lane) {
+        (Some((n, uses)), _) => {
+            i18n.tr_now("jn-sel-arm-stop", &args.num("n", n as i64 + 1).num("of", a.lanes.len() as i64).str("uses", say_now(i18n, units, &uses)))
+        }
+        (None, true) => i18n.tr_now("jn-sel-arm-stop-bus", &args),
+        (None, false) => i18n.tr_now("jn-sel-arm-stop-bare", &args),
+    }
+}
+
 /// What is selected, for a screen reader; nothing when nothing is.
 pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
     let s = &v.selected;
@@ -90,7 +108,7 @@ pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
         "lane" => i18n.tr_now("jn-sel-lane", &args.num("n", s.lane as i64 + 1).num("count", arm.map_or(0, |a| a.lanes.len()) as i64)),
         "arm" => {
             let args = args.num("degrees", arm.map_or(0, |a| a.bearing).into());
-            match arm.filter(|a| a.beyond_zone.is_some()) {
+            let base = match arm.filter(|a| a.beyond_zone.is_some()) {
                 Some(a) => {
                     let zone = a.beyond_zone.as_ref().map_or_else(String::new, |z| say_now(i18n, units, z));
                     let args = args.str("reach", units.length_in(a.beyond_reach_mm, locale)).str("zone", zone);
@@ -101,7 +119,11 @@ pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
                     }
                 }
                 None => i18n.tr_now("jn-sel-arm", &args),
-            }
+            };
+            let Some(a) = arm.filter(|a| !a.stops.is_empty()) else { return Some(base) };
+            let stops: Vec<String> = a.stops.iter().map(|st| stop_text(a, st, i18n, units)).collect();
+            // A sentence of its own after what the arm said, whether that ended in a full stop or not.
+            format!("{base}{} {}", if base.ends_with('.') { "" } else { "." }, stops.join(" "))
         }
         "corner" => {
             let corner = v.corners.iter().find(|c| c.uid == s.uid);
@@ -302,6 +324,27 @@ mod tests {
         let mut j = Junction::new(0);
         let n = arm_at(&j, 0);
         j.select(Target::Arm(n));
+        assert_eq!(selection_text(&j.view(), &en(), Units::Metres).unwrap(), "Sample Avenue 2 (north), 0 degrees");
+    }
+
+    #[test]
+    fn an_arm_with_a_stop_says_its_lane_in_both_languages() {
+        let (mut j, uid) = crate::junction::tests::junction_with_stops(|_| {}, |lane, walk| vec![crate::junction::tests::end_stop(25_000, 33_000, lane, walk)]);
+        j.select(Target::Arm(uid));
+        assert_eq!(
+            selection_text(&j.view(), &en(), Units::Metres).unwrap(),
+            "Sample Avenue 2 (north), 0 degrees. Curb stop on the left as seen from the centre, 25.0 m from the centre, in lane 2 of 2, which goes straight on or right."
+        );
+        assert_eq!(
+            selection_text(&j.view(), &fr(), Units::Metres).unwrap(),
+            "Sample Avenue 2 (nord), 0 degré. Arrêt au trottoir à gauche vu du centre, à 25,0\u{a0}m du centre, dans la voie 2 sur 2, qui permet d’aller tout droit ou de tourner à droite."
+        );
+    }
+
+    #[test]
+    fn an_arm_without_a_stop_says_nothing_of_one() {
+        let (mut j, uid) = crate::junction::tests::junction_with_stops(|_| {}, |_, _| Vec::new());
+        j.select(Target::Arm(uid));
         assert_eq!(selection_text(&j.view(), &en(), Units::Metres).unwrap(), "Sample Avenue 2 (north), 0 degrees");
     }
 }

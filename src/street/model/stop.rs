@@ -8,7 +8,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::curb::{CurbRefusal, Failure, SideView, StripCell, StripView, check_rows, curbside, selected_cell, side_word, strip_cells, toward_edge};
-use super::{Arg, Check, Content, Editor, SNAP_MM, Said, Segment, Street, ZoneFrame, snap, widest_walkway_mm};
+use super::stop_end::{STOP_CLEAR_MM, stop_gap_mm};
+use super::{Arg, Check, Content, Editor, SNAP_MM, Said, Segment, Street, ZoneEnd, ZoneFrame, snap, widest_walkway_mm};
 use crate::shared::catalogue::{KINDS, REGIONS, Side, is_motor};
 
 /// The most characters a stop's name keeps.
@@ -499,7 +500,7 @@ impl Editor {
     /// under the region's driving side (`bus_lane`).
     pub(super) fn stop_checks(&self) -> Vec<Check> {
         let content = &self.states[self.cursor].content;
-        let rows = [
+        let mut rows = vec![
             ("stop-lane", "check-label-stop-lane", "check-detail-stop-lane-ok"),
             ("stop-kind", "check-label-stop-kind", "check-detail-stop-kind-ok"),
             ("stop-length", "check-label-stop-length", "check-detail-stop-length-ok"),
@@ -507,17 +508,44 @@ impl Editor {
             ("stop-bike", "check-label-stop-bike", "check-detail-stop-bike-ok"),
             ("stop-shelter", "check-label-stop-shelter", "check-detail-stop-shelter-ok"),
         ];
+        if self.stops_see_a_junction() {
+            rows.push(("stop-junction", "check-label-stop-junction", "check-detail-stop-junction-ok"));
+        }
         check_rows(&rows, &self.stop_failures(), |k| content.stops[k].named())
+    }
+
+    /// Whether the city has told either end how far its junction reaches, so that the stops are judged against it.
+    fn stops_see_a_junction(&self) -> bool {
+        self.ends.iter().any(|e| e.reach_mm > 0)
     }
 
     /// Every rule each stop breaks, stop by stop in order: `rule` indexes the rows of `stop_checks`.
     fn stop_failures(&self) -> Vec<Failure> {
         let content = &self.states[self.cursor].content;
         let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        // The far end is measured from the frame's length, as the junction measures it (the two differ by up to the tolerance).
+        let end_length_mm = self.frame.map_or(length_mm, |f| f.length_mm);
         let driving = REGIONS[self.region].drive_side;
+        let (near, far) = match content.from_end {
+            ZoneEnd::First => (self.ends[0], self.ends[1]),
+            ZoneEnd::Last => (self.ends[1], self.ends[0]),
+        };
         let mut out: Vec<Failure> = Vec::new();
         for (k, s) in content.stops.iter().enumerate() {
             let mut fail = |rule: usize, detail: Said| Failure::record(&mut out, k, rule, detail);
+            // The stop's distance from each end, judged against how far that end's junction reaches.
+            for (end, from_end_mm) in [(near, s.from_mm), (far, end_length_mm.saturating_sub(s.to_mm()))] {
+                if end.reach_mm <= 0 {
+                    continue;
+                }
+                let gap = stop_gap_mm(from_end_mm, end.reach_mm);
+                if gap < 0 {
+                    fail(6, Said::new("check-detail-stop-junction-inside"));
+                } else if gap < STOP_CLEAR_MM {
+                    let key = if end.crossing { "check-detail-stop-junction-crossing" } else { "check-detail-stop-junction-mouth" };
+                    fail(6, Said::new(key).with("gap", Arg::Length(gap)).with("need", Arg::Length(STOP_CLEAR_MM)));
+                }
+            }
             if s.length_mm < MIN_STOP_MM {
                 fail(2, Said::new("check-detail-stop-length").with("length", Arg::Length(s.length_mm)).with("min", Arg::Length(MIN_STOP_MM)));
             }
@@ -1128,5 +1156,90 @@ mod tests {
         let named = check(&e, "stop-lane").zone.unwrap();
         assert_eq!(named.key, "stop-instance-named");
         assert!(named.args.contains(&("name", Arg::Text("Mont-Royal <b>".into()))));
+    }
+
+    // ---- the junction's clearance ----
+
+    use crate::street::model::EndInfo;
+
+    fn near_junction(from_end: ZoneEnd, ends: [EndInfo; 2], from_mm: i32) -> Editor {
+        let mut e = editor_with(&layout(&CURB), Side::Right, from_end).with_ends(ends);
+        e.add_stop(Side::Right, from_mm, 12_000, StopKind::Curb).unwrap();
+        e
+    }
+
+    fn reach(crossing: bool, reach_mm: i32) -> EndInfo {
+        EndInfo { crossing, reach_mm }
+    }
+
+    #[test]
+    fn a_stop_close_to_a_crossing_fails_stop_junction() {
+        let e = near_junction(ZoneEnd::First, [reach(true, 9_000), EndInfo::default()], 12_000);
+        let c = check(&e, "stop-junction");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-junction-crossing");
+        assert_eq!(mm(&c.detail, "gap"), Some(3_000));
+        assert_eq!(mm(&c.detail, "need"), Some(STOP_CLEAR_MM));
+        assert_eq!(c.zone.as_ref().unwrap().key, "stop-instance");
+        let mouth = near_junction(ZoneEnd::First, [reach(false, 9_000), EndInfo::default()], 12_000);
+        assert_eq!(check(&mouth, "stop-junction").detail.key, "check-detail-stop-junction-mouth");
+    }
+
+    #[test]
+    fn exactly_five_metres_clear_passes() {
+        let e = near_junction(ZoneEnd::First, [reach(true, 9_000), EndInfo::default()], 14_000);
+        let c = check(&e, "stop-junction");
+        assert!(c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-junction-ok");
+    }
+
+    #[test]
+    fn a_stop_inside_the_mouth_says_so() {
+        let e = near_junction(ZoneEnd::First, [reach(false, 9_000), EndInfo::default()], 4_000);
+        let c = check(&e, "stop-junction");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-junction-inside");
+    }
+
+    #[test]
+    fn the_far_end_is_measured_from_the_far_side() {
+        // The stop runs 36 000 to 48 000 on a 60 000 street: its far side is 12 000 from the far end.
+        let far = |reach_mm| near_junction(ZoneEnd::First, [EndInfo::default(), reach(true, reach_mm)], 36_000);
+        let c = check(&far(9_000), "stop-junction");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-stop-junction-crossing");
+        assert_eq!(mm(&c.detail, "gap"), Some(3_000));
+        assert!(ok(&far(7_000), "stop-junction"));
+    }
+
+    #[test]
+    fn the_far_end_is_measured_from_the_frames_length_as_the_junction_does() {
+        // The street drawn at 60 000 and the frame at 60 500 (within the tolerance): the junction measures the stop
+        // (36 000 to 48 000) from the frame's end, 12 500 away, and so does this page.
+        let mut e = near_junction(ZoneEnd::First, [EndInfo::default(), reach(true, 7_500)], 36_000);
+        e = e.with_frame(Some(ZoneFrame { length_mm: LEN + 500, from_end: ZoneEnd::First }));
+        assert!(ok(&e, "stop-junction"), "12 500 - 7 500 is the 5 000 asked for");
+    }
+
+    #[test]
+    fn anchored_at_the_last_end_reads_the_ends_swapped() {
+        // Anchored at the last end, the stop's `from_mm` is measured from node b: ends[1] is the near end.
+        let near = near_junction(ZoneEnd::Last, [EndInfo::default(), reach(true, 9_000)], 12_000);
+        assert!(!ok(&near, "stop-junction"));
+        let wrong_end = near_junction(ZoneEnd::Last, [reach(true, 9_000), EndInfo::default()], 12_000);
+        assert!(ok(&wrong_end, "stop-junction"), "ends[0] is the far end here: 36 000 clear");
+    }
+
+    #[test]
+    fn no_reach_no_row() {
+        let e = near_junction(ZoneEnd::First, [EndInfo { crossing: true, reach_mm: 0 }; 2], 100);
+        let ids: Vec<&str> = e.view().checks.iter().map(|c| c.id).filter(|i| i.starts_with("stop-")).collect();
+        assert_eq!(ids, ["stop-lane", "stop-kind", "stop-length", "stop-width", "stop-bike", "stop-shelter"]);
+    }
+
+    #[test]
+    fn a_street_without_stops_has_no_stop_rows() {
+        let e = editor_with(&layout(&CURB), Side::Right, ZoneEnd::First).with_ends([reach(true, 9_000); 2]);
+        assert!(e.view().checks.iter().all(|c| !c.id.starts_with("stop-")));
     }
 }
