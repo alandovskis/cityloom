@@ -1904,6 +1904,42 @@ fn choosing_a_pattern_is_announced_in_english_and_in_french_and_choosing_the_sam
 }
 
 #[test]
+fn switching_a_crossing_in_a_phase_is_announced_in_both_languages_and_says_when_the_phase_is_now_custom() {
+    use crate::shared::i18n::Locale;
+    for (locale, on, lost, back) in [
+        (Locale::En, "now walk across", "Phase 1 no longer follows a ready-made pattern.", "no longer walk across"),
+        (Locale::FrCa, "traversent maintenant", "La phase 1 ne suit plus un modèle prêt à l’emploi.", "ne traversent plus"),
+    ] {
+        let s = shared_in(0, locale);
+        let (north, east) = (arm(&s, 0), arm(&s, 90));
+        live::take_said();
+        assert!(s.toggle_phase_walk(0, north));
+        let said = live::take_said();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].contains(on) && said[0].ends_with(lost), "{said:?}");
+        // Already Custom: the next change does not say it again.
+        assert!(s.toggle_phase_walk(0, east));
+        let said = live::take_said();
+        assert!(said[0].contains(back) && !said[0].contains(lost), "{said:?}");
+        // Back to the pattern's own crossings: nothing is lost.
+        assert!(s.toggle_phase_walk(0, north));
+        assert!(!live::take_said()[0].contains(lost));
+    }
+}
+
+#[test]
+fn switching_a_bike_movement_or_a_crossing_that_cannot_be_is_refused_aloud_and_changes_nothing() {
+    let s = shared(0);
+    let north = arm(&s, 0);
+    live::take_said();
+    assert!(!s.toggle_phase_ride(0, north));
+    assert_eq!(live::take_said(), vec!["That street has no bike lane."]);
+    assert!(s.read(|j| j.current().signal_plan.is_none()), "nothing was changed");
+    assert!(!s.toggle_phase_walk(9, north));
+    assert_eq!(live::take_said().len(), 1);
+}
+
+#[test]
 fn an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languages() {
     use crate::shared::i18n::Locale;
     for (locale, tail) in
