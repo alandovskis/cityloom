@@ -130,7 +130,7 @@ impl Street {
     /// centre is measured from the other edge, of the section under the element.
     pub(super) fn reverse_green(&mut self) {
         let mirrored: Vec<Green> =
-            self.green.iter().map(|g| Green { offset_mm: self.section_total_at(g.from_mm + g.length_mm / 2) - g.offset_mm, ..*g }).collect();
+            self.green.iter().map(|g| Green { offset_mm: self.section_total_at(g.from_mm.saturating_add(g.length_mm / 2)) - g.offset_mm, ..*g }).collect();
         self.green = mirrored;
         self.sort_green();
     }
@@ -144,7 +144,7 @@ impl Street {
                     g.from_mm >= 0
                         && g.length_mm > 0
                         && g.width_mm > 0
-                        && (0..=self.row_mm).contains(&g.offset_mm)
+                        && (0..=self.section_total_at(g.from_mm.saturating_add(g.length_mm / 2))).contains(&g.offset_mm)
                         && g.size.is_some() == (g.kind == GreenKind::Tree)
                 }))
     }
@@ -230,6 +230,21 @@ mod tests {
         assert_eq!(once.green[0].offset_mm, total(&s.segments) - 1_000);
         assert_eq!(once.green[1].offset_mm, total(&s.segments) - removed - 1_000);
         assert_eq!(once.reversed(), s);
+    }
+
+    #[test]
+    fn an_element_is_sound_only_within_the_section_under_it_and_stays_sound_reversed() {
+        let mut s = zoned(Street::sample(0, Side::Right), &[0, 50_000], 100_000);
+        let mut own: Vec<Segment> = s.segments.clone();
+        own.remove(1);
+        s.zones[1].segments = Some(own);
+        let short = total(s.zones[1].segments.as_deref().unwrap());
+        assert!(short < s.row_mm);
+        s.green = vec![tree(60_000, short + 1)];
+        assert!(!s.is_sound(), "past the section under it, though within row_mm");
+        s.green = vec![tree(60_000, short), tree(10_000, s.row_mm)];
+        assert!(s.is_sound());
+        assert!(s.reversed().is_sound());
     }
 
     #[test]
