@@ -711,7 +711,7 @@ pub struct PhaseView {
 }
 
 /// One ready-made pattern a phase can be given: the message keys of its name and its one-sentence description.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct PatternView {
     pub pattern: Pattern,
     pub name: &'static str,

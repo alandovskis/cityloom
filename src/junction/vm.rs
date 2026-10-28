@@ -194,6 +194,21 @@ impl JunctionVm {
         chosen() == layout
     }
 
+    /// The person gives phase `index` a ready-made pattern. Choosing the pattern it is already changes nothing, so it
+    /// is neither refused nor announced and leaves no history. Whether the phase is that pattern afterwards.
+    pub fn choose_pattern(&self, index: usize, pattern: crate::junction::signal::Pattern) -> bool {
+        let chosen = || {
+            self.read(|j| {
+                let phase = crate::junction::signal::plan(j.current(), j.region).and_then(|p| p.phases.get(index).cloned());
+                phase.is_some_and(|ph| crate::junction::signal::pattern_of(j.current(), j.region, &ph) == pattern)
+            })
+        };
+        if !chosen() {
+            self.apply(|j| j.set_phase_pattern(index, pattern));
+        }
+        chosen()
+    }
+
     /// A change that is not announced, as each step of a drag is.
     pub fn quiet<R>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
         self.edit(f)

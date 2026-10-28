@@ -222,7 +222,7 @@ fn suggestion(s: &State, region: usize) -> Option<Plan> {
 
 /// A ready-made choice of what a phase allows. The figures behind them (which turns, whom they give way to) are
 /// UNVERIFIED placeholders, not a standard's rules: only the rules in this file about who crosses whom are used.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum Pattern {
     /// Only the traffic going straight on.
     ThroughOnly,

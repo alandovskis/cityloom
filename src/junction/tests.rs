@@ -7,6 +7,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::junction::model::*;
+use crate::junction::signal::Pattern;
 use crate::junction::vm::{DrawMode, JunctionVm};
 use crate::junction::{inspector, notes, page, plan, turns};
 use crate::shared::testing::{button_tag, count, html};
@@ -1807,6 +1808,87 @@ fn phase_cards(h: &str) -> Vec<String> {
     let at = h.find("class=\"signal-phases\"").expect("the row is there");
     let row = &h[at..at + h[at..].find("</ul>").unwrap()];
     row.split("<li").skip(1).map(str::to_string).collect()
+}
+
+// ---- the pattern of a phase ----
+
+/// The radio group of phase `i` in the panel's markup.
+fn pattern_group(h: &str, i: usize) -> String {
+    let at = h.find(&format!("id=\"sig-pattern-{i}\"")).expect("the group is there");
+    h[at..at + h[at..].find("</ul>").unwrap()].to_string()
+}
+
+#[test]
+fn each_phase_has_a_pattern_radio_group_with_one_tab_stop_and_the_patterns_that_fit() {
+    let s = shared(0);
+    let h = plain_panel(&s);
+    assert_eq!(count(&h, "role=\"radiogroup\" aria-label=\"Pattern for phase"), 4, "{h}");
+    let g = pattern_group(&h, 0);
+    assert_eq!(count(&g, "role=\"radio\""), 4, "{g}");
+    assert_eq!(count(&g, "tabindex=\"0\""), 1, "one tab stop");
+    assert!(g.contains("Through only") && g.contains("Protected left, then through") && g.contains("Pedestrian scramble") && g.contains("All movements"));
+    let checked: Vec<&str> = g.split("<li").filter(|r| r.contains("aria-checked=\"true\"")).collect();
+    assert_eq!(checked.len(), 1);
+    assert!(checked[0].contains("All movements") && checked[0].contains("tabindex=\"0\""), "the suggestion is all movements, and holds the tab stop");
+    assert!(g.contains("Only the traffic going straight on moves"), "each pattern has its sentence");
+    assert!(!g.contains("Custom"), "Custom is shown only when the phase is one");
+}
+
+#[test]
+fn a_phase_that_matches_no_pattern_shows_custom_checked_and_not_selectable() {
+    let s = shared(0);
+    s.edit(|j| j.set_phase_pattern(0, Pattern::ProtectedLeftThenThrough));
+    let (n, so) = (arm(&s, 0), arm(&s, 180));
+    for lane in 0..s.read(|j| j.arm(n).unwrap().lanes.len()) {
+        s.edit(|j| j.set_lane_dest(n, lane, so, false));
+    }
+    let g = pattern_group(&plain_panel(&s), 0);
+    let custom: Vec<&str> = g.split("<li").filter(|r| r.contains("Custom")).collect();
+    assert_eq!(custom.len(), 1, "{g}");
+    assert!(
+        custom[0].contains("aria-checked=\"true\"") && custom[0].contains("aria-disabled=\"true\"") && custom[0].contains("tabindex=\"0\""),
+        "{}",
+        custom[0]
+    );
+    assert_eq!(count(&g, "tabindex=\"0\""), 1);
+}
+
+#[test]
+fn choosing_a_pattern_is_announced_in_english_and_in_french_and_choosing_the_same_one_is_silent() {
+    use crate::shared::i18n::Locale;
+    let s = shared(0);
+    live::take_said();
+    assert!(s.choose_pattern(0, Pattern::ThroughOnly));
+    let said = live::take_said();
+    assert_eq!(said.len(), 1);
+    assert!(said[0].contains("Phase 1") && said[0].contains("through only"), "{said:?}");
+    assert!(s.choose_pattern(0, Pattern::ThroughOnly), "it is the pattern afterwards");
+    assert!(live::take_said().is_empty(), "choosing the one chosen changes nothing and says nothing");
+    assert!(plain_panel(&s).contains("Edited plan"));
+    let f = shared_in(0, Locale::FrCa);
+    live::take_said();
+    assert!(f.choose_pattern(0, Pattern::Scramble));
+    let said = live::take_said();
+    assert!(said[0].contains("Phase 1") && said[0].contains("piétonne exclusive"), "{said:?}");
+    assert!(plain_panel(&f).contains("Modèle de la phase 1"));
+    // A pattern that does not fit is refused, said, and is not the pattern afterwards.
+    let (n, so) = (arm(&s, 0), arm(&s, 180));
+    assert!(!s.choose_pattern(9, Pattern::Scramble));
+    let _ = (n, so);
+    assert!(live::take_said().len() == 1, "the refusal is said");
+}
+
+#[test]
+fn the_card_of_a_phase_follows_the_pattern_chosen() {
+    let s = shared(0);
+    let before = phase_cards(&plain_panel(&s));
+    assert!(before[0].contains("Cars go: north"));
+    s.choose_pattern(0, Pattern::Scramble);
+    let after = phase_cards(&plain_panel(&s));
+    assert!(!after[0].contains("Cars go"), "{}", after[0]);
+    assert!(after[0].contains("People cross: north, east, south and west."));
+    assert_ne!(after[0], before[0]);
+    assert_eq!(after[1], before[1]);
 }
 
 #[test]

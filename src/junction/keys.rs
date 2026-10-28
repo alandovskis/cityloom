@@ -87,6 +87,16 @@ pub fn radio_choice(p: &Press, count: usize, current: usize) -> Option<usize> {
     }
 }
 
+/// Which radio a key chooses in a group where none is checked that can be chosen (the phase's Custom): Down, Right
+/// and Home the first, Up, Left and End the last.
+pub fn radio_choice_from_none(p: &Press, count: usize) -> Option<usize> {
+    match p.key {
+        "ArrowDown" | "ArrowRight" => radio_choice(p, count, count.wrapping_sub(1)),
+        "ArrowUp" | "ArrowLeft" => radio_choice(p, count, 0),
+        _ => radio_choice(p, count, 0),
+    }
+}
+
 /// Whether the radio at `index` is the one a radio group stops the Tab key on: the one chosen, or the first when none is.
 pub fn radio_tab_stop(chosen: Option<usize>, index: usize) -> bool {
     chosen.unwrap_or(0) == index
@@ -98,6 +108,18 @@ mod tests {
 
     fn press(key: &str) -> Press<'_> {
         Press { key, ctrl: false, meta: false, alt: false, repeat: false, composing: false, taken: false }
+    }
+
+    #[test]
+    fn with_no_radio_to_start_from_the_arrows_go_to_the_ends() {
+        assert_eq!(radio_choice_from_none(&press("ArrowDown"), 4), Some(0));
+        assert_eq!(radio_choice_from_none(&press("ArrowRight"), 4), Some(0));
+        assert_eq!(radio_choice_from_none(&press("ArrowUp"), 4), Some(3));
+        assert_eq!(radio_choice_from_none(&press("ArrowLeft"), 4), Some(3));
+        assert_eq!(radio_choice_from_none(&press("Home"), 4), Some(0));
+        assert_eq!(radio_choice_from_none(&press("End"), 4), Some(3));
+        assert_eq!(radio_choice_from_none(&press("a"), 4), None);
+        assert_eq!(radio_choice_from_none(&press("ArrowDown"), 0), None);
     }
 
     #[test]

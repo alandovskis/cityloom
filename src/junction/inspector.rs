@@ -16,6 +16,7 @@ use crate::junction::model::{
 };
 use crate::junction::phase_svg::phase_drawings;
 use crate::junction::read_model::{CrossingView, JView};
+use crate::junction::signal::Pattern;
 use crate::junction::turns::{compass_key, turn_glyph};
 use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
@@ -1307,6 +1308,97 @@ fn phase_focus_id(index: usize, count: usize, dir: i32) -> String {
     }
 }
 
+/// The id of the radio of `pattern` in the group of phase `i`.
+fn pattern_id(i: usize, pattern: Pattern) -> String {
+    format!("sig-pattern-{i}-{}", pattern.name_key().trim_start_matches("jn-pattern-"))
+}
+
+/// What a phase allows, as a radio group of the ready-made patterns that fit the junction (one tab stop, Arrow, Home
+/// and End choose). A phase that matches none shows Custom checked first: it is the state the group is in, and
+/// cannot be chosen. The radios are keyed by pattern, so the one with the focus keeps it across a choice.
+fn pattern_group(w: Watch, i: usize) -> impl IntoView {
+    let current = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map_or(Pattern::Custom, |p| p.pattern));
+    let offered = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| p.patterns.clone()).unwrap_or_default());
+    // The radios shown: Custom first when it is what the phase is.
+    let shown = Memo::new(move |_| {
+        let mut all: Vec<Pattern> = Vec::new();
+        if current.get() == Pattern::Custom {
+            all.push(Pattern::Custom);
+        }
+        all.extend(offered.get().iter().map(|o| o.pattern));
+        all
+    });
+    // Where the phase's pattern is among those that can be chosen; none for Custom.
+    let chosen = Memo::new(move |_| offered.with(|all| all.iter().position(|o| o.pattern == current.get())));
+    let label = move || {
+        let street = w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| w.say(&p.street)).unwrap_or_default();
+        tr(w, "jn-pattern-group", Args::new().num("n", i as i64 + 1).str("street", street))
+    };
+    let radio = move |pattern: Pattern| {
+        let custom = pattern == Pattern::Custom;
+        let index = move || offered.with(|all| all.iter().position(|o| o.pattern == pattern));
+        // Custom, when the phase is it, is the one tab stop; else the checked radio is.
+        let tab_stop = move || if custom { true } else { chosen.get().is_some() && keys::radio_tab_stop(chosen.get(), index().unwrap_or(usize::MAX)) };
+        let on_key = move |ev: KeyboardEvent| {
+            let name = ev.key();
+            let press = keys::Press {
+                key: &name,
+                ctrl: ev.ctrl_key(),
+                meta: ev.meta_key(),
+                alt: ev.alt_key(),
+                repeat: ev.repeat(),
+                composing: ev.is_composing(),
+                taken: ev.default_prevented(),
+            };
+            let all: Vec<Pattern> = offered.get_untracked().iter().map(|o| o.pattern).collect();
+            let to = match chosen.get_untracked() {
+                Some(at) => keys::radio_choice(&press, all.len(), at),
+                None => keys::radio_choice_from_none(&press, all.len()),
+            };
+            let Some(to) = to else { return };
+            ev.prevent_default();
+            if w.choose_pattern(i, all[to]) {
+                focus_after_swap(pattern_id(i, all[to]));
+            }
+        };
+        let (id, desc_id) = (pattern_id(i, pattern), format!("{}-desc", pattern_id(i, pattern)));
+        let described = desc_id.clone();
+        view! {
+            <li role="none">
+                <button
+                    type="button"
+                    class="opt"
+                    role="radio"
+                    id=id
+                    aria-checked=move || (current.get() == pattern).to_string()
+                    aria-disabled=custom.then_some("true")
+                    aria-describedby=described
+                    tabindex=move || if tab_stop() { "0" } else { "-1" }
+                    on:click=move |_| {
+                        if !custom && w.choose_pattern(i, pattern) {
+                            focus_after_swap(pattern_id(i, pattern));
+                        }
+                    }
+                    on:keydown=on_key
+                >
+                    <span>{move || w.tr(pattern.name_key())}</span>{tick()}
+                </button>
+                <span class="insp-range" id=desc_id>{move || w.tr(pattern.description_key())}</span>
+            </li>
+        }
+    };
+    view! {
+        <ul class="opts phase-patterns" id=format!("sig-pattern-{i}") role="radiogroup" aria-label=label>
+            <For each=move || shown.get() key=|p| *p children=radio/>
+        </ul>
+    }
+}
+
+/// Puts the focus on element `id` once the panel has been redrawn for the choice (a microtask later).
+fn focus_after_swap(id: String) {
+    leptos::task::spawn_local(async move { focus_id(&id) });
+}
+
 /// The signal's cycle and a row for each phase, in the order they run, with the buttons that move, remove and add
 /// phases and give the suggested plan back. A press on a row opens that street. The rows are kept by their place in
 /// the cycle, so the button that was pressed keeps its element and the focus follows a phase that moves.
@@ -1331,11 +1423,13 @@ fn signal_overview(w: Watch) -> impl IntoView {
         };
         let named = move |key: &'static str| move || phase(i).map(|p| tr(w, key, Args::new().str("street", w.say(&p.street)))).unwrap_or_default();
         let is_first = move || i == 0;
+        let patterns = pattern_group(w, i);
         let is_last = move || i + 1 >= count.get();
         let (earlier, later) = (format!("sig-earlier-{i}"), format!("sig-later-{i}"));
         view! {
             <li>
                 <button type="button" class="btn quiet" on:click=move |_| { if let Some(p) = phase(i) { w.select(Target::Arm(p.uid)) } }>{select}</button>
+                {patterns}
                 <div class="signal-tools">
                     <button type="button" class="btn" id=earlier.clone() disabled=is_first aria-label=named("jn-sig-earlier")
                         on:click=move |_| { if w.edit(|j| j.move_phase(i, -1)) { focus_id(&phase_focus_id(i - 1, count.get_untracked(), -1)) } }>

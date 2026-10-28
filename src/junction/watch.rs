@@ -103,6 +103,12 @@ impl Watch {
         self.vm.with_value(|v| v.choose_turbo(layout))
     }
 
+    /// Gives phase `index` a ready-made pattern as the person does; the pattern it is already is left as it is.
+    /// Whether it is that pattern afterwards.
+    pub fn choose_pattern(&self, index: usize, pattern: crate::junction::signal::Pattern) -> bool {
+        self.vm.with_value(|v| v.choose_pattern(index, pattern))
+    }
+
     pub fn frame(&self) -> Option<crate::junction::frame::Frame> {
         self.vm.with_value(|v| v.frame())
     }
