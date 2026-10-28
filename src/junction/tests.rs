@@ -2336,3 +2336,39 @@ fn a_beyond_ignored_for_a_turbo_or_a_pedestrian_arm_cannot_fail() {
     state.arms.iter_mut().filter(|a| a.is_pedestrian()).for_each(short);
     assert!(approach(&Junction::from_city(named, &state, &state, 0).expect("draws")).ok);
 }
+
+#[test]
+fn phases_that_stop_following_their_pattern_are_said_once_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, two, three, one) in [
+        (
+            Locale::En,
+            "Phases 2 and 4 no longer follow a ready-made pattern.",
+            "Phases 1, 2 and 3 no longer follow a ready-made pattern.",
+            "Phase 2 no longer follows a ready-made pattern.",
+        ),
+        (
+            Locale::FrCa,
+            "Les phases 2 et 4 ne suivent plus un modèle prêt à l’emploi.",
+            "Les phases 1, 2 et 3 ne suivent plus un modèle prêt à l’emploi.",
+            "La phase 2 ne suit plus un modèle prêt à l’emploi.",
+        ),
+    ] {
+        let s = shared_in(0, locale);
+        let phases = s.read(|j| crate::junction::signal::plan(j.current(), j.region).unwrap().phases.len());
+        for i in 0..phases {
+            s.choose_pattern(i, Pattern::ThroughOnly);
+        }
+        // Taking a crossing away takes phases 2 and 4 off their pattern: one sentence, not one each.
+        let north = arm(&s, 0);
+        live::take_said();
+        s.apply(|j| j.set_crossing(north, false));
+        let said = live::take_said();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].ends_with(two), "{said:?}");
+        assert_eq!(said[0].matches("ready-made").count() + said[0].matches("modèle").count(), 1, "{said:?}");
+        assert_eq!(s.lost_note(&[1]).as_deref(), Some(one));
+        assert_eq!(s.lost_note(&[0, 1, 2]).as_deref(), Some(three));
+        assert_eq!(s.lost_note(&[]), None);
+    }
+}

@@ -547,3 +547,4 @@ jn-rev-phase-pattern = Phase { $n } for { $arm } set to { $pattern }
 jn-refusal-pattern-not-fit = That pattern does not fit this junction's lanes.
 jn-refusal-pattern-already = The phase is that pattern already.
 jn-pattern-lost = Phase { $n } no longer follows a ready-made pattern.
+jn-pattern-lost-many = Phases { $list } no longer follow a ready-made pattern.

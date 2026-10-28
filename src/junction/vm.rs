@@ -325,11 +325,25 @@ impl JunctionVm {
     /// The edit's text, then a sentence for each phase (from 0) the edit took off its ready-made pattern.
     fn say_edit_with(&self, lost: &[usize]) {
         if let Some(mut t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
-            for &i in lost {
-                t = format!("{t} {}", self.i18n.tr_now("jn-pattern-lost", &Args::new().num("n", i as i64 + 1)));
+            if let Some(note) = self.lost_note(lost) {
+                t = format!("{t} {note}");
             }
             self.ports.announcer.say(&t);
         }
+    }
+
+    /// One sentence for the phases (from 0) that came off their ready-made pattern: "Phase 2 no longer follows ...", or
+    /// "Phases 1, 2 and 3 no longer follow ..." for several. None when there are none.
+    pub(super) fn lost_note(&self, lost: &[usize]) -> Option<String> {
+        let numbers: Vec<String> = lost.iter().map(|&i| (i + 1).to_string()).collect();
+        let (last, rest) = numbers.split_last()?;
+        if rest.is_empty() {
+            return Some(self.i18n.tr_now("jn-pattern-lost", &Args::new().str("n", last.clone())));
+        }
+        let head =
+            rest.iter().cloned().reduce(|head, tail| self.i18n.tr_now("jn-list-comma", &Args::new().str("head", head).str("tail", tail))).unwrap_or_default();
+        let list = self.i18n.tr_now("jn-ph-and", &Args::new().str("head", head).str("tail", last.clone()));
+        Some(self.i18n.tr_now("jn-pattern-lost-many", &Args::new().str("list", list)))
     }
 
     fn say_refusal(&self) {
