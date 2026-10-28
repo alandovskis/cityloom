@@ -316,6 +316,34 @@ pub fn pattern_phase(s: &State, region: usize, uid: u32, pattern: Pattern) -> Op
     Some(StoredPhase { moves: chosen, walks, rides, arm: None })
 }
 
+/// Every street with a crossing, in the order of the bearings: who walks in a scramble, and whose crossing a phase can
+/// switch on.
+pub fn walk_arms(s: &State) -> Vec<u32> {
+    scramble_walks(s)
+}
+
+/// Every street with a bike lane, in the order of the bearings: whose bike movements a phase can switch on.
+pub fn ride_arms(s: &State, region: usize) -> Vec<u32> {
+    let (arms, _) = ordered(s);
+    let bikes = bikes_of(&arms, region);
+    arms.iter().zip(bikes).filter(|(_, b)| *b).map(|(a, _)| a.uid).collect()
+}
+
+/// `list` with `uid` put in (`on`) or taken out, keeping the order of the bearings. False when that changes nothing.
+pub fn with_member(s: &State, list: &mut Vec<u32>, uid: u32, on: bool) -> bool {
+    if list.contains(&uid) == on {
+        return false;
+    }
+    if on {
+        list.push(uid);
+        let (arms, _) = ordered(s);
+        list.sort_by_key(|u| arms.iter().position(|a| a.uid == *u));
+    } else {
+        list.retain(|&u| u != uid);
+    }
+    true
+}
+
 /// Every street with a crossing, in the order of the bearings: who walks in a scramble.
 fn scramble_walks(s: &State) -> Vec<u32> {
     let (arms, _) = ordered(s);

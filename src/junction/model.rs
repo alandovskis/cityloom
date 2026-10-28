@@ -806,10 +806,14 @@ pub enum Refusal {
     PlanSuggested,
     PatternNotFit,
     PatternAlready,
+    NoCrossing,
+    NoBikeLane,
+    ScrambleWalks,
+    MovementAlready,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 29] = [
+    pub const ALL: [Refusal; 33] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -839,6 +843,10 @@ impl Refusal {
         Refusal::PlanSuggested,
         Refusal::PatternNotFit,
         Refusal::PatternAlready,
+        Refusal::NoCrossing,
+        Refusal::NoBikeLane,
+        Refusal::ScrambleWalks,
+        Refusal::MovementAlready,
     ];
 
     /// The message that says why.
@@ -873,6 +881,10 @@ impl Refusal {
             Refusal::PlanSuggested => "jn-refusal-plan-suggested",
             Refusal::PatternNotFit => "jn-refusal-pattern-not-fit",
             Refusal::PatternAlready => "jn-refusal-pattern-already",
+            Refusal::NoCrossing => "jn-refusal-no-crossing",
+            Refusal::NoBikeLane => "jn-refusal-no-bike-lane",
+            Refusal::ScrambleWalks => "jn-refusal-scramble-walks",
+            Refusal::MovementAlready => "jn-refusal-movement-already",
         }
     }
 }
@@ -1517,6 +1529,52 @@ impl Junction {
         let label = self.phase_label("jn-rev-phase-pattern", phase.uid, index).with("pattern", Arg::MsgLower(pattern.name_key()));
         let mut kept = plan.to_stored();
         kept.phases[index] = made;
+        self.edit(label, |s| {
+            s.signal_plan = Some(kept);
+            true
+        })
+    }
+
+    /// Switches the crossing of street `arm_uid` on or off in the phase at `index`. What is chosen is kept, whatever the
+    /// phase's cars do: a conflict is not refused here. Refused when the street has no crossing, when the phase is a
+    /// scramble (it walks every crossing there is) and when the crossing is that already.
+    pub fn set_phase_walk(&mut self, index: usize, arm_uid: u32, on: bool) -> bool {
+        self.set_phase_movement(index, arm_uid, on, false)
+    }
+
+    /// `set_phase_walk` for the bike movements of street `arm_uid`, which needs a bike lane.
+    pub fn set_phase_ride(&mut self, index: usize, arm_uid: u32, on: bool) -> bool {
+        self.set_phase_movement(index, arm_uid, on, true)
+    }
+
+    fn set_phase_movement(&mut self, index: usize, arm_uid: u32, on: bool, ride: bool) -> bool {
+        let Some(plan) = self.signal_plan_to_edit() else { return false };
+        let Some(phase) = plan.phases.get(index) else { return self.refuse(Refusal::DoesNotFit) };
+        let Some(arm) = self.arm(arm_uid) else { return self.refuse(Refusal::DoesNotFit) };
+        if ride {
+            if !signal::ride_arms(self.current(), self.region).contains(&arm_uid) {
+                return self.refuse(Refusal::NoBikeLane);
+            }
+        } else if arm.is_pedestrian() {
+            return self.refuse(Refusal::CrossingOnPedestrian);
+        } else if arm.crossing.is_none() {
+            return self.refuse(Refusal::NoCrossing);
+        } else if phase.moves.is_empty() {
+            return self.refuse(Refusal::ScrambleWalks);
+        }
+        let street = Arg::Said(Box::new(arm_name(arm)));
+        let mut kept = plan.to_stored();
+        let list = if ride { &mut kept.phases[index].rides } else { &mut kept.phases[index].walks };
+        if !signal::with_member(self.current(), list, arm_uid, on) {
+            return self.refuse(Refusal::MovementAlready);
+        }
+        let key = match (ride, on) {
+            (false, true) => "jn-rev-phase-walk-on",
+            (false, false) => "jn-rev-phase-walk-off",
+            (true, true) => "jn-rev-phase-ride-on",
+            (true, false) => "jn-rev-phase-ride-off",
+        };
+        let label = self.phase_label(key, phase.uid, index).with("street", street);
         self.edit(label, |s| {
             s.signal_plan = Some(kept);
             true
@@ -2305,7 +2363,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 29);
+        assert_eq!(Refusal::ALL.len(), 33);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }
@@ -3897,6 +3955,107 @@ mod tests {
         assert_ne!(k.current().control, SIGNAL);
         assert!(!k.set_phase_pattern(0, Pattern::Scramble));
         assert_eq!(k.refusal(), Some(Refusal::NotSignal));
+    }
+
+    // ---- walks and rides per phase ----
+
+    #[test]
+    fn a_crossing_is_switched_on_and_off_in_a_phase_in_the_order_of_the_bearings_as_undoable_edits() {
+        let mut j = Junction::new(0);
+        let (n, e, w) = (arm_at(&j, 0), arm_at(&j, 90), arm_at(&j, 270));
+        assert_eq!(phase_of(&j, 0).walks, vec![e, w]);
+        assert!(j.set_phase_walk(0, n, true), "north's own crossing, while north's cars go: allowed and kept as chosen");
+        assert_eq!(phase_of(&j, 0).walks, vec![n, e, w], "inserted in the order of the bearings");
+        assert!(!signal::plan(j.current(), 0).unwrap().suggested);
+        assert_eq!(signal::pattern_of(j.current(), 0, &phase_of(&j, 0)), Pattern::Custom);
+        assert_eq!(phase_of(&j, 1).walks, signal::plan(&Junction::new(0).current().clone(), 0).unwrap().phases[1].walks, "the other phases are untouched");
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("walk"), "{}", en(j.revisions().last().unwrap()));
+        assert!(j.set_phase_walk(0, e, false));
+        assert_eq!(phase_of(&j, 0).walks, vec![n, w]);
+        assert!(j.undo() && j.undo());
+        assert!(signal::plan(j.current(), 0).unwrap().suggested);
+        assert!(j.redo() && j.redo());
+        assert_eq!(phase_of(&j, 0).walks, vec![n, w]);
+    }
+
+    #[test]
+    fn a_crossing_can_be_off_in_every_phase_and_the_choice_is_kept_in_the_record() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        for i in 0..4 {
+            for u in phase_of(&j, i).walks {
+                assert!(j.set_phase_walk(i, u, false));
+            }
+        }
+        assert!(signal::plan(j.current(), 0).unwrap().phases.iter().all(|p| !p.walks.contains(&n)));
+        let back: State = serde_json::from_value(serde_json::to_value(j.current()).unwrap()).unwrap();
+        assert_eq!(back.signal_plan, j.current().signal_plan, "kept and read back");
+        assert!(back.signal_plan.unwrap().phases.iter().all(|p| p.walks.is_empty()));
+    }
+
+    #[test]
+    fn choosing_a_pattern_again_overwrites_a_hand_set_crossing() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        assert!(j.set_phase_walk(0, n, true));
+        assert_eq!(signal::pattern_of(j.current(), 0, &phase_of(&j, 0)), Pattern::Custom);
+        assert!(j.set_phase_pattern(0, Pattern::All));
+        assert!(!phase_of(&j, 0).walks.contains(&n));
+        assert_eq!(signal::pattern_of(j.current(), 0, &phase_of(&j, 0)), Pattern::All);
+    }
+
+    #[test]
+    fn a_walk_or_ride_that_changes_nothing_or_cannot_be_is_refused_with_a_reason() {
+        let mut j = Junction::new(0);
+        let (n, e) = (arm_at(&j, 0), arm_at(&j, 90));
+        assert!(!j.set_phase_walk(0, e, true));
+        assert_eq!(j.refusal(), Some(Refusal::MovementAlready), "east already walks");
+        assert!(!j.set_phase_walk(0, n, false));
+        assert_eq!(j.refusal(), Some(Refusal::MovementAlready), "north does not walk");
+        assert!(!j.set_phase_walk(9, n, true));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+        assert!(!j.set_phase_walk(0, 999, true));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+        assert!(!j.set_phase_ride(0, n, true));
+        assert_eq!(j.refusal(), Some(Refusal::NoBikeLane), "the sample has no bike lanes");
+        assert!(signal::plan(j.current(), 0).unwrap().suggested, "nothing was changed");
+        assert!(j.set_crossing(n, false));
+        assert!(!j.set_phase_walk(0, n, true));
+        assert_eq!(j.refusal(), Some(Refusal::NoCrossing));
+        let mut k = Junction::new(1);
+        assert!(!k.set_phase_walk(0, 1, true));
+        assert_eq!(k.refusal(), Some(Refusal::NotSignal));
+        let mut w = junction_with_walkways(&[90], &[("sidewalk", 3000), ("sidewalk", 3000)]);
+        let walk = arm_at(&w, 90);
+        assert!(!w.set_phase_walk(0, walk, true));
+        assert_eq!(w.refusal(), Some(Refusal::CrossingOnPedestrian));
+    }
+
+    #[test]
+    fn a_scramble_walks_every_crossing_and_takes_no_walk_edit() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        assert!(j.set_phase_pattern(0, Pattern::Scramble));
+        assert!(!j.set_phase_walk(0, n, false));
+        assert_eq!(j.refusal(), Some(Refusal::ScrambleWalks));
+        assert_eq!(phase_of(&j, 0).walks.len(), 4);
+    }
+
+    #[test]
+    fn a_ride_is_switched_where_the_street_has_a_bike_lane() {
+        let mut j = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+        let p = phase_of(&j, 0);
+        assert!(!p.rides.is_empty());
+        let own = p.uid;
+        assert!(j.set_phase_ride(0, own, false));
+        assert!(!phase_of(&j, 0).rides.contains(&own));
+        assert_eq!(signal::pattern_of(j.current(), 0, &phase_of(&j, 0)), Pattern::Custom);
+        assert!(!j.set_phase_ride(0, own, false));
+        assert_eq!(j.refusal(), Some(Refusal::MovementAlready));
+        assert!(j.set_phase_ride(0, own, true));
+        assert!(plain(&en(j.revisions().last().unwrap())).contains("bike"), "{}", en(j.revisions().last().unwrap()));
+        assert!(j.undo() && j.undo());
+        assert_eq!(phase_of(&j, 0).rides, p.rides);
     }
 
     // ---- signal timing ----
