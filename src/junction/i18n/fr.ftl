@@ -530,3 +530,19 @@ jn-ph-timing = Vert { $green } s, jaune { $yellow } s, rouge intégral { $all_re
 jn-ph-timing-lead = Avance { $lead } s, vert { $green } s, jaune { $yellow } s, rouge intégral { $all_red } s
 jn-rev-plan-lost = { $change }; plan de feux modifié retiré
 jn-refusal-too-many-phases = Le plan a déjà le nombre maximal de phases.
+
+## Modèles de phase prêts à l’emploi (src/junction/signal.rs)
+jn-pattern-through = Tout droit seulement
+jn-pattern-through-desc = Seule la circulation qui va tout droit passe; les traverses à côté sont franchies à pied.
+jn-pattern-all = Tous les mouvements
+jn-pattern-all-desc = Tous les mouvements de la rue passent; les véhicules qui tournent cèdent le passage aux piétons.
+jn-pattern-protected-left = Virage à gauche protégé, puis tout droit
+jn-pattern-protected-left-desc = Les virages à gauche passent d’abord, sans piéton là où ils tournent, puis les autres mouvements de la rue.
+jn-pattern-scramble = Phase piétonne exclusive
+jn-pattern-scramble-desc = Aucun véhicule ne bouge et les piétons traversent toutes les rues.
+jn-pattern-custom = Personnalisé
+jn-pattern-custom-desc = Les mouvements de cette phase ne correspondent à aucun modèle prêt à l’emploi.
+jn-pattern-group = Modèle de la phase { $n }, { $street }
+jn-rev-phase-pattern = Phase { $n } de { $arm } : { $pattern }
+jn-refusal-pattern-not-fit = Ce modèle ne convient pas aux voies de cette intersection.
+jn-refusal-pattern-already = La phase suit déjà ce modèle.

@@ -530,3 +530,19 @@ jn-ph-timing = Green { $green } s, yellow { $yellow } s, all-red { $all_red } s
 jn-ph-timing-lead = Early green { $lead } s, green { $green } s, yellow { $yellow } s, all-red { $all_red } s
 jn-rev-plan-lost = { $change }; edited signal plan removed
 jn-refusal-too-many-phases = The plan has as many phases as it can hold.
+
+## Ready-made patterns for a phase (src/junction/signal.rs)
+jn-pattern-through = Through only
+jn-pattern-through-desc = Only the traffic going straight on moves; the crossings beside it are walked.
+jn-pattern-all = All movements
+jn-pattern-all-desc = Every movement of the street goes; turning drivers give way to the people crossing.
+jn-pattern-protected-left = Protected left, then through
+jn-pattern-protected-left-desc = Left turns go first with no one crossing where they turn, then the other movements of the street.
+jn-pattern-scramble = Pedestrian scramble
+jn-pattern-scramble-desc = No vehicle moves and people cross every street.
+jn-pattern-custom = Custom
+jn-pattern-custom-desc = The movements of this phase match none of the ready-made patterns.
+jn-pattern-group = Pattern for phase { $n }, { $street }
+jn-rev-phase-pattern = Phase { $n } for { $arm } set to { $pattern }
+jn-refusal-pattern-not-fit = That pattern does not fit this junction's lanes.
+jn-refusal-pattern-already = The phase is that pattern already.
