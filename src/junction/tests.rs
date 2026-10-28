@@ -1876,11 +1876,31 @@ fn choosing_a_pattern_is_announced_in_english_and_in_french_and_choosing_the_sam
     let said = live::take_said();
     assert!(said[0].contains("Phase 1") && said[0].contains("piétonne exclusive"), "{said:?}");
     assert!(plain_panel(&f).contains("Modèle de la phase 1"));
-    // A pattern that does not fit is refused, said, and is not the pattern afterwards.
-    let (n, so) = (arm(&s, 0), arm(&s, 180));
-    assert!(!s.choose_pattern(9, Pattern::Scramble));
-    let _ = (n, so);
-    assert!(live::take_said().len() == 1, "the refusal is said");
+    // A pattern that does not fit is refused, said in both languages, and is not the pattern afterwards. Sample 0 has
+    // streets to the north, east, south and west with crossings, so a scramble fits; take the crossings away and it
+    // does not.
+    for (vm, said_en, said_fr) in [(&s, true, false), (&f, false, true)] {
+        let uids: Vec<u32> = vm.read(|j| j.current().arms.iter().map(|a| a.uid).collect());
+        for uid in uids {
+            vm.apply(|j| j.set_crossing(uid, false));
+        }
+        live::take_said();
+        assert!(!vm.choose_pattern(0, Pattern::Scramble), "no pattern is the one chosen when it is refused");
+        let said = live::take_said();
+        if said_en {
+            assert_eq!(said, vec!["That pattern does not fit this junction's lanes."]);
+        }
+        if said_fr {
+            assert_eq!(said.len(), 1, "{said:?}");
+            assert!(said[0].contains("modèle") && !said[0].contains("pattern"), "{said:?}");
+        }
+    }
+    // Choosing the pattern a phase already is: it is silent through choose_pattern, and the model says why if asked.
+    let g = shared(0);
+    assert!(g.choose_pattern(0, Pattern::ThroughOnly));
+    live::take_said();
+    assert!(!g.apply(|j| j.set_phase_pattern(0, Pattern::ThroughOnly)));
+    assert_eq!(live::take_said(), vec!["The phase is that pattern already."]);
 }
 
 #[test]
