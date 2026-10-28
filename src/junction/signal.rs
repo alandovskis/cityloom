@@ -347,7 +347,7 @@ pub fn pattern_of(s: &State, region: usize, phase: &Phase) -> Pattern {
 }
 
 /// The places (from 0, in the order the phases run in `after`) of the phases that had a ready-made pattern in `before`
-/// and follow another one, or none, in `after`. Nothing when either state has no plan of the person's own: a suggestion
+/// and follow none in `after` (one that moved to another ready-made pattern is not lost). Nothing when either state has no plan of the person's own: a suggestion
 /// follows the lanes by definition.
 pub fn patterns_lost(before: &State, after: &State, region: usize) -> Vec<usize> {
     if before.signal_plan.is_none() || after.signal_plan.is_none() {
@@ -360,7 +360,7 @@ pub fn patterns_lost(before: &State, after: &State, region: usize) -> Vec<usize>
         .filter(|(_, ph)| {
             was.phases.iter().find(|w| w.uid == ph.uid).is_some_and(|w| {
                 let before = pattern_of(before, region, w);
-                before != Pattern::Custom && before != pattern_of(after, region, ph)
+                before != Pattern::Custom && pattern_of(after, region, ph) == Pattern::Custom
             })
         })
         .map(|(i, _)| i)
@@ -660,6 +660,27 @@ mod tests {
         let p = plan(&t, 0).unwrap();
         assert_eq!(pattern_of(&t, 0, &p.phases[0]), Pattern::Custom);
         assert!(Pattern::Custom.name_key() != Pattern::All.name_key());
+    }
+
+    /// The state `s` with one phase for street `n`, stored as `phase`.
+    fn with_phase(s: &State, phase: StoredPhase) -> State {
+        let mut t = s.clone();
+        t.signal_plan = Some(SignalPlan { phases: vec![phase] });
+        t
+    }
+
+    #[test]
+    fn a_phase_that_moves_to_another_ready_made_pattern_is_not_lost_but_one_that_becomes_custom_is() {
+        let s = north_every_way();
+        let n = at(&s, 0);
+        let before = with_phase(&s, stored(&s, n, Pattern::ThroughOnly));
+        let other = with_phase(&s, stored(&s, n, Pattern::All));
+        assert!(patterns_lost(&before, &other, 0).is_empty(), "it follows another ready-made pattern now");
+        let mut custom = stored(&s, n, Pattern::All);
+        custom.moves.pop();
+        let custom = with_phase(&s, custom);
+        assert_eq!(patterns_lost(&before, &custom, 0), vec![0], "it follows none now");
+        assert!(patterns_lost(&custom, &before, 0).is_empty(), "a phase that was custom has no pattern to lose");
     }
 
     #[test]
