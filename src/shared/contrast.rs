@@ -165,4 +165,31 @@ mod tests {
         let forced = editor.find("  #drawing .approach-mark {\n    stroke: CanvasText;").expect("forced-colours rule");
         assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some());
     }
+
+    #[test]
+    fn the_signal_phase_drawings_are_3_to_1_against_their_road_in_both_themes_and_have_forced_colours() {
+        let editor = include_str!("../../web/editor.css");
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let road = pick(&token(editor, "ph-road"), i);
+            for name in ["ph-lit", "ph-muted"] {
+                let ink = pick(&token(editor, name), i);
+                assert!(contrast(&ink, &road) >= 3.0, "{name} on the road {theme}: {:.2}", contrast(&ink, &road));
+            }
+        }
+        let forced = editor.find("  .phase-svg .ph-move .ph-line {\n    stroke: Highlight;").expect("forced-colours rule");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some());
+        assert!(editor[..forced].contains(".phase-card[aria-current=\"true\"] {\n    outline: 2px solid Highlight;"));
+        // The selected card is told apart by more than its colour: a thicker border and a check mark, both in the
+        // accent, which is 3:1 against the panel and the wash (measured above).
+        let card = rule(editor, ".phase-card[aria-current=\"true\"]");
+        assert!(card.contains("border-color: var(--accent);") && card.contains("inset 0 0 0 2px var(--accent)"), "{card}");
+        let tick = rule(editor, ".phase-card[aria-current=\"true\"]::after");
+        assert!(tick.contains("content: \"\\2713\" / \"\";") && tick.contains("color: var(--accent);"), "{tick}");
+        // The mark stands in room every card keeps at its top (so choosing a card moves nothing), clear of the drawing
+        // and of its lit strokes: it sits 4px down and a line of the card's font is under 18px, so 22px is enough.
+        assert!(tick.contains("inset-block-start: 4px;"), "{tick}");
+        let base = rule(editor, ".phase-card");
+        assert!(base.contains("padding-block-start: 22px;"), "{base}");
+    }
 }

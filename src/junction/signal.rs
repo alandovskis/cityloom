@@ -45,6 +45,19 @@ pub struct Phase {
     pub moves: Vec<Move>,
 }
 
+impl Phase {
+    /// The streets the phase sends traffic from, each once, in the order the moves first name them.
+    pub fn sources(&self) -> Vec<u32> {
+        let mut from: Vec<u32> = Vec::new();
+        for m in &self.moves {
+            if !from.contains(&m.from) {
+                from.push(m.from);
+            }
+        }
+        from
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Plan {
     pub phases: Vec<Phase>,
@@ -222,6 +235,16 @@ mod tests {
 
     fn phase(p: &Plan, uid: u32) -> &Phase {
         p.phases.iter().find(|p| p.uid == uid).unwrap()
+    }
+
+    #[test]
+    fn the_streets_a_phase_sends_traffic_from_are_listed_once_in_the_order_first_seen() {
+        let mut p = plan(&cross(), 0).unwrap().phases[0].clone();
+        let (a, b, c) = (p.uid, at(&cross(), 90), at(&cross(), 180));
+        p.moves = vec![Move { from: b, to: a }, Move { from: c, to: a }, Move { from: b, to: c }];
+        assert_eq!(p.sources(), vec![b, c]);
+        p.moves.clear();
+        assert!(p.sources().is_empty());
     }
 
     #[test]

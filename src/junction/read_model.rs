@@ -695,6 +695,31 @@ pub struct PhaseView {
     pub walks: Option<Said>,
     /// Bike movements that run during the phase, besides this street's own.
     pub rides: Option<Said>,
+    /// "Phase 2: Main Street", the streets whose traffic the phase serves.
+    pub name: Said,
+    /// The vehicle movements the phase serves, by street uid.
+    pub moves: Vec<crate::junction::signal::Move>,
+    /// The streets whose crossing is walked, and whose bike movements run, during the phase.
+    pub walk_arms: Vec<u32>,
+    pub ride_arms: Vec<u32>,
+    /// What the phase allows, in a sentence by compass point: "Cars go: north. People cross: east and west."
+    pub summary: Said,
+}
+
+/// The compass point an arm leaves by, said in full ("north-east").
+fn compass_said(bearing: i32) -> Said {
+    Said::new(crate::junction::turns::compass_name_key(bearing))
+}
+
+/// "a", "a and b", "a, b and c", each item a `Said`.
+fn and_list(mut items: Vec<Said>) -> Option<Said> {
+    let last = items.pop()?;
+    let head =
+        items.into_iter().reduce(|head, tail| Said::new("jn-list-comma").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail))));
+    Some(match head {
+        None => last,
+        Some(head) => Said::new("jn-ph-and").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(last))),
+    })
 }
 
 fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView> {
@@ -704,7 +729,13 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
     let phases = plan
         .phases
         .iter()
-        .map(|p| PhaseView {
+        .enumerate()
+        .map(|(n, p)| PhaseView {
+            name: phase_name(n, p, &find, &name),
+            summary: phase_summary(p, arms),
+            moves: p.moves.clone(),
+            walk_arms: p.walks.clone(),
+            ride_arms: p.rides.clone(),
             uid: p.uid,
             label: name(p.uid),
             street: find(p.uid).map_or_else(|| crate::street::model::named_said(""), |a| a.street.clone()),
@@ -715,6 +746,35 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
         })
         .collect();
     Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested })
+}
+
+/// "Phase 2: Main Street": the number, and the streets whose traffic goes in it.
+fn phase_name<'a>(n: usize, p: &signal::Phase, find: &impl Fn(u32) -> Option<&'a ArmView>, name: &impl Fn(u32) -> Said) -> Said {
+    let from = p.sources();
+    let streets = and_list(from.into_iter().map(|u| find(u).map_or_else(|| name(u), |a| a.street.clone())).collect()).unwrap_or_else(|| name(p.uid));
+    Said::new("jn-ph-name").with("n", Arg::Num(n as i64 + 1)).with("streets", Arg::Said(Box::new(streets)))
+}
+
+/// What a phase allows, by compass point: the cars that go, the crossings that are walked, the bikes that ride.
+fn phase_summary(p: &signal::Phase, arms: &[ArmView]) -> Said {
+    let compass = |uids: &[u32]| {
+        let mut points: Vec<Said> = Vec::new();
+        for a in uids.iter().filter_map(|u| arms.iter().find(|a| a.uid == *u)) {
+            let said = compass_said(a.bearing);
+            if !points.contains(&said) {
+                points.push(said);
+            }
+        }
+        and_list(points)
+    };
+    let from = p.sources();
+    let part = |key: &'static str, uids: &[u32]| compass(uids).map(|a| Said::new(key).with("arms", Arg::Said(Box::new(a))));
+    let parts = [part("jn-ph-cars", &from), part("jn-ph-walks", &p.walks), part("jn-ph-rides", &p.rides)];
+    parts
+        .into_iter()
+        .flatten()
+        .reduce(|head, tail| Said::new("jn-ph-join").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail))))
+        .unwrap_or_else(|| Said::new("jn-sig-alone"))
 }
 
 #[derive(Serialize)]
@@ -1898,6 +1958,32 @@ mod tests {
     use super::*;
     use crate::junction::model::{DEFAULT_SETBACK_MM, JUNCTION_SAMPLES, MIN_SETBACK_MM, junction_of, junction_two_way};
     use crate::shared::testing::{en, fr};
+
+    /// How many things an `and_list` says.
+    fn items(s: &Said) -> usize {
+        match (s.key, s.args.as_slice()) {
+            ("jn-ph-and" | "jn-list-comma", [(_, Arg::Said(head)), (_, Arg::Said(tail))]) => items(head) + items(tail),
+            _ => 1,
+        }
+    }
+
+    #[test]
+    fn a_phases_name_and_summary_name_the_same_streets() {
+        let j = Junction::new(0);
+        let v = j.view();
+        let (a, b, c) = (v.arms[0].uid, v.arms[1].uid, v.arms[2].uid);
+        let mut p = signal::plan(j.current(), 0).unwrap().phases[0].clone();
+        p.moves = vec![signal::Move { from: a, to: b }, signal::Move { from: c, to: b }, signal::Move { from: a, to: c }];
+        p.walks.clear();
+        p.rides.clear();
+        let find = |uid: u32| v.arms.iter().find(|x| x.uid == uid);
+        let name = |uid: u32| find(uid).unwrap().label.clone();
+        let named = phase_name(0, &p, &find, &name);
+        let Some((_, Arg::Said(streets))) = named.args.iter().find(|(k, _)| *k == "streets") else { panic!("{named:?}") };
+        let said = phase_summary(&p, &v.arms);
+        let Some((_, Arg::Said(cars))) = said.args.iter().find(|(k, _)| *k == "arms") else { panic!("{said:?}") };
+        assert_eq!((items(streets), items(cars)), (2, 2), "the two streets traffic goes from, once each: {named:?} {said:?}");
+    }
 
     #[test]
     fn a_junction_with_one_walkway_arm_lays_out_and_draws() {
@@ -3286,6 +3372,50 @@ mod tests {
         assert_eq!(s.phases[0].uid, n);
         assert_eq!(s.phases[0].timing.green_s, 30);
         assert!(Junction::new(1).view().signal.is_none(), "no plan off a signal");
+    }
+
+    #[test]
+    fn each_phase_carries_its_moves_walks_rides_and_a_summary_by_compass_point() {
+        use crate::shared::testing::en;
+        let j = Junction::new(0);
+        let v = j.view();
+        let s = v.signal.as_ref().unwrap();
+        let arm = |bearing: i32| v.arms.iter().find(|a| a.bearing == bearing).unwrap();
+        let p = &s.phases[0];
+        assert_eq!(p.uid, arm(0).uid);
+        assert!(!p.moves.is_empty() && p.moves.iter().all(|m| m.from == arm(0).uid), "the north phase serves what enters from the north");
+        assert_eq!(p.walk_arms, vec![arm(90).uid, arm(270).uid], "people cross east and west while the north goes");
+        assert!(p.ride_arms.is_empty(), "the sample has no bike lanes");
+        assert_eq!(en(&p.name), format!("Phase 1: {}", en(&arm(0).street)));
+        assert_eq!(en(&p.summary), "Cars go: north. People cross: east and west.");
+        assert!(s.phases.iter().all(|p| en(&p.summary).starts_with("Cars go: ")));
+        assert!(en(&s.phases[3].name).starts_with("Phase 4: "));
+    }
+
+    #[test]
+    fn a_phase_with_bikes_says_so() {
+        use crate::junction::model::junction_of;
+        use crate::shared::testing::en;
+        let j = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+        let v = j.view();
+        let p = &v.signal.as_ref().unwrap().phases[0];
+        assert!(!p.ride_arms.is_empty());
+        assert!(en(&p.summary).contains("Bikes go: "), "{}", en(&p.summary));
+    }
+
+    #[test]
+    fn suggested_goes_with_an_edit_and_comes_back_with_the_restore() {
+        use crate::shared::testing::en;
+        let mut j = Junction::new(0);
+        assert!(j.view().signal.unwrap().suggested);
+        assert!(j.remove_phase(0));
+        let s = j.view().signal.unwrap();
+        assert!(!s.suggested);
+        assert_eq!(s.phases.len(), 3);
+        assert!(en(&s.phases[0].name).starts_with("Phase 1: "), "numbered again after the removal");
+        assert!(j.restore_suggestion());
+        let s = j.view().signal.unwrap();
+        assert!(s.suggested && s.phases.len() == 4);
     }
 
     // ---- turbo ring ----

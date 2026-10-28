@@ -517,5 +517,16 @@ jn-sig-restore = Restore the suggested plan
 jn-sig-earlier-short = Earlier
 jn-sig-later-short = Later
 jn-sig-remove-short = Remove
+
+## The signal plan as drawings, one per phase
+jn-ph-name = Phase { $n }: { $streets }
+jn-ph-and = { $head } and { $tail }
+jn-ph-cars = Cars go: { $arms }.
+jn-ph-walks = People cross: { $arms }.
+jn-ph-rides = Bikes go: { $arms }.
+jn-ph-join = { $head } { $tail }
+jn-ph-row = The phases of the signal, in the order they run
+jn-ph-timing = Green { $green } s, yellow { $yellow } s, all-red { $all_red } s
+jn-ph-timing-lead = Early green { $lead } s, green { $green } s, yellow { $yellow } s, all-red { $all_red } s
 jn-rev-plan-lost = { $change }; edited signal plan removed
 jn-refusal-too-many-phases = The plan has as many phases as it can hold.

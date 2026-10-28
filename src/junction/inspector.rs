@@ -14,6 +14,7 @@ use crate::junction::model::{
     MAX_CORNER_MM, MAX_CROSSING_MM, MAX_SETBACK_MM, MIN_ARMS, MIN_CORNER_MM, MIN_CROSSING_MM, MIN_SEPARATION, MIN_SETBACK_MM, OFFSET_STEP_MM, RING_STEP_MM,
     RULES, STOPS, THROUGH, Target, TimingField,
 };
+use crate::junction::phase_svg::phase_drawings;
 use crate::junction::read_model::{CrossingView, JView};
 use crate::junction::turns::{compass_key, turn_glyph};
 use crate::junction::vm::JunctionVm;
@@ -1208,6 +1209,8 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
                 <section class="insp-sec">
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{runs}</p>
+                    <p class="insp-range">{move || w.tr(if w.view().signal.as_ref().is_none_or(|s| s.suggested) { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
+                    {signal_phases(w)}
                 </section>
                 {timing_field(w, uid, TimingField::Green)}
                 {timing_field(w, uid, TimingField::Yellow)}
@@ -1219,12 +1222,75 @@ fn signal_section(w: Watch, uid: u32) -> impl IntoView {
     }
 }
 
+/// The plan as a row of small drawings of the junction, one per phase in the order they run: what each phase lets
+/// cars, people and bikes do, lit against what is muted, with its name, its timing and a sentence. A drawing is a
+/// button that selects its street (it is no toggle: it says `aria-current`, not `aria-pressed`, while its street is selected). It decides nothing: the drawing, the
+/// name and the sentence all come from the view.
+fn signal_phases(w: Watch) -> impl IntoView {
+    let count = Memo::new(move |_| w.view().signal.as_ref().map_or(0, |s| s.phases.len()));
+    // One pass draws every phase; a drawing is a memo, so the page swaps it only when its markup is not the same as
+    // it was (a change of the selection, or of a timing, leaves it alone).
+    // The street that is selected has one card marked, the first phase that is its own: a street may have several
+    // phases (a second one for it can be added), and marking each would say the selection is in two places.
+    let current_phase = Memo::new(move |_| first_phase_of(&w.view()));
+    let drawings = Memo::new(move |_| phase_drawings(&w.view()));
+    let card = move |i: usize| {
+        // Each closure reads the field it needs and no more: no phase is cloned.
+        let uid = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| p.uid));
+        let current = move || (current_phase.get() == Some(i)).then_some("true");
+        let art = Memo::new(move |_| drawings.with(|d| d.get(i).cloned().unwrap_or_default()));
+        let name = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| w.say(&p.name)).unwrap_or_default());
+        let summary = Memo::new(move |_| w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| w.say(&p.summary)).unwrap_or_default());
+        let timing = Memo::new(move |_| {
+            let Some(t) = w.view().signal.as_ref().and_then(|s| s.phases.get(i)).map(|p| p.timing) else { return String::new() };
+            let key = if t.transit_lead_s > 0 { "jn-ph-timing-lead" } else { "jn-ph-timing" };
+            let args = Args::new()
+                .num("lead", i64::from(t.transit_lead_s))
+                .num("green", i64::from(t.green_s))
+                .num("yellow", i64::from(t.yellow_s))
+                .num("all_red", i64::from(t.all_red_s));
+            tr(w, key, args)
+        });
+        view! {
+            <li>
+                <button type="button" class="phase-card" id=format!("phase-card-{i}") aria-current=current
+                    on:click=move |_| { if let Some(u) = uid.get_untracked() { w.select(Target::Arm(u)); focus_card_after_swap(i) } }>
+                    <span class="phase-art" aria-hidden="true" inner_html=art></span>
+                    <span class="phase-name">{name}</span>
+                    <span class="phase-timing">{timing}</span>
+                    <span class="phase-summary">{summary}</span>
+                </button>
+            </li>
+        }
+    };
+    view! {
+        <ul class="signal-phases" aria-label=words(w, "jn-ph-row")><For each=move || 0..count.get() key=|i| *i children=card/></ul>
+    }
+}
+
 /// Puts the focus on the element with this id, if it is there.
 fn focus_id(id: &str) {
     use leptos::wasm_bindgen::JsCast;
     if let Some(el) = document().get_element_by_id(id).and_then(|e| e.dyn_into::<HtmlElement>().ok()) {
         let _ = el.focus();
     }
+}
+
+/// The place in the plan of the first phase that is the selected street's, if a street is selected.
+fn first_phase_of(v: &JView) -> Option<usize> {
+    if v.selected.kind != Some("arm") {
+        return None;
+    }
+    v.signal.as_ref()?.phases.iter().position(|p| p.uid == v.selected.uid)
+}
+
+/// Puts the focus back on phase card `i`, the card that was pressed (a street with two phases has two cards, and the
+/// person's place is the one they pressed, not the street's first), once the panel has been swapped for the pressed street's: a press on a card
+/// selects its street, which replaces the junction's panel (or another street's) and with it the button that was
+/// pressed. The swap runs in a microtask, so the focus waits for it.
+fn focus_card_after_swap(i: usize) {
+    let id = format!("phase-card-{i}");
+    leptos::task::spawn_local(async move { focus_id(&id) });
 }
 
 /// The id of the button to focus once a phase button was pressed, so the focus follows the phase. `index` is where the
@@ -1294,6 +1360,7 @@ fn signal_overview(w: Watch) -> impl IntoView {
                     <h3 class="note-h" id="i-h-signal">{words(w, "jn-insp-signal")}</h3>
                     <p class="insp-range">{move || tr(w, "jn-sig-cycle", Args::new().num("seconds", w.view().signal.as_ref().map_or(0, |s| i64::from(s.cycle_s))))}</p>
                     <p class="insp-range" id="signal-plan-state" tabindex="-1">{move || w.tr(if suggested.get() { "jn-sig-suggested" } else { "jn-sig-edited" })}</p>
+                    {signal_phases(w)}
                     <ul class="signal-list"><For each=move || 0..count.get() key=|i| *i children=row/></ul>
                     <div class="signal-tools">
                         <For
