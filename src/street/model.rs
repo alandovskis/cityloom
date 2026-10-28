@@ -32,7 +32,7 @@ mod stop_end;
 use curb::Choice;
 pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside};
 pub use curb_shown::{ShownInstance, ShownStop};
-pub use green::{Green, GreenKind, GreenRefusal, TreeSize};
+pub use green::{Green, GreenKind, GreenRefusal, TreeSize, fills, host_at};
 pub use map_uses::{MapStop, MapUse, MapUses};
 pub use stop::{MIN_STOP_MM, Stop, StopCell, StopKind, StopSideView, StopsView};
 pub use stop_end::{EndStop, STOP_CLEAR_MM, stop_gap_mm};
@@ -559,6 +559,8 @@ struct State {
     /// that undo and redo carry the chosen one with it.
     curb_move: Option<(Side, i32, i32)>,
     stop_move: Option<(Side, i32, i32)>,
+    /// The same for the trees and green infrastructure (see `State.stop_move`).
+    green_move: Option<((i32, i32), (i32, i32))>,
 }
 
 /// The speed limits an editor sets, in kilometres an hour.
@@ -589,6 +591,8 @@ pub struct Editor {
     curb_choice: Choice,
     /// The same for the stops' strips (see `State.stop_move`).
     stop_choice: Choice,
+    /// The same for the green elements (see `State.green_move`).
+    green_choice: green::GreenChoice,
     pending_label: Option<Said>,
 }
 
@@ -676,6 +680,7 @@ impl Editor {
                 row_mm: today.row_mm,
                 curb_move: None,
                 stop_move: None,
+                green_move: None,
             }],
             cursor: 0,
             next_uid: now.next_uid.max(1),
@@ -686,6 +691,7 @@ impl Editor {
             gesture: None,
             curb_choice: Choice::default(),
             stop_choice: Choice::default(),
+            green_choice: green::GreenChoice::default(),
             pending_label: None,
         };
         if Content::of(&now) != e.states[0].content || now.row_mm != e.states[0].row_mm {
@@ -785,8 +791,8 @@ impl Editor {
         content.settle();
         let (class, class_before) = settled_class(content.has_motor(), self.class(), self.class_before());
         let row_mm = self.row_mm();
-        let (curb_move, stop_move) = (self.curb_choice.take_moved(), self.stop_choice.take_moved());
-        self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move });
+        let (curb_move, stop_move, green_move) = (self.curb_choice.take_moved(), self.stop_choice.take_moved(), self.green_choice.take_moved());
+        self.push_state(State { label, content, class, class_before, row_mm, curb_move, stop_move, green_move });
         self.clamp_zone();
     }
 
@@ -810,6 +816,7 @@ impl Editor {
             self.pending_label = None;
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();
+            self.green_choice.forget_moved();
         }
     }
 
@@ -824,12 +831,14 @@ impl Editor {
         if now == baseline {
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();
+            self.green_choice.forget_moved();
             return false;
         }
         // An edit that changed anything left its label; without one there is nothing to record.
         let Some(label) = self.pending_label.take() else {
             self.curb_choice.forget_moved();
             self.stop_choice.forget_moved();
+            self.green_choice.forget_moved();
             return false;
         };
         self.push(label, now);
@@ -842,6 +851,7 @@ impl Editor {
             // The use or stop is back where it started: so is the choice.
             self.curb_choice.cancel();
             self.stop_choice.cancel();
+            self.green_choice.cancel();
         }
     }
 
@@ -1316,6 +1326,7 @@ impl Editor {
         }
         self.curb_choice.undo(self.states[self.cursor].curb_move);
         self.stop_choice.undo(self.states[self.cursor].stop_move);
+        self.green_choice.undo(self.states[self.cursor].green_move);
         self.cursor -= 1;
         self.reselect();
         true
@@ -1329,6 +1340,7 @@ impl Editor {
         self.cursor += 1;
         self.curb_choice.redo(self.states[self.cursor].curb_move);
         self.stop_choice.redo(self.states[self.cursor].stop_move);
+        self.green_choice.redo(self.states[self.cursor].green_move);
         self.reselect();
         true
     }
