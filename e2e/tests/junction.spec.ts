@@ -535,8 +535,16 @@ test.describe("signal timing on a junction of the city", () => {
     // The crossings are checked and cannot be changed; the group says why, and is described by it.
     const walks = page.getByRole("group", { name: /^People walking in phase 1, / });
     await expect(walks.getByRole("checkbox").first()).toBeDisabled();
-    await expect(walks).toContainText("Everyone crosses every street in a scramble.");
-    await expect(walks).toHaveAccessibleDescription("Everyone crosses every street in a scramble.");
+    await expect(walks).toContainText(
+      "This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one.",
+    );
+    await expect(walks).toHaveAccessibleDescription(
+      "This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one.",
+    );
+    // The reason comes first, on a line of its own above the boxes.
+    const noteBox = await walks.locator(".phase-moves-note").boundingBox();
+    const firstBox = await walks.getByRole("checkbox").first().boundingBox();
+    expect(noteBox!.y + noteBox!.height).toBeLessThanOrEqual(firstBox!.y);
     await page.reload();
     await expect(page.locator("#drawing")).toBeVisible();
     const again = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });

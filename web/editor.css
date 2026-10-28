@@ -2548,6 +2548,12 @@ dl.prov dd:last-child {
 .phase-moves-h {
   font-weight: 600;
 }
+.phase-moves-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
 .phase-move {
   display: inline-flex;
   align-items: center;

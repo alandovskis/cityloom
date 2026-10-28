@@ -588,4 +588,4 @@ jn-ph-walks-legend = Piétons en marche
 jn-ph-rides-legend = Vélos
 jn-ph-walk-box = Les piétons traversent { $other }
 jn-ph-ride-box = Les vélos circulent sur { $other }
-jn-ph-walks-fixed = Dans une phase piétonne exclusive, tout le monde traverse toutes les rues.
+jn-ph-walks-fixed = Cette phase est une phase piétonne exclusive : tout le monde traverse toutes les rues. Choisissez un autre modèle pour régler les passages un à un.

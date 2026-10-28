@@ -1395,8 +1395,9 @@ fn pattern_group(w: Watch, i: usize) -> impl IntoView {
 }
 
 /// What a phase lets people walk across or bikes go on, as a checklist of native checkboxes (Tab and Space), one per
-/// street that has a crossing or a bike lane: a street without is not listed. A box is named by the phase and the
-/// street. A scramble's crossings are shown and cannot be changed. A choice is kept whatever the cars do. The boxes are
+/// street that has a crossing or a bike lane: a street without is not listed. The group names the phase and the street
+/// and a box only the street it is for. A scramble's crossings are shown, checked and cannot be changed, and a note
+/// before them says why and what to do. A choice is kept whatever the cars do. The boxes are
 /// keyed by street, so the one with the focus keeps it across a change; a refused change puts the box back.
 fn movement_group(w: Watch, i: usize, ride: bool) -> impl IntoView {
     let options = Memo::new(move |_| {
@@ -1430,15 +1431,15 @@ fn movement_group(w: Watch, i: usize, ride: bool) -> impl IntoView {
     };
     let uids = move || options.get().into_iter().map(|o| o.uid).collect::<Vec<u32>>();
     // A scramble's boxes are checked and disabled (a disabled box fires no change), so the group says why.
-    let (note, note_id) = (format!("sig-{part}-{i}-note"), format!("sig-{part}-{i}-note"));
+    let note_id = format!("sig-{part}-{i}-note");
     move || {
-        let (note, note_id) = (note.clone(), note_id.clone());
+        let (note, note_id) = (note_id.clone(), note_id.clone());
         (!options.with(Vec::is_empty)).then(|| {
             view! {
                 <div class="phase-moves" role="group" id=format!("sig-{part}-{i}") aria-label=group aria-describedby=move || fixed.get().then(|| note.clone())>
                     <span class="phase-moves-h" aria-hidden="true">{words(w, if ride { "jn-ph-rides-legend" } else { "jn-ph-walks-legend" })}</span>
+                    {move || fixed.get().then(|| view! { <p class="phase-moves-note" id=note_id.clone()>{words(w, "jn-ph-walks-fixed")}</p> })}
                     <For each=uids key=|u| *u children=item/>
-                    {move || fixed.get().then(|| view! { <span class="insp-range" id=note_id.clone()>{words(w, "jn-ph-walks-fixed")}</span> })}
                 </div>
             }
         })

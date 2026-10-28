@@ -588,4 +588,4 @@ jn-ph-walks-legend = People walking
 jn-ph-rides-legend = Bikes
 jn-ph-walk-box = People walk across { $other }
 jn-ph-ride-box = Bikes go on { $other }
-jn-ph-walks-fixed = Everyone crosses every street in a scramble.
+jn-ph-walks-fixed = This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one.

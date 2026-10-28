@@ -1848,7 +1848,12 @@ fn each_phase_has_a_people_walking_checklist_of_native_checkboxes_named_by_stree
     s.edit(|j| j.set_phase_pattern(0, Pattern::Scramble));
     let g = movement_group(&plain_panel(&s), 0, "walks");
     assert_eq!(count(&g, "disabled"), 3, "{g}");
-    assert!(g.contains("Everyone crosses every street in a scramble."), "the boxes say why they cannot change: {g}");
+    assert!(
+        g.contains("This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one."),
+        "the boxes say why they cannot change and what to do: {g}"
+    );
+    assert!(g.find("sig-walks-0-note").unwrap() < g.find("type=\"checkbox\"").unwrap(), "the reason comes before the boxes: {g}");
+    assert!(g.contains("class=\"phase-moves-note\""), "the note is a block of its own: {g}");
     assert!(g.contains("aria-describedby=\"sig-walks-0-note\"") && g.contains("id=\"sig-walks-0-note\""), "{g}");
 }
 
@@ -1860,7 +1865,7 @@ fn the_names_of_the_boxes_and_the_scramble_note_are_in_french_too() {
     assert!(g.contains("aria-label=\"Les piétons traversent ") && !g.contains("aria-label=\"Phase 1"), "{g}");
     s.edit(|j| j.set_phase_pattern(0, Pattern::Scramble));
     let g = movement_group(&plain_panel(&s), 0, "walks");
-    assert!(g.contains("tout le monde traverse") && g.contains("aria-describedby=\"sig-walks-0-note\""), "{g}");
+    assert!(g.contains("Cette phase est une phase piétonne exclusive : tout le monde traverse toutes les rues. Choisissez un autre modèle pour régler les passages un à un.") && g.contains("aria-describedby=\"sig-walks-0-note\""), "{g}");
 }
 
 #[test]
