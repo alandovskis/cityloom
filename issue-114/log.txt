@@ -1,0 +1,104 @@
+1. Traffic signal chosen: phase 1 lists its crossings and bike lanes as checkboxes, named by the street; the group names the phase and street
+   focused: BODY
+   announced: ""
+   phase 1 group name: "People walking in phase 1, Boulevard Saint-Laurent"
+   phase 1 People walking: [{"name":"People walk across Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (south-east)","checked":false,"disabled":false},{"name":"People walk across Avenue Laurier Ouest (south-west)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (north-west)","checked":false,"disabled":false}]
+   phase 1 Bikes: [{"name":"Bikes go on Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"Bikes go on Avenue Laurier Ouest (south-west)","checked":false,"disabled":false}]
+   scramble note: "(no note)"
+   Custom pattern radios shown: 0
+   phase 1 card: "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east."
+
+   The junction has 4 streets with a crossing each: phase 1 lists 4 crossing checkboxes and 2 bike checkboxes, so streets without a bike lane are not listed in Bikes.
+
+2. Keyboard: Space switches on a bike movement in phase 1; the card's Bikes sentence gains it; the phase is Custom
+   focused: Bikes go on Avenue Laurier Ouest (south-west)
+   announced: "Phase 1 for Boulevard Saint-Laurent (south-east): bikes now go on Avenue Laurier Ouest (south-west). 4 streets, traffic signal. Every check passes. Phase 1 no longer follows a ready-made pattern."
+   phase 1 group name: "People walking in phase 1, Boulevard Saint-Laurent"
+   phase 1 People walking: [{"name":"People walk across Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (south-east)","checked":false,"disabled":false},{"name":"People walk across Avenue Laurier Ouest (south-west)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (north-west)","checked":false,"disabled":false}]
+   phase 1 Bikes: [{"name":"Bikes go on Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"Bikes go on Avenue Laurier Ouest (south-west)","checked":true,"disabled":false}]
+   scramble note: "(no note)"
+   Custom pattern radios shown: 1
+   phase 1 card: "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east and south-west."
+
+3. Keyboard: Space again switches it off
+   focused: Bikes go on Avenue Laurier Ouest (south-west)
+   announced: "Phase 1 for Boulevard Saint-Laurent (south-east): bikes no longer go on Avenue Laurier Ouest (south-west). 4 streets, traffic signal. Every check passes."
+   phase 1 group name: "People walking in phase 1, Boulevard Saint-Laurent"
+   phase 1 People walking: [{"name":"People walk across Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (south-east)","checked":false,"disabled":false},{"name":"People walk across Avenue Laurier Ouest (south-west)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (north-west)","checked":false,"disabled":false}]
+   phase 1 Bikes: [{"name":"Bikes go on Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"Bikes go on Avenue Laurier Ouest (south-west)","checked":false,"disabled":false}]
+   scramble note: "(no note)"
+   Custom pattern radios shown: 0
+   phase 1 card: "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east."
+
+4. Keyboard: Space switches on a crossing where cars conflict: kept as chosen; the phase is Custom
+   focused: People walk across Boulevard Saint-Laurent (south-east)
+   announced: "Phase 1 for Boulevard Saint-Laurent (south-east): people now walk across Boulevard Saint-Laurent (south-east). 4 streets, traffic signal. Every check passes. Phase 1 no longer follows a ready-made pattern."
+   phase 1 group name: "People walking in phase 1, Boulevard Saint-Laurent"
+   phase 1 People walking: [{"name":"People walk across Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (south-east)","checked":true,"disabled":false},{"name":"People walk across Avenue Laurier Ouest (south-west)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (north-west)","checked":false,"disabled":false}]
+   phase 1 Bikes: [{"name":"Bikes go on Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"Bikes go on Avenue Laurier Ouest (south-west)","checked":false,"disabled":false}]
+   scramble note: "(no note)"
+   Custom pattern radios shown: 1
+   phase 1 card: "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east, south-east and south-west. Bikes go: north-east."
+
+5. Page reloaded: the switched crossing is kept
+   focused: BODY
+   announced: ""
+   phase 1 group name: "People walking in phase 1, Boulevard Saint-Laurent"
+   phase 1 People walking: [{"name":"People walk across Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (south-east)","checked":true,"disabled":false},{"name":"People walk across Avenue Laurier Ouest (south-west)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (north-west)","checked":false,"disabled":false}]
+   phase 1 Bikes: [{"name":"Bikes go on Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"Bikes go on Avenue Laurier Ouest (south-west)","checked":false,"disabled":false}]
+   scramble note: "(no note)"
+   Custom pattern radios shown: 1
+   phase 1 card: "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east, south-east and south-west. Bikes go: north-east."
+
+6. Undo: the crossing is off again
+   focused: BODY
+   announced: "Undone."
+   phase 1 group name: "People walking in phase 1, Boulevard Saint-Laurent"
+   phase 1 People walking: [{"name":"People walk across Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (south-east)","checked":false,"disabled":false},{"name":"People walk across Avenue Laurier Ouest (south-west)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (north-west)","checked":false,"disabled":false}]
+   phase 1 Bikes: [{"name":"Bikes go on Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"Bikes go on Avenue Laurier Ouest (south-west)","checked":false,"disabled":false}]
+   scramble note: "(no note)"
+   Custom pattern radios shown: 0
+   phase 1 card: "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east."
+
+7. Redo: on again
+   focused: BODY
+   announced: "Earlier changes. 4 streets, traffic signal. Every check passes."
+   phase 1 group name: "People walking in phase 1, Boulevard Saint-Laurent"
+   phase 1 People walking: [{"name":"People walk across Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (south-east)","checked":true,"disabled":false},{"name":"People walk across Avenue Laurier Ouest (south-west)","checked":true,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (north-west)","checked":false,"disabled":false}]
+   phase 1 Bikes: [{"name":"Bikes go on Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"Bikes go on Avenue Laurier Ouest (south-west)","checked":false,"disabled":false}]
+   scramble note: "(no note)"
+   Custom pattern radios shown: 1
+   phase 1 card: "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east, south-east and south-west. Bikes go: north-east."
+
+8. Choose the Pedestrian scramble pattern for phase 1: the walk checkboxes are checked and disabled, with a visible note before them saying why and what to do
+   focused: sig-pattern-0-scramble
+   announced: "Phase 1 for Boulevard Saint-Laurent (south-east) set to pedestrian scramble. One check needs attention: every street has a phase."
+   phase 1 group name: "People walking in phase 1, Boulevard Saint-Laurent"
+   phase 1 People walking: [{"name":"People walk across Avenue Laurier Est (north-east)","checked":true,"disabled":true},{"name":"People walk across Boulevard Saint-Laurent (south-east)","checked":true,"disabled":true},{"name":"People walk across Avenue Laurier Ouest (south-west)","checked":true,"disabled":true},{"name":"People walk across Boulevard Saint-Laurent (north-west)","checked":true,"disabled":true}]
+   phase 1 Bikes: [{"name":"Bikes go on Avenue Laurier Est (north-east)","checked":false,"disabled":false},{"name":"Bikes go on Avenue Laurier Ouest (south-west)","checked":false,"disabled":false}]
+   scramble note: "This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one."
+   Custom pattern radios shown: 0
+   phase 1 card: "Phase 1: Boulevard Saint-Laurent (south-east)Green 25 s, yellow 3 s, all-red 2 sPeople cross: north-east, south-east, south-west and north-west."
+
+9. Every crossing switched off in every phase
+   focused: People walk across Boulevard Saint-Laurent (north-west)
+   announced: "Phase 2 for Avenue Laurier Ouest (south-west): people no longer walk across Boulevard Saint-Laurent (north-west). One check needs attention: time to cross."
+   phase 1 group name: "People walking in phase 1, Boulevard Saint-Laurent"
+   phase 1 People walking: [{"name":"People walk across Avenue Laurier Est (north-east)","checked":false,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (south-east)","checked":false,"disabled":false},{"name":"People walk across Avenue Laurier Ouest (south-west)","checked":false,"disabled":false},{"name":"People walk across Boulevard Saint-Laurent (north-west)","checked":false,"disabled":false}]
+   phase 1 Bikes: [{"name":"Bikes go on Avenue Laurier Est (north-east)","checked":true,"disabled":false},{"name":"Bikes go on Avenue Laurier Ouest (south-west)","checked":false,"disabled":false}]
+   scramble note: "(no note)"
+   Custom pattern radios shown: 2
+   phase 1 card: "Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. Bikes go: north-east."
+
+Checks list: Not enough time to cross at Avenue Laurier Est (north-east); Boulevard Saint-Laurent (south-east); Avenue Laurier Ouest (south-west); Boulevard Saint-Laurent (north-west) (screenshot s-checks.png, scrolled to the row)
+
+10. Switched to Français: group and checkbox names
+   focused: BUTTON
+   announced: ""
+   phase 1 group name: "Piétons en marche à la phase 1, Boulevard Saint-Laurent"
+   phase 1 People walking: [{"name":"Les piétons traversent Avenue Laurier Est (nord-est)","checked":false,"disabled":false},{"name":"Les piétons traversent Boulevard Saint-Laurent (sud-est)","checked":false,"disabled":false},{"name":"Les piétons traversent Avenue Laurier Ouest (sud-ouest)","checked":false,"disabled":false},{"name":"Les piétons traversent Boulevard Saint-Laurent (nord-ouest)","checked":false,"disabled":false}]
+   phase 1 Bikes: [{"name":"Les vélos circulent sur Avenue Laurier Est (nord-est)","checked":true,"disabled":false},{"name":"Les vélos circulent sur Avenue Laurier Ouest (sud-ouest)","checked":false,"disabled":false}]
+   scramble note: "(no note)"
+   Custom pattern radios shown: 2
+   phase 1 card: "Phase 1 : Boulevard Saint-LaurentVert 25 s, jaune 3 s, rouge intégral 2 sVoitures qui passent : sud-est. Vélos qui passent : nord-est."
+

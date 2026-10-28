@@ -1,0 +1,11 @@
+
+Running 6 tests using 6 workers
+
+  ✓  2 [chromium] › tests/junction.spec.ts:647:3 › signal timing on a junction of the city › the walking checklist is in French and announces a switch in French (3.6s)
+  ✓  5 [chromium] › tests/junction.spec.ts:555:3 › signal timing on a junction of the city › a phase whose movements match no pattern shows Custom, checked and not chosen, until a pattern is chosen (4.0s)
+  ✓  4 [chromium] › tests/junction.spec.ts:470:3 › signal timing on a junction of the city › a phase is given a ready-made pattern from a radio group with one tab stop, and undo and redo follow (4.1s)
+  ✓  6 [chromium] › tests/junction.spec.ts:531:3 › signal timing on a junction of the city › a chosen pattern is kept across a reload, and the group is in French (4.6s)
+  ✓  3 [chromium] › tests/junction.spec.ts:585:3 › signal timing on a junction of the city › the pattern group speaks French and announces a choice in French (4.6s)
+  ✓  1 [chromium] › tests/junction.spec.ts:595:3 › signal timing on a junction of the city › a crossing is switched in a phase from a checklist, kept even where cars conflict, shows Custom, can be off everywhere and fails the check (5.0s)
+
+  6 passed (5.9s)
