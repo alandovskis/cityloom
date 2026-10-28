@@ -1,0 +1,9 @@
+
+Running 4 tests using 4 workers
+
+  ✓  3 [chromium] › tests/junction.spec.ts:531:3 › signal timing on a junction of the city › a chosen pattern is kept across a reload, and the group is in French (2.7s)
+  ✓  1 [chromium] › tests/junction.spec.ts:470:3 › signal timing on a junction of the city › a phase is given a ready-made pattern from a radio group with one tab stop, and undo and redo follow (3.3s)
+  ✓  4 [chromium] › tests/junction.spec.ts:542:3 › signal timing on a junction of the city › a phase whose movements match no pattern shows Custom, checked and not chosen, until a pattern is chosen (3.6s)
+  ✓  2 [chromium] › tests/junction.spec.ts:584:3 › signal timing on a junction of the city › the pattern group speaks French and announces a choice in French (3.8s)
+
+  4 passed (4.7s)

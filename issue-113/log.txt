@@ -1,0 +1,81 @@
+1. Traffic signal chosen: phase 1 shows its patterns as a radio group (the suggested plan's phase matches one)
+   plan marker: Suggested plan
+   focused: BODY
+   announced: "That change does not fit."
+   phase 1 pattern radios (name, aria-checked, tabindex, aria-disabled): [{"name":"Through only","checked":"false","tabindex":"-1","disabled":null},{"name":"All movements","checked":"true","tabindex":"0","disabled":null},{"name":"Protected turn across traffic, then through","checked":"false","tabindex":"-1","disabled":null},{"name":"Pedestrian scramble","checked":"false","tabindex":"-1","disabled":null}]
+   cards: ["Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east.","Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west."]
+
+   tab stops in the group: 1
+
+2. Keyboard: ArrowRight chooses the next pattern; the card's drawing and sentence follow
+   plan marker: Edited plan
+   focused: sig-pattern-0-protected-left
+   announced: "Phase 1 for Boulevard Saint-Laurent (south-east) set to protected turn across traffic, then through. One check needs attention: time to cross."
+   phase 1 pattern radios (name, aria-checked, tabindex, aria-disabled): [{"name":"Through only","checked":"false","tabindex":"-1","disabled":null},{"name":"All movements","checked":"false","tabindex":"-1","disabled":null},{"name":"Protected turn across traffic, then through","checked":"true","tabindex":"0","disabled":null},{"name":"Pedestrian scramble","checked":"false","tabindex":"-1","disabled":null}]
+   cards: ["Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east. Bikes go: north-east.","Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west."]
+
+3. Keyboard: ArrowRight again
+   plan marker: Edited plan
+   focused: sig-pattern-0-scramble
+   announced: "Phase 1 for Boulevard Saint-Laurent (south-east) set to pedestrian scramble. One check needs attention: every street has a phase."
+   phase 1 pattern radios (name, aria-checked, tabindex, aria-disabled): [{"name":"Through only","checked":"false","tabindex":"-1","disabled":null},{"name":"All movements","checked":"false","tabindex":"-1","disabled":null},{"name":"Protected turn across traffic, then through","checked":"false","tabindex":"-1","disabled":null},{"name":"Pedestrian scramble","checked":"true","tabindex":"0","disabled":null}]
+   cards: ["Phase 1: Boulevard Saint-Laurent (south-east)Green 25 s, yellow 3 s, all-red 2 sPeople cross: north-east, south-east, south-west and north-west.","Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west."]
+
+4. Keyboard: Home chooses the first pattern
+   plan marker: Edited plan
+   focused: sig-pattern-0-through
+   announced: "Phase 1 for Boulevard Saint-Laurent (south-east) set to through only. 4 streets, traffic signal. Every check passes."
+   phase 1 pattern radios (name, aria-checked, tabindex, aria-disabled): [{"name":"Through only","checked":"true","tabindex":"0","disabled":null},{"name":"All movements","checked":"false","tabindex":"-1","disabled":null},{"name":"Protected turn across traffic, then through","checked":"false","tabindex":"-1","disabled":null},{"name":"Pedestrian scramble","checked":"false","tabindex":"-1","disabled":null}]
+   cards: ["Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east.","Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west."]
+
+5. Choose Pedestrian scramble: no car movement, every crossing walked
+   plan marker: Edited plan
+   focused: sig-pattern-0-scramble
+   announced: "Phase 1 for Boulevard Saint-Laurent (south-east) set to pedestrian scramble. One check needs attention: every street has a phase."
+   phase 1 pattern radios (name, aria-checked, tabindex, aria-disabled): [{"name":"Through only","checked":"false","tabindex":"-1","disabled":null},{"name":"All movements","checked":"false","tabindex":"-1","disabled":null},{"name":"Protected turn across traffic, then through","checked":"false","tabindex":"-1","disabled":null},{"name":"Pedestrian scramble","checked":"true","tabindex":"0","disabled":null}]
+   cards: ["Phase 1: Boulevard Saint-Laurent (south-east)Green 25 s, yellow 3 s, all-red 2 sPeople cross: north-east, south-east, south-west and north-west.","Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west."]
+
+6. Undo
+   plan marker: Edited plan
+   focused: undo
+   announced: "Undone."
+   phase 1 pattern radios (name, aria-checked, tabindex, aria-disabled): [{"name":"Through only","checked":"true","tabindex":"0","disabled":null},{"name":"All movements","checked":"false","tabindex":"-1","disabled":null},{"name":"Protected turn across traffic, then through","checked":"false","tabindex":"-1","disabled":null},{"name":"Pedestrian scramble","checked":"false","tabindex":"-1","disabled":null}]
+   cards: ["Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east and south-west. Bikes go: north-east.","Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west."]
+
+7. Redo
+   plan marker: Edited plan
+   focused: BODY
+   announced: "Phase 1 for Boulevard Saint-Laurent (south-east) set to pedestrian scramble. One check needs attention: every street has a phase."
+   phase 1 pattern radios (name, aria-checked, tabindex, aria-disabled): [{"name":"Through only","checked":"false","tabindex":"-1","disabled":null},{"name":"All movements","checked":"false","tabindex":"-1","disabled":null},{"name":"Protected turn across traffic, then through","checked":"false","tabindex":"-1","disabled":null},{"name":"Pedestrian scramble","checked":"true","tabindex":"0","disabled":null}]
+   cards: ["Phase 1: Boulevard Saint-Laurent (south-east)Green 25 s, yellow 3 s, all-red 2 sPeople cross: north-east, south-east, south-west and north-west.","Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west."]
+
+8. Page reloaded: the chosen pattern is kept
+   plan marker: Edited plan
+   focused: BODY
+   announced: ""
+   phase 1 pattern radios (name, aria-checked, tabindex, aria-disabled): [{"name":"Through only","checked":"false","tabindex":"-1","disabled":null},{"name":"All movements","checked":"false","tabindex":"-1","disabled":null},{"name":"Protected turn across traffic, then through","checked":"false","tabindex":"-1","disabled":null},{"name":"Pedestrian scramble","checked":"true","tabindex":"0","disabled":null}]
+   cards: ["Phase 1: Boulevard Saint-Laurent (south-east)Green 25 s, yellow 3 s, all-red 2 sPeople cross: north-east, south-east, south-west and north-west.","Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west."]
+
+9. Choose Protected turn across traffic, then through
+   plan marker: Edited plan
+   focused: sig-pattern-0-protected-left
+   announced: "Phase 1 for Boulevard Saint-Laurent (south-east) set to protected turn across traffic, then through. One check needs attention: time to cross."
+   phase 1 pattern radios (name, aria-checked, tabindex, aria-disabled): [{"name":"Through only","checked":"false","tabindex":"-1","disabled":null},{"name":"All movements","checked":"false","tabindex":"-1","disabled":null},{"name":"Protected turn across traffic, then through","checked":"true","tabindex":"0","disabled":null},{"name":"Pedestrian scramble","checked":"false","tabindex":"-1","disabled":null}]
+   cards: ["Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east. Bikes go: north-east.","Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west."]
+
+Announcements after each crossing removal: ["Avenue Laurier Est (north-east) crossing: remove. One check needs attention: time to cross. Phase 1 no longer follows a ready-made pattern.","Boulevard Saint-Laurent (south-east) crossing: remove. One check needs attention: time to cross. Phase 2 no longer follows a ready-made pattern.","Avenue Laurier Ouest (south-west) crossing: remove. 4 streets, traffic signal. Every check passes.","Boulevard Saint-Laurent (north-west) crossing: remove. 4 streets, traffic signal. Every check passes."]
+
+10. After the crossings are removed, phase 1 matches no pattern: Custom is shown, checked, not chosen
+   plan marker: Edited plan
+   focused: Junction plan editor
+   announced: "Avenue Laurier Est (north-east), 35 degrees"
+   phase 1 pattern radios (name, aria-checked, tabindex, aria-disabled): [{"name":"Custom","checked":"true","tabindex":"0","disabled":"true"},{"name":"Through only","checked":"false","tabindex":"-1","disabled":null},{"name":"All movements","checked":"false","tabindex":"-1","disabled":null}]
+   cards: ["Phase 1: Boulevard Saint-LaurentGreen 25 s, yellow 3 s, all-red 2 sCars go: south-east. People cross: north-east. Bikes go: north-east.","Phase 2: Avenue Laurier OuestGreen 25 s, yellow 3 s, all-red 2 sCars go: south-west. People cross: south-east and north-west. Bikes go: north-east and south-west."]
+
+11. Switched to Français: pattern names and sentences are French
+   plan marker: Plan modifié
+   focused: BUTTON
+   announced: ""
+   phase 1 pattern radios (name, aria-checked, tabindex, aria-disabled): [{"name":"Personnalisé","checked":"true","tabindex":"0","disabled":"true"},{"name":"Tout droit seulement","checked":"false","tabindex":"-1","disabled":null},{"name":"Tous les mouvements","checked":"false","tabindex":"-1","disabled":null}]
+   cards: ["Phase 1 : Boulevard Saint-LaurentVert 25 s, jaune 3 s, rouge intégral 2 sVoitures qui passent : sud-est. Piétons qui traversent : nord-est. Vélos qui passent : nord-est.","Phase 2 : Avenue Laurier OuestVert 25 s, jaune 3 s, rouge intégral 2 sVoitures qui passent : sud-ouest. Piétons qui traversent : sud-est et nord-ouest. Vélos qui passent : nord-est et sud-ouest."]
+
