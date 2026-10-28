@@ -4,7 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::junction::model::{Arm, LEFT, SIGNAL, State, THROUGH, Timing, turn_class};
+use crate::junction::model::{Arm, LEFT, RIGHT, SIGNAL, State, THROUGH, Timing, turn_class};
+use crate::shared::catalogue::{REGIONS, Side};
 
 /// One vehicle movement a phase serves: the traffic entering from arm `from`, going to arm `to`. It is the movement,
 /// not a lane, that a phase serves: a lane's number changes when the street's lanes are made again.
@@ -220,15 +221,17 @@ fn suggestion(s: &State, region: usize) -> Option<Plan> {
     Some(Plan { phases, cycle_s, suggested: true })
 }
 
-/// A ready-made choice of what a phase allows. The figures behind them (which turns, whom they give way to) are
-/// UNVERIFIED placeholders, not a standard's rules: only the rules in this file about who crosses whom are used.
+/// A ready-made choice of what a phase allows. UNVERIFIED: that "protected" means the crossing of the street the turn
+/// goes into is not walked (no standard was checked), and that the turn across oncoming traffic is the left turn in a
+/// region that drives on the right and the right turn in one that drives on the left (`across_traffic`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum Pattern {
     /// Only the traffic going straight on.
     ThroughOnly,
     /// Every movement of the street, turns giving way to the people crossing.
     All,
-    /// The left turns first, with no one crossing where they turn, then the straight on and right movements.
+    /// The turns across oncoming traffic first (left where traffic keeps right, right where it keeps left), with no one
+    /// crossing where they turn, then the other movements.
     ProtectedLeftThenThrough,
     /// No vehicle moves; every crossing is walked.
     Scramble,
@@ -261,6 +264,12 @@ impl Pattern {
     }
 }
 
+/// The class of turn that crosses oncoming traffic in `region`: the left turn where traffic keeps right, the right turn
+/// where it keeps left.
+fn across_traffic(region: usize) -> u8 {
+    if REGIONS[region].drive_side == Side::Left { RIGHT } else { LEFT }
+}
+
 /// The phase for street `uid` as `pattern` says it, to put in a stored plan. None when the pattern does not fit
 /// this junction (nothing for it to serve) or is Custom.
 pub fn pattern_phase(s: &State, region: usize, uid: u32, pattern: Pattern) -> Option<StoredPhase> {
@@ -279,12 +288,13 @@ pub fn pattern_phase(s: &State, region: usize, uid: u32, pattern: Pattern) -> Op
         });
     }
     let class_of = |m: &Move| arms.iter().find(|a| a.uid == m.to).map_or(0, |to| turn_class(arms[i].bearing, to.bearing));
+    let across = across_traffic(region);
     let all = movements(&arms, i);
     let chosen: Vec<Move> = match pattern {
         Pattern::ThroughOnly => all.iter().filter(|m| class_of(m) == THROUGH).copied().collect(),
         Pattern::All => all,
         Pattern::ProtectedLeftThenThrough => {
-            let (left, rest): (Vec<Move>, Vec<Move>) = all.into_iter().partition(|m| class_of(m) == LEFT);
+            let (left, rest): (Vec<Move>, Vec<Move>) = all.into_iter().partition(|m| class_of(m) == across);
             if left.is_empty() {
                 return None;
             }
@@ -298,8 +308,8 @@ pub fn pattern_phase(s: &State, region: usize, uid: u32, pattern: Pattern) -> Op
     let going: Vec<usize> = chosen.iter().filter_map(|m| arms.iter().position(|a| a.uid == m.to)).collect();
     let (mut walks, rides) = walks_and_rides(&arms, &moves, &bikes, i, &going);
     if pattern == Pattern::ProtectedLeftThenThrough {
-        // Protected: the crossing of a street a left turn goes into is not walked, whoever gives way elsewhere.
-        let lefts: Vec<u32> = chosen.iter().filter(|m| class_of(m) == LEFT).map(|m| m.to).collect();
+        // Protected: the crossing of a street the turn across oncoming traffic goes into is not walked, whoever gives way elsewhere.
+        let lefts: Vec<u32> = chosen.iter().filter(|m| class_of(m) == across).map(|m| m.to).collect();
         walks.retain(|u| !lefts.contains(u));
     }
     Some(StoredPhase { moves: chosen, walks, rides, arm: None })
@@ -551,6 +561,22 @@ mod tests {
         assert_eq!(p.walks, vec![w], "east's crossing is where the left turns into: not walked, nor south's where traffic goes straight on");
         let all = stored(&s, n, Pattern::All);
         assert_eq!(all.walks, vec![e, w], "unprotected: the left gives way to the people crossing");
+    }
+
+    #[test]
+    fn driving_on_the_left_the_protected_turn_is_the_one_across_oncoming_traffic_which_is_the_right_turn() {
+        use crate::shared::catalogue::{REGIONS, Side};
+        let left = REGIONS.iter().position(|r| r.drive_side == Side::Left).expect("a region that drives on the left");
+        let s = north_every_way();
+        let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
+        let p = pattern_phase(&s, left, n, Pattern::ProtectedLeftThenThrough).unwrap();
+        assert_eq!(p.moves, vec![Move { from: n, to: w }, Move { from: n, to: e }, Move { from: n, to: so }], "the turn across oncoming traffic first");
+        assert_eq!(p.walks, vec![e], "west's crossing is where it turns into: not walked");
+        let mut t = s.clone();
+        t.signal_plan = Some(SignalPlan { phases: vec![p] });
+        let plan = plan(&t, left).unwrap();
+        assert_eq!(pattern_of(&t, left, &plan.phases[0]), Pattern::ProtectedLeftThenThrough);
+        assert!(patterns_for(&t, left, &plan.phases[0]).contains(&Pattern::ProtectedLeftThenThrough));
     }
 
     #[test]

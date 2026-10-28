@@ -476,7 +476,7 @@ test.describe("signal timing on a junction of the city", () => {
     expect(names.map((n) => n.trim())).toEqual([
       "Through only",
       "All movements",
-      "Protected left, then through",
+      "Protected turn across traffic, then through",
       "Pedestrian scramble",
     ]);
     await expect(radios.last()).toHaveText(/Pedestrian scramble/);
@@ -543,7 +543,7 @@ test.describe("signal timing on a junction of the city", () => {
     page,
   }) => {
     const group = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
-    await group.getByRole("radio", { name: /Protected left/ }).click();
+    await group.getByRole("radio", { name: /Protected turn/ }).click();
     const custom = group.getByRole("radio", { name: /^Custom/ });
     await expect(custom).toHaveCount(0);
     // Take a crossing away: the people the phase let cross there are no longer the pattern's, so the phase matches none.

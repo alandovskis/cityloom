@@ -1826,7 +1826,12 @@ fn each_phase_has_a_pattern_radio_group_with_one_tab_stop_and_the_patterns_that_
     let g = pattern_group(&h, 0);
     assert_eq!(count(&g, "role=\"radio\""), 4, "{g}");
     assert_eq!(count(&g, "tabindex=\"0\""), 1, "one tab stop");
-    assert!(g.contains("Through only") && g.contains("Protected left, then through") && g.contains("Pedestrian scramble") && g.contains("All movements"));
+    assert!(
+        g.contains("Through only")
+            && g.contains("Protected turn across traffic, then through")
+            && g.contains("Pedestrian scramble")
+            && g.contains("All movements")
+    );
     let checked: Vec<&str> = g.split("<li").filter(|r| r.contains("aria-checked=\"true\"")).collect();
     assert_eq!(checked.len(), 1);
     assert!(checked[0].contains("All movements") && checked[0].contains("tabindex=\"0\""), "the suggestion is all movements, and holds the tab stop");
