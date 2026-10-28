@@ -546,31 +546,19 @@ test.describe("signal timing on a junction of the city", () => {
     await group.getByRole("radio", { name: /Protected turn/ }).click();
     const custom = group.getByRole("radio", { name: /^Custom/ });
     await expect(custom).toHaveCount(0);
-    // Take a crossing away: the people the phase let cross there are no longer the pattern's, so the phase matches none.
-    // Walk the selection round the drawing until a street shows its Remove button, then press it.
-    await page.locator("#wrap").focus();
-    const remove = page.locator("#inspector").getByRole("button", { name: "Remove the crossing" });
-    let said = false;
-    for (let i = 0; i < 12; i++) {
-      await page.keyboard.press("ArrowRight");
-      if (await remove.isVisible()) {
-        await remove.click();
-        if (!said) {
-          // The edit says that a phase it changed no longer follows its pattern.
-          await expect(live(page)).toContainText(/Phase \d no longer follows a ready-made pattern\./);
-          said = true;
-        }
-        await page.locator("#wrap").focus();
-      }
-    }
-    // Back to the junction's own panel, where the phases are.
-    await page.keyboard.press("Escape");
+    // Switch on a crossing the pattern does not walk: the people the phase lets cross are no longer the pattern's.
+    const off = page
+      .getByRole("group", { name: /^People walking in phase 1, / })
+      .locator("input:not(:checked)")
+      .first();
+    await off.focus();
+    await page.keyboard.press("Space");
+    // The edit says that the phase it changed no longer follows its pattern.
+    await expect(live(page)).toContainText(/Phase 1 no longer follows a ready-made pattern\./);
     await expect(custom).toHaveCount(1);
     await expect(custom).toHaveAttribute("aria-checked", "true");
     await expect(custom).toHaveAttribute("aria-disabled", "true");
     await expect(group.locator('[role=radio][tabindex="0"]')).toHaveCount(1);
-    // (With no crossing left there is nothing to protect and no scramble: only the patterns that fit are offered.)
-    await expect(group.getByRole("radio", { name: /Pedestrian scramble/ })).toHaveCount(0);
     await expect(group.getByRole("radio", { name: /Through only/ })).toHaveAttribute("aria-checked", "false");
     // Pressing Custom chooses nothing; an arrow key from it goes to a real pattern.
     await custom.click({ force: true });

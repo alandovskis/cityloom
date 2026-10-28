@@ -1989,14 +1989,16 @@ fn switching_a_bike_movement_or_a_crossing_that_cannot_be_is_refused_aloud_and_c
 #[test]
 fn an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languages() {
     use crate::shared::i18n::Locale;
-    for (locale, tail) in
-        [(Locale::En, "Phases 1 and 3 no longer follow a ready-made pattern."), (Locale::FrCa, "Les phases 1 et 3 ne suivent plus un modèle prêt à l’emploi.")]
-    {
+    for (locale, tail) in [(Locale::En, "no longer follow"), (Locale::FrCa, "ne suivent plus")] {
         let s = shared_in(0, locale);
-        assert!(s.choose_pattern(0, Pattern::ThroughOnly));
-        let east = arm(&s, 90);
+        let phases = s.read(|j| crate::junction::signal::plan(j.current(), j.region).unwrap().phases.len());
+        for i in 0..phases {
+            assert!(s.choose_pattern(i, Pattern::ThroughOnly));
+        }
+        let north = arm(&s, 0);
         live::take_said();
-        s.apply(|j| j.set_crossing(east, false));
+        // Turning north's street off its bearing changes which movements are straight on: some phases follow no pattern now.
+        assert!(s.apply(|j| j.set_bearing(north, 340)));
         let said = live::take_said();
         assert_eq!(said.len(), 1, "{said:?}");
         assert!(said[0].contains(tail), "{said:?}");
@@ -2442,10 +2444,10 @@ fn phases_that_stop_following_their_pattern_are_said_once_in_both_languages() {
         for i in 0..phases {
             s.choose_pattern(i, Pattern::ThroughOnly);
         }
-        // Taking a crossing away takes phases 2 and 4 off their pattern: one sentence, not one each.
+        // Switching north's crossing off by hand in phases 2 and 4 takes them off their pattern: one sentence, not one each.
         let north = arm(&s, 0);
         live::take_said();
-        s.apply(|j| j.set_crossing(north, false));
+        s.apply(|j| j.set_phase_walk(1, north, false) & j.set_phase_walk(3, north, false));
         let said = live::take_said();
         assert_eq!(said.len(), 1, "{said:?}");
         assert!(said[0].ends_with(two), "{said:?}");

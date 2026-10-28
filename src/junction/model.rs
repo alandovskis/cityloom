@@ -2071,7 +2071,7 @@ fn settle_table_and_boxes(s: &mut State, region: usize) {
             t.transit_lead_s = 0;
         }
     }
-    signal::settle(s);
+    signal::settle(s, region);
 }
 
 /// A turbo stands only on a roundabout whose arms suit it, none is more than 20° off its template and every entry it
@@ -3826,7 +3826,7 @@ mod tests {
         let arm = s.arms.iter_mut().find(|a| a.uid == uid).unwrap();
         assert!(arm.lanes.len() > 1, "the sample's first arm has more than one lane");
         arm.lanes.reverse();
-        signal::settle(&mut s);
+        signal::settle(&mut s, 0);
         let mut j2 = Junction::new(0);
         assert!(j2.remove_phase(3));
         *j2.current_mut() = s;
@@ -3991,6 +3991,25 @@ mod tests {
         let back: State = serde_json::from_value(serde_json::to_value(j.current()).unwrap()).unwrap();
         assert_eq!(back.signal_plan, j.current().signal_plan, "kept and read back");
         assert!(back.signal_plan.unwrap().phases.iter().all(|p| p.walks.is_empty()));
+    }
+
+    #[test]
+    fn a_crossing_removed_after_a_walk_was_switched_on_leaves_no_stale_walk_and_does_not_come_back() {
+        let mut j = Junction::new(0);
+        let n = arm_at(&j, 0);
+        let before = signal::pattern_of(j.current(), 0, &phase_of(&j, 0));
+        assert_ne!(before, Pattern::Custom);
+        assert!(j.set_phase_walk(0, n, true));
+        assert!(j.set_crossing(n, false));
+        let stored = j.current().signal_plan.as_ref().unwrap();
+        assert!(stored.phases.iter().all(|p| !p.walks.contains(&n)), "no stale walk is kept");
+        let p = phase_of(&j, 0);
+        let shown = j.view().signal.unwrap().phases[0].clone();
+        assert!(!p.walks.contains(&n) && !shown.walk_arms.contains(&n) && shown.walk_options.iter().all(|o| o.uid != n));
+        assert_eq!(signal::pattern_of(j.current(), 0, &p), before, "what is stored, said and shown agree");
+        assert!(j.set_crossing(n, true));
+        assert!(!phase_of(&j, 0).walks.contains(&n), "adding the crossing back does not resurrect the walk");
+        assert!(j.current().signal_plan.as_ref().unwrap().phases.iter().all(|p| !p.walks.contains(&n)));
     }
 
     #[test]
