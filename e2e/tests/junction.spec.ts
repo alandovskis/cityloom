@@ -591,6 +591,70 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(live(page)).toContainText(/Phase 1 de .*\s: phase piétonne exclusive/);
   });
 
+  test("a crossing is switched in a phase from a checklist, kept even where cars conflict, shows Custom, can be off everywhere and fails the check", async ({
+    page,
+  }) => {
+    const walks = (n: number) => page.getByRole("group", { name: new RegExp(`^People walking in phase ${n}, `) });
+    const boxes = walks(1).getByRole("checkbox");
+    expect(await boxes.count()).toBeGreaterThanOrEqual(1);
+    const card = page.locator("#inspector .signal-phases .phase-card").first().locator("svg.phase-svg");
+    const patterns = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
+    await expect(patterns.getByRole("radio", { name: /^Custom/ })).toHaveCount(0);
+
+    // The street whose own cars go in phase 1 has its crossing off there; switch it on with Space (a conflict: kept as chosen).
+    const off = walks(1).locator("input:not(:checked)").first();
+    await expect(off).toBeVisible();
+    const id = await off.getAttribute("id");
+    await expect(off).toHaveAccessibleName(/^Phase 1, .*: people walk across /);
+    const drawn = await card.innerHTML();
+    await off.focus();
+    await page.keyboard.press("Space");
+    const box = page.locator(`#${id}`);
+    await expect(box).toBeChecked();
+    await expect(box).toBeFocused();
+    await expect(live(page)).toContainText("now walk across");
+    await expect(live(page)).toContainText(/Phase 1 no longer follows a ready-made pattern\./);
+    await expect(page.locator("#signal-plan-state")).toHaveText("Edited plan");
+    expect(await card.innerHTML()).not.toBe(drawn);
+    await expect(patterns.getByRole("radio", { name: /^Custom/ })).toHaveAttribute("aria-checked", "true");
+
+    // It is kept across a reload; undo and redo follow.
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(page.locator(`#${id}`)).toBeChecked();
+    await page.locator("#undo").click();
+    await expect(page.locator(`#${id}`)).not.toBeChecked();
+    await expect(card).toBeVisible();
+    await page.locator("#redo").click();
+    await expect(page.locator(`#${id}`)).toBeChecked();
+
+    // Every crossing off in every phase: the Checks list says the time to cross is short.
+    const phases = await page.locator("#inspector .signal-phases .phase-card").count();
+    for (let n = 1; n <= phases; n++) {
+      const on = walks(n).locator("input:checked");
+      while ((await on.count()) > 0) {
+        await on.first().focus();
+        await page.keyboard.press("Space");
+      }
+      await expect(walks(n).locator("input:checked")).toHaveCount(0);
+    }
+    await expect(live(page)).toContainText("no longer walk across");
+    await page.locator("#t-checks").click();
+    await expect(page.locator("#p-checks")).toContainText("Not enough time to cross at");
+  });
+
+  test("the walking checklist is in French and announces a switch in French", async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr-CA"));
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    const group = page.getByRole("group", { name: /^Piétons en marche à la phase 1, / });
+    await expect(group).toBeVisible();
+    await group.locator("input:not(:checked)").first().focus();
+    await page.keyboard.press("Space");
+    await expect(live(page)).toContainText(/traversent maintenant/);
+    await expect(live(page)).toContainText(/La phase 1 ne suit plus un modèle prêt à l’emploi\./);
+  });
+
   test("a phase drawing is small, and two cards share a row where the inspector is wide enough", async ({ page }) => {
     const cards = page.locator("#inspector .signal-phases .phase-card");
     await expect(cards).toHaveCount(2);
