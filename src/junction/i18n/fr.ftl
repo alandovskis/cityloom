@@ -546,3 +546,4 @@ jn-pattern-group = Modèle de la phase { $n }, { $street }
 jn-rev-phase-pattern = Phase { $n } de { $arm } : { $pattern }
 jn-refusal-pattern-not-fit = Ce modèle ne convient pas aux voies de cette intersection.
 jn-refusal-pattern-already = La phase suit déjà ce modèle.
+jn-pattern-lost = La phase { $n } ne suit plus un modèle prêt à l’emploi.

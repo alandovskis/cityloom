@@ -174,9 +174,17 @@ impl JunctionVm {
     /// An edit the person made: it is announced by what it was, and a refusal by
     /// its reason.
     pub fn apply<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+        self.apply_noting(f, true)
+    }
+
+    /// `apply`; `note_patterns` adds a sentence for each phase the edit took off its ready-made pattern (a choice of
+    /// pattern does not: that is what it is for).
+    fn apply_noting<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R, note_patterns: bool) -> R {
+        let before = (note_patterns).then(|| self.read(|j| j.current().signal_plan.is_some().then(|| j.current().clone()))).flatten();
         let r = self.edit(f);
         if r.into() {
-            self.say_edit();
+            let lost = before.map(|b| self.read(|j| crate::junction::signal::patterns_lost(&b, j.current(), j.region))).unwrap_or_default();
+            self.say_edit_with(&lost);
         } else {
             self.say_refusal();
         }
@@ -204,7 +212,7 @@ impl JunctionVm {
             })
         };
         if !chosen() {
-            self.apply(|j| j.set_phase_pattern(index, pattern));
+            self.apply_noting(|j| j.set_phase_pattern(index, pattern), false);
         }
         chosen()
     }
@@ -311,7 +319,15 @@ impl JunctionVm {
     }
 
     fn say_edit(&self) {
-        if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
+        self.say_edit_with(&[]);
+    }
+
+    /// The edit's text, then a sentence for each phase (from 0) the edit took off its ready-made pattern.
+    fn say_edit_with(&self, lost: &[usize]) {
+        if let Some(mut t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
+            for &i in lost {
+                t = format!("{t} {}", self.i18n.tr_now("jn-pattern-lost", &Args::new().num("n", i as i64 + 1)));
+            }
             self.ports.announcer.say(&t);
         }
     }

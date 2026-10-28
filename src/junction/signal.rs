@@ -346,6 +346,27 @@ pub fn pattern_of(s: &State, region: usize, phase: &Phase) -> Pattern {
         .unwrap_or(Pattern::Custom)
 }
 
+/// The places (from 0, in the order the phases run in `after`) of the phases that had a ready-made pattern in `before`
+/// and follow another one, or none, in `after`. Nothing when either state has no plan of the person's own: a suggestion
+/// follows the lanes by definition.
+pub fn patterns_lost(before: &State, after: &State, region: usize) -> Vec<usize> {
+    if before.signal_plan.is_none() || after.signal_plan.is_none() {
+        return Vec::new();
+    }
+    let (Some(was), Some(now)) = (plan(before, region), plan(after, region)) else { return Vec::new() };
+    now.phases
+        .iter()
+        .enumerate()
+        .filter(|(_, ph)| {
+            was.phases.iter().find(|w| w.uid == ph.uid).is_some_and(|w| {
+                let before = pattern_of(before, region, w);
+                before != Pattern::Custom && before != pattern_of(after, region, ph)
+            })
+        })
+        .map(|(i, _)| i)
+        .collect()
+}
+
 /// The longest time in a row, round the cycle, that the crossing of arm `uid` is walked.
 pub fn walk_window_s(plan: &Plan, uid: u32) -> u32 {
     let runs: Vec<Option<u32>> = plan.phases.iter().map(|p| p.walks.contains(&uid).then_some(p.length_s)).collect();

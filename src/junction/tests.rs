@@ -1904,6 +1904,28 @@ fn choosing_a_pattern_is_announced_in_english_and_in_french_and_choosing_the_sam
 }
 
 #[test]
+fn an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, tail) in
+        [(Locale::En, "Phase 1 no longer follows a ready-made pattern."), (Locale::FrCa, "La phase 1 ne suit plus un modèle prêt à l’emploi.")]
+    {
+        let s = shared_in(0, locale);
+        assert!(s.choose_pattern(0, Pattern::ThroughOnly));
+        let east = arm(&s, 90);
+        live::take_said();
+        s.apply(|j| j.set_crossing(east, false));
+        let said = live::take_said();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].contains(tail), "{said:?}");
+        // An edit that leaves every phase as it was adds nothing.
+        live::take_said();
+        let west = arm(&s, 270);
+        s.apply(|j| j.set_setback(west, 4000));
+        assert!(!live::take_said()[0].contains(tail));
+    }
+}
+
+#[test]
 fn the_card_of_a_phase_follows_the_pattern_chosen() {
     let s = shared(0);
     let before = phase_cards(&plain_panel(&s));

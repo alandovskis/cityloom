@@ -550,10 +550,16 @@ test.describe("signal timing on a junction of the city", () => {
     // Walk the selection round the drawing until a street shows its Remove button, then press it.
     await page.locator("#wrap").focus();
     const remove = page.locator("#inspector").getByRole("button", { name: "Remove the crossing" });
+    let said = false;
     for (let i = 0; i < 12; i++) {
       await page.keyboard.press("ArrowRight");
       if (await remove.isVisible()) {
         await remove.click();
+        if (!said) {
+          // The edit says that a phase it changed no longer follows its pattern.
+          await expect(live(page)).toContainText(/Phase \d no longer follows a ready-made pattern\./);
+          said = true;
+        }
         await page.locator("#wrap").focus();
       }
     }
