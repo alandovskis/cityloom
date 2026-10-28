@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 use crate::junction::geometry::gap;
-use crate::junction::signal;
+use crate::junction::signal::{self, Pattern};
 use crate::junction::turbo::{self, BLOCKS, LAYOUTS, Turbo};
 use crate::street::model::{Beyond, Editor, Street, View, named_said};
 
@@ -799,10 +799,12 @@ pub enum Refusal {
     TooManyPhases,
     PhaseAtEnd,
     PlanSuggested,
+    PatternNotFit,
+    PatternAlready,
 }
 
 impl Refusal {
-    pub const ALL: [Refusal; 27] = [
+    pub const ALL: [Refusal; 29] = [
         Refusal::NeedsThreeStreets,
         Refusal::LinkedNoRemove,
         Refusal::RoundaboutTooBig,
@@ -830,6 +832,8 @@ impl Refusal {
         Refusal::TooManyPhases,
         Refusal::PhaseAtEnd,
         Refusal::PlanSuggested,
+        Refusal::PatternNotFit,
+        Refusal::PatternAlready,
     ];
 
     /// The message that says why.
@@ -862,6 +866,8 @@ impl Refusal {
             Refusal::TooManyPhases => "jn-refusal-too-many-phases",
             Refusal::PhaseAtEnd => "jn-refusal-phase-at-end",
             Refusal::PlanSuggested => "jn-refusal-plan-suggested",
+            Refusal::PatternNotFit => "jn-refusal-pattern-not-fit",
+            Refusal::PatternAlready => "jn-refusal-pattern-already",
         }
     }
 }
@@ -1088,6 +1094,11 @@ impl Junction {
             self.gesture = Some(self.current().clone());
             self.pending_label = earlier();
         }
+    }
+
+    /// The state the gesture under way began from, if one is.
+    pub fn gesture_baseline(&self) -> Option<&State> {
+        self.gesture.as_ref()
     }
 
     pub fn end_gesture(&mut self) -> bool {
@@ -1481,6 +1492,25 @@ impl Junction {
         let label = self.phase_label(key, phase.uid, to).with("total", Arg::Num(plan.phases.len() as i64));
         let mut kept = plan.to_stored();
         kept.phases.swap(index, to);
+        self.edit(label, |s| {
+            s.signal_plan = Some(kept);
+            true
+        })
+    }
+
+    /// Makes the phase at `index` (from 0, in the order they run) the ready-made `pattern`, keeping its street and so
+    /// its timing. Refused when the pattern does not fit the junction's lanes (or is Custom, which is shown and never
+    /// chosen) and when the phase is that pattern already.
+    pub fn set_phase_pattern(&mut self, index: usize, pattern: Pattern) -> bool {
+        let Some(plan) = self.signal_plan_to_edit() else { return false };
+        let Some(phase) = plan.phases.get(index) else { return self.refuse(Refusal::DoesNotFit) };
+        let Some(made) = signal::pattern_phase(self.current(), self.region, phase.uid, pattern) else { return self.refuse(Refusal::PatternNotFit) };
+        if signal::pattern_of(self.current(), self.region, phase) == pattern {
+            return self.refuse(Refusal::PatternAlready);
+        }
+        let label = self.phase_label("jn-rev-phase-pattern", phase.uid, index).with("pattern", Arg::MsgLower(pattern.name_key()));
+        let mut kept = plan.to_stored();
+        kept.phases[index] = made;
         self.edit(label, |s| {
             s.signal_plan = Some(kept);
             true
@@ -2269,7 +2299,7 @@ mod tests {
 
     #[test]
     fn the_refusal_of_a_crossing_on_a_walkway_is_a_refusal_with_a_message() {
-        assert_eq!(Refusal::ALL.len(), 27);
+        assert_eq!(Refusal::ALL.len(), 29);
         assert_eq!(Refusal::CrossingOnPedestrian.key(), "jn-refusal-crossing-pedestrian");
         assert!(Refusal::ALL.contains(&Refusal::CrossingOnPedestrian));
     }
@@ -3782,6 +3812,84 @@ mod tests {
         assert!(v["signal_plan"]["phases"].as_array().unwrap().len() == 4);
         let back: State = serde_json::from_value(v).unwrap();
         assert_eq!(back.signal_plan, j.current().signal_plan);
+    }
+
+    // ---- ready-made phase patterns ----
+
+    fn phase_of(j: &Junction, index: usize) -> signal::Phase {
+        signal::plan(j.current(), 0).unwrap().phases[index].clone()
+    }
+
+    #[test]
+    fn choosing_a_pattern_is_one_undoable_edit_that_changes_what_the_phase_serves() {
+        let mut j = Junction::new(0);
+        let n = phase_of(&j, 0).uid;
+        let all = phase_of(&j, 0).moves.len();
+        assert!(all > 1);
+        assert!(j.set_phase_pattern(0, Pattern::ThroughOnly));
+        let p = phase_of(&j, 0);
+        assert!(!p.moves.is_empty() && p.moves.len() < all);
+        assert!(p.moves.iter().all(|m| m.from == n && turn_class(arm_bearing(&j, n), arm_bearing(&j, m.to)) == THROUGH));
+        assert!(!signal::plan(j.current(), 0).unwrap().suggested, "the first edit keeps the plan as the person's own");
+        assert_eq!(
+            en(j.revisions().last().unwrap()).replace(['\u{a0}', '\u{202f}'], " ").contains("through only"),
+            true,
+            "{}",
+            en(j.revisions().last().unwrap())
+        );
+        assert!(fr(j.revisions().last().unwrap()).contains("tout droit"), "{}", fr(j.revisions().last().unwrap()));
+        assert!(j.undo());
+        assert!(signal::plan(j.current(), 0).unwrap().suggested);
+        assert_eq!(phase_of(&j, 0).moves.len(), all);
+        assert!(j.redo());
+        assert_eq!(signal::pattern_of(j.current(), 0, &phase_of(&j, 0)), Pattern::ThroughOnly);
+    }
+
+    fn arm_bearing(j: &Junction, uid: u32) -> i32 {
+        j.arm(uid).unwrap().bearing
+    }
+
+    #[test]
+    fn a_scramble_keeps_its_street_and_timing_and_serves_no_vehicle() {
+        let mut j = Junction::new(0);
+        let n = phase_of(&j, 0).uid;
+        assert!(j.set_timing(n, TimingField::Green, 44));
+        assert!(j.set_phase_pattern(0, Pattern::Scramble));
+        let p = phase_of(&j, 0);
+        assert!(p.moves.is_empty() && p.uid == n);
+        assert_eq!(p.timing.green_s, 44);
+        assert_eq!(p.walks.len(), j.current().arms.iter().filter(|a| a.crossing.is_some()).count(), "every crossing walks");
+        let back: State = serde_json::from_value(serde_json::to_value(j.current()).unwrap()).unwrap();
+        assert_eq!(back.signal_plan, j.current().signal_plan, "kept and read back");
+        assert!(j.set_phase_pattern(0, Pattern::All), "a scramble can go back to the street's movements");
+        assert!(!phase_of(&j, 0).moves.is_empty());
+    }
+
+    #[test]
+    fn a_pattern_that_does_not_fit_or_changes_nothing_is_refused_with_a_reason() {
+        let mut j = Junction::new(0);
+        assert!(!j.set_phase_pattern(0, Pattern::All));
+        assert_eq!(j.refusal(), Some(Refusal::PatternAlready), "the suggestion is already all movements");
+        assert!(!j.set_phase_pattern(0, Pattern::Custom));
+        assert_eq!(j.refusal(), Some(Refusal::PatternNotFit));
+        assert!(!j.set_phase_pattern(9, Pattern::Scramble));
+        assert_eq!(j.refusal(), Some(Refusal::DoesNotFit));
+        assert!(signal::plan(j.current(), 0).unwrap().suggested, "nothing was changed");
+        // North goes only straight on: there is no left to protect.
+        let n = phase_of(&j, 0).uid;
+        let turns: Vec<u32> =
+            j.arm(n).unwrap().lanes.iter().flat_map(|l| l.to.clone()).filter(|&t| turn_class(arm_bearing(&j, n), arm_bearing(&j, t)) != THROUGH).collect();
+        for t in turns {
+            for lane in 0..j.arm(n).unwrap().lanes.len() {
+                j.set_lane_dest(n, lane, t, false);
+            }
+        }
+        assert!(!j.set_phase_pattern(0, Pattern::ProtectedLeftThenThrough));
+        assert_eq!(j.refusal(), Some(Refusal::PatternNotFit));
+        let mut k = Junction::new(1);
+        assert_ne!(k.current().control, SIGNAL);
+        assert!(!k.set_phase_pattern(0, Pattern::Scramble));
+        assert_eq!(k.refusal(), Some(Refusal::NotSignal));
     }
 
     // ---- signal timing ----

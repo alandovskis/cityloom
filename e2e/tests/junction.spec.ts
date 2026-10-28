@@ -467,6 +467,130 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#inspector .signal-phases .phase-card[aria-current='true']")).toHaveCount(1);
   });
 
+  test("a phase is given a ready-made pattern from a radio group with one tab stop, and undo and redo follow", async ({
+    page,
+  }) => {
+    const group = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
+    const radios = group.getByRole("radio");
+    const names = await radios.allInnerTexts();
+    expect(names.map((n) => n.trim())).toEqual([
+      "Through only",
+      "All movements",
+      "Protected turn across traffic, then through",
+      "Pedestrian scramble",
+    ]);
+    await expect(radios.last()).toHaveText(/Pedestrian scramble/);
+    expect(await radios.count()).toBeGreaterThanOrEqual(2);
+    // The suggestion is all of the street's movements; the checked radio is the one tab stop.
+    await expect(group.locator('[role=radio][aria-checked="true"]')).toHaveCount(1);
+    await expect(group.locator('[role=radio][tabindex="0"]')).toHaveCount(1);
+    await expect(group.locator('[role=radio][aria-checked="true"]')).toHaveAttribute("tabindex", "0");
+    const cards = page.locator("#inspector .signal-phases .phase-card");
+    const second = await cards.nth(1).innerText();
+    await expect(cards.first()).toContainText("Cars go:");
+    await expect(group).toContainText("Every movement of the street goes");
+
+    // End chooses the last pattern: nobody drives, everybody crosses. It is announced, the drawing's card follows, the
+    // other card does not, and the focus stays on the group (on the chosen radio).
+    await group.locator('[role=radio][aria-checked="true"]').focus();
+    await page.keyboard.press("End");
+    const scramble = group.getByRole("radio", { name: /Pedestrian scramble/ });
+    await expect(scramble).toHaveAttribute("aria-checked", "true");
+    await expect(scramble).toBeFocused();
+    await expect(live(page)).toContainText(/Phase 1 for .* set to pedestrian scramble/);
+    await expect(cards.first()).not.toContainText("Cars go:");
+    await expect(cards.first()).toContainText("People cross:");
+    expect(await cards.nth(1).innerText()).toBe(second);
+    await expect(page.locator("#signal-plan-state")).toHaveText("Edited plan");
+
+    // Home chooses the first; Arrow keys wrap. Each is one edit.
+    await page.keyboard.press("Home");
+    await expect(radios.first()).toHaveAttribute("aria-checked", "true");
+    await expect(radios.first()).toBeFocused();
+    await expect(cards.first()).toContainText("Cars go:");
+    await page.keyboard.press("ArrowLeft");
+    await expect(scramble).toHaveAttribute("aria-checked", "true");
+    await expect(scramble).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    await expect(radios.first()).toHaveAttribute("aria-checked", "true");
+    // Pressing a key that chooses the pattern already chosen says nothing more (Home on the first).
+    await live(page).evaluate((el) => (el.textContent = ""));
+    await page.keyboard.press("Home");
+    await expect(live(page)).toHaveText("");
+
+    // Undo and redo step back through the choices.
+    await page.locator("#undo").click();
+    await expect(scramble).toHaveAttribute("aria-checked", "true");
+    await page.locator("#undo").click();
+    await expect(radios.first()).toHaveAttribute("aria-checked", "true");
+    await page.locator("#redo").click();
+    await expect(scramble).toHaveAttribute("aria-checked", "true");
+    await expect(cards.first()).toContainText("People cross:");
+  });
+
+  test("a chosen pattern is kept across a reload, and the group is in French", async ({ page }) => {
+    const group = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
+    await group.getByRole("radio", { name: /Pedestrian scramble/ }).click();
+    await expect(page.locator("#signal-plan-state")).toHaveText("Edited plan");
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    const again = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
+    await expect(again.getByRole("radio", { name: /Pedestrian scramble/ })).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator("#inspector .signal-phases .phase-card").first()).not.toContainText("Cars go:");
+  });
+
+  test("a phase whose movements match no pattern shows Custom, checked and not chosen, until a pattern is chosen", async ({
+    page,
+  }) => {
+    const group = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
+    await group.getByRole("radio", { name: /Protected turn/ }).click();
+    const custom = group.getByRole("radio", { name: /^Custom/ });
+    await expect(custom).toHaveCount(0);
+    // Take a crossing away: the people the phase let cross there are no longer the pattern's, so the phase matches none.
+    // Walk the selection round the drawing until a street shows its Remove button, then press it.
+    await page.locator("#wrap").focus();
+    const remove = page.locator("#inspector").getByRole("button", { name: "Remove the crossing" });
+    let said = false;
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press("ArrowRight");
+      if (await remove.isVisible()) {
+        await remove.click();
+        if (!said) {
+          // The edit says that a phase it changed no longer follows its pattern.
+          await expect(live(page)).toContainText(/Phase \d no longer follows a ready-made pattern\./);
+          said = true;
+        }
+        await page.locator("#wrap").focus();
+      }
+    }
+    // Back to the junction's own panel, where the phases are.
+    await page.keyboard.press("Escape");
+    await expect(custom).toHaveCount(1);
+    await expect(custom).toHaveAttribute("aria-checked", "true");
+    await expect(custom).toHaveAttribute("aria-disabled", "true");
+    await expect(group.locator('[role=radio][tabindex="0"]')).toHaveCount(1);
+    // (With no crossing left there is nothing to protect and no scramble: only the patterns that fit are offered.)
+    await expect(group.getByRole("radio", { name: /Pedestrian scramble/ })).toHaveCount(0);
+    await expect(group.getByRole("radio", { name: /Through only/ })).toHaveAttribute("aria-checked", "false");
+    // Pressing Custom chooses nothing; an arrow key from it goes to a real pattern.
+    await custom.click({ force: true });
+    await expect(custom).toHaveCount(1);
+    await custom.focus();
+    await page.keyboard.press("Home");
+    await expect(custom).toHaveCount(0);
+    await expect(group.getByRole("radio").first()).toHaveAttribute("aria-checked", "true");
+  });
+
+  test("the pattern group speaks French and announces a choice in French", async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr-CA"));
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    const group = page.getByRole("radiogroup", { name: /^Modèle de la phase 1, / });
+    await expect(group).toBeVisible();
+    await group.getByRole("radio", { name: /Phase piétonne exclusive/ }).click();
+    await expect(live(page)).toContainText(/Phase 1 de .*\s: phase piétonne exclusive/);
+  });
+
   test("a phase drawing is small, and two cards share a row where the inspector is wide enough", async ({ page }) => {
     const cards = page.locator("#inspector .signal-phases .phase-card");
     await expect(cards).toHaveCount(2);

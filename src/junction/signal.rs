@@ -4,7 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::junction::model::{Arm, SIGNAL, State, THROUGH, Timing, turn_class};
+use crate::junction::model::{Arm, LEFT, RIGHT, SIGNAL, State, THROUGH, Timing, turn_class};
+use crate::shared::catalogue::{REGIONS, Side};
 
 /// One vehicle movement a phase serves: the traffic entering from arm `from`, going to arm `to`. It is the movement,
 /// not a lane, that a phase serves: a lane's number changes when the street's lanes are made again.
@@ -22,6 +23,10 @@ pub struct StoredPhase {
     pub moves: Vec<Move>,
     pub walks: Vec<u32>,
     pub rides: Vec<u32>,
+    /// The street whose timing a phase with no movement takes (a pedestrian scramble); written only then. A phase
+    /// that serves movements takes its timing from the street of its first movement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arm: Option<u32>,
 }
 
 /// A signal plan the person has edited: its phases in the order they run. A junction that has none shows the
@@ -69,7 +74,13 @@ pub struct Plan {
 impl Plan {
     /// The plan as it is kept.
     pub fn to_stored(&self) -> SignalPlan {
-        SignalPlan { phases: self.phases.iter().map(|p| StoredPhase { moves: p.moves.clone(), walks: p.walks.clone(), rides: p.rides.clone() }).collect() }
+        SignalPlan {
+            phases: self
+                .phases
+                .iter()
+                .map(|p| StoredPhase { moves: p.moves.clone(), walks: p.walks.clone(), rides: p.rides.clone(), arm: p.moves.is_empty().then_some(p.uid) })
+                .collect(),
+        }
     }
 }
 
@@ -107,9 +118,11 @@ pub fn plan(s: &State, region: usize) -> Option<Plan> {
         .phases
         .into_iter()
         .filter_map(|p| {
-            let uid = p.moves.first()?.from;
+            let uid = p.moves.first().map(|m| m.from).or(p.arm)?;
             let timing = s.arms.iter().find(|a| a.uid == uid)?.timing.unwrap_or_default();
-            Some(Phase { uid, timing, length_s: timing.length_s(), walks: p.walks, rides: p.rides, moves: p.moves })
+            // A scramble walks every crossing there is, as the junction has them now.
+            let walks = if p.moves.is_empty() { scramble_walks(s) } else { p.walks };
+            Some(Phase { uid, timing, length_s: timing.length_s(), walks, rides: p.rides, moves: p.moves })
         })
         .collect();
     let cycle_s = phases.iter().map(|p| p.length_s).sum();
@@ -132,8 +145,9 @@ fn settled(s: &State, plan: &SignalPlan) -> Option<SignalPlan> {
                 .collect(),
             walks: p.walks.iter().copied().filter(|&u| has(u)).collect(),
             rides: p.rides.iter().copied().filter(|&u| has(u)).collect(),
+            arm: p.arm,
         })
-        .filter(|p| !p.moves.is_empty())
+        .filter(|p| !p.moves.is_empty() || p.arm.is_some_and(has))
         .collect();
     (!phases.is_empty()).then_some(SignalPlan { phases })
 }
@@ -148,7 +162,44 @@ pub fn settle(s: &mut State) {
 pub fn phase_for(s: &State, region: usize, uid: u32) -> Option<StoredPhase> {
     let suggestion = suggestion(s, region)?;
     let p = suggestion.phases.into_iter().find(|p| p.uid == uid)?;
-    (!p.moves.is_empty()).then_some(StoredPhase { moves: p.moves, walks: p.walks, rides: p.rides })
+    (!p.moves.is_empty()).then_some(StoredPhase { moves: p.moves, walks: p.walks, rides: p.rides, arm: None })
+}
+
+/// The movements of the traffic entering `arms[i]`, in the order of its lanes.
+fn movements(arms: &[&Arm], i: usize) -> Vec<Move> {
+    let from = arms[i].uid;
+    let mut moves: Vec<Move> = Vec::new();
+    for m in arms[i].lanes.iter().flat_map(|l| l.to.iter().map(move |&to| Move { from, to })) {
+        if m.to != m.from && arms.iter().any(|a| a.uid == m.to) && !moves.contains(&m) {
+            moves.push(m);
+        }
+    }
+    moves
+}
+
+/// The streets' arms in the order of the bearings, and where the traffic entering each goes (places in that order).
+fn ordered(s: &State) -> (Vec<&Arm>, Vec<Vec<usize>>) {
+    let mut arms: Vec<&Arm> = s.arms.iter().collect();
+    arms.sort_by_key(|a| a.bearing);
+    let moves = (0..arms.len()).map(|i| destinations(&arms, i)).collect();
+    (arms, moves)
+}
+
+/// The crossings walked and the bike movements run while arm `i` sends `going` (places in `arms`) and nothing else:
+/// the one place the pedestrian and bike rules meet a phase.
+fn walks_and_rides(arms: &[&Arm], moves: &[Vec<usize>], bikes: &[bool], i: usize, going: &[usize]) -> (Vec<u32>, Vec<u32>) {
+    let mut moves = moves.to_vec();
+    moves[i] = going.to_vec();
+    let walks = (0..arms.len()).filter(|&b| arms[b].crossing.is_some() && crossing_clear(arms, &moves, i, b)).map(|b| arms[b].uid).collect();
+    let rides = (0..arms.len())
+        .filter(|&b| bikes[b] && (b == i || moves[b].iter().all(|&x| moves[i].iter().all(|&y| !crosses(b, x, i, y)))))
+        .map(|b| arms[b].uid)
+        .collect();
+    (walks, rides)
+}
+
+fn bikes_of(arms: &[&Arm], region: usize) -> Vec<bool> {
+    arms.iter().map(|a| !a.profile(region).outer_bike().is_empty()).collect()
 }
 
 /// The suggestion: one phase per street that has entering lanes, in the order of the bearings.
@@ -156,31 +207,171 @@ fn suggestion(s: &State, region: usize) -> Option<Plan> {
     if s.control != SIGNAL {
         return None;
     }
-    let mut arms: Vec<&Arm> = s.arms.iter().collect();
-    arms.sort_by_key(|a| a.bearing);
-    let moves: Vec<Vec<usize>> = (0..arms.len()).map(|i| destinations(&arms, i)).collect();
-    let bikes: Vec<bool> = arms.iter().map(|a| !a.profile(region).outer_bike().is_empty()).collect();
+    let (arms, moves) = ordered(s);
+    let bikes = bikes_of(&arms, region);
     let phases: Vec<Phase> = (0..arms.len())
         .filter(|&i| !arms[i].lanes.is_empty())
         .map(|i| {
             let timing = arms[i].timing.unwrap_or_default();
-            let walks = (0..arms.len()).filter(|&b| arms[b].crossing.is_some() && crossing_clear(&arms, &moves, i, b)).map(|b| arms[b].uid).collect();
-            let rides = (0..arms.len())
-                .filter(|&b| bikes[b] && (b == i || moves[b].iter().all(|&x| moves[i].iter().all(|&y| !crosses(b, x, i, y)))))
-                .map(|b| arms[b].uid)
-                .collect();
-            let from = arms[i].uid;
-            let mut moves: Vec<Move> = Vec::new();
-            for m in arms[i].lanes.iter().flat_map(|l| l.to.iter().map(move |&to| Move { from, to })) {
-                if m.to != m.from && arms.iter().any(|a| a.uid == m.to) && !moves.contains(&m) {
-                    moves.push(m);
-                }
-            }
-            Phase { uid: arms[i].uid, timing, length_s: timing.length_s(), walks, rides, moves }
+            let (walks, rides) = walks_and_rides(&arms, &moves, &bikes, i, &moves[i]);
+            Phase { uid: arms[i].uid, timing, length_s: timing.length_s(), walks, rides, moves: movements(&arms, i) }
         })
         .collect();
     let cycle_s = phases.iter().map(|p| p.length_s).sum();
     Some(Plan { phases, cycle_s, suggested: true })
+}
+
+/// A ready-made choice of what a phase allows. UNVERIFIED: that "protected" means the crossing of the street the turn
+/// goes into is not walked (no standard was checked), and that the turn across oncoming traffic is the left turn in a
+/// region that drives on the right and the right turn in one that drives on the left (`across_traffic`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
+pub enum Pattern {
+    /// Only the traffic going straight on.
+    ThroughOnly,
+    /// Every movement of the street, turns giving way to the people crossing.
+    All,
+    /// The turns across oncoming traffic first (left where traffic keeps right, right where it keeps left), with no one
+    /// crossing where they turn, then the other movements. "Left" in this name and in the `jn-pattern-protected-left`
+    /// keys means the turn across oncoming traffic (a right turn where traffic keeps left); the names are kept for stability.
+    ProtectedLeftThenThrough,
+    /// No vehicle moves; every crossing is walked.
+    Scramble,
+    /// Whatever matches none of the above. It is shown, never chosen.
+    Custom,
+}
+
+impl Pattern {
+    /// The patterns a person can choose, in the order they are offered.
+    pub const CHOICES: [Pattern; 4] = [Pattern::ThroughOnly, Pattern::All, Pattern::ProtectedLeftThenThrough, Pattern::Scramble];
+
+    pub fn name_key(self) -> &'static str {
+        match self {
+            Pattern::ThroughOnly => "jn-pattern-through",
+            Pattern::All => "jn-pattern-all",
+            Pattern::ProtectedLeftThenThrough => "jn-pattern-protected-left",
+            Pattern::Scramble => "jn-pattern-scramble",
+            Pattern::Custom => "jn-pattern-custom",
+        }
+    }
+
+    pub fn description_key(self) -> &'static str {
+        match self {
+            Pattern::ThroughOnly => "jn-pattern-through-desc",
+            Pattern::All => "jn-pattern-all-desc",
+            Pattern::ProtectedLeftThenThrough => "jn-pattern-protected-left-desc",
+            Pattern::Scramble => "jn-pattern-scramble-desc",
+            Pattern::Custom => "jn-pattern-custom-desc",
+        }
+    }
+}
+
+/// The class of turn that crosses oncoming traffic in `region`: the left turn where traffic keeps right, the right turn
+/// where it keeps left.
+fn across_traffic(region: usize) -> u8 {
+    if REGIONS[region].drive_side == Side::Left { RIGHT } else { LEFT }
+}
+
+/// The phase for street `uid` as `pattern` says it, to put in a stored plan. None when the pattern does not fit
+/// this junction (nothing for it to serve) or is Custom.
+pub fn pattern_phase(s: &State, region: usize, uid: u32, pattern: Pattern) -> Option<StoredPhase> {
+    if s.control != SIGNAL {
+        return None;
+    }
+    let (arms, moves) = ordered(s);
+    let bikes = bikes_of(&arms, region);
+    let i = arms.iter().position(|a| a.uid == uid)?;
+    if pattern == Pattern::Scramble {
+        return arms.iter().any(|a| a.crossing.is_some()).then(|| StoredPhase {
+            moves: Vec::new(),
+            walks: scramble_walks(s),
+            rides: Vec::new(),
+            arm: Some(uid),
+        });
+    }
+    let class_of = |m: &Move| arms.iter().find(|a| a.uid == m.to).map_or(0, |to| turn_class(arms[i].bearing, to.bearing));
+    let across = across_traffic(region);
+    let all = movements(&arms, i);
+    let chosen: Vec<Move> = match pattern {
+        Pattern::ThroughOnly => all.iter().filter(|m| class_of(m) == THROUGH).copied().collect(),
+        Pattern::All => all,
+        Pattern::ProtectedLeftThenThrough => {
+            let (across_moves, rest): (Vec<Move>, Vec<Move>) = all.into_iter().partition(|m| class_of(m) == across);
+            if across_moves.is_empty() {
+                return None;
+            }
+            across_moves.into_iter().chain(rest).collect()
+        }
+        Pattern::Scramble | Pattern::Custom => return None,
+    };
+    if chosen.is_empty() {
+        return None;
+    }
+    let going: Vec<usize> = chosen.iter().filter_map(|m| arms.iter().position(|a| a.uid == m.to)).collect();
+    let (mut walks, rides) = walks_and_rides(&arms, &moves, &bikes, i, &going);
+    if pattern == Pattern::ProtectedLeftThenThrough {
+        // Protected: the crossing of a street the turn across oncoming traffic goes into is not walked, whoever gives way elsewhere.
+        let across_to: Vec<u32> = chosen.iter().filter(|m| class_of(m) == across).map(|m| m.to).collect();
+        walks.retain(|u| !across_to.contains(u));
+    }
+    Some(StoredPhase { moves: chosen, walks, rides, arm: None })
+}
+
+/// Every street with a crossing, in the order of the bearings: who walks in a scramble.
+fn scramble_walks(s: &State) -> Vec<u32> {
+    let (arms, _) = ordered(s);
+    arms.iter().filter(|a| a.crossing.is_some()).map(|a| a.uid).collect()
+}
+
+/// The patterns that fit the phase of street `phase.uid`, in the order they are offered. A pattern that would make
+/// the same phase as one before it is left out, so the list never holds two names for one thing.
+pub fn patterns_for(s: &State, region: usize, phase: &Phase) -> Vec<Pattern> {
+    let mut seen: Vec<StoredPhase> = Vec::new();
+    Pattern::CHOICES
+        .into_iter()
+        .filter(|&p| {
+            let Some(made) = pattern_phase(s, region, phase.uid, p) else { return false };
+            let new = !seen.contains(&made);
+            seen.push(made);
+            new
+        })
+        .collect()
+}
+
+/// Which pattern a phase is: the first that makes exactly this phase, else Custom.
+pub fn pattern_of(s: &State, region: usize, phase: &Phase) -> Pattern {
+    Pattern::CHOICES
+        .into_iter()
+        .find(|&p| {
+            pattern_phase(s, region, phase.uid, p).is_some_and(|made| made.moves == phase.moves && made.walks == phase.walks && made.rides == phase.rides)
+        })
+        .unwrap_or(Pattern::Custom)
+}
+
+/// The places (from 0, in the order the phases run in `after`) of the phases that had a ready-made pattern in `before`
+/// and follow none in `after` (one that moved to another ready-made pattern is not lost). Nothing when either state has
+/// no plan of the person's own: a suggestion follows the lanes by definition.
+pub fn patterns_lost(before: &State, after: &State, region: usize) -> Vec<usize> {
+    patterns_lost_across(before, region, after, region)
+}
+
+/// `patterns_lost` for an edit that may have changed the region as well (which turn crosses oncoming traffic depends
+/// on it): `before` is read in `before_region`, `after` in `after_region`.
+pub fn patterns_lost_across(before: &State, before_region: usize, after: &State, after_region: usize) -> Vec<usize> {
+    if before.signal_plan.is_none() || after.signal_plan.is_none() {
+        return Vec::new();
+    }
+    let (Some(was), Some(now)) = (plan(before, before_region), plan(after, after_region)) else { return Vec::new() };
+    now.phases
+        .iter()
+        .enumerate()
+        .filter(|(_, ph)| {
+            was.phases
+                .iter()
+                .find(|w| w.uid == ph.uid)
+                .is_some_and(|w| pattern_of(before, before_region, w) != Pattern::Custom && pattern_of(after, after_region, ph) == Pattern::Custom)
+        })
+        .map(|(i, _)| i)
+        .collect()
 }
 
 /// The longest time in a row, round the cycle, that the crossing of arm `uid` is walked.
@@ -363,5 +554,149 @@ mod tests {
         let s = through_only(); // east's crossing: free in north's and south's phases, which are not next to each other
         let p = plan(&s, 0).unwrap();
         assert_eq!(walk_window_s(&p, at(&s, 90)), 30);
+    }
+
+    // ---- ready-made patterns --------------------------------------------------------------------------------------
+
+    /// The north street sends traffic every way: south (straight on), east (a left) and west (a right).
+    fn north_every_way() -> State {
+        let mut s = through_only();
+        let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
+        send(&mut s, n, &[e, so, w]);
+        s
+    }
+
+    fn stored(s: &State, uid: u32, pattern: Pattern) -> StoredPhase {
+        pattern_phase(s, 0, uid, pattern).unwrap()
+    }
+
+    #[test]
+    fn through_only_serves_the_streets_straight_on_movements_and_nothing_else() {
+        let s = north_every_way();
+        let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
+        let p = stored(&s, n, Pattern::ThroughOnly);
+        assert_eq!(p.moves, vec![Move { from: n, to: so }]);
+        assert_eq!(p.walks, vec![e, w], "nobody turns, so the crossings beside it are walked");
+        assert!(p.arm.is_none());
+    }
+
+    #[test]
+    fn a_protected_left_goes_first_and_no_one_crosses_where_it_turns() {
+        let s = north_every_way();
+        let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
+        let p = stored(&s, n, Pattern::ProtectedLeftThenThrough);
+        assert_eq!(p.moves, vec![Move { from: n, to: e }, Move { from: n, to: so }, Move { from: n, to: w }], "the left first, then the rest");
+        assert_eq!(p.walks, vec![w], "east's crossing is where the left turns into: not walked, nor south's where traffic goes straight on");
+        let all = stored(&s, n, Pattern::All);
+        assert_eq!(all.walks, vec![e, w], "unprotected: the left gives way to the people crossing");
+    }
+
+    #[test]
+    fn driving_on_the_left_the_protected_turn_is_the_one_across_oncoming_traffic_which_is_the_right_turn() {
+        use crate::shared::catalogue::{REGIONS, Side};
+        let left = REGIONS.iter().position(|r| r.drive_side == Side::Left).expect("a region that drives on the left");
+        let s = north_every_way();
+        let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
+        let p = pattern_phase(&s, left, n, Pattern::ProtectedLeftThenThrough).unwrap();
+        assert_eq!(p.moves, vec![Move { from: n, to: w }, Move { from: n, to: e }, Move { from: n, to: so }], "the turn across oncoming traffic first");
+        assert_eq!(p.walks, vec![e], "west's crossing is where it turns into: not walked");
+        let mut t = s.clone();
+        t.signal_plan = Some(SignalPlan { phases: vec![p] });
+        let plan = plan(&t, left).unwrap();
+        assert_eq!(pattern_of(&t, left, &plan.phases[0]), Pattern::ProtectedLeftThenThrough);
+        assert!(patterns_for(&t, left, &plan.phases[0]).contains(&Pattern::ProtectedLeftThenThrough));
+    }
+
+    #[test]
+    fn a_pedestrian_scramble_serves_no_vehicle_and_every_crossing_walks() {
+        let s = north_every_way();
+        let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
+        let p = stored(&s, n, Pattern::Scramble);
+        assert!(p.moves.is_empty() && p.rides.is_empty());
+        assert_eq!(p.arm, Some(n));
+        let mut shown = s.clone();
+        shown.signal_plan = Some(SignalPlan { phases: vec![p] });
+        let plan = plan(&shown, 0).unwrap();
+        assert_eq!(plan.phases.len(), 1, "a phase with no movement is kept");
+        assert_eq!((plan.phases[0].uid, plan.phases[0].walks.clone()), (n, vec![n, e, so, w]));
+        assert!(plan.phases[0].sources().is_empty());
+    }
+
+    #[test]
+    fn a_scramble_takes_the_timing_of_its_street() {
+        let mut s = north_every_way();
+        let n = at(&s, 0);
+        let t = Timing { green_s: 40, yellow_s: 3, all_red_s: 2, transit_lead_s: 0 };
+        s.arms.iter_mut().find(|a| a.uid == n).unwrap().timing = Some(t);
+        s.signal_plan = Some(SignalPlan { phases: vec![stored(&s, n, Pattern::Scramble)] });
+        let p = plan(&s, 0).unwrap();
+        assert_eq!((p.phases[0].timing, p.cycle_s), (t, t.length_s()));
+        assert_eq!(p.to_stored().phases[0].arm, Some(n), "kept as a scramble when written back");
+    }
+
+    #[test]
+    fn only_the_patterns_the_lanes_support_are_offered() {
+        let s = through_only();
+        let n = at(&s, 0);
+        let p = plan(&s, 0).unwrap();
+        let offered = patterns_for(&s, 0, phase(&p, n));
+        assert_eq!(offered, vec![Pattern::ThroughOnly, Pattern::Scramble], "no left to protect, and all movements is the through movement");
+        assert!(pattern_phase(&s, 0, n, Pattern::ProtectedLeftThenThrough).is_none());
+        let s = north_every_way();
+        let p = plan(&s, 0).unwrap();
+        let offered = patterns_for(&s, 0, phase(&p, at(&s, 0)));
+        assert_eq!(offered, vec![Pattern::ThroughOnly, Pattern::All, Pattern::ProtectedLeftThenThrough, Pattern::Scramble]);
+    }
+
+    #[test]
+    fn a_phase_is_the_pattern_it_matches_and_custom_when_it_matches_none() {
+        let s = north_every_way();
+        let n = at(&s, 0);
+        let p = plan(&s, 0).unwrap();
+        assert_eq!(pattern_of(&s, 0, phase(&p, n)), Pattern::All, "the suggestion serves every movement");
+        for pat in [Pattern::ThroughOnly, Pattern::ProtectedLeftThenThrough, Pattern::Scramble] {
+            let mut t = s.clone();
+            t.signal_plan = Some(SignalPlan { phases: vec![stored(&s, n, pat)] });
+            let p = plan(&t, 0).unwrap();
+            assert_eq!(pattern_of(&t, 0, &p.phases[0]), pat);
+        }
+        let mut custom = stored(&s, n, Pattern::All);
+        custom.moves.pop();
+        let mut t = s.clone();
+        t.signal_plan = Some(SignalPlan { phases: vec![custom] });
+        let p = plan(&t, 0).unwrap();
+        assert_eq!(pattern_of(&t, 0, &p.phases[0]), Pattern::Custom);
+        assert!(Pattern::Custom.name_key() != Pattern::All.name_key());
+    }
+
+    /// The state `s` with one phase for street `n`, stored as `phase`.
+    fn with_phase(s: &State, phase: StoredPhase) -> State {
+        let mut t = s.clone();
+        t.signal_plan = Some(SignalPlan { phases: vec![phase] });
+        t
+    }
+
+    #[test]
+    fn a_phase_that_moves_to_another_ready_made_pattern_is_not_lost_but_one_that_becomes_custom_is() {
+        let s = north_every_way();
+        let n = at(&s, 0);
+        let before = with_phase(&s, stored(&s, n, Pattern::ThroughOnly));
+        let other = with_phase(&s, stored(&s, n, Pattern::All));
+        assert!(patterns_lost(&before, &other, 0).is_empty(), "it follows another ready-made pattern now");
+        let mut custom = stored(&s, n, Pattern::All);
+        custom.moves.pop();
+        let custom = with_phase(&s, custom);
+        assert_eq!(patterns_lost(&before, &custom, 0), vec![0], "it follows none now");
+        assert!(patterns_lost(&custom, &before, 0).is_empty(), "a phase that was custom has no pattern to lose");
+    }
+
+    #[test]
+    fn a_plan_kept_before_patterns_still_loads_and_a_scramble_is_the_only_phase_that_writes_the_marker() {
+        let old = r#"{"phases":[{"moves":[{"from":1,"to":2}],"walks":[3],"rides":[]}]}"#;
+        let plan: SignalPlan = serde_json::from_str(old).unwrap();
+        assert_eq!(plan.phases[0].arm, None);
+        assert_eq!(serde_json::to_string(&plan).unwrap(), old, "nothing new is written for a phase with movements");
+        let scramble = StoredPhase { arm: Some(4), ..Default::default() };
+        assert!(serde_json::to_string(&scramble).unwrap().contains(r#""arm":4"#));
     }
 }

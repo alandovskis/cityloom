@@ -9,7 +9,7 @@ use leptos::prelude::*;
 
 use crate::city::binding::{CityBinding, Place};
 use crate::junction::frame::Frame;
-use crate::junction::model::{Junction, Refusal, Target};
+use crate::junction::model::{Junction, Refusal, State, Target};
 use crate::junction::read_model::JView;
 use crate::junction::text;
 use crate::shared::core::{Core, Presents};
@@ -62,6 +62,13 @@ pub struct JunctionVm {
     binding: Option<CityBinding>,
     /// How the plan was last drawn, for turning a pointer position into a point on it.
     frame: Cell<Option<Frame>>,
+}
+
+/// Whether an edit says which phases it took off their ready-made pattern.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PatternNote {
+    Report,
+    Skip,
 }
 
 impl JunctionVm {
@@ -172,15 +179,38 @@ impl JunctionVm {
     }
 
     /// An edit the person made: it is announced by what it was, and a refusal by
-    /// its reason.
+    /// its reason. A phase it takes off its ready-made pattern is said too.
     pub fn apply<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+        self.apply_with(f, PatternNote::Report)
+    }
+
+    /// `apply` for a choice of pattern, which says nothing of the phases' patterns: changing one is what it is for.
+    fn apply_choosing_pattern<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
+        self.apply_with(f, PatternNote::Skip)
+    }
+
+    fn apply_with<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R, note: PatternNote) -> R {
+        let before = (note == PatternNote::Report).then(|| self.pattern_state()).flatten();
         let r = self.edit(f);
         if r.into() {
-            self.say_edit();
+            let lost = self.lost_since(before);
+            self.say_edit_with(&lost);
         } else {
             self.say_refusal();
         }
         r
+    }
+
+    /// The state and region, to compare patterns against later; None when the junction has no plan of the person's own
+    /// (nothing there can be lost).
+    fn pattern_state(&self) -> Option<(State, usize)> {
+        self.read(|j| j.current().signal_plan.is_some().then(|| (j.current().clone(), j.region)))
+    }
+
+    /// The phases (from 0) that were on a ready-made pattern in `before` and are on none now.
+    fn lost_since(&self, before: Option<(State, usize)>) -> Vec<usize> {
+        let Some((state, region)) = before else { return Vec::new() };
+        self.read(|j| crate::junction::signal::patterns_lost_across(&state, region, j.current(), j.region))
     }
 
     /// The person chooses a turbo layout (`None`: the single lane). Choosing the one already chosen changes nothing, so it
@@ -192,6 +222,21 @@ impl JunctionVm {
             self.apply(|j| j.set_turbo(layout));
         }
         chosen() == layout
+    }
+
+    /// The person gives phase `index` a ready-made pattern. Choosing the pattern it is already changes nothing, so it
+    /// is neither refused nor announced and leaves no history. Whether the phase is that pattern afterwards.
+    pub fn choose_pattern(&self, index: usize, pattern: crate::junction::signal::Pattern) -> bool {
+        let chosen = || {
+            self.read(|j| {
+                let phase = crate::junction::signal::plan(j.current(), j.region).and_then(|p| p.phases.get(index).cloned());
+                phase.is_some_and(|ph| crate::junction::signal::pattern_of(j.current(), j.region, &ph) == pattern)
+            })
+        };
+        if !chosen() {
+            self.apply_choosing_pattern(|j| j.set_phase_pattern(index, pattern));
+        }
+        chosen()
     }
 
     /// A change that is not announced, as each step of a drag is.
@@ -215,8 +260,10 @@ impl JunctionVm {
     /// changed anything, or else by what is selected.
     pub fn end_gesture(&self, commit: bool) {
         if commit {
+            let before = self.read(|j| j.gesture_baseline().filter(|b| b.signal_plan.is_some()).map(|b| (b.clone(), j.region)));
             if self.edit(|j| j.end_gesture()) {
-                self.say_edit();
+                let lost = self.lost_since(before);
+                self.say_edit_with(&lost);
             } else {
                 self.say_selection();
             }
@@ -296,9 +343,31 @@ impl JunctionVm {
     }
 
     fn say_edit(&self) {
-        if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
+        self.say_edit_with(&[]);
+    }
+
+    /// The edit's text, then a sentence for each phase (from 0) the edit took off its ready-made pattern.
+    fn say_edit_with(&self, lost: &[usize]) {
+        if let Some(mut t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
+            if let Some(note) = self.lost_note(lost) {
+                t = format!("{t} {note}");
+            }
             self.ports.announcer.say(&t);
         }
+    }
+
+    /// One sentence for the phases (from 0) that came off their ready-made pattern: "Phase 2 no longer follows ...", or
+    /// "Phases 1, 2 and 3 no longer follow ..." for several. None when there are none.
+    pub(super) fn lost_note(&self, lost: &[usize]) -> Option<String> {
+        let numbers: Vec<String> = lost.iter().map(|&i| (i + 1).to_string()).collect();
+        let (last, rest) = numbers.split_last()?;
+        if rest.is_empty() {
+            return Some(self.i18n.tr_now("jn-pattern-lost", &Args::new().str("n", last.clone())));
+        }
+        let head =
+            rest.iter().cloned().reduce(|head, tail| self.i18n.tr_now("jn-list-comma", &Args::new().str("head", head).str("tail", tail))).unwrap_or_default();
+        let list = self.i18n.tr_now("jn-ph-and", &Args::new().str("head", head).str("tail", last.clone()));
+        Some(self.i18n.tr_now("jn-pattern-lost-many", &Args::new().str("list", list)))
     }
 
     fn say_refusal(&self) {
@@ -330,7 +399,14 @@ impl crate::shell::Target for JunctionVm {
     }
 
     fn apply_region(&self, region: usize) -> bool {
-        self.edit(|j| j.set_region(region))
+        let before = self.pattern_state();
+        let changed = self.edit(|j| j.set_region(region));
+        if changed {
+            if let Some(note) = self.lost_note(&self.lost_since(before)) {
+                self.ports.announcer.say(&note);
+            }
+        }
+        changed
     }
 
     fn region_id(&self) -> String {

@@ -892,6 +892,7 @@ mod tests {
                 moves: vec![crate::junction::signal::Move { from: uid, to: record.state.arms[1].uid }],
                 walks: vec![uid],
                 rides: vec![],
+                arm: None,
             }],
         });
         e.junctions.insert(key.clone(), record);
@@ -954,6 +955,7 @@ mod tests {
                 moves: vec![crate::junction::signal::Move { from: 1, to: 2 }],
                 walks: vec![2],
                 rides: vec![1],
+                arm: None,
             }],
         });
         e.junctions.insert(key, record);

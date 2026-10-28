@@ -1854,6 +1854,9 @@ svg pattern circle {
 .opt[role="checkbox"]:disabled:hover {
   background: transparent;
 }
+.opt[role="radio"][aria-disabled="true"] {
+  cursor: default;
+}
 .opt .turn-ico {
   fill: none;
   stroke: currentColor;

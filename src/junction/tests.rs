@@ -7,6 +7,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::junction::model::*;
+use crate::junction::signal::Pattern;
 use crate::junction::vm::{DrawMode, JunctionVm};
 use crate::junction::{inspector, notes, page, plan, turns};
 use crate::shared::testing::{button_tag, count, html};
@@ -1809,6 +1810,134 @@ fn phase_cards(h: &str) -> Vec<String> {
     row.split("<li").skip(1).map(str::to_string).collect()
 }
 
+// ---- the pattern of a phase ----
+
+/// The radio group of phase `i` in the panel's markup.
+fn pattern_group(h: &str, i: usize) -> String {
+    let at = h.find(&format!("id=\"sig-pattern-{i}\"")).expect("the group is there");
+    h[at..at + h[at..].find("</ul>").unwrap()].to_string()
+}
+
+#[test]
+fn each_phase_has_a_pattern_radio_group_with_one_tab_stop_and_the_patterns_that_fit() {
+    let s = shared(0);
+    let h = plain_panel(&s);
+    assert_eq!(count(&h, "role=\"radiogroup\" aria-label=\"Pattern for phase"), 4, "{h}");
+    let g = pattern_group(&h, 0);
+    assert_eq!(count(&g, "role=\"radio\""), 4, "{g}");
+    assert_eq!(count(&g, "tabindex=\"0\""), 1, "one tab stop");
+    assert!(
+        g.contains("Through only")
+            && g.contains("Protected turn across traffic, then through")
+            && g.contains("Pedestrian scramble")
+            && g.contains("All movements")
+    );
+    let checked: Vec<&str> = g.split("<li").filter(|r| r.contains("aria-checked=\"true\"")).collect();
+    assert_eq!(checked.len(), 1);
+    assert!(checked[0].contains("All movements") && checked[0].contains("tabindex=\"0\""), "the suggestion is all movements, and holds the tab stop");
+    assert!(g.contains("Only the traffic going straight on moves"), "each pattern has its sentence");
+    assert!(!g.contains("Custom"), "Custom is shown only when the phase is one");
+}
+
+#[test]
+fn a_phase_that_matches_no_pattern_shows_custom_checked_and_not_selectable() {
+    let s = shared(0);
+    s.edit(|j| j.set_phase_pattern(0, Pattern::ProtectedLeftThenThrough));
+    let (n, so) = (arm(&s, 0), arm(&s, 180));
+    for lane in 0..s.read(|j| j.arm(n).unwrap().lanes.len()) {
+        s.edit(|j| j.set_lane_dest(n, lane, so, false));
+    }
+    let g = pattern_group(&plain_panel(&s), 0);
+    let custom: Vec<&str> = g.split("<li").filter(|r| r.contains("Custom")).collect();
+    assert_eq!(custom.len(), 1, "{g}");
+    assert!(
+        custom[0].contains("aria-checked=\"true\"") && custom[0].contains("aria-disabled=\"true\"") && custom[0].contains("tabindex=\"0\""),
+        "{}",
+        custom[0]
+    );
+    assert_eq!(count(&g, "tabindex=\"0\""), 1);
+}
+
+#[test]
+fn choosing_a_pattern_is_announced_in_english_and_in_french_and_choosing_the_same_one_is_silent() {
+    use crate::shared::i18n::Locale;
+    let s = shared(0);
+    live::take_said();
+    assert!(s.choose_pattern(0, Pattern::ThroughOnly));
+    let said = live::take_said();
+    assert_eq!(said.len(), 1);
+    assert!(said[0].contains("Phase 1") && said[0].contains("through only"), "{said:?}");
+    assert!(s.choose_pattern(0, Pattern::ThroughOnly), "it is the pattern afterwards");
+    assert!(live::take_said().is_empty(), "choosing the one chosen changes nothing and says nothing");
+    assert!(plain_panel(&s).contains("Edited plan"));
+    let f = shared_in(0, Locale::FrCa);
+    live::take_said();
+    assert!(f.choose_pattern(0, Pattern::Scramble));
+    let said = live::take_said();
+    assert!(said[0].contains("Phase 1") && said[0].contains("piétonne exclusive"), "{said:?}");
+    assert!(plain_panel(&f).contains("Modèle de la phase 1"));
+    // A pattern that does not fit is refused, said in both languages, and is not the pattern afterwards. Sample 0 has
+    // streets to the north, east, south and west with crossings, so a scramble fits; take the crossings away and it
+    // does not.
+    for (vm, said_en, said_fr) in [(&s, true, false), (&f, false, true)] {
+        let uids: Vec<u32> = vm.read(|j| j.current().arms.iter().map(|a| a.uid).collect());
+        for uid in uids {
+            vm.apply(|j| j.set_crossing(uid, false));
+        }
+        live::take_said();
+        assert!(!vm.choose_pattern(0, Pattern::Scramble), "no pattern is the one chosen when it is refused");
+        let said = live::take_said();
+        if said_en {
+            assert_eq!(said, vec!["That pattern does not fit this junction's lanes."]);
+        }
+        if said_fr {
+            assert_eq!(said.len(), 1, "{said:?}");
+            assert!(said[0].contains("modèle") && !said[0].contains("pattern"), "{said:?}");
+        }
+    }
+    // Choosing the pattern a phase already is: it is silent through choose_pattern, and the model says why if asked.
+    let g = shared(0);
+    assert!(g.choose_pattern(0, Pattern::ThroughOnly));
+    live::take_said();
+    assert!(!g.apply(|j| j.set_phase_pattern(0, Pattern::ThroughOnly)));
+    assert_eq!(live::take_said(), vec!["The phase is that pattern already."]);
+}
+
+#[test]
+fn an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, tail) in
+        [(Locale::En, "Phases 1 and 3 no longer follow a ready-made pattern."), (Locale::FrCa, "Les phases 1 et 3 ne suivent plus un modèle prêt à l’emploi.")]
+    {
+        let s = shared_in(0, locale);
+        assert!(s.choose_pattern(0, Pattern::ThroughOnly));
+        let east = arm(&s, 90);
+        live::take_said();
+        s.apply(|j| j.set_crossing(east, false));
+        let said = live::take_said();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].contains(tail), "{said:?}");
+        // An edit that leaves every phase as it was adds nothing.
+        live::take_said();
+        let west = arm(&s, 270);
+        s.apply(|j| j.set_setback(west, 4000));
+        assert!(!live::take_said()[0].contains(tail));
+    }
+}
+
+#[test]
+fn the_card_of_a_phase_follows_the_pattern_chosen() {
+    let s = shared(0);
+    let before = phase_cards(&plain_panel(&s));
+    assert!(before[0].contains("Cars go: north"));
+    s.choose_pattern(0, Pattern::Scramble);
+    let after = phase_cards(&plain_panel(&s));
+    assert!(!after[0].contains("Cars go"), "{}", after[0]);
+    assert!(after[0].contains("People cross: north, east, south and west."));
+    assert_ne!(after[0], before[0]);
+    assert_eq!(after[1], before[1]);
+}
+
 #[test]
 fn the_junction_panel_has_a_drawing_for_each_phase_in_the_order_they_run() {
     let h = plain_panel(&shared(0));
@@ -2206,4 +2335,87 @@ fn a_beyond_ignored_for_a_turbo_or_a_pedestrian_arm_cannot_fail() {
     let mut state = walk.current().clone();
     state.arms.iter_mut().filter(|a| a.is_pedestrian()).for_each(short);
     assert!(approach(&Junction::from_city(named, &state, &state, 0).expect("draws")).ok);
+}
+
+#[test]
+fn phases_that_stop_following_their_pattern_are_said_once_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, two, three, one) in [
+        (
+            Locale::En,
+            "Phases 2 and 4 no longer follow a ready-made pattern.",
+            "Phases 1, 2 and 3 no longer follow a ready-made pattern.",
+            "Phase 2 no longer follows a ready-made pattern.",
+        ),
+        (
+            Locale::FrCa,
+            "Les phases 2 et 4 ne suivent plus un modèle prêt à l’emploi.",
+            "Les phases 1, 2 et 3 ne suivent plus un modèle prêt à l’emploi.",
+            "La phase 2 ne suit plus un modèle prêt à l’emploi.",
+        ),
+    ] {
+        let s = shared_in(0, locale);
+        let phases = s.read(|j| crate::junction::signal::plan(j.current(), j.region).unwrap().phases.len());
+        for i in 0..phases {
+            s.choose_pattern(i, Pattern::ThroughOnly);
+        }
+        // Taking a crossing away takes phases 2 and 4 off their pattern: one sentence, not one each.
+        let north = arm(&s, 0);
+        live::take_said();
+        s.apply(|j| j.set_crossing(north, false));
+        let said = live::take_said();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].ends_with(two), "{said:?}");
+        assert_eq!(said[0].matches("ready-made").count() + said[0].matches("modèle").count(), 1, "{said:?}");
+        assert_eq!(s.lost_note(&[1]).as_deref(), Some(one));
+        assert_eq!(s.lost_note(&[0, 1, 2]).as_deref(), Some(three));
+        assert_eq!(s.lost_note(&[]), None);
+    }
+}
+
+/// The vm with every phase of sample 0 chosen as `pattern`.
+fn all_phases_as(pattern: Pattern) -> Rc<JunctionVm> {
+    let s = shared(0);
+    let phases = s.read(|j| crate::junction::signal::plan(j.current(), j.region).unwrap().phases.len());
+    for i in 0..phases {
+        s.choose_pattern(i, pattern);
+    }
+    live::take_said();
+    s
+}
+
+#[test]
+fn a_drag_that_changes_what_a_phase_is_says_so_like_a_button_does() {
+    let s = all_phases_as(Pattern::ThroughOnly);
+    let north = arm(&s, 0);
+    s.quiet(|j| j.begin_gesture());
+    assert!(s.quiet(|j| j.set_bearing(north, 340)));
+    s.end_gesture(true);
+    let said = live::take_said();
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].contains("no longer follow"), "{said:?}");
+    // A drag that leaves every phase as it was adds nothing.
+    let s = all_phases_as(Pattern::ThroughOnly);
+    let east = arm(&s, 90);
+    s.quiet(|j| j.begin_gesture());
+    s.quiet(|j| j.set_setback(east, 4000));
+    s.end_gesture(true);
+    assert!(!live::take_said().iter().any(|t| t.contains("no longer follow")));
+}
+
+#[test]
+fn a_change_of_region_that_changes_what_a_phase_is_says_so() {
+    use crate::shared::catalogue::{REGIONS, Side};
+    use crate::shell::Target;
+    let left = REGIONS.iter().position(|r| r.drive_side == Side::Left).unwrap();
+    let s = all_phases_as(Pattern::ProtectedLeftThenThrough);
+    assert!(s.apply_region(left));
+    let said = live::take_said();
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].contains("no longer follow"), "{said:?}");
+    // A region that drives the same side changes nothing.
+    let s = all_phases_as(Pattern::ProtectedLeftThenThrough);
+    let right = REGIONS.iter().position(|r| r.drive_side == Side::Right && r.id != "canada").unwrap();
+    assert!(s.apply_region(right));
+    assert!(live::take_said().is_empty());
 }

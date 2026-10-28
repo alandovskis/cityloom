@@ -106,6 +106,16 @@ mod tests {
     }
 
     #[test]
+    fn a_disabled_radio_option_does_not_look_pressable_and_keeps_its_checked_fill() {
+        let editor = include_str!("../../web/editor.css");
+        let rule_of = rule(editor, r#".opt[role="radio"][aria-disabled="true"]"#);
+        assert!(rule_of.contains("cursor: default;"), "{rule_of}");
+        // The checked fill is declared after the hover fill, so a checked option keeps it under the pointer.
+        let (hover, checked) = (editor.find(".opt:hover {").unwrap(), editor.find(r#".opt[aria-checked="true"] {"#).unwrap());
+        assert!(hover < checked);
+    }
+
+    #[test]
     fn the_drawing_group_shows_its_focus_in_the_accent_ring_not_its_faint_line() {
         let editor = include_str!("../../web/editor.css");
         let ring = rule(editor, ".wrap:focus-visible");
