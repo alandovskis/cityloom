@@ -542,3 +542,8 @@ stop-refused-overlap = That would overlap another stop on the same side.
 stop-refused-too-long = That would run past the end of the street.
 stop-refused-time-windows = A stop cannot be placed on a lane that changes with the time of day.
 stop-refused-dragging = Finish the drag before changing the stops.
+
+green-kind-tree = Tree
+green-kind-bed = Planting bed
+green-kind-rain-garden = Rain garden
+green-kind-bioswale = Bioswale

@@ -25,12 +25,14 @@ mod transition;
 pub use transition::{Change, Host, Transition, transition};
 mod curb;
 mod curb_shown;
+mod green;
 mod map_uses;
 mod stop;
 mod stop_end;
 use curb::Choice;
 pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside};
 pub use curb_shown::{ShownInstance, ShownStop};
+pub use green::{Green, GreenKind, GreenRefusal, TreeSize};
 pub use map_uses::{MapStop, MapUse, MapUses};
 pub use stop::{MIN_STOP_MM, Stop, StopCell, StopKind, StopSideView, StopsView};
 pub use stop_end::{EndStop, STOP_CLEAR_MM, stop_gap_mm};
@@ -249,6 +251,10 @@ pub struct Street {
     /// any, `from_end` and `length_mm` are written as they are with zones.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub stops: Vec<Stop>,
+    /// The trees and green infrastructure along the street, by `from_mm`. Empty for a street with none; with any,
+    /// `from_end` and `length_mm` are written as they are with zones.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub green: Vec<Green>,
 }
 
 /// A name that is data, said as it is: a street's, a place's, a junction's.
@@ -356,6 +362,7 @@ impl Street {
             speed: Speed::Undecided,
             curb: Vec::new(),
             stops: Vec::new(),
+            green: Vec::new(),
         };
         street.settle_class();
         street
@@ -421,13 +428,19 @@ impl Street {
         s.reverse_zones();
         s.reverse_curb();
         s.reverse_stops();
+        s.reverse_green();
         s
     }
 
     /// Whether every index in it points into the catalogue, so that it can be
     /// drawn. A street that came from storage is checked before it is used.
     pub fn is_sound(&self) -> bool {
-        self.row_mm > 0 && self.section_is_sound(&self.segments) && self.zones_are_sound() && self.curb_is_sound() && self.stops_are_sound()
+        self.row_mm > 0
+            && self.section_is_sound(&self.segments)
+            && self.zones_are_sound()
+            && self.curb_is_sound()
+            && self.stops_are_sound()
+            && self.green_is_sound()
     }
 
     /// Whether every piece of a section points into the catalogue and has a uid the street has issued.
@@ -478,6 +491,8 @@ struct Content {
     curb: Vec<Instance>,
     /// The transit stops, which lie along the street whatever its zones.
     stops: Vec<Stop>,
+    /// The trees and green infrastructure, which lie along the street whatever its zones.
+    green: Vec<Green>,
 }
 
 impl Content {
@@ -490,6 +505,7 @@ impl Content {
             speed: street.speed,
             curb: street.curb.clone(),
             stops: street.stops.clone(),
+            green: street.green.clone(),
         }
     }
 
@@ -522,7 +538,8 @@ impl Content {
     fn settle(&mut self) {
         self.sort_curb();
         self.sort_stops();
-        let keep_anchor = !self.curb.is_empty() || !self.stops.is_empty();
+        green::sort_green(&mut self.green);
+        let keep_anchor = !self.curb.is_empty() || !self.stops.is_empty() || !self.green.is_empty();
         zones::settle_zones(&mut self.segments, &mut self.zones, &mut self.from_end, &mut self.length_mm, keep_anchor);
     }
 }
@@ -635,6 +652,7 @@ impl Editor {
             speed: content.speed,
             curb: content.curb.clone(),
             stops: content.stops.clone(),
+            green: content.green.clone(),
         }
     }
 

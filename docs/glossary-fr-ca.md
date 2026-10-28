@@ -371,3 +371,9 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Signed in (an announcement) | `Votre session est ouverte.` | Not `Vous êtes connecté.`: it is gendered. Neutral forms pair with `Votre session est fermée.` and `Aucune session n’est ouverte.` |
 | link (an account to another) | `associer` | `lier`, `rattacher` (suggestion) |
 | unlink (a sign-in from an account) | `dissocier` | `délier`, `détacher` (suggestion) |
+| Tree (street) | `Arbre` | |
+| Tree pit | `Fosse d’arbre` | To confirm |
+| Planting bed | `Plate-bande` | To confirm |
+| Rain garden | `Jardin de pluie` | To confirm |
+| Bioswale | `Noue végétalisée` | To confirm |
+| Clearance (a path’s, a sightline’s) | `Dégagement` | To confirm |

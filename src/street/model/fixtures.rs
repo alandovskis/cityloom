@@ -154,6 +154,7 @@ impl Editor {
                 speed: Speed::Undecided,
                 curb: Vec::new(),
                 stops: Vec::new(),
+                green: Vec::new(),
             },
             class: s.class,
             class_before: None,

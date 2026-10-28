@@ -542,3 +542,8 @@ stop-refused-overlap = Cet arrêt chevaucherait un autre arrêt du même côté.
 stop-refused-too-long = Cet arrêt dépasserait l’extrémité de la rue.
 stop-refused-time-windows = On ne peut pas placer un arrêt sur une voie qui change selon l’heure de la journée.
 stop-refused-dragging = Terminez le glissement avant de modifier les arrêts.
+
+green-kind-tree = Arbre
+green-kind-bed = Plate-bande
+green-kind-rain-garden = Jardin de pluie
+green-kind-bioswale = Noue végétalisée
