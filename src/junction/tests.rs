@@ -1907,7 +1907,7 @@ fn choosing_a_pattern_is_announced_in_english_and_in_french_and_choosing_the_sam
 fn an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languages() {
     use crate::shared::i18n::Locale;
     for (locale, tail) in
-        [(Locale::En, "Phase 1 no longer follows a ready-made pattern."), (Locale::FrCa, "La phase 1 ne suit plus un modèle prêt à l’emploi.")]
+        [(Locale::En, "Phases 1 and 3 no longer follow a ready-made pattern."), (Locale::FrCa, "Les phases 1 et 3 ne suivent plus un modèle prêt à l’emploi.")]
     {
         let s = shared_in(0, locale);
         assert!(s.choose_pattern(0, Pattern::ThroughOnly));
