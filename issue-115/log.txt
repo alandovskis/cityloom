@@ -1,0 +1,122 @@
+Evidence for #115, HEAD e6b6342
+
+1. Suggested plan (English)
+   plan state: Suggested plan
+   [initial]
+   card 1: warn-moves=0 lists-in-inspector=0 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   card 2: warn-moves=0 lists-in-inspector=0 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   screenshot: s01-suggested-cards.png
+   check class="ok" text="Movements that meet : passes No phase puts movements together that meet"
+   screenshot: checks-1-suggested-pass-row.png (the "Movements that meet" check row itself)
+   screenshot: checks-1-suggested-pass-panel.png (#p-checks on a 1440x3200 window; clientHeight=1015 scrollHeight=1015)
+
+2. Switch on crossing of phase 1's own street
+   checkbox id=sig-walks-0-2 name="Boulevard Saint-Laurent (south-east)"
+   checked after toggle: true  (7: the edit was not refused)
+   live (polled 1.5 s): ["Phase 1 for Boulevard Saint-Laurent (south-east): people now walk across Boulevard Saint-Laurent (south-east). One check needs attention: movements that meet. Warning: 3 movements now meet, in phase 1. Phase 1: cars from the south-east side going left meet people walking across on the south-east side. Phase 1 no longer follows a ready-made pattern."]
+   [after switch on]
+   card 1: warn-moves=3 lists-in-inspector=1 list-items=3 items=["Phase 1: cars from the south-east side going left meet people walking across on the south-east side.","Phase 1: cars from the south-east side going straight on meet people walking across on the south-east side.","Phase 1: cars from the south-east side going right meet people walking across on the south-east side."]
+     moves=["ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1"]
+   card 2: warn-moves=0 lists-in-inspector=1 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   list aria name visible: true
+   screenshot: s02-warn-cards.png
+   screenshot: list-en-phase1-full.png (#inspector .phase-conflicts on a 1440x3200 window; clientHeight=456 scrollHeight=456)
+   screenshot: s03-warn-card1-closeup.png
+   check class="bad" text="Movements that meet : fails Phase 1: cars from the south-east side going left meet people walking across on the south-east side. Phase 1: cars from the south-east side going straight on meet people walking across on the south-east side. Phase 1: cars from the south-east side going right meet people walking across on the south-east side."
+   screenshot: checks-2-one-crossing-fail-row.png (the "Movements that meet" check row itself)
+   screenshot: checks-2-one-crossing-fail-panel.png (#p-checks on a 1440x3200 window; clientHeight=1128 scrollHeight=1128)
+
+3. Non-colour cue: dashed warn movement vs lit non-warn movement
+   lit non-warn lines (card 2): ["stroke-dasharray=null stroke=rgb(27, 79, 192)","stroke-dasharray=null stroke=rgb(27, 79, 192)","stroke-dasharray=null stroke=rgb(27, 79, 192)"]
+   warn lines: ["stroke-dasharray=2137.6 1140.1 stroke=rgb(146, 64, 14)","stroke-dasharray=2137.6 1140.1 stroke=rgb(146, 64, 14)","stroke-dasharray=2137.6 1140.1 stroke=rgb(146, 64, 14)"]
+   screenshot: s04-dashed-vs-lit-closeup.png
+   screenshot: s05-dashed-vs-lit-zoom3x.png
+
+4. Undo, redo, unrelated edit
+   after undo: live=["Undone."]  checked=false
+   [after undo]
+   card 1: warn-moves=0 lists-in-inspector=0 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   card 2: warn-moves=0 lists-in-inspector=0 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   screenshot: s06-after-undo.png
+   after redo: live=["Phase 1 for Boulevard Saint-Laurent (south-east): people now walk across Boulevard Saint-Laurent (south-east). One check needs attention: movements that meet. Warning: 3 movements now meet, in phase 1. Phase 1: cars from the south-east side going left meet people walking across on the south-east side."]  checked=true
+   [after redo]
+   card 1: warn-moves=3 lists-in-inspector=1 list-items=3 items=["Phase 1: cars from the south-east side going left meet people walking across on the south-east side.","Phase 1: cars from the south-east side going straight on meet people walking across on the south-east side.","Phase 1: cars from the south-east side going right meet people walking across on the south-east side."]
+     moves=["ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1"]
+   card 2: warn-moves=0 lists-in-inspector=1 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   screenshot: s07-after-redo.png
+   unrelated edit (phase 2 crossing off): live=["Phase 2 for Avenue Laurier Ouest (south-west): people no longer walk across Boulevard Saint-Laurent (south-east). One check needs attention: movements that meet. Phase 2 no longer follows a ready-made pattern."]
+   [after unrelated edit]
+   card 1: warn-moves=3 lists-in-inspector=1 list-items=3 items=["Phase 1: cars from the south-east side going left meet people walking across on the south-east side.","Phase 1: cars from the south-east side going straight on meet people walking across on the south-east side.","Phase 1: cars from the south-east side going right meet people walking across on the south-east side."]
+     moves=["ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1"]
+   card 2: warn-moves=0 lists-in-inspector=1 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   screenshot: s08-after-unrelated.png
+   unrelated edit reverted (phase 2 crossing on): live=["Phase 2 for Avenue Laurier Ouest (south-west): people now walk across Boulevard Saint-Laurent (south-east). One check needs attention: movements that meet."]
+   second crossing on in phase 1 (sig-walks-0-4): live=["Phase 1 for Boulevard Saint-Laurent (south-east): people now walk across Boulevard Saint-Laurent (north-west). One check needs attention: movements that meet. Warning: Phase 1: cars from the south-east side going straight on meet people walking across on the north-west side."]
+   [second crossing]
+   card 1: warn-moves=3 lists-in-inspector=1 list-items=4 items=["Phase 1: cars from the south-east side going left meet people walking across on the south-east side.","Phase 1: cars from the south-east side going straight on meet people walking across on the south-east side.","Phase 1: cars from the south-east side going right meet people walking across on the south-east side.","Phase 1: cars from the south-east side going straight on meet people walking across on the north-west side."]
+     moves=["ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1"]
+   card 2: warn-moves=0 lists-in-inspector=1 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   screenshot: s09-second-crossing.png
+
+6. Many conflicts: switch on every unchecked crossing and bike box in phases 1 and 2
+   [many]
+   card 1: warn-moves=3 lists-in-inspector=2 list-items=5 items=["Phase 1: cars from the south-east side going left meet people walking across on the south-east side.","Phase 1: cars from the south-east side going straight on meet people walking across on the south-east side.","Phase 1: cars from the south-east side going right meet people walking across on the south-east side.","Phase 1: cars from the south-east side going straight on meet people walking across on the north-west side.","Phase 1: cars from the south-east side going straight on cross bikes riding on the south-west side."]
+     moves=["ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1"]
+   card 2: warn-moves=3 lists-in-inspector=2 list-items=4 items=["Phase 2: cars from the south-west side going straight on meet people walking across on the north-east side.","Phase 2: cars from the south-west side going straight on meet people walking across on the south-west side.","Phase 2: cars from the south-west side going right meet people walking across on the south-west side.","Phase 2: cars from the south-west side going left meet people walking across on the south-west side."]
+     moves=["ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1"]
+   screenshot: s10-many-cards.png
+   screenshot: list-en-many-phase1-full.png (#inspector .phase-conflicts on a 1440x3200 window; clientHeight=751 scrollHeight=751)
+   check class="bad"
+   check text="Movements that meet : fails Phase 1: cars from the south-east side going left meet people walking across on the south-east side. Phase 1: cars from the south-east side going straight on meet people walking across on the south-east side. Phase 1: cars from the south-east side going right meet people walking across on the south-east side. And 6 more meetings."
+   check sentence-ish segments: 4; "And N more" present: true
+   screenshot: checks-3-nine-conflicts-fail-row.png (the "Movements that meet" check row itself)
+   screenshot: checks-3-nine-conflicts-fail-panel.png (#p-checks on a 1440x3200 window; clientHeight=1147 scrollHeight=1147)
+
+5. Switch the crossings back off
+   [after Restore (suggested)]
+   card 1: warn-moves=0 lists-in-inspector=0 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   card 2: warn-moves=0 lists-in-inspector=0 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   check class="ok" text="Movements that meet : passes No phase puts movements together that meet"
+   screenshot: checks-4-restored-pass-row.png (the "Movements that meet" check row itself)
+   screenshot: checks-4-restored-pass-panel.png (#p-checks on a 1440x3200 window; clientHeight=1015 scrollHeight=1015)
+   screenshot: s11-restored-cards.png
+
+5b. Switch the single crossing off again (undo path was step 4; here toggling manually)
+   [on]
+   card 1: warn-moves=3 lists-in-inspector=1 list-items=3 items=["Phase 1: cars from the south-east side going left meet people walking across on the south-east side.","Phase 1: cars from the south-east side going straight on meet people walking across on the south-east side.","Phase 1: cars from the south-east side going right meet people walking across on the south-east side."]
+     moves=["ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1"]
+   card 2: warn-moves=0 lists-in-inspector=1 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   switched off: checked=false live=["Phase 1 for Boulevard Saint-Laurent (south-east): people no longer walk across Boulevard Saint-Laurent (south-east). 4 streets, traffic signal. Every check passes."]
+   [off again]
+   card 1: warn-moves=0 lists-in-inspector=0 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   card 2: warn-moves=0 lists-in-inspector=0 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   screenshot: s12-off-again-cards.png
+   check class="ok" text="Movements that meet : passes No phase puts movements together that meet"
+   screenshot: checks-5-off-again-pass-row.png (the "Movements that meet" check row itself)
+   screenshot: checks-5-off-again-pass-panel.png (#p-checks on a 1440x3200 window; clientHeight=1015 scrollHeight=1015)
+
+8. French (fr-CA)
+   live fr: ["Phase 1 de Boulevard Saint-Laurent (sud-est) : les piétons traversent maintenant Boulevard Saint-Laurent (sud-est). Une vérification est à corriger : mouvements qui se rencontrent. Attention : 3 mouvements se rencontrent maintenant, à la phase 1. Phase 1 : les voitures du côté sud-est qui vont à gauche rencontrent les piétons qui traversent du côté sud-est. La phase 1 ne suit plus un modèle prêt à l’emploi."]
+   [fr]
+   card 1: warn-moves=3 lists-in-inspector=1 list-items=3 items=["Phase 1 : les voitures du côté sud-est qui vont à gauche rencontrent les piétons qui traversent du côté sud-est.","Phase 1 : les voitures du côté sud-est qui vont tout droit rencontrent les piétons qui traversent du côté sud-est.","Phase 1 : les voitures du côté sud-est qui vont à droite rencontrent les piétons qui traversent du côté sud-est."]
+     moves=["ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1","ph-move lit warn|dash=2137.6 1140.1"]
+   card 2: warn-moves=0 lists-in-inspector=1 list-items=0 items=[]
+     moves=["ph-move lit|dash=null","ph-move lit|dash=null","ph-move lit|dash=null"]
+   screenshot: s13-fr-cards.png
+   screenshot: list-fr-phase1-full.png (#inspector .phase-conflicts on a 1440x3200 window; clientHeight=511 scrollHeight=511)
+   fr check class="bad" text="Mouvements qui se rencontrent : échec Phase 1 : les voitures du côté sud-est qui vont à gauche rencontrent les piétons qui traversent du côté sud-est. Phase 1 : les voitures du côté sud-est qui vont tout droit rencontrent les piétons qui traversent du côté sud-est. Phase 1 : les voitures du côté sud-est qui vont à droite rencontrent les piétons qui traversent du côté sud-est."
+   screenshot: checks-6-fr-fail-row.png (the "Mouvements qui se rencontrent" check row itself)
+   screenshot: checks-6-fr-fail-panel.png (#p-checks on a 1440x3200 window; clientHeight=1309 scrollHeight=1309)

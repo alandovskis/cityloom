@@ -1,0 +1,9 @@
+test result: ok. 2432 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 6.74s
+  ✓  52 [chromium] › tests/junction.spec.ts:858:3 › signal timing on a junction of the city › the last phase stays, and the phase buttons speak French (3.0s)
+  ✓  56 [chromium] › tests/junction.spec.ts:923:1 › the turbo layouts are a radio group: one tab stop, the arrow keys choose, re-choosing says nothing (2.1s)
+  ✓  51 [chromium] › tests/junction.spec.ts:794:3 › signal timing on a junction of the city › phases are added, moved, removed and restored from the keyboard, with undo, redo, announcements and a reload (4.0s)
+  ✓  57 [chromium] › tests/junction.spec.ts:1002:3 › the approach of an arm whose street is divided › draws the transition and its marks, passes the check, then fails it when the end zone is short (11.8s)
+  ✓  59 [chromium] › tests/junction.spec.ts:1193:3 › a street's transit stop on the arm that meets it › a bus stopped in a lane that only turns fails, and passes when the lane goes straight on (18.3s)
+  ✓  58 [chromium] › tests/junction.spec.ts:1142:3 › a street's transit stop on the arm that meets it › a stop too near the junction is drawn and fails the checks, and passes 20 m out (20.6s)
+
+  59 passed (45.8s)

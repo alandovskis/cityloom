@@ -1,0 +1,121 @@
+=== cargo test --lib conflict ===
+test junction::read_model::tests::a_t_junction_has_nine_conflicts ... ok
+test junction::signal::tests::two_movements_that_cross_in_one_phase_are_a_vehicle_conflict ... ok
+test junction::signal::tests::traffic_that_starts_at_or_goes_straight_into_a_walked_crossing_is_a_walk_conflict ... ok
+test junction::signal::tests::a_turn_that_gives_way_to_people_crossing_is_not_a_conflict ... ok
+test junction::signal::tests::a_scramble_has_no_conflict ... ok
+test junction::read_model::tests::a_roundabout_has_no_crossing_conflicts ... ok
+test junction::signal::tests::removing_the_cause_removes_the_conflict ... ok
+test map::overlay::tests::a_street_in_conflict_with_an_area_says_so ... ok
+test junction::read_model::tests::the_four_way_has_the_textbook_thirty_two_conflicts ... ok
+test junction::signal::tests::a_movement_that_crosses_a_bike_movement_that_runs_is_a_ride_conflict ... ok
+test map::style::tests::a_street_in_conflict_is_tinted_and_dashed_so_it_is_not_told_by_colour_alone ... ok
+test junction::signal::tests::a_stored_plan_with_repeats_is_read_without_them_so_its_conflicts_stay_few ... ok
+test junction::signal::tests::the_suggested_plan_has_no_conflict_on_the_four_way_a_five_way_a_t_and_streets_with_bike_lanes ... ok
+test junction::notes::tests::the_note_on_conflicts_depends_on_how_the_junction_is_run ... ok
+test junction::tests::conflicts_are_counted_and_the_note_follows_the_control ... ok
+test map::vm::tests::a_street_in_conflict_with_an_area_rule_is_not_a_city_where_every_check_passes ... ok
+test junction::read_model::tests::the_suggested_plan_has_no_conflict_and_the_check_passes ... ok
+test restriction::model::tests::a_conflict_is_a_whole_sentence_with_its_count ... ok
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 2416 filtered out; finished in 0.02s
+=== cargo test --lib parity ===
+test shared::i18n::tests::parity_reports_a_file_that_does_not_parse ... ok
+test shared::i18n::tests::parity_walks_the_variants_of_a_select ... ok
+test shared::i18n::tests::parity_reports_a_message_in_one_language_only_and_a_variable_that_differs ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2431 filtered out; finished in 0.00s
+=== cargo test --lib dedup ===
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2434 filtered out; finished in 0.00s
+=== cargo test --lib give_way ===
+test junction::read_model::tests::a_stock_signal_gives_time_to_cross_because_turning_drivers_give_way ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2433 filtered out; finished in 0.00s
+=== cargo test --lib suggested ===
+test junction::model::tests::the_plan_round_trips_and_an_old_record_loads_as_suggested ... ok
+test junction::signal::tests::the_suggested_plan_has_no_conflict_on_the_four_way_a_five_way_a_t_and_streets_with_bike_lanes ... ok
+test junction::read_model::tests::the_sheet_says_whether_the_plan_is_suggested_and_flags_a_street_left_without_a_phase ... ok
+test junction::read_model::tests::suggested_goes_with_an_edit_and_comes_back_with_the_restore ... ok
+test junction::read_model::tests::the_suggested_plan_has_no_conflict_and_the_check_passes ... ok
+test junction::tests::the_signal_section_has_the_phase_buttons_and_says_whether_the_plan_is_suggested ... ok
+test city::edits::tests::a_junction_record_with_an_edited_signal_plan_is_written_as_the_signal_version_and_older_records_read_as_suggested ... ok
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 2427 filtered out; finished in 0.07s
+=== cargo test --lib meet ===
+test junction::geometry::tests::curb_lines_of_a_square_crossing_meet_at_the_expected_corner ... ok
+test junction::geometry::tests::circle_meets_line_at_pythagoras ... ok
+test junction::geometry::tests::opposite_arms_do_not_meet ... ok
+test junction::read_model::tests::a_turbo_ring_is_the_blocks_outer_edge_and_fits_the_streets_that_meet_it ... ok
+test junction::iso::tests::no_wall_is_drawn_where_two_surfaces_at_the_same_height_meet_and_one_is_where_they_differ ... ok
+test junction::read_model::tests::the_arms_meet_the_ring_on_its_outline ... ok
+test junction::turbo_spiral::tests::an_arm_meets_the_outline_at_its_farthest_hit ... ok
+test junction::turbo_spiral::tests::a_divider_stops_where_a_street_meets_the_ring_and_starts_again_beyond_it ... ok
+test junction::turbo_spiral::tests::the_edges_meet_across_the_axis_within_the_5_cm_of_the_dutch_figure ... ok
+test junction::read_model::tests::the_bike_lane_reaches_the_track_where_the_two_corners_of_a_street_meet_it_at_different_distances ... ok
+test street::iso::projection::tests::lines_along_the_street_meet_at_one_vanishing_point_on_the_horizon ... ok
+test shared::contrast::tests::a_movement_that_meets_something_is_3_to_1_on_its_road_and_its_warning_text_4_5_to_1_with_forced_colours ... ok
+test street::iso::markings::tests::a_bike_lane_with_its_own_curb_has_no_line_where_it_meets_the_roadway_and_without_one_has ... ok
+test junction::read_model::tests::a_street_15_degrees_off_square_and_a_cycle_track_still_meet_the_ring_and_cross_no_divider ... ok
+test junction::phase_svg::tests::a_movement_that_meets_something_is_dashed_and_marked_apart_from_colour ... ok
+test city::import::tests::a_meeting_that_cannot_be_drawn_as_a_junction_is_not_offered_as_one ... ok
+test street::iso::tests::the_label_names_the_two_zones_where_they_meet_in_both_languages ... ok
+test junction::tests::undoing_the_edit_that_made_movements_meet_does_not_warn_and_redoing_it_does ... ok
+test junction::tests::the_checks_list_fails_while_movements_meet_and_passes_again ... ok
+test city::import::tests::a_meeting_that_cannot_be_drawn_is_titled_as_a_connection_on_its_street ... ok
+test sync::tests::rules_made_before_syncing_are_renamed_once_so_two_devices_r1_never_meet ... ok
+test city::import::tests::a_places_title_follows_the_names_of_the_streets_that_meet_there ... ok
+test junction::tests::an_edit_that_makes_movements_meet_is_allowed_and_warned_about_once_in_both_languages ... ok
+test city::model::tests::a_junction_arm_whose_street_key_names_a_street_that_does_not_meet_it_is_not_applied ... ok
+test city::model::tests::a_place_is_titled_by_the_streets_that_meet_there_in_each_language ... ok
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 2409 filtered out; finished in 0.19s
+=== cargo test --lib warn ===
+test shared::contrast::tests::a_movement_that_meets_something_is_3_to_1_on_its_road_and_its_warning_text_4_5_to_1_with_forced_colours ... ok
+test account::tests::the_delete_warning_says_the_stored_work_goes_too ... ok
+test junction::read_model::tests::a_turn_that_gives_way_to_a_crossing_is_not_warned_about ... ok
+test junction::plan_svg::tests::a_crossing_that_is_too_far_is_drawn_as_a_warning ... ok
+test junction::tests::undoing_the_edit_that_made_movements_meet_does_not_warn_and_redoing_it_does ... ok
+test junction::read_model::tests::two_movements_that_cross_are_a_warning_in_both_languages ... ok
+test junction::read_model::tests::the_check_lists_only_the_first_few_warnings ... ok
+test junction::tests::the_card_of_a_phase_lists_its_warnings_outside_the_button_and_a_phase_without_has_no_list ... ok
+test junction::read_model::tests::traffic_across_a_bike_movement_that_rides_is_a_warning_in_both_languages ... ok
+test junction::read_model::tests::traffic_into_a_walked_crossing_is_a_warning_in_both_languages_and_a_failing_check_until_the_cause_goes ... ok
+test junction::tests::an_edit_that_makes_movements_meet_is_allowed_and_warned_about_once_in_both_languages ... ok
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 2423 filtered out; finished in 0.04s
+=== cargo test --lib junction::read_model::tests::traffic ===
+test junction::read_model::tests::traffic_on_a_turbo_only_merges_and_diverges_and_the_lane_checks_run_on_the_layouts_lanes ... ok
+test junction::read_model::tests::traffic_across_a_bike_movement_that_rides_is_a_warning_in_both_languages ... ok
+test junction::read_model::tests::traffic_into_a_walked_crossing_is_a_warning_in_both_languages_and_a_failing_check_until_the_cause_goes ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 2431 filtered out; finished in 0.03s
+=== cargo test --lib junction::read_model::tests::two_movements ===
+test junction::read_model::tests::two_movements_that_cross_are_a_warning_in_both_languages ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2433 filtered out; finished in 0.01s
+=== cargo test --lib ftl_files_have_the_same ===
+test sync::tests::the_ftl_files_have_the_same_messages_and_variables ... ok
+test place::tests::the_place_ftl_files_have_the_same_messages_and_variables ... ok
+test city::tests::the_city_ftl_files_have_the_same_messages_and_variables ... ok
+test account::tests::the_ftl_files_have_the_same_messages_and_variables ... ok
+test shell::tests::the_shell_ftl_files_have_the_same_messages_and_variables ... ok
+test restriction::tests::the_restriction_ftl_files_have_the_same_messages_and_variables ... ok
+test map::tests::the_map_ftl_files_have_the_same_messages_and_variables ... ok
+test street::tests::the_street_ftl_files_have_the_same_messages_and_variables ... ok
+test junction::tests::the_junction_ftl_files_have_the_same_messages_and_variables ... ok
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 2425 filtered out; finished in 0.00s
+=== cargo test --lib i18n_guard ===
+test i18n_guard::tests::a_message_id_is_kebab_case_with_a_hyphen ... ok
+test i18n_guard::tests::it_leaves_test_items_alone_when_collecting_keys ... ok
+test i18n_guard::tests::it_reads_char_raw_and_multi_line_literals_as_the_compiler_does ... ok
+test i18n_guard::tests::a_dead_allow_list_entry_is_found_by_the_literals_not_by_the_text ... ok
+test i18n_guard::tests::it_leaves_ids_classes_paths_keys_and_comments_alone ... ok
+test i18n_guard::tests::it_reports_a_mistyped_key_in_a_call_a_table_and_a_const ... ok
+test i18n_guard::tests::it_flags_the_text_nodes_of_the_notes_table_and_reports_their_lines ... ok
+test i18n_guard::tests::it_finds_words_in_text_nodes_format_strings_and_calls ... ok
+test i18n_guard::tests::it_skips_test_items_at_any_depth_and_only_those ... ok
+test i18n_guard::tests::it_scans_event_handlers_which_are_code ... ok
+test i18n_guard::every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason ... ok
+test i18n_guard::migrated_files_have_no_hardcoded_text ... ok
+test i18n_guard::no_allowed_literal_or_non_message_id_is_dead ... ok
+test i18n_guard::every_message_id_used_in_a_migrated_file_exists_in_both_languages ... ok
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 2420 filtered out; finished in 1.16s
+=== cargo test --lib junction::tests::undoing ===
+test junction::tests::undoing_the_edit_that_made_movements_meet_does_not_warn_and_redoing_it_does ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2433 filtered out; finished in 0.01s
+=== cargo test --lib junction::tests::an_edit_that_makes ===
+test junction::tests::an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languages ... ok
+test junction::tests::an_edit_that_makes_movements_meet_is_allowed_and_warned_about_once_in_both_languages ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2432 filtered out; finished in 0.04s
