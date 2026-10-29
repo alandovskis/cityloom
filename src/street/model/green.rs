@@ -28,6 +28,12 @@ pub const SIGHTLINE_MM: i32 = 10_000;
 /// UNVERIFIED (placeholder): 10 000 mm.
 pub const BIOSWALE_MIN_MM: i32 = 10_000;
 
+/// The narrowest a default tree pit is made to leave the walkway beside it, in millimetres; a sidewalk that would
+/// leave less gets the pit as wide as itself.
+///
+/// UNVERIFIED (placeholder): 600 mm.
+const MIN_TREE_WIDTH_MM: i32 = 600;
+
 /// What an element is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -544,7 +550,13 @@ pub fn default_across(segs: &[Segment], host: usize, kind: GreenKind, size: Opti
     let host_mm = to - from;
     let on_sidewalk = KINDS[segs[host].kind].id == "sidewalk";
     let width = width_mm.filter(|w| *w > 0).unwrap_or_else(|| match kind {
-        GreenKind::Tree => size.unwrap_or(TreeSize::M).default_pit_mm(),
+        GreenKind::Tree => {
+            // The pit of its size, narrowed to leave the walkway on a sidewalk (when that leaves a usable pit) and
+            // never wider than its host.
+            let pit = size.unwrap_or(TreeSize::M).default_pit_mm();
+            let path = host_mm - CLEAR_PATH_MM;
+            snap_down(if on_sidewalk && path >= MIN_TREE_WIDTH_MM { pit.min(path) } else { pit.min(host_mm) })
+        }
         _ if on_sidewalk && host_mm - CLEAR_PATH_MM >= SNAP_MM => snap_down(host_mm - CLEAR_PATH_MM),
         _ => host_mm,
     });
@@ -701,18 +713,26 @@ impl Editor {
         if host >= segs.len() {
             return Err(GreenRefusal::OffStreet);
         }
-        let pit = size.map(TreeSize::default_pit_mm);
         let width_mm = form.width_mm.or(own.map(|g| g.width_mm));
         let (offset_mm, width_mm) = default_across(segs, host, form.kind, size, width_mm);
+        // Only a typed offset moves an element that stays on its piece.
+        let own_host = own.and_then(|g| host_at(segs, g.offset_mm));
         let offset_mm = match (form.fine_mm, own) {
             (Some(fine), _) => {
                 let (from, to) = fills(segs, host);
                 (from + to) / 2 + fine
             }
-            (None, Some(g)) if form.host.is_none() => g.offset_mm,
+            (None, Some(g)) if form.host.is_none() || form.host == own_host => g.offset_mm,
             _ => offset_mm,
         };
-        let length_mm = form.length_mm.or(own.map(|g| g.length_mm)).unwrap_or_else(|| pit.unwrap_or(form.kind.default_length_mm()));
+        // A tree with no length is as long as its soil needs (its size's least area over the width), at least its pit.
+        let length_mm = form.length_mm.or(own.map(|g| g.length_mm)).unwrap_or_else(|| match size {
+            Some(size) => {
+                let soil = (size.min_pit_mm2() + i64::from(width_mm) - 1) / i64::from(width_mm.max(1));
+                size.default_pit_mm().max(snap_up(i32::try_from(soil).unwrap_or(i32::MAX - SNAP_MM)))
+            }
+            None => form.kind.default_length_mm(),
+        });
         Ok(Green { kind: form.kind, from_mm: at_mm, length_mm, offset_mm, width_mm, size })
     }
 

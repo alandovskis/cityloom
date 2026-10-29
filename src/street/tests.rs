@@ -1581,7 +1581,7 @@ fn the_curb_cells_share_the_zone_cells_minimum_width_and_scrolling() {
         &editor[i..i + editor[i..].find('}').unwrap()]
     };
     assert!(rule(".curb-cell,\n.stop-cell,\n.zone-cell {").contains("min-width: 24px;"));
-    assert!(rule(".curb-strip,\n.stop-strip,\n.zone-strip {").contains("overflow-x: auto;"));
+    assert!(rule(".curb-strip,\n.stop-strip,\n.green-strip,\n.zone-strip {").contains("overflow-x: auto;"), "the Green row has the same strip box");
     assert!(rule(".curb-cell.failing,\n.stop-cell.failing {").contains("border-bottom-width: 5px;"), "a failing use differs by more than colour");
     assert!(rule(".green-cell {").contains("height: 24px;") && rule(".green-cell {").contains("min-width: 24px;"), "a cell is a target of 24 px");
     assert!(rule(".green-cell.failing {").contains("border-bottom-width: 5px;"), "a failing element differs by more than colour");
@@ -1758,7 +1758,7 @@ fn the_green_row_is_a_listbox_with_one_tab_stop() {
     assert!(h.contains("aria-activedescendant=\"green-2\""), "the last one added is chosen: {h}");
     assert_eq!(count(&h, "aria-selected=\"true\""), 1, "{h}");
     assert!(h.contains(">Trees and planting along the street</h2>") && h.contains("aria-label=\"Trees and planting along the street. "), "{h}");
-    assert!(h.contains("aria-label=\"Tree at 10.0 m, on sidewalk, 10.0 m to 11.9 m, 1.9 m long, 1 of 3\""), "{h}");
+    assert!(h.contains("aria-label=\"Tree at 10.0 m, on sidewalk, 10.0 m to 13.0 m, 3.0 m long, 1 of 3\""), "{h}");
     assert!(h.contains("aria-label=\"Rain garden at 20.0 m, on sidewalk, 20.0 m to 26.0 m, 6.0 m long, 3 of 3\""), "{h}");
     // two elements side by side across lie on two tracks, which the row's height follows
     assert!(h.contains("--tracks: 2"), "{h}");
@@ -1776,7 +1776,7 @@ fn a_green_cell_that_fails_a_check_says_so() {
 fn the_green_row_follows_the_language() {
     let h = green_html(&green_street(Locale::FrCa)).replace(['\u{a0}', '\u{202f}'], " ");
     assert!(h.contains(">Arbres et plantations le long de la rue</h2>"), "{h}");
-    assert!(h.contains("aria-label=\"Arbre à 10,0 m, sur l’élément trottoir, de 10,0 m à 11,9 m, 1,9 m de long, 1 sur 3\""), "{h}");
+    assert!(h.contains("aria-label=\"Arbre à 10,0 m, sur l’élément trottoir, de 10,0 m à 13,0 m, 3,0 m de long, 1 sur 3\""), "{h}");
 }
 
 #[test]

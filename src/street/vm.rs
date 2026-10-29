@@ -2799,7 +2799,7 @@ mod green_tests {
     }
 
     #[test]
-    fn a_new_tree_has_the_pit_of_its_size_against_the_road_side_edge_of_a_sidewalk() {
+    fn a_new_tree_has_a_pit_that_fits_its_sidewalk_against_the_road_side_edge_of_a_sidewalk() {
         let r = rig();
         let left = GreenForm { size: Some(TreeSize::M), ..form(GreenKind::Tree, 10_000, 0) };
         assert!(r.vm.add_green(left));
@@ -2807,12 +2807,64 @@ mod green_tests {
         assert!(r.vm.add_green(right));
         let cells = r.vm.view_now().green.cells.clone();
         let (a, b) = (&cells[0], &cells[1]);
-        assert_eq!((a.to_mm - a.from_mm, a.width_mm), (1_900, 1_900), "the medium tree's pit");
-        assert_eq!((b.to_mm - b.from_mm, b.width_mm), (2_300, 2_300), "the large tree's pit");
+        // On a 3.0 m sidewalk the pit leaves the 1.8 m path (1.2 m wide) and is as long as its soil needs.
+        assert_eq!((a.to_mm - a.from_mm, a.width_mm), (3_000, 1_200), "the medium tree's pit");
+        assert_eq!((b.to_mm - b.from_mm, b.width_mm), (4_200, 1_200), "the large tree's pit");
         // The left sidewalk lies 0..3000 with the road to its right, so the pit is against the right edge.
-        assert_eq!((a.host, a.fine_mm), (Some(0), 500));
+        assert_eq!((a.host, a.fine_mm), (Some(0), 900));
         // The right sidewalk lies 9600..12600 with the road to its left: against the left edge.
-        assert_eq!((b.host, b.fine_mm), (Some(3), -300));
+        assert_eq!((b.host, b.fine_mm), (Some(3), -900));
+    }
+
+    fn failed_green(vm: &StreetVm) -> Vec<&'static str> {
+        vm.view_now().checks.iter().filter(|k| k.id.starts_with("green-") && !k.ok).map(|k| k.id).collect()
+    }
+
+    #[test]
+    fn a_default_tree_passes_its_checks_where_the_host_allows() {
+        let r = rig();
+        assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 0)));
+        assert_eq!(failed_green(&r.vm), Vec::<&str>::new(), "a medium tree on a 3.0 m sidewalk");
+        // A 1.5 m sidewalk is narrower than the path and the pit: the tree is as wide as the sidewalk, long enough for its soil.
+        let narrow = rig_of(&[("sidewalk", 1500, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 1500, None)], Some(LENGTH)).vm;
+        assert!(narrow.add_green(form(GreenKind::Tree, 10_000, 0)));
+        let c = narrow.view_now().green.cells[0].clone();
+        assert_eq!((c.width_mm, c.to_mm - c.from_mm), (1_500, 2_400));
+        assert_eq!(failed_green(&narrow), ["green-clear-path"], "soil and host pass, the walkway honestly fails");
+        // A wide planting strip takes the plain pit.
+        let strip = rig_of(
+            &[("sidewalk", 2000, None), ("planting", 6000, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 2000, None)],
+            Some(LENGTH),
+        )
+        .vm;
+        assert!(strip.add_green(form(GreenKind::Tree, 10_000, 1)));
+        let c = strip.view_now().green.cells[0].clone();
+        assert_eq!((c.width_mm, c.to_mm - c.from_mm), (1_900, 1_900));
+        assert_eq!(failed_green(&strip), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn an_explicit_size_wins_over_the_default_pit() {
+        let r = rig();
+        let f = GreenForm { length_mm: Some(2_000), width_mm: Some(1_000), ..form(GreenKind::Tree, 10_000, 0) };
+        assert!(r.vm.add_green(f));
+        let c = r.vm.view_now().green.cells[0].clone();
+        assert_eq!((c.to_mm - c.from_mm, c.width_mm), (2_000, 1_000));
+    }
+
+    #[test]
+    fn an_empty_fine_field_on_change_keeps_where_the_element_stands_across() {
+        let r = rig();
+        let f = GreenForm { fine_mm: Some(-300), ..form(GreenKind::Tree, 10_000, 0) };
+        assert!(r.vm.add_green(f));
+        let before = r.vm.view_now().green.cells[0].clone();
+        let same_host = GreenForm { host: Some(0), length_mm: Some(3_500), ..GreenForm::new(GreenKind::Tree) };
+        assert!(r.vm.change_green(&same_host));
+        let after = r.vm.view_now().green.cells[0].clone();
+        assert_eq!((after.fine_mm, after.host, after.to_mm - after.from_mm), (before.fine_mm, before.host, 3_500));
+        // Only a typed value moves it.
+        assert!(r.vm.change_green(&GreenForm { fine_mm: Some(300), ..same_host }));
+        assert_eq!(r.vm.view_now().green.cells[0].fine_mm, 300);
     }
 
     #[test]
@@ -2940,7 +2992,7 @@ mod green_tests {
         r.vm.select_green(0);
         let v = r.vm.view_now();
         let c = &v.green.cells[v.green.selected.unwrap()];
-        assert_eq!((c.kind, c.size, c.from_mm, c.host, c.fine_mm, c.width_mm), (GreenKind::Tree, Some(TreeSize::L), 20_000, Some(3), -500, 2_300));
+        assert_eq!((c.kind, c.size, c.from_mm, c.host, c.fine_mm, c.width_mm), (GreenKind::Tree, Some(TreeSize::L), 20_000, Some(3), -500, 1_200));
         r.vm.select_green_relative(1);
         let v = r.vm.view_now();
         let c = &v.green.cells[v.green.selected.unwrap()];
@@ -2960,7 +3012,7 @@ mod green_tests {
         assert!(r.vm.add_green(form(GreenKind::Bed, 30_000, 0)));
         r.said.take();
         r.vm.select_green(0);
-        assert_eq!(r.said.take(), ["Tree at 10.0 m, on sidewalk, 10.0 m to 11.9 m, 1.9 m long, 1 of 2"]);
+        assert_eq!(r.said.take(), ["Tree at 10.0 m, on sidewalk, 10.0 m to 13.0 m, 3.0 m long, 1 of 2"]);
     }
 
     #[test]

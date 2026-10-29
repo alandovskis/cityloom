@@ -1273,6 +1273,7 @@ svg pattern circle {
 }
 .curb-strip,
 .stop-strip,
+.green-strip,
 .zone-strip {
   flex: 1 1 14em;
   min-width: 0;
@@ -1288,7 +1289,8 @@ svg pattern circle {
 }
 .zone-strip:focus-visible,
 .curb-strip:focus-visible,
-.stop-strip:focus-visible {
+.stop-strip:focus-visible,
+.green-strip:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -1388,22 +1390,14 @@ svg pattern circle {
 }
 /* ---- the Green row: a bar for the street's length, a cell for each tree and planting laid along it, on a line of its
    own when it lies beside another across the street (24 px a line, two lines before the row scrolls) ---- */
+/* the box of the other strips (above); its cells lie on lines of 24 px, two before it scrolls */
 .green-strip {
   position: relative;
-  flex: 1 1 14em;
-  min-width: 0;
-  max-width: 100%;
+  display: block;
   box-sizing: border-box;
   height: calc(var(--tracks, 1) * 24px + 6px);
-  min-height: 40px;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 3px;
-  border-radius: 6px;
-}
-.green-strip:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
 }
 .green-cell {
   position: absolute;

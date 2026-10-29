@@ -68,15 +68,34 @@ impl Fields {
     fn form(self, w: SheetWatch) -> Option<GreenForm> {
         let field = |text: String| -> Option<Option<i32>> { if text.trim().is_empty() { Some(None) } else { typed_length(w, &text, None).map(Some) } };
         let kind = GreenKind::ALL.get(self.kind.get_untracked()).copied().unwrap_or(GreenKind::Tree);
+        let at_mm = field(self.at.get_untracked())?;
+        let hosts: Vec<usize> = w.hosts_at(at_mm.unwrap_or(0)).into_iter().map(|(i, _)| i).collect();
+        let (host, fell_back) = effective_host(&hosts, &self.host.get_untracked());
+        let fine_mm = if fell_back {
+            self.fine.set(String::new());
+            None
+        } else {
+            field(self.fine.get_untracked())?
+        };
         Some(GreenForm {
             kind,
             size: (kind == GreenKind::Tree).then(|| SIZES[self.size.get_untracked().min(SIZES.len() - 1)].0),
             length_mm: field(self.length.get_untracked())?,
             width_mm: field(self.width.get_untracked())?,
-            at_mm: field(self.at.get_untracked())?,
-            host: self.host.get_untracked().parse().ok(),
-            fine_mm: field(self.fine.get_untracked())?,
+            at_mm,
+            host,
+            fine_mm,
         })
+    }
+}
+
+/// The piece the host select shows and the form acts on: the one held when the section at this place has it, else the
+/// first that can hold an element. The second is true when a piece was held and the place does not have it, so that
+/// the offset from that piece's middle means nothing here.
+fn effective_host(hosts: &[usize], held: &str) -> (Option<usize>, bool) {
+    match held.parse::<usize>().ok().filter(|h| hosts.contains(h)) {
+        Some(h) => (Some(h), false),
+        None => (hosts.first().copied(), !held.trim().is_empty()),
     }
 }
 
@@ -116,6 +135,17 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
         let typed = f.at.get();
         if typed.trim().is_empty() { 0 } else { crate::shared::units::parse_length_mm(&typed, w.units()).unwrap_or(0) }
     };
+    let host_ids = move || w.hosts_at(at_mm()).into_iter().map(|(i, _)| i).collect::<Vec<_>>();
+    let host_value = move || effective_host(&host_ids(), &f.host.get()).0.map(|h| h.to_string()).unwrap_or_default();
+    // A piece held for another place is let go of, with the offset from its middle.
+    #[cfg(target_arch = "wasm32")]
+    Effect::new(move |_| {
+        let (host, fell_back) = effective_host(&host_ids(), &f.host.get());
+        if fell_back {
+            f.host.set(host.map(|h| h.to_string()).unwrap_or_default());
+            f.fine.set(String::new());
+        }
+    });
     let kind_options = move || {
         GreenKind::ALL
             .iter()
@@ -216,7 +246,7 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
                         <label for="green-host">{move || text("st-green-host")}</label>
                         <select
                             id="green-host"
-                            prop:value=move || f.host.get()
+                            prop:value=host_value
                             on:change=move |e| {
                                 f.host.set(event_target::<HtmlSelectElement>(&e).value());
                                 // The offset from the middle of the old piece means nothing on another: the new one takes its default.
@@ -252,5 +282,19 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
                 </div>
             </section>
         </Show>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::effective_host;
+
+    #[test]
+    fn the_host_shown_is_the_one_held_when_the_place_has_it_and_else_the_first() {
+        let hosts = [0, 3];
+        assert_eq!(effective_host(&hosts, "3"), (Some(3), false));
+        assert_eq!(effective_host(&hosts, ""), (Some(0), false), "nothing chosen: the first, and a typed offset counts");
+        assert_eq!(effective_host(&hosts, "5"), (Some(0), true), "a piece the section here does not have");
+        assert_eq!(effective_host(&[], "3"), (None, true), "no piece can hold it here");
     }
 }
