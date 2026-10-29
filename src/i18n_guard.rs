@@ -159,6 +159,7 @@ const ALLOWED: &[&str] = &[
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("the sync document serialises", "a panic message about the code, never shown"),
     ("a street and a junction have a section", "a panic message about the code, never shown"),
+    ("lit warn", "two CSS classes of a movement in a phase drawing"),
     ("OpenStreetMap", "a provider's brand name, not translated"),
     ("Google", "a provider's brand name, not translated"),
     ("Microsoft", "a provider's brand name, not translated"),

@@ -597,7 +597,10 @@ jn-conflict-walk = Phase { $n } : { $mv } rencontrent les piétons qui traversen
 jn-conflict-ride = Phase { $n } : { $mv } croisent les vélos du côté { $side }.
 jn-conflict-list = Avertissements de la phase { $n }
 jn-conflict-heard = Attention : { $conflict }
-jn-conflict-heard-many = Attention : { $count } mouvements se rencontrent maintenant, aux phases { $list }.
+jn-conflict-heard-many = Attention : { $count } mouvements se rencontrent maintenant, { $phases ->
+    [one] à la phase
+   *[other] aux phases
+} { $list }.
 jn-check-signal-conflicts = Mouvements qui se rencontrent
 jn-check-signal-conflicts-ok = Aucune phase ne réunit des mouvements qui se rencontrent
 jn-check-signal-conflicts-bad = { $list }

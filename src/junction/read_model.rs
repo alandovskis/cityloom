@@ -849,7 +849,7 @@ fn move_said(m: signal::Move, arms: &[ArmView]) -> Said {
 }
 
 /// A conflict of phase `n` (from 0) as a sentence: the movement, and what it meets.
-fn conflict_said(n: usize, c: &signal::Conflict, arms: &[ArmView]) -> Said {
+pub(super) fn conflict_said(n: usize, c: &signal::Conflict, arms: &[ArmView]) -> Said {
     let phase = Arg::Num(n as i64 + 1);
     let side = |uid: u32| Arg::Said(Box::new(compass_said(arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.bearing))));
     let said = |m: signal::Move| Arg::Said(Box::new(move_said(m, arms)));

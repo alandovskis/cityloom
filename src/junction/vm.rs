@@ -11,6 +11,7 @@ use crate::city::binding::{CityBinding, Place};
 use crate::junction::frame::Frame;
 use crate::junction::model::{Junction, Refusal, State, Target};
 use crate::junction::read_model::JView;
+use crate::junction::signal;
 use crate::junction::text;
 use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
@@ -63,6 +64,9 @@ pub struct JunctionVm {
     /// How the plan was last drawn, for turning a pointer position into a point on it.
     frame: Cell<Option<Frame>>,
 }
+
+/// A conflict of the signal plan: its phase's place, the phase's street, and what meets.
+type Meeting = (usize, u32, crate::junction::signal::Conflict);
 
 /// Whether an edit says which phases it took off their ready-made pattern.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -191,10 +195,11 @@ impl JunctionVm {
 
     fn apply_with<R: Into<bool> + Copy>(&self, f: impl FnOnce(&mut Junction) -> R, note: PatternNote) -> R {
         let before = (note == PatternNote::Report).then(|| self.pattern_state()).flatten();
+        let meeting = self.meetings();
         let r = self.edit(f);
         if r.into() {
             let lost = self.lost_since(before);
-            self.say_edit_with(&lost);
+            self.say_edit_with(&lost, &meeting);
         } else {
             self.say_refusal();
         }
@@ -251,7 +256,6 @@ impl JunctionVm {
     }
 
     fn toggle_phase_movement(&self, index: usize, uid: u32, ride: bool) -> bool {
-        use crate::junction::signal;
         // The pattern of the phase, as the suggestion or the person's plan has it.
         let pattern = || {
             self.read(|j| {
@@ -264,13 +268,14 @@ impl JunctionVm {
             self.say_refusal();
             return false;
         };
+        let meeting = self.meetings();
         let done = self.edit(|j| if ride { j.set_phase_ride(index, uid, !on) } else { j.set_phase_walk(index, uid, !on) });
         if done {
             let lost: Vec<usize> = match pattern() {
                 Some((after, _)) if before != signal::Pattern::Custom && after == signal::Pattern::Custom => vec![index],
                 _ => Vec::new(),
             };
-            self.say_edit_with(&lost);
+            self.say_edit_with(&lost, &meeting);
         } else {
             self.say_refusal();
         }
@@ -299,9 +304,10 @@ impl JunctionVm {
     pub fn end_gesture(&self, commit: bool) {
         if commit {
             let before = self.read(|j| j.gesture_baseline().filter(|b| b.signal_plan.is_some()).map(|b| (b.clone(), j.region)));
+            let meeting = self.read(|j| j.gesture_baseline().map(|b| signal::meetings(b, j.region)).unwrap_or_default());
             if self.edit(|j| j.end_gesture()) {
                 let lost = self.lost_since(before);
-                self.say_edit_with(&lost);
+                self.say_edit_with(&lost, &meeting);
             } else {
                 self.say_selection();
             }
@@ -311,25 +317,28 @@ impl JunctionVm {
     }
 
     pub fn undo(&self) -> bool {
+        let meeting = self.meetings();
         let done = self.edit(|j| j.undo());
         if done {
-            self.ports.announcer.say(&self.i18n.tr_now("jn-undone", &Args::new()));
+            self.say_with_meetings(self.i18n.tr_now("jn-undone", &Args::new()), &meeting);
         }
         done
     }
 
     pub fn redo(&self) -> bool {
+        let meeting = self.meetings();
         let done = self.edit(|j| j.redo());
         if done {
-            self.say_edit();
+            self.say_edit_with(&[], &meeting);
         }
         done
     }
 
     pub fn reset(&self) -> bool {
+        let meeting = self.meetings();
         let done = self.edit(|j| j.reset());
         if done {
-            self.ports.announcer.say(&self.i18n.tr_now("jn-started-over", &Args::new()));
+            self.say_with_meetings(self.i18n.tr_now("jn-started-over", &Args::new()), &meeting);
         }
         done
     }
@@ -380,32 +389,68 @@ impl JunctionVm {
         binding.keep_junction(self.core.read(|j| j.snapshot()))
     }
 
-    fn say_edit(&self) {
-        self.say_edit_with(&[]);
-    }
-
-    /// The edit's text, then a sentence for each phase (from 0) the edit took off its ready-made pattern.
-    fn say_edit_with(&self, lost: &[usize]) {
+    /// The edit's text, then a sentence for the movements that now meet and did not before (`meeting`), then one for each
+    /// phase (from 0) the edit took off its ready-made pattern.
+    fn say_edit_with(&self, lost: &[usize], meeting: &[Meeting]) {
         if let Some(mut t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
-            if let Some(note) = self.lost_note(lost) {
+            for note in self.meeting_note(meeting).into_iter().chain(self.lost_note(lost)) {
                 t = format!("{t} {note}");
             }
             self.ports.announcer.say(&t);
         }
     }
 
-    /// One sentence for the phases (from 0) that came off their ready-made pattern: "Phase 2 no longer follows ...", or
-    /// "Phases 1, 2 and 3 no longer follow ..." for several. None when there are none.
-    pub(super) fn lost_note(&self, lost: &[usize]) -> Option<String> {
-        let numbers: Vec<String> = lost.iter().map(|&i| (i + 1).to_string()).collect();
-        let (last, rest) = numbers.split_last()?;
+    /// Says `text`, then the sentence for the movements that meet now and did not before.
+    fn say_with_meetings(&self, text: String, meeting: &[Meeting]) {
+        let t = match self.meeting_note(meeting) {
+            Some(note) => format!("{text} {note}"),
+            None => text,
+        };
+        self.ports.announcer.say(&t);
+    }
+
+    /// The movements that meet in the signal plan now, each with its phase's street.
+    fn meetings(&self) -> Vec<Meeting> {
+        self.read(|j| signal::meetings(j.current(), j.region))
+    }
+
+    /// One sentence for the conflicts that arose since `before`: the warning itself when there is one, a count and the
+    /// phases when there are several. None when none arose (one that was there already is not said again).
+    fn meeting_note(&self, before: &[Meeting]) -> Option<String> {
+        let v = self.view_now();
+        let new: Vec<Meeting> = self.meetings().into_iter().filter(|(_, uid, c)| !before.iter().any(|(_, u, b)| u == uid && b == c)).collect();
+        let (first, rest) = new.split_first()?;
         if rest.is_empty() {
-            return Some(self.i18n.tr_now("jn-pattern-lost", &Args::new().str("n", last.clone())));
+            let said = say_now(&self.i18n, self.units_now(), &super::read_model::conflict_said(first.0, &first.2, &v.arms));
+            return Some(self.i18n.tr_now("jn-conflict-heard", &Args::new().str("conflict", said)));
+        }
+        let mut phases: Vec<usize> = new.iter().map(|m| m.0).collect();
+        phases.dedup();
+        let list = self.number_list(&phases);
+        let args = Args::new().num("count", new.len() as i64).num("phases", phases.len() as i64).str("list", list);
+        Some(self.i18n.tr_now("jn-conflict-heard-many", &args))
+    }
+
+    /// "1", "1 and 2", "1, 2 and 3": the places (from 0) as phase numbers.
+    fn number_list(&self, places: &[usize]) -> String {
+        let numbers: Vec<String> = places.iter().map(|&i| (i + 1).to_string()).collect();
+        let Some((last, rest)) = numbers.split_last() else { return String::new() };
+        if rest.is_empty() {
+            return last.clone();
         }
         let head =
             rest.iter().cloned().reduce(|head, tail| self.i18n.tr_now("jn-list-comma", &Args::new().str("head", head).str("tail", tail))).unwrap_or_default();
-        let list = self.i18n.tr_now("jn-ph-and", &Args::new().str("head", head).str("tail", last.clone()));
-        Some(self.i18n.tr_now("jn-pattern-lost-many", &Args::new().str("list", list)))
+        self.i18n.tr_now("jn-ph-and", &Args::new().str("head", head).str("tail", last.clone()))
+    }
+
+    /// One sentence for the phases (from 0) that came off their ready-made pattern: "Phase 2 no longer follows ...", or
+    /// "Phases 1, 2 and 3 no longer follow ..." for several. None when there are none.
+    pub(super) fn lost_note(&self, lost: &[usize]) -> Option<String> {
+        match lost {
+            [] => None,
+            [one] => Some(self.i18n.tr_now("jn-pattern-lost", &Args::new().str("n", (one + 1).to_string()))),
+            _ => Some(self.i18n.tr_now("jn-pattern-lost-many", &Args::new().str("list", self.number_list(lost)))),
+        }
     }
 
     fn say_refusal(&self) {
@@ -438,10 +483,12 @@ impl crate::shell::Target for JunctionVm {
 
     fn apply_region(&self, region: usize) -> bool {
         let before = self.pattern_state();
+        let meeting = self.meetings();
         let changed = self.edit(|j| j.set_region(region));
         if changed {
-            if let Some(note) = self.lost_note(&self.lost_since(before)) {
-                self.ports.announcer.say(&note);
+            let notes: Vec<String> = self.meeting_note(&meeting).into_iter().chain(self.lost_note(&self.lost_since(before))).collect();
+            if !notes.is_empty() {
+                self.ports.announcer.say(&notes.join(" "));
             }
         }
         changed

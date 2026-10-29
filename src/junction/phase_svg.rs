@@ -1,7 +1,8 @@
 //! One phase of a traffic signal as a small drawing of the junction: the vehicle movements the phase serves as arrows,
 //! the crossings that are walked as bars and the bike movements that ride as bike symbols, all lit; what does not run
-//! is muted (a dashed outline, a faint bike). Pure: the model's view in, markup out, no frame and no wording (the
-//! card around it says what it shows, in words: the drawing is decorative).
+//! is muted (a dashed outline, a faint bike); a movement that meets something in the phase is dashed and marked `warn`.
+//! Pure: the model's view in, markup out, no frame and no wording (the card around it says what it shows, in words: the
+//! drawing is decorative).
 
 use std::fmt::Write;
 
@@ -55,7 +56,7 @@ fn lane_point(a: &ArmView, side: f64, unit: f64, leaving: bool) -> P {
 }
 
 /// An arrow from the entering lane of `from` to the leaving lane of `to`: straight on, or a curve round the corner.
-fn movement(from: &ArmView, to: &ArmView, class: u8, side: f64, unit: f64) -> String {
+fn movement(from: &ArmView, to: &ArmView, class: u8, side: f64, unit: f64, warn: bool) -> String {
     let a = lane_point(from, side, unit, false);
     let b = lane_point(to, side, unit, true);
     let (din, dout) = (dir_of(from.bearing as f64), dir_of(to.bearing as f64));
@@ -78,8 +79,12 @@ fn movement(from: &ArmView, to: &ArmView, class: u8, side: f64, unit: f64) -> St
         Some(c) => format!("M{}Q{} {}", pt(a), pt(c), pt(base)),
         None => format!("M{}L{}", pt(a), pt(base)),
     };
+    // A movement that meets something is dashed (in the drawing's own unit, like a walk that does not run): the cue is
+    // not colour alone.
+    let dashes = if warn { format!(" stroke-dasharray=\"{} {}\"", f1(unit * 3.0), f1(unit * 1.6)) } else { String::new() };
     format!(
-        "<g class=\"ph-move lit\"><path class=\"ph-line\" fill=\"none\" stroke-width=\"{}\" d=\"{line}\"/><path class=\"ph-head\" d=\"M{}L{}L{}Z\"/></g>",
+        "<g class=\"ph-move {}\"><path class=\"ph-line\" fill=\"none\" stroke-width=\"{}\"{dashes} d=\"{line}\"/><path class=\"ph-head\" d=\"M{}L{}L{}Z\"/></g>",
+        if warn { "lit warn" } else { "lit" },
         f1(unit * 2.2),
         pt(b),
         pt((base.0 + n.0 * head * 0.6, base.1 + n.1 * head * 0.6)),
@@ -146,7 +151,7 @@ fn draw(v: &JView, phase: &PhaseView, bike_symbol: &str) -> String {
     for m in &phase.moves {
         let (Some(from), Some(to)) = (v.arms.iter().find(|a| a.uid == m.from), v.arms.iter().find(|a| a.uid == m.to)) else { continue };
         let class = v.movements.iter().find(|x| x.from == m.from && x.to == m.to).map_or(THROUGH, |x| x.class);
-        out += &movement(from, to, class, side, unit);
+        out += &movement(from, to, class, side, unit, phase.conflict_moves.contains(m));
     }
     out + "</svg>"
 }
@@ -287,6 +292,25 @@ mod tests {
         for arm in j.view().arms.iter().map(|a| a.uid).collect::<Vec<_>>() {
             j.select(Target::Arm(arm));
             assert_eq!(phase_drawings(&j.view()), before, "a selection is no reason to draw the phases again");
+        }
+    }
+    #[test]
+    fn a_movement_that_meets_something_is_dashed_and_marked_apart_from_colour() {
+        let mut j = Junction::new(0);
+        let (clean, _) = draw(&j, 0);
+        assert!(!clean.contains("warn"), "a phase without a conflict has no mark");
+        let n = j.view().signal.as_ref().unwrap().phases[0].uid;
+        assert!(j.set_phase_walk(0, n, true));
+        let (s, _) = draw(&j, 0);
+        let marked = j.view().signal.as_ref().unwrap().phases[0].conflict_moves.len();
+        assert!(marked > 0);
+        assert_eq!(count(&s, "class=\"ph-move lit warn\""), marked);
+        for g in s.split("<g class=\"ph-move lit warn\">").skip(1) {
+            let line = &g[..g.find("<path class=\"ph-head\"").unwrap()];
+            assert!(line.contains("stroke-dasharray=\""), "dashed, so colour is not the only cue: {line}");
+        }
+        for g in s.split("<g class=\"ph-move lit\">").skip(1) {
+            assert!(!g[..g.find("<path class=\"ph-head\"").unwrap()].contains("dasharray"), "a movement that meets nothing is solid");
         }
     }
 }

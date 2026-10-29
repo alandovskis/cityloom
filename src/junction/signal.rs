@@ -409,6 +409,13 @@ pub fn conflicts(s: &State, _region: usize, plan: &Plan) -> Vec<(usize, Conflict
     found
 }
 
+/// The conflicts of the plan the person sees in `s`, each with its phase's place and street, for telling a new conflict
+/// from one that was there (a phase is known by its street: places change when phases are moved). Empty off a signal.
+pub fn meetings(s: &State, region: usize) -> Vec<(usize, u32, Conflict)> {
+    let Some(p) = plan(s, region) else { return Vec::new() };
+    conflicts(s, region, &p).into_iter().map(|(n, c)| (n, p.phases[n].uid, c)).collect()
+}
+
 /// The patterns that fit the phase of street `phase.uid`, in the order they are offered. A pattern that would make
 /// the same phase as one before it is left out, so the list never holds two names for one thing.
 pub fn patterns_for(s: &State, region: usize, phase: &Phase) -> Vec<Pattern> {

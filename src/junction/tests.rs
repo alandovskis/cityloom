@@ -1806,8 +1806,96 @@ fn the_timing_panels_are_not_there_off_a_signal_and_speak_french() {
 /// The cards of the drawings row, one `<li>` each.
 fn phase_cards(h: &str) -> Vec<String> {
     let at = h.find("class=\"signal-phases\"").expect("the row is there");
-    let row = &h[at..at + h[at..].find("</ul>").unwrap()];
-    row.split("<li").skip(1).map(str::to_string).collect()
+    // The row ends at the first list end that is not inside a card: a card may hold a list of its own (its warnings),
+    // and a card's end follows its list's.
+    let end =
+        h[at..].match_indices("</ul>").map(|(i, _)| i).find(|&i| !h[at + i + 5..].starts_with("</li>") && !h[at + i + 5..].starts_with("<!></li>")).unwrap();
+    let row = &h[at..at + end];
+    row.split("<li><button").skip(1).map(|c| format!("<button{c}")).collect()
+}
+
+// ---- warnings about movements that meet ----
+
+#[test]
+fn an_edit_that_makes_movements_meet_is_allowed_and_warned_about_once_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, warning, several, none) in [
+        (Locale::En, "Warning: Phase 1: cars from the north side going straight on meet people", "movements now meet, in phases 1 and 3.", "Warning:"),
+        (
+            Locale::FrCa,
+            "Attention : Phase 1 : les voitures du côté nord qui vont tout droit rencontrent les piétons",
+            "mouvements se rencontrent maintenant, aux phases 1 et 3.",
+            "Attention :",
+        ),
+    ] {
+        let s = shared_in(0, locale);
+        let (north, east, south) = (arm(&s, 0), arm(&s, 90), arm(&s, 180));
+        let said_now = || live::take_said().iter().map(|t| t.replace(['\u{a0}', '\u{202f}'], " ")).collect::<Vec<String>>();
+        s.choose_pattern(0, Pattern::ThroughOnly);
+        live::take_said();
+        // North's phase leads straight into its own crossing: allowed, and said when it is made.
+        assert!(s.toggle_phase_walk(0, north), "a warning never refuses an edit");
+        let said = said_now();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].contains(warning), "{said:?}");
+        // The warning that is already there is not said again by a later edit that leaves it alone.
+        assert!(s.toggle_phase_walk(0, east));
+        assert!(!said_now()[0].contains(none));
+        // Removing the cause says nothing of warnings.
+        assert!(s.toggle_phase_walk(0, north));
+        assert!(!said_now()[0].contains(none));
+        // Several at once: one sentence.
+        assert!(s.toggle_phase_walk(0, east));
+        live::take_said();
+        assert!(s.apply(|j| j.set_phase_walk(0, north, true) & j.set_phase_walk(2, south, true)));
+        let said = said_now();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].contains(several), "{said:?}");
+        assert_eq!(said[0].matches(none).count(), 1, "{said:?}");
+    }
+}
+
+#[test]
+fn undoing_the_edit_that_made_movements_meet_does_not_warn_and_redoing_it_does() {
+    let s = shared(0);
+    let north = arm(&s, 0);
+    assert!(s.toggle_phase_walk(0, north));
+    live::take_said();
+    assert!(s.undo());
+    assert!(!live::take_said().iter().any(|t| t.contains("Warning")));
+    assert!(s.redo());
+    assert!(live::take_said().iter().any(|t| t.contains("Warning")));
+}
+
+#[test]
+fn the_card_of_a_phase_lists_its_warnings_outside_the_button_and_a_phase_without_has_no_list() {
+    let s = shared(0);
+    let clean = plain_panel(&s);
+    assert!(!clean.contains("phase-conflicts"), "the suggested plan has no warnings");
+    let north = arm(&s, 0);
+    assert!(s.toggle_phase_walk(0, north));
+    let cards = phase_cards(&plain_panel(&s));
+    assert!(cards[0].contains("class=\"phase-conflicts\"") && cards[0].contains("aria-label=\"Warnings for phase 1\""), "{}", cards[0]);
+    assert!(cards[0].contains("meet people walking across on the north side"), "{}", cards[0]);
+    assert!(cards[0].find("</button>").unwrap() < cards[0].find("phase-conflicts").unwrap(), "the list is not inside the button: {}", cards[0]);
+    assert!(cards[1..].iter().all(|c| !c.contains("phase-conflicts")));
+    assert!(s.toggle_phase_walk(0, north));
+    assert!(!plain_panel(&s).contains("phase-conflicts"), "removing the cause removes the warning");
+}
+
+#[test]
+fn the_checks_list_fails_while_movements_meet_and_passes_again() {
+    let s = shared(0);
+    let north = arm(&s, 0);
+    let list = |s: &Rc<JunctionVm>| html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
+    assert!(list(&s).contains("Movements that meet"));
+    let ok = count(&list(&s), "<li class=\"ok\">");
+    assert!(s.toggle_phase_walk(0, north));
+    let bad = list(&s);
+    assert_eq!(count(&bad, "<li class=\"ok\">"), ok - 1, "{bad}");
+    assert!(bad.replace(['\u{a0}', '\u{202f}'], " ").contains("meet people walking across on the north side"), "{bad}");
+    assert!(s.toggle_phase_walk(0, north));
+    assert_eq!(count(&list(&s), "<li class=\"ok\">"), ok);
 }
 
 // ---- the pattern of a phase ----
