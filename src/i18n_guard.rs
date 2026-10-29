@@ -566,6 +566,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("signal-walk", "the id of a check of the junction sheet"),
     ("signal-cycle", "the id of a check of the junction sheet"),
     ("signal-phases", "the id of a check of the junction sheet"),
+    ("signal-conflicts", "the id of a check of the junction sheet"),
     ("cityloom-theme", "a storage key"),
     ("cityloom-inspector", "a storage key"),
     ("cityloom-notes", "a storage key"),

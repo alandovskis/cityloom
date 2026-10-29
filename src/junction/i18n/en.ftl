@@ -589,3 +589,15 @@ jn-ph-rides-legend = Bikes
 jn-ph-walk-box = People walk across { $other }
 jn-ph-ride-box = Bikes go on { $other }
 jn-ph-walks-fixed = This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one.
+
+## Warnings: movements of a phase that meet (src/junction/signal.rs `conflicts`)
+jn-conflict-move = cars from the { $from } side going { $turn }
+jn-conflict-vehicles = Phase { $n }: { $a } cross { $b }.
+jn-conflict-walk = Phase { $n }: { $mv } meet people walking across on the { $side } side.
+jn-conflict-ride = Phase { $n }: { $mv } cross bikes riding on the { $side } side.
+jn-conflict-list = Warnings for phase { $n }
+jn-conflict-heard = Warning: { $conflict }
+jn-conflict-heard-many = Warning: { $count } movements now meet, in phases { $list }.
+jn-check-signal-conflicts = Movements that meet
+jn-check-signal-conflicts-ok = No phase puts movements together that meet
+jn-check-signal-conflicts-bad = { $list }
