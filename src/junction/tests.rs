@@ -1819,13 +1819,20 @@ fn phase_cards(h: &str) -> Vec<String> {
 #[test]
 fn an_edit_that_makes_movements_meet_is_allowed_and_warned_about_once_in_both_languages() {
     use crate::shared::i18n::Locale;
-    for (locale, warning, several, none) in [
-        (Locale::En, "Warning: Phase 1: cars from the north side going straight on meet people", "movements now meet, in phases 1 and 3.", "Warning:"),
+    for (locale, warning, several, none, several_first) in [
+        (
+            Locale::En,
+            "Warning: Phase 1: cars from the north side going straight on meet people",
+            "movements now meet, in phases 1 and 3.",
+            "Warning:",
+            "meet people walking across",
+        ),
         (
             Locale::FrCa,
             "Attention : Phase 1 : les voitures du côté nord qui vont tout droit rencontrent les piétons",
             "mouvements se rencontrent maintenant, aux phases 1 et 3.",
             "Attention :",
+            "rencontrent les piétons",
         ),
     ] {
         let s = shared_in(0, locale);
@@ -1852,6 +1859,7 @@ fn an_edit_that_makes_movements_meet_is_allowed_and_warned_about_once_in_both_la
         assert_eq!(said.len(), 1, "{said:?}");
         assert!(said[0].contains(several), "{said:?}");
         assert_eq!(said[0].matches(none).count(), 1, "{said:?}");
+        assert!(said[0].contains(several_first), "the first of them is named: {said:?}");
     }
 }
 

@@ -600,7 +600,7 @@ jn-conflict-heard = Attention : { $conflict }
 jn-conflict-heard-many = Attention : { $count } mouvements se rencontrent maintenant, { $phases ->
     [one] à la phase
    *[other] aux phases
-} { $list }.
+} { $list }. { $first }
 jn-check-signal-conflicts = Mouvements qui se rencontrent
 jn-check-signal-conflicts-ok = Aucune phase ne réunit des mouvements qui se rencontrent
 jn-check-signal-conflicts-bad = { $list }

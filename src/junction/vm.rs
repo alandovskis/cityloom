@@ -415,7 +415,7 @@ impl JunctionVm {
     }
 
     /// One sentence for the conflicts that arose since `before`: the warning itself when there is one, a count and the
-    /// phases when there are several. None when none arose (one that was there already is not said again).
+    /// phases (and the first of them) when there are several. None when none arose (one that was there already is not said again).
     fn meeting_note(&self, before: &[Meeting]) -> Option<String> {
         let v = self.view_now();
         let new: Vec<Meeting> = self.meetings().into_iter().filter(|(_, uid, c)| !before.iter().any(|(_, u, b)| u == uid && b == c)).collect();
@@ -427,7 +427,8 @@ impl JunctionVm {
         let mut phases: Vec<usize> = new.iter().map(|m| m.0).collect();
         phases.dedup();
         let list = self.number_list(&phases);
-        let args = Args::new().num("count", new.len() as i64).num("phases", phases.len() as i64).str("list", list);
+        let first = say_now(&self.i18n, self.units_now(), &super::read_model::conflict_said(first.0, &first.2, &v.arms));
+        let args = Args::new().num("count", new.len() as i64).num("phases", phases.len() as i64).str("list", list).str("first", first);
         Some(self.i18n.tr_now("jn-conflict-heard-many", &args))
     }
 
