@@ -335,8 +335,8 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::{Fields, effective_host, fine_shown, fine_typed};
-    use leptos::prelude::*;
     use crate::street::model::{SNAP_MM, snap};
+    use leptos::prelude::*;
 
     #[test]
     fn after_an_add_the_next_add_starts_from_the_kinds_defaults() {

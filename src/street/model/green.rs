@@ -822,12 +822,23 @@ impl Editor {
     }
 }
 
-/// The walkway left on one side of an element: the part of its host sidewalk on that side and the sidewalk pieces
-/// that run on from it. `toward_left` says which side.
-fn walkway_beside_mm(segs: &[Segment], host: usize, g: &Green, toward_left: bool) -> i32 {
+/// The walkway left on one side of an element: from its edge to the nearest other element on that side (`others`:
+/// those on the same piece over the same stretch), else to the edge of its host sidewalk plus the sidewalk pieces that
+/// run on from it. `toward_left` says which side.
+fn walkway_beside_mm(segs: &[Segment], host: usize, g: &Green, others: &[&Green], toward_left: bool) -> i32 {
     let (from, to) = fills(segs, host);
     let half = g.width_mm / 2;
-    let own = if toward_left { (g.offset_mm - half - from).clamp(0, to - from) } else { (to - (g.offset_mm + g.width_mm - half)).clamp(0, to - from) };
+    let (left, right) = (g.offset_mm - half, g.offset_mm + g.width_mm - half);
+    let edges = |o: &Green| (o.offset_mm - o.width_mm / 2, o.offset_mm + o.width_mm - o.width_mm / 2);
+    let next_to = if toward_left {
+        others.iter().map(|o| edges(o).1).filter(|&edge| edge <= left).max().map(|edge| left - edge)
+    } else {
+        others.iter().map(|o| edges(o).0).filter(|&edge| edge >= right).min().map(|edge| edge - right)
+    };
+    if let Some(gap) = next_to {
+        return gap.max(0);
+    }
+    let own = if toward_left { (left - from).clamp(0, to - from) } else { (to - right).clamp(0, to - from) };
     let beyond: Vec<&Segment> = if toward_left { segs[..host].iter().rev().collect() } else { segs[host + 1..].iter().collect() };
     let run: Vec<&Segment> = beyond.into_iter().take_while(|s| KINDS[s.kind].id == "sidewalk").collect();
     own + super::widest_walkway_mm(run.iter().copied())
@@ -902,7 +913,15 @@ impl Editor {
                     }
                 }
                 if host_id == "sidewalk" {
-                    let have = walkway_beside_mm(segs, h, g, true).max(walkway_beside_mm(segs, h, g, false));
+                    // Every other element on this piece over the same stretch narrows the walkway too.
+                    let others: Vec<&Green> = content
+                        .green
+                        .iter()
+                        .enumerate()
+                        .filter(|&(j, o)| j != k && o.from_mm < g.to_mm() && g.from_mm < o.to_mm() && host_at(segs, o.offset_mm) == Some(h))
+                        .map(|(_, o)| o)
+                        .collect();
+                    let have = walkway_beside_mm(segs, h, g, &others, true).max(walkway_beside_mm(segs, h, g, &others, false));
                     if have < CLEAR_PATH_MM {
                         fail(1, Said::new("check-detail-green-clear-path").with("have", Arg::Length(have)).with("need", Arg::Length(CLEAR_PATH_MM)));
                     }
@@ -1521,6 +1540,22 @@ mod tests {
         let mut e = editor();
         e.add_green(small(10_000, 1_650)).unwrap();
         assert!(!passes(&e, "green-clear-path"), "950 and 850 are left");
+    }
+
+    #[test]
+    fn green_clear_path_is_judged_with_every_other_element_on_the_piece_over_the_same_stretch() {
+        // Two 1 m beds side by side on the 3.3 m sidewalk leave 1.1 m between them: each saw 2.2 m on its other side
+        // when judged alone.
+        let mut e = editor();
+        e.add_green(Green { width_mm: 1_000, ..bed(10_000, 600) }).unwrap();
+        assert!(passes(&e, "green-clear-path"), "alone it leaves 2.2 m beside it");
+        e.add_green(Green { width_mm: 1_000, ..bed(10_000, 2_700) }).unwrap();
+        let c = row(&e, "green-clear-path");
+        assert!(!c.ok, "1.1 m is left between them");
+        assert_eq!(c.detail.key, "check-detail-green-clear-path");
+        // Along a different stretch they do not meet.
+        e.move_green(1, 20_000).unwrap();
+        assert!(passes(&e, "green-clear-path"));
     }
 
     #[test]
