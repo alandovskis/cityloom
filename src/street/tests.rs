@@ -1766,10 +1766,18 @@ fn the_green_row_is_a_listbox_with_one_tab_stop() {
 
 #[test]
 fn a_green_cell_that_fails_a_check_says_so() {
-    let s = green_street(Locale::En);
+    use crate::street::model::{GreenForm, GreenKind};
+    let s = stop_street(&AT_THE_CURB, Locale::En);
+    let tree = |at_mm| GreenForm { at_mm: Some(at_mm), host: Some(0), ..GreenForm::new(GreenKind::Tree) };
+    assert!(s.add_green(tree(10_000)));
     let h = green_html(&s);
-    // a 1.9 m pit on a 3 m sidewalk leaves under the 1.8 m walkway
-    assert!(h.contains("Fails a check. See the checks.") && h.contains("failing"), "{h}");
+    assert!(!h.contains("Fails a check") && !h.contains("failing"), "one tree on a 3 m sidewalk passes every check: {h}");
+    // A second one 4 m on stands closer than their crowns allow (8 m between centres); the pair is recorded against
+    // the first.
+    assert!(s.add_green(tree(14_000)));
+    let h = green_html(&s);
+    assert_eq!(count(&h, "Fails a check. See the checks."), 1, "{h}");
+    assert_eq!(count(&h, "failing"), 1, "{h}");
 }
 
 #[test]

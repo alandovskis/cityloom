@@ -326,6 +326,14 @@ impl Street {
     }
 }
 
+/// How far apart the middles of two elements are, along the street and across it, in millimetres: what crowns need
+/// between them.
+fn centre_gap_mm(a: &Green, b: &Green) -> i32 {
+    let along = f64::from(b.centre_mm()) - f64::from(a.centre_mm());
+    let across = f64::from(b.offset_mm) - f64::from(a.offset_mm);
+    along.hypot(across).round() as i32
+}
+
 impl Green {
     fn place(&self) -> Place {
         (self.from_mm, self.offset_mm)
@@ -887,7 +895,7 @@ impl Editor {
                     if (g.centre_mm(), k) > (o.centre_mm(), j) {
                         continue;
                     }
-                    let gap = o.centre_mm().saturating_sub(g.centre_mm());
+                    let gap = centre_gap_mm(g, o);
                     let need = size.canopy_mm().max(o_size.canopy_mm());
                     if gap < need {
                         let osegs = content.sections_over(o.from_mm, o.to_mm(), length_mm);
@@ -1503,6 +1511,30 @@ mod tests {
             assert_eq!(c.detail.args.iter().filter(|(n, _)| *n == who).count(), 1, "{who} is named in the detail");
         }
         assert!(c.zone.unwrap().args.iter().any(|(n, a)| *n == "at" && matches!(a, Arg::Length(10_000))), "the nearer the anchor is named first");
+    }
+
+    #[test]
+    fn spacing_is_measured_between_centres_along_and_across() {
+        let at = |at_mm, host| GreenForm { size: Some(TreeSize::M), at_mm: Some(at_mm), host: Some(host), ..GreenForm::new(GreenKind::Tree) };
+        // The review's pair: a medium tree on each sidewalk, level with each other. The road lies between them.
+        let mut e = editor();
+        e.add_green_from(&at(20_000, 0)).unwrap();
+        e.add_green_from(&at(20_000, 5)).unwrap();
+        assert!(passes(&e, "green-spacing"), "14 m apart across, though level along");
+        // Two on one sidewalk 5 m apart along are too close.
+        e.add_green_from(&at(25_000, 0)).unwrap();
+        let c = row(&e, "green-spacing");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-green-spacing");
+    }
+
+    #[test]
+    fn the_gap_between_two_trees_is_the_distance_between_their_centres() {
+        let a = Green { length_mm: 2_000, width_mm: 1_000, ..tree(10_000, 2_000) };
+        let b = Green { length_mm: 2_000, width_mm: 1_000, ..tree(16_000, 8_000) };
+        assert_eq!(centre_gap_mm(&a, &b), 8_485, "6 m along and 6 m across");
+        assert_eq!(centre_gap_mm(&a, &Green { offset_mm: 2_000, ..b }), 6_000);
+        assert_eq!(centre_gap_mm(&a, &a), 0);
     }
 
     #[test]
