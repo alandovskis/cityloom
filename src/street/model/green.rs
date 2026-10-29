@@ -8,9 +8,25 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::curb::CurbRefusal;
-use super::{Arg, Editor, SNAP_MM, Said, Segment, Street, ZoneFrame, snap, total};
-use crate::shared::catalogue::is_roadway;
+use super::curb::{CurbRefusal, Failure, check_rows};
+use super::{Arg, Check, Editor, SNAP_MM, Said, Segment, Street, ZoneEnd, ZoneFrame, snap, total};
+use crate::shared::catalogue::{KINDS, is_roadway};
+
+/// The walkway a sidewalk keeps beside an element standing on it, in millimetres.
+///
+/// UNVERIFIED (placeholder): 1 800 mm, two people passing.
+pub const CLEAR_PATH_MM: i32 = 1_800;
+
+/// How far from a junction a tree or a bed keeps back, so that drivers and people crossing see each other, in
+/// millimetres.
+///
+/// UNVERIFIED (placeholder): 10 000 mm.
+pub const SIGHTLINE_MM: i32 = 10_000;
+
+/// The shortest a bioswale can be and still carry water, in millimetres.
+///
+/// UNVERIFIED (placeholder): 10 000 mm.
+pub const BIOSWALE_MIN_MM: i32 = 10_000;
 
 /// What an element is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -277,6 +293,21 @@ impl Green {
         (self.from_mm, self.offset_mm)
     }
 
+    fn centre_mm(&self) -> i32 {
+        self.from_mm.saturating_add(self.length_mm / 2)
+    }
+
+    /// How the checks name it: "Tree at 42 m, on sidewalk", the piece being the one under its centre in `segs`.
+    pub fn named(&self, segs: &[Segment]) -> Said {
+        let kind = Arg::Msg(self.kind.name_key());
+        match host_at(segs, self.offset_mm) {
+            Some(h) => {
+                Said::new("green-instance").with("kind", kind).with("at", Arg::Length(self.from_mm)).with("across", Arg::KindLower(KINDS[segs[h].kind].id))
+            }
+            None => Said::new("green-instance-off").with("kind", kind).with("at", Arg::Length(self.from_mm)),
+        }
+    }
+
     fn to_mm(&self) -> i32 {
         self.from_mm.saturating_add(self.length_mm)
     }
@@ -443,13 +474,142 @@ impl Editor {
     }
 }
 
+/// The walkway left on one side of an element: the part of its host sidewalk on that side and the sidewalk pieces
+/// that run on from it. `toward_left` says which side.
+fn walkway_beside_mm(segs: &[Segment], host: usize, g: &Green, toward_left: bool) -> i32 {
+    let (from, to) = fills(segs, host);
+    let half = g.width_mm / 2;
+    let own = if toward_left { (g.offset_mm - half - from).clamp(0, to - from) } else { (to - (g.offset_mm + g.width_mm - half)).clamp(0, to - from) };
+    let beyond: Vec<&Segment> = if toward_left { segs[..host].iter().rev().collect() } else { segs[host + 1..].iter().collect() };
+    let run: Vec<&Segment> = beyond.into_iter().take_while(|s| KINDS[s.kind].id == "sidewalk").collect();
+    own + super::widest_walkway_mm(run.iter().copied())
+}
+
+impl Editor {
+    /// The rows of the trees and planting, after the stops' (only when the street has some): one per rule, failing
+    /// with the first element that breaks it, which it names in `zone`.
+    ///
+    /// An element is judged against the section of every zone it overlaps. Positions along are measured from the
+    /// anchored end, and `ends` (node `a`, node `b`) is read from that end.
+    pub(super) fn green_checks(&self) -> Vec<Check> {
+        let content = &self.states[self.cursor].content;
+        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        let rows = [
+            ("green-host", "check-label-green-host", "check-detail-green-host-ok"),
+            ("green-clear-path", "check-label-green-clear-path", "check-detail-green-clear-path-ok"),
+            ("green-spacing", "check-label-green-spacing", "check-detail-green-spacing-ok"),
+            ("green-soil", "check-label-green-soil", "check-detail-green-soil-ok"),
+            ("green-sightline", "check-label-green-sightline", "check-detail-green-sightline-ok"),
+            ("green-continuity", "check-label-green-continuity", "check-detail-green-continuity-ok"),
+        ];
+        check_rows(&rows, &self.green_failures(), |k| {
+            let g = &content.green[k];
+            let sections = content.sections_over(g.from_mm, g.to_mm(), length_mm);
+            g.named(sections.first().copied().unwrap_or(&content.segments))
+        })
+    }
+
+    /// Every rule each element breaks, element by element in order: `rule` indexes the six rows of `green_checks`.
+    fn green_failures(&self) -> Vec<Failure> {
+        let content = &self.states[self.cursor].content;
+        let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
+        let (near, far) = match content.from_end {
+            ZoneEnd::First => (self.ends[0], self.ends[1]),
+            ZoneEnd::Last => (self.ends[1], self.ends[0]),
+        };
+        let mut out: Vec<Failure> = Vec::new();
+        for (k, g) in content.green.iter().enumerate() {
+            let mut fail = |rule: usize, detail: Said| Failure::record(&mut out, k, rule, detail);
+            let sections = content.sections_over(g.from_mm, g.to_mm(), length_mm);
+            let mut host_kinds: Vec<&'static str> = Vec::new();
+            for segs in &sections {
+                let Some(h) = host_at(segs, g.offset_mm) else {
+                    fail(0, Said::new("check-detail-green-host-off"));
+                    continue;
+                };
+                let host = &segs[h];
+                let host_id = KINDS[host.kind].id;
+                host_kinds.push(host_id);
+                if is_roadway(host.kind) {
+                    fail(0, Said::new("check-detail-green-host-roadway").with("host", Arg::KindLower(host_id)));
+                } else if g.width_mm > host.width_mm {
+                    fail(
+                        0,
+                        Said::new("check-detail-green-host-wide")
+                            .with("width", Arg::Length(g.width_mm))
+                            .with("host", Arg::KindLower(host_id))
+                            .with("have", Arg::Length(host.width_mm)),
+                    );
+                }
+                if host_id == "sidewalk" {
+                    let have = walkway_beside_mm(segs, h, g, true).max(walkway_beside_mm(segs, h, g, false));
+                    if have < CLEAR_PATH_MM {
+                        fail(1, Said::new("check-detail-green-clear-path").with("have", Arg::Length(have)).with("need", Arg::Length(CLEAR_PATH_MM)));
+                    }
+                }
+            }
+            if let (GreenKind::Tree, Some(size)) = (g.kind, g.size) {
+                for (j, o) in content.green.iter().enumerate() {
+                    let Some(o_size) = o.size.filter(|_| o.kind == GreenKind::Tree && j != k) else { continue };
+                    // The pair is recorded against the one nearer the anchored end.
+                    if (g.centre_mm(), k) > (o.centre_mm(), j) {
+                        continue;
+                    }
+                    let gap = o.centre_mm().saturating_sub(g.centre_mm());
+                    let need = size.canopy_mm().max(o_size.canopy_mm());
+                    if gap < need {
+                        let osegs = content.sections_over(o.from_mm, o.to_mm(), length_mm);
+                        let named = o.named(osegs.first().copied().unwrap_or(&content.segments));
+                        fail(
+                            2,
+                            Said::new("check-detail-green-spacing")
+                                .with("gap", Arg::Length(gap))
+                                .with("other", Arg::Said(Box::new(named)))
+                                .with("need", Arg::Length(need)),
+                        );
+                    }
+                }
+                if i64::from(g.length_mm) * i64::from(g.width_mm) < size.min_pit_mm2() {
+                    fail(
+                        3,
+                        Said::new("check-detail-green-soil")
+                            .with("length", Arg::Length(g.length_mm))
+                            .with("width", Arg::Length(g.width_mm))
+                            .with("size", Arg::Text(format!("{size:?}"))),
+                    );
+                }
+            }
+            if matches!(g.kind, GreenKind::Tree | GreenKind::Bed) {
+                let ends = [(near, g.from_mm), (far, length_mm.saturating_sub(g.to_mm()))];
+                for (end, gap) in ends {
+                    if end.junction && gap < SIGHTLINE_MM {
+                        fail(4, Said::new("check-detail-green-sightline").with("gap", Arg::Length(gap.max(0))).with("need", Arg::Length(SIGHTLINE_MM)));
+                    }
+                }
+            }
+            if g.kind == GreenKind::Bioswale {
+                if g.length_mm < BIOSWALE_MIN_MM {
+                    fail(
+                        5,
+                        Said::new("check-detail-green-continuity-short").with("length", Arg::Length(g.length_mm)).with("min", Arg::Length(BIOSWALE_MIN_MM)),
+                    );
+                }
+                if host_kinds.windows(2).any(|w| w[0] != w[1]) {
+                    fail(5, Said::new("check-detail-green-continuity-host"));
+                }
+            }
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::shared::catalogue::Side;
     use crate::shared::catalogue::kind_index;
     use crate::street::model::fixtures::zoned;
-    use crate::street::model::{Editor, Segment, ZoneEnd, ZoneFrame};
+    use crate::street::model::{Editor, EndInfo, Segment, ZoneEnd, ZoneFrame};
 
     fn tree(from_mm: i32, offset_mm: i32) -> Green {
         Green { kind: GreenKind::Tree, from_mm, length_mm: 1_500, offset_mm, width_mm: 1_500, size: Some(TreeSize::M) }
@@ -778,5 +938,203 @@ mod tests {
         assert_eq!(host_at(&segs, total(&segs) + 1), None);
         assert_eq!(host_at(&segs, -1), None);
         assert_eq!(fills(&segs, 2), (6_300, 7_800));
+    }
+    // ---- the checks ------------------------------------------------------------------------------------------
+
+    fn small(from_mm: i32, offset_mm: i32) -> Green {
+        Green { size: Some(TreeSize::S), ..tree(from_mm, offset_mm) }
+    }
+
+    fn row(e: &Editor, id: &str) -> crate::street::model::Check {
+        e.view().checks.into_iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no check {id}"))
+    }
+
+    fn passes(e: &Editor, id: &str) -> bool {
+        row(e, id).ok
+    }
+
+    fn green_ids(e: &Editor) -> Vec<&'static str> {
+        e.view().checks.iter().map(|c| c.id).filter(|i| i.starts_with("green-")).collect()
+    }
+
+    fn junction_at(first: bool, last: bool) -> [EndInfo; 2] {
+        [EndInfo { junction: first, ..Default::default() }, EndInfo { junction: last, ..Default::default() }]
+    }
+
+    /// A 100 000 mm street with zones at 0 and 50 000; zone 2 has a section of its own, the first piece being `kind`.
+    fn two_zone_editor(kind: &str, green: Vec<Green>) -> Editor {
+        let mut s = zoned(Street::sample(0, Side::Right), &[0, 50_000], 100_000);
+        let mut own = s.segments.clone();
+        own[0].kind = kind_index(kind).unwrap();
+        s.zones[1].segments = Some(own);
+        s.green = green;
+        Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 100_000, from_end: ZoneEnd::First }))
+    }
+
+    #[test]
+    fn a_street_without_green_has_the_checks_it_had() {
+        let mut e = editor();
+        let before: Vec<&str> = e.view().checks.iter().map(|c| c.id).collect();
+        assert!(before.iter().all(|i| !i.starts_with("green-")));
+        e.add_green(small(10_000, 1_700)).unwrap();
+        assert_eq!(green_ids(&e), ["green-host", "green-clear-path", "green-spacing", "green-soil", "green-sightline", "green-continuity"]);
+        e.remove_green(0).unwrap();
+        let after: Vec<&str> = e.view().checks.iter().map(|c| c.id).collect();
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn a_street_with_a_sound_tree_passes_every_green_row() {
+        let mut e = editor().with_ends(junction_at(true, true));
+        e.add_green(Green { offset_mm: 2_600, width_mm: 1_600, ..small(12_000, 2_600) }).unwrap();
+        for id in green_ids(&e) {
+            assert!(passes(&e, id), "{id}");
+        }
+    }
+
+    #[test]
+    fn green_host_fails_for_an_element_wider_than_its_piece() {
+        let mut e = editor();
+        e.add_green(Green { width_mm: 3_000, ..bed(10_000, 2_000) }).unwrap();
+        assert!(passes(&e, "green-host"));
+        e.resize_green(0, 4_000, 4_000).unwrap();
+        let c = row(&e, "green-host");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-green-host-wide");
+        assert_eq!(c.zone.unwrap().key, "green-instance");
+    }
+
+    #[test]
+    fn a_zone_change_under_an_element_fails_green_host_and_keeps_it() {
+        let tree_across = small(49_500, 1_650);
+        let e = two_zone_editor("sidewalk", vec![tree_across]);
+        assert!(passes(&e, "green-host"), "the same kind of piece under it in both zones");
+        let e = two_zone_editor("travel", vec![tree_across]);
+        let c = row(&e, "green-host");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-green-host-roadway");
+        assert_eq!(e.snapshot().green, vec![tree_across], "the element stays");
+    }
+
+    #[test]
+    fn green_clear_path_wants_the_walkway_left_beside_the_element() {
+        // The sidewalk is 3 300 mm. A pit 1 600 wide centred at 2 600 leaves exactly 1 800 on its left.
+        let mut e = editor();
+        e.add_green(Green { width_mm: 1_600, ..small(10_000, 2_600) }).unwrap();
+        assert!(passes(&e, "green-clear-path"), "exactly the clear path");
+        e.move_green_across(0, 2_500).unwrap();
+        let c = row(&e, "green-clear-path");
+        assert!(!c.ok, "1 700 and 100 are left");
+        assert_eq!(c.detail.key, "check-detail-green-clear-path");
+        // A default pit in the middle of the sidewalk leaves less than that on either side.
+        let mut e = editor();
+        e.add_green(small(10_000, 1_650)).unwrap();
+        assert!(!passes(&e, "green-clear-path"), "900 and 900 are left");
+    }
+
+    #[test]
+    fn green_clear_path_counts_the_sidewalk_that_runs_on() {
+        let mut s = Street::sample(0, Side::Right);
+        let kinds = [("sidewalk", 1_000), ("sidewalk", 3_000), ("travel", 3_300), ("travel", 3_300), ("sidewalk", 3_000)];
+        s.segments = kinds.iter().enumerate().map(|(k, (id, w))| Segment::new(k as u32 + 1, kind_index(id).unwrap(), *w)).collect();
+        s.next_uid = 6;
+        s.row_mm = total(&s.segments);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
+        // On the second sidewalk piece (1 000 to 4 000), at 3 400 across: 2 650 of it and the first piece are on its left.
+        e.add_green(small(10_000, 3_400)).unwrap();
+        assert!(passes(&e, "green-clear-path"));
+    }
+
+    #[test]
+    fn spacing_uses_the_larger_size() {
+        let mut e = editor();
+        e.add_green(small(10_000, 1_700)).unwrap();
+        e.add_green(small(18_000, 1_700)).unwrap();
+        assert!(passes(&e, "green-spacing"), "8 000 apart, small crowns need 6 000");
+        e.set_green_size(1, TreeSize::L).unwrap();
+        let c = row(&e, "green-spacing");
+        assert!(!c.ok, "a large crown needs 10 000");
+        assert_eq!(c.detail.key, "check-detail-green-spacing");
+        let named: Vec<_> = c.detail.args.iter().filter(|(n, _)| *n == "other").collect();
+        assert_eq!(named.len(), 1, "the other tree is named in the detail");
+        assert!(c.zone.unwrap().args.iter().any(|(n, a)| *n == "at" && matches!(a, Arg::Length(10_000))), "the nearer the anchor is named first");
+    }
+
+    #[test]
+    fn soil_wants_the_pit_area_of_the_size() {
+        let mut e = editor();
+        e.add_green(small(10_000, 1_700)).unwrap();
+        assert!(passes(&e, "green-soil"), "2.25 m2 for a small tree");
+        e.set_green_size(0, TreeSize::M).unwrap();
+        let c = row(&e, "green-soil");
+        assert!(!c.ok, "3.5 m2 for a medium one");
+        assert_eq!(c.detail.key, "check-detail-green-soil");
+        e.resize_green(0, 2_400, 1_500).unwrap();
+        assert!(passes(&e, "green-soil"));
+    }
+
+    #[test]
+    fn sightline_keeps_planting_off_a_junction_end() {
+        let mut e = editor().with_ends(junction_at(true, false));
+        e.add_green(small(5_000, 1_700)).unwrap();
+        let c = row(&e, "green-sightline");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-green-sightline");
+        e.move_green(0, 10_000).unwrap();
+        assert!(passes(&e, "green-sightline"), "exactly 10 000 from the end");
+        let mut e = editor().with_ends(junction_at(false, true));
+        e.add_green(bed(50_000, 1_700)).unwrap();
+        assert!(!passes(&e, "green-sightline"), "a bed 6 000 from the far end");
+        e.move_green(0, 46_000).unwrap();
+        assert!(passes(&e, "green-sightline"));
+    }
+
+    #[test]
+    fn sightline_reads_the_end_the_elements_are_measured_from() {
+        let s = Street { green: vec![small(5_000, 1_700)], length_mm: Some(LEN), from_end: ZoneEnd::Last, ..Street::sample(0, Side::Right) };
+        let at = |ends| Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::Last })).with_ends(ends);
+        assert!(passes(&at(junction_at(true, false)), "green-sightline"), "the near end is node b");
+        assert!(!passes(&at(junction_at(false, true)), "green-sightline"));
+    }
+
+    #[test]
+    fn an_end_that_is_no_junction_has_no_sightline_rule() {
+        let mut e = editor().with_ends(junction_at(false, false));
+        e.add_green(small(0, 1_700)).unwrap();
+        e.add_green(bed(LEN - 4_000, 1_700)).unwrap();
+        assert!(passes(&e, "green-sightline"));
+    }
+
+    #[test]
+    fn a_bioswale_must_be_long_enough() {
+        let mut e = editor();
+        e.add_green(Green { kind: GreenKind::Bioswale, from_mm: 20_000, length_mm: 10_000, offset_mm: 1_650, width_mm: 3_300, size: None }).unwrap();
+        assert!(passes(&e, "green-continuity"), "exactly the minimum");
+        e.resize_green(0, 8_000, 3_300).unwrap();
+        let c = row(&e, "green-continuity");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-green-continuity-short");
+    }
+
+    #[test]
+    fn a_bioswale_across_a_change_of_host_fails_continuity() {
+        let swale = Green { kind: GreenKind::Bioswale, from_mm: 40_000, length_mm: 20_000, offset_mm: 1_650, width_mm: 3_300, size: None };
+        let e = two_zone_editor("planting", vec![swale]);
+        let c = row(&e, "green-continuity");
+        assert!(!c.ok, "a sidewalk becomes planting under it");
+        assert_eq!(c.detail.key, "check-detail-green-continuity-host");
+        assert!(passes(&e, "green-host"));
+        let same = two_zone_editor("sidewalk", vec![swale]);
+        assert!(passes(&same, "green-continuity"));
+    }
+
+    #[test]
+    fn a_green_element_is_named_by_its_kind_place_and_host() {
+        let e = two_zone_editor("sidewalk", vec![small(12_000, 1_650)]);
+        let g = e.snapshot().green[0];
+        let said = g.named(&e.snapshot().segments);
+        assert_eq!(said.key, "green-instance");
+        let names: Vec<_> = said.args.iter().map(|(n, _)| *n).collect();
+        assert_eq!(names, ["kind", "at", "across"]);
     }
 }

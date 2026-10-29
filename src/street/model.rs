@@ -1484,6 +1484,9 @@ impl Editor {
         if !self.states[self.cursor].content.stops.is_empty() {
             street.extend(self.stop_checks());
         }
+        if !self.states[self.cursor].content.green.is_empty() {
+            street.extend(self.green_checks());
+        }
         street
     }
 

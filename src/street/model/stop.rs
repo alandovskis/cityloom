@@ -1169,7 +1169,7 @@ mod tests {
     }
 
     fn reach(crossing: bool, reach_mm: i32) -> EndInfo {
-        EndInfo { crossing, reach_mm }
+        EndInfo { crossing, reach_mm, ..Default::default() }
     }
 
     #[test]
@@ -1232,7 +1232,7 @@ mod tests {
 
     #[test]
     fn no_reach_no_row() {
-        let e = near_junction(ZoneEnd::First, [EndInfo { crossing: true, reach_mm: 0 }; 2], 100);
+        let e = near_junction(ZoneEnd::First, [EndInfo { crossing: true, ..Default::default() }; 2], 100);
         let ids: Vec<&str> = e.view().checks.iter().map(|c| c.id).filter(|i| i.starts_with("stop-")).collect();
         assert_eq!(ids, ["stop-lane", "stop-kind", "stop-length", "stop-width", "stop-bike", "stop-shelter"]);
     }

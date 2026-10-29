@@ -26,6 +26,9 @@ pub struct EndInfo {
     /// How far from the end the junction reaches along this street: to the crossing's far edge, or to the mouth
     /// where there is no crossing. 0 when unknown.
     pub reach_mm: i32,
+    /// The end's node is a junction (whatever the street has on it), so its corner must be kept clear of sight
+    /// obstructions.
+    pub junction: bool,
 }
 
 /// What a stretch of curbside is used for. Each is drawn as an existing catalogue kind.

@@ -864,9 +864,10 @@ impl City {
         self.layout.origin_m.map(|(x, y)| [x, y])
     }
 
-    /// What the junctions say of the two ends of a street, node `a` first: whether the end has a pedestrian crossing
-    /// on this street's arm, and, for a street with transit stops, how far the junction reaches along it. A plain
-    /// connection, a map edge and a street not in the city have neither.
+    /// What the junctions say of the two ends of a street, node `a` first: whether the end is a junction, whether it
+    /// has a pedestrian crossing on this street's arm, and, for a street with transit stops, how far the junction
+    /// reaches along it. A plain connection, a map edge and a street not in the city are no junction and have
+    /// neither of the others.
     pub fn street_end_infos(&self, edge: u32, region: usize) -> [EndInfo; 2] {
         let Some(e) = self.edge_index(edge) else { return [EndInfo::default(); 2] };
         let has_stops = self.streets.get(&edge).is_some_and(|s| !s.stops.is_empty());
@@ -882,7 +883,7 @@ impl City {
                 }
                 _ => 0,
             };
-            EndInfo { crossing, reach_mm }
+            EndInfo { crossing, reach_mm, junction: self.layout.nodes[n].junction }
         };
         [at(a, true), at(b, false)]
     }
@@ -1303,6 +1304,21 @@ mod tests {
         assert!(city.street_end_infos(edge, 0).iter().all(|x| !x.crossing));
         assert_eq!(city.street_end_infos(999, 0), [EndInfo::default(); 2]);
         assert_eq!(city.street_editor(edge, 0).unwrap().frame(), city.layout.zone_frame(0));
+    }
+
+    #[test]
+    fn end_infos_say_which_end_is_a_junction() {
+        let city = City::new();
+        let edge = 1u32;
+        let e = &city.layout.edges[0];
+        let ends = city.street_end_infos(edge, 0);
+        for (n, info) in [e.a, e.b].into_iter().zip(ends) {
+            assert_eq!(info.junction, city.layout.nodes[n].junction);
+        }
+        assert!(ends.iter().any(|x| x.junction), "an end of street 1 is a junction");
+        assert!(city.streets.get(&edge).is_some_and(|s| s.stops.is_empty()), "and it is so with no stops to measure");
+        assert!(ends.iter().all(|x| x.reach_mm == 0), "the reach is still filled only for a street with stops");
+        assert!(city.street_end_infos(999, 0).iter().all(|x| !x.junction));
     }
 
     fn junction_number(node: usize) -> usize {

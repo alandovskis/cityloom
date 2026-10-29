@@ -141,6 +141,10 @@ pub fn check_label(check: &Check) -> Said {
         (Some(instance), false) if check.id.starts_with("stop-") => {
             Said::new("check-stop-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("instance", Arg::Said(Box::new(instance.clone())))
         }
+        // A row of the trees and planting names the element that fails.
+        (Some(instance), false) if check.id.starts_with("green-") => {
+            Said::new("check-green-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("instance", Arg::Said(Box::new(instance.clone())))
+        }
         (Some(zone), false) => {
             Said::new("check-zone-in").with("check", Arg::Said(Box::new(check.label.clone()))).with("zone", Arg::Said(Box::new(zone.clone())))
         }
@@ -428,6 +432,28 @@ mod tests {
         };
         assert_eq!(say_now(&en(), Units::Metres, &check_label(&row)), "Curbside uses are long enough: Loading at 42.0 m, right");
         assert_eq!(say_now(&fr(), Units::Metres, &check_label(&row)), "Usages du bord de rue assez longs\u{a0}: Zone de chargement à 42,0\u{a0}m, à droite");
+    }
+
+    #[test]
+    fn a_failing_green_row_names_its_element_in_both_languages() {
+        use crate::street::model::Check;
+        let row = Check {
+            id: "green-soil",
+            ok: false,
+            label: Said::new("check-label-green-soil"),
+            detail: Said::new("check-detail-green-soil-ok"),
+            zone: Some(
+                Said::new("green-instance")
+                    .with("kind", Arg::Msg("green-kind-tree"))
+                    .with("at", Arg::Length(42_000))
+                    .with("across", Arg::KindLower("sidewalk")),
+            ),
+        };
+        assert_eq!(say_now(&en(), Units::Metres, &check_label(&row)), "Tree pits with enough soil: Tree at 42.0 m, on sidewalk");
+        let fr_row = say_now(&fr(), Units::Metres, &check_label(&row));
+        assert!(fr_row.starts_with("Fosses d’arbre avec assez de terre\u{a0}: Arbre à 42,0\u{a0}m, sur "), "{fr_row}");
+        let ok = Check { ok: true, zone: None, ..row };
+        assert_eq!(check_label(&ok), ok.label);
     }
 
     #[test]
