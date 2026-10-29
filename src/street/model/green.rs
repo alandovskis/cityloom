@@ -105,6 +105,16 @@ impl TreeSize {
         }
     }
 
+    /// The message that names a tree of this size in a sentence: "a small tree", « un petit arbre » (the adjective's
+    /// place differs between the languages, so it is a message of its own).
+    pub fn tree_key(self) -> &'static str {
+        match self {
+            TreeSize::S => "green-tree-s",
+            TreeSize::M => "green-tree-m",
+            TreeSize::L => "green-tree-l",
+        }
+    }
+
     /// The width of the crown, which is also the spacing between trees.
     ///
     /// UNVERIFIED (placeholder): 6 000, 8 000 and 10 000 mm.
@@ -970,7 +980,7 @@ impl Editor {
                         Said::new("check-detail-green-soil")
                             .with("length", Arg::Length(g.length_mm))
                             .with("width", Arg::Length(g.width_mm))
-                            .with("size", Arg::MsgLower(size.name_key())),
+                            .with("tree", Arg::Said(Box::new(Said::new(size.tree_key())))),
                     );
                 }
             }
@@ -1794,7 +1804,10 @@ mod tests {
         let c = row(&e, "green-soil");
         assert!(!c.ok, "3.5 m2 for a medium one");
         assert_eq!(c.detail.key, "check-detail-green-soil");
-        assert!(c.detail.args.iter().any(|(n, a)| *n == "size" && matches!(a, Arg::MsgLower("green-size-m"))), "the size is named in the page's words");
+        assert!(
+            c.detail.args.iter().any(|(n, a)| *n == "tree" && matches!(a, Arg::Said(t) if t.key == "green-tree-m")),
+            "the tree is named in the page's words"
+        );
         e.resize_green(0, 2_400, 1_500).unwrap();
         assert!(passes(&e, "green-soil"));
     }
