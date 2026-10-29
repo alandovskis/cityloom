@@ -88,9 +88,9 @@ test.describe("the network checks on the map page", () => {
     // take every bike lane off the street
     const bikes = page.locator("#drawing [data-role='seg']:has(rect.k-bike)");
     for (let guard = 0; (await bikes.count()) > 0 && guard < 4; guard++) {
-      const index = await page.locator("#drawing [data-role='seg']").evaluateAll(
-        (els) => els.findIndex((e) => e.querySelector("rect.k-bike")),
-      );
+      const index = await page
+        .locator("#drawing [data-role='seg']")
+        .evaluateAll((els) => els.findIndex((e) => e.querySelector("rect.k-bike")));
       await page.locator("#wrap").focus();
       await page.keyboard.press("Escape");
       for (let i = 0; i <= index; i++) await page.keyboard.press("ArrowRight");
