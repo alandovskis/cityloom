@@ -2,6 +2,7 @@
 //! no editor. `City::network_read` makes it from the streets and junctions as they stand now; the rules that judge it
 //! are the map's (`map::network`).
 
+use super::street_note;
 use super::{City, node_uid};
 use crate::shared::catalogue::{KINDS, StreetClass};
 use crate::shared::said::Said;
@@ -52,6 +53,8 @@ pub struct NodeRead {
     pub junction: bool,
     /// The arms, for a junction.
     pub arms: Vec<ArmRead>,
+    /// A junction the editor could not read, so its arms are not known.
+    pub unreadable: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -60,17 +63,10 @@ pub struct NetworkRead {
     pub nodes: Vec<NodeRead>,
 }
 
-fn lanes_of(street: &Street) -> usize {
-    street.segments.iter().filter(|s| matches!(KINDS[s.kind].id, "travel" | "bus")).count()
-}
-
 fn end_of(street: &Street, first_end: bool) -> EndRead {
-    let zone = street.at_end(first_end);
-    EndRead {
-        lanes: lanes_of(&zone),
-        bike: zone.segments.iter().any(|s| KINDS[s.kind].id == "bike"),
-        bus: zone.segments.iter().any(|s| KINDS[s.kind].id == "bus"),
-    }
+    let zone = street.end_segments(first_end);
+    let has = |id: &str| zone.iter().any(|s| KINDS[s.kind].id == id);
+    EndRead { lanes: zone.iter().filter(|s| matches!(KINDS[s.kind].id, "travel" | "bus")).count(), bike: has("bike"), bus: has("bus") }
 }
 
 impl City {
@@ -80,14 +76,11 @@ impl City {
         for (i, e) in self.layout.edges.iter().enumerate() {
             let uid = i as u32 + 1;
             let now = &self.streets[&uid];
-            let name = Said::new("map-note-street")
-                .with("street", crate::shared::said::Arg::Said(Box::new(self.layout.edge_title(i, now))))
-                .with("ends", crate::shared::said::Arg::Said(Box::new(self.layout.edge_ends(i))));
             streets.push(StreetRead {
                 uid,
                 a: node_uid(e.a),
                 b: node_uid(e.b),
-                name,
+                name: street_note(self.layout.edge_title(i, now), self.layout.edge_ends(i)),
                 pedestrian: now.class == StreetClass::Pedestrian,
                 freeway: e.class.is_freeway(),
                 bike: now.sections().iter().any(|s| s.iter().any(|p| KINDS[p.kind].id == "bike")),
@@ -98,15 +91,14 @@ impl City {
         let mut nodes = Vec::new();
         for (i, def) in self.layout.nodes.iter().enumerate() {
             let uid = node_uid(i);
-            let arms = if def.junction {
-                // the junction as its editor reads it, with the crossings the streets now allow
-                self.junction_editor(uid, region)
-                    .map(|j| j.current().arms.iter().map(|a| ArmRead { street: a.edge, crossing_mm: a.crossing.map(|c| c.width_mm) }).collect())
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            };
-            nodes.push(NodeRead { uid, name: self.layout.node_name(i), junction: def.junction, arms });
+            // the junction as its editor reads it, with the crossings the streets now allow
+            let editor = def.junction.then(|| self.junction_editor(uid, region));
+            let unreadable = matches!(editor, Some(None));
+            let arms = editor
+                .flatten()
+                .map(|j| j.current().arms.iter().map(|a| ArmRead { street: a.edge, crossing_mm: a.crossing.map(|c| c.width_mm) }).collect())
+                .unwrap_or_default();
+            nodes.push(NodeRead { uid, name: self.layout.node_name(i), junction: def.junction, arms, unreadable });
         }
         NetworkRead { streets, nodes }
     }
@@ -120,7 +112,7 @@ mod tests {
     fn the_read_has_every_street_and_node_with_the_arms_of_its_junctions() {
         let city = City::new();
         let read = city.network_read(0);
-        assert_eq!(read.streets.len(), 23);
+        assert_eq!(read.streets.len(), crate::city::model::Layout::sample().edges.len());
         assert!(read.streets.iter().any(|s| s.freeway) && read.streets.iter().all(|s| !s.pedestrian));
         let junctions: Vec<_> = read.nodes.iter().filter(|n| n.junction).collect();
         assert!(!junctions.is_empty() && junctions.iter().all(|n| n.arms.len() >= 3));

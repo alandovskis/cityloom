@@ -179,10 +179,10 @@ net-heading = Vérifications du réseau
 net-no-places = Il n’y a pas de réseau à vérifier.
 net-lead-none = Les vérifications du réseau n’ont rien trouvé dans l’ensemble des rues et des jonctions.
 net-lead = { $n ->
-    [one] Les vérifications du réseau ont trouvé 1 point dans l’ensemble des rues et des jonctions.
-   *[other] Les vérifications du réseau ont trouvé { $n } points dans l’ensemble des rues et des jonctions.
+    [one] Les vérifications du réseau ont trouvé 1 constat dans l’ensemble des rues et des jonctions.
+   *[other] Les vérifications du réseau ont trouvé { $n } constats dans l’ensemble des rues et des jonctions.
 }
-net-note = Elles portent sur l’ensemble du réseau et sont comptées à part des vérifications de chaque lieu.
+net-note = Elles portent sur l’ensemble du réseau et sont comptées à part des vérifications de chaque lieu. Un problème veut dire que le réseau enfreint la règle; un point à noter mérite un coup d’œil, puisque la règle peut être respectée autrement. Les règles jugent les rues telles qu’elles sont maintenant, et non par rapport à leur tracé de départ.
 net-count-none = aucun constat
 net-count-one = 1 constat
 net-count = { $n } constats
@@ -201,9 +201,21 @@ net-cycling-island = { $n ->
     [one] Cette rue a une piste cyclable coupée du reste du réseau cyclable.
    *[other] Ces { $n } rues ont des pistes cyclables coupées du reste du réseau cyclable.
 }
-net-cycling-ends = La piste cyclable s’arrête ici : aucune autre rue qui se rencontre à cet endroit n’en a une.
-net-access-broken = Cette rue piétonne n’a pas de trottoir continu de { $need } de large pour les véhicules d’urgence.
+net-cycling-ends = { $at } : la piste cyclable de { $street } s’arrête, car aucune autre rue qui s’y rencontre n’en a une.
+net-access-broken = Cette rue piétonne n’a pas de trottoir continu de { $need } de large pour les véhicules d’urgence, telle qu’elle est maintenant.
 net-crossing-missing = Cette rue amène la circulation à la jonction et n’a pas de passage pour piétons.
-net-crossing-wide = Le passage pour piétons fait ici { $width } de large, soit plus que les { $max } à ne pas dépasser.
-net-lanes-change = Les voies de circulation passent de { $from } à { $to } là où ces deux rues se rejoignent, soit plus de { $step } d’un coup.
-net-transit-break = La voie réservée au transport en commun s’arrête ici : aucune autre rue qui se rencontre à cet endroit n’en a une.
+net-crossing-wide = Le passage pour piétons fait ici { $width } de large, soit plus que le maximum de { $max }.
+net-lanes-change = { $a } compte { $from } là où elle rejoint { $b }, qui en compte { $to } : un changement de plus de { $step } d’un coup.
+net-transit-break = { $at } : la voie réservée au transport en commun de { $street } s’arrête, car aucune autre rue qui s’y rencontre n’en a une.
+net-unreadable = { $n ->
+    [one] 1 jonction n’a pas pu être lue; ses passages pour piétons ne sont donc pas vérifiés.
+   *[other] { $n } jonctions n’ont pas pu être lues; leurs passages pour piétons ne sont donc pas vérifiés.
+}
+net-more-findings = { $n ->
+    [one] 1 autre constat n’est pas listé.
+   *[other] { $n } autres constats ne sont pas listés.
+}
+net-more-places = { $n ->
+    [one] et 1 autre lieu
+   *[other] et { $n } autres lieux
+}

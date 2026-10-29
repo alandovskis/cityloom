@@ -1596,7 +1596,17 @@ fn outcomes(segs: &[Segment], existing: &[Segment]) -> Outcomes {
 /// Whether every zone of the street has an unbroken run of sidewalk wide enough for emergency access (the `access`
 /// check of a pedestrian street, over each zone).
 pub fn walkway_access(street: &Street) -> bool {
-    street.sections().into_iter().all(|segs| widest_walkway_mm(segs) >= ACCESS_LANE_MM)
+    street.sections().into_iter().all(|segs| access_ok(segs, true))
+}
+
+/// Whether one section meets the `access` check: a pedestrian street keeps room for emergency vehicles in an unbroken
+/// run of sidewalk, the others in a lane.
+fn access_ok(segs: &[Segment], pedestrian: bool) -> bool {
+    if pedestrian {
+        widest_walkway_mm(segs) >= ACCESS_LANE_MM
+    } else {
+        segs.iter().any(|s| matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= ACCESS_LANE_MM)
+    }
 }
 
 /// The widest unbroken run of adjacent sidewalk pieces; any other piece between two sidewalks breaks the run.
@@ -1620,12 +1630,7 @@ fn checks(segs: &[Segment], row_mm: i32, side: Side, freeway: bool, pedestrian: 
     let edge_walk = |s: Option<&Segment>| s.is_some_and(|s| KINDS[s.kind].id == "sidewalk");
     // A freeway has no sidewalks to ask for, and a pedestrian street no roadway to edge.
     let both_edges = freeway || pedestrian || (edge_walk(segs.first()) && edge_walk(segs.last()));
-    // A pedestrian street keeps room for emergency vehicles in an unbroken run of sidewalk; the others in a lane.
-    let access = if pedestrian {
-        widest_walkway_mm(segs) >= ACCESS_LANE_MM
-    } else {
-        segs.iter().any(|s| matches!(KINDS[s.kind].id, "travel" | "bus") && s.width_mm >= ACCESS_LANE_MM)
-    };
+    let access = access_ok(segs, pedestrian);
     // With traffic on the right, lanes coming toward the viewer (1) sit to the
     // left of lanes going away (0); with traffic on the left, the reverse. A
     // one-way street has nothing to conflict.

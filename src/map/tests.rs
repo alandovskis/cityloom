@@ -799,7 +799,7 @@ fn a_finding_says_why_and_links_the_street_and_the_junction() {
     assert!(h.contains("href=\"street.html?street=") && h.contains("href=\"intersection.html?junction=2\""), "{h}");
     assert!(h.contains("data-severity=\"problem\"") && h.contains("class=\"bad\""), "{h}");
     let lead = map_html(|| view! { <network_view::NetworkLead vm=vm.clone()/> });
-    assert!(lead.contains("found 1 thing"), "{lead}");
+    assert!(lead.contains("found 1 finding"), "{lead}");
 }
 
 #[test]

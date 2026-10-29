@@ -4,9 +4,9 @@
 //!
 //! Every figure is a placeholder, UNVERIFIED against a design manual (TAC GDG, MTQ Tome I, NACTO).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
-use crate::city::model::{EndRead, NetworkRead};
+use crate::city::model::{EndRead, NetworkRead, NodeRead};
 use crate::shared::said::{Arg, Said};
 use crate::street::model::ACCESS_LANE_MM;
 
@@ -72,15 +72,26 @@ pub struct NetworkFinding {
     pub places: Vec<Place>,
 }
 
-/// Every finding of the five checks over the network, by rule and then by place.
-pub fn check(read: &NetworkRead) -> Vec<NetworkFinding> {
+/// What the checks found, and what they could not look at.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NetworkReport {
+    /// Every finding, by check and then by place.
+    pub findings: Vec<NetworkFinding>,
+    /// How many junctions could not be read (the editor cannot draw them) or have an arm whose street is not in the
+    /// network: their crossings are not checked, and that is not the same as nothing found.
+    pub unreadable: usize,
+}
+
+/// Every finding of the five checks over the network, by check and then by place.
+pub fn check(read: &NetworkRead) -> NetworkReport {
     let ctx = Ctx::new(read);
-    let mut found = cycling(&ctx);
-    found.extend(access(&ctx));
-    found.extend(crossings(&ctx));
-    found.extend(lanes(&ctx));
-    found.extend(transit(&ctx));
-    found
+    let mut findings = cycling(&ctx);
+    findings.extend(access(&ctx));
+    let (crossing_findings, unreadable) = crossings(&ctx);
+    findings.extend(crossing_findings);
+    findings.extend(lanes(&ctx));
+    findings.extend(transit(&ctx));
+    NetworkReport { findings, unreadable }
 }
 
 /// The network indexed for the rules.
@@ -88,6 +99,10 @@ struct Ctx<'a> {
     read: &'a NetworkRead,
     /// Per node uid: the street ends that meet there, as (index into `read.streets`, 0 for the street's `a` end or 1 for `b`).
     at: BTreeMap<u32, Vec<(usize, usize)>>,
+    /// Index into `read.streets` by street uid.
+    street_by_uid: HashMap<u32, usize>,
+    /// Index into `read.nodes` by node uid.
+    node_by_uid: HashMap<u32, usize>,
 }
 
 impl<'a> Ctx<'a> {
@@ -97,7 +112,9 @@ impl<'a> Ctx<'a> {
             at.entry(s.a).or_default().push((i, 0));
             at.entry(s.b).or_default().push((i, 1));
         }
-        Ctx { read, at }
+        let street_by_uid = read.streets.iter().enumerate().map(|(i, s)| (s.uid, i)).collect();
+        let node_by_uid = read.nodes.iter().enumerate().map(|(i, n)| (n.uid, i)).collect();
+        Ctx { read, at, street_by_uid, node_by_uid }
     }
 
     fn street_place(&self, i: usize) -> Place {
@@ -105,9 +122,13 @@ impl<'a> Ctx<'a> {
         Place { kind: PlaceKind::Street, uid: s.uid, name: s.name.clone() }
     }
 
+    fn node(&self, uid: u32) -> Option<&NodeRead> {
+        self.node_by_uid.get(&uid).map(|&i| &self.read.nodes[i])
+    }
+
     /// The junction at `node` as a place, when it is one.
     fn junction_place(&self, node: u32) -> Option<Place> {
-        self.read.nodes.iter().find(|n| n.uid == node && n.junction).map(|n| Place { kind: PlaceKind::Junction, uid: n.uid, name: n.name.clone() })
+        self.node(node).filter(|n| n.junction).map(|n| Place { kind: PlaceKind::Junction, uid: n.uid, name: n.name.clone() })
     }
 
     fn end(&self, (i, e): (usize, usize)) -> &EndRead {
@@ -117,6 +138,10 @@ impl<'a> Ctx<'a> {
 
 fn count(key: &'static str, n: usize) -> Arg {
     Arg::Said(Box::new(Said::new(key).with("n", Arg::Num(n as i64))))
+}
+
+fn name(s: &Said) -> Arg {
+    Arg::Said(Box::new(s.clone()))
 }
 
 /// The street ends where something runs (`has` is true of its end) and nothing that meets it there does: the
@@ -132,40 +157,45 @@ fn ends_where_it_stops(ctx: &Ctx, has: impl Fn(&EndRead) -> bool, rule: Check, k
             if !has(ctx.end(here)) || ends.iter().any(|&other| other != here && has(ctx.end(other))) {
                 continue;
             }
+            let street = &ctx.read.streets[here.0].name;
+            let at = ctx.node(node).map_or(street, |n| &n.name);
             let mut places = vec![ctx.street_place(here.0)];
             places.extend(ctx.junction_place(node));
-            found.push(NetworkFinding { rule, severity: Severity::Notice, said: Said::new(key), places });
+            found.push(NetworkFinding { rule, severity: Severity::Notice, said: Said::new(key).with("street", name(street)).with("at", name(at)), places });
         }
     }
     found
 }
 
+fn root(parent: &mut [usize], mut i: usize) -> usize {
+    while parent[i] != i {
+        parent[i] = parent[parent[i]];
+        i = parent[i];
+    }
+    i
+}
+
 /// Cycling links cut off from the rest of the bike network, and bike lanes that stop at a node.
 fn cycling(ctx: &Ctx) -> Vec<NetworkFinding> {
     let streets = &ctx.read.streets;
-    // the streets with a bike lane, joined where they share a node
-    let bikes: Vec<usize> = (0..streets.len()).filter(|&i| streets[i].bike).collect();
-    let mut component: BTreeMap<usize, usize> = BTreeMap::new();
-    let mut groups: Vec<Vec<usize>> = Vec::new();
-    for &start in &bikes {
-        if component.contains_key(&start) {
-            continue;
-        }
-        let id = groups.len();
-        let mut group = Vec::new();
-        let mut todo = vec![start];
-        while let Some(i) = todo.pop() {
-            if component.insert(i, id).is_some() {
-                continue;
-            }
-            group.push(i);
-            for node in [streets[i].a, streets[i].b] {
-                todo.extend(ctx.at[&node].iter().map(|&(j, _)| j).filter(|&j| streets[j].bike && !component.contains_key(&j)));
+    let has_bike = |i: usize| streets[i].bike || streets[i].ends.iter().any(|e| e.bike);
+    // the streets with a bike lane, joined where both have one at the node they share (so the link and the ends agree)
+    let mut parent: Vec<usize> = (0..streets.len()).collect();
+    for ends in ctx.at.values() {
+        let mut bikes = ends.iter().filter(|&&e| ctx.end(e).bike).map(|&(i, _)| i);
+        if let Some(first) = bikes.next() {
+            for i in bikes {
+                let (a, b) = (root(&mut parent, first), root(&mut parent, i));
+                parent[b] = a;
             }
         }
-        group.sort_unstable();
-        groups.push(group);
     }
+    let mut groups: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for i in (0..streets.len()).filter(|&i| has_bike(i)) {
+        let r = root(&mut parent, i);
+        groups.entry(r).or_default().push(i);
+    }
+    let groups: Vec<Vec<usize>> = groups.into_values().collect();
     // the biggest link is the network; the others are cut off from it (the first, on a tie)
     let main = (0..groups.len()).max_by_key(|&g| (groups[g].len(), std::cmp::Reverse(groups[g][0])));
     let mut found: Vec<NetworkFinding> = (0..groups.len())
@@ -181,7 +211,9 @@ fn cycling(ctx: &Ctx) -> Vec<NetworkFinding> {
     found
 }
 
-/// Pedestrian streets that have no unbroken sidewalk run for emergency access.
+/// Pedestrian streets that have no unbroken sidewalk run for emergency access. The rule is absolute: a street is
+/// judged as it stands, not against how it was first laid out (the places' own checks do that), so an imported street
+/// that was never wide enough stays a notice until it is changed.
 fn access(ctx: &Ctx) -> Vec<NetworkFinding> {
     ctx.read
         .streets
@@ -190,19 +222,25 @@ fn access(ctx: &Ctx) -> Vec<NetworkFinding> {
         .filter(|(_, s)| s.pedestrian && !s.walkway_ok)
         .map(|(i, _)| NetworkFinding {
             rule: Check::Access,
-            severity: Severity::Problem,
+            severity: Severity::Notice,
             said: Said::new("net-access-broken").with("need", Arg::Length(ACCESS_LANE_MM)),
             places: vec![ctx.street_place(i)],
         })
         .collect()
 }
 
-/// Arms of a junction that take traffic and have no crossing, or one too wide.
-fn crossings(ctx: &Ctx) -> Vec<NetworkFinding> {
+/// Arms of a junction that take traffic and have no crossing, or one too wide; and how many junctions could not be
+/// looked at.
+fn crossings(ctx: &Ctx) -> (Vec<NetworkFinding>, usize) {
     let mut found = Vec::new();
+    let mut unreadable = 0;
     for node in ctx.read.nodes.iter().filter(|n| n.junction) {
+        let mut unknown = node.unreadable;
         for arm in &node.arms {
-            let Some(i) = ctx.read.streets.iter().position(|s| s.uid == arm.street) else { continue };
+            let Some(&i) = ctx.street_by_uid.get(&arm.street) else {
+                unknown = true;
+                continue;
+            };
             let s = &ctx.read.streets[i];
             if s.pedestrian || s.freeway {
                 continue;
@@ -221,20 +259,22 @@ fn crossings(ctx: &Ctx) -> Vec<NetworkFinding> {
                 places: vec![ctx.street_place(i), Place { kind: PlaceKind::Junction, uid: node.uid, name: node.name.clone() }],
             });
         }
+        unreadable += usize::from(unknown);
     }
-    found
+    (found, unreadable)
 }
 
-/// Two streets that join at a plain connection with lane counts that differ by more than a lane.
+/// Two streets that join at a plain connection with lane counts that differ by more than a lane. A freeway or a
+/// pedestrian street is not compared: its lanes are not a choice of the street it joins.
 fn lanes(ctx: &Ctx) -> Vec<NetworkFinding> {
     let mut found = Vec::new();
     for (&node, ends) in &ctx.at {
-        if ctx.read.nodes.iter().any(|n| n.uid == node && n.junction) {
+        if ctx.node(node).is_some_and(|n| n.junction) {
             continue;
         }
         let [x, y] = ends.as_slice() else { continue };
         let (sx, sy) = (&ctx.read.streets[x.0], &ctx.read.streets[y.0]);
-        if x.0 == y.0 || sx.pedestrian || sy.pedestrian {
+        if x.0 == y.0 || sx.pedestrian || sy.pedestrian || sx.freeway || sy.freeway {
             continue;
         }
         let (from, to) = (ctx.end(*x).lanes, ctx.end(*y).lanes);
@@ -243,7 +283,9 @@ fn lanes(ctx: &Ctx) -> Vec<NetworkFinding> {
                 rule: Check::Lanes,
                 severity: Severity::Problem,
                 said: Said::new("net-lanes-change")
+                    .with("a", name(&sx.name))
                     .with("from", count("net-lanes", from))
+                    .with("b", name(&sy.name))
                     .with("to", count("net-lanes", to))
                     .with("step", count("net-lanes", MAX_LANE_STEP)),
                 places: vec![ctx.street_place(x.0), ctx.street_place(y.0)],
@@ -287,6 +329,7 @@ mod tests {
             name: Said::new("test-node"),
             junction: !arms.is_empty(),
             arms: arms.iter().map(|&(street, crossing_mm)| ArmRead { street, crossing_mm }).collect(),
+            unreadable: false,
         }
     }
 
@@ -297,7 +340,7 @@ mod tests {
     }
 
     fn of(read: &NetworkRead, rule: Check) -> Vec<NetworkFinding> {
-        check(read).into_iter().filter(|f| f.rule == rule).collect()
+        check(read).findings.into_iter().filter(|f| f.rule == rule).collect()
     }
 
     fn uids(f: &NetworkFinding) -> Vec<(PlaceKind, u32)> {
@@ -352,7 +395,7 @@ mod tests {
         let f = of(&r, Check::Access);
         assert_eq!(f.len(), 1);
         assert_eq!(uids(&f[0]), vec![(PlaceKind::Street, 2)]);
-        assert_eq!(f[0].severity, Severity::Problem);
+        assert_eq!(f[0].severity, Severity::Notice, "the rule is absolute, not against how the street was first laid out");
         r.streets[1].walkway_ok = true;
         assert!(of(&r, Check::Access).is_empty());
         // a street with traffic is judged by its lanes, not by this rule
@@ -420,5 +463,54 @@ mod tests {
         assert_eq!(uids(&f[0]), vec![(PlaceKind::Street, 1), (PlaceKind::Junction, 2)]);
         r.streets[1].ends[0] = end(2, false, true);
         assert!(of(&r, Check::Transit).is_empty());
+    }
+
+    #[test]
+    fn two_bike_streets_join_only_where_both_have_a_bike_lane_at_the_node() {
+        let mut r = line();
+        r.streets[0] = with_bike(r.streets[0].clone());
+        r.streets[1] = with_bike(r.streets[1].clone());
+        // street 2 has a lane somewhere along it but none at the end it meets street 1 by
+        r.streets[1].ends[0] = end(2, false, false);
+        let islands = |r: &NetworkRead| of(r, Check::Cycling).into_iter().filter(|f| f.said.key == "net-cycling-island").count();
+        assert_eq!(islands(&r), 1, "the two are not joined where the lane does not meet");
+        r.streets[1].ends[0] = end(2, true, false);
+        assert_eq!(islands(&r), 0);
+    }
+
+    #[test]
+    fn lanes_are_not_compared_with_a_freeway() {
+        let mut r = line();
+        r.streets[0].ends[1] = end(5, false, false);
+        r.streets[0].freeway = true;
+        assert!(of(&r, Check::Lanes).is_empty());
+    }
+
+    #[test]
+    fn a_finding_names_the_streets_and_the_place_it_is_about() {
+        let mut r = line();
+        r.streets[0].ends[1] = end(4, false, false);
+        let f = &of(&r, Check::Lanes)[0];
+        let arg = |k: &str| f.said.args.iter().find(|(n, _)| *n == k).map(|(_, a)| a.clone());
+        assert!(matches!(arg("a"), Some(Arg::Said(_))) && matches!(arg("b"), Some(Arg::Said(_))), "{:?}", f.said);
+        let mut r = line();
+        r.streets[0] = with_bike(r.streets[0].clone());
+        r.nodes[1] = node(2, &[(1, None), (2, None)]);
+        let f = of(&r, Check::Cycling).into_iter().find(|f| f.said.key == "net-cycling-ends").unwrap();
+        assert!(f.said.args.iter().any(|(n, _)| *n == "street") && f.said.args.iter().any(|(n, _)| *n == "at"), "{:?}", f.said);
+    }
+
+    #[test]
+    fn a_junction_that_could_not_be_read_or_has_an_arm_of_no_known_street_is_counted_not_passed() {
+        let mut r = line();
+        r.nodes[1] = node(2, &[(1, Some(3_000)), (2, Some(3_000))]);
+        assert_eq!(check(&r).unreadable, 0);
+        r.nodes[1].unreadable = true;
+        assert_eq!(check(&r).unreadable, 1);
+        r.nodes[1].unreadable = false;
+        r.nodes[1].arms.push(ArmRead { street: 99, crossing_mm: None });
+        let report = check(&r);
+        assert_eq!(report.unreadable, 1);
+        assert!(report.findings.is_empty(), "an arm that cannot be found is not a missing crossing: {:?}", report.findings);
     }
 }
