@@ -1395,7 +1395,9 @@ svg pattern circle {
   position: relative;
   display: block;
   box-sizing: border-box;
-  height: calc(var(--tracks, 1) * 24px + 6px);
+  height: calc(var(--tracks, 1) * 24px + 8px);
+  /* the other strips show the street's length with their free cells; this one has none, so it draws its own edge */
+  border: 1px dotted var(--zone-edge);
   overflow-x: hidden;
   overflow-y: auto;
 }
