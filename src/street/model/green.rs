@@ -676,6 +676,9 @@ impl Editor {
         }
         let can_add = self.curb_frame(true).is_ok() && (0..content.zone_count()).any(|z| content.section(z).iter().any(|s| !is_roadway(s.kind)));
         let failing: Vec<usize> = self.green_failures().iter().map(|f| f.instance).collect();
+        // A cell is drawn at least a twentieth of the row wide (the row is about 500 px and a cell wants 24), so the
+        // tracks are laid out as if each element were that long.
+        let least_mm = length_mm / 20;
         let mut track_ends: Vec<i32> = Vec::new();
         let cells: Vec<GreenCell> = content
             .green
@@ -686,7 +689,7 @@ impl Editor {
                 if track == track_ends.len() {
                     track_ends.push(0);
                 }
-                track_ends[track] = g.to_mm();
+                track_ends[track] = g.to_mm().max(g.from_mm.saturating_add(least_mm));
                 let sections = content.sections_over(g.from_mm, g.to_mm(), length_mm);
                 let segs = sections.first().copied().unwrap_or(&content.segments);
                 let host = host_at(segs, g.offset_mm);
@@ -1617,6 +1620,27 @@ mod tests {
         assert!(green_ids(&e).contains(&"green-stop"));
         e.remove_green(0).unwrap();
         assert!(green_ids(&e).is_empty(), "no green, no green rows");
+    }
+
+    #[test]
+    fn the_row_gives_cells_tracks_so_that_none_overlaps_at_any_length() {
+        // A 300 m street with a tree every 8 m: the strip is about 535 px wide, 24 px a cell is 13 m, so cells on one
+        // line would cover each other unless the tracks reckon with the least width a cell is drawn.
+        let green: Vec<Green> = (0..37).map(|k| Green { length_mm: 1_500, ..tree(4_000 + 8_000 * k, 1_700) }).collect();
+        let s = Street { green, length_mm: Some(300_000), ..Street::sample(0, Side::Right) };
+        let e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 300_000, from_end: ZoneEnd::First }));
+        let row = e.view().green;
+        let least = 300_000 / 20;
+        assert!(row.tracks >= 2, "{}", row.tracks);
+        for track in 0..row.tracks {
+            let mut previous: Option<&GreenCell> = None;
+            for c in row.cells.iter().filter(|c| c.track == track) {
+                if let Some(p) = previous {
+                    assert!(c.from_mm >= p.from_mm + least.max(p.to_mm - p.from_mm), "track {track}: {} after {}", c.from_mm, p.from_mm);
+                }
+                previous = Some(c);
+            }
+        }
     }
 
     #[test]
