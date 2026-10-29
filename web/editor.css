@@ -2655,6 +2655,23 @@ dl.prov dd:last-child {
   stroke: var(--ph-muted);
   stroke-width: 2;
 }
+/* A movement that meets something in the phase: dashed (set on the line itself) and in the warning colour, so colour is not
+   the only cue. */
+.phase-svg .ph-move.warn .ph-line {
+  stroke: var(--warn);
+}
+.phase-svg .ph-move.warn .ph-head {
+  fill: var(--warn);
+}
+/* The sentences under a card. */
+.phase-conflicts {
+  margin: 4px 0 0;
+  padding: 6px 8px 6px 22px;
+  font-size: 0.85em;
+  color: var(--warn);
+  background: var(--warn-wash);
+  border-radius: 6px;
+}
 @media (forced-colors: active) {
   .phase-card[aria-current="true"] {
     outline: 2px solid Highlight;
@@ -2678,6 +2695,17 @@ dl.prov dd:last-child {
   }
   .phase-svg .ph-bike.lit .sym * {
     stroke: Highlight;
+  }
+  .phase-svg .ph-move.warn .ph-line {
+    stroke: Mark;
+  }
+  .phase-svg .ph-move.warn .ph-head {
+    fill: Mark;
+  }
+  .phase-conflicts {
+    color: CanvasText;
+    background: Canvas;
+    border: 1px dashed CanvasText;
   }
 }
 .signal-tools {

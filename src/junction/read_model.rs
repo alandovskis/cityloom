@@ -741,6 +741,11 @@ pub struct PhaseView {
     pub pattern: Pattern,
     /// The patterns that fit this junction's lanes, in the order they are offered (never Custom).
     pub patterns: Vec<PatternView>,
+    /// What meets in this phase, each as a sentence naming the phase, the movement and who it meets. A warning: the
+    /// phase is allowed as it is.
+    pub conflicts: Vec<Said>,
+    /// The vehicle movements that take part in a conflict, to mark on the drawing.
+    pub conflict_moves: Vec<crate::junction::signal::Move>,
 }
 
 /// One crossing or bike movement a phase can switch: the street (by uid and name) and whether it runs in the phase.
@@ -775,15 +780,21 @@ fn and_list(mut items: Vec<Said>) -> Option<Said> {
     })
 }
 
+/// How many warnings the check lists in its detail.
+const MAX_LISTED_CONFLICTS: usize = 3;
+
 fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView> {
     let plan = signal::plan(s, region)?;
     let find = |uid: u32| arms.iter().find(|a| a.uid == uid);
     let name = |uid: u32| find(uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
+    let found = signal::conflicts(s, &plan);
     let phases = plan
         .phases
         .iter()
         .enumerate()
         .map(|(n, p)| PhaseView {
+            conflicts: found.iter().filter(|(at, _)| *at == n).map(|(_, c)| conflict_said(n, c, arms)).collect(),
+            conflict_moves: conflict_moves(found.iter().filter(|(at, _)| *at == n).map(|(_, c)| c)),
             name: phase_name(n, p, &find, &name),
             summary: phase_summary(p, arms),
             pattern: signal::pattern_of(s, region, p),
@@ -807,6 +818,46 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
         })
         .collect();
     Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested })
+}
+
+/// The movements that take part in the conflicts, each once.
+fn conflict_moves<'a>(found: impl Iterator<Item = &'a signal::Conflict>) -> Vec<signal::Move> {
+    let mut moves: Vec<signal::Move> = Vec::new();
+    for c in found {
+        let (a, b) = match *c {
+            signal::Conflict::Vehicles { a, b } => (a, Some(b)),
+            signal::Conflict::Walk { mv, .. } | signal::Conflict::Ride { mv, .. } => (mv, None),
+        };
+        for m in std::iter::once(a).chain(b) {
+            if !moves.contains(&m) {
+                moves.push(m);
+            }
+        }
+    }
+    moves
+}
+
+/// "cars from the north side going left": a movement, by the compass point of its street and its kind of turn.
+fn move_said(m: signal::Move, arms: &[ArmView]) -> Said {
+    let bearing = |uid: u32| arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.bearing);
+    let turn = match turn_class(bearing(m.from), bearing(m.to)) {
+        LEFT => "jn-turn-left",
+        RIGHT => "jn-turn-right",
+        _ => "jn-turn-through",
+    };
+    Said::new("jn-conflict-move").with("from", Arg::Said(Box::new(compass_said(bearing(m.from))))).with("turn", Arg::Said(Box::new(Said::new(turn))))
+}
+
+/// A conflict of phase `n` (from 0) as a sentence: the movement, and what it meets.
+pub(super) fn conflict_said(n: usize, c: &signal::Conflict, arms: &[ArmView]) -> Said {
+    let phase = Arg::Num(n as i64 + 1);
+    let side = |uid: u32| Arg::Said(Box::new(compass_said(arms.iter().find(|a| a.uid == uid).map_or(0, |a| a.bearing))));
+    let said = |m: signal::Move| Arg::Said(Box::new(move_said(m, arms)));
+    match *c {
+        signal::Conflict::Vehicles { a, b } => Said::new("jn-conflict-vehicles").with("n", phase).with("a", said(a)).with("b", said(b)),
+        signal::Conflict::Walk { mv, arm } => Said::new("jn-conflict-walk").with("n", phase).with("mv", said(mv)).with("side", side(arm)),
+        signal::Conflict::Ride { mv, arm } => Said::new("jn-conflict-ride").with("n", phase).with("mv", said(mv)).with("side", side(arm)),
+    }
 }
 
 fn option_list(all: &[u32], on: &[u32], name: &impl Fn(u32) -> Said) -> Vec<MovementOption> {
@@ -2080,6 +2131,20 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
             Said::new("jn-check-signal-cycle-ok").with("seconds", Arg::Num(seconds)),
             (plan.cycle_s > MAX_CYCLE_S)
                 .then(|| Said::new("jn-check-signal-cycle-bad").with("seconds", Arg::Num(seconds)).with("max", Arg::Num(i64::from(MAX_CYCLE_S)))),
+        ));
+        // A phase that puts movements together that meet is allowed, and warned about.
+        let meeting: Vec<Said> = signal::conflicts(s, &plan).iter().map(|(n, c)| conflict_said(*n, c, arms)).collect();
+        let mut first: Vec<Said> = meeting.iter().take(MAX_LISTED_CONFLICTS).cloned().collect();
+        if meeting.len() > MAX_LISTED_CONFLICTS {
+            first.push(Said::new("jn-conflict-more").with("n", Arg::Num((meeting.len() - MAX_LISTED_CONFLICTS) as i64)));
+        }
+        let detail =
+            first.into_iter().reduce(|head, tail| Said::new("jn-ph-join").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail))));
+        out.push(check(
+            "signal-conflicts",
+            "jn-check-signal-conflicts",
+            Said::new("jn-check-signal-conflicts-ok"),
+            detail.map(|list| Said::new("jn-check-signal-conflicts-bad").with("list", Arg::Said(Box::new(list)))),
         ));
     }
     // A turbo wants its streets to meet the ring square.
@@ -3411,6 +3476,103 @@ mod tests {
     #[test]
     fn an_unknown_selection_name_selects_nothing() {
         assert_eq!(Target::named("wedge", 3, 0), Target::None);
+    }
+
+    // ---- conflicts in a phase ----
+
+    fn arm_by(j: &Junction, bearing: i32) -> u32 {
+        j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid
+    }
+
+    fn bike_street() -> Junction {
+        junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)])
+    }
+
+    #[test]
+    fn the_suggested_plan_has_no_conflict_and_the_check_passes() {
+        for j in [Junction::new(0), bike_street()] {
+            let v = j.view();
+            assert!(v.signal.as_ref().unwrap().phases.iter().all(|p| p.conflicts.is_empty() && p.conflict_moves.is_empty()));
+            let c = check(&v, "signal-conflicts").unwrap();
+            assert!(c.ok, "{}", en(&c.detail));
+            assert!(plain(&en(&c.detail)).contains("No phase"), "{}", en(&c.detail));
+        }
+        assert!(check(&Junction::new(1).view(), "signal-conflicts").is_none(), "no signal, no check");
+    }
+
+    #[test]
+    fn traffic_into_a_walked_crossing_is_a_warning_in_both_languages_and_a_failing_check_until_the_cause_goes() {
+        let mut j = Junction::new(0);
+        let n = arm_by(&j, 0);
+        assert!(j.set_phase_walk(0, n, true), "allowed, with a warning");
+        let v = j.view();
+        let phase = &v.signal.as_ref().unwrap().phases[0];
+        assert!(!phase.conflicts.is_empty() && !phase.conflict_moves.is_empty());
+        let said = &phase.conflicts[0];
+        assert!(plain(&en(said)).starts_with("Phase 1: cars from the north side going "), "{}", en(said));
+        assert!(en(said).contains("meet people walking across on the north side"), "{}", en(said));
+        assert!(plain(&fr(said)).starts_with("Phase 1 : les voitures du côté nord qui vont "), "{}", fr(said));
+        assert!(fr(said).contains("rencontrent les piétons qui traversent du côté nord"), "{}", fr(said));
+        let c = check(&v, "signal-conflicts").unwrap();
+        assert!(!c.ok && en(&c.detail).contains("meet people walking across"), "{}", en(&c.detail));
+        assert!(fr(&c.detail).contains("piétons"), "{}", fr(&c.detail));
+        assert!(j.set_phase_walk(0, n, false));
+        let v = j.view();
+        assert!(v.signal.as_ref().unwrap().phases[0].conflicts.is_empty());
+        assert!(check(&v, "signal-conflicts").unwrap().ok);
+    }
+
+    #[test]
+    fn a_turn_that_gives_way_to_a_crossing_is_not_warned_about() {
+        let j = Junction::new(0);
+        let (n, e) = (arm_by(&j, 0), arm_by(&j, 90));
+        assert!(j.view().signal.as_ref().unwrap().phases[0].walk_arms.contains(&e), "east's crossing is walked while north turns into it");
+        assert!(j.view().signal.as_ref().unwrap().phases[0].moves.iter().any(|m| m.from == n && m.to == e));
+        assert!(j.view().signal.as_ref().unwrap().phases[0].conflicts.is_empty());
+    }
+
+    #[test]
+    fn traffic_across_a_bike_movement_that_rides_is_a_warning_in_both_languages() {
+        let mut j = bike_street();
+        let (n, e) = (arm_by(&j, 0), arm_by(&j, 90));
+        assert!(j.set_phase_ride(0, e, true), "east's bikes ride in north's phase, across its traffic");
+        let v = j.view();
+        let phase = &v.signal.as_ref().unwrap().phases[0];
+        let said = phase.conflicts.iter().find(|s| en(s).contains("bikes")).expect("a ride warning");
+        assert!(plain(&en(said)).starts_with("Phase 1: cars from the north side going "), "{}", en(said));
+        assert!(en(said).contains("cross bikes riding on the east side"), "{}", en(said));
+        assert!(fr(said).contains("croisent les vélos du côté est"), "{}", fr(said));
+        assert!(phase.conflict_moves.iter().all(|m| m.from == n));
+    }
+
+    #[test]
+    fn two_movements_that_cross_are_a_warning_in_both_languages() {
+        use crate::junction::signal::{Move, SignalPlan, StoredPhase};
+        let mut j = Junction::new(0);
+        let (n, e, so, w) = (arm_by(&j, 0), arm_by(&j, 90), arm_by(&j, 180), arm_by(&j, 270));
+        let moves = vec![Move { from: n, to: so }, Move { from: e, to: w }];
+        j.set_plan_for_test(SignalPlan { phases: vec![StoredPhase { moves, ..Default::default() }] });
+        let v = j.view();
+        let phase = &v.signal.as_ref().unwrap().phases[0];
+        assert_eq!(phase.conflicts.len(), 1);
+        let said = &phase.conflicts[0];
+        assert_eq!(plain(&en(said)), "Phase 1: cars from the north side going straight on cross cars from the east side going straight on.");
+        assert_eq!(plain(&fr(said)), "Phase 1 : les voitures du côté nord qui vont tout droit croisent les voitures du côté est qui vont tout droit.");
+        assert_eq!(phase.conflict_moves.len(), 2);
+    }
+
+    #[test]
+    fn the_check_lists_only_the_first_few_warnings() {
+        use crate::junction::signal::{Move, SignalPlan, StoredPhase};
+        let mut j = Junction::new(0);
+        let (n, e, so, w) = (arm_by(&j, 0), arm_by(&j, 90), arm_by(&j, 180), arm_by(&j, 270));
+        let moves = vec![Move { from: n, to: so }, Move { from: so, to: n }, Move { from: e, to: w }, Move { from: w, to: e }];
+        j.set_plan_for_test(SignalPlan { phases: vec![StoredPhase { moves, ..Default::default() }] });
+        let detail = en(&check(&j.view(), "signal-conflicts").unwrap().detail);
+        assert_eq!(detail.matches("Phase 1:").count(), 3, "{detail}");
+        assert!(detail.ends_with("And 1 more meeting."), "the rest is counted, not hidden: {detail}");
+        let detail = fr(&check(&j.view(), "signal-conflicts").unwrap().detail);
+        assert!(plain(&detail).ends_with("Et 1 autre rencontre."), "{detail}");
     }
 
     // ---- signal checks ----

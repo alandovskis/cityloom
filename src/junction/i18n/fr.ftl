@@ -589,3 +589,22 @@ jn-ph-rides-legend = Vélos
 jn-ph-walk-box = Les piétons traversent { $other }
 jn-ph-ride-box = Les vélos circulent sur { $other }
 jn-ph-walks-fixed = Cette phase est une phase piétonne exclusive : tout le monde traverse toutes les rues. Choisissez un autre modèle pour régler les passages un à un.
+
+## Avertissements : mouvements d’une phase qui se rencontrent (src/junction/signal.rs `conflicts`)
+jn-conflict-move = les voitures du côté { $from } qui vont { $turn }
+jn-conflict-vehicles = Phase { $n } : { $a } croisent { $b }.
+jn-conflict-walk = Phase { $n } : { $mv } rencontrent les piétons qui traversent du côté { $side }.
+jn-conflict-ride = Phase { $n } : { $mv } croisent les vélos du côté { $side }.
+jn-conflict-list = Avertissements de la phase { $n }
+jn-conflict-heard = Attention : { $conflict }
+jn-conflict-heard-many = Attention : { $count } mouvements se rencontrent maintenant, { $phases ->
+    [one] à la phase
+   *[other] aux phases
+} { $list }. { $first }
+jn-conflict-more = { $n ->
+    [one] Et { $n } autre rencontre.
+   *[other] Et { $n } autres rencontres.
+}
+jn-check-signal-conflicts = Mouvements qui se rencontrent
+jn-check-signal-conflicts-ok = Aucune phase ne réunit des mouvements qui se rencontrent
+jn-check-signal-conflicts-bad = { $list }

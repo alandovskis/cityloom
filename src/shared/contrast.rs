@@ -204,6 +204,36 @@ mod tests {
     }
 
     #[test]
+    fn a_movement_that_meets_something_is_3_to_1_on_its_road_and_its_warning_text_4_5_to_1_with_forced_colours() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let (warn, road, panel) = (pick(&token(app, "warn"), i), pick(&token(editor, "ph-road"), i), pick(&token(app, "panel"), i));
+            assert!(contrast(&warn, &road) >= 3.0, "warn on the phase road {theme}: {:.2}", contrast(&warn, &road));
+            assert!(contrast(&warn, &panel) >= 4.5, "warning text on the panel {theme}: {:.2}", contrast(&warn, &panel));
+        }
+        let wash = token(app, "warn-wash").0.expect("a light wash");
+        let warn = token(app, "warn").0.unwrap();
+        assert!(contrast(&warn, &wash) >= 4.5, "warning text on its wash: {:.2}", contrast(&warn, &wash));
+        // Dark: the wash is translucent, so it is measured composited over the dark panel it lies on.
+        let at = app.find("--warn-wash: ").unwrap();
+        let rgb = &app[at..at + app[at..].find(';').unwrap()];
+        let rgb = &rgb[rgb.find("rgb(").expect("a translucent dark wash") + 4..];
+        let n: Vec<f64> = rgb[..rgb.find(')').unwrap()].split(|c: char| c == ' ' || c == '/').filter(|t| !t.is_empty()).map(|t| t.parse().unwrap()).collect();
+        let panel = pick(&token(app, "panel"), 1);
+        let under: Vec<f64> = (0..3).map(|k| f64::from(u8::from_str_radix(&panel[1 + 2 * k..3 + 2 * k], 16).unwrap())).collect();
+        let washed = format!("#{}", (0..3).map(|k| format!("{:02x}", (n[k] * n[3] + under[k] * (1.0 - n[3])).round() as u8)).collect::<String>());
+        let dark_warn = pick(&token(app, "warn"), 1);
+        assert!(contrast(&dark_warn, &washed) >= 4.5, "warning text on its wash over the panel, dark: {:.2}", contrast(&dark_warn, &washed));
+        let line = rule(editor, ".phase-svg .ph-move.warn .ph-line");
+        assert!(line.contains("stroke: var(--warn);"), "{line}");
+        let list = rule(editor, ".phase-conflicts");
+        assert!(list.contains("color: var(--warn);") && list.contains("background: var(--warn-wash);"), "{list}");
+        let forced = editor.find("  .phase-svg .ph-move.warn .ph-line {\n    stroke: Mark;").expect("forced-colours rule");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some());
+    }
+
+    #[test]
     fn the_stop_marks_clear_three_to_one_on_the_road_in_both_themes() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
         let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();

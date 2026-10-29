@@ -646,6 +646,82 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(page.locator("#p-checks")).toContainText("Not enough time to cross at");
   });
 
+  test("movements that meet in a phase are warned about on the card, the drawing and the checks, said aloud, never refused, and the warning goes with its cause", async ({
+    page,
+  }) => {
+    const walks = page.getByRole("group", { name: /^People walking in phase 1, / });
+    const card = page.locator("#inspector .signal-phases .phase-card").first();
+    const warning = page.locator("#inspector .phase-conflicts");
+    const meetCheck = page.locator("#p-checks li", { hasText: "Movements that meet" });
+
+    // The suggested plan meets nothing: no list, no mark, a passing check.
+    await expect(warning).toHaveCount(0);
+    await expect(card.locator("svg.phase-svg .ph-move.warn")).toHaveCount(0);
+    await page.locator("#t-checks").click();
+    await expect(meetCheck).toHaveClass(/ok/);
+    await expect(meetCheck).toContainText("No phase puts movements together that meet");
+
+    // Switch on the crossing of the street whose own cars go in phase 1: allowed (the box stays checked), and warned about.
+    const off = walks.locator("input:not(:checked)").first();
+    const id = await off.getAttribute("id");
+    await off.focus();
+    await page.keyboard.press("Space");
+    await expect(page.locator(`#${id}`)).toBeChecked();
+    await expect(live(page)).toContainText(/Warning: /);
+    await expect(live(page)).toContainText(/meet people walking across on the/);
+    await expect(warning.first()).toContainText("Phase 1: cars from the");
+    await expect(page.getByRole("list", { name: "Warnings for phase 1" })).toBeVisible();
+    // The movement is dashed as well as coloured.
+    const marked = card.locator("svg.phase-svg .ph-move.warn .ph-line");
+    expect(await marked.count()).toBeGreaterThanOrEqual(1);
+    await expect(marked.first()).toHaveAttribute("stroke-dasharray", /\d/);
+    await page.locator("#t-checks").click();
+    await expect(meetCheck).not.toHaveClass(/ok/);
+    await expect(meetCheck).toContainText("meet people walking across");
+
+    // A later edit that leaves the warning alone does not say it again.
+    await page.locator("#undo").click();
+    await page.locator("#redo").click();
+    await page.evaluate(() => {
+      document.querySelector("#live")!.textContent = "";
+    });
+    const other = page
+      .getByRole("group", { name: /^People walking in phase 2, / })
+      .locator("input:checked")
+      .first();
+    await other.focus();
+    await page.keyboard.press("Space");
+    await expect(live(page)).toContainText("no longer walk across");
+    await expect(live(page)).not.toContainText("Warning");
+    await page.keyboard.press("Space");
+
+    // Removing the cause removes the warning.
+    await page.locator(`#${id}`).focus();
+    await page.keyboard.press("Space");
+    await expect(page.locator(`#${id}`)).not.toBeChecked();
+    await expect(warning).toHaveCount(0);
+    await expect(card.locator("svg.phase-svg .ph-move.warn")).toHaveCount(0);
+    await page.locator("#t-checks").click();
+    await expect(meetCheck).toHaveClass(/ok/);
+  });
+
+  test("the warning about movements that meet is in French", async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr-CA"));
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    const walks = page.getByRole("group", { name: /^Piétons en marche à la phase 1, / });
+    const off = walks.locator("input:not(:checked)").first();
+    await off.focus();
+    await page.keyboard.press("Space");
+    await expect(live(page)).toContainText(/Attention\s:\s/);
+    await expect(live(page)).toContainText("rencontrent les piétons qui traversent du côté");
+    await expect(page.getByRole("list", { name: "Avertissements de la phase 1" })).toBeVisible();
+    await page.locator("#t-checks").click();
+    await expect(page.locator("#p-checks li", { hasText: "Mouvements qui se rencontrent" })).toContainText(
+      "rencontrent les piétons",
+    );
+  });
+
   test("the walking checklist is in French and announces a switch in French", async ({ page }) => {
     await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr-CA"));
     await page.reload();

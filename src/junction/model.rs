@@ -980,6 +980,13 @@ impl Junction {
         &mut self.states[self.cursor]
     }
 
+    /// Puts `plan` in the current state as the person's own, whatever the lanes say: the tests' way to a plan the editing
+    /// cannot reach (several streets' traffic in one phase).
+    #[cfg(test)]
+    pub(crate) fn set_plan_for_test(&mut self, plan: crate::junction::signal::SignalPlan) {
+        self.current_mut().signal_plan = Some(plan);
+    }
+
     pub fn arm(&self, uid: u32) -> Option<&Arm> {
         self.current().arms.iter().find(|a| a.uid == uid)
     }
