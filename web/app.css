@@ -1587,3 +1587,27 @@ a.btn {
     padding: 24px 20px 28px;
   }
 }
+/* The Network checks section of the map's left panel: a heading and a count for each check, then its findings. */
+.net-h {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 8px;
+  margin: 14px 8px 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.net-count {
+  color: var(--ink-2);
+  font-weight: 400;
+}
+.net-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 14px;
+}
+.net-links a {
+  display: inline-block;
+  padding: 4px 0;
+  text-decoration: underline;
+}
