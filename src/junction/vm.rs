@@ -392,21 +392,24 @@ impl JunctionVm {
     /// The edit's text, then a sentence for the movements that now meet and did not before (`meeting`), then one for each
     /// phase (from 0) the edit took off its ready-made pattern.
     fn say_edit_with(&self, lost: &[usize], meeting: &[Meeting]) {
-        if let Some(mut t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
-            for note in self.meeting_note(meeting).into_iter().chain(self.lost_note(lost)) {
-                t = format!("{t} {note}");
-            }
-            self.ports.announcer.say(&t);
+        if let Some(t) = text::edit_text(&self.view_now(), &self.i18n, self.units_now()) {
+            self.say_parts(std::iter::once(t).chain(self.notes(meeting, lost)));
         }
     }
 
     /// Says `text`, then the sentence for the movements that meet now and did not before.
     fn say_with_meetings(&self, text: String, meeting: &[Meeting]) {
-        let t = match self.meeting_note(meeting) {
-            Some(note) => format!("{text} {note}"),
-            None => text,
-        };
-        self.ports.announcer.say(&t);
+        self.say_parts(std::iter::once(text).chain(self.meeting_note(meeting)));
+    }
+
+    /// The sentences that follow an edit's text: the movements that now meet, then the phases off their pattern.
+    fn notes(&self, meeting: &[Meeting], lost: &[usize]) -> Vec<String> {
+        self.meeting_note(meeting).into_iter().chain(self.lost_note(lost)).collect()
+    }
+
+    /// Announces the parts as one text.
+    fn say_parts(&self, parts: impl Iterator<Item = String>) {
+        self.ports.announcer.say(&parts.collect::<Vec<String>>().join(" "));
     }
 
     /// The movements that meet in the signal plan now, each with its phase's street.
@@ -420,15 +423,14 @@ impl JunctionVm {
         let v = self.view_now();
         let new: Vec<Meeting> = self.meetings().into_iter().filter(|(_, uid, c)| !before.iter().any(|(_, u, b)| u == uid && b == c)).collect();
         let (first, rest) = new.split_first()?;
+        let first_said = say_now(&self.i18n, self.units_now(), &super::read_model::conflict_said(first.0, &first.2, &v.arms));
         if rest.is_empty() {
-            let said = say_now(&self.i18n, self.units_now(), &super::read_model::conflict_said(first.0, &first.2, &v.arms));
-            return Some(self.i18n.tr_now("jn-conflict-heard", &Args::new().str("conflict", said)));
+            return Some(self.i18n.tr_now("jn-conflict-heard", &Args::new().str("conflict", first_said)));
         }
         let mut phases: Vec<usize> = new.iter().map(|m| m.0).collect();
         phases.dedup();
         let list = self.number_list(&phases);
-        let first = say_now(&self.i18n, self.units_now(), &super::read_model::conflict_said(first.0, &first.2, &v.arms));
-        let args = Args::new().num("count", new.len() as i64).num("phases", phases.len() as i64).str("list", list).str("first", first);
+        let args = Args::new().num("count", new.len() as i64).num("phases", phases.len() as i64).str("list", list).str("first", first_said);
         Some(self.i18n.tr_now("jn-conflict-heard-many", &args))
     }
 
@@ -487,9 +489,9 @@ impl crate::shell::Target for JunctionVm {
         let meeting = self.meetings();
         let changed = self.edit(|j| j.set_region(region));
         if changed {
-            let notes: Vec<String> = self.meeting_note(&meeting).into_iter().chain(self.lost_note(&self.lost_since(before))).collect();
+            let notes = self.notes(&meeting, &self.lost_since(before));
             if !notes.is_empty() {
-                self.ports.announcer.say(&notes.join(" "));
+                self.say_parts(notes.into_iter());
             }
         }
         changed
