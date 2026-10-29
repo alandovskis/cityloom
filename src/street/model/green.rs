@@ -96,6 +96,15 @@ pub enum TreeSize {
 }
 
 impl TreeSize {
+    /// The message that names it: "small", "medium", "large".
+    pub fn name_key(self) -> &'static str {
+        match self {
+            TreeSize::S => "green-size-s",
+            TreeSize::M => "green-size-m",
+            TreeSize::L => "green-size-l",
+        }
+    }
+
     /// The width of the crown, which is also the spacing between trees.
     ///
     /// UNVERIFIED (placeholder): 6 000, 8 000 and 10 000 mm.
@@ -927,7 +936,7 @@ impl Editor {
                         Said::new("check-detail-green-soil")
                             .with("length", Arg::Length(g.length_mm))
                             .with("width", Arg::Length(g.width_mm))
-                            .with("size", Arg::Text(format!("{size:?}"))),
+                            .with("size", Arg::MsgLower(size.name_key())),
                     );
                 }
             }
@@ -1652,6 +1661,7 @@ mod tests {
         let c = row(&e, "green-soil");
         assert!(!c.ok, "3.5 m2 for a medium one");
         assert_eq!(c.detail.key, "check-detail-green-soil");
+        assert!(c.detail.args.iter().any(|(n, a)| *n == "size" && matches!(a, Arg::MsgLower("green-size-m"))), "the size is named in the page's words");
         e.resize_green(0, 2_400, 1_500).unwrap();
         assert!(passes(&e, "green-soil"));
     }
