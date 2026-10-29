@@ -125,7 +125,7 @@ fn run_layers(out: &mut String, base: &Projection, v: &View, i18n: &I18n, run: &
     // middle covers the foot of a post beyond it. The strips are in groups of their own between the solids.
     let patches = green::patches(segs, green);
     let mut solids: Vec<Block> = (0..segs.len())
-        .flat_map(|i| blocks_among(segs, i, &p, &green::tree_stands(green, i)))
+        .flat_map(|i| blocks_among(segs, i, &p, &green::tree_stands(segs, green, i, &p)))
         .chain(curbside::blocks(segs, uses, &p))
         .chain(stops::blocks(segs, stops, &p))
         .chain(green::blocks(segs, green, &p))

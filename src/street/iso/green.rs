@@ -105,9 +105,14 @@ pub(super) fn draw(out: &mut String, p: &Projection, i18n: &I18n, patch: &Patch)
 }
 
 /// Where the explicit trees on piece `piece` stand along the stretch, at the middle of their pits: the automatic
-/// trees of a strip of street trees keep clear of them (`AUTOMATIC_CLEAR_MM`).
-pub(super) fn tree_stands(shown: &[ShownGreen], piece: usize) -> Vec<f64> {
-    shown.iter().filter(|g| g.kind == GreenKind::Tree && g.piece == piece).map(|g| (g.full.0 + g.full.1) / 2.0).collect()
+/// trees of a strip of street trees keep clear of them (`AUTOMATIC_CLEAR_MM`). Only a tree that is drawn (`blocks`: its
+/// crown wholly in the reach and wide enough to show) takes the place of an automatic one.
+pub(super) fn tree_stands(segs: &[SegView], shown: &[ShownGreen], piece: usize, p: &Projection) -> Vec<f64> {
+    shown
+        .iter()
+        .filter(|g| g.kind == GreenKind::Tree && g.piece == piece && !blocks(segs, std::slice::from_ref(g), p).is_empty())
+        .map(|g| (g.full.0 + g.full.1) / 2.0)
+        .collect()
 }
 
 /// The trunk and crown of each shown tree, standing on its pit at the middle of it. The crown is `CROWN_OF_CANOPY` of
@@ -332,6 +337,25 @@ mod tests {
         assert!(m.contains(&auto(25_750.0, 12_000.0)), "the other strip is another piece, whose trees stay");
         // The explicit trees stand in their place: the same number of trunks as before less two plus two.
         assert_eq!(count(&m, "s-trunk"), count(&m0, "s-trunk"));
+    }
+
+    #[test]
+    fn an_explicit_tree_whose_crown_is_not_drawn_leaves_the_automatic_trees_alone() {
+        // Avenue 2's strip has an automatic tree at 4 m. An explicit tree at the very start has no crown in the
+        // stretch (it would reach before it), so nothing stands in the automatic tree's place and it stays.
+        let before = framed(Editor::new(1), ZoneEnd::First);
+        let h = drawn_mm(150);
+        let p = projection(&before);
+        let auto = trunk_front(&p, 4_250.0, h, 4_000.0);
+        assert!(drawn(&before).contains(&auto));
+        let mut e = before;
+        e.add_green(Green { width_mm: 1_400, ..tree(0, 4_200, TreeSize::S) }).unwrap();
+        let m = drawn(&e);
+        assert!(m.contains(&auto), "within 4 m of the pit, but the pit draws no tree");
+        // One whose crown is drawn still takes the automatic tree's place.
+        let mut e = framed(Editor::new(1), ZoneEnd::First);
+        e.add_green(Green { width_mm: 1_400, ..tree(3_000, 4_200, TreeSize::S) }).unwrap();
+        assert!(!drawn(&e).contains(&auto));
     }
 
     #[test]
