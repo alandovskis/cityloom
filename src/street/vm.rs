@@ -2885,6 +2885,43 @@ mod green_tests {
     }
 
     #[test]
+    fn pressing_change_with_the_fields_as_shown_never_moves_the_element() {
+        // The review's drift probe: a 3.35 m sidewalk has its middle off the grid, so a field shown to the tenth of a
+        // metre read back 100 mm further on each Change. The field is in centimetres now.
+        let r = rig_of(&[("sidewalk", 3350, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 3350, None)], Some(LENGTH));
+        let f = GreenForm { size: Some(TreeSize::S), ..form(GreenKind::Tree, 10_000, 0) };
+        assert!(r.vm.add_green(f));
+        let first = r.vm.view_now().green.cells[0].clone();
+        for round in 0..6 {
+            let c = r.vm.view_now().green.cells[0].clone();
+            // Every field as shown, the length being the one edit.
+            let shown = GreenForm {
+                kind: c.kind,
+                size: c.size,
+                at_mm: Some(c.from_mm),
+                host: c.host,
+                fine_mm: crate::street::green_tools::fine_typed(&crate::street::green_tools::fine_shown(c.fine_mm)),
+                length_mm: Some(c.to_mm - c.from_mm + if round % 2 == 0 { 100 } else { -100 }),
+                width_mm: Some(c.width_mm),
+            };
+            assert!(r.vm.change_green(&shown), "round {round}: {:?}", r.said.take());
+            let after = r.vm.view_now().green.cells[0].clone();
+            assert_eq!((after.from_mm, after.host, after.fine_mm, after.width_mm), (first.from_mm, first.host, first.fine_mm, first.width_mm), "round {round}");
+        }
+        // And with nothing edited at all, it changes nothing and says nothing.
+        let c = r.vm.view_now().green.cells[0].clone();
+        let same = GreenForm {
+            fine_mm: crate::street::green_tools::fine_typed(&crate::street::green_tools::fine_shown(c.fine_mm)),
+            host: c.host,
+            ..GreenForm::new(c.kind)
+        };
+        r.said.take();
+        assert!(!r.vm.change_green(&same));
+        assert_eq!(r.vm.view_now().green.cells[0].fine_mm, first.fine_mm);
+        assert!(r.said.take().is_empty());
+    }
+
+    #[test]
     fn a_bed_on_a_planting_strip_is_centred_and_as_wide_as_the_strip() {
         let vm = rig_of(
             &[("sidewalk", 2000, None), ("planting", 1500, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 2000, None)],

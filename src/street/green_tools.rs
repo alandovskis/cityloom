@@ -15,6 +15,7 @@ use super::watch::SheetWatch;
 use super::zone_tools::focus_later;
 use crate::shared::i18n::Args;
 use crate::shared::said::say;
+use crate::shared::units::parse_number;
 
 /// The sizes a tree can be, in the order the select lists them.
 const SIZES: [(TreeSize, &str); 3] = [(TreeSize::S, "green-size-s"), (TreeSize::M, "green-size-m"), (TreeSize::L, "green-size-l")];
@@ -59,7 +60,7 @@ impl Fields {
         self.size.set(size_index(c.size));
         self.at.set(units.number_in(c.from_mm, locale));
         self.host.set(c.host.map(|h| h.to_string()).unwrap_or_default());
-        self.fine.set(units.number_in(c.fine_mm, locale));
+        self.fine.set(fine_shown(c.fine_mm));
         self.length.set(units.number_in(c.to_mm - c.from_mm, locale));
         self.width.set(units.number_in(c.width_mm, locale));
     }
@@ -75,7 +76,18 @@ impl Fields {
             self.fine.set(String::new());
             None
         } else {
-            field(self.fine.get_untracked())?
+            let typed = self.fine.get_untracked();
+            if typed.trim().is_empty() {
+                None
+            } else {
+                match fine_typed(&typed) {
+                    Some(mm) => Some(mm),
+                    None => {
+                        w.say_bad_number();
+                        return None;
+                    }
+                }
+            }
         };
         Some(GreenForm {
             kind,
@@ -97,6 +109,17 @@ fn effective_host(hosts: &[usize], held: &str) -> (Option<usize>, bool) {
         Some(h) => (Some(h), false),
         None => (hosts.first().copied(), !held.trim().is_empty()),
     }
+}
+
+/// What the across field shows for an offset from the middle of the piece: whole centimetres, whatever the page's
+/// units, so that the value shown is close enough to the offset (within 5 mm) for the 100 mm grid to give it back.
+pub(crate) fn fine_shown(fine_mm: i32) -> String {
+    (f64::from(fine_mm) / 10.0).round().to_string()
+}
+
+/// The offset in millimetres that a number of centimetres typed in the across field means; `None` when it is not one.
+pub(crate) fn fine_typed(text: &str) -> Option<i32> {
+    parse_number(text).map(|cm| (cm * 10.0).round() as i32)
 }
 
 fn chosen(w: SheetWatch) -> Option<GreenCell> {
@@ -287,7 +310,22 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
-    use super::effective_host;
+    use super::{effective_host, fine_shown, fine_typed};
+    use crate::street::model::{SNAP_MM, snap};
+
+    #[test]
+    fn the_fine_field_is_in_whole_centimetres_and_the_value_shown_gives_the_same_offset_back() {
+        assert_eq!((fine_shown(950), fine_shown(-300), fine_shown(0), fine_shown(1_625)), ("95".into(), "-30".into(), "0".into(), "163".into()));
+        assert_eq!((fine_typed("95"), fine_typed(" -30 "), fine_typed("4,5"), fine_typed(""), fine_typed("x")), (Some(950), Some(-300), Some(45), None, None));
+        // Any offset on the grid, on any piece (its middle need not be on the grid): the value shown, typed back, is the offset.
+        for host_mm in [1_500, 1_750, 3_000, 3_300, 3_350, 3_450] {
+            let middle = host_mm / 2;
+            for offset in (0..=host_mm).step_by(SNAP_MM as usize) {
+                let shown = fine_shown(offset - middle);
+                assert_eq!(snap(middle + fine_typed(&shown).unwrap()), offset, "{host_mm} {offset}: {shown}");
+            }
+        }
+    }
 
     #[test]
     fn the_host_shown_is_the_one_held_when_the_place_has_it_and_else_the_first() {

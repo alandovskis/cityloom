@@ -1808,7 +1808,7 @@ fn the_green_tools_render_labelled_controls() {
         ("green-kind", "Kind"),
         ("green-at", "Along the street, from the start (m)"),
         ("green-host", "Across, on"),
-        ("green-fine", "Across, from the middle of that piece (m)"),
+        ("green-fine", "Across, from the middle of that piece (cm)"),
         ("green-length", "Length (m)"),
         ("green-width", "Width (m)"),
     ] {

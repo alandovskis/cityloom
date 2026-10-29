@@ -81,7 +81,7 @@ test.describe("street trees and green infrastructure", () => {
     expect(hosts.length).toBeGreaterThan(0);
     for (const h of hosts) expect(h, "a travel lane is not a host").not.toMatch(/^(Travel|Driving|Transit)/);
 
-    // Four metres to either side of the middle of a sidewalk is on the road or off the section, whichever side the
+    // Four metres (400 cm) to either side of the middle of a sidewalk is on the road or off the section, whichever side the
     // sidewalk is on: one of the two is the roadway, and the add refuses it with its sentence.
     await page.locator("#green-kind").selectOption({ label: "Tree" });
     await page.locator("#green-at").fill("15");
@@ -91,7 +91,7 @@ test.describe("street trees and green infrastructure", () => {
       .first();
     await page.locator("#green-host").selectOption((await sidewalk.getAttribute("value"))!);
     const refusals: string[] = [];
-    for (const fine of ["-4", "4"]) {
+    for (const fine of ["-400", "400"]) {
       await page.locator("#green-fine").fill(fine);
       await page.locator("#green-add").click();
       await expect(live(page)).toHaveText(/^That /);
