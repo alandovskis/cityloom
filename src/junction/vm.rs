@@ -239,6 +239,44 @@ impl JunctionVm {
         chosen()
     }
 
+    /// The person switches the crossing of street `uid` in phase `index`: on if it is off there, else off. Announced by what
+    /// was done, with a sentence when that takes the phase off its ready-made pattern; a refusal is said with its reason.
+    pub fn toggle_phase_walk(&self, index: usize, uid: u32) -> bool {
+        self.toggle_phase_movement(index, uid, false)
+    }
+
+    /// `toggle_phase_walk` for the bike movements of street `uid`.
+    pub fn toggle_phase_ride(&self, index: usize, uid: u32) -> bool {
+        self.toggle_phase_movement(index, uid, true)
+    }
+
+    fn toggle_phase_movement(&self, index: usize, uid: u32, ride: bool) -> bool {
+        use crate::junction::signal;
+        // The pattern of the phase, as the suggestion or the person's plan has it.
+        let pattern = || {
+            self.read(|j| {
+                let phase = signal::plan(j.current(), j.region).and_then(|p| p.phases.get(index).cloned());
+                phase.map(|ph| (signal::pattern_of(j.current(), j.region, &ph), if ride { ph.rides.contains(&uid) } else { ph.walks.contains(&uid) }))
+            })
+        };
+        let Some((before, on)) = pattern() else {
+            self.edit(|j| if ride { j.set_phase_ride(index, uid, true) } else { j.set_phase_walk(index, uid, true) });
+            self.say_refusal();
+            return false;
+        };
+        let done = self.edit(|j| if ride { j.set_phase_ride(index, uid, !on) } else { j.set_phase_walk(index, uid, !on) });
+        if done {
+            let lost: Vec<usize> = match pattern() {
+                Some((after, _)) if before != signal::Pattern::Custom && after == signal::Pattern::Custom => vec![index],
+                _ => Vec::new(),
+            };
+            self.say_edit_with(&lost);
+        } else {
+            self.say_refusal();
+        }
+        done
+    }
+
     /// A change that is not announced, as each step of a drag is.
     pub fn quiet<R>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
         self.edit(f)

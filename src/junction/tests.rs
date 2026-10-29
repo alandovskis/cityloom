@@ -1818,6 +1818,76 @@ fn pattern_group(h: &str, i: usize) -> String {
     h[at..at + h[at..].find("</ul>").unwrap()].to_string()
 }
 
+/// The group `id_part` ("walks" or "rides") of phase `i` in the panel's markup.
+fn movement_group(h: &str, i: usize, id_part: &str) -> String {
+    let at = h.find(&format!("id=\"sig-{id_part}-{i}\"")).unwrap_or_else(|| panic!("no {id_part} group for phase {i}"));
+    let start = h[..at].rfind("<div").unwrap();
+    h[start..at + h[at..].find("</div>").unwrap()].to_string()
+}
+
+#[test]
+fn each_phase_has_a_people_walking_checklist_of_native_checkboxes_named_by_street_and_phase() {
+    let s = shared(0);
+    let h = plain_panel(&s);
+    let g = movement_group(&h, 0, "walks");
+    assert!(g.contains("role=\"group\"") && g.contains("People walking"), "{g}");
+    assert_eq!(count(&g, "type=\"checkbox\""), 4, "every street has a crossing: {g}");
+    assert_eq!(count(&g, "checked"), 2, "east and west walk while the north goes: {g}");
+    assert!(
+        g.contains("aria-label=\"People walk across ") && !g.contains("aria-label=\"Phase 1, "),
+        "a box is named by what differs, the group has the phase: {g}"
+    );
+    assert!(g.contains("aria-label=\"People walking in phase 1, "), "{g}");
+    assert!(!g.contains("in a scramble") && !g.contains("aria-describedby"), "no note unless the walks are fixed: {g}");
+    assert!(!h.contains("id=\"sig-rides-0\""), "the sample has no bike lanes, so no Bikes group: {h}");
+    // A crossing the junction does not have is not listed.
+    let n = arm(&s, 0);
+    s.edit(|j| j.set_crossing(n, false));
+    assert_eq!(count(&movement_group(&plain_panel(&s), 0, "walks"), "type=\"checkbox\""), 3);
+    // A scramble walks every crossing there is: the boxes are shown, checked and not changeable.
+    s.edit(|j| j.set_phase_pattern(0, Pattern::Scramble));
+    let g = movement_group(&plain_panel(&s), 0, "walks");
+    assert_eq!(count(&g, "disabled"), 3, "{g}");
+    assert!(
+        g.contains("This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one."),
+        "the boxes say why they cannot change and what to do: {g}"
+    );
+    assert!(g.find("sig-walks-0-note").unwrap() < g.find("type=\"checkbox\"").unwrap(), "the reason comes before the boxes: {g}");
+    assert!(g.contains("class=\"phase-moves-note\""), "the note is a block of its own: {g}");
+    assert!(g.contains("aria-describedby=\"sig-walks-0-note\"") && g.contains("id=\"sig-walks-0-note\""), "{g}");
+}
+
+#[test]
+fn the_names_of_the_boxes_and_the_scramble_note_are_in_french_too() {
+    use crate::shared::i18n::Locale;
+    let s = shared_in(0, Locale::FrCa);
+    let g = movement_group(&plain_panel(&s), 0, "walks");
+    assert!(g.contains("aria-label=\"Les piétons traversent ") && !g.contains("aria-label=\"Phase 1"), "{g}");
+    s.edit(|j| j.set_phase_pattern(0, Pattern::Scramble));
+    let g = movement_group(&plain_panel(&s), 0, "walks");
+    assert!(g.contains("Cette phase est une phase piétonne exclusive : tout le monde traverse toutes les rues. Choisissez un autre modèle pour régler les passages un à un.") && g.contains("aria-describedby=\"sig-walks-0-note\""), "{g}");
+}
+
+#[test]
+fn the_bikes_checklist_is_there_where_a_street_has_a_bike_lane_and_the_drawing_follows_a_switch() {
+    use crate::junction::model::junction_of;
+    let s = JunctionVm::new(
+        crate::shared::platform::browser_ports(),
+        crate::i18n_for(crate::shared::i18n::Locale::En),
+        junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]),
+        None,
+    );
+    let g = movement_group(&plain_panel(&s), 0, "rides");
+    assert!(g.contains("Bikes") && g.contains("type=\"checkbox\""), "{g}");
+    // The drawing of the phase changes when a crossing is switched.
+    let before = crate::junction::phase_svg::phase_drawings(&s.view_now());
+    let target = s.view_now().signal.as_ref().unwrap().phases[0].walk_options.iter().find(|o| !o.on).map(|o| o.uid).expect("a crossing is off");
+    assert!(s.toggle_phase_walk(0, target));
+    let after = crate::junction::phase_svg::phase_drawings(&s.view_now());
+    assert_ne!(before[0], after[0], "the lit crossing appears");
+    assert_eq!(before[1], after[1]);
+}
+
 #[test]
 fn each_phase_has_a_pattern_radio_group_with_one_tab_stop_and_the_patterns_that_fit() {
     let s = shared(0);
@@ -1904,19 +1974,60 @@ fn choosing_a_pattern_is_announced_in_english_and_in_french_and_choosing_the_sam
 }
 
 #[test]
-fn an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languages() {
+fn switching_a_crossing_in_a_phase_is_announced_in_both_languages_and_says_when_the_phase_is_now_custom() {
     use crate::shared::i18n::Locale;
-    for (locale, tail) in
-        [(Locale::En, "Phases 1 and 3 no longer follow a ready-made pattern."), (Locale::FrCa, "Les phases 1 et 3 ne suivent plus un modèle prêt à l’emploi.")]
-    {
+    for (locale, on, lost, back) in [
+        (Locale::En, "now walk across", "Phase 1 no longer follows a ready-made pattern.", "no longer walk across"),
+        (Locale::FrCa, "traversent maintenant", "La phase 1 ne suit plus un modèle prêt à l’emploi.", "ne traversent plus"),
+    ] {
         let s = shared_in(0, locale);
-        assert!(s.choose_pattern(0, Pattern::ThroughOnly));
-        let east = arm(&s, 90);
+        let (north, east) = (arm(&s, 0), arm(&s, 90));
         live::take_said();
-        s.apply(|j| j.set_crossing(east, false));
+        assert!(s.toggle_phase_walk(0, north));
         let said = live::take_said();
         assert_eq!(said.len(), 1, "{said:?}");
-        assert!(said[0].contains(tail), "{said:?}");
+        assert!(said[0].contains(on) && said[0].ends_with(lost), "{said:?}");
+        // Already Custom: the next change does not say it again.
+        assert!(s.toggle_phase_walk(0, east));
+        let said = live::take_said();
+        assert!(said[0].contains(back) && !said[0].contains(lost), "{said:?}");
+        // Back to the pattern's own crossings: nothing is lost.
+        assert!(s.toggle_phase_walk(0, north));
+        assert!(!live::take_said()[0].contains(lost));
+    }
+}
+
+#[test]
+fn switching_a_bike_movement_or_a_crossing_that_cannot_be_is_refused_aloud_and_changes_nothing() {
+    let s = shared(0);
+    let north = arm(&s, 0);
+    live::take_said();
+    assert!(!s.toggle_phase_ride(0, north));
+    assert_eq!(live::take_said(), vec!["That street has no bike lane."]);
+    assert!(s.read(|j| j.current().signal_plan.is_none()), "nothing was changed");
+    assert!(!s.toggle_phase_walk(9, north));
+    assert_eq!(live::take_said().len(), 1);
+}
+
+#[test]
+fn an_edit_that_makes_a_phase_stop_following_its_pattern_says_so_in_both_languages() {
+    use crate::shared::i18n::Locale;
+    for (locale, sentence, tail) in [
+        (Locale::En, "Phases 2 and 4 no longer follow a ready-made pattern.", "no longer follow"),
+        (Locale::FrCa, "Les phases 2 et 4 ne suivent plus un modèle prêt à l’emploi.", "ne suivent plus"),
+    ] {
+        let s = shared_in(0, locale);
+        let phases = s.read(|j| crate::junction::signal::plan(j.current(), j.region).unwrap().phases.len());
+        for i in 0..phases {
+            assert!(s.choose_pattern(i, Pattern::ThroughOnly));
+        }
+        let north = arm(&s, 0);
+        live::take_said();
+        // Turning north's street off its bearing changes which movements are straight on: some phases follow no pattern now.
+        assert!(s.apply(|j| j.set_bearing(north, 340)));
+        let said = live::take_said();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].ends_with(sentence), "turning north to 340 degrees takes phases 2 and 4 off the pattern: {said:?}");
         // An edit that leaves every phase as it was adds nothing.
         live::take_said();
         let west = arm(&s, 270);
@@ -2359,10 +2470,10 @@ fn phases_that_stop_following_their_pattern_are_said_once_in_both_languages() {
         for i in 0..phases {
             s.choose_pattern(i, Pattern::ThroughOnly);
         }
-        // Taking a crossing away takes phases 2 and 4 off their pattern: one sentence, not one each.
+        // Switching north's crossing off by hand in phases 2 and 4 takes them off their pattern: one sentence, not one each.
         let north = arm(&s, 0);
         live::take_said();
-        s.apply(|j| j.set_crossing(north, false));
+        s.apply(|j| j.set_phase_walk(1, north, false) & j.set_phase_walk(3, north, false));
         let said = live::take_said();
         assert_eq!(said.len(), 1, "{said:?}");
         assert!(said[0].ends_with(two), "{said:?}");
@@ -2393,7 +2504,7 @@ fn a_drag_that_changes_what_a_phase_is_says_so_like_a_button_does() {
     s.end_gesture(true);
     let said = live::take_said();
     assert_eq!(said.len(), 1, "{said:?}");
-    assert!(said[0].contains("no longer follow"), "{said:?}");
+    assert!(said[0].ends_with("Phases 2 and 4 no longer follow a ready-made pattern."), "{said:?}");
     // A drag that leaves every phase as it was adds nothing.
     let s = all_phases_as(Pattern::ThroughOnly);
     let east = arm(&s, 90);

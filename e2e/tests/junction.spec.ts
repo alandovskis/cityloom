@@ -513,7 +513,9 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(scramble).toBeFocused();
     await page.keyboard.press("ArrowRight");
     await expect(radios.first()).toHaveAttribute("aria-checked", "true");
-    // Pressing a key that chooses the pattern already chosen says nothing more (Home on the first).
+    // Pressing a key that chooses the pattern already chosen says nothing more (Home on the first). The last
+    // choice's announcement is waited for before the live region is emptied, or it could land after the emptying.
+    await expect(live(page)).toContainText("set to through only");
     await live(page).evaluate((el) => (el.textContent = ""));
     await page.keyboard.press("Home");
     await expect(live(page)).toHaveText("");
@@ -532,6 +534,19 @@ test.describe("signal timing on a junction of the city", () => {
     const group = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
     await group.getByRole("radio", { name: /Pedestrian scramble/ }).click();
     await expect(page.locator("#signal-plan-state")).toHaveText("Edited plan");
+    // The crossings are checked and cannot be changed; the group says why, and is described by it.
+    const walks = page.getByRole("group", { name: /^People walking in phase 1, / });
+    await expect(walks.getByRole("checkbox").first()).toBeDisabled();
+    await expect(walks).toContainText(
+      "This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one.",
+    );
+    await expect(walks).toHaveAccessibleDescription(
+      "This phase is a pedestrian scramble: everyone crosses every street. Choose another pattern to set crossings one by one.",
+    );
+    // The reason comes first, on a line of its own above the boxes.
+    const noteBox = await walks.locator(".phase-moves-note").boundingBox();
+    const firstBox = await walks.getByRole("checkbox").first().boundingBox();
+    expect(noteBox!.y + noteBox!.height).toBeLessThanOrEqual(firstBox!.y);
     await page.reload();
     await expect(page.locator("#drawing")).toBeVisible();
     const again = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
@@ -546,31 +561,19 @@ test.describe("signal timing on a junction of the city", () => {
     await group.getByRole("radio", { name: /Protected turn/ }).click();
     const custom = group.getByRole("radio", { name: /^Custom/ });
     await expect(custom).toHaveCount(0);
-    // Take a crossing away: the people the phase let cross there are no longer the pattern's, so the phase matches none.
-    // Walk the selection round the drawing until a street shows its Remove button, then press it.
-    await page.locator("#wrap").focus();
-    const remove = page.locator("#inspector").getByRole("button", { name: "Remove the crossing" });
-    let said = false;
-    for (let i = 0; i < 12; i++) {
-      await page.keyboard.press("ArrowRight");
-      if (await remove.isVisible()) {
-        await remove.click();
-        if (!said) {
-          // The edit says that a phase it changed no longer follows its pattern.
-          await expect(live(page)).toContainText(/Phase \d no longer follows a ready-made pattern\./);
-          said = true;
-        }
-        await page.locator("#wrap").focus();
-      }
-    }
-    // Back to the junction's own panel, where the phases are.
-    await page.keyboard.press("Escape");
+    // Switch on a crossing the pattern does not walk: the people the phase lets cross are no longer the pattern's.
+    const off = page
+      .getByRole("group", { name: /^People walking in phase 1, / })
+      .locator("input:not(:checked)")
+      .first();
+    await off.focus();
+    await page.keyboard.press("Space");
+    // The edit says that the phase it changed no longer follows its pattern.
+    await expect(live(page)).toContainText(/Phase 1 no longer follows a ready-made pattern\./);
     await expect(custom).toHaveCount(1);
     await expect(custom).toHaveAttribute("aria-checked", "true");
     await expect(custom).toHaveAttribute("aria-disabled", "true");
     await expect(group.locator('[role=radio][tabindex="0"]')).toHaveCount(1);
-    // (With no crossing left there is nothing to protect and no scramble: only the patterns that fit are offered.)
-    await expect(group.getByRole("radio", { name: /Pedestrian scramble/ })).toHaveCount(0);
     await expect(group.getByRole("radio", { name: /Through only/ })).toHaveAttribute("aria-checked", "false");
     // Pressing Custom chooses nothing; an arrow key from it goes to a real pattern.
     await custom.click({ force: true });
@@ -589,6 +592,70 @@ test.describe("signal timing on a junction of the city", () => {
     await expect(group).toBeVisible();
     await group.getByRole("radio", { name: /Phase piétonne exclusive/ }).click();
     await expect(live(page)).toContainText(/Phase 1 de .*\s: phase piétonne exclusive/);
+  });
+
+  test("a crossing is switched in a phase from a checklist, kept even where cars conflict, shows Custom, can be off everywhere and fails the check", async ({
+    page,
+  }) => {
+    const walks = (n: number) => page.getByRole("group", { name: new RegExp(`^People walking in phase ${n}, `) });
+    const boxes = walks(1).getByRole("checkbox");
+    expect(await boxes.count()).toBeGreaterThanOrEqual(1);
+    const card = page.locator("#inspector .signal-phases .phase-card").first().locator("svg.phase-svg");
+    const patterns = page.getByRole("radiogroup", { name: /^Pattern for phase 1, / });
+    await expect(patterns.getByRole("radio", { name: /^Custom/ })).toHaveCount(0);
+
+    // The street whose own cars go in phase 1 has its crossing off there; switch it on with Space (a conflict: kept as chosen).
+    const off = walks(1).locator("input:not(:checked)").first();
+    await expect(off).toBeVisible();
+    const id = await off.getAttribute("id");
+    await expect(off).toHaveAccessibleName(/^People walk across /);
+    const drawn = await card.innerHTML();
+    await off.focus();
+    await page.keyboard.press("Space");
+    const box = page.locator(`#${id}`);
+    await expect(box).toBeChecked();
+    await expect(box).toBeFocused();
+    await expect(live(page)).toContainText("now walk across");
+    await expect(live(page)).toContainText(/Phase 1 no longer follows a ready-made pattern\./);
+    await expect(page.locator("#signal-plan-state")).toHaveText("Edited plan");
+    expect(await card.innerHTML()).not.toBe(drawn);
+    await expect(patterns.getByRole("radio", { name: /^Custom/ })).toHaveAttribute("aria-checked", "true");
+
+    // It is kept across a reload; undo and redo follow.
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(page.locator(`#${id}`)).toBeChecked();
+    await page.locator("#undo").click();
+    await expect(page.locator(`#${id}`)).not.toBeChecked();
+    await expect(card).toBeVisible();
+    await page.locator("#redo").click();
+    await expect(page.locator(`#${id}`)).toBeChecked();
+
+    // Every crossing off in every phase: the Checks list says the time to cross is short.
+    const phases = await page.locator("#inspector .signal-phases .phase-card").count();
+    for (let n = 1; n <= phases; n++) {
+      const on = walks(n).locator("input:checked");
+      while ((await on.count()) > 0) {
+        await on.first().focus();
+        await page.keyboard.press("Space");
+      }
+      await expect(walks(n).locator("input:checked")).toHaveCount(0);
+    }
+    await expect(live(page)).toContainText("no longer walk across");
+    await page.locator("#t-checks").click();
+    await expect(page.locator("#p-checks")).toContainText("Not enough time to cross at");
+  });
+
+  test("the walking checklist is in French and announces a switch in French", async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem("cityloom-lang", "fr-CA"));
+    await page.reload();
+    await expect(page.locator("#drawing")).toBeVisible();
+    const group = page.getByRole("group", { name: /^Piétons en marche à la phase 1, / });
+    await expect(group).toBeVisible();
+    await group.locator("input:not(:checked)").first().focus();
+    await page.keyboard.press("Space");
+    await expect(live(page)).toContainText(/traversent maintenant/);
+    await expect(live(page)).toContainText(/La phase 1 ne suit plus un modèle prêt à l’emploi\./);
   });
 
   test("a phase drawing is small, and two cards share a row where the inspector is wide enough", async ({ page }) => {

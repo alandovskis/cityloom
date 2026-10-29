@@ -729,12 +729,26 @@ pub struct PhaseView {
     /// The streets whose crossing is walked, and whose bike movements run, during the phase.
     pub walk_arms: Vec<u32>,
     pub ride_arms: Vec<u32>,
+    /// Each crossing the junction has, in the order of the bearings, and whether it is walked in this phase.
+    pub walk_options: Vec<MovementOption>,
+    /// Each bike lane the junction has, in the order of the bearings, and whether its bike movements run in this phase.
+    pub ride_options: Vec<MovementOption>,
+    /// The phase walks every crossing there is (a scramble), so the crossings cannot be set one by one.
+    pub walks_fixed: bool,
     /// What the phase allows, in a sentence by compass point: "Cars go: north. People cross: east and west."
     pub summary: Said,
     /// The ready-made pattern the phase is, Custom when it matches none.
     pub pattern: Pattern,
     /// The patterns that fit this junction's lanes, in the order they are offered (never Custom).
     pub patterns: Vec<PatternView>,
+}
+
+/// One crossing or bike movement a phase can switch: the street (by uid and name) and whether it runs in the phase.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct MovementOption {
+    pub uid: u32,
+    pub label: Said,
+    pub on: bool,
 }
 
 /// One ready-made pattern a phase can be given: the message keys of its name and its one-sentence description.
@@ -780,6 +794,9 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
             moves: p.moves.clone(),
             walk_arms: p.walks.clone(),
             ride_arms: p.rides.clone(),
+            walk_options: option_list(&signal::walk_arms(s), &p.walks, &name),
+            ride_options: option_list(&signal::ride_arms(s, region), &p.rides, &name),
+            walks_fixed: p.moves.is_empty(),
             uid: p.uid,
             label: name(p.uid),
             street: find(p.uid).map_or_else(|| crate::street::model::named_said(""), |a| a.street.clone()),
@@ -790,6 +807,10 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
         })
         .collect();
     Some(SignalView { cycle_s: plan.cycle_s, phases, suggested: plan.suggested })
+}
+
+fn option_list(all: &[u32], on: &[u32], name: &impl Fn(u32) -> Said) -> Vec<MovementOption> {
+    all.iter().map(|&uid| MovementOption { uid, label: name(uid), on: on.contains(&uid) }).collect()
 }
 
 /// "Phase 2: Main Street": the number, and the streets whose traffic goes in it.
@@ -3463,6 +3484,25 @@ mod tests {
     }
 
     #[test]
+    fn a_crossing_switched_off_in_every_phase_fails_the_time_to_cross_check_and_names_its_street() {
+        use crate::shared::testing::en;
+        let mut j = Junction::new(0);
+        let n = j.current().arms.iter().find(|a| a.bearing == 0).unwrap().uid;
+        let v = j.view();
+        for (i, p) in v.signal.as_ref().unwrap().phases.iter().enumerate() {
+            if p.walk_arms.contains(&n) {
+                assert!(j.set_phase_walk(i, n, false));
+            }
+        }
+        let v = j.view();
+        assert!(v.signal.as_ref().unwrap().phases.iter().all(|p| !p.walk_arms.contains(&n)));
+        let c = check(&v, "signal-walk").unwrap();
+        assert!(!c.ok, "{}", en(&c.detail));
+        let north = en(&v.arms.iter().find(|a| a.uid == n).unwrap().label);
+        assert!(en(&c.detail).contains(&north), "{}", en(&c.detail));
+    }
+
+    #[test]
     fn a_crossing_too_long_for_its_window_fails_and_names_the_streets() {
         use crate::junction::model::{TimingField::Green, junction_of};
         // Six lanes of 3.5 m, a street taking about 21 s to cross: a whole 30 s phase covers it, a 10 s one does not.
@@ -3569,6 +3609,31 @@ mod tests {
         let p3 = &v3.signal.as_ref().unwrap().phases[0];
         assert_eq!(p3.pattern, Pattern::Custom);
         assert!(!p3.patterns.is_empty() && p3.patterns.iter().all(|o| o.pattern != Pattern::Custom));
+    }
+
+    #[test]
+    fn each_phase_lists_only_the_crossings_and_bike_lanes_the_junction_has_with_whether_they_are_on() {
+        use crate::junction::model::junction_of;
+        let mut j = Junction::new(0);
+        let v = j.view();
+        let arm = |bearing: i32| v.arms.iter().find(|a| a.bearing == bearing).unwrap();
+        let p = &v.signal.as_ref().unwrap().phases[0];
+        let listed: Vec<(u32, bool)> = p.walk_options.iter().map(|o| (o.uid, o.on)).collect();
+        assert_eq!(listed, vec![(arm(0).uid, false), (arm(90).uid, true), (arm(180).uid, false), (arm(270).uid, true)], "every street, in bearing order");
+        assert!(p.ride_options.is_empty(), "the sample has no bike lanes");
+        assert_eq!(p.walk_options[1].label, arm(90).label);
+        let n = arm(0).uid;
+        assert!(j.set_crossing(n, false));
+        let v = j.view();
+        assert!(
+            v.signal.as_ref().unwrap().phases.iter().all(|p| p.walk_options.len() == 3 && p.walk_options.iter().all(|o| o.uid != n)),
+            "no crossing, not listed"
+        );
+        let b = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+        let v = b.view();
+        let p = &v.signal.as_ref().unwrap().phases[0];
+        assert!(!p.ride_options.is_empty());
+        assert!(p.ride_options.iter().filter(|o| o.on).map(|o| o.uid).eq(p.ride_arms.iter().copied()));
     }
 
     #[test]

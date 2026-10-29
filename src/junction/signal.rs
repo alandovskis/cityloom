@@ -113,7 +113,7 @@ fn crossing_clear(arms: &[&Arm], moves: &[Vec<usize>], i: usize, b: usize) -> bo
 /// The plan the person sees: the one they edited, else the suggestion. None unless the control is a signal.
 pub fn plan(s: &State, region: usize) -> Option<Plan> {
     let suggestion = suggestion(s, region)?;
-    let Some(stored) = s.signal_plan.as_ref().and_then(|p| settled(s, p)) else { return Some(suggestion) };
+    let Some(stored) = s.signal_plan.as_ref().and_then(|p| settled(s, p, region)) else { return Some(suggestion) };
     let phases: Vec<Phase> = stored
         .phases
         .into_iter()
@@ -130,9 +130,11 @@ pub fn plan(s: &State, region: usize) -> Option<Plan> {
 }
 
 /// The stored plan with whatever no longer exists taken out (a street, a lane, a destination), and a phase that serves
-/// nothing any more dropped. None when nothing is left.
-fn settled(s: &State, plan: &SignalPlan) -> Option<SignalPlan> {
+/// nothing any more dropped. A walk needs the street's crossing and a ride its bike lane (as `walk_arms` and `ride_arms`
+/// list them), so what is stored, said and shown always match. None when nothing is left.
+fn settled(s: &State, plan: &SignalPlan, region: usize) -> Option<SignalPlan> {
     let has = |uid: u32| s.arms.iter().any(|a| a.uid == uid);
+    let (crossings, bikes) = (walk_arms(s), ride_arms(s, region));
     let phases: Vec<StoredPhase> = plan
         .phases
         .iter()
@@ -143,8 +145,8 @@ fn settled(s: &State, plan: &SignalPlan) -> Option<SignalPlan> {
                 .copied()
                 .filter(|m| has(m.to) && s.arms.iter().any(|a| a.uid == m.from && a.lanes.iter().any(|l| l.to.contains(&m.to))))
                 .collect(),
-            walks: p.walks.iter().copied().filter(|&u| has(u)).collect(),
-            rides: p.rides.iter().copied().filter(|&u| has(u)).collect(),
+            walks: p.walks.iter().copied().filter(|u| crossings.contains(u)).collect(),
+            rides: p.rides.iter().copied().filter(|u| bikes.contains(u)).collect(),
             arm: p.arm,
         })
         .filter(|p| !p.moves.is_empty() || p.arm.is_some_and(has))
@@ -154,8 +156,8 @@ fn settled(s: &State, plan: &SignalPlan) -> Option<SignalPlan> {
 
 /// Keeps the stored plan true to the junction after an edit: gone unless the control is a signal, and without what no
 /// longer exists.
-pub fn settle(s: &mut State) {
-    s.signal_plan = if s.control == SIGNAL { s.signal_plan.as_ref().and_then(|p| settled(s, p)) } else { None };
+pub fn settle(s: &mut State, region: usize) {
+    s.signal_plan = if s.control == SIGNAL { s.signal_plan.as_ref().and_then(|p| settled(s, p, region)) } else { None };
 }
 
 /// A phase for arm `uid` as the suggestion would make it, to add to a stored plan. None when nothing enters from it.
@@ -314,6 +316,34 @@ pub fn pattern_phase(s: &State, region: usize, uid: u32, pattern: Pattern) -> Op
         walks.retain(|u| !across_to.contains(u));
     }
     Some(StoredPhase { moves: chosen, walks, rides, arm: None })
+}
+
+/// Every street with a crossing, in the order of the bearings: who walks in a scramble, and whose crossing a phase can
+/// switch on.
+pub fn walk_arms(s: &State) -> Vec<u32> {
+    scramble_walks(s)
+}
+
+/// Every street with a bike lane, in the order of the bearings: whose bike movements a phase can switch on.
+pub fn ride_arms(s: &State, region: usize) -> Vec<u32> {
+    let (arms, _) = ordered(s);
+    let bikes = bikes_of(&arms, region);
+    arms.iter().zip(bikes).filter(|(_, b)| *b).map(|(a, _)| a.uid).collect()
+}
+
+/// `list` with `uid` put in (`on`) or taken out, keeping the order of the bearings. False when that changes nothing.
+pub fn with_member(s: &State, list: &mut Vec<u32>, uid: u32, on: bool) -> bool {
+    if list.contains(&uid) == on {
+        return false;
+    }
+    if on {
+        list.push(uid);
+        let (arms, _) = ordered(s);
+        list.sort_by_key(|u| arms.iter().position(|a| a.uid == *u));
+    } else {
+        list.retain(|&u| u != uid);
+    }
+    true
 }
 
 /// Every street with a crossing, in the order of the bearings: who walks in a scramble.
