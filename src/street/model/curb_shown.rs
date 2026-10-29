@@ -336,9 +336,9 @@ mod tests {
     #[test]
     fn a_tree_is_found_on_its_host_and_mapped_like_a_curb_use() {
         let mut e = editor(ZoneEnd::First);
-        // A medium tree in its 1 900 mm pit, centred 1 700 mm from the section's left edge: on the left sidewalk.
-        e.add_green(tree_at(12_000, 1_700)).unwrap();
-        assert_eq!(green(&e), vec![(0, (12_000.0, 13_900.0), (12_000.0, 13_900.0), (750.0, 2_650.0), GreenKind::Tree)]);
+        // A medium tree in its 1 900 mm pit, centred 1 750 mm from the section's left edge: on the left sidewalk.
+        e.add_green(tree_at(12_000, 1_750)).unwrap();
+        assert_eq!(green(&e), vec![(0, (12_000.0, 13_900.0), (12_000.0, 13_900.0), (800.0, 2_700.0), GreenKind::Tree)]);
         assert_eq!(e.view().green_shown[0].size, Some(TreeSize::M));
         // The right sidewalk is the section's last piece, whichever end the positions are measured from.
         let mut e = editor(ZoneEnd::First);
@@ -349,9 +349,9 @@ mod tests {
     #[test]
     fn anchored_at_the_last_end_the_element_is_mirrored_along_the_stretch_and_not_across() {
         let mut e = editor(ZoneEnd::Last);
-        e.add_green(tree_at(12_000, 1_700)).unwrap();
+        e.add_green(tree_at(12_000, 1_750)).unwrap();
         // 12 m to 13.9 m from the anchored (last) end is 28 m to 26.1 m from the stretch's near end.
-        assert_eq!(green(&e), vec![(0, (26_100.0, 28_000.0), (26_100.0, 28_000.0), (750.0, 2_650.0), GreenKind::Tree)]);
+        assert_eq!(green(&e), vec![(0, (26_100.0, 28_000.0), (26_100.0, 28_000.0), (800.0, 2_700.0), GreenKind::Tree)]);
     }
 
     #[test]

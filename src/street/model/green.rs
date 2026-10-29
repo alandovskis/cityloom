@@ -440,11 +440,12 @@ impl Editor {
         let size = if g.kind == GreenKind::Tree { g.size.or(Some(TreeSize::M)) } else { None };
         // A tree that comes with no length or width gets the pit its size needs.
         let pit = size.map(TreeSize::default_pit_mm);
+        let width_mm = snap(if g.width_mm <= 0 { pit.unwrap_or(0) } else { g.width_mm }).max(SNAP_MM);
         let g = Green {
             from_mm: snap(g.from_mm),
             length_mm: snap(if g.length_mm <= 0 { pit.unwrap_or(0) } else { g.length_mm }).max(SNAP_MM),
-            offset_mm: snap(g.offset_mm),
-            width_mm: snap(if g.width_mm <= 0 { pit.unwrap_or(0) } else { g.width_mm }).max(SNAP_MM),
+            offset_mm: snap_centre(g.offset_mm, width_mm),
+            width_mm,
             size,
             ..g
         };
@@ -463,7 +464,7 @@ impl Editor {
     /// Moves element `i` across the section to be centred `offset_mm` from its left edge (snapped), as `move_green`
     /// does.
     pub fn move_green_across(&mut self, i: usize, offset_mm: i32) -> Result<(), GreenRefusal> {
-        self.green_move_to(i, |old| Green { offset_mm: snap(offset_mm), ..*old })
+        self.green_move_to(i, |old| Green { offset_mm: snap_centre(offset_mm, old.width_mm), ..*old })
     }
 
     fn green_move_to(&mut self, i: usize, change: impl FnOnce(&Green) -> Green) -> Result<(), GreenRefusal> {
@@ -491,7 +492,10 @@ impl Editor {
 
     /// Gives element `i` a new length and width (snapped, at least `SNAP_MM`), about the same start and centre.
     pub fn resize_green(&mut self, i: usize, length_mm: i32, width_mm: i32) -> Result<(), GreenRefusal> {
-        self.green_replace(i, "rev-green-resize", |old| Green { length_mm: snap(length_mm).max(SNAP_MM), width_mm: snap(width_mm).max(SNAP_MM), ..*old })
+        self.green_replace(i, "rev-green-resize", |old| {
+            let width_mm = snap(width_mm).max(SNAP_MM);
+            Green { length_mm: snap(length_mm).max(SNAP_MM), width_mm, offset_mm: snap_centre(old.offset_mm, width_mm), ..*old }
+        })
     }
 
     /// Sets the size of tree `i`. Any other kind has no size, so nothing changes for it.
@@ -558,6 +562,12 @@ impl GreenForm {
     }
 }
 
+/// The centre across for an element `width_mm` wide whose left edge is snapped to the grid, from the centre asked for.
+/// The width is on the grid too, so the centre falls on the grid or on its 50 mm: a piece 1.5 m wide can be filled.
+fn snap_centre(offset_mm: i32, width_mm: i32) -> i32 {
+    snap(offset_mm - width_mm / 2) + width_mm / 2
+}
+
 /// `mm` rounded down to the grid.
 fn snap_down(mm: i32) -> i32 {
     mm.div_euclid(SNAP_MM) * SNAP_MM
@@ -574,9 +584,9 @@ fn snap_up(mm: i32) -> i32 {
 /// A tree has the pit of its size; any other kind is as wide as its host, except that on a sidewalk it leaves the
 /// walkway (`CLEAR_PATH_MM`), the host's whole width when that leaves under `SNAP_MM`. On a sidewalk it stands
 /// against the edge nearer the roadway, which leaves the widest walkway; on any other piece it is centred. A width
-/// that was not asked for is rounded down to the grid and the centre is on the grid, so the rectangle stays within
-/// the host: where no centre on the grid keeps it there, or the walkway it should leave, the width gives up one
-/// grid step at a time.
+/// that was not asked for is rounded down to the grid and the left edge is on the grid (the centre then falls on the grid
+/// or on its 50 mm), so the rectangle stays within the host and can fill it: where no edge on the grid keeps it there,
+/// or the walkway it should leave, the width gives up one grid step at a time.
 pub fn default_across(segs: &[Segment], host: usize, kind: GreenKind, size: Option<TreeSize>, width_mm: Option<i32>) -> (i32, i32) {
     let (from, to) = fills(segs, host);
     let host_mm = to - from;
@@ -612,12 +622,15 @@ pub fn default_across(segs: &[Segment], host: usize, kind: GreenKind, size: Opti
         .flatten();
     // The centre on the grid for `width`, if one keeps the rectangle within the host.
     let centre_for = |width: i32| -> Option<i32> {
-        let lo = snap_up((2 * from + width + 1).div_euclid(2));
-        let hi = snap_down((2 * to - width).div_euclid(2));
-        (lo <= hi).then(|| match road_right {
-            Some(true) => hi,
-            Some(false) => lo,
-            None => snap((from + to) / 2).clamp(lo, hi),
+        // The left edge on the grid, within the piece; the centre follows it.
+        let (lo, hi) = (snap_up(from), snap_down(to - width));
+        (lo <= hi).then(|| {
+            let edge = match road_right {
+                Some(true) => hi,
+                Some(false) => lo,
+                None => snap((from + to - width) / 2).clamp(lo, hi),
+            };
+            edge + width / 2
         })
     };
     let leaves_path = |width: i32, centre: i32| {
@@ -628,7 +641,7 @@ pub fn default_across(segs: &[Segment], host: usize, kind: GreenKind, size: Opti
         match centre_for(width) {
             Some(centre) if leaves_path(width, centre) => return (centre, width),
             // An asked width is kept whatever it does; the checks speak.
-            _ if asked.is_some() || width <= SNAP_MM => return (centre_for(width).unwrap_or_else(|| snap((from + to) / 2)), width),
+            _ if asked.is_some() || width <= SNAP_MM => return (centre_for(width).unwrap_or_else(|| snap_centre((from + to) / 2, width)), width),
             _ => width -= SNAP_MM,
         }
     }
@@ -811,7 +824,7 @@ impl Editor {
         new.from_mm = snap(new.from_mm);
         new.length_mm = snap(new.length_mm).max(SNAP_MM);
         new.width_mm = snap(new.width_mm).max(SNAP_MM);
-        new.offset_mm = snap(new.offset_mm);
+        new.offset_mm = snap_centre(new.offset_mm, new.width_mm);
         self.green_fits(&new, Some(i), frame)?;
         if new == old {
             return Ok(());
@@ -1137,7 +1150,7 @@ mod tests {
         let mut e = editor();
         e.add_green(pit(10_049, 1_650)).unwrap();
         let s = e.snapshot();
-        assert_eq!(s.green, vec![Green { from_mm: 10_000, offset_mm: 1_700, ..pit(10_000, 1_700) }]);
+        assert_eq!(s.green, vec![Green { from_mm: 10_000, offset_mm: 1_650, ..pit(10_000, 1_650) }]);
         assert_eq!((s.length_mm, s.from_end), (Some(LEN), ZoneEnd::First), "the street's length is written with the elements");
         assert_eq!(e.view().revisions.len(), 1);
         assert_eq!(e.selected_green(), Some(0), "the new element is the chosen one");
@@ -1400,6 +1413,62 @@ mod tests {
         assert!(!passes(&e, "green-host"), "its edge at 3 300 leaves the 2 800 piece of zone 2");
     }
 
+    /// The Plateau's common street: sidewalks of 1.5 m either side of two travel lanes.
+    fn narrow_sidewalks() -> Street {
+        let mut s = Street::sample(0, Side::Right);
+        s.segments = [("sidewalk", 1_500), ("travel", 3_000), ("travel", 3_000), ("sidewalk", 1_500)]
+            .iter()
+            .enumerate()
+            .map(|(k, (id, w))| Segment::new(k as u32 + 1, kind_index(id).unwrap(), *w))
+            .collect();
+        s.next_uid = 5;
+        s.row_mm = total(&s.segments);
+        s
+    }
+
+    #[test]
+    fn an_element_snaps_by_its_edges_so_it_can_fill_a_1_5_m_piece() {
+        let s = narrow_sidewalks();
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
+        // The centre is at 750, which is on the 50: the edges, 0 and 1 500, are on the grid.
+        e.add_green(Green { width_mm: 1_500, ..bed(10_000, 750) }).unwrap();
+        assert_eq!(e.snapshot().green[0].offset_mm, 750);
+        assert!(passes(&e, "green-host"));
+        // Defaults take the whole piece.
+        for kind in [GreenKind::Tree, GreenKind::Bed] {
+            let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
+            e.add_green_from(&GreenForm { at_mm: Some(20_000), host: Some(0), ..GreenForm::new(kind) }).unwrap();
+            let g = e.snapshot().green[0];
+            assert_eq!((g.width_mm, g.offset_mm), (1_500, 750), "{kind:?}");
+            assert!(passes(&e, "green-host"));
+        }
+        // A move across snaps the left edge: a centre of 700 puts the edge at 0 (not at -50).
+        e.add_green(Green { width_mm: 1_500, ..bed(30_000, 750) }).unwrap();
+        e.move_green_across(1, 790).unwrap();
+        assert_eq!(e.snapshot().green[1].offset_mm, 750);
+        // The fine field in cm: the value shown gives the offset back.
+        let c = e.view().green.cells[1].clone();
+        let shown = fine_typed_cm(c.fine_mm);
+        e.change_green(1, &GreenForm { host: c.host, fine_mm: Some(shown), ..GreenForm::new(GreenKind::Bed) }).unwrap();
+        assert_eq!(e.snapshot().green[1].offset_mm, 750);
+    }
+
+    /// What the across field gives back for `fine_mm`: whole centimetres.
+    fn fine_typed_cm(fine_mm: i32) -> i32 {
+        (f64::from(fine_mm) / 10.0).round() as i32 * 10
+    }
+
+    #[test]
+    fn a_centre_on_the_50_stays_sound_and_reversal_is_an_identity() {
+        let s = narrow_sidewalks();
+        let s = Street { green: vec![Green { width_mm: 1_500, ..bed(10_000, 750) }, Green { width_mm: 1_500, ..bed(30_000, 750) }], length_mm: Some(LEN), ..s };
+        assert!(s.is_sound());
+        let once = s.reversed();
+        assert!(once.is_sound());
+        assert_eq!(once.green[0].offset_mm, total(&s.segments) - 750);
+        assert_eq!(once.reversed(), s);
+    }
+
     #[test]
     fn a_default_element_lies_wholly_within_its_host() {
         // A small tree on the 3.3 m sidewalk used to land 50 mm into the lane.
@@ -1442,7 +1511,7 @@ mod tests {
                 let g = e.snapshot().green[0];
                 assert!(within_host(&e.snapshot().segments, host, &g), "{kind:?} {size:?} on {host}: {g:?}");
                 assert_eq!(g.width_mm % 100, 0, "{g:?}");
-                assert_eq!(g.offset_mm % 100, 0, "{g:?}");
+                assert_eq!((2 * g.offset_mm - g.width_mm) / 2 % 100, 0, "the left edge is on the grid: {g:?}");
             }
         }
     }

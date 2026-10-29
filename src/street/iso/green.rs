@@ -213,17 +213,17 @@ mod tests {
     fn a_tree_draws_its_pit_trunk_and_crown() {
         let mut e = street();
         let none = drawn(&e);
-        e.add_green(tree(12_000, 1_700, TreeSize::M)).unwrap();
+        e.add_green(tree(12_000, 1_750, TreeSize::M)).unwrap();
         let p = projection(&e);
         let m = drawn(&e);
         let h = drawn_mm(150);
         // The medium tree's 1 900 mm pit lies flush with the sidewalk's top, in the tree-pit material.
-        let pit = flat(&p, (750.0, 2_650.0), h, (12_000.0, 13_900.0));
+        let pit = flat(&p, (800.0, 2_700.0), h, (12_000.0, 13_900.0));
         assert!(m.contains(&format!("<polygon class=\"iso-top k-planting mat-trees\" points=\"{pit}\"/>")), "its pit");
         // Its trunk stands at the pit's centre, 250 mm across and 2 m tall.
-        assert!(m.contains(&trunk_front(&p, 1_700.0, h, 12_950.0)), "its trunk");
+        assert!(m.contains(&trunk_front(&p, 1_750.0, h, 12_950.0)), "its trunk");
         // The crown is 30% of the canopy (8 m): 2.4 m across and along, over the trunk.
-        let top = flat(&p, (500.0, 2_900.0), h + 5_000.0, (11_750.0, 14_150.0));
+        let top = flat(&p, (550.0, 2_950.0), h + 5_000.0, (11_750.0, 14_150.0));
         assert!(m.contains(&format!("<polygon class=\"o-top\" points=\"{top}\"/>")), "its crown");
         assert_eq!((count(&m, "s-trunk") - count(&none, "s-trunk"), count(&m, "s-crown") - count(&none, "s-crown")), (1, 1));
         // It hovers as a tree.
@@ -245,11 +245,11 @@ mod tests {
     fn the_crown_is_as_wide_as_the_size_says() {
         for (size, crown) in [(TreeSize::S, 1_800.0), (TreeSize::M, 2_400.0), (TreeSize::L, 3_000.0)] {
             let mut e = street();
-            e.add_green(tree(20_000, 1_700, size)).unwrap();
+            e.add_green(tree(20_000, 1_750, size)).unwrap();
             let (m, p) = (drawn(&e), projection(&e));
             let pit = f64::from(size.default_pit_mm());
             let z = 20_000.0 + pit / 2.0;
-            let top = flat(&p, (1_700.0 - crown / 2.0, 1_700.0 + crown / 2.0), drawn_mm(150) + 5_000.0, (z - crown / 2.0, z + crown / 2.0));
+            let top = flat(&p, (1_750.0 - crown / 2.0, 1_750.0 + crown / 2.0), drawn_mm(150) + 5_000.0, (z - crown / 2.0, z + crown / 2.0));
             assert!(m.contains(&format!("<polygon class=\"o-top\" points=\"{top}\"/>")), "{size:?}");
         }
     }
@@ -302,12 +302,12 @@ mod tests {
     #[test]
     fn anchored_at_the_last_end_the_element_draws_where_it_stands() {
         let mut e = framed(Editor::new(0), ZoneEnd::Last);
-        e.add_green(tree(12_000, 1_700, TreeSize::M)).unwrap();
+        e.add_green(tree(12_000, 1_750, TreeSize::M)).unwrap();
         let (m, p) = (drawn(&e), projection(&e));
         // 12 m to 13.9 m from the last end is 28 m to 26.1 m from the stretch's near end, across unchanged.
-        let pit = flat(&p, (750.0, 2_650.0), drawn_mm(150), (26_100.0, 28_000.0));
+        let pit = flat(&p, (800.0, 2_700.0), drawn_mm(150), (26_100.0, 28_000.0));
         assert!(m.contains(&format!("<polygon class=\"iso-top k-planting mat-trees\" points=\"{pit}\"/>")), "its pit");
-        assert!(m.contains(&trunk_front(&p, 1_700.0, drawn_mm(150), 27_050.0)), "its trunk at the middle");
+        assert!(m.contains(&trunk_front(&p, 1_750.0, drawn_mm(150), 27_050.0)), "its trunk at the middle");
     }
 
     #[test]
@@ -377,7 +377,7 @@ mod tests {
         let mut e = street();
         let none = iso_label(&e.view(), &en(), Units::Metres);
         assert!(!none.contains("Trees and plantings"));
-        e.add_green(tree(12_000, 1_700, TreeSize::M)).unwrap();
+        e.add_green(tree(12_000, 1_750, TreeSize::M)).unwrap();
         e.add_green(on_the_left(GreenKind::Bed, 20_000, 4_000)).unwrap();
         e.add_green(tree(50_000, 1_700, TreeSize::M)).unwrap();
         assert_eq!(iso_label(&e.view(), &en(), Units::Metres), format!("{none} Trees and plantings shown: 2."));
