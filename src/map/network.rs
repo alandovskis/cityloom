@@ -157,7 +157,7 @@ fn ends_where_it_stops(ctx: &Ctx, has: impl Fn(&EndRead) -> bool, rule: Check, k
             if !has(ctx.end(here)) || ends.iter().any(|&other| other != here && has(ctx.end(other))) {
                 continue;
             }
-            let street = &ctx.read.streets[here.0].name;
+            let street = &ctx.read.streets[here.0].called;
             let at = ctx.node(node).map_or(street, |n| &n.name);
             let mut places = vec![ctx.street_place(here.0)];
             places.extend(ctx.junction_place(node));
@@ -283,9 +283,9 @@ fn lanes(ctx: &Ctx) -> Vec<NetworkFinding> {
                 rule: Check::Lanes,
                 severity: Severity::Problem,
                 said: Said::new("net-lanes-change")
-                    .with("a", name(&sx.name))
+                    .with("a", name(&sx.called))
                     .with("from", count("net-lanes", from))
-                    .with("b", name(&sy.name))
+                    .with("b", name(&sy.called))
                     .with("to", count("net-lanes", to))
                     .with("step", count("net-lanes", MAX_LANE_STEP)),
                 places: vec![ctx.street_place(x.0), ctx.street_place(y.0)],
@@ -315,6 +315,7 @@ mod tests {
             a,
             b,
             name: Said::new("test-street"),
+            called: Said::new("test-called"),
             pedestrian: false,
             freeway: false,
             bike: false,

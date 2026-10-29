@@ -1601,13 +1601,26 @@ a.btn {
   color: var(--ink-2);
   font-weight: 400;
 }
-.net-links {
+/* The places of a finding are a list of their own inside a `.checks` item, so the item's grid, its border and its
+   block spans are taken off them again. */
+.checks .net-links {
   display: flex;
   flex-wrap: wrap;
   gap: 0 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.checks .net-links li {
+  display: block;
+  padding: 0;
+  border: 0;
 }
 .net-links a {
   display: inline-block;
   padding: 4px 0;
   text-decoration: underline;
+}
+.net-more {
+  margin: 0 8px 4px;
 }

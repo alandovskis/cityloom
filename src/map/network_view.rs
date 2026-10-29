@@ -27,13 +27,15 @@ pub fn NetworkChecks(vm: Rc<MapVm>) -> impl IntoView {
 
 fn check(rule: NetworkCheck) -> impl IntoView {
     let heading = format!("net-h-{}", rule.id);
-    let labelled_by = heading.clone();
     let items = rule.items.into_iter().map(finding).collect_view();
+    // The name and the count are two spans with a hidden ": " between them, so a screen reader hears "Cycling links:
+    // 3 findings" and the heading reads as two parts.
     view! {
-        <section class="net-rule" aria-labelledby=labelled_by data-rule=rule.id>
-            <h3 id=heading class="net-h"><span>{rule.label}</span><span class="fig net-count">{rule.count_text}</span></h3>
+        <div class="net-rule" data-rule=rule.id>
+            <h3 id=heading class="net-h"><span>{rule.label}</span><span class="sr-only">": "</span><span class="fig net-count">{rule.count_text}</span></h3>
             <ul class="checks places-list" data-count=rule.count>{items}</ul>
-        </section>
+            {rule.more.map(|m| view! { <p class="hint net-more">{m}</p> })}
+        </div>
     }
 }
 
@@ -44,11 +46,13 @@ fn finding(item: NetworkItem) -> impl IntoView {
     } else {
         view! { <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4.5" y="4.5" width="7" height="7"/></svg> }.into_any()
     };
-    let places = item.places.into_iter().map(|p| view! { <a href=p.href data-hot=p.hot>{p.name}</a> }).collect_view();
+    // A list of its own, so a screen reader says how many places the finding concerns.
+    let places = item.places.into_iter().map(|p| view! { <li><a class="net-link" href=p.href data-hot=p.hot>{p.name}</a></li> }).collect_view();
+    let more = item.more_places.map(|m| view! { <li class="net-more-places">{m}</li> });
     view! {
-        <li class=class data-severity=item.severity>
+        <li class=class data-severity=item.severity data-rule=item.rule>
             {icon}
-            <div><b>{item.text}</b><span class="net-severity">{item.severity_word}</span><span class="net-links">{places}</span></div>
+            <div><b>{item.text}</b><span class="net-severity">{item.severity_word}</span><ul class="net-links">{places}{more}</ul></div>
         </li>
     }
 }

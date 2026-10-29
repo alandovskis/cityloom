@@ -773,7 +773,11 @@ fn take_a_crossing_away(vm: &MapVm, storage: &Rc<MemoryStorage>) {
 fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
     let (vm, _) = map_vm();
     let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
-    assert_eq!(count(&h, "<section"), 5, "{h}");
+    assert_eq!(count(&h, "<section"), 0, "a check is not a landmark: {h}");
+    assert!(!h.contains("aria-labelledby"), "{h}");
+    assert_eq!(count(&h, "<h3"), 5);
+    // the name and the count are read apart: "Crossings: no findings"
+    assert!(h.contains("Crossings</span><span class=\"sr-only\">: </span><span class=\"fig net-count\">no findings</span>"), "{h}");
     for (id, label) in [
         ("cycling", "Cycling links"),
         ("access", "Pedestrian street access"),
@@ -781,7 +785,7 @@ fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
         ("lanes", "Lane counts"),
         ("transit", "Transit corridors"),
     ] {
-        assert!(h.contains(&format!("aria-labelledby=\"net-h-{id}\"")) && h.contains(&format!("id=\"net-h-{id}\"")) && h.contains(label), "{id}: {h}");
+        assert!(h.contains(&format!("id=\"net-h-{id}\"")) && h.contains(&format!("data-rule=\"{id}\"")) && h.contains(label), "{id}: {h}");
     }
     assert_eq!(count(&h, "no findings"), 5);
     assert_eq!(count(&h, "<li"), 0);
@@ -794,10 +798,13 @@ fn a_finding_says_why_and_links_the_street_and_the_junction() {
     let (vm, storage) = map_vm();
     take_a_crossing_away(&vm, &storage);
     let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
-    assert_eq!(count(&h, "<li"), 1, "{h}");
+    assert_eq!(count(&h, "<li data-severity"), 1, "{h}");
     assert!(h.contains("1 finding") && h.contains("has no pedestrian crossing") && h.contains("Problem"), "{h}");
     assert!(h.contains("href=\"street.html?street=") && h.contains("href=\"intersection.html?junction=2\""), "{h}");
-    assert!(h.contains("data-severity=\"problem\"") && h.contains("class=\"bad\""), "{h}");
+    assert!(h.contains("data-severity=\"problem\"") && h.contains("class=\"bad\"") && h.contains("data-rule=\"crossings\""), "{h}");
+    // the places are a list of their own, so a screen reader says how many there are
+    assert!(h.contains("<ul class=\"net-links\"") && count(&h, "<ul class=\"net-links\"") == 1, "{h}");
+    assert_eq!(count(&h, "class=\"net-link\""), 2, "{h}");
     let lead = map_html(|| view! { <network_view::NetworkLead vm=vm.clone()/> });
     assert!(lead.contains("found 1 finding"), "{lead}");
 }

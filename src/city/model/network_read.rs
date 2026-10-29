@@ -25,8 +25,10 @@ pub struct StreetRead {
     /// The nodes (their uids) at the first and last ends.
     pub a: u32,
     pub b: u32,
-    /// How the notes name the street.
+    /// How the notes name the street: what it is called and where it runs.
     pub name: Said,
+    /// What it is called, for a sentence.
+    pub called: Said,
     pub pedestrian: bool,
     pub freeway: bool,
     /// Whether any zone has a bike lane.
@@ -81,6 +83,7 @@ impl City {
                 a: node_uid(e.a),
                 b: node_uid(e.b),
                 name: street_note(self.layout.edge_title(i, now), self.layout.edge_ends(i)),
+                called: self.layout.edge_title(i, now),
                 pedestrian: now.class == StreetClass::Pedestrian,
                 freeway: e.class.is_freeway(),
                 bike: now.sections().iter().any(|s| s.iter().any(|p| KINDS[p.kind].id == "bike")),

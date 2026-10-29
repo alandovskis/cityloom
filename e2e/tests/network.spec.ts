@@ -37,16 +37,18 @@ test.describe("the network checks on the map page", () => {
       await expect(heading).toBeVisible();
       // the count is part of the heading, so a screen reader hears it with the name
       const n = (await counts(page))[id];
+      // the name and the count are apart, with a ": " a screen reader hears between them
+      expect((await heading.textContent())!.replace(/\s+/g, " ")).toMatch(/^[^:]+: (no findings|\d+ findings?)$/);
       await expect(heading).toContainText(n === 0 ? "no findings" : n === 1 ? "1 finding" : `${n} findings`);
-      await expect(rule(page, id).locator("ul > li")).toHaveCount(n);
+      await expect(rule(page, id).locator("ul.places-list > li")).toHaveCount(n);
     }
     const total = Object.values(await counts(page)).reduce((a, b) => a + b, 0);
     await expect(page.locator("#network-lead")).toHaveText(
       total === 0
         ? "The network checks found nothing across the streets and junctions."
         : total === 1
-          ? "The network checks found 1 thing across the streets and junctions."
-          : `The network checks found ${total} things across the streets and junctions.`,
+          ? "The network checks found 1 finding across the streets and junctions."
+          : `The network checks found ${total} findings across the streets and junctions.`,
     );
   });
 
@@ -56,7 +58,7 @@ test.describe("the network checks on the map page", () => {
     expect(total, "the Plateau has findings").toBeGreaterThan(0);
     // the Notes' lead and the status line count places that fail their own checks: none of the findings
     await expect(page.locator("#checks-lead")).not.toContainText("network");
-    await expect(page.locator("#fit-slot")).not.toContainText(String(total) + " things");
+    await expect(page.locator("#fit-slot")).not.toContainText(String(total) + " findings");
   });
 
   test("each finding says why it failed and a link opens the place it concerns", async ({ page }) => {
@@ -72,14 +74,41 @@ test.describe("the network checks on the map page", () => {
     await expect(page).toHaveURL(new RegExp(`/${href!.replace("?", "\\?")}$`));
   });
 
+  test("the places of a finding are a list of links that are apart from one another", async ({ page }) => {
+    await openMap(page);
+    const finding = page
+      .locator("#network-slot li[data-severity]", { has: page.locator("ul.net-links li + li") })
+      .first();
+    const list = finding.locator("ul.net-links");
+    await expect(list).toHaveCSS("display", "flex");
+    await expect(list.locator("li").first()).toHaveCSS("display", "block");
+    const boxes = await list.locator("a").evaluateAll((els) =>
+      els.map((e) => {
+        const r = e.getBoundingClientRect();
+        return { x: r.x, y: r.y, w: r.width, h: r.height };
+      }),
+    );
+    expect(boxes.length).toBeGreaterThan(1);
+    for (let i = 1; i < boxes.length; i++) {
+      const [a, b] = [boxes[i - 1], boxes[i]];
+      // the next link starts to the right of the one before it, with a gap, or on a line below it
+      const apart = b.y >= a.y + a.h - 1 || b.x >= a.x + a.w + 8;
+      expect(apart, `link ${i} is apart from the one before`).toBe(true);
+    }
+    // and no more of them are listed than the panel caps
+    expect(await list.locator("a").count()).toBeLessThanOrEqual(8);
+  });
+
   test("a finding goes when the street it concerns is edited, at the map's next load", async ({ page }) => {
     await openMap(page);
     // the smallest cycling link that is cut off, and the street at the head of it
     const target = await page.evaluate(() => {
-      const items = [...document.querySelectorAll<HTMLElement>('#network-slot .net-rule[data-rule="cycling"] li')];
+      const items = [
+        ...document.querySelectorAll<HTMLElement>('#network-slot .net-rule[data-rule="cycling"] ul.places-list > li'),
+      ];
       const islands = items
-        .map((li) => ({ links: [...li.querySelectorAll("a")].map((a) => a.getAttribute("href")!) }))
-        .filter((i) => i.links.every((h) => h.startsWith("street.html")));
+        .filter((li) => /cut off/.test(li.querySelector("b")!.textContent!))
+        .map((li) => ({ links: [...li.querySelectorAll("a")].map((a) => a.getAttribute("href")!) }));
       islands.sort((a, b) => a.links.length - b.links.length);
       return { href: islands[0].links[0], size: islands[0].links.length };
     });
