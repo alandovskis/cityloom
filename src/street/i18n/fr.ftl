@@ -570,6 +570,7 @@ check-label-green-sightline = Plantations à l’écart des coins aux intersecti
 check-label-green-continuity = Noues végétalisées continues
 check-detail-green-host-roadway = On ne peut pas planter sur la chaussée ({ $host }).
 check-detail-green-host-wide = L’élément fait { $width } de large, plus que la pièce en dessous ({ $host }, { $have }).
+check-detail-green-host-overhang = Son bord dépasse de { $over } l’élément en dessous ({ $host }).
 check-detail-green-host-off = Son centre se trouve au-delà du bord de la coupe à cet endroit.
 check-detail-green-host-ok = Chaque arbre et chaque plantation reposent sur une pièce qui peut les accueillir.
 check-detail-green-clear-path = Il ne reste que { $have } de trottoir à côté; il en faut { $need } ou plus.

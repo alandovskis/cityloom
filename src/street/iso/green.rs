@@ -317,9 +317,10 @@ mod tests {
             assert!(m0.contains(&auto(4_250.0, z)), "the strip has its tree at {z}");
         }
         let mut e = before;
-        // Explicit trees centred at 10.75 m and 16.75 m, each in the strip.
-        e.add_green(tree(10_000, 4_300, TreeSize::S)).unwrap();
-        e.add_green(tree(16_000, 4_300, TreeSize::S)).unwrap();
+        // Explicit trees centred at 10.75 m and 16.75 m along, each in the strip.
+        // The strip is 1 500 wide, which a pit on the 100 mm grid cannot fill: 1 400 wide, 3 500 to 5 000 across.
+        e.add_green(Green { width_mm: 1_400, ..tree(10_000, 4_200, TreeSize::S) }).unwrap();
+        e.add_green(Green { width_mm: 1_400, ..tree(16_000, 4_200, TreeSize::S) }).unwrap();
         let m = drawn(&e);
         // Within 4 m of an explicit tree (12 m is 1.25 m from the first, 20 m is 3.25 m from the second) the automatic
         // tree is gone; at 4 m (6.75 m from the first), 28 m and 36 m, and 12 m's mirror on the other strip, it stays.

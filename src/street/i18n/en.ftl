@@ -570,6 +570,7 @@ check-label-green-sightline = Planting clear of the corners at junctions
 check-label-green-continuity = Bioswales unbroken
 check-detail-green-host-roadway = Planting cannot stand on the roadway ({ $host }).
 check-detail-green-host-wide = It is { $width } wide, wider than the piece under it ({ $host }, { $have }).
+check-detail-green-host-overhang = It reaches { $over } past the piece under it ({ $host }).
 check-detail-green-host-off = Its centre lies beyond the edge of the section here.
 check-detail-green-host-ok = Every tree and planting stands on a piece that can hold it.
 check-detail-green-clear-path = Only { $have } of sidewalk is left beside it; { $need } or more is needed.

@@ -156,7 +156,7 @@ pub enum GreenRefusal {
     Dragging,
     /// It would reach past the street's ends, or past the section's edges across.
     OffStreet,
-    /// Its centre would lie on a piece of the roadway.
+    /// Some of it would lie over a piece of the roadway.
     OnRoadway,
     /// It would overlap another element.
     Overlap,
@@ -210,6 +210,17 @@ pub fn host_at(segs: &[Segment], offset_mm: i32) -> Option<usize> {
 pub fn fills(segs: &[Segment], host: usize) -> (i32, i32) {
     let from_mm = segs[..host].iter().map(|s| s.width_mm).sum();
     (from_mm, from_mm + segs[host].width_mm)
+}
+
+/// Whether the span from `left2` to `right2` (twice the offsets across, so that an odd width needs no rounding) lies
+/// over any piece of the roadway in `segs`. Touching an edge is not reaching.
+fn reaches_roadway(segs: &[Segment], left2: i64, right2: i64) -> bool {
+    let mut edge = 0i64;
+    segs.iter().any(|s| {
+        let (from2, to2) = (2 * edge, 2 * (edge + i64::from(s.width_mm)));
+        edge += i64::from(s.width_mm);
+        is_roadway(s.kind) && left2 < to2 && from2 < right2
+    })
 }
 
 /// Where an element is, to find it again after the list is sorted: `(from_mm, offset_mm)`.
@@ -359,7 +370,8 @@ impl Editor {
         if sections.iter().any(|segs| left2 < 0 || right2 > 2 * i64::from(total(segs))) {
             return Err(GreenRefusal::OffStreet);
         }
-        if sections.iter().any(|segs| host_at(segs, candidate.offset_mm).is_some_and(|h| is_roadway(segs[h].kind))) {
+        // Any part of the rectangle over a roadway piece, in any section it overlaps, not only the centre.
+        if sections.iter().any(|segs| reaches_roadway(segs, left2, right2)) {
             return Err(GreenRefusal::OnRoadway);
         }
         let overlaps = content.green.iter().enumerate().any(|(k, o)| {
@@ -543,25 +555,33 @@ fn snap_up(mm: i32) -> i32 {
 ///
 /// A tree has the pit of its size; any other kind is as wide as its host, except that on a sidewalk it leaves the
 /// walkway (`CLEAR_PATH_MM`), the host's whole width when that leaves under `SNAP_MM`. On a sidewalk it stands
-/// against the edge nearer the roadway, which leaves the widest walkway; on any other piece it is centred. The
-/// grid rounds toward the inside of the host, and never pushes the element past an edge of the section.
+/// against the edge nearer the roadway, which leaves the widest walkway; on any other piece it is centred. A width
+/// that was not asked for is rounded down to the grid and the centre is on the grid, so the rectangle stays within
+/// the host: where no centre on the grid keeps it there, or the walkway it should leave, the width gives up one
+/// grid step at a time.
 pub fn default_across(segs: &[Segment], host: usize, kind: GreenKind, size: Option<TreeSize>, width_mm: Option<i32>) -> (i32, i32) {
     let (from, to) = fills(segs, host);
     let host_mm = to - from;
     let on_sidewalk = KINDS[segs[host].kind].id == "sidewalk";
-    let width = width_mm.filter(|w| *w > 0).unwrap_or_else(|| match kind {
-        GreenKind::Tree => {
-            // The pit of its size, narrowed to leave the walkway on a sidewalk (when that leaves a usable pit) and
-            // never wider than its host.
-            let pit = size.unwrap_or(TreeSize::M).default_pit_mm();
-            let path = host_mm - CLEAR_PATH_MM;
-            snap_down(if on_sidewalk && path >= MIN_TREE_WIDTH_MM { pit.min(path) } else { pit.min(host_mm) })
-        }
-        _ if on_sidewalk && host_mm - CLEAR_PATH_MM >= SNAP_MM => snap_down(host_mm - CLEAR_PATH_MM),
-        _ => host_mm,
+    let path = host_mm - CLEAR_PATH_MM;
+    // Whether the walkway is to be kept: a default width on a sidewalk that has room for one.
+    let keeps_path = on_sidewalk
+        && match kind {
+            GreenKind::Tree => path >= MIN_TREE_WIDTH_MM,
+            _ => path >= SNAP_MM,
+        };
+    let asked = width_mm.filter(|w| *w > 0).map(|w| snap(w).max(SNAP_MM));
+    let target = asked.unwrap_or_else(|| {
+        snap_down(match kind {
+            GreenKind::Tree => {
+                let pit = size.unwrap_or(TreeSize::M).default_pit_mm();
+                if keeps_path { pit.min(path) } else { pit.min(host_mm) }
+            }
+            _ if keeps_path => path,
+            _ => host_mm,
+        })
+        .max(SNAP_MM)
     });
-    let width = snap(width).max(SNAP_MM);
-    let centre = (from + to) / 2;
     // The nearest roadway piece says which edge of a sidewalk is the road side; with none, it is centred.
     let road_right = on_sidewalk
         .then(|| {
@@ -572,14 +592,28 @@ pub fn default_across(segs: &[Segment], host: usize, kind: GreenKind, size: Opti
             })
         })
         .flatten();
-    let offset = match road_right {
-        Some(true) => snap_down(to - width / 2),
-        Some(false) => snap_up(from + width / 2),
-        None => snap(centre),
+    // The centre on the grid for `width`, if one keeps the rectangle within the host.
+    let centre_for = |width: i32| -> Option<i32> {
+        let lo = snap_up((2 * from + width + 1).div_euclid(2));
+        let hi = snap_down((2 * to - width).div_euclid(2));
+        (lo <= hi).then(|| match road_right {
+            Some(true) => hi,
+            Some(false) => lo,
+            None => snap((from + to) / 2).clamp(lo, hi),
+        })
     };
-    // The grid never pushes the element past the section's edge.
-    let (low, high) = (snap_up(width / 2), snap_down(total(segs) - width / 2));
-    (if low <= high { offset.clamp(low, high) } else { offset }, width)
+    let leaves_path = |width: i32, centre: i32| {
+        !(asked.is_none() && keeps_path && road_right.is_some()) || (centre - width / 2 - from).max(to - centre - width / 2) >= CLEAR_PATH_MM
+    };
+    let mut width = target;
+    loop {
+        match centre_for(width) {
+            Some(centre) if leaves_path(width, centre) => return (centre, width),
+            // An asked width is kept whatever it does; the checks speak.
+            _ if asked.is_some() || width <= SNAP_MM => return (centre_for(width).unwrap_or_else(|| snap((from + to) / 2)), width),
+            _ => width -= SNAP_MM,
+        }
+    }
 }
 
 /// One element as the Green row lists it.
@@ -831,6 +865,13 @@ impl Editor {
                             .with("host", Arg::KindLower(host_id))
                             .with("have", Arg::Length(host.width_mm)),
                     );
+                } else {
+                    // Position, not only width: the whole span across has to lie within the piece.
+                    let (from, to) = fills(segs, h);
+                    let over2 = (2 * from - (2 * g.offset_mm - g.width_mm)).max(2 * g.offset_mm + g.width_mm - 2 * to);
+                    if over2 > 0 {
+                        fail(0, Said::new("check-detail-green-host-overhang").with("over", Arg::Length((over2 + 1) / 2)).with("host", Arg::KindLower(host_id)));
+                    }
                 }
                 if host_id == "sidewalk" {
                     let have = walkway_beside_mm(segs, h, g, true).max(walkway_beside_mm(segs, h, g, false));
@@ -1056,7 +1097,7 @@ mod tests {
         let mut e = medianed();
         // The bike lane lies at 11 100 to 12 900 mm.
         assert_eq!(e.add_green(pit(10_000, 12_000)), Err(GreenRefusal::OnRoadway));
-        assert_eq!(e.add_green(pit(10_000, 13_500)), Ok(()));
+        assert_eq!(e.add_green(pit(10_000, 14_000)), Ok(()));
     }
 
     #[test]
@@ -1101,12 +1142,14 @@ mod tests {
     #[test]
     fn moving_across_onto_the_median_keeps_the_size() {
         let mut e = medianed();
-        e.add_green(Green { size: Some(TreeSize::L), ..pit(10_000, 1_500) }).unwrap();
-        e.move_green_across(0, 6_300 + 750).unwrap();
+        // The median is 6 300 to 7 800; a pit 1 400 wide fits it on the grid, one 1 500 wide cannot.
+        e.add_green(Green { size: Some(TreeSize::L), width_mm: 1_400, ..pit(10_000, 1_500) }).unwrap();
+        e.move_green_across(0, 6_300 + 700).unwrap();
         let g = e.snapshot().green[0];
-        assert_eq!((g.offset_mm, g.size, g.width_mm, g.from_mm), (7_100, Some(TreeSize::L), 1_500, 10_000));
+        assert_eq!((g.offset_mm, g.size, g.width_mm, g.from_mm), (7_000, Some(TreeSize::L), 1_400, 10_000));
+        assert_eq!(e.move_green_across(0, 7_200), Err(GreenRefusal::OnRoadway), "its edge would reach the lane");
         assert_eq!(e.move_green_across(0, 4_000), Err(GreenRefusal::OnRoadway), "a travel lane is no place for it");
-        assert_eq!(e.snapshot().green[0].offset_mm, 7_100);
+        assert_eq!(e.snapshot().green[0].offset_mm, 7_000);
     }
 
     #[test]
@@ -1233,6 +1276,111 @@ mod tests {
         assert_eq!(host_at(&segs, -1), None);
         assert_eq!(fills(&segs, 2), (6_300, 7_800));
     }
+    // ---- the span against the roadway and the host (final review C1) -------------------------------------------
+
+    /// Whether `g` lies wholly within the piece `host` of `segs`.
+    fn within_host(segs: &[Segment], host: usize, g: &Green) -> bool {
+        let (from, to) = fills(segs, host);
+        2 * g.offset_mm - g.width_mm >= 2 * from && 2 * g.offset_mm + g.width_mm <= 2 * to
+    }
+
+    #[test]
+    fn a_bed_that_reaches_into_a_travel_lane_is_refused_though_its_centre_is_on_the_sidewalk() {
+        // The review's probe: a 2 800 wide bed centred at 3 200 spans 1 800 to 4 600, 1.3 m into the lane.
+        let mut e = editor();
+        let overhang = Green { kind: GreenKind::Bed, from_mm: 10_000, length_mm: 4_000, offset_mm: 3_200, width_mm: 2_800, size: None };
+        assert_eq!(e.add_green(overhang), Err(GreenRefusal::OnRoadway));
+        assert!(e.snapshot().green.is_empty());
+        // Moved across, a bed that fits is dragged into the lane by its edge.
+        e.add_green(Green { offset_mm: 1_700, width_mm: 2_800, ..overhang }).unwrap();
+        assert_eq!(e.move_green_across(0, 2_000), Err(GreenRefusal::OnRoadway));
+        assert_eq!(e.resize_green(0, 4_000, 4_000), Err(GreenRefusal::OffStreet), "past the section's edge is still off the street");
+    }
+
+    #[test]
+    fn an_element_is_judged_against_the_roadway_in_every_section_it_overlaps() {
+        // Zone 2's sidewalk is 500 mm narrower: a tree at 2 500 across (1 750 to 3 250) fits zone 1's and reaches the lane in zone 2.
+        let mut s = zoned(Street::sample(0, Side::Right), &[0, 50_000], 100_000);
+        let mut own = s.segments.clone();
+        own[0].width_mm -= 500;
+        s.zones[1].segments = Some(own);
+        let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 100_000, from_end: ZoneEnd::First }));
+        let across = Green { length_mm: 4_000, ..small(48_000, 2_500) };
+        assert_eq!(e.add_green(across), Err(GreenRefusal::OnRoadway));
+        assert_eq!(e.add_green(Green { from_mm: 40_000, ..across }), Ok(()), "wholly in zone 1");
+    }
+
+    #[test]
+    fn green_host_fails_when_the_span_leaves_its_piece_in_any_zone() {
+        // Loaded as saved: a bed whose centre is on the sidewalk and whose edge is not.
+        let overhang = Green { kind: GreenKind::Bed, from_mm: 10_000, length_mm: 4_000, offset_mm: 3_200, width_mm: 2_800, size: None };
+        let s = Street { green: vec![overhang], length_mm: Some(LEN), ..Street::sample(0, Side::Right) };
+        let e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
+        let c = row(&e, "green-host");
+        assert!(!c.ok, "narrower than the piece, yet 1.3 m past it");
+        assert_eq!(c.detail.key, "check-detail-green-host-overhang");
+        // The same bed inside the piece passes.
+        let inside = Green { offset_mm: 1_900, ..overhang };
+        let s = Street { green: vec![inside], ..s };
+        let e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
+        assert!(passes(&e, "green-host"));
+        // A tree inside the first zone's piece that the second zone's narrower piece does not hold fails there.
+        let mut s = zoned(Street::sample(0, Side::Right), &[0, 50_000], 100_000);
+        let mut own = s.segments.clone();
+        own[0].width_mm -= 500;
+        s.zones[1].segments = Some(own);
+        s.green = vec![Green { length_mm: 4_000, ..small(48_000, 2_500) }];
+        let e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 100_000, from_end: ZoneEnd::First }));
+        assert!(!passes(&e, "green-host"), "its edge at 3 300 leaves the 2 800 piece of zone 2");
+    }
+
+    #[test]
+    fn a_default_element_lies_wholly_within_its_host() {
+        // A small tree on the 3.3 m sidewalk used to land 50 mm into the lane.
+        let mut e = editor();
+        e.add_green_from(&GreenForm { size: Some(TreeSize::S), at_mm: Some(10_000), host: Some(0), ..GreenForm::new(GreenKind::Tree) }).unwrap();
+        let segs = e.snapshot().segments;
+        let g = e.snapshot().green[0];
+        assert!(within_host(&segs, 0, &g), "{g:?}");
+        assert!(passes(&e, "green-host"));
+        // The Laurier sidewalks, 1.5 m with 150 mm buffers, for every kind and size.
+        let laurier: Vec<Segment> = [
+            ("sidewalk", 1_500),
+            ("buffer", 150),
+            ("bike", 1_500),
+            ("travel", 3_000),
+            ("travel", 3_000),
+            ("bike", 1_500),
+            ("buffer", 150),
+            ("sidewalk", 1_500),
+        ]
+        .iter()
+        .enumerate()
+        .map(|(k, (id, w))| Segment::new(k as u32 + 1, kind_index(id).unwrap(), *w))
+        .collect();
+        let mut s = Street::sample(0, Side::Right);
+        s.segments = laurier;
+        s.next_uid = 9;
+        s.row_mm = total(&s.segments);
+        for host in [0, 7] {
+            for (kind, size) in [
+                (GreenKind::Tree, Some(TreeSize::S)),
+                (GreenKind::Tree, Some(TreeSize::M)),
+                (GreenKind::Tree, Some(TreeSize::L)),
+                (GreenKind::Bed, None),
+                (GreenKind::RainGarden, None),
+                (GreenKind::Bioswale, None),
+            ] {
+                let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 100_000, from_end: ZoneEnd::First }));
+                e.add_green_from(&GreenForm { size, at_mm: Some(20_000), host: Some(host), ..GreenForm::new(kind) }).unwrap();
+                let g = e.snapshot().green[0];
+                assert!(within_host(&e.snapshot().segments, host, &g), "{kind:?} {size:?} on {host}: {g:?}");
+                assert_eq!(g.width_mm % 100, 0, "{g:?}");
+                assert_eq!(g.offset_mm % 100, 0, "{g:?}");
+            }
+        }
+    }
+
     // ---- the checks ------------------------------------------------------------------------------------------
 
     fn small(from_mm: i32, offset_mm: i32) -> Green {
@@ -1280,7 +1428,7 @@ mod tests {
     #[test]
     fn a_street_with_a_sound_tree_passes_every_green_row() {
         let mut e = editor().with_ends(junction_at(true, true));
-        e.add_green(Green { offset_mm: 2_600, width_mm: 1_600, ..small(12_000, 2_600) }).unwrap();
+        e.add_green(Green { width_mm: 1_400, length_mm: 1_700, ..small(12_000, 2_600) }).unwrap();
         for id in green_ids(&e) {
             assert!(passes(&e, id), "{id}");
         }
@@ -1289,9 +1437,11 @@ mod tests {
     #[test]
     fn green_host_fails_for_an_element_wider_than_its_piece() {
         let mut e = editor();
-        e.add_green(Green { width_mm: 3_000, ..bed(10_000, 2_000) }).unwrap();
+        e.add_green(Green { width_mm: 3_000, ..bed(10_000, 1_600) }).unwrap();
         assert!(passes(&e, "green-host"));
-        e.resize_green(0, 4_000, 4_000).unwrap();
+        // Placement refuses a wider one, so it is read as saved.
+        let s = Street { green: vec![Green { width_mm: 4_000, ..bed(10_000, 1_650) }], length_mm: Some(LEN), ..Street::sample(0, Side::Right) };
+        let e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
         let c = row(&e, "green-host");
         assert!(!c.ok);
         assert_eq!(c.detail.key, "check-detail-green-host-wide");
@@ -1312,18 +1462,18 @@ mod tests {
 
     #[test]
     fn green_clear_path_wants_the_walkway_left_beside_the_element() {
-        // The sidewalk is 3 300 mm. A pit 1 600 wide centred at 2 600 leaves exactly 1 800 on its left.
+        // The sidewalk is 3 300 mm. A pit 1 400 wide centred at 2 500 leaves exactly 1 800 on its left.
         let mut e = editor();
-        e.add_green(Green { width_mm: 1_600, ..small(10_000, 2_600) }).unwrap();
+        e.add_green(Green { width_mm: 1_400, ..small(10_000, 2_500) }).unwrap();
         assert!(passes(&e, "green-clear-path"), "exactly the clear path");
-        e.move_green_across(0, 2_500).unwrap();
+        e.move_green_across(0, 2_400).unwrap();
         let c = row(&e, "green-clear-path");
-        assert!(!c.ok, "1 700 and 0 are left");
+        assert!(!c.ok, "1 700 and 200 are left");
         assert_eq!(c.detail.key, "check-detail-green-clear-path");
-        // A default pit in the middle of the sidewalk leaves less than that on either side.
+        // A pit in the middle of the sidewalk leaves less than that on either side.
         let mut e = editor();
         e.add_green(small(10_000, 1_650)).unwrap();
-        assert!(!passes(&e, "green-clear-path"), "900 and 900 are left");
+        assert!(!passes(&e, "green-clear-path"), "950 and 850 are left");
     }
 
     #[test]
@@ -1334,8 +1484,8 @@ mod tests {
         s.next_uid = 6;
         s.row_mm = total(&s.segments);
         let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
-        // On the second sidewalk piece (1 000 to 4 000), at 3 400 across: 2 650 of it and the first piece are on its left.
-        e.add_green(small(10_000, 3_400)).unwrap();
+        // On the second sidewalk piece (1 000 to 4 000), at 3 200 across: 1 450 of it and the first piece are on its left.
+        e.add_green(small(10_000, 3_200)).unwrap();
         assert!(passes(&e, "green-clear-path"));
     }
 
@@ -1403,9 +1553,9 @@ mod tests {
     #[test]
     fn a_bioswale_must_be_long_enough() {
         let mut e = editor();
-        e.add_green(Green { kind: GreenKind::Bioswale, from_mm: 20_000, length_mm: 10_000, offset_mm: 1_650, width_mm: 3_300, size: None }).unwrap();
+        e.add_green(Green { kind: GreenKind::Bioswale, from_mm: 20_000, length_mm: 10_000, offset_mm: 1_600, width_mm: 3_200, size: None }).unwrap();
         assert!(passes(&e, "green-continuity"), "exactly the minimum");
-        e.resize_green(0, 8_000, 3_300).unwrap();
+        e.resize_green(0, 8_000, 3_200).unwrap();
         let c = row(&e, "green-continuity");
         assert!(!c.ok);
         assert_eq!(c.detail.key, "check-detail-green-continuity-short");
@@ -1438,13 +1588,13 @@ mod tests {
             let side = size.default_pit_mm();
             assert!(i64::from(side) * i64::from(side) >= size.min_pit_mm2(), "{size:?}");
             let mut e = editor();
-            e.add_green(Green { length_mm: 0, width_mm: 0, size: Some(size), ..tree(20_000, 2_600) }).unwrap();
+            e.add_green(Green { length_mm: 0, width_mm: 0, size: Some(size), ..tree(20_000, 1_700) }).unwrap();
             let g = e.snapshot().green[0];
             assert_eq!((g.length_mm, g.width_mm), (side, side), "{size:?}");
             assert!(passes(&e, "green-soil"), "{size:?}");
         }
         let mut e = editor();
-        e.add_green(Green { length_mm: 0, width_mm: 0, size: None, ..tree(20_000, 2_600) }).unwrap();
+        e.add_green(Green { length_mm: 0, width_mm: 0, size: None, ..tree(20_000, 1_700) }).unwrap();
         assert!(passes(&e, "green-soil"), "no size is medium");
     }
 

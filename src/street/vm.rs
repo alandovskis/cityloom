@@ -2825,11 +2825,12 @@ mod green_tests {
         let r = rig();
         assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 0)));
         assert_eq!(failed_green(&r.vm), Vec::<&str>::new(), "a medium tree on a 3.0 m sidewalk");
-        // A 1.5 m sidewalk is narrower than the path and the pit: the tree is as wide as the sidewalk, long enough for its soil.
+        // A 1.5 m sidewalk is narrower than the path and the pit: the tree is as wide as the grid lets it stand within the
+        // sidewalk (1.4 m, since 1.5 m has no centre on the 100 mm grid), long enough for its soil.
         let narrow = rig_of(&[("sidewalk", 1500, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 1500, None)], Some(LENGTH)).vm;
         assert!(narrow.add_green(form(GreenKind::Tree, 10_000, 0)));
         let c = narrow.view_now().green.cells[0].clone();
-        assert_eq!((c.width_mm, c.to_mm - c.from_mm), (1_500, 2_400));
+        assert_eq!((c.width_mm, c.to_mm - c.from_mm), (1_400, 2_500));
         assert_eq!(failed_green(&narrow), ["green-clear-path"], "soil and host pass, the walkway honestly fails");
         // A wide planting strip takes the plain pit.
         let strip = rig_of(
@@ -2876,10 +2877,11 @@ mod green_tests {
         let v = r.vm.view_now();
         let failed: Vec<_> = v.checks.iter().filter(|k| k.id.starts_with("green-") && !k.ok).map(|k| k.id).collect();
         assert!(failed.is_empty(), "a default bed passes its checks: {failed:?}");
-        // A 1.5 m sidewalk is narrower than the path: the bed is the host's width and the check says so.
+        // A 1.5 m sidewalk is narrower than the path: the bed is as wide as the grid lets it be within the host (1.4 m) and the
+        // check says so.
         let narrow = rig_of(&[("sidewalk", 1500, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 1500, None)], Some(LENGTH)).vm;
         assert!(narrow.add_green(form(GreenKind::RainGarden, 10_000, 0)));
-        assert_eq!(narrow.view_now().green.cells[0].width_mm, 1_500);
+        assert_eq!(narrow.view_now().green.cells[0].width_mm, 1_400);
     }
 
     #[test]
@@ -2891,7 +2893,7 @@ mod green_tests {
         .vm;
         assert!(vm.add_green(form(GreenKind::Bed, 10_000, 1)));
         let c = vm.view_now().green.cells[0].clone();
-        assert_eq!((c.host, c.width_mm), (Some(1), 1_500));
+        assert_eq!((c.host, c.width_mm), (Some(1), 1_400));
         assert!(c.fine_mm.abs() <= 50, "centred, to the grid: {}", c.fine_mm);
     }
 
@@ -3021,9 +3023,9 @@ mod green_tests {
         assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 0)));
         assert!(r.vm.set_green_size(TreeSize::L));
         assert_eq!(r.vm.view_now().green.cells[0].size, Some(TreeSize::L));
-        assert!(r.vm.resize_green(2_500, 2_500));
+        assert!(r.vm.resize_green(2_500, 1_000));
         let c = r.vm.view_now().green.cells[0].clone();
-        assert_eq!((c.to_mm - c.from_mm, c.width_mm), (2_500, 2_500));
+        assert_eq!((c.to_mm - c.from_mm, c.width_mm), (2_500, 1_000));
         assert!(r.vm.move_green_across(3, 0));
         let c = r.vm.view_now().green.cells[0].clone();
         assert_eq!((c.host, c.fine_mm), (Some(3), 0));
