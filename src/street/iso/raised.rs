@@ -7,7 +7,7 @@ use super::curbside::Over;
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::iso::format::esc;
-use crate::shared::iso::ground::{fine_patterns, joints};
+use crate::shared::iso::ground::{fine_patterns, fine_patterns_laid, joints};
 use crate::shared::iso::shading::shade_filters;
 use crate::street::model::SegView;
 use crate::street::svg::{curb_edges, curb_width_mm};
@@ -85,8 +85,11 @@ pub(super) fn shades() -> String {
 /// The surface materials' fine patterns for the drawing's `<defs>`: the grain, and not the regular joints of the
 /// materials that have them, which are geometry (`joints`). They are drawn in millimetres of ground with no transform
 /// of their own: a textured top is laid by the matrix of the polygon that fills with one (`top`), band by band.
-pub(super) fn materials() -> String {
-    fine_patterns("iso-m", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+/// The materials only a laid thing is drawn in (a rain garden's) come with them when `laid`, which a drawing says it
+/// needs, so that one that draws none is what it always was.
+pub(super) fn materials(laid: bool) -> String {
+    let ground = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+    if laid { fine_patterns_laid("iso-m", ground) } else { fine_patterns("iso-m", ground) }
 }
 
 /// The shading a face of this kind gets, as an attribute: none for a top.
@@ -100,7 +103,7 @@ pub(super) fn shade(what: Face) -> &'static str {
 
 /// One face: a polygon in the tint of the piece of kind `kind`, or of a curb when there is none
 /// (marked with the face it is), shaded when it is turned from the eye, then the hatch `hatch` over it.
-fn face(out: &mut String, what: Face, kind: Option<&str>, hatch: &str, pts: &str) {
+pub(super) fn face(out: &mut String, what: Face, kind: Option<&str>, hatch: &str, pts: &str) {
     let name = match what {
         Face::Top => "top",
         Face::Front => "front",

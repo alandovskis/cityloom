@@ -6,6 +6,7 @@ use crate::shared::catalogue::KINDS;
 use crate::street::model::SegView;
 use crate::street::svg::{curb_edges, curb_width_mm};
 
+use super::green::AUTOMATIC_CLEAR_MM;
 use super::order::Bx;
 
 /// Half the depth, along the street, of a tree's crown, in millimetres.
@@ -81,7 +82,14 @@ pub(super) fn shelter(p: &Projection, x: (f64, f64), along: (f64, f64), base_mm:
 /// piece, a post every 4 m along a bike lane's curb (not an island's). Each keeps its own size and
 /// stands on the top as drawn, `RISE` times as high as the piece stands. A thing stands only where its piece is wide
 /// enough on the screen, at its own distance, to show it (`wide_enough`).
+#[cfg(test)]
 pub(super) fn blocks(segs: &[SegView], i: usize, p: &Projection) -> Vec<Block> {
+    blocks_among(segs, i, p, &[])
+}
+
+/// `blocks`, the automatic trees of a strip of street trees left out where an explicit tree stands within
+/// `AUTOMATIC_CLEAR_MM` of them along the street (`explicit`: where the explicit trees on the piece stand).
+pub(super) fn blocks_among(segs: &[SegView], i: usize, p: &Projection, explicit: &[f64]) -> Vec<Block> {
     let s = &segs[i];
     let (x0, w) = (s.x_mm as f64, s.width_mm as f64);
     let id = KINDS[s.kind].id;
@@ -91,7 +99,7 @@ pub(super) fn blocks(segs: &[SegView], i: usize, p: &Projection) -> Vec<Block> {
     let mut out = Vec::new();
     if s.material == "trees" {
         let crown = (w * 0.9).min(2_400.0);
-        for z in along(4_000.0, 8_000.0).filter(|&z| wide_enough(p, w, z)) {
+        for z in along(4_000.0, 8_000.0).filter(|&z| wide_enough(p, w, z) && explicit.iter().all(|e| (z - e).abs() > AUTOMATIC_CLEAR_MM)) {
             out.push(Block { solid: Solid::Trunk, x: (cx - 125.0, cx + 125.0), y: (h, h + 2_000.0), z: (z - 125.0, z + 125.0) });
             out.push(Block {
                 solid: Solid::Crown,

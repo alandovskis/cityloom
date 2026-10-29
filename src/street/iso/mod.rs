@@ -19,10 +19,11 @@ use crate::shared::catalogue::KINDS;
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::say;
 use crate::shared::units::Units;
-use crate::street::model::{SegView, ShownInstance, ShownStop, View};
+use crate::street::model::{SegView, ShownGreen, ShownInstance, ShownStop, View};
 use crate::street::svg::curb_edges;
 
 mod curbside;
+mod green;
 mod joints;
 mod markings;
 mod order;
@@ -44,7 +45,9 @@ pub use raised::{HEIGHTS, curb_height_mm, curb_top_mm, height_mm};
 use order::Bx;
 use projection::points;
 use raised::{beside, inner_face, materials, shades, strips};
-use solids::{Block, block, blocks};
+#[cfg(test)]
+use solids::blocks;
+use solids::{Block, block, blocks_among};
 
 /// The 2.5D drawn, and the size it is drawn at.
 #[derive(Clone, Debug, PartialEq)]
@@ -109,8 +112,10 @@ fn run_layers(out: &mut String, base: &Projection, v: &View, i18n: &I18n, run: &
     let p = base.over(run.reach);
     let segs = run.segs;
     let (flat, standing) = surface::split(strips(segs, &p));
-    // The selected zone's run shows the curbside uses; the neighbour's, across the boundary, none.
-    let (uses, stops): (&[ShownInstance], &[ShownStop]) = if run.across { (&[], &[]) } else { (&v.curb_shown, &v.stops_shown) };
+    // The selected zone's run shows the curbside uses, the stops and the green elements; the neighbour's, across the
+    // boundary, none.
+    let (uses, stops, green): (&[ShownInstance], &[ShownStop], &[ShownGreen]) =
+        if run.across { (&[], &[], &[]) } else { (&v.curb_shown, &v.stops_shown, &v.green_shown) };
     let laid = curbside::overs(segs, uses, stops);
     out.push_str(&surface::layer(&p, segs, i18n, &flat, run.across, run.taper.as_ref(), &laid));
     out.push_str(&paint::layer_over(&p, segs, run.taper.as_ref()));
@@ -118,34 +123,42 @@ fn run_layers(out: &mut String, base: &Projection, v: &View, i18n: &I18n, run: &
     // The raised strips and what stands on the pieces, in the order the eye needs (`order`): a box covers the ones it
     // is in front of, so a crown nearer the middle of the street covers a shelter beyond it, and a strip nearer the
     // middle covers the foot of a post beyond it. The strips are in groups of their own between the solids.
-    let mut solids: Vec<Block> =
-        (0..segs.len()).flat_map(|i| blocks(segs, i, &p)).chain(curbside::blocks(segs, uses, &p)).chain(stops::blocks(segs, stops, &p)).collect();
+    let patches = green::patches(segs, green);
+    let mut solids: Vec<Block> = (0..segs.len())
+        .flat_map(|i| blocks_among(segs, i, &p, &green::tree_stands(green, i)))
+        .chain(curbside::blocks(segs, uses, &p))
+        .chain(stops::blocks(segs, stops, &p))
+        .chain(green::blocks(segs, green, &p))
+        .collect();
     solids.sort_by(|a, b| b.from_eye(&p).total_cmp(&a.from_eye(&p)).then(a.y.0.total_cmp(&b.y.0)));
     let lifted = curbside::lifted(&laid);
     let boxes: Vec<(Bx, bool)> = standing
         .iter()
         .map(|&s| (raised::strip_box(segs, s, p.reach), true))
         .chain(lifted.iter().map(|l| (curbside::lift_box(segs, l, &p, run.taper.as_ref()), false)))
+        .chain(patches.iter().map(|g| (g.bounds(), false)))
         .chain(solids.iter().map(|b| (b.bounds(), false)))
         .collect();
     out.push_str("<g class=\"iso-raised\">");
     let mut open = true;
+    let (standing_and_lifted, flat_ground) = (standing.len() + lifted.len(), standing.len() + lifted.len() + patches.len());
     for k in order::paint_order(&boxes, p.centre_mm) {
-        if k < standing.len() + lifted.len() {
+        if k < flat_ground {
             if !open {
                 out.push_str("<g class=\"iso-raised\">");
                 open = true;
             }
             match standing.get(k) {
                 Some(&strip) => raised::piece(out, &p, segs, i18n, strip, run.across),
-                None => curbside::lift(out, &p, segs, i18n, &lifted[k - standing.len()], run.taper.as_ref()),
+                None if k < standing_and_lifted => curbside::lift(out, &p, segs, i18n, &lifted[k - standing.len()], run.taper.as_ref()),
+                None => green::draw(out, &p, i18n, &patches[k - standing_and_lifted]),
             }
         } else {
             if open {
                 out.push_str("</g>");
                 open = false;
             }
-            block(out, &p, &solids[k - standing.len() - lifted.len()]);
+            block(out, &p, &solids[k - flat_ground]);
         }
     }
     if open {
@@ -170,7 +183,7 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let span = span_mm(v);
     let p = Projection::fit(width, span);
     let (w, l) = (span as f64, STRETCH_MM);
-    let mut out = format!("<defs>{}{}</defs>", shades(), materials());
+    let mut out = String::new();
     write!(out, "<polygon class=\"iso-ground\" points=\"{}\"/>", points(&p, &[(0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, 0.0, l), (0.0, 0.0, l)])).unwrap();
 
     let mut selected = Reach::STRETCH;
@@ -210,6 +223,9 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
         outline(&mut out, &p.over(selected), &v.segments, i);
     }
 
+    // The defs come first, and carry the pattern of a material only a laid thing is drawn in when the drawing has one.
+    let laid = out.contains("mat-rain_garden");
+    out.insert_str(0, &format!("<defs>{}{}</defs>", shades(), materials(laid)));
     IsoSvg { markup: out, width: p.width, height: p.height }
 }
 
@@ -228,6 +244,9 @@ pub fn iso_label_at(v: &View, i18n: &I18n, units: Units, width: f64) -> String {
     let mut label = iso_label_of(v, i18n, units);
     if !v.curb_shown.is_empty() {
         label = format!("{label} {}", i18n.tr("svg-iso-curb", &Args::new().num("count", v.curb_shown.len() as i64)));
+    }
+    if !v.green_shown.is_empty() {
+        label = format!("{label} {}", i18n.tr("svg-iso-green", &Args::new().num("count", v.green_shown.len() as i64)));
     }
     let shown = stops::drawn(v, width);
     if !shown.is_empty() {
@@ -435,8 +454,9 @@ mod tests {
         let v = e.view();
         let p = Projection::fit(1050.0, span_mm(&v));
         let m = drawn(&e);
-        // The patterns carry no projection: they are in ground millimetres, the identity.
-        for mat in MATERIALS {
+        // The patterns carry no projection: they are in ground millimetres, the identity. The rain garden's is carried
+        // only by a drawing that draws one (`green.rs` tests it).
+        for mat in MATERIALS.iter().filter(|m| m.id != "rain_garden") {
             let at = m.find(&format!("id=\"iso-m-{}\"", mat.id)).expect("every material has a pattern");
             let start = m[..at].rfind("<pattern").unwrap();
             let tag = &m[start..start + m[start..].find('>').unwrap()];

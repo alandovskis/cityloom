@@ -200,6 +200,7 @@ material-grass = Grass
 material-planted = Planted bed
 material-gravel = Gravel
 material-trees = Street trees
+material-rain_garden = Rain garden
 curb-granite = Granite
 curb-concrete = Concrete
 curb-asphalt = Asphalt
@@ -404,6 +405,7 @@ svg-iso-curb = { $count ->
         [one] One curbside use is shown.
        *[other] { $count } curbside uses are shown.
     }
+svg-iso-green = Trees and plantings shown: { $count }.
 svg-iso-stops = { $count ->
         [one] One transit stop is shown ({ $kinds }).
        *[other] { $count } transit stops are shown ({ $kinds }).

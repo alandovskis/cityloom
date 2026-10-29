@@ -10,9 +10,11 @@
 use serde::Serialize;
 
 use super::curb::curbside;
+use super::green::{GreenKind, TreeSize, host_at};
 use super::joint::SHOWN_MM;
 use super::stop::{Stand, StopKind, bus_lane, stand};
 use super::{Editor, REGIONS, Use, ZoneEnd};
+use crate::shared::catalogue::is_roadway;
 
 /// One transit stop as the 2.5D shows it, on the selected zone's section.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -46,6 +48,24 @@ pub struct ShownInstance {
     pub full: (f64, f64),
     #[serde(rename = "use")]
     pub use_: Use,
+}
+
+/// One green element as the 2.5D shows it, on the selected zone's section.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct ShownGreen {
+    /// The piece under its centre, an index into `View.segments`. Never a roadway piece: such an element is not shown.
+    pub piece: usize,
+    /// Where it lies along the stretch, in millimetres from the stretch's near end: only the part inside the stretch
+    /// and the zone.
+    pub along: (f64, f64),
+    /// The whole element in the same coordinates; it may lie partly outside the stretch. A tree's trunk is placed from
+    /// it, so it stays where it is as the stretch moves.
+    pub full: (f64, f64),
+    /// Where it lies across, in millimetres from the section's left edge (`SegView.x_mm`): its own span, which may
+    /// reach past its piece.
+    pub across: (f64, f64),
+    pub kind: GreenKind,
+    pub size: Option<TreeSize>,
 }
 
 /// The stretch the 2.5D shows of the selected zone: where it lies along the street, and how a position along the
@@ -121,6 +141,28 @@ impl Editor {
                 let lane = bus_lane(segs, s.side, driving)?;
                 let Stand { raised, stand } = stand(segs, lane, s.side, s.kind)?;
                 Some(ShownStop { raised, stand, along, full, kind: s.kind, shelter: s.shelter })
+            })
+            .collect()
+    }
+
+    /// The green elements that overlap the stretch the 2.5D shows, on the selected zone's section. One whose centre lies
+    /// on a roadway piece, or off the section, is not shown: there is nothing to stand it on (its check fails).
+    pub(super) fn green_shown(&self) -> Vec<ShownGreen> {
+        let content = &self.states[self.cursor].content;
+        if content.green.is_empty() {
+            return Vec::new();
+        }
+        let Some(stretch) = self.stretch() else { return Vec::new() };
+        let segs = self.current();
+        content
+            .green
+            .iter()
+            .filter_map(|g| {
+                let (along, full) = stretch.map(g.from_mm, g.from_mm.saturating_add(g.length_mm))?;
+                let host = host_at(segs, g.offset_mm).filter(|&h| !is_roadway(segs[h].kind))?;
+                let half = f64::from(g.width_mm) / 2.0;
+                let across = (f64::from(g.offset_mm) - half, f64::from(g.offset_mm) + half);
+                Some(ShownGreen { piece: host, along, full, across, kind: g.kind, size: g.size })
             })
             .collect()
     }
@@ -270,5 +312,65 @@ mod tests {
         let mut e = stop_editor(&street, ZoneEnd::First);
         e.add_stop(Side::Right, 41_000, 12_000, StopKind::Curb).unwrap();
         assert!(e.view().stops_shown.is_empty());
+    }
+
+    // ---- the green elements, mapped by the same stretch ----
+
+    use crate::street::model::{Green, GreenKind, TreeSize};
+
+    /// Sample Street 1: sidewalk 0 to 3 300 mm across, the left; sidewalk 14 700 to 18 000 mm, the right.
+    fn tree_at(from_mm: i32, offset_mm: i32) -> Green {
+        Green { kind: GreenKind::Tree, from_mm, length_mm: 1_900, offset_mm, width_mm: 1_900, size: Some(TreeSize::M) }
+    }
+
+    fn green(e: &Editor) -> Vec<(usize, (f64, f64), (f64, f64), (f64, f64), GreenKind)> {
+        e.view().green_shown.iter().map(|g| (g.piece, g.along, g.full, g.across, g.kind)).collect()
+    }
+
+    #[test]
+    fn a_street_with_no_green_shows_none() {
+        assert!(Editor::new(0).view().green_shown.is_empty());
+        assert!(editor(ZoneEnd::First).view().green_shown.is_empty());
+    }
+
+    #[test]
+    fn a_tree_is_found_on_its_host_and_mapped_like_a_curb_use() {
+        let mut e = editor(ZoneEnd::First);
+        // A medium tree in its 1 900 mm pit, centred 1 700 mm from the section's left edge: on the left sidewalk.
+        e.add_green(tree_at(12_000, 1_700)).unwrap();
+        assert_eq!(green(&e), vec![(0, (12_000.0, 13_900.0), (12_000.0, 13_900.0), (750.0, 2_650.0), GreenKind::Tree)]);
+        assert_eq!(e.view().green_shown[0].size, Some(TreeSize::M));
+        // The right sidewalk is the section's last piece, whichever end the positions are measured from.
+        let mut e = editor(ZoneEnd::First);
+        e.add_green(tree_at(12_000, 16_300)).unwrap();
+        assert_eq!(green(&e)[0].0, 5);
+    }
+
+    #[test]
+    fn anchored_at_the_last_end_the_element_is_mirrored_along_the_stretch_and_not_across() {
+        let mut e = editor(ZoneEnd::Last);
+        e.add_green(tree_at(12_000, 1_700)).unwrap();
+        // 12 m to 13.9 m from the anchored (last) end is 28 m to 26.1 m from the stretch's near end.
+        assert_eq!(green(&e), vec![(0, (26_100.0, 28_000.0), (26_100.0, 28_000.0), (750.0, 2_650.0), GreenKind::Tree)]);
+    }
+
+    #[test]
+    fn what_crosses_the_edge_of_the_stretch_is_clipped_and_keeps_its_whole() {
+        let mut e = editor(ZoneEnd::First);
+        let bed = Green { kind: GreenKind::Bed, from_mm: 38_000, length_mm: 4_000, offset_mm: 1_600, width_mm: 3_200, size: None };
+        e.add_green(bed).unwrap();
+        e.add_green(tree_at(41_000, 16_300)).unwrap();
+        assert_eq!(green(&e), vec![(0, (38_000.0, 40_000.0), (38_000.0, 42_000.0), (0.0, 3_200.0), GreenKind::Bed)]);
+    }
+
+    #[test]
+    fn an_element_whose_host_is_roadway_in_its_zone_is_not_shown() {
+        let mut s = Street::sample(0, Side::Right);
+        s.length_mm = Some(LEN);
+        // 8 000 mm across is the first driving lane.
+        s.green.push(tree_at(12_000, 8_000));
+        s.green.push(tree_at(20_000, 1_700));
+        let e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: LEN, from_end: ZoneEnd::First }));
+        assert_eq!(green(&e).iter().map(|g| g.0).collect::<Vec<_>>(), vec![0]);
     }
 }

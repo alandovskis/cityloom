@@ -40,6 +40,9 @@
      that one of the two is 3:1 against any of them (a test in street/iso/surface.rs). */
   --iso-sel: #8ab4ff;
   --iso-sel-casing: #0b1220;
+  /* The outline of a rain garden or a bioswale in 2.5D, drawn inside its dark fill: the same in both themes like the
+     materials, 3:1 against the fill (a test in shared/contrast.rs). */
+  --iso-green-edge: #bfe6d0;
   /* The zone strip: two fills (the base section and a zone's own), the text on them, the edges between cells and
      the chosen cell's outline; each is measured against the fills and the panel by a test in shared/contrast.rs. */
   --zone-fill: light-dark(#eef2f6, #262e36);
@@ -1048,6 +1051,10 @@ svg pattern circle {
 .iso-flat.mat-trees {
   fill: var(--mat-trees);
 }
+.iso-top.mat-rain_garden,
+.iso-flat.mat-rain_garden {
+  fill: var(--mat-rain_garden);
+}
 /* The 2.5D's textures (shared/iso/ground.rs) are drawn in the material's own colours (`--mat-*-line`, `-alt`), whatever the
    theme, and kept faint so that the paint, the symbols and the outlines read over them. */
 .hatch[fill^="url(#iso-m-"] {
@@ -1087,6 +1094,19 @@ svg pattern circle {
 }
 .iso-solid {
   pointer-events: none;
+}
+/* The outline of a rain garden or a bioswale (street/iso/green.rs): a line inside the patch, over its fill. */
+.iso-green-edge {
+  fill: none;
+  stroke: var(--iso-green-edge);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+@media (forced-colors: active) {
+  .iso-green-edge {
+    stroke: CanvasText;
+  }
 }
 .iso-solid polygon {
   stroke: var(--ink-2);

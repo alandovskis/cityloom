@@ -64,7 +64,9 @@ pub struct Material {
     pub name: &'static str,
 }
 
-pub const MATERIALS: [Material; 8] = [
+/// The materials a piece can be of are the first eight; `rain_garden` is last so that stored indices hold, and no kind
+/// lists it: it is only what a rain garden is drawn in (a curbside use, a green element).
+pub const MATERIALS: [Material; 9] = [
     Material { id: "asphalt", name: "Asphalt" },
     Material { id: "concrete", name: "Concrete" },
     Material { id: "permeable", name: "Permeable paving" },
@@ -73,6 +75,7 @@ pub const MATERIALS: [Material; 8] = [
     Material { id: "planted", name: "Planted bed" },
     Material { id: "gravel", name: "Gravel" },
     Material { id: "trees", name: "Street trees" },
+    Material { id: "rain_garden", name: "Rain garden" },
 ];
 
 /// Which way a one-way lane runs, seen from the cross-section: away from the

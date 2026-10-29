@@ -200,6 +200,7 @@ material-grass = Gazon
 material-planted = Plate-bande
 material-gravel = Gravier
 material-trees = Arbres de rue
+material-rain_garden = Jardin de pluie
 curb-granite = Granit
 curb-concrete = Béton
 curb-asphalt = Asphalte
@@ -404,6 +405,7 @@ svg-iso-curb = { $count ->
         [one] Un usage du bord de rue est montré.
        *[other] { $count } usages du bord de rue sont montrés.
     }
+svg-iso-green = Arbres et plantations montrés : { $count }.
 svg-iso-stops = { $count ->
         [one] Un arrêt d’autobus est montré ({ $kinds }).
        *[other] { $count } arrêts d’autobus sont montrés ({ $kinds }).

@@ -97,6 +97,9 @@
   --mat-trees: #6a6358; /* a tree pit: compacted soil and a grate, brown-grey */
   --mat-trees-line: #a79f90;
   --mat-trees-alt: #38332b;
+  --mat-rain_garden: #35574a; /* a rain garden: wet dark soil, the cobbles darker and the reeds lighter */
+  --mat-rain_garden-line: #8cc4a4;
+  --mat-rain_garden-alt: #1f362d;
 }
 
 /* A control the keyboard focuses scrolls clear of the sticky bar (src/shell/header.rs keeps its real height). */

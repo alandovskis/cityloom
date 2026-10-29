@@ -26,7 +26,7 @@ pub fn tile_mm(material: &str) -> (f64, f64) {
         "permeable" => (500.0, 250.0),
         "brick" => (800.0, 400.0),
         "grass" | "trees" => (400.0, 400.0),
-        "gravel" => (500.0, 500.0),
+        "gravel" | "rain_garden" => (500.0, 500.0),
         _ => (600.0, 600.0),
     }
 }
@@ -199,6 +199,33 @@ fn marks(material: &str, with_joints: bool) -> String {
                 write!(out, "<path d=\"M0,0H{w}M0,200H{w}M0,0V{h}M200,0V{h}\" style=\"stroke:{alt};stroke-width:30;fill:none\"/>").unwrap();
             }
         }
+        // A rain garden: wet dark soil with cobbles, and a few clumps of reeds, in their own tones.
+        "rain_garden" => {
+            for _ in 0..16 {
+                write!(
+                    out,
+                    "<ellipse cx=\"{:.0}\" cy=\"{:.0}\" rx=\"{:.0}\" ry=\"{:.0}\" style=\"fill:{alt};fill-opacity:0.7\"/>",
+                    r.between(0.0, w),
+                    r.between(0.0, h),
+                    r.between(22.0, 42.0),
+                    r.between(16.0, 30.0)
+                )
+                .unwrap();
+            }
+            for _ in 0..4 {
+                let (cx, cy) = (r.between(50.0, w - 50.0), r.between(50.0, h - 50.0));
+                for _ in 0..5 {
+                    write!(
+                        out,
+                        "<circle cx=\"{:.0}\" cy=\"{:.0}\" r=\"{:.0}\" style=\"fill:{line};fill-opacity:0.85\"/>",
+                        cx + r.between(-40.0, 40.0),
+                        cy + r.between(-40.0, 40.0),
+                        r.between(14.0, 26.0)
+                    )
+                    .unwrap();
+                }
+            }
+        }
         // Asphalt: a speckle of stones, light and dark.
         _ => {
             for k in 0..48 {
@@ -217,22 +244,32 @@ fn marks(material: &str, with_joints: bool) -> String {
     out
 }
 
+/// The materials no piece can be of: what a thing laid over a piece (a rain garden) is drawn in. A drawing carries
+/// their patterns only when it draws one, so that a drawing of a street without any is what it always was.
+const LAID_ONLY: [&str; 1] = ["rain_garden"];
+
 /// The materials' textures for a drawing's `<defs>`, each with the id `{prefix}-{material}`, laid on the ground by
-/// `ground` (pixels to the millimetre, as `Ground`).
+/// `ground` (pixels to the millimetre, as `Ground`): the materials a piece can be of.
 pub fn patterns(prefix: &str, ground: Ground) -> String {
-    pattern_defs(prefix, ground, true)
+    pattern_defs(prefix, ground, true, false)
 }
 
 /// The same patterns without the joints of the materials that have `joints`: their fine grain only.
 pub fn fine_patterns(prefix: &str, ground: Ground) -> String {
-    pattern_defs(prefix, ground, false)
+    pattern_defs(prefix, ground, false, false)
 }
 
-fn pattern_defs(prefix: &str, ground: Ground, with_joints: bool) -> String {
+/// `fine_patterns` with the materials only a laid thing is drawn in (`LAID_ONLY`) too.
+pub fn fine_patterns_laid(prefix: &str, ground: Ground) -> String {
+    pattern_defs(prefix, ground, false, true)
+}
+
+fn pattern_defs(prefix: &str, ground: Ground, with_joints: bool, laid: bool) -> String {
     let [a, b, c, d, e, f] = ground;
     let matrix = format!("matrix({a:.6} {b:.6} {c:.6} {d:.6} {e:.2} {f:.2})");
     MATERIALS
         .iter()
+        .filter(|m| laid || !LAID_ONLY.contains(&m.id))
         .map(|m| {
             let (w, h) = tile_mm(m.id);
             format!(
@@ -250,7 +287,7 @@ mod tests {
 
     #[test]
     fn each_material_has_its_own_texture_in_millimetres_under_the_prefix_with_the_ground_transform() {
-        let out = patterns("g", [0.03, 0.0, 0.012, -0.009, 10.0, 300.0]);
+        let out = pattern_defs("g", [0.03, 0.0, 0.012, -0.009, 10.0, 300.0], true, true);
         assert_eq!(out.matches("<pattern ").count(), MATERIALS.len());
         let mut seen = Vec::new();
         for m in MATERIALS {
@@ -296,7 +333,7 @@ mod tests {
     #[test]
     fn the_fine_patterns_carry_the_grain_and_not_the_joints_the_junction_s_patterns_keep_both() {
         let ground = [0.03, 0.0, 0.0, -0.009, 0.0, 0.0];
-        let (fine, whole) = (fine_patterns("g", ground), patterns("g", ground));
+        let (fine, whole) = (fine_patterns_laid("g", ground), pattern_defs("g", ground, true, true));
         let tag = |out: &str, id: &str| {
             let at = out.find(&format!("<pattern id=\"g-{id}\"")).unwrap();
             out[at..out[at..].find("</pattern>").unwrap() + at].to_string()
@@ -315,6 +352,21 @@ mod tests {
         assert!(!tag(&fine, "brick").contains("stroke-width:16") && tag(&fine, "brick").contains("fill-opacity:0.6"));
         assert!(!tag(&fine, "permeable").contains("stroke-width:25") && tag(&fine, "permeable").contains("fill-opacity:0.5"));
         assert!(!tag(&fine, "trees").contains("stroke-width:30") && tag(&fine, "trees").contains("<circle"));
+    }
+
+    #[test]
+    fn a_material_only_a_laid_thing_is_drawn_in_has_its_pattern_only_when_asked_so_that_a_drawing_without_one_is_unchanged() {
+        let ground = [0.03, 0.0, 0.0, -0.009, 0.0, 0.0];
+        for out in [patterns("g", ground), fine_patterns("g", ground)] {
+            assert_eq!(out.matches("<pattern ").count(), MATERIALS.len() - 1);
+            assert!(!out.contains("rain_garden"));
+        }
+        assert!(fine_patterns_laid("g", ground).contains("<pattern id=\"g-rain_garden\""));
+        // A rain garden is a wet, planted basin: soil, cobbles and a few clumps of plants, in its own tones, 500 mm to a tile.
+        assert_eq!(tile_mm("rain_garden"), (500.0, 500.0));
+        let marks = marks("rain_garden", true);
+        assert!(marks.contains("<ellipse") && marks.contains("<circle") && marks.contains("var(--mat-rain_garden-line)"));
+        assert_eq!(joints("rain_garden"), None);
     }
 
     #[test]

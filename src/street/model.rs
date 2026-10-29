@@ -31,7 +31,7 @@ mod stop;
 mod stop_end;
 use curb::Choice;
 pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside};
-pub use curb_shown::{ShownInstance, ShownStop};
+pub use curb_shown::{ShownGreen, ShownInstance, ShownStop};
 pub use green::{Green, GreenKind, GreenRefusal, TreeSize, fills, host_at};
 pub use map_uses::{MapStop, MapUse, MapUses};
 pub use stop::{MIN_STOP_MM, Stop, StopCell, StopKind, StopSideView, StopsView};
@@ -1453,6 +1453,7 @@ impl Editor {
             stops: self.stops_view(),
             curb_shown: self.curb_shown(),
             stops_shown: self.stops_shown(),
+            green_shown: self.green_shown(),
             measures: self.measure_views(segs, &now),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
@@ -1825,6 +1826,8 @@ pub struct View {
     pub curb_shown: Vec<ShownInstance>,
     /// The transit stops the 2.5D shows, on the selected zone's pieces.
     pub stops_shown: Vec<ShownStop>,
+    /// The green elements the 2.5D shows, on the selected zone's pieces.
+    pub green_shown: Vec<ShownGreen>,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
     pub revisions: Vec<Revision>,
