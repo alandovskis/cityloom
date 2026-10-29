@@ -107,7 +107,19 @@ fn crosses(a: usize, x: usize, p: usize, y: usize) -> bool {
 /// straight on into `b`. A turn into `b` gives way to people crossing, as it does at any signal, so it does not block
 /// the crossing. This is the one rule about pedestrians; change it here.
 fn crossing_clear(arms: &[&Arm], moves: &[Vec<usize>], i: usize, b: usize) -> bool {
-    i != b && !(moves[i].contains(&b) && turn_class(arms[i].bearing, arms[b].bearing) == THROUGH)
+    i != b && !moves[i].iter().any(|&y| blocks_crossing(arms, i, y, b))
+}
+
+/// Whether the movement `p -> y` is not clear of the crossing of arm `b`: it starts at `b`, or goes straight on into it.
+/// A turn into `b` gives way. (Places in `arms`.)
+fn blocks_crossing(arms: &[&Arm], p: usize, y: usize, b: usize) -> bool {
+    p == b || (y == b && turn_class(arms[p].bearing, arms[b].bearing) == THROUGH)
+}
+
+/// Whether the movement `p -> y` meets the bike movement of arm `b`, which goes where the traffic entering `b` goes
+/// (`moves[b]`): a street's own bikes go with its traffic, and any other crosses a movement that crosses theirs.
+fn meets_bikes(moves: &[Vec<usize>], b: usize, p: usize, y: usize) -> bool {
+    b != p && moves[b].iter().any(|&x| crosses(b, x, p, y))
 }
 
 /// The plan the person sees: the one they edited, else the suggestion. None unless the control is a signal.
@@ -193,10 +205,7 @@ fn walks_and_rides(arms: &[&Arm], moves: &[Vec<usize>], bikes: &[bool], i: usize
     let mut moves = moves.to_vec();
     moves[i] = going.to_vec();
     let walks = (0..arms.len()).filter(|&b| arms[b].crossing.is_some() && crossing_clear(arms, &moves, i, b)).map(|b| arms[b].uid).collect();
-    let rides = (0..arms.len())
-        .filter(|&b| bikes[b] && (b == i || moves[b].iter().all(|&x| moves[i].iter().all(|&y| !crosses(b, x, i, y)))))
-        .map(|b| arms[b].uid)
-        .collect();
+    let rides = (0..arms.len()).filter(|&b| bikes[b] && !moves[i].iter().any(|&y| meets_bikes(&moves, b, i, y))).map(|b| arms[b].uid).collect();
     (walks, rides)
 }
 
@@ -350,6 +359,54 @@ pub fn with_member(s: &State, list: &mut Vec<u32>, uid: u32, on: bool) -> bool {
 fn scramble_walks(s: &State) -> Vec<u32> {
     let (arms, _) = ordered(s);
     arms.iter().filter(|a| a.crossing.is_some()).map(|a| a.uid).collect()
+}
+
+/// Two things in one phase that meet: what the people involved would face. By street uid, so a conflict means the same
+/// after the phases are reordered. No wording: the model's view says it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub enum Conflict {
+    /// Two vehicle movements that cross.
+    Vehicles { a: Move, b: Move },
+    /// A vehicle movement that starts at, or goes straight on into, a street whose crossing is walked.
+    Walk { mv: Move, arm: u32 },
+    /// A vehicle movement that crosses the bike movements of a street whose bikes ride.
+    Ride { mv: Move, arm: u32 },
+}
+
+/// What meets in each phase of `plan`, as (the phase's place in the plan, the conflict). A warning only: nothing here
+/// refuses or changes an edit. The rules are the ones the suggestion keeps (`crosses`, `blocks_crossing`,
+/// `meets_bikes`), so the suggestion has none.
+pub fn conflicts(s: &State, _region: usize, plan: &Plan) -> Vec<(usize, Conflict)> {
+    let (arms, dests) = ordered(s);
+    let place = |uid: u32| arms.iter().position(|a| a.uid == uid);
+    let mut found = Vec::new();
+    for (n, ph) in plan.phases.iter().enumerate() {
+        let moves: Vec<(Move, usize, usize)> = ph.moves.iter().filter_map(|m| Some((*m, place(m.from)?, place(m.to)?))).collect();
+        for (k, (a, p, x)) in moves.iter().enumerate() {
+            for (b, q, y) in &moves[k + 1..] {
+                if crosses(*p, *x, *q, *y) {
+                    found.push((n, Conflict::Vehicles { a: *a, b: *b }));
+                }
+            }
+        }
+        for &uid in &ph.walks {
+            let Some(w) = place(uid) else { continue };
+            for (m, p, y) in &moves {
+                if blocks_crossing(&arms, *p, *y, w) {
+                    found.push((n, Conflict::Walk { mv: *m, arm: uid }));
+                }
+            }
+        }
+        for &uid in &ph.rides {
+            let Some(b) = place(uid) else { continue };
+            for (m, p, y) in &moves {
+                if meets_bikes(&dests, b, *p, *y) {
+                    found.push((n, Conflict::Ride { mv: *m, arm: uid }));
+                }
+            }
+        }
+    }
+    found
 }
 
 /// The patterns that fit the phase of street `phase.uid`, in the order they are offered. A pattern that would make
@@ -728,5 +785,98 @@ mod tests {
         assert_eq!(serde_json::to_string(&plan).unwrap(), old, "nothing new is written for a phase with movements");
         let scramble = StoredPhase { arm: Some(4), ..Default::default() };
         assert!(serde_json::to_string(&scramble).unwrap().contains(r#""arm":4"#));
+    }
+
+    // ---- conflicts ------------------------------------------------------------------------------------------------
+
+    fn bike_cross() -> State {
+        let j = junction_of(&[("sidewalk", 2000), ("bike", 1500), ("travel", 3200), ("travel", 3200), ("bike", 1500), ("sidewalk", 2000)]);
+        let mut s = j.current().clone();
+        let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
+        send(&mut s, n, &[so]);
+        send(&mut s, so, &[n]);
+        send(&mut s, e, &[w]);
+        send(&mut s, w, &[e]);
+        s
+    }
+
+    fn found(s: &State) -> Vec<(usize, Conflict)> {
+        conflicts(s, 0, &plan(s, 0).unwrap())
+    }
+
+    #[test]
+    fn two_movements_that_cross_in_one_phase_are_a_vehicle_conflict() {
+        let s = through_only();
+        let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
+        let (a, b) = (Move { from: n, to: so }, Move { from: e, to: w });
+        let t = with_phase(&s, StoredPhase { moves: vec![a, b], ..Default::default() });
+        assert_eq!(found(&t), vec![(0, Conflict::Vehicles { a, b })]);
+        let same_street = with_phase(&s, StoredPhase { moves: vec![a, Move { from: so, to: n }], ..Default::default() });
+        assert!(found(&same_street).is_empty(), "opposed straight movements do not cross");
+    }
+
+    #[test]
+    fn traffic_that_starts_at_or_goes_straight_into_a_walked_crossing_is_a_walk_conflict() {
+        let s = north_every_way();
+        let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
+        let through = Move { from: n, to: so };
+        let t = with_phase(&s, StoredPhase { moves: vec![through], walks: vec![so, e], ..Default::default() });
+        assert_eq!(found(&t), vec![(0, Conflict::Walk { mv: through, arm: so })], "straight into south's crossing; east's is clear");
+        let t = with_phase(&s, StoredPhase { moves: vec![through], walks: vec![n], ..Default::default() });
+        assert_eq!(found(&t), vec![(0, Conflict::Walk { mv: through, arm: n })], "traffic entering from a street whose crossing is walked");
+        let _ = w;
+    }
+
+    #[test]
+    fn a_turn_that_gives_way_to_people_crossing_is_not_a_conflict() {
+        let s = north_every_way();
+        let (n, e, w) = (at(&s, 0), at(&s, 90), at(&s, 270));
+        let t = with_phase(&s, StoredPhase { moves: vec![Move { from: n, to: e }, Move { from: n, to: w }], walks: vec![e, w], ..Default::default() });
+        assert!(found(&t).is_empty());
+    }
+
+    #[test]
+    fn a_movement_that_crosses_a_bike_movement_that_runs_is_a_ride_conflict() {
+        let s = bike_cross();
+        let (n, e, w) = (at(&s, 0), at(&s, 90), at(&s, 270));
+        let go = Move { from: e, to: w };
+        let t = with_phase(&s, StoredPhase { moves: vec![go], rides: vec![n], ..Default::default() });
+        assert_eq!(found(&t), vec![(0, Conflict::Ride { mv: go, arm: n })]);
+        let own = with_phase(&s, StoredPhase { moves: vec![go], rides: vec![e], ..Default::default() });
+        assert!(found(&own).is_empty(), "a street's own bikes go with its traffic");
+    }
+
+    #[test]
+    fn removing_the_cause_removes_the_conflict() {
+        let s = through_only();
+        let (n, so) = (at(&s, 0), at(&s, 180));
+        let mv = Move { from: n, to: so };
+        let mut t = with_phase(&s, StoredPhase { moves: vec![mv], walks: vec![so], ..Default::default() });
+        assert_eq!(found(&t).len(), 1);
+        t.signal_plan.as_mut().unwrap().phases[0].walks.clear();
+        assert!(found(&t).is_empty());
+    }
+
+    #[test]
+    fn the_suggested_plan_has_no_conflict_on_the_four_way_a_five_way_a_t_and_streets_with_bike_lanes() {
+        let mut every = north_every_way();
+        let mut t = Junction::new(1);
+        assert!(t.set_control(SIGNAL));
+        let mut five = Junction::new(3);
+        assert!(five.set_control(SIGNAL));
+        let (t, five) = (t.current().clone(), five.current().clone());
+        for s in [cross(), through_only(), every.clone(), bike_cross(), t, five] {
+            let p = plan(&s, 0).unwrap();
+            assert!(p.suggested && conflicts(&s, 0, &p).is_empty(), "{:?}", conflicts(&s, 0, &p));
+        }
+        every.signal_plan = None;
+    }
+
+    #[test]
+    fn a_scramble_has_no_conflict() {
+        let s = north_every_way();
+        let n = at(&s, 0);
+        let t = with_phase(&s, stored(&s, n, Pattern::Scramble));
+        assert!(found(&t).is_empty());
     }
 }
