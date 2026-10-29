@@ -787,7 +787,7 @@ fn signal_view(s: &State, region: usize, arms: &[ArmView]) -> Option<SignalView>
     let plan = signal::plan(s, region)?;
     let find = |uid: u32| arms.iter().find(|a| a.uid == uid);
     let name = |uid: u32| find(uid).map_or_else(|| crate::street::model::named_said(""), |a| a.label.clone());
-    let found = signal::conflicts(s, region, &plan);
+    let found = signal::conflicts(s, &plan);
     let phases = plan
         .phases
         .iter()
@@ -2133,8 +2133,11 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
                 .then(|| Said::new("jn-check-signal-cycle-bad").with("seconds", Arg::Num(seconds)).with("max", Arg::Num(i64::from(MAX_CYCLE_S)))),
         ));
         // A phase that puts movements together that meet is allowed, and warned about.
-        let meeting: Vec<Said> = signal::conflicts(s, region, &plan).iter().map(|(n, c)| conflict_said(*n, c, arms)).collect();
-        let first: Vec<Said> = meeting.iter().take(MAX_LISTED_CONFLICTS).cloned().collect();
+        let meeting: Vec<Said> = signal::conflicts(s, &plan).iter().map(|(n, c)| conflict_said(*n, c, arms)).collect();
+        let mut first: Vec<Said> = meeting.iter().take(MAX_LISTED_CONFLICTS).cloned().collect();
+        if meeting.len() > MAX_LISTED_CONFLICTS {
+            first.push(Said::new("jn-conflict-more").with("n", Arg::Num((meeting.len() - MAX_LISTED_CONFLICTS) as i64)));
+        }
         let detail =
             first.into_iter().reduce(|head, tail| Said::new("jn-ph-join").with("head", Arg::Said(Box::new(head))).with("tail", Arg::Said(Box::new(tail))));
         out.push(check(
@@ -3567,6 +3570,9 @@ mod tests {
         j.set_plan_for_test(SignalPlan { phases: vec![StoredPhase { moves, ..Default::default() }] });
         let detail = en(&check(&j.view(), "signal-conflicts").unwrap().detail);
         assert_eq!(detail.matches("Phase 1:").count(), 3, "{detail}");
+        assert!(detail.ends_with("And 1 more meeting."), "the rest is counted, not hidden: {detail}");
+        let detail = fr(&check(&j.view(), "signal-conflicts").unwrap().detail);
+        assert!(plain(&detail).ends_with("Et 1 autre rencontre."), "{detail}");
     }
 
     // ---- signal checks ----

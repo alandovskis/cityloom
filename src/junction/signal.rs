@@ -9,7 +9,7 @@ use crate::shared::catalogue::{REGIONS, Side};
 
 /// One vehicle movement a phase serves: the traffic entering from arm `from`, going to arm `to`. It is the movement,
 /// not a lane, that a phase serves: a lane's number changes when the street's lanes are made again.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Move {
     pub from: u32,
     pub to: u32,
@@ -141,6 +141,12 @@ pub fn plan(s: &State, region: usize) -> Option<Plan> {
     Some(Plan { phases, cycle_s, suggested: false })
 }
 
+/// `items` with each once, in the order first seen: a stored plan may come from anywhere (a sync) and repeat itself.
+fn once<T: Copy + Eq + std::hash::Hash>(items: impl Iterator<Item = T>) -> Vec<T> {
+    let mut seen = std::collections::HashSet::new();
+    items.filter(|i| seen.insert(*i)).collect()
+}
+
 /// The stored plan with whatever no longer exists taken out (a street, a lane, a destination), and a phase that serves
 /// nothing any more dropped. A walk needs the street's crossing and a ride its bike lane (as `walk_arms` and `ride_arms`
 /// list them), so what is stored, said and shown always match. None when nothing is left.
@@ -151,14 +157,11 @@ fn settled(s: &State, plan: &SignalPlan, region: usize) -> Option<SignalPlan> {
         .phases
         .iter()
         .map(|p| StoredPhase {
-            moves: p
-                .moves
-                .iter()
-                .copied()
-                .filter(|m| has(m.to) && s.arms.iter().any(|a| a.uid == m.from && a.lanes.iter().any(|l| l.to.contains(&m.to))))
-                .collect(),
-            walks: p.walks.iter().copied().filter(|u| crossings.contains(u)).collect(),
-            rides: p.rides.iter().copied().filter(|u| bikes.contains(u)).collect(),
+            moves: once(
+                p.moves.iter().copied().filter(|m| has(m.to) && s.arms.iter().any(|a| a.uid == m.from && a.lanes.iter().any(|l| l.to.contains(&m.to)))),
+            ),
+            walks: once(p.walks.iter().copied().filter(|u| crossings.contains(u))),
+            rides: once(p.rides.iter().copied().filter(|u| bikes.contains(u))),
             arm: p.arm,
         })
         .filter(|p| !p.moves.is_empty() || p.arm.is_some_and(has))
@@ -376,7 +379,7 @@ pub enum Conflict {
 /// What meets in each phase of `plan`, as (the phase's place in the plan, the conflict). A warning only: nothing here
 /// refuses or changes an edit. The rules are the ones the suggestion keeps (`crosses`, `blocks_crossing`,
 /// `meets_bikes`), so the suggestion has none.
-pub fn conflicts(s: &State, _region: usize, plan: &Plan) -> Vec<(usize, Conflict)> {
+pub fn conflicts(s: &State, plan: &Plan) -> Vec<(usize, Conflict)> {
     let (arms, dests) = ordered(s);
     let place = |uid: u32| arms.iter().position(|a| a.uid == uid);
     let mut found = Vec::new();
@@ -413,7 +416,7 @@ pub fn conflicts(s: &State, _region: usize, plan: &Plan) -> Vec<(usize, Conflict
 /// from one that was there (a phase is known by its street: places change when phases are moved). Empty off a signal.
 pub fn meetings(s: &State, region: usize) -> Vec<(usize, u32, Conflict)> {
     let Some(p) = plan(s, region) else { return Vec::new() };
-    conflicts(s, region, &p).into_iter().map(|(n, c)| (n, p.phases[n].uid, c)).collect()
+    conflicts(s, &p).into_iter().map(|(n, c)| (n, p.phases[n].uid, c)).collect()
 }
 
 /// The patterns that fit the phase of street `phase.uid`, in the order they are offered. A pattern that would make
@@ -808,7 +811,7 @@ mod tests {
     }
 
     fn found(s: &State) -> Vec<(usize, Conflict)> {
-        conflicts(s, 0, &plan(s, 0).unwrap())
+        conflicts(s, &plan(s, 0).unwrap())
     }
 
     #[test]
@@ -825,13 +828,12 @@ mod tests {
     #[test]
     fn traffic_that_starts_at_or_goes_straight_into_a_walked_crossing_is_a_walk_conflict() {
         let s = north_every_way();
-        let (n, e, so, w) = (at(&s, 0), at(&s, 90), at(&s, 180), at(&s, 270));
+        let (n, e, so) = (at(&s, 0), at(&s, 90), at(&s, 180));
         let through = Move { from: n, to: so };
         let t = with_phase(&s, StoredPhase { moves: vec![through], walks: vec![so, e], ..Default::default() });
         assert_eq!(found(&t), vec![(0, Conflict::Walk { mv: through, arm: so })], "straight into south's crossing; east's is clear");
         let t = with_phase(&s, StoredPhase { moves: vec![through], walks: vec![n], ..Default::default() });
         assert_eq!(found(&t), vec![(0, Conflict::Walk { mv: through, arm: n })], "traffic entering from a street whose crossing is walked");
-        let _ = w;
     }
 
     #[test]
@@ -866,17 +868,15 @@ mod tests {
 
     #[test]
     fn the_suggested_plan_has_no_conflict_on_the_four_way_a_five_way_a_t_and_streets_with_bike_lanes() {
-        let mut every = north_every_way();
         let mut t = Junction::new(1);
         assert!(t.set_control(SIGNAL));
         let mut five = Junction::new(3);
         assert!(five.set_control(SIGNAL));
         let (t, five) = (t.current().clone(), five.current().clone());
-        for s in [cross(), through_only(), every.clone(), bike_cross(), t, five] {
+        for s in [cross(), through_only(), north_every_way(), bike_cross(), t, five] {
             let p = plan(&s, 0).unwrap();
-            assert!(p.suggested && conflicts(&s, 0, &p).is_empty(), "{:?}", conflicts(&s, 0, &p));
+            assert!(p.suggested && conflicts(&s, &p).is_empty(), "{:?}", conflicts(&s, &p));
         }
-        every.signal_plan = None;
     }
 
     #[test]
@@ -885,5 +885,18 @@ mod tests {
         let n = at(&s, 0);
         let t = with_phase(&s, stored(&s, n, Pattern::Scramble));
         assert!(found(&t).is_empty());
+    }
+
+    #[test]
+    fn a_stored_plan_with_repeats_is_read_without_them_so_its_conflicts_stay_few() {
+        let s = north_every_way();
+        let (n, e, so) = (at(&s, 0), at(&s, 90), at(&s, 180));
+        let mv = Move { from: n, to: so };
+        let phase = StoredPhase { moves: [mv, Move { from: n, to: e }].repeat(1000), walks: vec![so; 2000], rides: vec![n; 2000], arm: None };
+        let t = with_phase(&s, phase);
+        let p = plan(&t, 0).unwrap();
+        assert_eq!((p.phases[0].moves.clone(), p.phases[0].walks.clone()), (vec![mv, Move { from: n, to: e }], vec![so]), "each once, in the order first seen");
+        assert!(p.phases[0].rides.is_empty());
+        assert_eq!(found(&t), vec![(0, Conflict::Walk { mv, arm: so })]);
     }
 }

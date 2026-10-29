@@ -601,6 +601,10 @@ jn-conflict-heard-many = Warning: { $count } movements now meet, in { $phases ->
     [one] phase
    *[other] phases
 } { $list }. { $first }
+jn-conflict-more = { $n ->
+    [one] And { $n } more meeting.
+   *[other] And { $n } more meetings.
+}
 jn-check-signal-conflicts = Movements that meet
 jn-check-signal-conflicts-ok = No phase puts movements together that meet
 jn-check-signal-conflicts-bad = { $list }

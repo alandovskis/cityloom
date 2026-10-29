@@ -186,7 +186,7 @@ mod tests {
     fn the_counts_said_are_singular_at_zero_and_one_in_french_and_at_one_in_english() {
         let count = |i: &I18n, key: &str, name: &'static str, n: i64| i.tr_now(key, &Args::new().num(name, n).str("checks", "x").str("arm", "A"));
         let (en, fr) = (en(), fr());
-        let cases: [(&str, &'static str, [&str; 3], [&str; 3]); 4] = [
+        let cases: [(&str, &'static str, [&str; 3], [&str; 3]); 5] = [
             ("jn-arms", "n", ["0 streets", "1 street", "2 streets"], ["0 rue", "1 rue", "2 rues"]),
             // The status line says "jn-fit-ok" when no check fails, so it never asks for this one with 0;
             // the 0 case only pins how each language's plural rule reads it.
@@ -201,6 +201,12 @@ mod tests {
                 "n",
                 ["0 streets is too many for one signal", "1 street is too many for one signal", "2 streets is too many for one signal"],
                 ["0 rue, c’est trop pour un seul jeu de feux", "1 rue, c’est trop pour un seul jeu de feux", "2 rues, c’est trop pour un seul jeu de feux"],
+            ),
+            (
+                "jn-conflict-more",
+                "n",
+                ["And 0 more meetings.", "And 1 more meeting.", "And 2 more meetings."],
+                ["Et 0 autre rencontre.", "Et 1 autre rencontre.", "Et 2 autres rencontres."],
             ),
             ("jn-sel-arm", "degrees", ["A, 0 degrees", "A, 1 degree", "A, 2 degrees"], ["A, 0 degré", "A, 1 degré", "A, 2 degrés"]),
         ];
