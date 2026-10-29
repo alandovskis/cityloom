@@ -41,7 +41,7 @@ pub use zones::{Elsewhere, Keep, LENGTH_TOLERANCE_MM, MIN_ZONE_MM, Zone, ZoneEnd
 /// Widths snap to this step when dragged.
 pub const SNAP_MM: i32 = 100;
 /// Sidewalk on each edge is a sheet check, not a hard rule.
-const ACCESS_LANE_MM: i32 = 3000;
+pub const ACCESS_LANE_MM: i32 = 3000;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Segment {
@@ -1591,6 +1591,12 @@ fn shares(segs: &[Segment]) -> Vec<Share> {
 
 fn outcomes(segs: &[Segment], existing: &[Segment]) -> Outcomes {
     Outcomes { share: shares(segs), existing_share: shares(existing), capacity_pph: capacity(segs), existing_capacity_pph: capacity(existing) }
+}
+
+/// Whether every zone of the street has an unbroken run of sidewalk wide enough for emergency access (the `access`
+/// check of a pedestrian street, over each zone).
+pub fn walkway_access(street: &Street) -> bool {
+    street.sections().into_iter().all(|segs| widest_walkway_mm(segs) >= ACCESS_LANE_MM)
 }
 
 /// The widest unbroken run of adjacent sidewalk pieces; any other piece between two sidewalks breaks the run.

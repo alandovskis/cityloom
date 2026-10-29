@@ -173,3 +173,37 @@ map-svg-changed = modifié
 map-basemap-missing = Le fond de carte n’a pas pu être chargé. Construisez-le avec `just prepare`, puis rechargez la page.
 map-basemap-outside = Il n’y a pas de fond de carte pour ce lieu. La carte couvre la région de Montréal.
 map-no-roads = Les rues de ce lieu n’ont pas pu être chargées, il n’y a donc pas de carte à afficher.
+
+## Vérifications du réseau (src/map/network.rs, src/map/vm.rs)
+net-heading = Vérifications du réseau
+net-no-places = Il n’y a pas de réseau à vérifier.
+net-lead-none = Les vérifications du réseau n’ont rien trouvé dans l’ensemble des rues et des jonctions.
+net-lead = { $n ->
+    [one] Les vérifications du réseau ont trouvé 1 point dans l’ensemble des rues et des jonctions.
+   *[other] Les vérifications du réseau ont trouvé { $n } points dans l’ensemble des rues et des jonctions.
+}
+net-note = Elles portent sur l’ensemble du réseau et sont comptées à part des vérifications de chaque lieu.
+net-count-none = aucun constat
+net-count-one = 1 constat
+net-count = { $n } constats
+net-rule-cycling = Liens cyclables
+net-rule-access = Accès aux rues piétonnes
+net-rule-crossings = Passages pour piétons
+net-rule-lanes = Nombre de voies
+net-rule-transit = Axes de transport en commun
+net-severity-problem = Problème
+net-severity-notice = À noter
+net-lanes = { $n ->
+    [one] { $n } voie
+   *[other] { $n } voies
+}
+net-cycling-island = { $n ->
+    [one] Cette rue a une piste cyclable coupée du reste du réseau cyclable.
+   *[other] Ces { $n } rues ont des pistes cyclables coupées du reste du réseau cyclable.
+}
+net-cycling-ends = La piste cyclable s’arrête ici : aucune autre rue qui se rencontre à cet endroit n’en a une.
+net-access-broken = Cette rue piétonne n’a pas de trottoir continu de { $need } de large pour les véhicules d’urgence.
+net-crossing-missing = Cette rue amène la circulation à la jonction et n’a pas de passage pour piétons.
+net-crossing-wide = Le passage pour piétons fait ici { $width } de large, soit plus que les { $max } à ne pas dépasser.
+net-lanes-change = Les voies de circulation passent de { $from } à { $to } là où ces deux rues se rejoignent, soit plus de { $step } d’un coup.
+net-transit-break = La voie réservée au transport en commun s’arrête ici : aucune autre rue qui se rencontre à cet endroit n’en a une.

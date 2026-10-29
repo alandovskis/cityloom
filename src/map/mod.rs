@@ -8,6 +8,7 @@ pub mod areas_view;
 pub mod camera;
 pub mod editable;
 pub mod home;
+pub mod network;
 pub mod overlay;
 pub mod style;
 pub mod svg;

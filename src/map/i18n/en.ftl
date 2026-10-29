@@ -173,3 +173,37 @@ map-svg-changed = changed
 map-basemap-missing = The basemap could not be loaded. Build it with `just prepare`, then reload the page.
 map-basemap-outside = There is no basemap for this place. The map covers the Montréal area.
 map-no-roads = The roads of this place could not be loaded, so there is no map to show.
+
+## Network checks (src/map/network.rs, src/map/vm.rs)
+net-heading = Network checks
+net-no-places = There is no network to check.
+net-lead-none = The network checks found nothing across the streets and junctions.
+net-lead = { $n ->
+    [one] The network checks found 1 thing across the streets and junctions.
+   *[other] The network checks found { $n } things across the streets and junctions.
+}
+net-note = These look across the whole network and are counted apart from the checks on each place.
+net-count-none = no findings
+net-count-one = 1 finding
+net-count = { $n } findings
+net-rule-cycling = Cycling links
+net-rule-access = Pedestrian street access
+net-rule-crossings = Crossings
+net-rule-lanes = Lane counts
+net-rule-transit = Transit corridors
+net-severity-problem = Problem
+net-severity-notice = Notice
+net-lanes = { $n ->
+    [one] { $n } lane
+   *[other] { $n } lanes
+}
+net-cycling-island = { $n ->
+    [one] This street has a bike lane that is cut off from the rest of the cycling network.
+   *[other] These { $n } streets have bike lanes that are cut off from the rest of the cycling network.
+}
+net-cycling-ends = The bike lane stops here: no other street that meets at this place has one.
+net-access-broken = This pedestrian street has no unbroken run of sidewalk { $need } wide for emergency vehicles.
+net-crossing-missing = This street takes traffic into the junction and has no pedestrian crossing.
+net-crossing-wide = The pedestrian crossing here is { $width } wide, more than the { $max } it should not pass.
+net-lanes-change = The traffic lanes change from { $from } to { $to } where these two streets join, more than { $step } at once.
+net-transit-break = The transit lane stops here: no other street that meets at this place has one.
