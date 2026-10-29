@@ -1,0 +1,84 @@
+1. Map page, Network checks section (English, Plateau)
+   h2: "Network checks"
+   note (legend): "These look across the whole network and are counted apart from the checks on each place. A problem means the network breaks the rule; a notice is worth a look, since the rule may be met another way. The rules judge the streets as they stand now, not against how they were first laid out."
+   lead: "The network checks found 7 findings across the streets and junctions."
+   heading cycling: Cycling links: 6 findings  [aria-text-content="Cycling links: 6 findings"]
+   heading access: Pedestrian street access: 1 finding  [aria-text-content="Pedestrian street access: 1 finding"]
+   heading crossings: Crossings: no findings  [aria-text-content="Crossings: no findings"]
+   heading lanes: Lane counts: no findings  [aria-text-content="Lane counts: no findings"]
+   heading transit: Transit corridors: no findings  [aria-text-content="Transit corridors: no findings"]
+   screenshot: 01-network-panel.png (#network-panel on 1440x3600; clientHeight=2780 scrollHeight=2780)
+   findings listed in the panel: 7; severity words: ["Problem","Problem","Problem","Problem","Notice","Notice","Notice"]
+2a. Cycling cut-off island and bike lane stops, Access (from the Plateau)
+   cycling finding: severity=problem (Problem) why="These 13 streets have bike lanes that are cut off from the rest of the cycling network." links=8 ["Avenue Laurier Ouest, Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est to a connection on Avenue Laurier Ouest=>street.html?street=1","Avenue Laurier Ouest, a connection on Avenue Laurier Ouest to Avenue Laurier Ouest and Rue Clark=>street.html?street=2","Rue Clark, Avenue Laurier Ouest and Rue Clark to the end of Rue Clark=>street.html?street=38","Rue Bernard Ouest, Rue Bernard Ouest and Rue Clark to a connection on Rue Bernard Ouest=>street.html?street=66","Rue Bernard Ouest, the end of Rue Bernard Ouest to Rue Bernard Ouest and Rue Clark=>street.html?street=67","Avenue Laurier Ouest, Avenue Laurier Ouest and Rue Clark to the end of Avenue Laurier Ouest=>street.html?street=91","Rue Clark, Rue Saint-Viateur Ouest and Rue Clark to Avenue Fairmount Ouest and Rue Clark=>street.html?street=113","Rue Clark, Avenue Fairmount Ouest and Rue Clark to a connection on Rue Clark=>street.html?street=114"] more=and 5 more places
+   screenshot: 02a-cycling-island.png
+   cycling finding: severity=notice (Notice) why="Rue Bernard Est, Boulevard Saint-Laurent and Rue Bernard Ouest: the bike lane of Rue Bernard Est stops, since no other street that meets there has one." links=2 ["Rue Bernard Est, Rue Bernard Est, Boulevard Saint-Laurent and Rue Bernard Ouest to Rue Bernard Est and Rue Cloutier=>street.html?street=42","Rue Bernard Est, Boulevard Saint-Laurent and Rue Bernard Ouest=>intersection.html?junction=45"] more=null
+   screenshot: 02b-cycling-bike-lane-stops.png
+   access finding: severity=notice (Notice) why="This pedestrian street has no unbroken run of sidewalk 3.0 m wide for emergency vehicles, as it stands now." links=1 ["Place Andrée-Lachapelle, through the city=>street.html?street=123"] more=null
+   screenshot: 02c-access.png
+   crossings: Crossings: no findings (the Plateau produces none; see test "other rules")
+   lanes: Lane counts: no findings (the Plateau produces none; see test "other rules")
+   transit: Transit corridors: no findings (the Plateau produces none; see test "other rules")
+3. Navigation
+   focus on first link "Avenue Laurier Ouest, Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est to a connection on Avenue Laurier Ouest" => street.html?street=1; activeElement after focus: net-link street.html?street=1
+   Tab moves to: net-link street.html?street=2 Avenue Laurier Ouest, a connection on Avenue Laurier Ouest to Avenue Laurier Ouest and Rue Clark
+   Tab x3 from the section heading: net-link:street.html?street=1 | net-link:street.html?street=2 | net-link:street.html?street=38 | 
+   screenshot: 03a-tab-focus-panel.png (viewport-height panel with the focused link)
+   screenshot: 03b-focused-link.png (focus ring on first link; outline=solid 2px)
+   Enter => URL http://127.0.0.1:8291/street.html?street=1
+   screenshot: 03c-opened-place.png (street page, title "Avenue Laurier Ouest between Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est and a connection on Avenue Laurier Ouest · CityLoom")
+   junction link intersection.html?junction=45 => URL http://127.0.0.1:8291/intersection.html?junction=45
+   screenshot: 03d-opened-junction.png
+4. Places of a finding are separate links in a list; cap
+   ul.net-links: {"display":"flex","gap":"0px 14px","rowGap":"0px","columnGap":"14px","role":null,"items":9,"links":8,"liDisplay":"block","listStyle":"none","firstTwo":["x=68 y=601 w=288","x=68 y=696 w=288","x=68 y=769 w=288"],"moreText":"and 5 more places","moreIsLi":"LI"}
+   screenshot: 04-many-places-capped.png (8 links listed + 'and N more places')
+   'N more findings are not listed' (cap 50 findings per check): the Plateau has at most 6 per check, not reachable here; native test map::vm::tests::a_check_lists_the_first_findings_and_counts_the_rest_and_a_finding_links_the_first_places
+5. Counted apart
+   [map with network findings] network-lead="The network checks found 7 findings across the streets and junctions." | status line (#fit-slot)="170 places. Every check passes." | Notes lead (#checks-lead)="Every check passes in all 170 places."
+   network findings=7 but the status line says "Every check passes" and the Notes lead says every check passes in all places
+   screenshot: 05-counted-apart.png (whole map window: status line and Notes lead beside the panel's findings)
+   screenshot: 05b-status-line.png
+2b. Rules the Plateau alone does not fire, produced by real edits then a map reload (fresh browser context for each)
+   Crossings: junction page, removed one crossing (4 -> 3)
+   heading Crossings: 1 finding
+   crossings finding: severity=problem (Problem) why="This street takes traffic into the junction and has no pedestrian crossing." links=2 ["Avenue Laurier Est, Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est to the end of Avenue Laurier Est=>street.html?street=142","Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est=>intersection.html?junction=1"] more=null
+   screenshot: 06-crossings-missing.png
+   screenshot: 06b-crossings-panel.png (#network-panel on 1440x3600; clientHeight=3013 scrollHeight=3013)
+   Lanes (after +3 driving lanes on a street and the crossing edit): heading Lane counts: 1 finding
+   lanes finding: severity=problem (Problem) why="Avenue Laurier Ouest has 5 lanes where it joins Avenue Laurier Ouest, which has 2 lanes: a change of more than 1 lane at once." links=2 ["Avenue Laurier Ouest, Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est to a connection on Avenue Laurier Ouest=>street.html?street=1","Avenue Laurier Ouest, a connection on Avenue Laurier Ouest to Avenue Laurier Ouest and Rue Clark=>street.html?street=2"] more=null
+   screenshot: 07-lanes-change.png
+2c. Transit: Transform > Transit priority on the first street, then the map reloaded
+   heading Transit corridors: 2 findings
+   transit finding: severity=notice (Notice) why="Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est: the transit lane of Avenue Laurier Ouest stops, since no other street that meets there has one." links=2 ["Avenue Laurier Ouest, Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est to a connection on Avenue Laurier Ouest=>street.html?street=1","Avenue Laurier Ouest, Boulevard Saint-Laurent and Avenue Laurier Est=>intersection.html?junction=1"] more=null
+   screenshot: 08-transit-break.png
+   screenshot: 08b-transit-panel.png (#network-panel on 1440x3600; clientHeight=3300 scrollHeight=3300)
+6. Delete all bike lanes of a street at the head of the smallest cut-off cycling link, reload the map
+   BEFORE: cycling heading="Cycling links: 6 findings"; target finding "These 3 streets have bike lanes that are cut off from the rest of the cycling network." links=["street.html?street=23","street.html?street=24","street.html?street=71"]; edited street=street.html?street=23
+   BEFORE: link to street.html?street=23 present in cycling list: 1
+   [before] network-lead="The network checks found 7 findings across the streets and junctions." | status line (#fit-slot)="170 places. Every check passes." | Notes lead (#checks-lead)="Every check passes in all 170 places."
+   screenshot: 09-before-cycling.png (#network-slot .net-rule[data-rule=cycling] on 1440x3600; clientHeight=2231 scrollHeight=2231)
+   street page: bike lanes before: 1
+   screenshot: 09b-street-before.png
+   street page: bike lanes after: 0
+   screenshot: 09c-street-after.png
+   AFTER: cycling heading="Cycling links: 9 findings"; link to street.html?street=23 present: 0; text changed: true
+   AFTER lead: "The network checks found 10 findings across the streets and junctions."
+   [after] network-lead="The network checks found 10 findings across the streets and junctions." | status line (#fit-slot)="170 places. Every check passes." | Notes lead (#checks-lead)="Every check passes in all 170 places."
+   AFTER findings texts: ["These 13 streets have bike lanes that are cut off from the rest of the cycling network.","This street has a bike lane that is cut off from the rest of the cycling network.","These 6 streets have bike lanes that are cut off from the rest of the cycling network.","These 3 streets have bike lanes that are cut off from the rest of the cycling network.","This street has a bike lane that is cut off from the rest of the cycling network.","Rue Jeanne-Mance and Rue Saint-Viateur Ouest: the bike lane of Rue Jeanne-Mance stops, since no other street that meets there has one.","Connection on Rue Jeanne-Mance: the bike lane of Rue Jeanne-Mance stops, since no other street that meets there has one.","Rue Bernard Est, Boulevard Saint-Laurent and Rue Bernard Ouest: the bike lane of Rue Bernard Est stops, since no other street that meets there has one.","Connection on Rue Bernard Ouest: the bike lane of Rue Bernard Ouest stops, since no other street that meets there has one."]
+   screenshot: 10-after-cycling.png (#network-slot .net-rule[data-rule=cycling] on 1440x3600; clientHeight=2628 scrollHeight=2628)
+   screenshot: 10b-after-panel.png (#network-panel on 1440x3600; clientHeight=3177 scrollHeight=3177)
+7. French (fr-CA)
+   h2: "Vérifications du réseau"
+   note: "Elles portent sur l’ensemble du réseau et sont comptées à part des vérifications de chaque lieu. Un problème veut dire que le réseau enfreint la règle; un point à noter mérite un coup d’œil, puisque la règle peut être respectée autrement. Les règles jugent les rues telles qu’elles sont maintenant, et non par rapport à leur tracé de départ."
+   lead: "Les vérifications du réseau ont trouvé 7 constats dans l’ensemble des rues et des jonctions."
+   heading cycling: Liens cyclables: 6 constats  [aria-text-content="Liens cyclables: 6 constats"]
+   heading access: Accès aux rues piétonnes: 1 constat  [aria-text-content="Accès aux rues piétonnes: 1 constat"]
+   heading crossings: Passages pour piétons: aucun constat  [aria-text-content="Passages pour piétons: aucun constat"]
+   heading lanes: Nombre de voies: aucun constat  [aria-text-content="Nombre de voies: aucun constat"]
+   heading transit: Axes de transport en commun: aucun constat  [aria-text-content="Axes de transport en commun: aucun constat"]
+   cycling finding: severity=problem (Problème) why="Ces 13 rues ont des pistes cyclables coupées du reste du réseau cyclable." links=8 ["Avenue Laurier Ouest, entre Avenue Laurier Ouest, Boulevard Saint-Laurent et Avenue Laurier Est et un raccordement sur Avenue Laurier Ouest=>street.html?street=1","Avenue Laurier Ouest, entre un raccordement sur Avenue Laurier Ouest et Avenue Laurier Ouest et Rue Clark=>street.html?street=2","Rue Clark, entre Avenue Laurier Ouest et Rue Clark et le bout de Rue Clark=>street.html?street=38","Rue Bernard Ouest, entre Rue Bernard Ouest et Rue Clark et un raccordement sur Rue Bernard Ouest=>street.html?street=66","Rue Bernard Ouest, entre le bout de Rue Bernard Ouest et Rue Bernard Ouest et Rue Clark=>street.html?street=67","Avenue Laurier Ouest, entre Avenue Laurier Ouest et Rue Clark et le bout de Avenue Laurier Ouest=>street.html?street=91","Rue Clark, entre Rue Saint-Viateur Ouest et Rue Clark et Avenue Fairmount Ouest et Rue Clark=>street.html?street=113","Rue Clark, entre Avenue Fairmount Ouest et Rue Clark et un raccordement sur Rue Clark=>street.html?street=114"] more=et 5 autres lieux
+   screenshot: 11b-fr-finding.png
+   access finding: severity=notice (À noter) why="Cette rue piétonne n’a pas de trottoir continu de 3,0 m de large pour les véhicules d’urgence, telle qu’elle est maintenant." links=1 ["Place Andrée-Lachapelle, à travers la ville=>street.html?street=123"] more=null
+   screenshot: 11c-fr-access.png
+   screenshot: 11-fr-panel.png (#network-panel on 1440x3600; clientHeight=2714 scrollHeight=2714)
+   html lang=fr-CA

@@ -1,0 +1,8 @@
+HEAD 889335d8c604e123903ed2b8e8203bd295f7152e
+cargo test --lib:
+
+
+e2e: just e2e tests/network.spec.ts
+  ✓  1 [chromium] › tests/network.spec.ts:102:3 › the network checks on the map page › a finding goes when the street it concerns is edited, at the map's next load (2.8s)
+
+  6 passed (5.2s)

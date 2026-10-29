@@ -1,0 +1,46 @@
+cargo test --lib network (all tests whose path contains 'network')
+test city::projection::tests::the_south_west_corner_is_the_network_origin_and_the_far_corner_is_the_north_east ... ok
+test city::import::tests::a_network_without_roads_is_a_city_of_no_places_whose_bounds_are_a_point ... ok
+test map::network::tests::a_bike_lane_that_runs_to_the_edge_of_the_map_is_not_a_break ... ok
+test map::network::tests::a_pedestrian_street_or_a_freeway_needs_no_crossing ... ok
+test city::store::tests::a_damaged_network_is_not_used ... ok
+test map::network::tests::a_bike_link_cut_off_from_the_rest_of_the_bike_network_is_found_and_joining_it_clears_it ... ok
+test map::network::tests::a_finding_names_the_streets_and_the_place_it_is_about ... ok
+test map::network::tests::a_junction_that_could_not_be_read_or_has_an_arm_of_no_known_street_is_counted_not_passed ... ok
+test map::network::tests::a_bike_lane_that_ends_where_no_other_street_has_one_is_found_at_its_junction ... ok
+test city::store::tests::the_checksum_of_the_data_an_area_was_made_from_is_kept_with_its_network_and_for_that_area_only ... ok
+test map::network::tests::a_pedestrian_street_without_an_unbroken_sidewalk_run_is_found ... ok
+test map::network::tests::a_transit_lane_that_breaks_at_a_junction_is_found ... ok
+test map::network::tests::lanes_are_not_compared_at_a_junction_or_with_a_pedestrian_street ... ok
+test map::network::tests::an_arm_that_takes_traffic_without_a_crossing_or_with_too_wide_a_one_is_found ... ok
+test map::network::tests::lanes_are_not_compared_with_a_freeway ... ok
+test map::network::tests::lanes_that_jump_where_two_streets_join_are_found_and_one_lane_more_is_not ... ok
+test map::network::tests::two_bike_streets_join_only_where_both_have_a_bike_lane_at_the_node ... ok
+test city::model::tests::the_network_is_well_formed ... ok
+test city::store::tests::an_area_without_its_network_is_an_empty_city_until_the_network_is_kept ... ok
+test map::vm::tests::a_city_with_no_places_has_no_network_checks_only_its_lead ... ok
+test shell::tests::a_page_opened_offline_learns_it_is_signed_in_when_the_network_returns_and_starts_the_sync_once ... ok
+test city::model::network_read::tests::the_read_has_every_street_and_node_with_the_arms_of_its_junctions ... ok
+test city::model::network_read::tests::a_street_made_pedestrian_reads_as_one_with_no_lanes_and_its_arm_has_no_crossing ... ok
+test map::vm::tests::the_network_checks_are_five_rules_with_a_count_each_and_the_hand_made_city_passes_them ... ok
+test map::tests::the_network_checks_are_a_section_per_check_with_its_count_in_the_heading ... ok
+test city::import::tests::the_layout_remembers_where_its_origin_lies_in_the_network ... ok
+test sync::tests::while_offline_changes_stay_marked_and_go_when_the_network_returns ... ok
+test street::vm::tests::a_city_with_a_network_but_a_layout_that_lies_nowhere_has_no_area_check_even_under_an_area ... ok
+test map::tests::the_network_checks_are_worded_in_french ... ok
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 2429 filtered out; finished in 0.28s
+
+cargo test --lib -- parity ftl (the .ftl parity: map::tests::the_map_ftl_files_have_the_same_messages_and_variables)
+test shared::i18n::tests::parity_reports_a_file_that_does_not_parse ... ok
+test shared::i18n::tests::parity_walks_the_variants_of_a_select ... ok
+test shared::i18n::tests::parity_reports_a_message_in_one_language_only_and_a_variable_that_differs ... ok
+test place::tests::the_place_ftl_files_have_the_same_messages_and_variables ... ok
+test sync::tests::the_ftl_files_have_the_same_messages_and_variables ... ok
+test city::tests::the_city_ftl_files_have_the_same_messages_and_variables ... ok
+test account::tests::the_ftl_files_have_the_same_messages_and_variables ... ok
+test shell::tests::the_shell_ftl_files_have_the_same_messages_and_variables ... ok
+test restriction::tests::the_restriction_ftl_files_have_the_same_messages_and_variables ... ok
+test map::tests::the_map_ftl_files_have_the_same_messages_and_variables ... ok
+test street::tests::the_street_ftl_files_have_the_same_messages_and_variables ... ok
+test junction::tests::the_junction_ftl_files_have_the_same_messages_and_variables ... ok
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 2446 filtered out; finished in 0.00s

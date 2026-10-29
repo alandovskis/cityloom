@@ -1,0 +1,6 @@
+test map::vm::tests::a_city_with_no_places_has_no_network_checks_only_its_lead ... ok
+test map::vm::tests::a_check_lists_the_first_findings_and_counts_the_rest_and_a_finding_links_the_first_places ... ok
+test map::vm::tests::the_network_checks_are_five_rules_with_a_count_each_and_the_hand_made_city_passes_them ... ok
+test map::tests::the_network_checks_are_a_section_per_check_with_its_count_in_the_heading ... ok
+test map::tests::the_network_checks_are_worded_in_french ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2453 filtered out; finished in 0.27s

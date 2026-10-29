@@ -1,0 +1,247 @@
+import { appendFileSync, writeFileSync } from "node:fs";
+import type { Page } from "@playwright/test";
+import { expect, mapReady, openJunction, openStreet, test } from "./fixtures";
+
+const OUT = "/private/tmp/claude-501/-Users-alex-src-cityloom/4cb51d1a-df55-4d28-90b1-a94549351273/scratchpad/ev63";
+const mk = (tag: string) => {
+  const f = `${OUT}/log-${tag}.txt`;
+  writeFileSync(f, "");
+  return (s: string) => appendFileSync(f, s + "\n");
+};
+const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+
+async function full(page: Page, sel: string, file: string, log: (s: string) => void, nth = 0) {
+  const vp = page.viewportSize()!;
+  await page.setViewportSize({ width: vp.width, height: 3600 });
+  await page.waitForTimeout(400);
+  const loc = page.locator(sel).nth(nth);
+  await loc.scrollIntoViewIfNeeded();
+  const m = await loc.evaluate((e) => ({ client: e.clientHeight, scroll: e.scrollHeight }));
+  await loc.screenshot({ path: `${OUT}/${file}` });
+  log(`   screenshot: ${file} (${sel} on ${vp.width}x3600; clientHeight=${m.client} scrollHeight=${m.scroll})`);
+  await page.setViewportSize(vp);
+  await page.waitForTimeout(200);
+}
+const rule = (page: Page, id: string) => page.locator(`#network-slot .net-rule[data-rule="${id}"]`);
+const headings = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>("#network-slot .net-rule")].map(
+      (s) => s.dataset.rule + ": " + s.querySelector("h3")!.textContent!.replace(/\s+/g, " ").trim() + "  [aria-text-content=" + JSON.stringify(s.querySelector("h3")!.textContent) + "]",
+    ),
+  );
+async function openMap(page: Page) {
+  await page.goto("/map.html");
+  await mapReady(page);
+  await expect(page.locator("#network-slot .net-rule")).toHaveCount(5);
+}
+async function finding(page: Page, id: string, file: string, log: (s: string) => void, pick?: RegExp) {
+  const li = rule(page, id).locator("li[data-severity]", pick ? { hasText: pick } : undefined).first();
+  await li.scrollIntoViewIfNeeded();
+  await li.screenshot({ path: `${OUT}/${file}` });
+  const info = await li.evaluate((e) => ({
+    severity: e.getAttribute("data-severity"),
+    why: e.querySelector("b")!.textContent,
+    word: e.querySelector(".net-severity")!.textContent,
+    links: [...e.querySelectorAll("a")].map((a) => `${a.textContent}=>${a.getAttribute("href")}`),
+    more: e.querySelector(".net-more-places")?.textContent ?? null,
+  }));
+  log(`   ${id} finding: severity=${info.severity} (${info.word}) why="${info.why}" links=${info.links.length} ${JSON.stringify(info.links)} more=${info.more}`);
+  log(`   screenshot: ${file}`);
+}
+const summary = (page: Page, log: (s: string) => void, tag: string) =>
+  page.evaluate(() => ({
+    lead: document.querySelector("#network-lead")!.textContent,
+    status: document.querySelector("#fit-slot")!.textContent,
+    checks: document.querySelector("#checks-lead")!.textContent,
+  })).then((s) => log(`   [${tag}] network-lead="${s.lead}" | status line (#fit-slot)="${norm(s.status!)}" | Notes lead (#checks-lead)="${norm(s.checks!)}"`));
+
+test("baseline: steps 1 to 5", async ({ page }) => {
+  const log = mk("a");
+  await openMap(page);
+  log("1. Map page, Network checks section (English, Plateau)");
+  log(`   h2: ${JSON.stringify(await page.locator("#h-network").textContent())}`);
+  log(`   note (legend): ${JSON.stringify(norm(await page.locator("#network-panel > p.hint").first().textContent() ?? ""))}`);
+  log(`   lead: ${JSON.stringify(await page.locator("#network-lead").textContent())}`);
+  for (const h of await headings(page)) log(`   heading ${h}`);
+  await full(page, "#network-panel", "01-network-panel.png", log);
+  const total = await page.evaluate(() => [...document.querySelectorAll("#network-slot li[data-severity]")].length);
+  log(`   findings listed in the panel: ${total}; severity words: ${JSON.stringify(await page.locator("#network-slot .net-severity").allInnerTexts())}`);
+
+  log("2a. Cycling cut-off island and bike lane stops, Access (from the Plateau)");
+  await finding(page, "cycling", "02a-cycling-island.png", log, /cut off/);
+  await finding(page, "cycling", "02b-cycling-bike-lane-stops.png", log, /stops/);
+  await finding(page, "access", "02c-access.png", log);
+  for (const id of ["crossings", "lanes", "transit"]) log(`   ${id}: ${norm(await rule(page, id).locator("h3").textContent() ?? "")} (the Plateau produces none; see test "other rules")`);
+
+  log("3. Navigation");
+  const first = rule(page, "cycling").locator("li[data-severity]").first().locator("a").first();
+  const href = (await first.getAttribute("href"))!;
+  const label = await first.textContent();
+  await first.focus();
+  log(`   focus on first link "${label}" => ${href}; activeElement after focus: ${await page.evaluate(() => document.activeElement?.className + " " + document.activeElement?.getAttribute("href"))}`);
+  await page.keyboard.press("Tab");
+  log(`   Tab moves to: ${await page.evaluate(() => document.activeElement?.className + " " + document.activeElement?.getAttribute("href") + " " + document.activeElement?.textContent)}`);
+  await page.keyboard.press("Shift+Tab");
+  // Tab reaches links from the section's start
+  await page.locator("#h-network").focus().catch(() => {});
+  await page.evaluate(() => (document.querySelector("#network-lead") as HTMLElement).scrollIntoView());
+  await page.mouse.click(1, 1);
+  await page.locator("#network-panel").evaluate((e) => { (e.previousElementSibling as HTMLElement | null)?.focus?.(); });
+  let reached = "";
+  await page.locator("#h-network").evaluate((h) => { const t = document.createElement("span"); t.tabIndex = -1; t.id = "tab-anchor"; h.prepend(t); t.focus(); });
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press("Tab");
+    reached += (await page.evaluate(() => `${document.activeElement?.className}:${document.activeElement?.getAttribute("href")}`)) + " | ";
+  }
+  log(`   Tab x3 from the section heading: ${reached}`);
+  await page.locator("#network-panel").screenshot({ path: `${OUT}/03a-tab-focus-panel.png` });
+  log("   screenshot: 03a-tab-focus-panel.png (viewport-height panel with the focused link)");
+  await first.focus();
+  await page.locator("#network-slot li[data-severity]").first().screenshot({ path: `${OUT}/03b-focused-link.png` });
+  log(`   screenshot: 03b-focused-link.png (focus ring on first link; outline=${await first.evaluate((e) => getComputedStyle(e).outlineStyle + " " + getComputedStyle(e).outlineWidth)})`);
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(href.replace("?", "\\?") + "$"));
+  log(`   Enter => URL ${page.url()}`);
+  await expect(page.locator("#drawing")).toBeVisible();
+  await page.screenshot({ path: `${OUT}/03c-opened-place.png` });
+  log(`   screenshot: 03c-opened-place.png (${href.startsWith("street") ? "street" : "junction"} page, title "${await page.title()}")`);
+  // a junction link too
+  await page.goBack();
+  await mapReady(page);
+  await expect(page.locator("#network-slot .net-rule")).toHaveCount(5);
+  const jl = page.locator('#network-slot a[href^="intersection.html"]').first();
+  if (await jl.count()) {
+    const jh = (await jl.getAttribute("href"))!;
+    await jl.click();
+    await expect(page.locator("#drawing")).toBeVisible();
+    log(`   junction link ${jh} => URL ${page.url()}`);
+    await page.screenshot({ path: `${OUT}/03d-opened-junction.png` });
+    log("   screenshot: 03d-opened-junction.png");
+    await page.goBack();
+    await mapReady(page);
+    await expect(page.locator("#network-slot .net-rule")).toHaveCount(5);
+  } else log("   no junction link on the Plateau list");
+
+  log("4. Places of a finding are separate links in a list; cap");
+  const many = rule(page, "cycling").locator("li[data-severity]", { has: page.locator("li.net-more-places") }).first();
+  const css = await many.evaluate((e) => {
+    const ul = e.querySelector("ul.net-links")!;
+    const cs = getComputedStyle(ul);
+    const lis = [...ul.children] as HTMLElement[];
+    const boxes = [...ul.querySelectorAll("a")].map((a) => a.getBoundingClientRect());
+    return { display: cs.display, gap: cs.gap, rowGap: cs.rowGap, columnGap: cs.columnGap, role: ul.getAttribute("role"), items: lis.length, links: boxes.length, liDisplay: getComputedStyle(lis[0]).display, listStyle: cs.listStyleType, firstTwo: boxes.slice(0, 3).map((b) => `x=${Math.round(b.x)} y=${Math.round(b.y)} w=${Math.round(b.width)}`), moreText: e.querySelector(".net-more-places")!.textContent, moreIsLi: e.querySelector(".net-more-places")!.tagName };
+  });
+  log(`   ul.net-links: ${JSON.stringify(css)}`);
+  await many.screenshot({ path: `${OUT}/04-many-places-capped.png` });
+  log("   screenshot: 04-many-places-capped.png (8 links listed + 'and N more places')");
+  log("   'N more findings are not listed' (cap 50 findings per check): the Plateau has at most 6 per check, not reachable here; native test map::vm::tests::a_check_lists_the_first_findings_and_counts_the_rest_and_a_finding_links_the_first_places");
+
+  log("5. Counted apart");
+  await summary(page, log, "map with network findings");
+  const cnt = await page.evaluate(() => [...document.querySelectorAll("#network-slot li[data-severity]")].length);
+  log(`   network findings=${cnt} but the status line says "Every check passes" and the Notes lead says every check passes in all places`);
+  await page.locator("#network-panel").evaluate((e) => e.scrollIntoView());
+  await page.screenshot({ path: `${OUT}/05-counted-apart.png` });
+  log("   screenshot: 05-counted-apart.png (whole map window: status line and Notes lead beside the panel's findings)");
+  const checks = page.locator("#checks-lead");
+  await checks.scrollIntoViewIfNeeded();
+  await page.locator("#fit-slot > *").first().screenshot({ path: `${OUT}/05b-status-line.png` });
+  log("   screenshot: 05b-status-line.png");
+});
+
+test("other rules produced by edits: crossings, lanes, transit", async ({ page }) => {
+  const log = mk("b");
+  log("2b. Rules the Plateau alone does not fire, produced by real edits then a map reload (fresh browser context for each)");
+  // crossings
+  await openJunction(page);
+  await expect(page.locator("#drawing")).toBeVisible();
+  const n = await page.locator("#drawing path.crossing").count();
+  await page.locator("#drawing path.crossing").first().click({ force: true });
+  await page.getByRole("button", { name: "Remove the crossing" }).click();
+  log(`   Crossings: junction page, removed one crossing (${n} -> ${await page.locator("#drawing path.crossing").count()})`);
+  await openMap(page);
+  log(`   heading ${norm((await rule(page, "crossings").locator("h3").textContent())!)}`);
+  await finding(page, "crossings", "06-crossings-missing.png", log);
+  await full(page, "#network-panel", "06b-crossings-panel.png", log);
+  // lanes
+  await openStreet(page);
+  for (let i = 0; i < 3; i++) {
+    await page.locator("#add-btn").click();
+    await page.locator(".add-item", { hasText: "Driving lane" }).click();
+  }
+  await openMap(page);
+  log(`   Lanes (after +3 driving lanes on a street and the crossing edit): heading ${norm((await rule(page, "lanes").locator("h3").textContent())!)}`);
+  await finding(page, "lanes", "07-lanes-change.png", log);
+});
+
+test("transit break", async ({ page }) => {
+  const log = mk("c");
+  await openStreet(page);
+  await page.locator("#transform-btn").click();
+  await page.locator('#transform-menu [role="menuitem"].transit-item').first().click();
+  await expect(page.locator("#undo")).toBeEnabled();
+  log("2c. Transit: Transform > Transit priority on the first street, then the map reloaded");
+  await openMap(page);
+  log(`   heading ${norm((await rule(page, "transit").locator("h3").textContent())!)}`);
+  await finding(page, "transit", "08-transit-break.png", log);
+  await full(page, "#network-panel", "08b-transit-panel.png", log);
+});
+
+test("edit removes a finding: step 6", async ({ page }) => {
+  const log = mk("d");
+  log("6. Delete all bike lanes of a street at the head of the smallest cut-off cycling link, reload the map");
+  await openMap(page);
+  const target = await page.evaluate(() => {
+    const items = [...document.querySelectorAll<HTMLElement>('#network-slot .net-rule[data-rule="cycling"] ul.places-list > li')];
+    const islands = items.filter((li) => /cut off/.test(li.querySelector("b")!.textContent!)).map((li) => ({ links: [...li.querySelectorAll("a")].map((a) => a.getAttribute("href")!), text: li.querySelector("b")!.textContent! }));
+    islands.sort((a, b) => a.links.length - b.links.length);
+    return { href: islands[0].links[0], all: islands[0].links, text: islands[0].text };
+  });
+  const before = norm(await rule(page, "cycling").innerText());
+  const beforeHead = norm((await rule(page, "cycling").locator("h3").textContent())!);
+  log(`   BEFORE: cycling heading="${beforeHead}"; target finding "${target.text}" links=${JSON.stringify(target.all)}; edited street=${target.href}`);
+  log(`   BEFORE: link to ${target.href} present in cycling list: ${await rule(page, "cycling").locator(`a[href="${target.href}"]`).count()}`);
+  await summary(page, log, "before");
+  await full(page, "#network-slot .net-rule[data-rule=cycling]", "09-before-cycling.png", log);
+  await page.goto("/" + target.href);
+  const bikes = page.locator("#drawing [data-role='seg']:has(rect.k-bike)");
+  log(`   street page: bike lanes before: ${await bikes.count()}`);
+  await page.screenshot({ path: `${OUT}/09b-street-before.png` });
+  log("   screenshot: 09b-street-before.png");
+  for (let guard = 0; (await bikes.count()) > 0 && guard < 4; guard++) {
+    const index = await page.locator("#drawing [data-role='seg']").evaluateAll((els) => els.findIndex((e) => e.querySelector("rect.k-bike")));
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("Escape");
+    for (let i = 0; i <= index; i++) await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Delete");
+  }
+  await expect(bikes).toHaveCount(0);
+  log(`   street page: bike lanes after: ${await bikes.count()}`);
+  await page.screenshot({ path: `${OUT}/09c-street-after.png` });
+  log("   screenshot: 09c-street-after.png");
+  await page.goto("/map.html");
+  await mapReady(page);
+  await expect(page.locator("#network-slot .net-rule")).toHaveCount(5);
+  const after = norm(await rule(page, "cycling").innerText());
+  log(`   AFTER: cycling heading="${norm((await rule(page, "cycling").locator("h3").textContent())!)}"; link to ${target.href} present: ${await rule(page, "cycling").locator(`a[href="${target.href}"]`).count()}; text changed: ${after !== before}`);
+  log(`   AFTER lead: "${await page.locator("#network-lead").textContent()}"`);
+  await summary(page, log, "after");
+  log(`   AFTER findings texts: ${JSON.stringify(await rule(page, "cycling").locator("li[data-severity] b").allInnerTexts())}`);
+  await full(page, "#network-slot .net-rule[data-rule=cycling]", "10-after-cycling.png", log);
+  await full(page, "#network-panel", "10b-after-panel.png", log);
+});
+
+test("French and empty city: steps 7", async ({ page }) => {
+  const log = mk("e");
+  await page.addInitScript(() => localStorage.setItem("cityloom-lang", "fr-CA"));
+  await openMap(page);
+  log("7. French (fr-CA)");
+  log(`   h2: ${JSON.stringify(await page.locator("#h-network").textContent())}`);
+  log(`   note: ${JSON.stringify(norm(await page.locator("#network-panel > p.hint").first().textContent() ?? ""))}`);
+  log(`   lead: ${JSON.stringify(await page.locator("#network-lead").textContent())}`);
+  for (const h of await headings(page)) log(`   heading ${h}`);
+  await finding(page, "cycling", "11b-fr-finding.png", log);
+  await finding(page, "access", "11c-fr-access.png", log);
+  await full(page, "#network-panel", "11-fr-panel.png", log);
+  log(`   html lang=${await page.evaluate(() => document.documentElement.lang)}`);
+});
