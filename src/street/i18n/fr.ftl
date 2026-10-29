@@ -568,6 +568,7 @@ check-label-green-spacing = Arbres espacés selon leur couronne
 check-label-green-soil = Fosses d’arbre avec assez de terre
 check-label-green-sightline = Plantations à l’écart des coins aux intersections
 check-label-green-continuity = Noues végétalisées continues
+check-label-green-stop = Arbres et plantations à l’écart des quais d’arrêt
 check-detail-green-host-roadway = On ne peut pas planter sur la chaussée ({ $host }).
 check-detail-green-host-wide = L’élément fait { $width } de large, plus que la pièce en dessous ({ $host }, { $have }).
 check-detail-green-host-overhang = Son bord dépasse de { $over } l’élément en dessous ({ $host }).
@@ -584,6 +585,8 @@ check-detail-green-sightline-ok = Aucun arbre ni aucune plate-bande ne bloque la
 check-detail-green-continuity-short = La noue végétalisée fait { $length } de long; il en faut { $min } ou plus pour qu’elle achemine l’eau.
 check-detail-green-continuity-host = La noue végétalisée passe au-dessus d’un changement de pièce, ce qui interrompt le canal.
 check-detail-green-continuity-ok = Chaque noue végétalisée est continue.
+check-detail-green-stop = Il se trouve sur le quai de cet arrêt : { $stop }. Les arbres et les plantations restent à l’écart de l’endroit où l’on embarque.
+check-detail-green-stop-ok = Aucun arbre ni aucune plate-bande ne se trouve sur le quai d’un arrêt.
 
 # La rangée des arbres et plantations, ses commandes et ce que dit la coupe (src/street/green_strip.rs, src/street/green_tools.rs).
 green-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }

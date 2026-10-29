@@ -9,8 +9,9 @@
 use serde::{Deserialize, Serialize};
 
 use super::curb::{CurbRefusal, Failure, check_rows};
+use super::stop::{bus_lane, stand};
 use super::{Arg, Check, Editor, SNAP_MM, Said, Segment, Street, ZoneEnd, ZoneFrame, snap, total};
-use crate::shared::catalogue::{KINDS, is_roadway};
+use crate::shared::catalogue::{KINDS, REGIONS, is_roadway};
 
 /// The walkway a sidewalk keeps beside an element standing on it, in millimetres.
 ///
@@ -827,7 +828,7 @@ impl Editor {
     pub(super) fn green_checks(&self) -> Vec<Check> {
         let content = &self.states[self.cursor].content;
         let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
-        let rows = [
+        let mut rows = vec![
             ("green-host", "check-label-green-host", "check-detail-green-host-ok"),
             ("green-clear-path", "check-label-green-clear-path", "check-detail-green-clear-path-ok"),
             ("green-spacing", "check-label-green-spacing", "check-detail-green-spacing-ok"),
@@ -835,6 +836,10 @@ impl Editor {
             ("green-sightline", "check-label-green-sightline", "check-detail-green-sightline-ok"),
             ("green-continuity", "check-label-green-continuity", "check-detail-green-continuity-ok"),
         ];
+        // Only a street with a stop has a platform to keep clear of.
+        if !content.stops.is_empty() {
+            rows.push(("green-stop", "check-label-green-stop", "check-detail-green-stop-ok"));
+        }
         check_rows(&rows, &self.green_failures(), |k| {
             let g = &content.green[k];
             let sections = content.sections_over(g.from_mm, g.to_mm(), length_mm);
@@ -842,7 +847,7 @@ impl Editor {
         })
     }
 
-    /// Every rule each element breaks, element by element in order: `rule` indexes the six rows of `green_checks`.
+    /// Every rule each element breaks, element by element in order: `rule` indexes the rows of `green_checks` (the seventh, `green-stop`, only when the street has a stop).
     fn green_failures(&self) -> Vec<Failure> {
         let content = &self.states[self.cursor].content;
         let length_mm = content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(i32::MAX);
@@ -850,6 +855,7 @@ impl Editor {
             ZoneEnd::First => (self.ends[0], self.ends[1]),
             ZoneEnd::Last => (self.ends[1], self.ends[0]),
         };
+        let driving = REGIONS[self.region].drive_side;
         let mut out: Vec<Failure> = Vec::new();
         for (k, g) in content.green.iter().enumerate() {
             let mut fail = |rule: usize, detail: Said| Failure::record(&mut out, k, rule, detail);
@@ -927,6 +933,25 @@ impl Editor {
                 for (end, gap) in ends {
                     if end.junction && gap < SIGHTLINE_MM {
                         fail(4, Said::new("check-detail-green-sightline").with("gap", Arg::Length(gap.max(0))).with("need", Arg::Length(SIGHTLINE_MM)));
+                    }
+                }
+            }
+            if matches!(g.kind, GreenKind::Tree | GreenKind::Bed) {
+                // Left and right of twice the span across, to compare with the pieces' edges.
+                let (left2, right2) = (2 * i64::from(g.offset_mm) - i64::from(g.width_mm), 2 * i64::from(g.offset_mm) + i64::from(g.width_mm));
+                for stop in content.stops.iter().filter(|s| s.from_mm < g.to_mm() && g.from_mm < s.to_mm()) {
+                    let (from_mm, to_mm) = (stop.from_mm.max(g.from_mm), stop.to_mm().min(g.to_mm()));
+                    let on_platform = content.sections_over(from_mm, to_mm, length_mm).into_iter().any(|segs| {
+                        let found = bus_lane(segs, stop.side, driving).and_then(|lane| stand(segs, lane, stop.side, stop.kind));
+                        found.is_some_and(|f| {
+                            f.raised.iter().chain(f.stand.iter()).any(|&p| {
+                                let (from, to) = fills(segs, p);
+                                left2 < 2 * i64::from(to) && 2 * i64::from(from) < right2
+                            })
+                        })
+                    });
+                    if on_platform {
+                        fail(6, Said::new("check-detail-green-stop").with("stop", Arg::Said(Box::new(stop.named()))));
                     }
                 }
             }
@@ -1535,6 +1560,63 @@ mod tests {
         assert_eq!(centre_gap_mm(&a, &b), 8_485, "6 m along and 6 m across");
         assert_eq!(centre_gap_mm(&a, &Green { offset_mm: 2_000, ..b }), 6_000);
         assert_eq!(centre_gap_mm(&a, &a), 0);
+    }
+
+    // ---- a stop's platform (final review I3) ---------------------------------------------------------------------
+
+    use crate::street::model::StopKind;
+
+    /// `medianed()` with a curb stop on its right side from 20 to 35 m: the bus uses the last travel lane and the
+    /// stop stands on the right sidewalk (12 900 to 15 900 mm across).
+    fn stopped() -> Editor {
+        let mut e = medianed();
+        e.add_stop(Side::Right, 20_000, 15_000, StopKind::Curb).unwrap();
+        e
+    }
+
+    #[test]
+    fn a_tree_on_a_stops_platform_fails_green_stop_naming_both() {
+        let mut e = stopped();
+        e.add_green(Green { width_mm: 1_500, ..small(25_000, 14_400) }).unwrap();
+        let c = row(&e, "green-stop");
+        assert!(!c.ok);
+        assert_eq!(c.detail.key, "check-detail-green-stop");
+        assert!(c.detail.args.iter().any(|(n, a)| *n == "stop" && matches!(a, Arg::Said(s) if s.key == "stop-instance")), "the stop is named");
+        assert_eq!(c.zone.unwrap().key, "green-instance", "and so is the tree");
+    }
+
+    #[test]
+    fn a_bed_across_the_platform_fails_and_one_beside_it_or_past_it_does_not() {
+        let mut e = stopped();
+        // Along: from 30 to 34 m lies within the stop's 20 to 35 m.
+        e.add_green(Green { width_mm: 2_000, ..bed(30_000, 14_000) }).unwrap();
+        assert!(!passes(&e, "green-stop"));
+        e.move_green(0, 35_000).unwrap();
+        assert!(passes(&e, "green-stop"), "it starts where the stop ends: touching is not overlapping");
+        e.move_green(0, 16_000).unwrap();
+        assert!(passes(&e, "green-stop"), "it ends where the stop begins");
+        e.move_green(0, 18_000).unwrap();
+        assert!(!passes(&e, "green-stop"), "two metres of it are over the stop");
+    }
+
+    #[test]
+    fn planting_on_the_other_sidewalk_is_clear_of_the_stop() {
+        let mut e = stopped();
+        // The left sidewalk (0 to 3 000 mm across): the stop is on the right.
+        e.add_green(Green { width_mm: 2_000, length_mm: 8_000, ..bed(24_000, 1_500) }).unwrap();
+        assert!(passes(&e, "green-stop"));
+        assert!(!green_ids(&e).is_empty());
+    }
+
+    #[test]
+    fn a_street_without_stops_has_no_stop_row_and_one_without_green_is_unchanged() {
+        let mut e = medianed();
+        e.add_green(Green { width_mm: 1_500, ..small(25_000, 14_400) }).unwrap();
+        assert!(!green_ids(&e).contains(&"green-stop"), "no stop, nothing to keep clear of");
+        e.add_stop(Side::Right, 20_000, 15_000, StopKind::Curb).unwrap();
+        assert!(green_ids(&e).contains(&"green-stop"));
+        e.remove_green(0).unwrap();
+        assert!(green_ids(&e).is_empty(), "no green, no green rows");
     }
 
     #[test]

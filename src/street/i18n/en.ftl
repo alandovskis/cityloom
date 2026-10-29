@@ -568,6 +568,7 @@ check-label-green-spacing = Trees spaced for their crowns
 check-label-green-soil = Tree pits with enough soil
 check-label-green-sightline = Planting clear of the corners at junctions
 check-label-green-continuity = Bioswales unbroken
+check-label-green-stop = Trees and planting clear of stop platforms
 check-detail-green-host-roadway = Planting cannot stand on the roadway ({ $host }).
 check-detail-green-host-wide = It is { $width } wide, wider than the piece under it ({ $host }, { $have }).
 check-detail-green-host-overhang = It reaches { $over } past the piece under it ({ $host }).
@@ -584,6 +585,8 @@ check-detail-green-sightline-ok = No tree or bed blocks the view at a junction.
 check-detail-green-continuity-short = The bioswale is { $length } long; { $min } or more is needed for it to carry water.
 check-detail-green-continuity-host = The bioswale passes over a change of the piece under it, which breaks the channel.
 check-detail-green-continuity-ok = Every bioswale runs unbroken.
+check-detail-green-stop = It stands on the platform of this stop: { $stop }. Trees and planting keep clear of where people board.
+check-detail-green-stop-ok = No tree or bed stands on the platform of a stop.
 
 # The Green row, its commands and what the section says (src/street/green_strip.rs, src/street/green_tools.rs).
 green-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
