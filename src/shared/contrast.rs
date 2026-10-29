@@ -215,6 +215,16 @@ mod tests {
         let wash = token(app, "warn-wash").0.expect("a light wash");
         let warn = token(app, "warn").0.unwrap();
         assert!(contrast(&warn, &wash) >= 4.5, "warning text on its wash: {:.2}", contrast(&warn, &wash));
+        // Dark: the wash is translucent, so it is measured composited over the dark panel it lies on.
+        let at = app.find("--warn-wash: ").unwrap();
+        let rgb = &app[at..at + app[at..].find(';').unwrap()];
+        let rgb = &rgb[rgb.find("rgb(").expect("a translucent dark wash") + 4..];
+        let n: Vec<f64> = rgb[..rgb.find(')').unwrap()].split(|c: char| c == ' ' || c == '/').filter(|t| !t.is_empty()).map(|t| t.parse().unwrap()).collect();
+        let panel = pick(&token(app, "panel"), 1);
+        let under: Vec<f64> = (0..3).map(|k| f64::from(u8::from_str_radix(&panel[1 + 2 * k..3 + 2 * k], 16).unwrap())).collect();
+        let washed = format!("#{}", (0..3).map(|k| format!("{:02x}", (n[k] * n[3] + under[k] * (1.0 - n[3])).round() as u8)).collect::<String>());
+        let dark_warn = pick(&token(app, "warn"), 1);
+        assert!(contrast(&dark_warn, &washed) >= 4.5, "warning text on its wash over the panel, dark: {:.2}", contrast(&dark_warn, &washed));
         let line = rule(editor, ".phase-svg .ph-move.warn .ph-line");
         assert!(line.contains("stroke: var(--warn);"), "{line}");
         let list = rule(editor, ".phase-conflicts");
