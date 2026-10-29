@@ -38,6 +38,9 @@ struct Fields {
     fine: RwSignal<String>,
     length: RwSignal<String>,
     width: RwSignal<String>,
+    /// An element was just added: the fields are let go of the values of the new element (which is the chosen one) once,
+    /// so that the next add starts from the kind's defaults, not from this element's length and width.
+    added: RwSignal<bool>,
 }
 
 impl Fields {
@@ -50,6 +53,26 @@ impl Fields {
             fine: RwSignal::new(String::new()),
             length: RwSignal::new(String::new()),
             width: RwSignal::new(String::new()),
+            added: RwSignal::new(false),
+        }
+    }
+
+    /// The fields after an element was added: the length, width and place across blank, so the kind's defaults apply to
+    /// the next one. What the fields show of the chosen element follows it again when another is chosen.
+    fn after_add(self) {
+        self.length.set(String::new());
+        self.width.set(String::new());
+        self.fine.set(String::new());
+        self.added.set(true);
+    }
+
+    /// Shows element `c`, unless it is the one just added, which leaves the fields at the defaults (once).
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    fn follow(self, w: SheetWatch, c: &GreenCell) {
+        if self.added.get_untracked() {
+            self.added.set(false);
+        } else {
+            self.show(w, c);
         }
     }
 
@@ -147,7 +170,7 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
         let shown = Memo::new(move |_| chosen(w));
         Effect::new(move |_| {
             if let Some(c) = shown.get() {
-                f.show(w, &c);
+                f.follow(w, &c);
             }
         });
     }
@@ -202,6 +225,7 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
         if let Some(form) = f.form(w)
             && w.add_green(form)
         {
+            f.after_add();
             focus_after(w);
         }
     };
@@ -310,8 +334,23 @@ pub fn GreenTools(vm: Rc<StreetVm>) -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
-    use super::{effective_host, fine_shown, fine_typed};
+    use super::{Fields, effective_host, fine_shown, fine_typed};
+    use leptos::prelude::*;
     use crate::street::model::{SNAP_MM, snap};
+
+    #[test]
+    fn after_an_add_the_next_add_starts_from_the_kinds_defaults() {
+        let f = Fields::new();
+        f.kind.set(2);
+        f.at.set("20.0".into());
+        f.length.set("6.0".into());
+        f.width.set("1.2".into());
+        f.fine.set("90".into());
+        f.after_add();
+        assert_eq!((f.length.get_untracked(), f.width.get_untracked(), f.fine.get_untracked()), (String::new(), String::new(), String::new()));
+        assert_eq!((f.kind.get_untracked(), f.at.get_untracked()), (2, "20.0".to_string()), "the kind and the place stay for the next one");
+        assert!(f.added.get_untracked(), "the fields skip showing the new element once");
+    }
 
     #[test]
     fn the_fine_field_is_in_whole_centimetres_and_the_value_shown_gives_the_same_offset_back() {

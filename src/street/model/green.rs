@@ -755,7 +755,9 @@ impl Editor {
     /// pit). `own` is the element being changed, whose values stand in for the defaults.
     fn green_from_form(&self, form: &GreenForm, own: Option<&Green>) -> Result<Green, GreenRefusal> {
         let at_mm = form.at_mm.or(own.map(|g| g.from_mm)).unwrap_or(0);
-        let size = if form.kind == GreenKind::Tree { form.size.or(own.and_then(|g| g.size)).or(Some(TreeSize::M)) } else { None };
+        // A change of kind takes the new kind's defaults for what the form leaves open, not the old element's values.
+        let own_kind = own.filter(|g| g.kind == form.kind);
+        let size = if form.kind == GreenKind::Tree { form.size.or(own_kind.and_then(|g| g.size)).or(Some(TreeSize::M)) } else { None };
         let Some(segs) = self.section_at(at_mm) else { return Err(GreenRefusal::OffStreet) };
         let hosts = self.hosts_at(at_mm);
         let host = match form.host {
@@ -768,7 +770,7 @@ impl Editor {
         if host >= segs.len() {
             return Err(GreenRefusal::OffStreet);
         }
-        let width_mm = form.width_mm.or(own.map(|g| g.width_mm));
+        let width_mm = form.width_mm.or(own_kind.map(|g| g.width_mm));
         let (offset_mm, width_mm) = default_across(segs, host, form.kind, size, width_mm);
         // Only a typed offset moves an element that stays on its piece.
         let own_host = own.and_then(|g| host_at(segs, g.offset_mm));
@@ -777,11 +779,11 @@ impl Editor {
                 let (from, to) = fills(segs, host);
                 (from + to) / 2 + fine
             }
-            (None, Some(g)) if form.host.is_none() || form.host == own_host => g.offset_mm,
+            (None, Some(g)) if g.kind == form.kind && (form.host.is_none() || form.host == own_host) => g.offset_mm,
             _ => offset_mm,
         };
         // A tree with no length is as long as its soil needs (its size's least area over the width), at least its pit.
-        let length_mm = form.length_mm.or(own.map(|g| g.length_mm)).unwrap_or_else(|| match size {
+        let length_mm = form.length_mm.or(own_kind.map(|g| g.length_mm)).unwrap_or_else(|| match size {
             Some(size) => {
                 let soil = (size.min_pit_mm2() + i64::from(width_mm) - 1) / i64::from(width_mm.max(1));
                 size.default_pit_mm().max(snap_up(i32::try_from(soil).unwrap_or(i32::MAX - SNAP_MM)))
@@ -799,13 +801,13 @@ impl Editor {
         self.add_green(g)
     }
 
-    /// Changes element `i` as `form` says, a field it leaves open staying as it is (the kind never changes). One
-    /// revision, whatever the number of fields; the element stays the chosen one.
+    /// Changes element `i` as `form` says, a field it leaves open staying as it is, except that a change of kind takes
+    /// the new kind's defaults for the length, width and place across (a tree's size is medium unless one is asked). It
+    /// is checked as an add is. One revision, whatever the number of fields; the element stays the chosen one.
     pub fn change_green(&mut self, i: usize, form: &GreenForm) -> Result<(), GreenRefusal> {
         let frame = self.green_gate(false)?;
         let Some(old) = self.green_at(i) else { return Ok(()) };
-        let form = GreenForm { kind: old.kind, ..*form };
-        let mut new = self.green_from_form(&form, Some(&old))?;
+        let mut new = self.green_from_form(form, Some(&old))?;
         new.from_mm = snap(new.from_mm);
         new.length_mm = snap(new.length_mm).max(SNAP_MM);
         new.width_mm = snap(new.width_mm).max(SNAP_MM);
@@ -1650,6 +1652,33 @@ mod tests {
                 previous = Some(c);
             }
         }
+    }
+
+    #[test]
+    fn change_applies_the_kind_too_as_one_undoable_edit() {
+        let mut e = editor();
+        e.add_green_from(&GreenForm { size: Some(TreeSize::L), at_mm: Some(10_000), host: Some(0), ..GreenForm::new(GreenKind::Tree) }).unwrap();
+        let revisions = e.view().revisions.len();
+        // To a bed, with the fields as the tool shows them: the tree's length and width.
+        let tree = e.snapshot().green[0];
+        e.change_green(0, &GreenForm { length_mm: Some(tree.length_mm), width_mm: Some(tree.width_mm), ..GreenForm::new(GreenKind::Bed) }).unwrap();
+        let bed = e.snapshot().green[0];
+        assert_eq!((bed.kind, bed.size, bed.from_mm, bed.offset_mm, bed.width_mm), (GreenKind::Bed, None, tree.from_mm, tree.offset_mm, tree.width_mm));
+        assert_eq!(e.view().revisions.len(), revisions + 1, "one edit");
+        assert_eq!(e.view().revisions.last().unwrap().label.key, "rev-green-change");
+        assert_eq!(e.selected_green(), Some(0), "still the chosen one");
+        // Back to a tree with no size asked: a medium one; with no length or width asked, the kind's own defaults.
+        e.change_green(0, &GreenForm::new(GreenKind::Tree)).unwrap();
+        assert_eq!(e.snapshot().green[0].size, Some(TreeSize::M));
+        e.change_green(0, &GreenForm::new(GreenKind::Bioswale)).unwrap();
+        let swale = e.snapshot().green[0];
+        assert_eq!((swale.kind, swale.size, swale.length_mm), (GreenKind::Bioswale, None, GreenKind::Bioswale.default_length_mm()));
+        assert!(e.undo() && e.undo());
+        assert_eq!(e.snapshot().green[0].kind, GreenKind::Bed);
+        // It is re-validated: a bioswale that long would overlap the next element.
+        e.add_green(pit(20_000, 1_700)).unwrap();
+        assert_eq!(e.change_green(0, &GreenForm::new(GreenKind::Bioswale)), Err(GreenRefusal::Overlap));
+        assert_eq!(e.snapshot().green[0].kind, GreenKind::Bed);
     }
 
     #[test]
