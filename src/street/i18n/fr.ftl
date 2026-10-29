@@ -583,3 +583,43 @@ check-detail-green-sightline-ok = Aucun arbre ni aucune plate-bande ne bloque la
 check-detail-green-continuity-short = La noue végétalisée fait { $length } de long; il en faut { $min } ou plus pour qu’elle achemine l’eau.
 check-detail-green-continuity-host = La noue végétalisée passe au-dessus d’un changement de pièce, ce qui interrompt le canal.
 check-detail-green-continuity-ok = Chaque noue végétalisée est continue.
+
+# La rangée des arbres et plantations, ses commandes et ce que dit la coupe (src/street/green_strip.rs, src/street/green_tools.rs).
+green-cell = { $name }, de { $from } à { $to }, { $length } de long, { $n } sur { $total }
+green-choose-element = Choisissez d’abord un arbre ou une plantation.
+green-host-choice = { $kind }, { $width }
+green-size-s = Petit
+green-size-m = Moyen
+green-size-l = Grand
+rev-green-change = Modification à { $at } : { $kind }
+st-green-heading = Arbres et plantations le long de la rue
+st-green-caption = Arbres et plantations
+st-green-strip-label = Arbres et plantations le long de la rue. Les flèches en choisissent un; Alt avec une flèche le déplace de 1 m le long de la rue, avec Maj de 10 m.
+st-green-tools = Commandes des arbres et plantations
+st-green-kind = Type
+st-green-size = Taille
+st-green-at = Le long de la rue, depuis le début ({ $unit })
+st-green-host = Dans la coupe, sur
+st-green-fine = Dans la coupe, depuis le milieu de cet élément ({ $unit })
+st-green-length = Longueur ({ $unit })
+st-green-width = Largeur ({ $unit })
+st-green-add = Ajouter
+st-green-change = Modifier
+st-green-remove = Retirer
+svg-green = Le long de la rue : { $list }.
+green-count-tree = { $count ->
+        [one] { $count } arbre
+       *[other] { $count } arbres
+    }
+green-count-bed = { $count ->
+        [one] { $count } plate-bande
+       *[other] { $count } plates-bandes
+    }
+green-count-rain-garden = { $count ->
+        [one] { $count } jardin de pluie
+       *[other] { $count } jardins de pluie
+    }
+green-count-bioswale = { $count ->
+        [one] { $count } noue végétalisée
+       *[other] { $count } noues végétalisées
+    }

@@ -583,3 +583,43 @@ check-detail-green-sightline-ok = No tree or bed blocks the view at a junction.
 check-detail-green-continuity-short = The bioswale is { $length } long; { $min } or more is needed for it to carry water.
 check-detail-green-continuity-host = The bioswale passes over a change of the piece under it, which breaks the channel.
 check-detail-green-continuity-ok = Every bioswale runs unbroken.
+
+# The Green row, its commands and what the section says (src/street/green_strip.rs, src/street/green_tools.rs).
+green-cell = { $name }, { $from } to { $to }, { $length } long, { $n } of { $total }
+green-choose-element = Choose a tree or planting first.
+green-host-choice = { $kind }, { $width }
+green-size-s = Small
+green-size-m = Medium
+green-size-l = Large
+rev-green-change = Change the { $kind } at { $at }
+st-green-heading = Trees and planting along the street
+st-green-caption = Trees and planting
+st-green-strip-label = Trees and planting along the street. The arrow keys choose one; Alt with an arrow moves it 1 m along the street, with Shift 10 m.
+st-green-tools = Tree and planting commands
+st-green-kind = Kind
+st-green-size = Size
+st-green-at = Along the street, from the start ({ $unit })
+st-green-host = Across, on
+st-green-fine = Across, from the middle of that piece ({ $unit })
+st-green-length = Length ({ $unit })
+st-green-width = Width ({ $unit })
+st-green-add = Add
+st-green-change = Change
+st-green-remove = Remove
+svg-green = Along the street: { $list }.
+green-count-tree = { $count ->
+        [one] { $count } tree
+       *[other] { $count } trees
+    }
+green-count-bed = { $count ->
+        [one] { $count } planting bed
+       *[other] { $count } planting beds
+    }
+green-count-rain-garden = { $count ->
+        [one] { $count } rain garden
+       *[other] { $count } rain gardens
+    }
+green-count-bioswale = { $count ->
+        [one] { $count } bioswale
+       *[other] { $count } bioswales
+    }

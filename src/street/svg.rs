@@ -10,7 +10,7 @@ use crate::shared::iso::format::esc;
 use crate::shared::said::say;
 use crate::shared::symbols::{Placement, SymbolOpts, symbol};
 use crate::shared::units::Units;
-use crate::street::model::{SegView, StopKind, View};
+use crate::street::model::{GreenKind, SegView, StopKind, View};
 use crate::street::text::fit_phrase;
 
 /// The heights of the drawing's bands, scaled with its width.
@@ -311,6 +311,17 @@ pub fn street_label(v: &View, i18n: &I18n, units: Units) -> String {
         let word = i18n.tr(if side.side == Side::Left { "side-word-left" } else { "side-word-right" }, &Args::new());
         let args = Args::new().str("side", word).num("count", kinds.len() as i64).str("kinds", named.join(", "));
         label = format!("{label} {}", i18n.tr("svg-stops", &args));
+    }
+    // The trees and planting come last, one count per kind that is there.
+    let counts: Vec<String> = GreenKind::ALL
+        .iter()
+        .filter_map(|k| {
+            let count = v.green.cells.iter().filter(|c| c.kind == *k).count();
+            (count > 0).then(|| i18n.tr(k.count_key(), &Args::new().num("count", count as i64)))
+        })
+        .collect();
+    if !counts.is_empty() {
+        label = format!("{label} {}", i18n.tr("svg-green", &Args::new().str("list", counts.join(", "))));
     }
     label
 }
@@ -981,6 +992,24 @@ mod tests {
             ),
             "{f}"
         );
+    }
+
+    #[test]
+    fn the_label_counts_the_green_elements() {
+        use crate::street::model::{Green, GreenKind, Street, TreeSize, ZoneEnd, ZoneFrame};
+        let fr = crate::i18n_for(Locale::FrCa);
+        let street = Street::sample(0, Side::Right);
+        let mut e = Editor::from_street(&street, &street, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
+        let plain = svg(&e).label;
+        assert!(!plain.contains("Along the street"), "no elements, no sentence: {plain}");
+        let at = |kind, from_mm, size| Green { kind, from_mm, length_mm: 1_900, offset_mm: 1_500, width_mm: 1_200, size };
+        e.add_green(at(GreenKind::Tree, 10_000, Some(TreeSize::M))).unwrap();
+        assert_eq!(svg(&e).label, format!("{plain} Along the street: 1 tree."));
+        e.add_green(at(GreenKind::Tree, 30_000, Some(TreeSize::M))).unwrap();
+        e.add_green(at(GreenKind::RainGarden, 40_000, None)).unwrap();
+        assert_eq!(svg(&e).label, format!("{plain} Along the street: 2 trees, 1 rain garden."));
+        let f = street_svg(&e.view(), &fr, 1050.0, Units::Metres, &Interaction::default()).label;
+        assert!(f.ends_with("Le long de la rue\u{a0}: 2 arbres, 1 jardin de pluie."), "{f}");
     }
 
     #[test]

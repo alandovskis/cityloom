@@ -56,6 +56,16 @@ impl GreenKind {
         }
     }
 
+    /// The message that counts them: "2 trees".
+    pub fn count_key(self) -> &'static str {
+        match self {
+            GreenKind::Tree => "green-count-tree",
+            GreenKind::Bed => "green-count-bed",
+            GreenKind::RainGarden => "green-count-rain-garden",
+            GreenKind::Bioswale => "green-count-bioswale",
+        }
+    }
+
     /// How long a new element is along the street.
     ///
     /// UNVERIFIED (placeholder): a tree pit 1 500 mm square, a bed 4 000 mm, a rain garden 6 000 mm, a bioswale
@@ -485,6 +495,253 @@ impl Editor {
     /// Starts a drag of an element: the steps are shown and the end is one revision. False when a drag is under way.
     pub fn begin_green_drag(&mut self) -> bool {
         self.begin_curb_drag()
+    }
+}
+
+/// What the person asks for when they add an element or change one. For an add, a field left `None` takes its
+/// default (see `Editor::add_green_from`); for a change, a field left `None` keeps what the element has.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GreenForm {
+    pub kind: GreenKind,
+    /// A tree's size; any other kind has none.
+    pub size: Option<TreeSize>,
+    pub length_mm: Option<i32>,
+    pub width_mm: Option<i32>,
+    /// Where it starts along the street, from the anchored end.
+    pub at_mm: Option<i32>,
+    /// The piece it stands on, an index into the section at `at_mm` (see `Editor::hosts_at`).
+    pub host: Option<usize>,
+    /// How far its centre lies from the middle of that piece, across (negative: toward the section's left edge).
+    pub fine_mm: Option<i32>,
+}
+
+impl GreenForm {
+    /// An element of `kind` with everything left to the defaults.
+    pub fn new(kind: GreenKind) -> GreenForm {
+        GreenForm { kind, size: None, length_mm: None, width_mm: None, at_mm: None, host: None, fine_mm: None }
+    }
+}
+
+/// `mm` rounded down to the grid.
+fn snap_down(mm: i32) -> i32 {
+    mm.div_euclid(SNAP_MM) * SNAP_MM
+}
+
+/// `mm` rounded up to the grid.
+fn snap_up(mm: i32) -> i32 {
+    -snap_down(-mm)
+}
+
+/// How wide a new element is, and where its centre lies across, when it stands on piece `host` of `segs` with no
+/// width or place asked for. `width_mm` is the width asked for, if any.
+///
+/// A tree has the pit of its size; any other kind is as wide as its host, except that on a sidewalk it leaves the
+/// walkway (`CLEAR_PATH_MM`), the host's whole width when that leaves under `SNAP_MM`. On a sidewalk it stands
+/// against the edge nearer the roadway, which leaves the widest walkway; on any other piece it is centred. The
+/// grid rounds toward the inside of the host, and never pushes the element past an edge of the section.
+pub fn default_across(segs: &[Segment], host: usize, kind: GreenKind, size: Option<TreeSize>, width_mm: Option<i32>) -> (i32, i32) {
+    let (from, to) = fills(segs, host);
+    let host_mm = to - from;
+    let on_sidewalk = KINDS[segs[host].kind].id == "sidewalk";
+    let width = width_mm.filter(|w| *w > 0).unwrap_or_else(|| match kind {
+        GreenKind::Tree => size.unwrap_or(TreeSize::M).default_pit_mm(),
+        _ if on_sidewalk && host_mm - CLEAR_PATH_MM >= SNAP_MM => snap_down(host_mm - CLEAR_PATH_MM),
+        _ => host_mm,
+    });
+    let width = snap(width).max(SNAP_MM);
+    let centre = (from + to) / 2;
+    // The nearest roadway piece says which edge of a sidewalk is the road side; with none, it is centred.
+    let road_right = on_sidewalk
+        .then(|| {
+            (1..segs.len()).find_map(|d| {
+                let right = host + d < segs.len() && is_roadway(segs[host + d].kind);
+                let left = host >= d && is_roadway(segs[host - d].kind);
+                (left || right).then_some(right && !left)
+            })
+        })
+        .flatten();
+    let offset = match road_right {
+        Some(true) => snap_down(to - width / 2),
+        Some(false) => snap_up(from + width / 2),
+        None => snap(centre),
+    };
+    // The grid never pushes the element past the section's edge.
+    let (low, high) = (snap_up(width / 2), snap_down(total(segs) - width / 2));
+    (if low <= high { offset.clamp(low, high) } else { offset }, width)
+}
+
+/// One element as the Green row lists it.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct GreenCell {
+    /// An index into the street's `green`.
+    pub index: usize,
+    pub from_mm: i32,
+    pub to_mm: i32,
+    /// The line of the row it lies on: elements side by side across take lines of their own.
+    pub track: usize,
+    pub kind: GreenKind,
+    pub size: Option<TreeSize>,
+    pub width_mm: i32,
+    /// The piece under its centre, an index into the section at its start; none when the centre lies off the section.
+    pub host: Option<usize>,
+    /// How far its centre lies from the middle of that piece, across.
+    pub fine_mm: i32,
+    /// What it is called: its kind, where along and on what.
+    pub label: Said,
+    /// It breaks a check.
+    pub failing: bool,
+}
+
+/// The Green row: every element along the street, in order.
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct GreenRowView {
+    /// The street's length, which the cells are laid along.
+    pub length_mm: i32,
+    pub cells: Vec<GreenCell>,
+    /// The chosen element, an index into `cells`.
+    pub selected: Option<usize>,
+    /// How many lines the cells need.
+    pub tracks: usize,
+    /// An element can be added: the street has a length to lay it along and a piece to stand it on.
+    pub can_add: bool,
+}
+
+impl Editor {
+    fn green_length(&self) -> i32 {
+        let content = &self.states[self.cursor].content;
+        content.length_mm.or(self.frame.map(|f| f.length_mm)).unwrap_or(0)
+    }
+
+    /// The Green row. Empty (and not offering an add) while the street's length is unknown.
+    pub(super) fn green_row(&self) -> GreenRowView {
+        let content = &self.states[self.cursor].content;
+        let length_mm = self.green_length();
+        if length_mm <= 0 {
+            return GreenRowView::default();
+        }
+        let can_add = self.curb_frame(true).is_ok() && (0..content.zone_count()).any(|z| content.section(z).iter().any(|s| !is_roadway(s.kind)));
+        let failing: Vec<usize> = self.green_failures().iter().map(|f| f.instance).collect();
+        let mut track_ends: Vec<i32> = Vec::new();
+        let cells: Vec<GreenCell> = content
+            .green
+            .iter()
+            .enumerate()
+            .map(|(k, g)| {
+                let track = track_ends.iter().position(|&end| end <= g.from_mm).unwrap_or(track_ends.len());
+                if track == track_ends.len() {
+                    track_ends.push(0);
+                }
+                track_ends[track] = g.to_mm();
+                let sections = content.sections_over(g.from_mm, g.to_mm(), length_mm);
+                let segs = sections.first().copied().unwrap_or(&content.segments);
+                let host = host_at(segs, g.offset_mm);
+                let fine_mm = host.map_or(0, |h| {
+                    let (from, to) = fills(segs, h);
+                    g.offset_mm - (from + to) / 2
+                });
+                GreenCell {
+                    index: k,
+                    from_mm: g.from_mm,
+                    to_mm: g.to_mm(),
+                    track,
+                    kind: g.kind,
+                    size: g.size,
+                    width_mm: g.width_mm,
+                    host,
+                    fine_mm,
+                    label: g.named(segs),
+                    failing: failing.contains(&k),
+                }
+            })
+            .collect();
+        GreenRowView { length_mm, tracks: track_ends.len(), selected: self.selected_green(), cells, can_add }
+    }
+
+    /// Element `i`, if there is one.
+    pub fn green_at(&self, i: usize) -> Option<Green> {
+        self.states[self.cursor].content.green.get(i).copied()
+    }
+
+    /// The section the street has at `at_mm` from the anchored end: the section of the zone there, or of the
+    /// first zone an element starting there overlaps.
+    fn section_at(&self, at_mm: i32) -> Option<&[Segment]> {
+        let length_mm = self.green_length();
+        if length_mm <= 0 || at_mm < 0 || at_mm >= length_mm {
+            return None;
+        }
+        self.states[self.cursor].content.sections_over(at_mm, at_mm + 1, length_mm).first().copied()
+    }
+
+    /// The pieces an element starting at `at_mm` can stand on: the section there without its roadway pieces, each as
+    /// an index into that section and a name.
+    pub fn hosts_at(&self, at_mm: i32) -> Vec<(usize, Said)> {
+        let Some(segs) = self.section_at(at_mm) else { return Vec::new() };
+        segs.iter()
+            .enumerate()
+            .filter(|(_, s)| !is_roadway(s.kind))
+            .map(|(i, s)| (i, Said::new("green-host-choice").with("kind", Arg::Kind(KINDS[s.kind].id)).with("width", Arg::Length(s.width_mm))))
+            .collect()
+    }
+
+    /// The element `form` asks for, with its defaults filled in: where it starts (0), the piece it stands on (the
+    /// first that can hold it), its width and place across (`default_across`) and its length (the kind's, a tree's
+    /// pit). `own` is the element being changed, whose values stand in for the defaults.
+    fn green_from_form(&self, form: &GreenForm, own: Option<&Green>) -> Result<Green, GreenRefusal> {
+        let at_mm = form.at_mm.or(own.map(|g| g.from_mm)).unwrap_or(0);
+        let size = if form.kind == GreenKind::Tree { form.size.or(own.and_then(|g| g.size)).or(Some(TreeSize::M)) } else { None };
+        let Some(segs) = self.section_at(at_mm) else { return Err(GreenRefusal::OffStreet) };
+        let hosts = self.hosts_at(at_mm);
+        let host = match form.host {
+            Some(h) => h,
+            None => match own {
+                Some(g) => host_at(segs, g.offset_mm).unwrap_or(0),
+                None => hosts.first().map(|(i, _)| *i).ok_or(GreenRefusal::OnRoadway)?,
+            },
+        };
+        if host >= segs.len() {
+            return Err(GreenRefusal::OffStreet);
+        }
+        let pit = size.map(TreeSize::default_pit_mm);
+        let width_mm = form.width_mm.or(own.map(|g| g.width_mm));
+        let (offset_mm, width_mm) = default_across(segs, host, form.kind, size, width_mm);
+        let offset_mm = match (form.fine_mm, own) {
+            (Some(fine), _) => {
+                let (from, to) = fills(segs, host);
+                (from + to) / 2 + fine
+            }
+            (None, Some(g)) if form.host.is_none() => g.offset_mm,
+            _ => offset_mm,
+        };
+        let length_mm = form.length_mm.or(own.map(|g| g.length_mm)).unwrap_or_else(|| pit.unwrap_or(form.kind.default_length_mm()));
+        Ok(Green { kind: form.kind, from_mm: at_mm, length_mm, offset_mm, width_mm, size })
+    }
+
+    /// Adds the element `form` asks for, with the defaults it leaves open (see `green_from_form`). One revision; the
+    /// new element is the chosen one.
+    pub fn add_green_from(&mut self, form: &GreenForm) -> Result<(), GreenRefusal> {
+        self.green_gate(false)?;
+        let g = self.green_from_form(form, None)?;
+        self.add_green(g)
+    }
+
+    /// Changes element `i` as `form` says, a field it leaves open staying as it is (the kind never changes). One
+    /// revision, whatever the number of fields; the element stays the chosen one.
+    pub fn change_green(&mut self, i: usize, form: &GreenForm) -> Result<(), GreenRefusal> {
+        let frame = self.green_gate(false)?;
+        let Some(old) = self.green_at(i) else { return Ok(()) };
+        let form = GreenForm { kind: old.kind, ..*form };
+        let mut new = self.green_from_form(&form, Some(&old))?;
+        new.from_mm = snap(new.from_mm);
+        new.length_mm = snap(new.length_mm).max(SNAP_MM);
+        new.width_mm = snap(new.width_mm).max(SNAP_MM);
+        new.offset_mm = snap(new.offset_mm);
+        self.green_fits(&new, Some(i), frame)?;
+        if new == old {
+            return Ok(());
+        }
+        self.green_choice.follow(old.place(), new.place());
+        self.green_change(Self::green_label("rev-green-change", &new), frame, |green| green[i] = new);
+        Ok(())
     }
 }
 

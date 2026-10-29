@@ -15,9 +15,9 @@ use crate::shared::core::{Core, Presents};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::keeper::Keeper;
 use crate::shared::ports::Ports;
-use crate::shared::said::say_now;
+use crate::shared::said::{Said, say_now};
 use crate::shared::units::Units;
-use crate::street::model::{CurbRefusal, Editor, Keep, SPEED_CHOICES, StopKind, StripCell, Subject, Use, View, ZoneRefusal};
+use crate::street::model::{CurbRefusal, Editor, GreenForm, GreenRefusal, Keep, SPEED_CHOICES, StopKind, StripCell, Subject, TreeSize, Use, View, ZoneRefusal};
 use crate::street::row::{CurbRow, Row, StopRow};
 use crate::street::text;
 use crate::sync::model::{Change, Origin};
@@ -793,6 +793,150 @@ impl StreetVm {
 
     pub fn end_stop_drag(&self, keep: bool) {
         self.end_cell_drag(keep);
+    }
+
+    // ---- trees and green infrastructure ----
+
+    /// An edit of the trees and planting the person made: announced like any edit; a refusal is said and changes
+    /// nothing. A command is not a drag, so it is refused while one is under way (the model lets a move through
+    /// inside a gesture, which is how a drag moves). False, and silent, when the edit changed nothing.
+    fn green_edit(&self, f: impl FnOnce(&mut Editor) -> Result<(), GreenRefusal>) -> bool {
+        if self.core.read(|e| e.dragging()) {
+            self.say_green_refusal(GreenRefusal::Dragging);
+            return false;
+        }
+        let (before, revisions) = (self.class_now(), self.view_now().revisions.len());
+        match self.core.edit(f) {
+            Ok(()) if self.view_now().revisions.len() == revisions => false,
+            Ok(()) => {
+                if let Some(k) = &self.keeper {
+                    k.touch();
+                }
+                self.say_edit(before);
+                true
+            }
+            Err(refusal) => {
+                self.say_green_refusal(refusal);
+                false
+            }
+        }
+    }
+
+    fn say_green_refusal(&self, refusal: GreenRefusal) {
+        self.ports.announcer.say(&say_now(&self.i18n, self.units_now(), &refusal.said()));
+    }
+
+    /// Runs `f` on the chosen element (its index in the street's list); says so when none is chosen.
+    fn on_chosen_green(&self, f: impl FnOnce(&mut Editor, usize) -> Result<(), GreenRefusal>) -> bool {
+        match self.core.read(|e| e.selected_green()) {
+            Some(i) => self.green_edit(|e| f(e, i)),
+            None => {
+                self.say_now_key("green-choose-element");
+                false
+            }
+        }
+    }
+
+    /// Chooses element `i` of the Green row, announcing it. One that is not there is left alone, as is the choice
+    /// while a drag is under way.
+    pub fn select_green(&self, i: usize) {
+        if self.core.read(|e| e.dragging()) || i >= self.view_now().green.cells.len() {
+            return;
+        }
+        self.edit(|e| e.select_green(i));
+        self.ports.announcer.say(&text::green_cell_text(&self.view_now().green, i, &self.i18n, self.units_now()));
+    }
+
+    /// The element `delta` places along from the chosen one (the first, or the last going back, when none is).
+    pub fn select_green_relative(&self, delta: i32) {
+        let g = self.view_now().green.clone();
+        let target = match g.selected {
+            Some(n) => n as i64 + delta as i64,
+            None if delta < 0 => g.cells.len() as i64 - 1,
+            None => 0,
+        };
+        if let Ok(i) = usize::try_from(target) {
+            self.select_green(i);
+        }
+    }
+
+    /// The first element of the row, or the last (Home and End).
+    pub fn select_green_edge(&self, last: bool) {
+        let n = self.view_now().green.cells.len();
+        if n > 0 {
+            self.select_green(if last { n - 1 } else { 0 });
+        }
+    }
+
+    /// Moves the chosen element along the street by `delta_mm`.
+    pub fn nudge_green(&self, delta_mm: i32) -> bool {
+        self.on_chosen_green(|e, i| {
+            let from = e.green_at(i).map_or(0, |g| g.from_mm);
+            e.move_green(i, from.saturating_add(delta_mm))
+        })
+    }
+
+    /// Starts a drag of the chosen element. False, with the reason said, while another drag is under way or when none
+    /// is chosen; then `end_green_drag` is not to be called.
+    pub fn begin_green_drag(&self) -> bool {
+        if self.core.read(|e| e.selected_green()).is_none() {
+            self.say_now_key("green-choose-element");
+            return false;
+        }
+        let begun = self.edit(|e| e.begin_green_drag());
+        if !begun {
+            self.say_green_refusal(GreenRefusal::Dragging);
+        }
+        begun
+    }
+
+    /// One step of a drag of the chosen element: shown, not announced.
+    pub fn drag_green_to(&self, from_mm: i32) {
+        if let Some(i) = self.core.read(|e| e.selected_green()) {
+            self.quiet(|e| e.move_green(i, from_mm).is_ok());
+        }
+    }
+
+    /// The end of a drag: kept as one edit, and announced, when `keep`.
+    pub fn end_green_drag(&self, keep: bool) {
+        self.end_gesture(keep);
+    }
+
+    /// Adds the element `form` asks for, the defaults filling what it leaves open.
+    pub fn add_green(&self, form: GreenForm) -> bool {
+        self.green_edit(|e| e.add_green_from(&form))
+    }
+
+    /// Changes the chosen element as `form` says, what it leaves open staying as it is.
+    pub fn change_green(&self, form: &GreenForm) -> bool {
+        self.on_chosen_green(|e, i| e.change_green(i, form))
+    }
+
+    /// Moves the chosen element across, to be centred `fine_mm` from the middle of piece `host` of the section at its start.
+    pub fn move_green_across(&self, host: usize, fine_mm: i32) -> bool {
+        self.on_chosen_green(|e, i| {
+            let Some(g) = e.green_at(i) else { return Ok(()) };
+            e.change_green(i, &GreenForm { host: Some(host), fine_mm: Some(fine_mm), ..GreenForm::new(g.kind) })
+        })
+    }
+
+    /// Gives the chosen element a length and a width.
+    pub fn resize_green(&self, length_mm: i32, width_mm: i32) -> bool {
+        self.on_chosen_green(|e, i| e.resize_green(i, length_mm, width_mm))
+    }
+
+    /// Sets the size of the chosen tree.
+    pub fn set_green_size(&self, size: TreeSize) -> bool {
+        self.on_chosen_green(|e, i| e.set_green_size(i, size))
+    }
+
+    pub fn remove_green(&self) -> bool {
+        self.on_chosen_green(|e, i| e.remove_green(i))
+    }
+
+    /// The pieces a new element starting at `at_mm` can stand on, as indices into the section there, with their names.
+    pub fn hosts_at(&self, at_mm: i32) -> Vec<(usize, Said)> {
+        self.core.read(|e| e.hosts_at(at_mm))
     }
 
     /// Says that a typed length for a zone is not a number.
@@ -2022,7 +2166,7 @@ mod curb_tests {
         r.vm.select_curb(Side::Right, 1);
         assert!(r.vm.begin_curb_drag());
         r.vm.drag_curb_to(30_000);
-        r.vm.end_curb_drag(false);
+        r.vm.end_gesture(false);
         assert_eq!(side(&r, Side::Right)[1], (Some(0), 12_300, 18_300));
         assert_eq!(r.vm.view_now().revisions.len(), 2);
     }
@@ -2037,7 +2181,7 @@ mod curb_tests {
         let r = with_one_use();
         assert!(r.vm.begin_curb_drag());
         r.vm.drag_curb_to(30_000);
-        r.vm.end_curb_drag(false);
+        r.vm.end_gesture(false);
         assert_eq!(side(&r, Side::Right)[0], (Some(0), 0, 6_000));
         assert_eq!(chosen(&r), Some(0), "still chosen after a cancelled drag");
         assert!(r.vm.nudge_curb(1_000));
@@ -2080,7 +2224,7 @@ mod curb_tests {
         assert!(!r.vm.resize_curb(7_000));
         assert!(!r.vm.split_zone(None));
         assert_eq!(r.said.take().len(), 3);
-        r.vm.end_curb_drag(false);
+        r.vm.end_gesture(false);
         assert!(r.vm.resize_curb(7_000));
     }
 
@@ -2111,7 +2255,7 @@ mod curb_tests {
         let v = r.vm.view_now();
         assert_eq!((v.curb.sides[0].selected, v.curb.sides[1].selected), (None, Some(1)), "the dragged use stays chosen");
         assert_eq!(side(&r, Side::Right)[1], (Some(0), 4_000, 10_000));
-        r.vm.end_curb_drag(false);
+        r.vm.end_gesture(false);
         r.vm.select_curb(Side::Left, 0);
         assert_eq!(r.vm.view_now().curb.sides[0].selected, Some(0), "choosing works again");
     }
@@ -2498,7 +2642,7 @@ mod stop_tests {
         assert!(!r.vm.begin_stop_drag());
         assert!(!r.vm.set_stop_shelter(true));
         assert_eq!(r.said.take(), ["Finish the drag before changing the stops.", "Finish the drag before changing the stops."]);
-        r.vm.end_curb_drag(false);
+        r.vm.end_gesture(false);
         assert!(r.vm.set_stop_shelter(true), "commands work again");
     }
 
@@ -2588,5 +2732,284 @@ mod stop_tests {
             elsewhere.said.take(),
             ["The stops of this street were drawn on a road of another length or from its other end, so they cannot be rearranged here."]
         );
+    }
+}
+
+#[cfg(test)]
+mod green_tests {
+    use super::*;
+    use crate::shared::catalogue::{REGIONS, StreetClass, kind_index};
+    use crate::shared::i18n::Locale;
+    use crate::shared::ports::{RecordingAnnouncer, test_ports_with_time};
+    use crate::street::model::{GreenForm, GreenKind, Piece, Street, TreeSize, ZoneEnd, ZoneFrame};
+
+    const LENGTH: i32 = 60_000;
+
+    /// Two sidewalks of 3 m with two bus lanes between them: pieces 0 and 3 can hold green, 1 and 2 cannot.
+    const CURB: [(&str, i32, Option<usize>); 4] = [("sidewalk", 3000, None), ("bus", 3300, Some(1)), ("bus", 3300, Some(0)), ("sidewalk", 3000, None)];
+
+    struct Rig {
+        vm: Rc<StreetVm>,
+        said: Rc<RecordingAnnouncer>,
+    }
+
+    fn rig_of(pieces: &[(&str, i32, Option<usize>)], length_mm: Option<i32>) -> Rig {
+        let pieces: Vec<Piece> =
+            pieces.iter().map(|&(id, width_mm, direction)| Piece { kind: kind_index(id).unwrap(), width_mm, direction, variants: Vec::new() }).collect();
+        let street = Street::imported(StreetClass::Local, Side::Right, &pieces);
+        let region = REGIONS.iter().position(|r| r.drive_side == Side::Right).unwrap();
+        let (ports, said, _, _) = test_ports_with_time();
+        let editor = Editor::from_street(&street, &street, region).with_frame(length_mm.map(|length_mm| ZoneFrame { length_mm, from_end: ZoneEnd::First }));
+        Rig { vm: StreetVm::new(ports, crate::i18n_for(Locale::En), editor, None), said }
+    }
+
+    fn rig() -> Rig {
+        rig_of(&CURB, Some(LENGTH))
+    }
+
+    fn form(kind: GreenKind, at_mm: i32, host: usize) -> GreenForm {
+        GreenForm { at_mm: Some(at_mm), host: Some(host), ..GreenForm::new(kind) }
+    }
+
+    fn froms(r: &Rig) -> Vec<(i32, usize)> {
+        r.vm.view_now().green.cells.iter().map(|c| (c.from_mm, c.track)).collect()
+    }
+
+    #[test]
+    fn a_street_that_can_take_green_offers_it_before_it_has_any() {
+        let r = rig();
+        let g = r.vm.view_now().green.clone();
+        assert!(g.can_add && g.cells.is_empty() && g.tracks == 0 && g.selected.is_none());
+        let unknown = rig_of(&CURB, None);
+        assert!(!unknown.vm.view_now().green.can_add, "no length, nothing to lay elements along");
+    }
+
+    #[test]
+    fn adding_a_tree_selects_it_and_says_so() {
+        let r = rig();
+        assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 0)));
+        let v = r.vm.view_now();
+        assert_eq!(v.green.cells.len(), 1);
+        assert_eq!(v.green.selected, Some(0), "the new element is the chosen one");
+        assert_eq!((v.green.cells[0].kind, v.green.cells[0].from_mm), (GreenKind::Tree, 10_000));
+        assert_eq!(v.revisions.last().unwrap().label.key, "rev-green-add");
+        let said = r.said.take();
+        assert_eq!(said.len(), 1, "announced once: {said:?}");
+        assert!(said[0].contains("Add tree at 10.0 m"), "{said:?}");
+    }
+
+    #[test]
+    fn a_new_tree_has_the_pit_of_its_size_against_the_road_side_edge_of_a_sidewalk() {
+        let r = rig();
+        let left = GreenForm { size: Some(TreeSize::M), ..form(GreenKind::Tree, 10_000, 0) };
+        assert!(r.vm.add_green(left));
+        let right = GreenForm { size: Some(TreeSize::L), ..form(GreenKind::Tree, 30_000, 3) };
+        assert!(r.vm.add_green(right));
+        let cells = r.vm.view_now().green.cells.clone();
+        let (a, b) = (&cells[0], &cells[1]);
+        assert_eq!((a.to_mm - a.from_mm, a.width_mm), (1_900, 1_900), "the medium tree's pit");
+        assert_eq!((b.to_mm - b.from_mm, b.width_mm), (2_300, 2_300), "the large tree's pit");
+        // The left sidewalk lies 0..3000 with the road to its right, so the pit is against the right edge.
+        assert_eq!((a.host, a.fine_mm), (Some(0), 500));
+        // The right sidewalk lies 9600..12600 with the road to its left: against the left edge.
+        assert_eq!((b.host, b.fine_mm), (Some(3), -300));
+    }
+
+    #[test]
+    fn a_new_bed_leaves_the_walkway_and_a_narrow_host_is_filled() {
+        let r = rig();
+        assert!(r.vm.add_green(form(GreenKind::Bed, 10_000, 0)));
+        let c = r.vm.view_now().green.cells[0].clone();
+        assert_eq!((c.width_mm, c.to_mm - c.from_mm), (1_200, 4_000), "the sidewalk's 3.0 m less the 1.8 m path, 4 m long");
+        let v = r.vm.view_now();
+        let failed: Vec<_> = v.checks.iter().filter(|k| k.id.starts_with("green-") && !k.ok).map(|k| k.id).collect();
+        assert!(failed.is_empty(), "a default bed passes its checks: {failed:?}");
+        // A 1.5 m sidewalk is narrower than the path: the bed is the host's width and the check says so.
+        let narrow = rig_of(&[("sidewalk", 1500, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 1500, None)], Some(LENGTH)).vm;
+        assert!(narrow.add_green(form(GreenKind::RainGarden, 10_000, 0)));
+        assert_eq!(narrow.view_now().green.cells[0].width_mm, 1_500);
+    }
+
+    #[test]
+    fn a_bed_on_a_planting_strip_is_centred_and_as_wide_as_the_strip() {
+        let vm = rig_of(
+            &[("sidewalk", 2000, None), ("planting", 1500, None), ("travel", 3300, Some(1)), ("travel", 3300, Some(0)), ("sidewalk", 2000, None)],
+            Some(LENGTH),
+        )
+        .vm;
+        assert!(vm.add_green(form(GreenKind::Bed, 10_000, 1)));
+        let c = vm.view_now().green.cells[0].clone();
+        assert_eq!((c.host, c.width_mm), (Some(1), 1_500));
+        assert!(c.fine_mm.abs() <= 50, "centred, to the grid: {}", c.fine_mm);
+    }
+
+    #[test]
+    fn nudging_moves_by_a_metre_and_shift_by_ten() {
+        let r = rig();
+        assert!(!r.vm.nudge_green(1_000));
+        assert_eq!(r.said.take(), ["Choose a tree or planting first."]);
+        assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 0)));
+        r.said.take();
+        assert!(r.vm.nudge_green(1_000));
+        assert_eq!(froms(&r), [(11_000, 0)]);
+        assert!(r.vm.nudge_green(10_000));
+        assert_eq!(froms(&r), [(21_000, 0)]);
+        assert!(r.vm.nudge_green(-21_000));
+        assert_eq!(froms(&r), [(0, 0)]);
+        assert!(!r.vm.nudge_green(-1_000), "past the end of the street is refused");
+        assert_eq!(r.said.take().last().unwrap(), "That would reach past the end of the street or the edge of its section.");
+        assert_eq!(r.vm.view_now().green.selected, Some(0), "the choice follows the element");
+    }
+
+    #[test]
+    fn hosts_at_lists_only_off_roadway_pieces() {
+        let r = rig();
+        let said = |h: &[(usize, crate::shared::said::Said)]| -> Vec<(usize, String)> {
+            h.iter().map(|(i, s)| (*i, say_now(&crate::i18n_for(Locale::En), Units::Metres, s))).collect()
+        };
+        assert_eq!(said(&r.vm.hosts_at(10_000)), [(0, "Sidewalk, 3.0 m".to_string()), (3, "Sidewalk, 3.0 m".to_string())]);
+        assert!(r.vm.hosts_at(LENGTH + 1).is_empty(), "past the end there is no section");
+    }
+
+    #[test]
+    fn two_elements_side_by_side_take_two_tracks() {
+        let r = rig();
+        assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 0)));
+        assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 3)));
+        assert!(r.vm.add_green(form(GreenKind::Tree, 30_000, 0)));
+        let v = r.vm.view_now();
+        assert_eq!(froms(&r), [(10_000, 0), (10_000, 1), (30_000, 0)], "first fit by the range along");
+        assert_eq!(v.green.tracks, 2);
+        assert_eq!(v.green.length_mm, LENGTH);
+    }
+
+    #[test]
+    fn green_commands_are_refused_during_any_drag_and_its_drag_refuses_the_others() {
+        let r = rig();
+        assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 0)));
+        assert!(r.vm.add_green(form(GreenKind::Tree, 30_000, 0)));
+        r.vm.select_green(0);
+        // another drag is under way
+        assert!(r.vm.edit(|e| e.begin_curb_drag()), "a curbside drag is under way");
+        r.said.take();
+        let before = r.vm.view_now().green.cells.iter().map(|c| c.from_mm).collect::<Vec<_>>();
+        assert!(!r.vm.begin_green_drag(), "its drag refuses the others");
+        assert!(!r.vm.nudge_green(1_000));
+        assert!(!r.vm.add_green(form(GreenKind::Bed, 40_000, 0)));
+        assert!(!r.vm.change_green(&GreenForm { length_mm: Some(2_000), ..GreenForm::new(GreenKind::Tree) }));
+        assert!(!r.vm.move_green_across(3, 0));
+        assert!(!r.vm.resize_green(2_000, 2_000));
+        assert!(!r.vm.set_green_size(TreeSize::L));
+        assert!(!r.vm.remove_green());
+        let said = r.said.take();
+        assert!(said.iter().filter(|s| s.contains("Finish the drag")).count() >= 7, "{said:?}");
+        assert_eq!(r.vm.view_now().green.cells.iter().map(|c| c.from_mm).collect::<Vec<_>>(), before);
+        r.vm.end_gesture(false);
+        // and the other way: a green drag refuses the curbside, stops and zones
+        assert!(r.vm.begin_green_drag());
+        assert!(!r.vm.edit(|e| e.begin_curb_drag()), "the curbside drag is refused");
+        assert!(!r.vm.edit(|e| e.begin_stop_drag()), "and the stops' drag");
+        assert!(!r.vm.add_green(form(GreenKind::Bed, 40_000, 0)));
+        r.vm.drag_green_to(14_000);
+        assert_eq!(froms(&r)[0].0, 14_000, "the drag shows each step");
+        r.vm.end_green_drag(true);
+        assert_eq!(froms(&r)[0].0, 14_000);
+        assert_eq!(r.vm.view_now().revisions.iter().filter(|x| x.label.key == "rev-green-move").count(), 1, "one revision for the whole drag");
+        assert!(r.vm.add_green(form(GreenKind::Bed, 40_000, 0)), "after the drag it works again");
+    }
+
+    #[test]
+    fn a_drag_cancelled_puts_the_element_back() {
+        let r = rig();
+        assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 0)));
+        assert!(r.vm.begin_green_drag());
+        r.vm.drag_green_to(20_000);
+        r.vm.end_green_drag(false);
+        assert_eq!(froms(&r), [(10_000, 0)]);
+        assert_eq!(r.vm.view_now().green.selected, Some(0));
+    }
+
+    #[test]
+    fn the_tools_show_the_chosen_element() {
+        let r = rig();
+        let mut f = form(GreenKind::Tree, 20_000, 3);
+        f.size = Some(TreeSize::L);
+        f.fine_mm = Some(-500);
+        assert!(r.vm.add_green(f));
+        assert!(r.vm.add_green(form(GreenKind::Bioswale, 40_000, 0)));
+        r.vm.select_green(0);
+        let v = r.vm.view_now();
+        let c = &v.green.cells[v.green.selected.unwrap()];
+        assert_eq!((c.kind, c.size, c.from_mm, c.host, c.fine_mm, c.width_mm), (GreenKind::Tree, Some(TreeSize::L), 20_000, Some(3), -500, 2_300));
+        r.vm.select_green_relative(1);
+        let v = r.vm.view_now();
+        let c = &v.green.cells[v.green.selected.unwrap()];
+        assert_eq!((c.kind, c.size, c.to_mm - c.from_mm, c.host), (GreenKind::Bioswale, None, 20_000, Some(0)));
+        r.vm.select_green_edge(false);
+        assert_eq!(r.vm.view_now().green.selected, Some(0));
+        r.vm.select_green_edge(true);
+        assert_eq!(r.vm.view_now().green.selected, Some(1));
+        r.vm.select_green_relative(1);
+        assert_eq!(r.vm.view_now().green.selected, Some(1), "arrows stop at the ends");
+    }
+
+    #[test]
+    fn selecting_says_what_is_chosen() {
+        let r = rig();
+        assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 0)));
+        assert!(r.vm.add_green(form(GreenKind::Bed, 30_000, 0)));
+        r.said.take();
+        r.vm.select_green(0);
+        assert_eq!(r.said.take(), ["Tree at 10.0 m, on sidewalk, 10.0 m to 11.9 m, 1.9 m long, 1 of 2"]);
+    }
+
+    #[test]
+    fn changing_resizing_moving_across_and_removing_are_undoable_edits() {
+        let r = rig();
+        assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 0)));
+        assert!(r.vm.set_green_size(TreeSize::L));
+        assert_eq!(r.vm.view_now().green.cells[0].size, Some(TreeSize::L));
+        assert!(r.vm.resize_green(2_500, 2_500));
+        let c = r.vm.view_now().green.cells[0].clone();
+        assert_eq!((c.to_mm - c.from_mm, c.width_mm), (2_500, 2_500));
+        assert!(r.vm.move_green_across(3, 0));
+        let c = r.vm.view_now().green.cells[0].clone();
+        assert_eq!((c.host, c.fine_mm), (Some(3), 0));
+        // one revision for a change of several fields
+        let revisions = r.vm.view_now().revisions.len();
+        let change = GreenForm {
+            at_mm: Some(20_000),
+            length_mm: Some(2_000),
+            width_mm: Some(2_400),
+            host: Some(0),
+            fine_mm: Some(0),
+            ..GreenForm::new(GreenKind::Tree)
+        };
+        assert!(r.vm.change_green(&change));
+        let v = r.vm.view_now();
+        assert_eq!(v.revisions.len(), revisions + 1);
+        let c = &v.green.cells[0];
+        assert_eq!((c.from_mm, c.to_mm, c.width_mm, c.host, c.fine_mm), (20_000, 22_000, 2_400, Some(0), 0));
+        assert_eq!(v.green.selected, Some(0));
+        assert!(r.vm.remove_green());
+        assert!(r.vm.view_now().green.cells.is_empty());
+        assert!(!r.vm.remove_green());
+        assert_eq!(r.said.take().last().unwrap(), "Choose a tree or planting first.");
+        assert!(r.vm.undo());
+        assert_eq!(r.vm.view_now().green.cells.len(), 1);
+    }
+
+    #[test]
+    fn a_refused_add_says_why_and_changes_nothing() {
+        let r = rig();
+        assert!(r.vm.add_green(form(GreenKind::Tree, 10_000, 0)));
+        r.said.take();
+        assert!(!r.vm.add_green(form(GreenKind::Tree, 10_000, 0)), "the same place");
+        assert_eq!(r.said.take(), ["That would overlap another tree or planting."]);
+        assert!(!r.vm.add_green(form(GreenKind::Bioswale, 50_000, 0)), "20 m from 50 m runs past the end of the street");
+        assert_eq!(r.said.take(), ["That would reach past the end of the street or the edge of its section."]);
+        assert!(!r.vm.add_green(GreenForm { at_mm: Some(10_000), host: Some(1), ..GreenForm::new(GreenKind::Bed) }), "piece 1 is a roadway");
+        assert_eq!(r.said.take(), ["That cannot stand on the roadway."]);
+        assert_eq!(r.vm.view_now().green.cells.len(), 1);
     }
 }

@@ -3,6 +3,8 @@
 
 pub mod curb_strip;
 pub mod curb_tools;
+pub mod green_strip;
+pub mod green_tools;
 pub mod inspector;
 pub mod iso;
 pub mod keys;
@@ -84,10 +86,12 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("street", view! { <page::StreetHeader vm=vm.clone() ends=ends.clone()/> }.into_any());
     mount("zones-slot", view! { <strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
     mount("curb-slot", view! { <curb_strip::CurbStrips vm=vm.clone()/> }.into_any());
+    mount("green-slot", view! { <green_strip::GreenStrip vm=vm.clone()/> }.into_any());
     mount("speed-slot", view! { <speed_view::SpeedLimit vm=vm.clone()/> }.into_any());
     mount("zone-tools-slot", view! { <zone_tools::ZoneTools vm=vm.clone()/> }.into_any());
     mount("curb-tools-slot", view! { <curb_tools::CurbTools vm=vm.clone()/> }.into_any());
     mount("stop-tools-slot", view! { <stop_tools::StopTools vm=vm.clone()/> }.into_any());
+    mount("green-tools-slot", view! { <green_tools::GreenTools vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <page::TitleBlock vm=vm.clone()/> }.into_any());
     mount("fit-slot", view! { <page::Fit vm=vm.clone()/> }.into_any());
     mount("fit-checks-slot", view! { <notes::FitChecks vm=vm.clone()/> }.into_any());
