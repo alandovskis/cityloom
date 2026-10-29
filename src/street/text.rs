@@ -451,7 +451,7 @@ mod tests {
         };
         assert_eq!(say_now(&en(), Units::Metres, &check_label(&row)), "Tree pits with enough soil: Tree at 42.0 m, on sidewalk");
         let fr_row = say_now(&fr(), Units::Metres, &check_label(&row));
-        assert!(fr_row.starts_with("Fosses d’arbre avec assez de terre\u{a0}: Arbre à 42,0\u{a0}m, sur "), "{fr_row}");
+        assert!(fr_row.starts_with("Fosses d’arbre avec assez de terre\u{a0}: Arbre à 42,0\u{a0}m, sur la pièce "), "{fr_row}");
         let ok = Check { ok: true, zone: None, ..row };
         assert_eq!(check_label(&ok), ok.label);
     }

@@ -90,6 +90,17 @@ impl TreeSize {
         }
     }
 
+    /// The side of the square pit a new tree of this size is given, enough soil for its size.
+    ///
+    /// UNVERIFIED (placeholder): 1 500, 1 900 and 2 300 mm, each at least the size's least area.
+    pub fn default_pit_mm(self) -> i32 {
+        match self {
+            TreeSize::S => 1_500,
+            TreeSize::M => 1_900,
+            TreeSize::L => 2_300,
+        }
+    }
+
     /// The least area of soil a pit gives this tree, in square millimetres.
     ///
     /// UNVERIFIED (placeholder): 2.25, 3.5 and 5 square metres.
@@ -376,15 +387,18 @@ impl Editor {
     }
 
     /// Adds an element, its position, length and width snapped to `SNAP_MM` (the lengths at least that). A tree with
-    /// no size is a medium one; any other kind has none. One revision; the new element is the chosen one.
+    /// no size is a medium one; any other kind has none. A tree with no length or width (0) gets the pit its size
+    /// needs (`TreeSize::default_pit_mm`). One revision; the new element is the chosen one.
     pub fn add_green(&mut self, g: Green) -> Result<(), GreenRefusal> {
         let frame = self.green_gate(false)?;
         let size = if g.kind == GreenKind::Tree { g.size.or(Some(TreeSize::M)) } else { None };
+        // A tree that comes with no length or width gets the pit its size needs.
+        let pit = size.map(TreeSize::default_pit_mm);
         let g = Green {
             from_mm: snap(g.from_mm),
-            length_mm: snap(g.length_mm).max(SNAP_MM),
+            length_mm: snap(if g.length_mm <= 0 { pit.unwrap_or(0) } else { g.length_mm }).max(SNAP_MM),
             offset_mm: snap(g.offset_mm),
-            width_mm: snap(g.width_mm).max(SNAP_MM),
+            width_mm: snap(if g.width_mm <= 0 { pit.unwrap_or(0) } else { g.width_mm }).max(SNAP_MM),
             size,
             ..g
         };
@@ -560,9 +574,12 @@ impl Editor {
                     if gap < need {
                         let osegs = content.sections_over(o.from_mm, o.to_mm(), length_mm);
                         let named = o.named(osegs.first().copied().unwrap_or(&content.segments));
+                        let gsegs = content.sections_over(g.from_mm, g.to_mm(), length_mm);
+                        let this = g.named(gsegs.first().copied().unwrap_or(&content.segments));
                         fail(
                             2,
                             Said::new("check-detail-green-spacing")
+                                .with("tree", Arg::Said(Box::new(this)))
                                 .with("gap", Arg::Length(gap))
                                 .with("other", Arg::Said(Box::new(named)))
                                 .with("need", Arg::Length(need)),
@@ -1024,7 +1041,7 @@ mod tests {
         assert!(passes(&e, "green-clear-path"), "exactly the clear path");
         e.move_green_across(0, 2_500).unwrap();
         let c = row(&e, "green-clear-path");
-        assert!(!c.ok, "1 700 and 100 are left");
+        assert!(!c.ok, "1 700 and 0 are left");
         assert_eq!(c.detail.key, "check-detail-green-clear-path");
         // A default pit in the middle of the sidewalk leaves less than that on either side.
         let mut e = editor();
@@ -1055,8 +1072,9 @@ mod tests {
         let c = row(&e, "green-spacing");
         assert!(!c.ok, "a large crown needs 10 000");
         assert_eq!(c.detail.key, "check-detail-green-spacing");
-        let named: Vec<_> = c.detail.args.iter().filter(|(n, _)| *n == "other").collect();
-        assert_eq!(named.len(), 1, "the other tree is named in the detail");
+        for who in ["tree", "other"] {
+            assert_eq!(c.detail.args.iter().filter(|(n, _)| *n == who).count(), 1, "{who} is named in the detail");
+        }
         assert!(c.zone.unwrap().args.iter().any(|(n, a)| *n == "at" && matches!(a, Arg::Length(10_000))), "the nearer the anchor is named first");
     }
 
@@ -1136,5 +1154,38 @@ mod tests {
         assert_eq!(said.key, "green-instance");
         let names: Vec<_> = said.args.iter().map(|(n, _)| *n).collect();
         assert_eq!(names, ["kind", "at", "across"]);
+    }
+    #[test]
+    fn a_tree_added_with_no_pit_gets_one_big_enough_for_its_size() {
+        for size in [TreeSize::S, TreeSize::M, TreeSize::L] {
+            let side = size.default_pit_mm();
+            assert!(i64::from(side) * i64::from(side) >= size.min_pit_mm2(), "{size:?}");
+            let mut e = editor();
+            e.add_green(Green { length_mm: 0, width_mm: 0, size: Some(size), ..tree(20_000, 2_600) }).unwrap();
+            let g = e.snapshot().green[0];
+            assert_eq!((g.length_mm, g.width_mm), (side, side), "{size:?}");
+            assert!(passes(&e, "green-soil"), "{size:?}");
+        }
+        let mut e = editor();
+        e.add_green(Green { length_mm: 0, width_mm: 0, size: None, ..tree(20_000, 2_600) }).unwrap();
+        assert!(passes(&e, "green-soil"), "no size is medium");
+    }
+
+    #[test]
+    fn a_tree_given_a_pit_keeps_it() {
+        let mut e = editor();
+        e.add_green(Green { size: Some(TreeSize::L), ..tree(20_000, 1_700) }).unwrap();
+        let g = e.snapshot().green[0];
+        assert_eq!((g.length_mm, g.width_mm), (1_500, 1_500));
+    }
+
+    #[test]
+    fn an_element_whose_centre_is_off_the_section_is_named_without_a_host() {
+        let e = editor();
+        let segs = e.snapshot().segments;
+        let g = small(12_000, total(&segs) + 1_000);
+        let said = g.named(&segs);
+        assert_eq!(said.key, "green-instance-off");
+        assert_eq!(said.args.iter().map(|(n, _)| *n).collect::<Vec<_>>(), ["kind", "at"]);
     }
 }
