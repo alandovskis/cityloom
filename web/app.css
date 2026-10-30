@@ -1587,7 +1587,7 @@ a.btn {
     padding: 24px 20px 28px;
   }
 }
-/* The Network checks section of the map's left panel: a heading and a count for each check, then its findings. */
+/* The Network checks section of the map's Notes panel: a heading and a count for each check, then its findings. */
 .net-h {
   display: flex;
   flex-wrap: wrap;

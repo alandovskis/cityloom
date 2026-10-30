@@ -14,7 +14,7 @@ The code is organised by feature, one folder per slice, not by layer. New code g
 | -------------- | ------------------------------------------------------------------------------------------------ |
 | `street/`      | The street editor.                                                                               |
 | `junction/`    | The junction editor.                                                                             |
-| `map/`         | The city map over a MapLibre basemap, the Area rules panel and the Network checks.               |
+| `map/`         | The city map over a MapLibre basemap, the Area rules panel and the Network checks (in Notes).    |
 | `shell/`       | The markup the pages share: menu, language switch, shortcuts, the Sign in menu.                  |
 | `account/`     | The Account page: linked sign-ins, where the work is kept, deleting the account.                 |
 | `city/`        | The city: the layout, its storage, its projection onto the earth and the edits document.         |

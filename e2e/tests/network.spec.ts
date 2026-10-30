@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 import { expect, mapReady, test } from "./fixtures";
 
-// The network checks look across the whole city: a section in the map page's left panel with a count for each check
+// The network checks look across the whole city: a section in the map page's Notes panel, under the Checks tab with a count for each check
 // and the findings under it, each linking the places it concerns. They are worked out when the map reads the city, so
 // an edit made on a street page shows on the map's next load.
 

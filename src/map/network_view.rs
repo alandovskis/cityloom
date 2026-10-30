@@ -1,4 +1,4 @@
-//! The Network checks section of the map page's left panel: one heading per check with its count, and under it
+//! The Network checks section of the map page's Notes panel (Checks tab): one heading per check with its count, and under it
 //! the findings, each saying why it failed and linking the places it concerns. The views show what the map's
 //! view-model says; nothing here decides anything.
 
