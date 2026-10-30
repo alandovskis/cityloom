@@ -754,3 +754,65 @@ fn a_city_whose_roads_arrive_after_the_page_was_made_is_drawn_and_fitted_on_reop
     assert_eq!(camera.k, camera.fit_k);
     assert!(camera.world.x1 - camera.world.x0 > 100.0, "the world is the city's, not the empty one: {:?}", camera.world);
 }
+
+// ---- the network checks ---------------------------------------------------------------------
+
+use crate::map::network_view;
+
+/// Another page takes a crossing off one arm of a junction of the city, and the map reads the city again.
+fn take_a_crossing_away(vm: &MapVm, storage: &Rc<MemoryStorage>) {
+    let store = CityStore::sample(storage.clone());
+    let mut j = store.open().junction_editor(2, 0).unwrap();
+    let arm = j.snapshot().arms.iter().find(|a| a.crossing.is_some()).map(|a| a.uid).unwrap();
+    assert!(j.set_crossing(arm, false));
+    assert!(store.write_junction(2, j.snapshot()));
+    vm.reload();
+}
+
+#[test]
+fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
+    let (vm, _) = map_vm();
+    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    assert_eq!(count(&h, "<section"), 0, "a check is not a landmark: {h}");
+    assert!(!h.contains("aria-labelledby"), "{h}");
+    assert_eq!(count(&h, "<h3"), 5);
+    // the name and the count are read apart: "Crossings: no findings"
+    assert!(h.contains("Crossings</span><span class=\"sr-only\">: </span><span class=\"fig net-count\">no findings</span>"), "{h}");
+    for (id, label) in [
+        ("cycling", "Cycling links"),
+        ("access", "Pedestrian street access"),
+        ("crossings", "Crossings"),
+        ("lanes", "Lane counts"),
+        ("transit", "Transit corridors"),
+    ] {
+        assert!(h.contains(&format!("id=\"net-h-{id}\"")) && h.contains(&format!("data-rule=\"{id}\"")) && h.contains(label), "{id}: {h}");
+    }
+    assert_eq!(count(&h, "no findings"), 5);
+    assert_eq!(count(&h, "<li"), 0);
+    let lead = map_html(|| view! { <network_view::NetworkLead vm=vm.clone()/> });
+    assert!(lead.contains("found nothing"), "{lead}");
+}
+
+#[test]
+fn a_finding_says_why_and_links_the_street_and_the_junction() {
+    let (vm, storage) = map_vm();
+    take_a_crossing_away(&vm, &storage);
+    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    assert_eq!(count(&h, "<li data-severity"), 1, "{h}");
+    assert!(h.contains("1 finding") && h.contains("has no pedestrian crossing") && h.contains("Problem"), "{h}");
+    assert!(h.contains("href=\"street.html?street=") && h.contains("href=\"intersection.html?junction=2\""), "{h}");
+    assert!(h.contains("data-severity=\"problem\"") && h.contains("class=\"bad\"") && h.contains("data-rule=\"crossings\""), "{h}");
+    // the places are a list of their own, so a screen reader says how many there are
+    assert!(h.contains("<ul class=\"net-links\"") && count(&h, "<ul class=\"net-links\"") == 1, "{h}");
+    assert_eq!(count(&h, "class=\"net-link\""), 2, "{h}");
+    let lead = map_html(|| view! { <network_view::NetworkLead vm=vm.clone()/> });
+    assert!(lead.contains("found 1 finding"), "{lead}");
+}
+
+#[test]
+fn the_network_checks_are_worded_in_french() {
+    let (vm, storage) = map_vm_in(Locale::FrCa);
+    take_a_crossing_away(&vm, &storage);
+    let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
+    assert!(h.contains("Passages pour piétons") && h.contains("1 constat") && h.contains("passage pour piétons") && h.contains("Problème"), "{h}");
+}

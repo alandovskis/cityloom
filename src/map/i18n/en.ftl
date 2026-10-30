@@ -173,3 +173,49 @@ map-svg-changed = changed
 map-basemap-missing = The basemap could not be loaded. Build it with `just prepare`, then reload the page.
 map-basemap-outside = There is no basemap for this place. The map covers the Montréal area.
 map-no-roads = The roads of this place could not be loaded, so there is no map to show.
+
+## Network checks (src/map/network.rs, src/map/vm.rs)
+net-heading = Network checks
+net-no-places = There is no network to check.
+net-lead-none = The network checks found nothing across the streets and junctions.
+net-lead = { $n ->
+    [one] The network checks found 1 finding across the streets and junctions.
+   *[other] The network checks found { $n } findings across the streets and junctions.
+}
+net-note = These look across the whole network and are counted apart from the checks on each place. A problem means the network breaks the rule; a notice is worth a look, since the rule may be met another way. The rules judge the streets as they stand now, not against how they were first laid out.
+net-count-none = no findings
+net-count-one = 1 finding
+net-count = { $n } findings
+net-rule-cycling = Cycling links
+net-rule-access = Pedestrian street access
+net-rule-crossings = Crossings
+net-rule-lanes = Lane counts
+net-rule-transit = Transit corridors
+net-severity-problem = Problem
+net-severity-notice = Notice
+net-lanes = { $n ->
+    [one] { $n } lane
+   *[other] { $n } lanes
+}
+net-cycling-island = { $n ->
+    [one] This street has a bike lane that is cut off from the rest of the cycling network.
+   *[other] These { $n } streets have bike lanes that are cut off from the rest of the cycling network.
+}
+net-cycling-ends = { $at }: the bike lane of { $street } stops, since no other street that meets there has one.
+net-access-broken = This pedestrian street has no unbroken run of sidewalk { $need } wide for emergency vehicles, as it stands now.
+net-crossing-missing = This street takes traffic into the junction and has no pedestrian crossing.
+net-crossing-wide = The pedestrian crossing here is { $width } wide, wider than the { $max } maximum.
+net-lanes-change = { $a } has { $from } where it joins { $b }, which has { $to }: a change of more than { $step } at once.
+net-transit-break = { $at }: the transit lane of { $street } stops, since no other street that meets there has one.
+net-unreadable = { $n ->
+    [one] 1 junction could not be read, so its crossings are not checked.
+   *[other] { $n } junctions could not be read, so their crossings are not checked.
+}
+net-more-findings = { $n ->
+    [one] 1 more finding is not listed.
+   *[other] { $n } more findings are not listed.
+}
+net-more-places = { $n ->
+    [one] and 1 more place
+   *[other] and { $n } more places
+}

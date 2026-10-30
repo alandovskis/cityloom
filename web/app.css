@@ -1587,3 +1587,40 @@ a.btn {
     padding: 24px 20px 28px;
   }
 }
+/* The Network checks section of the map's Notes panel: a heading and a count for each check, then its findings. */
+.net-h {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 8px;
+  margin: 14px 8px 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.net-count {
+  color: var(--ink-2);
+  font-weight: 400;
+}
+/* The places of a finding are a list of their own inside a `.checks` item, so the item's grid, its border and its
+   block spans are taken off them again. */
+.checks .net-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.checks .net-links li {
+  display: block;
+  padding: 0;
+  border: 0;
+}
+.net-links a {
+  display: inline-block;
+  padding: 4px 0;
+  text-decoration: underline;
+}
+.net-more {
+  margin: 0 8px 4px;
+}

@@ -8,12 +8,13 @@ use std::rc::{Rc, Weak};
 
 use leptos::prelude::*;
 
-use crate::city::model::{City, CityView, EdgeView, NodeView};
+use crate::city::model::{City, CityView, EdgeView, NodeView, street_note};
 use crate::city::projection::Projection;
 use crate::city::store::CityStore;
 use crate::map::areas::AreasVm;
 use crate::map::camera::{Camera, Insets, World};
 use crate::map::editable;
+use crate::map::network::{self, Check, NetworkFinding, NetworkReport, PlaceKind, Severity};
 use crate::map::overlay;
 use crate::map::style;
 use crate::restriction::draw::Draw;
@@ -220,6 +221,46 @@ pub struct AreaStreet {
     pub speed_unknown: bool,
 }
 
+/// How many findings of a check the panel lists, and how many places of a finding it links: the rest are counted.
+pub const NETWORK_SHOWN: usize = 50;
+pub const NETWORK_PLACES: usize = 8;
+
+/// A place a network finding concerns: a link and its name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NetworkPlace {
+    pub href: String,
+    /// `s-7` or `j-3`, as the map highlights them.
+    pub hot: String,
+    pub name: String,
+}
+
+/// A network finding as the panel lists it, worded.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NetworkItem {
+    pub rule: &'static str,
+    pub severity: &'static str,
+    /// The word for the severity, so it is not told by a mark alone.
+    pub severity_word: String,
+    pub text: String,
+    /// The places the finding concerns, the first `NETWORK_PLACES` of them.
+    pub places: Vec<NetworkPlace>,
+    /// `and 5 more streets`, when places are left out.
+    pub more_places: Option<String>,
+}
+
+/// One of the network checks and what it found.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NetworkCheck {
+    pub id: &'static str,
+    pub label: String,
+    pub count: usize,
+    /// `no findings`, `1 finding`, `3 findings`.
+    pub count_text: String,
+    pub items: Vec<NetworkItem>,
+    /// `12 more findings are not shown.`, when findings are left out (`count` is still all of them).
+    pub more: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Status {
     pub text: String,
@@ -261,6 +302,8 @@ pub struct MapVm {
     worded: RefCell<Option<Worded>>,
     /// The area restrictions: the Area rules panel, and what the map shows of them.
     areas: Rc<AreasVm>,
+    /// The network findings for the city view they were made from: the rules run again only when the city changes.
+    network: RefCell<Option<(Rc<CityView>, Rc<NetworkReport>)>>,
     /// In the tests: how many streets were read to check them against an area's rule.
     #[cfg(test)]
     editors_read: Cell<usize>,
@@ -306,6 +349,7 @@ impl MapVm {
             active: ArcRwSignal::new(None),
             worded: RefCell::new(None),
             areas,
+            network: RefCell::new(None),
             #[cfg(test)]
             editors_read: Cell::new(0),
         })
@@ -542,7 +586,7 @@ impl MapVm {
             all.push((junction_href(n.uid), n.name.clone(), n.ok, n.edited, n.failing.as_slice()));
         }
         for e in &v.edges {
-            let name = Said::new("map-note-street").with("street", Arg::Said(Box::new(e.called.clone()))).with("ends", Arg::Said(Box::new(e.ends.clone())));
+            let name = street_note(e.called.clone(), e.ends.clone());
             all.push((street_href(e.uid), name, e.ok, e.edited, e.failing.as_slice()));
         }
         all
@@ -565,6 +609,108 @@ impl MapVm {
                 i
             })
             .collect()
+    }
+
+    // ---- the network checks ----
+    //
+    // Findings that span the loaded streets, counted apart from the places' own checks (the status line and the
+    // checks lead do not count them). They are worked out from the city as the map read it, so an edit made on a
+    // street or junction page shows when the map reads the city again (it does when the page is shown, or when
+    // another tab writes).
+
+    /// Every finding of the network checks, found again when the city changes.
+    fn network_report(&self) -> Rc<NetworkReport> {
+        let view = self.view();
+        if let Some((seen, found)) = &*self.network.borrow()
+            && Rc::ptr_eq(seen, &view)
+        {
+            return found.clone();
+        }
+        let found = Rc::new(network::check(&self.core.read(|m| m.city.network_read(m.region))));
+        *self.network.borrow_mut() = Some((view, found.clone()));
+        found
+    }
+
+    /// How many findings the network checks have in all.
+    pub fn network_count(&self) -> usize {
+        self.network_report().findings.len()
+    }
+
+    fn count_text(&self, n: usize) -> String {
+        let key = match n {
+            0 => "net-count-none",
+            1 => "net-count-one",
+            _ => "net-count",
+        };
+        self.i18n.tr(key, &Args::new().num("n", n as i64))
+    }
+
+    /// The one line above the network checks: how many findings there are, and how many junctions could not be read.
+    pub fn network_lead(&self) -> String {
+        if self.has_no_places() {
+            return self.word("net-no-places");
+        }
+        let report = self.network_report();
+        let n = report.findings.len();
+        let mut lead = if n == 0 { self.word("net-lead-none") } else { self.i18n.tr("net-lead", &Args::new().num("n", n as i64)) };
+        if report.unreadable > 0 {
+            lead.push(' ');
+            lead.push_str(&self.i18n.tr("net-unreadable", &Args::new().num("n", report.unreadable as i64)));
+        }
+        lead
+    }
+
+    /// The five checks, each with its count and its findings (the first `NETWORK_SHOWN` of them), in a fixed order.
+    /// None when the city has no places.
+    pub fn network_rules(&self) -> Vec<NetworkCheck> {
+        if self.has_no_places() {
+            return Vec::new();
+        }
+        let report = self.network_report();
+        let mut by_check: Vec<Vec<&NetworkFinding>> = vec![Vec::new(); Check::ALL.len()];
+        for f in &report.findings {
+            if let Some(at) = Check::ALL.iter().position(|c| *c == f.rule) {
+                by_check[at].push(f);
+            }
+        }
+        Check::ALL.into_iter().zip(by_check).map(|(rule, found)| self.network_check(rule, found)).collect()
+    }
+
+    /// One check with its count (all the findings) and the first of them.
+    fn network_check(&self, rule: Check, found: Vec<&NetworkFinding>) -> NetworkCheck {
+        let hidden = found.len().saturating_sub(NETWORK_SHOWN);
+        NetworkCheck {
+            id: rule.id(),
+            label: self.word(&format!("net-rule-{}", rule.id())),
+            count: found.len(),
+            count_text: self.count_text(found.len()),
+            items: found.into_iter().take(NETWORK_SHOWN).map(|f| self.network_item(f)).collect(),
+            more: (hidden > 0).then(|| self.i18n.tr("net-more-findings", &Args::new().num("n", hidden as i64))),
+        }
+    }
+
+    fn network_item(&self, f: &NetworkFinding) -> NetworkItem {
+        let (severity, key) = match f.severity {
+            Severity::Problem => ("problem", "net-severity-problem"),
+            Severity::Notice => ("notice", "net-severity-notice"),
+        };
+        let hidden = f.places.len().saturating_sub(NETWORK_PLACES);
+        NetworkItem {
+            rule: f.rule.id(),
+            severity,
+            severity_word: self.word(key),
+            text: self.say(&f.said),
+            places: f
+                .places
+                .iter()
+                .take(NETWORK_PLACES)
+                .map(|p| match p.kind {
+                    PlaceKind::Street => NetworkPlace { href: street_href(p.uid), hot: format!("s-{}", p.uid), name: self.say(&p.name) },
+                    PlaceKind::Junction => NetworkPlace { href: junction_href(p.uid), hot: format!("j-{}", p.uid), name: self.say(&p.name) },
+                })
+                .collect(),
+            more_places: (hidden > 0).then(|| self.i18n.tr("net-more-places", &Args::new().num("n", hidden as i64))),
+        }
     }
 
     /// How many streets break the rule of an area they are inside (a speed limit never does).
@@ -895,7 +1041,7 @@ impl MapVm {
                 let Some(street) = self.core.read(|m| m.city.street_editor(e.uid, m.region).map(|e| e.snapshot())) else { continue };
                 let conflicts = conflicts(r.rule, &street);
                 let speed_unknown = speed_unknown(r.rule, &street);
-                let name = Said::new("map-note-street").with("street", Arg::Said(Box::new(e.called.clone()))).with("ends", Arg::Said(Box::new(e.ends.clone())));
+                let name = street_note(e.called.clone(), e.ends.clone());
                 found.push(AreaStreet { area: r.id.clone(), uid: e.uid, href: street_href(e.uid), name, rule: r.rule, conflicts, speed_unknown });
             }
         }
@@ -1337,6 +1483,123 @@ mod tests {
             assert!(st.text.contains(&item.name), "{} in {}", item.name, st.text);
         }
         assert!(!st.text.contains(&named[3].name) || named[3].name == named[0].name);
+    }
+
+    /// Another page writes a junction of the city with `edit` applied to its editor.
+    fn edit_junction(storage: &Rc<MemoryStorage>, node: u32, edit: impl FnOnce(&mut crate::junction::model::Junction)) {
+        let store = CityStore::sample(storage.clone());
+        let mut j = store.open().junction_editor(node, 0).unwrap();
+        edit(&mut j);
+        assert!(store.write_junction(node, j.snapshot()));
+    }
+
+    fn found(vm: &MapVm, id: &str) -> NetworkCheck {
+        vm.network_rules().into_iter().find(|r| r.id == id).unwrap()
+    }
+
+    #[test]
+    fn the_network_checks_are_five_rules_with_a_count_each_and_the_hand_made_city_passes_them() {
+        let (vm, ..) = vm();
+        let rules = vm.network_rules();
+        assert_eq!(rules.iter().map(|r| r.id).collect::<Vec<_>>(), ["cycling", "access", "crossings", "lanes", "transit"]);
+        assert!(rules.iter().all(|r| r.count == 0 && r.items.is_empty() && r.count_text == "no findings"));
+        assert_eq!(vm.network_count(), 0);
+        assert_eq!(vm.network_lead(), "The network checks found nothing across the streets and junctions.");
+        assert_eq!(rules[2].label, "Crossings");
+    }
+
+    #[test]
+    fn a_crossing_taken_away_is_found_naming_the_street_and_the_junction_and_the_map_counts_stay_apart() {
+        let (vm, _, storage) = vm();
+        let before = (vm.status(), vm.checks_lead(), vm.failing_items());
+        let (node, arm) = {
+            let city = CityStore::sample(storage.clone()).open();
+            let j = city.junction_editor(2, 0).unwrap();
+            (2, j.snapshot().arms.iter().find(|a| a.crossing.is_some()).map(|a| a.uid).unwrap())
+        };
+        edit_junction(&storage, node, |j| assert!(j.set_crossing(arm, false)));
+        vm.reload();
+        let crossings = found(&vm, "crossings");
+        assert_eq!(crossings.count, 1, "{crossings:?}");
+        assert_eq!(crossings.count_text, "1 finding");
+        let item = &crossings.items[0];
+        assert_eq!((item.severity, item.severity_word.as_str()), ("problem", "Problem"));
+        assert_eq!(item.text, "This street takes traffic into the junction and has no pedestrian crossing.");
+        assert_eq!(item.places.len(), 2);
+        assert!(item.places[0].href.starts_with("street.html?street=") && item.places[1].href == "intersection.html?junction=2");
+        assert_eq!(item.places[1].hot, "j-2");
+        assert!(vm.network_lead().starts_with("The network checks found 1 finding"));
+        // the places' own checks do not count it
+        let after = (vm.status(), vm.checks_lead(), vm.failing_items());
+        assert_eq!(before.0.bad, after.0.bad);
+        assert_eq!(before.2, after.2);
+        // put back, the finding clears
+        edit_junction(&storage, node, |j| assert!(j.set_crossing(arm, true)));
+        vm.reload();
+        assert_eq!(found(&vm, "crossings").count, 0);
+    }
+
+    #[test]
+    fn a_check_lists_the_first_findings_and_counts_the_rest_and_a_finding_links_the_first_places() {
+        let (vm, ..) = vm();
+        let place = |uid: u32| network::Place { kind: PlaceKind::Street, uid, name: Said::new("map-note-street") };
+        let finding = |n: u32| NetworkFinding {
+            rule: Check::Cycling,
+            severity: Severity::Problem,
+            said: Said::new("net-cycling-island").with("n", Arg::Num(n as i64)),
+            places: (1..=n).map(place).collect(),
+        };
+        let all: Vec<NetworkFinding> = (0..NETWORK_SHOWN as u32 + 12).map(|_| finding(11)).collect();
+        let check = vm.network_check(Check::Cycling, all.iter().collect());
+        assert_eq!(check.count, NETWORK_SHOWN + 12, "the count is all of them");
+        assert_eq!(check.count_text, format!("{} findings", NETWORK_SHOWN + 12));
+        assert_eq!(check.items.len(), NETWORK_SHOWN);
+        assert_eq!(check.more.as_deref(), Some("12 more findings are not listed."));
+        assert_eq!(check.items[0].places.len(), NETWORK_PLACES);
+        assert_eq!(check.items[0].more_places.as_deref(), Some("and 3 more places"));
+        assert_eq!(check.items[0].rule, "cycling");
+        let few = vm.network_check(Check::Cycling, vec![&finding(2)]);
+        assert!(few.more.is_none() && few.items[0].more_places.is_none());
+    }
+
+    #[test]
+    fn junctions_that_could_not_be_read_are_said_and_not_taken_for_nothing_found() {
+        let (vm, ..) = vm();
+        *vm.network.borrow_mut() = Some((vm.view(), Rc::new(NetworkReport { findings: Vec::new(), unreadable: 1 })));
+        assert_eq!(
+            vm.network_lead(),
+            "The network checks found nothing across the streets and junctions. 1 junction could not be read, so its crossings are not checked."
+        );
+        *vm.network.borrow_mut() = Some((vm.view(), Rc::new(NetworkReport { findings: Vec::new(), unreadable: 3 })));
+        assert!(vm.network_lead().ends_with("3 junctions could not be read, so their crossings are not checked."));
+        vm.i18n().set(Locale::FrCa);
+        assert!(vm.network_lead().contains("3 jonctions n’ont pas pu être lues"), "{}", vm.network_lead());
+    }
+
+    #[test]
+    fn a_city_with_no_places_has_no_network_checks_only_its_lead() {
+        let (ports, ..) = test_ports();
+        let vm = MapVm::new(ports, crate::i18n_for(Locale::En)); // the default area, whose roads are not kept: no places
+        assert!(vm.network_rules().is_empty());
+        assert_eq!(vm.network_lead(), "There is no network to check.");
+    }
+
+    #[test]
+    fn the_findings_follow_the_language_and_are_worked_out_once_per_city() {
+        let (vm, _, storage) = vm();
+        let (node, arm) = {
+            let j = CityStore::sample(storage.clone()).open().junction_editor(2, 0).unwrap();
+            (2, j.snapshot().arms.iter().find(|a| a.crossing.is_some()).map(|a| a.uid).unwrap())
+        };
+        edit_junction(&storage, node, |j| assert!(j.set_crossing(arm, false)));
+        vm.reload();
+        let first = vm.network_report();
+        assert!(Rc::ptr_eq(&first, &vm.network_report()));
+        vm.i18n().set(Locale::FrCa);
+        assert_eq!(found(&vm, "crossings").label, "Passages pour piétons");
+        assert!(found(&vm, "crossings").items[0].text.contains("passage pour piétons"));
+        vm.reload();
+        assert!(!Rc::ptr_eq(&first, &vm.network_report()));
     }
 
     #[test]

@@ -152,6 +152,14 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Map page | Editors (the navigation) | Éditeurs |  |
 | Map page | Sheet tools | Outils de la feuille | To confirm, see below. |
 | Map page | Area rules (the panel) | Règles de zone | To confirm, see below. |
+| Map page | Network checks (the panel's section) | Vérifications du réseau |  |
+| Map page | finding (of a network check) | constat | `1 constat`, `aucun constat`. |
+| Map page | Problem / Notice (a finding's severity) | Problème / À noter |  |
+| Map page | Cycling links | Liens cyclables |  |
+| Map page | Pedestrian street access | Accès aux rues piétonnes |  |
+| Map page | Crossings (the network check) | Passages pour piétons | `passage pour piétons`, as in the junction. |
+| Map page | Lane counts | Nombre de voies |  |
+| Map page | Transit corridors | Axes de transport en commun |  |
 | Map page | area (of a restriction) | zone |  |
 | Map page | outline (of an area) | contour |  |
 | Map page | Rules over an area (the tab's heading) | Règles sur une zone | To confirm, see below. |

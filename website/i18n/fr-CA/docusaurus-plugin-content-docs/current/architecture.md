@@ -15,7 +15,7 @@ qui possède la fonctionnalité.
 | -------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `street/`      | L’éditeur de rue.                                                                                                       |
 | `junction/`    | L’éditeur de jonction.                                                                                                  |
-| `map/`         | La carte de la ville sur un fond de carte MapLibre, et le panneau Règles de zone.                                       |
+| `map/`         | La carte de la ville sur un fond de carte MapLibre, le panneau Règles de zone et les vérifications du réseau.           |
 | `shell/`       | Le balisage commun aux pages : menu, changement de langue, raccourcis, le menu Se connecter.                            |
 | `account/`     | La page Compte : connexions associées, lieu de conservation du travail, suppression du compte.                          |
 | `city/`        | La ville : sa disposition, son stockage, sa projection sur la Terre et le document des modifications.                   |

@@ -12,6 +12,9 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
+mod network_read;
+pub use network_read::{ArmRead, EndRead, NetworkRead, NodeRead, StreetRead};
+
 use super::edits::{ArmStreet, Edits, Ids, JunctionRecord, SAME_WAY_DEG, StreetRecord, assign, degrees_apart};
 use crate::junction::model::{self as junction, Arm, Junction, State};
 #[cfg(test)]
@@ -145,6 +148,11 @@ const EDGES: [TestEdge; 23] = [
     street(15, 18, LANE),   // 22
     street(19, 20, FREEWAY),// 23
 ];
+
+/// How the notes name a street: what it is called and where it runs.
+pub fn street_note(called: Said, ends: Said) -> Said {
+    Said::new("map-note-street").with("street", Arg::Said(Box::new(called))).with("ends", Arg::Said(Box::new(ends)))
+}
 
 /// The map name of the city.
 #[cfg(test)]
