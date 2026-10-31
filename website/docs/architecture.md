@@ -21,6 +21,7 @@ The code is organised by feature, one folder per slice, not by layer. New code g
 | `place/`       | Where a city comes from: place search, and fetching and importing an area's roads.               |
 | `restriction/` | The rules declared over an area of the map.                                                      |
 | `sync/`        | Keeps a signed-in person's work on the server when they chose it, and merges it between devices. |
+| `archive/`     | The design archive: export and import of a person's edits and area rules as one file.            |
 | `shared/`      | The kernel: catalogue, units, ports, translations. It must not depend on any slice.              |
 
 A slice may use another slice's `model`, `city::store`, `city::binding`, `city::projection`, `restriction::store`,
@@ -42,7 +43,7 @@ state machines with tests. The map page is the exception: it draws over a MapLib
 ## Ports
 
 A view-model reaches the browser only through ports, defined in `shared/ports.rs` with fakes for tests:
-`Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (the OpenStreetMap reader), `Account` (the sign-in state and the account API), `WorkSync` (the work stored on the server) and
+`Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (the OpenStreetMap reader), `Account` (the sign-in state and the account API), `WorkSync` (the work stored on the server), `ArchiveFiles` (a design archive handed over as a file, and a file chosen) and
 `Navigator`. `shared/platform.rs` is their browser side. This is how view-models are tested natively, against
 `test_ports()`, without a browser.
 
@@ -104,3 +105,20 @@ A page opened from the map edits one place of the city. Its edits are written ba
 debounce and flushed when the page is left. The edits of every area live in one document, `cityloom-edits`, whose
 records are keyed by what the place was made from (OpenStreetMap node and way ids), so an edit follows its place into
 another area that holds it.
+
+## The design archive
+
+The Account page can export a person's design work as one JSON file and import such a file. The format is documented
+in `src/archive/model.rs`; it carries an integer `format_version` (1) and a `kind` of `cityloom-design`, the app
+version, the time, what the design was made on (area, tile checksum, importer version), the `cityloom-edits` document
+(read from version 4 and written at the version its content needs) and the `cityloom-restrictions` document. It does
+not carry the sync document, anything of the account, the language and theme, or the downloaded street networks. The
+file is named `*.cityloom-design.json`, never a bare `.cityloom`, which is the area archive that `cityloom_prepare`
+builds.
+
+An import checks the whole file before it writes anything. A file that is not JSON, not a CityLoom design archive,
+damaged, larger than 10 MB, from a newer format, or holding edits or rules from a newer build is refused with a message
+that says so and that nothing was changed. Places that are not on the device are added; a place that is on the device
+and differs is replaced only if the person chooses "Use the archive's" for that import. Edits or rules on the device that
+are damaged or from a newer build stop the import. Unknown fields are ignored on read, and `notes` and `scenarios` are
+reserved names that version 1 neither writes nor reads. Imported records are marked for the sync like any edit.

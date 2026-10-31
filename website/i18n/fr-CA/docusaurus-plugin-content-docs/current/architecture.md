@@ -11,18 +11,19 @@ sidebar_position: 3
 Le code est organisé par fonctionnalité, un dossier par tranche, et non par couche. Le nouveau code va dans la tranche
 qui possède la fonctionnalité.
 
-| Tranche        | Contenu                                                                                                                 |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `street/`      | L’éditeur de rue.                                                                                                       |
-| `junction/`    | L’éditeur de jonction.                                                                                                  |
-| `map/`         | La carte de la ville sur un fond de carte MapLibre, le panneau Règles de zone et les vérifications du réseau.           |
-| `shell/`       | Le balisage commun aux pages : menu, changement de langue, raccourcis, le menu Se connecter.                            |
-| `account/`     | La page Compte : connexions associées, lieu de conservation du travail, suppression du compte.                          |
-| `city/`        | La ville : sa disposition, son stockage, sa projection sur la Terre et le document des modifications.                   |
-| `place/`       | L’origine d’une ville : la recherche de lieu, ainsi que la récupération et l’importation des routes d’une zone.         |
-| `restriction/` | Les règles déclarées sur une zone de la carte.                                                                          |
-| `sync/`        | Conserve le travail d’une personne connectée sur le serveur, quand elle l’a choisi, et le fusionne entre ses appareils. |
-| `shared/`      | Le noyau : catalogue, unités, ports, traductions. Il ne doit dépendre d’aucune tranche.                                 |
+| Tranche        | Contenu                                                                                                                           |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `street/`      | L’éditeur de rue.                                                                                                                 |
+| `junction/`    | L’éditeur de jonction.                                                                                                            |
+| `map/`         | La carte de la ville sur un fond de carte MapLibre, le panneau Règles de zone et les vérifications du réseau.                     |
+| `shell/`       | Le balisage commun aux pages : menu, changement de langue, raccourcis, le menu Se connecter.                                      |
+| `account/`     | La page Compte : connexions associées, lieu de conservation du travail, suppression du compte.                                    |
+| `city/`        | La ville : sa disposition, son stockage, sa projection sur la Terre et le document des modifications.                             |
+| `place/`       | L’origine d’une ville : la recherche de lieu, ainsi que la récupération et l’importation des routes d’une zone.                   |
+| `restriction/` | Les règles déclarées sur une zone de la carte.                                                                                    |
+| `sync/`        | Conserve le travail d’une personne connectée sur le serveur, quand elle l’a choisi, et le fusionne entre ses appareils.           |
+| `archive/`     | L’archive de conception : exportation et importation des modifications et des règles de zone d’une personne dans un seul fichier. |
+| `shared/`      | Le noyau : catalogue, unités, ports, traductions. Il ne doit dépendre d’aucune tranche.                                           |
 
 Une tranche peut utiliser le `model` d’une autre tranche, `city::store`, `city::binding`, `city::projection`,
 `restriction::store`, `shell::Target` et `shared`; les magasins et les éditeurs utilisent aussi les types de `sync::model` et `mark`, et tout le reste accède à la synchronisation par `sync::hub`. Elle ne doit jamais accéder au modèle de vue, aux vues ni aux textes
@@ -47,7 +48,7 @@ fond de carte MapLibre, sans SVG.
 
 Un modèle de vue n’atteint le navigateur que par des ports, définis dans `shared/ports.rs` avec des doublures pour les
 tests : `Announcer`, `Storage`, `Scheduler`, `Mapper`, `Fetcher` (HTTP), `Importer` (le lecteur OpenStreetMap), `Account` (l’état de connexion et l’API du compte), `WorkSync` (le travail stocké sur le serveur) et
-`Navigator`. `shared/platform.rs` en est le côté navigateur. C’est ainsi que les modèles de vue sont testés en natif,
+`ArchiveFiles` (une archive de conception remise sous forme de fichier, et un fichier choisi) et `Navigator`. `shared/platform.rs` en est le côté navigateur. C’est ainsi que les modèles de vue sont testés en natif,
 avec `test_ports()`, sans navigateur.
 
 ## Traduction
@@ -113,3 +114,22 @@ délai antirebond de 250 ms, et enregistrées quand on quitte la page. Les modif
 dans un seul document, `cityloom-edits`, dont les enregistrements sont indexés d’après ce dont le lieu a été fait
 (identifiants de nœuds et de voies OpenStreetMap); une modification suit donc son lieu dans une autre zone qui le
 contient.
+
+## L’archive de conception
+
+La page Compte peut exporter le travail de conception d’une personne dans un seul fichier JSON et importer un tel
+fichier. Le format est décrit dans `src/archive/model.rs`; il porte un `format_version` entier (1) et un `kind` valant
+`cityloom-design`, la version de l’application, l’heure, ce sur quoi la conception a été faite (zone, somme de
+contrôle de la tuile, version de l’importeur), le document `cityloom-edits` (lu à partir de la version 4 et écrit à la
+version que son contenu exige) et le document `cityloom-restrictions`. Il ne contient ni le document de
+synchronisation, ni rien du compte, ni la langue et le thème, ni les réseaux de rues téléchargés. Le fichier se nomme
+`*.cityloom-design.json`, jamais un simple `.cityloom`, qui est l’archive de zone que construit `cityloom_prepare`.
+
+Une importation vérifie tout le fichier avant d’écrire quoi que ce soit. Un fichier qui n’est pas du JSON, qui n’est pas
+une archive de conception CityLoom, qui est endommagé, qui dépasse 10 Mo, qui vient d’un format plus récent ou qui
+contient des modifications ou des règles d’une version plus récente est refusé avec un message qui le dit et qui précise
+que rien n’a été modifié. Les lieux absents de l’appareil sont ajoutés; un lieu présent qui diffère n’est remplacé que si
+la personne choisit « Utiliser ceux de l’archive » pour cette importation. Des modifications ou des règles de l’appareil
+qui sont endommagées ou d’une version plus récente arrêtent l’importation. Les champs inconnus sont ignorés à la
+lecture, et `notes` et `scenarios` sont des noms réservés que la version 1 n’écrit ni ne lit. Les enregistrements
+importés sont marqués pour la synchronisation comme toute modification.
