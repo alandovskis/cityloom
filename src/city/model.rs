@@ -25,7 +25,7 @@ use crate::shared::said::{Arg, Said};
 #[cfg(test)]
 use crate::street::model::SAMPLES;
 use crate::street::model::{
-    Beyond, Editor, EndInfo, EndStop, Host, LENGTH_TOLERANCE_MM, MapStop, MapUse, MapUses, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition,
+    Beyond, Editor, EndInfo, EndStop, EndUse, Host, LENGTH_TOLERANCE_MM, MapStop, MapUse, MapUses, Speed, Street, ZoneEnd, ZoneFrame, named_said, transition,
     unnamed_said,
 };
 
@@ -512,6 +512,7 @@ impl Layout {
                 arm.section = streets.get(&arm.edge).map(|s| seen_from(self, e, node, s));
                 arm.beyond = streets.get(&arm.edge).and_then(|s| beyond_from(self, e, node, s));
                 arm.stops = streets.get(&arm.edge).map_or_else(Vec::new, |s| stops_from(self, e, node, s, self.side));
+                arm.curb_near = streets.get(&arm.edge).map_or_else(Vec::new, |s| curb_from(self, e, node, s));
                 arm
             })
             .collect();
@@ -611,6 +612,7 @@ fn forget_streets(s: &mut State) {
         a.section = None;
         a.beyond = None;
         a.stops.clear();
+        a.curb_near.clear();
     }
 }
 
@@ -629,6 +631,11 @@ fn seen_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Stre
 /// What lies across the first boundary of the zone at the end of `edge` that meets `node`, for the arm that reads it.
 fn beyond_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Option<Beyond> {
     street.beyond(layout.edges[edge].a == node, layout.zone_frame(edge))
+}
+
+/// The curbside uses in the end zone of `edge` that meets `node`, for the arm that reads them.
+fn curb_from(layout: &Layout, edge: usize, node: usize, street: &Street) -> Vec<EndUse> {
+    street.end_uses(layout.edges[edge].a == node, layout.zone_frame(edge))
 }
 
 /// The transit stops in the end zone of `edge` that meets `node`, for the arm that reads them.
@@ -673,6 +680,7 @@ impl City {
                 a.section = today_streets.get(&a.edge).map(|st| seen_from(&layout, e, n, st));
                 a.beyond = today_streets.get(&a.edge).and_then(|st| beyond_from(&layout, e, n, st));
                 a.stops = today_streets.get(&a.edge).map_or_else(Vec::new, |st| stops_from(&layout, e, n, st, layout.side));
+                a.curb_near = today_streets.get(&a.edge).map_or_else(Vec::new, |st| curb_from(&layout, e, n, st));
             }
             // A meeting the junction editor cannot draw (every road leaving to one side, say) is left as
             // a plain connection of streets.
@@ -935,6 +943,7 @@ impl City {
             a.section = street.map(|(e, st)| seen_from(&self.layout, e, node, st));
             a.beyond = street.and_then(|(e, st)| beyond_from(&self.layout, e, node, st));
             a.stops = street.map_or_else(Vec::new, |(e, st)| stops_from(&self.layout, e, node, st, driving));
+            a.curb_near = street.map_or_else(Vec::new, |(e, st)| curb_from(&self.layout, e, node, st));
         }
         s
     }
@@ -2582,6 +2591,30 @@ mod tests {
         assert!(j.snapshot().arms.iter().all(|a| a.stops.is_empty()));
         assert!(!serde_json::to_string(&j.current()).unwrap().contains("stops"));
         assert!(city.junctions.values().all(|s| s.arms.iter().all(|a| a.stops.is_empty())));
+    }
+
+    /// Street `uid` as the city has it, with a parking use of 6 m from `from_mm` on its right.
+    fn with_use(city: &City, uid: u32, from_mm: i32) -> Street {
+        let length = city.layout.zone_frame(uid as usize - 1).unwrap().length_mm;
+        let mut s = city.streets[&uid].clone();
+        s.length_mm = Some(length);
+        s.curb = vec![crate::street::model::Instance { side: Side::Right, from_mm, length_mm: 6_000, use_: crate::street::model::Use::Parking }];
+        s
+    }
+
+    #[test]
+    fn an_arm_carries_the_curbside_uses_of_its_street_and_keeps_none() {
+        let mut city = City::new();
+        assert!(city.keep_street(2, with_use(&city, 2, 12_000)));
+        let state = city.with_streets(1, &city.junctions[&node_uid(1)], 0);
+        let arm = state.arms.iter().find(|a| a.edge == 2).unwrap();
+        assert_eq!(arm.curb_near.len(), 1);
+        assert_eq!((arm.curb_near[0].near_mm, arm.curb_near[0].far_mm), (12_000, 18_000));
+        assert!(state.arms.iter().filter(|a| a.edge != 2).all(|a| a.curb_near.is_empty()));
+        let j = city.junction_editor(node_uid(1), 0).unwrap();
+        assert!(j.snapshot().arms.iter().all(|a| a.curb_near.is_empty()));
+        assert!(!serde_json::to_string(&j.current()).unwrap().contains("curb_near"));
+        assert!(city.junctions.values().all(|s| s.arms.iter().all(|a| a.curb_near.is_empty())));
     }
 
     #[test]

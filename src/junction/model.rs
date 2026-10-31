@@ -12,7 +12,7 @@ use std::borrow::Cow;
 use crate::junction::geometry::gap;
 use crate::junction::signal::{self, Pattern};
 use crate::junction::turbo::{self, BLOCKS, LAYOUTS, Turbo};
-use crate::street::model::{Beyond, Editor, EndStop, Street, View, named_said};
+use crate::street::model::{Beyond, Editor, EndStop, EndUse, Street, View, named_said};
 
 #[cfg(test)]
 mod fixtures;
@@ -263,6 +263,10 @@ pub struct Arm {
     /// never kept.
     #[serde(skip)]
     pub stops: Vec<EndStop>,
+    /// The curbside uses of the street that have a part in the end zone, as the street has them now; set with
+    /// `section`, never kept.
+    #[serde(skip)]
+    pub curb_near: Vec<EndUse>,
     /// Clockwise from north, a multiple of `BEARING_STEP`.
     pub bearing: i32,
     /// Sideways shift of the arm's axis, to the arm's right.
@@ -474,6 +478,7 @@ impl Arm {
             section: None,
             beyond: None,
             stops: Vec::new(),
+            curb_near: Vec::new(),
             bearing,
             offset_mm,
             corner_mm: DEFAULT_CORNER_MM,
@@ -960,6 +965,7 @@ impl Junction {
             a.section = None;
             a.beyond = None;
             a.stops.clear();
+            a.curb_near.clear();
         }
         s
     }
@@ -2880,6 +2886,7 @@ mod tests {
                 a.section = base.arm(a.uid).and_then(|b| b.section.clone());
                 a.beyond = base.arm(a.uid).and_then(|b| b.beyond.clone());
                 a.stops = base.arm(a.uid).map_or_else(Vec::new, |b| b.stops.clone());
+                a.curb_near = base.arm(a.uid).map_or_else(Vec::new, |b| b.curb_near.clone());
             }
         };
         let mut today = base.snapshot();
