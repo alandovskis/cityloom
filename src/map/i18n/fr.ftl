@@ -226,3 +226,48 @@ net-more-places = { $n ->
     [one] et 1 autre lieu
    *[other] et { $n } autres lieux
 }
+
+## Données sources, l’onglet Provenance (src/map/source_quality.rs, src/map/vm.rs)
+prov-heading = Données sources
+prov-note = Ces constats montrent où les données OpenStreetMap derrière la carte peuvent être manquantes ou erronées. Ce ne sont pas des échecs de conception : ils sont comptés à part des vérifications de chaque lieu et des vérifications du réseau, et une rue visée ici peut quand même respecter toutes les règles. L’importateur ne peut pas distinguer une largeur indiquée sur la route de celle qu’il suppose; un constat sur une largeur peut donc n’être que la valeur par défaut.
+prov-no-places = Il n’y a pas de données sources à examiner.
+prov-lead-none = Rien ne semble manquant ni erroné dans les données sources.
+prov-lead = { $n ->
+    [one] 1 lieu des données sources peut être manquant ou erroné.
+   *[other] { $n } lieux des données sources peuvent être manquants ou erronés.
+}
+prov-count-none = rien trouvé
+prov-count-one = 1 lacune possible
+prov-count = { $n } lacunes possibles
+prov-label-source = Source :
+prov-label-impact = Effet sur la conception :
+prov-kind-name = Noms de rues
+prov-kind-disconnected = Rues déconnectées
+prov-kind-ends = Culs-de-sac
+prov-kind-width = Largeurs
+prov-kind-speed = Limites de vitesse
+prov-name = Le nom de { $street } ne figure pas dans OpenStreetMap; la carte lui donne donc un nom de son cru.
+prov-source-name = La route n’a pas d’étiquette de nom.
+prov-impact-name = Les modifications enregistrées et les notes désignent la rue par un nom inventé par la carte, et une rue du même genre pourrait être prise pour une autre.
+prov-disconnected = { $n ->
+    [one] Cette rue n’est reliée à aucune autre rue de la zone chargée.
+   *[other] Ces { $n } rues sont reliées entre elles et à aucune autre rue de la zone chargée.
+}
+prov-source-disconnected = Les routes ne partagent aucun nœud avec le reste du réseau et aucune n’atteint le bord de la zone. Les routes peuvent avoir été cartographiées sans nœud commun, ou les autres routes peuvent manquer.
+prov-impact-disconnected = Les vérifications du réseau sur les parcours piétons, cyclables et de transport en commun les compteront comme coupées, ce qui peut être une lacune des données et non de la conception.
+prov-ends = { $street } se termine à un nœud qu’aucune autre rue n’atteint.
+prov-source-ends = La route s’arrête à un nœud qui lui est propre. Ce peut être un vrai cul-de-sac, ou la route qui la prolonge peut manquer ou ne pas être reliée.
+prov-impact-ends = Il peut manquer une jonction ici; les passages et les voies que les vérifications de conception attendent ne seraient alors pas dessinés.
+prov-width-row-narrow = { $street } fait { $width } de large à l’importation, soit moins que les { $limit } qu’une rue est censée exiger.
+prov-width-row-wide = { $street } fait { $width } de large à l’importation, soit plus que les { $limit } qu’une rue est censée exiger.
+prov-width-lane-narrow = Un élément de { $street } ({ $kind }) est à la largeur minimale permise par le catalogue, soit { $limit }.
+prov-width-lane-wide = Un élément de { $street } ({ $kind }) est à la largeur maximale permise par le catalogue, soit { $limit }.
+prov-source-width = L’importateur ne peut pas distinguer une largeur indiquée sur la route de celle que suppose osm2streets, et il garde chaque élément dans les limites du catalogue; un élément à une limite peut donc y avoir été ramené.
+prov-impact-width = Les vérifications de largeur et de capacité, et la place qui reste pour les autres éléments, reposent sur cette largeur.
+prov-speed = { $street } n’a pas de limite de vitesse dans OpenStreetMap.
+prov-source-speed = La route n’a pas d’étiquette maxspeed, ou en a une qui n’a pas pu être lue.
+prov-impact-speed = La vitesse affichée pour la rue est « Non indiquée », et la règle de limite de vitesse d’une zone ne peut pas la juger.
+prov-more-findings = { $n ->
+    [one] 1 autre constat n’est pas listé.
+   *[other] { $n } autres constats ne sont pas listés.
+}

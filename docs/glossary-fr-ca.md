@@ -154,6 +154,10 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Map page | Area rules (the panel) | Règles de zone | To confirm, see below. |
 | Map page | Network checks (the panel's section) | Vérifications du réseau |  |
 | Map page | finding (of a network check) | constat | `1 constat`, `aucun constat`. |
+| Map page | source data (the Provenance tab's heading) | données sources | `Données sources`. To confirm: `données d’origine`. |
+| Map page | possible gap (a source-data finding's count) | lacune possible | `1 lacune possible`, `rien trouvé`. To confirm: `anomalie possible`. |
+| Map page | dead end (a street that ends at a node of its own) | cul-de-sac | `Culs-de-sac`. To confirm. |
+| Map page | design impact (what a source-data finding could mislead) | effet sur la conception | To confirm: `incidence sur la conception`. |
 | Map page | Problem / Notice (a finding's severity) | Problème / À noter |  |
 | Map page | Cycling links | Liens cyclables |  |
 | Map page | Pedestrian street access | Accès aux rues piétonnes |  |
