@@ -107,6 +107,7 @@
     <div class="tabs" role="tablist" data-i18n-aria-label="ui-notes-sections" aria-label="Notes sections">
       <button type="button" role="tab" class="tab" id="t-checks" aria-controls="p-checks" aria-selected="true" data-i18n="ui-tab-checks">Checks</button>
       <button type="button" role="tab" class="tab" id="t-changes" aria-controls="p-changes" aria-selected="false" tabindex="-1" data-i18n="ui-tab-changes">Changes</button>
+      <button type="button" role="tab" class="tab" id="t-provenance" aria-controls="p-provenance" aria-selected="false" tabindex="-1" data-i18n="ui-tab-provenance">Provenance</button>
     </div>
     <div class="panel-body">
       <div class="panel-tab" id="p-checks" role="tabpanel" aria-labelledby="t-checks">
@@ -127,6 +128,14 @@
           <h2 id="h-changes" class="note-h" data-i18n="map-your-changes">Your changes</h2>
           <p class="hint" id="changes-lead"></p>
           <ul class="checks places-list" id="changes"></ul>
+        </section>
+      </div>
+      <div class="panel-tab" id="p-provenance" role="tabpanel" aria-labelledby="t-provenance" hidden>
+        <section aria-labelledby="h-source">
+          <h2 id="h-source" class="note-h" data-i18n="prov-heading">Source data</h2>
+          <p class="hint" data-i18n="prov-note">These show where the OpenStreetMap data behind the map may be missing or wrong. They are not design failures: they are counted apart from the checks on each place and from the network checks, and a street with a finding here can still pass every rule. The importer cannot tell a width the road is tagged with from the one it assumes, so a width finding may be only the default.</p>
+          <p class="hint" id="source-lead"></p>
+          <div id="source-slot"></div>
         </section>
       </div>
       <section class="key-section" aria-labelledby="h-key">

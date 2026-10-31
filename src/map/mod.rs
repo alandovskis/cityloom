@@ -11,6 +11,8 @@ pub mod home;
 pub mod network;
 pub mod network_view;
 pub mod overlay;
+pub mod source_quality;
+pub mod source_view;
 pub mod style;
 pub mod svg;
 #[cfg(test)]
@@ -87,6 +89,8 @@ pub fn mount_map(basemap: crate::shared::platform::Basemap) -> MapPage {
     mount("areas-slot", view! { <areas_view::Areas vm=vm.clone()/> }.into_any());
     mount("network-lead", view! { <network_view::NetworkLead vm=vm.clone()/> }.into_any());
     mount("network-slot", view! { <network_view::NetworkChecks vm=vm.clone()/> }.into_any());
+    mount("source-lead", view! { <source_view::SourceLead vm=vm.clone()/> }.into_any());
+    mount("source-slot", view! { <source_view::SourceFindings vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <view::TitleBlock vm=vm.clone()/><view::MapTitle vm=vm.clone()/> }.into_any());
     MapPage(vm, i18n)
 }

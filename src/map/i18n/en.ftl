@@ -226,3 +226,48 @@ net-more-places = { $n ->
     [one] and 1 more place
    *[other] and { $n } more places
 }
+
+## Source data, the Provenance tab (src/map/source_quality.rs, src/map/vm.rs)
+prov-heading = Source data
+prov-note = These show where the OpenStreetMap data behind the map may be missing or wrong. They are not design failures: they are counted apart from the checks on each place and from the network checks, and a street with a finding here can still pass every rule. The importer cannot tell a width the road is tagged with from the one it assumes, so a width finding may be only the default.
+prov-no-places = There is no source data to inspect.
+prov-lead-none = Nothing looks missing or wrong in the source data.
+prov-lead = { $n ->
+    [one] 1 place in the source data may be missing or wrong.
+   *[other] { $n } places in the source data may be missing or wrong.
+}
+prov-count-none = nothing found
+prov-count-one = 1 possible gap
+prov-count = { $n } possible gaps
+prov-label-source = Source:
+prov-label-impact = Design impact:
+prov-kind-name = Street names
+prov-kind-disconnected = Disconnected streets
+prov-kind-ends = Dead ends
+prov-kind-width = Widths
+prov-kind-speed = Speed limits
+prov-name = The name of { $street } is not in OpenStreetMap, so the map gives it a name of its own.
+prov-source-name = The road has no name tag.
+prov-impact-name = Saved edits and the notes name the street by what the map made up, and a street of the same sort could be taken for another.
+prov-disconnected = { $n ->
+    [one] This street is joined to no other street in the loaded area.
+   *[other] These { $n } streets are joined to each other and to no other street in the loaded area.
+}
+prov-source-disconnected = The roads share no node with the rest of the network, and none of them reaches the edge of the area. The roads may be mapped without a shared node, or the other roads may be missing.
+prov-impact-disconnected = Network checks on walking, cycling and transit routes will count them as cut off, which may be a gap in the data and not in the design.
+prov-ends = { $street } ends at a node that no other street reaches.
+prov-source-ends = The road stops at its own node. It may be a real dead end, or the road that continues it may be missing or not joined.
+prov-impact-ends = A junction may be missing here, so the crossings and lanes the design checks expect would not be drawn.
+prov-width-row-narrow = { $street } is { $width } wide as imported, narrower than the { $limit } a street is taken to need.
+prov-width-row-wide = { $street } is { $width } wide as imported, wider than the { $limit } a street is taken to need.
+prov-width-lane-narrow = A piece of { $street } ({ $kind }) is at the least width the catalogue allows, { $limit }.
+prov-width-lane-wide = A piece of { $street } ({ $kind }) is at the most width the catalogue allows, { $limit }.
+prov-source-width = The importer cannot tell a width the road is tagged with from the one osm2streets assumes, and it keeps each piece within the catalogue's limits, so a piece at a limit may have been cut to it.
+prov-impact-width = Width and capacity checks, and the room left for other pieces, rest on this width.
+prov-speed = { $street } has no speed limit in OpenStreetMap.
+prov-source-speed = The road has no maxspeed tag, or one that could not be read.
+prov-impact-speed = The speed shown for the street is Not set, and the Speed limit rule of an area cannot judge it.
+prov-more-findings = { $n ->
+    [one] 1 more finding is not listed.
+   *[other] { $n } more findings are not listed.
+}
