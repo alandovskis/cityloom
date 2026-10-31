@@ -390,22 +390,33 @@ fn walking_islands(ctx: &Ctx) -> Vec<NetworkFinding> {
     let main = (0..groups.len()).max_by_key(|&g| (groups[g].len(), std::cmp::Reverse(groups[g][0])));
     (0..groups.len())
         .filter(|&g| Some(g) != main)
-        .map(|g| {
+        .filter_map(|g| {
+            let mut cut = false;
             let mut places: Vec<Place> = groups[g].iter().map(|&i| ctx.street_place(i)).collect();
             // the junctions where the route ends against an arm with no crossing: its own, or a neighbour's
             // (or against a freeway or a street with no sidewalk)
             for (&node, ends) in &ctx.at {
                 let cuts = cut_at.contains_key(&node) || ends.iter().any(|&(i, _)| !streets[i].walkable);
                 if cuts && ends.iter().any(|(i, _)| groups[g].contains(i)) {
+                    cut = true;
                     places.extend(ctx.junction_place(node));
+                    // and the streets that walking stops at, since adding a sidewalk to one is a way to join the route
+                    for &(i, _) in ends {
+                        let at_end = &streets[i];
+                        let place = ctx.street_place(i);
+                        if !at_end.walkable && !at_end.freeway && !places.contains(&place) {
+                            places.push(place);
+                        }
+                    }
                 }
             }
-            NetworkFinding {
+            // a route that touches nothing that cuts it is a fragment of the area's box, not a gap
+            cut.then(|| NetworkFinding {
                 rule: Check::Walking,
                 severity: Severity::Problem,
                 said: Said::new("net-walking-island").with("n", Arg::Num(groups[g].len() as i64)),
                 places,
-            }
+            })
         })
         .collect()
 }
@@ -696,7 +707,7 @@ mod tests {
         // streets 1 and 2 are joined (the bigger route), street 4 is alone beyond street 3
         let f = walking_of(&r, "net-walking-island");
         assert_eq!(f.len(), 1, "{f:?}");
-        assert_eq!(uids(&f[0]), vec![(PlaceKind::Street, 4)]);
+        assert_eq!(uids(&f[0]), vec![(PlaceKind::Street, 4), (PlaceKind::Street, 3)]);
         assert_eq!(f[0].severity, Severity::Problem);
         assert_eq!(f[0].said.args[0].1, Arg::Num(1));
         r.streets[2] = line().streets[2].clone();
@@ -753,5 +764,20 @@ mod tests {
         r.streets[1].length_mm = MAX_BLOCK_MM * 3;
         r.streets[1].freeway = true;
         assert!(walking_of(&r, "net-walking-block").is_empty());
+    }
+
+    #[test]
+    fn a_street_that_meets_nothing_is_a_fragment_of_the_map_and_not_a_walking_gap() {
+        let mut r = line();
+        r.streets.push(street(9, 20, 21));
+        assert!(walking_of(&r, "net-walking-island").is_empty(), "{:?}", walking_of(&r, "net-walking-island"));
+    }
+
+    #[test]
+    fn the_street_without_a_sidewalk_that_cuts_a_route_is_named_so_a_sidewalk_on_it_can_join_the_route() {
+        let mut r = line();
+        r.streets[2] = without_sidewalk(r.streets[2].clone());
+        let f = walking_of(&r, "net-walking-island");
+        assert_eq!(uids(&f[0]), vec![(PlaceKind::Street, 4), (PlaceKind::Street, 3)]);
     }
 }
