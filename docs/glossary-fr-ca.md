@@ -160,6 +160,8 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Map page | Crossings (the network check) | Passages pour piétons | `passage pour piétons`, as in the junction. |
 | Map page | Lane counts | Nombre de voies |  |
 | Map page | Transit corridors | Axes de transport en commun |  |
+| Map page | Walking routes (the network check) | Parcours piétons |  |
+| Map page | block (the stretch of street between two junctions) | îlot | `îlot` for the block, as in `longueur d’îlot`; to confirm. |
 | Map page | area (of a restriction) | zone |  |
 | Map page | outline (of an area) | contour |  |
 | Map page | Rules over an area (the tab's heading) | Règles sur une zone | To confirm, see below. |

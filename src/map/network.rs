@@ -16,6 +16,9 @@ pub const MAX_LANE_STEP: usize = 1;
 /// A pedestrian crossing wider than this is unsuitable for the people crossing. UNVERIFIED (the junction editor allows
 /// up to 6 m).
 pub const MAX_CROSSING_MM: i32 = 4_500;
+/// A street longer than this between its ends is a block too long to walk round. UNVERIFIED: a placeholder, since the
+/// figure a design manual gives depends on the setting.
+pub const MAX_BLOCK_MM: i32 = 250_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Check {
@@ -24,10 +27,11 @@ pub enum Check {
     Crossings,
     Lanes,
     Transit,
+    Walking,
 }
 
 impl Check {
-    pub const ALL: [Check; 5] = [Check::Cycling, Check::Access, Check::Crossings, Check::Lanes, Check::Transit];
+    pub const ALL: [Check; 6] = [Check::Cycling, Check::Access, Check::Crossings, Check::Lanes, Check::Transit, Check::Walking];
 
     /// The rule's name, for an element id; and the message `net-rule-<id>` that words it.
     pub fn id(self) -> &'static str {
@@ -37,6 +41,7 @@ impl Check {
             Check::Crossings => "crossings",
             Check::Lanes => "lanes",
             Check::Transit => "transit",
+            Check::Walking => "walking",
         }
     }
 }
@@ -82,7 +87,7 @@ pub struct NetworkReport {
     pub unreadable: usize,
 }
 
-/// Every finding of the five checks over the network, by check and then by place.
+/// Every finding of the six checks over the network, by check and then by place.
 pub fn check(read: &NetworkRead) -> NetworkReport {
     let ctx = Ctx::new(read);
     let mut findings = cycling(&ctx);
@@ -91,6 +96,7 @@ pub fn check(read: &NetworkRead) -> NetworkReport {
     findings.extend(crossing_findings);
     findings.extend(lanes(&ctx));
     findings.extend(transit(&ctx));
+    findings.extend(walking(&ctx));
     NetworkReport { findings, unreadable }
 }
 
@@ -300,13 +306,142 @@ fn transit(ctx: &Ctx) -> Vec<NetworkFinding> {
     ends_where_it_stops(ctx, |e| e.bus, Check::Transit, "net-transit-break")
 }
 
+/// Walking routes, read as routes across the network and not as single crossings or sections: a sidewalk that stops
+/// where the next street has none, a part of the network people cannot walk to from the rest, and a block too long
+/// to walk round. Accessible curb transitions are not modelled (the editors hold no curb ramps), so they are covered
+/// only as far as sidewalk continuity and the crossings go: a sidewalk that stops at a node is a break in the route,
+/// and an arm with no crossing does not join the walking network (the Crossings check names it too).
+fn walking(ctx: &Ctx) -> Vec<NetworkFinding> {
+    let mut found = walking_ends(ctx);
+    found.extend(walking_islands(ctx));
+    found.extend(long_blocks(ctx));
+    found
+}
+
+/// Sidewalks that stop at a node where another street goes on without one. Where the only other streets are
+/// freeways the walkway is cut by a barrier, which the islands report.
+fn walking_ends(ctx: &Ctx) -> Vec<NetworkFinding> {
+    let mut found = Vec::new();
+    for (&node, ends) in &ctx.at {
+        for &here in ends {
+            if !ctx.end(here).sidewalk {
+                continue;
+            }
+            let others: Vec<(usize, usize)> = ends.iter().copied().filter(|o| o.0 != here.0).collect();
+            let goes_on = others.iter().any(|&o| !ctx.read.streets[o.0].freeway);
+            if !goes_on || others.iter().any(|&o| ctx.end(o).sidewalk) {
+                continue;
+            }
+            let street = &ctx.read.streets[here.0].called;
+            let at = ctx.node(node).map_or(street, |n| &n.name);
+            let mut places = vec![ctx.street_place(here.0)];
+            places.extend(ctx.junction_place(node));
+            found.push(NetworkFinding {
+                rule: Check::Walking,
+                severity: Severity::Notice,
+                said: Said::new("net-walking-ends").with("street", name(street)).with("at", name(at)),
+                places,
+            });
+        }
+    }
+    found
+}
+
+/// Streets people can walk, joined into routes: at a plain connection every walkable street end joins; at a junction
+/// only the arms that can be crossed (a pedestrian street, or an arm with a pedestrian crossing) do. A junction that
+/// could not be read, or an arm of no known street, is given the benefit of the doubt. A route that is not the biggest
+/// is cut off from the rest, by a freeway, a street with no sidewalk or an arm with no crossing.
+fn walking_islands(ctx: &Ctx) -> Vec<NetworkFinding> {
+    let streets = &ctx.read.streets;
+    let mut parent: Vec<usize> = (0..streets.len()).collect();
+    // junction uid -> the walkable streets that end there and cannot be crossed to
+    let mut cut_at: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
+    for (&node_uid, ends) in &ctx.at {
+        let walkable: Vec<(usize, usize)> = ends.iter().copied().filter(|&(i, _)| streets[i].walkable).collect();
+        let junction = ctx.node(node_uid).filter(|n| n.junction && !n.unreadable && !n.arms.is_empty());
+        let mut joined = Vec::new();
+        for &(i, _) in &walkable {
+            let passable = match junction {
+                None => true,
+                Some(n) => match n.arms.iter().find(|a| a.street == streets[i].uid) {
+                    None => true,
+                    Some(arm) => streets[i].pedestrian || arm.crossing_mm.is_some(),
+                },
+            };
+            if passable {
+                joined.push(i);
+            } else {
+                cut_at.entry(node_uid).or_default().push(i);
+            }
+        }
+        if let Some((&first, rest)) = joined.split_first() {
+            for &i in rest {
+                let (a, b) = (root(&mut parent, first), root(&mut parent, i));
+                parent[b] = a;
+            }
+        }
+    }
+    let mut groups: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for i in (0..streets.len()).filter(|&i| streets[i].walkable) {
+        let r = root(&mut parent, i);
+        groups.entry(r).or_default().push(i);
+    }
+    let groups: Vec<Vec<usize>> = groups.into_values().collect();
+    let main = (0..groups.len()).max_by_key(|&g| (groups[g].len(), std::cmp::Reverse(groups[g][0])));
+    (0..groups.len())
+        .filter(|&g| Some(g) != main)
+        .map(|g| {
+            let mut places: Vec<Place> = groups[g].iter().map(|&i| ctx.street_place(i)).collect();
+            // the junctions where the route ends against an arm with no crossing: its own, or a neighbour's
+            // (or against a freeway or a street with no sidewalk)
+            for (&node, ends) in &ctx.at {
+                let cuts = cut_at.contains_key(&node) || ends.iter().any(|&(i, _)| !streets[i].walkable);
+                if cuts && ends.iter().any(|(i, _)| groups[g].contains(i)) {
+                    places.extend(ctx.junction_place(node));
+                }
+            }
+            NetworkFinding {
+                rule: Check::Walking,
+                severity: Severity::Problem,
+                said: Said::new("net-walking-island").with("n", Arg::Num(groups[g].len() as i64)),
+                places,
+            }
+        })
+        .collect()
+}
+
+/// Streets longer than a block should be, with the junctions at their ends. A freeway is not a block.
+fn long_blocks(ctx: &Ctx) -> Vec<NetworkFinding> {
+    ctx.read
+        .streets
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| !s.freeway && s.length_mm > MAX_BLOCK_MM)
+        .map(|(i, s)| {
+            let mut places = vec![ctx.street_place(i)];
+            for node in [s.a, s.b] {
+                places.extend(ctx.junction_place(node));
+            }
+            NetworkFinding {
+                rule: Check::Walking,
+                severity: Severity::Notice,
+                said: Said::new("net-walking-block")
+                    .with("street", name(&s.called))
+                    .with("length", Arg::Length(s.length_mm))
+                    .with("max", Arg::Length(MAX_BLOCK_MM)),
+                places,
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::city::model::{ArmRead, EndRead, NodeRead, StreetRead};
 
     fn end(lanes: usize, bike: bool, bus: bool) -> EndRead {
-        EndRead { lanes, bike, bus }
+        EndRead { lanes, bike, bus, sidewalk: true }
     }
 
     fn street(uid: u32, a: u32, b: u32) -> StreetRead {
@@ -318,6 +453,8 @@ mod tests {
             called: Said::new("test-called"),
             pedestrian: false,
             freeway: false,
+            length_mm: 80_000,
+            walkable: true,
             bike: false,
             walkway_ok: true,
             ends: [end(2, false, false), end(2, false, false)],
@@ -513,5 +650,108 @@ mod tests {
         let report = check(&r);
         assert_eq!(report.unreadable, 1);
         assert!(report.findings.is_empty(), "an arm that cannot be found is not a missing crossing: {:?}", report.findings);
+    }
+
+    fn walking_of(r: &NetworkRead, key: &str) -> Vec<NetworkFinding> {
+        of(r, Check::Walking).into_iter().filter(|f| f.said.key == key).collect()
+    }
+
+    /// Street `s` as a street with no sidewalk (and so not walkable).
+    fn without_sidewalk(mut s: StreetRead) -> StreetRead {
+        s.walkable = false;
+        s.ends[0].sidewalk = false;
+        s.ends[1].sidewalk = false;
+        s
+    }
+
+    #[test]
+    fn a_sidewalk_that_stops_where_the_next_street_has_none_is_found_with_its_junction() {
+        let mut r = line();
+        r.streets[1] = without_sidewalk(r.streets[1].clone());
+        r.nodes[1] = node(2, &[(1, Some(3_000)), (2, Some(3_000)), (5, Some(3_000))]);
+        let f = walking_of(&r, "net-walking-ends");
+        // street 1 stops at node 2, and street 3 stops at node 3 (a plain connection: no junction to name)
+        assert_eq!(f.len(), 2, "{f:?}");
+        assert_eq!(uids(&f[0]), vec![(PlaceKind::Street, 1), (PlaceKind::Junction, 2)]);
+        assert_eq!(uids(&f[1]), vec![(PlaceKind::Street, 3)]);
+        assert_eq!(f[0].severity, Severity::Notice);
+        // the sidewalk goes on along the next street
+        r.streets[1] = line().streets[1].clone();
+        assert!(walking_of(&r, "net-walking-ends").is_empty());
+    }
+
+    #[test]
+    fn a_sidewalk_that_meets_only_a_freeway_or_the_edge_of_the_map_is_not_an_end_to_report() {
+        let mut r = line();
+        r.streets[1].freeway = true;
+        r.streets[1] = without_sidewalk(r.streets[1].clone());
+        // street 1's sidewalk meets a freeway at node 2, and street 4 is left to run off the map
+        assert!(walking_of(&r, "net-walking-ends").is_empty(), "{:?}", walking_of(&r, "net-walking-ends"));
+    }
+
+    #[test]
+    fn a_street_cut_off_from_the_walking_network_by_a_street_without_a_sidewalk_is_an_island_and_a_sidewalk_clears_it() {
+        let mut r = line();
+        r.streets[2] = without_sidewalk(r.streets[2].clone());
+        // streets 1 and 2 are joined (the bigger route), street 4 is alone beyond street 3
+        let f = walking_of(&r, "net-walking-island");
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert_eq!(uids(&f[0]), vec![(PlaceKind::Street, 4)]);
+        assert_eq!(f[0].severity, Severity::Problem);
+        assert_eq!(f[0].said.args[0].1, Arg::Num(1));
+        r.streets[2] = line().streets[2].clone();
+        assert!(walking_of(&r, "net-walking-island").is_empty());
+    }
+
+    #[test]
+    fn a_freeway_cuts_the_walking_network() {
+        let mut r = line();
+        r.streets[1].freeway = true;
+        r.streets[1].walkable = false;
+        let f = walking_of(&r, "net-walking-island");
+        assert_eq!(f.len(), 1, "{f:?}");
+        // the one street on its own side is the island; the two on the other side are the bigger route
+        assert_eq!(uids(&f[0]), vec![(PlaceKind::Street, 1)]);
+        assert_eq!(f[0].said.args[0].1, Arg::Num(1));
+    }
+
+    #[test]
+    fn an_arm_with_no_crossing_does_not_join_the_walking_network_and_the_junction_is_named() {
+        let mut r = line();
+        r.nodes[1] = node(2, &[(1, Some(3_000)), (2, None)]);
+        // street 1 is alone on one side of node 2, streets 2..4 are the bigger route
+        let f = walking_of(&r, "net-walking-island");
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert_eq!(uids(&f[0]), vec![(PlaceKind::Street, 1), (PlaceKind::Junction, 2)]);
+        // with the crossing, the route is whole
+        r.nodes[1] = node(2, &[(1, Some(3_000)), (2, Some(3_000))]);
+        assert!(walking_of(&r, "net-walking-island").is_empty());
+        // a pedestrian street needs no crossing to be walked on to
+        r.nodes[1] = node(2, &[(1, Some(3_000)), (2, None)]);
+        r.streets[1].pedestrian = true;
+        assert!(walking_of(&r, "net-walking-island").is_empty());
+    }
+
+    #[test]
+    fn a_junction_that_could_not_be_read_does_not_cut_the_walking_network() {
+        let mut r = line();
+        r.nodes[1] = node(2, &[(1, None), (2, None)]);
+        r.nodes[1].unreadable = true;
+        assert!(walking_of(&r, "net-walking-island").is_empty());
+    }
+
+    #[test]
+    fn a_block_longer_than_the_maximum_is_found_with_the_junctions_at_its_ends_and_a_freeway_is_not_a_block() {
+        let mut r = line();
+        r.nodes[1] = node(2, &[(1, Some(3_000)), (2, Some(3_000))]);
+        r.streets[1].length_mm = MAX_BLOCK_MM + 1;
+        let f = walking_of(&r, "net-walking-block");
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert_eq!(uids(&f[0]), vec![(PlaceKind::Street, 2), (PlaceKind::Junction, 2)]);
+        r.streets[1].length_mm = MAX_BLOCK_MM;
+        assert!(walking_of(&r, "net-walking-block").is_empty());
+        r.streets[1].length_mm = MAX_BLOCK_MM * 3;
+        r.streets[1].freeway = true;
+        assert!(walking_of(&r, "net-walking-block").is_empty());
     }
 }

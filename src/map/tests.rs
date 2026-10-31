@@ -775,7 +775,7 @@ fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
     let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
     assert_eq!(count(&h, "<section"), 0, "a check is not a landmark: {h}");
     assert!(!h.contains("aria-labelledby"), "{h}");
-    assert_eq!(count(&h, "<h3"), 5);
+    assert_eq!(count(&h, "<h3"), 6);
     // the name and the count are read apart: "Crossings: no findings"
     assert!(h.contains("Crossings</span><span class=\"sr-only\">: </span><span class=\"fig net-count\">no findings</span>"), "{h}");
     for (id, label) in [
@@ -784,10 +784,11 @@ fn the_network_checks_are_a_section_per_check_with_its_count_in_the_heading() {
         ("crossings", "Crossings"),
         ("lanes", "Lane counts"),
         ("transit", "Transit corridors"),
+        ("walking", "Walking routes"),
     ] {
         assert!(h.contains(&format!("id=\"net-h-{id}\"")) && h.contains(&format!("data-rule=\"{id}\"")) && h.contains(label), "{id}: {h}");
     }
-    assert_eq!(count(&h, "no findings"), 5);
+    assert_eq!(count(&h, "no findings"), 6);
     assert_eq!(count(&h, "<li"), 0);
     let lead = map_html(|| view! { <network_view::NetworkLead vm=vm.clone()/> });
     assert!(lead.contains("found nothing"), "{lead}");
