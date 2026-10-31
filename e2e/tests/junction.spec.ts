@@ -1224,3 +1224,94 @@ test.describe("a street's transit stop on the arm that meets it", () => {
     await expect(checkRow(page, lanes)).not.toHaveClass(/bad/);
   });
 });
+
+// ---- curbside uses on an arm ---------------------------------------------------------------------------------
+
+test.describe("a street's curbside use on the arm that meets it", () => {
+  const PARKING = "0";
+  const USE_M = 6;
+  const label = "Curbside clear of crossings";
+
+  /** Finds a junction whose first street is measured from the junction itself (so a use placed at the street's
+   *  origin stands at the junction's centre) and has a curbside strip. Leaves the page on the street. */
+  const originArm = async (page: Page) => {
+    await page.goto("/map.html");
+    for (const junction of (await placesOnMap(page)).junctions) {
+      await page.goto("/" + junction);
+      await expect(page.locator("#drawing")).toBeVisible();
+      const name = (await page.locator("#street-name").innerText()).trim();
+      await page.locator("#wrap").focus();
+      await page.keyboard.press("ArrowRight");
+      const link = page.locator('#inspector a.btn[href^="street.html?street="]');
+      await expect(link).toBeVisible();
+      await link.click();
+      await expect(page.locator("#zone-0")).toBeVisible();
+      const from = (
+        await page
+          .getByText(/^Measured from /)
+          .first()
+          .innerText()
+      ).trim();
+      if (
+        from === `Measured from ${name}` &&
+        (await streetLengthM(page)) >= 50 &&
+        (await page.locator(".curb-strip").count()) > 0
+      ) {
+        return { junction, street: page.url() };
+      }
+    }
+    throw new Error("no junction has a first street measured from it with a curbside lane");
+  };
+
+  const kept = (page: Page, fromM: number) =>
+    expect
+      .poll(() =>
+        page.evaluate((m) => (localStorage.getItem("cityloom-edits") ?? "").includes(`"from_mm":${m * 1000}`), fromM),
+      )
+      .toBe(true);
+
+  const checkRow = (page: Page) => page.locator("#checks li").filter({ hasText: label });
+
+  test("parking at the centre fails the check, and drawn 30 m out it passes", async ({ page }) => {
+    test.setTimeout(120_000);
+    const arm = await originArm(page);
+
+    await page.goto("/" + arm.junction);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(page.locator("#drawing .curb-use")).toHaveCount(0);
+
+    // A parking use at the street's origin: it stands on the crossing, which the junction says.
+    await page.goto(arm.street);
+    await expect(page.locator("#zone-0")).toBeVisible();
+    const strip = page.locator(".curb-strip").first();
+    const cells = strip.locator('[role="option"]');
+    await cells.nth(0).click();
+    await page.locator("#curb-use").selectOption(PARKING);
+    await page.locator("#curb-length").fill(String(USE_M));
+    await page.locator("#curb-add").click();
+    await expect(cells).toHaveCount(2);
+    await kept(page, 0);
+
+    await page.goto("/" + arm.junction);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await page.locator("#t-checks").click();
+    await expect(checkRow(page)).toHaveClass("bad");
+
+    // Moved 30 m out, it is drawn on the arm and clear.
+    await page.goto(arm.street);
+    await expect(page.locator("#zone-0")).toBeVisible();
+    await cells.nth(0).click();
+    await strip.focus();
+    for (let i = 0; i < 3; i++) await page.keyboard.press("Shift+Alt+ArrowRight");
+    await kept(page, 30);
+
+    await page.goto("/" + arm.junction);
+    await expect(page.locator("#drawing")).toBeVisible();
+    await expect(page.locator('#drawing g[data-role="arm"] .curb-use.use-parking')).toHaveCount(1);
+    await page.locator("#t-checks").click();
+    await expect(checkRow(page)).not.toHaveClass(/bad/);
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(live(page)).toContainText(/Parking .*30\.0 m from the centre/);
+  });
+});
