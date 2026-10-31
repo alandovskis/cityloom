@@ -409,6 +409,13 @@ pub fn plan_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: U
         if let Some(q) = &t.queue {
             g += &p.piece("piece k-bus queue", "bus", &p.path_d(q));
         }
+        for u in &a.curb_uses {
+            if let Some(poly) = &u.poly {
+                let id = KINDS[u.kind].id;
+                let name = format!("{:?}", u.use_).to_lowercase();
+                g += &p.piece(&format!("piece k-{id} curb-use use-{name}{}", if u.bad { " curb-use-bad" } else { "" }), id, &p.path_d(poly));
+            }
+        }
         for st in &a.stops {
             let bad = if st.bad { " stop-bad" } else { "" };
             if let Some(pad) = &st.pad {

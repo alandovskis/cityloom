@@ -234,6 +234,23 @@ mod tests {
     }
 
     #[test]
+    fn the_outline_of_a_curbside_use_too_near_a_crossing_clears_three_to_one_on_every_use_in_both_themes() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        let rule = editor.find("#drawing .curb-use.curb-use-bad {").expect("the outline has a rule");
+        let block = &editor[rule..rule + editor[rule..].find('}').unwrap()];
+        assert!(block.contains("stroke: var(--ink);"), "{block}");
+        assert!(editor.contains("  #drawing .curb-use.curb-use-bad {\n    stroke: Highlight;"), "forced-colours rule");
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let ink = pick(&token(app, "ink"), i);
+            for ground in ["k-parking", "k-loading", "k-planting", "k-terrace", "k-bikerack", "k-sidewalk"] {
+                let fill = pick(&token(app, ground), i);
+                assert!(contrast(&ink, &fill) >= 3.0, "ink on {ground} {theme}: {:.2}", contrast(&ink, &fill));
+            }
+        }
+    }
+
+    #[test]
     fn the_stop_marks_clear_three_to_one_on_the_road_in_both_themes() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
         let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();

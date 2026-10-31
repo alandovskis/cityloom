@@ -171,7 +171,7 @@ fn conflicts_are_counted_and_the_note_follows_the_control() {
 fn the_checks_each_say_whether_they_pass() {
     let s = shared(0);
     let h = html(|| view! { <notes::Checks vm=s.clone()/> }.into_any());
-    assert_eq!(count(&h, "<li class=\"ok\">"), 14, "the ten of any junction, and a signal's time to cross, phases, cycle and meeting movements");
+    assert_eq!(count(&h, "<li class=\"ok\">"), 15, "the ten of any junction, and a signal's time to cross, phases, cycle and meeting movements");
     assert!(h.contains("Time to cross") && h.contains("Signal cycle") && h.contains("Movements that meet"));
     assert!(h.contains(": passes"));
     assert!(h.contains("Longest crossing in one go: 11.4 m"));
@@ -3092,4 +3092,120 @@ fn a_stops_side_is_said_as_seen_from_the_centre_and_the_double_stop_problem_read
     assert!(j.set_stop(uid, STOP_PLATFORM));
     let text = crate::shared::testing::fr(&check_of(&j, "transit").detail);
     assert!(text.contains("gardez soit la mesure (quai sur rue protégé par des feux), soit l\u{2019}arrêt de la rue"), "{text}");
+}
+
+// ---- curbside uses on an arm ----
+
+/// A sample junction whose north arm has the curbside uses `make` builds from the index of that arm's parking piece
+/// (or its first sidewalk when it has none), and that arm's uid.
+fn junction_with_uses(make: impl Fn(usize) -> Vec<crate::street::model::EndUse>) -> (Junction, u32) {
+    let mut state = Junction::new(0).current().clone();
+    let arm = state.arms.iter_mut().find(|a| a.bearing == 0).unwrap();
+    let prof = arm.profile(0);
+    let piece = prof.pieces.iter().position(|p| crate::shared::catalogue::KINDS[p.kind].id == "parking").unwrap_or(0);
+    arm.curb_near = make(piece);
+    let uid = arm.uid;
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    (Junction::from_city(named, &state, &state, 0).expect("draws"), uid)
+}
+
+fn end_use(near_mm: i32, use_: crate::street::model::Use, piece: usize) -> crate::street::model::EndUse {
+    crate::street::model::EndUse { index: 0, side: crate::shared::catalogue::Side::Right, use_, near_mm, far_mm: near_mm + 6_000, piece: Some(piece) }
+}
+
+#[test]
+fn an_arm_draws_the_curbside_uses_its_street_has() {
+    use crate::street::model::Use;
+    let (j, uid) = junction_with_uses(|p| vec![end_use(25_000, Use::Tree, p)]);
+    let v = j.view();
+    let a = v.arms.iter().find(|a| a.uid == uid).unwrap();
+    assert_eq!(a.curb_uses.len(), 1);
+    let u = &a.curb_uses[0];
+    assert!(u.poly.is_some());
+    assert_eq!((u.near_mm, u.material), (25_000, "trees"));
+    assert!(v.arms.iter().filter(|x| x.uid != uid).all(|x| x.curb_uses.is_empty()));
+}
+
+#[test]
+fn an_arm_without_uses_sends_none() {
+    let v = Junction::new(0).view();
+    assert!(v.arms.iter().all(|a| a.curb_uses.is_empty()));
+    assert!(!serde_json::to_string(&v.arms[0]).unwrap().contains("curb_uses"));
+}
+
+fn near_check(near: i32, use_: crate::street::model::Use) -> (Junction, crate::junction::read_model::Check) {
+    let (j, _) = junction_with_uses(|p| vec![end_use(near, use_, p)]);
+    let c = check_of(&j, "curb-near");
+    (j, c)
+}
+
+#[test]
+fn parking_three_metres_past_the_crossing_fails_curb_near_and_names_the_arm() {
+    use crate::street::model::Use;
+    let (probe, _) = near_check(30_000, Use::Parking);
+    let near = north_reach(&probe) + 3_000;
+    let (j, c) = near_check(near, Use::Parking);
+    assert!(!c.ok);
+    let text = said_en(&c.detail);
+    assert!(text.contains("Sample Avenue 2 (north)") && text.contains("3.0 m") && text.contains("5.0 m or more") && text.contains("crossing"), "{text}");
+    assert!(j.view().arms.iter().find(|a| a.bearing == 0).unwrap().curb_uses[0].bad);
+}
+
+#[test]
+fn parking_five_metres_clear_passes_and_a_millimetre_short_fails() {
+    use crate::street::model::Use;
+    let (probe, _) = near_check(30_000, Use::Parking);
+    let reach = north_reach(&probe);
+    assert!(near_check(reach + 5_000, Use::Parking).1.ok);
+    assert!(!near_check(reach + 4_999, Use::Parking).1.ok);
+    assert!(!near_check(reach + 5_000, Use::Loading).0.view().arms.is_empty());
+    assert!(!near_check(reach + 4_999, Use::Loading).1.ok, "loading is held to it too");
+}
+
+#[test]
+fn parking_that_reaches_the_crossing_says_so() {
+    use crate::street::model::Use;
+    let (probe, _) = near_check(30_000, Use::Parking);
+    let (_, c) = near_check(north_reach(&probe) - 500, Use::Parking);
+    assert!(!c.ok);
+    assert!(said_en(&c.detail).contains("reaches the crossing"), "{}", said_en(&c.detail));
+}
+
+#[test]
+fn a_tree_beside_the_crossing_is_not_held_to_the_clearance() {
+    use crate::street::model::Use;
+    let (probe, _) = near_check(30_000, Use::Parking);
+    let (j, c) = near_check(north_reach(&probe) + 1_000, Use::Tree);
+    assert!(c.ok, "{}", said_en(&c.detail));
+    assert!(!j.view().arms.iter().find(|a| a.bearing == 0).unwrap().curb_uses[0].bad);
+}
+
+#[test]
+fn no_uses_one_passing_check() {
+    for sample in 0..JUNCTION_SAMPLES.len() {
+        let v = Junction::new(sample).view();
+        let c = v.checks.iter().find(|c| c.id == "curb-near").expect("the check is always listed");
+        assert!(c.ok && c.amount_mm == 0, "sample {sample}");
+        assert_eq!(said_en(&c.detail), "No parking or loading stands within 5.0 m of a crossing.", "sample {sample}");
+    }
+}
+
+#[test]
+fn a_pedestrian_arm_draws_and_judges_no_uses() {
+    use crate::street::model::Use;
+    let mut state = Junction::new(0).current().clone();
+    state.arms.iter_mut().filter(|a| a.is_pedestrian()).for_each(|a| a.curb_near = vec![end_use(500, Use::Parking, 0)]);
+    let named = crate::shared::said::Said::new("city-name").with("name", crate::shared::said::Arg::Text("Test".into()));
+    let v = Junction::from_city(named, &state, &state, 0).unwrap().view();
+    assert!(v.arms.iter().all(|a| a.curb_uses.is_empty() || !a.pedestrian));
+}
+
+#[test]
+fn the_selected_arm_names_its_curbside_uses() {
+    use crate::street::model::Use;
+    let (mut j, uid) = junction_with_uses(|p| vec![end_use(25_000, Use::Patio, p)]);
+    j.select(Target::Arm(uid));
+    let v = j.view();
+    let text = crate::junction::text::selection_text(&v, &crate::i18n_for(crate::shared::i18n::Locale::En), crate::shared::units::Units::Metres).unwrap();
+    assert!(text.contains("Patio") && text.contains("25.0 m from the centre"), "{text}");
 }

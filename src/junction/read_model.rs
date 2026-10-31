@@ -16,6 +16,7 @@ use crate::junction::model::{
     TRANSIT_LANE_MM, Target, arm_name, bike_box_blocker, blocked, classes_of, in_force, protected_blocker, protected_island_mm, traffic_arms, turn_class,
 };
 
+use crate::junction::curbside::{self, CROSSING_CLEARANCE_MM, CurbUseView};
 use crate::junction::signal::{self, Pattern};
 use crate::junction::stops::{self, StopView};
 use crate::junction::turbo::{self, BLOCKS, Edge, LAYOUTS, Turbo, WARN_SKEW_DEG, layouts_for, main_candidates, ring_lane};
@@ -115,7 +116,7 @@ pub struct EntryWiden {
 }
 
 impl ArmLayout {
-    fn lat(&self, offset: f64, x_mm: i32) -> f64 {
+    pub(crate) fn lat(&self, offset: f64, x_mm: i32) -> f64 {
         offset + x_mm as f64 - self.prof.row_mm as f64 / 2.0
     }
 }
@@ -575,6 +576,13 @@ pub struct ArmView {
     /// The stops whose bus is trapped in a turning lane.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub stop_lane: Vec<Said>,
+    /// The street's curbside uses on the arm, nearest first. Empty (and not sent) for an arm with none, a pedestrian
+    /// arm and a turbo's.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub curb_uses: Vec<CurbUseView>,
+    /// The parking or loading that stands too near the crossing, as the check says it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub curb_near: Vec<Said>,
 }
 
 #[derive(Serialize)]
@@ -1247,6 +1255,40 @@ impl Junction {
                     })
                     .collect()
             };
+            // The street's curbside uses, each drawn on its piece from where that piece's strip begins (parking and
+            // loading where the parking piece does, the rest beyond the crossing), and parking and loading judged
+            // against the crossing.
+            let (curb_uses, curb_near) = if walk || s.turbo.is_some() {
+                (Vec::new(), Vec::new())
+            } else {
+                let mut said = Vec::new();
+                let uses: Vec<CurbUseView> = a
+                    .curb_near
+                    .iter()
+                    .filter(|u| f64::from(u.near_mm) < len)
+                    .filter_map(|u| {
+                        let floor = if curbside::keeps_clear(u.use_) { park_t } else { far };
+                        let mut v = curbside::draw(l, off, u, floor, &|pi| cut(pi, l.mouth), len)?;
+                        v.gap_mm = stop_gap_mm(u.near_mm, far.round() as i32);
+                        if cx.is_some() && curbside::keeps_clear(u.use_) && v.gap_mm < CROSSING_CLEARANCE_MM {
+                            let arm = Arg::Said(Box::new(arm_name(a)));
+                            let use_ = Arg::MsgLower(u.use_.name_key());
+                            said.push(if v.gap_mm < 0 {
+                                Said::new("jn-curb-near-inside").with("use", use_).with("arm", arm)
+                            } else {
+                                Said::new("jn-curb-near")
+                                    .with("use", use_)
+                                    .with("arm", arm)
+                                    .with("gap", Arg::Length(v.gap_mm))
+                                    .with("need", Arg::Length(CROSSING_CLEARANCE_MM))
+                            });
+                            v.bad = true;
+                        }
+                        Some(v)
+                    })
+                    .collect();
+                (uses, said)
+            };
             let arrow_t = if cx.is_some() { far + ARROW_FROM_EDGE_MM } else { l.mouth + ARROW_FROM_EDGE_MM + 1_000.0 };
             // Where the lane at `x` ends: where its piece does.
             let lane_end = |x: i32| {
@@ -1350,6 +1392,8 @@ impl Junction {
                 transit: transit_view(s, a, l, off, far, crossing_present, side),
                 stops,
                 stop_clear,
+                curb_uses,
+                curb_near,
                 stop_lane,
             });
         }
@@ -2076,6 +2120,15 @@ fn checks(s: &State, region: usize, arms: &[ArmView], corners: &[CornerView], mo
         "jn-check-stop-lane",
         Said::new("jn-check-stop-lane-ok"),
         problems.map(|p| Said::new("jn-check-stop-lane-bad").with("stops", Arg::Said(Box::new(p)))),
+    ));
+
+    // The street's parking and loading stand clear of the crossings the junction draws.
+    let problems = list(arms.iter().flat_map(|a| a.curb_near.iter().cloned()).collect());
+    out.push(check(
+        "curb-near",
+        "jn-check-curb-near",
+        Said::new("jn-check-curb-near-ok").with("need", Arg::Length(CROSSING_CLEARANCE_MM)),
+        problems.map(|p| Said::new("jn-check-curb-near-bad").with("uses", Arg::Said(Box::new(p)))),
     ));
 
     // The end zone reaches past its stop line and arrows, and its transition fits.
