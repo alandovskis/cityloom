@@ -191,6 +191,7 @@ net-rule-access = Pedestrian street access
 net-rule-crossings = Crossings
 net-rule-lanes = Lane counts
 net-rule-transit = Transit corridors
+net-rule-walking = Walking routes
 net-severity-problem = Problem
 net-severity-notice = Notice
 net-lanes = { $n ->
@@ -207,6 +208,12 @@ net-crossing-missing = This street takes traffic into the junction and has no pe
 net-crossing-wide = The pedestrian crossing here is { $width } wide, wider than the { $max } maximum.
 net-lanes-change = { $a } has { $from } where it joins { $b }, which has { $to }: a change of more than { $step } at once.
 net-transit-break = { $at }: the transit lane of { $street } stops, since no other street that meets there has one.
+net-walking-ends = { $at }: the sidewalk of { $street } stops, since no other street that meets there has one.
+net-walking-island = { $n ->
+    [one] People cannot walk from this street to the rest of the network: a freeway, a street with no sidewalk or an arm with no pedestrian crossing cuts it off.
+   *[other] People cannot walk from these { $n } streets to the rest of the network: a freeway, a street with no sidewalk or an arm with no pedestrian crossing cuts them off.
+}
+net-walking-block = { $street } is { $length } long between its ends, longer than the { $max } maximum for a block.
 net-unreadable = { $n ->
     [one] 1 junction could not be read, so its crossings are not checked.
    *[other] { $n } junctions could not be read, so their crossings are not checked.

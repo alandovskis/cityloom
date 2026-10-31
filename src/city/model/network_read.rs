@@ -3,7 +3,7 @@
 //! are the map's (`map::network`).
 
 use super::street_note;
-use super::{City, node_uid};
+use super::{City, node_uid, path_mm};
 use crate::shared::catalogue::{KINDS, StreetClass};
 use crate::shared::said::Said;
 use crate::street::model::{Street, walkway_access};
@@ -17,6 +17,8 @@ pub struct EndRead {
     pub bike: bool,
     /// Whether that zone has a transit lane.
     pub bus: bool,
+    /// Whether people can walk along that zone: it has a sidewalk, or the street is pedestrian-only.
+    pub sidewalk: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -31,6 +33,11 @@ pub struct StreetRead {
     pub called: Said,
     pub pedestrian: bool,
     pub freeway: bool,
+    /// The street's length along its centreline, in millimetres.
+    pub length_mm: i32,
+    /// Whether people can walk the street: not a freeway, and either pedestrian-only or with a sidewalk at some end.
+    /// A street that is not walkable is a barrier to the walking routes, whatever its sidewalks elsewhere.
+    pub walkable: bool,
     /// Whether any zone has a bike lane.
     pub bike: bool,
     /// Whether every zone has an unbroken run of sidewalk wide enough for emergency access.
@@ -68,7 +75,12 @@ pub struct NetworkRead {
 fn end_of(street: &Street, first_end: bool) -> EndRead {
     let zone = street.end_segments(first_end);
     let has = |id: &str| zone.iter().any(|s| KINDS[s.kind].id == id);
-    EndRead { lanes: zone.iter().filter(|s| matches!(KINDS[s.kind].id, "travel" | "bus")).count(), bike: has("bike"), bus: has("bus") }
+    EndRead {
+        lanes: zone.iter().filter(|s| matches!(KINDS[s.kind].id, "travel" | "bus")).count(),
+        bike: has("bike"),
+        bus: has("bus"),
+        sidewalk: street.class == StreetClass::Pedestrian || has("sidewalk"),
+    }
 }
 
 impl City {
@@ -78,6 +90,10 @@ impl City {
         for (i, e) in self.layout.edges.iter().enumerate() {
             let uid = i as u32 + 1;
             let now = &self.streets[&uid];
+            let freeway = e.class.is_freeway();
+            let ends = [end_of(now, true), end_of(now, false)];
+            let walkable =
+                !freeway && (now.class == StreetClass::Pedestrian || now.sections().iter().any(|s| s.iter().any(|p| KINDS[p.kind].id == "sidewalk")));
             streets.push(StreetRead {
                 uid,
                 a: node_uid(e.a),
@@ -85,10 +101,12 @@ impl City {
                 name: street_note(self.layout.edge_title(i, now), self.layout.edge_ends(i)),
                 called: self.layout.edge_title(i, now),
                 pedestrian: now.class == StreetClass::Pedestrian,
-                freeway: e.class.is_freeway(),
+                freeway,
+                length_mm: path_mm(&self.layout.shape_of(i)).round() as i32,
+                walkable,
                 bike: now.sections().iter().any(|s| s.iter().any(|p| KINDS[p.kind].id == "bike")),
                 walkway_ok: walkway_access(now),
-                ends: [end_of(now, true), end_of(now, false)],
+                ends,
             });
         }
         let mut nodes = Vec::new();

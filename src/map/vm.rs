@@ -660,7 +660,7 @@ impl MapVm {
         lead
     }
 
-    /// The five checks, each with its count and its findings (the first `NETWORK_SHOWN` of them), in a fixed order.
+    /// The six checks, each with its count and its findings (the first `NETWORK_SHOWN` of them), in a fixed order.
     /// None when the city has no places.
     pub fn network_rules(&self) -> Vec<NetworkCheck> {
         if self.has_no_places() {
@@ -1498,14 +1498,52 @@ mod tests {
     }
 
     #[test]
-    fn the_network_checks_are_five_rules_with_a_count_each_and_the_hand_made_city_passes_them() {
+    fn the_network_checks_are_six_rules_with_a_count_each_and_the_hand_made_city_passes_them() {
         let (vm, ..) = vm();
         let rules = vm.network_rules();
-        assert_eq!(rules.iter().map(|r| r.id).collect::<Vec<_>>(), ["cycling", "access", "crossings", "lanes", "transit"]);
+        assert_eq!(rules.iter().map(|r| r.id).collect::<Vec<_>>(), ["cycling", "access", "crossings", "lanes", "transit", "walking"]);
         assert!(rules.iter().all(|r| r.count == 0 && r.items.is_empty() && r.count_text == "no findings"));
         assert_eq!(vm.network_count(), 0);
         assert_eq!(vm.network_lead(), "The network checks found nothing across the streets and junctions.");
         assert_eq!(rules[2].label, "Crossings");
+    }
+
+    /// Takes the sidewalks off a street of the hand-made city, as a street edit kept for the map to read; and puts one back.
+    fn set_sidewalks(storage: &Rc<MemoryStorage>, street: u32, on: bool) {
+        let store = CityStore::sample(storage.clone());
+        let mut e = store.open().street_editor(street, 0).unwrap();
+        let sidewalk = crate::shared::catalogue::kind_index("sidewalk").unwrap();
+        if on {
+            e.add(sidewalk, 0);
+        } else {
+            let uids: Vec<u32> = e.view().segments.iter().filter(|s| s.kind == sidewalk).map(|s| s.uid).collect();
+            for u in uids {
+                assert!(e.remove(u));
+            }
+        }
+        assert!(store.write_street(street, e.snapshot()));
+    }
+
+    #[test]
+    fn streets_without_sidewalks_cut_a_walking_route_and_a_fix_on_one_street_drops_the_findings() {
+        let (vm, _, storage) = vm();
+        assert_eq!(found(&vm, "walking").count, 0, "the hand-made city has walkable routes: {:?}", found(&vm, "walking"));
+        // street 7 runs from the edge of the map to junction 1, where streets 5 and 8 meet it; with neither of those
+        // walkable, its sidewalk stops at the junction and it is cut off from the rest of the network
+        set_sidewalks(&storage, 5, false);
+        set_sidewalks(&storage, 8, false);
+        vm.reload();
+        let walking = found(&vm, "walking");
+        assert_eq!(walking.items.iter().filter(|i| i.text.contains("cannot walk")).count(), 1, "{walking:?}");
+        assert!(walking.items.iter().all(|i| i.places.iter().any(|p| p.hot == "s-7")), "{walking:?}");
+        assert!(walking.items.iter().any(|i| i.text.contains("the sidewalk of")), "{walking:?}");
+        assert!(walking.items.iter().all(|i| i.places.iter().any(|p| p.hot == "j-3")), "the junction is named: {walking:?}");
+        assert_eq!(vm.network_count(), walking.count, "only the walking check found anything");
+        // a sidewalk put back on street 5 is the fix: the route goes on and the findings go
+        set_sidewalks(&storage, 5, true);
+        vm.reload();
+        assert_eq!(found(&vm, "walking").count, 0, "{:?}", found(&vm, "walking"));
+        assert_eq!(vm.network_count(), 0);
     }
 
     #[test]

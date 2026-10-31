@@ -18,7 +18,7 @@ pub fn NetworkLead(vm: Rc<MapVm>) -> impl IntoView {
     move || vm.with(|v| v.network_lead())
 }
 
-/// The five checks, in a fixed order, each with its count and its findings.
+/// The six checks, in a fixed order, each with its count and its findings.
 #[component]
 pub fn NetworkChecks(vm: Rc<MapVm>) -> impl IntoView {
     let vm: Vm = Bound::new(vm);

@@ -191,6 +191,7 @@ net-rule-access = Accès aux rues piétonnes
 net-rule-crossings = Passages pour piétons
 net-rule-lanes = Nombre de voies
 net-rule-transit = Axes de transport en commun
+net-rule-walking = Parcours piétons
 net-severity-problem = Problème
 net-severity-notice = À noter
 net-lanes = { $n ->
@@ -207,6 +208,12 @@ net-crossing-missing = Cette rue amène la circulation à la jonction et n’a p
 net-crossing-wide = Le passage pour piétons fait ici { $width } de large, soit plus que le maximum de { $max }.
 net-lanes-change = { $a } compte { $from } là où elle rejoint { $b }, qui en compte { $to } : un changement de plus de { $step } d’un coup.
 net-transit-break = { $at } : la voie réservée au transport en commun de { $street } s’arrête, car aucune autre rue qui s’y rencontre n’en a une.
+net-walking-ends = { $at } : le trottoir de { $street } s’arrête, car aucune autre rue qui s’y rencontre n’en a un.
+net-walking-island = { $n ->
+    [one] On ne peut pas aller à pied de cette rue au reste du réseau : une autoroute, une rue sans trottoir ou une branche sans passage pour piétons la coupe du reste.
+   *[other] On ne peut pas aller à pied de ces { $n } rues au reste du réseau : une autoroute, une rue sans trottoir ou une branche sans passage pour piétons les coupe du reste.
+}
+net-walking-block = { $street } fait { $length } de long entre ses extrémités, soit plus que le maximum de { $max } pour un îlot.
 net-unreadable = { $n ->
     [one] 1 jonction n’a pas pu être lue; ses passages pour piétons ne sont donc pas vérifiés.
    *[other] { $n } jonctions n’ont pas pu être lues; leurs passages pour piétons ne sont donc pas vérifiés.
