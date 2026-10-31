@@ -2,6 +2,7 @@
 //! words and views live together.
 
 pub mod beyond;
+pub mod curbside;
 pub mod frame;
 pub mod geometry;
 pub mod inspector;

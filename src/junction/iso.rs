@@ -454,8 +454,15 @@ impl Draw {
 /// The points the picture reaches on the ground: each arm from its mouth to its end, the core, and a
 /// roundabout's ring, and what lies beyond an end zone. Everything drawn is inside them.
 fn content_points(v: &JView) -> Vec<P> {
-    let mut pts: Vec<P> =
-        v.arms.iter().flat_map(|a| flatten(&a.outline).into_iter().chain(a.beyond.iter().flat_map(|p| flatten(&p.poly)))).chain(flatten(&v.core)).collect();
+    let mut pts: Vec<P> = v
+        .arms
+        .iter()
+        .flat_map(|a| {
+            let uses = a.curb_uses.iter().filter_map(|u| u.poly.as_ref()).flat_map(|p| flatten(p));
+            flatten(&a.outline).into_iter().chain(a.beyond.iter().flat_map(|p| flatten(&p.poly))).chain(uses)
+        })
+        .chain(flatten(&v.core))
+        .collect();
     if let Some(ring) = &v.ring {
         if ring.outer_edge.is_empty() {
             let r = ring.radius_mm as f64;
@@ -538,6 +545,16 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
             match h {
                 h if h > 0.0 => d.stand_in(id, piece.material, foot, h, true),
                 _ => d.lay_in(id, piece.material, &foot),
+            }
+        }
+        // The street's curbside uses stand or lie on their piece, over it.
+        for u in &a.curb_uses {
+            let Some(poly) = &u.poly else { continue };
+            let id = KINDS[u.kind].id;
+            let foot = flatten(poly);
+            match if a.pedestrian { wall } else { height_of(id) } {
+                h if h > 0.0 => d.stand_in(id, u.material, foot, h, true),
+                _ => d.lay_in(id, u.material, &foot),
             }
         }
         // Where there is no parking beside the curb the road runs on, over the parking piece.

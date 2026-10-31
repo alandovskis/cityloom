@@ -4,6 +4,7 @@
 //! A view words the status with `arms_text` and `fit_text`, which ask with the tracked `tr` and
 //! `say`, so it is drawn again when the language is switched; a command uses the `_now` forms.
 
+use crate::junction::curbside::CurbUseView;
 use crate::junction::model::control_key;
 use crate::junction::read_model::{ArmView, JView};
 use crate::junction::stops::{self, StopView};
@@ -94,6 +95,16 @@ fn stop_text(a: &ArmView, st: &StopView, i18n: &I18n, units: Units) -> String {
     }
 }
 
+/// One curbside use of an arm, said for a screen reader: what it is, which side and where it begins.
+fn curb_text(u: &CurbUseView, i18n: &I18n, units: Units) -> String {
+    let locale = i18n.locale_now();
+    let side = i18n.tr_now(if u.side == Side::Left { "jn-side-left" } else { "jn-side-right" }, &Args::new());
+    i18n.tr_now(
+        "jn-sel-arm-curb",
+        &Args::new().str("use", i18n.tr_now(u.use_.name_key(), &Args::new())).str("side", side).str("at", units.length_in(u.near_mm, locale)),
+    )
+}
+
 /// What is selected, for a screen reader; nothing when nothing is.
 pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
     let s = &v.selected;
@@ -120,8 +131,13 @@ pub fn selection_text(v: &JView, i18n: &I18n, units: Units) -> Option<String> {
                 }
                 None => i18n.tr_now("jn-sel-arm", &args),
             };
-            let Some(a) = arm.filter(|a| !a.stops.is_empty()) else { return Some(base) };
-            let stops: Vec<String> = a.stops.iter().map(|st| stop_text(a, st, i18n, units)).collect();
+            let Some(a) = arm.filter(|a| !a.stops.is_empty() || a.curb_uses.iter().any(|u| u.poly.is_some())) else { return Some(base) };
+            let stops: Vec<String> = a
+                .stops
+                .iter()
+                .map(|st| stop_text(a, st, i18n, units))
+                .chain(a.curb_uses.iter().filter(|u| u.poly.is_some()).map(|u| curb_text(u, i18n, units)))
+                .collect();
             // A sentence of its own after what the arm said, whether that ended in a full stop or not.
             format!("{base}{} {}", if base.ends_with('.') { "" } else { "." }, stops.join(" "))
         }

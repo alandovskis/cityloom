@@ -30,7 +30,9 @@ mod map_uses;
 mod stop;
 mod stop_end;
 use curb::Choice;
-pub use curb::{CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside};
+pub use curb::{
+    CROSSING_CLEARANCE_MM, CurbCell, CurbRefusal, CurbSideView, CurbView, EndInfo, Instance, SideView, StripCell, StripView, Subject, Use, curbside,
+};
 pub use curb_end::EndUse;
 pub use curb_shown::{ShownInstance, ShownStop};
 pub use map_uses::{MapStop, MapUse, MapUses};
