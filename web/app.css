@@ -1624,3 +1624,12 @@ a.btn {
 .net-more {
   margin: 0 8px 4px;
 }
+/* The Provenance tab of the map's Notes panel: each finding says where its doubt comes from and what it could mislead. */
+.src-line {
+  margin: 2px 0;
+  font-size: 13px;
+}
+.src-label {
+  color: var(--ink-2);
+  font-weight: 600;
+}

@@ -817,3 +817,47 @@ fn the_network_checks_are_worded_in_french() {
     let h = map_html(|| view! { <network_view::NetworkChecks vm=vm.clone()/> });
     assert!(h.contains("Passages pour piétons") && h.contains("1 constat") && h.contains("passage pour piétons") && h.contains("Problème"), "{h}");
 }
+
+#[test]
+fn the_provenance_tab_lists_a_group_per_kind_with_its_count_source_and_impact() {
+    use crate::map::source_view;
+    let (vm, _) = map_vm();
+    let h = map_html(|| view! { <source_view::SourceFindings vm=vm.clone()/> });
+    assert_eq!(count(&h, "<h3"), 5, "{h}");
+    for (id, label) in
+        [("name", "Street names"), ("disconnected", "Disconnected streets"), ("ends", "Dead ends"), ("width", "Widths"), ("speed", "Speed limits")]
+    {
+        assert!(h.contains(&format!("id=\"src-h-{id}\"")) && h.contains(&format!("data-kind=\"{id}\"")) && h.contains(label), "{id}: {h}");
+    }
+    // the sample city's streets have no name from OpenStreetMap: each finding says so, where it comes from and what it could mislead
+    assert!(h.contains("is not in OpenStreetMap") && h.contains("Source:") && h.contains("Design impact:") && h.contains("The road has no name tag."), "{h}");
+    assert!(h.contains("href=\"street.html?street="), "{h}");
+    // a count in the heading, read apart from the name, and no mark or word of a design failure
+    assert!(h.contains("Street names</span><span class=\"sr-only\">: </span><span class=\"fig net-count\">"), "{h}");
+    assert!(!h.contains("class=\"bad\"") && !h.contains("data-severity") && !h.contains("Problem"), "{h}");
+    let lead = map_html(|| view! { <source_view::SourceLead vm=vm.clone()/> });
+    assert!(lead.contains("may be missing or wrong"), "{lead}");
+}
+
+#[test]
+fn source_findings_do_not_reach_the_status_line_the_checks_lead_or_the_network_checks() {
+    let (vm, _) = map_vm();
+    assert!(vm.source_count() > 0, "the sample city has unnamed streets");
+    // the same numbers as a city whose findings were never worked out
+    let status = vm.status();
+    let lead = vm.checks_lead();
+    let network = vm.network_count();
+    let _ = vm.source_groups();
+    assert_eq!((vm.status(), vm.checks_lead(), vm.network_count()), (status.clone(), lead.clone(), network));
+    assert!(!status.bad || !status.text.contains("source"), "{status:?}");
+    assert!(!lead.contains("possible gap") && !lead.contains("source data"), "{lead}");
+    assert!(vm.network_rules().iter().all(|c| c.items.iter().all(|i| !i.text.contains("OpenStreetMap"))));
+}
+
+#[test]
+fn the_provenance_tab_is_worded_in_french() {
+    use crate::map::source_view;
+    let (vm, _) = map_vm_in(Locale::FrCa);
+    let h = map_html(|| view! { <source_view::SourceFindings vm=vm.clone()/> });
+    assert!(h.contains("Noms de rues") && h.contains("lacune") && h.contains("Effet sur la conception") && h.contains("n’a pas d’étiquette de nom"), "{h}");
+}
