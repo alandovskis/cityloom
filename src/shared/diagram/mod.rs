@@ -1,5 +1,15 @@
 //! The street's drawing as data: layers of shapes in ground millimetres.
 
+pub mod render;
+
+/// How a point of the ground lands in the drawing, in pixels.
+pub trait Projection {
+    /// Where the point is, in pixels.
+    fn at(&self, p: Pt) -> (f64, f64);
+    /// The drawing's width and height, in pixels.
+    fn size(&self) -> (f64, f64);
+}
+
 /// A point on the ground and above it, in millimetres: across the street,
 /// up, and along it.
 #[derive(Clone, Copy, Debug, PartialEq)]
