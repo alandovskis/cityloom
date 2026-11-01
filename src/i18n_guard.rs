@@ -585,6 +585,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("share-btn", "the id of an element the editors share"),
     ("share-btn-label", "the id of an element the editors share"),
     ("share-heading", "the id of an element the editors share"),
+    ("share-export", "the id of the Share menu's Export design button"),
     ("share-menu", "the id of an element the editors share"),
     ("signal-walk", "the id of a check of the junction sheet"),
     ("signal-cycle", "the id of a check of the junction sheet"),

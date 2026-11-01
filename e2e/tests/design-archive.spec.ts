@@ -117,3 +117,19 @@ test("a damaged, foreign or future-version file shows why and leaves local work 
     expect(await edits(page), name).toBe(mine);
   }
 });
+
+test("the street page's Share menu offers Export design and saves the archive", async ({ page }) => {
+  await editStreet(page, 1);
+  await openStreet(page, 0);
+  await page.locator("#share-btn").click();
+  const download = page.waitForEvent("download");
+  await page.locator("#share-export").click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/\.cityloom-design\.json$/);
+  expect(JSON.parse(await readFile((await file.path())!, "utf8"))).toMatchObject({
+    kind: "cityloom-design",
+    format_version: 1,
+  });
+  await expect(page.locator("#share-menu")).toBeHidden();
+  await expect(page.locator("#share-btn")).toBeFocused();
+});
