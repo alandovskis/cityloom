@@ -6,20 +6,19 @@
 //! middle and `(eye height - up) * f / depth` pixels under the horizon. So the centre line is vertical, parallel lines
 //! along the street meet at one vanishing point on the horizon, and the street narrows with distance.
 
-use crate::street::svg::Geometry;
-
 /// How long a stretch of the street is shown, in millimetres.
 pub const STRETCH_MM: f64 = 40_000.0;
 /// How high the eye is above the ground, in millimetres: above the tallest crown, so that every top is seen from above.
 pub const EYE_HEIGHT_MM: f64 = 9_000.0;
 /// How far behind the near end of the stretch the eye is, in millimetres.
 pub const EYE_BACK_MM: f64 = 14_000.0;
-/// The tallest the drawing grows at a `width`: as tall as the section is (`Geometry::fit`), which is as tall as the
-/// group around either view (`street/view.rs` keeps its `min-height` at least that). So the 2.5D never makes the card
-/// taller than the section does, and the status line under it stays in view at 1440 by 900 as it does with the
-/// section; a narrow street is drawn smaller, centred, rather than taller.
+/// The tallest the drawing grows at a `width`, which is also the height of the group around it
+/// (`street/view.rs` keeps its `min-height` at least that): the card does not grow taller as the street's width
+/// does, so the status line under it stays in view at 1440 by 900; a narrow street is drawn smaller, centred,
+/// rather than taller. The height scales with the width (to a point), as the section's did before it went.
 pub fn max_height(width: f64) -> f64 {
-    Geometry::fit(width, 1).rows.height
+    let factor = (width.max(680.0) / 1050.0).clamp(0.9, 1.1);
+    (484.0 * factor).round()
 }
 /// Room round the scene, in pixels.
 pub(super) const PAD: f64 = 30.0;

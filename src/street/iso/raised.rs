@@ -10,7 +10,7 @@ use crate::shared::iso::format::esc;
 use crate::shared::iso::ground::{fine_patterns, joints};
 use crate::shared::iso::shading::shade_filters;
 use crate::street::model::SegView;
-use crate::street::svg::{curb_edges, curb_width_mm};
+use crate::street::pieces::{curb_edges, curb_width_mm};
 
 use super::curbside;
 use super::joints::path as joint_path;

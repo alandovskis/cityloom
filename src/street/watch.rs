@@ -11,7 +11,7 @@ use crate::shared::units::Units;
 use crate::street::keys::Action;
 use crate::street::model::{Editor, SegView, StopKind, Use, View};
 use crate::street::row::Row;
-use crate::street::vm::{StreetVm, ViewMode};
+use crate::street::vm::StreetVm;
 
 /// What a component reads of the street view-model and tells it. The view-model
 /// is kept where only this thread can reach it, so the handle is `Copy` and any
@@ -28,19 +28,6 @@ impl SheetWatch {
 
     pub fn version(&self) -> RwSignal<u32> {
         self.vm.with_value(|v| v.version())
-    }
-
-    /// How the drawing shows the street, drawing again when it changes.
-    pub fn mode(&self) -> ViewMode {
-        self.vm.with_value(|v| v.mode())
-    }
-
-    pub fn set_mode(&self, mode: ViewMode) {
-        self.vm.with_value(|v| v.set_mode(mode));
-    }
-
-    pub fn toggle_mode(&self) {
-        self.vm.with_value(|v| v.toggle_mode());
     }
 
     /// The view, drawing again when the street is edited.

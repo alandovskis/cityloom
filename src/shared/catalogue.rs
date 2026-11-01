@@ -455,11 +455,6 @@ pub fn kind_key(id: &str) -> String {
     format!("kind-{id}")
 }
 
-/// The message that gives a kind's two-letter mark, shown where its name does not fit.
-pub fn mark_key(id: &str) -> String {
-    format!("kind-mark-{id}")
-}
-
 /// The message that names a group of kinds.
 pub fn group_key(id: &str) -> String {
     format!("group-{id}")
@@ -507,9 +502,6 @@ mod tests {
             for k in KINDS.iter() {
                 i.tr_now(&kind_key(k.id), &Args::new());
             }
-            for k in KINDS.iter() {
-                i.tr_now(&mark_key(k.id), &Args::new());
-            }
             for m in Mode::ALL.into_iter().chain([Mode::Neutral]) {
                 i.tr_now(mode_key(m), &Args::new());
             }
@@ -521,13 +513,10 @@ mod tests {
     }
 
     #[test]
-    fn the_english_messages_say_what_the_marks_and_groups_still_say() {
+    fn the_english_messages_say_what_the_groups_still_say() {
         let i = crate::i18n_for(Locale::En);
         assert_eq!(i.tr_now(&kind_key("sidewalk"), &Args::new()), "Sidewalk");
         assert_eq!(i.tr_now(mode_key(Mode::Vehicle), &Args::new()), "Cars and trucks");
-        for k in KINDS.iter() {
-            assert_eq!(i.tr_now(&mark_key(k.id), &Args::new()), k.mark, "{}", k.id);
-        }
         for (g, word) in GROUP_IDS.iter().zip(GROUP_WORDS) {
             assert_eq!(i.tr_now(&group_key(g), &Args::new()), word, "{g}");
         }

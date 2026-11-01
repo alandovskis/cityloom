@@ -5,7 +5,7 @@
 use crate::shared::catalogue::KINDS;
 use crate::shared::iso::paint::{Paint, Pattern, Style};
 use crate::street::model::SegView;
-use crate::street::svg::curb_edges;
+use crate::street::pieces::curb_edges;
 
 const SOLID_WHITE: Style = Style { paint: Paint::White, pattern: Pattern::Solid, double: false };
 const BROKEN_WHITE: Style = Style { paint: Paint::White, pattern: Pattern::Broken, double: false };

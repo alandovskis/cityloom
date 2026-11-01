@@ -16,7 +16,7 @@ use crate::shared::symbols::icon;
 use crate::shared::tick::Tick;
 use crate::street::model::{SegView, View};
 use crate::street::text::status_text;
-use crate::street::vm::{StreetVm, ViewMode};
+use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
 
 // ---- what the page is made of --------------------------------------------------------
@@ -276,38 +276,11 @@ pub fn History(vm: Rc<StreetVm>) -> impl IntoView {
     }
 }
 
-/// The drawing's heading, for a screen reader: the view it shows.
+/// The drawing's heading, for a screen reader.
 #[component]
 pub fn DrawingHeading(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
-    move || {
-        let key = match w.mode() {
-            ViewMode::Section => "st-cross-section",
-            ViewMode::Iso => "st-street-2-5d",
-        };
-        w.i18n().tr(key, &Args::new())
-    }
-}
-
-/// The two ways the drawing shows the street, the section and the 2.5D: a group of two buttons, the one
-/// shown pressed. `V` does the same anywhere on the page.
-#[component]
-pub fn ViewToggle(vm: Rc<StreetVm>) -> impl IntoView {
-    let w = SheetWatch::new(vm);
-    let pressed = move |mode: ViewMode| move || (w.mode() == mode).to_string();
-    // V goes to the view not shown: only its button says so.
-    let shortcut = move |mode: ViewMode| move || (w.mode() != mode).then_some("V");
-    view! {
-        <fieldset class="units view-mode" id="view-mode">
-            <legend class="sr-only">{say(w, "view-mode-label")}</legend>
-            <button type="button" class="unit" id="view-section" aria-pressed=pressed(ViewMode::Section) aria-keyshortcuts=shortcut(ViewMode::Section) on:click=move |_| w.set_mode(ViewMode::Section)>
-                {say(w, "view-mode-section")}
-            </button>
-            <button type="button" class="unit" id="view-iso" aria-pressed=pressed(ViewMode::Iso) aria-keyshortcuts=shortcut(ViewMode::Iso) on:click=move |_| w.set_mode(ViewMode::Iso)>
-                {say(w, "view-mode-iso")}
-            </button>
-        </fieldset>
-    }
+    move || w.i18n().tr("st-street-2-5d", &Args::new())
 }
 
 /// Where the list of pieces is drawn, in window pixels.

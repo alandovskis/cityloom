@@ -10,11 +10,11 @@ pub mod measures;
 pub mod model;
 pub mod notes;
 pub mod page;
+pub mod pieces;
 pub mod row;
 pub mod speed_view;
 pub mod stop_tools;
 pub mod strip;
-pub mod svg;
 #[cfg(test)]
 mod tests;
 pub mod text;

@@ -13,10 +13,8 @@ st-key-remove = remove
 st-key-details-notes = details, notes
 st-key-undo = undo
 st-key-view = section, 2.5D
-st-cross-section = Cross-section
 st-street-2-5d = Street in 2.5D
 st-focus-hint = Arrows select. Shift+arrows reorder. + and − resize, with Shift for bigger steps. Enter edits the width.
-st-touch-cue = On a touch screen, swipe the street sideways to see all of it.
 st-space-heading = Where the width goes
 st-people-moved = People moved
 st-sample-numbers = sample numbers
@@ -142,14 +140,8 @@ welcome-text = Add a piece, then drag to arrange. The width is fixed; a piece th
 welcome-dismiss = Got it
 
 # The drawing of the section (src/street/view.rs).
-view-section-label = Street cross-section editor
 view-iso-label = Street editor, 2.5D view
 # The view of the drawing, the section or the street in 2.5D (src/street/vm.rs, src/street/page.rs).
-view-shown-section = Showing the section
-view-shown-iso = Showing the street in 2.5D
-view-mode-label = Show the street as
-view-mode-section = Section
-view-mode-iso = 2.5D
 
 # The Transit Priority Atlas measures, by lowercase code (src/shared/atlas.rs).
 atlas-a1-name = Transit Streets
@@ -242,41 +234,9 @@ inspector-curb-note = The raised edge, if it has one.
 inspector-curb-none = None (flush)
 
 # The marks of the kinds, shown where a name does not fit (src/shared/catalogue.rs).
-kind-mark-sidewalk = SW
-kind-mark-planting = PL
-kind-mark-bike = BL
-kind-mark-travel = TL
-kind-mark-bus = TR
-kind-mark-parking = PK
-kind-mark-median = MD
-kind-mark-loading = LZ
-kind-mark-shoulder = SD
-kind-mark-bikerack = BR
-kind-mark-bikeshare = BS
-kind-mark-pole = UP
-kind-mark-busshelter = SH
-kind-mark-busstation = ST
-kind-mark-bench = BN
-kind-mark-terrace = CT
-kind-mark-streetlamp = SL
-kind-mark-buffer = BF
 
 # The drawing of the section (src/street/svg.rs).
-svg-today = Today
-svg-your-design = Your design
-svg-change = Change { $n }
-svg-street-edge = Street edge
-svg-unused = Unused
-svg-unused-length = Unused { $length }
 svg-too-wide = { $length } too wide
-svg-too-wide-clipped = { $length } too wide (more off-screen)
-svg-street-width = Street width { $length }
-svg-design-width = Your design { $length }
-svg-scale = Scale
-svg-label = Cross-section of { $name }. { $count ->
-        [one] { $count } segment
-       *[other] { $count } segments
-    }, { $total } of { $row }. { $fit }.
 svg-iso-label = { $name } in 2.5D, along a { $length } stretch. { $count ->
         [one] { $count } segment
        *[other] { $count } segments
@@ -392,14 +352,6 @@ st-speed-kmh = { $kmh } km/h
 iso-sign-maximum = MAXIMUM
 svg-iso-transition = A transition of { $length } leads into { $zone }.
 svg-iso-speed = Speed limit { $kmh } km/h.
-svg-curb-uses = Curbside, { $side }: { $count ->
-        [one] one use
-       *[other] { $count } uses
-    } along the street.
-svg-stops = Stops, { $side }: { $count ->
-        [one] one stop
-       *[other] { $count } stops
-    } along the street ({ $kinds }).
 svg-iso-curb = { $count ->
         [one] One curbside use is shown.
        *[other] { $count } curbside uses are shown.

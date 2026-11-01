@@ -60,34 +60,6 @@ pub fn on_strip(key: &str, shift: bool, alt: bool, ctrl: bool, meta: bool) -> Op
     Some(if alt { (ZoneAction::Nudge(d * if shift { 10_000 } else { 1_000 }), true) } else { (ZoneAction::Select(d), true) })
 }
 
-/// Whether a key pressed on the page (outside a field, which the page checks) switches the drawing between
-/// the section and the 2.5D: `V`, without Ctrl, Cmd or Alt.
-pub fn is_view_toggle(key: &str, ctrl: bool, meta: bool, alt: bool) -> bool {
-    !(ctrl || meta || alt) && key.eq_ignore_ascii_case("v")
-}
-
-/// A key pressed on the page, as far as switching the view cares.
-#[derive(Clone, Copy, Debug)]
-pub struct Press<'a> {
-    pub key: &'a str,
-    pub ctrl: bool,
-    pub meta: bool,
-    pub alt: bool,
-    /// The key is held down and this is a repeat of it.
-    pub repeat: bool,
-    /// An input method is composing text.
-    pub composing: bool,
-    /// A field has the key (the person is typing) or another handler has taken it.
-    pub taken: bool,
-}
-
-/// Whether a key pressed on the page switches the view: `V`, pressed once, not while composing, and not
-/// taken by a field or by another handler. It is the letter on the person's layout (`key`, not `code`), so a
-/// layout without a Latin V does not have it; the toggle's buttons are there for that.
-pub fn switches_view(p: &Press) -> bool {
-    is_view_toggle(p.key, p.ctrl, p.meta, p.alt) && !p.repeat && !p.composing && !p.taken
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,23 +145,7 @@ mod tests {
     }
 
     #[test]
-    fn v_switches_the_view_but_not_with_ctrl_cmd_or_alt_and_is_no_key_of_the_section() {
-        assert!(is_view_toggle("v", false, false, false));
-        assert!(is_view_toggle("V", false, false, false));
-        assert!(!is_view_toggle("v", true, false, false));
-        assert!(!is_view_toggle("v", false, true, false));
-        assert!(!is_view_toggle("v", false, false, true));
-        assert!(!is_view_toggle("b", false, false, false));
+    fn v_is_no_key_of_the_drawing() {
         assert_eq!(on_section("v", false, true), None);
-    }
-
-    #[test]
-    fn v_held_down_composing_or_taken_by_a_field_or_another_handler_does_not_switch_the_view() {
-        let v = Press { key: "v", ctrl: false, meta: false, alt: false, repeat: false, composing: false, taken: false };
-        assert!(switches_view(&v));
-        assert!(!switches_view(&Press { repeat: true, ..v }), "a repeat of a key held down");
-        assert!(!switches_view(&Press { composing: true, ..v }), "an input method composing");
-        assert!(!switches_view(&Press { taken: true, ..v }), "a field, or a handler that took it");
-        assert!(!switches_view(&Press { ctrl: true, ..v }) && !switches_view(&Press { key: "b", ..v }));
     }
 }

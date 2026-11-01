@@ -1,77 +1,22 @@
-//! The street's drawing: its section, drawn by `street_svg`, with the pointer and
-//! keyboard input on it, or the street in 2.5D, drawn by `iso_svg`, which is only
-//! looked at (the keys still edit the street). On the section, pressing selects a
-//! piece, dragging a boundary or the far edge resizes, dragging a piece moves it,
-//! and the arrows, plus and minus, Enter and Delete do the same by key.
+//! The street's drawing: the street in 2.5D, drawn by `iso_svg`. A press on a piece selects it and brings up its
+//! details, where its width and kind are edited (a perspective has no handles to drag), and the arrows, plus and
+//! minus, Enter and Delete edit the street by key.
 
 use std::rc::Rc;
 
 use leptos::prelude::*;
 use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
 
-use crate::shared::bind::current_element;
 use crate::shared::i18n::Args;
-use crate::street::iso::{iso_height, iso_label_at, iso_svg};
+use crate::street::iso::{iso_label_at, iso_svg, max_height};
 use crate::street::keys::{self, Action};
-use crate::street::svg::{Geometry, Interaction, Moving, street_label, street_svg};
-use crate::street::vm::{StreetVm, ViewMode};
+use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
-
-/// How far a pointer must move before a pressed piece is being moved.
-const DRAG_START_PX: f64 = 4.0;
-
-/// What a press on the drawing started.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Drag {
-    /// A boundary between pieces, by the index of the piece to its left.
-    Resize { i: usize, start_x: f64 },
-    /// The far edge of the last piece.
-    Edge { uid: u32, start_x: f64 },
-    /// A piece that may be dragged to a new place once the pointer has moved.
-    Move { uid: u32, start_x: f64, active: bool },
-}
-
-/// What pressing something on the drawing starts, from its role and numbers.
-pub fn drag_for(role: &str, uid: u32, i: usize, start_x: f64) -> Option<Drag> {
-    match role {
-        "handle" => Some(Drag::Resize { i, start_x }),
-        "edge" => Some(Drag::Edge { uid, start_x }),
-        "seg" => Some(Drag::Move { uid, start_x, active: false }),
-        _ => None,
-    }
-}
-
-/// How far a pointer has dragged, in millimetres of street.
-pub fn delta_mm(dx_px: f64, scale: f64) -> i32 {
-    (dx_px / scale).round() as i32
-}
-
-/// Whether a press has moved far enough to be a drag.
-pub fn is_drag(dx_px: f64) -> bool {
-    dx_px.abs() >= DRAG_START_PX
-}
-
-#[cfg(target_arch = "wasm32")]
-fn coarse() -> bool {
-    leptos::web_sys::window().and_then(|w| w.match_media("(pointer: coarse)").ok().flatten()).is_some_and(|m| m.matches())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn coarse() -> bool {
-    false
-}
 
 #[component]
 pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
     let w = SheetWatch::new(vm);
     let width = RwSignal::new(1050.0_f64);
-    let interaction = RwSignal::new(Interaction::default());
-    let geometry = StoredValue::new_local(Geometry::fit(1050.0, 18_000));
-    let drag = StoredValue::new_local(None::<Drag>);
-    let tapped = StoredValue::new_local(false);
-    let was_over = StoredValue::new_local(false);
-    let fresh = StoredValue::new_local(false);
-    let row_right = StoredValue::new_local(0.0_f64);
     let wrap = NodeRef::<leptos::html::Div>::new();
 
     #[cfg(target_arch = "wasm32")]
@@ -80,16 +25,6 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
             if let Some(el) = wrap.get() {
                 watch_size(el.into(), width);
             }
-        });
-        // Bring a street that has just run over into view, and say whether it scrolls.
-        let version = w.version();
-        Effect::new(move |_| {
-            version.track();
-            width.track();
-            interaction.track();
-            // The 2.5D has no cloud to bring into view and never scrolls: it is scaled to the group's width.
-            let section = w.mode() == ViewMode::Section;
-            request_animation_frame(move || after_draw(section && fresh.get_value(), row_right.get_value()));
         });
         // Control or Command with Z or Y undoes and redoes, wherever the keyboard is.
         window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
@@ -111,107 +46,12 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
         });
     }
 
-    let markup = move || {
-        let (v, units) = w.now();
-        let mut ui = interaction.get();
-        ui.coarse = coarse();
-        let over = v.delta_mm > 0;
-        ui.fresh = over && !was_over.get_value();
-        was_over.set_value(over);
-        fresh.set_value(ui.fresh);
-        let i18n = w.i18n();
-        // Read so the drawing is made again, with its words, when the language is switched.
-        i18n.locale();
-        let out = street_svg(&v, &i18n, width.get(), units, &ui);
-        geometry.set_value(out.geometry);
-        row_right.set_value(out.row_right);
-        out.markup
-    };
-    let size = move || Geometry::fit(width.get(), w.view().row_mm);
-    let height = move || size().rows.height;
-    // The 2.5D, made only while it is shown, and again when the street, the width or the language changes:
-    // its names are asked with the tracked `tr`, so the memo follows a switch.
+    // Made again when the street, the width or the language changes: its names are asked with the tracked `tr`,
+    // so the memo follows a switch.
     let iso = Memo::new(move |_| {
         let (v, _) = w.now();
         iso_svg(&v, &w.i18n(), width.get())
     });
-
-    let press = move |e: PointerEvent| {
-        if e.pointer_type() == "mouse" && e.button() != 0 {
-            return;
-        }
-        let svg: Element = current_element(&e);
-        let hit = e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()).and_then(|t| t.closest("[data-role]").ok().flatten());
-        focus_wrap(wrap);
-        let Some(hit) = hit else { return };
-        let number = |name: &str| hit.get_attribute(name).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
-        let role = hit.get_attribute("data-role").unwrap_or_default();
-        let uid = number("data-uid") as u32;
-        let start_x = e.client_x() as f64;
-        let Some(d) = drag_for(&role, uid, number("data-i"), start_x) else { return };
-        match d {
-            Drag::Resize { i, .. } => {
-                w.quiet(|ed| ed.begin_gesture());
-                interaction.update(|ui| ui.resizing = Some(i));
-            }
-            Drag::Edge { .. } => {
-                w.quiet(|ed| ed.begin_gesture());
-                interaction.update(|ui| ui.edge = true);
-            }
-            Drag::Move { uid, .. } => {
-                w.select(Some(uid));
-                tapped.set_value(true);
-            }
-        }
-        drag.set_value(Some(d));
-        let _ = svg.set_pointer_capture(e.pointer_id());
-        e.prevent_default();
-    };
-
-    let moved = move |e: PointerEvent| {
-        let Some(d) = drag.get_value() else { return };
-        let scale = geometry.with_value(|g| g.scale);
-        match d {
-            Drag::Resize { i, start_x } => {
-                w.quiet(|ed| ed.resize_boundary(i, delta_mm(e.client_x() as f64 - start_x, scale)));
-            }
-            Drag::Edge { uid, start_x } => {
-                w.quiet(|ed| ed.resize_edge(uid, delta_mm(e.client_x() as f64 - start_x, scale)));
-            }
-            Drag::Move { uid, start_x, active } => {
-                if !active && !is_drag(e.client_x() as f64 - start_x) {
-                    return;
-                }
-                tapped.set_value(false);
-                drag.set_value(Some(Drag::Move { uid, start_x, active: true }));
-                let svg: Element = current_element(&e);
-                let left = svg.get_bounding_client_rect().left();
-                let px = e.client_x() as f64 - left;
-                let mm = geometry.with_value(|g| g.mm_at(px));
-                let index = w.quiet(|ed| ed.drop_index(mm, uid));
-                interaction.update(|ui| ui.moving = Some(Moving { uid, px, index: Some(index) }));
-            }
-        }
-    };
-
-    let finish = move |commit: bool| {
-        let Some(d) = drag.get_value() else { return };
-        drag.set_value(None);
-        let moving = interaction.get_untracked().moving;
-        interaction.update(|ui| {
-            ui.resizing = None;
-            ui.edge = false;
-            ui.moving = None;
-        });
-        match d {
-            Drag::Resize { .. } | Drag::Edge { .. } => w.finish_gesture(commit),
-            Drag::Move { uid, active, .. } => {
-                if let (true, true, Some(Moving { index: Some(index), .. })) = (commit, active, moving) {
-                    w.edit(|ed| ed.move_to(uid, index));
-                }
-            }
-        }
-    };
 
     let keydown = move |e: KeyboardEvent| {
         if e.meta_key() || e.ctrl_key() || e.alt_key() {
@@ -224,44 +64,11 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
         }
         match action {
             Action::EditWidth => edit_width(),
-            Action::Escape if drag.get_value().is_some() => finish(false),
             other => w.apply(other),
         }
     };
 
-    // The section, with what the pointer does on it.
-    let section = move || {
-        view! {
-            <svg
-                id="drawing"
-                xmlns="http://www.w3.org/2000/svg"
-                role="img"
-                aria-label=move || {
-                    let (v, units) = w.now();
-                    let i18n = w.i18n();
-                    // Read so the label is drawn again when the language is switched.
-                    i18n.locale();
-                    street_label(&v, &i18n, units)
-                }
-                width=move || size().width.to_string()
-                height=move || height().to_string()
-                viewBox=move || format!("0 0 {} {}", size().width, height())
-                on:pointerdown=press
-                on:pointermove=moved
-                on:pointerup=move |_| {
-                    finish(true);
-                    if tapped.get_value() {
-                        tapped.set_value(false);
-                        show_inspector();
-                    }
-                }
-                on:pointercancel=move |_| finish(false)
-                inner_html=markup
-            ></svg>
-        }
-    };
-    // The 2.5D: a press on a piece selects it and brings up its details, where its width and kind are edited; a
-    // perspective has no handles to drag, and the keys still edit the street.
+    // A press on a piece selects it and brings up its details.
     let pick = move |e: PointerEvent| {
         if e.pointer_type() == "mouse" && e.button() != 0 {
             return;
@@ -273,8 +80,21 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
             show_inspector();
         }
     };
-    let in_depth = move || {
-        view! {
+
+    view! {
+        <div
+            class="wrap views iso-view"
+            id="wrap"
+            tabindex="0"
+            role="group"
+            aria-label=move || w.i18n().tr("view-iso-label", &Args::new())
+            aria-describedby="keys"
+            node_ref=wrap
+            on:keydown=keydown
+            // The group keeps the height the drawing is held to (`iso::max_height`), and the drawing, which is as
+            // wide as the group, is centred in it.
+            style:min-height=move || format!("{}px", max_height(width.get()))
+        >
             <svg
                 id="drawing"
                 class="iso"
@@ -292,33 +112,11 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
                 viewBox=move || iso.with(|s| format!("0 0 {} {}", s.width, s.height))
                 inner_html=move || iso.with(|s| s.markup.clone())
             ></svg>
-        }
-    };
-
-    view! {
-        <div class="wrap views" id="wrap" tabindex="0" role="group" aria-label=move || {
-                // The keys edit the street in either view; the group is named for the one shown.
-                let key = match w.mode() {
-                    ViewMode::Section => "view-section-label",
-                    ViewMode::Iso => "view-iso-label",
-                };
-                w.i18n().tr(key, &Args::new())
-            } aria-describedby="keys" node_ref=wrap on:keydown=keydown
-            class:iso-view=move || w.mode() == ViewMode::Iso
-            // As tall as the section in either view (the 2.5D is never taller than it, `iso::max_height`), so switching
-            // does not make the card jump; the 2.5D, which is as wide as the group, is centred in it. Only the section
-            // keeps the group 600 px wide (it scrolls sideways on a phone); the 2.5D scales to what it has.
-            style:min-height=move || format!("{}px", height().max(iso_height(&w.view(), width.get())))
-        >
-            {move || match w.mode() {
-                ViewMode::Section => section().into_any(),
-                ViewMode::Iso => in_depth().into_any(),
-            }}
         </div>
     }
 }
 
-/// Puts the keyboard on the section, as pressing it does.
+/// Puts the keyboard on the drawing, as pressing it does.
 fn focus_wrap(wrap: NodeRef<leptos::html::Div>) {
     if let Some(el) = wrap.get_untracked() {
         let options = leptos::web_sys::FocusOptions::new();
@@ -345,7 +143,7 @@ fn edit_width() {
 }
 
 /// Stacked under 1100px the inspector sits below the street. A tap on a piece
-/// that does not turn into a drag brings it into view.
+/// brings it into view.
 fn show_inspector() {
     #[cfg(target_arch = "wasm32")]
     {
@@ -376,30 +174,12 @@ fn typing(e: &KeyboardEvent) -> bool {
         || leptos::wasm_bindgen::JsCast::dyn_ref::<HtmlElement>(&t).is_some_and(|h| h.is_content_editable())
 }
 
-/// After the drawing is redrawn: bring a street that has just run over into
-/// view, and say whether the section scrolls.
-#[cfg(target_arch = "wasm32")]
-fn after_draw(fresh: bool, row_right: f64) {
-    let doc = document();
-    let Some(scroll) = doc.get_element_by_id("scroll") else { return };
-    if fresh {
-        let reach = row_right + 140.0 - scroll.client_width() as f64;
-        if reach > scroll.scroll_left() as f64 {
-            scroll.set_scroll_left(reach as i32);
-        }
-    }
-    if let Ok(Some(cue)) = doc.query_selector(".cue") {
-        let _ = cue.class_list().toggle_with_force("on", scroll.scroll_width() > scroll.client_width() + 1);
-    }
-}
-
-/// Keeps `width` as wide as the section's group.
+/// Keeps `width` as wide as the drawing's group.
 #[cfg(target_arch = "wasm32")]
 fn watch_size(wrap: Element, width: RwSignal<f64>) {
     use leptos::wasm_bindgen::{JsCast, closure::Closure};
 
-    // The group's own width changes with the view (600 px at least for the section, as wide as there is room for
-    // the 2.5D) with no change to its scroller's, so it is watched as well.
+    // The group is watched as well as its scroller: its own width can change with no change to the scroller's.
     let update = {
         let wrap = wrap.clone();
         move || {
@@ -419,31 +199,4 @@ fn watch_size(wrap: Element, width: RwSignal<f64>) {
         }
     }
     observer.forget();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pressing_a_boundary_an_edge_or_a_piece_starts_the_drag_that_suits_it() {
-        assert_eq!(drag_for("handle", 0, 3, 50.0), Some(Drag::Resize { i: 3, start_x: 50.0 }));
-        assert_eq!(drag_for("edge", 7, 0, 50.0), Some(Drag::Edge { uid: 7, start_x: 50.0 }));
-        assert_eq!(drag_for("seg", 7, 0, 50.0), Some(Drag::Move { uid: 7, start_x: 50.0, active: false }));
-        assert_eq!(drag_for("", 0, 0, 0.0), None);
-        assert_eq!(drag_for("grip", 0, 0, 0.0), None);
-    }
-
-    #[test]
-    fn a_drag_is_measured_in_millimetres_of_street() {
-        assert_eq!(delta_mm(10.0, 0.05), 200);
-        assert_eq!(delta_mm(-10.0, 0.05), -200);
-        assert_eq!(delta_mm(0.4, 0.05), 8);
-    }
-
-    #[test]
-    fn a_press_is_a_drag_only_after_it_has_moved_a_few_pixels() {
-        assert!(!is_drag(3.9) && !is_drag(-3.9));
-        assert!(is_drag(4.0) && is_drag(-4.0) && is_drag(40.0));
-    }
 }

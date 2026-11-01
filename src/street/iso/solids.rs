@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 use crate::shared::catalogue::KINDS;
 use crate::street::model::SegView;
-use crate::street::svg::{curb_edges, curb_width_mm};
+use crate::street::pieces::{curb_edges, curb_width_mm};
 
 use super::order::Bx;
 

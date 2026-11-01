@@ -20,7 +20,7 @@ use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::say;
 use crate::shared::units::Units;
 use crate::street::model::{SegView, ShownInstance, ShownStop, View};
-use crate::street::svg::curb_edges;
+use crate::street::pieces::curb_edges;
 
 mod curbside;
 mod joints;
@@ -38,7 +38,7 @@ mod taper;
 #[cfg(test)]
 mod testing;
 
-pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MIN_SOLID_PX, Projection, RISE, Reach, STRETCH_MM, TALLEST_MM, drawn_mm};
+pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MIN_SOLID_PX, Projection, RISE, Reach, STRETCH_MM, TALLEST_MM, drawn_mm, max_height};
 pub use raised::{HEIGHTS, curb_height_mm, curb_top_mm, height_mm};
 
 use order::Bx;
@@ -673,19 +673,23 @@ mod tests {
     }
 
     #[test]
-    fn the_2_5d_is_never_taller_than_the_section_at_any_width_so_it_never_makes_the_card_taller() {
-        // The group is as tall as the section is (`Geometry::fit`), and the status line under it has to stay in view at
-        // 1440 by 900, where the group is about 680 px wide: the 2.5D is held to that height at every width.
+    fn the_2_5d_is_never_taller_than_the_height_the_group_keeps_at_any_width_so_it_never_makes_the_card_taller() {
+        // The group keeps `max_height` of its width, and the status line under it has to stay in view at 1440 by 900,
+        // where the group is about 680 px wide: the 2.5D is held to that height at every width.
         let mut e = Editor::new(0);
         e.add(kind_index("travel").unwrap(), 2);
         for e in [Editor::new(0), Editor::new(1), Editor::new(2), Editor::new(3), e, furnished()] {
             let v = e.view();
             for width in [280.0, 358.0, 600.0, 684.0, 760.0, 945.0, 1050.0, 1155.0, 1440.0, 1800.0] {
-                let section = crate::street::svg::Geometry::fit(width, v.row_mm).rows.height;
+                let kept = projection::max_height(width);
                 let iso = iso_height(&v, width);
-                assert!(iso <= section + 1e-9, "{width}: the 2.5D is {iso} px tall, the section {section}");
+                assert!(iso <= kept + 1e-9, "{width}: the 2.5D is {iso} px tall, the group keeps {kept}");
             }
         }
+        // The height the section had at the widths the card is laid out for.
+        assert_eq!(projection::max_height(1050.0), 484.0);
+        assert_eq!(projection::max_height(358.0), (484.0_f64 * 0.9).round());
+        assert_eq!(projection::max_height(3000.0), (484.0_f64 * 1.1).round());
     }
 
     #[test]
