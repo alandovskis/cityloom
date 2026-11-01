@@ -41,8 +41,9 @@ impl Differences {
     }
 }
 
-fn parts(outcome: &Outcome) -> (&'static str, Args) {
-    match outcome {
+/// The message and arguments of an outcome that is not an error (an error is said from its `Said`).
+fn parts(outcome: &Outcome) -> Option<(&'static str, Args)> {
+    Some(match outcome {
         Outcome::Exported { name, count } => ("archive-exported", Args::new().str("name", name.clone()).num("count", *count as i64)),
         Outcome::ExportEmpty => ("archive-export-empty", Args::new()),
         Outcome::ExportFailed => ("archive-export-failed", Args::new()),
@@ -52,29 +53,25 @@ fn parts(outcome: &Outcome) -> (&'static str, Args) {
         ),
         Outcome::NothingNew => ("archive-nothing-new", Args::new()),
         Outcome::Cancelled => ("archive-cancelled", Args::new()),
-        Outcome::Failed(_) => unreachable!("an error is said from its Said"),
-    }
+        Outcome::Failed(_) => return None,
+    })
 }
 
 /// The outcome in words; tracked, for a view.
 pub fn outcome_text(i18n: &I18n, outcome: &Outcome) -> String {
-    match outcome {
-        Outcome::Failed(e) => say(i18n, Units::default(), &e.said()),
-        other => {
-            let (key, args) = parts(other);
-            i18n.tr(key, &args)
-        }
+    match (outcome, parts(outcome)) {
+        (_, Some((key, args))) => i18n.tr(key, &args),
+        (Outcome::Failed(e), None) => say(i18n, Units::default(), &e.said()),
+        (_, None) => String::new(),
     }
 }
 
 /// The same, for a command: nothing is watched.
 pub fn outcome_text_now(i18n: &I18n, outcome: &Outcome) -> String {
-    match outcome {
-        Outcome::Failed(e) => say_now(i18n, Units::default(), &e.said()),
-        other => {
-            let (key, args) = parts(other);
-            i18n.tr_now(key, &args)
-        }
+    match (outcome, parts(outcome)) {
+        (_, Some((key, args))) => i18n.tr_now(key, &args),
+        (Outcome::Failed(e), None) => say_now(i18n, Units::default(), &e.said()),
+        (_, None) => String::new(),
     }
 }
 

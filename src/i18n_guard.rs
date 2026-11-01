@@ -172,6 +172,8 @@ const ALLOWED: &[&str] = &[
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("the sync document serialises", "a panic message about the code, never shown"),
     ("a street and a junction have a section", "a panic message about the code, never shown"),
+    ("hint archive-error", "two CSS classes of the design archive's refusal line"),
+    ("an archive serialises", "a panic message about the code, never shown"),
     ("lit warn", "two CSS classes of a movement in a phase drawing"),
     ("OpenStreetMap", "a provider's brand name, not translated"),
     ("Google", "a provider's brand name, not translated"),
@@ -455,6 +457,10 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("cityloom-design", "the `kind` of a design archive file, not a message"),
+    ("archive-result", "the id of the design archive's result line, not a message"),
+    ("archive-keep", "the id of the design archive's Keep mine button, not a message"),
+    ("archive-slot", "the id of the page slot the design archive is mounted in, not a message"),
     ("sig-later-0", "the id of the first phase's Later button, not a message"),
     ("signal-plan-state", "the id of the plan's state paragraph, not a message"),
     ("transition-room", "the id of a check, not a message"),
