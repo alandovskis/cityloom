@@ -7,6 +7,7 @@ use std::fmt::Write;
 use crate::shared::iso::paint::{Paint, class, quads};
 use crate::street::model::SegView;
 
+use super::layers::Layer;
 use super::markings::{Mark, markings};
 use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection, STRETCH_MM, points};
 use super::symbols::shapes;
@@ -25,7 +26,7 @@ pub(super) fn layer(p: &Projection, segs: &[SegView]) -> String {
 /// host has it to where the other zone's section has that edge.
 pub(super) fn layer_over(p: &Projection, segs: &[SegView], draw: Option<&Draw>) -> String {
     let m = markings(segs);
-    let mut out = String::from("<g class=\"iso-markings\">");
+    let mut out = Layer::Markings.open();
     for line in &m.lines {
         let x = line.x_mm as f64;
         // The dashes are laid from the start of the stretch and cut to the reach, so that a line that goes on across a

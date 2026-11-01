@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn a_street_without_a_speed_shows_no_sign() {
-        assert_eq!(count(&iso_svg(&with_speed(Side::Right, None), &en(), 1050.0).markup, "iso-sign"), 0);
+        assert_eq!(count(&iso_svg(&with_speed(Side::Right, None), &en(), 1050.0).markup, "class=\"iso-sign\""), 0);
     }
 
     #[test]

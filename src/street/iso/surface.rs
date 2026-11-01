@@ -2,6 +2,7 @@
 //! markings are painted over it and a raised piece stands over both.
 
 use super::curbside::Over;
+use super::layers::Layer;
 use crate::shared::i18n::I18n;
 use crate::street::model::SegView;
 
@@ -17,8 +18,8 @@ pub(super) fn split(strips: Vec<Strip>) -> (Vec<Strip>, Vec<Strip>) {
 /// The roadway pieces as one group. Each keeps its `<g class="iso-piece" data-uid>`.
 /// Where the run holds a transition (`draw`), the pieces that change taper, and the ones the host lacks open in it.
 pub(super) fn layer(p: &Projection, segs: &[SegView], i18n: &I18n, flat: &[Strip], across: bool, draw: Option<&Draw>, shown: &[Over]) -> String {
-    let Some(draw) = draw else { return group("<g class=\"iso-surface\">", p, segs, i18n, flat, across, shown) };
-    let mut out = String::from("<g class=\"iso-surface\">");
+    let Some(draw) = draw else { return group(&Layer::Surface.open(), p, segs, i18n, flat, across, shown) };
+    let mut out = Layer::Surface.open();
     for &strip in flat {
         let edge = draw.shape_of(&segs[strip.1]).map(|shape| move |z: f64| draw.edges(shape, p.reach, z));
         piece_with(&mut out, p, segs, i18n, strip, across, edge.as_ref().map(|f| f as &dyn Fn(f64) -> (f64, f64)), shown);

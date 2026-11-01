@@ -274,9 +274,10 @@ mod tests {
     }
 
     #[test]
-    fn a_post_beyond_a_taller_strip_nearer_the_middle_is_drawn_before_it_so_that_the_strip_covers_its_foot() {
+    fn objects_are_a_layer_over_every_raised_strip_so_a_post_beyond_a_nearer_taller_strip_shows_over_it() {
         // A bike lane (curbed, posts on its curbs) on the left and a median farther in, nearer the middle of the street,
-        // 450 mm as drawn: from over the middle the median stands between the eye and the lane's posts.
+        // 450 mm as drawn. With objects and strips in layers of their own the posts are painted over the median that
+        // stands in front of them (the one deliberate difference from painting both in one depth order).
         let mut e = Editor::new(0);
         let bike = e.add(kind_index("bike").unwrap(), 1);
         let median = e.add(kind_index("median").unwrap(), 3);
@@ -287,9 +288,9 @@ mod tests {
         };
         assert!(bike_x < median_x && (median_x as f64) < Projection::fit(1050.0, v.row_mm.max(v.total_mm)).centre_mm, "the median is left of the eye");
         let m = iso_svg(&v, &en(), 1050.0).markup;
-        let median_at = m.find(&format!("<g class=\"iso-piece\" data-uid=\"{median}\">")).unwrap();
-        let last_post = m.rfind("class=\"iso-solid s-post\"").unwrap();
-        assert!(last_post < median_at, "a post is painted over the median that stands in front of it");
+        let median_at = m.rfind(&format!("<g class=\"iso-piece\" data-uid=\"{median}\">")).unwrap();
+        let first_post = m.find("class=\"iso-solid s-post\"").unwrap();
+        assert!(first_post > median_at, "every post is painted after every raised strip");
         // And a tree stands over its own strip, on top of it.
         let m = drawn(&Editor::new(1));
         assert!(m.find("<g class=\"iso-piece\"").unwrap() < m.find("s-trunk").unwrap());

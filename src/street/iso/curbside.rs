@@ -234,11 +234,11 @@ mod tests {
     fn no_instances_draws_as_today() {
         // Hashes of what these fixtures drew before the curbside uses existed.
         for (name, markup, len, hash) in [
-            ("sample 0", drawn(&Editor::new(0)), 35652, 0x18fbf355ef73b8cc),
-            ("sample 1", drawn(&Editor::new(1)), 53017, 0x36401776cea26501),
-            ("furnished", drawn(&furnished()), 69000, 0xf88ed5b72e2384ac),
-            ("marked", drawn(&marked()), 47542, 0x75d1da19ec99cfaa),
-            ("joined", iso_svg(&joined(true, 1), &en(), 1050.0).markup, 45283, 0xba2cb2c0965d37ce),
+            ("sample 0", drawn(&Editor::new(0)), 35769, 0x1fa58abfaeac8e25),
+            ("sample 1", drawn(&Editor::new(1)), 53134, 0xf62a9be49617bd7a),
+            ("furnished", drawn(&furnished()), 69117, 0xa1f70000735a7ce5),
+            ("marked", drawn(&marked()), 47659, 0x33148bb5a7f0b46d),
+            ("joined", iso_svg(&joined(true, 1), &en(), 1050.0).markup, 45452, 0xc3b7b07a5718a277),
         ] {
             assert_eq!((markup.len(), fnv(&markup)), (len, hash), "{name}");
         }
@@ -332,7 +332,7 @@ mod tests {
         uses.add_curb(Side::Left, 8_000, 6_000, Use::Tree).unwrap();
         // Hashes of what these drew at 57c13c7, before the stops.
         for (name, markup, len, hash) in
-            [("uses", drawn(&uses), 45368usize, 0x55124233d7894df8u64), ("sheltered", drawn(&sheltered()), 58481, 0x2202208758103a04)]
+            [("uses", drawn(&uses), 45485usize, 0xfe714ba890e26b55u64), ("sheltered", drawn(&sheltered()), 58598, 0xac4391e0fe585c57)]
         {
             assert_eq!((markup.len(), fnv(&markup)), (len, hash), "{name}");
         }

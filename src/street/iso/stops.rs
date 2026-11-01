@@ -144,16 +144,34 @@ mod tests {
     /// The stop sign's group.
     fn stop_sign(m: &str) -> &str {
         let at = m.find("<g class=\"iso-stop-sign\"").expect("a stop sign");
-        &m[at..at + m[at..].find("</g></g>").map_or(m.len() - at, |i| i + 8)]
+        // To the group's own close: nested groups counted.
+        let (mut depth, mut i) = (0_i32, at);
+        loop {
+            let open = m[i..].find("<g ").map(|k| i + k);
+            let close = m[i..].find("</g>").map(|k| i + k).expect("the sign is closed");
+            match open {
+                Some(o) if o < close => {
+                    depth += 1;
+                    i = o + 3;
+                }
+                _ => {
+                    depth -= 1;
+                    i = close + 4;
+                    if depth == 0 {
+                        return &m[at..i];
+                    }
+                }
+            }
+        }
     }
 
     #[test]
     fn no_stops_draws_as_today() {
         // Hashes of what these fixtures drew before the stops existed.
         for (name, pieces, len, hash) in [
-            ("curb", &CURB[..], 34324usize, 0xfe408c31ce4128abu64),
-            ("bulb", &BULB[..], 35630, 0x79bae35920d099cf),
-            ("island", &ISLAND[..], 39738, 0xdad452c8e5174c10),
+            ("curb", &CURB[..], 34441usize, 0x1a8c9d11500b41fcu64),
+            ("bulb", &BULB[..], 35747, 0x434fdc2713146ae0),
+            ("island", &ISLAND[..], 39855, 0x688e9dc7076695c1),
         ] {
             let m = drawn(&editor(pieces, ZoneEnd::First));
             assert_eq!((m.len(), fnv(&m)), (len, hash), "{name}");

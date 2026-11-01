@@ -24,6 +24,7 @@ use crate::street::pieces::curb_edges;
 
 mod curbside;
 mod joints;
+mod layers;
 mod markings;
 mod order;
 mod paint;
@@ -41,6 +42,7 @@ mod testing;
 pub use projection::{ARROW_AT_MM, EYE_BACK_MM, EYE_HEIGHT_MM, MIN_SOLID_PX, Projection, RISE, Reach, STRETCH_MM, TALLEST_MM, drawn_mm, max_height};
 pub use raised::{HEIGHTS, curb_height_mm, curb_top_mm, height_mm};
 
+use layers::Layer;
 use order::Bx;
 use projection::points;
 use raised::{beside, inner_face, materials, shades, strips};
@@ -115,47 +117,40 @@ fn run_layers(out: &mut String, base: &Projection, v: &View, i18n: &I18n, run: &
     out.push_str(&surface::layer(&p, segs, i18n, &flat, run.across, run.taper.as_ref(), &laid));
     out.push_str(&paint::layer_over(&p, segs, run.taper.as_ref()));
 
-    // The raised strips and what stands on the pieces, in the order the eye needs (`order`): a box covers the ones it
-    // is in front of, so a crown nearer the middle of the street covers a shelter beyond it, and a strip nearer the
-    // middle covers the foot of a post beyond it. The strips are in groups of their own between the solids.
-    let mut solids: Vec<Block> =
-        (0..segs.len()).flat_map(|i| blocks(segs, i, &p)).chain(curbside::blocks(segs, uses, &p)).chain(stops::blocks(segs, stops, &p)).collect();
-    solids.sort_by(|a, b| b.from_eye(&p).total_cmp(&a.from_eye(&p)).then(a.y.0.total_cmp(&b.y.0)));
+    // The raised layer: the strips standing above the roadway and the curbside uses lifted into strips of their
+    // own, in the order the eye needs among themselves (`order`): a strip nearer the middle of the street covers the
+    // one beyond it.
     let lifted = curbside::lifted(&laid);
-    let boxes: Vec<(Bx, bool)> = standing
+    let strips_boxes: Vec<(Bx, bool)> = standing
         .iter()
         .map(|&s| (raised::strip_box(segs, s, p.reach), true))
         .chain(lifted.iter().map(|l| (curbside::lift_box(segs, l, &p, run.taper.as_ref()), false)))
-        .chain(solids.iter().map(|b| (b.bounds(), false)))
         .collect();
-    out.push_str("<g class=\"iso-raised\">");
-    let mut open = true;
-    for k in order::paint_order(&boxes, p.centre_mm) {
-        if k < standing.len() + lifted.len() {
-            if !open {
-                out.push_str("<g class=\"iso-raised\">");
-                open = true;
-            }
-            match standing.get(k) {
-                Some(&strip) => raised::piece(out, &p, segs, i18n, strip, run.across),
-                None => curbside::lift(out, &p, segs, i18n, &lifted[k - standing.len()], run.taper.as_ref()),
-            }
-        } else {
-            if open {
-                out.push_str("</g>");
-                open = false;
-            }
-            block(out, &p, &solids[k - standing.len() - lifted.len()]);
+    out.push_str(&Layer::Raised.open());
+    for k in order::paint_order(&strips_boxes, p.centre_mm) {
+        match standing.get(k) {
+            Some(&strip) => raised::piece(out, &p, segs, i18n, strip, run.across),
+            None => curbside::lift(out, &p, segs, i18n, &lifted[k - standing.len()], run.taper.as_ref()),
         }
     }
-    if open {
-        out.push_str("</g>");
+    out.push_str("</g>");
+
+    // The objects layer: what stands on the pieces, in the order the eye needs among themselves: a crown nearer the
+    // middle of the street covers a shelter beyond it.
+    let mut solids: Vec<Block> =
+        (0..segs.len()).flat_map(|i| blocks(segs, i, &p)).chain(curbside::blocks(segs, uses, &p)).chain(stops::blocks(segs, stops, &p)).collect();
+    solids.sort_by(|a, b| b.from_eye(&p).total_cmp(&a.from_eye(&p)).then(a.y.0.total_cmp(&b.y.0)));
+    let object_boxes: Vec<(Bx, bool)> = solids.iter().map(|b| (b.bounds(), false)).collect();
+    out.push_str(&Layer::Objects.open());
+    for k in order::paint_order(&object_boxes, p.centre_mm) {
+        block(out, &p, &solids[k]);
     }
-    // The speed limit sign stands in the selected zone's run only, over everything else but the outline.
-    if !run.across {
-        out.push_str(&sign::sign(v, segs, &p, i18n).unwrap_or_default());
-        out.push_str(&stops::signs(segs, &v.stops_shown, &p));
-    }
+    out.push_str("</g>");
+
+    // The signs stand in the selected zone's run only, over everything else but the outline.
+    let signs =
+        if run.across { String::new() } else { format!("{}{}", sign::sign(v, segs, &p, i18n).unwrap_or_default(), stops::signs(segs, &v.stops_shown, &p)) };
+    out.push_str(&Layer::Signs.wrap(&signs));
 }
 
 /// The street in 2.5D, drawn `width` wide: a stretch of `STRETCH_MM` seen in perspective from the centre line,
@@ -171,7 +166,8 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
     let p = Projection::fit(width, span);
     let (w, l) = (span as f64, STRETCH_MM);
     let mut out = format!("<defs>{}{}</defs>", shades(), materials());
-    write!(out, "<polygon class=\"iso-ground\" points=\"{}\"/>", points(&p, &[(0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, 0.0, l), (0.0, 0.0, l)])).unwrap();
+    let ground = points(&p, &[(0.0, 0.0, 0.0), (w, 0.0, 0.0), (w, 0.0, l), (0.0, 0.0, l)]);
+    out.push_str(&Layer::Ground.wrap(&format!("<polygon class=\"iso-ground\" points=\"{ground}\"/>")));
 
     let mut selected = Reach::STRETCH;
     match &v.zones.joint {
@@ -206,9 +202,11 @@ pub fn iso_svg(v: &View, i18n: &I18n, width: f64) -> IsoSvg {
             }
         }
     }
+    out.push_str(&Layer::Outline.open());
     if let Some(i) = v.selected.and_then(|u| v.segments.iter().position(|s| s.uid == u)) {
         outline(&mut out, &p.over(selected), &v.segments, i);
     }
+    out.push_str("</g>");
 
     IsoSvg { markup: out, width: p.width, height: p.height }
 }
@@ -945,6 +943,55 @@ mod tests {
         assert!(m.find("<defs>").unwrap() < order[0]);
     }
 
+    /// What is inside the first group of `class`, nested groups and all.
+    fn layer_of<'a>(markup: &'a str, class: &str) -> &'a str {
+        let open = format!("<g class=\"{class}\">");
+        let start = markup.find(&open).unwrap_or_else(|| panic!("no {class} layer"));
+        let (mut depth, mut at) = (0_i32, start);
+        loop {
+            let next_open = markup[at..].find("<g ").map(|i| at + i);
+            let next_close = markup[at..].find("</g>").map(|i| at + i).expect("the layer is closed");
+            match next_open {
+                Some(o) if o < next_close => {
+                    depth += 1;
+                    at = o + 3;
+                }
+                _ => {
+                    depth -= 1;
+                    at = next_close + 4;
+                    if depth == 0 {
+                        return &markup[start + open.len()..next_close];
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn each_kind_of_thing_is_a_layer_of_its_own_stacked_ground_surface_markings_raised_objects_signs_outline() {
+        let mut e = furnished();
+        e.select(Some(e.view().segments[0].uid));
+        let mut v = e.view();
+        v.speed_kmh = Some(30);
+        let m = iso_svg(&v, &en(), 1050.0).markup;
+        let classes = Layer::ALL.map(Layer::class);
+        assert_eq!(classes, ["iso-layer-ground", "iso-surface", "iso-markings", "iso-raised", "iso-objects", "iso-signs", "iso-layer-outline"]);
+        let at: Vec<usize> = classes.iter().map(|c| m.find(&format!("<g class=\"{c}\">")).unwrap_or_else(|| panic!("no {c}"))).collect();
+        assert!(at.windows(2).all(|w| w[0] < w[1]), "{at:?}");
+        // Each holds its own kind of thing and nothing of another's.
+        assert!(layer_of(&m, "iso-layer-ground").contains("class=\"iso-ground\"") && !layer_of(&m, "iso-layer-ground").contains("<g "));
+        let objects = layer_of(&m, "iso-objects");
+        assert!(objects.contains("class=\"iso-solid") && !objects.contains("iso-piece") && !objects.contains("iso-top"), "{objects}");
+        let raised = layer_of(&m, "iso-raised");
+        assert!(raised.contains("iso-piece") && !raised.contains("iso-solid"), "no object among the strips");
+        assert!(layer_of(&m, "iso-signs").contains("iso-sign"));
+        let outline = layer_of(&m, "iso-layer-outline");
+        assert!(outline.contains("class=\"iso-sel\"") && !outline.contains("<g "));
+        // Nothing is left outside a layer: a section holds layers only, and the outline is the last of them.
+        assert!(m.find("<defs>").unwrap() < at[0]);
+        assert_eq!(count(&m, "class=\"iso-raised\""), 1, "one raised layer, not runs between the objects");
+    }
+
     #[test]
     fn the_surface_layer_holds_the_top_of_every_roadway_piece_and_the_raised_layer_the_rest() {
         let e = furnished();
@@ -1190,7 +1237,7 @@ mod tests {
             let p = Projection::fit(1050.0, span_mm(&v)).over(if far { farr } else { near });
             let mut want = String::new();
             outline(&mut want, &p, &v.segments, 1);
-            assert!(m.ends_with(&want), "zone {selected}");
+            assert_eq!(layer_of(&m, "iso-layer-outline"), want, "zone {selected}");
         }
     }
 
@@ -1339,10 +1386,10 @@ mod tests {
         // The markup of joints between identical sections, as it was before transitions (FNV-1a of the drawing).
         let h = |s: &str| s.bytes().fold(0xcbf29ce484222325u64, |a, b| (a ^ u64::from(b)).wrapping_mul(0x100000001b3));
         for (name, v, hash) in [
-            ("first, zone 1", joined(false, 0), 0x6e0989a69b519fe7u64),
-            ("first, zone 2", joined(false, 1), 0x3253ebfea4e98c7f),
-            ("last, zone 1", joined_from_last(false, 0), 0x3253ebfea4e98c7f),
-            ("last, zone 2", joined_from_last(false, 1), 0x6e0989a69b519fe7),
+            ("first, zone 1", joined(false, 0), 0xb0a26882a7ac3ec6u64),
+            ("first, zone 2", joined(false, 1), 0x512f95d709f00ffe),
+            ("last, zone 1", joined_from_last(false, 0), 0x512f95d709f00ffe),
+            ("last, zone 2", joined_from_last(false, 1), 0xb0a26882a7ac3ec6),
         ] {
             assert!(v.zones.joint.as_ref().unwrap().taper.is_none(), "{name}");
             let m = iso_svg(&v, &en(), 1050.0).markup;
