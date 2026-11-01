@@ -1,7 +1,9 @@
 //! Writes a diagram as SVG markup through a projection.
 
-use super::{Diagram, Layer, Projection, Pt, Section, Shape};
-use crate::shared::iso::format::esc;
+use super::{Diagram, Face, Layer, Projection, Pt, Section, Shape, Texture};
+use std::fmt::Write;
+
+use crate::shared::iso::format::{esc, f1};
 
 /// A pixel value to two decimals, which is all a drawing needs.
 fn r(v: f64) -> f64 {
@@ -18,9 +20,93 @@ fn points(p: &dyn Projection, pts: &[Pt]) -> String {
         .join(" ")
 }
 
+/// A textured top over `near` to `far` along the street, `h` high, its edges across given along the street (`edge`: across
+/// `(left, right)` at an `along`; straight between the bands, so each band is a quadrilateral of its own). It is the
+/// polygon of class `class`, then the material's texture over it. A projection that is not an affine map cannot lay
+/// one pattern on the top: it is cut into bands along the street (`Projection::bands`), each carrying the affine map
+/// that is the projection's slope at its middle (`ground_at`); the band's polygon is written in the ground's own
+/// millimetres, as the true quadrilateral the band is on the screen taken back through that map, so it fits the top
+/// exactly and its `transform` lays the texture. An affine projection fills the one polygon with the pattern.
+pub fn textured(out: &mut String, p: &dyn Projection, class: &str, material: &str, h: f64, (near, far): (f64, f64), edge: &dyn Fn(f64) -> (f64, f64)) {
+    let ((a0, a1), (b0, b1)) = (edge(near), edge(far));
+    let pts = points(p, &[Pt::new(a0, h, near), Pt::new(a1, h, near), Pt::new(b1, h, far), Pt::new(b0, h, far)]);
+    if p.affine() {
+        write!(out, "<polygon class=\"{class}\" points=\"{pts}\" fill=\"url(#iso-m-{material})\"/>").unwrap();
+        return;
+    }
+    write!(out, "<polygon class=\"{class}\" points=\"{pts}\"/>").unwrap();
+    // The bands share their fill, and so the group carries it: a texture's polygons are bare.
+    write!(out, "<g class=\"hatch\" fill=\"url(#iso-m-{material})\">").unwrap();
+    for w in p.bands(near, far).windows(2) {
+        let (z0, z1) = (w[0], w[1]);
+        let mid = p.band_mid(z0, z1);
+        let (m0, m1) = edge(mid);
+        let g = p.ground_at(h, (m0 + m1) / 2.0, mid);
+        // The numbers as written, so that the polygon is taken back through exactly the map that lays the texture.
+        let [a, _, c, d, e, f] = [g[0], g[1], g[2], g[3], g[4], g[5]].map(|n| (n * 1e6).round() / 1e6);
+        let (e, f) = ((e * 100.0).round() / 100.0, (f * 100.0).round() / 100.0);
+        let (e0, e1) = (edge(z0), edge(z1));
+        let local: Vec<String> = [(e0.0, z0), (e0.1, z0), (e1.1, z1), (e1.0, z1)]
+            .iter()
+            .map(|&(x, z)| {
+                let (sx, sy) = p.at(Pt::new(x, h, z));
+                let v = (sy - f) / d;
+                let u = (sx - e - c * v) / a;
+                format!("{:.0},{:.0}", u, v)
+            })
+            .collect();
+        write!(out, "<polygon transform=\"matrix({a} 0 {c} {d} {e} {f})\" points=\"{}\"/>", local.join(" ")).unwrap();
+    }
+    out.push_str("</g>");
+}
+
+/// A polygon edge between two corners, as the textured top's edge: straight along the street.
+fn lerp_edge(l: (Pt, Pt), r: (Pt, Pt)) -> impl Fn(f64) -> (f64, f64) {
+    let at = move |(a, b): (Pt, Pt), z: f64| if b.z == a.z { a.x } else { a.x + (b.x - a.x) * (z - a.z) / (b.z - a.z) };
+    move |z| (at(l, z), at(r, z))
+}
+
+/// A joint as a path to a tenth of a pixel; a straight run across the screen is written as `H`.
+fn joint(out: &mut String, class: &str, p: &dyn Projection, pts: &[Pt]) {
+    let mut d = String::new();
+    for (i, &pt) in pts.iter().enumerate() {
+        let (x, y) = p.at(pt);
+        if i == 0 {
+            write!(d, "M{},{}", f1(x), f1(y)).unwrap();
+        } else if pts.len() == 2 && f1(y) == f1(p.at(pts[0]).1) {
+            write!(d, "H{}", f1(x)).unwrap();
+        } else {
+            write!(d, "L{},{}", f1(x), f1(y)).unwrap();
+        }
+    }
+    write!(out, "<path class=\"{class}\" d=\"{d}\"/>").unwrap();
+}
+
+fn polygon(out: &mut String, p: &dyn Projection, pts: &[Pt], class: &str, face: Option<Face>, texture: Option<&Texture>) {
+    if let Some(t) = texture {
+        // Four corners, the near edge first (left, right), then the far edge (right, left).
+        if let [a, b, c, d] = pts[..] {
+            textured(out, p, class, &t.material, a.y, (a.z, c.z), &lerp_edge((a, d), (b, c)));
+            return;
+        }
+    }
+    let shade = match face {
+        Some(Face::Front) => Some(("front", " filter=\"url(#iso-shade-front)\"")),
+        Some(Face::Side) => Some(("side", " filter=\"url(#iso-shade-side)\"")),
+        Some(Face::Ramp) => Some(("ramp", " filter=\"url(#iso-shade-ramp)\"")),
+        Some(Face::Top) => Some(("top", "")),
+        None => None,
+    };
+    match shade {
+        Some((name, filter)) => write!(out, "<polygon class=\"{class}\" data-face=\"{name}\" points=\"{}\"{filter}/>", points(p, pts)).unwrap(),
+        None => write!(out, "<polygon class=\"{class}\" points=\"{}\"/>", points(p, pts)).unwrap(),
+    }
+}
+
 fn shape(out: &mut String, s: &Shape, p: &dyn Projection) {
     match s {
-        Shape::Polygon { pts, class, .. } => out.push_str(&format!(r#"<polygon class="{class}" points="{}"/>"#, points(p, pts))),
+        Shape::Polygon { pts, class, face, texture } => polygon(out, p, pts, class, *face, texture.as_ref()),
+        Shape::Polyline { pts, class } if class.starts_with("joints") => joint(out, class, p, pts),
         Shape::Polyline { pts, class } => out.push_str(&format!(r#"<polyline class="{class}" points="{}"/>"#, points(p, pts))),
         Shape::Group { class, uid, title, shapes } => {
             out.push_str(&format!(r#"<g class="{class}""#));
@@ -146,5 +232,111 @@ mod tests {
         let s = render(&d, &Scale(1.0));
         assert!(s.contains(r#"<g class="iso-piece" data-uid="7"><title>A &amp; &lt;B&gt;</title><polygon class="iso-top" points="1,5 4,11"/></g>"#), "{s}");
         assert!(s.contains(r#"<g class="g"></g>"#), "{s}");
+    }
+
+    /// A perspective stand-in: not affine, bands `[0, 10, 20]`, the identity matrix everywhere.
+    struct Persp;
+
+    impl Projection for Persp {
+        fn at(&self, p: Pt) -> (f64, f64) {
+            (p.x, p.y + p.z)
+        }
+        fn size(&self) -> (f64, f64) {
+            (100.0, 100.0)
+        }
+        fn affine(&self) -> bool {
+            false
+        }
+        fn ground_at(&self, _up: f64, _u: f64, _v: f64) -> [f64; 6] {
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+        }
+        fn bands(&self, _near: f64, _far: f64) -> Vec<f64> {
+            vec![0.0, 10.0, 20.0]
+        }
+        fn band_mid(&self, z0: f64, z1: f64) -> f64 {
+            (z0 + z1) / 2.0
+        }
+    }
+
+    /// The same with an affine map: one polygon is enough.
+    struct Flat;
+
+    impl Projection for Flat {
+        fn at(&self, p: Pt) -> (f64, f64) {
+            (p.x, p.y + p.z)
+        }
+        fn size(&self) -> (f64, f64) {
+            (100.0, 100.0)
+        }
+        fn affine(&self) -> bool {
+            true
+        }
+        fn ground_at(&self, _up: f64, _u: f64, _v: f64) -> [f64; 6] {
+            [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+        }
+        fn bands(&self, near: f64, far: f64) -> Vec<f64> {
+            vec![near, far]
+        }
+        fn band_mid(&self, z0: f64, z1: f64) -> f64 {
+            (z0 + z1) / 2.0
+        }
+    }
+
+    fn top() -> Shape {
+        Shape::Polygon {
+            pts: vec![Pt::new(0.0, 0.0, 0.0), Pt::new(10.0, 0.0, 0.0), Pt::new(10.0, 0.0, 20.0), Pt::new(0.0, 0.0, 20.0)],
+            class: "iso-top".into(),
+            face: None,
+            texture: Some(Texture { material: "concrete".into(), tile_mm: (1800.0, 1800.0) }),
+        }
+    }
+
+    fn drawn(s: Shape, p: &dyn Projection) -> String {
+        let d = Diagram { defs: String::new(), ground: layer_of(LayerKind::Ground, vec![s]), sections: vec![], outline: layer_of(LayerKind::Outline, vec![]) };
+        render(&d, p)
+    }
+
+    #[test]
+    fn a_textured_top_on_a_perspective_is_cut_into_bands_each_with_its_transform() {
+        let s = drawn(top(), &Persp);
+        assert!(
+            s.contains(concat!(
+                r#"<polygon class="iso-top" points="0,0 10,0 10,20 0,20"/>"#,
+                r#"<g class="hatch" fill="url(#iso-m-concrete)">"#,
+                r#"<polygon transform="matrix(1 0 0 1 0 0)" points="0,0 10,0 10,10 0,10"/>"#,
+                r#"<polygon transform="matrix(1 0 0 1 0 0)" points="0,10 10,10 10,20 0,20"/></g>"#
+            )),
+            "{s}"
+        );
+        assert_eq!(s.matches("transform=").count(), 2);
+    }
+
+    #[test]
+    fn a_textured_top_on_an_affine_projection_is_one_polygon() {
+        let s = drawn(top(), &Flat);
+        assert_eq!(s.matches("<polygon").count(), 1, "{s}");
+        assert_eq!(s.matches("transform=").count(), 0, "{s}");
+        assert!(s.contains(r##"fill="url(#iso-m-concrete)""##), "{s}");
+    }
+
+    #[test]
+    fn a_face_carries_its_shading_filter() {
+        let face = |f| Shape::Polygon { pts: vec![Pt::new(1.0, 2.0, 3.0)], class: "iso-curb".into(), face: Some(f), texture: None };
+        assert!(drawn(face(Face::Front), &Flat).contains(r##"<polygon class="iso-curb" data-face="front" points="1,5" filter="url(#iso-shade-front)"/>"##));
+        assert!(drawn(face(Face::Side), &Flat).contains(r##"data-face="side" points="1,5" filter="url(#iso-shade-side)"/>"##));
+        assert!(drawn(face(Face::Ramp), &Flat).contains(r##"data-face="ramp" points="1,5" filter="url(#iso-shade-ramp)"/>"##));
+        let top = drawn(face(Face::Top), &Flat);
+        assert!(top.contains(r#"data-face="top" points="1,5"/>"#) && !top.contains("filter"), "{top}");
+    }
+
+    #[test]
+    fn joints_are_one_path_after_the_bands() {
+        let joints = Shape::Polyline { pts: vec![Pt::new(0.0, 0.0, 5.0), Pt::new(10.0, 0.0, 5.0)], class: "joints j-concrete".into() };
+        let along = Shape::Polyline { pts: vec![Pt::new(4.0, 0.0, 0.0), Pt::new(4.0, 0.0, 20.0)], class: "joints j-concrete".into() };
+        let s = drawn(Shape::Group { class: "g".into(), uid: None, title: None, shapes: vec![top(), joints, along] }, &Persp);
+        assert!(
+            s.contains(concat!(r#"</g><path class="joints j-concrete" d="M0,5H10"/>"#, r#"<path class="joints j-concrete" d="M4,0L4,20"/>"#, "</g>")),
+            "{s}"
+        );
     }
 }

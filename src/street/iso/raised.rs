@@ -15,7 +15,8 @@ use crate::street::pieces::{curb_edges, curb_width_mm};
 use super::curbside;
 use super::joints::path as joint_path;
 use super::order::Bx;
-use super::projection::{Projection, Reach, band_edges, band_mid, drawn_mm, points};
+use super::projection::{Projection, Reach, drawn_mm, points};
+use crate::shared::diagram::render::textured;
 
 /// How high each kind of piece stands above the roadway, in millimetres. They are plausible, not
 /// surveyed, like the catalogue's rates. The furniture kinds stand on the sidewalk, so at its height.
@@ -150,32 +151,8 @@ fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h:
 /// of a material are laid only on a top with straight edges (`joints`).
 pub(super) fn top_over(out: &mut String, p: &Projection, id: &str, m: &str, h: f64, edge: &dyn Fn(f64) -> (f64, f64), joints_too: bool) {
     let (n, l) = (p.reach.near, p.reach.far);
-    let ((a0, a1), (b0, b1)) = (edge(n), edge(l));
-    let (x0, x1) = (a0, a1);
-    let pts = points(p, &[(a0, h, n), (a1, h, n), (b1, h, l), (b0, h, l)]);
-    write!(out, "<polygon class=\"iso-top k-{id} mat-{m}\" points=\"{pts}\"/>").unwrap();
-    // The bands share their fill, and so the group carries it: a texture's polygons are bare.
-    write!(out, "<g class=\"hatch\" fill=\"url(#iso-m-{m})\">").unwrap();
-    for w in band_edges(p.reach).windows(2) {
-        let (z0, z1) = (w[0], w[1]);
-        let (m0, m1) = edge(band_mid(z0, z1));
-        let g = p.ground_at(h, (m0 + m1) / 2.0, band_mid(z0, z1));
-        // The numbers as written, so that the polygon is taken back through exactly the map that lays the texture.
-        let [a, _, c, d, e, f] = [g[0], g[1], g[2], g[3], g[4], g[5]].map(|n| (n * 1e6).round() / 1e6);
-        let (e, f) = ((e * 100.0).round() / 100.0, (f * 100.0).round() / 100.0);
-        let (e0, e1) = (edge(z0), edge(z1));
-        let local: Vec<String> = [(e0.0, z0), (e0.1, z0), (e1.1, z1), (e1.0, z1)]
-            .iter()
-            .map(|&(x, z)| {
-                let (sx, sy) = p.at(x, h, z);
-                let v = (sy - f) / d;
-                let u = (sx - e - c * v) / a;
-                format!("{:.0},{:.0}", u, v)
-            })
-            .collect();
-        write!(out, "<polygon transform=\"matrix({a} 0 {c} {d} {e} {f})\" points=\"{}\"/>", local.join(" ")).unwrap();
-    }
-    out.push_str("</g>");
+    let (x0, x1) = edge(n);
+    textured(out, p, &format!("iso-top k-{id} mat-{m}"), m, h, (n, l), edge);
     // The joints of the materials that have them, as lines over the grain (`joints`).
     if let Some(j) = joints(m).filter(|_| joints_too) {
         let d = joint_path(p, &j, x0, x1, h);

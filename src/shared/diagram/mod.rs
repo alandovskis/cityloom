@@ -8,6 +8,23 @@ pub trait Projection {
     fn at(&self, p: Pt) -> (f64, f64);
     /// The drawing's width and height, in pixels.
     fn size(&self) -> (f64, f64);
+    /// Whether the projection is an affine map of the ground, so that one pattern fills a whole top.
+    fn affine(&self) -> bool {
+        true
+    }
+    /// The matrix (`a b c d e f`, `x_px = a*u + c*v + e`, `y_px = b*u + d*v + f`) nearest to the projection of the
+    /// plane `up` high from `(u, v)` = (across, along) about that point.
+    fn ground_at(&self, _up: f64, _u: f64, _v: f64) -> [f64; 6] {
+        [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+    }
+    /// Where along the street each band of a textured top from `near` to `far` begins, and the end of the last.
+    fn bands(&self, near: f64, far: f64) -> Vec<f64> {
+        vec![near, far]
+    }
+    /// How far along the street a band from `z0` to `z1` is laid.
+    fn band_mid(&self, z0: f64, z1: f64) -> f64 {
+        (z0 + z1) / 2.0
+    }
 }
 
 /// A point on the ground and above it, in millimetres: across the street,

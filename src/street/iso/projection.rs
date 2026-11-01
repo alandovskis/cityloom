@@ -173,6 +173,22 @@ impl crate::shared::diagram::Projection for Projection {
     fn size(&self) -> (f64, f64) {
         (self.width, self.height)
     }
+
+    fn affine(&self) -> bool {
+        false
+    }
+
+    fn ground_at(&self, up: f64, u: f64, v: f64) -> [f64; 6] {
+        Projection::ground_at(self, up, u, v)
+    }
+
+    fn bands(&self, near: f64, far: f64) -> Vec<f64> {
+        band_edges(Reach { near, far }).to_vec()
+    }
+
+    fn band_mid(&self, z0: f64, z1: f64) -> f64 {
+        band_mid(z0, z1)
+    }
 }
 
 /// A pixel value to two decimals, which is all a drawing needs.
