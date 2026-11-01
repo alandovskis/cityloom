@@ -127,3 +127,22 @@
     outline-color: Highlight;
   }
 }
+
+/* The design archive section sits in a slot of its own, under the account's. */
+#archive-slot .hint {
+  padding: 0;
+}
+#archive-slot .menu-act .btn + .btn {
+  margin-left: 8px;
+}
+#archive-slot .archive-error {
+  font-weight: 600;
+}
+#archive-result:focus {
+  outline: none;
+}
+#archive-result:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}

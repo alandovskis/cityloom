@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
 
-/// The `.rs` files of `account`, `map`, `place`, `junction`, `city`, `restriction` and `sync` that are not in `MIGRATED`, and why. Every other
+/// The `.rs` files of `account`, `archive`, `map`, `place`, `junction`, `city`, `restriction` and `sync` that are not in `MIGRATED`, and why. Every other
 /// one is, and a test fails on a file of these slices that is in neither list, so a new file is scanned from
 /// the day it is added.
 const LEFT_OUT: &[(&str, &str)] = &[
@@ -15,6 +15,7 @@ const LEFT_OUT: &[(&str, &str)] = &[
     ("src/restriction/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
     ("src/account/tests.rs", "test-only"),
+    ("src/archive/tests.rs", "test-only"),
     ("src/sync/tests.rs", "test-only"),
     ("src/map/tests.rs", "test-only"),
     ("src/junction/tests.rs", "test-only"),
@@ -27,6 +28,11 @@ const LEFT_OUT: &[(&str, &str)] = &[
 
 const MIGRATED: &[(&str, &str)] = &[
     // Files are added here as their task completes.
+    ("src/archive/mod.rs", include_str!("archive/mod.rs")),
+    ("src/archive/model.rs", include_str!("archive/model.rs")),
+    ("src/archive/text.rs", include_str!("archive/text.rs")),
+    ("src/archive/view.rs", include_str!("archive/view.rs")),
+    ("src/archive/vm.rs", include_str!("archive/vm.rs")),
     ("src/account/mod.rs", include_str!("account/mod.rs")),
     ("src/account/text.rs", include_str!("account/text.rs")),
     ("src/account/view.rs", include_str!("account/view.rs")),
@@ -166,6 +172,8 @@ const ALLOWED: &[&str] = &[
 const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("the sync document serialises", "a panic message about the code, never shown"),
     ("a street and a junction have a section", "a panic message about the code, never shown"),
+    ("hint archive-error", "two CSS classes of the design archive's refusal line"),
+    ("an archive serialises", "a panic message about the code, never shown"),
     ("lit warn", "two CSS classes of a movement in a phase drawing"),
     ("OpenStreetMap", "a provider's brand name, not translated"),
     ("Google", "a provider's brand name, not translated"),
@@ -449,6 +457,10 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("cityloom-design", "the `kind` of a design archive file, not a message"),
+    ("archive-result", "the id of the design archive's result line, not a message"),
+    ("archive-keep", "the id of the design archive's Keep mine button, not a message"),
+    ("archive-slot", "the id of the page slot the design archive is mounted in, not a message"),
     ("sig-later-0", "the id of the first phase's Later button, not a message"),
     ("signal-plan-state", "the id of the plan's state paragraph, not a message"),
     ("transition-room", "the id of a check, not a message"),
@@ -573,6 +585,7 @@ const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
     ("share-btn", "the id of an element the editors share"),
     ("share-btn-label", "the id of an element the editors share"),
     ("share-heading", "the id of an element the editors share"),
+    ("share-export", "the id of the Share menu's Export design button"),
     ("share-menu", "the id of an element the editors share"),
     ("signal-walk", "the id of a check of the junction sheet"),
     ("signal-cycle", "the id of a check of the junction sheet"),
@@ -705,7 +718,7 @@ fn rust_files(dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn every_file_of_the_translated_slices_is_scanned_or_left_out_with_a_reason() {
     let mut files = Vec::new();
-    for slice in ["account", "map", "place", "junction", "city", "restriction", "sync"] {
+    for slice in ["account", "archive", "map", "place", "junction", "city", "restriction", "sync"] {
         rust_files(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(slice), &mut files);
     }
     let unlisted: Vec<_> = files.iter().filter(|f| !MIGRATED.iter().chain(LEFT_OUT).any(|(name, _)| name == f)).collect();

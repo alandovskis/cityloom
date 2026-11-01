@@ -421,6 +421,64 @@ impl Mapper for NoMapper {
     fn listen(&self, _: Box<dyn Fn(MapEvent)>) {}
 }
 
+/// A file the person chose: its name and its text.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Picked {
+    pub name: String,
+    pub text: String,
+}
+
+/// Hands a design archive to the person as a file, and takes one they choose. The browser side is a download and a
+/// file chooser; neither reads or writes anything of the app's own.
+pub trait ArchiveFiles {
+    /// Offers `text` to the person as a file called `name`. Says whether it could be offered.
+    fn save(&self, name: &str, text: &str) -> bool;
+    /// Lets the person choose a file and calls `done` once with its text, or with None when they chose none or it
+    /// could not be read as text. May never call `done` (a chooser that is closed without a choice says nothing in
+    /// every browser).
+    fn pick(&self, done: Box<dyn FnOnce(Option<Picked>)>);
+}
+
+/// A file port that keeps what was saved and offers what a test staged.
+#[derive(Default)]
+pub struct FakeArchiveFiles {
+    saved: RefCell<Vec<(String, String)>>,
+    staged: RefCell<Option<Picked>>,
+    refuse: std::cell::Cell<bool>,
+}
+
+impl FakeArchiveFiles {
+    /// What was saved since this was last called, as (name, text).
+    pub fn take_saved(&self) -> Vec<(String, String)> {
+        std::mem::take(&mut *self.saved.borrow_mut())
+    }
+
+    /// The file the next `pick` gives.
+    pub fn stage(&self, name: &str, text: &str) {
+        *self.staged.borrow_mut() = Some(Picked { name: name.to_string(), text: text.to_string() });
+    }
+
+    /// Makes `save` fail, as a browser that blocks downloads does.
+    pub fn refuse_saves(&self, refuse: bool) {
+        self.refuse.set(refuse);
+    }
+}
+
+impl ArchiveFiles for FakeArchiveFiles {
+    fn save(&self, name: &str, text: &str) -> bool {
+        if self.refuse.get() {
+            return false;
+        }
+        self.saved.borrow_mut().push((name.to_string(), text.to_string()));
+        true
+    }
+
+    fn pick(&self, done: Box<dyn FnOnce(Option<Picked>)>) {
+        let staged = self.staged.borrow_mut().take();
+        done(staged);
+    }
+}
+
 /// The platform services a view-model is given.
 #[derive(Clone)]
 pub struct Ports {
@@ -434,6 +492,7 @@ pub struct Ports {
     pub page: Rc<dyn Page>,
     pub account: Rc<dyn Account>,
     pub work: Rc<dyn WorkSync>,
+    pub files: Rc<dyn ArchiveFiles>,
 }
 
 /// An announcer that keeps what it was told.
@@ -1021,6 +1080,7 @@ pub fn test_ports_with_time() -> (Ports, Rc<RecordingAnnouncer>, Rc<MemoryStorag
             page: Rc::new(FakePage::default()),
             account: Rc::new(FakeAccount::default()),
             work: Rc::new(FakeWorkSync::default()),
+            files: Rc::new(FakeArchiveFiles::default()),
         },
         announcer,
         storage,
@@ -1045,6 +1105,7 @@ pub struct TestPorts {
     pub announcer: Rc<RecordingAnnouncer>,
     pub storage: Rc<MemoryStorage>,
     pub work: Rc<FakeWorkSync>,
+    pub files: Rc<FakeArchiveFiles>,
 }
 
 /// The same, with the account, the navigator and the page too.
@@ -1056,7 +1117,9 @@ pub fn test_ports_full() -> TestPorts {
     ports.page = page.clone();
     let work = Rc::new(FakeWorkSync::default());
     ports.work = work.clone();
-    TestPorts { ports, account, navigator, page, announcer, storage, work }
+    let files = Rc::new(FakeArchiveFiles::default());
+    ports.files = files.clone();
+    TestPorts { ports, account, navigator, page, announcer, storage, work, files }
 }
 
 /// The same, with the fetcher and the importer too.

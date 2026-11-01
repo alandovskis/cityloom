@@ -7,8 +7,8 @@ use wasm_bindgen::prelude::*;
 
 // `account_error` is imported inside `api` below, where only the wasm32 build uses it: a host build would warn about an unused import, and CI builds with `-D warnings`.
 use crate::shared::ports::{
-    Account, AccountError, Announcer, Answer, Fetched, Fetcher, Importer, Me, Navigator, Page, Ports, ProviderInfo, Scheduler, Storage, WorkAnswer, WorkAsk,
-    WorkError, WorkPage, WorkPushed, WorkPut, WorkSync,
+    Account, AccountError, Announcer, Answer, ArchiveFiles, Fetched, Fetcher, Importer, Me, Navigator, Page, Picked, Ports, ProviderInfo, Scheduler, Storage,
+    WorkAnswer, WorkAsk, WorkError, WorkPage, WorkPushed, WorkPut, WorkSync,
 };
 use crate::shared::{live, store};
 
@@ -191,6 +191,73 @@ impl Navigator for BrowserNavigator {
         }
         #[cfg(not(target_arch = "wasm32"))]
         let _ = href;
+    }
+}
+
+/// The browser's side of `ArchiveFiles`: a download through a temporary link, and a file chooser on an input that is
+/// never put in the page. Thin glue; every decision about the text is the archive slice's.
+struct BrowserFiles;
+
+impl ArchiveFiles for BrowserFiles {
+    fn save(&self, name: &str, text: &str) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            let parts = js_sys::Array::of1(&wasm_bindgen::JsValue::from_str(text));
+            let options = web_sys::BlobPropertyBag::new();
+            options.set_type("application/json");
+            let Ok(blob) = web_sys::Blob::new_with_str_sequence_and_options(&parts, &options) else { return false };
+            let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else { return false };
+            let document = leptos::prelude::document();
+            let Some(link) = document.create_element("a").ok().and_then(|e| e.dyn_into::<web_sys::HtmlAnchorElement>().ok()) else {
+                return false;
+            };
+            link.set_href(&url);
+            link.set_download(name);
+            link.click();
+            let _ = web_sys::Url::revoke_object_url(&url);
+            true
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = (name, text);
+            false
+        }
+    }
+
+    fn pick(&self, done: Box<dyn FnOnce(Option<Picked>)>) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            let Some(input) = leptos::prelude::document().create_element("input").ok().and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok()) else {
+                return done(None);
+            };
+            input.set_type("file");
+            input.set_accept(".json,application/json");
+            let done = Rc::new(std::cell::RefCell::new(Some(done)));
+            let on_change = {
+                let (input, done) = (input.clone(), done.clone());
+                Closure::once_into_js(move || {
+                    let Some(file) = input.files().and_then(|f| f.get(0)) else {
+                        if let Some(done) = done.borrow_mut().take() {
+                            done(None);
+                        }
+                        return;
+                    };
+                    let name = file.name();
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let text = wasm_bindgen_futures::JsFuture::from(file.text()).await.ok().and_then(|t| t.as_string());
+                        if let Some(done) = done.borrow_mut().take() {
+                            done(text.map(|text| Picked { name, text }));
+                        }
+                    });
+                })
+            };
+            let _ = input.add_event_listener_with_callback("change", on_change.unchecked_ref());
+            input.click();
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        done(None);
     }
 }
 
@@ -491,6 +558,7 @@ pub fn browser_ports() -> Ports {
         page: Rc::new(BrowserPage),
         account: Rc::new(BrowserAccount),
         work: Rc::new(BrowserWork),
+        files: Rc::new(BrowserFiles),
     }
 }
 

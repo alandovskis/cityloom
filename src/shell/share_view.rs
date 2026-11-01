@@ -27,6 +27,14 @@ pub fn ShareMenu(i18n: Rc<I18n>) -> impl IntoView {
                     <span>{move || i18n.with_value(|i| i.tr("ui-print", &Args::new()))}</span>
                 </button>
             </p>
+            <p class="menu-act">
+                <button type="button" id="share-export" class="btn">
+                    <svg class="btn-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                        <path d="M8 2.5V10M5 7l3 3 3-3M3.5 8.5v5h9v-5"></path>
+                    </svg>
+                    <span>{move || i18n.with_value(|i| i.tr("archive-export", &Args::new()))}</span>
+                </button>
+            </p>
         </div>
     }
 }

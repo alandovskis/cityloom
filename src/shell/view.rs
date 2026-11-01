@@ -106,6 +106,18 @@ pub fn mount(i18n: Rc<I18n>, target: Rc<dyn Target>, details_word: &'static str,
             let _ = leptos::prelude::window().print();
         });
     }
+    if let Some(export) = by_id("share-export") {
+        let v = vm.clone();
+        let archive = crate::archive::vm::ArchiveVm::new(crate::shared::platform::browser_ports(), vm.i18n());
+        listen(&export, "click", move |_: MouseEvent| {
+            v.close_share();
+            // As for Print: the menu is hidden under the focus, so the Share button takes it. The result is announced.
+            if let Some(share) = by_id("share-btn").and_then(|b| b.dyn_into::<HtmlElement>().ok()) {
+                let _ = share.focus();
+            }
+            archive.export();
+        });
+    }
     crate::shell::header::watch();
     std::mem::forget(owner);
 }
