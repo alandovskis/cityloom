@@ -2,10 +2,12 @@ import type { Page } from "@playwright/test";
 
 import { expect, live, openStreet, placesOnMap, test } from "./fixtures";
 
-const iso = (page: Page) => page.locator("#view-iso");
-const section = (page: Page) => page.locator("#view-section");
+// The street page draws the street in 2.5D only (#139). A press on a piece selects it; its width and kind are
+// edited in the inspector and with the keys, since a perspective has no handles to drag.
 
-// The street page's drawing shows the section, which is edited, or the street in 2.5D, which follows it.
+const pieces = (page: Page) => page.locator("#drawing .iso-piece");
+const pressPiece = (page: Page, i: number) =>
+  pieces(page).nth(i).locator(".iso-top, .iso-front, polygon").first().click({ force: true });
 
 test.describe("the street in 2.5D", () => {
   test.beforeEach(async ({ page }) => {
@@ -13,37 +15,70 @@ test.describe("the street in 2.5D", () => {
     await expect(page.locator("#drawing")).toBeVisible();
   });
 
-  test("the toggle shows the street in 2.5D without handles, and V brings the section back", async ({ page }) => {
-    await expect(section(page)).toHaveAttribute("aria-pressed", "true");
-    const n = await page.locator('#drawing [data-role="seg"]').count();
-    await iso(page).click();
-    await expect(iso(page)).toHaveAttribute("aria-pressed", "true");
-    await expect(section(page)).toHaveAttribute("aria-pressed", "false");
-    await expect(live(page)).toHaveText("Showing the street in 2.5D");
-    await expect(page.locator("#drawing .iso-top")).toHaveCount(n);
+  test("is the only drawing: no toggle, no section, no handles, and V changes nothing", async ({ page }) => {
+    await expect(page.locator("#drawing.iso")).toBeVisible();
+    await expect(page.locator("#view-mode")).toHaveCount(0);
+    await expect(page.locator('#drawing [data-role="seg"]')).toHaveCount(0);
     await expect(page.locator('#drawing [data-role="handle"]')).toHaveCount(0);
     await expect(page.locator("#drawing")).toHaveAttribute(
       "aria-label",
       /in 2\.5D, along a 40 m stretch\. \d+ segments?\.( Speed limit \d+ km\/h\.)?$/,
     );
+    await page.locator("#wrap").focus();
     await page.keyboard.press("v");
-    await expect(section(page)).toHaveAttribute("aria-pressed", "true");
-    await expect(live(page)).toHaveText("Showing the section");
-    await expect(page.locator('#drawing [data-role="handle"]').first()).toBeVisible();
+    await expect(page.locator("#drawing.iso")).toBeVisible();
+    await expect(live(page)).toHaveText("");
+  });
+
+  test("a view kept by an earlier visit, the section included, does not change what opens", async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem("cityloom-street-view", "section"));
+    await page.reload();
+    await expect(page.locator("#drawing.iso")).toBeVisible();
+    await expect(page.locator('#drawing [data-role="seg"]')).toHaveCount(0);
+  });
+
+  test("a press on a piece selects it, outlines it, announces it and shows its details", async ({ page }) => {
+    await expect(page.locator("#inspector .insp-empty")).toBeVisible();
+    await pressPiece(page, 0);
+    await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
+    await expect(live(page)).toHaveText(/, [\d.]+ m, \d+ of \d+$/);
+    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
+    await expect(page.locator("#wrap")).toBeFocused();
+  });
+
+  test("every piece can be pressed, the narrow far ones too", async ({ page }) => {
+    const n = await pieces(page).count();
+    expect(n).toBeGreaterThan(0);
+    for (let i = 0; i < n; i++) {
+      await page.keyboard.press("Escape");
+      await pressPiece(page, i);
+      await expect(page.locator("#drawing .iso-sel"), `piece ${i} is selected`).toHaveCount(1);
+    }
   });
 
   test("the 2.5D follows an edit made with the keys and outlines the selected piece", async ({ page }) => {
-    const second = await page.locator('#drawing [data-role="seg"]').nth(1).getAttribute("data-uid");
-    await iso(page).click();
-    const top = page.locator(`#drawing .iso-piece[data-uid="${second}"] .iso-top`);
-    const before = await top.getAttribute("points");
+    const tops = () =>
+      page.locator("#drawing .iso-top").evaluateAll((els) => els.map((e) => e.getAttribute("points")).join("|"));
+    const before = await tops();
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
     await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
     await page.keyboard.press("+");
-    await expect(top).not.toHaveAttribute("points", before ?? "");
+    await expect.poll(tops).not.toBe(before);
     await expect(page.locator("#undo")).toBeEnabled();
-    await expect(page.locator('#drawing [data-role="handle"]')).toHaveCount(0);
+    await page.keyboard.press("Control+z");
+    await expect.poll(tops).toBe(before);
+  });
+
+  test("a piece is made wider in the inspector's width field", async ({ page }) => {
+    await pressPiece(page, 0);
+    const width = page.locator("#width");
+    await expect(width).toBeVisible();
+    const before = Number(await width.inputValue());
+    await width.fill(String(before + 0.1));
+    await width.press("Enter");
+    await expect(page.locator("#undo")).toBeEnabled();
+    expect(Number(await width.inputValue())).toBeCloseTo(before + 0.1, 1);
   });
 
   test("choosing another surface material in the inspector changes the selected piece's top in 2.5D", async ({
@@ -59,17 +94,14 @@ test.describe("the street in 2.5D", () => {
       );
     await page.locator("#wrap").focus();
     await page.keyboard.press("ArrowRight");
-    await iso(page).click();
     const before = await tops();
     for (const t of before) {
       const material = /mat-(\w+)/.exec(t.class)?.[1];
       expect(material, t.class).toBeTruthy();
       expect(t.hatch).toBe(`url(#iso-m-${material})`);
     }
-    await section(page).click();
     const other = page.locator('#i-h-surface ~ [role="radiogroup"] [role="radio"][aria-checked="false"]').first();
     await other.click();
-    await iso(page).click();
     const after = await tops();
     expect(after).toHaveLength(before.length);
     const changed = after.filter((t, i) => t.class !== before[i].class);
@@ -80,79 +112,6 @@ test.describe("the street in 2.5D", () => {
     const id = /#(iso-m-\w+)/.exec(changed[0].hatch)![1];
     await expect(page.locator(`#drawing pattern#${id}`)).toHaveAttribute("patternTransform", /^matrix\(/);
   });
-
-  test("the view chosen is kept across a reload", async ({ page }) => {
-    await iso(page).click();
-    await page.reload();
-    await expect(iso(page)).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator("#drawing .iso-top").first()).toBeVisible();
-  });
-
-  test("V typed in the width field is a letter, not the view", async ({ page }) => {
-    await page.locator("#wrap").focus();
-    await page.keyboard.press("ArrowRight");
-    await page.keyboard.press("Enter");
-    const width = page.locator("#width");
-    await expect(width).toBeFocused();
-    await width.press("v");
-    await expect(section(page)).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator("#drawing .iso-top")).toHaveCount(0);
-  });
-
-  test("in French the toggle reads Coupe and 2,5D and the change is said in French", async ({ page }) => {
-    await page.locator("#account-btn").click();
-    await page.locator('[data-lang="fr-CA"]').click();
-    await page.keyboard.press("Escape");
-    await expect(section(page)).toHaveText("Coupe");
-    await expect(iso(page)).toHaveText("2,5D");
-    await iso(page).click();
-    await expect(live(page)).toHaveText("Rue affichée en 2,5D");
-  });
-});
-
-test("at 400 px the Notes edge tab leaves the toggle clear, wherever the page is scrolled", async ({ page }) => {
-  // A short window puts the tab, half-way down it, level with the toggle when the page is at the top.
-  await page.setViewportSize({ width: 400, height: 700 });
-  await openStreet(page);
-  await expect(iso(page)).toBeVisible();
-  const tab = (await page.locator(".edge-tab.right").boundingBox())!;
-  for (const id of ["#view-section", "#view-iso"]) {
-    const b = (await page.locator(id).boundingBox())!;
-    // The tab is fixed and the toggle scrolls past it, so only across can they meet.
-    expect(b.x + b.width, id).toBeLessThanOrEqual(tab.x);
-  }
-});
-
-test("in forced colours the view shown is still marked as pressed", async ({ page }) => {
-  // Forced colours drop the pressed button's background and shadow; an outline in Highlight stays.
-  await page.emulateMedia({ forcedColors: "active" });
-  await openStreet(page);
-  const outline = (id: string) => page.locator(id).evaluate((b) => getComputedStyle(b).outlineStyle);
-  expect(await outline("#view-section")).toBe("solid");
-  expect(await outline("#view-iso")).toBe("none");
-  await iso(page).click();
-  await page.mouse.click(1, 1);
-  expect(await outline("#view-iso")).toBe("solid");
-  expect(await outline("#view-section")).toBe("none");
-});
-
-test("the toggle is not printed", async ({ page }) => {
-  await openStreet(page);
-  await expect(page.locator("#view-mode")).toBeVisible();
-  await page.emulateMedia({ media: "print" });
-  await expect(page.locator("#view-mode")).toBeHidden();
-});
-
-test("the toggle sits on the street name's line, so the page's head is no taller for it", async ({ page }) => {
-  // A row of its own, under the tools, pushed the drawing out of the window wherever the text is wider (CI's fonts).
-  await openStreet(page);
-  await expect(iso(page)).toBeVisible();
-  const toggle = (await page.locator("#view-mode").boundingBox())!;
-  const name = (await page.locator("#street-name").boundingBox())!;
-  const sub = (await page.locator("#street-sub").boundingBox())!;
-  expect(toggle.y + toggle.height).toBeLessThanOrEqual(sub.y + 1);
-  expect(toggle.x).toBeGreaterThanOrEqual(name.x + name.width);
-  expect(toggle.height).toBeLessThanOrEqual(name.height + 6);
 });
 
 test("a street with opposing lanes shows yellow paint in 2.5D, and symbols in place of the section's arrows", async ({
@@ -164,8 +123,6 @@ test("a street with opposing lanes shows yellow paint in 2.5D, and symbols in pl
   // The first streets of the Plateau: stop at the first with a line between lanes that run opposite ways.
   for (const href of streets.slice(0, 8)) {
     await page.goto("/" + href);
-    await iso(page).click();
-    await expect(iso(page)).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("#drawing .iso-markings")).toHaveCount(1);
     expect(await page.locator("#drawing .iso-mark").count(), "symbols take the arrows' place").toBeGreaterThan(0);
     yellow = await page.locator("#drawing .iso-paint.yellow").count();

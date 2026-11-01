@@ -128,8 +128,9 @@ impl StreetVm {
     pub fn new(ports: Ports, i18n: Rc<I18n>, street: Editor, binding: Option<CityBinding>) -> Rc<StreetVm> {
         let areas = areas_holding(&ports, binding.as_ref());
         Rc::new_cyclic(|me: &std::rc::Weak<StreetVm>| {
-            // The view chosen on an earlier visit; the section when there is none, or it is not a view.
-            let mode = ports.storage.recall(VIEW_KEY).as_deref().and_then(ViewMode::parse).unwrap_or(ViewMode::Section);
+            // The 2.5D is the street's drawing (#139). The section stays in the code, but a view kept by an
+            // earlier visit, the section included, no longer decides what the page opens with.
+            let mode = ViewMode::Iso;
             let keeper = binding.is_some().then(|| {
                 let (keep, told) = (me.clone(), me.clone());
                 Keeper::new(
@@ -1442,18 +1443,17 @@ mod tests {
     }
 
     #[test]
-    fn the_drawing_starts_as_the_section_and_toggling_shows_the_2_5d_keeps_the_choice_and_says_it() {
+    fn the_drawing_starts_as_the_2_5d_and_the_section_is_still_there_to_switch_to_in_code() {
         use crate::shared::ports::Storage;
         let r = rig(0);
+        assert_eq!(r.vm.mode_now(), ViewMode::Iso);
+        r.vm.toggle_mode();
         assert_eq!(r.vm.mode_now(), ViewMode::Section);
+        assert_eq!(r.said.take(), vec!["Showing the section"]);
         r.vm.toggle_mode();
         assert_eq!(r.vm.mode_now(), ViewMode::Iso);
         assert_eq!(r.storage.recall(VIEW_KEY).as_deref(), Some("iso"));
         assert_eq!(r.said.take(), vec!["Showing the street in 2.5D"]);
-        r.vm.toggle_mode();
-        assert_eq!(r.vm.mode_now(), ViewMode::Section);
-        assert_eq!(r.storage.recall(VIEW_KEY).as_deref(), Some("section"));
-        assert_eq!(r.said.take(), vec!["Showing the section"]);
         // Changing the view is not an edit.
         assert_eq!(r.vm.version().get_untracked(), 0);
     }
@@ -1461,21 +1461,23 @@ mod tests {
     #[test]
     fn choosing_the_view_already_shown_changes_nothing_and_says_nothing() {
         let r = rig(0);
-        r.vm.set_mode(ViewMode::Section);
+        r.vm.set_mode(ViewMode::Iso);
         assert!(r.said.take().is_empty());
-        r.vm.set_mode(ViewMode::Iso);
+        r.vm.set_mode(ViewMode::Section);
         r.said.take();
-        r.vm.set_mode(ViewMode::Iso);
+        r.vm.set_mode(ViewMode::Section);
         assert!(r.said.take().is_empty());
     }
 
     #[test]
-    fn the_view_chosen_is_the_one_the_next_page_opens_with() {
-        let (ports, _said, _storage, _time) = test_ports_with_time();
-        let first = StreetVm::new(ports.clone(), crate::i18n_for(Locale::En), Editor::new(0), None);
-        first.set_mode(ViewMode::Iso);
-        let next = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0), None);
-        assert_eq!(next.mode_now(), ViewMode::Iso);
+    fn a_view_kept_by_an_earlier_visit_does_not_change_what_the_page_opens_with() {
+        use crate::shared::ports::Storage;
+        let (ports, _said, storage, _time) = test_ports_with_time();
+        for word in ["section", "iso", "sideways", ""] {
+            storage.remember(VIEW_KEY, word);
+            let vm = StreetVm::new(ports.clone(), crate::i18n_for(Locale::En), Editor::new(0), None);
+            assert_eq!(vm.mode_now(), ViewMode::Iso, "stored {word:?}");
+        }
     }
 
     #[test]
@@ -1483,24 +1485,21 @@ mod tests {
         let r = rig(0);
         r.vm.i18n().set(Locale::FrCa);
         r.vm.toggle_mode();
-        assert_eq!(r.said.take(), vec!["Rue affichée en 2,5D"]);
-        r.vm.toggle_mode();
         assert_eq!(r.said.take(), vec!["Coupe affichée"]);
+        r.vm.toggle_mode();
+        assert_eq!(r.said.take(), vec!["Rue affichée en 2,5D"]);
     }
 
     #[test]
-    fn a_blocked_store_or_an_unknown_word_starts_the_section_and_the_toggle_still_works() {
+    fn a_blocked_store_does_not_stop_the_view_changing_for_this_visit() {
         use crate::shared::ports::Storage;
         let (ports, said, storage, _time) = test_ports_with_time();
-        storage.remember(VIEW_KEY, "sideways");
         let vm = StreetVm::new(ports, crate::i18n_for(Locale::En), Editor::new(0), None);
-        assert_eq!(vm.mode_now(), ViewMode::Section);
         storage.blocked(true);
         vm.toggle_mode();
-        assert_eq!(vm.mode_now(), ViewMode::Iso, "it holds for this visit");
-        assert_eq!(said.take(), vec!["Showing the street in 2.5D"]);
-        // Nothing was kept: the next visit reads what the store held before, and starts on the section.
-        assert_eq!(storage.recall(VIEW_KEY).as_deref(), Some("sideways"));
+        assert_eq!(vm.mode_now(), ViewMode::Section, "it holds for this visit");
+        assert_eq!(said.take(), vec!["Showing the section"]);
+        assert_eq!(storage.recall(VIEW_KEY), None, "nothing was kept");
     }
 
     #[test]

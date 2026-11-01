@@ -80,7 +80,6 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     };
     mount("scroll", view! { <view::StreetDrawing vm=vm.clone()/> }.into_any());
     mount("h-drawing", view! { <page::DrawingHeading vm=vm.clone()/> }.into_any());
-    mount("view-mode-slot", view! { <page::ViewToggle vm=vm.clone()/> }.into_any());
     mount("street", view! { <page::StreetHeader vm=vm.clone() ends=ends.clone()/> }.into_any());
     mount("zones-slot", view! { <strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
     mount("curb-slot", view! { <curb_strip::CurbStrips vm=vm.clone()/> }.into_any());

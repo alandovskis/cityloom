@@ -112,6 +112,7 @@ fn street_ends() -> Vec<EndView> {
 #[test]
 fn the_street_section_is_a_labelled_group_holding_a_picture_of_the_street() {
     let s = street_shared(0);
+    s.set_mode(ViewMode::Section);
     let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
     assert!(h.contains("id=\"wrap\"") && h.contains("aria-label=\"Street cross-section editor\"") && h.contains("tabindex=\"0\""));
     assert!(h.contains("id=\"drawing\"") && h.contains("role=\"img\""));
@@ -123,6 +124,7 @@ fn the_street_section_is_a_labelled_group_holding_a_picture_of_the_street() {
 #[test]
 fn the_section_follows_the_units_and_the_selection() {
     let s = street_shared(0);
+    s.set_mode(ViewMode::Section);
     s.set_units(Units::Feet);
     let u = segment(&s, 2);
     s.edit(|e| e.select(Some(u)));
@@ -268,6 +270,7 @@ fn a_street_without_a_name_is_headed_by_its_class_in_the_language_of_the_page() 
     use crate::street::model::Street;
     let unnamed = Street { name: None, ..Street::sample(0, Side::Right) };
     let s = StreetVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(Locale::En), Editor::from_street(&unnamed, &unnamed, 0), None);
+    s.set_mode(ViewMode::Section);
     let h = street_html(|| view! { <page::StreetHeader vm=s.clone() ends=None/> });
     assert!(h.contains(">Unnamed local street</h1>"), "{h}");
     let b = street_html(|| view! { <page::TitleBlock vm=s.clone()/> });
@@ -779,9 +782,11 @@ fn the_heading_and_the_title_block_are_in_french() {
 #[test]
 fn the_drawing_s_group_is_named_in_the_language_of_the_page() {
     let s = street_shared(0);
+    s.set_mode(ViewMode::Section);
     let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
     assert!(h.contains("aria-label=\"Street cross-section editor\""), "{h}");
     let s = street_shared_in(0, Locale::FrCa);
+    s.set_mode(ViewMode::Section);
     let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
     assert!(h.contains("aria-label=\"Éditeur de coupe transversale de la rue\"") && !h.contains("Street cross-section editor"), "{h}");
 }
@@ -929,10 +934,12 @@ fn the_panel_is_drawn_again_in_the_language_the_shell_switches() {
 #[test]
 fn the_drawing_is_in_french_when_the_page_is() {
     let s = street_shared_in(0, Locale::FrCa);
+    s.set_mode(ViewMode::Section);
     let h = street_html(|| view! { <view::StreetDrawing vm=s.clone()/> });
     assert!(h.contains("Aujourd’hui") && h.contains("Votre aménagement") && h.contains("Coupe transversale de"), "{h}");
     assert!(!h.contains(">Today<") && !h.contains("Cross-section of"), "{h}");
     let e = street_shared(0);
+    e.set_mode(ViewMode::Section);
     let h = street_html(|| view! { <view::StreetDrawing vm=e.clone()/> });
     assert!(h.contains(">Today<"), "{h}");
     e.i18n().set(Locale::FrCa);

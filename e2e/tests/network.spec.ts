@@ -115,14 +115,11 @@ test.describe("the network checks on the map page", () => {
     const before = await rule(page, "cycling").innerText();
     await page.goto("/" + target.href);
     // take every bike lane off the street
-    const bikes = page.locator("#drawing [data-role='seg']:has(rect.k-bike)");
+    const bikes = page.locator("#drawing .iso-piece:has(.k-bike)");
     for (let guard = 0; (await bikes.count()) > 0 && guard < 4; guard++) {
-      const index = await page
-        .locator("#drawing [data-role='seg']")
-        .evaluateAll((els) => els.findIndex((e) => e.querySelector("rect.k-bike")));
+      // press a bike lane to select it, then take it away
+      await bikes.first().locator(".k-bike").first().click({ force: true });
       await page.locator("#wrap").focus();
-      await page.keyboard.press("Escape");
-      for (let i = 0; i <= index; i++) await page.keyboard.press("ArrowRight");
       await page.keyboard.press("Delete");
     }
     await expect(bikes).toHaveCount(0);

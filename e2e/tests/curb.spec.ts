@@ -85,7 +85,6 @@ test.describe("the curbside strip", () => {
     }
 
     // The 2.5D says how many uses it shows and draws the patio as a raised strip of its own.
-    await page.locator('#view-mode-slot button[aria-pressed="false"]').click();
     await expect(page.locator("#drawing.iso")).toBeAttached();
     await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /One curbside use is shown\./);
     await expect(page.locator('#drawing .iso-piece:has(> title:text-is("Patio"))').first()).toBeAttached();

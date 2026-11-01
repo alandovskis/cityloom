@@ -36,7 +36,6 @@ test.describe("a street's speed limit", () => {
     await expect(page.locator("#undo")).toBeEnabled();
 
     await page.keyboard.press("Escape");
-    await page.locator("#view-iso").click();
     await expect(sign(page)).toHaveCount(1);
     await expect(sign(page)).toContainText("MAXIMUM");
     await expect(sign(page)).toContainText("30");
@@ -69,27 +68,23 @@ test.describe("a street's speed limit", () => {
     await expect(speed(page)).toHaveValue("30");
     await page.reload();
     await expect(speed(page)).toHaveValue("30");
-    await page.locator("#view-iso").click();
     await expect(sign(page)).toContainText("30");
   });
 
   test("Not set removes the sign and is kept across a reload", async ({ page }) => {
     await openStreetWithSpeed(page, "30");
-    await page.locator("#view-iso").click();
     await expect(sign(page)).toHaveCount(1);
     await speed(page).selectOption("");
     await expect(speed(page)).toHaveValue("");
     await expect(sign(page)).toHaveCount(0);
     await page.reload();
     await expect(speed(page)).toHaveValue("");
-    await page.locator("#view-iso").click();
     await expect(sign(page)).toHaveCount(0);
   });
 
   test("a street OpenStreetMap gives no speed shows Not set and no sign", async ({ page }) => {
     await openStreetWithSpeed(page, "");
     await expect(speed(page)).toHaveValue("");
-    await page.locator("#view-iso").click();
     await expect(page.locator("#drawing .iso-top").first()).toBeVisible();
     await expect(sign(page)).toHaveCount(0);
   });

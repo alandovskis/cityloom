@@ -30,7 +30,7 @@ test("at 400% zoom the sticky bar does not cover the control the keyboard has re
   const covered = await page.evaluate(() => parseFloat(document.documentElement.style.getPropertyValue("--bar-stuck")));
   const bar = (await page.locator(".bar").boundingBox())!;
   expect(covered).toBeGreaterThanOrEqual(bar.y + bar.height);
-  for (const id of ["#add-btn", "#view-section", "#zone-strip", "#wrap"]) {
+  for (const id of ["#add-btn", "#zone-strip", "#wrap"]) {
     await page.locator(id).focus();
     const box = (await page.locator(id).boundingBox())!;
     const barNow = (await page.locator(".bar").boundingBox())!;
@@ -190,18 +190,16 @@ test("Alt and the arrows on the strip do not leave the page", async ({ page }) =
   await expect(page.locator("#zone-strip")).toBeVisible();
 });
 
-test("V and the arrow keys still work after the strip had focus", async ({ page }) => {
+test("the arrow keys still work after the strip had focus, and V changes nothing", async ({ page }) => {
   await openStreet(page);
   await page.locator("#zone-split").click();
   await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
   await page.locator("#zone-strip").focus();
   await page.keyboard.press("ArrowRight");
-  // back to the drawing: V switches the view, the arrows choose a piece
+  // back to the drawing: the 2.5D is the only view, so V does nothing, and the arrows choose a piece
   await page.locator("#wrap").focus();
   await page.keyboard.press("v");
   await expect(page.locator("#drawing.iso")).toBeAttached();
-  await page.keyboard.press("v");
-  await expect(page.locator("#drawing.iso")).not.toBeAttached();
   const before = await page.locator("#live").textContent();
   await page.keyboard.press("ArrowRight");
   await expect(page.locator("#live")).not.toHaveText(before ?? "");

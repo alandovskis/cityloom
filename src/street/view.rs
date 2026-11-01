@@ -213,29 +213,6 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
         }
     };
 
-    // V switches the drawing between the section and the 2.5D, anywhere but in a field (`keys::switches_view`).
-    // A drag under way is finished first and kept: the section it is on goes, and with it the pointer's release,
-    // and what the drag has done is already on screen, so it becomes an edit that can be undone.
-    #[cfg(target_arch = "wasm32")]
-    window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
-        let key = e.key();
-        let press = keys::Press {
-            key: &key,
-            ctrl: e.ctrl_key(),
-            meta: e.meta_key(),
-            alt: e.alt_key(),
-            repeat: e.repeat(),
-            composing: e.is_composing(),
-            taken: e.default_prevented() || typing(&e),
-        };
-        if keys::switches_view(&press) {
-            e.prevent_default();
-            tapped.set_value(false);
-            finish(true);
-            w.toggle_mode();
-        }
-    });
-
     let keydown = move |e: KeyboardEvent| {
         if e.meta_key() || e.ctrl_key() || e.alt_key() {
             return;
@@ -283,13 +260,26 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
             ></svg>
         }
     };
-    // The 2.5D: no handles and nothing for the pointer to do; the keys still edit the street.
+    // The 2.5D: a press on a piece selects it and brings up its details, where its width and kind are edited; a
+    // perspective has no handles to drag, and the keys still edit the street.
+    let pick = move |e: PointerEvent| {
+        if e.pointer_type() == "mouse" && e.button() != 0 {
+            return;
+        }
+        focus_wrap(wrap);
+        let hit = e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()).and_then(|t| t.closest("[data-uid]").ok().flatten());
+        if let Some(uid) = hit.and_then(|h| h.get_attribute("data-uid")).and_then(|v| v.parse::<u32>().ok()) {
+            w.select(Some(uid));
+            show_inspector();
+        }
+    };
     let in_depth = move || {
         view! {
             <svg
                 id="drawing"
                 class="iso"
                 xmlns="http://www.w3.org/2000/svg"
+                on:pointerdown=pick
                 role="img"
                 aria-label=move || {
                     let (v, units) = w.now();
