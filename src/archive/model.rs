@@ -6,7 +6,7 @@
 //! convention):
 //!
 //! ```json
-//! { "kind": "cityloom-design", "format_version": 1, "app_version": "0.43.0", "created_at": "2026-10-31T12:00:00.000Z",
+//! { "kind": "cityloom-design", "format_version": 1, "app_version": "0.44.0", "created_at": "2026-10-31T12:00:00.000Z",
 //!   "source": { "area_key": "45.5230,-73.5810", "tile_checksum": "…+i7", "importer_version": 7 },
 //!   "area": "area=45.5230,-73.5810&name=Plateau", "edits": { …the `cityloom-edits` document… },
 //!   "restrictions": { …the `cityloom-restrictions` document… } }
