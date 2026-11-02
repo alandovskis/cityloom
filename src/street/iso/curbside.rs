@@ -207,7 +207,7 @@ mod tests {
             ("sample 0", drawn(&Editor::new(0)), 35769, 0x1fa58abfaeac8e25),
             ("sample 1", drawn(&Editor::new(1)), 53134, 0xf62a9be49617bd7a),
             ("furnished", drawn(&furnished()), 69117, 0xa1f70000735a7ce5),
-            ("marked", drawn(&marked()), 47659, 0x33148bb5a7f0b46d),
+            ("marked", drawn(&marked()), 47628, 0xd1017b334c1e55da),
             ("joined", iso_svg(&joined(true, 1), &en(), 1050.0).markup, 45452, 0xc3b7b07a5718a277),
         ] {
             assert_eq!((markup.len(), fnv(&markup)), (len, hash), "{name}");
