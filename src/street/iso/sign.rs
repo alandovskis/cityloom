@@ -1,4 +1,5 @@
-//! The speed limit sign: a post on the street's kerbside edge with a white panel facing the eye, "MAXIMUM" over the limit.
+//! The speed limit sign: a white panel facing the eye, "MAXIMUM" over the limit, floating over the street's kerbside
+//! edge with no post under it. The stop sign (`stops.rs`) shares the panel's geometry and keeps its post.
 
 use crate::shared::catalogue::{KINDS, Side};
 use crate::shared::diagram::{Pt, Shape};
@@ -91,8 +92,9 @@ impl Panel {
     }
 }
 
-/// The speed limit sign: a post on the piece at the edge on the side traffic keeps, `AT_MM` into the run so that it is
-/// in front, and on it a white panel facing the eye, "MAXIMUM" over the number. `None` only without a speed.
+/// The speed limit sign: a white panel facing the eye, "MAXIMUM" over the number, `PANEL_FROM_TOP_MM` over the piece at
+/// the edge on the side traffic keeps, `AT_MM` into the run so that it is in front, with no post. `None` only without
+/// a speed.
 pub(super) fn sign(v: &View, segs: &[SegView], p: &Projection, i18n: &I18n) -> Option<Shape> {
     let kmh = v.speed_kmh?;
     let piece = site(segs, v.side)?;
@@ -113,12 +115,7 @@ pub(super) fn sign(v: &View, segs: &[SegView], p: &Projection, i18n: &I18n) -> O
         data: None,
         hidden: true,
         title: None,
-        shapes: vec![
-            sign.post(p),
-            sign.panel(),
-            word(panel_h * 0.74, 0.17, i18n.tr("iso-sign-maximum", &Args::new())),
-            word(panel_h * 0.14, 0.46, kmh.to_string()),
-        ],
+        shapes: vec![sign.panel(), word(panel_h * 0.74, 0.17, i18n.tr("iso-sign-maximum", &Args::new())), word(panel_h * 0.14, 0.46, kmh.to_string())],
     })
 }
 
@@ -166,12 +163,13 @@ mod tests {
     }
 
     #[test]
-    fn the_speed_sign_is_drawn_as_before_the_stop_sign_shared_its_post() {
-        // Hashes of the sign's markup before its post and panel were factored out.
+    fn the_speed_sign_is_a_floating_panel_with_no_post() {
+        // Hashes of the sign's markup. Re-pinned for #139: the post was dropped, so the panel and its two words are all
+        // that is left (the panel's place and size are unchanged).
         for (name, side, width, len, hash) in [
-            ("right", Side::Right, 1050.0, 659u64, 0x73a2064882660bf6u64),
-            ("left", Side::Left, 1050.0, 659, 0x664a47b85c745732),
-            ("small", Side::Right, 280.0, 654, 0xd8325459d13641f1),
+            ("right", Side::Right, 1050.0, 299, 0x6b452f04fa0c9eab),
+            ("left", Side::Left, 1050.0, 299, 0x1a91d45b3e5f01b1),
+            ("small", Side::Right, 280.0, 291, 0x6b084f59e292590f),
         ] {
             let m = iso_svg(&with_speed(side, Some(50)), &en(), width).markup;
             let sign = sign_of(&m);
