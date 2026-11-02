@@ -32,7 +32,7 @@ fn symbol(p: &Projection, segs: &[SegView], mark: &Mark, draw: Option<&Draw>) ->
         .iter()
         .map(|shape| polygon(white, shape.iter().map(|&(across, along)| (cx + across, 0.0, p.reach.near + ARROW_AT_MM + along))))
         .collect();
-    Some(Shape::Group { class: "iso-mark".into(), uid: None, data: Some(("data-mark", mark.uid)), title: None, shapes })
+    Some(Shape::Group { class: "iso-mark".into(), uid: None, data: Some(("data-mark", mark.uid)), hidden: false, title: None, shapes })
 }
 
 /// The lines and symbols of the street, drawn flat on the ground over the reach of `p`. A line is the shared paint

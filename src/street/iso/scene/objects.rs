@@ -17,7 +17,7 @@ fn face(corners: [(f64, f64, f64); 4], class: &str, face: Face) -> Shape {
 
 /// A box's faces the eye sees: its front, its side on the middle of the street's side (none when it is over the eye)
 /// and its top.
-fn block(p: &Projection, b: &Block) -> Shape {
+pub(in crate::street::iso) fn block(p: &Projection, b: &Block) -> Shape {
     let ((x0, x1), (y0, y1), (z0, z1)) = (b.x, b.y, b.z);
     let mut shapes = vec![face([(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0)], "o-front", Face::Front)];
     if let Some(right) = inner_face(p, x0, x1) {
@@ -25,7 +25,7 @@ fn block(p: &Projection, b: &Block) -> Shape {
         shapes.push(face([(x, y0, z0), (x, y0, z1), (x, y1, z1), (x, y1, z0)], "o-side", Face::Side));
     }
     shapes.push(face([(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)], "o-top", Face::Top));
-    Shape::Group { class: format!("iso-solid s-{}", b.solid.name()), uid: None, data: None, title: None, shapes }
+    Shape::Group { class: format!("iso-solid s-{}", b.solid.name()), uid: None, data: None, hidden: false, title: None, shapes }
 }
 
 /// The boxes that stand on the pieces, on the shown curbside uses and on the shown stops, in the order they are painted

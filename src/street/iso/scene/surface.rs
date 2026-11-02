@@ -59,6 +59,7 @@ fn piece(p: &Projection, segs: &[SegView], i18n: &I18n, strip: Strip, across: bo
         class: if across { "iso-piece iso-across" } else { "iso-piece" }.into(),
         uid: if across { None } else { Some(s.uid) },
         data: None,
+        hidden: false,
         title: Some(i18n.tr(&kind_key(id), &Args::new())),
         shapes,
     }
@@ -85,6 +86,7 @@ pub(in crate::street::iso) fn surface(
                 class: "iso-piece iso-taper".into(),
                 uid: None,
                 data: None,
+                hidden: false,
                 title: Some(i18n.tr(&kind_key(k.id), &Args::new())),
                 shapes: top(p, k.id, MATERIALS[k.materials[0]].id, drawn_mm(height_mm(k.id)), &edge, false),
             });

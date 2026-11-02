@@ -86,7 +86,7 @@ fn curb(p: &Projection, segs: &[SegView], i: usize, right: bool) -> Vec<Shape> {
 }
 
 fn group(class: &str, uid: Option<u32>, name: String, shapes: Vec<Shape>) -> Shape {
-    Shape::Group { class: class.into(), uid, data: None, title: Some(name), shapes }
+    Shape::Group { class: class.into(), uid, data: None, hidden: false, title: Some(name), shapes }
 }
 
 /// A strip of the street as a group of its own with the piece's name for hovering: its slab, or one of its curbs. A

@@ -3,6 +3,7 @@
 //! where it is as the stretch moves, and is drawn whole or not at all within the reach.
 
 use crate::shared::catalogue::KINDS;
+use crate::shared::diagram::Shape;
 use crate::street::model::{SegView, ShownStop, View};
 
 use super::projection::{Projection, Reach, STRETCH_MM, drawn_mm};
@@ -86,6 +87,20 @@ pub(super) fn signs(segs: &[SegView], stops: &[ShownStop], p: &Projection) -> St
         out.push_str("</g>");
     }
     out
+}
+
+/// `signs` as shapes.
+pub(super) fn sign_shapes(segs: &[SegView], stops: &[ShownStop], p: &Projection) -> Vec<Shape> {
+    stops
+        .iter()
+        .filter_map(|s| {
+            let sign = sign_panel(segs, s, p)?;
+            let mut shapes = vec![sign.post_shape(p), sign.panel_shape(), sign.rect_shape("iso-sign-glyph", BODY.0, BODY.1)];
+            shapes.extend(WINDOWS.iter().map(|&u| sign.rect_shape("iso-sign-glyph-cut", u, (0.52, 0.72))));
+            shapes.extend(WHEELS.iter().map(|&u| sign.rect_shape("iso-sign-glyph", u, (0.20, 0.32))));
+            Some(Shape::Group { class: "iso-stop-sign".into(), uid: None, data: None, hidden: true, title: None, shapes })
+        })
+        .collect()
 }
 
 #[cfg(test)]

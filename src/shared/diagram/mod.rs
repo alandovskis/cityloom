@@ -98,11 +98,20 @@ pub enum Shape {
         runs: Vec<JointRun>,
         class: String,
     },
+    /// A word set at a point, `size` pixels high whatever the projection.
+    Text {
+        at: Pt,
+        class: String,
+        size: f64,
+        text: String,
+    },
     Group {
         class: String,
         uid: Option<u32>,
         /// A data attribute of its own besides the uid: its name (`data-mark`) and number.
         data: Option<(&'static str, u32)>,
+        /// Hidden from a screen reader (`aria-hidden`): a sign is part of the picture, not of what it says.
+        hidden: bool,
         title: Option<String>,
         shapes: Vec<Shape>,
     },
@@ -183,7 +192,7 @@ mod tests {
             face: Some(Face::Top),
             texture: Some(Texture { material: "asphalt".into(), tile_mm: (100.0, 200.0) }),
         };
-        let group = Shape::Group { class: "iso-piece".into(), uid: Some(3), data: None, title: Some("Lane".into()), shapes: vec![poly.clone()] };
+        let group = Shape::Group { class: "iso-piece".into(), uid: Some(3), data: None, hidden: false, title: Some("Lane".into()), shapes: vec![poly.clone()] };
         let d = Diagram {
             defs: "<defs/>".into(),
             ground: Layer { kind: LayerKind::Ground, shapes: vec![poly] },
