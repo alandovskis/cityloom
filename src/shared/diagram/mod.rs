@@ -84,6 +84,15 @@ pub enum Shape {
         pts: Vec<Pt>,
         class: String,
     },
+    /// A face of a solid (a slab's front or side, a curb's, a box's): shaded by how it is turned from the eye
+    /// (`face`), carrying `data-face` when `labelled`, and, when there is a `hatch`, the hatch of that id over it.
+    Plane {
+        pts: Vec<Pt>,
+        class: String,
+        face: Face,
+        labelled: bool,
+        hatch: Option<String>,
+    },
     /// All the joints of one textured top, written as one path.
     Joints {
         runs: Vec<JointRun>,

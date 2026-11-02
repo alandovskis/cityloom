@@ -23,7 +23,7 @@ pub(super) enum Solid {
 }
 
 impl Solid {
-    fn name(self) -> &'static str {
+    pub(super) fn name(self) -> &'static str {
         match self {
             Solid::Trunk => "trunk",
             Solid::Crown => "crown",

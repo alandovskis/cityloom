@@ -129,7 +129,7 @@ pub(super) fn lifted(shown: &[Over]) -> Vec<Lift> {
 }
 
 /// The edges across of a lifted strip's piece along the stretch: the transition's where the piece tapers, else none.
-fn edges<'a>(segs: &[SegView], l: &Lift, p: &'a Projection, taper: Option<&'a Draw>) -> Option<impl Fn(f64) -> (f64, f64) + 'a> {
+pub(super) fn edges<'a>(segs: &[SegView], l: &Lift, p: &'a Projection, taper: Option<&'a Draw>) -> Option<impl Fn(f64) -> (f64, f64) + 'a> {
     let d = taper?;
     let shape = d.shape_of(&segs[l.piece])?;
     let reach = p.reach;

@@ -87,6 +87,29 @@ pub fn joints_d(p: &dyn Projection, runs: &[JointRun]) -> String {
     d
 }
 
+/// A face's name and the filter that darkens it, as an attribute: none for a top.
+fn shade(face: Face) -> (&'static str, &'static str) {
+    match face {
+        Face::Front => ("front", " filter=\"url(#iso-shade-front)\""),
+        Face::Side => ("side", " filter=\"url(#iso-shade-side)\""),
+        Face::Ramp => ("ramp", " filter=\"url(#iso-shade-ramp)\""),
+        Face::Top => ("top", ""),
+    }
+}
+
+fn plane(out: &mut String, p: &dyn Projection, pts: &[Pt], class: &str, face: Face, labelled: bool, hatch: Option<&str>) {
+    let (name, filter) = shade(face);
+    let pts = points(p, pts);
+    write!(out, "<polygon class=\"{class}\"").unwrap();
+    if labelled {
+        write!(out, " data-face=\"{name}\"").unwrap();
+    }
+    write!(out, " points=\"{pts}\"{filter}/>").unwrap();
+    if let Some(h) = hatch {
+        write!(out, "<polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#{h})\"/>").unwrap();
+    }
+}
+
 fn polygon(out: &mut String, p: &dyn Projection, pts: &[Pt], class: &str, face: Option<Face>, texture: Option<&Texture>) {
     if let Some(t) = texture {
         // Four corners, the near edge first (left, right), then the far edge (right, left).
@@ -96,14 +119,7 @@ fn polygon(out: &mut String, p: &dyn Projection, pts: &[Pt], class: &str, face: 
             return;
         }
     }
-    let shade = match face {
-        Some(Face::Front) => Some(("front", " filter=\"url(#iso-shade-front)\"")),
-        Some(Face::Side) => Some(("side", " filter=\"url(#iso-shade-side)\"")),
-        Some(Face::Ramp) => Some(("ramp", " filter=\"url(#iso-shade-ramp)\"")),
-        Some(Face::Top) => Some(("top", "")),
-        None => None,
-    };
-    match shade {
+    match face.map(shade) {
         Some((name, filter)) => write!(out, "<polygon class=\"{class}\" data-face=\"{name}\" points=\"{}\"{filter}/>", points(p, pts)).unwrap(),
         None => write!(out, "<polygon class=\"{class}\" points=\"{}\"/>", points(p, pts)).unwrap(),
     }
@@ -112,6 +128,7 @@ fn polygon(out: &mut String, p: &dyn Projection, pts: &[Pt], class: &str, face: 
 fn shape(out: &mut String, s: &Shape, p: &dyn Projection) {
     match s {
         Shape::Polygon { pts, class, face, texture } => polygon(out, p, pts, class, *face, texture.as_ref()),
+        Shape::Plane { pts, class, face, labelled, hatch } => plane(out, p, pts, class, *face, *labelled, hatch.as_deref()),
         Shape::Joints { runs, class } => {
             let d = joints_d(p, runs);
             if !d.is_empty() {
@@ -392,5 +409,23 @@ mod tests {
         let s = drawn(top(), &Sheared);
         // The matrix is the projection's own, so each corner comes back to its ground millimetres.
         assert!(s.contains(r#"<polygon transform="matrix(2 0 0.5 4 3 7)" points="0,0 10,0 10,20 0,20"/>"#), "{s}");
+    }
+
+    #[test]
+    fn a_plane_is_shaded_by_its_face_labelled_on_request_and_hatched_over() {
+        let plane = |face, labelled, hatch: Option<&str>| Shape::Plane {
+            pts: vec![Pt::new(1.0, 2.0, 3.0)],
+            class: "iso-front k-x".into(),
+            face,
+            labelled,
+            hatch: hatch.map(String::from),
+        };
+        let at = |s| layer_markup(&layer_of(LayerKind::Raised, vec![s]), &Scale(1.0));
+        assert_eq!(
+            at(plane(Face::Front, false, Some("h-x"))),
+            r#"<g class="iso-raised"><polygon class="iso-front k-x" points="1,5" filter="url(#iso-shade-front)"/><polygon class="hatch" points="1,5" fill="url(#h-x)"/></g>"#
+        );
+        assert_eq!(at(plane(Face::Top, true, None)), r#"<g class="iso-raised"><polygon class="iso-front k-x" data-face="top" points="1,5"/></g>"#);
+        assert!(at(plane(Face::Side, true, None)).contains(r#"data-face="side" points="1,5" filter="url(#iso-shade-side)""#));
     }
 }

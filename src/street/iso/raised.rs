@@ -206,7 +206,7 @@ pub(super) fn slab_of(
 }
 
 /// Where the curb of the piece at `i` along one edge (`right`) lies across the street.
-fn curb_span(s: &crate::street::model::SegView, c: &str, right: bool) -> (f64, f64) {
+pub(super) fn curb_span(s: &crate::street::model::SegView, c: &str, right: bool) -> (f64, f64) {
     let cw = curb_width_mm(c).min(s.width_mm as f64 / 2.0);
     let edge = (s.x_mm + s.width_mm) as f64;
     if right { (edge - cw, edge) } else { (s.x_mm as f64, s.x_mm as f64 + cw) }
