@@ -1,5 +1,5 @@
 //! The raised layer as shapes: every strip standing above the roadway with its faces, and the curbside uses lifted into
-//! strips of their own, in the order the eye needs among themselves. Equal to what `run_layers` wrote for `iso-raised`.
+//! strips of their own, in the order the eye needs among themselves.
 
 use crate::shared::catalogue::{KINDS, kind_key};
 use crate::shared::diagram::{Face, Layer, LayerKind, Pt, Shape};
@@ -136,31 +136,12 @@ pub(in crate::street::iso) fn raised(
 mod tests {
     use super::*;
     use crate::street::iso::raised::strips;
-    use crate::street::iso::scene::testing::{each_run, parity};
+    use crate::street::iso::scene::testing::each_run;
     use crate::street::iso::surface::split;
     use crate::street::iso::testing::en;
 
-    /// The old writer's raised layer for a run, as `run_layers` writes it.
-    fn old(p: &Projection, segs: &[SegView], across: bool, draw: Option<&Draw>, shown: &[curbside::Over]) -> String {
-        use crate::street::iso::layers::Layer as Old;
-        let i18n = en();
-        let (_, standing) = split(strips(segs, p));
-        let lifted = curbside::lifted(shown);
-        let boxes: Vec<(Bx, bool)> =
-            standing.iter().map(|&s| (strip_box(segs, s, p.reach), true)).chain(lifted.iter().map(|l| (curbside::lift_box(segs, l, p, draw), false))).collect();
-        let mut out = Old::Raised.open();
-        for k in order::paint_order(&boxes, p.centre_mm) {
-            match standing.get(k) {
-                Some(&s) => crate::street::iso::raised::piece(&mut out, p, segs, &i18n, s, across),
-                None => curbside::lift(&mut out, p, segs, &i18n, &lifted[k - standing.len()], draw),
-            }
-        }
-        out.push_str("</g>");
-        out
-    }
-
     #[test]
-    fn the_raised_layer_equals_the_old_writer_on_every_sample() {
+    fn the_raised_layer_holds_a_group_per_standing_strip_and_per_lifted_use() {
         let i18n = en();
         let (mut runs, mut lifts) = (0, 0);
         each_run(|name, p, segs, across, draw, shown| {
@@ -169,7 +150,8 @@ mod tests {
             lifts += lifted.len();
             let layer = raised(p, segs, &i18n, &standing, &lifted, across, draw);
             assert_eq!(layer.kind, LayerKind::Raised, "{name}");
-            parity(&layer, p, &old(p, segs, across, draw, shown));
+            assert_eq!(layer.shapes.len(), standing.len() + lifted.len(), "{name}");
+            assert!(layer.shapes.iter().all(|s| matches!(s, Shape::Group { title: Some(_), .. })), "{name}: every strip is named for hovering");
             runs += 1;
         });
         assert!(runs >= 30, "{runs} runs");
@@ -207,7 +189,6 @@ mod tests {
             let (_, standing) = split(strips(segs, &p));
             let lifted = curbside::lifted(&[on]);
             let layer = raised(&p, segs, &i18n, &standing, &lifted, is_across, Some(&draw));
-            parity(&layer, &p, &old(&p, segs, is_across, Some(&draw), &[on]));
             // The lifted strip follows the tapering piece: without the transition it is drawn differently.
             let plain = layer_markup(&raised(&p, segs, &i18n, &standing, &lifted, is_across, None), &p);
             assert_ne!(layer_markup(&layer, &p), plain);

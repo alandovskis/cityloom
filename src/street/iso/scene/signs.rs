@@ -12,8 +12,8 @@ use crate::street::iso::{sign, stops};
 pub(in crate::street::iso) fn signs(v: &View, segs: &[SegView], p: &Projection, i18n: &I18n, across: bool) -> Layer {
     let mut shapes = Vec::new();
     if !across {
-        shapes.extend(sign::sign_shape(v, segs, p, i18n));
-        shapes.extend(stops::sign_shapes(segs, &v.stops_shown, p));
+        shapes.extend(sign::sign(v, segs, p, i18n));
+        shapes.extend(stops::signs(segs, &v.stops_shown, p));
     }
     Layer { kind: LayerKind::Signs, shapes }
 }

@@ -1,22 +1,14 @@
 //! What stands above the roadway: the heights of the pieces and of their curbs, and the slabs and curb blocks drawn
 //! with their front and side faces.
 
-use std::fmt::Write;
-
-use super::curbside::Over;
-use crate::shared::catalogue::{KINDS, kind_key};
-use crate::shared::i18n::{Args, I18n};
-use crate::shared::iso::format::esc;
-use crate::shared::iso::ground::{fine_patterns, joints};
+use crate::shared::catalogue::KINDS;
+use crate::shared::iso::ground::fine_patterns;
 use crate::shared::iso::shading::shade_filters;
 use crate::street::model::SegView;
 use crate::street::pieces::{curb_edges, curb_width_mm};
 
-use super::curbside;
-use super::joints::path as joint_path;
 use super::order::Bx;
-use super::projection::{Projection, Reach, drawn_mm, points};
-use crate::shared::diagram::render::textured;
+use super::projection::{Projection, Reach, drawn_mm};
 
 /// How high each kind of piece stands above the roadway, in millimetres. They are plausible, not
 /// surveyed, like the catalogue's rates. The furniture kinds stand on the sidewalk, so at its height.
@@ -65,14 +57,6 @@ pub fn curb_top_mm(curb: &str, kind_id: &str) -> f64 {
     drawn_mm(h) + (curb_height_mm(curb) - h).max(0) as f64
 }
 
-/// Which face of a strip, or of a curb, a polygon is.
-#[derive(Clone, Copy)]
-pub(super) enum Face {
-    Top,
-    Front,
-    Side,
-}
-
 /// How much darker the faces turned from the eye are drawn, so that the depth reads: the front a little,
 /// the side more. They are SVG filters the drawing carries, not CSS `filter: brightness()`, which Safari
 /// may not apply to SVG shapes (an SVG filter is SVG 1.1); in sRGB, so they darken as `brightness()` does.
@@ -88,31 +72,6 @@ pub(super) fn shades() -> String {
 /// of their own: a textured top is laid by the matrix of the polygon that fills with one (`top`), band by band.
 pub(super) fn materials() -> String {
     fine_patterns("iso-m", [1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
-}
-
-/// The shading a face of this kind gets, as an attribute: none for a top.
-pub(super) fn shade(what: Face) -> &'static str {
-    match what {
-        Face::Top => "",
-        Face::Front => " filter=\"url(#iso-shade-front)\"",
-        Face::Side => " filter=\"url(#iso-shade-side)\"",
-    }
-}
-
-/// One face: a polygon in the tint of the piece of kind `kind`, or of a curb when there is none
-/// (marked with the face it is), shaded when it is turned from the eye, then the hatch `hatch` over it.
-fn face(out: &mut String, what: Face, kind: Option<&str>, hatch: &str, pts: &str) {
-    let name = match what {
-        Face::Top => "top",
-        Face::Front => "front",
-        Face::Side => "side",
-    };
-    match kind {
-        Some(k) => write!(out, "<polygon class=\"iso-{name} k-{k}\""),
-        None => write!(out, "<polygon class=\"iso-curb\" data-face=\"{name}\""),
-    }
-    .unwrap();
-    write!(out, " points=\"{pts}\"{}/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#{hatch})\"/>", shade(what)).unwrap();
 }
 
 /// How high the piece next to `i` on its right (`right`) or its left is drawn, or the ground when there is none.
@@ -134,103 +93,11 @@ pub(super) fn inner_face(p: &Projection, x0: f64, x1: f64) -> Option<bool> {
     }
 }
 
-/// The top of a piece at `h` (drawn mm) across `x0` to `x1`: a polygon in the tint of the kind `id` and the material
-/// `m`, the material's texture over it, and its regular joints (`joints`) over that. The texture is the fine grain, a
-/// pattern in millimetres of ground; perspective is not an affine map, so the top is cut into `BANDS` bands along the
-/// street (`band_edges`), each carrying the affine map that is the perspective's slope at its middle
-/// (`Projection::ground_at`); the band's polygon is written in the ground's own millimetres, as the true quadrilateral
-/// the band is on the screen taken back through that map, so it fits the top exactly and its `transform` lays the
-/// texture. The grain is not continuous across a seam, which does not show in a grain; the joints, which the eye
-/// follows, are not part of the pattern but lines projected point by point, so they have no seam.
-fn top(out: &mut String, p: &Projection, id: &str, m: &str, x0: f64, x1: f64, h: f64) {
-    top_over(out, p, id, m, h, &|_| (x0, x1), true);
-}
-
-/// The same top with its edges across given along the street (`edge`: across `(left, right)` at an `along_mm`), as a
-/// transition makes them. The edges are straight in between, so each band is a quadrilateral of its own. The joints
-/// of a material are laid only on a top with straight edges (`joints`).
-pub(super) fn top_over(out: &mut String, p: &Projection, id: &str, m: &str, h: f64, edge: &dyn Fn(f64) -> (f64, f64), joints_too: bool) {
-    let (n, l) = (p.reach.near, p.reach.far);
-    let (x0, x1) = edge(n);
-    textured(out, p, &format!("iso-top k-{id} mat-{m}"), m, h, (n, l), edge);
-    // The joints of the materials that have them, as lines over the grain (`joints`).
-    if let Some(j) = joints(m).filter(|_| joints_too) {
-        let d = joint_path(p, &j, x0, x1, h);
-        if !d.is_empty() {
-            write!(out, "<path class=\"joints j-{m}\" d=\"{d}\"/>").unwrap();
-        }
-    }
-}
-
-/// The piece at `i` as a strip along the stretch: its top, and where it stands above the ground its
-/// front (the cut at the near end) and the side face the eye sees, where the piece beside it is lower.
-pub(super) fn slab(out: &mut String, p: &Projection, segs: &[SegView], i: usize) {
-    let s = &segs[i];
-    slab_of(out, p, segs, i, KINDS[s.kind].id, s.material, (p.reach.near, p.reach.far), None);
-}
-
-/// A strip across the piece at `i` as a thing of kind `id` and material `m` over `along` of the reach: the piece's
-/// own (`slab`), or a curbside use standing where the piece lies.
-/// `edge` gives the piece's edges across at an `along_mm` where a transition moves them (a use standing on a tapering
-/// piece follows it).
-pub(super) fn slab_of(
-    out: &mut String,
-    p: &Projection,
-    segs: &[SegView],
-    i: usize,
-    id: &str,
-    m: &str,
-    along: (f64, f64),
-    edge: Option<&dyn Fn(f64) -> (f64, f64)>,
-) {
-    let s = &segs[i];
-    let (n, l) = along;
-    let (x0, x1) = edge.map_or((s.x_mm as f64, (s.x_mm + s.width_mm) as f64), |e| e(n));
-    let h = drawn_mm(height_mm(id));
-    let hatch = format!("h-{id}");
-    if h > 0.0 {
-        face(out, Face::Front, Some(id), &hatch, &points(p, &[(x0, 0.0, n), (x1, 0.0, n), (x1, h, n), (x0, h, n)]));
-        if let Some(right) = inner_face(p, x0, x1) {
-            let (far_x0, far_x1) = edge.map_or((x0, x1), |e| e(l));
-            let (x, xl, low) = if right { (x1, far_x1, beside(segs, i, right)) } else { (x0, far_x0, beside(segs, i, right)) };
-            if low < h {
-                face(out, Face::Side, Some(id), &hatch, &points(p, &[(x, low, n), (xl, low, l), (xl, h, l), (x, h, n)]));
-            }
-        }
-    }
-    let sub = p.over(Reach { near: n, far: l });
-    match edge {
-        Some(edge) => top_over(out, &sub, id, m, h, edge, false),
-        None => top(out, &sub, id, m, x0, x1, h),
-    }
-}
-
 /// Where the curb of the piece at `i` along one edge (`right`) lies across the street.
 pub(super) fn curb_span(s: &crate::street::model::SegView, c: &str, right: bool) -> (f64, f64) {
     let cw = curb_width_mm(c).min(s.width_mm as f64 / 2.0);
     let edge = (s.x_mm + s.width_mm) as f64;
     if right { (edge - cw, edge) } else { (s.x_mm as f64, s.x_mm as f64 + cw) }
-}
-
-/// The curb of the piece at `i` along one edge (`right`). As high as the piece, it is a stripe on its
-/// top; higher (a bike lane's, a boarding island), it is a block with its own front, side and top.
-pub(super) fn curb(out: &mut String, p: &Projection, segs: &[SegView], i: usize, right: bool) {
-    let s = &segs[i];
-    let Some(c) = s.curb else { return };
-    let id = KINDS[s.kind].id;
-    let (h, n, l) = (drawn_mm(height_mm(id)), p.reach.near, p.reach.far);
-    let top = curb_top_mm(c, id);
-    let (x0, x1) = curb_span(s, c, right);
-    let hatch = format!("c-{c}");
-    if top > h {
-        face(out, Face::Front, None, &hatch, &points(p, &[(x0, 0.0, n), (x1, 0.0, n), (x1, top, n), (x0, top, n)]));
-        if let Some(face_right) = inner_face(p, x0, x1) {
-            // A block's face on the piece's own side stands on the piece; its other face stands on what is beside it.
-            let (x, low) = (if face_right { x1 } else { x0 }, if face_right == right { beside(segs, i, right) } else { h });
-            face(out, Face::Side, None, &hatch, &points(p, &[(x, low, n), (x, low, l), (x, top, l), (x, top, n)]));
-        }
-    }
-    face(out, Face::Top, None, &hatch, &points(p, &[(x0, top, n), (x1, top, n), (x1, top, l), (x0, top, l)]));
 }
 
 /// One strip to draw: how high its top is drawn, which piece, and which edge's curb if it is a curb.
@@ -281,68 +148,12 @@ pub(super) fn strips(segs: &[SegView], p: &Projection) -> Vec<Strip> {
     strips
 }
 
-/// A strip as its own group, with the piece's name for hovering: its slab, or one of its curbs. A piece of the
-/// section across the boundary (`across`) carries no uid: uids repeat from one section to the other, and what finds
-/// a piece by its uid is the selected zone's.
-pub(super) fn piece(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I18n, strip: Strip, across: bool) {
-    piece_with(out, p, segs, i18n, strip, across, None, &[]);
-}
-
-/// `piece`, its top (a roadway slab at the ground) tapering when `taper` gives its edges along the street.
-pub(super) fn piece_with(
-    out: &mut String,
-    p: &Projection,
-    segs: &[SegView],
-    i18n: &I18n,
-    strip: Strip,
-    across: bool,
-    taper: Option<&dyn Fn(f64) -> (f64, f64)>,
-    shown: &[Over],
-) {
-    let (_, i, edge) = strip;
-    let s = &segs[i];
-    let name = i18n.tr(&kind_key(KINDS[s.kind].id), &Args::new());
-    if across {
-        write!(out, "<g class=\"iso-piece iso-across\"><title>{}</title>", esc(&name)).unwrap();
-    } else {
-        write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
-    }
-    match edge {
-        None => match (taper, curbside::flat_parts(segs, i, p.reach, shown)) {
-            (taper, Some(parts)) => curbside::flat(out, p, segs, i, &parts, taper),
-            (Some(edge), None) => top_over(out, p, KINDS[s.kind].id, s.material, drawn_mm(height_mm(KINDS[s.kind].id)), edge, false),
-            (None, None) => slab(out, p, segs, i),
-        },
-        Some(right) => curb(out, p, segs, i, right),
-    }
-    out.push_str("</g>");
-}
-
-/// A roadway piece the host's section lacks, opening in its run: its top in the kind's default material, in a group
-/// of its own (`iso-taper`; it carries no uid, no piece of the street is it).
-pub(super) fn sliver(out: &mut String, p: &Projection, i18n: &I18n, kind: usize, edge: &dyn Fn(f64) -> (f64, f64)) {
-    let k = &KINDS[kind];
-    let name = i18n.tr(&kind_key(k.id), &Args::new());
-    write!(out, "<g class=\"iso-piece iso-taper\"><title>{}</title>", esc(&name)).unwrap();
-    top_over(out, p, k.id, crate::shared::catalogue::MATERIALS[k.materials[0]].id, drawn_mm(height_mm(k.id)), edge, false);
-    out.push_str("</g>");
-}
-
-/// The strips in the order given, between the group tag `open` and its end.
-pub(super) fn group(open: &str, p: &Projection, segs: &[SegView], i18n: &I18n, strips: &[Strip], across: bool, shown: &[Over]) -> String {
-    let mut out = String::from(open);
-    for &strip in strips {
-        piece_with(&mut out, p, segs, i18n, strip, across, None, shown);
-    }
-    out.push_str("</g>");
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::shared::catalogue::{KINDS, kind_index};
-    use crate::street::iso::projection::{Projection, Reach, r};
+    use crate::shared::diagram::render::layer_markup;
+    use crate::street::iso::projection::{Projection, Reach, points, r};
     use crate::street::iso::testing::{furnished, one_way_bikes};
     use crate::street::model::Editor;
 
@@ -354,8 +165,7 @@ mod tests {
         let s = &v.segments[i];
         let (x0, h) = (s.x_mm as f64, drawn_mm(height_mm("sidewalk")));
         let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm)).over(Reach { near: 20_000.0, far: 40_000.0 });
-        let mut out = String::new();
-        slab(&mut out, &p, &v.segments, i);
+        let out = layer_markup(&crate::street::iso::scene::raised(&p, &v.segments, &crate::street::iso::testing::en(), &[(h, i, None)], &[], false, None), &p);
         let cut = r(p.at(x0, 0.0, 20_000.0).1);
         let ys: Vec<f64> = xs_ys(&out).into_iter().map(|(_, y)| y).collect();
         let front =

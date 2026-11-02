@@ -1,4 +1,4 @@
-//! The markings layer as shapes: paint quads and symbols on the surface. Equal to `super::super::paint::layer_over`.
+//! The markings layer as shapes: paint quads and symbols on the surface.
 
 use crate::shared::diagram::{Layer, LayerKind, Pt, Shape};
 use crate::shared::iso::paint::{Paint, class, quads};
@@ -63,19 +63,24 @@ pub(in crate::street::iso) fn markings(p: &Projection, segs: &[SegView], draw: O
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::street::iso::paint::layer_over;
+    use crate::shared::diagram::render::layer_markup;
     use crate::street::iso::projection::Reach;
-    use crate::street::iso::scene::testing::{each_run, parity};
+    use crate::street::iso::scene::testing::each_run;
     use crate::street::model::Editor;
 
     #[test]
-    fn the_markings_layer_equals_the_old_writer_on_every_sample() {
-        let mut runs = 0;
-        each_run(|_, p, segs, _, draw, _| {
-            parity(&markings(p, segs, draw), p, &layer_over(p, segs, draw));
+    fn the_markings_layer_is_paint_and_symbols_only_on_every_sample() {
+        let (mut runs, mut marks) = (0, 0);
+        each_run(|name, p, segs, _, draw, _| {
+            let l = markings(p, segs, draw);
+            assert_eq!(l.kind, LayerKind::Markings, "{name}");
+            let m = layer_markup(&l, p);
+            assert!(!m.contains("iso-top") && !m.contains("iso-piece"), "{name}");
+            marks += m.matches("class=\"iso-mark\"").count();
             runs += 1;
         });
         assert!(runs >= 30, "{runs} runs");
+        assert!(marks > 0, "some sample carries a symbol");
     }
 
     #[test]
@@ -84,7 +89,6 @@ mod tests {
         for width in [600.0, 1050.0, 1800.0] {
             let p = Projection::fit(width, v.row_mm.max(v.total_mm)).over(Reach::STRETCH);
             let l = markings(&p, &v.segments, None);
-            parity(&l, &p, &layer_over(&p, &v.segments, None));
             let m = crate::shared::diagram::render::layer_markup(&l, &p);
             assert!(!m.contains("NaN") && !m.contains("inf"), "{width}");
             let all = crate::street::iso::testing::xs(&m);
@@ -103,6 +107,6 @@ mod tests {
         let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm)).over(Reach::STRETCH);
         let l = markings(&p, &v.segments, None);
         assert!(l.shapes.is_empty());
-        parity(&l, &p, "<g class=\"iso-markings\"></g>");
+        assert_eq!(layer_markup(&l, &p), "<g class=\"iso-markings\"></g>");
     }
 }

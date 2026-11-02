@@ -1,7 +1,5 @@
 //! The things that stand on the pieces, drawn as plain boxes: a tree, a bus shelter, a post on a curb.
 
-use std::fmt::Write;
-
 use crate::shared::catalogue::KINDS;
 use crate::street::model::SegView;
 use crate::street::pieces::{curb_edges, curb_width_mm};
@@ -10,8 +8,8 @@ use super::order::Bx;
 
 /// Half the depth, along the street, of a tree's crown, in millimetres.
 pub const CROWN_HALF_DEPTH_MM: f64 = 1_200.0;
-use super::projection::{EYE_BACK_MM, MIN_STANDING_PX, Projection, drawn_mm, points};
-use super::raised::{Face, curb_top_mm, height_mm, inner_face, shade};
+use super::projection::{EYE_BACK_MM, MIN_STANDING_PX, Projection, drawn_mm};
+use super::raised::{curb_top_mm, height_mm};
 
 /// Something standing on a piece, drawn as a plain box.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -118,33 +116,22 @@ pub(super) fn blocks(segs: &[SegView], i: usize, p: &Projection) -> Vec<Block> {
     out
 }
 
-/// A box's three faces the eye sees: its front, its side on the middle of the street's side (its right side when it is
-/// left of the eye, its left side when it is right of it, none when it is over the eye) and its top.
-pub(super) fn block(out: &mut String, p: &Projection, b: &Block) {
-    let ((x0, x1), (y0, y1), (z0, z1)) = (b.x, b.y, b.z);
-    write!(
-        out,
-        "<g class=\"iso-solid s-{}\"><polygon class=\"o-front\" points=\"{}\"{}/>",
-        b.solid.name(),
-        points(p, &[(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0)]),
-        shade(Face::Front)
-    )
-    .unwrap();
-    if let Some(right) = inner_face(p, x0, x1) {
-        let x = if right { x1 } else { x0 };
-        write!(out, "<polygon class=\"o-side\" points=\"{}\"{}/>", points(p, &[(x, y0, z0), (x, y0, z1), (x, y1, z1), (x, y1, z0)]), shade(Face::Side))
-            .unwrap();
-    }
-    write!(out, "<polygon class=\"o-top\" points=\"{}\"/></g>", points(p, &[(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)])).unwrap();
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::shared::catalogue::kind_index;
+    use crate::shared::diagram::render::layer_markup;
+    use crate::shared::diagram::{Layer, LayerKind};
     use crate::street::iso::iso_svg;
+    use crate::street::iso::projection::points;
     use crate::street::iso::testing::{count, drawn, en, furnished};
     use crate::street::model::Editor;
+
+    /// A box as markup, in a layer of its own.
+    fn block(out: &mut String, p: &Projection, b: &Block) {
+        let layer = Layer { kind: LayerKind::Objects, shapes: vec![crate::street::iso::scene::block(p, b)] };
+        out.push_str(&layer_markup(&layer, p));
+    }
 
     #[test]
     fn trees_posts_and_the_shelter_stay_wholly_inside_the_reach() {

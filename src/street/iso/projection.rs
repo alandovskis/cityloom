@@ -191,12 +191,14 @@ impl crate::shared::diagram::Projection for Projection {
     }
 }
 
-/// A pixel value to two decimals, which is all a drawing needs.
+/// A pixel value to two decimals, as the renderer writes it (the tests' expected markup).
+#[cfg(test)]
 pub(super) fn r(v: f64) -> f64 {
     (v * 100.0).round() / 100.0
 }
 
-/// The points of a polygon whose corners are in millimetres: across, up, along.
+/// The points of a polygon whose corners are in millimetres (across, up, along), as the renderer writes them.
+#[cfg(test)]
 pub(super) fn points(p: &Projection, corners: &[(f64, f64, f64)]) -> String {
     corners
         .iter()

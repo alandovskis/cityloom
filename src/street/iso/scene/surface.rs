@@ -1,4 +1,4 @@
-//! The surface layer as shapes: the top of every roadway piece, one group per piece. Equal to `super::super::surface::layer`.
+//! The surface layer as shapes: the top of every roadway piece, one group per piece.
 
 use crate::shared::catalogue::{KINDS, MATERIALS, kind_key};
 use crate::shared::diagram::{Layer, LayerKind, Pt, Shape, Texture};
@@ -98,23 +98,33 @@ pub(in crate::street::iso) fn surface(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::diagram::render::layer_markup;
     use crate::street::iso::raised::strips;
-    use crate::street::iso::scene::testing::{each_run, parity};
-    use crate::street::iso::surface::{layer, split};
+    use crate::street::iso::scene::testing::each_run;
+    use crate::street::iso::surface::split;
     use crate::street::iso::testing::en;
     use crate::street::model::Editor;
 
     #[test]
-    fn the_surface_layer_equals_the_old_writer_on_every_sample() {
+    fn the_surface_layer_holds_a_group_per_roadway_piece_and_a_sliver_per_piece_the_host_lacks() {
         let i18n = en();
-        let mut runs = 0;
-        each_run(|_, p, segs, across, draw, shown| {
+        let (mut runs, mut slivers) = (0, 0);
+        each_run(|name, p, segs, across, draw, shown| {
             let (flat, _) = split(strips(segs, p));
-            let old = layer(p, segs, &i18n, &flat, across, draw, shown);
-            parity(&surface(p, segs, &i18n, &flat, across, draw, shown), p, &old);
+            let l = surface(p, segs, &i18n, &flat, across, draw, shown);
+            assert_eq!(l.kind, LayerKind::Surface, "{name}");
+            let extra = draw.map_or(0, |d| d.slivers().count());
+            slivers += extra;
+            assert_eq!(l.shapes.len(), flat.len() + extra, "{name}");
+            let m = layer_markup(&l, p);
+            assert!(m.starts_with("<g class=\"iso-surface\">") && m.ends_with("</g>"), "{name}");
+            assert_eq!(m.matches("<g class=\"iso-piece iso-taper\">").count(), extra, "{name}");
+            // The neighbour's pieces carry no uid and the selected zone's do.
+            assert_eq!(m.contains("data-uid"), !across && !flat.is_empty(), "{name}");
             runs += 1;
         });
         assert!(runs >= 30, "{runs} runs");
+        assert!(slivers > 0, "some sample opens a lane in a taper");
     }
 
     #[test]
@@ -124,7 +134,6 @@ mod tests {
             let p = Projection::fit(width, v.row_mm.max(v.total_mm)).over(Reach::STRETCH);
             let (flat, _) = split(strips(&v.segments, &p));
             let l = surface(&p, &v.segments, &en(), &flat, false, None, &[]);
-            parity(&l, &p, &layer(&p, &v.segments, &en(), &flat, false, None, &[]));
             let m = crate::shared::diagram::render::layer_markup(&l, &p);
             assert!(!m.contains("NaN") && !m.contains("inf"), "{width}");
             let all = crate::street::iso::testing::xs(&m);
@@ -143,6 +152,6 @@ mod tests {
         let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm)).over(Reach::STRETCH);
         let l = surface(&p, &v.segments, &en(), &[], false, None, &[]);
         assert!(l.shapes.is_empty());
-        parity(&l, &p, "<g class=\"iso-surface\"></g>");
+        assert_eq!(layer_markup(&l, &p), "<g class=\"iso-surface\"></g>");
     }
 }

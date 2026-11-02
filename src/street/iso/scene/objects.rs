@@ -1,5 +1,5 @@
 //! The objects layer as shapes: what stands on the pieces (trees, shelters, posts, racks), a group per box with the faces
-//! the eye sees, in the order the eye needs among themselves. Equal to what `run_layers` wrote for `iso-objects`.
+//! the eye sees, in the order the eye needs among themselves.
 
 use crate::shared::diagram::{Face, Layer, LayerKind, Pt, Shape};
 use crate::street::model::{SegView, ShownInstance, ShownStop};
@@ -43,37 +43,23 @@ pub(in crate::street::iso) fn objects(p: &Projection, segs: &[SegView], uses: &[
 mod tests {
     use super::*;
     use crate::shared::diagram::render::layer_markup;
-    use crate::street::iso::layers::Layer as Old;
-    use crate::street::iso::scene::testing::{each_object_run, parity};
-    use crate::street::iso::solids::{Solid, block as old_block};
-
-    /// The old writer's objects layer for a run, as `run_layers` wrote it.
-    fn old(p: &Projection, segs: &[SegView], uses: &[ShownInstance], stops: &[ShownStop]) -> String {
-        let mut solids: Vec<Block> =
-            (0..segs.len()).flat_map(|i| blocks(segs, i, p)).chain(curbside::blocks(segs, uses, p)).chain(stops::blocks(segs, stops, p)).collect();
-        solids.sort_by(|a, b| b.from_eye(p).total_cmp(&a.from_eye(p)).then(a.y.0.total_cmp(&b.y.0)));
-        let boxes: Vec<(Bx, bool)> = solids.iter().map(|b| (b.bounds(), false)).collect();
-        let mut out = Old::Objects.open();
-        for k in order::paint_order(&boxes, p.centre_mm) {
-            old_block(&mut out, p, &solids[k]);
-        }
-        out.push_str("</g>");
-        out
-    }
+    use crate::street::iso::scene::testing::each_object_run;
+    use crate::street::iso::solids::Solid;
 
     #[test]
-    fn the_objects_layer_equals_the_old_writer_on_every_sample() {
+    fn the_objects_layer_holds_one_group_per_box_of_every_kind_on_every_sample() {
         let (mut runs, mut with) = (0, std::collections::BTreeSet::new());
         each_object_run(|name, p, segs, uses, stops| {
             let layer = objects(p, segs, uses, stops);
             assert_eq!(layer.kind, LayerKind::Objects, "{name}");
-            let expected = old(p, segs, uses, stops);
+            let m = layer_markup(&layer, p);
+            assert_eq!(m.matches("<g class=\"iso-solid ").count(), layer.shapes.len(), "{name}");
+            assert!(!m.contains("iso-piece"), "{name}");
             for s in ["trunk", "crown", "shelter", "post"] {
-                if expected.contains(&format!("iso-solid s-{s}\"")) {
+                if m.contains(&format!("iso-solid s-{s}\"")) {
                     with.insert(s);
                 }
             }
-            parity(&layer, p, &expected);
             runs += 1;
         });
         assert!(runs >= 40, "{runs} runs");

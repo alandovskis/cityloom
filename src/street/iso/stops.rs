@@ -70,34 +70,14 @@ fn sign_panel(segs: &[SegView], s: &ShownStop, p: &Projection) -> Option<Panel> 
 
 /// The signs of the stops: a post at the stop's near end on the piece the stop stands on, and on it a white panel
 /// with a bus. Drawn only where the whole post stands in the reach.
-pub(super) fn signs(segs: &[SegView], stops: &[ShownStop], p: &Projection) -> String {
-    let mut out = String::new();
-    for s in stops {
-        let Some(sign) = sign_panel(segs, s, p) else { continue };
-        out.push_str("<g class=\"iso-stop-sign\" aria-hidden=\"true\">");
-        sign.post(&mut out, p);
-        sign.panel(&mut out, p);
-        sign.rect(&mut out, p, "iso-sign-glyph", BODY.0, BODY.1);
-        for u in WINDOWS {
-            sign.rect(&mut out, p, "iso-sign-glyph-cut", u, (0.52, 0.72));
-        }
-        for u in WHEELS {
-            sign.rect(&mut out, p, "iso-sign-glyph", u, (0.20, 0.32));
-        }
-        out.push_str("</g>");
-    }
-    out
-}
-
-/// `signs` as shapes.
-pub(super) fn sign_shapes(segs: &[SegView], stops: &[ShownStop], p: &Projection) -> Vec<Shape> {
+pub(super) fn signs(segs: &[SegView], stops: &[ShownStop], p: &Projection) -> Vec<Shape> {
     stops
         .iter()
         .filter_map(|s| {
             let sign = sign_panel(segs, s, p)?;
-            let mut shapes = vec![sign.post_shape(p), sign.panel_shape(), sign.rect_shape("iso-sign-glyph", BODY.0, BODY.1)];
-            shapes.extend(WINDOWS.iter().map(|&u| sign.rect_shape("iso-sign-glyph-cut", u, (0.52, 0.72))));
-            shapes.extend(WHEELS.iter().map(|&u| sign.rect_shape("iso-sign-glyph", u, (0.20, 0.32))));
+            let mut shapes = vec![sign.post(p), sign.panel(), sign.rect("iso-sign-glyph", BODY.0, BODY.1)];
+            shapes.extend(WINDOWS.iter().map(|&u| sign.rect("iso-sign-glyph-cut", u, (0.52, 0.72))));
+            shapes.extend(WHEELS.iter().map(|&u| sign.rect("iso-sign-glyph", u, (0.20, 0.32))));
             Some(Shape::Group { class: "iso-stop-sign".into(), uid: None, data: None, hidden: true, title: None, shapes })
         })
         .collect()

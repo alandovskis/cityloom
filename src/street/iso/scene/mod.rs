@@ -1,5 +1,5 @@
 //! The 2.5D as shapes: builders that give each layer of the drawing as `shared::diagram` data, which the renderer
-//! writes. Each is equal, byte for byte, to the string writer it replaces.
+//! writes (`iso_svg` puts them together).
 
 mod markings;
 mod objects;
@@ -18,19 +18,12 @@ pub(super) use surface::surface;
 #[cfg(test)]
 pub(super) mod testing {
     use crate::shared::catalogue::Side;
-    use crate::shared::diagram::Layer;
-    use crate::shared::diagram::render::layer_markup;
     use crate::street::iso::curbside::{self, Over};
     use crate::street::iso::projection::{Projection, Reach, STRETCH_MM};
     use crate::street::iso::span_mm;
     use crate::street::iso::taper::Draw;
     use crate::street::iso::testing::{furnished, joined, joined_from_last, marked};
     use crate::street::model::{Editor, SegView, ShownInstance, ShownStop, StopKind, Street, Use, View, ZoneEnd, ZoneFrame};
-
-    /// The layer rendered alone through `p` equals what the old writer wrote.
-    pub fn parity(layer: &Layer, p: &Projection, old: &str) {
-        assert_eq!(layer_markup(layer, p), old);
-    }
 
     /// A street with a curbside programme and a frame, so that its uses are shown.
     pub fn curbed() -> Editor {

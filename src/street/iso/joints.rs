@@ -13,7 +13,6 @@
 //! them and shrinks toward the vanishing point, are drawn as far as that gap lasts (`along_reach`). A running bond's
 //! ticks (the short joints between the units of a course) are drawn only for the courses that are not thinned.
 
-use crate::shared::diagram::render::joints_d;
 use crate::shared::diagram::{JointRun, Pt};
 use crate::shared::iso::ground::Joints;
 
@@ -46,11 +45,6 @@ pub(super) fn along_reach(p: &Projection, unit_mm: f64, i: u64) -> f64 {
 
 fn run(x0: f64, z0: f64, x1: f64, z1: f64, h: f64, flat: bool) -> JointRun {
     JointRun { from: Pt::new(x0, h, z0), to: Pt::new(x1, h, z1), flat }
-}
-
-/// The path data of a top's joints (`runs`, written by the renderer).
-pub(super) fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> String {
-    joints_d(p, &runs(p, j, x0, x1, h))
 }
 
 /// The joints of a top, `x0` to `x1` across and the projection's reach along, `h` (drawn mm) high. Every
@@ -116,8 +110,14 @@ pub(super) fn runs(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::diagram::render::joints_d;
     use crate::shared::iso::ground::joints;
     use crate::street::iso::projection::{Reach, band_edges};
+
+    /// The path data of a top's joints, as the renderer writes it.
+    fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> String {
+        joints_d(p, &runs(p, j, x0, x1, h))
+    }
 
     /// One drawn joint, as its two ends on the screen.
     type Seg = ((f64, f64), (f64, f64));
@@ -151,14 +151,16 @@ mod tests {
         for m in ["concrete", "brick", "permeable", "trees"] {
             let j = joints(m).unwrap();
             let runs = runs(&p, &j, 0.0, 3_300.0, h);
+            let joint_runs = runs.clone();
             let d = Diagram {
                 defs: String::new(),
                 ground: Layer { kind: LayerKind::Ground, shapes: vec![crate::shared::diagram::Shape::Joints { runs, class: format!("joints j-{m}") }] },
                 sections: vec![],
                 outline: Layer { kind: LayerKind::Outline, shapes: vec![] },
             };
-            let want = format!(r#"<path class="joints j-{m}" d="{}"/>"#, path(&p, &j, 0.0, 3_300.0, h));
-            assert!(path(&p, &j, 0.0, 3_300.0, h).len() > 10, "{m}");
+            let path = joints_d(&p, &joint_runs);
+            let want = format!(r#"<path class="joints j-{m}" d="{path}"/>"#);
+            assert!(path.len() > 10, "{m}");
             assert_eq!(render(&d, &p), format!(r#"<g class="iso-layer-ground">{want}</g><g class="iso-layer-outline"></g>"#), "{m}");
         }
     }

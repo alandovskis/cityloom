@@ -1,88 +1,28 @@
-//! The markings layer: the lines and symbols of `markings`, as SVG through the street's projection. It is built
-//! from `markings(v)`, `shared::iso::paint` and the projection only, and knows nothing about slabs, so the
-//! surface and the markings can change independently.
+//! The markings layer's one rule that others read: whether a piece is wide enough on the screen to carry its symbol.
+//! The layer itself is `scene::markings`.
 
-use std::fmt::Write;
-
-use crate::shared::iso::paint::{Paint, class, quads};
-use crate::street::model::SegView;
-
-use super::layers::Layer;
-use super::markings::{Mark, markings};
-use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection, STRETCH_MM, points};
-use super::symbols::shapes;
-use super::taper::Draw;
-
-/// The lines and symbols of the street as one group, drawn flat on the ground. A line is the shared paint quads of
-/// the path `[(x, reach.near), (x, reach.far)]` (across, along), the reach being the part of the stretch this section
-/// covers; a symbol is its polygons laid on its lane at `ARROW_AT_MM` from the reach's near end, so it foreshortens and shrinks with the distance. A piece narrower on screen than `MIN_SOLID_PX`
-/// where its symbol lies (`wide_enough`) keeps its lines but gets no symbol.
-#[cfg(test)]
-pub(super) fn layer(p: &Projection, segs: &[SegView]) -> String {
-    layer_over(p, segs, None)
-}
-
-/// `layer`, its lines following the transition (`draw`): a line on the edge of a tapering piece goes from where the
-/// host has it to where the other zone's section has that edge.
-pub(super) fn layer_over(p: &Projection, segs: &[SegView], draw: Option<&Draw>) -> String {
-    let m = markings(segs);
-    let mut out = Layer::Markings.open();
-    for line in &m.lines {
-        let x = line.x_mm as f64;
-        // The dashes are laid from the start of the stretch and cut to the reach, so that a line that goes on across a
-        // boundary keeps its rhythm there.
-        for (paint, quad) in quads(&[(x, 0.0), (x, STRETCH_MM)], line.style) {
-            let (lo, hi) = quad.iter().fold((f64::MAX, f64::MIN), |(lo, hi), c| (lo.min(c.1), hi.max(c.1)));
-            if hi.min(p.reach.far) - lo.max(p.reach.near) < 1e-9 {
-                continue;
-            }
-            let corners: Vec<(f64, f64, f64)> = quad
-                .iter()
-                .map(|&(across, along)| {
-                    let along = along.clamp(p.reach.near, p.reach.far);
-                    let moved = draw.map_or(0.0, |d| d.line_at(line.x_mm, p.reach, along) - x);
-                    (across + moved, 0.0, along)
-                })
-                .collect();
-            write!(out, "<polygon class=\"{}\" points=\"{}\"/>", class(paint), points(p, &corners)).unwrap();
-        }
-    }
-    for mark in &m.marks {
-        symbol(&mut out, p, segs, mark, draw);
-    }
-    out.push_str("</g>");
-    out
-}
+use super::projection::{ARROW_AT_MM, MIN_SOLID_PX, Projection};
 
 /// Whether a piece `w` mm wide is wide enough on the screen, where its symbol lies, to carry it.
 pub(super) fn symbol_fits(p: &Projection, w: f64) -> bool {
     w * p.scale_at(p.reach.near + ARROW_AT_MM) >= MIN_SOLID_PX
 }
 
-/// A symbol lies on its lane where the lane is at `ARROW_AT_MM`: where the transition (`draw`) has moved the piece
-/// there, not where the host has it.
-fn symbol(out: &mut String, p: &Projection, segs: &[SegView], mark: &Mark, draw: Option<&Draw>) {
-    let Some(s) = segs.iter().find(|s| s.uid == mark.uid) else { return };
-    let (x0, x1) = match draw.and_then(|d| d.shape_of(s).map(|shape| d.edges(shape, p.reach, p.reach.near + ARROW_AT_MM))) {
-        Some(edges) => edges,
-        None => (s.x_mm as f64, (s.x_mm + s.width_mm) as f64),
-    };
-    let w = x1 - x0;
-    if !symbol_fits(p, w) {
-        return;
-    }
-    let cx = x0 + w / 2.0;
-    write!(out, "<g class=\"iso-mark\" data-mark=\"{}\">", mark.uid).unwrap();
-    for shape in shapes(mark.symbol, w) {
-        let corners: Vec<(f64, f64, f64)> = shape.iter().map(|&(across, along)| (cx + across, 0.0, p.reach.near + ARROW_AT_MM + along)).collect();
-        write!(out, "<polygon class=\"{}\" points=\"{}\"/>", class(Paint::White), points(p, &corners)).unwrap();
-    }
-    out.push_str("</g>");
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::diagram::render::layer_markup;
+    use crate::street::iso::markings::markings;
+    use crate::street::iso::projection::{STRETCH_MM, points};
+    use crate::street::iso::symbols::shapes;
+    use crate::street::iso::taper::Draw;
+    use crate::street::model::SegView;
+
+    /// The markings layer as markup.
+    fn layer(p: &Projection, segs: &[SegView]) -> String {
+        layer_markup(&crate::street::iso::scene::markings(p, segs, None::<&Draw>), p)
+    }
+
     use crate::shared::catalogue::{KINDS, kind_index};
     use crate::street::iso::markings::Symbol;
     use crate::street::iso::projection::drawn_mm;
@@ -287,7 +227,7 @@ mod tests {
         };
         let draw = Draw::new(&t, true);
         let p = fit(&v, 1050.0).over(Reach { near: 0.0, far: 20_000.0 });
-        let m = layer_over(&p, &v.segments, Some(&draw));
+        let m = layer_markup(&crate::street::iso::scene::markings(&p, &v.segments, Some(&draw)), &p);
         let (e0, e1) = draw.edges(draw.shape_of(lane).unwrap(), p.reach, ARROW_AT_MM);
         assert!(e0 > f64::from(x0) + 1_000.0, "the lane has moved by the arrow's distance");
         let toward = lane.direction == Some("toward");
