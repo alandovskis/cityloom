@@ -1,12 +1,12 @@
-//! The speed limit sign: a white panel facing the eye, "MAXIMUM" over the limit, floating over the street's kerbside
-//! edge with no post under it. The stop sign (`stops.rs`) shares the panel's geometry and keeps its post.
+//! The speed limit sign: a white panel facing the eye, "MAXIMUM" over the limit, hung in the sky over the street's
+//! kerbside edge with no post under it: its top edge is `SKY_MARGIN_MM` under `TALLEST_MM`, the highest anything is drawn. The stop sign (`stops.rs`) shares the panel's geometry and keeps its post.
 
 use crate::shared::catalogue::{KINDS, Side};
 use crate::shared::diagram::{Pt, Shape};
 use crate::shared::i18n::{Args, I18n};
 use crate::street::model::{SegView, View};
 
-use super::projection::{Projection, drawn_mm};
+use super::projection::{Projection, TALLEST_MM, drawn_mm};
 use super::raised::height_mm;
 use super::solids::{Block, Solid};
 
@@ -20,6 +20,9 @@ const POST_MM: f64 = 75.0;
 /// The narrowest the panel is drawn on the screen, in pixels: the sign is a symbol that has to read, not a thing at
 /// scale, so when its true size is smaller the whole sign (panel, post and text) is drawn larger by one factor.
 pub(super) const MIN_PANEL_PX: f64 = 32.0;
+/// How far under `TALLEST_MM` the panel's top edge hangs: the panel is in the empty band above the road, whatever the
+/// width, so it is inside the drawing (the drawing's top is `TALLEST_MM` at the far end, and anything nearer is lower).
+const SKY_MARGIN_MM: f64 = 100.0;
 /// How far along the run's near end the sign stands, in millimetres: near, so that it is in front.
 const AT_MM: f64 = 2_000.0;
 
@@ -92,15 +95,20 @@ impl Panel {
     }
 }
 
-/// The speed limit sign: a white panel facing the eye, "MAXIMUM" over the number, `PANEL_FROM_TOP_MM` over the piece at
-/// the edge on the side traffic keeps, `AT_MM` into the run so that it is in front, with no post. `None` only without
+/// The speed limit sign: a white panel facing the eye, "MAXIMUM" over the number, hung in the sky (see `SKY_MARGIN_MM`)
+/// over the piece at the edge on the side traffic keeps, `AT_MM` into the run so that it is in front, with no post. `None` only without
 /// a speed.
 pub(super) fn sign(v: &View, segs: &[SegView], p: &Projection, i18n: &I18n) -> Option<Shape> {
     let kmh = v.speed_kmh?;
     let piece = site(segs, v.side)?;
     let cx = piece.x_mm as f64 + piece.width_mm as f64 / 2.0;
     let top = drawn_mm(height_mm(KINDS[piece.kind].id));
-    let sign = Panel::at(p, cx, top, p.reach.near + AT_MM);
+    let mut sign = Panel::at(p, cx, top, p.reach.near + AT_MM);
+    // Raised into the sky: top edge at the ceiling, but never under the piece's own top (a panel scaled up for a
+    // narrow drawing is tall, and then it hangs as high as it can without reaching the road).
+    let lift = (TALLEST_MM - SKY_MARGIN_MM - sign.upper).max(top - sign.bottom);
+    sign.bottom += lift;
+    sign.upper += lift;
     let (bottom, panel_h, wide, z0) = (sign.bottom, sign.height, sign.wide, sign.z0);
     // The words on the panel, centred on it: the first over the second, sized by the panel's width on the screen.
     let word = |from_bottom: f64, size: f64, text: String| Shape::Text {
@@ -167,13 +175,36 @@ mod tests {
         // Hashes of the sign's markup. Re-pinned for #139: the post was dropped, so the panel and its two words are all
         // that is left (the panel's place and size are unchanged).
         for (name, side, width, len, hash) in [
-            ("right", Side::Right, 1050.0, 299, 0x6b452f04fa0c9eab),
-            ("left", Side::Left, 1050.0, 299, 0x1a91d45b3e5f01b1),
-            ("small", Side::Right, 280.0, 291, 0x6b084f59e292590f),
+            ("right", Side::Right, 1050.0, 299, 0xc58cce83679e032c),
+            ("left", Side::Left, 1050.0, 299, 0xdb7061d535643246),
+            ("small", Side::Right, 280.0, 292, 0xc7c510cd9348bb54),
         ] {
             let m = iso_svg(&with_speed(side, Some(50)), &en(), width).markup;
             let sign = sign_of(&m);
             assert_eq!((sign.len() as u64, fnv(sign)), (len, hash), "{name}");
+        }
+    }
+
+    /// The y of every point of the panel, in pixels.
+    fn panel_ys(sign: &str) -> Vec<f64> {
+        let at = sign.find("class=\"iso-sign-panel\" points=\"").unwrap() + 31;
+        sign[at..at + sign[at..].find('"').unwrap()].split(' ').map(|p| p.split(',').nth(1).unwrap().parse().unwrap()).collect()
+    }
+
+    #[test]
+    fn the_panel_hangs_in_the_sky_inside_the_drawing_at_every_width_and_over_the_road() {
+        for side in [Side::Right, Side::Left] {
+            for width in [280.0, 600.0, 1050.0, 1800.0] {
+                let v = with_speed(side, Some(50));
+                let svg = iso_svg(&v, &en(), width);
+                let sign = sign_of(&svg.markup);
+                let ys = panel_ys(sign);
+                let (top, bottom) = (ys.iter().cloned().fold(f64::MAX, f64::min), ys.iter().cloned().fold(f64::MIN, f64::max));
+                assert!(top >= 0.0 && bottom <= svg.height, "{side:?} {width}: {top} {bottom} of {}", svg.height);
+                // It is above the roadway's near edge on the screen, not on it.
+                let p = Projection::fit(width, super::super::span_mm(&v)).over(crate::street::iso::projection::Reach::STRETCH);
+                assert!(bottom < p.at(0.0, 0.0, p.reach.near + AT_MM).1, "{side:?} {width}");
+            }
         }
     }
 
