@@ -1,6 +1,6 @@
 //! Writes a diagram as SVG markup through a projection.
 
-use super::{Diagram, Face, Layer, Projection, Pt, Section, Shape, Texture};
+use super::{Diagram, Face, JointRun, Layer, Projection, Pt, Section, Shape, Texture};
 use std::fmt::Write;
 
 use crate::shared::iso::format::{esc, f1};
@@ -60,31 +60,37 @@ pub fn textured(out: &mut String, p: &dyn Projection, class: &str, material: &st
     out.push_str("</g>");
 }
 
-/// A polygon edge between two corners, as the textured top's edge: straight along the street.
+/// The edges of a textured top across the street along it: the left edge runs from the near-left corner `l.0` to the
+/// far-left `l.1`, the right from the near-right `r.0` to the far-right `r.1`, each straight between them.
 fn lerp_edge(l: (Pt, Pt), r: (Pt, Pt)) -> impl Fn(f64) -> (f64, f64) {
     let at = move |(a, b): (Pt, Pt), z: f64| if b.z == a.z { a.x } else { a.x + (b.x - a.x) * (z - a.z) / (b.z - a.z) };
     move |z| (at(l, z), at(r, z))
 }
 
-/// A joint as a path to a tenth of a pixel; a straight run across the screen is written as `H`.
-fn joint(out: &mut String, class: &str, p: &dyn Projection, pts: &[Pt]) {
+/// A point as `x,y` to a tenth of a pixel.
+fn pt1(p: &dyn Projection, pt: Pt) -> String {
+    let (x, y) = p.at(pt);
+    format!("{},{}", f1(x), f1(y))
+}
+
+/// The path data of a top's joints, to a tenth of a pixel: `Mx,yHx2` for a run level across the drawing and
+/// `Mx,yLx2,y2` for any other.
+pub fn joints_d(p: &dyn Projection, runs: &[JointRun]) -> String {
     let mut d = String::new();
-    for (i, &pt) in pts.iter().enumerate() {
-        let (x, y) = p.at(pt);
-        if i == 0 {
-            write!(d, "M{},{}", f1(x), f1(y)).unwrap();
-        } else if pts.len() == 2 && f1(y) == f1(p.at(pts[0]).1) {
-            write!(d, "H{}", f1(x)).unwrap();
+    for run in runs {
+        if run.flat {
+            write!(d, "M{}H{}", pt1(p, run.from), f1(p.at(run.to).0)).unwrap();
         } else {
-            write!(d, "L{},{}", f1(x), f1(y)).unwrap();
+            write!(d, "M{}L{}", pt1(p, run.from), pt1(p, run.to)).unwrap();
         }
     }
-    write!(out, "<path class=\"{class}\" d=\"{d}\"/>").unwrap();
+    d
 }
 
 fn polygon(out: &mut String, p: &dyn Projection, pts: &[Pt], class: &str, face: Option<Face>, texture: Option<&Texture>) {
     if let Some(t) = texture {
         // Four corners, the near edge first (left, right), then the far edge (right, left).
+        debug_assert_eq!(pts.len(), 4, "a textured polygon is the four corners of a top");
         if let [a, b, c, d] = pts[..] {
             textured(out, p, class, &t.material, a.y, (a.z, c.z), &lerp_edge((a, d), (b, c)));
             return;
@@ -106,7 +112,12 @@ fn polygon(out: &mut String, p: &dyn Projection, pts: &[Pt], class: &str, face: 
 fn shape(out: &mut String, s: &Shape, p: &dyn Projection) {
     match s {
         Shape::Polygon { pts, class, face, texture } => polygon(out, p, pts, class, *face, texture.as_ref()),
-        Shape::Polyline { pts, class } if class.starts_with("joints") => joint(out, class, p, pts),
+        Shape::Joints { runs, class } => {
+            let d = joints_d(p, runs);
+            if !d.is_empty() {
+                write!(out, "<path class=\"{class}\" d=\"{d}\"/>").unwrap();
+            }
+        }
         Shape::Polyline { pts, class } => out.push_str(&format!(r#"<polyline class="{class}" points="{}"/>"#, points(p, pts))),
         Shape::Group { class, uid, title, shapes } => {
             out.push_str(&format!(r#"<g class="{class}""#));
@@ -330,13 +341,46 @@ mod tests {
     }
 
     #[test]
-    fn joints_are_one_path_after_the_bands() {
-        let joints = Shape::Polyline { pts: vec![Pt::new(0.0, 0.0, 5.0), Pt::new(10.0, 0.0, 5.0)], class: "joints j-concrete".into() };
-        let along = Shape::Polyline { pts: vec![Pt::new(4.0, 0.0, 0.0), Pt::new(4.0, 0.0, 20.0)], class: "joints j-concrete".into() };
-        let s = drawn(Shape::Group { class: "g".into(), uid: None, title: None, shapes: vec![top(), joints, along] }, &Persp);
-        assert!(
-            s.contains(concat!(r#"</g><path class="joints j-concrete" d="M0,5H10"/>"#, r#"<path class="joints j-concrete" d="M4,0L4,20"/>"#, "</g>")),
-            "{s}"
-        );
+    fn all_the_joints_of_a_top_are_one_path_after_the_bands() {
+        let run = |a: (f64, f64, f64), b: (f64, f64, f64), flat| JointRun { from: Pt::new(a.0, a.1, a.2), to: Pt::new(b.0, b.1, b.2), flat };
+        let joints = Shape::Joints {
+            runs: vec![run((0.0, 0.0, 5.0), (10.0, 0.0, 5.0), true), run((4.0, 0.0, 0.0), (4.0, 0.0, 20.0), false)],
+            class: "joints j-concrete".into(),
+        };
+        let s = drawn(Shape::Group { class: "g".into(), uid: None, title: None, shapes: vec![top(), joints] }, &Persp);
+        assert!(s.contains(r#"</g><path class="joints j-concrete" d="M0,5H10M4,0L4,20"/></g>"#), "{s}");
+        assert_eq!(s.matches("<path").count(), 1, "{s}");
+    }
+
+    /// A projection that shears and scales, so the band polygons are inverted through a real matrix.
+    struct Sheared;
+
+    impl Projection for Sheared {
+        fn at(&self, p: Pt) -> (f64, f64) {
+            // x_px = 2u + 0.5v + 3, y_px = 4v + 7 (the plane's up is ignored).
+            (2.0 * p.x + 0.5 * p.z + 3.0, 4.0 * p.z + 7.0)
+        }
+        fn size(&self) -> (f64, f64) {
+            (100.0, 100.0)
+        }
+        fn affine(&self) -> bool {
+            false
+        }
+        fn ground_at(&self, _up: f64, _u: f64, _v: f64) -> [f64; 6] {
+            [2.0, 0.0, 0.5, 4.0, 3.0, 7.0]
+        }
+        fn bands(&self, near: f64, far: f64) -> Vec<f64> {
+            vec![near, far]
+        }
+        fn band_mid(&self, z0: f64, z1: f64) -> f64 {
+            (z0 + z1) / 2.0
+        }
+    }
+
+    #[test]
+    fn a_band_polygon_is_the_top_taken_back_through_the_matrix_that_lays_its_texture() {
+        let s = drawn(top(), &Sheared);
+        // The matrix is the projection's own, so each corner comes back to its ground millimetres.
+        assert!(s.contains(r#"<polygon transform="matrix(2 0 0.5 4 3 7)" points="0,0 10,0 10,20 0,20"/>"#), "{s}");
     }
 }

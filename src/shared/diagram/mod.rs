@@ -58,13 +58,43 @@ pub struct Texture {
     pub tile_mm: (f64, f64),
 }
 
+/// One joint of a textured top: a straight run from one point to another. `flat` says it is written as a run level
+/// across the drawing (`H`), which the projection's owner knows (a course across the street) and the renderer does
+/// not guess.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct JointRun {
+    pub from: Pt,
+    pub to: Pt,
+    pub flat: bool,
+}
+
 /// One thing drawn: a closed polygon, an open polyline, or a group (a piece
 /// with its faces, a uid and a title).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Shape {
-    Polygon { pts: Vec<Pt>, class: String, face: Option<Face>, texture: Option<Texture> },
-    Polyline { pts: Vec<Pt>, class: String },
-    Group { class: String, uid: Option<u32>, title: Option<String>, shapes: Vec<Shape> },
+    /// With a `texture`, `pts` are the four corners of a top: the near edge left then right, then the far edge right
+    /// then left.
+    Polygon {
+        pts: Vec<Pt>,
+        class: String,
+        face: Option<Face>,
+        texture: Option<Texture>,
+    },
+    Polyline {
+        pts: Vec<Pt>,
+        class: String,
+    },
+    /// All the joints of one textured top, written as one path.
+    Joints {
+        runs: Vec<JointRun>,
+        class: String,
+    },
+    Group {
+        class: String,
+        uid: Option<u32>,
+        title: Option<String>,
+        shapes: Vec<Shape>,
+    },
 }
 
 /// The kinds of layer, bottom to top.
