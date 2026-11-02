@@ -334,7 +334,7 @@ impl Street {
                     .map(|w| Variant {
                         kind: w.kind,
                         material: KINDS[w.kind].materials[0],
-                        direction: direction_for(w.kind, g.direction),
+                        direction: direction_for(w.kind, p.direction),
                         from_min: w.from_min,
                         to_min: w.to_min,
                         days: w.days.clone(),
@@ -1888,7 +1888,7 @@ mod tests {
         let piece = Piece {
             kind: parking,
             width_mm: 3400,
-            direction: Some(0),
+            direction: Some(1),
             variants: vec![Window { kind: bus, from_min: 6 * 60, to_min: 10 * 60, days: Some("Mo-Fr".into()) }],
         };
         let s = Street::imported(StreetClass::Local, Side::Right, &[piece]);
@@ -1899,7 +1899,8 @@ mod tests {
         assert_eq!((g.kind_at(8 * 60), g.kind_at(12 * 60)), (bus, parking));
         // the width is one both kinds allow
         assert_eq!(g.width_mm, 3000);
-        assert_eq!(g.variants[0].direction, g.direction);
+        // the bus window runs the way the lane did (the parking it is outside the window has no direction)
+        assert_eq!((g.direction, g.variants[0].direction), (None, Some(1)));
         assert_eq!(g.variants[0].days.as_deref(), Some("Mo-Fr"));
         assert_eq!(s.segments[0].variants[0].days, Editor::from_street(&s, &s, 0).view().segments[0].variants[0].days);
     }

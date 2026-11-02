@@ -59,6 +59,31 @@ mod tests {
     }
 
     #[test]
+    fn the_hover_and_pressed_states_of_a_press_target_are_seen_on_every_material() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let (tint, casing) = (token(editor, "iso-sel").0.unwrap(), token(editor, "iso-sel-casing").0.unwrap());
+        let opacity = |rule: &str, prop: &str| -> f64 {
+            let at = editor.find(rule).unwrap_or_else(|| panic!("{rule}"));
+            let body = &editor[at..at + editor[at..].find('}').unwrap()];
+            body.split(&format!("{prop}: ")).nth(1).unwrap().split(';').next().unwrap().parse().unwrap()
+        };
+        let state = |rule: &str| (opacity(rule, "fill-opacity"), opacity(rule, "stroke-opacity"));
+        let (hover, pressed) = (state(".iso-hit-area:hover {"), state(".iso-hit-area:active {"));
+        assert!(hover.0 > 0.0 && pressed.0 > hover.0 && pressed.1 > hover.1, "{hover:?} {pressed:?}");
+        // A state is not text or a control's edge: it has to be seen against the material it lies over, by the tint
+        // inside or the dark band round it, whichever shows better there. The ratio to the bare material is at least
+        // 1.5 hovered and 2 pressed, on every material.
+        let seen = |mat: &str, (fill, stroke): (f64, f64)| contrast(mat, &blend(&tint, mat, fill)).max(contrast(mat, &blend(&casing, mat, stroke)));
+        for m in crate::shared::catalogue::MATERIALS {
+            let mat = token(app, &format!("mat-{}", m.id)).0.unwrap();
+            let (h, p) = (seen(&mat, hover), seen(&mat, pressed));
+            assert!(h >= 1.5, "{} hovered: {h:.2}", m.id);
+            assert!(p >= 2.0 && p >= h, "{} pressed: {p:.2}", m.id);
+        }
+        assert!(editor.contains("touch-action: manipulation"));
+    }
+
+    #[test]
     fn the_boundaries_of_the_pieces_are_3_to_1_against_the_plate_and_every_lane_fill_in_both_themes() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
         for rule in ["#drawing .piece {", "#drawing .iso-flat,\n#drawing .iso-top,\n#drawing .iso-side {"] {

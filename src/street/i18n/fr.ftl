@@ -13,10 +13,8 @@ st-key-remove = supprimer
 st-key-details-notes = détails, notes
 st-key-undo = annuler
 st-key-view = coupe, 2,5D
-st-cross-section = Coupe transversale
 st-street-2-5d = Rue en 2,5D
 st-focus-hint = Les flèches sélectionnent. Maj + flèches réordonnent. + et − redimensionnent, avec Maj pour de plus grands pas. Entrée modifie la largeur.
-st-touch-cue = Sur un écran tactile, faites glisser la rue de côté pour la voir en entier.
 st-space-heading = Où va la largeur
 st-people-moved = Personnes déplacées
 st-sample-numbers = chiffres d’exemple
@@ -142,14 +140,8 @@ welcome-text = Ajoutez un élément, puis faites-le glisser pour le réorganiser
 welcome-dismiss = Compris
 
 # Le dessin de la coupe (src/street/view.rs).
-view-section-label = Éditeur de coupe transversale de la rue
 view-iso-label = Éditeur de la rue, vue 2,5D
 # La vue du dessin, la coupe ou la rue en 2,5D (src/street/vm.rs, src/street/page.rs).
-view-shown-section = Coupe affichée
-view-shown-iso = Rue affichée en 2,5D
-view-mode-label = Afficher la rue en
-view-mode-section = Coupe
-view-mode-iso = 2,5D
 
 # The Transit Priority Atlas measures, by lowercase code (src/shared/atlas.rs).
 atlas-a1-name = Rues de transport en commun
@@ -242,41 +234,9 @@ inspector-curb-note = Le rebord surélevé, s’il y en a un.
 inspector-curb-none = Aucune (au ras du sol)
 
 # Les sigles des éléments, là où le nom ne tient pas (src/shared/catalogue.rs).
-kind-mark-sidewalk = TO
-kind-mark-planting = PL
-kind-mark-bike = PC
-kind-mark-travel = VC
-kind-mark-bus = VR
-kind-mark-parking = ST
-kind-mark-median = TP
-kind-mark-loading = ZC
-kind-mark-shoulder = AC
-kind-mark-bikerack = SV
-kind-mark-bikeshare = VP
-kind-mark-pole = PO
-kind-mark-busshelter = AB
-kind-mark-busstation = SA
-kind-mark-bench = BC
-kind-mark-terrace = TE
-kind-mark-streetlamp = LA
-kind-mark-buffer = ZT
 
 # Le dessin de la coupe (src/street/svg.rs).
-svg-today = Aujourd’hui
-svg-your-design = Votre aménagement
-svg-change = Variation { $n }
-svg-street-edge = Limite de la rue
-svg-unused = Inutilisé
-svg-unused-length = Inutilisé : { $length }
 svg-too-wide = { $length } de trop
-svg-too-wide-clipped = { $length } de trop (suite hors écran)
-svg-street-width = Largeur de la rue : { $length }
-svg-design-width = Votre aménagement : { $length }
-svg-scale = Échelle
-svg-label = Coupe transversale de { $name }. { $count ->
-        [one] { $count } élément
-       *[other] { $count } éléments
-    }, { $total } sur { $row }. { $fit }.
 svg-iso-label = { $name } en 2,5D, sur un tronçon de { $length }. { $count ->
         [one] { $count } élément
        *[other] { $count } éléments
@@ -364,6 +324,10 @@ zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $sect
     }, { $n } sur { $total }
 zone-cut-off = Coupée par le bord de la carte
 
+# La liste des éléments (src/street/piece_list.rs).
+st-pieces-heading = Éléments de la rue
+st-pieces-label = Éléments, de gauche à droite
+
 # La bande des zones (src/street/strip.rs).
 st-zones-heading = Zones le long de la rue
 st-zones-strip-label = Zones de la rue, du début à la fin
@@ -392,14 +356,6 @@ st-speed-kmh = { $kmh }{" "}km/h
 iso-sign-maximum = MAXIMUM
 svg-iso-transition = Une transition de { $length } mène à { $zone }.
 svg-iso-speed = Limite de vitesse : { $kmh }{" "}km/h.
-svg-curb-uses = Bord de rue, { $side } : { $count ->
-        [one] un usage
-       *[other] { $count } usages
-    } le long de la rue.
-svg-stops = Arrêts, { $side } : { $count ->
-        [one] un arrêt
-       *[other] { $count } arrêts
-    } le long de la rue ({ $kinds }).
 svg-iso-curb = { $count ->
         [one] Un usage du bord de rue est montré.
        *[other] { $count } usages du bord de rue sont montrés.

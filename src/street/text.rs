@@ -79,13 +79,19 @@ pub fn redone_text(v: &View, i18n: &I18n, units: Units) -> String {
 pub fn selection_text(v: &View, i18n: &I18n, units: Units) -> Option<String> {
     let uid = v.selected?;
     let i = v.segments.iter().position(|s| s.uid == uid)?;
+    Some(piece_text(v, i, i18n, units))
+}
+
+/// Piece `i`: its kind, its width and its place among the pieces, which is how a cell of the piece list is named and
+/// what is said when the piece is selected.
+pub fn piece_text(v: &View, i: usize, i18n: &I18n, units: Units) -> String {
     let s = &v.segments[i];
     let args = Args::new()
         .str("kind", i18n.tr_now(&kind_key(KINDS[s.kind].id), &Args::new()))
         .str("width", units.length_fine_in(s.width_mm, i18n.locale_now()))
         .num("index", i as i64 + 1)
         .num("total", v.segments.len() as i64);
-    Some(i18n.tr_now("selection-position", &args))
+    i18n.tr_now("selection-position", &args)
 }
 
 /// The selected zone: its name, where it lies, how long it is, whether it has a section of its own and its place

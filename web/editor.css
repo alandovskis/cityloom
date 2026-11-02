@@ -398,9 +398,6 @@
 #drawing .t-soft {
   fill: var(--ink-2);
 }
-#drawing .t-faint {
-  fill: var(--ink-3);
-}
 #drawing .t-label {
   font-size: 13px;
   font-weight: 600;
@@ -424,11 +421,6 @@
   stroke-width: 4px;
   stroke-linejoin: round;
 }
-#drawing .t-over {
-  fill: var(--warn);
-  font-size: 15px;
-  font-weight: 600;
-}
 #drawing .t-warn {
   fill: var(--warn);
   font-weight: 600;
@@ -438,11 +430,6 @@
   font-weight: 600;
 }
 
-.obj {
-  fill: var(--panel);
-  stroke: var(--ink-2);
-  stroke-width: 1.6;
-}
 .bar-b {
   fill: var(--ink-2);
   stroke: var(--ink-2);
@@ -480,22 +467,6 @@
   stroke: none;
   opacity: 0.3;
 }
-.seg {
-  cursor: grab;
-  touch-action: none;
-}
-.seg:active {
-  cursor: grabbing;
-}
-.seg .hit {
-  fill: transparent;
-}
-.seg.lifted {
-  opacity: 0.35;
-}
-.seg:hover .obj {
-  stroke-width: 2;
-}
 .sel-box {
   fill: none;
   stroke: var(--accent);
@@ -528,50 +499,6 @@
 .handle:hover .grip-arrow,
 .handle.active .grip-arrow {
   stroke: var(--accent-ink);
-}
-.handle:hover .bound-line,
-.handle.active .bound-line {
-  stroke: var(--accent);
-  stroke-width: 2;
-  stroke-dasharray: none;
-}
-.caret {
-  stroke: var(--accent);
-  stroke-width: 2.6;
-  pointer-events: none;
-}
-.caret-head {
-  fill: var(--accent);
-  stroke: none;
-  pointer-events: none;
-}
-.ghost {
-  fill: var(--accent-wash);
-  stroke: var(--accent);
-  stroke-width: 1.6;
-  stroke-dasharray: 5 3;
-  pointer-events: none;
-}
-.over-wash {
-  fill: var(--warn-wash);
-  pointer-events: none;
-}
-.cloud {
-  fill: none;
-  stroke: var(--warn-line);
-  stroke-width: 2;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
-.cloud.fresh {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: draw-cloud 620ms var(--ease-out) forwards;
-}
-@keyframes draw-cloud {
-  to {
-    stroke-dashoffset: 0;
-  }
 }
 .free {
   fill: none;
@@ -703,14 +630,6 @@ svg pattern circle {
   fill: var(--panel);
   stroke: var(--ink-2);
   stroke-width: 1.4;
-  pointer-events: none;
-}
-#drawing .badge-hands {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
   pointer-events: none;
 }
 
@@ -1089,13 +1008,8 @@ svg pattern circle {
   stroke: var(--mat-trees-alt);
   stroke-width: 1;
 }
-/* A piece's colour is the same in both themes, so an outline needs a halo of the panel's colour to be seen on any
-   of them: the hover outline and the selection outline. */
-.iso-piece:hover .iso-top {
-  stroke: var(--ink);
-  stroke-width: 2;
-  filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
-}
+/* A piece's colour is the same in both themes, so the selection outline needs a halo of the panel's colour to be seen
+   on any of them. (The hover is the press target's tint, `.iso-hit-area:hover`, below.) */
 .iso-solid {
   pointer-events: none;
 }
@@ -1198,6 +1112,42 @@ svg pattern circle {
   stroke: var(--iso-sel);
   stroke-width: 2.5;
 }
+/* The press targets (street/iso/scene/hits.rs): each piece's silhouette over the whole drawing, with no paint of its own.
+   The stroke makes the target wider than the piece by 5 px a side, which is what lets a far, narrow piece be pressed;
+   narrower pieces are drawn last, so they win where targets overlap. The hover and pressed states are a tint of the
+   selection's blue with the selection's dark casing round it (a test in shared/contrast.rs reads the opacities). A tap selects and a drag scrolls the
+   page: pan and pinch stay the browser's. */
+#drawing.iso {
+  touch-action: manipulation;
+  /* The drawing is never narrower than 280 px (iso::MIN_WIDTH), so in a group narrower than that (a 280 px window,
+     less the page's margins) it is scaled down whole by its viewBox, not cut off at the right. */
+  max-width: 100%;
+  height: auto;
+}
+.iso-hit-area {
+  fill: var(--iso-sel);
+  fill-opacity: 0;
+  stroke: transparent;
+  stroke-width: 10;
+  stroke-linejoin: round;
+  pointer-events: all;
+  cursor: pointer;
+}
+.iso-hit-area:hover {
+  fill-opacity: 0.3;
+  stroke: var(--iso-sel-casing);
+  stroke-opacity: 0.45;
+}
+.iso-hit-area:active {
+  fill-opacity: 0.55;
+  stroke: var(--iso-sel-casing);
+  stroke-opacity: 0.75;
+}
+@media (forced-colors: active) {
+  .iso-hit-area {
+    fill: Highlight;
+  }
+}
 /* The toggle between the section and the 2.5D, at the right of the street's name, on its line: the name's
    line has room to spare, while a row of its own (or the tools' row, which wraps it where text is wider, as
    with Linux's fonts) would push the drawing and the status line under it out of view at 1440 by 900. The
@@ -1278,6 +1228,7 @@ svg pattern circle {
   border-radius: 6px;
 }
 .zone-strip:focus-visible,
+.piece-list:focus-visible,
 .curb-strip:focus-visible,
 .stop-strip:focus-visible {
   outline: 2px solid var(--accent);
@@ -1300,6 +1251,39 @@ svg pattern circle {
   cursor: pointer;
   overflow: hidden;
 }
+.piece-list-section {
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 12px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+.piece-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 6px;
+}
+/* A cell is as wide as its words, a row of them wrapping at a narrow window; each is 24 px at least both ways
+   (WCAG 2.5.8). The selected one has the zone strip's heavy outline, so it is not shown by colour alone. */
+.piece-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  min-width: 24px;
+  min-height: 34px;
+  background: var(--zone-fill);
+  color: var(--zone-ink);
+  border: 1px solid var(--zone-edge);
+  cursor: pointer;
+}
+.piece-width {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .zone-cell.own {
   background: var(--zone-fill-own);
   /* not by tint alone (WCAG 1.4.1): a zone with a section of its own has a heavier top edge */
@@ -1312,13 +1296,13 @@ svg pattern circle {
   background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--zone-edge) 6px 7px);
 }
 .zone-cell[aria-selected="true"],
+.piece-cell[aria-selected="true"],
 .curb-cell[aria-selected="true"],
 .stop-cell[aria-selected="true"] {
   outline: 3px solid var(--zone-sel);
   outline-offset: -3px;
   font-weight: 600;
 }
-.curb-name,
 .stop-name,
 .zone-name {
   min-width: 0;
@@ -1816,11 +1800,6 @@ svg pattern circle {
 .stepper .unit-tag {
   font-size: 14px;
 }
-.acts {
-  display: flex;
-  justify-content: flex-end;
-  gap: 4px;
-}
 .ico {
   display: grid;
   place-items: center;
@@ -1857,9 +1836,6 @@ svg pattern circle {
   border-color: var(--danger);
   background: var(--danger);
   color: var(--panel);
-}
-.acts .ico.danger {
-  margin-left: 10px;
 }
 .opts {
   margin: 0;
@@ -2412,9 +2388,6 @@ dl.prov dd:last-child {
   margin: 0;
   text-align: center;
 }
-.keyhelp {
-  display: none;
-}
 
 /* ---- touch, small screens, motion --------------------------------------------- */
 
@@ -2470,10 +2443,13 @@ dl.prov dd:last-child {
   }
   .panel.left {
     order: 2;
+    max-width: calc(100% - 16px);
   }
   .panel.right {
     order: 3;
     bottom: auto;
+    /* never wider than the window less its margins (the Notes are 340 px at a desktop width) */
+    max-width: calc(100% - 16px);
   }
   .stage-head {
     align-items: stretch;
@@ -2505,11 +2481,6 @@ dl.prov dd:last-child {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cloud.fresh {
-    animation: none;
-    stroke-dasharray: none;
-    stroke-dashoffset: 0;
-  }
   .ico,
   .turn,
   .opt,

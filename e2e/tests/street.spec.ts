@@ -2,18 +2,7 @@ import { readFileSync } from "node:fs";
 
 import type { Page } from "@playwright/test";
 
-import {
-  expect,
-  live,
-  mapReady,
-  OPEN_ENDS_PBF,
-  openStreet,
-  PRESSABLE_PX,
-  pressablePiece,
-  splitInto,
-  streetLengthM,
-  test,
-} from "./fixtures";
+import { expect, live, mapReady, OPEN_ENDS_PBF, openStreet, splitInto, streetLengthM, test } from "./fixtures";
 
 const selectFirstPiece = async (page: Page) => {
   await page.locator("#wrap").focus();
@@ -37,7 +26,7 @@ test.describe("the street editor on a street of the city", () => {
     await expect(page.locator("#street-name")).not.toHaveText("");
     await expect(page.locator("#drawing")).toHaveAttribute(
       "aria-label",
-      /\d+ segments, ([\d.]+) m of \1 m\. Every metre of the street is used\.$/,
+      /in 2\.5D, along a 40 m stretch\. \d+ segments\./,
     );
     await expect(page.locator("#fit")).toHaveText("Every metre of the street is used.");
     await expect(page.locator("#undo")).toBeDisabled();
@@ -74,28 +63,23 @@ test.describe("the street editor on a street of the city", () => {
     await expect(page.locator("#inspector .insp-empty")).toBeVisible();
   });
 
-  test("a buffer too narrow to press is selected with the arrow keys and announced", async ({ page }) => {
-    // a buffer as narrow as an imported curb's 150 mm: added, then narrowed with the keys
+  test("a buffer as narrow as an imported curb's is selected with the arrow keys and announced", async ({ page }) => {
     await page.locator("#add-btn").click();
     await page.locator(".add-item", { hasText: "Buffer" }).click();
     await page.locator("#wrap").focus();
     for (let k = 0; k < 6; k++) await page.keyboard.press("-");
-    const widths = await page
-      .locator('#drawing [data-role="seg"]')
-      .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().width));
-    const narrow = widths.length - 1; // a new piece goes at the end
-    expect(widths[narrow], "too narrow to press").toBeLessThan(PRESSABLE_PX);
+    const last = (await pieces(page)) - 1; // a new piece goes at the end
     await page.keyboard.press("Escape");
     await page.locator("#wrap").focus();
-    for (let k = 0; k <= narrow; k++) await page.keyboard.press("ArrowRight");
-    await expect(live(page)).toHaveText(new RegExp(`^Buffer, 0\\.15 m, ${narrow + 1} of ${narrow + 1}$`));
+    for (let k = 0; k <= last; k++) await page.keyboard.press("ArrowRight");
+    await expect(live(page)).toHaveText(new RegExp(`^Buffer, 0\\.15 m, ${last + 1} of ${last + 1}$`));
     await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
   });
 
   test("a piece is pressed to select it", async ({ page }) => {
-    const i = await pressablePiece(page);
-    await page.locator('#drawing [data-role="seg"]').nth(i).click();
-    await expect(live(page)).toHaveText(new RegExp(`, ${i + 1} of \\d+$`));
+    await page.locator("#drawing .iso-piece .iso-top").first().click({ force: true });
+    await expect(live(page)).toHaveText(/, \d+ of \d+$/);
+    await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
   });
 
   test("making a piece wider says that the street is too wide, and narrower makes room again", async ({ page }) => {
@@ -211,71 +195,6 @@ test.describe("the street editor on a street of the city", () => {
     });
   }
 
-  test("a boundary between two pieces is dragged to share width between them", async ({ page }) => {
-    // A boundary that cannot grow (a sidewalk against a planting strip, say) says nothing: take the first that resizes.
-    const handles = page.locator('#drawing [data-role="handle"]');
-    let resized = false;
-    for (let i = 0; i < (await handles.count()) && !resized; i++) {
-      const box = (await handles.nth(i).boundingBox())!;
-      const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
-      await page.mouse.move(x, y);
-      await page.mouse.down();
-      await page.mouse.move(x + 40, y, { steps: 6 });
-      await page.mouse.up();
-      resized = await expect(live(page))
-        .toContainText("Resize", { timeout: 1500 })
-        .then(
-          () => true,
-          () => false,
-        );
-    }
-    expect(resized, "one boundary of the street shares width").toBe(true);
-    await expect(page.locator("#fit")).toHaveText("Every metre of the street is used.");
-    await expect(page.locator("#undo")).toBeEnabled();
-    await page.locator("#t-changes").click();
-    await expect(page.locator("#revs tbody tr")).toHaveCount(2);
-  });
-
-  test("V pressed in the middle of a drag keeps the width the drag has shown, as an edit that can be undone", async ({
-    page,
-  }) => {
-    // The pieces of the design as the section labels them, after both street edges.
-    const design = async () =>
-      ((await page.locator("#drawing").textContent()) ?? "").split("Street edgeStreet edge")[1];
-    const today = await design();
-    const box = (await page.locator('#drawing [data-role="handle"]').nth(2).boundingBox())!;
-    const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
-    await page.mouse.move(x, y);
-    await page.mouse.down();
-    await page.mouse.move(x + 20, y, { steps: 4 });
-    const dragged = await design();
-    expect(dragged).not.toBe(today);
-    await page.keyboard.press("v");
-    await expect(page.locator("#drawing.iso")).toBeAttached();
-    await page.mouse.up();
-    await page.keyboard.press("v");
-    await expect(page.locator('#drawing [data-role="handle"]').first()).toBeAttached();
-    expect(await design()).toBe(dragged);
-    await expect(page.locator("#undo")).toBeEnabled();
-    await expect(page.locator("#tb-changes")).toHaveText("1");
-    await page.reload();
-    await expect(page.locator('#drawing [data-role="handle"]').first()).toBeAttached();
-    expect(await design()).toBe(dragged);
-  });
-
-  test("a piece is dragged along to a new place", async ({ page }) => {
-    const first = page.locator('#drawing [data-role="seg"]').first();
-    const second = page.locator('#drawing [data-role="seg"]').nth(1);
-    const a = (await first.boundingBox())!;
-    const b = (await second.boundingBox())!;
-    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(b.x + b.width + 10, b.y + b.height / 2, { steps: 10 });
-    await page.mouse.up();
-    await expect(live(page)).toContainText("Move");
-    await expect(page.locator("#undo")).toBeEnabled();
-  });
-
   test("the details change a piece's width and the street follows", async ({ page }) => {
     await selectFirstPiece(page);
     await page.keyboard.press("Enter");
@@ -346,7 +265,7 @@ test.describe("the street editor on a street of the city", () => {
   test("units change the lengths shown", async ({ page }) => {
     await page.locator("#account-btn").click();
     await page.locator('[data-unit="ft"]').click();
-    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /ft of /);
+    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", /along a \d+ ft stretch/);
   });
 
   test("the left panel is one scroller holding the inspector and nothing else", async ({ page }) => {
@@ -649,22 +568,23 @@ test.describe("the zones of a street", () => {
   test("changes one zone's section and reloads to the same zones", async ({ page }) => {
     await page.locator("#zone-split").click();
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
-    await page.locator("#zone-0").click();
-    const zone1 = await page.locator("#drawing").getAttribute("aria-label");
+    await expect(page.locator("#zone-1")).not.toHaveAttribute("aria-label", /its own section/);
     await page.locator("#zone-1").click();
-    expect(await page.locator("#drawing").getAttribute("aria-label")).toBe(zone1);
+    const tops = () =>
+      page.locator("#drawing .iso-top").evaluateAll((els) => els.map((e) => e.getAttribute("points")).join("|"));
+    const unchanged = await tops();
     await selectFirstPiece(page);
     await page.keyboard.press("-");
-    const edited = await page.locator("#drawing").getAttribute("aria-label");
-    expect(edited).not.toBe(zone1);
+    await expect.poll(tops).not.toBe(unchanged);
+    const edited = await tops();
     await page.locator("#zone-0").click();
-    expect(await page.locator("#drawing").getAttribute("aria-label"), "zone 1 is unchanged").toBe(zone1);
+    await expect(page.locator("#zone-0")).not.toHaveAttribute("aria-label", /its own section/);
     await page.waitForTimeout(500); // the debounced write
     await page.reload();
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
     await expect(page.locator("#zone-1")).toHaveAttribute("aria-label", /its own section/);
     await page.locator("#zone-1").click();
-    expect(await page.locator("#drawing").getAttribute("aria-label")).toBe(edited);
+    await expect.poll(tops).toBe(edited);
   });
 
   test("pressing a zone cell below the fold after editing by keyboard does not move it from under the pointer", async ({
@@ -694,7 +614,6 @@ test.describe("the zones of a street", () => {
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
     await selectFirstPiece(page);
     await page.keyboard.press("-"); // the second zone gets a section of its own
-    await page.locator("#view-iso").click();
     await expect(page.locator("#drawing.iso")).toBeAttached();
     const label = () => page.locator("#drawing").getAttribute("aria-label");
     const markup = () => page.locator("#drawing").innerHTML();
@@ -724,7 +643,6 @@ test.describe("the zones of a street", () => {
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(2);
     await selectFirstPiece(page);
     await page.keyboard.press("-"); // the second zone gets a section of its own
-    await page.locator("#view-iso").click();
     await expect(page.locator("#drawing.iso")).toBeAttached();
   };
 
@@ -759,7 +677,6 @@ test.describe("the zones of a street", () => {
 
   test("the 2.5D says how long the transition is that leads into the zone beyond", async ({ page }) => {
     await addLaneInZone2(page);
-    await page.locator("#view-iso").click();
     await expect(page.locator("#drawing.iso")).toBeAttached();
     await expect(page.locator("#drawing")).toHaveAttribute(
       "aria-label",
@@ -778,7 +695,6 @@ test.describe("the zones of a street", () => {
 
   test("a 2.5D with no boundary near is not split in two", async ({ page }) => {
     await expect(page.locator('#zone-strip [role="option"]')).toHaveCount(1);
-    await page.locator("#view-iso").click();
     await expect(page.locator("#drawing.iso")).toBeAttached();
     await expect(page.locator("#drawing .iso-section")).toHaveCount(0);
     await expect(page.locator("#drawing .iso-across")).toHaveCount(0);

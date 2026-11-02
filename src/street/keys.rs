@@ -33,6 +33,20 @@ pub fn on_section(key: &str, shift: bool, selected: bool) -> Option<(Action, boo
     }
 }
 
+/// Which piece the piece list's key chooses: `current` is the index of the selected piece, `len` the number of pieces.
+/// The arrows go one along (from nothing, to the first or the last), Home and End to the ends; the ends do not wrap.
+/// `None` for a key that is not the list's, or for no pieces.
+pub fn piece_target(key: &str, current: Option<usize>, len: usize) -> Option<usize> {
+    let last = len.checked_sub(1)?;
+    match key {
+        "ArrowRight" | "ArrowDown" => Some(current.map_or(0, |c| (c + 1).min(last))),
+        "ArrowLeft" | "ArrowUp" => Some(current.map_or(last, |c| c.saturating_sub(1))),
+        "Home" => Some(0),
+        "End" => Some(last),
+        _ => None,
+    }
+}
+
 /// What a key does on the zone strip.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZoneAction {
@@ -58,34 +72,6 @@ pub fn on_strip(key: &str, shift: bool, alt: bool, ctrl: bool, meta: bool) -> Op
         _ => return None,
     };
     Some(if alt { (ZoneAction::Nudge(d * if shift { 10_000 } else { 1_000 }), true) } else { (ZoneAction::Select(d), true) })
-}
-
-/// Whether a key pressed on the page (outside a field, which the page checks) switches the drawing between
-/// the section and the 2.5D: `V`, without Ctrl, Cmd or Alt.
-pub fn is_view_toggle(key: &str, ctrl: bool, meta: bool, alt: bool) -> bool {
-    !(ctrl || meta || alt) && key.eq_ignore_ascii_case("v")
-}
-
-/// A key pressed on the page, as far as switching the view cares.
-#[derive(Clone, Copy, Debug)]
-pub struct Press<'a> {
-    pub key: &'a str,
-    pub ctrl: bool,
-    pub meta: bool,
-    pub alt: bool,
-    /// The key is held down and this is a repeat of it.
-    pub repeat: bool,
-    /// An input method is composing text.
-    pub composing: bool,
-    /// A field has the key (the person is typing) or another handler has taken it.
-    pub taken: bool,
-}
-
-/// Whether a key pressed on the page switches the view: `V`, pressed once, not while composing, and not
-/// taken by a field or by another handler. It is the letter on the person's layout (`key`, not `code`), so a
-/// layout without a Latin V does not have it; the toggle's buttons are there for that.
-pub fn switches_view(p: &Press) -> bool {
-    is_view_toggle(p.key, p.ctrl, p.meta, p.alt) && !p.repeat && !p.composing && !p.taken
 }
 
 #[cfg(test)]
@@ -173,23 +159,22 @@ mod tests {
     }
 
     #[test]
-    fn v_switches_the_view_but_not_with_ctrl_cmd_or_alt_and_is_no_key_of_the_section() {
-        assert!(is_view_toggle("v", false, false, false));
-        assert!(is_view_toggle("V", false, false, false));
-        assert!(!is_view_toggle("v", true, false, false));
-        assert!(!is_view_toggle("v", false, true, false));
-        assert!(!is_view_toggle("v", false, false, true));
-        assert!(!is_view_toggle("b", false, false, false));
+    fn v_is_no_key_of_the_drawing() {
         assert_eq!(on_section("v", false, true), None);
     }
 
     #[test]
-    fn v_held_down_composing_or_taken_by_a_field_or_another_handler_does_not_switch_the_view() {
-        let v = Press { key: "v", ctrl: false, meta: false, alt: false, repeat: false, composing: false, taken: false };
-        assert!(switches_view(&v));
-        assert!(!switches_view(&Press { repeat: true, ..v }), "a repeat of a key held down");
-        assert!(!switches_view(&Press { composing: true, ..v }), "an input method composing");
-        assert!(!switches_view(&Press { taken: true, ..v }), "a field, or a handler that took it");
-        assert!(!switches_view(&Press { ctrl: true, ..v }) && !switches_view(&Press { key: "b", ..v }));
+    fn the_piece_list_s_arrows_go_one_along_without_wrapping_and_home_and_end_to_the_ends() {
+        assert_eq!(piece_target("ArrowRight", Some(1), 5), Some(2));
+        assert_eq!(piece_target("ArrowDown", Some(1), 5), Some(2));
+        assert_eq!(piece_target("ArrowLeft", Some(1), 5), Some(0));
+        assert_eq!(piece_target("ArrowUp", Some(0), 5), Some(0), "no wrap at the first");
+        assert_eq!(piece_target("ArrowRight", Some(4), 5), Some(4), "no wrap at the last");
+        assert_eq!(piece_target("ArrowRight", None, 5), Some(0));
+        assert_eq!(piece_target("ArrowLeft", None, 5), Some(4));
+        assert_eq!(piece_target("Home", Some(3), 5), Some(0));
+        assert_eq!(piece_target("End", Some(3), 5), Some(4));
+        assert_eq!(piece_target("a", Some(3), 5), None);
+        assert_eq!(piece_target("End", None, 0), None, "no pieces");
     }
 }
