@@ -173,6 +173,7 @@ const ALLOWED_LITERALS: &[(&str, &str)] = &[
     ("Google", "a provider's brand name, not translated"),
     ("Microsoft", "a provider's brand name, not translated"),
     ("Apple", "a provider's brand name, not translated"),
+    ("lane-hit on", "the CSS classes of the selected lane's place to press in the junction's 2.5D"),
     ("iso-paint white", "CSS classes of the 2.5D's pavement paint"),
     ("iso-paint yellow", "CSS classes of the 2.5D's pavement paint"),
     ("iso-section iso-across", "CSS classes of the 2.5D's section across a zone boundary"),
@@ -448,6 +449,8 @@ fn is_message_id(s: &str) -> bool {
 
 /// Literals shaped like a message id that are not one, each with the reason.
 const NOT_MESSAGE_IDS: &[(&str, &str)] = &[
+    ("iso-hit", "the CSS class of a place to press in the junction's 2.5D (junction/iso.rs)"),
+    ("lane-hit", "the CSS class of a lane's place to press, in the plan and in the junction's 2.5D"),
     ("sig-later-0", "the id of the first phase's Later button, not a message"),
     ("signal-plan-state", "the id of the plan's state paragraph, not a message"),
     ("transition-room", "the id of a check, not a message"),

@@ -886,8 +886,9 @@ fn the_drawing_is_the_2_5d_picture_in_iso_mode_with_no_grips_and_a_label_of_its_
     use crate::shared::i18n::Locale;
     let s = shared_mode(DrawMode::Iso, Locale::En);
     let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
-    assert!(h.contains("class=\"iso\"") && !h.contains("class=\"plan\""), "{h}");
-    assert!(!h.contains("data-role=\"grip") && !h.contains("data-role=\"arm\""), "{h}");
+    assert!(h.contains("class=\"iso iso-junction\"") && !h.contains("class=\"plan\""), "{h}");
+    // Its parts are pressed to be selected, but there is nothing to drag.
+    assert!(!h.contains("data-role=\"grip") && h.contains("data-role=\"arm\"") && h.contains("data-role=\"lane\""), "{h}");
     assert!(h.contains("2.5D view of the junction. 4 streets."), "{h}");
     let f = shared_mode(DrawMode::Iso, Locale::FrCa);
     let h = html(|| view! { <plan::PlanDrawing vm=f.clone()/> }.into_any());

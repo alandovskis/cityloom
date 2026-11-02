@@ -325,4 +325,31 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn the_junction_in_2_5d_outlines_its_selection_in_the_two_tones_and_is_pressed_with_a_tap() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        // The outline is the street page's two tones (no new colour): over the panel and every surface the junction
+        // lays, one of the two stands out at 3:1, in both themes.
+        let (line, casing) = (token(editor, "iso-sel").0.unwrap(), token(editor, "iso-sel-casing").0.unwrap());
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            for ground in ["panel", "road", "k-sidewalk", "k-planting", "k-bike", "k-travel", "k-bus", "k-parking", "k-median", "k-loading", "k-shoulder"] {
+                let under = pick(&token(app, ground), i);
+                let best = contrast(&line, &under).max(contrast(&casing, &under));
+                assert!(best >= 3.0, "the selection outline on {ground} {theme}: {best:.2}");
+            }
+        }
+        // It is drawn as the casing under the line, in the system colours when the page's are forced.
+        assert!(editor.contains("\n.iso-sel {\n  stroke: var(--iso-sel);") && editor.contains("\n.iso-sel-casing {\n  stroke: var(--iso-sel-casing);"));
+        let forced = editor.find("  #drawing .iso-junction .iso-sel {\n    stroke: Highlight;").expect("forced-colours rule for the line");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some_and(|m| !editor[m..forced].contains("\n}\n")));
+        assert!(editor.contains("  #drawing .iso-junction .iso-sel-casing {\n    stroke: Canvas;"));
+        // What is only looked at lets a press through; what is pressed asks for a tap and no double-tap zoom.
+        assert!(rule(editor, "#drawing .iso-junction *").contains("pointer-events: none;"));
+        let pressed = rule(editor, "#drawing .iso-junction [data-role]");
+        assert!(pressed.contains("cursor: pointer;") && pressed.contains("touch-action: manipulation;"), "{pressed}");
+        // A lane under the pointer or selected is shaded in the accent's wash, which the accent clears 3:1 on (measured above).
+        assert!(rule(editor, "#drawing .lane-hit:hover,\n#drawing .lane-hit.on").contains("fill: var(--accent-wash);"));
+    }
 }

@@ -142,6 +142,8 @@ struct Solid {
     foot: Vec<P>,
     h_mm: f64,
     sides: bool,
+    /// The attributes that make it pressable (`hit_attrs`), or none.
+    hit: String,
 }
 
 /// The filters that darken the faces turned from the eye: a ramp a little, a side more. SVG filters, since CSS
@@ -194,8 +196,11 @@ struct Draw {
     tables: Vec<(Vec<P>, f64)>,
     /// Posts with their heads, painted over the solids.
     posts: String,
-    /// The outline of the selected arm.
+    /// The outline of what is selected.
     sel: String,
+    /// The attributes the shapes drawn now carry so that a press on them selects something (`hit_attrs`); empty
+    /// for a shape that is only looked at.
+    hit: String,
     /// The streets' names, painted last so nothing standing hides one.
     names: String,
 }
@@ -208,7 +213,16 @@ const NAME_EDGE_PX: f64 = 4.0;
 
 impl Draw {
     fn new(f: IsoFrame) -> Draw {
-        Draw { f, flat: String::new(), solids: Vec::new(), tables: Vec::new(), posts: String::new(), sel: String::new(), names: String::new() }
+        Draw {
+            f,
+            flat: String::new(),
+            solids: Vec::new(),
+            tables: Vec::new(),
+            posts: String::new(),
+            sel: String::new(),
+            hit: String::new(),
+            names: String::new(),
+        }
     }
 
     fn path(&self, pts: &[P], h_mm: f64) -> String {
@@ -232,8 +246,12 @@ impl Draw {
             return;
         }
         let d = self.path(foot, 0.0);
-        write!(self.flat, "<path class=\"iso-flat k-{kind_id} mat-{material}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#iso-m-{material})\" d=\"{d}\"/>")
-            .unwrap();
+        let hit = &self.hit;
+        write!(
+            self.flat,
+            "<path class=\"iso-flat k-{kind_id} mat-{material}\"{hit} d=\"{d}\"/><path class=\"hatch\" fill=\"url(#iso-m-{material})\" d=\"{d}\"/>"
+        )
+        .unwrap();
     }
 
     /// The stripes of a zebra crossing: `foot` is its four corners, across the street first. They run the length
@@ -295,9 +313,10 @@ impl Draw {
         self.tables.push((foot.to_vec(), h_mm));
         let d = self.path(foot, h_mm);
         let material = default_material(kind_id);
+        let hit = &self.hit;
         write!(
             self.flat,
-            "<path class=\"iso-table iso-flat k-{kind_id} mat-{material}\" d=\"{d}\"/><path class=\"hatch\" fill=\"url(#iso-m-{material})\" d=\"{d}\"/>"
+            "<path class=\"iso-table iso-flat k-{kind_id} mat-{material}\"{hit} d=\"{d}\"/><path class=\"hatch\" fill=\"url(#iso-m-{material})\" d=\"{d}\"/>"
         )
         .unwrap();
     }
@@ -322,7 +341,7 @@ impl Draw {
 
     fn stand_in(&mut self, kind_id: &'static str, material: &'static str, foot: Vec<P>, h_mm: f64, sides: bool) {
         if foot.len() >= 3 {
-            self.solids.push(Solid { kind_id, material, foot, h_mm, sides });
+            self.solids.push(Solid { kind_id, material, foot, h_mm, sides, hit: self.hit.clone() });
         }
     }
 
@@ -344,7 +363,7 @@ impl Draw {
     fn render(&self, i: usize) -> String {
         let s = &self.solids[i];
         let id = s.kind_id;
-        let mut g = format!("<g class=\"iso-solid\" data-depth=\"{}\">", f1(Self::depth(s)));
+        let mut g = format!("<g class=\"iso-solid\" data-depth=\"{}\"{}>", f1(Self::depth(s)), s.hit);
         if s.sides {
             let seen: Vec<P> = s.foot.iter().map(|p| view_point(*p)).collect();
             let n = seen.len();
@@ -399,11 +418,31 @@ impl Draw {
         .unwrap();
     }
 
-    /// The outline of a shape lying on the ground, to show what is selected.
-    fn outline(&mut self, foot: &[P]) {
+    /// The outline of a shape `h_mm` above the ground, to show what is selected: two tones, the light line over a dark
+    /// casing, so that one of them stands out from any surface (the street page's selection outline).
+    fn outline(&mut self, foot: &[P], h_mm: f64) {
         if foot.len() >= 3 {
-            write!(self.sel, "<path class=\"sel-box\" d=\"{}\"/>", self.path(foot, 0.0)).unwrap();
+            let d = self.path(foot, h_mm);
+            write!(self.sel, "<path class=\"iso-sel-casing\" d=\"{d}\"/><path class=\"sel-box iso-sel\" d=\"{d}\"/>").unwrap();
         }
+    }
+
+    /// Makes the shapes `draw` draws pressable: a press on one selects what `attrs` (`hit_attrs`) says.
+    fn pressing(&mut self, attrs: String, draw: impl FnOnce(&mut Draw)) {
+        self.hit = attrs;
+        draw(self);
+        self.hit.clear();
+    }
+
+    /// A shape that is only a place to press, with nothing painted in it. `class` is its CSS class, `title` what the
+    /// pointer is told it is.
+    fn press_area(&mut self, class: &str, attrs: &str, foot: &[P], h_mm: f64, title: Option<&str>) {
+        if foot.len() < 3 {
+            return;
+        }
+        let d = self.path(foot, h_mm);
+        let title = title.map(|t| format!("<title>{}</title>", esc(t))).unwrap_or_default();
+        write!(self.flat, "<path class=\"{class}\"{attrs} d=\"{d}\">{title}</path>").unwrap();
     }
 
     /// A street's name beyond the end of its arm, away from the middle of the junction and kept inside the drawing.
@@ -447,7 +486,7 @@ impl Draw {
     fn finish(mut self) -> String {
         self.solids.sort_by(|a, b| Self::depth(a).total_cmp(&Self::depth(b)));
         let solids: String = (0..self.solids.len()).map(|i| self.render(i)).collect();
-        format!("{}<g class=\"iso\">{}{solids}{}{}{}</g>", shades(&self.f), self.flat, self.posts, self.sel, self.names)
+        format!("{}<g class=\"iso iso-junction\">{}{solids}{}{}{}</g>", shades(&self.f), self.flat, self.posts, self.sel, self.names)
     }
 }
 
@@ -482,104 +521,163 @@ pub fn iso_label(v: &JView, i18n: &I18n) -> String {
     }
 }
 
-/// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high.
+/// The attributes that make a shape of the picture pressable: what a press on it selects, as the plan's shapes say it
+/// (`plan::selected_by` reads them back). The cycle track and the bus lane are the only one of their kind, and have
+/// no uid.
+pub fn hit_attrs(role: &str, uid: Option<u32>, lane: Option<usize>) -> String {
+    let mut a = format!(" data-role=\"{role}\"");
+    if let Some(uid) = uid {
+        write!(a, " data-uid=\"{uid}\"").unwrap();
+    }
+    if let Some(lane) = lane {
+        write!(a, " data-lane=\"{lane}\"").unwrap();
+    }
+    a
+}
+
+/// A circle of 48 points, round the middle of the junction.
+fn circle(r: f64) -> Vec<P> {
+    (0..48)
+        .map(|i| {
+            let t = i as f64 * std::f64::consts::TAU / 48.0;
+            (r * t.cos(), r * t.sin())
+        })
+        .collect()
+}
+
+/// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high. Every part the keys select can
+/// be pressed (`hit_attrs`), and the one that is selected is outlined.
 pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> IsoSvg {
     let f = IsoFrame::fit(v.bounds, &content_points(v), width, window_height);
     let mut d = Draw::new(f);
     let wall = height_of("sidewalk");
+    let selected = |kind: &str, uid: u32| v.selected.kind == Some(kind) && v.selected.uid == uid;
 
     // the carriageway where the streets meet, and a roundabout's ring and island
     if let Some(ring) = &v.ring {
+        let track = ring.cycle_mm.is_some_and(|c| c != 0);
         if ring.lanes.is_empty() {
-            let circle = |r: f64| -> Vec<P> {
-                (0..48)
-                    .map(|i| {
-                        let t = i as f64 * std::f64::consts::TAU / 48.0;
-                        (r * t.cos(), r * t.sin())
-                    })
-                    .collect()
-            };
-            if ring.cycle_mm.is_some_and(|c| c != 0) {
+            if track {
                 // The cycle track is the band outside the carriageway: the whole ring in its colour, the carriageway over it.
-                d.lay("bike", &circle(ring.radius_mm as f64));
+                d.pressing(hit_attrs("cycle", None, None), |d| d.lay("bike", &circle(ring.radius_mm as f64)));
                 d.lay("travel", &circle(ring.road_mm as f64));
             } else {
                 d.lay("travel", &circle(ring.radius_mm as f64));
             }
             if let Some(bus) = &v.bus {
-                d.lay("bus", &flatten(&bus.poly));
+                let poly = flatten(&bus.poly);
+                d.pressing(hit_attrs("bus", None, None), |d| d.lay("bus", &poly));
+                if v.selected.kind == Some("bus") {
+                    d.outline(&poly, 0.0);
+                }
             }
             d.stand("median", circle(ring.island_mm as f64), height_of("median"), true);
+            if track && v.selected.kind == Some("cycle") {
+                d.outline(&circle(ring.radius_mm as f64), 0.0);
+                d.outline(&circle(ring.road_mm as f64), 0.0);
+            }
         } else {
             // A turbo: the carriageway (the lanes and the 300 mm between them) is one travel surface, the dividers are paint on it.
-            if ring.cycle_mm.is_some_and(|c| c != 0) {
-                d.lay("bike", &ring.outer_edge);
+            if track {
+                d.pressing(hit_attrs("cycle", None, None), |d| d.lay("bike", &ring.outer_edge));
             }
             d.lay("travel", &ring.road_edge);
             for divider in &ring.dividers {
                 d.divider(divider);
             }
             d.stand("median", ring.island_edge.clone(), height_of("median"), true);
+            if track && v.selected.kind == Some("cycle") {
+                d.outline(&ring.outer_edge, 0.0);
+                d.outline(&ring.road_edge, 0.0);
+            }
         }
     } else {
         d.lay("travel", &flatten(&v.core));
     }
 
     for c in &v.corners {
-        if c.walk {
-            d.stand("sidewalk", flatten(&c.wedge), wall, true);
-        }
-        if let Some(p) = &c.protected {
-            d.lay("bike", &flatten(&p.track));
-            d.stand("sidewalk", flatten(&p.island), wall, true);
+        // A straight curb is no corner: nothing of it is pressed.
+        let hit = if c.straight { String::new() } else { hit_attrs("corner", Some(c.uid), None) };
+        d.pressing(hit.clone(), |d| {
+            if c.walk {
+                d.stand("sidewalk", flatten(&c.wedge), wall, true);
+            }
+            if let Some(p) = &c.protected {
+                d.lay("bike", &flatten(&p.track));
+                d.stand("sidewalk", flatten(&p.island), wall, true);
+            }
+        });
+        if !c.straight {
+            // Bare ground between two streets is a corner too: it is only a place to press.
+            if !c.walk {
+                d.press_area("iso-hit", &hit, &flatten(&c.wedge), 0.0, None);
+            }
+            if selected("corner", c.uid) {
+                d.outline(&flatten(&c.wedge), if c.walk { wall } else { 0.0 });
+            }
         }
     }
 
     for a in &v.arms {
-        // The arm's end zone, then the taper and the zone across: a taper's quad stands or lies like any piece.
-        for piece in a.pieces.iter().chain(&a.beyond) {
-            let id = KINDS[piece.kind].id;
-            let foot = flatten(&piece.poly);
-            // A walkway is walking surface wall to wall, whatever stands on it.
-            let h = if a.pedestrian { wall } else { height_of(id) };
-            match h {
-                h if h > 0.0 => d.stand_in(id, piece.material, foot, h, true),
-                _ => d.lay_in(id, piece.material, &foot),
+        d.pressing(hit_attrs("arm", Some(a.uid), None), |d| {
+            // The arm's end zone, then the taper and the zone across: a taper's quad stands or lies like any piece.
+            for piece in a.pieces.iter().chain(&a.beyond) {
+                let id = KINDS[piece.kind].id;
+                let foot = flatten(&piece.poly);
+                // A walkway is walking surface wall to wall, whatever stands on it.
+                let h = if a.pedestrian { wall } else { height_of(id) };
+                match h {
+                    h if h > 0.0 => d.stand_in(id, piece.material, foot, h, true),
+                    _ => d.lay_in(id, piece.material, &foot),
+                }
             }
-        }
-        // The street's curbside uses stand or lie on their piece, over it.
-        for u in &a.curb_uses {
-            let Some(poly) = &u.poly else { continue };
-            let id = KINDS[u.kind].id;
-            let foot = flatten(poly);
-            match if a.pedestrian { wall } else { height_of(id) } {
-                h if h > 0.0 => d.stand_in(id, u.material, foot, h, true),
-                _ => d.lay_in(id, u.material, &foot),
+            // The street's curbside uses stand or lie on their piece, over it.
+            for u in &a.curb_uses {
+                let Some(poly) = &u.poly else { continue };
+                let id = KINDS[u.kind].id;
+                let foot = flatten(poly);
+                match if a.pedestrian { wall } else { height_of(id) } {
+                    h if h > 0.0 => d.stand_in(id, u.material, foot, h, true),
+                    _ => d.lay_in(id, u.material, &foot),
+                }
             }
-        }
-        // Where there is no parking beside the curb the road runs on, over the parking piece.
-        for gap in &a.gaps {
-            d.lay("travel", &flatten(gap));
-        }
-        // The bus lane and the queue jump run over the arm's pieces; a stop's bulb and an island stand like a sidewalk.
-        let t = &a.transit;
-        for lane in [&t.bus, &t.queue].into_iter().flatten() {
-            d.lay("bus", &flatten(lane));
-        }
-        for poly in [&t.stop_poly, &t.island].into_iter().flatten() {
-            d.stand("sidewalk", flatten(poly), wall, true);
-        }
-        for lane in &a.core_bike {
-            d.lay("bike", &flatten(lane));
-        }
-        if let Some(b) = &a.bike_box {
-            d.lay("bike", &flatten(b));
-        }
-        for bulb in a.bulbs.iter().flatten() {
-            d.stand("sidewalk", flatten(bulb), wall, true);
-        }
-        if let Some(i) = a.crossing.as_ref().and_then(|c| c.island_poly.as_ref()) {
-            d.stand("sidewalk", flatten(i), wall, true);
+            // Where there is no parking beside the curb the road runs on, over the parking piece.
+            for gap in &a.gaps {
+                d.lay("travel", &flatten(gap));
+            }
+            // The bus lane and the queue jump run over the arm's pieces; a stop's bulb and an island stand like a sidewalk.
+            let t = &a.transit;
+            for lane in [&t.bus, &t.queue].into_iter().flatten() {
+                d.lay("bus", &flatten(lane));
+            }
+            for poly in [&t.stop_poly, &t.island].into_iter().flatten() {
+                d.stand("sidewalk", flatten(poly), wall, true);
+            }
+            for lane in &a.core_bike {
+                d.lay("bike", &flatten(lane));
+            }
+            if let Some(b) = &a.bike_box {
+                d.lay("bike", &flatten(b));
+            }
+            for bulb in a.bulbs.iter().flatten() {
+                d.stand("sidewalk", flatten(bulb), wall, true);
+            }
+            if let Some(i) = a.crossing.as_ref().and_then(|c| c.island_poly.as_ref()) {
+                // The island of a crossing is a part of the crossing.
+                d.hit = hit_attrs("crossing", Some(a.uid), None);
+                d.stand("sidewalk", flatten(i), wall, true);
+            }
+        });
+        // An entering lane is pressed over the arm's pieces, as it is on the plan.
+        let name = say(i18n, units, &a.label);
+        for (i, lane) in a.lanes.iter().enumerate() {
+            let on = selected("lane", a.uid) && v.selected.lane == i;
+            let title = i18n.tr("jn-sel-lane", &Args::new().num("n", i as i64 + 1).num("count", a.lanes.len() as i64).str("arm", name.clone()));
+            let class = if on { "lane-hit on" } else { "lane-hit" };
+            d.press_area(class, &hit_attrs("lane", Some(a.uid), Some(i)), &flatten(&lane.poly), 0.0, Some(&title));
+            if on {
+                d.outline(&flatten(&lane.poly), 0.0);
+            }
         }
     }
 
@@ -612,16 +710,23 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
         for b in &a.transit.bollards {
             d.post(*b, BOLLARD_MM, "bollard");
         }
-        let selected = v.selected.kind == Some("arm") && v.selected.uid == a.uid;
-        d.name(a.end, &say(i18n, units, &a.street), selected);
-        if selected {
-            d.outline(&flatten(&a.outline));
+        let on = selected("arm", a.uid);
+        d.name(a.end, &say(i18n, units, &a.street), on);
+        if on {
+            d.outline(&flatten(&a.outline), 0.0);
         }
-        let Some(c) = a.crossing.as_ref().filter(|c| c.continuous) else { continue };
+        let Some(c) = a.crossing.as_ref() else { continue };
         let top = flatten(&c.poly);
-        d.table("sidewalk", &top, wall);
-        for ramp in &c.ramps {
-            d.ramp("sidewalk", &flatten(ramp), &top, wall);
+        let h = if c.continuous { wall } else { level };
+        if c.continuous {
+            d.table("sidewalk", &top, wall);
+            for ramp in &c.ramps {
+                d.ramp("sidewalk", &flatten(ramp), &top, wall);
+            }
+        }
+        d.press_area("iso-hit", &hit_attrs("crossing", Some(a.uid), None), &top, h, None);
+        if selected("crossing", a.uid) {
+            d.outline(&top, h);
         }
     }
 
@@ -745,7 +850,8 @@ mod tests {
             })
             .collect::<String>()
             + "Z";
-        let at = s.markup.find(&format!("class=\"iso-flat k-travel mat-asphalt\" d=\"{d}\"")).expect("the gap is drawn as road");
+        let hit = hit_attrs("arm", Some(arm.uid), None);
+        let at = s.markup.find(&format!("class=\"iso-flat k-travel mat-asphalt\"{hit} d=\"{d}\"")).expect("the gap is drawn as road, and pressed as the arm");
         // It is painted after the arm's parking, which it covers.
         assert!(at > s.markup.find("iso-flat k-parking").unwrap());
     }
@@ -910,7 +1016,9 @@ mod tests {
 
     #[test]
     fn an_arm_without_a_beyond_draws_as_before() {
-        let (got, pinned) = (iso_fingerprint(), 13_505_848_485_995_189_453);
+        // Repinned for #140 stage 1, which gave the shapes the attributes a press reads and drew the parts that only
+        // have a place to press (a lane, a crossing, a bare corner); no shape moved.
+        let (got, pinned) = (iso_fingerprint(), 1_529_890_298_063_261_862);
         assert_eq!(
             got, pinned,
             "the 2.5D markup of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
@@ -937,7 +1045,8 @@ mod tests {
         assert_eq!(pts.len(), 4);
         assert!(((d(pts[0], pts[3]) - d(pts[1], pts[2])).abs() > 1.0) || ((d(pts[0], pts[1]) - d(pts[2], pts[3])).abs() > 1.0), "not a rectangle: {pts:?}");
         let path = Draw::new(with.frame).path(&pts, 0.0);
-        assert!(with.markup.contains(&format!("<path class=\"iso-flat k-travel mat-asphalt\" d=\"{path}\"/>")), "{path}");
+        let hit = hit_attrs("arm", Some(a.uid), None);
+        assert!(with.markup.contains(&format!("<path class=\"iso-flat k-travel mat-asphalt\"{hit} d=\"{path}\"/>")), "{path}");
     }
 
     #[test]
@@ -1146,6 +1255,124 @@ mod tests {
         let uid = j.current().arms[0].uid;
         j.select(Target::Arm(uid));
         assert_eq!(count(&svg(&j).markup, "sel-box"), 1);
+    }
+
+    /// What a press on each pressable shape of the picture would select, in the way the view reads it (`plan::selected_by`).
+    fn pressable(markup: &str) -> Vec<Target> {
+        markup
+            .split(" data-role=\"")
+            .skip(1)
+            .map(|rest| {
+                let role = rest.split('"').next().unwrap();
+                let tag = &rest[..rest.find('>').unwrap()];
+                let number = |name: &str| tag.split(&format!("{name}=\"")).nth(1).and_then(|v| v.split('"').next()).and_then(|v| v.parse::<usize>().ok());
+                crate::junction::plan::selected_by(role, number("data-uid").unwrap_or(0) as u32, number("data-lane").unwrap_or(0))
+            })
+            .collect()
+    }
+
+    /// Junctions that between them have every kind of thing the keys select: arms, lanes, crossings and corners (with
+    /// and without a sidewalk to stand on), a roundabout's cycle track and bus lane, a turbo's cycle track.
+    fn every_kind() -> Vec<(String, Junction)> {
+        let mut all: Vec<(String, Junction)> = (0..JUNCTION_SAMPLES.len()).map(|i| (format!("sample {i}"), Junction::new(i))).collect();
+        all.push(("no sidewalks".into(), junction_of(&[("travel", 3200), ("travel", 3200)])));
+        all.push(("walkways".into(), junction_with_walkways(&[90], &[("sidewalk", 3000), ("terrace", 2000), ("sidewalk", 3000)])));
+        let mut round = Junction::new(0);
+        round.set_control(ROUNDABOUT);
+        let at = |j: &Junction, bearing: i32| j.current().arms.iter().find(|a| a.bearing == bearing).unwrap().uid;
+        let (n, so) = (at(&round, 0), at(&round, 180));
+        assert!(round.set_bus(Some((n, so))) && round.set_cycle(Some(2_000)));
+        all.push(("roundabout".into(), round));
+        let mut basic = turbo(0);
+        assert!(basic.set_cycle_track(true));
+        all.push(("turbo".into(), basic));
+        let mut raised = Junction::new(0);
+        assert!(raised.set_raised(true));
+        all.push(("raised".into(), raised));
+        all
+    }
+
+    #[test]
+    fn every_part_the_keys_step_through_can_be_pressed_in_the_picture() {
+        for (name, mut j) in every_kind() {
+            let pressable = pressable(&svg(&j).markup);
+            let targets = j.targets();
+            assert!(!targets.is_empty(), "{name}");
+            for t in targets {
+                j.select(t);
+                assert_eq!(j.selected, t, "{name}: {t:?} is not kept as the selection");
+                assert!(pressable.contains(&t), "{name}: nothing in the picture selects {t:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn what_is_only_looked_at_selects_nothing_and_a_bare_corner_is_still_pressed() {
+        // The core, the paint, the posts and the names say nothing about what a press selects.
+        let m = svg(&Junction::new(0)).markup;
+        for class in ["iso-flat k-travel mat-asphalt\" d=", "iso-zebra", "iso-stopline", "iso-post", "iso-head", "iso-name", "hatch"] {
+            for part in m.split(&format!("class=\"{class}")).skip(1) {
+                let tag = &part[..part.find('>').unwrap()];
+                assert!(!tag.contains("data-role"), "{class}: {tag}");
+            }
+        }
+        // A corner without a walkway beside it is bare ground: it is still pressed to be selected.
+        let bare = svg(&junction_of(&[("travel", 3200), ("travel", 3200)])).markup;
+        assert!(bare.contains("class=\"iso-hit\" data-role=\"corner\""), "{bare}");
+    }
+
+    #[test]
+    fn a_shape_that_stands_carries_what_a_press_on_it_selects() {
+        let m = svg(&walked()).markup;
+        let solids: Vec<&str> = m.split("<g class=\"iso-solid\" ").skip(1).collect();
+        assert!(!solids.is_empty());
+        let tag = |g: &&str| g.split('>').next().unwrap().to_string();
+        assert!(solids.iter().map(tag).any(|t| t.contains("data-role=\"arm\" data-uid=\"")), "a sidewalk of an arm");
+        assert!(solids.iter().map(tag).any(|t| t.contains("data-role=\"corner\" data-uid=\"")), "a corner's sidewalk");
+    }
+
+    #[test]
+    fn every_selected_part_is_outlined_in_two_tones_and_nothing_else_is() {
+        for (name, mut j) in every_kind() {
+            assert_eq!(count(&svg(&j).markup, "iso-sel"), 0, "{name}: nothing selected, nothing outlined");
+            for t in j.targets() {
+                j.select(t);
+                let m = svg(&j).markup;
+                let lines = if t == Target::Cycle { 2 } else { 1 };
+                assert_eq!(count(&m, "class=\"sel-box iso-sel\""), lines, "{name}: {t:?}");
+                assert_eq!(count(&m, "class=\"iso-sel-casing\""), lines, "{name}: {t:?}");
+                assert!(!m.contains("NaN") && !m.contains("inf"), "{name}: {t:?}");
+                // The casing is under the line, and both are over everything that stands.
+                assert!(m.find("iso-sel-casing").unwrap() < m.find("sel-box iso-sel").unwrap(), "{name}: {t:?}");
+                assert!(m.find("iso-sel-casing").unwrap() > m.rfind("class=\"iso-solid\"").unwrap_or(0), "{name}: {t:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_selected_lane_is_shaded_and_named_and_the_others_are_not() {
+        let mut j = Junction::new(0);
+        let arm = j.current().arms[0].uid;
+        assert!(j.current().arms[0].lanes.len() >= 2);
+        let m = svg(&j).markup;
+        assert_eq!(count(&m, "class=\"lane-hit\""), j.current().arms.iter().map(|a| a.lanes.len()).sum::<usize>());
+        assert_eq!(count(&m, "lane-hit on"), 0);
+        assert!(m.contains("<title>Lane 1 of "), "a lane has its name for the pointer");
+        j.select(Target::Lane(arm, 1));
+        let m = svg(&j).markup;
+        assert_eq!(count(&m, "class=\"lane-hit on\" data-role=\"lane\" data-uid=\""), 1);
+        assert!(m.contains(&format!("data-uid=\"{arm}\" data-lane=\"1\"")));
+    }
+
+    #[test]
+    fn a_corner_is_outlined_on_the_height_it_stands_at() {
+        let mut j = walked();
+        let c = j.view().corners.iter().find(|c| c.walk && !c.straight).map(|c| c.uid).expect("a corner with a sidewalk");
+        j.select(Target::Corner(c));
+        let (v, s) = (j.view(), svg(&j));
+        let wedge = flatten(&v.corners.iter().find(|k| k.uid == c).unwrap().wedge);
+        let d = Draw::new(s.frame).path(&wedge, height_of("sidewalk"));
+        assert!(s.markup.contains(&format!("class=\"sel-box iso-sel\" d=\"{d}\"")), "{d}");
     }
 
     #[test]

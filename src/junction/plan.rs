@@ -50,6 +50,13 @@ pub fn selected_by(role: &str, uid: u32, lane: usize) -> Target {
     }
 }
 
+/// What a press on a shape selects, from the attributes it carries (`data-role`, `data-uid`, `data-lane`; the plan
+/// and the 2.5D both write them). A number that is missing or is not one is 0.
+pub fn pressed(attribute: impl Fn(&str) -> Option<String>) -> Target {
+    let number = |name: &str| attribute(name).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+    selected_by(&attribute("data-role").unwrap_or_default(), number("data-uid") as u32, number("data-lane"))
+}
+
 /// Where the window's size and the drawing's width are now.
 #[cfg(target_arch = "wasm32")]
 fn viewport_of(wrap: &Element) -> (f64, f64) {
@@ -138,17 +145,18 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
         w.frame().map_or((0.0, 0.0), |f| f.plan_point((e.client_x() as f64 - r.left(), e.client_y() as f64 - r.top())))
     };
 
-    // The 2.5D picture is only looked at: the pointer does nothing on it.
+    // A press on a part of either drawing selects it, as the keys do. The grips, and so the drags, are the plan's
+    // only: the 2.5D draws none.
     let press = move |e: PointerEvent| {
-        if e.button() != 0 || w.mode_now() == DrawMode::Iso {
+        if e.button() != 0 {
             return;
         }
         let svg: Element = current_element(&e);
         let hit = e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()).and_then(|t| t.closest("[data-role]").ok().flatten());
-        let role = hit.as_ref().and_then(|h| h.get_attribute("data-role")).unwrap_or_default();
-        let number = |name: &str| hit.as_ref().and_then(|h| h.get_attribute(name)).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
-        let uid = number("data-uid") as u32;
-        if let Some(grip) = Grip::named(&role) {
+        let attribute = |name: &str| hit.as_ref().and_then(|h| h.get_attribute(name));
+        let role = attribute("data-role").unwrap_or_default();
+        let uid = attribute("data-uid").and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+        if let Some(grip) = Grip::named(&role).filter(|_| w.mode_now() == DrawMode::Plan) {
             if grip == Grip::Arm {
                 w.quiet(|j| {
                     j.select(Target::Arm(uid));
@@ -164,7 +172,7 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
             e.prevent_default();
             return;
         }
-        let target = selected_by(&role, uid, number("data-lane"));
+        let target = pressed(attribute);
         if target != Target::None || w.view_now().selected.kind.is_some() {
             w.select(target);
         }
@@ -293,5 +301,38 @@ mod tests {
         assert_eq!(selected_by("cycle", 0, 0), Target::Cycle);
         assert_eq!(selected_by("", 0, 0), Target::None);
         assert_eq!(selected_by("none", 3, 0), Target::None);
+    }
+
+    #[test]
+    fn a_press_reads_the_attributes_of_what_it_landed_on_and_a_part_with_none_selects_nothing() {
+        let on = |role: &'static str, uid: &'static str, lane: &'static str| {
+            move |name: &str| match name {
+                "data-role" => Some(role.to_string()),
+                "data-uid" if !uid.is_empty() => Some(uid.to_string()),
+                "data-lane" if !lane.is_empty() => Some(lane.to_string()),
+                _ => None,
+            }
+        };
+        assert_eq!(pressed(on("arm", "4", "")), Target::Arm(4));
+        assert_eq!(pressed(on("lane", "4", "2")), Target::Lane(4, 2));
+        assert_eq!(pressed(on("crossing", "4", "")), Target::Crossing(4));
+        assert_eq!(pressed(on("cycle", "", "")), Target::Cycle);
+        assert_eq!(pressed(on("bus", "", "")), Target::Bus);
+        // A number that is not one is zero, as the plan has always read it; a part with no role selects nothing.
+        assert_eq!(pressed(on("arm", "x", "")), Target::Arm(0));
+        assert_eq!(pressed(on("", "4", "")), Target::None);
+        assert_eq!(pressed(|_| None), Target::None);
+    }
+
+    #[test]
+    fn the_picture_gives_the_shapes_the_attributes_a_press_reads() {
+        // `hit_attrs` is the writing of what `pressed` reads.
+        let attrs = crate::junction::iso::hit_attrs("lane", Some(4), Some(2));
+        let read = |name: &str| attrs.split(&format!(" {name}=\"")).nth(1).and_then(|v| v.split('"').next()).map(str::to_string);
+        assert_eq!(pressed(read), Target::Lane(4, 2));
+        let read = |name: &str| {
+            crate::junction::iso::hit_attrs("cycle", None, None).split(&format!(" {name}=\"")).nth(1).and_then(|v| v.split('"').next()).map(str::to_string)
+        };
+        assert_eq!(pressed(read), Target::Cycle);
     }
 }
