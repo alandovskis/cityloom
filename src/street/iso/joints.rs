@@ -13,7 +13,7 @@
 //! them and shrinks toward the vanishing point, are drawn as far as that gap lasts (`along_reach`). A running bond's
 //! ticks (the short joints between the units of a course) are drawn only for the courses that are not thinned.
 
-use crate::shared::iso::format::f1;
+use crate::shared::diagram::{JointRun, Pt};
 use crate::shared::iso::ground::Joints;
 
 use super::projection::{EYE_BACK_MM, Projection, STRETCH_MM};
@@ -43,19 +43,17 @@ pub(super) fn along_reach(p: &Projection, unit_mm: f64, i: u64) -> f64 {
     (EYE_BACK_MM * (p.scale * apart / MIN_JOINT_GAP_PX - 1.0)).clamp(0.0, STRETCH_MM)
 }
 
-/// A point of the top, as `x,y` in pixels.
-fn pt(p: &Projection, x: f64, h: f64, z: f64) -> String {
-    let (sx, sy) = p.at(x, h, z);
-    format!("{},{}", f1(sx), f1(sy))
+fn run(x0: f64, z0: f64, x1: f64, z1: f64, h: f64, flat: bool) -> JointRun {
+    JointRun { from: Pt::new(x0, h, z0), to: Pt::new(x1, h, z1), flat }
 }
 
-/// The path data of a top's joints, `x0` to `x1` across and the projection's reach along, `h` (drawn mm) high. Every
+/// The joints of a top, `x0` to `x1` across and the projection's reach along, `h` (drawn mm) high. Every
 /// point is inside the top: the joints are cut to its edges here, and a joint on an edge is left to the edge. The
 /// courses stay at multiples of their size from the near end of the stretch, so a reach continues the texture.
-pub(super) fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> String {
+pub(super) fn runs(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> Vec<JointRun> {
     const EDGE: f64 = 0.5;
     let (near, far) = (p.reach.near, p.reach.far);
-    let mut d = String::new();
+    let mut d = Vec::new();
     // Across the street, one every course, at their own depth.
     for k in 1.. {
         let z = k as f64 * j.course_mm;
@@ -66,7 +64,7 @@ pub(super) fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> Stri
             continue;
         }
         if (k as u64).trailing_zeros() >= course_level(p, h, j.course_mm, z) {
-            d.push_str(&format!("M{}H{}", pt(p, x0, h, z), f1(p.at(x1, h, z).0)));
+            d.push(run(x0, z, x1, z, h, true));
         }
     }
     let first = (x0 / j.unit_mm).floor() as u64;
@@ -87,7 +85,7 @@ pub(super) fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> Stri
                     // A course that ends before the reach begins is not drawn; one that crosses its edge is cut there.
                     let (from, to) = (z.max(near), (z + j.course_mm).min(far));
                     if to > from {
-                        d.push_str(&format!("M{}L{}", pt(p, u, h, from), pt(p, u, h, to)));
+                        d.push(run(u, from, u, to, h, false));
                     }
                 }
             }
@@ -102,7 +100,7 @@ pub(super) fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> Stri
             let reach = along_reach(p, j.unit_mm, i);
             let to = reach.min(far);
             if u > x0 + EDGE && to - near >= 1.0 {
-                d.push_str(&format!("M{}L{}", pt(p, u, h, near), pt(p, u, h, to)));
+                d.push(run(u, near, u, to, h, false));
             }
         }
     }
@@ -112,8 +110,14 @@ pub(super) fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared::diagram::render::joints_d;
     use crate::shared::iso::ground::joints;
     use crate::street::iso::projection::{Reach, band_edges};
+
+    /// The path data of a top's joints, as the renderer writes it.
+    fn path(p: &Projection, j: &Joints, x0: f64, x1: f64, h: f64) -> String {
+        joints_d(p, &runs(p, j, x0, x1, h))
+    }
 
     /// One drawn joint, as its two ends on the screen.
     type Seg = ((f64, f64), (f64, f64));
@@ -138,6 +142,27 @@ mod tests {
 
     fn sidewalk() -> (Projection, f64) {
         (Projection::fit(1050.0, 18_000), crate::street::iso::drawn_mm(150))
+    }
+
+    #[test]
+    fn the_renderer_writes_a_tops_joints_as_the_street_does() {
+        use crate::shared::diagram::{Diagram, Layer, LayerKind, render::render};
+        let (p, h) = sidewalk();
+        for m in ["concrete", "brick", "permeable", "trees"] {
+            let j = joints(m).unwrap();
+            let runs = runs(&p, &j, 0.0, 3_300.0, h);
+            let joint_runs = runs.clone();
+            let d = Diagram {
+                defs: String::new(),
+                ground: Layer { kind: LayerKind::Ground, shapes: vec![crate::shared::diagram::Shape::Joints { runs, class: format!("joints j-{m}") }] },
+                sections: vec![],
+                outline: Layer { kind: LayerKind::Outline, shapes: vec![] },
+            };
+            let path = joints_d(&p, &joint_runs);
+            let want = format!(r#"<path class="joints j-{m}" d="{path}"/>"#);
+            assert!(path.len() > 10, "{m}");
+            assert_eq!(render(&d, &p), format!(r#"<g class="iso-layer-ground">{want}</g><g class="iso-layer-outline"></g>"#), "{m}");
+        }
     }
 
     #[test]

@@ -1,15 +1,13 @@
 //! The speed limit sign: a post on the street's kerbside edge with a white panel facing the eye, "MAXIMUM" over the limit.
 
-use std::fmt::Write;
-
 use crate::shared::catalogue::{KINDS, Side};
+use crate::shared::diagram::{Pt, Shape};
 use crate::shared::i18n::{Args, I18n};
-use crate::shared::iso::format::esc;
 use crate::street::model::{SegView, View};
 
-use super::projection::{Projection, drawn_mm, points};
+use super::projection::{Projection, drawn_mm};
 use super::raised::height_mm;
-use super::solids::{Block, Solid, block};
+use super::solids::{Block, Solid};
 
 /// The panel's width, its height and how high its bottom is over the piece's drawn top, in millimetres. Estimates,
 /// pending the drawing of the speed limit sign in MTQ Tome V (the real panel is taller for its two lines).
@@ -69,56 +67,59 @@ impl Panel {
     }
 
     /// The post, from its foot to the top of the panel.
-    pub(super) fn post(&self, out: &mut String, p: &Projection) {
+    pub(super) fn post(&self, p: &Projection) -> Shape {
         let post = self.post_w / 2.0;
-        block(out, p, &Block { solid: Solid::Post, x: (self.cx - post, self.cx + post), y: (self.top, self.upper), z: (self.z0, self.z0 + self.post_w) });
+        super::scene::block(
+            p,
+            &Block { solid: Solid::Post, x: (self.cx - post, self.cx + post), y: (self.top, self.upper), z: (self.z0, self.z0 + self.post_w) },
+        )
     }
 
     /// The white panel facing the eye (a flat rectangle on the screen).
-    pub(super) fn panel(&self, out: &mut String, p: &Projection) {
+    pub(super) fn panel(&self) -> Shape {
         let (cx, half, z0) = (self.cx, self.half, self.z0);
-        let panel = points(p, &[(cx - half, self.bottom, z0), (cx + half, self.bottom, z0), (cx + half, self.upper, z0), (cx - half, self.upper, z0)]);
-        write!(out, "<polygon class=\"iso-sign-panel\" points=\"{panel}\"/>").unwrap();
+        let pts = [(cx - half, self.bottom), (cx + half, self.bottom), (cx + half, self.upper), (cx - half, self.upper)];
+        Shape::Polygon { pts: pts.iter().map(|&(x, y)| Pt::new(x, y, z0)).collect(), class: "iso-sign-panel".into(), face: None, texture: None }
     }
 
     /// A rectangle on the panel, `u` across it and `v` up it, each from 0 to 1.
-    pub(super) fn rect(&self, out: &mut String, p: &Projection, class: &str, u: (f64, f64), v: (f64, f64)) {
+    pub(super) fn rect(&self, class: &str, u: (f64, f64), v: (f64, f64)) -> Shape {
         let x = |u: f64| self.cx + (u - 0.5) * 2.0 * self.half;
         let y = |v: f64| self.bottom + v * self.height;
-        let pts = points(p, &[(x(u.0), y(v.0), self.z0), (x(u.1), y(v.0), self.z0), (x(u.1), y(v.1), self.z0), (x(u.0), y(v.1), self.z0)]);
-        write!(out, "<polygon class=\"{class}\" points=\"{pts}\"/>").unwrap();
+        let pts = [(x(u.0), y(v.0)), (x(u.1), y(v.0)), (x(u.1), y(v.1)), (x(u.0), y(v.1))];
+        Shape::Polygon { pts: pts.iter().map(|&(x, y)| Pt::new(x, y, self.z0)).collect(), class: class.into(), face: None, texture: None }
     }
 }
 
 /// The speed limit sign: a post on the piece at the edge on the side traffic keeps, `AT_MM` into the run so that it is
 /// in front, and on it a white panel facing the eye, "MAXIMUM" over the number. `None` only without a speed.
-pub(super) fn sign(v: &View, segs: &[SegView], p: &Projection, i18n: &I18n) -> Option<String> {
+pub(super) fn sign(v: &View, segs: &[SegView], p: &Projection, i18n: &I18n) -> Option<Shape> {
     let kmh = v.speed_kmh?;
     let piece = site(segs, v.side)?;
     let cx = piece.x_mm as f64 + piece.width_mm as f64 / 2.0;
     let top = drawn_mm(height_mm(KINDS[piece.kind].id));
     let sign = Panel::at(p, cx, top, p.reach.near + AT_MM);
-    let mut out = String::from("<g class=\"iso-sign\" aria-hidden=\"true\">");
-    sign.post(&mut out, p);
-    sign.panel(&mut out, p);
-    // The words on the panel, centred on it: the first over the second, sized by the panel's width on the screen.
     let (bottom, panel_h, wide, z0) = (sign.bottom, sign.height, sign.wide, sign.z0);
-    let word = |from_bottom: f64, size: f64, text: &str, out: &mut String| {
-        let (x, y) = p.at(cx, bottom + from_bottom, z0);
-        write!(
-            out,
-            "<text class=\"iso-sign-text\" x=\"{}\" y=\"{}\" font-size=\"{}\">{}</text>",
-            super::projection::r(x),
-            super::projection::r(y),
-            super::projection::r(size * wide),
-            esc(text)
-        )
-        .unwrap();
+    // The words on the panel, centred on it: the first over the second, sized by the panel's width on the screen.
+    let word = |from_bottom: f64, size: f64, text: String| Shape::Text {
+        at: Pt::new(cx, bottom + from_bottom, z0),
+        class: "iso-sign-text".into(),
+        size: size * wide,
+        text,
     };
-    word(panel_h * 0.74, 0.17, &i18n.tr("iso-sign-maximum", &Args::new()), &mut out);
-    word(panel_h * 0.14, 0.46, &kmh.to_string(), &mut out);
-    out.push_str("</g>");
-    Some(out)
+    Some(Shape::Group {
+        class: "iso-sign".into(),
+        uid: None,
+        data: None,
+        hidden: true,
+        title: None,
+        shapes: vec![
+            sign.post(p),
+            sign.panel(),
+            word(panel_h * 0.74, 0.17, i18n.tr("iso-sign-maximum", &Args::new())),
+            word(panel_h * 0.14, 0.46, kmh.to_string()),
+        ],
+    })
 }
 
 #[cfg(test)]
@@ -180,7 +181,7 @@ mod tests {
 
     #[test]
     fn a_street_without_a_speed_shows_no_sign() {
-        assert_eq!(count(&iso_svg(&with_speed(Side::Right, None), &en(), 1050.0).markup, "iso-sign"), 0);
+        assert_eq!(count(&iso_svg(&with_speed(Side::Right, None), &en(), 1050.0).markup, "class=\"iso-sign\""), 0);
     }
 
     #[test]

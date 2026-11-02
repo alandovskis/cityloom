@@ -1,33 +1,11 @@
 //! The surface layer: the top of every roadway piece, at the height of the ground, with its tint and hatch. The
 //! markings are painted over it and a raised piece stands over both.
 
-use super::curbside::Over;
-use crate::shared::i18n::I18n;
-use crate::street::model::SegView;
-
-use super::projection::Projection;
-use super::raised::{Strip, group, piece_with, sliver};
-use super::taper::Draw;
+use super::raised::Strip;
 
 /// The strips split into the roadway's (a slab drawn at the ground) and the rest, each keeping its order.
 pub(super) fn split(strips: Vec<Strip>) -> (Vec<Strip>, Vec<Strip>) {
     strips.into_iter().partition(|&(top, _, edge)| edge.is_none() && top == 0.0)
-}
-
-/// The roadway pieces as one group. Each keeps its `<g class="iso-piece" data-uid>`.
-/// Where the run holds a transition (`draw`), the pieces that change taper, and the ones the host lacks open in it.
-pub(super) fn layer(p: &Projection, segs: &[SegView], i18n: &I18n, flat: &[Strip], across: bool, draw: Option<&Draw>, shown: &[Over]) -> String {
-    let Some(draw) = draw else { return group("<g class=\"iso-surface\">", p, segs, i18n, flat, across, shown) };
-    let mut out = String::from("<g class=\"iso-surface\">");
-    for &strip in flat {
-        let edge = draw.shape_of(&segs[strip.1]).map(|shape| move |z: f64| draw.edges(shape, p.reach, z));
-        piece_with(&mut out, p, segs, i18n, strip, across, edge.as_ref().map(|f| f as &dyn Fn(f64) -> (f64, f64)), shown);
-    }
-    for (kind, shape) in draw.slivers() {
-        sliver(&mut out, p, i18n, kind, &|z| draw.edges(shape, p.reach, z));
-    }
-    out.push_str("</g>");
-    out
 }
 
 #[cfg(test)]
@@ -35,6 +13,7 @@ mod tests {
     use super::*;
     use crate::shared::catalogue::KINDS;
     use crate::shared::contrast::{contrast, token};
+    use crate::street::iso::projection::Projection;
     use crate::street::iso::raised::{height_mm, strips};
     use crate::street::model::Editor;
 

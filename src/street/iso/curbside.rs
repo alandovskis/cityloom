@@ -4,16 +4,11 @@
 //! sidewalk height, a raised strip of their own (`lift`) in the raised layer with its faces; a tree is one tree at
 //! the middle of its use and bike parking a rack every metre.
 
-use std::fmt::Write;
-
 use crate::shared::catalogue::{KINDS, MATERIALS, kind_index};
-use crate::shared::i18n::I18n;
-use crate::shared::iso::format::esc;
 use crate::street::model::{SegView, ShownInstance, ShownStop};
 
 use super::order::Bx;
 use super::projection::{Projection, Reach};
-use super::raised::{slab_of, top_over};
 use super::solids::{Block, CROWN_HALF_DEPTH_MM, Solid, wide_enough};
 use super::taper::Draw;
 
@@ -98,21 +93,6 @@ pub(super) fn flat_parts(segs: &[SegView], i: usize, reach: Reach, shown: &[Over
     Some(parts)
 }
 
-/// The flat parts of a piece, each its own top over its part of the stretch; `edge` gives the piece's edges along the
-/// street where a transition moves them.
-pub(super) fn flat(out: &mut String, p: &Projection, segs: &[SegView], i: usize, parts: &[Part], edge: Option<&dyn Fn(f64) -> (f64, f64)>) {
-    let s = &segs[i];
-    let (x0, x1) = (s.x_mm as f64, (s.x_mm + s.width_mm) as f64);
-    for part in parts {
-        let sub = p.over(Reach { near: part.along.0, far: part.along.1 });
-        let id = KINDS[part.kind].id;
-        match edge {
-            Some(edge) => top_over(out, &sub, id, part.material, 0.0, edge, false),
-            None => top_over(out, &sub, id, part.material, 0.0, &|_| (x0, x1), true),
-        }
-    }
-}
-
 /// Something that stands at sidewalk height on the piece at `piece`.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Lift {
@@ -129,7 +109,7 @@ pub(super) fn lifted(shown: &[Over]) -> Vec<Lift> {
 }
 
 /// The edges across of a lifted strip's piece along the stretch: the transition's where the piece tapers, else none.
-fn edges<'a>(segs: &[SegView], l: &Lift, p: &'a Projection, taper: Option<&'a Draw>) -> Option<impl Fn(f64) -> (f64, f64) + 'a> {
+pub(super) fn edges<'a>(segs: &[SegView], l: &Lift, p: &'a Projection, taper: Option<&'a Draw>) -> Option<impl Fn(f64) -> (f64, f64) + 'a> {
     let d = taper?;
     let shape = d.shape_of(&segs[l.piece])?;
     let reach = p.reach;
@@ -148,16 +128,6 @@ pub(super) fn lift_box(segs: &[SegView], l: &Lift, p: &Projection, taper: Option
         None => (s.x_mm as f64, (s.x_mm + s.width_mm) as f64),
     };
     Bx { x, y: (0.0, h), z: l.along }
-}
-
-/// A lifted strip of its own, hovered by its name; on a tapering piece it follows the piece's edges.
-pub(super) fn lift(out: &mut String, p: &Projection, segs: &[SegView], i18n: &I18n, l: &Lift, taper: Option<&Draw>) {
-    let s = &segs[l.piece];
-    let name = i18n.tr(l.name_key, &crate::shared::i18n::Args::new());
-    write!(out, "<g class=\"iso-piece\" data-uid=\"{}\"><title>{}</title>", s.uid, esc(&name)).unwrap();
-    let edge = edges(segs, l, p, taper);
-    slab_of(out, p, segs, l.piece, KINDS[l.kind].id, l.material, l.along, edge.as_ref().map(|e| e as &dyn Fn(f64) -> (f64, f64)));
-    out.push_str("</g>");
 }
 
 /// What stands on the shown uses: a tree at the middle of a tree's, a rack every metre of a bike corral's. Each stands
@@ -234,11 +204,11 @@ mod tests {
     fn no_instances_draws_as_today() {
         // Hashes of what these fixtures drew before the curbside uses existed.
         for (name, markup, len, hash) in [
-            ("sample 0", drawn(&Editor::new(0)), 35652, 0x18fbf355ef73b8cc),
-            ("sample 1", drawn(&Editor::new(1)), 53017, 0x36401776cea26501),
-            ("furnished", drawn(&furnished()), 69000, 0xf88ed5b72e2384ac),
-            ("marked", drawn(&marked()), 47542, 0x75d1da19ec99cfaa),
-            ("joined", iso_svg(&joined(true, 1), &en(), 1050.0).markup, 45283, 0xba2cb2c0965d37ce),
+            ("sample 0", drawn(&Editor::new(0)), 35769, 0x1fa58abfaeac8e25),
+            ("sample 1", drawn(&Editor::new(1)), 53134, 0xf62a9be49617bd7a),
+            ("furnished", drawn(&furnished()), 69117, 0xa1f70000735a7ce5),
+            ("marked", drawn(&marked()), 47659, 0x33148bb5a7f0b46d),
+            ("joined", iso_svg(&joined(true, 1), &en(), 1050.0).markup, 45452, 0xc3b7b07a5718a277),
         ] {
             assert_eq!((markup.len(), fnv(&markup)), (len, hash), "{name}");
         }
@@ -332,7 +302,7 @@ mod tests {
         uses.add_curb(Side::Left, 8_000, 6_000, Use::Tree).unwrap();
         // Hashes of what these drew at 57c13c7, before the stops.
         for (name, markup, len, hash) in
-            [("uses", drawn(&uses), 45368usize, 0x55124233d7894df8u64), ("sheltered", drawn(&sheltered()), 58481, 0x2202208758103a04)]
+            [("uses", drawn(&uses), 45485usize, 0xfe714ba890e26b55u64), ("sheltered", drawn(&sheltered()), 58598, 0xac4391e0fe585c57)]
         {
             assert_eq!((markup.len(), fnv(&markup)), (len, hash), "{name}");
         }

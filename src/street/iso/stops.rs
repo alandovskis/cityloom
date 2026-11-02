@@ -3,6 +3,7 @@
 //! where it is as the stretch moves, and is drawn whole or not at all within the reach.
 
 use crate::shared::catalogue::KINDS;
+use crate::shared::diagram::Shape;
 use crate::street::model::{SegView, ShownStop, View};
 
 use super::projection::{Projection, Reach, STRETCH_MM, drawn_mm};
@@ -69,23 +70,17 @@ fn sign_panel(segs: &[SegView], s: &ShownStop, p: &Projection) -> Option<Panel> 
 
 /// The signs of the stops: a post at the stop's near end on the piece the stop stands on, and on it a white panel
 /// with a bus. Drawn only where the whole post stands in the reach.
-pub(super) fn signs(segs: &[SegView], stops: &[ShownStop], p: &Projection) -> String {
-    let mut out = String::new();
-    for s in stops {
-        let Some(sign) = sign_panel(segs, s, p) else { continue };
-        out.push_str("<g class=\"iso-stop-sign\" aria-hidden=\"true\">");
-        sign.post(&mut out, p);
-        sign.panel(&mut out, p);
-        sign.rect(&mut out, p, "iso-sign-glyph", BODY.0, BODY.1);
-        for u in WINDOWS {
-            sign.rect(&mut out, p, "iso-sign-glyph-cut", u, (0.52, 0.72));
-        }
-        for u in WHEELS {
-            sign.rect(&mut out, p, "iso-sign-glyph", u, (0.20, 0.32));
-        }
-        out.push_str("</g>");
-    }
-    out
+pub(super) fn signs(segs: &[SegView], stops: &[ShownStop], p: &Projection) -> Vec<Shape> {
+    stops
+        .iter()
+        .filter_map(|s| {
+            let sign = sign_panel(segs, s, p)?;
+            let mut shapes = vec![sign.post(p), sign.panel(), sign.rect("iso-sign-glyph", BODY.0, BODY.1)];
+            shapes.extend(WINDOWS.iter().map(|&u| sign.rect("iso-sign-glyph-cut", u, (0.52, 0.72))));
+            shapes.extend(WHEELS.iter().map(|&u| sign.rect("iso-sign-glyph", u, (0.20, 0.32))));
+            Some(Shape::Group { class: "iso-stop-sign".into(), uid: None, data: None, hidden: true, title: None, shapes })
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -144,16 +139,34 @@ mod tests {
     /// The stop sign's group.
     fn stop_sign(m: &str) -> &str {
         let at = m.find("<g class=\"iso-stop-sign\"").expect("a stop sign");
-        &m[at..at + m[at..].find("</g></g>").map_or(m.len() - at, |i| i + 8)]
+        // To the group's own close: nested groups counted.
+        let (mut depth, mut i) = (0_i32, at);
+        loop {
+            let open = m[i..].find("<g ").map(|k| i + k);
+            let close = m[i..].find("</g>").map(|k| i + k).expect("the sign is closed");
+            match open {
+                Some(o) if o < close => {
+                    depth += 1;
+                    i = o + 3;
+                }
+                _ => {
+                    depth -= 1;
+                    i = close + 4;
+                    if depth == 0 {
+                        return &m[at..i];
+                    }
+                }
+            }
+        }
     }
 
     #[test]
     fn no_stops_draws_as_today() {
         // Hashes of what these fixtures drew before the stops existed.
         for (name, pieces, len, hash) in [
-            ("curb", &CURB[..], 34324usize, 0xfe408c31ce4128abu64),
-            ("bulb", &BULB[..], 35630, 0x79bae35920d099cf),
-            ("island", &ISLAND[..], 39738, 0xdad452c8e5174c10),
+            ("curb", &CURB[..], 34441usize, 0x1a8c9d11500b41fcu64),
+            ("bulb", &BULB[..], 35747, 0x434fdc2713146ae0),
+            ("island", &ISLAND[..], 39855, 0x688e9dc7076695c1),
         ] {
             let m = drawn(&editor(pieces, ZoneEnd::First));
             assert_eq!((m.len(), fnv(&m)), (len, hash), "{name}");

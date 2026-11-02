@@ -165,12 +165,40 @@ pub const MIN_STANDING_PX: f64 = 3.0;
 /// millimetres: near the near end, where the street is widest on the screen, so that the symbol reads.
 pub const ARROW_AT_MM: f64 = 6_000.0;
 
-/// A pixel value to two decimals, which is all a drawing needs.
+impl crate::shared::diagram::Projection for Projection {
+    fn at(&self, p: crate::shared::diagram::Pt) -> (f64, f64) {
+        Projection::at(self, p.x, p.y, p.z)
+    }
+
+    fn size(&self) -> (f64, f64) {
+        (self.width, self.height)
+    }
+
+    fn affine(&self) -> bool {
+        false
+    }
+
+    fn ground_at(&self, up: f64, u: f64, v: f64) -> [f64; 6] {
+        Projection::ground_at(self, up, u, v)
+    }
+
+    fn bands(&self, near: f64, far: f64) -> Vec<f64> {
+        band_edges(Reach { near, far }).to_vec()
+    }
+
+    fn band_mid(&self, z0: f64, z1: f64) -> f64 {
+        band_mid(z0, z1)
+    }
+}
+
+/// A pixel value to two decimals, as the renderer writes it (the tests' expected markup).
+#[cfg(test)]
 pub(super) fn r(v: f64) -> f64 {
     (v * 100.0).round() / 100.0
 }
 
-/// The points of a polygon whose corners are in millimetres: across, up, along.
+/// The points of a polygon whose corners are in millimetres (across, up, along), as the renderer writes them.
+#[cfg(test)]
 pub(super) fn points(p: &Projection, corners: &[(f64, f64, f64)]) -> String {
     corners
         .iter()
@@ -357,5 +385,21 @@ mod tests {
             assert!(hi < 1.3 * lo, "{width}: every seam is about as big as the others: {steps:?}");
         }
         assert_eq!(BANDS, 8);
+    }
+
+    #[test]
+    fn the_diagram_writes_points_as_the_street_does() {
+        use crate::shared::diagram::{Diagram, Layer, LayerKind, Pt, Shape, render::render};
+        let corners = [(1234.0, 0.0, 0.0), (5678.0, 150.0, 7_000.0), (333.0, 2_000.0, 40_000.0)];
+        let p = Projection::fit(1050.0, 18_000);
+        let pts = corners.iter().map(|&(x, y, z)| Pt::new(x, y, z)).collect();
+        let d = Diagram {
+            defs: String::new(),
+            ground: Layer { kind: LayerKind::Ground, shapes: vec![Shape::Polyline { pts, class: "c".into() }] },
+            sections: vec![],
+            outline: Layer { kind: LayerKind::Outline, shapes: vec![] },
+        };
+        let want = format!(r#"<polyline class="c" points="{}"/>"#, points(&p, &corners));
+        assert!(render(&d, &p).contains(&want));
     }
 }
