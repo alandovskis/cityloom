@@ -157,6 +157,7 @@ mod tests {
                 ground: Layer { kind: LayerKind::Ground, shapes: vec![crate::shared::diagram::Shape::Joints { runs, class: format!("joints j-{m}") }] },
                 sections: vec![],
                 outline: Layer { kind: LayerKind::Outline, shapes: vec![] },
+                hits: Layer { kind: LayerKind::Hit, shapes: vec![] },
             };
             let path = joints_d(&p, &joint_runs);
             let want = format!(r#"<path class="joints j-{m}" d="{path}"/>"#);

@@ -5,7 +5,7 @@
 use std::rc::Rc;
 
 use leptos::prelude::*;
-use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, PointerEvent};
+use leptos::web_sys::{Element, HtmlElement, KeyboardEvent, MouseEvent};
 
 use crate::shared::i18n::Args;
 use crate::street::iso::{iso_label_at, iso_svg, max_height};
@@ -68,11 +68,10 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
         }
     };
 
-    // A press on a piece selects it and brings up its details.
-    let pick = move |e: PointerEvent| {
-        if e.pointer_type() == "mouse" && e.button() != 0 {
-            return;
-        }
+    // A press on a piece selects it and brings up its details. It is the click, the end of a press that did not turn into
+    // a scroll (`touch-action` leaves the page's panning to the browser), so a swipe over the drawing selects nothing.
+    // The press targets (`iso-hit`, the last layer) carry the uids and take the pointer.
+    let pick = move |e: MouseEvent| {
         focus_wrap(wrap);
         let hit = e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()).and_then(|t| t.closest("[data-uid]").ok().flatten());
         if let Some(uid) = hit.and_then(|h| h.get_attribute("data-uid")).and_then(|v| v.parse::<u32>().ok()) {
@@ -99,7 +98,7 @@ pub fn StreetDrawing(vm: Rc<StreetVm>) -> impl IntoView {
                 id="drawing"
                 class="iso"
                 xmlns="http://www.w3.org/2000/svg"
-                on:pointerdown=pick
+                on:click=pick
                 role="img"
                 aria-label=move || {
                     let (v, units) = w.now();

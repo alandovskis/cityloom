@@ -127,11 +127,21 @@ pub enum LayerKind {
     Objects,
     Signs,
     Outline,
+    /// The press targets: shapes with no paint of their own, over everything, that take the pointer.
+    Hit,
 }
 
 impl LayerKind {
-    pub const ALL: [LayerKind; 7] =
-        [LayerKind::Ground, LayerKind::Surface, LayerKind::Markings, LayerKind::Raised, LayerKind::Objects, LayerKind::Signs, LayerKind::Outline];
+    pub const ALL: [LayerKind; 8] = [
+        LayerKind::Ground,
+        LayerKind::Surface,
+        LayerKind::Markings,
+        LayerKind::Raised,
+        LayerKind::Objects,
+        LayerKind::Signs,
+        LayerKind::Outline,
+        LayerKind::Hit,
+    ];
 
     /// The CSS class of the layer's group.
     pub fn class(self) -> &'static str {
@@ -143,6 +153,7 @@ impl LayerKind {
             LayerKind::Objects => "iso-objects",
             LayerKind::Signs => "iso-signs",
             LayerKind::Outline => "iso-layer-outline",
+            LayerKind::Hit => "iso-layer-hit",
         }
     }
 }
@@ -163,13 +174,14 @@ pub struct Section {
     pub layers: Vec<Layer>,
 }
 
-/// The whole drawing: the ground, the sections, then the outline.
+/// The whole drawing: the ground, the sections, the outline, then the press targets.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Diagram {
     pub defs: String,
     pub ground: Layer,
     pub sections: Vec<Section>,
     pub outline: Layer,
+    pub hits: Layer,
 }
 
 #[cfg(test)]
@@ -180,7 +192,7 @@ mod tests {
     fn layers_are_listed_bottom_to_top_with_the_classes_the_markup_uses() {
         assert_eq!(
             LayerKind::ALL.map(LayerKind::class),
-            ["iso-layer-ground", "iso-surface", "iso-markings", "iso-raised", "iso-objects", "iso-signs", "iso-layer-outline",]
+            ["iso-layer-ground", "iso-surface", "iso-markings", "iso-raised", "iso-objects", "iso-signs", "iso-layer-outline", "iso-layer-hit",]
         );
     }
 
@@ -201,6 +213,7 @@ mod tests {
                 kind: LayerKind::Outline,
                 shapes: vec![Shape::Polyline { pts: vec![Pt::new(0.0, 0.0, 0.0), Pt::new(0.0, 1.0, 0.0)], class: "iso-sel".into() }],
             },
+            hits: Layer { kind: LayerKind::Hit, shapes: Vec::new() },
         };
         assert_eq!(d.ground.kind, LayerKind::Ground);
         assert_eq!(d.sections.len(), 1);

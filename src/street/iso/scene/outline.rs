@@ -12,6 +12,14 @@ use crate::street::iso::raised::{beside, curb_top_mm, height_mm, inner_face};
 /// near face, the side the eye sees where there is one, and its top, at the height of its highest part. `p` is the
 /// projection over the selected run's reach.
 pub(in crate::street::iso) fn outline(p: &Projection, segs: &[SegView], i: usize) -> Layer {
+    let pts = silhouette(p, segs, i);
+    // A dark casing under the light line: one of the two is seen on any material, in either theme.
+    let line = |class: &str| Shape::Polygon { pts: pts.clone(), class: class.into(), face: None, texture: None };
+    Layer { kind: LayerKind::Outline, shapes: vec![line("iso-sel-casing"), line("iso-sel")] }
+}
+
+/// The corners round everything drawn for the piece at `i` (see `outline`), which the press targets share.
+pub(in crate::street::iso) fn silhouette(p: &Projection, segs: &[SegView], i: usize) -> Vec<Pt> {
     let s = &segs[i];
     let id = KINDS[s.kind].id;
     let top = s.curb.filter(|_| !curb_edges(segs, i).is_empty()).map_or(drawn_mm(height_mm(id)), |c| curb_top_mm(c, id));
@@ -29,8 +37,5 @@ pub(in crate::street::iso) fn outline(p: &Projection, segs: &[SegView], i: usize
         }
         None => vec![(x0, 0.0, n), (x1, 0.0, n), (x1, top, n), (x1, top, l), (x0, top, l), (x0, top, n)],
     };
-    let pts: Vec<Pt> = corners.into_iter().map(|(x, y, z)| Pt::new(x, y, z)).collect();
-    // A dark casing under the light line: one of the two is seen on any material, in either theme.
-    let line = |class: &str| Shape::Polygon { pts: pts.clone(), class: class.into(), face: None, texture: None };
-    Layer { kind: LayerKind::Outline, shapes: vec![line("iso-sel-casing"), line("iso-sel")] }
+    corners.into_iter().map(|(x, y, z)| Pt::new(x, y, z)).collect()
 }

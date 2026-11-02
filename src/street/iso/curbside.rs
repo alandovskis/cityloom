@@ -208,7 +208,7 @@ mod tests {
             ("sample 1", drawn(&Editor::new(1)), 53134, 0xf62a9be49617bd7a),
             ("furnished", drawn(&furnished()), 69117, 0xa1f70000735a7ce5),
             ("marked", drawn(&marked()), 47628, 0xd1017b334c1e55da),
-            ("joined", iso_svg(&joined(true, 1), &en(), 1050.0).markup, 45452, 0xc3b7b07a5718a277),
+            ("joined", crate::street::iso::testing::seen(&iso_svg(&joined(true, 1), &en(), 1050.0).markup), 45452, 0xc3b7b07a5718a277),
         ] {
             assert_eq!((markup.len(), fnv(&markup)), (len, hash), "{name}");
         }

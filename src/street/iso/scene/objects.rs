@@ -90,7 +90,7 @@ mod tests {
         let post = blocks(&v.segments, bi, &p).into_iter().find(|b| b.solid == Solid::Post).expect("the bike lane has posts");
         assert!(post.x.1 <= m_x0, "the post is farther from the middle of the street than the median");
         assert!(post.y.0 < m_top, "the post stands lower than the median's top");
-        let svg = iso_svg(&v, &en(), 1050.0).markup;
+        let svg = crate::street::iso::testing::seen(&iso_svg(&v, &en(), 1050.0).markup);
         let median_last = svg.rfind(&format!("data-uid=\"{median}\"")).unwrap();
         let post_first = svg.find("iso-solid s-post").unwrap();
         assert!(post_first > median_last, "every post is painted after every raised strip");

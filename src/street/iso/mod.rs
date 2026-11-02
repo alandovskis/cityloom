@@ -149,7 +149,9 @@ fn diagram(v: &View, i18n: &I18n, width: f64) -> Diagram {
         Some(i) => scene::outline(&p.over(selected), &v.segments, i),
         None => Layer { kind: LayerKind::Outline, shapes: Vec::new() },
     };
-    Diagram { defs: format!("<defs>{}{}</defs>", shades(), materials()), ground, sections, outline }
+    // The press targets are the selected run's pieces, over everything.
+    let hits = scene::hits(&p.over(selected), &v.segments, i18n);
+    Diagram { defs: format!("<defs>{}{}</defs>", shades(), materials()), ground, sections, outline, hits }
 }
 
 /// What a screen reader is told the 2.5D drawing is: the street, the zone shown when it has several, the stretch
@@ -912,6 +914,25 @@ mod tests {
     }
 
     #[test]
+    fn the_press_targets_are_the_last_layer_one_per_piece_and_the_rest_of_the_markup_is_untouched() {
+        for width in [1050.0, 280.0] {
+            let e = furnished();
+            let v = e.view();
+            let m = iso_svg(&v, &en(), width).markup;
+            let at = m.find("<g class=\"iso-layer-hit\">").expect("a hit layer");
+            let hit = &m[at..];
+            assert_eq!(count(hit, "<g class=\"iso-hit\" data-uid=\""), v.segments.len(), "{width}");
+            assert_eq!(count(hit, "<polygon class=\"iso-hit-area\""), v.segments.len(), "{width}");
+            for s in &v.segments {
+                assert!(hit.contains(&format!("data-uid=\"{}\"", s.uid)), "{width}");
+            }
+            // The targets paint nothing of their own (the stylesheet says how), and what is before them is the drawing.
+            assert!(!hit.contains("fill=") && !hit.contains("filter="), "{hit}");
+            assert!(m[..at].ends_with("</g>") && !m[..at].contains("iso-hit"));
+        }
+    }
+
+    #[test]
     fn the_signs_layer_is_empty_across_the_boundary() {
         let mut v = joined(true, 0);
         v.speed_kmh = Some(30);
@@ -949,7 +970,10 @@ mod tests {
         v.speed_kmh = Some(30);
         let m = iso_svg(&v, &en(), 1050.0).markup;
         let classes = LayerKind::ALL.map(LayerKind::class);
-        assert_eq!(classes, ["iso-layer-ground", "iso-surface", "iso-markings", "iso-raised", "iso-objects", "iso-signs", "iso-layer-outline"]);
+        assert_eq!(
+            classes,
+            ["iso-layer-ground", "iso-surface", "iso-markings", "iso-raised", "iso-objects", "iso-signs", "iso-layer-outline", "iso-layer-hit"]
+        );
         let at: Vec<usize> = classes.iter().map(|c| m.find(&format!("<g class=\"{c}\">")).unwrap_or_else(|| panic!("no {c}"))).collect();
         assert!(at.windows(2).all(|w| w[0] < w[1]), "{at:?}");
         // Each holds its own kind of thing and nothing of another's.
@@ -1183,7 +1207,7 @@ mod tests {
     #[test]
     fn the_neighbours_pieces_carry_no_uid_and_the_selected_ones_do() {
         let v = joined(true, 1);
-        let m = iso_svg(&v, &en(), 1050.0).markup;
+        let m = crate::street::iso::testing::seen(&iso_svg(&v, &en(), 1050.0).markup);
         assert_eq!(count(&m, "iso-piece iso-across\" data-uid"), 0);
         // A uid of the selected section is also one of the neighbour's (uids repeat across sections): only the selected one carries it.
         let uid = v.segments[0].uid;
@@ -1205,7 +1229,9 @@ mod tests {
             let m = iso_svg(&v, &en(), 1050.0).markup;
             assert_eq!(count(&m, "class=\"iso-sel\""), 1);
             let at = m.find("<polygon class=\"iso-sel-casing\"").unwrap();
-            assert!(!m[at..].contains("<g"), "after the last section");
+            let after = &m[at..];
+            // Only the press targets, the invisible layer, come after the outline.
+            assert!(!after[..after.find("<g class=\"iso-layer-hit\">").unwrap()].contains("<g"), "after the last section");
             // The outline stands over the selected zone's half.
             let (near, farr) = halves();
             let p = Projection::fit(1050.0, span_mm(&v)).over(if far { farr } else { near });
@@ -1365,7 +1391,7 @@ mod tests {
             ("last, zone 2", joined_from_last(false, 1), 0xb0a26882a7ac3ec6),
         ] {
             assert!(v.zones.joint.as_ref().unwrap().taper.is_none(), "{name}");
-            let m = iso_svg(&v, &en(), 1050.0).markup;
+            let m = crate::street::iso::testing::seen(&iso_svg(&v, &en(), 1050.0).markup);
             assert_eq!(count(&m, "iso-taper"), 0, "{name}");
             assert_eq!(h(&m), hash, "{name}");
         }

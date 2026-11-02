@@ -1089,13 +1089,8 @@ svg pattern circle {
   stroke: var(--mat-trees-alt);
   stroke-width: 1;
 }
-/* A piece's colour is the same in both themes, so an outline needs a halo of the panel's colour to be seen on any
-   of them: the hover outline and the selection outline. */
-.iso-piece:hover .iso-top {
-  stroke: var(--ink);
-  stroke-width: 2;
-  filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
-}
+/* A piece's colour is the same in both themes, so the selection outline needs a halo of the panel's colour to be seen
+   on any of them. (The hover is the press target's tint, `.iso-hit-area:hover`, below.) */
 .iso-solid {
   pointer-events: none;
 }
@@ -1197,6 +1192,38 @@ svg pattern circle {
 .iso-sel {
   stroke: var(--iso-sel);
   stroke-width: 2.5;
+}
+/* The press targets (street/iso/scene/hits.rs): each piece's silhouette over the whole drawing, with no paint of its own.
+   The stroke makes the target wider than the piece by 5 px a side, which is what lets a far, narrow piece be pressed;
+   narrower pieces are drawn last, so they win where targets overlap. The hover and pressed states are a tint of the
+   selection's blue with the selection's dark casing round it (a test in shared/contrast.rs reads the opacities). A tap selects and a drag scrolls the
+   page: pan and pinch stay the browser's. */
+#drawing.iso {
+  touch-action: manipulation;
+}
+.iso-hit-area {
+  fill: var(--iso-sel);
+  fill-opacity: 0;
+  stroke: transparent;
+  stroke-width: 10;
+  stroke-linejoin: round;
+  pointer-events: all;
+  cursor: pointer;
+}
+.iso-hit-area:hover {
+  fill-opacity: 0.3;
+  stroke: var(--iso-sel-casing);
+  stroke-opacity: 0.45;
+}
+.iso-hit-area:active {
+  fill-opacity: 0.55;
+  stroke: var(--iso-sel-casing);
+  stroke-opacity: 0.75;
+}
+@media (forced-colors: active) {
+  .iso-hit-area {
+    fill: Highlight;
+  }
 }
 /* The toggle between the section and the 2.5D, at the right of the street's name, on its line: the name's
    line has room to spare, while a row of its own (or the tools' row, which wraps it where text is wider, as

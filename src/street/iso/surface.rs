@@ -50,8 +50,9 @@ mod tests {
     #[test]
     fn the_outlines_are_seen_on_every_material() {
         let css = include_str!("../../../web/editor.css");
-        // A halo of the panel's colour keeps the hover outline and the junction's selection box seen on any material.
-        for rule in [".iso-piece:hover .iso-top {", "#drawing .iso .sel-box {"] {
+        // A halo of the panel's colour keeps the junction's selection box seen on any material (the street's hover is the
+        // press target's tint, measured in shared/contrast.rs).
+        for rule in ["#drawing .iso .sel-box {"] {
             let at = css.find(rule).unwrap_or_else(|| panic!("{rule}"));
             assert!(css[at..at + css[at..].find('}').unwrap()].contains("drop-shadow(0 0 1px var(--panel))"), "{rule}");
         }

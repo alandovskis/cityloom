@@ -170,3 +170,41 @@ test("a street with opposing lanes shows yellow paint in 2.5D, and symbols in pl
   expect(forced[0]).not.toBe(forced[2]);
   expect(forced[1]).toBe("none");
 });
+
+test.describe("with a coarse pointer", () => {
+  test.use({ hasTouch: true });
+
+  test("a tap on the narrowest piece selects that piece", async ({ page }) => {
+    await openStreet(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    // The press targets are what a finger lands on: the drawing keeps the page's panning and zoom for the browser.
+    expect(await page.locator("#drawing").evaluate((el) => getComputedStyle(el).touchAction)).toBe("manipulation");
+    const targets = page.locator("#drawing .iso-hit");
+    expect(await targets.count()).toBeGreaterThan(2);
+    const narrowest = await targets.evaluateAll((els) => {
+      const sized = els.map((el) => {
+        const r = el.querySelector(".iso-hit-area")!.getBoundingClientRect();
+        return { uid: el.getAttribute("data-uid"), width: r.width };
+      });
+      return sized.sort((a, b) => a.width - b.width)[0];
+    });
+    await page.evaluate(() => (document.querySelector("#drawing") as SVGElement).scrollIntoView({ block: "center" }));
+    const box = (await page.locator("#drawing").boundingBox())!;
+    // A point well inside the target: the middle across, a fifth of the way up from its foot.
+    const at = await page.evaluate((uid) => {
+      const r = document.querySelector(`#drawing .iso-hit[data-uid="${uid}"] .iso-hit-area`)!.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.bottom - r.height * 0.2 };
+    }, narrowest.uid);
+    expect(at.x).toBeGreaterThan(box.x);
+    // The element a finger lands on there is that piece's target, not a neighbour's.
+    const landed = await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest("[data-uid]")?.getAttribute("data-uid"),
+      at,
+    );
+    expect(landed).toBe(narrowest.uid);
+    await page.touchscreen.tap(at.x, at.y);
+    await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
+    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
+    await expect(live(page)).toHaveText(/, [\d.]+ m, \d+ of \d+$/);
+  });
+});

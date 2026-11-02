@@ -190,7 +190,7 @@ fn section(out: &mut String, s: &Section, p: &dyn Projection) {
     }
 }
 
-/// The diagram as markup: its defs, the ground, each section, then the outline.
+/// The diagram as markup: its defs, the ground, each section, then the outline and the press targets.
 pub fn render(d: &Diagram, p: &dyn Projection) -> String {
     let mut out = d.defs.clone();
     layer(&mut out, &d.ground, p);
@@ -198,6 +198,10 @@ pub fn render(d: &Diagram, p: &dyn Projection) -> String {
         section(&mut out, s, p);
     }
     layer(&mut out, &d.outline, p);
+    // Targets are drawn only when there are some, so a diagram with none is the markup it was.
+    if !d.hits.shapes.is_empty() {
+        layer(&mut out, &d.hits, p);
+    }
     out
 }
 
@@ -232,6 +236,7 @@ mod tests {
             ground: layer_of(LayerKind::Ground, vec![]),
             sections: vec![Section { class: None, layers: vec![layer_of(LayerKind::Surface, vec![]), layer_of(LayerKind::Raised, vec![])] }],
             outline: layer_of(LayerKind::Outline, vec![]),
+            hits: layer_of(LayerKind::Hit, vec![]),
         };
         assert_eq!(
             render(&d, &Scale(1.0)),
@@ -246,6 +251,7 @@ mod tests {
             ground: layer_of(LayerKind::Ground, vec![]),
             sections: vec![Section { class: class.map(String::from), layers: vec![layer_of(LayerKind::Surface, vec![])] }],
             outline: layer_of(LayerKind::Outline, vec![]),
+            hits: layer_of(LayerKind::Hit, vec![]),
         };
         let with = render(&mk(Some("iso-section iso-across")), &Scale(1.0));
         assert!(with.contains(r#"<g class="iso-section iso-across"><g class="iso-surface"></g></g>"#), "{with}");
@@ -255,7 +261,13 @@ mod tests {
 
     #[test]
     fn points_are_rounded_to_two_decimals_like_the_street_does() {
-        let d = Diagram { defs: String::new(), ground: layer_of(LayerKind::Ground, vec![]), sections: vec![], outline: layer_of(LayerKind::Outline, vec![]) };
+        let d = Diagram {
+            defs: String::new(),
+            ground: layer_of(LayerKind::Ground, vec![]),
+            sections: vec![],
+            outline: layer_of(LayerKind::Outline, vec![]),
+            hits: layer_of(LayerKind::Hit, vec![]),
+        };
         // A hand-made projection that lands between two hundredths.
         let s = render(
             &Diagram { ground: layer_of(LayerKind::Ground, vec![Shape::Polyline { pts: vec![Pt::new(1.0, 0.0, 0.0)], class: "c".into() }]), ..d },
@@ -274,6 +286,7 @@ mod tests {
             ground: layer_of(LayerKind::Ground, vec![g, bare]),
             sections: vec![],
             outline: layer_of(LayerKind::Outline, vec![]),
+            hits: layer_of(LayerKind::Hit, vec![]),
         };
         let s = render(&d, &Scale(1.0));
         assert!(s.contains(r#"<g class="iso-piece" data-uid="7"><title>A &amp; &lt;B&gt;</title><polygon class="iso-top" points="1,5 4,11"/></g>"#), "{s}");
@@ -338,7 +351,13 @@ mod tests {
     }
 
     fn drawn(s: Shape, p: &dyn Projection) -> String {
-        let d = Diagram { defs: String::new(), ground: layer_of(LayerKind::Ground, vec![s]), sections: vec![], outline: layer_of(LayerKind::Outline, vec![]) };
+        let d = Diagram {
+            defs: String::new(),
+            ground: layer_of(LayerKind::Ground, vec![s]),
+            sections: vec![],
+            outline: layer_of(LayerKind::Outline, vec![]),
+            hits: layer_of(LayerKind::Hit, vec![]),
+        };
         render(&d, p)
     }
 

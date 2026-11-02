@@ -398,6 +398,7 @@ mod tests {
             ground: Layer { kind: LayerKind::Ground, shapes: vec![Shape::Polyline { pts, class: "c".into() }] },
             sections: vec![],
             outline: Layer { kind: LayerKind::Outline, shapes: vec![] },
+            hits: Layer { kind: LayerKind::Hit, shapes: vec![] },
         };
         let want = format!(r#"<polyline class="c" points="{}"/>"#, points(&p, &corners));
         assert!(render(&d, &p).contains(&want));

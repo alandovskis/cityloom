@@ -1,6 +1,7 @@
 //! The 2.5D as shapes: builders that give each layer of the drawing as `shared::diagram` data, which the renderer
 //! writes (`iso_svg` puts them together).
 
+mod hits;
 mod markings;
 mod objects;
 mod outline;
@@ -8,6 +9,7 @@ mod raised;
 mod signs;
 mod surface;
 
+pub(super) use hits::hits;
 pub(super) use markings::markings;
 pub(super) use objects::{block, objects};
 pub(super) use outline::outline;
