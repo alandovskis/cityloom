@@ -1315,3 +1315,115 @@ test.describe("a street's curbside use on the arm that meets it", () => {
     await expect(live(page)).toContainText(/Parking .*30\.0 m from the centre/);
   });
 });
+
+// The 2.5D is pressed to select, as the plan is (#140): each part the keys step through has a shape that says what a
+// press on it selects. A press goes where the pointer lands on screen, so the point is found by asking the page what
+// is on top at points of the shape, and then pressed with the mouse.
+async function pressOn(page: Page, selector: string) {
+  // Some shapes of a kind are hidden or thin (a sidewalk far behind another): the first one with a visible point is pressed.
+  const at = await page.locator(selector).evaluateAll((els) => {
+    const steps = Array.from({ length: 17 }, (_, i) => (i + 0.5) / 17);
+    for (const el of els) {
+      el.scrollIntoView({ block: "center", inline: "center" });
+      const box = el.getBoundingClientRect();
+      for (const fx of steps) {
+        for (const fy of steps) {
+          const [x, y] = [box.left + box.width * fx, box.top + box.height * fy];
+          if (document.elementFromPoint(x, y)?.closest("[data-role]") === el) return { x, y };
+        }
+      }
+    }
+    return null;
+  });
+  expect(at, `a point that lands on ${selector}`).not.toBeNull();
+  await page.mouse.click(at!.x, at!.y);
+}
+
+test.describe("a part of the junction in 2.5D is pressed to select it", () => {
+  test.beforeEach(async ({ page }) => {
+    await openJunction(page);
+    await page.locator("#view-iso").click();
+    await expect(page.locator("#drawing .iso-junction")).toHaveCount(1);
+  });
+
+  test("a street, a lane, a crossing and a corner, each outlined once selected and named as the keys name them", async ({
+    page,
+  }) => {
+    const outlined = page.locator("#drawing .iso-sel");
+    await expect(outlined).toHaveCount(0);
+    await expect(page.locator("#inspector .insp-empty")).toBeVisible();
+
+    await pressOn(page, '#drawing [data-role="arm"]');
+    await expect(live(page)).toHaveText(/^.+ \(.+\), \d+ degrees$/);
+    await expect(outlined).toHaveCount(1);
+    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
+
+    await pressOn(page, '#drawing .lane-hit[data-lane="0"]');
+    await expect(live(page)).toHaveText(/^Lane 1 of \d+, /);
+    await expect(outlined).toHaveCount(1);
+    await expect(page.locator("#drawing .lane-hit.on")).toHaveCount(1);
+
+    await pressOn(page, '#drawing [data-role="crossing"]');
+    await expect(live(page)).toHaveText(/^(Crossing on|Continuous sidewalk across) /);
+    await expect(outlined).toHaveCount(1);
+    await expect(page.locator("#drawing .lane-hit.on")).toHaveCount(0);
+
+    await pressOn(page, '#drawing [data-role="corner"]');
+    await expect(live(page)).toHaveText(/^(Protected corner|Corner) after /);
+    await expect(outlined).toHaveCount(1);
+
+    // The outline is two tones, the casing under the line, and the pointer goes through it.
+    const casing = page.locator("#drawing .iso-sel-casing");
+    await expect(casing).toHaveCount(1);
+    expect(await casing.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+
+    // The keyboard goes on from what was pressed.
+    const said = await live(page).innerText();
+    await page.keyboard.press("ArrowRight");
+    await expect(live(page)).not.toHaveText(said);
+    await expect(outlined).toHaveCount(1);
+
+    // A press on bare ground clears the selection.
+    const drawing = (await page.locator("#drawing").boundingBox())!;
+    await page.mouse.click(drawing.x + 3, drawing.y + 3);
+    await expect(outlined).toHaveCount(0);
+    await expect(page.locator("#inspector .insp-empty")).toBeVisible();
+  });
+
+  test("what is pressed asks for a tap, and what is only looked at lets the press through", async ({ page }) => {
+    const style = (selector: string, property: "touchAction" | "pointerEvents" | "cursor") =>
+      page
+        .locator(selector)
+        .first()
+        .evaluate((el, p) => getComputedStyle(el)[p], property);
+    expect(await style('#drawing [data-role="arm"]', "touchAction")).toBe("manipulation");
+    expect(await style('#drawing [data-role="arm"]', "cursor")).toBe("pointer");
+    for (const looked of ["#drawing .iso-zebra", "#drawing .iso-name", "#drawing .iso-post", "#drawing .hatch"])
+      expect(await style(looked, "pointerEvents"), looked).toBe("none");
+  });
+
+  test("a roundabout's cycle track and bus lane are pressed too", async ({ page }) => {
+    await page.locator("#inspector select").first().selectOption({ label: "Roundabout" });
+    await page.getByRole("checkbox", { name: /Track around the outside/ }).click();
+    await page.getByLabel("Bus lane through the middle").selectOption({ index: 1 });
+    await expect(page.locator('#drawing [data-role="bus"]').first()).toBeAttached();
+    const outlined = page.locator("#drawing .iso-sel");
+
+    await pressOn(page, '#drawing [data-role="cycle"]');
+    await expect(live(page)).toHaveText(/^Cycle track, /);
+    await expect(outlined).toHaveCount(2);
+
+    await pressOn(page, '#drawing [data-role="bus"]');
+    await expect(live(page)).toHaveText("Bus lane across the middle");
+    await expect(outlined).toHaveCount(1);
+  });
+});
+
+test("a turbo roundabout's cycle track is pressed in 2.5D", async ({ page }) => {
+  await basicTurbo(page);
+  await page.locator("#view-iso").click();
+  await page.getByRole("checkbox", { name: /Track around the outside/ }).click();
+  await pressOn(page, '#drawing [data-role="cycle"]');
+  await expect(live(page)).toHaveText(/^Cycle track, /);
+  await expect(page.locator("#drawing .iso-sel")).toHaveCount(2);
+});
