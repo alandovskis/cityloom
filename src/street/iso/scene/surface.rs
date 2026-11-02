@@ -117,18 +117,18 @@ mod tests {
 
     #[test]
     fn a_design_wider_than_the_street_keeps_every_point_inside_the_drawing_and_has_no_nan() {
-        let mut e = Editor::new(0);
-        for _ in 0..4 {
-            e.add(crate::shared::catalogue::kind_index("travel").unwrap(), 2);
+        let v = crate::street::iso::scene::testing::wide();
+        for width in [600.0, 1050.0, 1800.0] {
+            let p = Projection::fit(width, v.row_mm.max(v.total_mm)).over(Reach::STRETCH);
+            let (flat, _) = split(strips(&v.segments, &p));
+            let l = surface(&p, &v.segments, &en(), &flat, false, None, &[]);
+            parity(&l, &p, &layer(&p, &v.segments, &en(), &flat, false, None, &[]));
+            let m = crate::shared::diagram::render::layer_markup(&l, &p);
+            assert!(!m.contains("NaN") && !m.contains("inf"), "{width}");
+            let all = crate::street::iso::testing::xs(&m);
+            assert!(!all.is_empty());
+            assert!(all.iter().all(|x| *x >= 0.0 && *x <= p.width), "{width}: {all:?}");
         }
-        let v = e.view();
-        let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm)).over(Reach::STRETCH);
-        let (flat, _) = split(strips(&v.segments, &p));
-        let l = surface(&p, &v.segments, &en(), &flat, false, None, &[]);
-        let m = crate::shared::diagram::render::layer_markup(&l, &p);
-        assert!(!m.contains("NaN") && !m.contains("inf"));
-        // Every point of the layer is on a pixel; the drawing's own width is checked by the street's tests.
-        assert!(crate::street::iso::testing::xs_ys(&m).iter().all(|&(x, y)| x.is_finite() && y.is_finite()));
     }
 
     #[test]

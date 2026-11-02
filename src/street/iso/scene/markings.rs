@@ -79,6 +79,21 @@ mod tests {
     }
 
     #[test]
+    fn paint_stays_inside_the_drawing_when_the_design_is_wider_than_the_street() {
+        let v = crate::street::iso::scene::testing::wide();
+        for width in [600.0, 1050.0, 1800.0] {
+            let p = Projection::fit(width, v.row_mm.max(v.total_mm)).over(Reach::STRETCH);
+            let l = markings(&p, &v.segments, None);
+            parity(&l, &p, &layer_over(&p, &v.segments, None));
+            let m = crate::shared::diagram::render::layer_markup(&l, &p);
+            assert!(!m.contains("NaN") && !m.contains("inf"), "{width}");
+            let all = crate::street::iso::testing::xs(&m);
+            assert!(!all.is_empty());
+            assert!(all.iter().all(|x| *x >= 0.0 && *x <= p.width), "{width}: {all:?}");
+        }
+    }
+
+    #[test]
     fn an_empty_street_gives_an_empty_markings_layer() {
         let mut e = Editor::new(0);
         while let Some(uid) = e.view().segments.first().map(|s| s.uid) {

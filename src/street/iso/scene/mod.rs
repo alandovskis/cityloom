@@ -24,7 +24,7 @@ pub(super) mod testing {
         assert_eq!(layer_markup(layer, p), old);
     }
 
-    /// A street with a curbside programme and a stop-free frame, so that uses are shown.
+    /// A street with a curbside programme and a frame, so that its uses are shown.
     fn curbed() -> Editor {
         let s = Street::sample(0, Side::Right);
         let mut e = Editor::from_street(&s, &s, 0).with_frame(Some(ZoneFrame { length_mm: 60_000, from_end: ZoneEnd::First }));
@@ -32,6 +32,15 @@ pub(super) mod testing {
         e.add_curb(Side::Right, 20_000, 6_000, Use::Parking).unwrap();
         e.add_curb(Side::Left, 8_000, 6_000, Use::Tree).unwrap();
         e
+    }
+
+    /// Sample Street 1 with a first piece 8 m wide: the design runs over the street.
+    pub fn wide() -> View {
+        let mut e = Editor::new(0);
+        let u = e.view().segments[0].uid;
+        assert!(e.set_width(u, 8_000));
+        assert!(e.view().delta_mm > 0, "the design runs over the street");
+        e.view()
     }
 
     /// Every sample the layers are compared on, with the runs each is drawn in: the view, the projection over the
@@ -42,6 +51,7 @@ pub(super) mod testing {
             .chain([
                 ("furnished".to_string(), furnished().view()),
                 ("marked".to_string(), marked().view()),
+                ("wide".to_string(), wide()),
                 ("curbed".to_string(), curbed().view()),
                 ("joined 0".to_string(), joined(true, 0)),
                 ("joined 1".to_string(), joined(true, 1)),
