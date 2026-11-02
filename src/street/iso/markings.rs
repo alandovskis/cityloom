@@ -366,4 +366,18 @@ mod tests {
         let ways: Vec<bool> = m.marks.iter().map(|k| matches!(k.symbol, Symbol::Ahead { toward: true })).collect();
         assert_ne!(ways[0], ways[1], "the two arrows point opposite ways");
     }
+
+    #[test]
+    fn an_imported_part_time_bus_lane_is_marked_the_way_it_runs() {
+        use crate::shared::catalogue::StreetClass;
+        use crate::street::model::{Piece, Street, Window};
+        let (parking, bus) = (kind_index("parking").unwrap(), kind_index("bus").unwrap());
+        let lane = |direction| Piece { kind: parking, width_mm: 3000, direction, variants: vec![Window { kind: bus, from_min: 420, to_min: 540, days: None }] };
+        let street = Street::imported(StreetClass::Local, Side::Right, &[lane(Some(1)), lane(Some(0))]);
+        let mut e = Editor::from_street(&street, &street, 0);
+        assert!(e.set_time(8 * 60));
+        let marks = markings(&e.view().segments).marks;
+        let symbols: Vec<Symbol> = marks.iter().map(|m| m.symbol).collect();
+        assert_eq!(symbols, vec![Symbol::Bus { toward: true }, Symbol::Bus { toward: false }]);
+    }
 }
