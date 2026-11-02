@@ -82,31 +82,31 @@ mod tests {
 
     #[test]
     fn a_far_lower_object_is_painted_over_a_nearer_taller_strip() {
-        // A bike lane (posts on its curbs) left of a median that stands nearer the middle of the street and is higher:
-        // the posts are an objects layer, painted over every raised strip (the accepted difference from one depth order).
+        // The spec's accepted exception: objects are a layer over every raised strip, so a post beyond a median that
+        // stands nearer the middle of the street and higher is still painted over it. Checked on the real assembly.
         use crate::shared::catalogue::kind_index;
-        use crate::street::iso::raised::strips;
-        use crate::street::iso::scene::raised::raised;
-        use crate::street::iso::surface::split;
+        use crate::street::iso::iso_svg;
+        use crate::street::iso::projection::Reach;
+        use crate::street::iso::projection::drawn_mm;
+        use crate::street::iso::raised::height_mm;
         use crate::street::iso::testing::en;
         use crate::street::model::Editor;
         let mut e = Editor::new(0);
         let bike = e.add(kind_index("bike").unwrap(), 1);
         let median = e.add(kind_index("median").unwrap(), 3);
         let v = e.view();
-        let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm)).over(crate::street::iso::projection::Reach::STRETCH);
-        let at = |uid| v.segments.iter().find(|s| s.uid == uid).unwrap().x_mm as f64;
-        assert!(at(bike) < at(median) && at(median) < p.centre_mm, "the median is nearer the middle and left of the eye");
-        let (_, standing) = split(strips(&v.segments, &p));
-        let strips_markup = layer_markup(&raised(&p, &v.segments, &en(), &standing, &[], false, None), &p);
-        let objects = objects(&p, &v.segments, &[], &[]);
-        let posts: Vec<&Shape> = objects.shapes.iter().filter(|s| matches!(s, Shape::Group { class, .. } if class == "iso-solid s-post")).collect();
-        assert!(!posts.is_empty() && posts.len() == objects.shapes.len(), "the bike lane's posts");
-        assert!(strips_markup.contains(&format!("data-uid=\"{median}\"")));
-        // Painted as the diagram paints them: the raised layer, then the objects.
-        let all = format!("{strips_markup}{}", layer_markup(&objects, &p));
-        let median_at = all.rfind(&format!("data-uid=\"{median}\"")).unwrap();
-        assert!(all.find("iso-solid s-post").unwrap() > median_at);
-        assert!(Solid::Post.name() == "post");
+        let p = Projection::fit(1050.0, v.row_mm.max(v.total_mm)).over(Reach::STRETCH);
+        let seg = |uid| v.segments.iter().position(|s| s.uid == uid).unwrap();
+        let (bi, mi) = (seg(bike), seg(median));
+        let m = &v.segments[mi];
+        let (m_x0, m_top) = (m.x_mm as f64, drawn_mm(height_mm("median")));
+        assert!(m_x0 < p.centre_mm, "the median is left of the eye");
+        let post = blocks(&v.segments, bi, &p).into_iter().find(|b| b.solid == Solid::Post).expect("the bike lane has posts");
+        assert!(post.x.1 <= m_x0, "the post is farther from the middle of the street than the median");
+        assert!(post.y.0 < m_top, "the post stands lower than the median's top");
+        let svg = iso_svg(&v, &en(), 1050.0).markup;
+        let median_last = svg.rfind(&format!("data-uid=\"{median}\"")).unwrap();
+        let post_first = svg.find("iso-solid s-post").unwrap();
+        assert!(post_first > median_last, "every post is painted after every raised strip");
     }
 }
