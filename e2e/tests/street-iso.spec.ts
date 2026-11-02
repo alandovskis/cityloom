@@ -208,3 +208,104 @@ test.describe("with a coarse pointer", () => {
     await expect(live(page)).toHaveText(/, [\d.]+ m, \d+ of \d+$/);
   });
 });
+
+// The piece list (#139): a perspective cannot be read for widths and hides narrow pieces, so every piece is also a
+// cell of a list under the drawing.
+test.describe("the piece list", () => {
+  const cells = (page: Page) => page.locator("#piece-list [role=option]");
+
+  test.beforeEach(async ({ page }) => {
+    await openStreet(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+  });
+
+  test("is a listbox with one tab stop and a cell per piece, naming its kind and its width", async ({ page }) => {
+    const list = page.locator("#piece-list");
+    await expect(list).toHaveAttribute("role", "listbox");
+    await expect(list).toHaveAttribute("aria-label", "Pieces, left to right");
+    await expect(page.locator("#piece-list [tabindex]")).toHaveCount(0);
+    const n = await page.locator("#drawing .iso-hit").count();
+    await expect(cells(page)).toHaveCount(n);
+    for (let i = 0; i < n; i++) {
+      const cell = cells(page).nth(i);
+      await expect(cell.locator(".piece-name")).not.toHaveText("");
+      await expect(cell.locator(".piece-width")).toHaveText(/\d/);
+      await expect(cell).toHaveAttribute("aria-label", new RegExp(`, ${i + 1} of ${n}$`));
+    }
+  });
+
+  test("the arrows, Home and End choose a piece as a press on the drawing does", async ({ page }) => {
+    await page.locator("#piece-list").focus();
+    await page.keyboard.press("End");
+    const n = await cells(page).count();
+    await expect(cells(page).nth(n - 1)).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#piece-list")).toHaveAttribute("aria-activedescendant", /^piece-cell-\d+$/);
+    await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
+    await expect(live(page)).toHaveText(new RegExp(`, ${n} of ${n}$`));
+    await page.keyboard.press("ArrowLeft");
+    await expect(cells(page).nth(n - 2)).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("[aria-selected=true]", { has: page.locator(".piece-name") })).toHaveCount(1);
+    await page.keyboard.press("Home");
+    await expect(cells(page).first()).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#inspector .insp-empty")).toHaveCount(0);
+    // The drawing's own selection is the list's.
+    await page.keyboard.press("Escape");
+    await pressPiece(page, 1);
+    const uid = await pieces(page).nth(1).getAttribute("data-uid");
+    await expect(page.locator(`#piece-cell-${uid}`)).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("every piece can be chosen from the list at 320 px, where the narrow ones are hardly in the picture", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    const n = await cells(page).count();
+    for (let i = 0; i < n; i++) {
+      await cells(page).nth(i).click();
+      await expect(cells(page).nth(i)).toHaveAttribute("aria-selected", "true");
+      await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
+    }
+  });
+});
+
+// Without a section to read, the widths are in the inspector, the piece list and the Width tab, and the status line
+// says whether the street is used, over or under (#139).
+for (const [width, height] of [
+  [1440, 900],
+  [1050, 900],
+] as const) {
+  test(`at ${width} px the widths are written down and the status line stays in view`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await openStreet(page);
+    await expect(page.locator("#drawing")).toBeVisible();
+    const fit = page.locator("#fit");
+    await expect(fit).toHaveText(/Every metre of the street is used|left to use|too wide/);
+    await expect(fit).toBeInViewport();
+    // The inspector shows the selected piece's width, the one its cell in the list shows.
+    await pressPiece(page, 0);
+    const uid = await pieces(page).first().getAttribute("data-uid");
+    const shown = parseFloat((await page.locator(`#piece-cell-${uid} .piece-width`).innerText()).replace(",", "."));
+    expect(Number(await page.locator("#width").inputValue())).toBeCloseTo(shown, 1);
+    // The Width tab lists each use with its width: together they are the street's pieces.
+    const rows = page.locator("#space tbody tr");
+    expect(await rows.count()).toBeGreaterThan(0);
+    const design = await rows.evaluateAll((trs) => trs.map((tr) => tr.children[2].textContent));
+    const total = (await page.locator("#piece-list .piece-width").allInnerTexts()).reduce(
+      (a, t) => a + parseFloat(t.replace(",", ".")),
+      0,
+    );
+    expect(design.reduce((a, t) => a + parseFloat((t ?? "").replace(",", ".")), 0)).toBeCloseTo(total, 0);
+    // Over: the status says so and stays in view.
+    await page.locator("#width").fill("30");
+    await page.locator("#width").press("Enter");
+    await expect(fit).toHaveText(/too wide/);
+    await expect(fit).toBeInViewport();
+    await page.locator("#undo").click();
+    await expect(fit).not.toHaveText(/too wide/);
+    // Under: taking the selected piece away leaves metres to use.
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("Delete");
+    await expect(fit).toHaveText(/is still unused|left to use/);
+    await expect(fit).toBeInViewport();
+  });
+}

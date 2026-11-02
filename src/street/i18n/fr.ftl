@@ -324,6 +324,10 @@ zone-selected = { $zone }, de { $from } à { $to }, { $length } de long, { $sect
     }, { $n } sur { $total }
 zone-cut-off = Coupée par le bord de la carte
 
+# La liste des éléments (src/street/piece_list.rs).
+st-pieces-heading = Éléments de la rue
+st-pieces-label = Éléments, de gauche à droite
+
 # La bande des zones (src/street/strip.rs).
 st-zones-heading = Zones le long de la rue
 st-zones-strip-label = Zones de la rue, du début à la fin

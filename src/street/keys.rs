@@ -33,6 +33,20 @@ pub fn on_section(key: &str, shift: bool, selected: bool) -> Option<(Action, boo
     }
 }
 
+/// Which piece the piece list's key chooses: `current` is the index of the selected piece, `len` the number of pieces.
+/// The arrows go one along (from nothing, to the first or the last), Home and End to the ends; the ends do not wrap.
+/// `None` for a key that is not the list's, or for no pieces.
+pub fn piece_target(key: &str, current: Option<usize>, len: usize) -> Option<usize> {
+    let last = len.checked_sub(1)?;
+    match key {
+        "ArrowRight" | "ArrowDown" => Some(current.map_or(0, |c| (c + 1).min(last))),
+        "ArrowLeft" | "ArrowUp" => Some(current.map_or(last, |c| c.saturating_sub(1))),
+        "Home" => Some(0),
+        "End" => Some(last),
+        _ => None,
+    }
+}
+
 /// What a key does on the zone strip.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZoneAction {
@@ -147,5 +161,20 @@ mod tests {
     #[test]
     fn v_is_no_key_of_the_drawing() {
         assert_eq!(on_section("v", false, true), None);
+    }
+
+    #[test]
+    fn the_piece_list_s_arrows_go_one_along_without_wrapping_and_home_and_end_to_the_ends() {
+        assert_eq!(piece_target("ArrowRight", Some(1), 5), Some(2));
+        assert_eq!(piece_target("ArrowDown", Some(1), 5), Some(2));
+        assert_eq!(piece_target("ArrowLeft", Some(1), 5), Some(0));
+        assert_eq!(piece_target("ArrowUp", Some(0), 5), Some(0), "no wrap at the first");
+        assert_eq!(piece_target("ArrowRight", Some(4), 5), Some(4), "no wrap at the last");
+        assert_eq!(piece_target("ArrowRight", None, 5), Some(0));
+        assert_eq!(piece_target("ArrowLeft", None, 5), Some(4));
+        assert_eq!(piece_target("Home", Some(3), 5), Some(0));
+        assert_eq!(piece_target("End", Some(3), 5), Some(4));
+        assert_eq!(piece_target("a", Some(3), 5), None);
+        assert_eq!(piece_target("End", None, 0), None, "no pieces");
     }
 }

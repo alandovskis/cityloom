@@ -10,6 +10,7 @@ pub mod measures;
 pub mod model;
 pub mod notes;
 pub mod page;
+pub mod piece_list;
 pub mod pieces;
 pub mod row;
 pub mod speed_view;
@@ -81,6 +82,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("scroll", view! { <view::StreetDrawing vm=vm.clone()/> }.into_any());
     mount("h-drawing", view! { <page::DrawingHeading vm=vm.clone()/> }.into_any());
     mount("street", view! { <page::StreetHeader vm=vm.clone() ends=ends.clone()/> }.into_any());
+    mount("pieces-slot", view! { <piece_list::PieceList vm=vm.clone()/> }.into_any());
     mount("zones-slot", view! { <strip::ZoneStrip vm=vm.clone() ends=ends.clone()/> }.into_any());
     mount("curb-slot", view! { <curb_strip::CurbStrips vm=vm.clone()/> }.into_any());
     mount("speed-slot", view! { <speed_view::SpeedLimit vm=vm.clone()/> }.into_any());

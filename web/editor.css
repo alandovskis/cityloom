@@ -1200,6 +1200,10 @@ svg pattern circle {
    page: pan and pinch stay the browser's. */
 #drawing.iso {
   touch-action: manipulation;
+  /* The drawing is never narrower than 280 px (iso::MIN_WIDTH), so in a group narrower than that (a 280 px window,
+     less the page's margins) it is scaled down whole by its viewBox, not cut off at the right. */
+  max-width: 100%;
+  height: auto;
 }
 .iso-hit-area {
   fill: var(--iso-sel);
@@ -1305,6 +1309,7 @@ svg pattern circle {
   border-radius: 6px;
 }
 .zone-strip:focus-visible,
+.piece-list:focus-visible,
 .curb-strip:focus-visible,
 .stop-strip:focus-visible {
   outline: 2px solid var(--accent);
@@ -1327,6 +1332,39 @@ svg pattern circle {
   cursor: pointer;
   overflow: hidden;
 }
+.piece-list-section {
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 12px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+.piece-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 6px;
+}
+/* A cell is as wide as its words, a row of them wrapping at a narrow window; each is 24 px at least both ways
+   (WCAG 2.5.8). The selected one has the zone strip's heavy outline, so it is not shown by colour alone. */
+.piece-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  min-width: 24px;
+  min-height: 34px;
+  background: var(--zone-fill);
+  color: var(--zone-ink);
+  border: 1px solid var(--zone-edge);
+  cursor: pointer;
+}
+.piece-width {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .zone-cell.own {
   background: var(--zone-fill-own);
   /* not by tint alone (WCAG 1.4.1): a zone with a section of its own has a heavier top edge */
@@ -1339,6 +1377,7 @@ svg pattern circle {
   background-image: repeating-linear-gradient(135deg, transparent 0 6px, var(--zone-edge) 6px 7px);
 }
 .zone-cell[aria-selected="true"],
+.piece-cell[aria-selected="true"],
 .curb-cell[aria-selected="true"],
 .stop-cell[aria-selected="true"] {
   outline: 3px solid var(--zone-sel);
@@ -2497,10 +2536,13 @@ dl.prov dd:last-child {
   }
   .panel.left {
     order: 2;
+    max-width: calc(100% - 16px);
   }
   .panel.right {
     order: 3;
     bottom: auto;
+    /* never wider than the window less its margins (the Notes are 340 px at a desktop width) */
+    max-width: calc(100% - 16px);
   }
   .stage-head {
     align-items: stretch;

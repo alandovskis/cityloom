@@ -1626,3 +1626,47 @@ fn the_stop_tools_follow_the_language() {
         assert!(h.contains(&format!(">{name}</option>")), "{name}: {h}");
     }
 }
+
+// ---- the piece list ----------------------------------------------------------------
+
+fn pieces_html(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <crate::street::piece_list::PieceList vm=s.clone()/> })
+}
+
+#[test]
+fn the_piece_list_is_a_listbox_with_one_tab_stop_and_a_cell_per_piece_with_its_kind_and_width() {
+    let s = street_in(Locale::En);
+    let v = s.view_now();
+    let h = pieces_html(&s);
+    assert_eq!(count(&h, "role=\"listbox\""), 1, "{h}");
+    assert!(h.contains("id=\"piece-list\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Pieces, left to right\""), "{h}");
+    assert_eq!(count(&h, "role=\"option\""), v.segments.len(), "{h}");
+    assert_eq!(count(&h, "tabindex"), 1, "the cells are not tab stops");
+    for (i, g) in v.segments.iter().enumerate() {
+        let name = crate::street::text::piece_text(&v, i, &s.i18n(), s.units_now());
+        assert!(h.contains(&format!("id=\"piece-cell-{}\"", g.uid)), "{h}");
+        assert!(h.contains(&format!("aria-label=\"{name}\"")), "{name}: {h}");
+    }
+    // Nothing selected: none is marked, and the keyboard lands on the first.
+    assert_eq!(count(&h, "aria-selected=\"true\""), 0);
+    assert!(h.contains(&format!("aria-activedescendant=\"piece-cell-{}\"", v.segments[0].uid)), "{h}");
+}
+
+#[test]
+fn the_selected_piece_is_the_one_marked_and_the_active_descendant() {
+    let s = street_in(Locale::En);
+    let uid = s.view_now().segments[2].uid;
+    s.select(Some(uid));
+    let h = pieces_html(&s);
+    assert_eq!(count(&h, "aria-selected=\"true\""), 1, "{h}");
+    assert!(h.contains(&format!("aria-activedescendant=\"piece-cell-{uid}\"")), "{h}");
+    let cell = &h[h.find(&format!("id=\"piece-cell-{uid}\"")).unwrap()..];
+    assert!(cell[..cell.find("</div>").unwrap()].contains("aria-selected=\"true\""));
+}
+
+#[test]
+fn the_piece_list_is_worded_in_french_with_the_glossary_s_word() {
+    let h = pieces_html(&street_in(Locale::FrCa));
+    assert!(h.contains("aria-label=\"Éléments, de gauche à droite\""), "{h}");
+    assert!(h.contains("Éléments de la rue"), "{h}");
+}
