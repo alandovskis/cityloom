@@ -128,20 +128,22 @@ fn bike(two_way: bool) -> Vec<Shape> {
 }
 
 /// The polygons of `symbol` on a lane `width_mm` wide, scaled by `fit` and, for an arrow or a bike that runs toward
-/// the viewer, mirrored along the street. "BUS" is not turned for a lane that runs toward the viewer.
+/// the viewer, mirrored along the street. "BUS" is turned half round for a lane that runs toward the viewer, so it reads the way the lane runs.
 pub(super) fn shapes(symbol: Symbol, width_mm: f64) -> Vec<Shape> {
     let (mut out, flip) = match symbol {
         Symbol::Ahead { toward } => {
             (vec![arrow(0.0, -AHEAD_HALF_LENGTH_MM, AHEAD_HALF_LENGTH_MM, AHEAD_SHAFT_HALF_MM, AHEAD_HEAD_HALF_MM, AHEAD_HEAD_LENGTH_MM)], toward)
         }
-        Symbol::Bus => (bus(), false),
+        Symbol::Bus { toward } => (bus(), toward),
         Symbol::Bike { two_way, toward } => (bike(two_way), toward && !two_way),
     };
     let k = fit(width_mm);
     let along = if flip { -k } else { k };
+    // The word reads the way the lane runs, so a bus lane toward the viewer is turned half round, not mirrored.
+    let across = if flip && matches!(symbol, Symbol::Bus { .. }) { -k } else { k };
     for shape in &mut out {
         for pt in shape.iter_mut() {
-            *pt = (pt.0 * k, pt.1 * along);
+            *pt = (pt.0 * across, pt.1 * along);
         }
     }
     out
@@ -157,7 +159,8 @@ mod tests {
         vec![
             Symbol::Ahead { toward: false },
             Symbol::Ahead { toward: true },
-            Symbol::Bus,
+            Symbol::Bus { toward: false },
+            Symbol::Bus { toward: true },
             Symbol::Bike { two_way: true, toward: false },
             Symbol::Bike { two_way: false, toward: false },
             Symbol::Bike { two_way: false, toward: true },
@@ -194,7 +197,7 @@ mod tests {
 
     #[test]
     fn the_bus_symbol_is_a_diamond_with_the_letters_b_u_s_beyond_it() {
-        let s = shapes(Symbol::Bus, 3_300.0);
+        let s = shapes(Symbol::Bus { toward: false }, 3_300.0);
         // The diamond, then B (6 bars), U (3), S (5).
         assert_eq!(s.len(), 1 + 6 + 3 + 5);
         assert_eq!(s[0].len(), 4);
@@ -203,6 +206,20 @@ mod tests {
         assert!(letters.1.0 > diamond.1.1, "the letters start beyond the diamond: {letters:?} {diamond:?}");
         // The three letters are left to right: the U is centred.
         assert!(letters.0.0 < 0.0 && letters.0.1 > 0.0 && (letters.0.0 + letters.0.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_bus_symbol_is_turned_half_round_for_a_lane_toward_the_viewer() {
+        let away = shapes(Symbol::Bus { toward: false }, 3_300.0);
+        let toward = shapes(Symbol::Bus { toward: true }, 3_300.0);
+        assert_eq!(away.len(), toward.len());
+        for (a, t) in away.iter().zip(&toward) {
+            // Every corner is turned through 180 degrees about the symbol's origin, not mirrored along the street.
+            assert!(a.iter().zip(t).all(|(a, t)| (a.0 + t.0).abs() < 1e-9 && (a.1 + t.1).abs() < 1e-9));
+        }
+        // The diamond leads for the lane that runs away and trails for the one that runs toward the viewer.
+        assert!(extent(&away[..1]).1.1 < extent(&away[1..]).1.0);
+        assert!(extent(&toward[..1]).1.0 > extent(&toward[1..]).1.1);
     }
 
     #[test]
@@ -237,7 +254,7 @@ mod tests {
         for symbol in all() {
             for w in WIDTHS {
                 let (_, (v0, v1)) = extent(&shapes(symbol, w));
-                assert!(v0 >= -2_500.0 && v1 <= 2_000.0, "{symbol:?} in {w}: {v0}..{v1}");
+                assert!(v0 >= -2_500.0 && v1 <= 2_500.0, "{symbol:?} in {w}: {v0}..{v1}");
                 assert!(shapes(symbol, w).iter().flatten().all(|p| p.0.is_finite() && p.1.is_finite()));
             }
         }
