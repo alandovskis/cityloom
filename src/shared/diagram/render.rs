@@ -119,10 +119,13 @@ fn shape(out: &mut String, s: &Shape, p: &dyn Projection) {
             }
         }
         Shape::Polyline { pts, class } => out.push_str(&format!(r#"<polyline class="{class}" points="{}"/>"#, points(p, pts))),
-        Shape::Group { class, uid, title, shapes } => {
+        Shape::Group { class, uid, data, title, shapes } => {
             out.push_str(&format!(r#"<g class="{class}""#));
             if let Some(uid) = uid {
                 out.push_str(&format!(r#" data-uid="{uid}""#));
+            }
+            if let Some((name, n)) = data {
+                out.push_str(&format!(r#" {name}="{n}""#));
             }
             out.push('>');
             if let Some(title) = title {
@@ -142,6 +145,13 @@ fn layer(out: &mut String, l: &Layer, p: &dyn Projection) {
         shape(out, s, p);
     }
     out.push_str("</g>");
+}
+
+/// One layer as markup, on its own.
+pub fn layer_markup(l: &Layer, p: &dyn Projection) -> String {
+    let mut out = String::new();
+    layer(&mut out, l, p);
+    out
 }
 
 fn section(out: &mut String, s: &Section, p: &dyn Projection) {
@@ -232,8 +242,8 @@ mod tests {
 
     #[test]
     fn a_group_carries_its_uid_and_an_escaped_title() {
-        let g = Shape::Group { class: "iso-piece".into(), uid: Some(7), title: Some("A & <B>".into()), shapes: vec![poly("iso-top")] };
-        let bare = Shape::Group { class: "g".into(), uid: None, title: None, shapes: vec![] };
+        let g = Shape::Group { class: "iso-piece".into(), uid: Some(7), data: None, title: Some("A & <B>".into()), shapes: vec![poly("iso-top")] };
+        let bare = Shape::Group { class: "g".into(), uid: None, data: None, title: None, shapes: vec![] };
         let d = Diagram {
             defs: String::new(),
             ground: layer_of(LayerKind::Ground, vec![g, bare]),
@@ -347,7 +357,7 @@ mod tests {
             runs: vec![run((0.0, 0.0, 5.0), (10.0, 0.0, 5.0), true), run((4.0, 0.0, 0.0), (4.0, 0.0, 20.0), false)],
             class: "joints j-concrete".into(),
         };
-        let s = drawn(Shape::Group { class: "g".into(), uid: None, title: None, shapes: vec![top(), joints] }, &Persp);
+        let s = drawn(Shape::Group { class: "g".into(), uid: None, data: None, title: None, shapes: vec![top(), joints] }, &Persp);
         assert!(s.contains(r#"</g><path class="joints j-concrete" d="M0,5H10M4,0L4,20"/></g>"#), "{s}");
         assert_eq!(s.matches("<path").count(), 1, "{s}");
     }

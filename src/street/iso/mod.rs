@@ -30,6 +30,9 @@ mod order;
 mod paint;
 mod projection;
 mod raised;
+// Unused until the drawing is made from its shapes.
+#[allow(dead_code, unused_imports)]
+mod scene;
 mod sign;
 mod solids;
 mod stops;

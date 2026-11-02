@@ -92,6 +92,8 @@ pub enum Shape {
     Group {
         class: String,
         uid: Option<u32>,
+        /// A data attribute of its own besides the uid: its name (`data-mark`) and number.
+        data: Option<(&'static str, u32)>,
         title: Option<String>,
         shapes: Vec<Shape>,
     },
@@ -172,7 +174,7 @@ mod tests {
             face: Some(Face::Top),
             texture: Some(Texture { material: "asphalt".into(), tile_mm: (100.0, 200.0) }),
         };
-        let group = Shape::Group { class: "iso-piece".into(), uid: Some(3), title: Some("Lane".into()), shapes: vec![poly.clone()] };
+        let group = Shape::Group { class: "iso-piece".into(), uid: Some(3), data: None, title: Some("Lane".into()), shapes: vec![poly.clone()] };
         let d = Diagram {
             defs: "<defs/>".into(),
             ground: Layer { kind: LayerKind::Ground, shapes: vec![poly] },
