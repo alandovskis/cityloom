@@ -2197,6 +2197,67 @@ svg pattern circle {
   color: var(--ink-2);
   font-weight: 600;
 }
+/* The Impact tab's card: what the last change did to the space and the checks (#64). The verdict is a sentence that
+   names its result, so its colour only adds to the words; its bar is the colour of its text (3:1 on the panel). */
+.impact {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+.impact-what,
+.impact-none,
+.impact-class,
+.impact-verdict,
+.impact-uses li {
+  padding: 2px 8px;
+  font-size: 14px;
+}
+.impact-what {
+  color: var(--ink);
+  font-weight: 600;
+}
+.impact-none,
+.impact-class {
+  color: var(--ink-2);
+}
+.impact-sub {
+  padding: 8px 8px 2px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+.impact-uses {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.impact-checks li {
+  padding-block: 4px;
+}
+.impact-verdict {
+  margin: 8px 8px 0;
+  padding-inline-start: 8px;
+  border-inline-start: 4px solid currentColor;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.impact-verdict.improved {
+  color: var(--ok);
+}
+.impact-verdict.regressed {
+  color: var(--warn);
+}
+.impact-verdict.mixed {
+  color: var(--ink);
+}
+@media (forced-colors: active) {
+  .impact-verdict,
+  .impact-verdict.improved,
+  .impact-verdict.regressed,
+  .impact-verdict.mixed {
+    color: CanvasText;
+    border-inline-start-color: CanvasText;
+  }
+}
 .revs {
   min-height: 0;
 }

@@ -47,6 +47,7 @@ use std::rc::Rc;
 use leptos::prelude::*;
 
 use crate::shared::catalogue::{Mode, mode_key};
+use crate::street::impact::Verdict;
 use crate::street::vm::StreetVm;
 use crate::street::watch::SheetWatch;
 
@@ -103,6 +104,67 @@ pub fn Space(vm: Rc<StreetVm>) -> impl IntoView {
                 </tr>
             </thead>
             <tbody>{rows}</tbody>
+        }
+        .into_any()
+    }
+}
+
+/// What the last change did to the street: the width each use gained or lost, then the design checks that now pass
+/// and the ones that now fail, apart, and a line on the checks as a whole. It sits in a live region that is polite, and
+/// the view-model shows a change only after the edits have settled, so it never talks over typing.
+#[component]
+pub fn LastChange(vm: Rc<StreetVm>) -> impl IntoView {
+    let w = SheetWatch::new(vm);
+    move || {
+        let (units, i18n) = (w.units(), w.i18n());
+        let Some(impact) = w.impact() else {
+            return view! { <p class="fine impact-empty">{plain(&i18n, "st-impact-empty")}</p> }.into_any();
+        };
+        let headline = say(&i18n, units, &impact.headline);
+        if impact.is_empty() {
+            return view! {
+                <p class="impact-what">{headline}</p>
+                <p class="impact-none">{plain(&i18n, "impact-no-effect")}</p>
+            }
+            .into_any();
+        }
+        let uses = (!impact.uses.is_empty()).then(|| {
+            let items = impact
+                .uses
+                .iter()
+                .map(|u| view! { <li><span class=format!("mc mc-{}", mode_class(u.mode)) aria-hidden="true"></span>{say(&i18n, units, &u.said())}</li> })
+                .collect_view();
+            view! {
+                <h3 class="impact-sub">{plain(&i18n, "impact-space-heading")}</h3>
+                <ul class="impact-uses">{items}</ul>
+            }
+        });
+        let class = impact.class.as_ref().map(|c| view! { <p class="impact-class">{say(&i18n, units, c)}</p> });
+        let checks = |heading: &'static str, ok: bool, list: &[crate::shared::said::Said]| {
+            (!list.is_empty()).then(|| {
+                let items = list
+                    .iter()
+                    .map(|s| view! { <li class=if ok { "ok" } else { "bad" }>{icon(ok)}<div><b>{say(&i18n, units, s)}</b></div></li> })
+                    .collect_view();
+                view! {
+                    <h3 class="impact-sub">{plain(&i18n, heading)}</h3>
+                    <ul class="checks impact-checks">{items}</ul>
+                }
+            })
+        };
+        let verdict = match impact.verdict {
+            Verdict::Improved => "improved",
+            Verdict::Regressed => "regressed",
+            Verdict::Mixed => "mixed",
+            Verdict::Unchanged => "unchanged",
+        };
+        view! {
+            <p class="impact-what">{headline}</p>
+            {uses}
+            {class}
+            {checks("impact-passing-heading", true, &impact.now_passing)}
+            {checks("impact-failing-heading", false, &impact.now_failing)}
+            <p class=format!("impact-verdict {verdict}")>{say(&i18n, units, &impact.verdict_said())}</p>
         }
         .into_any()
     }

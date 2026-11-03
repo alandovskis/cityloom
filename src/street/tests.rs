@@ -1670,3 +1670,125 @@ fn the_piece_list_is_worded_in_french_with_the_glossary_s_word() {
     assert!(h.contains("aria-label=\"Éléments, de gauche à droite\""), "{h}");
     assert!(h.contains("Éléments de la rue"), "{h}");
 }
+
+// ---- the summary of the last change (#64) --------------------------------------------------
+
+/// A street page whose clock the test holds, so the summary can be left to settle.
+fn timed_street(locale: Locale) -> (Rc<StreetVm>, Rc<crate::shared::ports::ManualScheduler>) {
+    let (ports, _, _, time) = crate::shared::ports::test_ports_with_time();
+    (StreetVm::new(ports, crate::i18n_for(locale), Editor::new(0), None), time)
+}
+
+fn last_change(s: &Rc<StreetVm>) -> String {
+    street_html(|| view! { <notes::LastChange vm=s.clone()/> })
+}
+
+#[test]
+fn the_card_says_there_is_no_change_yet_until_the_street_is_changed() {
+    let (s, time) = timed_street(Locale::En);
+    let h = last_change(&s);
+    assert!(h.contains("impact-empty") && h.contains("No change yet."), "{h}");
+    assert!(!h.contains("impact-what"));
+    let u = segment(&s, 0);
+    s.select(Some(u));
+    time.advance(2_000);
+    assert!(last_change(&s).contains("impact-empty"), "selecting is not a change");
+}
+
+#[test]
+fn an_edit_that_widens_a_sidewalk_shows_the_space_it_took_and_the_check_it_broke_apart() {
+    let (s, time) = timed_street(Locale::En);
+    let u = segment(&s, 0);
+    assert!(s.apply(|e| e.set_width(u, 3_800)));
+    assert!(last_change(&s).contains("impact-empty"), "not until the edits settle");
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("Resize sidewalk") && h.contains("Street space"), "{h}");
+    assert!(h.contains("mc mc-foot") && h.contains("Walking: 6.6 m \u{2192} 7.1 m (0.5 m more)"), "{h}");
+    assert!(h.contains("Newly failing") && !h.contains("Newly passing"), "{h}");
+    let failing = &h[h.find("Newly failing").unwrap()..];
+    assert!(failing.contains("<li class=\"bad\">") && failing.contains("Fits the street width"), "{h}");
+    assert!(h.contains("impact-verdict regressed") && h.contains("Regressed: 1 check now fails."), "{h}");
+    assert_eq!(count(&h, "<li class=\"bad\">"), 1);
+    // Units follow the page.
+    s.set_units(Units::Feet);
+    assert!(last_change(&s).contains("ft"));
+}
+
+#[test]
+fn undo_shows_what_undoing_changed_and_a_check_that_recovers_is_newly_passing() {
+    let (s, time) = timed_street(Locale::En);
+    let u = segment(&s, 0);
+    assert!(s.apply(|e| e.set_width(u, 3_800)));
+    time.advance(600);
+    assert!(s.undo());
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("Undone: Resize sidewalk"), "{h}");
+    assert!(h.contains("Walking: 7.1 m \u{2192} 6.6 m (0.5 m less)"), "{h}");
+    assert!(h.contains("Newly passing") && !h.contains("Newly failing"), "{h}");
+    assert!(h.contains("<li class=\"ok\">") && h.contains("impact-verdict improved"), "{h}");
+    assert!(s.redo());
+    time.advance(600);
+    assert!(last_change(&s).contains("Redone: Resize sidewalk"));
+}
+
+#[test]
+fn a_change_that_touches_neither_space_nor_checks_says_so_and_has_no_lists() {
+    let (s, time) = timed_street(Locale::En);
+    assert!(s.set_speed(Some(30)));
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("No effect on space or checks") && h.contains("Speed limit 30 km/h"), "{h}");
+    assert!(!h.contains("impact-uses") && !h.contains("impact-verdict") && !h.contains("<ul"), "{h}");
+}
+
+#[test]
+fn a_change_that_leaves_every_check_as_it_was_says_so_beside_the_space_it_moved() {
+    let (s, time) = timed_street(Locale::En);
+    let u = segment(&s, 0);
+    assert!(s.apply(|e| e.set_width(u, 3_000)));
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("Walking: 6.6 m \u{2192} 6.3 m (0.3 m less)") && !h.contains("Newly"), "{h}");
+    assert!(h.contains("impact-verdict unchanged") && h.contains("No change in the checks."), "{h}");
+}
+
+#[test]
+fn making_the_street_pedestrian_is_one_change_that_says_what_it_became() {
+    let (s, time) = timed_street(Locale::En);
+    let sidewalk = crate::shared::catalogue::kind_index("sidewalk").unwrap();
+    assert!(s.apply(|e| e.make_pedestrian(sidewalk)));
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("Made pedestrian") && h.contains("mc mc-vehicle") && h.contains("is now a pedestrian street."), "{h}");
+}
+
+#[test]
+fn the_card_is_in_french_with_plurals_and_follows_a_switch_of_language() {
+    let (s, time) = timed_street(Locale::FrCa);
+    let u = segment(&s, 0);
+    assert!(s.apply(|e| e.set_width(u, 3_800)));
+    time.advance(600);
+    let h = last_change(&s);
+    assert!(h.contains("Marche\u{a0}: 6,6\u{a0}m \u{2192} 7,1\u{a0}m (0,5\u{a0}m de plus)"), "{h}");
+    assert!(h.contains("Nouveaux échecs") && h.contains("Dégradation\u{a0}: 1 vérification échoue maintenant."), "{h}");
+    assert!(!h.contains("Newly") && !h.contains("Walking"), "{h}");
+    s.i18n().set(Locale::En);
+    assert!(last_change(&s).contains("Newly failing"));
+}
+
+#[test]
+fn the_card_is_a_polite_live_region_in_the_page_and_the_first_tab_is_called_impact() {
+    let page = include_str!("../../web/street.html");
+    let card = &page[page.find("id=\"impact-card\"").unwrap()..];
+    let card = &card[..card.find('>').unwrap()];
+    assert!(card.contains("aria-live=\"polite\"") && !card.contains("assertive") && card.contains("aria-atomic=\"true\""), "{card}");
+    assert!(page.contains("id=\"t-space\" aria-controls=\"p-space\" aria-selected=\"true\" data-i18n=\"ui-tab-impact\">Impact</button>"));
+    // The card is in the first tab's panel, above the width table.
+    assert!(page.find("id=\"impact-card\"").unwrap() < page.find("id=\"h-space\"").unwrap());
+    let en = crate::i18n_for(Locale::En);
+    let fr = crate::i18n_for(Locale::FrCa);
+    let say = |i: &crate::shared::i18n::I18n| i.tr_now("ui-tab-impact", &crate::shared::i18n::Args::new());
+    assert_eq!((say(&en).as_str(), say(&fr).as_str()), ("Impact", "Incidence"));
+}
