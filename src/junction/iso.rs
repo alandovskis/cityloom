@@ -8,8 +8,9 @@ use serde_json::Value;
 
 use crate::junction::frame::Frame;
 use crate::junction::geometry::{sample_arc, sample_quad};
+use crate::junction::iso_marks::{LEAVE_ARROW_MM, crossing_dimension, lane_arrow, lane_arrow_size, movement_strokes, plain_arrow, ring_arrows};
 use crate::junction::plan_svg::turbo_name;
-use crate::junction::read_model::JView;
+use crate::junction::read_model::{ArmView, JView};
 use crate::junction::text::arms_text;
 use crate::shared::catalogue::{KINDS, MATERIALS};
 use crate::shared::i18n::{Args, I18n};
@@ -19,6 +20,7 @@ use crate::shared::iso::paint::{Paint, Pattern, Style, class, quads};
 use crate::shared::iso::shading::shade_filters;
 use crate::shared::said::say;
 use crate::shared::units::Units;
+use crate::street::model::StopKind;
 
 type P = (f64, f64);
 
@@ -43,6 +45,8 @@ const STOP_LINE_MM: f64 = 300.0;
 const YIELD_DASH_MM: f64 = 700.0;
 const YIELD_GAP_MM: f64 = 500.0;
 
+/// How long on the screen an arrow's length on the ground is drawn, near enough, for the weight of its line.
+const ARROW_SCREEN: f64 = 0.8;
 /// The steps a curve is sampled in.
 const CURVE_STEPS: usize = 12;
 
@@ -194,6 +198,8 @@ struct Draw {
     /// The footprints and heights of the surfaces with no wall round them, which a solid level with one does not
     /// show a wall against.
     tables: Vec<(Vec<P>, f64)>,
+    /// Outlines and lines that belong on what stands (a stop's platform, a curb), painted over the solids.
+    marks: String,
     /// Posts with their heads, painted over the solids.
     posts: String,
     /// The outline of what is selected.
@@ -218,6 +224,7 @@ impl Draw {
             flat: String::new(),
             solids: Vec::new(),
             tables: Vec::new(),
+            marks: String::new(),
             posts: String::new(),
             sel: String::new(),
             hit: String::new(),
@@ -483,10 +490,64 @@ impl Draw {
         .unwrap();
     }
 
+    /// The path commands of open lines `h_mm` above the ground, one `M` for each.
+    fn strokes_d(&self, strokes: &[Vec<P>], h_mm: f64) -> String {
+        let mut d = String::new();
+        for line in strokes.iter().filter(|l| l.len() >= 2) {
+            for (i, p) in line.iter().enumerate() {
+                let (x, y) = self.f.at(*p, h_mm);
+                write!(d, "{}{} {}", if i == 0 { "M" } else { "L" }, f1(x), f1(y)).unwrap();
+            }
+        }
+        d
+    }
+
+    /// A mark of `class` along `d`, with a casing under it in the panel's colour (a dark one for a warning), so that it
+    /// is seen on any surface, light or dark. On the ground it lies under what stands; over, it is drawn over it.
+    fn mark(&mut self, over: bool, class: &str, warn: bool, d: &str) {
+        if d.is_empty() {
+            return;
+        }
+        let casing = if warn { "iso-casing warn" } else { "iso-casing" };
+        let layer = if over { &mut self.marks } else { &mut self.flat };
+        write!(layer, "<path class=\"{casing}\" d=\"{d}\"/><path class=\"{class}\" d=\"{d}\"/>").unwrap();
+    }
+
+    /// A closed outline of `foot` `h_mm` above the ground, as a mark.
+    fn mark_ring(&mut self, over: bool, class: &str, warn: bool, foot: &[P], h_mm: f64) {
+        if foot.len() >= 3 {
+            let d = self.path(foot, h_mm);
+            self.mark(over, class, warn, &d);
+        }
+    }
+
+    /// Open lines `h_mm` above the ground, as a mark.
+    fn mark_lines(&mut self, over: bool, class: &str, warn: bool, strokes: &[Vec<P>], h_mm: f64) {
+        let d = self.strokes_d(strokes, h_mm);
+        self.mark(over, class, warn, &d);
+    }
+
+    /// A glyph painted on the road: `strokes` on the plan, `extra` the classes added to a lane's arrow (`bad`, `out`),
+    /// `size_mm` how long it is on the ground, which sets how heavy its line is. A halo of the panel's colour is under it.
+    fn glyph(&mut self, extra: &str, strokes: &[Vec<P>], size_mm: f64, h_mm: f64) {
+        let d = self.strokes_d(strokes, h_mm);
+        if d.is_empty() {
+            return;
+        }
+        let px = f1(size_mm * self.f.scale * ARROW_SCREEN);
+        write!(self.flat, "<g class=\"lane-arrow{extra}\" style=\"--arrow:{px}\"><path class=\"halo\" d=\"{d}\"/><path d=\"{d}\"/></g>").unwrap();
+    }
+
+    /// A line of text standing at a point of the ground, over a halo, on top of everything. `class` is its classes.
+    fn label(&mut self, class: &str, at: P, h_mm: f64, dy: f64, text: &str) {
+        let (x, y) = self.f.at(at, h_mm);
+        write!(self.names, "<text class=\"{class}\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>", f1(x), f1(y + dy), esc(text)).unwrap();
+    }
+
     fn finish(mut self) -> String {
         self.solids.sort_by(|a, b| Self::depth(a).total_cmp(&Self::depth(b)));
         let solids: String = (0..self.solids.len()).map(|i| self.render(i)).collect();
-        format!("{}<g class=\"iso iso-junction\">{}{solids}{}{}{}</g>", shades(&self.f), self.flat, self.posts, self.sel, self.names)
+        format!("{}<g class=\"iso iso-junction\">{}{solids}{}{}{}{}</g>", shades(&self.f), self.flat, self.marks, self.posts, self.sel, self.names)
     }
 }
 
@@ -594,8 +655,19 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
     } else {
         d.lay("travel", &flatten(&v.core));
     }
+    // Which way the ring runs, and what the bus lane across the middle of a plain one is.
+    for a in ring_arrows(v) {
+        d.glyph("", &plain_arrow(a.at, a.heading, a.size, RING_HEAD), a.size, 0.0);
+    }
+    if v.ring.as_ref().is_some_and(|r| r.lanes.is_empty()) && v.bus.is_some() {
+        d.label("t-mark t-halo", (0.0, 0.0), 0.0, 5.0, &i18n.tr("jn-svg-bus-only", &Args::new()));
+    }
 
     for c in &v.corners {
+        // A corner that fails its check has its curb drawn in the warning's colour.
+        if !c.ok || c.fast {
+            d.mark_lines(true, "curb-line bad", true, &[flatten(&c.curb)], if c.walk { wall } else { 0.0 });
+        }
         // A straight curb is no corner: nothing of it is pressed.
         let hit = if c.straight { String::new() } else { hit_attrs("corner", Some(c.uid), None) };
         d.pressing(hit.clone(), |d| {
@@ -636,10 +708,19 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
                 let Some(poly) = &u.poly else { continue };
                 let id = KINDS[u.kind].id;
                 let foot = flatten(poly);
-                match if a.pedestrian { wall } else { height_of(id) } {
+                let h = if a.pedestrian { wall } else { height_of(id) };
+                // One that fails its check is outlined over what it stands on.
+                if u.bad {
+                    d.mark_ring(true, "curb-use curb-use-bad", false, &foot, h);
+                }
+                match h {
                     h if h > 0.0 => d.stand_in(id, u.material, foot, h, true),
                     _ => d.lay_in(id, u.material, &foot),
                 }
+            }
+            // A turbo's entry is wider than its street, where the layout wants more lanes than the street has.
+            if let Some(entry) = &a.turbo_entry {
+                d.lay("travel", &flatten(entry));
             }
             // Where there is no parking beside the curb the road runs on, over the parking piece.
             for gap in &a.gaps {
@@ -649,6 +730,10 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
             let t = &a.transit;
             for lane in [&t.bus, &t.queue].into_iter().flatten() {
                 d.lay("bus", &flatten(lane));
+            }
+            // The queue jump is a dashed lane.
+            if let Some(queue) = &t.queue {
+                d.mark_ring(false, "iso-queue", false, &flatten(queue), 0.0);
             }
             for poly in [&t.stop_poly, &t.island].into_iter().flatten() {
                 d.stand("sidewalk", flatten(poly), wall, true);
@@ -710,6 +795,16 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
         for b in &a.transit.bollards {
             d.post(*b, BOLLARD_MM, "bollard");
         }
+        // The turn arrows on the lanes, and the small ones where the traffic leaves.
+        let size = lane_arrow_size(&a.lanes);
+        for lane in &a.lanes {
+            d.glyph(if lane.bad { " bad" } else { "" }, &lane_arrow(lane, size), size, level);
+        }
+        for out in &a.leave_arrows {
+            d.glyph(" out", &plain_arrow(out.at, out.heading as f64, LEAVE_ARROW_MM, LEAVE_HEAD), LEAVE_ARROW_MM, level);
+        }
+        draw_stops(&mut d, a, wall, level);
+        draw_measures(&mut d, a, level);
         let on = selected("arm", a.uid);
         d.name(a.end, &say(i18n, units, &a.street), on);
         if on {
@@ -718,6 +813,13 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
         let Some(c) = a.crossing.as_ref() else { continue };
         let top = flatten(&c.poly);
         let h = if c.continuous { wall } else { level };
+        // How far across, on the junction side of the crossing.
+        if let Some((strokes, at)) = crossing_dimension(&top, a.bearing as f64) {
+            d.mark_lines(false, if c.too_far { "dim dim-warn" } else { "dim" }, c.too_far, &strokes, h);
+            let number = |mm: i32| units.number_in(mm, i18n.locale());
+            let text = if c.stages > 1 { format!("{} × {}", c.stages, number(c.stage_mm)) } else { number(c.distance_mm) };
+            d.label(&format!("t-dim t-halo{}", if c.too_far { " t-warn" } else { "" }), at, h, 5.0, &text);
+        }
         if c.continuous {
             d.table("sidewalk", &top, wall);
             for ramp in &c.ramps {
@@ -730,7 +832,80 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
         }
     }
 
+    // The turns of the street that is selected (or of a part of it), where they may go and where they may not.
+    if v.selected.kind.is_some()
+        && let Some(sa) = v.arms.iter().find(|a| a.uid == v.selected.uid)
+    {
+        let level = if v.raised && v.ring.is_none() { wall } else { 0.0 };
+        for m in v.movements.iter().filter(|m| m.from == sa.uid) {
+            let class = format!(
+                "mv{}{}{}",
+                if m.allowed { "" } else { " no" },
+                if m.allowed && !m.lane { " bad" } else { "" },
+                if m.indirect { " indirect" } else { "" }
+            );
+            let strokes = movement_strokes(&flatten(&m.path), m.allowed);
+            d.mark_lines(true, &class, m.allowed && !m.lane, &strokes, level);
+        }
+    }
+
     IsoSvg { frame: f, markup: d.finish() }
+}
+
+/// An arrow's head, as a part of its length: a ring's, and where the traffic leaves.
+const RING_HEAD: f64 = 0.2;
+const LEAVE_HEAD: f64 = 0.19;
+
+/// The street's transit stops on an arm: the platform over what it stands on, the bus's dwell and its run to the stop
+/// line on the road, and the post.
+fn draw_stops(d: &mut Draw, a: &ArmView, wall: f64, level: f64) {
+    for st in &a.stops {
+        let bad = if st.bad { " stop-bad" } else { "" };
+        if let Some(pad) = &st.pad {
+            let kind = match st.kind {
+                StopKind::Curb => "",
+                StopKind::Bulb => " stop-bulb",
+                StopKind::Island => " stop-island",
+            };
+            d.mark_ring(true, &format!("stop-pad{kind}{bad}"), false, &flatten(pad), wall);
+        }
+        if let Some(dwell) = &st.dwell {
+            d.mark_ring(false, &format!("stop-dwell{bad}"), false, &flatten(dwell), level);
+        }
+        if let Some(run) = &st.run {
+            d.mark_lines(false, "stop-run", false, &[flatten(run)], level);
+        }
+        if let Some(post) = st.post {
+            let (x, y) = d.f.at(post, wall);
+            let shelter = if st.shelter {
+                format!("<rect class=\"stop-shelter\" x=\"{}\" y=\"{}\" width=\"10\" height=\"10\"/>", f1(x - 5.0), f1(y - 5.0))
+            } else {
+                String::new()
+            };
+            write!(d.posts, "<g class=\"stop-post\">{shelter}<circle cx=\"{}\" cy=\"{}\" r=\"3.5\"/></g>", f1(x), f1(y)).unwrap();
+        }
+    }
+}
+
+/// The measures of an arm that are marks on the road: where a boundary's taper begins and ends, a virtual queue
+/// jump's loop, a bus gate's line, a dead end's cap, and each measure's Atlas code.
+fn draw_measures(d: &mut Draw, a: &ArmView, level: f64) {
+    for [from, to] in &a.beyond_marks {
+        d.mark_lines(false, "approach-mark", false, &[vec![*from, *to]], 0.0);
+    }
+    let t = &a.transit;
+    if let Some(l) = &t.virtual_loop {
+        d.mark_ring(false, "measure-loop", false, &flatten(l), level);
+    }
+    if let Some([from, to]) = t.gate {
+        d.stop_line(from, to, level, t.gate_yields);
+    }
+    if let Some(c) = t.cap {
+        d.mark_lines(false, "dead-cap", false, &[vec![c[0], c[1]]], level);
+    }
+    for tag in &t.tags {
+        d.label("t-note t-halo measure-tag", tag.at, level, 4.0, tag.code);
+    }
 }
 
 #[cfg(test)]
@@ -1016,9 +1191,9 @@ mod tests {
 
     #[test]
     fn an_arm_without_a_beyond_draws_as_before() {
-        // Repinned for #140 stage 1, which gave the shapes the attributes a press reads and drew the parts that only
+        // Repinned for #140 stages 1 and 2, which gave the shapes the attributes a press reads and drew the parts that only
         // have a place to press (a lane, a crossing, a bare corner); no shape moved.
-        let (got, pinned) = (iso_fingerprint(), 1_529_890_298_063_261_862);
+        let (got, pinned) = (iso_fingerprint(), 6_762_659_799_963_991_834);
         assert_eq!(
             got, pinned,
             "the 2.5D markup of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."

@@ -102,10 +102,83 @@ pub fn ring_arrows(v: &JView) -> Vec<RingArrow> {
     out
 }
 
+/// The strokes of a turn: its path, then the head of an arrow where an allowed one ends, or a cross at the middle of a
+/// banned one. A path with no length has none.
+pub fn movement_strokes(path: &[P], allowed: bool) -> Vec<Vec<P>> {
+    let (Some(&first), Some(&last)) = (path.first(), path.last()) else { return Vec::new() };
+    let mut strokes = vec![path.to_vec()];
+    if allowed {
+        // The last part of the path that has a direction.
+        if let Some(&back) = path.iter().rev().find(|p| (p.0 - last.0).hypot(p.1 - last.1) > 1.0) {
+            let len = (last.0 - back.0).hypot(last.1 - back.1);
+            let u = ((last.0 - back.0) / len, (last.1 - back.1) / len);
+            let wing = |turn: f64| {
+                let (c, s) = (turn.cos(), turn.sin());
+                (last.0 - HEAD_MM * (u.0 * c - u.1 * s), last.1 - HEAD_MM * (u.0 * s + u.1 * c))
+            };
+            strokes.push(vec![wing(HEAD_ANGLE), last, wing(-HEAD_ANGLE)]);
+        }
+    } else {
+        let mid = ((first.0 + last.0) / 2.0, (first.1 + last.1) / 2.0);
+        strokes.push(vec![(mid.0 - CROSS_MM, mid.1 - CROSS_MM), (mid.0 + CROSS_MM, mid.1 + CROSS_MM)]);
+        strokes.push(vec![(mid.0 + CROSS_MM, mid.1 - CROSS_MM), (mid.0 - CROSS_MM, mid.1 + CROSS_MM)]);
+    }
+    strokes
+}
+
+/// The length of the arrow head of a turn, and its angle off the path.
+const HEAD_MM: f64 = 1_100.0;
+const HEAD_ANGLE: f64 = 0.55;
+/// Half the size of the cross on a banned turn.
+const CROSS_MM: f64 = 600.0;
+/// How far from the crossing, towards the middle of the junction, its length is written; nothing else is drawn there.
+const DIM_OFFSET_MM: f64 = 800.0;
+/// The length of the ticks that end a dimension line.
+const TICK_MM: f64 = 350.0;
+
+/// A crossing's length written across it: the dimension line on the junction side of the crossing's near edge, a tick
+/// at each end, and where its figure goes. `poly` is the crossing's four corners, across the street first; `bearing`
+/// is its arm's.
+pub fn crossing_dimension(poly: &[P], bearing: f64) -> Option<(Vec<Vec<P>>, P)> {
+    let (a, b) = (*poly.first()?, *poly.get(1)?);
+    let n = dir(bearing);
+    let (q0, q1) = ((a.0 - n.0 * DIM_OFFSET_MM, a.1 - n.1 * DIM_OFFSET_MM), (b.0 - n.0 * DIM_OFFSET_MM, b.1 - n.1 * DIM_OFFSET_MM));
+    let ang = (q1.1 - q0.1).atan2(q1.0 - q0.0) + std::f64::consts::FRAC_PI_4;
+    let t = (ang.cos() * TICK_MM, ang.sin() * TICK_MM);
+    let tick = |p: P| vec![(p.0 - t.0, p.1 - t.1), (p.0 + t.0, p.1 + t.1)];
+    Some((vec![vec![q0, q1], tick(q0), tick(q1)], ((q0.0 + q1.0) / 2.0, (q0.1 + q1.1) / 2.0)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::junction::model::*;
+
+    #[test]
+    fn an_allowed_turn_ends_in_a_head_and_a_banned_one_has_a_cross() {
+        let path = vec![(0.0, 0.0), (0.0, -5_000.0), (5_000.0, -5_000.0)];
+        let allowed = movement_strokes(&path, true);
+        assert_eq!(allowed.len(), 2);
+        assert_eq!(allowed[1][1], (5_000.0, -5_000.0), "the head's tip is the end of the path");
+        assert!(allowed[1][0].0 < 5_000.0 && allowed[1][2].0 < 5_000.0, "the wings trail behind the tip: {:?}", allowed[1]);
+        let banned = movement_strokes(&path, false);
+        assert_eq!(banned.len(), 3, "the path and the two strokes of a cross");
+        assert!(banned[1].iter().chain(&banned[2]).all(|p| (p.0 - 2_500.0).abs() <= CROSS_MM && (p.1 + 2_500.0).abs() <= CROSS_MM));
+        assert!(movement_strokes(&[], true).is_empty());
+        assert_eq!(movement_strokes(&[(1.0, 1.0)], true).len(), 1, "a point has no direction to point");
+    }
+
+    #[test]
+    fn a_crossing_is_measured_on_the_junction_side_of_its_near_edge() {
+        let poly = [(-3_000.0, -10_000.0), (3_000.0, -10_000.0), (3_000.0, -12_000.0), (-3_000.0, -12_000.0)];
+        let (strokes, label) = crossing_dimension(&poly, 0.0).unwrap();
+        assert_eq!(strokes.len(), 3);
+        // The north arm leaves along -y, so the junction is at +y of its crossing.
+        assert!(strokes[0].iter().all(|p| (p.1 - (-10_000.0 + DIM_OFFSET_MM)).abs() < 1e-6));
+        assert_eq!(strokes[0][1].0 - strokes[0][0].0, 6_000.0);
+        assert_eq!(label, (0.0, -10_000.0 + DIM_OFFSET_MM));
+        assert!(crossing_dimension(&[], 0.0).is_none());
+    }
 
     fn lane(uses: u8, heading: i32) -> LaneView {
         LaneView { uses, dests: Vec::new(), bad: false, at: (1000.0, 2000.0), heading, poly: Vec::new(), width_mm: 3_500, fixed: false }
@@ -201,5 +274,289 @@ mod tests {
     #[test]
     fn no_ring_no_arrows() {
         assert!(ring_arrows(&Junction::new(0).view()).is_empty());
+    }
+
+    // ---- what the 2.5D draws of them ----------------------------------------------------------------------------
+
+    use crate::junction::iso::{flatten, iso_svg};
+    use crate::junction::tests::{end_stop, end_use, junction_with_a_pocket, junction_with_stops, junction_with_uses};
+    use crate::shared::units::Units;
+
+    fn svg(j: &Junction) -> String {
+        iso_svg(&j.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), 1000.0, 1000.0, Units::Metres).markup
+    }
+
+    fn count(s: &str, needle: &str) -> usize {
+        s.matches(needle).count()
+    }
+
+    fn no_missing_number(m: &str) {
+        assert!(!m.contains("NaN") && !m.contains("inf"));
+    }
+
+    #[test]
+    fn every_entering_lane_has_its_arrow_and_every_leaving_street_its_small_one() {
+        for sample in 0..4 {
+            let j = Junction::new(sample);
+            let (v, m) = (j.view(), svg(&j));
+            let lanes: usize = v.arms.iter().map(|a| a.lanes.len()).sum();
+            let leaving: usize = v.arms.iter().map(|a| a.leave_arrows.len()).sum();
+            assert!(lanes > 0 && leaving > 0, "sample {sample}");
+            assert_eq!(count(&m, "<g class=\"lane-arrow\" "), lanes, "sample {sample}");
+            assert_eq!(count(&m, "<g class=\"lane-arrow out\" "), leaving, "sample {sample}");
+            no_missing_number(&m);
+        }
+    }
+
+    #[test]
+    fn an_arrow_is_a_halo_under_a_line_and_is_sized_for_the_screen() {
+        let m = svg(&Junction::new(0));
+        let g = &m[m.find("<g class=\"lane-arrow\" ").unwrap()..];
+        let g = &g[..g.find("</g>").unwrap()];
+        assert!(g.find("class=\"halo\"").unwrap() < g.rfind("<path d=").unwrap(), "{g}");
+        let size: f64 = g.split("--arrow:").nth(1).unwrap().split(['"', ';']).next().unwrap().parse().unwrap();
+        assert!((20.0..200.0).contains(&size), "{size}");
+    }
+
+    #[test]
+    fn a_lane_that_serves_only_banned_turns_has_a_bad_arrow() {
+        let mut j = Junction::new(0);
+        let uid = j.current().arms[0].uid;
+        let bad = j.view().arms[0].lanes.iter().filter(|l| l.bad).count();
+        assert_eq!(count(&svg(&j), "<g class=\"lane-arrow bad\" "), bad);
+        // Ban the turns of every lane of an arm: its lanes serve nothing that is allowed.
+        for lane in 0..j.current().arms[0].lanes.len() {
+            for dest in j.current().arms.iter().map(|a| a.uid).filter(|u| *u != uid).collect::<Vec<_>>() {
+                let _ = j.set_lane_dest(uid, lane, dest, true);
+            }
+        }
+        let v = j.view();
+        let bad = v.arms.iter().flat_map(|a| &a.lanes).filter(|l| l.bad).count();
+        assert_eq!(count(&svg(&j), "<g class=\"lane-arrow bad\" "), bad);
+    }
+
+    #[test]
+    fn a_roundabout_has_its_circulation_arrows_and_a_turbo_too() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT));
+        let (v, m) = (j.view(), svg(&j));
+        let ring = ring_arrows(&v).len();
+        assert_eq!(ring, v.arms.len());
+        let lanes: usize = v.arms.iter().map(|a| a.lanes.len()).sum();
+        let leaving: usize = v.arms.iter().map(|a| a.leave_arrows.len()).sum();
+        assert_eq!(count(&m, "<g class=\"lane-arrow\" "), lanes + ring);
+        assert_eq!(count(&m, "<g class=\"lane-arrow out\" "), leaving);
+        assert!(j.set_turbo(Some(0)));
+        let (v, m) = (j.view(), svg(&j));
+        let lanes: usize = v.arms.iter().map(|a| a.lanes.len()).sum();
+        assert_eq!(count(&m, "<g class=\"lane-arrow\" "), lanes + ring_arrows(&v).len());
+        no_missing_number(&m);
+    }
+
+    #[test]
+    fn the_selected_arm_shows_where_its_traffic_may_go_and_a_banned_turn_is_crossed_out() {
+        let mut j = Junction::new(0);
+        assert_eq!(count(&svg(&j), "class=\"mv"), 0, "nothing selected, no turns");
+        let uid = j.current().arms[0].uid;
+        let other = j.current().arms[1].uid;
+        j.select(Target::Arm(uid));
+        let v = j.view();
+        let mine: Vec<_> = v.movements.iter().filter(|m| m.from == uid).collect();
+        assert!(mine.len() >= 2);
+        let m = svg(&j);
+        assert_eq!(count(&m, "class=\"mv"), mine.len());
+        assert_eq!(count(&m, "class=\"mv no"), mine.iter().filter(|m| !m.allowed).count());
+        // A lane, a crossing and a corner of the arm show its turns too, as on the plan.
+        j.select(Target::Lane(uid, 0));
+        assert_eq!(count(&svg(&j), "class=\"mv"), mine.len());
+        // Banning a turn makes it a dashed, crossed-out one.
+        let allowed = mine.iter().filter(|m| m.allowed).count();
+        assert!(allowed > 0);
+        let class = v.movements.iter().find(|m| m.from == uid && m.to == other).map(|m| m.class);
+        assert!(class.is_some());
+        no_missing_number(&m);
+    }
+
+    #[test]
+    fn a_turn_that_has_no_lane_is_bad_and_one_made_the_indirect_way_is_marked() {
+        let mut j = Junction::new(0);
+        let uid = j.current().arms[0].uid;
+        j.select(Target::Arm(uid));
+        let v = j.view();
+        let bad = v.movements.iter().filter(|m| m.from == uid && m.allowed && !m.lane).count();
+        let indirect = v.movements.iter().filter(|m| m.from == uid && m.indirect).count();
+        let m = svg(&j);
+        assert_eq!(count(&m, "class=\"mv bad"), bad);
+        assert_eq!(count(&m, " indirect\""), indirect);
+        // Close every lane of the arm to turns: the allowed turns have no lane, so they are bad.
+        for lane in 0..j.current().arms[0].lanes.len() {
+            for dest in j.current().arms.iter().map(|a| a.uid).filter(|u| *u != uid).collect::<Vec<_>>() {
+                let _ = j.set_lane_dest(uid, lane, dest, false);
+            }
+        }
+        let v = j.view();
+        let bad = v.movements.iter().filter(|m| m.from == uid && m.allowed && !m.lane).count();
+        assert_eq!(count(&svg(&j), "class=\"mv bad"), bad);
+    }
+
+    #[test]
+    fn a_turn_starts_where_the_street_enters_and_ends_where_the_other_leaves() {
+        let mut j = Junction::new(0);
+        let uid = j.current().arms[0].uid;
+        j.select(Target::Arm(uid));
+        let v = j.view();
+        let s = iso_svg(&v, &crate::i18n_for(crate::shared::i18n::Locale::En), 1000.0, 1000.0, Units::Metres);
+        let m = v.movements.iter().find(|m| m.from == uid && m.allowed).unwrap();
+        let path = flatten(&m.path);
+        let (x, y) = s.frame.at(path[0], 0.0);
+        assert!(s.markup.contains(&format!("d=\"M{} {}", crate::shared::iso::format::f1(x), crate::shared::iso::format::f1(y))), "the turn starts at {x},{y}");
+    }
+
+    #[test]
+    fn a_stop_draws_its_pad_dwell_run_and_post_and_a_bad_one_says_so() {
+        let (j, uid) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(25_000, 33_000, lane, walk)]);
+        let v = j.view();
+        let s = &v.arms.iter().find(|a| a.uid == uid).unwrap().stops[0];
+        assert!(s.bad);
+        let m = svg(&j);
+        for class in ["stop-pad stop-bad", "stop-dwell stop-bad", "stop-run", "stop-post"] {
+            assert_eq!(count(&m, &format!("class=\"{class}")), 1, "{class}");
+        }
+        assert_eq!(count(&m, "class=\"stop-shelter\""), 1, "the stop has a shelter");
+        no_missing_number(&m);
+        // Far from the junction and with a lane that goes straight on, a stop is not bad.
+        let (j, _) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(25_000, 33_000, lane, walk)]);
+        let plain = svg(&Junction::new(0));
+        assert!(!plain.contains("stop-pad") && !plain.contains("stop-run"));
+        assert!(svg(&j).len() > plain.len());
+    }
+
+    #[test]
+    fn a_stop_far_side_of_the_crossing_has_no_run_and_a_bulb_or_island_says_which() {
+        use crate::shared::catalogue::Side;
+        use crate::street::model::StopKind;
+        for (kind, class) in [(StopKind::Bulb, "stop-pad stop-bulb"), (StopKind::Island, "stop-pad stop-island")] {
+            let (j, _) = junction_with_stops(
+                |_| {},
+                |lane, walk| {
+                    let mut s = end_stop(25_000, 33_000, lane, walk);
+                    s.kind = kind;
+                    s.side = Side::Left;
+                    vec![s]
+                },
+            );
+            assert_eq!(count(&svg(&j), &format!("class=\"{class}")), 1, "{class}");
+        }
+        let (j, _) = junction_with_stops(
+            |_| {},
+            |lane, walk| {
+                let mut s = end_stop(25_000, 33_000, lane, walk);
+                s.enters = false;
+                vec![s]
+            },
+        );
+        assert_eq!(count(&svg(&j), "class=\"stop-run"), 0);
+    }
+
+    #[test]
+    fn a_boundary_with_a_taper_draws_its_two_marks_across_the_arm() {
+        let (j, _) = junction_with_a_pocket(|_| {});
+        let v = j.view();
+        let marks: usize = v.arms.iter().map(|a| a.beyond_marks.len()).sum();
+        assert!(marks >= 1);
+        assert_eq!(count(&svg(&j), "class=\"approach-mark\""), marks);
+        assert_eq!(count(&svg(&Junction::new(0)), "approach-mark"), 0);
+    }
+
+    #[test]
+    fn the_measures_of_an_arm_are_tagged_with_their_codes_and_drawn() {
+        let mut j = Junction::new(0);
+        let e = j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid;
+        let w = j.current().arms.iter().find(|a| a.bearing == 270).unwrap().uid;
+        assert_eq!(count(&svg(&j), "measure-tag"), 0);
+        assert!(j.set_bus_lane(e, true) && j.set_approach(e, GATE_YIELD) && j.set_approach(w, Q_VIRTUAL) && j.set_rule(e, RULE_DEAD_END));
+        let (v, m) = (j.view(), svg(&j));
+        let tags: usize = v.arms.iter().map(|a| a.transit.tags.len()).sum();
+        assert!(tags >= 2);
+        assert_eq!(count(&m, "class=\"t-note t-halo measure-tag\""), tags);
+        for code in v.arms.iter().flat_map(|a| a.transit.tags.iter().map(|t| t.code)) {
+            assert!(m.contains(&format!(">{code}</text>")), "{code}");
+        }
+        assert_eq!(count(&m, "class=\"measure-loop\""), v.arms.iter().filter(|a| a.transit.virtual_loop.is_some()).count());
+        assert_eq!(count(&m, "class=\"dead-cap\""), v.arms.iter().filter(|a| a.transit.cap.is_some()).count());
+        // The gate is a stop line of its own, beside the arm's.
+        let gates = v.arms.iter().filter(|a| a.transit.gate.is_some()).count();
+        assert!(gates >= 1);
+        no_missing_number(&m);
+    }
+
+    #[test]
+    fn a_queue_jump_lane_is_dashed_and_a_dead_end_arm_is_capped() {
+        let mut j = Junction::new(0);
+        let e = j.current().arms.iter().find(|a| a.bearing == 90).unwrap().uid;
+        assert!(j.set_bus_lane(e, true) && j.set_approach(e, Q_CURB));
+        assert_eq!(count(&svg(&j), "class=\"iso-queue\""), 1);
+        assert_eq!(count(&svg(&Junction::new(0)), "iso-queue"), 0);
+    }
+
+    #[test]
+    fn a_curbside_use_that_fails_its_check_is_outlined_and_one_that_passes_is_not() {
+        use crate::street::model::Use;
+        let probe = svg(&junction_with_uses(|p| vec![end_use(30_000, Use::Parking, p)]).0);
+        assert_eq!(count(&probe, "curb-use-bad"), 0);
+        let (j, _) = junction_with_uses(|p| vec![end_use(18_000, Use::Parking, p)]);
+        let bad = j.view().arms.iter().flat_map(|a| &a.curb_uses).filter(|u| u.bad).count();
+        assert_eq!(count(&svg(&j), "class=\"curb-use curb-use-bad\""), bad);
+    }
+
+    #[test]
+    fn a_corner_that_fails_is_drawn_with_a_warning_curb() {
+        let mut j = Junction::new(0);
+        let uid = j.current().arms[0].uid;
+        let fast = |j: &Junction| j.view().corners.iter().filter(|c| !c.straight && (!c.ok || c.fast)).count();
+        let before = fast(&j);
+        assert_eq!(count(&svg(&j), "class=\"curb-line bad\""), before);
+        // A big radius makes the turn fast; whatever the view then calls bad is drawn.
+        for _ in 0..30 {
+            j.step_corner(uid, 1);
+        }
+        assert_eq!(count(&svg(&j), "class=\"curb-line bad\""), fast(&j));
+    }
+
+    #[test]
+    fn a_crossing_has_its_length_written_across_it_and_a_long_one_is_a_warning() {
+        let j = Junction::new(0);
+        let (v, m) = (j.view(), svg(&j));
+        let crossings = v.arms.iter().filter(|a| a.crossing.is_some()).count();
+        assert!(crossings > 0);
+        assert_eq!(count(&m, "class=\"dim\"") + count(&m, "class=\"dim dim-warn\""), crossings);
+        assert_eq!(count(&m, "class=\"t-dim t-halo"), crossings);
+        let long = v.arms.iter().filter_map(|a| a.crossing.as_ref()).filter(|c| c.too_far).count();
+        assert_eq!(count(&m, "class=\"dim dim-warn\""), long);
+    }
+
+    #[test]
+    fn a_roundabout_with_a_bus_lane_says_so_and_a_turbo_entry_is_widened() {
+        let mut j = Junction::new(0);
+        assert!(j.set_control(ROUNDABOUT));
+        let at = |j: &Junction, b: i32| j.current().arms.iter().find(|a| a.bearing == b).unwrap().uid;
+        let (n, s) = (at(&j, 0), at(&j, 180));
+        assert!(!svg(&j).contains(">Bus only</text>"));
+        assert!(j.set_bus(Some((n, s))));
+        assert_eq!(count(&svg(&j), ">Bus only</text>"), 1);
+    }
+
+    #[test]
+    fn nothing_the_2_5d_marks_on_the_ground_takes_a_press() {
+        let (j, _) = junction_with_stops(|_| {}, |lane, walk| vec![end_stop(25_000, 33_000, lane, walk)]);
+        let mut j = j;
+        let uid = j.current().arms[0].uid;
+        j.select(Target::Arm(uid));
+        let m = svg(&j);
+        for class in ["lane-arrow", "iso-casing", "mv", "stop-pad", "stop-run", "dim"] {
+            for part in m.split(&format!("class=\"{class}")).skip(1) {
+                assert!(!part[..part.find('>').unwrap()].contains("data-role"), "{class}");
+            }
+        }
     }
 }

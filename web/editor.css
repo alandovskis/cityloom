@@ -740,11 +740,62 @@ svg pattern circle {
 #drawing .iso-junction .lane-hit {
   stroke: none;
 }
+/* What the plan draws on the ground and the 2.5D draws after it (junction/iso_marks.rs; #140): the marks keep the
+   plan's own classes and so its colours (stop-*, mv, approach-mark, dim, measure-loop, dead-cap, lane-arrow, curb-line),
+   and lie on a surface that can be anything from dark asphalt to pale concrete, so each line has a casing under it
+   in the panel's colour (a dark one under a warning, which the panel's colour does not clear 3:1). */
+#drawing .iso-junction .iso-casing {
+  fill: none;
+  stroke: var(--panel);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+#drawing .iso-junction .iso-casing.warn {
+  stroke: var(--iso-sel-casing);
+}
+#drawing .iso-junction .iso-queue {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  stroke-dasharray: 6 3;
+}
+#drawing .iso-junction .curb-use-bad {
+  fill: none;
+}
+#drawing .iso-junction .stop-post circle {
+  stroke: var(--panel);
+  stroke-width: 1.5;
+}
+#drawing .iso-junction .stop-shelter {
+  filter: drop-shadow(0 0 1px var(--panel)) drop-shadow(0 0 1px var(--panel));
+}
 @media (forced-colors: active) {
   #drawing .iso-junction .iso-sel {
     stroke: Highlight;
   }
-  #drawing .iso-junction .iso-sel-casing {
+  #drawing .iso-junction .iso-sel-casing,
+  #drawing .iso-junction .iso-casing,
+  #drawing .iso-junction .iso-casing.warn,
+  #drawing .iso-junction .lane-arrow path.halo {
+    stroke: Canvas;
+  }
+  #drawing .iso-junction .lane-arrow path:not(.halo),
+  #drawing .iso-junction .mv,
+  #drawing .iso-junction .iso-queue,
+  #drawing .iso-junction .measure-loop,
+  #drawing .iso-junction .dead-cap,
+  #drawing .iso-junction .dim,
+  #drawing .iso-junction .curb-line {
+    stroke: CanvasText;
+  }
+  #drawing .iso-junction .lane-arrow.bad path:not(.halo),
+  #drawing .iso-junction .mv.bad,
+  #drawing .iso-junction .dim-warn,
+  #drawing .iso-junction .curb-line.bad {
+    stroke: Mark;
+  }
+  #drawing .iso-junction .stop-post circle {
     stroke: Canvas;
   }
 }

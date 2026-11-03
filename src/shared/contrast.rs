@@ -344,12 +344,38 @@ mod tests {
         assert!(editor.contains("\n.iso-sel {\n  stroke: var(--iso-sel);") && editor.contains("\n.iso-sel-casing {\n  stroke: var(--iso-sel-casing);"));
         let forced = editor.find("  #drawing .iso-junction .iso-sel {\n    stroke: Highlight;").expect("forced-colours rule for the line");
         assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some_and(|m| !editor[m..forced].contains("\n}\n")));
-        assert!(editor.contains("  #drawing .iso-junction .iso-sel-casing {\n    stroke: Canvas;"));
+        assert!(editor.contains("  #drawing .iso-junction .iso-sel-casing,\n  #drawing .iso-junction .iso-casing,"));
         // What is only looked at lets a press through; what is pressed asks for a tap and no double-tap zoom.
         assert!(rule(editor, "#drawing .iso-junction *").contains("pointer-events: none;"));
         let pressed = rule(editor, "#drawing .iso-junction [data-role]");
         assert!(pressed.contains("cursor: pointer;") && pressed.contains("touch-action: manipulation;"), "{pressed}");
         // A lane under the pointer or selected is shaded in the accent's wash, which the accent clears 3:1 on (measured above).
         assert!(rule(editor, "#drawing .lane-hit:hover,\n#drawing .lane-hit.on").contains("fill: var(--accent-wash);"));
+    }
+
+    #[test]
+    fn the_marks_the_2_5d_draws_on_the_ground_clear_three_to_one_on_their_casing_in_both_themes_and_have_forced_colours() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        let dark_casing = token(editor, "iso-sel-casing").0.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let panel = pick(&token(app, "panel"), i);
+            // A mark lies on any surface, so it is measured against the casing it is drawn on: the panel's colour.
+            for name in ["ink", "ink-2", "ink-3", "accent"] {
+                let line = pick(&token(app, name), i);
+                assert!(contrast(&line, &panel) >= 3.0, "{name} on the panel {theme}: {:.2}", contrast(&line, &panel));
+            }
+            // A warning is on the dark casing, which the panel's colour would not do for the amber.
+            let warn = token(app, "warn-line").0.unwrap();
+            assert!(contrast(&warn, &dark_casing) >= 3.0, "warning on its casing {theme}: {:.2}", contrast(&warn, &dark_casing));
+        }
+        // The casings are the colours said, and the forced colours turn every kind of mark into system colours.
+        assert!(rule(editor, "#drawing .iso-junction .iso-casing").contains("stroke: var(--panel);"));
+        assert!(rule(editor, "#drawing .iso-junction .iso-casing.warn").contains("stroke: var(--iso-sel-casing);"));
+        let forced = editor.find("  #drawing .iso-junction .lane-arrow path:not(.halo),").expect("forced-colours rule for the marks");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some_and(|m| !editor[m..forced].contains("\n}\n")));
+        for class in [".mv", ".dim-warn", ".curb-line.bad", ".stop-post circle", ".iso-casing.warn"] {
+            assert!(editor[forced - 400..].contains(&format!("#drawing .iso-junction {class}")), "{class}");
+        }
     }
 }

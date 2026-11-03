@@ -2769,7 +2769,7 @@ fn a_stop_on_a_lane_that_moves_across_the_boundary_ends_with_the_lane() {
 
 // ---- the stop checks ---------------------------------------------------------------------
 
-fn check_of(j: &Junction, id: &str) -> crate::junction::read_model::Check {
+pub(crate) fn check_of(j: &Junction, id: &str) -> crate::junction::read_model::Check {
     j.view().checks.into_iter().find(|c| c.id == id).unwrap_or_else(|| panic!("no check {id}"))
 }
 
@@ -3099,7 +3099,7 @@ fn a_stops_side_is_said_as_seen_from_the_centre_and_the_double_stop_problem_read
 
 /// A sample junction whose north arm has the curbside uses `make` builds from the index of that arm's parking piece
 /// (or its first sidewalk when it has none), and that arm's uid.
-fn junction_with_uses(make: impl Fn(usize) -> Vec<crate::street::model::EndUse>) -> (Junction, u32) {
+pub(crate) fn junction_with_uses(make: impl Fn(usize) -> Vec<crate::street::model::EndUse>) -> (Junction, u32) {
     let mut state = Junction::new(0).current().clone();
     let arm = state.arms.iter_mut().find(|a| a.bearing == 0).unwrap();
     let prof = arm.profile(0);
@@ -3110,7 +3110,7 @@ fn junction_with_uses(make: impl Fn(usize) -> Vec<crate::street::model::EndUse>)
     (Junction::from_city(named, &state, &state, 0).expect("draws"), uid)
 }
 
-fn end_use(near_mm: i32, use_: crate::street::model::Use, piece: usize) -> crate::street::model::EndUse {
+pub(crate) fn end_use(near_mm: i32, use_: crate::street::model::Use, piece: usize) -> crate::street::model::EndUse {
     crate::street::model::EndUse { index: 0, side: crate::shared::catalogue::Side::Right, use_, near_mm, far_mm: near_mm + 6_000, piece: Some(piece) }
 }
 
