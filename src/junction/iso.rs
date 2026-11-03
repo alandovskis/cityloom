@@ -11,7 +11,6 @@ use crate::junction::geometry::{sample_arc, sample_quad};
 use crate::junction::iso_marks::{
     LEAVE_ARROW_MM, Spot, crossing_dimension, lane_arrow, lane_arrow_size, movement_strokes, plain_arrow, ring_arrows, spread_labels,
 };
-use crate::junction::plan_svg::turbo_name;
 use crate::junction::read_model::{ArmView, JView};
 use crate::junction::text::arms_text;
 use crate::shared::catalogue::{KINDS, MATERIALS};
@@ -108,10 +107,9 @@ pub struct IsoFrame {
 
 impl IsoFrame {
     /// The frame for a drawing `width` wide in a window `window_height` high, as big as the plan's, that holds
-    /// the points of `content` (on the ground) and the tallest thing standing above them. `bounds` is the plan's,
-    /// which only sizes the drawing: it has room round the junction for the street names the picture has none of.
-    pub fn fit(bounds: [f64; 4], content: &[P], width: f64, window_height: f64) -> IsoFrame {
-        let plan = Frame::fit(bounds, width, window_height);
+    /// the points of `content` (on the ground) and the tallest thing standing above them.
+    pub fn fit(content: &[P], width: f64, window_height: f64) -> IsoFrame {
+        let plan = Frame::fit(width, window_height);
         let ground: Vec<P> = content.iter().map(|&c| project(c, 0.0)).collect();
         let (min_x, max_x) = ground.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.0), hi.max(p.0)));
         let (min_y, max_y) = ground.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p.1), hi.max(p.1)));
@@ -581,16 +579,31 @@ fn content_points(v: &JView) -> Vec<P> {
     pts
 }
 
-/// What a screen reader is told the picture is, drawn again when the language changes.
+/// "Basic turbo roundabout, regular size": what the drawing is, when the junction has a turbo.
+pub(crate) fn turbo_name(v: &JView, i18n: &I18n) -> Option<String> {
+    let t = v.turbo.as_ref()?;
+    Some(i18n.tr(t.label_key, &Args::new().str("size", i18n.tr(t.size_key, &Args::new()).to_lowercase())))
+}
+
+/// What a screen reader is told the picture is: the junction in 2.5D, its streets, and a roundabout, a turbo layout
+/// or a raised table where it is one. Drawn again when the language changes.
 pub fn iso_label(v: &JView, i18n: &I18n) -> String {
-    match turbo_name(v, i18n) {
-        Some(name) => i18n.tr("jn-iso-label-turbo", &Args::new().str("arms", arms_text(v, i18n)).str("name", name)),
-        None => i18n.tr("jn-iso-label", &Args::new().str("arms", arms_text(v, i18n))),
+    let arms = arms_text(v, i18n);
+    if let Some(name) = turbo_name(v, i18n) {
+        return i18n.tr("jn-iso-label-turbo", &Args::new().str("arms", arms).str("name", name));
     }
+    let key = if v.control == "roundabout" {
+        "jn-iso-label-roundabout"
+    } else if v.raised {
+        "jn-iso-label-raised"
+    } else {
+        "jn-iso-label"
+    };
+    i18n.tr(key, &Args::new().str("arms", arms))
 }
 
 /// The attributes that make a shape of the picture pressable: what a press on it selects, as the plan's shapes say it
-/// (`plan::selected_by` reads them back). The cycle track and the bus lane are the only one of their kind, and have
+/// (`drawing::selected_by` reads them back). The cycle track and the bus lane are the only one of their kind, and have
 /// no uid.
 pub fn hit_attrs(role: &str, uid: Option<u32>, lane: Option<usize>) -> String {
     let mut a = format!(" data-role=\"{role}\"");
@@ -616,7 +629,7 @@ fn circle(r: f64) -> Vec<P> {
 /// The junction in 2.5D, in a drawing `width` wide in a window `window_height` high. Every part the keys select can
 /// be pressed (`hit_attrs`), and the one that is selected is outlined.
 pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Units) -> IsoSvg {
-    let f = IsoFrame::fit(v.bounds, &content_points(v), width, window_height);
+    let f = IsoFrame::fit(&content_points(v), width, window_height);
     let mut d = Draw::new(f);
     let wall = height_of("sidewalk");
     let selected = |kind: &str, uid: u32| v.selected.kind == Some(kind) && v.selected.uid == uid;
@@ -1061,7 +1074,7 @@ mod tests {
     }
 
     fn frame() -> IsoFrame {
-        IsoFrame::fit([-5000.0, -5000.0, 5000.0, 5000.0], &[(-5000.0, -5000.0), (5000.0, 5000.0)], 1000.0, 1000.0)
+        IsoFrame::fit(&[(-5000.0, -5000.0), (5000.0, 5000.0)], 1000.0, 1000.0)
     }
 
     fn square(x0: f64, x1: f64) -> Vec<(f64, f64)> {
@@ -1470,7 +1483,7 @@ mod tests {
                 let role = rest.split('"').next().unwrap();
                 let tag = &rest[..rest.find('>').unwrap()];
                 let number = |name: &str| tag.split(&format!("{name}=\"")).nth(1).and_then(|v| v.split('"').next()).and_then(|v| v.parse::<usize>().ok());
-                crate::junction::plan::selected_by(role, number("data-uid").unwrap_or(0) as u32, number("data-lane").unwrap_or(0))
+                crate::junction::drawing::selected_by(role, number("data-uid").unwrap_or(0) as u32, number("data-lane").unwrap_or(0))
             })
             .collect()
     }
@@ -1667,7 +1680,7 @@ mod tests {
         for width in [320.0, 400.0, 1000.0] {
             let b = [-20_000.0, -20_000.0, 20_000.0, 20_000.0];
             let corners = [(b[0], b[1]), (b[2], b[1]), (b[2], b[3]), (b[0], b[3])];
-            let f = IsoFrame::fit(b, &corners, width, 1000.0);
+            let f = IsoFrame::fit(&corners, width, 1000.0);
             for corner in corners {
                 for h in [0.0, TALLEST_MM] {
                     let (x, y) = f.at(corner, h);
@@ -1678,11 +1691,10 @@ mod tests {
     }
 
     #[test]
-    fn the_drawing_is_as_wide_and_as_tall_as_the_plans() {
-        let b = [-20_000.0, -20_000.0, 20_000.0, 20_000.0];
-        let f = IsoFrame::fit(b, &[(0.0, 0.0), (1000.0, 1000.0)], 1000.0, 1000.0);
-        let plan = crate::junction::frame::Frame::fit(b, 1000.0, 1000.0);
-        assert_eq!((f.width, f.height), (plan.width, plan.height));
+    fn the_drawing_is_as_wide_and_as_tall_as_the_page_leaves_room_for() {
+        let f = IsoFrame::fit(&[(0.0, 0.0), (1000.0, 1000.0)], 1000.0, 1000.0);
+        let size = crate::junction::frame::Frame::fit(1000.0, 1000.0);
+        assert_eq!((f.width, f.height), (size.width, size.height));
     }
 
     #[test]

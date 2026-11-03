@@ -3,6 +3,7 @@
 
 pub mod beyond;
 pub mod curbside;
+pub mod drawing;
 pub mod frame;
 pub mod geometry;
 pub mod inspector;
@@ -13,8 +14,6 @@ pub mod model;
 pub mod notes;
 pub mod page;
 pub mod phase_svg;
-pub mod plan;
-pub mod plan_svg;
 pub mod read_model;
 pub mod signal;
 pub mod stops;
@@ -79,9 +78,8 @@ pub fn mount_page(plan: &Plan) {
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
-    mount("scroll", view! { <plan::PlanDrawing vm=vm.clone()/> }.into_any());
+    mount("scroll", view! { <drawing::Drawing vm=vm.clone()/> }.into_any());
     mount("street", view! { <page::Header vm=vm.clone()/> }.into_any());
-    mount("view-mode-slot", view! { <page::ViewToggle vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <page::TitleBlock vm=vm.clone()/> }.into_any());
     mount("fit-slot", view! { <page::Fit vm=vm.clone()/> }.into_any());
     mount("history", view! { <page::History vm=vm.clone()/> }.into_any());

@@ -274,28 +274,13 @@ jn-check-length = { $detail }: { $length }
 jn-col-step = Step
 jn-col-what-changed = What changed
 
-## The plan (src/junction/plan.rs, plan_svg.rs)
-jn-plan-editor = Junction plan editor
-# The choice over the drawing between the flat plan, which is edited, and the 2.5D picture, which is looked at.
-jn-view-group = View
-jn-view-plan = Plan
-jn-view-iso = 2.5D
-jn-view-shown-plan = Showing the plan.
-jn-view-shown-iso = Showing the junction in 2.5D.
+## The drawing (src/junction/drawing.rs, iso.rs)
+jn-editor = Junction editor
 jn-iso-label = 2.5D view of the junction. { $arms }.
+jn-iso-label-roundabout = 2.5D view of the junction. { $arms }. Roundabout.
+jn-iso-label-raised = 2.5D view of the junction. { $arms }. Raised table.
 jn-iso-label-turbo = 2.5D view of the junction. { $arms }. { $name }.
-jn-plan-label = Plan of the junction, north up. { $arms }.
-jn-plan-label-roundabout = Plan of the junction, north up. { $arms }. Roundabout.
-jn-plan-label-raised = Plan of the junction, north up. { $arms }. Raised table.
-jn-plan-label-turbo = Plan of the junction, north up. { $arms }. { $name }.
-jn-svg-scale = Scale
 jn-svg-bus-only = Bus only
-# Under a street's name: the way it leaves and its width, "N · 20.0 m road".
-jn-svg-road = { $compass } · { $width } road
-jn-svg-road-shifted = { $compass } · { $width } road · shifted { $offset }
-jn-grip-turn = Turn { $arm }
-jn-grip-corner = Change the corner radius
-jn-grip-crossing = Move the crossing
 
 ## The page's markup (web/intersection.html); the window title is the header's jn-title
 jn-page-description = Change how a junction of streets works: corners, crossings, lanes, turns and control.
@@ -308,7 +293,6 @@ jn-page-key-change = change
 jn-page-key-turn = turn a street
 jn-page-key-remove = remove
 jn-page-key-details-notes = details, notes
-jn-page-key-view = plan, 2.5D
 jn-page-key-undo = undo
 jn-page-details-panel = Selected street, corner or crossing
 jn-page-plan-key = Key to the strips

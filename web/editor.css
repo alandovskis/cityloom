@@ -395,14 +395,6 @@
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
-#drawing .t-soft {
-  fill: var(--ink-2);
-}
-#drawing .t-label {
-  font-size: 13px;
-  font-weight: 600;
-  fill: var(--ink-2);
-}
 #drawing .t-dim {
   font-size: 15px;
   font-weight: 500;
@@ -430,16 +422,6 @@
   font-weight: 600;
 }
 
-.bar-b {
-  fill: var(--ink-2);
-  stroke: var(--ink-2);
-  stroke-width: 1;
-}
-.bar-w {
-  fill: var(--panel);
-  stroke: var(--ink-2);
-  stroke-width: 1;
-}
 .ground {
   stroke: var(--ink-2);
   stroke-width: 3;
@@ -472,33 +454,6 @@
   stroke: var(--accent);
   stroke-width: 2.5;
   pointer-events: none;
-}
-.handle {
-  cursor: ew-resize;
-  touch-action: none;
-}
-.handle .hit {
-  fill: transparent;
-}
-.handle .grip {
-  fill: var(--panel);
-  stroke: var(--ink-3);
-  stroke-width: 1;
-  transition: stroke 120ms var(--ease-out), fill 120ms var(--ease-out);
-}
-.handle .grip-arrow {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 1.3;
-}
-.handle:hover .grip,
-.handle.active .grip {
-  stroke: var(--accent);
-  fill: var(--accent);
-}
-.handle:hover .grip-arrow,
-.handle.active .grip-arrow {
-  stroke: var(--accent-ink);
 }
 .free {
   fill: none;
@@ -634,63 +589,6 @@ svg pattern circle {
 }
 
 /* The plan of a junction. */
-#drawing .wedge,
-#drawing .wedge-g {
-  stroke: none;
-}
-#drawing .wedge-g {
-  cursor: pointer;
-}
-#drawing .wedge-g[data-role="none"] {
-  cursor: default;
-}
-#drawing .core-bike {
-  stroke: var(--ink-2);
-  stroke-width: 0.8;
-  stroke-dasharray: 5 3;
-}
-#drawing .raised-top {
-  fill: var(--k-sidewalk);
-  fill-opacity: 0.4;
-  stroke: none;
-  pointer-events: none;
-}
-#drawing .corner-bike,
-#drawing .corner-island {
-  stroke: var(--ink-2);
-  stroke-width: 0.8;
-  pointer-events: none;
-}
-#drawing .bike-box {
-  stroke: var(--ink-2);
-  stroke-width: 0.8;
-}
-#drawing .continuous-ramp {
-  fill: var(--k-sidewalk);
-  fill-opacity: 0.5;
-  stroke: var(--ink-2);
-  stroke-width: 0.8;
-  stroke-dasharray: 5 3;
-  pointer-events: none;
-}
-#drawing .raised-ramp {
-  fill: var(--k-sidewalk);
-  fill-opacity: 0.3;
-  stroke: var(--ink-2);
-  stroke-width: 0.8;
-  stroke-dasharray: 5 3;
-  pointer-events: none;
-}
-#drawing .wedge.bare {
-  fill: var(--k-planting);
-  fill-opacity: 0.4;
-}
-#drawing .piece {
-  stroke: var(--ink);
-  stroke-width: 0.8;
-  stroke-opacity: 1;
-  stroke-linejoin: round;
-}
 #drawing .iso-flat,
 #drawing .iso-top,
 #drawing .iso-side {
@@ -799,50 +697,11 @@ svg pattern circle {
     stroke: Canvas;
   }
 }
-#drawing .arm,
-#drawing .bus-g,
-#drawing .cycle-g {
-  cursor: pointer;
-}
-#drawing .arm:hover .piece,
-#drawing .bus-g:hover .piece,
-#drawing .cycle-g:hover .piece {
-  stroke-opacity: 1;
-}
-#drawing .road {
-  fill: var(--road);
-  stroke: none;
-}
-#drawing .island,
-#drawing .bulb {
-  stroke: var(--ink-2);
-  stroke-width: 1.6;
-  stroke-linejoin: round;
-}
-#drawing .turbo-lane {
-  stroke: none;
-  pointer-events: none;
-}
-#drawing .turbo-divider {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-linejoin: round;
-  pointer-events: none;
-}
-#drawing .turbo-divider-gap {
-  fill: none;
-  stroke: var(--road);
-  stroke-linejoin: round;
-  pointer-events: none;
-}
 #drawing .approach-mark {
   fill: none;
   stroke: var(--ink-2);
   stroke-width: 2;
   stroke-dasharray: 6 4;
-  pointer-events: none;
-}
-#drawing .turbo-entry {
   pointer-events: none;
 }
 #drawing .stop-pad,
@@ -894,13 +753,7 @@ svg pattern circle {
   pointer-events: none;
 }
 @media (forced-colors: active) {
-  #drawing .turbo-divider {
-    stroke: CanvasText;
-  }
-  #drawing .turbo-divider-gap {
-    stroke: Canvas;
-  }
-  #drawing .approach-mark {
+      #drawing .approach-mark {
     stroke: CanvasText;
   }
   #drawing .stop-pad,
@@ -933,42 +786,6 @@ svg pattern circle {
 #drawing .curb-line.bad {
   stroke: var(--warn-line);
   stroke-width: 3;
-}
-#drawing .crossing {
-  fill: var(--road);
-  stroke: var(--ink-2);
-  stroke-width: 1;
-}
-#drawing .zebra {
-  fill: var(--ink-2);
-}
-#drawing [data-role="crossing"] {
-  cursor: pointer;
-}
-#drawing .zebra-fill {
-  stroke: none;
-}
-#drawing .stop-line {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 4;
-  pointer-events: none;
-}
-#drawing .stop-line.yield {
-  stroke-width: 3;
-  stroke-dasharray: 7 5;
-}
-#drawing .sign * {
-  fill: var(--panel);
-  stroke: var(--ink-2);
-  stroke-width: 1.4;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-  pointer-events: none;
-}
-#drawing .sign circle {
-  fill: var(--ink-2);
-  stroke: none;
 }
 #drawing .lane-arrow path {
   fill: none;
@@ -1246,19 +1063,6 @@ svg pattern circle {
 }
 .title-card.with-view .street-sub {
   grid-area: 2 / 1 / 3 / 3;
-}
-.view-mode-tools {
-  grid-area: 1 / 2;
-  align-self: center;
-  margin-block: -3px;
-}
-.view-mode {
-  margin: 0;
-  border: 0;
-  min-inline-size: 0;
-}
-.view-mode .unit {
-  min-height: 26px;
 }
 /* ---- the zone strip: a bar for the street's length, a cell per zone ----------------- */
 
@@ -1543,13 +1347,6 @@ svg pattern circle {
     background-image: linear-gradient(CanvasText, CanvasText);
   }
 }
-#drawing .sel-line {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 3.5;
-  stroke-linecap: round;
-  pointer-events: none;
-}
 #drawing .mv {
   fill: none;
   stroke: var(--ink-2);
@@ -1568,43 +1365,6 @@ svg pattern circle {
 #drawing .mv.indirect {
   stroke-dasharray: 8 4;
 }
-#drawing .mv-x {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 2;
-  stroke-linecap: round;
-  pointer-events: none;
-}
-#drawing .mv-tip {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 1.6;
-  stroke-linejoin: round;
-}
-#drawing .north circle {
-  fill: var(--panel);
-  stroke: var(--ink-2);
-  stroke-width: 1.2;
-}
-#drawing .north path {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-#drawing .scale text {
-  fill: var(--ink-2);
-}
-#drawing .handle {
-  cursor: grab;
-}
-#drawing .handle:active {
-  cursor: grabbing;
-}
-#drawing .handle .grip {
-  fill: var(--panel);
-}
 #drawing .lane-hit {
   fill: transparent;
   cursor: pointer;
@@ -1617,18 +1377,12 @@ svg pattern circle {
   font-size: 13px;
   font-weight: 600;
 }
-#drawing .piece.queue {
-  stroke-dasharray: 6 3;
-}
 #drawing .measure-loop {
   fill: none;
   stroke: var(--ink-2);
   stroke-width: 1.6;
   stroke-dasharray: 3 2;
   pointer-events: none;
-}
-#drawing .measure-stop {
-  stroke-width: 2;
 }
 #drawing .bollard {
   fill: var(--ink-2);
@@ -1642,9 +1396,6 @@ svg pattern circle {
   stroke-width: 5;
   stroke-linecap: butt;
   pointer-events: none;
-}
-#drawing .arm.dead {
-  opacity: 0.55;
 }
 
 /* ---- legend, swatches ------------------------------------------------------- */
@@ -2534,13 +2285,9 @@ dl.prov dd:last-child {
 
 @media (any-pointer: coarse) {
   /* The toggle is 44px tall here, not the 32px the row above is sized for: it gives up 6px each side, not 3. */
-  .view-mode-tools {
-    margin-block: -9px;
-  }
-  .view-mode .unit,
-  .add-item,
-  .check,
-  .fit-checks {
+    .add-item,
+.check,
+.fit-checks {
     min-height: 44px;
   }
   .ico,
@@ -2616,28 +2363,23 @@ dl.prov dd:last-child {
   }
   /* The Notes' edge tab stands at the window's right edge here, fixed half-way down: the toggle keeps clear of it
      across, as it scrolls past. */
-  .view-mode-tools {
-    margin-inline-end: var(--tab-w);
   }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .ico,
-  .turn,
-  .opt,
-  .handle .grip {
+.turn,
+.opt {
     transition: none;
   }
 }
 
 @media print {
   .bar,
-  .panel,
-  .tools,
-  .view-mode-tools,
-  .welcome,
-  .clock,
-  .statusbar {
+.panel,
+.tools,
+.welcome,
+.clock,
+.statusbar {
     display: none;
   }
   .stage-main {

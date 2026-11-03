@@ -1,6 +1,7 @@
-//! The plan of the junction, drawn by `plan_svg`, and the pointer input on it:
-//! pressing something selects it, dragging a grip turns a street or moves a
-//! corner or crossing, and dropping a street from the palette adds it.
+//! The junction's drawing, the 2.5D (`iso.rs`), and the input on it: pressing a part selects it as the keys do, and
+//! the keys on the group step through the parts and change the selected one. There is nothing to drag: what a
+//! street's direction, a corner's radius and a crossing's setback need is a typed field with steppers in the
+//! inspector, and a key.
 
 use std::rc::Rc;
 
@@ -11,33 +12,12 @@ use crate::junction::frame::Frame;
 use crate::junction::iso::{iso_label, iso_svg};
 use crate::junction::keys;
 use crate::junction::model::Target;
-use crate::junction::plan_svg::{plan_label, plan_svg};
-use crate::junction::vm::{DrawMode, JunctionVm};
+use crate::junction::vm::JunctionVm;
 use crate::junction::watch::Watch;
-use crate::shared::bind::current_element;
 use crate::shared::i18n::Args;
 
-/// What a grip is dragging.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Grip {
-    Arm,
-    Corner,
-    Crossing,
-}
-
-impl Grip {
-    pub fn named(role: &str) -> Option<Grip> {
-        match role {
-            "grip-arm" => Some(Grip::Arm),
-            "grip-corner" => Some(Grip::Corner),
-            "grip-crossing" => Some(Grip::Crossing),
-            _ => None,
-        }
-    }
-}
-
-/// What pressing something on the plan selects. A press on nothing clears the
-/// selection; a press on a part that cannot be selected does nothing to it.
+/// What pressing something in the drawing selects. A press on nothing clears the selection; a press on a part that
+/// cannot be selected does nothing to it.
 pub fn selected_by(role: &str, uid: u32, lane: usize) -> Target {
     match role {
         "cycle" => Target::Cycle,
@@ -50,8 +30,8 @@ pub fn selected_by(role: &str, uid: u32, lane: usize) -> Target {
     }
 }
 
-/// What a press on a shape selects, from the attributes it carries (`data-role`, `data-uid`, `data-lane`; the plan
-/// and the 2.5D both write them). A number that is missing or is not one is 0.
+/// What a press on a shape selects, from the attributes it carries (`data-role`, `data-uid`, `data-lane`, written by
+/// `iso::hit_attrs`). A number that is missing or is not one is 0.
 pub fn pressed(attribute: impl Fn(&str) -> Option<String>) -> Target {
     let number = |name: &str| attribute(name).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
     selected_by(&attribute("data-role").unwrap_or_default(), number("data-uid") as u32, number("data-lane"))
@@ -64,17 +44,10 @@ fn viewport_of(wrap: &Element) -> (f64, f64) {
     (wrap.client_width() as f64, height)
 }
 
-#[derive(Clone, Copy)]
-struct Drag {
-    grip: Grip,
-    uid: u32,
-}
-
 #[component]
-pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
+pub fn Drawing(vm: Rc<JunctionVm>) -> impl IntoView {
     let w = Watch::new(vm);
     let viewport = RwSignal::new((1000.0, 800.0));
-    let drag = StoredValue::new_local(None::<Drag>);
 
     let wrap = NodeRef::<leptos::html::Div>::new();
     #[cfg(target_arch = "wasm32")]
@@ -108,7 +81,7 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
         if e.meta_key() || e.ctrl_key() || e.alt_key() {
             return;
         }
-        if let Some((action, prevent)) = keys::on_plan(&e.key(), e.shift_key(), w.view_now().selected.kind) {
+        if let Some((action, prevent)) = keys::on_drawing(&e.key(), e.shift_key(), w.view_now().selected.kind) {
             if prevent {
                 e.prevent_default();
             }
@@ -119,107 +92,29 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
     let markup = move || {
         let (v, units) = w.now();
         let (width, window) = viewport.get();
-        match w.mode() {
-            DrawMode::Plan => {
-                let out = plan_svg(&v, &w.i18n(), width, window, units);
-                w.set_frame(out.frame);
-                out.markup
-            }
-            DrawMode::Iso => iso_svg(&v, &w.i18n(), width, window, units).markup,
-        }
+        iso_svg(&v, &w.i18n(), width, window, units).markup
     };
-    let label = move || match w.mode() {
-        DrawMode::Plan => plan_label(&w.view(), &w.i18n()),
-        DrawMode::Iso => iso_label(&w.view(), &w.i18n()),
-    };
+    let label = move || iso_label(&w.view(), &w.i18n());
     let size = move || {
-        let (v, _) = w.now();
         let (width, window) = viewport.get();
-        Frame::fit(v.bounds, width, window)
+        Frame::fit(width, window)
     };
 
-    // A point in the drawing, from where the pointer is on the page.
-    let plan_point = move |e: &PointerEvent| {
-        let svg: Element = current_element(e);
-        let r = svg.get_bounding_client_rect();
-        w.frame().map_or((0.0, 0.0), |f| f.plan_point((e.client_x() as f64 - r.left(), e.client_y() as f64 - r.top())))
-    };
-
-    // A press on a part of either drawing selects it, as the keys do. The grips, and so the drags, are the plan's
-    // only: the 2.5D draws none.
+    // A press on a part of the drawing selects it, as the keys do.
     let press = move |e: PointerEvent| {
         if e.button() != 0 {
             return;
         }
-        let svg: Element = current_element(&e);
         let hit = e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()).and_then(|t| t.closest("[data-role]").ok().flatten());
-        let attribute = |name: &str| hit.as_ref().and_then(|h| h.get_attribute(name));
-        let role = attribute("data-role").unwrap_or_default();
-        let uid = attribute("data-uid").and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
-        if let Some(grip) = Grip::named(&role).filter(|_| w.mode_now() == DrawMode::Plan) {
-            if grip == Grip::Arm {
-                w.quiet(|j| {
-                    j.select(Target::Arm(uid));
-                    true
-                });
-            }
-            drag.set_value(Some(Drag { grip, uid }));
-            w.quiet(|j| {
-                j.begin_gesture();
-                true
-            });
-            let _ = svg.set_pointer_capture(e.pointer_id());
-            e.prevent_default();
-            return;
-        }
-        let target = pressed(attribute);
+        let target = pressed(|name| hit.as_ref().and_then(|h| h.get_attribute(name)));
         if target != Target::None || w.view_now().selected.kind.is_some() {
             w.select(target);
         }
         focus_wrap();
     };
 
-    let moved = move |e: PointerEvent| {
-        let Some(d) = drag.get_value() else { return };
-        let (x, y) = plan_point(&e);
-        w.quiet(|j| match d.grip {
-            Grip::Arm => j.drag_arm_to(d.uid, x, y),
-            Grip::Corner => j.drag_corner_to(d.uid, x, y),
-            Grip::Crossing => j.drag_crossing_to(d.uid, x, y),
-        });
-    };
-
-    let finish = move |commit: bool| {
-        if drag.get_value().is_none() {
-            return;
-        }
-        drag.set_value(None);
-        w.finish_gesture(commit);
-    };
-
-    // V switches the drawing between the plan and the 2.5D, anywhere but in a field (`keys::switches_view`). A
-    // drag under way is finished first and kept: the plan it is on goes, and with it the pointer's release.
-    #[cfg(target_arch = "wasm32")]
-    window_event_listener(leptos::ev::keydown, move |e: KeyboardEvent| {
-        let key = e.key();
-        let press = keys::Press {
-            key: &key,
-            ctrl: e.ctrl_key(),
-            meta: e.meta_key(),
-            alt: e.alt_key(),
-            repeat: e.repeat(),
-            composing: e.is_composing(),
-            taken: e.default_prevented() || typing(&e),
-        };
-        if keys::switches_view(&press) {
-            e.prevent_default();
-            finish(true);
-            w.toggle_mode();
-        }
-    });
-
     view! {
-      <div class="wrap" id="wrap" tabindex="0" role="group" aria-label=move || w.i18n().tr("jn-plan-editor", &Args::new()) aria-describedby="keys" node_ref=wrap on:keydown=keydown>
+      <div class="wrap" id="wrap" tabindex="0" role="group" aria-label=move || w.i18n().tr("jn-editor", &Args::new()) aria-describedby="keys" node_ref=wrap on:keydown=keydown>
         <svg
             id="drawing"
             xmlns="http://www.w3.org/2000/svg"
@@ -232,16 +127,13 @@ pub fn PlanDrawing(vm: Rc<JunctionVm>) -> impl IntoView {
                 format!("0 0 {} {}", f.width, f.height)
             }
             on:pointerdown=press
-            on:pointermove=moved
-            on:pointerup=move |_| finish(true)
-            on:pointercancel=move |_| finish(false)
             inner_html=markup
         ></svg>
       </div>
     }
 }
 
-/// Puts the keyboard on the plan's group, as pressing the plan does.
+/// Puts the keyboard on the drawing's group, as pressing the drawing does.
 fn focus_wrap() {
     if let Some(el) = document().get_element_by_id("wrap").and_then(|e| leptos::wasm_bindgen::JsCast::dyn_into::<HtmlElement>(e).ok()) {
         let options = leptos::web_sys::FocusOptions::new();
@@ -258,7 +150,7 @@ fn typing(e: &KeyboardEvent) -> bool {
         .is_some_and(|t| t.closest("input, select, textarea").ok().flatten().is_some())
 }
 
-/// Keeps `viewport` as wide as the plan's group and as high as the window.
+/// Keeps `viewport` as wide as the drawing's group and as high as the window.
 #[cfg(target_arch = "wasm32")]
 fn watch_size(wrap: Element, viewport: RwSignal<(f64, f64)>) {
     use leptos::wasm_bindgen::{JsCast, closure::Closure};
@@ -284,15 +176,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_grip_is_named_by_the_part_it_moves() {
-        assert_eq!(Grip::named("grip-arm"), Some(Grip::Arm));
-        assert_eq!(Grip::named("grip-corner"), Some(Grip::Corner));
-        assert_eq!(Grip::named("grip-crossing"), Some(Grip::Crossing));
-        assert_eq!(Grip::named("arm"), None);
-    }
-
-    #[test]
-    fn pressing_a_part_of_the_plan_selects_it_and_pressing_nothing_clears() {
+    fn pressing_a_part_of_the_drawing_selects_it_and_pressing_nothing_clears() {
         assert_eq!(selected_by("arm", 3, 0), Target::Arm(3));
         assert_eq!(selected_by("corner", 3, 0), Target::Corner(3));
         assert_eq!(selected_by("crossing", 3, 0), Target::Crossing(3));
@@ -318,7 +202,7 @@ mod tests {
         assert_eq!(pressed(on("crossing", "4", "")), Target::Crossing(4));
         assert_eq!(pressed(on("cycle", "", "")), Target::Cycle);
         assert_eq!(pressed(on("bus", "", "")), Target::Bus);
-        // A number that is not one is zero, as the plan has always read it; a part with no role selects nothing.
+        // A number that is not one is zero; a part with no role selects nothing.
         assert_eq!(pressed(on("arm", "x", "")), Target::Arm(0));
         assert_eq!(pressed(on("", "4", "")), Target::None);
         assert_eq!(pressed(|_| None), Target::None);

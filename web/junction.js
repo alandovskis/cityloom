@@ -33,10 +33,9 @@ async function start({ hatches, junction_exists, mount_bare_shell, mount_page, o
     await new Promise(() => {});
   }
 
-  // The hatch patterns the plan and the swatches are filled with.
+  // The hatch patterns the key's swatches are filled with.
   document.getElementById("defs").innerHTML =
-    `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}
-  <marker id="mv-head" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mv-tip" d="M1 1 9 5 1 9"/></marker></defs>`;
+    `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}</defs>`;
 
   // What is waiting to be kept in the city is kept when the page is left.
   addEventListener("pagehide", () => plan.flush());

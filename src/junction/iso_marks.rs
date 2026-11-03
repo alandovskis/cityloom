@@ -4,8 +4,8 @@
 
 use crate::junction::geometry::{dir, sample_quad};
 use crate::junction::model::{LEFT, RIGHT, THROUGH};
-use crate::junction::plan_svg::outer_lane_at;
-use crate::junction::read_model::{JView, LaneView};
+use crate::junction::read_model::{JView, LaneView, RingView};
+use crate::junction::turbo_ring::mouth_on_open;
 
 type P = (f64, f64);
 
@@ -64,6 +64,21 @@ pub fn plain_arrow(at: P, heading: f64, h: f64, head: f64) -> Vec<Vec<P>> {
         .into_iter()
         .map(|s| s.into_iter().map(|p| place(at, heading, p)).collect())
         .collect()
+}
+
+/// Where the ray from the middle at `bearing` meets the middle of the outermost ring lane, and how wide that lane is
+/// there, both in mm. A turbo's lanes are open, one on each half of the ring, so the half the ray runs into is the one
+/// that answers (the other half's hits are behind the middle, and are dropped).
+fn outer_lane_at(ring: &RingView, bearing: f64) -> Option<(f64, f64)> {
+    let last = ring.lanes.iter().map(|l| l.k).max()?;
+    ring.lanes
+        .iter()
+        .filter(|l| l.k == last)
+        .filter_map(|l| {
+            let (t, o, i) = (mouth_on_open(&l.centre, bearing, 0.0)?, mouth_on_open(&l.outer, bearing, 0.0)?, mouth_on_open(&l.inner, bearing, 0.0)?);
+            (t > 0.0).then_some((t, (o - i).abs()))
+        })
+        .max_by(|a, b| a.0.total_cmp(&b.0))
 }
 
 /// An arrow on a roundabout's ring: where it stands, the way it points and how long it is.

@@ -8,8 +8,8 @@ use leptos::prelude::*;
 
 use crate::junction::model::*;
 use crate::junction::signal::Pattern;
-use crate::junction::vm::{DrawMode, JunctionVm};
-use crate::junction::{inspector, notes, page, plan, turns};
+use crate::junction::vm::JunctionVm;
+use crate::junction::{drawing, inspector, notes, page, turns};
 use crate::shared::testing::{button_tag, count, html};
 use crate::shared::units::Units;
 
@@ -206,11 +206,11 @@ fn panel(s: &Rc<JunctionVm>) -> String {
     html(|| view! { <inspector::Inspector vm=s.clone()/> }.into_any())
 }
 
-// ---- what the plan's grips edit is edited from the inspector and the keys (#140, stage 3) ------------------------------
+// ---- what the plan's grips edited is edited from the inspector and the keys (#140) --------------------------------------
 //
-// The plan has three grips: the end of a street (`Grip::Arm`, which turns it), a corner's (`Grip::Corner`, its curb
-// radius) and a crossing's (`Grip::Crossing`, how far it is set back). The 2.5D has none, so each of these must be
-// reachable without a drag: a typed field with a stepper in the inspector, and the keys.
+// The plan had three grips: the end of a street (which turned it), a corner's (its curb radius) and a crossing's (how far
+// it is set back). The 2.5D has none, and the plan is gone, so each of these is a typed field with a stepper in the
+// inspector, and a key.
 
 /// The number field of the inspector with this heading id: its input, labelled by it, and the two stepper buttons
 /// whose names start with `down` and `up`.
@@ -220,7 +220,7 @@ fn has_field(h: &str, id: &str, down: &str, up: &str) -> bool {
 }
 
 #[test]
-fn each_thing_a_grip_edits_has_a_field_with_steppers_in_the_inspector() {
+fn each_thing_the_old_grips_edited_has_a_field_with_steppers_in_the_inspector() {
     let s = shared(0);
     let n = arm(&s, 0);
     s.edit(|j| j.select(Target::Arm(n)));
@@ -234,63 +234,11 @@ fn each_thing_a_grip_edits_has_a_field_with_steppers_in_the_inspector() {
 }
 
 #[test]
-fn a_typed_value_reaches_every_state_a_grip_can() {
-    // The grip sets one number from where the pointer is; the field sets the same number. So whatever a drag leaves is
-    // what typing that number leaves, on every sample junction and every street, corner and crossing.
-    let mut compared = [0; 3];
-    for sample in 0..JUNCTION_SAMPLES.len() {
-        let base = Junction::new(sample);
-        for (i, a) in base.current().arms.iter().enumerate() {
-            let uid = a.uid;
-            // A street turned to face a point.
-            let mut dragged = Junction::new(sample);
-            if dragged.drag_arm_to(uid, 12_000.0, -3_000.0) {
-                let bearing = dragged.current().arms[i].bearing;
-                let mut typed = Junction::new(sample);
-                assert!(typed.set_bearing(uid, bearing));
-                compared[0] += 1;
-                assert_eq!(serde_json::to_string(&typed.view().arms).unwrap(), serde_json::to_string(&dragged.view().arms).unwrap(), "sample {sample} arm {i}");
-            }
-            // A corner's handle moved.
-            let mut dragged = Junction::new(sample);
-            let handle = base.view().corners[i].handle;
-            if dragged.drag_corner_to(uid, handle.0 + 900.0, handle.1 - 400.0) {
-                let radius = dragged.view().corners[i].radius_mm;
-                let mut typed = Junction::new(sample);
-                assert!(typed.set_corner(uid, radius));
-                compared[1] += 1;
-                assert_eq!(
-                    serde_json::to_string(&typed.view().corners).unwrap(),
-                    serde_json::to_string(&dragged.view().corners).unwrap(),
-                    "sample {sample} corner {i}"
-                );
-            }
-            // A crossing's handle moved.
-            let mut dragged = Junction::new(sample);
-            if let Some(c) = base.view().arms[i].crossing.as_ref() {
-                if dragged.drag_crossing_to(uid, c.handle.0 * 1.1, c.handle.1 * 1.1) {
-                    let setback = dragged.view().arms[i].crossing.as_ref().unwrap().setback_mm;
-                    let mut typed = Junction::new(sample);
-                    assert!(typed.set_setback(uid, setback));
-                    compared[2] += 1;
-                    assert_eq!(
-                        serde_json::to_string(&typed.view().arms).unwrap(),
-                        serde_json::to_string(&dragged.view().arms).unwrap(),
-                        "sample {sample} crossing {i}"
-                    );
-                }
-            }
-        }
-    }
-    assert!(compared.iter().all(|n| *n > 0), "each kind of grip was compared: {compared:?}");
-}
-
-#[test]
-fn the_keys_step_what_a_grip_drags_and_the_inspector_follows() {
-    use crate::junction::keys::{Action, Step, on_plan};
-    assert_eq!(on_plan("ArrowRight", true, Some("arm")), Some((Action::Step(Step::Bearing, 1), true)));
-    assert_eq!(on_plan("+", false, Some("corner")), Some((Action::Step(Step::Corner, 1), true)));
-    assert_eq!(on_plan("-", false, Some("crossing")), Some((Action::Step(Step::Setback, -1), true)));
+fn the_keys_step_what_the_old_grips_dragged_and_the_inspector_follows() {
+    use crate::junction::keys::{Action, Step, on_drawing};
+    assert_eq!(on_drawing("ArrowRight", true, Some("arm")), Some((Action::Step(Step::Bearing, 1), true)));
+    assert_eq!(on_drawing("+", false, Some("corner")), Some((Action::Step(Step::Corner, 1), true)));
+    assert_eq!(on_drawing("-", false, Some("crossing")), Some((Action::Step(Step::Setback, -1), true)));
     // The steps are the field's own steppers: one press changes the number the field shows.
     let s = shared(0);
     let n = arm(&s, 0);
@@ -940,96 +888,69 @@ fn the_key_lists_the_pieces_in_the_plan() {
 }
 
 #[test]
-fn the_plan_is_a_labelled_group_holding_a_picture_of_the_junction() {
-    let s = shared(0);
-    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
-    assert!(h.contains("id=\"wrap\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Junction plan editor\""));
-    assert!(h.contains("id=\"drawing\"") && h.contains("role=\"img\""));
-    assert!(h.contains("Plan of the junction, north up. 4 streets."));
-    assert!(h.contains("data-role=\"grip-arm\"") && h.contains("class=\"plan\""));
-}
-
-#[test]
-fn the_plan_follows_the_units_and_the_selection() {
-    let s = shared(0);
-    s.set_units(Units::Feet);
-    let n = arm(&s, 0);
-    s.edit(|j| j.select(Target::Arm(n)));
-    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
-    assert!(h.contains("2 × 29.5") && h.contains("66 ft"));
-    assert_eq!(count(&h, "class=\"arm on\""), 1);
-}
-
-#[test]
-fn the_keyboard_help_names_v_for_the_view_in_both_languages() {
-    use crate::shared::i18n::{Args, Locale};
-    let page = include_str!("../../web/intersection.html");
-    assert!(page.contains("<kbd>V</kbd> <span data-i18n=\"jn-page-key-view\">"), "the page's key help lists V");
-    assert_eq!(crate::i18n_for(Locale::En).tr("jn-page-key-view", &Args::new()), "plan, 2.5D");
-    assert_eq!(crate::i18n_for(Locale::FrCa).tr("jn-page-key-view", &Args::new()), "plan, 2,5D");
-}
-
-#[test]
-fn the_view_toggle_keeps_the_touch_target_of_a_coarse_pointer() {
-    // `.view-mode .unit` (min-height 26px) outweighs app.css's `.unit` rule for a coarse pointer, so editor.css
-    // must say 44px again for it inside its own coarse-pointer block.
-    let css = include_str!("../../web/editor.css");
-    let coarse = &css[css.find("@media (any-pointer: coarse)").unwrap()..];
-    let block = &coarse[..coarse.find("\n}\n").unwrap()];
-    let rule = &block[block.find(".view-mode .unit").expect("the coarse block names the toggle's buttons")..];
-    assert!(rule[..rule.find('}').unwrap()].contains("min-height: 44px"), "{rule}");
-    // The row's negative margin was sized for a 32px toggle (`.view-mode-tools`); 12px more of button needs 6px more.
-    let tools = &block[block.find(".view-mode-tools").expect("the coarse block makes room for the taller toggle")..];
-    assert!(tools[..tools.find('}').unwrap()].contains("margin-block: -9px"), "{tools}");
-}
-
-fn shared_mode(mode: DrawMode, locale: crate::shared::i18n::Locale) -> Rc<JunctionVm> {
-    let vm = JunctionVm::new(crate::shared::platform::browser_ports(), crate::i18n_for(locale), Junction::new(0), None);
-    vm.set_mode(mode);
-    vm
-}
-
-#[test]
-fn the_drawing_is_the_2_5d_picture_in_iso_mode_with_no_grips_and_a_label_of_its_own() {
+fn the_drawing_is_a_labelled_group_holding_the_2_5d_picture_of_the_junction() {
     use crate::shared::i18n::Locale;
-    let s = shared_mode(DrawMode::Iso, Locale::En);
-    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
+    let s = shared(0);
+    let h = html(|| view! { <drawing::Drawing vm=s.clone()/> }.into_any());
+    assert!(h.contains("id=\"wrap\"") && h.contains("tabindex=\"0\"") && h.contains("aria-label=\"Junction editor\""));
+    assert!(h.contains("id=\"drawing\"") && h.contains("role=\"img\""));
     assert!(h.contains("class=\"iso iso-junction\"") && !h.contains("class=\"plan\""), "{h}");
     // Its parts are pressed to be selected, but there is nothing to drag.
     assert!(!h.contains("data-role=\"grip") && h.contains("data-role=\"arm\"") && h.contains("data-role=\"lane\""), "{h}");
     assert!(h.contains("2.5D view of the junction. 4 streets."), "{h}");
-    let f = shared_mode(DrawMode::Iso, Locale::FrCa);
-    let h = html(|| view! { <plan::PlanDrawing vm=f.clone()/> }.into_any());
-    assert!(h.contains("Vue en 2,5D de la jonction. 4 rues."), "{h}");
+    let f = shared_in(0, Locale::FrCa);
+    let h = html(|| view! { <drawing::Drawing vm=f.clone()/> }.into_any());
+    assert!(h.contains("Vue en 2,5D de la jonction. 4 rues.") && h.contains("aria-label=\"Éditeur de la jonction\""), "{h}");
 }
 
 #[test]
-fn the_view_toggle_is_a_group_of_two_buttons_and_the_view_shown_is_pressed() {
+fn the_label_of_the_drawing_describes_the_junction_as_the_plan_s_did() {
+    use crate::junction::iso::iso_label;
     use crate::shared::i18n::Locale;
-    let s = shared_mode(DrawMode::Plan, Locale::En);
-    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
-    assert!(h.contains("<fieldset") && h.contains("id=\"view-mode\""), "{h}");
-    assert!(h.contains(">View</legend>"), "{h}");
-    assert!(button_tag(&h, "view-plan").contains("aria-pressed=\"true\""));
-    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"false\""));
-    // V goes to the view not shown, so only that button carries it.
-    assert!(button_tag(&h, "view-iso").contains("aria-keyshortcuts=\"V\""));
-    assert!(!button_tag(&h, "view-plan").contains("aria-keyshortcuts"));
-    assert!(h.contains(">Plan</button>") && h.contains(">2.5D</button>"), "{h}");
-    s.set_mode(DrawMode::Iso);
-    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
-    assert!(button_tag(&h, "view-iso").contains("aria-pressed=\"true\""));
-    assert!(button_tag(&h, "view-plan").contains("aria-pressed=\"false\""));
-    assert!(button_tag(&h, "view-plan").contains("aria-keyshortcuts=\"V\""));
-    assert!(!button_tag(&h, "view-iso").contains("aria-keyshortcuts"));
+    let (en, fr) = (crate::i18n_for(Locale::En), crate::i18n_for(Locale::FrCa));
+    let mut j = Junction::new(0);
+    assert_eq!(iso_label(&j.view(), &en), "2.5D view of the junction. 4 streets.");
+    assert_eq!(iso_label(&Junction::new(1).view(), &en), "2.5D view of the junction. 3 streets.");
+    assert!(j.set_raised(true));
+    assert_eq!(iso_label(&j.view(), &en), "2.5D view of the junction. 4 streets. Raised table.");
+    assert_eq!(iso_label(&j.view(), &fr), "Vue en 2,5D de la jonction. 4 rues. Carrefour surélevé.");
+    assert!(j.set_control(ROUNDABOUT));
+    assert_eq!(iso_label(&j.view(), &en), "2.5D view of the junction. 4 streets. Roundabout.");
+    assert_eq!(iso_label(&j.view(), &fr), "Vue en 2,5D de la jonction. 4 rues. Carrefour giratoire.");
+    assert!(j.set_turbo(Some(0)));
+    assert_eq!(iso_label(&j.view(), &en), "2.5D view of the junction. 4 streets. Basic turbo roundabout, mini size.");
 }
 
 #[test]
-fn the_view_toggle_reads_plan_and_2_5d_in_french() {
-    use crate::shared::i18n::Locale;
-    let s = shared_mode(DrawMode::Plan, Locale::FrCa);
-    let h = html(|| view! { <page::ViewToggle vm=s.clone()/> }.into_any());
-    assert!(h.contains(">Plan</button>") && h.contains(">2,5D</button>") && h.contains(">Affichage</legend>"), "{h}");
+fn the_drawing_follows_the_units_and_the_selection() {
+    let s = shared(0);
+    s.set_units(Units::Feet);
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Arm(n)));
+    let h = html(|| view! { <drawing::Drawing vm=s.clone()/> }.into_any());
+    assert!(h.contains("2 × 29.5"), "the crossing's length is in feet");
+    assert_eq!(count(&h, "class=\"sel-box iso-sel\""), 1);
+}
+
+#[test]
+fn the_old_choice_of_the_plan_is_ignored_and_the_junction_is_always_drawn_in_2_5d() {
+    // An earlier build kept "plan" or "iso" under this key; nothing reads it now.
+    for kept in ["plan", "iso", "sideways", ""] {
+        let ports = crate::shared::platform::browser_ports();
+        ports.storage.remember("cityloom-junction-view", kept);
+        let s = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::En), Junction::new(0), None);
+        let h = html(|| view! { <drawing::Drawing vm=s.clone()/> }.into_any());
+        assert!(h.contains("class=\"iso iso-junction\"") && !h.contains("class=\"plan\""), "kept {kept:?}");
+    }
+}
+
+#[test]
+fn the_page_has_no_toggle_between_views_and_no_key_for_one() {
+    let page = include_str!("../../web/intersection.html");
+    assert!(!page.contains("<kbd>V</kbd>") && !page.contains("jn-page-key-view") && !page.contains("view-mode"), "no view to switch to");
+    for lang in [include_str!("i18n/en.ftl"), include_str!("i18n/fr.ftl")] {
+        assert!(!lang.contains("jn-view-") && !lang.contains("jn-plan-label") && !lang.contains("jn-grip-"), "the words of the plan are gone");
+    }
 }
 
 // ---- the page in French ---------------------------------------------------------------
@@ -1107,39 +1028,28 @@ fn the_notes_speak_french() {
 }
 
 #[test]
-fn the_plan_speaks_french() {
+fn the_drawing_speaks_french() {
     use crate::shared::i18n::Locale;
     let s = shared_in(0, Locale::FrCa);
     let (n, e) = (arm(&s, 0), arm(&s, 90));
     s.edit(|j| j.set_offset(e, 500));
     s.edit(|j| j.select(Target::Corner(n)));
-    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
+    let h = html(|| view! { <drawing::Drawing vm=s.clone()/> }.into_any());
     speaks_french(
         &h,
-        &[ENGLISH, &["Plan of the junction", "north up", "Scale", " road", "shifted", "Turn ", "Change the corner radius", "Lane 1 of"]].concat(),
-        &[
-            "aria-label=\"Éditeur du plan de la jonction\"",
-            "Plan de la jonction, nord en haut. 4 rues.",
-            ">Échelle<",
-            "E · chaussée de 11,4\u{a0}m · décalée de 0,5\u{a0}m",
-            "Faire pivoter Sample Street 1 (est)",
-            "Modifier le rayon du coin",
-            "Voie 1 sur 2, Sample Avenue 2 (nord)",
-            ">20\u{a0}m<",
-            ">2 × 9,0<",
-        ],
+        &[ENGLISH, &["2.5D view of the junction", "Junction editor", "Lane 1 of"]].concat(),
+        &["aria-label=\"Éditeur de la jonction\"", "Vue en 2,5D de la jonction. 4 rues.", "Voie 1 sur 2, Sample Avenue 2 (nord)", ">2 × 9,0<"],
     );
-    s.edit(|j| j.select(Target::Crossing(n)));
     s.edit(|j| j.set_control(ROUNDABOUT));
     let so = arm(&s, 180);
     s.edit(|j| j.set_bus(Some((n, so))));
-    let h = html(|| view! { <plan::PlanDrawing vm=s.clone()/> }.into_any());
-    speaks_french(&h, &["Move the crossing", "Bus only", "Roundabout."], &["Déplacer le passage pour piétons", "Autobus seulement", "Carrefour giratoire."]);
+    let h = html(|| view! { <drawing::Drawing vm=s.clone()/> }.into_any());
+    speaks_french(&h, &["Bus only", "Roundabout."], &["Autobus seulement", "Carrefour giratoire."]);
 }
 
 #[test]
-fn a_switch_of_language_draws_the_plan_its_label_and_the_status_again() {
-    use crate::junction::plan_svg::{plan_label, plan_svg};
+fn a_switch_of_language_draws_the_picture_its_label_and_the_status_again() {
+    use crate::junction::iso::{iso_label, iso_svg};
     use crate::junction::text::{arms_text, fit_text};
     use crate::shared::i18n::Locale;
     let owner = Owner::new();
@@ -1147,13 +1057,13 @@ fn a_switch_of_language_draws_the_plan_its_label_and_the_status_again() {
     let i18n = crate::i18n_for(Locale::En);
     // What the views' closures do: they word the junction from the shared words, so they track them.
     let shared = StoredValue::new_local((i18n.clone(), Junction::new(0).view()));
-    let markup = Memo::new(move |_| shared.with_value(|(i18n, v)| plan_svg(v, i18n, 1000.0, 1000.0, Units::Metres).markup));
-    let label = Memo::new(move |_| shared.with_value(|(i18n, v)| plan_label(v, i18n)));
+    let markup = Memo::new(move |_| shared.with_value(|(i18n, v)| iso_svg(v, i18n, 1000.0, 1000.0, Units::Metres).markup));
+    let label = Memo::new(move |_| shared.with_value(|(i18n, v)| iso_label(v, i18n)));
     let status = Memo::new(move |_| shared.with_value(|(i18n, v)| format!("{} / {}", arms_text(v, i18n), fit_text(v, i18n))));
-    assert!(markup.get().contains(">Scale<") && label.get().starts_with("Plan of the junction") && status.get().starts_with("4 streets"));
+    assert!(markup.get().contains("Lane 1 of") && label.get().starts_with("2.5D view of the junction") && status.get().starts_with("4 streets"));
     i18n.set(Locale::FrCa);
-    assert!(markup.get().contains(">Échelle<") && !markup.get().contains(">Scale<"), "{}", markup.get());
-    assert!(label.get().starts_with("Plan de la jonction, nord en haut."), "{}", label.get());
+    assert!(markup.get().contains("Voie 1 sur") && !markup.get().contains("Lane 1 of"), "{}", markup.get());
+    assert!(label.get().starts_with("Vue en 2,5D de la jonction."), "{}", label.get());
     assert!(status.get().starts_with("4 rues / 4 rues, feux de circulation."), "{}", status.get());
 }
 
@@ -1168,7 +1078,7 @@ fn the_junction_page_asks_for_no_message_that_is_missing_in_french() {
         view! {
             <page::Header vm=s.clone()/><page::TitleBlock vm=s.clone()/><page::Provenance vm=s.clone()/><page::Fit vm=s.clone()/><page::History vm=s.clone()/><page::Key vm=s.clone()/>
             <notes::Across vm=s.clone()/><notes::Conflicts vm=s.clone()/><notes::ConflictNote vm=s.clone()/><notes::Checks vm=s.clone()/>
-            <notes::Revisions vm=s.clone()/><plan::PlanDrawing vm=s.clone()/><turns::Turns vm=s.clone()/>
+            <notes::Revisions vm=s.clone()/><drawing::Drawing vm=s.clone()/><turns::Turns vm=s.clone()/>
         }
         .into_any()
     });
@@ -2346,18 +2256,18 @@ fn a_typed_time_is_read_with_a_comma_and_a_bad_one_changes_nothing() {
 
 #[test]
 fn a_suspended_turbo_is_not_named_or_offered_and_is_back_with_the_traffic() {
-    use crate::junction::plan_svg::plan_label;
+    use crate::junction::iso::iso_label;
     use crate::shared::i18n::Locale;
     let en = crate::i18n_for(Locale::En);
     let s = JunctionVm::new(crate::shared::platform::browser_ports(), en.clone(), suspended_turbo(), None);
-    assert!(!plan_label(&s.read(|j| j.view()), &en).contains("turbo"));
+    assert!(!iso_label(&s.read(|j| j.view()), &en).contains("turbo"));
     let h = panel(&s);
     for gone in ["i-h-turbo-size", "i-h-turbo-main", "i-h-turbo-layout"] {
         assert!(!h.contains(gone), "{gone}");
     }
     let mut busy = Junction::new(0);
     assert!(busy.set_control(ROUNDABOUT) && busy.set_turbo(Some(0)));
-    assert!(plan_label(&busy.view(), &en).contains("turbo"));
+    assert!(iso_label(&busy.view(), &en).contains("turbo"));
 }
 
 // ---- an arm's end zone and what lies beyond it -------------------------------------
@@ -2701,21 +2611,17 @@ fn all_phases_as(pattern: Pattern) -> Rc<JunctionVm> {
 }
 
 #[test]
-fn a_drag_that_changes_what_a_phase_is_says_so_like_a_button_does() {
+fn a_turn_of_a_street_that_changes_what_a_phase_is_says_so() {
     let s = all_phases_as(Pattern::ThroughOnly);
     let north = arm(&s, 0);
-    s.quiet(|j| j.begin_gesture());
-    assert!(s.quiet(|j| j.set_bearing(north, 340)));
-    s.end_gesture(true);
+    assert!(s.apply(|j| j.set_bearing(north, 340)));
     let said = live::take_said();
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(said[0].ends_with("Phases 2 and 4 no longer follow a ready-made pattern."), "{said:?}");
-    // A drag that leaves every phase as it was adds nothing.
+    // An edit that leaves every phase as it was adds nothing.
     let s = all_phases_as(Pattern::ThroughOnly);
     let east = arm(&s, 90);
-    s.quiet(|j| j.begin_gesture());
-    s.quiet(|j| j.set_setback(east, 4000));
-    s.end_gesture(true);
+    s.apply(|j| j.set_setback(east, 4000));
     assert!(!live::take_said().iter().any(|t| t.contains("no longer follow")));
 }
 

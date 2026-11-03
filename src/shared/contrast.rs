@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn the_boundaries_of_the_pieces_are_3_to_1_against_the_plate_and_every_lane_fill_in_both_themes() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
-        for rule in ["#drawing .piece {", "#drawing .iso-flat,\n#drawing .iso-top,\n#drawing .iso-side {"] {
+        for rule in ["#drawing .iso-flat,\n#drawing .iso-top,\n#drawing .iso-side {"] {
             let at = editor.find(rule).unwrap_or_else(|| panic!("{rule}"));
             let body = &editor[at..at + editor[at..].find('}').unwrap()];
             let alpha: f64 = body.split("stroke-opacity: ").nth(1).unwrap().split(';').next().unwrap().parse().unwrap();
