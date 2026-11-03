@@ -289,7 +289,7 @@ pub(crate) fn turbo_name(v: &JView, i18n: &I18n) -> Option<String> {
 /// Where the ray from the middle at `bearing` meets the middle of the outermost ring lane, and how wide that lane is
 /// there, both in mm. A turbo's lanes are open, one on each half of the ring, so the half the ray runs into is the one
 /// that answers (the other half's hits are behind the middle, and are dropped).
-fn outer_lane_at(ring: &RingView, bearing: f64) -> Option<(f64, f64)> {
+pub(crate) fn outer_lane_at(ring: &RingView, bearing: f64) -> Option<(f64, f64)> {
     let last = ring.lanes.iter().map(|l| l.k).max()?;
     ring.lanes
         .iter()

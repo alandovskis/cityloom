@@ -7,6 +7,7 @@ pub mod frame;
 pub mod geometry;
 pub mod inspector;
 pub mod iso;
+pub mod iso_marks;
 pub mod keys;
 pub mod model;
 pub mod notes;
