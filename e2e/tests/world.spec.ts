@@ -15,7 +15,7 @@ test("a junction of the area opens in the junction editor and a street in the st
   await page.goto("/map.html");
   const places = await placesOnMap(page);
   await page.goto("/" + places.junctions[0]);
-  await expect(page.locator(".plan, #plan").first()).toBeVisible();
+  await expect(page.locator("#drawing .iso-junction")).toBeVisible();
   await page.goto("/" + places.streets[0]);
   await expect(page.locator("#drawing")).toBeVisible();
 });

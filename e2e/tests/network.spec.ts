@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, mapReady, test } from "./fixtures";
+import { expect, live, mapReady, test } from "./fixtures";
 
 // The network checks look across the whole city: a section in the map page's Notes panel, under the Checks tab with a count for each check
 // and the findings under it, each linking the places it concerns. They are worked out when the map reads the city, so
@@ -163,12 +163,18 @@ test.describe("the network checks on the map page", () => {
     // can no longer be crossed to, so the street is cut off there
     await page.goto("/" + junction);
     await expect(page.locator("#drawing")).toBeVisible();
-    const crossings = page.locator("#drawing path.crossing");
+    const crossings = page.locator('#drawing path.iso-hit[data-role="crossing"]');
     const n = await crossings.count();
+    // The keys step through the junction's parts; the crossing across Rue Waverly says its street when it is selected.
+    await page.locator("#wrap").focus();
     let removed = false;
-    for (let i = 0; i < n && !removed; i++) {
-      await crossings.nth(i).click({ force: true });
-      if (/Waverly/.test(await page.locator("#details-panel").innerText())) {
+    for (let i = 0; i < 6 * n && !removed; i++) {
+      const before = await live(page).innerText();
+      await page.keyboard.press("ArrowRight");
+      // The status is emptied before it says what is selected: wait for the new words, not for the gap.
+      await expect(live(page)).not.toHaveText(before);
+      await expect(live(page)).toHaveText(/\S/);
+      if (/^(Crossing on|Continuous sidewalk across) .*Waverly/.test(await live(page).innerText())) {
         await page.keyboard.press("Delete");
         removed = true;
       }
