@@ -206,6 +206,114 @@ fn panel(s: &Rc<JunctionVm>) -> String {
     html(|| view! { <inspector::Inspector vm=s.clone()/> }.into_any())
 }
 
+// ---- what the plan's grips edit is edited from the inspector and the keys (#140, stage 3) ------------------------------
+//
+// The plan has three grips: the end of a street (`Grip::Arm`, which turns it), a corner's (`Grip::Corner`, its curb
+// radius) and a crossing's (`Grip::Crossing`, how far it is set back). The 2.5D has none, so each of these must be
+// reachable without a drag: a typed field with a stepper in the inspector, and the keys.
+
+/// The number field of the inspector with this heading id: its input, labelled by it, and the two stepper buttons
+/// whose names start with `down` and `up`.
+fn has_field(h: &str, id: &str, down: &str, up: &str) -> bool {
+    let labelled = h.contains(&format!("id=\"{id}\"")) && h.contains(&format!("aria-labelledby=\"{id}\""));
+    labelled && h.contains(&format!("aria-label=\"{down}")) && h.contains(&format!("aria-label=\"{up}"))
+}
+
+#[test]
+fn each_thing_a_grip_edits_has_a_field_with_steppers_in_the_inspector() {
+    let s = shared(0);
+    let n = arm(&s, 0);
+    s.edit(|j| j.select(Target::Arm(n)));
+    assert!(has_field(&panel(&s), "i-h-bearing", "Turn anticlockwise by", "Turn clockwise by"), "the street's direction");
+    s.edit(|j| j.select(Target::Corner(n)));
+    assert!(has_field(&panel(&s), "i-h-corner", "Tighter by", "Wider by"), "the corner's curb radius");
+    s.edit(|j| j.select(Target::Crossing(n)));
+    assert!(has_field(&panel(&s), "i-h-setback", "Closer by", "Farther by"), "how far the crossing is set back");
+    // The crossing's own panel is only the crossing: the same field, and its width beside it.
+    assert!(has_field(&panel(&s), "i-h-cwidth", "Narrower by", "Wider by"));
+}
+
+#[test]
+fn a_typed_value_reaches_every_state_a_grip_can() {
+    // The grip sets one number from where the pointer is; the field sets the same number. So whatever a drag leaves is
+    // what typing that number leaves, on every sample junction and every street, corner and crossing.
+    let mut compared = [0; 3];
+    for sample in 0..JUNCTION_SAMPLES.len() {
+        let base = Junction::new(sample);
+        for (i, a) in base.current().arms.iter().enumerate() {
+            let uid = a.uid;
+            // A street turned to face a point.
+            let mut dragged = Junction::new(sample);
+            if dragged.drag_arm_to(uid, 12_000.0, -3_000.0) {
+                let bearing = dragged.current().arms[i].bearing;
+                let mut typed = Junction::new(sample);
+                assert!(typed.set_bearing(uid, bearing));
+                compared[0] += 1;
+                assert_eq!(serde_json::to_string(&typed.view().arms).unwrap(), serde_json::to_string(&dragged.view().arms).unwrap(), "sample {sample} arm {i}");
+            }
+            // A corner's handle moved.
+            let mut dragged = Junction::new(sample);
+            let handle = base.view().corners[i].handle;
+            if dragged.drag_corner_to(uid, handle.0 + 900.0, handle.1 - 400.0) {
+                let radius = dragged.view().corners[i].radius_mm;
+                let mut typed = Junction::new(sample);
+                assert!(typed.set_corner(uid, radius));
+                compared[1] += 1;
+                assert_eq!(
+                    serde_json::to_string(&typed.view().corners).unwrap(),
+                    serde_json::to_string(&dragged.view().corners).unwrap(),
+                    "sample {sample} corner {i}"
+                );
+            }
+            // A crossing's handle moved.
+            let mut dragged = Junction::new(sample);
+            if let Some(c) = base.view().arms[i].crossing.as_ref() {
+                if dragged.drag_crossing_to(uid, c.handle.0 * 1.1, c.handle.1 * 1.1) {
+                    let setback = dragged.view().arms[i].crossing.as_ref().unwrap().setback_mm;
+                    let mut typed = Junction::new(sample);
+                    assert!(typed.set_setback(uid, setback));
+                    compared[2] += 1;
+                    assert_eq!(
+                        serde_json::to_string(&typed.view().arms).unwrap(),
+                        serde_json::to_string(&dragged.view().arms).unwrap(),
+                        "sample {sample} crossing {i}"
+                    );
+                }
+            }
+        }
+    }
+    assert!(compared.iter().all(|n| *n > 0), "each kind of grip was compared: {compared:?}");
+}
+
+#[test]
+fn the_keys_step_what_a_grip_drags_and_the_inspector_follows() {
+    use crate::junction::keys::{Action, Step, on_plan};
+    assert_eq!(on_plan("ArrowRight", true, Some("arm")), Some((Action::Step(Step::Bearing, 1), true)));
+    assert_eq!(on_plan("+", false, Some("corner")), Some((Action::Step(Step::Corner, 1), true)));
+    assert_eq!(on_plan("-", false, Some("crossing")), Some((Action::Step(Step::Setback, -1), true)));
+    // The steps are the field's own steppers: one press changes the number the field shows.
+    let s = shared(0);
+    let n = arm(&s, 0);
+    for (target, field, step) in
+        [(Target::Arm(n), "i-h-bearing", Step::Bearing), (Target::Corner(n), "i-h-corner", Step::Corner), (Target::Crossing(n), "i-h-setback", Step::Setback)]
+    {
+        s.edit(|j| j.select(target));
+        let shown = |s: &Rc<JunctionVm>| {
+            let h = panel(s);
+            let at = h.find(&format!("id=\"{field}\"")).unwrap();
+            h[at..].split("value=\"").nth(1).unwrap().split('"').next().unwrap().to_string()
+        };
+        let before = shown(&s);
+        s.edit(|j| match step {
+            Step::Bearing => j.step_bearing(n, 1),
+            Step::Corner => j.step_corner(n, 1),
+            Step::Setback => j.step_setback(n, 1),
+            Step::Cycle => j.step_cycle(1),
+        });
+        assert_ne!(shown(&s), before, "{field}");
+    }
+}
+
 #[test]
 fn a_selected_street_offers_a_control_for_each_junction_measure_of_the_atlas() {
     use crate::shared::i18n::{Args, Locale};

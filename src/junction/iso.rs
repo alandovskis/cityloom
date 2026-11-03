@@ -8,7 +8,9 @@ use serde_json::Value;
 
 use crate::junction::frame::Frame;
 use crate::junction::geometry::{sample_arc, sample_quad};
-use crate::junction::iso_marks::{LEAVE_ARROW_MM, crossing_dimension, lane_arrow, lane_arrow_size, movement_strokes, plain_arrow, ring_arrows};
+use crate::junction::iso_marks::{
+    LEAVE_ARROW_MM, Spot, crossing_dimension, lane_arrow, lane_arrow_size, movement_strokes, plain_arrow, ring_arrows, spread_labels,
+};
 use crate::junction::plan_svg::turbo_name;
 use crate::junction::read_model::{ArmView, JView};
 use crate::junction::text::arms_text;
@@ -544,6 +546,11 @@ impl Draw {
         write!(self.names, "<text class=\"{class}\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>", f1(x), f1(y + dy), esc(text)).unwrap();
     }
 
+    /// A line of text standing at a point of the screen, in pixels, over a halo, on top of everything.
+    fn label_px(&mut self, class: &str, at: P, text: &str) {
+        write!(self.names, "<text class=\"{class}\" x=\"{}\" y=\"{}\" text-anchor=\"middle\">{}</text>", f1(at.0), f1(at.1), esc(text)).unwrap();
+    }
+
     fn finish(mut self) -> String {
         self.solids.sort_by(|a, b| Self::depth(a).total_cmp(&Self::depth(b)));
         let solids: String = (0..self.solids.len()).map(|i| self.render(i)).collect();
@@ -766,6 +773,10 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
         }
     }
 
+    // The lengths of the crossings, written over the drawing once all are known: two that would overlap on the
+    // screen are moved apart, the longer crossing keeping its place, and one with no room is left out.
+    let mut dims: Vec<Dim> = Vec::new();
+
     // Surfaces raised to the sidewalk's level go over the road they are on, so they come after everything flat.
     if v.raised && v.ring.is_none() {
         d.table("sidewalk", &flatten(&v.core), wall);
@@ -818,7 +829,8 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
             d.mark_lines(false, if c.too_far { "dim dim-warn" } else { "dim" }, c.too_far, &strokes, h);
             let number = |mm: i32| units.number_in(mm, i18n.locale());
             let text = if c.stages > 1 { format!("{} × {}", c.stages, number(c.stage_mm)) } else { number(c.distance_mm) };
-            d.label(&format!("t-dim t-halo{}", if c.too_far { " t-warn" } else { "" }), at, h, 5.0, &text);
+            let (x, y) = d.f.at(at, h);
+            dims.push(Dim { at: (x, y + 5.0), warn: c.too_far, mm: c.distance_mm, text });
         }
         if c.continuous {
             d.table("sidewalk", &top, wall);
@@ -829,6 +841,14 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
         d.press_area("iso-hit", &hit_attrs("crossing", Some(a.uid), None), &top, h, None);
         if selected("crossing", a.uid) {
             d.outline(&top, h);
+        }
+    }
+
+    dims.sort_by(|a, b| b.warn.cmp(&a.warn).then(b.mm.cmp(&a.mm)));
+    let spots: Vec<Spot> = dims.iter().map(|m| Spot { at: m.at, chars: m.text.chars().count() }).collect();
+    for (m, spot) in dims.iter().zip(spread_labels(&spots)) {
+        if let Some((x, y)) = spot {
+            d.label_px(&format!("t-dim t-halo{}", if m.warn { " t-warn" } else { "" }), (x, y), &m.text);
         }
     }
 
@@ -850,6 +870,15 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
     }
 
     IsoSvg { frame: f, markup: d.finish() }
+}
+
+/// A crossing's length, to be written where there is room for it: where it wants to stand on the screen, and whether
+/// the crossing is too long, and how long it is, which of two that would overlap is kept.
+struct Dim {
+    at: P,
+    warn: bool,
+    mm: i32,
+    text: String,
 }
 
 /// An arrow's head, as a part of its length: a ring's, and where the traffic leaves.
@@ -1191,9 +1220,9 @@ mod tests {
 
     #[test]
     fn an_arm_without_a_beyond_draws_as_before() {
-        // Repinned for #140 stages 1 and 2, which gave the shapes the attributes a press reads and drew the parts that only
+        // Repinned for #140 stages 1, 2 and 4, which gave the shapes the attributes a press reads and drew the parts that only
         // have a place to press (a lane, a crossing, a bare corner); no shape moved.
-        let (got, pinned) = (iso_fingerprint(), 6_762_659_799_963_991_834);
+        let (got, pinned) = (iso_fingerprint(), 17_956_967_032_559_205_120);
         assert_eq!(
             got, pinned,
             "the 2.5D markup of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."

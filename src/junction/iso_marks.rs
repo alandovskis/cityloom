@@ -149,10 +149,77 @@ pub fn crossing_dimension(poly: &[P], bearing: f64) -> Option<(Vec<Vec<P>>, P)> 
     Some((vec![vec![q0, q1], tick(q0), tick(q1)], ((q0.0 + q1.0) / 2.0, (q0.1 + q1.1) / 2.0)))
 }
 
+/// A text on the screen that wants a place: where (its middle and baseline, in pixels) and how many characters wide.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Spot {
+    pub at: P,
+    pub chars: usize,
+}
+
+/// How wide a character of the dimension figures is, how much room above its baseline and below it a text holds,
+/// and the air kept between two.
+const CHAR_PX: f64 = 9.0;
+const LINE_PX: f64 = 16.0;
+const AIR_PX: f64 = 3.0;
+/// How far a text is moved, one way or the other, to clear another, as many lines as it may be moved.
+const STEP_PX: f64 = LINE_PX + AIR_PX;
+const NUDGES: [f64; 5] = [0.0, STEP_PX, -STEP_PX, 2.0 * STEP_PX, -2.0 * STEP_PX];
+
+fn overlap(a: &Spot, b: &Spot) -> bool {
+    let wide = (a.chars + b.chars) as f64 * CHAR_PX / 2.0 + AIR_PX;
+    (a.at.0 - b.at.0).abs() < wide && (a.at.1 - b.at.1).abs() < LINE_PX + AIR_PX
+}
+
+/// Where each text may stand so that no two overlap, kept in the order given, which is the order of their
+/// importance: a text that overlaps one already placed is moved up or down by whole lines, and goes unplaced (`None`)
+/// when none of those places is clear.
+pub fn spread_labels(spots: &[Spot]) -> Vec<Option<P>> {
+    let mut placed: Vec<Spot> = Vec::new();
+    spots
+        .iter()
+        .map(|s| {
+            let found = NUDGES.iter().map(|dy| Spot { at: (s.at.0, s.at.1 + dy), chars: s.chars }).find(|c| placed.iter().all(|p| !overlap(c, p)));
+            if let Some(c) = found {
+                placed.push(c);
+            }
+            found.map(|c| c.at)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::junction::model::*;
+
+    #[test]
+    fn texts_that_overlap_are_moved_by_a_line_and_the_most_important_one_keeps_its_place() {
+        let at = |x: f64, y: f64| Spot { at: (x, y), chars: 4 };
+        // Far apart: nobody moves.
+        assert_eq!(spread_labels(&[at(0.0, 0.0), at(200.0, 0.0), at(0.0, 100.0)]), vec![Some((0.0, 0.0)), Some((200.0, 0.0)), Some((0.0, 100.0))]);
+        // On top of each other: the first stays where it is, the others are moved up or down by whole lines, and when
+        // the five places there are for a text are taken, the next has none.
+        let all = spread_labels(&[at(0.0, 0.0), at(5.0, 2.0), at(-4.0, 1.0), at(2.0, 3.0), at(1.0, 0.0), at(0.0, 4.0)]);
+        assert_eq!(all[0], Some((0.0, 0.0)));
+        let placed_count = all.iter().flatten().count();
+        assert!((3..=5).contains(&placed_count), "at most five lines of room: {all:?}");
+        assert!(all.iter().any(|p| p.is_none()), "six on one spot do not all fit");
+        // Whatever is placed clears everything else placed.
+        let placed: Vec<Spot> = all.iter().flatten().map(|p| Spot { at: *p, chars: 4 }).collect();
+        for (i, a) in placed.iter().enumerate() {
+            assert!(placed[i + 1..].iter().all(|b| !overlap(a, b)), "{a:?}");
+        }
+    }
+
+    #[test]
+    fn a_long_text_needs_more_room_than_a_short_one() {
+        let (short, long) = (Spot { at: (0.0, 0.0), chars: 2 }, Spot { at: (0.0, 0.0), chars: 8 });
+        let beside = |c: &Spot, x: f64| Spot { at: (x, 0.0), chars: c.chars };
+        assert!(overlap(&short, &beside(&short, 20.0)));
+        assert!(!overlap(&short, &beside(&short, 30.0)));
+        assert!(overlap(&long, &beside(&long, 60.0)));
+        assert!(!overlap(&long, &beside(&long, 80.0)));
+    }
 
     #[test]
     fn an_allowed_turn_ends_in_a_head_and_a_banned_one_has_a_cross() {
@@ -544,6 +611,38 @@ mod tests {
         assert_eq!(count(&m, "class=\"t-dim t-halo"), crossings);
         let long = v.arms.iter().filter_map(|a| a.crossing.as_ref()).filter(|c| c.too_far).count();
         assert_eq!(count(&m, "class=\"dim dim-warn\""), long);
+    }
+
+    /// The crossing lengths written in a drawing: where each stands and how many characters it has.
+    fn dimension_texts(markup: &str) -> Vec<Spot> {
+        markup
+            .split("<text class=\"t-dim t-halo")
+            .skip(1)
+            .map(|t| {
+                let num = |name: &str| t.split(&format!(" {name}=\"")).nth(1).unwrap().split('"').next().unwrap().parse::<f64>().unwrap();
+                let text = t.split('>').nth(1).unwrap().split('<').next().unwrap();
+                Spot { at: (num("x"), num("y")), chars: text.chars().count() }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_lengths_of_neighbouring_crossings_never_overlap_and_the_longest_keeps_its_place() {
+        for width in [1000.0, 600.0, 320.0] {
+            for sample in 0..4 {
+                let j = Junction::new(sample);
+                let v = j.view();
+                let m = iso_svg(&v, &crate::i18n_for(crate::shared::i18n::Locale::En), width, 800.0, Units::Metres).markup;
+                let texts = dimension_texts(&m);
+                for (i, a) in texts.iter().enumerate() {
+                    assert!(texts[i + 1..].iter().all(|b| !overlap(a, b)), "sample {sample} at {width}: {a:?} meets another in {texts:?}");
+                }
+                let crossings = v.arms.iter().filter(|a| a.crossing.is_some()).count();
+                assert!(!texts.is_empty() && texts.len() <= crossings, "sample {sample} at {width}");
+                // The lines are all drawn, whether or not their figures are.
+                assert_eq!(count(&m, "class=\"dim\"") + count(&m, "class=\"dim dim-warn\""), crossings);
+            }
+        }
     }
 
     #[test]
