@@ -510,6 +510,17 @@ mod tests {
     }
 
     #[test]
+    fn a_curbside_use_stands_or_lies_on_its_arm_in_its_own_material() {
+        use crate::street::model::Use;
+        let before = svg(&Junction::new(0));
+        let (j, _) = junction_with_uses(|p| vec![end_use(25_000, Use::Tree, p)]);
+        let m = svg(&j);
+        assert_eq!(count(&m, "mat-trees\""), count(&before, "mat-trees\"") + 1, "a street tree stands as a raised strip");
+        let (j, _) = junction_with_uses(|p| vec![end_use(25_000, Use::Parking, p)]);
+        assert!(count(&svg(&j), "iso-flat k-parking") > count(&before, "iso-flat k-parking"), "parking lies in its lane");
+    }
+
+    #[test]
     fn a_corner_that_fails_is_drawn_with_a_warning_curb() {
         let mut j = Junction::new(0);
         let uid = j.current().arms[0].uid;
