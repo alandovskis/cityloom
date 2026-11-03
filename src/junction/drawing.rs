@@ -113,6 +113,8 @@ pub fn Drawing(vm: Rc<JunctionVm>) -> impl IntoView {
         focus_wrap();
     };
 
+    // Under the drawing are the keys' way through the parts, for a pointer: a press can miss a part that is small on the
+    // screen, and these two buttons are as large as a finger and reach every part the keys do.
     view! {
       <div class="wrap" id="wrap" tabindex="0" role="group" aria-label=move || w.i18n().tr("jn-editor", &Args::new()) aria-describedby="keys" node_ref=wrap on:keydown=keydown>
         <svg
@@ -129,6 +131,10 @@ pub fn Drawing(vm: Rc<JunctionVm>) -> impl IntoView {
             on:pointerdown=press
             inner_html=markup
         ></svg>
+        <div class="part-steps">
+            <button type="button" class="btn" id="part-previous" on:click=move |_| w.apply(keys::Action::Select(-1))>{move || w.i18n().tr("jn-part-previous", &Args::new())}</button>
+            <button type="button" class="btn" id="part-next" on:click=move |_| w.apply(keys::Action::Select(1))>{move || w.i18n().tr("jn-part-next", &Args::new())}</button>
+        </div>
       </div>
     }
 }

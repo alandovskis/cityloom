@@ -1,5 +1,9 @@
 //! How big the junction's drawing is: as wide as its group and as tall as the window leaves room for.
 
+/// The least wide the drawing is made: it scales to the group it has down to this, so that the page does not scroll
+/// sideways in a window of 280 px (the street's 2.5D is held to the same).
+pub const MIN_WIDTH: f64 = 240.0;
+
 /// The size of the drawing.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Frame {
@@ -12,7 +16,7 @@ pub struct Frame {
 impl Frame {
     /// The frame for a drawing `width` wide, in a window `window_height` high.
     pub fn fit(width: f64, window_height: f64) -> Frame {
-        let width = width.max(320.0);
+        let width = width.max(MIN_WIDTH);
         let narrow = width < 640.0;
         let height = if narrow { (width * 1.5).min(620.0) } else { (window_height - 555.0).clamp(340.0, 760.0) }.round();
         Frame { width, height, narrow }
@@ -37,6 +41,6 @@ mod tests {
         let f = Frame::fit(400.0, 1000.0);
         assert!(f.narrow);
         assert_eq!((f.width, f.height), (400.0, 600.0));
-        assert!(Frame::fit(100.0, 1000.0).width >= 320.0);
+        assert!(Frame::fit(100.0, 1000.0).width >= MIN_WIDTH);
     }
 }

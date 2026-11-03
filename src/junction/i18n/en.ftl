@@ -240,7 +240,7 @@ jn-turn-allowed = { $turn }, allowed
 ## The page around the plan: heading, window title, title block and history (src/junction/page.rs)
 jn-title = { $name } · CityLoom
 jn-city-map = City map
-jn-plan = Junction plan
+jn-heading = Junction in 2.5D
 jn-block-junction = Junction
 jn-block-streets = Streets
 jn-block-changes = Changes made
@@ -281,6 +281,9 @@ jn-iso-label-roundabout = 2.5D view of the junction. { $arms }. Roundabout.
 jn-iso-label-raised = 2.5D view of the junction. { $arms }. Raised table.
 jn-iso-label-turbo = 2.5D view of the junction. { $arms }. { $name }.
 jn-svg-bus-only = Bus only
+# What the buttons under the drawing step through: the streets, lanes, crossings and corners, as the arrow keys do.
+jn-part-previous = Previous part
+jn-part-next = Next part
 
 ## The page's markup (web/intersection.html); the window title is the header's jn-title
 jn-page-description = Change how a junction of streets works: corners, crossings, lanes, turns and control.

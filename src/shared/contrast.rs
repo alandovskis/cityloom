@@ -354,6 +354,26 @@ mod tests {
     }
 
     #[test]
+    fn the_junction_s_zebra_and_stop_line_are_pavement_paint_that_clears_three_to_one_on_every_material() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let rule_of = rule(editor, "#drawing .iso-zebra,\n#drawing .iso-stopline");
+        assert!(rule_of.contains("fill: var(--iso-paint-white);") && rule_of.contains("stroke: var(--iso-paint-edge);"), "{rule_of}");
+        // The ink-2 they were filled with is below 3:1 on the asphalt in the light theme: the paint's fill, or the hairline round
+        // it, stands out from every material in both themes.
+        let (white_l, white_d) = token(editor, "iso-paint-white");
+        let edge = token(editor, "iso-paint-edge").0.unwrap();
+        for m in crate::shared::catalogue::MATERIALS {
+            let mat = token(app, &format!("mat-{}", m.id)).0.unwrap();
+            for (theme, fill) in [("light", white_l.clone().unwrap()), ("dark", white_d.clone().unwrap())] {
+                let best = contrast(&fill, &mat).max(contrast(&edge, &mat));
+                assert!(best >= 3.0, "{} {theme}: {best:.2}", m.id);
+            }
+        }
+        let forced = editor.find("  #drawing .iso-zebra,\n  #drawing .iso-stopline {").expect("forced-colours rule");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some_and(|m| !editor[m..forced].contains("\n}\n")));
+    }
+
+    #[test]
     fn the_marks_the_2_5d_draws_on_the_ground_clear_three_to_one_on_their_casing_in_both_themes_and_have_forced_colours() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
         let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();

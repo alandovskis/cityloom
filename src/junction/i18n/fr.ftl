@@ -240,7 +240,7 @@ jn-turn-allowed = { $turn }, permis
 ## La page autour du plan : en-tête, titre de la fenêtre, cartouche et historique (src/junction/page.rs)
 jn-title = { $name } · CityLoom
 jn-city-map = Carte de la ville
-jn-plan = Plan de la jonction
+jn-heading = Jonction en 2,5D
 jn-block-junction = Jonction
 jn-block-streets = Rues
 jn-block-changes = Modifications apportées
@@ -281,6 +281,9 @@ jn-iso-label-roundabout = Vue en 2,5D de la jonction. { $arms }. Carrefour girat
 jn-iso-label-raised = Vue en 2,5D de la jonction. { $arms }. Carrefour surélevé.
 jn-iso-label-turbo = Vue en 2,5D de la jonction. { $arms }. { $name }.
 jn-svg-bus-only = Autobus seulement
+# What the buttons under the drawing step through: the streets, lanes, crossings and corners, as the arrow keys do.
+jn-part-previous = Partie précédente
+jn-part-next = Partie suivante
 
 ## Le balisage de la page (web/intersection.html); le titre de la fenêtre est le jn-title de l’en-tête
 jn-page-description = Modifiez le fonctionnement d’une jonction de rues : coins, passages pour piétons, voies, virages et signalisation.

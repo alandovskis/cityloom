@@ -56,7 +56,7 @@ pub fn Header(vm: Rc<JunctionVm>) -> impl IntoView {
                 <span aria-hidden="true">"·"</span>
                 " "
             })}
-            <span>{move || w.tr("jn-plan")}</span>
+            <span>{move || w.tr("jn-heading")}</span>
             " "
             <span aria-hidden="true">"·"</span>
             " "

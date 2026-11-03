@@ -597,10 +597,21 @@ svg pattern circle {
   stroke-opacity: 1;
   stroke-linejoin: round;
 }
+/* A zebra's stripes and a stop line are pavement paint, as the street's markings are: the white of --iso-paint-white
+   with its 0.5 px dark edge (--iso-paint-edge), 3:1 on every material in both themes (shared/contrast.rs). */
 #drawing .iso-zebra,
 #drawing .iso-stopline {
-  fill: var(--ink-2);
-  stroke: none;
+  fill: var(--iso-paint-white);
+  stroke: var(--iso-paint-edge);
+  stroke-width: 0.5px;
+  stroke-linejoin: round;
+}
+@media (forced-colors: active) {
+  #drawing .iso-zebra,
+  #drawing .iso-stopline {
+    fill: CanvasText;
+    stroke: none;
+  }
 }
 #drawing .iso-post {
   stroke: var(--ink-2);
@@ -631,12 +642,24 @@ svg pattern circle {
   cursor: pointer;
   touch-action: manipulation;
 }
+/* A place to press that is narrower than a finger carries a stroke-width (junction/iso.rs `target_growth_px`) that
+   brings it to 24 px; the stroke is not painted, but a press lands on it. */
 #drawing .iso-junction .iso-hit {
   fill: transparent;
-  stroke: none;
+  stroke: transparent;
+  stroke-linejoin: round;
 }
 #drawing .iso-junction .lane-hit {
-  stroke: none;
+  stroke: transparent;
+  stroke-linejoin: round;
+}
+/* The two buttons under the junction's drawing that step through its parts, as the arrow keys do. */
+.part-steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding-block: 6px;
 }
 /* What the plan draws on the ground and the 2.5D draws after it (junction/iso_marks.rs; #140): the marks keep the
    plan's own classes and so its colours (stop-*, mv, approach-mark, dim, measure-loop, dead-cap, lane-arrow, curb-line),

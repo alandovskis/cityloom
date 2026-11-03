@@ -2001,19 +2001,6 @@ fn measure(a: &Arm, item: &Item, none: &'static str) -> Said {
     }
 }
 
-/// The middle of the widest gap between arms, snapped to the bearing step.
-pub fn widest_gap(arms: &[Arm]) -> i32 {
-    let mut b: Vec<i32> = arms.iter().map(|a| a.bearing).collect();
-    b.sort_unstable();
-    let n = b.len();
-    if n == 0 {
-        return 0;
-    }
-    // The first of the widest gaps, so the choice does not depend on order.
-    let (start, width) = (0..n).map(|i| (b[i], gap(b[i], b[(i + 1) % n]))).fold((b[0], 0), |best, g| if g.1 > best.1 { g } else { best });
-    snap(start + width / 2, BEARING_STEP).rem_euclid(360)
-}
-
 /// A roundabout is no raised table, and a bike box stands only where `bike_box_blocker` allows one: whatever put it
 /// elsewhere (an edit, a save), it goes. A turbo is settled first (`settle_turbo`).
 fn settle_table_and_boxes(s: &mut State, region: usize) {

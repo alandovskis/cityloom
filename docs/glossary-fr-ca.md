@@ -239,7 +239,7 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction | One check needs attention: … | Une vérification est à corriger : … | As the map's `À corriger`. |
 | Junction | Started over from the junction as it is today | Retour à la jonction telle qu’elle est aujourd’hui |  |
 | Junction | Points at banned turns: … | Voies menant à des virages interdits : … | A check's failing detail; the lanes are its subject. |
-| Junction page | Junction plan | Plan de la jonction | As the map page's `Ouvre le plan de la jonction`. |
+| Junction page | Junction in 2.5D (the drawing's heading and the title block) | Jonction en 2,5D |  |
 | Junction page | Junction editor (the drawing’s group) | Éditeur de la jonction |  |
 | Junction page | Edited / As imported (title block) | Modifiée / Telle qu’importée | Feminine, agreeing with `jonction`; the street page's are `Modifié` / `Tel qu’importé`. |
 | Junction page | Data (title block) | Données |  |

@@ -772,7 +772,7 @@ fn linked_shared() -> Rc<JunctionVm> {
 fn the_heading_names_the_junction_and_counts_its_streets() {
     let s = shared(0);
     let h = html(|| view! { <page::Header vm=s.clone()/> }.into_any());
-    assert!(h.contains(">Avenue and street</h1>") && h.contains("Junction plan") && h.contains(">4 streets<"));
+    assert!(h.contains(">Avenue and street</h1>") && h.contains("Junction in 2.5D") && h.contains(">4 streets<"));
     assert!(!h.contains("City map"));
 }
 
@@ -980,14 +980,14 @@ fn speaks_french(h: &str, english: &[&str], french: &[&str]) {
 }
 
 /// English that must not be left on a French junction page, whatever the view.
-const ENGLISH: &[&str] = &["Junction plan", "Does it work", "Your changes", "Turns allowed", "Where paths meet", "streets", "Every check"];
+const ENGLISH: &[&str] = &["Junction in 2.5D", "Does it work", "Your changes", "Turns allowed", "Where paths meet", "streets", "Every check"];
 
 #[test]
 fn the_page_around_the_plan_speaks_french() {
     use crate::shared::i18n::Locale;
     let s = linked_in(Locale::FrCa);
     let h = html(|| view! { <page::Header vm=s.clone()/> }.into_any());
-    speaks_french(&h, &[ENGLISH, &["City map"]].concat(), &["Carte de la ville", "Plan de la jonction", ">4 rues<", ">Jonction 4</h1>"]);
+    speaks_french(&h, &[ENGLISH, &["City map"]].concat(), &["Carte de la ville", "Jonction en 2,5D", ">4 rues<", ">Jonction 4</h1>"]);
     let h = html(|| view! { <page::TitleBlock vm=s.clone()/> }.into_any());
     speaks_french(&h, &["Junction<", "Streets", "Changes made"], &[">Jonction<", ">Rues<", "Modifications apportées"]);
     let h = html(|| view! { <page::Provenance vm=s.clone()/> }.into_any());

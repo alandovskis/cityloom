@@ -109,11 +109,6 @@ pub fn fillet_setback(radius: f64, delta_deg: f64) -> f64 {
     radius / (delta_deg.to_radians() / 2.0).tan()
 }
 
-/// The arc from `a` to `b` about `o`, as an SVG arc command; always the short way.
-pub fn short_arc(o: P, r: f64, a: P, b: P) -> Value {
-    arc(r, false, cross(sub(a, o), sub(b, o)) > 0.0, b)
-}
-
 /// The arc along a circle about the origin from `a` to `b`, clockwise.
 pub fn ring_arc(r: f64, a: P, b: P) -> Value {
     let sweep = (b.1.atan2(b.0) - a.1.atan2(a.0)).to_degrees().rem_euclid(360.0);

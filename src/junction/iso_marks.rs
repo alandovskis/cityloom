@@ -643,7 +643,7 @@ mod tests {
 
     #[test]
     fn the_lengths_of_neighbouring_crossings_never_overlap_and_the_longest_keeps_its_place() {
-        for width in [1000.0, 600.0, 320.0] {
+        for width in [1000.0, 600.0, 320.0, 240.0] {
             for sample in 0..4 {
                 let j = Junction::new(sample);
                 let v = j.view();

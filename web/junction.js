@@ -26,8 +26,8 @@ async function start({ hatches, junction_exists, mount_bare_shell, mount_page, o
     location.replace("map.html");
     await new Promise(() => {});
   }
-  const plan = open_junction(placeId);
-  if (!plan) {
+  const editor = open_junction(placeId);
+  if (!editor) {
     // The streets here have been changed so that the junction cannot be drawn: the module says so.
     mount_bare_shell(placeId);
     await new Promise(() => {});
@@ -38,9 +38,9 @@ async function start({ hatches, junction_exists, mount_bare_shell, mount_page, o
     `<defs>${[HATCH, MATERIAL_HATCH, CURB_HATCH].flatMap((h) => Object.values(h)).join("")}</defs>`;
 
   // What is waiting to be kept in the city is kept when the page is left.
-  addEventListener("pagehide", () => plan.flush());
+  addEventListener("pagehide", () => editor.flush());
 
-  mount_page(plan);
+  mount_page(editor);
 
-  plan.mount_shell();
+  editor.mount_shell();
 }

@@ -449,7 +449,11 @@ impl Draw {
         }
         let d = self.path(foot, h_mm);
         let title = title.map(|t| format!("<title>{}</title>", esc(t))).unwrap_or_default();
-        write!(self.flat, "<path class=\"{class}\"{attrs} d=\"{d}\">{title}</path>").unwrap();
+        // A part narrower than a finger is given the rest of the 24 px as a stroke nobody sees, which a press also lands on.
+        let on_screen: Vec<P> = foot.iter().map(|p| self.f.at(*p, h_mm)).collect();
+        let grow = target_growth_px(&on_screen);
+        let reach = if grow > 0.0 { format!(" stroke-width=\"{}\"", f1(grow)) } else { String::new() };
+        write!(self.flat, "<path class=\"{class}\"{attrs}{reach} d=\"{d}\">{title}</path>").unwrap();
     }
 
     /// A street's name beyond the end of its arm, away from the middle of the junction and kept inside the drawing.
@@ -602,6 +606,30 @@ pub fn iso_label(v: &JView, i18n: &I18n) -> String {
     i18n.tr(key, &Args::new().str("arms", arms))
 }
 
+/// The least a part to press is asked to be on the screen, in pixels (WCAG 2.2, 2.5.8 Target Size, Minimum).
+pub const MIN_TARGET_PX: f64 = 24.0;
+
+/// How much wider a polygon on the screen must be made all round, as the width of a stroke, to be as thick as
+/// `MIN_TARGET_PX`: its thickness is taken as twice its area over its perimeter (a strip's width, near enough), and
+/// 0 when it is thick enough already.
+pub fn target_growth_px(points: &[P]) -> f64 {
+    let n = points.len();
+    if n < 3 {
+        return 0.0;
+    }
+    let (mut twice_area, mut perimeter) = (0.0, 0.0);
+    for i in 0..n {
+        let (a, b) = (points[i], points[(i + 1) % n]);
+        twice_area += a.0 * b.1 - b.0 * a.1;
+        perimeter += (b.0 - a.0).hypot(b.1 - a.1);
+    }
+    if perimeter < 1e-9 {
+        return 0.0;
+    }
+    let thickness = twice_area.abs() / perimeter;
+    (MIN_TARGET_PX - thickness).max(0.0)
+}
+
 /// The attributes that make a shape of the picture pressable: what a press on it selects, as the plan's shapes say it
 /// (`drawing::selected_by` reads them back). The cycle track and the bus lane are the only one of their kind, and have
 /// no uid.
@@ -700,10 +728,6 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
             }
         });
         if !c.straight {
-            // Bare ground between two streets is a corner too: it is only a place to press.
-            if !c.walk {
-                d.press_area("iso-hit", &hit, &flatten(&c.wedge), 0.0, None);
-            }
             if selected("corner", c.uid) {
                 d.outline(&flatten(&c.wedge), if c.walk { wall } else { 0.0 });
             }
@@ -784,6 +808,12 @@ pub fn iso_svg(v: &JView, i18n: &I18n, width: f64, window_height: f64, units: Un
                 d.outline(&flatten(&lane.poly), 0.0);
             }
         }
+    }
+
+    // A corner is a place to press, drawn after the streets so that it is the one pressed where it is made wider than
+    // it is, to be as big as a finger (bare ground or a sidewalk's corner alike).
+    for c in v.corners.iter().filter(|c| !c.straight) {
+        d.press_area("iso-hit", &hit_attrs("corner", Some(c.uid), None), &flatten(&c.wedge), if c.walk { wall } else { 0.0 }, None);
     }
 
     // The lengths of the crossings, written over the drawing once all are known: two that would overlap on the
@@ -1233,9 +1263,9 @@ mod tests {
 
     #[test]
     fn an_arm_without_a_beyond_draws_as_before() {
-        // Repinned for #140 stages 1, 2 and 4, which gave the shapes the attributes a press reads and drew the parts that only
+        // Repinned for #140 stages 1, 2, 4 and 6, which gave the shapes the attributes a press reads and drew the parts that only
         // have a place to press (a lane, a crossing, a bare corner); no shape moved.
-        let (got, pinned) = (iso_fingerprint(), 17_956_967_032_559_205_120);
+        let (got, pinned) = (iso_fingerprint(), 4_228_804_085_593_975_495);
         assert_eq!(
             got, pinned,
             "the 2.5D markup of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
@@ -1567,6 +1597,31 @@ mod tests {
     }
 
     #[test]
+    fn a_strip_narrower_than_a_finger_grows_to_one_and_a_wide_shape_does_not() {
+        let strip = |w: f64| [(0.0, 0.0), (400.0, 0.0), (400.0, w), (0.0, w)];
+        // A strip 10 px wide is made 14 px wider (its thickness is a little under its width, 2A/P).
+        let grow = target_growth_px(&strip(10.0));
+        assert!((grow - (MIN_TARGET_PX - 2.0 * 400.0 * 10.0 / (2.0 * 410.0))).abs() < 1e-9 && grow > 13.0 && grow < 15.0, "{grow}");
+        assert_eq!(target_growth_px(&strip(60.0)), 0.0);
+        assert_eq!(target_growth_px(&[(0.0, 0.0), (1.0, 1.0)]), 0.0, "a line is no shape");
+        assert_eq!(target_growth_px(&[(5.0, 5.0), (5.0, 5.0), (5.0, 5.0)]), 0.0, "nor is a point");
+    }
+
+    #[test]
+    fn on_a_narrow_drawing_the_places_to_press_that_are_thinner_than_a_finger_say_how_much_to_grow() {
+        let growing = |width: f64| {
+            let j = Junction::new(0);
+            let m = iso_svg(&j.view(), &crate::i18n_for(crate::shared::i18n::Locale::En), width, 800.0, Units::Metres).markup;
+            let tags: Vec<&str> = m.split("<path class=\"lane-hit\"").skip(1).map(|t| &t[..t.find('>').unwrap()]).collect();
+            (tags.len(), tags.iter().filter(|t| t.contains("stroke-width=")).count())
+        };
+        let (lanes, wide) = growing(1440.0);
+        let (narrow_lanes, narrow) = growing(320.0);
+        assert_eq!(lanes, narrow_lanes);
+        assert!(narrow >= wide && narrow > 0, "at 320 px the lanes are thinner than a finger: {narrow} of {narrow_lanes} grow, {wide} of {lanes} at 1440");
+    }
+
+    #[test]
     fn a_selected_lane_is_shaded_and_named_and_the_others_are_not() {
         let mut j = Junction::new(0);
         let arm = j.current().arms[0].uid;
@@ -1677,7 +1732,7 @@ mod tests {
 
     #[test]
     fn the_whole_junction_and_its_tallest_post_are_inside_the_drawing() {
-        for width in [320.0, 400.0, 1000.0] {
+        for width in [240.0, 320.0, 400.0, 1000.0] {
             let b = [-20_000.0, -20_000.0, 20_000.0, 20_000.0];
             let corners = [(b[0], b[1]), (b[2], b[1]), (b[2], b[3]), (b[0], b[3])];
             let f = IsoFrame::fit(&corners, width, 1000.0);
