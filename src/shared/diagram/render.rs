@@ -31,7 +31,9 @@ pub fn textured(out: &mut String, p: &dyn Projection, class: &str, material: &st
     let ((a0, a1), (b0, b1)) = (edge(near), edge(far));
     let pts = points(p, &[Pt::new(a0, h, near), Pt::new(a1, h, near), Pt::new(b1, h, far), Pt::new(b0, h, far)]);
     if p.affine() {
-        write!(out, "<polygon class=\"{class}\" points=\"{pts}\" fill=\"url(#iso-m-{material})\"/>").unwrap();
+        // The texture is a polygon of its own over the top: a fill attribute on the top itself would be overridden by the
+        // top's CSS fill (`.iso-top.mat-*`), and the pattern would never show.
+        write!(out, "<polygon class=\"{class}\" points=\"{pts}\"/><polygon class=\"hatch\" points=\"{pts}\" fill=\"url(#iso-m-{material})\"/>").unwrap();
         return;
     }
     write!(out, "<polygon class=\"{class}\" points=\"{pts}\"/>").unwrap();
@@ -87,6 +89,21 @@ pub fn joints_d(p: &dyn Projection, runs: &[JointRun]) -> String {
     d
 }
 
+/// The path data of runs of points, to a tenth of a pixel: `M x yL x y` for each run, a `Z` at the end of a closed shape.
+pub fn path_d(p: &dyn Projection, runs: &[Vec<Pt>], closed: bool) -> String {
+    let mut d = String::new();
+    for run in runs.iter().filter(|r| r.len() >= if closed { 1 } else { 2 }) {
+        for (i, &pt) in run.iter().enumerate() {
+            let (x, y) = p.at(pt);
+            write!(d, "{}{} {}", if i == 0 { "M" } else { "L" }, f1(x), f1(y)).unwrap();
+        }
+    }
+    if closed && !d.is_empty() {
+        d.push('Z');
+    }
+    d
+}
+
 /// A face's name and the filter that darkens it, as an attribute: none for a top.
 fn shade(face: Face) -> (&'static str, &'static str) {
     match face {
@@ -134,6 +151,36 @@ fn shape(out: &mut String, s: &Shape, p: &dyn Projection) {
             if !d.is_empty() {
                 write!(out, "<path class=\"{class}\" d=\"{d}\"/>").unwrap();
             }
+        }
+        Shape::Path { runs, closed, class, attrs, title } => {
+            out.push_str("<path");
+            if !class.is_empty() {
+                write!(out, " class=\"{class}\"").unwrap();
+            }
+            write!(out, "{attrs} d=\"{}\"", path_d(p, runs, *closed)).unwrap();
+            match title {
+                Some(t) => write!(out, "><title>{}</title></path>", esc(t)).unwrap(),
+                None => out.push_str("/>"),
+            }
+        }
+        Shape::Elem { tag, class, attrs, shapes } => {
+            write!(out, "<{tag}").unwrap();
+            if !class.is_empty() {
+                write!(out, " class=\"{class}\"").unwrap();
+            }
+            out.push_str(attrs);
+            if shapes.is_empty() {
+                out.push_str("/>");
+            } else {
+                out.push('>');
+                for s in shapes {
+                    shape(out, s, p);
+                }
+                write!(out, "</{tag}>").unwrap();
+            }
+        }
+        Shape::Caption { px, class, anchor, text } => {
+            write!(out, "<text class=\"{class}\" x=\"{}\" y=\"{}\" text-anchor=\"{anchor}\">{}</text>", f1(px.0), f1(px.1), esc(text)).unwrap()
         }
         Shape::Polyline { pts, class } => out.push_str(&format!(r#"<polyline class="{class}" points="{}"/>"#, points(p, pts))),
         Shape::Text { at, class, size, text } => {
@@ -361,6 +408,11 @@ mod tests {
         render(&d, p)
     }
 
+    /// One shape as the ground layer's markup, on its own.
+    fn ground_of(s: Shape, p: &dyn Projection) -> String {
+        layer_markup(&layer_of(LayerKind::Ground, vec![s]), p)
+    }
+
     #[test]
     fn a_textured_top_on_a_perspective_is_cut_into_bands_each_with_its_transform() {
         let s = drawn(top(), &Persp);
@@ -377,11 +429,42 @@ mod tests {
     }
 
     #[test]
-    fn a_textured_top_on_an_affine_projection_is_one_polygon() {
+    fn a_textured_top_on_an_affine_projection_is_the_top_and_one_polygon_of_texture_over_it() {
         let s = drawn(top(), &Flat);
-        assert_eq!(s.matches("<polygon").count(), 1, "{s}");
+        assert_eq!(s.matches("<polygon").count(), 2, "{s}");
         assert_eq!(s.matches("transform=").count(), 0, "{s}");
-        assert!(s.contains(r##"fill="url(#iso-m-concrete)""##), "{s}");
+        // The top carries no fill of its own, so that its class's CSS cannot override the texture; the texture is its own polygon.
+        assert!(s.starts_with(r#"<g class="iso-layer-ground"><polygon class="iso-top" points="0,0 10,0 10,20 0,20"/>"#), "{s}");
+        assert!(s.contains(r##"<polygon class="hatch" points="0,0 10,0 10,20 0,20" fill="url(#iso-m-concrete)"/>"##), "{s}");
+        assert!(!s.contains(r#"class="iso-top" points="0,0 10,0 10,20 0,20" fill"#), "{s}");
+    }
+
+    #[test]
+    fn a_path_is_runs_of_points_to_a_tenth_with_one_z_when_closed_and_a_title_makes_it_a_parent() {
+        let run = |n: f64| vec![Pt::new(n, 0.0, 0.0), Pt::new(n + 1.04, 0.0, 2.0)];
+        let one = |closed, title: Option<&str>, class: &str| Shape::Path { runs: vec![run(1.0), run(5.0)], closed, class: class.into(), attrs: " data-role=\"x\"".into(), title: title.map(String::from) };
+        assert_eq!(ground_of(one(false, None, "c"), &Flat), r#"<g class="iso-layer-ground"><path class="c" data-role="x" d="M1 2L2 4M5 2L6 4"/></g>"#.replace("M1 2L2 4M5 2L6 4", "M1 0L2 2M5 0L6 2"));
+        assert_eq!(ground_of(one(true, Some("A & B"), ""), &Flat), r#"<g class="iso-layer-ground"><path data-role="x" d="M1 0L2 2M5 0L6 2Z"><title>A &amp; B</title></path></g>"#);
+        // A run of one point is no stroke, and a closed shape of nothing writes nothing but its element.
+        let dot = Shape::Path { runs: vec![vec![Pt::new(1.0, 0.0, 0.0)]], closed: false, class: "c".into(), attrs: String::new(), title: None };
+        assert_eq!(ground_of(dot, &Flat), r#"<g class="iso-layer-ground"><path class="c" d=""/></g>"#);
+    }
+
+    #[test]
+    fn an_element_writes_its_attributes_as_given_and_closes_itself_when_it_holds_nothing() {
+        let leaf = Shape::Elem { tag: "circle", class: "iso-head signal".into(), attrs: " cx=\"1\" cy=\"2\" r=\"3\"".into(), shapes: vec![] };
+        assert_eq!(ground_of(leaf.clone(), &Flat), r#"<g class="iso-layer-ground"><circle class="iso-head signal" cx="1" cy="2" r="3"/></g>"#);
+        let parent = Shape::Elem { tag: "g", class: String::new(), attrs: " style=\"--arrow:5\"".into(), shapes: vec![leaf] };
+        assert_eq!(
+            ground_of(parent, &Flat),
+            r#"<g class="iso-layer-ground"><g style="--arrow:5"><circle class="iso-head signal" cx="1" cy="2" r="3"/></g></g>"#
+        );
+    }
+
+    #[test]
+    fn a_caption_is_set_at_its_pixel_position_with_its_anchor_and_an_escaped_text() {
+        let c = Shape::Caption { px: (10.04, 20.06), class: "t-note".into(), anchor: "middle", text: "G1 & <2>".into() };
+        assert_eq!(ground_of(c, &Flat), r#"<g class="iso-layer-ground"><text class="t-note" x="10" y="20.1" text-anchor="middle">G1 &amp; &lt;2&gt;</text></g>"#);
     }
 
     #[test]
