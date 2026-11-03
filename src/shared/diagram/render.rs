@@ -442,9 +442,21 @@ mod tests {
     #[test]
     fn a_path_is_runs_of_points_to_a_tenth_with_one_z_when_closed_and_a_title_makes_it_a_parent() {
         let run = |n: f64| vec![Pt::new(n, 0.0, 0.0), Pt::new(n + 1.04, 0.0, 2.0)];
-        let one = |closed, title: Option<&str>, class: &str| Shape::Path { runs: vec![run(1.0), run(5.0)], closed, class: class.into(), attrs: " data-role=\"x\"".into(), title: title.map(String::from) };
-        assert_eq!(ground_of(one(false, None, "c"), &Flat), r#"<g class="iso-layer-ground"><path class="c" data-role="x" d="M1 2L2 4M5 2L6 4"/></g>"#.replace("M1 2L2 4M5 2L6 4", "M1 0L2 2M5 0L6 2"));
-        assert_eq!(ground_of(one(true, Some("A & B"), ""), &Flat), r#"<g class="iso-layer-ground"><path data-role="x" d="M1 0L2 2M5 0L6 2Z"><title>A &amp; B</title></path></g>"#);
+        let one = |closed, title: Option<&str>, class: &str| Shape::Path {
+            runs: vec![run(1.0), run(5.0)],
+            closed,
+            class: class.into(),
+            attrs: " data-role=\"x\"".into(),
+            title: title.map(String::from),
+        };
+        assert_eq!(
+            ground_of(one(false, None, "c"), &Flat),
+            r#"<g class="iso-layer-ground"><path class="c" data-role="x" d="M1 2L2 4M5 2L6 4"/></g>"#.replace("M1 2L2 4M5 2L6 4", "M1 0L2 2M5 0L6 2")
+        );
+        assert_eq!(
+            ground_of(one(true, Some("A & B"), ""), &Flat),
+            r#"<g class="iso-layer-ground"><path data-role="x" d="M1 0L2 2M5 0L6 2Z"><title>A &amp; B</title></path></g>"#
+        );
         // A run of one point is no stroke, and a closed shape of nothing writes nothing but its element.
         let dot = Shape::Path { runs: vec![vec![Pt::new(1.0, 0.0, 0.0)]], closed: false, class: "c".into(), attrs: String::new(), title: None };
         assert_eq!(ground_of(dot, &Flat), r#"<g class="iso-layer-ground"><path class="c" d=""/></g>"#);
@@ -464,7 +476,10 @@ mod tests {
     #[test]
     fn a_caption_is_set_at_its_pixel_position_with_its_anchor_and_an_escaped_text() {
         let c = Shape::Caption { px: (10.04, 20.06), class: "t-note".into(), anchor: "middle", text: "G1 & <2>".into() };
-        assert_eq!(ground_of(c, &Flat), r#"<g class="iso-layer-ground"><text class="t-note" x="10" y="20.1" text-anchor="middle">G1 &amp; &lt;2&gt;</text></g>"#);
+        assert_eq!(
+            ground_of(c, &Flat),
+            r#"<g class="iso-layer-ground"><text class="t-note" x="10" y="20.1" text-anchor="middle">G1 &amp; &lt;2&gt;</text></g>"#
+        );
     }
 
     #[test]
