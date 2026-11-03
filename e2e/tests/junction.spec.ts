@@ -1429,6 +1429,56 @@ test.describe("a part of the junction in 2.5D is pressed to select it", () => {
       expect(await style(looked, "pointerEvents"), looked).toBe("none");
   });
 
+  // The plan's grips turn a street, size a corner and set a crossing back; the 2.5D has none, so each is a field of the
+  // inspector with steppers, reached by pressing the part (#140).
+  test("a street is turned, a corner sized and a crossing set back from the inspector, with the 2.5D shown", async ({
+    page,
+  }) => {
+    const field = (id: string) => page.locator(`#inspector input[aria-labelledby="${id}"]`);
+    const picture = () => page.locator("#drawing").innerHTML();
+    const undo = page.locator("#undo");
+    await expect(undo).toBeDisabled();
+
+    // A street turns only where it keeps clear of its neighbours: one way or the other.
+    await pressOn(page, '#drawing [data-role="arm"]');
+    const bearing = field("i-h-bearing");
+    const was = await bearing.inputValue();
+    const before = await picture();
+    await page.getByRole("button", { name: /^Turn clockwise by/ }).click();
+    if ((await bearing.inputValue()) === was)
+      await page.getByRole("button", { name: /^Turn anticlockwise by/ }).click();
+    await expect(bearing).not.toHaveValue(was);
+    await expect.poll(picture).not.toBe(before);
+    await expect(undo).toBeEnabled();
+
+    // A corner's curb radius, by its stepper and by typing.
+    await pressOn(page, '#drawing [data-role="corner"]');
+    const radius = field("i-h-corner");
+    const tight = await radius.inputValue();
+    await page.getByRole("button", { name: /^Wider by/ }).click();
+    await expect(radius).not.toHaveValue(tight);
+    await radius.fill("5");
+    await radius.press("Tab");
+    await expect(radius).toHaveValue("5.0");
+    await expect.poll(picture).not.toBe(before);
+
+    // How far a crossing stands back, by its stepper and by typing.
+    await pressOn(page, '#drawing [data-role="crossing"]');
+    const setback = field("i-h-setback");
+    const near = await setback.inputValue();
+    const crossing = await picture();
+    await page.getByRole("button", { name: /^Farther by/ }).click();
+    await expect(setback).not.toHaveValue(near);
+    await expect.poll(picture).not.toBe(crossing);
+    await setback.fill("4");
+    await setback.press("Tab");
+    await expect(setback).toHaveValue("4.0");
+
+    // Each of the edits is one step to undo.
+    await page.keyboard.press("Control+z");
+    await expect(setback).not.toHaveValue("4.0");
+  });
+
   test("the lanes carry their arrows, the crossings their lengths, and the selected street shows its turns", async ({
     page,
   }) => {
@@ -1491,4 +1541,85 @@ test("a turbo roundabout's cycle track is pressed in 2.5D", async ({ page }) => 
   await pressOn(page, '#drawing [data-role="cycle"]');
   await expect(live(page)).toHaveText(/^Cycle track, /);
   await expect(page.locator("#drawing .iso-sel")).toHaveCount(2);
+});
+
+// ---- the roundabout and the turbo layouts, checked in 2.5D (#140) -------------------------------------------------------
+//
+// The plan's own checks of them (the painted divider, the layouts, the cycle track) are made here on the 2.5D's shapes:
+// the divider is paint in quads (`.iso-paint.white`), the ring a travel surface, its arrows `g.lane-arrow`.
+
+test.describe("the roundabout and the turbo layouts in 2.5D", () => {
+  const paint = (page: Page) => page.locator("#drawing .iso-junction .iso-paint.white");
+  const label = /Basic turbo roundabout, \w+ size\.$/;
+
+  test.beforeEach(async ({ page }) => {
+    await basicTurbo(page);
+    await page.locator("#view-iso").click();
+    await expect(page.locator("#drawing .iso-junction")).toHaveCount(1);
+  });
+
+  test("a turbo is drawn with its painted dividers and its name, and undo takes them away", async ({ page }) => {
+    await expect(paint(page).first()).toBeAttached();
+    // A double line: two lines of quads, so an even number.
+    expect((await paint(page).count()) % 2).toBe(0);
+    await expect(page.locator("#drawing")).toHaveAttribute("aria-label", label);
+    await expect(page.getByRole("radio", { name: "Basic", exact: true })).toHaveAttribute("aria-checked", "true");
+    // The ring is a travel surface with the island standing in it.
+    await expect(page.locator("#drawing .iso-junction .iso-flat.k-travel").first()).toBeAttached();
+    await expect(page.locator("#drawing .iso-junction .iso-top.k-median").first()).toBeAttached();
+    // Its streets' lanes have arrows and so has the ring.
+    await expect(page.locator("#drawing .iso-junction g.lane-arrow:not(.out)").first()).toBeAttached();
+    await page.locator("#undo").click();
+    await expect(paint(page)).toHaveCount(0);
+    await expect(page.locator("#drawing")).not.toHaveAttribute("aria-label", label);
+  });
+
+  test("each layout the streets allow draws, is named in the label and changes the dividers", async ({ page }) => {
+    const markups = new Set<string>();
+    let drawn = 0;
+    for (const [name, label] of [
+      ["Basic", /Basic turbo roundabout/],
+      ["Egg", /Egg turbo roundabout/],
+      ["Knee", /Knee turbo roundabout/],
+      ["Spiral", /Spiral turbo roundabout/],
+      ["Rotor", /Rotor turbo roundabout/],
+    ] as const) {
+      const radio = page.getByRole("radio", { name, exact: true });
+      if (!(await radio.isVisible()) || (await radio.getAttribute("aria-disabled")) === "true") continue;
+      await radio.click();
+      await expect(radio).toHaveAttribute("aria-checked", "true");
+      await expect(page.locator("#drawing")).toHaveAttribute("aria-label", label);
+      await expect(paint(page).first()).toBeAttached();
+      const markup = await page.locator("#drawing").innerHTML();
+      expect(markup).not.toMatch(/NaN|inf\b/);
+      markups.add(markup);
+      drawn++;
+    }
+    expect(drawn).toBeGreaterThanOrEqual(2);
+    expect(markups.size, "each layout is a different picture").toBe(drawn);
+  });
+
+  test("the size of the turbo redraws the ring", async ({ page }) => {
+    const before = await page.locator("#drawing").innerHTML();
+    const larger = page.getByRole("button", { name: "Next larger size" });
+    const smaller = page.getByRole("button", { name: "Next smaller size" });
+    await ((await larger.isEnabled()) ? larger : smaller).click();
+    await expect.poll(() => page.locator("#drawing").innerHTML()).not.toBe(before);
+    await expect(paint(page).first()).toBeAttached();
+  });
+
+  test("the cycle track is a band round the ring that is drawn, widened and taken away", async ({ page }) => {
+    const track = page.locator("#drawing .iso-junction .iso-flat.k-bike");
+    const before = await track.count();
+    await page.getByRole("checkbox", { name: /Track around the outside/ }).click();
+    await expect(track).toHaveCount(before + 1);
+    const picture = await page.locator("#drawing").innerHTML();
+    const width = page.locator('#inspector input[aria-labelledby="i-h-cycle-width"]');
+    await width.fill("3");
+    await width.press("Tab");
+    await expect(width).toHaveValue("3.0");
+    await expect.poll(() => page.locator("#drawing").innerHTML()).not.toBe(picture);
+    await page.getByRole("checkbox", { name: /Track around the outside/ }).click();
+    await expect(track).toHaveCount(before);
+  });
 });
