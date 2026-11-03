@@ -498,3 +498,36 @@ stop-refused-overlap = Cet arrêt chevaucherait un autre arrêt du même côté.
 stop-refused-too-long = Cet arrêt dépasserait l’extrémité de la rue.
 stop-refused-time-windows = On ne peut pas placer un arrêt sur une voie qui change selon l’heure de la journée.
 stop-refused-dragging = Terminez le glissement avant de modifier les arrêts.
+
+# Ce que la dernière modification a changé à la rue (src/street/impact.rs et la fiche de l’onglet Incidence).
+st-impact-heading = Dernière modification
+st-impact-empty = Aucune modification pour l’instant. Modifiez la rue pour voir son effet sur l’espace et sur les vérifications.
+impact-no-effect = Aucun effet sur l’espace ni sur les vérifications
+impact-space-heading = Espace de la rue
+impact-passing-heading = Nouvelles réussites
+impact-failing-heading = Nouveaux échecs
+impact-changed = La rue a changé
+impact-started-over = Retour à la rue d’aujourd’hui
+impact-undone = Annulé : { $what }
+impact-redone = Rétabli : { $what }
+impact-use-more = { $use } : { $before } → { $after } ({ $amount } de plus)
+impact-use-less = { $use } : { $before } → { $after } ({ $amount } de moins)
+impact-verdict-improved =
+    { $passing ->
+        [one] Amélioration : 1 vérification réussit maintenant.
+       *[other] Amélioration : { $passing } vérifications réussissent maintenant.
+    }
+impact-verdict-regressed =
+    { $failing ->
+        [one] Dégradation : 1 vérification échoue maintenant.
+       *[other] Dégradation : { $failing } vérifications échouent maintenant.
+    }
+impact-verdict-mixed =
+    Résultat mitigé : { $passing ->
+        [one] 1 vérification réussit maintenant
+       *[other] { $passing } vérifications réussissent maintenant
+    }, { $failing ->
+        [one] 1 échoue maintenant
+       *[other] { $failing } échouent maintenant
+    }.
+impact-verdict-unchanged = Aucun changement dans les vérifications.

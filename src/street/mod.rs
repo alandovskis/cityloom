@@ -3,6 +3,7 @@
 
 pub mod curb_strip;
 pub mod curb_tools;
+pub mod impact;
 pub mod inspector;
 pub mod iso;
 pub mod keys;
