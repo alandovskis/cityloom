@@ -1,4 +1,4 @@
-//! The junction's drawing, the 2.5D (`iso.rs`), and the input on it: pressing a part selects it as the keys do, and
+//! The junction's drawing, the 2.5D (`iso/`), and the input on it: pressing a part selects it as the keys do, and
 //! the keys on the group step through the parts and change the selected one. There is nothing to drag: what a
 //! street's direction, a corner's radius and a crossing's setback need is a typed field with steppers in the
 //! inspector, and a key.

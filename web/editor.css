@@ -628,7 +628,7 @@ svg pattern circle {
   stroke-width: 0.6;
   stroke-opacity: 0.55;
 }
-/* The junction in 2.5D is pressed to select (junction/iso.rs `hit_attrs`): a shape with a data-role selects what the
+/* The junction in 2.5D is pressed to select (junction/iso/ `hit_attrs`): a shape with a data-role selects what the
    keys would, and everything else is looked at and lets the press through to what lies under it. A tap is the whole
    gesture, so the targets ask for no double-tap zoom; the 2.5D has no grips, so nothing here is dragged. */
 #drawing .iso-junction * {

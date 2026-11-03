@@ -4,8 +4,6 @@
 //! viewpoint, so what stands is painted far to near with no depth buffer.
 
 mod build;
-#[cfg(test)]
-mod legacy;
 mod scene;
 
 use std::fmt::Write;
@@ -392,6 +390,46 @@ mod tests {
 
     fn frame() -> IsoFrame {
         IsoFrame::fit(&[(-5000.0, -5000.0), (5000.0, 5000.0)], 1000.0, 1000.0)
+    }
+
+    #[test]
+    fn the_oblique_frame_is_an_affine_projection_whose_one_matrix_lays_every_texture() {
+        let f = frame();
+        assert!(Projection::affine(&f));
+        assert_eq!(Projection::size(&f), (f.width, f.height));
+        let m = f.ground_at(0.0, 0.0, 0.0);
+        for (x, y) in [(0.0, 0.0), (1234.0, -567.0), (-9000.0, 4000.0)] {
+            let (px, py) = Projection::at(&f, Pt::new(x, 0.0, y));
+            assert!((px - (m[0] * x + m[2] * y + m[4])).abs() < 1e-6 && (py - (m[1] * x + m[3] * y + m[5])).abs() < 1e-6, "({x}, {y})");
+            // A height only lifts a point up the screen, by what `project` says, whatever the point.
+            let (hx, hy) = Projection::at(&f, Pt::new(x, 150.0, y));
+            assert!((hx - px).abs() < 1e-9 && ((py - hy) - 150.0 * LIFT * f.scale).abs() < 1e-6);
+        }
+        // The patterns of the picture are laid by that matrix.
+        assert_eq!(materials(&f), patterns("iso-m", m));
+    }
+
+    #[test]
+    fn the_picture_is_a_diagram_of_layers_bottom_to_top_with_what_stands_far_to_near() {
+        use crate::shared::diagram::{LayerKind, Shape};
+        let v = Junction::new(0).view();
+        let (_, d) = build::build(&v, &crate::i18n_for(crate::shared::i18n::Locale::En), 1000.0, 800.0, Units::Metres);
+        assert_eq!(d.ground.kind, LayerKind::Ground);
+        assert_eq!(d.sections.len(), 1);
+        let kinds: Vec<LayerKind> = d.sections[0].layers.iter().map(|l| l.kind).collect();
+        assert_eq!(kinds, [LayerKind::Surface, LayerKind::Raised, LayerKind::Markings, LayerKind::Objects, LayerKind::Signs]);
+        assert_eq!(d.outline.kind, LayerKind::Outline);
+        assert!(d.outline.shapes.is_empty(), "nothing is selected, nothing is outlined");
+        assert!(d.hits.shapes.is_empty(), "the places to press are laid with what they are on");
+        // The carriageway is the ground; the sidewalks stand, painted far to near; the words are captions.
+        assert!(!d.ground.shapes.is_empty());
+        let depth = |s: &Shape| match s {
+            Shape::Elem { attrs, .. } => attrs.split("data-depth=\"").nth(1).and_then(|r| r.split('"').next()).and_then(|n| n.parse::<f64>().ok()),
+            _ => None,
+        };
+        let depths: Vec<f64> = d.sections[0].layers[1].shapes.iter().filter_map(depth).collect();
+        assert!(depths.len() >= 8 && depths.windows(2).all(|w| w[0] <= w[1]), "{depths:?}");
+        assert!(d.sections[0].layers[4].shapes.iter().all(|s| matches!(s, Shape::Caption { .. })) && !d.sections[0].layers[4].shapes.is_empty());
     }
 
     fn square(x0: f64, x1: f64) -> Vec<(f64, f64)> {

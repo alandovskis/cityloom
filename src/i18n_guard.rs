@@ -15,7 +15,6 @@ const LEFT_OUT: &[(&str, &str)] = &[
     ("src/restriction/store.rs", "storage keys and persistence; it holds no wording (its keys are kebab-case, but not messages)"),
     ("src/map/style.rs", "MapLibre style JSON (layer ids, paint property names): data for the map library, not text"),
     ("src/account/tests.rs", "test-only"),
-    ("src/junction/iso/legacy.rs", "test-only: the writer the diagram replaced, kept to prove the markup is the same (#140), then deleted"),
     ("src/sync/tests.rs", "test-only"),
     ("src/map/tests.rs", "test-only"),
     ("src/junction/tests.rs", "test-only"),
