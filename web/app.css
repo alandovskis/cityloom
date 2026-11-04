@@ -70,7 +70,7 @@
   --k-terrace: light-dark(#f1dca0, #7d6a30);
   --k-buffer: light-dark(#bdb8ae, #4d4a45);
   --k-streetlamp: light-dark(#d9dcc0, #5d6148);
-  /* The surface materials in 2.5D (street/iso/, junction/iso.rs): the typical colour of each material, the same in
+  /* The surface materials in 2.5D (street/iso/, junction/iso/): the typical colour of each material, the same in
      both themes (a material looks like itself), and the two tones of its texture (`-line`, `-alt`). The pavement paint keeps
      its 3:1 against each through its edge (a test in street/iso/surface.rs reads these). */
   --mat-asphalt: #3b3f43; /* weathered asphalt, dark grey */

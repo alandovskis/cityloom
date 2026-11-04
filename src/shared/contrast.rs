@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn the_boundaries_of_the_pieces_are_3_to_1_against_the_plate_and_every_lane_fill_in_both_themes() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
-        for rule in ["#drawing .piece {", "#drawing .iso-flat,\n#drawing .iso-top,\n#drawing .iso-side {"] {
+        for rule in ["#drawing .iso-flat,\n#drawing .iso-top,\n#drawing .iso-side {"] {
             let at = editor.find(rule).unwrap_or_else(|| panic!("{rule}"));
             let body = &editor[at..at + editor[at..].find('}').unwrap()];
             let alpha: f64 = body.split("stroke-opacity: ").nth(1).unwrap().split(';').next().unwrap().parse().unwrap();
@@ -323,6 +323,79 @@ mod tests {
                 let fill = pick(&token(app, ground), i);
                 assert!(contrast(&accent, &fill) >= 3.0, "accent on {ground} {theme}: {:.2}", contrast(&accent, &fill));
             }
+        }
+    }
+
+    #[test]
+    fn the_junction_in_2_5d_outlines_its_selection_in_the_two_tones_and_is_pressed_with_a_tap() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        // The outline is the street page's two tones (no new colour): over the panel and every surface the junction
+        // lays, one of the two stands out at 3:1, in both themes.
+        let (line, casing) = (token(editor, "iso-sel").0.unwrap(), token(editor, "iso-sel-casing").0.unwrap());
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            for ground in ["panel", "road", "k-sidewalk", "k-planting", "k-bike", "k-travel", "k-bus", "k-parking", "k-median", "k-loading", "k-shoulder"] {
+                let under = pick(&token(app, ground), i);
+                let best = contrast(&line, &under).max(contrast(&casing, &under));
+                assert!(best >= 3.0, "the selection outline on {ground} {theme}: {best:.2}");
+            }
+        }
+        // It is drawn as the casing under the line, in the system colours when the page's are forced.
+        assert!(editor.contains("\n.iso-sel {\n  stroke: var(--iso-sel);") && editor.contains("\n.iso-sel-casing {\n  stroke: var(--iso-sel-casing);"));
+        let forced = editor.find("  #drawing .iso-junction .iso-sel {\n    stroke: Highlight;").expect("forced-colours rule for the line");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some_and(|m| !editor[m..forced].contains("\n}\n")));
+        assert!(editor.contains("  #drawing .iso-junction .iso-sel-casing,\n  #drawing .iso-junction .iso-casing,"));
+        // What is only looked at lets a press through; what is pressed asks for a tap and no double-tap zoom.
+        assert!(rule(editor, "#drawing .iso-junction *").contains("pointer-events: none;"));
+        let pressed = rule(editor, "#drawing .iso-junction [data-role]");
+        assert!(pressed.contains("cursor: pointer;") && pressed.contains("touch-action: manipulation;"), "{pressed}");
+        // A lane under the pointer or selected is shaded in the accent's wash, which the accent clears 3:1 on (measured above).
+        assert!(rule(editor, "#drawing .lane-hit:hover,\n#drawing .lane-hit.on").contains("fill: var(--accent-wash);"));
+    }
+
+    #[test]
+    fn the_junction_s_zebra_and_stop_line_are_pavement_paint_that_clears_three_to_one_on_every_material() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let rule_of = rule(editor, "#drawing .iso-zebra,\n#drawing .iso-stopline");
+        assert!(rule_of.contains("fill: var(--iso-paint-white);") && rule_of.contains("stroke: var(--iso-paint-edge);"), "{rule_of}");
+        // The ink-2 they were filled with is below 3:1 on the asphalt in the light theme: the paint's fill, or the hairline round
+        // it, stands out from every material in both themes.
+        let (white_l, white_d) = token(editor, "iso-paint-white");
+        let edge = token(editor, "iso-paint-edge").0.unwrap();
+        for m in crate::shared::catalogue::MATERIALS {
+            let mat = token(app, &format!("mat-{}", m.id)).0.unwrap();
+            for (theme, fill) in [("light", white_l.clone().unwrap()), ("dark", white_d.clone().unwrap())] {
+                let best = contrast(&fill, &mat).max(contrast(&edge, &mat));
+                assert!(best >= 3.0, "{} {theme}: {best:.2}", m.id);
+            }
+        }
+        let forced = editor.find("  #drawing .iso-zebra,\n  #drawing .iso-stopline {").expect("forced-colours rule");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some_and(|m| !editor[m..forced].contains("\n}\n")));
+    }
+
+    #[test]
+    fn the_marks_the_2_5d_draws_on_the_ground_clear_three_to_one_on_their_casing_in_both_themes_and_have_forced_colours() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        let dark_casing = token(editor, "iso-sel-casing").0.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let panel = pick(&token(app, "panel"), i);
+            // A mark lies on any surface, so it is measured against the casing it is drawn on: the panel's colour.
+            for name in ["ink", "ink-2", "ink-3", "accent"] {
+                let line = pick(&token(app, name), i);
+                assert!(contrast(&line, &panel) >= 3.0, "{name} on the panel {theme}: {:.2}", contrast(&line, &panel));
+            }
+            // A warning is on the dark casing, which the panel's colour would not do for the amber.
+            let warn = token(app, "warn-line").0.unwrap();
+            assert!(contrast(&warn, &dark_casing) >= 3.0, "warning on its casing {theme}: {:.2}", contrast(&warn, &dark_casing));
+        }
+        // The casings are the colours said, and the forced colours turn every kind of mark into system colours.
+        assert!(rule(editor, "#drawing .iso-junction .iso-casing").contains("stroke: var(--panel);"));
+        assert!(rule(editor, "#drawing .iso-junction .iso-casing.warn").contains("stroke: var(--iso-sel-casing);"));
+        let forced = editor.find("  #drawing .iso-junction .lane-arrow path:not(.halo),").expect("forced-colours rule for the marks");
+        assert!(editor[..forced].rfind("@media (forced-colors: active)").is_some_and(|m| !editor[m..forced].contains("\n}\n")));
+        for class in [".mv", ".dim-warn", ".curb-line.bad", ".stop-post circle", ".iso-casing.warn"] {
+            assert!(editor[forced - 400..].contains(&format!("#drawing .iso-junction {class}")), "{class}");
         }
     }
 }

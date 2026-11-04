@@ -1,4 +1,4 @@
-//! The street's drawing as data: layers of shapes in ground millimetres.
+//! The street's and the junction's 2.5D drawing as data: layers of shapes in millimetres.
 
 pub mod render;
 
@@ -103,6 +103,33 @@ pub enum Shape {
         at: Pt,
         class: String,
         size: f64,
+        text: String,
+    },
+    /// Runs of points written as path data (`M x yL x y`, each run its own `M`, one `Z` at the end of a `closed` shape),
+    /// to a tenth of a pixel: a shape of any number of corners, or several strokes in one element. `attrs` are the
+    /// element's other attributes as written (a space first), after its class and before its path; an empty `class`
+    /// leaves the attribute out; a `title` makes it an element with a child.
+    Path {
+        runs: Vec<Vec<Pt>>,
+        closed: bool,
+        class: String,
+        attrs: String,
+        title: Option<String>,
+    },
+    /// An element that holds other shapes, or none (a `<circle .../>`): the numbers of `attrs` are written already, as a
+    /// thing is that stands on the screen at a size of pixels whatever the projection (a post's head, a shelter's box).
+    Elem {
+        tag: &'static str,
+        class: String,
+        attrs: String,
+        shapes: Vec<Shape>,
+    },
+    /// A word set at a pixel position of the drawing (`px`), for text placed on the screen after the shapes are, with
+    /// its text-anchor.
+    Caption {
+        px: (f64, f64),
+        class: String,
+        anchor: &'static str,
         text: String,
     },
     Group {

@@ -904,8 +904,6 @@ pub struct Junction {
     states: Vec<State>,
     cursor: usize,
     pub selected: Target,
-    gesture: Option<State>,
-    pending_label: Said,
     /// Why the last edit was refused; None once one is taken.
     refusal: Option<Refusal>,
     /// The arm a `TurboArmSkewed` or `TurboEntryTooNarrow` refusal names; None for any other.
@@ -938,8 +936,6 @@ impl Junction {
             states: vec![State { label: self::today(), ..today.clone() }],
             cursor: 0,
             selected: Target::None,
-            gesture: None,
-            pending_label: earlier(),
             refusal: None,
             refusal_arm: None,
         };
@@ -982,6 +978,7 @@ impl Junction {
         &self.states[self.cursor]
     }
 
+    #[cfg(test)]
     fn current_mut(&mut self) -> &mut State {
         &mut self.states[self.cursor]
     }
@@ -1030,8 +1027,7 @@ impl Junction {
 
     // ---- history ----------------------------------------------------------
 
-    /// Runs an edit on a copy and records it as a revision, or, inside a
-    /// gesture, applies it without recording. Rejects an edit that leaves the
+    /// Runs an edit on a copy and records it as a revision. Rejects an edit that leaves the
     /// junction invalid.
     fn edit<F>(&mut self, label: Said, f: F) -> bool
     where
@@ -1089,12 +1085,6 @@ impl Junction {
         }
         self.refusal = None;
         self.refusal_arm = None;
-        if self.gesture.is_some() {
-            *self.current_mut() = next;
-            self.pending_label = label;
-            self.fix_selection();
-            return true;
-        }
         next.label = label;
         self.states.truncate(self.cursor + 1);
         self.states.push(next);
@@ -1120,40 +1110,7 @@ impl Junction {
         self.refusal_arm.as_ref()
     }
 
-    pub fn begin_gesture(&mut self) {
-        if self.gesture.is_none() {
-            self.gesture = Some(self.current().clone());
-            self.pending_label = earlier();
-        }
-    }
-
-    /// The state the gesture under way began from, if one is.
-    pub fn gesture_baseline(&self) -> Option<&State> {
-        self.gesture.as_ref()
-    }
-
-    pub fn end_gesture(&mut self) -> bool {
-        let Some(baseline) = self.gesture.take() else { return false };
-        let mut now = self.current().clone();
-        if now == baseline {
-            return false;
-        }
-        *self.current_mut() = baseline;
-        now.label = std::mem::replace(&mut self.pending_label, earlier());
-        self.states.truncate(self.cursor + 1);
-        self.states.push(now);
-        self.cursor += 1;
-        true
-    }
-
-    pub fn cancel_gesture(&mut self) {
-        if let Some(baseline) = self.gesture.take() {
-            *self.current_mut() = baseline;
-        }
-    }
-
     pub fn undo(&mut self) -> bool {
-        self.cancel_gesture();
         if !self.can_undo() {
             return false;
         }
@@ -1178,7 +1135,6 @@ impl Junction {
         self.states.truncate(1);
         self.cursor = 0;
         self.selected = Target::None;
-        self.gesture = None;
         true
     }
 
@@ -2045,19 +2001,6 @@ fn measure(a: &Arm, item: &Item, none: &'static str) -> Said {
     }
 }
 
-/// The middle of the widest gap between arms, snapped to the bearing step.
-pub fn widest_gap(arms: &[Arm]) -> i32 {
-    let mut b: Vec<i32> = arms.iter().map(|a| a.bearing).collect();
-    b.sort_unstable();
-    let n = b.len();
-    if n == 0 {
-        return 0;
-    }
-    // The first of the widest gaps, so the choice does not depend on order.
-    let (start, width) = (0..n).map(|i| (b[i], gap(b[i], b[(i + 1) % n]))).fold((b[0], 0), |best, g| if g.1 > best.1 { g } else { best });
-    snap(start + width / 2, BEARING_STEP).rem_euclid(360)
-}
-
 /// A roundabout is no raised table, and a bike box stands only where `bike_box_blocker` allows one: whatever put it
 /// elsewhere (an edit, a save), it goes. A turbo is settled first (`settle_turbo`).
 fn settle_table_and_boxes(s: &mut State, region: usize) {
@@ -2628,24 +2571,6 @@ mod tests {
         assert!(j.redo());
         assert_eq!(j.arm(a).unwrap().corner_mm, 9000);
         assert!(j.reset());
-        assert_eq!(j.arm(a).unwrap().corner_mm, DEFAULT_CORNER_MM);
-    }
-
-    #[test]
-    fn a_gesture_is_one_revision() {
-        let mut j = Junction::new(0);
-        let a = j.current().arms[0].uid;
-        j.begin_gesture();
-        for r in [7000, 8000, 9000] {
-            assert!(j.set_corner(a, r));
-        }
-        assert!(j.end_gesture());
-        assert_eq!(j.revisions().count(), 1);
-        assert!(j.undo());
-        assert_eq!(j.arm(a).unwrap().corner_mm, DEFAULT_CORNER_MM);
-        j.begin_gesture();
-        j.set_corner(a, 12000);
-        j.cancel_gesture();
         assert_eq!(j.arm(a).unwrap().corner_mm, DEFAULT_CORNER_MM);
     }
 

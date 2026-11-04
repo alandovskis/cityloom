@@ -1,19 +1,19 @@
-//! The junction page: a junction of streets edited on a plan. Its model, view-model,
+//! The junction page: a junction of streets edited in 2.5D. Its model, view-model,
 //! words and views live together.
 
 pub mod beyond;
 pub mod curbside;
+pub mod drawing;
 pub mod frame;
 pub mod geometry;
 pub mod inspector;
 pub mod iso;
+pub mod iso_marks;
 pub mod keys;
 pub mod model;
 pub mod notes;
 pub mod page;
 pub mod phase_svg;
-pub mod plan;
-pub mod plan_svg;
 pub mod read_model;
 pub mod signal;
 pub mod stops;
@@ -45,10 +45,10 @@ pub const RESOURCES: Resources = Resources { en: include_str!("i18n/en.ftl"), fr
 /// module mounts; the script only starts it up and hands it what the shell
 /// chooses (units, region).
 #[wasm_bindgen]
-pub struct Plan(Rc<vm::JunctionVm>);
+pub struct Editor(Rc<vm::JunctionVm>);
 
 #[wasm_bindgen]
-impl Plan {
+impl Editor {
     /// Binds the shell every page shares (settings menu, sidebars, notes tabs)
     /// to this page.
     pub fn mount_shell(&self) {
@@ -66,21 +66,20 @@ impl Plan {
     }
 }
 
-/// Draws the junction page into the elements it keeps for them: the plan, its
+/// Draws the junction page into the elements it keeps for them: the drawing, its
 /// heading and status, undo and redo, the key, and the notes beside it.
 #[wasm_bindgen]
-pub fn mount_page(plan: &Plan) {
+pub fn mount_page(editor: &Editor) {
     // Components create effects as they are built, before any is mounted.
     let _ = any_spawner::Executor::init_wasm_bindgen();
     let at =
         |id: &str| -> HtmlElement { leptos::prelude::document().get_element_by_id(id).unwrap_or_else(|| panic!("the page has no #{id}")).unchecked_into() };
-    let vm = plan.0.clone();
+    let vm = editor.0.clone();
     let mount = |id: &str, view: AnyView| {
         leptos::mount::mount_to(at(id), move || view).forget();
     };
-    mount("scroll", view! { <plan::PlanDrawing vm=vm.clone()/> }.into_any());
+    mount("scroll", view! { <drawing::Drawing vm=vm.clone()/> }.into_any());
     mount("street", view! { <page::Header vm=vm.clone()/> }.into_any());
-    mount("view-mode-slot", view! { <page::ViewToggle vm=vm.clone()/> }.into_any());
     mount("title-block", view! { <page::TitleBlock vm=vm.clone()/> }.into_any());
     mount("fit-slot", view! { <page::Fit vm=vm.clone()/> }.into_any());
     mount("history", view! { <page::History vm=vm.clone()/> }.into_any());
@@ -118,7 +117,7 @@ pub fn mount_bare_shell(node: u32) {
     let name = CityStore::current(ports.storage.clone()).open().junction_name(node);
     let doc = leptos::prelude::document();
     let find = |selector: &str| doc.query_selector(selector).ok().flatten();
-    // Nothing here can be drawn or changed: the plan, its tools and its status make way for the panel.
+    // Nothing here can be drawn or changed: the drawing, its tools and its status make way for the panel.
     if let Some(tools) = find(".tools") {
         let _ = tools.set_attribute("hidden", "");
     }
@@ -142,7 +141,7 @@ pub fn mount_bare_shell(node: u32) {
 /// writes what is made back to the city. Nothing when there is no such junction
 /// or it cannot be drawn with the streets as they now are.
 #[wasm_bindgen]
-pub fn open_junction(node: u32) -> Option<Plan> {
+pub fn open_junction(node: u32) -> Option<Editor> {
     let ports = browser_ports();
     let store = CityStore::current(ports.storage.clone());
     let junction = store.open().junction_editor(node, store.region())?;
@@ -150,5 +149,5 @@ pub fn open_junction(node: u32) -> Option<Plan> {
     let i18n = page_i18n(&ports);
     let vm = vm::JunctionVm::new(ports, i18n, junction, Some(CityBinding { store, place }));
     vm.watch_sync();
-    Some(Plan(vm))
+    Some(Editor(vm))
 }

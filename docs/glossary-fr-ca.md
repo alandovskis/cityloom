@@ -119,8 +119,6 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | The drawing of the section | Section / 2.5D (the view toggle) | Coupe / 2,5D | To confirm, see below. |
 | The drawing of the section | Show the street as (the toggle's legend) | Afficher la rue en |  |
 | The drawing of the section | Showing the street in 2.5D / Showing the section | Rue affichée en 2,5D / Coupe affichée | Announcements. |
-| The junction page | Plan / 2.5D (the view toggle), View (its legend) | Plan / 2,5D, Affichage | To confirm, see below. |
-| The junction page | Showing the junction in 2.5D / Showing the plan | Jonction affichée en 2,5D / Plan affiché | Announcements; `jonction` is the editor’s word for the place. |
 | Changes list and announcements | Add / Remove / Move / Resize | Ajout / Retrait / Déplacement / Redimensionnement | Nouns followed by ` : ` and the lowercase name of the kind, so no article (and no gender) is needed. |
 | Changes list and announcements | Parking surface: permeable paving | Stationnement, surface : revêtement perméable | The kind, then what changed. |
 | Changes list and announcements | Curb: none | Bordure : aucune |  |
@@ -240,29 +238,26 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Junction | One check needs attention: … | Une vérification est à corriger : … | As the map's `À corriger`. |
 | Junction | Started over from the junction as it is today | Retour à la jonction telle qu’elle est aujourd’hui |  |
 | Junction | Points at banned turns: … | Voies menant à des virages interdits : … | A check's failing detail; the lanes are its subject. |
-| Junction page | Junction plan | Plan de la jonction | As the map page's `Ouvre le plan de la jonction`. |
-| Junction page | Junction plan editor (the plan's name) | Éditeur du plan de la jonction |  |
+| Junction page | Junction in 2.5D (the drawing's heading and the title block) | Jonction en 2,5D |  |
+| Junction page | Junction editor (the drawing’s group) | Éditeur de la jonction |  |
 | Junction page | Edited / As imported (title block) | Modifiée / Telle qu’importée | Feminine, agreeing with `jonction`; the street page's are `Modifié` / `Tel qu’importé`. |
 | Junction page | Data (title block) | Données |  |
 | Junction page | To cross / Lanes in | À traverser / Voies entrantes | Columns of the Getting across table; a street with no crossing says `aucun` (a `passage`). |
 | Junction page | Crossing / Merging / Splitting / All (conflict points) | Croisement / Convergence / Divergence / Total |  |
 | Junction page | path (of a turn) | trajectoire |  |
 | Junction page | Junction today | Jonction aujourd’hui | As the city's history label. |
-| Junction plan | Plan of the junction, north up | Plan de la jonction, nord en haut |  |
-| Junction plan | N · 20.0 m road | N · chaussée de 20,0 m | `· décalée de 0,5 m` when shifted (agrees with `chaussée`). |
-| Junction plan | Bus only (road marking) | Autobus seulement |  |
-| Junction plan | Turn X (a grip) | Faire pivoter X |  |
-| Junction plan | Change the corner radius / Move the crossing | Modifier le rayon du coin / Déplacer le passage pour piétons |  |
+| Junction page | 2.5D view of the junction / Roundabout / Raised table (the drawing’s label) | Vue en 2,5D de la jonction / Carrefour giratoire / Carrefour surélevé |  |
+| Junction page | Bus only (road marking) | Autobus seulement |  |
 | Junction page | Details (the left panel's button) | Détails |  |
 | Street and junction pages | Provenance (a notes tab) | Provenance | Where the street or junction came from (`D’où vient cette rue`, `D’où vient cette jonction`); the same word in both languages. |
 | Junction page | Streets (a notes tab) | Rues | Checks and Changes are the shell's `Vérifications` / `Modifications`. |
 | Junction page | Where paths meet | Où les trajectoires se rencontrent |  |
-| Junction page | Key to the strips (the plan's legend) | Légende des bandes |  |
-| Junction page | turn a street (keyboard list) | faire pivoter une rue | As the plan's grip. |
+| Junction page | Key to the strips (the legend) | Légende des bandes |  |
+| Junction page | turn a street (keyboard list) | faire pivoter une rue | As the street’s turn. |
 | Junction inspector | Junction control (a heading) | Signalisation de la jonction |  |
 | Junction inspector | Smaller / Larger / Narrower / Wider / Tighter / Closer / Farther / Shorter / Longer by 0.5 m (steppers) | Réduire / Agrandir / Rétrécir / Élargir / Resserrer / Rapprocher / Éloigner / Raccourcir / Allonger de 0,5 m | Verbs, as the street page's `Élargir de` / `Rétrécir de`, so nothing agrees with a gender. |
 | Junction inspector | Shift left / right by 0.1 m | Décaler de 0,1 m vers la gauche / la droite |  |
-| Junction inspector | Turn anticlockwise / clockwise by 5° | Faire pivoter de 5° dans le sens antihoraire / horaire | As the plan's grip, `Faire pivoter`. No space before `°` (an angle). |
+| Junction inspector | Turn anticlockwise / clockwise by 5° | Faire pivoter de 5° dans le sens antihoraire / horaire | As the street’s turn, `Faire pivoter`. No space before `°` (an angle). |
 | Junction inspector | 1.0 m to 15.0 m (a field's range) | De 1,0 m à 15,0 m |  |
 | Junction inspector | Size of the roundabout / m across | Taille du carrefour giratoire / m de diamètre |  |
 | Junction inspector | Track width / Track around the outside | Largeur de la piste / Piste tout autour, à l’extérieur |  |
@@ -380,8 +375,6 @@ Chosen as the most standard Québec term, but a native speaker (the owner) shoul
 | Section (the view toggle) | `Coupe` | `Coupe transversale` (longer, as the page's heading) |
 | 2.5D (the view toggle) | `2,5D` | `2,5 D`, `Vue en 2,5D` (suggestion) |
 | Showing the street in 2.5D (announcement) | `Rue affichée en 2,5D` | `Affichage de la rue en 2,5D` (suggestion) |
-| View (the junction page toggle's legend) | `Affichage` | `Vue` (suggestion) |
-| Showing the junction in 2.5D (announcement) | `Jonction affichée en 2,5D` | `Affichage de la jonction en 2,5D` (suggestion) |
 | Signal timing (junction) | `Réglage des feux` | `Phasage des feux`, `Programmation des feux` (suggestion) |
 | Green, yellow, all-red (a signal’s intervals) | `Vert`, `Jaune`, `Rouge intégral` | `Tout rouge` for all-red (suggestion) |
 | Transit early green (a head start for buses) | `Avance pour le transport en commun` | `Priorité de départ pour les autobus` (suggestion) |

@@ -44,16 +44,18 @@ for (const theme of ["light", "dark"]) {
   });
 }
 
-test.describe("a touch drag moves the piece, it does not scroll the page", () => {
-  test("on the junction, every grip takes no browser pan", async ({ page }) => {
+test.describe("a tap on the junction selects a part, there is nothing to drag", () => {
+  test("every part that is pressed asks for a tap and the junction has no grip that takes the browser's pan", async ({
+    page,
+  }) => {
     await openJunction(page);
     await expect(page.locator("#drawing")).toBeVisible();
-    for (const role of ["grip-arm", "grip-corner", "grip-crossing"]) {
-      const grips = page.locator(`#drawing [data-role="${role}"]`);
-      if ((await grips.count()) === 0) continue;
-      expect(await touchAction(grips), role).toBe("none");
+    for (const role of ["arm", "lane", "crossing", "corner"]) {
+      const parts = page.locator(`#drawing [data-role="${role}"]`);
+      expect(await parts.count(), role).toBeGreaterThan(0);
+      expect(await touchAction(parts), role).toBe("manipulation");
     }
-    expect(await page.locator('#drawing [data-role="grip-arm"]').count()).toBeGreaterThan(0);
+    expect(await page.locator('#drawing [data-role^="grip"]').count()).toBe(0);
   });
 });
 

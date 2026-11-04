@@ -2,13 +2,11 @@
 //! it changes, and keeping what is made in the city. The views read its view and
 //! send it what the person does.
 
-use std::cell::Cell;
 use std::rc::Rc;
 
 use leptos::prelude::*;
 
 use crate::city::binding::{CityBinding, Place};
-use crate::junction::frame::Frame;
 use crate::junction::model::{Junction, Refusal, State, Target};
 use crate::junction::read_model::JView;
 use crate::junction::signal;
@@ -28,41 +26,12 @@ impl Presents for Junction {
     }
 }
 
-pub const VIEW_KEY: &str = "cityloom-junction-view";
-
-/// How the junction is drawn: the plan, which is edited, or the 2.5D picture, which is only looked at.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DrawMode {
-    Plan,
-    Iso,
-}
-
-impl DrawMode {
-    pub fn key(self) -> &'static str {
-        match self {
-            DrawMode::Plan => "plan",
-            DrawMode::Iso => "iso",
-        }
-    }
-
-    pub fn parse(s: &str) -> Option<DrawMode> {
-        match s {
-            "plan" => Some(DrawMode::Plan),
-            "iso" => Some(DrawMode::Iso),
-            _ => None,
-        }
-    }
-}
-
 pub struct JunctionVm {
     core: Core<Junction>,
-    mode: RwSignal<DrawMode>,
     ports: Ports,
     i18n: Rc<I18n>,
     keeper: Option<Rc<Keeper>>,
     binding: Option<CityBinding>,
-    /// How the plan was last drawn, for turning a pointer position into a point on it.
-    frame: Cell<Option<Frame>>,
 }
 
 /// A conflict of the signal plan: its phase's place, the phase's street, and what meets.
@@ -92,8 +61,7 @@ impl JunctionVm {
                     },
                 )
             });
-            let mode = ports.storage.recall(VIEW_KEY).as_deref().and_then(DrawMode::parse).unwrap_or(DrawMode::Plan);
-            JunctionVm { core: Core::new(junction), mode: RwSignal::new(mode), ports, i18n, keeper, binding, frame: Cell::new(None) }
+            JunctionVm { core: Core::new(junction), ports, i18n, keeper, binding }
         })
     }
 
@@ -130,47 +98,10 @@ impl JunctionVm {
         self.core.read(f)
     }
 
-    pub fn frame(&self) -> Option<Frame> {
-        self.frame.get()
-    }
-
-    /// How the junction is drawn, which a view that reads it draws again when it changes.
-    pub fn mode(&self) -> DrawMode {
-        self.mode.get()
-    }
-
-    /// The same, for a command: nothing is watched.
-    pub fn mode_now(&self) -> DrawMode {
-        self.mode.get_untracked()
-    }
-
-    /// Draws the junction in `mode`, keeps the choice and says it. Choosing the mode it is already in says nothing,
-    /// whether or not the browser kept the choice.
-    pub fn set_mode(&self, mode: DrawMode) {
-        if self.mode.get_untracked() == mode {
-            return;
-        }
-        self.mode.set(mode);
-        self.ports.storage.remember(VIEW_KEY, mode.key());
-        let key = match mode {
-            DrawMode::Plan => "jn-view-shown-plan",
-            DrawMode::Iso => "jn-view-shown-iso",
-        };
-        self.ports.announcer.say(&self.i18n.tr_now(key, &Args::new()));
-    }
-
-    pub fn toggle_mode(&self) {
-        self.set_mode(if self.mode_now() == DrawMode::Plan { DrawMode::Iso } else { DrawMode::Plan });
-    }
-
     // ---- what the views do ----
 
     pub fn set_units(&self, units: Units) {
         self.core.set_units(units);
-    }
-
-    pub fn set_frame(&self, frame: Frame) {
-        self.frame.set(Some(frame));
     }
 
     /// Changes the junction, tells whatever watches it, and sees that it is kept.
@@ -282,11 +213,6 @@ impl JunctionVm {
         done
     }
 
-    /// A change that is not announced, as each step of a drag is.
-    pub fn quiet<R>(&self, f: impl FnOnce(&mut Junction) -> R) -> R {
-        self.edit(f)
-    }
-
     /// A selection the person made, announced by what is selected.
     pub fn select(&self, target: Target) {
         self.edit(|j| j.select(target));
@@ -297,23 +223,6 @@ impl JunctionVm {
     pub fn select_relative(&self, dir: i32) {
         self.edit(|j| j.select_relative(dir));
         self.say_selection();
-    }
-
-    /// The end of a gesture: kept when `commit`, and announced as an edit if it
-    /// changed anything, or else by what is selected.
-    pub fn end_gesture(&self, commit: bool) {
-        if commit {
-            let before = self.read(|j| j.gesture_baseline().filter(|b| b.signal_plan.is_some()).map(|b| (b.clone(), j.region)));
-            let meeting = self.read(|j| j.gesture_baseline().map(|b| signal::meetings(b, j.region)).unwrap_or_default());
-            if self.edit(|j| j.end_gesture()) {
-                let lost = self.lost_since(before);
-                self.say_edit_with(&lost, &meeting);
-            } else {
-                self.say_selection();
-            }
-        } else {
-            self.edit(|j| j.cancel_gesture());
-        }
     }
 
     pub fn undo(&self) -> bool {
@@ -676,44 +585,6 @@ mod tests {
     }
 
     #[test]
-    fn the_mode_starts_as_the_plan_toggles_and_is_announced() {
-        let r = rig(0);
-        assert_eq!(r.vm.mode_now(), DrawMode::Plan);
-        r.vm.toggle_mode();
-        assert_eq!(r.vm.mode_now(), DrawMode::Iso);
-        r.vm.set_mode(DrawMode::Iso);
-        r.vm.toggle_mode();
-        assert_eq!(r.said.take(), vec!["Showing the junction in 2.5D.", "Showing the plan."]);
-    }
-
-    #[test]
-    fn choosing_the_view_already_shown_says_nothing_even_before_anything_is_kept() {
-        let r = rig(0);
-        r.vm.set_mode(DrawMode::Plan);
-        assert_eq!(r.said.take(), Vec::<String>::new());
-        assert_eq!(r.storage.recall(VIEW_KEY), None);
-    }
-
-    #[test]
-    fn the_mode_is_kept_across_a_new_view_model_and_garbage_falls_back_to_the_plan() {
-        let (ports, _, storage) = crate::shared::ports::test_ports();
-        let en = crate::i18n_for(crate::shared::i18n::Locale::En);
-        JunctionVm::new(ports.clone(), en.clone(), Junction::new(0), None).set_mode(DrawMode::Iso);
-        assert_eq!(storage.recall(VIEW_KEY).as_deref(), Some("iso"));
-        assert_eq!(JunctionVm::new(ports.clone(), en.clone(), Junction::new(0), None).mode_now(), DrawMode::Iso);
-        storage.remember(VIEW_KEY, "sideways");
-        assert_eq!(JunctionVm::new(ports, en, Junction::new(0), None).mode_now(), DrawMode::Plan);
-    }
-
-    #[test]
-    fn the_mode_speaks_french() {
-        let (ports, said, _) = crate::shared::ports::test_ports();
-        let vm = JunctionVm::new(ports, crate::i18n_for(crate::shared::i18n::Locale::FrCa), Junction::new(0), None);
-        vm.set_mode(DrawMode::Iso);
-        assert_eq!(said.take(), vec!["Jonction affichée en 2,5D."]);
-    }
-
-    #[test]
     fn the_units_start_in_metres_and_changing_them_is_not_an_edit() {
         let r = rig(0);
         assert_eq!(r.vm.units_now(), Units::Metres);
@@ -722,15 +593,6 @@ mod tests {
         assert_eq!(r.vm.units_now(), Units::Feet);
         assert_eq!(r.vm.version().get_untracked(), 0);
         assert!(Rc::ptr_eq(&a, &r.vm.view_now()));
-    }
-
-    #[test]
-    fn the_plan_s_frame_is_kept_for_whoever_needs_to_read_a_point_from_it() {
-        let r = rig(0);
-        assert_eq!(r.vm.frame(), None);
-        let f = Frame::fit([-10.0, -10.0, 10.0, 10.0], 1000.0, 800.0);
-        r.vm.set_frame(f);
-        assert_eq!(r.vm.frame(), Some(f));
     }
 
     #[test]
@@ -778,36 +640,6 @@ mod tests {
         assert!(r.said.take().is_empty());
         r.vm.select_relative(1);
         assert_eq!(r.said.take().len(), 1);
-    }
-
-    #[test]
-    fn a_quiet_change_says_nothing() {
-        let r = rig(0);
-        r.vm.quiet(|j| j.set_control(2));
-        assert!(r.said.take().is_empty());
-    }
-
-    #[test]
-    fn a_gesture_is_one_revision_announced_when_it_ends_and_none_when_cancelled_or_unchanged() {
-        let r = rig(0);
-        let n = arm(&r.vm, 0);
-        r.vm.select(Target::Arm(n));
-        r.said.take();
-        r.vm.quiet(|j| j.begin_gesture());
-        assert!(r.vm.quiet(|j| j.drag_arm_to(n, 3_000.0, -10_000.0)));
-        r.vm.quiet(|j| j.drag_arm_to(n, 5_000.0, -10_000.0));
-        assert_eq!(r.vm.view_now().revisions.len(), 0);
-        r.vm.end_gesture(true);
-        assert_eq!(r.vm.view_now().revisions.len(), 1);
-        assert!(r.said.take()[0].starts_with("Sample Avenue 2 bearing: 25°."));
-        // Nothing changed: the selection is said instead.
-        r.vm.quiet(|j| j.begin_gesture());
-        r.vm.end_gesture(true);
-        assert_eq!(r.said.take(), vec!["Sample Avenue 2 (north-east), 25 degrees"]);
-        r.vm.quiet(|j| j.begin_gesture());
-        r.vm.quiet(|j| j.drag_arm_to(n, 9_000.0, -10_000.0));
-        r.vm.end_gesture(false);
-        assert_eq!((r.vm.view_now().revisions.len(), r.vm.read(|j| j.arm(n).unwrap().bearing)), (1, 25));
     }
 
     #[test]
