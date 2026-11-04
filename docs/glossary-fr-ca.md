@@ -42,6 +42,12 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page | Pedestrian street | Rue piétonne | The class alone is the adjective `piétonne` (`class-pedestrian`), as in `Rue piétonne sans nom`. |
 | Street page | Make pedestrian / Made pedestrian | Rendre piétonne / Rendue piétonne | The menu's choices are the kinds' own names (`Trottoir`, `Bande plantée`, `Terrasse de café`). |
 | Street page | Transform | Transformer | The menu button for Make pedestrian and the transit measures that fit. |
+| Street page | Street templates | Modèles de rue | The Transform menu's third group; `rev-template` words a change as `Modèle : Rue scolaire`. |
+| Street page | Commercial main street | Rue commerciale | Template. To confirm with the OQLF's `artère commerciale`. |
+| Street page | School street | Rue scolaire | Template. |
+| Street page | Neighbourhood greenway | Voie verte de quartier | Template. To confirm: `voie partagée de quartier` is the form some boroughs use. |
+| Street page | Bus corridor | Corridor d’autobus | Template; the Atlas's measures say `transport en commun`, this one is the street's use. To confirm. |
+| Street page | Industrial access street | Rue d’accès industriel | Template. |
 | Street page | carries traffic | accueille la circulation | Said of a street: `Rue Rachel accueille de nouveau la circulation.` |
 | Street page | Street lamp | Lampadaire |  |
 | Street page | Buffer | Zone tampon | The strip of curb, paint, posts or a barrier between pieces; the mark is `ZT` (`BF` in English). |

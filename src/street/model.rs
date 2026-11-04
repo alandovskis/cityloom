@@ -23,6 +23,8 @@ mod beyond;
 pub use beyond::{Beyond, BeyondTaper, TaperPiece};
 mod transition;
 pub use transition::{Change, Host, Transition, transition};
+mod templates;
+pub use templates::{Template, TemplateRefusal, TemplateView};
 mod curb;
 mod curb_end;
 mod curb_shown;
@@ -1210,6 +1212,23 @@ impl Editor {
         ok
     }
 
+    /// Arranges the selected zone as a street template (`Template`): its pieces are replaced by the template's,
+    /// fitted to the street's width, as one undoable edit. Refused, with the reason and nothing changed, when the
+    /// class or the width does not suit it.
+    pub fn apply_template(&mut self, template: Template) -> Result<(), TemplateRefusal> {
+        let mut next_uid = self.next_uid;
+        let arranged = template.arrange(self.class(), self.row_mm(), REGIONS[self.region].drive_side, &mut next_uid)?;
+        let ok = self.edit(Said::new("rev-template").with("name", Arg::Said(Box::new(Said::new(template.name_key())))), |segs| {
+            *segs = arranged;
+            true
+        });
+        if ok {
+            self.next_uid = next_uid;
+            self.selected = None;
+        }
+        Ok(())
+    }
+
     /// Makes the street pedestrian: every motor piece (travel, parking, loading, bus, shoulder, at any hour: a bike
     /// lane with a motor hour is one too) becomes a piece of `kind` (one of `PEDESTRIAN_KINDS`) at its own width and
     /// in its own place, with that kind's surface and curb and without hours or direction; the other pieces, bike
@@ -1428,6 +1447,7 @@ impl Editor {
             curb_shown: self.curb_shown(),
             stops_shown: self.stops_shown(),
             measures: self.measure_views(segs, &now),
+            templates: Template::ALL.into_iter().map(|template| TemplateView { template, refusal: template.applicable(self.class(), self.row_mm()).err() }).collect(),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
             can_redo: self.cursor + 1 < self.states.len(),
@@ -1809,6 +1829,8 @@ pub struct View {
     pub stops_shown: Vec<ShownStop>,
     /// The Atlas lane measures: which this section forms, and what each lacks.
     pub measures: Vec<MeasureView>,
+    /// The street templates, all of them, each with the reason it cannot be applied to the selected zone.
+    pub templates: Vec<TemplateView>,
     pub revisions: Vec<Revision>,
     pub can_undo: bool,
     pub can_redo: bool,

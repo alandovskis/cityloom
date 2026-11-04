@@ -531,3 +531,16 @@ impact-verdict-mixed =
        *[other] { $failing } échouent maintenant
     }.
 impact-verdict-unchanged = Aucun changement dans les vérifications.
+
+# Modèles de rue (src/street/model/templates.rs, page.rs, vm.rs).
+rev-template = Modèle : { $name }
+template-commercial = Rue commerciale
+template-school = Rue scolaire
+template-greenway = Voie verte de quartier
+template-bus-corridor = Corridor d’autobus
+template-industrial = Rue d’accès industriel
+transform-templates-heading = Modèles de rue
+transform-templates-hint = Aménagez la rue selon l’un de ces modèles. Les éléments de la zone choisie sont remplacés par des éléments ordinaires, modifiables et annulables en une seule modification.
+template-refused-freeway = Le modèle « { $name } » ne peut pas s’appliquer à une autoroute.
+template-refused-narrow = Le modèle « { $name } » demande une rue d’au moins { $min } de largeur. Cette rue mesure { $row } de largeur.
+template-refused-wide = Le modèle « { $name } » ne peut pas servir une rue de plus de { $max } de largeur. Cette rue mesure { $row } de largeur.
