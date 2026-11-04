@@ -8,7 +8,7 @@ use crate::shared::catalogue::{KINDS, StreetClass, kind_key};
 use crate::shared::i18n::{Args, I18n};
 use crate::shared::said::{Arg, Said};
 use crate::shared::units::Units;
-use crate::street::model::{Check, SideView, StripCell, View, ZoneRefusal};
+use crate::street::model::{Check, SideView, StripCell, Template, TemplateRefusal, View, ZoneRefusal};
 
 /// What an edit says of the street becoming pedestrian or carrying traffic again, after what it already said;
 /// nothing when the class is the one it was.
@@ -133,6 +133,11 @@ pub fn cell_text<C: StripCell>(key: &str, side: &SideView<C>, cell: usize, i18n:
 /// Why a zone operation was refused, in the page's language.
 pub fn zone_refused(i18n: &I18n, units: Units, refusal: ZoneRefusal) -> String {
     say_now(i18n, units, &refusal.said())
+}
+
+/// Why a street template cannot be applied, in the page's language.
+pub fn template_refused(i18n: &I18n, units: Units, template: Template, refusal: TemplateRefusal) -> String {
+    say_now(i18n, units, &refusal.said(template))
 }
 
 /// What a check is called where it is listed: a failing check of a street with several zones says which zone

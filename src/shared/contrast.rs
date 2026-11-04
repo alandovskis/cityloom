@@ -283,6 +283,19 @@ mod tests {
     }
 
     #[test]
+    fn a_disabled_template_and_its_reason_are_ink_2_on_the_panel_at_4_5_to_1_in_both_themes() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let (ink, panel) = (pick(&token(app, "ink-2"), i), pick(&token(app, "panel"), i));
+            assert!(contrast(&ink, &panel) >= 4.5, "ink-2 on the panel {theme}: {:.2}", contrast(&ink, &panel));
+        }
+        for selector in [".template-item[aria-disabled=\"true\"]", ".template-reason"] {
+            assert!(rule(editor, selector).contains("color: var(--ink-2);"), "{selector}");
+        }
+    }
+
+    #[test]
     fn the_outline_of_a_curbside_use_too_near_a_crossing_clears_three_to_one_on_every_use_in_both_themes() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
         let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
