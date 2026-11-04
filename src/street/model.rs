@@ -1447,7 +1447,10 @@ impl Editor {
             curb_shown: self.curb_shown(),
             stops_shown: self.stops_shown(),
             measures: self.measure_views(segs, &now),
-            templates: Template::ALL.into_iter().map(|template| TemplateView { template, refusal: template.applicable(self.class(), self.row_mm()).err() }).collect(),
+            templates: Template::ALL
+                .into_iter()
+                .map(|template| TemplateView { template, refusal: template.applicable(self.class(), self.row_mm()).err() })
+                .collect(),
             revisions: self.states[1..=self.cursor].iter().enumerate().map(|(i, s)| Revision { step: i + 1, label: s.label.clone() }).collect(),
             can_undo: self.cursor > 0,
             can_redo: self.cursor + 1 < self.states.len(),

@@ -60,7 +60,8 @@ impl Template {
     /// too narrow for all of them. Sidewalks are never left out.
     fn specs(self) -> Vec<Spec> {
         use Dir::*;
-        let (sidewalk, planting, terrace, loading) = (|| sp("sidewalk", None, false), || sp("planting", None, true), || sp("terrace", None, true), || sp("loading", None, true));
+        let (sidewalk, planting, terrace, loading) =
+            (|| sp("sidewalk", None, false), || sp("planting", None, true), || sp("terrace", None, true), || sp("loading", None, true));
         let lane = || sp("travel", Half, false);
         match self {
             Template::Commercial => vec![sidewalk(), terrace(), loading(), lane(), lane(), loading(), terrace(), sidewalk()],
@@ -171,7 +172,10 @@ mod tests {
                     let k = &KINDS[s.kind];
                     assert!((k.min_mm..=k.max_mm).contains(&s.width_mm), "{t:?}: {} {}", k.id, s.width_mm);
                     assert!(s.variants.is_empty());
-                    assert_eq!(s.direction.is_some(), k.direction == DirectionRule::Required || (k.direction == DirectionRule::Optional && s.direction.is_some()));
+                    assert_eq!(
+                        s.direction.is_some(),
+                        k.direction == DirectionRule::Required || (k.direction == DirectionRule::Optional && s.direction.is_some())
+                    );
                 }
                 let uids: std::collections::HashSet<u32> = segs.iter().map(|s| s.uid).collect();
                 assert_eq!(uids.len(), segs.len(), "uids are unique");

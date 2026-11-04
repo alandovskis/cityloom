@@ -1065,7 +1065,10 @@ fn the_templates_are_all_listed_and_one_that_does_not_fit_is_disabled_with_its_r
     assert_eq!(count(&h, "aria-disabled=\"true\""), s.transform_menu().templates.iter().filter(|t| t.refusal.is_some()).count());
     let tag = &h[h[..h.find("data-template=\"bus-corridor\"").unwrap()].rfind("<button").unwrap()..];
     let tag = &tag[..tag.find('>').unwrap()];
-    assert!(tag.contains("aria-disabled=\"true\"") && tag.contains("aria-describedby=\"template-reason-bus-corridor\"") && tag.contains("role=\"menuitem\""), "{tag}");
+    assert!(
+        tag.contains("aria-disabled=\"true\"") && tag.contains("aria-describedby=\"template-reason-bus-corridor\"") && tag.contains("role=\"menuitem\""),
+        "{tag}"
+    );
     let reason = &h[h.find("id=\"template-reason-bus-corridor\"").unwrap()..];
     assert!(reason.contains("Bus corridor needs a street at least 13.8 m wide. This street is 12.0 m wide."), "{reason}");
     let school = &h[h[..h.find("data-template=\"school\"").unwrap()].rfind("<button").unwrap()..];
