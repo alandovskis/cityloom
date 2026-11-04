@@ -259,6 +259,30 @@ mod tests {
     }
 
     #[test]
+    fn the_impact_card_s_verdict_is_4_5_to_1_as_text_and_as_its_bar_in_both_themes_and_has_forced_colours() {
+        let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
+        let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();
+        for (theme, i) in [("light", 0), ("dark", 1)] {
+            let panel = pick(&token(app, "panel"), i);
+            // The text of each verdict (and of the lines above it), whose bar is drawn in the text's own colour.
+            for name in ["ok", "warn", "ink", "ink-2", "ink-3"] {
+                let c = pick(&token(app, name), i);
+                assert!(contrast(&c, &panel) >= 4.5, "{name} as text on the panel {theme}: {:.2}", contrast(&c, &panel));
+            }
+        }
+        for (class, colour) in [("improved", "var(--ok)"), ("regressed", "var(--warn)"), ("mixed", "var(--ink)")] {
+            let r = rule(editor, &format!(".impact-verdict.{class}"));
+            assert!(r.contains(&format!("color: {colour};")), "{r}");
+        }
+        let base = rule(editor, ".impact-verdict");
+        assert!(base.contains("border-inline-start: 4px solid currentColor;") && base.contains("color: var(--ink-2);"), "{base}");
+        let forced = editor.find("@media (forced-colors: active) {\n  .impact-verdict,").expect("a forced-colours rule for the verdict");
+        let forced = &editor[forced..];
+        let forced = &forced[..forced.find("\n}\n").unwrap()];
+        assert!(forced.contains("color: CanvasText;") && forced.contains("border-inline-start-color: CanvasText;"), "{forced}");
+    }
+
+    #[test]
     fn the_outline_of_a_curbside_use_too_near_a_crossing_clears_three_to_one_on_every_use_in_both_themes() {
         let (app, editor) = (include_str!("../../web/app.css"), include_str!("../../web/editor.css"));
         let pick = |t: &(Option<String>, Option<String>), i: usize| if i == 0 { t.0.clone() } else { t.1.clone() }.unwrap();

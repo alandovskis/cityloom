@@ -71,6 +71,11 @@ The French the app speaks (fr-CA), for translators and reviewers. The messages a
 | Street page notes | Change (a column) | Variation | To confirm: see "Variation N" below. |
 | Street page notes | Step | Étape |  |
 | Street page notes | check (of the street) | vérification | `0` and `1` are singular, as in CLDR. |
+| Street and junction pages | Impact (the street notes’ first tab, once Width) | Incidence | `Impact` is accepted in Québec French; `incidence` is the OQLF’s word. The junction’s first tab is Streets. |
+| Street page notes | Last change (the Impact tab’s card) | Dernière modification | Its lines: `Annulé : …` / `Rétabli : …` (undone / redone), `Retour à la rue d’aujourd’hui` (started over). |
+| Street page notes | Newly passing / Newly failing | Nouvelles réussites / Nouveaux échecs | Lists of checks; `réussite` and `échec` are the nouns of the checks’ own rows. |
+| Street page notes | Improved / Regressed / Mixed | Amélioration / Dégradation / Résultat mitigé | The verdict on the checks; `Aucun changement dans les vérifications.` when none changed. |
+| Street page notes | No effect on space or checks | Aucun effet sur l’espace ni sur les vérifications |  |
 | Street page notes | passes / fails | réussite / échec | Nouns, so they agree with any check's name. |
 | Street page frame | City map | Carte de la ville |  |
 | Street page frame | Street cross-section | Coupe transversale de la rue |  |

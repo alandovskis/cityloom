@@ -268,7 +268,7 @@ test.describe("the piece list", () => {
   });
 });
 
-// Without a section to read, the widths are in the inspector, the piece list and the Width tab, and the status line
+// Without a section to read, the widths are in the inspector, the piece list and the Impact tab (its width table), and the status line
 // says whether the street is used, over or under (#139).
 for (const [width, height] of [
   [1440, 900],
@@ -286,7 +286,7 @@ for (const [width, height] of [
     const uid = await pieces(page).first().getAttribute("data-uid");
     const shown = parseFloat((await page.locator(`#piece-cell-${uid} .piece-width`).innerText()).replace(",", "."));
     expect(Number(await page.locator("#width").inputValue())).toBeCloseTo(shown, 1);
-    // The Width tab lists each use with its width: together they are the street's pieces.
+    // The Impact tab's width table lists each use with its width: together they are the street's pieces.
     const rows = page.locator("#space tbody tr");
     expect(await rows.count()).toBeGreaterThan(0);
     const design = await rows.evaluateAll((trs) => trs.map((tr) => tr.children[2].textContent));

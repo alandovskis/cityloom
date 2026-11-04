@@ -3,6 +3,7 @@
 
 pub mod curb_strip;
 pub mod curb_tools;
+pub mod impact;
 pub mod inspector;
 pub mod iso;
 pub mod keys;
@@ -100,6 +101,7 @@ pub fn mount_street_page(sheet: &Sheet, edge: Option<u32>) {
     mount("time-note", view! { <page::TimeNote vm=vm.clone()/> }.into_any());
     mount("welcome-slot", view! { <page::Welcome vm=vm.clone()/> }.into_any());
     mount("inspector", view! { <inspector::StreetInspector vm=vm.clone()/> }.into_any());
+    mount("impact", view! { <notes::LastChange vm=vm.clone()/> }.into_any());
     mount("space", view! { <notes::Space vm=vm.clone()/> }.into_any());
     mount("cap", view! { <notes::Capacity vm=vm.clone()/> }.into_any());
     mount("checks", view! { <notes::Checks vm=vm.clone()/> }.into_any());

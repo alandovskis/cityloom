@@ -498,3 +498,36 @@ stop-refused-overlap = That would overlap another stop on the same side.
 stop-refused-too-long = That would run past the end of the street.
 stop-refused-time-windows = A stop cannot be placed on a lane that changes with the time of day.
 stop-refused-dragging = Finish the drag before changing the stops.
+
+# What the last change did to the street (src/street/impact.rs and the Impact tab's card).
+st-impact-heading = Last change
+st-impact-empty = No change yet. Edit the street to see what it did to the space and the checks.
+impact-no-effect = No effect on space or checks
+impact-space-heading = Street space
+impact-passing-heading = Newly passing
+impact-failing-heading = Newly failing
+impact-changed = The street changed
+impact-started-over = Started over
+impact-undone = Undone: { $what }
+impact-redone = Redone: { $what }
+impact-use-more = { $use }: { $before } → { $after } ({ $amount } more)
+impact-use-less = { $use }: { $before } → { $after } ({ $amount } less)
+impact-verdict-improved =
+    { $passing ->
+        [one] Improved: 1 check now passes.
+       *[other] Improved: { $passing } checks now pass.
+    }
+impact-verdict-regressed =
+    { $failing ->
+        [one] Regressed: 1 check now fails.
+       *[other] Regressed: { $failing } checks now fail.
+    }
+impact-verdict-mixed =
+    Mixed: { $passing ->
+        [one] 1 check now passes
+       *[other] { $passing } checks now pass
+    }, { $failing ->
+        [one] 1 now fails
+       *[other] { $failing } now fail
+    }.
+impact-verdict-unchanged = No change in the checks.

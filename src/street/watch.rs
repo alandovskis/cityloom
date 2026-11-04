@@ -45,6 +45,11 @@ impl SheetWatch {
         self.vm.with_value(|v| v.area_checks())
     }
 
+    /// What the last change did to the street, once the edits have settled, drawing again when it is shown.
+    pub fn impact(&self) -> Option<crate::street::impact::Impact> {
+        self.vm.with_value(|v| v.impact())
+    }
+
     /// The page's words, for a view: ask with `tr` so it is drawn again on a language switch.
     pub fn i18n(&self) -> Rc<I18n> {
         self.vm.with_value(|v| v.i18n().clone())
