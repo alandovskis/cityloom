@@ -274,7 +274,7 @@ jn-check-length = { $detail }: { $length }
 jn-col-step = Step
 jn-col-what-changed = What changed
 
-## The drawing (src/junction/drawing.rs, iso.rs)
+## The drawing (src/junction/drawing.rs, iso/)
 jn-editor = Junction editor
 jn-iso-label = 2.5D view of the junction. { $arms }.
 jn-iso-label-roundabout = 2.5D view of the junction. { $arms }. Roundabout.

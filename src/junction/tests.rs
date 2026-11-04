@@ -2298,7 +2298,7 @@ fn an_arm_without_a_beyond_draws_as_before() {
     let (got, pinned) = (arms_fingerprint(), 15_083_500_958_540_711_930);
     assert_eq!(
         got, pinned,
-        "the pieces, lane hit areas and leaving arrows of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
+        "the pieces, lane hit areas and leaving arrows of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at the 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
     );
 }
 

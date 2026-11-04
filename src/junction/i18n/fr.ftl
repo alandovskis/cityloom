@@ -274,14 +274,14 @@ jn-check-length = { $detail } : { $length }
 jn-col-step = Étape
 jn-col-what-changed = Ce qui a changé
 
-## Le dessin (src/junction/drawing.rs, iso.rs)
+## Le dessin (src/junction/drawing.rs, iso/)
 jn-editor = Éditeur de la jonction
 jn-iso-label = Vue en 2,5D de la jonction. { $arms }.
 jn-iso-label-roundabout = Vue en 2,5D de la jonction. { $arms }. Carrefour giratoire.
 jn-iso-label-raised = Vue en 2,5D de la jonction. { $arms }. Carrefour surélevé.
 jn-iso-label-turbo = Vue en 2,5D de la jonction. { $arms }. { $name }.
 jn-svg-bus-only = Autobus seulement
-# What the buttons under the drawing step through: the streets, lanes, crossings and corners, as the arrow keys do.
+# Ce que les boutons sous le dessin parcourent : les rues, les voies, les passages et les coins, comme les touches fléchées.
 jn-part-previous = Partie précédente
 jn-part-next = Partie suivante
 

@@ -604,7 +604,7 @@ mod tests {
         let (got, pinned) = (iso_fingerprint(), 402_851_788_980_089_418);
         assert_eq!(
             got, pinned,
-            "the 2.5D markup of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at a plan and a 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
+            "the 2.5D markup of the sample junctions no longer draws byte for byte as it did before the end-zone beyond was added (this pins that an arm without a beyond is untouched). If you changed how these junctions draw on purpose, look at the 2.5D of each sample junction first; only when the picture is what you meant, replace the pinned number with {got}."
         );
     }
 

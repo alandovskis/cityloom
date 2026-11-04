@@ -449,10 +449,7 @@ mod tests {
             attrs: " data-role=\"x\"".into(),
             title: title.map(String::from),
         };
-        assert_eq!(
-            ground_of(one(false, None, "c"), &Flat),
-            r#"<g class="iso-layer-ground"><path class="c" data-role="x" d="M1 2L2 4M5 2L6 4"/></g>"#.replace("M1 2L2 4M5 2L6 4", "M1 0L2 2M5 0L6 2")
-        );
+        assert_eq!(ground_of(one(false, None, "c"), &Flat), r#"<g class="iso-layer-ground"><path class="c" data-role="x" d="M1 0L2 2M5 0L6 2"/></g>"#);
         assert_eq!(
             ground_of(one(true, Some("A & B"), ""), &Flat),
             r#"<g class="iso-layer-ground"><path data-role="x" d="M1 0L2 2M5 0L6 2Z"><title>A &amp; B</title></path></g>"#

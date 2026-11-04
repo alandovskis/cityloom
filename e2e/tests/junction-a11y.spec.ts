@@ -135,6 +135,44 @@ test.describe("the junction's parts are reached without a pointer, and with one 
     await expect(page.locator("#drawing .iso-sel")).not.toHaveCount(0);
   });
 
+  test("a key pressed on a step button is the button's, not the drawing's: it turns, resizes and removes nothing", async ({
+    page,
+  }) => {
+    await openJunction(page);
+    await page.locator("#part-next").click();
+    await expect(live(page)).toHaveText(/degrees$/);
+    await expect(page.locator("#part-next")).toBeFocused();
+    for (const key of [
+      "Shift+ArrowRight",
+      "Shift+ArrowLeft",
+      "+",
+      "-",
+      "Delete",
+      "Backspace",
+      "ArrowRight",
+      "Escape",
+    ]) {
+      await page.keyboard.press(key);
+    }
+    await page.waitForTimeout(250);
+    // Nothing was edited, and what is selected is still the street the button chose.
+    await expect(page.locator("#undo")).toBeDisabled();
+    await expect(page.locator("#drawing .iso-sel")).toHaveCount(1);
+    // Enter and Space still press the button.
+    const before = await live(page).innerText();
+    await page.keyboard.press("Enter");
+    await expect(live(page)).not.toHaveText(before);
+    await page.keyboard.press("Space");
+    await expect(page.locator("#undo")).toBeDisabled();
+    // On the drawing itself the keys edit, as ever.
+    await page.locator("#wrap").focus();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Shift+ArrowRight");
+    if (!(await page.locator("#undo").isEnabled())) await page.keyboard.press("Shift+ArrowLeft");
+    await expect(page.locator("#undo")).toBeEnabled();
+  });
+
   for (const width of [1440, 1050, 600, 280]) {
     test(`at ${width} px the step buttons are 24 px or more and each kind of part has a place that is nearly as big`, async ({
       page,

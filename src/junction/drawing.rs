@@ -81,6 +81,11 @@ pub fn Drawing(vm: Rc<JunctionVm>) -> impl IntoView {
         if e.meta_key() || e.ctrl_key() || e.alt_key() {
             return;
         }
+        // A key pressed on a button under the drawing (the step buttons) is the button's own: it bubbles up to the group, which
+        // must not turn, resize or remove what is selected for it.
+        if e.target().and_then(|t| leptos::wasm_bindgen::JsCast::dyn_into::<Element>(t).ok()).is_some_and(|t| t.id() != "wrap") {
+            return;
+        }
         if let Some((action, prevent)) = keys::on_drawing(&e.key(), e.shift_key(), w.view_now().selected.kind) {
             if prevent {
                 e.prevent_default();

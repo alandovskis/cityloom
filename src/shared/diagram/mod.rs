@@ -1,4 +1,4 @@
-//! The street's drawing as data: layers of shapes in ground millimetres.
+//! The street's and the junction's 2.5D drawing as data: layers of shapes in millimetres.
 
 pub mod render;
 
